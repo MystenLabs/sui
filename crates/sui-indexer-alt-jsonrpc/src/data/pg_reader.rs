@@ -10,6 +10,7 @@ use diesel::pg::Pg;
 use diesel::query_builder::{Query, QueryFragment, QueryId};
 use diesel::query_dsl::methods::LimitDsl;
 use diesel::query_dsl::CompatibleType;
+use diesel::OptionalExtension;
 use diesel_async::RunQueryDsl;
 use prometheus::Registry;
 use sui_indexer_alt_metrics::db::DbConnectionStatsCollector;
@@ -63,7 +64,7 @@ impl PgReader {
 }
 
 impl Connection<'_> {
-    pub(crate) async fn first<'q, Q, ST, U>(&mut self, query: Q) -> Result<U, Error>
+    pub(crate) async fn first<'q, Q, ST, U>(&mut self, query: Q) -> Result<Option<U>, Error>
     where
         Q: LimitDsl,
         Q::Output: Query + QueryFragment<Pg> + QueryId + Send + 'q,
@@ -76,7 +77,7 @@ impl Connection<'_> {
         debug!("{}", diesel::debug_query(&query));
 
         let _guard = self.metrics.db_latency.start_timer();
-        let res = query.get_result(&mut self.conn).await;
+        let res = query.get_result(&mut self.conn).await.optional();
 
         if res.is_ok() {
             self.metrics.db_requests_succeeded.inc();

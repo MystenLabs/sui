@@ -93,6 +93,12 @@ module Test::real {
   "params": ["@{Test}::fake::NonExistent"]
 }
 
+//# run-jsonrpc
+{
+  "method": "suix_getCoinMetadata",
+  "params": ["invalid_coin_type"]
+}
+
 //# programmable --sender A --inputs object(1,4) object(1,2)
 //> 0: Test::real::update_metadata_name(Input(0),Input(1));
 

@@ -2,13 +2,14 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::collections::{BTreeMap, HashMap};
+use std::str::FromStr;
 
 use anyhow::Context as _;
 use diesel::prelude::*;
 use diesel::sql_types::Bool;
 use futures::future;
 use jsonrpsee::{core::RpcResult, proc_macros::rpc};
-use move_core_types::language_storage::TypeTag;
+use move_core_types::language_storage::{StructTag, TypeTag};
 use serde::{Deserialize, Serialize};
 use sui_indexer_alt_schema::objects::StoredCoinOwnerKind;
 use sui_indexer_alt_schema::schema::coin_balance_buckets;
@@ -22,13 +23,13 @@ use sui_types::{
     gas_coin::GAS,
 };
 
+use crate::data::singleton_object::load_singleton_object_id;
 use crate::{
     context::Context,
-    data::objects::{load_latest, load_live},
-    error::{internal_error, invalid_params, InternalContext, RpcError},
+    data::objects::load_latest,
+    error::{invalid_params, InternalContext, RpcError},
     paginate::{BcsCursor, Cursor as _, Page},
 };
-use super::objects::filter::{single_object, SuiObjectDataFilter};
 
 use super::rpc_module::RpcModule;
 
@@ -174,31 +175,15 @@ impl CoinsApiServer for Coins {
     }
 
     async fn get_coin_metadata(&self, coin_type: String) -> RpcResult<Option<SuiCoinMetadata>> {
-        let Self(ctx, _) = self;
-
-        let coin_type_param = sui_types::parse_sui_struct_tag(&coin_type)
-            .map_err(|e| invalid_params(Error::BadType(coin_type.clone(), e)))?;
-        let full_coin_type = sui_types::coin::CoinMetadata::type_(coin_type_param);
-        let type_filter = SuiObjectDataFilter::StructType(full_coin_type);
-
-        let object_id = single_object(ctx, type_filter).await?;
+        let Self(ctx) = self;
+        let object_id = coin_metadata_object_id(ctx, coin_type).await?;
 
         let Some(object_id) = object_id else {
             return Ok(None);
         };
 
-        let object = load_live(ctx, object_id)
-            .await
-            .map_err::<RpcError<Error>, _>(|_| {
-                internal_error!("Failed to load live object for {object_id}")
-            })?;
-        let Some(object) = object else {
-            return Ok(None);
-        };
+        let coin_metadata = coin_metadata_response(ctx, object_id).await?;
 
-        let coin_metadata = object.try_into().map_err::<RpcError<Error>, _>(|_| {
-            internal_error!("Failed to convert object to coin metadata for type {coin_type}")
-        })?;
         Ok(Some(coin_metadata))
     }
 }
@@ -330,6 +315,20 @@ async fn filter_coins(
     })
 }
 
+async fn coin_metadata_object_id(
+    ctx: &Context,
+    coin_type: String,
+) -> Result<Option<ObjectID>, RpcError<Error>> {
+    let coin_type_param = StructTag::from_str(&coin_type)
+        .map_err(|e| invalid_params(Error::BadType(coin_type.clone(), e)))?;
+
+    let full_coin_type = sui_types::coin::CoinMetadata::type_(coin_type_param);
+
+    Ok(load_singleton_object_id(ctx.pg_reader(), full_coin_type)
+        .await
+        .context("Failed to load singleton object id")?)
+}
+
 async fn coin_response(ctx: &Context, id: ObjectID) -> Result<Coin, RpcError<Error>> {
     let (object, coin_type, balance) = object_with_coin_data(ctx, id).await?;
 
@@ -346,6 +345,20 @@ async fn coin_response(ctx: &Context, id: ObjectID) -> Result<Coin, RpcError<Err
         balance,
         previous_transaction,
     })
+}
+
+async fn coin_metadata_response(
+    ctx: &Context,
+    id: ObjectID,
+) -> Result<SuiCoinMetadata, RpcError<Error>> {
+    let object = load_latest(ctx, id)
+        .await?
+        .context("Latest object not found")?;
+
+    let coin_metadata = object
+        .try_into()
+        .context("Failed to convert object to coin metadata")?;
+    Ok(coin_metadata)
 }
 
 async fn object_with_coin_data(

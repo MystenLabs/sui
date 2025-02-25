@@ -109,41 +109,6 @@ pub(super) async fn owned_objects(
     cursor: Option<String>,
     limit: Option<usize>,
 ) -> Result<ObjectIDs, RpcError<Error>> {
-    let config = &ctx.config().objects;
-    let page: Page<Cursor> = Page::from_params(
-        config.default_page_size,
-        config.max_page_size,
-        cursor,
-        limit,
-        None,
-    )?;
-    filter_objects(ctx, Some(owner), filter, page).await
-}
-
-/// Fetch a single object id that satisfies the given `filter`.
-pub(crate) async fn single_object(
-    ctx: &Context,
-    filter: SuiObjectDataFilter,
-) -> Result<Option<ObjectID>, RpcError<Error>> {
-    let page: Page<Cursor> = Page::from_params(1, 1, None, Some(1), None)?;
-    let object_ids = filter_objects(ctx, None, &Some(filter), page).await?;
-
-    if object_ids.data.len() > 1 {
-        rpc_bail!("Multiple objects found while limiting to 1");
-    }
-
-    Ok(object_ids.data.first().copied())
-}
-
-/// Fetch ObjectIDs for a page of objects owned by `owner` that satisfy the given `filter` and
-/// pagination parameters. Returns the digests and a cursor point to the last result (if there are
-/// any results).
-async fn filter_objects(
-    ctx: &Context,
-    owner: Option<SuiAddress>,
-    filter: &Option<SuiObjectDataFilter>,
-    page: Page<Cursor>,
-) -> Result<ObjectIDs, RpcError<Error>> {
     use obj_info::dsl as o;
 
     let (candidates, newer) = diesel::alias!(obj_info as candidates, obj_info as newer);
@@ -160,6 +125,15 @@ async fn filter_objects(
         };
     }
 
+    let config = &ctx.config().objects;
+    let page: Page<Cursor> = Page::from_params(
+        config.default_page_size,
+        config.max_page_size,
+        cursor,
+        limit,
+        None,
+    )?;
+
     let mut query = candidates
         .select(candidates!(object_id, cp_sequence_number))
         .left_join(
@@ -168,18 +142,12 @@ async fn filter_objects(
                 .and(candidates!(cp_sequence_number).lt(newer!(cp_sequence_number)))),
         )
         .filter(newer!(object_id).is_null())
+        .filter(candidates!(owner_kind).eq(StoredOwnerKind::Address))
+        .filter(candidates!(owner_id).eq(owner.to_inner()))
         .order_by(candidates!(cp_sequence_number).desc())
         .then_order_by(candidates!(object_id).desc())
         .limit(page.limit + 1)
         .into_boxed();
-
-    if let Some(owner) = owner {
-        query = query
-            .filter(candidates!(owner_kind).eq(StoredOwnerKind::Address))
-            .filter(candidates!(owner_id).eq(owner.to_inner()));
-    } else {
-        query = query.filter(candidates!(owner_kind).is_not_null());
-    }
 
     if let Some(c) = page.cursor {
         query = query.filter(sql!(as Bool,
