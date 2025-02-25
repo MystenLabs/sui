@@ -643,13 +643,17 @@ impl<C: NetworkClient, V: BlockVerifier, D: CoreThreadDispatcher> Synchronizer<C
             // TODO: improve efficiency, maybe suspend and continue processing the block asynchronously.
             let now = context.clock.timestamp_utc_ms();
             if now < verified_block.timestamp_ms() {
-                warn!(
-                    "Synced block {} timestamp {} is in the future (now={}). Ignoring.",
-                    verified_block.reference(),
-                    verified_block.timestamp_ms(),
-                    now
-                );
-                continue;
+                if context.protocol_config.consensus_median_based_timestamp() {
+                    debug!("Synced block {} timestamp {} is in the future (now={}). Will not ignore as median based timestamp is enabled.", verified_block.reference(), verified_block.timestamp_ms(), now);
+                } else {
+                    warn!(
+                        "Synced block {} timestamp {} is in the future (now={}). Ignoring.",
+                        verified_block.reference(),
+                        verified_block.timestamp_ms(),
+                        now
+                    );
+                    continue;
+                }
             }
 
             verified_blocks.push(verified_block);
