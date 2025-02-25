@@ -1494,7 +1494,7 @@ where
     /// overriden in the config), so please use this function with caution
     #[instrument(level = "trace", skip_all, err)]
     fn schedule_delete_all(&self) -> Result<(), TypedStoreError> {
-        let first_key = self.unbounded_iter().next().map(|(k, _v)| k);
+        let first_key = self.safe_iter().next().transpose()?.map(|(k, _v)| k);
         let last_key = self
             .reversed_safe_iter_with_bounds(None, None)?
             .next()
@@ -1512,24 +1512,6 @@ where
         self.safe_iter().next().is_none()
     }
 
-    /// Returns an unbounded iterator visiting each key-value pair in the map.
-    /// This is potentially unsafe as it can perform a full table scan
-    fn unbounded_iter(&'a self) -> Self::Iterator {
-        let db_iter = self
-            .rocksdb
-            .raw_iterator_cf(&self.cf(), self.opts.readopts());
-        let (_timer, bytes_scanned, keys_scanned, _perf_ctx) = self.create_iter_context();
-        Iter::new(
-            self.cf.clone(),
-            db_iter,
-            _timer,
-            _perf_ctx,
-            bytes_scanned,
-            keys_scanned,
-            Some(self.db_metrics.clone()),
-        )
-    }
-
     /// Returns an iterator visiting each key-value pair in the map. By proving bounds of the
     /// scan range, RocksDB scan avoid unnecessary scans.
     /// Lower bound is inclusive, while upper bound is exclusive.
@@ -1539,23 +1521,6 @@ where
         upper_bound: Option<K>,
     ) -> Self::Iterator {
         let readopts = self.create_read_options_with_bounds(lower_bound, upper_bound);
-        let db_iter = self.rocksdb.raw_iterator_cf(&self.cf(), readopts);
-        let (_timer, bytes_scanned, keys_scanned, _perf_ctx) = self.create_iter_context();
-        Iter::new(
-            self.cf.clone(),
-            db_iter,
-            _timer,
-            _perf_ctx,
-            bytes_scanned,
-            keys_scanned,
-            Some(self.db_metrics.clone()),
-        )
-    }
-
-    /// Similar to `iter_with_bounds` but allows specifying inclusivity/exclusivity of ranges explicitly.
-    /// TODO: find better name
-    fn range_iter(&'a self, range: impl RangeBounds<K>) -> Self::Iterator {
-        let readopts = self.create_read_options_with_range(range);
         let db_iter = self.rocksdb.raw_iterator_cf(&self.cf(), readopts);
         let (_timer, bytes_scanned, keys_scanned, _perf_ctx) = self.create_iter_context();
         Iter::new(

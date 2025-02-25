@@ -242,7 +242,7 @@ pub fn print_db_all_tables(db_path: PathBuf) -> anyhow::Result<()> {
 
 pub fn print_db_duplicates_summary(db_path: PathBuf) -> anyhow::Result<()> {
     let (total_count, duplicate_count, total_bytes, duplicated_bytes) =
-        duplicate_objects_summary(db_path);
+        duplicate_objects_summary(db_path)?;
     println!(
         "Total objects = {}, duplicated objects = {}, total bytes = {}, duplicated bytes = {}",
         total_count, duplicate_count, total_bytes, duplicated_bytes
