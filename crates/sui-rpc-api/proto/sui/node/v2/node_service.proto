@@ -122,7 +122,7 @@ message GetNodeInfoResponse {
 
 // Request message for NodeService.GetCommittee.
 message GetCommitteeRequest {
-  // Optional. Request the sui.types.ValidatorCommittee corresponding to the
+  // Request the sui.types.ValidatorCommittee corresponding to the
   // provided epoch. If no epoch is provided the committee for the current
   // epoch will be returned.
   optional uint64 epoch = 1;
@@ -235,10 +235,10 @@ message GetObjectResponse {
 // returned if you attempt to provide both. If you provide neither, the service
 // returns the latest executed checkpoint.
 message GetCheckpointRequest {
-  // Optional. The sequence number of the requested checkpoint.
+  // The sequence number of the requested checkpoint.
   optional uint64 sequence_number = 1;
 
-  // Optional. The digest of the requested checkpoint.
+  // The digest of the requested checkpoint.
   optional sui.types.Digest digest = 2;
 
   // Mask specifying which fields to read.
@@ -388,22 +388,22 @@ message FullCheckpointObject {
 //
 // Note: You must provide only one of `transaction` or `transaction_bcs`.
 message ExecuteTransactionRequest {
-  // Optional. The transaction to execute.
+  // The transaction to execute.
   optional sui.types.Transaction transaction = 1;
 
-  // Optional. The transaction to execute, encoded as BCS bytes.
+  // The transaction to execute, encoded as BCS bytes.
   optional sui.types.Bcs transaction_bcs = 2;
 
-  // Optional. Set of `UserSiganture`s authorizing the execution of the provided
+  // Set of `UserSiganture`s authorizing the execution of the provided
   // transaction.
   repeated sui.types.UserSignature signatures = 3;
 
-  // Optional. Set of `UserSiganture`s authorizing the execution of the provided
+  // Set of `UserSiganture`s authorizing the execution of the provided
   // transaction, encoded as bytes.
   repeated bytes signatures_bytes = 4;
 
-  // Optional. Mask for specifying which parts of the
-  // `ExecuteTransactionResponse` should be returned.
+  // Mask specifying which fields to read.
+  // If no mask is specified, defaults to `effects,events,finality`.
   optional google.protobuf.FieldMask read_mask = 6;
 }
 

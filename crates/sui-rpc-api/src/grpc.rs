@@ -161,78 +161,8 @@ impl crate::proto::node::v2::node_service_server::NodeService for crate::RpcServ
         tonic::Response<crate::proto::node::v2::ExecuteTransactionResponse>,
         tonic::Status,
     > {
-        let request = request.into_inner();
-        let transaction = match (request.transaction, request.transaction_bcs) {
-            (Some(_), Some(_)) => {
-                return Err(tonic::Status::new(
-                    tonic::Code::InvalidArgument,
-                    "only one of `transaction` or `transaction_bcs` can be provided",
-                ))
-            }
-            (Some(transaction), None) => (&transaction).try_into().map_err(|e| {
-                tonic::Status::new(
-                    tonic::Code::InvalidArgument,
-                    format!("invalid transaction: {e}"),
-                )
-            })?,
-
-            (None, Some(bcs)) => bcs::from_bytes(bcs.bcs()).map_err(|_| {
-                tonic::Status::new(tonic::Code::InvalidArgument, "invalid transaction bcs")
-            })?,
-
-            (None, None) => {
-                return Err(tonic::Status::new(
-                    tonic::Code::InvalidArgument,
-                    "one of `transaction` or `transaction_bcs` must be provided",
-                ))
-            }
-        };
-        let mut signatures: Vec<sui_sdk_types::UserSignature> = Vec::new();
-
-        if !request.signatures.is_empty() {
-            let from_proto_signatures = request
-                .signatures
-                .iter()
-                .map(TryInto::try_into)
-                .collect::<Result<Vec<_>, _>>()
-                .map_err(|e| {
-                    tonic::Status::new(
-                        tonic::Code::InvalidArgument,
-                        format!("invalid signature: {e}"),
-                    )
-                })?;
-
-            signatures.extend(from_proto_signatures);
-        }
-
-        if !request.signatures_bytes.is_empty() {
-            let from_bytes_signatures = request
-                .signatures_bytes
-                .iter()
-                .map(|bytes| sui_sdk_types::UserSignature::from_bytes(bytes))
-                .collect::<Result<Vec<_>, _>>()
-                .map_err(|e| {
-                    tonic::Status::new(
-                        tonic::Code::InvalidArgument,
-                        format!("invalid signature: {e}"),
-                    )
-                })?;
-
-            signatures.extend(from_bytes_signatures);
-        }
-
-        let signed_transaction = sui_sdk_types::SignedTransaction {
-            transaction,
-            signatures,
-        };
-
-        let options = crate::types::ExecuteTransactionOptions::from_read_mask(
-            request.read_mask.unwrap_or_default(),
-        );
-
-        self.execute_transaction(signed_transaction, None, &options)
+        self.execute_transaction(request.into_inner())
             .await
-            .map(Into::into)
             .map(tonic::Response::new)
             .map_err(Into::into)
     }
