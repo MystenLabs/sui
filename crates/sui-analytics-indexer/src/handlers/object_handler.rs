@@ -5,7 +5,7 @@ use anyhow::Result;
 use fastcrypto::encoding::{Base64, Encoding};
 use std::path::Path;
 use sui_data_ingestion_core::Worker;
-use sui_types::SYSTEM_PACKAGE_ADDRESSES;
+use sui_types::{TypeTag, SYSTEM_PACKAGE_ADDRESSES};
 use tokio::sync::Mutex;
 
 use sui_json_rpc_types::SuiMoveStruct;
@@ -150,6 +150,49 @@ impl ObjectHandler {
         }
         Ok(())
     }
+
+    async fn check_type_hierarchy(
+        &self,
+        type_tag: &TypeTag,
+        original_package_id: ObjectID,
+        state: &mut State,
+    ) -> Result<bool> {
+        use std::collections::BTreeSet;
+        use tokio::task::JoinSet;
+
+        // Collect all package IDs using stack-based traversal
+        let mut types = vec![type_tag];
+        let mut package_ids = BTreeSet::new();
+
+        while let Some(type_) = types.pop() {
+            match type_ {
+                TypeTag::Struct(s) => {
+                    package_ids.insert(s.address);
+                    types.extend(s.type_params.iter());
+                }
+                TypeTag::Vector(inner) => types.push(inner.as_ref()),
+                _ => {} // Primitive types can't match a package ID
+            }
+        }
+
+        // Resolve original package IDs in parallel
+        let mut original_ids = JoinSet::new();
+
+        for id in package_ids {
+            let package_store = state.package_store.clone();
+            original_ids.spawn(async move { package_store.get_original_package_id(id).await });
+        }
+
+        // Check if any resolved ID matches our target
+        while let Some(result) = original_ids.join_next().await {
+            if result?? == original_package_id {
+                return Ok(true);
+            }
+        }
+
+        Ok(false)
+    }
+
     // Object data. Only called if there are objects in the transaction.
     // Responsible to build the live object table.
     async fn process_object(
@@ -188,17 +231,16 @@ impl ObjectHandler {
         let object_type = move_obj_opt.map(|o| o.type_());
 
         let is_match = if let Some(package_id) = self.package_filter {
-            let original_package_id = state
-                .package_store
-                .get_original_package_id(package_id.into())
-                .await?;
-            if let Some(move_object_type) = object_type {
-                let object_package_id: ObjectID = move_object_type.address().into();
-                let object_original_package_id = state
+            if let Some(object_type) = object_type {
+                let original_package_id = state
                     .package_store
-                    .get_original_package_id(object_package_id.into())
+                    .get_original_package_id(package_id.into())
                     .await?;
-                object_original_package_id == original_package_id
+
+                // Check if any type parameter matches the package filter
+                let type_tag: TypeTag = object_type.clone().into();
+                self.check_type_hierarchy(&type_tag, original_package_id, state)
+                    .await?
             } else {
                 false
             }
@@ -240,5 +282,98 @@ impl ObjectHandler {
         };
         state.objects.push(entry);
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use move_core_types::{
+        account_address::AccountAddress, identifier::Identifier, language_storage::StructTag,
+    };
+    use std::str::FromStr;
+    use sui_types::TypeTag;
+
+    fn create_struct_tag(
+        addr: &str,
+        module: &str,
+        name: &str,
+        type_params: Vec<TypeTag>,
+    ) -> TypeTag {
+        TypeTag::Struct(Box::new(StructTag {
+            address: AccountAddress::from_str(addr).unwrap(),
+            module: Identifier::new(module).unwrap(),
+            name: Identifier::new(name).unwrap(),
+            type_params,
+        }))
+    }
+
+    #[tokio::test]
+    async fn test_check_type_hierarchy() {
+        let temp_dir = tempfile::tempdir().unwrap();
+        let handler = ObjectHandler::new(
+            temp_dir.path(),
+            "http://localhost:9000",
+            &Some("0xabc".to_string()),
+        );
+        let mut state = handler.state.lock().await;
+
+        // 1. Direct match
+        let type_tag = create_struct_tag("0xabc", "module", "Type", vec![]);
+        assert!(handler
+            .check_type_hierarchy(
+                &type_tag,
+                ObjectID::from_hex_literal("0xabc").unwrap(),
+                &mut state
+            )
+            .await
+            .unwrap());
+
+        // 2. Match in type parameter
+        let inner_type = create_struct_tag("0xabc", "module", "Inner", vec![]);
+        let type_tag = create_struct_tag("0xcde", "module", "Type", vec![inner_type]);
+        assert!(handler
+            .check_type_hierarchy(
+                &type_tag,
+                ObjectID::from_hex_literal("0xabc").unwrap(),
+                &mut state
+            )
+            .await
+            .unwrap());
+
+        // 3. Match in nested vector
+        let inner_type = create_struct_tag("0xabc", "module", "Inner", vec![]);
+        let vector_type = TypeTag::Vector(Box::new(inner_type));
+        let type_tag = create_struct_tag("0xcde", "module", "Type", vec![vector_type]);
+        assert!(handler
+            .check_type_hierarchy(
+                &type_tag,
+                ObjectID::from_hex_literal("0xabc").unwrap(),
+                &mut state
+            )
+            .await
+            .unwrap());
+
+        // 4. No match
+        let type_tag = create_struct_tag("0xcde", "module", "Type", vec![]);
+        assert!(!handler
+            .check_type_hierarchy(
+                &type_tag,
+                ObjectID::from_hex_literal("0xabc").unwrap(),
+                &mut state
+            )
+            .await
+            .unwrap());
+
+        // 5. Primitive type
+        let type_tag = TypeTag::U64;
+        assert!(!handler
+            .check_type_hierarchy(
+                &type_tag,
+                ObjectID::from_hex_literal("0xabc").unwrap(),
+                &mut state
+            )
+            .await
+            .unwrap());
     }
 }
