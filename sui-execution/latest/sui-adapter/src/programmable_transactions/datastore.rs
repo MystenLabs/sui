@@ -25,7 +25,13 @@ mod checked {
     pub(crate) struct SuiDataStore<'state, 'a> {
         /// Interface to resolve packages, modules and resources directly from the store.
         resolver: &'state dyn BackingPackageStore,
+        /// New packages -- these are new package that have been published, and initialized
+        /// successfully.
         new_packages: &'a [MovePackage],
+        /// A possibly new package that we may be in the process of publishing and/or initializing.
+        /// This package will only be added to `new_packages` iff publication and initialization
+        /// (if any) is pefromed successfully.
+        ephemeral_package: Option<&'a MovePackage>,
     }
 
     impl<'state, 'a> SuiDataStore<'state, 'a> {
@@ -36,12 +42,26 @@ mod checked {
             Self {
                 new_packages,
                 resolver,
+                ephemeral_package: None,
+            }
+        }
+
+        pub(crate) fn new_with_ephemeral(
+            resolver: &'state dyn BackingPackageStore,
+            new_packages: &'a [MovePackage],
+            ephemeral_package: Option<&'a MovePackage>,
+        ) -> Self {
+            Self {
+                new_packages,
+                resolver,
+                ephemeral_package,
             }
         }
 
         fn get_package(&self, package_storage_id: PackageStorageId) -> Option<&MovePackage> {
             self.new_packages
                 .iter()
+                .chain(self.ephemeral_package.iter().cloned())
                 .find(|package| *package.id() == package_storage_id)
         }
 

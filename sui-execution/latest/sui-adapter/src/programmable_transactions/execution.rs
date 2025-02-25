@@ -624,17 +624,19 @@ mod checked {
         // and if there is an error of any kind (verification or module init) we
         // remove it.
         // context.write_package(package);
-        let (mut new_context, package) =
-            publish_and_verify_modules(context, runtime_id, package, &modules)?;
+        let mut new_context = publish_and_verify_modules(context, runtime_id, package, &modules)?;
         init_modules::<Mode>(
             &mut new_context,
             argument_updates,
             &modules,
             trace_builder_opt,
         )?;
+        let Some(package) = new_context.destroy_publication_context() else {
+            invariant_violation!("Ephemeral package should be set in publication");
+        };
         // If we have successfully published and initialized the modules, we can write the package
-        // to the context.
-        new_context.write_package(package);
+        // to the _old_ context.
+        context.write_package(package);
 
         let values = if Mode::packages_are_predefined() {
             // no upgrade cap for genesis modules
@@ -734,8 +736,7 @@ mod checked {
             dependencies.iter().map(|p| p.move_package()),
         )?;
 
-        let (mut new_context, package) =
-            publish_and_verify_modules(context, runtime_id, package, &modules)?;
+        let new_context = publish_and_verify_modules(context, runtime_id, package, &modules)?;
 
         check_compatibility(
             &new_context,
@@ -744,8 +745,12 @@ mod checked {
             upgrade_ticket.policy,
         )?;
 
-        // We have successfully verified the modules, we can write the package to the context now.
-        new_context.write_package(package);
+        let Some(package) = new_context.destroy_publication_context() else {
+            invariant_violation!("Ephemeral package should be set in upgrade");
+        };
+
+        // We have successfully verified the modules, we can write the package to the _old_ context now.
+        context.write_package(package);
 
         debug_assert_eq!(upgrade_receipt_type.abilities, AbilitySet::EMPTY);
         Ok(vec![Value::Raw(
@@ -969,13 +974,13 @@ mod checked {
         runtime_id: ObjectID,
         pkg: MovePackage,
         modules: &[CompiledModule],
-    ) -> Result<(LinkedContext<'outer_context, 'vm, 'state, 'a>, MovePackage), ExecutionError> {
+    ) -> Result<LinkedContext<'outer_context, 'vm, 'state, 'a>, ExecutionError> {
         let signing_config = context
             .ctx
             .protocol_config
             .verifier_config(/* signing_limits */ None)
             .clone();
-        let (new_vm_instance, pkg) =
+        let new_vm_instance =
             context.publish_module_bundle(AccountAddress::from(runtime_id), pkg)?;
         // run the Sui verifier
         for module in modules {
@@ -987,7 +992,7 @@ mod checked {
                 &signing_config,
             )?;
         }
-        Ok((new_vm_instance, pkg))
+        Ok(new_vm_instance)
     }
 
     fn init_modules<Mode: ExecutionMode>(
