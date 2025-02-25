@@ -26,6 +26,7 @@ use tokio::{join, signal, task::JoinHandle};
 use tokio_util::sync::CancellationToken;
 use tower_layer::Identity;
 use tracing::info;
+use url::Url;
 
 use crate::api::governance::Governance;
 use crate::context::Context;
@@ -214,6 +215,7 @@ impl Default for RpcArgs {
 /// The service may spin up auxiliary services (such as the system package task) to support itself,
 /// and will clean these up on shutdown as well.
 pub async fn start_rpc(
+    database_url: Url,
     db_args: DbArgs,
     rpc_args: RpcArgs,
     system_package_task_args: SystemPackageTaskArgs,
@@ -224,7 +226,7 @@ pub async fn start_rpc(
     let mut rpc = RpcService::new(rpc_args, registry, cancel.child_token())
         .context("Failed to create RPC service")?;
 
-    let context = Context::new(db_args, rpc_config, rpc.metrics(), registry).await?;
+    let context = Context::new(database_url, db_args, rpc_config, rpc.metrics(), registry).await?;
 
     let system_package_task = SystemPackageTask::new(
         context.clone(),

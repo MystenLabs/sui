@@ -25,6 +25,7 @@ use sui_indexer_alt_framework::{Indexer, IndexerArgs};
 use sui_indexer_alt_schema::MIGRATIONS;
 use sui_pg_db::DbArgs;
 use tokio_util::sync::CancellationToken;
+use url::Url;
 
 pub mod args;
 #[cfg(feature = "benchmark")]
@@ -35,6 +36,7 @@ pub(crate) mod consistent_pruning;
 pub(crate) mod handlers;
 
 pub async fn setup_indexer(
+    database_url: Url,
     db_args: DbArgs,
     indexer_args: IndexerArgs,
     client_args: ClientArgs,
@@ -89,6 +91,7 @@ pub async fn setup_indexer(
     let retry_interval = ingestion.retry_interval();
 
     let mut indexer = Indexer::new(
+        database_url,
         db_args,
         indexer_args,
         client_args,

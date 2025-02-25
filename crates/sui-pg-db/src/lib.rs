@@ -20,10 +20,6 @@ pub mod temp;
 
 #[derive(clap::Args, Debug, Clone)]
 pub struct DbArgs {
-    /// The URL of the database to connect to.
-    #[arg(long, default_value_t = Self::default().database_url)]
-    pub database_url: Url,
-
     /// Number of connections to keep in the pool.
     #[arg(long, default_value_t = Self::default().db_connection_pool_size)]
     pub db_connection_pool_size: u32,
@@ -49,21 +45,22 @@ impl DbArgs {
 }
 
 impl Db {
-    /// Construct a new DB connection pool that supports write and reads. Instances of [Db] can be
-    /// cloned to share access to the same pool.
-    pub async fn for_write(config: DbArgs) -> anyhow::Result<Self> {
+    /// Construct a new DB connection pool talking to the database at `database_url` that supports
+    /// write and reads. Instances of [Db] can be cloned to share access to the same pool.
+    pub async fn for_write(database_url: Url, config: DbArgs) -> anyhow::Result<Self> {
         Ok(Self {
             read_only: false,
-            pool: pool(config).await?,
+            pool: pool(database_url, config).await?,
         })
     }
 
-    /// Construct a new DB connection pool that defaults to read-only transactions. Instances of
-    /// [Db] can be cloned to share access to the same pool.
-    pub async fn for_read(config: DbArgs) -> anyhow::Result<Self> {
+    /// Construct a new DB connection pool talking to the database at `database_url` that defaults
+    /// to read-only transactions. Instances of [Db] can be cloned to share access to the same
+    /// pool.
+    pub async fn for_read(database_url: Url, config: DbArgs) -> anyhow::Result<Self> {
         Ok(Self {
             read_only: true,
-            pool: pool(config).await?,
+            pool: pool(database_url, config).await?,
         })
     }
 
@@ -162,22 +159,9 @@ impl Db {
     }
 }
 
-impl DbArgs {
-    pub fn new_for_testing(database_url: Url) -> Self {
-        Self {
-            database_url,
-            ..Default::default()
-        }
-    }
-}
-
 impl Default for DbArgs {
     fn default() -> Self {
         Self {
-            database_url: Url::parse(
-                "postgres://postgres:postgrespw@localhost:5432/sui_indexer_alt",
-            )
-            .unwrap(),
             db_connection_pool_size: 100,
             connection_timeout_ms: 60_000,
         }
@@ -186,10 +170,11 @@ impl Default for DbArgs {
 
 /// Drop all tables, and re-run migrations if supplied.
 pub async fn reset_database<S: MigrationSource<Pg> + Send + Sync + 'static>(
+    database_url: Url,
     db_config: DbArgs,
     migrations: Option<S>,
 ) -> anyhow::Result<()> {
-    let db = Db::for_write(db_config).await?;
+    let db = Db::for_write(database_url, db_config).await?;
     db.clear_database().await?;
     if let Some(migrations) = migrations {
         db.run_migrations(migrations).await?;
@@ -198,8 +183,8 @@ pub async fn reset_database<S: MigrationSource<Pg> + Send + Sync + 'static>(
     Ok(())
 }
 
-async fn pool(args: DbArgs) -> anyhow::Result<Pool<AsyncPgConnection>> {
-    let manager = AsyncDieselConnectionManager::new(args.database_url.as_str());
+async fn pool(database_url: Url, args: DbArgs) -> anyhow::Result<Pool<AsyncPgConnection>> {
+    let manager = AsyncDieselConnectionManager::new(database_url.as_str());
 
     Ok(Pool::builder()
         .max_size(args.db_connection_pool_size)
@@ -222,12 +207,7 @@ mod tests {
         let url = db.database().url();
 
         info!(%url);
-        let db_args = DbArgs {
-            database_url: url.clone(),
-            ..Default::default()
-        };
-
-        let db = Db::for_write(db_args).await.unwrap();
+        let db = Db::for_write(url.clone(), DbArgs::default()).await.unwrap();
         let mut conn = db.connect().await.unwrap();
 
         // Run a simple query to verify the db can properly be queried
@@ -250,12 +230,7 @@ mod tests {
         let temp_db = temp::TempDb::new().unwrap();
         let url = temp_db.database().url();
 
-        let db_args = DbArgs {
-            database_url: url.clone(),
-            ..Default::default()
-        };
-
-        let db = Db::for_write(db_args.clone()).await.unwrap();
+        let db = Db::for_write(url.clone(), DbArgs::default()).await.unwrap();
         let mut conn = db.connect().await.unwrap();
         diesel::sql_query("CREATE TABLE test_table (id INTEGER PRIMARY KEY)")
             .execute(&mut conn)
@@ -269,7 +244,7 @@ mod tests {
         .unwrap();
         assert_eq!(cnt.cnt, 1);
 
-        reset_database::<EmbeddedMigrations>(db_args, None)
+        reset_database::<EmbeddedMigrations>(url.clone(), DbArgs::default(), None)
             .await
             .unwrap();
 
@@ -288,13 +263,8 @@ mod tests {
         let temp_db = temp::TempDb::new().unwrap();
         let url = temp_db.database().url();
 
-        let db_args = DbArgs {
-            database_url: url.clone(),
-            ..Default::default()
-        };
-
-        let writer = Db::for_write(db_args.clone()).await.unwrap();
-        let reader = Db::for_read(db_args).await.unwrap();
+        let writer = Db::for_write(url.clone(), DbArgs::default()).await.unwrap();
+        let reader = Db::for_read(url.clone(), DbArgs::default()).await.unwrap();
 
         {
             // Create a table

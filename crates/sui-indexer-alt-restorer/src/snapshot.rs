@@ -66,7 +66,7 @@ impl SnapshotRestorer {
             true, // skip_reset_local_store
         )
         .await?;
-        let db = Db::for_write(args.db_args.clone()).await?;
+        let db = Db::for_write(args.database_url.clone(), args.db_args.clone()).await?;
 
         Ok(Self {
             restore_args: args.clone(),
