@@ -241,8 +241,8 @@ message GetCheckpointRequest {
   // Optional. The digest of the requested checkpoint.
   optional sui.types.Digest digest = 2;
 
-  // Optional. Mask for specifying which parts of the `GetCheckpointResponse`
-  // should be returned.
+  // Mask specifying which fields to read.
+  // If no mask is specified, defaults to `sequence_number,digest`.
   optional google.protobuf.FieldMask read_mask = 4;
 }
 

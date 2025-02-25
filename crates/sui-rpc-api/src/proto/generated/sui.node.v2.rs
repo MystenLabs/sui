@@ -163,8 +163,8 @@ pub struct GetCheckpointRequest {
     /// Optional. The digest of the requested checkpoint.
     #[prost(message, optional, tag = "2")]
     pub digest: ::core::option::Option<super::super::types::Digest>,
-    /// Optional. Mask for specifying which parts of the `GetCheckpointResponse`
-    /// should be returned.
+    /// Mask specifying which fields to read.
+    /// If no mask is specified, defaults to `sequence_number,digest`.
     #[prost(message, optional, tag = "4")]
     pub read_mask: ::core::option::Option<::prost_types::FieldMask>,
 }
