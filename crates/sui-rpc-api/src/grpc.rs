@@ -55,7 +55,6 @@ impl crate::proto::node::v2::node_service_server::NodeService for crate::RpcServ
         _request: tonic::Request<crate::proto::node::v2::GetNodeInfoRequest>,
     ) -> Result<tonic::Response<crate::proto::node::v2::GetNodeInfoResponse>, tonic::Status> {
         self.get_node_info()
-            .map(Into::into)
             .map(tonic::Response::new)
             .map_err(Into::into)
     }
