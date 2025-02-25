@@ -98,6 +98,8 @@ move-vm-profiler.workspace = true
 move-vm-config.workspace = true
 move-ir-types.workspace = true
 move-command-line-common.workspace = true
+move-cli.workspace = true
+move-symbol-pool.workspace = true
 
 [target.'cfg(not(target_env = "msvc"))'.dependencies]
 jemalloc-ctl.workspace = true
