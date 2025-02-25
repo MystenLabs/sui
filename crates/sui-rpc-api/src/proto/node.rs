@@ -1,8 +1,6 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use super::types::proto_to_timestamp_ms;
-use super::types::timestamp_ms_to_proto;
 use super::TryFromProtoError;
 use prost_types::FieldMask;
 use tap::Pipe;
@@ -83,88 +81,6 @@ impl TryFrom<&BalanceChange> for sui_sdk_types::BalanceChange {
             coin_type,
             amount,
         })
-    }
-}
-
-//
-// NodeInfo
-//
-
-impl From<crate::types::NodeInfo> for GetNodeInfoResponse {
-    fn from(
-        crate::types::NodeInfo {
-            chain_id,
-            chain,
-            epoch,
-            checkpoint_height,
-            timestamp_ms,
-            lowest_available_checkpoint,
-            lowest_available_checkpoint_objects,
-            software_version,
-        }: crate::types::NodeInfo,
-    ) -> Self {
-        Self {
-            chain_id: Some(chain_id.into()),
-            chain: Some(chain.into()),
-            epoch: Some(epoch),
-            checkpoint_height: Some(checkpoint_height),
-            timestamp: Some(timestamp_ms_to_proto(timestamp_ms)),
-            lowest_available_checkpoint,
-            lowest_available_checkpoint_objects,
-            software_version: Some(software_version.into()),
-        }
-    }
-}
-
-impl TryFrom<&GetNodeInfoResponse> for crate::types::NodeInfo {
-    type Error = TryFromProtoError;
-
-    fn try_from(
-        GetNodeInfoResponse {
-            chain_id,
-            chain,
-            epoch,
-            checkpoint_height,
-            timestamp,
-            lowest_available_checkpoint,
-            lowest_available_checkpoint_objects,
-            software_version,
-        }: &GetNodeInfoResponse,
-    ) -> Result<Self, Self::Error> {
-        let chain_id = chain_id
-            .as_ref()
-            .ok_or_else(|| TryFromProtoError::missing("chain_id"))?
-            .pipe(TryInto::try_into)?;
-        let chain = chain
-            .as_ref()
-            .ok_or_else(|| TryFromProtoError::missing("chain"))?
-            .to_owned()
-            .into();
-        let timestamp_ms = timestamp
-            .ok_or_else(|| TryFromProtoError::missing("timestamp"))?
-            .pipe(proto_to_timestamp_ms)?;
-
-        let epoch = epoch.ok_or_else(|| TryFromProtoError::missing("epoch"))?;
-        let checkpoint_height =
-            checkpoint_height.ok_or_else(|| TryFromProtoError::missing("checkpoint_height"))?;
-
-        let software_version = software_version
-            .as_ref()
-            .ok_or_else(|| TryFromProtoError::missing("software_version"))?
-            .to_owned()
-            .into();
-
-        Self {
-            chain_id,
-            chain,
-            epoch,
-            checkpoint_height,
-            timestamp_ms,
-            lowest_available_checkpoint: *lowest_available_checkpoint,
-            lowest_available_checkpoint_objects: *lowest_available_checkpoint_objects,
-            software_version,
-        }
-        .pipe(Ok)
     }
 }
 
