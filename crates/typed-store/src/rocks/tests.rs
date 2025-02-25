@@ -207,27 +207,6 @@ async fn test_get(#[values(true, false)] is_transactional: bool) {
 
 #[rstest]
 #[tokio::test]
-async fn test_get_raw(#[values(true, false)] is_transactional: bool) {
-    let db = open_map(temp_dir(), None, is_transactional);
-
-    db.insert(&123456789, &"123456789".to_string())
-        .expect("Failed to insert");
-
-    let val_bytes = db
-        .get_raw_bytes(&123456789)
-        .expect("Failed to get_raw_bytes")
-        .unwrap();
-
-    assert_eq!(bcs::to_bytes(&"123456789".to_string()).unwrap(), val_bytes);
-    assert_eq!(
-        None,
-        db.get_raw_bytes(&000000000)
-            .expect("Failed to get_raw_bytes")
-    );
-}
-
-#[rstest]
-#[tokio::test]
 async fn test_multi_get(#[values(true, false)] is_transactional: bool) {
     let db = open_map(temp_dir(), None, is_transactional);
 
@@ -237,26 +216,6 @@ async fn test_multi_get(#[values(true, false)] is_transactional: bool) {
         .expect("Failed to insert");
 
     let result = db.multi_get([123, 456, 789]).expect("Failed to multi get");
-
-    assert_eq!(result.len(), 3);
-    assert_eq!(result[0], Some("123".to_string()));
-    assert_eq!(result[1], Some("456".to_string()));
-    assert_eq!(result[2], None);
-}
-
-#[rstest]
-#[tokio::test]
-async fn test_chunked_multi_get(#[values(true, false)] is_transactional: bool) {
-    let db = open_map(temp_dir(), None, is_transactional);
-
-    db.insert(&123, &"123".to_string())
-        .expect("Failed to insert");
-    db.insert(&456, &"456".to_string())
-        .expect("Failed to insert");
-
-    let result = db
-        .chunked_multi_get([123, 456, 789], 1)
-        .expect("Failed to chunk multi get");
 
     assert_eq!(result.len(), 3);
     assert_eq!(result[0], Some("123".to_string()));
@@ -383,19 +342,6 @@ async fn test_iter_reverse(
     let mut iter = get_iter_with_bounds(&db, Some(1), None, use_safe_iter);
     assert_eq!(Some((1, "1".to_string())), iter.next());
     assert_eq!(Some((2, "2".to_string())), iter.next());
-}
-
-#[rstest]
-#[tokio::test]
-async fn test_values(#[values(true, false)] is_transactional: bool) {
-    let db = open_map(temp_dir(), None, is_transactional);
-
-    db.insert(&123456789, &"123456789".to_string())
-        .expect("Failed to insert");
-
-    let mut values = db.values();
-    assert_eq!(Some(Ok("123456789".to_string())), values.next());
-    assert_eq!(None, values.next());
 }
 
 #[rstest]
@@ -1035,8 +981,6 @@ async fn test_transaction_read_your_write() {
             .unwrap(),
         vec![Some("11".to_string()), None]
     );
-    let values: Vec<_> = tx.values(&db).collect();
-    assert_eq!(values, vec![Ok("11".to_string())]);
     assert!(tx.commit().is_ok());
 }
 
