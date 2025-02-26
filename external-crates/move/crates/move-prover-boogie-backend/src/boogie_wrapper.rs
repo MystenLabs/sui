@@ -16,7 +16,7 @@ use codespan::{ByteIndex, ColumnIndex, LineIndex, Location, Span};
 use codespan_reporting::diagnostic::{Diagnostic, Label};
 use itertools::Itertools;
 use log::{debug, info, warn};
-use num::BigInt;
+use num::{BigInt, BigUint};
 use once_cell::sync::Lazy;
 use pretty::RcDoc;
 use regex::Regex;
@@ -1389,20 +1389,27 @@ impl ModelValue {
                 "{}u8",
                 self.extract_literal().and_then(|s| s.parse::<u8>().ok())?
             ))),
-            Type::Primitive(PrimitiveType::U64) => Some(PrettyDoc::text(
-                self.extract_literal()
-                    .and_then(|s| s.parse::<u64>().ok())?
-                    .to_string(),
-            )),
+            Type::Primitive(PrimitiveType::U16) => Some(PrettyDoc::text(format!(
+                "{}u16",
+                self.extract_literal().and_then(|s| s.parse::<u16>().ok())?
+            ))),
+            Type::Primitive(PrimitiveType::U32) => Some(PrettyDoc::text(format!(
+                "{}u32",
+                self.extract_literal().and_then(|s| s.parse::<u32>().ok())?
+            ))),
+            Type::Primitive(PrimitiveType::U64) => Some(PrettyDoc::text(format!(
+                "{}u64",
+                self.extract_literal().and_then(|s| s.parse::<u64>().ok())?
+            ))),
             Type::Primitive(PrimitiveType::U128) => Some(PrettyDoc::text(format!(
                 "{}u128",
                 self.extract_literal()
                     .and_then(|s| s.parse::<u128>().ok())?
             ))),
-            Type::Primitive(PrimitiveType::Num) => Some(PrettyDoc::text(format!(
-                "{}num",
+            Type::Primitive(PrimitiveType::U256) => Some(PrettyDoc::text(format!(
+                "{}u256",
                 self.extract_literal()
-                    .and_then(|s| s.parse::<i128>().ok())?
+                    .and_then(|s| s.parse::<BigUint>().ok())?
             ))),
             Type::Primitive(PrimitiveType::Bool) => Some(PrettyDoc::text(
                 self.extract_literal()
