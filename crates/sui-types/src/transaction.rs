@@ -530,9 +530,10 @@ impl EndOfEpochTransactionKind {
                 }
             }
             Self::StoreExecutionTimeObservations(_) => {
-                if config.per_object_congestion_control_mode()
-                    != PerObjectCongestionControlMode::ExecutionTimeEstimate
-                {
+                if !matches!(
+                    config.per_object_congestion_control_mode(),
+                    PerObjectCongestionControlMode::ExecutionTimeEstimate(_)
+                ) {
                     return Err(UserInputError::Unsupported(
                         "execution time estimation not enabled".to_string(),
                     ));

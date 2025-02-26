@@ -1250,9 +1250,10 @@ impl AuthorityPerEpochStore {
         committee: Arc<Committee>,
         object_store: &dyn ObjectStore,
     ) -> impl Iterator<Item = (AuthorityIndex, u64, ExecutionTimeObservationKey, Duration)> {
-        if protocol_config.per_object_congestion_control_mode()
-            != PerObjectCongestionControlMode::ExecutionTimeEstimate
-        {
+        if !matches!(
+            protocol_config.per_object_congestion_control_mode(),
+            PerObjectCongestionControlMode::ExecutionTimeEstimate(_)
+        ) {
             return itertools::Either::Left(std::iter::empty());
         }
 
@@ -2000,6 +2001,7 @@ impl AuthorityPerEpochStore {
         generating_randomness: bool,
         previously_deferred_tx_digests: &HashMap<TransactionDigest, DeferralKey>,
         shared_object_congestion_tracker: &SharedObjectCongestionTracker,
+        additional_state: &AdditionalConsensusState,
     ) -> Option<(DeferralKey, DeferralReason)> {
         // Defer transaction if it uses randomness but we aren't generating any this round.
         // Don't defer if DKG has permanently failed; in that case we need to ignore.
@@ -2025,6 +2027,7 @@ impl AuthorityPerEpochStore {
                 cert,
                 previously_deferred_tx_digests,
                 commit_round,
+                additional_state.estimated_commit_rate(),
             )
         {
             Some((
@@ -3458,6 +3461,7 @@ impl AuthorityPerEpochStore {
             match self
                 .process_consensus_transaction(
                     output,
+                    additional_state,
                     tx,
                     checkpoint_service,
                     consensus_commit_info.round,
@@ -3550,11 +3554,14 @@ impl AuthorityPerEpochStore {
             .with_label_values(&["randomness_commit"])
             .set(shared_object_using_randomness_congestion_tracker.max_cost() as i64);
 
+        let estimated_commit_rate = additional_state.estimated_commit_rate();
+
         output.set_congestion_control_object_debts(
-            shared_object_congestion_tracker.accumulated_debts(),
+            shared_object_congestion_tracker.accumulated_debts(estimated_commit_rate),
         );
         output.set_congestion_control_randomness_object_debts(
-            shared_object_using_randomness_congestion_tracker.accumulated_debts(),
+            shared_object_using_randomness_congestion_tracker
+                .accumulated_debts(estimated_commit_rate),
         );
 
         if randomness_state_updated {
@@ -3703,6 +3710,7 @@ impl AuthorityPerEpochStore {
     async fn process_consensus_transaction<C: CheckpointServiceNotify>(
         &self,
         output: &mut ConsensusCommitOutput,
+        additional_state: &AdditionalConsensusState,
         transaction: &VerifiedSequencedConsensusTransaction,
         checkpoint_service: &Arc<C>,
         commit_round: Round,
@@ -3743,6 +3751,7 @@ impl AuthorityPerEpochStore {
                 let transaction = VerifiedExecutableTransaction::new_from_certificate(certificate);
 
                 self.process_consensus_user_transaction(
+                    additional_state,
                     transaction,
                     certificate_author,
                     commit_round,
@@ -3938,6 +3947,7 @@ impl AuthorityPerEpochStore {
                     VerifiedExecutableTransaction::new_from_consensus(tx, self.epoch());
 
                 self.process_consensus_user_transaction(
+                    additional_state,
                     transaction,
                     certificate_author,
                     commit_round,
@@ -3975,6 +3985,7 @@ impl AuthorityPerEpochStore {
 
     fn process_consensus_user_transaction(
         &self,
+        additional_state: &AdditionalConsensusState,
         transaction: VerifiedExecutableTransaction,
         block_author: &AuthorityPublicKeyBytes,
         commit_round: Round,
@@ -4025,6 +4036,7 @@ impl AuthorityPerEpochStore {
             generating_randomness,
             previously_deferred_tx_digests,
             shared_object_congestion_tracker,
+            additional_state,
         );
 
         if let Some((deferral_key, deferral_reason)) = deferral_info {

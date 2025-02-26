@@ -3,8 +3,10 @@
 
 use super::execution_time_estimator::ExecutionTimeEstimator;
 use crate::authority::transaction_deferral::DeferralKey;
+use mysten_common::fatal;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
+use std::time::Duration;
 use sui_protocol_config::{PerObjectCongestionControlMode, ProtocolConfig};
 use sui_types::base_types::{ObjectID, TransactionDigest};
 use sui_types::error::SuiResult;
@@ -12,6 +14,78 @@ use sui_types::executable_transaction::VerifiedExecutableTransaction;
 use sui_types::messages_consensus::Round;
 use sui_types::transaction::{Argument, SharedInputObject, TransactionDataAPI};
 use tracing::trace;
+
+#[derive(PartialEq, Eq, Clone, Debug)]
+struct Params {
+    mode: PerObjectCongestionControlMode,
+    max_accumulated_txn_cost_per_object_in_commit: u64,
+    gas_budget_based_txn_cost_cap_factor: Option<u64>,
+    gas_budget_based_txn_cost_absolute_cap: Option<u64>,
+    max_txn_cost_overage_per_object_in_commit: u64,
+    allowed_txn_cost_overage_burst_per_object_in_commit: u64,
+}
+
+impl Params {
+    // Get the target budget per commit. Over the long term, the scheduler will try to
+    // schedule no more than this much work per object per commit on average.
+    pub fn target_budget_per_commit(&self, estimated_commit_period: Duration) -> u64 {
+        match self.mode {
+            PerObjectCongestionControlMode::ExecutionTimeEstimate(params) => {
+                let commit_period_micros = estimated_commit_period.as_micros() as u64;
+                commit_period_micros
+                    .checked_mul(params.target_utilization)
+                    .unwrap_or(u64::MAX)
+                    / 100
+            }
+            _ => self.max_accumulated_txn_cost_per_object_in_commit,
+        }
+    }
+
+    // The amount scheduled in a commit can "burst" up to this much over the target budget.
+    // The per-object debt limit will enforce the average limit over time.
+    pub fn max_burst_budget(&self) -> u64 {
+        match self.mode {
+            PerObjectCongestionControlMode::ExecutionTimeEstimate(params) => {
+                params.allowed_txn_cost_overage_burst_limit_us
+            }
+            _ => self.allowed_txn_cost_overage_burst_per_object_in_commit,
+        }
+    }
+
+    // The absolute maximum to schedule per commit, even for a single transaction.
+    // This should normally be very high, otherwise some transactions could be
+    // unschedulable regardless of congestion.
+    pub fn per_commit_hard_limit(&self) -> u64 {
+        match self.mode {
+            PerObjectCongestionControlMode::ExecutionTimeEstimate(params) => {
+                params.max_txn_cost_overage_per_object_in_commit_us
+            }
+            _ => self.max_txn_cost_overage_per_object_in_commit,
+        }
+    }
+
+    pub fn gas_budget_based_txn_cost_cap_factor(&self) -> u64 {
+        match self.mode {
+            PerObjectCongestionControlMode::TotalGasBudgetWithCap => self
+                .gas_budget_based_txn_cost_cap_factor
+                .expect("cap factor must be set if TotalGasBudgetWithCap mode is used."),
+            _ => fatal!(
+                "gas_budget_based_txn_cost_cap_factor is only used in TotalGasBudgetWithCap mode."
+            ),
+        }
+    }
+
+    pub fn gas_budget_based_txn_cost_absolute_cap(&self) -> Option<u64> {
+        match self.mode {
+            PerObjectCongestionControlMode::TotalGasBudgetWithCap => {
+                self.gas_budget_based_txn_cost_absolute_cap
+            }
+            _ => fatal!(
+                "gas_budget_based_txn_cost_absolute_cap is only used in TotalGasBudgetWithCap mode."
+            ),
+        }
+    }
+}
 
 // SharedObjectCongestionTracker stores the accumulated cost of executing transactions on an object, for
 // all transactions in a consensus commit.
@@ -28,12 +102,7 @@ use tracing::trace;
 #[derive(PartialEq, Eq, Clone, Debug)]
 pub struct SharedObjectCongestionTracker {
     object_execution_cost: HashMap<ObjectID, u64>,
-    mode: PerObjectCongestionControlMode,
-    max_accumulated_txn_cost_per_object_in_commit: u64,
-    gas_budget_based_txn_cost_cap_factor: Option<u64>,
-    gas_budget_based_txn_cost_absolute_cap: Option<u64>,
-    max_txn_cost_overage_per_object_in_commit: u64,
-    allowed_txn_cost_overage_burst_per_object_in_commit: u64,
+    params: Params,
 }
 
 impl SharedObjectCongestionTracker {
@@ -76,12 +145,14 @@ impl SharedObjectCongestionTracker {
         );
         Self {
             object_execution_cost,
-            mode,
-            max_accumulated_txn_cost_per_object_in_commit,
-            gas_budget_based_txn_cost_cap_factor,
-            gas_budget_based_txn_cost_absolute_cap,
-            max_txn_cost_overage_per_object_in_commit,
-            allowed_txn_cost_overage_burst_per_object_in_commit,
+            params: Params {
+                mode,
+                max_accumulated_txn_cost_per_object_in_commit,
+                gas_budget_based_txn_cost_cap_factor,
+                gas_budget_based_txn_cost_absolute_cap,
+                max_txn_cost_overage_per_object_in_commit,
+                allowed_txn_cost_overage_burst_per_object_in_commit,
+            },
         }
     }
 
@@ -131,14 +202,14 @@ impl SharedObjectCongestionTracker {
         execution_time_estimator: &ExecutionTimeEstimator,
         cert: &VerifiedExecutableTransaction,
     ) -> Option<u64> {
-        match self.mode {
+        match &self.params.mode {
             PerObjectCongestionControlMode::None => None,
             PerObjectCongestionControlMode::TotalGasBudget => Some(cert.gas_budget()),
             PerObjectCongestionControlMode::TotalTxCount => Some(1),
             PerObjectCongestionControlMode::TotalGasBudgetWithCap => {
                 Some(std::cmp::min(cert.gas_budget(), self.get_tx_cost_cap(cert)))
             }
-            PerObjectCongestionControlMode::ExecutionTimeEstimate => Some(
+            PerObjectCongestionControlMode::ExecutionTimeEstimate(_) => Some(
                 execution_time_estimator
                     .get_estimate(cert.transaction_data())
                     .as_micros()
@@ -155,6 +226,7 @@ impl SharedObjectCongestionTracker {
         cert: &VerifiedExecutableTransaction,
         previously_deferred_tx_digests: &HashMap<TransactionDigest, DeferralKey>,
         commit_round: Round,
+        estimated_commit_period: Duration,
     ) -> Option<(DeferralKey, Vec<ObjectID>)> {
         let tx_cost = self.get_tx_cost(execution_time_estimator, cert)?;
 
@@ -166,13 +238,18 @@ impl SharedObjectCongestionTracker {
         let start_cost = self.compute_tx_start_at_cost(&shared_input_objects);
         let end_cost = start_cost.saturating_add(tx_cost);
 
+        let target_budget_per_commit = self
+            .params
+            .target_budget_per_commit(estimated_commit_period);
+
+        let max_burst_budget = self.params.max_burst_budget();
+
+        let per_commit_hard_limit = self.params.per_commit_hard_limit();
+
         // Allow tx if it's within configured limits.
-        let burst_limit = self
-            .max_accumulated_txn_cost_per_object_in_commit
-            .saturating_add(self.allowed_txn_cost_overage_burst_per_object_in_commit);
-        let absolute_limit = self
-            .max_accumulated_txn_cost_per_object_in_commit
-            .saturating_add(self.max_txn_cost_overage_per_object_in_commit);
+        let burst_limit = target_budget_per_commit.saturating_add(max_burst_budget);
+        let absolute_limit = target_budget_per_commit.saturating_add(per_commit_hard_limit);
+
         if start_cost <= burst_limit && end_cost <= absolute_limit {
             return None;
         }
@@ -239,8 +316,8 @@ impl SharedObjectCongestionTracker {
     // Returns accumulated debts for objects whose budgets have been exceeded over the course
     // of the commit. Consumes the tracker object, since this should only be called once after
     // all tx have been processed.
-    pub fn accumulated_debts(self) -> Vec<(ObjectID, u64)> {
-        if self.max_txn_cost_overage_per_object_in_commit == 0 {
+    pub fn accumulated_debts(self, commit_rate: Duration) -> Vec<(ObjectID, u64)> {
+        if self.params.per_commit_hard_limit() == 0 {
             return vec![]; // early-exit if overage is not allowed
         }
 
@@ -248,7 +325,7 @@ impl SharedObjectCongestionTracker {
             .into_iter()
             .filter_map(|(obj_id, cost)| {
                 let remaining_cost =
-                    cost.saturating_sub(self.max_accumulated_txn_cost_per_object_in_commit);
+                    cost.saturating_sub(self.params.target_budget_per_commit(commit_rate));
                 if remaining_cost > 0 {
                     Some((obj_id, remaining_cost))
                 } else {
@@ -281,14 +358,13 @@ impl SharedObjectCongestionTracker {
             }
         }
         let cap = (number_of_move_call + number_of_move_input) as u64
-            * self
-                .gas_budget_based_txn_cost_cap_factor
-                .expect("cap factor must be set if TotalGasBudgetWithCap mode is used.");
+            * self.params.gas_budget_based_txn_cost_cap_factor();
 
         // Apply absolute cap if configured.
         std::cmp::min(
             cap,
-            self.gas_budget_based_txn_cost_absolute_cap
+            self.params
+                .gas_budget_based_txn_cost_absolute_cap()
                 .unwrap_or(u64::MAX),
         )
     }
@@ -316,6 +392,7 @@ mod object_cost_tests {
     use super::*;
 
     use rstest::rstest;
+    use sui_protocol_config::ExecutionTimeEstimateParams;
     use sui_test_transaction_builder::TestTransactionBuilder;
     use sui_types::base_types::{random_object_ref, SequenceNumber};
     use sui_types::crypto::{get_key_pair, AccountKeyPair};
@@ -468,7 +545,11 @@ mod object_cost_tests {
             PerObjectCongestionControlMode::TotalGasBudget,
             PerObjectCongestionControlMode::TotalTxCount,
             PerObjectCongestionControlMode::TotalGasBudgetWithCap,
-            PerObjectCongestionControlMode::ExecutionTimeEstimate
+            PerObjectCongestionControlMode::ExecutionTimeEstimate(ExecutionTimeEstimateParams {
+                target_utilization: 20,
+                allowed_txn_cost_overage_burst_limit_us: 0,
+                max_txn_cost_overage_per_object_in_commit_us: 0,
+            }),
         )]
         mode: PerObjectCongestionControlMode,
     ) {
@@ -486,7 +567,8 @@ mod object_cost_tests {
             PerObjectCongestionControlMode::TotalGasBudget => tx_gas_budget + 1,
             PerObjectCongestionControlMode::TotalTxCount => 2,
             PerObjectCongestionControlMode::TotalGasBudgetWithCap => tx_gas_budget - 1,
-            PerObjectCongestionControlMode::ExecutionTimeEstimate => 2_000_000,
+            //PerObjectCongestionControlMode::ExecutionTimeEstimate(_) => 2_000_000,
+            PerObjectCongestionControlMode::ExecutionTimeEstimate(_) => 0, // ignored
         };
 
         let shared_object_congestion_tracker = match mode {
@@ -536,7 +618,7 @@ mod object_cost_tests {
                     0,
                 )
             }
-            PerObjectCongestionControlMode::ExecutionTimeEstimate => {
+            PerObjectCongestionControlMode::ExecutionTimeEstimate(_) => {
                 // Construct object execution cost as following
                 //                0     1_000_000
                 // object 0:            |
@@ -562,6 +644,7 @@ mod object_cost_tests {
                     &tx,
                     &HashMap::new(),
                     0,
+                    Duration::from_micros(10_000_000),
                 )
             {
                 assert_eq!(congested_objects.len(), 1);
@@ -581,7 +664,8 @@ mod object_cost_tests {
                     &execution_time_estimator,
                     &tx,
                     &HashMap::new(),
-                    0
+                    0,
+                    Duration::from_micros(10_000_000),
                 )
                 .is_none());
         }
@@ -599,6 +683,7 @@ mod object_cost_tests {
                         &tx,
                         &HashMap::new(),
                         0,
+                        Duration::from_micros(10_000_000),
                     )
                 {
                     assert_eq!(congested_objects.len(), 1);
@@ -616,7 +701,11 @@ mod object_cost_tests {
             PerObjectCongestionControlMode::TotalGasBudget,
             PerObjectCongestionControlMode::TotalTxCount,
             PerObjectCongestionControlMode::TotalGasBudgetWithCap,
-            PerObjectCongestionControlMode::ExecutionTimeEstimate
+            PerObjectCongestionControlMode::ExecutionTimeEstimate(ExecutionTimeEstimateParams {
+                target_utilization: 0, // Make should_defer_due_to_object_congestion always defer transactions.
+                allowed_txn_cost_overage_burst_limit_us: 0,
+                max_txn_cost_overage_per_object_in_commit_us: 0,
+            }),
         )]
         mode: PerObjectCongestionControlMode,
     ) {
@@ -657,6 +746,7 @@ mod object_cost_tests {
             &tx,
             &previously_deferred_tx_digests,
             10,
+            Duration::from_micros(10_000_000),
         ) {
             assert_eq!(future_round, 11);
             assert_eq!(deferred_from_round, 10);
@@ -684,6 +774,7 @@ mod object_cost_tests {
             &tx,
             &previously_deferred_tx_digests,
             10,
+            Duration::from_micros(10_000_000),
         ) {
             assert_eq!(future_round, 11);
             assert_eq!(deferred_from_round, 4);
@@ -712,6 +803,7 @@ mod object_cost_tests {
             &tx,
             &previously_deferred_tx_digests,
             10,
+            Duration::from_micros(10_000_000),
         ) {
             assert_eq!(future_round, 11);
             assert_eq!(deferred_from_round, 5);
@@ -726,7 +818,11 @@ mod object_cost_tests {
             PerObjectCongestionControlMode::TotalGasBudget,
             PerObjectCongestionControlMode::TotalTxCount,
             PerObjectCongestionControlMode::TotalGasBudgetWithCap,
-            PerObjectCongestionControlMode::ExecutionTimeEstimate
+            PerObjectCongestionControlMode::ExecutionTimeEstimate(ExecutionTimeEstimateParams {
+                target_utilization: 16,
+                allowed_txn_cost_overage_burst_limit_us: 0,
+                max_txn_cost_overage_per_object_in_commit_us: 10_000_000,
+            }),
         )]
         mode: PerObjectCongestionControlMode,
     ) {
@@ -747,7 +843,7 @@ mod object_cost_tests {
             PerObjectCongestionControlMode::TotalGasBudget => tx_gas_budget + 1,
             PerObjectCongestionControlMode::TotalTxCount => 2,
             PerObjectCongestionControlMode::TotalGasBudgetWithCap => tx_gas_budget - 1,
-            PerObjectCongestionControlMode::ExecutionTimeEstimate => 1_600_000,
+            PerObjectCongestionControlMode::ExecutionTimeEstimate(_) => 0, // ignored
         };
 
         let shared_object_congestion_tracker = match mode {
@@ -797,7 +893,7 @@ mod object_cost_tests {
                     0,
                 )
             }
-            PerObjectCongestionControlMode::ExecutionTimeEstimate => {
+            PerObjectCongestionControlMode::ExecutionTimeEstimate(_) => {
                 // Construct object execution cost as following
                 //                300K  1.7M
                 // object 0:            |
@@ -823,6 +919,7 @@ mod object_cost_tests {
                     &tx,
                     &HashMap::new(),
                     0,
+                    Duration::from_micros(10_000_000),
                 )
             {
                 assert_eq!(congested_objects.len(), 1);
@@ -841,6 +938,7 @@ mod object_cost_tests {
                     &tx,
                     &HashMap::new(),
                     0,
+                    Duration::from_micros(10_000_000),
                 )
                 .is_none());
         }
@@ -858,6 +956,7 @@ mod object_cost_tests {
                         &tx,
                         &HashMap::new(),
                         0,
+                        Some(Duration::from_micros(10_000_000)),
                     )
                 {
                     assert_eq!(congested_objects.len(), 1);
@@ -875,7 +974,11 @@ mod object_cost_tests {
             PerObjectCongestionControlMode::TotalGasBudget,
             PerObjectCongestionControlMode::TotalTxCount,
             PerObjectCongestionControlMode::TotalGasBudgetWithCap,
-            PerObjectCongestionControlMode::ExecutionTimeEstimate
+            PerObjectCongestionControlMode::ExecutionTimeEstimate(ExecutionTimeEstimateParams {
+                target_utilization: 16,
+                allowed_txn_cost_overage_burst_limit_us: 1_500_000,
+                max_txn_cost_overage_per_object_in_commit_us: 10_000_000,
+            }),
         )]
         mode: PerObjectCongestionControlMode,
     ) {
@@ -895,7 +998,7 @@ mod object_cost_tests {
             PerObjectCongestionControlMode::TotalGasBudget => tx_gas_budget,
             PerObjectCongestionControlMode::TotalTxCount => 2,
             PerObjectCongestionControlMode::TotalGasBudgetWithCap => tx_gas_budget,
-            PerObjectCongestionControlMode::ExecutionTimeEstimate => 1_600_000,
+            PerObjectCongestionControlMode::ExecutionTimeEstimate(_) => 0, // ignored
         };
 
         // Set burst limit to allow 1 extra transaction to go through.
@@ -904,7 +1007,7 @@ mod object_cost_tests {
             PerObjectCongestionControlMode::TotalGasBudget => tx_gas_budget * 2,
             PerObjectCongestionControlMode::TotalTxCount => 2,
             PerObjectCongestionControlMode::TotalGasBudgetWithCap => tx_gas_budget * 2,
-            PerObjectCongestionControlMode::ExecutionTimeEstimate => 1_500_000,
+            PerObjectCongestionControlMode::ExecutionTimeEstimate(_) => 0, // ignored
         };
 
         let shared_object_congestion_tracker = match mode {
@@ -963,7 +1066,7 @@ mod object_cost_tests {
                     allowed_txn_cost_overage_burst_per_object_in_commit,
                 )
             }
-            PerObjectCongestionControlMode::ExecutionTimeEstimate => {
+            PerObjectCongestionControlMode::ExecutionTimeEstimate(_) => {
                 // Construct object execution cost as following
                 //                4M    2M
                 // object 0:            |
@@ -992,6 +1095,7 @@ mod object_cost_tests {
                     &tx,
                     &HashMap::new(),
                     0,
+                    Duration::from_micros(10_000_000),
                 )
             {
                 assert_eq!(congested_objects.len(), 1);
@@ -1011,6 +1115,7 @@ mod object_cost_tests {
                     &tx,
                     &HashMap::new(),
                     0,
+                    Duration::from_micros(10_000_000),
                 )
                 .is_none());
         }
@@ -1028,6 +1133,7 @@ mod object_cost_tests {
                         &tx,
                         &HashMap::new(),
                         0,
+                        Duration::from_micros(10_000_000),
                     )
                 {
                     assert_eq!(congested_objects.len(), 1);
@@ -1045,7 +1151,12 @@ mod object_cost_tests {
             PerObjectCongestionControlMode::TotalGasBudget,
             PerObjectCongestionControlMode::TotalTxCount,
             PerObjectCongestionControlMode::TotalGasBudgetWithCap,
-            PerObjectCongestionControlMode::ExecutionTimeEstimate
+            PerObjectCongestionControlMode::ExecutionTimeEstimate(ExecutionTimeEstimateParams {
+                // all params ignored in this test
+                target_utilization: 0,
+                allowed_txn_cost_overage_burst_limit_us: 0,
+                max_txn_cost_overage_per_object_in_commit_us: 0,
+            }),
         )]
         mode: PerObjectCongestionControlMode,
     ) {
@@ -1097,7 +1208,7 @@ mod object_cost_tests {
             PerObjectCongestionControlMode::TotalGasBudget => 20,
             PerObjectCongestionControlMode::TotalTxCount => 11,
             PerObjectCongestionControlMode::TotalGasBudgetWithCap => 13, // 2 objects, 1 command.
-            PerObjectCongestionControlMode::ExecutionTimeEstimate => 1_500_010,
+            PerObjectCongestionControlMode::ExecutionTimeEstimate(_) => 1_500_010,
         };
         assert_eq!(
             shared_object_congestion_tracker,
@@ -1130,7 +1241,7 @@ mod object_cost_tests {
             PerObjectCongestionControlMode::TotalGasBudget => 30,
             PerObjectCongestionControlMode::TotalTxCount => 12,
             PerObjectCongestionControlMode::TotalGasBudgetWithCap => 17, // 3 objects, 1 command
-            PerObjectCongestionControlMode::ExecutionTimeEstimate => 3_000_010,
+            PerObjectCongestionControlMode::ExecutionTimeEstimate(_) => 3_000_010,
         };
         shared_object_congestion_tracker
             .bump_object_execution_cost(&execution_time_estimator, &cert);
@@ -1171,7 +1282,7 @@ mod object_cost_tests {
             PerObjectCongestionControlMode::TotalTxCount => 13,
             PerObjectCongestionControlMode::TotalGasBudgetWithCap => 45, // 3 objects, 7 commands
             // previous cost 3_000_010 + (unknown-command default of 1.5M)
-            PerObjectCongestionControlMode::ExecutionTimeEstimate => 4_500_010,
+            PerObjectCongestionControlMode::ExecutionTimeEstimate(_) => 4_500_010,
         };
         shared_object_congestion_tracker
             .bump_object_execution_cost(&execution_time_estimator, &cert);
@@ -1203,7 +1314,13 @@ mod object_cost_tests {
             PerObjectCongestionControlMode::TotalGasBudget,
             PerObjectCongestionControlMode::TotalTxCount,
             PerObjectCongestionControlMode::TotalGasBudgetWithCap,
-            PerObjectCongestionControlMode::ExecutionTimeEstimate
+            PerObjectCongestionControlMode::ExecutionTimeEstimate(ExecutionTimeEstimateParams {
+                // all params ignored in this test
+                target_utilization: 16,
+                // set a burst limit to verify that it does not affect debt calculation.
+                allowed_txn_cost_overage_burst_limit_us: 1_600_000 * 5,
+                max_txn_cost_overage_per_object_in_commit_us: 1_600_000 * 10,
+            }),
         )]
         mode: PerObjectCongestionControlMode,
     ) {
@@ -1224,7 +1341,7 @@ mod object_cost_tests {
             PerObjectCongestionControlMode::TotalGasBudget
             | PerObjectCongestionControlMode::TotalGasBudgetWithCap => 90,
             PerObjectCongestionControlMode::TotalTxCount => 2,
-            PerObjectCongestionControlMode::ExecutionTimeEstimate => 1_600_000,
+            PerObjectCongestionControlMode::ExecutionTimeEstimate(_) => 0, // ignored
         };
 
         let mut shared_object_congestion_tracker = match mode {
@@ -1268,7 +1385,7 @@ mod object_cost_tests {
                     max_accumulated_txn_cost_per_object_in_commit * 5,
                 )
             }
-            PerObjectCongestionControlMode::ExecutionTimeEstimate => {
+            PerObjectCongestionControlMode::ExecutionTimeEstimate(_) => {
                 // Starting with two objects with accumulated cost 500K.
                 SharedObjectCongestionTracker::new(
                     [(shared_obj_0, 500_000), (shared_obj_1, 500_000)],
@@ -1291,7 +1408,8 @@ mod object_cost_tests {
         }
 
         // Verify that accumulated_debts reports the debt for object 0.
-        let accumulated_debts = shared_object_congestion_tracker.accumulated_debts();
+        let accumulated_debts =
+            shared_object_congestion_tracker.accumulated_debts(Duration::from_micros(10_000_000));
         assert_eq!(accumulated_debts.len(), 1);
         match mode {
             PerObjectCongestionControlMode::None => unreachable!(),
@@ -1304,7 +1422,7 @@ mod object_cost_tests {
             PerObjectCongestionControlMode::TotalTxCount => {
                 assert_eq!(accumulated_debts[0], (shared_obj_0, 1)); // init 2 + 1 tx - budget 2 = 1
             }
-            PerObjectCongestionControlMode::ExecutionTimeEstimate => {
+            PerObjectCongestionControlMode::ExecutionTimeEstimate(_) => {
                 // init 500K + 1.5M tx - budget 1.6M = 400K
                 assert_eq!(accumulated_debts[0], (shared_obj_0, 400_000));
             }
@@ -1327,7 +1445,7 @@ mod object_cost_tests {
             0,
         );
 
-        let accumulated_debts = shared_object_congestion_tracker.accumulated_debts();
+        let accumulated_debts = shared_object_congestion_tracker.accumulated_debts(None);
         assert!(accumulated_debts.is_empty());
     }
 
@@ -1369,6 +1487,7 @@ mod object_cost_tests {
                 &tx,
                 &HashMap::new(),
                 0,
+                None,
             )
             .is_none());
 
@@ -1377,7 +1496,7 @@ mod object_cost_tests {
         assert_eq!(300, shared_object_congestion_tracker.max_cost());
 
         // Verify accumulated debts still uses the per-commit budget to decrement.
-        let accumulated_debts = shared_object_congestion_tracker.accumulated_debts();
+        let accumulated_debts = shared_object_congestion_tracker.accumulated_debts(None);
         assert_eq!(accumulated_debts.len(), 1);
         assert_eq!(accumulated_debts[0], (object_id_2, 200));
     }

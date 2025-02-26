@@ -84,11 +84,12 @@ impl ExecutionTimeObserver {
         channel_size: usize,
         observation_cache_size: NonZeroUsize,
     ) {
-        if epoch_store
-            .protocol_config()
-            .per_object_congestion_control_mode()
-            != PerObjectCongestionControlMode::ExecutionTimeEstimate
-        {
+        if !matches!(
+            epoch_store
+                .protocol_config()
+                .per_object_congestion_control_mode(),
+            PerObjectCongestionControlMode::ExecutionTimeEstimate(_)
+        ) {
             info!("ExecutionTimeObserver disabled because per-object congestion control mode is not ExecutionTimeEstimate");
             return;
         }
