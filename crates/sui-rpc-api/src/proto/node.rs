@@ -212,6 +212,8 @@ impl GetTransactionResponse {
 //
 
 impl GetFullCheckpointRequest {
+    pub const READ_MASK_DEFAULT: &str = "sequence_number,digest";
+
     pub fn latest() -> Self {
         Self {
             sequence_number: None,
@@ -266,138 +268,33 @@ impl GetCheckpointResponse {
 // FullCheckpointResponse
 //
 
-impl From<crate::types::FullCheckpointResponse> for GetFullCheckpointResponse {
-    fn from(
-        crate::types::FullCheckpointResponse {
-            sequence_number,
-            digest,
-            summary,
-            summary_bcs,
-            signature,
-            contents,
-            contents_bcs,
-            transactions,
-        }: crate::types::FullCheckpointResponse,
-    ) -> Self {
-        Self {
-            sequence_number: Some(sequence_number),
-            digest: Some(digest.into()),
-            summary: summary.map(Into::into),
-            summary_bcs: summary_bcs.map(Into::into),
-            signature: signature.map(Into::into),
-            contents: contents.map(Into::into),
-            contents_bcs: contents_bcs.map(Into::into),
-            transactions: transactions.into_iter().map(Into::into).collect(),
+impl GetFullCheckpointResponse {
+    pub fn validate_read_mask(read_mask: &FieldMask) -> Result<(), &str> {
+        for path in &read_mask.paths {
+            if !Self::validate_field_path(path) {
+                return Err(path);
+            }
         }
+
+        Ok(())
     }
-}
 
-impl TryFrom<&GetFullCheckpointResponse> for crate::types::FullCheckpointResponse {
-    type Error = TryFromProtoError;
-
-    fn try_from(
-        GetFullCheckpointResponse {
-            sequence_number,
-            digest,
-            summary,
-            summary_bcs,
-            signature,
-            contents,
-            contents_bcs,
-            transactions,
-        }: &GetFullCheckpointResponse,
-    ) -> Result<Self, Self::Error> {
-        let sequence_number =
-            sequence_number.ok_or_else(|| TryFromProtoError::missing("sequence_number"))?;
-        let digest = digest
-            .as_ref()
-            .ok_or_else(|| TryFromProtoError::missing("digest"))?
-            .pipe(TryInto::try_into)?;
-
-        let summary = summary.as_ref().map(TryInto::try_into).transpose()?;
-        let summary_bcs = summary_bcs.as_ref().map(Into::into);
-
-        let signature = signature.as_ref().map(TryInto::try_into).transpose()?;
-
-        let contents = contents.as_ref().map(TryInto::try_into).transpose()?;
-        let contents_bcs = contents_bcs.as_ref().map(Into::into);
-
-        let transactions = transactions
-            .iter()
-            .map(TryInto::try_into)
-            .collect::<Result<_, _>>()?;
-
-        Self {
-            sequence_number,
-            digest,
-            summary,
-            summary_bcs,
-            signature,
-            contents,
-            contents_bcs,
-            transactions,
+    pub fn validate_field_path(path: &str) -> bool {
+        if let Some(remaining) = path.strip_prefix("transactions.") {
+            return FullCheckpointTransaction::validate_field_path(remaining);
         }
-        .pipe(Ok)
-    }
-}
 
-//
-// FullCheckpointObject
-//
-
-impl From<crate::types::FullCheckpointObject> for FullCheckpointObject {
-    fn from(
-        crate::types::FullCheckpointObject {
-            object_id,
-            version,
-            digest,
-            object,
-            object_bcs,
-        }: crate::types::FullCheckpointObject,
-    ) -> Self {
-        Self {
-            object_id: Some(object_id.into()),
-            version: Some(version),
-            digest: Some(digest.into()),
-            object: object.map(Into::into),
-            object_bcs: object_bcs.map(Into::into),
-        }
-    }
-}
-
-impl TryFrom<&FullCheckpointObject> for crate::types::FullCheckpointObject {
-    type Error = TryFromProtoError;
-
-    fn try_from(
-        FullCheckpointObject {
-            object_id,
-            version,
-            digest,
-            object,
-            object_bcs,
-        }: &FullCheckpointObject,
-    ) -> Result<Self, Self::Error> {
-        let object_id = object_id
-            .as_ref()
-            .ok_or_else(|| TryFromProtoError::missing("object_id"))?
-            .pipe(TryInto::try_into)?;
-        let version = version.ok_or_else(|| TryFromProtoError::missing("version"))?;
-        let digest = digest
-            .as_ref()
-            .ok_or_else(|| TryFromProtoError::missing("digest"))?
-            .pipe(TryInto::try_into)?;
-
-        let object = object.as_ref().map(TryInto::try_into).transpose()?;
-        let object_bcs = object_bcs.as_ref().map(Into::into);
-
-        Self {
-            object_id,
-            version,
-            digest,
-            object,
-            object_bcs,
-        }
-        .pipe(Ok)
+        matches!(
+            path,
+            "sequence_number"
+                | "digest"
+                | "summary"
+                | "summary_bcs"
+                | "signature"
+                | "contents"
+                | "contents_bcs"
+                | "transactions"
+        )
     }
 }
 
@@ -405,102 +302,41 @@ impl TryFrom<&FullCheckpointObject> for crate::types::FullCheckpointObject {
 // FullCheckpointTransaction
 //
 
-impl From<crate::types::FullCheckpointTransaction> for FullCheckpointTransaction {
-    fn from(
-        crate::types::FullCheckpointTransaction {
-            digest,
-            transaction,
-            transaction_bcs,
-            effects,
-            effects_bcs,
-            events,
-            events_bcs,
-            input_objects,
-            output_objects,
-        }: crate::types::FullCheckpointTransaction,
-    ) -> Self {
-        let input_objects = input_objects
-            .map(|objects| objects.into_iter().map(Into::into).collect())
-            .unwrap_or_default();
-        let output_objects = output_objects
-            .map(|objects| objects.into_iter().map(Into::into).collect())
-            .unwrap_or_default();
-        Self {
-            digest: Some(digest.into()),
-            transaction: transaction.map(Into::into),
-            transaction_bcs: transaction_bcs.map(Into::into),
-            effects: effects.map(Into::into),
-            effects_bcs: effects_bcs.map(Into::into),
-            events: events.map(Into::into),
-            events_bcs: events_bcs.map(Into::into),
-            input_objects,
-            output_objects,
+impl FullCheckpointTransaction {
+    pub fn validate_field_path(path: &str) -> bool {
+        if let Some(remaining) = path.strip_prefix("input_objects.") {
+            return FullCheckpointObject::validate_field_path(remaining);
         }
+
+        if let Some(remaining) = path.strip_prefix("output_objects.") {
+            return FullCheckpointObject::validate_field_path(remaining);
+        }
+
+        matches!(
+            path,
+            "digest"
+                | "transaction"
+                | "transaction_bcs"
+                | "effects"
+                | "effects_bcs"
+                | "events"
+                | "events_bcs"
+                | "input_objects"
+                | "output_objects"
+        )
     }
 }
 
-impl TryFrom<&FullCheckpointTransaction> for crate::types::FullCheckpointTransaction {
-    type Error = TryFromProtoError;
+//
+// FullCheckpointObject
+//
 
-    fn try_from(
-        FullCheckpointTransaction {
-            digest,
-            transaction,
-            transaction_bcs,
-            effects,
-            effects_bcs,
-            events,
-            events_bcs,
-            input_objects,
-            output_objects,
-        }: &FullCheckpointTransaction,
-    ) -> Result<Self, Self::Error> {
-        let digest = digest
-            .as_ref()
-            .ok_or_else(|| TryFromProtoError::missing("digest"))?
-            .pipe(TryInto::try_into)?;
-
-        let transaction = transaction.as_ref().map(TryInto::try_into).transpose()?;
-        let transaction_bcs = transaction_bcs.as_ref().map(Into::into);
-
-        let effects = effects.as_ref().map(TryInto::try_into).transpose()?;
-        let effects_bcs = effects_bcs.as_ref().map(Into::into);
-
-        let events = events.as_ref().map(TryInto::try_into).transpose()?;
-        let events_bcs = events_bcs.as_ref().map(Into::into);
-
-        let input_objects = input_objects
-            .iter()
-            .map(TryInto::try_into)
-            .collect::<Result<Vec<_>, _>>()?;
-        let input_objects = if input_objects.is_empty() {
-            None
-        } else {
-            Some(input_objects)
-        };
-
-        let output_objects = output_objects
-            .iter()
-            .map(TryInto::try_into)
-            .collect::<Result<Vec<_>, _>>()?;
-        let output_objects = if output_objects.is_empty() {
-            None
-        } else {
-            Some(output_objects)
-        };
-
-        Self {
-            digest,
-            transaction,
-            transaction_bcs,
-            effects,
-            effects_bcs,
-            events,
-            events_bcs,
-            input_objects,
-            output_objects,
-        }
-        .pipe(Ok)
+impl FullCheckpointObject {
+    pub fn validate_field_path(path: &str) -> bool {
+        matches!(
+            path,
+            "object_id" | "version" | "digest" | "object" | "object_bcs"
+        )
     }
 }
 

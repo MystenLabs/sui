@@ -118,37 +118,7 @@ impl crate::proto::node::v2::node_service_server::NodeService for crate::RpcServ
         tonic::Response<crate::proto::node::v2::GetFullCheckpointResponse>,
         tonic::Status,
     > {
-        let request = request.into_inner();
-        let checkpoint = match (request.sequence_number, request.digest) {
-            (Some(_sequence_number), Some(_digest)) => {
-                return Err(tonic::Status::new(
-                    tonic::Code::InvalidArgument,
-                    "only one of `sequence_number` or `digest` can be provided",
-                ))
-            }
-            (Some(sequence_number), None) => {
-                crate::service::checkpoints::CheckpointId::SequenceNumber(sequence_number)
-            }
-
-            (None, Some(digest)) => {
-                crate::service::checkpoints::CheckpointId::Digest((&digest).try_into().map_err(
-                    |_| tonic::Status::new(tonic::Code::InvalidArgument, "invalid digest"),
-                )?)
-            }
-            (None, None) => {
-                return Err(tonic::Status::new(
-                    tonic::Code::InvalidArgument,
-                    "must provided one of `sequence_number` or `digest`",
-                ))
-            }
-        };
-
-        let options = crate::types::GetFullCheckpointOptions::from_read_mask(
-            request.read_mask.unwrap_or_default(),
-        );
-
-        self.get_full_checkpoint(checkpoint, &options)
-            .map(Into::into)
+        self.get_full_checkpoint(request.into_inner())
             .map(tonic::Response::new)
             .map_err(Into::into)
     }
