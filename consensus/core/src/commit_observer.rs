@@ -213,18 +213,26 @@ impl CommitObserver {
 mod tests {
     use mysten_metrics::monitored_mpsc::UnboundedReceiver;
     use parking_lot::RwLock;
+    use rstest::rstest;
 
     use super::*;
     use crate::{
-        block::BlockRef, context::Context, dag_state::DagState, storage::mem_store::MemStore,
-        test_dag_builder::DagBuilder,
+        block::BlockRef, context::Context, dag_state::DagState, linearizer::median,
+        storage::mem_store::MemStore, test_dag_builder::DagBuilder,
     };
 
+    #[rstest]
     #[tokio::test]
-    async fn test_handle_commit() {
+    async fn test_handle_commit(#[values(true, false)] consensus_median_timestamp: bool) {
         telemetry_subscribers::init_for_testing();
         let num_authorities = 4;
-        let context = Arc::new(Context::new_for_test(num_authorities).0);
+        let (mut context, _keys) = Context::new_for_test(num_authorities);
+        context
+            .protocol_config
+            .set_consensus_median_based_timestamp(consensus_median_timestamp);
+
+        let context = Arc::new(context);
+
         let mem_store = Arc::new(MemStore::new());
         let dag_state = Arc::new(RwLock::new(DagState::new(
             context.clone(),
@@ -268,14 +276,32 @@ mod tests {
         for (idx, subdag) in commits.iter().enumerate() {
             tracing::info!("{subdag:?}");
             assert_eq!(subdag.leader, leaders[idx].reference());
-            let expected_ts = if idx == 0 {
-                leaders[idx].timestamp_ms()
+
+            let expected_ts = if consensus_median_timestamp {
+                let ancestor_timestamps = subdag
+                    .blocks
+                    .iter()
+                    .filter(|block| block.round() == subdag.leader.round - 1)
+                    .map(|b| b.timestamp_ms())
+                    .collect::<Vec<_>>();
+
+                if ancestor_timestamps.is_empty() {
+                    leaders[idx].timestamp_ms()
+                } else {
+                    median(ancestor_timestamps).unwrap()
+                }
             } else {
-                leaders[idx]
-                    .timestamp_ms()
-                    .max(commits[idx - 1].timestamp_ms)
+                leaders[idx].timestamp_ms()
             };
+
+            let expected_ts = if idx == 0 {
+                expected_ts
+            } else {
+                expected_ts.max(commits[idx - 1].timestamp_ms)
+            };
+
             assert_eq!(expected_ts, subdag.timestamp_ms);
+
             if idx == 0 {
                 // First subdag includes the leader block plus all ancestor blocks
                 // of the leader minus the genesis round blocks
