@@ -174,6 +174,12 @@ mod additional_consensus_state {
             bcs::serialize_into(&mut hash, self).unwrap();
             AdditionalConsensusStateDigest::new(hash.finalize().into())
         }
+
+        pub fn estimated_commit_rate(&self) -> Duration {
+            self.commit_rate_estimate
+                .commit_rate_estimate()
+                .unwrap_or(Duration::from_millis(100))
+        }
     }
 }
 pub(crate) use additional_consensus_state::AdditionalConsensusState;
@@ -1165,7 +1171,6 @@ impl CommitRateObserver {
         self.ring_buffer.push_back(commit_time);
     }
 
-    #[allow(dead_code)]
     pub fn commit_rate_estimate(&self) -> Option<Duration> {
         if self.ring_buffer.len() <= 1 {
             None
