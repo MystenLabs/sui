@@ -11,6 +11,9 @@ ActiveJwk:
     - jwk:
         TYPENAME: JWK
     - epoch: U64
+AdditionalConsensusStateDigest:
+  NEWTYPESTRUCT:
+    TYPENAME: Digest
 Argument:
   ENUM:
     0:
@@ -293,6 +296,19 @@ ConsensusCommitPrologueV3:
         TYPENAME: ConsensusCommitDigest
     - consensus_determined_version_assignments:
         TYPENAME: ConsensusDeterminedVersionAssignments
+ConsensusCommitPrologueV4:
+  STRUCT:
+    - epoch: U64
+    - round: U64
+    - sub_dag_index:
+        OPTION: U64
+    - commit_timestamp_ms: U64
+    - consensus_commit_digest:
+        TYPENAME: ConsensusCommitDigest
+    - consensus_determined_version_assignments:
+        TYPENAME: ConsensusDeterminedVersionAssignments
+    - additional_state_digest:
+        TYPENAME: AdditionalConsensusStateDigest
 ConsensusDeterminedVersionAssignments:
   ENUM:
     0:
@@ -1153,6 +1169,10 @@ TransactionKind:
       ConsensusCommitPrologueV3:
         NEWTYPE:
           TYPENAME: ConsensusCommitPrologueV3
+    9:
+      ConsensusCommitPrologueV4:
+        NEWTYPE:
+          TYPENAME: ConsensusCommitPrologueV4
 TypeArgumentError:
   ENUM:
     0:
