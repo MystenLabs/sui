@@ -665,6 +665,18 @@ impl ConsensusTransactionOrdering {
     }
 }
 
+#[derive(Default, Copy, Clone, PartialEq, Eq, Serialize, Deserialize, Debug)]
+pub struct ExecutionTimeEstimateParams {
+    // targeted per-object utilization as an integer percentage (1-100)
+    pub target_utilization: u64,
+    // Schedule up to this much extra work (in microseconds) per object,
+    // but don't allow the running debt to exceed this limit.
+    pub allowed_txn_cost_overage_burst_limit_us: u64,
+    // absolute limit of how much estimated work to schedule in a commit,
+    // even if it all comes from a single transaction
+    pub max_txn_cost_overage_per_object_in_commit_us: u64,
+}
+
 // The config for per object congestion control in consensus handler.
 #[derive(Default, Copy, Clone, PartialEq, Eq, Serialize, Deserialize, Debug)]
 pub enum PerObjectCongestionControlMode {
@@ -673,7 +685,7 @@ pub enum PerObjectCongestionControlMode {
     TotalGasBudget,        // Use txn gas budget as execution cost.
     TotalTxCount,          // Use total txn count as execution cost.
     TotalGasBudgetWithCap, // Use txn gas budget as execution cost with a cap.
-    ExecutionTimeEstimate, // Use execution time estimate as execution cost.
+    ExecutionTimeEstimate(ExecutionTimeEstimateParams), // Use execution time estimate as execution cost.
 }
 
 impl PerObjectCongestionControlMode {
@@ -3301,6 +3313,16 @@ impl ProtocolConfig {
                     if chain != Chain::Mainnet && chain != Chain::Testnet {
                         cfg.feature_flags.record_additional_state_digest_in_prologue = true;
                         cfg.consensus_commit_rate_estimation_window_size = Some(10);
+
+                        cfg.feature_flags.per_object_congestion_control_mode =
+                            PerObjectCongestionControlMode::ExecutionTimeEstimate(
+                                ExecutionTimeEstimateParams {
+                                    target_utilization: 50,
+                                    // Allow up to (roughly) one half checkpoint of burst limit.
+                                    allowed_txn_cost_overage_burst_limit_us: 125 * 1000,
+                                    max_txn_cost_overage_per_object_in_commit_us: u64::MAX,
+                                },
+                            );
                     }
                     cfg.feature_flags.minimize_child_object_mutations = true;
 
