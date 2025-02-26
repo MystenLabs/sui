@@ -1269,7 +1269,10 @@ mod tests {
 
     #[tokio::test]
     async fn reject_blocks_failing_verifications() {
-        let (context, _key_pairs) = Context::new_for_test(4);
+        let (mut context, _key_pairs) = Context::new_for_test(4);
+        context
+            .protocol_config
+            .set_consensus_median_based_timestamp(false);
         let context = Arc::new(context);
 
         // create a DAG of rounds 1 ~ 5.
