@@ -132,6 +132,7 @@ async fn cluster(config: &OffChainConfig) -> Arc<OffchainCluster> {
             system_package_task_args,
             indexer_config,
             rpc_config,
+            None,
             &registry,
             cancel,
         )
