@@ -13795,6 +13795,7 @@ dependencies = [
  "sui-pg-db",
  "sui-sql-macro",
  "sui-storage",
+ "sui-synthetic-ingestion",
  "sui-types",
  "telemetry-subscribers",
  "tempfile",
@@ -13803,6 +13804,7 @@ dependencies = [
  "tokio-stream",
  "tokio-util 0.7.13 (registry+https://github.com/rust-lang/crates.io-index)",
  "tracing",
+ "tracing-subscriber",
  "url",
  "wiremock",
 ]
