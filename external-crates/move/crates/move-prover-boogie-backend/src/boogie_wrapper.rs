@@ -1423,6 +1423,9 @@ impl ModelValue {
                 self.extract_literal()
                     .and_then(|s| s.parse::<BigUint>().ok())?
             ))),
+            Type::Primitive(PrimitiveType::Num) => {
+                Some(PrettyDoc::text(format!("{}num", self.extract_integer()?)))
+            }
             Type::Primitive(PrimitiveType::Bool) => Some(PrettyDoc::text(
                 self.extract_literal()
                     .and_then(|s| s.parse::<bool>().ok())?
@@ -1472,8 +1475,10 @@ impl ModelValue {
                 // effect the verification outcome, we may not have much need for seeing it.
                 Some(PrettyDoc::text("<generic>"))
             }
+            Type::Primitive(PrimitiveType::Range) | Type::Primitive(PrimitiveType::EventStore) => {
+                unreachable!("unexpected type in ModelValue::pretty: {:?}", ty)
+            }
             Type::Tuple(_)
-            | Type::Primitive(_)
             | Type::Fun(_, _)
             | Type::TypeDomain(_)
             | Type::ResourceDomain(_, _, _)
