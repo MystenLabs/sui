@@ -1340,6 +1340,18 @@ impl ModelValue {
         }
     }
 
+    fn extract_integer(&self) -> Option<BigInt> {
+        if let Some(values) = self.extract_list("-") {
+            if values.len() == 1 {
+                Some(-values[0].extract_integer()?)
+            } else {
+                None
+            }
+        } else {
+            self.extract_literal()?.parse().ok()
+        }
+    }
+
     /// Extract a i128 from a literal.
     fn extract_i128(&self) -> Option<i128> {
         if let Some(value) = self.extract_list("-").and_then(|values| {
@@ -1437,6 +1449,10 @@ impl ModelValue {
                     StructOrEnumEnv::Struct(struct_env) => {
                         if struct_env.is_intrinsic_of(INTRINSIC_TYPE_MAP) {
                             self.pretty_table(wrapper, model, &params[0], &params[1])
+                        } else if struct_env.is_native()
+                            && struct_env.get_full_name_str() == "integer::Integer"
+                        {
+                            Some(PrettyDoc::text(format!("{}", self.extract_integer()?)))
                         } else {
                             self.pretty_struct(wrapper, model, &struct_env, params)
                         }
