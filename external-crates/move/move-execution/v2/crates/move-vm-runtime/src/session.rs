@@ -6,6 +6,11 @@ use crate::{
     data_cache::TransactionDataCache, native_extensions::NativeContextExtensions,
     runtime::VMRuntime,
 };
+use legacy_move_vm_types::{
+    data_store::MoveResolver,
+    gas::GasMeter,
+    loaded_data::runtime_types::{CachedDatatype, CachedTypeIndex, Type},
+};
 use move_binary_format::{
     errors::*,
     file_format::{AbilitySet, LocalIndex},
@@ -17,11 +22,6 @@ use move_core_types::{
     identifier::IdentStr,
     language_storage::{ModuleId, TypeTag},
     runtime_value::MoveTypeLayout,
-};
-use legacy_move_vm_types::{
-    data_store::MoveResolver,
-    gas::GasMeter,
-    loaded_data::runtime_types::{CachedDatatype, CachedTypeIndex, Type},
 };
 use std::{borrow::Borrow, sync::Arc};
 

@@ -7,8 +7,8 @@ use crate::debug::DebugContext;
 
 #[cfg(any(debug_assertions, feature = "debugging"))]
 use ::{
-    move_binary_format::file_format::Bytecode,
     legacy_move_vm_types::values::Locals,
+    move_binary_format::file_format::Bytecode,
     once_cell::sync::Lazy,
     std::{
         env,

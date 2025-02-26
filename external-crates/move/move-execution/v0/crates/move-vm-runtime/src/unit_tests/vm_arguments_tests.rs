@@ -5,6 +5,7 @@
 use std::collections::HashMap;
 
 use crate::move_vm::MoveVM;
+use legacy_move_vm_types::gas::UnmeteredGasMeter;
 use move_binary_format::{
     errors::{VMError, VMResult},
     file_format::{
@@ -24,7 +25,6 @@ use move_core_types::{
     u256::U256,
     vm_status::{StatusCode, StatusType},
 };
-use legacy_move_vm_types::gas::UnmeteredGasMeter;
 
 fn make_module_with_function(
     visibility: Visibility,

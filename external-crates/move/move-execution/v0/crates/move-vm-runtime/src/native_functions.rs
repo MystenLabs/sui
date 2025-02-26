@@ -5,6 +5,9 @@
 use crate::{
     interpreter::Interpreter, loader::Resolver, native_extensions::NativeContextExtensions,
 };
+use legacy_move_vm_types::{
+    loaded_data::runtime_types::Type, natives::function::NativeResult, values::Value,
+};
 use move_binary_format::errors::{ExecutionState, PartialVMError, PartialVMResult};
 use move_core_types::{
     account_address::AccountAddress,
@@ -16,9 +19,6 @@ use move_core_types::{
     vm_status::{StatusCode, StatusType},
 };
 use move_vm_config::runtime::VMRuntimeLimitsConfig;
-use legacy_move_vm_types::{
-    loaded_data::runtime_types::Type, natives::function::NativeResult, values::Value,
-};
 use std::{
     cell::RefCell,
     collections::{HashMap, VecDeque},
