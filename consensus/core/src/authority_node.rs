@@ -531,6 +531,7 @@ mod tests {
 
         if gc_depth == 0 {
             protocol_config.set_consensus_linearize_subdag_v2_for_testing(false);
+            protocol_config.set_consensus_median_based_timestamp(false);
         }
 
         let temp_dirs = (0..NUM_OF_AUTHORITIES)
@@ -745,6 +746,7 @@ mod tests {
 
         if gc_depth == 0 {
             protocol_config.set_consensus_linearize_subdag_v2_for_testing(false);
+            protocol_config.set_consensus_median_based_timestamp(false);
         }
 
         for (index, _authority_info) in committee.authorities() {
