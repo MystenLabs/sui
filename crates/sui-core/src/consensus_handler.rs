@@ -163,7 +163,7 @@ mod additional_consensus_state {
         }
 
         /// Update all internal state based on the new commit
-        pub fn observe_commit(&mut self, consensus_commit: &impl ConsensusCommitAPI) {
+        pub(crate) fn observe_commit(&mut self, consensus_commit: &impl ConsensusCommitAPI) {
             self.commit_rate_estimate
                 .observe_commit_time(consensus_commit);
         }
@@ -272,6 +272,10 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
     /// Any state computed here must be a pure function of the commits observed, it cannot depend on any
     /// state recorded in the epoch db.
     fn handle_prior_consensus_commit(&mut self, consensus_commit: impl ConsensusCommitAPI) {
+        assert!(self
+            .epoch_store
+            .protocol_config()
+            .record_additional_state_digest_in_prologue());
         self.additional_consensus_state
             .observe_commit(&consensus_commit);
     }
@@ -290,8 +294,14 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
 
         let round = consensus_commit.leader_round();
 
-        self.additional_consensus_state
-            .observe_commit(&consensus_commit);
+        if self
+            .epoch_store
+            .protocol_config()
+            .record_additional_state_digest_in_prologue()
+        {
+            self.additional_consensus_state
+                .observe_commit(&consensus_commit);
+        }
 
         // TODO: Remove this once narwhal is deprecated. For now mysticeti will not return
         // more than one leader per round so we are not in danger of ignoring any commits.
@@ -1155,6 +1165,7 @@ impl CommitRateObserver {
         self.ring_buffer.push_back(commit_time);
     }
 
+    #[allow(dead_code)]
     pub fn commit_rate_estimate(&self) -> Option<Duration> {
         if self.ring_buffer.len() <= 1 {
             None

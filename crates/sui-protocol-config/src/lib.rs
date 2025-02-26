@@ -3287,7 +3287,7 @@ impl ProtocolConfig {
                     }
                 }
                 76 => {
-                    if chain != Chain::Mainnet {
+                    if chain != Chain::Mainnet && chain != Chain::Testnet {
                         cfg.feature_flags.record_additional_state_digest_in_prologue = true;
                         cfg.consensus_commit_rate_estimation_window_size = Some(10);
                     }
