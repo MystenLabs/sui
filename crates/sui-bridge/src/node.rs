@@ -55,20 +55,31 @@ pub async fn run_bridge_node(
     metadata: BridgeNodePublicMetadata,
     prometheus_registry: prometheus::Registry,
 ) -> anyhow::Result<JoinHandle<()>> {
+    info!("Starting bridge node initialization...");
     init_all_struct_tags();
+
+    info!("Creating metrics...");
     let metrics = Arc::new(BridgeMetrics::new(&prometheus_registry));
+
     let watchdog_config = config.watchdog_config.clone();
+    info!("Validating node configuration...");
     let (server_config, client_config) = config.validate(metrics.clone()).await?;
+
+    info!("Getting Sui chain identifier...");
     let sui_chain_identifier = server_config
         .sui_client
         .get_chain_identifier()
         .await
         .map_err(|e| anyhow::anyhow!("Failed to get sui chain identifier: {:?}", e))?;
+
+    info!("Getting Ethereum chain identifier...");
     let eth_chain_identifier = server_config
         .eth_client
         .get_chain_id()
         .await
         .map_err(|e| anyhow::anyhow!("Failed to get eth chain identifier: {:?}", e))?;
+
+    info!("Registering bridge uptime metric...");
     prometheus_registry
         .register(mysten_metrics::bridge_uptime_metric(
             "bridge",
@@ -79,6 +90,7 @@ pub async fn run_bridge_node(
         ))
         .unwrap();
 
+    info!("Getting bridge committee...");
     let committee = Arc::new(
         server_config
             .sui_client
@@ -89,6 +101,7 @@ pub async fn run_bridge_node(
     let mut handles = vec![];
 
     // Start watchdog
+    info!("Starting watchdog components...");
     let eth_provider = server_config.eth_client.provider();
     let eth_bridge_proxy_address = server_config.eth_bridge_proxy_address;
     let sui_client = server_config.sui_client.clone();
@@ -102,6 +115,7 @@ pub async fn run_bridge_node(
 
     // Update voting right metrics
     // Before reconfiguration happens we only set it once when the node starts
+    info!("Getting latest Sui system state...");
     let sui_system = server_config
         .sui_client
         .sui_client()
@@ -111,6 +125,7 @@ pub async fn run_bridge_node(
 
     // Start Client
     if let Some(client_config) = client_config {
+        info!("Starting client components...");
         let committee_keys_to_names =
             Arc::new(get_validator_names_by_pub_keys(&committee, &sui_system).await);
         let client_components = start_client_components(
@@ -121,8 +136,10 @@ pub async fn run_bridge_node(
         )
         .await?;
         handles.extend(client_components);
+        info!("Client components started successfully");
     }
 
+    info!("Setting up committee name mapping and voting rights...");
     let committee_name_mapping = get_committee_voting_power_by_name(&committee, &sui_system).await;
     for (name, voting_power) in committee_name_mapping.into_iter() {
         metrics
@@ -132,10 +149,13 @@ pub async fn run_bridge_node(
     }
 
     // Start Server
+    info!("Starting bridge server...");
     let socket_address = SocketAddr::new(
         IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)),
         server_config.server_listen_port,
     );
+
+    info!("Bridge node initialization complete, running server...");
     Ok(run_server(
         &socket_address,
         BridgeRequestHandler::new(

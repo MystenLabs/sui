@@ -47,6 +47,7 @@ use sui_types::programmable_transaction_builder::ProgrammableTransactionBuilder;
 use sui_types::sui_system_state::sui_system_state_summary::SuiSystemStateSummary;
 use sui_types::transaction::{ObjectArg, TransactionData};
 use sui_types::BRIDGE_PACKAGE_ID;
+use tracing::info;
 
 pub type EthSigner = SignerMiddleware<Provider<Http>, Wallet<SigningKey>>;
 
@@ -116,18 +117,42 @@ pub async fn get_eth_contract_addresses<P: ethers::providers::JsonRpcClient + 's
     EthAddress,
     EthAddress,
 )> {
+    info!("Getting Ethereum contract addresses...");
+
+    info!("Creating SuiBridge contract instance...");
     let sui_bridge = EthSuiBridge::new(bridge_proxy_address, provider.clone());
+
+    info!("Getting committee address...");
     let committee_address: EthAddress = sui_bridge.committee().call().await?;
+
+    info!("Creating committee contract instance...");
     let committee = EthBridgeCommittee::new(committee_address, provider.clone());
+
+    info!("Getting config address...");
     let config_address: EthAddress = committee.config().call().await?;
+
+    info!("Creating bridge config instance...");
     let bridge_config = EthBridgeConfig::new(config_address, provider.clone());
+
+    info!("Getting limiter address...");
     let limiter_address: EthAddress = sui_bridge.limiter().call().await?;
+
+    info!("Getting vault address...");
     let vault_address: EthAddress = sui_bridge.vault().call().await?;
+
+    info!("Creating vault contract instance...");
     let vault = EthBridgeVault::new(vault_address, provider.clone());
+
+    info!("Getting WETH address...");
     let weth_address: EthAddress = vault.w_eth().call().await?;
+
+    info!("Getting USDT address...");
     let usdt_address: EthAddress = bridge_config.token_address_of(4).call().await?;
+
+    info!("Getting WBTC address...");
     let wbtc_address: EthAddress = bridge_config.token_address_of(1).call().await?;
 
+    info!("Successfully retrieved all Ethereum contract addresses");
     Ok((
         committee_address,
         limiter_address,

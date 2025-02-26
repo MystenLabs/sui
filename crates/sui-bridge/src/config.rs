@@ -151,6 +151,9 @@ impl BridgeNodeConfig {
         &self,
         metrics: Arc<BridgeMetrics>,
     ) -> anyhow::Result<(BridgeServerConfig, Option<BridgeClientConfig>)> {
+        info!("Starting config validation...");
+
+        info!("Validating bridge chain IDs...");
         if !is_route_valid(
             BridgeChainId::try_from(self.sui.sui_bridge_chain_id)?,
             BridgeChainId::try_from(self.eth.eth_bridge_chain_id)?,
@@ -162,6 +165,7 @@ impl BridgeNodeConfig {
             ));
         };
 
+        info!("Reading bridge authority key...");
         let bridge_authority_key = match read_key(&self.bridge_authority_key_path, true)? {
             SuiKeyPair::Secp256k1(key) => key,
             _ => unreachable!("we required secp256k1 key in `read_key`"),
@@ -169,23 +173,32 @@ impl BridgeNodeConfig {
 
         // we do this check here instead of `prepare_for_sui` below because
         // that is only called when `run_client` is true.
+        info!("Creating Sui client...");
         let sui_client =
             Arc::new(SuiClient::<SuiSdkClient>::new(&self.sui.sui_rpc_url, metrics.clone()).await?);
+
+        info!("Getting bridge committee...");
         let bridge_committee = sui_client
             .get_bridge_committee()
             .await
             .map_err(|e| anyhow!("Error getting bridge committee: {:?}", e))?;
+
+        info!("Validating bridge authority membership...");
         if !bridge_committee.is_active_member(&bridge_authority_key.public().into()) {
             return Err(anyhow!(
                 "Bridge authority key is not part of bridge committee"
             ));
         }
 
+        info!("Preparing Ethereum configuration...");
         let (eth_client, eth_contracts) = self.prepare_for_eth(metrics.clone()).await?;
+
+        info!("Getting bridge summary...");
         let bridge_summary = sui_client
             .get_bridge_summary()
             .await
             .map_err(|e| anyhow!("Error getting bridge summary: {:?}", e))?;
+
         if bridge_summary.chain_id != self.sui.sui_bridge_chain_id {
             anyhow::bail!(
                 "Bridge chain id mismatch: expected {}, but connected to {}",
@@ -247,6 +260,7 @@ impl BridgeNodeConfig {
                 .sui_bridge_module_last_processed_event_id_override,
         };
 
+        info!("Config validation complete");
         Ok((bridge_server_config, Some(bridge_client_config)))
     }
 
