@@ -65,13 +65,13 @@ module Test::M1 {
 //# create-checkpoint
 
 //# run-graphql
-# Fetch specific versions of objects.
+# Fetch specific versions of objects including a non existing object.
 {
   objects_at_version: multiGetObjects(keys: [
-      {objectId: "@{obj_2_0}", version: 3},
+      {objectId: "0x1", version: 1},
       {objectId: "@{obj_3_0}", version: 4},
       {objectId: "@{obj_5_0}", version: 5},
-      {objectId: "@{obj_6_0}", version: 6}
+      {objectId: "0xabc", version: 1}
   ]) {
         version
         asMoveObject {

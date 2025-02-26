@@ -125,18 +125,8 @@ Response: {
   "data": {
     "objects_at_version": [
       {
-        "version": 3,
-        "asMoveObject": {
-          "contents": {
-            "type": {
-              "repr": "0xf8ecbba416b85769db9b3425d240e9e350c2994bc68d944ac19ebecffb7e0c60::M1::Object"
-            },
-            "json": {
-              "id": "0xc4e6c824c72af97ed831b666173a96111e573e0162b205b51c23ae242757e8d2",
-              "value": "0"
-            }
-          }
-        }
+        "version": 1,
+        "asMoveObject": null
       },
       {
         "version": 4,
@@ -166,20 +156,7 @@ Response: {
           }
         }
       },
-      {
-        "version": 6,
-        "asMoveObject": {
-          "contents": {
-            "type": {
-              "repr": "0xf8ecbba416b85769db9b3425d240e9e350c2994bc68d944ac19ebecffb7e0c60::M1::Object"
-            },
-            "json": {
-              "id": "0x44864f8c6cad831f338516aa3ebeacf00c60a13fb4a5a4200b35f376af227cf3",
-              "value": "3"
-            }
-          }
-        }
-      }
+      null
     ]
   }
 }

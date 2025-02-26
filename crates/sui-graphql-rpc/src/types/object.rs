@@ -818,10 +818,19 @@ impl Object {
         let data = loader.load_many(keys.clone()).await?;
         Ok(keys
             .into_iter()
-            .flat_map(|k| {
-                data.get(&k).cloned().map(|bcs| {
-                    Object::new_serialized(k.id, k.version, bcs, checkpoint_viewed_at, k.version)
-                })
+            .map(|k| {
+                data.get(&k)
+                    .cloned()
+                    .map(|bcs| {
+                        Object::new_serialized(
+                            k.id,
+                            k.version,
+                            bcs,
+                            checkpoint_viewed_at,
+                            k.version,
+                        )
+                    })
+                    .flatten()
             })
             .collect())
     }
@@ -1635,50 +1644,28 @@ mod tests {
         let i2 = SuiAddress::from_str("0x2").unwrap();
         let i3 = SuiAddress::from_str("0x3").unwrap();
 
+        // A standard object filter
         let f0 = ObjectFilter {
             object_ids: Some(vec![i1, i3]),
             ..Default::default()
         };
 
+        // Overlaps with f0 on id i1
         let f1 = ObjectFilter {
             object_ids: Some(vec![i1, i2]),
             ..Default::default()
         };
 
+        // An empty filter
         let f2 = ObjectFilter {
             ..Default::default()
         };
 
+        // Overlaps with f0 on id i3, and does not overlap with f1
         let f3 = ObjectFilter {
             object_ids: Some(vec![i3]),
             ..Default::default()
         };
-
-        let f4 = ObjectFilter {
-            owner: Some(i1),
-            object_ids: Some(vec![i2]),
-            type_: None,
-        };
-
-        let f5 = ObjectFilter {
-            owner: None,
-            object_ids: Some(vec![i1]),
-            type_: Some(TypeFilter::ByModule(
-                crate::types::type_filter::ModuleFilter::ByPackage(i3),
-            )),
-        };
-
-        let f6 = ObjectFilter {
-            owner: None,
-            object_ids: Some(vec![i1]),
-            type_: Some(TypeFilter::ByModule(
-                crate::types::type_filter::ModuleFilter::ByPackage(i1),
-            )),
-        };
-
-        assert_eq!(f0.clone().intersect(f4.clone()), None);
-        assert_eq!(f0.clone().intersect(f5.clone()), Some(f5.clone()));
-        assert_eq!(f5.clone().intersect(f6.clone()), None);
 
         assert_eq!(
             f0.clone().intersect(f1.clone()),
@@ -1695,5 +1682,36 @@ mod tests {
 
         assert_eq!(f1.clone().intersect(f2.clone()), Some(f1.clone()));
         assert_eq!(f1.clone().intersect(f3.clone()), None);
+
+        // Overlaps with f1 on i2, but does not overlap with f0 or f3. Note that this also has an
+        // owner filter
+        let f4 = ObjectFilter {
+            owner: Some(i1),
+            object_ids: Some(vec![i2]),
+            type_: None,
+        };
+
+        // Overlaps with f0 on id i1
+        let f5 = ObjectFilter {
+            owner: None,
+            object_ids: Some(vec![i1]),
+            type_: Some(TypeFilter::ByModule(
+                crate::types::type_filter::ModuleFilter::ByPackage(i3),
+            )),
+        };
+
+        // Does not overlap with f5 because module filter is different.
+        let f6 = ObjectFilter {
+            owner: None,
+            object_ids: Some(vec![i1]),
+            type_: Some(TypeFilter::ByModule(
+                crate::types::type_filter::ModuleFilter::ByPackage(i1),
+            )),
+        };
+
+        assert_eq!(f0.clone().intersect(f4.clone()), None);
+        assert_eq!(f1.clone().intersect(f4.clone()), Some(f4.clone()));
+        assert_eq!(f0.clone().intersect(f5.clone()), Some(f5.clone()));
+        assert_eq!(f5.clone().intersect(f6.clone()), None);
     }
 }
