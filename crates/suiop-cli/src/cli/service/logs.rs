@@ -8,9 +8,10 @@ use kube::{
     config::Kubeconfig,
     Client, Config,
 };
+use snailquote::unescape;
 use tracing::debug;
 
-use crate::{cache_local, get_cached_local, run_cmd};
+use crate::{cache_local_raw, get_cached_local, run_cmd};
 
 fn get_kubeconfig_key(stack: &str) -> String {
     format!("kubeconfig.{}.yaml", stack)
@@ -24,8 +25,9 @@ pub async fn get_kubeconfig(stack: &str) -> Result<Client> {
             cached_kubeconfig.value
         } else {
             let cmd_output = run_cmd(vec!["pulumi", "config", "get", "kubeconfig"], None)?;
-            let kubeconfig_yaml = String::from_utf8(cmd_output.stdout)?;
-            cache_local(&get_kubeconfig_key(stack), kubeconfig_yaml.clone())?;
+            let raw_yaml = String::from_utf8(cmd_output.stdout)?;
+            let kubeconfig_yaml = unescape(&raw_yaml)?.to_string();
+            cache_local_raw(&get_kubeconfig_key(stack), kubeconfig_yaml.as_bytes())?;
 
             kubeconfig_yaml
         };

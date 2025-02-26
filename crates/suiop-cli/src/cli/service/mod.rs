@@ -102,7 +102,8 @@ fn find_workspace_file(project_name: &str) -> PathBuf {
         captures.get(1).expect("No stack name found").as_str() == project_name
     });
     // read the workspace file and extract the stack name
-    let workspace_file = workspace_file.expect("No workspace file found");
+    let workspace_file =
+        workspace_file.expect("No workspace file found. Select a stack with `pulumi stack select`");
     cache_local(
         PULUMI_WORKSPACE_FILE_CACHE_KEY,
         workspace_file.path().to_str().unwrap().to_string(),
