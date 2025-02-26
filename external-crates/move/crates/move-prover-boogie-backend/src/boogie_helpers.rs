@@ -54,12 +54,19 @@ pub fn boogie_struct_name_bv(struct_env: &StructEnv<'_>, inst: &[Type], bv_flag:
         format!("Table int ({})", type_fun(env, &inst[1]))
     } else {
         format!(
-            "${}_{}{}",
-            boogie_module_name(&struct_env.module_env),
-            struct_env.get_name().display(struct_env.symbol_pool()),
+            "{}{}",
+            boogie_struct_name_prefix(struct_env),
             boogie_inst_suffix(struct_env.module_env.env, inst)
         )
     }
+}
+
+pub fn boogie_struct_name_prefix(struct_env: &StructEnv<'_>) -> String {
+    format!(
+        "${}_{}",
+        boogie_module_name(&struct_env.module_env),
+        struct_env.get_name().display(struct_env.symbol_pool()),
+    )
 }
 
 /// Return field selector for given field.

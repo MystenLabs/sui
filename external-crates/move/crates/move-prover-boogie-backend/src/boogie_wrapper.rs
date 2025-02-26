@@ -36,7 +36,7 @@ use move_stackless_bytecode::function_target_pipeline::{FunctionTargetsHolder, F
 // DEBUG
 // use backtrace::Backtrace;
 use crate::{
-    boogie_helpers::{boogie_inst_suffix, boogie_struct_name},
+    boogie_helpers::{boogie_inst_suffix, boogie_struct_name, boogie_struct_name_prefix},
     options::{BoogieOptions, VectorTheory},
     prover_task_runner::{ProverTask, ProverTaskRunner, RunBoogieWithSeeds},
 };
@@ -1555,11 +1555,21 @@ impl ModelValue {
             vec![PrettyDoc::text(rep)]
         } else {
             let struct_name = &boogie_struct_name(struct_env, inst);
+            let struct_name_prefix = boogie_struct_name_prefix(struct_env);
             let values = self
                 .extract_list(struct_name)
                 // It appears sometimes keys are represented witout, sometimes with enclosing
                 // bars?
-                .or_else(|| self.extract_list(&format!("|{}|", struct_name)))?;
+                .or_else(|| self.extract_list(&format!("|{}|", struct_name)))
+                // if the instantiated type constructor is not an exact match,
+                // check if the type constructor without type parameters is a
+                // prefix. This can happen in a function with type parameters
+                // that are instantiated. The type instances are not recovered,
+                // so the fields of the struct with parametric types will appear
+                // as <generic>.
+                .or_else(|| self.extract_list_ctor_prefix(&struct_name_prefix))
+                // like before, check with '|' as well
+                .or_else(|| self.extract_list_ctor_prefix(&format!("|{}", struct_name_prefix)))?;
             struct_env
                 .get_fields()
                 .enumerate()
