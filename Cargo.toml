@@ -655,7 +655,7 @@ sui-genesis-builder = { path = "crates/sui-genesis-builder" }
 sui-http = { path = "crates/sui-http" }
 sui-indexer = { path = "crates/sui-indexer" }
 sui-indexer-alt = { path = "crates/sui-indexer-alt" }
-sui-indexer-alt-framework = { path = "crates/sui-indexer-alt-framework" }
+sui-indexer-alt-framework = { path = "crates/sui-indexer-alt-framework", default-features = false }
 sui-indexer-alt-jsonrpc = { path = "crates/sui-indexer-alt-jsonrpc" }
 sui-indexer-alt-metrics = { path = "crates/sui-indexer-alt-metrics" }
 sui-indexer-alt-restorer = { path = "crates/sui-indexer-alt-restorer" }

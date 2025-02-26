@@ -3,7 +3,7 @@
 
 use std::{collections::BTreeSet, sync::Arc};
 
-use anyhow::{ensure, Context, Result};
+use anyhow::{ensure, Context};
 use diesel::{
     migration::{self, Migration, MigrationSource},
     pg::Pg,
@@ -27,6 +27,14 @@ use tokio_util::sync::CancellationToken;
 use tracing::{info, warn};
 use url::Url;
 
+pub use anyhow::Result;
+pub use sui_field_count::FieldCount;
+pub use sui_pg_db as db;
+pub use sui_sql_macro::sql;
+pub use sui_types as types;
+
+#[cfg(feature = "cluster")]
+pub mod cluster;
 pub mod handlers;
 pub mod ingestion;
 pub(crate) mod metrics;
@@ -204,6 +212,11 @@ impl Indexer {
     /// The ingestion client used by the indexer to fetch checkpoints.
     pub fn ingestion_client(&self) -> &IngestionClient {
         self.ingestion_service.client()
+    }
+
+    /// The indexer's metrics.
+    pub fn metrics(&self) -> &Arc<IndexerMetrics> {
+        &self.metrics
     }
 
     /// The pipelines that this indexer will run.
