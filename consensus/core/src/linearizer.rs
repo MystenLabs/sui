@@ -417,7 +417,7 @@ mod tests {
         storage::mem_store::MemStore,
         test_dag_builder::DagBuilder,
         test_dag_parser::parse_dag,
-        CommitIndex,
+        CommitIndex, TestBlock,
     };
 
     #[rstest]
@@ -955,5 +955,83 @@ mod tests {
             }
             assert_eq!(subdag.commit_ref.index, idx as CommitIndex + 1);
         }
+    }
+
+    #[rstest]
+    #[case(false, 5_000, 5_000, 6_000)]
+    #[case(true, 2_500, 3_000, 6_000)]
+    #[test]
+    fn test_calculate_commit_timestamp(
+        #[case] consensus_median_timestamp: bool,
+        #[case] timestamp_1: u64,
+        #[case] timestamp_2: u64,
+        #[case] timestamp_3: u64,
+    ) {
+        // GIVEN
+        telemetry_subscribers::init_for_testing();
+
+        let num_authorities = 4;
+        let (mut context, _keys) = Context::new_for_test(num_authorities);
+
+        context
+            .protocol_config
+            .set_consensus_median_based_timestamp(consensus_median_timestamp);
+
+        let context = Arc::new(context);
+
+        let to_commit = vec![
+            TestBlock::new(4, 0).set_timestamp_ms(1_000).build(),
+            TestBlock::new(4, 1).set_timestamp_ms(2_000).build(),
+            TestBlock::new(4, 2).set_timestamp_ms(3_000).build(),
+            TestBlock::new(4, 3).set_timestamp_ms(4_000).build(),
+            TestBlock::new(5, 0).set_timestamp_ms(5_000).build(),
+        ];
+        let mut to_commit = to_commit
+            .into_iter()
+            .map(VerifiedBlock::new_for_test)
+            .collect::<Vec<_>>();
+        let leader_block = to_commit.last().unwrap().clone();
+        let last_commit_timestamp_ms = 0;
+
+        // WHEN
+        let timestamp = Linearizer::calculate_commit_timestamp(
+            &context,
+            &leader_block,
+            last_commit_timestamp_ms,
+            &to_commit,
+        );
+        assert_eq!(timestamp, timestamp_1);
+
+        // AND remove the block of authority 0 and round 4.
+        to_commit.remove(0);
+
+        let timestamp = Linearizer::calculate_commit_timestamp(
+            &context,
+            &leader_block,
+            last_commit_timestamp_ms,
+            &to_commit,
+        );
+        assert_eq!(timestamp, timestamp_2);
+
+        // AND set the `last_commit_timestamp_ms` to 6_000
+        let last_commit_timestamp_ms = 6_000;
+        let timestamp = Linearizer::calculate_commit_timestamp(
+            &context,
+            &leader_block,
+            last_commit_timestamp_ms,
+            &to_commit,
+        );
+        assert_eq!(timestamp, timestamp_3);
+
+        // AND there is only one block to commit - the leader
+        let last_commit_timestamp_ms = 0;
+        let to_commit = vec![leader_block.clone()];
+        let timestamp = Linearizer::calculate_commit_timestamp(
+            &context,
+            &leader_block,
+            last_commit_timestamp_ms,
+            &to_commit,
+        );
+        assert_eq!(timestamp, leader_block.timestamp_ms());
     }
 }
