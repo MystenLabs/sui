@@ -207,14 +207,14 @@ pub struct GetCheckpointResponse {
 /// returns the latest executed checkpoint.
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct GetFullCheckpointRequest {
-    /// Optional. The sequence number of the requested checkpoint.
+    /// The sequence number of the requested checkpoint.
     #[prost(uint64, optional, tag = "1")]
     pub sequence_number: ::core::option::Option<u64>,
-    /// Optional. The digest of the requested checkpoint.
+    /// The digest of the requested checkpoint.
     #[prost(message, optional, tag = "2")]
     pub digest: ::core::option::Option<super::super::types::Digest>,
-    /// Optional. Mask for specifying which parts of the `GetFullCheckpointResponse`
-    /// should be returned.
+    /// Mask specifying which fields to read.
+    /// If no mask is specified, defaults to `sequence_number,digest`.
     #[prost(message, optional, tag = "4")]
     pub read_mask: ::core::option::Option<::prost_types::FieldMask>,
 }

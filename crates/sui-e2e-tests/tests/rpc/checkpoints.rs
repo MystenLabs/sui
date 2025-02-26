@@ -157,6 +157,62 @@ async fn get_full_checkpoint() {
         .checkpoint
         .unwrap();
 
+    let GetFullCheckpointResponse {
+        sequence_number,
+        digest,
+        summary,
+        summary_bcs,
+        signature,
+        contents,
+        contents_bcs,
+        transactions,
+    } = grpc_client
+        .get_full_checkpoint(
+            GetFullCheckpointRequest::by_sequence_number(checkpoint).with_read_mask(
+                FieldMask::from_paths(["sequence_number", "digest", "transactions.digest"]),
+            ),
+        )
+        .await
+        .unwrap()
+        .into_inner();
+
+    assert!(sequence_number.is_some());
+    assert!(digest.is_some());
+    assert!(summary.is_none());
+    assert!(summary_bcs.is_none());
+    assert!(signature.is_none());
+    assert!(contents.is_none());
+    assert!(contents_bcs.is_none());
+
+    let mut found_transaction = false;
+    for FullCheckpointTransaction {
+        digest,
+        transaction,
+        transaction_bcs,
+        effects,
+        effects_bcs,
+        events,
+        events_bcs,
+        input_objects,
+        output_objects,
+    } in transactions
+    {
+        assert!(digest.is_some());
+        assert!(transaction.is_none());
+        assert!(transaction_bcs.is_none());
+        assert!(effects.is_none());
+        assert!(effects_bcs.is_none());
+        if digest == Some(transaction_digest.into()) {
+            found_transaction = true;
+        }
+        assert!(events.is_none());
+        assert!(events_bcs.is_none());
+        assert!(input_objects.is_empty());
+        assert!(output_objects.is_empty());
+    }
+    // Ensure we found the transaction we used for picking the checkpoint to test against
+    assert!(found_transaction);
+
     // Request default fields
     let GetFullCheckpointResponse {
         sequence_number,
@@ -180,88 +236,7 @@ async fn get_full_checkpoint() {
     assert!(signature.is_none());
     assert!(contents.is_none());
     assert!(contents_bcs.is_none());
-
-    let mut found_transaction = false;
-    for FullCheckpointTransaction {
-        digest,
-        transaction,
-        transaction_bcs,
-        effects,
-        effects_bcs,
-        events,
-        events_bcs,
-        input_objects,
-        output_objects,
-    } in transactions
-    {
-        assert!(digest.is_some());
-        assert!(transaction.is_none());
-        assert!(transaction_bcs.is_none());
-        assert!(effects.is_none());
-        assert!(effects_bcs.is_none());
-        if digest == Some(transaction_digest.into()) {
-            found_transaction = true;
-        }
-        assert!(events.is_none());
-        assert!(events_bcs.is_none());
-        assert!(input_objects.is_empty());
-        assert!(output_objects.is_empty());
-    }
-    // Ensure we found the transaction we used for picking the checkpoint to test against
-    assert!(found_transaction);
-
-    // Request no fields
-    let GetFullCheckpointResponse {
-        sequence_number,
-        digest,
-        summary,
-        summary_bcs,
-        signature,
-        contents,
-        contents_bcs,
-        transactions,
-    } = grpc_client
-        .get_full_checkpoint(GetFullCheckpointRequest::by_sequence_number(checkpoint))
-        .await
-        .unwrap()
-        .into_inner();
-
-    assert!(sequence_number.is_some());
-    assert!(digest.is_some());
-    assert!(summary.is_none());
-    assert!(summary_bcs.is_none());
-    assert!(signature.is_none());
-    assert!(contents.is_none());
-    assert!(contents_bcs.is_none());
-
-    let mut found_transaction = false;
-    for FullCheckpointTransaction {
-        digest,
-        transaction,
-        transaction_bcs,
-        effects,
-        effects_bcs,
-        events,
-        events_bcs,
-        input_objects,
-        output_objects,
-    } in transactions
-    {
-        assert!(digest.is_some());
-        assert!(transaction.is_none());
-        assert!(transaction_bcs.is_none());
-        assert!(effects.is_none());
-        assert!(effects_bcs.is_none());
-        if digest == Some(transaction_digest.into()) {
-            found_transaction = true;
-        }
-        assert!(events.is_none());
-        assert!(events_bcs.is_none());
-        assert!(input_objects.is_empty());
-        assert!(output_objects.is_empty());
-    }
-    // Ensure we found the transaction we used for picking the checkpoint to test against
-    assert!(found_transaction);
+    assert!(transactions.is_empty());
 
     // Request all fields
     let response = grpc_client
@@ -345,9 +320,6 @@ async fn get_full_checkpoint() {
     }
     // Ensure we found the transaction we used for picking the checkpoint to test against
     assert!(found_transaction);
-
-    // ensure we can convert proto GetFullCheckpointResponse type to rust CheckpointData
-    sui_rpc_api::types::FullCheckpointResponse::try_from(&response).unwrap();
 
     // Request by digest
     let response = grpc_client

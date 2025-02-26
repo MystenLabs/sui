@@ -281,14 +281,14 @@ message GetCheckpointResponse {
 // returned if you provide both. If you provide neither, the service
 // returns the latest executed checkpoint.
 message GetFullCheckpointRequest {
-  // Optional. The sequence number of the requested checkpoint.
+  // The sequence number of the requested checkpoint.
   optional uint64 sequence_number = 1;
 
-  // Optional. The digest of the requested checkpoint.
+  // The digest of the requested checkpoint.
   optional sui.types.Digest digest = 2;
 
-  // Optional. Mask for specifying which parts of the `GetFullCheckpointResponse`
-  // should be returned.
+  // Mask specifying which fields to read.
+  // If no mask is specified, defaults to `sequence_number,digest`.
   optional google.protobuf.FieldMask read_mask = 4;
 }
 
