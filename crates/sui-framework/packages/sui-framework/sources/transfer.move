@@ -88,8 +88,11 @@ public fun multiparty_transfer<T: key>(obj: T, multiparty: sui::multiparty::Mult
 /// can use the object as an input to a transaction. It is similar to `share_object` in that the
 /// object must be used in consensus and cannot be used in the fast path.
 /// The object must have `store` to be transferred outside of its module.
-public fun public_multiparty_transfer<T: key + store>(obj: T, multiparty: sui::multiparty::Multiparty {
-    assert!(multiparty.length() == 1, EInvalidMultipartyPermissions);
+public fun public_multiparty_transfer<T: key + store>(
+    obj: T,
+    multiparty: sui::multiparty::Multiparty,
+) {
+    assert!(multiparty.is_single_owner(), EInvalidMultipartyPermissions);
     multiparty_transfer_impl(obj, multiparty)
 }
 

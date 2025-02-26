@@ -35,7 +35,6 @@ public fun single_owner(owner: address): Multiparty {
         m.parties.remove(&address);
     };
     m.parties.insert(address, permissions);
-
 }
 
 /* public */ fun all_permissions(): Permissions {
