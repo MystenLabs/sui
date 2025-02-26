@@ -14,8 +14,7 @@ use simulacrum::Simulacrum;
 use sui_indexer_alt::{config::IndexerConfig, setup_indexer};
 use sui_indexer_alt_framework::{ingestion::ClientArgs, schema::watermarks, IndexerArgs};
 use sui_indexer_alt_jsonrpc::{
-    args::WriteArgs, config::RpcConfig, data::system_package_task::SystemPackageTaskArgs,
-    start_rpc, RpcArgs,
+    config::RpcConfig, data::system_package_task::SystemPackageTaskArgs, start_rpc, RpcArgs,
 };
 use sui_pg_db::{
     temp::{get_available_port, TempDb},
@@ -52,7 +51,8 @@ pub struct FullCluster {
 }
 
 /// A collection of the off-chain services (an indexer, a database and a JSON-RPC server that reads
-/// from that database), grouped together to simplify set-up and tear-down for tests.
+/// from that database), grouped together to simplify set-up and tear-down for tests. The included
+/// JSON-RPC server currently does not support transaction dry run and execution.
 ///
 /// The database is temporary, and will be cleaned up when the cluster is dropped, and the RPC is
 /// set-up to listen on a random, available port, to avoid conflicts when multiple instances are
@@ -125,7 +125,6 @@ impl FullCluster {
             system_package_task_args,
             indexer_config,
             rpc_config,
-            None,
             registry,
             cancel,
         )
@@ -248,7 +247,6 @@ impl OffchainCluster {
         system_package_task_args: SystemPackageTaskArgs,
         indexer_config: IndexerConfig,
         rpc_config: RpcConfig,
-        fullnode_rpc_url: Option<Url>,
         registry: &prometheus::Registry,
         cancel: CancellationToken,
     ) -> anyhow::Result<Self> {
@@ -288,7 +286,7 @@ impl OffchainCluster {
             database_url.clone(),
             DbArgs::default(),
             rpc_args,
-            write_args,
+            None,
             system_package_task_args,
             rpc_config,
             registry,
@@ -306,27 +304,6 @@ impl OffchainCluster {
             database,
             cancel,
         })
-    }
-
-    pub async fn new_with_fullnode_rpc_url(fullnode_rpc_url: Url) -> anyhow::Result<Self> {
-        let temp_dir = tempfile::tempdir().context("Failed to create data ingestion path")?;
-
-        let client_args = ClientArgs {
-            local_ingestion_path: Some(temp_dir.path().to_owned()),
-            remote_store_url: None,
-        };
-
-        Self::new(
-            IndexerArgs::default(),
-            client_args,
-            SystemPackageTaskArgs::default(),
-            IndexerConfig::for_test(),
-            RpcConfig::default(),
-            Some(fullnode_rpc_url),
-            &prometheus::Registry::new(),
-            CancellationToken::new(),
-        )
-        .await
     }
 
     /// The URL to talk to the database on.

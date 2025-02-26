@@ -24,6 +24,9 @@ pub struct RpcConfig {
     /// Configuration for coin-related RPC methods.
     pub coins: CoinsConfig,
 
+    /// Configuration for transaction execution RPC methods.
+    pub write: WriteConfig,
+
     /// Configuration for bigtable kv store, if it is used.
     pub bigtable: Option<BigtableConfig>,
 
@@ -45,6 +48,9 @@ pub struct RpcLayer {
 
     /// Configuration for coin-related RPC methods.
     pub coins: CoinsLayer,
+
+    /// Configuration for transaction execution RPC methods.
+    pub write: WriteLayer,
 
     /// Configuration for bigtable kv store, if it is used.
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -140,6 +146,24 @@ pub struct CoinsLayer {
     pub extra: toml::Table,
 }
 
+#[derive(Clone, Debug)]
+pub struct WriteConfig {
+    /// The value of the header to be sent to the fullnode RPC, used to distinguish between different instances.
+    pub header_value: String,
+    /// The maximum size of the request body allowed.
+    pub max_request_size: u32,
+}
+
+#[DefaultConfig]
+#[derive(Clone, Default, Debug)]
+pub struct WriteLayer {
+    pub header_value: Option<String>,
+    pub max_request_size: Option<u32>,
+
+    #[serde(flatten)]
+    pub extra: toml::Table,
+}
+
 #[DefaultConfig]
 #[derive(Clone, Default, Debug)]
 pub struct BigtableConfig {
@@ -170,6 +194,7 @@ impl RpcLayer {
             coins: CoinsConfig::default().into(),
             bigtable: None,
             package_resolver: PackageResolverLayer::default(),
+            write: WriteConfig::default().into(),
             extra: Default::default(),
         }
     }
@@ -181,6 +206,7 @@ impl RpcLayer {
             transactions: self.transactions.finish(TransactionsConfig::default()),
             name_service: self.name_service.finish(NameServiceConfig::default()),
             coins: self.coins.finish(CoinsConfig::default()),
+            write: self.write.finish(WriteConfig::default()),
             bigtable: self.bigtable,
             package_resolver: self.package_resolver.finish(),
         }
@@ -237,6 +263,16 @@ impl CoinsLayer {
     }
 }
 
+impl WriteLayer {
+    pub fn finish(self, base: WriteConfig) -> WriteConfig {
+        check_extra("write", self.extra);
+        WriteConfig {
+            header_value: self.header_value.unwrap_or(base.header_value),
+            max_request_size: self.max_request_size.unwrap_or(base.max_request_size),
+        }
+    }
+}
+
 impl PackageResolverLayer {
     pub fn finish(self) -> sui_package_resolver::Limits {
         check_extra("package-resolver", self.extra);
@@ -256,6 +292,7 @@ impl Default for RpcConfig {
             transactions: TransactionsConfig::default(),
             name_service: NameServiceConfig::default(),
             coins: CoinsConfig::default(),
+            write: WriteConfig::default(),
             bigtable: None,
             package_resolver: PackageResolverLayer::default().finish(),
         }
@@ -288,6 +325,15 @@ impl Default for CoinsConfig {
         Self {
             default_page_size: 50,
             max_page_size: 100,
+        }
+    }
+}
+
+impl Default for WriteConfig {
+    fn default() -> Self {
+        Self {
+            header_value: "sui-indexer-alt-jsonrpc".to_string(),
+            max_request_size: (10 * 2) << 20, // 10MB
         }
     }
 }
@@ -349,6 +395,16 @@ impl From<CoinsConfig> for CoinsLayer {
         Self {
             default_page_size: Some(config.default_page_size),
             max_page_size: Some(config.max_page_size),
+            extra: Default::default(),
+        }
+    }
+}
+
+impl From<WriteConfig> for WriteLayer {
+    fn from(config: WriteConfig) -> Self {
+        Self {
+            header_value: Some(config.header_value),
+            max_request_size: Some(config.max_request_size),
             extra: Default::default(),
         }
     }

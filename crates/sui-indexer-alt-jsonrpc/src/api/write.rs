@@ -1,8 +1,13 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use anyhow::Context;
 use fastcrypto::encoding::Base64;
-use jsonrpsee::{core::RpcResult, http_client::HttpClient, proc_macros::rpc};
+use jsonrpsee::{
+    core::RpcResult,
+    http_client::{HeaderMap, HeaderValue, HttpClient, HttpClientBuilder},
+    proc_macros::rpc,
+};
 use sui_json_rpc_types::{
     DryRunTransactionBlockResponse, SuiTransactionBlockResponse, SuiTransactionBlockResponseOptions,
 };
@@ -10,9 +15,14 @@ use sui_open_rpc::Module;
 use sui_open_rpc_macros::open_rpc;
 use sui_types::quorum_driver_types::ExecuteTransactionRequestType;
 
-use crate::error::{client_error_to_error_object, invalid_params};
+use crate::{
+    config::WriteConfig,
+    error::{client_error_to_error_object, invalid_params},
+};
 
 use super::rpc_module::RpcModule;
+
+pub const CLIENT_SDK_TYPE_HEADER: &str = "client-sdk-type";
 
 #[open_rpc(namespace = "sui", tag = "Write API")]
 #[rpc(server, client, namespace = "sui")]
@@ -42,12 +52,36 @@ pub trait WriteApi {
     ) -> RpcResult<DryRunTransactionBlockResponse>;
 }
 
+#[derive(clap::Args, Debug, Clone)]
+pub struct WriteArgs {
+    /// The URL of the fullnode RPC we connect to for executing transactions.
+    pub fullnode_rpc_url: url::Url,
+}
+
 pub(crate) struct Write(pub HttpClient);
 
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
     #[error("WaitForLocalExecution mode is deprecated")]
     DeprecatedWaitForLocalExecution,
+}
+
+impl Write {
+    pub fn new(args: WriteArgs, config: WriteConfig) -> anyhow::Result<Self> {
+        let mut headers = HeaderMap::new();
+        headers.insert(
+            CLIENT_SDK_TYPE_HEADER,
+            HeaderValue::from_str(&config.header_value)?,
+        );
+
+        Ok(Self(
+            HttpClientBuilder::default()
+                .max_request_size(config.max_request_size)
+                .set_headers(headers.clone())
+                .build(&args.fullnode_rpc_url)
+                .context("Failed to initialize fullnode RPC client")?,
+        ))
+    }
 }
 
 #[async_trait::async_trait]

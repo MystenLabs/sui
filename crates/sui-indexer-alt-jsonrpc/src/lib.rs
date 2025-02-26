@@ -13,11 +13,9 @@ use api::name_service::NameService;
 use api::objects::{Objects, QueryObjects};
 use api::rpc_module::RpcModule;
 use api::transactions::{QueryTransactions, Transactions};
-use api::write::Write;
-use args::WriteArgs;
+use api::write::{Write, WriteArgs};
 use config::RpcConfig;
 use data::system_package_task::{SystemPackageTask, SystemPackageTaskArgs};
-use jsonrpsee::http_client::{HeaderMap, HeaderValue, HttpClient, HttpClientBuilder};
 use jsonrpsee::server::{BatchRequestConfig, RpcServiceBuilder, ServerBuilder};
 use metrics::middleware::MetricsLayer;
 use metrics::RpcMetrics;
@@ -34,7 +32,7 @@ use url::Url;
 use crate::api::governance::Governance;
 use crate::context::Context;
 
-mod api;
+pub mod api;
 pub mod args;
 pub mod config;
 mod context;
@@ -42,8 +40,6 @@ pub mod data;
 mod error;
 mod metrics;
 mod paginate;
-
-pub const CLIENT_SDK_TYPE_HEADER: &str = "client-sdk-type";
 
 #[derive(clap::Args, Debug, Clone)]
 pub struct RpcArgs {
@@ -253,9 +249,7 @@ pub async fn start_rpc(
 
     // Add the write module if a fullnode rpc url is provided.
     if let Some(write_args) = write_args {
-        let http_client = get_http_client(&write_args.fullnode_rpc_url)
-            .context("Failed to create fullnode RPC client")?;
-        rpc.add_module(Write(http_client))?;
+        rpc.add_module(Write::new(write_args, context.config().write.clone())?)?;
     }
 
     let h_rpc = rpc.run().await.context("Failed to start RPC service")?;
@@ -266,25 +260,6 @@ pub async fn start_rpc(
         cancel.cancel();
         let _ = h_system_package_task.await;
     }))
-}
-
-fn get_http_client(rpc_client_url: &Url) -> anyhow::Result<HttpClient> {
-    let mut headers = HeaderMap::new();
-    headers.insert(
-        CLIENT_SDK_TYPE_HEADER,
-        HeaderValue::from_static("indexer-alt"),
-    );
-
-    HttpClientBuilder::default()
-        .max_request_size(2 << 30)
-        .set_headers(headers.clone())
-        .build(rpc_client_url)
-        .map_err(|e| {
-            anyhow::anyhow!(format!(
-                "Failed to initialize fullnode RPC client with error: {:?}",
-                e
-            ))
-        })
 }
 
 #[cfg(test)]

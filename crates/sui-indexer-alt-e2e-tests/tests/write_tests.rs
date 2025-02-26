@@ -8,7 +8,7 @@ use prometheus::Registry;
 use reqwest::Client;
 use serde_json::{json, Value};
 use sui_indexer_alt_jsonrpc::{
-    args::WriteArgs, config::RpcConfig, data::system_package_task::SystemPackageTaskArgs,
+    api::write::WriteArgs, config::RpcConfig, data::system_package_task::SystemPackageTaskArgs,
     start_rpc, RpcArgs,
 };
 use sui_pg_db::{
@@ -21,16 +21,14 @@ use tokio::task::JoinHandle;
 use tokio_util::sync::CancellationToken;
 use url::Url;
 
-const EPOCH_DURATION_MS: u64 = 2000;
-const GAS_OBJECT_COUNT: usize = 1;
-const DEFAULT_GAS_AMOUNT: u64 = 1_000_000_000_000;
-
 struct WriteTestCluster {
     onchain_cluster: TestCluster,
-    rpc_url: String,
+    rpc_url: Url,
     rpc_handle: JoinHandle<()>,
     client: Client,
     cancel: CancellationToken,
+    #[allow(unused)]
+    db: TempDb,
 }
 
 impl WriteTestCluster {
@@ -38,11 +36,11 @@ impl WriteTestCluster {
     async fn new() -> anyhow::Result<Self> {
         let onchain_cluster = TestClusterBuilder::new()
             .with_num_validators(1)
-            .with_epoch_duration_ms(EPOCH_DURATION_MS)
+            .with_epoch_duration_ms(2000)
             .with_accounts(vec![
                 AccountConfig {
                     address: None,
-                    gas_amounts: vec![DEFAULT_GAS_AMOUNT; GAS_OBJECT_COUNT],
+                    gas_amounts: vec![1_000_000_000_000; 1],
                 };
                 4
             ])
@@ -54,7 +52,33 @@ impl WriteTestCluster {
 
         let cancel = CancellationToken::new();
 
-        let (rpc_handle, rpc_url) = set_up_rpc_server(fullnode_rpc_url, cancel.clone()).await;
+        let db = TempDb::new().expect("Failed to create temporary database");
+
+        let rpc_listen_address =
+            SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), get_available_port());
+        let rpc_url = Url::parse(&format!("http://{}/", rpc_listen_address))
+            .expect("Failed to parse RPC URL");
+
+        // We don't expose metrics in these tests, but we create a registry to collect them anyway.
+        let registry = Registry::new();
+
+        let rpc_args = RpcArgs {
+            rpc_listen_address,
+            ..Default::default()
+        };
+
+        let rpc_handle = start_rpc(
+            db.database().url().clone(),
+            DbArgs::default(),
+            rpc_args,
+            Some(WriteArgs { fullnode_rpc_url }),
+            SystemPackageTaskArgs::default(),
+            RpcConfig::default(),
+            &registry,
+            cancel.child_token(),
+        )
+        .await
+        .expect("Failed to start JSON-RPC server");
 
         Ok(Self {
             onchain_cluster,
@@ -62,6 +86,7 @@ impl WriteTestCluster {
             rpc_handle,
             client: Client::new(),
             cancel,
+            db,
         })
     }
 
@@ -80,7 +105,7 @@ impl WriteTestCluster {
         let signed_tx = self.onchain_cluster.wallet.sign_transaction(&tx);
         let (tx_bytes, sigs) = signed_tx.to_tx_bytes_and_signatures();
         let tx_bytes = tx_bytes.encoded();
-        let sigs = sigs.iter().map(|sig| sig.encoded()).collect::<Vec<_>>();
+        let sigs: Vec<_> = sigs.iter().map(|sig| sig.encoded()).collect();
 
         Ok((tx_digest, tx_bytes, sigs))
     }
@@ -97,7 +122,7 @@ impl WriteTestCluster {
         let signed_tx = self.onchain_cluster.wallet.sign_transaction(&tx);
         let (tx_bytes, sigs) = signed_tx.to_tx_bytes_and_signatures();
         let tx_bytes = tx_bytes.encoded();
-        let sigs = sigs.iter().map(|sig| sig.encoded()).collect::<Vec<_>>();
+        let sigs: Vec<_> = sigs.iter().map(|sig| sig.encoded()).collect();
 
         Ok((tx_digest, tx_bytes, sigs))
     }
@@ -129,6 +154,10 @@ impl WriteTestCluster {
     async fn stopped(self) {
         self.cancel.cancel();
         let _ = self.rpc_handle.await;
+        let mut nodes = self.onchain_cluster.all_node_handles();
+        for node in &mut nodes {
+            node.shutdown_on_drop();
+        }
     }
 }
 
@@ -225,6 +254,10 @@ async fn test_execution_with_no_sigs() {
 
     assert_eq!(response["error"]["code"], -32602);
     assert_eq!(response["error"]["message"], "Invalid params");
+    assert!(response["error"]["data"]
+        .as_str()
+        .unwrap()
+        .starts_with("missing field `signatures`"));
 
     test_cluster.stopped().await;
 }
@@ -327,48 +360,9 @@ async fn test_dry_run_with_invalid_tx() {
 
     assert_eq!(response["error"]["code"], -32602);
     assert_eq!(response["error"]["message"], "Invalid params");
-
+    assert!(response["error"]["data"]
+        .as_str()
+        .unwrap()
+        .starts_with("Invalid value was given to the function"));
     test_cluster.stopped().await;
-}
-
-async fn set_up_rpc_server(
-    fullnode_rpc_url: Url,
-    cancel: CancellationToken,
-) -> (JoinHandle<()>, String) {
-    let rpc_port = get_available_port();
-    let rpc_listen_address = SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), rpc_port);
-    let rpc_url = Url::parse(&format!("http://{}/", rpc_listen_address))
-        .expect("Failed to parse RPC URL")
-        .to_string();
-
-    // We don't expose metrics in these tests, but we create a registry to collect them anyway.
-    let registry = Registry::new();
-
-    let database = TempDb::new().expect("Failed to create temporary database");
-
-    let db_args = DbArgs {
-        database_url: database.database().url().clone(),
-        ..Default::default()
-    };
-
-    let rpc_args = RpcArgs {
-        rpc_listen_address,
-        ..Default::default()
-    };
-
-    let write_args = WriteArgs { fullnode_rpc_url };
-
-    let rpc_handle = start_rpc(
-        db_args,
-        rpc_args,
-        Some(write_args),
-        SystemPackageTaskArgs::default(),
-        RpcConfig::example(),
-        &registry,
-        cancel.child_token(),
-    )
-    .await
-    .expect("Failed to start JSON-RPC server");
-
-    (rpc_handle, rpc_url)
 }
