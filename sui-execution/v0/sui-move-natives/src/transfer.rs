@@ -3,15 +3,15 @@
 
 use super::object_runtime::{ObjectRuntime, TransferResult};
 use crate::NativesCostTable;
+use legacy_move_vm_types::{
+    loaded_data::runtime_types::Type, natives::function::NativeResult, pop_arg, values::Value,
+};
 use move_binary_format::errors::{PartialVMError, PartialVMResult};
 use move_core_types::{
     account_address::AccountAddress, gas_algebra::InternalGas, language_storage::TypeTag,
     vm_status::StatusCode,
 };
 use move_vm_runtime::{native_charge_gas_early_exit, native_functions::NativeContext};
-use legacy_move_vm_types::{
-    loaded_data::runtime_types::Type, natives::function::NativeResult, pop_arg, values::Value,
-};
 use smallvec::smallvec;
 use std::collections::VecDeque;
 use sui_types::{base_types::SequenceNumber, object::Owner};

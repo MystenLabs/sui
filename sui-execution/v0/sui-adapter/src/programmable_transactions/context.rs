@@ -21,6 +21,7 @@ mod checked {
     use crate::gas_charger::GasCharger;
     use crate::programmable_transactions::linkage_view::{LinkageInfo, LinkageView, SavedLinkage};
     use crate::type_resolver::TypeTagResolver;
+    use legacy_move_vm_types::loaded_data::runtime_types::Type;
     use move_binary_format::{
         errors::{Location, VMError, VMResult},
         file_format::{CodeOffset, FunctionDefinitionIndex, TypeParameterIndex},
@@ -31,7 +32,6 @@ mod checked {
         language_storage::{ModuleId, StructTag, TypeTag},
     };
     use move_vm_runtime::{move_vm::MoveVM, session::Session};
-    use legacy_move_vm_types::loaded_data::runtime_types::Type;
     use sui_move_natives::object_runtime::{
         self, get_all_uids, max_event_error, ObjectRuntime, RuntimeResults,
     };

@@ -128,7 +128,10 @@ pub fn num_events(
 ) -> PartialVMResult<NativeResult> {
     assert!(ty_args.is_empty());
     assert!(args.is_empty());
-    let object_runtime_ref: &ObjectRuntime = context.extensions().get();
+    let object_runtime_ref: &ObjectRuntime = &context
+        .extensions()
+        .get::<NativeContextMut<ObjectRuntime>>()
+        .borrow();
     let num_events = object_runtime_ref.state.events().len();
     Ok(NativeResult::ok(
         legacy_test_cost(),
@@ -145,7 +148,10 @@ pub fn get_events_by_type(
     assert_eq!(ty_args.len(), 1);
     let specified_ty = ty_args.pop().unwrap();
     assert!(args.is_empty());
-    let object_runtime_ref: &ObjectRuntime = context.extensions().get();
+    let object_runtime_ref: &ObjectRuntime = &context
+        .extensions()
+        .get::<NativeContextMut<ObjectRuntime>>()
+        .borrow();
     let specified_type_tag = match context.type_to_type_tag(&specified_ty)? {
         TypeTag::Struct(s) => *s,
         _ => return Ok(NativeResult::ok(legacy_test_cost(), smallvec![])),

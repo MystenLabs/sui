@@ -737,6 +737,22 @@ impl TryFrom<TransactionData> for Operations {
             fn get_module(&self, _id: &ModuleId) -> Result<Option<Vec<u8>>, Self::Error> {
                 Ok(None)
             }
+
+            fn get_packages_static<const N: usize>(
+                &self,
+                _ids: [move_core_types::account_address::AccountAddress; N],
+            ) -> Result<[Option<move_core_types::resolver::SerializedPackage>; N], Self::Error>
+            {
+                Ok([const { None }; N])
+            }
+
+            fn get_packages(
+                &self,
+                ids: &[move_core_types::account_address::AccountAddress],
+            ) -> Result<Vec<Option<move_core_types::resolver::SerializedPackage>>, Self::Error>
+            {
+                Ok(ids.iter().map(|_| None).collect())
+            }
         }
         // Rosetta don't need the call args to be parsed into readable format
         Ok(Operations::try_from_data(

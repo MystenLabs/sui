@@ -8,6 +8,10 @@ use super::get_object_id;
 use better_any::{Tid, TidAble};
 use indexmap::map::IndexMap;
 use indexmap::set::IndexSet;
+use legacy_move_vm_types::{
+    loaded_data::runtime_types::Type,
+    values::{GlobalValue, Value},
+};
 use move_binary_format::errors::{PartialVMError, PartialVMResult};
 use move_core_types::{
     account_address::AccountAddress,
@@ -17,10 +21,6 @@ use move_core_types::{
     language_storage::StructTag,
     runtime_value as R,
     vm_status::StatusCode,
-};
-use legacy_move_vm_types::{
-    loaded_data::runtime_types::Type,
-    values::{GlobalValue, Value},
 };
 use object_store::ChildObjectStore;
 use std::{

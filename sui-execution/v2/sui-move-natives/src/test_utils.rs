@@ -2,12 +2,12 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{legacy_test_cost, types::is_otw_struct};
-use move_binary_format::errors::PartialVMResult;
-use move_core_types::{gas_algebra::InternalGas, runtime_value::MoveTypeLayout};
-use move_vm_runtime::native_functions::NativeContext;
 use legacy_move_vm_types::{
     loaded_data::runtime_types::Type, natives::function::NativeResult, values::Value,
 };
+use move_binary_format::errors::PartialVMResult;
+use move_core_types::{gas_algebra::InternalGas, runtime_value::MoveTypeLayout};
+use move_vm_runtime::native_functions::NativeContext;
 use smallvec::smallvec;
 use std::collections::VecDeque;
 
@@ -40,9 +40,9 @@ pub fn create_one_time_witness(
     if is_otw_struct(&struct_layout, &type_tag, hardened_check) {
         Ok(NativeResult::ok(
             legacy_test_cost(),
-            smallvec![Value::struct_(legacy_move_vm_types::values::Struct::pack(vec![
-                Value::bool(true)
-            ]))],
+            smallvec![Value::struct_(legacy_move_vm_types::values::Struct::pack(
+                vec![Value::bool(true)]
+            ))],
         ))
     } else {
         Ok(NativeResult::err(InternalGas::new(1), 1))

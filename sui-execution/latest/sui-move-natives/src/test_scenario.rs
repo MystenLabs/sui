@@ -278,10 +278,6 @@ pub fn end_transaction(
     }
     // find all wrapped objects
     let mut all_wrapped = BTreeSet::new();
-    let object_runtime_ref: &mut ObjectRuntime = &mut context
-        .extensions()
-        .get::<NativeContextMut<ObjectRuntime>>()
-        .borrow_mut();
     find_all_wrapped_objects(
         context,
         &mut all_wrapped,

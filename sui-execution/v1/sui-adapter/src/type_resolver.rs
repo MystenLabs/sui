@@ -1,8 +1,8 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use move_core_types::language_storage::TypeTag;
 use legacy_move_vm_types::loaded_data::runtime_types::Type;
+use move_core_types::language_storage::TypeTag;
 use sui_types::error::ExecutionError;
 
 pub trait TypeTagResolver {

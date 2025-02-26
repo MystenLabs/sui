@@ -1,9 +1,9 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use legacy_move_vm_types::loaded_data::runtime_types::Type;
 use move_binary_format::file_format::AbilitySet;
 use move_core_types::identifier::IdentStr;
-use legacy_move_vm_types::loaded_data::runtime_types::Type;
 use serde::Deserialize;
 use sui_types::{
     base_types::{ObjectID, SequenceNumber, SuiAddress},
