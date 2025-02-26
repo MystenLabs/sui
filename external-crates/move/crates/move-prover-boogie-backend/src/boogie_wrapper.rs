@@ -1567,9 +1567,7 @@ impl ModelValue {
                     let ty = f.get_type().instantiate(inst);
                     let default = ModelValue::error();
                     let v = values.get(i).unwrap_or(&default);
-                    let vp = v
-                        .pretty(wrapper, model, &ty)
-                        .unwrap_or_else(|| default.pretty_or_raw(wrapper, model, &ty));
+                    let vp = v.pretty_or_raw(wrapper, model, &ty);
                     PrettyDoc::text(format!(
                         "{}",
                         f.get_name().display(struct_env.symbol_pool())
