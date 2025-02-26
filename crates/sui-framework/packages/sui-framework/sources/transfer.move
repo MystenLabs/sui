@@ -75,9 +75,9 @@ public fun public_transfer<T: key + store>(obj: T, recipient: address) {
 /// This function has custom rules performed by the Sui Move bytecode verifier that ensures that `T`
 /// is an object defined in the module where `transfer` is invoked. Use `public_multiparty_transfer`
 /// to transfer an object with `store` outside of its module.
-public fun multiparty_transfer<T: key>(obj: T, multiparty_permissions: sui::multiparty::Multiparty) {
-    assert!(multiparty_permissions.is_single_owner(), EInvalidMultipartyPermissions);
-    multiparty_transfer_impl(obj, party_members)
+public fun multiparty_transfer<T: key>(obj: T, multiparty: sui::multiparty::Multiparty) {
+    assert!(multiparty.is_single_owner(), EInvalidMultipartyPermissions);
+    multiparty_transfer_impl(obj, multiparty)
 }
 
 /// NOT YET SUPPORTED. The function will abort with `ENotSupported` if used on a network,
@@ -88,9 +88,9 @@ public fun multiparty_transfer<T: key>(obj: T, multiparty_permissions: sui::mult
 /// can use the object as an input to a transaction. It is similar to `share_object` in that the
 /// object must be used in consensus and cannot be used in the fast path.
 /// The object must have `store` to be transferred outside of its module.
-public fun public_multiparty_transfer<T: key + store>(obj: T, party_members: vector<address>) {
-    assert!(party_members.length() == 1, EInvalidMultipartyPermissions);
-    multiparty_transfer_impl(obj, party_members)
+public fun public_multiparty_transfer<T: key + store>(obj: T, multiparty: sui::multiparty::Multiparty {
+    assert!(multiparty.length() == 1, EInvalidMultipartyPermissions);
+    multiparty_transfer_impl(obj, multiparty)
 }
 
 /// Freeze `obj`. After freezing `obj` becomes immutable and can no longer be transferred or

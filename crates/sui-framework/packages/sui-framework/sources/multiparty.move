@@ -3,6 +3,8 @@
 
 module sui::multiparty;
 
+use sui::vec_map::{Self, VecMap};
+
 public struct Multiparty has copy, drop {
     global: Permissions,
     parties: VecMap<address, Permissions>,
@@ -24,7 +26,7 @@ public fun single_owner(owner: address): Multiparty {
 /* public */ fun empty(): Multiparty {
     Multiparty {
         global: no_permissions!(),
-        parties: vector[],
+        parties: vec_map::empty(),
     }
 }
 
@@ -46,6 +48,6 @@ macro fun no_permissions(): Permissions {
 
 public(package) fun is_single_owner(m: &Multiparty): bool {
     m.global == no_permissions!() &&
-    m.parties.length() == 1 &&
-    { let (_, p) = m.parties.get_entry_by_idx(0).flags; p == all_permissions() }
+    m.parties.size() == 1 &&
+    { let (_, p) = m.parties.get_entry_by_idx(0); p == all_permissions() }
 }
