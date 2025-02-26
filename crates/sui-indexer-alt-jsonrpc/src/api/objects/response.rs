@@ -259,5 +259,5 @@ async fn display_fields(
         bcs::from_bytes(&stored.display).context("Failed to deserialize Display format")?;
 
     let format = Format::parse(config.max_display_field_depth, &event.fields)?;
-    Ok(format.display(object.contents(), &layout))
+    format.display(config.max_display_output_size, object.contents(), &layout)
 }
