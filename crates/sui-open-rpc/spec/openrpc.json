@@ -8988,12 +8988,22 @@
             }
           },
           "variants": {
-            "type": "object",
-            "additionalProperties": {
+            "type": "array",
+            "items": {
               "type": "array",
-              "items": {
-                "$ref": "#/components/schemas/SuiMoveNormalizedField"
-              }
+              "items": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/SuiMoveNormalizedField"
+                  }
+                }
+              ],
+              "maxItems": 2,
+              "minItems": 2
             }
           }
         }
