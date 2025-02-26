@@ -169,7 +169,19 @@ const protocolInject = async function (source) {
             );
           }
           if (hasLabel) {
-            content.push(`<div className="">${field[1].label}</div>`);
+            let label =
+              field[1].label[0].toUpperCase() + field[1].label.substring(1);
+            let labelBg = "bg-sui-ghost-white dark:bg-sui-ghost-dark";
+            if (field[1].label === "optional") {
+              label = "Proto3 optional";
+              labelBg = "bg-sui-blue-light dark:bg-sui-blue-dark";
+            } else if (field[1].label === "repeated") {
+              label = "Repeated []";
+              labelBg = "bg-sui-warning-light dark:bg-sui-warning-dark";
+            }
+            content.push(
+              `<div className="px-2 py-1 my-1 w-fit border border-solid rounded-full text-sm ${labelBg}">${label}</div>`,
+            );
           }
           if (hasDesc) {
             content.push(
@@ -253,7 +265,6 @@ const protocolInject = async function (source) {
           content.push(`</div>`);
         }
       }
-      //content.push("</div>");
     }
     if (file.enums.length > 0) {
       const cellDesc = "mt-4";
