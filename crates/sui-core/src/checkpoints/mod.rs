@@ -40,6 +40,7 @@ use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 use std::fs::File;
 use std::io::Write;
 use std::path::Path;
+use std::str::FromStr;
 use std::sync::Arc;
 use std::sync::Weak;
 use std::time::{Duration, SystemTime};
@@ -74,6 +75,12 @@ use typed_store::{
 };
 
 pub type CheckpointHeight = u64;
+
+fn get_ignorable_bad_checkpoint_digest() -> Option<CheckpointDigest> {
+    std::env::var("SUI_IGNORABLE_BAD_CHECKPOINT_DIGEST")
+        .ok()
+        .map(|s| CheckpointDigest::from_str(&s).unwrap())
+}
 
 pub struct EpochStats {
     pub checkpoint_count: u64,
@@ -186,12 +193,16 @@ pub struct CheckpointStore {
 
 impl CheckpointStore {
     pub fn new(path: &Path) -> Arc<Self> {
-        Arc::new(Self::open_tables_read_write(
+        let store = Arc::new(Self::open_tables_read_write(
             path.to_path_buf(),
             MetricConf::new("checkpoint"),
             None,
             None,
-        ))
+        ));
+
+        store.clear_forked_checkpoints();
+
+        store
     }
 
     pub fn open_readonly(path: &Path) -> CheckpointStoreReadOnly {
@@ -201,6 +212,46 @@ impl CheckpointStore {
             None,
             MetricConf::new("checkpoint_readonly"),
         )
+    }
+
+    fn clear_forked_checkpoints(&self) {
+        let Some(known_bad_digest) = get_ignorable_bad_checkpoint_digest() else {
+            return;
+        };
+
+        let mut delete = false;
+        let executed_watermark = self
+            .get_highest_executed_checkpoint_seq_number()
+            .expect("db error")
+            .unwrap_or(0);
+        let mut to_delete = Vec::new();
+
+        for (seq, summary) in self
+            .locally_computed_checkpoints
+            .safe_iter_with_bounds(Some(executed_watermark), None)
+            .map(|r| r.unwrap())
+        {
+            if known_bad_digest == summary.digest() {
+                error!(
+                    "Found locally computed checkpoint with known bad digest {:?}",
+                    known_bad_digest
+                );
+                delete = true;
+            }
+
+            if delete {
+                to_delete.push(seq);
+            }
+        }
+
+        if !to_delete.is_empty() {
+            error!("Clearing all locally forked checkpoints: {:?}", to_delete);
+            for seq in to_delete {
+                self.locally_computed_checkpoints
+                    .remove(&seq)
+                    .expect("db error");
+            }
+        }
     }
 
     #[instrument(level = "info", skip_all)]
@@ -472,6 +523,8 @@ impl CheckpointStore {
 
             // checkpoint contents may be too large for panic message.
             error!(
+                verified_digest = ?verified_checkpoint.digest(),
+                local_digest = ?local_checkpoint.digest(),
                 verified_checkpoint = ?verified_checkpoint.data(),
                 ?verified_contents,
                 ?local_checkpoint,
@@ -494,15 +547,18 @@ impl CheckpointStore {
         &self,
         checkpoint: &VerifiedCheckpoint,
     ) -> Result<(), TypedStoreError> {
-        debug!(
-            checkpoint_seq = checkpoint.sequence_number(),
-            "Inserting certified checkpoint",
-        );
+        let seq = *checkpoint.sequence_number();
+        debug!(checkpoint_seq = seq, "Inserting certified checkpoint",);
+
+        if let Some(local_checkpoint) = self.locally_computed_checkpoints.get(&seq)? {
+            self.check_for_checkpoint_fork(&local_checkpoint, checkpoint);
+        }
+
         let mut batch = self.certified_checkpoints.batch();
         batch
             .insert_batch(
                 &self.certified_checkpoints,
-                [(checkpoint.sequence_number(), checkpoint.serializable_ref())],
+                [(seq, checkpoint.serializable_ref())],
             )?
             .insert_batch(
                 &self.checkpoint_by_digest,
@@ -511,17 +567,10 @@ impl CheckpointStore {
         if checkpoint.next_epoch_committee().is_some() {
             batch.insert_batch(
                 &self.epoch_last_checkpoint_map,
-                [(&checkpoint.epoch(), checkpoint.sequence_number())],
+                [(&checkpoint.epoch(), seq)],
             )?;
         }
         batch.write()?;
-
-        if let Some(local_checkpoint) = self
-            .locally_computed_checkpoints
-            .get(checkpoint.sequence_number())?
-        {
-            self.check_for_checkpoint_fork(&local_checkpoint, checkpoint);
-        }
 
         Ok(())
     }
