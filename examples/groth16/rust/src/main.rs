@@ -1,3 +1,6 @@
+// Copyright (c) Mysten Labs, Inc.
+// SPDX-License-Identifier: Apache-2.0
+
 use ark_bn254::{Bn254, Fr};
 use ark_circom::CircomBuilder;
 use ark_circom::CircomConfig;
