@@ -220,6 +220,8 @@ const MAX_PROTOCOL_VERSION: u64 = 76;
 // Version 75: Enable passkey auth in testnet.
 // Version 76: Deprecate Deepbook V2 order placement and deposit.
 //             Removes unnecessary child object mutations
+//             Enable consensus garbage collection for testnet
+//             Enable the new consensus commit rule for testnet
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
 
@@ -3265,6 +3267,11 @@ impl ProtocolConfig {
                 }
                 76 => {
                     cfg.feature_flags.minimize_child_object_mutations = true;
+
+                    if chain != Chain::Mainnet {
+                        cfg.consensus_gc_depth = Some(60);
+                        cfg.feature_flags.consensus_linearize_subdag_v2 = true;
+                    }
                 }
                 // Use this template when making changes:
                 //
