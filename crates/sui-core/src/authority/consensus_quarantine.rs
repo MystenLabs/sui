@@ -103,6 +103,10 @@ impl ConsensusCommitOutput {
         }
     }
 
+    pub fn get_deleted_deferred_txn_keys(&self) -> impl Iterator<Item = DeferralKey> + use<'_> {
+        self.deleted_deferred_txns.iter().cloned()
+    }
+
     fn get_randomness_last_round_timestamp(&self) -> Option<TimestampMs> {
         self.next_randomness_round.as_ref().map(|(_, ts)| *ts)
     }

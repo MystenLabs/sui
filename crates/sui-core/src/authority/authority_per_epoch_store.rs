@@ -1936,20 +1936,25 @@ impl AuthorityPerEpochStore {
         max: DeferralKey,
     ) -> SuiResult<Vec<(DeferralKey, Vec<VerifiedSequencedConsensusTransaction>)>> {
         debug!("Query epoch store to load deferred txn {:?} {:?}", min, max);
-        let mut keys = Vec::new();
-        let mut txns = Vec::new();
 
-        let mut deferred_transactions = self.consensus_output_cache.deferred_transactions.lock();
+        let (keys, txns) = {
+            let mut keys = Vec::new();
+            let mut txns = Vec::new();
 
-        for (key, transactions) in deferred_transactions.range(min..max) {
-            debug!(
-                "Loaded {:?} deferred txn with deferral key {:?}",
-                transactions.len(),
-                key
-            );
-            keys.push(*key);
-            txns.push((*key, transactions.clone()));
-        }
+            let deferred_transactions = self.consensus_output_cache.deferred_transactions.lock();
+
+            for (key, transactions) in deferred_transactions.range(min..max) {
+                debug!(
+                    "Loaded {:?} deferred txn with deferral key {:?}",
+                    transactions.len(),
+                    key
+                );
+                keys.push(*key);
+                txns.push((*key, transactions.clone()));
+            }
+
+            (keys, txns)
+        };
 
         // verify that there are no duplicates - should be impossible due to
         // is_consensus_message_processed
@@ -1961,10 +1966,6 @@ impl AuthorityPerEpochStore {
                     assert!(seen.insert(txn.0.key()));
                 }
             }
-        }
-
-        for key in &keys {
-            deferred_transactions.remove(key);
         }
 
         output.delete_loaded_deferred_transactions(&keys);
@@ -3155,6 +3156,14 @@ impl AuthorityPerEpochStore {
                     },
                 });
                 self.write_pending_checkpoint(&mut output, &pending_checkpoint)?;
+            }
+        }
+
+        {
+            let mut deferred_transactions =
+                self.consensus_output_cache.deferred_transactions.lock();
+            for deleted_deferred_key in output.get_deleted_deferred_txn_keys() {
+                deferred_transactions.remove(&deleted_deferred_key);
             }
         }
 
