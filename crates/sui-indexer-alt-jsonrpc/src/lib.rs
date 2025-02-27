@@ -156,6 +156,14 @@ impl RpcService {
 
         let handle = server
             .set_rpc_middleware(middleware)
+            .set_http_middleware(
+                tower::builder::ServiceBuilder::new().layer(
+                    tower_http::cors::CorsLayer::new()
+                        .allow_methods([http::Method::GET, http::Method::POST])
+                        .allow_origin(tower_http::cors::Any)
+                        .allow_headers(tower_http::cors::Any),
+                ),
+            )
             .build(rpc_listen_address)
             .await
             .context("Failed to bind JSON-RPC service")?

@@ -23,6 +23,8 @@ task 5, lines 37-41:
 //# run-jsonrpc --show-headers
 Headers: {
     "content-type": "application/json; charset=utf-8",
+    "vary": "origin, access-control-request-method, access-control-request-headers",
+    "access-control-allow-origin": "*",
     "content-length": "40",
 }
 
