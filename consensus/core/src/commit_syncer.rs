@@ -677,7 +677,9 @@ impl<C: NetworkClient> CommitSyncer<C> {
             certified_commits.push(CertifiedCommit::new_certified(commit.clone(), blocks));
         }
 
-        // 10. Make sure the last timestamp commit is not too far in the future compared to now, when the median based timestamp is enabled.
+        // 10. Make sure the last commit's timestamp is not too far in the future compared to now, when the median based timestamp is enabled.
+        // Since the commit's timestamp is calculated based on the median of the leader's blocks timestamps, we do have a guaratnee that for the last
+        // synced quorum we do have at least 50% of that whose timestamps are lower than the current local time.
         if inner
             .context
             .protocol_config
