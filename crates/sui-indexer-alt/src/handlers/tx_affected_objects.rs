@@ -8,11 +8,11 @@ use anyhow::Result;
 use diesel::{ExpressionMethods, QueryDsl};
 use diesel_async::RunQueryDsl;
 use sui_indexer_alt_framework::{
+    db,
     models::cp_sequence_numbers::tx_interval,
     pipeline::{concurrent::Handler, Processor},
 };
 use sui_indexer_alt_schema::{schema::tx_affected_objects, transactions::StoredTxAffectedObject};
-use sui_pg_db as db;
 use sui_types::{effects::TransactionEffectsAPI, full_checkpoint_content::CheckpointData};
 
 pub(crate) struct TxAffectedObjects;

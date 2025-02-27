@@ -9,13 +9,13 @@ use diesel::{ExpressionMethods, QueryDsl};
 use diesel_async::RunQueryDsl;
 use itertools::Itertools;
 use sui_indexer_alt_framework::{
+    db,
     models::cp_sequence_numbers::tx_interval,
     pipeline::{concurrent::Handler, Processor},
 };
 use sui_indexer_alt_schema::{
     schema::tx_affected_addresses, transactions::StoredTxAffectedAddress,
 };
-use sui_pg_db as db;
 use sui_types::{full_checkpoint_content::CheckpointData, object::Owner};
 
 pub(crate) struct TxAffectedAddresses;
