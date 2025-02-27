@@ -218,6 +218,14 @@ mod tests {
     }
 
     #[test]
+    fn test_escape_chain() {
+        assert_eq!(
+            Parser::new(10, r#"\\\\\\\\\"#).parse_format().unwrap(),
+            vec![Strand::Text(r#"\\\\\"#.into())],
+        );
+    }
+
+    #[test]
     fn test_back_to_back_exprs() {
         assert_eq!(
             Parser::new(10, "{foo . bar}{baz.qux}")

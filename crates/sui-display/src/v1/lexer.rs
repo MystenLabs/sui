@@ -367,4 +367,22 @@ mod tests {
             ],
         );
     }
+
+    /// The lexer should correctly identify backslashes that signify escapes vs backslashes that
+    /// are literal.
+    #[test]
+    fn test_escape_chain() {
+        let lexer = Lexer::new(r#"\\\\\\\\\"#);
+        let lexemes: Vec<_> = lexer.collect();
+        assert_eq!(
+            lexemes,
+            vec![
+                L(T::Escaped, 1, r#"\"#),
+                L(T::Escaped, 3, r#"\"#),
+                L(T::Escaped, 5, r#"\"#),
+                L(T::Escaped, 7, r#"\"#),
+                L(T::Text, 8, r#"\"#),
+            ],
+        );
+    }
 }
