@@ -56,3 +56,14 @@ fun wrapper_well_formed_spec() {
     ghost::declare_global<GhostStruct, Wrapper<u64>>();
     ensures(ghost::global<GhostStruct, Wrapper<u64>>().value <= u64::max_value!());
 }
+
+fun set_test() {
+    ghost::set<GhostStruct, bool>(&true);
+}
+
+#[spec(verify)]
+fun set_test_spec() {
+    ghost::declare_global_mut<GhostStruct, bool>();
+    set_test();
+    ensures(ghost::global<GhostStruct, bool>() == true);
+}
