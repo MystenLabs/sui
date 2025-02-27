@@ -195,10 +195,10 @@ pub(super) fn collector<H: Handler + 'static>(
 
 #[cfg(test)]
 mod tests {
-    use sui_pg_db as db;
     use sui_types::full_checkpoint_content::CheckpointData;
 
     use crate::{
+        db,
         metrics::tests::test_metrics,
         pipeline::{concurrent::max_chunk_rows, Processor},
         FieldCount,

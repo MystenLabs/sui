@@ -6,9 +6,9 @@ use std::{borrow::Cow, time::Duration};
 use chrono::{naive::NaiveDateTime, DateTime, Utc};
 use diesel::{prelude::*, sql_types::BigInt};
 use diesel_async::RunQueryDsl;
-use sui_pg_db::Connection;
 use sui_sql_macro::sql;
 
+use crate::db::Connection;
 use crate::schema::watermarks;
 use crate::FieldCount;
 
