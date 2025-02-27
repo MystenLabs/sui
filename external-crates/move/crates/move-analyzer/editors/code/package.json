@@ -57,6 +57,11 @@
       "type": "object",
       "title": "Move",
       "properties": {
+        "move.force-bundled": {
+          "type": "boolean",
+          "default": false,
+          "markdownDescription": "Prefer bundled version of move-analyzer binary over the one from on-path sui binary"
+        },
         "move.inlay-hints.type": {
           "type": "boolean",
           "default": true,
