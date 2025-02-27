@@ -32,7 +32,6 @@ tracing.workspace = true
 url.workspace = true
 
 sui-default-config.workspace = true
-sui-field-count.workspace = true
 sui-indexer-alt-framework.workspace = true
 sui-indexer-alt-metrics.workspace = true
 sui-indexer-alt-schema.workspace = true

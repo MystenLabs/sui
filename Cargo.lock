@@ -13723,7 +13723,6 @@ dependencies = [
  "rand 0.8.5",
  "serde",
  "sui-default-config",
- "sui-field-count",
  "sui-indexer-alt-framework",
  "sui-indexer-alt-metrics",
  "sui-indexer-alt-schema",
