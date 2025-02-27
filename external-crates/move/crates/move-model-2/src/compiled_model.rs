@@ -33,7 +33,7 @@ pub struct BinaryModel {
 
 #[derive(Debug, Clone)]
 pub struct Package {
-    pub package_id: AccountAddress,
+    pub package: AccountAddress,
     pub modules: BTreeMap<Symbol, Module>,
 }
 
