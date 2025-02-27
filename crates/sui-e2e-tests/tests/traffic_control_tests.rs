@@ -66,6 +66,7 @@ async fn test_fullnode_traffic_control_noop() -> Result<(), anyhow::Error> {
         error_policy_type: PolicyType::TestPanicOnInvocation,
         spam_sample_rate: Weight::one(),
         dry_run: false,
+        weight_spam_by_request_size: false,
         ..Default::default()
     };
     let test_cluster = TestClusterBuilder::new()
@@ -111,6 +112,7 @@ async fn test_fullnode_traffic_control_ok() -> Result<(), anyhow::Error> {
         error_policy_type: PolicyType::TestPanicOnInvocation,
         spam_sample_rate: Weight::one(),
         dry_run: false,
+        weight_spam_by_request_size: false,
         ..Default::default()
     };
     let test_cluster = TestClusterBuilder::new()
@@ -158,6 +160,7 @@ async fn test_fullnode_traffic_control_dry_run() -> Result<(), anyhow::Error> {
         // as we are not sending requests that error
         error_policy_type: PolicyType::TestPanicOnInvocation,
         dry_run: true,
+        weight_spam_by_request_size: false,
         ..Default::default()
     };
     let test_cluster = TestClusterBuilder::new()
@@ -263,6 +266,7 @@ async fn test_fullnode_traffic_control_spam_blocked() -> Result<(), anyhow::Erro
         spam_policy_type: PolicyType::TestNConnIP(txn_count - 1),
         spam_sample_rate: Weight::one(),
         dry_run: false,
+        weight_spam_by_request_size: false,
         ..Default::default()
     };
     let test_cluster = TestClusterBuilder::new()
@@ -329,6 +333,7 @@ async fn test_fullnode_traffic_control_error_blocked() -> Result<(), anyhow::Err
         connection_blocklist_ttl_sec: 3,
         error_policy_type: PolicyType::TestNConnIP(txn_count - 1),
         dry_run: false,
+        weight_spam_by_request_size: false,
         ..Default::default()
     };
     let test_cluster = TestClusterBuilder::new()
@@ -459,6 +464,7 @@ async fn test_fullnode_traffic_control_spam_delegated() -> Result<(), anyhow::Er
         spam_policy_type: PolicyType::TestNConnIP(txn_count - 1),
         spam_sample_rate: Weight::one(),
         dry_run: false,
+        weight_spam_by_request_size: false,
         ..Default::default()
     };
     // enable remote firewall delegation
@@ -517,7 +523,11 @@ async fn test_fullnode_traffic_control_spam_delegated() -> Result<(), anyhow::Er
         let response: Result<SuiTransactionBlockResponse, _> = jsonrpc_client
             .request("sui_getTransactionBlock", rpc_params![*tx_digest])
             .await;
-        assert!(response.is_ok(), "Expected request to succeed");
+        assert!(
+            response.is_ok(),
+            "Expected request to succeed. Response: {:?}",
+            response
+        );
     }
     let fw_blocklist = server.list_addresses_rpc().await;
     assert!(
@@ -535,6 +545,7 @@ async fn test_traffic_control_dead_mans_switch() -> Result<(), anyhow::Error> {
         spam_policy_type: PolicyType::TestNConnIP(10),
         spam_sample_rate: Weight::one(),
         dry_run: false,
+        weight_spam_by_request_size: false,
         ..Default::default()
     };
 
@@ -611,6 +622,7 @@ async fn test_traffic_sketch_no_blocks() {
         error_policy_type: PolicyType::FreqThreshold(sketch_config),
         channel_capacity: 100,
         dry_run: false,
+        weight_spam_by_request_size: false,
         ..Default::default()
     };
     let metrics = TrafficSim::run(
@@ -651,6 +663,7 @@ async fn test_traffic_sketch_with_slow_blocks() {
         error_policy_type: PolicyType::FreqThreshold(sketch_config),
         channel_capacity: 100,
         dry_run: false,
+        weight_spam_by_request_size: false,
         ..Default::default()
     };
     let metrics = TrafficSim::run(
@@ -688,6 +701,7 @@ async fn test_traffic_sketch_with_sampled_spam() {
         proxy_blocklist_ttl_sec: 1,
         spam_policy_type: PolicyType::FreqThreshold(sketch_config),
         spam_sample_rate: Weight::new(0.5).unwrap(),
+        weight_spam_by_request_size: false,
         dry_run: false,
         ..Default::default()
     };
@@ -719,6 +733,7 @@ async fn test_traffic_sketch_allowlist_mode() {
         // first two clients allowlisted, rest blocked
         allow_list: Some(vec![String::from("127.0.0.0"), String::from("127.0.0.1")]),
         dry_run: false,
+        weight_spam_by_request_size: false,
         ..Default::default()
     };
     let metrics = TrafficSim::run(
