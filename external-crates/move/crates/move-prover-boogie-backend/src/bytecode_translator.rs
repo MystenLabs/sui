@@ -2170,6 +2170,28 @@ impl<'env> FunctionTranslator<'env> {
                             }
                         }
 
+                        if callee_env.get_qualified_id() == self.parent.env.ensures_qid() {
+                            emitln!(
+                                self.writer(),
+                                "assert {{:msg \"assert_failed{}: prover::ensures assertion does not hold\"}} {};",
+                                self.loc_str(&self.writer().get_loc()),
+                                args_str,
+                            );
+                            processed = true;
+                        }
+
+                        if callee_env.get_qualified_id() == self.parent.env.asserts_qid()
+                            && self.style == FunctionTranslationStyle::Asserts
+                        {
+                            emitln!(
+                                self.writer(),
+                                "assert {{:msg \"assert_failed{}: prover::asserts assertion does not hold\"}} {};",
+                                self.loc_str(&self.writer().get_loc()),
+                                args_str,
+                            );
+                            processed = true;
+                        }
+
                         if callee_env.get_qualified_id() == self.parent.env.asserts_qid()
                             && self.style == FunctionTranslationStyle::Aborts
                         {
@@ -3318,7 +3340,11 @@ impl<'env> FunctionTranslator<'env> {
                         emitln!(self.writer(), "}");
                     }
                     Some(AbortAction::Check) => {
-                        emitln!(self.writer(), "assert {:msg \"assert_failed(0,0,0): code should not abort\"} !$abort_flag;");
+                        emitln!(
+                            self.writer(),
+                            "assert {{:msg \"assert_failed{}: code should not abort\"}} !$abort_flag;",
+                            self.loc_str(&self.writer().get_loc()),
+                        );
                     }
                     None => {}
                 }
@@ -3354,7 +3380,11 @@ impl<'env> FunctionTranslator<'env> {
                             })
                             .join(", "),
                     );
-                    emitln!(self.writer(), "assert {:msg \"assert_failed(0,0,0): abort_if assertion does not hold\"} !$abort_if_cond;");
+                    emitln!(
+                        self.writer(),
+                        "assert {{:msg \"assert_failed{}: prover::asserts conditions are not complete\"}} !$abort_if_cond;",
+                        self.loc_str(&self.writer().get_loc()),
+                    );
                 }
                 emitln!(self.writer(), "$abort_code := {};", str_local(*src));
                 emitln!(self.writer(), "$abort_flag := true;");

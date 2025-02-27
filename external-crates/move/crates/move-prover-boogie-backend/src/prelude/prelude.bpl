@@ -32,12 +32,6 @@ procedure {:inline 1} $ShlBvBv256From8(src1: bv256, src2: bv8) returns (dst: bv2
 procedure {:inline 1} $0_prover_requires(p: bool) {
     assume p;
 }
-procedure {:inline 1} $0_prover_ensures(p: bool) {
-    assert {:msg "assert_failed(0,0,0): assertion does not hold"} p;
-}
-procedure {:inline 1} $0_prover_asserts(p: bool) {
-    assert {:msg "assert_failed(0,0,0): assertion does not hold"} p;
-}
 
 type $1_integer_Integer = int;
 function {:inline} $IsValid'$1_integer_Integer'(x: int): bool {
