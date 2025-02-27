@@ -19,7 +19,7 @@ use move_core_types::{account_address::AccountAddress, runtime_value::MoveValue}
 use move_ir_types::location::*;
 use move_model_2::{
     display as model_display,
-    source_model::{self as model, Constant, Enum, Model},
+    source_model::{self as model, Model},
     ModuleId, QualifiedMemberId,
 };
 use move_symbol_pool::Symbol;
@@ -874,7 +874,7 @@ impl<'env> Docgen<'env> {
         self.increment_section_nest();
         let current_module = self.current_module.unwrap();
         let current_module = env.module(current_module);
-        for const_env in current_module.constants() {
+        for const_env in current_module.named_constants() {
             self.label(&self.label_for_module_item(current_module, const_env.name()));
             self.doc_text(env, const_env.info().doc.text());
             self.code_block(env, &self.named_constant_display(const_env));
@@ -909,7 +909,7 @@ impl<'env> Docgen<'env> {
     }
 
     /// Generates documentation for an enum.
-    fn gen_enum(&mut self, enum_env: Enum<'_>) {
+    fn gen_enum(&mut self, enum_env: model::Enum<'_>) {
         let env = enum_env.model();
         let module_env = enum_env.module();
         let name = enum_env.name();
@@ -934,7 +934,7 @@ impl<'env> Docgen<'env> {
     }
 
     /// Generates declaration for named constant
-    fn named_constant_display(&self, const_env: Constant<'_>) -> String {
+    fn named_constant_display(&self, const_env: model::NamedConstant<'_>) -> String {
         fn move_value_display(value: &MoveValue) -> String {
             match value {
                 MoveValue::U8(u) => format!("{u}"),
@@ -1032,7 +1032,7 @@ impl<'env> Docgen<'env> {
     }
 
     /// Generates code signature for an enum.
-    fn enum_header_display(&self, enum_env: Enum<'_>) -> String {
+    fn enum_header_display(&self, enum_env: model::Enum<'_>) -> String {
         let name = enum_env.name();
         let env_info = enum_env.info();
         let type_params = self.datatype_type_parameter_list_display(&env_info.type_parameters);
@@ -1049,7 +1049,7 @@ impl<'env> Docgen<'env> {
         }
     }
 
-    fn gen_enum_variants(&mut self, enum_env: Enum<'_>) {
+    fn gen_enum_variants(&mut self, enum_env: model::Enum<'_>) {
         self.begin_definitions();
         for variant_env in enum_env.variants() {
             let variant_name = variant_env.name();

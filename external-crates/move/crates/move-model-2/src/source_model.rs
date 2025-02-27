@@ -266,8 +266,12 @@ impl Model {
             .flat_map(move |(a, p)| p.modules.keys().map(move |m| self.module((a, m))))
     }
 
-    pub fn files(&self) -> Option<&MappedFiles> {
+    pub fn maybe_files(&self) -> Option<&MappedFiles> {
         self.files.as_ref()
+    }
+
+    pub fn files(&self) -> &MappedFiles {
+        self.files.as_ref().unwrap()
     }
 
     pub fn compiled(&self) -> &compiled_model::Model {
@@ -425,23 +429,32 @@ impl<'a> Module<'a> {
         })
     }
 
-    pub fn info(&self) -> Option<&'a ModuleInfo> {
+    pub fn maybe_info(&self) -> Option<&'a ModuleInfo> {
         Some(
             self.model()
                 .info
                 .as_ref()?
                 .modules
-                .get(self.ident()?)
+                .get(self.maybe_ident()?)
                 .unwrap(),
         )
+    }
+
+    /// Panics if there is no source information for this module
+    pub fn info(&self) -> &'a ModuleInfo {
+        self.maybe_info().unwrap()
     }
 
     pub fn compiled(&self) -> &'a compiled_model::Module {
         &self.model().compiled_model.packages[&self.package.addr].modules[&self.name()]
     }
 
-    pub fn ident(&self) -> Option<&'a E::ModuleIdent> {
+    pub fn maybe_ident(&self) -> Option<&'a E::ModuleIdent> {
         self.data.ident.as_ref()
+    }
+
+    pub fn ident(&self) -> &'a E::ModuleIdent {
+        self.data.ident.as_ref().unwrap()
     }
 
     pub fn name(&self) -> Symbol {
@@ -452,13 +465,17 @@ impl<'a> Module<'a> {
         self.id
     }
 
-    pub fn source_path(&self) -> Option<Symbol> {
+    pub fn maybe_source_path(&self) -> Option<Symbol> {
         Some(
             self.model()
                 .files
                 .as_ref()?
-                .filename(&self.info()?.defined_loc.file_hash()),
+                .filename(&self.maybe_info()?.defined_loc.file_hash()),
         )
+    }
+
+    pub fn source_path(&self) -> Symbol {
+        self.maybe_source_path().unwrap()
     }
 
     pub fn deps(&self) -> &'a BTreeMap<ModuleId, /* is immediate */ bool> {
@@ -487,8 +504,13 @@ impl<'a> Struct<'a> {
         self.module
     }
 
-    pub fn info(&self) -> Option<&'a N::StructDefinition> {
-        Some(self.module.info()?.structs.get_(&self.name).unwrap())
+    pub fn maybe_info(&self) -> Option<&'a N::StructDefinition> {
+        Some(self.module.maybe_info()?.structs.get_(&self.name).unwrap())
+    }
+
+    /// Panics if there is no source information for this struct
+    pub fn info(&self) -> &'a N::StructDefinition {
+        self.maybe_info().unwrap()
     }
 
     pub fn compiled(&self) -> &'a compiled_model::Struct {
@@ -513,8 +535,13 @@ impl<'a> Enum<'a> {
         self.module
     }
 
-    pub fn info(&self) -> Option<&'a N::EnumDefinition> {
-        Some(self.module.info()?.enums.get_(&self.name).unwrap())
+    pub fn maybe_info(&self) -> Option<&'a N::EnumDefinition> {
+        Some(self.module.maybe_info()?.enums.get_(&self.name).unwrap())
+    }
+
+    /// Panics if there is no source information for this enum
+    pub fn info(&self) -> &'a N::EnumDefinition {
+        self.maybe_info().unwrap()
     }
 
     pub fn compiled(&self) -> &'a compiled_model::Enum {
@@ -558,8 +585,13 @@ impl<'a> Variant<'a> {
         self.enum_
     }
 
-    pub fn info(&self) -> Option<&'a N::VariantDefinition> {
-        Some(self.enum_.info()?.variants.get_(&self.name).unwrap())
+    pub fn maybe_info(&self) -> Option<&'a N::VariantDefinition> {
+        Some(self.enum_.maybe_info()?.variants.get_(&self.name).unwrap())
+    }
+
+    /// Panics if there is no source information for this variant
+    pub fn info(&self) -> &'a N::VariantDefinition {
+        self.maybe_info().unwrap()
     }
 
     pub fn compiled(&self) -> &'a compiled_model::Variant {
@@ -587,8 +619,19 @@ impl<'a> Function<'a> {
         self.module
     }
 
-    pub fn info(&self) -> Option<&'a FunctionInfo> {
-        Some(self.module.info()?.functions.get_(&self.name).unwrap())
+    pub fn maybe_info(&self) -> Option<&'a FunctionInfo> {
+        Some(
+            self.module
+                .maybe_info()?
+                .functions
+                .get_(&self.name)
+                .unwrap(),
+        )
+    }
+
+    /// Panics if there is no source information for this function
+    pub fn info(&self) -> &'a FunctionInfo {
+        self.maybe_info().unwrap()
     }
 
     /// Returns the compiled function if it exists. This will be `None` for `macro`s.
@@ -630,8 +673,19 @@ impl<'a> NamedConstant<'a> {
         self.module
     }
 
-    pub fn info(&self) -> Option<&'a ConstantInfo> {
-        Some(self.module.info()?.constants.get_(&self.name).unwrap())
+    pub fn maybe_info(&self) -> Option<&'a ConstantInfo> {
+        Some(
+            self.module
+                .maybe_info()?
+                .constants
+                .get_(&self.name)
+                .unwrap(),
+        )
+    }
+
+    /// Panics if there is no source information for this constant
+    pub fn info(&self) -> &'a ConstantInfo {
+        self.maybe_info().unwrap()
     }
 
     /// Not all source constants have a compiled representation
@@ -825,21 +879,24 @@ impl ModuleData {
     fn from_compiled_model(unit: &compiled_model::Module) -> Self {
         let structs = unit
             .structs
-            .iter()
-            .map(|(name, _)| (*name, StructData::new()))
+            .keys()
+            .copied()
+            .map(|name| (name, StructData::new()))
             .collect();
         let enums = unit
             .enums
-            .iter()
-            .map(|(name, _)| {
+            .keys()
+            .copied()
+            .map(|name| {
                 let (_idx, enum_def) = unit.module.find_enum_def_by_name(name.as_str()).unwrap();
-                (*name, EnumData::new(&unit.module, enum_def))
+                (name, EnumData::new(&unit.module, enum_def))
             })
             .collect();
         let functions = unit
             .functions
-            .iter()
-            .map(|(name, _)| (*name, FunctionData::new()))
+            .keys()
+            .copied()
+            .map(|name| (name, FunctionData::new()))
             .collect();
         let named_constants = BTreeMap::new();
         Self {
