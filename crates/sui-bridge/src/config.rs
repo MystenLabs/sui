@@ -487,58 +487,41 @@ pub async fn pick_highest_balance_coin(
     address: SuiAddress,
     minimal_amount: u64,
 ) -> anyhow::Result<Coin> {
-    info!(
-        "Starting to find highest balance coin for address {:?}",
-        address
-    );
-    let mut highest_balance = 0;
-    let mut highest_balance_coin = None;
-    let mut coin_count = 0;
+    info!("Looking for a suitable gas coin for address {:?}", address);
 
-    info!("Getting coins stream for address {:?}", address);
-    coin_read_api
-        .get_coins_stream(address, None)
-        .for_each(|coin: Coin| {
-            coin_count += 1;
-            if coin_count % 100 == 0 {
-                info!(
-                    "Processed {} coins so far for address {:?}",
-                    coin_count, address
-                );
-            }
-            if coin.balance > highest_balance {
-                highest_balance = coin.balance;
-                highest_balance_coin = Some(coin.clone());
-                info!(
-                    "Found new highest balance coin: {} mist (object ID: {:?})",
-                    highest_balance, coin.coin_object_id
-                );
-            }
-            future::ready(())
-        })
-        .await;
+    // Only look at SUI coins specifically
+    let mut stream = coin_read_api
+        .get_coins_stream(address, Some("0x2::sui::SUI".to_string()))
+        .boxed();
 
-    info!(
-        "Finished processing {} coins for address {:?}",
-        coin_count, address
-    );
+    let mut coins_checked = 0;
 
-    if highest_balance_coin.is_none() {
-        return Err(anyhow!("No Sui coins found for address {:?}", address));
-    }
-    if highest_balance < minimal_amount {
-        return Err(anyhow!(
-            "Found no single coin that has >= {} balance Sui for address {:?}",
-            minimal_amount,
-            address,
-        ));
+    while let Some(coin) = stream.next().await {
+        info!(
+            "Checking coin: {:?}, balance: {}",
+            coin.coin_object_id, coin.balance
+        );
+        coins_checked += 1;
+
+        // Take the first coin with a sufficient balance
+        if coin.balance >= minimal_amount {
+            info!(
+                "Found suitable gas coin with {} mist (object ID: {:?})",
+                coin.balance, coin.coin_object_id
+            );
+            return Ok(coin);
+        }
+        if coins_checked >= 1000 {
+            break;
+        }
     }
 
-    info!(
-        "Selected highest balance coin with {} mist for address {:?}",
-        highest_balance, address
-    );
-    Ok(highest_balance_coin.unwrap())
+    return Err(anyhow!(
+        "No suitable gas coin with >= {} mist found for address {:?} after checking {} coins",
+        minimal_amount,
+        address,
+        coins_checked
+    ));
 }
 
 #[derive(Debug, Eq, PartialEq, Clone)]
