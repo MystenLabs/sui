@@ -156,11 +156,12 @@ impl Linearizer {
         let timestamp_ms =
             if context.protocol_config.consensus_median_based_timestamp() && to_commit.len() > 1 {
                 // We are calculating the median based timestamp only when the flag is enabled and there are more than one blocks to commit.
-                // The only case to have one block to commit that would be the case where we have only one authority in commitee and the leader is the only one
-                // which gets committed.
+                // The only case to have one block to commit would be when we have only one authority in commitee and the only block that gets committed
+                // is the leader's.
 
                 // Attention should be paid that we are calculating the timestamp only using the leader's committed strong ancestors which should be all the blocks
-                // or round leader.round - 1.
+                // or round leader.round - 1. Not necessary to search and recheck here the leader's ancestors as by the protocol rules it's impossible to commit any block
+                // of round leader.round - 1 unless it is a leader's strong ancestor.
                 let timestamps = to_commit
                     .iter()
                     .filter_map(|block| {
