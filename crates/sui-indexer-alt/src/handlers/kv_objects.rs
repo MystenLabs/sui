@@ -8,9 +8,9 @@ use diesel_async::RunQueryDsl;
 use sui_indexer_alt_framework::{
     db,
     pipeline::{concurrent::Handler, Processor},
+    types::full_checkpoint_content::CheckpointData,
 };
 use sui_indexer_alt_schema::{objects::StoredObject, schema::kv_objects};
-use sui_types::full_checkpoint_content::CheckpointData;
 
 pub(crate) struct KvObjects;
 

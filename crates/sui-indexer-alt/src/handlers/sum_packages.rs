@@ -10,10 +10,10 @@ use futures::future::try_join_all;
 use sui_indexer_alt_framework::{
     db,
     pipeline::{sequential::Handler, Processor},
+    types::full_checkpoint_content::CheckpointData,
     FieldCount,
 };
 use sui_indexer_alt_schema::{packages::StoredPackage, schema::sum_packages};
-use sui_types::full_checkpoint_content::CheckpointData;
 
 const MAX_INSERT_CHUNK_ROWS: usize = i16::MAX as usize / StoredPackage::FIELD_COUNT;
 

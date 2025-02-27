@@ -5,7 +5,7 @@ use std::collections::BTreeMap;
 
 use anyhow::bail;
 use dashmap::DashMap;
-use sui_types::base_types::ObjectID;
+use sui_indexer_alt_framework::types::base_types::ObjectID;
 
 #[derive(Default)]
 pub(crate) struct PruningLookupTable {

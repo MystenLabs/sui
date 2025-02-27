@@ -10,9 +10,9 @@ use sui_indexer_alt_framework::{
     db,
     models::cp_sequence_numbers::tx_interval,
     pipeline::{concurrent::Handler, Processor},
+    types::full_checkpoint_content::CheckpointData,
 };
 use sui_indexer_alt_schema::{events::StoredEvStructInst, schema::ev_struct_inst};
-use sui_types::full_checkpoint_content::CheckpointData;
 
 pub(crate) struct EvStructInst;
 
@@ -87,11 +87,12 @@ impl Handler for EvStructInst {
 mod tests {
     use super::*;
     use diesel_async::RunQueryDsl;
-    use sui_indexer_alt_framework::handlers::cp_sequence_numbers::CpSequenceNumbers;
-    use sui_indexer_alt_framework::Indexer;
+    use sui_indexer_alt_framework::{
+        handlers::cp_sequence_numbers::CpSequenceNumbers,
+        types::{event::Event, test_checkpoint_data_builder::TestCheckpointDataBuilder},
+        Indexer,
+    };
     use sui_indexer_alt_schema::MIGRATIONS;
-    use sui_types::event::Event;
-    use sui_types::test_checkpoint_data_builder::TestCheckpointDataBuilder;
 
     async fn get_all_ev_struct_inst(
         conn: &mut db::Connection<'_>,

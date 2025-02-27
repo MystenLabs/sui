@@ -9,10 +9,10 @@ use diesel_async::RunQueryDsl;
 use sui_indexer_alt_framework::{
     db,
     pipeline::{concurrent::Handler, Processor},
+    types::{base_types::ObjectID, full_checkpoint_content::CheckpointData, object::Object},
     FieldCount,
 };
 use sui_indexer_alt_schema::{objects::StoredObjInfo, schema::obj_info};
-use sui_types::{base_types::ObjectID, full_checkpoint_content::CheckpointData, object::Object};
 
 use crate::consistent_pruning::{PruningInfo, PruningLookupTable};
 
@@ -193,13 +193,15 @@ impl TryInto<StoredObjInfo> for &ProcessedObjInfo {
 
 #[cfg(test)]
 mod tests {
-    use sui_indexer_alt_framework::Indexer;
-    use sui_indexer_alt_schema::{objects::StoredOwnerKind, MIGRATIONS};
-    use sui_types::{
-        base_types::{dbg_addr, SequenceNumber},
-        object::{Authenticator, Owner},
-        test_checkpoint_data_builder::TestCheckpointDataBuilder,
+    use sui_indexer_alt_framework::{
+        types::{
+            base_types::{dbg_addr, SequenceNumber},
+            object::{Authenticator, Owner},
+            test_checkpoint_data_builder::TestCheckpointDataBuilder,
+        },
+        Indexer,
     };
+    use sui_indexer_alt_schema::{objects::StoredOwnerKind, MIGRATIONS};
 
     use super::*;
 
