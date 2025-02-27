@@ -30,76 +30,79 @@ use move_symbol_pool::Symbol;
 // Types
 //**************************************************************************************************
 
-pub struct Model {
-    files: Option<MappedFiles>,
+pub const WITH_SOURCE: usize = 1;
+pub const WITHOUT_SOURCE: usize = 0;
+
+pub struct Model<const HAS_SOURCE: usize> {
+    files: [MappedFiles; HAS_SOURCE],
     root_named_address_map: BTreeMap<Symbol, AccountAddress>,
     root_package_name: Option<Symbol>,
-    info: Option<Arc<TypingProgramInfo>>,
+    info: [Arc<TypingProgramInfo>; HAS_SOURCE],
     // compiled_units: BTreeMap<AccountAddress, BTreeMap<Symbol, AnnotatedCompiledUnit>>,
     compiled: compiled::Model,
-    packages: BTreeMap<AccountAddress, PackageData>,
+    packages: BTreeMap<AccountAddress, PackageData<HAS_SOURCE>>,
 }
 
 #[derive(Clone, Copy)]
-pub struct Package<'a> {
+pub struct Package<'a, const HAS_SOURCE: usize> {
     addr: AccountAddress,
     // TODO name. We likely want the package name from the root package's named address map
-    model: &'a Model,
+    model: &'a Model<HAS_SOURCE>,
     compiled: &'a compiled::Package,
-    data: &'a PackageData,
+    data: &'a PackageData<HAS_SOURCE>,
 }
 
 #[derive(Clone, Copy)]
-pub struct Module<'a> {
+pub struct Module<'a, const HAS_SOURCE: usize> {
     id: ModuleId,
-    package: Package<'a>,
+    package: Package<'a, HAS_SOURCE>,
     compiled: &'a compiled::Module,
-    data: &'a ModuleData,
+    data: &'a ModuleData<HAS_SOURCE>,
 }
 
 #[derive(Clone, Copy)]
-pub enum Member<'a> {
-    Struct(Struct<'a>),
-    Enum(Enum<'a>),
-    Function(Function<'a>),
+pub enum Member<'a, const HAS_SOURCE: usize> {
+    Struct(Struct<'a, HAS_SOURCE>),
+    Enum(Enum<'a, HAS_SOURCE>),
+    Function(Function<'a, HAS_SOURCE>),
     NamedConstant(NamedConstant<'a>),
 }
 
 #[derive(Clone, Copy)]
-pub enum Datatype<'a> {
-    Struct(Struct<'a>),
-    Enum(Enum<'a>),
+pub enum Datatype<'a, const HAS_SOURCE: usize> {
+    Struct(Struct<'a, HAS_SOURCE>),
+    Enum(Enum<'a, HAS_SOURCE>),
 }
 
 #[derive(Clone, Copy)]
-pub struct Struct<'a> {
+pub struct Struct<'a, const HAS_SOURCE: usize> {
     name: Symbol,
-    module: Module<'a>,
+    module: Module<'a, HAS_SOURCE>,
     compiled: &'a compiled::Struct,
     #[allow(unused)]
     data: &'a StructData,
 }
 
 #[derive(Clone, Copy)]
-pub struct Enum<'a> {
+pub struct Enum<'a, const HAS_SOURCE: usize> {
     name: Symbol,
-    module: Module<'a>,
+    module: Module<'a, HAS_SOURCE>,
     compiled: &'a compiled::Enum,
     #[allow(unused)]
     data: &'a EnumData,
 }
 
 #[derive(Clone, Copy)]
-pub struct Variant<'a> {
+pub struct Variant<'a, const HAS_SOURCE: usize> {
     name: Symbol,
-    enum_: Enum<'a>,
+    enum_: Enum<'a, HAS_SOURCE>,
     compiled: &'a compiled::Variant,
 }
 
 #[derive(Clone, Copy)]
-pub struct Function<'a> {
+pub struct Function<'a, const HAS_SOURCE: usize> {
     name: Symbol,
-    module: Module<'a>,
+    module: Module<'a, HAS_SOURCE>,
     // might be none for macros
     compiled: Option<&'a compiled::Function>,
     #[allow(unused)]
@@ -109,7 +112,7 @@ pub struct Function<'a> {
 #[derive(Clone, Copy)]
 pub struct NamedConstant<'a> {
     name: Symbol,
-    module: Module<'a>,
+    module: Module<'a, WITH_SOURCE>,
     // There is no guarantee a source constant will have a compiled representation
     compiled: Option<&'a compiled::Constant>,
     #[allow(unused)]
@@ -120,7 +123,7 @@ pub struct NamedConstant<'a> {
 // API
 //**************************************************************************************************
 
-impl Model {
+impl Model<WITH_SOURCE> {
     pub fn from_source(
         files: MappedFiles,
         root_package_name: Option<Symbol>,
@@ -181,16 +184,22 @@ impl Model {
             .collect();
         let compiled = compiled::Model::new(compiled_modules);
         let model = Self {
-            files: Some(files),
+            files: [files],
             root_package_name,
             root_named_address_map,
-            info: Some(info),
+            info: [info],
             compiled,
             packages,
         };
         Ok(model)
     }
 
+    pub fn files(&self) -> &MappedFiles {
+        &self.files[0]
+    }
+}
+
+impl Model<WITHOUT_SOURCE> {
     pub fn from_compiled(
         named_address_reverse_map: &BTreeMap<AccountAddress, Symbol>,
         compiled: compiled::Model,
@@ -209,20 +218,22 @@ impl Model {
             .map(|(a, n)| (*n, *a))
             .collect();
         Self {
-            files: None,
+            files: [],
             root_package_name: None,
             root_named_address_map,
-            info: None,
+            info: [],
             compiled,
             packages,
         }
     }
+}
 
+impl<const HAS_SOURCE: usize> Model<HAS_SOURCE> {
     pub fn root_package_name(&self) -> Option<Symbol> {
         self.root_package_name
     }
 
-    pub fn maybe_package(&self, addr: &AccountAddress) -> Option<Package<'_>> {
+    pub fn maybe_package(&self, addr: &AccountAddress) -> Option<Package<'_, HAS_SOURCE>> {
         let data = self.packages.get(addr)?;
         Some(Package {
             addr: *addr,
@@ -231,42 +242,34 @@ impl Model {
             data,
         })
     }
-    pub fn package(&self, addr: &AccountAddress) -> Package<'_> {
+    pub fn package(&self, addr: &AccountAddress) -> Package<'_, HAS_SOURCE> {
         self.maybe_package(addr).unwrap()
     }
 
     /// The name of the package corresponds to the name for the address in the root package's
     /// named address map. This is not the name of the package in the Move.toml file.
-    pub fn package_by_name(&self, name: &Symbol) -> Option<Package<'_>> {
+    pub fn package_by_name(&self, name: &Symbol) -> Option<Package<'_, HAS_SOURCE>> {
         let addr = self.root_named_address_map.get(name)?;
         self.maybe_package(addr)
     }
 
-    pub fn maybe_module(&self, module: impl TModuleId) -> Option<Module<'_>> {
+    pub fn maybe_module(&self, module: impl TModuleId) -> Option<Module<'_, HAS_SOURCE>> {
         let (addr, name) = module.module_id();
         let package = self.maybe_package(&addr)?;
         package.maybe_module(name)
     }
-    pub fn module(&self, module: impl TModuleId) -> Module<'_> {
+    pub fn module(&self, module: impl TModuleId) -> Module<'_, HAS_SOURCE> {
         self.maybe_module(module).unwrap()
     }
 
-    pub fn packages(&self) -> impl Iterator<Item = Package<'_>> {
+    pub fn packages(&self) -> impl Iterator<Item = Package<'_, HAS_SOURCE>> {
         self.packages.keys().map(|a| self.package(a))
     }
 
-    pub fn modules(&self) -> impl Iterator<Item = Module<'_>> {
+    pub fn modules(&self) -> impl Iterator<Item = Module<'_, HAS_SOURCE>> {
         self.packages
             .iter()
             .flat_map(move |(a, p)| p.modules.keys().map(move |m| self.module((a, m))))
-    }
-
-    pub fn maybe_files(&self) -> Option<&MappedFiles> {
-        self.files.as_ref()
-    }
-
-    pub fn files(&self) -> &MappedFiles {
-        self.files.as_ref().unwrap()
     }
 
     pub fn compiled(&self) -> &compiled::Model {
@@ -559,34 +562,25 @@ impl<'a> Enum<'a> {
     }
 }
 
-impl<'a> Variant<'a> {
+impl<'a, const HAS_SOURCE: usize> Variant<'a, HAS_SOURCE> {
     pub fn name(&self) -> Symbol {
         self.name
     }
 
-    pub fn package(&self) -> Package<'a> {
+    pub fn package(&self) -> Package<'a, HAS_SOURCE> {
         self.enum_.package()
     }
 
-    pub fn model(&self) -> &'a Model {
+    pub fn model(&self) -> &'a Model<HAS_SOURCE> {
         self.enum_.model()
     }
 
-    pub fn module(&self) -> Module<'a> {
+    pub fn module(&self) -> Module<'a, HAS_SOURCE> {
         self.enum_.module()
     }
 
-    pub fn enum_(&self) -> Enum<'a> {
+    pub fn enum_(&self) -> Enum<'a, HAS_SOURCE> {
         self.enum_
-    }
-
-    pub fn maybe_info(&self) -> Option<&'a N::VariantDefinition> {
-        Some(self.enum_.maybe_info()?.variants.get_(&self.name).unwrap())
-    }
-
-    /// Panics if there is no source information for this variant
-    pub fn info(&self) -> &'a N::VariantDefinition {
-        self.maybe_info().unwrap()
     }
 
     pub fn compiled(&self) -> &'a compiled::Variant {
@@ -594,39 +588,30 @@ impl<'a> Variant<'a> {
     }
 }
 
+impl<'a> Variant<'a, WITH_SOURCE> {
+    pub fn info(&self) -> &'a N::VariantDefinition {
+        self.enum_.info().variants.get_(&self.name).unwrap()
+    }
+}
+
 static MACRO_EMPTY_SET: LazyLock<&'static BTreeSet<QualifiedMemberId>> =
     LazyLock::new(|| Box::leak(Box::new(BTreeSet::new())));
 
-impl<'a> Function<'a> {
+impl<'a, const HAS_SOURCE: usize> Function<'a, HAS_SOURCE> {
     pub fn name(&self) -> Symbol {
         self.name
     }
 
-    pub fn package(&self) -> Package<'a> {
+    pub fn package(&self) -> Package<'a, HAS_SOURCE> {
         self.module.package()
     }
 
-    pub fn model(&self) -> &'a Model {
+    pub fn model(&self) -> &'a Model<HAS_SOURCE> {
         self.module.model()
     }
 
-    pub fn module(&self) -> Module<'a> {
+    pub fn module(&self) -> Module<'a, HAS_SOURCE> {
         self.module
-    }
-
-    pub fn maybe_info(&self) -> Option<&'a FunctionInfo> {
-        Some(
-            self.module
-                .maybe_info()?
-                .functions
-                .get_(&self.name)
-                .unwrap(),
-        )
-    }
-
-    /// Panics if there is no source information for this function
-    pub fn info(&self) -> &'a FunctionInfo {
-        self.maybe_info().unwrap()
     }
 
     /// Returns the compiled function if it exists. This will be `None` for `macro`s.
@@ -651,20 +636,26 @@ impl<'a> Function<'a> {
     }
 }
 
+impl<'a> Function<'a, WITH_SOURCE> {
+    pub fn info(&self) -> &'a FunctionInfo {
+        self.module.info().functions.get_(&self.name).unwrap()
+    }
+}
+
 impl<'a> NamedConstant<'a> {
     pub fn name(&self) -> Symbol {
         self.name
     }
 
-    pub fn package(&self) -> Package<'a> {
+    pub fn package(&self) -> Package<'a, WITH_SOURCE> {
         self.module.package()
     }
 
-    pub fn model(&self) -> &'a Model {
+    pub fn model(&self) -> &'a Model<WITH_SOURCE> {
         self.module.model()
     }
 
-    pub fn module(&self) -> Module<'a> {
+    pub fn module(&self) -> Module<'a, WITH_SOURCE> {
         self.module
     }
 
@@ -724,20 +715,20 @@ impl<T: TModuleId> TModuleId for Spanned<T> {
 
 // The *Data structs are not used currently, but if we need extra source information these provide
 // a place to store it.
-struct PackageData {
+struct PackageData<const HAS_SOURCE: usize> {
     // Based on the root packages named address map
     name: Option<Symbol>,
-    modules: BTreeMap<Symbol, ModuleData>,
+    modules: BTreeMap<Symbol, ModuleData<HAS_SOURCE>>,
 }
 
-struct ModuleData {
+struct ModuleData<const HAS_SOURCE: usize> {
     ident: Option<E::ModuleIdent>,
     structs: BTreeMap<Symbol, StructData>,
     enums: BTreeMap<Symbol, EnumData>,
     functions: BTreeMap<Symbol, FunctionData>,
-    named_constants: BTreeMap<Symbol, ConstantData>,
+    named_constants: [BTreeMap<Symbol, ConstantData>; HAS_SOURCE],
     // mapping from file_format::ConstantPoolIndex to source constant name, if any
-    constant_names: Vec<Option<Symbol>>,
+    constant_names: [Vec<Option<Symbol>>; HAS_SOURCE],
 }
 
 struct StructData {}
@@ -759,7 +750,7 @@ struct ConstantData {
 // Construction
 //**************************************************************************************************
 
-impl PackageData {
+impl PackageData<WITH_SOURCE> {
     fn from_source(
         name: Option<Symbol>,
         addr: AccountAddress,
@@ -779,7 +770,9 @@ impl PackageData {
             .collect();
         Self { name, modules }
     }
+}
 
+impl PackageData<WITHOUT_SOURCE> {
     fn from_compiled(
         named_address_reverse_map: &BTreeMap<AccountAddress, Symbol>,
         compiled: &compiled::Package,
@@ -796,7 +789,7 @@ impl PackageData {
     }
 }
 
-impl ModuleData {
+impl ModuleData<WITH_SOURCE> {
     fn from_source(
         _id: ModuleId,
         ident: E::ModuleIdent,
@@ -864,11 +857,13 @@ impl ModuleData {
             structs,
             enums,
             functions,
-            named_constants,
-            constant_names,
+            named_constants: [named_constants],
+            constant_names: [constant_names],
         }
     }
+}
 
+impl ModuleData<WITHOUT_SOURCE> {
     fn from_compiled(unit: &compiled::Module) -> Self {
         let structs = unit
             .structs
@@ -891,14 +886,13 @@ impl ModuleData {
             .copied()
             .map(|name| (name, FunctionData::new()))
             .collect();
-        let named_constants = BTreeMap::new();
         Self {
             ident: None,
             structs,
             enums,
             functions,
-            named_constants,
-            constant_names: unit.constants.iter().map(|_| None).collect(),
+            named_constants: [],
+            constant_names: [],
         }
     }
 }
