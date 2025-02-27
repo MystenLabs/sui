@@ -110,7 +110,7 @@ async fn latest_timestamp_ms(ctx: &Context) -> Result<u64, RpcError<Error>> {
     let timestamp_ms: i64 = conn
         .first(query)
         .await
-        .context("Failed to fetch latest timestamp")?;
-
+        .context("Failed to fetch latest timestamp")?
+        .context("No latest timestamp found")?;
     Ok(timestamp_ms as u64)
 }

@@ -80,7 +80,8 @@ async fn rgp_response(ctx: &Context) -> Result<BigInt<u64>, RpcError> {
                 .order(e::epoch.desc()),
         )
         .await
-        .context("Failed to fetch the reference gas price")?;
+        .context("Failed to fetch the reference gas price")?
+        .context("No reference gas price found")?;
 
     Ok((rgp as u64).into())
 }
