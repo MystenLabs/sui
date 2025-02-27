@@ -668,7 +668,10 @@ pub struct RandomnessStateUpdate {
 /// Transaction type.
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct TransactionKind {
-    #[prost(oneof = "transaction_kind::Kind", tags = "1, 2, 200, 201, 3, 4, 5, 202, 6")]
+    #[prost(
+        oneof = "transaction_kind::Kind",
+        tags = "1, 2, 200, 201, 3, 4, 5, 202, 6, 7"
+    )]
     pub kind: ::core::option::Option<transaction_kind::Kind>,
 }
 /// Nested message and enum types in `TransactionKind`.
@@ -709,6 +712,9 @@ pub mod transaction_kind {
         /// V3 consensus commit update.
         #[prost(message, tag = "6")]
         ConsensusCommitPrologueV3(super::ConsensusCommitPrologue),
+        /// V4 consensus commit update.
+        #[prost(message, tag = "7")]
+        ConsensusCommitPrologueV4(super::ConsensusCommitPrologue),
     }
 }
 /// A user transaction.
@@ -1001,37 +1007,43 @@ pub struct GenesisTransaction {
 pub struct ConsensusCommitPrologue {
     /// Epoch of the commit prologue transaction.
     ///
-    /// Present in V1, V2, and V3.
+    /// Present in V1, V2, V3, V4.
     #[prost(uint64, optional, tag = "1")]
     pub epoch: ::core::option::Option<u64>,
     /// Consensus round of the commit.
     ///
-    /// Present in V1, V2, and V3.
+    /// Present in V1, V2, V3, V4.
     #[prost(uint64, optional, tag = "2")]
     pub round: ::core::option::Option<u64>,
     /// Unix timestamp from consensus.
     ///
-    /// Present in V1, V2, and V3.
+    /// Present in V1, V2, V3, V4.
     #[prost(uint64, optional, tag = "3")]
     pub commit_timestamp_ms: ::core::option::Option<u64>,
     /// Digest of consensus output.
     ///
-    /// Present in V2 and V3.
+    /// Present in V2, V3, V4.
     #[prost(message, optional, tag = "4")]
     pub consensus_commit_digest: ::core::option::Option<Digest>,
     /// The sub DAG index of the consensus commit. This field is populated if there
     /// are multiple consensus commits per round.
     ///
-    /// Present in V3.
+    /// Present in V3, V4.
     #[prost(uint64, optional, tag = "5")]
     pub sub_dag_index: ::core::option::Option<u64>,
     /// Stores consensus handler determined shared object version assignments.
     ///
-    /// Present in V3.
+    /// Present in V3, V4.
     #[prost(message, optional, tag = "6")]
     pub consensus_determined_version_assignments: ::core::option::Option<
         ConsensusDeterminedVersionAssignments,
     >,
+    /// Digest of any additional state computed by the consensus handler.
+    /// Used to detect forking bugs as early as possible.
+    ///
+    /// Present in V4.
+    #[prost(message, optional, tag = "7")]
+    pub additional_state_digest: ::core::option::Option<Digest>,
 }
 /// Object version assignment from consensus.
 #[derive(Clone, PartialEq, ::prost::Message)]
