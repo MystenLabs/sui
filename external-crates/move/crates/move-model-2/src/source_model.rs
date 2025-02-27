@@ -7,7 +7,7 @@ use std::{
     sync::{Arc, LazyLock},
 };
 
-use crate::compiled_model::{self, BinaryModel, ModuleId, QualifiedMemberId, TModuleId};
+use crate::compiled_model::{self, ModuleId, QualifiedMemberId, TModuleId};
 use move_binary_format::file_format;
 use move_bytecode_source_map::source_map::SourceMap;
 use move_compiler::{
@@ -36,7 +36,7 @@ pub struct Model {
     root_package_name: Option<Symbol>,
     info: Option<Arc<TypingProgramInfo>>,
     // compiled_units: BTreeMap<AccountAddress, BTreeMap<Symbol, AnnotatedCompiledUnit>>,
-    compiled_model: BinaryModel,
+    compiled_model: compiled_model::Model,
     packages: BTreeMap<AccountAddress, PackageData>,
 }
 
@@ -179,7 +179,7 @@ impl Model {
             .into_iter()
             .flat_map(|(_addr, units)| units.into_values().map(|unit| unit.module))
             .collect();
-        let compiled_model = BinaryModel::new(compiled_modules);
+        let compiled_model = compiled_model::Model::new(compiled_modules);
         let model = Self {
             files: Some(files),
             root_package_name,
@@ -194,7 +194,7 @@ impl Model {
     pub fn from_compiled_model(
         root_package_name: Option<Symbol>,
         root_named_address_map: BTreeMap<Symbol, AccountAddress>,
-        compiled_model: BinaryModel,
+        compiled_model: compiled_model::Model,
     ) -> Self {
         let mut root_named_address_reverse_map = BTreeMap::new();
         for (name, addr) in &root_named_address_map {
@@ -270,7 +270,7 @@ impl Model {
         self.files.as_ref()
     }
 
-    pub fn compiled(&self) -> &BinaryModel {
+    pub fn compiled(&self) -> &compiled_model::Model {
         &self.compiled_model
     }
 }

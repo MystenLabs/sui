@@ -27,7 +27,7 @@ pub trait TModuleId {
 }
 
 #[derive(Debug, Clone)]
-pub struct BinaryModel {
+pub struct Model {
     pub packages: BTreeMap<AccountAddress, Package>,
 }
 
@@ -308,7 +308,7 @@ impl<T: TModuleId> TModuleId for &T {
 // Construction
 //**************************************************************************************************
 
-impl BinaryModel {
+impl Model {
     pub fn new(compiled_modules: Vec<CompiledModule>) -> Self {
         let mut packages = BTreeMap::new();
 
@@ -461,9 +461,9 @@ impl BinaryModel {
 }
 
 impl Package {
-    fn new(package_id: AccountAddress) -> Self {
+    fn new(package: AccountAddress) -> Self {
         Self {
-            package_id,
+            package,
             modules: BTreeMap::new(),
         }
     }
