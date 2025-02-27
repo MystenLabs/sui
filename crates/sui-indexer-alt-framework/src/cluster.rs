@@ -160,7 +160,6 @@ mod tests {
 
     use diesel::{Insertable, QueryDsl, Queryable};
     use diesel_async::RunQueryDsl;
-    use sui_field_count::FieldCount;
     use sui_pg_db::temp::get_available_port;
     use sui_pg_db::Db;
     use sui_synthetic_ingestion::synthetic_ingestion;
@@ -170,6 +169,7 @@ mod tests {
     use crate::db::{self, temp::TempDb};
     use crate::pipeline::concurrent::ConcurrentConfig;
     use crate::pipeline::{concurrent, Processor};
+    use crate::FieldCount;
 
     use super::*;
 
