@@ -6,8 +6,10 @@ use std::{collections::BTreeMap, sync::Arc};
 use anyhow::Result;
 use diesel::sql_query;
 use diesel_async::RunQueryDsl;
-use sui_field_count::FieldCount;
-use sui_indexer_alt_framework::pipeline::{concurrent::Handler, Processor};
+use sui_indexer_alt_framework::{
+    pipeline::{concurrent::Handler, Processor},
+    FieldCount,
+};
 use sui_indexer_alt_schema::{objects::StoredObjInfo, schema::obj_info};
 use sui_pg_db as db;
 use sui_types::{base_types::ObjectID, full_checkpoint_content::CheckpointData, object::Object};

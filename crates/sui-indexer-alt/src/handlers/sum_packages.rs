@@ -7,8 +7,10 @@ use anyhow::{anyhow, Result};
 use diesel::{upsert::excluded, ExpressionMethods};
 use diesel_async::RunQueryDsl;
 use futures::future::try_join_all;
-use sui_field_count::FieldCount;
-use sui_indexer_alt_framework::pipeline::{sequential::Handler, Processor};
+use sui_indexer_alt_framework::{
+    pipeline::{sequential::Handler, Processor},
+    FieldCount,
+};
 use sui_indexer_alt_schema::{packages::StoredPackage, schema::sum_packages};
 use sui_pg_db as db;
 use sui_types::full_checkpoint_content::CheckpointData;
