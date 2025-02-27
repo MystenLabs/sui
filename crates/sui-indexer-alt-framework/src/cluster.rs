@@ -161,13 +161,13 @@ mod tests {
     use diesel::{Insertable, QueryDsl, Queryable};
     use diesel_async::RunQueryDsl;
     use sui_synthetic_ingestion::synthetic_ingestion;
-    use sui_types::full_checkpoint_content::CheckpointData;
     use tempfile::tempdir;
 
-    use crate::db::{self, Db};
     use crate::db::temp::{get_available_port, TempDb};
+    use crate::db::{self, Db};
     use crate::pipeline::concurrent::{self, ConcurrentConfig};
     use crate::pipeline::Processor;
+    use crate::types::full_checkpoint_content::CheckpointData;
     use crate::FieldCount;
 
     use super::*;
