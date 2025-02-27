@@ -1473,7 +1473,7 @@ impl ModelValue {
                 // actual type unless we parse it out from the model (via the type value parameter)
                 // and convert into a Type. However, since the value is parametric and cannot
                 // effect the verification outcome, we may not have much need for seeing it.
-                Some(PrettyDoc::text("<generic>"))
+                None
             }
             Type::Primitive(PrimitiveType::Range) | Type::Primitive(PrimitiveType::EventStore) => {
                 unreachable!("unexpected type in ModelValue::pretty: {:?}", ty)
@@ -1570,8 +1570,8 @@ impl ModelValue {
                 // check if the type constructor without type parameters is a
                 // prefix. This can happen in a function with type parameters
                 // that are instantiated. The type instances are not recovered,
-                // so the fields of the struct with parametric types will appear
-                // as <generic>.
+                // so the fields of the struct with parametric types are displayed
+                // in debug format.
                 .or_else(|| self.extract_list_ctor_prefix(&struct_name_prefix))
                 // like before, check with '|' as well
                 .or_else(|| self.extract_list_ctor_prefix(&format!("|{}", struct_name_prefix)))?;
