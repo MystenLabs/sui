@@ -20,12 +20,12 @@ use move_proc_macros::test_variant_order;
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 
-/// Defines normalized representations of Move types, fields, kinds, structs, functions, and
-/// modules. These representations are useful in situations that require require comparing
-/// functions, resources, and types across modules. This arises in linking, compatibility checks
-/// (e.g., "is it safe to deploy this new module without updating its dependents and/or restarting
-/// genesis?"), defining schemas for resources stored on-chain, and (possibly in the future)
-/// allowing module updates transactions.
+// Defines normalized representations of Move types, fields, kinds, structs, functions, and
+// modules. These representations are useful in situations that require require comparing
+// functions, resources, and types across modules. This arises in linking, compatibility checks
+// (e.g., "is it safe to deploy this new module without updating its dependents and/or restarting
+// genesis?"), defining schemas for resources stored on-chain, and (possibly in the future)
+// allowing module updates transactions.
 
 /// A normalized version of `SignatureToken`, a type expression appearing in struct or function
 /// declarations. Unlike `SignatureToken`s, `normalized::Type`s from different modules can safely be

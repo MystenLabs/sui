@@ -89,7 +89,7 @@ struct Context<'env, 'map> {
     pub path_expander: Option<Box<dyn PathExpander>>,
 }
 
-impl<'env, 'map> Context<'env, 'map> {
+impl<'env> Context<'env, '_> {
     fn new(
         compilation_env: &'env CompilationEnv,
         module_members: UniqueMap<ModuleIdent, ModuleMembers>,

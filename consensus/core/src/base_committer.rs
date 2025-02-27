@@ -5,6 +5,7 @@ use std::{collections::HashMap, fmt::Display, sync::Arc};
 
 use consensus_config::{AuthorityIndex, Stake};
 use parking_lot::RwLock;
+use tracing::warn;
 
 use crate::{
     block::{BlockAPI, BlockRef, Round, Slot, VerifiedBlock},
@@ -18,6 +19,10 @@ use crate::{
 #[cfg(test)]
 #[path = "tests/base_committer_tests.rs"]
 mod base_committer_tests;
+
+#[cfg(test)]
+#[path = "tests/base_committer_declarative_tests.rs"]
+mod base_committer_declarative_tests;
 
 pub(crate) struct BaseCommitterOptions {
     /// TODO: Re-evaluate if we want this to be configurable after running experiments.

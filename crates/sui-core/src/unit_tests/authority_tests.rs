@@ -1690,8 +1690,14 @@ async fn test_publish_dependent_module_ok() {
     );
     let transaction = to_sender_signed_transaction(data, &sender_key);
 
-    let dependent_module_id =
-        TxContext::new(&sender, transaction.digest(), &EpochData::new_test()).fresh_id();
+    let dependent_module_id = TxContext::new(
+        &sender,
+        transaction.digest(),
+        &EpochData::new_test(),
+        rgp,
+        None,
+    )
+    .fresh_id();
 
     // Object does not exist
     assert!(authority.get_object(&dependent_module_id).await.is_none());
@@ -1739,8 +1745,14 @@ async fn test_publish_module_no_dependencies_ok() {
         rgp,
     );
     let transaction = to_sender_signed_transaction(data, &sender_key);
-    let _module_object_id =
-        TxContext::new(&sender, transaction.digest(), &EpochData::new_test()).fresh_id();
+    let _module_object_id = TxContext::new(
+        &sender,
+        transaction.digest(),
+        &EpochData::new_test(),
+        rgp,
+        None,
+    )
+    .fresh_id();
     let signed_effects = send_and_confirm_transaction(&authority, transaction)
         .await
         .unwrap()
@@ -2742,7 +2754,7 @@ async fn test_authority_persist() {
     let perpetual_tables = Arc::new(AuthorityPerpetualTables::open(&path, None));
     // Create an authority
     let store =
-        AuthorityStore::open_with_committee_for_testing(perpetual_tables, &committee, &genesis, 0)
+        AuthorityStore::open_with_committee_for_testing(perpetual_tables, &committee, &genesis)
             .await
             .unwrap();
     let authority = init_state(&genesis, authority_key, store).await;
@@ -2768,7 +2780,7 @@ async fn test_authority_persist() {
     let committee = genesis.committee().unwrap();
     let perpetual_tables = Arc::new(AuthorityPerpetualTables::open(&path, None));
     let store =
-        AuthorityStore::open_with_committee_for_testing(perpetual_tables, &committee, &genesis, 0)
+        AuthorityStore::open_with_committee_for_testing(perpetual_tables, &committee, &genesis)
             .await
             .unwrap();
     let authority2 = init_state(&genesis, authority_key, store).await;
@@ -3240,8 +3252,7 @@ async fn test_store_revert_wrap_move_call() {
             authority_state.epoch_store_for_testing().epoch(),
             &[*create_effects.transaction_digest()],
             true,
-        )
-        .await;
+        );
 
     assert!(create_effects.status().is_ok());
     assert_eq!(create_effects.created().len(), 1);
@@ -3340,8 +3351,7 @@ async fn test_store_revert_unwrap_move_call() {
                 *wrap_effects.transaction_digest(),
             ],
             true,
-        )
-        .await;
+        );
 
     assert!(wrap_effects.status().is_ok());
     assert_eq!(wrap_effects.created().len(), 1);
@@ -3620,8 +3630,7 @@ async fn test_store_revert_add_ofield() {
                 *create_inner_effects.transaction_digest(),
             ],
             true,
-        )
-        .await;
+        );
 
     let add_txn = to_sender_signed_transaction(
         TransactionData::new_move_call(
@@ -3748,8 +3757,7 @@ async fn test_store_revert_remove_ofield() {
                 *add_effects.transaction_digest(),
             ],
             true,
-        )
-        .await;
+        );
 
     let field_v0 = add_effects.created()[0].0;
     let outer_v1 = find_by_id(&add_effects.mutated(), outer_v0.0).unwrap();
@@ -4586,7 +4594,6 @@ async fn test_shared_object_transaction_ok() {
     let shared_object_version = authority
         .epoch_store_for_testing()
         .get_assigned_shared_object_versions(&certificate.key())
-        .expect("Reading shared version assignments should not fail")
         .expect("Versions should be set")
         .into_iter()
         .find_map(|((object_id, initial_shared_version), version)| {
@@ -4704,7 +4711,6 @@ async fn test_consensus_commit_prologue_generation() {
         authority_state
             .epoch_store_for_testing()
             .get_assigned_shared_object_versions(txn_key)
-            .unwrap()
             .expect("versions should be set")
             .iter()
             .filter_map(|((id, initial_shared_version), seq)| {
@@ -4816,7 +4822,6 @@ async fn test_consensus_message_processed() {
                     &effects1,
                     authority2.get_object_cache_reader().as_ref(),
                 )
-                .await
                 .unwrap();
             authority2.try_execute_for_test(&certificate).await.unwrap();
             authority2
@@ -5832,9 +5837,7 @@ async fn test_consensus_handler_per_object_congestion_control(
     } else {
         epoch_store.get_highest_pending_checkpoint_height()
     };
-    let deferred_txns = epoch_store
-        .get_all_deferred_transactions_for_test()
-        .unwrap();
+    let deferred_txns = epoch_store.get_all_deferred_transactions_for_test();
     assert_eq!(deferred_txns.len(), 1);
     assert_eq!(deferred_txns[0].1.len(), 3);
     let deferral_key = deferred_txns[0].0;
@@ -5895,8 +5898,7 @@ async fn test_consensus_handler_per_object_congestion_control(
 
     let deferred_txns = authority
         .epoch_store_for_testing()
-        .get_all_deferred_transactions_for_test()
-        .unwrap();
+        .get_all_deferred_transactions_for_test();
     assert_eq!(deferred_txns.len(), 1);
     assert_eq!(deferred_txns[0].1.len(), 1);
     let deferral_key = deferred_txns[0].0;
@@ -5924,7 +5926,6 @@ async fn test_consensus_handler_per_object_congestion_control(
     assert!(authority
         .epoch_store_for_testing()
         .get_all_deferred_transactions_for_test()
-        .unwrap()
         .is_empty());
 }
 
@@ -6070,14 +6071,12 @@ async fn test_consensus_handler_congestion_control_transaction_cancellation() {
     assert!(authority
         .epoch_store_for_testing()
         .get_all_deferred_transactions_for_test()
-        .unwrap()
         .is_empty());
 
     // Check cancelled transaction shared locks.
     let shared_object_version = authority
         .epoch_store_for_testing()
         .get_assigned_shared_object_versions(&cancelled_txn.key())
-        .expect("Reading shared version assignments should not fail")
         .expect("Versions should be set")
         .into_iter()
         .collect::<HashMap<_, _>>();

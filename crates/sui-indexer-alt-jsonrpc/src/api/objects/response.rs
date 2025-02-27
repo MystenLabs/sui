@@ -5,12 +5,11 @@ use anyhow::Context as _;
 use futures::future::OptionFuture;
 use move_core_types::annotated_value::MoveTypeLayout;
 use sui_json_rpc_types::{
-    SuiData, SuiObjectData, SuiObjectDataOptions, SuiObjectRef, SuiObjectResponse, SuiParsedData,
+    SuiData, SuiObjectData, SuiObjectDataOptions, SuiObjectResponse, SuiParsedData,
     SuiPastObjectResponse, SuiRawData,
 };
 use sui_types::{
     base_types::{ObjectID, ObjectType, SequenceNumber},
-    digests::ObjectDigest,
     error::SuiObjectResponseError,
     object::{Data, Object},
     TypeTag,
@@ -19,11 +18,8 @@ use tokio::join;
 
 use crate::{
     context::Context,
-    data::{
-        object_info::LatestObjectInfoKey,
-        objects::{load_latest, VersionedObjectKey},
-    },
-    error::{internal_error, rpc_bail, RpcError},
+    data::{object_info::LatestObjectInfoKey, objects::load_latest},
+    error::{rpc_bail, InternalContext, RpcError},
 };
 
 /// Fetch the necessary data from the stores in `ctx` and transform it to build a response for a
@@ -34,7 +30,7 @@ pub(super) async fn live_object(
     options: &SuiObjectDataOptions,
 ) -> Result<SuiObjectResponse, RpcError> {
     let Some(info) = ctx
-        .loader()
+        .pg_loader()
         .load_one(LatestObjectInfoKey(object_id))
         .await
         .context("Failed to load object ownership information from store")?
@@ -54,23 +50,28 @@ pub(super) async fn live_object(
         ));
     }
 
+    latest_object(ctx, object_id, options).await
+}
+
+/// Assuming the latest version of this object exists, fetch it from the database and convert it
+/// into a response. This is intended to be used after checking with `obj_info` that the object is
+/// live.
+pub(super) async fn latest_object(
+    ctx: &Context,
+    object_id: ObjectID,
+    options: &SuiObjectDataOptions,
+) -> Result<SuiObjectResponse, RpcError> {
     // The fact that we found an `obj_info` record above means that the latest version of the
     // object does exist, so the following calls should find a valid latest version for the object,
     // and that version is expected to have content, so if either of those things don't happen,
     // it's an internal error.
-    let stored = load_latest(ctx.loader(), object_id)
+    let object = load_latest(ctx, object_id)
         .await
         .context("Failed to load latest object")?
-        .ok_or_else(|| internal_error!("Could not find latest content for live object"))?;
-
-    let Some(bytes) = &stored.serialized_object else {
-        rpc_bail!("No content found for live object")
-    };
-
-    let version = SequenceNumber::from_u64(stored.object_version as u64);
+        .context("Could not find latest content for live object")?;
 
     Ok(SuiObjectResponse::new_with_data(
-        object(ctx, object_id, version, bytes, options).await?,
+        object_data_with_options(ctx, object, options).await?,
     ))
 }
 
@@ -82,38 +83,26 @@ pub(super) async fn past_object(
     version: SequenceNumber,
     options: &SuiObjectDataOptions,
 ) -> Result<SuiPastObjectResponse, RpcError> {
-    let Some(stored) = ctx
-        .loader()
-        .load_one(VersionedObjectKey(object_id, version.value()))
+    let Some(object) = ctx
+        .kv_loader()
+        .load_one_object(object_id, version.value())
         .await
         .context("Failed to load object from store")?
     else {
         return Ok(SuiPastObjectResponse::VersionNotFound(object_id, version));
     };
 
-    let Some(bytes) = &stored.serialized_object else {
-        return Ok(SuiPastObjectResponse::ObjectDeleted(SuiObjectRef {
-            object_id,
-            version,
-            digest: ObjectDigest::OBJECT_DIGEST_DELETED,
-        }));
-    };
-
     Ok(SuiPastObjectResponse::VersionFound(
-        object(ctx, object_id, version, bytes, options).await?,
+        object_data_with_options(ctx, object, options).await?,
     ))
 }
 
-/// Extract a representation of the object from its stored form, according to its response options.
-async fn object(
+/// Extract a representation of the object according to its response options.
+pub(crate) async fn object_data_with_options(
     ctx: &Context,
-    object_id: ObjectID,
-    version: SequenceNumber,
-    bytes: &[u8],
+    object: Object,
     options: &SuiObjectDataOptions,
 ) -> Result<SuiObjectData, RpcError> {
-    let object: Object = bcs::from_bytes(bytes).context("Failed to deserialize object")?;
-
     let type_ = options.show_type.then(|| ObjectType::from(&object));
     let owner = options.show_owner.then(|| object.owner().clone());
     let previous_transaction = options
@@ -135,15 +124,15 @@ async fn object(
 
     let content = content
         .transpose()
-        .context("Failed to deserialize object content")?;
+        .internal_context("Failed to deserialize object content")?;
 
     let bcs = bcs
         .transpose()
-        .context("Failed to deserialize object to BCS")?;
+        .internal_context("Failed to deserialize object to BCS")?;
 
     Ok(SuiObjectData {
-        object_id,
-        version,
+        object_id: object.id(),
+        version: object.version(),
         digest: object.digest(),
         type_,
         owner,

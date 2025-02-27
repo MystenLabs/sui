@@ -133,7 +133,7 @@ impl QueryExecutor for PgExecutor {
 }
 
 #[async_trait]
-impl<'c> super::DbConnection for PgConnection<'c> {
+impl super::DbConnection for PgConnection<'_> {
     type Connection = diesel_async::AsyncPgConnection;
     type Backend = Pg;
 

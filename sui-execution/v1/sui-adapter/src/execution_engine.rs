@@ -103,6 +103,9 @@ mod checked {
             &transaction_digest,
             epoch_id,
             epoch_timestamp_ms,
+            // Those values are unused in execution versions before 3 (or latest)
+            1,
+            None,
         );
 
         let is_epoch_change = transaction_kind.is_end_of_epoch_tx();
@@ -646,6 +649,9 @@ mod checked {
                         }
                         EndOfEpochTransactionKind::BridgeCommitteeInit(_) => {
                             panic!("EndOfEpochTransactionKind::BridgeCommitteeInit should not exist in v1");
+                        }
+                        EndOfEpochTransactionKind::StoreExecutionTimeObservations(_) => {
+                            panic!("EndOfEpochTransactionKind::StoreExecutionTimeEstimates should not exist in v1");
                         }
                     }
                 }

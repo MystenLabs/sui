@@ -4,10 +4,11 @@
 use std::{borrow::Cow, time::Duration};
 
 use chrono::{naive::NaiveDateTime, DateTime, Utc};
-use diesel::{dsl::sql, prelude::*, sql_types};
+use diesel::{prelude::*, sql_types::BigInt};
 use diesel_async::RunQueryDsl;
 use sui_field_count::FieldCount;
 use sui_pg_db::Connection;
+use sui_sql_macro::sql;
 
 use crate::schema::watermarks;
 
@@ -176,10 +177,10 @@ impl PrunerWatermark<'static> {
         //     |-----------------------|----------------|
         //     ^                       ^
         //     pruner_timestamp        NOW()
-        let wait_for = sql::<sql_types::BigInt>(&format!(
-            "CAST({} + 1000 * EXTRACT(EPOCH FROM pruner_timestamp - NOW()) AS BIGINT)",
-            delay.as_millis(),
-        ));
+        let wait_for = sql!(as BigInt,
+            "CAST({BigInt} + 1000 * EXTRACT(EPOCH FROM pruner_timestamp - NOW()) AS BIGINT)",
+            delay.as_millis() as i64,
+        );
 
         watermarks::table
             .select((
@@ -195,9 +196,9 @@ impl PrunerWatermark<'static> {
     }
 }
 
-impl<'p> PrunerWatermark<'p> {
+impl PrunerWatermark<'_> {
     #[cfg(test)]
-    pub(crate) fn new_for_testing(pipeline: &'p str, pruner_hi: u64) -> Self {
+    pub(crate) fn new_for_testing(pipeline: &'static str, pruner_hi: u64) -> Self {
         PrunerWatermark {
             pipeline: pipeline.into(),
             wait_for: 0,

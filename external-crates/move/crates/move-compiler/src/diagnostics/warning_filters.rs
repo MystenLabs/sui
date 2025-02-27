@@ -212,6 +212,12 @@ impl WarningFiltersScope {
     }
 }
 
+impl Default for WarningFiltersTable {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl WarningFiltersTable {
     pub fn new() -> Self {
         Self(HashSet::new())

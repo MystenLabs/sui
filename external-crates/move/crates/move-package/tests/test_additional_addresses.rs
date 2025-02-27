@@ -12,7 +12,7 @@ use std::{collections::BTreeMap, path::PathBuf};
 use tempfile::tempdir;
 
 #[test]
-fn test_additonal_addresses() {
+fn test_additional_addresses() {
     let path: PathBuf = [
         "tests",
         "test_sources",
@@ -74,7 +74,7 @@ fn test_additonal_addresses() {
 }
 
 #[test]
-fn test_additonal_addresses_already_assigned_same_value() {
+fn test_additional_addresses_already_assigned_same_value() {
     let path: PathBuf = ["tests", "test_sources", "basic_no_deps_address_assigned"]
         .into_iter()
         .collect();
@@ -120,7 +120,7 @@ fn test_additonal_addresses_already_assigned_same_value() {
 }
 
 #[test]
-fn test_additonal_addresses_already_assigned_different_value() {
+fn test_additional_addresses_already_assigned_different_value() {
     let path: PathBuf = ["tests", "test_sources", "basic_no_deps_address_assigned"]
         .into_iter()
         .collect();

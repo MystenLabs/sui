@@ -102,20 +102,9 @@ impl SimpleFaucet {
         wal_path: &Path,
         config: FaucetConfig,
     ) -> Result<Arc<Self>, FaucetError> {
-        let active_address = wallet
-            .active_address()
-            .map_err(|err| FaucetError::Wallet(err.to_string()))?;
-        info!("SimpleFaucet::new with active address: {active_address}");
+        let (coins, active_address) = find_gas_coins_and_address(&mut wallet, &config).await?;
+        info!("Starting faucet with address: {:?}", active_address);
 
-        let coins = wallet
-            .gas_objects(active_address)
-            .await
-            .map_err(|e| FaucetError::Wallet(e.to_string()))?
-            .iter()
-            // Ok to unwrap() since `get_gas_objects` guarantees gas
-            .map(|q| GasCoin::try_from(&q.1).unwrap())
-            .filter(|coin| coin.0.balance.value() >= (config.amount * config.num_coins as u64))
-            .collect::<Vec<GasCoin>>();
         let metrics = FaucetMetrics::new(prometheus_registry);
         // set initial balance when faucet starts
         let balance = coins.iter().map(|coin| coin.0.balance.value()).sum::<u64>();
@@ -1108,6 +1097,42 @@ pub async fn batch_transfer_gases(
             GasCoinResponse::NoGasCoinAvailable => return Err(FaucetError::NoGasCoinAvailable),
         }
     }
+}
+
+/// Finds gas coins with sufficient balance and returns the address to use as the active address
+/// for the faucet. If the initial active address in the wallet does not have enough gas coins,
+/// it will iterate through the addresses to find one with sufficient gas coins.
+async fn find_gas_coins_and_address(
+    wallet: &mut WalletContext,
+    config: &FaucetConfig,
+) -> Result<(Vec<GasCoin>, SuiAddress), FaucetError> {
+    let active_address = wallet
+        .active_address()
+        .map_err(|e| FaucetError::Wallet(e.to_string()))?;
+
+    for address in std::iter::once(active_address).chain(wallet.get_addresses().into_iter()) {
+        let coins: Vec<_> = wallet
+            .gas_objects(address)
+            .await
+            .map_err(|e| FaucetError::Wallet(e.to_string()))?
+            .iter()
+            .filter_map(|(balance, obj)| {
+                if *balance >= config.amount * config.num_coins as u64 {
+                    GasCoin::try_from(obj).ok()
+                } else {
+                    None
+                }
+            })
+            .collect();
+
+        if !coins.is_empty() {
+            return Ok((coins, address));
+        }
+    }
+
+    Err(FaucetError::Wallet(
+        "No address found with sufficient coins".to_string(),
+    ))
 }
 
 #[cfg(test)]

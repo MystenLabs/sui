@@ -15,7 +15,7 @@ pub(super) struct FormattedType<'f> {
     type_params: &'f [SourceName],
 }
 
-impl<'f> fmt::Display for FormattedType<'f> {
+impl fmt::Display for FormattedType<'_> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         if f.alternate() {
             write!(
@@ -68,7 +68,7 @@ impl<'f> FormattedField<'f> {
     }
 }
 
-impl<'f> fmt::Display for FormattedField<'f> {
+impl fmt::Display for FormattedField<'_> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         use FormattedIdentifier as FI;
         match self.identifier {

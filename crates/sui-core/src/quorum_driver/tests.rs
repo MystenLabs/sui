@@ -130,8 +130,8 @@ async fn test_quorum_driver_submit_transaction_no_ticket() {
     handle.await.unwrap();
 }
 
-async fn verify_ticket_response<'a>(
-    ticket: Registration<'a, TransactionDigest, QuorumDriverResult>,
+async fn verify_ticket_response(
+    ticket: Registration<'_, TransactionDigest, QuorumDriverResult>,
     tx_digest: &TransactionDigest,
 ) {
     let QuorumDriverResponse { effects_cert, .. } = ticket.await.unwrap();

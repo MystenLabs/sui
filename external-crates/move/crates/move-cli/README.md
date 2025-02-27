@@ -471,7 +471,7 @@ Module 00000000000000000000000000000002::Test
 ```
 
 The output indicates that not only the test is passed, but also that 100%
-instruction coverage is observed in the `publish` funciton. This is expected
+instruction coverage is observed in the `publish` function. This is expected
 as the whole purpose of our `test_script.move` is to run the `publish` function.
 At the same time, the other two functions, `unpublish` and `write`, are never
 executed, making the average coverage 27.78% for the whole `Test` module.

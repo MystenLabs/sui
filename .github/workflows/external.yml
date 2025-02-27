@@ -128,4 +128,4 @@ jobs:
     steps:
       - uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11  # Pin v4.1.1
       - uses: taiki-e/install-action@cargo-deny
-      - run: cargo deny check
+      - run: cargo deny --manifest-path external-crates/move/Cargo.toml check --hide-inclusion-graph

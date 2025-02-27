@@ -38,7 +38,7 @@ pub(crate) struct ExpTranslator<'env, 'translator, 'module_translator> {
     pub node_counter_start: usize,
 }
 
-/// # General
+// # General
 
 impl<'env, 'translator, 'module_translator> ExpTranslator<'env, 'translator, 'module_translator> {
     pub fn new(parent: &'module_translator mut ModuleBuilder<'env, 'translator>) -> Self {
@@ -231,9 +231,9 @@ impl<'env, 'translator, 'module_translator> ExpTranslator<'env, 'translator, 'mo
     }
 }
 
-/// # Type Translation
+// # Type Translation
 
-impl<'env, 'translator, 'module_translator> ExpTranslator<'env, 'translator, 'module_translator> {
+impl ExpTranslator<'_, '_, '_> {
     /// Translates a source AST type into a target AST type.
     pub fn translate_type(&mut self, ty: &EA::Type) -> Type {
         use EA::Type_::*;
@@ -327,9 +327,9 @@ impl<'env, 'translator, 'module_translator> ExpTranslator<'env, 'translator, 'mo
     }
 }
 
-/// # Expression Translation
+// # Expression Translation
 
-impl<'env, 'translator, 'module_translator> ExpTranslator<'env, 'translator, 'module_translator> {
+impl ExpTranslator<'_, '_, '_> {
     pub fn translate_value(&mut self, v: &EA::Value) -> Option<(Value, Type)> {
         let loc = self.to_loc(&v.loc);
         match &v.value {

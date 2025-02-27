@@ -1,8 +1,9 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use crate::proto::types::Bcs;
 use http::{Request, Response};
-use std::{convert::Infallible, pin::Pin, sync::Arc};
+use std::{convert::Infallible, pin::Pin};
 use tap::Pipe;
 use tonic::{
     body::{boxed, BoxBody},
@@ -54,7 +55,6 @@ impl crate::proto::node::v2::node_service_server::NodeService for crate::RpcServ
         _request: tonic::Request<crate::proto::node::v2::GetNodeInfoRequest>,
     ) -> Result<tonic::Response<crate::proto::node::v2::GetNodeInfoResponse>, tonic::Status> {
         self.get_node_info()
-            .map(Into::into)
             .map(tonic::Response::new)
             .map_err(Into::into)
     }
@@ -82,18 +82,7 @@ impl crate::proto::node::v2::node_service_server::NodeService for crate::RpcServ
         tonic::Response<crate::proto::node::v2::GetObjectResponse>,
         tonic::Status,
     > {
-        let request = request.into_inner();
-        let object_id = request
-            .object_id
-            .as_ref()
-            .ok_or_else(|| tonic::Status::new(tonic::Code::InvalidArgument, "missing object_id"))?
-            .try_into()
-            .map_err(|_| tonic::Status::new(tonic::Code::InvalidArgument, "invalid object_id"))?;
-        let version = request.version;
-        let options = request.options.unwrap_or_default().into();
-
-        self.get_object(object_id, version, options)
-            .map(Into::into)
+        self.get_object(request.into_inner())
             .map(tonic::Response::new)
             .map_err(Into::into)
     }
@@ -105,22 +94,7 @@ impl crate::proto::node::v2::node_service_server::NodeService for crate::RpcServ
         tonic::Response<crate::proto::node::v2::GetTransactionResponse>,
         tonic::Status,
     > {
-        let request = request.into_inner();
-        let transaction_digest = request
-            .digest
-            .as_ref()
-            .ok_or_else(|| {
-                tonic::Status::new(tonic::Code::InvalidArgument, "missing transaction_digest")
-            })?
-            .try_into()
-            .map_err(|_| {
-                tonic::Status::new(tonic::Code::InvalidArgument, "invalid transaction_digest")
-            })?;
-
-        let options = request.options.unwrap_or_default().into();
-
-        self.get_transaction(transaction_digest, &options)
-            .map(Into::into)
+        self.get_transaction(request.into_inner())
             .map(tonic::Response::new)
             .map_err(Into::into)
     }
@@ -132,29 +106,7 @@ impl crate::proto::node::v2::node_service_server::NodeService for crate::RpcServ
         tonic::Response<crate::proto::node::v2::GetCheckpointResponse>,
         tonic::Status,
     > {
-        let request = request.into_inner();
-        let checkpoint = match (request.sequence_number, request.digest) {
-            (Some(_sequence_number), Some(_digest)) => {
-                return Err(tonic::Status::new(
-                    tonic::Code::InvalidArgument,
-                    "only one of `sequence_number` or `digest` can be provided",
-                ))
-            }
-            (Some(sequence_number), None) => Some(
-                crate::service::checkpoints::CheckpointId::SequenceNumber(sequence_number),
-            ),
-            (None, Some(digest)) => Some(crate::service::checkpoints::CheckpointId::Digest(
-                (&digest).try_into().map_err(|_| {
-                    tonic::Status::new(tonic::Code::InvalidArgument, "invalid digest")
-                })?,
-            )),
-            (None, None) => None,
-        };
-
-        let options = request.options.unwrap_or_default().into();
-
-        self.get_checkpoint(checkpoint, options)
-            .map(Into::into)
+        self.get_checkpoint(request.into_inner())
             .map(tonic::Response::new)
             .map_err(Into::into)
     }
@@ -166,35 +118,7 @@ impl crate::proto::node::v2::node_service_server::NodeService for crate::RpcServ
         tonic::Response<crate::proto::node::v2::GetFullCheckpointResponse>,
         tonic::Status,
     > {
-        let request = request.into_inner();
-        let checkpoint = match (request.sequence_number, request.digest) {
-            (Some(_sequence_number), Some(_digest)) => {
-                return Err(tonic::Status::new(
-                    tonic::Code::InvalidArgument,
-                    "only one of `sequence_number` or `digest` can be provided",
-                ))
-            }
-            (Some(sequence_number), None) => {
-                crate::service::checkpoints::CheckpointId::SequenceNumber(sequence_number)
-            }
-
-            (None, Some(digest)) => {
-                crate::service::checkpoints::CheckpointId::Digest((&digest).try_into().map_err(
-                    |_| tonic::Status::new(tonic::Code::InvalidArgument, "invalid digest"),
-                )?)
-            }
-            (None, None) => {
-                return Err(tonic::Status::new(
-                    tonic::Code::InvalidArgument,
-                    "must provided one of `sequence_number` or `digest`",
-                ))
-            }
-        };
-
-        let options = request.options.unwrap_or_default().into();
-
-        self.get_full_checkpoint(checkpoint, &options)
-            .map(Into::into)
+        self.get_full_checkpoint(request.into_inner())
             .map(tonic::Response::new)
             .map_err(Into::into)
     }
@@ -206,76 +130,8 @@ impl crate::proto::node::v2::node_service_server::NodeService for crate::RpcServ
         tonic::Response<crate::proto::node::v2::ExecuteTransactionResponse>,
         tonic::Status,
     > {
-        let request = request.into_inner();
-        let transaction = match (request.transaction, request.transaction_bcs) {
-            (Some(_), Some(_)) => {
-                return Err(tonic::Status::new(
-                    tonic::Code::InvalidArgument,
-                    "only one of `transaction` or `transaction_bcs` can be provided",
-                ))
-            }
-            (Some(transaction), None) => (&transaction).try_into().map_err(|e| {
-                tonic::Status::new(
-                    tonic::Code::InvalidArgument,
-                    format!("invalid transaction: {e}"),
-                )
-            })?,
-
-            (None, Some(bcs)) => bcs::from_bytes(bcs.bcs()).map_err(|_| {
-                tonic::Status::new(tonic::Code::InvalidArgument, "invalid transaction bcs")
-            })?,
-
-            (None, None) => {
-                return Err(tonic::Status::new(
-                    tonic::Code::InvalidArgument,
-                    "one of `transaction` or `transaction_bcs` must be provided",
-                ))
-            }
-        };
-        let mut signatures: Vec<sui_sdk_types::UserSignature> = Vec::new();
-
-        if let Some(proto_signatures) = request.signatures {
-            let from_proto_signatures = proto_signatures
-                .signatures
-                .iter()
-                .map(TryInto::try_into)
-                .collect::<Result<Vec<_>, _>>()
-                .map_err(|e| {
-                    tonic::Status::new(
-                        tonic::Code::InvalidArgument,
-                        format!("invalid signature: {e}"),
-                    )
-                })?;
-
-            signatures.extend(from_proto_signatures);
-        }
-
-        if let Some(signatures_bytes) = request.signatures_bytes {
-            let from_bytes_signatures = signatures_bytes
-                .signatures
-                .iter()
-                .map(|bytes| sui_sdk_types::UserSignature::from_bytes(bytes))
-                .collect::<Result<Vec<_>, _>>()
-                .map_err(|e| {
-                    tonic::Status::new(
-                        tonic::Code::InvalidArgument,
-                        format!("invalid signature: {e}"),
-                    )
-                })?;
-
-            signatures.extend(from_bytes_signatures);
-        }
-
-        let signed_transaction = sui_sdk_types::SignedTransaction {
-            transaction,
-            signatures,
-        };
-
-        let options = request.options.unwrap_or_default().into();
-
-        self.execute_transaction(signed_transaction, None, &options)
+        self.execute_transaction(request.into_inner())
             .await
-            .map(Into::into)
             .map(tonic::Response::new)
             .map_err(Into::into)
     }
@@ -299,7 +155,7 @@ impl crate::proto::node::v2alpha::subscription_service_server::SubscriptionServi
         &self,
         request: tonic::Request<crate::proto::node::v2alpha::SubscribeCheckpointsRequest>,
     ) -> Result<tonic::Response<Self::SubscribeCheckpointsStream>, tonic::Status> {
-        let options = request.into_inner().options.unwrap_or_default();
+        let read_mask = request.into_inner().read_mask.unwrap_or_default();
 
         let Some(mut receiver) = self.register_subscription().await else {
             return Err(tonic::Status::unavailable(
@@ -314,7 +170,7 @@ impl crate::proto::node::v2alpha::subscription_service_server::SubscriptionServi
                     break;
                 };
 
-                let checkpoint = apply_checkpont_options(&options, Arc::unwrap_or_clone(checkpoint));
+                let checkpoint = apply_checkpoint_read_mask(&read_mask, &checkpoint);
                 let response = SubscribeCheckpointsResponse {
                     cursor: Some(cursor),
                     checkpoint: Some(checkpoint),
@@ -332,66 +188,261 @@ impl crate::proto::node::v2alpha::subscription_service_server::SubscriptionServi
 //
 // This function assumes that the provided checkpoint has all fields populated and that applying
 // the requested options is a matter of removing the data that the request didn't ask for.
-fn apply_checkpont_options(
-    options: &crate::proto::node::v2::GetFullCheckpointOptions,
-    mut checkpoint: crate::proto::node::v2::GetFullCheckpointResponse,
+fn apply_checkpoint_read_mask(
+    read_mask: &prost_types::FieldMask,
+    checkpoint: &crate::proto::node::v2::GetFullCheckpointResponse,
 ) -> crate::proto::node::v2::GetFullCheckpointResponse {
-    if !options.summary() {
-        checkpoint.summary = None;
-    }
-    if !options.summary_bcs() {
-        checkpoint.summary_bcs = None;
-    }
-    if !options.signature() {
-        checkpoint.signature = None;
-    }
-    if !options.contents() {
-        checkpoint.contents = None;
-    }
-    if !options.contents_bcs() {
-        checkpoint.contents_bcs = None;
-    }
+    let mut response = crate::proto::node::v2::GetFullCheckpointResponse::default();
 
-    for transaction in checkpoint.transactions.iter_mut() {
-        if !options.transaction() {
-            transaction.transaction = None;
-        }
-        if !options.transaction_bcs() {
-            transaction.transaction_bcs = None;
-        }
-        if !options.effects() {
-            transaction.effects = None;
-        }
-        if !options.effects_bcs() {
-            transaction.effects_bcs = None;
-        }
-        if !options.events() {
-            transaction.events = None;
-        }
-        if !options.events_bcs() {
-            transaction.events_bcs = None;
-        }
-        if !options.input_objects() {
-            transaction.input_objects = None;
-        }
-        if !options.output_objects() {
-            transaction.output_objects = None;
-        }
+    for path in &read_mask.paths {
+        let mut components = path.split('.');
+        let Some(component) = components.next() else {
+            continue;
+        };
 
-        for object in transaction
-            .input_objects
-            .iter_mut()
-            .chain(transaction.output_objects.iter_mut())
-            .flat_map(|objects| objects.objects.iter_mut())
-        {
-            if !options.object() {
-                object.object = None;
+        match component {
+            "sequence_number" => response.sequence_number = checkpoint.sequence_number,
+            "digest" => response.digest = checkpoint.digest.clone(),
+            "summary" => response.summary = checkpoint.summary.clone(),
+            "summary_bcs" => response.summary_bcs = checkpoint.summary_bcs.clone(),
+            "signature" => response.signature = checkpoint.signature.clone(),
+            "contents" => response.contents = checkpoint.contents.clone(),
+            "contents_bcs" => response.contents_bcs = checkpoint.contents_bcs.clone(),
+            "transactions" => {
+                let Some(component) = components.next() else {
+                    response.transactions = checkpoint.transactions.clone();
+                    continue;
+                };
+                if response.transactions.len() != checkpoint.transactions.len() {
+                    response.transactions = vec![Default::default(); checkpoint.transactions.len()];
+                }
+
+                for (src, dst) in checkpoint
+                    .transactions
+                    .iter()
+                    .zip(response.transactions.iter_mut())
+                {
+                    match component {
+                        "digest" => dst.digest = src.digest.clone(),
+                        "transaction" => dst.transaction = src.transaction.clone(),
+                        "transaction_bcs" => dst.transaction_bcs = src.transaction_bcs.clone(),
+                        "effects" => dst.effects = src.effects.clone(),
+                        "effects_bcs" => dst.effects_bcs = src.effects_bcs.clone(),
+                        "events" => dst.events = src.events.clone(),
+                        "events_bcs" => dst.events_bcs = src.events_bcs.clone(),
+                        "input_objects" => {
+                            let Some(component) = components.clone().next() else {
+                                dst.input_objects = src.input_objects.clone();
+                                continue;
+                            };
+                            if dst.input_objects.len() != src.input_objects.len() {
+                                dst.input_objects =
+                                    vec![Default::default(); src.input_objects.len()];
+                            }
+
+                            for (src, dst) in
+                                src.input_objects.iter().zip(dst.input_objects.iter_mut())
+                            {
+                                match component {
+                                    "object" => dst.object = src.object.clone(),
+                                    "object_bcs" => dst.object_bcs = src.object_bcs.clone(),
+                                    // Ignore unknown field
+                                    _ => {}
+                                }
+                            }
+                        }
+                        "output_objects" => {
+                            let Some(component) = components.clone().next() else {
+                                dst.output_objects = src.output_objects.clone();
+                                continue;
+                            };
+                            if dst.output_objects.len() != src.output_objects.len() {
+                                dst.output_objects =
+                                    vec![Default::default(); src.output_objects.len()];
+                            }
+
+                            for (src, dst) in
+                                src.output_objects.iter().zip(dst.output_objects.iter_mut())
+                            {
+                                match component {
+                                    "object" => dst.object = src.object.clone(),
+                                    "object_bcs" => dst.object_bcs = src.object_bcs.clone(),
+                                    // Ignore unknown field
+                                    _ => {}
+                                }
+                            }
+                        }
+                        // Ignore unknown field
+                        _ => {}
+                    }
+                }
             }
-            if !options.object_bcs() {
-                object.object_bcs = None;
-            }
+            // Ignore unknown field
+            _ => {}
         }
     }
 
-    checkpoint
+    response
+}
+
+#[tonic::async_trait]
+impl crate::proto::node::v2alpha::node_service_server::NodeService for crate::RpcService {
+    async fn get_coin_info(
+        &self,
+        request: tonic::Request<crate::proto::node::v2alpha::GetCoinInfoRequest>,
+    ) -> Result<tonic::Response<crate::proto::node::v2alpha::GetCoinInfoResponse>, tonic::Status>
+    {
+        self.get_coin_info(request.into_inner())
+            .map(tonic::Response::new)
+            .map_err(Into::into)
+    }
+
+    async fn list_dynamic_fields(
+        &self,
+        request: tonic::Request<crate::proto::node::v2alpha::ListDynamicFieldsRequest>,
+    ) -> std::result::Result<
+        tonic::Response<crate::proto::node::v2alpha::ListDynamicFieldsResponse>,
+        tonic::Status,
+    > {
+        self.list_dynamic_fields(request.into_inner())
+            .map(tonic::Response::new)
+            .map_err(Into::into)
+    }
+
+    async fn list_account_objects(
+        &self,
+        request: tonic::Request<crate::proto::node::v2alpha::ListAccountObjectsRequest>,
+    ) -> std::result::Result<
+        tonic::Response<crate::proto::node::v2alpha::ListAccountObjectsResponse>,
+        tonic::Status,
+    > {
+        self.list_account_objects(request.into_inner())
+            .map(tonic::Response::new)
+            .map_err(Into::into)
+    }
+
+    async fn get_protocol_config(
+        &self,
+        request: tonic::Request<crate::proto::node::v2alpha::GetProtocolConfigRequest>,
+    ) -> std::result::Result<
+        tonic::Response<crate::proto::node::v2alpha::GetProtocolConfigResponse>,
+        tonic::Status,
+    > {
+        self.get_protocol_config(request.into_inner())
+            .map(tonic::Response::new)
+            .map_err(Into::into)
+    }
+
+    async fn get_gas_info(
+        &self,
+        request: tonic::Request<crate::proto::node::v2alpha::GetGasInfoRequest>,
+    ) -> std::result::Result<
+        tonic::Response<crate::proto::node::v2alpha::GetGasInfoResponse>,
+        tonic::Status,
+    > {
+        self.get_gas_info(request.into_inner())
+            .map(tonic::Response::new)
+            .map_err(Into::into)
+    }
+
+    async fn simulate_transaction(
+        &self,
+        request: tonic::Request<crate::proto::node::v2alpha::SimulateTransactionRequest>,
+    ) -> std::result::Result<
+        tonic::Response<crate::proto::node::v2alpha::SimulateTransactionResponse>,
+        tonic::Status,
+    > {
+        let request = request.into_inner();
+        //TODO use provided read_mask
+        let parameters = crate::types::SimulateTransactionQueryParameters {
+            balance_changes: false,
+            input_objects: false,
+            output_objects: false,
+        };
+        let transaction = if let Some(bcs) = request.transaction_bcs {
+            bcs::from_bytes(bcs.bcs()).map_err(|_| {
+                tonic::Status::new(tonic::Code::InvalidArgument, "invalid transaction bcs")
+            })?
+        } else {
+            return Err(tonic::Status::new(
+                tonic::Code::InvalidArgument,
+                "`transaction_bcs` must be provided",
+            ));
+        };
+
+        let response = self.simulate_transaction(&parameters, transaction)?;
+
+        let balance_changes = response
+            .balance_changes
+            .map(|balance_changes| balance_changes.into_iter().map(Into::into).collect())
+            .unwrap_or_default();
+        let response = crate::proto::node::v2alpha::SimulateTransactionResponse {
+            effects_bcs: Some(Bcs::serialize(&response.effects).unwrap()),
+            events_bcs: response
+                .events
+                .map(|events| Bcs::serialize(&events))
+                .transpose()
+                .unwrap(),
+            balance_changes,
+        };
+        Ok(tonic::Response::new(response))
+    }
+
+    async fn resolve_transaction(
+        &self,
+        request: tonic::Request<crate::proto::node::v2alpha::ResolveTransactionRequest>,
+    ) -> std::result::Result<
+        tonic::Response<crate::proto::node::v2alpha::ResolveTransactionResponse>,
+        tonic::Status,
+    > {
+        let request = request.into_inner();
+        let read_mask = request.read_mask.unwrap_or_default();
+        //TODO use provided read_mask
+        let simulate_parameters = crate::types::SimulateTransactionQueryParameters {
+            balance_changes: false,
+            input_objects: false,
+            output_objects: false,
+        };
+        let parameters = crate::types::ResolveTransactionQueryParameters {
+            simulate: read_mask
+                .paths
+                .iter()
+                .any(|path| path.starts_with("simulation")),
+            simulate_transaction_parameters: simulate_parameters,
+        };
+        let unresolved_transaction = serde_json::from_str(
+            &request.unresolved_transaction.unwrap_or_default(),
+        )
+        .map_err(|_| {
+            tonic::Status::new(
+                tonic::Code::InvalidArgument,
+                "invalid unresolved_transaction",
+            )
+        })?;
+
+        let response = self.resolve_transaction(parameters, unresolved_transaction)?;
+
+        let simulation = response.simulation.map(|simulation| {
+            let balance_changes = simulation
+                .balance_changes
+                .map(|balance_changes| balance_changes.into_iter().map(Into::into).collect())
+                .unwrap_or_default();
+            crate::proto::node::v2alpha::SimulateTransactionResponse {
+                effects_bcs: Some(Bcs::serialize(&simulation.effects).unwrap()),
+                events_bcs: simulation
+                    .events
+                    .map(|events| Bcs::serialize(&events))
+                    .transpose()
+                    .unwrap(),
+                balance_changes,
+            }
+        });
+
+        let response = crate::proto::node::v2alpha::ResolveTransactionResponse {
+            transaction_bcs: Some(Bcs::serialize(&response.transaction).unwrap()),
+            simulation,
+        };
+
+        Ok(tonic::Response::new(response))
+    }
 }

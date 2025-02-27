@@ -94,6 +94,12 @@ impl Context {
         self.parameters = parameters;
         self
     }
+
+    #[cfg(test)]
+    pub(crate) fn with_protocol_config(mut self, protocol_config: ProtocolConfig) -> Self {
+        self.protocol_config = protocol_config;
+        self
+    }
 }
 
 /// A clock that allows to derive the current UNIX system timestamp while guaranteeing that timestamp

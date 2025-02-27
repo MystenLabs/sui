@@ -122,7 +122,7 @@ pub fn ecrecover(
     native_charge_gas_early_exit!(
         context,
         cost_per_byte * (msg_ref.len() as u64).into()
-            + cost_per_block * (((msg_ref.len() + block_size - 1) / block_size) as u64).into()
+            + cost_per_block * (msg_ref.len().div_ceil(block_size) as u64).into()
     );
 
     let cost = context.gas_used();
@@ -275,7 +275,7 @@ pub fn secp256k1_verify(
     native_charge_gas_early_exit!(
         context,
         cost_per_byte * (msg_ref.len() as u64).into()
-            + cost_per_block * (((msg_ref.len() + block_size - 1) / block_size) as u64).into()
+            + cost_per_block * (msg_ref.len().div_ceil(block_size) as u64).into()
     );
 
     let cost = context.gas_used();

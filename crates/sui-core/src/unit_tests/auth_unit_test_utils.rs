@@ -130,7 +130,7 @@ pub async fn upgrade_package_on_single_authority(
         gas_payment,
         package_id,
         modules,
-        package.published_dependency_ids(),
+        package.get_dependency_storage_package_ids(),
         (upgrade_cap, Owner::AddressOwner(sender)),
         UpgradePolicy::COMPATIBLE,
         digest,

@@ -3,7 +3,7 @@
 
 use fastcrypto::error::FastCryptoError;
 use jsonrpsee::types::ErrorObjectOwned as RpcError;
-use sui_json_rpc::name_service::NameServiceError;
+use sui_name_service::NameServiceError;
 use thiserror::Error;
 
 use sui_types::base_types::ObjectIDParseError;

@@ -41,8 +41,8 @@ impl New {
 
         ensure!(
             Identifier::is_valid(&self.name),
-            "Invalid package name. Package name must start with a lowercase letter \
-                     and consist only of lowercase letters, numbers, and underscores."
+            "Invalid package name. Package name must start with a letter or underscore \
+                     and consist only of letters, numbers, and underscores."
         );
 
         let path = path.unwrap_or_else(|| Path::new(&self.name));

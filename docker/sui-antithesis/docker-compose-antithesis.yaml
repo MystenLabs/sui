@@ -146,7 +146,7 @@ services:
     networks:
       sui-network:
         ipv4_address: 10.0.0.16
-    image: stress:testing
+    image: stress:${SUI_NODE_B_TAG}
     container_name: stress
     environment:
       - RUST_LOG=info

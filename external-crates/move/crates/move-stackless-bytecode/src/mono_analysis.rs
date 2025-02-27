@@ -152,7 +152,7 @@ struct Analyzer<'a> {
     inst_opt: Option<Vec<Type>>,
 }
 
-impl<'a> Analyzer<'a> {
+impl Analyzer<'_> {
     fn analyze_funs(&mut self) {
         // Analyze top-level, verified functions. Any functions they call will be queued
         // in self.todo_targets for later analysis. During this phase, self.inst_opt is None.

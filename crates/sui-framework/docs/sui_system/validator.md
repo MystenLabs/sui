@@ -965,7 +965,7 @@ Request to add stake to the validator's staking pool, processed at the end of th
     stake: Balance&lt;SUI&gt;,
     staker_address: <b>address</b>,
     ctx: &<b>mut</b> TxContext,
-) : StakedSui {
+): StakedSui {
     <b>let</b> <a href="../sui_system/validator.md#sui_system_validator_stake_amount">stake_amount</a> = stake.value();
     <b>assert</b>!(<a href="../sui_system/validator.md#sui_system_validator_stake_amount">stake_amount</a> &gt; 0, <a href="../sui_system/validator.md#sui_system_validator_EInvalidStakeAmount">EInvalidStakeAmount</a>);
     <b>let</b> stake_epoch = ctx.epoch() + 1;
@@ -1011,7 +1011,7 @@ Request to add stake to the validator's staking pool, processed at the end of th
     self: &<b>mut</b> <a href="../sui_system/validator.md#sui_system_validator_Validator">Validator</a>,
     staked_sui: StakedSui,
     ctx: &<b>mut</b> TxContext,
-) : FungibleStakedSui {
+): FungibleStakedSui {
     <b>let</b> stake_activation_epoch = staked_sui.stake_activation_epoch();
     <b>let</b> staked_sui_principal_amount = staked_sui.staked_sui_amount();
     <b>let</b> fungible_staked_sui = self.<a href="../sui_system/staking_pool.md#sui_system_staking_pool">staking_pool</a>.<a href="../sui_system/validator.md#sui_system_validator_convert_to_fungible_staked_sui">convert_to_fungible_staked_sui</a>(staked_sui, ctx);
@@ -1050,7 +1050,7 @@ Request to add stake to the validator's staking pool, processed at the end of th
     self: &<b>mut</b> <a href="../sui_system/validator.md#sui_system_validator_Validator">Validator</a>,
     fungible_staked_sui: FungibleStakedSui,
     ctx: &TxContext,
-) : Balance&lt;SUI&gt; {
+): Balance&lt;SUI&gt; {
     <b>let</b> fungible_staked_sui_amount = fungible_staked_sui.value();
     <b>let</b> sui = self.<a href="../sui_system/staking_pool.md#sui_system_staking_pool">staking_pool</a>.<a href="../sui_system/validator.md#sui_system_validator_redeem_fungible_staked_sui">redeem_fungible_staked_sui</a>(fungible_staked_sui, ctx);
     self.next_epoch_stake = self.next_epoch_stake - sui.value();
@@ -1130,7 +1130,7 @@ Request to withdraw stake from the validator's staking pool, processed at the en
     self: &<b>mut</b> <a href="../sui_system/validator.md#sui_system_validator_Validator">Validator</a>,
     staked_sui: StakedSui,
     ctx: &TxContext,
-) : Balance&lt;SUI&gt; {
+): Balance&lt;SUI&gt; {
     <b>let</b> principal_amount = staked_sui.staked_sui_amount();
     <b>let</b> stake_activation_epoch = staked_sui.stake_activation_epoch();
     <b>let</b> withdrawn_stake = self.<a href="../sui_system/staking_pool.md#sui_system_staking_pool">staking_pool</a>.<a href="../sui_system/validator.md#sui_system_validator_request_withdraw_stake">request_withdraw_stake</a>(staked_sui, ctx);
@@ -2213,7 +2213,7 @@ Set the voting power of this validator, called only from validator_set.
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="../sui_system/validator.md#sui_system_validator_is_duplicate">is_duplicate</a>(self: &<a href="../sui_system/validator.md#sui_system_validator_Validator">Validator</a>, other: &<a href="../sui_system/validator.md#sui_system_validator_Validator">Validator</a>): bool {
-     self.<a href="../sui_system/validator.md#sui_system_validator_metadata">metadata</a>.<a href="../sui_system/validator.md#sui_system_validator_sui_address">sui_address</a> == other.<a href="../sui_system/validator.md#sui_system_validator_metadata">metadata</a>.<a href="../sui_system/validator.md#sui_system_validator_sui_address">sui_address</a>
+        self.<a href="../sui_system/validator.md#sui_system_validator_metadata">metadata</a>.<a href="../sui_system/validator.md#sui_system_validator_sui_address">sui_address</a> == other.<a href="../sui_system/validator.md#sui_system_validator_metadata">metadata</a>.<a href="../sui_system/validator.md#sui_system_validator_sui_address">sui_address</a>
         || self.<a href="../sui_system/validator.md#sui_system_validator_metadata">metadata</a>.<a href="../sui_system/validator.md#sui_system_validator_name">name</a> == other.<a href="../sui_system/validator.md#sui_system_validator_metadata">metadata</a>.<a href="../sui_system/validator.md#sui_system_validator_name">name</a>
         || self.<a href="../sui_system/validator.md#sui_system_validator_metadata">metadata</a>.net_address == other.<a href="../sui_system/validator.md#sui_system_validator_metadata">metadata</a>.net_address
         || self.<a href="../sui_system/validator.md#sui_system_validator_metadata">metadata</a>.<a href="../sui_system/validator.md#sui_system_validator_p2p_address">p2p_address</a> == other.<a href="../sui_system/validator.md#sui_system_validator_metadata">metadata</a>.<a href="../sui_system/validator.md#sui_system_validator_p2p_address">p2p_address</a>
@@ -2985,7 +2985,7 @@ Aborts if validator metadata is valid
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b>(package) <b>fun</b> <a href="../sui_system/validator.md#sui_system_validator_get_staking_pool_ref">get_staking_pool_ref</a>(self: &<a href="../sui_system/validator.md#sui_system_validator_Validator">Validator</a>) : &StakingPool {
+<pre><code><b>public</b>(package) <b>fun</b> <a href="../sui_system/validator.md#sui_system_validator_get_staking_pool_ref">get_staking_pool_ref</a>(self: &<a href="../sui_system/validator.md#sui_system_validator_Validator">Validator</a>): &StakingPool {
     &self.<a href="../sui_system/staking_pool.md#sui_system_staking_pool">staking_pool</a>
 }
 </code></pre>

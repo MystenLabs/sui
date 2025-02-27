@@ -1,0 +1,115 @@
+---
+source: crates/move-analyzer/tests/ide_testsuite.rs
+---
+== M9.move ========================================================
+-- test 0 -------------------
+use line: 2, use_ndx: 0
+Use: 'M9', start: 16, end: 18
+Def: 'M9', line: 5, def char: 16
+TypeDef: no info
+On Hover:
+module Symbols::M9
+
+ A module doc comment
+
+-- test 1 -------------------
+use line: 8, use_ndx: 0
+Use: 'M1', start: 17, end: 19
+Def: 'M1', line: 0, def char: 16
+TypeDef: no info
+On Hover:
+module Symbols::M1
+
+-- test 2 -------------------
+use line: 9, use_ndx: 0
+Use: 'M1', start: 17, end: 19
+Def: 'M1', line: 0, def char: 16
+TypeDef: no info
+On Hover:
+module Symbols::M1
+
+-- test 3 -------------------
+use line: 9, use_ndx: 1
+Use: 'ALIAS_M1', start: 23, end: 31
+Def: 'M1', line: 0, def char: 16
+TypeDef: no info
+On Hover:
+module Symbols::M1
+
+-- test 4 -------------------
+use line: 10, use_ndx: 0
+Use: 'M1', start: 18, end: 20
+Def: 'M1', line: 0, def char: 16
+TypeDef: no info
+On Hover:
+module Symbols::M1
+
+-- test 5 -------------------
+use line: 10, use_ndx: 1
+Use: 'BLAH', start: 24, end: 28
+Def: 'M1', line: 0, def char: 16
+TypeDef: no info
+On Hover:
+module Symbols::M1
+
+-- test 6 -------------------
+use line: 10, use_ndx: 2
+Use: 'M2', start: 30, end: 32
+Def: 'M2', line: 0, def char: 16
+TypeDef: no info
+On Hover:
+module Symbols::M2
+
+-- test 7 -------------------
+use line: 10, use_ndx: 3
+Use: 'BLEH', start: 36, end: 40
+Def: 'M2', line: 0, def char: 16
+TypeDef: no info
+On Hover:
+module Symbols::M2
+
+-- test 8 -------------------
+use line: 11, use_ndx: 1
+Use: 'SomeOtherStruct', start: 22, end: 37
+Def: 'SomeOtherStruct', line: 2, def char: 18
+TypeDef: 'SomeOtherStruct', line: 2, char: 18
+On Hover:
+public struct Symbols::M2::SomeOtherStruct has drop {
+	some_field: u64
+}
+
+-- test 9 -------------------
+use line: 11, use_ndx: 2
+Use: 'S', start: 41, end: 42
+Def: 'SomeOtherStruct', line: 2, def char: 18
+TypeDef: 'SomeOtherStruct', line: 2, char: 18
+On Hover:
+public struct Symbols::M2::SomeOtherStruct has drop {
+	some_field: u64
+}
+
+-- test 10 -------------------
+use line: 33, use_ndx: 0
+Use: 'M1', start: 21, end: 23
+Def: 'M1', line: 0, def char: 16
+TypeDef: no info
+On Hover:
+module Symbols::M1
+
+-- test 11 -------------------
+use line: 33, use_ndx: 1
+Use: 'ANOTHER_ALIAS_M1', start: 27, end: 43
+Def: 'M1', line: 0, def char: 16
+TypeDef: no info
+On Hover:
+module Symbols::M1
+
+-- test 12 -------------------
+use line: 38, use_ndx: 1
+Use: 'S', start: 27, end: 28
+Def: 'SomeOtherStruct', line: 2, def char: 18
+TypeDef: 'SomeOtherStruct', line: 2, char: 18
+On Hover:
+public struct Symbols::M2::SomeOtherStruct has drop {
+	some_field: u64
+}

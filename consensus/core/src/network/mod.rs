@@ -51,7 +51,10 @@ mod metrics_layer;
 mod network_tests;
 #[cfg(test)]
 pub(crate) mod test_network;
+#[cfg(not(msim))]
 pub(crate) mod tonic_network;
+#[cfg(msim)]
+pub mod tonic_network;
 mod tonic_tls;
 
 /// A stream of serialized filtered blocks returned over the network.

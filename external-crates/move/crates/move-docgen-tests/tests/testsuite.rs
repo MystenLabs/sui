@@ -67,9 +67,9 @@ fn test_impl(toml_path: &Path, flags: DocgenFlags, test_case: &str) -> datatest_
         .try_into()
         .expect("Test infra supports only one output file currently");
     insta_assert! {
-        name: path,
         input_path: toml_path,
         contents: contents,
+        name: path,
         info: &options.flags,
         suffix: test_case,
     };

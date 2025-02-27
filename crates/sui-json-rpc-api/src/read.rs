@@ -4,14 +4,14 @@
 use jsonrpsee::core::RpcResult;
 use jsonrpsee::proc_macros::rpc;
 
-use sui_json_rpc_types::ProtocolConfigResponse;
 use sui_json_rpc_types::{
     Checkpoint, CheckpointId, CheckpointPage, SuiEvent, SuiGetPastObjectRequest,
     SuiObjectDataOptions, SuiObjectResponse, SuiPastObjectResponse, SuiTransactionBlockResponse,
     SuiTransactionBlockResponseOptions,
 };
+use sui_json_rpc_types::{ProtocolConfigResponse, ZkLoginIntentScope, ZkLoginVerifyResult};
 use sui_open_rpc_macros::open_rpc;
-use sui_types::base_types::{ObjectID, SequenceNumber, TransactionDigest};
+use sui_types::base_types::{ObjectID, SequenceNumber, SuiAddress, TransactionDigest};
 use sui_types::sui_serde::BigInt;
 
 #[open_rpc(namespace = "sui", tag = "Read API")]
@@ -148,4 +148,18 @@ pub trait ReadApi {
     /// Return the first four bytes of the chain's genesis checkpoint digest.
     #[method(name = "getChainIdentifier")]
     async fn get_chain_identifier(&self) -> RpcResult<String>;
+
+    /// Verify a zklogin signature for the given bytes, intent scope and author.
+    #[method(name = "verifyZkLoginSignature")]
+    async fn verify_zklogin_signature(
+        &self,
+        /// The Base64 string of bcs bytes for raw transaction data or personal message indicated by intent_scope.
+        bytes: String,
+        /// The Base64 string of the zklogin signature to verify.
+        signature: String,
+        /// The intent scope, either transaction data or personal message. Used to parse bytes.
+        intent_scope: ZkLoginIntentScope,
+        /// The author of the signature.
+        author: SuiAddress,
+    ) -> RpcResult<ZkLoginVerifyResult>;
 }

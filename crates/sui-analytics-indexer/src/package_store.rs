@@ -3,6 +3,7 @@
 
 use async_trait::async_trait;
 use move_core_types::account_address::AccountAddress;
+#[cfg(not(test))]
 use std::collections::HashMap;
 use std::path::Path;
 use std::sync::Arc;
@@ -11,8 +12,11 @@ use sui_package_resolver::{
 };
 use sui_rpc_api::Client;
 use sui_types::base_types::ObjectID;
-use sui_types::object::{Data, Object};
+#[cfg(not(test))]
+use sui_types::object::Data;
+use sui_types::object::Object;
 use thiserror::Error;
+#[cfg(not(test))]
 use tokio::sync::RwLock;
 use typed_store::rocks::{DBMap, MetricConf};
 use typed_store::traits::TableSummary;
@@ -71,6 +75,7 @@ impl PackageStoreTables {
 pub struct LocalDBPackageStore {
     package_store_tables: Arc<PackageStoreTables>,
     fallback_client: Client,
+    #[cfg(not(test))]
     original_id_cache: Arc<RwLock<HashMap<AccountAddress, ObjectID>>>,
 }
 
@@ -79,6 +84,7 @@ impl LocalDBPackageStore {
         Self {
             package_store_tables: PackageStoreTables::new(path),
             fallback_client: Client::new(rest_url).unwrap(),
+            #[cfg(not(test))]
             original_id_cache: Arc::new(RwLock::new(HashMap::new())),
         }
     }
@@ -112,6 +118,7 @@ impl LocalDBPackageStore {
     }
 
     /// Gets the original package id for the given package id.
+    #[cfg(not(test))]
     pub async fn get_original_package_id(&self, id: AccountAddress) -> Result<ObjectID> {
         if let Some(&original_id) = self.original_id_cache.read().await.get(&id) {
             return Ok(original_id);
@@ -127,6 +134,11 @@ impl LocalDBPackageStore {
         self.original_id_cache.write().await.insert(id, original_id);
 
         Ok(original_id)
+    }
+
+    #[cfg(test)]
+    pub async fn get_original_package_id(&self, id: AccountAddress) -> Result<ObjectID> {
+        Ok(id.into())
     }
 }
 

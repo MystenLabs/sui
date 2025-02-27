@@ -10,7 +10,7 @@ use std::{
 
 use arc_swap::ArcSwap;
 use consensus_config::Committee as ConsensusCommittee;
-use consensus_core::{CommitConsumerMonitor, TransactionIndex, VerifiedBlock};
+use consensus_core::{CommitConsumerMonitor, CommitIndex, TransactionIndex, VerifiedBlock};
 use lru::LruCache;
 use mysten_common::debug_fatal;
 use mysten_metrics::{
@@ -19,7 +19,7 @@ use mysten_metrics::{
     monitored_scope, spawn_monitored_task,
 };
 use serde::{Deserialize, Serialize};
-use sui_macros::{fail_point_async, fail_point_if};
+use sui_macros::{fail_point, fail_point_if};
 use sui_protocol_config::ProtocolConfig;
 use sui_types::{
     authenticator_state::ActiveJwk,
@@ -51,7 +51,7 @@ use crate::{
     checkpoints::{CheckpointService, CheckpointServiceNotify},
     consensus_throughput_calculator::ConsensusThroughputCalculator,
     consensus_types::consensus_output_api::{parse_block_transactions, ConsensusCommitAPI},
-    execution_cache::ObjectCacheRead,
+    execution_cache::{ObjectCacheRead, TransactionCacheRead},
     scoring_decision::update_low_scoring_authorities,
     transaction_manager::TransactionManager,
 };
@@ -112,6 +112,7 @@ impl ConsensusHandlerInitializer {
             self.checkpoint_service.clone(),
             self.state.transaction_manager().clone(),
             self.state.get_object_cache_reader().clone(),
+            self.state.get_transaction_cache_reader().clone(),
             self.low_scoring_authorities.clone(),
             consensus_committee,
             self.state.metrics.clone(),
@@ -140,6 +141,8 @@ pub struct ConsensusHandler<C> {
     checkpoint_service: Arc<C>,
     /// cache reader is needed when determining the next version to assign for shared objects.
     cache_reader: Arc<dyn ObjectCacheRead>,
+    /// used to read randomness transactions during crash recovery
+    tx_reader: Arc<dyn TransactionCacheRead>,
     /// Reputation scores used by consensus adapter that we update, forwarded from consensus
     low_scoring_authorities: Arc<ArcSwap<HashMap<AuthorityName, u64>>>,
     /// The consensus committee used to do stake computations for deciding set of low scoring authorities
@@ -165,6 +168,7 @@ impl<C> ConsensusHandler<C> {
         checkpoint_service: Arc<C>,
         transaction_manager: Arc<TransactionManager>,
         cache_reader: Arc<dyn ObjectCacheRead>,
+        tx_reader: Arc<dyn TransactionCacheRead>,
         low_scoring_authorities: Arc<ArcSwap<HashMap<AuthorityName, u64>>>,
         committee: ConsensusCommittee,
         metrics: Arc<AuthorityMetrics>,
@@ -186,6 +190,7 @@ impl<C> ConsensusHandler<C> {
             last_consensus_stats,
             checkpoint_service,
             cache_reader,
+            tx_reader,
             low_scoring_authorities,
             committee,
             metrics,
@@ -207,6 +212,15 @@ impl<C> ConsensusHandler<C> {
 }
 
 impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
+    /// Called during startup to allow us to observe commits we previously processed, for crash recovery.
+    /// Any state computed here must be a pure function of the commits observed, it cannot depend on any
+    /// state recorded in the epoch db.
+    fn handle_prior_consensus_commit(&mut self, consensus_commit: impl ConsensusCommitAPI) {
+        // TODO: this will be used to recover state computed from previous commits at startup.
+        let round = consensus_commit.leader_round();
+        info!("Ignoring prior consensus commit for round {:?}", round);
+    }
+
     #[instrument(level = "debug", skip_all)]
     async fn handle_consensus_commit(&mut self, consensus_commit: impl ConsensusCommitAPI) {
         // This may block until one of two conditions happens:
@@ -436,6 +450,7 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
                 &self.last_consensus_stats,
                 &self.checkpoint_service,
                 self.cache_reader.as_ref(),
+                self.tx_reader.as_ref(),
                 &ConsensusCommitInfo::new(self.epoch_store.protocol_config(), &consensus_commit),
                 &self.metrics,
             )
@@ -448,12 +463,12 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
 
         fail_point_if!("correlated-crash-after-consensus-commit-boundary", || {
             let key = [commit_sub_dag_index, self.epoch_store.epoch()];
-            if sui_simulator::random::deterministic_probability(&key, 0.01) {
+            if sui_simulator::random::deterministic_probability_once(&key, 0.01) {
                 sui_simulator::task::kill_current_node(None);
             }
         });
 
-        fail_point_async!("crash"); // for tests that produce random crashes
+        fail_point!("crash"); // for tests that produce random crashes
 
         self.transaction_manager_sender
             .send(executable_transactions);
@@ -501,6 +516,7 @@ pub(crate) struct MysticetiConsensusHandler {
 
 impl MysticetiConsensusHandler {
     pub(crate) fn new(
+        last_processed_commit_at_startup: CommitIndex,
         mut consensus_handler: ConsensusHandler<CheckpointService>,
         consensus_transaction_handler: ConsensusTransactionHandler,
         mut commit_receiver: UnboundedReceiver<consensus_core::CommittedSubDag>,
@@ -512,10 +528,14 @@ impl MysticetiConsensusHandler {
             // TODO: pause when execution is overloaded, so consensus can detect the backpressure.
             while let Some(consensus_commit) = commit_receiver.recv().await {
                 let commit_index = consensus_commit.commit_ref.index;
-                consensus_handler
-                    .handle_consensus_commit(consensus_commit)
-                    .await;
-                commit_consumer_monitor.set_highest_handled_commit(commit_index);
+                if commit_index <= last_processed_commit_at_startup {
+                    consensus_handler.handle_prior_consensus_commit(consensus_commit);
+                } else {
+                    consensus_handler
+                        .handle_consensus_commit(consensus_commit)
+                        .await;
+                    commit_consumer_monitor.set_highest_handled_commit(commit_index);
+                }
             }
         }));
         if consensus_transaction_handler.enabled() {
@@ -1107,6 +1127,7 @@ mod tests {
             Arc::new(CheckpointServiceNoop {}),
             state.transaction_manager().clone(),
             state.get_object_cache_reader().clone(),
+            state.get_transaction_cache_reader().clone(),
             Arc::new(ArcSwap::default()),
             consensus_committee.clone(),
             metrics,

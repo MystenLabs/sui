@@ -40,7 +40,6 @@ rand.workspace = true
 
 [dev-dependencies]
 datatest-stable.workspace = true
-difference.workspace = true
 
 [[bin]]
 name = "move-unit-test"

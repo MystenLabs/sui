@@ -450,7 +450,7 @@ impl<'de> de::Deserialize<'de> for StatusCode {
         D: de::Deserializer<'de>,
     {
         struct StatusCodeVisitor;
-        impl<'de> de::Visitor<'de> for StatusCodeVisitor {
+        impl de::Visitor<'_> for StatusCodeVisitor {
             type Value = StatusCode;
 
             fn expecting(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {

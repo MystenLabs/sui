@@ -141,7 +141,7 @@ impl SuiTxValidator {
         Ok(())
     }
 
-    async fn vote_transactions(&self, txs: Vec<ConsensusTransactionKind>) -> Vec<TransactionIndex> {
+    fn vote_transactions(&self, txs: Vec<ConsensusTransactionKind>) -> Vec<TransactionIndex> {
         let epoch_store = self.authority_state.load_epoch_store_one_call_per_task();
         if !epoch_store.protocol_config().mysticeti_fastpath() {
             return vec![];
@@ -153,7 +153,7 @@ impl SuiTxValidator {
                 continue;
             };
 
-            if let Err(e) = self.vote_transaction(&epoch_store, tx).await {
+            if let Err(e) = self.vote_transaction(&epoch_store, tx) {
                 debug!("Failed to vote transaction: {:?}", e);
                 result.push(i as TransactionIndex);
             }
@@ -162,7 +162,7 @@ impl SuiTxValidator {
         result
     }
 
-    async fn vote_transaction(
+    fn vote_transaction(
         &self,
         epoch_store: &Arc<AuthorityPerEpochStore>,
         tx: Box<Transaction>,
@@ -180,8 +180,7 @@ impl SuiTxValidator {
         let tx = epoch_store.verify_transaction(*tx)?;
 
         self.authority_state
-            .handle_transaction_v2(epoch_store, tx)
-            .await?;
+            .handle_vote_transaction(epoch_store, tx)?;
 
         Ok(())
     }
@@ -198,7 +197,6 @@ fn tx_kind_from_bytes(tx: &[u8]) -> Result<ConsensusTransactionKind, ValidationE
         .map(|tx| tx.kind)
 }
 
-#[async_trait::async_trait]
 impl TransactionVerifier for SuiTxValidator {
     fn verify_batch(&self, batch: &[&[u8]]) -> Result<(), ValidationError> {
         let _scope = monitored_scope("ValidateBatch");
@@ -212,7 +210,7 @@ impl TransactionVerifier for SuiTxValidator {
             .map_err(|e| ValidationError::InvalidTransaction(e.to_string()))
     }
 
-    async fn verify_and_vote_batch(
+    fn verify_and_vote_batch(
         &self,
         batch: &[&[u8]],
     ) -> Result<Vec<TransactionIndex>, ValidationError> {
@@ -226,7 +224,7 @@ impl TransactionVerifier for SuiTxValidator {
         self.validate_transactions(&txs)
             .map_err(|e| ValidationError::InvalidTransaction(e.to_string()))?;
 
-        Ok(self.vote_transactions(txs).await)
+        Ok(self.vote_transactions(txs))
     }
 }
 

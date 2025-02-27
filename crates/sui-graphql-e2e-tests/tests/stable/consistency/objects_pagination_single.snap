@@ -34,7 +34,7 @@ task 5, line 35:
 Checkpoint created: 1
 
 task 6, lines 37-65:
-//# run-graphql --cursors @{obj_3_0}
+//# run-graphql --cursors bcs(@{obj_3_0},@{highest_checkpoint})
 Response: {
   "data": {
     "after_obj_3_0": {
@@ -73,7 +73,7 @@ task 8, line 69:
 Checkpoint created: 2
 
 task 9, lines 71-100:
-//# run-graphql --cursors @{obj_3_0,1}
+//# run-graphql --cursors bcs(@{obj_3_0},1)
 Response: {
   "data": {
     "after_obj_3_0_chkpt_1": {
@@ -103,7 +103,7 @@ Response: {
 }
 
 task 10, lines 102-177:
-//# run-graphql --cursors @{obj_3_0,2}
+//# run-graphql --cursors bcs(@{obj_3_0},2)
 Response: {
   "data": {
     "address": {
@@ -204,7 +204,7 @@ task 12, line 181:
 Checkpoint created: 3
 
 task 13, lines 183-246:
-//# run-graphql --cursors @{obj_3_0,2}
+//# run-graphql --cursors bcs(@{obj_3_0},2)
 Response: {
   "data": {
     "after_obj_3_0_chkpt_2": {
@@ -266,7 +266,7 @@ Response: {
 }
 
 task 14, lines 248-323:
-//# run-graphql --cursors @{obj_3_0,3}
+//# run-graphql --cursors bcs(@{obj_3_0},3)
 Response: {
   "data": {
     "address": {

@@ -17,7 +17,7 @@ use crate::types::{
 };
 use crate::{OnlineServerContext, SuiEnv};
 
-/// This module implements the [Rosetta Network API](https://www.rosetta-api.org/docs/NetworkApi.html)
+// This module implements the [Rosetta Network API](https://www.rosetta-api.org/docs/NetworkApi.html)
 
 /// This endpoint returns a list of NetworkIdentifiers that the Rosetta server supports.
 ///

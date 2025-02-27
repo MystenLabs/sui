@@ -77,7 +77,7 @@ impl fmt::Display for Value {
 }
 
 // =================================================================================================
-/// # Names
+// # Names
 
 /// Represents a module name, consisting of address and name.
 #[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Clone)]
@@ -149,7 +149,7 @@ pub struct ModuleNameDisplay<'a> {
     with_address: bool,
 }
 
-impl<'a> fmt::Display for ModuleNameDisplay<'a> {
+impl fmt::Display for ModuleNameDisplay<'_> {
     fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), Error> {
         if self.with_address && !self.name.is_script() {
             write!(f, "0x{}::", self.name.0.to_str_radix(16))?;
@@ -208,7 +208,7 @@ pub struct QualifiedSymbolDisplay<'a> {
     with_address: bool,
 }
 
-impl<'a> fmt::Display for QualifiedSymbolDisplay<'a> {
+impl fmt::Display for QualifiedSymbolDisplay<'_> {
     fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), Error> {
         if self.with_module {
             write!(

@@ -87,6 +87,7 @@ the SuiSystemStateInner version, or vice versa.
 -  [Function `load_system_state_mut`](#sui_system_sui_system_load_system_state_mut)
 -  [Function `load_inner_maybe_upgrade`](#sui_system_sui_system_load_inner_maybe_upgrade)
 -  [Function `validator_voting_powers`](#sui_system_sui_system_validator_voting_powers)
+-  [Function `store_execution_time_estimates`](#sui_system_sui_system_store_execution_time_estimates)
 
 
 <pre><code><b>use</b> <a href="../std/address.md#std_address">std::address</a>;
@@ -723,7 +724,7 @@ Non-entry version of <code><a href="../sui_system/sui_system.md#sui_system_sui_s
     wrapper: &<b>mut</b> <a href="../sui_system/sui_system.md#sui_system_sui_system_SuiSystemState">SuiSystemState</a>,
     staked_sui: StakedSui,
     ctx: &<b>mut</b> TxContext,
-) : Balance&lt;SUI&gt; {
+): Balance&lt;SUI&gt; {
     <b>let</b> self = <a href="../sui_system/sui_system.md#sui_system_sui_system_load_system_state_mut">load_system_state_mut</a>(wrapper);
     self.<a href="../sui_system/sui_system.md#sui_system_sui_system_request_withdraw_stake">request_withdraw_stake</a>(staked_sui, ctx)
 }
@@ -1491,11 +1492,11 @@ gas coins.
     storage_rebate: u64,
     non_refundable_storage_fee: u64,
     storage_fund_reinvest_rate: u64, // share of storage fund's rewards that's reinvested
-                                     // into storage fund, in basis point.
+                                        // into storage fund, in basis point.
     reward_slashing_rate: u64, // how much rewards are slashed to punish a <a href="../sui_system/validator.md#sui_system_validator">validator</a>, in bps.
     epoch_start_timestamp_ms: u64, // Timestamp of the epoch start
     ctx: &<b>mut</b> TxContext,
-) : Balance&lt;SUI&gt; {
+): Balance&lt;SUI&gt; {
     <b>let</b> self = <a href="../sui_system/sui_system.md#sui_system_sui_system_load_system_state_mut">load_system_state_mut</a>(wrapper);
     // Validator will make a special system call with sender set <b>as</b> 0x0.
     <b>assert</b>!(ctx.sender() == @0x0, <a href="../sui_system/sui_system.md#sui_system_sui_system_ENotSystemAddress">ENotSystemAddress</a>);
@@ -1584,10 +1585,10 @@ gas coins.
 
 <pre><code><b>fun</b> <a href="../sui_system/sui_system.md#sui_system_sui_system_load_inner_maybe_upgrade">load_inner_maybe_upgrade</a>(self: &<b>mut</b> <a href="../sui_system/sui_system.md#sui_system_sui_system_SuiSystemState">SuiSystemState</a>): &<b>mut</b> SuiSystemStateInnerV2 {
     <b>if</b> (self.version == 1) {
-      <b>let</b> v1: SuiSystemStateInner = dynamic_field::remove(&<b>mut</b> self.id, self.version);
-      <b>let</b> v2 = v1.v1_to_v2();
-      self.version = 2;
-      dynamic_field::add(&<b>mut</b> self.id, self.version, v2);
+        <b>let</b> v1: SuiSystemStateInner = dynamic_field::remove(&<b>mut</b> self.id, self.version);
+        <b>let</b> v2 = v1.v1_to_v2();
+        self.version = 2;
+        dynamic_field::add(&<b>mut</b> self.id, self.version, v2);
     };
     <b>let</b> inner: &<b>mut</b> SuiSystemStateInnerV2 = dynamic_field::borrow_mut(
         &<b>mut</b> self.id,
@@ -1621,6 +1622,33 @@ Returns the voting power of the active validators, values are voting power in th
 <pre><code><b>fun</b> <a href="../sui_system/sui_system.md#sui_system_sui_system_validator_voting_powers">validator_voting_powers</a>(wrapper: &<b>mut</b> <a href="../sui_system/sui_system.md#sui_system_sui_system_SuiSystemState">SuiSystemState</a>): VecMap&lt;<b>address</b>, u64&gt; {
     <b>let</b> self = <a href="../sui_system/sui_system.md#sui_system_sui_system_load_system_state">load_system_state</a>(wrapper);
     <a href="../sui_system/sui_system_state_inner.md#sui_system_sui_system_state_inner_active_validator_voting_powers">sui_system_state_inner::active_validator_voting_powers</a>(self)
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="sui_system_sui_system_store_execution_time_estimates"></a>
+
+## Function `store_execution_time_estimates`
+
+Saves the given execution time estimate blob to the SuiSystemState object, for system use
+at the start of the next epoch.
+
+
+<pre><code><b>fun</b> <a href="../sui_system/sui_system.md#sui_system_sui_system_store_execution_time_estimates">store_execution_time_estimates</a>(wrapper: &<b>mut</b> <a href="../sui_system/sui_system.md#sui_system_sui_system_SuiSystemState">sui_system::sui_system::SuiSystemState</a>, estimates_bytes: vector&lt;u8&gt;)
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>fun</b> <a href="../sui_system/sui_system.md#sui_system_sui_system_store_execution_time_estimates">store_execution_time_estimates</a>(wrapper: &<b>mut</b> <a href="../sui_system/sui_system.md#sui_system_sui_system_SuiSystemState">SuiSystemState</a>, estimates_bytes: vector&lt;u8&gt;) {
+    <b>let</b> self = <a href="../sui_system/sui_system.md#sui_system_sui_system_load_system_state_mut">load_system_state_mut</a>(wrapper);
+    <a href="../sui_system/sui_system_state_inner.md#sui_system_sui_system_state_inner_store_execution_time_estimates">sui_system_state_inner::store_execution_time_estimates</a>(self, estimates_bytes)
 }
 </code></pre>
 

@@ -778,16 +778,6 @@ impl TransactionManager {
         self.metrics.execution_driver_dispatch_queue.inc();
     }
 
-    /// Gets the missing input object keys for the given transaction.
-    pub(crate) fn get_missing_input(&self, digest: &TransactionDigest) -> Option<Vec<InputKey>> {
-        let reconfig_lock = self.inner.read();
-        let inner = reconfig_lock.read();
-        inner
-            .pending_certificates
-            .get(digest)
-            .map(|cert| cert.waiting_input_objects.clone().into_iter().collect())
-    }
-
     // Returns the number of transactions waiting on each object ID, as well as the age of the oldest transaction in the queue.
     pub(crate) fn objects_queue_len_and_age(
         &self,

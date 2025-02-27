@@ -1,3 +1,0 @@
-vscode startup: 48s vs 1m06s
-
-cargo check after modifying one file: 45s vs 2m16s

@@ -43,7 +43,6 @@ sui-config.workspace = true
 sui-core.workspace = true
 sui-execution.workspace = true
 sui-framework.workspace = true
-sui-json-rpc.workspace = true
 sui-json-rpc-api.workspace = true
 sui-json-rpc-types.workspace = true
 sui-protocol-config.workspace = true

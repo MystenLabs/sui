@@ -11,7 +11,6 @@ anyhow.workspace = true
 axum = { workspace = true, features = ["matched-path"] }
 bcs.workspace = true
 rand.workspace = true
-reqwest.workspace = true
 url.workspace = true
 serde.workspace = true
 serde_json.workspace = true
@@ -49,10 +48,10 @@ tonic-health.workspace = true
 tonic-reflection.workspace = true
 
 [dev-dependencies]
-diffy = "0.3"
 protox = "0.7"
 tonic-build = "0.12.3"
 sui-sdk-types = { workspace = true, features = ["proptest"] }
 test-strategy = "0.4.0"
 proptest.workspace = true
 paste = "1.0.15"
+walkdir.workspace = true
