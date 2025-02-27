@@ -1,6 +1,7 @@
 ---
 source: crates/sui-protocol-config/src/lib.rs
 expression: "ProtocolConfig::get_for_version(cur, *chain_id)"
+snapshot_kind: text
 ---
 version: 76
 feature_flags:
@@ -39,6 +40,7 @@ feature_flags:
   verify_legacy_zklogin_address: true
   recompute_has_public_transfer_in_execution: true
   accept_zklogin_in_multisig: true
+  accept_passkey_in_multisig: true
   include_consensus_digest_in_prologue: true
   hardened_otw_check: true
   allow_receiving_object_id: true

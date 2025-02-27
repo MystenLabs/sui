@@ -221,7 +221,8 @@ const MAX_PROTOCOL_VERSION: u64 = 76;
 // Version 76: Deprecate Deepbook V2 order placement and deposit.
 //             Removes unnecessary child object mutations
 //             Enable consensus garbage collection for testnet
-//             Enable the new consensus commit rule for testnet
+//             Enable the new consensus commit rule for testnet.
+//             Enable passkey auth in multisig for testnet.
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
 
@@ -448,6 +449,10 @@ struct FeatureFlags {
     // If true, multisig containing zkLogin sig is accepted.
     #[serde(skip_serializing_if = "is_false")]
     accept_zklogin_in_multisig: bool,
+
+    // If true, multisig containing passkey sig is accepted.
+    #[serde(skip_serializing_if = "is_false")]
+    accept_passkey_in_multisig: bool,
 
     // If true, consensus prologue transaction also includes the consensus output digest.
     // It can be used to detect consensus output folk.
@@ -1606,6 +1611,10 @@ impl ProtocolConfig {
 
     pub fn accept_zklogin_in_multisig(&self) -> bool {
         self.feature_flags.accept_zklogin_in_multisig
+    }
+
+    pub fn accept_passkey_in_multisig(&self) -> bool {
+        self.feature_flags.accept_passkey_in_multisig
     }
 
     pub fn zklogin_max_epoch_upper_bound_delta(&self) -> Option<u64> {
@@ -3299,6 +3308,9 @@ impl ProtocolConfig {
                         cfg.consensus_gc_depth = Some(60);
                         cfg.feature_flags.consensus_linearize_subdag_v2 = true;
                     }
+                    if chain != Chain::Mainnet {
+                        cfg.feature_flags.accept_passkey_in_multisig = true;
+                    }
                 }
                 // Use this template when making changes:
                 //
@@ -3478,6 +3490,10 @@ impl ProtocolConfig {
 
     pub fn set_mysticeti_fastpath_for_testing(&mut self, val: bool) {
         self.feature_flags.mysticeti_fastpath = val;
+    }
+
+    pub fn set_accept_passkey_in_multisig_for_testing(&mut self, val: bool) {
+        self.feature_flags.accept_passkey_in_multisig = val;
     }
 }
 
