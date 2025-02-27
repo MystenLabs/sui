@@ -3,13 +3,14 @@
 
 use std::sync::Arc;
 
+use anyhow::Result;
+use diesel_async::RunQueryDsl;
+use sui_types::full_checkpoint_content::CheckpointData;
+
+use crate::db;
 use crate::models::cp_sequence_numbers::StoredCpSequenceNumbers;
 use crate::pipeline::{concurrent::Handler, Processor};
 use crate::schema::cp_sequence_numbers;
-use anyhow::Result;
-use diesel_async::RunQueryDsl;
-use sui_pg_db::{self as db};
-use sui_types::full_checkpoint_content::CheckpointData;
 
 pub struct CpSequenceNumbers;
 

@@ -453,7 +453,6 @@ impl Indexer {
 #[cfg(test)]
 mod tests {
     use async_trait::async_trait;
-    use sui_pg_db as db;
     use sui_types::full_checkpoint_content::CheckpointData;
 
     use super::*;

@@ -10,12 +10,12 @@ use anyhow::Context;
 use diesel_migrations::EmbeddedMigrations;
 use prometheus::Registry;
 use sui_indexer_alt_metrics::{MetricsArgs, MetricsService};
-use sui_pg_db::DbArgs;
 use tokio::task::JoinHandle;
 use tokio_util::sync::CancellationToken;
 use url::Url;
 
 use crate::{
+    db::DbArgs,
     ingestion::{ClientArgs, IngestionConfig},
     Indexer, IndexerArgs, IndexerMetrics, Result,
 };
@@ -160,15 +160,14 @@ mod tests {
 
     use diesel::{Insertable, QueryDsl, Queryable};
     use diesel_async::RunQueryDsl;
-    use sui_pg_db::temp::get_available_port;
-    use sui_pg_db::Db;
     use sui_synthetic_ingestion::synthetic_ingestion;
     use sui_types::full_checkpoint_content::CheckpointData;
     use tempfile::tempdir;
 
-    use crate::db::{self, temp::TempDb};
-    use crate::pipeline::concurrent::ConcurrentConfig;
-    use crate::pipeline::{concurrent, Processor};
+    use crate::db::{self, Db};
+    use crate::db::temp::{get_available_port, TempDb};
+    use crate::pipeline::concurrent::{self, ConcurrentConfig};
+    use crate::pipeline::Processor;
     use crate::FieldCount;
 
     use super::*;
