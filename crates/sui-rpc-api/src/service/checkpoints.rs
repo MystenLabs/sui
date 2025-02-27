@@ -14,6 +14,7 @@ use crate::proto::node::v2::GetFullCheckpointResponse;
 use crate::proto::types::Bcs;
 use crate::ErrorReason;
 use crate::Result;
+use crate::RpcError;
 use crate::RpcService;
 use prost_types::FieldMask;
 use sui_sdk_types::CheckpointContents;
@@ -41,11 +42,19 @@ impl RpcService {
             checkpoint,
             signature,
         } = match checkpoint_id {
-            Some(checkpoint_id @ CheckpointId::SequenceNumber(s)) => self
-                .reader
-                .inner()
-                .get_checkpoint_by_sequence_number(s)
-                .ok_or(CheckpointNotFoundError(checkpoint_id))?,
+            Some(checkpoint_id @ CheckpointId::SequenceNumber(s)) => {
+                if s < self.reader.inner().get_lowest_available_checkpoint()? {
+                    return Err(RpcError::new(
+                        tonic::Code::NotFound,
+                        format!("data from requested checkpoint {s} has been pruned"),
+                    ));
+                }
+
+                self.reader
+                    .inner()
+                    .get_checkpoint_by_sequence_number(s)
+                    .ok_or(CheckpointNotFoundError(checkpoint_id))?
+            }
             Some(checkpoint_id @ CheckpointId::Digest(d)) => self
                 .reader
                 .inner()
@@ -121,11 +130,26 @@ impl RpcService {
         let read_mask = FieldMaskTree::from(read_mask);
 
         let verified_summary = match checkpoint_id {
-            Some(checkpoint_id @ CheckpointId::SequenceNumber(s)) => self
-                .reader
-                .inner()
-                .get_checkpoint_by_sequence_number(s)
-                .ok_or(CheckpointNotFoundError(checkpoint_id))?,
+            Some(checkpoint_id @ CheckpointId::SequenceNumber(s)) => {
+                if s < self.reader.inner().get_lowest_available_checkpoint()?
+                    || (s < self
+                        .reader
+                        .inner()
+                        .get_lowest_available_checkpoint_objects()?
+                        && (read_mask.contains("transactions.input_objects")
+                            || read_mask.contains("transactions.output_objects")))
+                {
+                    return Err(RpcError::new(
+                        tonic::Code::NotFound,
+                        format!("data from requested checkpoint {s} has been pruned"),
+                    ));
+                }
+
+                self.reader
+                    .inner()
+                    .get_checkpoint_by_sequence_number(s)
+                    .ok_or(CheckpointNotFoundError(checkpoint_id))?
+            }
             Some(checkpoint_id @ CheckpointId::Digest(d)) => self
                 .reader
                 .inner()
