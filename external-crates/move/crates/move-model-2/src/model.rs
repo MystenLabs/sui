@@ -192,29 +192,25 @@ impl Model {
     }
 
     pub fn from_compiled(
-        root_package_name: Option<Symbol>,
-        root_named_address_map: BTreeMap<Symbol, AccountAddress>,
+        named_address_reverse_map: &BTreeMap<AccountAddress, Symbol>,
         compiled: compiled::Model,
     ) -> Self {
-        let mut root_named_address_reverse_map = BTreeMap::new();
-        for (name, addr) in &root_named_address_map {
-            root_named_address_reverse_map
-                .entry(*addr)
-                .or_insert_with(Vec::new)
-                .push(*name);
-        }
         let packages = compiled
             .packages
             .values()
             .map(|package| {
                 let addr = package.package;
-                let data = PackageData::from_compiled(&root_named_address_reverse_map, package);
+                let data = PackageData::from_compiled(&named_address_reverse_map, package);
                 (addr, data)
             })
             .collect();
+        let root_named_address_map = named_address_reverse_map
+            .iter()
+            .map(|(a, n)| (*n, *a))
+            .collect();
         Self {
             files: None,
-            root_package_name,
+            root_package_name: None,
             root_named_address_map,
             info: None,
             compiled,
@@ -785,7 +781,7 @@ impl PackageData {
     }
 
     fn from_compiled(
-        root_named_address_reverse_map: &BTreeMap<AccountAddress, Vec<Symbol>>,
+        named_address_reverse_map: &BTreeMap<AccountAddress, Symbol>,
         compiled: &compiled::Package,
     ) -> Self {
         let modules = compiled
@@ -794,9 +790,7 @@ impl PackageData {
             .map(|(name, unit)| (*name, ModuleData::from_compiled(unit)))
             .collect();
         Self {
-            name: root_named_address_reverse_map
-                .get(&compiled.package)
-                .and_then(|names| names.first().copied()),
+            name: named_address_reverse_map.get(&compiled.package).copied(),
             modules,
         }
     }
