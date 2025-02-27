@@ -19,7 +19,7 @@ use move_core_types::{account_address::AccountAddress, runtime_value::MoveValue}
 use move_ir_types::location::*;
 use move_model_2::{
     display as model_display,
-    source_model::{self as model, Model},
+    model::{self, Model},
     ModuleId, QualifiedMemberId,
 };
 use move_symbol_pool::Symbol;

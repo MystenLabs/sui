@@ -7,7 +7,7 @@ use std::{
     sync::{Arc, LazyLock},
 };
 
-use crate::compiled_model::{self, ModuleId, QualifiedMemberId, TModuleId};
+use crate::compiled::{self, ModuleId, QualifiedMemberId, TModuleId};
 use move_binary_format::file_format;
 use move_bytecode_source_map::source_map::SourceMap;
 use move_compiler::{
@@ -36,7 +36,7 @@ pub struct Model {
     root_package_name: Option<Symbol>,
     info: Option<Arc<TypingProgramInfo>>,
     // compiled_units: BTreeMap<AccountAddress, BTreeMap<Symbol, AnnotatedCompiledUnit>>,
-    compiled_model: compiled_model::Model,
+    compiled: compiled::Model,
     packages: BTreeMap<AccountAddress, PackageData>,
 }
 
@@ -45,7 +45,7 @@ pub struct Package<'a> {
     addr: AccountAddress,
     // TODO name. We likely want the package name from the root package's named address map
     model: &'a Model,
-    compiled: &'a compiled_model::Package,
+    compiled: &'a compiled::Package,
     data: &'a PackageData,
 }
 
@@ -53,7 +53,7 @@ pub struct Package<'a> {
 pub struct Module<'a> {
     id: ModuleId,
     package: Package<'a>,
-    compiled: &'a compiled_model::Module,
+    compiled: &'a compiled::Module,
     data: &'a ModuleData,
 }
 
@@ -75,7 +75,7 @@ pub enum Datatype<'a> {
 pub struct Struct<'a> {
     name: Symbol,
     module: Module<'a>,
-    compiled: &'a compiled_model::Struct,
+    compiled: &'a compiled::Struct,
     #[allow(unused)]
     data: &'a StructData,
 }
@@ -84,7 +84,7 @@ pub struct Struct<'a> {
 pub struct Enum<'a> {
     name: Symbol,
     module: Module<'a>,
-    compiled: &'a compiled_model::Enum,
+    compiled: &'a compiled::Enum,
     #[allow(unused)]
     data: &'a EnumData,
 }
@@ -93,7 +93,7 @@ pub struct Enum<'a> {
 pub struct Variant<'a> {
     name: Symbol,
     enum_: Enum<'a>,
-    compiled: &'a compiled_model::Variant,
+    compiled: &'a compiled::Variant,
 }
 
 #[derive(Clone, Copy)]
@@ -101,7 +101,7 @@ pub struct Function<'a> {
     name: Symbol,
     module: Module<'a>,
     // might be none for macros
-    compiled: Option<&'a compiled_model::Function>,
+    compiled: Option<&'a compiled::Function>,
     #[allow(unused)]
     data: &'a FunctionData,
 }
@@ -111,7 +111,7 @@ pub struct NamedConstant<'a> {
     name: Symbol,
     module: Module<'a>,
     // There is no guarantee a source constant will have a compiled representation
-    compiled: Option<&'a compiled_model::Constant>,
+    compiled: Option<&'a compiled::Constant>,
     #[allow(unused)]
     data: &'a ConstantData,
 }
@@ -179,22 +179,22 @@ impl Model {
             .into_iter()
             .flat_map(|(_addr, units)| units.into_values().map(|unit| unit.module))
             .collect();
-        let compiled_model = compiled_model::Model::new(compiled_modules);
+        let compiled = compiled::Model::new(compiled_modules);
         let model = Self {
             files: Some(files),
             root_package_name,
             root_named_address_map,
             info: Some(info),
-            compiled_model,
+            compiled,
             packages,
         };
         Ok(model)
     }
 
-    pub fn from_compiled_model(
+    pub fn from_compiled(
         root_package_name: Option<Symbol>,
         root_named_address_map: BTreeMap<Symbol, AccountAddress>,
-        compiled_model: compiled_model::Model,
+        compiled: compiled::Model,
     ) -> Self {
         let mut root_named_address_reverse_map = BTreeMap::new();
         for (name, addr) in &root_named_address_map {
@@ -203,13 +203,12 @@ impl Model {
                 .or_insert_with(Vec::new)
                 .push(*name);
         }
-        let packages = compiled_model
+        let packages = compiled
             .packages
             .values()
             .map(|package| {
                 let addr = package.package;
-                let data =
-                    PackageData::from_compiled_model(&root_named_address_reverse_map, package);
+                let data = PackageData::from_compiled(&root_named_address_reverse_map, package);
                 (addr, data)
             })
             .collect();
@@ -218,7 +217,7 @@ impl Model {
             root_package_name,
             root_named_address_map,
             info: None,
-            compiled_model,
+            compiled,
             packages,
         }
     }
@@ -232,7 +231,7 @@ impl Model {
         Some(Package {
             addr: *addr,
             model: self,
-            compiled: &self.compiled_model.packages[addr],
+            compiled: &self.compiled.packages[addr],
             data,
         })
     }
@@ -274,8 +273,8 @@ impl Model {
         self.files.as_ref().unwrap()
     }
 
-    pub fn compiled(&self) -> &compiled_model::Model {
-        &self.compiled_model
+    pub fn compiled(&self) -> &compiled::Model {
+        &self.compiled
     }
 }
 
@@ -312,7 +311,7 @@ impl<'a> Package<'a> {
         self.data.modules.keys().map(move |name| self.module(*name))
     }
 
-    pub fn compiled(&self) -> &'a compiled_model::Package {
+    pub fn compiled(&self) -> &'a compiled::Package {
         self.compiled
     }
 }
@@ -421,7 +420,7 @@ impl<'a> Module<'a> {
 
     pub fn constants(
         &self,
-    ) -> impl Iterator<Item = (&compiled_model::Constant, Option<NamedConstant<'a>>)> + '_ {
+    ) -> impl Iterator<Item = (&compiled::Constant, Option<NamedConstant<'a>>)> + '_ {
         self.compiled.constants.iter().map(|c| {
             let source_opt =
                 self.data.constant_names[c.def_idx.0 as usize].map(|n| self.named_constant(n));
@@ -445,8 +444,8 @@ impl<'a> Module<'a> {
         self.maybe_info().unwrap()
     }
 
-    pub fn compiled(&self) -> &'a compiled_model::Module {
-        &self.model().compiled_model.packages[&self.package.addr].modules[&self.name()]
+    pub fn compiled(&self) -> &'a compiled::Module {
+        &self.model().compiled.packages[&self.package.addr].modules[&self.name()]
     }
 
     pub fn maybe_ident(&self) -> Option<&'a E::ModuleIdent> {
@@ -513,7 +512,7 @@ impl<'a> Struct<'a> {
         self.maybe_info().unwrap()
     }
 
-    pub fn compiled(&self) -> &'a compiled_model::Struct {
+    pub fn compiled(&self) -> &'a compiled::Struct {
         self.compiled
     }
 }
@@ -544,7 +543,7 @@ impl<'a> Enum<'a> {
         self.maybe_info().unwrap()
     }
 
-    pub fn compiled(&self) -> &'a compiled_model::Enum {
+    pub fn compiled(&self) -> &'a compiled::Enum {
         self.compiled
     }
 
@@ -594,7 +593,7 @@ impl<'a> Variant<'a> {
         self.maybe_info().unwrap()
     }
 
-    pub fn compiled(&self) -> &'a compiled_model::Variant {
+    pub fn compiled(&self) -> &'a compiled::Variant {
         self.compiled
     }
 }
@@ -635,7 +634,7 @@ impl<'a> Function<'a> {
     }
 
     /// Returns the compiled function if it exists. This will be `None` for `macro`s.
-    pub fn compiled(&self) -> Option<&'a compiled_model::Function> {
+    pub fn compiled(&self) -> Option<&'a compiled::Function> {
         self.compiled
     }
 
@@ -689,7 +688,7 @@ impl<'a> NamedConstant<'a> {
     }
 
     /// Not all source constants have a compiled representation
-    pub fn compiled(&self) -> Option<&'a compiled_model::Constant> {
+    pub fn compiled(&self) -> Option<&'a compiled::Constant> {
         self.compiled
     }
 }
@@ -785,14 +784,14 @@ impl PackageData {
         Self { name, modules }
     }
 
-    fn from_compiled_model(
+    fn from_compiled(
         root_named_address_reverse_map: &BTreeMap<AccountAddress, Vec<Symbol>>,
-        compiled: &compiled_model::Package,
+        compiled: &compiled::Package,
     ) -> Self {
         let modules = compiled
             .modules
             .iter()
-            .map(|(name, unit)| (*name, ModuleData::from_compiled_model(unit)))
+            .map(|(name, unit)| (*name, ModuleData::from_compiled(unit)))
             .collect();
         Self {
             name: root_named_address_reverse_map
@@ -876,7 +875,7 @@ impl ModuleData {
         }
     }
 
-    fn from_compiled_model(unit: &compiled_model::Module) -> Self {
+    fn from_compiled(unit: &compiled::Module) -> Self {
         let structs = unit
             .structs
             .keys()

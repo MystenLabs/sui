@@ -6,10 +6,10 @@
 #[macro_use(sp)]
 extern crate move_ir_types;
 
-pub mod compiled_model;
+pub mod compiled;
 pub mod display;
-pub mod source_model;
+pub mod model;
 
-pub use compiled_model::ModuleId;
-pub use compiled_model::QualifiedMemberId;
-pub use compiled_model::TModuleId;
+pub use compiled::ModuleId;
+pub use compiled::QualifiedMemberId;
+pub use compiled::TModuleId;
