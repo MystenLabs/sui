@@ -453,7 +453,8 @@ impl Indexer {
 #[cfg(test)]
 mod tests {
     use async_trait::async_trait;
-    use sui_types::full_checkpoint_content::CheckpointData;
+
+    use crate::types::full_checkpoint_content::CheckpointData;
 
     use super::*;
 

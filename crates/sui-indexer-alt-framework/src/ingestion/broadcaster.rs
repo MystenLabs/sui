@@ -1,15 +1,18 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use futures::future::try_join_all;
 use std::sync::Arc;
-use sui_types::full_checkpoint_content::CheckpointData;
+
+use futures::future::try_join_all;
 use tokio::{sync::mpsc, task::JoinHandle};
 use tokio_stream::wrappers::ReceiverStream;
 use tokio_util::sync::CancellationToken;
 use tracing::{error, info};
 
-use crate::{ingestion::error::Error, task::TrySpawnStreamExt};
+use crate::{
+    ingestion::error::Error, task::TrySpawnStreamExt,
+    types::full_checkpoint_content::CheckpointData,
+};
 
 use super::{client::IngestionClient, IngestionConfig};
 
