@@ -226,3 +226,8 @@ fn test_vm_value_vector_u64_casting() {
         Value::vector_u64([1, 2, 3]).value_as::<Vec<u64>>().unwrap()
     );
 }
+
+#[test]
+fn assert_sizes() {
+    assert_eq!(size_of::<Value>(), 16);
+}
