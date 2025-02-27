@@ -62,8 +62,8 @@ pub(crate) async fn load_singleton_object_id(
     let mut conn = reader.connect().await.map_err(Arc::new)?;
 
     let stored: Option<Vec<u8>> = conn.first(query).await.map_err(Arc::new)?;
-    Ok(stored
+    stored
         .map(|b| ObjectID::from_bytes(&b))
         .transpose()
-        .map_err(|e| Arc::new(Error::Serde(e.into())))?)
+        .map_err(|e| Arc::new(Error::Serde(e.into())))
 }
