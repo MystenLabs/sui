@@ -43,7 +43,7 @@ exclude = [
     "external-crates/move/crates/move-stdlib-natives",
     "external-crates/move/crates/move-symbol-pool",
     "external-crates/move/crates/move-transactional-test-runner",
-    "external-crates/move/crates/move-trace-format",    
+    "external-crates/move/crates/move-trace-format",
     "external-crates/move/crates/move-unit-test",
     "external-crates/move/crates/move-vm-config",
     "external-crates/move/crates/move-vm-integration-tests",
@@ -100,6 +100,7 @@ members = [
     "crates/sui-data-ingestion-core",
     "crates/sui-deepbook-indexer",
     "crates/sui-default-config",
+    "crates/sui-display",
     "crates/sui-e2e-tests",
     "crates/sui-edge-proxy",
     "crates/sui-enum-compat-util",
@@ -638,6 +639,7 @@ sui-cost = { path = "crates/sui-cost" }
 sui-data-ingestion = { path = "crates/sui-data-ingestion" }
 sui-data-ingestion-core = { path = "crates/sui-data-ingestion-core" }
 sui-default-config = { path = "crates/sui-default-config" }
+sui-display = { path = "crates/sui-display" }
 sui-e2e-tests = { path = "crates/sui-e2e-tests" }
 sui-enum-compat-util = { path = "crates/sui-enum-compat-util" }
 sui-faucet = { path = "crates/sui-faucet" }

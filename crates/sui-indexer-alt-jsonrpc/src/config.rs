@@ -68,6 +68,12 @@ pub struct ObjectsConfig {
     /// The largest acceptable page size when querying transactions. Requesting a page larger than
     /// this is a user error.
     pub max_page_size: usize,
+
+    /// The maximum depth a Display format string is allowed to nest field accesses.
+    pub max_display_field_depth: usize,
+
+    /// The maximum number of bytes occupied by Display field names and values in the output.
+    pub max_display_output_size: usize,
 }
 
 #[DefaultConfig]
@@ -76,6 +82,8 @@ pub struct ObjectsLayer {
     pub max_multi_get_objects: Option<usize>,
     pub default_page_size: Option<usize>,
     pub max_page_size: Option<usize>,
+    pub max_display_field_depth: Option<usize>,
+    pub max_display_output_size: Option<usize>,
 
     #[serde(flatten)]
     pub extra: toml::Table,
@@ -188,6 +196,12 @@ impl ObjectsLayer {
                 .unwrap_or(base.max_multi_get_objects),
             default_page_size: self.default_page_size.unwrap_or(base.default_page_size),
             max_page_size: self.max_page_size.unwrap_or(base.max_page_size),
+            max_display_field_depth: self
+                .max_display_field_depth
+                .unwrap_or(base.max_display_field_depth),
+            max_display_output_size: self
+                .max_display_output_size
+                .unwrap_or(base.max_display_output_size),
         }
     }
 }
@@ -254,6 +268,8 @@ impl Default for ObjectsConfig {
             max_multi_get_objects: 50,
             default_page_size: 50,
             max_page_size: 100,
+            max_display_field_depth: 10,
+            max_display_output_size: 1024 * 1024,
         }
     }
 }
@@ -300,6 +316,8 @@ impl From<ObjectsConfig> for ObjectsLayer {
             max_multi_get_objects: Some(config.max_multi_get_objects),
             default_page_size: Some(config.default_page_size),
             max_page_size: Some(config.max_page_size),
+            max_display_field_depth: Some(config.max_display_field_depth),
+            max_display_output_size: Some(config.max_display_output_size),
             extra: Default::default(),
         }
     }

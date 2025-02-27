@@ -13190,6 +13190,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "sui-display"
+version = "1.44.0"
+dependencies = [
+ "anyhow",
+ "move-core-types",
+ "sui-json-rpc-types",
+ "sui-types",
+ "thiserror 1.0.69",
+]
+
+[[package]]
 name = "sui-e2e-tests"
 version = "1.44.0"
 dependencies = [
@@ -13820,6 +13831,7 @@ dependencies = [
  "serde_json",
  "serde_with",
  "sui-default-config",
+ "sui-display",
  "sui-indexer-alt-metrics",
  "sui-indexer-alt-schema",
  "sui-json",
