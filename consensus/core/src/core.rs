@@ -48,8 +48,8 @@ use crate::{
 };
 #[cfg(test)]
 use crate::{
-    block_verifier::NoopBlockVerifier, storage::mem_store::MemStore, CommitConsumer,
-    TransactionClient,
+    block::CertifiedBlocksOutput, block_verifier::NoopBlockVerifier, storage::mem_store::MemStore,
+    CommitConsumer, TransactionClient,
 };
 
 // Maximum number of commit votes to include in a block.
@@ -1353,12 +1353,12 @@ pub(crate) fn create_cores(context: Context, authorities: Vec<Stake>) -> Vec<Cor
 
 #[cfg(test)]
 pub(crate) struct CoreTextFixture {
-    pub core: Core,
-    pub signal_receivers: CoreSignalsReceivers,
-    pub block_receiver: broadcast::Receiver<ExtendedBlock>,
-    #[allow(unused)]
-    pub commit_receiver: UnboundedReceiver<CommittedSubDag>,
-    pub store: Arc<MemStore>,
+    pub(crate) core: Core,
+    pub(crate) signal_receivers: CoreSignalsReceivers,
+    pub(crate) block_receiver: broadcast::Receiver<ExtendedBlock>,
+    pub(crate) _commit_output_receiver: UnboundedReceiver<CommittedSubDag>,
+    pub(crate) _blocks_output_receiver: UnboundedReceiver<CertifiedBlocksOutput>,
+    pub(crate) store: Arc<MemStore>,
 }
 
 #[cfg(test)]
@@ -1397,7 +1397,8 @@ impl CoreTextFixture {
         // Need at least one subscriber to the block broadcast channel.
         let block_receiver = signal_receivers.block_broadcast_receiver();
 
-        let (commit_consumer, commit_receiver, _transaction_receiver) = CommitConsumer::new(0);
+        let (commit_consumer, commit_output_receiver, blocks_output_receiver) =
+            CommitConsumer::new(0);
         let commit_observer = CommitObserver::new(
             context.clone(),
             commit_consumer,
@@ -1425,7 +1426,8 @@ impl CoreTextFixture {
             core,
             signal_receivers,
             block_receiver,
-            commit_receiver,
+            _commit_output_receiver: commit_output_receiver,
+            _blocks_output_receiver: blocks_output_receiver,
             store,
         }
     }
