@@ -819,18 +819,9 @@ impl Object {
         Ok(keys
             .into_iter()
             .map(|k| {
-                data.get(&k)
-                    .cloned()
-                    .map(|bcs| {
-                        Object::new_serialized(
-                            k.id,
-                            k.version,
-                            bcs,
-                            checkpoint_viewed_at,
-                            k.version,
-                        )
-                    })
-                    .flatten()
+                data.get(&k).cloned().and_then(|bcs| {
+                    Object::new_serialized(k.id, k.version, bcs, checkpoint_viewed_at, k.version)
+                })
             })
             .collect())
     }

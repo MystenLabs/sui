@@ -6,6 +6,7 @@ use async_graphql::connection::CursorType;
 use async_graphql::connection::Edge;
 use async_graphql::*;
 use sui_types::{
+    base_types::SuiAddress as NativeSuiAddress,
     effects::{TransactionEffects as NativeTransactionEffects, TransactionEffectsAPI},
     gas::GasCostSummary as NativeGasCostSummary,
     transaction::GasData,
@@ -188,11 +189,9 @@ impl GasInput {
     /// was queried for. This is stored on `GasInput` so that when viewing that entity's state, it
     /// will be as if it was read at the same checkpoint.
     pub(crate) fn from(s: &GasData, checkpoint_viewed_at: u64) -> Self {
-        Self {
-            owner: s.owner.into(),
-            price: s.price,
-            budget: s.budget,
-            payment_obj_keys: s
+        let payment_obj_keys = match s.owner {
+            NativeSuiAddress::ZERO => vec![], // system transactions do not have payment objects
+            _ => s
                 .payment
                 .iter()
                 .map(|o| ObjectKey {
@@ -200,6 +199,13 @@ impl GasInput {
                     version: o.1.value().into(),
                 })
                 .collect(),
+        };
+
+        Self {
+            owner: s.owner.into(),
+            price: s.price,
+            budget: s.budget,
+            payment_obj_keys,
             checkpoint_viewed_at,
         }
     }
