@@ -11,16 +11,16 @@ use sui_indexer_alt_framework::{
     db,
     models::cp_sequence_numbers::tx_interval,
     pipeline::{concurrent::Handler, Processor},
+    types::{
+        coin::Coin,
+        effects::TransactionEffectsAPI,
+        full_checkpoint_content::{CheckpointData, CheckpointTransaction},
+        gas_coin::GAS,
+    },
 };
 use sui_indexer_alt_schema::{
     schema::tx_balance_changes,
     transactions::{BalanceChange, StoredTxBalanceChange},
-};
-use sui_types::{
-    coin::Coin,
-    effects::TransactionEffectsAPI,
-    full_checkpoint_content::{CheckpointData, CheckpointTransaction},
-    gas_coin::GAS,
 };
 
 pub(crate) struct TxBalanceChanges;
@@ -127,9 +127,11 @@ fn balance_changes(transaction: &CheckpointTransaction) -> Result<Vec<BalanceCha
 mod tests {
     use super::*;
     use diesel_async::RunQueryDsl;
-    use sui_indexer_alt_framework::{handlers::cp_sequence_numbers::CpSequenceNumbers, Indexer};
+    use sui_indexer_alt_framework::{
+        handlers::cp_sequence_numbers::CpSequenceNumbers,
+        types::test_checkpoint_data_builder::TestCheckpointDataBuilder, Indexer,
+    };
     use sui_indexer_alt_schema::MIGRATIONS;
-    use sui_types::test_checkpoint_data_builder::TestCheckpointDataBuilder;
 
     async fn get_all_tx_balance_changes(conn: &mut db::Connection<'_>) -> Result<Vec<i64>> {
         Ok(tx_balance_changes::table

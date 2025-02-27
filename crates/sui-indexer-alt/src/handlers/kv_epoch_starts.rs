@@ -11,13 +11,13 @@ use sui_indexer_alt_framework::{
     db,
     models::cp_sequence_numbers::epoch_interval,
     pipeline::{concurrent::Handler, Processor},
+    types::{
+        full_checkpoint_content::CheckpointData,
+        sui_system_state::{get_sui_system_state, SuiSystemStateTrait},
+        transaction::{TransactionDataAPI, TransactionKind},
+    },
 };
 use sui_indexer_alt_schema::{epochs::StoredEpochStart, schema::kv_epoch_starts};
-use sui_types::{
-    full_checkpoint_content::CheckpointData,
-    sui_system_state::{get_sui_system_state, SuiSystemStateTrait},
-    transaction::{TransactionDataAPI, TransactionKind},
-};
 
 pub(crate) struct KvEpochStarts;
 

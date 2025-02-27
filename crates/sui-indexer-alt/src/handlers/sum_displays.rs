@@ -10,10 +10,10 @@ use futures::future::try_join_all;
 use sui_indexer_alt_framework::{
     db,
     pipeline::{sequential::Handler, Processor},
+    types::{display::DisplayVersionUpdatedEvent, full_checkpoint_content::CheckpointData},
     FieldCount,
 };
 use sui_indexer_alt_schema::{displays::StoredDisplay, schema::sum_displays};
-use sui_types::{display::DisplayVersionUpdatedEvent, full_checkpoint_content::CheckpointData};
 
 const MAX_INSERT_CHUNK_ROWS: usize = i16::MAX as usize / StoredDisplay::FIELD_COUNT;
 

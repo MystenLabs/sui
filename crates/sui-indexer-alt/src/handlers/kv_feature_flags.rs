@@ -8,12 +8,12 @@ use diesel_async::RunQueryDsl;
 use sui_indexer_alt_framework::{
     db,
     pipeline::{concurrent::Handler, Processor},
+    types::full_checkpoint_content::CheckpointData,
 };
 use sui_indexer_alt_schema::{
     checkpoints::StoredGenesis, epochs::StoredFeatureFlag, schema::kv_feature_flags,
 };
 use sui_protocol_config::ProtocolConfig;
-use sui_types::full_checkpoint_content::CheckpointData;
 
 pub(crate) struct KvFeatureFlags(pub(crate) StoredGenesis);
 
