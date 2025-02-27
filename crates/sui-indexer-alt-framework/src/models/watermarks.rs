@@ -6,10 +6,10 @@ use std::{borrow::Cow, time::Duration};
 use chrono::{naive::NaiveDateTime, DateTime, Utc};
 use diesel::{prelude::*, sql_types::BigInt};
 use diesel_async::RunQueryDsl;
-use sui_sql_macro::sql;
 
 use crate::db::Connection;
 use crate::schema::watermarks;
+use crate::sql;
 use crate::FieldCount;
 
 #[derive(Insertable, Selectable, Queryable, Debug, Clone, FieldCount)]
