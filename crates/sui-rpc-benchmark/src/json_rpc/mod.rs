@@ -16,13 +16,13 @@ pub async fn run_benchmark(
     file_path: &str,
     concurrency: usize,
     duration_secs: u64,
-    methods_to_skip: HashSet<String>,
+    json_rpc_methods_to_skip: HashSet<String>,
 ) -> Result<()> {
     let config = BenchmarkConfig {
         concurrency,
         duration: Duration::from_secs(duration_secs),
         json_rpc_file_path: Some(file_path.to_string()),
-        json_rpc_methods_to_skip: methods_to_skip.into_iter().collect(),
+        json_rpc_methods_to_skip,
     };
 
     info!("Loading JSON RPC requests from {}", file_path);

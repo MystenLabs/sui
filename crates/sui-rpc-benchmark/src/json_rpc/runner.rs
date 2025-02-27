@@ -217,7 +217,7 @@ pub async fn run_queries(
                             next_cursor: Option<Value>,
                         }
 
-                        if let Ok(Body { result }) = resp.json::<Body>().await {
+                        if let Ok(Body { result }) = resp.json().await {
                             let method_key = PaginationCursorState::get_method_key(
                                 &request_line.method,
                                 &params,
@@ -238,7 +238,7 @@ pub async fn run_queries(
                 // Record stats after all async operations to avoid error of sending future between threads
                 let mut stats = task_stats
                     .lock()
-                    .map_err(|e| anyhow::anyhow!("Failed to acquire stats lock: {}", e))?;
+                    .expect("Thread holding stats lock panicked");
                 stats.record_request(&request_line.method, elapsed_ms, is_error);
                 Ok::<(), anyhow::Error>(())
             }
