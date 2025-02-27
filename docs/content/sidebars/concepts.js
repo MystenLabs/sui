@@ -110,6 +110,7 @@ const concepts = [
 				],
 			},
 			'concepts/cryptography/zklogin',
+			'concepts/cryptography/passkeys',
 			'concepts/cryptography/system/checkpoint-verification',
 			/*{
 				type: 'category',
