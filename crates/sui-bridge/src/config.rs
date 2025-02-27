@@ -151,6 +151,9 @@ impl BridgeNodeConfig {
         &self,
         metrics: Arc<BridgeMetrics>,
     ) -> anyhow::Result<(BridgeServerConfig, Option<BridgeClientConfig>)> {
+        info!("Starting config validation...");
+
+        info!("Validating bridge chain IDs...");
         if !is_route_valid(
             BridgeChainId::try_from(self.sui.sui_bridge_chain_id)?,
             BridgeChainId::try_from(self.eth.eth_bridge_chain_id)?,
@@ -162,6 +165,7 @@ impl BridgeNodeConfig {
             ));
         };
 
+        info!("Reading bridge authority key...");
         let bridge_authority_key = match read_key(&self.bridge_authority_key_path, true)? {
             SuiKeyPair::Secp256k1(key) => key,
             _ => unreachable!("we required secp256k1 key in `read_key`"),
@@ -169,23 +173,33 @@ impl BridgeNodeConfig {
 
         // we do this check here instead of `prepare_for_sui` below because
         // that is only called when `run_client` is true.
+        info!("Creating Sui client...");
         let sui_client =
             Arc::new(SuiClient::<SuiSdkClient>::new(&self.sui.sui_rpc_url, metrics.clone()).await?);
+
+        info!("Getting bridge committee...");
         let bridge_committee = sui_client
             .get_bridge_committee()
             .await
             .map_err(|e| anyhow!("Error getting bridge committee: {:?}", e))?;
+
+        info!("Validating bridge authority membership...");
         if !bridge_committee.is_active_member(&bridge_authority_key.public().into()) {
             return Err(anyhow!(
                 "Bridge authority key is not part of bridge committee"
             ));
         }
 
+        info!("Preparing Ethereum configuration...");
         let (eth_client, eth_contracts) = self.prepare_for_eth(metrics.clone()).await?;
+
+        info!("Getting bridge summary...");
         let bridge_summary = sui_client
             .get_bridge_summary()
             .await
             .map_err(|e| anyhow!("Error getting bridge summary: {:?}", e))?;
+
+        info!("Checking bridge chain ID match...");
         if bridge_summary.chain_id != self.sui.sui_bridge_chain_id {
             anyhow::bail!(
                 "Bridge chain id mismatch: expected {}, but connected to {}",
@@ -194,6 +208,7 @@ impl BridgeNodeConfig {
             );
         }
 
+        info!("Validating approved governance actions...");
         // Validate approved actions that must be governace actions
         for action in &self.approved_governance_actions {
             if !action.is_governace_action() {
@@ -204,6 +219,7 @@ impl BridgeNodeConfig {
             }
         }
         let approved_governance_actions = self.approved_governance_actions.clone();
+        info!("Approved governance actions validated successfully");
 
         let bridge_server_config = BridgeServerConfig {
             key: bridge_authority_key,
@@ -214,19 +230,26 @@ impl BridgeNodeConfig {
             eth_client: eth_client.clone(),
             approved_governance_actions,
         };
+
+        info!("Checking if client is enabled...");
         if !self.run_client {
+            info!("Client is not enabled, skipping client configuration");
             return Ok((bridge_server_config, None));
         }
 
+        info!("Client is enabled, preparing client configuration...");
         // If client is enabled, prepare client config
         let (bridge_client_key, client_sui_address, gas_object_ref) =
             self.prepare_for_sui(sui_client.clone(), metrics).await?;
+        info!("Sui client preparation completed successfully");
 
         let db_path = self
             .db_path
             .clone()
             .ok_or(anyhow!("`db_path` is required when `run_client` is true"))?;
+        info!("Using DB path: {:?}", db_path);
 
+        info!("Creating bridge client config...");
         let bridge_client_config = BridgeClientConfig {
             sui_address: client_sui_address,
             key: bridge_client_key,
@@ -247,6 +270,7 @@ impl BridgeNodeConfig {
                 .sui_bridge_module_last_processed_event_id_override,
         };
 
+        info!("Config validation complete");
         Ok((bridge_server_config, Some(bridge_client_config)))
     }
 
@@ -268,6 +292,7 @@ impl BridgeNodeConfig {
             config_address,
             _weth_address,
             _usdt_address,
+            _wbtc_address,
         ) = get_eth_contract_addresses(bridge_proxy_address, &provider).await?;
         let config = EthBridgeConfig::new(config_address, provider.clone());
 
@@ -368,28 +393,50 @@ impl BridgeNodeConfig {
             sui_identifier, self.sui.sui_bridge_chain_id,
         );
 
+        // Add detailed logging after connection is established
+        info!("Determining client Sui address...");
         let client_sui_address = SuiAddress::from(&bridge_client_key.public());
+        info!("Client Sui address: {:?}", client_sui_address);
 
+        info!("Identifying gas object...");
         let gas_object_id = match self.sui.bridge_client_gas_object {
-            Some(id) => id,
+            Some(id) => {
+                info!("Using configured gas object: {:?}", id);
+                id
+            }
             None => {
+                info!("No gas object configured, finding gas object with highest balance...");
                 let sui_client = SuiClientBuilder::default()
                     .build(&self.sui.sui_rpc_url)
                     .await?;
-                let coin =
-                    // Minimum balance for gas object is 10 SUI
-                    pick_highest_balance_coin(sui_client.coin_read_api(), client_sui_address, 10_000_000_000)
-                        .await?;
+                info!("Built SUI client for gas object lookup");
+                // Minimum balance for gas object is 10 SUI
+                let coin = pick_highest_balance_coin(
+                    sui_client.coin_read_api(),
+                    client_sui_address,
+                    10_000_000_000,
+                )
+                .await?;
+                info!(
+                    "Found gas object with highest balance: {:?}",
+                    coin.coin_object_id
+                );
                 coin.coin_object_id
             }
         };
+
+        info!("Getting gas data for object: {:?}", gas_object_id);
         let (gas_coin, gas_object_ref, owner) = sui_client
             .get_gas_data_panic_if_not_gas(gas_object_id)
             .await;
+
+        info!("Checking ownership of gas object...");
         if owner != Owner::AddressOwner(client_sui_address) {
             return Err(anyhow!("Gas object {:?} is not owned by bridge client key's associated sui address {:?}, but {:?}", gas_object_id, client_sui_address, owner));
         }
+
         let balance = gas_coin.value();
+        info!("Gas object balance: {}", balance);
         metrics.gas_coin_balance.set(balance as i64);
         info!(
             "Starting bridge client with address: {:?}, gas object {:?}, balance: {}",
@@ -440,29 +487,41 @@ pub async fn pick_highest_balance_coin(
     address: SuiAddress,
     minimal_amount: u64,
 ) -> anyhow::Result<Coin> {
-    let mut highest_balance = 0;
-    let mut highest_balance_coin = None;
-    coin_read_api
-        .get_coins_stream(address, None)
-        .for_each(|coin: Coin| {
-            if coin.balance > highest_balance {
-                highest_balance = coin.balance;
-                highest_balance_coin = Some(coin.clone());
-            }
-            future::ready(())
-        })
-        .await;
-    if highest_balance_coin.is_none() {
-        return Err(anyhow!("No Sui coins found for address {:?}", address));
+    info!("Looking for a suitable gas coin for address {:?}", address);
+
+    // Only look at SUI coins specifically
+    let mut stream = coin_read_api
+        .get_coins_stream(address, Some("0x2::sui::SUI".to_string()))
+        .boxed();
+
+    let mut coins_checked = 0;
+
+    while let Some(coin) = stream.next().await {
+        info!(
+            "Checking coin: {:?}, balance: {}",
+            coin.coin_object_id, coin.balance
+        );
+        coins_checked += 1;
+
+        // Take the first coin with a sufficient balance
+        if coin.balance >= minimal_amount {
+            info!(
+                "Found suitable gas coin with {} mist (object ID: {:?})",
+                coin.balance, coin.coin_object_id
+            );
+            return Ok(coin);
+        }
+        if coins_checked >= 1000 {
+            break;
+        }
     }
-    if highest_balance < minimal_amount {
-        return Err(anyhow!(
-            "Found no single coin that has >= {} balance Sui for address {:?}",
-            minimal_amount,
-            address,
-        ));
-    }
-    Ok(highest_balance_coin.unwrap())
+
+    return Err(anyhow!(
+        "No suitable gas coin with >= {} mist found for address {:?} after checking {} coins",
+        minimal_amount,
+        address,
+        coins_checked
+    ));
 }
 
 #[derive(Debug, Eq, PartialEq, Clone)]
