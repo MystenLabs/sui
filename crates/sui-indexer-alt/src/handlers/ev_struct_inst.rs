@@ -7,11 +7,11 @@ use anyhow::{Context, Result};
 use diesel::{ExpressionMethods, QueryDsl};
 use diesel_async::RunQueryDsl;
 use sui_indexer_alt_framework::{
+    db,
     models::cp_sequence_numbers::tx_interval,
     pipeline::{concurrent::Handler, Processor},
 };
 use sui_indexer_alt_schema::{events::StoredEvStructInst, schema::ev_struct_inst};
-use sui_pg_db as db;
 use sui_types::full_checkpoint_content::CheckpointData;
 
 pub(crate) struct EvStructInst;

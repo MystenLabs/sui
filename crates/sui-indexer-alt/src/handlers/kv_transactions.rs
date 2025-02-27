@@ -6,9 +6,11 @@ use std::sync::Arc;
 use anyhow::{Context, Result};
 use diesel::{ExpressionMethods, QueryDsl};
 use diesel_async::RunQueryDsl;
-use sui_indexer_alt_framework::pipeline::{concurrent::Handler, Processor};
+use sui_indexer_alt_framework::{
+    db,
+    pipeline::{concurrent::Handler, Processor},
+};
 use sui_indexer_alt_schema::{schema::kv_transactions, transactions::StoredTransaction};
-use sui_pg_db as db;
 use sui_types::full_checkpoint_content::CheckpointData;
 
 pub(crate) struct KvTransactions;

@@ -8,6 +8,7 @@ use anyhow::Result;
 use diesel::{ExpressionMethods, QueryDsl};
 use diesel_async::RunQueryDsl;
 use sui_indexer_alt_framework::{
+    db,
     models::cp_sequence_numbers::tx_interval,
     pipeline::{concurrent::Handler, Processor},
 };
@@ -15,7 +16,6 @@ use sui_indexer_alt_schema::{
     schema::tx_kinds,
     transactions::{StoredKind, StoredTxKind},
 };
-use sui_pg_db as db;
 use sui_types::full_checkpoint_content::CheckpointData;
 
 pub(crate) struct TxKinds;

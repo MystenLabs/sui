@@ -7,6 +7,7 @@ use anyhow::{anyhow, bail, Result};
 use diesel::sql_query;
 use diesel_async::RunQueryDsl;
 use sui_indexer_alt_framework::{
+    db,
     pipeline::{concurrent::Handler, Processor},
     FieldCount,
 };
@@ -14,7 +15,6 @@ use sui_indexer_alt_schema::{
     objects::{StoredCoinBalanceBucket, StoredCoinOwnerKind},
     schema::coin_balance_buckets,
 };
-use sui_pg_db as db;
 use sui_types::{
     base_types::{ObjectID, SuiAddress},
     full_checkpoint_content::CheckpointData,
