@@ -163,7 +163,7 @@ impl<'b> BoundedWriter<'b> {
     }
 }
 
-impl<'b> Write for BoundedWriter<'b> {
+impl Write for BoundedWriter<'_> {
     fn write_str(&mut self, s: &str) -> std::fmt::Result {
         if s.len() > *self.budget {
             return Err(std::fmt::Error);

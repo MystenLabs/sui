@@ -183,7 +183,7 @@ impl fmt::Display for Token {
     }
 }
 
-impl<'t> fmt::Display for TokenSet<'t> {
+impl fmt::Display for TokenSet<'_> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         let TokenSet(tokens) = self;
 
