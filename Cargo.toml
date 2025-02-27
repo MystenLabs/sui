@@ -607,10 +607,9 @@ anemo-build = { git = "https://github.com/mystenlabs/anemo.git", rev = "e609f769
 anemo-cli = { git = "https://github.com/mystenlabs/anemo.git", rev = "e609f7697ed6169bf0760882a0b6c032a57e4f3b" }
 anemo-tower = { git = "https://github.com/mystenlabs/anemo.git", rev = "e609f7697ed6169bf0760882a0b6c032a57e4f3b" }
 
-# core-types with json format for REST api
-# sui-sdk-types = { version = "0.0.1", features = ["hash", "serde", "schemars"] }
-sui-sdk-types = { git = "https://github.com/MystenLabs/sui-rust-sdk.git", rev = "cb174b66714ea643e4b78bbfadb3f9c17e635460", features = ["hash", "serde"] }
-sui-sdk-transaction-builder = { git = "https://github.com/MystenLabs/sui-rust-sdk.git", rev = "cb174b66714ea643e4b78bbfadb3f9c17e635460", package = "sui-transaction-builder" }
+# core-types from the new sdk for use in gRPC
+sui-sdk-types = { git = "https://github.com/MystenLabs/sui-rust-sdk.git", rev = "5e11579031793f086178332219f5847ec94da0c4", features = ["hash", "serde"] }
+sui-sdk-transaction-builder = { git = "https://github.com/MystenLabs/sui-rust-sdk.git", rev = "5e11579031793f086178332219f5847ec94da0c4", package = "sui-transaction-builder" }
 
 ### Workspace Members ###
 anemo-benchmark = { path = "crates/anemo-benchmark" }

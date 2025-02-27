@@ -5007,7 +5007,7 @@ impl AuthorityState {
             .into_iter()
             .map(|maybe_checkpoint| {
                 maybe_checkpoint
-                    .expect("preceding checkpoints must exist by end of epoch")
+                    .unwrap_or_else(|| fatal!("preceding checkpoints must exist by end of epoch"))
                     .content_digest
             })
             .collect();

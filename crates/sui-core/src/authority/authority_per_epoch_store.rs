@@ -107,8 +107,9 @@ use crate::checkpoints::{
     PendingCheckpoint, PendingCheckpointInfo, PendingCheckpointV2, PendingCheckpointV2Contents,
 };
 use crate::consensus_handler::{
-    ConsensusCommitInfo, SequencedConsensusTransaction, SequencedConsensusTransactionKey,
-    SequencedConsensusTransactionKind, VerifiedSequencedConsensusTransaction,
+    AdditionalConsensusState, ConsensusCommitInfo, SequencedConsensusTransaction,
+    SequencedConsensusTransactionKey, SequencedConsensusTransactionKind,
+    VerifiedSequencedConsensusTransaction,
 };
 use crate::epoch::epoch_metrics::EpochMetrics;
 use crate::epoch::randomness::{
@@ -2805,6 +2806,7 @@ impl AuthorityPerEpochStore {
     >(
         &self,
         transactions: Vec<SequencedConsensusTransaction>,
+        additional_state: &AdditionalConsensusState,
         consensus_stats: &ExecutionIndicesWithStats,
         checkpoint_service: &Arc<C>,
         cache_reader: &dyn ObjectCacheRead,
@@ -3042,6 +3044,7 @@ impl AuthorityPerEpochStore {
         ) = self
             .process_consensus_transactions(
                 &mut output,
+                additional_state,
                 &consensus_transactions,
                 &end_of_publish_transactions,
                 checkpoint_service,
@@ -3207,6 +3210,7 @@ impl AuthorityPerEpochStore {
         transactions: &mut VecDeque<VerifiedExecutableTransaction>,
         consensus_commit_info: &ConsensusCommitInfo,
         cancelled_txns: &BTreeMap<TransactionDigest, CancelConsensusCertificateReason>,
+        additional_state: &AdditionalConsensusState,
     ) -> SuiResult<Option<TransactionKey>> {
         {
             if consensus_commit_info.skip_consensus_commit_prologue_in_test() {
@@ -3245,6 +3249,7 @@ impl AuthorityPerEpochStore {
             self.epoch(),
             self.protocol_config(),
             version_assignment,
+            additional_state,
         );
         let consensus_commit_prologue_root = match self.process_consensus_system_transaction(&transaction) {
             ConsensusCertificateResult::SuiTransaction(processed_tx) => {
@@ -3312,6 +3317,7 @@ impl AuthorityPerEpochStore {
     ) -> SuiResult<Vec<VerifiedExecutableTransaction>> {
         self.process_consensus_transactions_and_commit_boundary(
             transactions,
+            &AdditionalConsensusState::new_for_tests(),
             &ExecutionIndicesWithStats::default(),
             checkpoint_service,
             cache_reader,
@@ -3373,6 +3379,7 @@ impl AuthorityPerEpochStore {
     pub(crate) async fn process_consensus_transactions<C: CheckpointServiceNotify>(
         &self,
         output: &mut ConsensusCommitOutput,
+        additional_state: &AdditionalConsensusState,
         transactions: &[VerifiedSequencedConsensusTransaction],
         end_of_publish_transactions: &[VerifiedSequencedConsensusTransaction],
         checkpoint_service: &Arc<C>,
@@ -3549,6 +3556,7 @@ impl AuthorityPerEpochStore {
             &mut verified_certificates,
             consensus_commit_info,
             &cancelled_txns,
+            additional_state,
         )?;
 
         let verified_certificates: Vec<_> = verified_certificates.into();

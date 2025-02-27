@@ -273,8 +273,10 @@ impl TryFrom<&super::CircomG2> for sui_sdk_types::CircomG2 {
 // ZkLoginClaim
 //
 
-impl From<sui_sdk_types::Claim> for super::ZkLoginClaim {
-    fn from(sui_sdk_types::Claim { value, index_mod_4 }: sui_sdk_types::Claim) -> Self {
+impl From<sui_sdk_types::ZkLoginClaim> for super::ZkLoginClaim {
+    fn from(
+        sui_sdk_types::ZkLoginClaim { value, index_mod_4 }: sui_sdk_types::ZkLoginClaim,
+    ) -> Self {
         Self {
             value: Some(value),
             index_mod_4: Some(index_mod_4.into()),
@@ -282,7 +284,7 @@ impl From<sui_sdk_types::Claim> for super::ZkLoginClaim {
     }
 }
 
-impl TryFrom<&super::ZkLoginClaim> for sui_sdk_types::Claim {
+impl TryFrom<&super::ZkLoginClaim> for sui_sdk_types::ZkLoginClaim {
     type Error = TryFromProtoError;
 
     fn try_from(

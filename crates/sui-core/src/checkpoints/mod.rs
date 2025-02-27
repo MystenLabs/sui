@@ -1328,15 +1328,13 @@ impl CheckpointBuilder {
             .get_transaction_block(&root_digests[0])
             .expect("Transaction block must exist");
 
-        Ok(match first_tx.transaction_data().kind() {
-            TransactionKind::ConsensusCommitPrologue(_)
-            | TransactionKind::ConsensusCommitPrologueV2(_)
-            | TransactionKind::ConsensusCommitPrologueV3(_) => {
+        Ok(first_tx
+            .transaction_data()
+            .is_consensus_commit_prologue()
+            .then(|| {
                 assert_eq!(first_tx.digest(), root_effects[0].transaction_digest());
-                Some((*first_tx.digest(), root_effects[0].clone()))
-            }
-            _ => None,
-        })
+                (*first_tx.digest(), root_effects[0].clone())
+            }))
     }
 
     #[instrument(level = "debug", skip_all)]
@@ -1545,6 +1543,7 @@ impl CheckpointBuilder {
                     TransactionKind::ConsensusCommitPrologue(_)
                     | TransactionKind::ConsensusCommitPrologueV2(_)
                     | TransactionKind::ConsensusCommitPrologueV3(_)
+                    | TransactionKind::ConsensusCommitPrologueV4(_)
                     | TransactionKind::AuthenticatorStateUpdate(_) => {
                         // ConsensusCommitPrologue and AuthenticatorStateUpdate are guaranteed to be
                         // processed before we reach here.
@@ -1920,12 +1919,7 @@ impl CheckpointBuilder {
             .iter()
             .filter_map(|tx| {
                 if let Some(tx) = tx {
-                    if matches!(
-                        tx.transaction_data().kind(),
-                        TransactionKind::ConsensusCommitPrologue(_)
-                            | TransactionKind::ConsensusCommitPrologueV2(_)
-                            | TransactionKind::ConsensusCommitPrologueV3(_)
-                    ) {
+                    if tx.transaction_data().is_consensus_commit_prologue() {
                         Some(tx)
                     } else {
                         None
@@ -1955,33 +1949,22 @@ impl CheckpointBuilder {
             // consensus commit prologue transaction in the checkpoint.
             for tx in txs.iter() {
                 if let Some(tx) = tx {
-                    assert!(!matches!(
-                        tx.transaction_data().kind(),
-                        TransactionKind::ConsensusCommitPrologue(_)
-                            | TransactionKind::ConsensusCommitPrologueV2(_)
-                            | TransactionKind::ConsensusCommitPrologueV3(_)
-                    ));
+                    assert!(!tx.transaction_data().is_consensus_commit_prologue());
                 }
             }
         } else {
             // If there is one consensus commit prologue, it must be the first one in the checkpoint.
-            assert!(matches!(
-                txs[0].as_ref().unwrap().transaction_data().kind(),
-                TransactionKind::ConsensusCommitPrologue(_)
-                    | TransactionKind::ConsensusCommitPrologueV2(_)
-                    | TransactionKind::ConsensusCommitPrologueV3(_)
-            ));
+            assert!(txs[0]
+                .as_ref()
+                .unwrap()
+                .transaction_data()
+                .is_consensus_commit_prologue());
 
             assert_eq!(ccps[0].digest(), txs[0].as_ref().unwrap().digest());
 
             for tx in txs.iter().skip(1) {
                 if let Some(tx) = tx {
-                    assert!(!matches!(
-                        tx.transaction_data().kind(),
-                        TransactionKind::ConsensusCommitPrologue(_)
-                            | TransactionKind::ConsensusCommitPrologueV2(_)
-                            | TransactionKind::ConsensusCommitPrologueV3(_)
-                    ));
+                    assert!(!tx.transaction_data().is_consensus_commit_prologue());
                 }
             }
         }
