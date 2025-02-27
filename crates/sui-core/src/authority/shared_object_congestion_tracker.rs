@@ -48,7 +48,7 @@ impl SharedObjectCongestionTracker {
     ) -> Self {
         assert!(
             allowed_txn_cost_overage_burst_per_object_in_commit <= max_txn_cost_overage_per_object_in_commit,
-            "burst limit bust be <= absolute limit; allowed_txn_cost_overage_burst_per_object_in_commit = {allowed_txn_cost_overage_burst_per_object_in_commit}, max_txn_cost_overage_per_object_in_commit = {max_txn_cost_overage_per_object_in_commit}"
+            "burst limit must be <= absolute limit; allowed_txn_cost_overage_burst_per_object_in_commit = {allowed_txn_cost_overage_burst_per_object_in_commit}, max_txn_cost_overage_per_object_in_commit = {max_txn_cost_overage_per_object_in_commit}"
         );
 
         let object_execution_cost: HashMap<ObjectID, u64> =
@@ -664,7 +664,7 @@ mod object_cost_tests {
             panic!("should defer");
         }
 
-        // Insert `tx`` as previously deferred transaction due to randomness.
+        // Insert `tx` as previously deferred transaction due to randomness.
         previously_deferred_tx_digests.insert(
             *tx.digest(),
             DeferralKey::Randomness {
@@ -691,7 +691,7 @@ mod object_cost_tests {
             panic!("should defer");
         }
 
-        // Insert `tx`` as previously deferred consensus transaction.
+        // Insert `tx` as previously deferred consensus transaction.
         previously_deferred_tx_digests.insert(
             *tx.digest(),
             DeferralKey::ConsensusRound {
