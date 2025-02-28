@@ -57,13 +57,16 @@ exclude = [
     "external-crates/move/move-execution/v0/crates/move-bytecode-verifier",
     "external-crates/move/move-execution/v0/crates/move-stdlib-natives",
     "external-crates/move/move-execution/v0/crates/move-vm-runtime",
+    "external-crates/move/move-execution/v0/crates/move-vm-types",
     "external-crates/move/move-execution/v1/crates/move-bytecode-verifier",
     "external-crates/move/move-execution/v1/crates/move-stdlib-natives",
     "external-crates/move/move-execution/v1/crates/move-vm-runtime",
+    "external-crates/move/move-execution/v1/crates/move-vm-types",
     "external-crates/move/move-execution/v2/crates/move-abstract-interpreter",
     "external-crates/move/move-execution/v2/crates/move-bytecode-verifier",
     "external-crates/move/move-execution/v2/crates/move-stdlib-natives",
     "external-crates/move/move-execution/v2/crates/move-vm-runtime",
+    "external-crates/move/move-execution/v2/crates/move-vm-types",
 ]
 
 members = [
@@ -578,7 +581,6 @@ move-vm-config = { path = "external-crates/move/crates/move-vm-config" }
 move-vm-test-utils = { path = "external-crates/move/crates/move-vm-test-utils/", features = [
     "tiered-gas",
 ] }
-move-vm-types = { path = "external-crates/move/crates/move-vm-types" }
 move-vm-profiler = { path = "external-crates/move/crates/move-vm-profiler" }
 move-command-line-common = { path = "external-crates/move/crates/move-command-line-common" }
 move-transactional-test-runner = { path = "external-crates/move/crates/move-transactional-test-runner" }

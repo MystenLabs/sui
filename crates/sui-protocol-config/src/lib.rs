@@ -3371,6 +3371,7 @@ impl ProtocolConfig {
                     cfg.tx_context_gas_budget_cost_base = Some(30);
                     cfg.tx_context_ids_created_cost_base = Some(30);
                     cfg.tx_context_replace_cost_base = Some(30);
+                    cfg.gas_model_version = Some(10);
                 }
                 // Use this template when making changes:
                 //

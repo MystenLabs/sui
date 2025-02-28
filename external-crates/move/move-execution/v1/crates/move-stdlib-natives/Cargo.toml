@@ -11,7 +11,7 @@ publish = false
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 [dependencies]
-move-vm-types.workspace = true
+move-vm-types = { path = "../move-vm-types", package = "move-vm-types-v1" }
 move-binary-format.workspace = true
 move-core-types.workspace = true
 move-vm-runtime = { path = "../move-vm-runtime", package = "move-vm-runtime-v1" }
