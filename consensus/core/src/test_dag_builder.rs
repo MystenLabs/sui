@@ -583,8 +583,9 @@ impl<'a> LayerBuilder<'a> {
     pub fn with_timestamps(mut self, timestamps: Vec<BlockTimestampMs>) -> Self {
         // authorities must be specified for this to apply
         assert!(self.specified_authorities.is_some());
-        assert!(
-            self.specified_authorities.as_ref().unwrap().len() == timestamps.len(),
+        assert_eq!(
+            self.specified_authorities.as_ref().unwrap().len(),
+            timestamps.len(),
             "Timestamps should be provided for each specified authority"
         );
         self.timestamps = timestamps;
