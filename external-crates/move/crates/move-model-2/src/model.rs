@@ -8,7 +8,7 @@ use std::{
 };
 
 use crate::compiled::{self, ModuleId, QualifiedMemberId, TModuleId};
-use move_binary_format::file_format;
+use move_binary_format::{file_format, CompiledModule};
 use move_bytecode_source_map::source_map::SourceMap;
 use move_compiler::{
     self,
@@ -38,8 +38,7 @@ pub struct Model<const HAS_SOURCE: usize> {
     root_named_address_map: BTreeMap<Symbol, AccountAddress>,
     root_package_name: Option<Symbol>,
     info: [Arc<TypingProgramInfo>; HAS_SOURCE],
-    // compiled_units: BTreeMap<AccountAddress, BTreeMap<Symbol, AnnotatedCompiledUnit>>,
-    compiled: compiled::Model,
+    compiled: compiled::Packages,
     packages: BTreeMap<AccountAddress, PackageData<HAS_SOURCE>>,
 }
 
@@ -182,7 +181,7 @@ impl Model<WITH_SOURCE> {
             .into_iter()
             .flat_map(|(_addr, units)| units.into_values().map(|unit| unit.module))
             .collect();
-        let compiled = compiled::Model::new(compiled_modules);
+        let compiled = compiled::Packages::new(compiled_modules);
         let model = Self {
             files: [files],
             root_package_name,
@@ -202,8 +201,9 @@ impl Model<WITH_SOURCE> {
 impl Model<WITHOUT_SOURCE> {
     pub fn from_compiled(
         named_address_reverse_map: &BTreeMap<AccountAddress, Symbol>,
-        compiled: compiled::Model,
+        modules: Vec<CompiledModule>,
     ) -> Self {
+        let compiled = compiled::Packages::new(modules);
         let packages = compiled
             .packages
             .values()
@@ -272,7 +272,7 @@ impl<const HAS_SOURCE: usize> Model<HAS_SOURCE> {
             .flat_map(move |(a, p)| p.modules.keys().map(move |m| self.module((a, m))))
     }
 
-    pub fn compiled(&self) -> &compiled::Model {
+    pub fn compiled_packages(&self) -> &compiled::Packages {
         &self.compiled
     }
 }
