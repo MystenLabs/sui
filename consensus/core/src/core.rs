@@ -607,7 +607,16 @@ impl Core {
         let now = self.context.clock.timestamp_utc_ms();
         ancestors.iter().for_each(|block| {
             if self.context.protocol_config.consensus_median_based_timestamp() {
-                debug!("Ancestor block {:?} has timestamp {}, greater than current timestamp {now}. Proposing for round {}.", block, block.timestamp_ms(), clock_round);
+                if block.timestamp_ms() > now {
+                    debug!("Ancestor block {:?} has timestamp {}, greater than current timestamp {now}. Proposing for round {}.", block, block.timestamp_ms(), clock_round);
+                    let authority = &self.context.committee.authority(block.author()).hostname;
+                    self.context
+                    .metrics
+                    .node_metrics
+                    .proposed_block_ancestors_timestamp_drift_ms
+                    .with_label_values(&[authority])
+                    .inc_by(block.timestamp_ms().saturating_sub(now));
+                }
             } else {
                 // Ensure ancestor timestamps are not more advanced than the current time.
                 // Also catch the issue if system's clock go backwards.
