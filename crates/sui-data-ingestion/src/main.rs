@@ -129,6 +129,8 @@ async fn main() -> Result<()> {
                 kv_config.instance_id.clone(),
                 false,
                 Some(Duration::from_secs(kv_config.timeout_secs as u64)),
+                "ingestion".to_string(),
+                &registry,
             )
             .await?;
             bigtable_store = Some(BigTableProgressStore::new(bigtable_client));
@@ -173,6 +175,8 @@ async fn main() -> Result<()> {
                     kv_config.instance_id,
                     false,
                     Some(Duration::from_secs(kv_config.timeout_secs as u64)),
+                    "ingestion".to_string(),
+                    &registry,
                 )
                 .await?;
                 let worker_pool = WorkerPool::new(
