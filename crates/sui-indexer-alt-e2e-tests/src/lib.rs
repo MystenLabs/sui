@@ -253,24 +253,21 @@ impl OffchainCluster {
         let rpc_listen_address = SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), rpc_port);
 
         let database = TempDb::new().context("Failed to create database")?;
-
-        let db_args = DbArgs {
-            database_url: database.database().url().clone(),
-            ..Default::default()
-        };
+        let database_url = database.database().url();
 
         let rpc_args = RpcArgs {
             rpc_listen_address,
             ..Default::default()
         };
 
-        let db = Db::for_read(db_args.clone())
+        let db = Db::for_read(database_url.clone(), DbArgs::default())
             .await
             .context("Failed to connect to database")?;
 
         let with_genesis = true;
         let indexer = setup_indexer(
-            db_args.clone(),
+            database_url.clone(),
+            DbArgs::default(),
             indexer_args,
             client_args,
             indexer_config,
@@ -285,7 +282,8 @@ impl OffchainCluster {
         let indexer = indexer.run().await.context("Failed to start indexer")?;
 
         let jsonrpc = start_rpc(
-            db_args,
+            database_url.clone(),
+            DbArgs::default(),
             rpc_args,
             system_package_task_args,
             rpc_config,

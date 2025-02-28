@@ -4,13 +4,13 @@
 use std::{sync::Arc, time::Duration};
 
 use backoff::ExponentialBackoff;
-use sui_pg_db::Db;
 use tokio::{sync::mpsc, task::JoinHandle};
 use tokio_stream::wrappers::ReceiverStream;
 use tokio_util::sync::CancellationToken;
 use tracing::{debug, error, info, warn};
 
 use crate::{
+    db::Db,
     metrics::{CheckpointLagMetricReporter, IndexerMetrics},
     pipeline::{Break, CommitterConfig, WatermarkPart},
     task::TrySpawnStreamExt,

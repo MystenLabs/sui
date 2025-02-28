@@ -1,24 +1,26 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use std::path::PathBuf;
+use std::sync::Arc;
+use std::time::Duration;
+
+use backoff::backoff::Constant;
+use backoff::Error as BE;
+use backoff::ExponentialBackoff;
+use sui_storage::blob::Blob;
+use tokio_util::bytes::Bytes;
+use tokio_util::sync::CancellationToken;
+use tracing::debug;
+use url::Url;
+
 use crate::ingestion::local_client::LocalIngestionClient;
 use crate::ingestion::remote_client::RemoteIngestionClient;
 use crate::ingestion::Error as IngestionError;
 use crate::ingestion::Result as IngestionResult;
 use crate::metrics::CheckpointLagMetricReporter;
 use crate::metrics::IndexerMetrics;
-use backoff::backoff::Constant;
-use backoff::Error as BE;
-use backoff::ExponentialBackoff;
-use std::path::PathBuf;
-use std::sync::Arc;
-use std::time::Duration;
-use sui_storage::blob::Blob;
-use sui_types::full_checkpoint_content::CheckpointData;
-use tokio_util::bytes::Bytes;
-use tokio_util::sync::CancellationToken;
-use tracing::debug;
-use url::Url;
+use crate::types::full_checkpoint_content::CheckpointData;
 
 /// Wait at most this long between retries for transient errors.
 const MAX_TRANSIENT_RETRY_INTERVAL: Duration = Duration::from_secs(60);

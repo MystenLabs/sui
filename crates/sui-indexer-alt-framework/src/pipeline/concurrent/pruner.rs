@@ -5,7 +5,6 @@ use std::{collections::BTreeMap, sync::Arc};
 
 use futures::stream::FuturesUnordered;
 use futures::StreamExt;
-use sui_pg_db::Db;
 use tokio::{
     sync::Semaphore,
     task::JoinHandle,
@@ -15,6 +14,7 @@ use tokio_util::sync::CancellationToken;
 use tracing::{debug, error, info, warn};
 
 use crate::{
+    db::Db,
     metrics::IndexerMetrics,
     models::watermarks::PrunerWatermark,
     pipeline::logging::{LoggerWatermark, WatermarkLogger},

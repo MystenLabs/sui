@@ -16,6 +16,7 @@ use prometheus::Registry;
 use sui_indexer_alt_metrics::db::DbConnectionStatsCollector;
 use sui_pg_db as db;
 use tracing::debug;
+use url::Url;
 
 use crate::{data::error::Error, metrics::RpcMetrics};
 
@@ -34,11 +35,14 @@ pub(crate) struct Connection<'p> {
 
 impl PgReader {
     pub(crate) async fn new(
+        database_url: Url,
         db_args: db::DbArgs,
         metrics: Arc<RpcMetrics>,
         registry: &Registry,
     ) -> Result<Self, Error> {
-        let db = db::Db::for_read(db_args).await.map_err(Error::PgCreate)?;
+        let db = db::Db::for_read(database_url, db_args)
+            .await
+            .map_err(Error::PgCreate)?;
 
         registry
             .register(Box::new(DbConnectionStatsCollector::new(

@@ -13723,20 +13723,18 @@ dependencies = [
  "rand 0.8.5",
  "serde",
  "sui-default-config",
- "sui-field-count",
  "sui-indexer-alt-framework",
  "sui-indexer-alt-metrics",
  "sui-indexer-alt-schema",
- "sui-pg-db",
  "sui-protocol-config",
  "sui-synthetic-ingestion",
- "sui-types",
  "telemetry-subscribers",
  "tempfile",
  "tokio",
  "tokio-util 0.7.13 (registry+https://github.com/rust-lang/crates.io-index)",
  "toml 0.7.4",
  "tracing",
+ "url",
  "wiremock",
 ]
 
@@ -13794,6 +13792,7 @@ dependencies = [
  "sui-pg-db",
  "sui-sql-macro",
  "sui-storage",
+ "sui-synthetic-ingestion",
  "sui-types",
  "telemetry-subscribers",
  "tempfile",
@@ -13802,6 +13801,7 @@ dependencies = [
  "tokio-stream",
  "tokio-util 0.7.13 (registry+https://github.com/rust-lang/crates.io-index)",
  "tracing",
+ "tracing-subscriber",
  "url",
  "wiremock",
 ]
@@ -13898,6 +13898,7 @@ dependencies = [
  "telemetry-subscribers",
  "tokio",
  "tracing",
+ "url",
 ]
 
 [[package]]

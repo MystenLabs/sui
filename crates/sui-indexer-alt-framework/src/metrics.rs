@@ -43,7 +43,7 @@ const BATCH_SIZE_BUCKETS: &[f64] = &[
 ];
 
 #[derive(Clone)]
-pub(crate) struct IndexerMetrics {
+pub struct IndexerMetrics {
     // Statistics related to fetching data from the remote store.
     pub total_ingested_checkpoints: IntCounter,
     pub total_ingested_transactions: IntCounter,

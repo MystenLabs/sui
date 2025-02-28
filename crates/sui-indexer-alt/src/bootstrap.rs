@@ -6,16 +6,18 @@ use std::time::Duration;
 use anyhow::{bail, Context, Result};
 use diesel::{OptionalExtension, QueryDsl, SelectableHelper};
 use diesel_async::RunQueryDsl;
-use sui_indexer_alt_framework::task::graceful_shutdown;
+use sui_indexer_alt_framework::{
+    task::graceful_shutdown,
+    types::{
+        full_checkpoint_content::CheckpointData,
+        sui_system_state::{get_sui_system_state, SuiSystemStateTrait},
+        transaction::{TransactionDataAPI, TransactionKind},
+    },
+};
 use sui_indexer_alt_schema::{
     checkpoints::StoredGenesis,
     epochs::StoredEpochStart,
     schema::{kv_epoch_starts, kv_genesis},
-};
-use sui_types::{
-    full_checkpoint_content::CheckpointData,
-    sui_system_state::{get_sui_system_state, SuiSystemStateTrait},
-    transaction::{TransactionDataAPI, TransactionKind},
 };
 use tokio_util::sync::CancellationToken;
 use tracing::info;
