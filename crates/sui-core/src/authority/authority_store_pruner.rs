@@ -4,6 +4,7 @@
 use super::authority_store_tables::{AuthorityPerpetualTables, AuthorityPrunerTables};
 use crate::authority::authority_store_types::{StoreObject, StoreObjectWrapper};
 use crate::checkpoints::{CheckpointStore, CheckpointWatermark};
+use crate::jsonrpc_index::IndexStore;
 use crate::rpc_index::RpcIndexStore;
 use anyhow::anyhow;
 use bincode::Options;
@@ -521,6 +522,24 @@ impl AuthorityStorePruner {
         Ok(())
     }
 
+    fn prune_indexes(
+        indexes: Option<&IndexStore>,
+        config: &AuthorityStorePruningConfig,
+        epoch_duration_ms: u64,
+    ) -> anyhow::Result<()> {
+        if let (Some(epochs_to_retain), Some(indexes)) =
+            (config.num_epochs_to_retain_for_indexes, indexes)
+        {
+            let now = SystemTime::now().duration_since(UNIX_EPOCH)?.as_millis();
+            if let Some(cut_time_ms) =
+                u64::try_from(now)?.checked_sub(epochs_to_retain * epoch_duration_ms)
+            {
+                indexes.prune(cut_time_ms)?;
+            }
+        }
+        Ok(())
+    }
+
     fn compact_next_sst_file(
         perpetual_db: Arc<AuthorityPerpetualTables>,
         delay_days: usize,
@@ -608,6 +627,7 @@ impl AuthorityStorePruner {
         perpetual_db: Arc<AuthorityPerpetualTables>,
         checkpoint_store: Arc<CheckpointStore>,
         rpc_index: Option<Arc<RpcIndexStore>>,
+        jsonrpc_index: Option<Arc<IndexStore>>,
         pruner_db: Option<Arc<AuthorityPrunerTables>>,
         metrics: Arc<AuthorityStorePruningMetrics>,
         archive_readers: ArchiveReaderBalancer,
@@ -628,6 +648,8 @@ impl AuthorityStorePruner {
         let mut objects_prune_interval =
             tokio::time::interval_at(Instant::now() + pruning_initial_delay, tick_duration);
         let mut checkpoints_prune_interval =
+            tokio::time::interval_at(Instant::now() + pruning_initial_delay, tick_duration);
+        let mut indexes_prune_interval =
             tokio::time::interval_at(Instant::now() + pruning_initial_delay, tick_duration);
 
         let perpetual_db_for_compaction = perpetual_db.clone();
@@ -677,6 +699,11 @@ impl AuthorityStorePruner {
                             error!("Failed to prune checkpoints: {:?}", err);
                         }
                     },
+                    _ = indexes_prune_interval.tick(), if config.num_epochs_to_retain_for_indexes.is_some() => {
+                        if let Err(err) = Self::prune_indexes(jsonrpc_index.as_deref(), &config, epoch_duration_ms) {
+                            error!("Failed to prune indexes: {:?}", err);
+                        }
+                    }
                     _ = &mut recv => break,
                 }
             }
@@ -688,6 +715,7 @@ impl AuthorityStorePruner {
         perpetual_db: Arc<AuthorityPerpetualTables>,
         checkpoint_store: Arc<CheckpointStore>,
         rpc_index: Option<Arc<RpcIndexStore>>,
+        jsonrpc_index: Option<Arc<IndexStore>>,
         mut pruning_config: AuthorityStorePruningConfig,
         is_validator: bool,
         epoch_duration_ms: u64,
@@ -712,6 +740,7 @@ impl AuthorityStorePruner {
                 perpetual_db,
                 checkpoint_store,
                 rpc_index,
+                jsonrpc_index,
                 pruner_db,
                 AuthorityStorePruningMetrics::new(registry),
                 archive_readers,
