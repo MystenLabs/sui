@@ -1,0 +1,17 @@
+---
+source: crates/sui/tests/shell_tests.rs
+description: tests/shell_tests/implicits/build.sh
+---
+----- script -----
+# Copyright (c) Mysten Labs, Inc.
+# SPDX-License-Identifier: Apache-2.0
+
+# tests that building a package that implicitly depends on `Bridge` can build
+sui move build -p example 2> /dev/null
+
+----- results -----
+success: true
+exit_code: 0
+----- stdout -----
+
+----- stderr -----

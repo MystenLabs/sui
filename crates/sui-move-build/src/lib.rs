@@ -34,15 +34,21 @@ use move_package::{
     },
     package_hooks::{PackageHooks, PackageIdentifier},
     resolution::{dependency_graph::DependencyGraph, resolution_graph::ResolvedGraph},
-    source_package::parsed_manifest::{Dependencies, PackageName},
-    BuildConfig as MoveBuildConfig, LintFlag,
+    source_package::parsed_manifest::{
+        Dependencies, Dependency, DependencyKind, GitInfo, InternalDependency, PackageName,
+    },
+    BuildConfig as MoveBuildConfig,
 };
 use move_package::{
     source_package::parsed_manifest::OnChainInfo, source_package::parsed_manifest::SourceManifest,
 };
 use move_symbol_pool::Symbol;
 use serde_reflection::Registry;
-use sui_package_management::{resolve_published_id, PublishedAtError};
+use sui_package_management::{
+    resolve_published_id,
+    system_package_versions::{SystemPackagesVersion, SYSTEM_GIT_REPO},
+    PublishedAtError,
+};
 use sui_protocol_config::{Chain, ProtocolConfig, ProtocolVersion};
 use sui_types::{
     base_types::ObjectID,
@@ -110,18 +116,17 @@ pub struct BuildConfig {
 impl BuildConfig {
     pub fn new_for_testing() -> Self {
         move_package::package_hooks::register_package_hooks(Box::new(SuiPackageHooks));
-
-        // Note: in the future, consider changing this to dependencies on the local system
-        // packages:
-        let implicit_dependencies = Dependencies::new();
         let install_dir = tempfile::tempdir().unwrap().into_path();
+
         let config = MoveBuildConfig {
             default_flavor: Some(move_compiler::editions::Flavor::Sui),
-            implicit_dependencies,
+
             lock_file: Some(install_dir.join("Move.lock")),
             install_dir: Some(install_dir),
-            lint_flag: LintFlag::LEVEL_NONE,
             silence_warnings: true,
+            lint_flag: move_package::LintFlag::LEVEL_NONE,
+            // TODO: in the future this should probably be changed to a set of local deps:
+            implicit_dependencies: Dependencies::new(),
             ..MoveBuildConfig::default()
         };
         BuildConfig {
@@ -276,9 +281,9 @@ pub fn build_from_resolution_graph(
 
     // compile!
     let result = if print_diags_to_stderr {
-        BuildConfig::compile_package(resolution_graph, &mut std::io::stderr())
+        BuildConfig::compile_package(&resolution_graph, &mut std::io::stderr())
     } else {
-        BuildConfig::compile_package(resolution_graph, &mut std::io::sink())
+        BuildConfig::compile_package(&resolution_graph, &mut std::io::sink())
     };
 
     let (package, fn_info) = result.map_err(|error| SuiError::ModuleBuildFailure {
@@ -295,6 +300,7 @@ pub fn build_from_resolution_graph(
         published_at,
         dependency_ids,
         bytecode_deps,
+        dependency_graph: resolution_graph.graph,
     })
 }
 
@@ -638,15 +644,12 @@ impl CompiledPackage {
         self.dependency_ids.published.values().cloned().collect()
     }
 
-    /// Tree-shake the package's dependencies to remove any that are not referenced in source code.
-    ///
-    /// This algorithm uses the set of root modules as the starting point to retrieve the
-    /// list of used packages that are immediate dependencies of these modules. Essentially, it
-    /// will remove any package that has no immediate module dependency to it.
-    ///
-    /// Then, it will recursively find all the transitive dependencies of the packages in the list
-    /// above and add them to the list of packages that need to be kept as dependencies.
-    pub fn tree_shake(&mut self, with_unpublished_deps: bool) -> Result<(), anyhow::Error> {
+    /// Find the map of packages that are immediate dependencies of the root modules, joined with
+    /// the set of bytecode dependencies.
+    pub fn find_immediate_deps_pkgs_to_keep(
+        &self,
+        with_unpublished_deps: bool,
+    ) -> Result<BTreeMap<Symbol, ObjectID>, anyhow::Error> {
         // Start from the root modules (or all modules if with_unpublished_deps is true as we
         // need to include modules with 0x0 address)
         let root_modules: Vec<_> = if with_unpublished_deps {
@@ -663,7 +666,7 @@ impl CompiledPackage {
         };
 
         // Find the immediate dependencies for each root module and store the package name
-        // in the used_immediate_packages set. This basically prunes the packages that are not used
+        // in the pkgs_to_keep set. This basically prunes the packages that are not used
         // based on the modules information.
         let mut pkgs_to_keep: BTreeSet<Symbol> = BTreeSet::new();
         let module_to_pkg_name: BTreeMap<_, _> = self
@@ -671,7 +674,6 @@ impl CompiledPackage {
             .all_modules()
             .map(|m| (m.unit.module.self_id(), m.unit.package_name))
             .collect();
-        let mut used_immediate_packages: BTreeSet<Symbol> = BTreeSet::new();
 
         for module in &root_modules {
             let immediate_deps = module.module.immediate_dependencies();
@@ -680,32 +682,49 @@ impl CompiledPackage {
                     let Some(pkg_name) = pkg_name else {
                         bail!("Expected a package name but it's None")
                     };
-                    used_immediate_packages.insert(*pkg_name);
+                    pkgs_to_keep.insert(*pkg_name);
                 }
             }
         }
-
-        // Next, for each package from used_immediate_packages set, we need to find all the
-        // transitive dependencies. Those trans dependencies need to be included in the final list
-        // of package dependencies (note that the pkg itself will be added by the transitive deps
-        // function)
-        used_immediate_packages.iter().for_each(|pkg| {
-            self.dependency_graph
-                .add_transitive_dependencies(pkg, &mut pkgs_to_keep)
-        });
 
         // If a package depends on another published package that has only bytecode without source
         // code available, we need to include also that package as dep.
         pkgs_to_keep.extend(self.bytecode_deps.iter().map(|(name, _)| *name));
 
-        // Finally, filter out packages that are not in the union above from the
-        // dependency_ids.published field and return the package ids.
-        self.dependency_ids
+        // Finally, filter out packages that are published and exist in the manifest at the
+        // compilation time but are not referenced in the source code.
+        Ok(self
+            .dependency_ids
+            .clone()
             .published
-            .retain(|pkg_name, _| pkgs_to_keep.contains(pkg_name));
-
-        Ok(())
+            .into_iter()
+            .filter(|(pkg_name, _)| pkgs_to_keep.contains(pkg_name))
+            .collect())
     }
+}
+
+/// Create a set of [Dependencies] from a [SystemPackagesVersion]; the dependencies are override git
+/// dependencies to the specific revision given by the [SystemPackagesVersion]
+pub fn implicit_deps(packages: &SystemPackagesVersion) -> Dependencies {
+    packages
+        .packages
+        .iter()
+        .map(|package| {
+            (
+                package.package_name.clone().into(),
+                Dependency::Internal(InternalDependency {
+                    kind: DependencyKind::Git(GitInfo {
+                        git_url: SYSTEM_GIT_REPO.into(),
+                        git_rev: packages.git_revision.clone().into(),
+                        subdir: package.repo_path.clone().into(),
+                    }),
+                    subst: None,
+                    digest: None,
+                    dep_override: true,
+                }),
+            )
+        })
+        .collect()
 }
 
 impl GetModule for CompiledPackage {
