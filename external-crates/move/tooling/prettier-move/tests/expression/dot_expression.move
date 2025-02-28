@@ -100,6 +100,17 @@ fun dot_comments() {
     expression
         // lead
         .div(50); // trailing
+
+    // dot comment preserves trailing comment in a list of a single element
+    call(
+        b"".to_string(), // comment kept
+    );
+
+    // leading comment is preserved in a list of a single element
+    call(
+        // leading comment
+        b"".to_string(),
+    )
 }
 
 
