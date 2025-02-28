@@ -302,6 +302,7 @@ pub fn run_model_builder_with_options_and_compilation_flags<
 
     env.add_stub_prover_module();
     env.add_stub_spec_module();
+    env.add_stub_log_module();
 
     Ok(env)
 }

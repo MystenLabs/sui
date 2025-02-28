@@ -1840,6 +1840,7 @@ impl GlobalEnv {
 
     const PROVER_MODULE_NAME: &'static str = "prover";
     const SPEC_MODULE_NAME: &'static str = "ghost";
+    const LOG_MODULE_NAME: &'static str = "log";
     const REQUIRES_FUNCTION_NAME: &'static str = "requires";
     const ENSURES_FUNCTION_NAME: &'static str = "ensures";
     const ASSERTS_FUNCTION_NAME: &'static str = "asserts";
@@ -1850,6 +1851,9 @@ impl GlobalEnv {
     const HAVOC_GLOBAL_FUNCTION_NAME: &'static str = "havoc_global";
     const INVARIANT_BEGIN_FUNCTION_NAME: &'static str = "invariant_begin";
     const INVARIANT_END_FUNCTION_NAME: &'static str = "invariant_end";
+    const LOG_TEXT_FUNCTION_NAME: &'static str = "text";
+    const LOG_VAR_FUNCTION_NAME: &'static str = "var";
+    const LOG_GHOST_FUNCTION_NAME: &'static str = "ghost";
 
     pub fn requires_qid(&self) -> QualifiedId<FunId> {
         self.get_fun_qid(Self::PROVER_MODULE_NAME, Self::REQUIRES_FUNCTION_NAME)
@@ -1897,6 +1901,18 @@ impl GlobalEnv {
         self.get_fun_qid(Self::PROVER_MODULE_NAME, Self::INVARIANT_END_FUNCTION_NAME)
     }
 
+    pub fn log_text_qid(&self) -> QualifiedId<FunId> {
+        self.get_fun_qid(Self::LOG_MODULE_NAME, Self::LOG_TEXT_FUNCTION_NAME)
+    }
+
+    pub fn log_var_qid(&self) -> QualifiedId<FunId> {
+        self.get_fun_qid(Self::LOG_MODULE_NAME, Self::LOG_VAR_FUNCTION_NAME)
+    }
+
+    pub fn log_ghost_qid(&self) -> QualifiedId<FunId> {
+        self.get_fun_qid(Self::LOG_MODULE_NAME, Self::LOG_GHOST_FUNCTION_NAME)
+    }
+
     fn add_stub_module(&mut self, module_symbol: Symbol) {
         if self.find_module_by_name(module_symbol).is_none() {
             self.module_data.push(ModuleData {
@@ -1938,6 +1954,10 @@ impl GlobalEnv {
 
     pub fn add_stub_spec_module(&mut self) {
         self.add_stub_module(self.symbol_pool().make(Self::SPEC_MODULE_NAME))
+    }
+
+    pub fn add_stub_log_module(&mut self) {
+        self.add_stub_module(self.symbol_pool().make(Self::LOG_MODULE_NAME))
     }
 }
 

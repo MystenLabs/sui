@@ -197,6 +197,8 @@ pub enum Operation {
     TraceAbort,
     TraceExp(TraceKind, NodeId),
     TraceGlobalMem(QualifiedInstId<DatatypeId>),
+    TraceMessage(String),
+    TraceGhost(Type),
 
     // Event
     EmitEvent,
@@ -262,6 +264,8 @@ impl Operation {
             Operation::TraceAbort => false,
             Operation::TraceReturn(..) => false,
             Operation::TraceExp(..) => false,
+            Operation::TraceMessage(..) => false,
+            Operation::TraceGhost(..) => false,
             Operation::EmitEvent => false,
             Operation::EventStoreDiverge => false,
             Operation::TraceGlobalMem(..) => false,
@@ -1234,6 +1238,12 @@ impl<'env> fmt::Display for OperationDisplay<'env> {
                     loc.display(self.func_target.global_env())
                 )?
             }
+            TraceMessage(message) => write!(f, "trace_message[{}]", message)?,
+            TraceGhost(ty) => write!(
+                f,
+                "trace_ghost[{}]",
+                ty.display(&self.func_target.global_env().get_type_display_ctx())
+            )?,
             EmitEvent => write!(f, "emit_event")?,
             EventStoreDiverge => write!(f, "event_store_diverge")?,
             TraceGlobalMem(_) => write!(f, "trace_global_mem")?,

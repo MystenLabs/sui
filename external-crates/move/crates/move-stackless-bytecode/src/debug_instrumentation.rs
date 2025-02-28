@@ -18,7 +18,7 @@ use crate::{
     function_data_builder::FunctionDataBuilder,
     function_target::FunctionData,
     function_target_pipeline::{FunctionTargetProcessor, FunctionTargetsHolder},
-    stackless_bytecode::{Bytecode, Operation},
+    stackless_bytecode::{Bytecode, Constant, Operation},
 };
 
 pub struct DebugInstrumenter {}
@@ -54,6 +54,7 @@ impl FunctionTargetProcessor for DebugInstrumenter {
         }
 
         for bc in code {
+            let bc_clone = bc.clone();
             match &bc {
                 Ret(id, locals) => {
                     // Emit trace instructions for return values.
@@ -81,6 +82,46 @@ impl FunctionTargetProcessor for DebugInstrumenter {
                             vec![srcs[0]],
                             None,
                         )
+                    });
+                }
+                Call(_, dests, Operation::Function(mid, fid, _), srcs, _)
+                    if mid.qualified(*fid) == fun_env.module_env.env.log_text_qid() =>
+                {
+                    assert!(dests.is_empty());
+                    assert_eq!(1, srcs.len());
+                    let message = match builder.data.code.last() {
+                        Some(Bytecode::Load(_, last_dest, Constant::ByteArray(bytes)))
+                            if srcs[0] == *last_dest =>
+                        {
+                            String::from_utf8_lossy(bytes).to_string()
+                        }
+                        _ => panic!("log text should be preceded by load byte array"),
+                    };
+                    builder.set_loc_from_attr(bc.get_attr_id());
+                    builder.emit_with(|id| {
+                        Call(id, vec![], Operation::TraceMessage(message), vec![], None)
+                    });
+                }
+                Call(_, dests, Operation::Function(mid, fid, _), srcs, _)
+                    if mid.qualified(*fid) == fun_env.module_env.env.log_var_qid() =>
+                {
+                    assert!(dests.is_empty());
+                    assert_eq!(1, srcs.len());
+                    let var = match builder.data.code.last() {
+                        Some(Bytecode::Call(_, last_dests, Operation::BorrowLoc, last_srcs, _))
+                            if srcs[0] == last_dests[0]
+                                && 1 == last_dests.len()
+                                && 1 == last_srcs.len()
+                                // check the argument is a local
+                                && !fun_env.is_temporary(last_srcs[0]) =>
+                        {
+                            last_srcs[0]
+                        }
+                        _ => panic!("log variable should be preceded by borrow local"),
+                    };
+                    builder.set_loc_from_attr(bc.get_attr_id());
+                    builder.emit_with(|id| {
+                        Call(id, vec![], Operation::TraceLocal(var), vec![var], None)
                     });
                 }
                 _ => {

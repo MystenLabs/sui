@@ -3301,6 +3301,12 @@ impl<'env> FunctionTranslator<'env> {
                             == Bitwise;
                         self.track_exp(*kind, *node_id, srcs[0], bv_flag)
                     }
+                    TraceMessage(message) => emitln!(
+                        self.writer(),
+                        "assume {{:print \"$info():{}\"}} true;",
+                        message,
+                    ),
+                    TraceGhost(_) => todo!(),
                     EmitEvent => {
                         let msg = srcs[0];
                         let handle = srcs[1];
@@ -3383,7 +3389,7 @@ impl<'env> FunctionTranslator<'env> {
                     emitln!(
                         self.writer(),
                         "assert {{:msg \"assert_failed{}: prover::asserts conditions are not complete\"}} !$abort_if_cond;",
-                        self.loc_str(&self.writer().get_loc()),
+                        self.loc_str(&self.fun_target.func_env.get_loc()),
                     );
                 }
                 emitln!(self.writer(), "$abort_code := {};", str_local(*src));
