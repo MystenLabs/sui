@@ -842,9 +842,9 @@ mod tests {
             &ReadWriteOptions::default(),
             false,
         )?;
-        let iter = objects.unbounded_iter();
-        for (k, _v) in iter {
-            after_pruning.insert(k);
+        let iter = objects.safe_iter();
+        for item in iter {
+            after_pruning.insert(item?.0);
         }
         Ok(after_pruning)
     }
