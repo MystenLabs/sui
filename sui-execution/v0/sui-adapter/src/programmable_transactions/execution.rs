@@ -12,11 +12,11 @@ mod checked {
         sync::Arc,
     };
 
-    use crate::execution_mode::ExecutionMode;
     use crate::execution_value::{
         CommandKind, ExecutionState, ObjectContents, ObjectValue, RawValueType, Value,
     };
     use crate::gas_charger::GasCharger;
+    use crate::{execution_mode::ExecutionMode, gas_meter::SuiGasMeter};
     use move_binary_format::{
         compatibility::{Compatibility, InclusionCheck},
         errors::{Location, PartialVMResult, VMResult},
@@ -833,7 +833,7 @@ mod checked {
                 function,
                 type_arguments,
                 serialized_arguments,
-                context.gas_charger.move_gas_status_mut(),
+                &mut SuiGasMeter(context.gas_charger.move_gas_status_mut()),
             )
             .map_err(|e| context.convert_vm_error(e))?;
 
@@ -902,7 +902,7 @@ mod checked {
                 AccountAddress::from(package_id),
                 // TODO: publish_module_bundle() currently doesn't charge gas.
                 // Do we want to charge there?
-                context.gas_charger.move_gas_status_mut(),
+                &mut SuiGasMeter(context.gas_charger.move_gas_status_mut()),
             )
             .map_err(|e| context.convert_vm_error(e))?;
 
