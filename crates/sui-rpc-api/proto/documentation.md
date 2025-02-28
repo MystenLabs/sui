@@ -1528,7 +1528,7 @@ Response message for `NodeService.GetTransactio`n.
 | transaction | [sui.types.Transaction](#sui-types-Transaction) | optional | The transaction itself. |
 | transaction_bcs | [sui.types.Bcs](#sui-types-Bcs) | optional | The [Transaction](https://docs.rs/sui-sdk-types/latest/sui_sdk_types/struct.Transaction.html) encoded as BCS bytes. |
 | signatures | [sui.types.UserSignature](#sui-types-UserSignature) | repeated | List of user signatures that are used to authorize the execution of this transaction. |
-| signatures_bytes | [bytes](#bytes) | repeated | List of [UserSignature](https://docs.rs/sui-sdk-types/latest/sui_sdk_types/enum.UserSignature.html) encoded as bytes. |
+| signatures_bytes | [bytes](#bytes) | repeated | List of [UserSignature](https://docs.rs/sui-sdk-types/latest/sui_sdk_types/enum.UserSignature.html)s encoded as bytes. |
 | effects | [sui.types.TransactionEffects](#sui-types-TransactionEffects) | optional | The `TransactionEffects` for this transaction. |
 | effects_bcs | [sui.types.Bcs](#sui-types-Bcs) | optional | The [TransactionEffects](https://docs.rs/sui-sdk-types/latest/sui_sdk_types/struct.TransactionEffects.html) for this transaction encoded as BCS bytes. |
 | events | [sui.types.TransactionEvents](#sui-types-TransactionEvents) | optional | The `TransactionEvents` for this transaction.
