@@ -4454,7 +4454,7 @@ async fn make_test_transaction(
     arg_value: u64,
     gas_price: Option<u64>,
     gas_budget: Option<u64>,
-) -> VerifiedCertificate {
+) -> SuiResult<VerifiedCertificate> {
     // Make a sample transaction.
     let module = "object_basics";
     let function = "set_value";
@@ -4504,16 +4504,15 @@ async fn make_test_transaction(
         let transaction = epoch_store.verify_transaction(transaction).unwrap();
         let response = authority
             .handle_transaction(&epoch_store, transaction.clone())
-            .await
-            .unwrap();
+            .await?;
         let vote = response.status.into_signed_for_testing();
         sigs.push(vote.clone());
         if let Ok(cert) =
             CertifiedTransaction::new(transaction.clone().into_message(), sigs.clone(), &committee)
         {
-            return cert
+            return Ok(cert
                 .try_into_verified_for_testing(&committee, &Default::default())
-                .unwrap();
+                .unwrap());
         }
     }
 
@@ -4556,7 +4555,8 @@ async fn prepare_authority_and_shared_object_cert() -> (
         None,
         None,
     )
-    .await;
+    .await
+    .unwrap();
     (
         authority,
         certificate,
@@ -4619,6 +4619,53 @@ async fn test_shared_object_transaction_ok() {
     assert_eq!(shared_object_version, SequenceNumber::from(2));
 }
 
+#[tokio::test(flavor = "current_thread", start_paused = true)]
+async fn test_missing_shared_object() {
+    let (sender, keypair): (_, AccountKeyPair) = get_key_pair();
+
+    // Initialize an authority with a (owned) gas object and a shared object.
+    let gas_object_id = ObjectID::random();
+    let gas_object = Object::with_id_owner_for_testing(gas_object_id, sender);
+    let gas_object_ref = gas_object.compute_object_reference();
+
+    let shared_object_id = ObjectID::random();
+    let shared_object = {
+        let obj = MoveObject::new_gas_coin(OBJECT_START_VERSION, shared_object_id, 10);
+        let owner = Owner::Shared {
+            initial_shared_version: obj.version(),
+        };
+        Object::new_move(obj, owner, TransactionDigest::genesis_marker())
+    };
+    let initial_shared_version = shared_object.version();
+
+    // don't create the shared object!
+    let authority = init_state_with_objects(vec![gas_object]).await;
+
+    let err = make_test_transaction(
+        &sender,
+        &keypair,
+        &[],
+        &[(shared_object_id, initial_shared_version, true)],
+        &gas_object_ref,
+        &[&authority],
+        16,
+        None,
+        None,
+    )
+    .await
+    .unwrap_err();
+
+    assert_eq!(
+        err,
+        SuiError::UserInputError {
+            error: UserInputError::ObjectNotFound {
+                object_id: shared_object_id,
+                version: None
+            }
+        }
+    );
+}
+
 // Tests that process_consensus_transactions_and_commit_boundary() will add the consensus commit prologue transaction
 // to the transactions in the current consensus commit. It will be the first transaction in the batch and
 // the first one that updates the system clock object.
@@ -4657,7 +4704,8 @@ async fn test_consensus_commit_prologue_generation() {
             None,
             None,
         )
-        .await,
+        .await
+        .unwrap(),
     );
 
     let tx_data = TransactionData::new_move_call(
@@ -4786,7 +4834,8 @@ async fn test_consensus_message_processed() {
             None,
             None,
         )
-        .await;
+        .await
+        .unwrap();
         let transaction_digest = certificate.digest();
 
         // on authority1, we always sequence via consensus
@@ -5801,7 +5850,8 @@ async fn test_consensus_handler_per_object_congestion_control(
                 Some(10_000_000)
             },
         )
-        .await;
+        .await
+        .unwrap();
         certificates.push(certificate);
     }
 
@@ -5871,7 +5921,8 @@ async fn test_consensus_handler_per_object_congestion_control(
             Some(1000),
             Some(10_000_000),
         )
-        .await;
+        .await
+        .unwrap();
         new_certificates.push(certificate);
     }
 
@@ -6019,7 +6070,8 @@ async fn test_consensus_handler_congestion_control_transaction_cancellation() {
             Some(2000),
             Some(100_000_000),
         )
-        .await;
+        .await
+        .unwrap();
         certificates.push(certificate);
     }
 
@@ -6040,7 +6092,8 @@ async fn test_consensus_handler_congestion_control_transaction_cancellation() {
         Some(1000),
         Some(100_000_000),
     )
-    .await;
+    .await
+    .unwrap();
     certificates.push(cancelled_txn.clone());
 
     // We shuffle the transactions so that transactions in the list do not have any order in terms of gas price.
