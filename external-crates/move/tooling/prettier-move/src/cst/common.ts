@@ -5,7 +5,7 @@ import { Node } from '..';
 import { MoveOptions, printFn, treeFn } from '../printer';
 import { AstPath, doc, Doc } from 'prettier';
 import { list, printIdentifier, shouldBreakFirstChild } from '../utilities';
-const { group, join, line } = doc.builders;
+const { group, join, line, indent, hardline } = doc.builders;
 
 /**
  * Creates a callback function to print common nodes.
@@ -159,10 +159,24 @@ export function printRefType(path: AstPath<Node>, _opt: MoveOptions, print: prin
  */
 function printArgList(path: AstPath<Node>, options: MoveOptions, print: printFn): Doc {
 	const nodes = path.node.nonFormattingChildren;
-	const children = path.map(print, 'nonFormattingChildren');
 
 	if (nodes.length === 1 && nodes[0]!.isBreakableExpression) {
-		return ['(', children[0]!, ')'];
+		const child = nodes[0]!;
+		const shouldBreak =
+			nodes[0]?.trailingComment?.type === 'line_comment' ||
+			nodes[0]?.leadingComment.some((e) => e.type === 'line_comment');
+
+		if (shouldBreak) {
+			return [
+				'(',
+				indent(hardline),
+				indent(path.call(print, 'nonFormattingChildren', 0)),
+				hardline,
+				')',
+			];
+		}
+
+		return ['(', path.call(print, 'nonFormattingChildren', 0), ')'];
 	}
 
 	return group(list({ path, print, options, open: '(', close: ')' }), {
