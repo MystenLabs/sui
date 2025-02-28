@@ -103,6 +103,7 @@ pub(crate) struct NodeMetrics {
     pub(crate) proposed_block_transactions: Histogram,
     pub(crate) proposed_block_ancestors: Histogram,
     pub(crate) proposed_block_ancestors_depth: HistogramVec,
+    pub(crate) proposed_block_ancestors_timestamp_drift_ms: IntCounterVec,
     pub(crate) highest_verified_authority_round: IntGaugeVec,
     pub(crate) lowest_verified_authority_round: IntGaugeVec,
     pub(crate) block_proposal_interval: Histogram,
@@ -231,6 +232,12 @@ impl NodeMetrics {
                 "proposed_block_ancestors",
                 "Number of ancestors in proposed blocks",
                 exponential_buckets(1.0, 1.4, 20).unwrap(),
+                registry,
+            ).unwrap(),
+            proposed_block_ancestors_timestamp_drift_ms: register_int_counter_vec_with_registry!(
+                "proposed_block_ancestors_timestamp_drift_ms",
+                "The drift in ms of ancestors' timestamps included in newly proposed blocks",
+                &["authority"],
                 registry,
             ).unwrap(),
             proposed_block_ancestors_depth: register_histogram_vec_with_registry!(

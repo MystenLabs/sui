@@ -153,35 +153,27 @@ impl Linearizer {
         last_commit_timestamp_ms: BlockTimestampMs,
         to_commit: &[VerifiedBlock],
     ) -> BlockTimestampMs {
-        let timestamp_ms =
-            if context.protocol_config.consensus_median_based_timestamp() && to_commit.len() > 1 {
-                // We are calculating the median based timestamp only when the flag is enabled and there are more than one blocks to commit.
-                // The only case to have one block to commit would be when we have only one authority in commitee and the only block that gets committed
-                // is the leader's.
-
-                // Attention should be paid that we are calculating the timestamp only using the leader's committed strong ancestors which should be all the blocks
-                // or round leader.round - 1. Not necessary to search and recheck here the leader's ancestors as by the protocol rules it's impossible to commit any block
-                // of round leader.round - 1 unless it is a leader's strong ancestor.
-                let timestamps = to_commit
-                    .iter()
-                    .filter_map(|block| {
-                        if block.round() == leader_block.round() - 1 {
-                            Some(block.timestamp_ms())
-                        } else {
-                            None
-                        }
-                    })
-                    .collect::<Vec<_>>();
-
-                median(timestamps).unwrap_or_else(|| {
-                    panic!(
-                        "Failed to calculate median timestamp for linearized DAG: {:?}",
-                        to_commit
-                    )
+        let timestamp_ms = if context.protocol_config.consensus_median_based_timestamp() {
+            // Attention should be paid that we are calculating the timestamp only using the leader's committed strong ancestors which should be all the blocks
+            // or round leader.round - 1. Not necessary to search and recheck here the leader's ancestors as by the protocol rules it's impossible to commit any block
+            // of round leader.round - 1 unless it is a leader's strong ancestor.
+            let timestamps = to_commit
+                .iter()
+                .filter_map(|block| {
+                    if block.round() == leader_block.round() - 1 {
+                        Some(block.timestamp_ms())
+                    } else {
+                        None
+                    }
                 })
-            } else {
-                leader_block.timestamp_ms()
-            };
+                .collect::<Vec<_>>();
+
+            // The only reason for the median to be `None` would be when there is only one authority in commitee and the only block that gets committed is the leader's.
+            // In this case we just return the leader's timestamp.
+            median(timestamps).unwrap_or(leader_block.timestamp_ms())
+        } else {
+            leader_block.timestamp_ms()
+        };
 
         // Always make sure that commit timestamps are monotonic, so override if necessary.
         timestamp_ms.max(last_commit_timestamp_ms)
