@@ -287,7 +287,7 @@ impl BlockManager {
         let blocks_to_accept = if self
             .context
             .protocol_config
-            .consensus_median_based_timestamp()
+            .consensus_median_based_commit_timestamp()
         {
             unsuspended_blocks.into_iter().collect::<Vec<_>>()
         } else {
@@ -1272,7 +1272,7 @@ mod tests {
         let (mut context, _key_pairs) = Context::new_for_test(4);
         context
             .protocol_config
-            .set_consensus_median_based_timestamp(false);
+            .set_consensus_median_based_commit_timestamp_for_testing(false);
         let context = Arc::new(context);
 
         // create a DAG of rounds 1 ~ 5.
@@ -1425,7 +1425,7 @@ mod tests {
         let (mut context, _key_pairs) = Context::new_for_test(4);
         context
             .protocol_config
-            .set_consensus_median_based_timestamp(median_based_timestamp);
+            .set_consensus_median_based_commit_timestamp_for_testing(median_based_timestamp);
 
         let context = Arc::new(context);
         let store = Arc::new(MemStore::new());

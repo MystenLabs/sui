@@ -636,7 +636,7 @@ impl<C: NetworkClient> CommitSyncer<C> {
         if !inner
             .context
             .protocol_config
-            .consensus_median_based_timestamp()
+            .consensus_median_based_commit_timestamp()
         {
             // 8. Make sure fetched block (and votes) timestamps are lower than current time.
             for block in fetched_blocks.values().chain(vote_blocks.iter()) {
@@ -703,7 +703,7 @@ impl<C: NetworkClient> CommitSyncer<C> {
         if inner
             .context
             .protocol_config
-            .consensus_median_based_timestamp()
+            .consensus_median_based_commit_timestamp()
         {
             if let Some(commit) = commits.last() {
                 let now_ms = inner.context.clock.timestamp_utc_ms();
