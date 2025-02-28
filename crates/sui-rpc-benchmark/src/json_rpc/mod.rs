@@ -5,7 +5,7 @@ use crate::config::BenchmarkConfig;
 use anyhow::Result;
 use request_loader::load_json_rpc_requests;
 use runner::run_queries;
-use std::time::Duration;
+use std::{collections::HashSet, time::Duration};
 use tracing::info;
 
 pub mod request_loader;
@@ -16,11 +16,13 @@ pub async fn run_benchmark(
     file_path: &str,
     concurrency: usize,
     duration_secs: u64,
+    json_rpc_methods_to_skip: HashSet<String>,
 ) -> Result<()> {
     let config = BenchmarkConfig {
         concurrency,
         duration: Duration::from_secs(duration_secs),
         json_rpc_file_path: Some(file_path.to_string()),
+        json_rpc_methods_to_skip,
     };
 
     info!("Loading JSON RPC requests from {}", file_path);
