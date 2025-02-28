@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"struct":["object_id","object_version","serialized_object","star"]};

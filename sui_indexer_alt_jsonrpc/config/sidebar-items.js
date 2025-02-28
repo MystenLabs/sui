@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"struct":["BigtableConfig","CoinsConfig","CoinsLayer","NameServiceConfig","NameServiceLayer","ObjectsConfig","ObjectsLayer","PackageResolverLayer","RpcConfig","RpcLayer","TransactionsConfig","TransactionsLayer"]};

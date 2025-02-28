@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["LiveObject"],"struct":["AuthorityPerpetualTables","AuthorityPerpetualTablesConfigurator","AuthorityPerpetualTablesOptions","AuthorityPerpetualTablesReadOnly","AuthorityPrunerTables","AuthorityPrunerTablesConfigurator","AuthorityPrunerTablesReadOnly","LiveSetIter"]};
