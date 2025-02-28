@@ -5,11 +5,13 @@
 //! This module translates the bytecode of a module to Boogie code.
 
 use std::{
+    cell::RefCell,
     collections::{BTreeMap, BTreeSet},
     iter,
     str::FromStr,
 };
 
+use bimap::btree::BiBTreeMap;
 use codespan::LineIndex;
 use itertools::Itertools;
 #[allow(unused_imports)]
@@ -76,6 +78,7 @@ pub struct BoogieTranslator<'env> {
     writer: &'env CodeWriter,
     spec_translator: SpecTranslator<'env>,
     targets: &'env FunctionTargetsHolder,
+    types: &'env RefCell<BiBTreeMap<Type, String>>,
 }
 
 pub struct FunctionTranslator<'env> {
@@ -103,12 +106,14 @@ impl<'env> BoogieTranslator<'env> {
         options: &'env BoogieOptions,
         targets: &'env FunctionTargetsHolder,
         writer: &'env CodeWriter,
+        types: &'env RefCell<BiBTreeMap<Type, String>>,
     ) -> Self {
         Self {
             env,
             options,
             targets,
             writer,
+            types,
             spec_translator: SpecTranslator::new(writer, env, options),
         }
     }
@@ -835,8 +840,22 @@ impl<'env> StructTranslator<'env> {
         // Set the location to internal as default.
         writer.set_location(&env.internal_loc());
 
-        // Emit data type
         let struct_name = boogie_struct_name(struct_env, self.type_inst);
+        // Record datatype
+        self.parent
+            .types
+            .borrow_mut()
+            .insert_no_overwrite(
+                Type::Datatype(
+                    struct_env.module_env.get_id(),
+                    struct_env.get_id(),
+                    self.type_inst.to_owned(),
+                ),
+                struct_name.clone(),
+            )
+            .unwrap();
+
+        // Emit data type
         emitln!(writer, "datatype {} {{", struct_name);
 
         // Emit constructor
@@ -3306,7 +3325,19 @@ impl<'env> FunctionTranslator<'env> {
                         "assume {{:print \"$info():{}\"}} true;",
                         message,
                     ),
-                    TraceGhost(_) => todo!(),
+                    TraceGhost(ghost_type, value_type) => {
+                        let instantiated_ghost_type = ghost_type.instantiate(self.type_inst);
+                        let instantiated_value_type = value_type.instantiate(self.type_inst);
+                        emitln!(
+                            self.writer(),
+                            "assume {{:print \"$track_ghost({}):\", {}}} true;",
+                            boogie_type(self.parent.env, &instantiated_ghost_type),
+                            boogie_spec_global_var_name(
+                                self.parent.env,
+                                &vec![instantiated_ghost_type, instantiated_value_type]
+                            ),
+                        )
+                    }
                     EmitEvent => {
                         let msg = srcs[0];
                         let handle = srcs[1];

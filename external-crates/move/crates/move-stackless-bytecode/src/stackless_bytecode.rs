@@ -198,7 +198,7 @@ pub enum Operation {
     TraceExp(TraceKind, NodeId),
     TraceGlobalMem(QualifiedInstId<DatatypeId>),
     TraceMessage(String),
-    TraceGhost(Type),
+    TraceGhost(Type, Type),
 
     // Event
     EmitEvent,
@@ -1239,10 +1239,11 @@ impl<'env> fmt::Display for OperationDisplay<'env> {
                 )?
             }
             TraceMessage(message) => write!(f, "trace_message[{}]", message)?,
-            TraceGhost(ty) => write!(
+            TraceGhost(ghost_type, value_type) => write!(
                 f,
-                "trace_ghost[{}]",
-                ty.display(&self.func_target.global_env().get_type_display_ctx())
+                "trace_ghost[{}, {}]",
+                ghost_type.display(&self.func_target.global_env().get_type_display_ctx()),
+                value_type.display(&self.func_target.global_env().get_type_display_ctx()),
             )?,
             EmitEvent => write!(f, "emit_event")?,
             EventStoreDiverge => write!(f, "event_store_diverge")?,

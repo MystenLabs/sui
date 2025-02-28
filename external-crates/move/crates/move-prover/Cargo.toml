@@ -17,6 +17,7 @@ move-stackless-bytecode.workspace = true
 
 # external dependencies
 anyhow.workspace = true
+bimap.workspace = true
 clap.workspace = true
 codespan-reporting.workspace = true
 itertools.workspace = true

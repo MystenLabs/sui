@@ -12,6 +12,7 @@ use std::{
 };
 
 use anyhow::anyhow;
+use bimap::btree::BiBTreeMap;
 use codespan::{ByteIndex, ColumnIndex, LineIndex, Location, Span};
 use codespan_reporting::diagnostic::{Diagnostic, Label};
 use itertools::Itertools;
@@ -54,6 +55,7 @@ pub struct BoogieWrapper<'env> {
     pub targets: &'env FunctionTargetsHolder,
     pub writer: &'env CodeWriter,
     pub options: &'env BoogieOptions,
+    pub types: &'env BiBTreeMap<Type, String>,
 }
 
 /// Output of a boogie run.
@@ -100,6 +102,7 @@ pub enum TraceEntry {
     SubExp(NodeId, ModelValue),
     GlobalMem(NodeId, ModelValue),
     InfoLine(String),
+    Ghost(Type, ModelValue),
 }
 
 // Error message matching
@@ -396,6 +399,14 @@ impl<'env> BoogieWrapper<'env> {
                     InfoLine(info_line) => {
                         // information that should be displayed to the user
                         display.push(format!("    {}", info_line));
+                    }
+                    TraceEntry::Ghost(ty, value) if error.model.is_some() => {
+                        let var_name =
+                            format!("ghost<{}>", ty.display(&self.env.get_type_display_ctx()));
+                        let pretty =
+                            // value.pretty_or_raw(self, error.model.as_ref().unwrap(), ty);
+                            PrettyDoc::text(format!("<? {:?}>", value));
+                        display.extend(self.make_trace_entry(var_name, pretty));
                     }
                     _ => {}
                 }
@@ -700,6 +711,10 @@ impl<'env> BoogieWrapper<'env> {
                 Some(info_line) => Ok(TraceEntry::InfoLine(info_line.trim().to_string())),
                 None => Ok(TraceEntry::InfoLine("".to_string())),
             },
+            "track_ghost" => Ok(TraceEntry::Ghost(
+                self.extract_type(args)?,
+                self.extract_value(value)?,
+            )),
             _ => Err(ModelParseError::new(&format!(
                 "unrecognized augmented trace entry `{}`",
                 name
@@ -755,6 +770,13 @@ impl<'env> BoogieWrapper<'env> {
             return Ok((fun, idx));
         }
         Err(ModelParseError("invalid function id and index".to_string()))
+    }
+
+    fn extract_type(&self, args: &str) -> Result<Type, ModelParseError> {
+        self.types
+            .get_by_right(args)
+            .map(|t| t.clone())
+            .ok_or(ModelParseError("invalid type".to_string()))
     }
 
     fn extract_value(&self, value: Option<&str>) -> Result<ModelValue, ModelParseError> {

@@ -124,6 +124,23 @@ impl FunctionTargetProcessor for DebugInstrumenter {
                         Call(id, vec![], Operation::TraceLocal(var), vec![var], None)
                     });
                 }
+                Call(_, dests, Operation::Function(mid, fid, tys), srcs, _)
+                    if mid.qualified(*fid) == fun_env.module_env.env.log_ghost_qid() =>
+                {
+                    assert!(dests.is_empty());
+                    assert!(srcs.is_empty());
+                    assert_eq!(2, tys.len());
+                    builder.set_loc_from_attr(bc.get_attr_id());
+                    builder.emit_with(|id| {
+                        Call(
+                            id,
+                            vec![],
+                            Operation::TraceGhost(tys[0].clone(), tys[1].clone()),
+                            vec![],
+                            None,
+                        )
+                    });
+                }
                 _ => {
                     builder.set_loc_from_attr(bc.get_attr_id());
                     builder.emit(bc.clone());

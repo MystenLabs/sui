@@ -4,8 +4,11 @@
 
 #![forbid(unsafe_code)]
 
+use std::cell::RefCell;
+
 use crate::cli::Options;
 use anyhow::anyhow;
+use bimap::btree::BiBTreeMap;
 use codespan_reporting::{
     diagnostic::Severity,
     term::termcolor::{Buffer, ColorChoice, StandardStream, WriteColor},
@@ -16,7 +19,7 @@ use move_compiler::shared::PackagePaths;
 use move_docgen::Docgen;
 use move_model::{
     code_writer::CodeWriter, model::GlobalEnv, parse_addresses_from_options,
-    run_model_builder_with_options,
+    run_model_builder_with_options, ty::Type,
 };
 use move_prover_boogie_backend::{
     add_prelude, boogie_wrapper::BoogieWrapper, bytecode_translator::BoogieTranslator,
@@ -143,7 +146,7 @@ pub fn run_move_prover_with_model<W: WriteColor>(
 
     // Generate boogie code
     let now = Instant::now();
-    let code_writer = generate_boogie(env, &options, &targets)?;
+    let (code_writer, types) = generate_boogie(env, &options, &targets)?;
     let gen_duration = now.elapsed();
     check_errors(
         env,
@@ -154,7 +157,7 @@ pub fn run_move_prover_with_model<W: WriteColor>(
 
     // Verify boogie code.
     let now = Instant::now();
-    verify_boogie(env, &options, &targets, code_writer)?;
+    verify_boogie(env, &options, &targets, code_writer, types)?;
     let verify_duration = now.elapsed();
 
     // Report durations.
@@ -195,12 +198,13 @@ pub fn generate_boogie(
     env: &GlobalEnv,
     options: &Options,
     targets: &FunctionTargetsHolder,
-) -> anyhow::Result<CodeWriter> {
+) -> anyhow::Result<(CodeWriter, BiBTreeMap<Type, String>)> {
     let writer = CodeWriter::new(env.internal_loc());
+    let types = RefCell::new(BiBTreeMap::new());
     add_prelude(env, &options.backend, &writer)?;
-    let mut translator = BoogieTranslator::new(env, &options.backend, targets, &writer);
+    let mut translator = BoogieTranslator::new(env, &options.backend, targets, &writer, &types);
     translator.translate();
-    Ok(writer)
+    Ok((writer, types.into_inner()))
 }
 
 pub fn verify_boogie(
@@ -208,6 +212,7 @@ pub fn verify_boogie(
     options: &Options,
     targets: &FunctionTargetsHolder,
     writer: CodeWriter,
+    types: BiBTreeMap<Type, String>,
 ) -> anyhow::Result<()> {
     let output_existed = std::path::Path::new(&options.output_path).exists();
     debug!("writing boogie to `{}`", &options.output_path);
@@ -218,6 +223,7 @@ pub fn verify_boogie(
             targets,
             writer: &writer,
             options: &options.backend,
+            types: &types,
         };
         boogie.call_boogie_and_verify_output(&options.output_path)?;
         if !output_existed && !options.backend.keep_artifacts {

@@ -9,6 +9,7 @@ edition = "2021"
 
 [dependencies]
 async-trait.workspace = true
+bimap.workspace = true
 move-stackless-bytecode.workspace = true
 move-command-line-common.workspace = true
 move-compiler.workspace = true

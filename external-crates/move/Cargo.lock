@@ -2335,6 +2335,7 @@ name = "move-prover"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "bimap",
  "clap 4.5.17",
  "codespan-reporting",
  "datatest-stable",
@@ -2362,6 +2363,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "async-trait",
+ "bimap",
  "codespan",
  "codespan-reporting",
  "futures",
