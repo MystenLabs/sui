@@ -9,6 +9,7 @@ use std::path::PathBuf;
 use std::sync::{Arc, RwLock};
 use std::time::Duration;
 use std::{ffi::OsString, fs, path::Path, process::Command};
+use sui_package_management::system_package_versions::latest_system_packages;
 use tokio::sync::oneshot::Sender;
 
 use anyhow::{anyhow, bail};
@@ -30,7 +31,7 @@ use move_core_types::account_address::AccountAddress;
 use move_package::{BuildConfig as MoveBuildConfig, LintFlag};
 use move_symbol_pool::Symbol;
 use sui_move::manage_package::resolve_lock_file_path;
-use sui_move_build::{BuildConfig, SuiPackageHooks};
+use sui_move_build::{implicit_deps, BuildConfig, SuiPackageHooks};
 use sui_sdk::rpc_types::SuiTransactionBlockEffects;
 use sui_sdk::types::base_types::ObjectID;
 use sui_sdk::SuiClientBuilder;
@@ -163,6 +164,7 @@ pub async fn verify_package(
         resolve_lock_file_path(MoveBuildConfig::default(), Some(package_path.as_ref()))?;
     config.lint_flag = LintFlag::LEVEL_NONE;
     config.silence_warnings = true;
+    config.implicit_dependencies = implicit_deps(latest_system_packages());
     let build_config = BuildConfig {
         config,
         run_bytecode_verifier: false, /* no need to run verifier if code is on-chain */
