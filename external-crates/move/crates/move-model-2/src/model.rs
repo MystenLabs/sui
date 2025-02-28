@@ -366,11 +366,15 @@ impl<'a, const HAS_SOURCE: usize> Module<'a, HAS_SOURCE> {
         self.maybe_function(name).unwrap()
     }
 
-    pub fn datatype(&self, name: impl Into<Symbol>) -> Option<Datatype<'_, HAS_SOURCE>> {
+    pub fn maybe_datatype(&self, name: impl Into<Symbol>) -> Option<Datatype<'_, HAS_SOURCE>> {
         let name = name.into();
         self.maybe_struct(name)
             .map(Datatype::Struct)
             .or_else(|| self.maybe_enum(name).map(Datatype::Enum))
+    }
+
+    pub fn datatype(&self, name: impl Into<Symbol>) -> Datatype<'_, HAS_SOURCE> {
+        self.maybe_datatype(name).unwrap()
     }
 
     pub fn structs(&self) -> impl Iterator<Item = Struct<'a, HAS_SOURCE>> + '_ {
@@ -383,6 +387,12 @@ impl<'a, const HAS_SOURCE: usize> Module<'a, HAS_SOURCE> {
 
     pub fn functions(&self) -> impl Iterator<Item = Function<'a, HAS_SOURCE>> + '_ {
         self.data.functions.keys().map(|name| self.function(*name))
+    }
+
+    pub fn datatypes(&self) -> impl Iterator<Item = Datatype<'a, HAS_SOURCE>> + '_ {
+        self.structs()
+            .map(Datatype::Struct)
+            .chain(self.enums().map(Datatype::Enum))
     }
 
     pub fn compiled(&self) -> &'a compiled::Module {
