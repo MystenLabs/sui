@@ -30,6 +30,15 @@ static METHOD_CURSOR_POSITIONS: phf::Map<&'static str, usize> = phf_map! {
     "suix_getAllCoins" => 1,
 };
 
+static METHOD_LENGTHS: phf::Map<&'static str, usize> = phf_map! {
+    // based on function headers in crates/sui-json-rpc-api/src/indexer.rs
+    "suix_getOwnedObjects" => 4,
+    "suix_queryTransactionBlocks" => 4,
+    // based on function headers in crates/sui-json-rpc-api/src/coin.rs
+    "suix_getCoins" => 4,
+    "suix_getAllCoins" => 3,
+};
+
 /// Statistics for a single JSON RPC method
 #[derive(Clone, Default)]
 pub struct PerMethodStats {
@@ -100,8 +109,10 @@ impl PaginationCursorState {
         if let Some(param_to_modify) = key_params.get_mut(*cursor_idx) {
             *param_to_modify = Value::Null;
         } else {
-            // cursor parameter is omitted for this method, thus do nothing
-            debug!("cursor parameter is omitted for method {}", method);
+            let method_length = METHOD_LENGTHS
+                .get(method)
+                .with_context(|| format!("method {} not found in method lengths", method))?;
+            key_params.resize(*method_length, Value::Null);
         }
         Ok((method.to_string(), key_params))
     }
