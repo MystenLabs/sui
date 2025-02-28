@@ -104,7 +104,9 @@ impl TreeShakingTest {
         let temp_dir = tempfile::Builder::new().prefix("tree_shaking").tempdir()?;
         std::fs::create_dir_all(temp_dir.path()).unwrap();
         let tests_dir = PathBuf::from(TEST_DATA_DIR);
+        let framework_pkgs = PathBuf::from("../sui-framework/packages");
         copy_dir_all(tests_dir, temp_dir.path())?;
+        copy_dir_all(framework_pkgs, temp_dir.path().join("system-packages"))?;
 
         Ok(Self {
             test_cluster,
@@ -1877,7 +1879,7 @@ async fn test_package_publish_nonexistent_dependency() -> Result<(), anyhow::Err
 
     let err = result.unwrap_err().to_string();
     assert!(
-        err.contains("Dependency object does not exist or was deleted"),
+        err.contains("Package Nonexistent with object ID 0x0000000000000000000000000000000000000000000000000000000000abc123 does not exist"),
         "{}",
         err
     );
@@ -4330,7 +4332,7 @@ async fn test_tree_shaking_package_with_unused_dependency() -> Result<(), anyhow
 }
 
 #[sim_test]
-async fn test_tree_shaking_package_with_transitive_dependencies() -> Result<(), anyhow::Error> {
+async fn test_tree_shaking_package_with_transitive_dependencies1() -> Result<(), anyhow::Error> {
     let mut test = TreeShakingTest::new().await?;
 
     // Publish packages A and B
@@ -4516,6 +4518,36 @@ async fn test_tree_shaking_package_deps_on_pkg_upgrade_1() -> Result<(), anyhow:
     assert!(linkage_table_i
         .get(&package_a_id)
         .is_some_and(|x| x.upgraded_id == package_a_v2_id), "Package I should depend on A_v2 after upgrade, and the UpgradeInfo should have matching ids");
+
+    Ok(())
+}
+
+#[sim_test]
+async fn test_tree_shaking_package_system_deps() -> Result<(), anyhow::Error> {
+    let mut test = TreeShakingTest::new().await?;
+
+    // Publish package J and verify empty linkage table
+    let (package_j_id, _) = test.publish_package("J_system_deps", false).await?;
+    let move_pkg_j = fetch_move_packages(&test.client, vec![package_j_id]).await;
+    let linkage_table_j = move_pkg_j.first().unwrap().linkage_table();
+    assert!(
+        linkage_table_j.is_empty(),
+        "Package J should have no dependencies"
+    );
+
+    // sui move build --dump-bytecode-as-base64 should also yield a json with no dependencies
+    let package_path = test.package_path("J_system_deps");
+    let binary_path = env!("CARGO_BIN_EXE_sui");
+    let cmd = std::process::Command::new(binary_path)
+        .arg("move")
+        .arg("build")
+        .arg("--dump-bytecode-as-base64")
+        .arg(package_path)
+        .output()
+        .expect("Failed to execute command");
+
+    let output = String::from_utf8_lossy(&cmd.stdout);
+    assert!(!output.contains("dependencies: []"));
 
     Ok(())
 }
