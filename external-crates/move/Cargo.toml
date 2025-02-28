@@ -21,6 +21,10 @@ members = [
     # "move-execution/$CUT/crates/move-stdlib-natives",
     "move-execution/v2/crates/move-abstract-interpreter",
     # "move-execution/$CUT/crates/move-abstract-interpreter",
+    "move-execution/v0/crates/move-vm-types",
+    "move-execution/v1/crates/move-vm-types",
+    "move-execution/v2/crates/move-vm-types",
+    # "move-execution/$CUT/crates/move-vm-types",
 ]
 
 # Dependencies that should be kept in sync through the whole workspace

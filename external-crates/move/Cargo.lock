@@ -2313,7 +2313,7 @@ dependencies = [
  "move-binary-format",
  "move-core-types",
  "move-vm-runtime-v0",
- "move-vm-types",
+ "move-vm-types-v0",
  "sha2",
  "sha3",
  "smallvec",
@@ -2327,7 +2327,7 @@ dependencies = [
  "move-binary-format",
  "move-core-types",
  "move-vm-runtime-v1",
- "move-vm-types",
+ "move-vm-types-v1",
  "sha2",
  "sha3",
  "smallvec",
@@ -2341,7 +2341,7 @@ dependencies = [
  "move-binary-format",
  "move-core-types",
  "move-vm-runtime-v2",
- "move-vm-types",
+ "move-vm-types-v2",
  "sha2",
  "sha3",
  "smallvec",
@@ -2511,7 +2511,7 @@ dependencies = [
  "move-ir-compiler",
  "move-vm-config",
  "move-vm-profiler",
- "move-vm-types",
+ "move-vm-types-v0",
  "once_cell",
  "parking_lot 0.11.2",
  "proptest",
@@ -2534,7 +2534,7 @@ dependencies = [
  "move-ir-compiler",
  "move-vm-config",
  "move-vm-profiler",
- "move-vm-types",
+ "move-vm-types-v1",
  "once_cell",
  "parking_lot 0.11.2",
  "proptest",
@@ -2557,7 +2557,7 @@ dependencies = [
  "move-ir-compiler",
  "move-vm-config",
  "move-vm-profiler",
- "move-vm-types",
+ "move-vm-types-v2",
  "once_cell",
  "parking_lot 0.11.2",
  "proptest",
@@ -2588,6 +2588,45 @@ dependencies = [
 
 [[package]]
 name = "move-vm-types"
+version = "0.1.0"
+dependencies = [
+ "bcs",
+ "move-binary-format",
+ "move-core-types",
+ "move-vm-profiler",
+ "proptest",
+ "serde",
+ "smallvec",
+]
+
+[[package]]
+name = "move-vm-types-v0"
+version = "0.1.0"
+dependencies = [
+ "bcs",
+ "move-binary-format",
+ "move-core-types",
+ "move-vm-profiler",
+ "proptest",
+ "serde",
+ "smallvec",
+]
+
+[[package]]
+name = "move-vm-types-v1"
+version = "0.1.0"
+dependencies = [
+ "bcs",
+ "move-binary-format",
+ "move-core-types",
+ "move-vm-profiler",
+ "proptest",
+ "serde",
+ "smallvec",
+]
+
+[[package]]
+name = "move-vm-types-v2"
 version = "0.1.0"
 dependencies = [
  "bcs",
