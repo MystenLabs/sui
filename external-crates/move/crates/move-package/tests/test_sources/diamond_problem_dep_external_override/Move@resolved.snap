@@ -115,6 +115,7 @@ ResolvedGraph {
             no_lint: false,
             lint: false,
         },
+        implicit_dependencies: {},
     },
     package_table: {
         "A": Package {

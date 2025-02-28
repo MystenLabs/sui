@@ -1,0 +1,8 @@
+---
+source: crates/move-package/tests/test_runner.rs
+---
+When resolving dependencies for package A, conflicting versions of package I2 found:
+At B -> I2
+	I2 = { local = "../i2" }
+At I1 -> I2
+	I2 = { local = "../i2a" }

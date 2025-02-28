@@ -7,6 +7,7 @@ use anyhow::{bail, Result};
 use move_compiler::editions::{Edition, Flavor};
 use move_core_types::account_address::AccountAddress;
 use move_symbol_pool::symbol::Symbol;
+use serde::{Deserialize, Serialize};
 use std::{
     collections::BTreeMap,
     path::{Component, Path, PathBuf},
@@ -44,14 +45,14 @@ pub struct PackageInfo {
     pub custom_properties: BTreeMap<Symbol, String>,
 }
 
-#[derive(Debug, Clone, Eq, PartialEq)]
+#[derive(Debug, Clone, Eq, PartialEq, PartialOrd, Serialize, Deserialize)]
 pub enum Dependency {
     /// Parametrised by the binary that will resolve packages for this dependency.
     External(Symbol),
     Internal(InternalDependency),
 }
 
-#[derive(Debug, Clone, Eq, PartialEq)]
+#[derive(Debug, Clone, Eq, PartialEq, PartialOrd, Serialize, Deserialize)]
 pub struct InternalDependency {
     pub kind: DependencyKind,
     pub subst: Option<Substitution>,
@@ -59,14 +60,14 @@ pub struct InternalDependency {
     pub dep_override: DepOverride,
 }
 
-#[derive(Debug, Clone, Eq, PartialEq, Ord, PartialOrd)]
+#[derive(Debug, Clone, Eq, PartialEq, Ord, PartialOrd, Serialize, Deserialize)]
 pub enum DependencyKind {
     Local(PathBuf),
     Git(GitInfo),
     OnChain(OnChainInfo),
 }
 
-#[derive(Debug, Clone, Eq, PartialEq, Ord, PartialOrd)]
+#[derive(Debug, Clone, Eq, PartialEq, Ord, PartialOrd, Serialize, Deserialize)]
 pub struct GitInfo {
     /// The git clone url to download from
     pub git_url: Symbol,
@@ -77,7 +78,7 @@ pub struct GitInfo {
     pub subdir: PathBuf,
 }
 
-#[derive(Debug, Clone, Eq, PartialEq, Ord, PartialOrd)]
+#[derive(Debug, Clone, Eq, PartialEq, Ord, PartialOrd, Serialize, Deserialize)]
 pub struct OnChainInfo {
     pub id: Symbol,
 }
@@ -87,7 +88,7 @@ pub struct BuildInfo {
     pub language_version: Option<Version>,
 }
 
-#[derive(Debug, Clone, Eq, PartialEq, Ord, PartialOrd)]
+#[derive(Debug, Clone, Eq, PartialEq, Ord, PartialOrd, Serialize, Deserialize)]
 pub enum SubstOrRename {
     RenameFrom(NamedAddress),
     Assign(AccountAddress),
