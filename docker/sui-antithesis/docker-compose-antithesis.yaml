@@ -159,11 +159,14 @@ services:
       - KEYSTORE_PATH=/opt/sui/config/sui.keystore
       - STRESS_TARGET_QPS=3
       - STRESS_SHARED_COUNTER=1
+      - STRESS_SHARED_DELETION=1
       - STRESS_TRANSFER_OBJECT=1
       - STRESS_DELEGATION=0
       - BATCH_PAYMENT=1
       - BATCH_PAYMENT_SIZE=15
       - STRESS_ADVERSARIAL=0
+      - STRESS_RANDOMNESS=1
+      - STRESS_RANDOMIZED_TRANSACTION=1
     volumes:
       - ./genesis/files/genesis.blob:/opt/sui/config/genesis.blob:ro
       - ./genesis/static/sui.keystore:/opt/sui/config/sui.keystore:ro

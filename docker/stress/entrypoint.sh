@@ -30,10 +30,13 @@ echo 'Setup Complete'
     --target-qps "${STRESS_TARGET_QPS}" \
     --in-flight-ratio 30 \
     --shared-counter "${STRESS_SHARED_COUNTER}" \
+    --shared-deletion "${STRESS_SHARED_DELETION}" \
     --transfer-object "${STRESS_TRANSFER_OBJECT}" \
     --delegation "${STRESS_DELEGATION}" \
     --batch-payment "${BATCH_PAYMENT}" \
     --batch-payment-size "${BATCH_PAYMENT_SIZE}" \
     --adversarial "${STRESS_ADVERSARIAL}" \
+    --randomness "${STRESS_RANDOMNESS}" \
+    --randomized-transaction "${STRESS_RANDOMIZED_TRANSACTION}" \
     --client-metric-host 0.0.0.0 \
     --num-workers 24
