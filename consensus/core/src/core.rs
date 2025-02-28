@@ -212,7 +212,7 @@ impl Core {
         if self
             .context
             .protocol_config
-            .consensus_median_based_timestamp()
+            .consensus_median_based_commit_timestamp()
         {
             info!("Median based timestamp is enabled. Will not wait for {} ms while recovering ancestors from storage", wait_ms);
         } else if wait_ms > 0 {
@@ -606,7 +606,7 @@ impl Core {
 
         let now = self.context.clock.timestamp_utc_ms();
         ancestors.iter().for_each(|block| {
-            if self.context.protocol_config.consensus_median_based_timestamp() {
+            if self.context.protocol_config.consensus_median_based_commit_timestamp() {
                 if block.timestamp_ms() > now {
                     debug!("Ancestor block {:?} has timestamp {}, greater than current timestamp {now}. Proposing for round {}.", block, block.timestamp_ms(), clock_round);
                     let authority = &self.context.committee.authority(block.author()).hostname;
