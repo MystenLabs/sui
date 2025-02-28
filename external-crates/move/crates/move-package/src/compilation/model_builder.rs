@@ -8,7 +8,7 @@ use crate::{
 };
 use anyhow::Result;
 use move_compiler::shared::{SaveFlag, SaveHook};
-use move_model_2::model;
+use move_model_2::source_model;
 use std::io::Write;
 
 // NOTE: If there are now renamings, then the root package has the global resolution of all named
@@ -16,7 +16,10 @@ use std::io::Write;
 // across all packages and build the Move model from that.
 // TODO: In the future we will need a better way to do this to support renaming in packages
 // where we want to support building a Move model.
-pub fn build<W: Write>(resolved_graph: ResolvedGraph, writer: &mut W) -> Result<model::Model> {
+pub fn build<W: Write>(
+    resolved_graph: ResolvedGraph,
+    writer: &mut W,
+) -> Result<source_model::Model> {
     let root_package_name = resolved_graph.root_package();
     let build_plan = BuildPlan::create(&resolved_graph)?;
     let program_info_hook = SaveHook::new([SaveFlag::TypingInfo]);
@@ -33,7 +36,7 @@ pub fn build<W: Write>(resolved_graph: ResolvedGraph, writer: &mut W) -> Result<
         .cloned()
         .map(|CompiledUnitWithSource { unit, source_path }| (source_path, unit))
         .collect::<Vec<_>>();
-    model::Model::from_source(
+    source_model::Model::from_source(
         compiled_package.file_map,
         Some(root_package_name),
         root_named_address_map,

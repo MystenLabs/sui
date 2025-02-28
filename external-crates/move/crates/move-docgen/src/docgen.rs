@@ -19,7 +19,7 @@ use move_core_types::{account_address::AccountAddress, runtime_value::MoveValue}
 use move_ir_types::location::*;
 use move_model_2::{
     display as model_display,
-    model::{self, Model},
+    source_model::{self, Model},
     ModuleId, QualifiedMemberId,
 };
 use move_symbol_pool::Symbol;
@@ -443,7 +443,7 @@ impl<'env> Docgen<'env> {
 
     /// Computes file location for a module. This considers if the module is a dependency
     /// and if so attempts to locate already generated documentation for it.
-    fn compute_output_file(&mut self, module_env: model::Module<'_>) -> String {
+    fn compute_output_file(&mut self, module_env: source_model::Module<'_>) -> String {
         let output_path = PathBuf::from(&self.options.output_directory);
         let package_name = match module_env.package().name() {
             Some(name) => name.to_string(),
@@ -626,7 +626,7 @@ impl<'env> Docgen<'env> {
     ) {
         let module_env = env.module(module);
         let fun_env = module_env.function(function);
-        let name_of = |other: model::Function<'_>| {
+        let name_of = |other: source_model::Function<'_>| {
             if fun_env.module().id() == other.module().id() {
                 other.name().to_string()
             } else {
@@ -884,7 +884,7 @@ impl<'env> Docgen<'env> {
     }
 
     /// Generates documentation for a struct.
-    fn gen_struct(&mut self, struct_env: model::Struct<'_>) {
+    fn gen_struct(&mut self, struct_env: source_model::Struct<'_>) {
         let env = struct_env.model();
         let module_env = struct_env.module();
         let name = struct_env.name();
@@ -909,7 +909,7 @@ impl<'env> Docgen<'env> {
     }
 
     /// Generates documentation for an enum.
-    fn gen_enum(&mut self, enum_env: model::Enum<'_>) {
+    fn gen_enum(&mut self, enum_env: source_model::Enum<'_>) {
         let env = enum_env.model();
         let module_env = enum_env.module();
         let name = enum_env.name();
@@ -934,7 +934,7 @@ impl<'env> Docgen<'env> {
     }
 
     /// Generates declaration for named constant
-    fn named_constant_display(&self, const_env: model::NamedConstant<'_>) -> String {
+    fn named_constant_display(&self, const_env: source_model::NamedConstant<'_>) -> String {
         fn move_value_display(value: &MoveValue) -> String {
             match value {
                 MoveValue::U8(u) => format!("{u}"),
@@ -994,7 +994,7 @@ impl<'env> Docgen<'env> {
     }
 
     /// Generates code signature for a struct.
-    fn struct_header_display(&self, struct_env: model::Struct<'_>) -> String {
+    fn struct_header_display(&self, struct_env: source_model::Struct<'_>) -> String {
         let name = struct_env.name();
         let info = struct_env.info();
         let type_params = self.datatype_type_parameter_list_display(&info.type_parameters);
@@ -1032,7 +1032,7 @@ impl<'env> Docgen<'env> {
     }
 
     /// Generates code signature for an enum.
-    fn enum_header_display(&self, enum_env: model::Enum<'_>) -> String {
+    fn enum_header_display(&self, enum_env: source_model::Enum<'_>) -> String {
         let name = enum_env.name();
         let env_info = enum_env.info();
         let type_params = self.datatype_type_parameter_list_display(&env_info.type_parameters);
@@ -1049,7 +1049,7 @@ impl<'env> Docgen<'env> {
         }
     }
 
-    fn gen_enum_variants(&mut self, enum_env: model::Enum<'_>) {
+    fn gen_enum_variants(&mut self, enum_env: source_model::Enum<'_>) {
         self.begin_definitions();
         for variant_env in enum_env.variants() {
             let variant_name = variant_env.name();
@@ -1081,7 +1081,7 @@ impl<'env> Docgen<'env> {
     }
 
     /// Generates documentation for a function.
-    fn gen_function(&mut self, func_env: model::Function<'_>) {
+    fn gen_function(&mut self, func_env: source_model::Function<'_>) {
         let env = func_env.model();
         let module_env = func_env.module();
         let name = func_env.name();
@@ -1121,7 +1121,11 @@ impl<'env> Docgen<'env> {
     }
 
     /// Generates documentation for a function signature.
-    fn function_header_display(&self, name: Symbol, func_env: model::Function<'_>) -> String {
+    fn function_header_display(
+        &self,
+        name: Symbol,
+        func_env: source_model::Function<'_>,
+    ) -> String {
         let signature = &func_env.info().signature;
         let type_params = self.function_type_parameter_list_display(&signature.type_parameters);
         let params = func_env
@@ -1454,7 +1458,7 @@ impl<'env> Docgen<'env> {
         } else {
             None
         };
-        let try_func_struct_or_const = |module: model::Module<'_>, name: Symbol| {
+        let try_func_struct_or_const = |module: source_model::Module<'_>, name: Symbol| {
             // Below we only resolve a simple name to a hyperref if it is followed by a ( or <,
             // or if it is a named constant in the module.
             // Otherwise we get too many false positives where names are resolved to functions
@@ -1507,12 +1511,12 @@ impl<'env> Docgen<'env> {
     }
 
     /// Create label for a module.
-    fn make_label_for_module(&self, module_env: model::Module<'_>) -> String {
+    fn make_label_for_module(&self, module_env: source_model::Module<'_>) -> String {
         format!("{}", module_env.ident()).replace("::", "_")
     }
 
     /// Return the label for a module.
-    fn label_for_module(&self, module_env: model::Module<'_>) -> &str {
+    fn label_for_module(&self, module_env: source_model::Module<'_>) -> &str {
         let Some(info) = self.infos.get(&module_env.id()) else {
             return "";
         };
@@ -1520,7 +1524,7 @@ impl<'env> Docgen<'env> {
     }
 
     /// Return the reference for a module.
-    fn ref_for_module(&self, module_env: model::Module<'_>) -> String {
+    fn ref_for_module(&self, module_env: source_model::Module<'_>) -> String {
         let Some(info) = self.infos.get(&module_env.id()) else {
             return String::new();
         };
@@ -1548,17 +1552,17 @@ impl<'env> Docgen<'env> {
     }
 
     /// Return the label for an item in a module.
-    fn label_for_module_item(&self, module_env: model::Module<'_>, item: Symbol) -> String {
+    fn label_for_module_item(&self, module_env: source_model::Module<'_>, item: Symbol) -> String {
         self.label_for_module_item_str(module_env, item.as_str())
     }
 
     /// Return the label for an item in a module.
-    fn label_for_module_item_str(&self, module_env: model::Module<'_>, s: &str) -> String {
+    fn label_for_module_item_str(&self, module_env: source_model::Module<'_>, s: &str) -> String {
         format!("{}_{}", self.label_for_module(module_env), s)
     }
 
     /// Return the reference for an item in a module.
-    fn ref_for_module_item(&self, module_env: model::Module<'_>, item: Symbol) -> String {
+    fn ref_for_module_item(&self, module_env: source_model::Module<'_>, item: Symbol) -> String {
         format!("{}_{}", self.ref_for_module(module_env), item)
     }
 

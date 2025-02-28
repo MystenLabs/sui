@@ -209,7 +209,7 @@ impl Model<WITHOUT_SOURCE> {
             .values()
             .map(|package| {
                 let addr = package.package;
-                let data = PackageData::from_compiled(&named_address_reverse_map, package);
+                let data = PackageData::from_compiled(named_address_reverse_map, package);
                 (addr, data)
             })
             .collect();
@@ -277,7 +277,7 @@ impl<const HAS_SOURCE: usize> Model<HAS_SOURCE> {
     }
 }
 
-impl<'a> Package<'a> {
+impl<'a, const HAS_SOURCE: usize> Package<'a, HAS_SOURCE> {
     pub fn address(&self) -> AccountAddress {
         self.addr
     }
@@ -288,11 +288,11 @@ impl<'a> Package<'a> {
         self.data.name
     }
 
-    pub fn model(&self) -> &'a Model {
+    pub fn model(&self) -> &'a Model<HAS_SOURCE> {
         self.model
     }
 
-    pub fn maybe_module(&self, name: impl Into<Symbol>) -> Option<Module<'a>> {
+    pub fn maybe_module(&self, name: impl Into<Symbol>) -> Option<Module<'a, HAS_SOURCE>> {
         let name = name.into();
         let data = self.data.modules.get(&name)?;
         Some(Module {
@@ -302,11 +302,11 @@ impl<'a> Package<'a> {
             data,
         })
     }
-    pub fn module(&self, name: impl Into<Symbol>) -> Module<'a> {
+    pub fn module(&self, name: impl Into<Symbol>) -> Module<'a, HAS_SOURCE> {
         self.maybe_module(name).unwrap()
     }
 
-    pub fn modules(&self) -> impl Iterator<Item = Module<'a>> + '_ {
+    pub fn modules(&self) -> impl Iterator<Item = Module<'a, HAS_SOURCE>> + '_ {
         self.data.modules.keys().map(move |name| self.module(*name))
     }
 
@@ -315,16 +315,16 @@ impl<'a> Package<'a> {
     }
 }
 
-impl<'a> Module<'a> {
-    pub fn model(&self) -> &'a Model {
+impl<'a, const HAS_SOURCE: usize> Module<'a, HAS_SOURCE> {
+    pub fn model(&self) -> &'a Model<HAS_SOURCE> {
         self.package.model()
     }
 
-    pub fn package(&self) -> Package<'a> {
+    pub fn package(&self) -> Package<'a, HAS_SOURCE> {
         self.package
     }
 
-    pub fn maybe_struct(&self, name: impl Into<Symbol>) -> Option<Struct<'a>> {
+    pub fn maybe_struct(&self, name: impl Into<Symbol>) -> Option<Struct<'a, HAS_SOURCE>> {
         let name = name.into();
         let data = &self.data.structs.get(&name)?;
         Some(Struct {
@@ -334,11 +334,11 @@ impl<'a> Module<'a> {
             data,
         })
     }
-    pub fn struct_(&self, name: impl Into<Symbol>) -> Struct<'a> {
+    pub fn struct_(&self, name: impl Into<Symbol>) -> Struct<'a, HAS_SOURCE> {
         self.maybe_struct(name).unwrap()
     }
 
-    pub fn maybe_enum(&self, name: impl Into<Symbol>) -> Option<Enum<'a>> {
+    pub fn maybe_enum(&self, name: impl Into<Symbol>) -> Option<Enum<'a, HAS_SOURCE>> {
         let name = name.into();
         let data = &self.data.enums.get(&name)?;
         Some(Enum {
@@ -348,11 +348,11 @@ impl<'a> Module<'a> {
             data,
         })
     }
-    pub fn enum_(&self, name: impl Into<Symbol>) -> Enum<'a> {
+    pub fn enum_(&self, name: impl Into<Symbol>) -> Enum<'a, HAS_SOURCE> {
         self.maybe_enum(name).unwrap()
     }
 
-    pub fn maybe_function(&self, name: impl Into<Symbol>) -> Option<Function<'a>> {
+    pub fn maybe_function(&self, name: impl Into<Symbol>) -> Option<Function<'a, HAS_SOURCE>> {
         let name = name.into();
         let data = &self.data.functions.get(&name)?;
         Some(Function {
@@ -362,85 +362,27 @@ impl<'a> Module<'a> {
             data,
         })
     }
-    pub fn function(&self, name: impl Into<Symbol>) -> Function<'a> {
+    pub fn function(&self, name: impl Into<Symbol>) -> Function<'a, HAS_SOURCE> {
         self.maybe_function(name).unwrap()
     }
 
-    pub fn maybe_named_constant(&self, name: impl Into<Symbol>) -> Option<NamedConstant<'a>> {
-        let name = name.into();
-        let data = &self.data.named_constants.get(&name)?;
-        Some(NamedConstant {
-            name,
-            module: *self,
-            compiled: data
-                .compiled_index
-                .map(|idx| &self.compiled.constants[idx.0 as usize]),
-            data,
-        })
-    }
-    pub fn named_constant(&self, name: impl Into<Symbol>) -> NamedConstant<'a> {
-        self.maybe_named_constant(name).unwrap()
-    }
-
-    pub fn member(&self, name: impl Into<Symbol>) -> Option<Member<'a>> {
-        let name = name.into();
-        self.maybe_struct(name)
-            .map(Member::Struct)
-            .or_else(|| self.maybe_enum(name).map(Member::Enum))
-            .or_else(|| self.maybe_function(name).map(Member::Function))
-            .or_else(|| self.maybe_named_constant(name).map(Member::NamedConstant))
-    }
-
-    pub fn datatype(&self, name: impl Into<Symbol>) -> Option<Datatype<'_>> {
+    pub fn datatype(&self, name: impl Into<Symbol>) -> Option<Datatype<'_, HAS_SOURCE>> {
         let name = name.into();
         self.maybe_struct(name)
             .map(Datatype::Struct)
             .or_else(|| self.maybe_enum(name).map(Datatype::Enum))
     }
 
-    pub fn structs(&self) -> impl Iterator<Item = Struct<'a>> + '_ {
+    pub fn structs(&self) -> impl Iterator<Item = Struct<'a, HAS_SOURCE>> + '_ {
         self.data.structs.keys().map(|name| self.struct_(*name))
     }
 
-    pub fn enums(&self) -> impl Iterator<Item = Enum<'a>> + '_ {
+    pub fn enums(&self) -> impl Iterator<Item = Enum<'a, HAS_SOURCE>> + '_ {
         self.data.enums.keys().map(|name| self.enum_(*name))
     }
 
-    pub fn functions(&self) -> impl Iterator<Item = Function<'a>> + '_ {
+    pub fn functions(&self) -> impl Iterator<Item = Function<'a, HAS_SOURCE>> + '_ {
         self.data.functions.keys().map(|name| self.function(*name))
-    }
-
-    pub fn named_constants(&self) -> impl Iterator<Item = NamedConstant<'a>> + '_ {
-        self.data
-            .named_constants
-            .keys()
-            .map(|name| self.named_constant(*name))
-    }
-
-    pub fn constants(
-        &self,
-    ) -> impl Iterator<Item = (&compiled::Constant, Option<NamedConstant<'a>>)> + '_ {
-        self.compiled.constants.iter().map(|c| {
-            let source_opt =
-                self.data.constant_names[c.def_idx.0 as usize].map(|n| self.named_constant(n));
-            (c, source_opt)
-        })
-    }
-
-    pub fn maybe_info(&self) -> Option<&'a ModuleInfo> {
-        Some(
-            self.model()
-                .info
-                .as_ref()?
-                .modules
-                .get(self.maybe_ident()?)
-                .unwrap(),
-        )
-    }
-
-    /// Panics if there is no source information for this module
-    pub fn info(&self) -> &'a ModuleInfo {
-        self.maybe_info().unwrap()
     }
 
     pub fn compiled(&self) -> &'a compiled::Module {
@@ -463,19 +405,6 @@ impl<'a> Module<'a> {
         self.id
     }
 
-    pub fn maybe_source_path(&self) -> Option<Symbol> {
-        Some(
-            self.model()
-                .files
-                .as_ref()?
-                .filename(&self.maybe_info()?.defined_loc.file_hash()),
-        )
-    }
-
-    pub fn source_path(&self) -> Symbol {
-        self.maybe_source_path().unwrap()
-    }
-
     pub fn deps(&self) -> &'a BTreeMap<ModuleId, /* is immediate */ bool> {
         &self.compiled.deps
     }
@@ -485,30 +414,88 @@ impl<'a> Module<'a> {
     }
 }
 
-impl<'a> Struct<'a> {
+impl<'a> Module<'a, WITH_SOURCE> {
+    pub fn info(&self) -> &'a ModuleInfo {
+        self.model().info[0].modules.get(self.ident()).unwrap()
+    }
+
+    pub fn source_path(&self) -> Symbol {
+        self.model().files[0].filename(&self.info().defined_loc.file_hash())
+    }
+
+    pub fn member(&self, name: impl Into<Symbol>) -> Option<Member<'a, WITH_SOURCE>> {
+        let name = name.into();
+        self.maybe_struct(name)
+            .map(Member::Struct)
+            .or_else(|| self.maybe_enum(name).map(Member::Enum))
+            .or_else(|| self.maybe_function(name).map(Member::Function))
+            .or_else(|| self.maybe_named_constant(name).map(Member::NamedConstant))
+    }
+
+    pub fn maybe_named_constant(&self, name: impl Into<Symbol>) -> Option<NamedConstant<'a>> {
+        let name = name.into();
+        let data = &self.data.named_constants[0].get(&name)?;
+        Some(NamedConstant {
+            name,
+            module: *self,
+            compiled: data
+                .compiled_index
+                .map(|idx| &self.compiled.constants[idx.0 as usize]),
+            data,
+        })
+    }
+
+    pub fn named_constant(&self, name: impl Into<Symbol>) -> NamedConstant<'a> {
+        self.maybe_named_constant(name).unwrap()
+    }
+
+    pub fn named_constants(&self) -> impl Iterator<Item = NamedConstant<'a>> + '_ {
+        self.data.named_constants[0]
+            .keys()
+            .copied()
+            .map(|name| self.named_constant(name))
+    }
+
+    pub fn constants(
+        &self,
+    ) -> impl Iterator<Item = (&compiled::Constant, Option<NamedConstant<'a>>)> + '_ {
+        self.compiled.constants.iter().map(|c| {
+            let source_opt =
+                self.data.constant_names[0][c.def_idx.0 as usize].map(|n| self.named_constant(n));
+            (c, source_opt)
+        })
+    }
+}
+
+impl<'a> Module<'a, WITHOUT_SOURCE> {
+    pub fn member(&self, name: impl Into<Symbol>) -> Option<Member<'a, WITHOUT_SOURCE>> {
+        let name = name.into();
+        self.maybe_struct(name)
+            .map(Member::Struct)
+            .or_else(|| self.maybe_enum(name).map(Member::Enum))
+            .or_else(|| self.maybe_function(name).map(Member::Function))
+    }
+
+    pub fn constants(&self) -> impl Iterator<Item = &compiled::Constant> + '_ {
+        self.compiled.constants.iter()
+    }
+}
+
+impl<'a, const HAS_SOURCE: usize> Struct<'a, HAS_SOURCE> {
     pub fn name(&self) -> Symbol {
         self.name
     }
 
-    pub fn model(&self) -> &'a Model {
+    pub fn model(&self) -> &'a Model<HAS_SOURCE> {
         self.module.model()
     }
 
-    pub fn package(&self) -> Package<'a> {
+    pub fn package(&self) -> Package<'a, HAS_SOURCE> {
         self.module.package()
     }
 
-    pub fn module(&self) -> Module<'a> {
+    pub fn module(&self) -> Module<'a, HAS_SOURCE> {
         self.module
-    }
-
-    pub fn maybe_info(&self) -> Option<&'a N::StructDefinition> {
-        Some(self.module.maybe_info()?.structs.get_(&self.name).unwrap())
-    }
-
-    /// Panics if there is no source information for this struct
-    pub fn info(&self) -> &'a N::StructDefinition {
-        self.maybe_info().unwrap()
     }
 
     pub fn compiled(&self) -> &'a compiled::Struct {
@@ -516,49 +503,52 @@ impl<'a> Struct<'a> {
     }
 }
 
-impl<'a> Enum<'a> {
+impl<'a> Struct<'a, WITH_SOURCE> {
+    pub fn info(&self) -> &'a N::StructDefinition {
+        self.module.info().structs.get_(&self.name).unwrap()
+    }
+}
+
+impl<'a, const HAS_SOURCE: usize> Enum<'a, HAS_SOURCE> {
     pub fn name(&self) -> Symbol {
         self.name
     }
 
-    pub fn package(&self) -> Package<'a> {
+    pub fn package(&self) -> Package<'a, HAS_SOURCE> {
         self.module.package()
     }
 
-    pub fn model(&self) -> &'a Model {
+    pub fn model(&self) -> &'a Model<HAS_SOURCE> {
         self.module.model()
     }
 
-    pub fn module(&self) -> Module<'a> {
+    pub fn module(&self) -> Module<'a, HAS_SOURCE> {
         self.module
-    }
-
-    pub fn maybe_info(&self) -> Option<&'a N::EnumDefinition> {
-        Some(self.module.maybe_info()?.enums.get_(&self.name).unwrap())
-    }
-
-    /// Panics if there is no source information for this enum
-    pub fn info(&self) -> &'a N::EnumDefinition {
-        self.maybe_info().unwrap()
     }
 
     pub fn compiled(&self) -> &'a compiled::Enum {
         self.compiled
     }
 
-    pub fn variants(&self) -> impl Iterator<Item = Variant<'a>> + '_ {
+    pub fn variants(&self) -> impl Iterator<Item = Variant<'a, HAS_SOURCE>> + '_ {
         self.compiled
             .variants
             .keys()
             .map(move |name| self.variant(*name))
     }
 
-    pub fn variant(&self, name: Symbol) -> Variant<'a> {
+    pub fn variant(&self, name: Symbol) -> Variant<'a, HAS_SOURCE> {
         Variant {
             name,
             enum_: *self,
             compiled: &self.compiled.variants[&name],
         }
+    }
+}
+
+impl<'a> Enum<'a, WITH_SOURCE> {
+    pub fn info(&self) -> &'a N::EnumDefinition {
+        self.module.info().enums.get_(&self.name).unwrap()
     }
 }
 
@@ -659,19 +649,8 @@ impl<'a> NamedConstant<'a> {
         self.module
     }
 
-    pub fn maybe_info(&self) -> Option<&'a ConstantInfo> {
-        Some(
-            self.module
-                .maybe_info()?
-                .constants
-                .get_(&self.name)
-                .unwrap(),
-        )
-    }
-
-    /// Panics if there is no source information for this constant
     pub fn info(&self) -> &'a ConstantInfo {
-        self.maybe_info().unwrap()
+        self.module.info().constants.get_(&self.name).unwrap()
     }
 
     /// Not all source constants have a compiled representation

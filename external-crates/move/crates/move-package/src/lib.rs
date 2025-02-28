@@ -19,7 +19,7 @@ use move_compiler::{
     Flags,
 };
 use move_core_types::account_address::AccountAddress;
-use move_model_2::model;
+use move_model_2::source_model;
 use resolution::{dependency_graph::DependencyGraphBuilder, resolution_graph::ResolvedGraph};
 use serde::{Deserialize, Serialize};
 use source_package::{
@@ -243,7 +243,7 @@ impl BuildConfig {
         self,
         path: &Path,
         writer: &mut W,
-    ) -> Result<model::Model> {
+    ) -> Result<source_model::Model> {
         // resolution graph diagnostics are only needed for CLI commands so ignore them by passing a
         // vector as the writer
         let resolved_graph = self.resolution_graph_for_package(path, None, writer)?;
