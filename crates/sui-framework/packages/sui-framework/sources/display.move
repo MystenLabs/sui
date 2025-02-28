@@ -24,7 +24,8 @@
 ///   let display = display::new<MyObject>(&publisher, ctx);
 ///
 ///   display.add(b"name".to_string(), b"My Awesome Object".to_string());
-///   display.add(b"description".to_string(), b")
+///   display.add(b"description".to_string(), b");
+///   display.commit(); // important to commit results on chain
 /// }
 /// ```
 module sui::display;
