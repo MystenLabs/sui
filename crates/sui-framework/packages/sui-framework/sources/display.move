@@ -1,15 +1,32 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-/// Defines a Display struct which defines the way an Object
-/// should be displayed. The intention is to keep data as independent
-/// from its display as possible, protecting the development process
-/// and keeping it separate from the ecosystem agreements.
+/// Defines a Display struct which describes the way an Object should be
+/// displayed. The goal of the Sui Object Display is separation of the type
+/// definition from its external (off-chain) representation.
 ///
-/// Each of the fields of the Display object should allow for pattern
-/// substitution and filling-in the pieces using the data from the object T.
+/// Each of the fields of the Display object allows for pattern substitution and
+/// filling-in the pieces using the data from the object T.
 ///
-/// More entry functions might be added in the future depending on the use cases.
+/// Example usage:
+/// ```
+/// module pkg::display;
+///
+/// use pkg::my_object::MyObject;
+/// use sui::package;
+/// use sui::display;
+///
+/// /// One time witness to get the `Publisher`.
+/// public struct DISPLAY has drop {}
+///
+/// fun init(otw: DISPLAY, ctx: &mut TxContext) {
+///   let publisher = package::claim(otw, ctx);
+///   let display = display::new<MyObject>(&publisher, ctx);
+///
+///   display.add(b"name".to_string(), b"My Awesome Object".to_string());
+///   display.add(b"description".to_string(), b")
+/// }
+/// ```
 module sui::display;
 
 use std::string::String;
@@ -17,40 +34,35 @@ use sui::event;
 use sui::package::Publisher;
 use sui::vec_map::{Self, VecMap};
 
-/// For when T does not belong to the package `Publisher`.
+/// For when `T` does not belong to the package `Publisher`.
 const ENotOwner: u64 = 0;
 
-/// For when vectors passed into one of the multiple insert functions
-/// don't match in their lengths.
-const EVecLengthMismatch: u64 = 1;
-
-/// The Display<T> object. Defines the way a T instance should be
-/// displayed. Display object can only be created and modified with
-/// a PublisherCap, making sure that the rules are set by the owner
-/// of the type.
+/// The Display<T> object. Defines the way a T instance should be displayed
+/// Display object can only be created and modified with the `Publisher` object,
+/// making sure that the rules are set by the publisher of the type.
 ///
-/// Each of the display properties should support patterns outside
-/// of the system, making it simpler to customize Display based
-/// on the property values of an Object.
 /// ```
 /// // Example of a display object
 /// Display<0x...::capy::Capy> {
 ///  fields:
-///    <name, "Capy { genes }">
-///    <link, "https://capy.art/capy/{ id }">
-///    <image, "https://api.capy.art/capy/{ id }/svg">
-///    <description, "Lovely Capy, one of many">
+///    name: "Capy { genes }"
+///    link: "https://capy.art/capy/{ id }"
+///    image_url: "https://api.capy.art/capy/{ id }/svg"
+///    thumbnail_url: "https://api.capy.art/capy/{ id }/thumbnail"
+///    description: "Lovely Capy, one of many"
+///    project_url: "https://capy.art/"
+///    creator: "Capy Lover"
 /// }
 /// ```
 ///
-/// Uses only String type due to external-facing nature of the object,
-/// the property names have a priority over their types.
+/// Uses only String type due to external-facing nature of the object, the
+/// property names have priority over their types.
 public struct Display<phantom T: key> has key, store {
     id: UID,
     /// Contains fields for display. Currently supported
     /// fields are: name, link, image and description.
     fields: VecMap<String, String>,
-    /// Version that can only be updated manually by the Publisher.
+    /// Version that can only be updated manually by the publisher.
     version: u16,
 }
 
@@ -64,7 +76,7 @@ public struct DisplayCreated<phantom T: key> has copy, drop {
     id: ID,
 }
 
-/// Version of Display got updated -
+/// Version of Display got updated via `commit` or `update_version`.
 public struct VersionUpdated<phantom T: key> has copy, drop {
     id: ID,
     version: u16,
@@ -77,7 +89,10 @@ public struct VersionUpdated<phantom T: key> has copy, drop {
 /// with data right away via cheaper `set_owned` method.
 public fun new<T: key>(pub: &Publisher, ctx: &mut TxContext): Display<T> {
     assert!(is_authorized<T>(pub), ENotOwner);
-    create_internal(ctx)
+
+    let id = object::new(ctx);
+    event::emit(DisplayCreated<T> { id: id.to_inner() });
+    Display { id, fields: vec_map::empty(), version: 0 }
 }
 
 /// Create a new Display<T> object with a set of fields.
@@ -87,16 +102,8 @@ public fun new_with_fields<T: key>(
     values: vector<String>,
     ctx: &mut TxContext,
 ): Display<T> {
-    let len = fields.length();
-    assert!(len == values.length(), EVecLengthMismatch);
-
-    let mut i = 0;
     let mut display = new<T>(pub, ctx);
-    while (i < len) {
-        display.add_internal(fields[i], values[i]);
-        i = i + 1;
-    };
-
+    fields.zip_do!(values, |name, value| display.fields.insert(name, value));
     display
 }
 
@@ -107,6 +114,9 @@ public fun new_with_fields<T: key>(
 public entry fun create_and_keep<T: key>(pub: &Publisher, ctx: &mut TxContext) {
     transfer::public_transfer(new<T>(pub, ctx), ctx.sender())
 }
+
+/// Alias that matches the purpose better.
+public use fun update_version as Display.commit;
 
 /// Manually bump the version and emit an event with the updated version's contents.
 public entry fun update_version<T: key>(display: &mut Display<T>) {
@@ -121,36 +131,29 @@ public entry fun update_version<T: key>(display: &mut Display<T>) {
 // === Entry functions: Add/Modify fields ===
 
 /// Sets a custom `name` field with the `value`.
-public entry fun add<T: key>(self: &mut Display<T>, name: String, value: String) {
-    self.add_internal(name, value)
+public entry fun add<T: key>(display: &mut Display<T>, name: String, value: String) {
+    display.fields.insert(name, value)
 }
 
 /// Sets multiple `fields` with `values`.
 public entry fun add_multiple<T: key>(
-    self: &mut Display<T>,
+    display: &mut Display<T>,
     fields: vector<String>,
     values: vector<String>,
 ) {
-    let len = fields.length();
-    assert!(len == values.length(), EVecLengthMismatch);
-
-    let mut i = 0;
-    while (i < len) {
-        self.add_internal(fields[i], values[i]);
-        i = i + 1;
-    };
+    fields.zip_do!(values, |name, value| display.fields.insert(name, value));
 }
 
 /// Change the value of the field.
 /// TODO (long run): version changes;
-public entry fun edit<T: key>(self: &mut Display<T>, name: String, value: String) {
-    let (_, _) = self.fields.remove(&name);
-    self.add_internal(name, value)
+public entry fun edit<T: key>(display: &mut Display<T>, name: String, value: String) {
+    let (_, _) = display.fields.remove(&name);
+    display.fields.insert(name, value)
 }
 
 /// Remove the key from the Display.
-public entry fun remove<T: key>(self: &mut Display<T>, name: String) {
-    self.fields.remove(&name);
+public entry fun remove<T: key>(display: &mut Display<T>, name: String) {
+    display.fields.remove(&name);
 }
 
 // === Access fields ===
@@ -168,26 +171,4 @@ public fun version<T: key>(d: &Display<T>): u16 {
 /// Read the `fields` field.
 public fun fields<T: key>(d: &Display<T>): &VecMap<String, String> {
     &d.fields
-}
-
-// === Private functions ===
-
-/// Internal function to create a new `Display<T>`.
-fun create_internal<T: key>(ctx: &mut TxContext): Display<T> {
-    let uid = object::new(ctx);
-
-    event::emit(DisplayCreated<T> {
-        id: uid.to_inner(),
-    });
-
-    Display {
-        id: uid,
-        fields: vec_map::empty(),
-        version: 0,
-    }
-}
-
-/// Private method for inserting fields without security checks.
-fun add_internal<T: key>(display: &mut Display<T>, name: String, value: String) {
-    display.fields.insert(name, value)
 }
