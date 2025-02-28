@@ -17,8 +17,8 @@ use sui_core::{
     },
 };
 use sui_json_rpc_types::{
-    SuiObjectDataOptions, SuiObjectResponse, SuiObjectResponseQuery, SuiTransactionBlockEffects,
-    SuiTransactionBlockEffectsAPI, SuiTransactionBlockResponseOptions,
+    QueryObjectsPage, SuiObjectDataOptions, SuiObjectResponse, SuiObjectResponseQuery,
+    SuiTransactionBlockEffects, SuiTransactionBlockEffectsAPI, SuiTransactionBlockResponseOptions,
 };
 use sui_sdk::{SuiClient, SuiClientBuilder};
 use sui_types::effects::{TransactionEffectsAPI, TransactionEvents};
@@ -357,6 +357,24 @@ impl ValidatorProxy for LocalValidatorAggregatorProxy {
                 }
                 Err(QuorumDriverError::NonRecoverableTransactionError { errors }) => {
                     bail!(QuorumDriverError::NonRecoverableTransactionError { errors });
+                }
+                Err(QuorumDriverError::SystemOverload { .. }) => {
+                    let delay = Duration::from_millis(rand::thread_rng().gen_range(100..1000));
+                    warn!(
+                        ?tx_digest,
+                        retry_cnt, "System overload error. Sleeping for {:?} ...", delay,
+                    );
+                    sleep(delay).await;
+                }
+                Err(QuorumDriverError::SystemOverloadRetryAfter {
+                    retry_after_secs, ..
+                }) => {
+                    let delay = Duration::from_secs(retry_after_secs);
+                    warn!(
+                        ?tx_digest,
+                        retry_cnt, "System overload error. Sleeping for {:?} ...", delay,
+                    );
+                    sleep(delay).await;
                 }
                 Err(err) => {
                     let delay = Duration::from_millis(rand::thread_rng().gen_range(100..1000));
