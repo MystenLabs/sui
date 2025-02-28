@@ -153,7 +153,10 @@ impl Linearizer {
         last_commit_timestamp_ms: BlockTimestampMs,
         to_commit: &[VerifiedBlock],
     ) -> BlockTimestampMs {
-        let timestamp_ms = if context.protocol_config.consensus_median_based_timestamp() {
+        let timestamp_ms = if context
+            .protocol_config
+            .consensus_median_based_commit_timestamp()
+        {
             // Attention should be paid that we are calculating the timestamp only using the leader's committed strong ancestors which should be all the blocks
             // or round leader.round - 1. Not necessary to search and recheck here the leader's ancestors as by the protocol rules it's impossible to commit any block
             // of round leader.round - 1 unless it is a leader's strong ancestor.
@@ -421,7 +424,7 @@ mod tests {
         let (mut context, _keys) = Context::new_for_test(num_authorities);
         context
             .protocol_config
-            .set_consensus_median_based_timestamp(consensus_median_timestamp);
+            .set_consensus_median_based_commit_timestamp_for_testing(consensus_median_timestamp);
 
         let context = Arc::new(context);
 
@@ -562,7 +565,7 @@ mod tests {
         let (mut context, _) = Context::new_for_test(num_authorities);
         context
             .protocol_config
-            .set_consensus_median_based_timestamp(consensus_median_timestamp);
+            .set_consensus_median_based_commit_timestamp_for_testing(consensus_median_timestamp);
 
         let context = Arc::new(context);
 
@@ -704,7 +707,7 @@ mod tests {
             .set_consensus_gc_depth_for_testing(gc_depth);
         context
             .protocol_config
-            .set_consensus_median_based_timestamp(consensus_median_timestamp);
+            .set_consensus_median_based_commit_timestamp_for_testing(consensus_median_timestamp);
 
         if gc_depth == 0 {
             context
@@ -843,7 +846,7 @@ mod tests {
             .set_consensus_gc_depth_for_testing(gc_depth);
         context
             .protocol_config
-            .set_consensus_median_based_timestamp(consensus_median_timestamp);
+            .set_consensus_median_based_commit_timestamp_for_testing(consensus_median_timestamp);
         context
             .protocol_config
             .set_consensus_linearize_subdag_v2_for_testing(true);
@@ -968,7 +971,7 @@ mod tests {
 
         context
             .protocol_config
-            .set_consensus_median_based_timestamp(consensus_median_timestamp);
+            .set_consensus_median_based_commit_timestamp_for_testing(consensus_median_timestamp);
 
         let context = Arc::new(context);
 
