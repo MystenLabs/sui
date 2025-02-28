@@ -7370,9 +7370,12 @@ name = "move-binary-format"
 version = "0.0.3"
 dependencies = [
  "anyhow",
+ "arbitrary",
  "enum-compat-util",
  "move-core-types",
  "move-proc-macros",
+ "proptest",
+ "proptest-derive",
  "ref-cast",
  "serde",
  "variant_count",
@@ -7852,7 +7855,7 @@ dependencies = [
  "move-binary-format",
  "move-core-types",
  "move-vm-runtime-v0",
- "move-vm-types",
+ "move-vm-types-v0",
  "sha2 0.9.9",
  "sha3 0.9.1",
  "smallvec",
@@ -7866,7 +7869,7 @@ dependencies = [
  "move-binary-format",
  "move-core-types",
  "move-vm-runtime-v1",
- "move-vm-types",
+ "move-vm-types-v1",
  "sha2 0.9.9",
  "sha3 0.9.1",
  "smallvec",
@@ -7880,7 +7883,7 @@ dependencies = [
  "move-binary-format",
  "move-core-types",
  "move-vm-runtime-v2",
- "move-vm-types",
+ "move-vm-types-v2",
  "sha2 0.9.9",
  "sha3 0.9.1",
  "smallvec",
@@ -8016,7 +8019,7 @@ dependencies = [
  "move-core-types",
  "move-vm-config",
  "move-vm-profiler",
- "move-vm-types",
+ "move-vm-types-v0",
  "once_cell",
  "parking_lot 0.11.2",
  "smallvec",
@@ -8034,7 +8037,7 @@ dependencies = [
  "move-core-types",
  "move-vm-config",
  "move-vm-profiler",
- "move-vm-types",
+ "move-vm-types-v1",
  "once_cell",
  "parking_lot 0.11.2",
  "smallvec",
@@ -8052,7 +8055,7 @@ dependencies = [
  "move-core-types",
  "move-vm-config",
  "move-vm-profiler",
- "move-vm-types",
+ "move-vm-types-v2",
  "once_cell",
  "parking_lot 0.11.2",
  "smallvec",
@@ -8080,6 +8083,45 @@ dependencies = [
  "move-binary-format",
  "move-core-types",
  "move-vm-profiler",
+ "serde",
+ "smallvec",
+]
+
+[[package]]
+name = "move-vm-types-v0"
+version = "0.1.0"
+dependencies = [
+ "bcs",
+ "move-binary-format",
+ "move-core-types",
+ "move-vm-profiler",
+ "proptest",
+ "serde",
+ "smallvec",
+]
+
+[[package]]
+name = "move-vm-types-v1"
+version = "0.1.0"
+dependencies = [
+ "bcs",
+ "move-binary-format",
+ "move-core-types",
+ "move-vm-profiler",
+ "proptest",
+ "serde",
+ "smallvec",
+]
+
+[[package]]
+name = "move-vm-types-v2"
+version = "0.1.0"
+dependencies = [
+ "bcs",
+ "move-binary-format",
+ "move-core-types",
+ "move-vm-profiler",
+ "proptest",
  "serde",
  "smallvec",
 ]
@@ -12532,7 +12574,7 @@ dependencies = [
  "move-vm-config",
  "move-vm-profiler",
  "move-vm-runtime-v0",
- "move-vm-types",
+ "move-vm-types-v0",
  "once_cell",
  "parking_lot 0.12.3",
  "serde",
@@ -12559,7 +12601,7 @@ dependencies = [
  "move-vm-config",
  "move-vm-profiler",
  "move-vm-runtime-v1",
- "move-vm-types",
+ "move-vm-types-v1",
  "parking_lot 0.12.3",
  "serde",
  "sui-macros",
@@ -12585,7 +12627,7 @@ dependencies = [
  "move-vm-config",
  "move-vm-profiler",
  "move-vm-runtime-v2",
- "move-vm-types",
+ "move-vm-types-v2",
  "parking_lot 0.12.3",
  "serde",
  "sui-macros",
@@ -13315,6 +13357,10 @@ dependencies = [
  "move-vm-runtime-v0",
  "move-vm-runtime-v1",
  "move-vm-runtime-v2",
+ "move-vm-types",
+ "move-vm-types-v0",
+ "move-vm-types-v1",
+ "move-vm-types-v2",
  "petgraph 0.5.1",
  "sui-adapter-latest",
  "sui-adapter-v0",
@@ -14308,7 +14354,7 @@ dependencies = [
  "move-core-types",
  "move-stdlib-natives-v0",
  "move-vm-runtime-v0",
- "move-vm-types",
+ "move-vm-types-v0",
  "smallvec",
  "sui-protocol-config",
  "sui-types",
@@ -14328,7 +14374,7 @@ dependencies = [
  "move-core-types",
  "move-stdlib-natives-v1",
  "move-vm-runtime-v1",
- "move-vm-types",
+ "move-vm-types-v1",
  "smallvec",
  "sui-protocol-config",
  "sui-types",
@@ -14348,7 +14394,7 @@ dependencies = [
  "move-core-types",
  "move-stdlib-natives-v2",
  "move-vm-runtime-v2",
- "move-vm-types",
+ "move-vm-types-v2",
  "smallvec",
  "sui-protocol-config",
  "sui-types",

@@ -45,6 +45,11 @@ move-vm-runtime-v0 = { path = "../external-crates/move/move-execution/v0/crates/
 move-vm-runtime-v1 = { path = "../external-crates/move/move-execution/v1/crates/move-vm-runtime" }
 move-vm-runtime-v2 = { path = "../external-crates/move/move-execution/v2/crates/move-vm-runtime" }
 # move-vm-runtime-$CUT = { path = "../external-crates/move/move-execution/$CUT/crates/move-vm-runtime" }
+move-vm-types-latest = { path = "../external-crates/move/crates/move-vm-types", package = "move-vm-types" }
+move-vm-types-v0 = { path = "../external-crates/move/move-execution/v0/crates/move-vm-types" }
+move-vm-types-v1 = { path = "../external-crates/move/move-execution/v1/crates/move-vm-types" }
+move-vm-types-v2 = { path = "../external-crates/move/move-execution/v2/crates/move-vm-types" }
+# move-vm-types-$CUT = { path = "../external-crates/move/move-execution/$CUT/crates/move-vm-types" }
 
 [dev-dependencies]
 cargo_metadata = "0.15.4"

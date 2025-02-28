@@ -24,12 +24,12 @@ move-bytecode-verifier-meter.workspace = true
 move-core-types.workspace = true
 move-vm-config.workspace = true
 move-vm-profiler.workspace = true
-move-vm-types.workspace = true
 
 move-bytecode-verifier = { path = "../../../external-crates/move/move-execution/v0/crates/move-bytecode-verifier", package = "move-bytecode-verifier-v0" }
 move-vm-runtime = { path = "../../../external-crates/move/move-execution/v0/crates/move-vm-runtime", package = "move-vm-runtime-v0" }
 sui-move-natives = { path = "../sui-move-natives", package = "sui-move-natives-v0" }
 sui-verifier = { path = "../sui-verifier", package = "sui-verifier-v0" }
+move-vm-types = { path = "../../../external-crates/move/move-execution/v0/crates/move-vm-types", package = "move-vm-types-v0" }
 
 sui-macros.workspace = true
 sui-protocol-config.workspace = true
