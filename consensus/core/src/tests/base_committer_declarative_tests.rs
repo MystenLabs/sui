@@ -8,7 +8,7 @@ use std::sync::Arc;
 use crate::{
     base_committer::base_committer_builder::BaseCommitterBuilder, block::BlockAPI,
     commit::LeaderStatus, context::Context, dag_state::DagState, storage::mem_store::MemStore,
-    test_dag_parser::parse_dag,
+    test_dag_parser::parse_dag, TestBlock, VerifiedBlock,
 };
 
 #[tokio::test]
@@ -363,5 +363,104 @@ async fn indirect_skip() {
         assert_eq!(skipped_slot, leader_wave_2)
     } else {
         panic!("Expected a skipped leader")
+    };
+}
+
+/// Here we setup a situation where theres is an undecided leader (D)
+/// but later we encounter B which votes for D to make it committed directly
+#[tokio::test]
+async fn test_equivocating_direct_commit() {
+    telemetry_subscribers::init_for_testing();
+    let context = Arc::new(Context::new_for_test(4).0);
+    let dag_state = Arc::new(RwLock::new(DagState::new(
+        context.clone(),
+        Arc::new(MemStore::new()),
+    )));
+    let committer = BaseCommitterBuilder::new(context.clone(), dag_state.clone()).build();
+
+    let dag_str = "DAG {
+        Round 0 : { 4 },
+        Round 1 : { * },
+        Round 2 : { * },
+        Round 3 : { * }
+        Round 4 : { 
+            A -> [],
+            B -> [],
+            C -> [*],
+            D -> [*],
+        },
+        Round 5 : { * },
+    }";
+
+    let (_, dag_builder) = parse_dag(dag_str).expect("a DAG should be valid");
+    dag_builder.persist_all_blocks(dag_state.clone());
+
+    let leader_round_wave_1 = committer.leader_round(1);
+    tracing::info!("Leader round wave 1: {leader_round_wave_1}");
+    let leader_wave_1 = committer
+        .elect_leader(leader_round_wave_1)
+        .expect("there should be a leader for wave 2");
+    let leader_index_wave_1 = leader_wave_1.authority;
+    tracing::info!("Leader index wave 1: {leader_index_wave_1}");
+
+    let leader_status_wave_1 = committer.try_direct_decide(leader_wave_1);
+    if let LeaderStatus::Undecided(undecided) = leader_status_wave_1.clone() {
+        tracing::info!("Direct undecided leader at wave 1: {undecided}");
+    } else {
+        panic!(
+            "Expected LeaderStatus::Undecided for a leader in wave 1, applying a direct decicion rule, got {leader_status_wave_1}"
+        );
+    };
+
+    // Authority B is equivoking
+    let block_refs_round_3: Vec<_> = dag_builder
+        .blocks(3u32..=3)
+        .iter()
+        .map(|b| b.reference())
+        .collect();
+
+    // Authority B index is 1
+    let b4_votes_all = VerifiedBlock::new_for_test(
+        TestBlock::new(4, 1)
+            .set_ancestors(block_refs_round_3)
+            .set_timestamp_ms(4 * 1000 + 1 as u64)
+            .build(),
+    );
+
+    let round_4_refs: Vec<_> = dag_builder
+        .blocks(4u32..=4)
+        .iter()
+        .map(|b| {
+            if b.author().value() == 1 {
+                b4_votes_all.reference()
+            } else {
+                b.reference()
+            }
+        })
+        .collect();
+
+    dag_state.write().accept_block(b4_votes_all);
+
+    for block in dag_builder.blocks(5u32..=5).iter() {
+        let autor_index = block.author().value();
+        // skip own_index
+        if autor_index == 0 {
+            continue;
+        }
+        let block = VerifiedBlock::new_for_test(
+            TestBlock::new(5, autor_index as u32)
+                .set_ancestors(round_4_refs.clone())
+                .set_timestamp_ms(5 * 1000 + autor_index as u64)
+                .build(),
+        );
+        dag_state.write().accept_block(block);
+    }
+
+    if let LeaderStatus::Commit(committed) = leader_status_wave_1.clone() {
+        tracing::info!("Direct committed leader at wave 1: {committed}");
+    } else {
+        panic!(
+            "Expected LeaderStatus::Commit for a leader in wave 1, applying a direct decicion rule, got {leader_status_wave_1}"
+        );
     };
 }
