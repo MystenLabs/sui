@@ -1,0 +1,37 @@
+[package]
+name = "move-decompiler"
+version = "1.0.1-alpha"
+authors = ["Verichains"]
+description = "Decompile Move bytecode files (.mv files)"
+license = "Apache-2.0"
+publish = false
+edition = "2021"
+
+[dependencies]
+anyhow = "1.0.52"
+itertools = "0.10.0"
+codespan = "0.11.1"
+
+clap = { version = "3.1.8", features = ["derive"] }
+
+colored.workspace = true
+
+move-bytecode-source-map.workspace = true
+move-command-line-common.workspace = true
+move-core-types.workspace = true
+move-ir-types.workspace = true
+move-binary-format.workspace = true
+move-coverage.workspace = true
+move-compiler.workspace = true
+move-abstract-interpreter.workspace = true
+move-stackless-bytecode.workspace = true
+move-model.workspace = true
+move-symbol-pool.workspace = true
+num.workspace = true
+
+bcs.workspace = true
+hex.workspace = true
+
+
+[features]
+default = []
