@@ -4295,43 +4295,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "fea41bba32d969b513997752735605054bc0dfa92b4c56bf1189f2e174be7a10"
 
 [[package]]
-name = "docker-api"
-version = "0.12.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "522a3ae33cf4fc165de192eb9c563b755bc43cda9bd6f442b2d511b84514b917"
-dependencies = [
- "asynchronous-codec",
- "base64 0.13.1",
- "byteorder",
- "bytes",
- "chrono",
- "containers-api",
- "docker-api-stubs",
- "futures-util",
- "http 0.2.9",
- "hyper 0.14.26",
- "log",
- "paste",
- "serde",
- "serde_json",
- "tar",
- "thiserror 1.0.69",
- "url",
-]
-
-[[package]]
-name = "docker-api-stubs"
-version = "0.4.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5872f5e057625a972acce1a51b461284eab32b7e594e18f8fc2f63724075da47"
-dependencies = [
- "chrono",
- "serde",
- "serde_json",
- "serde_with 2.1.0",
-]
-
-[[package]]
 name = "document-features"
 version = "0.2.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -14913,7 +14876,7 @@ dependencies = [
  "tokio-stream",
  "tokio-util 0.7.13 (registry+https://github.com/rust-lang/crates.io-index)",
  "tracing",
- "tracing-subscriber",
+ "tracing-subscriber 0.3.17",
  "url",
  "wiremock",
 ]
