@@ -246,6 +246,8 @@ impl<'env> BoogieTranslator<'env> {
 
         self.translate_ghost_global(&mono_info);
 
+        self.add_type(&Type::Primitive(PrimitiveType::Bool));
+
         // let singleton_function_id = FunId::new(self.env.symbol_pool().make("singleton"));
         let reverse_function_id = FunId::new(self.env.symbol_pool().make("reverse"));
         let append_function_id = FunId::new(self.env.symbol_pool().make("append"));
@@ -735,9 +737,6 @@ impl<'env> BoogieTranslator<'env> {
         );
 
         for type_inst in &ghost_declare_global_type_instances {
-            self.add_type(&type_inst[0]);
-            self.add_type(&type_inst[1]);
-
             self.generate_ghost_global_var_declaration(type_inst);
         }
 
