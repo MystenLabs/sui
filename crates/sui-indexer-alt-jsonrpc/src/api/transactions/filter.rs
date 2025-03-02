@@ -72,6 +72,8 @@ pub(crate) enum TransactionFilter {
     FromAndToAddress { from: SuiAddress, to: SuiAddress },
     /// Query transactions that have a given address as sender or recipient.
     FromOrToAddress { addr: SuiAddress },
+    /// Query by recipient address. On this RPC, this is an alias for `FromOrToAddress`.
+    ToAddress(SuiAddress),
 }
 
 type Cursor = JsonCursor<u64>;
@@ -117,6 +119,8 @@ pub(super) async fn transactions(
         }
 
         Some(F::FromOrToAddress { addr }) => tx_affected_addresses(ctx, &page, None, *addr).await,
+
+        Some(F::ToAddress(addr)) => tx_affected_addresses(ctx, &page, None, *addr).await,
     }
 }
 
