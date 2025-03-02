@@ -523,6 +523,14 @@ impl<'env> BoogieTranslator<'env> {
                 },
                 FunctionTranslationStyle::Asserts | FunctionTranslationStyle::Aborts => match bc {
                     Call(_, _, op, _, _) if op == requires_function || op == ensures_function => {}
+                    Call(_, _, op, _, _)
+                        if matches!(
+                            op,
+                            Operation::TraceLocal { .. }
+                                | Operation::TraceReturn { .. }
+                                | Operation::TraceMessage { .. }
+                                | Operation::TraceGhost { .. }
+                        ) => {}
                     Call(_, _, Operation::Function(module_id, fun_id, _), _, _)
                         if self
                             .targets

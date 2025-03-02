@@ -260,6 +260,7 @@ impl<'env> BoogieWrapper<'env> {
         if error.kind.is_from_verification() && !error.execution_trace.is_empty() {
             let mut display = vec![];
             let mut last_loc = self.env.unknown_loc();
+            let mut is_last_loc = false;
             let mut abort_in_progress = None;
             let print_loc = |loc: &Loc, last_loc: &mut Loc, display: &mut Vec<String>| {
                 let info = if let Some(fun) = self.env.get_enclosing_function(loc) {
@@ -300,7 +301,7 @@ impl<'env> BoogieWrapper<'env> {
                 }
                 match entry {
                     AtLocation(loc) => {
-                        if loc != &last_loc {
+                        if loc != &last_loc && !is_last_loc {
                             print_loc(loc, &mut last_loc, &mut display);
                         }
                     }
@@ -328,7 +329,8 @@ impl<'env> BoogieWrapper<'env> {
                             let pretty = value.pretty_or_raw(
                                 self,
                                 error.model.as_ref().unwrap(),
-                                ty.as_ref().unwrap_or_else(|| fun_target.get_local_type(*idx)),
+                                ty.as_ref()
+                                    .unwrap_or_else(|| fun_target.get_local_type(*idx)),
                             );
                             display.extend(self.make_trace_entry(var_name, pretty));
                         }
@@ -348,7 +350,8 @@ impl<'env> BoogieWrapper<'env> {
                             let pretty = value.pretty_or_raw(
                                 self,
                                 error.model.as_ref().unwrap(),
-                                &ty.as_ref().unwrap_or_else(|| fun_target.get_return_type(*idx)),
+                                &ty.as_ref()
+                                    .unwrap_or_else(|| fun_target.get_return_type(*idx)),
                             );
                             display.extend(self.make_trace_entry(var_name, pretty));
                         }
@@ -410,12 +413,15 @@ impl<'env> BoogieWrapper<'env> {
                         let pretty = value.pretty_or_raw(
                             self,
                             error.model.as_ref().unwrap(),
-                            value_type.as_ref().unwrap_or(&Type::Primitive(PrimitiveType::Num)),
+                            value_type
+                                .as_ref()
+                                .unwrap_or(&Type::Primitive(PrimitiveType::Num)),
                         );
                         display.extend(self.make_trace_entry(var_name, pretty));
                     }
                     _ => {}
                 }
+                is_last_loc = matches!(entry, AtLocation { .. })
             }
             if let Some((abort_loc, value)) = abort_in_progress {
                 let code = if let Some(c) = value.extract_i128() {
