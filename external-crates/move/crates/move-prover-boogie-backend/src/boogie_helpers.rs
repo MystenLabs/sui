@@ -676,24 +676,26 @@ fn boogie_debug_track(
         let temp_name = boogie_temp(fun_target.global_env(), ty.skip_reference(), 0, bv_flag);
         format!(
             "{} := $Dereference({});\n\
-             assume {{:print \"{}({},{},{}):\", {}}} {} == {};",
+             assume {{:print \"{}({},{},{},{}):\", {}}} {} == {};",
             temp_name,
             value,
             track_tag,
             fun_target.func_env.module_env.get_id().to_usize(),
             fun_def_idx,
             tracked_idx,
+            boogie_type(fun_target.global_env(), ty.skip_reference()),
             temp_name,
             temp_name,
             temp_name
         )
     } else {
         format!(
-            "assume {{:print \"{}({},{},{}):\", {}}} {} == {};",
+            "assume {{:print \"{}({},{},{},{}):\", {}}} {} == {};",
             track_tag,
             fun_target.func_env.module_env.get_id().to_usize(),
             fun_def_idx,
             tracked_idx,
+            boogie_type(fun_target.global_env(), ty),
             value,
             value,
             value

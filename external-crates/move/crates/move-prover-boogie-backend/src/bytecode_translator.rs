@@ -735,6 +735,9 @@ impl<'env> BoogieTranslator<'env> {
         );
 
         for type_inst in &ghost_declare_global_type_instances {
+            self.add_type(&type_inst[0]);
+            self.add_type(&type_inst[1]);
+
             self.generate_ghost_global_var_declaration(type_inst);
         }
 
@@ -769,6 +772,17 @@ impl<'env> BoogieTranslator<'env> {
                 &type_inst[1],
             ),
         );
+    }
+
+    fn add_type(&self, ty: &Type) {
+        let overwritten = self
+            .types
+            .borrow_mut()
+            .insert(ty.clone(), boogie_type(self.env, ty));
+        match overwritten {
+            bimap::Overwritten::Neither | bimap::Overwritten::Pair { .. } => {}
+            _ => panic!("type already exists"),
+        }
     }
 
     fn get_verification_target_fun_env(
@@ -822,10 +836,18 @@ impl<'env> StructTranslator<'env> {
     fn translate(&self) {
         let writer = self.parent.writer;
         let struct_env = self.struct_env;
+        let env = struct_env.module_env.env;
+
+        // Record datatype
+        self.parent.add_type(&Type::Datatype(
+            struct_env.module_env.get_id(),
+            struct_env.get_id(),
+            self.type_inst.to_owned(),
+        ));
+
         if struct_env.is_native() {
             return;
         }
-        let env = struct_env.module_env.env;
 
         let qid = struct_env
             .get_qualified_id()
@@ -840,22 +862,8 @@ impl<'env> StructTranslator<'env> {
         // Set the location to internal as default.
         writer.set_location(&env.internal_loc());
 
-        let struct_name = boogie_struct_name(struct_env, self.type_inst);
-        // Record datatype
-        self.parent
-            .types
-            .borrow_mut()
-            .insert_no_overwrite(
-                Type::Datatype(
-                    struct_env.module_env.get_id(),
-                    struct_env.get_id(),
-                    self.type_inst.to_owned(),
-                ),
-                struct_name.clone(),
-            )
-            .unwrap();
-
         // Emit data type
+        let struct_name = boogie_struct_name(struct_env, self.type_inst);
         emitln!(writer, "datatype {} {{", struct_name);
 
         // Emit constructor
@@ -1067,6 +1075,13 @@ impl<'env> EnumTranslator<'env> {
         let writer = self.parent.writer;
         let enum_env = self.enum_env;
         let env = enum_env.module_env.env;
+
+        // Record datatype
+        self.parent.add_type(&Type::Datatype(
+            enum_env.module_env.get_id(),
+            enum_env.get_id(),
+            self.type_inst.to_owned(),
+        ));
 
         let qid = enum_env
             .get_qualified_id()
@@ -3330,8 +3345,9 @@ impl<'env> FunctionTranslator<'env> {
                         let instantiated_value_type = value_type.instantiate(self.type_inst);
                         emitln!(
                             self.writer(),
-                            "assume {{:print \"$track_ghost({}):\", {}}} true;",
+                            "assume {{:print \"$track_ghost({},{}):\", {}}} true;",
                             boogie_type(self.parent.env, &instantiated_ghost_type),
+                            boogie_type(self.parent.env, &instantiated_value_type),
                             boogie_spec_global_var_name(
                                 self.parent.env,
                                 &vec![instantiated_ghost_type, instantiated_value_type]

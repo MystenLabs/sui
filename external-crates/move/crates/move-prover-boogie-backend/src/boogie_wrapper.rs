@@ -95,14 +95,14 @@ pub struct BoogieError {
 /// A trace entry.
 pub enum TraceEntry {
     AtLocation(Loc),
-    Temporary(QualifiedId<FunId>, TempIndex, ModelValue),
-    Result(QualifiedId<FunId>, usize, ModelValue),
+    Temporary(QualifiedId<FunId>, TempIndex, Type, ModelValue),
+    Result(QualifiedId<FunId>, usize, Type, ModelValue),
     Abort(QualifiedId<FunId>, ModelValue),
     Exp(NodeId, ModelValue),
     SubExp(NodeId, ModelValue),
     GlobalMem(NodeId, ModelValue),
     InfoLine(String),
-    Ghost(Type, ModelValue),
+    Ghost(Type, Type, ModelValue),
 }
 
 // Error message matching
@@ -304,7 +304,7 @@ impl<'env> BoogieWrapper<'env> {
                             print_loc(loc, &mut last_loc, &mut display);
                         }
                     }
-                    Temporary(fun, idx, value) if error.model.is_some() => {
+                    Temporary(fun, idx, ty, value) if error.model.is_some() => {
                         let fun_env = self.env.get_function(*fun);
                         let fun_target = self
                             .targets
@@ -325,13 +325,12 @@ impl<'env> BoogieWrapper<'env> {
                                 } else {
                                     var_name
                                 };
-                            let ty = fun_target.get_local_type(*idx);
                             let pretty =
                                 value.pretty_or_raw(self, error.model.as_ref().unwrap(), ty);
                             display.extend(self.make_trace_entry(var_name, pretty));
                         }
                     }
-                    Result(fun, idx, value) if error.model.is_some() => {
+                    Result(fun, idx, ty, value) if error.model.is_some() => {
                         let fun_env = self.env.get_function(*fun);
                         let fun_target = self
                             .targets
@@ -343,7 +342,6 @@ impl<'env> BoogieWrapper<'env> {
                             } else {
                                 "result".to_string()
                             };
-                            let ty = fun_target.get_return_type(*idx);
                             let pretty =
                                 value.pretty_or_raw(self, error.model.as_ref().unwrap(), ty);
                             display.extend(self.make_trace_entry(var_name, pretty));
@@ -400,12 +398,11 @@ impl<'env> BoogieWrapper<'env> {
                         // information that should be displayed to the user
                         display.push(format!("    {}", info_line));
                     }
-                    TraceEntry::Ghost(ty, value) if error.model.is_some() => {
+                    TraceEntry::Ghost(ty, value_type, value) if error.model.is_some() => {
                         let var_name =
                             format!("ghost<{}>", ty.display(&self.env.get_type_display_ctx()));
                         let pretty =
-                            // value.pretty_or_raw(self, error.model.as_ref().unwrap(), ty);
-                            PrettyDoc::text(format!("<? {:?}>", value));
+                            value.pretty_or_raw(self, error.model.as_ref().unwrap(), value_type);
                         display.extend(self.make_trace_entry(var_name, pretty));
                     }
                     _ => {}
@@ -678,14 +675,14 @@ impl<'env> BoogieWrapper<'env> {
         match name {
             "at" => Ok(TraceEntry::AtLocation(self.extract_loc(args)?)),
             "track_local" => {
-                let (fun, idx) = self.extract_fun_and_index(args)?;
+                let (fun, idx, ty) = self.extract_fun_and_index(args)?;
                 let value = self.extract_value(value)?;
-                Ok(TraceEntry::Temporary(fun, idx, value))
+                Ok(TraceEntry::Temporary(fun, idx, ty, value))
             }
             "track_return" => {
-                let (fun, idx) = self.extract_fun_and_index(args)?;
+                let (fun, idx, ty) = self.extract_fun_and_index(args)?;
                 let value = self.extract_value(value)?;
-                Ok(TraceEntry::Result(fun, idx, value))
+                Ok(TraceEntry::Result(fun, idx, ty, value))
             }
             "track_abort" => {
                 let fun = self.extract_fun(args)?;
@@ -711,10 +708,20 @@ impl<'env> BoogieWrapper<'env> {
                 Some(info_line) => Ok(TraceEntry::InfoLine(info_line.trim().to_string())),
                 None => Ok(TraceEntry::InfoLine("".to_string())),
             },
-            "track_ghost" => Ok(TraceEntry::Ghost(
-                self.extract_type(args)?,
-                self.extract_value(value)?,
-            )),
+            "track_ghost" => {
+                let elems = args.split(',').collect_vec();
+                if elems.len() == 2 {
+                    Ok(TraceEntry::Ghost(
+                        self.extract_type(elems[0])?,
+                        self.extract_type(elems[1])?,
+                        self.extract_value(value)?,
+                    ))
+                } else {
+                    Err(ModelParseError(
+                        "invalid ghost type and value type".to_string(),
+                    ))
+                }
+            }
             _ => Err(ModelParseError::new(&format!(
                 "unrecognized augmented trace entry `{}`",
                 name
@@ -762,12 +769,13 @@ impl<'env> BoogieWrapper<'env> {
     fn extract_fun_and_index(
         &self,
         args: &str,
-    ) -> Result<(QualifiedId<FunId>, usize), ModelParseError> {
+    ) -> Result<(QualifiedId<FunId>, usize, Type), ModelParseError> {
         let elems = args.split(',').collect_vec();
-        if elems.len() == 3 {
+        if elems.len() == 4 {
             let fun = self.extract_fun(&elems[0..2].join(","))?;
             let idx = elems[2].parse::<usize>()?;
-            return Ok((fun, idx));
+            let ty = self.extract_type(elems[3])?;
+            return Ok((fun, idx, ty));
         }
         Err(ModelParseError("invalid function id and index".to_string()))
     }
