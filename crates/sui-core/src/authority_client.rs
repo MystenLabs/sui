@@ -28,12 +28,19 @@ use sui_network::tonic::transport::Channel;
 use sui_types::messages_grpc::{
     HandleCertificateRequestV3, HandleCertificateResponseV2, HandleCertificateResponseV3,
     HandleSoftBundleCertificatesRequestV3, HandleSoftBundleCertificatesResponseV3,
-    HandleTransactionResponse, ObjectInfoRequest, ObjectInfoResponse, SystemStateRequest,
-    TransactionInfoRequest, TransactionInfoResponse,
+    HandleTransactionRequestV2, HandleTransactionResponse, HandleTransactionResponseV2,
+    ObjectInfoRequest, ObjectInfoResponse, SystemStateRequest, TransactionInfoRequest,
+    TransactionInfoResponse,
 };
 
 #[async_trait]
 pub trait AuthorityAPI {
+    async fn submit_transaction(
+        &self,
+        transaction: HandleTransactionRequestV2,
+        client_addr: Option<SocketAddr>,
+    ) -> Result<HandleTransactionResponseV2, SuiError>;
+
     /// Initiate a new transaction to a Sui or Primary account.
     async fn handle_transaction(
         &self,
@@ -148,6 +155,22 @@ impl NetworkAuthorityClient {
 
 #[async_trait]
 impl AuthorityAPI for NetworkAuthorityClient {
+    /// Submits a transaction to the Sui network for certification and execution.
+    async fn submit_transaction(
+        &self,
+        transaction: HandleTransactionRequestV2,
+        client_addr: Option<SocketAddr>,
+    ) -> Result<HandleTransactionResponseV2, SuiError> {
+        let mut request = transaction.into_request();
+        insert_metadata(&mut request, client_addr);
+
+        self.client()?
+            .submit_transaction(request)
+            .await
+            .map(tonic::Response::into_inner)
+            .map_err(Into::into)
+    }
+
     /// Initiate a new transfer to a Sui or Primary account.
     async fn handle_transaction(
         &self,

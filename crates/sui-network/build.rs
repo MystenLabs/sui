@@ -24,19 +24,19 @@ fn main() -> Result<()> {
         .comment("The Validator interface")
         .method(
             Method::builder()
-                .name("transaction")
-                .route_name("Transaction")
-                .input_type("sui_types::transaction::Transaction")
-                .output_type("sui_types::messages_grpc::HandleTransactionResponse")
+                .name("submit_transaction")
+                .route_name("SubmitTransaction")
+                .input_type("sui_types::messages_grpc::HandleTransactionRequestV2")
+                .output_type("sui_types::messages_grpc::HandleTransactionResponseV2")
                 .codec_path(codec_path)
                 .build(),
         )
         .method(
             Method::builder()
-                .name("transaction_v2")
-                .route_name("TransactionV2")
-                .input_type("sui_types::messages_grpc::HandleTransactionRequestV2")
-                .output_type("sui_types::messages_grpc::HandleTransactionResponseV2")
+                .name("transaction")
+                .route_name("Transaction")
+                .input_type("sui_types::transaction::Transaction")
+                .output_type("sui_types::messages_grpc::HandleTransactionResponse")
                 .codec_path(codec_path)
                 .build(),
         )
