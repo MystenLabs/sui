@@ -12,12 +12,15 @@
 
 use std::collections::BTreeSet;
 
+use itertools::Itertools;
+
 use move_model::{exp_generator::ExpGenerator, model::FunctionEnv};
 
 use crate::{
     function_data_builder::FunctionDataBuilder,
     function_target::FunctionData,
     function_target_pipeline::{FunctionTargetProcessor, FunctionTargetsHolder},
+    spec_global_variable_analysis,
     stackless_bytecode::{Bytecode, Constant, Operation},
 };
 
@@ -32,7 +35,7 @@ impl DebugInstrumenter {
 impl FunctionTargetProcessor for DebugInstrumenter {
     fn process(
         &self,
-        _targets: &mut FunctionTargetsHolder,
+        targets: &mut FunctionTargetsHolder,
         fun_env: &FunctionEnv,
         data: FunctionData,
         _scc_opt: Option<&[FunctionEnv]>,
@@ -51,6 +54,21 @@ impl FunctionTargetProcessor for DebugInstrumenter {
         builder.set_loc(builder.fun_env.get_loc().at_start());
         for i in 0..builder.fun_env.get_parameter_count() {
             builder.emit_with(|id| Call(id, vec![], Operation::TraceLocal(i), vec![i], None));
+        }
+
+        // For spec functions, emit trace instructions for all global variables at entry.
+        if targets.is_spec(&fun_env.get_qualified_id()) {
+            for tys in spec_global_variable_analysis::get_info(&builder.data).all_vars().collect_vec() {
+                builder.emit_with(|id| {
+                    Call(
+                        id,
+                        vec![],
+                        Operation::TraceGhost(tys[0].clone(), tys[1].clone()),
+                        vec![],
+                        None,
+                    )
+                });
+            }
         }
 
         for bc in code {
