@@ -34,6 +34,7 @@ bls12381.yaml
 borrow.yaml
 clock.yaml
 coin.yaml
+coin_registry.yaml
 config.yaml
 deny_list.yaml
 display.yaml
