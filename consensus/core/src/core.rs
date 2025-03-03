@@ -993,7 +993,7 @@ impl Core {
             mem::take(certified_commits)
         };
 
-        tracing::info!(
+        tracing::debug!(
             "Decided {} certified leaders: {}",
             to_commit.len(),
             to_commit.iter().map(|c| c.leader().to_string()).join(",")
