@@ -37,18 +37,22 @@ public struct SystemParameters has store {
     /// The starting epoch in which stake subsidies start being paid out
     stake_subsidy_start_epoch: u64,
 
+    /// Deprecated.
     /// Maximum number of active validators at any moment.
     /// We do not allow the number of validators in any epoch to go above this.
     max_validator_count: u64,
 
+    /// Deprecated.
     /// Lower-bound on the amount of stake required to become a validator.
     min_validator_joining_stake: u64,
 
+    // Deprecated.
     /// Validators with stake amount below `validator_low_stake_threshold` are considered to
     /// have low stake and will be escorted out of the validator set after being below this
     /// threshold for more than `validator_low_stake_grace_period` number of epochs.
     validator_low_stake_threshold: u64,
 
+    /// Deprecated.
     /// Validators with stake below `validator_very_low_stake_threshold` will be removed
     /// immediately at epoch change, no grace period.
     validator_very_low_stake_threshold: u64,
@@ -72,18 +76,22 @@ public struct SystemParametersV2 has store {
     /// Minimum number of active validators at any moment.
     min_validator_count: u64,
 
+    /// Deprecated.
     /// Maximum number of active validators at any moment.
     /// We do not allow the number of validators in any epoch to go above this.
     max_validator_count: u64,
 
+    /// Deprecated.
     /// Lower-bound on the amount of stake required to become a validator.
     min_validator_joining_stake: u64,
 
+    /// Deprecated.
     /// Validators with stake amount below `validator_low_stake_threshold` are considered to
     /// have low stake and will be escorted out of the validator set after being below this
     /// threshold for more than `validator_low_stake_grace_period` number of epochs.
     validator_low_stake_threshold: u64,
 
+    /// Deprecated.
     /// Validators with stake below `validator_very_low_stake_threshold` will be removed
     /// immediately at epoch change, no grace period.
     validator_very_low_stake_threshold: u64,
@@ -407,12 +415,7 @@ public(package) fun request_add_validator(
     self: &mut SuiSystemStateInnerV2,
     ctx: &TxContext,
 ) {
-    assert!(
-        self.validators.next_epoch_validator_count() < self.parameters.max_validator_count,
-        ELimitExceeded,
-    );
-
-    self.validators.request_add_validator(self.parameters.min_validator_joining_stake, ctx);
+    self.validators.request_add_validator(ctx);
 }
 
 /// A validator can call this function to request a removal in the next epoch.
@@ -920,8 +923,6 @@ public(package) fun advance_epoch(
         &mut storage_fund_reward,
         &mut self.validator_report_records,
         reward_slashing_rate,
-        self.parameters.validator_low_stake_threshold,
-        self.parameters.validator_very_low_stake_threshold,
         self.parameters.validator_low_stake_grace_period,
         ctx,
     );
@@ -1139,15 +1140,9 @@ public(package) fun set_epoch_for_testing(self: &mut SuiSystemStateInnerV2, epoc
 #[test_only]
 public(package) fun request_add_validator_for_testing(
     self: &mut SuiSystemStateInnerV2,
-    min_joining_stake_for_testing: u64,
     ctx: &TxContext,
 ) {
-    assert!(
-        self.validators.next_epoch_validator_count() < self.parameters.max_validator_count,
-        ELimitExceeded,
-    );
-
-    self.validators.request_add_validator(min_joining_stake_for_testing, ctx);
+    self.validators.request_add_validator(ctx);
 }
 
 #[test_only]
