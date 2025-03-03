@@ -35,6 +35,7 @@ pub mod base_types;
 pub mod bridge;
 pub mod clock;
 pub mod coin;
+pub mod coin_registry;
 pub mod collection_types;
 pub mod committee;
 pub mod config;
@@ -124,6 +125,7 @@ built_in_pkgs! {
     SUI_FRAMEWORK_ADDRESS / SUI_FRAMEWORK_PACKAGE_ID = 0x2;
     SUI_SYSTEM_ADDRESS / SUI_SYSTEM_PACKAGE_ID = 0x3;
     BRIDGE_ADDRESS / BRIDGE_PACKAGE_ID = 0xb;
+    COIN_REGISTRY_ADDRESS / COIN_REGISTRY_PACKAGE_ID = 0xc;
     DEEPBOOK_ADDRESS / DEEPBOOK_PACKAGE_ID = 0xdee9;
 }
 
@@ -135,6 +137,7 @@ built_in_ids! {
     SUI_BRIDGE_ADDRESS / SUI_BRIDGE_OBJECT_ID = 0x9;
     SUI_DENY_LIST_ADDRESS / SUI_DENY_LIST_OBJECT_ID = 0x403;
     SUI_ACCUMULATOR_ROOT_ADDRESS / SUI_ACCUMULATOR_ROOT_OBJECT_ID = 0xacc;
+    SUI_COIN_REGISTRY_ADDRESS / SUI_COIN_REGISTRY_OBJECT_ID = 0xc;
 }
 
 pub const SUI_SYSTEM_STATE_OBJECT_SHARED_VERSION: SequenceNumber = OBJECT_START_VERSION;
@@ -200,6 +203,7 @@ pub fn resolve_address(addr: &str) -> Option<AccountAddress> {
         "sui" => Some(SUI_FRAMEWORK_ADDRESS),
         "sui_system" => Some(SUI_SYSTEM_ADDRESS),
         "bridge" => Some(BRIDGE_ADDRESS),
+        "coin_registry" => Some(SUI_COIN_REGISTRY_ADDRESS),
         _ => None,
     }
 }
