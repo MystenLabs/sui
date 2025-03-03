@@ -46,6 +46,9 @@ const SUI_ACCUMULATOR_ROOT_OBJECT_ID: address = @0xacc;
 /// The hardcoded ID for the Bridge Object.
 const SUI_BRIDGE_ID: address = @0x9;
 
+/// The hardcoded ID for the Coin Metadata Registry Object.
+const SUI_COIN_METADATA_OBJECT_ID: address = @0x10;
+
 /// Sender is not @0x0 the system address.
 const ENotSystemAddress: u64 = 0;
 
@@ -155,6 +158,15 @@ public(package) fun sui_accumulator_root_address(): address {
 fun bridge(): UID {
     UID {
         id: ID { bytes: SUI_BRIDGE_ID },
+    }
+}
+
+#[allow(unused_function)]
+/// Create the `UID` for the singleton `` object.
+/// This should only be called once from ``.
+public(package) fun sui_coin_metadata_registry_object_id(): UID {
+    UID {
+        id: ID { bytes: SUI_COIN_METADATA_OBJECT_ID },
     }
 }
 

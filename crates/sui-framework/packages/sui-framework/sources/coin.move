@@ -115,6 +115,10 @@ public fun supply_mut<T>(treasury: &mut TreasuryCap<T>): &mut Supply<T> {
     &mut treasury.total_supply
 }
 
+public(package) fun treasury_cap_uid_mut<T>(treasury_cap: &mut TreasuryCap<T>): &mut UID {
+    &mut treasury_cap.id
+}
+
 // === Balance <-> Coin accessors and type morphing ===
 
 /// Public getter for the coin's value
@@ -454,6 +458,19 @@ public entry fun update_icon_url<T>(
     url: ascii::String,
 ) {
     metadata.icon_url = option::some(url::new_unsafe(url));
+}
+
+/// Destroy the metadata for a coin type, only callable by the registry.
+public(package) fun destroy_metadata<T>(metadata: CoinMetadata<T>) {
+    let CoinMetadata { id, .. } = metadata;
+    id.delete()
+}
+
+public(package) fun destroy_treasury_cap<T>(treasury_cap: TreasuryCap<T>): Supply<T> {
+    let TreasuryCap { id, total_supply } = treasury_cap;
+    id.delete();
+
+    total_supply
 }
 
 // === Get coin metadata fields for on-chain consumption ===
