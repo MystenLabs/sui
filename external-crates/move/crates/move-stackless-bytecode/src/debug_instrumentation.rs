@@ -111,7 +111,7 @@ impl FunctionTargetProcessor for DebugInstrumenter {
                         Some(Bytecode::Load(_, last_dest, Constant::ByteArray(bytes)))
                             if srcs[0] == *last_dest =>
                         {
-                            String::from_utf8_lossy(bytes).to_string()
+                            String::from_utf8_lossy(bytes).to_string().escape_debug().to_string()
                         }
                         _ => panic!("log text should be preceded by load byte array"),
                     };
