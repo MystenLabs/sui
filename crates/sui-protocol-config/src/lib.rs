@@ -220,8 +220,6 @@ const MAX_PROTOCOL_VERSION: u64 = 76;
 // Version 75: Enable passkey auth in testnet.
 // Version 76: Deprecate Deepbook V2 order placement and deposit.
 //             Removes unnecessary child object mutations
-//             Enable consensus garbage collection for testnet
-//             Enable the new consensus commit rule for testnet.
 //             Enable passkey auth in multisig for testnet.
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
