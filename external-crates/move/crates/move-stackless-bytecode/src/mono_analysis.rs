@@ -214,6 +214,25 @@ impl MonoAnalysisProcessor {
             done_types: BTreeSet::new(),
             inst_opt: None,
         };
+
+        // Analyze ghost types
+        targets
+            .specs()
+            .map(|id| {
+                spec_global_variable_analysis::get_info(
+                    targets.get_data(id, &FunctionVariant::Baseline).unwrap(),
+                )
+                .all_vars()
+            })
+            .flatten()
+            .collect::<BTreeSet<_>>()
+            .iter()
+            .for_each(|tys| {
+                for ty in tys {
+                    analyzer.add_type_root(ty);
+                }
+            });
+
         // Analyze axioms found in modules.
         for module_env in env.get_modules() {
             for axiom in module_env.get_spec().filter_kind_axiom() {
