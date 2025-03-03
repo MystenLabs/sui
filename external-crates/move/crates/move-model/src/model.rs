@@ -42,8 +42,9 @@ use move_binary_format::{
     file_format::{
         AddressIdentifierIndex, Bytecode, CodeOffset, Constant as VMConstant, ConstantPoolIndex,
         DatatypeHandleIndex, EnumDefinitionIndex, FunctionDefinition, FunctionDefinitionIndex,
-        FunctionHandleIndex, FunctionInstantiation, SignatureIndex, SignatureToken,
-        StructDefinitionIndex, StructFieldInformation, VariantJumpTable, Visibility,
+        FunctionHandleIndex, FunctionInstantiation, IdentifierIndex, ModuleHandle, SignatureIndex,
+        SignatureToken, StructDefinitionIndex, StructFieldInformation, VariantJumpTable,
+        Visibility,
     },
     normalized::{Enum, FunctionRef, Type as MType},
     CompiledModule,
@@ -1915,10 +1916,21 @@ impl GlobalEnv {
 
     fn add_stub_module(&mut self, module_symbol: Symbol) {
         if self.find_module_by_name(module_symbol).is_none() {
+            let mut compiled_module: CompiledModule = CompiledModule::default();
+            compiled_module.module_handles.push(ModuleHandle {
+                address: AddressIdentifierIndex::default(),
+                name: IdentifierIndex::default(),
+            });
+            compiled_module
+                .address_identifiers
+                .push(AccountAddress::ZERO);
+            compiled_module
+                .identifiers
+                .push(Identifier::new("<SELF>").unwrap());
             self.module_data.push(ModuleData {
                 name: ModuleName::new(Default::default(), module_symbol),
                 id: ModuleId::new(self.get_module_count()),
-                module: CompiledModule::default(),
+                module: compiled_module,
                 named_constants: BTreeMap::new(),
                 struct_data: BTreeMap::new(),
                 struct_idx_to_id: BTreeMap::new(),
