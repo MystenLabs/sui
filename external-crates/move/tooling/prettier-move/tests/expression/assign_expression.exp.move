@@ -15,18 +15,18 @@ fun assign_expression() {
     // assignment with if + break
     a =
         if (long_condition)
-        long_expression
-    else
-        another_long_expression;
+            long_expression
+        else
+            another_long_expression;
 
     a = if (true) { a } else { b };
 
     // assignment with if + block
     a = if (true) {
-        long_true_expression
-    } else {
-        long_false_expression
-    };
+            long_true_expression
+        } else {
+            long_false_expression
+        };
 }
 
 fun assign_comment() {
@@ -44,5 +44,10 @@ fun assign_comment() {
     // of trailing comments are
     // mixed in lhs
     a /* unsolved */ = // comment
-    b /* b */; // trailing
+        b /* b */; // trailing
+
+    a = // comment
+        if (true) expr
+        else
+            longer_expression;
 }

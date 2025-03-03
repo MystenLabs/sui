@@ -150,13 +150,15 @@ fun f() {
     animation.do_ref!(|el| {
         contents =
             contents
-            .map!(|mut contents| {
-                contents.push_back(el.to_string());
-                contents
-            })
-            .or!(
-                vector[el.to_string()],
-            );
+                .map!(|mut contents| {
+                    contents.push_back(el.to_string());
+                    contents
+                })
+                .or!(
+                    vector[
+                        el.to_string(),
+                    ],
+                );
     });
 
     stack.other!(argument, |x| x.do!());

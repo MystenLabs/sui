@@ -45,4 +45,8 @@ fun assign_comment() {
     // mixed in lhs
     a /* unsolved */ = // comment
         b /* b */; // trailing
+
+    a = // comment
+        if (true) expr
+        else longer_expression;
 }

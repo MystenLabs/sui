@@ -44,7 +44,7 @@ function printAssignExpression(path: AstPath<Node>, options: MoveOptions, print:
 	}, 'nonFormattingChildren', 0));
 
 	// then print the rhs
-	result.push(group([indent(line), path.call(print, 'nonFormattingChildren', 1)], { shouldBreak }));
+	result.push(group([indent(line), indent(path.call(print, 'nonFormattingChildren', 1))], { shouldBreak }));
 
 	return result;
 }
