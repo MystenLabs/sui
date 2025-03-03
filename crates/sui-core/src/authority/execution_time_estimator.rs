@@ -171,16 +171,14 @@ impl ExecutionTimeObserver {
                             last_measured: None,
                         });
                 utilization.excess_execution_time += total_duration;
-                utilization.excess_execution_time = utilization
-                    .excess_execution_time
-                    .checked_sub(
+                utilization.excess_execution_time =
+                    utilization.excess_execution_time.saturating_sub(
                         utilization
                             .last_measured
                             .map(|last_measured| now.duration_since(last_measured))
                             .unwrap_or(Duration::MAX)
                             .mul_f64(TARGET_OBJECT_UTILIZATION),
-                    )
-                    .unwrap_or(Duration::ZERO);
+                    );
                 utilization.last_measured = Some(now);
                 utilization.excess_execution_time
             })
@@ -226,15 +224,14 @@ impl ExecutionTimeObserver {
             // - the tx has at least one mutable shared object with utilization that's too high
             // TODO: Consider only sharing observations that disagree with consensus estimate.
             let new_average = local_observation.moving_average.get_average();
-            let diff_exceeds_threshold = {
+            let diff_exceeds_threshold =
                 local_observation
                     .last_shared
                     .is_none_or(|(last_shared, last_shared_timestamp)| {
                         let diff = last_shared.abs_diff(new_average);
                         diff >= new_average.mul_f64(OBSERVATION_SHARING_DIFF_THRESHOLD)
                             && last_shared_timestamp.elapsed() >= OBSERVATION_SHARING_MIN_INTERVAL
-                    })
-            };
+                    });
             let utilization_exceeds_threshold = max_excess_per_object_execution_time
                 >= self.observation_sharing_object_utilization_threshold;
             if diff_exceeds_threshold && utilization_exceeds_threshold {
