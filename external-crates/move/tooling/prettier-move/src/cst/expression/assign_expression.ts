@@ -4,6 +4,7 @@
 import { Node } from '../..';
 import { MoveOptions, printFn, treeFn } from '../../printer';
 import { AstPath, Doc, doc } from 'prettier';
+import { printTrailingComment } from '../../utilities';
 const { group, indent, line } = doc.builders;
 
 /** The type of the node implemented in this file */
@@ -21,12 +22,29 @@ export default function (path: AstPath<Node>): treeFn | null {
  * Print `assign_expression` node.
  */
 function printAssignExpression(path: AstPath<Node>, options: MoveOptions, print: printFn): Doc {
-	return [
-		path.call(print, 'nonFormattingChildren', 0), // lhs
-		' =',
-		group([
-			indent(line),
-			indent(path.call(print, 'nonFormattingChildren', 1)), // rhs
-		]),
-	];
+	if (path.node.nonFormattingChildren.length !== 2) {
+		throw new Error('`assign_expression` must have 2 children');
+	}
+
+	const result: Doc[] = [];
+	let shouldBreak = false;
+
+	// together with the LHS we print trailing comment if there is one
+	result.push(path.call((lhs) => {
+		const hasComment = !!lhs.node.trailingComment;
+
+		if (lhs.node.trailingComment?.type == 'line_comment') {
+			shouldBreak = true;
+			const trailingLineComment = printTrailingComment(lhs, false);
+			lhs.node.disableTrailingComment();
+			return [print(lhs), ' =', trailingLineComment];
+		}
+
+		return [print(lhs), hasComment ? '=' : ' ='];
+	}, 'nonFormattingChildren', 0));
+
+	// then print the rhs
+	result.push(group([indent(line), path.call(print, 'nonFormattingChildren', 1)], { shouldBreak }));
+
+	return result;
 }
