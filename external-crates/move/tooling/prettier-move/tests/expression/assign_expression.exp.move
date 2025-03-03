@@ -38,16 +38,10 @@ fun assign_comment() {
 
     a = /* hahaha */ b;
 
-    // TODO:
-    // unsolved case of missing
-    // indentation when two types
-    // of trailing comments are
-    // mixed in lhs
     a /* unsolved */ = // comment
         b /* b */; // trailing
 
     a = // comment
         if (true) expr
-        else
-            longer_expression;
+        else longer_expression;
 }
