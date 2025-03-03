@@ -399,7 +399,7 @@ async fn test_equivocating_direct_commit() {
     tracing::info!("Leader round wave 1: {leader_round_wave_1}");
     let leader_wave_1 = committer
         .elect_leader(leader_round_wave_1)
-        .expect("there should be a leader for wave 2");
+        .expect("there should be a leader for wave 1");
     let leader_index_wave_1 = leader_wave_1.authority;
     tracing::info!("Leader index wave 1: {leader_index_wave_1}");
 
@@ -412,7 +412,7 @@ async fn test_equivocating_direct_commit() {
         );
     };
 
-    // Authority B is equivoking
+    // Authority B is equivocating
     let block_refs_round_3: Vec<_> = dag_builder
         .blocks(3u32..=3)
         .iter()
@@ -442,20 +442,21 @@ async fn test_equivocating_direct_commit() {
     dag_state.write().accept_block(b4_votes_all);
 
     for block in dag_builder.blocks(5u32..=5).iter() {
-        let autor_index = block.author().value();
+        let author_index = block.author().value();
         // skip own_index
-        if autor_index == 0 {
+        if author_index == 0 {
             continue;
         }
         let block = VerifiedBlock::new_for_test(
-            TestBlock::new(5, autor_index as u32)
+            TestBlock::new(5, author_index as u32)
                 .set_ancestors(round_4_refs.clone())
-                .set_timestamp_ms(5 * 1000 + autor_index as u64)
+                .set_timestamp_ms(5 * 1000 + author_index as u64)
                 .build(),
         );
         dag_state.write().accept_block(block);
     }
 
+    let leader_status_wave_1 = committer.try_direct_decide(leader_wave_1);
     if let LeaderStatus::Commit(committed) = leader_status_wave_1.clone() {
         tracing::info!("Direct committed leader at wave 1: {committed}");
     } else {
