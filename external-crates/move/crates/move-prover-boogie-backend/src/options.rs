@@ -146,6 +146,7 @@ pub struct BoogieOptions {
     /// Optional aggregate function names for native methods implementing mutable borrow semantics
     pub borrow_aggregates: Vec<BorrowAggregate>,
     pub prelude_extra: Option<PathBuf>,
+    pub path_split: Option<usize>,
 }
 
 impl Default for BoogieOptions {
@@ -184,6 +185,7 @@ impl Default for BoogieOptions {
             loop_unroll: None,
             borrow_aggregates: vec![],
             prelude_extra: Some(PathBuf::from("prelude_extra.bpl")),
+            path_split: Some(10),
         }
     }
 }
@@ -268,6 +270,15 @@ impl BoogieOptions {
         }
         for f in &self.boogie_flags {
             add(&[f.as_str()]);
+        }
+        if let Some(n) = self.path_split {
+            add(&[
+                &format!("-vcsCores:{}", n),
+                "-verifySeparately",
+                &format!("-vcsMaxKeepGoingSplits:{}", n),
+                "-vcsSplitOnEveryAssert",
+                "-vcsFinalAssertTimeout:600",
+            ]);
         }
         add(&[boogie_file]);
         Ok(result)

@@ -32,6 +32,8 @@ pub struct Build {
     pub generate_struct_layouts: bool,
     #[clap(long, global = true)]
     pub generate_boogie: bool,
+    #[clap(long, global = true)]
+    pub path_split: Option<usize>,
     /// The chain ID, if resolved. Required when the dump_bytecode_as_base64 is true,
     /// for automated address management, where package addresses are resolved for the
     /// respective chain in the Move.lock file.
@@ -54,6 +56,7 @@ impl Build {
             self.dump_bytecode_as_base64,
             self.generate_struct_layouts,
             self.generate_boogie,
+            self.path_split,
             self.chain_id.clone(),
         )
     }
@@ -65,6 +68,7 @@ impl Build {
         dump_bytecode_as_base64: bool,
         generate_struct_layouts: bool,
         generate_boogie: bool,
+        path_split: Option<usize>,
         chain_id: Option<String>,
     ) -> anyhow::Result<()> {
         if generate_boogie {
@@ -83,6 +87,7 @@ impl Build {
             options.backend.sequential_task = true;
             options.backend.use_array_theory = true;
             options.backend.vc_timeout = 3000;
+            options.backend.path_split = path_split;
             run_boogie_gen(&model, options)?;
             return Ok(());
         }
