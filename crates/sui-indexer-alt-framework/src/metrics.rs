@@ -43,7 +43,7 @@ const BATCH_SIZE_BUCKETS: &[f64] = &[
 ];
 
 #[derive(Clone)]
-pub(crate) struct IndexerMetrics {
+pub struct IndexerMetrics {
     // Statistics related to fetching data from the remote store.
     pub total_ingested_checkpoints: IntCounter,
     pub total_ingested_transactions: IntCounter,
@@ -145,7 +145,7 @@ pub(crate) struct CheckpointLagMetricReporter {
 }
 
 impl IndexerMetrics {
-    pub(crate) fn new(registry: &Registry) -> Arc<Self> {
+    pub fn new(registry: &Registry) -> Arc<Self> {
         Arc::new(Self {
             total_ingested_checkpoints: register_int_counter_with_registry!(
                 "indexer_total_ingested_checkpoints",
