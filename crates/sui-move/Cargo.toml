@@ -16,7 +16,6 @@ serde_yaml.workspace = true
 tracing.workspace = true
 prometheus.workspace = true
 bin-version.workspace = true
-datatest-stable.workspace = true
 
 move-binary-format.workspace = true
 move-cli.workspace = true
@@ -41,23 +40,17 @@ better_any = "0.1.1"
 jemalloc-ctl.workspace = true
 
 [dev-dependencies]
-assert_cmd.workspace = true
 futures.workspace = true
 jsonrpsee.workspace = true
 rand.workspace = true
 tempfile.workspace = true
 walkdir.workspace = true
-insta-cmd.workspace = true
 insta.workspace = true
-fs_extra.workspace = true
 
 move-package.workspace = true
 
 mysten-metrics.workspace = true
-sui-core.workspace = true
 sui-macros.workspace = true
-sui-node.workspace = true
-sui-simulator.workspace = true
 
 [package.metadata.cargo-udeps.ignore]
 normal = ["jemalloc-ctl"]

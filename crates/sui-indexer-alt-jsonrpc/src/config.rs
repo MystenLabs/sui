@@ -8,13 +8,32 @@ use sui_protocol_config::ProtocolConfig;
 use sui_types::base_types::{ObjectID, SuiAddress};
 use tracing::warn;
 
-use crate::api::{coin::CoinsConfig, objects::ObjectsConfig, transactions::TransactionsConfig};
-
 pub use sui_name_service::NameServiceConfig;
+
+#[derive(Debug)]
+pub struct RpcConfig {
+    /// Configuration for object-related RPC methods.
+    pub objects: ObjectsConfig,
+
+    /// Configuration for transaction-related RPC methods.
+    pub transactions: TransactionsConfig,
+
+    /// Configuration for SuiNS related RPC methods.
+    pub name_service: NameServiceConfig,
+
+    /// Configuration for coin-related RPC methods.
+    pub coins: CoinsConfig,
+
+    /// Configuration for bigtable kv store, if it is used.
+    pub bigtable: Option<BigtableConfig>,
+
+    /// Configuring limits for the package resolver.
+    pub package_resolver: sui_package_resolver::Limits,
+}
 
 #[DefaultConfig]
 #[derive(Clone, Default, Debug)]
-pub struct RpcConfig {
+pub struct RpcLayer {
     /// Configuration for object-related RPC methods.
     pub objects: ObjectsLayer,
 
@@ -29,7 +48,7 @@ pub struct RpcConfig {
 
     /// Configuration for bigtable kv store, if it is used.
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub bigtable_config: Option<BigtableConfig>,
+    pub bigtable: Option<BigtableConfig>,
 
     /// Configuring limits for the package resolver.
     pub package_resolver: PackageResolverLayer,
@@ -38,15 +57,46 @@ pub struct RpcConfig {
     pub extra: toml::Table,
 }
 
+#[derive(Debug, Clone)]
+pub struct ObjectsConfig {
+    /// The maximum number of keys that can be queried in a single multi-get request.
+    pub max_multi_get_objects: usize,
+
+    /// The default page size limit when querying objects, if none is provided.
+    pub default_page_size: usize,
+
+    /// The largest acceptable page size when querying transactions. Requesting a page larger than
+    /// this is a user error.
+    pub max_page_size: usize,
+
+    /// The maximum depth a Display format string is allowed to nest field accesses.
+    pub max_display_field_depth: usize,
+
+    /// The maximum number of bytes occupied by Display field names and values in the output.
+    pub max_display_output_size: usize,
+}
+
 #[DefaultConfig]
 #[derive(Clone, Default, Debug)]
 pub struct ObjectsLayer {
     pub max_multi_get_objects: Option<usize>,
     pub default_page_size: Option<usize>,
     pub max_page_size: Option<usize>,
+    pub max_display_field_depth: Option<usize>,
+    pub max_display_output_size: Option<usize>,
 
     #[serde(flatten)]
     pub extra: toml::Table,
+}
+
+#[derive(Debug, Clone)]
+pub struct TransactionsConfig {
+    /// The default page size limit when querying transactions, if none is provided.
+    pub default_page_size: usize,
+
+    /// The largest acceptable page size when querying transactions. Requesting a page larger than
+    /// this is a user error.
+    pub max_page_size: usize,
 }
 
 #[DefaultConfig]
@@ -68,6 +118,16 @@ pub struct NameServiceLayer {
 
     #[serde(flatten)]
     pub extra: toml::Table,
+}
+
+#[derive(Debug, Clone)]
+pub struct CoinsConfig {
+    /// The default page size limit when querying coins, if none is provided.
+    pub default_page_size: usize,
+
+    /// The largest acceptable page size when querying coins. Requesting a page larger than
+    /// this is a user error.
+    pub max_page_size: usize,
 }
 
 #[DefaultConfig]
@@ -99,7 +159,7 @@ pub struct PackageResolverLayer {
     pub extra: toml::Table,
 }
 
-impl RpcConfig {
+impl RpcLayer {
     /// Generate an example configuration, suitable for demonstrating the fields available to
     /// configure.
     pub fn example() -> Self {
@@ -108,7 +168,7 @@ impl RpcConfig {
             transactions: TransactionsConfig::default().into(),
             name_service: NameServiceConfig::default().into(),
             coins: CoinsConfig::default().into(),
-            bigtable_config: None,
+            bigtable: None,
             package_resolver: PackageResolverLayer::default(),
             extra: Default::default(),
         }
@@ -116,7 +176,14 @@ impl RpcConfig {
 
     pub fn finish(mut self) -> RpcConfig {
         check_extra("top-level", mem::take(&mut self.extra));
-        self
+        RpcConfig {
+            objects: self.objects.finish(ObjectsConfig::default()),
+            transactions: self.transactions.finish(TransactionsConfig::default()),
+            name_service: self.name_service.finish(NameServiceConfig::default()),
+            coins: self.coins.finish(CoinsConfig::default()),
+            bigtable: self.bigtable,
+            package_resolver: self.package_resolver.finish(),
+        }
     }
 }
 
@@ -129,6 +196,12 @@ impl ObjectsLayer {
                 .unwrap_or(base.max_multi_get_objects),
             default_page_size: self.default_page_size.unwrap_or(base.default_page_size),
             max_page_size: self.max_page_size.unwrap_or(base.max_page_size),
+            max_display_field_depth: self
+                .max_display_field_depth
+                .unwrap_or(base.max_display_field_depth),
+            max_display_output_size: self
+                .max_display_output_size
+                .unwrap_or(base.max_display_output_size),
         }
     }
 }
@@ -176,6 +249,49 @@ impl PackageResolverLayer {
     }
 }
 
+impl Default for RpcConfig {
+    fn default() -> Self {
+        Self {
+            objects: ObjectsConfig::default(),
+            transactions: TransactionsConfig::default(),
+            name_service: NameServiceConfig::default(),
+            coins: CoinsConfig::default(),
+            bigtable: None,
+            package_resolver: PackageResolverLayer::default().finish(),
+        }
+    }
+}
+
+impl Default for ObjectsConfig {
+    fn default() -> Self {
+        Self {
+            max_multi_get_objects: 50,
+            default_page_size: 50,
+            max_page_size: 100,
+            max_display_field_depth: 10,
+            max_display_output_size: 1024 * 1024,
+        }
+    }
+}
+
+impl Default for TransactionsConfig {
+    fn default() -> Self {
+        Self {
+            default_page_size: 50,
+            max_page_size: 100,
+        }
+    }
+}
+
+impl Default for CoinsConfig {
+    fn default() -> Self {
+        Self {
+            default_page_size: 50,
+            max_page_size: 100,
+        }
+    }
+}
+
 impl Default for PackageResolverLayer {
     fn default() -> Self {
         // SAFETY: Accessing the max supported config by the binary (and disregarding specific
@@ -200,6 +316,8 @@ impl From<ObjectsConfig> for ObjectsLayer {
             max_multi_get_objects: Some(config.max_multi_get_objects),
             default_page_size: Some(config.default_page_size),
             max_page_size: Some(config.max_page_size),
+            max_display_field_depth: Some(config.max_display_field_depth),
+            max_display_output_size: Some(config.max_display_output_size),
             extra: Default::default(),
         }
     }

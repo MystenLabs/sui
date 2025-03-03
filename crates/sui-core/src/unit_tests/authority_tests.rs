@@ -1077,9 +1077,13 @@ async fn test_dry_run_dev_inspect_dynamic_field_too_new() {
     );
     let transaction = to_sender_signed_transaction(data.clone(), &sender_key);
     let digest = *transaction.digest();
-    let DryRunTransactionBlockResponse { effects, .. } =
-        fullnode.dry_exec_transaction(data, digest).await.unwrap().0;
+    let DryRunTransactionBlockResponse {
+        effects,
+        execution_error_source,
+        ..
+    } = fullnode.dry_exec_transaction(data, digest).await.unwrap().0;
     assert_eq!(effects.deleted().len(), 0);
+    assert_eq!(execution_error_source, Some("VMError with status ABORTED with sub status 1 at location Module ModuleId { address: 0000000000000000000000000000000000000000000000000000000000000002, name: Identifier(\"dynamic_field\") } at code offset 0 in function definition 13".to_string()));
 }
 
 // tests using a gas coin with version MAX - 1
@@ -4703,7 +4707,7 @@ async fn test_consensus_commit_prologue_generation() {
             .data()
             .transaction_data()
             .kind(),
-        TransactionKind::ConsensusCommitPrologueV3(..)
+        TransactionKind::ConsensusCommitPrologueV4(..)
     ));
 
     // Tests that the system clock object is updated by the new consensus commit prologue transaction.
@@ -5352,6 +5356,121 @@ async fn test_for_inc_201_dry_run() {
         events.data[0].type_.name.to_string()
     );
     assert_eq!(json!({"foo":"bar"}), events.data[0].parsed_json);
+}
+
+#[tokio::test]
+async fn test_function_not_found() {
+    let (sender, sender_key): (_, AccountKeyPair) = get_key_pair();
+    let gas_object_id = ObjectID::random();
+    let (_, fullnode, _) =
+        init_state_with_ids_and_object_basics_with_fullnode(vec![(sender, gas_object_id)]).await;
+
+    let mut builder = ProgrammableTransactionBuilder::new();
+    builder
+        .move_call(
+            ObjectID::from_single_byte(1),
+            ident_str!("option").to_owned(),
+            ident_str!("bad_function").to_owned(),
+            vec![],
+            vec![],
+        )
+        .unwrap();
+    let kind = TransactionKind::programmable(builder.finish());
+
+    let rgp = fullnode.reference_gas_price_for_testing().unwrap();
+    let txn_data = TransactionData::new_with_gas_coins(
+        kind,
+        sender,
+        vec![],
+        TEST_ONLY_GAS_UNIT_FOR_PUBLISH * rgp,
+        rgp,
+    );
+
+    let signed = to_sender_signed_transaction(txn_data, &sender_key);
+    let (
+        DryRunTransactionBlockResponse {
+            effects,
+            execution_error_source,
+            ..
+        },
+        _,
+        _,
+        _,
+    ) = fullnode
+        .dry_exec_transaction(
+            signed.data().intent_message().value.clone(),
+            *signed.digest(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(
+        effects.status(),
+        &SuiExecutionStatus::Failure {
+            error: "FunctionNotFound in command 0".to_string(),
+        }
+    );
+
+    assert_eq!(execution_error_source, Some("Could not resolve function 'bad_function' in module 0000000000000000000000000000000000000000000000000000000000000001::option".to_string()),)
+}
+
+#[tokio::test]
+async fn test_arity_mismatch() {
+    let (sender, sender_key): (_, AccountKeyPair) = get_key_pair();
+    let gas = ObjectID::random();
+    let obj_id = ObjectID::random();
+    let (_, authority, _) =
+        init_state_with_ids_and_object_basics_with_fullnode(vec![(sender, gas), (sender, obj_id)])
+            .await;
+
+    let mut builder = ProgrammableTransactionBuilder::new();
+    builder
+        .move_call(
+            ObjectID::from_single_byte(1),
+            ident_str!("option").to_owned(),
+            ident_str!("is_none").to_owned(),
+            vec![TypeTag::U64],
+            vec![],
+        )
+        .unwrap();
+    let kind = TransactionKind::programmable(builder.finish());
+
+    let rgp = authority.reference_gas_price_for_testing().unwrap();
+    let txn_data = TransactionData::new_with_gas_coins(
+        kind,
+        sender,
+        vec![],
+        TEST_ONLY_GAS_UNIT_FOR_PUBLISH * rgp,
+        rgp,
+    );
+
+    let signed = to_sender_signed_transaction(txn_data, &sender_key);
+    let (
+        DryRunTransactionBlockResponse {
+            effects,
+            execution_error_source,
+            ..
+        },
+        _,
+        _,
+        _,
+    ) = authority
+        .dry_exec_transaction(
+            signed.data().intent_message().value.clone(),
+            *signed.digest(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(
+        effects.status(),
+        &SuiExecutionStatus::Failure {
+            error: "ArityMismatch in command 0".to_string(),
+        }
+    );
+
+    assert_eq!(
+        execution_error_source,
+        Some("Expected 1 argument calling function 'is_none', but found 0".to_string()),
+    )
 }
 
 #[tokio::test]
@@ -6053,7 +6172,7 @@ async fn test_consensus_handler_congestion_control_transaction_cancellation() {
     // Note that consensus handler also generates consensus commit prologue transaction, and it must be the first one.
     assert!(matches!(
         scheduled_txns[0].data().transaction_data().kind(),
-        TransactionKind::ConsensusCommitPrologueV3(..)
+        TransactionKind::ConsensusCommitPrologueV4(..)
     ));
     assert!(scheduled_txns[1].data().transaction_data().gas_price() == 2000);
 
@@ -6061,7 +6180,7 @@ async fn test_consensus_handler_congestion_control_transaction_cancellation() {
     assert_eq!(scheduled_txns.len(), 2);
     assert!(matches!(
         scheduled_txns[0].data().transaction_data().kind(),
-        TransactionKind::ConsensusCommitPrologueV3(..)
+        TransactionKind::ConsensusCommitPrologueV4(..)
     ));
     assert!(scheduled_txns[1].data().transaction_data().gas_price() == 2000);
 
@@ -6137,7 +6256,7 @@ async fn test_consensus_handler_congestion_control_transaction_cancellation() {
     assert_eq!(cancellation_reason, SequenceNumber::CONGESTED);
 
     // Consensus commit prologue contains cancelled txn shared object version assignment.
-    if let TransactionKind::ConsensusCommitPrologueV3(prologue_txn) =
+    if let TransactionKind::ConsensusCommitPrologueV4(prologue_txn) =
         scheduled_txns[0].data().transaction_data().kind()
     {
         match &prologue_txn.consensus_determined_version_assignments {
@@ -6179,7 +6298,7 @@ async fn test_consensus_handler_congestion_control_transaction_cancellation() {
             }
         }
     } else {
-        panic!("First scheduled transaction must be a ConsensusCommitPrologueV3 transaction.");
+        panic!("First scheduled transaction must be a ConsensusCommitPrologueV4 transaction.");
     }
 }
 

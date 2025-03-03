@@ -477,7 +477,8 @@ impl From<&SuiTransactionBlockKind> for OperationType {
             SuiTransactionBlockKind::Genesis(_) => OperationType::Genesis,
             SuiTransactionBlockKind::ConsensusCommitPrologue(_)
             | SuiTransactionBlockKind::ConsensusCommitPrologueV2(_)
-            | SuiTransactionBlockKind::ConsensusCommitPrologueV3(_) => {
+            | SuiTransactionBlockKind::ConsensusCommitPrologueV3(_)
+            | SuiTransactionBlockKind::ConsensusCommitPrologueV4(_) => {
                 OperationType::ConsensusCommitPrologue
             }
             SuiTransactionBlockKind::ProgrammableTransaction(_) => {

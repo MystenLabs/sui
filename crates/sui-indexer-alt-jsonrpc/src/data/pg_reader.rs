@@ -10,14 +10,16 @@ use diesel::pg::Pg;
 use diesel::query_builder::{Query, QueryFragment, QueryId};
 use diesel::query_dsl::methods::LimitDsl;
 use diesel::query_dsl::CompatibleType;
+use diesel::OptionalExtension;
 use diesel_async::RunQueryDsl;
 use prometheus::Registry;
 use sui_indexer_alt_metrics::db::DbConnectionStatsCollector;
 use sui_pg_db as db;
 use tracing::debug;
+use url::Url;
 
-use crate::data::error::Error;
-use crate::metrics::RpcMetrics;
+use crate::{data::error::Error, metrics::RpcMetrics};
+
 /// This wrapper type exists to perform error conversion between the data fetching layer and the
 /// RPC layer, metrics collection, and debug logging of database queries.
 #[derive(Clone)]
@@ -33,11 +35,14 @@ pub(crate) struct Connection<'p> {
 
 impl PgReader {
     pub(crate) async fn new(
+        database_url: Url,
         db_args: db::DbArgs,
         metrics: Arc<RpcMetrics>,
         registry: &Registry,
     ) -> Result<Self, Error> {
-        let db = db::Db::for_read(db_args).await.map_err(Error::PgCreate)?;
+        let db = db::Db::for_read(database_url, db_args)
+            .await
+            .map_err(Error::PgCreate)?;
 
         registry
             .register(Box::new(DbConnectionStatsCollector::new(
@@ -63,7 +68,7 @@ impl PgReader {
 }
 
 impl Connection<'_> {
-    pub(crate) async fn first<'q, Q, ST, U>(&mut self, query: Q) -> Result<U, Error>
+    pub(crate) async fn first<'q, Q, ST, U>(&mut self, query: Q) -> Result<Option<U>, Error>
     where
         Q: LimitDsl,
         Q::Output: Query + QueryFragment<Pg> + QueryId + Send + 'q,
@@ -76,7 +81,7 @@ impl Connection<'_> {
         debug!("{}", diesel::debug_query(&query));
 
         let _guard = self.metrics.db_latency.start_timer();
-        let res = query.get_result(&mut self.conn).await;
+        let res = query.get_result(&mut self.conn).await.optional();
 
         if res.is_ok() {
             self.metrics.db_requests_succeeded.inc();

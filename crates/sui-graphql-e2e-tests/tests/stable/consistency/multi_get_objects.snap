@@ -1,0 +1,162 @@
+---
+source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
+---
+processed 12 tasks
+
+init:
+A: object(0,0), B: object(0,1)
+
+task 1, lines 14-27:
+//# publish
+created: object(1,0)
+mutated: object(0,2)
+gas summary: computation_cost: 1000000, storage_cost: 5175600,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 2, line 29:
+//# run Test::M1::create --args 0 @A
+created: object(2,0)
+mutated: object(0,2)
+gas summary: computation_cost: 1000000, storage_cost: 2302800,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 3, line 31:
+//# run Test::M1::create --args 1 @A
+created: object(3,0)
+mutated: object(0,2)
+gas summary: computation_cost: 1000000, storage_cost: 2302800,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 4, line 33:
+//# create-checkpoint
+Checkpoint created: 1
+
+task 5, line 35:
+//# run Test::M1::create --args 2 @A
+created: object(5,0)
+mutated: object(0,2)
+gas summary: computation_cost: 1000000, storage_cost: 2302800,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 6, line 37:
+//# run Test::M1::create --args 3 @A
+created: object(6,0)
+mutated: object(0,2)
+gas summary: computation_cost: 1000000, storage_cost: 2302800,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 7, line 39:
+//# create-checkpoint
+Checkpoint created: 2
+
+task 8, lines 41-60:
+//# run-graphql
+Response: {
+  "data": {
+    "objects_at_version": [
+      {
+        "version": 3,
+        "asMoveObject": {
+          "contents": {
+            "type": {
+              "repr": "0xf8ecbba416b85769db9b3425d240e9e350c2994bc68d944ac19ebecffb7e0c60::M1::Object"
+            },
+            "json": {
+              "id": "0xc4e6c824c72af97ed831b666173a96111e573e0162b205b51c23ae242757e8d2",
+              "value": "0"
+            }
+          }
+        }
+      },
+      {
+        "version": 4,
+        "asMoveObject": {
+          "contents": {
+            "type": {
+              "repr": "0xf8ecbba416b85769db9b3425d240e9e350c2994bc68d944ac19ebecffb7e0c60::M1::Object"
+            },
+            "json": {
+              "id": "0x0f2ff2731e04cef60e75403b02f31721406c99cb05eb3029f697de89a3d70a71",
+              "value": "1"
+            }
+          }
+        }
+      },
+      {
+        "version": 5,
+        "asMoveObject": {
+          "contents": {
+            "type": {
+              "repr": "0xf8ecbba416b85769db9b3425d240e9e350c2994bc68d944ac19ebecffb7e0c60::M1::Object"
+            },
+            "json": {
+              "id": "0xd0a70e7cf1fa823e6bf035f878cc33ee3d221d7f956da78e572bb52574482471",
+              "value": "2"
+            }
+          }
+        }
+      },
+      {
+        "version": 6,
+        "asMoveObject": {
+          "contents": {
+            "type": {
+              "repr": "0xf8ecbba416b85769db9b3425d240e9e350c2994bc68d944ac19ebecffb7e0c60::M1::Object"
+            },
+            "json": {
+              "id": "0x44864f8c6cad831f338516aa3ebeacf00c60a13fb4a5a4200b35f376af227cf3",
+              "value": "3"
+            }
+          }
+        }
+      }
+    ]
+  }
+}
+
+task 9, lines 62-63:
+//# programmable --sender A --inputs object(2,0) object(3,0) object(5,0) object(6,0) @B
+//> TransferObjects([Input(0), Input(1), Input(2), Input(3)], Input(4))
+mutated: object(0,0), object(2,0), object(3,0), object(5,0), object(6,0)
+gas summary: computation_cost: 1000000, storage_cost: 6247200,  storage_rebate: 5206608, non_refundable_storage_fee: 52592
+
+task 10, line 65:
+//# create-checkpoint
+Checkpoint created: 3
+
+task 11, lines 67-86:
+//# run-graphql
+Response: {
+  "data": {
+    "objects_at_version": [
+      {
+        "version": 1,
+        "asMoveObject": null
+      },
+      {
+        "version": 4,
+        "asMoveObject": {
+          "contents": {
+            "type": {
+              "repr": "0xf8ecbba416b85769db9b3425d240e9e350c2994bc68d944ac19ebecffb7e0c60::M1::Object"
+            },
+            "json": {
+              "id": "0x0f2ff2731e04cef60e75403b02f31721406c99cb05eb3029f697de89a3d70a71",
+              "value": "1"
+            }
+          }
+        }
+      },
+      {
+        "version": 5,
+        "asMoveObject": {
+          "contents": {
+            "type": {
+              "repr": "0xf8ecbba416b85769db9b3425d240e9e350c2994bc68d944ac19ebecffb7e0c60::M1::Object"
+            },
+            "json": {
+              "id": "0xd0a70e7cf1fa823e6bf035f878cc33ee3d221d7f956da78e572bb52574482471",
+              "value": "2"
+            }
+          }
+        }
+      },
+      null
+    ]
+  }
+}

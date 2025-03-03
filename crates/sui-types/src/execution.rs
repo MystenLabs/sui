@@ -235,7 +235,7 @@ impl ExecutionTimeObservationKey {
     }
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Clone, Copy, Debug, Serialize, Deserialize)]
 pub enum ExecutionTiming {
     Success(Duration),
     Abort(Duration),

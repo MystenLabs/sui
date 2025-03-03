@@ -10,10 +10,12 @@ use tonic::metadata::MetadataMap;
 use crate::field_mask::FieldMaskUtil;
 use crate::proto::node::v2::node_service_client::NodeServiceClient;
 use crate::proto::node::v2::{
-    ExecuteTransactionResponse, GetCheckpointResponse, GetFullCheckpointResponse, GetObjectResponse,
+    EffectsFinality, ExecuteTransactionResponse, GetCheckpointResponse, GetFullCheckpointResponse,
+    GetObjectResponse,
 };
 use crate::proto::types::Bcs;
 use crate::proto::TryFromProtoError;
+use prost_types::FieldMask;
 use sui_types::base_types::{ObjectID, SequenceNumber};
 use sui_types::effects::{TransactionEffects, TransactionEvents};
 use sui_types::full_checkpoint_content::CheckpointData;
@@ -92,7 +94,7 @@ impl Client {
         let request = crate::proto::node::v2::GetCheckpointRequest {
             sequence_number,
             digest: None,
-            read_mask: FieldMaskUtil::from_paths(["summary_bcs", "signature"]).pipe(Some),
+            read_mask: FieldMask::from_paths(["summary_bcs", "signature"]).pipe(Some),
         };
 
         let (
@@ -120,7 +122,7 @@ impl Client {
         let request = crate::proto::node::v2::GetFullCheckpointRequest {
             sequence_number: Some(sequence_number),
             digest: None,
-            read_mask: FieldMaskUtil::from_paths([
+            read_mask: FieldMask::from_paths([
                 "summary_bcs",
                 "signature",
                 "contents_bcs",
@@ -165,7 +167,7 @@ impl Client {
         let request = crate::proto::node::v2::GetObjectRequest {
             object_id: Some(sui_sdk_types::ObjectId::from(object_id).into()),
             version,
-            read_mask: FieldMaskUtil::from_paths(["object_bcs"]).pipe(Some),
+            read_mask: FieldMask::from_paths(["object_bcs"]).pipe(Some),
         };
 
         let (metadata, GetObjectResponse { object_bcs, .. }, _extentions) =
@@ -193,8 +195,13 @@ impl Client {
             ),
             signatures: Vec::new(),
             signatures_bytes: signatures,
-            read_mask: FieldMaskUtil::from_paths(["effects_bcs", "events_bcs", "balance_changes"])
-                .pipe(Some),
+            read_mask: FieldMask::from_paths([
+                "finality",
+                "effects_bcs",
+                "events_bcs",
+                "balance_changes",
+            ])
+            .pipe(Some),
         };
 
         let (metadata, response, _extentions) = self
@@ -210,7 +217,7 @@ impl Client {
 
 #[derive(Debug)]
 pub struct TransactionExecutionResponse {
-    pub finality: crate::types::EffectsFinality,
+    pub finality: EffectsFinality,
 
     pub effects: TransactionEffects,
     pub events: Option<TransactionEvents>,
@@ -340,10 +347,7 @@ fn execute_transaction_response_try_from_proto(
         ..
     }: ExecuteTransactionResponse,
 ) -> Result<TransactionExecutionResponse, TryFromProtoError> {
-    let finality = finality
-        .as_ref()
-        .ok_or_else(|| TryFromProtoError::missing("finality"))?
-        .try_into()?;
+    let finality = finality.ok_or_else(|| TryFromProtoError::missing("finality"))?;
 
     let effects = effects_bcs
         .ok_or_else(|| TryFromProtoError::missing("effects_bcs"))?

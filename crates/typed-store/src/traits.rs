@@ -1,7 +1,6 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 use crate::TypedStoreError;
-use async_trait::async_trait;
 use serde::{de::DeserializeOwned, Serialize};
 use std::ops::RangeBounds;
 use std::{borrow::Borrow, collections::BTreeMap, error::Error};
@@ -14,7 +13,6 @@ where
     type Error: Error;
     type Iterator: Iterator<Item = (K, V)>;
     type SafeIterator: Iterator<Item = Result<(K, V), TypedStoreError>>;
-    type Values: Iterator<Item = Result<V, TypedStoreError>>;
 
     /// Returns true if the map contains a value for the specified key.
     fn contains_key(&self, key: &K) -> Result<bool, Self::Error>;
@@ -35,9 +33,6 @@ where
     /// Returns the value for the given key from the map, if it exists.
     fn get(&self, key: &K) -> Result<Option<V>, Self::Error>;
 
-    /// Returns the raw value (serialized bytes) for the given key from the map, if it exists.
-    fn get_raw_bytes(&self, key: &K) -> Result<Option<Vec<u8>>, Self::Error>;
-
     /// Inserts the given key-value pair into the map.
     fn insert(&self, key: &K, value: &V) -> Result<(), Self::Error>;
 
@@ -46,9 +41,6 @@ where
 
     /// Removes every key-value pair from the map.
     fn unsafe_clear(&self) -> Result<(), Self::Error>;
-
-    /// Removes every key-value pair from the map by deleting the underlying file.
-    fn delete_file_in_range(&self, from: &K, to: &K) -> Result<(), TypedStoreError>;
 
     /// Uses delete range on the entire key range
     fn schedule_delete_all(&self) -> Result<(), TypedStoreError>;
@@ -81,36 +73,8 @@ where
     // Same as `range_iter` but performs status check.
     fn safe_range_iter(&'a self, range: impl RangeBounds<K>) -> Self::SafeIterator;
 
-    /// Returns an iterator over each value in the map.
-    fn values(&'a self) -> Self::Values;
-
     /// Returns a vector of values corresponding to the keys provided, non-atomically.
     fn multi_get<J>(&self, keys: impl IntoIterator<Item = J>) -> Result<Vec<Option<V>>, Self::Error>
-    where
-        J: Borrow<K>,
-    {
-        keys.into_iter().map(|key| self.get(key.borrow())).collect()
-    }
-
-    /// Returns a vector of raw values corresponding to the keys provided, non-atomically.
-    fn multi_get_raw_bytes<J>(
-        &self,
-        keys: impl IntoIterator<Item = J>,
-    ) -> Result<Vec<Option<Vec<u8>>>, Self::Error>
-    where
-        J: Borrow<K>,
-    {
-        keys.into_iter()
-            .map(|key| self.get_raw_bytes(key.borrow()))
-            .collect()
-    }
-
-    /// Returns a vector of values corresponding to the keys provided, non-atomically.
-    fn chunked_multi_get<J>(
-        &self,
-        keys: impl IntoIterator<Item = J>,
-        _chunk_size: usize,
-    ) -> Result<Vec<Option<V>>, Self::Error>
     where
         J: Borrow<K>,
     {
@@ -142,46 +106,6 @@ where
 
     /// Try to catch up with primary when running as secondary
     fn try_catch_up_with_primary(&self) -> Result<(), Self::Error>;
-}
-
-#[async_trait]
-pub trait AsyncMap<'a, K, V>
-where
-    K: Serialize + DeserializeOwned + std::marker::Sync,
-    V: Serialize + DeserializeOwned + std::marker::Sync + std::marker::Send,
-{
-    type Error: Error;
-    type Iterator: Iterator<Item = Result<(K, V), TypedStoreError>>;
-    type Values: Iterator<Item = Result<V, TypedStoreError>>;
-
-    /// Returns true if the map contains a value for the specified key.
-    async fn contains_key(&self, key: &K) -> Result<bool, Self::Error>;
-
-    /// Returns the value for the given key from the map, if it exists.
-    async fn get(&self, key: &K) -> Result<Option<V>, Self::Error>;
-
-    /// Returns the raw value (serialized bytes) for the given key from the map, if it exists.
-    async fn get_raw_bytes(&self, key: &K) -> Result<Option<Vec<u8>>, Self::Error>;
-
-    /// Returns true if the map is empty, otherwise false.
-    async fn is_empty(&self) -> bool;
-
-    /// Returns an iterator visiting each key-value pair in the map.
-    async fn iter(&'a self) -> Self::Iterator;
-
-    /// Returns an iterator over each value in the map.
-    async fn values(&'a self) -> Self::Values;
-
-    /// Returns a vector of values corresponding to the keys provided, non-atomically.
-    async fn multi_get<J>(
-        &self,
-        keys: impl IntoIterator<Item = J> + std::marker::Send,
-    ) -> Result<Vec<Option<V>>, Self::Error>
-    where
-        J: Borrow<K>;
-
-    /// Try to catch up with primary when running as secondary
-    async fn try_catch_up_with_primary(&self) -> Result<(), Self::Error>;
 }
 
 pub struct TableSummary {

@@ -81,6 +81,7 @@ fn async_verifier_bench(c: &mut Criterion) {
                         ZkLoginEnv::Test,
                         true,
                         true,
+                        true,
                         Some(30),
                     ));
 

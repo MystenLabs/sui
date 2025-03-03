@@ -122,7 +122,7 @@ message GetNodeInfoResponse {
 
 // Request message for NodeService.GetCommittee.
 message GetCommitteeRequest {
-  // Optional. Request the sui.types.ValidatorCommittee corresponding to the
+  // Request the sui.types.ValidatorCommittee corresponding to the
   // provided epoch. If no epoch is provided the committee for the current
   // epoch will be returned.
   optional uint64 epoch = 1;
@@ -139,8 +139,8 @@ message GetTransactionRequest {
   // Required. The digest of the requested transaction.
   optional sui.types.Digest digest = 1;
 
-  // Optional. Mask for specifying which parts of the `GetTransactionResponse`
-  // should be returned.
+  // Mask specifying which fields to read.
+  // If no mask is specified, defaults to `digest`.
   optional google.protobuf.FieldMask read_mask = 4;
 }
 
@@ -199,13 +199,13 @@ message GetObjectRequest {
   // Required. The `ObjectId` of the requested object.
   optional sui.types.ObjectId object_id = 1;
 
-  // Optional. Request that a specific version of the requested object is
-  // returned. If no version is provided, then then the latest version for
-  // the object is returned.
+  // Request a specific version of the object.
+  // If no version is specified, and the object is live, then the latest
+  // version of the object is returned.
   optional uint64 version = 2;
 
-  // Optional. Mask for specifying which parts of the `GetObjectResponse`
-  // should be returned.
+  // Mask specifying which fields to read.
+  // If no mask is specified, defaults to `object_id,version,digest`.
   optional google.protobuf.FieldMask read_mask = 4;
 }
 
@@ -235,14 +235,14 @@ message GetObjectResponse {
 // returned if you attempt to provide both. If you provide neither, the service
 // returns the latest executed checkpoint.
 message GetCheckpointRequest {
-  // Optional. The sequence number of the requested checkpoint.
+  // The sequence number of the requested checkpoint.
   optional uint64 sequence_number = 1;
 
-  // Optional. The digest of the requested checkpoint.
+  // The digest of the requested checkpoint.
   optional sui.types.Digest digest = 2;
 
-  // Optional. Mask for specifying which parts of the `GetCheckpointResponse`
-  // should be returned.
+  // Mask specifying which fields to read.
+  // If no mask is specified, defaults to `sequence_number,digest`.
   optional google.protobuf.FieldMask read_mask = 4;
 }
 
@@ -281,14 +281,14 @@ message GetCheckpointResponse {
 // returned if you provide both. If you provide neither, the service
 // returns the latest executed checkpoint.
 message GetFullCheckpointRequest {
-  // Optional. The sequence number of the requested checkpoint.
+  // The sequence number of the requested checkpoint.
   optional uint64 sequence_number = 1;
 
-  // Optional. The digest of the requested checkpoint.
+  // The digest of the requested checkpoint.
   optional sui.types.Digest digest = 2;
 
-  // Optional. Mask for specifying which parts of the `GetFullCheckpointResponse`
-  // should be returned.
+  // Mask specifying which fields to read.
+  // If no mask is specified, defaults to `sequence_number,digest`.
   optional google.protobuf.FieldMask read_mask = 4;
 }
 
@@ -388,22 +388,22 @@ message FullCheckpointObject {
 //
 // Note: You must provide only one of `transaction` or `transaction_bcs`.
 message ExecuteTransactionRequest {
-  // Optional. The transaction to execute.
+  // The transaction to execute.
   optional sui.types.Transaction transaction = 1;
 
-  // Optional. The transaction to execute, encoded as BCS bytes.
+  // The transaction to execute, encoded as BCS bytes.
   optional sui.types.Bcs transaction_bcs = 2;
 
-  // Optional. Set of `UserSiganture`s authorizing the execution of the provided
+  // Set of `UserSiganture`s authorizing the execution of the provided
   // transaction.
   repeated sui.types.UserSignature signatures = 3;
 
-  // Optional. Set of `UserSiganture`s authorizing the execution of the provided
+  // Set of `UserSiganture`s authorizing the execution of the provided
   // transaction, encoded as bytes.
   repeated bytes signatures_bytes = 4;
 
-  // Optional. Mask for specifying which parts of the
-  // `ExecuteTransactionResponse` should be returned.
+  // Mask specifying which fields to read.
+  // If no mask is specified, defaults to `effects,events,finality`.
   optional google.protobuf.FieldMask read_mask = 6;
 }
 

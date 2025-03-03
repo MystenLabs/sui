@@ -6,7 +6,7 @@ use clap::Parser;
 use prometheus::Registry;
 use sui_indexer_alt_jsonrpc::{
     args::{Args, Command},
-    config::RpcConfig,
+    config::RpcLayer,
     start_rpc,
 };
 use sui_indexer_alt_metrics::MetricsService;
@@ -24,6 +24,8 @@ async fn main() -> anyhow::Result<()> {
 
     match args.command {
         Command::Rpc {
+            database_url,
+            db_args,
             rpc_args,
             system_package_task_args,
             metrics_args,
@@ -36,8 +38,9 @@ async fn main() -> anyhow::Result<()> {
 
                 toml::from_str(&contents).context("Failed to parse configuration TOML file")?
             } else {
-                RpcConfig::default()
-            };
+                RpcLayer::default()
+            }
+            .finish();
 
             let cancel = CancellationToken::new();
 
@@ -47,7 +50,8 @@ async fn main() -> anyhow::Result<()> {
             let metrics = MetricsService::new(metrics_args, registry, cancel.child_token());
 
             let h_rpc = start_rpc(
-                args.db_args,
+                database_url,
+                db_args,
                 rpc_args,
                 system_package_task_args,
                 rpc_config,
@@ -64,7 +68,7 @@ async fn main() -> anyhow::Result<()> {
         }
 
         Command::GenerateConfig => {
-            let config = RpcConfig::example();
+            let config = RpcLayer::example();
             let config_toml = toml::to_string_pretty(&config)
                 .context("Failed to serialize default configuration to TOML.")?;
 

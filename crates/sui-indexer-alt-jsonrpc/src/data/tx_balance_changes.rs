@@ -14,8 +14,9 @@ use sui_indexer_alt_schema::{
 };
 use sui_types::digests::TransactionDigest;
 
-use super::pg_reader::PgReader;
 use crate::data::error::Error;
+
+use super::pg_reader::PgReader;
 
 /// Key for fetching a transaction's balance changes by digest.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]

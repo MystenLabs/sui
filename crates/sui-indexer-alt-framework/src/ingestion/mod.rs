@@ -9,7 +9,6 @@
 use std::{path::PathBuf, sync::Arc, time::Duration};
 
 use serde::{Deserialize, Serialize};
-use sui_types::full_checkpoint_content::CheckpointData;
 use tokio::{sync::mpsc, task::JoinHandle};
 use tokio_util::sync::CancellationToken;
 use url::Url;
@@ -19,6 +18,7 @@ use crate::ingestion::client::IngestionClient;
 use crate::ingestion::error::{Error, Result};
 use crate::ingestion::regulator::regulator;
 use crate::metrics::IndexerMetrics;
+use crate::types::full_checkpoint_content::CheckpointData;
 
 mod broadcaster;
 pub mod client;

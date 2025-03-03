@@ -11,7 +11,7 @@ use crate::{
 ///
 /// - Selectors, which recurse into the sub-structure.
 /// - Filters, which check properties of the value at that position in the sub-structure.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Eq, PartialEq)]
 pub enum Element<'e> {
     // Selectors
     /// Select a named field, assuming the value in question is a struct or an enum variant.

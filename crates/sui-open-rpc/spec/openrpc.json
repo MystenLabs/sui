@@ -12,7 +12,7 @@
       "name": "Apache-2.0",
       "url": "https://raw.githubusercontent.com/MystenLabs/sui/main/LICENSE"
     },
-    "version": "1.44.0"
+    "version": "1.45.0"
   },
   "methods": [
     {
@@ -1297,6 +1297,7 @@
               "maxSupportedProtocolVersion": "76",
               "protocolVersion": "6",
               "featureFlags": {
+                "accept_passkey_in_multisig": false,
                 "accept_zklogin_in_multisig": false,
                 "advance_epoch_start_time_in_safe_mode": true,
                 "advance_to_highest_supported_protocol_version": false,
@@ -1333,6 +1334,7 @@
                 "loaded_child_object_format": false,
                 "loaded_child_object_format_type": false,
                 "loaded_child_objects_fixed": true,
+                "minimize_child_object_mutations": false,
                 "missing_type_is_compatibility_error": true,
                 "mysticeti_fastpath": false,
                 "mysticeti_leader_scoring_and_schedule": false,
@@ -1349,6 +1351,7 @@
                 "random_beacon": false,
                 "receive_objects": false,
                 "recompute_has_public_transfer_in_execution": false,
+                "record_additional_state_digest_in_prologue": false,
                 "record_consensus_determined_version_assignments_in_prologue": false,
                 "record_consensus_determined_version_assignments_in_prologue_v2": false,
                 "reject_mutable_random_on_entry_functions": false,
@@ -1436,6 +1439,7 @@
                 "config_read_setting_impl_cost_base": null,
                 "config_read_setting_impl_cost_per_byte": null,
                 "consensus_bad_nodes_stake_threshold": null,
+                "consensus_commit_rate_estimation_window_size": null,
                 "consensus_gc_depth": null,
                 "consensus_max_num_transactions_in_block": null,
                 "consensus_max_transaction_size_bytes": null,
@@ -5322,6 +5326,9 @@
   ],
   "components": {
     "schemas": {
+      "AdditionalConsensusStateDigest": {
+        "$ref": "#/components/schemas/Digest"
+      },
       "Authenticator": {
         "oneOf": [
           {
@@ -5697,6 +5704,18 @@
               }
             },
             "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "required": [
+              "Passkey"
+            ],
+            "properties": {
+              "Passkey": {
+                "$ref": "#/components/schemas/PasskeyAuthenticatorAsBytes"
+              }
+            },
+            "additionalProperties": false
           }
         ]
       },
@@ -6056,6 +6075,12 @@
             "items": {
               "$ref": "#/components/schemas/Event"
             }
+          },
+          "executionErrorSource": {
+            "type": [
+              "string",
+              "null"
+            ]
           },
           "input": {
             "$ref": "#/components/schemas/TransactionBlockData"
@@ -8074,6 +8099,9 @@
           }
         }
       },
+      "PasskeyAuthenticatorAsBytes": {
+        "$ref": "#/components/schemas/Base64"
+      },
       "ProtocolConfig": {
         "type": "object",
         "required": [
@@ -8987,12 +9015,22 @@
             }
           },
           "variants": {
-            "type": "object",
-            "additionalProperties": {
+            "type": "array",
+            "items": {
               "type": "array",
-              "items": {
-                "$ref": "#/components/schemas/SuiMoveNormalizedField"
-              }
+              "items": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/SuiMoveNormalizedField"
+                  }
+                }
+              ],
+              "maxItems": 2,
+              "minItems": 2
             }
           }
         }
@@ -10782,6 +10820,55 @@
                 "type": "string",
                 "enum": [
                   "ConsensusCommitPrologueV3"
+                ]
+              },
+              "round": {
+                "$ref": "#/components/schemas/BigInt_for_uint64"
+              },
+              "sub_dag_index": {
+                "default": null,
+                "anyOf": [
+                  {
+                    "$ref": "#/components/schemas/BigInt_for_uint64"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "required": [
+              "additional_state_digest",
+              "commit_timestamp_ms",
+              "consensus_commit_digest",
+              "consensus_determined_version_assignments",
+              "epoch",
+              "kind",
+              "round"
+            ],
+            "properties": {
+              "additional_state_digest": {
+                "$ref": "#/components/schemas/AdditionalConsensusStateDigest"
+              },
+              "commit_timestamp_ms": {
+                "$ref": "#/components/schemas/BigInt_for_uint64"
+              },
+              "consensus_commit_digest": {
+                "$ref": "#/components/schemas/ConsensusCommitDigest"
+              },
+              "consensus_determined_version_assignments": {
+                "$ref": "#/components/schemas/ConsensusDeterminedVersionAssignments"
+              },
+              "epoch": {
+                "$ref": "#/components/schemas/BigInt_for_uint64"
+              },
+              "kind": {
+                "type": "string",
+                "enum": [
+                  "ConsensusCommitPrologueV4"
                 ]
               },
               "round": {

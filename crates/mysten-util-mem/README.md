@@ -12,7 +12,7 @@ For types that are local to your crate, this is really easy. Just add:
 #[derive(MallocSizeOf)]
 ```
 
-For external types, you'll need to implement the trait here in [`external_impls.rs`](https://github.com/MystenLabs/blob/main/crates/mysten-util-mem/src/external_impls.rs). See the existing implementations in that file for examples.
+For external types, implement the trait found in [`external_impls.rs`](https://github.com/MystenLabs/sui/blob/main/crates/mysten-util-mem/src/external_impls.rs). See the existing implementations in that file for examples.
 
 Note that `size_of` should return only the number of **heap-allocated bytes** used by the type. For example, a type such as `struct MyStruct([u8; 128])` would return **zero**, not 128. Recursive accounting for heap-allocated memory when your struct is part of e.g. a `Vec` or `HashMap` is already taken care of by the implementations of `MallocSizeOf` on those collection types.
 

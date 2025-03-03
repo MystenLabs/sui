@@ -6,13 +6,13 @@ use std::sync::Arc;
 
 use anyhow::Context as _;
 use api::checkpoints::Checkpoints;
-use api::coin::{Coins, CoinsConfig};
+use api::coin::Coins;
 use api::dynamic_fields::DynamicFields;
 use api::move_utils::MoveUtils;
 use api::name_service::NameService;
-use api::objects::{Objects, ObjectsConfig, QueryObjects};
+use api::objects::{Objects, QueryObjects};
 use api::rpc_module::RpcModule;
-use api::transactions::{QueryTransactions, Transactions, TransactionsConfig};
+use api::transactions::{QueryTransactions, Transactions};
 use config::RpcConfig;
 use data::system_package_task::{SystemPackageTask, SystemPackageTaskArgs};
 use jsonrpsee::server::{BatchRequestConfig, RpcServiceBuilder, ServerBuilder};
@@ -20,13 +20,13 @@ use metrics::middleware::MetricsLayer;
 use metrics::RpcMetrics;
 use prometheus::Registry;
 use serde_json::json;
-use sui_name_service::NameServiceConfig;
 use sui_open_rpc::Project;
 use sui_pg_db::DbArgs;
 use tokio::{join, signal, task::JoinHandle};
 use tokio_util::sync::CancellationToken;
 use tower_layer::Identity;
 use tracing::info;
+use url::Url;
 
 use crate::api::governance::Governance;
 use crate::context::Context;
@@ -157,6 +157,14 @@ impl RpcService {
 
         let handle = server
             .set_rpc_middleware(middleware)
+            .set_http_middleware(
+                tower::builder::ServiceBuilder::new().layer(
+                    tower_http::cors::CorsLayer::new()
+                        .allow_methods([http::Method::GET, http::Method::POST])
+                        .allow_origin(tower_http::cors::Any)
+                        .allow_headers(tower_http::cors::Any),
+                ),
+            )
             .build(rpc_listen_address)
             .await
             .context("Failed to bind JSON-RPC service")?
@@ -207,6 +215,7 @@ impl Default for RpcArgs {
 /// The service may spin up auxiliary services (such as the system package task) to support itself,
 /// and will clean these up on shutdown as well.
 pub async fn start_rpc(
+    database_url: Url,
     db_args: DbArgs,
     rpc_args: RpcArgs,
     system_package_task_args: SystemPackageTaskArgs,
@@ -214,33 +223,10 @@ pub async fn start_rpc(
     registry: &Registry,
     cancel: CancellationToken,
 ) -> anyhow::Result<JoinHandle<()>> {
-    let RpcConfig {
-        objects,
-        transactions,
-        name_service,
-        coins,
-        bigtable_config,
-        package_resolver,
-        extra: _,
-    } = rpc_config.finish();
-
-    let objects_config = objects.finish(ObjectsConfig::default());
-    let transactions_config = transactions.finish(TransactionsConfig::default());
-    let name_service_config = name_service.finish(NameServiceConfig::default());
-    let coins_config = coins.finish(CoinsConfig::default());
-    let package_resolver_limits = package_resolver.finish();
-
     let mut rpc = RpcService::new(rpc_args, registry, cancel.child_token())
         .context("Failed to create RPC service")?;
 
-    let context = Context::new(
-        db_args,
-        bigtable_config,
-        package_resolver_limits,
-        rpc.metrics(),
-        registry,
-    )
-    .await?;
+    let context = Context::new(database_url, db_args, rpc_config, rpc.metrics(), registry).await?;
 
     let system_package_task = SystemPackageTask::new(
         context.clone(),
@@ -249,14 +235,14 @@ pub async fn start_rpc(
     );
 
     rpc.add_module(Checkpoints(context.clone()))?;
-    rpc.add_module(Coins(context.clone(), coins_config))?;
+    rpc.add_module(Coins(context.clone()))?;
     rpc.add_module(DynamicFields(context.clone()))?;
     rpc.add_module(Governance(context.clone()))?;
     rpc.add_module(MoveUtils(context.clone()))?;
-    rpc.add_module(NameService(context.clone(), name_service_config))?;
-    rpc.add_module(Objects(context.clone(), objects_config.clone()))?;
-    rpc.add_module(QueryObjects(context.clone(), objects_config))?;
-    rpc.add_module(QueryTransactions(context.clone(), transactions_config))?;
+    rpc.add_module(NameService(context.clone()))?;
+    rpc.add_module(Objects(context.clone()))?;
+    rpc.add_module(QueryObjects(context.clone()))?;
+    rpc.add_module(QueryTransactions(context.clone()))?;
     rpc.add_module(Transactions(context.clone()))?;
 
     let h_rpc = rpc.run().await.context("Failed to start RPC service")?;

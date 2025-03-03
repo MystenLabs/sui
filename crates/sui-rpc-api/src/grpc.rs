@@ -55,7 +55,6 @@ impl crate::proto::node::v2::node_service_server::NodeService for crate::RpcServ
         _request: tonic::Request<crate::proto::node::v2::GetNodeInfoRequest>,
     ) -> Result<tonic::Response<crate::proto::node::v2::GetNodeInfoResponse>, tonic::Status> {
         self.get_node_info()
-            .map(Into::into)
             .map(tonic::Response::new)
             .map_err(Into::into)
     }
@@ -95,24 +94,7 @@ impl crate::proto::node::v2::node_service_server::NodeService for crate::RpcServ
         tonic::Response<crate::proto::node::v2::GetTransactionResponse>,
         tonic::Status,
     > {
-        let request = request.into_inner();
-        let transaction_digest = request
-            .digest
-            .as_ref()
-            .ok_or_else(|| {
-                tonic::Status::new(tonic::Code::InvalidArgument, "missing transaction_digest")
-            })?
-            .try_into()
-            .map_err(|_| {
-                tonic::Status::new(tonic::Code::InvalidArgument, "invalid transaction_digest")
-            })?;
-
-        let options = crate::types::GetTransactionOptions::from_read_mask(
-            request.read_mask.unwrap_or_default(),
-        );
-
-        self.get_transaction(transaction_digest, &options)
-            .map(Into::into)
+        self.get_transaction(request.into_inner())
             .map(tonic::Response::new)
             .map_err(Into::into)
     }
@@ -124,31 +106,7 @@ impl crate::proto::node::v2::node_service_server::NodeService for crate::RpcServ
         tonic::Response<crate::proto::node::v2::GetCheckpointResponse>,
         tonic::Status,
     > {
-        let request = request.into_inner();
-        let checkpoint = match (request.sequence_number, request.digest) {
-            (Some(_sequence_number), Some(_digest)) => {
-                return Err(tonic::Status::new(
-                    tonic::Code::InvalidArgument,
-                    "only one of `sequence_number` or `digest` can be provided",
-                ))
-            }
-            (Some(sequence_number), None) => Some(
-                crate::service::checkpoints::CheckpointId::SequenceNumber(sequence_number),
-            ),
-            (None, Some(digest)) => Some(crate::service::checkpoints::CheckpointId::Digest(
-                (&digest).try_into().map_err(|_| {
-                    tonic::Status::new(tonic::Code::InvalidArgument, "invalid digest")
-                })?,
-            )),
-            (None, None) => None,
-        };
-
-        let options = crate::types::GetCheckpointOptions::from_read_mask(
-            request.read_mask.unwrap_or_default(),
-        );
-
-        self.get_checkpoint(checkpoint, options)
-            .map(Into::into)
+        self.get_checkpoint(request.into_inner())
             .map(tonic::Response::new)
             .map_err(Into::into)
     }
@@ -160,37 +118,7 @@ impl crate::proto::node::v2::node_service_server::NodeService for crate::RpcServ
         tonic::Response<crate::proto::node::v2::GetFullCheckpointResponse>,
         tonic::Status,
     > {
-        let request = request.into_inner();
-        let checkpoint = match (request.sequence_number, request.digest) {
-            (Some(_sequence_number), Some(_digest)) => {
-                return Err(tonic::Status::new(
-                    tonic::Code::InvalidArgument,
-                    "only one of `sequence_number` or `digest` can be provided",
-                ))
-            }
-            (Some(sequence_number), None) => {
-                crate::service::checkpoints::CheckpointId::SequenceNumber(sequence_number)
-            }
-
-            (None, Some(digest)) => {
-                crate::service::checkpoints::CheckpointId::Digest((&digest).try_into().map_err(
-                    |_| tonic::Status::new(tonic::Code::InvalidArgument, "invalid digest"),
-                )?)
-            }
-            (None, None) => {
-                return Err(tonic::Status::new(
-                    tonic::Code::InvalidArgument,
-                    "must provided one of `sequence_number` or `digest`",
-                ))
-            }
-        };
-
-        let options = crate::types::GetFullCheckpointOptions::from_read_mask(
-            request.read_mask.unwrap_or_default(),
-        );
-
-        self.get_full_checkpoint(checkpoint, &options)
-            .map(Into::into)
+        self.get_full_checkpoint(request.into_inner())
             .map(tonic::Response::new)
             .map_err(Into::into)
     }
@@ -202,78 +130,8 @@ impl crate::proto::node::v2::node_service_server::NodeService for crate::RpcServ
         tonic::Response<crate::proto::node::v2::ExecuteTransactionResponse>,
         tonic::Status,
     > {
-        let request = request.into_inner();
-        let transaction = match (request.transaction, request.transaction_bcs) {
-            (Some(_), Some(_)) => {
-                return Err(tonic::Status::new(
-                    tonic::Code::InvalidArgument,
-                    "only one of `transaction` or `transaction_bcs` can be provided",
-                ))
-            }
-            (Some(transaction), None) => (&transaction).try_into().map_err(|e| {
-                tonic::Status::new(
-                    tonic::Code::InvalidArgument,
-                    format!("invalid transaction: {e}"),
-                )
-            })?,
-
-            (None, Some(bcs)) => bcs::from_bytes(bcs.bcs()).map_err(|_| {
-                tonic::Status::new(tonic::Code::InvalidArgument, "invalid transaction bcs")
-            })?,
-
-            (None, None) => {
-                return Err(tonic::Status::new(
-                    tonic::Code::InvalidArgument,
-                    "one of `transaction` or `transaction_bcs` must be provided",
-                ))
-            }
-        };
-        let mut signatures: Vec<sui_sdk_types::UserSignature> = Vec::new();
-
-        if !request.signatures.is_empty() {
-            let from_proto_signatures = request
-                .signatures
-                .iter()
-                .map(TryInto::try_into)
-                .collect::<Result<Vec<_>, _>>()
-                .map_err(|e| {
-                    tonic::Status::new(
-                        tonic::Code::InvalidArgument,
-                        format!("invalid signature: {e}"),
-                    )
-                })?;
-
-            signatures.extend(from_proto_signatures);
-        }
-
-        if !request.signatures_bytes.is_empty() {
-            let from_bytes_signatures = request
-                .signatures_bytes
-                .iter()
-                .map(|bytes| sui_sdk_types::UserSignature::from_bytes(bytes))
-                .collect::<Result<Vec<_>, _>>()
-                .map_err(|e| {
-                    tonic::Status::new(
-                        tonic::Code::InvalidArgument,
-                        format!("invalid signature: {e}"),
-                    )
-                })?;
-
-            signatures.extend(from_bytes_signatures);
-        }
-
-        let signed_transaction = sui_sdk_types::SignedTransaction {
-            transaction,
-            signatures,
-        };
-
-        let options = crate::types::ExecuteTransactionOptions::from_read_mask(
-            request.read_mask.unwrap_or_default(),
-        );
-
-        self.execute_transaction(signed_transaction, None, &options)
+        self.execute_transaction(request.into_inner())
             .await
-            .map(Into::into)
             .map(tonic::Response::new)
             .map_err(Into::into)
     }

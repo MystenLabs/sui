@@ -34,6 +34,9 @@ tokio.workspace = true
 tokio-util.workspace = true
 toml.workspace = true
 tower-layer.workspace = true
+tower.workspace = true
+tower-http.workspace = true
+http.workspace = true
 tracing.workspace = true
 url.workspace = true
 
@@ -41,6 +44,7 @@ move-binary-format.workspace = true
 move-core-types.workspace = true
 
 sui-default-config.workspace = true
+sui-display.workspace = true
 sui-indexer-alt-metrics.workspace = true
 sui-indexer-alt-schema.workspace = true
 sui-json.workspace = true
