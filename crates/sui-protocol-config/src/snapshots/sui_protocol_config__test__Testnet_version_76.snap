@@ -1,7 +1,6 @@
 ---
 source: crates/sui-protocol-config/src/lib.rs
 expression: "ProtocolConfig::get_for_version(cur, *chain_id)"
-snapshot_kind: text
 ---
 version: 76
 feature_flags:
@@ -72,7 +71,6 @@ feature_flags:
   consensus_smart_ancestor_selection: true
   consensus_round_prober_probe_accepted_rounds: true
   native_charging_v2: true
-  consensus_linearize_subdag_v2: true
   convert_type_argument_error: true
   variant_nodes: true
   consensus_zstd_compression: true
@@ -353,7 +351,6 @@ max_soft_bundle_size: 5
 bridge_should_try_to_finalize_committee: true
 max_accumulated_txn_cost_per_object_in_mysticeti_commit: 37000000
 max_accumulated_randomness_txn_cost_per_object_in_mysticeti_commit: 7400000
-consensus_gc_depth: 60
 gas_budget_based_txn_cost_cap_factor: 400000
 gas_budget_based_txn_cost_absolute_cap_commit_count: 50
 sip_45_consensus_amplification_threshold: 5
