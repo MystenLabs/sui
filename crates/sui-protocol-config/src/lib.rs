@@ -3305,7 +3305,7 @@ impl ProtocolConfig {
                     cfg.feature_flags.minimize_child_object_mutations = true;
 
                     if chain != Chain::Mainnet {
-                        cfg.consensus_gc_depth = Some(4);
+                        cfg.consensus_gc_depth = Some(2);
                         cfg.feature_flags.consensus_linearize_subdag_v2 = true;
                     }
                     if chain != Chain::Mainnet {
