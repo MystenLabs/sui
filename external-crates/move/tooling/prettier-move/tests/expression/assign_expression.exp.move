@@ -38,6 +38,8 @@ fun assign_comment() {
 
     a = /* hahaha */ b;
 
+    // two types of trailing comments
+    // are mixed in lhs
     a /* unsolved */ = // comment
         b /* b */; // trailing
 
