@@ -7,7 +7,7 @@ use sui_indexer_alt_metrics::MetricsArgs;
 use sui_pg_db::DbArgs;
 use url::Url;
 
-use crate::{data::system_package_task::SystemPackageTaskArgs, RpcArgs};
+use crate::{api::write::WriteArgs, data::system_package_task::SystemPackageTaskArgs, RpcArgs};
 
 #[derive(clap::Parser, Debug, Clone)]
 pub struct Args {
@@ -38,6 +38,9 @@ pub enum Command {
 
         #[command(flatten)]
         metrics_args: MetricsArgs,
+
+        #[command(flatten)]
+        write_args: Option<WriteArgs>,
 
         /// Path to the RPC's configuration TOML file. If one is not provided, the default values for
         /// the configuration will be set.

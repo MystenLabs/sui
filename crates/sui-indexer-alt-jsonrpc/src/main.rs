@@ -29,6 +29,7 @@ async fn main() -> anyhow::Result<()> {
             rpc_args,
             system_package_task_args,
             metrics_args,
+            write_args,
             config,
         } => {
             let rpc_config = if let Some(path) = config {
@@ -53,6 +54,7 @@ async fn main() -> anyhow::Result<()> {
                 database_url,
                 db_args,
                 rpc_args,
+                write_args,
                 system_package_task_args,
                 rpc_config,
                 metrics.registry(),

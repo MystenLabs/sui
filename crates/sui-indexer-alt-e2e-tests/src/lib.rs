@@ -51,7 +51,8 @@ pub struct FullCluster {
 }
 
 /// A collection of the off-chain services (an indexer, a database and a JSON-RPC server that reads
-/// from that database), grouped together to simplify set-up and tear-down for tests.
+/// from that database), grouped together to simplify set-up and tear-down for tests. The included
+/// JSON-RPC server currently does not support transaction dry run and execution.
 ///
 /// The database is temporary, and will be cleaned up when the cluster is dropped, and the RPC is
 /// set-up to listen on a random, available port, to avoid conflicts when multiple instances are
@@ -285,6 +286,7 @@ impl OffchainCluster {
             database_url.clone(),
             DbArgs::default(),
             rpc_args,
+            None,
             system_package_task_args,
             rpc_config,
             registry,

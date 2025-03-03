@@ -13,6 +13,7 @@ use api::name_service::NameService;
 use api::objects::{Objects, QueryObjects};
 use api::rpc_module::RpcModule;
 use api::transactions::{QueryTransactions, Transactions};
+use api::write::{Write, WriteArgs};
 use config::RpcConfig;
 use data::system_package_task::{SystemPackageTask, SystemPackageTaskArgs};
 use jsonrpsee::server::{BatchRequestConfig, RpcServiceBuilder, ServerBuilder};
@@ -31,7 +32,7 @@ use url::Url;
 use crate::api::governance::Governance;
 use crate::context::Context;
 
-mod api;
+pub mod api;
 pub mod args;
 pub mod config;
 mod context;
@@ -218,6 +219,7 @@ pub async fn start_rpc(
     database_url: Url,
     db_args: DbArgs,
     rpc_args: RpcArgs,
+    write_args: Option<WriteArgs>,
     system_package_task_args: SystemPackageTaskArgs,
     rpc_config: RpcConfig,
     registry: &Registry,
@@ -244,6 +246,11 @@ pub async fn start_rpc(
     rpc.add_module(QueryObjects(context.clone()))?;
     rpc.add_module(QueryTransactions(context.clone()))?;
     rpc.add_module(Transactions(context.clone()))?;
+
+    // Add the write module if a fullnode rpc url is provided.
+    if let Some(write_args) = write_args {
+        rpc.add_module(Write::new(write_args, context.config().write.clone())?)?;
+    }
 
     let h_rpc = rpc.run().await.context("Failed to start RPC service")?;
     let h_system_package_task = system_package_task.run();
