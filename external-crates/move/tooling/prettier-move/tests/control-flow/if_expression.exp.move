@@ -20,8 +20,7 @@ fun basic() {
     } else do_this();
 
     if (true) call_something()
-    else
-        call_something_else();
+    else call_something_else();
 
     if (false) {
         call_something_else();
@@ -138,8 +137,7 @@ fun if_expression() {
     // and newline + indent it
     if (expression)
         expression_that_is_too_long
-    else
-        another_long_expression;
+    else another_long_expression;
 
     // same exampla with block will
     // be broken into multiple lines
