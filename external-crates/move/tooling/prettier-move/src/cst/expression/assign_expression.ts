@@ -35,16 +35,16 @@ function printAssignExpression(path: AstPath<Node>, options: MoveOptions, print:
 
 		if (lhs.node.trailingComment?.type == 'line_comment') {
 			shouldBreak = true;
-			const trailingLineComment = printTrailingComment(lhs, false);
+			const trailingLineComment = printTrailingComment(lhs, true);
 			lhs.node.disableTrailingComment();
-			return [print(lhs), ' =', trailingLineComment];
+			return [print(lhs), ' =', indent(trailingLineComment)];
 		}
 
 		return [print(lhs), hasComment ? '=' : ' ='];
 	}, 'nonFormattingChildren', 0));
 
 	// then print the rhs
-	result.push(group([indent(line), indent(path.call(print, 'nonFormattingChildren', 1))], { shouldBreak }));
+	result.push(group([shouldBreak ? '' : indent(line), indent(path.call(print, 'nonFormattingChildren', 1))]));
 
 	return result;
 }

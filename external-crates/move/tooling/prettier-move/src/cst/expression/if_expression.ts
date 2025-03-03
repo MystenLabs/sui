@@ -93,11 +93,11 @@ function printIfExpression(path: AstPath<Node>, options: MoveOptions, print: pri
 			]))
 		} else {
 			result.push(
+				isTrueBlock ? ' ' : line,
+				'else',
 				group([
-					isTrueBlock ? ' ' : line,
-					'else',
 					indent(line),
-					indent(printed),
+					indent(path.call(print, 'nonFormattingChildren', 2)),
 				], { shouldBreak }),
 			);
 		}
