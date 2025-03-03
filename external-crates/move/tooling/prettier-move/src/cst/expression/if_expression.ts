@@ -48,10 +48,11 @@ export default function (path: AstPath<Node>): treeFn | null {
  */
 function printIfExpression(path: AstPath<Node>, options: MoveOptions, print: printFn): Doc {
 	const groupId = Symbol('if_expression');
-	const length = path.node.nonFormattingChildren.length;
+	const hasElse = path.node.children.some((e) => e.type == 'else');
+
 	const condition = path.node.nonFormattingChildren[0];
 	const trueBranch = path.node.nonFormattingChildren[1];
-	const result = [
+	const result: Doc[] = [
 		// condition group
 		group([
 			'if (',
@@ -67,31 +68,39 @@ function printIfExpression(path: AstPath<Node>, options: MoveOptions, print: pri
 		// body group
 		group(
 			[
-				trueBranch?.isList // || trueBranch?.isControlFlow
+				trueBranch?.isList
 					? [' ', path.call(print, 'nonFormattingChildren', 1)]
-					: [indent(line), (path.call(print, 'nonFormattingChildren', 1))],
-
+					: [indent(line), path.call(print, 'nonFormattingChildren', 1)],
 			],
 			{ id: groupId },
 		),
 	];
 
 	// else block
-	if (length === 3) {
-		// whether developer has put a newline character before `else` keyword
-		// if they did - we respect it and break the line intentionally
-		const shouldBreak = !!path.node.children.find((e) => e.type === 'else')?.startsOnNewLine;
-		const elseBranch = path.node.nonFormattingChildren[2];
+	if (hasElse) {
+		const isTrueBlock = trueBranch?.type === 'block';
+		const elseNode = path.node.nonFormattingChildren[2]!;
 		const printed = path.call(print, 'nonFormattingChildren', 2);
+		const shouldBreak =
+			elseNode.leadingComment.some((e) => e.type == 'line_comment') ||
+			elseNode.trailingComment?.type == 'line_comment';
 
-		result.push(
-			group(
-				elseBranch?.isList || trueBranch?.type === 'block'
-					? [' else ', printed]
-					: [ifBreak(' ', line, { groupId }), 'else ', printed],
-				{ shouldBreak },
-			),
-		);
+		if (elseNode.isList || elseNode.isControlFlow) {
+			result.push(group([
+				isTrueBlock ? ' ' : line,
+				'else ',
+				printed,
+			]))
+		} else {
+			result.push(
+				group([
+					isTrueBlock ? ' ' : line,
+					'else',
+					indent(line),
+					indent(printed),
+				], { shouldBreak }),
+			);
+		}
 	}
 
 	return result;
