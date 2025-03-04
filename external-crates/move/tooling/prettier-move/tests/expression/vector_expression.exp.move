@@ -3,7 +3,7 @@
 // tabWidth: 4
 // useModuleLabel: true
 
-module prettier::dot_expression;
+module prettier::vector_expression;
 
 fun vector_simple() {
     // should be printed as is
@@ -14,7 +14,7 @@ fun vector_simple() {
 
     // should be expanded to multiple lines
     vector[
-        alice,
+        alice, // comments should be preserved
         bob,
         carl,
         dave,

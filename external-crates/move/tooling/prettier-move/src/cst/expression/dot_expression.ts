@@ -35,10 +35,11 @@ function printDotExpression(path: AstPath<Node>, options: MoveOptions, print: pr
 		path.node.nonFormattingChildren[0]!.type === NODE_TYPE ||
 		path.node.parent?.type === NODE_TYPE;
 
+	const isParentList = path.node.parent?.isList;
+
 	// if dot expression has a trailing comment and it breaks, we need to
 	// print it manually after the rhs
 	const trailing = lineSuffix(printTrailingComment(path));
-	path.node.disableTrailingComment();
 
 	const lhs = path.call(
 		(path) => printNode(path, options, print, false),
@@ -57,12 +58,14 @@ function printDotExpression(path: AstPath<Node>, options: MoveOptions, print: pr
 	if (!isChain) {
 		const right = path.node.nonFormattingChildren[1]!;
 		if (right.leadingComment.length > 0) {
+			path.node.disableTrailingComment();
 			return [lhs, indent(softline), indent(rhs), trailing];
 		}
 
 		return [lhs, rhs];
 	}
 
+	path.node.disableTrailingComment();
 	const parts = [lhs, ifBreak(indent(softline), ''), ifBreak(indent(rhs), rhs), trailing];
 
 	// group if parent is not `dot_expression`
