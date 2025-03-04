@@ -95,17 +95,16 @@ impl CommitteeStore {
     }
 
     // todo - make use of cache or remove this method
-    pub fn get_latest_committee(&self) -> SuiResult<Committee> {
-        Ok(self
-            .tables
+    pub fn get_latest_committee(&self) -> Committee {
+        self.tables
             .committee_map
-            .reversed_safe_iter_with_bounds(None, None)?
+            .unbounded_iter()
+            .skip_to_last()
             .next()
-            .transpose()?
             // unwrap safe because we guarantee there is at least a genesis epoch
             // when initializing the store.
             .unwrap()
-            .1)
+            .1
     }
     /// Return the committee specified by `epoch`. If `epoch` is `None`, return the latest committee.
     // todo - make use of cache or remove this method
@@ -115,7 +114,7 @@ impl CommitteeStore {
                 .get_committee(&epoch)?
                 .ok_or(SuiError::MissingCommitteeAtEpoch(epoch))
                 .map(|c| Committee::clone(&*c))?,
-            None => self.get_latest_committee()?,
+            None => self.get_latest_committee(),
         })
     }
 
