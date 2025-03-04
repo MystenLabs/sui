@@ -13,7 +13,7 @@ use std::{
 use consensus_config::AuthorityIndex;
 use itertools::Itertools as _;
 use tokio::time::Instant;
-use tracing::{debug, error, info};
+use tracing::{debug, error, info, trace};
 
 use crate::{
     block::{
@@ -292,10 +292,23 @@ impl DagState {
 
         let now = self.context.clock.timestamp_utc_ms();
         if block.timestamp_ms() > now {
-            panic!(
-                "Block {:?} cannot be accepted! Block timestamp {} is greater than local timestamp {}.",
-                block, block.timestamp_ms(), now,
-            );
+            if self
+                .context
+                .protocol_config
+                .consensus_median_based_commit_timestamp()
+            {
+                trace!(
+                    "Block {:?} with timestamp {} is greater than local timestamp {}.",
+                    block,
+                    block.timestamp_ms(),
+                    now,
+                );
+            } else {
+                panic!(
+                    "Block {:?} cannot be accepted! Block timestamp {} is greater than local timestamp {}.",
+                    block, block.timestamp_ms(), now,
+                );
+            }
         }
 
         // TODO: Move this check to core
