@@ -49,7 +49,7 @@ pub type FetchResult = Result<FetchData, FetchError>;
 
 pub enum FetchData {
     Raw(Bytes),
-    CheckPointData(CheckpointData),
+    CheckpointData(CheckpointData),
 }
 
 #[derive(Clone)]
@@ -71,9 +71,17 @@ impl IngestionClient {
         Self::new_impl(client, metrics)
     }
 
-    pub(crate) fn new_rpc(url: Url, metrics: Arc<IndexerMetrics>) -> IngestionResult<Self> {
-        let client = Client::new(url.to_string())?
-            .with_auth(AuthInterceptor::basic(url.username(), url.password()));
+    pub(crate) fn new_rpc(
+        url: Url,
+        username: Option<String>,
+        password: Option<String>,
+        metrics: Arc<IndexerMetrics>,
+    ) -> IngestionResult<Self> {
+        let client = if let Some(username) = username {
+            Client::new(url.to_string())?.with_auth(AuthInterceptor::basic(username, password))
+        } else {
+            Client::new(url.to_string())?
+        };
         Ok(Self::new_impl(Arc::new(client), metrics))
     }
 
@@ -170,7 +178,7 @@ impl IngestionClient {
                             )
                         })?
                     }
-                    FetchData::CheckPointData(data) => {
+                    FetchData::CheckpointData(data) => {
                         // We are not recording size metric for Checkpoint data (from RPC client).
                         // TODO: Record the metric when we have a good way to get the size information
                         data

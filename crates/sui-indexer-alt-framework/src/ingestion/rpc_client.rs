@@ -19,6 +19,6 @@ impl IngestionClientTrait for RpcClient {
                     error: anyhow!(status),
                 },
             })?;
-        Ok(FetchData::CheckPointData(data))
+        Ok(FetchData::CheckpointData(data))
     }
 }

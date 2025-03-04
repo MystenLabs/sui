@@ -118,6 +118,8 @@ impl FullCluster {
             local_ingestion_path: Some(temp_dir.path().to_owned()),
             remote_store_url: None,
             rpc_api_url: None,
+            rpc_username: None,
+            rpc_password: None,
         };
 
         let offchain = OffchainCluster::new(

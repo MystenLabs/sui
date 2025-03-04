@@ -42,10 +42,18 @@ pub struct ClientArgs {
     #[clap(long, group = "source")]
     pub local_ingestion_path: Option<PathBuf>,
 
-    /// Path to the local ingestion directory.
+    /// Sui fullnode gRPC url to fetch checkpoints from.
     /// If all remote_store_url, local_ingestion_path and rpc_api_url are provided, remote_store_url will be used.
     #[clap(long, env, group = "source")]
     pub rpc_api_url: Option<Url>,
+
+    /// Optional username for the gRPC service.
+    #[clap(long, env)]
+    pub rpc_username: Option<String>,
+
+    /// Optional password for the gRPC service.
+    #[clap(long, env)]
+    pub rpc_password: Option<String>,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
@@ -90,7 +98,12 @@ impl IngestionService {
         } else if let Some(path) = args.local_ingestion_path.as_ref() {
             IngestionClient::new_local(path.clone(), metrics.clone())
         } else if let Some(rpc_api_url) = args.rpc_api_url.as_ref() {
-            IngestionClient::new_rpc(rpc_api_url.clone(), metrics.clone())?
+            IngestionClient::new_rpc(
+                rpc_api_url.clone(),
+                args.rpc_username,
+                args.rpc_password,
+                metrics.clone(),
+            )?
         } else {
             panic!("One of remote_store_url, local_ingestion_path or rpc_api_url must be provided");
         };
@@ -214,6 +227,8 @@ mod tests {
                 remote_store_url: Some(Url::parse(&uri).unwrap()),
                 local_ingestion_path: None,
                 rpc_api_url: None,
+                rpc_username: None,
+                rpc_password: None,
             },
             IngestionConfig {
                 checkpoint_buffer_size,
