@@ -77,8 +77,7 @@ pub struct SuiMoveNormalizedStruct {
 pub struct SuiMoveNormalizedEnum {
     pub abilities: SuiMoveAbilitySet,
     pub type_parameters: Vec<SuiMoveStructTypeParameter>,
-    // NB: Don't use a `BTreeMap` here as we want to keep the declaration order of the variants
-    pub variants: Vec<(String, Vec<SuiMoveNormalizedField>)>,
+    pub variants: BTreeMap<String, Vec<SuiMoveNormalizedField>>,
 }
 
 #[derive(Serialize, Deserialize, Debug, JsonSchema, Clone)]
@@ -247,7 +246,7 @@ impl From<NormalizedEnum> for SuiMoveNormalizedEnum {
                             .collect::<Vec<SuiMoveNormalizedField>>(),
                     )
                 })
-                .collect::<Vec<(String, Vec<SuiMoveNormalizedField>)>>(),
+                .collect::<BTreeMap<String, Vec<SuiMoveNormalizedField>>>(),
         }
     }
 }
