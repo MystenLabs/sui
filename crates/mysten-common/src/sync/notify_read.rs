@@ -34,7 +34,8 @@ impl<K: Eq + Hash + Clone, V: Clone> NotifyRead<K, V> {
 
     /// Asynchronously notifies waiters and return number of remaining pending registration
     pub fn notify(&self, key: &K, value: &V) -> usize {
-        let registrations = self.pending(key).remove(key);
+        let mut registrations = self.pending(key);
+        let registrations = registrations.remove(key);
         let Some(registrations) = registrations else {
             return self.count_pending.load(Ordering::Relaxed);
         };
