@@ -6,6 +6,8 @@
 #[test_only]
 module std::vector_tests;
 
+use std::unit_test::assert_eq;
+
 public struct R has store {}
 public struct Droppable has drop {}
 public struct NotDroppable {}
@@ -397,6 +399,82 @@ fun swap_remove_out_of_range() {
     let mut v = vector[];
     v.push_back(0);
     v.swap_remove(1);
+}
+
+#[test]
+fun skip() {
+    assert!(vector[0,1,2].skip(2) == vector[2]);
+}
+
+#[test, expected_failure]
+fun skip_fail() {
+    vector[0,1,2].skip(0); // no elements skipped
+    vector[0,1,2].skip(1); // one element skipped
+    vector[0,1,2].skip(2); // two elements skipped
+    vector[0,1,2].skip(3); // out of bounds (skipping 4 elements)
+}
+
+#[test]
+fun skip_mut() {
+    let mut v = vector[0, 1, 2, 3];
+
+    let mut v1 = v.skip_mut(0);
+    assert_eq!(v1.length(), 4);
+    assert_eq!(v1, vector[0, 1, 2, 3]);
+
+    let mut v2 = v1.skip_mut(1);
+    assert_eq!(v2.length(), 3);
+    assert_eq!(v2, vector[1, 2, 3]);
+
+    let v3 = v2.skip_mut(2);
+    assert_eq!(v3.length(), 1);
+    assert_eq!(v3, vector[3]);
+}
+
+#[test, expected_failure]
+fun skip_mut_fail() {
+    let mut v = vector[0, 1, 2, 3];
+    v.skip_mut(4); // out of bounds (skipping 4 elements)
+}
+
+#[test]
+fun take() {
+    assert_eq!(vector[0,1,2].take(0), vector[]);
+    assert_eq!(vector[0,1,2].take(1), vector[0]);
+    assert_eq!(vector[0,1,2].take(2), vector[0,1]);
+    assert_eq!(vector[0,1,2].take(3), vector[0,1,2]);
+}
+
+#[test, expected_failure]
+fun take_fail() {
+    vector[0,1,2].take(4); // out of bounds (taking 4 elements)
+}
+
+#[test]
+fun take_mut() {
+    let mut v = vector[0, 1, 2, 3];
+
+    let v1 = v.take_mut(0);
+    assert_eq!(v1.length(), 0);
+    assert_eq!(v1, vector[]);
+
+    let v2 = v.take_mut(1);
+    assert_eq!(v2.length(), 1);
+    assert_eq!(v2, vector[0]);
+
+    let mut v3 = v.take_mut(2);
+    assert_eq!(v3.length(), 2);
+    assert_eq!(v3, vector[1, 2]);
+
+    let v4 = v3.take_mut(2);
+    assert_eq!(v4.length(), 2);
+    assert_eq!(v4, vector[1, 2]);
+}
+
+#[test, expected_failure]
+fun take_mut_fail() {
+    let mut v = vector[0, 1, 2, 3];
+    v.take_mut(5); // out of bounds (taking 4 elements)
 }
 
 #[test]
@@ -846,4 +924,66 @@ fun zip_map_ref_macro() {
     let v1 = vector[1u64, 2, 3];
     let v2 = vector[4u64, 5, 6];
     assert!(v2.zip_map_ref!(&v1, |a, b| *a + *b) == vector[5, 7, 9]);
+}
+
+#[test]
+fun find_indices() {
+    let v = vector[1, 2, 3, 2, 1];
+    assert_eq!(v.find_indices!(|e| e == 2), vector[1, 3]);
+    assert_eq!(v.find_indices!(|e| e == 1), vector[0, 4]);
+    assert_eq!(v.find_indices!(|e| e == 100), vector[]);
+}
+
+#[test]
+fun take_mut_while() {
+    let mut v = vector[0, 1, 2, 3];
+    let v1 = v.take_mut_while!(|e| *e < 2);
+    let v2 = v.take_mut_while!(|e| *e == 0);
+
+    assert_eq!(v1, vector[0, 1]);
+    assert_eq!(v2, vector[]);
+    assert_eq!(v, vector[2, 3]);
+
+    let mut v = vector[1, 1, 1, 2, 2, 2, 3, 3, 3];
+    assert_eq!(v.take_mut_while!(|e| *e <= 2), vector[1, 1, 1, 2, 2, 2]);
+    assert_eq!(v, vector[3, 3, 3]);
+
+    let mut v = vector[1, 1, 1, 2, 2, 2, 3, 3, 3];
+    assert_eq!(v.take_mut_while!(|_| true), vector[1, 1, 1, 2, 2, 2, 3, 3, 3]);
+    assert_eq!(v, vector[]);
+}
+
+#[test]
+fun take_while() {
+    assert_eq!(vector[0, 1, 2].take_while!(|e| *e > 0), vector[]);
+    assert_eq!(vector[0, 1, 2].take_while!(|e| *e < 2), vector[0, 1]);
+    assert_eq!(vector[0, 1, 2].take_while!(|e| *e == 0), vector[0]);
+}
+
+#[test]
+fun skip_mut_while() {
+    let v1 = vector[0, 1, 2, 3].skip_mut_while!(|e| *e < 2);
+    let v2 = vector[0, 1, 2, 3].skip_mut_while!(|e| *e == 0);
+    let v3 = vector[0, 1, 2, 3].skip_mut_while!(|e| *e > 6);
+
+    assert_eq!(v1, vector[2, 3]);
+    assert_eq!(v2, vector[1, 2, 3]);
+    assert_eq!(v3, vector[0, 1, 2, 3]);
+
+    let mut v = vector[1, 1, 1, 2, 2, 2, 3, 3, 3];
+    assert_eq!(v.skip_mut_while!(|_| true), vector[]);
+    assert_eq!(v, vector[1, 1, 1, 2, 2, 2, 3, 3, 3]);
+}
+
+#[test]
+fun skip_while() {
+    assert_eq!(vector[0, 1, 2].skip_while!(|e| *e > 0), vector[0, 1, 2]);
+    assert_eq!(vector[0, 1, 2].skip_while!(|e| *e < 2), vector[2]);
+    assert_eq!(vector[0, 1, 2].skip_while!(|e| *e == 0), vector[1, 2]);
+
+    let v = vector[1, 1, 1, 2, 2, 2, 3, 3, 3];
+    assert_eq!(v.skip_while!(|_| false), v);
+    assert_eq!(v.skip_while!(|e| *e == 1), vector[2, 2, 2, 3, 3, 3]);
+    assert_eq!(v.skip_while!(|e| *e <= 2), vector[3, 3, 3]);
+    assert_eq!(v.skip_while!(|_| true), vector[]);
 }
