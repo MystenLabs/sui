@@ -422,7 +422,8 @@ impl AuthorityStore {
             let marker_entry = self
                 .perpetual_tables
                 .object_per_epoch_marker_table_v2
-                .reversed_safe_iter_with_bounds(Some(min_key), Some(max_key))?
+                .safe_iter_with_bounds(Some(min_key), Some(max_key))
+                .skip_prior_to(&max_key)?
                 .next();
             match marker_entry {
                 Some(Ok(((epoch, key), marker))) => {
@@ -441,7 +442,8 @@ impl AuthorityStore {
             let marker_entry = self
                 .perpetual_tables
                 .object_per_epoch_marker_table
-                .reversed_safe_iter_with_bounds(Some(min_key), Some(max_key))?
+                .safe_iter_with_bounds(Some(min_key), Some(max_key))
+                .skip_prior_to(&max_key)?
                 .next();
             match marker_entry {
                 Some(Ok(((epoch, key), marker))) => {
@@ -562,12 +564,10 @@ impl AuthorityStore {
         let mut iterator = self
             .perpetual_tables
             .objects
-            .reversed_safe_iter_with_bounds(
-                Some(ObjectKey::min_for_id(object_id)),
-                Some(ObjectKey(*object_id, prior_version)),
-            )?;
+            .unbounded_iter()
+            .skip_prior_to(&ObjectKey(*object_id, prior_version))?;
 
-        if let Some((object_key, value)) = iterator.next().transpose()? {
+        if let Some((object_key, value)) = iterator.next() {
             if object_key.0 == *object_id {
                 return Ok(Some(
                     self.perpetual_tables.object_reference(&object_key, value)?,
@@ -620,9 +620,10 @@ impl AuthorityStore {
         let marker_entry = self
             .perpetual_tables
             .object_per_epoch_marker_table
-            .reversed_safe_iter_with_bounds(None, Some(marker_key))?
+            .unbounded_iter()
+            .skip_prior_to(&marker_key)?
             .next();
-        match marker_entry.transpose()? {
+        match marker_entry {
             Some(((epoch, key), marker)) => {
                 // Make sure object id matches and version is >= `version`
                 let object_data_ok = key.0 == *object_id && key.1 >= version;
@@ -1047,13 +1048,11 @@ impl AuthorityStore {
         let mut iterator = self
             .perpetual_tables
             .live_owned_object_markers
-            .reversed_safe_iter_with_bounds(
-                None,
-                Some((object_id, SequenceNumber::MAX, ObjectDigest::MAX)),
-            )?;
+            .unbounded_iter()
+            // Make the max possible entry for this object ID.
+            .skip_prior_to(&(object_id, SequenceNumber::MAX, ObjectDigest::MAX))?;
         Ok(iterator
             .next()
-            .transpose()?
             .and_then(|value| {
                 if value.0 .0 == object_id {
                     Some(value)
@@ -1820,7 +1819,8 @@ impl AccumulatorStore for AuthorityStore {
         Ok(self
             .perpetual_tables
             .root_state_hash_by_epoch
-            .reversed_safe_iter_with_bounds(None, None)?
+            .safe_iter()
+            .skip_to_last()
             .next()
             .transpose()?)
     }

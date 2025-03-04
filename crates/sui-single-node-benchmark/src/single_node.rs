@@ -245,7 +245,6 @@ impl SingleValidator {
             self.get_validator()
                 .get_checkpoint_store()
                 .get_latest_certified_checkpoint()
-                .unwrap()
                 .unwrap(),
         );
         let mut checkpoints = vec![];

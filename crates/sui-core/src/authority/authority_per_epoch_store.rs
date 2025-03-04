@@ -515,7 +515,7 @@ pub struct AuthorityEpochTables {
 
     /// Stores pending signatures
     /// The key in this table is checkpoint sequence number and an arbitrary integer
-    pub(crate) pending_checkpoint_signatures:
+    pending_checkpoint_signatures:
         DBMap<(CheckpointSequenceNumber, u64), CheckpointSignatureMessage>,
 
     /// Deprecated - pending signatures are now stored in memory.
@@ -701,6 +701,22 @@ impl AuthorityEpochTables {
         Ok(self.last_consensus_stats.get(&LAST_CONSENSUS_STATS_ADDR)?)
     }
 
+    pub fn get_pending_checkpoint_signatures_iter(
+        &self,
+        checkpoint_seq: CheckpointSequenceNumber,
+        starting_index: u64,
+    ) -> SuiResult<
+        impl Iterator<Item = ((CheckpointSequenceNumber, u64), CheckpointSignatureMessage)> + '_,
+    > {
+        let key = (checkpoint_seq, starting_index);
+        trace!("Scanning pending checkpoint signatures from {:?}", key);
+        let iter = self
+            .pending_checkpoint_signatures
+            .unbounded_iter()
+            .skip_to(&key)?;
+        Ok::<_, SuiError>(iter)
+    }
+
     pub fn get_locked_transaction(&self, obj_ref: &ObjectRef) -> SuiResult<Option<LockDetails>> {
         Ok(self
             .owned_object_locked_transactions
@@ -878,7 +894,7 @@ impl AuthorityPerEpochStore {
 
         let mut jwk_aggregator = JwkAggregator::new(committee.clone());
 
-        for ((authority, id, jwk), _) in tables.pending_jwks.unbounded_iter() {
+        for ((authority, id, jwk), _) in tables.pending_jwks.unbounded_iter().seek_to_first() {
             jwk_aggregator.insert(authority, (id, jwk));
         }
 
@@ -1161,9 +1177,9 @@ impl AuthorityPerEpochStore {
         Ok(self
             .tables()?
             .running_root_accumulators
-            .reversed_safe_iter_with_bounds(None, None)?
-            .next()
-            .transpose()?)
+            .unbounded_iter()
+            .skip_to_last()
+            .next())
     }
 
     pub fn insert_running_root_accumulator(
@@ -4125,10 +4141,11 @@ impl AuthorityPerEpochStore {
             // Reading from the db table is only need when upgrading to data quarantining
             // for the first time.
             let tables = self.tables()?;
-            let db_iter = tables
-                .pending_checkpoints_v2
-                .safe_iter_with_bounds(last.map(|height| height + 1), None);
-            db_iter.collect::<Result<Vec<_>, _>>()?
+            let mut db_iter = tables.pending_checkpoints_v2.unbounded_iter();
+            if let Some(last_processed_height) = last {
+                db_iter = db_iter.skip_to(&(last_processed_height + 1))?;
+            }
+            db_iter.collect()
         } else {
             vec![]
         };
@@ -4216,9 +4233,9 @@ impl AuthorityPerEpochStore {
         Ok(self
             .tables()?
             .builder_checkpoint_summary_v2
-            .reversed_safe_iter_with_bounds(None, None)?
+            .unbounded_iter()
+            .skip_to_last()
             .next()
-            .transpose()?
             .map(|(_, s)| s))
     }
 
@@ -4238,9 +4255,9 @@ impl AuthorityPerEpochStore {
             let seq = self
                 .tables()?
                 .builder_checkpoint_summary_v2
-                .reversed_safe_iter_with_bounds(None, None)?
+                .unbounded_iter()
+                .skip_to_last()
                 .next()
-                .transpose()?
                 .map(|(seq, s)| (seq, s.summary));
             debug!(
                 "returning last_built_summary from builder_checkpoint_summary_v2: {:?}",
@@ -4296,9 +4313,9 @@ impl AuthorityPerEpochStore {
         Ok(self
             .tables()?
             .pending_checkpoint_signatures
-            .reversed_safe_iter_with_bounds(None, None)?
+            .unbounded_iter()
+            .skip_to_last()
             .next()
-            .transpose()?
             .map(|((_, index), _)| index)
             .unwrap_or_default())
     }
