@@ -873,14 +873,17 @@ impl IndexStore {
                 )?
                 // skip one more if exclusive cursor is Some
                 .skip(usize::from(cursor.is_some()))
-                .collect::<Result<Vec<_>, _>>()?
-                .into_iter()
-                .take_while(|((id, _), _)| *id == key)
-                .map(|(_, digest)| digest);
+                .take_while(|result| {
+                    result
+                        .as_ref()
+                        .map(|((id, _), _)| *id == key)
+                        .unwrap_or(false)
+                })
+                .map(|result| result.map(|(_, digest)| digest));
             if let Some(limit) = limit {
-                iter.take(limit).collect()
+                iter.take(limit).collect::<Result<Vec<_>, _>>()?
             } else {
-                iter.collect()
+                iter.collect::<Result<Vec<_>, _>>()?
             }
         } else {
             let iter = index
@@ -1013,18 +1016,21 @@ impl IndexStore {
                 .reversed_safe_iter_with_bounds(None, Some(key))?
                 // skip one more if exclusive cursor is Some
                 .skip(usize::from(cursor.is_some()))
-                .collect::<Result<Vec<_>, _>>()?
-                .into_iter()
-                .take_while(|((id, m, f, _), _)| {
-                    *id == package
-                        && module.as_ref().map(|x| x == m).unwrap_or(true)
-                        && function.as_ref().map(|x| x == f).unwrap_or(true)
+                .take_while(|result| {
+                    result
+                        .as_ref()
+                        .map(|((id, m, f, _), _)| {
+                            *id == package
+                                && module.as_ref().map(|x| x == m).unwrap_or(true)
+                                && function.as_ref().map(|x| x == f).unwrap_or(true)
+                        })
+                        .unwrap_or(false)
                 })
-                .map(|(_, digest)| digest);
+                .map(|result| result.map(|(_, digest)| digest));
             if let Some(limit) = limit {
-                iter.take(limit).collect()
+                iter.take(limit).collect::<Result<Vec<_>, _>>()?
             } else {
-                iter.collect()
+                iter.collect::<Result<Vec<_>, _>>()?
             }
         } else {
             let iter = self
@@ -1119,14 +1125,19 @@ impl IndexStore {
             self.tables
                 .event_order
                 .reversed_safe_iter_with_bounds(None, Some((min(tx_seq, seq), event_seq)))?
-                .collect::<Result<Vec<_>, _>>()?
-                .into_iter()
-                .take_while(|((tx, _), _)| tx == &seq)
-                .take(limit)
-                .map(|((_, event_seq), (digest, tx_digest, time))| {
-                    (digest, tx_digest, event_seq, time)
+                .take_while(|result| {
+                    result
+                        .as_ref()
+                        .map(|((tx, _), _)| tx == &seq)
+                        .unwrap_or(false)
                 })
-                .collect()
+                .take(limit)
+                .map(|result| {
+                    result.map(|((_, event_seq), (digest, tx_digest, time))| {
+                        (digest, tx_digest, event_seq, time)
+                    })
+                })
+                .collect::<Result<Vec<_>, _>>()?
         } else {
             self.tables
                 .event_order
@@ -1152,14 +1163,14 @@ impl IndexStore {
         Ok(if descending {
             index
                 .reversed_safe_iter_with_bounds(None, Some((key.clone(), (tx_seq, event_seq))))?
-                .collect::<Result<Vec<_>, _>>()?
-                .into_iter()
-                .take_while(|((m, _), _)| m == key)
+                .take_while(|result| result.as_ref().map(|((m, _), _)| m == key).unwrap_or(false))
                 .take(limit)
-                .map(|((_, (_, event_seq)), (digest, tx_digest, time))| {
-                    (digest, tx_digest, event_seq, time)
+                .map(|result| {
+                    result.map(|((_, (_, event_seq)), (digest, tx_digest, time))| {
+                        (digest, tx_digest, event_seq, time)
+                    })
                 })
-                .collect()
+                .collect::<Result<Vec<_>, _>>()?
         } else {
             index
                 .iter_with_bounds(Some((key.clone(), (tx_seq, event_seq))), None)
@@ -1262,14 +1273,19 @@ impl IndexStore {
             self.tables
                 .event_by_time
                 .reversed_safe_iter_with_bounds(None, Some((end_time, (tx_seq, event_seq))))?
-                .collect::<Result<Vec<_>, _>>()?
-                .into_iter()
-                .take_while(|((m, _), _)| m >= &start_time)
-                .take(limit)
-                .map(|((_, (_, event_seq)), (digest, tx_digest, time))| {
-                    (digest, tx_digest, event_seq, time)
+                .take_while(|result| {
+                    result
+                        .as_ref()
+                        .map(|((m, _), _)| m >= &start_time)
+                        .unwrap_or(false)
                 })
-                .collect()
+                .take(limit)
+                .map(|result| {
+                    result.map(|((_, (_, event_seq)), (digest, tx_digest, time))| {
+                        (digest, tx_digest, event_seq, time)
+                    })
+                })
+                .collect::<Result<Vec<_>, _>>()?
         } else {
             self.tables
                 .event_by_time
