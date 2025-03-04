@@ -11,6 +11,7 @@ use sui_indexer_alt_jsonrpc::{
     api::write::WriteArgs, config::RpcConfig, data::system_package_task::SystemPackageTaskArgs,
     start_rpc, RpcArgs,
 };
+use sui_macros::sim_test;
 use sui_pg_db::{
     temp::{get_available_port, TempDb},
     DbArgs,
@@ -154,15 +155,12 @@ impl WriteTestCluster {
     async fn stopped(self) {
         self.cancel.cancel();
         let _ = self.rpc_handle.await;
-        let mut nodes = self.onchain_cluster.all_node_handles();
-        for node in &mut nodes {
-            node.shutdown_on_drop();
-        }
     }
 }
 
-#[tokio::test]
+#[sim_test]
 async fn test_execution() {
+    telemetry_subscribers::init_for_testing();
     let test_cluster = WriteTestCluster::new()
         .await
         .expect("Failed to create test cluster");
@@ -190,6 +188,8 @@ async fn test_execution() {
         .await
         .unwrap();
 
+    tracing::info!("execution rpc response is {:?}", response);
+
     // Checking that all the requested fields are present in the response.
     assert_eq!(response["result"]["digest"], tx_digest);
     assert!(response["result"]["transaction"].is_object());
@@ -203,8 +203,10 @@ async fn test_execution() {
     test_cluster.stopped().await;
 }
 
-#[tokio::test]
+#[sim_test]
 async fn test_execution_with_deprecated_mode() {
+    telemetry_subscribers::init_for_testing();
+
     let test_cluster = WriteTestCluster::new()
         .await
         .expect("Failed to create test cluster");
@@ -224,6 +226,8 @@ async fn test_execution_with_deprecated_mode() {
         .await
         .unwrap();
 
+    tracing::info!("execution rpc response is {:?}", response);
+
     assert_eq!(response["error"]["code"], -32602);
     assert_eq!(
         response["error"]["message"],
@@ -233,8 +237,10 @@ async fn test_execution_with_deprecated_mode() {
     test_cluster.stopped().await;
 }
 
-#[tokio::test]
+#[sim_test]
 async fn test_execution_with_no_sigs() {
+    telemetry_subscribers::init_for_testing();
+
     let test_cluster = WriteTestCluster::new()
         .await
         .expect("Failed to create test cluster");
@@ -252,6 +258,8 @@ async fn test_execution_with_no_sigs() {
         .await
         .unwrap();
 
+    tracing::info!("execution rpc response is {:?}", response);
+
     assert_eq!(response["error"]["code"], -32602);
     assert_eq!(response["error"]["message"], "Invalid params");
     assert!(response["error"]["data"]
@@ -262,8 +270,10 @@ async fn test_execution_with_no_sigs() {
     test_cluster.stopped().await;
 }
 
-#[tokio::test]
+#[sim_test]
 async fn test_execution_with_empty_sigs() {
+    telemetry_subscribers::init_for_testing();
+
     let test_cluster = WriteTestCluster::new()
         .await
         .expect("Failed to create test cluster");
@@ -282,6 +292,8 @@ async fn test_execution_with_empty_sigs() {
         .await
         .unwrap();
 
+    tracing::info!("execution rpc response is {:?}", response);
+
     assert_eq!(response["error"]["code"], -32002);
     assert_eq!(
         response["error"]["message"],
@@ -291,8 +303,10 @@ async fn test_execution_with_empty_sigs() {
     test_cluster.stopped().await;
 }
 
-#[tokio::test]
+#[sim_test]
 async fn test_execution_with_aborted_tx() {
+    telemetry_subscribers::init_for_testing();
+
     let test_cluster = WriteTestCluster::new()
         .await
         .expect("Failed to create test cluster");
@@ -314,12 +328,14 @@ async fn test_execution_with_aborted_tx() {
         .await
         .unwrap();
 
+    tracing::info!("execution rpc response is {:?}", response);
+
     assert_eq!(response["result"]["effects"]["status"]["status"], "failure");
 
     test_cluster.stopped().await;
 }
 
-#[tokio::test]
+#[sim_test]
 async fn test_dry_run() {
     let test_cluster = WriteTestCluster::new()
         .await
@@ -342,7 +358,7 @@ async fn test_dry_run() {
     test_cluster.stopped().await;
 }
 
-#[tokio::test]
+#[sim_test]
 async fn test_dry_run_with_invalid_tx() {
     let test_cluster = WriteTestCluster::new()
         .await

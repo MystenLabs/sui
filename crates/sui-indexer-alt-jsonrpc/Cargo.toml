@@ -10,6 +10,9 @@ edition = "2021"
 name = "sui-indexer-alt-jsonrpc"
 path = "src/main.rs"
 
+[lints]
+workspace = true
+
 [dependencies]
 anyhow.workspace = true
 async-graphql = { workspace = true, features = ["dataloader"] }
