@@ -1580,6 +1580,16 @@ impl VMValueCast<Vec<u64>> for Value {
     }
 }
 
+impl VMValueCast<Vec<AccountAddress>> for Value {
+    fn cast(self) -> PartialVMResult<Vec<AccountAddress>> {
+        match self.0 {
+            ValueImpl::Container(Container::VecAddress(r)) => take_unique_ownership(r),
+            v => Err(PartialVMError::new(StatusCode::INTERNAL_TYPE_ERROR)
+                .with_message(format!("cannot cast {:?} to vector<AccountAddress>", v,))),
+        }
+    }
+}
+
 impl VMValueCast<Vec<Value>> for Value {
     fn cast(self) -> PartialVMResult<Vec<Value>> {
         match self.0 {
