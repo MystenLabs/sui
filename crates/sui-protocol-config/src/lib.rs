@@ -3310,6 +3310,7 @@ impl ProtocolConfig {
                     if chain != Chain::Mainnet {
                         cfg.feature_flags.passkey_auth = true;
                     }
+                    cfg.feature_flags.consensus_median_based_commit_timestamp = true;
                 }
                 76 => {
                     if chain != Chain::Mainnet && chain != Chain::Testnet {
