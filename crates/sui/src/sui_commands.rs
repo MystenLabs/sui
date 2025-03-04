@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::client_commands::SuiClientCommands;
+use crate::client_commands::{pkg_tree_shake, SuiClientCommands};
 use crate::console::start_console;
 use crate::fire_drill::{run_fire_drill, FireDrill};
 use crate::genesis_ceremony::{run, Ceremony};
@@ -43,10 +43,15 @@ use sui_graphql_rpc::{
     test_infra::cluster::start_graphql_server_with_fn_rpc,
 };
 
+use serde_json::json;
 use sui_keys::keypair_file::read_key;
 use sui_keys::keystore::{AccountKeystore, FileBasedKeystore, Keystore};
+use sui_move::manage_package::resolve_lock_file_path;
 use sui_move::{self, execute_move_command};
-use sui_move_build::SuiPackageHooks;
+use sui_move_build::{
+    check_invalid_dependencies, check_unpublished_dependencies, BuildConfig as SuiBuildConfig,
+    SuiPackageHooks,
+};
 use sui_sdk::sui_client_config::{SuiClientConfig, SuiEnv};
 use sui_sdk::wallet_context::WalletContext;
 use sui_swarm::memory::Swarm;
@@ -499,31 +504,67 @@ impl SuiCommand {
             SuiCommand::Move {
                 package_path,
                 build_config,
-                mut cmd,
+                cmd,
                 config: client_config,
             } => {
-                match &mut cmd {
+                match cmd {
                     sui_move::Command::Build(build) if build.dump_bytecode_as_base64 => {
-                        if build.ignore_chain {
-                            build.chain_id = None;
-                        } else {
-                            // `sui move build` does not ordinarily require a network connection.
-                            // The exception is when --dump-bytecode-as-base64 is specified: In this
-                            // case, we should resolve the correct addresses for the respective chain
-                            // (e.g., testnet, mainnet) from the Move.lock under automated address management.
-                            let config =
-                                client_config.unwrap_or(sui_config_dir()?.join(SUI_CLIENT_CONFIG));
-                            prompt_if_no_config(&config, false).await?;
-                            let context = WalletContext::new(&config, None, None)?;
-                            if let Ok(client) = context.get_client().await {
-                                if let Err(e) = client.check_api_version() {
-                                    eprintln!("{}", format!("[warning] {e}").yellow().bold());
-                                }
-                            }
-                            let client = context.get_client().await?;
-                            let chain_id = client.read_api().get_chain_identifier().await.ok();
-                            build.chain_id = chain_id.clone();
+                        // `sui move build` does not ordinarily require a network connection.
+                        // The exception is when --dump-bytecode-as-base64 is specified: In this
+                        // case, we should resolve the correct addresses for the respective chain
+                        // (e.g., testnet, mainnet) from the Move.lock under automated address management.
+                        // In addition, tree shaking also requires a network as it needs to fetch
+                        // on-chain linkage table of package dependencies.
+                        let config =
+                            client_config.unwrap_or(sui_config_dir()?.join(SUI_CLIENT_CONFIG));
+                        prompt_if_no_config(&config, false).await?;
+                        let context = WalletContext::new(&config, None, None)?;
+
+                        let Ok(client) = context.get_client().await else {
+                            bail!("`sui move build --dump-bytecode-as-base64` requires a connection to the network. Current active network is {} but failed to connect to it.", context.config.active_env.as_ref().unwrap());
+                        };
+                        let read_api = client.read_api();
+
+                        if let Err(e) = client.check_api_version() {
+                            eprintln!("{}", format!("[warning] {e}").yellow().bold());
                         }
+
+                        let chain_id = if build.ignore_chain {
+                            // for tests it's useful to ignore the chain id!
+                            None
+                        } else {
+                            read_api.get_chain_identifier().await.ok()
+                        };
+
+                        let rerooted_path = move_cli::base::reroot_path(package_path.as_deref())?;
+                        let build_config =
+                            resolve_lock_file_path(build_config, Some(&rerooted_path))?;
+                        let mut pkg = SuiBuildConfig {
+                            config: build_config,
+                            run_bytecode_verifier: true,
+                            print_diags_to_stderr: true,
+                            chain_id,
+                        }
+                        .build(&rerooted_path)?;
+
+                        let with_unpublished_deps = build.with_unpublished_dependencies;
+
+                        check_invalid_dependencies(&pkg.dependency_ids.invalid)?;
+                        if !with_unpublished_deps {
+                            check_unpublished_dependencies(&pkg.dependency_ids.unpublished)?;
+                        }
+
+                        pkg_tree_shake(read_api, with_unpublished_deps, &mut pkg).await?;
+
+                        println!(
+                            "{}",
+                            json!({
+                                "modules": pkg.get_package_base64(with_unpublished_deps),
+                                "dependencies": pkg.get_dependency_storage_package_ids(),
+                                "digest": pkg.get_package_digest(with_unpublished_deps),
+                            })
+                        );
+                        return Ok(());
                     }
                     _ => (),
                 };
