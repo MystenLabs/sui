@@ -9015,22 +9015,12 @@
             }
           },
           "variants": {
-            "type": "array",
-            "items": {
+            "type": "object",
+            "additionalProperties": {
               "type": "array",
-              "items": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "array",
-                  "items": {
-                    "$ref": "#/components/schemas/SuiMoveNormalizedField"
-                  }
-                }
-              ],
-              "maxItems": 2,
-              "minItems": 2
+              "items": {
+                "$ref": "#/components/schemas/SuiMoveNormalizedField"
+              }
             }
           }
         }
