@@ -317,7 +317,8 @@ bytes = { version = "1.5.0", features = ["serde"] }
 cached = "0.43.0"
 camino = "1.1.1"
 cfg-if = "1.0.0"
-chrono = { version = "0.4.26", features = ["clock", "serde"] }
+# Locked to this version until a release of `arrow` that includes https://github.com/apache/arrow-rs/pull/7198
+chrono = { version = "=0.4.39", features = ["clock", "serde"] }
 clap = { version = "4.4", features = ["derive", "wrap_help"] }
 codespan-reporting = "0.11.1"
 collectable = "0.0.2"
