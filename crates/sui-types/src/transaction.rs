@@ -1094,24 +1094,21 @@ impl ProgrammableTransaction {
         Ok(())
     }
 
-    fn shared_input_objects(&self) -> impl Iterator<Item = SharedInputObject> + '_ {
-        self.inputs
-            .iter()
-            .filter_map(|arg| match arg {
-                CallArg::Pure(_)
-                | CallArg::Object(ObjectArg::Receiving(_))
-                | CallArg::Object(ObjectArg::ImmOrOwnedObject(_)) => None,
-                CallArg::Object(ObjectArg::SharedObject {
-                    id,
-                    initial_shared_version,
-                    mutable,
-                }) => Some(vec![SharedInputObject {
-                    id: *id,
-                    initial_shared_version: *initial_shared_version,
-                    mutable: *mutable,
-                }]),
-            })
-            .flatten()
+    pub fn shared_input_objects(&self) -> impl Iterator<Item = SharedInputObject> + '_ {
+        self.inputs.iter().filter_map(|arg| match arg {
+            CallArg::Pure(_)
+            | CallArg::Object(ObjectArg::Receiving(_))
+            | CallArg::Object(ObjectArg::ImmOrOwnedObject(_)) => None,
+            CallArg::Object(ObjectArg::SharedObject {
+                id,
+                initial_shared_version,
+                mutable,
+            }) => Some(SharedInputObject {
+                id: *id,
+                initial_shared_version: *initial_shared_version,
+                mutable: *mutable,
+            }),
+        })
     }
 
     fn move_calls(&self) -> Vec<(&ObjectID, &str, &str)> {
