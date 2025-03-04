@@ -59,6 +59,9 @@ jobs:
       - name: Add postgres to PATH
         run: echo "/usr/lib/postgresql/14/bin" >> $GITHUB_PATH
 
+      - name: Install toolchain
+        run: rustup toolchain install 1.85-x86_64-unknown-linux-gnu
+
       - name: Set Swap Space
         uses: pierotofy/set-swap-space@master
         with:
