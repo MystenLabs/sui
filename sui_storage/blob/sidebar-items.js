@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"constant":["BLOB_ENCODING_BYTES","MAX_VARINT_LENGTH"],"enum":["BlobEncoding"],"struct":["Blob","BlobIter"]};
