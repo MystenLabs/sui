@@ -23,10 +23,9 @@ use sui_types::{
     gas_coin::GAS,
 };
 
-use crate::data::singleton_object::load_singleton_object_id;
 use crate::{
     context::Context,
-    data::objects::load_latest,
+    data::{coin_metadata::CoinMetadataKey, objects::load_latest},
     error::{invalid_params, InternalContext, RpcError},
     paginate::{BcsCursor, Cursor as _, Page},
 };
@@ -176,15 +175,10 @@ impl CoinsApiServer for Coins {
 
     async fn get_coin_metadata(&self, coin_type: String) -> RpcResult<Option<SuiCoinMetadata>> {
         let Self(ctx) = self;
-        let object_id = coin_metadata_object_id(ctx, coin_type).await?;
 
-        let Some(object_id) = object_id else {
-            return Ok(None);
-        };
-
-        let coin_metadata = coin_metadata_response(ctx, object_id).await?;
-
-        Ok(Some(coin_metadata))
+        Ok(coin_metadata_response(ctx, &coin_type)
+            .await
+            .with_internal_context(|| format!("Failed to fetch CoinMetadata for {coin_type:?}"))?)
     }
 }
 
@@ -315,20 +309,6 @@ async fn filter_coins(
     })
 }
 
-async fn coin_metadata_object_id(
-    ctx: &Context,
-    coin_type: String,
-) -> Result<Option<ObjectID>, RpcError<Error>> {
-    let coin_type_param = StructTag::from_str(&coin_type)
-        .map_err(|e| invalid_params(Error::BadType(coin_type.clone(), e)))?;
-
-    let full_coin_type = sui_types::coin::CoinMetadata::type_(coin_type_param);
-
-    Ok(load_singleton_object_id(ctx.pg_reader(), full_coin_type)
-        .await
-        .context("Failed to load singleton object id")?)
-}
-
 async fn coin_response(ctx: &Context, id: ObjectID) -> Result<Coin, RpcError<Error>> {
     let (object, coin_type, balance) = object_with_coin_data(ctx, id).await?;
 
@@ -349,16 +329,34 @@ async fn coin_response(ctx: &Context, id: ObjectID) -> Result<Coin, RpcError<Err
 
 async fn coin_metadata_response(
     ctx: &Context,
-    id: ObjectID,
-) -> Result<SuiCoinMetadata, RpcError<Error>> {
-    let object = load_latest(ctx, id)
-        .await?
-        .context("Latest object not found")?;
+    coin_type: &str,
+) -> Result<Option<SuiCoinMetadata>, RpcError<Error>> {
+    let coin_type = StructTag::from_str(coin_type)
+        .map_err(|e| invalid_params(Error::BadType(coin_type.to_owned(), e)))?;
+
+    let Some(stored) = ctx
+        .pg_loader()
+        .load_one(CoinMetadataKey(coin_type))
+        .await
+        .context("Failed to load info for CoinMetadata")?
+    else {
+        return Ok(None);
+    };
+
+    let id = ObjectID::from_bytes(&stored.object_id).context("Failed to parse ObjectID")?;
+
+    let Some(object) = load_latest(ctx, id)
+        .await
+        .context("Failed to load latest version of CoinMetadata")?
+    else {
+        return Ok(None);
+    };
 
     let coin_metadata = object
         .try_into()
-        .context("Failed to convert object to coin metadata")?;
-    Ok(coin_metadata)
+        .context("Failed to parse object as CoinMetadata")?;
+
+    Ok(Some(coin_metadata))
 }
 
 async fn object_with_coin_data(
