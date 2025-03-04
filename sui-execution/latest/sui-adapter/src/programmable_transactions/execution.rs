@@ -10,6 +10,7 @@ mod checked {
         CommandKind, ExecutionState, ObjectContents, ObjectValue, RawValueType, Value,
     };
     use crate::gas_charger::GasCharger;
+    use crate::package_unification::{LinkageConfig, PTBLinkageMetadata};
     use move_binary_format::{
         compatibility::{Compatibility, InclusionCheck},
         errors::{Location, PartialVMResult, VMResult},
