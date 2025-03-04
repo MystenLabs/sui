@@ -118,49 +118,55 @@ impl<C: CoreThreadDispatcher> NetworkService for AuthorityService<C> {
         let block_ref = verified_block.reference();
         debug!("Received block {} via send block.", block_ref);
 
-        // Reject block with timestamp too far in the future.
-        let now = self.context.clock.timestamp_utc_ms();
-        let forward_time_drift =
-            Duration::from_millis(verified_block.timestamp_ms().saturating_sub(now));
-        if forward_time_drift > self.context.parameters.max_forward_time_drift {
-            self.context
-                .metrics
-                .node_metrics
-                .rejected_future_blocks
-                .with_label_values(&[peer_hostname])
-                .inc();
-            debug!(
-                "Block {:?} timestamp ({} > {}) is too far in the future, rejected.",
-                block_ref,
-                verified_block.timestamp_ms(),
-                now,
-            );
-            return Err(ConsensusError::BlockRejected {
-                block_ref,
-                reason: format!(
-                    "Block timestamp is too far in the future: {} > {}",
+        if !self
+            .context
+            .protocol_config
+            .consensus_median_based_commit_timestamp()
+        {
+            // Reject block with timestamp too far in the future.
+            let now = self.context.clock.timestamp_utc_ms();
+            let forward_time_drift =
+                Duration::from_millis(verified_block.timestamp_ms().saturating_sub(now));
+            if forward_time_drift > self.context.parameters.max_forward_time_drift {
+                self.context
+                    .metrics
+                    .node_metrics
+                    .rejected_future_blocks
+                    .with_label_values(&[peer_hostname])
+                    .inc();
+                debug!(
+                    "Block {:?} timestamp ({} > {}) is too far in the future, rejected.",
+                    block_ref,
                     verified_block.timestamp_ms(),
-                    now
-                ),
-            });
-        }
+                    now,
+                );
+                return Err(ConsensusError::BlockRejected {
+                    block_ref,
+                    reason: format!(
+                        "Block timestamp is too far in the future: {} > {}",
+                        verified_block.timestamp_ms(),
+                        now
+                    ),
+                });
+            }
 
-        // Wait until the block's timestamp is current.
-        if forward_time_drift > Duration::ZERO {
-            self.context
-                .metrics
-                .node_metrics
-                .block_timestamp_drift_wait_ms
-                .with_label_values(&[peer_hostname, "handle_send_block"])
-                .inc_by(forward_time_drift.as_millis() as u64);
-            debug!(
-                "Block {:?} timestamp ({} > {}) is in the future, waiting for {}ms",
-                block_ref,
-                verified_block.timestamp_ms(),
-                now,
-                forward_time_drift.as_millis(),
-            );
-            sleep(forward_time_drift).await;
+            // Wait until the block's timestamp is current.
+            if forward_time_drift > Duration::ZERO {
+                self.context
+                    .metrics
+                    .node_metrics
+                    .block_timestamp_drift_wait_ms
+                    .with_label_values(&[peer_hostname, "handle_send_block"])
+                    .inc_by(forward_time_drift.as_millis() as u64);
+                debug!(
+                    "Block {:?} timestamp ({} > {}) is in the future, waiting for {}ms",
+                    block_ref,
+                    verified_block.timestamp_ms(),
+                    now,
+                    forward_time_drift.as_millis(),
+                );
+                sleep(forward_time_drift).await;
+            }
         }
 
         // Observe the block for the commit votes. When local commit is lagging too much,
