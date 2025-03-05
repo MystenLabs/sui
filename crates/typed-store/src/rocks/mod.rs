@@ -335,6 +335,15 @@ impl RocksDB {
         delegate_call!(self.drop_cf(name))
     }
 
+    pub fn delete_file_in_range<K: AsRef<[u8]>>(
+        &self,
+        cf: &impl AsColumnFamilyRef,
+        from: K,
+        to: K,
+    ) -> Result<(), rocksdb::Error> {
+        delegate_call!(self.delete_file_in_range_cf(cf, from, to))
+    }
+
     pub fn delete_cf<K: AsRef<[u8]>>(
         &self,
         cf: &impl AsColumnFamilyRef,
@@ -1563,6 +1572,24 @@ impl DBBatch {
             .rocksdb_batch_put_bytes
             .with_label_values(&[&db.cf])
             .observe(total as f64);
+        Ok(self)
+    }
+
+    pub fn partial_merge_batch<J: Borrow<K>, K: Serialize, V: Serialize, B: AsRef<[u8]>>(
+        &mut self,
+        db: &DBMap<K, V>,
+        new_vals: impl IntoIterator<Item = (J, B)>,
+    ) -> Result<&mut Self, TypedStoreError> {
+        if !Arc::ptr_eq(&db.rocksdb, &self.rocksdb) {
+            return Err(TypedStoreError::CrossDBBatch);
+        }
+        new_vals
+            .into_iter()
+            .try_for_each::<_, Result<_, TypedStoreError>>(|(k, v)| {
+                let k_buf = be_fix_int_ser(k.borrow())?;
+                self.batch.merge_cf(&db.cf(), k_buf, v);
+                Ok(())
+            })?;
         Ok(self)
     }
 }
