@@ -956,7 +956,7 @@ mod object_cost_tests {
                         &tx,
                         &HashMap::new(),
                         0,
-                        Some(Duration::from_micros(10_000_000)),
+                        Duration::from_micros(10_000_000),
                     )
                 {
                     assert_eq!(congested_objects.len(), 1);
@@ -1445,7 +1445,7 @@ mod object_cost_tests {
             0,
         );
 
-        let accumulated_debts = shared_object_congestion_tracker.accumulated_debts(None);
+        let accumulated_debts = shared_object_congestion_tracker.accumulated_debts(Duration::ZERO);
         assert!(accumulated_debts.is_empty());
     }
 
@@ -1487,7 +1487,7 @@ mod object_cost_tests {
                 &tx,
                 &HashMap::new(),
                 0,
-                None,
+                Duration::ZERO,
             )
             .is_none());
 
@@ -1496,7 +1496,7 @@ mod object_cost_tests {
         assert_eq!(300, shared_object_congestion_tracker.max_cost());
 
         // Verify accumulated debts still uses the per-commit budget to decrement.
-        let accumulated_debts = shared_object_congestion_tracker.accumulated_debts(None);
+        let accumulated_debts = shared_object_congestion_tracker.accumulated_debts(Duration::ZERO);
         assert_eq!(accumulated_debts.len(), 1);
         assert_eq!(accumulated_debts[0], (object_id_2, 200));
     }
