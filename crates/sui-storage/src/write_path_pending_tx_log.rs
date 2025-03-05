@@ -82,12 +82,13 @@ impl WritePathPendingTransactionLog {
         write_batch.write().map_err(SuiError::from)
     }
 
-    pub fn load_all_pending_transactions(&self) -> Vec<VerifiedTransaction> {
-        self.pending_transactions
+    pub fn load_all_pending_transactions(&self) -> SuiResult<Vec<VerifiedTransaction>> {
+        Ok(self
+            .pending_transactions
             .logs
-            .unbounded_iter()
-            .map(|(_tx_digest, tx)| VerifiedTransaction::from(tx))
-            .collect()
+            .safe_iter()
+            .map(|item| item.map(|(_tx_digest, tx)| VerifiedTransaction::from(tx)))
+            .collect::<Result<Vec<_>, _>>()?)
     }
 }
 
@@ -114,11 +115,11 @@ mod tests {
             .await
             .unwrap());
 
-        let loaded_txes = pending_txes.load_all_pending_transactions();
+        let loaded_txes = pending_txes.load_all_pending_transactions()?;
         assert_eq!(vec![tx], loaded_txes);
 
         pending_txes.finish_transaction(&tx_digest).unwrap();
-        let loaded_txes = pending_txes.load_all_pending_transactions();
+        let loaded_txes = pending_txes.load_all_pending_transactions()?;
         assert!(loaded_txes.is_empty());
 
         // It's ok to finish an already finished transaction
@@ -135,7 +136,7 @@ mod tests {
                 .unwrap());
         }
         let loaded_tx_digests: HashSet<_> = pending_txes
-            .load_all_pending_transactions()
+            .load_all_pending_transactions()?
             .iter()
             .map(|t| *t.digest())
             .collect();
@@ -148,7 +149,7 @@ mod tests {
             pending_txes.finish_transaction(tx.digest()).unwrap();
         }
         let loaded_tx_digests: HashSet<_> = pending_txes
-            .load_all_pending_transactions()
+            .load_all_pending_transactions()?
             .iter()
             .map(|t| *t.digest())
             .collect();

@@ -670,11 +670,12 @@ impl AuthorityEpochTables {
         Ok(state)
     }
 
-    pub fn get_all_pending_consensus_transactions(&self) -> Vec<ConsensusTransaction> {
-        self.pending_consensus_transactions
-            .unbounded_iter()
-            .map(|(_k, v)| v)
-            .collect()
+    pub fn get_all_pending_consensus_transactions(&self) -> SuiResult<Vec<ConsensusTransaction>> {
+        Ok(self
+            .pending_consensus_transactions
+            .safe_iter()
+            .map(|item| item.map(|(_k, v)| v))
+            .collect::<Result<Vec<_>, _>>()?)
     }
 
     pub fn reset_db_for_execution_since_genesis(&self) -> SuiResult {
@@ -780,19 +781,19 @@ impl AuthorityPerEpochStore {
         expensive_safety_check_config: &ExpensiveSafetyCheckConfig,
         chain_identifier: ChainIdentifier,
         highest_executed_checkpoint: CheckpointSequenceNumber,
-    ) -> Arc<Self> {
+    ) -> SuiResult<Arc<Self>> {
         let current_time = Instant::now();
         let epoch_id = committee.epoch;
 
         let tables = AuthorityEpochTables::open(epoch_id, parent_path, db_options.clone());
         let end_of_publish =
-            StakeAggregator::from_iter(committee.clone(), tables.end_of_publish.unbounded_iter());
+            StakeAggregator::from_iter(committee.clone(), tables.end_of_publish.safe_iter())?;
         let reconfig_state = tables
             .load_reconfig_state()
             .expect("Load reconfig state at initialization cannot fail");
 
         let epoch_alive_notify = NotifyOnce::new();
-        let pending_consensus_transactions = tables.get_all_pending_consensus_transactions();
+        let pending_consensus_transactions = tables.get_all_pending_consensus_transactions()?;
         let pending_consensus_certificates: HashSet<_> = pending_consensus_transactions
             .iter()
             .filter_map(|transaction| {
@@ -878,7 +879,8 @@ impl AuthorityPerEpochStore {
 
         let mut jwk_aggregator = JwkAggregator::new(committee.clone());
 
-        for ((authority, id, jwk), _) in tables.pending_jwks.unbounded_iter() {
+        for item in tables.pending_jwks.safe_iter() {
+            let ((authority, id, jwk), _) = item?;
             jwk_aggregator.insert(authority, (id, jwk));
         }
 
@@ -887,6 +889,10 @@ impl AuthorityPerEpochStore {
         let consensus_output_cache =
             ConsensusOutputCache::new(&epoch_start_configuration, &tables, metrics.clone());
 
+        let execution_time_observations = tables
+            .execution_time_observations
+            .safe_iter()
+            .collect::<Result<Vec<_>, _>>()?;
         let execution_time_estimator = ExecutionTimeEstimator::new(
             committee.clone(),
             // Load observations stored at end of previous epoch.
@@ -896,16 +902,13 @@ impl AuthorityPerEpochStore {
                 &*object_store,
             )
             // Load observations stored during the current epoch.
-            .chain(
-                tables
-                    .execution_time_observations
-                    .unbounded_iter()
-                    .flat_map(|((generation, source), observations)| {
-                        observations
-                            .into_iter()
-                            .map(move |(key, duration)| (source, generation, key, duration))
-                    }),
-            ),
+            .chain(execution_time_observations.into_iter().flat_map(
+                |((generation, source), observations)| {
+                    observations
+                        .into_iter()
+                        .map(move |(key, duration)| (source, generation, key, duration))
+                },
+            )),
         );
 
         let s = Arc::new(Self {
@@ -949,7 +952,7 @@ impl AuthorityPerEpochStore {
         });
 
         s.update_buffer_stake_metric();
-        s
+        Ok(s)
     }
 
     pub fn tables(&self) -> SuiResult<Arc<AuthorityEpochTables>> {
@@ -1063,7 +1066,7 @@ impl AuthorityPerEpochStore {
         expensive_safety_check_config: &ExpensiveSafetyCheckConfig,
         chain_identifier: ChainIdentifier,
         previous_epoch_last_checkpoint: CheckpointSequenceNumber,
-    ) -> Arc<Self> {
+    ) -> SuiResult<Arc<Self>> {
         assert_eq!(self.epoch() + 1, new_committee.epoch);
         self.record_reconfig_halt_duration_metric();
         self.record_epoch_total_duration_metric();
@@ -1107,6 +1110,7 @@ impl AuthorityPerEpochStore {
             self.chain_identifier,
             previous_epoch_last_checkpoint,
         )
+        .expect("failed to create new authority per epoch store")
     }
 
     pub fn committee(&self) -> &Arc<Committee> {
@@ -1612,9 +1616,9 @@ impl AuthorityPerEpochStore {
         Ok(self
             .tables()?
             .pending_execution
-            .unbounded_iter()
-            .map(|(_, cert)| cert.into())
-            .collect())
+            .safe_iter()
+            .map(|item| item.map(|(_, cert)| cert.into()))
+            .collect::<Result<Vec<_>, _>>()?)
     }
 
     /// Called when transaction outputs are committed to disk
@@ -1650,6 +1654,7 @@ impl AuthorityPerEpochStore {
         self.tables()
             .expect("recovery should not cross epoch boundary")
             .get_all_pending_consensus_transactions()
+            .expect("failed to get pending consensus transactions")
     }
 
     #[cfg(test)]
@@ -4404,25 +4409,25 @@ impl AuthorityPerEpochStore {
         self.signature_verifier.clear_signature_cache();
     }
 
-    pub(crate) fn check_all_executed_transactions_in_checkpoint(&self) {
+    pub(crate) fn check_all_executed_transactions_in_checkpoint(&self) -> SuiResult<()> {
         let tables = self.tables().unwrap();
 
         info!("Verifying that all executed transactions are in a checkpoint");
 
-        let mut executed_iter = tables.executed_in_epoch.unbounded_iter();
-        let mut checkpointed_iter = tables.executed_transactions_to_checkpoint.unbounded_iter();
+        let mut executed_iter = tables.executed_in_epoch.safe_iter();
+        let mut checkpointed_iter = tables.executed_transactions_to_checkpoint.safe_iter();
 
         // verify that the two iterators (which are both sorted) are identical
         loop {
-            let executed = executed_iter.next();
-            let checkpointed = checkpointed_iter.next();
+            let executed = executed_iter.next().transpose()?;
+            let checkpointed = checkpointed_iter.next().transpose()?;
             match (executed, checkpointed) {
                 (Some((left, ())), Some((right, _))) => {
                     if left != right {
                         panic!("Executed transactions and checkpointed transactions do not match: {:?} {:?}", left, right);
                     }
                 }
-                (None, None) => break,
+                (None, None) => break Ok(()),
                 (left, right) => panic!(
                     "Executed transactions and checkpointed transactions do not match: {:?} {:?}",
                     left, right
