@@ -11,9 +11,10 @@ use move_unit_test::{extensions::set_extension_hook, UnitTestingConfig};
 use move_vm_runtime::native_extensions::NativeContextExtensions;
 use once_cell::sync::Lazy;
 use std::{cell::RefCell, collections::BTreeMap, path::Path, sync::Arc};
-use sui_move_build::decorate_warnings;
+use sui_move_build::{decorate_warnings, implicit_deps};
 use sui_move_natives::test_scenario::InMemoryTestStore;
 use sui_move_natives::{object_runtime::ObjectRuntime, NativesCostTable};
+use sui_package_management::system_package_versions::latest_system_packages;
 use sui_protocol_config::ProtocolConfig;
 use sui_types::{
     gas_model::tables::initial_cost_schedule_for_unit_tests, in_memory_storage::InMemoryStorage,
@@ -71,7 +72,7 @@ static SET_EXTENSION_HOOK: Lazy<()> =
 /// successfully started running the test, and the inner result indicatests whether all tests pass.
 pub fn run_move_unit_tests(
     path: &Path,
-    build_config: BuildConfig,
+    mut build_config: BuildConfig,
     config: Option<UnitTestingConfig>,
     compute_coverage: bool,
     save_disassembly: bool,
@@ -81,6 +82,7 @@ pub fn run_move_unit_tests(
 
     let config = config
         .unwrap_or_else(|| UnitTestingConfig::default_with_bound(Some(MAX_UNIT_TEST_INSTRUCTIONS)));
+    build_config.implicit_dependencies = implicit_deps(latest_system_packages());
 
     let result = move_cli::base::test::run_move_unit_tests(
         path,
