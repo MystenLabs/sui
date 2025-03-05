@@ -6,8 +6,7 @@ import { MoveOptions, printFn, treeFn } from '../../printer';
 import { AstPath, Doc } from 'prettier';
 import { list } from '../../utilities';
 import { builders } from 'prettier/doc';
-import { printBreakableBlock, printNonBreakingBlock } from './block';
-const { join, indent, group, softline, line, dedent, conditionalGroup } = builders;
+const { join, indent, group, softline, line } = builders;
 
 /** The type of the node implemented in this file */
 export const NODE_TYPE = 'match_expression';
@@ -72,7 +71,6 @@ function printMatchExpression(path: AstPath<Node>, options: MoveOptions, print: 
  */
 function printMatchArm(path: AstPath<Node>, options: MoveOptions, print: printFn): Doc {
 	const children = path.map(print, 'nonFormattingChildren');
-	const groupId = Symbol('match_arm');
 
 	if (children.length < 2) {
 		throw new Error('`match_arm` node should have at least 2 children');
