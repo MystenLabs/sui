@@ -50,11 +50,7 @@ impl Client {
         let mut endpoint = tonic::transport::Endpoint::from(uri.clone());
         if uri.scheme() == Some(&http::uri::Scheme::HTTPS) {
             endpoint = endpoint
-                .tls_config(
-                    ClientTlsConfig::new()
-                        .with_enabled_roots()
-                        .assume_http2(true),
-                )
+                .tls_config(ClientTlsConfig::new().with_enabled_roots())
                 .map_err(Into::into)
                 .map_err(Status::from_error)?;
         }
