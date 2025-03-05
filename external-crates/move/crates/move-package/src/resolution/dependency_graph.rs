@@ -16,7 +16,7 @@ use std::{
     process::Command,
 };
 
-use crate::source_package::parsed_manifest::Dependencies;
+use crate::source_package::parsed_manifest::{Dependencies, InternalDependency};
 use crate::{
     lock_file::{schema, LockFile},
     package_hooks::{custom_resolve_pkg_id, resolve_version, PackageIdentifier},
@@ -200,6 +200,7 @@ pub struct DependencyGraphBuilder<Progress: Write> {
     /// Installation directory for compiled artifacts (from BuildConfig).
     install_dir: PathBuf,
     /// Set of implicit dependencies to add to every package
+    /// Invariant: all dependencies are Internal deps with dep_override set
     implicit_deps: Dependencies,
 }
 
@@ -210,6 +211,13 @@ impl<Progress: Write> DependencyGraphBuilder<Progress> {
         install_dir: PathBuf,
         implicit_deps: Dependencies,
     ) -> Self {
+        for (name, dep) in implicit_deps.iter() {
+            assert!(
+                matches!(dep, PM::Dependency::Internal(i) if i.dep_override),
+                "Implicit dependencies must be internal overrides; {name} is not"
+            );
+        }
+
         DependencyGraphBuilder {
             dependency_cache: DependencyCache::new(skip_fetch_latest_git_deps),
             progress_output,
