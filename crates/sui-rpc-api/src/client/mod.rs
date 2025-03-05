@@ -50,7 +50,11 @@ impl Client {
         let mut endpoint = tonic::transport::Endpoint::from(uri.clone());
         if uri.scheme() == Some(&http::uri::Scheme::HTTPS) {
             endpoint = endpoint
-                .tls_config(ClientTlsConfig::new().with_enabled_roots())
+                .tls_config(
+                    ClientTlsConfig::new()
+                        .with_enabled_roots()
+                        .assume_http2(true),
+                )
                 .map_err(Into::into)
                 .map_err(Status::from_error)?;
         }
@@ -137,7 +141,7 @@ impl Client {
 
         let (metadata, response, _extentions) = self
             .raw_client()
-            .max_decoding_message_size(64 * 1024 * 1024)
+            .max_decoding_message_size(128 * 1024 * 1024)
             .get_full_checkpoint(request)
             .await?
             .into_parts();
