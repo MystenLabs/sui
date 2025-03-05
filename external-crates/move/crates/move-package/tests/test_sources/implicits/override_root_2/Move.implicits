@@ -1,0 +1,2 @@
+I1 = { local = "../i1", override = true }
+I2 = { local = "../i2", override = true }
