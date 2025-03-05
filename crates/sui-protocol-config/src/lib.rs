@@ -18,7 +18,7 @@ use tracing::{info, warn};
 
 /// The minimum and maximum protocol versions supported by this build.
 const MIN_PROTOCOL_VERSION: u64 = 1;
-const MAX_PROTOCOL_VERSION: u64 = 76;
+const MAX_PROTOCOL_VERSION: u64 = 77;
 
 // Record history of protocol version allocations here:
 //
@@ -221,6 +221,8 @@ const MAX_PROTOCOL_VERSION: u64 = 76;
 // Version 76: Deprecate Deepbook V2 order placement and deposit.
 //             Removes unnecessary child object mutations
 //             Enable passkey auth in multisig for testnet.
+// Version 77: Enable consensus garbage collection for testnet
+//             Enable the new consensus commit rule for testnet.
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
 
@@ -3304,6 +3306,12 @@ impl ProtocolConfig {
 
                     if chain != Chain::Mainnet {
                         cfg.feature_flags.accept_passkey_in_multisig = true;
+                    }
+                }
+                77 => {
+                    if chain != Chain::Mainnet {
+                        cfg.consensus_gc_depth = Some(60);
+                        cfg.feature_flags.consensus_linearize_subdag_v2 = true;
                     }
                 }
                 // Use this template when making changes:
