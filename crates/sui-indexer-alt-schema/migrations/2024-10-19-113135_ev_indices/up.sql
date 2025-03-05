@@ -4,8 +4,12 @@ CREATE TABLE IF NOT EXISTS ev_emit_mod
     module                      TEXT          NOT NULL,
     tx_sequence_number          BIGINT        NOT NULL,
     sender                      BYTEA         NOT NULL,
-    PRIMARY KEY(package, module, tx_sequence_number)
-);
+    cp_sequence_number          BIGINT        NOT NULL,
+    PRIMARY KEY(package, module, tx_sequence_number, cp_sequence_number)
+) PARTITION BY RANGE (cp_sequence_number);
+
+CREATE INDEX IF NOT EXISTS ev_emit_mod_cp_sequence_number
+ON ev_emit_mod (cp_sequence_number);
 
 CREATE INDEX IF NOT EXISTS ev_emit_mod_tx_sequence_number
 ON ev_emit_mod (tx_sequence_number);
@@ -28,8 +32,12 @@ CREATE TABLE IF NOT EXISTS ev_struct_inst
     instantiation               BYTEA         NOT NULL,
     tx_sequence_number          BIGINT        NOT NULL,
     sender                      BYTEA         NOT NULL,
-    PRIMARY KEY(package, module, name, instantiation, tx_sequence_number)
-);
+    cp_sequence_number          BIGINT        NOT NULL,
+    PRIMARY KEY(package, module, name, instantiation, tx_sequence_number, cp_sequence_number)
+) PARTITION BY RANGE (cp_sequence_number);
+
+CREATE INDEX IF NOT EXISTS ev_struct_inst_cp_sequence_number
+ON ev_struct_inst (cp_sequence_number);
 
 CREATE INDEX IF NOT EXISTS ev_struct_inst_tx_sequence_number
 ON ev_struct_inst (tx_sequence_number);

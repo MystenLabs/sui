@@ -7,8 +7,8 @@ CREATE TABLE IF NOT EXISTS obj_versions
     object_version              BIGINT        NOT NULL,
     object_digest               BYTEA         NOT NULL,
     cp_sequence_number          BIGINT        NOT NULL,
-    PRIMARY KEY (object_id, object_version)
-);
+    PRIMARY KEY (object_id, object_version, cp_sequence_number)
+) PARTITION BY RANGE (cp_sequence_number);
 
 CREATE INDEX IF NOT EXISTS obj_versions_cp_sequence_number
 ON obj_versions (cp_sequence_number);

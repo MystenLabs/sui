@@ -37,7 +37,10 @@ CREATE TABLE IF NOT EXISTS obj_info
     -- The type's type parameters, as a BCS-encoded array of TypeTags.
     instantiation               BYTEA,
     PRIMARY KEY (object_id, cp_sequence_number)
-);
+) PARTITION BY RANGE (cp_sequence_number);
+
+CREATE INDEX IF NOT EXISTS obj_info_cp_sequence_number
+ON obj_info (cp_sequence_number);
 
 CREATE INDEX IF NOT EXISTS obj_info_owner
 ON obj_info (owner_kind, owner_id, cp_sequence_number DESC, object_id);

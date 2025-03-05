@@ -148,9 +148,9 @@ impl Indexer {
             .context("Failed to connect to database")?;
 
         // At indexer initialization, we ensure that the DB schema is up-to-date.
-        // db.run_migrations(Self::migrations(migrations))
-        // .await
-        // .context("Failed to run pending migrations")?;
+        db.run_migrations(Self::migrations(migrations))
+            .await
+            .context("Failed to run pending migrations")?;
 
         let metrics = IndexerMetrics::new(registry);
         registry.register(Box::new(DbConnectionStatsCollector::new(

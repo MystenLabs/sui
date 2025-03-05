@@ -23,7 +23,10 @@ CREATE TABLE IF NOT EXISTS coin_balance_buckets
     -- The balance bucket of the coin, which is log10(coin_balance).
     coin_balance_bucket         SMALLINT,
     PRIMARY KEY (object_id, cp_sequence_number)
-);
+) PARTITION BY RANGE (cp_sequence_number);
+
+CREATE INDEX IF NOT EXISTS coin_balance_buckets_cp_sequence_number
+ON coin_balance_buckets (cp_sequence_number);
 
 CREATE INDEX IF NOT EXISTS coin_balances_buckets_owner_type
 ON coin_balance_buckets (owner_kind, owner_id, coin_type, coin_balance_bucket DESC, cp_sequence_number DESC, object_id);

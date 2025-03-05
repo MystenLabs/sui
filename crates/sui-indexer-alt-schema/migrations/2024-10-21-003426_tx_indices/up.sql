@@ -3,8 +3,12 @@ CREATE TABLE IF NOT EXISTS tx_affected_addresses
     affected                    BYTEA        NOT NULL,
     tx_sequence_number          BIGINT       NOT NULL,
     sender                      BYTEA        NOT NULL,
-    PRIMARY KEY (affected, tx_sequence_number)
-);
+    cp_sequence_number          BIGINT       NOT NULL,
+    PRIMARY KEY (affected, tx_sequence_number, cp_sequence_number)
+) PARTITION BY RANGE (cp_sequence_number);
+
+CREATE INDEX IF NOT EXISTS tx_affected_addresses_cp_sequence_number
+ON tx_affected_addresses (cp_sequence_number);
 
 CREATE INDEX IF NOT EXISTS tx_affected_addresses_tx_sequence_number
 ON tx_affected_addresses (tx_sequence_number);
@@ -14,16 +18,25 @@ ON tx_affected_addresses (sender, affected, tx_sequence_number);
 
 CREATE TABLE IF NOT EXISTS tx_digests
 (
-    tx_sequence_number          BIGINT       PRIMARY KEY,
-    tx_digest                   BYTEA        NOT NULL
-);
+    tx_sequence_number          BIGINT       NOT NULL,
+    tx_digest                   BYTEA        NOT NULL,
+    cp_sequence_number          BIGINT       NOT NULL,
+    PRIMARY KEY (tx_sequence_number, cp_sequence_number)
+) PARTITION BY RANGE (cp_sequence_number);
+
+CREATE INDEX IF NOT EXISTS tx_digests_cp_sequence_number
+ON tx_digests (cp_sequence_number);
 
 CREATE TABLE IF NOT EXISTS tx_kinds
 (
     tx_kind                     SMALLINT     NOT NULL,
     tx_sequence_number          BIGINT       NOT NULL,
-    PRIMARY KEY (tx_kind, tx_sequence_number)
-);
+    cp_sequence_number          BIGINT       NOT NULL,
+    PRIMARY KEY (tx_kind, tx_sequence_number, cp_sequence_number)
+) PARTITION BY RANGE (cp_sequence_number);
+
+CREATE INDEX IF NOT EXISTS tx_kinds_cp_sequence_number
+ON tx_kinds (cp_sequence_number);
 
 CREATE INDEX IF NOT EXISTS tx_kinds_tx_sequence_number
 ON tx_kinds (tx_sequence_number);
@@ -35,8 +48,12 @@ CREATE TABLE IF NOT EXISTS tx_calls
     function                    TEXT         NOT NULL,
     tx_sequence_number          BIGINT       NOT NULL,
     sender                      BYTEA        NOT NULL,
-    PRIMARY KEY (package, module, function, tx_sequence_number)
-);
+    cp_sequence_number          BIGINT       NOT NULL,
+    PRIMARY KEY (package, module, function, tx_sequence_number, cp_sequence_number)
+) PARTITION BY RANGE (cp_sequence_number);
+
+CREATE INDEX IF NOT EXISTS tx_calls_cp_sequence_number
+ON tx_calls (cp_sequence_number);
 
 CREATE INDEX IF NOT EXISTS tx_calls_tx_sequence_number
 ON tx_calls (tx_sequence_number);
