@@ -76,8 +76,8 @@ function printIfExpression(path: AstPath<Node>, options: MoveOptions, print: pri
 			trueBranch.leadingComment.some((e) => e.type == 'line_comment') ||
 			trueBranch.trailingComment?.type == 'line_comment';
 
-		result.push([' ', path.call(print, 'nonFormattingChildren', 1)]);
-		hasElse && result.push(shouldBreak ? [line, 'else'] : ' else');
+		result.push(group([' ', path.call(print, 'nonFormattingChildren', 1)], { shouldBreak: false }));
+		hasElse && result.push(group([line, 'else'], { shouldBreak }));
 	} else {
 		result.push(
 			group(
@@ -99,7 +99,6 @@ function printIfExpression(path: AstPath<Node>, options: MoveOptions, print: pri
 	// else block
 	if (hasElse) {
 		const elseNode = path.node.nonFormattingChildren[2]!;
-		const printed = path.call(print, 'nonFormattingChildren', 2);
 		const shouldBreak =
 			elseNode.leadingComment.some((e) => e.type == 'line_comment') ||
 			elseNode.trailingComment?.type == 'line_comment';
@@ -107,7 +106,7 @@ function printIfExpression(path: AstPath<Node>, options: MoveOptions, print: pri
 		// special casing chained `if_expression` with the expectation that the
 		// expression can handle breaking / nesting itself.
 		if (elseNode.isList || elseNode.type == 'if_expression') {
-			result.push([' ', printed]);
+			result.push([' ', path.call(print, 'nonFormattingChildren', 2)]);
 		} else {
 			result.push(
 				group(
