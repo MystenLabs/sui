@@ -148,7 +148,12 @@ fun lists() {
 
     // changes with trailing
     // comments
-    if (true) vector[1, 2] // line
+    if (true) vector[1, 2] // trailing
+    else abort;
+
+    // if list breaks, trailing
+    // comment forces else newline
+    if (true) vector[1, 2, 3, 4, 5] // trailing
     else abort;
 }
 
