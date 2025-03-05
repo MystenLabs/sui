@@ -641,7 +641,7 @@ fn pending_consensus_transactions_table_default_config() -> DBOptions {
 
 impl AuthorityEpochTables {
     pub fn open(epoch: EpochId, parent_path: &Path, db_options: Option<Options>) -> Self {
-        Self::open_tables_transactional(
+        Self::open_tables_read_write(
             Self::path(epoch, parent_path),
             MetricConf::new("epoch"),
             db_options,

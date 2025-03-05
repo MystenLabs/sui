@@ -279,7 +279,6 @@ pub fn derive_dbmap_utils_general(input: TokenStream) -> TokenStream {
             pub fn open_tables_impl(
                 path: std::path::PathBuf,
                 as_secondary_with_path: Option<std::path::PathBuf>,
-                is_transaction: bool,
                 metric_conf: typed_store::rocks::MetricConf,
                 global_db_options_override: Option<typed_store::rocksdb::Options>,
                 tables_db_options_override: Option<typed_store::rocks::DBMapTableConfigMap>,
@@ -310,9 +309,8 @@ pub fn derive_dbmap_utils_general(input: TokenStream) -> TokenStream {
                     // Safe to call unwrap because we will have at least one field_name entry in the struct
                     let rwopt_cfs: std::collections::HashMap<String, typed_store::rocks::ReadWriteOptions> = opt_cfs.iter().map(|q| (q.0.as_str().to_string(), q.1.rw_options.clone())).collect();
                     let opt_cfs: Vec<_> = opt_cfs.iter().map(|q| (q.0.as_str(), q.1.options.clone())).collect();
-                    let db = match (as_secondary_with_path.clone(), is_transaction) {
-                        (Some(p), _) => typed_store::rocks::open_cf_opts_secondary(path, Some(&p), global_db_options_override, metric_conf, &opt_cfs),
-                        (_, true) => typed_store::rocks::open_cf_opts_transactional(path, global_db_options_override, metric_conf, &opt_cfs),
+                    let db = match as_secondary_with_path.clone() {
+                        Some(p) => typed_store::rocks::open_cf_opts_secondary(path, Some(&p), global_db_options_override, metric_conf, &opt_cfs),
                         _ => typed_store::rocks::open_cf_opts(path, global_db_options_override, metric_conf, &opt_cfs)
                     };
                     db.map(|d| (d, rwopt_cfs))
@@ -358,7 +356,7 @@ pub fn derive_dbmap_utils_general(input: TokenStream) -> TokenStream {
                 global_db_options_override: Option<typed_store::rocksdb::Options>,
                 tables_db_options_override: Option<typed_store::rocks::DBMapTableConfigMap>
             ) -> Self {
-                let inner = #intermediate_db_map_struct_name::open_tables_impl(path, None, false, metric_conf, global_db_options_override, tables_db_options_override, false);
+                let inner = #intermediate_db_map_struct_name::open_tables_impl(path, None, metric_conf, global_db_options_override, tables_db_options_override, false);
                 Self {
                     #(
                         #field_names: inner.#field_names,
@@ -374,26 +372,7 @@ pub fn derive_dbmap_utils_general(input: TokenStream) -> TokenStream {
                 tables_db_options_override: Option<typed_store::rocks::DBMapTableConfigMap>,
                 remove_deprecated_tables: bool,
             ) -> Self {
-                let inner = #intermediate_db_map_struct_name::open_tables_impl(path, None, false, metric_conf, global_db_options_override, tables_db_options_override, remove_deprecated_tables);
-                Self {
-                    #(
-                        #field_names: inner.#field_names,
-                    )*
-                }
-            }
-
-            /// Opens a set of tables in transactional read-write mode
-            /// Only one process is allowed to do this at a time
-            /// `global_db_options_override` apply to the whole DB
-            /// `tables_db_options_override` apply to each table. If `None`, the attributes from `default_options_override_fn` are used if any
-            #[allow(unused_parens)]
-            pub fn open_tables_transactional(
-                path: std::path::PathBuf,
-                metric_conf: typed_store::rocks::MetricConf,
-                global_db_options_override: Option<typed_store::rocksdb::Options>,
-                tables_db_options_override: Option<typed_store::rocks::DBMapTableConfigMap>
-            ) -> Self {
-                let inner = #intermediate_db_map_struct_name::open_tables_impl(path, None, true, metric_conf, global_db_options_override, tables_db_options_override, false);
+                let inner = #intermediate_db_map_struct_name::open_tables_impl(path, None, metric_conf, global_db_options_override, tables_db_options_override, remove_deprecated_tables);
                 Self {
                     #(
                         #field_names: inner.#field_names,
@@ -442,12 +421,12 @@ pub fn derive_dbmap_utils_general(input: TokenStream) -> TokenStream {
                 global_db_options_override: Option<typed_store::rocksdb::Options>,
             ) -> Self {
                 let inner = match with_secondary_path {
-                    Some(q) => #intermediate_db_map_struct_name::open_tables_impl(primary_path, Some(q), false, metric_conf, global_db_options_override, None, false),
+                    Some(q) => #intermediate_db_map_struct_name::open_tables_impl(primary_path, Some(q), metric_conf, global_db_options_override, None, false),
                     None => {
                         let p: std::path::PathBuf = tempfile::tempdir()
                         .expect("Failed to open temporary directory")
                         .into_path();
-                        #intermediate_db_map_struct_name::open_tables_impl(primary_path, Some(p), false, metric_conf, global_db_options_override, None, false)
+                        #intermediate_db_map_struct_name::open_tables_impl(primary_path, Some(p), metric_conf, global_db_options_override, None, false)
                     }
                 };
                 Self {
