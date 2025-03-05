@@ -113,13 +113,43 @@ fun lists() {
     // list that is supported
     if (true) vector[1, 2, 3, 4];
 
+    // printed in 1 line
+    if (true) vector[] else abort;
+
     // printed in 2 lines
+    if (true) vector[1, 2, 3, 4]
+    else abort;
+
+    // does not break on else
+    if (true) vector[1, 2, 3, 4]
+    else vector[1, 2, 3, 4];
+
+    // uses space if true breaks
     if (true) vector[
-        1,
-        2,
-        3,
-        4,
+        100,
+        200,
+        300,
+        400,
     ] else vector[];
+
+    // breaks on both braches
+    if (true) vector[
+        100,
+        200,
+        300,
+        400,
+    ] else vector[
+        100,
+        200,
+        300,
+        400,
+        500,
+    ];
+
+    // changes with trailing
+    // comments
+    if (true) vector[1, 2] // line
+    else abort;
 }
 
 fun folding() {
