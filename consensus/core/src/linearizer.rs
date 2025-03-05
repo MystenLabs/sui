@@ -173,7 +173,18 @@ impl Linearizer {
 
             // The only reason for the median to be `None` would be when there is only one authority in commitee and the only block that gets committed is the leader's.
             // In this case we just return the leader's timestamp.
-            median(timestamps).unwrap_or(leader_block.timestamp_ms())
+            median(timestamps).unwrap_or_else(|| {
+                // Trust the leader's timestamp only if it has quorum on its own (most probably we are looking to a single committee network).
+                // Otherwise fallback to zero. This is also protecting us against the case where the very first sub dag is committed where the genesis blocks
+                // are not committed and leader could manipulate here the timestamp to a very high value. Setting it to zero ensures that we just fallback to
+                // whatever timestamp was set before the epoch change.
+                let leader_stake = context.committee.authority(leader_block.author()).stake;
+                if context.committee.reached_quorum(leader_stake) {
+                    leader_block.timestamp_ms()
+                } else {
+                    0
+                }
+            })
         } else {
             leader_block.timestamp_ms()
         };
@@ -457,7 +468,7 @@ mod tests {
             tracing::info!("{subdag:?}");
             assert_eq!(subdag.leader, leaders[idx].reference());
 
-            let expected_ts = if consensus_median_timestamp && subdag.blocks.len() > 1 {
+            let expected_ts = if consensus_median_timestamp {
                 let ancestor_timestamps = subdag
                     .blocks
                     .iter()
@@ -465,7 +476,7 @@ mod tests {
                     .map(|b| b.timestamp_ms())
                     .collect::<Vec<_>>();
 
-                median(ancestor_timestamps).unwrap()
+                median(ancestor_timestamps).unwrap_or(0)
             } else {
                 leaders[idx].timestamp_ms()
             };
@@ -769,7 +780,7 @@ mod tests {
             tracing::info!("{subdag:?}");
             assert_eq!(subdag.leader, leaders[idx].reference());
 
-            let expected_ts = if consensus_median_timestamp && subdag.blocks.len() > 1 {
+            let expected_ts = if consensus_median_timestamp {
                 let ancestor_timestamps = subdag
                     .blocks
                     .iter()
@@ -777,7 +788,7 @@ mod tests {
                     .map(|b| b.timestamp_ms())
                     .collect::<Vec<_>>();
 
-                median(ancestor_timestamps).unwrap()
+                median(ancestor_timestamps).unwrap_or(0)
             } else {
                 leaders[idx].timestamp_ms()
             };
@@ -898,7 +909,7 @@ mod tests {
             tracing::info!("{subdag:?}");
             assert_eq!(subdag.leader, leaders[idx].reference());
 
-            let expected_ts = if consensus_median_timestamp && subdag.blocks.len() > 1 {
+            let expected_ts = if consensus_median_timestamp {
                 let ancestor_timestamps = subdag
                     .blocks
                     .iter()
@@ -906,7 +917,7 @@ mod tests {
                     .map(|b| b.timestamp_ms())
                     .collect::<Vec<_>>();
 
-                median(ancestor_timestamps).unwrap()
+                median(ancestor_timestamps).unwrap_or(0)
             } else {
                 leaders[idx].timestamp_ms()
             };
@@ -1028,6 +1039,10 @@ mod tests {
             last_commit_timestamp_ms,
             &to_commit,
         );
-        assert_eq!(timestamp, leader_block.timestamp_ms());
+        if consensus_median_timestamp {
+            assert_eq!(timestamp, 0);
+        } else {
+            assert_eq!(timestamp, leader_block.timestamp_ms());
+        }
     }
 }
