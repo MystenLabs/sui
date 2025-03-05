@@ -647,7 +647,7 @@ impl<C: NetworkClient, V: BlockVerifier, D: CoreThreadDispatcher> Synchronizer<C
                     .protocol_config
                     .consensus_median_based_commit_timestamp()
                 {
-                    debug!("Synced block {} timestamp {} is in the future (now={}). Will not ignore as median based timestamp is enabled.", verified_block.reference(), verified_block.timestamp_ms(), now);
+                    trace!("Synced block {} timestamp {} is in the future (now={}). Will not ignore as median based timestamp is enabled.", verified_block.reference(), verified_block.timestamp_ms(), now);
                 } else {
                     warn!(
                         "Synced block {} timestamp {} is in the future (now={}). Ignoring.",

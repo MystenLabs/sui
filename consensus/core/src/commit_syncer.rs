@@ -677,32 +677,6 @@ impl<C: NetworkClient> CommitSyncer<C> {
             certified_commits.push(CertifiedCommit::new_certified(commit.clone(), blocks));
         }
 
-        // 10. Make sure the last commit's timestamp is not too far in the future compared to now, when the median based timestamp is enabled.
-        // Since the commit's timestamp is calculated based on the median of the leader's blocks timestamps, we do have a guaratnee that for the last
-        // synced quorum we do have at least 50% of that whose timestamps are lower than the current local time.
-        if inner
-            .context
-            .protocol_config
-            .consensus_median_based_commit_timestamp()
-        {
-            if let Some(commit) = commits.last() {
-                let now_ms = inner.context.clock.timestamp_utc_ms();
-                let commit_ms = commit.timestamp_ms();
-                let forward_drift = commit_ms.saturating_sub(now_ms);
-                let forward_drift = Duration::from_millis(forward_drift);
-
-                if forward_drift >= inner.context.parameters.max_forward_time_drift {
-                    warn!(
-                        "Local clock is behind compared to last sync commit: local ts {}, commit ts {} for commit {}",
-                        now_ms,
-                        commit_ms,
-                        commit.index()
-                    );
-                    sleep(forward_drift).await;
-                }
-            }
-        }
-
         Ok(CertifiedCommits::new(certified_commits, vote_blocks))
     }
 
