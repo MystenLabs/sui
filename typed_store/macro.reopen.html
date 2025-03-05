@@ -1,0 +1,36 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="A helper macro to reopen multiple column families. The macro returns a tuple of DBMap structs in the same order that the column families are defined."><title>reopen in typed_store - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-6b053e98.ttf.woff2,FiraSans-Regular-0fe48ade.woff2,FiraSans-Medium-e1aa3f0a.woff2,SourceCodePro-Regular-8badfe75.ttf.woff2,SourceCodePro-Semibold-aa29a496.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2" crossorigin href="../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../static.files/normalize-9960930a.css"><link rel="stylesheet" href="../static.files/rustdoc-46132b98.css"><meta name="rustdoc-vars" data-root-path="../" data-static-root-path="../static.files/" data-current-crate="typed_store" data-themes="" data-resource-suffix="" data-rustdoc-version="1.85.0 (4d91de4e4 2025-02-17)" data-channel="1.85.0" data-search-js="search-75f5ac3e.js" data-settings-js="settings-0f613d39.js" ><script src="../static.files/storage-59e33391.js"></script><script defer src="sidebar-items.js"></script><script defer src="../static.files/main-5f194d8c.js"></script><noscript><link rel="stylesheet" href="../static.files/noscript-893ab5e7.css"></noscript><link rel="alternate icon" type="image/png" href="../static.files/favicon-32x32-6580c154.png"><link rel="icon" type="image/svg+xml" href="../static.files/favicon-044be391.svg"></head><body class="rustdoc macro"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="mobile-topbar"><button class="sidebar-menu-toggle" title="show sidebar"></button></nav><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../typed_store/index.html">typed_<wbr>store</a><span class="version">0.4.0</span></h2></div><div class="sidebar-elems"><section id="rustdoc-toc"><h2 class="location"><a href="#">reopen</a></h2><h3><a href="#">Sections</a></h3><ul class="block top-toc"><li><a href="#arguments" title="Arguments">Arguments</a></li><li><a href="#examples" title="Examples">Examples</a></li></ul></section><div id="rustdoc-modnav"><h2 class="in-crate"><a href="index.html">In crate typed_<wbr>store</a></h2></div></div></nav><div class="sidebar-resizer"></div><main><div class="width-limiter"><rustdoc-search></rustdoc-search><section id="main-content" class="content"><div class="main-heading"><span class="rustdoc-breadcrumbs"><a href="index.html">typed_store</a></span><h1>Macro <span class="macro">reopen</span><button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><rustdoc-toolbar></rustdoc-toolbar><span class="sub-heading"><a class="src" href="../src/typed_store/rocks/mod.rs.html#120-128">Source</a> </span></div><pre class="rust item-decl"><code>macro_rules! reopen {
+    ( $db:expr, $($cf:expr;&lt;$K:ty, $V:ty&gt;),*) =&gt; { ... };
+}</code></pre><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>A helper macro to reopen multiple column families. The macro returns
+a tuple of DBMap structs in the same order that the column families
+are defined.</p>
+<h2 id="arguments"><a class="doc-anchor" href="#arguments">§</a>Arguments</h2>
+<ul>
+<li><code>db</code> - a reference to a rocks DB object</li>
+<li><code>cf;&lt;ty,ty&gt;</code> - a comma separated list of column families to open. For each column family a
+concatenation of column family name (cf) and Key-Value &lt;ty, ty&gt; should be provided.</li>
+</ul>
+<h2 id="examples"><a class="doc-anchor" href="#examples">§</a>Examples</h2>
+<p>We successfully open two different column families.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>typed_store::reopen;
+<span class="kw">use </span>typed_store::rocks::<span class="kw-2">*</span>;
+<span class="kw">use </span>tempfile::tempdir;
+<span class="kw">use </span>prometheus::Registry;
+<span class="kw">use </span>std::sync::Arc;
+<span class="kw">use </span>typed_store::metrics::DBMetrics;
+<span class="kw">use </span>core::fmt::Error;
+
+<span class="attr">#[tokio::main]
+</span><span class="kw">async fn </span>main() -&gt; <span class="prelude-ty">Result</span>&lt;(), Error&gt; {
+<span class="kw">const </span>FIRST_CF: <span class="kw-2">&amp;</span>str = <span class="string">"First_CF"</span>;
+<span class="kw">const </span>SECOND_CF: <span class="kw-2">&amp;</span>str = <span class="string">"Second_CF"</span>;
+
+
+<span class="doccomment">/// Create the rocks database reference for the desired column families
+</span><span class="kw">let </span>rocks = open_cf(tempdir().unwrap(), <span class="prelude-val">None</span>, MetricConf::default(), <span class="kw-2">&amp;</span>[FIRST_CF, SECOND_CF]).unwrap();
+
+<span class="doccomment">/// Now simply open all the column families for their expected Key-Value types
+</span><span class="kw">let </span>(db_map_1, db_map_2) = <span class="macro">reopen!</span>(<span class="kw-2">&amp;</span>rocks, FIRST_CF;&lt;i32, String&gt;, SECOND_CF;&lt;i32, String&gt;);
+<span class="prelude-val">Ok</span>(())
+}</code></pre></div>
+</div></details></section></div></main></body></html>
