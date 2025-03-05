@@ -1433,7 +1433,7 @@ mod tests {
 
         let mut block_manager = BlockManager::new(
             context.clone(),
-            dag_state,
+            dag_state.clone(),
             Arc::new(SignedBlockVerifier::new(
                 context.clone(),
                 Arc::new(NoopTransactionVerifier {}),
