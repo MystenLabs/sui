@@ -6,11 +6,15 @@ module test::if_expression;
 
 fun basic() {
     if (true) call_something();
-    if (false) call_something_else_call_something_else_call_something_else();
+    if (false) call_some_long_func();
 
 
-    if (cond) do_this()
-    else {
+    if (cond) do_this() else {
+        do_that();
+        do_this();
+    };
+
+    if (cond) push_else_out() else {
         do_that();
         do_this();
     };
@@ -38,15 +42,61 @@ fun basic() {
 }
 
 fun control_flow() {
+    if (true) break;
+    if (true) abort;
+    if (true) return call();
     if (true) return call_something();
-    if (true) return call_something_else_call_something_else_call_something_else();
+
+    'a: if (true) { break 'a; }
+}
+
+fun dot_expression() {
+    if (true) a.dot().expression()
+    else b.dot().expression();
+
+    if (true) staking
+        .pools[pool]
+        .borrow_mut()
+        .unwrap()
+        .stake(amount)
+    else staking
+        .pools[pool]
+        .borrow_mut()
+        .stake(0)
+}
+
+fun lists() {
+    if (true) (1, 2, 3)
+    else (4, 5, 6);
+
+    // list can break itself
+    if (true) (longer, list, values)
+    else (short, list, third);
+
+    // trailing comment on the true
+    // branch forces else on a new
+    // line, other comments work
+    if (true) /* wow */ (longer, /* haha */ list, values) // beep
+    else (short, list, third); // boop
+
+    // both lists are broken, no
+    // braces added to any branch
+    if (true) (longer, list, values) // beep
+    else (even, longer, list, better); // boop
+
+    // vector expression is another
+    // list that is supported
+    if (true) vector[1, 2, 3, 4];
+
+    // printed in 2 lines
+    if (true) vector[1, 2, 3, 4]
+    else vector[];
 }
 
 fun folding() {
-
     if (true) call_something()
     else if (false) call_something_else()
-    else call_something_otherwise();
+    else last_call();
 
     if (true) {
         call_something()
@@ -127,13 +177,13 @@ fun if_expression() {
     };
 
     // should break on expression
-    // and newline + indent it
+    // and add block to both
+    // branches that break
     if (expression)
         expression_that_is_too_long
-    else
-        another_long_expression;
+    else another_long_expression_too;
 
-    // same exampla with block will
+    // same example with block will
     // be broken into multiple lines
     if (expression) { expression_that_is_too_long }
     else { another_long_expression };
