@@ -632,27 +632,28 @@ impl<C: NetworkClient> CommitSyncer<C> {
             }
         }
 
-        // We want to run the following checks only if the median based commit timestamp is not enabled.
-        if !inner
-            .context
-            .protocol_config
-            .consensus_median_based_commit_timestamp()
-        {
-            // 8. Make sure fetched block (and votes) timestamps are lower than current time.
-            for block in fetched_blocks.values().chain(vote_blocks.iter()) {
-                let now_ms = inner.context.clock.timestamp_utc_ms();
-                let forward_drift = block.timestamp_ms().saturating_sub(now_ms);
-                if forward_drift == 0 {
-                    continue;
-                };
-                let peer_hostname = &inner.context.committee.authority(target_authority).hostname;
-                inner
-                    .context
-                    .metrics
-                    .node_metrics
-                    .block_timestamp_drift_wait_ms
-                    .with_label_values(&[peer_hostname, "commit_syncer"])
-                    .inc_by(forward_drift);
+        // 8. Make sure fetched block (and votes) timestamps are lower than current time.
+        for block in fetched_blocks.values().chain(vote_blocks.iter()) {
+            let now_ms = inner.context.clock.timestamp_utc_ms();
+            let forward_drift = block.timestamp_ms().saturating_sub(now_ms);
+            if forward_drift == 0 {
+                continue;
+            };
+            let peer_hostname = &inner.context.committee.authority(target_authority).hostname;
+            inner
+                .context
+                .metrics
+                .node_metrics
+                .block_timestamp_drift_wait_ms
+                .with_label_values(&[peer_hostname, "commit_syncer"])
+                .inc_by(forward_drift);
+
+            // We want to run the following checks only if the median based commit timestamp is not enabled.
+            if !inner
+                .context
+                .protocol_config
+                .consensus_median_based_commit_timestamp()
+            {
                 let forward_drift = Duration::from_millis(forward_drift);
                 if forward_drift >= inner.context.parameters.max_forward_time_drift {
                     warn!(
@@ -693,32 +694,6 @@ impl<C: NetworkClient> CommitSyncer<C> {
                     inner
                         .transaction_certifier
                         .add_voted_blocks(vec![(block.clone(), vec![])]);
-                }
-            }
-        }
-
-        // 10. Make sure the last commit's timestamp is not too far in the future compared to now, when the median based timestamp is enabled.
-        // Since the commit's timestamp is calculated based on the median of the leader's blocks timestamps, we do have a guaratnee that for the last
-        // synced quorum we do have at least 50% of that whose timestamps are lower than the current local time.
-        if inner
-            .context
-            .protocol_config
-            .consensus_median_based_commit_timestamp()
-        {
-            if let Some(commit) = commits.last() {
-                let now_ms = inner.context.clock.timestamp_utc_ms();
-                let commit_ms = commit.timestamp_ms();
-                let forward_drift = commit_ms.saturating_sub(now_ms);
-                let forward_drift = Duration::from_millis(forward_drift);
-
-                if forward_drift >= inner.context.parameters.max_forward_time_drift {
-                    warn!(
-                        "Local clock is behind compared to last sync commit: local ts {}, commit ts {} for commit {}",
-                        now_ms,
-                        commit_ms,
-                        commit.index()
-                    );
-                    sleep(forward_drift).await;
                 }
             }
         }
