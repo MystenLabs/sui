@@ -118,6 +118,8 @@ const ANY_VALIDATOR: u8 = 3;
 const BASIS_POINT_DENOMINATOR: u128 = 10000;
 const MIN_STAKING_THRESHOLD: u64 = 1_000_000_000; // 1 SUI
 
+const PHASE_LENGTH: u64 = 14; // phases are 14 days = 14 epochs
+
 // Errors
 const ENonValidatorInReportRecords: u64 = 0;
 #[allow(unused_const)]
@@ -257,19 +259,15 @@ fun can_join(self: &ValidatorSet, stake: u64, ctx: &TxContext): bool {
 fun get_voting_power_thresholds(self: &ValidatorSet, ctx: &TxContext): (u64, u64, u64) {
     let start_epoch = {
         let key = VotingPowerAdmissionStartEpochKey();
-        if (self.extra_fields.contains(key)) *self.extra_fields.borrow(key)
+        if (self.extra_fields.contains(key)) self.extra_fields[key]
         else ctx.epoch() + 1 // will give us the phase 1 values
     };
+
     // these numbers come from SIP-39 TODO link once landed
-    let phase_length = 14; // phases are 14 days = 14 epochs
-    let epoch = ctx.epoch();
-    if (epoch < start_epoch + phase_length) { // phase 1
-        (12, 8, 4)
-    } else if (epoch < start_epoch + (2 * phase_length)) { // phase 2
-        (6, 4, 2)
-    } else { // phase 3
-        (3, 2, 1)
-    }
+    let curr_epoch = ctx.epoch();
+    if (curr_epoch < start_epoch + PHASE_LENGTH) (12, 8, 4) // phase 1
+    else if (curr_epoch < start_epoch + (2 * PHASE_LENGTH)) (6, 4, 2) // phase 2
+    else (3, 2, 1) // phase 3
 }
 
 public(package) fun assert_no_pending_or_active_duplicates(self: &ValidatorSet, validator: &Validator) {
