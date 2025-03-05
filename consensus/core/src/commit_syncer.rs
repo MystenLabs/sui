@@ -629,27 +629,28 @@ impl<C: NetworkClient> CommitSyncer<C> {
             }
         }
 
-        // We want to run the following checks only if the median based commit timestamp is not enabled.
-        if !inner
-            .context
-            .protocol_config
-            .consensus_median_based_commit_timestamp()
-        {
-            // 8. Make sure fetched block (and votes) timestamps are lower than current time.
-            for block in fetched_blocks.values().chain(vote_blocks.iter()) {
-                let now_ms = inner.context.clock.timestamp_utc_ms();
-                let forward_drift = block.timestamp_ms().saturating_sub(now_ms);
-                if forward_drift == 0 {
-                    continue;
-                };
-                let peer_hostname = &inner.context.committee.authority(target_authority).hostname;
-                inner
-                    .context
-                    .metrics
-                    .node_metrics
-                    .block_timestamp_drift_wait_ms
-                    .with_label_values(&[peer_hostname, "commit_syncer"])
-                    .inc_by(forward_drift);
+        // 8. Make sure fetched block (and votes) timestamps are lower than current time.
+        for block in fetched_blocks.values().chain(vote_blocks.iter()) {
+            let now_ms = inner.context.clock.timestamp_utc_ms();
+            let forward_drift = block.timestamp_ms().saturating_sub(now_ms);
+            if forward_drift == 0 {
+                continue;
+            };
+            let peer_hostname = &inner.context.committee.authority(target_authority).hostname;
+            inner
+                .context
+                .metrics
+                .node_metrics
+                .block_timestamp_drift_wait_ms
+                .with_label_values(&[peer_hostname, "commit_syncer"])
+                .inc_by(forward_drift);
+
+            // We want to run the following checks only if the median based commit timestamp is not enabled.
+            if !inner
+                .context
+                .protocol_config
+                .consensus_median_based_commit_timestamp()
+            {
                 let forward_drift = Duration::from_millis(forward_drift);
                 if forward_drift >= inner.context.parameters.max_forward_time_drift {
                     warn!(

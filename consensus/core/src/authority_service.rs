@@ -118,15 +118,16 @@ impl<C: CoreThreadDispatcher> NetworkService for AuthorityService<C> {
         let block_ref = verified_block.reference();
         debug!("Received block {} via send block.", block_ref);
 
-        // Reject block with timestamp too far in the future.
+        let now = self.context.clock.timestamp_utc_ms();
+        let forward_time_drift =
+            Duration::from_millis(verified_block.timestamp_ms().saturating_sub(now));
+
         if !self
             .context
             .protocol_config
             .consensus_median_based_commit_timestamp()
         {
-            let now = self.context.clock.timestamp_utc_ms();
-            let forward_time_drift =
-                Duration::from_millis(verified_block.timestamp_ms().saturating_sub(now));
+            // Reject block with timestamp too far in the future.
             if forward_time_drift > self.context.parameters.max_forward_time_drift {
                 self.context
                     .metrics
@@ -167,6 +168,13 @@ impl<C: CoreThreadDispatcher> NetworkService for AuthorityService<C> {
                 );
                 sleep(forward_time_drift).await;
             }
+        } else {
+            self.context
+                .metrics
+                .node_metrics
+                .block_timestamp_drift_wait_ms
+                .with_label_values(&[peer_hostname, "handle_send_block"])
+                .inc_by(forward_time_drift.as_millis() as u64);
         }
 
         // Observe the block for the commit votes. When local commit is lagging too much,
