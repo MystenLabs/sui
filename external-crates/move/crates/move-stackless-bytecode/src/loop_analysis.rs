@@ -362,7 +362,7 @@ impl LoopAnalysisProcessor {
                 spec_global_var_mut.extend(
                     spec_global_variable_analysis::collect_spec_global_variable_info(
                         targets,
-                        func_target.func_env,
+                        func_target,
                         &code[code_offset as usize..=code_offset as usize],
                     )
                     .mut_vars()
