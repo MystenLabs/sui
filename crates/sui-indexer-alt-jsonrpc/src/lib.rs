@@ -182,7 +182,9 @@ impl RpcService {
 
         // Set-up another helper task that will listen for Ctrl-C and trigger the cancellation
         // token.
+        #[cfg(not(msim))]
         let ctrl_c_cancel = cancel.clone();
+        #[cfg(not(msim))]
         let h_ctrl_c = tokio::spawn(async move {
             tokio::select! {
                 _ = ctrl_c_cancel.cancelled() => {}
@@ -195,7 +197,10 @@ impl RpcService {
         Ok(tokio::spawn(async move {
             handle.stopped().await;
             cancel.cancel();
+            #[cfg(not(msim))]
             let _ = join!(h_cancel, h_ctrl_c);
+            #[cfg(msim)]
+            let _ = h_cancel;
         }))
     }
 }
