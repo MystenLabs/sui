@@ -5,15 +5,6 @@ use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::Duration;
 
-use backoff::backoff::Constant;
-use backoff::Error as BE;
-use backoff::ExponentialBackoff;
-use sui_storage::blob::Blob;
-use tokio_util::bytes::Bytes;
-use tokio_util::sync::CancellationToken;
-use tracing::debug;
-use url::Url;
-
 use crate::ingestion::local_client::LocalIngestionClient;
 use crate::ingestion::remote_client::RemoteIngestionClient;
 use crate::ingestion::Error as IngestionError;
@@ -21,6 +12,16 @@ use crate::ingestion::Result as IngestionResult;
 use crate::metrics::CheckpointLagMetricReporter;
 use crate::metrics::IndexerMetrics;
 use crate::types::full_checkpoint_content::CheckpointData;
+use backoff::backoff::Constant;
+use backoff::Error as BE;
+use backoff::ExponentialBackoff;
+use sui_rpc_api::client::AuthInterceptor;
+use sui_rpc_api::Client;
+use sui_storage::blob::Blob;
+use tokio_util::bytes::Bytes;
+use tokio_util::sync::CancellationToken;
+use tracing::debug;
+use url::Url;
 
 /// Wait at most this long between retries for transient errors.
 const MAX_TRANSIENT_RETRY_INTERVAL: Duration = Duration::from_secs(60);
@@ -44,7 +45,12 @@ pub enum FetchError {
     },
 }
 
-pub type FetchResult = Result<Bytes, FetchError>;
+pub type FetchResult = Result<FetchData, FetchError>;
+
+pub enum FetchData {
+    Raw(Bytes),
+    CheckpointData(CheckpointData),
+}
 
 #[derive(Clone)]
 pub struct IngestionClient {
@@ -63,6 +69,20 @@ impl IngestionClient {
     pub(crate) fn new_local(path: PathBuf, metrics: Arc<IndexerMetrics>) -> Self {
         let client = Arc::new(LocalIngestionClient::new(path));
         Self::new_impl(client, metrics)
+    }
+
+    pub(crate) fn new_rpc(
+        url: Url,
+        username: Option<String>,
+        password: Option<String>,
+        metrics: Arc<IndexerMetrics>,
+    ) -> IngestionResult<Self> {
+        let client = if let Some(username) = username {
+            Client::new(url.to_string())?.with_auth(AuthInterceptor::basic(username, password))
+        } else {
+            Client::new(url.to_string())?
+        };
+        Ok(Self::new_impl(Arc::new(client), metrics))
     }
 
     fn new_impl(client: Arc<dyn IngestionClientTrait>, metrics: Arc<IndexerMetrics>) -> Self {
@@ -135,7 +155,7 @@ impl IngestionClient {
                     return Err(BE::permanent(IngestionError::Cancelled));
                 }
 
-                let bytes = client.fetch(checkpoint).await.map_err(|err| match err {
+                let fetch_data = client.fetch(checkpoint).await.map_err(|err| match err {
                     FetchError::NotFound => BE::permanent(IngestionError::NotFound(checkpoint)),
                     FetchError::Permanent(error) => {
                         BE::permanent(IngestionError::FetchError(checkpoint, error))
@@ -147,16 +167,23 @@ impl IngestionClient {
                     ),
                 })?;
 
-                self.metrics.total_ingested_bytes.inc_by(bytes.len() as u64);
-                let data: CheckpointData = Blob::from_bytes(&bytes).map_err(|e| {
-                    self.metrics.inc_retry(
-                        checkpoint,
-                        "deserialization",
-                        IngestionError::DeserializationError(checkpoint, e),
-                    )
-                })?;
-
-                Ok(data)
+                Ok(match fetch_data {
+                    FetchData::Raw(bytes) => {
+                        self.metrics.total_ingested_bytes.inc_by(bytes.len() as u64);
+                        Blob::from_bytes(&bytes).map_err(|e| {
+                            self.metrics.inc_retry(
+                                checkpoint,
+                                "deserialization",
+                                IngestionError::DeserializationError(checkpoint, e),
+                            )
+                        })?
+                    }
+                    FetchData::CheckpointData(data) => {
+                        // We are not recording size metric for Checkpoint data (from RPC client).
+                        // TODO: Record the metric when we have a good way to get the size information
+                        data
+                    }
+                })
             }
         };
 

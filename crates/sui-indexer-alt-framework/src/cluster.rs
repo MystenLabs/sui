@@ -258,6 +258,9 @@ mod tests {
             client_args: ClientArgs {
                 local_ingestion_path: Some(checkpoint_dir.path().to_owned()),
                 remote_store_url: None,
+                rpc_api_url: None,
+                rpc_username: None,
+                rpc_password: None,
             },
             indexer_args: IndexerArgs {
                 first_checkpoint: Some(0),
