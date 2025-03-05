@@ -183,6 +183,7 @@ pub enum ExecutionTimeObservationKey {
         /// The function to be called.
         function: String,
         /// The type arguments to the function.
+        /// NOTE: This field is currently not populated.
         type_arguments: Vec<TypeInput>,
     },
     TransferObjects,
