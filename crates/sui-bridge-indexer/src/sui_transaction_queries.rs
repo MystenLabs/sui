@@ -51,7 +51,7 @@ pub async fn start_sui_tx_polling_task(
         {
             Ok(data) => data,
             Err(e) => {
-                // TODO: Sometimes fullnode does not return checkpoint strangely. We retry instead of
+                // TODO: Strangely, sometimes fullnode does not return checkpoint. We retry instead of
                 // panicking.
                 error!(
                     "Failed to convert retrieved transactions to sanitized format: {}",
