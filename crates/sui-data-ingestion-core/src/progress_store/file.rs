@@ -18,10 +18,22 @@ impl FileProgressStore {
     }
 }
 
+fn handle_file(p: PathBuf) -> Result<Value, serde_json::Error> {
+    let f = std::fs::read(p);
+    match f {
+        Err(_) => serde_json::from_str("{}"),
+        Ok(c) => match c.is_empty() {
+            true => serde_json::from_str("{}"),
+            false => serde_json::from_slice(&c),
+        },
+    }
+}
+
 #[async_trait]
 impl ProgressStore for FileProgressStore {
     async fn load(&mut self, task_name: String) -> Result<CheckpointSequenceNumber> {
-        let content: Value = serde_json::from_slice(&std::fs::read(self.path.clone())?)?;
+        let content: Value = handle_file(self.path.clone())?;
+
         Ok(content
             .get(&task_name)
             .and_then(|v| v.as_u64())
@@ -32,7 +44,7 @@ impl ProgressStore for FileProgressStore {
         task_name: String,
         checkpoint_number: CheckpointSequenceNumber,
     ) -> Result<()> {
-        let mut content: Value = serde_json::from_slice(&std::fs::read(self.path.clone())?)?;
+        let mut content: Value = handle_file(self.path.clone())?;
         content[task_name] = Value::Number(Number::from(checkpoint_number));
         std::fs::write(self.path.clone(), serde_json::to_string_pretty(&content)?)?;
         Ok(())
