@@ -3246,7 +3246,7 @@
           "methods": [
             {
               "name": "SubscribeCheckpoints",
-              "description": "Subscribe to the stream of checkpoints.\n\nThis API provides a subscription to the checkpoint stream for the Sui\nblockchain. When a subscription is initialized the stream will begin with\nthe latest executed checkpoint as seen by the server. Responses are\ngaurenteed to return checkpoints in-order and without gaps. This enables\nclients to know exactly the last checkpoint they have processed and in the\nevent the subscription terminates (either by the client/server or by the\nconnection breaking), clients will be able to reinitialize a subscription\nand then leverage other APIs (e.g.\nsui.node.v2.NodeService.GetFullCheckpoint) in order to request data for\nthe checkpoints they missed.",
+              "description": "Subscribe to the stream of checkpoints.\n\nThis API provides a subscription to the checkpoint stream for the Sui\nblockchain. When a subscription is initialized the stream will begin with\nthe latest executed checkpoint as seen by the server. Responses are\nguaranteed to return checkpoints in order and without gaps. This enables\nclients to know exactly the last checkpoint they have processed and in the\nevent the subscription terminates (either by the client/server or by the\nconnection breaking), clients will be able to reinitialize a subscription\nand then leverage other APIs (e.g.\nsui.node.v2.NodeService.GetFullCheckpoint) to request data for\nthe checkpoints they missed.",
               "requestType": "SubscribeCheckpointsRequest",
               "requestLongType": "SubscribeCheckpointsRequest",
               "requestFullType": "sui.node.v2alpha.SubscribeCheckpointsRequest",
