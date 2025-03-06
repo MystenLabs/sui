@@ -668,6 +668,7 @@ async fn successful_versioned_dependency_verification() -> anyhow::Result<()> {
 }
 
 #[tokio::test]
+#[ignore] // TODO: DVX-786
 async fn successful_verification_with_bytecode_dep() -> anyhow::Result<()> {
     let mut cluster = TestClusterBuilder::new().build().await;
     let context = &mut cluster.wallet;

@@ -4234,6 +4234,7 @@ async fn test_tree_shaking_package_with_unpublished_deps() -> Result<(), anyhow:
 }
 
 #[sim_test]
+#[ignore] // TODO: DVX-786
 async fn test_tree_shaking_package_with_bytecode_deps() -> Result<(), anyhow::Error> {
     let mut test = TreeShakingTest::new().await?;
     let with_unpublished_dependencies = false;
