@@ -7,7 +7,7 @@ CREATE TABLE events
     -- array of SuiAddress in bytes. All signers of the transaction.
     senders                     bytea[]      NOT NULL,
     -- bytes of the entry package ID. Notice that the package and module here
-    -- are the package and module of the function that emitted the event, diffrent
+    -- are the package and module of the function that emitted the event, different
     -- from the package and module of the event type.
     package                     bytea        NOT NULL,
     -- entry module name

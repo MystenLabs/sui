@@ -43,7 +43,7 @@ pub struct Domain {
 pub struct NameRecord {
     /// The ID of the `RegistrationNFT` assigned to this record.
     ///
-    /// The owner of the corrisponding `RegistrationNFT` has the rights to
+    /// The owner of the corresponding `RegistrationNFT` has the rights to
     /// be able to change and adjust the `target_address` of this domain.
     ///
     /// It is possible that the ID changes if the record expires and is

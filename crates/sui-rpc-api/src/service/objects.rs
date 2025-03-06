@@ -163,7 +163,7 @@ impl RpcService {
 
         let next_page_token = if dynamic_fields.len() > page_size {
             // SAFETY: We've already verified that object_keys is greater than limit, which is
-            // gaurenteed to be >= 1.
+            // guaranteed to be >= 1.
             dynamic_fields
                 .pop()
                 .unwrap()

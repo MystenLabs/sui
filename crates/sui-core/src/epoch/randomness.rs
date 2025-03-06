@@ -130,7 +130,7 @@ impl VersionedUsedProcessedMessages {
 // DKG protocol:
 // 1. This validator sends out a `Message` to all other validators.
 // 2. Once sufficient valid `Message`s are received from other validators via consensus and
-//    procesed, this validator sends out a `Confirmation` to all other validators.
+//    proceeds, this validator sends out a `Confirmation` to all other validators.
 // 3. Once sufficient `Confirmation`s are received from other validators via consensus and
 //    processed, they are combined to form a public VSS key and local private key shares.
 // 4. Randomness generation begins.

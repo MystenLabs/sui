@@ -328,7 +328,7 @@ mod tests {
 
     /// Left curlies are not valid inside expressions and right curlies are not valid inside text
     /// strands, but we still tokenize them so that we can detect them during parsing and return
-    /// ane error message.
+    /// and error message.
     #[test]
     fn test_misplaced_curlies() {
         let lexer = Lexer::new(r#"foo}{bar{}}"#);

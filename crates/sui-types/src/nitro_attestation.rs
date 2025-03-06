@@ -37,13 +37,13 @@ static ROOT_CERTIFICATE: Lazy<Vec<u8>> = Lazy::new(|| {
 /// Error type for Nitro attestation verification.
 #[derive(Debug, PartialEq, Eq)]
 pub enum NitroAttestationVerifyError {
-    /// Invalid COSE_Sign1: {0}
-    InvalidCoseSign1(String),
+    /// Invalid CASE_Sign1: {0}
+    InvalidCaseSign1(String),
     /// Invalid signature
     InvalidSignature,
     /// Invalid public key
     InvalidPublicKey,
-    /// Siganture failed to verify
+    /// Signature failed to verify
     SignatureFailedToVerify,
     /// Invalid attestation document
     InvalidAttestationDoc(String),
@@ -58,8 +58,8 @@ pub enum NitroAttestationVerifyError {
 impl fmt::Display for NitroAttestationVerifyError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            NitroAttestationVerifyError::InvalidCoseSign1(msg) => {
-                write!(f, "InvalidCoseSign1: {}", msg)
+            NitroAttestationVerifyError::InvalidCaseSign1(msg) => {
+                write!(f, "InvalidCaseSign1: {}", msg)
             }
             NitroAttestationVerifyError::InvalidSignature => write!(f, "InvalidSignature"),
             NitroAttestationVerifyError::InvalidPublicKey => write!(f, "InvalidPublicKey"),
@@ -88,10 +88,10 @@ impl From<NitroAttestationVerifyError> for SuiError {
 pub fn parse_nitro_attestation(
     attestation_bytes: &[u8],
 ) -> SuiResult<(Vec<u8>, Vec<u8>, AttestationDocument)> {
-    let cose_sign1 = CoseSign1::parse_and_validate(attestation_bytes)?;
-    let doc = AttestationDocument::parse_payload(&cose_sign1.payload)?;
-    let signature = cose_sign1.clone().signature;
-    Ok((signature, cose_sign1.to_signed_message(), doc))
+    let case_sign1 = CaseSign1::parse_and_validate(attestation_bytes)?;
+    let doc = AttestationDocument::parse_payload(&case_sign1.payload)?;
+    let signature = case_sign1.clone().signature;
+    Ok((signature, case_sign1.to_signed_message(), doc))
 }
 
 /// Given the signature bytes, signed message and parsed payload, verify everything according to
@@ -129,13 +129,13 @@ pub fn verify_nitro_attestation(
     Ok(())
 }
 
-///  Implementation of the COSE_Sign1 structure as defined in [RFC8152](https://tools.ietf.org/html/rfc8152).
+///  Implementation of the CASE_Sign1 structure as defined in [RFC8152](https://tools.ietf.org/html/rfc8152).
 ///  protected_header: See Section 3 (Note: AWS Nitro does not have unprotected header.)
 ///  payload: See Section 4.2.
 ///  signature: See Section 4.2.
 ///  Class and trait impl adapted from <https://github.com/awslabs/aws-nitro-enclaves-cose/blob/main/src/sign.rs>
 #[derive(Debug, Clone)]
-pub struct CoseSign1 {
+pub struct CaseSign1 {
     /// protected: empty_or_serialized_map,
     protected: Vec<u8>,
     /// unprotected: HeaderMap
@@ -148,7 +148,7 @@ pub struct CoseSign1 {
     signature: Vec<u8>,
 }
 
-/// Empty map wrapper for COSE headers.
+/// Empty map wrapper for CASE headers.
 #[derive(Clone, Debug, Default)]
 pub struct HeaderMap;
 
@@ -191,7 +191,7 @@ impl<'de> Deserialize<'de> for HeaderMap {
     }
 }
 
-impl Serialize for CoseSign1 {
+impl Serialize for CaseSign1 {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where
         S: Serializer,
@@ -205,24 +205,24 @@ impl Serialize for CoseSign1 {
     }
 }
 
-impl<'de> Deserialize<'de> for CoseSign1 {
-    fn deserialize<D>(deserializer: D) -> Result<CoseSign1, D::Error>
+impl<'de> Deserialize<'de> for CaseSign1 {
+    fn deserialize<D>(deserializer: D) -> Result<CaseSign1, D::Error>
     where
         D: Deserializer<'de>,
     {
         use serde::de::{Error, SeqAccess, Visitor};
         use std::fmt;
 
-        struct CoseSign1Visitor;
+        struct CaseSign1Visitor;
 
-        impl<'de> Visitor<'de> for CoseSign1Visitor {
-            type Value = CoseSign1;
+        impl<'de> Visitor<'de> for CaseSign1Visitor {
+            type Value = CaseSign1;
 
             fn expecting(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-                f.write_str("a possibly tagged CoseSign1 structure")
+                f.write_str("a possibly tagged CaseSign1 structure")
             }
 
-            fn visit_seq<A>(self, mut seq: A) -> Result<CoseSign1, A::Error>
+            fn visit_seq<A>(self, mut seq: A) -> Result<CaseSign1, A::Error>
             where
                 A: SeqAccess<'de>,
             {
@@ -259,7 +259,7 @@ impl<'de> Deserialize<'de> for CoseSign1 {
                     None => return Err(A::Error::missing_field("signature")),
                 };
 
-                Ok(CoseSign1 {
+                Ok(CaseSign1 {
                     protected,
                     unprotected,
                     payload,
@@ -267,35 +267,35 @@ impl<'de> Deserialize<'de> for CoseSign1 {
                 })
             }
 
-            fn visit_newtype_struct<D>(self, deserializer: D) -> Result<CoseSign1, D::Error>
+            fn visit_newtype_struct<D>(self, deserializer: D) -> Result<CaseSign1, D::Error>
             where
                 D: Deserializer<'de>,
             {
                 // This is the tagged version: we ignore the tag part, and just go into it
-                deserializer.deserialize_seq(CoseSign1Visitor)
+                deserializer.deserialize_seq(CaseSign1Visitor)
             }
         }
 
-        deserializer.deserialize_any(CoseSign1Visitor)
+        deserializer.deserialize_any(CaseSign1Visitor)
     }
 }
 
-impl CoseSign1 {
+impl CaseSign1 {
     /// Parse CBOR bytes into struct. Adapted from <https://github.com/awslabs/aws-nitro-enclaves-cose/blob/main/src/sign.rs>
     pub fn parse_and_validate(bytes: &[u8]) -> Result<Self, NitroAttestationVerifyError> {
         let tagged_value: ciborium::value::Value = ciborium::de::from_reader(bytes)
-            .map_err(|e| NitroAttestationVerifyError::InvalidCoseSign1(e.to_string()))?;
+            .map_err(|e| NitroAttestationVerifyError::InvalidCaseSign1(e.to_string()))?;
 
         let (tag, value) = match tagged_value {
             ciborium::value::Value::Tag(tag, box_value) => (Some(tag), *box_value),
             other => (None, other),
         };
 
-        // Validate tag (18 is the COSE_Sign1 tag)
+        // Validate tag (18 is the CASE_Sign1 tag)
         match tag {
             None | Some(18) => (),
             Some(_) => {
-                return Err(NitroAttestationVerifyError::InvalidCoseSign1(
+                return Err(NitroAttestationVerifyError::InvalidCaseSign1(
                     "invalid tag".to_string(),
                 ))
             }
@@ -306,15 +306,15 @@ impl CoseSign1 {
 
         // Serialize the value into the buffer
         ciborium::ser::into_writer(&value, &mut buf)
-            .map_err(|e| NitroAttestationVerifyError::InvalidCoseSign1(e.to_string()))?;
+            .map_err(|e| NitroAttestationVerifyError::InvalidCaseSign1(e.to_string()))?;
 
-        // Deserialize the COSE_Sign1 structure from the buffer
+        // Deserialize the CASE_Sign1 structure from the buffer
         let cosesign1: Self = ciborium::de::from_reader(&buf[..])
-            .map_err(|e| NitroAttestationVerifyError::InvalidCoseSign1(e.to_string()))?;
+            .map_err(|e| NitroAttestationVerifyError::InvalidCaseSign1(e.to_string()))?;
 
         // Validate protected header
         let _: HeaderMap = ciborium::de::from_reader(cosesign1.protected.as_slice())
-            .map_err(|e| NitroAttestationVerifyError::InvalidCoseSign1(e.to_string()))?;
+            .map_err(|e| NitroAttestationVerifyError::InvalidCaseSign1(e.to_string()))?;
 
         cosesign1.validate_header()?;
         Ok(cosesign1)
@@ -326,7 +326,7 @@ impl CoseSign1 {
             && (1..16384).contains(&self.payload.len())
             && self.signature.len() == 96)
         {
-            return Err(NitroAttestationVerifyError::InvalidCoseSign1(
+            return Err(NitroAttestationVerifyError::InvalidCaseSign1(
                 "invalid cbor header".to_string(),
             ));
         }
@@ -334,7 +334,7 @@ impl CoseSign1 {
     }
 
     // Check protected header: https://docs.aws.amazon.com/enclaves/latest/user/verify-root.html#COSE-CBOR
-    // 18(/* COSE_Sign1 CBOR tag is 18 */
+    // 18(/* CASE_Sign1 CBOR tag is 18 */
     //     {1: -35}, /* This is equivalent with {algorithm: ECDS 384} */
     //     {}, /* We have nothing in unprotected */
     //     $ATTESTATION_DOCUMENT_CONTENT /* Attestation Document */,

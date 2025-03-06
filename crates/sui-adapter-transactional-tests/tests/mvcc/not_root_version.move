@@ -65,7 +65,7 @@ module test::m {
 //# view-object 2,0
 
 
-// Create object B witha version 2 and 3 for it's dynamic field
+// Create object B with version 2 and 3 for it's dynamic field
 
 //# programmable --sender P2 --inputs @P2
 //> 0: test::m::b();

@@ -161,7 +161,7 @@ impl BenchmarkBank {
     }
 
     async fn create_init_coin(&mut self, amount: u64, gas_price: u64) -> Result<Gas> {
-        info!("Creating initilization coin of value {amount}...");
+        info!("Creating initialization coin of value {amount}...");
 
         let tx = make_transfer_sui_transaction(
             self.primary_coin.0,
@@ -176,7 +176,7 @@ impl BenchmarkBank {
 
         if !effects.is_ok() {
             effects.print_gas_summary();
-            panic!("Failed to create initilization coin for workload.");
+            panic!("Failed to create initialization coin for workload.");
         }
 
         let updated_gas = effects
@@ -198,7 +198,7 @@ impl BenchmarkBank {
                 created_coin.1.get_owner_address()?,
                 self.primary_coin.2.clone(),
             )),
-            None => panic!("Failed to create initilization coin for workload."),
+            None => panic!("Failed to create initialization coin for workload."),
         }
     }
 }

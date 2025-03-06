@@ -189,7 +189,7 @@ module axelar::validators {
     /// messaging system allows sending private messages which can be consumed
     /// by single-owner targets.
     ///
-    /// The hot potato approvel call object is returned.
+    /// The hot potato approval call object is returned.
     public(package) fun take_approved_call(
         axelar: &mut AxelarValidators,
         cmd_id: address,

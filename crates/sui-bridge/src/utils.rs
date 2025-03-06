@@ -405,7 +405,7 @@ pub async fn wait_for_server_to_be_up(server_url: String, timeout_sec: u64) -> a
     Ok(())
 }
 
-/// Return a mappping from validator name to their bridge voting power.
+/// Return a mapping from validator name to their bridge voting power.
 /// If a validator is not in the Sui committee, we will use its base URL as the name.
 pub async fn get_committee_voting_power_by_name(
     bridge_committee: &Arc<BridgeCommittee>,
@@ -430,7 +430,7 @@ pub async fn get_committee_voting_power_by_name(
         .collect()
 }
 
-/// Return a mappping from validator pub keys to their names.
+/// Return a mapping from validator pub keys to their names.
 /// If a validator is not in the Sui committee, we will use its base URL as the name.
 pub async fn get_validator_names_by_pub_keys(
     bridge_committee: &Arc<BridgeCommittee>,

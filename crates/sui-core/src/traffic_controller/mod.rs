@@ -63,7 +63,7 @@ impl Debug for TrafficController {
         // given that (1) it contains all requests IPs, and (2) it could be quite
         // large. Instead, we print lengths of the blocklists. Further, we prefer
         // to get length from the metrics rather than from the blocklists themselves
-        // to avoid unneccesarily aquiring the read lock.
+        // to avoid unnecessarily acquiring the read lock.
         f.debug_struct("TrafficController")
             .field(
                 "connection_ip_blocklist_len",
@@ -113,7 +113,7 @@ impl TrafficController {
         Self::set_policy_config_metrics(&policy_config, metrics.clone());
         let (tx, rx) = mpsc::channel(policy_config.channel_capacity);
         // Memoized drainfile existence state. This is passed into delegation
-        // funtions to prevent them from continuing to populate blocklists
+        // functions to prevent them from continuing to populate blocklists
         // if drain is set, as otherwise it will grow without bounds
         // without the firewall running to periodically clear it.
         let mem_drainfile_present = fw_config
@@ -274,7 +274,7 @@ impl TrafficController {
         };
         let now = SystemTime::now();
         // the below two blocks cannot be nested, otherwise we will deadlock
-        // due to aquiring the lock on get, then holding across the remove
+        // due to acquiring the lock on get, then holding across the remove
         let (should_block, should_remove) = {
             match blocklist.get(client) {
                 Some(expiration) if now >= *expiration => (false, true),
@@ -842,7 +842,7 @@ impl TrafficSim {
         // This is the time it took for the first request to be blocked across all clients,
         // and is instead more useful for understanding false positives in terms of rate and magnitude.
         println!(
-            "Abolute time to first block (across all clients): {:?}",
+            "Absolute time to first block (across all clients): {:?}",
             metrics.abs_time_to_first_block
         );
         // Useful for ensuring that TTL is respected

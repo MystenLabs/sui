@@ -113,7 +113,7 @@ impl Measurement {
     /// Compute the tps.
     /// NOTE: Do not use `self.timestamp` as benchmark duration because some clients may
     /// be unable to submit transactions passed the first few seconds of the benchmark. This
-    /// may happen as a result of a bad control system withing the nodes.
+    /// may happen as a result of a bad control system within the nodes.
     pub fn tps(&self, duration: &Duration) -> u64 {
         let tps = self.count.checked_div(duration.as_secs() as usize);
         tps.unwrap_or_default() as u64

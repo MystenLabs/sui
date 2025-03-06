@@ -52,7 +52,7 @@
       - name: validator-10
         account-key: AEM7kl/d6VlBG1IgY+lHdxzudYT6ZhtXiYBh3kCxLZCq
         protocol-key: iic7mlIKCwVxaqej7btkXo045aJYw6hgqpHZT+n25aqICuYCkc0PUXzZ2qSGTrUgDkhcyLKUpMPXjNCPw7AV3M+B+dPuKf6BVVo4Enj4KJe5SnoNOYRE7Ll01K9KfbWU
-        worker-key: +Ukw2HM7IYXyIxp9F2ZbBZMAQpIMN24fhzArm41CJy0=
+        worker-key: +Ukw2HM7ITXyIxp9F2ZbBZMAQpIMN24fhzArm41CJy0=
         network-key: IXFQDgUFO6XD+eqnCHf4aAR2HVdqKKM/7l13nlFIk+w=
         stake: 1
         delegation: 0

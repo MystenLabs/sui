@@ -14,7 +14,7 @@ use tokio::sync::Notify;
 ///
 /// Specifically with tokio watch you may miss notification,
 /// if you subscribe to it after the value was changed
-/// (Note that this is not a bug in tokio watch, but rather a mis-use of it).
+/// (Note that this is not a bug in tokio watch, but rather a miss-use of it).
 ///
 /// NotifyOnce guarantees that wait() will return once notify() is called,
 /// regardless of whether wait() was called before or after notify().

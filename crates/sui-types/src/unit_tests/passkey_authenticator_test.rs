@@ -353,7 +353,7 @@ async fn test_passkey_fails_wrong_client_data_type() {
 //     let response = PasskeyResponse::<TransactionData> {
 //         user_sig_bytes: Hex::decode("02bbd02ace0bad3b32eb3a891dc5c85e56274f52695d24db41b247ec694d1531d6fe1a5bec11a8063d1eb0512e7971bfd23395c2cb8862f73049d0f78fd204c6d602276d5f3a22f3e698cdd2272a63da8bfdd9344de73312c7f7f9eca21bfc304f2e").unwrap(),
 //         authenticator_data: Hex::decode("49960de5880e8c687434170f6476605b8fe4aeb9a28632c7995cf3ba831d97631d00000000").unwrap(),
-//         client_data_json: r#"{"type":"webauthn.get","challenge":"AAAAZgUD1inhS1l9qUfZePaivu6IbIo_SxCGmYcfTwrmcFU","origin":"http://localhost:5173","crossOrigin":false}"#.to_string(),
+//         client_data_json: r#"{"type":"webauthn.get","challenge":"AAAAZgUD1inS1l9qUfZePaivu6IbIo_SxCGmYcfTwrmcFU","origin":"http://localhost:5173","crossOrigin":false}"#.to_string(),
 //         intent_msg: IntentMessage::new(Intent::sui_transaction(), tx_data),
 //         sender: SuiAddress::from_str("0x769364b73418667a44d600a8f0bc2d6655ef11cefb9e337fbd5aad5d4cc0552d").unwrap()
 //     };

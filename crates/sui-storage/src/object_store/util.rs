@@ -374,7 +374,7 @@ pub fn get_path(prefix: &str) -> Path {
 }
 
 // Snapshot MANIFEST file is very simple. Just a newline delimited list of all paths in the snapshot directory
-// this simplicty enables easy parsing for scripts to download snapshots
+// this simplicity enables easy parsing for scripts to download snapshots
 pub async fn write_snapshot_manifest<S: ObjectStoreListExt + ObjectStorePutExt>(
     dir: &Path,
     store: &S,

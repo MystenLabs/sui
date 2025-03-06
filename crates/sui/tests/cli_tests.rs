@@ -3740,7 +3740,7 @@ async fn test_pay_sui() -> Result<(), anyhow::Error> {
     .await?;
 
     // pay sui takes the input coins and transfers from each of them (in order) the amounts to the
-    // respective receipients.
+    // respective recipients.
     // check if each recipient has one object, if the tx status is success,
     // and if the gas object used was the first object in the input coins
     // we also check if the balances of each recipient are right!

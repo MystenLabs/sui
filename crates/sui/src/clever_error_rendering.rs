@@ -120,7 +120,7 @@ pub(crate) async fn render_clever_error_opt(
     let command = command_index + 1;
     let suffix = match command % 10 {
         1 => "st",
-        2 => "nd",
+        2 => "and",
         3 => "rd",
         _ => "th",
     };

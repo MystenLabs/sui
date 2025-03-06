@@ -54,7 +54,7 @@ You can also build the documentation locally. To do so,
 
 The [examples](https://github.com/MystenLabs/sui/tree/main/crates/sui-sdk/examples) folder provides both basic and advanced examples.
 
-There are serveral files ending in `_api.rs` which provide code examples of the corresponding APIs and their methods. These showcase how to use the Sui Rust SDK, and can be run against the Sui testnet. Below are instructions on the prerequisites and how to run these examples.
+There are several files ending in `_api.rs` which provide code examples of the corresponding APIs and their methods. These showcase how to use the Sui Rust SDK, and can be run against the Sui testnet. Below are instructions on the prerequisites and how to run these examples.
 
 ### Prerequisites
 

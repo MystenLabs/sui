@@ -409,7 +409,7 @@ pub trait ObjectCacheRead: Send + Sync {
         // TODO: Delete this parameter once table migration is complete.
         use_object_per_epoch_marker_table_v2: bool,
     ) -> bool {
-        let full_id = FullObjectID::Fastpath(object_id); // function explicilty assumes "fastpath"
+        let full_id = FullObjectID::Fastpath(object_id); // function explicitly assumes "fastpath"
         matches!(
             self.get_latest_marker(full_id, epoch_id, use_object_per_epoch_marker_table_v2),
             Some((marker_version, MarkerValue::OwnedDeleted)) if marker_version >= version

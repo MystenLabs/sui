@@ -272,7 +272,7 @@ impl DataProvider {
             .with_label_values(&[&self.feed_name, &self.source_name])
             .inc();
 
-        // TODO: allow more flexible multiplers and data types
+        // TODO: allow more flexible multipliers and data types
         let value = (value.unwrap() * METRICS_MULTIPLIER) as u64;
         self.send_to_uploader(value).await;
     }

@@ -80,7 +80,7 @@ Response: {
   "data": {
     "object1": null,
     "object2": {
-      "digest": "jVRpzwEAGgYKYJ5rQfpW2zjMajazCAF9VVGUXEACpN1"
+      "digest": "jVRpzwEAGgYKYJ5rQfpW2zjMajazCALF9VVGUXEACpN1"
     }
   }
 }

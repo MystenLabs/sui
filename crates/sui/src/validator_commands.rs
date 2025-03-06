@@ -1024,7 +1024,7 @@ pub async fn get_validator_summary(
         status = Some(ValidatorStatus::Active);
         Some(active_validators.remove(&validator_address).unwrap())
     } else {
-        // Check panding validators
+        // Check landing validators
         get_pending_candidate_summary(validator_address, client, pending_active_validators_id)
             .await?
             .map(|v| v.into_sui_validator_summary())

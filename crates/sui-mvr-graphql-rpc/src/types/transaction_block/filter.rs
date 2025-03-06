@@ -48,7 +48,7 @@ pub(crate) struct TransactionBlockFilter {
     pub input_object: Option<SuiAddress>,
 
     /// Limit to transactions that output a versioon of this object. NOTE: this input filter has
-    /// been deprecated in favor of `affectedObject` which offers an easier to understand behavor.
+    /// been deprecated in favor of `affectedObject` which offers an easier to understand behavior.
     ///
     /// This filter will be removed with 1.36.0 (2024-10-14), or at least one release after
     /// `affectedObject` is introduced, whichever is later.

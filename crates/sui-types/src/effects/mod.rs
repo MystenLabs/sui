@@ -404,7 +404,7 @@ impl TransactionEvents {
 
 #[derive(Debug)]
 pub struct TransactionEffectsDebugSummary {
-    /// Size of bcs serialized byets of the effects.
+    /// Size of bcs serialized bytes of the effects.
     pub bcs_size: usize,
     pub status: ExecutionStatus,
     pub gas_used: GasCostSummary,

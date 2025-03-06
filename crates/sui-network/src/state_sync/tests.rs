@@ -772,7 +772,7 @@ async fn sync_with_checkpoints_watermark() {
     );
     tokio::spawn(event_loop_3.start());
 
-    // Peer 3 is able to sync checkpoint 1 with teh help from Peer 2
+    // Peer 3 is able to sync checkpoint 1 with the help from Peer 2
     timeout(Duration::from_secs(1), async {
         assert_eq!(
             subscriber_3.recv().await.unwrap().data(),

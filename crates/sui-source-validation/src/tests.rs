@@ -531,7 +531,7 @@ async fn linkage_differs() -> anyhow::Result<()> {
         upgrade_package(context, b_v1.0, b_cap.0, b_src).await
     };
 
-    // Publish b-v2 a second time, to create a third version of the package that is othewise
+    // Publish b-v2 a second time, to create a third version of the package that is otherwise
     // byte-for-byte identical with the second version;
     let b_v3_fixtures = tempfile::tempdir()?;
     let b_v3 = {

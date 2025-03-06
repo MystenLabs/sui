@@ -59,7 +59,7 @@ async fn main() -> Result<(), anyhow::Error> {
     // Replace the pkg_id with the package id you want to call
     let pkg_id = "0x883393ee444fb828aa0e977670cf233b0078b41d144e6208719557cb3888244d";
     let package = ObjectID::from_hex_literal(pkg_id).map_err(|e| anyhow!(e))?;
-    let module = Identifier::new("hello_wolrd").map_err(|e| anyhow!(e))?;
+    let module = Identifier::new("hello_world").map_err(|e| anyhow!(e))?;
     let function = Identifier::new("hello_world").map_err(|e| anyhow!(e))?;
     ptb.command(Command::move_call(
         package,

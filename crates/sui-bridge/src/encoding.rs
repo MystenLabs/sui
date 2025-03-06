@@ -576,7 +576,7 @@ mod tests {
                 .unwrap(),
         )
         .unwrap();
-        // its evem address: 0xacaef39832cb995c4e049437a3e2ec6a7bad1ab5
+        // its even address: 0xacaef39832cb995c4e049437a3e2ec6a7bad1ab5
         let blocklist_action = BridgeAction::BlocklistCommitteeAction(BlocklistCommitteeAction {
             nonce: 68,
             chain_id: BridgeChainId::SuiCustom,

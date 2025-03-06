@@ -92,7 +92,7 @@ fn handle_traffic_resp(
         // For now, count everything as spam with equal weight
         // on the rpc node side, including gas-charging endpoints
         // such as `sui_executeTransactionBlock`, as this can enable
-        // node operators who wish to rate limit their transcation
+        // node operators who wish to rate limit their transaction
         // traffic and incentivize high volume clients to choose a
         // suitable rpc provider (or run their own). Later we may want
         // to provide a weight distribution based on the method being called.
@@ -137,7 +137,7 @@ pub fn determine_client_ip<T>(
                     let contents_len = header_contents.len();
                     let Some(client_ip) = header_contents.get(contents_len - num_hops) else {
                         error!(
-                                "x-forwarded-for header value of {:?} contains {} values, but {} hops were specificed. \
+                                "x-forwarded-for header value of {:?} contains {} values, but {} hops were specified. \
                                 Expected {} values. Skipping traffic controller request handling.",
                                 header_contents,
                                 contents_len,

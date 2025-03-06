@@ -226,7 +226,7 @@ pub enum Command {
     RunMigrations,
     /// Backfill DB tables for some ID range [\start, \end].
     /// The tool will automatically slice it into smaller ranges and for each range,
-    /// it first makes a read query to the DB to get data needed for backfil if needed,
+    /// it first makes a read query to the DB to get data needed for backfill if needed,
     /// which then can be processed and written back to the DB.
     /// To add a new backfill, add a new module and implement the `BackfillTask` trait.
     /// full_objects_history.rs provides an example to do SQL-only backfills.

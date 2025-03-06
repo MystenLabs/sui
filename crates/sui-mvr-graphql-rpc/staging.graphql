@@ -169,7 +169,7 @@ enum AddressTransactionBlockRelationship {
 	SENT
 	"""
 	Transactions that this address was involved in, either as the sender, sponsor, or as the
-	owner of some object that was created, modified or transfered.
+	owner of some object that was created, modified or transferred.
 	"""
 	AFFECTED
 }
@@ -3622,7 +3622,7 @@ type SharedInput {
 }
 
 """
-The transaction accpeted a shared object as input, but its execution was cancelled.
+The transaction accepted a shared object as input, but its execution was cancelled.
 """
 type SharedObjectCancelled {
 	"""
@@ -4331,7 +4331,7 @@ input TransactionBlockFilter {
 	"""
 	kind: TransactionBlockKindInput
 	"""
-	Limit to transactions that occured strictly after the given checkpoint.
+	Limit to transactions that occurred strictly after the given checkpoint.
 	"""
 	afterCheckpoint: UInt53
 	"""
@@ -4339,7 +4339,7 @@ input TransactionBlockFilter {
 	"""
 	atCheckpoint: UInt53
 	"""
-	Limit to transaction that occured strictly before the given checkpoint.
+	Limit to transaction that occurred strictly before the given checkpoint.
 	"""
 	beforeCheckpoint: UInt53
 	"""
@@ -4368,7 +4368,7 @@ input TransactionBlockFilter {
 	inputObject: SuiAddress
 	"""
 	Limit to transactions that output a versioon of this object. NOTE: this input filter has
-	been deprecated in favor of `affectedObject` which offers an easier to understand behavor.
+	been deprecated in favor of `affectedObject` which offers an easier to understand behavior.
 	
 	This filter will be removed with 1.36.0 (2024-10-14), or at least one release after
 	`affectedObject` is introduced, whichever is later.

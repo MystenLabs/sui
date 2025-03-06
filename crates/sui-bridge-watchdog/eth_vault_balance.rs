@@ -8,7 +8,7 @@ use ethers::types::{Address as EthAddress, U256};
 use prometheus::IntGauge;
 use std::sync::Arc;
 use sui_bridge::abi::EthERC20;
-use sui_bridge::metered_eth_provider::MeteredEthHttpProvier;
+use sui_bridge::metered_eth_provider::MeteredEthHttpProvider;
 use tokio::time::Duration;
 use tracing::{error, info};
 
@@ -20,7 +20,7 @@ pub enum VaultAsset {
 }
 
 pub struct EthereumVaultBalance {
-    coin_contract: EthERC20<Provider<MeteredEthHttpProvier>>,
+    coin_contract: EthERC20<Provider<MeteredEthHttpProvider>>,
     asset: VaultAsset,
     decimals: u8,
     vault_address: EthAddress,
@@ -29,7 +29,7 @@ pub struct EthereumVaultBalance {
 
 impl EthereumVaultBalance {
     pub fn new(
-        provider: Arc<Provider<MeteredEthHttpProvier>>,
+        provider: Arc<Provider<MeteredEthHttpProvider>>,
         vault_address: EthAddress,
         coin_address: EthAddress, // for now this only support one coin which is WETH
         asset: VaultAsset,

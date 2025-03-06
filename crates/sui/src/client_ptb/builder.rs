@@ -1098,7 +1098,7 @@ pub fn to_ordinal_contraction(num: usize) -> String {
         11..=13 => "th",
         _ => match num % 10 {
             1 => "st",
-            2 => "nd",
+            2 => "and",
             3 => "rd",
             _ => "th",
         },

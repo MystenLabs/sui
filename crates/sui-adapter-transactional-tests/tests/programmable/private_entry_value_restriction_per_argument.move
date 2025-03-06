@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-// tests dirty check happens in order of arguments, nto all at once
+// tests dirty check happens in order of arguments, not all at once
 
 //# init --addresses test=0x0 --accounts A
 

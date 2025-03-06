@@ -139,7 +139,7 @@ async fn test_sponsored_transaction() -> Result<(), anyhow::Error> {
     info!("updated obj ref: {:?}", object_ref);
     info!("updated gas ref: {:?}", gas_obj);
 
-    // Construct the sponsored transction
+    // Construct the sponsored transaction
     let pt = {
         let mut builder = ProgrammableTransactionBuilder::new();
         builder.transfer_object(another_addr, object_ref).unwrap();

@@ -10,18 +10,18 @@ use ethers::types::Address as EthAddress;
 use prometheus::IntGauge;
 use std::sync::Arc;
 use sui_bridge::abi::EthSuiBridge;
-use sui_bridge::metered_eth_provider::MeteredEthHttpProvier;
+use sui_bridge::metered_eth_provider::MeteredEthHttpProvider;
 use tokio::time::Duration;
 use tracing::{error, info};
 
 pub struct EthBridgeStatus {
-    bridge_contract: EthSuiBridge<Provider<MeteredEthHttpProvier>>,
+    bridge_contract: EthSuiBridge<Provider<MeteredEthHttpProvider>>,
     metric: IntGauge,
 }
 
 impl EthBridgeStatus {
     pub fn new(
-        provider: Arc<Provider<MeteredEthHttpProvier>>,
+        provider: Arc<Provider<MeteredEthHttpProvider>>,
         bridge_address: EthAddress,
         metric: IntGauge,
     ) -> Self {

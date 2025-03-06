@@ -66,7 +66,7 @@ Add configuration for any initial gas objects that should be created at genesis.
 $ sui genesis-ceremony add-gas-object \
     --address <SuiAddress> \
     --object-id <ObjectId> \
-    --valud <# of sui coins>
+    --valid <# of sui coins>
 $ git add .
 $ git commit -m "add gas object"
 $ git push

@@ -520,7 +520,7 @@ impl IndexStore {
             })
             .collect::<Vec<_>>();
         trace!(
-            tx_digset=?digest,
+            tx_digest=?digest,
             "coin_delete_keys: {:?}",
             coin_delete_keys,
         );
@@ -564,7 +564,7 @@ impl IndexStore {
             })
             .collect::<Vec<_>>();
         trace!(
-            tx_digset=?digest,
+            tx_digest=?digest,
             "coin_add_keys: {:?}",
             coin_add_keys,
         );

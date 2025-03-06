@@ -145,7 +145,7 @@ where
 
         let mut decoder = ProtobufDecoder::new(intermediate);
         let decoded = decoder.parse::<MetricFamily>().map_err(|e| {
-            let msg = format!("unable to decode len deliminated protobufs; {e}");
+            let msg = format!("unable to decode len delimited protobufs; {e}");
             error!(msg);
             MIDDLEWARE_OPS
                 .with_label_values(&[

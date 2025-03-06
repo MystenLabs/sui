@@ -17,7 +17,7 @@ module sui::event_tests {
     }
 
     #[test]
-    fun test_emit_homogenous() {
+    fun test_emit_homogeneous() {
         let e0 = S1(0);
         event::emit(e0);
         assert_eq(event::events_by_type<S1>()[0], e0);

@@ -58,7 +58,7 @@ impl ObjectLocks {
         new_lock: LockDetails,
         epoch_store: &AuthorityPerEpochStore,
     ) -> SuiResult {
-        // entry holds a lock on the dashmap shard, so this function operates atomicly
+        // entry holds a lock on the dashmap shard, so this function operates atomically
         let entry = self.locked_transactions.entry(*obj_ref);
 
         // TODO: currently, the common case for this code is that we will miss the cache

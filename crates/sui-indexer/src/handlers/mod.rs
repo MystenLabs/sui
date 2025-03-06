@@ -137,12 +137,12 @@ impl<T> CommonHandler<T> {
 
             // Process unprocessed checkpoints, even no new checkpoints from stream
             let checkpoint_lag_limiter = self.handler.get_max_committable_checkpoint().await?;
-            let max_commitable_cp = std::cmp::min(
+            let max_committable_cp = std::cmp::min(
                 checkpoint_lag_limiter,
                 end_checkpoint_opt.unwrap_or(u64::MAX),
             );
             // Stop pushing to tuple_batch if we've reached the end checkpoint.
-            while next_cp_to_process <= max_commitable_cp {
+            while next_cp_to_process <= max_committable_cp {
                 if let Some(data_tuple) = unprocessed.remove(&next_cp_to_process) {
                     tuple_batch.push(data_tuple);
                     next_cp_to_process += 1;
@@ -197,8 +197,8 @@ pub trait Handler<T>: Send + Sync {
     /// which tracks the latest epoch, cp, and tx sequence number of the committed batch.
     async fn set_watermark_hi(&self, watermark: CommitterWatermark) -> IndexerResult<()>;
 
-    /// By default, return u64::MAX, which means no extra waiting is needed before commiting;
-    /// get max committable checkpoint, for handlers that want to wait for some condition before commiting,
+    /// By default, return u64::MAX, which means no extra waiting is needed before committing;
+    /// get max committable checkpoint, for handlers that want to wait for some condition before committing,
     /// one use-case is the objects snapshot handler,
     /// which waits for the lag between snapshot and latest checkpoint to reach a certain threshold.
     async fn get_max_committable_checkpoint(&self) -> IndexerResult<u64> {

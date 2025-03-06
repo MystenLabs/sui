@@ -9,14 +9,14 @@ use std::sync::Arc;
 use url::{ParseError, Url};
 
 #[derive(Debug, Clone)]
-pub struct MeteredEthHttpProvier {
+pub struct MeteredEthHttpProvider {
     inner: Http,
     metrics: Arc<BridgeMetrics>,
 }
 
 #[cfg_attr(target_arch = "wasm32", async_trait(?Send))]
 #[cfg_attr(not(target_arch = "wasm32"), async_trait::async_trait)]
-impl JsonRpcClient for MeteredEthHttpProvier {
+impl JsonRpcClient for MeteredEthHttpProvider {
     type Error = HttpClientError;
 
     async fn request<T: Serialize + Send + Sync + Debug, R: DeserializeOwned + Send>(
@@ -37,7 +37,7 @@ impl JsonRpcClient for MeteredEthHttpProvier {
     }
 }
 
-impl MeteredEthHttpProvier {
+impl MeteredEthHttpProvider {
     pub fn new(url: impl Into<Url>, metrics: Arc<BridgeMetrics>) -> Self {
         let inner = Http::new(url);
         Self { inner, metrics }
@@ -47,8 +47,8 @@ impl MeteredEthHttpProvier {
 pub fn new_metered_eth_provider(
     url: &str,
     metrics: Arc<BridgeMetrics>,
-) -> Result<Provider<MeteredEthHttpProvier>, ParseError> {
-    let http_provider = MeteredEthHttpProvier::new(Url::parse(url)?, metrics);
+) -> Result<Provider<MeteredEthHttpProvider>, ParseError> {
+    let http_provider = MeteredEthHttpProvider::new(Url::parse(url)?, metrics);
     Ok(Provider::new(http_provider))
 }
 

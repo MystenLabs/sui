@@ -29,7 +29,7 @@ module test::m1 {
 }
 
 //# programmable --inputs vector[0u64,0u64]
-// INVALID option, using a vetor of length 2
+// INVALID option, using a vector of length 2
 //> 0: MakeMoveVec<std::option::Option<u64>>([Input(0)]);
 //> 1: test::m1::vec_option_u64(Result(0));
 

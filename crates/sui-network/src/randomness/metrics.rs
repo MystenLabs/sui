@@ -117,7 +117,7 @@ impl Inner {
             ).unwrap(),
             num_ignored_byzantine_peers: register_int_gauge_with_registry!(
                 "randomness_num_ignored_byzantine_peers",
-                "The number of byzantine peers that have been ignored by the randomness newtork loop in the current epoch",
+                "The number of byzantine peers that have been ignored by the randomness network loop in the current epoch",
                 registry
             ).unwrap(),
         }

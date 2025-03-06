@@ -984,7 +984,7 @@
             },
             {
               "name": "signatures",
-              "description": "Optional. Set of `UserSiganture`s authorizing the execution of the provided\ntransaction.",
+              "description": "Optional. Set of `UserSignature`s authorizing the execution of the provided\ntransaction.",
               "label": "repeated",
               "type": "UserSignature",
               "longType": "sui.types.UserSignature",
@@ -996,7 +996,7 @@
             },
             {
               "name": "signatures_bytes",
-              "description": "Optional. Set of `UserSiganture`s authorizing the execution of the provided\ntransaction, encoded as bytes.",
+              "description": "Optional. Set of `UserSignature`s authorizing the execution of the provided\ntransaction, encoded as bytes.",
               "label": "repeated",
               "type": "bytes",
               "longType": "bytes",
@@ -2161,7 +2161,7 @@
     },
     {
       "name": "sui/node/v2alpha/node_service.proto",
-      "description": "The sui.node.v2alpha package contains experimental services that have yet to\nstabilize\n\nEverything in here is subject to change and there is no gaurentee about\nstability or breaking changes.",
+      "description": "The sui.node.v2alpha package contains experimental services that have yet to\nstabilize\n\nEverything in here is subject to change and there is no guarantee about\nstability or breaking changes.",
       "package": "sui.node.v2alpha",
       "hasEnums": false,
       "hasExtensions": false,
@@ -2600,7 +2600,7 @@
               "defaultValue": ""
             },
             {
-              "name": "max_suppported_protocol_version",
+              "name": "max_supported_protocol_version",
               "description": "",
               "label": "optional",
               "type": "uint64",
@@ -2608,11 +2608,11 @@
               "fullType": "uint64",
               "ismap": false,
               "isoneof": true,
-              "oneofdecl": "_max_suppported_protocol_version",
+              "oneofdecl": "_max_supported_protocol_version",
               "defaultValue": ""
             },
             {
-              "name": "min_suppported_protocol_version",
+              "name": "min_supported_protocol_version",
               "description": "",
               "label": "optional",
               "type": "uint64",
@@ -2620,7 +2620,7 @@
               "fullType": "uint64",
               "ismap": false,
               "isoneof": true,
-              "oneofdecl": "_min_suppported_protocol_version",
+              "oneofdecl": "_min_supported_protocol_version",
               "defaultValue": ""
             }
           ]
@@ -3167,7 +3167,7 @@
     },
     {
       "name": "sui/node/v2alpha/subscription_service.proto",
-      "description": "The sui.node.v2alpha package contains experimental services that have yet to\nstabilize\n\nEverything in here is subject to change and there is no gaurentee about\nstability or breaking changes.",
+      "description": "The sui.node.v2alpha package contains experimental services that have yet to\nstabilize\n\nEverything in here is subject to change and there is no guarantee about\nstability or breaking changes.",
       "package": "sui.node.v2alpha",
       "hasEnums": false,
       "hasExtensions": false,
@@ -3188,7 +3188,7 @@
           "fields": [
             {
               "name": "read_mask",
-              "description": "Optional. Mask for specifiying which parts of the\nSubscribeCheckpointsResponse should be returned.",
+              "description": "Optional. Mask for specifying which parts of the\nSubscribeCheckpointsResponse should be returned.",
               "label": "optional",
               "type": "FieldMask",
               "longType": "google.protobuf.FieldMask",
@@ -3246,7 +3246,7 @@
           "methods": [
             {
               "name": "SubscribeCheckpoints",
-              "description": "Subscribe to the stream of checkpoints.\n\nThis API provides a subscription to the checkpoint stream for the Sui\nblockchain. When a subscription is initialized the stream will begin with\nthe latest executed checkpoint as seen by the server. Responses are\ngaurenteed to return checkpoints in-order and without gaps. This enables\nclients to know exactly the last checkpoint they have processed and in the\nevent the subscription terminates (either by the client/server or by the\nconnection breaking), clients will be able to reinitailize a subscription\nand then leverage other APIs (e.g.\nsui.node.v2.NodeService.GetFullCheckpoint) in order to request data for\nthe checkpoints they missed.",
+              "description": "Subscribe to the stream of checkpoints.\n\nThis API provides a subscription to the checkpoint stream for the Sui\nblockchain. When a subscription is initialized the stream will begin with\nthe latest executed checkpoint as seen by the server. Responses are\ngaurenteed to return checkpoints in-order and without gaps. This enables\nclients to know exactly the last checkpoint they have processed and in the\nevent the subscription terminates (either by the client/server or by the\nconnection breaking), clients will be able to reinitialize a subscription\nand then leverage other APIs (e.g.\nsui.node.v2.NodeService.GetFullCheckpoint) in order to request data for\nthe checkpoints they missed.",
               "requestType": "SubscribeCheckpointsRequest",
               "requestLongType": "SubscribeCheckpointsRequest",
               "requestFullType": "sui.node.v2alpha.SubscribeCheckpointsRequest",
@@ -7407,7 +7407,7 @@
               "defaultValue": ""
             },
             {
-              "name": "digets_does_not_match",
+              "name": "digest_does_not_match",
               "description": "Digest in upgrade ticket and computed digest differ.",
               "label": "",
               "type": "Digest",

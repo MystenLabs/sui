@@ -440,9 +440,9 @@ fun index_of_nonempty_has() {
     assert!(index == 1);
 }
 
-// index_of will return the index first occurence that is equal
+// index_of will return the index first occurrence that is equal
 #[test]
-fun index_of_nonempty_has_multiple_occurences() {
+fun index_of_nonempty_has_multiple_occurrences() {
     let mut v = vector[];
     v.push_back(false);
     v.push_back(true);

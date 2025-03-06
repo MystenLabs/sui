@@ -38,7 +38,7 @@ module bridge::limiter_tests {
         let mut clock = clock::create_for_testing(ctx);
         clock.set_for_testing(1706288001377);
 
-        // transfer 10000 ETH every hour, the totol should be 10000 * 5
+        // transfer 10000 ETH every hour, the total should be 10000 * 5
         assert!(
             limiter.check_and_record_sending_transfer<ETH>(
                 &treasury,
@@ -52,7 +52,7 @@ module bridge::limiter_tests {
         let record = limiter.transfer_records().get(&route);
         assert!(record.total_amount() == 10000 * 5 * usd_value_multiplier());
 
-        // transfer 1000 ETH every hour for 50 hours, the 24 hours totol should be 24000 * 10
+        // transfer 1000 ETH every hour for 50 hours, the 24 hours total should be 24000 * 10
         let mut i = 0;
         while (i < 50) {
             clock.increment_for_testing(60 * 60 * 1000);
@@ -72,7 +72,7 @@ module bridge::limiter_tests {
         assert_eq(record.total_amount(), expected_value);
 
         // transfer 1000 * i ETH every hour for 24 hours, the 24 hours
-        // totol should be 300 * 1000 * 5
+        // total should be 300 * 1000 * 5
         let mut i = 0;
         // At this point, every hour in past 24 hour has value $5000.
         // In each iteration, the old $5000 gets replaced with (i * 5000)

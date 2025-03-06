@@ -198,7 +198,7 @@ fn code_as_str(code: tonic::Code) -> &'static str {
 #[derive(Clone)]
 pub(crate) struct SubscriptionMetrics {
     pub inflight_subscribers: IntGauge,
-    pub last_recieved_checkpoint: IntGauge,
+    pub last_received_checkpoint: IntGauge,
 }
 
 impl SubscriptionMetrics {
@@ -210,9 +210,9 @@ impl SubscriptionMetrics {
                 registry,
             )
             .unwrap(),
-            last_recieved_checkpoint: register_int_gauge_with_registry!(
-                "subscription_last_recieved_checkpoint",
-                "Last recieved checkpoint by the subscription service",
+            last_received_checkpoint: register_int_gauge_with_registry!(
+                "subscription_last_received_checkpoint",
+                "Last received checkpoint by the subscription service",
                 registry,
             )
             .unwrap(),

@@ -183,7 +183,7 @@ pub struct SystemStateRequest {
     pub _unused: bool,
 }
 
-/// Response type for version 3 of the handle certifacte validator API.
+/// Response type for version 3 of the handle certificate validator API.
 ///
 /// The corresponding version 3 request type allows for a client to request events as well as
 /// input/output objects from a transaction's execution. Given Validators operate with very

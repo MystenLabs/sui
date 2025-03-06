@@ -307,7 +307,7 @@ impl BridgeTestCluster {
     }
 
     pub fn sui_bridge_address(&self) -> String {
-        self.eth_environment.contracts().sui_bridge_addrress_hex()
+        self.eth_environment.contracts().sui_bridge_address_hex()
     }
 
     pub fn wallet_mut(&mut self) -> &mut WalletContext {
@@ -487,12 +487,12 @@ pub struct DeployedSolContracts {
 }
 
 impl DeployedSolContracts {
-    pub fn eth_adress_to_hex(addr: EthAddress) -> String {
+    pub fn eth_address_to_hex(addr: EthAddress) -> String {
         format!("{:x}", addr)
     }
 
-    pub fn sui_bridge_addrress_hex(&self) -> String {
-        Self::eth_adress_to_hex(self.sui_bridge)
+    pub fn sui_bridge_address_hex(&self) -> String {
+        Self::eth_address_to_hex(self.sui_bridge)
     }
 }
 
@@ -767,7 +767,7 @@ pub(crate) async fn start_bridge_cluster(
         .contracts
         .as_ref()
         .unwrap()
-        .sui_bridge_addrress_hex();
+        .sui_bridge_address_hex();
 
     let mut handles = vec![];
     for (i, ((kp, server_listen_port), approved_governance_actions)) in bridge_authority_keys

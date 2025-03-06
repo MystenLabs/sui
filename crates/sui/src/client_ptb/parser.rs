@@ -265,11 +265,11 @@ impl<'a, I: Iterator<Item = &'a str>> ProgramParser<'a, I> {
     /// Parse a transfer-objects command.
     /// The expected format is: `--transfer-objects [<from>, ...] <to>`
     fn parse_transfer_objects(&mut self) -> PTBResult<Spanned<ParsedPTBCommand>> {
-        let transfer_froms = self.parse_array()?;
+        let transfer_forms = self.parse_array()?;
         let transfer_to = self.parse_argument()?;
-        let sp = transfer_to.span.widen(transfer_froms.span);
+        let sp = transfer_to.span.widen(transfer_forms.span);
         Ok(sp.wrap(ParsedPTBCommand::TransferObjects(
-            transfer_froms,
+            transfer_forms,
             transfer_to,
         )))
     }
