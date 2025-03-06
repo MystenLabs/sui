@@ -7,9 +7,10 @@
 module sui::coin;
 
 use std::ascii;
-use std::string;
+use std::string::{Self, String};
 use std::type_name;
 use sui::balance::{Self, Balance, Supply};
+use sui::coin_metadata_registry::{Self, Metadata, CoinMetadataRegistry, MetadataCap};
 use sui::deny_list::DenyList;
 use sui::url::{Self, Url};
 
@@ -31,6 +32,7 @@ const EBadWitness: u64 = 0;
 const EInvalidArg: u64 = 1;
 /// Trying to split a coin more times than its balance allows.
 const ENotEnough: u64 = 2;
+
 // #[error]
 // const EGlobalPauseNotAllowed: vector<u8> =
 //    b"Kill switch was not allowed at the creation of the DenyCapV2";
@@ -207,11 +209,155 @@ public fun destroy_zero<T>(c: Coin<T>) {
     balance.destroy_zero()
 }
 
+/// ============ NEW METADATA REGISTRY ============
+
+// TODO: specify shared and owned
+public fun migrate_to_registry<T>(
+    registry: &mut CoinMetadataRegistry,
+    metadata_v1: CoinMetadata<T>,
+    ctx: &mut TxContext,
+) {
+    registry.attach_metadata(from_v1(&metadata_v1, ctx));
+    metadata_v1.destroy_metadata()
+}
+
+public fun migrate_frozen_to_registry<T>(
+    registry: &mut CoinMetadataRegistry,
+    metadata_v1: &CoinMetadata<T>,
+    ctx: &mut TxContext,
+) {
+    // we only allow one migration with frozen metadata, to avoid overwriting
+    // in cases of "shared" metadata objects.
+    assert!(!registry.exists<T>(), EMetadataAlreadyExists);
+    registry.attach_metadata(from_v1(metadata_v1, ctx));
+}
+
+fun from_v1<T>(metadata_v1: &CoinMetadata<T>, ctx: &mut TxContext): Metadata<T> {
+    let icon_url = metadata_v1
+        .get_icon_url()
+        .map!(|u| u.inner_url().to_string())
+        .destroy_or!(b"".to_string());
+
+    coin_metadata_registry::create_metadata<T>(
+        metadata_v1.decimals,
+        metadata_v1.name,
+        metadata_v1.symbol.to_string(),
+        metadata_v1.description,
+        icon_url,
+        option::none(),
+        option::none(),
+        option::none(),
+        ctx,
+    )
+}
+
+/// Allows the owner to freeze the currency by destroying the treasury cap.
+public fun freeze_supply<T>(registry: &mut CoinMetadataRegistry, cap: TreasuryCap<T>) {
+    assert!(registry.exists<T>(), EMetadataNotFound);
+
+    let metadata = registry.metadata<T>();
+
+    assert!(metadata.cap_claimed(), EMetadataCapNotClaimed);
+    registry.freeze_supply(cap.treasury_into_supply());
+}
+
+public fun claim_cap<T>(
+    metadata: &mut Metadata<T>,
+    _: &TreasuryCap<T>,
+    ctx: &mut TxContext,
+): MetadataCap<T> {
+    coin_metadata_registry::create_cap(metadata, ctx)
+}
+
+// replacement for create_currency
+public fun new_currency<T: drop>(
+    witness: T,
+    decimals: u8,
+    symbol: String,
+    name: String,
+    description: String,
+    icon_url: String,
+    ctx: &mut TxContext,
+): (TreasuryCap<T>, MetadataCap<T>) {
+    // Make sure there's only one instance of the type T
+    assert!(sui::types::is_one_time_witness(&witness), EBadWitness);
+
+    let treasury_cap = TreasuryCap {
+        id: object::new(ctx),
+        total_supply: balance::create_supply(witness),
+    };
+
+    let metadata: Metadata<T> = coin_metadata_registry::create_metadata(
+        decimals,
+        name,
+        symbol,
+        description,
+        icon_url,
+        option::none(),
+        option::none(),
+        option::none(),
+        ctx,
+    );
+
+    let metadata_cap = claim_cap(&mut metadata, &treasury_cap, ctx);
+
+    transfer::public_transfer(
+        metadata,
+        coin_metadata_registry::coin_metadata_registry_id().to_address(),
+    );
+
+    (treasury_cap, metadata_cap)
+}
+
+/// replacement for create_regulated_currency_v2
+public fun new_regulated_currency<T: drop>(
+    witness: T,
+    decimals: u8,
+    symbol: String,
+    name: String,
+    description: String,
+    icon_url: String,
+    allow_global_pause: bool,
+    ctx: &mut TxContext,
+): (TreasuryCap<T>, MetadataCap<T>, DenyCapV2<T>) {
+    // Make sure there's only one instance of the type T
+    assert!(sui::types::is_one_time_witness(&witness), EBadWitness);
+
+    let treasury_cap = TreasuryCap {
+        id: object::new(ctx),
+        total_supply: balance::create_supply(witness),
+    };
+
+    let deny_cap = DenyCapV2 {
+        id: object::new(ctx),
+        allow_global_pause,
+    };
+
+    let metadata: Metadata<T> = coin_metadata_registry::create_metadata(
+        decimals,
+        name,
+        symbol,
+        description,
+        icon_url,
+        option::none(),
+        option::none(),
+        option::some(deny_cap.id.to_inner()),
+        ctx,
+    );
+
+    let metadata_cap = claim_cap(&mut metadata, &treasury_cap, ctx);
+
+    (treasury_cap, metadata_cap, deny_cap)
+}
+
+/// ============ END METADATA REGISTRY ============
+
 // === Registering new coin types and managing the coin supply ===
 
 /// Create a new currency type `T` as and return the `TreasuryCap` for
 /// `T` to the caller. Can only be called with a `one-time-witness`
 /// type, ensuring that there's only one `TreasuryCap` per `T`.
+#[deprecated(note = b"Use `new_currency` instead")]
 public fun create_currency<T: drop>(
     witness: T,
     decimals: u8,
@@ -221,23 +367,7 @@ public fun create_currency<T: drop>(
     icon_url: Option<Url>,
     ctx: &mut TxContext,
 ): (TreasuryCap<T>, CoinMetadata<T>) {
-    // Make sure there's only one instance of the type T
-    assert!(sui::types::is_one_time_witness(&witness), EBadWitness);
-
-    (
-        TreasuryCap {
-            id: object::new(ctx),
-            total_supply: balance::create_supply(witness),
-        },
-        CoinMetadata {
-            id: object::new(ctx),
-            decimals,
-            name: string::utf8(name),
-            symbol: ascii::string(symbol),
-            description: string::utf8(description),
-            icon_url,
-        },
-    )
+    abort 1337
 }
 
 /// This creates a new currency, via `create_currency`, but with an extra capability that
@@ -258,25 +388,7 @@ public fun create_regulated_currency_v2<T: drop>(
     allow_global_pause: bool,
     ctx: &mut TxContext,
 ): (TreasuryCap<T>, DenyCapV2<T>, CoinMetadata<T>) {
-    let (treasury_cap, metadata) = create_currency(
-        witness,
-        decimals,
-        symbol,
-        name,
-        description,
-        icon_url,
-        ctx,
-    );
-    let deny_cap = DenyCapV2 {
-        id: object::new(ctx),
-        allow_global_pause,
-    };
-    transfer::freeze_object(RegulatedCoinMetadata<T> {
-        id: object::new(ctx),
-        coin_metadata_object: object::id(&metadata),
-        deny_cap_object: object::id(&deny_cap),
-    });
-    (treasury_cap, deny_cap, metadata)
+    abort 1337
 }
 
 /// Given the `DenyCap` for a regulated currency, migrate it to the new `DenyCapV2` type.
@@ -464,13 +576,6 @@ public entry fun update_icon_url<T>(
 public(package) fun destroy_metadata<T>(metadata: CoinMetadata<T>) {
     let CoinMetadata { id, .. } = metadata;
     id.delete()
-}
-
-public(package) fun destroy_treasury_cap<T>(treasury_cap: TreasuryCap<T>): Supply<T> {
-    let TreasuryCap { id, total_supply } = treasury_cap;
-    id.delete();
-
-    total_supply
 }
 
 // === Get coin metadata fields for on-chain consumption ===
