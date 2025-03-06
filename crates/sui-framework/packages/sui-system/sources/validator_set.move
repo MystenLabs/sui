@@ -503,11 +503,12 @@ fun update_and_process_low_stake_departures(
     validator_report_records: &mut VecMap<address, VecSet<address>>,
     ctx: &mut TxContext
 ): u64 {
-    let mut pending_active_validators = vector::empty();
-    while (!self.pending_active_validators.is_empty()) {
-        let validator = self.pending_active_validators.pop_back();
-        pending_active_validators.push_back(validator)
-    };
+    // take all pending validators out of the tablevec and put them in a local vector
+    let pending_active_validators = vector::tabulate!(
+        self.pending_active_validators.length(),
+        |_| self.pending_active_validators.pop_back()
+    );
+
     let pending_total_stake = calculate_total_stakes(&pending_active_validators);
     let initial_total_stake = calculate_total_stakes(&self.active_validators) + pending_total_stake;
     let (min_joining_voting_power_threshold, low_voting_power_threshold, very_low_voting_power_threshold) = self.get_voting_power_thresholds(ctx);
@@ -543,21 +544,35 @@ fun update_and_process_low_stake_departures(
             // If the grace period has passed, the validator has to leave us.
             if (new_low_stake_period > low_stake_grace_period) {
                 let validator = self.active_validators.remove(i);
-                let removed_stake = self.process_validator_departure(validator, validator_report_records, false /* the validator is kicked out involuntarily */, ctx);
+                let removed_stake = self.process_validator_departure(
+                    validator,
+                    validator_report_records,
+                    false /* the validator is kicked out involuntarily */,
+                    ctx
+                );
                 total_removed_stake = total_removed_stake + removed_stake;
             }
         } else {
             // The validator's stake is lower than the very low threshold so we kick them out immediately.
             let validator = self.active_validators.remove(i);
-            let removed_stake = self.process_validator_departure(validator, validator_report_records, false /* the validator is kicked out involuntarily */, ctx);
+            let removed_stake = self.process_validator_departure(
+                validator,
+                validator_report_records,
+                false /* the validator is kicked out involuntarily */,
+                ctx
+            );
             total_removed_stake = total_removed_stake + removed_stake;
         }
     };
-        // check that pending validators still have sufficient stake to be added. this was checked at the time of
-    // request_add_validator, but stake may have been withdrawn, or stakes of other validators may have increased significantly
+    // check that pending validators still have sufficient stake to be added. this was checked at
+    // the time of request_add_validator, but stake may have been withdrawn, or stakes of other
+    // validators may have increased significantly
     pending_active_validators.do!(|mut validator| {
         let validator_stake = validator.total_stake_amount();
-        let voting_power = voting_power::derive_voting_power(validator_stake, initial_total_stake);
+        let voting_power = voting_power::derive_voting_power(
+            validator_stake,
+            initial_total_stake
+        );
         if (voting_power >= min_joining_voting_power_threshold) {
             validator.activate(ctx.epoch());
             event::emit(
@@ -569,9 +584,13 @@ fun update_and_process_low_stake_departures(
             );
             self.active_validators.push_back(validator);
         } else {
-            // return validator object to the candidate pool. want to do this directly instead of calling request_add_validator_candidate
-            // because staking_pool_mappings already has an entry for this validator, and the duplicate checks are redundant
-            self.validator_candidates.add(validator.sui_address(), validator_wrapper::create_v1(validator, ctx));
+            // return validator object to the candidate pool. want to do this directly instead of
+            // calling request_add_validator_candidate because staking_pool_mappings already has an
+            // entry for this validator, and the duplicate checks are redundant
+            self.validator_candidates.add(
+                validator.sui_address(),
+                validator_wrapper::create_v1(validator, ctx)
+            );
             total_removed_stake = total_removed_stake + validator_stake;
         }
     });
@@ -744,15 +763,6 @@ fun get_candidate_or_active_validator_mut(self: &mut ValidatorSet, validator_add
         return wrapper.load_validator_maybe_upgrade()
     };
     get_validator_mut(&mut self.active_validators, validator_address)
-}
-
-#[test_only]
-fun get_candidate_or_active_validator(self: &ValidatorSet, validator_address: address): &Validator {
-    if (self.validator_candidates.contains(validator_address)) {
-        let wrapper = &self.validator_candidates[validator_address];
-        return wrapper.get_inner_validator_ref()
-    };
-    get_validator(&self.active_validators, validator_address)
 }
 
 /// Find validator by `validator_address`, in `validators`.
@@ -1387,4 +1397,13 @@ public(package) fun active_validator_addresses(self: &ValidatorSet): vector<addr
 #[test_only]
 public fun find_for_testing(self: &ValidatorSet, validator_address: address): &Validator {
     self.get_candidate_or_active_validator(validator_address)
+}
+
+#[test_only]
+fun get_candidate_or_active_validator(self: &ValidatorSet, validator_address: address): &Validator {
+    if (self.validator_candidates.contains(validator_address)) {
+        let wrapper = &self.validator_candidates[validator_address];
+        return wrapper.get_inner_validator_ref()
+    };
+    get_validator(&self.active_validators, validator_address)
 }
