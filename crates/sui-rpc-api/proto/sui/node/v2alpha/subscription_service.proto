@@ -17,7 +17,7 @@ service SubscriptionService {
   // This API provides a subscription to the checkpoint stream for the Sui
   // blockchain. When a subscription is initialized the stream will begin with
   // the latest executed checkpoint as seen by the server. Responses are
-  // guaranteed to return checkpoints in-order and without gaps. This enables
+  // guaranteed to return checkpoints in order and without gaps. This enables
   // clients to know exactly the last checkpoint they have processed and in the
   // event the subscription terminates (either by the client/server or by the
   // connection breaking), clients will be able to reinitialize a subscription
