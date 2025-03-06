@@ -286,7 +286,7 @@ mod tests {
                     .collect::<Vec<_>>();
 
                 if ancestor_timestamps.is_empty() {
-                    leaders[idx].timestamp_ms()
+                    0
                 } else {
                     median(ancestor_timestamps).unwrap()
                 }
