@@ -1,6 +1,6 @@
 [package]
 name = "I1"
-edition = "2024.beta" # edition = "legacy" to use legacy (pre-2024) Move
+edition = "2024.beta"
 
 [dependencies]
 I2 = { local = "../i2" }
