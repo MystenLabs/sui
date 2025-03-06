@@ -1,10 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{
-    sync::Arc,
-    time::SystemTime,
-};
+use std::{sync::Arc, time::SystemTime};
 
 use consensus_config::{AuthorityIndex, Committee, Parameters};
 #[cfg(test)]
@@ -171,6 +168,7 @@ impl Clock {
                     SystemTime::UNIX_EPOCH,
                 )
             })
-            .as_millis() as BlockTimestampMs + self.clock_drift
+            .as_millis() as BlockTimestampMs
+            + self.clock_drift
     }
 }
