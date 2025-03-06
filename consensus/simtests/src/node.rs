@@ -31,6 +31,7 @@ pub(crate) struct Config {
     pub keypairs: Vec<(NetworkKeyPair, ProtocolKeyPair)>,
     pub network_type: ConsensusNetwork,
     pub boot_counter: u64,
+    pub clock_drift: BlockTimestampMs,
     pub protocol_config: ProtocolConfig,
 }
 
@@ -250,6 +251,7 @@ pub(crate) async fn make_authority(
         network_type,
         boot_counter,
         protocol_config,
+        clock_drift,
     } = config;
 
     let registry = Registry::new();
@@ -283,6 +285,7 @@ pub(crate) async fn make_authority(
         commit_consumer,
         registry,
         boot_counter,
+        Arc::new(Clock::new_for_test(clock_drift)),
     )
     .await;
 

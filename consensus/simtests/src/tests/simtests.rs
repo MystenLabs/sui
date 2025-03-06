@@ -54,6 +54,12 @@ mod test {
         let mut boot_counters = [0; NUM_OF_AUTHORITIES];
 
         for (index, _authority_info) in committee.authorities() {
+            let clock_drift= if index == 0 {
+                100
+            } else {
+                0
+            };
+
             let config = Config {
                 authority_index: index,
                 db_dir: Arc::new(TempDir::new().unwrap()),
@@ -62,6 +68,7 @@ mod test {
                 network_type: sui_protocol_config::ConsensusNetwork::Tonic,
                 boot_counter: boot_counters[index],
                 protocol_config: protocol_config.clone(),
+                clock_drift
             };
             let node = AuthorityNode::new(config);
 
