@@ -19,7 +19,8 @@ use tempfile::TempDir;
 use consensus_core::network::tonic_network::to_socket_addr;
 use consensus_core::transaction::NoopTransactionVerifier;
 use consensus_core::{
-    CommitConsumer, CommitConsumerMonitor, CommittedSubDag, ConsensusAuthority, TransactionClient,
+    BlockTimestampMs, Clock, CommitConsumer, CommitConsumerMonitor, CommittedSubDag,
+    ConsensusAuthority, TransactionClient,
 };
 
 #[derive(Clone)]

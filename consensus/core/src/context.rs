@@ -3,7 +3,7 @@
 
 use std::{
     sync::Arc,
-    time::{Duration, SystemTime},
+    time::SystemTime,
 };
 
 use consensus_config::{AuthorityIndex, Committee, Parameters};
@@ -121,6 +121,8 @@ impl Context {
 pub struct Clock {
     initial_instant: Instant,
     initial_system_time: SystemTime,
+    // `clock_drift` should be used only for testing
+    clock_drift: BlockTimestampMs,
 }
 
 impl Default for Clock {
@@ -128,20 +130,18 @@ impl Default for Clock {
         Self {
             initial_instant: Instant::now(),
             initial_system_time: SystemTime::now(),
+            clock_drift: 0,
         }
     }
 }
 
 impl Clock {
     #[allow(unused)]
-    pub fn new_for_test(drift: BlockTimestampMs) -> Self {
+    pub fn new_for_test(clock_drift: BlockTimestampMs) -> Self {
         Self {
-            initial_instant: Instant::now()
-                .checked_add(Duration::from_millis(drift))
-                .unwrap(),
-            initial_system_time: SystemTime::now()
-                .checked_add(Duration::from_millis(drift))
-                .unwrap(),
+            initial_instant: Instant::now(),
+            initial_system_time: SystemTime::now(),
+            clock_drift,
         }
     }
 
@@ -171,6 +171,6 @@ impl Clock {
                     SystemTime::UNIX_EPOCH,
                 )
             })
-            .as_millis() as BlockTimestampMs
+            .as_millis() as BlockTimestampMs + self.clock_drift
     }
 }

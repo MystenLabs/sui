@@ -868,8 +868,8 @@ mod tests {
         }
     }
 
-    #[tokio::test(flavor = "current_thread", start_paused = true)]
     #[rstest]
+    #[tokio::test(flavor = "current_thread", start_paused = true)]
     async fn test_handle_send_block(#[values(false, true)] median_based_timestamp: bool) {
         let (mut context, _keys) = Context::new_for_test(4);
         context
