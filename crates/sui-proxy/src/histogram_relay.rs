@@ -93,7 +93,7 @@ impl HistogramRelay {
         Self::default()
     }
     /// submit will take metric family submissions and store them for scraping
-    /// in doing so, it will also wrap each entry in a timestamp which will be use
+    /// in doing so, it will also wrap each entry in a timestamp which will be used
     /// for pruning old entries on each submission call. this may not be ideal long term.
     pub fn submit(&self, data: Vec<MetricFamily>) {
         RELAY_PRESSURE.with_label_values(&["submit"]).inc();
