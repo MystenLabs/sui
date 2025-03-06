@@ -2161,7 +2161,7 @@
     },
     {
       "name": "sui/node/v2alpha/node_service.proto",
-      "description": "The sui.node.v2alpha package contains experimental services that have yet to\nstabilize\n\nEverything in here is subject to change and there is no guarantee about\nstability or breaking changes.",
+      "description": "The sui.node.v2alpha package contains experimental services that have yet to\nstabilize.\n\nEverything in here is subject to change and there is no guarantee about\nstability or breaking changes.",
       "package": "sui.node.v2alpha",
       "hasEnums": false,
       "hasExtensions": false,
