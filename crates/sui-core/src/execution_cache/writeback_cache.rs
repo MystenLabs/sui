@@ -215,7 +215,7 @@ struct UncommittedData {
 
     // Because TransactionEvents are not unique to the transaction that created them, we must
     // reference count them in order to know when we can remove them from the cache. For now
-    // we track all referrer explicitly, but we can use a ref count when we are confident in
+    // we track all referrers explicitly, but we can use a ref count when we are confident in
     // the correctness of the code.
     transaction_events:
         DashMap<TransactionEventsDigest, (BTreeSet<TransactionDigest>, TransactionEvents)>,

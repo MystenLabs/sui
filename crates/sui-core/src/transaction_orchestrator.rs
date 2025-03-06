@@ -632,7 +632,7 @@ impl TransactionOrchestratorMetrics {
             )
             .unwrap(),
             wait_for_finality_finished: register_int_counter_with_registry!(
-                "tx_orchestrator_wait_for_finality_finished",
+                "tx_orchestrator_wait_for_finality_fnished",
                 "Total number of txns Transaction Orchestrator gets responses from Quorum Driver before timeout, either success or failure",
                 registry,
             )

@@ -344,14 +344,14 @@ impl BridgeMetrics {
             .unwrap(),
             auth_agg_ok_responses: register_int_counter_vec_with_registry!(
                 "bridge_auth_agg_ok_responses",
-                "Total number of ok response from auth agg",
+                "Total number of ok responses from auth agg",
                 &["authority"],
                 registry,
             )
             .unwrap(),
             auth_agg_bad_responses: register_int_counter_vec_with_registry!(
                 "bridge_auth_agg_bad_responses",
-                "Total number of bad response from auth agg",
+                "Total number of bad responses from auth agg",
                 &["authority"],
                 registry,
             )
