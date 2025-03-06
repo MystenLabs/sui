@@ -2027,7 +2027,7 @@ Service for subscribing to data from a Sui Fullnode
 | ----------- | ------------ | ------------- | ------------|
 | SubscribeCheckpoints | [SubscribeCheckpointsRequest](#sui-node-v2alpha-SubscribeCheckpointsRequest) | [SubscribeCheckpointsResponse](#sui-node-v2alpha-SubscribeCheckpointsResponse) stream | Subscribe to the stream of checkpoints.
 
-This API provides a subscription to the checkpoint stream for the Sui blockchain. When a subscription is initialized the stream will begin with the latest executed checkpoint as seen by the server. Responses are guaranteed to return checkpoints in-order and without gaps. This enables clients to know exactly the last checkpoint they have processed and in the event the subscription terminates (either by the client/server or by the connection breaking), clients will be able to reinitialize a subscription and then leverage other APIs (e.g. sui.node.v2.NodeService.GetFullCheckpoint) in order to request data for the checkpoints they missed. |
+This API provides a subscription to the checkpoint stream for the Sui blockchain. When a subscription is initialized the stream will begin with the latest executed checkpoint as seen by the server. Responses are guaranteed to return checkpoints in order and without gaps. This enables clients to know exactly the last checkpoint they have processed and in the event the subscription terminates (either by the client/server or by the connection breaking), clients will be able to reinitialize a subscription and then leverage other APIs (e.g. sui.node.v2.NodeService.GetFullCheckpoint) to request data for the checkpoints they missed. |
 
  
 
