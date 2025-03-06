@@ -400,7 +400,7 @@ async fn get_latest_bridge_committee_with_blocklist_event<C: SuiClientInner>(
             let member = committee.member(&BridgeAuthorityPublicKeyBytes::from(pk));
             let Some(member) = member else {
                 // This is possible when a node is processing an older event while the member
-                // quit at a later point. Or fullnode returns a stale committee that
+                // quits at a later point. Or fullnode returns a stale committee that
                 // the member hasn't joined.
                 warn!("Committee member not found in the committee: {:?}", pk);
                 any_mismatch = true;
