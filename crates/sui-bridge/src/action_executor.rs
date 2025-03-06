@@ -1077,7 +1077,7 @@ mod tests {
             .unwrap();
         let action_digest = action.digest();
 
-        // Wait for 1 second. It should still in the process of retrying requesting sigs because we mock errors above.
+        // Wait for 1 second. It should still be in the process of retrying requesting sigs because we mock errors above.
         tokio::time::sleep(tokio::time::Duration::from_secs(1)).await;
         tx_subscription.try_recv().unwrap_err();
         // And the action is still in WAL
