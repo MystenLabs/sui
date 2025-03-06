@@ -1856,7 +1856,11 @@ impl ProtocolConfig {
     }
 
     pub fn consensus_median_based_commit_timestamp(&self) -> bool {
-        let res = self.feature_flags.consensus_median_based_commit_timestamp;
+        let res = if cfg!(msim) {
+            true
+        } else {
+            self.feature_flags.consensus_median_based_commit_timestamp
+        };
         assert!(
             !res || self.gc_depth() > 0,
             "The consensus median based commit timestamp requires GC to be enabled"
