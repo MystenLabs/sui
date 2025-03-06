@@ -45,7 +45,7 @@ impl Processor for ObjInfo {
             .map(|o| (o.id(), o))
             .collect::<BTreeMap<_, _>>();
         let mut values: BTreeMap<ObjectID, Self::Value> = BTreeMap::new();
-        let mut prune_info = PruningInfo::new();
+        // let mut prune_info = PruningInfo::new();
         for object_id in checkpoint_input_objects.keys() {
             if !latest_live_output_objects.contains_key(object_id) {
                 // If an input object is not in the latest live output objects, it must have been deleted
@@ -59,7 +59,7 @@ impl Processor for ObjInfo {
                         update: ProcessedObjInfoUpdate::Delete(*object_id),
                     },
                 );
-                prune_info.add_deleted_object(*object_id);
+                // prune_info.add_deleted_object(*object_id);
             }
         }
         for (object_id, object) in latest_live_output_objects.iter() {
@@ -79,13 +79,13 @@ impl Processor for ObjInfo {
                 );
                 // We do not need to prune if the object was created in this checkpoint,
                 // because this object would not have been in the table prior to this checkpoint.
-                if checkpoint_input_objects.contains_key(object_id) {
-                    prune_info.add_mutated_object(*object_id);
-                }
+                // if checkpoint_input_objects.contains_key(object_id) {
+                // prune_info.add_mutated_object(*object_id);
+                // }
             }
         }
-        self.pruning_lookup_table
-            .insert(cp_sequence_number, prune_info);
+        // self.pruning_lookup_table
+        // .insert(cp_sequence_number, prune_info);
 
         Ok(values.into_values().collect())
     }

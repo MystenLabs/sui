@@ -65,7 +65,7 @@ impl Processor for CoinBalanceBuckets {
             .map(|o| (o.id(), o))
             .collect();
         let mut values: BTreeMap<ObjectID, Self::Value> = BTreeMap::new();
-        let mut prune_info = PruningInfo::new();
+        // let mut prune_info = PruningInfo::new();
         for (object_id, input_object) in checkpoint_input_objects.iter() {
             // This loop processes all coins that were owned by a single address prior to the checkpoint,
             // but is now deleted or wrapped after the checkpoint.
@@ -78,7 +78,7 @@ impl Processor for CoinBalanceBuckets {
             if latest_live_output_objects.contains_key(object_id) {
                 continue;
             }
-            prune_info.add_deleted_object(*object_id);
+            // prune_info.add_deleted_object(*object_id);
             values.insert(
                 *object_id,
                 ProcessedCoinBalanceBucket {
@@ -118,7 +118,7 @@ impl Processor for CoinBalanceBuckets {
                             change: CoinBalanceBucketChangeKind::Delete,
                         },
                     );
-                    prune_info.add_deleted_object(*object_id);
+                    // prune_info.add_deleted_object(*object_id);
                 }
                 (_, Some(new_owner))
                     if input_owner != output_owner
@@ -143,15 +143,15 @@ impl Processor for CoinBalanceBuckets {
                     // If input_owner is None, it means that the coin was not tracked in the table
                     // prior to the checkpoint, and is now created/unwrapped. In this case, we don't
                     // need to prune anything, since there was no old data to prune.
-                    if input_owner.is_some() {
-                        prune_info.add_mutated_object(*object_id);
-                    }
+                    // if input_owner.is_some() {
+                    // prune_info.add_mutated_object(*object_id);
+                    // }
                 }
                 _ => {}
             }
         }
-        self.pruning_lookup_table
-            .insert(cp_sequence_number, prune_info);
+        // self.pruning_lookup_table
+        // .insert(cp_sequence_number, prune_info);
 
         Ok(values.into_values().collect())
     }
