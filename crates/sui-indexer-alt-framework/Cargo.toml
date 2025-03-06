@@ -13,7 +13,7 @@ axum.workspace = true
 backoff.workspace = true
 bb8 = "0.8.5"
 chrono.workspace = true
-clap.workspace = true
+clap = { workspace = true, features = ["env"] }
 diesel = { workspace = true, features = ["chrono"] }
 diesel-async = { workspace = true, features = ["bb8", "postgres", "async-connection-wrapper"] }
 diesel_migrations.workspace = true
@@ -36,6 +36,8 @@ sui-pg-db.workspace = true
 sui-sql-macro.workspace = true
 sui-storage.workspace = true
 sui-types.workspace = true
+sui-rpc-api.workspace = true
+tonic.workspace = true
 
 [dev-dependencies]
 rand.workspace = true
