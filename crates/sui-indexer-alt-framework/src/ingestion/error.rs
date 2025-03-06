@@ -22,4 +22,7 @@ pub enum Error {
 
     #[error("Shutdown signal received, stopping ingestion service")]
     Cancelled,
+
+    #[error(transparent)]
+    RpcClientError(#[from] tonic::Status),
 }
