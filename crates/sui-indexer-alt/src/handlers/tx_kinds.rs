@@ -49,7 +49,6 @@ impl Processor for TxKinds {
                 tx_kind,
             });
         }
-
         Ok(values)
     }
 }
