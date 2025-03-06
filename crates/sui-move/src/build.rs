@@ -31,7 +31,7 @@ pub struct Build {
     #[clap(long, global = true)]
     pub generate_struct_layouts: bool,
     #[clap(long, global = true)]
-    pub generate_boogie: bool,
+    pub prove: bool,
     #[clap(long, global = true)]
     pub path_split: Option<usize>,
     /// The chain ID, if resolved. Required when the dump_bytecode_as_base64 is true,
@@ -55,7 +55,7 @@ impl Build {
             self.with_unpublished_dependencies,
             self.dump_bytecode_as_base64,
             self.generate_struct_layouts,
-            self.generate_boogie,
+            self.prove,
             self.path_split,
             self.chain_id.clone(),
         )
@@ -67,11 +67,11 @@ impl Build {
         with_unpublished_deps: bool,
         dump_bytecode_as_base64: bool,
         generate_struct_layouts: bool,
-        generate_boogie: bool,
+        prove: bool,
         path_split: Option<usize>,
         chain_id: Option<String>,
     ) -> anyhow::Result<()> {
-        if generate_boogie {
+        if prove {
             config.verify_mode = true;
             config.dev_mode = true;
 
