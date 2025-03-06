@@ -51,6 +51,7 @@ impl Processor for TxAffectedAddresses {
                 .unique()
                 .map(|a| StoredTxAffectedAddress {
                     tx_sequence_number,
+                    cp_sequence_number: checkpoint_summary.sequence_number as i64,
                     affected: a.to_vec(),
                     sender: sender.to_vec(),
                 })

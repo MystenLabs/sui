@@ -48,6 +48,7 @@ pub struct StoredTransaction {
 #[diesel(table_name = tx_affected_addresses)]
 pub struct StoredTxAffectedAddress {
     pub tx_sequence_number: i64,
+    pub cp_sequence_number: i64,
     /// Address affected by the transaction, including the sender, the gas payer
     /// and any recipients of objects.
     pub affected: Vec<u8>,
