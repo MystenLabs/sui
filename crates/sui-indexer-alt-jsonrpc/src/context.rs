@@ -40,6 +40,9 @@ pub(crate) struct Context {
     /// through the same connection pool as `reader`).
     package_resolver: PackageResolver,
 
+    /// Access to the RPC's metrics.
+    metrics: Arc<RpcMetrics>,
+
     /// Access to the RPC's configuration.
     config: Arc<RpcConfig>,
 }
@@ -53,7 +56,7 @@ impl Context {
         metrics: Arc<RpcMetrics>,
         registry: &Registry,
     ) -> Result<Self, Error> {
-        let pg_reader = PgReader::new(database_url, db_args, metrics, registry).await?;
+        let pg_reader = PgReader::new(database_url, db_args, metrics.clone(), registry).await?;
         let pg_loader = Arc::new(pg_reader.as_data_loader());
 
         let kv_loader = if let Some(config) = config.bigtable.clone() {
@@ -74,6 +77,7 @@ impl Context {
             pg_loader,
             kv_loader,
             package_resolver,
+            metrics,
             config: Arc::new(config),
         })
     }
@@ -98,6 +102,11 @@ impl Context {
     /// For querying type and function signature information.
     pub(crate) fn package_resolver(&self) -> &PackageResolver {
         &self.package_resolver
+    }
+
+    /// Access to the RPC metrics.
+    pub(crate) fn metrics(&self) -> &RpcMetrics {
+        self.metrics.as_ref()
     }
 
     /// Access to the RPC configuration.
