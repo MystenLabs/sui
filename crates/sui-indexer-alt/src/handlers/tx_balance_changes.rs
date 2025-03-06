@@ -48,6 +48,7 @@ impl Processor for TxBalanceChanges {
 
             values.push(StoredTxBalanceChange {
                 tx_sequence_number,
+                cp_sequence_number: checkpoint_summary.sequence_number as i64,
                 balance_changes: bcs::to_bytes(&balance_changes).with_context(|| {
                     format!("Serializing balance changes for transaction {tx_sequence_number}")
                 })?,

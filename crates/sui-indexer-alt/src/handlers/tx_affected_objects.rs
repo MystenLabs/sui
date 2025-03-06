@@ -42,6 +42,7 @@ impl Processor for TxAffectedObjects {
                     .iter()
                     .map(|o| StoredTxAffectedObject {
                         tx_sequence_number,
+                        cp_sequence_number: checkpoint_summary.sequence_number as i64,
                         affected: o.id.to_vec(),
                         sender: sender.to_vec(),
                     }),

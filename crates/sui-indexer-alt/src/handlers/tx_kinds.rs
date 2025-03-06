@@ -44,6 +44,7 @@ impl Processor for TxKinds {
             };
 
             values.push(StoredTxKind {
+                cp_sequence_number: checkpoint_summary.sequence_number as i64,
                 tx_sequence_number,
                 tx_kind,
             });

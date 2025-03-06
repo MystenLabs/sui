@@ -43,6 +43,7 @@ impl Processor for TxCalls {
                     .iter()
                     .map(|(package, module, function)| StoredTxCalls {
                         tx_sequence_number,
+                        cp_sequence_number: checkpoint_summary.sequence_number as i64,
                         package: package.to_vec(),
                         module: module.to_string(),
                         function: function.to_string(),

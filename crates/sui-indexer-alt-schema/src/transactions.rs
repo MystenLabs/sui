@@ -58,6 +58,7 @@ pub struct StoredTxAffectedAddress {
 #[diesel(table_name = tx_affected_objects)]
 pub struct StoredTxAffectedObject {
     pub tx_sequence_number: i64,
+    pub cp_sequence_number: i64,
     /// Object affected by the transaction, including deleted, wrapped, mutated,
     /// and created objects.
     pub affected: Vec<u8>,
@@ -68,6 +69,7 @@ pub struct StoredTxAffectedObject {
 #[diesel(table_name = tx_balance_changes)]
 pub struct StoredTxBalanceChange {
     pub tx_sequence_number: i64,
+    pub cp_sequence_number: i64,
     pub balance_changes: Vec<u8>,
 }
 
@@ -78,6 +80,7 @@ pub struct StoredTxCalls {
     pub module: String,
     pub function: String,
     pub tx_sequence_number: i64,
+    pub cp_sequence_number: i64,
     pub sender: Vec<u8>,
 }
 
@@ -85,6 +88,7 @@ pub struct StoredTxCalls {
 #[diesel(table_name = tx_digests)]
 pub struct StoredTxDigest {
     pub tx_sequence_number: i64,
+    pub cp_sequence_number: i64,
     pub tx_digest: Vec<u8>,
 }
 
@@ -100,6 +104,7 @@ pub enum StoredKind {
 #[diesel(table_name = tx_kinds)]
 pub struct StoredTxKind {
     pub tx_sequence_number: i64,
+    pub cp_sequence_number: i64,
     pub tx_kind: StoredKind,
 }
 

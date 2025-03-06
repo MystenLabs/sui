@@ -41,6 +41,7 @@ impl Processor for EvEmitMod {
                         package: ev.package_id.to_vec(),
                         module: ev.transaction_module.to_string(),
                         tx_sequence_number: (first_tx + i) as i64,
+                        cp_sequence_number: checkpoint_summary.sequence_number as i64,
                         sender: ev.sender.to_vec(),
                     }),
             );
@@ -98,6 +99,7 @@ mod tests {
         let query = ev_emit_mod::table
             .order_by((
                 ev_emit_mod::tx_sequence_number,
+                ev_emit_mod::cp_sequence_number,
                 ev_emit_mod::sender,
                 ev_emit_mod::package,
                 ev_emit_mod::module,

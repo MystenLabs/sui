@@ -43,6 +43,7 @@ impl Processor for EvStructInst {
                             "Failed to serialize type parameters for event ({tx_sequence_number}, {j})"
                         ))?,
                     tx_sequence_number: (first_tx + i) as i64,
+                    cp_sequence_number: checkpoint_summary.sequence_number as i64,
                     sender: ev.sender.to_vec(),
                 });
             }

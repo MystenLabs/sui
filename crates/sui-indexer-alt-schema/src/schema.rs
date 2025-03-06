@@ -22,21 +22,23 @@ diesel::table! {
 }
 
 diesel::table! {
-    ev_emit_mod (package, module, tx_sequence_number) {
+    ev_emit_mod (package, module, tx_sequence_number, cp_sequence_number) {
         package -> Bytea,
         module -> Text,
         tx_sequence_number -> Int8,
+        cp_sequence_number -> Int8,
         sender -> Bytea,
     }
 }
 
 diesel::table! {
-    ev_struct_inst (package, module, name, instantiation, tx_sequence_number) {
+    ev_struct_inst (package, module, name, instantiation, tx_sequence_number, cp_sequence_number) {
         package -> Bytea,
         module -> Text,
         name -> Text,
         instantiation -> Bytea,
         tx_sequence_number -> Int8,
+        cp_sequence_number -> Int8,
         sender -> Bytea,
     }
 }
@@ -166,49 +168,55 @@ diesel::table! {
 }
 
 diesel::table! {
-    tx_affected_addresses (affected, tx_sequence_number) {
+    tx_affected_addresses (affected, tx_sequence_number, cp_sequence_number) {
         affected -> Bytea,
         tx_sequence_number -> Int8,
+        cp_sequence_number -> Int8,
         sender -> Bytea,
     }
 }
 
 diesel::table! {
-    tx_affected_objects (affected, tx_sequence_number) {
+    tx_affected_objects (affected, tx_sequence_number, cp_sequence_number) {
         tx_sequence_number -> Int8,
+        cp_sequence_number -> Int8,
         affected -> Bytea,
         sender -> Bytea,
     }
 }
 
 diesel::table! {
-    tx_balance_changes (tx_sequence_number) {
+    tx_balance_changes (tx_sequence_number, cp_sequence_number) {
         tx_sequence_number -> Int8,
+        cp_sequence_number -> Int8,
         balance_changes -> Bytea,
     }
 }
 
 diesel::table! {
-    tx_calls (package, module, function, tx_sequence_number) {
+    tx_calls (package, module, function, tx_sequence_number, cp_sequence_number) {
         package -> Bytea,
         module -> Text,
         function -> Text,
         tx_sequence_number -> Int8,
+        cp_sequence_number -> Int8,
         sender -> Bytea,
     }
 }
 
 diesel::table! {
-    tx_digests (tx_sequence_number) {
+    tx_digests (tx_sequence_number, cp_sequence_number) {
         tx_sequence_number -> Int8,
+        cp_sequence_number -> Int8,
         tx_digest -> Bytea,
     }
 }
 
 diesel::table! {
-    tx_kinds (tx_kind, tx_sequence_number) {
+    tx_kinds (tx_kind, tx_sequence_number, cp_sequence_number) {
         tx_kind -> Int2,
         tx_sequence_number -> Int8,
+        cp_sequence_number -> Int8,
     }
 }
 

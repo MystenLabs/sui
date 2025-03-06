@@ -36,6 +36,7 @@ impl Processor for TxDigests {
             .enumerate()
             .map(|(i, tx)| StoredTxDigest {
                 tx_sequence_number: (first_tx + i) as i64,
+                cp_sequence_number: checkpoint_summary.sequence_number as i64,
                 tx_digest: tx.transaction.digest().inner().to_vec(),
             })
             .collect())

@@ -11,6 +11,7 @@ pub struct StoredEvEmitMod {
     pub package: Vec<u8>,
     pub module: String,
     pub tx_sequence_number: i64,
+    pub cp_sequence_number: i64,
     pub sender: Vec<u8>,
 }
 
@@ -22,5 +23,6 @@ pub struct StoredEvStructInst {
     pub name: String,
     pub instantiation: Vec<u8>,
     pub tx_sequence_number: i64,
+    pub cp_sequence_number: i64,
     pub sender: Vec<u8>,
 }
