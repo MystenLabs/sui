@@ -612,7 +612,7 @@ module bridge::message_tests {
         let ctx = test_scenario::ctx(&mut scenario);
         let coin = coin::mint_for_testing<USDC>(12345, ctx);
         let mut sender = address::to_bytes(sender_address);
-        // double sender which will make the payload different the 64 bytes
+        // double sender makes the payload different than 64 bytes
         sender.append(address::to_bytes(sender_address));
         create_token_bridge_message(
             chain_ids::sui_testnet(), // source chain
