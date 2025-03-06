@@ -8077,7 +8077,7 @@
         }
       },
       "PasskeyAuthenticator": {
-        "description": "An passkey authenticator with parsed fields. See field definition below. Can be initialized from [struct RawPasskeyAuthenticator].",
+        "description": "A passkey authenticator with parsed fields. See field definition below. Can be initialized from [struct RawPasskeyAuthenticator].",
         "type": "object",
         "required": [
           "authenticator_data",
