@@ -177,7 +177,10 @@ pub fn run_move_prover_with_model<W: WriteColor>(
         &options,
         error_writer,
         "exiting with verification errors",
-    )
+    )?;
+
+    println!("✅ All specs proved!");
+    Ok(())
 }
 
 pub fn check_errors<W: WriteColor>(
@@ -257,13 +260,13 @@ pub fn create_and_process_bytecode(options: &Options, env: &GlobalEnv) -> Functi
         }
     }
 
-    println!(
-        "{}",
-        FunctionTargetsHolderDisplay {
-            targets: &targets,
-            env
-        }
-    );
+    // println!(
+    //     "{}",
+    //     FunctionTargetsHolderDisplay {
+    //         targets: &targets,
+    //         env
+    //     }
+    // );
 
     // Create processing pipeline and run it.
     let pipeline = if options.experimental_pipeline {
@@ -283,13 +286,13 @@ pub fn create_and_process_bytecode(options: &Options, env: &GlobalEnv) -> Functi
         pipeline.run(env, &mut targets);
     }
 
-    println!(
-        "{}",
-        mono_analysis::MonoInfoCFGDisplay {
-            info: &mono_analysis::get_info(env),
-            env
-        }
-    );
+    // println!(
+    //     "{}",
+    //     mono_analysis::MonoInfoCFGDisplay {
+    //         info: &mono_analysis::get_info(env),
+    //         env
+    //     }
+    // );
 
     targets
 }
