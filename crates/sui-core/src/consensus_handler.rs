@@ -146,13 +146,13 @@ mod additional_consensus_state {
     /// state in ConsensusCommitPrologue, so that any deviation causes an immediate fork.
     #[derive(Serialize, Deserialize)]
     pub(super) struct AdditionalConsensusState {
-        commit_rate_estimate: CommitRateObserver,
+        commit_interval_observer: CommitIntervalObserver,
     }
 
     impl AdditionalConsensusState {
         pub fn new(additional_consensus_state_window_size: u32) -> Self {
             Self {
-                commit_rate_estimate: CommitRateObserver::new(
+                commit_interval_observer: CommitIntervalObserver::new(
                     additional_consensus_state_window_size,
                 ),
             }
@@ -164,8 +164,15 @@ mod additional_consensus_state {
             protocol_config: &ProtocolConfig,
             consensus_commit: &impl ConsensusCommitAPI,
         ) -> ConsensusCommitInfo {
-            self.commit_rate_estimate
+            self.commit_interval_observer
                 .observe_commit_time(consensus_commit);
+
+            let estimated_commit_period = self
+                .commit_interval_observer
+                .commit_interval_estimate()
+                .unwrap_or(Duration::from_millis(
+                    protocol_config.min_checkpoint_interval_ms(),
+                ));
 
             ConsensusCommitInfo {
                 _phantom: PhantomData,
@@ -173,7 +180,7 @@ mod additional_consensus_state {
                 timestamp: consensus_commit.commit_timestamp_ms(),
                 consensus_commit_digest: consensus_commit.consensus_digest(protocol_config),
                 additional_state_digest: Some(self.digest()),
-                estimated_commit_period: Some(self.estimated_commit_rate()),
+                estimated_commit_period: Some(estimated_commit_period),
                 skip_consensus_commit_prologue_in_test: false,
             }
         }
@@ -199,12 +206,6 @@ mod additional_consensus_state {
             let mut hash = sui_types::crypto::DefaultHash::new();
             bcs::serialize_into(&mut hash, self).unwrap();
             AdditionalConsensusStateDigest::new(hash.finalize().into())
-        }
-
-        fn estimated_commit_rate(&self) -> Duration {
-            self.commit_rate_estimate
-                .commit_rate_estimate()
-                .unwrap_or(Duration::from_millis(100))
         }
     }
 
@@ -1293,11 +1294,11 @@ impl ConsensusTransactionHandler {
 }
 
 #[derive(Serialize, Deserialize)]
-pub(crate) struct CommitRateObserver {
+pub(crate) struct CommitIntervalObserver {
     ring_buffer: VecDeque<u64>,
 }
 
-impl CommitRateObserver {
+impl CommitIntervalObserver {
     pub fn new(window_size: u32) -> Self {
         Self {
             ring_buffer: VecDeque::with_capacity(window_size as usize),
@@ -1312,7 +1313,7 @@ impl CommitRateObserver {
         self.ring_buffer.push_back(commit_time);
     }
 
-    pub fn commit_rate_estimate(&self) -> Option<Duration> {
+    pub fn commit_interval_estimate(&self) -> Option<Duration> {
         if self.ring_buffer.len() <= 1 {
             None
         } else {

@@ -571,7 +571,6 @@ mod object_cost_tests {
             PerObjectCongestionControlMode::TotalGasBudget => tx_gas_budget + 1,
             PerObjectCongestionControlMode::TotalTxCount => 2,
             PerObjectCongestionControlMode::TotalGasBudgetWithCap => tx_gas_budget - 1,
-            //PerObjectCongestionControlMode::ExecutionTimeEstimate(_) => 2_000_000,
             PerObjectCongestionControlMode::ExecutionTimeEstimate(_) => 0, // ignored
         };
 
@@ -703,6 +702,33 @@ mod object_cost_tests {
                     assert_eq!(congested_objects[0], shared_obj_0);
                 } else {
                     panic!("should defer");
+                }
+            }
+        }
+
+        if matches!(
+            mode,
+            PerObjectCongestionControlMode::ExecutionTimeEstimate(_)
+        ) {
+            for mutable_0 in [true, false].iter() {
+                for mutable_1 in [true, false].iter() {
+                    let tx = build_transaction(
+                        &[(shared_obj_0, *mutable_0), (shared_obj_1, *mutable_1)],
+                        tx_gas_budget,
+                    );
+                    assert!(shared_object_congestion_tracker
+                        .should_defer_due_to_object_congestion(
+                            &execution_time_estimator,
+                            &tx,
+                            &HashMap::new(),
+                            &ConsensusCommitInfo::new_for_congestion_test(
+                                0,
+                                0,
+                                // With higher commit period, no deferral should happen.
+                                Duration::from_micros(20_000_000),
+                            ),
+                        )
+                        .is_none());
                 }
             }
         }
