@@ -1552,14 +1552,22 @@ impl SuiNode {
             config.network_key_pair().copy().private(),
             SUI_TLS_SERVER_NAME.to_string(),
         );
-        let server = server_builder
-            .bind(config.network_address(), Some(tls_config))
-            .await
-            .map_err(|err| anyhow!(err.to_string()))?;
-        let local_addr = server.local_addr();
-        info!("Listening to traffic on {local_addr}");
 
-        Ok(SpawnOnce::new(server.serve().map_err(Into::into)))
+        let network_address = config.network_address().clone();
+
+        Ok(SpawnOnce::new(async move {
+            let server = server_builder
+                .bind(&network_address, Some(tls_config))
+                .await
+                .map_err(|err| anyhow!(err.to_string()))?;
+            let local_addr = server.local_addr();
+            info!("Listening to traffic on {local_addr}");
+            server
+                .serve()
+                .map_err(|err| anyhow!(err.to_string()))
+                .await?;
+            Ok(())
+        }))
     }
 
     async fn reexecute_pending_consensus_certs(
