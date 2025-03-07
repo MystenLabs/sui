@@ -101,13 +101,6 @@ impl Context {
         self.protocol_config = protocol_config;
         self
     }
-
-    #[cfg(test)]
-    #[allow(unused)]
-    pub(crate) fn with_clock(mut self, clock: Clock) -> Self {
-        self.clock = Arc::new(clock);
-        self
-    }
 }
 
 /// A clock that allows to derive the current UNIX system timestamp while guaranteeing that timestamp
@@ -133,7 +126,6 @@ impl Default for Clock {
 }
 
 impl Clock {
-    #[allow(unused)]
     pub fn new_for_test(clock_drift: BlockTimestampMs) -> Self {
         Self {
             initial_instant: Instant::now(),
