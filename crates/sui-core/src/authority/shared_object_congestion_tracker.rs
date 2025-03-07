@@ -3,6 +3,7 @@
 
 use super::execution_time_estimator::ExecutionTimeEstimator;
 use crate::authority::transaction_deferral::DeferralKey;
+use crate::consensus_handler::ConsensusCommitInfo;
 use mysten_common::fatal;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -225,9 +226,11 @@ impl SharedObjectCongestionTracker {
         execution_time_estimator: &ExecutionTimeEstimator,
         cert: &VerifiedExecutableTransaction,
         previously_deferred_tx_digests: &HashMap<TransactionDigest, DeferralKey>,
-        commit_round: Round,
-        estimated_commit_period: Duration,
+        commit_info: &ConsensusCommitInfo,
     ) -> Option<(DeferralKey, Vec<ObjectID>)> {
+        let commit_round = commit_info.round;
+        let estimated_commit_period = commit_info.estimated_commit_period();
+
         let tx_cost = self.get_tx_cost(execution_time_estimator, cert)?;
 
         let shared_input_objects: Vec<_> = cert.shared_input_objects().collect();
@@ -316,7 +319,8 @@ impl SharedObjectCongestionTracker {
     // Returns accumulated debts for objects whose budgets have been exceeded over the course
     // of the commit. Consumes the tracker object, since this should only be called once after
     // all tx have been processed.
-    pub fn accumulated_debts(self, commit_rate: Duration) -> Vec<(ObjectID, u64)> {
+    pub fn accumulated_debts(self, commit_info: &ConsensusCommitInfo) -> Vec<(ObjectID, u64)> {
+        let commit_period = commit_info.estimated_commit_period();
         if self.params.per_commit_hard_limit() == 0 {
             return vec![]; // early-exit if overage is not allowed
         }
@@ -325,7 +329,7 @@ impl SharedObjectCongestionTracker {
             .into_iter()
             .filter_map(|(obj_id, cost)| {
                 let remaining_cost =
-                    cost.saturating_sub(self.params.target_budget_per_commit(commit_rate));
+                    cost.saturating_sub(self.params.target_budget_per_commit(commit_period));
                 if remaining_cost > 0 {
                     Some((obj_id, remaining_cost))
                 } else {
@@ -643,8 +647,11 @@ mod object_cost_tests {
                     &execution_time_estimator,
                     &tx,
                     &HashMap::new(),
-                    0,
-                    Duration::from_micros(10_000_000),
+                    &ConsensusCommitInfo::new_for_congestion_test(
+                        0,
+                        0,
+                        Duration::from_micros(10_000_000),
+                    ),
                 )
             {
                 assert_eq!(congested_objects.len(), 1);
@@ -664,8 +671,11 @@ mod object_cost_tests {
                     &execution_time_estimator,
                     &tx,
                     &HashMap::new(),
-                    0,
-                    Duration::from_micros(10_000_000),
+                    &ConsensusCommitInfo::new_for_congestion_test(
+                        0,
+                        0,
+                        Duration::from_micros(10_000_000)
+                    ),
                 )
                 .is_none());
         }
@@ -682,8 +692,11 @@ mod object_cost_tests {
                         &execution_time_estimator,
                         &tx,
                         &HashMap::new(),
-                        0,
-                        Duration::from_micros(10_000_000),
+                        &ConsensusCommitInfo::new_for_congestion_test(
+                            0,
+                            0,
+                            Duration::from_micros(10_000_000),
+                        ),
                     )
                 {
                     assert_eq!(congested_objects.len(), 1);
@@ -745,8 +758,7 @@ mod object_cost_tests {
             &execution_time_estimator,
             &tx,
             &previously_deferred_tx_digests,
-            10,
-            Duration::from_micros(10_000_000),
+            &ConsensusCommitInfo::new_for_congestion_test(0, 0, Duration::from_micros(10_000_000)),
         ) {
             assert_eq!(future_round, 11);
             assert_eq!(deferred_from_round, 10);
@@ -773,8 +785,11 @@ mod object_cost_tests {
             &execution_time_estimator,
             &tx,
             &previously_deferred_tx_digests,
-            10,
-            Duration::from_micros(10_000_000),
+            &ConsensusCommitInfo::new_for_congestion_test(
+                10,
+                10,
+                Duration::from_micros(10_000_000),
+            ),
         ) {
             assert_eq!(future_round, 11);
             assert_eq!(deferred_from_round, 4);
@@ -802,8 +817,11 @@ mod object_cost_tests {
             &execution_time_estimator,
             &tx,
             &previously_deferred_tx_digests,
-            10,
-            Duration::from_micros(10_000_000),
+            &ConsensusCommitInfo::new_for_congestion_test(
+                10,
+                10,
+                Duration::from_micros(10_000_000),
+            ),
         ) {
             assert_eq!(future_round, 11);
             assert_eq!(deferred_from_round, 5);
@@ -918,8 +936,11 @@ mod object_cost_tests {
                     &execution_time_estimator,
                     &tx,
                     &HashMap::new(),
-                    0,
-                    Duration::from_micros(10_000_000),
+                    &ConsensusCommitInfo::new_for_congestion_test(
+                        0,
+                        0,
+                        Duration::from_micros(10_000_000),
+                    ),
                 )
             {
                 assert_eq!(congested_objects.len(), 1);
@@ -937,8 +958,11 @@ mod object_cost_tests {
                     &execution_time_estimator,
                     &tx,
                     &HashMap::new(),
-                    0,
-                    Duration::from_micros(10_000_000),
+                    &ConsensusCommitInfo::new_for_congestion_test(
+                        0,
+                        0,
+                        Duration::from_micros(10_000_000)
+                    ),
                 )
                 .is_none());
         }
@@ -955,8 +979,11 @@ mod object_cost_tests {
                         &execution_time_estimator,
                         &tx,
                         &HashMap::new(),
-                        0,
-                        Duration::from_micros(10_000_000),
+                        &ConsensusCommitInfo::new_for_congestion_test(
+                            0,
+                            0,
+                            Duration::from_micros(10_000_000),
+                        ),
                     )
                 {
                     assert_eq!(congested_objects.len(), 1);
@@ -1094,8 +1121,11 @@ mod object_cost_tests {
                     &execution_time_estimator,
                     &tx,
                     &HashMap::new(),
-                    0,
-                    Duration::from_micros(10_000_000),
+                    &ConsensusCommitInfo::new_for_congestion_test(
+                        0,
+                        0,
+                        Duration::from_micros(10_000_000),
+                    ),
                 )
             {
                 assert_eq!(congested_objects.len(), 1);
@@ -1114,8 +1144,11 @@ mod object_cost_tests {
                     &execution_time_estimator,
                     &tx,
                     &HashMap::new(),
-                    0,
-                    Duration::from_micros(10_000_000),
+                    &ConsensusCommitInfo::new_for_congestion_test(
+                        0,
+                        0,
+                        Duration::from_micros(10_000_000)
+                    ),
                 )
                 .is_none());
         }
@@ -1132,8 +1165,11 @@ mod object_cost_tests {
                         &execution_time_estimator,
                         &tx,
                         &HashMap::new(),
-                        0,
-                        Duration::from_micros(10_000_000),
+                        &ConsensusCommitInfo::new_for_congestion_test(
+                            0,
+                            0,
+                            Duration::from_micros(10_000_000),
+                        ),
                     )
                 {
                     assert_eq!(congested_objects.len(), 1);
@@ -1408,8 +1444,9 @@ mod object_cost_tests {
         }
 
         // Verify that accumulated_debts reports the debt for object 0.
-        let accumulated_debts =
-            shared_object_congestion_tracker.accumulated_debts(Duration::from_micros(10_000_000));
+        let accumulated_debts = shared_object_congestion_tracker.accumulated_debts(
+            &ConsensusCommitInfo::new_for_congestion_test(0, 0, Duration::from_micros(10_000_000)),
+        );
         assert_eq!(accumulated_debts.len(), 1);
         match mode {
             PerObjectCongestionControlMode::None => unreachable!(),
@@ -1445,7 +1482,9 @@ mod object_cost_tests {
             0,
         );
 
-        let accumulated_debts = shared_object_congestion_tracker.accumulated_debts(Duration::ZERO);
+        let accumulated_debts = shared_object_congestion_tracker.accumulated_debts(
+            &ConsensusCommitInfo::new_for_congestion_test(0, 0, Duration::ZERO),
+        );
         assert!(accumulated_debts.is_empty());
     }
 
@@ -1486,8 +1525,7 @@ mod object_cost_tests {
                 &execution_time_estimator,
                 &tx,
                 &HashMap::new(),
-                0,
-                Duration::ZERO,
+                &ConsensusCommitInfo::new_for_congestion_test(0, 0, Duration::ZERO),
             )
             .is_none());
 
@@ -1496,7 +1534,9 @@ mod object_cost_tests {
         assert_eq!(300, shared_object_congestion_tracker.max_cost());
 
         // Verify accumulated debts still uses the per-commit budget to decrement.
-        let accumulated_debts = shared_object_congestion_tracker.accumulated_debts(Duration::ZERO);
+        let accumulated_debts = shared_object_congestion_tracker.accumulated_debts(
+            &ConsensusCommitInfo::new_for_congestion_test(0, 0, Duration::ZERO),
+        );
         assert_eq!(accumulated_debts.len(), 1);
         assert_eq!(accumulated_debts[0], (object_id_2, 200));
     }
