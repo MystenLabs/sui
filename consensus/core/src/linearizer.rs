@@ -967,8 +967,8 @@ mod tests {
     #[rstest]
     #[case(false, 5_000, 5_000, 6_000)]
     #[case(true, 2_500, 3_000, 6_000)]
-    #[test]
-    fn test_calculate_commit_timestamp(
+    #[tokio::test]
+    async fn test_calculate_commit_timestamp(
         #[case] consensus_median_timestamp: bool,
         #[case] timestamp_1: u64,
         #[case] timestamp_2: u64,
