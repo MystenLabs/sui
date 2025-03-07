@@ -1610,8 +1610,9 @@ impl SuiNode {
         // possible that it may temporarily "forget" about transactions that it had previously
         // executed. This could confuse clients in some circumstances. However, the transactions
         // are still in pending_consensus_certificates, so we cannot lose any finality guarantees.
+        let timeout = if cfg!(msim) { 120 } else { 60 };
         if tokio::time::timeout(
-            std::time::Duration::from_secs(60),
+            std::time::Duration::from_secs(timeout),
             state
                 .get_transaction_cache_reader()
                 .notify_read_executed_effects_digests(&digests),
