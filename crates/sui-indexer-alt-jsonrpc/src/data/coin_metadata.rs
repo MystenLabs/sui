@@ -85,13 +85,7 @@ impl Loader<CoinMetadataKey> for PgReader {
             .filter(candidates!(package).eq(SUI_FRAMEWORK_ADDRESS.into_bytes()))
             .filter(candidates!(module).eq(COIN_MODULE_NAME.as_str()))
             .filter(candidates!(name).eq(COIN_METADATA_STRUCT_NAME.as_str()))
-            .filter(candidates!(instantiation).eq_any(&instantiations))
-            .order_by(candidates!(package))
-            .then_order_by(candidates!(module))
-            .then_order_by(candidates!(name))
-            .then_order_by(candidates!(instantiation))
-            .then_order_by(candidates!(cp_sequence_number).desc())
-            .then_order_by(candidates!(object_id).desc());
+            .filter(candidates!(instantiation).eq_any(&instantiations));
 
         let obj_info: Vec<StoredObjInfo> = conn.results(query).await.map_err(Arc::new)?;
         let instantiations_to_stored: HashMap<_, _> = obj_info
