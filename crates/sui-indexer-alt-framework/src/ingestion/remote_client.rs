@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::ingestion::client::{FetchError, FetchResult, IngestionClientTrait};
+use crate::ingestion::client::{FetchData, FetchError, FetchResult, IngestionClientTrait};
 use crate::ingestion::Result as IngestionResult;
 use reqwest::{Client, StatusCode};
 use tracing::{debug, error};
@@ -65,10 +65,14 @@ impl IngestionClientTrait for RemoteIngestionClient {
                 // checkpoint from them is considered a transient error -- the store being
                 // fetched from needs to be corrected, and ingestion will keep retrying it
                 // until it is.
-                response.bytes().await.map_err(|e| FetchError::Transient {
-                    reason: "bytes",
-                    error: e.into(),
-                })
+                response
+                    .bytes()
+                    .await
+                    .map_err(|e| FetchError::Transient {
+                        reason: "bytes",
+                        error: e.into(),
+                    })
+                    .map(FetchData::Raw)
             }
 
             // Treat 404s as a special case so we can match on this error type.
