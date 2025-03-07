@@ -29,9 +29,10 @@ struct Params {
 impl Params {
     // Get the target budget per commit. Over the long term, the scheduler will try to
     // schedule no more than this much work per object per commit on average.
-    pub fn commit_budget(&self, estimated_commit_period: Duration) -> u64 {
+    pub fn commit_budget(&self, commit_info: &ConsensusCommitInfo) -> u64 {
         match self.mode {
             PerObjectCongestionControlMode::ExecutionTimeEstimate(params) => {
+                let estimated_commit_period = commit_info.estimated_commit_period();
                 let commit_period_micros = estimated_commit_period.as_micros() as u64;
                 commit_period_micros
                     .checked_mul(params.target_utilization)
@@ -229,7 +230,6 @@ impl SharedObjectCongestionTracker {
         commit_info: &ConsensusCommitInfo,
     ) -> Option<(DeferralKey, Vec<ObjectID>)> {
         let commit_round = commit_info.round;
-        let estimated_commit_period = commit_info.estimated_commit_period();
 
         let tx_cost = self.get_tx_cost(execution_time_estimator, cert)?;
 
@@ -241,7 +241,7 @@ impl SharedObjectCongestionTracker {
         let start_cost = self.compute_tx_start_at_cost(&shared_input_objects);
         let end_cost = start_cost.saturating_add(tx_cost);
 
-        let budget = self.params.commit_budget(estimated_commit_period);
+        let budget = self.params.commit_budget(commit_info);
 
         // Allow tx if it's within configured limits.
         let burst_limit = budget.saturating_add(self.params.max_burst());
@@ -314,7 +314,6 @@ impl SharedObjectCongestionTracker {
     // of the commit. Consumes the tracker object, since this should only be called once after
     // all tx have been processed.
     pub fn accumulated_debts(self, commit_info: &ConsensusCommitInfo) -> Vec<(ObjectID, u64)> {
-        let commit_period = commit_info.estimated_commit_period();
         if self.params.max_overage() == 0 {
             return vec![]; // early-exit if overage is not allowed
         }
@@ -322,7 +321,7 @@ impl SharedObjectCongestionTracker {
         self.object_execution_cost
             .into_iter()
             .filter_map(|(obj_id, cost)| {
-                let remaining_cost = cost.saturating_sub(self.params.commit_budget(commit_period));
+                let remaining_cost = cost.saturating_sub(self.params.commit_budget(commit_info));
                 if remaining_cost > 0 {
                     Some((obj_id, remaining_cost))
                 } else {
@@ -777,7 +776,11 @@ mod object_cost_tests {
             &execution_time_estimator,
             &tx,
             &previously_deferred_tx_digests,
-            &ConsensusCommitInfo::new_for_congestion_test(0, 0, Duration::from_micros(10_000_000)),
+            &ConsensusCommitInfo::new_for_congestion_test(
+                10,
+                10,
+                Duration::from_micros(10_000_000),
+            ),
         ) {
             assert_eq!(future_round, 11);
             assert_eq!(deferred_from_round, 10);
