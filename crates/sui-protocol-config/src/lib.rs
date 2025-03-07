@@ -669,7 +669,9 @@ pub struct ExecutionTimeEstimateParams {
     // targeted per-object utilization as an integer percentage (1-100)
     pub target_utilization: u64,
     // Schedule up to this much extra work (in microseconds) per object,
-    // but don't allow the running debt to exceed this limit.
+    // but don't allow the running debt to exceed this limit (unless we
+    // are scheduling a single very large transaction, in which case the
+    // absolute limit will be used).
     pub allowed_txn_cost_overage_burst_limit_us: u64,
     // absolute limit of how much estimated work to schedule in a commit,
     // even if it all comes from a single transaction

@@ -29,7 +29,7 @@ struct Params {
 impl Params {
     // Get the target budget per commit. Over the long term, the scheduler will try to
     // schedule no more than this much work per object per commit on average.
-    pub fn target_budget_per_commit(&self, estimated_commit_period: Duration) -> u64 {
+    pub fn commit_budget(&self, estimated_commit_period: Duration) -> u64 {
         match self.mode {
             PerObjectCongestionControlMode::ExecutionTimeEstimate(params) => {
                 let commit_period_micros = estimated_commit_period.as_micros() as u64;
@@ -44,7 +44,7 @@ impl Params {
 
     // The amount scheduled in a commit can "burst" up to this much over the target budget.
     // The per-object debt limit will enforce the average limit over time.
-    pub fn max_burst_budget(&self) -> u64 {
+    pub fn max_burst(&self) -> u64 {
         match self.mode {
             PerObjectCongestionControlMode::ExecutionTimeEstimate(params) => {
                 params.allowed_txn_cost_overage_burst_limit_us
@@ -56,7 +56,7 @@ impl Params {
     // The absolute maximum to schedule per commit, even for a single transaction.
     // This should normally be very high, otherwise some transactions could be
     // unschedulable regardless of congestion.
-    pub fn per_commit_hard_limit(&self) -> u64 {
+    pub fn max_overage(&self) -> u64 {
         match self.mode {
             PerObjectCongestionControlMode::ExecutionTimeEstimate(params) => {
                 params.max_txn_cost_overage_per_object_in_commit_us
@@ -241,17 +241,11 @@ impl SharedObjectCongestionTracker {
         let start_cost = self.compute_tx_start_at_cost(&shared_input_objects);
         let end_cost = start_cost.saturating_add(tx_cost);
 
-        let target_budget_per_commit = self
-            .params
-            .target_budget_per_commit(estimated_commit_period);
-
-        let max_burst_budget = self.params.max_burst_budget();
-
-        let per_commit_hard_limit = self.params.per_commit_hard_limit();
+        let budget = self.params.commit_budget(estimated_commit_period);
 
         // Allow tx if it's within configured limits.
-        let burst_limit = target_budget_per_commit.saturating_add(max_burst_budget);
-        let absolute_limit = target_budget_per_commit.saturating_add(per_commit_hard_limit);
+        let burst_limit = budget.saturating_add(self.params.max_burst());
+        let absolute_limit = budget.saturating_add(self.params.max_overage());
 
         if start_cost <= burst_limit && end_cost <= absolute_limit {
             return None;
@@ -321,15 +315,14 @@ impl SharedObjectCongestionTracker {
     // all tx have been processed.
     pub fn accumulated_debts(self, commit_info: &ConsensusCommitInfo) -> Vec<(ObjectID, u64)> {
         let commit_period = commit_info.estimated_commit_period();
-        if self.params.per_commit_hard_limit() == 0 {
+        if self.params.max_overage() == 0 {
             return vec![]; // early-exit if overage is not allowed
         }
 
         self.object_execution_cost
             .into_iter()
             .filter_map(|(obj_id, cost)| {
-                let remaining_cost =
-                    cost.saturating_sub(self.params.target_budget_per_commit(commit_period));
+                let remaining_cost = cost.saturating_sub(self.params.commit_budget(commit_period));
                 if remaining_cost > 0 {
                     Some((obj_id, remaining_cost))
                 } else {
