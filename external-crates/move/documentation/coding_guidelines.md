@@ -138,7 +138,7 @@ Make sure to use the appropriate attributes for handling dead code:
 
 ### Avoid Deref polymorphism
 
-Don't abuse the Deref trait to emulate inheritance between structs, and thus reuse methods.  For more information, read [here](https://github.com/rust-unofficial/patterns/blob/master/anti_patterns/deref.md).
+Don't abuse the Deref trait to emulate inheritance between structs, and thus reuse methods.  For more information, read [here](https://github.com/rust-unofficial/patterns/blob/main/src/anti_patterns/deref.md).
 
 ### Comments
 

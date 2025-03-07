@@ -21,6 +21,7 @@ use sui_types::crypto::{
 };
 use sui_types::effects::TransactionEvents;
 use sui_types::event::Event;
+use sui_types::execution::ExecutionTimeObservationKey;
 use sui_types::execution_status::{
     CommandArgumentError, ExecutionFailureStatus, ExecutionStatus, PackageUpgradeError,
     TypeArgumentError,
@@ -31,7 +32,9 @@ use sui_types::messages_consensus::ConsensusDeterminedVersionAssignments;
 use sui_types::messages_grpc::ObjectInfoRequestKind;
 use sui_types::move_package::TypeOrigin;
 use sui_types::object::Object;
-use sui_types::transaction::{GenesisObject, SenderSignedData, TransactionData};
+use sui_types::transaction::{
+    GenesisObject, SenderSignedData, StoredExecutionTimeObservations, TransactionData,
+};
 use sui_types::type_input::{StructInput, TypeInput};
 use sui_types::{
     base_types::MoveObjectType_,
@@ -221,6 +224,12 @@ fn get_registry() -> Result<Registry> {
     tracer.trace_type::<PackageUpgradeError>(&samples).unwrap();
     tracer
         .trace_type::<TransactionExpiration>(&samples)
+        .unwrap();
+    tracer
+        .trace_type::<ExecutionTimeObservationKey>(&samples)
+        .unwrap();
+    tracer
+        .trace_type::<StoredExecutionTimeObservations>(&samples)
         .unwrap();
     tracer
         .trace_type::<EndOfEpochTransactionKind>(&samples)

@@ -33,7 +33,7 @@ module Test::M1 {
 
 //# create-checkpoint
 
-//# run-graphql --cursors @{obj_2_0} @{obj_3_0}
+//# run-graphql --cursors bcs(@{obj_2_0},@{highest_checkpoint}) bcs(@{obj_3_0},@{highest_checkpoint})
 {
   one_of_these_will_yield_an_object: address(address: "@{A}") {
     objects(filter: {type: "@{Test}"}, after: "@{cursor_0}") {
@@ -69,7 +69,7 @@ module Test::M1 {
 
 //# create-checkpoint
 
-//# run-graphql --cursors @{obj_2_0,1} @{obj_3_0,1}
+//# run-graphql --cursors bcs(@{obj_2_0},1) bcs(@{obj_3_0},1)
 {
   paginating_on_checkpoint_1: address(address: "@{A}") {
     objects(filter: {type: "@{Test}"}, after: "@{cursor_0}") {
@@ -148,7 +148,7 @@ module Test::M1 {
 
 //# create-checkpoint
 
-//# run-graphql --cursors @{obj_6_0,2}
+//# run-graphql --cursors bcs(@{obj_6_0},2)
 {
   after_obj_6_0_at_checkpoint_2: address(address: "@{A}") {
     objects(filter: {type: "@{Test}"}, after: "@{cursor_0}") {
@@ -228,7 +228,7 @@ module Test::M1 {
 
 //# create-checkpoint
 
-//# run-graphql --cursors @{obj_6_0,2}
+//# run-graphql --cursors bcs(@{obj_6_0},2)
 # This query will error due to requesting data outside of available range
 {
   availableRange {

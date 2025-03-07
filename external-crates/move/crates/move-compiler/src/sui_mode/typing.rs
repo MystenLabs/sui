@@ -109,7 +109,7 @@ const OTW_NOTE: &str = "One-time witness types are structs with the following re
 // Entry
 //**************************************************************************************************
 
-impl<'a> TypingVisitorContext for Context<'a> {
+impl TypingVisitorContext for Context<'_> {
     fn push_warning_filter_scope(&mut self, filters: WarningFilters) {
         self.reporter.push_warning_filter_scope(filters)
     }

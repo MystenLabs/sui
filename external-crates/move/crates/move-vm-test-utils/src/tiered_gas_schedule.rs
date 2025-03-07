@@ -647,7 +647,7 @@ impl<'b> GasMeter for GasStatus<'b> {
     ) -> PartialVMResult<()> {
         // We will perform `num_args` number of pops.
         let num_args = args.len() as u64;
-        // The amount of data on the stack stays contstant except we have some extra metadata for
+        // The amount of data on the stack stays constant except we have some extra metadata for
         // the vector to hold the length of the vector.
         self.charge(1, 1, num_args, VEC_SIZE.into(), 0)
     }

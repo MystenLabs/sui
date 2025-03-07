@@ -106,8 +106,7 @@ pub async fn execute_certificate_with_execution_error(
                     &vec![VerifiedExecutableTransaction::new_from_certificate(
                         certificate.clone(),
                     )],
-                )
-                .await?;
+                )?;
         }
         if let Some(fullnode) = fullnode {
             fullnode
@@ -117,8 +116,7 @@ pub async fn execute_certificate_with_execution_error(
                     &vec![VerifiedExecutableTransaction::new_from_certificate(
                         certificate.clone(),
                     )],
-                )
-                .await?;
+                )?;
         }
     }
 
@@ -128,7 +126,7 @@ pub async fn execute_certificate_with_execution_error(
     let state_after =
         state_acc.accumulate_cached_live_object_set_for_testing(include_wrapped_tombstone);
     let effects_acc = state_acc.accumulate_effects(
-        vec![result.inner().data().clone()],
+        &[result.inner().data().clone()],
         epoch_store.protocol_config(),
     );
     state.union(&effects_acc);
@@ -405,6 +403,7 @@ pub async fn send_consensus(authority: &AuthorityState, cert: &VerifiedCertifica
             vec![transaction],
             &Arc::new(CheckpointServiceNoop {}),
             authority.get_object_cache_reader().as_ref(),
+            authority.get_transaction_cache_reader().as_ref(),
             &authority.metrics,
             true,
         )
@@ -429,6 +428,7 @@ pub async fn send_consensus_no_execution(authority: &AuthorityState, cert: &Veri
             vec![transaction],
             &Arc::new(CheckpointServiceNoop {}),
             authority.get_object_cache_reader().as_ref(),
+            authority.get_transaction_cache_reader().as_ref(),
             &authority.metrics,
             true,
         )
@@ -459,6 +459,7 @@ pub async fn send_batch_consensus_no_execution(
             transactions,
             &Arc::new(CheckpointServiceNoop {}),
             authority.get_object_cache_reader().as_ref(),
+            authority.get_transaction_cache_reader().as_ref(),
             &authority.metrics,
             skip_consensus_commit_prologue_in_test,
         )

@@ -162,7 +162,7 @@ impl<'a, T> Permit<'a, T> {
     }
 }
 
-impl<'a, T> Drop for Permit<'a, T> {
+impl<T> Drop for Permit<'_, T> {
     fn drop(&mut self) {
         // in the case the permit is dropped without sending, we still want to decrease the occupancy of the channel
         if self.permit.is_some() {
@@ -253,11 +253,10 @@ impl<T> Sender<T> {
 }
 
 ////////////////////////////////
-/// Stream API Wrappers!
+// Stream API Wrappers!
 ////////////////////////////////
 
 /// A wrapper around [`crate::metered_channel::Receiver`] that implements [`Stream`].
-///
 #[derive(Debug)]
 pub struct ReceiverStream<T> {
     inner: Receiver<T>,
@@ -313,7 +312,7 @@ impl<T> From<Receiver<T>> for ReceiverStream<T> {
 // TODO: add prom metrics reporting for gauge and migrate all existing use cases.
 
 ////////////////////////////////////////////////////////////////
-/// Constructor
+// Constructor
 ////////////////////////////////////////////////////////////////
 
 /// Similar to `mpsc::channel`, `channel` creates a pair of `Sender` and `Receiver`

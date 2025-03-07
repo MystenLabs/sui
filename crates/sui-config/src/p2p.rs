@@ -40,7 +40,7 @@ pub struct P2pConfig {
 }
 
 fn default_listen_address() -> SocketAddr {
-    "0.0.0.0:8080".parse().unwrap()
+    "0.0.0.0:8084".parse().unwrap()
 }
 
 impl Default for P2pConfig {

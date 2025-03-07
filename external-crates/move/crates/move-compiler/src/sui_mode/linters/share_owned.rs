@@ -115,7 +115,7 @@ impl SimpleAbsIntConstructor for ShareOwnedVerifier {
     }
 }
 
-impl<'a> SimpleAbsInt for ShareOwnedVerifierAI<'a> {
+impl SimpleAbsInt for ShareOwnedVerifierAI<'_> {
     type State = State;
     type ExecutionContext = ExecutionContext;
 

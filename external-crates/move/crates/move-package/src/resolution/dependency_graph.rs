@@ -4,7 +4,7 @@
 use anyhow::{bail, Context, Result};
 use colored::Colorize;
 use move_symbol_pool::Symbol;
-use petgraph::{algo, prelude::DiGraphMap, Direction};
+use petgraph::{algo, prelude::DiGraphMap, visit::Dfs, Direction};
 
 use std::io::BufRead;
 use std::{
@@ -181,7 +181,7 @@ pub enum DependencyMode {
 }
 
 /// Wrapper struct to display a package as an inline table in the lock file (matching the
-/// convention in the source manifest).  This is necessary becase the `toml` crate does not
+/// convention in the source manifest).  This is necessary because the `toml` crate does not
 /// currently support serializing types as inline tables.
 struct PackageTOML<'a>(&'a Package);
 struct PackageWithResolverTOML<'a>(&'a Package);
@@ -1556,6 +1556,17 @@ impl DependencyGraph {
             );
         }
     }
+
+    /// Add all transitive dependencies of `start` node to a mutable `list`. Note that this keeps
+    /// the initial start node in the list.
+    pub fn add_transitive_dependencies(&self, start: &Symbol, list: &mut BTreeSet<Symbol>) {
+        let mut dfs = Dfs::new(&self.package_graph, *start);
+
+        // Visit all reachable nodes
+        while let Some(n) = dfs.next(&self.package_graph) {
+            list.insert(n);
+        }
+    }
 }
 
 impl fmt::Display for Package {
@@ -1591,7 +1602,7 @@ impl fmt::Display for Package {
     }
 }
 
-impl<'a> fmt::Display for PackageTOML<'a> {
+impl fmt::Display for PackageTOML<'_> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.write_str("{ ")?;
         write!(f, "{}", self.0)?;
@@ -1600,7 +1611,7 @@ impl<'a> fmt::Display for PackageTOML<'a> {
     }
 }
 
-impl<'a> fmt::Display for PackageWithResolverTOML<'a> {
+impl fmt::Display for PackageWithResolverTOML<'_> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         PackageTOML(self.0).fmt(f)?;
 
@@ -1612,7 +1623,7 @@ impl<'a> fmt::Display for PackageWithResolverTOML<'a> {
     }
 }
 
-impl<'a> fmt::Display for DependencyTOML<'a> {
+impl fmt::Display for DependencyTOML<'_> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let DependencyTOML(
             id,
@@ -1647,7 +1658,7 @@ impl<'a> fmt::Display for DependencyTOML<'a> {
     }
 }
 
-impl<'a> fmt::Display for SubstTOML<'a> {
+impl fmt::Display for SubstTOML<'_> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         /// Write an individual key value pair in the substitution.
         fn write_subst(

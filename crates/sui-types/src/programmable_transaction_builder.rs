@@ -257,6 +257,24 @@ impl ProgrammableTransactionBuilder {
         self.pay_impl(recipients, amounts, Argument::GasCoin)
     }
 
+    pub fn split_coin(&mut self, recipient: SuiAddress, coin: ObjectRef, amounts: Vec<u64>) {
+        let coin_arg = self.obj(ObjectArg::ImmOrOwnedObject(coin)).unwrap();
+        let amounts_len = amounts.len();
+        let amt_args = amounts.into_iter().map(|a| self.pure(a).unwrap()).collect();
+        let result = self.command(Command::SplitCoins(coin_arg, amt_args));
+        let Argument::Result(result) = result else {
+            panic!("self.command should always give a Argument::Result");
+        };
+
+        let recipient = self.pure(recipient).unwrap();
+        self.command(Command::TransferObjects(
+            (0..amounts_len)
+                .map(|i| Argument::NestedResult(result, i as u16))
+                .collect(),
+            recipient,
+        ));
+    }
+
     /// Will fail to generate if recipients and amounts do not have the same lengths.
     /// Or if coins is empty
     pub fn pay(

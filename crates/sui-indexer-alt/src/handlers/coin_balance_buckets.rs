@@ -6,18 +6,20 @@ use std::{collections::BTreeMap, sync::Arc};
 use anyhow::{anyhow, bail, Result};
 use diesel::sql_query;
 use diesel_async::RunQueryDsl;
-use sui_field_count::FieldCount;
-use sui_indexer_alt_framework::pipeline::{concurrent::Handler, Processor};
+use sui_indexer_alt_framework::{
+    db,
+    pipeline::{concurrent::Handler, Processor},
+    types::{
+        base_types::{ObjectID, SuiAddress},
+        full_checkpoint_content::CheckpointData,
+        object::{Object, Owner},
+        TypeTag,
+    },
+    FieldCount,
+};
 use sui_indexer_alt_schema::{
     objects::{StoredCoinBalanceBucket, StoredCoinOwnerKind},
     schema::coin_balance_buckets,
-};
-use sui_pg_db as db;
-use sui_types::{
-    base_types::{ObjectID, SuiAddress},
-    full_checkpoint_content::CheckpointData,
-    object::{Object, Owner},
-    TypeTag,
 };
 
 use crate::consistent_pruning::{PruningInfo, PruningLookupTable};
@@ -202,15 +204,24 @@ impl Handler for CoinBalanceBuckets {
             .join(",");
         let query = format!(
             "
-            WITH to_prune_data (object_id, cp_sequence_number_exclusive) AS (
+            WITH modifications(object_id, cp_sequence_number) AS (
                 VALUES {}
             )
-            DELETE FROM coin_balance_buckets
-            USING to_prune_data
-            WHERE coin_balance_buckets.{:?} = to_prune_data.object_id
-              AND coin_balance_buckets.{:?} < to_prune_data.cp_sequence_number_exclusive
+            DELETE FROM coin_balance_buckets cbo
+            USING modifications m
+            WHERE cbo.{:?} = m.object_id
+              AND cbo.{:?} = (
+                SELECT cbo2.cp_sequence_number
+                FROM coin_balance_buckets cbo2
+                WHERE cbo2.{:?} = m.object_id
+                  AND cbo2.{:?} < m.cp_sequence_number
+                ORDER BY cbo2.cp_sequence_number DESC
+                LIMIT 1
+              )
             ",
             values,
+            dsl::object_id,
+            dsl::cp_sequence_number,
             dsl::object_id,
             dsl::cp_sequence_number,
         );
@@ -290,14 +301,18 @@ mod tests {
 
     use super::*;
     use diesel::QueryDsl;
-    use sui_indexer_alt_framework::Indexer;
+    use sui_indexer_alt_framework::{
+        types::{
+            base_types::{dbg_addr, MoveObjectType, ObjectID, SequenceNumber, SuiAddress},
+            digests::TransactionDigest,
+            gas_coin::GAS,
+            object::{Authenticator, MoveObject, Object},
+            test_checkpoint_data_builder::TestCheckpointDataBuilder,
+        },
+        Indexer,
+    };
     use sui_indexer_alt_schema::MIGRATIONS;
     use sui_protocol_config::ProtocolConfig;
-    use sui_types::base_types::{dbg_addr, MoveObjectType, ObjectID, SequenceNumber, SuiAddress};
-    use sui_types::digests::TransactionDigest;
-    use sui_types::gas_coin::GAS;
-    use sui_types::object::{Authenticator, MoveObject, Object};
-    use sui_types::test_checkpoint_data_builder::TestCheckpointDataBuilder;
 
     // Get all balance buckets from the database, sorted by object_id and cp_sequence_number.
     async fn get_all_balance_buckets(

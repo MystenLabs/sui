@@ -1,16 +1,19 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use anyhow::Context as _;
+use std::{collections::BTreeMap, fmt::Write};
+
+use anyhow::{bail, Context as _};
 use futures::future::OptionFuture;
-use move_core_types::annotated_value::MoveTypeLayout;
+use move_core_types::{annotated_value::MoveTypeLayout, language_storage::StructTag};
+use sui_display::v1::Format;
 use sui_json_rpc_types::{
-    SuiData, SuiObjectData, SuiObjectDataOptions, SuiObjectRef, SuiObjectResponse, SuiParsedData,
-    SuiPastObjectResponse, SuiRawData,
+    DisplayFieldsResponse, SuiData, SuiObjectData, SuiObjectDataOptions, SuiObjectResponse,
+    SuiParsedData, SuiPastObjectResponse, SuiRawData,
 };
 use sui_types::{
     base_types::{ObjectID, ObjectType, SequenceNumber},
-    digests::ObjectDigest,
+    display::DisplayVersionUpdatedEvent,
     error::SuiObjectResponseError,
     object::{Data, Object},
     TypeTag,
@@ -19,11 +22,8 @@ use tokio::join;
 
 use crate::{
     context::Context,
-    data::{
-        object_info::LatestObjectInfoKey,
-        objects::{load_latest, VersionedObjectKey},
-    },
-    error::{internal_error, rpc_bail, RpcError},
+    data::{displays::DisplayKey, object_info::LatestObjectInfoKey, objects::load_latest},
+    error::{rpc_bail, InternalContext, RpcError},
 };
 
 /// Fetch the necessary data from the stores in `ctx` and transform it to build a response for a
@@ -34,7 +34,7 @@ pub(super) async fn live_object(
     options: &SuiObjectDataOptions,
 ) -> Result<SuiObjectResponse, RpcError> {
     let Some(info) = ctx
-        .loader()
+        .pg_loader()
         .load_one(LatestObjectInfoKey(object_id))
         .await
         .context("Failed to load object ownership information from store")?
@@ -54,23 +54,28 @@ pub(super) async fn live_object(
         ));
     }
 
+    latest_object(ctx, object_id, options).await
+}
+
+/// Assuming the latest version of this object exists, fetch it from the database and convert it
+/// into a response. This is intended to be used after checking with `obj_info` that the object is
+/// live.
+pub(super) async fn latest_object(
+    ctx: &Context,
+    object_id: ObjectID,
+    options: &SuiObjectDataOptions,
+) -> Result<SuiObjectResponse, RpcError> {
     // The fact that we found an `obj_info` record above means that the latest version of the
     // object does exist, so the following calls should find a valid latest version for the object,
     // and that version is expected to have content, so if either of those things don't happen,
     // it's an internal error.
-    let stored = load_latest(ctx.loader(), object_id)
+    let object = load_latest(ctx, object_id)
         .await
         .context("Failed to load latest object")?
-        .ok_or_else(|| internal_error!("Could not find latest content for live object"))?;
-
-    let Some(bytes) = &stored.serialized_object else {
-        rpc_bail!("No content found for live object")
-    };
-
-    let version = SequenceNumber::from_u64(stored.object_version as u64);
+        .context("Could not find latest content for live object")?;
 
     Ok(SuiObjectResponse::new_with_data(
-        object(ctx, object_id, version, bytes, options).await?,
+        object_data_with_options(ctx, object, options).await?,
     ))
 }
 
@@ -82,43 +87,34 @@ pub(super) async fn past_object(
     version: SequenceNumber,
     options: &SuiObjectDataOptions,
 ) -> Result<SuiPastObjectResponse, RpcError> {
-    let Some(stored) = ctx
-        .loader()
-        .load_one(VersionedObjectKey(object_id, version.value()))
+    let Some(object) = ctx
+        .kv_loader()
+        .load_one_object(object_id, version.value())
         .await
         .context("Failed to load object from store")?
     else {
         return Ok(SuiPastObjectResponse::VersionNotFound(object_id, version));
     };
 
-    let Some(bytes) = &stored.serialized_object else {
-        return Ok(SuiPastObjectResponse::ObjectDeleted(SuiObjectRef {
-            object_id,
-            version,
-            digest: ObjectDigest::OBJECT_DIGEST_DELETED,
-        }));
-    };
-
     Ok(SuiPastObjectResponse::VersionFound(
-        object(ctx, object_id, version, bytes, options).await?,
+        object_data_with_options(ctx, object, options).await?,
     ))
 }
 
-/// Extract a representation of the object from its stored form, according to its response options.
-async fn object(
+/// Extract a representation of the object according to its response options.
+pub(crate) async fn object_data_with_options(
     ctx: &Context,
-    object_id: ObjectID,
-    version: SequenceNumber,
-    bytes: &[u8],
+    object: Object,
     options: &SuiObjectDataOptions,
 ) -> Result<SuiObjectData, RpcError> {
-    let object: Object = bcs::from_bytes(bytes).context("Failed to deserialize object")?;
-
     let type_ = options.show_type.then(|| ObjectType::from(&object));
+
     let owner = options.show_owner.then(|| object.owner().clone());
+
     let previous_transaction = options
         .show_previous_transaction
         .then(|| object.previous_transaction);
+
     let storage_rebate = options.show_storage_rebate.then(|| object.storage_rebate);
 
     let content: OptionFuture<_> = options
@@ -131,25 +127,27 @@ async fn object(
         .then(|| object_data::<SuiRawData>(ctx, &object))
         .into();
 
-    let (content, bcs) = join!(content, bcs);
+    let display: OptionFuture<_> = options.show_display.then(|| display(ctx, &object)).into();
+
+    let (content, bcs, display) = join!(content, bcs, display);
 
     let content = content
         .transpose()
-        .context("Failed to deserialize object content")?;
+        .internal_context("Failed to deserialize object content")?;
 
     let bcs = bcs
         .transpose()
-        .context("Failed to deserialize object to BCS")?;
+        .internal_context("Failed to deserialize object to BCS")?;
 
     Ok(SuiObjectData {
-        object_id,
-        version,
+        object_id: object.id(),
+        version: object.version(),
         digest: object.digest(),
         type_,
         owner,
         previous_transaction,
         storage_rebate,
-        display: None,
+        display,
         content,
         bcs,
     })
@@ -183,4 +181,83 @@ async fn object_data<D: SuiData>(ctx: &Context, object: &Object) -> Result<D, Rp
             D::try_from_object(move_object, *layout)?
         }
     })
+}
+
+/// Creates a response containing an object's Display fields. If this operation fails for any
+/// reason, the value is captured in the response's error field, rather than using a `Result`, so
+/// that the failure to generate a Display does not prevent the rest of the object's data from
+/// being returned.
+async fn display(ctx: &Context, object: &Object) -> DisplayFieldsResponse {
+    let fields = match display_fields(ctx, object).await {
+        Ok(fields) => fields,
+        Err(e) => {
+            return DisplayFieldsResponse {
+                data: None,
+                error: Some(SuiObjectResponseError::DisplayError {
+                    error: format!("{e:#}"),
+                }),
+            }
+        }
+    };
+
+    let mut field_values = BTreeMap::new();
+    let mut field_errors = String::new();
+    let mut prefix = "";
+
+    for (name, value) in fields {
+        match value {
+            Ok(value) => {
+                field_values.insert(name, value);
+            }
+            Err(e) => {
+                write!(field_errors, "{prefix}Error for field {name:?}: {e:#}").unwrap();
+                prefix = "; ";
+            }
+        }
+    }
+
+    DisplayFieldsResponse {
+        data: Some(field_values),
+        error: (!field_errors.is_empty()).then_some(SuiObjectResponseError::DisplayError {
+            error: field_errors,
+        }),
+    }
+}
+
+/// Generate the Display fields for an object by fetching its latest Display format, parsing it,
+/// and extracting values from the object's contents according to expressions in each field's
+/// format string.
+///
+/// This operation can fail if the object is not a Move object, the Display format is not found, or
+/// one of its fields fails to parse as a valid format string. Generating each field can also fail
+/// if a field is nested too deeply, is not present, or has an invalid type for a format string.
+async fn display_fields(
+    ctx: &Context,
+    object: &Object,
+) -> anyhow::Result<BTreeMap<String, anyhow::Result<String>>> {
+    let Some(object) = object.data.try_as_move() else {
+        bail!("Display is only supported for Move objects");
+    };
+
+    let config = &ctx.config().objects;
+    let type_: StructTag = object.type_().clone().into();
+
+    let layout = ctx.package_resolver().type_layout(type_.clone().into());
+    let display = ctx.pg_loader().load_one(DisplayKey(type_.clone()));
+
+    let (layout, display) = join!(layout, display);
+
+    let layout = layout.context("Failed to resolve type layout")?;
+    let Some(stored) = display.context("Failed to load Display format")? else {
+        bail!(
+            "Display format not found for {}",
+            type_.to_canonical_display(/*with_prefix */ true)
+        );
+    };
+
+    let event: DisplayVersionUpdatedEvent =
+        bcs::from_bytes(&stored.display).context("Failed to deserialize Display format")?;
+
+    let format = Format::parse(config.max_display_field_depth, &event.fields)?;
+    format.display(config.max_display_output_size, object.contents(), &layout)
 }

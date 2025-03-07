@@ -248,8 +248,8 @@ pub fn run_test(path: &Path) -> datatest_stable::Result<()> {
     if let Some(suffix) = suffix {
         options.suffix(suffix);
     }
+    options.name(test_name);
     insta_assert! {
-        name: test_name,
         input_path: move_path,
         contents: rendered_diags,
         options: options,

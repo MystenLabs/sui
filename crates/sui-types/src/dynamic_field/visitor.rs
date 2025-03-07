@@ -55,7 +55,7 @@ impl FieldVisitor {
     }
 }
 
-impl<'b, 'l> Field<'b, 'l> {
+impl Field<'_, '_> {
     /// If this field is a dynamic field, returns its value's type. If it is a dynamic object
     /// field, it returns the ID of the object the value points to (which must be fetched to
     /// extract its type).

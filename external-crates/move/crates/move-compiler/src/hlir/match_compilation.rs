@@ -366,7 +366,7 @@ struct ResolutionContext<'ctxt, 'call> {
     arms_loc: Loc,
 }
 
-impl<'ctxt, 'call> ResolutionContext<'ctxt, 'call> {
+impl ResolutionContext<'_, '_> {
     fn arm(&self, index: usize) -> T::Exp {
         self.arms[index].clone()
     }

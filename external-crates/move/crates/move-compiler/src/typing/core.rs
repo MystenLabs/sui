@@ -935,6 +935,12 @@ impl MacroExpansion {
     }
 }
 
+impl Default for TVarCounter {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl TVarCounter {
     pub fn new() -> Self {
         TVarCounter { next: 0 }

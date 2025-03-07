@@ -172,7 +172,7 @@ impl ExecutionResultsV2 {
     }
 }
 
-#[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
+#[derive(Debug, PartialEq, Eq, Hash, PartialOrd, Ord, Clone, Serialize, Deserialize)]
 pub enum ExecutionTimeObservationKey {
     // Containts all the fields from `ProgrammableMoveCall` besides `arguments`.
     MoveEntryPoint {
@@ -183,6 +183,7 @@ pub enum ExecutionTimeObservationKey {
         /// The function to be called.
         function: String,
         /// The type arguments to the function.
+        /// NOTE: This field is currently not populated.
         type_arguments: Vec<TypeInput>,
     },
     TransferObjects,
@@ -232,23 +233,9 @@ impl ExecutionTimeObservationKey {
             Command::Upgrade(_, _, _, _) => ExecutionTimeObservationKey::Upgrade,
         }
     }
-
-    // Returns the default estimated execution duration for the given key, for use if no
-    // observations are available.
-    pub fn default_duration(&self) -> Duration {
-        match self {
-            ExecutionTimeObservationKey::MoveEntryPoint { .. } => Duration::from_millis(1_500),
-            ExecutionTimeObservationKey::TransferObjects => Duration::from_millis(1),
-            ExecutionTimeObservationKey::SplitCoins => Duration::from_millis(1),
-            ExecutionTimeObservationKey::MergeCoins => Duration::from_millis(1),
-            ExecutionTimeObservationKey::Publish => Duration::from_millis(1),
-            ExecutionTimeObservationKey::MakeMoveVec => Duration::from_millis(1),
-            ExecutionTimeObservationKey::Upgrade => Duration::from_millis(1),
-        }
-    }
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Clone, Copy, Debug, Serialize, Deserialize)]
 pub enum ExecutionTiming {
     Success(Duration),
     Abort(Duration),

@@ -18,7 +18,7 @@ use tracing::{info, warn};
 
 /// The minimum and maximum protocol versions supported by this build.
 const MIN_PROTOCOL_VERSION: u64 = 1;
-const MAX_PROTOCOL_VERSION: u64 = 74;
+const MAX_PROTOCOL_VERSION: u64 = 76;
 
 // Record history of protocol version allocations here:
 //
@@ -215,8 +215,12 @@ const MAX_PROTOCOL_VERSION: u64 = 74;
 //             Enable probing for accepted rounds in round prober in mainnet
 // Version 74: Enable load_nitro_attestation move function in sui framework in devnet.
 //             Enable all gas costs for load_nitro_attestation.
-//
-
+//             Enable zstd compression for consensus tonic network in mainnet.
+//             Enable the new commit rule for devnet.
+// Version 75: Enable passkey auth in testnet.
+// Version 76: Deprecate Deepbook V2 order placement and deposit.
+//             Removes unnecessary child object mutations
+//             Enable passkey auth in multisig for testnet.
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
 
@@ -444,6 +448,10 @@ struct FeatureFlags {
     #[serde(skip_serializing_if = "is_false")]
     accept_zklogin_in_multisig: bool,
 
+    // If true, multisig containing passkey sig is accepted.
+    #[serde(skip_serializing_if = "is_false")]
+    accept_passkey_in_multisig: bool,
+
     // If true, consensus prologue transaction also includes the consensus output digest.
     // It can be used to detect consensus output folk.
     #[serde(skip_serializing_if = "is_false")]
@@ -621,6 +629,14 @@ struct FeatureFlags {
     // If true, enable zstd compression for consensus tonic network.
     #[serde(skip_serializing_if = "is_false")]
     consensus_zstd_compression: bool,
+
+    // If true, enables the optimizations for child object mutations, removing unnecessary mutations
+    #[serde(skip_serializing_if = "is_false")]
+    minimize_child_object_mutations: bool,
+
+    // If true, record the additional state digest in the consensus commit prologue.
+    #[serde(skip_serializing_if = "is_false")]
+    record_additional_state_digest_in_prologue: bool,
 }
 
 fn is_false(b: &bool) -> bool {
@@ -963,13 +979,11 @@ pub struct ProtocolConfig {
     // Maximal nodes which are allowed when converting to a type layout.
     max_type_to_layout_nodes: Option<u64>,
 
-    /// === Gas version. gas model ===
-
+    // === Gas version. gas model ===
     /// Gas model version, what code we are using to charge gas
     gas_model_version: Option<u64>,
 
-    /// === Storage gas costs ===
-
+    // === Storage gas costs ===
     /// Per-byte cost of storing an object in the Sui global object store. Some of this cost may be refundable if the object is later freed
     obj_data_cost_refundable: Option<u64>,
 
@@ -978,7 +992,7 @@ pub struct ProtocolConfig {
     // TODO: Option<I don't fully understand this^ and more details would be useful
     obj_metadata_cost_non_refundable: Option<u64>,
 
-    /// === Tokenomics ===
+    // === Tokenomics ===
 
     // TODO: Option<this should be changed to u64.
     /// Sender of a txn that touches an object will get this percent of the storage rebate back.
@@ -996,8 +1010,7 @@ pub struct ProtocolConfig {
     /// Unit gas price, Mist per internal gas unit.
     storage_gas_price: Option<u64>,
 
-    /// === Core Protocol ===
-
+    // === Core Protocol ===
     /// Max number of transactions per checkpoint.
     /// Note that this is a protocol constant and not a config as validators must have this set to
     /// the same value, otherwise they *will* fork.
@@ -1291,8 +1304,7 @@ pub struct ProtocolConfig {
     // will cause the new epoch to start with JWKs from the previous epoch still valid.
     max_age_of_jwk_in_epochs: Option<u64>,
 
-    /// === random beacon ===
-
+    // === random beacon ===
     /// Maximum allowed precision loss when reducing voting weights for the random beacon
     /// protocol.
     random_beacon_reduction_allowed_delta: Option<u16>,
@@ -1384,6 +1396,9 @@ pub struct ProtocolConfig {
 
     /// Enables use of v2 of the object per-epoch marker table with FullObjectID keys.
     use_object_per_epoch_marker_table_v2: Option<bool>,
+
+    /// The number of commits to consider when computing a deterministic commit rate.
+    consensus_commit_rate_estimation_window_size: Option<u32>,
 }
 
 // feature flags
@@ -1596,6 +1611,10 @@ impl ProtocolConfig {
         self.feature_flags.accept_zklogin_in_multisig
     }
 
+    pub fn accept_passkey_in_multisig(&self) -> bool {
+        self.feature_flags.accept_passkey_in_multisig
+    }
+
     pub fn zklogin_max_epoch_upper_bound_delta(&self) -> Option<u64> {
         self.feature_flags.zklogin_max_epoch_upper_bound_delta
     }
@@ -1611,6 +1630,11 @@ impl ProtocolConfig {
     pub fn record_consensus_determined_version_assignments_in_prologue(&self) -> bool {
         self.feature_flags
             .record_consensus_determined_version_assignments_in_prologue
+    }
+
+    pub fn record_additional_state_digest_in_prologue(&self) -> bool {
+        self.feature_flags
+            .record_additional_state_digest_in_prologue
     }
 
     pub fn record_consensus_determined_version_assignments_in_prologue_v2(&self) -> bool {
@@ -1803,6 +1827,25 @@ impl ProtocolConfig {
     }
     pub fn enable_nitro_attestation(&self) -> bool {
         self.feature_flags.enable_nitro_attestation
+    }
+
+    pub fn get_consensus_commit_rate_estimation_window_size(&self) -> u32 {
+        self.consensus_commit_rate_estimation_window_size
+            .unwrap_or(0)
+    }
+
+    pub fn consensus_num_requested_prior_commits_at_startup(&self) -> u32 {
+        // Currently there is only one parameter driving this value. If there are multiple
+        // things computed from prior consensus commits, this function must return the max
+        // of all of them.
+        let window_size = self.get_consensus_commit_rate_estimation_window_size();
+        // Ensure we are not using past commits without recording a state digest in the prologue.
+        assert!(window_size == 0 || self.record_additional_state_digest_in_prologue());
+        window_size
+    }
+
+    pub fn minimize_child_object_mutations(&self) -> bool {
+        self.feature_flags.minimize_child_object_mutations
     }
 }
 
@@ -2346,6 +2389,8 @@ impl ProtocolConfig {
             sip_45_consensus_amplification_threshold: None,
 
             use_object_per_epoch_marker_table_v2: None,
+
+            consensus_commit_rate_estimation_window_size: None,
             // When adding a new constant, set it to None in the earliest version, like this:
             // new_constant: None,
         };
@@ -3233,10 +3278,33 @@ impl ProtocolConfig {
                     if chain != Chain::Mainnet && chain != Chain::Testnet {
                         cfg.feature_flags.enable_nitro_attestation = true;
                     }
-                    cfg.nitro_attestation_parse_base_cost = Some(53);
-                    cfg.nitro_attestation_parse_cost_per_byte = Some(1);
-                    cfg.nitro_attestation_verify_base_cost = Some(49632);
-                    cfg.nitro_attestation_verify_cost_per_cert = Some(52369);
+                    cfg.nitro_attestation_parse_base_cost = Some(53 * 50);
+                    cfg.nitro_attestation_parse_cost_per_byte = Some(50);
+                    cfg.nitro_attestation_verify_base_cost = Some(49632 * 50);
+                    cfg.nitro_attestation_verify_cost_per_cert = Some(52369 * 50);
+
+                    // Enable zstd compression for consensus in mainnet
+                    cfg.feature_flags.consensus_zstd_compression = true;
+
+                    if chain != Chain::Mainnet && chain != Chain::Testnet {
+                        cfg.feature_flags.consensus_linearize_subdag_v2 = true;
+                    }
+                }
+                75 => {
+                    if chain != Chain::Mainnet {
+                        cfg.feature_flags.passkey_auth = true;
+                    }
+                }
+                76 => {
+                    if chain != Chain::Mainnet && chain != Chain::Testnet {
+                        cfg.feature_flags.record_additional_state_digest_in_prologue = true;
+                        cfg.consensus_commit_rate_estimation_window_size = Some(10);
+                    }
+                    cfg.feature_flags.minimize_child_object_mutations = true;
+
+                    if chain != Chain::Mainnet {
+                        cfg.feature_flags.accept_passkey_in_multisig = true;
+                    }
                 }
                 // Use this template when making changes:
                 //
@@ -3412,6 +3480,14 @@ impl ProtocolConfig {
 
     pub fn set_consensus_linearize_subdag_v2_for_testing(&mut self, val: bool) {
         self.feature_flags.consensus_linearize_subdag_v2 = val;
+    }
+
+    pub fn set_mysticeti_fastpath_for_testing(&mut self, val: bool) {
+        self.feature_flags.mysticeti_fastpath = val;
+    }
+
+    pub fn set_accept_passkey_in_multisig_for_testing(&mut self, val: bool) {
+        self.feature_flags.accept_passkey_in_multisig = val;
     }
 }
 

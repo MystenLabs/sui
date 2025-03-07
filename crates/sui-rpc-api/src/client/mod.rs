@@ -4,20 +4,18 @@
 mod response_ext;
 pub use response_ext::ResponseExt;
 
-pub mod sdk;
-use sdk::BoxError;
-
-pub use reqwest;
 use tap::Pipe;
 use tonic::metadata::MetadataMap;
 
+use crate::field_mask::FieldMaskUtil;
 use crate::proto::node::v2::node_service_client::NodeServiceClient;
 use crate::proto::node::v2::{
-    ExecuteTransactionResponse, GetCheckpointResponse, GetFullCheckpointResponse, GetObjectResponse,
+    EffectsFinality, ExecuteTransactionResponse, GetCheckpointResponse, GetFullCheckpointResponse,
+    GetObjectResponse,
 };
 use crate::proto::types::Bcs;
 use crate::proto::TryFromProtoError;
-use crate::types::ExecuteTransactionOptions;
+use prost_types::FieldMask;
 use sui_types::base_types::{ObjectID, SequenceNumber};
 use sui_types::effects::{TransactionEffects, TransactionEvents};
 use sui_types::full_checkpoint_content::CheckpointData;
@@ -26,6 +24,7 @@ use sui_types::object::Object;
 use sui_types::transaction::Transaction;
 
 pub type Result<T, E = tonic::Status> = std::result::Result<T, E>;
+pub type BoxError = Box<dyn std::error::Error + Send + Sync + 'static>;
 
 use tonic::transport::channel::ClientTlsConfig;
 use tonic::Status;
@@ -95,13 +94,7 @@ impl Client {
         let request = crate::proto::node::v2::GetCheckpointRequest {
             sequence_number,
             digest: None,
-            options: Some(crate::proto::node::v2::GetCheckpointOptions {
-                summary: Some(false),
-                summary_bcs: Some(true),
-                signature: Some(true),
-                contents: Some(false),
-                contents_bcs: Some(false),
-            }),
+            read_mask: FieldMask::from_paths(["summary_bcs", "signature"]).pipe(Some),
         };
 
         let (
@@ -129,28 +122,22 @@ impl Client {
         let request = crate::proto::node::v2::GetFullCheckpointRequest {
             sequence_number: Some(sequence_number),
             digest: None,
-            options: Some(crate::proto::node::v2::GetFullCheckpointOptions {
-                summary: Some(false),
-                summary_bcs: Some(true),
-                signature: Some(true),
-                contents: Some(false),
-                contents_bcs: Some(true),
-                transaction: Some(false),
-                transaction_bcs: Some(true),
-                effects: Some(false),
-                effects_bcs: Some(true),
-                events: Some(false),
-                events_bcs: Some(true),
-                input_objects: Some(true),
-                output_objects: Some(true),
-                object: Some(false),
-                object_bcs: Some(true),
-            }),
+            read_mask: FieldMask::from_paths([
+                "summary_bcs",
+                "signature",
+                "contents_bcs",
+                "transactions.transaction_bcs",
+                "transactions.effects_bcs",
+                "transactions.events_bcs",
+                "transactions.input_objects.object_bcs",
+                "transactions.output_objects.object_bcs",
+            ])
+            .pipe(Some),
         };
 
         let (metadata, response, _extentions) = self
             .raw_client()
-            .max_decoding_message_size(64 * 1024 * 1024)
+            .max_decoding_message_size(128 * 1024 * 1024)
             .get_full_checkpoint(request)
             .await?
             .into_parts();
@@ -180,10 +167,7 @@ impl Client {
         let request = crate::proto::node::v2::GetObjectRequest {
             object_id: Some(sui_sdk_types::ObjectId::from(object_id).into()),
             version,
-            options: Some(crate::proto::node::v2::GetObjectOptions {
-                object: Some(false),
-                object_bcs: Some(true),
-            }),
+            read_mask: FieldMask::from_paths(["object_bcs"]).pipe(Some),
         };
 
         let (metadata, GetObjectResponse { object_bcs, .. }, _extentions) =
@@ -194,7 +178,6 @@ impl Client {
 
     pub async fn execute_transaction(
         &self,
-        parameters: &ExecuteTransactionOptions,
         transaction: &Transaction,
     ) -> Result<TransactionExecutionResponse> {
         let signatures = transaction
@@ -210,16 +193,15 @@ impl Client {
                 crate::proto::types::Bcs::serialize(&transaction.inner().intent_message.value)
                     .map_err(|e| Status::from_error(e.into()))?,
             ),
-            signatures: None,
-            signatures_bytes: Some(crate::proto::node::v2::UserSignaturesBytes { signatures }),
-
-            options: Some(crate::proto::node::v2::ExecuteTransactionOptions {
-                effects: Some(false),
-                effects_bcs: Some(true),
-                events: Some(false),
-                events_bcs: Some(true),
-                ..(parameters.to_owned().into())
-            }),
+            signatures: Vec::new(),
+            signatures_bytes: signatures,
+            read_mask: FieldMask::from_paths([
+                "finality",
+                "effects_bcs",
+                "events_bcs",
+                "balance_changes",
+            ])
+            .pipe(Some),
         };
 
         let (metadata, response, _extentions) = self
@@ -235,11 +217,11 @@ impl Client {
 
 #[derive(Debug)]
 pub struct TransactionExecutionResponse {
-    pub finality: crate::types::EffectsFinality,
+    pub finality: EffectsFinality,
 
     pub effects: TransactionEffects,
     pub events: Option<TransactionEvents>,
-    pub balance_changes: Option<Vec<sui_sdk_types::BalanceChange>>,
+    pub balance_changes: Vec<sui_sdk_types::BalanceChange>,
 }
 
 /// Attempts to parse `CertifiedCheckpointSummary` from the bcs fields in `GetCheckpointResponse`
@@ -317,15 +299,11 @@ fn checkpoint_data_try_from_proto(
                     .transpose()
                     .map_err(TryFromProtoError::from_error)?;
                 let input_objects = input_objects
-                    .ok_or_else(|| TryFromProtoError::missing("input_objects"))?
-                    .objects
                     .into_iter()
                     .map(|object| object_try_from_proto(object.object_bcs))
                     .collect::<Result<_, TryFromProtoError>>()?;
 
                 let output_objects = output_objects
-                    .ok_or_else(|| TryFromProtoError::missing("output_objects"))?
-                    .objects
                     .into_iter()
                     .map(|object| object_try_from_proto(object.object_bcs))
                     .collect::<Result<_, TryFromProtoError>>()?;
@@ -369,10 +347,7 @@ fn execute_transaction_response_try_from_proto(
         ..
     }: ExecuteTransactionResponse,
 ) -> Result<TransactionExecutionResponse, TryFromProtoError> {
-    let finality = finality
-        .as_ref()
-        .ok_or_else(|| TryFromProtoError::missing("finality"))?
-        .try_into()?;
+    let finality = finality.ok_or_else(|| TryFromProtoError::missing("finality"))?;
 
     let effects = effects_bcs
         .ok_or_else(|| TryFromProtoError::missing("effects_bcs"))?
@@ -384,14 +359,9 @@ fn execute_transaction_response_try_from_proto(
         .map_err(TryFromProtoError::from_error)?;
 
     let balance_changes = balance_changes
-        .map(|balance_changes| {
-            balance_changes
-                .balance_changes
-                .iter()
-                .map(TryInto::try_into)
-                .collect::<Result<_, _>>()
-        })
-        .transpose()?;
+        .iter()
+        .map(TryInto::try_into)
+        .collect::<Result<_, _>>()?;
 
     TransactionExecutionResponse {
         finality,

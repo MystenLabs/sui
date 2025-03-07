@@ -44,7 +44,6 @@ eyre.workspace = true
 indexmap.workspace = true
 move-binary-format.workspace = true
 move-bytecode-utils.workspace = true
-move-command-line-common.workspace = true
 move-core-types.workspace = true
 move-vm-test-utils.workspace = true
 move-vm-types.workspace = true

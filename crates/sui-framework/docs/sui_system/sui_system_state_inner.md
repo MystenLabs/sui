@@ -66,6 +66,7 @@ title: Module `sui_system::sui_system_state_inner`
 -  [Function `pool_exchange_rates`](#sui_system_sui_system_state_inner_pool_exchange_rates)
 -  [Function `active_validator_addresses`](#sui_system_sui_system_state_inner_active_validator_addresses)
 -  [Function `extract_coin_balance`](#sui_system_sui_system_state_inner_extract_coin_balance)
+-  [Function `store_execution_time_estimates`](#sui_system_sui_system_state_inner_store_execution_time_estimates)
 
 
 <pre><code><b>use</b> <a href="../std/address.md#std_address">std::address</a>;
@@ -719,6 +720,15 @@ the epoch advancement transaction.
 
 
 
+<a name="sui_system_sui_system_state_inner_EXTRA_FIELD_EXECUTION_TIME_ESTIMATES_KEY"></a>
+
+
+
+<pre><code><b>const</b> <a href="../sui_system/sui_system_state_inner.md#sui_system_sui_system_state_inner_EXTRA_FIELD_EXECUTION_TIME_ESTIMATES_KEY">EXTRA_FIELD_EXECUTION_TIME_ESTIMATES_KEY</a>: u64 = 0;
+</code></pre>
+
+
+
 <a name="sui_system_sui_system_state_inner_SYSTEM_STATE_VERSION_V1"></a>
 
 
@@ -1224,7 +1234,7 @@ Add stake to a validator's staking pool.
     stake: Coin&lt;SUI&gt;,
     validator_address: <b>address</b>,
     ctx: &<b>mut</b> TxContext,
-) : StakedSui {
+): StakedSui {
     self.validators.<a href="../sui_system/sui_system_state_inner.md#sui_system_sui_system_state_inner_request_add_stake">request_add_stake</a>(
         validator_address,
         stake.into_balance(),
@@ -1259,7 +1269,7 @@ Add stake to a validator's staking pool using multiple coins.
     stake_amount: option::Option&lt;u64&gt;,
     validator_address: <b>address</b>,
     ctx: &<b>mut</b> TxContext,
-) : StakedSui {
+): StakedSui {
     <b>let</b> balance = <a href="../sui_system/sui_system_state_inner.md#sui_system_sui_system_state_inner_extract_coin_balance">extract_coin_balance</a>(stakes, stake_amount, ctx);
     self.validators.<a href="../sui_system/sui_system_state_inner.md#sui_system_sui_system_state_inner_request_add_stake">request_add_stake</a>(validator_address, balance, ctx)
 }
@@ -1289,7 +1299,7 @@ Withdraw some portion of a stake from a validator's staking pool.
     self: &<b>mut</b> <a href="../sui_system/sui_system_state_inner.md#sui_system_sui_system_state_inner_SuiSystemStateInnerV2">SuiSystemStateInnerV2</a>,
     staked_sui: StakedSui,
     ctx: &TxContext,
-) : Balance&lt;SUI&gt; {
+): Balance&lt;SUI&gt; {
     self.validators.<a href="../sui_system/sui_system_state_inner.md#sui_system_sui_system_state_inner_request_withdraw_stake">request_withdraw_stake</a>(staked_sui, ctx)
 }
 </code></pre>
@@ -1317,7 +1327,7 @@ Withdraw some portion of a stake from a validator's staking pool.
     self: &<b>mut</b> <a href="../sui_system/sui_system_state_inner.md#sui_system_sui_system_state_inner_SuiSystemStateInnerV2">SuiSystemStateInnerV2</a>,
     staked_sui: StakedSui,
     ctx: &<b>mut</b> TxContext,
-) : FungibleStakedSui {
+): FungibleStakedSui {
     self.validators.<a href="../sui_system/sui_system_state_inner.md#sui_system_sui_system_state_inner_convert_to_fungible_staked_sui">convert_to_fungible_staked_sui</a>(staked_sui, ctx)
 }
 </code></pre>
@@ -1345,7 +1355,7 @@ Withdraw some portion of a stake from a validator's staking pool.
     self: &<b>mut</b> <a href="../sui_system/sui_system_state_inner.md#sui_system_sui_system_state_inner_SuiSystemStateInnerV2">SuiSystemStateInnerV2</a>,
     fungible_staked_sui: FungibleStakedSui,
     ctx: &TxContext,
-) : Balance&lt;SUI&gt; {
+): Balance&lt;SUI&gt; {
     self.validators.<a href="../sui_system/sui_system_state_inner.md#sui_system_sui_system_state_inner_redeem_fungible_staked_sui">redeem_fungible_staked_sui</a>(fungible_staked_sui, ctx)
 }
 </code></pre>
@@ -2117,11 +2127,11 @@ gas coins.
     <b>mut</b> storage_rebate_amount: u64,
     <b>mut</b> non_refundable_storage_fee_amount: u64,
     storage_fund_reinvest_rate: u64, // share of storage fund's rewards that's reinvested
-                                     // into storage fund, in basis point.
+                                        // into storage fund, in basis point.
     reward_slashing_rate: u64, // how much rewards are slashed to punish a <a href="../sui_system/validator.md#sui_system_validator">validator</a>, in bps.
     <a href="../sui_system/sui_system_state_inner.md#sui_system_sui_system_state_inner_epoch_start_timestamp_ms">epoch_start_timestamp_ms</a>: u64, // Timestamp of the <a href="../sui_system/sui_system_state_inner.md#sui_system_sui_system_state_inner_epoch">epoch</a> start
     ctx: &<b>mut</b> TxContext,
-) : Balance&lt;SUI&gt; {
+): Balance&lt;SUI&gt; {
     <b>let</b> prev_epoch_start_timestamp = self.<a href="../sui_system/sui_system_state_inner.md#sui_system_sui_system_state_inner_epoch_start_timestamp_ms">epoch_start_timestamp_ms</a>;
     self.<a href="../sui_system/sui_system_state_inner.md#sui_system_sui_system_state_inner_epoch_start_timestamp_ms">epoch_start_timestamp_ms</a> = <a href="../sui_system/sui_system_state_inner.md#sui_system_sui_system_state_inner_epoch_start_timestamp_ms">epoch_start_timestamp_ms</a>;
     <b>let</b> bps_denominator_u64 = <a href="../sui_system/sui_system_state_inner.md#sui_system_sui_system_state_inner_BASIS_POINT_DENOMINATOR">BASIS_POINT_DENOMINATOR</a> <b>as</b> u64;
@@ -2675,6 +2685,33 @@ Extract required Balance from vector of Coin<SUI>, transfer the remainder back t
     } <b>else</b> {
         total_balance
     }
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="sui_system_sui_system_state_inner_store_execution_time_estimates"></a>
+
+## Function `store_execution_time_estimates`
+
+
+
+<pre><code><b>public</b>(package) <b>fun</b> <a href="../sui_system/sui_system_state_inner.md#sui_system_sui_system_state_inner_store_execution_time_estimates">store_execution_time_estimates</a>(self: &<b>mut</b> <a href="../sui_system/sui_system_state_inner.md#sui_system_sui_system_state_inner_SuiSystemStateInnerV2">sui_system::sui_system_state_inner::SuiSystemStateInnerV2</a>, estimates: vector&lt;u8&gt;)
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b>(package) <b>fun</b> <a href="../sui_system/sui_system_state_inner.md#sui_system_sui_system_state_inner_store_execution_time_estimates">store_execution_time_estimates</a>(self: &<b>mut</b> <a href="../sui_system/sui_system_state_inner.md#sui_system_sui_system_state_inner_SuiSystemStateInnerV2">SuiSystemStateInnerV2</a>, estimates: vector&lt;u8&gt;) {
+    <b>if</b> (bag::contains(&self.extra_fields, <a href="../sui_system/sui_system_state_inner.md#sui_system_sui_system_state_inner_EXTRA_FIELD_EXECUTION_TIME_ESTIMATES_KEY">EXTRA_FIELD_EXECUTION_TIME_ESTIMATES_KEY</a>)) {
+        <b>let</b> _: vector&lt;u8&gt; = bag::remove(&<b>mut</b> self.extra_fields, <a href="../sui_system/sui_system_state_inner.md#sui_system_sui_system_state_inner_EXTRA_FIELD_EXECUTION_TIME_ESTIMATES_KEY">EXTRA_FIELD_EXECUTION_TIME_ESTIMATES_KEY</a>);
+    };
+    bag::add(&<b>mut</b> self.extra_fields, <a href="../sui_system/sui_system_state_inner.md#sui_system_sui_system_state_inner_EXTRA_FIELD_EXECUTION_TIME_ESTIMATES_KEY">EXTRA_FIELD_EXECUTION_TIME_ESTIMATES_KEY</a>, estimates);
 }
 </code></pre>
 

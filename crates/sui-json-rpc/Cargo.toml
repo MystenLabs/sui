@@ -11,6 +11,7 @@ arc-swap.workspace = true
 backoff.workspace = true
 chrono.workspace = true
 fastcrypto.workspace = true
+fastcrypto-zkp.workspace = true
 jsonrpsee.workspace = true
 hyper.workspace = true
 http-body = "0.4"
@@ -37,6 +38,7 @@ bcs.workspace = true
 eyre.workspace = true
 once_cell.workspace = true
 serde_json.workspace = true
+base64.workspace = true
 
 tap.workspace = true
 
@@ -45,6 +47,7 @@ sui-storage.workspace = true
 sui-types.workspace = true
 sui-json.workspace = true
 sui-json-rpc-api.workspace = true
+sui-name-service.workspace = true
 sui-open-rpc.workspace = true
 sui-open-rpc-macros.workspace = true
 sui-protocol-config.workspace = true
@@ -53,10 +56,10 @@ sui-json-rpc-types.workspace = true
 sui-macros.workspace = true
 sui-transaction-builder.workspace = true
 mysten-metrics.workspace = true
-mysten-service.workspace = true
 shared-crypto.workspace = true
 typed-store-error.workspace = true
 cached.workspace = true
+im.workspace = true
 
 [dev-dependencies]
 mockall.workspace = true

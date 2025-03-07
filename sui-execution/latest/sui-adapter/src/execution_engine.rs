@@ -8,6 +8,7 @@ mod checked {
 
     use crate::execution_mode::{self, ExecutionMode};
     use move_binary_format::CompiledModule;
+    use move_trace_format::format::MoveTraceBuilder;
     use move_vm_runtime::move_vm::MoveVM;
     use std::{collections::HashSet, sync::Arc};
     use sui_types::balance::{
@@ -32,7 +33,9 @@ mod checked {
     use crate::{gas_charger::GasCharger, temporary_store::TemporaryStore};
     use move_core_types::ident_str;
     use sui_move_natives::all_natives;
-    use sui_protocol_config::{check_limit_by_meter, LimitThresholdCrossed, ProtocolConfig};
+    use sui_protocol_config::{
+        check_limit_by_meter, LimitThresholdCrossed, PerObjectCongestionControlMode, ProtocolConfig,
+    };
     use sui_types::authenticator_state::{
         AUTHENTICATOR_STATE_CREATE_FUNCTION_NAME, AUTHENTICATOR_STATE_EXPIRE_JWKS_FUNCTION_NAME,
         AUTHENTICATOR_STATE_MODULE_NAME, AUTHENTICATOR_STATE_UPDATE_FUNCTION_NAME,
@@ -64,12 +67,12 @@ mod checked {
     use sui_types::sui_system_state::{AdvanceEpochParams, ADVANCE_EPOCH_SAFE_MODE_FUNCTION_NAME};
     use sui_types::transaction::{
         Argument, AuthenticatorStateExpire, AuthenticatorStateUpdate, CallArg, ChangeEpoch,
-        Command, EndOfEpochTransactionKind, GenesisTransaction, ObjectArg, ProgrammableTransaction,
-        TransactionKind,
+        Command, EndOfEpochTransactionKind, GasData, GenesisTransaction, ObjectArg,
+        ProgrammableTransaction, StoredExecutionTimeObservations, TransactionKind,
     };
     use sui_types::transaction::{CheckedInputObjects, RandomnessStateUpdate};
     use sui_types::{
-        base_types::{ObjectID, ObjectRef, SuiAddress, TransactionDigest, TxContext},
+        base_types::{ObjectID, SuiAddress, TransactionDigest, TxContext},
         object::{Object, ObjectInner},
         sui_system_state::{ADVANCE_EPOCH_FUNCTION_NAME, SUI_SYSTEM_MODULE_NAME},
         SUI_AUTHENTICATOR_STATE_OBJECT_ID, SUI_FRAMEWORK_ADDRESS, SUI_FRAMEWORK_PACKAGE_ID,
@@ -80,7 +83,7 @@ mod checked {
     pub fn execute_transaction_to_effects<Mode: ExecutionMode>(
         store: &dyn BackingStore,
         input_objects: CheckedInputObjects,
-        gas_coins: Vec<ObjectRef>,
+        gas_data: GasData,
         gas_status: SuiGasStatus,
         transaction_kind: TransactionKind,
         transaction_signer: SuiAddress,
@@ -92,6 +95,7 @@ mod checked {
         metrics: Arc<LimitsMetrics>,
         enable_expensive_checks: bool,
         certificate_deny_set: &HashSet<TransactionDigest>,
+        trace_builder_opt: &mut Option<MoveTraceBuilder>,
     ) -> (
         InnerTemporaryStore,
         SuiGasStatus,
@@ -120,14 +124,29 @@ mod checked {
             *epoch_id,
         );
 
-        let mut gas_charger =
-            GasCharger::new(transaction_digest, gas_coins, gas_status, protocol_config);
+        let sponsor = {
+            let gas_owner = gas_data.owner;
+            if gas_owner == transaction_signer {
+                None
+            } else {
+                Some(gas_owner)
+            }
+        };
+        let gas_price = gas_status.gas_price();
+        let mut gas_charger = GasCharger::new(
+            transaction_digest,
+            gas_data.payment,
+            gas_status,
+            protocol_config,
+        );
 
         let mut tx_ctx = TxContext::new_from_components(
             &transaction_signer,
             &transaction_digest,
             epoch_id,
             epoch_timestamp_ms,
+            gas_price,
+            sponsor,
         );
 
         let is_epoch_change = transaction_kind.is_end_of_epoch_tx();
@@ -145,6 +164,7 @@ mod checked {
             deny_cert,
             contains_deleted_input,
             cancelled_objects,
+            trace_builder_opt,
         );
 
         let status = if let Err(error) = &execution_result {
@@ -262,6 +282,7 @@ mod checked {
             tx_context,
             &mut gas_charger,
             pt,
+            &mut None,
         )
         .map_err(|(e, _)| e)?;
         temporary_store.update_object_version_and_prev_tx();
@@ -281,6 +302,7 @@ mod checked {
         deny_cert: bool,
         contains_deleted_input: bool,
         cancelled_objects: Option<(Vec<ObjectID>, SequenceNumber)>,
+        trace_builder_opt: &mut Option<MoveTraceBuilder>,
     ) -> (
         GasCostSummary,
         Result<Mode::ExecutionResults, ExecutionError>,
@@ -296,6 +318,7 @@ mod checked {
 
         let is_genesis_tx = matches!(transaction_kind, TransactionKind::Genesis(_));
         let advance_epoch_gas_summary = transaction_kind.get_advance_epoch_tx_gas_summary();
+        let digest = tx_ctx.digest();
 
         // We must charge object read here during transaction execution, because if this fails
         // we must still ensure an effect is committed and all objects versions incremented
@@ -340,6 +363,7 @@ mod checked {
                             gas_charger,
                             protocol_config,
                             metrics.clone(),
+                            trace_builder_opt,
                         )
                     };
 
@@ -387,7 +411,7 @@ mod checked {
         if let Err(e) = run_conservation_checks::<Mode>(
             temporary_store,
             gas_charger,
-            tx_ctx,
+            digest,
             move_vm,
             protocol_config.simple_conservation_checks(),
             enable_expensive_checks,
@@ -406,7 +430,7 @@ mod checked {
     fn run_conservation_checks<Mode: ExecutionMode>(
         temporary_store: &mut TemporaryStore<'_>,
         gas_charger: &mut GasCharger,
-        tx_ctx: &mut TxContext,
+        tx_digest: TransactionDigest,
         move_vm: &Arc<MoveVM>,
         simple_conservation_checks: bool,
         enable_expensive_checks: bool,
@@ -465,7 +489,7 @@ mod checked {
                     // we will create or destroy SUI otherwise
                     panic!(
                         "SUI conservation fail in tx block {}: {}\nGas status is {}\nTx was ",
-                        tx_ctx.digest(),
+                        tx_digest,
                         recovery_err,
                         gas_charger.summary()
                     )
@@ -566,6 +590,7 @@ mod checked {
         gas_charger: &mut GasCharger,
         protocol_config: &ProtocolConfig,
         metrics: Arc<LimitsMetrics>,
+        trace_builder_opt: &mut Option<MoveTraceBuilder>,
     ) -> ResultWithTimings<Mode::ExecutionResults, ExecutionError> {
         let result = match transaction_kind {
             TransactionKind::ChangeEpoch(change_epoch) => {
@@ -579,6 +604,7 @@ mod checked {
                     gas_charger,
                     protocol_config,
                     metrics,
+                    trace_builder_opt,
                 )
                 .map_err(|e| (e, vec![]))?;
                 Ok((Mode::empty_results(), vec![]))
@@ -612,6 +638,7 @@ mod checked {
                     gas_charger,
                     protocol_config,
                     metrics,
+                    trace_builder_opt,
                 )
                 .expect("ConsensusCommitPrologue cannot fail");
                 Ok((Mode::empty_results(), vec![]))
@@ -625,6 +652,7 @@ mod checked {
                     gas_charger,
                     protocol_config,
                     metrics,
+                    trace_builder_opt,
                 )
                 .expect("ConsensusCommitPrologueV2 cannot fail");
                 Ok((Mode::empty_results(), vec![]))
@@ -638,8 +666,23 @@ mod checked {
                     gas_charger,
                     protocol_config,
                     metrics,
+                    trace_builder_opt,
                 )
                 .expect("ConsensusCommitPrologueV3 cannot fail");
+                Ok((Mode::empty_results(), vec![]))
+            }
+            TransactionKind::ConsensusCommitPrologueV4(prologue) => {
+                setup_consensus_commit(
+                    prologue.commit_timestamp_ms,
+                    temporary_store,
+                    tx_ctx,
+                    move_vm,
+                    gas_charger,
+                    protocol_config,
+                    metrics,
+                    trace_builder_opt,
+                )
+                .expect("ConsensusCommitPrologue cannot fail");
                 Ok((Mode::empty_results(), vec![]))
             }
             TransactionKind::ProgrammableTransaction(pt) => {
@@ -651,6 +694,7 @@ mod checked {
                     tx_ctx,
                     gas_charger,
                     pt,
+                    trace_builder_opt,
                 )
             }
             TransactionKind::EndOfEpochTransaction(txns) => {
@@ -669,6 +713,7 @@ mod checked {
                                 gas_charger,
                                 protocol_config,
                                 metrics,
+                                trace_builder_opt,
                             )
                             .map_err(|e| (e, vec![]))?;
                             return Ok((Mode::empty_results(), vec![]));
@@ -701,6 +746,13 @@ mod checked {
                             assert!(protocol_config.should_try_to_finalize_bridge_committee());
                             builder = setup_bridge_committee_update(builder, bridge_shared_version)
                         }
+                        EndOfEpochTransactionKind::StoreExecutionTimeObservations(estimates) => {
+                            assert_eq!(
+                                protocol_config.per_object_congestion_control_mode(),
+                                PerObjectCongestionControlMode::ExecutionTimeEstimate
+                            );
+                            builder = setup_store_execution_time_estimates(builder, estimates);
+                        }
                     }
                 }
                 unreachable!("EndOfEpochTransactionKind::ChangeEpoch should be the last transaction in the list")
@@ -714,6 +766,7 @@ mod checked {
                     gas_charger,
                     protocol_config,
                     metrics,
+                    trace_builder_opt,
                 )
                 .map_err(|e| (e, vec![]))?;
                 Ok((Mode::empty_results(), vec![]))
@@ -727,6 +780,7 @@ mod checked {
                     gas_charger,
                     protocol_config,
                     metrics,
+                    trace_builder_opt,
                 )
                 .map_err(|e| (e, vec![]))?;
                 Ok((Mode::empty_results(), vec![]))
@@ -882,6 +936,7 @@ mod checked {
         gas_charger: &mut GasCharger,
         protocol_config: &ProtocolConfig,
         metrics: Arc<LimitsMetrics>,
+        trace_builder_opt: &mut Option<MoveTraceBuilder>,
     ) -> Result<(), ExecutionError> {
         let params = AdvanceEpochParams {
             epoch: change_epoch.epoch,
@@ -903,6 +958,7 @@ mod checked {
             tx_ctx,
             gas_charger,
             advance_epoch_pt,
+            trace_builder_opt,
         );
 
         #[cfg(msim)]
@@ -932,6 +988,7 @@ mod checked {
                     tx_ctx,
                     gas_charger,
                     advance_epoch_safe_mode_pt,
+                    trace_builder_opt,
                 )
                 .map_err(|(e, _)| e)
                 .expect("Advance epoch with safe mode must succeed");
@@ -953,6 +1010,7 @@ mod checked {
                 gas_charger,
                 protocol_config,
                 metrics,
+                trace_builder_opt,
             );
         } else {
             process_system_packages(
@@ -963,6 +1021,7 @@ mod checked {
                 gas_charger,
                 protocol_config,
                 metrics,
+                trace_builder_opt,
             );
         }
         Ok(())
@@ -976,7 +1035,9 @@ mod checked {
         gas_charger: &mut GasCharger,
         protocol_config: &ProtocolConfig,
         metrics: Arc<LimitsMetrics>,
+        trace_builder_opt: &mut Option<MoveTraceBuilder>,
     ) {
+        let digest = tx_ctx.digest();
         let binary_config = to_binary_config(protocol_config);
         for (version, modules, dependencies) in change_epoch.system_packages.into_iter() {
             let deserialized_modules: Vec<_> = modules
@@ -1002,6 +1063,7 @@ mod checked {
                     tx_ctx,
                     gas_charger,
                     publish_pt,
+                    trace_builder_opt,
                 )
                 .map_err(|(e, _)| e)
                 .expect("System Package Publish must succeed");
@@ -1010,7 +1072,7 @@ mod checked {
                     &deserialized_modules,
                     version,
                     dependencies,
-                    tx_ctx.digest(),
+                    digest,
                 );
 
                 info!(
@@ -1044,6 +1106,7 @@ mod checked {
         gas_charger: &mut GasCharger,
         protocol_config: &ProtocolConfig,
         metrics: Arc<LimitsMetrics>,
+        trace_builder_opt: &mut Option<MoveTraceBuilder>,
     ) -> Result<(), ExecutionError> {
         let pt = {
             let mut builder = ProgrammableTransactionBuilder::new();
@@ -1071,6 +1134,7 @@ mod checked {
             tx_ctx,
             gas_charger,
             pt,
+            trace_builder_opt,
         )
         .map_err(|(e, _)| e)?;
         Ok(())
@@ -1183,6 +1247,7 @@ mod checked {
         gas_charger: &mut GasCharger,
         protocol_config: &ProtocolConfig,
         metrics: Arc<LimitsMetrics>,
+        trace_builder_opt: &mut Option<MoveTraceBuilder>,
     ) -> Result<(), ExecutionError> {
         let pt = {
             let mut builder = ProgrammableTransactionBuilder::new();
@@ -1214,6 +1279,7 @@ mod checked {
             tx_ctx,
             gas_charger,
             pt,
+            trace_builder_opt,
         )
         .map_err(|(e, _)| e)?;
         Ok(())
@@ -1250,6 +1316,7 @@ mod checked {
         gas_charger: &mut GasCharger,
         protocol_config: &ProtocolConfig,
         metrics: Arc<LimitsMetrics>,
+        trace_builder_opt: &mut Option<MoveTraceBuilder>,
     ) -> Result<(), ExecutionError> {
         let pt = {
             let mut builder = ProgrammableTransactionBuilder::new();
@@ -1282,6 +1349,7 @@ mod checked {
             tx_ctx,
             gas_charger,
             pt,
+            trace_builder_opt,
         )
         .map_err(|(e, _)| e)?;
         Ok(())
@@ -1299,6 +1367,25 @@ mod checked {
                 vec![],
             )
             .expect("Unable to generate coin_deny_list_create transaction!");
+        builder
+    }
+
+    fn setup_store_execution_time_estimates(
+        mut builder: ProgrammableTransactionBuilder,
+        estimates: StoredExecutionTimeObservations,
+    ) -> ProgrammableTransactionBuilder {
+        let system_state = builder.obj(ObjectArg::SUI_SYSTEM_MUT).unwrap();
+        // This is stored as a vector<u8> in Move, so we first convert to bytes before again
+        // serializing inside the call to `pure`.
+        let estimates_bytes = bcs::to_bytes(&estimates).unwrap();
+        let estimates_arg = builder.pure(estimates_bytes).unwrap();
+        builder.programmable_move_call(
+            SUI_SYSTEM_PACKAGE_ID,
+            SUI_SYSTEM_MODULE_NAME.to_owned(),
+            ident_str!("store_execution_time_estimates").to_owned(),
+            vec![],
+            vec![system_state, estimates_arg],
+        );
         builder
     }
 }

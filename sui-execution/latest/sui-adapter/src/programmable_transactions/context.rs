@@ -35,6 +35,7 @@ mod checked {
         identifier::IdentStr,
         language_storage::{ModuleId, StructTag, TypeTag},
     };
+    use move_trace_format::format::MoveTraceBuilder;
     use move_vm_runtime::native_extensions::NativeContextExtensions;
     use move_vm_runtime::{
         move_vm::MoveVM,
@@ -963,6 +964,7 @@ mod checked {
             function_name: &IdentStr,
             ty_args: Vec<Type>,
             args: Vec<impl Borrow<[u8]>>,
+            tracer: &mut Option<MoveTraceBuilder>,
         ) -> VMResult<SerializedReturnValues> {
             let gas_status = self.gas_charger.move_gas_status_mut();
             let mut data_store = SuiDataStore::new(&self.linkage_view, &self.new_packages);
@@ -974,6 +976,7 @@ mod checked {
                 &mut data_store,
                 gas_status,
                 &mut self.native_extensions,
+                tracer.as_mut(),
             )
         }
 
@@ -1028,7 +1031,7 @@ mod checked {
         }
     }
 
-    impl<'vm, 'state, 'a> TypeTagResolver for ExecutionContext<'vm, 'state, 'a> {
+    impl TypeTagResolver for ExecutionContext<'_, '_, '_> {
         fn get_type_tag(&self, type_: &Type) -> Result<TypeTag, ExecutionError> {
             self.vm
                 .get_runtime()
@@ -1495,7 +1498,7 @@ mod checked {
 
     // TODO: `DataStore` will be reworked and this is likely to disappear.
     //       Leaving this comment around until then as testament to better days to come...
-    impl<'state, 'a> DataStore for SuiDataStore<'state, 'a> {
+    impl DataStore for SuiDataStore<'_, '_> {
         fn link_context(&self) -> AccountAddress {
             self.linkage_view.link_context()
         }

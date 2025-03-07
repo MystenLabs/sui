@@ -10,14 +10,14 @@ use crate::crypto::{
     AuthorityStrongQuorumSignInfo, DefaultHash, Ed25519SuiSignature, EmptySignInfo,
     RandomnessRound, Signature, Signer, SuiSignatureInner, ToFromBytes,
 };
-use crate::digests::{CertificateDigest, SenderSignedDataDigest};
+use crate::digests::{AdditionalConsensusStateDigest, CertificateDigest, SenderSignedDataDigest};
 use crate::digests::{ChainIdentifier, ConsensusCommitDigest, ZKLoginInputsDigest};
-use crate::execution::SharedInput;
+use crate::execution::{ExecutionTimeObservationKey, SharedInput};
 use crate::message_envelope::{Envelope, Message, TrustedEnvelope, VerifiedEnvelope};
 use crate::messages_checkpoint::CheckpointTimestamp;
 use crate::messages_consensus::{
     ConsensusCommitPrologue, ConsensusCommitPrologueV2, ConsensusCommitPrologueV3,
-    ConsensusDeterminedVersionAssignments,
+    ConsensusCommitPrologueV4, ConsensusDeterminedVersionAssignments,
 };
 use crate::object::{MoveObject, Object, Owner};
 use crate::programmable_transaction_builder::ProgrammableTransactionBuilder;
@@ -34,7 +34,7 @@ use crate::{
 };
 use enum_dispatch::enum_dispatch;
 use fastcrypto::{encoding::Base64, hash::HashFunction};
-use itertools::Either;
+use itertools::{Either, Itertools};
 use move_core_types::{ident_str, identifier};
 use move_core_types::{identifier::Identifier, language_storage::TypeTag};
 use nonempty::{nonempty, NonEmpty};
@@ -44,13 +44,14 @@ use std::fmt::Write;
 use std::fmt::{Debug, Display, Formatter};
 use std::iter::once;
 use std::sync::Arc;
+use std::time::Duration;
 use std::{
     collections::{BTreeMap, BTreeSet, HashSet},
     hash::Hash,
     iter,
 };
 use strum::IntoStaticStr;
-use sui_protocol_config::ProtocolConfig;
+use sui_protocol_config::{PerObjectCongestionControlMode, ProtocolConfig};
 use tap::Pipe;
 use tracing::trace;
 
@@ -236,6 +237,35 @@ impl AuthenticatorStateExpire {
 }
 
 #[derive(Debug, Hash, PartialEq, Eq, Clone, Serialize, Deserialize)]
+pub enum StoredExecutionTimeObservations {
+    V1(Vec<(ExecutionTimeObservationKey, Vec<(AuthorityName, Duration)>)>),
+}
+
+impl StoredExecutionTimeObservations {
+    pub fn unwrap_v1(self) -> Vec<(ExecutionTimeObservationKey, Vec<(AuthorityName, Duration)>)> {
+        match self {
+            Self::V1(observations) => observations,
+        }
+    }
+
+    pub fn filter_and_sort_v1<P>(&self, predicate: P) -> Self
+    where
+        P: FnMut(&&(ExecutionTimeObservationKey, Vec<(AuthorityName, Duration)>)) -> bool,
+    {
+        match self {
+            Self::V1(observations) => Self::V1(
+                observations
+                    .iter()
+                    .filter(predicate)
+                    .sorted_by_key(|(key, _)| key)
+                    .cloned()
+                    .collect(),
+            ),
+        }
+    }
+}
+
+#[derive(Debug, Hash, PartialEq, Eq, Clone, Serialize, Deserialize)]
 pub struct AuthenticatorStateUpdate {
     /// Epoch of the authenticator state update transaction
     pub epoch: u64,
@@ -304,6 +334,7 @@ pub enum TransactionKind {
     ConsensusCommitPrologueV2(ConsensusCommitPrologueV2),
 
     ConsensusCommitPrologueV3(ConsensusCommitPrologueV3),
+    ConsensusCommitPrologueV4(ConsensusCommitPrologueV4),
     // .. more transaction types go here
 }
 
@@ -317,6 +348,7 @@ pub enum EndOfEpochTransactionKind {
     DenyListStateCreate,
     BridgeStateCreate(ChainIdentifier),
     BridgeCommitteeInit(SequenceNumber),
+    StoreExecutionTimeObservations(StoredExecutionTimeObservations),
 }
 
 impl EndOfEpochTransactionKind {
@@ -372,6 +404,12 @@ impl EndOfEpochTransactionKind {
         Self::BridgeCommitteeInit(bridge_shared_version)
     }
 
+    pub fn new_store_execution_time_observations(
+        estimates: StoredExecutionTimeObservations,
+    ) -> Self {
+        Self::StoreExecutionTimeObservations(estimates)
+    }
+
     fn input_objects(&self) -> Vec<InputObjectKind> {
         match self {
             Self::ChangeEpoch(_) => {
@@ -404,6 +442,13 @@ impl EndOfEpochTransactionKind {
                     mutable: true,
                 },
             ],
+            Self::StoreExecutionTimeObservations(_) => {
+                vec![InputObjectKind::SharedMoveObject {
+                    id: SUI_SYSTEM_STATE_OBJECT_ID,
+                    initial_shared_version: SUI_SYSTEM_STATE_OBJECT_SHARED_VERSION,
+                    mutable: true,
+                }]
+            }
         }
     }
 
@@ -435,6 +480,9 @@ impl EndOfEpochTransactionKind {
                 ]
                 .into_iter(),
             ),
+            Self::StoreExecutionTimeObservations(_) => {
+                Either::Left(vec![SharedInputObject::SUI_SYSTEM_OBJ].into_iter())
+            }
         }
     }
 
@@ -478,6 +526,15 @@ impl EndOfEpochTransactionKind {
                 if !config.should_try_to_finalize_bridge_committee() {
                     return Err(UserInputError::Unsupported(
                         "should not try to finalize committee yet".to_string(),
+                    ));
+                }
+            }
+            Self::StoreExecutionTimeObservations(_) => {
+                if config.per_object_congestion_control_mode()
+                    != PerObjectCongestionControlMode::ExecutionTimeEstimate
+                {
+                    return Err(UserInputError::Unsupported(
+                        "execution time estimation not enabled".to_string(),
                     ));
                 }
             }
@@ -1037,24 +1094,21 @@ impl ProgrammableTransaction {
         Ok(())
     }
 
-    fn shared_input_objects(&self) -> impl Iterator<Item = SharedInputObject> + '_ {
-        self.inputs
-            .iter()
-            .filter_map(|arg| match arg {
-                CallArg::Pure(_)
-                | CallArg::Object(ObjectArg::Receiving(_))
-                | CallArg::Object(ObjectArg::ImmOrOwnedObject(_)) => None,
-                CallArg::Object(ObjectArg::SharedObject {
-                    id,
-                    initial_shared_version,
-                    mutable,
-                }) => Some(vec![SharedInputObject {
-                    id: *id,
-                    initial_shared_version: *initial_shared_version,
-                    mutable: *mutable,
-                }]),
-            })
-            .flatten()
+    pub fn shared_input_objects(&self) -> impl Iterator<Item = SharedInputObject> + '_ {
+        self.inputs.iter().filter_map(|arg| match arg {
+            CallArg::Pure(_)
+            | CallArg::Object(ObjectArg::Receiving(_))
+            | CallArg::Object(ObjectArg::ImmOrOwnedObject(_)) => None,
+            CallArg::Object(ObjectArg::SharedObject {
+                id,
+                initial_shared_version,
+                mutable,
+            }) => Some(SharedInputObject {
+                id: *id,
+                initial_shared_version: *initial_shared_version,
+                mutable: *mutable,
+            }),
+        })
     }
 
     fn move_calls(&self) -> Vec<(&ObjectID, &str, &str)> {
@@ -1208,6 +1262,7 @@ impl TransactionKind {
             | TransactionKind::ConsensusCommitPrologue(_)
             | TransactionKind::ConsensusCommitPrologueV2(_)
             | TransactionKind::ConsensusCommitPrologueV3(_)
+            | TransactionKind::ConsensusCommitPrologueV4(_)
             | TransactionKind::AuthenticatorStateUpdate(_)
             | TransactionKind::RandomnessStateUpdate(_)
             | TransactionKind::EndOfEpochTransaction(_) => true,
@@ -1257,7 +1312,8 @@ impl TransactionKind {
 
             Self::ConsensusCommitPrologue(_)
             | Self::ConsensusCommitPrologueV2(_)
-            | Self::ConsensusCommitPrologueV3(_) => {
+            | Self::ConsensusCommitPrologueV3(_)
+            | Self::ConsensusCommitPrologueV4(_) => {
                 Either::Left(Either::Left(iter::once(SharedInputObject {
                     id: SUI_CLOCK_OBJECT_ID,
                     initial_shared_version: SUI_CLOCK_OBJECT_SHARED_VERSION,
@@ -1284,7 +1340,7 @@ impl TransactionKind {
             Self::ProgrammableTransaction(pt) => {
                 Either::Right(Either::Left(pt.shared_input_objects()))
             }
-            _ => Either::Right(Either::Right(iter::empty())),
+            Self::Genesis(_) => Either::Right(Either::Right(iter::empty())),
         }
     }
 
@@ -1302,6 +1358,7 @@ impl TransactionKind {
             | TransactionKind::ConsensusCommitPrologue(_)
             | TransactionKind::ConsensusCommitPrologueV2(_)
             | TransactionKind::ConsensusCommitPrologueV3(_)
+            | TransactionKind::ConsensusCommitPrologueV4(_)
             | TransactionKind::AuthenticatorStateUpdate(_)
             | TransactionKind::RandomnessStateUpdate(_)
             | TransactionKind::EndOfEpochTransaction(_) => vec![],
@@ -1327,7 +1384,8 @@ impl TransactionKind {
             }
             Self::ConsensusCommitPrologue(_)
             | Self::ConsensusCommitPrologueV2(_)
-            | Self::ConsensusCommitPrologueV3(_) => {
+            | Self::ConsensusCommitPrologueV3(_)
+            | Self::ConsensusCommitPrologueV4(_) => {
                 vec![InputObjectKind::SharedMoveObject {
                     id: SUI_CLOCK_OBJECT_ID,
                     initial_shared_version: SUI_CLOCK_OBJECT_SHARED_VERSION,
@@ -1400,6 +1458,13 @@ impl TransactionKind {
                     ));
                 }
             }
+            TransactionKind::ConsensusCommitPrologueV4(_) => {
+                if !config.record_additional_state_digest_in_prologue() {
+                    return Err(UserInputError::Unsupported(
+                        "ConsensusCommitPrologueV4 is not supported".to_string(),
+                    ));
+                }
+            }
             TransactionKind::EndOfEpochTransaction(txns) => {
                 if !config.end_of_epoch_transaction_supported() {
                     return Err(UserInputError::Unsupported(
@@ -1460,6 +1525,7 @@ impl TransactionKind {
             Self::ConsensusCommitPrologue(_) => "ConsensusCommitPrologue",
             Self::ConsensusCommitPrologueV2(_) => "ConsensusCommitPrologueV2",
             Self::ConsensusCommitPrologueV3(_) => "ConsensusCommitPrologueV3",
+            Self::ConsensusCommitPrologueV4(_) => "ConsensusCommitPrologueV4",
             Self::ProgrammableTransaction(_) => "ProgrammableTransaction",
             Self::AuthenticatorStateUpdate(_) => "AuthenticatorStateUpdate",
             Self::RandomnessStateUpdate(_) => "RandomnessStateUpdate",
@@ -1500,6 +1566,21 @@ impl Display for TransactionKind {
                     writer,
                     "Consensus determined version assignment: {:?}",
                     p.consensus_determined_version_assignments
+                )?;
+            }
+            Self::ConsensusCommitPrologueV4(p) => {
+                writeln!(writer, "Transaction Kind : Consensus Commit Prologue V4")?;
+                writeln!(writer, "Timestamp : {}", p.commit_timestamp_ms)?;
+                writeln!(writer, "Consensus Digest: {}", p.consensus_commit_digest)?;
+                writeln!(
+                    writer,
+                    "Consensus determined version assignment: {:?}",
+                    p.consensus_determined_version_assignments
+                )?;
+                writeln!(
+                    writer,
+                    "Additional State Digest: {}",
+                    p.additional_state_digest
                 )?;
             }
             Self::ProgrammableTransaction(p) => {
@@ -1806,6 +1887,22 @@ impl TransactionData {
         Self::new_programmable(sender, coins, pt, gas_budget, gas_price)
     }
 
+    pub fn new_split_coin(
+        sender: SuiAddress,
+        coin: ObjectRef,
+        amounts: Vec<u64>,
+        gas_payment: ObjectRef,
+        gas_budget: u64,
+        gas_price: u64,
+    ) -> Self {
+        let pt = {
+            let mut builder = ProgrammableTransactionBuilder::new();
+            builder.split_coin(sender, coin, amounts);
+            builder.finish()
+        };
+        Self::new_programmable(sender, vec![gas_payment], pt, gas_budget, gas_price)
+    }
+
     pub fn new_module(
         sender: SuiAddress,
         gas_payment: ObjectRef,
@@ -1927,12 +2024,8 @@ impl TransactionData {
         }
     }
 
-    pub fn execution_parts(&self) -> (TransactionKind, SuiAddress, Vec<ObjectRef>) {
-        (
-            self.kind().clone(),
-            self.sender(),
-            self.gas_data().payment.clone(),
-        )
+    pub fn execution_parts(&self) -> (TransactionKind, SuiAddress, GasData) {
+        (self.kind().clone(), self.sender(), self.gas_data().clone())
     }
 
     pub fn uses_randomness(&self) -> bool {
@@ -1998,6 +2091,8 @@ pub trait TransactionDataAPI {
     /// returns true if the transaction is one that is specially sequenced to run at the very end
     /// of the epoch
     fn is_end_of_epoch_tx(&self) -> bool;
+
+    fn is_consensus_commit_prologue(&self) -> bool;
 
     /// Check if the transaction is sponsored (namely gas owner != sender)
     fn is_sponsored_tx(&self) -> bool;
@@ -2130,6 +2225,22 @@ impl TransactionDataAPI for TransactionDataV1 {
             self.kind,
             TransactionKind::ChangeEpoch(_) | TransactionKind::EndOfEpochTransaction(_)
         )
+    }
+
+    fn is_consensus_commit_prologue(&self) -> bool {
+        match &self.kind {
+            TransactionKind::ConsensusCommitPrologue(_)
+            | TransactionKind::ConsensusCommitPrologueV2(_)
+            | TransactionKind::ConsensusCommitPrologueV3(_)
+            | TransactionKind::ConsensusCommitPrologueV4(_) => true,
+
+            TransactionKind::ProgrammableTransaction(_)
+            | TransactionKind::ChangeEpoch(_)
+            | TransactionKind::Genesis(_)
+            | TransactionKind::AuthenticatorStateUpdate(_)
+            | TransactionKind::EndOfEpochTransaction(_)
+            | TransactionKind::RandomnessStateUpdate(_) => false,
+        }
     }
 
     fn is_system_tx(&self) -> bool {
@@ -2614,6 +2725,28 @@ impl VerifiedTransaction {
             consensus_determined_version_assignments,
         }
         .pipe(TransactionKind::ConsensusCommitPrologueV3)
+        .pipe(Self::new_system_transaction)
+    }
+
+    pub fn new_consensus_commit_prologue_v4(
+        epoch: u64,
+        round: u64,
+        commit_timestamp_ms: CheckpointTimestamp,
+        consensus_commit_digest: ConsensusCommitDigest,
+        consensus_determined_version_assignments: ConsensusDeterminedVersionAssignments,
+        additional_state_digest: AdditionalConsensusStateDigest,
+    ) -> Self {
+        ConsensusCommitPrologueV4 {
+            epoch,
+            round,
+            // sub_dag_index is reserved for when we have multi commits per round.
+            sub_dag_index: None,
+            commit_timestamp_ms,
+            consensus_commit_digest,
+            consensus_determined_version_assignments,
+            additional_state_digest,
+        }
+        .pipe(TransactionKind::ConsensusCommitPrologueV4)
         .pipe(Self::new_system_transaction)
     }
 

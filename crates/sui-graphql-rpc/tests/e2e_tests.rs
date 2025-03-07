@@ -453,7 +453,6 @@ async fn test_zklogin_sig_verify() {
 
     // a valid signature with tx bytes returns success as true.
     let binding = res.response_body().data.clone().into_json().unwrap();
-    tracing::info!("tktkbinding: {:?}", binding);
     let res = binding.get("verifyZkloginSignature").unwrap();
     assert_eq!(res.get("success").unwrap(), true);
 

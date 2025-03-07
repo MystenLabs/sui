@@ -1093,7 +1093,7 @@ impl AbsintVisitorContext<'_> {
     }
 }
 
-impl<'a> CFGIRVisitorContext for AbsintVisitorContext<'a> {
+impl CFGIRVisitorContext for AbsintVisitorContext<'_> {
     fn push_warning_filter_scope(&mut self, filters: WarningFilters) {
         self.reporter.push_warning_filter_scope(filters)
     }

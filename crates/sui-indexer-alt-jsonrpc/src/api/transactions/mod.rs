@@ -3,16 +3,17 @@
 
 use futures::future;
 use jsonrpsee::{core::RpcResult, proc_macros::rpc};
-use serde::{Deserialize, Serialize};
-use sui_json_rpc_types::{
-    Page, SuiTransactionBlockResponse, SuiTransactionBlockResponseOptions,
-    SuiTransactionBlockResponseQuery,
-};
+use sui_json_rpc_types::{Page, SuiTransactionBlockResponse, SuiTransactionBlockResponseOptions};
 use sui_open_rpc::Module;
 use sui_open_rpc_macros::open_rpc;
 use sui_types::digests::TransactionDigest;
 
-use crate::{context::Context, error::InternalContext};
+use self::{error::Error, filter::SuiTransactionBlockResponseQuery};
+
+use crate::{
+    context::Context,
+    error::{rpc_bail, InternalContext, RpcError},
+};
 
 use super::rpc_module::RpcModule;
 
@@ -64,17 +65,7 @@ trait QueryTransactionsApi {
 
 pub(crate) struct Transactions(pub Context);
 
-pub(crate) struct QueryTransactions(pub Context, pub TransactionsConfig);
-
-#[derive(Serialize, Deserialize, Debug, Clone)]
-pub struct TransactionsConfig {
-    /// The default page size limit when querying transactions, if none is provided.
-    pub default_page_size: usize,
-
-    /// The largest acceptable page size when querying transactions. Requesting a page larger than
-    /// this is a user error.
-    pub max_page_size: usize,
-}
+pub(crate) struct QueryTransactions(pub Context);
 
 #[async_trait::async_trait]
 impl TransactionsApiServer for Transactions {
@@ -99,13 +90,13 @@ impl QueryTransactionsApiServer for QueryTransactions {
         limit: Option<usize>,
         descending_order: Option<bool>,
     ) -> RpcResult<Page<SuiTransactionBlockResponse, String>> {
-        let Self(ctx, config) = self;
+        let Self(ctx) = self;
 
         let Page {
             data: digests,
             next_cursor,
             has_next_page,
-        } = filter::transactions(ctx, config, &query.filter, cursor, limit, descending_order)
+        } = filter::transactions(ctx, &query.filter, cursor.clone(), limit, descending_order)
             .await?;
 
         let options = query.options.unwrap_or_default();
@@ -118,12 +109,18 @@ impl QueryTransactionsApiServer for QueryTransactions {
             .await
             .into_iter()
             .zip(digests)
-            .map(|(r, d)| r.with_internal_context(|| format!("Failed to get transaction {d}")))
+            .map(|(r, d)| {
+                if let Err(RpcError::InvalidParams(e @ Error::NotFound(_))) = r {
+                    rpc_bail!(e)
+                } else {
+                    r.with_internal_context(|| format!("Failed to get transaction {d}"))
+                }
+            })
             .collect::<Result<Vec<_>, _>>()?;
 
         Ok(Page {
             data,
-            next_cursor,
+            next_cursor: next_cursor.or(cursor),
             has_next_page,
         })
     }
@@ -146,14 +143,5 @@ impl RpcModule for QueryTransactions {
 
     fn into_impl(self) -> jsonrpsee::RpcModule<Self> {
         self.into_rpc()
-    }
-}
-
-impl Default for TransactionsConfig {
-    fn default() -> Self {
-        Self {
-            default_page_size: 50,
-            max_page_size: 100,
-        }
     }
 }

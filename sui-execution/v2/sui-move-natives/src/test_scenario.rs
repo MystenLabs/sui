@@ -655,7 +655,7 @@ fn find_all_wrapped_objects<'a, 'i>(
         uid: &'u MoveStructLayout,
     }
 
-    impl<'i, 'u, 'b, 'l> AV::Traversal<'b, 'l> for Traversal<'i, 'u> {
+    impl<'b, 'l> AV::Traversal<'b, 'l> for Traversal<'_, '_> {
         type Error = AV::Error;
 
         fn traverse_struct(

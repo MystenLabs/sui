@@ -30,7 +30,6 @@ use sui_types::transaction::{
     CertifiedTransaction, Transaction, TransactionDataAPI, VerifiedCertificate,
     VerifiedTransaction, DEFAULT_VALIDATOR_GAS_PRICE,
 };
-use tokio::sync::broadcast;
 
 #[derive(Clone)]
 pub struct SingleValidator {
@@ -57,6 +56,7 @@ impl SingleValidator {
                 Arc::downgrade(&validator),
                 consensus_mode,
             )),
+            validator.checkpoint_store.clone(),
             validator.name,
             Arc::new(ConnectionMonitorStatusForTests {}),
             100_000,
@@ -132,7 +132,6 @@ impl SingleValidator {
                 transaction.data().intent_message().value.clone(),
                 *transaction.digest(),
             )
-            .await
             .unwrap()
             .2;
         assert!(effects.status().is_ok());
@@ -205,7 +204,7 @@ impl SingleValidator {
             self.epoch_store.reference_gas_price(),
         )
         .unwrap();
-        let (kind, signer, gas) = executable.transaction_data().execution_parts();
+        let (kind, signer, gas_data) = executable.transaction_data().execution_parts();
         let (inner_temp_store, _, effects, _timings, _) =
             self.epoch_store.executor().execute_transaction_to_effects(
                 &store,
@@ -216,11 +215,12 @@ impl SingleValidator {
                 &self.epoch_store.epoch(),
                 0,
                 input_objects,
-                gas,
+                gas_data,
                 gas_status,
                 kind,
                 signer,
                 *executable.digest(),
+                &mut None,
             );
         assert!(effects.status().is_ok());
         store.commit_objects(inner_temp_store);
@@ -245,6 +245,7 @@ impl SingleValidator {
             self.get_validator()
                 .get_checkpoint_store()
                 .get_latest_certified_checkpoint()
+                .unwrap()
                 .unwrap(),
         );
         let mut checkpoints = vec![];
@@ -266,20 +267,16 @@ impl SingleValidator {
         checkpoints
     }
 
-    pub fn create_checkpoint_executor(
-        &self,
-    ) -> (CheckpointExecutor, broadcast::Sender<VerifiedCheckpoint>) {
+    pub fn create_checkpoint_executor(&self) -> CheckpointExecutor {
         let validator = self.get_validator();
-        let (ckpt_sender, ckpt_receiver) = broadcast::channel(1000000);
-        let checkpoint_executor = CheckpointExecutor::new_for_tests(
-            ckpt_receiver,
+        CheckpointExecutor::new_for_tests(
+            self.epoch_store.clone(),
             validator.get_checkpoint_store().clone(),
             validator.clone(),
             Arc::new(StateAccumulator::new_for_tests(
                 validator.get_accumulator_store().clone(),
             )),
-        );
-        (checkpoint_executor, ckpt_sender)
+        )
     }
 
     pub(crate) fn create_in_memory_store(&self) -> InMemoryObjectStore {
@@ -312,7 +309,6 @@ impl SingleValidator {
                 self.get_validator().get_object_cache_reader().as_ref(),
                 &transactions,
             )
-            .await
             .unwrap();
     }
 }

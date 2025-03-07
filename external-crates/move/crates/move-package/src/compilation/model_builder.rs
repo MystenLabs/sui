@@ -21,7 +21,7 @@ pub fn build<W: Write>(
     writer: &mut W,
 ) -> Result<source_model::Model> {
     let root_package_name = resolved_graph.root_package();
-    let build_plan = BuildPlan::create(resolved_graph)?;
+    let build_plan = BuildPlan::create(&resolved_graph)?;
     let program_info_hook = SaveHook::new([SaveFlag::TypingInfo]);
     let compiled_package = build_plan.compile_no_exit(writer, |compiler| {
         compiler.add_save_hook(&program_info_hook)

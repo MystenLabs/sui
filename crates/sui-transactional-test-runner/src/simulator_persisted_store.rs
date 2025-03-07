@@ -189,9 +189,11 @@ impl SimulatorStore for PersistedStore {
     fn get_highest_checkpint(&self) -> Option<VerifiedCheckpoint> {
         self.read_write
             .checkpoints
-            .unbounded_iter()
-            .skip_to_last()
+            .reversed_safe_iter_with_bounds(None, None)
+            .expect("failed to fetch highest checkpoint")
             .next()
+            .transpose()
+            .expect("failed to fetch highest checkpoint")
             .map(|(_, checkpoint)| checkpoint.into())
     }
 
@@ -556,9 +558,9 @@ impl ReadStore for PersistedStoreInnerReadOnlyWrapper {
         self.sync();
         self.inner
             .checkpoints
-            .unbounded_iter()
-            .skip_to_last()
+            .reversed_safe_iter_with_bounds(None, None)?
             .next()
+            .transpose()?
             .map(|(_, checkpoint)| checkpoint.into())
             .ok_or(SuiError::UserInputError {
                 error: UserInputError::LatestCheckpointSequenceNumberNotFound,

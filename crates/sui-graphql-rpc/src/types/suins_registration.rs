@@ -35,9 +35,7 @@ use diesel_async::scoped_futures::ScopedFutureExt;
 use move_core_types::{ident_str, identifier::IdentStr, language_storage::StructTag};
 use serde::{Deserialize, Serialize};
 use sui_indexer::models::objects::StoredHistoryObject;
-use sui_json_rpc::name_service::{
-    Domain as NativeDomain, NameRecord, NameServiceConfig, NameServiceError,
-};
+use sui_name_service::{Domain as NativeDomain, NameRecord, NameServiceConfig, NameServiceError};
 use sui_types::{base_types::SuiAddress as NativeSuiAddress, dynamic_field::Field, id::UID};
 
 const MOD_REGISTRATION: &IdentStr = ident_str!("suins_registration");
@@ -52,7 +50,7 @@ pub(crate) struct NameService;
 pub(crate) struct Domain(NativeDomain);
 
 #[derive(Enum, Copy, Clone, Eq, PartialEq)]
-#[graphql(remote = "sui_json_rpc::name_service::DomainFormat")]
+#[graphql(remote = "sui_name_service::DomainFormat")]
 pub enum DomainFormat {
     At,
     Dot,

@@ -73,7 +73,7 @@ impl SystemPackageTask {
                     }
 
                     _ = interval.tick() => {
-                        let mut conn = match context.reader().connect().await {
+                        let mut conn = match context.pg_reader().connect().await {
                             Ok(conn) => conn,
                             Err(e) => {
                                 error!("Failed to connect to database: {:?}", e);

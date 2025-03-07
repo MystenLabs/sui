@@ -1,0 +1,58 @@
+---
+source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
+---
+processed 5 tasks
+
+init:
+A: object(0,0)
+
+task 1, lines 14-45:
+//# publish --sender A
+events: Event { package_id: test, transaction_module: Identifier("mod"), sender: A, type_: StructTag { address: sui, module: Identifier("display"), name: Identifier("DisplayCreated"), type_params: [Struct(StructTag { address: test, module: Identifier("mod"), name: Identifier("Foo"), type_params: [] })] }, contents: [203, 99, 60, 9, 57, 214, 58, 15, 167, 161, 179, 50, 172, 90, 229, 207, 25, 16, 189, 106, 252, 61, 225, 239, 152, 205, 75, 37, 117, 228, 213, 33] }, Event { package_id: test, transaction_module: Identifier("mod"), sender: A, type_: StructTag { address: sui, module: Identifier("display"), name: Identifier("VersionUpdated"), type_params: [Struct(StructTag { address: test, module: Identifier("mod"), name: Identifier("Foo"), type_params: [] })] }, contents: [203, 99, 60, 9, 57, 214, 58, 15, 167, 161, 179, 50, 172, 90, 229, 207, 25, 16, 189, 106, 252, 61, 225, 239, 152, 205, 75, 37, 117, 228, 213, 33, 1, 0, 1, 3, 98, 97, 114, 4, 123, 98, 97, 114] }
+created: object(1,0), object(1,1), object(1,2)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 11802800,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 2, lines 47-49:
+//# programmable --sender A --inputs 42 @A
+//> 0: test::mod::new(Input(0));
+//> 1: TransferObjects([Result(0)], Input(1))
+created: object(2,0)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 2287600,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 3, line 51:
+//# create-checkpoint
+Checkpoint created: 1
+
+task 4, lines 53-57:
+//# run-jsonrpc
+Response: {
+  "jsonrpc": "2.0",
+  "id": 0,
+  "result": {
+    "data": {
+      "objectId": "0x1940b6d59cdde42448a6c81bd41e65efdec6038b8f893b3aa4cf4a89388406f7",
+      "version": "3",
+      "digest": "BM4w2R4RCthD68oFpyprjA3oZbWh7EmHZHvWwFr11aMo",
+      "display": {
+        "data": null,
+        "error": {
+          "code": "displayError",
+          "error": "Failed to parse format for display field \"bar\": Unexpected end-of-string, expected one of '}', or '.'"
+        }
+      },
+      "content": {
+        "dataType": "moveObject",
+        "type": "0x04da6a6964b5c4c71c28f4a6c865c8d3ff2e5f8249f71002c57a4ca3b4a76c35::mod::Foo",
+        "hasPublicTransfer": true,
+        "fields": {
+          "bar": "42",
+          "id": {
+            "id": "0x1940b6d59cdde42448a6c81bd41e65efdec6038b8f893b3aa4cf4a89388406f7"
+          }
+        }
+      }
+    }
+  }
+}

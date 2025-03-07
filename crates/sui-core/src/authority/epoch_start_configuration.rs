@@ -34,6 +34,11 @@ pub trait EpochStartConfigTrait {
         self.flags()
             .contains(&EpochFlag::UseVersionAssignmentTablesV3)
     }
+
+    fn is_data_quarantine_active_from_beginning_of_epoch(&self) -> bool {
+        self.flags()
+            .contains(&EpochFlag::DataQuarantineFromBeginningOfEpoch)
+    }
 }
 
 // IMPORTANT: Assign explicit values to each variant to ensure that the values are stable.
@@ -59,6 +64,10 @@ pub enum EpochFlag {
     _ExecutedInEpochTableDeprecated = 7,
 
     UseVersionAssignmentTablesV3 = 8,
+
+    // This flag indicates whether data quarantining has been enabled from the
+    // beginning of the epoch.
+    DataQuarantineFromBeginningOfEpoch = 9,
 }
 
 impl EpochFlag {
@@ -74,7 +83,10 @@ impl EpochFlag {
     }
 
     fn default_flags_impl() -> Vec<Self> {
-        vec![EpochFlag::UseVersionAssignmentTablesV3]
+        vec![
+            EpochFlag::UseVersionAssignmentTablesV3,
+            EpochFlag::DataQuarantineFromBeginningOfEpoch,
+        ]
     }
 }
 
@@ -108,6 +120,9 @@ impl fmt::Display for EpochFlag {
             }
             EpochFlag::UseVersionAssignmentTablesV3 => {
                 write!(f, "UseVersionAssignmentTablesV3")
+            }
+            EpochFlag::DataQuarantineFromBeginningOfEpoch => {
+                write!(f, "DataQuarantineFromBeginningOfEpoch")
             }
         }
     }

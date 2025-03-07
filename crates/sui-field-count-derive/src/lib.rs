@@ -11,10 +11,10 @@ pub fn field_count_derive(input: TokenStream) -> TokenStream {
     let generics = input.generics;
     let (impl_generics, ty_generics, where_clause) = generics.split_for_impl();
 
-    let fields_count = if let syn::Data::Struct(data_struct) = input.data {
-        data_struct.fields.len()
-    } else {
-        panic!("FieldCount can only be derived for structs");
+    let fields_count = match input.data {
+        syn::Data::Struct(data_struct) => data_struct.fields.len(),
+        syn::Data::Enum(data_enum) => data_enum.variants.len(),
+        syn::Data::Union(_) => panic!("FieldCount cannot be derived for unions"),
     };
 
     let expanded = quote! {
@@ -22,6 +22,5 @@ pub fn field_count_derive(input: TokenStream) -> TokenStream {
             const FIELD_COUNT: usize = #fields_count;
         }
     };
-
     TokenStream::from(expanded)
 }

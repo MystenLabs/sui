@@ -47,6 +47,7 @@ serde_with.workspace = true
 serde_yaml.workspace = true
 shared-crypto.workspace = true
 similar.workspace = true
+sui-name-service.workspace = true
 sui-pg-db.workspace = true
 sui-sdk.workspace = true
 sui-types.workspace = true

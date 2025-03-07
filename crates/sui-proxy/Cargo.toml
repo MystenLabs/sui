@@ -41,8 +41,6 @@ rustls-pemfile.workspace = true
 prost.workspace = true
 once_cell.workspace = true
 hex.workspace = true
-ipnetwork.workspace = true
-
 
 telemetry-subscribers.workspace = true
 fastcrypto.workspace = true

@@ -45,6 +45,8 @@ async fn advance_epoch_tx_test() {
                     &GasCostSummary::new(0, 0, 0, 0),
                     0, // checkpoint
                     0, // epoch_start_timestamp_ms
+                    vec![],
+                    0, // last_checkpoint
                 )
                 .await
                 .unwrap();
@@ -737,8 +739,8 @@ async fn test_epoch_flag_upgrade() {
             return None;
         }
 
-        // start with no flags
-        let flags: Vec<EpochFlag> = vec![];
+        // start with only UseVersionAssignmentTablesV3
+        let flags: Vec<EpochFlag> = vec![EpochFlag::UseVersionAssignmentTablesV3];
         Some(flags)
     });
 

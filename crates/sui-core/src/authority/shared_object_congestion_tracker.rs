@@ -1,10 +1,8 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use super::authority_per_epoch_store::AuthorityEpochTables;
 use super::execution_time_estimator::ExecutionTimeEstimator;
 use crate::authority::transaction_deferral::DeferralKey;
-use crate::consensus_handler::VerifiedSequencedConsensusTransaction;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use sui_protocol_config::{PerObjectCongestionControlMode, ProtocolConfig};
@@ -50,7 +48,7 @@ impl SharedObjectCongestionTracker {
     ) -> Self {
         assert!(
             allowed_txn_cost_overage_burst_per_object_in_commit <= max_txn_cost_overage_per_object_in_commit,
-            "burst limit bust be <= absolute limit; allowed_txn_cost_overage_burst_per_object_in_commit = {allowed_txn_cost_overage_burst_per_object_in_commit}, max_txn_cost_overage_per_object_in_commit = {max_txn_cost_overage_per_object_in_commit}"
+            "burst limit must be <= absolute limit; allowed_txn_cost_overage_burst_per_object_in_commit = {allowed_txn_cost_overage_burst_per_object_in_commit}, max_txn_cost_overage_per_object_in_commit = {max_txn_cost_overage_per_object_in_commit}"
         );
 
         let object_execution_cost: HashMap<ObjectID, u64> =
@@ -88,21 +86,14 @@ impl SharedObjectCongestionTracker {
     }
 
     pub fn from_protocol_config(
-        tables: &AuthorityEpochTables,
+        initial_object_debts: impl IntoIterator<Item = (ObjectID, u64)>,
         protocol_config: &ProtocolConfig,
-        round: Round,
         for_randomness: bool,
-        transactions: &[VerifiedSequencedConsensusTransaction],
     ) -> SuiResult<Self> {
         let max_accumulated_txn_cost_per_object_in_commit =
             protocol_config.max_accumulated_txn_cost_per_object_in_mysticeti_commit_as_option();
         Ok(Self::new(
-            tables.load_initial_object_debts(
-                round,
-                for_randomness,
-                protocol_config,
-                transactions,
-            )?,
+            initial_object_debts,
             protocol_config.per_object_congestion_control_mode(),
             if for_randomness {
                 protocol_config
@@ -303,7 +294,7 @@ impl SharedObjectCongestionTracker {
     }
 }
 
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Copy, Debug, Serialize, Deserialize)]
 pub enum CongestionPerObjectDebt {
     V1(Round, u64),
 }
@@ -673,7 +664,7 @@ mod object_cost_tests {
             panic!("should defer");
         }
 
-        // Insert `tx`` as previously deferred transaction due to randomness.
+        // Insert `tx` as previously deferred transaction due to randomness.
         previously_deferred_tx_digests.insert(
             *tx.digest(),
             DeferralKey::Randomness {
@@ -700,7 +691,7 @@ mod object_cost_tests {
             panic!("should defer");
         }
 
-        // Insert `tx`` as previously deferred consensus transaction.
+        // Insert `tx` as previously deferred consensus transaction.
         previously_deferred_tx_digests.insert(
             *tx.digest(),
             DeferralKey::ConsensusRound {
@@ -1179,8 +1170,8 @@ mod object_cost_tests {
             PerObjectCongestionControlMode::TotalGasBudget => 60,
             PerObjectCongestionControlMode::TotalTxCount => 13,
             PerObjectCongestionControlMode::TotalGasBudgetWithCap => 45, // 3 objects, 7 commands
-            // previous cost 3_000_010 + 7 commands * 1.5M
-            PerObjectCongestionControlMode::ExecutionTimeEstimate => 13_500_010,
+            // previous cost 3_000_010 + (unknown-command default of 1.5M)
+            PerObjectCongestionControlMode::ExecutionTimeEstimate => 4_500_010,
         };
         shared_object_congestion_tracker
             .bump_object_execution_cost(&execution_time_estimator, &cert);

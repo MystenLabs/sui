@@ -3,44 +3,65 @@
 
 use std::{
     collections::HashMap,
+    num::NonZeroUsize,
     sync::{Arc, Weak},
-    time::{Duration, Instant},
+    time::Duration,
 };
 
 use super::authority_per_epoch_store::AuthorityPerEpochStore;
 use crate::consensus_adapter::SubmitToConsensus;
 use itertools::Itertools;
+use lru::LruCache;
 use mysten_common::debug_fatal;
-use mysten_metrics::monitored_scope;
+use mysten_metrics::{monitored_scope, spawn_monitored_task};
 use simple_moving_average::{SingleSumSMA, SMA};
 use sui_protocol_config::PerObjectCongestionControlMode;
 use sui_types::{
+    base_types::ObjectID,
     committee::Committee,
     error::SuiError,
     execution::{ExecutionTimeObservationKey, ExecutionTiming},
     messages_consensus::{AuthorityIndex, ConsensusTransaction, ExecutionTimeObservation},
     transaction::{
-        Command, ProgrammableTransaction, TransactionData, TransactionDataAPI, TransactionKind,
+        Command, ProgrammableTransaction, StoredExecutionTimeObservations, TransactionData,
+        TransactionDataAPI, TransactionKind,
     },
 };
-use tokio::sync::mpsc;
+use tokio::{sync::mpsc, time::Instant};
 use tracing::{debug, info, warn};
+
+// TODO: Move all these consts into protocol configs once design stabilizes.
 
 const LOCAL_OBSERVATION_WINDOW_SIZE: usize = 10;
 
-// If our current local observation differs from the last one we shared by more than
-// this percent, we share a new one.
+// We won't share a new observation with consensus unless our current local observation differs
+// from the last one we shared by more than this percentage.
 const OBSERVATION_SHARING_DIFF_THRESHOLD: f64 = 0.05;
+
+// We won't share a new observation with consensus unless target object utilization is exceeded
+// by at least this amount.
+const OBSERVATION_SHARING_OBJECT_UTILIZATION_THRESHOLD: Duration = Duration::from_millis(500);
 
 // Minimum interval between sharing multiple observations of the same key.
 const OBSERVATION_SHARING_MIN_INTERVAL: Duration = Duration::from_secs(5);
+
+const OBJECT_UTILIZATION_TRACKER_CAPACITY: usize = 50_000;
+
+// TODO: source from time-based utilization target param in ProtocolConfig when available.
+const TARGET_OBJECT_UTILIZATION: f64 = 0.5;
 
 // Collects local execution time estimates to share via consensus.
 pub struct ExecutionTimeObserver {
     epoch_store: Weak<AuthorityPerEpochStore>,
     consensus_adapter: Box<dyn SubmitToConsensus>,
+    observation_sharing_object_utilization_threshold: Duration,
 
-    local_observations: HashMap<ExecutionTimeObservationKey, LocalObservations>,
+    local_observations: LruCache<ExecutionTimeObservationKey, LocalObservations>,
+
+    // For each object, tracks the amount of time above our utilization target that we spent
+    // executing transactions. This is used to decide which observations should be shared
+    // via consensus.
+    object_utilization_tracker: LruCache<ObjectID, ObjectUtilization>,
 }
 
 #[derive(Debug, Clone)]
@@ -49,12 +70,19 @@ pub struct LocalObservations {
     last_shared: Option<(Duration, Instant)>,
 }
 
+#[derive(Debug, Clone)]
+pub struct ObjectUtilization {
+    excess_execution_time: Duration,
+    last_measured: Option<Instant>,
+}
+
 // Tracks local execution time observations and shares them via consensus.
 impl ExecutionTimeObserver {
     pub fn spawn(
-        epoch_store: &Arc<AuthorityPerEpochStore>,
+        epoch_store: Arc<AuthorityPerEpochStore>,
         consensus_adapter: Box<dyn SubmitToConsensus>,
         channel_size: usize,
+        observation_cache_size: NonZeroUsize,
     ) {
         if epoch_store
             .protocol_config()
@@ -70,29 +98,39 @@ impl ExecutionTimeObserver {
 
         // TODO: pre-populate local observations with stored data from prior epoch.
         let mut observer = Self {
-            epoch_store: Arc::downgrade(epoch_store),
+            epoch_store: Arc::downgrade(&epoch_store),
             consensus_adapter,
-            local_observations: HashMap::new(),
+            local_observations: LruCache::new(observation_cache_size),
+            object_utilization_tracker: LruCache::new(
+                NonZeroUsize::new(OBJECT_UTILIZATION_TRACKER_CAPACITY).unwrap(),
+            ),
+            observation_sharing_object_utilization_threshold:
+                OBSERVATION_SHARING_OBJECT_UTILIZATION_THRESHOLD,
         };
-        tokio::spawn(async move {
+        spawn_monitored_task!(epoch_store.within_alive_epoch(async move {
             while let Some((tx, timings, total_duration)) = rx_local_execution_time.recv().await {
                 observer
                     .record_local_observations(&tx, &timings, total_duration)
                     .await;
             }
             info!("shutting down ExecutionTimeObserver");
-        });
+        }));
     }
 
     #[cfg(test)]
     fn new_for_testing(
         epoch_store: Arc<AuthorityPerEpochStore>,
         consensus_adapter: Box<dyn SubmitToConsensus>,
+        observation_sharing_object_utilization_threshold: Duration,
     ) -> Self {
         Self {
             epoch_store: Arc::downgrade(&epoch_store),
             consensus_adapter,
-            local_observations: HashMap::new(),
+            local_observations: LruCache::new(NonZeroUsize::new(10000).unwrap()),
+            object_utilization_tracker: LruCache::new(
+                NonZeroUsize::new(OBJECT_UTILIZATION_TRACKER_CAPACITY).unwrap(),
+            ),
+            observation_sharing_object_utilization_threshold,
         }
     }
 
@@ -110,6 +148,43 @@ impl ExecutionTimeObserver {
 
         assert!(tx.commands.len() >= timings.len());
 
+        // Update the accumulated excess execution time for each mutable shared object
+        // used in this transaction, and determine the max overage.
+        let max_excess_per_object_execution_time = tx
+            .shared_input_objects()
+            .filter_map(|obj| obj.mutable.then_some(obj.id))
+            .map(|id| {
+                // For each object:
+                // - add the execution time of the current transaction to the tracker
+                // - subtract the maximum amount of time available for execution according
+                //   to our utilization target since the last report was received
+                //   (clamping to zero)
+                //
+                // What remains is the amount of excess time spent executing transactions on
+                // the object above the intended limit. If this value is greater than zero,
+                // it means the object is overutilized.
+                let now = Instant::now();
+                let utilization =
+                    self.object_utilization_tracker
+                        .get_or_insert_mut(id, || ObjectUtilization {
+                            excess_execution_time: Duration::ZERO,
+                            last_measured: None,
+                        });
+                utilization.excess_execution_time += total_duration;
+                utilization.excess_execution_time =
+                    utilization.excess_execution_time.saturating_sub(
+                        utilization
+                            .last_measured
+                            .map(|last_measured| now.duration_since(last_measured))
+                            .unwrap_or(Duration::MAX)
+                            .mul_f64(TARGET_OBJECT_UTILIZATION),
+                    );
+                utilization.last_measured = Some(now);
+                utilization.excess_execution_time
+            })
+            .max()
+            .unwrap_or(Duration::ZERO);
+
         let total_command_duration: Duration = timings.iter().map(|t| t.duration()).sum();
         let extra_overhead = total_duration - total_command_duration;
 
@@ -120,20 +195,23 @@ impl ExecutionTimeObserver {
             let mut command_duration = timing.duration();
 
             // Distribute overhead proportionally to each command's measured duration.
-            command_duration = command_duration
-                + extra_overhead
-                    .mul_f64(command_duration.as_secs_f64() / total_command_duration.as_secs_f64());
+            let overhead_factor = if total_command_duration > Duration::ZERO {
+                command_duration.as_secs_f64() / total_command_duration.as_secs_f64()
+            } else {
+                // divisor here must be >0 or this loop would not be running at all
+                1.0 / (tx.commands.len() as f64)
+            };
+            command_duration += extra_overhead.mul_f64(overhead_factor);
 
             // For native commands, adjust duration by length of command's inputs/outputs.
             // This is sort of arbitrary, but hopefully works okay as a heuristic.
-            command_duration = command_duration.div_f64(command_length(command));
+            command_duration = command_duration.div_f64(command_length(command).get() as f64);
 
             // Update moving-average observation for the command.
             let key = ExecutionTimeObservationKey::from_command(command);
             let local_observation =
                 self.local_observations
-                    .entry(key.clone())
-                    .or_insert_with(|| LocalObservations {
+                    .get_or_insert_mut(key.clone(), || LocalObservations {
                         moving_average: SingleSumSMA::from_zero(Duration::ZERO),
                         last_shared: None,
                     });
@@ -141,19 +219,22 @@ impl ExecutionTimeObserver {
                 .moving_average
                 .add_sample(command_duration);
 
-            // Send a new observation through consensus if our current moving average
-            // differs too much from the last one we shared.
-            // TODO: Consider only sharing observations for entrypoints with congestion.
+            // Send a new observation through consensus if:
+            // - our current moving average differs too much from the last one we shared, and
+            // - the tx has at least one mutable shared object with utilization that's too high
             // TODO: Consider only sharing observations that disagree with consensus estimate.
             let new_average = local_observation.moving_average.get_average();
-            if local_observation
-                .last_shared
-                .map_or(true, |(last_shared, last_shared_timestamp)| {
-                    let diff = last_shared.abs_diff(new_average);
-                    diff > new_average.mul_f64(OBSERVATION_SHARING_DIFF_THRESHOLD)
-                        && last_shared_timestamp.elapsed() > OBSERVATION_SHARING_MIN_INTERVAL
-                })
-            {
+            let diff_exceeds_threshold =
+                local_observation
+                    .last_shared
+                    .is_none_or(|(last_shared, last_shared_timestamp)| {
+                        let diff = last_shared.abs_diff(new_average);
+                        diff >= new_average.mul_f64(OBSERVATION_SHARING_DIFF_THRESHOLD)
+                            && last_shared_timestamp.elapsed() >= OBSERVATION_SHARING_MIN_INTERVAL
+                    });
+            let utilization_exceeds_threshold = max_excess_per_object_execution_time
+                >= self.observation_sharing_object_utilization_threshold;
+            if diff_exceeds_threshold && utilization_exceeds_threshold {
                 debug!("sharing new execution time observation for {key:?}: {new_average:?}");
                 to_share.push((key, new_average));
                 local_observation.last_shared = Some((new_average, Instant::now()));
@@ -183,6 +264,15 @@ impl ExecutionTimeObserver {
         }
     }
 }
+
+// Default duration estimate used for transations containing a command without any
+// available observations.
+// TODO: Make this a protocol config.
+const DEFAULT_TRANSACTION_DURATION: Duration = Duration::from_millis(1_500);
+
+// Key used to save StoredExecutionTimeObservations in the Sui system state object's
+// `extra_fields` Bag.
+pub const EXTRA_FIELD_EXECUTION_TIME_ESTIMATES_KEY: u64 = 0;
 
 // Tracks global execution time observations provided by validators from consensus
 // and computes deterministic per-command estimates for use in congestion control.
@@ -228,13 +318,31 @@ impl ConsensusObservations {
 }
 
 impl ExecutionTimeEstimator {
-    pub fn new(committee: Arc<Committee>) -> Self {
+    pub fn new(
+        committee: Arc<Committee>,
+        initial_observations: impl Iterator<
+            Item = (AuthorityIndex, u64, ExecutionTimeObservationKey, Duration),
+        >,
+    ) -> Self {
         // TODO: At epoch start, prepopulate with end-of-epoch data from previous epoch.
         // TODO: Load saved consensus observations from per-epoch tables for crash recovery.
-        Self {
+        let mut estimator = Self {
             committee,
             consensus_observations: HashMap::new(),
+        };
+        for (source, generation, key, duration) in initial_observations {
+            estimator.process_observation_from_consensus(
+                source,
+                generation,
+                key.to_owned(),
+                duration,
+                true,
+            );
         }
+        for observation in estimator.consensus_observations.values_mut() {
+            observation.update_stake_weighted_median(&estimator.committee);
+        }
+        estimator
     }
 
     #[cfg(test)]
@@ -250,10 +358,16 @@ impl ExecutionTimeEstimator {
         &mut self,
         source: AuthorityIndex,
         generation: u64,
-        estimates: Vec<(ExecutionTimeObservationKey, Duration)>,
+        observations: &[(ExecutionTimeObservationKey, Duration)],
     ) {
-        for (key, duration) in estimates {
-            self.process_observation_from_consensus(source, generation, key, duration);
+        for (key, duration) in observations {
+            self.process_observation_from_consensus(
+                source,
+                generation,
+                key.to_owned(),
+                *duration,
+                false,
+            );
         }
     }
 
@@ -263,6 +377,7 @@ impl ExecutionTimeEstimator {
         generation: u64,
         observation_key: ExecutionTimeObservationKey,
         duration: Duration,
+        skip_update: bool,
     ) {
         let observations = self
             .consensus_observations
@@ -285,7 +400,9 @@ impl ExecutionTimeEstimator {
         }
         *obs_generation = generation;
         *obs_duration = Some(duration);
-        observations.update_stake_weighted_median(&self.committee);
+        if !skip_update {
+            observations.update_stake_weighted_median(&self.committee);
+        }
     }
 
     pub fn get_estimate(&self, tx: &TransactionData) -> Duration {
@@ -293,44 +410,75 @@ impl ExecutionTimeEstimator {
             debug_fatal!("get_estimate called on non-ProgrammableTransaction");
             return Duration::ZERO;
         };
-        tx.commands
-            .iter()
-            .map(|command| {
-                let key = ExecutionTimeObservationKey::from_command(command);
-                self.consensus_observations
-                    .get(&key)
-                    .map(|obs| obs.stake_weighted_median)
-                    .unwrap_or_else(|| key.default_duration())
-                    // For native commands, adjust duration by length of command's inputs/outputs.
-                    // This is sort of arbitrary, but hopefully works okay as a heuristic.
-                    .mul_f64(command_length(command))
-            })
-            .sum()
+        let mut estimate = Duration::ZERO;
+        for command in &tx.commands {
+            let key = ExecutionTimeObservationKey::from_command(command);
+            let Some(command_estimate) = self.consensus_observations.get(&key).map(|obs| {
+                obs.stake_weighted_median
+                    .mul_f64(command_length(command).get() as f64)
+            }) else {
+                estimate = DEFAULT_TRANSACTION_DURATION;
+                break;
+            };
+            estimate += command_estimate;
+        }
+        estimate
+    }
+
+    pub fn take_observations(&mut self) -> StoredExecutionTimeObservations {
+        StoredExecutionTimeObservations::V1(
+            self.consensus_observations
+                .drain()
+                .map(|(key, observations)| {
+                    let observations = observations
+                        .observations
+                        .into_iter()
+                        .enumerate()
+                        .filter_map(|(idx, (_, duration))| {
+                            duration.map(|d| {
+                                (
+                                    self.committee
+                                        .authority_by_index(idx.try_into().unwrap())
+                                        .cloned()
+                                        .unwrap(),
+                                    d,
+                                )
+                            })
+                        })
+                        .collect();
+                    (key, observations)
+                })
+                .collect(),
+        )
     }
 }
 
-fn command_length(command: &Command) -> f64 {
-    match command {
-        Command::MoveCall(_) => 1.0,
-        Command::TransferObjects(src, _) => src.len() as f64,
-        Command::SplitCoins(_, amts) => amts.len() as f64,
-        Command::MergeCoins(_, src) => src.len() as f64,
-        Command::Publish(_, _) => 1.0,
-        Command::MakeMoveVec(_, src) => src.len() as f64,
-        Command::Upgrade(_, _, _, _) => 1.0,
-    }
+fn command_length(command: &Command) -> NonZeroUsize {
+    // Commands with variable-length inputs/outputs are reported as +1
+    // to account for fixed overhead and prevent divide-by-zero.
+    NonZeroUsize::new(match command {
+        Command::MoveCall(_) => 1,
+        Command::TransferObjects(src, _) => src.len() + 1,
+        Command::SplitCoins(_, amts) => amts.len() + 1,
+        Command::MergeCoins(_, src) => src.len() + 1,
+        Command::Publish(_, _) => 1,
+        Command::MakeMoveVec(_, src) => src.len() + 1,
+        Command::Upgrade(_, _, _, _) => 1,
+    })
+    .unwrap()
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::authority::test_authority_builder::TestAuthorityBuilder;
+    use crate::checkpoints::CheckpointStore;
     use crate::consensus_adapter::{
         ConnectionMonitorStatusForTests, ConsensusAdapter, ConsensusAdapterMetrics,
         MockConsensusClient,
     };
-    use sui_types::base_types::{ObjectID, SuiAddress};
-    use sui_types::transaction::{Argument, ProgrammableMoveCall};
+    use sui_types::base_types::{ObjectID, SequenceNumber, SuiAddress};
+    use sui_types::transaction::{Argument, CallArg, ObjectArg, ProgrammableMoveCall};
 
     #[tokio::test]
     async fn test_record_local_observations() {
@@ -341,6 +489,7 @@ mod tests {
         let epoch_store = authority.epoch_store_for_testing();
         let consensus_adapter = Arc::new(ConsensusAdapter::new(
             Arc::new(mock_consensus_client),
+            CheckpointStore::new_for_tests(),
             authority.name,
             Arc::new(ConnectionMonitorStatusForTests {}),
             100_000,
@@ -353,6 +502,7 @@ mod tests {
         let mut observer = ExecutionTimeObserver::new_for_testing(
             epoch_store.clone(),
             Box::new(consensus_adapter.clone()),
+            Duration::ZERO, // disable object utilization thresholds for this test
         );
 
         // Create a simple PTB with one move call
@@ -465,6 +615,7 @@ mod tests {
         let epoch_store = authority.epoch_store_for_testing();
         let consensus_adapter = Arc::new(ConsensusAdapter::new(
             Arc::new(mock_consensus_client),
+            CheckpointStore::new_for_tests(),
             authority.name,
             Arc::new(ConnectionMonitorStatusForTests {}),
             100_000,
@@ -477,6 +628,7 @@ mod tests {
         let mut observer = ExecutionTimeObserver::new_for_testing(
             epoch_store.clone(),
             Box::new(consensus_adapter.clone()),
+            Duration::ZERO, // disable object utilization thresholds for this test
         );
 
         // Create a PTB with multiple commands.
@@ -531,8 +683,124 @@ mod tests {
             transfer_obs.moving_average.get_average(),
             // 50ms time before adjustments
             // 50/150 == 1/3 of 30ms overhead distributed to object xfer
-            // 60ms adjusetd time / 2 transferred inputs == 30ms
-            Duration::from_millis(30)
+            // 60ms adjusetd time / 3 command length == 20ms
+            Duration::from_millis(20)
+        );
+    }
+
+    #[tokio::test]
+    async fn test_record_local_observations_with_object_utilization_threshold() {
+        telemetry_subscribers::init_for_testing();
+
+        let mock_consensus_client = MockConsensusClient::new();
+        let authority = TestAuthorityBuilder::new().build().await;
+        let epoch_store = authority.epoch_store_for_testing();
+        let consensus_adapter = Arc::new(ConsensusAdapter::new(
+            Arc::new(mock_consensus_client),
+            CheckpointStore::new_for_tests(),
+            authority.name,
+            Arc::new(ConnectionMonitorStatusForTests {}),
+            100_000,
+            100_000,
+            None,
+            None,
+            ConsensusAdapterMetrics::new_test(),
+            epoch_store.protocol_config().clone(),
+        ));
+        let mut observer = ExecutionTimeObserver::new_for_testing(
+            epoch_store.clone(),
+            Box::new(consensus_adapter.clone()),
+            Duration::from_millis(500), // only share observations with excess utilization >= 500ms
+        );
+
+        // Create a simple PTB with one move call and one mutable shared input
+        let package = ObjectID::random();
+        let module = "test_module".to_string();
+        let function = "test_function".to_string();
+        let ptb = ProgrammableTransaction {
+            inputs: vec![CallArg::Object(ObjectArg::SharedObject {
+                id: ObjectID::random(),
+                initial_shared_version: SequenceNumber::new(),
+                mutable: true,
+            })],
+            commands: vec![Command::MoveCall(Box::new(ProgrammableMoveCall {
+                package,
+                module: module.clone(),
+                function: function.clone(),
+                type_arguments: vec![],
+                arguments: vec![],
+            }))],
+        };
+        let key = ExecutionTimeObservationKey::MoveEntryPoint {
+            package,
+            module: module.clone(),
+            function: function.clone(),
+            type_arguments: vec![],
+        };
+
+        tokio::time::pause();
+
+        // First observation - should not share due to low utilization
+        let timings = vec![ExecutionTiming::Success(Duration::from_secs(1))];
+        observer
+            .record_local_observations(&ptb, &timings, Duration::from_secs(2))
+            .await;
+        assert!(observer
+            .local_observations
+            .get(&key)
+            .unwrap()
+            .last_shared
+            .is_none());
+
+        // Second observation - no time has passed, so now utilization is high; should share
+        let timings = vec![ExecutionTiming::Success(Duration::from_secs(1))];
+        observer
+            .record_local_observations(&ptb, &timings, Duration::from_secs(2))
+            .await;
+        assert_eq!(
+            observer
+                .local_observations
+                .get(&key)
+                .unwrap()
+                .last_shared
+                .unwrap()
+                .0,
+            Duration::from_secs(2)
+        );
+
+        // Third execution still with high utilization - time has passed but not enough to clear excess
+        // when accounting for the new observation; should share
+        tokio::time::advance(Duration::from_secs(5)).await;
+        let timings = vec![ExecutionTiming::Success(Duration::from_secs(3))];
+        observer
+            .record_local_observations(&ptb, &timings, Duration::from_secs(5))
+            .await;
+        assert_eq!(
+            observer
+                .local_observations
+                .get(&key)
+                .unwrap()
+                .last_shared
+                .unwrap()
+                .0,
+            Duration::from_secs(3)
+        );
+
+        // Fourth execution after utilization drops - should not share, even though diff still high
+        tokio::time::advance(Duration::from_secs(60)).await;
+        let timings = vec![ExecutionTiming::Success(Duration::from_secs(11))];
+        observer
+            .record_local_observations(&ptb, &timings, Duration::from_secs(11))
+            .await;
+        assert_eq!(
+            observer
+                .local_observations
+                .get(&key)
+                .unwrap()
+                .last_shared
+                .unwrap()
+                .0,
+            Duration::from_secs(3) // still the old value
         );
     }
 
@@ -649,7 +917,7 @@ mod tests {
 
         let (committee, _) =
             Committee::new_simple_test_committee_with_normalized_voting_power(vec![10, 20, 30, 40]);
-        let mut estimator = ExecutionTimeEstimator::new(Arc::new(committee));
+        let mut estimator = ExecutionTimeEstimator::new(Arc::new(committee), std::iter::empty());
         // Create test keys
         let package = ObjectID::random();
         let module = "test_module".to_string();
@@ -669,18 +937,21 @@ mod tests {
             1,
             move_key.clone(),
             Duration::from_millis(1000),
+            false,
         );
         estimator.process_observation_from_consensus(
             1,
             1,
             move_key.clone(),
             Duration::from_millis(1000),
+            false,
         );
         estimator.process_observation_from_consensus(
             2,
             1,
             move_key.clone(),
             Duration::from_millis(1000),
+            false,
         );
 
         estimator.process_observation_from_consensus(
@@ -688,18 +959,21 @@ mod tests {
             1,
             transfer_key.clone(),
             Duration::from_millis(500),
+            false,
         );
         estimator.process_observation_from_consensus(
             1,
             1,
             transfer_key.clone(),
             Duration::from_millis(500),
+            false,
         );
         estimator.process_observation_from_consensus(
             2,
             1,
             transfer_key.clone(),
             Duration::from_millis(500),
+            false,
         );
 
         // Now record newer observations that should be used
@@ -708,18 +982,21 @@ mod tests {
             2,
             move_key.clone(),
             Duration::from_millis(100),
+            false,
         );
         estimator.process_observation_from_consensus(
             1,
             2,
             move_key.clone(),
             Duration::from_millis(200),
+            false,
         );
         estimator.process_observation_from_consensus(
             2,
             2,
             move_key.clone(),
             Duration::from_millis(300),
+            false,
         );
 
         estimator.process_observation_from_consensus(
@@ -727,18 +1004,21 @@ mod tests {
             2,
             transfer_key.clone(),
             Duration::from_millis(50),
+            false,
         );
         estimator.process_observation_from_consensus(
             1,
             2,
             transfer_key.clone(),
             Duration::from_millis(60),
+            false,
         );
         estimator.process_observation_from_consensus(
             2,
             2,
             transfer_key.clone(),
             Duration::from_millis(70),
+            false,
         );
 
         // Try to record old observations again - these should be ignored
@@ -747,18 +1027,21 @@ mod tests {
             1,
             move_key.clone(),
             Duration::from_millis(1000),
+            false,
         );
         estimator.process_observation_from_consensus(
             1,
             1,
             transfer_key.clone(),
             Duration::from_millis(500),
+            false,
         );
         estimator.process_observation_from_consensus(
             2,
             1,
             move_key.clone(),
             Duration::from_millis(1000),
+            false,
         );
 
         // Test single command transaction
@@ -810,10 +1093,10 @@ mod tests {
         );
 
         // Should return sum of median move call (300ms)
-        // plus the per-transferred-item median (70ms) * number of items (2)
+        // plus the median transfer (70ms) * command length (3)
         assert_eq!(
             estimator.get_estimate(&multi_command_tx),
-            Duration::from_millis(440)
+            Duration::from_millis(510)
         );
     }
 }

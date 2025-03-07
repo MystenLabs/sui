@@ -186,6 +186,7 @@ impl From<sui_sdk_types::TransactionKind> for super::TransactionKind {
             RandomnessStateUpdate(update) => Kind::RandomnessStateUpdate(update.into()),
             ConsensusCommitPrologueV2(prologue) => Kind::ConsensusCommitPrologueV2(prologue.into()),
             ConsensusCommitPrologueV3(prologue) => Kind::ConsensusCommitPrologueV3(prologue.into()),
+            ConsensusCommitPrologueV4(prologue) => Kind::ConsensusCommitPrologueV4(prologue.into()),
         };
 
         Self { kind: Some(kind) }
@@ -225,6 +226,9 @@ impl TryFrom<&super::TransactionKind> for sui_sdk_types::TransactionKind {
             Kind::ConsensusCommitPrologueV3(prologue) => {
                 Self::ConsensusCommitPrologueV3(prologue.try_into()?)
             }
+            Kind::ConsensusCommitPrologueV4(prologue) => {
+                Self::ConsensusCommitPrologueV4(prologue.try_into()?)
+            }
         }
         .pipe(Ok)
     }
@@ -243,6 +247,7 @@ impl From<sui_sdk_types::ConsensusCommitPrologue> for super::ConsensusCommitProl
             consensus_commit_digest: None,
             sub_dag_index: None,
             consensus_determined_version_assignments: None,
+            additional_state_digest: None,
         }
     }
 }
@@ -278,6 +283,7 @@ impl From<sui_sdk_types::ConsensusCommitPrologueV2> for super::ConsensusCommitPr
             consensus_commit_digest: Some(value.consensus_commit_digest.into()),
             sub_dag_index: None,
             consensus_determined_version_assignments: None,
+            additional_state_digest: None,
         }
     }
 }
@@ -322,6 +328,7 @@ impl From<sui_sdk_types::ConsensusCommitPrologueV3> for super::ConsensusCommitPr
             consensus_determined_version_assignments: Some(
                 value.consensus_determined_version_assignments.into(),
             ),
+            additional_state_digest: None,
         }
     }
 }
@@ -359,6 +366,76 @@ impl TryFrom<&super::ConsensusCommitPrologue> for sui_sdk_types::ConsensusCommit
             sub_dag_index: value.sub_dag_index,
             consensus_commit_digest,
             consensus_determined_version_assignments,
+        })
+    }
+}
+
+impl From<sui_sdk_types::ConsensusCommitPrologueV4> for super::ConsensusCommitPrologue {
+    fn from(
+        sui_sdk_types::ConsensusCommitPrologueV4 {
+            epoch,
+            round,
+            sub_dag_index,
+            commit_timestamp_ms,
+            consensus_commit_digest,
+            consensus_determined_version_assignments,
+            additional_state_digest,
+        }: sui_sdk_types::ConsensusCommitPrologueV4,
+    ) -> Self {
+        Self {
+            epoch: Some(epoch),
+            round: Some(round),
+            commit_timestamp_ms: Some(commit_timestamp_ms),
+            consensus_commit_digest: Some(consensus_commit_digest.into()),
+            sub_dag_index,
+            consensus_determined_version_assignments: Some(
+                consensus_determined_version_assignments.into(),
+            ),
+            additional_state_digest: Some(additional_state_digest.into()),
+        }
+    }
+}
+
+impl TryFrom<&super::ConsensusCommitPrologue> for sui_sdk_types::ConsensusCommitPrologueV4 {
+    type Error = TryFromProtoError;
+
+    fn try_from(value: &super::ConsensusCommitPrologue) -> Result<Self, Self::Error> {
+        let epoch = value
+            .epoch
+            .ok_or_else(|| TryFromProtoError::missing("epoch"))?;
+        let round = value
+            .round
+            .ok_or_else(|| TryFromProtoError::missing("round"))?;
+        let commit_timestamp_ms = value
+            .commit_timestamp_ms
+            .ok_or_else(|| TryFromProtoError::missing("commit_timestamp_ms"))?;
+
+        let consensus_commit_digest = value
+            .consensus_commit_digest
+            .as_ref()
+            .ok_or_else(|| TryFromProtoError::missing("consensus_commit_digest"))?
+            .try_into()?;
+
+        let consensus_determined_version_assignments = value
+            .consensus_determined_version_assignments
+            .as_ref()
+            .ok_or_else(|| TryFromProtoError::missing("consensus_determined_version_assignments"))?
+            .try_into()?;
+
+        let additional_state_digest = value
+            .additional_state_digest
+            .as_ref()
+            .ok_or_else(|| TryFromProtoError::missing("additional_state_digest"))?
+            .try_into()?;
+
+        Ok(Self {
+            epoch,
+            round,
+            commit_timestamp_ms,
+            sub_dag_index: value.sub_dag_index,
+            consensus_commit_digest,
+            consensus_determined_version_assignments,
+            additional_state_digest,
         })
     }
 }

@@ -4,6 +4,7 @@
 use std::{collections::HashSet, sync::Arc};
 
 use consensus_config::AuthorityIndex;
+use itertools::Itertools;
 use parking_lot::RwLock;
 
 use crate::{
@@ -279,6 +280,8 @@ impl Linearizer {
             let (sub_dag, commit) =
                 self.collect_sub_dag_and_commit(leader_block, reputation_scores_desc);
 
+            self.update_blocks_pruned_metric(&sub_dag);
+
             // Buffer commit in dag state for persistence later.
             // This also updates the last committed rounds.
             self.dag_state.write().add_commit(commit.clone());
@@ -294,6 +297,48 @@ impl Linearizer {
         self.dag_state.write().flush();
 
         committed_sub_dags
+    }
+
+    // Try to measure the number of blocks that get pruned due to GC. This is not very accurate, but it can give us a good enough idea.
+    // We consider a block as pruned when it is an ancestor of a block that has been committed as part of the provided `sub_dag`, but
+    // it has not been committed as part of previous commits. Right now we measure this via checking that highest committed round for the authority
+    // as we don't an efficient look up functionality to check if a block has been committed or not.
+    fn update_blocks_pruned_metric(&self, sub_dag: &CommittedSubDag) {
+        let (last_committed_rounds, gc_round) = {
+            let dag_state = self.dag_state.read();
+            (dag_state.last_committed_rounds(), dag_state.gc_round())
+        };
+
+        for block_ref in sub_dag
+            .blocks
+            .iter()
+            .flat_map(|block| block.ancestors())
+            .filter(
+                |ancestor_ref| {
+                    ancestor_ref.round <= gc_round
+                        && last_committed_rounds[ancestor_ref.author] != ancestor_ref.round
+                }, // If the last committed round is the same as the pruned block's round, then we know for sure that it has been committed and it doesn't count here
+                   // as pruned block.
+            )
+            .unique()
+        {
+            let hostname = &self.context.committee.authority(block_ref.author).hostname;
+
+            // If the last committed round from this authority is lower than the pruned ancestor in question, then we know for sure that it has not been committed.
+            let label_values = if last_committed_rounds[block_ref.author] < block_ref.round {
+                &[hostname, "uncommitted"]
+            } else {
+                // If last committed round is higher for this authority, then we don't really know it's status, but we know that there is a higher committed block from this authority.
+                &[hostname, "higher_committed"]
+            };
+
+            self.context
+                .metrics
+                .node_metrics
+                .blocks_pruned_on_commit
+                .with_label_values(label_values)
+                .inc();
+        }
     }
 }
 
@@ -422,76 +467,6 @@ mod tests {
             (AuthorityIndex::new_for_test(0), 29),
             (AuthorityIndex::new_for_test(3), 29),
             (AuthorityIndex::new_for_test(2), 29),
-        ];
-        assert_eq!(commits[0].reputation_scores_desc, scores);
-
-        for commit in commits.into_iter().skip(1) {
-            assert_eq!(commit.reputation_scores_desc, vec![]);
-        }
-    }
-
-    // TODO: Remove when DistributedVoteScoring is enabled.
-    #[tokio::test]
-    async fn test_handle_commit_with_schedule_update_with_unscored_subdags() {
-        telemetry_subscribers::init_for_testing();
-        let num_authorities = 4;
-        let context = Arc::new(Context::new_for_test(num_authorities).0);
-        let dag_state = Arc::new(RwLock::new(DagState::new(
-            context.clone(),
-            Arc::new(MemStore::new()),
-        )));
-        const NUM_OF_COMMITS_PER_SCHEDULE: u64 = 10;
-        let leader_schedule = Arc::new(
-            LeaderSchedule::new(context.clone(), LeaderSwapTable::default())
-                .with_num_commits_per_schedule(NUM_OF_COMMITS_PER_SCHEDULE),
-        );
-        let mut linearizer =
-            Linearizer::new(context.clone(), dag_state.clone(), leader_schedule.clone());
-
-        // Populate fully connected test blocks for round 0 ~ 20, authorities 0 ~ 3.
-        let num_rounds: u32 = 20;
-        let mut dag_builder = DagBuilder::new(context.clone());
-        dag_builder
-            .layers(1..=num_rounds)
-            .build()
-            .persist_layers(dag_state.clone());
-
-        // Take the first 10 leaders
-        let leaders = dag_builder
-            .leader_blocks(1..=10)
-            .into_iter()
-            .map(Option::unwrap)
-            .collect::<Vec<_>>();
-
-        // Create some commits
-        let commits = linearizer.handle_commit(leaders.clone());
-
-        // Write them in DagState
-        dag_state.write().add_unscored_committed_subdags(commits);
-
-        // Now update the leader schedule
-        leader_schedule.update_leader_schedule_v1(&dag_state);
-
-        assert!(
-            leader_schedule.leader_schedule_updated(&dag_state),
-            "Leader schedule should have been updated"
-        );
-
-        // Try to commit now the rest of the 10 leaders
-        let leaders = dag_builder
-            .leader_blocks(11..=20)
-            .into_iter()
-            .map(Option::unwrap)
-            .collect::<Vec<_>>();
-
-        // Now on the commits only the first one should contain the updated scores, the other should be empty
-        let commits = linearizer.handle_commit(leaders.clone());
-        assert_eq!(commits.len(), 10);
-        let scores = vec![
-            (AuthorityIndex::new_for_test(2), 9),
-            (AuthorityIndex::new_for_test(1), 8),
-            (AuthorityIndex::new_for_test(0), 8),
-            (AuthorityIndex::new_for_test(3), 8),
         ];
         assert_eq!(commits[0].reputation_scores_desc, scores);
 

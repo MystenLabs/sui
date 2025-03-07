@@ -16,7 +16,6 @@ anyhow.workspace = true
 futures.workspace = true
 async-trait.workspace = true
 bcs.workspace = true
-bin-version.workspace = true
 clap.workspace = true
 mysten-metrics.workspace = true
 prometheus.workspace = true

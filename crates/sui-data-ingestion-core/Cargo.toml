@@ -18,7 +18,6 @@ serde.workspace = true
 serde_json.workspace = true
 object_store.workspace = true
 prometheus.workspace = true
-telemetry-subscribers.workspace = true
 tokio = { workspace = true, features = ["full"] }
 tokio-stream.workspace = true
 tracing.workspace = true
