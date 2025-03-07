@@ -167,7 +167,7 @@ module sui::ecdsa_k1_tests {
         let sig = ecdsa_k1::secp256k1_sign(&sk, &msg, 1, true);
         assert!(pk == ecdsa_k1::secp256k1_ecrecover(&sig, &msg, 1));
 
-        // Recovers pk should not be the same with another message
+        // Recoverer's pk should not be the same with another message
         let other_msg = b"Farewell, world!";
         assert!(pk != ecdsa_k1::secp256k1_ecrecover(&sig, &other_msg, 0));
     }

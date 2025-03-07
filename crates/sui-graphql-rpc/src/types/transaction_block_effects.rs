@@ -188,7 +188,7 @@ impl TransactionBlockEffects {
                 let command = command + 1;
                 let suffix = match command % 10 {
                     1 => "st",
-                    2 => "and",
+                    2 => "nd",
                     3 => "rd",
                     _ => "th",
                 };

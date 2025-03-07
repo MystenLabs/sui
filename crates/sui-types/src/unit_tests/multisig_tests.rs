@@ -431,7 +431,7 @@ fn zklogin_in_multisig_works_with_both_addresses() {
         matches!(res, Err(crate::error::SuiError::InvalidSignature { error }) if error.contains("General cryptographic error: Groth16 proof verify failed"))
     );
 
-    // initialize zklogin pk (pk1_pad) with padded address seed
+    // initialize zklogin pk (pk1_padd) with padded address seed
     let pk1_padded = PublicKey::ZkLogin(
         ZkLoginPublicIdentifier::new(
             &OIDCProvider::Twitch.get_config().iss,

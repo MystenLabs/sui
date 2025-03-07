@@ -1,0 +1,7 @@
+[default]
+extend-ignore-re = [
+  "[a-zA-Z0-9]{44}"
+]
+
+[default.extend-words]
+groth = "groth"

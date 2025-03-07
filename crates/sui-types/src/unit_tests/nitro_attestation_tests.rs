@@ -54,7 +54,7 @@ fn test_with_malformed_attestation() {
 
     assert!(matches!(
         err,
-        SuiError::AttestationFailedToVerify(msg) if msg.starts_with("InvalidCaseSign1")
+        SuiError::AttestationFailedToVerify(msg) if msg.starts_with("InvalidCoseSign1")
     ));
 }
 
