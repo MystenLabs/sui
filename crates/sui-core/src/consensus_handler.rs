@@ -235,7 +235,7 @@ mod additional_consensus_state {
                 round: commit_round,
                 timestamp: commit_timestamp,
                 consensus_commit_digest: ConsensusCommitDigest::default(),
-                additional_state_digest: None,
+                additional_state_digest: Some(AdditionalConsensusStateDigest::ZERO),
                 estimated_commit_period,
                 skip_consensus_commit_prologue_in_test,
             }
