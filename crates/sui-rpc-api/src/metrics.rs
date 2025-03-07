@@ -211,7 +211,7 @@ impl SubscriptionMetrics {
             )
             .unwrap(),
             last_received_checkpoint: register_int_gauge_with_registry!(
-                "subscription_last_received_checkpoint",
+                "subscription_last_recieved_checkpoint",
                 "Last received checkpoint by the subscription service",
                 registry,
             )

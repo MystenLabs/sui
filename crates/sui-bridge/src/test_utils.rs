@@ -230,7 +230,7 @@ pub fn get_test_log_and_action(
     let source_address = EthAddress::random();
     let sui_address: SuiAddress = SuiAddress::random_for_testing_only();
     let target_address = Hex::decode(&sui_address.to_string()).unwrap();
-    // Note: must use `encode` rather than `encode_packaged`
+    // Note: must use `encode` rather than `encode_packed`
     let encoded = ethers::abi::encode(&[
         // u8/u64 is encoded as u256 in abi standard
         ethers::abi::Token::Uint(ethers::types::U256::from(token_id)),

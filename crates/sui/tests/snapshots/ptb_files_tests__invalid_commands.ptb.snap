@@ -8,23 +8,23 @@ expression: "results.join(\"\\n\")"
  1 │ --move-cal
    · ─────┬────
    ·      ╰── Unknown command '--move-cal'
- 2 │ --assign
+ 2 │ --assing
    ╰────
   help: Did you mean '--move-call'?
 
   × Error when processing PTB
    ╭─[2:1]
  1 │ --move-cal
- 2 │ --assign
+ 2 │ --assing
    · ────┬───
-   ·     ╰── Unknown command '--assign'
+   ·     ╰── Unknown command '--assing'
  3 │ --assig
    ╰────
   help: Did you mean '--assign'?
 
   × Error when processing PTB
    ╭─[3:1]
- 2 │ --assign
+ 2 │ --assing
  3 │ --assig
    · ───┬───
    ·    ╰── Unknown command '--assig'

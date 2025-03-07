@@ -169,7 +169,7 @@ Response: {
       "epochCommitments": []
     },
     "transactions": [
-      "gzaBYLyrgTTckbYkCedU6srqRv8v1eV6PB75uxy6koH"
+      "gzaBALyrgTTckbYkCedU6srqRv8v1eV6PB75uxy6koH"
     ],
     "checkpointCommitments": [],
     "validatorSignature": "hoTxEM+Lag81g7z2pfJEgjVgG41jML8Aq6OlXGF3ntDI2LMyUXocRbNBmDGktf+0"

@@ -230,7 +230,7 @@ async fn start_processing_sui_checkpoints_by_querying_txns(
     ));
     handles.push(spawn_logged_monitored_task!(
         handle_sui_transactions_loop(pg_pool.clone(), rx, indexer_metrics.clone()),
-        "handle_sui_transactions_loop"
+        "handle_sui_transcations_loop"
     ));
     Ok(handles)
 }
