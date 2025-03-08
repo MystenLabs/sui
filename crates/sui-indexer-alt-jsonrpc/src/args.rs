@@ -40,7 +40,7 @@ pub enum Command {
         metrics_args: MetricsArgs,
 
         #[command(flatten)]
-        write_args: Option<WriteArgs>,
+        write_args: WriteArgs,
 
         /// Path to the RPC's configuration TOML file. If one is not provided, the default values for
         /// the configuration will be set.

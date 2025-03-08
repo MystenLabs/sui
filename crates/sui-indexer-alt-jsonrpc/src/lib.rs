@@ -224,7 +224,7 @@ pub async fn start_rpc(
     database_url: Url,
     db_args: DbArgs,
     rpc_args: RpcArgs,
-    write_args: Option<WriteArgs>,
+    write_args: WriteArgs,
     system_package_task_args: SystemPackageTaskArgs,
     rpc_config: RpcConfig,
     registry: &Registry,
@@ -253,8 +253,11 @@ pub async fn start_rpc(
     rpc.add_module(Transactions(context.clone()))?;
 
     // Add the write module if a fullnode rpc url is provided.
-    if let Some(write_args) = write_args {
-        rpc.add_module(Write::new(write_args, context.config().write.clone())?)?;
+    if let Some(fullnode_rpc_url) = write_args.fullnode_rpc_url {
+        rpc.add_module(Write::new(
+            fullnode_rpc_url,
+            context.config().write.clone(),
+        )?)?;
     }
 
     let h_rpc = rpc.run().await.context("Failed to start RPC service")?;

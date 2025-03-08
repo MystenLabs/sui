@@ -52,10 +52,11 @@ pub trait WriteApi {
     ) -> RpcResult<DryRunTransactionBlockResponse>;
 }
 
-#[derive(clap::Args, Debug, Clone)]
+#[derive(clap::Args, Debug, Clone, Default)]
 pub struct WriteArgs {
     /// The URL of the fullnode RPC we connect to for executing transactions.
-    pub fullnode_rpc_url: url::Url,
+    #[arg(long)]
+    pub fullnode_rpc_url: Option<url::Url>,
 }
 
 pub(crate) struct Write(pub HttpClient);
@@ -67,7 +68,7 @@ pub enum Error {
 }
 
 impl Write {
-    pub fn new(args: WriteArgs, config: WriteConfig) -> anyhow::Result<Self> {
+    pub fn new(fullnode_rpc_url: url::Url, config: WriteConfig) -> anyhow::Result<Self> {
         let mut headers = HeaderMap::new();
         headers.insert(
             CLIENT_SDK_TYPE_HEADER,
@@ -78,7 +79,7 @@ impl Write {
             HttpClientBuilder::default()
                 .max_request_size(config.max_request_size)
                 .set_headers(headers.clone())
-                .build(&args.fullnode_rpc_url)
+                .build(&fullnode_rpc_url)
                 .context("Failed to initialize fullnode RPC client")?,
         ))
     }
