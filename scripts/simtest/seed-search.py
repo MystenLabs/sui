@@ -20,7 +20,7 @@ parser.add_argument(
     default=int(subprocess.check_output(["date", "+%s"]).decode("utf-8").strip()) * 1000
 )
 parser.add_argument('--concurrency', type=int, help='Number of concurrent tests to run', default=os.cpu_count())
-parser.add_argument('--no-build', type=bool, help='Skip building the test binary', default=False)
+parser.add_argument('--no-build', action='store_true', help='Skip building the test binary')
 args = parser.parse_args()
 
 def run_command(command, env_vars):
