@@ -7,7 +7,6 @@ use crate::consensus_handler::ConsensusCommitInfo;
 use mysten_common::fatal;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
-use std::time::Duration;
 use sui_protocol_config::{PerObjectCongestionControlMode, ProtocolConfig};
 use sui_types::base_types::{ObjectID, TransactionDigest};
 use sui_types::error::SuiResult;
