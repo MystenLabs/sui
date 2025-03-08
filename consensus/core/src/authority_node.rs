@@ -62,6 +62,7 @@ impl ConsensusAuthority {
         // make decisions on whether amnesia recovery should run or not. When `boot_counter` is 0, then `ConsensusAuthority`
         // will initiate the process of amnesia recovery if that's enabled in the parameters.
         boot_counter: u64,
+        clock: Arc<Clock>,
     ) -> Self {
         match network_type {
             ConsensusNetwork::Anemo => {
@@ -76,6 +77,7 @@ impl ConsensusAuthority {
                     commit_consumer,
                     registry,
                     boot_counter,
+                    clock,
                 )
                 .await;
                 Self::WithAnemo(authority)
@@ -92,6 +94,7 @@ impl ConsensusAuthority {
                     commit_consumer,
                     registry,
                     boot_counter,
+                    clock,
                 )
                 .await;
                 Self::WithTonic(authority)
@@ -176,6 +179,7 @@ where
         commit_consumer: CommitConsumer,
         registry: Registry,
         boot_counter: u64,
+        clock: Arc<Clock>,
     ) -> Self {
         assert!(
             committee.is_valid_index(own_index),
@@ -202,7 +206,7 @@ where
             parameters,
             protocol_config,
             initialise_metrics(registry),
-            Arc::new(Clock::new()),
+            clock,
         ));
         let start_time = Instant::now();
 
@@ -477,6 +481,7 @@ mod tests {
             commit_consumer,
             registry,
             0,
+            Arc::new(Clock::default()),
         )
         .await;
 
@@ -504,6 +509,7 @@ mod tests {
 
         if gc_depth == 0 {
             protocol_config.set_consensus_linearize_subdag_v2_for_testing(false);
+            protocol_config.set_consensus_median_based_commit_timestamp_for_testing(false);
         }
 
         let temp_dirs = (0..NUM_OF_AUTHORITIES)
@@ -714,6 +720,7 @@ mod tests {
 
         if gc_depth == 0 {
             protocol_config.set_consensus_linearize_subdag_v2_for_testing(false);
+            protocol_config.set_consensus_median_based_commit_timestamp_for_testing(false);
         }
 
         for (index, _authority_info) in committee.authorities() {
@@ -861,6 +868,7 @@ mod tests {
             commit_consumer,
             registry,
             boot_counter,
+            Arc::new(Clock::default()),
         )
         .await;
 
