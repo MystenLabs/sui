@@ -44,7 +44,7 @@ module test::m1 {
 
 //# view-object 4,0
 
-// compilicated Move logic
+// complicated Move logic
 //# programmable --sender A --inputs @B true
 //> 0: sui::address::to_u256(Input(0));
 //> 1: sui::address::from_u256(Result(0));

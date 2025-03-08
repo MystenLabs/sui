@@ -31,7 +31,7 @@ trait ObjectsApi {
     #[method(name = "getObject")]
     async fn get_object(
         &self,
-        /// The ID of the queried obect
+        /// The ID of the queried object
         object_id: ObjectID,
         /// Options for specifying the content to be returned
         options: Option<SuiObjectDataOptions>,

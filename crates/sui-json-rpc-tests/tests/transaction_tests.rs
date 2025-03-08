@@ -371,7 +371,7 @@ async fn test_query_transaction_blocks() -> Result<(), anyhow::Error> {
     let signer = cluster.wallet.active_address().unwrap();
 
     let tx_builder = client.transaction_builder().clone();
-    let mut pt_builer = ProgrammableTransactionBuilder::new();
+    let mut pt_builder = ProgrammableTransactionBuilder::new();
     let gas = objects.last().unwrap().object().unwrap().object_ref();
 
     let module = Identifier::from_str("pay")?;
@@ -387,7 +387,7 @@ async fn test_query_transaction_blocks() -> Result<(), anyhow::Error> {
     let sui_call_args_1 = call_args!(coin.data.clone().unwrap().object_id, 10)?;
     let call_args_1 = tx_builder
         .resolve_and_checks_json_args(
-            &mut pt_builer,
+            &mut pt_builder,
             package_id,
             &module,
             &function_1,
@@ -406,7 +406,7 @@ async fn test_query_transaction_blocks() -> Result<(), anyhow::Error> {
     let sui_call_args_2 = call_args!(coin_2.data.clone().unwrap().object_id, 10)?;
     let call_args_2 = tx_builder
         .resolve_and_checks_json_args(
-            &mut pt_builer,
+            &mut pt_builder,
             package_id,
             &module,
             &function_2,
@@ -415,9 +415,9 @@ async fn test_query_transaction_blocks() -> Result<(), anyhow::Error> {
         )
         .await?;
     let cmd_2 = Command::move_call(package_id, module, function_2, type_args, call_args_2);
-    pt_builer.command(cmd_1);
-    pt_builer.command(cmd_2);
-    let pt = pt_builer.finish();
+    pt_builder.command(cmd_1);
+    pt_builder.command(cmd_2);
+    let pt = pt_builder.finish();
 
     let tx_data = TransactionData::new_programmable(signer, vec![gas], pt, 10_000_000, 1000);
     let signed_data = cluster.wallet.sign_transaction(&tx_data);

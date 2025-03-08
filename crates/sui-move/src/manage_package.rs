@@ -26,7 +26,7 @@ pub struct ManagePackage {
     /// The environment to associate this package information with (consider using `sui client active-env`).
     pub environment: String,
     #[clap(long = "network-id")]
-    /// The network chain identifer. Use '35834a8a' for mainnet.
+    /// The network chain identifier. Use '35834a8a' for mainnet.
     pub chain_id: String,
     #[clap(long = "original-id", value_parser = ObjectID::from_hex_literal)]
     /// The original address (Object ID) where this package is published.

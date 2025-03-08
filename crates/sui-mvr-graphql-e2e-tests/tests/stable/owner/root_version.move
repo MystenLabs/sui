@@ -155,7 +155,7 @@ fragment DOF on Owner {
 { # Querying dynamic fields under the wrapped Move object
   # AA== is the base64 encoding of the boolean value `false` (0x00).
 
-  # The latest version konwn to the service for the wrapped object is
+  # The latest version known to the service for the wrapped object is
   # the version it was wrapped at, so that will have no dynamic
   # fields.
   unversioned: owner(address: "@{obj_3_0}") { ...DOF }

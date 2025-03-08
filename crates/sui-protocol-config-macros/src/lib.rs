@@ -11,11 +11,11 @@ use syn::{parse_macro_input, Data, DeriveInput, Fields, Type};
 /// and for the feature flags
 /// Example for a field: `new_constant: Option<u64>`, and for feature flags `feature: bool`, we derive
 /// ```rust,ignore
-///     /// Returns the value of the field if exists at the given version, otherise panic
+///     /// Returns the value of the field if exists at the given version, otherwise panic
 ///     pub fn new_constant(&self) -> u64 {
 ///         self.new_constant.expect(Self::CONSTANT_ERR_MSG)
 ///     }
-///     /// Returns the value of the field if exists at the given version, otherise None.
+///     /// Returns the value of the field if exists at the given version, otherwise None.
 ///     pub fn new_constant_as_option(&self) -> Option<u64> {
 ///         self.new_constant
 ///     }
@@ -27,7 +27,7 @@ use syn::{parse_macro_input, Data, DeriveInput, Fields, Type};
 ///     }
 ///     // This enum is used to return field values so that the type is also encoded in the response
 ///
-///     /// Returns the value of the field if exists at the given version, otherise None
+///     /// Returns the value of the field if exists at the given version, otherwise None
 ///     pub fn lookup_attr(&self, value: String) -> Option<ProtocolConfigValue>;
 ///
 ///     /// Returns a map of all configs to values

@@ -286,7 +286,7 @@ may abort with errors described above.
 
 ## Function `pcrs`
 
-Returns a list of mapping PCREntry containg the index and the PCR bytes.
+Returns a list of mapping PCREntry containing the index and the PCR bytes.
 Currently AWS supports PCR0, PCR1, PCR2, PCR3, PCR4, PCR8.
 
 

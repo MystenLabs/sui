@@ -182,7 +182,7 @@ impl SharedObjectCongestionTracker {
         // Note that the congested objects here may be caused by transaction dependency of other congested objects.
         // Consider in a consensus commit, there are many transactions touching object A, and later in processing the
         // consensus commit, there is a transaction touching both object A and B. Although there are fewer transactions
-        // touching object B, becase it's starting execution is delayed due to dependency to other transactions on
+        // touching object B, because it's starting execution is delayed due to dependency to other transactions on
         // object A, it may be shown up as congested objects.
         let mut congested_objects = vec![];
         for obj in shared_input_objects {

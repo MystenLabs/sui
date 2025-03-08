@@ -377,7 +377,7 @@ impl Coin {
             })?;
 
             let coin = Coin::try_from(&move_).map_err(|_| {
-                Error::Internal(format!("Faild to deserialize as Coin: {}", object.address))
+                Error::Internal(format!("Failed to deserialize as Coin: {}", object.address))
             })?;
 
             conn.edges.push(Edge::new(cursor, coin));

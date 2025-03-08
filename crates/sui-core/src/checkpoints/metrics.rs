@@ -112,13 +112,13 @@ impl CheckpointMetrics {
             .unwrap(),
             last_skipped_checkpoint_signature_submission: register_int_gauge_with_registry!(
                 "last_skipped_checkpoint_signature_submission",
-                "Last checkpoint signature that this validator skipped submitting because it was already certfied.",
+                "Last checkpoint signature that this validator skipped submitting because it was already certified.",
                 registry
             )
             .unwrap(),
             last_ignored_checkpoint_signature_received: register_int_gauge_with_registry!(
                 "last_ignored_checkpoint_signature_received",
-                "Last received checkpoint signature that this validator ignored because it was already certfied.",
+                "Last received checkpoint signature that this validator ignored because it was already certified.",
                 registry
             )
             .unwrap(),
@@ -130,13 +130,13 @@ impl CheckpointMetrics {
             .unwrap(),
             checkpoint_creation_latency: register_histogram_with_registry!(
                 "checkpoint_creation_latency",
-                "Latency from consensus commit timstamp to local checkpoint creation in milliseconds",
+                "Latency from consensus commit timestamp to local checkpoint creation in milliseconds",
                 mysten_metrics::LATENCY_SEC_BUCKETS.to_vec(),
                 registry,
             ).unwrap(),
             checkpoint_creation_latency_ms: MystenHistogram::new_in_registry(
                 "checkpoint_creation_latency_ms",
-                "Latency from consensus commit timstamp to local checkpoint creation in milliseconds",
+                "Latency from consensus commit timestamp to local checkpoint creation in milliseconds",
                 registry,
             ),
             remote_checkpoint_forks: register_int_counter_with_registry!(

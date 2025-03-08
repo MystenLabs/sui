@@ -99,7 +99,7 @@ module deepbook::clob {
         // Orders that are submitted earlier has lower order ids.
         // 64 bits are sufficient for order ids whereas 32 bits are not.
         // Assuming a maximum TPS of 100K/s of Sui chain, it would take (1<<63) / 100000 / 3600 / 24 / 365 = 2924712 years to reach the full capacity.
-        // The highest bit of the order id is used to denote the order tyep, 0 for bid, 1 for ask.
+        // The highest bit of the order id is used to denote the order type, 0 for bid, 1 for ask.
         order_id: u64,
         // Only used for limit orders.
         price: u64,

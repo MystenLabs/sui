@@ -394,11 +394,11 @@ message ExecuteTransactionRequest {
   // The transaction to execute, encoded as BCS bytes.
   optional sui.types.Bcs transaction_bcs = 2;
 
-  // Set of `UserSiganture`s authorizing the execution of the provided
+  // Set of `UserSignature`s authorizing the execution of the provided
   // transaction.
   repeated sui.types.UserSignature signatures = 3;
 
-  // Set of `UserSiganture`s authorizing the execution of the provided
+  // Set of `UserSignature`s authorizing the execution of the provided
   // transaction, encoded as bytes.
   repeated bytes signatures_bytes = 4;
 

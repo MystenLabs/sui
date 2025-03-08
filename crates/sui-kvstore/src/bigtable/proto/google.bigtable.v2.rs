@@ -669,7 +669,7 @@ pub struct RequestLatencyStats {
 pub struct FullReadStatsView {
     /// Iteration stats describe how efficient the read is, e.g. comparing
     /// rows seen vs. rows returned or cells seen vs cells returned can provide an
-    /// indication of read efficiency (the higher the ratio of seen to retuned the
+    /// indication of read efficiency (the higher the ratio of seen to returned the
     /// better).
     #[prost(message, optional, tag = "1")]
     pub read_iteration_stats: ::core::option::Option<ReadIterationStats>,

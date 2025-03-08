@@ -154,7 +154,7 @@ pub(crate) async fn object_data_with_options(
 }
 
 /// Extract the contents of an object, in a format chosen by the `D` type parameter.
-/// This operaton can fail if it's not possible to get the type layout for the object's type.
+/// This operation can fail if it's not possible to get the type layout for the object's type.
 async fn object_data<D: SuiData>(ctx: &Context, object: &Object) -> Result<D, RpcError> {
     Ok(match object.data.clone() {
         Data::Package(move_package) => D::try_from_package(move_package)?,

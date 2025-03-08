@@ -265,7 +265,7 @@ impl ExecutionTimeObserver {
     }
 }
 
-// Default duration estimate used for transations containing a command without any
+// Default duration estimate used for transitions containing a command without any
 // available observations.
 // TODO: Make this a protocol config.
 const DEFAULT_TRANSACTION_DURATION: Duration = Duration::from_millis(1_500);
