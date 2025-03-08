@@ -34,15 +34,12 @@ impl<K: DeserializeOwned, V: DeserializeOwned> Iterator for TestIteratorWrapper<
 }
 
 // Creates an Iterator based on `use_safe_iter` on `db`.
-fn get_iter<K, V>(db: &DBMap<K, V>, use_safe_iter: bool) -> TestIteratorWrapper<'_, K, V>
+fn get_iter<K, V>(db: &DBMap<K, V>, _: bool) -> TestIteratorWrapper<'_, K, V>
 where
     K: Serialize + DeserializeOwned,
     V: Serialize + DeserializeOwned,
 {
-    match use_safe_iter {
-        true => TestIteratorWrapper::SafeIter(db.safe_iter()),
-        false => TestIteratorWrapper::Iter(db.unbounded_iter()),
-    }
+    TestIteratorWrapper::SafeIter(db.safe_iter())
 }
 
 fn get_reverse_iter<K, V>(
@@ -79,16 +76,12 @@ where
 fn get_range_iter<K, V>(
     db: &DBMap<K, V>,
     range: impl RangeBounds<K>,
-    use_safe_iter: bool,
 ) -> TestIteratorWrapper<'_, K, V>
 where
     K: Serialize + DeserializeOwned,
     V: Serialize + DeserializeOwned,
 {
-    match use_safe_iter {
-        true => TestIteratorWrapper::SafeIter(db.safe_range_iter(range)),
-        false => TestIteratorWrapper::Iter(db.range_iter(range)),
-    }
+    TestIteratorWrapper::SafeIter(db.safe_range_iter(range))
 }
 
 #[tokio::test]
@@ -580,7 +573,7 @@ async fn test_iter_with_bounds(#[values(true, false)] use_safe_iter: bool) {
 
 #[rstest]
 #[tokio::test]
-async fn test_range_iter(#[values(true, false)] use_safe_iter: bool) {
+async fn test_range_iter() {
     let db = open_map(temp_dir(), None);
 
     // Add [1, 50) and (50, 100) in the db
@@ -591,28 +584,28 @@ async fn test_range_iter(#[values(true, false)] use_safe_iter: bool) {
     }
 
     // Tests basic range iterating with inclusive end.
-    let db_iter = get_range_iter(&db, 10..=20, use_safe_iter);
+    let db_iter = get_range_iter(&db, 10..=20);
     assert_eq!(
         (10..21).map(|i| (i, i.to_string())).collect::<Vec<_>>(),
         db_iter.collect::<Vec<_>>()
     );
 
     // Tests range with min start and exclusive end.
-    let db_iter = get_range_iter(&db, ..20, use_safe_iter);
+    let db_iter = get_range_iter(&db, ..20);
     assert_eq!(
         (1..20).map(|i| (i, i.to_string())).collect::<Vec<_>>(),
         db_iter.collect::<Vec<_>>()
     );
 
     // Tests range with max end.
-    let db_iter = get_range_iter(&db, 60.., use_safe_iter);
+    let db_iter = get_range_iter(&db, 60..);
     assert_eq!(
         (60..100).map(|i| (i, i.to_string())).collect::<Vec<_>>(),
         db_iter.collect::<Vec<_>>()
     );
 
     // Skip to first key in the bound (bound is [1, 49))
-    let db_iter = get_range_iter(&db, 1..49, use_safe_iter);
+    let db_iter = get_range_iter(&db, 1..49);
     assert_eq!(
         (1..49).map(|i| (i, i.to_string())).collect::<Vec<_>>(),
         db_iter.collect::<Vec<_>>()
