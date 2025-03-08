@@ -16,7 +16,7 @@ use std::{
     process::Command,
 };
 
-use crate::source_package::parsed_manifest::{Dependencies, InternalDependency};
+use crate::source_package::parsed_manifest::Dependencies;
 use crate::{
     lock_file::{schema, LockFile},
     package_hooks::{custom_resolve_pkg_id, resolve_version, PackageIdentifier},
@@ -260,13 +260,28 @@ impl<Progress: Write> DependencyGraphBuilder<Progress> {
 
         // implicits deps should be skipped if the manifest contains any of them
         // explicitly (or if the manifest is for a system package).
-        let add_implicits: bool = !self.implicit_deps.iter().any(|(name, _)| {
-            root_manifest.dependencies.contains_key(name) || root_manifest.package.name == *name
-        });
-        if add_implicits {
+        let explicit_implicits: Vec<&Symbol> = self
+            .implicit_deps
+            .keys()
+            .filter(|name| root_manifest.dependencies.contains_key(name))
+            .collect();
+
+        let is_implicit: bool = self.implicit_deps.contains_key(&root_manifest.package.name);
+
+        if !is_implicit && explicit_implicits.is_empty() {
             for (name, dep) in self.implicit_deps.iter() {
                 root_manifest.dependencies.insert(*name, dep.clone());
             }
+        } else if !is_implicit {
+            println!(
+                "[{}] Dependencies on {} are automatically added, but this feature is \
+                disabled for your package because you have explicitly included dependencies on {}. Consider \
+                removing these dependencies from {}.",
+                "note".bold().yellow(),
+                move_compiler::format_oxford_list!("and", "{}", self.implicit_deps.keys().collect::<Vec<_>>()),
+                move_compiler::format_oxford_list!("and", "{}", explicit_implicits),
+                SourcePackageLayout::Manifest.location_str(),
+            );
         }
 
         // collect sub-graphs for "regular" and "dev" dependencies
