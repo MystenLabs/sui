@@ -88,7 +88,7 @@ impl Test<'_> {
             lock_file: ["locked", "notlocked"]
                 .contains(&self.kind)
                 .then(|| lock_path.clone()),
-            implicit_dependencies: load_implicits(&implicits_path),
+            implicit_dependencies: load_implicits_from_file(&implicits_path),
             ..Default::default()
         };
 
@@ -130,7 +130,7 @@ impl Test<'_> {
 }
 
 /// Return the dependencies contained in the file at `path`, if any
-fn load_implicits(path: &Path) -> Dependencies {
+fn load_implicits_from_file(path: &Path) -> Dependencies {
     let deps_toml = fs::read_to_string(path).unwrap_or("# no implicit deps".to_string());
 
     parse_dependencies(toml::from_str(&deps_toml).unwrap()).unwrap_or_else(|e| {

@@ -262,14 +262,7 @@ impl BuildConfig {
         let lock_string = std::fs::read_to_string(path.join(SourcePackageLayout::Lock.path())).ok();
         let _mutx = PackageLock::lock(); // held until function returns
 
-        resolution::download_dependency_repos(
-            manifest_string,
-            lock_string,
-            self,
-            &path,
-            writer,
-            &self.implicit_dependencies,
-        )?;
+        resolution::download_dependency_repos(manifest_string, lock_string, self, &path, writer)?;
         Ok(())
     }
 

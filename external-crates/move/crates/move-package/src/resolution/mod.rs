@@ -10,7 +10,7 @@ use std::{
 };
 
 use crate::{
-    source_package::parsed_manifest::{Dependencies, DependencyKind, GitInfo, OnChainInfo},
+    source_package::parsed_manifest::{DependencyKind, GitInfo, OnChainInfo},
     BuildConfig,
 };
 
@@ -28,7 +28,6 @@ pub fn download_dependency_repos<Progress: Write>(
     build_options: &BuildConfig,
     root_path: &Path,
     progress_output: &mut Progress,
-    implicit_deps: &Dependencies,
 ) -> Result<()> {
     let install_dir = build_options
         .install_dir
@@ -39,7 +38,7 @@ pub fn download_dependency_repos<Progress: Write>(
         build_options.skip_fetch_latest_git_deps,
         progress_output,
         install_dir,
-        implicit_deps.clone(),
+        build_options.implicit_dependencies.clone(),
     );
     let (graph, _) = dep_graph_builder.get_graph(
         &DependencyKind::default(),
