@@ -387,6 +387,7 @@ mod object_cost_tests {
     use super::*;
 
     use rstest::rstest;
+    use std::time::Duration;
     use sui_protocol_config::ExecutionTimeEstimateParams;
     use sui_test_transaction_builder::TestTransactionBuilder;
     use sui_types::base_types::{random_object_ref, SequenceNumber};
