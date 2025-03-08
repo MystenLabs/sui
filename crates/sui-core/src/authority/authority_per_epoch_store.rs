@@ -3340,7 +3340,7 @@ impl AuthorityPerEpochStore {
                     self.get_highest_pending_checkpoint_height() + 1
                 },
                 0,
-                None,
+                Some(Duration::from_millis(80)),
                 skip_consensus_commit_prologue_in_test,
             ),
             authority_metrics,
