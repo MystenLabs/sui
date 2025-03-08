@@ -5005,7 +5005,11 @@ impl AuthorityState {
                         )
                         + 1
                 })
-                .unwrap_or(0),
+                .unwrap_or(1),
+        );
+        info!(
+            "reading checkpoint range {:?}..={:?}",
+            start_checkpoint, last_checkpoint_before_end_of_epoch
         );
         let sequence_numbers =
             (start_checkpoint..=last_checkpoint_before_end_of_epoch).collect::<Vec<_>>();
