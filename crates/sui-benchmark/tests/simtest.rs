@@ -36,7 +36,10 @@ mod test {
         clear_fail_point, nondeterministic, register_fail_point, register_fail_point_arg,
         register_fail_point_async, register_fail_point_if, register_fail_points, sim_test,
     };
-    use sui_protocol_config::{PerObjectCongestionControlMode, ProtocolConfig, ProtocolVersion};
+    use sui_protocol_config::{
+        ExecutionTimeEstimateParams, PerObjectCongestionControlMode, ProtocolConfig,
+        ProtocolVersion,
+    };
     use sui_simulator::tempfile::TempDir;
     use sui_simulator::{configs::*, SimConfig};
     use sui_storage::blob::Blob;
@@ -477,7 +480,13 @@ mod test {
                 PerObjectCongestionControlMode::TotalGasBudget,
                 PerObjectCongestionControlMode::TotalTxCount,
                 PerObjectCongestionControlMode::TotalGasBudgetWithCap,
-                PerObjectCongestionControlMode::ExecutionTimeEstimate,
+                PerObjectCongestionControlMode::ExecutionTimeEstimate(
+                    ExecutionTimeEstimateParams {
+                        target_utilization: rng.gen_range(1..=100),
+                        allowed_txn_cost_overage_burst_limit_us: rng.gen_range(0..500_000),
+                        max_txn_cost_overage_per_object_in_commit_us: 10_000_000_000,
+                    },
+                ),
             ]
             .choose(&mut rng)
             .unwrap();
@@ -488,13 +497,7 @@ mod test {
             } else {
                 rng.gen_range(1000..10000) // Large deferral round (testing liveness)
             };
-            if mode == PerObjectCongestionControlMode::ExecutionTimeEstimate {
-                // Note: ExecutionTimeEstimate mode does not work properly without overage enabled,
-                // because high default estimates will always initially exceed the per-commit
-                // budget. Overage must at least allow for a single 1.5s (150% util) tx.
-                let min_overage_factor = (150 / checkpoint_budget_factor) + 1;
-                allow_overage_factor = rng.gen_range(min_overage_factor..min_overage_factor * 2);
-            } else if rng.gen_bool(0.5) {
+            if rng.gen_bool(0.5) {
                 allow_overage_factor = rng.gen_range(1..100);
             }
             cap_factor_denominator = rng.gen_range(1..100);
@@ -554,17 +557,8 @@ mod test {
                         burst_limit_factor * total_gas_limit,
                     );
                 },
-                PerObjectCongestionControlMode::ExecutionTimeEstimate => {
-                    let budget = checkpoint_budget_factor * 1_000; // convert budget factor to % utilization 
-                    config.set_max_accumulated_txn_cost_per_object_in_narwhal_commit_for_testing(budget);
-                    config.set_max_accumulated_txn_cost_per_object_in_mysticeti_commit_for_testing(budget);
-                    config.set_max_txn_cost_overage_per_object_in_commit_for_testing(
-                        allow_overage_factor * budget,
-                    );
-                    config.set_allowed_txn_cost_overage_burst_per_object_in_commit_for_testing(
-                        burst_limit_factor * budget,
-                    );
-                }
+                // Ignore, params are in ExecutionTimeEstimateParams
+                PerObjectCongestionControlMode::ExecutionTimeEstimate(_) => {}
             }
             config.set_max_deferral_rounds_for_congestion_control_for_testing(max_deferral_rounds);
             if separate_randomness_budget {
