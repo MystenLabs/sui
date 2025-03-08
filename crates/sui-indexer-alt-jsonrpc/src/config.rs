@@ -80,6 +80,16 @@ pub struct ObjectsConfig {
 
     /// The maximum number of bytes occupied by Display field names and values in the output.
     pub max_display_output_size: usize,
+
+    /// The maximum nesting depth of an owned object filter.
+    pub max_filter_depth: usize,
+
+    /// The maximum number of type filters in an owned object filter.
+    pub max_type_filters: usize,
+
+    /// The number of owned objects to fetch in one go when fulfilling a compound owned object
+    /// filter.
+    pub filter_scan_size: usize,
 }
 
 #[DefaultConfig]
@@ -90,6 +100,9 @@ pub struct ObjectsLayer {
     pub max_page_size: Option<usize>,
     pub max_display_field_depth: Option<usize>,
     pub max_display_output_size: Option<usize>,
+    pub max_filter_depth: Option<usize>,
+    pub max_type_filters: Option<usize>,
+    pub filter_scan_size: Option<usize>,
 
     #[serde(flatten)]
     pub extra: toml::Table,
@@ -228,6 +241,9 @@ impl ObjectsLayer {
             max_display_output_size: self
                 .max_display_output_size
                 .unwrap_or(base.max_display_output_size),
+            max_filter_depth: self.max_filter_depth.unwrap_or(base.max_filter_depth),
+            max_type_filters: self.max_type_filters.unwrap_or(base.max_type_filters),
+            filter_scan_size: self.filter_scan_size.unwrap_or(base.filter_scan_size),
         }
     }
 }
@@ -307,6 +323,9 @@ impl Default for ObjectsConfig {
             max_page_size: 100,
             max_display_field_depth: 10,
             max_display_output_size: 1024 * 1024,
+            max_filter_depth: 3,
+            max_type_filters: 10,
+            filter_scan_size: 200,
         }
     }
 }
@@ -364,6 +383,9 @@ impl From<ObjectsConfig> for ObjectsLayer {
             max_page_size: Some(config.max_page_size),
             max_display_field_depth: Some(config.max_display_field_depth),
             max_display_output_size: Some(config.max_display_output_size),
+            max_filter_depth: Some(config.max_filter_depth),
+            max_type_filters: Some(config.max_type_filters),
+            filter_scan_size: Some(config.filter_scan_size),
             extra: Default::default(),
         }
     }

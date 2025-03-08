@@ -18,6 +18,10 @@ const LATENCY_SEC_BUCKETS: &[f64] = &[
     200.0, 500.0, 1000.0,
 ];
 
+/// Histogram buckets for the distribution of the number of pages of data fetched/scanned from the
+/// database.
+const PAGE_SCAN_BUCKETS: &[f64] = &[1.0, 2.0, 5.0, 10.0, 20.0, 50.0, 100.0];
+
 #[derive(Clone)]
 pub struct RpcMetrics {
     pub db_latency: Histogram,
@@ -29,6 +33,8 @@ pub struct RpcMetrics {
     pub requests_received: IntCounterVec,
     pub requests_succeeded: IntCounterVec,
     pub requests_failed: IntCounterVec,
+
+    pub owned_objects_filter_scans: Histogram,
 }
 
 impl RpcMetrics {
@@ -89,6 +95,14 @@ impl RpcMetrics {
                 "Number of requests that completed with an error for each JSON-RPC method, by error code",
                 &["method", "code"],
                 registry
+            )
+            .unwrap(),
+
+            owned_objects_filter_scans: register_histogram_with_registry!(
+                "owned_objects_filter_scans",
+                "Number of pages of owned objects scanned in response to compound owned object filters",
+                PAGE_SCAN_BUCKETS.to_vec(),
+                registry,
             )
             .unwrap(),
         })

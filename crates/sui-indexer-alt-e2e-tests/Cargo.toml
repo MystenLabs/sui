@@ -41,11 +41,13 @@ async-trait.workspace = true
 datatest-stable.workspace = true
 jsonrpsee.workspace = true
 reqwest.workspace = true
+serde.workspace = true
 serde_json.workspace = true
 telemetry-subscribers.workspace = true
 
 move-core-types.workspace = true
 
+sui-json-rpc-types.workspace = true
 sui-macros.workspace = true
 sui-move-build.workspace = true
 sui-swarm-config.workspace = true
