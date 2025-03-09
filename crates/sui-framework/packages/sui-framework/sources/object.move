@@ -43,6 +43,9 @@ const SUI_DENY_LIST_OBJECT_ID: address = @0x403;
 /// The hardcoded ID for the Bridge Object.
 const SUI_BRIDGE_ID: address = @0x9;
 
+/// The hardcoded ID for the Display Registry Object.
+const SUI_DISPLAY_REGISTRY_OBJECT_ID: address = @0x11;
+
 /// Sender is not @0x0 the system address.
 const ENotSystemAddress: u64 = 0;
 
@@ -133,6 +136,14 @@ public(package) fun randomness_state(): UID {
 public(package) fun sui_deny_list_object_id(): UID {
     UID {
         id: ID { bytes: SUI_DENY_LIST_OBJECT_ID },
+    }
+}
+
+/// Create the `UID` for the singleton `DisplayRegistry` object.
+/// This should only be called once from `display_registry`.
+public(package) fun sui_display_registry_object_id(): UID {
+    UID {
+        id: ID { bytes: SUI_DISPLAY_REGISTRY_OBJECT_ID },
     }
 }
 
