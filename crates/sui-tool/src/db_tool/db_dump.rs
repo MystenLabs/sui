@@ -158,9 +158,9 @@ pub fn print_table_metadata(
     Ok(())
 }
 
-pub fn duplicate_objects_summary(db_path: PathBuf) -> (usize, usize, usize, usize) {
+pub fn duplicate_objects_summary(db_path: PathBuf) -> anyhow::Result<(usize, usize, usize, usize)> {
     let perpetual_tables = AuthorityPerpetualTables::open_readonly(&db_path);
-    let iter = perpetual_tables.objects.unbounded_iter();
+    let iter = perpetual_tables.objects.safe_iter();
     let mut total_count = 0;
     let mut duplicate_count = 0;
     let mut total_bytes = 0;
@@ -169,7 +169,8 @@ pub fn duplicate_objects_summary(db_path: PathBuf) -> (usize, usize, usize, usiz
     let mut object_id: ObjectID = ObjectID::random();
     let mut data: HashMap<Vec<u8>, usize> = HashMap::new();
 
-    for (key, value) in iter {
+    for item in iter {
+        let (key, value) = item?;
         if let StoreObject::Value(store_object) = value.migrate().into_inner() {
             if let StoreData::Move(object) = store_object.data {
                 if object_id != key.0 {
@@ -186,7 +187,7 @@ pub fn duplicate_objects_summary(db_path: PathBuf) -> (usize, usize, usize, usiz
             }
         }
     }
-    (total_count, duplicate_count, total_bytes, duplicated_bytes)
+    Ok((total_count, duplicate_count, total_bytes, duplicated_bytes))
 }
 
 pub fn compact(db_path: PathBuf) -> anyhow::Result<()> {

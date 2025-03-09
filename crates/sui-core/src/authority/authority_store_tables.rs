@@ -415,12 +415,12 @@ impl AuthorityPerpetualTables {
     }
 
     pub fn database_is_empty(&self) -> SuiResult<bool> {
-        Ok(self.objects.unbounded_iter().next().is_none())
+        Ok(self.objects.safe_iter().next().is_none())
     }
 
     pub fn iter_live_object_set(&self, include_wrapped_object: bool) -> LiveSetIter<'_> {
         LiveSetIter {
-            iter: self.objects.unbounded_iter(),
+            iter: self.objects.safe_iter(),
             tables: self,
             prev: None,
             include_wrapped_object,
@@ -437,7 +437,7 @@ impl AuthorityPerpetualTables {
         let upper_bound = upper_bound.as_ref().map(ObjectKey::max_for_id);
 
         LiveSetIter {
-            iter: self.objects.iter_with_bounds(lower_bound, upper_bound),
+            iter: self.objects.safe_iter_with_bounds(lower_bound, upper_bound),
             tables: self,
             prev: None,
             include_wrapped_object,
@@ -541,7 +541,7 @@ impl ObjectStore for AuthorityPerpetualTables {
 
 pub struct LiveSetIter<'a> {
     iter:
-        <DBMap<ObjectKey, StoreObjectWrapper> as Map<'a, ObjectKey, StoreObjectWrapper>>::Iterator,
+        <DBMap<ObjectKey, StoreObjectWrapper> as Map<'a, ObjectKey, StoreObjectWrapper>>::SafeIterator,
     tables: &'a AuthorityPerpetualTables,
     prev: Option<(ObjectKey, StoreObjectWrapper)>,
     /// Whether a wrapped object is considered as a live object.
@@ -615,7 +615,7 @@ impl Iterator for LiveSetIter<'_> {
 
     fn next(&mut self) -> Option<Self::Item> {
         loop {
-            if let Some((next_key, next_value)) = self.iter.next() {
+            if let Some(Ok((next_key, next_value))) = self.iter.next() {
                 let prev = self.prev.take();
                 self.prev = Some((next_key, next_value));
 
