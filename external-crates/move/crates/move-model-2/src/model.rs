@@ -400,11 +400,42 @@ impl<'a, const HAS_SOURCE: usize> Module<'a, HAS_SOURCE> {
     }
 
     pub fn maybe_ident(&self) -> Option<&'a E::ModuleIdent> {
-        self.data.ident.as_ref()
+        if HAS_SOURCE == 1 {
+            Some(&self.data.ident[0])
+        } else {
+            None
+        }
     }
 
-    pub fn ident(&self) -> &'a E::ModuleIdent {
-        self.data.ident.as_ref().unwrap()
+    pub fn maybe_info(&self) -> Option<&'a ModuleInfo> {
+        if HAS_SOURCE == 1 {
+            Some(
+                self.model().info[0]
+                    .modules
+                    .get(self.maybe_ident().unwrap())
+                    .unwrap(),
+            )
+        } else {
+            None
+        }
+    }
+
+    pub fn maybe_named_constant(&self, name: impl Into<Symbol>) -> Option<NamedConstant<'a>> {
+        if HAS_SOURCE == 0 {
+            return None;
+        }
+
+        let name = name.into();
+        let data = &self.data.named_constants[0].get(&name)?;
+        let module: Module<'_, 1> = unsafe { std::mem::transmute(*self) };
+        Some(NamedConstant {
+            name,
+            module,
+            compiled: data
+                .compiled_index
+                .map(|idx| &self.compiled.constants[idx.0 as usize]),
+            data,
+        })
     }
 
     pub fn name(&self) -> Symbol {
@@ -425,6 +456,10 @@ impl<'a, const HAS_SOURCE: usize> Module<'a, HAS_SOURCE> {
 }
 
 impl<'a> Module<'a, WITH_SOURCE> {
+    pub fn ident(&self) -> &'a E::ModuleIdent {
+        &self.data.ident[0]
+    }
+
     pub fn info(&self) -> &'a ModuleInfo {
         self.model().info[0].modules.get(self.ident()).unwrap()
     }
@@ -440,19 +475,6 @@ impl<'a> Module<'a, WITH_SOURCE> {
             .or_else(|| self.maybe_enum(name).map(Member::Enum))
             .or_else(|| self.maybe_function(name).map(Member::Function))
             .or_else(|| self.maybe_named_constant(name).map(Member::NamedConstant))
-    }
-
-    pub fn maybe_named_constant(&self, name: impl Into<Symbol>) -> Option<NamedConstant<'a>> {
-        let name = name.into();
-        let data = &self.data.named_constants[0].get(&name)?;
-        Some(NamedConstant {
-            name,
-            module: *self,
-            compiled: data
-                .compiled_index
-                .map(|idx| &self.compiled.constants[idx.0 as usize]),
-            data,
-        })
     }
 
     pub fn named_constant(&self, name: impl Into<Symbol>) -> NamedConstant<'a> {
@@ -511,6 +533,10 @@ impl<'a, const HAS_SOURCE: usize> Struct<'a, HAS_SOURCE> {
     pub fn compiled(&self) -> &'a compiled::Struct {
         self.compiled
     }
+
+    pub fn maybe_info(&self) -> Option<&'a N::StructDefinition> {
+        Some(self.module.maybe_info()?.structs.get_(&self.name).unwrap())
+    }
 }
 
 impl<'a> Struct<'a, WITH_SOURCE> {
@@ -538,6 +564,10 @@ impl<'a, const HAS_SOURCE: usize> Enum<'a, HAS_SOURCE> {
 
     pub fn compiled(&self) -> &'a compiled::Enum {
         self.compiled
+    }
+
+    pub fn maybe_info(&self) -> Option<&'a N::EnumDefinition> {
+        Some(self.module.maybe_info()?.enums.get_(&self.name).unwrap())
     }
 
     pub fn variants(&self) -> impl Iterator<Item = Variant<'a, HAS_SOURCE>> + '_ {
@@ -586,6 +616,10 @@ impl<'a, const HAS_SOURCE: usize> Variant<'a, HAS_SOURCE> {
     pub fn compiled(&self) -> &'a compiled::Variant {
         self.compiled
     }
+
+    pub fn maybe_info(&self) -> Option<&'a N::VariantDefinition> {
+        Some(self.enum_.maybe_info()?.variants.get_(&self.name).unwrap())
+    }
 }
 
 impl<'a> Variant<'a, WITH_SOURCE> {
@@ -617,6 +651,16 @@ impl<'a, const HAS_SOURCE: usize> Function<'a, HAS_SOURCE> {
     /// Returns the compiled function if it exists. This will be `None` for `macro`s.
     pub fn compiled(&self) -> Option<&'a compiled::Function> {
         self.compiled
+    }
+
+    pub fn maybe_info(&self) -> Option<&'a FunctionInfo> {
+        Some(
+            self.module
+                .maybe_info()?
+                .functions
+                .get_(&self.name)
+                .unwrap(),
+        )
     }
 
     /// Returns an the functions called by this function. This will be empty for `macro`s.
@@ -711,7 +755,7 @@ struct PackageData<const HAS_SOURCE: usize> {
 }
 
 struct ModuleData<const HAS_SOURCE: usize> {
-    ident: Option<E::ModuleIdent>,
+    ident: [E::ModuleIdent; HAS_SOURCE],
     structs: BTreeMap<Symbol, StructData>,
     enums: BTreeMap<Symbol, EnumData>,
     functions: BTreeMap<Symbol, FunctionData>,
@@ -842,7 +886,7 @@ impl ModuleData<WITH_SOURCE> {
                 .collect()
         };
         Self {
-            ident: Some(ident),
+            ident: [ident],
             structs,
             enums,
             functions,
@@ -876,7 +920,7 @@ impl ModuleData<WITHOUT_SOURCE> {
             .map(|name| (name, FunctionData::new()))
             .collect();
         Self {
-            ident: None,
+            ident: [],
             structs,
             enums,
             functions,
