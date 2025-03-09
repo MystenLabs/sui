@@ -514,7 +514,7 @@ impl TransactionBlockEffects {
     }
 
     /// Resolves the module ID within a Move abort to the storage ID of the package that the
-    /// abort occured in.
+    /// abort occurred in.
     /// * If the error is not a Move abort, or the Move call in the programmable transaction cannot
     ///   be found, this function will do nothing.
     /// * If the error is a Move abort and the storage ID is unable to be resolved an error is
@@ -541,7 +541,7 @@ impl TransactionBlockEffects {
             {
                 let module_new = module.clone();
                 // Resolve the runtime module ID in the Move abort to the storage ID of the package
-                // that the abort occured in. This is important to make sure that we look at the
+                // that the abort occurred in. This is important to make sure that we look at the
                 // correct version of the module when resolving the error.
                 *module = resolver
                     .resolve_module_id(module_new, ptb_call.package.into())

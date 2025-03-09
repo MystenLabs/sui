@@ -117,7 +117,7 @@ impl Builder {
             Arc::new(tls)
         });
 
-        let (watch_sender, watch_reciever) = tokio::sync::watch::channel(());
+        let (watch_sender, watch_receiver) = tokio::sync::watch::channel(());
         let server = Server {
             config: self.config,
             tls_config,
@@ -132,7 +132,7 @@ impl Builder {
             connection_handlers: JoinSet::new(),
             connections: connections.clone(),
             graceful_shutdown_token: graceful_shutdown_token.clone(),
-            _watch_reciever: watch_reciever,
+            _watch_receiver: watch_receiver,
         };
 
         let handle = ServerHandle(Arc::new(HandleInner {
@@ -218,7 +218,7 @@ struct Server<L: Listener> {
     connections: ActiveConnections<L::Addr>,
     graceful_shutdown_token: tokio_util::sync::CancellationToken,
     // Used to signal to a ServerHandle when the server has completed shutting down
-    _watch_reciever: tokio::sync::watch::Receiver<()>,
+    _watch_receiver: tokio::sync::watch::Receiver<()>,
 }
 
 impl<L> Server<L>
@@ -233,7 +233,7 @@ where
                     break;
                 },
                 (io, remote_addr) = self.listener.accept() => {
-                    self.handle_incomming(io, remote_addr);
+                    self.handle_incoming(io, remote_addr);
                 },
                 Some(maybe_connection) = self.pending_connections.join_next() => {
                     // If a task panics, just propagate it
@@ -263,7 +263,7 @@ where
         Ok(())
     }
 
-    fn handle_incomming(&mut self, io: L::Io, remote_addr: L::Addr) {
+    fn handle_incoming(&mut self, io: L::Io, remote_addr: L::Addr) {
         if let Some(tls) = self.tls_config.clone() {
             let tls_acceptor = TlsAcceptor::from(tls);
             let allow_insecure = self.config.allow_insecure;

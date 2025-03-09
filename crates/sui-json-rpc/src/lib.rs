@@ -170,7 +170,7 @@ impl JsonRpcServerBuilder {
             // Since we're not using jsonrpsee's server to actually handle connections this value
             // is instead limiting the number of concurrent requests and has no impact on the
             // number of connections. As such, for now we can just set this to a very high value to
-            // disable it artificially limiting us to ~100 conncurrent requests.
+            // disable it artificially limiting us to ~100 concurrent requests.
             .max_connections(u32::MAX)
             // Before we updated jsonrpsee, batches were disabled so lets keep them disabled.
             .set_batch_request_config(jsonrpsee::server::BatchRequestConfig::Disabled)

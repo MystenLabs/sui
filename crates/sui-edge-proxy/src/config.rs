@@ -25,7 +25,7 @@ pub struct ProxyConfig {
     pub max_idle_connections: usize,
     /// Idle timeout for connections in the connection pool.
     /// This should be set to a value less than the keep-alive timeout of the server to avoid sending requests to a closed connection.
-    /// if your you expect sui-edge-proxy to recieve a small number of requests per second, you should set this to a higher value.
+    /// if your you expect sui-edge-proxy to receive a small number of requests per second, you should set this to a higher value.
     #[serde_as(as = "DurationSeconds")]
     #[serde(default = "default_idle_timeout")]
     pub idle_timeout_seconds: Duration,

@@ -53,7 +53,7 @@ enum HealthCheckError {
 impl TempDb {
     /// Create and start a new temporary postgres database.
     ///
-    /// A fresh database will be initialized in a temporary directory that will be cleand up on drop.
+    /// A fresh database will be initialized in a temporary directory that will be cleaned up on drop.
     /// The running `postgres` service will be serving traffic on an available, os-assigned port.
     pub fn new() -> Result<Self> {
         let dir = tempfile::TempDir::new()?;

@@ -23,7 +23,7 @@ pub enum FaucetError {
     GasCoinWithInsufficientBalance(String),
 
     #[error("Faucet does not have enough balance")]
-    InsuffientBalance,
+    InsufficientBalance,
 
     #[error("Gas coin `{0}` is not valid and has been removed from gas coin pool")]
     InvalidGasCoin(String),

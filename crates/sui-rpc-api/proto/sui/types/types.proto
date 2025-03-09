@@ -1368,7 +1368,7 @@ message PackageUpgradeError {
     // Package upgrade is incompatible with previous version.
     google.protobuf.Empty incompatible_upgrade = 4;
     // Digest in upgrade ticket and computed digest differ.
-    Digest digets_does_not_match = 5;
+    Digest digest_does_not_match = 5;
     // Upgrade policy is not valid.
     uint32 unknown_upgrade_policy = 6;
     // Package ID does not match `PackageId` in upgrade ticket.

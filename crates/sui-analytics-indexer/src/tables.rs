@@ -186,7 +186,7 @@ pub(crate) struct ObjectEntry {
 
 // Objects used and manipulated in a transaction.
 // Both input object and objects in effects are reported here with the proper
-// input kind (for input objects) and status (for objets in effects).
+// input kind (for input objects) and status (for objects in effects).
 // An object may appear twice as an input and output object. In that case, the
 // version will be different.
 #[derive(Serialize, Clone, SerializeParquet)]

@@ -705,7 +705,7 @@ async fn test_traffic_sketch_with_sampled_spam() {
     assert!(metrics.num_requests < expected_requests + 200);
     // number of blocked requests should be nearly the same
     // as before, as we have half the single client TPS,
-    // but the threshould is also halved. However, divide by
+    // but the threshold is also halved. However, divide by
     // 5 instead of 4 as a buffer due in case we're unlucky with
     // the sampling
     assert!(metrics.num_blocked > (expected_requests / 5) - 1000);

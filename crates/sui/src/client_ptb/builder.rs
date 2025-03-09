@@ -749,7 +749,7 @@ impl<'a> PTBBuilder<'a> {
                     }
                 }
             }
-            // Unable to resolve an identifer to anything at this point -- error and see if we can
+            // Unable to resolve an identifier to anything at this point -- error and see if we can
             // find a similar identifier to suggest.
             PTBArg::Identifier(i) => match self.did_you_mean_identifier(&i) {
                 Some(similars) => {
@@ -1098,7 +1098,7 @@ pub fn to_ordinal_contraction(num: usize) -> String {
         11..=13 => "th",
         _ => match num % 10 {
             1 => "st",
-            2 => "nd",
+            2 => "and",
             3 => "rd",
             _ => "th",
         },
