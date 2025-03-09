@@ -72,7 +72,9 @@ impl WriteTestCluster {
             db.database().url().clone(),
             DbArgs::default(),
             rpc_args,
-            Some(WriteArgs { fullnode_rpc_url }),
+            WriteArgs {
+                fullnode_rpc_url: Some(fullnode_rpc_url),
+            },
             SystemPackageTaskArgs::default(),
             RpcConfig::default(),
             &registry,
