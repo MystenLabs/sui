@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use async_graphql::dataloader::DataLoader;
+use prometheus::Registry;
 use sui_kvstore::BigTableClient;
 
 use crate::data::error::Error;
@@ -13,15 +14,21 @@ use crate::data::error::Error;
 pub struct BigtableReader(pub(crate) BigTableClient);
 
 impl BigtableReader {
-    pub(crate) async fn new(instance_id: String) -> Result<Self, Error> {
+    pub(crate) async fn new(instance_id: String, registry: &Registry) -> Result<Self, Error> {
         if std::env::var("GOOGLE_APPLICATION_CREDENTIALS").is_err() {
             return Err(Error::BigtableCreate(anyhow::anyhow!(
                 "Environment variable GOOGLE_APPLICATION_CREDENTIALS is not set"
             )));
         }
-        let client = BigTableClient::new_remote(instance_id, true, None)
-            .await
-            .map_err(Error::BigtableCreate)?;
+        let client = BigTableClient::new_remote(
+            instance_id,
+            true,
+            None,
+            "indexer-alt-jsonrpc".to_string(),
+            registry,
+        )
+        .await
+        .map_err(Error::BigtableCreate)?;
         Ok(Self(client))
     }
 
