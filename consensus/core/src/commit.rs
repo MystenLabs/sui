@@ -343,6 +343,7 @@ pub type CommitVote = CommitRef;
 pub struct CommittedSubDag {
     /// A reference to the leader of the sub-dag
     pub leader: BlockRef,
+    // TODO: refactor blocks and rejected_transactions_by_block to CertifiedBlock.
     /// All the committed blocks that are part of this sub-dag
     pub blocks: Vec<VerifiedBlock>,
     /// Indices of rejected transactions in each block.
