@@ -54,6 +54,7 @@ impl Context {
 
     /// Create a test context with a committee of given size and even stake
     #[cfg(test)]
+    #[allow(unused)]
     pub(crate) fn new_for_test(
         committee_size: usize,
     ) -> (Self, Vec<(NetworkKeyPair, ProtocolKeyPair)>) {
@@ -61,7 +62,7 @@ impl Context {
             consensus_config::local_committee_and_keys(0, vec![1; committee_size]);
         let metrics = test_metrics();
         let temp_dir = TempDir::new().unwrap();
-        let clock = Arc::new(Clock::new());
+        let clock = Arc::new(Clock::default());
 
         let context = Context::new(
             AuthorityIndex::new_for_test(0),
@@ -107,16 +108,29 @@ impl Context {
 /// Explicitly avoid to make `[Clock]` cloneable to ensure that a single instance is shared behind an `[Arc]`
 /// wherever is needed in order to make sure that consecutive calls to receive the system timestamp
 /// will remain monotonically increasing.
-pub(crate) struct Clock {
+pub struct Clock {
     initial_instant: Instant,
     initial_system_time: SystemTime,
+    // `clock_drift` should be used only for testing
+    clock_drift: BlockTimestampMs,
 }
 
-impl Clock {
-    pub fn new() -> Self {
+impl Default for Clock {
+    fn default() -> Self {
         Self {
             initial_instant: Instant::now(),
             initial_system_time: SystemTime::now(),
+            clock_drift: 0,
+        }
+    }
+}
+
+impl Clock {
+    pub fn new_for_test(clock_drift: BlockTimestampMs) -> Self {
+        Self {
+            initial_instant: Instant::now(),
+            initial_system_time: SystemTime::now(),
+            clock_drift,
         }
     }
 
@@ -147,5 +161,6 @@ impl Clock {
                 )
             })
             .as_millis() as BlockTimestampMs
+            + self.clock_drift
     }
 }

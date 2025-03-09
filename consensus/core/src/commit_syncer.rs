@@ -644,15 +644,23 @@ impl<C: NetworkClient> CommitSyncer<C> {
                 .block_timestamp_drift_wait_ms
                 .with_label_values(&[peer_hostname, "commit_syncer"])
                 .inc_by(forward_drift);
-            let forward_drift = Duration::from_millis(forward_drift);
-            if forward_drift >= inner.context.parameters.max_forward_time_drift {
-                warn!(
-                    "Local clock is behind a quorum of peers: local ts {}, certified block ts {}",
-                    now_ms,
-                    block.timestamp_ms()
-                );
+
+            // We want to run the following checks only if the median based commit timestamp is not enabled.
+            if !inner
+                .context
+                .protocol_config
+                .consensus_median_based_commit_timestamp()
+            {
+                let forward_drift = Duration::from_millis(forward_drift);
+                if forward_drift >= inner.context.parameters.max_forward_time_drift {
+                    warn!(
+                        "Local clock is behind a quorum of peers: local ts {}, certified block ts {}",
+                        now_ms,
+                        block.timestamp_ms()
+                    );
+                }
+                sleep(forward_drift).await;
             }
-            sleep(forward_drift).await;
         }
 
         // 9. Now create the Certified commits by assigning the blocks to each commit and retaining the commit votes history.
