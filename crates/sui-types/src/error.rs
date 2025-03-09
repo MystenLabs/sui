@@ -178,6 +178,8 @@ pub enum UserInputError {
     InvalidGasObject { object_id: ObjectID },
     #[error("Gas object does not have enough balance to cover minimal gas spend")]
     InsufficientBalanceToCoverMinimalGas,
+    #[error("Alloted execution time given computation cost exceede")]
+    ExecutionTimeExceeded,
 
     #[error("Could not find the referenced object {:?} as the asked version {:?} is higher than the latest {:?}", object_id, asked_version, latest_version)]
     ObjectSequenceNumberTooHigh {
