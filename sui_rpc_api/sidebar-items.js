@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["Direction","ErrorReason"],"mod":["client","field_mask","proto","subscription","types"],"struct":["Config","ErrorDetails","RpcError","RpcMetrics","RpcService"],"type":["Result"]};
