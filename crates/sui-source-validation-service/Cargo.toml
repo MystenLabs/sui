@@ -27,6 +27,7 @@ url = "2.3.1"
 
 sui-move.workspace = true
 sui-move-build.workspace = true
+sui-package-management.workspace = true
 sui-sdk.workspace = true
 sui-source-validation.workspace = true
 
