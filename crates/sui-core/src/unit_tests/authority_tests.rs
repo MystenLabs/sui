@@ -30,6 +30,7 @@ use sui_json_rpc_types::{
     SuiArgument, SuiExecutionResult, SuiExecutionStatus, SuiTransactionBlockEffectsAPI, SuiTypeTag,
 };
 use sui_macros::sim_test;
+use sui_move_build::BuildConfig;
 use sui_protocol_config::{Chain, PerObjectCongestionControlMode, ProtocolConfig, ProtocolVersion};
 use sui_types::dynamic_field::DynamicFieldType;
 use sui_types::effects::TransactionEffects;
@@ -1533,6 +1534,239 @@ async fn test_handle_sponsored_transaction() {
         "{}",
         error
     );
+}
+
+#[tokio::test]
+async fn test_move_sponsored_transaction() {
+    let (sender, sender_key): (_, AccountKeyPair) = get_key_pair();
+    let (sponsor, sponsor_key): (_, AccountKeyPair) = get_key_pair();
+    let sponsor_gas_id = ObjectID::random();
+    let sender_gas_id = ObjectID::random();
+    let authority_state =
+        init_state_with_ids(vec![(sender, sender_gas_id), (sponsor, sponsor_gas_id)]).await;
+    let rgp = authority_state.reference_gas_price_for_testing().unwrap();
+
+    // 1. publish sponsor package
+    //
+    let mut path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    path.push("src/unit_tests/data/move_sponsor");
+    let modules = BuildConfig::new_for_testing()
+        .build(&path)
+        .unwrap()
+        .get_package_bytes(/* with_unpublished_deps */ true);
+    let mut builder: ProgrammableTransactionBuilder = ProgrammableTransactionBuilder::new();
+    builder.publish_immutable(
+        modules,
+        vec![MOVE_STDLIB_PACKAGE_ID, SUI_FRAMEWORK_PACKAGE_ID],
+    );
+    let kind = TransactionKind::programmable(builder.finish());
+    let sender_gas_obj = authority_state.get_object(&sender_gas_id).await.unwrap();
+    let txn_data = TransactionData::new_with_gas_coins(
+        kind,
+        sender,
+        vec![sender_gas_obj.compute_object_reference()],
+        rgp * TEST_ONLY_GAS_UNIT_FOR_PUBLISH,
+        rgp,
+    );
+    let signed = to_sender_signed_transaction(txn_data, &sender_key);
+    let (_cert, effects) = send_and_confirm_transaction(&authority_state, signed)
+        .await
+        .unwrap();
+    assert!(effects.created().len() == 1);
+    let pkg_ref = effects.created()[0].0;
+
+    //
+    // *** non sponsored transactions ***
+    //
+
+    // 2. call `is_sponsored` with `false` succeeds
+    // sponsor::is_sponsored(false) -> () // no sponsor
+    //
+    let sender_gas_obj = authority_state.get_object(&sender_gas_id).await.unwrap();
+    let data = TransactionData::new_move_call(
+        sender,
+        pkg_ref.0,
+        ident_str!("sponsor").to_owned(),
+        ident_str!("is_sponsored").to_owned(),
+        vec![],
+        sender_gas_obj.compute_object_reference(),
+        vec![false.into()],
+        TEST_ONLY_GAS_UNIT_FOR_OBJECT_BASICS * rgp,
+        rgp,
+    )
+    .unwrap();
+    let transaction = to_sender_signed_transaction(data, &sender_key);
+    let (_, effects) = send_and_confirm_transaction(&authority_state, transaction)
+        .await
+        .unwrap();
+    assert!(effects.status().is_ok(), "transaction must succeeds");
+
+    // 3. call `is_sponsored` with `true` fails with 100 (no sponsor)
+    // sponsor::is_sponsored(true) -> assert!(txn_sponsor.is_some(), 100);
+    //
+    let sender_gas_obj = authority_state.get_object(&sender_gas_id).await.unwrap();
+    let data = TransactionData::new_move_call(
+        sender,
+        pkg_ref.0,
+        ident_str!("sponsor").to_owned(),
+        ident_str!("is_sponsored").to_owned(),
+        vec![],
+        sender_gas_obj.compute_object_reference(),
+        vec![true.into()],
+        TEST_ONLY_GAS_UNIT_FOR_OBJECT_BASICS * rgp,
+        rgp,
+    )
+    .unwrap();
+    let transaction = to_sender_signed_transaction(data, &sender_key);
+    let (_, effects) = send_and_confirm_transaction(&authority_state, transaction)
+        .await
+        .unwrap();
+    let (err, _) = effects.status().clone().unwrap_err();
+    if let ExecutionFailureStatus::MoveAbort(_, abort_code) = err {
+        assert!(abort_code == 100, "bad abort code");
+    } else {
+        panic!("must return an abort code");
+    };
+
+    // 4. call `check_sponsor` with `sender` as argument fails with 100 (no sponsor)
+    // sponsor::check_sponsor(sender) -> assert!(txn_sponsor.is_some(), 100);
+    //
+    let sender_gas_obj = authority_state.get_object(&sender_gas_id).await.unwrap();
+    let addr = CallArg::Pure(bcs::to_bytes(&AccountAddress::from(sender)).unwrap());
+    let data = TransactionData::new_move_call(
+        sender,
+        pkg_ref.0,
+        ident_str!("sponsor").to_owned(),
+        ident_str!("check_sponsor").to_owned(),
+        vec![],
+        sender_gas_obj.compute_object_reference(),
+        vec![addr],
+        TEST_ONLY_GAS_UNIT_FOR_OBJECT_BASICS * rgp,
+        rgp,
+    )
+    .unwrap();
+    let transaction = to_sender_signed_transaction(data, &sender_key);
+    let (_, effects) = send_and_confirm_transaction(&authority_state, transaction)
+        .await
+        .unwrap();
+    let (err, _) = effects.status().clone().unwrap_err();
+    if let ExecutionFailureStatus::MoveAbort(_, abort_code) = err {
+        assert!(abort_code == 100, "bad abort code");
+    } else {
+        panic!("must return an abort code");
+    };
+
+    //
+    // *** sponsored transactions ***
+    //
+
+    // 5. call `is_sponsored` with `true` succeeds
+    // sponsor::is_sponsored(true) -> () // sponsored transaction
+    //
+    let sponsor_gas_obj = authority_state.get_object(&sponsor_gas_id).await.unwrap();
+    let mut data = TransactionData::new_move_call(
+        sender,
+        pkg_ref.0,
+        ident_str!("sponsor").to_owned(),
+        ident_str!("is_sponsored").to_owned(),
+        vec![],
+        sponsor_gas_obj.compute_object_reference(),
+        vec![true.into()],
+        TEST_ONLY_GAS_UNIT_FOR_OBJECT_BASICS * rgp,
+        rgp,
+    )
+    .unwrap();
+    data.gas_data_mut().owner = sponsor;
+    let transaction =
+        to_sender_signed_transaction_with_multi_signers(data, vec![&sender_key, &sponsor_key]);
+    let (_, effects) = send_and_confirm_transaction(&authority_state, transaction)
+        .await
+        .unwrap();
+    assert!(effects.status().is_ok(), "transaction must succeeds");
+
+    // 6. call `is_sponsored` with `false` fails with 101
+    // sponsor::is_sponsored(false) ->  assert!(sponsor.is_none(), 101);
+    //
+    let sponsor_gas_obj = authority_state.get_object(&sponsor_gas_id).await.unwrap();
+    let mut data = TransactionData::new_move_call(
+        sender,
+        pkg_ref.0,
+        ident_str!("sponsor").to_owned(),
+        ident_str!("is_sponsored").to_owned(),
+        vec![],
+        sponsor_gas_obj.compute_object_reference(),
+        vec![false.into()],
+        TEST_ONLY_GAS_UNIT_FOR_OBJECT_BASICS * rgp,
+        rgp,
+    )
+    .unwrap();
+    data.gas_data_mut().owner = sponsor;
+    let transaction =
+        to_sender_signed_transaction_with_multi_signers(data, vec![&sender_key, &sponsor_key]);
+    let (_, effects) = send_and_confirm_transaction(&authority_state, transaction)
+        .await
+        .unwrap();
+    let (err, _) = effects.status().clone().unwrap_err();
+    if let ExecutionFailureStatus::MoveAbort(_, abort_code) = err {
+        assert!(abort_code == 101, "bad abort code");
+    } else {
+        panic!("must return an abort code");
+    };
+
+    // 7. call `check_sponsor` with `sender` as argument fails with 101 (wrong sponsor)
+    // sponsor::check_sponsor(sender) -> assert!(txn_sponsor.destroy_some() == sponsor, 101);
+    //
+    let sponsor_gas_obj = authority_state.get_object(&sponsor_gas_id).await.unwrap();
+    let addr = CallArg::Pure(bcs::to_bytes(&AccountAddress::from(sender)).unwrap());
+    let mut data = TransactionData::new_move_call(
+        sender,
+        pkg_ref.0,
+        ident_str!("sponsor").to_owned(),
+        ident_str!("check_sponsor").to_owned(),
+        vec![],
+        sponsor_gas_obj.compute_object_reference(),
+        vec![addr],
+        TEST_ONLY_GAS_UNIT_FOR_OBJECT_BASICS * rgp,
+        rgp,
+    )
+    .unwrap();
+    data.gas_data_mut().owner = sponsor;
+    let transaction =
+        to_sender_signed_transaction_with_multi_signers(data, vec![&sender_key, &sponsor_key]);
+    let (_, effects) = send_and_confirm_transaction(&authority_state, transaction)
+        .await
+        .unwrap();
+    let (err, _) = effects.status().clone().unwrap_err();
+    if let ExecutionFailureStatus::MoveAbort(_, abort_code) = err {
+        assert!(abort_code == 101, "bad abort code");
+    } else {
+        panic!("must return an abort code");
+    };
+
+    // 8. call `check_sponsor` with `sponsor` as argument succeeds
+    // sponsor::check_sponsor(sender) -> () // sponsor in sponsored transaction
+    //
+    let sponsor_gas_obj = authority_state.get_object(&sponsor_gas_id).await.unwrap();
+    let addr = CallArg::Pure(bcs::to_bytes(&AccountAddress::from(sponsor)).unwrap());
+    let mut data = TransactionData::new_move_call(
+        sender,
+        pkg_ref.0,
+        ident_str!("sponsor").to_owned(),
+        ident_str!("check_sponsor").to_owned(),
+        vec![],
+        sponsor_gas_obj.compute_object_reference(),
+        vec![addr],
+        TEST_ONLY_GAS_UNIT_FOR_OBJECT_BASICS * rgp,
+        rgp,
+    )
+    .unwrap();
+    data.gas_data_mut().owner = sponsor;
+    let transaction =
+        to_sender_signed_transaction_with_multi_signers(data, vec![&sender_key, &sponsor_key]);
+    let (_, effects) = send_and_confirm_transaction(&authority_state, transaction)
+        .await
+        .unwrap();
+    assert!(effects.status().is_ok(), "transaction must succeeds");
 }
 
 #[tokio::test]
@@ -4065,8 +4299,6 @@ pub async fn init_state_with_ids_and_object_basics<
 }
 
 pub async fn publish_object_basics(state: Arc<AuthorityState>) -> (Arc<AuthorityState>, ObjectRef) {
-    use sui_move_build::BuildConfig;
-
     // add object_basics package object to genesis, since lots of test use it
     let mut path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     path.push("src/unit_tests/data/object_basics");
@@ -4094,8 +4326,6 @@ pub async fn init_state_with_ids_and_object_basics_with_fullnode<
 >(
     objects: I,
 ) -> (Arc<AuthorityState>, Arc<AuthorityState>, ObjectRef) {
-    use sui_move_build::BuildConfig;
-
     let (validator, fullnode) = init_state_validator_with_fullnode().await;
     for (address, object_id) in objects {
         let obj = Object::with_id_owner_for_testing(object_id, address);
@@ -5266,8 +5496,6 @@ async fn test_gas_smashing() {
 
 #[tokio::test]
 async fn test_for_inc_201_dev_inspect() {
-    use sui_move_build::BuildConfig;
-
     let (sender, _sender_key): (_, AccountKeyPair) = get_key_pair();
     let gas_object_id = ObjectID::random();
     let (_, fullnode, _) =
@@ -5311,8 +5539,6 @@ async fn test_for_inc_201_dev_inspect() {
 
 #[tokio::test]
 async fn test_for_inc_201_dry_run() {
-    use sui_move_build::BuildConfig;
-
     let (sender, sender_key): (_, AccountKeyPair) = get_key_pair();
     let gas_object_id = ObjectID::random();
     let (_, fullnode, _) =
@@ -5481,8 +5707,6 @@ async fn test_arity_mismatch() {
 
 #[tokio::test]
 async fn test_publish_transitive_dependencies_ok() {
-    use sui_move_build::BuildConfig;
-
     let (sender, key): (_, AccountKeyPair) = get_key_pair();
     let gas_id = ObjectID::random();
     let state = init_state_with_ids(vec![(sender, gas_id)]).await;
@@ -5654,8 +5878,6 @@ async fn test_publish_transitive_dependencies_ok() {
 
 #[tokio::test]
 async fn test_publish_missing_dependency() {
-    use sui_move_build::BuildConfig;
-
     let (sender, key): (_, AccountKeyPair) = get_key_pair();
     let gas_id = ObjectID::random();
     let state = init_state_with_ids(vec![(sender, gas_id)]).await;
@@ -5703,8 +5925,6 @@ async fn test_publish_missing_dependency() {
 
 #[tokio::test]
 async fn test_publish_missing_transitive_dependency() {
-    use sui_move_build::BuildConfig;
-
     let (sender, key): (_, AccountKeyPair) = get_key_pair();
     let gas_id = ObjectID::random();
     let state = init_state_with_ids(vec![(sender, gas_id)]).await;
@@ -5752,8 +5972,6 @@ async fn test_publish_missing_transitive_dependency() {
 
 #[tokio::test]
 async fn test_publish_not_a_package_dependency() {
-    use sui_move_build::BuildConfig;
-
     let (sender, key): (_, AccountKeyPair) = get_key_pair();
     let gas_id = ObjectID::random();
     let state = init_state_with_ids(vec![(sender, gas_id)]).await;
