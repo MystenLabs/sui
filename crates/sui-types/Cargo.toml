@@ -46,7 +46,6 @@ move-binary-format.workspace = true
 move-bytecode-utils.workspace = true
 move-core-types.workspace = true
 move-vm-test-utils.workspace = true
-move-vm-types.workspace = true
 move-vm-profiler.workspace = true
 num-traits = "0.2.18"
 num-bigint = { version = "0.4", default-features = false, features = ["rand"] }
