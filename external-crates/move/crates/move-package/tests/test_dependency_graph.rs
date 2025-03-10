@@ -16,7 +16,7 @@ use move_package::{
     },
     source_package::{
         layout::SourcePackageLayout,
-        parsed_manifest::{Dependency, DependencyKind, InternalDependency},
+        parsed_manifest::{Dependencies, Dependency, DependencyKind, InternalDependency},
     },
 };
 use move_symbol_pool::Symbol;
@@ -43,6 +43,7 @@ fn no_dep_graph() {
         /* skip_fetch_latest_git_deps */ true,
         std::io::sink(),
         tempfile::tempdir().unwrap().path().to_path_buf(),
+        /* implicit deps */ Dependencies::default(),
     );
     let (graph, _) = dep_graph_builder
         .get_graph(
@@ -165,6 +166,7 @@ fn always_deps() {
         /* skip_fetch_latest_git_deps */ true,
         std::io::sink(),
         tempfile::tempdir().unwrap().path().to_path_buf(),
+        /* implicit_deps */ Dependencies::default(),
     );
     let (graph, _) = dep_graph_builder
         .get_graph(
@@ -575,6 +577,7 @@ fn immediate_dependencies() {
         /* skip_fetch_latest_git_deps */ true,
         std::io::sink(),
         tempfile::tempdir().unwrap().path().to_path_buf(),
+        /* implicit_deps */ Dependencies::default(),
     );
     let (graph, _) = dep_graph_builder
         .get_graph(

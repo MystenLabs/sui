@@ -276,7 +276,8 @@ impl<'a> TestAuthorityBuilder<'a> {
                 .get_highest_executed_checkpoint_seq_number()
                 .unwrap()
                 .unwrap_or(0),
-        );
+        )
+        .expect("failed to create authority per epoch store");
         let committee_store = Arc::new(CommitteeStore::new(
             path.join("epochs"),
             &genesis_committee,

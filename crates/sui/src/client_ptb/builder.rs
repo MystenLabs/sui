@@ -23,7 +23,7 @@ use move_core_types::parsing::{
 use move_core_types::{
     account_address::AccountAddress, annotated_value::MoveTypeLayout, ident_str,
 };
-use move_package::BuildConfig;
+use move_package::BuildConfig as MoveBuildConfig;
 use std::{collections::BTreeMap, path::Path};
 use sui_json::{is_receiving_argument, primitive_type};
 use sui_json_rpc_types::{SuiObjectData, SuiObjectDataOptions, SuiRawData};
@@ -932,7 +932,7 @@ impl<'a> PTBBuilder<'a> {
             }
             ParsedPTBCommand::Publish(sp!(pkg_loc, package_path)) => {
                 let chain_id = self.reader.get_chain_identifier().await.ok();
-                let build_config = BuildConfig::default();
+                let build_config = MoveBuildConfig::default();
                 let package_path = Path::new(&package_path);
                 let build_config = resolve_lock_file_path(build_config.clone(), Some(package_path))
                     .map_err(|e| err!(pkg_loc, "{e}"))?;
@@ -1000,7 +1000,7 @@ impl<'a> PTBBuilder<'a> {
                     .await?;
 
                 let chain_id = self.reader.get_chain_identifier().await.ok();
-                let build_config = BuildConfig::default();
+                let build_config = MoveBuildConfig::default();
                 let package_path = Path::new(&package_path);
                 let build_config = resolve_lock_file_path(build_config.clone(), Some(package_path))
                     .map_err(|e| err!(path_loc, "{e}"))?;

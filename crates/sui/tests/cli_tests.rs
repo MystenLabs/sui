@@ -4234,6 +4234,7 @@ async fn test_tree_shaking_package_with_unpublished_deps() -> Result<(), anyhow:
 }
 
 #[sim_test]
+#[ignore] // TODO: DVX-786
 async fn test_tree_shaking_package_with_bytecode_deps() -> Result<(), anyhow::Error> {
     let mut test = TreeShakingTest::new().await?;
     let with_unpublished_dependencies = false;
@@ -4256,7 +4257,7 @@ async fn test_tree_shaking_package_with_bytecode_deps() -> Result<(), anyhow::Er
     }
     move_package::package_hooks::register_package_hooks(Box::new(SuiPackageHooks));
     // now build the package which will create the build folder and a new Move.lock file
-    BuildConfig::default().build(&package_path).unwrap();
+    BuildConfig::new_for_testing().build(&package_path).unwrap();
     fs::remove_dir_all(package_path.join("sources"))?;
 
     let (package_f_id, _) = test

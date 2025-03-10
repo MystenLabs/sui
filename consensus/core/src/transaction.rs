@@ -5,7 +5,7 @@ use std::{collections::BTreeMap, sync::Arc};
 use mysten_common::debug_fatal;
 use mysten_metrics::monitored_mpsc::{channel, Receiver, Sender};
 use parking_lot::Mutex;
-use tap::tap::TapFallible;
+use tap::TapFallible;
 use thiserror::Error;
 use tokio::sync::oneshot;
 use tracing::{error, warn};

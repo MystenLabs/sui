@@ -6,11 +6,12 @@ use anyhow::bail;
 use move_command_line_common::testing::insta_assert;
 use move_package::{
     compilation::{build_plan::BuildPlan, compiled_package::CompiledPackageInfo},
-    package_hooks,
-    package_hooks::PackageHooks,
-    package_hooks::PackageIdentifier,
+    package_hooks::{self, PackageHooks, PackageIdentifier},
     resolution::resolution_graph::Package,
-    source_package::parsed_manifest::{OnChainInfo, PackageDigest, SourceManifest},
+    source_package::{
+        manifest_parser::parse_dependencies,
+        parsed_manifest::{Dependencies, OnChainInfo, PackageDigest, SourceManifest},
+    },
     BuildConfig,
 };
 use move_symbol_pool::Symbol;
@@ -20,6 +21,16 @@ use std::{
 };
 use tempfile::{tempdir, TempDir};
 
+/// Resolve the package contained in the same directory as [path], and snapshot a value based
+/// on the extension of [path]:
+///  - ".progress": the output of the progress indicator
+///  - ".locked": the contents of the lockfile
+///  - ".notlocked": the nonexistence of the lockfile
+///  - ".compiled": the serialized [CompiledPackageInfo] after compilation
+///  - ".resolved": the serialized [ResolvedGraph] after package resolution
+///
+/// If a file named `path.with_extension("implicits")` exists, its contents are a toml file containing
+/// additional dependencies which are included as implicit dependencencies.
 pub fn run_test(path: &Path) -> datatest_stable::Result<()> {
     if path.iter().any(|part| part == "deps_only") {
         return Ok(());
@@ -27,7 +38,8 @@ pub fn run_test(path: &Path) -> datatest_stable::Result<()> {
 
     let kind = path.extension().unwrap().to_string_lossy();
     let toml_path = path.with_extension("toml");
-    Test::from_path_with_kind(&toml_path, &kind)?.run()
+    let test = Test::from_path_with_kind(&toml_path, &kind)?;
+    test.run()
 }
 
 struct Test<'a> {
@@ -61,9 +73,11 @@ impl Test<'_> {
         Ok(())
     }
 
+    /// Return the value to be snapshotted, based on `self.kind`, as described in [run_test]
     fn output(&self) -> anyhow::Result<String> {
         let out_path = self.output_dir.path().to_path_buf();
         let lock_path = out_path.join("Move.lock");
+        let implicits_path = self.toml_path.with_extension("implicits");
 
         let config = BuildConfig {
             dev_mode: true,
@@ -74,6 +88,7 @@ impl Test<'_> {
             lock_file: ["locked", "notlocked"]
                 .contains(&self.kind)
                 .then(|| lock_path.clone()),
+            implicit_dependencies: load_implicits_from_file(&implicits_path),
             ..Default::default()
         };
 
@@ -112,6 +127,15 @@ impl Test<'_> {
             ext => bail!("Unrecognised snapshot type: '{ext}'"),
         })
     }
+}
+
+/// Return the dependencies contained in the file at `path`, if any
+fn load_implicits_from_file(path: &Path) -> Dependencies {
+    let deps_toml = fs::read_to_string(path).unwrap_or("# no implicit deps".to_string());
+
+    parse_dependencies(toml::from_str(&deps_toml).unwrap()).unwrap_or_else(|e| {
+        panic!("expected {path:?} to contain a toml-formatted dependencies section\n{e:?}")
+    })
 }
 
 fn scrub_build_config(config: &mut BuildConfig) {

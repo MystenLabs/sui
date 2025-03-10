@@ -530,9 +530,10 @@ impl EndOfEpochTransactionKind {
                 }
             }
             Self::StoreExecutionTimeObservations(_) => {
-                if config.per_object_congestion_control_mode()
-                    != PerObjectCongestionControlMode::ExecutionTimeEstimate
-                {
+                if !matches!(
+                    config.per_object_congestion_control_mode(),
+                    PerObjectCongestionControlMode::ExecutionTimeEstimate(_)
+                ) {
                     return Err(UserInputError::Unsupported(
                         "execution time estimation not enabled".to_string(),
                     ));
@@ -1094,24 +1095,21 @@ impl ProgrammableTransaction {
         Ok(())
     }
 
-    fn shared_input_objects(&self) -> impl Iterator<Item = SharedInputObject> + '_ {
-        self.inputs
-            .iter()
-            .filter_map(|arg| match arg {
-                CallArg::Pure(_)
-                | CallArg::Object(ObjectArg::Receiving(_))
-                | CallArg::Object(ObjectArg::ImmOrOwnedObject(_)) => None,
-                CallArg::Object(ObjectArg::SharedObject {
-                    id,
-                    initial_shared_version,
-                    mutable,
-                }) => Some(vec![SharedInputObject {
-                    id: *id,
-                    initial_shared_version: *initial_shared_version,
-                    mutable: *mutable,
-                }]),
-            })
-            .flatten()
+    pub fn shared_input_objects(&self) -> impl Iterator<Item = SharedInputObject> + '_ {
+        self.inputs.iter().filter_map(|arg| match arg {
+            CallArg::Pure(_)
+            | CallArg::Object(ObjectArg::Receiving(_))
+            | CallArg::Object(ObjectArg::ImmOrOwnedObject(_)) => None,
+            CallArg::Object(ObjectArg::SharedObject {
+                id,
+                initial_shared_version,
+                mutable,
+            }) => Some(SharedInputObject {
+                id: *id,
+                initial_shared_version: *initial_shared_version,
+                mutable: *mutable,
+            }),
+        })
     }
 
     fn move_calls(&self) -> Vec<(&ObjectID, &str, &str)> {
@@ -1888,6 +1886,22 @@ impl TransactionData {
             builder.finish()
         };
         Self::new_programmable(sender, coins, pt, gas_budget, gas_price)
+    }
+
+    pub fn new_split_coin(
+        sender: SuiAddress,
+        coin: ObjectRef,
+        amounts: Vec<u64>,
+        gas_payment: ObjectRef,
+        gas_budget: u64,
+        gas_price: u64,
+    ) -> Self {
+        let pt = {
+            let mut builder = ProgrammableTransactionBuilder::new();
+            builder.split_coin(sender, coin, amounts);
+            builder.finish()
+        };
+        Self::new_programmable(sender, vec![gas_payment], pt, gas_budget, gas_price)
     }
 
     pub fn new_module(

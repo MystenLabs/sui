@@ -31,7 +31,9 @@ ignore = [
     # allow unmaintained instant crate used in transitive dependencies (backoff, cached, fastrand, parking_lot_*)
     "RUSTSEC-2024-0384",
     # allow unmaintained derivative crate used in transitive dependencies (ark-*)
-    "RUSTSEC-2024-0388"
+    "RUSTSEC-2024-0388",
+    # `paste` is unmaintained
+    "RUSTSEC-2024-0436",
 ]
 # Threshold for security vulnerabilities, any vulnerability with a CVSS score
 # lower than the range specified will be ignored. Note that ignored advisories
