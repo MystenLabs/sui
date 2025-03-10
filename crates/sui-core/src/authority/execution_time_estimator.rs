@@ -32,6 +32,8 @@ use tracing::{debug, info, warn};
 
 // TODO: Move all these consts into protocol configs once design stabilizes.
 
+const MAX_ESTIMATED_TRANSACTION_DURATION: Duration = Duration::from_millis(1_500);
+
 const LOCAL_OBSERVATION_WINDOW_SIZE: usize = 10;
 
 // We won't share a new observation with consensus unless our current local observation differs
@@ -418,7 +420,8 @@ impl ExecutionTimeEstimator {
                     // This is sort of arbitrary, but hopefully works okay as a heuristic.
                     .mul_f64(command_length(command).get() as f64)
             })
-            .sum()
+            .sum::<Duration>()
+            .min(MAX_ESTIMATED_TRANSACTION_DURATION)
     }
 
     pub fn take_observations(&mut self) -> StoredExecutionTimeObservations {
