@@ -770,7 +770,7 @@ impl DagState {
     // Buffers a new commit in memory and updates last committed rounds.
     // REQUIRED: must not skip over any commit index.
     pub(crate) fn add_commit(&mut self, commit: TrustedCommit) {
-        if let Some(last_commit) = &self.last_commit {
+        let time_diff = if let Some(last_commit) = &self.last_commit {
             if commit.index() <= last_commit.index() {
                 error!(
                     "New commit index {} <= last commit index {}!",
@@ -784,9 +784,19 @@ impl DagState {
             if commit.timestamp_ms() < last_commit.timestamp_ms() {
                 panic!("Commit timestamps do not monotonically increment, prev commit {:?}, new commit {:?}", last_commit, commit);
             }
+            commit
+                .timestamp_ms()
+                .saturating_sub(last_commit.timestamp_ms())
         } else {
             assert_eq!(commit.index(), 1);
-        }
+            commit.timestamp_ms()
+        };
+
+        self.context
+            .metrics
+            .node_metrics
+            .last_commit_time_diff
+            .observe(time_diff as f64);
 
         let commit_round_advanced = if let Some(previous_commit) = &self.last_commit {
             previous_commit.round() < commit.round()
