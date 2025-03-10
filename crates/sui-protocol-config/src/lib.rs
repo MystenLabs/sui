@@ -18,7 +18,7 @@ use tracing::{info, warn};
 
 /// The minimum and maximum protocol versions supported by this build.
 const MIN_PROTOCOL_VERSION: u64 = 1;
-const MAX_PROTOCOL_VERSION: u64 = 78;
+const MAX_PROTOCOL_VERSION: u64 = 77;
 
 // Record history of protocol version allocations here:
 //
@@ -3323,19 +3323,6 @@ impl ProtocolConfig {
                 }
                 77 => {
                     cfg.feature_flags.uncompressed_g1_group_elements = true;
-                }
-                78 => {
-                    if chain != Chain::Mainnet && chain != Chain::Testnet {
-                        cfg.feature_flags.per_object_congestion_control_mode =
-                            PerObjectCongestionControlMode::ExecutionTimeEstimate(
-                                ExecutionTimeEstimateParams {
-                                    target_utilization: 50,
-                                    // Allow up to (roughly) one half checkpoint of burst limit.
-                                    allowed_txn_cost_overage_burst_limit_us: 125 * 1000,
-                                    max_txn_cost_overage_per_object_in_commit_us: u64::MAX,
-                                },
-                            );
-                    }
                 }
                 // Use this template when making changes:
                 //
