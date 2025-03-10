@@ -179,7 +179,8 @@ impl IndexerMetrics {
             .unwrap(),
             total_ingested_bytes: register_int_counter_with_registry!(
                 "indexer_total_ingested_bytes",
-                "Total number of bytes fetched from the remote store",
+                "Total number of bytes fetched from the remote store, this metric will not \
+                be updated when data are fetched over gRPC.",
                 registry,
             )
             .unwrap(),
