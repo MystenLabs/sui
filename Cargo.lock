@@ -14580,6 +14580,8 @@ dependencies = [
  "sui-archival",
  "sui-config",
  "sui-macros",
+ "sui-protocol-config",
+ "sui-simulator",
  "sui-storage",
  "sui-swarm-config",
  "sui-types",
