@@ -747,10 +747,10 @@ mod checked {
                             builder = setup_bridge_committee_update(builder, bridge_shared_version)
                         }
                         EndOfEpochTransactionKind::StoreExecutionTimeObservations(estimates) => {
-                            assert_eq!(
+                            assert!(matches!(
                                 protocol_config.per_object_congestion_control_mode(),
-                                PerObjectCongestionControlMode::ExecutionTimeEstimate
-                            );
+                                PerObjectCongestionControlMode::ExecutionTimeEstimate(_)
+                            ));
                             builder = setup_store_execution_time_estimates(builder, estimates);
                         }
                     }

@@ -133,6 +133,8 @@ impl ConsensusHandlerInitializer {
 }
 
 mod additional_consensus_state {
+    use std::marker::PhantomData;
+
     use super::*;
     /// AdditionalConsensusState tracks any in-memory state that is retained by ConsensusHandler
     /// between consensus commits. Because of crash recovery, using such data is inherently risky.
@@ -143,40 +145,317 @@ mod additional_consensus_state {
     /// To make sure that bugs in this process appear immediately, we record the digest of this
     /// state in ConsensusCommitPrologue, so that any deviation causes an immediate fork.
     #[derive(Serialize, Deserialize)]
-    pub struct AdditionalConsensusState {
-        commit_rate_estimate: CommitRateObserver,
+    pub(super) struct AdditionalConsensusState {
+        commit_interval_observer: CommitIntervalObserver,
     }
 
     impl AdditionalConsensusState {
         pub fn new(additional_consensus_state_window_size: u32) -> Self {
             Self {
-                commit_rate_estimate: CommitRateObserver::new(
+                commit_interval_observer: CommitIntervalObserver::new(
                     additional_consensus_state_window_size,
                 ),
             }
         }
 
-        pub fn new_for_tests() -> Self {
-            Self {
-                commit_rate_estimate: CommitRateObserver::new(10),
+        /// Update all internal state based on the new commit
+        pub(crate) fn observe_commit(
+            &mut self,
+            protocol_config: &ProtocolConfig,
+            consensus_commit: &impl ConsensusCommitAPI,
+        ) -> ConsensusCommitInfo {
+            self.commit_interval_observer
+                .observe_commit_time(consensus_commit);
+
+            let estimated_commit_period = self
+                .commit_interval_observer
+                .commit_interval_estimate()
+                .unwrap_or(Duration::from_millis(
+                    protocol_config.min_checkpoint_interval_ms(),
+                ));
+
+            ConsensusCommitInfo {
+                _phantom: PhantomData,
+                round: consensus_commit.leader_round(),
+                timestamp: consensus_commit.commit_timestamp_ms(),
+                consensus_commit_digest: consensus_commit.consensus_digest(protocol_config),
+                additional_state_digest: Some(self.digest()),
+                estimated_commit_period: Some(estimated_commit_period),
+                skip_consensus_commit_prologue_in_test: false,
             }
         }
 
-        /// Update all internal state based on the new commit
-        pub(crate) fn observe_commit(&mut self, consensus_commit: &impl ConsensusCommitAPI) {
-            self.commit_rate_estimate
-                .observe_commit_time(consensus_commit);
+        pub(crate) fn stateless_commit_info(
+            &self,
+            protocol_config: &ProtocolConfig,
+            consensus_commit: &impl ConsensusCommitAPI,
+        ) -> ConsensusCommitInfo {
+            ConsensusCommitInfo {
+                _phantom: PhantomData,
+                round: consensus_commit.leader_round(),
+                timestamp: consensus_commit.commit_timestamp_ms(),
+                consensus_commit_digest: consensus_commit.consensus_digest(protocol_config),
+                additional_state_digest: None,
+                estimated_commit_period: None,
+                skip_consensus_commit_prologue_in_test: false,
+            }
         }
 
         /// Get the digest of the current state.
-        pub fn digest(&self) -> AdditionalConsensusStateDigest {
+        fn digest(&self) -> AdditionalConsensusStateDigest {
             let mut hash = sui_types::crypto::DefaultHash::new();
             bcs::serialize_into(&mut hash, self).unwrap();
             AdditionalConsensusStateDigest::new(hash.finalize().into())
         }
     }
+
+    pub struct ConsensusCommitInfo {
+        // prevent public construction
+        _phantom: PhantomData<()>,
+
+        pub round: u64,
+        pub timestamp: u64,
+        pub consensus_commit_digest: ConsensusCommitDigest,
+
+        additional_state_digest: Option<AdditionalConsensusStateDigest>,
+        estimated_commit_period: Option<Duration>,
+
+        pub skip_consensus_commit_prologue_in_test: bool,
+    }
+
+    impl ConsensusCommitInfo {
+        pub fn new_for_test(
+            commit_round: u64,
+            commit_timestamp: u64,
+            estimated_commit_period: Option<Duration>,
+            skip_consensus_commit_prologue_in_test: bool,
+        ) -> Self {
+            Self {
+                _phantom: PhantomData,
+                round: commit_round,
+                timestamp: commit_timestamp,
+                consensus_commit_digest: ConsensusCommitDigest::default(),
+                additional_state_digest: Some(AdditionalConsensusStateDigest::ZERO),
+                estimated_commit_period,
+                skip_consensus_commit_prologue_in_test,
+            }
+        }
+
+        pub fn new_for_congestion_test(
+            commit_round: u64,
+            commit_timestamp: u64,
+            estimated_commit_period: Duration,
+        ) -> Self {
+            Self::new_for_test(
+                commit_round,
+                commit_timestamp,
+                Some(estimated_commit_period),
+                true,
+            )
+        }
+
+        pub fn additional_state_digest(&self) -> AdditionalConsensusStateDigest {
+            // this method cannot be called if stateless_commit_info is used
+            self.additional_state_digest
+                .expect("additional_state_digest is not available")
+        }
+
+        pub fn estimated_commit_period(&self) -> Duration {
+            // this method cannot be called if stateless_commit_info is used
+            self.estimated_commit_period
+                .expect("estimated commit period is not available")
+        }
+
+        fn consensus_commit_prologue_transaction(
+            &self,
+            epoch: u64,
+        ) -> VerifiedExecutableTransaction {
+            let transaction = VerifiedTransaction::new_consensus_commit_prologue(
+                epoch,
+                self.round,
+                self.timestamp,
+            );
+            VerifiedExecutableTransaction::new_system(transaction, epoch)
+        }
+
+        fn consensus_commit_prologue_v2_transaction(
+            &self,
+            epoch: u64,
+        ) -> VerifiedExecutableTransaction {
+            let transaction = VerifiedTransaction::new_consensus_commit_prologue_v2(
+                epoch,
+                self.round,
+                self.timestamp,
+                self.consensus_commit_digest,
+            );
+            VerifiedExecutableTransaction::new_system(transaction, epoch)
+        }
+
+        fn consensus_commit_prologue_v3_transaction(
+            &self,
+            epoch: u64,
+            consensus_determined_version_assignments: ConsensusDeterminedVersionAssignments,
+        ) -> VerifiedExecutableTransaction {
+            let transaction = VerifiedTransaction::new_consensus_commit_prologue_v3(
+                epoch,
+                self.round,
+                self.timestamp,
+                self.consensus_commit_digest,
+                consensus_determined_version_assignments,
+            );
+            VerifiedExecutableTransaction::new_system(transaction, epoch)
+        }
+
+        fn consensus_commit_prologue_v4_transaction(
+            &self,
+            epoch: u64,
+            consensus_determined_version_assignments: ConsensusDeterminedVersionAssignments,
+            additional_state_digest: AdditionalConsensusStateDigest,
+        ) -> VerifiedExecutableTransaction {
+            let transaction = VerifiedTransaction::new_consensus_commit_prologue_v4(
+                epoch,
+                self.round,
+                self.timestamp,
+                self.consensus_commit_digest,
+                consensus_determined_version_assignments,
+                additional_state_digest,
+            );
+            VerifiedExecutableTransaction::new_system(transaction, epoch)
+        }
+
+        pub fn create_consensus_commit_prologue_transaction(
+            &self,
+            epoch: u64,
+            protocol_config: &ProtocolConfig,
+            cancelled_txn_version_assignment: Vec<(
+                TransactionDigest,
+                Vec<(ConsensusObjectSequenceKey, SequenceNumber)>,
+            )>,
+            commit_info: &ConsensusCommitInfo,
+        ) -> VerifiedExecutableTransaction {
+            let version_assignments = if protocol_config
+                .record_consensus_determined_version_assignments_in_prologue_v2()
+            {
+                Some(
+                    ConsensusDeterminedVersionAssignments::CancelledTransactionsV2(
+                        cancelled_txn_version_assignment,
+                    ),
+                )
+            } else if protocol_config.record_consensus_determined_version_assignments_in_prologue()
+            {
+                Some(
+                    ConsensusDeterminedVersionAssignments::CancelledTransactions(
+                        cancelled_txn_version_assignment
+                            .into_iter()
+                            .map(|(tx_digest, versions)| {
+                                (
+                                    tx_digest,
+                                    versions.into_iter().map(|(id, v)| (id.0, v)).collect(),
+                                )
+                            })
+                            .collect(),
+                    ),
+                )
+            } else {
+                None
+            };
+
+            if protocol_config.record_additional_state_digest_in_prologue() {
+                self.consensus_commit_prologue_v4_transaction(
+                    epoch,
+                    version_assignments.unwrap(),
+                    commit_info.additional_state_digest(),
+                )
+            } else if let Some(version_assignments) = version_assignments {
+                self.consensus_commit_prologue_v3_transaction(epoch, version_assignments)
+            } else if protocol_config.include_consensus_digest_in_prologue() {
+                self.consensus_commit_prologue_v2_transaction(epoch)
+            } else {
+                self.consensus_commit_prologue_transaction(epoch)
+            }
+        }
+    }
+
+    #[test]
+    fn test_additional_consensus_state() {
+        use crate::consensus_types::consensus_output_api::ParsedTransaction;
+
+        #[derive(Debug)]
+        struct TestConsensusCommit {
+            round: u64,
+            timestamp: u64,
+        }
+
+        impl std::fmt::Display for TestConsensusCommit {
+            fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                write!(
+                    f,
+                    "TestConsensusCommitAPI(round={}, timestamp={})",
+                    self.round, self.timestamp
+                )
+            }
+        }
+
+        impl ConsensusCommitAPI for TestConsensusCommit {
+            fn reputation_score_sorted_desc(&self) -> Option<Vec<(AuthorityIndex, u64)>> {
+                None
+            }
+            fn leader_round(&self) -> u64 {
+                self.round
+            }
+            fn leader_author_index(&self) -> AuthorityIndex {
+                0
+            }
+
+            /// Returns epoch UNIX timestamp in milliseconds
+            fn commit_timestamp_ms(&self) -> u64 {
+                self.timestamp
+            }
+
+            /// Returns a unique global index for each committed sub-dag.
+            fn commit_sub_dag_index(&self) -> u64 {
+                self.round
+            }
+
+            /// Returns all accepted and rejected transactions per block in the commit in deterministic order.
+            fn transactions(&self) -> Vec<(AuthorityIndex, Vec<ParsedTransaction>)> {
+                vec![]
+            }
+
+            /// Returns the digest of consensus output.
+            fn consensus_digest(&self, _: &ProtocolConfig) -> ConsensusCommitDigest {
+                ConsensusCommitDigest::ZERO
+            }
+        }
+
+        fn observe(state: &mut AdditionalConsensusState, round: u64, timestamp: u64) {
+            let protocol_config = ProtocolConfig::get_for_max_version_UNSAFE();
+            state.observe_commit(&protocol_config, &TestConsensusCommit { round, timestamp });
+        }
+
+        let mut s1 = AdditionalConsensusState::new(3);
+        observe(&mut s1, 1, 1000);
+        observe(&mut s1, 2, 2000);
+        observe(&mut s1, 3, 3000);
+        observe(&mut s1, 4, 4000);
+
+        let mut s2 = AdditionalConsensusState::new(3);
+        // Because state uses a ring buffer, we should get the same digest
+        // even though we only added the 3 latest observations.
+        observe(&mut s2, 2, 2000);
+        observe(&mut s2, 3, 3000);
+        observe(&mut s2, 4, 4000);
+
+        assert_eq!(s1.digest(), s2.digest());
+
+        observe(&mut s1, 5, 5000);
+        observe(&mut s2, 5, 5000);
+
+        assert_eq!(s1.digest(), s2.digest());
+    }
 }
-pub(crate) use additional_consensus_state::AdditionalConsensusState;
+use additional_consensus_state::AdditionalConsensusState;
+pub(crate) use additional_consensus_state::ConsensusCommitInfo;
 
 pub struct ConsensusHandler<C> {
     /// A store created for each epoch. ConsensusHandler is recreated each epoch, with the
@@ -277,7 +556,7 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
             .protocol_config()
             .record_additional_state_digest_in_prologue());
         self.additional_consensus_state
-            .observe_commit(&consensus_commit);
+            .observe_commit(self.epoch_store.protocol_config(), &consensus_commit);
     }
 
     #[instrument(level = "debug", skip_all)]
@@ -292,27 +571,34 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
 
         let last_committed_round = self.last_consensus_stats.index.last_committed_round;
 
-        let round = consensus_commit.leader_round();
-
-        if self
+        let commit_info = if self
             .epoch_store
             .protocol_config()
             .record_additional_state_digest_in_prologue()
         {
+            let commit_info = self
+                .additional_consensus_state
+                .observe_commit(self.epoch_store.protocol_config(), &consensus_commit);
+            info!(
+                "estimated commit rate: {:?}",
+                commit_info.estimated_commit_period()
+            );
+            commit_info
+        } else {
             self.additional_consensus_state
-                .observe_commit(&consensus_commit);
-        }
+                .stateless_commit_info(self.epoch_store.protocol_config(), &consensus_commit)
+        };
 
         // TODO: Remove this once narwhal is deprecated. For now mysticeti will not return
         // more than one leader per round so we are not in danger of ignoring any commits.
-        assert!(round >= last_committed_round);
-        if last_committed_round == round {
+        assert!(commit_info.round >= last_committed_round);
+        if last_committed_round == commit_info.round {
             // we can receive the same commit twice after restart
             // It is critical that the writes done by this function are atomic - otherwise we can
             // lose the later parts of a commit if we restart midway through processing it.
             warn!(
                 "Ignoring consensus output for round {} as it is already committed. NOTE: This is only expected if consensus is running.",
-                round
+                commit_info.round
             );
             return;
         }
@@ -329,7 +615,8 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
             .epoch_start_timestamp_ms();
         let timestamp = if timestamp < epoch_start {
             error!(
-                "Unexpected commit timestamp {timestamp} less then epoch start time {epoch_start}, author {leader_author}, round {round}",
+                "Unexpected commit timestamp {timestamp} less then epoch start time {epoch_start}, author {leader_author}, round {}",
+                commit_info.round
             );
             epoch_start
         } else {
@@ -343,7 +630,7 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
         );
 
         let execution_index = ExecutionIndices {
-            last_committed_round: round,
+            last_committed_round: commit_info.round,
             sub_dag_index: commit_sub_dag_index,
             transaction_index: 0_u64,
         };
@@ -370,7 +657,7 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
 
         if !new_jwks.is_empty() {
             let authenticator_state_update_transaction =
-                self.authenticator_state_update_transaction(round, new_jwks);
+                self.authenticator_state_update_transaction(commit_info.round, new_jwks);
             debug!(
                 "adding AuthenticatorStateUpdate({:?}) tx: {:?}",
                 authenticator_state_update_transaction.digest(),
@@ -437,7 +724,9 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
                     {
                         // These are deprecated and we should never see them. Log an error and eat the tx if one appears.
                         debug_fatal!(
-                            "BUG: saw deprecated RandomnessStateUpdate tx for commit round {round:?}, randomness round {randomness_round:?}"
+                            "BUG: saw deprecated RandomnessStateUpdate tx for commit round {}, randomness round {}",
+                            commit_info.round,
+                            randomness_round
                         );
                     } else {
                         let transaction =
@@ -475,7 +764,7 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
                 // prologue transaction, which will be the first transaction in this consensus commit batch.
                 // Therefore, the transaction sequence number starts from 1 here.
                 let current_tx_index = ExecutionIndices {
-                    last_committed_round: round,
+                    last_committed_round: commit_info.round,
                     sub_dag_index: commit_sub_dag_index,
                     transaction_index: (seq + 1) as u64,
                 };
@@ -515,12 +804,11 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
             .epoch_store
             .process_consensus_transactions_and_commit_boundary(
                 all_transactions,
-                &self.additional_consensus_state,
                 &self.last_consensus_stats,
                 &self.checkpoint_service,
                 self.cache_reader.as_ref(),
                 self.tx_reader.as_ref(),
-                &ConsensusCommitInfo::new(self.epoch_store.protocol_config(), &consensus_commit),
+                &commit_info,
                 &self.metrics,
             )
             .await
@@ -891,146 +1179,6 @@ impl SequencedConsensusTransaction {
     }
 }
 
-/// Represents the information from the current consensus commit.
-pub struct ConsensusCommitInfo {
-    pub round: u64,
-    pub timestamp: u64,
-    pub consensus_commit_digest: ConsensusCommitDigest,
-
-    skip_consensus_commit_prologue_in_test: bool,
-}
-
-impl ConsensusCommitInfo {
-    fn new(protocol_config: &ProtocolConfig, consensus_commit: &impl ConsensusCommitAPI) -> Self {
-        Self {
-            round: consensus_commit.leader_round(),
-            timestamp: consensus_commit.commit_timestamp_ms(),
-            consensus_commit_digest: consensus_commit.consensus_digest(protocol_config),
-
-            skip_consensus_commit_prologue_in_test: false,
-        }
-    }
-
-    pub fn new_for_test(
-        commit_round: u64,
-        commit_timestamp: u64,
-        skip_consensus_commit_prologue_in_test: bool,
-    ) -> Self {
-        Self {
-            round: commit_round,
-            timestamp: commit_timestamp,
-            consensus_commit_digest: ConsensusCommitDigest::default(),
-            skip_consensus_commit_prologue_in_test,
-        }
-    }
-
-    pub fn skip_consensus_commit_prologue_in_test(&self) -> bool {
-        self.skip_consensus_commit_prologue_in_test
-    }
-
-    fn consensus_commit_prologue_transaction(&self, epoch: u64) -> VerifiedExecutableTransaction {
-        let transaction =
-            VerifiedTransaction::new_consensus_commit_prologue(epoch, self.round, self.timestamp);
-        VerifiedExecutableTransaction::new_system(transaction, epoch)
-    }
-
-    fn consensus_commit_prologue_v2_transaction(
-        &self,
-        epoch: u64,
-    ) -> VerifiedExecutableTransaction {
-        let transaction = VerifiedTransaction::new_consensus_commit_prologue_v2(
-            epoch,
-            self.round,
-            self.timestamp,
-            self.consensus_commit_digest,
-        );
-        VerifiedExecutableTransaction::new_system(transaction, epoch)
-    }
-
-    fn consensus_commit_prologue_v3_transaction(
-        &self,
-        epoch: u64,
-        consensus_determined_version_assignments: ConsensusDeterminedVersionAssignments,
-    ) -> VerifiedExecutableTransaction {
-        let transaction = VerifiedTransaction::new_consensus_commit_prologue_v3(
-            epoch,
-            self.round,
-            self.timestamp,
-            self.consensus_commit_digest,
-            consensus_determined_version_assignments,
-        );
-        VerifiedExecutableTransaction::new_system(transaction, epoch)
-    }
-
-    fn consensus_commit_prologue_v4_transaction(
-        &self,
-        epoch: u64,
-        consensus_determined_version_assignments: ConsensusDeterminedVersionAssignments,
-        additional_state_digest: AdditionalConsensusStateDigest,
-    ) -> VerifiedExecutableTransaction {
-        let transaction = VerifiedTransaction::new_consensus_commit_prologue_v4(
-            epoch,
-            self.round,
-            self.timestamp,
-            self.consensus_commit_digest,
-            consensus_determined_version_assignments,
-            additional_state_digest,
-        );
-        VerifiedExecutableTransaction::new_system(transaction, epoch)
-    }
-
-    pub fn create_consensus_commit_prologue_transaction(
-        &self,
-        epoch: u64,
-        protocol_config: &ProtocolConfig,
-        cancelled_txn_version_assignment: Vec<(
-            TransactionDigest,
-            Vec<(ConsensusObjectSequenceKey, SequenceNumber)>,
-        )>,
-        additional_state: &AdditionalConsensusState,
-    ) -> VerifiedExecutableTransaction {
-        let version_assignments = if protocol_config
-            .record_consensus_determined_version_assignments_in_prologue_v2()
-        {
-            Some(
-                ConsensusDeterminedVersionAssignments::CancelledTransactionsV2(
-                    cancelled_txn_version_assignment,
-                ),
-            )
-        } else if protocol_config.record_consensus_determined_version_assignments_in_prologue() {
-            Some(
-                ConsensusDeterminedVersionAssignments::CancelledTransactions(
-                    cancelled_txn_version_assignment
-                        .into_iter()
-                        .map(|(tx_digest, versions)| {
-                            (
-                                tx_digest,
-                                versions.into_iter().map(|(id, v)| (id.0, v)).collect(),
-                            )
-                        })
-                        .collect(),
-                ),
-            )
-        } else {
-            None
-        };
-
-        if protocol_config.record_additional_state_digest_in_prologue() {
-            self.consensus_commit_prologue_v4_transaction(
-                epoch,
-                version_assignments.unwrap(),
-                additional_state.digest(),
-            )
-        } else if let Some(version_assignments) = version_assignments {
-            self.consensus_commit_prologue_v3_transaction(epoch, version_assignments)
-        } else if protocol_config.include_consensus_digest_in_prologue() {
-            self.consensus_commit_prologue_v2_transaction(epoch)
-        } else {
-            self.consensus_commit_prologue_transaction(epoch)
-        }
-    }
-}
-
 /// Handles certified and rejected transactions output by consensus.
 pub(crate) struct ConsensusTransactionHandler {
     /// Whether to enable handling certified transactions.
@@ -1146,11 +1294,11 @@ impl ConsensusTransactionHandler {
 }
 
 #[derive(Serialize, Deserialize)]
-pub(crate) struct CommitRateObserver {
+pub(crate) struct CommitIntervalObserver {
     ring_buffer: VecDeque<u64>,
 }
 
-impl CommitRateObserver {
+impl CommitIntervalObserver {
     pub fn new(window_size: u32) -> Self {
         Self {
             ring_buffer: VecDeque::with_capacity(window_size as usize),
@@ -1165,8 +1313,7 @@ impl CommitRateObserver {
         self.ring_buffer.push_back(commit_time);
     }
 
-    #[allow(dead_code)]
-    pub fn commit_rate_estimate(&self) -> Option<Duration> {
+    pub fn commit_interval_estimate(&self) -> Option<Duration> {
         if self.ring_buffer.len() <= 1 {
             None
         } else {
@@ -1186,7 +1333,9 @@ mod tests {
     };
     use futures::pin_mut;
     use prometheus::Registry;
-    use sui_protocol_config::ConsensusTransactionOrdering;
+    use sui_protocol_config::{
+        Chain, ConsensusTransactionOrdering, PerObjectCongestionControlMode, ProtocolVersion,
+    };
     use sui_types::{
         base_types::{random_object_ref, AuthorityName, ObjectID, SuiAddress},
         committee::Committee,
@@ -1212,7 +1361,6 @@ mod tests {
         consensus_adapter::consensus_tests::{
             test_certificates_with_gas_objects, test_user_transaction,
         },
-        consensus_types::consensus_output_api::ParsedTransaction,
         post_consensus_tx_reorder::PostConsensusTxReorder,
     };
 
@@ -1242,8 +1390,15 @@ mod tests {
                 .with_objects(all_objects.clone())
                 .build();
 
+        let mut protocol_config =
+            ProtocolConfig::get_for_version(ProtocolVersion::max(), Chain::Unknown);
+        protocol_config.set_per_object_congestion_control_mode_for_testing(
+            PerObjectCongestionControlMode::None,
+        );
+
         let state = TestAuthorityBuilder::new()
             .with_network_config(&network_config, 0)
+            .with_protocol_config(protocol_config)
             .build()
             .await;
 
@@ -1683,80 +1838,5 @@ mod tests {
             kind,
             tracking_id: Default::default(),
         })
-    }
-
-    #[test]
-    fn test_additional_consensus_state() {
-        #[derive(Debug)]
-        struct TestConsensusCommit {
-            round: u64,
-            timestamp: u64,
-        }
-
-        impl std::fmt::Display for TestConsensusCommit {
-            fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-                write!(
-                    f,
-                    "TestConsensusCommitAPI(round={}, timestamp={})",
-                    self.round, self.timestamp
-                )
-            }
-        }
-
-        impl ConsensusCommitAPI for TestConsensusCommit {
-            fn reputation_score_sorted_desc(&self) -> Option<Vec<(AuthorityIndex, u64)>> {
-                None
-            }
-            fn leader_round(&self) -> u64 {
-                self.round
-            }
-            fn leader_author_index(&self) -> AuthorityIndex {
-                0
-            }
-
-            /// Returns epoch UNIX timestamp in milliseconds
-            fn commit_timestamp_ms(&self) -> u64 {
-                self.timestamp
-            }
-
-            /// Returns a unique global index for each committed sub-dag.
-            fn commit_sub_dag_index(&self) -> u64 {
-                self.round
-            }
-
-            /// Returns all accepted and rejected transactions per block in the commit in deterministic order.
-            fn transactions(&self) -> Vec<(AuthorityIndex, Vec<ParsedTransaction>)> {
-                vec![]
-            }
-
-            /// Returns the digest of consensus output.
-            fn consensus_digest(&self, _: &ProtocolConfig) -> ConsensusCommitDigest {
-                ConsensusCommitDigest::ZERO
-            }
-        }
-
-        fn observe(state: &mut AdditionalConsensusState, round: u64, timestamp: u64) {
-            state.observe_commit(&TestConsensusCommit { round, timestamp });
-        }
-
-        let mut s1 = AdditionalConsensusState::new(3);
-        observe(&mut s1, 1, 1000);
-        observe(&mut s1, 2, 2000);
-        observe(&mut s1, 3, 3000);
-        observe(&mut s1, 4, 4000);
-
-        let mut s2 = AdditionalConsensusState::new(3);
-        // Because state uses a ring buffer, we should get the same digest
-        // even though we only added the 3 latest observations.
-        observe(&mut s2, 2, 2000);
-        observe(&mut s2, 3, 3000);
-        observe(&mut s2, 4, 4000);
-
-        assert_eq!(s1.digest(), s2.digest());
-
-        observe(&mut s1, 5, 5000);
-        observe(&mut s2, 5, 5000);
-
-        assert_eq!(s1.digest(), s2.digest());
     }
 }

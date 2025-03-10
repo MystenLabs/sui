@@ -1069,6 +1069,7 @@ impl fmt::Debug for ConsensusCommitDigest {
 pub struct AdditionalConsensusStateDigest(Digest);
 
 impl AdditionalConsensusStateDigest {
+    pub const ZERO: Self = Self(Digest::ZERO);
     pub const fn new(digest: [u8; 32]) -> Self {
         Self(Digest::new(digest))
     }

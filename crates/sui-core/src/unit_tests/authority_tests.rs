@@ -5836,7 +5836,7 @@ async fn test_consensus_handler_per_object_congestion_control(
 
     let non_congested_tx_count = match mode {
         PerObjectCongestionControlMode::None => unreachable!(),
-        PerObjectCongestionControlMode::ExecutionTimeEstimate => unreachable!(),
+        PerObjectCongestionControlMode::ExecutionTimeEstimate(_) => unreachable!(),
         PerObjectCongestionControlMode::TotalGasBudget => 5,
         PerObjectCongestionControlMode::TotalTxCount => 2,
         PerObjectCongestionControlMode::TotalGasBudgetWithCap => 5,
@@ -5851,7 +5851,7 @@ async fn test_consensus_handler_per_object_congestion_control(
 
     match mode {
         PerObjectCongestionControlMode::None => unreachable!(),
-        PerObjectCongestionControlMode::ExecutionTimeEstimate => unreachable!(),
+        PerObjectCongestionControlMode::ExecutionTimeEstimate(_) => unreachable!(),
         PerObjectCongestionControlMode::TotalGasBudget => {
             protocol_config
                 .set_max_accumulated_txn_cost_per_object_in_narwhal_commit_for_testing(200_000_000);
