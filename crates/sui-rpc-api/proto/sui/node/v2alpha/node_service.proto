@@ -185,7 +185,7 @@ message ResolveTransactionResponse {
 // Request message for `NodeService.ListAccountObjects`
 message ListAccountObjectsRequest {
   // Required. The address of the account that owns the objects.
-  optional sui.types.Address owner = 1;
+  optional string owner = 1;
 
   // The maximum number of entries return. The service may return fewer than this value.
   // If unspecified, at most `50` entries will be returned.
@@ -211,7 +211,7 @@ message ListAccountObjectsResponse {
 }
 
 message AccountObject {
-  optional sui.types.Address owner = 1;
+  optional string owner = 1;
   optional sui.types.ObjectId object_id = 2;
   optional uint64 version = 3;
   optional sui.types.StructTag object_type = 4;

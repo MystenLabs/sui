@@ -154,7 +154,7 @@ impl From<sui_sdk_types::ExecutionError> for super::failure_status::ExecutionErr
             AddressDeniedForCoin { address, coin_type } => {
                 Self::AddressDeniedForCoin(super::AddressDeniedForCoinError {
                     coin_type: Some(coin_type),
-                    address: Some(address.into()),
+                    address: Some(address.to_string()),
                 })
             }
             CoinTypeGlobalPause { coin_type } => Self::CoinTypeGlobalPause(coin_type),
@@ -284,7 +284,8 @@ impl TryFrom<&super::failure_status::ExecutionError> for sui_sdk_types::Executio
                     address: address
                         .as_ref()
                         .ok_or_else(|| TryFromProtoError::missing("address"))?
-                        .try_into()?,
+                        .parse()
+                        .map_err(TryFromProtoError::from_error)?,
                     coin_type: coin_type
                         .as_ref()
                         .ok_or_else(|| TryFromProtoError::missing("coin_type"))?

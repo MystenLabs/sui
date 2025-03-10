@@ -28,9 +28,9 @@ impl RpcService {
             .owner
             .as_ref()
             .ok_or_else(|| RpcError::new(tonic::Code::InvalidArgument, "missing owner"))?
-            .try_into()
+            .parse()
             .map_err(|e| {
-                RpcError::new(tonic::Code::InvalidArgument, format!("invalid parent: {e}"))
+                RpcError::new(tonic::Code::InvalidArgument, format!("invalid owner: {e}"))
             })?;
 
         let page_size = request
@@ -104,7 +104,7 @@ pub struct AccountOwnedObjectInfo {
 impl AccountOwnedObjectInfo {
     fn into_proto(self) -> AccountObject {
         AccountObject {
-            owner: Some(self.owner.into()),
+            owner: Some(self.owner.to_string()),
             object_id: Some(self.object_id.into()),
             version: Some(self.version),
             object_type: Some(self.type_.into()),

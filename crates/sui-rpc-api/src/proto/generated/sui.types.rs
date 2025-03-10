@@ -46,18 +46,6 @@ impl SignatureScheme {
         }
     }
 }
-/// Unique identifier for an account on the Sui blockchain.
-///
-/// An `Address` is a 32-byte pseudonymous identifier used to uniquely identify an account and
-/// asset-ownership on the Sui blockchain. Often, human-readable addresses are encoded in
-/// hexadecimal with a `0x` prefix. For example, this is a valid Sui address:
-/// `0x02a212de6a9dfa3a69e22387acfbafbb1a9e591bd9d636e7895dcfc8de05f331`.
-#[derive(Clone, PartialEq, ::prost::Message)]
-pub struct Address {
-    /// 32-byte address.
-    #[prost(bytes = "bytes", optional, tag = "1")]
-    pub address: ::core::option::Option<::prost::bytes::Bytes>,
-}
 /// Unique identifier for an object on the Sui blockchain.
 ///
 /// An `ObjectId` is a 32-byte identifier used to uniquely identify an object on the Sui
@@ -246,8 +234,8 @@ pub struct Event {
     #[prost(message, optional, tag = "2")]
     pub module: ::core::option::Option<Identifier>,
     /// Address of the account that sent the transaction where this event was emitted.
-    #[prost(message, optional, tag = "3")]
-    pub sender: ::core::option::Option<Address>,
+    #[prost(string, optional, tag = "3")]
+    pub sender: ::core::option::Option<::prost::alloc::string::String>,
     /// The type of the event emitted.
     #[prost(message, optional, tag = "4")]
     pub event_type: ::core::option::Option<StructTag>,
@@ -333,8 +321,8 @@ pub mod owner {
     #[derive(Clone, PartialEq, ::prost::Oneof)]
     pub enum Kind {
         /// Object is exclusively owned by a single address, and is mutable.
-        #[prost(message, tag = "1")]
-        Address(super::Address),
+        #[prost(string, tag = "1")]
+        Address(::prost::alloc::string::String),
         /// Object is exclusively owned by a single object, and is mutable.
         #[prost(message, tag = "2")]
         Object(super::ObjectId),
@@ -475,8 +463,8 @@ pub struct Identifier {
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct StructTag {
     /// Address of the package where this type was defined.
-    #[prost(message, optional, tag = "1")]
-    pub address: ::core::option::Option<Address>,
+    #[prost(string, optional, tag = "1")]
+    pub address: ::core::option::Option<::prost::alloc::string::String>,
     /// Name of the module where this type was defined.
     #[prost(message, optional, tag = "2")]
     pub module: ::core::option::Option<Identifier>,
@@ -569,14 +557,14 @@ pub mod move_value {
         U128(super::U128),
         #[prost(message, tag = "8")]
         U256(super::U256),
-        #[prost(message, tag = "9")]
-        Address(super::Address),
+        #[prost(string, tag = "9")]
+        Address(::prost::alloc::string::String),
         #[prost(message, tag = "10")]
         Vector(super::MoveVector),
         #[prost(message, tag = "11")]
         Struct(super::MoveStructValue),
-        #[prost(message, tag = "12")]
-        Signer(super::Address),
+        #[prost(string, tag = "12")]
+        Signer(::prost::alloc::string::String),
         #[prost(message, tag = "13")]
         Variant(super::MoveVariant),
     }
@@ -599,8 +587,8 @@ pub mod transaction {
     pub struct TransactionV1 {
         #[prost(message, optional, tag = "1")]
         pub kind: ::core::option::Option<super::TransactionKind>,
-        #[prost(message, optional, tag = "2")]
-        pub sender: ::core::option::Option<super::Address>,
+        #[prost(string, optional, tag = "2")]
+        pub sender: ::core::option::Option<::prost::alloc::string::String>,
         #[prost(message, optional, tag = "3")]
         pub gas_payment: ::core::option::Option<super::GasPayment>,
         #[prost(message, optional, tag = "4")]
@@ -619,8 +607,8 @@ pub struct GasPayment {
     #[prost(message, repeated, tag = "1")]
     pub objects: ::prost::alloc::vec::Vec<ObjectReference>,
     /// Owner of the gas objects, either the transaction sender or a sponsor.
-    #[prost(message, optional, tag = "2")]
-    pub owner: ::core::option::Option<Address>,
+    #[prost(string, optional, tag = "2")]
+    pub owner: ::core::option::Option<::prost::alloc::string::String>,
     /// Gas unit price to use when charging for computation.
     ///
     /// Must be greater than or equal to the network's current RGP (reference gas price).
@@ -1647,8 +1635,8 @@ pub mod failure_status {
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct AddressDeniedForCoinError {
     /// Denied address.
-    #[prost(message, optional, tag = "1")]
-    pub address: ::core::option::Option<Address>,
+    #[prost(string, optional, tag = "1")]
+    pub address: ::core::option::Option<::prost::alloc::string::String>,
     /// Coin type.
     #[prost(string, optional, tag = "2")]
     pub coin_type: ::core::option::Option<::prost::alloc::string::String>,

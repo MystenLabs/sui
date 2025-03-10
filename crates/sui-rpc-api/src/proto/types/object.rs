@@ -100,7 +100,7 @@ impl From<sui_sdk_types::Owner> for super::Owner {
         use sui_sdk_types::Owner::*;
 
         let kind = match value {
-            Address(address) => Kind::Address(address.into()),
+            Address(address) => Kind::Address(address.to_string()),
             Object(object) => Kind::Object(object.into()),
             Shared(version) => Kind::Shared(version),
             Immutable => Kind::Immutable(()),
@@ -121,7 +121,9 @@ impl TryFrom<&super::Owner> for sui_sdk_types::Owner {
             .as_ref()
             .ok_or_else(|| TryFromProtoError::missing("kind"))?
         {
-            Address(address) => Self::Address(address.try_into()?),
+            Address(address) => {
+                Self::Address(address.parse().map_err(TryFromProtoError::from_error)?)
+            }
             Object(object) => Self::Object(object.try_into()?),
             Shared(version) => Self::Shared(*version),
             Immutable(()) => Self::Immutable,

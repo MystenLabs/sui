@@ -9,7 +9,7 @@ impl From<sui_sdk_types::Event> for super::Event {
         Self {
             package_id: Some(value.package_id.into()),
             module: Some(value.module.into()),
-            sender: Some(value.sender.into()),
+            sender: Some(value.sender.to_string()),
             event_type: Some(value.type_.into()),
             contents: Some(value.contents.into()),
         }
@@ -36,7 +36,8 @@ impl TryFrom<&super::Event> for sui_sdk_types::Event {
             .sender
             .as_ref()
             .ok_or_else(|| TryFromProtoError::missing("sender"))?
-            .try_into()?;
+            .parse()
+            .map_err(TryFromProtoError::from_error)?;
 
         let type_ = value
             .event_type

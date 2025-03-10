@@ -38,7 +38,7 @@ impl From<sui_sdk_types::Transaction> for super::transaction::TransactionV1 {
     fn from(value: sui_sdk_types::Transaction) -> Self {
         Self {
             kind: Some(value.kind.into()),
-            sender: Some(value.sender.into()),
+            sender: Some(value.sender.to_string()),
             gas_payment: Some(value.gas_payment.into()),
             expiration: Some(value.expiration.into()),
         }
@@ -59,7 +59,8 @@ impl TryFrom<&super::transaction::TransactionV1> for sui_sdk_types::Transaction 
             .sender
             .as_ref()
             .ok_or_else(|| TryFromProtoError::missing("sender"))?
-            .try_into()?;
+            .parse()
+            .map_err(TryFromProtoError::from_error)?;
 
         let gas_payment = value
             .gas_payment
@@ -90,7 +91,7 @@ impl From<sui_sdk_types::GasPayment> for super::GasPayment {
     fn from(value: sui_sdk_types::GasPayment) -> Self {
         Self {
             objects: value.objects.into_iter().map(Into::into).collect(),
-            owner: Some(value.owner.into()),
+            owner: Some(value.owner.to_string()),
             price: Some(value.price),
             budget: Some(value.budget),
         }
@@ -111,7 +112,8 @@ impl TryFrom<&super::GasPayment> for sui_sdk_types::GasPayment {
             .owner
             .as_ref()
             .ok_or_else(|| TryFromProtoError::missing("owner"))?
-            .try_into()?;
+            .parse()
+            .map_err(TryFromProtoError::from_error)?;
         let price = value
             .price
             .ok_or_else(|| TryFromProtoError::missing("price"))?;

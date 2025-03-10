@@ -30,32 +30,6 @@ mod signatures;
 mod transaction_convert;
 
 //
-// Address
-//
-
-impl From<sui_sdk_types::Address> for Address {
-    fn from(value: sui_sdk_types::Address) -> Self {
-        Self {
-            address: Some(value.as_bytes().to_vec().into()),
-        }
-    }
-}
-
-impl TryFrom<&Address> for sui_sdk_types::Address {
-    type Error = TryFromProtoError;
-
-    fn try_from(Address { address }: &Address) -> Result<Self, Self::Error> {
-        let address = address
-            .as_ref()
-            .ok_or_else(|| TryFromProtoError::missing("address"))?
-            .as_ref()
-            .try_into()?;
-
-        Ok(Self::new(address))
-    }
-}
-
-//
 // ObjectId
 //
 

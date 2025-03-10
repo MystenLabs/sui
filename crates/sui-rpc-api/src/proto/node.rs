@@ -50,7 +50,7 @@ use v2::*;
 impl From<sui_sdk_types::BalanceChange> for BalanceChange {
     fn from(value: sui_sdk_types::BalanceChange) -> Self {
         Self {
-            address: Some(value.address.into()),
+            address: Some(value.address.to_string()),
             coin_type: Some(value.coin_type.into()),
             amount: Some(value.amount.into()),
         }
@@ -65,7 +65,8 @@ impl TryFrom<&BalanceChange> for sui_sdk_types::BalanceChange {
             .address
             .as_ref()
             .ok_or_else(|| TryFromProtoError::missing("address"))?
-            .pipe(TryInto::try_into)?;
+            .parse()
+            .map_err(TryFromProtoError::from_error)?;
         let coin_type = value
             .coin_type
             .as_ref()

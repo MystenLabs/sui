@@ -186,8 +186,8 @@ pub struct ResolveTransactionResponse {
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct ListAccountObjectsRequest {
     /// Required. The address of the account that owns the objects.
-    #[prost(message, optional, tag = "1")]
-    pub owner: ::core::option::Option<super::super::types::Address>,
+    #[prost(string, optional, tag = "1")]
+    pub owner: ::core::option::Option<::prost::alloc::string::String>,
     /// The maximum number of entries return. The service may return fewer than this value.
     /// If unspecified, at most `50` entries will be returned.
     /// The maximum value is `1000`; values above `1000` will be coerced to `1000`.
@@ -214,8 +214,8 @@ pub struct ListAccountObjectsResponse {
 }
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct AccountObject {
-    #[prost(message, optional, tag = "1")]
-    pub owner: ::core::option::Option<super::super::types::Address>,
+    #[prost(string, optional, tag = "1")]
+    pub owner: ::core::option::Option<::prost::alloc::string::String>,
     #[prost(message, optional, tag = "2")]
     pub object_id: ::core::option::Option<super::super::types::ObjectId>,
     #[prost(uint64, optional, tag = "3")]

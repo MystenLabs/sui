@@ -31,10 +31,10 @@ import "google/protobuf/empty.proto";
 // asset-ownership on the Sui blockchain. Often, human-readable addresses are encoded in
 // hexadecimal with a `0x` prefix. For example, this is a valid Sui address:
 // `0x02a212de6a9dfa3a69e22387acfbafbb1a9e591bd9d636e7895dcfc8de05f331`.
-message Address {
+// message Address {
   // 32-byte address.
-  optional bytes address = 1;
-}
+  // optional bytes address = 1;
+// }
 
 // Unique identifier for an object on the Sui blockchain.
 //
@@ -202,7 +202,7 @@ message Event {
   // event to be emitted.
   optional Identifier module = 2;
   // Address of the account that sent the transaction where this event was emitted.
-  optional Address sender = 3;
+  optional string sender = 3;
   // The type of the event emitted.
   optional StructTag event_type = 4;
   // BCS serialized bytes of the event.
@@ -268,7 +268,7 @@ message UpgradeInfo {
 message Owner {
   oneof kind {
     // Object is exclusively owned by a single address, and is mutable.
-    Address address = 1;
+    string address = 1;
     // Object is exclusively owned by a single object, and is mutable.
     ObjectId object = 2;
     // Object is shared, can be used by any address, and is mutable.
@@ -388,7 +388,7 @@ message Identifier {
 // Type information for a Move struct.
 message StructTag {
   // Address of the package where this type was defined.
-  optional Address address = 1;
+  optional string address = 1;
   // Name of the module where this type was defined.
   optional Identifier module = 2;
   // Name of the type itself.
@@ -440,10 +440,10 @@ message MoveValue {
     uint64 u64 = 6;
     U128 u128 = 7;
     U256 u256 = 8;
-    Address address = 9;
+    string address = 9;
     MoveVector vector = 10;
     MoveStructValue struct = 11;
-    Address signer = 12;
+    string signer = 12;
     MoveVariant variant = 13;
   }
 }
@@ -461,7 +461,7 @@ message Transaction {
   // Version 1 of `Transaction`.
   message TransactionV1 {
     optional TransactionKind kind = 1;
-    optional Address sender = 2;
+    optional string sender = 2;
     optional GasPayment gas_payment = 3;
     optional TransactionExpiration expiration = 4;
   }
@@ -477,7 +477,7 @@ message GasPayment {
   repeated ObjectReference objects = 1;
 
   // Owner of the gas objects, either the transaction sender or a sponsor.
-  optional Address owner = 2;
+  optional string owner = 2;
 
   // Gas unit price to use when charging for computation.
   //
@@ -1293,7 +1293,7 @@ message FailureStatus {
 // Address is denied for this coin type.
 message AddressDeniedForCoinError {
   // Denied address.
-  optional Address address = 1;
+  optional string address = 1;
   // Coin type.
   optional string coin_type = 2;
 }

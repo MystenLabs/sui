@@ -443,7 +443,7 @@ message ExecuteTransactionResponse {
 // The delta, or change, in balance for an address for a particular `Coin` type.
 message BalanceChange {
   // The account address that is affected by this balance change event.
-  optional sui.types.Address address = 1;
+  optional string address = 1;
 
   // The `Coin` type of this balance change event.
   optional sui.types.TypeTag coin_type = 2;

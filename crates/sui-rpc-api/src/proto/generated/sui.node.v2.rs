@@ -378,8 +378,8 @@ pub struct ExecuteTransactionResponse {
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct BalanceChange {
     /// The account address that is affected by this balance change event.
-    #[prost(message, optional, tag = "1")]
-    pub address: ::core::option::Option<super::super::types::Address>,
+    #[prost(string, optional, tag = "1")]
+    pub address: ::core::option::Option<::prost::alloc::string::String>,
     /// The `Coin` type of this balance change event.
     #[prost(message, optional, tag = "2")]
     pub coin_type: ::core::option::Option<super::super::types::TypeTag>,

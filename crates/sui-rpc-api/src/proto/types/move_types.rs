@@ -33,7 +33,7 @@ impl TryFrom<&super::Identifier> for sui_sdk_types::Identifier {
 impl From<sui_sdk_types::StructTag> for super::StructTag {
     fn from(value: sui_sdk_types::StructTag) -> Self {
         Self {
-            address: Some(value.address.into()),
+            address: Some(value.address.to_string()),
             module: Some(value.module.into()),
             name: Some(value.name.into()),
             type_parameters: value.type_params.into_iter().map(Into::into).collect(),
@@ -49,7 +49,8 @@ impl TryFrom<&super::StructTag> for sui_sdk_types::StructTag {
             .address
             .as_ref()
             .ok_or_else(|| TryFromProtoError::missing("address"))?
-            .pipe(TryFrom::try_from)?;
+            .parse()
+            .map_err(TryFromProtoError::from_error)?;
         let module = value
             .module
             .as_ref()
