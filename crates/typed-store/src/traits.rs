@@ -11,7 +11,6 @@ where
     V: Serialize + DeserializeOwned,
 {
     type Error: Error;
-    type Iterator: Iterator<Item = (K, V)>;
     type SafeIterator: Iterator<Item = Result<(K, V), TypedStoreError>>;
 
     /// Returns true if the map contains a value for the specified key.
@@ -47,10 +46,6 @@ where
 
     /// Returns true if the map is empty, otherwise false.
     fn is_empty(&self) -> bool;
-
-    /// Returns an iterator visiting each key-value pair within the specified bounds in the map.
-    fn iter_with_bounds(&'a self, lower_bound: Option<K>, upper_bound: Option<K>)
-        -> Self::Iterator;
 
     /// Same as `iter` but performs status check.
     fn safe_iter(&'a self) -> Self::SafeIterator;
