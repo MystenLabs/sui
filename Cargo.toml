@@ -348,7 +348,7 @@ diesel_migrations = "2.2"
 diesel-async = "0.5"
 dirs = "4.0.0"
 duration-str = "0.5.0"
-ed25519 = { version = "1.5.0", features = ["pkcs8", "alloc", "zeroize"] }
+ed25519 = { version = "2", features = ["pkcs8", "alloc", "zeroize"] }
 ed25519-consensus = { version = "2.0.1", features = ["serde"] }
 either = "1.8.0"
 petgraph = "0.5.1"
@@ -421,7 +421,7 @@ ouroboros = "0.17"
 parking_lot = { version = "0.12.3", features = ["arc_lock"] }
 parquet = "54"
 pin-project-lite = "0.2.13"
-pkcs8 = { version = "0.9.0", features = ["std"] }
+pkcs8 = { version = "0.10.0", features = ["std"] }
 pprof = { version = "0.14.0", features = ["cpp", "frame-pointer"] }
 pretty_assertions = "1.3.0"
 prettytable-rs = "0.10.0"
@@ -549,12 +549,13 @@ ureq = "2.9.1"
 url = "2.3.1"
 uuid = { version = "1.1.2", features = ["v4", "fast-rng"] }
 walkdir = "2.5.0"
-webpki = { version = "0.102", package = "rustls-webpki", features = [
+webpki = { version = "0.103", package = "rustls-webpki", features = [
     "alloc",
     "std",
+    "ring",
 ] }
 wiremock = "0.5"
-x509-parser = { version = "0.14.0", features = ["verify"] }
+x509-parser = { version = "0.17.0", features = ["verify"] }
 zstd = "0.12.3"
 zeroize = "1.6.0"
 versions = "4.1.0"
@@ -604,10 +605,10 @@ p384 = { version = "0.13.0", default-features = false, features = ["ecdsa","sha3
 ciborium = "0.2"
 
 # anemo dependencies
-anemo = { git = "https://github.com/mystenlabs/anemo.git", rev = "e609f7697ed6169bf0760882a0b6c032a57e4f3b" }
-anemo-build = { git = "https://github.com/mystenlabs/anemo.git", rev = "e609f7697ed6169bf0760882a0b6c032a57e4f3b" }
-anemo-cli = { git = "https://github.com/mystenlabs/anemo.git", rev = "e609f7697ed6169bf0760882a0b6c032a57e4f3b" }
-anemo-tower = { git = "https://github.com/mystenlabs/anemo.git", rev = "e609f7697ed6169bf0760882a0b6c032a57e4f3b" }
+anemo = { git = "https://github.com/mystenlabs/anemo.git", rev = "9c52c3c7946532163a79129db15180cdb984bab4" }
+anemo-build = { git = "https://github.com/mystenlabs/anemo.git", rev = "9c52c3c7946532163a79129db15180cdb984bab4" }
+anemo-cli = { git = "https://github.com/mystenlabs/anemo.git", rev = "9c52c3c7946532163a79129db15180cdb984bab4" }
+anemo-tower = { git = "https://github.com/mystenlabs/anemo.git", rev = "9c52c3c7946532163a79129db15180cdb984bab4" }
 
 # core-types from the new sdk for use in gRPC
 sui-sdk-types = { git = "https://github.com/MystenLabs/sui-rust-sdk.git", rev = "5e11579031793f086178332219f5847ec94da0c4", features = ["hash", "serde"] }
