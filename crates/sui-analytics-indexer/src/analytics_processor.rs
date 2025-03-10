@@ -26,7 +26,7 @@ use crate::handlers::AnalyticsHandler;
 use crate::writers::AnalyticsWriter;
 use crate::{
     join_paths, AnalyticsIndexerConfig, FileMetadata, MaxCheckpointReader, ParquetSchema,
-    EPOCH_DIR_PREFIX,
+    TaskConfig, EPOCH_DIR_PREFIX,
 };
 
 struct State<S: Serialize + ParquetSchema> {
@@ -41,7 +41,8 @@ pub struct AnalyticsProcessor<S: Serialize + ParquetSchema> {
     handler: Box<dyn AnalyticsHandler<S>>,
     state: Mutex<State<S>>,
     metrics: AnalyticsMetrics,
-    config: AnalyticsIndexerConfig,
+    config: Arc<AnalyticsIndexerConfig>,
+    task_config: Arc<TaskConfig>,
     sender: mpsc::Sender<FileMetadata>,
     #[allow(dead_code)]
     kill_sender: oneshot::Sender<()>,
@@ -75,11 +76,11 @@ impl<S: Serialize + ParquetSchema + 'static> Worker for AnalyticsProcessor<S> {
 
         let num_checkpoints_processed =
             state.current_checkpoint_range.end - state.current_checkpoint_range.start;
-        let cut_new_files = (num_checkpoints_processed >= self.config.checkpoint_interval)
-            || (state.last_commit_instant.elapsed().as_secs() > self.config.time_interval_s)
+        let cut_new_files = (num_checkpoints_processed >= self.task_config.checkpoint_interval)
+            || (state.last_commit_instant.elapsed().as_secs() > self.task_config.time_interval_s)
             || (state.num_checkpoint_iterations % CHECK_FILE_SIZE_ITERATION_CYCLE == 0
                 && state.writer.file_size()?.unwrap_or(0)
-                    > self.config.max_file_size_mb * 1024 * 1024);
+                    > self.task_config.max_file_size_mb * 1024 * 1024);
         if cut_new_files {
             self.cut(&mut state).await?;
             self.reset(&mut state)?;
@@ -108,7 +109,8 @@ impl<S: Serialize + ParquetSchema + 'static> AnalyticsProcessor<S> {
         max_checkpoint_reader: Box<dyn MaxCheckpointReader>,
         next_checkpoint_seq_num: CheckpointSequenceNumber,
         metrics: AnalyticsMetrics,
-        config: AnalyticsIndexerConfig,
+        config: Arc<AnalyticsIndexerConfig>,
+        task_config: Arc<TaskConfig>,
     ) -> Result<Self> {
         let local_store_config = ObjectStoreConfig {
             directory: Some(config.checkpoint_dir.clone()),
@@ -126,7 +128,7 @@ impl<S: Serialize + ParquetSchema + 'static> AnalyticsProcessor<S> {
             remote_object_store,
             local_object_store.clone(),
             checkpoint_dir,
-            config.remote_store_path_prefix.clone(),
+            task_config.remote_store_path_prefix()?,
             receiver,
             kill_receiver,
             cloned_metrics,
@@ -154,6 +156,7 @@ impl<S: Serialize + ParquetSchema + 'static> AnalyticsProcessor<S> {
             max_checkpoint_sender,
             metrics,
             config,
+            task_config,
         })
     }
 
@@ -166,8 +169,8 @@ impl<S: Serialize + ParquetSchema + 'static> AnalyticsProcessor<S> {
             && state.writer.flush(state.current_checkpoint_range.end)?
         {
             let file_metadata = FileMetadata::new(
-                self.config.file_type,
-                self.config.file_format,
+                self.task_config.file_type,
+                self.task_config.file_format,
                 state.current_epoch,
                 state.current_checkpoint_range.clone(),
             );
@@ -184,7 +187,7 @@ impl<S: Serialize + ParquetSchema + 'static> AnalyticsProcessor<S> {
     fn epoch_dir(&self, state: &State<S>) -> Result<PathBuf> {
         let path = path_to_filesystem(
             self.config.checkpoint_dir.to_path_buf(),
-            &self.config.file_type.dir_prefix(),
+            &self.task_config.file_type.dir_prefix(),
         )?
         .join(format!("{}{}", EPOCH_DIR_PREFIX, state.current_epoch));
         Ok(path)
@@ -288,7 +291,7 @@ impl<S: Serialize + ParquetSchema + 'static> AnalyticsProcessor<S> {
         from: Arc<DynObjectStore>,
         to: Arc<DynObjectStore>,
     ) -> Result<()> {
-        let remote_dest = join_paths(prefix, &path);
+        let remote_dest = join_paths(prefix.as_ref(), &path);
         info!("Syncing file to remote: {:?}", &remote_dest);
         copy_file(&path, &remote_dest, &from, &to).await?;
         fs::remove_file(path_to_filesystem(dir, &path)?)?;
