@@ -321,6 +321,7 @@ impl SyntaxAttribute {
 
 impl ErrorAttribute {
     pub const ERROR: &'static str = "error";
+    pub const CODE: &'static str = "code";
 
     pub const fn name(&self) -> &str {
         Self::ERROR
