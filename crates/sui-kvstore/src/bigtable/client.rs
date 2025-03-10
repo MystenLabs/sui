@@ -426,7 +426,20 @@ impl BigTableClient {
             entries,
             ..MutateRowsRequest::default()
         };
-        self.mutate_rows(request).await?;
+        let mut response = self.mutate_rows(request).await?;
+        while let Some(part) = response.message().await? {
+            for entry in part.entries {
+                if let Some(status) = entry.status {
+                    if status.code != 0 {
+                        return Err(anyhow!(
+                            "bigtable write failed {} {}",
+                            status.code,
+                            status.message
+                        ));
+                    }
+                }
+            }
+        }
         Ok(())
     }
 
