@@ -2,14 +2,10 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::proto::types::Bcs;
-use http::{Request, Response};
 use std::{convert::Infallible, pin::Pin};
 use tap::Pipe;
-use tonic::{
-    body::{boxed, BoxBody},
-    server::NamedService,
-};
-use tower::{Service, ServiceExt};
+use tonic::server::NamedService;
+use tower::Service;
 
 use crate::subscription::SubscriptionServiceHandle;
 
@@ -28,18 +24,20 @@ impl Services {
     /// Add a new service.
     pub fn add_service<S>(mut self, svc: S) -> Self
     where
-        S: Service<Request<BoxBody>, Response = Response<BoxBody>, Error = Infallible>
-            + NamedService
+        S: Service<
+                axum::extract::Request,
+                Response: axum::response::IntoResponse,
+                Error = Infallible,
+            > + NamedService
             + Clone
             + Send
             + 'static,
         S::Future: Send + 'static,
         S::Error: Into<BoxError> + Send,
     {
-        self.router = self.router.route_service(
-            &format!("/{}/*rest", S::NAME),
-            svc.map_request(|req: Request<axum::body::Body>| req.map(boxed)),
-        );
+        self.router = self
+            .router
+            .route_service(&format!("/{}/*rest", S::NAME), svc);
         self
     }
 
