@@ -293,7 +293,7 @@ impl StateRead for AuthorityState {
     ) -> StateReadResult<Vec<ObjectInfo>> {
         Ok(self
             .get_owner_objects_iterator(owner, cursor, filter)?
-            .collect())
+            .collect::<Result<Vec<_>, _>>()?)
     }
 
     async fn query_events(

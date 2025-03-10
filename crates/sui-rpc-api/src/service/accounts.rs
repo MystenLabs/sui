@@ -45,17 +45,20 @@ impl RpcService {
         let mut object_info = indexes
             .account_owned_objects_info_iter(owner.into(), page_token.map(Into::into))?
             .take(page_size + 1)
-            .map(|info| {
-                AccountOwnedObjectInfo {
-                    owner: info.owner.into(),
-                    object_id: info.object_id.into(),
-                    version: info.version.into(),
-                    type_: struct_tag_core_to_sdk(info.type_.into())?,
-                }
-                .pipe(Ok)
+            .map(|result| {
+                result
+                    .map_err(|err| RpcError::new(tonic::Code::Internal, err.to_string()))
+                    .and_then(|info| {
+                        AccountOwnedObjectInfo {
+                            owner: info.owner.into(),
+                            object_id: info.object_id.into(),
+                            version: info.version.into(),
+                            type_: struct_tag_core_to_sdk(info.type_.into())?,
+                        }
+                        .pipe(Ok)
+                    })
             })
-            .collect::<Result<Vec<_>>>()?;
-
+            .collect::<Result<Vec<_>, _>>()?;
         let next_page_token = if object_info.len() > page_size {
             // SAFETY: We've already verified that object_info is greater than limit, which is
             // gaurenteed to be >= 1.

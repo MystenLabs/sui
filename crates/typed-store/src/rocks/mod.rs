@@ -1,10 +1,8 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 pub mod errors;
-pub(crate) mod iter;
 pub(crate) mod safe_iter;
 
-use self::iter::Iter;
 use crate::rocks::errors::typed_store_err_from_bcs_err;
 use crate::rocks::errors::typed_store_err_from_bincode_err;
 use crate::rocks::errors::typed_store_err_from_rocks_err;
@@ -1327,7 +1325,6 @@ where
     V: Serialize + DeserializeOwned,
 {
     type Error = TypedStoreError;
-    type Iterator = Iter<'a, K, V>;
     type SafeIterator = SafeIter<'a, K, V>;
 
     #[instrument(level = "trace", skip_all, err)]
@@ -1510,28 +1507,6 @@ where
 
     fn is_empty(&self) -> bool {
         self.safe_iter().next().is_none()
-    }
-
-    /// Returns an iterator visiting each key-value pair in the map. By proving bounds of the
-    /// scan range, RocksDB scan avoid unnecessary scans.
-    /// Lower bound is inclusive, while upper bound is exclusive.
-    fn iter_with_bounds(
-        &'a self,
-        lower_bound: Option<K>,
-        upper_bound: Option<K>,
-    ) -> Self::Iterator {
-        let readopts = self.create_read_options_with_bounds(lower_bound, upper_bound);
-        let db_iter = self.rocksdb.raw_iterator_cf(&self.cf(), readopts);
-        let (_timer, bytes_scanned, keys_scanned, _perf_ctx) = self.create_iter_context();
-        Iter::new(
-            self.cf.clone(),
-            db_iter,
-            _timer,
-            _perf_ctx,
-            bytes_scanned,
-            keys_scanned,
-            Some(self.db_metrics.clone()),
-        )
     }
 
     fn safe_iter(&'a self) -> Self::SafeIterator {

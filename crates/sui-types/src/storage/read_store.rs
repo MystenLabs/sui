@@ -21,6 +21,7 @@ use move_core_types::language_storage::TypeTag;
 use serde::Deserialize;
 use serde::Serialize;
 use std::sync::Arc;
+use typed_store_error::TypedStoreError;
 
 pub trait ReadStore: ObjectStore {
     //
@@ -621,13 +622,18 @@ pub trait RpcIndexes: Send + Sync {
         &self,
         owner: SuiAddress,
         cursor: Option<ObjectID>,
-    ) -> Result<Box<dyn Iterator<Item = AccountOwnedObjectInfo> + '_>>;
+    ) -> Result<Box<dyn Iterator<Item = Result<AccountOwnedObjectInfo, TypedStoreError>> + '_>>;
 
     fn dynamic_field_iter(
         &self,
         parent: ObjectID,
         cursor: Option<ObjectID>,
-    ) -> Result<Box<dyn Iterator<Item = (DynamicFieldKey, DynamicFieldIndexInfo)> + '_>>;
+    ) -> Result<
+        Box<
+            dyn Iterator<Item = Result<(DynamicFieldKey, DynamicFieldIndexInfo), TypedStoreError>>
+                + '_,
+        >,
+    >;
 
     fn get_coin_info(&self, coin_type: &StructTag) -> Result<Option<CoinInfo>>;
 }
