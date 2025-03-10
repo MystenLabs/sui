@@ -233,6 +233,18 @@ impl ExecutionTimeObservationKey {
             Command::Upgrade(_, _, _, _) => ExecutionTimeObservationKey::Upgrade,
         }
     }
+
+    pub fn default_duration(&self) -> Duration {
+        match self {
+            ExecutionTimeObservationKey::MoveEntryPoint { .. } => Duration::from_millis(1),
+            ExecutionTimeObservationKey::TransferObjects => Duration::from_millis(1),
+            ExecutionTimeObservationKey::SplitCoins => Duration::from_millis(1),
+            ExecutionTimeObservationKey::MergeCoins => Duration::from_millis(1),
+            ExecutionTimeObservationKey::Publish => Duration::from_millis(3),
+            ExecutionTimeObservationKey::MakeMoveVec => Duration::from_millis(1),
+            ExecutionTimeObservationKey::Upgrade => Duration::from_millis(3),
+        }
+    }
 }
 
 #[derive(Clone, Copy, Debug, Serialize, Deserialize)]
