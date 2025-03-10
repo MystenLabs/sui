@@ -222,6 +222,8 @@ const MAX_PROTOCOL_VERSION: u64 = 77;
 //             Removes unnecessary child object mutations
 //             Enable passkey auth in multisig for testnet.
 // Version 77: Enable uncompressed point group ops on mainnet.
+//             Enable consensus garbage collection for testnet
+//             Enable the new consensus commit rule for testnet.
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
 
@@ -3323,6 +3325,11 @@ impl ProtocolConfig {
                 }
                 77 => {
                     cfg.feature_flags.uncompressed_g1_group_elements = true;
+
+                    if chain != Chain::Mainnet {
+                        cfg.consensus_gc_depth = Some(60);
+                        cfg.feature_flags.consensus_linearize_subdag_v2 = true;
+                    }
                 }
                 // Use this template when making changes:
                 //
