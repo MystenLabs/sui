@@ -1599,17 +1599,16 @@ impl AuthorityPerEpochStore {
             .map_err(Into::into)
     }
 
-    /// Returns future containing the state digest for the given epoch
+    /// Returns future containing the state accumulator for the given epoch
     /// once available.
-    /// TODO: remove once StateAccumulatorV1 is removed
-    pub async fn notify_read_checkpoint_state_digests(
+    pub async fn notify_read_checkpoint_state_accumulator(
         &self,
-        checkpoints: Vec<CheckpointSequenceNumber>,
+        checkpoints: &[CheckpointSequenceNumber],
     ) -> SuiResult<Vec<Accumulator>> {
         let tables = self.tables()?;
         Ok(self
             .checkpoint_state_notify_read
-            .read(&checkpoints, |checkpoints| {
+            .read(checkpoints, |checkpoints| {
                 tables
                     .state_hash_by_checkpoint
                     .multi_get(checkpoints)
