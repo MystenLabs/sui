@@ -24,6 +24,7 @@ pub struct CheckpointExecutorMetrics {
     pub last_executed_checkpoint_age: Histogram,
     // TODO: delete once users are migrated to non-Mysten histogram.
     pub last_executed_checkpoint_age_ms: MystenHistogram,
+    pub checkpoint_executor_validator_path: IntGauge,
 }
 
 impl CheckpointExecutorMetrics {
@@ -110,6 +111,12 @@ impl CheckpointExecutorMetrics {
                 "Age of the last executed checkpoint",
                 registry,
             ),
+            checkpoint_executor_validator_path: register_int_gauge_with_registry!(
+                "checkpoint_executor_validator_path",
+                "Number of checkpoints executed using the validator path",
+                registry
+            )
+            .unwrap(),
         };
         Arc::new(this)
     }

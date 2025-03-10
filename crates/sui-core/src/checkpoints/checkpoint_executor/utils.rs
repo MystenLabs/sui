@@ -10,7 +10,8 @@ use mysten_common::fatal;
 use std::time::Duration;
 use sui_types::{
     base_types::{TransactionDigest, TransactionEffectsDigest},
-    messages_checkpoint::{CheckpointSequenceNumber, VerifiedCheckpoint},
+    message_envelope::Message,
+    messages_checkpoint::{CheckpointSequenceNumber, CheckpointSummary, VerifiedCheckpoint},
 };
 use tracing::{debug, error, info, instrument, warn};
 
@@ -170,6 +171,75 @@ pub(super) fn assert_not_forked(
             tx_digest,
             expected_digest,
             actual_effects_digest,
+        );
+    }
+}
+
+pub(super) fn assert_checkpoint_not_forked(
+    locally_built_checkpoint: &CheckpointSummary,
+    verified_checkpoint: &VerifiedCheckpoint,
+    checkpoint_store: &CheckpointStore,
+) {
+    assert_eq!(
+        locally_built_checkpoint.sequence_number(),
+        verified_checkpoint.sequence_number(),
+        "Checkpoint sequence numbers must match"
+    );
+
+    if locally_built_checkpoint.digest() == *verified_checkpoint.digest() {
+        return;
+    }
+
+    let verified_checkpoint_summary = verified_checkpoint.data();
+
+    if locally_built_checkpoint.content_digest == verified_checkpoint_summary.content_digest {
+        // fork is in the checkpoint header
+        fatal!("Checkpoint fork detected in header! Locally built checkpoint: {:?}, verified checkpoint: {:?}",
+            locally_built_checkpoint,
+            verified_checkpoint
+        );
+    } else {
+        let local_contents = checkpoint_store
+            .get_checkpoint_contents(&locally_built_checkpoint.content_digest)
+            .expect("db error")
+            .expect("contents must exist if checkpoint was built locally!");
+
+        let verified_contents = checkpoint_store
+            .get_checkpoint_contents(&verified_checkpoint_summary.content_digest)
+            .expect("db error")
+            .expect("contents must exist if checkpoint has been synced!");
+
+        // fork is in the checkpoint contents
+        let mut local_contents_iter = local_contents.iter();
+        let mut verified_contents_iter = verified_contents.iter();
+        let mut pos = 0;
+
+        loop {
+            let local_digests = local_contents_iter.next();
+            let verified_digests = verified_contents_iter.next();
+
+            match (local_digests, verified_digests) {
+                (Some(local_digests), Some(verified_digests)) => {
+                    if local_digests != verified_digests {
+                        fatal!("Checkpoint contents diverge at position {pos}! {local_digests:?} != {verified_digests:?}");
+                    }
+                }
+                (None, Some(_)) | (Some(_), None) => {
+                    fatal!("Checkpoint contents have different lengths! Locally built checkpoint: {:?}, verified checkpoint: {:?}",
+                        locally_built_checkpoint,
+                        verified_checkpoint
+                    );
+                }
+                (None, None) => {
+                    break;
+                }
+            }
+            pos += 1;
+        }
+
+        fatal!("Checkpoint fork detected in contents! Locally built checkpoint: {:?}, verified checkpoint: {:?}",
+            locally_built_checkpoint,
+            verified_checkpoint
         );
     }
 }
