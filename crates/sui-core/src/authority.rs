@@ -3700,7 +3700,8 @@ impl AuthorityState {
         cursor: (String, u64, ObjectID),
         limit: usize,
         one_coin_type_only: bool,
-    ) -> SuiResult<impl Iterator<Item = (CoinIndexKey2, CoinInfo)> + '_> {
+    ) -> SuiResult<impl Iterator<Item = Result<(CoinIndexKey2, CoinInfo), TypedStoreError>> + '_>
+    {
         if let Some(indexes) = &self.indexes {
             indexes.get_owned_coins_iterator_with_cursor(owner, cursor, limit, one_coin_type_only)
         } else {
@@ -3715,7 +3716,7 @@ impl AuthorityState {
         // If `Some`, the query will start from the next item after the specified cursor
         cursor: Option<ObjectID>,
         filter: Option<SuiObjectDataFilter>,
-    ) -> SuiResult<impl Iterator<Item = ObjectInfo> + '_> {
+    ) -> SuiResult<impl Iterator<Item = Result<ObjectInfo, TypedStoreError>> + '_> {
         let cursor_u = cursor.unwrap_or(ObjectID::ZERO);
         if let Some(indexes) = &self.indexes {
             indexes.get_owner_objects_iterator(owner, cursor_u, filter)
@@ -3735,12 +3736,17 @@ impl AuthorityState {
     {
         let object_ids = self
             .get_owner_objects_iterator(owner, None, None)?
-            .filter(|o| match &o.type_ {
-                ObjectType::Struct(s) => &type_ == s,
-                ObjectType::Package => false,
+            .filter(|result| {
+                result
+                    .as_ref()
+                    .map(|o| match &o.type_ {
+                        ObjectType::Struct(s) => &type_ == s,
+                        ObjectType::Package => false,
+                    })
+                    .unwrap_or(false)
             })
-            .map(|info| ObjectKey(info.object_id, info.version))
-            .collect::<Vec<_>>();
+            .map(|result| result.map(|info| ObjectKey(info.object_id, info.version)))
+            .collect::<Result<Vec<_>, _>>()?;
         let mut move_objects = vec![];
 
         let objects = self
