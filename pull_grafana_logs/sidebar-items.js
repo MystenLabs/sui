@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"constant":["MAX_LOGS_PER_REQUEST"],"fn":["extract_from_message","fetch_logs","main","run"],"struct":["GrafanaLog","LogEntry","LokiData","LokiResponse","LokiResult"]};

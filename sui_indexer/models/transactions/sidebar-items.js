@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["stored_events_to_events","tx_events_to_sui_tx_events"],"struct":["StoredTransaction","StoredTransactionCheckpoint","StoredTransactionSuccessCommandCount","StoredTransactionTimestamp","TxSeq"],"type":["StoredTransactionEvents"]};
