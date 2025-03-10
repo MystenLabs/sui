@@ -425,7 +425,7 @@ async fn test_multisig_e2e() {
 }
 
 #[sim_test]
-async fn test_multisig_with_zklogin_scenerios() {
+async fn test_multisig_with_zklogin_scenarios() {
     let test_cluster = TestClusterBuilder::new()
         // Use a long epoch duration such that it won't change epoch on its own.
         .with_epoch_duration_ms(10000000)
@@ -613,7 +613,7 @@ async fn test_multisig_with_zklogin_scenerios() {
         .to_string()
         .contains("Invalid zklogin authenticator bytes"));
 
-    // assert positive case for all 4 participanting parties.
+    // assert positive case for all 4 participating parties.
     // 1a. good ed25519 sig used in multisig executes successfully.
     let gas = test_cluster
         .fund_address_and_return_gas(rgp, Some(20000000000), multisig_addr)

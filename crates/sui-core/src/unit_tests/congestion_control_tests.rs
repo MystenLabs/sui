@@ -193,7 +193,7 @@ impl TestSetup {
     }
 }
 
-// Creates a transaction that touchs the shared objects `shared_object_1` and `shared_object_2`, and `owned_object`,
+// Creates a transaction that touches the shared objects `shared_object_1` and `shared_object_2`, and `owned_object`,
 // and executes the transaction in `authority_state`. Returns the transaction and the effects of the execution.
 async fn update_objects(
     authority_state: &AuthorityState,

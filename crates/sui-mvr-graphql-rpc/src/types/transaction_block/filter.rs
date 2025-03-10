@@ -17,13 +17,13 @@ pub(crate) struct TransactionBlockFilter {
     /// An input filter selecting for either system or programmable transactions.
     pub kind: Option<TransactionBlockKindInput>,
 
-    /// Limit to transactions that occured strictly after the given checkpoint.
+    /// Limit to transactions that occurred strictly after the given checkpoint.
     pub after_checkpoint: Option<UInt53>,
 
     /// Limit to transactions in the given checkpoint.
     pub at_checkpoint: Option<UInt53>,
 
-    /// Limit to transaction that occured strictly before the given checkpoint.
+    /// Limit to transaction that occurred strictly before the given checkpoint.
     pub before_checkpoint: Option<UInt53>,
 
     /// Limit to transactions that interacted with the given address. The address could be a
@@ -48,7 +48,7 @@ pub(crate) struct TransactionBlockFilter {
     pub input_object: Option<SuiAddress>,
 
     /// Limit to transactions that output a versioon of this object. NOTE: this input filter has
-    /// been deprecated in favor of `affectedObject` which offers an easier to understand behavor.
+    /// been deprecated in favor of `affectedObject` which offers an easier to understand behavior.
     ///
     /// This filter will be removed with 1.36.0 (2024-10-14), or at least one release after
     /// `affectedObject` is introduced, whichever is later.

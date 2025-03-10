@@ -79,7 +79,7 @@ pub fn build_sui_transaction(
             rgp,
         ),
         BridgeAction::EvmContractUpgradeAction(_) => {
-            // It does not need a Sui tranaction to execute EVM contract upgrade
+            // It does not need a Sui transaction to execute EVM contract upgrade
             unreachable!()
         }
         BridgeAction::AddTokensOnSuiAction(_) => build_add_tokens_on_sui_transaction(
@@ -90,7 +90,7 @@ pub fn build_sui_transaction(
             rgp,
         ),
         BridgeAction::AddTokensOnEvmAction(_) => {
-            // It does not need a Sui tranaction to add tokens on EVM
+            // It does not need a Sui transaction to add tokens on EVM
             unreachable!()
         }
     }

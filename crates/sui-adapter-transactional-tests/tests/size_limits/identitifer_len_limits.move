@@ -1,13 +1,13 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-// Test Identifer length limits
+// Test Identifier length limits
 
 //# init --addresses Test=0x0
 
 //# publish
 
-/// Test Identifer length limits enforced for module name
+/// Test Identifier length limits enforced for module name
 module Test::M1_1234567891234567890123456789012345678912345678901234567890123456789123456789012345678908901234567891234567890123456789078912345678901234567890 {
 
     public entry fun create_n_idscreate_n_idscreate_n_() {
@@ -16,7 +16,7 @@ module Test::M1_1234567891234567890123456789012345678912345678901234567890123456
 
 //# publish
 
-/// Test Identifer length limits enforced for function name
+/// Test Identifier length limits enforced for function name
 module Test::M1_12345678912345678901234567890 {
     public entry fun create_n_idscreate_n_idscreate_n_idscreate_n_idscreate_n_idscreate_n_idscreate_n_idscreate_n_idscreate_n_idscreate_n_idscreate_n_idscreate_n_idscreate_n_idscreate_n_ids() {
     }
@@ -25,7 +25,7 @@ module Test::M1_12345678912345678901234567890 {
 
 //# publish
 
-/// Test normal Identifer lengths
+/// Test normal Identifier lengths
 module Test::M1_1234567891234567890123456789012345678912345678901234567 {
 
     public entry fun create_n_(n: u64, ctx: &mut TxContext) {

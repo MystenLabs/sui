@@ -21,7 +21,7 @@ pub enum CacheResult<T> {
     Miss,
 }
 
-/// CachedVersionMap is a map from version to value, with the additional contraints:
+/// CachedVersionMap is a map from version to value, with the additional constraints:
 /// - The key (SequenceNumber) must be monotonically increasing for each insert. If
 ///   a key is inserted that is less than the previous key, it results in an assertion
 ///   failure.

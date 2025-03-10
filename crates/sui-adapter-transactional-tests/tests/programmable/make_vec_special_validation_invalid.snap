@@ -14,7 +14,7 @@ gas summary: computation_cost: 1000000, storage_cost: 6072400,  storage_rebate: 
 
 task 2, lines 31-34:
 //# programmable --inputs vector[0u64,0u64]
-// INVALID option, using a vetor of length 2
+// INVALID option, using a vector of length 2
 //> 0: MakeMoveVec<std::option::Option<u64>>([Input(0)]);
 //> 1: test::m1::vec_option_u64(Result(0));
 Error: Transaction Effects Status: Invalid command argument at 0. The argument cannot be deserialized into a value of the specified type

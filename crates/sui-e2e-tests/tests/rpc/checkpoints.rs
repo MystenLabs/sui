@@ -393,7 +393,7 @@ async fn subscribe_checkpoint() {
         }
         last = Some(cursor);
 
-        // Subscribe for 50 checkponts to ensure the subscription system works
+        // Subscribe for 50 checkpoints to ensure the subscription system works
         count += 1;
         if count > 50 {
             break;

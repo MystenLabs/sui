@@ -43,7 +43,7 @@ pub enum NitroAttestationVerifyError {
     InvalidSignature,
     /// Invalid public key
     InvalidPublicKey,
-    /// Siganture failed to verify
+    /// Signature failed to verify
     SignatureFailedToVerify,
     /// Invalid attestation document
     InvalidAttestationDoc(String),

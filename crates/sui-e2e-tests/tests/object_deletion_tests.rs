@@ -107,11 +107,11 @@ mod sim_only_tests {
                 .unwrap();
 
                 let state = node.state();
-                let checkpoit_store = state.get_checkpoint_store();
+                let checkpoints_store = state.get_checkpoint_store();
                 // Manually initiating a pruning and compaction job to make sure that deleted objects are gong from object store.
                 state
                     .database_for_testing()
-                    .prune_objects_and_compact_for_testing(checkpoit_store, None)
+                    .prune_objects_and_compact_for_testing(checkpoints_store, None)
                     .await;
 
                 // Check that both root and child objects are gone from object store.

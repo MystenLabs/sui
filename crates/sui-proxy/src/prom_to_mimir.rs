@@ -91,7 +91,7 @@ impl From<Vec<MetricFamily>> for Mimir<Vec<remote_write::WriteRequest>> {
             Vec::with_capacity(metric_families.len());
 
         for mf in metric_families {
-            // TOOD add From impl
+            // TODO add From impl
             let mt = match mf.get_field_type() {
                 MetricType::COUNTER => remote_write::metric_metadata::MetricType::Counter,
                 MetricType::GAUGE => remote_write::metric_metadata::MetricType::Gauge,

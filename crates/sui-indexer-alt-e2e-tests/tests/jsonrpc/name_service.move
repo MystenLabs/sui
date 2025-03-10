@@ -7,7 +7,7 @@
 // 1. Not enough labels (need at least two)
 // 2. Too long
 // 3. Bad (inconsistent) use of separators
-// 4. Indvidual label too short
+// 4. Individual label too short
 // 5. Individual label too long
 // 6, 7, 8, 9. Bad characters (non-alphanumeric, or leading/trailing hyphen)
 

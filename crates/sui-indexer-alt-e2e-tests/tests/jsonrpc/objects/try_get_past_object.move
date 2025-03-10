@@ -7,7 +7,7 @@
 // 2. ...at its first version
 // 3. ...after it has been modified
 // 4. ...after it has been deleted
-// 5. Show the details of a non-existent object verson
+// 5. Show the details of a non-existent object version
 // 6. Show the details of an object version
 // 7. Show the details of a deleted object version
 

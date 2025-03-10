@@ -260,7 +260,7 @@ impl TransactionBlock {
     }
 
     /// Look-up the transaction block by its sequence number (this is not usually exposed through
-    /// the GraphQL schema, but internally, othe entities in the DB will refer to transactions at
+    /// the GraphQL schema, but internally, other entities in the DB will refer to transactions at
     /// their sequence number).
     pub(crate) fn by_seq(
         tx_sequence_number: u64,

@@ -171,9 +171,9 @@ enum NextOp {
     Response {
         /// Time taken to execute the tx and produce effects
         latency: Duration,
-        /// Number of commands in the executed transction
+        /// Number of commands in the executed transaction
         num_commands: u16,
-        /// Gas used in the executed transction
+        /// Gas used in the executed transaction
         gas_used: u64,
         /// The payload updated with the effects of the transaction
         payload: Box<dyn Payload>,
@@ -565,7 +565,7 @@ async fn spawn_workers_scheduler(
         // Set the total benchmark start time
         let total_benchmark_start_time = print_and_start_benchmark().await;
 
-        // Initially boostrap the first tasks
+        // Initially bootstrap the first tasks
         tx_workers_to_run
             .send(bench_workers.pop_front().unwrap())
             .await

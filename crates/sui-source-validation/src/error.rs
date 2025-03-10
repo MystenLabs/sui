@@ -67,7 +67,7 @@ pub enum Error {
     SuiObjectRefFailure(SuiObjectResponseError),
 
     #[error("On-chain address cannot be zero")]
-    ZeroOnChainAddresSpecifiedFailure,
+    ZeroOnChainAddressSpecifiedFailure,
 }
 
 impl fmt::Display for AggregateError {

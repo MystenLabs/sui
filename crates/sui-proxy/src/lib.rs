@@ -87,7 +87,7 @@ mod tests {
     /// test_axum_acceptor is a basic e2e test that creates a mock remote_write post endpoint and has a simple
     /// sui-node client that posts data to the proxy using the protobuf format.  The server processes this
     /// data and sends it to the mock remote_write which accepts everything.  Future work is to make this more
-    /// robust and expand the scope of coverage, probabaly moving this test elsewhere and renaming it.
+    /// robust and expand the scope of coverage, probably moving this test elsewhere and renaming it.
     #[tokio::test]
     async fn test_axum_acceptor() {
         // generate self-signed certificates
