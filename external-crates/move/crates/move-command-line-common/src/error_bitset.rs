@@ -71,13 +71,14 @@ impl ErrorBitset {
     /// For testing (below)
     #[cfg(test)]
     pub(crate) fn new(
+        version: u8,
         error_code: u8,
         line_number: u16,
         identifier_index: u16,
         constant_index: u16,
     ) -> Self {
         ErrorBitset {
-            version: VERSION_1.into(),
+            version: version.into(),
             reserved: 0.into(),
             error_code,
             line_number,
@@ -147,6 +148,9 @@ impl ErrorBitset {
 
 #[cfg(test)]
 mod tests {
+    use crate::error_bitset::VERSION_0;
+    use crate::error_bitset::VERSION_1;
+
     use super::{ErrorBitset, ErrorBitsetBuilder};
     use proptest::prelude::*;
     use proptest::proptest;
@@ -154,7 +158,7 @@ mod tests {
     proptest! {
         #[test]
         fn test_error_bitset(error_code in 0..u8::MAX, line_number in 0..u16::MAX, identifier_index in 0..u16::MAX, constant_index in 0..u16::MAX) {
-            let error_bitset = ErrorBitset::new(error_code, line_number, identifier_index, constant_index);
+            let error_bitset = ErrorBitset::new(VERSION_1, error_code, line_number, identifier_index, constant_index);
             prop_assert_eq!(error_bitset.line_number(), Some(line_number));
             prop_assert_eq!(error_bitset.identifier_index(), Some(identifier_index));
             prop_assert_eq!(error_bitset.constant_index(), Some(constant_index));
@@ -164,7 +168,7 @@ mod tests {
     proptest! {
         #[test]
         fn test_error_bitset_builder(error_code in 0..u8::MAX, line_number in 0..u16::MAX, identifier_index in 0..u16::MAX, constant_index in 0..u16::MAX) {
-            let error_bitset = ErrorBitset::new(error_code, line_number, identifier_index, constant_index);
+            let error_bitset = ErrorBitset::new(VERSION_1, error_code, line_number, identifier_index, constant_index);
             let mut error_bitset_builder = ErrorBitsetBuilder::new(line_number);
             error_bitset_builder.with_error_code(error_code);
             error_bitset_builder.with_identifier_index(identifier_index);
@@ -186,7 +190,7 @@ mod tests {
         #[test]
         #[allow(deprecated)]
         fn test_error_legacy_bitset_builder(line_number in 0..u16::MAX, identifier_index in 0..u16::MAX, constant_index in 0..u16::MAX) {
-            let error_bitset = ErrorBitset::new(0, line_number, identifier_index, constant_index);
+            let error_bitset = ErrorBitset::new(VERSION_0, 0, line_number, identifier_index, constant_index);
             let mut error_bitset_builder = crate::legacy_error_bitset::ErrorBitsetBuilder::new(line_number);
             error_bitset_builder.with_identifier_index(identifier_index);
             error_bitset_builder.with_constant_index(constant_index);
