@@ -189,6 +189,7 @@ impl executor::Executor for Executor {
             1,
             1_000_000,
             None,
+            protocol_config,
         );
         let tx_context = Rc::new(RefCell::new(tx_context));
         execute_genesis_state_update(

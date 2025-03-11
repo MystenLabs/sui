@@ -91,6 +91,7 @@ mod checked {
             1,
             1_000_000,
             None,
+            protocol_config,
         );
 
         let is_epoch_change = matches!(transaction_kind, TransactionKind::ChangeEpoch(_));

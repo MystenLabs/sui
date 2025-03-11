@@ -842,12 +842,10 @@ mod checked {
         mut serialized_arguments: Vec<Vec<u8>>,
         trace_builder_opt: &mut Option<MoveTraceBuilder>,
     ) -> Result<SerializedReturnValues, ExecutionError> {
-        let is_native = context.protocol_config.move_native_context();
         match tx_context_kind {
             TxContextKind::None => (),
             TxContextKind::Mutable | TxContextKind::Immutable => {
-                serialized_arguments
-                    .push(context.tx_context.borrow().to_bcs_legacy_context(is_native));
+                serialized_arguments.push(context.tx_context.borrow().to_bcs_legacy_context());
             }
         }
         // script visibility checked manually for entry points
@@ -877,10 +875,7 @@ mod checked {
                     "Unable to deserialize TxContext bytes. {e}"
                 ))
             })?;
-            context
-                .tx_context
-                .borrow_mut()
-                .update_state(updated_ctx, is_native)?;
+            context.tx_context.borrow_mut().update_state(updated_ctx)?;
         }
         Ok(result)
     }

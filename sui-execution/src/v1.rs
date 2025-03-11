@@ -193,6 +193,7 @@ impl executor::Executor for Executor {
             1,
             1_000_000,
             None,
+            protocol_config,
         );
         execute_genesis_state_update(
             store,

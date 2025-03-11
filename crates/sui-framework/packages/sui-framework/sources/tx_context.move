@@ -188,11 +188,7 @@ public fun increment_epoch_timestamp(self: &mut TxContext, delta_ms: u64) {
 
 fun option_sponsor(): Option<address> {
     let sponsor = native_sponsor();
-    if (sponsor.length() == 0) {
-        option::none()
-    } else {
-        option::some(sponsor[0])
-    }
+    if (sponsor.length() == 0) option::none() else option::some(sponsor[0])
 }
 native fun native_sponsor(): vector<address>;
 

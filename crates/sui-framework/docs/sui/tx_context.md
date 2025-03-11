@@ -436,11 +436,7 @@ Hidden for now, but may expose later
 
 <pre><code><b>fun</b> <a href="../sui/tx_context.md#sui_tx_context_option_sponsor">option_sponsor</a>(): Option&lt;<b>address</b>&gt; {
     <b>let</b> <a href="../sui/tx_context.md#sui_tx_context_sponsor">sponsor</a> = <a href="../sui/tx_context.md#sui_tx_context_native_sponsor">native_sponsor</a>();
-    <b>if</b> (<a href="../sui/tx_context.md#sui_tx_context_sponsor">sponsor</a>.length() == 0) {
-        option::none()
-    } <b>else</b> {
-        option::some(<a href="../sui/tx_context.md#sui_tx_context_sponsor">sponsor</a>[0])
-    }
+    <b>if</b> (<a href="../sui/tx_context.md#sui_tx_context_sponsor">sponsor</a>.length() == 0) option::none() <b>else</b> option::some(<a href="../sui/tx_context.md#sui_tx_context_sponsor">sponsor</a>[0])
 }
 </code></pre>
 

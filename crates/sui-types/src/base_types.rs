@@ -68,6 +68,7 @@ use std::cmp::max;
 use std::convert::{TryFrom, TryInto};
 use std::fmt;
 use std::str::FromStr;
+use sui_protocol_config::ProtocolConfig;
 
 #[cfg(test)]
 #[path = "unit_tests/base_types_tests.rs"]
@@ -1023,6 +1024,9 @@ pub struct TxContext {
     gas_budget: u64,
     // address of the sponsor if any
     sponsor: Option<AccountAddress>,
+    // whether the `TxContext` is native or not
+    // (TODO: once we version execution we could drop this field)
+    is_native: bool,
 }
 
 #[derive(PartialEq, Eq, Clone, Copy)]
@@ -1043,6 +1047,7 @@ impl TxContext {
         gas_price: u64,
         gas_budget: u64,
         sponsor: Option<SuiAddress>,
+        protocol_config: &ProtocolConfig,
     ) -> Self {
         Self::new_from_components(
             sender,
@@ -1052,6 +1057,7 @@ impl TxContext {
             gas_price,
             gas_budget,
             sponsor,
+            protocol_config,
         )
     }
 
@@ -1063,6 +1069,7 @@ impl TxContext {
         gas_price: u64,
         gas_budget: u64,
         sponsor: Option<SuiAddress>,
+        protocol_config: &ProtocolConfig,
     ) -> Self {
         Self {
             sender: AccountAddress::new(sender.0),
@@ -1073,6 +1080,7 @@ impl TxContext {
             gas_price,
             gas_budget,
             sponsor: sponsor.map(|s| s.into()),
+            is_native: protocol_config.move_native_context(),
         }
     }
 
@@ -1142,8 +1150,8 @@ impl TxContext {
         id
     }
 
-    pub fn to_bcs_legacy_context(&self, is_native: bool) -> Vec<u8> {
-        let move_context: MoveLegacyTxContext = if is_native {
+    pub fn to_bcs_legacy_context(&self) -> Vec<u8> {
+        let move_context: MoveLegacyTxContext = if self.is_native {
             let tx_context = &TxContext {
                 sender: AccountAddress::ZERO,
                 digest: self.digest.clone(),
@@ -1153,6 +1161,7 @@ impl TxContext {
                 gas_price: 0,
                 gas_budget: 0,
                 sponsor: None,
+                is_native: true,
             };
             tx_context.into()
         } else {
@@ -1169,12 +1178,8 @@ impl TxContext {
     /// when mutable context is passed over some boundary via
     /// serialize/deserialize and this is the reason why this method
     /// consumes the other context..
-    pub fn update_state(
-        &mut self,
-        other: MoveLegacyTxContext,
-        is_native: bool,
-    ) -> Result<(), ExecutionError> {
-        if !is_native {
+    pub fn update_state(&mut self, other: MoveLegacyTxContext) -> Result<(), ExecutionError> {
+        if !self.is_native {
             if self.sender != other.sender
                 || self.digest != other.digest
                 || other.ids_created < self.ids_created
