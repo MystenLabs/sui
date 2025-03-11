@@ -1814,8 +1814,9 @@ pub struct SimpleSignature {
 pub struct ZkLoginPublicIdentifier {
     #[prost(string, optional, tag = "1")]
     pub iss: ::core::option::Option<::prost::alloc::string::String>,
-    #[prost(message, optional, tag = "2")]
-    pub address_seed: ::core::option::Option<Bn254FieldElement>,
+    /// base10 encoded Bn254FieldElement
+    #[prost(string, optional, tag = "2")]
+    pub address_seed: ::core::option::Option<::prost::alloc::string::String>,
 }
 /// Set of valid public keys for multisig committee members.
 #[derive(Clone, PartialEq, ::prost::Message)]
@@ -1928,8 +1929,9 @@ pub struct ZkLoginInputs {
     pub iss_base64_details: ::core::option::Option<ZkLoginClaim>,
     #[prost(string, optional, tag = "3")]
     pub header_base64: ::core::option::Option<::prost::alloc::string::String>,
-    #[prost(message, optional, tag = "4")]
-    pub address_seed: ::core::option::Option<Bn254FieldElement>,
+    /// base10 encoded Bn254FieldElement
+    #[prost(string, optional, tag = "4")]
+    pub address_seed: ::core::option::Option<::prost::alloc::string::String>,
 }
 /// A zklogin groth16 proof.
 #[derive(Clone, PartialEq, ::prost::Message)]
@@ -1952,35 +1954,37 @@ pub struct ZkLoginClaim {
 /// A G1 point.
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct CircomG1 {
-    #[prost(message, optional, tag = "1")]
-    pub e0: ::core::option::Option<Bn254FieldElement>,
-    #[prost(message, optional, tag = "2")]
-    pub e1: ::core::option::Option<Bn254FieldElement>,
-    #[prost(message, optional, tag = "3")]
-    pub e2: ::core::option::Option<Bn254FieldElement>,
+    /// base10 encoded Bn254FieldElement
+    #[prost(string, optional, tag = "1")]
+    pub e0: ::core::option::Option<::prost::alloc::string::String>,
+    /// base10 encoded Bn254FieldElement
+    #[prost(string, optional, tag = "2")]
+    pub e1: ::core::option::Option<::prost::alloc::string::String>,
+    /// base10 encoded Bn254FieldElement
+    #[prost(string, optional, tag = "3")]
+    pub e2: ::core::option::Option<::prost::alloc::string::String>,
 }
 /// A G2 point.
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct CircomG2 {
-    #[prost(message, optional, tag = "1")]
-    pub e00: ::core::option::Option<Bn254FieldElement>,
-    #[prost(message, optional, tag = "2")]
-    pub e01: ::core::option::Option<Bn254FieldElement>,
-    #[prost(message, optional, tag = "3")]
-    pub e10: ::core::option::Option<Bn254FieldElement>,
-    #[prost(message, optional, tag = "4")]
-    pub e11: ::core::option::Option<Bn254FieldElement>,
-    #[prost(message, optional, tag = "5")]
-    pub e20: ::core::option::Option<Bn254FieldElement>,
-    #[prost(message, optional, tag = "6")]
-    pub e21: ::core::option::Option<Bn254FieldElement>,
-}
-/// A point on the BN254 elliptic curve.
-#[derive(Clone, PartialEq, ::prost::Message)]
-pub struct Bn254FieldElement {
-    /// 32-byte big-endian field element.
-    #[prost(bytes = "bytes", optional, tag = "1")]
-    pub element: ::core::option::Option<::prost::bytes::Bytes>,
+    /// base10 encoded Bn254FieldElement
+    #[prost(string, optional, tag = "1")]
+    pub e00: ::core::option::Option<::prost::alloc::string::String>,
+    /// base10 encoded Bn254FieldElement
+    #[prost(string, optional, tag = "2")]
+    pub e01: ::core::option::Option<::prost::alloc::string::String>,
+    /// base10 encoded Bn254FieldElement
+    #[prost(string, optional, tag = "3")]
+    pub e10: ::core::option::Option<::prost::alloc::string::String>,
+    /// base10 encoded Bn254FieldElement
+    #[prost(string, optional, tag = "4")]
+    pub e11: ::core::option::Option<::prost::alloc::string::String>,
+    /// base10 encoded Bn254FieldElement
+    #[prost(string, optional, tag = "5")]
+    pub e20: ::core::option::Option<::prost::alloc::string::String>,
+    /// base10 encoded Bn254FieldElement
+    #[prost(string, optional, tag = "6")]
+    pub e21: ::core::option::Option<::prost::alloc::string::String>,
 }
 /// A passkey authenticator.
 ///

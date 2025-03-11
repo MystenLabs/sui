@@ -1402,7 +1402,8 @@ message SimpleSignature {
 // Public key equivalent for zklogin authenticators.
 message ZkLoginPublicIdentifier {
   optional string iss = 1;
-  optional Bn254FieldElement address_seed = 2;
+  // base10 encoded Bn254FieldElement
+  optional string address_seed = 2;
 }
 
 // Set of valid public keys for multisig committee members.
@@ -1482,7 +1483,8 @@ message ZkLoginInputs {
   optional ZkLoginProof proof_points = 1;
   optional ZkLoginClaim iss_base64_details = 2;
   optional string header_base64 = 3;
-  optional Bn254FieldElement address_seed = 4;
+  // base10 encoded Bn254FieldElement
+  optional string address_seed = 4;
 }
 
 // A zklogin groth16 proof.
@@ -1500,27 +1502,30 @@ message ZkLoginClaim {
 
 // A G1 point.
 message CircomG1 {
-  optional Bn254FieldElement e0 = 1;
-  optional Bn254FieldElement e1 = 2;
-  optional Bn254FieldElement e2 = 3;
+  // base10 encoded Bn254FieldElement
+  optional string e0 = 1;
+  // base10 encoded Bn254FieldElement
+  optional string e1 = 2;
+  // base10 encoded Bn254FieldElement
+  optional string e2 = 3;
 }
 
 // A G2 point.
 message CircomG2 {
-  optional Bn254FieldElement e00 = 1;
-  optional Bn254FieldElement e01 = 2;
+  // base10 encoded Bn254FieldElement
+  optional string e00 = 1;
+  // base10 encoded Bn254FieldElement
+  optional string e01 = 2;
 
-  optional Bn254FieldElement e10 = 3;
-  optional Bn254FieldElement e11 = 4;
+  // base10 encoded Bn254FieldElement
+  optional string e10 = 3;
+  // base10 encoded Bn254FieldElement
+  optional string e11 = 4;
 
-  optional Bn254FieldElement e20 = 5;
-  optional Bn254FieldElement e21 = 6;
-}
-
-// A point on the BN254 elliptic curve.
-message Bn254FieldElement {
-  // 32-byte big-endian field element.
-  optional bytes element = 1;
+  // base10 encoded Bn254FieldElement
+  optional string e20 = 5;
+  // base10 encoded Bn254FieldElement
+  optional string e21 = 6;
 }
 
 // A passkey authenticator.
