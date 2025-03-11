@@ -13,7 +13,6 @@ workspace = true
 anyhow = { workspace = true, features = ["backtrace"] }
 arc-swap.workspace = true
 async-trait.workspace = true
-async-stream.workspace = true
 axum.workspace = true
 bcs.workspace = true
 bincode.workspace = true

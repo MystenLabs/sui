@@ -30,6 +30,7 @@ use sui_types::transaction::{
     CertifiedTransaction, Transaction, TransactionDataAPI, VerifiedCertificate,
     VerifiedTransaction, DEFAULT_VALIDATOR_GAS_PRICE,
 };
+use tokio::sync::broadcast;
 
 #[derive(Clone)]
 pub struct SingleValidator {
@@ -267,16 +268,20 @@ impl SingleValidator {
         checkpoints
     }
 
-    pub fn create_checkpoint_executor(&self) -> CheckpointExecutor {
+    pub fn create_checkpoint_executor(
+        &self,
+    ) -> (CheckpointExecutor, broadcast::Sender<VerifiedCheckpoint>) {
         let validator = self.get_validator();
-        CheckpointExecutor::new_for_tests(
-            self.epoch_store.clone(),
+        let (ckpt_sender, ckpt_receiver) = broadcast::channel(1000000);
+        let checkpoint_executor = CheckpointExecutor::new_for_tests(
+            ckpt_receiver,
             validator.get_checkpoint_store().clone(),
             validator.clone(),
             Arc::new(StateAccumulator::new_for_tests(
                 validator.get_accumulator_store().clone(),
             )),
-        )
+        );
+        (checkpoint_executor, ckpt_sender)
     }
 
     pub(crate) fn create_in_memory_store(&self) -> InMemoryObjectStore {

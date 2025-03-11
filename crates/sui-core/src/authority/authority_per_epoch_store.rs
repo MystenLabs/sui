@@ -1149,13 +1149,9 @@ impl AuthorityPerEpochStore {
 
     pub fn get_running_root_accumulator(
         &self,
-        checkpoint: CheckpointSequenceNumber,
+        checkpoint: &CheckpointSequenceNumber,
     ) -> SuiResult<Option<Accumulator>> {
-        Ok(self
-            .tables()?
-            .running_root_accumulators
-            .get(&checkpoint)
-            .expect("db error"))
+        Ok(self.tables()?.running_root_accumulators.get(checkpoint)?)
     }
 
     pub fn get_highest_running_root_accumulator(
