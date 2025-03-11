@@ -3,6 +3,7 @@
 
 use std::sync::Arc;
 
+use anyhow::anyhow;
 use async_graphql::dataloader::DataLoader;
 use diesel::deserialize::FromSqlRow;
 use diesel::expression::QueryMetadata;
@@ -14,6 +15,7 @@ use diesel_async::RunQueryDsl;
 use prometheus::Registry;
 use sui_indexer_alt_metrics::db::DbConnectionStatsCollector;
 use sui_pg_db as db;
+use tokio_util::sync::CancellationToken;
 use tracing::debug;
 use url::Url;
 
@@ -25,6 +27,7 @@ use crate::{data::error::Error, metrics::RpcMetrics};
 pub(crate) struct PgReader {
     db: db::Db,
     metrics: Arc<RpcMetrics>,
+    cancel: CancellationToken,
 }
 
 pub(crate) struct Connection<'p> {
@@ -38,6 +41,7 @@ impl PgReader {
         db_args: db::DbArgs,
         metrics: Arc<RpcMetrics>,
         registry: &Registry,
+        cancel: CancellationToken,
     ) -> Result<Self, Error> {
         let db = db::Db::for_read(database_url, db_args)
             .await
@@ -50,7 +54,11 @@ impl PgReader {
             )))
             .map_err(|e| Error::PgCreate(e.into()))?;
 
-        Ok(Self { db, metrics })
+        Ok(Self {
+            db,
+            metrics,
+            cancel,
+        })
     }
 
     /// Create a data loader backed by this reader.
@@ -58,11 +66,21 @@ impl PgReader {
         DataLoader::new(self.clone(), tokio::spawn)
     }
 
+    /// Acquire a connection to the database. This can potentially fail if the service is cancelled
+    /// while the connection is being acquired.
     pub(crate) async fn connect(&self) -> Result<Connection<'_>, Error> {
-        Ok(Connection {
-            conn: self.db.connect().await.map_err(Error::PgConnect)?,
-            metrics: self.metrics.clone(),
-        })
+        tokio::select! {
+            _ = self.cancel.cancelled() => {
+                Err(Error::PgConnect(anyhow!("Cancelled while connecting to the database")))
+            }
+
+            conn = self.db.connect() => {
+                Ok(Connection {
+                    conn: conn.map_err(Error::PgConnect)?,
+                    metrics: self.metrics.clone(),
+                })
+            }
+        }
     }
 }
 

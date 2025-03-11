@@ -7,6 +7,7 @@ use async_graphql::dataloader::DataLoader;
 use prometheus::Registry;
 use sui_package_resolver::Resolver;
 use sui_pg_db::DbArgs;
+use tokio_util::sync::CancellationToken;
 use url::Url;
 
 use crate::{
@@ -55,8 +56,10 @@ impl Context {
         config: RpcConfig,
         metrics: Arc<RpcMetrics>,
         registry: &Registry,
+        cancel: CancellationToken,
     ) -> Result<Self, Error> {
-        let pg_reader = PgReader::new(database_url, db_args, metrics.clone(), registry).await?;
+        let pg_reader =
+            PgReader::new(database_url, db_args, metrics.clone(), registry, cancel).await?;
         let pg_loader = Arc::new(pg_reader.as_data_loader());
 
         let kv_loader = if let Some(config) = config.bigtable.clone() {
