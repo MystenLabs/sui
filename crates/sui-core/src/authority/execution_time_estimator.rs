@@ -3,17 +3,19 @@
 
 use std::{
     collections::HashMap,
-    num::NonZeroUsize,
+    num::{NonZeroU32, NonZeroUsize},
     sync::{Arc, Weak},
     time::Duration,
 };
 
 use super::authority_per_epoch_store::AuthorityPerEpochStore;
 use crate::consensus_adapter::SubmitToConsensus;
+use governor::{Quota, RateLimiter};
 use itertools::Itertools;
 use lru::LruCache;
 use mysten_common::debug_fatal;
 use mysten_metrics::{monitored_scope, spawn_monitored_task};
+use nonzero_ext::nonzero;
 use simple_moving_average::{SingleSumSMA, SMA};
 use sui_protocol_config::PerObjectCongestionControlMode;
 use sui_types::{
@@ -45,6 +47,11 @@ const OBSERVATION_SHARING_OBJECT_UTILIZATION_THRESHOLD: Duration = Duration::fro
 // Minimum interval between sharing multiple observations of the same key.
 const OBSERVATION_SHARING_MIN_INTERVAL: Duration = Duration::from_secs(5);
 
+// Global rate limit for sharing observations. This is a safety valve and should
+// not trigger during normal operation.
+const OBSERVATION_SHARING_RATE_LIMIT: NonZeroU32 = nonzero!(10u32); // per second
+const OBSERVATION_SHARING_BURST_LIMIT: NonZeroU32 = nonzero!(60u32);
+
 const OBJECT_UTILIZATION_TRACKER_CAPACITY: usize = 50_000;
 
 // TODO: source from time-based utilization target param in ProtocolConfig when available.
@@ -62,6 +69,12 @@ pub struct ExecutionTimeObserver {
     // executing transactions. This is used to decide which observations should be shared
     // via consensus.
     object_utilization_tracker: LruCache<ObjectID, ObjectUtilization>,
+
+    sharing_rate_limiter: RateLimiter<
+        governor::state::NotKeyed,
+        governor::state::InMemoryState,
+        governor::clock::DefaultClock,
+    >,
 }
 
 #[derive(Debug, Clone)]
@@ -107,6 +120,10 @@ impl ExecutionTimeObserver {
             ),
             observation_sharing_object_utilization_threshold:
                 OBSERVATION_SHARING_OBJECT_UTILIZATION_THRESHOLD,
+            sharing_rate_limiter: RateLimiter::direct(
+                Quota::per_second(OBSERVATION_SHARING_RATE_LIMIT)
+                    .allow_burst(OBSERVATION_SHARING_BURST_LIMIT),
+            ),
         };
         spawn_monitored_task!(epoch_store.within_alive_epoch(async move {
             while let Some((tx, timings, total_duration)) = rx_local_execution_time.recv().await {
@@ -132,6 +149,7 @@ impl ExecutionTimeObserver {
                 NonZeroUsize::new(OBJECT_UTILIZATION_TRACKER_CAPACITY).unwrap(),
             ),
             observation_sharing_object_utilization_threshold,
+            sharing_rate_limiter: RateLimiter::direct(Quota::per_hour(NonZeroU32::MAX)),
         }
     }
 
@@ -243,24 +261,40 @@ impl ExecutionTimeObserver {
         }
 
         // Share new observations.
-        if !to_share.is_empty() {
-            if let Some(epoch_store) = self.epoch_store.upgrade() {
-                let epoch_store = epoch_store.clone();
-                epoch_store
-                    .metrics
-                    .epoch_execution_time_observations_shared
-                    .inc();
-                let transaction = ConsensusTransaction::new_execution_time_observation(
-                    ExecutionTimeObservation::new(epoch_store.name, to_share),
-                );
-                if let Err(e) = self
-                    .consensus_adapter
-                    .submit_to_consensus(&[transaction], &epoch_store)
-                {
-                    if !matches!(e, SuiError::EpochEnded(_)) {
-                        warn!("failed to submit execution time observation: {e:?}");
-                    }
-                }
+        self.share_observations(to_share).await;
+    }
+
+    async fn share_observations(&mut self, to_share: Vec<(ExecutionTimeObservationKey, Duration)>) {
+        if to_share.is_empty() {
+            return;
+        }
+        let Some(epoch_store) = self.epoch_store.upgrade() else {
+            debug!("epoch is ending, dropping execution time observation");
+            return;
+        };
+
+        // Enforce global observation-sharing rate limit.
+        if let Err(e) = self.sharing_rate_limiter.check() {
+            debug!("rate limit exceeded, dropping execution time observation; {e:?}");
+            // TODO: Increment a metric for dropped observations, for alerting.
+            return;
+        }
+
+        let epoch_store = epoch_store.clone();
+        epoch_store
+            .metrics
+            .epoch_execution_time_observations_shared
+            .inc();
+        let transaction = ConsensusTransaction::new_execution_time_observation(
+            ExecutionTimeObservation::new(epoch_store.name, to_share),
+        );
+        if let Err(e) = self
+            .consensus_adapter
+            .submit_to_consensus(&[transaction], &epoch_store)
+        {
+            if !matches!(e, SuiError::EpochEnded(_)) {
+                // TODO: Increment a metric for dropped observations, for alerting.
+                warn!("failed to submit execution time observation: {e:?}");
             }
         }
     }
