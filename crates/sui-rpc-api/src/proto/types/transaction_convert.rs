@@ -282,7 +282,7 @@ impl From<sui_sdk_types::ConsensusCommitPrologueV2> for super::ConsensusCommitPr
             epoch: Some(value.epoch),
             round: Some(value.round),
             commit_timestamp_ms: Some(value.commit_timestamp_ms),
-            consensus_commit_digest: Some(value.consensus_commit_digest.into()),
+            consensus_commit_digest: Some(value.consensus_commit_digest.to_string()),
             sub_dag_index: None,
             consensus_determined_version_assignments: None,
             additional_state_digest: None,
@@ -308,7 +308,8 @@ impl TryFrom<&super::ConsensusCommitPrologue> for sui_sdk_types::ConsensusCommit
             .consensus_commit_digest
             .as_ref()
             .ok_or_else(|| TryFromProtoError::missing("consensus_commit_digest"))?
-            .try_into()?;
+            .parse()
+            .map_err(TryFromProtoError::from_error)?;
 
         Ok(Self {
             epoch,
@@ -325,7 +326,7 @@ impl From<sui_sdk_types::ConsensusCommitPrologueV3> for super::ConsensusCommitPr
             epoch: Some(value.epoch),
             round: Some(value.round),
             commit_timestamp_ms: Some(value.commit_timestamp_ms),
-            consensus_commit_digest: Some(value.consensus_commit_digest.into()),
+            consensus_commit_digest: Some(value.consensus_commit_digest.to_string()),
             sub_dag_index: value.sub_dag_index,
             consensus_determined_version_assignments: Some(
                 value.consensus_determined_version_assignments.into(),
@@ -353,7 +354,8 @@ impl TryFrom<&super::ConsensusCommitPrologue> for sui_sdk_types::ConsensusCommit
             .consensus_commit_digest
             .as_ref()
             .ok_or_else(|| TryFromProtoError::missing("consensus_commit_digest"))?
-            .try_into()?;
+            .parse()
+            .map_err(TryFromProtoError::from_error)?;
 
         let consensus_determined_version_assignments = value
             .consensus_determined_version_assignments
@@ -388,12 +390,12 @@ impl From<sui_sdk_types::ConsensusCommitPrologueV4> for super::ConsensusCommitPr
             epoch: Some(epoch),
             round: Some(round),
             commit_timestamp_ms: Some(commit_timestamp_ms),
-            consensus_commit_digest: Some(consensus_commit_digest.into()),
+            consensus_commit_digest: Some(consensus_commit_digest.to_string()),
             sub_dag_index,
             consensus_determined_version_assignments: Some(
                 consensus_determined_version_assignments.into(),
             ),
-            additional_state_digest: Some(additional_state_digest.into()),
+            additional_state_digest: Some(additional_state_digest.to_string()),
         }
     }
 }
@@ -416,7 +418,8 @@ impl TryFrom<&super::ConsensusCommitPrologue> for sui_sdk_types::ConsensusCommit
             .consensus_commit_digest
             .as_ref()
             .ok_or_else(|| TryFromProtoError::missing("consensus_commit_digest"))?
-            .try_into()?;
+            .parse()
+            .map_err(TryFromProtoError::from_error)?;
 
         let consensus_determined_version_assignments = value
             .consensus_determined_version_assignments
@@ -428,7 +431,8 @@ impl TryFrom<&super::ConsensusCommitPrologue> for sui_sdk_types::ConsensusCommit
             .additional_state_digest
             .as_ref()
             .ok_or_else(|| TryFromProtoError::missing("additional_state_digest"))?
-            .try_into()?;
+            .parse()
+            .map_err(TryFromProtoError::from_error)?;
 
         Ok(Self {
             epoch,
@@ -501,7 +505,7 @@ impl TryFrom<&super::ConsensusDeterminedVersionAssignments>
 impl From<sui_sdk_types::CancelledTransaction> for super::CancelledTransaction {
     fn from(value: sui_sdk_types::CancelledTransaction) -> Self {
         Self {
-            digest: Some(value.digest.into()),
+            digest: Some(value.digest.to_string()),
             version_assignments: value
                 .version_assignments
                 .into_iter()
@@ -519,7 +523,8 @@ impl TryFrom<&super::CancelledTransaction> for sui_sdk_types::CancelledTransacti
             .digest
             .as_ref()
             .ok_or_else(|| TryFromProtoError::missing("digest"))?
-            .try_into()?;
+            .parse()
+            .map_err(TryFromProtoError::from_error)?;
 
         let version_assignments = value
             .version_assignments
@@ -903,7 +908,7 @@ impl From<sui_sdk_types::EndOfEpochTransactionKind> for super::EndOfEpochTransac
             AuthenticatorStateExpire(expire) => Kind::AuthenticatorStateExpire(expire.into()),
             RandomnessStateCreate => Kind::RandomnessStateCreate(()),
             DenyListStateCreate => Kind::DenyListStateCreate(()),
-            BridgeStateCreate { chain_id } => Kind::BridgeStateCreate(chain_id.into()),
+            BridgeStateCreate { chain_id } => Kind::BridgeStateCreate(chain_id.to_string()),
             BridgeCommitteeInit {
                 bridge_object_version,
             } => Kind::BridgeCommitteeInit(bridge_object_version),
@@ -932,7 +937,7 @@ impl TryFrom<&super::EndOfEpochTransactionKind> for sui_sdk_types::EndOfEpochTra
             Kind::RandomnessStateCreate(()) => Self::RandomnessStateCreate,
             Kind::DenyListStateCreate(()) => Self::DenyListStateCreate,
             Kind::BridgeStateCreate(digest) => Self::BridgeStateCreate {
-                chain_id: digest.try_into()?,
+                chain_id: digest.parse().map_err(TryFromProtoError::from_error)?,
             },
             Kind::BridgeCommitteeInit(version) => Self::BridgeCommitteeInit {
                 bridge_object_version: *version,

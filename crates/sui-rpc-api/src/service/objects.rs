@@ -76,7 +76,9 @@ impl RpcService {
                 .contains("object_id")
                 .then(|| object.object_id().to_string()),
             version: read_mask.contains("version").then_some(object.version()),
-            digest: read_mask.contains("digest").then(|| object.digest().into()),
+            digest: read_mask
+                .contains("digest")
+                .then(|| object.digest().to_string()),
             object: read_mask.contains("object").then(|| object.into()),
             object_bcs,
         }

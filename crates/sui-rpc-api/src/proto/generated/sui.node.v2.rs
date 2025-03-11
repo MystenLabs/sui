@@ -9,8 +9,8 @@ pub struct GetNodeInfoResponse {
     ///
     /// The chain identifier is the digest of the genesis checkpoint, the
     /// checkpoint with sequence number 0.
-    #[prost(message, optional, tag = "1")]
-    pub chain_id: ::core::option::Option<super::super::types::Digest>,
+    #[prost(string, optional, tag = "1")]
+    pub chain_id: ::core::option::Option<::prost::alloc::string::String>,
     /// Human-readable name of the chain that this node is on.
     ///
     /// This is intended to be a human-readable name like `mainnet`, `testnet`, and so on.
@@ -55,8 +55,8 @@ pub struct GetCommitteeResponse {
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct GetTransactionRequest {
     /// Required. The digest of the requested transaction.
-    #[prost(message, optional, tag = "1")]
-    pub digest: ::core::option::Option<super::super::types::Digest>,
+    #[prost(string, optional, tag = "1")]
+    pub digest: ::core::option::Option<::prost::alloc::string::String>,
     /// Mask specifying which fields to read.
     /// If no mask is specified, defaults to `digest`.
     #[prost(message, optional, tag = "4")]
@@ -66,8 +66,8 @@ pub struct GetTransactionRequest {
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct GetTransactionResponse {
     /// The digest of this [Transaction](<https://docs.rs/sui-sdk-types/latest/sui_sdk_types/struct.Transaction.html>).
-    #[prost(message, optional, tag = "1")]
-    pub digest: ::core::option::Option<super::super::types::Digest>,
+    #[prost(string, optional, tag = "1")]
+    pub digest: ::core::option::Option<::prost::alloc::string::String>,
     /// The transaction itself.
     #[prost(message, optional, tag = "2")]
     pub transaction: ::core::option::Option<super::super::types::Transaction>,
@@ -139,8 +139,8 @@ pub struct GetObjectResponse {
     #[prost(uint64, optional, tag = "2")]
     pub version: ::core::option::Option<u64>,
     /// The digest of this object.
-    #[prost(message, optional, tag = "3")]
-    pub digest: ::core::option::Option<super::super::types::Digest>,
+    #[prost(string, optional, tag = "3")]
+    pub digest: ::core::option::Option<::prost::alloc::string::String>,
     /// The object itself.
     #[prost(message, optional, tag = "4")]
     pub object: ::core::option::Option<super::super::types::Object>,
@@ -161,8 +161,8 @@ pub struct GetCheckpointRequest {
     #[prost(uint64, optional, tag = "1")]
     pub sequence_number: ::core::option::Option<u64>,
     /// The digest of the requested checkpoint.
-    #[prost(message, optional, tag = "2")]
-    pub digest: ::core::option::Option<super::super::types::Digest>,
+    #[prost(string, optional, tag = "2")]
+    pub digest: ::core::option::Option<::prost::alloc::string::String>,
     /// Mask specifying which fields to read.
     /// If no mask is specified, defaults to `sequence_number,digest`.
     #[prost(message, optional, tag = "4")]
@@ -175,8 +175,8 @@ pub struct GetCheckpointResponse {
     #[prost(uint64, optional, tag = "1")]
     pub sequence_number: ::core::option::Option<u64>,
     /// The digest of this checkpoint's `CheckpointSummary`.
-    #[prost(message, optional, tag = "2")]
-    pub digest: ::core::option::Option<super::super::types::Digest>,
+    #[prost(string, optional, tag = "2")]
+    pub digest: ::core::option::Option<::prost::alloc::string::String>,
     /// The `CheckpointSummary` for this checkpoint.
     #[prost(message, optional, tag = "3")]
     pub summary: ::core::option::Option<super::super::types::CheckpointSummary>,
@@ -211,8 +211,8 @@ pub struct GetFullCheckpointRequest {
     #[prost(uint64, optional, tag = "1")]
     pub sequence_number: ::core::option::Option<u64>,
     /// The digest of the requested checkpoint.
-    #[prost(message, optional, tag = "2")]
-    pub digest: ::core::option::Option<super::super::types::Digest>,
+    #[prost(string, optional, tag = "2")]
+    pub digest: ::core::option::Option<::prost::alloc::string::String>,
     /// Mask specifying which fields to read.
     /// If no mask is specified, defaults to `sequence_number,digest`.
     #[prost(message, optional, tag = "4")]
@@ -225,8 +225,8 @@ pub struct GetFullCheckpointResponse {
     #[prost(uint64, optional, tag = "1")]
     pub sequence_number: ::core::option::Option<u64>,
     /// The digest of this checkpoint's `CheckpointSummary`.
-    #[prost(message, optional, tag = "2")]
-    pub digest: ::core::option::Option<super::super::types::Digest>,
+    #[prost(string, optional, tag = "2")]
+    pub digest: ::core::option::Option<::prost::alloc::string::String>,
     /// The `CheckpointSummary` for this checkpoint.
     #[prost(message, optional, tag = "3")]
     pub summary: ::core::option::Option<super::super::types::CheckpointSummary>,
@@ -257,8 +257,8 @@ pub struct GetFullCheckpointResponse {
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct FullCheckpointTransaction {
     /// The digest of this transaction.
-    #[prost(message, optional, tag = "1")]
-    pub digest: ::core::option::Option<super::super::types::Digest>,
+    #[prost(string, optional, tag = "1")]
+    pub digest: ::core::option::Option<::prost::alloc::string::String>,
     /// The transaction itself.
     #[prost(message, optional, tag = "2")]
     pub transaction: ::core::option::Option<super::super::types::Transaction>,
@@ -305,8 +305,8 @@ pub struct FullCheckpointObject {
     #[prost(uint64, optional, tag = "2")]
     pub version: ::core::option::Option<u64>,
     /// The digest of this object.
-    #[prost(message, optional, tag = "3")]
-    pub digest: ::core::option::Option<super::super::types::Digest>,
+    #[prost(string, optional, tag = "3")]
+    pub digest: ::core::option::Option<::prost::alloc::string::String>,
     /// The object itself.
     #[prost(message, optional, tag = "4")]
     pub object: ::core::option::Option<super::super::types::Object>,

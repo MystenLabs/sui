@@ -95,7 +95,9 @@ async fn get_checkpoint() {
 
     // Request by digest
     let response = grpc_client
-        .get_checkpoint(GetCheckpointRequest::by_digest(digest.clone().unwrap()))
+        .get_checkpoint(GetCheckpointRequest::by_digest(
+            digest.clone().unwrap().parse().unwrap(),
+        ))
         .await
         .unwrap()
         .into_inner();
@@ -202,7 +204,7 @@ async fn get_full_checkpoint() {
         assert!(transaction_bcs.is_none());
         assert!(effects.is_none());
         assert!(effects_bcs.is_none());
-        if digest == Some(transaction_digest.into()) {
+        if digest == Some(transaction_digest.to_string()) {
             found_transaction = true;
         }
         assert!(events.is_none());
@@ -295,7 +297,7 @@ async fn get_full_checkpoint() {
         assert!(transaction_bcs.is_some());
         assert!(effects.is_some());
         assert!(effects_bcs.is_some());
-        if digest == &Some(transaction_digest.into()) {
+        if digest == &Some(transaction_digest.to_string()) {
             found_transaction = true;
             assert!(events.is_some());
             assert!(events_bcs.is_some());
@@ -323,7 +325,9 @@ async fn get_full_checkpoint() {
 
     // Request by digest
     let response = grpc_client
-        .get_full_checkpoint(GetFullCheckpointRequest::by_digest(digest.clone().unwrap()))
+        .get_full_checkpoint(GetFullCheckpointRequest::by_digest(
+            digest.clone().unwrap().parse().unwrap(),
+        ))
         .await
         .unwrap()
         .into_inner();

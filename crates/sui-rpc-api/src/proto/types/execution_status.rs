@@ -419,7 +419,7 @@ impl From<sui_sdk_types::PackageUpgradeError> for super::package_upgrade_error::
             }
             NotAPackage { object_id } => Self::NotAPackage(object_id.to_string()),
             IncompatibleUpgrade => Self::IncompatibleUpgrade(()),
-            DigestDoesNotMatch { digest } => Self::DigetsDoesNotMatch(digest.into()),
+            DigestDoesNotMatch { digest } => Self::DigetsDoesNotMatch(digest.to_string()),
             UnknownUpgradePolicy { policy } => Self::UnknownUpgradePolicy(policy.into()),
             PackageIdDoesNotMatch {
                 package_id,
@@ -447,7 +447,7 @@ impl TryFrom<&super::package_upgrade_error::Kind> for sui_sdk_types::PackageUpgr
             },
             IncompatibleUpgrade(()) => Self::IncompatibleUpgrade,
             DigetsDoesNotMatch(digest) => Self::DigestDoesNotMatch {
-                digest: digest.try_into()?,
+                digest: digest.parse().map_err(TryFromProtoError::from_error)?,
             },
             UnknownUpgradePolicy(policy) => Self::UnknownUpgradePolicy {
                 policy: (*policy).try_into()?,

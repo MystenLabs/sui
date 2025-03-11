@@ -24,8 +24,8 @@ impl From<sui_sdk_types::CheckpointSummary> for super::CheckpointSummary {
             epoch: Some(epoch),
             sequence_number: Some(sequence_number),
             total_network_transactions: Some(network_total_transactions),
-            content_digest: Some(content_digest.into()),
-            previous_digest: previous_digest.map(Into::into),
+            content_digest: Some(content_digest.to_string()),
+            previous_digest: previous_digest.map(|d| d.to_string()),
             epoch_rolling_gas_cost_summary: Some(epoch_rolling_gas_cost_summary.into()),
             timestamp_ms: Some(timestamp_ms),
             commitments: checkpoint_commitments.into_iter().map(Into::into).collect(),
@@ -60,10 +60,11 @@ impl TryFrom<&super::CheckpointSummary> for sui_sdk_types::CheckpointSummary {
         let content_digest = content_digest
             .as_ref()
             .ok_or_else(|| TryFromProtoError::missing("content_digest"))?
-            .try_into()?;
+            .parse()
+            .map_err(TryFromProtoError::from_error)?;
         let previous_digest = previous_digest
             .as_ref()
-            .map(TryInto::try_into)
+            .map(|s| s.parse().map_err(TryFromProtoError::from_error))
             .transpose()?;
         let epoch_rolling_gas_cost_summary = epoch_rolling_gas_cost_summary
             .as_ref()
@@ -161,7 +162,7 @@ impl From<sui_sdk_types::CheckpointCommitment> for super::CheckpointCommitment {
     fn from(value: sui_sdk_types::CheckpointCommitment) -> Self {
         let commitment = match value {
             sui_sdk_types::CheckpointCommitment::EcmhLiveObjectSet { digest } => {
-                super::checkpoint_commitment::Commitment::EcmhLiveObjectSet(digest.into())
+                super::checkpoint_commitment::Commitment::EcmhLiveObjectSet(digest.to_string())
             }
         };
 
@@ -182,7 +183,7 @@ impl TryFrom<&super::CheckpointCommitment> for sui_sdk_types::CheckpointCommitme
         {
             super::checkpoint_commitment::Commitment::EcmhLiveObjectSet(digest) => {
                 Self::EcmhLiveObjectSet {
-                    digest: digest.try_into()?,
+                    digest: digest.parse().map_err(TryFromProtoError::from_error)?,
                 }
             }
         }
@@ -244,8 +245,8 @@ impl TryFrom<&super::EndOfEpochData> for sui_sdk_types::EndOfEpochData {
 impl From<sui_sdk_types::CheckpointTransactionInfo> for super::CheckpointedTransactionInfo {
     fn from(value: sui_sdk_types::CheckpointTransactionInfo) -> Self {
         Self {
-            transaction: Some(value.transaction.into()),
-            effects: Some(value.effects.into()),
+            transaction: Some(value.transaction.to_string()),
+            effects: Some(value.effects.to_string()),
             signatures: value.signatures.into_iter().map(Into::into).collect(),
         }
     }
@@ -259,13 +260,15 @@ impl TryFrom<&super::CheckpointedTransactionInfo> for sui_sdk_types::CheckpointT
             .transaction
             .as_ref()
             .ok_or_else(|| TryFromProtoError::missing("transaction"))?
-            .try_into()?;
+            .parse()
+            .map_err(TryFromProtoError::from_error)?;
 
         let effects = value
             .effects
             .as_ref()
             .ok_or_else(|| TryFromProtoError::missing("effects"))?
-            .try_into()?;
+            .parse()
+            .map_err(TryFromProtoError::from_error)?;
 
         let signatures = value
             .signatures

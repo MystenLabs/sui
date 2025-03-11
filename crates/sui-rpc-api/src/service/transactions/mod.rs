@@ -27,7 +27,7 @@ impl RpcService {
                     .with_description("missing digest")
                     .with_reason(ErrorReason::FieldMissing)
             })?
-            .pipe_ref(TransactionDigest::try_from)
+            .parse::<TransactionDigest>()
             .map_err(|e| {
                 FieldViolation::new("digest")
                     .with_description(format!("invalid digest: {e}"))
@@ -83,7 +83,7 @@ impl RpcService {
             .unwrap_or_default();
 
         GetTransactionResponse {
-            digest: read_mask.contains("digest").then(|| digest.into()),
+            digest: read_mask.contains("digest").then(|| digest.to_string()),
             transaction: read_mask
                 .contains("transaction")
                 .then(|| transaction.into()),

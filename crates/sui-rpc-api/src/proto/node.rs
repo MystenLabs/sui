@@ -145,10 +145,10 @@ impl GetCheckpointRequest {
         }
     }
 
-    pub fn by_digest<T: Into<super::types::Digest>>(digest: T) -> Self {
+    pub fn by_digest(digest: sui_sdk_types::CheckpointDigest) -> Self {
         Self {
             sequence_number: None,
-            digest: Some(digest.into()),
+            digest: Some(digest.to_string()),
             read_mask: None,
         }
     }
@@ -174,9 +174,9 @@ impl GetCheckpointRequest {
 impl GetTransactionRequest {
     pub const READ_MASK_DEFAULT: &str = "digest";
 
-    pub fn new<T: Into<super::types::Digest>>(digest: T) -> Self {
+    pub fn new(digest: sui_sdk_types::TransactionDigest) -> Self {
         Self {
-            digest: Some(digest.into()),
+            digest: Some(digest.to_string()),
             read_mask: None,
         }
     }
@@ -223,10 +223,10 @@ impl GetFullCheckpointRequest {
         }
     }
 
-    pub fn by_digest<T: Into<super::types::Digest>>(digest: T) -> Self {
+    pub fn by_digest(digest: sui_sdk_types::CheckpointDigest) -> Self {
         Self {
             sequence_number: None,
-            digest: Some(digest.into()),
+            digest: Some(digest.to_string()),
             read_mask: None,
         }
     }

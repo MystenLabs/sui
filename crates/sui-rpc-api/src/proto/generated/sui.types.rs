@@ -46,13 +46,6 @@ impl SignatureScheme {
         }
     }
 }
-/// 32-byte output of hashing a Sui structure using the Blake2b256 hash function.
-#[derive(Clone, PartialEq, ::prost::Message)]
-pub struct Digest {
-    /// 32-byte hash.
-    #[prost(bytes = "bytes", optional, tag = "1")]
-    pub digest: ::core::option::Option<::prost::bytes::Bytes>,
-}
 /// Message that represents a type that is serialized and encoded using the
 /// [BCS](<https://mystenlabs.github.io/sui-rust-sdk/sui_sdk_types/index.html#bcs>)
 /// format.
@@ -115,13 +108,13 @@ pub struct CheckpointSummary {
     #[prost(uint64, optional, tag = "3")]
     pub total_network_transactions: ::core::option::Option<u64>,
     /// The hash of the `CheckpointContents` for this checkpoint.
-    #[prost(message, optional, tag = "4")]
-    pub content_digest: ::core::option::Option<Digest>,
+    #[prost(string, optional, tag = "4")]
+    pub content_digest: ::core::option::Option<::prost::alloc::string::String>,
     /// The hash of the previous `CheckpointSummary`.
     ///
     /// This will be `None` only for the first, or genesis, checkpoint.
-    #[prost(message, optional, tag = "5")]
-    pub previous_digest: ::core::option::Option<Digest>,
+    #[prost(string, optional, tag = "5")]
+    pub previous_digest: ::core::option::Option<::prost::alloc::string::String>,
     /// The running total gas costs of all transactions included in the current epoch so far
     /// until this checkpoint.
     #[prost(message, optional, tag = "6")]
@@ -156,8 +149,8 @@ pub mod checkpoint_commitment {
     pub enum Commitment {
         /// An elliptic curve multiset hash attesting to the set of objects that comprise the live
         /// state of the Sui blockchain.
-        #[prost(message, tag = "1")]
-        EcmhLiveObjectSet(super::Digest),
+        #[prost(string, tag = "1")]
+        EcmhLiveObjectSet(::prost::alloc::string::String),
     }
 }
 /// Data, which when included in a `CheckpointSummary`, signals the end of an `Epoch`.
@@ -177,11 +170,11 @@ pub struct EndOfEpochData {
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct CheckpointedTransactionInfo {
     /// Digest of the transaction.
-    #[prost(message, optional, tag = "1")]
-    pub transaction: ::core::option::Option<Digest>,
+    #[prost(string, optional, tag = "1")]
+    pub transaction: ::core::option::Option<::prost::alloc::string::String>,
     /// Digest of the effects.
-    #[prost(message, optional, tag = "2")]
-    pub effects: ::core::option::Option<Digest>,
+    #[prost(string, optional, tag = "2")]
+    pub effects: ::core::option::Option<::prost::alloc::string::String>,
     /// Set of user signatures that authorized the transaction.
     #[prost(message, repeated, tag = "3")]
     pub signatures: ::prost::alloc::vec::Vec<UserSignature>,
@@ -243,8 +236,8 @@ pub struct ObjectReference {
     #[prost(uint64, optional, tag = "2")]
     pub version: ::core::option::Option<u64>,
     /// The digest of this object.
-    #[prost(message, optional, tag = "3")]
-    pub digest: ::core::option::Option<Digest>,
+    #[prost(string, optional, tag = "3")]
+    pub digest: ::core::option::Option<::prost::alloc::string::String>,
 }
 /// A Move package.
 #[derive(Clone, PartialEq, ::prost::Message)]
@@ -359,8 +352,8 @@ pub struct Object {
     #[prost(message, optional, tag = "4")]
     pub object: ::core::option::Option<ObjectData>,
     /// The digest of the transaction that created or last mutated this object
-    #[prost(message, optional, tag = "5")]
-    pub previous_transaction: ::core::option::Option<Digest>,
+    #[prost(string, optional, tag = "5")]
+    pub previous_transaction: ::core::option::Option<::prost::alloc::string::String>,
     /// The amount of SUI to rebate if this object gets deleted.
     /// This number is re-calculated each time the object is mutated based on
     /// the present storage gas price.
@@ -1001,8 +994,8 @@ pub struct ConsensusCommitPrologue {
     /// Digest of consensus output.
     ///
     /// Present in V2, V3, V4.
-    #[prost(message, optional, tag = "4")]
-    pub consensus_commit_digest: ::core::option::Option<Digest>,
+    #[prost(string, optional, tag = "4")]
+    pub consensus_commit_digest: ::core::option::Option<::prost::alloc::string::String>,
     /// The sub DAG index of the consensus commit. This field is populated if there
     /// are multiple consensus commits per round.
     ///
@@ -1020,8 +1013,8 @@ pub struct ConsensusCommitPrologue {
     /// Used to detect forking bugs as early as possible.
     ///
     /// Present in V4.
-    #[prost(message, optional, tag = "7")]
-    pub additional_state_digest: ::core::option::Option<Digest>,
+    #[prost(string, optional, tag = "7")]
+    pub additional_state_digest: ::core::option::Option<::prost::alloc::string::String>,
 }
 /// Object version assignment from consensus.
 #[derive(Clone, PartialEq, ::prost::Message)]
@@ -1037,8 +1030,8 @@ pub struct VersionAssignment {
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct CancelledTransaction {
     /// Digest of the cancelled transaction.
-    #[prost(message, optional, tag = "1")]
-    pub digest: ::core::option::Option<Digest>,
+    #[prost(string, optional, tag = "1")]
+    pub digest: ::core::option::Option<::prost::alloc::string::String>,
     /// List of object version assignments.
     #[prost(message, repeated, tag = "2")]
     pub version_assignments: ::prost::alloc::vec::Vec<VersionAssignment>,
@@ -1159,8 +1152,8 @@ pub mod end_of_epoch_transaction_kind {
         #[prost(message, tag = "202")]
         DenyListStateCreate(()),
         /// Create and initialize the bridge object.
-        #[prost(message, tag = "203")]
-        BridgeStateCreate(super::Digest),
+        #[prost(string, tag = "203")]
+        BridgeStateCreate(::prost::alloc::string::String),
         /// Initialize the bridge committee.
         #[prost(uint64, tag = "204")]
         BridgeCommitteeInit(u64),
@@ -1212,8 +1205,8 @@ pub struct TransactionEffectsV1 {
     #[prost(message, repeated, tag = "5")]
     pub shared_objects: ::prost::alloc::vec::Vec<ObjectReference>,
     /// The transaction digest.
-    #[prost(message, optional, tag = "6")]
-    pub transaction_digest: ::core::option::Option<Digest>,
+    #[prost(string, optional, tag = "6")]
+    pub transaction_digest: ::core::option::Option<::prost::alloc::string::String>,
     /// `ObjectReference` and owner of new objects created.
     #[prost(message, repeated, tag = "7")]
     pub created: ::prost::alloc::vec::Vec<ObjectReferenceWithOwner>,
@@ -1240,11 +1233,11 @@ pub struct TransactionEffectsV1 {
     pub gas_object: ::core::option::Option<ObjectReferenceWithOwner>,
     /// The digest of the events emitted during execution,
     /// can be `None` if the transaction does not emit any event.
-    #[prost(message, optional, tag = "14")]
-    pub events_digest: ::core::option::Option<Digest>,
+    #[prost(string, optional, tag = "14")]
+    pub events_digest: ::core::option::Option<::prost::alloc::string::String>,
     /// The set of transaction digests this transaction depends on.
-    #[prost(message, repeated, tag = "15")]
-    pub dependencies: ::prost::alloc::vec::Vec<Digest>,
+    #[prost(string, repeated, tag = "15")]
+    pub dependencies: ::prost::alloc::vec::Vec<::prost::alloc::string::String>,
 }
 /// An object reference with owner information.
 #[derive(Clone, PartialEq, ::prost::Message)]
@@ -1279,8 +1272,8 @@ pub struct TransactionEffectsV2 {
     #[prost(message, optional, tag = "3")]
     pub gas_used: ::core::option::Option<GasCostSummary>,
     /// The transaction digest.
-    #[prost(message, optional, tag = "4")]
-    pub transaction_digest: ::core::option::Option<Digest>,
+    #[prost(string, optional, tag = "4")]
+    pub transaction_digest: ::core::option::Option<::prost::alloc::string::String>,
     /// The updated gas object reference, as an index into the `changed_objects` vector.
     /// Having a dedicated field for convenient access.
     /// System transaction that don't require gas will leave this as `None`.
@@ -1288,11 +1281,11 @@ pub struct TransactionEffectsV2 {
     pub gas_object_index: ::core::option::Option<u32>,
     /// The digest of the events emitted during execution,
     /// can be `None` if the transaction does not emit any event.
-    #[prost(message, optional, tag = "6")]
-    pub events_digest: ::core::option::Option<Digest>,
+    #[prost(string, optional, tag = "6")]
+    pub events_digest: ::core::option::Option<::prost::alloc::string::String>,
     /// The set of transaction digests this transaction depends on.
-    #[prost(message, repeated, tag = "7")]
-    pub dependencies: ::prost::alloc::vec::Vec<Digest>,
+    #[prost(string, repeated, tag = "7")]
+    pub dependencies: ::prost::alloc::vec::Vec<::prost::alloc::string::String>,
     /// The version number of all the written Move objects by this transaction.
     #[prost(uint64, optional, tag = "8")]
     pub lamport_version: ::core::option::Option<u64>,
@@ -1308,8 +1301,8 @@ pub struct TransactionEffectsV2 {
     /// Auxiliary data that are not protocol-critical, generated as part of the effects but are stored separately.
     /// Storing it separately allows us to avoid bloating the effects with data that are not critical.
     /// It also provides more flexibility on the format and type of the data.
-    #[prost(message, optional, tag = "11")]
-    pub auxiliary_data_digest: ::core::option::Option<Digest>,
+    #[prost(string, optional, tag = "11")]
+    pub auxiliary_data_digest: ::core::option::Option<::prost::alloc::string::String>,
 }
 /// / Input/output state of an object that was changed during execution.
 #[derive(Clone, PartialEq, ::prost::Message)]
@@ -1370,8 +1363,8 @@ pub struct ObjectExist {
     #[prost(uint64, optional, tag = "1")]
     pub version: ::core::option::Option<u64>,
     /// Digest of the object.
-    #[prost(message, optional, tag = "2")]
-    pub digest: ::core::option::Option<Digest>,
+    #[prost(string, optional, tag = "2")]
+    pub digest: ::core::option::Option<::prost::alloc::string::String>,
     /// Owner of the object.
     #[prost(message, optional, tag = "3")]
     pub owner: ::core::option::Option<Owner>,
@@ -1380,8 +1373,8 @@ pub struct ObjectExist {
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct ObjectWrite {
     /// Digest of the new version of the object.
-    #[prost(message, optional, tag = "2")]
-    pub digest: ::core::option::Option<Digest>,
+    #[prost(string, optional, tag = "2")]
+    pub digest: ::core::option::Option<::prost::alloc::string::String>,
     /// Owner of the new version of the object.
     #[prost(message, optional, tag = "3")]
     pub owner: ::core::option::Option<Owner>,
@@ -1393,8 +1386,8 @@ pub struct PackageWrite {
     #[prost(uint64, optional, tag = "1")]
     pub version: ::core::option::Option<u64>,
     /// Digest of the new package.
-    #[prost(message, optional, tag = "2")]
-    pub digest: ::core::option::Option<Digest>,
+    #[prost(string, optional, tag = "2")]
+    pub digest: ::core::option::Option<::prost::alloc::string::String>,
 }
 /// A shared object that wasn't changed during execution.
 #[derive(Clone, PartialEq, ::prost::Message)]
@@ -1434,8 +1427,8 @@ pub struct ReadOnlyRoot {
     #[prost(uint64, optional, tag = "1")]
     pub version: ::core::option::Option<u64>,
     /// Digest of the shared object.
-    #[prost(message, optional, tag = "2")]
-    pub digest: ::core::option::Option<Digest>,
+    #[prost(string, optional, tag = "2")]
+    pub digest: ::core::option::Option<::prost::alloc::string::String>,
 }
 /// / The status of an executed transaction.
 #[derive(Clone, PartialEq, ::prost::Message)]
@@ -1738,8 +1731,8 @@ pub mod package_upgrade_error {
         #[prost(message, tag = "4")]
         IncompatibleUpgrade(()),
         /// Digest in upgrade ticket and computed digest differ.
-        #[prost(message, tag = "5")]
-        DigetsDoesNotMatch(super::Digest),
+        #[prost(string, tag = "5")]
+        DigetsDoesNotMatch(::prost::alloc::string::String),
         /// Upgrade policy is not valid.
         #[prost(uint32, tag = "6")]
         UnknownUpgradePolicy(u32),

@@ -11,7 +11,7 @@ impl From<sui_sdk_types::ObjectReference> for super::ObjectReference {
         Self {
             object_id: Some(object_id.to_string()),
             version: Some(version),
-            digest: Some(digest.into()),
+            digest: Some(digest.to_string()),
         }
     }
 }
@@ -35,7 +35,8 @@ impl TryFrom<&super::ObjectReference> for sui_sdk_types::ObjectReference {
             .digest
             .as_ref()
             .ok_or_else(|| TryFromProtoError::missing("digest"))?
-            .try_into()?;
+            .parse()
+            .map_err(TryFromProtoError::from_error)?;
 
         Ok(Self::new(object_id, version, digest))
     }
@@ -52,7 +53,7 @@ impl From<sui_sdk_types::Object> for super::Object {
             version: Some(value.version()),
             owner: Some(value.owner().to_owned().into()),
             object: Some(value.data().to_owned().into()),
-            previous_transaction: Some(value.previous_transaction().into()),
+            previous_transaction: Some(value.previous_transaction().to_string()),
             storage_rebate: Some(value.storage_rebate()),
         }
     }
@@ -77,7 +78,8 @@ impl TryFrom<&super::Object> for sui_sdk_types::Object {
             .previous_transaction
             .as_ref()
             .ok_or_else(|| TryFromProtoError::missing("previous_transaction"))?
-            .try_into()?;
+            .parse()
+            .map_err(TryFromProtoError::from_error)?;
         let storage_rebate = value
             .storage_rebate
             .ok_or_else(|| TryFromProtoError::missing("storage_rebate"))?;

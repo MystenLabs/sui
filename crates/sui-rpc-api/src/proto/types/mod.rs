@@ -30,59 +30,6 @@ mod signatures;
 mod transaction_convert;
 
 //
-// Digest
-//
-
-impl From<sui_sdk_types::Digest> for Digest {
-    fn from(value: sui_sdk_types::Digest) -> Self {
-        Self {
-            digest: Some(value.as_bytes().to_vec().into()),
-        }
-    }
-}
-
-impl TryFrom<&Digest> for sui_sdk_types::Digest {
-    type Error = TryFromProtoError;
-
-    fn try_from(Digest { digest }: &Digest) -> Result<Self, Self::Error> {
-        let digest = digest
-            .as_ref()
-            .ok_or_else(|| TryFromProtoError::missing("digest"))?
-            .as_ref()
-            .try_into()?;
-
-        Ok(Self::new(digest))
-    }
-}
-
-macro_rules! impl_digest_proto {
-    ($t:ident) => {
-        impl From<sui_sdk_types::$t> for Digest {
-            fn from(value: sui_sdk_types::$t) -> Self {
-                sui_sdk_types::Digest::from(value).into()
-            }
-        }
-
-        impl TryFrom<&Digest> for sui_sdk_types::$t {
-            type Error = TryFromProtoError;
-
-            fn try_from(digest: &Digest) -> Result<Self, Self::Error> {
-                sui_sdk_types::Digest::try_from(digest).map(Into::into)
-            }
-        }
-    };
-}
-
-impl_digest_proto!(CheckpointDigest);
-impl_digest_proto!(CheckpointContentsDigest);
-impl_digest_proto!(TransactionDigest);
-impl_digest_proto!(TransactionEffectsDigest);
-impl_digest_proto!(TransactionEventsDigest);
-impl_digest_proto!(ObjectDigest);
-impl_digest_proto!(ConsensusCommitDigest);
-impl_digest_proto!(EffectsAuxiliaryDataDigest);
-
-//
 // TimeStamp
 //
 

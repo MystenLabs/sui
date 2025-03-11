@@ -1,6 +1,8 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use std::str::FromStr;
+
 use crate::field_mask::FieldMaskTree;
 use crate::field_mask::FieldMaskUtil;
 use crate::proto::google::rpc::bad_request::FieldViolation;
@@ -102,7 +104,7 @@ impl RpcService {
                 .then_some(checkpoint.sequence_number),
             digest: read_mask
                 .contains("digest")
-                .then(|| checkpoint.digest().into()),
+                .then(|| checkpoint.digest().to_string()),
             summary: read_mask.contains("summary").then(|| checkpoint.into()),
             summary_bcs,
             signature: read_mask.contains("signature").then(|| signature.into()),
@@ -213,7 +215,7 @@ pub(crate) fn checkpoint_data_to_full_checkpoint_response(
         sequence_number: read_mask
             .contains("sequence_number")
             .then_some(sequence_number),
-        digest: read_mask.contains("digest").then(|| digest.into()),
+        digest: read_mask.contains("digest").then(|| digest.to_string()),
         summary: read_mask
             .contains("summary")
             .then(|| sui_sdk_types::CheckpointSummary::try_from(summary))
@@ -246,9 +248,9 @@ fn transaction_to_checkpoint_transaction(
     }: sui_types::full_checkpoint_content::CheckpointTransaction,
     read_mask: &FieldMaskTree,
 ) -> Result<FullCheckpointTransaction> {
-    let digest = read_mask
-        .contains("digest")
-        .then(|| sui_sdk_types::TransactionDigest::from(transaction.digest().to_owned()).into());
+    let digest = read_mask.contains("digest").then(|| {
+        sui_sdk_types::TransactionDigest::from(transaction.digest().to_owned()).to_string()
+    });
     let transaction = transaction.into_data().into_inner().intent_message.value;
     let transaction_bcs = read_mask
         .contains("transaction_bcs")
@@ -328,7 +330,7 @@ fn object_to_object_response(
         .then(|| object.version().value());
     let digest = read_mask
         .contains("digest")
-        .then(|| sui_sdk_types::ObjectDigest::from(object.digest()).into());
+        .then(|| sui_sdk_types::ObjectDigest::from(object.digest()).to_string());
 
     let object_bcs = read_mask
         .contains("object_bcs")
@@ -359,7 +361,7 @@ pub enum CheckpointId {
 impl CheckpointId {
     pub fn try_from_proto_request(
         sequence_number: Option<u64>,
-        digest: Option<crate::proto::types::Digest>,
+        digest: Option<String>,
     ) -> Result<Option<Self>, BadRequest> {
         match (sequence_number, digest) {
             (Some(_), Some(_)) => {
@@ -378,7 +380,7 @@ impl CheckpointId {
             }
             (Some(sequence_number), None) => Some(CheckpointId::SequenceNumber(sequence_number)),
             (None, Some(digest)) => {
-                let digest = CheckpointDigest::try_from(&digest).map_err(|e| {
+                let digest = CheckpointDigest::from_str(&digest).map_err(|e| {
                     FieldViolation::new("digest")
                         .with_description(format!("invalid digest: {e}"))
                         .with_reason(ErrorReason::FieldInvalid)
