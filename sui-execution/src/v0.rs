@@ -234,3 +234,6 @@ impl verifier::Verifier for Verifier<'_> {
         )
     }
 }
+
+#[cfg(msim)]
+pub fn init_vm_for_msim() {}

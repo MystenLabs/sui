@@ -53,6 +53,9 @@ move-vm-types-v2 = { path = "../external-crates/move/move-execution/v2/crates/mo
 cargo_metadata = "0.15.4"
 petgraph = "0.5.1"
 
+[lints.rust]
+unexpected_cfgs = { level = "warn", check-cfg = ['cfg(msim)'] }
+
 [features]
 default = []
 tracing = [

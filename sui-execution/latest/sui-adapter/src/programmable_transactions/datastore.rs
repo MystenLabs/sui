@@ -91,7 +91,7 @@ mod checked {
     }
 
     // Better days have arrived!
-    impl<'state, 'a> ModuleResolver for SuiDataStore<'state, 'a> {
+    impl ModuleResolver for SuiDataStore<'_, '_> {
         type Error = PartialVMError;
         fn get_packages_static<const N: usize>(
             &self,

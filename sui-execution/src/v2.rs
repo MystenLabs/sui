@@ -228,3 +228,6 @@ impl verifier::Verifier for Verifier<'_> {
         run_metered_move_bytecode_verifier(modules, &self.config, meter, self.metrics)
     }
 }
+
+#[cfg(msim)]
+pub fn init_vm_for_msim() {}
