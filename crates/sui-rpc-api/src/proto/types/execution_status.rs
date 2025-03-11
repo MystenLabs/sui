@@ -79,7 +79,7 @@ impl From<sui_sdk_types::ExecutionError> for super::failure_status::ExecutionErr
                 size: Some(object_size),
                 max_size: Some(max_object_size),
             }),
-            CircularObjectOwnership { object } => Self::CircularObjectOwnership(object.into()),
+            CircularObjectOwnership { object } => Self::CircularObjectOwnership(object.to_string()),
             InsufficientCoinBalance => Self::InsufficientCoinBalance(()),
             CoinBalanceOverflow => Self::CoinBalanceOverflow(()),
             PublishErrorNonZeroAddress => Self::PublishErrorNonZeroAddress(()),
@@ -148,7 +148,7 @@ impl From<sui_sdk_types::ExecutionError> for super::failure_status::ExecutionErr
             InputObjectDeleted => Self::InputObjectDeleted(()),
             ExecutionCancelledDueToSharedObjectCongestion { congested_objects } => {
                 Self::ExecutionCancelledDueToSharedObjectCongestion(super::CongestedObjectsError {
-                    congested_objects: congested_objects.into_iter().map(Into::into).collect(),
+                    congested_objects: congested_objects.iter().map(ToString::to_string).collect(),
                 })
             }
             AddressDeniedForCoin { address, coin_type } => {
@@ -185,7 +185,7 @@ impl TryFrom<&super::failure_status::ExecutionError> for sui_sdk_types::Executio
                 max_object_size: max_size.ok_or_else(|| TryFromProtoError::missing("max_size"))?,
             },
             CircularObjectOwnership(object) => Self::CircularObjectOwnership {
-                object: object.try_into()?,
+                object: object.parse().map_err(TryFromProtoError::from_error)?,
             },
             InsufficientCoinBalance(()) => Self::InsufficientCoinBalance,
             CoinBalanceOverflow(()) => Self::CoinBalanceOverflow,
@@ -276,8 +276,9 @@ impl TryFrom<&super::failure_status::ExecutionError> for sui_sdk_types::Executio
             }) => Self::ExecutionCancelledDueToSharedObjectCongestion {
                 congested_objects: congested_objects
                     .iter()
-                    .map(TryInto::try_into)
-                    .collect::<Result<_, _>>()?,
+                    .map(|s| s.parse())
+                    .collect::<Result<_, _>>()
+                    .map_err(TryFromProtoError::from_error)?,
             },
             AddressDeniedForCoin(super::AddressDeniedForCoinError { address, coin_type }) => {
                 Self::AddressDeniedForCoin {
@@ -413,8 +414,10 @@ impl From<sui_sdk_types::PackageUpgradeError> for super::package_upgrade_error::
         use sui_sdk_types::PackageUpgradeError::*;
 
         match value {
-            UnableToFetchPackage { package_id } => Self::UnableToFetchPackage(package_id.into()),
-            NotAPackage { object_id } => Self::NotAPackage(object_id.into()),
+            UnableToFetchPackage { package_id } => {
+                Self::UnableToFetchPackage(package_id.to_string())
+            }
+            NotAPackage { object_id } => Self::NotAPackage(object_id.to_string()),
             IncompatibleUpgrade => Self::IncompatibleUpgrade(()),
             DigestDoesNotMatch { digest } => Self::DigetsDoesNotMatch(digest.into()),
             UnknownUpgradePolicy { policy } => Self::UnknownUpgradePolicy(policy.into()),
@@ -422,8 +425,8 @@ impl From<sui_sdk_types::PackageUpgradeError> for super::package_upgrade_error::
                 package_id,
                 ticket_id,
             } => Self::PackageIdDoesNotMatch(super::PackageIdDoesNotMatch {
-                package_id: Some(package_id.into()),
-                ticket_id: Some(ticket_id.into()),
+                package_id: Some(package_id.to_string()),
+                ticket_id: Some(ticket_id.to_string()),
             }),
         }
     }
@@ -437,10 +440,10 @@ impl TryFrom<&super::package_upgrade_error::Kind> for sui_sdk_types::PackageUpgr
 
         match value {
             UnableToFetchPackage(package_id) => Self::UnableToFetchPackage {
-                package_id: package_id.try_into()?,
+                package_id: package_id.parse().map_err(TryFromProtoError::from_error)?,
             },
             NotAPackage(object_id) => Self::NotAPackage {
-                object_id: object_id.try_into()?,
+                object_id: object_id.parse().map_err(TryFromProtoError::from_error)?,
             },
             IncompatibleUpgrade(()) => Self::IncompatibleUpgrade,
             DigetsDoesNotMatch(digest) => Self::DigestDoesNotMatch {
@@ -453,8 +456,8 @@ impl TryFrom<&super::package_upgrade_error::Kind> for sui_sdk_types::PackageUpgr
                 package_id: Some(package_id),
                 ticket_id: Some(ticket_id),
             }) => Self::PackageIdDoesNotMatch {
-                package_id: package_id.try_into()?,
-                ticket_id: ticket_id.try_into()?,
+                package_id: package_id.parse().map_err(TryFromProtoError::from_error)?,
+                ticket_id: ticket_id.parse().map_err(TryFromProtoError::from_error)?,
             },
             PackageIdDoesNotMatch(_) => {
                 return Err(TryFromProtoError::missing(
@@ -473,7 +476,7 @@ impl TryFrom<&super::package_upgrade_error::Kind> for sui_sdk_types::PackageUpgr
 impl From<sui_sdk_types::MoveLocation> for super::MoveLocation {
     fn from(value: sui_sdk_types::MoveLocation) -> Self {
         Self {
-            package: Some(value.package.into()),
+            package: Some(value.package.to_string()),
             module: Some(value.module.into()),
             function: Some(value.function.into()),
             instruction: Some(value.instruction.into()),
@@ -490,7 +493,8 @@ impl TryFrom<&super::MoveLocation> for sui_sdk_types::MoveLocation {
             .package
             .as_ref()
             .ok_or_else(|| TryFromProtoError::missing("package"))?
-            .try_into()?;
+            .parse()
+            .map_err(TryFromProtoError::from_error)?;
         let module = value
             .module
             .as_ref()

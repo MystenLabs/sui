@@ -46,16 +46,6 @@ impl SignatureScheme {
         }
     }
 }
-/// Unique identifier for an object on the Sui blockchain.
-///
-/// An `ObjectId` is a 32-byte identifier used to uniquely identify an object on the Sui
-/// blockchain.
-#[derive(Clone, PartialEq, ::prost::Message)]
-pub struct ObjectId {
-    /// 32-byte object-id.
-    #[prost(bytes = "bytes", optional, tag = "1")]
-    pub object_id: ::core::option::Option<::prost::bytes::Bytes>,
-}
 /// 32-byte output of hashing a Sui structure using the Blake2b256 hash function.
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct Digest {
@@ -227,8 +217,8 @@ pub struct TransactionEvents {
 pub struct Event {
     /// Package ID of the top-level function invoked by a `MoveCall` command that triggered this
     /// event to be emitted.
-    #[prost(message, optional, tag = "1")]
-    pub package_id: ::core::option::Option<ObjectId>,
+    #[prost(string, optional, tag = "1")]
+    pub package_id: ::core::option::Option<::prost::alloc::string::String>,
     /// Module name of the top-level function invoked by a `MoveCall` command that triggered this
     /// event to be emitted.
     #[prost(message, optional, tag = "2")]
@@ -247,8 +237,8 @@ pub struct Event {
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct ObjectReference {
     /// The object ID of this object.
-    #[prost(message, optional, tag = "1")]
-    pub object_id: ::core::option::Option<ObjectId>,
+    #[prost(string, optional, tag = "1")]
+    pub object_id: ::core::option::Option<::prost::alloc::string::String>,
     /// The version of this object.
     #[prost(uint64, optional, tag = "2")]
     pub version: ::core::option::Option<u64>,
@@ -260,8 +250,8 @@ pub struct ObjectReference {
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct MovePackage {
     /// Address or ID of this package.
-    #[prost(message, optional, tag = "1")]
-    pub id: ::core::option::Option<ObjectId>,
+    #[prost(string, optional, tag = "1")]
+    pub id: ::core::option::Option<::prost::alloc::string::String>,
     /// Version of the package.
     #[prost(uint64, optional, tag = "2")]
     pub version: ::core::option::Option<u64>,
@@ -294,18 +284,18 @@ pub struct TypeOrigin {
     pub module_name: ::core::option::Option<Identifier>,
     #[prost(message, optional, tag = "2")]
     pub struct_name: ::core::option::Option<Identifier>,
-    #[prost(message, optional, tag = "3")]
-    pub package_id: ::core::option::Option<ObjectId>,
+    #[prost(string, optional, tag = "3")]
+    pub package_id: ::core::option::Option<::prost::alloc::string::String>,
 }
 /// / Upgraded package info for the linkage table.
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct UpgradeInfo {
     /// ID of the original package.
-    #[prost(message, optional, tag = "1")]
-    pub original_id: ::core::option::Option<ObjectId>,
+    #[prost(string, optional, tag = "1")]
+    pub original_id: ::core::option::Option<::prost::alloc::string::String>,
     /// ID of the upgraded package.
-    #[prost(message, optional, tag = "2")]
-    pub upgraded_id: ::core::option::Option<ObjectId>,
+    #[prost(string, optional, tag = "2")]
+    pub upgraded_id: ::core::option::Option<::prost::alloc::string::String>,
     /// Version of the upgraded package.
     #[prost(uint64, optional, tag = "3")]
     pub upgraded_version: ::core::option::Option<u64>,
@@ -324,8 +314,8 @@ pub mod owner {
         #[prost(string, tag = "1")]
         Address(::prost::alloc::string::String),
         /// Object is exclusively owned by a single object, and is mutable.
-        #[prost(message, tag = "2")]
-        Object(super::ObjectId),
+        #[prost(string, tag = "2")]
+        Object(::prost::alloc::string::String),
         /// Object is shared, can be used by any address, and is mutable.
         #[prost(uint64, tag = "3")]
         Shared(u64),
@@ -338,8 +328,8 @@ pub mod owner {
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct MoveStruct {
     /// `ObjectId` for this object.
-    #[prost(message, optional, tag = "1")]
-    pub object_id: ::core::option::Option<ObjectId>,
+    #[prost(string, optional, tag = "1")]
+    pub object_id: ::core::option::Option<::prost::alloc::string::String>,
     /// The type of this object.
     #[prost(message, optional, tag = "2")]
     pub object_type: ::core::option::Option<StructTag>,
@@ -358,8 +348,8 @@ pub struct MoveStruct {
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct Object {
     /// `ObjectId` for this object.
-    #[prost(message, optional, tag = "1")]
-    pub object_id: ::core::option::Option<ObjectId>,
+    #[prost(string, optional, tag = "1")]
+    pub object_id: ::core::option::Option<::prost::alloc::string::String>,
     /// Version of the object.
     #[prost(uint64, optional, tag = "2")]
     pub version: ::core::option::Option<u64>,
@@ -396,8 +386,8 @@ pub mod object_data {
 /// An object part of the initial chain state.
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct GenesisObject {
-    #[prost(message, optional, tag = "1")]
-    pub object_id: ::core::option::Option<ObjectId>,
+    #[prost(string, optional, tag = "1")]
+    pub object_id: ::core::option::Option<::prost::alloc::string::String>,
     #[prost(uint64, optional, tag = "2")]
     pub version: ::core::option::Option<u64>,
     #[prost(message, optional, tag = "3")]
@@ -750,8 +740,8 @@ pub mod input {
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct SharedObjectInput {
     /// `ObjectId` of the shared object.
-    #[prost(message, optional, tag = "1")]
-    pub object_id: ::core::option::Option<ObjectId>,
+    #[prost(string, optional, tag = "1")]
+    pub object_id: ::core::option::Option<::prost::alloc::string::String>,
     /// Initial version of the object when it was shared.
     #[prost(uint64, optional, tag = "2")]
     pub initial_shared_version: ::core::option::Option<u64>,
@@ -813,8 +803,8 @@ pub mod command {
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct MoveCall {
     /// The package containing the module and function.
-    #[prost(message, optional, tag = "1")]
-    pub package: ::core::option::Option<ObjectId>,
+    #[prost(string, optional, tag = "1")]
+    pub package: ::core::option::Option<::prost::alloc::string::String>,
     /// The specific module in the package containing the function.
     #[prost(message, optional, tag = "2")]
     pub module: ::core::option::Option<Identifier>,
@@ -867,8 +857,8 @@ pub struct Publish {
     #[prost(bytes = "bytes", repeated, tag = "1")]
     pub modules: ::prost::alloc::vec::Vec<::prost::bytes::Bytes>,
     /// Set of packages that the to-be published package depends on.
-    #[prost(message, repeated, tag = "2")]
-    pub dependencies: ::prost::alloc::vec::Vec<ObjectId>,
+    #[prost(string, repeated, tag = "2")]
+    pub dependencies: ::prost::alloc::vec::Vec<::prost::alloc::string::String>,
 }
 /// Command to build a Move vector out of a set of individual elements.
 #[derive(Clone, PartialEq, ::prost::Message)]
@@ -890,11 +880,11 @@ pub struct Upgrade {
     #[prost(bytes = "bytes", repeated, tag = "1")]
     pub modules: ::prost::alloc::vec::Vec<::prost::bytes::Bytes>,
     /// Set of packages that the to-be published package depends on.
-    #[prost(message, repeated, tag = "2")]
-    pub dependencies: ::prost::alloc::vec::Vec<ObjectId>,
+    #[prost(string, repeated, tag = "2")]
+    pub dependencies: ::prost::alloc::vec::Vec<::prost::alloc::string::String>,
     /// Package ID of the package to upgrade.
-    #[prost(message, optional, tag = "3")]
-    pub package: ::core::option::Option<ObjectId>,
+    #[prost(string, optional, tag = "3")]
+    pub package: ::core::option::Option<::prost::alloc::string::String>,
     /// Ticket authorizing the upgrade.
     #[prost(message, optional, tag = "4")]
     pub ticket: ::core::option::Option<Argument>,
@@ -978,8 +968,8 @@ pub struct SystemPackage {
     #[prost(bytes = "bytes", repeated, tag = "2")]
     pub modules: ::prost::alloc::vec::Vec<::prost::bytes::Bytes>,
     /// Package dependencies.
-    #[prost(message, repeated, tag = "3")]
-    pub dependencies: ::prost::alloc::vec::Vec<ObjectId>,
+    #[prost(string, repeated, tag = "3")]
+    pub dependencies: ::prost::alloc::vec::Vec<::prost::alloc::string::String>,
 }
 /// The genesis transaction.
 #[derive(Clone, PartialEq, ::prost::Message)]
@@ -1037,8 +1027,8 @@ pub struct ConsensusCommitPrologue {
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct VersionAssignment {
     /// `ObjectId` of the object.
-    #[prost(message, optional, tag = "1")]
-    pub object_id: ::core::option::Option<ObjectId>,
+    #[prost(string, optional, tag = "1")]
+    pub object_id: ::core::option::Option<::prost::alloc::string::String>,
     /// Assigned version.
     #[prost(uint64, optional, tag = "2")]
     pub version: ::core::option::Option<u64>,
@@ -1270,8 +1260,8 @@ pub struct ObjectReferenceWithOwner {
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct ModifiedAtVersion {
     /// `ObjectId` of the object.
-    #[prost(message, optional, tag = "1")]
-    pub object_id: ::core::option::Option<ObjectId>,
+    #[prost(string, optional, tag = "1")]
+    pub object_id: ::core::option::Option<::prost::alloc::string::String>,
     /// Version of the object prior to this transaction.
     #[prost(uint64, optional, tag = "2")]
     pub version: ::core::option::Option<u64>,
@@ -1325,8 +1315,8 @@ pub struct TransactionEffectsV2 {
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct ChangedObject {
     /// ID of the object.
-    #[prost(message, optional, tag = "1")]
-    pub object_id: ::core::option::Option<ObjectId>,
+    #[prost(string, optional, tag = "1")]
+    pub object_id: ::core::option::Option<::prost::alloc::string::String>,
     /// State of the object in the store prior to this transaction.
     #[prost(oneof = "changed_object::InputState", tags = "2, 3")]
     pub input_state: ::core::option::Option<changed_object::InputState>,
@@ -1410,8 +1400,8 @@ pub struct PackageWrite {
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct UnchangedSharedObject {
     /// ObjectId of the shared object.
-    #[prost(message, optional, tag = "1")]
-    pub object_id: ::core::option::Option<ObjectId>,
+    #[prost(string, optional, tag = "1")]
+    pub object_id: ::core::option::Option<::prost::alloc::string::String>,
     #[prost(oneof = "unchanged_shared_object::Kind", tags = "2, 3, 4, 5, 6")]
     pub kind: ::core::option::Option<unchanged_shared_object::Kind>,
 }
@@ -1512,8 +1502,8 @@ pub mod failure_status {
         #[prost(message, tag = "7")]
         PackageTooBig(super::SizeError),
         /// Circular object ownership.
-        #[prost(message, tag = "8")]
-        CircularObjectOwnership(super::ObjectId),
+        #[prost(string, tag = "8")]
+        CircularObjectOwnership(::prost::alloc::string::String),
         ///
         /// Coin errors.
         ///
@@ -1645,15 +1635,15 @@ pub struct AddressDeniedForCoinError {
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct CongestedObjectsError {
     /// Set of congested objects.
-    #[prost(message, repeated, tag = "1")]
-    pub congested_objects: ::prost::alloc::vec::Vec<ObjectId>,
+    #[prost(string, repeated, tag = "1")]
+    pub congested_objects: ::prost::alloc::vec::Vec<::prost::alloc::string::String>,
 }
 /// / Location in Move bytecode where an error occurred.s
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct MoveLocation {
     /// The package ID.
-    #[prost(message, optional, tag = "1")]
-    pub package: ::core::option::Option<ObjectId>,
+    #[prost(string, optional, tag = "1")]
+    pub package: ::core::option::Option<::prost::alloc::string::String>,
     /// The module name.
     #[prost(message, optional, tag = "2")]
     pub module: ::core::option::Option<Identifier>,
@@ -1739,11 +1729,11 @@ pub mod package_upgrade_error {
     #[derive(Clone, PartialEq, ::prost::Oneof)]
     pub enum Kind {
         /// Unable to fetch package.
-        #[prost(message, tag = "2")]
-        UnableToFetchPackage(super::ObjectId),
+        #[prost(string, tag = "2")]
+        UnableToFetchPackage(::prost::alloc::string::String),
         /// Object is not a package.
-        #[prost(message, tag = "3")]
-        NotAPackage(super::ObjectId),
+        #[prost(string, tag = "3")]
+        NotAPackage(::prost::alloc::string::String),
         /// Package upgrade is incompatible with previous version.
         #[prost(message, tag = "4")]
         IncompatibleUpgrade(()),
@@ -1762,11 +1752,11 @@ pub mod package_upgrade_error {
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct PackageIdDoesNotMatch {
     /// The package ID.
-    #[prost(message, optional, tag = "1")]
-    pub package_id: ::core::option::Option<ObjectId>,
+    #[prost(string, optional, tag = "1")]
+    pub package_id: ::core::option::Option<::prost::alloc::string::String>,
     /// The ticket ID.
-    #[prost(message, optional, tag = "2")]
-    pub ticket_id: ::core::option::Option<ObjectId>,
+    #[prost(string, optional, tag = "2")]
+    pub ticket_id: ::core::option::Option<::prost::alloc::string::String>,
 }
 /// Type argument error.
 #[derive(Clone, Copy, PartialEq, ::prost::Message)]

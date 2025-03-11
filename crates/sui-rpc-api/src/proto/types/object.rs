@@ -9,7 +9,7 @@ impl From<sui_sdk_types::ObjectReference> for super::ObjectReference {
     fn from(value: sui_sdk_types::ObjectReference) -> Self {
         let (object_id, version, digest) = value.into_parts();
         Self {
-            object_id: Some(object_id.into()),
+            object_id: Some(object_id.to_string()),
             version: Some(version),
             digest: Some(digest.into()),
         }
@@ -24,7 +24,8 @@ impl TryFrom<&super::ObjectReference> for sui_sdk_types::ObjectReference {
             .object_id
             .as_ref()
             .ok_or_else(|| TryFromProtoError::missing("object_id"))?
-            .try_into()?;
+            .parse()
+            .map_err(TryFromProtoError::from_error)?;
 
         let version = value
             .version
@@ -47,7 +48,7 @@ impl TryFrom<&super::ObjectReference> for sui_sdk_types::ObjectReference {
 impl From<sui_sdk_types::Object> for super::Object {
     fn from(value: sui_sdk_types::Object) -> Self {
         Self {
-            object_id: Some(value.object_id().into()),
+            object_id: Some(value.object_id().to_string()),
             version: Some(value.version()),
             owner: Some(value.owner().to_owned().into()),
             object: Some(value.data().to_owned().into()),
@@ -101,7 +102,7 @@ impl From<sui_sdk_types::Owner> for super::Owner {
 
         let kind = match value {
             Address(address) => Kind::Address(address.to_string()),
-            Object(object) => Kind::Object(object.into()),
+            Object(object) => Kind::Object(object.to_string()),
             Shared(version) => Kind::Shared(version),
             Immutable => Kind::Immutable(()),
         };
@@ -124,7 +125,7 @@ impl TryFrom<&super::Owner> for sui_sdk_types::Owner {
             Address(address) => {
                 Self::Address(address.parse().map_err(TryFromProtoError::from_error)?)
             }
-            Object(object) => Self::Object(object.try_into()?),
+            Object(object) => Self::Object(object.parse().map_err(TryFromProtoError::from_error)?),
             Shared(version) => Self::Shared(*version),
             Immutable(()) => Self::Immutable,
         }
@@ -175,7 +176,7 @@ impl TryFrom<&super::ObjectData> for sui_sdk_types::ObjectData {
 impl From<sui_sdk_types::MoveStruct> for super::MoveStruct {
     fn from(value: sui_sdk_types::MoveStruct) -> Self {
         Self {
-            object_id: Some(value.object_id().into()),
+            object_id: Some(value.object_id().to_string()),
             object_type: Some(value.object_type().to_owned().into()),
             has_public_transfer: Some(value.has_public_transfer()),
             version: Some(value.version()),
@@ -247,8 +248,8 @@ impl From<sui_sdk_types::MovePackage> for super::MovePackage {
                     },
                 )| {
                     super::UpgradeInfo {
-                        original_id: Some(original_id.into()),
-                        upgraded_id: Some(upgraded_id.into()),
+                        original_id: Some(original_id.to_string()),
+                        upgraded_id: Some(upgraded_id.to_string()),
                         upgraded_version: Some(upgraded_version),
                     }
                 },
@@ -256,7 +257,7 @@ impl From<sui_sdk_types::MovePackage> for super::MovePackage {
             .collect();
 
         Self {
-            id: Some(value.id.into()),
+            id: Some(value.id.to_string()),
             version: Some(value.version),
             modules,
             type_origin_table,
@@ -273,7 +274,8 @@ impl TryFrom<&super::MovePackage> for sui_sdk_types::MovePackage {
             .id
             .as_ref()
             .ok_or_else(|| TryFromProtoError::missing("id"))?
-            .try_into()?;
+            .parse()
+            .map_err(TryFromProtoError::from_error)?;
 
         let modules = value
             .modules
@@ -309,13 +311,15 @@ impl TryFrom<&super::MovePackage> for sui_sdk_types::MovePackage {
                     .original_id
                     .as_ref()
                     .ok_or_else(|| TryFromProtoError::missing("original_id"))?
-                    .try_into()?;
+                    .parse()
+                    .map_err(TryFromProtoError::from_error)?;
 
                 let upgraded_id = upgrade_info
                     .upgraded_id
                     .as_ref()
                     .ok_or_else(|| TryFromProtoError::missing("upgraded_id"))?
-                    .try_into()?;
+                    .parse()
+                    .map_err(TryFromProtoError::from_error)?;
                 let upgraded_version = upgrade_info
                     .upgraded_version
                     .ok_or_else(|| TryFromProtoError::missing("upgraded_version"))?;
@@ -353,7 +357,7 @@ impl From<sui_sdk_types::TypeOrigin> for super::TypeOrigin {
         Self {
             module_name: Some(value.module_name.into()),
             struct_name: Some(value.struct_name.into()),
-            package_id: Some(value.package.into()),
+            package_id: Some(value.package.to_string()),
         }
     }
 }
@@ -378,7 +382,8 @@ impl TryFrom<&super::TypeOrigin> for sui_sdk_types::TypeOrigin {
             .package_id
             .as_ref()
             .ok_or_else(|| TryFromProtoError::missing("package_id"))?
-            .try_into()?;
+            .parse()
+            .map_err(TryFromProtoError::from_error)?;
 
         Ok(Self {
             module_name,
@@ -395,7 +400,7 @@ impl TryFrom<&super::TypeOrigin> for sui_sdk_types::TypeOrigin {
 impl From<sui_sdk_types::GenesisObject> for super::GenesisObject {
     fn from(value: sui_sdk_types::GenesisObject) -> Self {
         Self {
-            object_id: Some(value.object_id().into()),
+            object_id: Some(value.object_id().to_string()),
             version: Some(value.version()),
             owner: Some(value.owner().to_owned().into()),
             object: Some(value.data().to_owned().into()),

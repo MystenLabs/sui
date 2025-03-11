@@ -197,7 +197,7 @@ message GetTransactionResponse {
 // Request message for `NodeService.GetObject`.
 message GetObjectRequest {
   // Required. The `ObjectId` of the requested object.
-  optional sui.types.ObjectId object_id = 1;
+  optional string object_id = 1;
 
   // Request a specific version of the object.
   // If no version is specified, and the object is live, then the latest
@@ -212,7 +212,7 @@ message GetObjectRequest {
 // Response message for `NodeService.GetObject`.
 message GetObjectResponse {
   // The `ObjectId` of this object.
-  optional sui.types.ObjectId object_id = 1;
+  optional string object_id = 1;
 
   // The version of this object.
   optional uint64 version = 2;
@@ -367,7 +367,7 @@ message FullCheckpointTransaction {
 // An object used by or produced from a transaction.
 message FullCheckpointObject {
   // The `ObjectId` of this object.
-  optional sui.types.ObjectId object_id = 1;
+  optional string object_id = 1;
 
   // The version of this object.
   optional uint64 version = 2;

@@ -322,7 +322,7 @@ fn object_to_object_response(
 ) -> Result<FullCheckpointObject> {
     let object_id = read_mask
         .contains("object_id")
-        .then(|| sui_sdk_types::ObjectId::from(object.id()).into());
+        .then(|| sui_sdk_types::ObjectId::from(object.id()).to_string());
     let version = read_mask
         .contains("version")
         .then(|| object.version().value());

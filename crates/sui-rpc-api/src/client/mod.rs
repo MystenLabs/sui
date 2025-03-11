@@ -165,7 +165,7 @@ impl Client {
         version: Option<u64>,
     ) -> Result<Object> {
         let request = crate::proto::node::v2::GetObjectRequest {
-            object_id: Some(sui_sdk_types::ObjectId::from(object_id).into()),
+            object_id: Some(object_id.to_string()),
             version,
             read_mask: FieldMask::from_paths(["object_bcs"]).pipe(Some),
         };

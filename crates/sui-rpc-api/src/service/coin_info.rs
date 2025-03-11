@@ -66,7 +66,7 @@ impl RpcService {
                 )
             })?
             .map(|value| CoinMetadata {
-                id: Some(ObjectId::from(value.id.id.bytes).into()),
+                id: Some(ObjectId::from(value.id.id.bytes).to_string()),
                 decimals: Some(value.decimals.into()),
                 name: Some(value.name),
                 symbol: Some(value.symbol),
@@ -90,7 +90,7 @@ impl RpcService {
                 )
             })?
             .map(|treasury| CoinTreasury {
-                id: Some(ObjectId::from(treasury.id.id.bytes).into()),
+                id: Some(ObjectId::from(treasury.id.id.bytes).to_string()),
                 total_supply: Some(treasury.total_supply.value),
             })
         } else if sui_types::gas_coin::GAS::is_gas(&core_coin_type) {

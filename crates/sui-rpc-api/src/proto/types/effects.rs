@@ -313,7 +313,7 @@ impl TryFrom<&super::TransactionEffectsV2> for sui_sdk_types::TransactionEffects
 impl From<sui_sdk_types::ModifiedAtVersion> for super::ModifiedAtVersion {
     fn from(value: sui_sdk_types::ModifiedAtVersion) -> Self {
         Self {
-            object_id: Some(value.object_id.into()),
+            object_id: Some(value.object_id.to_string()),
             version: Some(value.version),
         }
     }
@@ -327,7 +327,8 @@ impl TryFrom<&super::ModifiedAtVersion> for sui_sdk_types::ModifiedAtVersion {
             .object_id
             .as_ref()
             .ok_or_else(|| TryFromProtoError::missing("object_id"))?
-            .try_into()?;
+            .parse()
+            .map_err(TryFromProtoError::from_error)?;
         let version = value
             .version
             .ok_or_else(|| TryFromProtoError::missing("version"))?;
@@ -376,7 +377,7 @@ impl TryFrom<&super::ObjectReferenceWithOwner> for sui_sdk_types::ObjectReferenc
 impl From<sui_sdk_types::ChangedObject> for super::ChangedObject {
     fn from(value: sui_sdk_types::ChangedObject) -> Self {
         Self {
-            object_id: Some(value.object_id.into()),
+            object_id: Some(value.object_id.to_string()),
             input_state: Some(value.input_state.into()),
             output_state: Some(value.output_state.into()),
             id_operation: Some(value.id_operation.into()),
@@ -392,7 +393,8 @@ impl TryFrom<&super::ChangedObject> for sui_sdk_types::ChangedObject {
             .object_id
             .as_ref()
             .ok_or_else(|| TryFromProtoError::missing("object_id"))?
-            .try_into()?;
+            .parse()
+            .map_err(TryFromProtoError::from_error)?;
 
         let input_state = value
             .input_state
@@ -560,7 +562,7 @@ impl TryFrom<&super::changed_object::IdOperation> for sui_sdk_types::IdOperation
 impl From<sui_sdk_types::UnchangedSharedObject> for super::UnchangedSharedObject {
     fn from(value: sui_sdk_types::UnchangedSharedObject) -> Self {
         Self {
-            object_id: Some(value.object_id.into()),
+            object_id: Some(value.object_id.to_string()),
             kind: Some(value.kind.into()),
         }
     }
@@ -574,7 +576,8 @@ impl TryFrom<&super::UnchangedSharedObject> for sui_sdk_types::UnchangedSharedOb
             .object_id
             .as_ref()
             .ok_or_else(|| TryFromProtoError::missing("object_id"))?
-            .try_into()?;
+            .parse()
+            .map_err(TryFromProtoError::from_error)?;
 
         let kind = value
             .kind

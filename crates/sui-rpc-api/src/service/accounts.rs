@@ -105,7 +105,7 @@ impl AccountOwnedObjectInfo {
     fn into_proto(self) -> AccountObject {
         AccountObject {
             owner: Some(self.owner.to_string()),
-            object_id: Some(self.object_id.into()),
+            object_id: Some(self.object_id.to_string()),
             version: Some(self.version),
             object_type: Some(self.type_.into()),
         }

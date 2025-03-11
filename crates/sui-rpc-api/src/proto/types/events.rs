@@ -7,7 +7,7 @@ use super::TryFromProtoError;
 impl From<sui_sdk_types::Event> for super::Event {
     fn from(value: sui_sdk_types::Event) -> Self {
         Self {
-            package_id: Some(value.package_id.into()),
+            package_id: Some(value.package_id.to_string()),
             module: Some(value.module.into()),
             sender: Some(value.sender.to_string()),
             event_type: Some(value.type_.into()),
@@ -24,7 +24,8 @@ impl TryFrom<&super::Event> for sui_sdk_types::Event {
             .package_id
             .as_ref()
             .ok_or_else(|| TryFromProtoError::missing("package_id"))?
-            .try_into()?;
+            .parse()
+            .map_err(TryFromProtoError::from_error)?;
 
         let module = value
             .module

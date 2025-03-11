@@ -541,7 +541,7 @@ impl TryFrom<&super::CancelledTransaction> for sui_sdk_types::CancelledTransacti
 impl From<sui_sdk_types::VersionAssignment> for super::VersionAssignment {
     fn from(value: sui_sdk_types::VersionAssignment) -> Self {
         Self {
-            object_id: Some(value.object_id.into()),
+            object_id: Some(value.object_id.to_string()),
             version: Some(value.version),
         }
     }
@@ -555,7 +555,8 @@ impl TryFrom<&super::VersionAssignment> for sui_sdk_types::VersionAssignment {
             .object_id
             .as_ref()
             .ok_or_else(|| TryFromProtoError::missing("object_id"))?
-            .try_into()?;
+            .parse()
+            .map_err(TryFromProtoError::from_error)?;
         let version = value
             .version
             .ok_or_else(|| TryFromProtoError::missing("version"))?;
@@ -863,7 +864,7 @@ impl From<sui_sdk_types::SystemPackage> for super::SystemPackage {
         Self {
             version: Some(value.version),
             modules: value.modules.into_iter().map(Into::into).collect(),
-            dependencies: value.dependencies.into_iter().map(Into::into).collect(),
+            dependencies: value.dependencies.iter().map(ToString::to_string).collect(),
         }
     }
 }
@@ -880,8 +881,9 @@ impl TryFrom<&super::SystemPackage> for sui_sdk_types::SystemPackage {
             dependencies: value
                 .dependencies
                 .iter()
-                .map(TryInto::try_into)
-                .collect::<Result<_, _>>()?,
+                .map(|s| s.parse())
+                .collect::<Result<_, _>>()
+                .map_err(TryFromProtoError::from_error)?,
         })
     }
 }
@@ -1025,7 +1027,7 @@ impl From<sui_sdk_types::Input> for super::Input {
                 initial_shared_version,
                 mutable,
             } => Kind::Shared(super::SharedObjectInput {
-                object_id: Some(object_id.into()),
+                object_id: Some(object_id.to_string()),
                 initial_shared_version: Some(initial_shared_version),
                 mutable: Some(mutable),
             }),
@@ -1056,7 +1058,8 @@ impl TryFrom<&super::Input> for sui_sdk_types::Input {
                     .object_id
                     .as_ref()
                     .ok_or_else(|| TryFromProtoError::missing("object_id"))?
-                    .try_into()?;
+                    .parse()
+                    .map_err(TryFromProtoError::from_error)?;
                 Self::Shared {
                     object_id,
                     initial_shared_version: shared
@@ -1182,7 +1185,7 @@ impl TryFrom<&super::Command> for sui_sdk_types::Command {
 impl From<sui_sdk_types::MoveCall> for super::MoveCall {
     fn from(value: sui_sdk_types::MoveCall) -> Self {
         Self {
-            package: Some(value.package.into()),
+            package: Some(value.package.to_string()),
             module: Some(value.module.into()),
             function: Some(value.function.into()),
             type_arguments: value.type_arguments.into_iter().map(Into::into).collect(),
@@ -1199,7 +1202,8 @@ impl TryFrom<&super::MoveCall> for sui_sdk_types::MoveCall {
             .package
             .as_ref()
             .ok_or_else(|| TryFromProtoError::missing("package"))?
-            .try_into()?;
+            .parse()
+            .map_err(TryFromProtoError::from_error)?;
 
         let module = value
             .module
@@ -1344,7 +1348,7 @@ impl From<sui_sdk_types::Publish> for super::Publish {
     fn from(value: sui_sdk_types::Publish) -> Self {
         Self {
             modules: value.modules.into_iter().map(Into::into).collect(),
-            dependencies: value.dependencies.into_iter().map(Into::into).collect(),
+            dependencies: value.dependencies.iter().map(ToString::to_string).collect(),
         }
     }
 }
@@ -1358,8 +1362,9 @@ impl TryFrom<&super::Publish> for sui_sdk_types::Publish {
         let dependencies = value
             .dependencies
             .iter()
-            .map(TryInto::try_into)
-            .collect::<Result<_, _>>()?;
+            .map(|s| s.parse())
+            .collect::<Result<_, _>>()
+            .map_err(TryFromProtoError::from_error)?;
 
         Ok(Self {
             modules,
@@ -1412,8 +1417,8 @@ impl From<sui_sdk_types::Upgrade> for super::Upgrade {
     fn from(value: sui_sdk_types::Upgrade) -> Self {
         Self {
             modules: value.modules.into_iter().map(Into::into).collect(),
-            dependencies: value.dependencies.into_iter().map(Into::into).collect(),
-            package: Some(value.package.into()),
+            dependencies: value.dependencies.iter().map(ToString::to_string).collect(),
+            package: Some(value.package.to_string()),
             ticket: Some(value.ticket.into()),
         }
     }
@@ -1428,14 +1433,16 @@ impl TryFrom<&super::Upgrade> for sui_sdk_types::Upgrade {
         let dependencies = value
             .dependencies
             .iter()
-            .map(TryInto::try_into)
-            .collect::<Result<_, _>>()?;
+            .map(|s| s.parse())
+            .collect::<Result<_, _>>()
+            .map_err(TryFromProtoError::from_error)?;
 
         let package = value
             .package
             .as_ref()
             .ok_or_else(|| TryFromProtoError::missing("package"))?
-            .try_into()?;
+            .parse()
+            .map_err(TryFromProtoError::from_error)?;
 
         let ticket = value
             .ticket

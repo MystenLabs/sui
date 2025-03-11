@@ -59,7 +59,7 @@ message GetCoinInfoResponse {
 // Metadata for a coin type
 message CoinMetadata {
   // ObjectId of the `0x2::coin::CoinMetadata` object.
-  optional sui.types.ObjectId id = 1;
+  optional string id = 1;
   // Number of decimal places to coin uses.
   optional uint32 decimals = 2;
   // Name for the token
@@ -75,7 +75,7 @@ message CoinMetadata {
 // Information about a coin type's `0x2::coin::TreasuryCap` and its total available supply
 message CoinTreasury {
   // ObjectId of the `0x2::coin::TreasuryCap` object.
-  optional sui.types.ObjectId id = 1;
+  optional string id = 1;
   // Total available supply for this coin type.
   optional uint64 total_supply = 2;
 }
@@ -83,17 +83,17 @@ message CoinTreasury {
 // Information about a regulated coin, which indicates that it makes use of the transfer deny list.
 message RegulatedCoinMetadata {
   // ObjectId of the `0x2::coin::RegulatedCoinMetadata` object.
-  optional sui.types.ObjectId id = 1;
+  optional string id = 1;
   // The ID of the coin's `CoinMetadata` object.
-  optional sui.types.ObjectId coin_metadata_object = 2;
+  optional string coin_metadata_object = 2;
   // The ID of the coin's `DenyCap` object.
-  optional sui.types.ObjectId deny_cap_object = 3;
+  optional string deny_cap_object = 3;
 }
 
 // Request message for `NodeService.ListDynamicFields`
 message ListDynamicFieldsRequest {
   // Required. The `UID` of the parent, which owns the collections of dynamic fields.
-  optional sui.types.ObjectId parent = 1;
+  optional string parent = 1;
 
   // The maximum number of dynamic fields to return. The service may return fewer than this value.
   // If unspecified, at most `50` entries will be returned.
@@ -120,10 +120,10 @@ message ListDynamicFieldsResponse {
 
 message DynamicField {
   // Required. ObjectId of this dynamic field's parent.
-  optional sui.types.ObjectId parent = 1;
+  optional string parent = 1;
 
   // Required. ObjectId of this dynamic field.
-  optional sui.types.ObjectId field_id = 2;
+  optional string field_id = 2;
 
   // Required. The type of the dynamic field "name"
   optional sui.types.TypeTag name_type = 3;
@@ -136,7 +136,7 @@ message DynamicField {
   //
   // The presence or absence of this field can be used to determine if a child
   // is a dynamic field or a dynamic child object
-  optional sui.types.ObjectId dynamic_object_id = 5;
+  optional string dynamic_object_id = 5;
 }
 
 message GetProtocolConfigRequest {
@@ -212,7 +212,7 @@ message ListAccountObjectsResponse {
 
 message AccountObject {
   optional string owner = 1;
-  optional sui.types.ObjectId object_id = 2;
+  optional string object_id = 2;
   optional uint64 version = 3;
   optional sui.types.StructTag object_type = 4;
 }

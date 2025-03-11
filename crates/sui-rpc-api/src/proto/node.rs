@@ -92,9 +92,9 @@ impl TryFrom<&BalanceChange> for sui_sdk_types::BalanceChange {
 impl GetObjectRequest {
     pub const READ_MASK_DEFAULT: &str = "object_id,version,digest";
 
-    pub fn new<T: Into<super::types::ObjectId>>(object_id: T) -> Self {
+    pub fn new<T: Into<sui_sdk_types::ObjectId>>(object_id: T) -> Self {
         Self {
-            object_id: Some(object_id.into()),
+            object_id: Some(object_id.into().to_string()),
             version: None,
             read_mask: None,
         }

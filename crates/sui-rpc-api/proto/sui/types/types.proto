@@ -25,26 +25,6 @@ package sui.types;
 
 import "google/protobuf/empty.proto";
 
-// Unique identifier for an account on the Sui blockchain.
-//
-// An `Address` is a 32-byte pseudonymous identifier used to uniquely identify an account and
-// asset-ownership on the Sui blockchain. Often, human-readable addresses are encoded in
-// hexadecimal with a `0x` prefix. For example, this is a valid Sui address:
-// `0x02a212de6a9dfa3a69e22387acfbafbb1a9e591bd9d636e7895dcfc8de05f331`.
-// message Address {
-  // 32-byte address.
-  // optional bytes address = 1;
-// }
-
-// Unique identifier for an object on the Sui blockchain.
-//
-// An `ObjectId` is a 32-byte identifier used to uniquely identify an object on the Sui
-// blockchain.
-message ObjectId {
-  // 32-byte object-id.
-  optional bytes object_id = 1;
-}
-
 // 32-byte output of hashing a Sui structure using the Blake2b256 hash function.
 message Digest {
   // 32-byte hash.
@@ -197,7 +177,7 @@ message TransactionEvents {
 message Event {
   // Package ID of the top-level function invoked by a `MoveCall` command that triggered this
   // event to be emitted.
-  optional ObjectId package_id = 1;
+  optional string package_id = 1;
   // Module name of the top-level function invoked by a `MoveCall` command that triggered this
   // event to be emitted.
   optional Identifier module = 2;
@@ -216,7 +196,7 @@ message Event {
 // Reference to an object.
 message ObjectReference {
   // The object ID of this object.
-  optional ObjectId object_id = 1;
+  optional string object_id = 1;
   // The version of this object.
   optional uint64 version = 2;
   // The digest of this object.
@@ -226,7 +206,7 @@ message ObjectReference {
 // A Move package.
 message MovePackage {
   // Address or ID of this package.
-  optional ObjectId id = 1;
+  optional string id = 1;
   // Version of the package.
   optional uint64 version = 2;
   // Set of modules defined by this package.
@@ -251,15 +231,15 @@ message MoveModule {
 message TypeOrigin {
   optional Identifier module_name = 1;
   optional Identifier struct_name = 2;
-  optional ObjectId package_id = 3;
+  optional string package_id = 3;
 }
 
 /// Upgraded package info for the linkage table.
 message UpgradeInfo {
   // ID of the original package.
-  optional ObjectId original_id = 1;
+  optional string original_id = 1;
   // ID of the upgraded package.
-  optional ObjectId upgraded_id = 2;
+  optional string upgraded_id = 2;
   // Version of the upgraded package.
   optional uint64 upgraded_version = 3;
 }
@@ -270,7 +250,7 @@ message Owner {
     // Object is exclusively owned by a single address, and is mutable.
     string address = 1;
     // Object is exclusively owned by a single object, and is mutable.
-    ObjectId object = 2;
+    string object = 2;
     // Object is shared, can be used by any address, and is mutable.
     uint64 shared = 3;
     // Object is immutable, and hence ownership doesn't matter.
@@ -281,7 +261,7 @@ message Owner {
 // A Move struct.
 message MoveStruct {
   // `ObjectId` for this object.
-  optional ObjectId object_id = 1;
+  optional string object_id = 1;
   // The type of this object.
   optional StructTag object_type = 2;
   // DEPRECATED this field is no longer used to determine whether a tx can transfer this
@@ -296,7 +276,7 @@ message MoveStruct {
 // An object on the Sui blockchain.
 message Object {
   // `ObjectId` for this object.
-  optional ObjectId object_id = 1;
+  optional string object_id = 1;
   // Version of the object.
   optional uint64 version = 2;
   // Owner of the object.
@@ -322,7 +302,7 @@ message ObjectData {
 
 // An object part of the initial chain state.
 message GenesisObject {
-  optional ObjectId object_id = 1;
+  optional string object_id = 1;
   optional uint64 version = 2;
   optional Owner owner = 3;
   optional ObjectData object = 4;
@@ -593,7 +573,7 @@ message Input {
 // A shared object input.
 message SharedObjectInput {
   // `ObjectId` of the shared object.
-  optional ObjectId object_id = 1;
+  optional string object_id = 1;
 
   // Initial version of the object when it was shared.
   optional uint64 initial_shared_version = 2;
@@ -648,7 +628,7 @@ message Command {
 // that is either `entry` or `public` (which don't have a reference return type).
 message MoveCall {
   // The package containing the module and function.
-  optional ObjectId package = 1;
+  optional string package = 1;
   // The specific module in the package containing the function.
   optional Identifier module = 2;
   // The function to be called.
@@ -692,7 +672,7 @@ message Publish {
   repeated bytes modules = 1;
 
   // Set of packages that the to-be published package depends on.
-  repeated ObjectId dependencies = 2;
+  repeated string dependencies = 2;
 }
 
 // Command to build a Move vector out of a set of individual elements.
@@ -712,9 +692,9 @@ message Upgrade {
   // The serialized Move modules.
   repeated bytes modules = 1;
   // Set of packages that the to-be published package depends on.
-  repeated ObjectId dependencies = 2;
+  repeated string dependencies = 2;
   // Package ID of the package to upgrade.
-  optional ObjectId package = 3;
+  optional string package = 3;
   // Ticket authorizing the upgrade.
   optional Argument ticket = 4;
 }
@@ -775,7 +755,7 @@ message SystemPackage {
   // Move modules.
   repeated bytes modules = 2;
   // Package dependencies.
-  repeated ObjectId dependencies = 3;
+  repeated string dependencies = 3;
 }
 
 // The genesis transaction.
@@ -829,7 +809,7 @@ message ConsensusCommitPrologue {
 // Object version assignment from consensus.
 message VersionAssignment {
   // `ObjectId` of the object.
-  optional ObjectId object_id = 1;
+  optional string object_id = 1;
   // Assigned version.
   optional uint64 version = 2;
 }
@@ -1001,7 +981,7 @@ message ObjectReferenceWithOwner {
 // Indicates that an object was modified at a specific version.
 message ModifiedAtVersion {
   // `ObjectId` of the object.
-  optional ObjectId object_id = 1;
+  optional string object_id = 1;
   // Version of the object prior to this transaction.
   optional uint64 version = 2;
 }
@@ -1049,7 +1029,7 @@ message TransactionEffectsV2 {
 /// Input/output state of an object that was changed during execution.
 message ChangedObject {
   // ID of the object.
-  optional ObjectId object_id = 1;
+  optional string object_id = 1;
 
   // State of the object in the store prior to this transaction.
   oneof input_state {
@@ -1106,7 +1086,7 @@ message PackageWrite {
 // A shared object that wasn't changed during execution.
 message UnchangedSharedObject {
   // ObjectId of the shared object.
-  optional ObjectId object_id = 1;
+  optional string object_id = 1;
 
   oneof kind {
     // Read-only shared object from the input.
@@ -1183,7 +1163,7 @@ message FailureStatus {
     // Package is larger than the maximum allowed size.
     SizeError package_too_big = 7;
     // Circular object ownership.
-    ObjectId circular_object_ownership = 8;
+    string circular_object_ownership = 8;
 
     //
     // Coin errors.
@@ -1301,13 +1281,13 @@ message AddressDeniedForCoinError {
 // Set of objects that were congested, leading to the transaction's cancellation.
 message CongestedObjectsError {
   // Set of congested objects.
-  repeated ObjectId congested_objects = 1;
+  repeated string congested_objects = 1;
 }
 
 /// Location in Move bytecode where an error occurred.s
 message MoveLocation {
   // The package ID.
-  optional ObjectId package = 1;
+  optional string package = 1;
   // The module name.
   optional Identifier module = 2;
   // The function index.
@@ -1362,9 +1342,9 @@ message CommandArgumentError {
 message PackageUpgradeError {
   oneof kind {
     // Unable to fetch package.
-    ObjectId unable_to_fetch_package = 2;
+    string unable_to_fetch_package = 2;
     // Object is not a package.
-    ObjectId not_a_package = 3;
+    string not_a_package = 3;
     // Package upgrade is incompatible with previous version.
     google.protobuf.Empty incompatible_upgrade = 4;
     // Digest in upgrade ticket and computed digest differ.
@@ -1379,9 +1359,9 @@ message PackageUpgradeError {
 // Package ID does not match `PackageId` in upgrade ticket.
 message PackageIdDoesNotMatch {
   // The package ID.
-  optional ObjectId package_id = 1;
+  optional string package_id = 1;
   // The ticket ID.
-  optional ObjectId ticket_id = 2;
+  optional string ticket_id = 2;
 }
 
 // Type argument error.

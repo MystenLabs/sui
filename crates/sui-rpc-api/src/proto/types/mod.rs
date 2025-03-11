@@ -30,32 +30,6 @@ mod signatures;
 mod transaction_convert;
 
 //
-// ObjectId
-//
-
-impl From<sui_sdk_types::ObjectId> for ObjectId {
-    fn from(value: sui_sdk_types::ObjectId) -> Self {
-        Self {
-            object_id: Some(value.as_bytes().to_vec().into()),
-        }
-    }
-}
-
-impl TryFrom<&ObjectId> for sui_sdk_types::ObjectId {
-    type Error = TryFromProtoError;
-
-    fn try_from(ObjectId { object_id }: &ObjectId) -> Result<Self, Self::Error> {
-        let object_id = object_id
-            .as_ref()
-            .ok_or_else(|| TryFromProtoError::missing("object_id"))?
-            .as_ref()
-            .try_into()?;
-
-        Ok(Self::new(object_id))
-    }
-}
-
-//
 // Digest
 //
 
