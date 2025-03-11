@@ -30,6 +30,7 @@ use sui_json_rpc_types::{
     SuiArgument, SuiExecutionResult, SuiExecutionStatus, SuiTransactionBlockEffectsAPI, SuiTypeTag,
 };
 use sui_macros::sim_test;
+use sui_move_build::BuildConfig;
 use sui_protocol_config::{Chain, PerObjectCongestionControlMode, ProtocolConfig, ProtocolVersion};
 use sui_types::dynamic_field::DynamicFieldType;
 use sui_types::effects::TransactionEffects;
@@ -1683,14 +1684,18 @@ async fn test_publish_dependent_module_ok() {
     };
 
     let authority = init_state_with_objects(vec![gas_payment_object]).await;
+    let epoch_store = authority.epoch_store_for_testing();
+    let protocol_config = epoch_store.protocol_config();
     let rgp = authority.reference_gas_price_for_testing().unwrap();
+    let gas_price = rgp;
+    let gas_budget = gas_price * TEST_ONLY_GAS_UNIT_FOR_PUBLISH;
     let data = TransactionData::new_module(
         sender,
         gas_payment_object_ref,
         vec![dependent_module_bytes],
         vec![ObjectID::from(*genesis_module.address())],
-        rgp * TEST_ONLY_GAS_UNIT_FOR_PUBLISH,
-        rgp,
+        gas_budget,
+        gas_price,
     );
     let transaction = to_sender_signed_transaction(data, &sender_key);
 
@@ -1698,8 +1703,10 @@ async fn test_publish_dependent_module_ok() {
         &sender,
         transaction.digest(),
         &EpochData::new_test(),
-        rgp,
+        gas_price,
+        gas_budget,
         None,
+        protocol_config,
     )
     .fresh_id();
 
@@ -1722,12 +1729,10 @@ async fn test_publish_module_no_dependencies_ok() {
     let authority = init_state_with_objects(vec![]).await;
     let rgp = authority.reference_gas_price_for_testing().unwrap();
     let gas_payment_object_id = ObjectID::random();
+    let epoch_store = authority.epoch_store_for_testing();
+    let protocol_config = epoch_store.protocol_config();
     // Use the max budget to avoid running out of gas.
-    let gas_balance = {
-        let epoch_store = authority.epoch_store_for_testing();
-        let protocol_config = epoch_store.protocol_config();
-        protocol_config.max_tx_gas()
-    };
+    let gas_balance = protocol_config.max_tx_gas();
     let gas_payment_object =
         Object::with_id_owner_gas_for_testing(gas_payment_object_id, sender, gas_balance);
     let gas_payment_object_ref = gas_payment_object.compute_object_reference();
@@ -1740,21 +1745,25 @@ async fn test_publish_module_no_dependencies_ok() {
         .unwrap();
     let module_bytes = vec![module_bytes];
     let dependencies = vec![]; // no dependencies
+    let gas_price = rgp;
+    let gas_budget = gas_price * TEST_ONLY_GAS_UNIT_FOR_PUBLISH;
     let data = TransactionData::new_module(
         sender,
         gas_payment_object_ref,
         module_bytes,
         dependencies,
-        rgp * TEST_ONLY_GAS_UNIT_FOR_PUBLISH,
-        rgp,
+        gas_budget,
+        gas_price,
     );
     let transaction = to_sender_signed_transaction(data, &sender_key);
     let _module_object_id = TxContext::new(
         &sender,
         transaction.digest(),
         &EpochData::new_test(),
-        rgp,
+        gas_price,
+        gas_budget,
         None,
+        protocol_config,
     )
     .fresh_id();
     let signed_effects = send_and_confirm_transaction(&authority, transaction)
@@ -4059,8 +4068,6 @@ pub async fn init_state_with_ids_and_object_basics<
 }
 
 pub async fn publish_object_basics(state: Arc<AuthorityState>) -> (Arc<AuthorityState>, ObjectRef) {
-    use sui_move_build::BuildConfig;
-
     // add object_basics package object to genesis, since lots of test use it
     let mut path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     path.push("src/unit_tests/data/object_basics");
@@ -4088,8 +4095,6 @@ pub async fn init_state_with_ids_and_object_basics_with_fullnode<
 >(
     objects: I,
 ) -> (Arc<AuthorityState>, Arc<AuthorityState>, ObjectRef) {
-    use sui_move_build::BuildConfig;
-
     let (validator, fullnode) = init_state_validator_with_fullnode().await;
     for (address, object_id) in objects {
         let obj = Object::with_id_owner_for_testing(object_id, address);
@@ -5260,8 +5265,6 @@ async fn test_gas_smashing() {
 
 #[tokio::test]
 async fn test_for_inc_201_dev_inspect() {
-    use sui_move_build::BuildConfig;
-
     let (sender, _sender_key): (_, AccountKeyPair) = get_key_pair();
     let gas_object_id = ObjectID::random();
     let (_, fullnode, _) =
@@ -5305,8 +5308,6 @@ async fn test_for_inc_201_dev_inspect() {
 
 #[tokio::test]
 async fn test_for_inc_201_dry_run() {
-    use sui_move_build::BuildConfig;
-
     let (sender, sender_key): (_, AccountKeyPair) = get_key_pair();
     let gas_object_id = ObjectID::random();
     let (_, fullnode, _) =
@@ -5475,8 +5476,6 @@ async fn test_arity_mismatch() {
 
 #[tokio::test]
 async fn test_publish_transitive_dependencies_ok() {
-    use sui_move_build::BuildConfig;
-
     let (sender, key): (_, AccountKeyPair) = get_key_pair();
     let gas_id = ObjectID::random();
     let state = init_state_with_ids(vec![(sender, gas_id)]).await;
@@ -5648,8 +5647,6 @@ async fn test_publish_transitive_dependencies_ok() {
 
 #[tokio::test]
 async fn test_publish_missing_dependency() {
-    use sui_move_build::BuildConfig;
-
     let (sender, key): (_, AccountKeyPair) = get_key_pair();
     let gas_id = ObjectID::random();
     let state = init_state_with_ids(vec![(sender, gas_id)]).await;
@@ -5697,8 +5694,6 @@ async fn test_publish_missing_dependency() {
 
 #[tokio::test]
 async fn test_publish_missing_transitive_dependency() {
-    use sui_move_build::BuildConfig;
-
     let (sender, key): (_, AccountKeyPair) = get_key_pair();
     let gas_id = ObjectID::random();
     let state = init_state_with_ids(vec![(sender, gas_id)]).await;
@@ -5746,8 +5741,6 @@ async fn test_publish_missing_transitive_dependency() {
 
 #[tokio::test]
 async fn test_publish_not_a_package_dependency() {
-    use sui_move_build::BuildConfig;
-
     let (sender, key): (_, AccountKeyPair) = get_key_pair();
     let gas_id = ObjectID::random();
     let state = init_state_with_ids(vec![(sender, gas_id)]).await;

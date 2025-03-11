@@ -224,6 +224,7 @@ const MAX_PROTOCOL_VERSION: u64 = 77;
 // Version 77: Enable uncompressed point group ops on mainnet.
 //             Enable consensus garbage collection for testnet
 //             Enable the new consensus commit rule for testnet.
+//             Make `TxContext` Move API native
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
 
@@ -640,6 +641,10 @@ struct FeatureFlags {
     // If true, record the additional state digest in the consensus commit prologue.
     #[serde(skip_serializing_if = "is_false")]
     record_additional_state_digest_in_prologue: bool,
+
+    // If true, enable `TxContext` Move API to go native.
+    #[serde(skip_serializing_if = "is_false")]
+    move_native_context: bool,
 }
 
 fn is_false(b: &bool) -> bool {
@@ -1116,6 +1121,15 @@ pub struct ProtocolConfig {
     // TxContext
     // Cost params for the Move native function `transfer_impl<T: key>(obj: T, recipient: address)`
     tx_context_derive_id_cost_base: Option<u64>,
+    tx_context_fresh_id_cost_base: Option<u64>,
+    tx_context_sender_cost_base: Option<u64>,
+    tx_context_epoch_cost_base: Option<u64>,
+    tx_context_epoch_timestamp_ms_cost_base: Option<u64>,
+    tx_context_sponsor_cost_base: Option<u64>,
+    tx_context_gas_price_cost_base: Option<u64>,
+    tx_context_gas_budget_cost_base: Option<u64>,
+    tx_context_ids_created_cost_base: Option<u64>,
+    tx_context_replace_cost_base: Option<u64>,
 
     // Types
     // Cost params for the Move native function `is_one_time_witness<T: drop>(_: &T): bool`
@@ -1842,6 +1856,7 @@ impl ProtocolConfig {
     pub fn consensus_zstd_compression(&self) -> bool {
         self.feature_flags.consensus_zstd_compression
     }
+
     pub fn enable_nitro_attestation(&self) -> bool {
         self.feature_flags.enable_nitro_attestation
     }
@@ -1863,6 +1878,10 @@ impl ProtocolConfig {
 
     pub fn minimize_child_object_mutations(&self) -> bool {
         self.feature_flags.minimize_child_object_mutations
+    }
+
+    pub fn move_native_context(&self) -> bool {
+        self.feature_flags.move_native_context
     }
 }
 
@@ -2156,6 +2175,15 @@ impl ProtocolConfig {
             // `tx_context` module
             // Cost params for the Move native function `transfer_impl<T: key>(obj: T, recipient: address)`
             tx_context_derive_id_cost_base: Some(52),
+            tx_context_fresh_id_cost_base: None,
+            tx_context_sender_cost_base: None,
+            tx_context_epoch_cost_base: None,
+            tx_context_epoch_timestamp_ms_cost_base: None,
+            tx_context_sponsor_cost_base: None,
+            tx_context_gas_price_cost_base: None,
+            tx_context_gas_budget_cost_base: None,
+            tx_context_ids_created_cost_base: None,
+            tx_context_replace_cost_base: None,
 
             // `types` module
             // Cost params for the Move native function `is_one_time_witness<T: drop>(_: &T): bool`
@@ -3330,6 +3358,17 @@ impl ProtocolConfig {
                         cfg.consensus_gc_depth = Some(60);
                         cfg.feature_flags.consensus_linearize_subdag_v2 = true;
                     }
+
+                    cfg.feature_flags.move_native_context = true;
+                    cfg.tx_context_fresh_id_cost_base = Some(52);
+                    cfg.tx_context_sender_cost_base = Some(30);
+                    cfg.tx_context_epoch_cost_base = Some(30);
+                    cfg.tx_context_epoch_timestamp_ms_cost_base = Some(30);
+                    cfg.tx_context_sponsor_cost_base = Some(30);
+                    cfg.tx_context_gas_price_cost_base = Some(30);
+                    cfg.tx_context_gas_budget_cost_base = Some(30);
+                    cfg.tx_context_ids_created_cost_base = Some(30);
+                    cfg.tx_context_replace_cost_base = Some(30);
                 }
                 // Use this template when making changes:
                 //
