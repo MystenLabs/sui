@@ -10,7 +10,7 @@ use crate::{
     verifier_meter::{AccumulatingMeter, Accumulator},
 };
 use std::{
-    collections::{btree_map::Entry, BTreeMap, BTreeSet},
+    collections::{btree_map::Entry, BTreeMap},
     fmt::{Debug, Display, Formatter, Write},
     fs,
     path::{Path, PathBuf},
@@ -72,7 +72,7 @@ use sui_types::{
     gas_coin::GasCoin,
     message_envelope::Envelope,
     metrics::BytecodeVerifierMetrics,
-    move_package::{MovePackage, UpgradeCap},
+    move_package::{MovePackage, UpgradeCap, UpgradeInfo},
     object::Owner,
     parse_sui_type_tag,
     signature::GenericSignature,
@@ -3116,15 +3116,21 @@ async fn check_protocol_version_and_warn(read_api: &ReadApi) -> Result<(), anyho
     Ok(())
 }
 
-/// Fetch move packages based on the provided package IDs.
+/// Fetch move packages
 async fn fetch_move_packages(
     read_api: &ReadApi,
-    package_ids: &[ObjectID],
-    pkg_id_to_name: &BTreeMap<&ObjectID, &Symbol>,
+    immediate_dep_packages: &BTreeMap<Symbol, ObjectID>,
 ) -> Result<Vec<MovePackage>, anyhow::Error> {
+    let package_ids: Vec<_> = immediate_dep_packages.values().cloned().collect();
     let objects = read_api
-        .multi_get_object_with_options(package_ids.to_vec(), SuiObjectDataOptions::bcs_lossless())
+        .multi_get_object_with_options(package_ids, SuiObjectDataOptions::bcs_lossless())
         .await?;
+
+    // a map from id to pkg name for finding package names for error reporting.
+    let pkg_id_to_name: BTreeMap<_, _> = immediate_dep_packages
+        .iter()
+        .map(|(name, id)| (id, name))
+        .collect();
 
     objects
         .into_iter()
@@ -3133,6 +3139,8 @@ async fn fetch_move_packages(
                 SuiObjectResponseError::NotExists { object_id } => {
                     anyhow!(
                         "Package {} with object ID {object_id} does not exist",
+                        // SAFETY it's ok to unwrap because we build the `objects` list from the
+                        // same data where `pkg_id_to_name` is created
                         pkg_id_to_name.get(&object_id).unwrap()
                     )
                 }
@@ -3144,6 +3152,8 @@ async fn fetch_move_packages(
                     anyhow!(
                         "Package {} with object ID {object_id} was deleted at version {version} \
                         with digest {digest}",
+                        // SAFETY it's ok to unwrap because we build the `objects` list from the
+                        // same data where `pkg_id_to_name` is created
                         pkg_id_to_name.get(&object_id).unwrap()
                     )
                 }
@@ -3153,6 +3163,8 @@ async fn fetch_move_packages(
             let Some(SuiRawData::Package(p)) = o.bcs else {
                 bail!(
                     "Expected package {} with object ID {} but got something else",
+                    // SAFETY it's ok to unwrap because we build the `objects` list from the
+                    // same data where `pkg_id_to_name` is created
                     pkg_id_to_name.get(&o.object_id).unwrap(),
                     o.object_id
                 );
@@ -3161,6 +3173,19 @@ async fn fetch_move_packages(
                 .map_err(|e| anyhow!(e))
         })
         .collect()
+}
+
+async fn pkgs_linkage_tables(
+    read_api: &ReadApi,
+    immediate_dep_packages: &BTreeMap<Symbol, ObjectID>,
+) -> Result<BTreeMap<ObjectID, UpgradeInfo>, anyhow::Error> {
+    let pkgs = fetch_move_packages(read_api, immediate_dep_packages).await?;
+    let linkage_table = pkgs
+        .into_iter()
+        .flat_map(|pkg| pkg.linkage_table().clone())
+        .collect();
+
+    Ok(linkage_table)
 }
 
 /// Filter out a package's dependencies which are not referenced in the source code.
@@ -3172,9 +3197,11 @@ pub(crate) async fn pkg_tree_shake(
     // these are packages that are immediate dependencies of the root package
     let immediate_dep_packages =
         compiled_package.find_immediate_deps_pkgs_to_keep(with_unpublished_dependencies)?;
-    let immediate_dep_pkgs_ids = immediate_dep_packages.values().cloned().collect::<Vec<_>>();
 
-    // if there's no lock file, the id will always be the one set in the [addresses] section
+    // for every immediate dependency package, we need to use its linkage table to determine its
+    // transitive dependencies and ensure that we keep the required packages, so fetch those tables
+    let immediate_dep_pkgs_linkage_tables =
+        pkgs_linkage_tables(read_api, &immediate_dep_packages).await?;
     let pkg_name_to_orig_id: BTreeMap<_, _> = compiled_package
         .package
         .deps_compiled_units
@@ -3182,48 +3209,15 @@ pub(crate) async fn pkg_tree_shake(
         .map(|(pkg_name, module)| (*pkg_name, ObjectID::from(module.unit.address.into_inner())))
         .collect();
 
-    // need to find the trans dependencies of the immediate dep_pkgs
-    let pkg_id_to_name: BTreeMap<_, _> = immediate_dep_packages
-        .iter()
-        .map(|(name, id)| (id, name))
-        .collect();
-    let immediate_dep_move_pkgs =
-        fetch_move_packages(read_api, &immediate_dep_pkgs_ids, &pkg_id_to_name).await?;
-    let immediate_dep_pkgs_linkage_tables: BTreeMap<_, _> = immediate_dep_move_pkgs
-        .iter()
-        .flat_map(|pkg| pkg.linkage_table())
-        .collect();
-
-    // for every immediate dep package, we need to use its linkage table to determine its
-    // transitive dependencies and ensure that we keep the required packages
-    let mut pkgs_to_keep: BTreeSet<&Symbol> = BTreeSet::new();
-    let published_pkgs = compiled_package.dependency_ids.published.clone();
-    for (linkage_orig_id, upgrade_info) in &immediate_dep_pkgs_linkage_tables {
-        // orig id
-        for (name, id) in &pkg_name_to_orig_id {
-            if *linkage_orig_id == id {
-                pkgs_to_keep.insert(name);
-            }
-        }
-
-        // for dependencies on pkgs that are upgrades, find the name of the published
-        // package by matching the upgraded package id with the published package id
-        for (name, id) in &published_pkgs {
-            if &upgrade_info.upgraded_id == id {
-                pkgs_to_keep.insert(name);
-            }
-        }
-    }
-
-    // need to also keep the immediate dep packages
-    for pkg in immediate_dep_packages.keys() {
-        pkgs_to_keep.insert(pkg);
-    }
-
-    compiled_package
-        .dependency_ids
-        .published
-        .retain(|pkg, _| pkgs_to_keep.contains(&pkg));
+    // for every published package in the original list of published dependencies, get its original
+    // id and then check if that id exists in the linkage table. If it does, then we need to keep
+    // this package. Similarly, all immediate dep packages must stay
+    compiled_package.dependency_ids.published.retain(|pkg, _| {
+        immediate_dep_packages.contains_key(pkg)
+            || pkg_name_to_orig_id
+                .get(pkg)
+                .is_some_and(|id| immediate_dep_pkgs_linkage_tables.contains_key(id))
+    });
 
     Ok(())
 }
