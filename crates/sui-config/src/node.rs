@@ -837,7 +837,7 @@ impl ExpensiveSafetyCheckConfig {
 }
 
 fn default_checkpoint_execution_max_concurrency() -> usize {
-    40
+    4
 }
 
 fn default_local_execution_timeout_sec() -> u64 {
