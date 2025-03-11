@@ -1464,7 +1464,7 @@ impl<'env> Docgen<'env> {
             // Otherwise we get too many false positives where names are resolved to functions
             // but are actually fields.
             module
-                .member(name)
+                .maybe_member(name)
                 .map(|_member| self.ref_for_module_item(module, name))
         };
         let parts_sym = parts.iter().map(|p| Symbol::from(*p)).collect_vec();

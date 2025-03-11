@@ -130,8 +130,7 @@ pub enum Type {
     U256,
     Address,
     Vector(Box<Type>),
-    Datatype(Box<QualifiedMemberId>),
-    DatatypeInstantiation(Box<(QualifiedMemberId, Vec<Type>)>),
+    Datatype(Box<(QualifiedMemberId, Vec<Type>)>),
     Reference(Box<Type>),
     MutableReference(Box<Type>),
     TypeParameter(TypeParameterIndex),
@@ -267,11 +266,9 @@ impl Constant {
             T::Address => L::Address,
             T::Vector(inner) => L::Vector(Box::new(Self::annotated_constant_layout(inner))),
 
-            T::Datatype(_)
-            | T::DatatypeInstantiation(_)
-            | T::Reference(_)
-            | T::MutableReference(_)
-            | T::TypeParameter(_) => unreachable!("{ty:?} is not supported in constants"),
+            T::Datatype(_) | T::Reference(_) | T::MutableReference(_) | T::TypeParameter(_) => {
+                unreachable!("{ty:?} is not supported in constants")
+            }
         }
     }
 }
@@ -653,34 +650,34 @@ fn make_constant(
 }
 
 fn make_type(module: &CompiledModule, token: &SignatureToken) -> Type {
-    use file_format::SignatureToken::*;
+    use file_format::SignatureToken as S;
     match token {
-        Bool => Type::Bool,
-        U8 => Type::U8,
-        U64 => Type::U64,
-        U128 => Type::U128,
-        Address => Type::Address,
-        Signer => panic!("Signer type is not supported"),
-        Vector(token) => Type::Vector(Box::new(make_type(module, token))),
-        Datatype(handle_idx) => {
+        S::Bool => Type::Bool,
+        S::U8 => Type::U8,
+        S::U64 => Type::U64,
+        S::U128 => Type::U128,
+        S::Address => Type::Address,
+        S::Signer => panic!("Signer type is not supported"),
+        S::Vector(token) => Type::Vector(Box::new(make_type(module, token))),
+        S::Datatype(handle_idx) => {
             let member_id = qualified_member_from_datatype_handle(module, *handle_idx);
-            Type::Datatype(Box::new(member_id))
+            Type::Datatype(Box::new((member_id, vec![])))
         }
-        DatatypeInstantiation(datatype_inst) => {
+        S::DatatypeInstantiation(datatype_inst) => {
             let (handle_idx, tokens) = &**datatype_inst;
             let member_id = qualified_member_from_datatype_handle(module, *handle_idx);
             let types = tokens
                 .iter()
                 .map(|token| make_type(module, token))
                 .collect();
-            Type::DatatypeInstantiation(Box::new((member_id, types)))
+            Type::Datatype(Box::new((member_id, types)))
         }
-        Reference(token) => Type::Reference(Box::new(make_type(module, token))),
-        MutableReference(token) => Type::MutableReference(Box::new(make_type(module, token))),
-        TypeParameter(idx) => Type::TypeParameter(*idx),
-        U16 => Type::U16,
-        U32 => Type::U32,
-        U256 => Type::U256,
+        S::Reference(token) => Type::Reference(Box::new(make_type(module, token))),
+        S::MutableReference(token) => Type::MutableReference(Box::new(make_type(module, token))),
+        S::TypeParameter(idx) => Type::TypeParameter(*idx),
+        S::U16 => Type::U16,
+        S::U32 => Type::U32,
+        S::U256 => Type::U256,
     }
 }
 
@@ -709,147 +706,149 @@ fn make_bytecode(
     jump_tables: &[VariantJumpTable],
     bytecode: &file_format::Bytecode,
 ) -> Bytecode {
-    use file_format::Bytecode::*;
+    use file_format::Bytecode as B;
     match bytecode {
-        Pop => Bytecode::Pop,
-        Ret => Bytecode::Ret,
-        BrTrue(offset) => Bytecode::BrTrue(*offset),
-        BrFalse(offset) => Bytecode::BrFalse(*offset),
-        Branch(offset) => Bytecode::Branch(*offset),
-        LdU8(val) => Bytecode::LdU8(*val),
-        LdU64(val) => Bytecode::LdU64(*val),
-        LdU128(val) => Bytecode::LdU128(val.clone()),
-        CastU8 => Bytecode::CastU8,
-        CastU64 => Bytecode::CastU64,
-        CastU128 => Bytecode::CastU128,
-        LdConst(idx) => Bytecode::LdConst(*idx),
-        LdTrue => Bytecode::LdTrue,
-        LdFalse => Bytecode::LdFalse,
-        CopyLoc(idx) => Bytecode::CopyLoc(*idx),
-        MoveLoc(idx) => Bytecode::MoveLoc(*idx),
-        StLoc(idx) => Bytecode::StLoc(*idx),
-        Call(idx) => {
+        B::Pop => Bytecode::Pop,
+        B::Ret => Bytecode::Ret,
+        B::BrTrue(offset) => Bytecode::BrTrue(*offset),
+        B::BrFalse(offset) => Bytecode::BrFalse(*offset),
+        B::Branch(offset) => Bytecode::Branch(*offset),
+        B::LdU8(val) => Bytecode::LdU8(*val),
+        B::LdU64(val) => Bytecode::LdU64(*val),
+        B::LdU128(val) => Bytecode::LdU128(val.clone()),
+        B::CastU8 => Bytecode::CastU8,
+        B::CastU64 => Bytecode::CastU64,
+        B::CastU128 => Bytecode::CastU128,
+        B::LdConst(idx) => Bytecode::LdConst(*idx),
+        B::LdTrue => Bytecode::LdTrue,
+        B::LdFalse => Bytecode::LdFalse,
+        B::CopyLoc(idx) => Bytecode::CopyLoc(*idx),
+        B::MoveLoc(idx) => Bytecode::MoveLoc(*idx),
+        B::StLoc(idx) => Bytecode::StLoc(*idx),
+        B::Call(idx) => {
             let member_id = qualified_member_from_func_handle(module, *idx);
             Bytecode::Call(Box::new(member_id))
         }
-        CallGeneric(idx) => {
+        B::CallGeneric(idx) => {
             let func_inst = module.function_instantiation_at(*idx);
             let member_id = qualified_member_from_func_handle(module, func_inst.handle);
             let types = signature_to_types(module, func_inst.type_parameters);
             Bytecode::CallGeneric(Box::new((member_id, types)))
         }
-        Pack(idx) => Bytecode::Pack(Box::new(resolve_struct(module, *idx))),
-        PackGeneric(idx) => Bytecode::PackGeneric(Box::new(resolve_struct_generic(module, *idx))),
-        Unpack(idx) => Bytecode::Unpack(Box::new(resolve_struct(module, *idx))),
-        UnpackGeneric(idx) => {
+        B::Pack(idx) => Bytecode::Pack(Box::new(resolve_struct(module, *idx))),
+        B::PackGeneric(idx) => {
+            Bytecode::PackGeneric(Box::new(resolve_struct_generic(module, *idx)))
+        }
+        B::Unpack(idx) => Bytecode::Unpack(Box::new(resolve_struct(module, *idx))),
+        B::UnpackGeneric(idx) => {
             Bytecode::UnpackGeneric(Box::new(resolve_struct_generic(module, *idx)))
         }
-        ReadRef => Bytecode::ReadRef,
-        WriteRef => Bytecode::WriteRef,
-        FreezeRef => Bytecode::FreezeRef,
-        MutBorrowLoc(idx) => Bytecode::MutBorrowLoc(*idx),
-        ImmBorrowLoc(idx) => Bytecode::ImmBorrowLoc(*idx),
-        MutBorrowField(idx) => {
+        B::ReadRef => Bytecode::ReadRef,
+        B::WriteRef => Bytecode::WriteRef,
+        B::FreezeRef => Bytecode::FreezeRef,
+        B::MutBorrowLoc(idx) => Bytecode::MutBorrowLoc(*idx),
+        B::ImmBorrowLoc(idx) => Bytecode::ImmBorrowLoc(*idx),
+        B::MutBorrowField(idx) => {
             let field_ref = field_ref_from_handle(module, *idx);
             Bytecode::MutBorrowField(Box::new(field_ref))
         }
-        MutBorrowFieldGeneric(idx) => {
+        B::MutBorrowFieldGeneric(idx) => {
             let field_inst = module.field_instantiation_at(*idx);
             let field_ref = field_ref_from_handle(module, field_inst.handle);
             let types = signature_to_types(module, field_inst.type_parameters);
             Bytecode::MutBorrowFieldGeneric(Box::new((field_ref, types)))
         }
-        ImmBorrowField(idx) => {
+        B::ImmBorrowField(idx) => {
             let field_ref = field_ref_from_handle(module, *idx);
             Bytecode::ImmBorrowField(Box::new(field_ref))
         }
-        ImmBorrowFieldGeneric(idx) => {
+        B::ImmBorrowFieldGeneric(idx) => {
             let field_inst = module.field_instantiation_at(*idx);
             let field_ref = field_ref_from_handle(module, field_inst.handle);
             let types = signature_to_types(module, field_inst.type_parameters);
             Bytecode::ImmBorrowFieldGeneric(Box::new((field_ref, types)))
         }
-        Add => Bytecode::Add,
-        Sub => Bytecode::Sub,
-        Mul => Bytecode::Mul,
-        Mod => Bytecode::Mod,
-        Div => Bytecode::Div,
-        BitOr => Bytecode::BitOr,
-        BitAnd => Bytecode::BitAnd,
-        Xor => Bytecode::Xor,
-        Or => Bytecode::Or,
-        And => Bytecode::And,
-        Not => Bytecode::Not,
-        Eq => Bytecode::Eq,
-        Neq => Bytecode::Neq,
-        Lt => Bytecode::Lt,
-        Gt => Bytecode::Gt,
-        Le => Bytecode::Le,
-        Ge => Bytecode::Ge,
-        Abort => Bytecode::Abort,
-        Nop => Bytecode::Nop,
-        Shl => Bytecode::Shl,
-        Shr => Bytecode::Shr,
-        VecPack(idx, val) => {
+        B::Add => Bytecode::Add,
+        B::Sub => Bytecode::Sub,
+        B::Mul => Bytecode::Mul,
+        B::Mod => Bytecode::Mod,
+        B::Div => Bytecode::Div,
+        B::BitOr => Bytecode::BitOr,
+        B::BitAnd => Bytecode::BitAnd,
+        B::Xor => Bytecode::Xor,
+        B::Or => Bytecode::Or,
+        B::And => Bytecode::And,
+        B::Not => Bytecode::Not,
+        B::Eq => Bytecode::Eq,
+        B::Neq => Bytecode::Neq,
+        B::Lt => Bytecode::Lt,
+        B::Gt => Bytecode::Gt,
+        B::Le => Bytecode::Le,
+        B::Ge => Bytecode::Ge,
+        B::Abort => Bytecode::Abort,
+        B::Nop => Bytecode::Nop,
+        B::Shl => Bytecode::Shl,
+        B::Shr => Bytecode::Shr,
+        B::VecPack(idx, val) => {
             let vec_type = get_vector_signature_as_type(module, *idx);
             Bytecode::VecPack(Box::new((vec_type, *val)))
         }
-        VecLen(idx) => {
+        B::VecLen(idx) => {
             let vec_type = get_vector_signature_as_type(module, *idx);
             Bytecode::VecLen(Box::new(vec_type))
         }
-        VecImmBorrow(idx) => {
+        B::VecImmBorrow(idx) => {
             let vec_type = get_vector_signature_as_type(module, *idx);
             Bytecode::VecImmBorrow(Box::new(vec_type))
         }
-        VecMutBorrow(idx) => {
+        B::VecMutBorrow(idx) => {
             let vec_type = get_vector_signature_as_type(module, *idx);
             Bytecode::VecMutBorrow(Box::new(vec_type))
         }
-        VecPushBack(idx) => {
+        B::VecPushBack(idx) => {
             let vec_type = get_vector_signature_as_type(module, *idx);
             Bytecode::VecPushBack(Box::new(vec_type))
         }
-        VecPopBack(idx) => {
+        B::VecPopBack(idx) => {
             let vec_type = get_vector_signature_as_type(module, *idx);
             Bytecode::VecPopBack(Box::new(vec_type))
         }
-        VecUnpack(idx, val) => {
+        B::VecUnpack(idx, val) => {
             let vec_type = get_vector_signature_as_type(module, *idx);
             Bytecode::VecUnpack(Box::new((vec_type, *val)))
         }
-        VecSwap(idx) => {
+        B::VecSwap(idx) => {
             let vec_type = get_vector_signature_as_type(module, *idx);
             Bytecode::VecSwap(Box::new(vec_type))
         }
-        LdU16(val) => Bytecode::LdU16(*val),
-        LdU32(val) => Bytecode::LdU32(*val),
-        LdU256(val) => Bytecode::LdU256(val.clone()),
-        CastU16 => Bytecode::CastU16,
-        CastU32 => Bytecode::CastU32,
-        CastU256 => Bytecode::CastU256,
+        B::LdU16(val) => Bytecode::LdU16(*val),
+        B::LdU32(val) => Bytecode::LdU32(*val),
+        B::LdU256(val) => Bytecode::LdU256(val.clone()),
+        B::CastU16 => Bytecode::CastU16,
+        B::CastU32 => Bytecode::CastU32,
+        B::CastU256 => Bytecode::CastU256,
 
-        PackVariant(idx) => Bytecode::PackVariant(Box::new(resolve_variant(module, *idx))),
-        PackVariantGeneric(idx) => {
+        B::PackVariant(idx) => Bytecode::PackVariant(Box::new(resolve_variant(module, *idx))),
+        B::PackVariantGeneric(idx) => {
             Bytecode::PackVariantGeneric(Box::new(resolve_variant_generic(module, *idx)))
         }
-        UnpackVariant(idx) => Bytecode::UnpackVariant(Box::new(resolve_variant(module, *idx))),
-        UnpackVariantImmRef(idx) => {
+        B::UnpackVariant(idx) => Bytecode::UnpackVariant(Box::new(resolve_variant(module, *idx))),
+        B::UnpackVariantImmRef(idx) => {
             Bytecode::UnpackVariantImmRef(Box::new(resolve_variant(module, *idx)))
         }
-        UnpackVariantMutRef(idx) => {
+        B::UnpackVariantMutRef(idx) => {
             Bytecode::UnpackVariantMutRef(Box::new(resolve_variant(module, *idx)))
         }
-        UnpackVariantGeneric(idx) => {
+        B::UnpackVariantGeneric(idx) => {
             Bytecode::UnpackVariantGeneric(Box::new(resolve_variant_generic(module, *idx)))
         }
-        UnpackVariantGenericImmRef(idx) => {
+        B::UnpackVariantGenericImmRef(idx) => {
             Bytecode::UnpackVariantGenericImmRef(Box::new(resolve_variant_generic(module, *idx)))
         }
-        UnpackVariantGenericMutRef(idx) => {
+        B::UnpackVariantGenericMutRef(idx) => {
             Bytecode::UnpackVariantGenericMutRef(Box::new(resolve_variant_generic(module, *idx)))
         }
-        VariantSwitch(idx) => {
+        B::VariantSwitch(idx) => {
             let VariantJumpTable {
                 head_enum,
                 jump_table,
@@ -868,16 +867,16 @@ fn make_bytecode(
         }
 
         // deprecated
-        ExistsDeprecated(_)
-        | ExistsGenericDeprecated(_)
-        | MoveFromDeprecated(_)
-        | MoveFromGenericDeprecated(_)
-        | MoveToDeprecated(_)
-        | MoveToGenericDeprecated(_)
-        | MutBorrowGlobalDeprecated(_)
-        | MutBorrowGlobalGenericDeprecated(_)
-        | ImmBorrowGlobalDeprecated(_)
-        | ImmBorrowGlobalGenericDeprecated(_) => panic!("Unsupported bytecode"),
+        B::ExistsDeprecated(_)
+        | B::ExistsGenericDeprecated(_)
+        | B::MoveFromDeprecated(_)
+        | B::MoveFromGenericDeprecated(_)
+        | B::MoveToDeprecated(_)
+        | B::MoveToGenericDeprecated(_)
+        | B::MutBorrowGlobalDeprecated(_)
+        | B::MutBorrowGlobalGenericDeprecated(_)
+        | B::ImmBorrowGlobalDeprecated(_)
+        | B::ImmBorrowGlobalGenericDeprecated(_) => panic!("Unsupported bytecode"),
     }
 }
 
