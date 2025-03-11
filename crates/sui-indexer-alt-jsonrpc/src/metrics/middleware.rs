@@ -125,7 +125,7 @@ where
         };
 
         let method = this.method.as_ref();
-        let elapsed_ms = metrics.timer.stop_and_record() / 1000.0;
+        let elapsed_ms = metrics.timer.stop_and_record() * 1000.0;
 
         if let Some(code) = resp.as_error_code() {
             metrics
