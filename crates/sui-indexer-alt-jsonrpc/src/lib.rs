@@ -201,10 +201,14 @@ impl Default for RpcArgs {
 /// command-line). The service will continue to run until the cancellation token is triggered, and
 /// will signal cancellation on the token when it is shutting down.
 ///
+/// Access to reads is controlled by the `database_url` -- if it is `None`, reads will not work.
+/// Similarly, access to writes (executing and dry-running transactions) is controlled by
+/// `write_args.fullnode_rpc_url`, which can be omitted to disable writes from this RPC.
+///
 /// The service may spin up auxiliary services (such as the system package task) to support itself,
 /// and will clean these up on shutdown as well.
 pub async fn start_rpc(
-    database_url: Url,
+    database_url: Option<Url>,
     db_args: DbArgs,
     rpc_args: RpcArgs,
     write_args: WriteArgs,

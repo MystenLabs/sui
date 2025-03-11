@@ -25,7 +25,7 @@ use crate::{data::error::Error, metrics::RpcMetrics};
 /// RPC layer, metrics collection, and debug logging of database queries.
 #[derive(Clone)]
 pub(crate) struct PgReader {
-    db: db::Db,
+    db: Option<db::Db>,
     metrics: Arc<RpcMetrics>,
     cancel: CancellationToken,
 }
@@ -36,23 +36,31 @@ pub(crate) struct Connection<'p> {
 }
 
 impl PgReader {
+    /// Create a new database reader. If `database_url` is `None`, the reader will not accept any
+    /// connection requests (they will all fail).
     pub(crate) async fn new(
-        database_url: Url,
+        database_url: Option<Url>,
         db_args: db::DbArgs,
         metrics: Arc<RpcMetrics>,
         registry: &Registry,
         cancel: CancellationToken,
     ) -> Result<Self, Error> {
-        let db = db::Db::for_read(database_url, db_args)
-            .await
-            .map_err(Error::PgCreate)?;
+        let db = if let Some(database_url) = database_url {
+            let db = db::Db::for_read(database_url, db_args)
+                .await
+                .map_err(Error::PgCreate)?;
 
-        registry
-            .register(Box::new(DbConnectionStatsCollector::new(
-                Some("rpc_db"),
-                db.clone(),
-            )))
-            .map_err(|e| Error::PgCreate(e.into()))?;
+            registry
+                .register(Box::new(DbConnectionStatsCollector::new(
+                    Some("rpc_db"),
+                    db.clone(),
+                )))
+                .map_err(|e| Error::PgCreate(e.into()))?;
+
+            Some(db)
+        } else {
+            None
+        };
 
         Ok(Self {
             db,
@@ -69,12 +77,16 @@ impl PgReader {
     /// Acquire a connection to the database. This can potentially fail if the service is cancelled
     /// while the connection is being acquired.
     pub(crate) async fn connect(&self) -> Result<Connection<'_>, Error> {
+        let Some(db) = &self.db else {
+            return Err(Error::PgConnect(anyhow!("No database to connect to")));
+        };
+
         tokio::select! {
             _ = self.cancel.cancelled() => {
                 Err(Error::PgConnect(anyhow!("Cancelled while connecting to the database")))
             }
 
-            conn = self.db.connect() => {
+            conn = db.connect() => {
                 Ok(Connection {
                     conn: conn.map_err(Error::PgConnect)?,
                     metrics: self.metrics.clone(),

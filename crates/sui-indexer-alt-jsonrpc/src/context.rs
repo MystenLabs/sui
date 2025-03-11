@@ -49,9 +49,11 @@ pub(crate) struct Context {
 }
 
 impl Context {
-    /// Set-up access to the database through all the interfaces available in the context.
+    /// Set-up access to the database through all the interfaces available in the context. If
+    /// `database_url` is `None`, the interfaces will be set-up but will fail to accept any
+    /// connections.
     pub(crate) async fn new(
-        database_url: Url,
+        database_url: Option<Url>,
         db_args: DbArgs,
         config: RpcConfig,
         metrics: Arc<RpcMetrics>,

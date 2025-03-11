@@ -65,7 +65,7 @@ async fn main() -> anyhow::Result<()> {
             });
 
             let h_rpc = start_rpc(
-                database_url,
+                Some(database_url),
                 db_args,
                 rpc_args,
                 write_args,
