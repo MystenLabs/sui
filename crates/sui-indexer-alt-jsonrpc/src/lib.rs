@@ -23,7 +23,7 @@ use prometheus::Registry;
 use serde_json::json;
 use sui_open_rpc::Project;
 use sui_pg_db::DbArgs;
-use tokio::{join, signal, task::JoinHandle};
+use tokio::task::JoinHandle;
 use tokio_util::sync::CancellationToken;
 use tower_layer::Identity;
 use tracing::info;
@@ -180,27 +180,10 @@ impl RpcService {
             cancel_handle.stop()
         });
 
-        // Set-up another helper task that will listen for Ctrl-C and trigger the cancellation
-        // token.
-        #[cfg(not(msim))]
-        let ctrl_c_cancel = cancel.clone();
-        #[cfg(not(msim))]
-        let h_ctrl_c = tokio::spawn(async move {
-            tokio::select! {
-                _ = ctrl_c_cancel.cancelled() => {}
-                _ = signal::ctrl_c() => {
-                    ctrl_c_cancel.cancel();
-                }
-            }
-        });
-
         Ok(tokio::spawn(async move {
             handle.stopped().await;
             cancel.cancel();
-            #[cfg(not(msim))]
-            let _ = join!(h_cancel, h_ctrl_c);
-            #[cfg(msim)]
-            let _ = h_cancel;
+            let _ = h_cancel.await;
         }))
     }
 }

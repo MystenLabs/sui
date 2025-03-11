@@ -6,13 +6,10 @@ use std::time::Duration;
 use anyhow::{bail, Context, Result};
 use diesel::{OptionalExtension, QueryDsl, SelectableHelper};
 use diesel_async::RunQueryDsl;
-use sui_indexer_alt_framework::{
-    task::graceful_shutdown,
-    types::{
-        full_checkpoint_content::CheckpointData,
-        sui_system_state::{get_sui_system_state, SuiSystemStateTrait},
-        transaction::{TransactionDataAPI, TransactionKind},
-    },
+use sui_indexer_alt_framework::types::{
+    full_checkpoint_content::CheckpointData,
+    sui_system_state::{get_sui_system_state, SuiSystemStateTrait},
+    transaction::{TransactionDataAPI, TransactionKind},
 };
 use sui_indexer_alt_schema::{
     checkpoints::StoredGenesis,
@@ -36,6 +33,8 @@ pub async fn bootstrap(
     retry_interval: Duration,
     cancel: CancellationToken,
 ) -> Result<StoredGenesis> {
+    info!("Bootstrapping indexer with genesis information");
+
     let Ok(mut conn) = indexer.db().connect().await else {
         bail!("Bootstrap failed to get connection for DB");
     };
@@ -60,19 +59,11 @@ pub async fn bootstrap(
     //
     // - Get the Genesis system transaction from the genesis checkpoint.
     // - Get the system state object that was written out by the system transaction.
-    let ingestion_client = indexer.ingestion_client().clone();
-    let wait_cancel = cancel.clone();
-    let genesis = tokio::spawn(async move {
-        ingestion_client
-            .wait_for(0, retry_interval, &wait_cancel)
-            .await
-    });
-
-    let Some(genesis_checkpoint) = graceful_shutdown(vec![genesis], cancel).await.pop() else {
-        bail!("Bootstrap cancelled");
-    };
-
-    let genesis_checkpoint = genesis_checkpoint.context("Failed to fetch genesis checkpoint")?;
+    let genesis_checkpoint = indexer
+        .ingestion_client()
+        .wait_for(0, retry_interval, &cancel)
+        .await
+        .context("Failed to fetch genesis checkpoint")?;
 
     let CheckpointData {
         checkpoint_summary,

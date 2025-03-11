@@ -18,6 +18,7 @@ use sui_indexer_alt_framework::Indexer;
 use sui_indexer_alt_metrics::MetricsService;
 use sui_indexer_alt_schema::MIGRATIONS;
 use tokio::fs;
+use tokio::signal;
 use tokio_util::sync::CancellationToken;
 use tracing::info;
 
@@ -49,6 +50,19 @@ async fn main() -> Result<()> {
 
             let metrics = MetricsService::new(metrics_args, registry, cancel.child_token());
 
+            let h_ctrl_c = tokio::spawn({
+                let cancel = cancel.clone();
+                async move {
+                    tokio::select! {
+                        _ = cancel.cancelled() => {}
+                        _ = signal::ctrl_c() => {
+                            info!("Received Ctrl-C, shutting down...");
+                            cancel.cancel();
+                        }
+                    }
+                }
+            });
+
             let h_indexer = setup_indexer(
                 database_url,
                 db_args,
@@ -71,6 +85,7 @@ async fn main() -> Result<()> {
             let _ = h_indexer.await;
             cancel.cancel();
             let _ = h_metrics.await;
+            let _ = h_ctrl_c.await;
         }
 
         Command::GenerateConfig => {

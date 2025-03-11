@@ -10,8 +10,9 @@ use anyhow::Context;
 use diesel_migrations::EmbeddedMigrations;
 use prometheus::Registry;
 use sui_indexer_alt_metrics::{MetricsArgs, MetricsService};
-use tokio::task::JoinHandle;
+use tokio::{signal, task::JoinHandle};
 use tokio_util::sync::CancellationToken;
+use tracing::info;
 use url::Url;
 
 use crate::{
@@ -129,6 +130,19 @@ impl IndexerCluster {
     /// The service will exit when the indexer has finished processing all the checkpoints it was
     /// configured to process, or when it receives an interrupt signal.
     pub async fn run(self) -> Result<JoinHandle<()>> {
+        let h_ctrl_c = tokio::spawn({
+            let cancel = self.cancel.clone();
+            async move {
+                tokio::select! {
+                    _ = cancel.cancelled() => {}
+                    _ = signal::ctrl_c() => {
+                        info!("Received Ctrl-C, shutting down...");
+                        cancel.cancel();
+                    }
+                }
+            }
+        });
+
         let h_metrics = self.metrics.run().await?;
         let h_indexer = self.indexer.run().await?;
 
@@ -136,6 +150,7 @@ impl IndexerCluster {
             let _ = h_indexer.await;
             self.cancel.cancel();
             let _ = h_metrics.await;
+            let _ = h_ctrl_c.await;
         }))
     }
 }
