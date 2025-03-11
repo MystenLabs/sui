@@ -8,6 +8,16 @@ use crate::{
     trace,
 };
 use fail::fail_point;
+use legacy_move_vm_types::{
+    data_store::DataStore,
+    gas::{GasMeter, SimpleInstruction},
+    loaded_data::runtime_types::Type,
+    values::{
+        self, IntegerValue, Locals, Reference, Struct, StructRef, VMValueCast, Value, Vector,
+        VectorRef,
+    },
+    views::TypeView,
+};
 use move_binary_format::{
     errors::*,
     file_format::{Bytecode, FunctionHandleIndex, FunctionInstantiationIndex},
@@ -21,16 +31,6 @@ use move_core_types::{
 use move_vm_config::runtime::VMRuntimeLimitsConfig;
 use move_vm_profiler::{
     profile_close_frame, profile_close_instr, profile_open_frame, profile_open_instr,
-};
-use legacy_move_vm_types::{
-    data_store::DataStore,
-    gas::{GasMeter, SimpleInstruction},
-    loaded_data::runtime_types::Type,
-    values::{
-        self, IntegerValue, Locals, Reference, Struct, StructRef, VMValueCast, Value, Vector,
-        VectorRef,
-    },
-    views::TypeView,
 };
 use smallvec::SmallVec;
 

@@ -5,6 +5,12 @@ use crate::{
     get_nth_struct_field, legacy_test_cost,
     object_runtime::{ObjectRuntime, RuntimeResults},
 };
+use legacy_move_vm_types::{
+    loaded_data::runtime_types::Type,
+    natives::function::NativeResult,
+    pop_arg,
+    values::{self, StructRef, Value},
+};
 use linked_hash_map::LinkedHashMap;
 use move_binary_format::errors::{PartialVMError, PartialVMResult};
 use move_core_types::{
@@ -14,12 +20,6 @@ use move_core_types::{
     vm_status::StatusCode,
 };
 use move_vm_runtime::native_functions::NativeContext;
-use legacy_move_vm_types::{
-    loaded_data::runtime_types::Type,
-    natives::function::NativeResult,
-    pop_arg,
-    values::{self, StructRef, Value},
-};
 use smallvec::smallvec;
 use std::{
     borrow::Borrow,

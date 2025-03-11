@@ -8,7 +8,7 @@ use move_cli::base::{
 };
 use move_package::BuildConfig;
 use move_unit_test::{extensions::set_extension_hook, UnitTestingConfig};
-use move_vm_runtime::natives::extensions::NativeContextExtensions;
+use move_vm_runtime::natives::extensions::{NativeContextExtensions, NativeContextMut};
 use once_cell::sync::Lazy;
 use std::{cell::RefCell, collections::BTreeMap, path::Path, sync::Arc};
 use sui_move_build::decorate_warnings;
@@ -114,14 +114,14 @@ fn new_testing_object_and_natives_cost_runtime(ext: &mut NativeContextExtensions
     let metrics = Arc::new(LimitsMetrics::new(&registry));
     let store = Lazy::force(&TEST_STORE);
 
-    ext.add(ObjectRuntime::new(
+    ext.add(NativeContextMut::new(ObjectRuntime::new(
         store,
         BTreeMap::new(),
         false,
         Box::leak(Box::new(ProtocolConfig::get_for_max_version_UNSAFE())), // leak for testing
         metrics,
         0, // epoch id
-    ));
+    )));
     ext.add(NativesCostTable::from_protocol_config(
         &ProtocolConfig::get_for_max_version_UNSAFE(),
     ));

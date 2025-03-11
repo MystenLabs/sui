@@ -29,3 +29,4 @@ bcs.workspace = true
 
 [target.'cfg(msim)'.dependencies]
 msim.workspace = true
+sui-execution.workspace = true

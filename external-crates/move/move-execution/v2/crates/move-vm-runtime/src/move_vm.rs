@@ -8,6 +8,7 @@ use crate::{
     data_cache::TransactionDataCache, native_extensions::NativeContextExtensions,
     native_functions::NativeFunction, runtime::VMRuntime, session::Session,
 };
+use legacy_move_vm_types::data_store::MoveResolver;
 use move_binary_format::{
     errors::{Location, VMResult},
     CompiledModule,
@@ -17,7 +18,6 @@ use move_core_types::{
     metadata::Metadata,
 };
 use move_vm_config::runtime::VMConfig;
-use legacy_move_vm_types::data_store::MoveResolver;
 
 pub struct MoveVM {
     runtime: VMRuntime,

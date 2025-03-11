@@ -5,15 +5,15 @@ use fastcrypto::{
     ed25519::{Ed25519PublicKey, Ed25519Signature},
     traits::{ToFromBytes, VerifyingKey},
 };
-use move_binary_format::errors::PartialVMResult;
-use move_core_types::gas_algebra::InternalGas;
-use move_vm_runtime::{native_charge_gas_early_exit, native_functions::NativeContext};
 use legacy_move_vm_types::{
     loaded_data::runtime_types::Type,
     natives::function::NativeResult,
     pop_arg,
     values::{Value, VectorRef},
 };
+use move_binary_format::errors::PartialVMResult;
+use move_core_types::gas_algebra::InternalGas;
+use move_vm_runtime::{native_charge_gas_early_exit, native_functions::NativeContext};
 use smallvec::smallvec;
 use std::collections::VecDeque;
 

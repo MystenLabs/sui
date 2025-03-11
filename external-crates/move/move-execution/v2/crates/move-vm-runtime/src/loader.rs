@@ -7,6 +7,12 @@ use crate::{
     native_functions::{NativeFunction, NativeFunctions, UnboxedNativeFunction},
     session::LoadedFunctionInstantiation,
 };
+use legacy_move_vm_types::{
+    data_store::DataStore,
+    loaded_data::runtime_types::{
+        CachedDatatype, CachedTypeIndex, Datatype, DepthFormula, StructType, Type,
+    },
+};
 use move_binary_format::{
     errors::{verification_error, Location, PartialVMError, PartialVMResult, VMResult},
     file_format::{
@@ -28,12 +34,6 @@ use move_core_types::{
     vm_status::StatusCode,
 };
 use move_vm_config::runtime::VMConfig;
-use legacy_move_vm_types::{
-    data_store::DataStore,
-    loaded_data::runtime_types::{
-        CachedDatatype, CachedTypeIndex, Datatype, DepthFormula, StructType, Type,
-    },
-};
 use parking_lot::RwLock;
 use std::{
     collections::{btree_map::Entry, BTreeMap, BTreeSet, HashMap},

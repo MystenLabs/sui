@@ -2,13 +2,13 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::object_runtime::LocalProtocolConfig;
-use move_binary_format::errors::{PartialVMError, PartialVMResult};
-use move_core_types::{
-    annotated_value as A, effects::Op, runtime_value as R, vm_status::StatusCode,
-};
 use legacy_move_vm_types::{
     loaded_data::runtime_types::Type,
     values::{GlobalValue, StructRef, Value},
+};
+use move_binary_format::errors::{PartialVMError, PartialVMResult};
+use move_core_types::{
+    annotated_value as A, effects::Op, runtime_value as R, vm_status::StatusCode,
 };
 use std::{
     collections::{btree_map, BTreeMap},

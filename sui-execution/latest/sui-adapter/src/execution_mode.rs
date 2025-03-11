@@ -234,7 +234,7 @@ impl<const SKIP_ALL_CHECKS: bool> ExecutionMode for DevInspect<SKIP_ALL_CHECKS> 
     ) -> Result<(), ExecutionError> {
         let command_bytes = command_result
             .iter()
-            .map(|value| value_to_bytes_and_tag(value))
+            .map(value_to_bytes_and_tag)
             .collect::<Result<_, _>>()?;
         acc.push((argument_updates, command_bytes));
         Ok(())

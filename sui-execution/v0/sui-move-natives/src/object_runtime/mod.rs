@@ -2,15 +2,15 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use better_any::{Tid, TidAble};
+use legacy_move_vm_types::{
+    loaded_data::runtime_types::Type,
+    values::{GlobalValue, Value},
+};
 use linked_hash_map::LinkedHashMap;
 use move_binary_format::errors::{PartialVMError, PartialVMResult};
 use move_core_types::{
     account_address::AccountAddress, annotated_value as A, annotated_visitor as AV, effects::Op,
     language_storage::StructTag, runtime_value as R, vm_status::StatusCode,
-};
-use legacy_move_vm_types::{
-    loaded_data::runtime_types::Type,
-    values::{GlobalValue, Value},
 };
 use std::{
     collections::{BTreeMap, BTreeSet},

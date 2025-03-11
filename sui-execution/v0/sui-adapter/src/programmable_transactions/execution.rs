@@ -17,6 +17,7 @@ mod checked {
         CommandKind, ExecutionState, ObjectContents, ObjectValue, RawValueType, Value,
     };
     use crate::gas_charger::GasCharger;
+    use legacy_move_vm_types::loaded_data::runtime_types::{CachedDatatype, Type};
     use move_binary_format::{
         compatibility::{Compatibility, InclusionCheck},
         errors::{Location, PartialVMResult, VMResult},
@@ -34,7 +35,6 @@ mod checked {
         move_vm::MoveVM,
         session::{LoadedFunctionInstantiation, SerializedReturnValues},
     };
-    use legacy_move_vm_types::loaded_data::runtime_types::{CachedDatatype, Type};
     use serde::{de::DeserializeSeed, Deserialize};
     use sui_move_natives::object_runtime::ObjectRuntime;
     use sui_protocol_config::ProtocolConfig;

@@ -2,15 +2,15 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{object_runtime::ObjectRuntime, NativesCostTable};
-use move_binary_format::errors::PartialVMResult;
-use move_core_types::{account_address::AccountAddress, gas_algebra::InternalGas};
-use move_vm_runtime::{native_charge_gas_early_exit, native_functions::NativeContext};
 use legacy_move_vm_types::{
     loaded_data::runtime_types::Type,
     natives::function::NativeResult,
     pop_arg,
     values::{StructRef, Value},
 };
+use move_binary_format::errors::PartialVMResult;
+use move_core_types::{account_address::AccountAddress, gas_algebra::InternalGas};
+use move_vm_runtime::{native_charge_gas_early_exit, native_functions::NativeContext};
 use smallvec::smallvec;
 use std::collections::VecDeque;
 

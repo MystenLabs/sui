@@ -8,13 +8,13 @@ use std::{
 };
 
 use crate::execution_value::SuiResolver;
+use legacy_move_vm_types::data_store::LinkageResolver;
 use move_core_types::{
     account_address::AccountAddress,
     identifier::{IdentStr, Identifier},
     language_storage::ModuleId,
     resolver::{ModuleResolver, SerializedPackage},
 };
-use legacy_move_vm_types::data_store::LinkageResolver;
 use sui_types::storage::{get_module, PackageObject};
 use sui_types::{
     base_types::ObjectID,

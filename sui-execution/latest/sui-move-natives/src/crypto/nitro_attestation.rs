@@ -3,6 +3,7 @@
 
 use move_binary_format::errors::{PartialVMError, PartialVMResult};
 use move_core_types::{gas_algebra::InternalGas, vm_status::StatusCode};
+use move_vm_runtime::natives::extensions::NativeContextMut;
 use move_vm_runtime::natives::functions::NativeContext;
 use move_vm_runtime::{
     execution::{
@@ -49,7 +50,8 @@ macro_rules! native_charge_gas_early_exit_option {
 fn is_supported(context: &NativeContext) -> bool {
     context
         .extensions()
-        .get::<ObjectRuntime>()
+        .get::<NativeContextMut<ObjectRuntime>>()
+        .borrow()
         .protocol_config
         .enable_nitro_attestation()
 }
@@ -83,7 +85,7 @@ pub fn load_nitro_attestation_internal(
             .parse_cost_per_byte
             .map(|per_byte| base_cost + per_byte * (attestation_bytes.len() as u64).into()))
     );
-    match parse_nitro_attestation(&attestation_bytes) {
+    match parse_nitro_attestation(attestation_bytes) {
         Ok((signature, signed_message, payload)) => {
             let cert_chain_length = payload.get_cert_chain_length();
             native_charge_gas_early_exit_option!(

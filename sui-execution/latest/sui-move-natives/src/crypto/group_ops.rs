@@ -12,6 +12,7 @@ use move_binary_format::errors::{PartialVMError, PartialVMResult};
 use move_core_types::gas_algebra::InternalGas;
 use move_core_types::vm_status::StatusCode;
 use move_vm_runtime::native_charge_gas_early_exit;
+use move_vm_runtime::natives::extensions::NativeContextMut;
 use move_vm_runtime::natives::functions::NativeContext;
 use move_vm_runtime::{
     execution::{
@@ -31,7 +32,8 @@ pub const INPUT_TOO_LONG_ERROR: u64 = 2;
 fn is_supported(context: &NativeContext) -> bool {
     context
         .extensions()
-        .get::<ObjectRuntime>()
+        .get::<NativeContextMut<ObjectRuntime>>()
+        .borrow()
         .protocol_config
         .enable_group_ops_native_functions()
 }
@@ -39,7 +41,8 @@ fn is_supported(context: &NativeContext) -> bool {
 fn is_msm_supported(context: &NativeContext) -> bool {
     context
         .extensions()
-        .get::<ObjectRuntime>()
+        .get::<NativeContextMut<ObjectRuntime>>()
+        .borrow()
         .protocol_config
         .enable_group_ops_native_function_msm()
 }
@@ -47,7 +50,8 @@ fn is_msm_supported(context: &NativeContext) -> bool {
 fn is_uncompressed_g1_supported(context: &NativeContext) -> bool {
     context
         .extensions()
-        .get::<ObjectRuntime>()
+        .get::<NativeContextMut<ObjectRuntime>>()
+        .borrow()
         .protocol_config
         .uncompressed_g1_group_elements()
 }
@@ -55,7 +59,8 @@ fn is_uncompressed_g1_supported(context: &NativeContext) -> bool {
 fn v2_native_charge(context: &NativeContext, cost: InternalGas) -> InternalGas {
     if context
         .extensions()
-        .get::<ObjectRuntime>()
+        .get::<NativeContextMut<ObjectRuntime>>()
+        .borrow()
         .protocol_config
         .native_charging_v2()
     {
@@ -248,15 +253,15 @@ pub fn internal_validate(
     let result = match Groups::from_u8(group_type) {
         Some(Groups::BLS12381Scalar) => {
             native_charge_gas_early_exit_option!(context, cost_params.bls12381_decode_scalar_cost);
-            parse_untrusted::<bls::Scalar, { bls::Scalar::BYTE_LENGTH }>(&bytes).is_ok()
+            parse_untrusted::<bls::Scalar, { bls::Scalar::BYTE_LENGTH }>(bytes).is_ok()
         }
         Some(Groups::BLS12381G1) => {
             native_charge_gas_early_exit_option!(context, cost_params.bls12381_decode_g1_cost);
-            parse_untrusted::<bls::G1Element, { bls::G1Element::BYTE_LENGTH }>(&bytes).is_ok()
+            parse_untrusted::<bls::G1Element, { bls::G1Element::BYTE_LENGTH }>(bytes).is_ok()
         }
         Some(Groups::BLS12381G2) => {
             native_charge_gas_early_exit_option!(context, cost_params.bls12381_decode_g2_cost);
-            parse_untrusted::<bls::G2Element, { bls::G2Element::BYTE_LENGTH }>(&bytes).is_ok()
+            parse_untrusted::<bls::G2Element, { bls::G2Element::BYTE_LENGTH }>(bytes).is_ok()
         }
         _ => false,
     };
@@ -300,19 +305,19 @@ pub fn internal_add(
     let result = match Groups::from_u8(group_type) {
         Some(Groups::BLS12381Scalar) => {
             native_charge_gas_early_exit_option!(context, cost_params.bls12381_scalar_add_cost);
-            binary_op::<bls::Scalar, { bls::Scalar::BYTE_LENGTH }>(|a, b| Ok(a + b), &e1, &e2)
+            binary_op::<bls::Scalar, { bls::Scalar::BYTE_LENGTH }>(|a, b| Ok(a + b), e1, e2)
         }
         Some(Groups::BLS12381G1) => {
             native_charge_gas_early_exit_option!(context, cost_params.bls12381_g1_add_cost);
-            binary_op::<bls::G1Element, { bls::G1Element::BYTE_LENGTH }>(|a, b| Ok(a + b), &e1, &e2)
+            binary_op::<bls::G1Element, { bls::G1Element::BYTE_LENGTH }>(|a, b| Ok(a + b), e1, e2)
         }
         Some(Groups::BLS12381G2) => {
             native_charge_gas_early_exit_option!(context, cost_params.bls12381_g2_add_cost);
-            binary_op::<bls::G2Element, { bls::G2Element::BYTE_LENGTH }>(|a, b| Ok(a + b), &e1, &e2)
+            binary_op::<bls::G2Element, { bls::G2Element::BYTE_LENGTH }>(|a, b| Ok(a + b), e1, e2)
         }
         Some(Groups::BLS12381GT) => {
             native_charge_gas_early_exit_option!(context, cost_params.bls12381_gt_add_cost);
-            binary_op::<bls::GTElement, { bls::GTElement::BYTE_LENGTH }>(|a, b| Ok(a + b), &e1, &e2)
+            binary_op::<bls::GTElement, { bls::GTElement::BYTE_LENGTH }>(|a, b| Ok(a + b), e1, e2)
         }
         _ => Err(FastCryptoError::InvalidInput),
     };
@@ -353,19 +358,19 @@ pub fn internal_sub(
     let result = match Groups::from_u8(group_type) {
         Some(Groups::BLS12381Scalar) => {
             native_charge_gas_early_exit_option!(context, cost_params.bls12381_scalar_sub_cost);
-            binary_op::<bls::Scalar, { bls::Scalar::BYTE_LENGTH }>(|a, b| Ok(a - b), &e1, &e2)
+            binary_op::<bls::Scalar, { bls::Scalar::BYTE_LENGTH }>(|a, b| Ok(a - b), e1, e2)
         }
         Some(Groups::BLS12381G1) => {
             native_charge_gas_early_exit_option!(context, cost_params.bls12381_g1_sub_cost);
-            binary_op::<bls::G1Element, { bls::G1Element::BYTE_LENGTH }>(|a, b| Ok(a - b), &e1, &e2)
+            binary_op::<bls::G1Element, { bls::G1Element::BYTE_LENGTH }>(|a, b| Ok(a - b), e1, e2)
         }
         Some(Groups::BLS12381G2) => {
             native_charge_gas_early_exit_option!(context, cost_params.bls12381_g2_sub_cost);
-            binary_op::<bls::G2Element, { bls::G2Element::BYTE_LENGTH }>(|a, b| Ok(a - b), &e1, &e2)
+            binary_op::<bls::G2Element, { bls::G2Element::BYTE_LENGTH }>(|a, b| Ok(a - b), e1, e2)
         }
         Some(Groups::BLS12381GT) => {
             native_charge_gas_early_exit_option!(context, cost_params.bls12381_gt_sub_cost);
-            binary_op::<bls::GTElement, { bls::GTElement::BYTE_LENGTH }>(|a, b| Ok(a - b), &e1, &e2)
+            binary_op::<bls::GTElement, { bls::GTElement::BYTE_LENGTH }>(|a, b| Ok(a - b), e1, e2)
         }
         _ => Err(FastCryptoError::InvalidInput),
     };
@@ -406,7 +411,7 @@ pub fn internal_mul(
     let result = match Groups::from_u8(group_type) {
         Some(Groups::BLS12381Scalar) => {
             native_charge_gas_early_exit_option!(context, cost_params.bls12381_scalar_mul_cost);
-            binary_op::<bls::Scalar, { bls::Scalar::BYTE_LENGTH }>(|a, b| Ok(b * a), &e1, &e2)
+            binary_op::<bls::Scalar, { bls::Scalar::BYTE_LENGTH }>(|a, b| Ok(b * a), e1, e2)
         }
         Some(Groups::BLS12381G1) => {
             native_charge_gas_early_exit_option!(context, cost_params.bls12381_g1_mul_cost);
@@ -415,7 +420,7 @@ pub fn internal_mul(
                 bls::G1Element,
                 { bls::Scalar::BYTE_LENGTH },
                 { bls::G1Element::BYTE_LENGTH },
-            >(|a, b| Ok(b * a), &e1, &e2)
+            >(|a, b| Ok(b * a), e1, e2)
         }
         Some(Groups::BLS12381G2) => {
             native_charge_gas_early_exit_option!(context, cost_params.bls12381_g2_mul_cost);
@@ -424,7 +429,7 @@ pub fn internal_mul(
                 bls::G2Element,
                 { bls::Scalar::BYTE_LENGTH },
                 { bls::G2Element::BYTE_LENGTH },
-            >(|a, b| Ok(b * a), &e1, &e2)
+            >(|a, b| Ok(b * a), e1, e2)
         }
         Some(Groups::BLS12381GT) => {
             native_charge_gas_early_exit_option!(context, cost_params.bls12381_gt_mul_cost);
@@ -433,7 +438,7 @@ pub fn internal_mul(
                 bls::GTElement,
                 { bls::Scalar::BYTE_LENGTH },
                 { bls::GTElement::BYTE_LENGTH },
-            >(|a, b| Ok(b * a), &e1, &e2)
+            >(|a, b| Ok(b * a), e1, e2)
         }
         _ => Err(FastCryptoError::InvalidInput),
     };
@@ -474,7 +479,7 @@ pub fn internal_div(
     let result = match Groups::from_u8(group_type) {
         Some(Groups::BLS12381Scalar) => {
             native_charge_gas_early_exit_option!(context, cost_params.bls12381_scalar_div_cost);
-            binary_op::<bls::Scalar, { bls::Scalar::BYTE_LENGTH }>(|a, b| b / a, &e1, &e2)
+            binary_op::<bls::Scalar, { bls::Scalar::BYTE_LENGTH }>(|a, b| b / a, e1, e2)
         }
         Some(Groups::BLS12381G1) => {
             native_charge_gas_early_exit_option!(context, cost_params.bls12381_g1_div_cost);
@@ -483,7 +488,7 @@ pub fn internal_div(
                 bls::G1Element,
                 { bls::Scalar::BYTE_LENGTH },
                 { bls::G1Element::BYTE_LENGTH },
-            >(|a, b| b / a, &e1, &e2)
+            >(|a, b| b / a, e1, e2)
         }
         Some(Groups::BLS12381G2) => {
             native_charge_gas_early_exit_option!(context, cost_params.bls12381_g2_div_cost);
@@ -492,7 +497,7 @@ pub fn internal_div(
                 bls::G2Element,
                 { bls::Scalar::BYTE_LENGTH },
                 { bls::G2Element::BYTE_LENGTH },
-            >(|a, b| b / a, &e1, &e2)
+            >(|a, b| b / a, e1, e2)
         }
         Some(Groups::BLS12381GT) => {
             native_charge_gas_early_exit_option!(context, cost_params.bls12381_gt_div_cost);
@@ -501,7 +506,7 @@ pub fn internal_div(
                 bls::GTElement,
                 { bls::Scalar::BYTE_LENGTH },
                 { bls::GTElement::BYTE_LENGTH },
-            >(|a, b| b / a, &e1, &e2)
+            >(|a, b| b / a, e1, e2)
         }
         _ => Err(FastCryptoError::InvalidInput),
     };
@@ -552,7 +557,7 @@ pub fn internal_hash_to(
                         .bls12381_g1_hash_to_cost_per_byte
                         .map(|per_byte| base_cost + per_byte * (m.len() as u64).into()))
             );
-            Ok(bls::G1Element::hash_to_group_element(&m)
+            Ok(bls::G1Element::hash_to_group_element(m)
                 .to_byte_array()
                 .to_vec())
         }
@@ -565,7 +570,7 @@ pub fn internal_hash_to(
                         .bls12381_g2_hash_to_cost_per_byte
                         .map(|per_byte| base_cost + per_byte * (m.len() as u64).into()))
             );
-            Ok(bls::G2Element::hash_to_group_element(&m)
+            Ok(bls::G2Element::hash_to_group_element(m)
                 .to_byte_array()
                 .to_vec())
         }
@@ -772,8 +777,8 @@ pub fn internal_pairing(
     let result = match Groups::from_u8(group_type) {
         Some(Groups::BLS12381G1) => {
             native_charge_gas_early_exit_option!(context, cost_params.bls12381_pairing_cost);
-            parse_trusted::<bls::G1Element, { bls::G1Element::BYTE_LENGTH }>(&e1).and_then(|e1| {
-                parse_trusted::<bls::G2Element, { bls::G2Element::BYTE_LENGTH }>(&e2).map(|e2| {
+            parse_trusted::<bls::G1Element, { bls::G1Element::BYTE_LENGTH }>(e1).and_then(|e1| {
+                parse_trusted::<bls::G2Element, { bls::G2Element::BYTE_LENGTH }>(e2).map(|e2| {
                     let e3 = e1.pairing(&e2);
                     e3.to_byte_array().to_vec()
                 })
@@ -833,7 +838,7 @@ pub fn internal_convert(
                 context,
                 cost_params.bls12381_g1_to_uncompressed_g1_cost
             );
-            parse_trusted::<bls::G1Element, { bls::G1Element::BYTE_LENGTH }>(&e)
+            parse_trusted::<bls::G1Element, { bls::G1Element::BYTE_LENGTH }>(e)
                 .map(|e| bls::G1ElementUncompressed::from(&e))
                 .map(|e| e.into_byte_array().to_vec())
         }

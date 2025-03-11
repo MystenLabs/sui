@@ -10,6 +10,12 @@ use crate::{
     native_functions::{NativeFunction, NativeFunctions},
     session::{LoadedFunctionInstantiation, SerializedReturnValues, Session},
 };
+use legacy_move_vm_types::{
+    data_store::{DataStore, MoveResolver},
+    gas::GasMeter,
+    loaded_data::runtime_types::{CachedDatatype, CachedTypeIndex, Type},
+    values::{Locals, Reference, VMValueCast, Value},
+};
 use move_binary_format::{
     errors::{verification_error, Location, PartialVMError, PartialVMResult, VMResult},
     file_format::{AbilitySet, LocalIndex},
@@ -25,12 +31,6 @@ use move_core_types::{
     vm_status::StatusCode,
 };
 use move_vm_config::runtime::VMConfig;
-use legacy_move_vm_types::{
-    data_store::{DataStore, MoveResolver},
-    gas::GasMeter,
-    loaded_data::runtime_types::{CachedDatatype, CachedTypeIndex, Type},
-    values::{Locals, Reference, VMValueCast, Value},
-};
 use std::{borrow::Borrow, collections::BTreeSet, sync::Arc};
 use tracing::warn;
 

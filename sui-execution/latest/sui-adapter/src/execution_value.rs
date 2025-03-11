@@ -298,7 +298,7 @@ fn try_from_value_prim<'a, T: Deserialize<'a>>(
             bcs::from_bytes(bytes).map_err(|_| CommandArgumentError::InvalidBCSBytes)
         }
         Value::Raw(RawValueType::Loaded { ty, .. }, bytes) => {
-            if &ty.type_ != &expected_ty {
+            if ty.type_ != expected_ty {
                 return Err(CommandArgumentError::TypeMismatch);
             }
             bcs::from_bytes(bytes).map_err(|_| CommandArgumentError::InvalidBCSBytes)

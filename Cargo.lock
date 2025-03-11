@@ -7023,7 +7023,6 @@ dependencies = [
  "move-binary-format",
  "move-core-types",
  "move-vm-profiler",
- "proptest",
  "serde",
  "smallvec",
 ]
@@ -7623,12 +7622,9 @@ name = "move-binary-format"
 version = "0.0.3"
 dependencies = [
  "anyhow",
- "arbitrary",
  "enum-compat-util",
  "move-core-types",
  "move-proc-macros",
- "proptest",
- "proptest-derive 0.3.0",
  "ref-cast",
  "serde",
  "variant_count",
@@ -15468,6 +15464,7 @@ dependencies = [
  "mysten-network",
  "rand 0.8.5",
  "serde",
+ "sui-execution",
  "sui-framework",
  "sui-move-build",
  "sui-types",

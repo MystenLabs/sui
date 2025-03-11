@@ -4094,7 +4094,7 @@ pub mod prop {
                         .into_iter()
                         .map(move |l| value_strategy_with_layout(&l))
                         .collect::<Vec<_>>();
-                    v.prop_map(move |vals| Value::variant(Variant::pack(tag as u16, vals)))
+                    v.prop_map(move |vals| Value::variant(Variant::pack(tag, vals)))
                 })
                 .boxed(),
         }

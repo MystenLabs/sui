@@ -6,6 +6,12 @@ use crate::{
     object_runtime::{object_store::ObjectResult, ObjectRuntime},
     NativesCostTable,
 };
+use legacy_move_vm_types::{
+    loaded_data::runtime_types::Type,
+    natives::function::NativeResult,
+    pop_arg,
+    values::{StructRef, Value},
+};
 use move_binary_format::errors::{PartialVMError, PartialVMResult};
 use move_core_types::{
     account_address::AccountAddress,
@@ -17,12 +23,6 @@ use move_core_types::{
 };
 use move_vm_runtime::native_charge_gas_early_exit;
 use move_vm_runtime::native_functions::NativeContext;
-use legacy_move_vm_types::{
-    loaded_data::runtime_types::Type,
-    natives::function::NativeResult,
-    pop_arg,
-    values::{StructRef, Value},
-};
 use smallvec::smallvec;
 use std::collections::VecDeque;
 use sui_types::{base_types::MoveObjectType, dynamic_field::derive_dynamic_field_id};
