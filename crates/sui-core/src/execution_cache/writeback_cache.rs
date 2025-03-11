@@ -948,10 +948,21 @@ impl WritebackCache {
         // Flush writes to disk before removing anything from dirty set. otherwise,
         // a cache eviction could cause a value to disappear briefly, even if we insert to the
         // cache before removing from the dirty set.
-        self.store
-            .write_transaction_outputs(epoch, &all_outputs, use_object_per_epoch_marker_table_v2)
-            .expect("db error");
+        {
+            let _metrics_guard = mysten_metrics::monitored_scope(
+                "WritebackCache::commit_transaction_outputs::write",
+            );
+            self.store
+                .write_transaction_outputs(
+                    epoch,
+                    &all_outputs,
+                    use_object_per_epoch_marker_table_v2,
+                )
+                .expect("db error");
+        }
 
+        let _metrics_guard =
+            mysten_metrics::monitored_scope("WritebackCache::commit_transaction_outputs::flush");
         for outputs in all_outputs.iter() {
             let tx_digest = outputs.transaction.digest();
             assert!(self
