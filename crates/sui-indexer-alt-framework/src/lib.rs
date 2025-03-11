@@ -9,6 +9,7 @@ use diesel::{
     pg::Pg,
 };
 use diesel_migrations::{embed_migrations, EmbeddedMigrations};
+use futures::future;
 use ingestion::{client::IngestionClient, ClientArgs, IngestionConfig, IngestionService};
 use metrics::IndexerMetrics;
 use models::watermarks::{CommitterWatermark, PrunerWatermark};
@@ -20,7 +21,6 @@ use pipeline::{
 use prometheus::Registry;
 use sui_indexer_alt_metrics::db::DbConnectionStatsCollector;
 use sui_pg_db::{temp::TempDb, Db, DbArgs};
-use task::graceful_shutdown;
 use tempfile::tempdir;
 use tokio::task::JoinHandle;
 use tokio_util::sync::CancellationToken;
@@ -373,7 +373,7 @@ impl Indexer {
             // If ingestion has been configured to only handle a specific range of checkpoints, we
             // want to make sure that tasks are allowed to run to completion before shutting them
             // down.
-            graceful_shutdown(self.handles, self.cancel).await;
+            future::join_all(self.handles).await;
             info!("Indexing pipeline gracefully shut down");
         }))
     }

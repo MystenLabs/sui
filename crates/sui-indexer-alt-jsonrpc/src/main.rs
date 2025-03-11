@@ -10,8 +10,9 @@ use sui_indexer_alt_jsonrpc::{
     start_rpc,
 };
 use sui_indexer_alt_metrics::MetricsService;
-use tokio::fs;
+use tokio::{fs, signal};
 use tokio_util::sync::CancellationToken;
+use tracing::info;
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
@@ -50,6 +51,19 @@ async fn main() -> anyhow::Result<()> {
 
             let metrics = MetricsService::new(metrics_args, registry, cancel.child_token());
 
+            let h_ctrl_c = tokio::spawn({
+                let cancel = cancel.clone();
+                async move {
+                    tokio::select! {
+                        _ = cancel.cancelled() => {}
+                        _ = signal::ctrl_c() => {
+                            info!("Received Ctrl-C, shutting down...");
+                            cancel.cancel();
+                        }
+                    }
+                }
+            });
+
             let h_rpc = start_rpc(
                 database_url,
                 db_args,
@@ -67,6 +81,7 @@ async fn main() -> anyhow::Result<()> {
             let _ = h_rpc.await;
             cancel.cancel();
             let _ = h_metrics.await;
+            let _ = h_ctrl_c.await;
         }
 
         Command::GenerateConfig => {
