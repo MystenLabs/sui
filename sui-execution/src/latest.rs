@@ -220,3 +220,9 @@ impl<'m> verifier::Verifier for Verifier<'m> {
         run_metered_move_bytecode_verifier(modules, &self.config, meter, self.metrics)
     }
 }
+
+#[cfg(msim)]
+pub fn init_vm_for_msim() {
+    use move_vm_runtime_latest::cache::identifier_interner;
+    identifier_interner::init_interner();
+}

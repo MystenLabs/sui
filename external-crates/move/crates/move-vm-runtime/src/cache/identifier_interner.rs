@@ -30,6 +30,11 @@ use std::sync::Arc;
 static STRING_INTERNER: Lazy<Arc<IdentifierInterner>> =
     Lazy::new(|| Arc::new(IdentifierInterner::new()));
 
+#[cfg(msim)]
+pub fn init_interner() {
+    let _ = &*STRING_INTERNER;
+}
+
 /// Function to access the global StringInterner
 fn global_interner() -> Arc<IdentifierInterner> {
     Arc::clone(&STRING_INTERNER)

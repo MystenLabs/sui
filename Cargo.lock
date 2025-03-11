@@ -15464,6 +15464,7 @@ dependencies = [
  "mysten-network",
  "rand 0.8.5",
  "serde",
+ "sui-execution",
  "sui-framework",
  "sui-move-build",
  "sui-types",
