@@ -216,7 +216,15 @@ pub async fn start_rpc(
     let mut rpc = RpcService::new(rpc_args, registry, cancel.child_token())
         .context("Failed to create RPC service")?;
 
-    let context = Context::new(database_url, db_args, rpc_config, rpc.metrics(), registry).await?;
+    let context = Context::new(
+        database_url,
+        db_args,
+        rpc_config,
+        rpc.metrics(),
+        registry,
+        cancel.child_token(),
+    )
+    .await?;
 
     let system_package_task = SystemPackageTask::new(
         context.clone(),
