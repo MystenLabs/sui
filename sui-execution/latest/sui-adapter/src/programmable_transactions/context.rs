@@ -358,15 +358,20 @@ mod checked {
         /// However, it is currently gated to 1 result, so this function is in place for future
         /// changes. This is currently blocked by more invasive work needed to update argument idx
         /// in errors
-        pub fn splat_args(
+        pub fn splat_args<Items: IntoIterator<Item = Argument>>(
             &self,
-            args: impl IntoIterator<Item = Argument>,
-        ) -> Result<Vec<Arg>, ExecutionError> {
-            if !self.protocol_config.normalize_args() {
+            args: Items,
+        ) -> Result<Vec<Arg>, ExecutionError>
+        where
+            Items::IntoIter: ExactSizeIterator,
+        {
+            if !self.protocol_config.normalize_ptb_arguments() {
                 Ok(args.into_iter().map(|arg| Arg(Arg_::V1(arg))).collect())
             } else {
+                let args = args.into_iter();
+                let _args_len = args.len();
                 let mut res = vec![];
-                for (arg_idx, arg) in args.into_iter().enumerate() {
+                for (arg_idx, arg) in args.enumerate() {
                     match arg {
                         Argument::GasCoin => res.push(Arg(Arg_::V2(NormalizedArg::GasCoin))),
                         Argument::Input(i) => res.push(Arg(Arg_::V2(NormalizedArg::Input(i)))),
@@ -394,6 +399,7 @@ mod checked {
                         }
                     }
                 }
+                debug_assert_eq!(res.len(), _args_len);
                 Ok(res)
             }
         }
@@ -1010,15 +1016,16 @@ mod checked {
         {
             match arg.0 {
                 Arg_::V1(arg) => {
-                    assert_invariant!(
-                        !self.protocol_config.normalize_args(),
+                    // invariant violation cannot be a command argument error
+                    debug_assert!(
+                        !self.protocol_config.normalize_ptb_arguments(),
                         "Should not be using v1 args with normalized args"
                     );
                     self.borrow_mut_impl_v1(arg, update_last_usage)
                 }
                 Arg_::V2(arg) => {
-                    assert_invariant!(
-                        self.protocol_config.normalize_args(),
+                    debug_assert!(
+                        self.protocol_config.normalize_ptb_arguments(),
                         "Should be using only v2 args with normalized args"
                     );
                     self.borrow_mut_impl_v2(arg, update_last_usage)
