@@ -52,7 +52,7 @@ impl From<sui_sdk_types::BalanceChange> for BalanceChange {
         Self {
             address: Some(value.address.to_string()),
             coin_type: Some(value.coin_type.into()),
-            amount: Some(value.amount.into()),
+            amount: Some(value.amount.to_string()),
         }
     }
 }
@@ -76,7 +76,8 @@ impl TryFrom<&BalanceChange> for sui_sdk_types::BalanceChange {
             .amount
             .as_ref()
             .ok_or_else(|| TryFromProtoError::missing("amount"))?
-            .pipe(TryInto::try_into)?;
+            .parse()
+            .map_err(TryFromProtoError::from_error)?;
         Ok(Self {
             address,
             coin_type,

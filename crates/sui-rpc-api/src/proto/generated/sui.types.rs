@@ -55,27 +55,6 @@ pub struct Bcs {
     #[prost(bytes = "bytes", optional, tag = "1")]
     pub bcs: ::core::option::Option<::prost::bytes::Bytes>,
 }
-/// An unsigned 128-bit integer encoded in little-endian using 16-bytes.
-#[derive(Clone, PartialEq, ::prost::Message)]
-pub struct U128 {
-    /// 16-byte little-endian bytes.
-    #[prost(bytes = "bytes", optional, tag = "1")]
-    pub bytes: ::core::option::Option<::prost::bytes::Bytes>,
-}
-/// A signed 128-bit integer encoded in little-endian using 16-bytes.
-#[derive(Clone, PartialEq, ::prost::Message)]
-pub struct I128 {
-    /// 16-byte little-endian bytes.
-    #[prost(bytes = "bytes", optional, tag = "1")]
-    pub bytes: ::core::option::Option<::prost::bytes::Bytes>,
-}
-/// An unsigned 256-bit integer encoded in little-endian using 32-bytes.
-#[derive(Clone, PartialEq, ::prost::Message)]
-pub struct U256 {
-    /// 16-byte little-endian bytes.
-    #[prost(bytes = "bytes", optional, tag = "1")]
-    pub bytes: ::core::option::Option<::prost::bytes::Bytes>,
-}
 /// A header for a checkpoint on the Sui blockchain.
 ///
 /// On the Sui network, checkpoints define the history of the blockchain. They are quite similar to
@@ -536,10 +515,12 @@ pub mod move_value {
         U32(u32),
         #[prost(uint64, tag = "6")]
         U64(u64),
-        #[prost(message, tag = "7")]
-        U128(super::U128),
-        #[prost(message, tag = "8")]
-        U256(super::U256),
+        /// 128-bit unsigned integer encoded in base10
+        #[prost(string, tag = "7")]
+        U128(::prost::alloc::string::String),
+        /// 256-bit unsigned integer encoded in base10
+        #[prost(string, tag = "8")]
+        U256(::prost::alloc::string::String),
         #[prost(string, tag = "9")]
         Address(::prost::alloc::string::String),
         #[prost(message, tag = "10")]

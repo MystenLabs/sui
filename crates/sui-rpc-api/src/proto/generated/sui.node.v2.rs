@@ -384,8 +384,9 @@ pub struct BalanceChange {
     #[prost(message, optional, tag = "2")]
     pub coin_type: ::core::option::Option<super::super::types::TypeTag>,
     /// The amount or change in balance.
-    #[prost(message, optional, tag = "3")]
-    pub amount: ::core::option::Option<super::super::types::I128>,
+    /// 128-bit signed integer encoded in base10
+    #[prost(string, optional, tag = "3")]
+    pub amount: ::core::option::Option<::prost::alloc::string::String>,
 }
 /// Indicates the finality of the executed transaction.
 #[derive(Clone, PartialEq, ::prost::Message)]

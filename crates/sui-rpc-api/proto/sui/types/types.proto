@@ -33,28 +33,6 @@ message Bcs {
   optional bytes bcs = 1;
 }
 
-// Primitives {{{
-
-// An unsigned 128-bit integer encoded in little-endian using 16-bytes.
-message U128 {
-  // 16-byte little-endian bytes.
-  optional bytes bytes = 1;
-}
-
-// A signed 128-bit integer encoded in little-endian using 16-bytes.
-message I128 {
-  // 16-byte little-endian bytes.
-  optional bytes bytes = 1;
-}
-
-// An unsigned 256-bit integer encoded in little-endian using 32-bytes.
-message U256 {
-  // 16-byte little-endian bytes.
-  optional bytes bytes = 1;
-}
-
-// End Primitives }}}
-
 // Checkpoint {{{
 
 // A header for a checkpoint on the Sui blockchain.
@@ -412,8 +390,10 @@ message MoveValue {
     uint32 u16 = 4;
     uint32 u32 = 5;
     uint64 u64 = 6;
-    U128 u128 = 7;
-    U256 u256 = 8;
+    // 128-bit unsigned integer encoded in base10
+    string u128 = 7;
+    // 256-bit unsigned integer encoded in base10
+    string u256 = 8;
     string address = 9;
     MoveVector vector = 10;
     MoveStructValue struct = 11;
