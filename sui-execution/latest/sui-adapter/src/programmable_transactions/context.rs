@@ -102,7 +102,7 @@ mod checked {
         results: Vec<Vec<ResultValue>>,
         /// Map of arguments that are currently borrowed in this command, true if the borrow is mutable
         /// This gets cleared out when new results are pushed, i.e. the end of a command
-        borrowed: HashMap<Argument, /* mut */ bool>,
+        borrowed: HashMap<Arg, /* mut */ bool>,
     }
 
     /// A write for an object that was generated outside of the Move ObjectRuntime
@@ -115,6 +115,22 @@ mod checked {
         has_public_transfer: bool,
         /// contents of the object
         bytes: Vec<u8>,
+    }
+
+    #[derive(Clone, Copy, Debug, Eq, PartialEq, Hash)]
+    pub struct Arg(Arg_);
+
+    #[derive(Clone, Copy, Debug, Eq, PartialEq, Hash)]
+    enum Arg_ {
+        V1(Argument),
+        V2(NormalizedArg),
+    }
+
+    #[derive(Clone, Copy, Debug, Eq, PartialEq, Hash)]
+    enum NormalizedArg {
+        GasCoin,
+        Input(u16),
+        Result(u16, u16),
     }
 
     impl<'vm, 'state, 'a> ExecutionContext<'vm, 'state, 'a> {
@@ -337,6 +353,62 @@ mod checked {
             Ok(())
         }
 
+        /// Takes an iterator of arguments and flattens a Result into a NestedResult if there
+        /// is more than one result.
+        /// However, it is currently gated to 1 result, so this function is in place for future
+        /// changes. This is currently blocked by more invasive work needed to update argument idx
+        /// in errors
+        pub fn splat_args(
+            &self,
+            args: impl IntoIterator<Item = Argument>,
+        ) -> Result<Vec<Arg>, ExecutionError> {
+            if !self.protocol_config.normalize_args() {
+                Ok(args.into_iter().map(|arg| Arg(Arg_::V1(arg))).collect())
+            } else {
+                let mut res = vec![];
+                for (arg_idx, arg) in args.into_iter().enumerate() {
+                    match arg {
+                        Argument::GasCoin => res.push(Arg(Arg_::V2(NormalizedArg::GasCoin))),
+                        Argument::Input(i) => res.push(Arg(Arg_::V2(NormalizedArg::Input(i)))),
+                        Argument::Result(i) => {
+                            let Some(result) = self.results.get(i as usize) else {
+                                return Err(command_argument_error(
+                                    CommandArgumentError::IndexOutOfBounds { idx: i },
+                                    arg_idx,
+                                ));
+                            };
+                            let Ok(len): Result<u16, _> = result.len().try_into() else {
+                                invariant_violation!("Result of length greater than u16::MAX");
+                            };
+                            if len != 1 {
+                                // TODO protocol config to allow splatting of args
+                                return Err(command_argument_error(
+                                    CommandArgumentError::InvalidResultArity { result_idx: i },
+                                    arg_idx,
+                                ));
+                            }
+                            res.extend((0..len).map(|j| Arg(Arg_::V2(NormalizedArg::Result(i, j)))))
+                        }
+                        Argument::NestedResult(i, j) => {
+                            res.push(Arg(Arg_::V2(NormalizedArg::Result(i, j))))
+                        }
+                    }
+                }
+                Ok(res)
+            }
+        }
+
+        pub fn one_arg(&self, arg: Argument) -> Result<Arg, ExecutionError> {
+            let args = self.splat_args(vec![arg])?;
+            let Ok([arg]): Result<[Arg; 1], _> = args.try_into() else {
+                return Err(ExecutionError::new_with_source(
+                    ExecutionErrorKind::ArityMismatch,
+                    "Expected 1 argument but found many when expanding a Result into NestedResult",
+                ));
+            };
+            Ok(arg)
+        }
+
         /// Get the argument value. Cloning the value if it is copyable, and setting its value to None
         /// if it is not (making it unavailable).
         /// Errors if out of bounds, if the argument is borrowed, if it is unavailable (already taken),
@@ -345,7 +417,7 @@ mod checked {
             &mut self,
             command_kind: CommandKind<'_>,
             arg_idx: usize,
-            arg: Argument,
+            arg: Arg,
         ) -> Result<V, ExecutionError> {
             self.by_value_arg_(command_kind, arg)
                 .map_err(|e| command_argument_error(e, arg_idx))
@@ -353,7 +425,7 @@ mod checked {
         fn by_value_arg_<V: TryFromValue>(
             &mut self,
             command_kind: CommandKind<'_>,
-            arg: Argument,
+            arg: Arg,
         ) -> Result<V, CommandArgumentError> {
             let shared_obj_deletion_enabled = self.protocol_config.shared_object_deletion();
             let is_borrowed = self.arg_is_borrowed(&arg);
@@ -372,9 +444,7 @@ mod checked {
                 return Err(CommandArgumentError::InvalidValueUsage);
             }
             // Gas coin cannot be taken by value, except in TransferObjects
-            if matches!(arg, Argument::GasCoin)
-                && !matches!(command_kind, CommandKind::TransferObjects)
-            {
+            if arg.is_gas_coin() && !matches!(command_kind, CommandKind::TransferObjects) {
                 return Err(CommandArgumentError::InvalidGasCoinUsage);
             }
             // Immutable objects cannot be taken by value
@@ -427,14 +497,14 @@ mod checked {
         pub fn borrow_arg_mut<V: TryFromValue>(
             &mut self,
             arg_idx: usize,
-            arg: Argument,
+            arg: Arg,
         ) -> Result<V, ExecutionError> {
             self.borrow_arg_mut_(arg)
                 .map_err(|e| command_argument_error(e, arg_idx))
         }
         fn borrow_arg_mut_<V: TryFromValue>(
             &mut self,
-            arg: Argument,
+            arg: Arg,
         ) -> Result<V, CommandArgumentError> {
             // mutable borrowing requires unique usage
             if self.arg_is_borrowed(&arg) {
@@ -471,7 +541,7 @@ mod checked {
         pub fn borrow_arg<V: TryFromValue>(
             &mut self,
             arg_idx: usize,
-            arg: Argument,
+            arg: Arg,
             type_: &Type,
         ) -> Result<V, ExecutionError> {
             self.borrow_arg_(arg, type_)
@@ -479,7 +549,7 @@ mod checked {
         }
         fn borrow_arg_<V: TryFromValue>(
             &mut self,
-            arg: Argument,
+            arg: Arg,
             arg_type: &Type,
         ) -> Result<V, CommandArgumentError> {
             // immutable borrowing requires the value was not mutably borrowed.
@@ -509,10 +579,10 @@ mod checked {
         pub fn restore_arg<Mode: ExecutionMode>(
             &mut self,
             updates: &mut Mode::ArgumentUpdates,
-            arg: Argument,
+            arg: Arg,
             value: Value,
         ) -> Result<(), ExecutionError> {
-            Mode::add_argument_update(self, updates, arg, &value)?;
+            Mode::add_argument_update(self, updates, arg.into(), &value)?;
             let was_mut_opt = self.borrowed.remove(&arg);
             assert_invariant!(
                 was_mut_opt.is_some() && was_mut_opt.unwrap(),
@@ -911,19 +981,19 @@ mod checked {
         }
 
         /// Returns true if the value at the argument's location is borrowed, mutably or immutably
-        fn arg_is_borrowed(&self, arg: &Argument) -> bool {
+        fn arg_is_borrowed(&self, arg: &Arg) -> bool {
             self.borrowed.contains_key(arg)
         }
 
         /// Returns true if the value at the argument's location is mutably borrowed
-        fn arg_is_mut_borrowed(&self, arg: &Argument) -> bool {
+        fn arg_is_mut_borrowed(&self, arg: &Arg) -> bool {
             matches!(self.borrowed.get(arg), Some(/* mut */ true))
         }
 
         /// Internal helper to borrow the value for an argument and update the most recent usage
         fn borrow_mut(
             &mut self,
-            arg: Argument,
+            arg: Arg,
             usage: UsageKind,
         ) -> Result<(Option<&InputObjectMetadata>, &mut Option<Value>), CommandArgumentError>
         {
@@ -933,6 +1003,31 @@ mod checked {
         /// Internal helper to borrow the value for an argument
         /// Updates the most recent usage if specified
         fn borrow_mut_impl(
+            &mut self,
+            arg: Arg,
+            update_last_usage: Option<UsageKind>,
+        ) -> Result<(Option<&InputObjectMetadata>, &mut Option<Value>), CommandArgumentError>
+        {
+            match arg.0 {
+                Arg_::V1(arg) => {
+                    assert_invariant!(
+                        !self.protocol_config.normalize_args(),
+                        "Should not be using v1 args with normalized args"
+                    );
+                    self.borrow_mut_impl_v1(arg, update_last_usage)
+                }
+                Arg_::V2(arg) => {
+                    assert_invariant!(
+                        self.protocol_config.normalize_args(),
+                        "Should be using only v2 args with normalized args"
+                    );
+                    self.borrow_mut_impl_v2(arg, update_last_usage)
+                }
+            }
+        }
+
+        // v1 of borrow_mut_impl
+        fn borrow_mut_impl_v1(
             &mut self,
             arg: Argument,
             update_last_usage: Option<UsageKind>,
@@ -956,6 +1051,40 @@ mod checked {
                     (None, &mut command_result[0])
                 }
                 Argument::NestedResult(i, j) => {
+                    let Some(command_result) = self.results.get_mut(i as usize) else {
+                        return Err(CommandArgumentError::IndexOutOfBounds { idx: i });
+                    };
+                    let Some(result_value) = command_result.get_mut(j as usize) else {
+                        return Err(CommandArgumentError::SecondaryIndexOutOfBounds {
+                            result_idx: i,
+                            secondary_idx: j,
+                        });
+                    };
+                    (None, result_value)
+                }
+            };
+            if let Some(usage) = update_last_usage {
+                result_value.last_usage_kind = Some(usage);
+            }
+            Ok((metadata, &mut result_value.value))
+        }
+
+        // v2 of borrow_mut_impl
+        fn borrow_mut_impl_v2(
+            &mut self,
+            arg: NormalizedArg,
+            update_last_usage: Option<UsageKind>,
+        ) -> Result<(Option<&InputObjectMetadata>, &mut Option<Value>), CommandArgumentError>
+        {
+            let (metadata, result_value) = match arg {
+                NormalizedArg::GasCoin => (self.gas.object_metadata.as_ref(), &mut self.gas.inner),
+                NormalizedArg::Input(i) => {
+                    let Some(input_value) = self.inputs.get_mut(i as usize) else {
+                        return Err(CommandArgumentError::IndexOutOfBounds { idx: i });
+                    };
+                    (input_value.object_metadata.as_ref(), &mut input_value.inner)
+                }
+                NormalizedArg::Result(i, j) => {
                     let Some(command_result) = self.results.get_mut(i as usize) else {
                         return Err(CommandArgumentError::IndexOutOfBounds { idx: i });
                     };
@@ -1044,6 +1173,29 @@ mod checked {
                 &mut data_store,
                 &mut SuiGasMeter(self.gas_charger.move_gas_status_mut()),
             )
+        }
+    }
+
+    impl Arg {
+        fn is_gas_coin(&self) -> bool {
+            // kept as two separate matches for exhaustiveness
+            match self {
+                Arg(Arg_::V1(a)) => matches!(a, Argument::GasCoin),
+                Arg(Arg_::V2(n)) => matches!(n, NormalizedArg::GasCoin),
+            }
+        }
+    }
+
+    impl From<Arg> for Argument {
+        fn from(arg: Arg) -> Self {
+            match arg.0 {
+                Arg_::V1(a) => a,
+                Arg_::V2(normalized) => match normalized {
+                    NormalizedArg::GasCoin => Argument::GasCoin,
+                    NormalizedArg::Input(i) => Argument::Input(i),
+                    NormalizedArg::Result(i, j) => Argument::NestedResult(i, j),
+                },
+            }
         }
     }
 
