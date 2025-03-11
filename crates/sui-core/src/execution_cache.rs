@@ -38,6 +38,7 @@ use sui_types::{
     storage::InputKey,
 };
 use tracing::instrument;
+use typed_store::rocks::DBBatch;
 
 pub(crate) mod cache_types;
 pub mod metrics;
@@ -140,16 +141,26 @@ pub fn build_execution_cache_from_env(
     )
 }
 
+pub type Batch = (Vec<Arc<TransactionOutputs>>, DBBatch);
+
 pub trait ExecutionCacheCommit: Send + Sync {
+    /// Build a DBBatch containing the given transaction outputs.
+    fn build_db_batch(
+        &self,
+        epoch: EpochId,
+        digests: &[TransactionDigest],
+        // TODO: Delete this parameter once table migration is complete.
+        use_object_per_epoch_marker_table_v2: bool,
+    ) -> Batch;
+
     /// Durably commit the outputs of the given transactions to the database.
     /// Will be called by CheckpointExecutor to ensure that transaction outputs are
     /// written durably before marking a checkpoint as finalized.
     fn commit_transaction_outputs(
         &self,
         epoch: EpochId,
+        batch: Batch,
         digests: &[TransactionDigest],
-        // TODO: Delete this parameter once table migration is complete.
-        use_object_per_epoch_marker_table_v2: bool,
     );
 
     /// Durably commit a transaction to the database. Used to store any transactions

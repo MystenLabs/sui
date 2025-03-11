@@ -3241,6 +3241,15 @@ async fn test_store_revert_transfer_sui() {
     assert!(!tx_cache.is_tx_already_executed(&tx_digest));
 }
 
+fn build_and_commit(
+    cache_commit: &Arc<dyn ExecutionCacheCommit>,
+    epoch: EpochId,
+    txs: &[TransactionDigest],
+) {
+    let batch = cache_commit.build_db_batch(epoch, txs, true);
+    cache_commit.commit_transaction_outputs(epoch, batch, txs);
+}
+
 #[tokio::test]
 async fn test_store_revert_wrap_move_call() {
     let (sender, sender_key): (_, AccountKeyPair) = get_key_pair();
@@ -3259,13 +3268,11 @@ async fn test_store_revert_wrap_move_call() {
     .await
     .unwrap();
 
-    authority_state
-        .get_cache_commit()
-        .commit_transaction_outputs(
-            authority_state.epoch_store_for_testing().epoch(),
-            &[*create_effects.transaction_digest()],
-            true,
-        );
+    build_and_commit(
+        authority_state.get_cache_commit(),
+        authority_state.epoch_store_for_testing().epoch(),
+        &[*create_effects.transaction_digest()],
+    );
 
     assert!(create_effects.status().is_ok());
     assert_eq!(create_effects.created().len(), 1);
@@ -3355,16 +3362,14 @@ async fn test_store_revert_unwrap_move_call() {
     .await
     .unwrap();
 
-    authority_state
-        .get_cache_commit()
-        .commit_transaction_outputs(
-            authority_state.epoch_store_for_testing().epoch(),
-            &[
-                *create_effects.transaction_digest(),
-                *wrap_effects.transaction_digest(),
-            ],
-            true,
-        );
+    build_and_commit(
+        authority_state.get_cache_commit(),
+        authority_state.epoch_store_for_testing().epoch(),
+        &[
+            *create_effects.transaction_digest(),
+            *wrap_effects.transaction_digest(),
+        ],
+    );
 
     assert!(wrap_effects.status().is_ok());
     assert_eq!(wrap_effects.created().len(), 1);
@@ -3634,16 +3639,14 @@ async fn test_store_revert_add_ofield() {
     let outer_v0 = create_outer_effects.created()[0].0;
     let inner_v0 = create_inner_effects.created()[0].0;
 
-    authority_state
-        .get_cache_commit()
-        .commit_transaction_outputs(
-            authority_state.epoch_store_for_testing().epoch(),
-            &[
-                *create_outer_effects.transaction_digest(),
-                *create_inner_effects.transaction_digest(),
-            ],
-            true,
-        );
+    build_and_commit(
+        authority_state.get_cache_commit(),
+        authority_state.epoch_store_for_testing().epoch(),
+        &[
+            *create_outer_effects.transaction_digest(),
+            *create_inner_effects.transaction_digest(),
+        ],
+    );
 
     let add_txn = to_sender_signed_transaction(
         TransactionData::new_move_call(
@@ -3760,17 +3763,15 @@ async fn test_store_revert_remove_ofield() {
     assert!(add_effects.status().is_ok());
     assert_eq!(add_effects.created().len(), 1);
 
-    authority_state
-        .get_cache_commit()
-        .commit_transaction_outputs(
-            authority_state.epoch_store_for_testing().epoch(),
-            &[
-                *create_outer_effects.transaction_digest(),
-                *create_inner_effects.transaction_digest(),
-                *add_effects.transaction_digest(),
-            ],
-            true,
-        );
+    build_and_commit(
+        authority_state.get_cache_commit(),
+        authority_state.epoch_store_for_testing().epoch(),
+        &[
+            *create_outer_effects.transaction_digest(),
+            *create_inner_effects.transaction_digest(),
+            *add_effects.transaction_digest(),
+        ],
+    );
 
     let field_v0 = add_effects.created()[0].0;
     let outer_v1 = find_by_id(&add_effects.mutated(), outer_v0.0).unwrap();

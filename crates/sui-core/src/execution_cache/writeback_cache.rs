@@ -52,7 +52,7 @@ use crate::transaction_outputs::TransactionOutputs;
 use dashmap::mapref::entry::Entry as DashMapEntry;
 use dashmap::DashMap;
 use futures::{future::BoxFuture, FutureExt};
-use moka::sync::Cache as MokaCache;
+use moka::sync::SegmentedCache as MokaCache;
 use mysten_common::sync::notify_read::NotifyRead;
 use parking_lot::Mutex;
 use prometheus::Registry;
@@ -91,7 +91,7 @@ use super::{
     cache_types::{CacheResult, CachedVersionMap, IsNewer, MonotonicCache},
     implement_passthrough_traits,
     object_locks::ObjectLocks,
-    CheckpointCache, ExecutionCacheCommit, ExecutionCacheMetrics, ExecutionCacheReconfigAPI,
+    Batch, CheckpointCache, ExecutionCacheCommit, ExecutionCacheMetrics, ExecutionCacheReconfigAPI,
     ExecutionCacheWrite, ObjectCacheRead, StateSyncAPI, TestingAPI, TransactionCacheRead,
 };
 
@@ -233,12 +233,12 @@ struct UncommittedData {
 impl UncommittedData {
     fn new() -> Self {
         Self {
-            objects: DashMap::new(),
-            markers: DashMap::new(),
-            transaction_effects: DashMap::new(),
-            executed_effects_digests: DashMap::new(),
-            pending_transaction_writes: DashMap::new(),
-            transaction_events: DashMap::new(),
+            objects: DashMap::with_shard_amount(2048),
+            markers: DashMap::with_shard_amount(2048),
+            transaction_effects: DashMap::with_shard_amount(2048),
+            executed_effects_digests: DashMap::with_shard_amount(2048),
+            pending_transaction_writes: DashMap::with_shard_amount(2048),
+            transaction_events: DashMap::with_shard_amount(2048),
             total_transaction_inserts: AtomicU64::new(0),
             total_transaction_commits: AtomicU64::new(0),
         }
@@ -332,10 +332,10 @@ struct CachedCommittedData {
 
 impl CachedCommittedData {
     fn new(config: &ExecutionCacheConfig) -> Self {
-        let object_cache = MokaCache::builder()
+        let object_cache = MokaCache::builder(8)
             .max_capacity(config.object_cache_size())
             .build();
-        let marker_cache = MokaCache::builder()
+        let marker_cache = MokaCache::builder(8)
             .max_capacity(config.marker_cache_size())
             .build();
 
@@ -344,7 +344,7 @@ impl CachedCommittedData {
         let transaction_events = MonotonicCache::new(config.events_cache_size());
         let executed_effects_digests = MonotonicCache::new(config.executed_effect_cache_size());
 
-        let transaction_objects = MokaCache::builder()
+        let transaction_objects = MokaCache::builder(8)
             .max_capacity(config.transaction_objects_cache_size())
             .build();
 
@@ -460,7 +460,7 @@ impl WritebackCache {
         metrics: Arc<ExecutionCacheMetrics>,
         backpressure_manager: Arc<BackpressureManager>,
     ) -> Self {
-        let packages = MokaCache::builder()
+        let packages = MokaCache::builder(8)
             .max_capacity(config.package_cache_size())
             .build();
         Self {
@@ -907,18 +907,13 @@ impl WritebackCache {
         self.set_backpressure(pending_count);
     }
 
-    // Commits dirty data for the given TransactionDigest to the db.
-    #[instrument(level = "debug", skip_all)]
-    fn commit_transaction_outputs(
+    fn build_db_batch(
         &self,
         epoch: EpochId,
         digests: &[TransactionDigest],
-        // TODO: Delete this parameter once table migration is complete.
         use_object_per_epoch_marker_table_v2: bool,
-    ) {
-        fail_point!("writeback-cache-commit");
-        trace!(?digests);
-
+    ) -> Batch {
+        let _metrics_guard = mysten_metrics::monitored_scope("WritebackCache::build_db_batch");
         let mut all_outputs = Vec::with_capacity(digests.len());
         for tx in digests {
             let Some(outputs) = self
@@ -938,13 +933,33 @@ impl WritebackCache {
             all_outputs.push(outputs);
         }
 
+        let batch = self
+            .store
+            .build_db_batch(epoch, &all_outputs, use_object_per_epoch_marker_table_v2)
+            .expect("db error");
+        (all_outputs, batch)
+    }
+
+    // Commits dirty data for the given TransactionDigest to the db.
+    #[instrument(level = "debug", skip_all)]
+    fn commit_transaction_outputs(
+        &self,
+        epoch: EpochId,
+        (all_outputs, db_batch): Batch,
+        digests: &[TransactionDigest],
+    ) {
+        let _metrics_guard =
+            mysten_metrics::monitored_scope("WritebackCache::commit_transaction_outputs");
+        fail_point!("writeback-cache-commit");
+        trace!(?digests);
+
         // Flush writes to disk before removing anything from dirty set. otherwise,
         // a cache eviction could cause a value to disappear briefly, even if we insert to the
         // cache before removing from the dirty set.
-        self.store
-            .write_transaction_outputs(epoch, &all_outputs, use_object_per_epoch_marker_table_v2)
-            .expect("db error");
+        db_batch.write().expect("db error");
 
+        let _metrics_guard =
+            mysten_metrics::monitored_scope("WritebackCache::commit_transaction_outputs::flush");
         for outputs in all_outputs.iter() {
             let tx_digest = outputs.transaction.digest();
             assert!(self
@@ -1252,19 +1267,23 @@ impl WritebackCache {
 impl ExecutionCacheAPI for WritebackCache {}
 
 impl ExecutionCacheCommit for WritebackCache {
-    fn commit_transaction_outputs(
+    fn build_db_batch(
         &self,
         epoch: EpochId,
         digests: &[TransactionDigest],
         // TODO: Delete this parameter once table migration is complete.
         use_object_per_epoch_marker_table_v2: bool,
+    ) -> Batch {
+        self.build_db_batch(epoch, digests, use_object_per_epoch_marker_table_v2)
+    }
+
+    fn commit_transaction_outputs(
+        &self,
+        epoch: EpochId,
+        batch: Batch,
+        digests: &[TransactionDigest],
     ) {
-        WritebackCache::commit_transaction_outputs(
-            self,
-            epoch,
-            digests,
-            use_object_per_epoch_marker_table_v2,
-        )
+        WritebackCache::commit_transaction_outputs(self, epoch, batch, digests)
     }
 
     fn persist_transaction(&self, tx: &VerifiedExecutableTransaction) {
