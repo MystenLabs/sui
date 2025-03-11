@@ -7,7 +7,10 @@ use anyhow::Context as _;
 use async_graphql::dataloader::Loader;
 use diesel::{BoolExpressionMethods, ExpressionMethods, QueryDsl};
 use serde::de::DeserializeOwned;
-use sui_indexer_alt_schema::{objects::StoredObject, schema::kv_objects};
+use sui_indexer_alt_schema::{
+    objects::StoredObject,
+    schema::{kv_objects, obj_versions},
+};
 use sui_kvstore::KeyValueStoreReader;
 use sui_types::{base_types::ObjectID, object::Object, storage::ObjectKey};
 
@@ -15,7 +18,7 @@ use crate::context::Context;
 
 use super::{
     bigtable_reader::BigtableReader, error::Error, object_info::LatestObjectInfoKey,
-    object_versions::LatestObjectVersionKey, pg_reader::PgReader,
+    pg_reader::PgReader,
 };
 
 /// Key for fetching the contents a particular version of an object.
@@ -111,9 +114,24 @@ pub(crate) async fn load_latest(
     ctx: &Context,
     object_id: ObjectID,
 ) -> Result<Option<Object>, anyhow::Error> {
-    let Some(latest_version) = ctx
-        .pg_loader()
-        .load_one(LatestObjectVersionKey(object_id))
+    use obj_versions::dsl as v;
+
+    // It turns out to be more efficient to send each "latest version" query to the database
+    // one-by-one, than to batch them. The database has a hard time finding a good query plan for
+    // the batched query.
+    let query = v::obj_versions
+        .select(v::object_version)
+        .filter(v::object_id.eq(object_id.into_bytes()))
+        .order(v::object_version.desc());
+
+    let mut conn = ctx
+        .pg_reader()
+        .connect()
+        .await
+        .context("Failed to connect to the database")?;
+
+    let Some(latest_version): Option<i64> = conn
+        .optional(query)
         .await
         .context("Failed to load latest version")?
     else {
@@ -122,7 +140,7 @@ pub(crate) async fn load_latest(
 
     let object = ctx
         .kv_loader()
-        .load_one_object(object_id, latest_version.object_version as u64)
+        .load_one_object(object_id, latest_version as u64)
         .await
         .context("Failed to load latest object")?;
 
