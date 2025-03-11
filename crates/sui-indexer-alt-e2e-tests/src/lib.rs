@@ -287,7 +287,7 @@ impl OffchainCluster {
         let indexer = indexer.run().await.context("Failed to start indexer")?;
 
         let jsonrpc = start_rpc(
-            database_url.clone(),
+            Some(database_url.clone()),
             DbArgs::default(),
             rpc_args,
             WriteArgs::default(),

@@ -12,10 +12,7 @@ use sui_indexer_alt_jsonrpc::{
     start_rpc, RpcArgs,
 };
 use sui_macros::sim_test;
-use sui_pg_db::{
-    temp::{get_available_port, TempDb},
-    DbArgs,
-};
+use sui_pg_db::{temp::get_available_port, DbArgs};
 use sui_swarm_config::genesis_config::AccountConfig;
 use test_cluster::{TestCluster, TestClusterBuilder};
 use tokio::task::JoinHandle;
@@ -28,8 +25,6 @@ struct WriteTestCluster {
     rpc_handle: JoinHandle<()>,
     client: Client,
     cancel: CancellationToken,
-    #[allow(unused)]
-    db: TempDb,
 }
 
 impl WriteTestCluster {
@@ -53,8 +48,6 @@ impl WriteTestCluster {
 
         let cancel = CancellationToken::new();
 
-        let db = TempDb::new().expect("Failed to create temporary database");
-
         let rpc_listen_address =
             SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), get_available_port());
         let rpc_url = Url::parse(&format!("http://{}/", rpc_listen_address))
@@ -69,7 +62,7 @@ impl WriteTestCluster {
         };
 
         let rpc_handle = start_rpc(
-            db.database().url().clone(),
+            None,
             DbArgs::default(),
             rpc_args,
             WriteArgs {
@@ -89,7 +82,6 @@ impl WriteTestCluster {
             rpc_handle,
             client: Client::new(),
             cancel,
-            db,
         })
     }
 
