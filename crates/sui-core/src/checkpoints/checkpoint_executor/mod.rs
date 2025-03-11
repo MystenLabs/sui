@@ -242,7 +242,14 @@ impl CheckpointExecutor {
             run_with_range.and_then(|rwr| rwr.into_checkpoint_bound()),
         )
         // Checkpoint loading and execution is parallelized
-        .map(|checkpoint| this.clone().execute_checkpoint(checkpoint))
+        .map(|checkpoint| {
+            let this = this.clone();
+            async move {
+                tokio::spawn(this.execute_checkpoint(checkpoint))
+                    .await
+                    .unwrap()
+            }
+        })
         .buffered(concurrency)
         // Committing checkpoint contents must be done serially
         // Returns whether the checkpoint just executed was the final checkpoint of the epoch
