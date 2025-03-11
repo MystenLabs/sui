@@ -8,12 +8,17 @@ use crate::execution_cache::TransactionCacheRead;
 use futures::{future::Either, Stream};
 use mysten_common::fatal;
 use std::time::Duration;
+use strum::IntoEnumIterator;
+use strum::VariantNames;
 use sui_types::{
     base_types::{TransactionDigest, TransactionEffectsDigest},
     message_envelope::Message,
     messages_checkpoint::{CheckpointSequenceNumber, CheckpointSummary, VerifiedCheckpoint},
 };
+use tokio::sync::watch;
 use tracing::{debug, error, info, instrument, warn};
+
+use super::metrics::CheckpointExecutorMetrics;
 
 #[instrument(level = "debug", skip_all)]
 pub(super) fn stream_synced_checkpoints(
@@ -241,6 +246,162 @@ pub(super) fn assert_checkpoint_not_forked(
             locally_built_checkpoint,
             verified_checkpoint
         );
+    }
+}
+
+struct Watch {
+    watch: watch::Sender<CheckpointSequenceNumber>,
+}
+
+impl Watch {
+    fn new(starting_seq: CheckpointSequenceNumber) -> Self {
+        Self {
+            watch: watch::channel(starting_seq).0,
+        }
+    }
+
+    async fn wait_for(&self, seq: CheckpointSequenceNumber) {
+        let mut ready_seq = self.watch.subscribe();
+        while *ready_seq.borrow_and_update() < seq {
+            ready_seq.changed().await.expect("sender cannot be dropped");
+        }
+    }
+
+    fn signal(&self, new_ready: CheckpointSequenceNumber) {
+        self.watch.send_modify(|prev| {
+            assert_eq!(*prev + 1, new_ready);
+            *prev = new_ready;
+        });
+    }
+}
+
+#[derive(
+    Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, strum::EnumIter, strum_macros::VariantNames,
+)]
+pub(crate) enum PipelineStage {
+    ExecuteTransactions = 0,
+    WaitForTransactions = 1,
+    FinalizeTransactions = 2,
+    ProcessCheckpointData = 3,
+    BuildDbBatch = 4,
+    CommitTransactionOutputs = 5,
+    FinalizeCheckpoint = 6,
+    UpdateRpcIndex = 7,
+    BumpHighestExecutedCheckpoint = 8,
+    End = 9,
+}
+
+impl PipelineStage {
+    pub const fn first() -> Self {
+        Self::ExecuteTransactions
+    }
+
+    fn next(self) -> Self {
+        assert!(self < Self::End);
+        // Safe to unwrap since we know the value exists and we checked it's not End
+        Self::iter().nth((self as usize) + 1).unwrap()
+    }
+
+    fn as_str(self) -> &'static str {
+        Self::VARIANTS[self as usize]
+    }
+}
+
+pub(super) struct PipelineStages {
+    stages: [Watch; PipelineStage::End as usize],
+    metrics: Arc<CheckpointExecutorMetrics>,
+}
+
+impl PipelineStages {
+    pub fn new(
+        starting_seq: CheckpointSequenceNumber,
+        metrics: Arc<CheckpointExecutorMetrics>,
+    ) -> Arc<Self> {
+        Arc::new(Self {
+            stages: std::array::from_fn(|_| Watch::new(starting_seq)),
+            metrics,
+        })
+    }
+
+    pub async fn handle(self: &Arc<Self>, seq: CheckpointSequenceNumber) -> PipelineHandle {
+        let mut handle = PipelineHandle::new(self.clone(), seq);
+        handle.begin().await;
+        handle
+    }
+
+    async fn begin(&self, stage: PipelineStage, seq: CheckpointSequenceNumber) {
+        debug!(?stage, ?seq, "begin stage");
+        let start = Instant::now();
+        self.stages[stage as usize].wait_for(seq).await;
+        let duration = start.elapsed();
+        self.metrics
+            .stage_wait_duration_ns
+            .with_label_values(&[stage.as_str()])
+            .inc_by(duration.as_nanos() as u64);
+    }
+
+    fn end(&self, stage: PipelineStage, seq: CheckpointSequenceNumber) {
+        debug!(?stage, ?seq, "end stage");
+        self.stages[stage as usize].signal(seq + 1);
+    }
+}
+
+pub(super) struct PipelineHandle {
+    seq: CheckpointSequenceNumber,
+    cur_stage: PipelineStage,
+    stages: Arc<PipelineStages>,
+    timer: Instant,
+}
+
+impl PipelineHandle {
+    fn new(stages: Arc<PipelineStages>, seq: CheckpointSequenceNumber) -> Self {
+        Self {
+            seq,
+            cur_stage: PipelineStage::first(),
+            stages,
+            timer: Instant::now(),
+        }
+    }
+
+    async fn begin(&mut self) {
+        assert_eq!(self.cur_stage, PipelineStage::first(), "cannot begin twice");
+        self.stages.begin(self.cur_stage, self.seq).await;
+        self.timer = Instant::now();
+    }
+
+    pub async fn finish_stage(&mut self, finished: PipelineStage) {
+        let duration = self.timer.elapsed();
+        self.stages
+            .metrics
+            .stage_active_duration_ns
+            .with_label_values(&[self.cur_stage.as_str()])
+            .inc_by(duration.as_nanos() as u64);
+        assert_eq!(finished, self.cur_stage, "cannot skip stages");
+
+        self.stages.end(self.cur_stage, self.seq);
+        self.cur_stage = self.cur_stage.next();
+        if self.cur_stage != PipelineStage::End {
+            self.stages.begin(self.cur_stage, self.seq).await;
+        }
+    }
+
+    pub async fn skip_to(&mut self, stage: PipelineStage) {
+        assert!(self.cur_stage < stage);
+        while self.cur_stage < stage {
+            self.finish_stage(self.cur_stage).await;
+        }
+    }
+}
+
+impl Drop for PipelineHandle {
+    fn drop(&mut self) {
+        if !std::thread::panicking() {
+            assert_eq!(
+                self.cur_stage,
+                PipelineStage::End,
+                "PipelineHandle dropped without reaching end of pipeline"
+            );
+        }
     }
 }
 
