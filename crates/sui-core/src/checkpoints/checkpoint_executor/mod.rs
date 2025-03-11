@@ -472,22 +472,19 @@ impl CheckpointExecutor {
         checkpoint: VerifiedCheckpoint,
     ) -> CheckpointExecutionState {
         let sequence_number = checkpoint.sequence_number;
-        let (mut ckpt_state, tx_data, unexecuted_tx_digests) = tokio::task::spawn_blocking({
+        let (mut ckpt_state, tx_data) = tokio::task::spawn_blocking({
             let this = self.clone();
             move || {
                 let _scope =
                     mysten_metrics::monitored_scope("CheckpointExecutor::execute_transactions");
-                let (ckpt_state, tx_data) = this.load_checkpoint_transactions(checkpoint);
-                let unexecuted_tx_digests =
-                    this.schedule_transaction_execution(&ckpt_state, &tx_data);
-                (ckpt_state, tx_data, unexecuted_tx_digests)
+                this.load_and_schedule_checkpoint_transactions(checkpoint)
             }
         })
         .await
         .unwrap();
 
         self.transaction_cache_reader
-            .notify_read_executed_effects_digests(&unexecuted_tx_digests)
+            .notify_read_executed_effects_digests(&ckpt_state.data.tx_digests)
             .await;
 
         if ckpt_state.data.checkpoint.is_last_checkpoint_of_epoch() {
@@ -582,7 +579,7 @@ impl CheckpointExecutor {
 
     // Load all required transaction and effects data for the checkpoint.
     #[instrument(level = "info", skip_all)]
-    fn load_checkpoint_transactions(
+    fn load_and_schedule_checkpoint_transactions(
         &self,
         checkpoint: VerifiedCheckpoint,
     ) -> (CheckpointExecutionState, CheckpointTransactionData) {
@@ -618,11 +615,27 @@ impl CheckpointExecutor {
                     debug_assert_eq!(fx_digest, execution_data.effects.digest());
 
                     tx_digests.push(tx_digest);
-                    transactions.push(VerifiedExecutableTransaction::new_from_checkpoint(
+                    let tx = VerifiedExecutableTransaction::new_from_checkpoint(
                         VerifiedTransaction::new_unchecked(execution_data.transaction),
                         epoch,
                         seq,
-                    ));
+                    );
+
+                    if tx.contains_shared_object() {
+                        self.epoch_store
+                            .acquire_shared_version_assignments_from_effects(
+                                &tx,
+                                &execution_data.effects,
+                                &*self.object_cache_reader,
+                            )
+                            .expect("failed to acquire shared version assignments");
+                    }
+
+                    self.tx_manager.enqueue_with_expected_effects_digest(
+                        vec![(tx.clone(), fx_digest)],
+                        &self.epoch_store,
+                    );
+                    transactions.push(tx);
                     effects.push(execution_data.effects);
                     fx_digests.push(fx_digest);
                 });
