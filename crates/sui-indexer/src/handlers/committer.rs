@@ -4,7 +4,7 @@
 use std::collections::{BTreeMap, HashMap};
 
 use sui_types::messages_checkpoint::CheckpointSequenceNumber;
-use tap::tap::TapFallible;
+use tap::TapFallible;
 use tokio_util::sync::CancellationToken;
 use tracing::instrument;
 use tracing::{error, info};
