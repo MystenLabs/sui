@@ -407,7 +407,6 @@ impl CheckpointExecutor {
         self: Arc<Self>,
         checkpoint: VerifiedCheckpoint,
     ) -> CheckpointExecutionState {
-        self.metrics.checkpoint_executor_validator_path.inc();
         assert!(
             !checkpoint.is_last_checkpoint_of_epoch(),
             "only fullnode path has end-of-epoch logic"
@@ -424,6 +423,8 @@ impl CheckpointExecutor {
             return self.execute_checkpoint_fullnode(checkpoint).await;
         };
 
+        self.metrics.checkpoint_executor_validator_path.inc();
+
         // Check for fork
         assert_checkpoint_not_forked(
             &locally_built_checkpoint,
@@ -432,14 +433,18 @@ impl CheckpointExecutor {
         );
 
         // Checkpoint builder triggers accumulation of the checkpoint, so this is guaranteed to finish.
-        let accumulator = self
-            .epoch_store
-            .notify_read_checkpoint_state_accumulator(&[sequence_number])
-            .await
-            .unwrap()
-            .pop()
-            .unwrap();
+        let accumulator = {
+            let _metrics_guard =
+                mysten_metrics::monitored_scope("CheckpointExecutor::notify_read_accumulator");
+            self.epoch_store
+                .notify_read_checkpoint_state_accumulator(&[sequence_number])
+                .await
+                .unwrap()
+                .pop()
+                .unwrap()
+        };
 
+        mysten_metrics::monitored_scope("CheckpointExecutor::get_checkpoint_contents");
         let checkpoint_contents = self
             .checkpoint_store
             .get_checkpoint_contents(&checkpoint.content_digest)
@@ -486,9 +491,14 @@ impl CheckpointExecutor {
         .await
         .unwrap();
 
-        self.transaction_cache_reader
-            .notify_read_executed_effects_digests(&unexecuted_tx_digests)
-            .await;
+        {
+            let _metrics_guard = mysten_metrics::monitored_scope(
+                "CheckpointExecutor::notify_read_executed_effects_digests",
+            );
+            self.transaction_cache_reader
+                .notify_read_executed_effects_digests(&unexecuted_tx_digests)
+                .await;
+        }
 
         if ckpt_state.data.checkpoint.is_last_checkpoint_of_epoch() {
             self.execute_change_epoch_tx(&tx_data).await;
