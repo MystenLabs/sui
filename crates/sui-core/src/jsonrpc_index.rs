@@ -10,11 +10,16 @@ use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
 
+use bincode::Options;
 use itertools::Itertools;
 use move_core_types::language_storage::{ModuleId, StructTag, TypeTag};
 use parking_lot::ArcMutexGuard;
-use prometheus::{register_int_counter_with_registry, IntCounter, Registry};
+use prometheus::{
+    register_int_counter_vec_with_registry, register_int_counter_with_registry, IntCounter,
+    IntCounterVec, Registry,
+};
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
+use typed_store::rocksdb::compaction_filter::Decision;
 use typed_store::TypedStoreError;
 
 use sui_json_rpc_types::{SuiObjectDataFilter, TransactionFilter};
@@ -34,7 +39,8 @@ use sui_types::parse_sui_struct_tag;
 use sui_types::storage::error::Error as StorageError;
 use tracing::{debug, info, instrument, trace};
 use typed_store::rocks::{
-    default_db_options, read_size_from_env, DBBatch, DBMap, DBOptions, MetricConf,
+    default_db_options, read_size_from_env, DBBatch, DBMap, DBMapTableConfigMap, DBOptions,
+    MetricConf,
 };
 use typed_store::traits::Map;
 use typed_store::traits::{TableSummary, TypedStoreDebug};
@@ -46,7 +52,6 @@ use crate::par_index_live_object_set::{LiveObjectIndexer, ParMakeLiveObjectIndex
 type OwnedMutexGuard<T> = ArcMutexGuard<parking_lot::RawMutex, T>;
 
 type OwnerIndexKey = (SuiAddress, ObjectID);
-type CoinIndexKey = (SuiAddress, String, ObjectID);
 type DynamicFieldKey = (ObjectID, ObjectID);
 type EventId = (TxSequenceNumber, usize);
 type EventIndex = (TransactionEventsDigest, TransactionDigest, u64);
@@ -208,11 +213,9 @@ pub struct IndexStoreTables {
     meta: DBMap<(), MetadataInfo>,
 
     /// Index from sui address to transactions initiated by that address.
-    #[default_options_override_fn = "transactions_from_addr_table_default_config"]
     transactions_from_addr: DBMap<(SuiAddress, TxSequenceNumber), TransactionDigest>,
 
     /// Index from sui address to transactions that were sent to that address.
-    #[default_options_override_fn = "transactions_to_addr_table_default_config"]
     transactions_to_addr: DBMap<(SuiAddress, TxSequenceNumber), TransactionDigest>,
 
     /// Index from object id to transactions that used that object id as input.
@@ -224,67 +227,37 @@ pub struct IndexStoreTables {
     transactions_by_mutated_object_id: DBMap<(ObjectID, TxSequenceNumber), TransactionDigest>,
 
     /// Index from package id, module and function identifier to transactions that used that moce function call as input.
-    #[default_options_override_fn = "transactions_by_move_function_table_default_config"]
     transactions_by_move_function:
         DBMap<(ObjectID, String, String, TxSequenceNumber), TransactionDigest>,
 
-    /// This is a map between the transaction digest and its timestamp (UTC timestamp in
-    /// **milliseconds** since epoch 1/1/1970). A transaction digest is subjectively time stamped
-    /// on a node according to the local machine time, so it varies across nodes.
-    /// The timestamping happens when the node sees a txn certificate for the first time.
-    ///
-    /// DEPRECATED. DO NOT USE
-    #[allow(dead_code)]
-    #[default_options_override_fn = "timestamps_table_default_config"]
-    #[deprecated]
-    timestamps: DBMap<TransactionDigest, u64>,
-
     /// Ordering of all indexed transactions.
-    #[default_options_override_fn = "transactions_order_table_default_config"]
     transaction_order: DBMap<TxSequenceNumber, TransactionDigest>,
 
     /// Index from transaction digest to sequence number.
-    #[default_options_override_fn = "transactions_seq_table_default_config"]
     transactions_seq: DBMap<TransactionDigest, TxSequenceNumber>,
 
     /// This is an index of object references to currently existing objects, indexed by the
     /// composite key of the SuiAddress of their owner and the object ID of the object.
     /// This composite index allows an efficient iterator to list all objected currently owned
     /// by a specific user, and their object reference.
-    #[default_options_override_fn = "owner_index_table_default_config"]
     owner_index: DBMap<OwnerIndexKey, ObjectInfo>,
 
-    #[default_options_override_fn = "coin_index_table_default_config"]
-    #[deprecated]
-    #[allow(unused)]
-    coin_index: DBMap<CoinIndexKey, CoinInfo>,
-    #[default_options_override_fn = "coin_index_table_default_config"]
     coin_index_2: DBMap<CoinIndexKey2, CoinInfo>,
 
     /// This is an index of object references to currently existing dynamic field object, indexed by the
     /// composite key of the object ID of their parent and the object ID of the dynamic field object.
     /// This composite index allows an efficient iterator to list all objects currently owned
     /// by a specific object, and their object reference.
-    #[default_options_override_fn = "dynamic_field_index_table_default_config"]
     dynamic_field_index: DBMap<DynamicFieldKey, DynamicFieldInfo>,
 
-    /// This is an index of all the versions of loaded child objects
-    #[deprecated]
-    #[allow(unused)]
-    loaded_child_object_versions: DBMap<TransactionDigest, Vec<(ObjectID, SequenceNumber)>>,
-
-    #[default_options_override_fn = "index_table_default_config"]
     event_order: DBMap<EventId, EventIndex>,
-    #[default_options_override_fn = "index_table_default_config"]
     event_by_move_module: DBMap<(ModuleId, EventId), EventIndex>,
-    #[default_options_override_fn = "index_table_default_config"]
     event_by_move_event: DBMap<(StructTag, EventId), EventIndex>,
-    #[default_options_override_fn = "index_table_default_config"]
     event_by_event_module: DBMap<(ModuleId, EventId), EventIndex>,
-    #[default_options_override_fn = "index_table_default_config"]
     event_by_sender: DBMap<(SuiAddress, EventId), EventIndex>,
-    #[default_options_override_fn = "index_table_default_config"]
     event_by_time: DBMap<(u64, EventId), EventIndex>,
+
+    pruner_watermark: DBMap<(), TxSequenceNumber>,
 }
 
 impl IndexStoreTables {
@@ -353,38 +326,89 @@ pub struct IndexStore {
     metrics: Arc<IndexStoreMetrics>,
     max_type_length: u64,
     remove_deprecated_tables: bool,
+    pruner_watermark: Arc<AtomicU64>,
 }
 
-// These functions are used to initialize the DB tables
-fn transactions_order_table_default_config() -> DBOptions {
-    default_db_options().disable_write_throttling()
+struct JsonRpcCompactionMetrics {
+    key_removed: IntCounterVec,
+    key_kept: IntCounterVec,
+    key_error: IntCounterVec,
 }
-fn transactions_seq_table_default_config() -> DBOptions {
-    default_db_options().disable_write_throttling()
+
+impl JsonRpcCompactionMetrics {
+    pub fn new(registry: &Registry) -> Arc<Self> {
+        Arc::new(Self {
+            key_removed: register_int_counter_vec_with_registry!(
+                "json_rpc_compaction_filter_key_removed",
+                "Compaction key removed",
+                &["cf"],
+                registry
+            )
+            .unwrap(),
+            key_kept: register_int_counter_vec_with_registry!(
+                "json_rpc_compaction_filter_key_kept",
+                "Compaction key kept",
+                &["cf"],
+                registry
+            )
+            .unwrap(),
+            key_error: register_int_counter_vec_with_registry!(
+                "json_rpc_compaction_filter_key_error",
+                "Compaction error",
+                &["cf"],
+                registry
+            )
+            .unwrap(),
+        })
+    }
 }
-fn transactions_from_addr_table_default_config() -> DBOptions {
-    default_db_options().disable_write_throttling()
+
+fn compaction_filter_config<T: DeserializeOwned>(
+    name: &str,
+    metrics: Arc<JsonRpcCompactionMetrics>,
+    mut db_options: DBOptions,
+    pruner_watermark: Arc<AtomicU64>,
+    extractor: impl Fn(T) -> TxSequenceNumber + Send + Sync + 'static,
+    by_key: bool,
+) -> DBOptions {
+    let cf = name.to_string();
+    db_options
+        .options
+        .set_compaction_filter(name, move |_, key, value| {
+            let bytes = if by_key { key } else { value };
+            let deserializer = bincode::DefaultOptions::new()
+                .with_big_endian()
+                .with_fixint_encoding();
+            match deserializer.deserialize(bytes) {
+                Ok(key_data) => {
+                    let sequence_number = extractor(key_data);
+                    if sequence_number < pruner_watermark.load(Ordering::Relaxed) {
+                        metrics.key_removed.with_label_values(&[&cf]).inc();
+                        Decision::Remove
+                    } else {
+                        metrics.key_kept.with_label_values(&[&cf]).inc();
+                        Decision::Keep
+                    }
+                }
+                Err(_) => {
+                    metrics.key_error.with_label_values(&[&cf]).inc();
+                    Decision::Keep
+                }
+            }
+        });
+    db_options
 }
-fn transactions_to_addr_table_default_config() -> DBOptions {
-    default_db_options().disable_write_throttling()
+
+fn compaction_filter_config_by_key<T: DeserializeOwned>(
+    name: &str,
+    metrics: Arc<JsonRpcCompactionMetrics>,
+    db_options: DBOptions,
+    pruner_watermark: Arc<AtomicU64>,
+    extractor: impl Fn(T) -> TxSequenceNumber + Send + Sync + 'static,
+) -> DBOptions {
+    compaction_filter_config(name, metrics, db_options, pruner_watermark, extractor, true)
 }
-fn transactions_by_move_function_table_default_config() -> DBOptions {
-    default_db_options().disable_write_throttling()
-}
-fn timestamps_table_default_config() -> DBOptions {
-    default_db_options()
-        .optimize_for_point_lookup(64)
-        .disable_write_throttling()
-}
-fn owner_index_table_default_config() -> DBOptions {
-    default_db_options().disable_write_throttling()
-}
-fn dynamic_field_index_table_default_config() -> DBOptions {
-    default_db_options().disable_write_throttling()
-}
-fn index_table_default_config() -> DBOptions {
-    default_db_options().disable_write_throttling()
-}
+
 fn coin_index_table_default_config() -> DBOptions {
     default_db_options()
         .optimize_for_write_throughput()
@@ -401,11 +425,121 @@ impl IndexStore {
         max_type_length: Option<u64>,
         remove_deprecated_tables: bool,
     ) -> Self {
+        let db_options = default_db_options().disable_write_throttling();
+        let pruner_watermark = Arc::new(AtomicU64::new(0));
+        let compaction_metrics = JsonRpcCompactionMetrics::new(registry);
+        let table_options = DBMapTableConfigMap::new(BTreeMap::from([
+            (
+                "transactions_from_addr".to_string(),
+                compaction_filter_config_by_key(
+                    "transactions_from_addr",
+                    compaction_metrics.clone(),
+                    db_options.clone(),
+                    pruner_watermark.clone(),
+                    |(_, id): (SuiAddress, TxSequenceNumber)| id,
+                ),
+            ),
+            (
+                "transactions_to_addr".to_string(),
+                compaction_filter_config_by_key(
+                    "transactions_to_addr",
+                    compaction_metrics.clone(),
+                    db_options.clone(),
+                    pruner_watermark.clone(),
+                    |(_, sequence_number): (SuiAddress, TxSequenceNumber)| sequence_number,
+                ),
+            ),
+            (
+                "transactions_by_move_function".to_string(),
+                compaction_filter_config_by_key(
+                    "transactions_by_move_function",
+                    compaction_metrics.clone(),
+                    db_options.clone(),
+                    pruner_watermark.clone(),
+                    |(_, _, _, id): (ObjectID, String, String, TxSequenceNumber)| id,
+                ),
+            ),
+            (
+                "transaction_order".to_string(),
+                compaction_filter_config_by_key(
+                    "transaction_order",
+                    compaction_metrics.clone(),
+                    db_options.clone(),
+                    pruner_watermark.clone(),
+                    |sequence_number: TxSequenceNumber| sequence_number,
+                ),
+            ),
+            (
+                "transactions_seq".to_string(),
+                compaction_filter_config(
+                    "transactions_seq",
+                    compaction_metrics.clone(),
+                    db_options.clone(),
+                    pruner_watermark.clone(),
+                    |sequence_number: TxSequenceNumber| sequence_number,
+                    false,
+                ),
+            ),
+            (
+                "coin_index_2".to_string(),
+                coin_index_table_default_config(),
+            ),
+            (
+                "event_order".to_string(),
+                compaction_filter_config_by_key(
+                    "event_order",
+                    compaction_metrics.clone(),
+                    db_options.clone(),
+                    pruner_watermark.clone(),
+                    |event_id: EventId| event_id.0,
+                ),
+            ),
+            (
+                "event_by_move_module".to_string(),
+                compaction_filter_config_by_key(
+                    "event_by_move_module",
+                    compaction_metrics.clone(),
+                    db_options.clone(),
+                    pruner_watermark.clone(),
+                    |(_, event_id): (ModuleId, EventId)| event_id.0,
+                ),
+            ),
+            (
+                "event_by_event_module".to_string(),
+                compaction_filter_config_by_key(
+                    "event_by_event_module",
+                    compaction_metrics.clone(),
+                    db_options.clone(),
+                    pruner_watermark.clone(),
+                    |(_, event_id): (ModuleId, EventId)| event_id.0,
+                ),
+            ),
+            (
+                "event_by_sender".to_string(),
+                compaction_filter_config_by_key(
+                    "event_by_sender",
+                    compaction_metrics.clone(),
+                    db_options.clone(),
+                    pruner_watermark.clone(),
+                    |(_, event_id): (SuiAddress, EventId)| event_id.0,
+                ),
+            ),
+            (
+                "event_by_time".to_string(),
+                compaction_filter_config_by_key(
+                    "event_by_time",
+                    compaction_metrics.clone(),
+                    db_options.clone(),
+                    pruner_watermark.clone(),
+                    |(_, event_id): (u64, EventId)| event_id.0,
+                ),
+            ),
+        ]));
         let tables = IndexStoreTables::open_tables_read_write_with_deprecation_option(
             path,
             MetricConf::new("index"),
-            None,
-            None,
+            Some(db_options.options),
+            Some(table_options),
             remove_deprecated_tables,
         );
 
@@ -425,6 +559,12 @@ impl IndexStore {
             .map(|(seq, _)| seq + 1)
             .unwrap_or(0)
             .into();
+        let pruner_watermark_value = tables
+            .pruner_watermark
+            .get(&())
+            .expect("failed to initialize index tables")
+            .unwrap_or(0);
+        pruner_watermark.store(pruner_watermark_value, Ordering::Relaxed);
 
         Self {
             tables,
@@ -433,6 +573,7 @@ impl IndexStore {
             metrics: Arc::new(metrics),
             max_type_length: max_type_length.unwrap_or(128),
             remove_deprecated_tables,
+            pruner_watermark,
         }
     }
 
@@ -1297,6 +1438,32 @@ impl IndexStore {
                 })
                 .collect()
         })
+    }
+
+    pub fn prune(&self, cut_time_ms: u64) -> SuiResult<TxSequenceNumber> {
+        match self
+            .tables
+            .event_by_time
+            .reversed_safe_iter_with_bounds(
+                None,
+                Some((cut_time_ms, (TxSequenceNumber::MAX, usize::MAX))),
+            )?
+            .next()
+            .transpose()?
+        {
+            Some(((_, (watermark, _)), _)) => {
+                if let Some(digest) = self.tables.transaction_order.get(&watermark)? {
+                    info!(
+                        "json rpc index pruning. Watermark is {} with digest {}",
+                        watermark, digest
+                    );
+                }
+                self.pruner_watermark.store(watermark, Ordering::Relaxed);
+                self.tables.pruner_watermark.insert(&(), &watermark)?;
+                Ok(watermark)
+            }
+            None => Ok(0),
+        }
     }
 
     pub fn get_dynamic_fields_iterator(
