@@ -110,6 +110,7 @@ const concepts = [
 				],
 			},
 			'concepts/cryptography/zklogin',
+			'concepts/cryptography/passkeys',
 			'concepts/cryptography/system/checkpoint-verification',
 			/*{
 				type: 'category',
@@ -161,7 +162,6 @@ const concepts = [
 			'concepts/tokenomics/vesting-strategies'
 		],
 	},
-	'concepts/sui-bridge',
 	'concepts/research-papers',
 ];
 module.exports = concepts;

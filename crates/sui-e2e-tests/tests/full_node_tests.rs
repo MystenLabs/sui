@@ -9,7 +9,6 @@ use move_core_types::ident_str;
 use rand::rngs::OsRng;
 use std::path::PathBuf;
 use std::sync::Arc;
-use sui::client_commands::{OptsWithGas, SuiClientCommandResult, SuiClientCommands};
 use sui_config::node::RunWithRange;
 use sui_json_rpc_types::{EventFilter, TransactionFilter};
 use sui_json_rpc_types::{
@@ -42,13 +41,13 @@ use sui_types::quorum_driver_types::{
 use sui_types::storage::ObjectStore;
 use sui_types::transaction::{
     CallArg, GasData, TransactionData, TransactionKind, TEST_ONLY_GAS_UNIT_FOR_OBJECT_BASICS,
-    TEST_ONLY_GAS_UNIT_FOR_SPLIT_COIN, TEST_ONLY_GAS_UNIT_FOR_TRANSFER,
+    TEST_ONLY_GAS_UNIT_FOR_TRANSFER,
 };
 use sui_types::utils::{
     to_sender_signed_transaction, to_sender_signed_transaction_with_multi_signers,
 };
 use test_cluster::TestClusterBuilder;
-use tokio::sync::Mutex;
+use tokio::sync::RwLock;
 use tokio::time::{sleep, Duration};
 use tracing::info;
 
@@ -536,21 +535,21 @@ async fn do_test_full_node_sync_flood() {
     // Start a new fullnode that is not on the write path
     let fullnode = test_cluster.spawn_new_fullnode().await.sui_node;
 
-    let context = test_cluster.wallet;
+    let test_cluster = Arc::new(RwLock::new(test_cluster));
 
     let mut futures = Vec::new();
 
-    let (package_ref, counter_ref) = publish_basics_package_and_make_counter(&context).await;
-
-    let context = Arc::new(Mutex::new(context));
+    let (package_ref, counter_ref) =
+        publish_basics_package_and_make_counter(&test_cluster.read().await.wallet).await;
 
     // Start up 5 different tasks that all spam txs at the authorities.
     for _i in 0..5 {
         let (tx, rx) = tokio::sync::oneshot::channel();
-        let context = context.clone();
+        let test_cluster = test_cluster.clone();
         tokio::task::spawn(async move {
             let (sender, object_to_split, gas_obj) = {
-                let context = &mut context.lock().await;
+                let mut test_cluster = test_cluster.write().await;
+                let context = &mut test_cluster.wallet;
 
                 let sender = context
                     .config
@@ -570,35 +569,25 @@ async fn do_test_full_node_sync_flood() {
             let mut shared_tx_digest = None;
             let gas_object_id = gas_obj.0;
             for _ in 0..10 {
+                let test_cluster = test_cluster.read().await;
                 let res = {
-                    let context = &mut context.lock().await;
-                    SuiClientCommands::SplitCoin {
-                        amounts: Some(vec![1]),
-                        count: None,
-                        coin_id: object_to_split.0,
-                        opts: OptsWithGas::for_testing(
-                            Some(gas_object_id),
-                            TEST_ONLY_GAS_UNIT_FOR_SPLIT_COIN
-                                * context.get_reference_gas_price().await.unwrap(),
-                        ),
-                    }
-                    .execute(context)
-                    .await
-                    .unwrap()
+                    let tx = TestTransactionBuilder::new(
+                        sender,
+                        gas_obj,
+                        test_cluster.get_reference_gas_price().await,
+                    )
+                    .split_coin(object_to_split, vec![1])
+                    .build();
+
+                    let tx = test_cluster.wallet.sign_transaction(&tx);
+                    test_cluster.execute_transaction(tx).await
                 };
 
-                owned_tx_digest = if let SuiClientCommandResult::TransactionBlock(resp) = res {
-                    Some(resp.digest)
-                } else {
-                    panic!(
-                        "SplitCoin command did not return SuiClientCommandResult::TransactionBlock"
-                    );
-                };
+                owned_tx_digest = Some(res.digest);
 
-                let context = &context.lock().await;
                 shared_tx_digest = Some(
                     increment_counter(
-                        context,
+                        &test_cluster.wallet,
                         sender,
                         Some(gas_object_id),
                         package_ref.0,

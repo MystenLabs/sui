@@ -668,6 +668,7 @@ async fn successful_versioned_dependency_verification() -> anyhow::Result<()> {
 }
 
 #[tokio::test]
+#[ignore] // TODO: DVX-786
 async fn successful_verification_with_bytecode_dep() -> anyhow::Result<()> {
     let mut cluster = TestClusterBuilder::new().build().await;
     let context = &mut cluster.wallet;
@@ -685,7 +686,7 @@ async fn successful_verification_with_bytecode_dep() -> anyhow::Result<()> {
         let pkg_path = copy_published_package(&tempdir, "b", b_ref.0.into()).await?;
 
         move_package::package_hooks::register_package_hooks(Box::new(SuiPackageHooks));
-        BuildConfig::default().build(&pkg_path).unwrap();
+        BuildConfig::new_for_testing().build(&pkg_path).unwrap();
 
         fs::remove_dir_all(pkg_path.join("sources"))?;
     };

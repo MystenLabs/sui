@@ -1,0 +1,32 @@
+---
+source: crates/sui/tests/shell_tests.rs
+description: tests/shell_tests/new_tests/new_uppercase_name.sh
+---
+----- script -----
+# Copyright (c) Mysten Labs, Inc.
+# SPDX-License-Identifier: Apache-2.0
+
+# test that `sui move new` works as expected with `<NAME>` containing uppercase letter(s)
+sui move new _Example_A
+echo ==== files in project ====
+ls -A _Example_A
+echo ==== files in sources ====
+ls -A _Example_A/sources
+echo ==== files in tests =====
+ls -A _Example_A/tests
+
+----- results -----
+success: true
+exit_code: 0
+----- stdout -----
+==== files in project ====
+.gitignore
+Move.toml
+sources
+tests
+==== files in sources ====
+_example_a.move
+==== files in tests =====
+_example_a_tests.move
+
+----- stderr -----

@@ -1094,6 +1094,7 @@ impl ReadApiServer for ReadApi {
             zklogin_env_native,
             true,
             true,
+            true,
             Some(30),
         );
         match intent_scope {

@@ -333,7 +333,7 @@ impl Query {
         &self,
         ctx: &Context<'_>,
         keys: Vec<ObjectKey>,
-    ) -> Result<Vec<Object>> {
+    ) -> Result<Vec<Option<Object>>> {
         let cfg: &ServiceConfig = ctx.data_unchecked();
         if keys.len() > cfg.limits.max_multi_get_objects_keys as usize {
             return Err(Error::Client(format!(

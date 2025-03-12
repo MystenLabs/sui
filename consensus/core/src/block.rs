@@ -423,7 +423,7 @@ impl From<BlockRef> for Slot {
 // TODO: re-evaluate formats for production debugging.
 impl fmt::Display for Slot {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{}{}", self.authority, self.round,)
+        write!(f, "{}{}", self.authority, self.round)
     }
 }
 

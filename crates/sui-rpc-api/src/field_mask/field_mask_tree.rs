@@ -9,12 +9,13 @@ use super::FIELD_SEPARATOR;
 use prost_types::FieldMask;
 use std::collections::BTreeMap;
 
-#[derive(Debug, Default)]
+#[derive(Clone, Debug, Default)]
 pub struct FieldMaskTree {
+    wildcard: bool,
     root: Node,
 }
 
-#[derive(Debug, Default)]
+#[derive(Clone, Debug, Default)]
 struct Node {
     children: BTreeMap<String, Node>,
 }
@@ -102,6 +103,10 @@ impl FieldMaskTree {
             return false;
         }
 
+        if self.wildcard {
+            return true;
+        }
+
         let mut node = &self.root;
         for component in path.split(FIELD_SEPARATOR) {
             // If this isn't the root node, and there are no sub-paths, then this path has been
@@ -120,6 +125,41 @@ impl FieldMaskTree {
         // We found a matching node for this path. This node may be empty or have leaf children. In
         // either case the provided patch is a "match" and is contained by this tree.
         true
+    }
+
+    pub fn subtree(&self, path: &str) -> Option<Self> {
+        if path.is_empty() {
+            return None;
+        }
+
+        if self.wildcard {
+            return Some(self.clone());
+        }
+
+        let mut node = &self.root;
+        for component in path.split(FIELD_SEPARATOR) {
+            if let Some(child) = node.children.get(component) {
+                node = child;
+            } else {
+                return None;
+            }
+        }
+
+        if std::ptr::eq(node, &self.root) {
+            None
+        } else {
+            Some(Self {
+                wildcard: node.children.is_empty(),
+                root: node.clone(),
+            })
+        }
+    }
+
+    pub(crate) fn new_wildcard() -> Self {
+        Self {
+            wildcard: true,
+            root: Default::default(),
+        }
     }
 }
 

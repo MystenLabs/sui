@@ -5,7 +5,6 @@ use crate::metrics::SubscriptionMetrics;
 use crate::proto::node::v2::GetFullCheckpointResponse;
 use std::sync::Arc;
 use sui_types::full_checkpoint_content::CheckpointData;
-use tap::Pipe;
 use tokio::sync::mpsc;
 use tokio::sync::oneshot;
 use tracing::error;
@@ -124,9 +123,9 @@ impl SubscriptionService {
         let checkpoint =
             match crate::service::checkpoints::checkpoint_data_to_full_checkpoint_response(
                 checkpoint,
-                &crate::types::GetFullCheckpointOptions::all(),
+                &crate::field_mask::FieldMaskTree::new_wildcard(),
             ) {
-                Ok(checkpoint) => GetFullCheckpointResponse::from(checkpoint).pipe(Arc::new),
+                Ok(checkpoint) => Arc::new(checkpoint),
                 Err(e) => {
                     error!("unable to convert checkpoint to proto: {e:?}");
                     return;

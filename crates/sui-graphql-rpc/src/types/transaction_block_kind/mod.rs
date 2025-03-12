@@ -59,6 +59,9 @@ impl TransactionBlockKind {
             K::ConsensusCommitPrologueV3(ccp) => T::ConsensusCommitPrologue(
                 ConsensusCommitPrologueTransaction::from_v3(ccp, checkpoint_viewed_at),
             ),
+            K::ConsensusCommitPrologueV4(ccp) => T::ConsensusCommitPrologue(
+                ConsensusCommitPrologueTransaction::from_v4(ccp, checkpoint_viewed_at),
+            ),
             K::AuthenticatorStateUpdate(asu) => {
                 T::AuthenticatorState(AuthenticatorStateUpdateTransaction {
                     native: asu,

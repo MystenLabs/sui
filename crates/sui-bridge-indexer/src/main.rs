@@ -154,6 +154,7 @@ async fn start_watchdog(
         weth_address,
         usdt_address,
         wbtc_address,
+        lbtc_address,
     ) = get_eth_contract_addresses(eth_bridge_proxy_address, &eth_provider).await?;
 
     let eth_vault_balance = EthereumVaultBalance::new(
@@ -186,6 +187,16 @@ async fn start_watchdog(
     .await
     .unwrap_or_else(|e| panic!("Failed to create wbtc vault balance: {}", e));
 
+    let lbtc_vault_balance = EthereumVaultBalance::new(
+        eth_provider.clone(),
+        vault_address,
+        lbtc_address,
+        VaultAsset::LBTC,
+        watchdog_metrics.lbtc_vault_balance.clone(),
+    )
+    .await
+    .unwrap_or_else(|e| panic!("Failed to create lbtc vault balance: {}", e));
+
     let eth_bridge_status = EthBridgeStatus::new(
         eth_provider,
         eth_bridge_proxy_address,
@@ -198,6 +209,7 @@ async fn start_watchdog(
         Box::new(eth_vault_balance),
         Box::new(usdt_vault_balance),
         Box::new(wbtc_vault_balance),
+        Box::new(lbtc_vault_balance),
         Box::new(eth_bridge_status),
         Box::new(sui_bridge_status),
     ];

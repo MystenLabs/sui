@@ -551,6 +551,9 @@ message TransactionKind {
 
     // V3 consensus commit update.
     ConsensusCommitPrologue consensus_commit_prologue_v3 = 6;
+
+    // V4 consensus commit update.
+    ConsensusCommitPrologue consensus_commit_prologue_v4 = 7;
   }
 }
 
@@ -787,34 +790,40 @@ message GenesisTransaction {
 message ConsensusCommitPrologue {
   // Epoch of the commit prologue transaction.
   //
-  // Present in V1, V2, and V3.
+  // Present in V1, V2, V3, V4.
   optional uint64 epoch = 1;
 
   // Consensus round of the commit.
   //
-  // Present in V1, V2, and V3.
+  // Present in V1, V2, V3, V4.
   optional uint64 round = 2;
 
   // Unix timestamp from consensus.
   //
-  // Present in V1, V2, and V3.
+  // Present in V1, V2, V3, V4.
   optional uint64 commit_timestamp_ms = 3;
 
   // Digest of consensus output.
   //
-  // Present in V2 and V3.
+  // Present in V2, V3, V4.
   optional Digest consensus_commit_digest = 4;
 
   // The sub DAG index of the consensus commit. This field is populated if there
   // are multiple consensus commits per round.
   //
-  // Present in V3.
+  // Present in V3, V4.
   optional uint64 sub_dag_index = 5;
 
   // Stores consensus handler determined shared object version assignments.
   //
-  // Present in V3.
+  // Present in V3, V4.
   optional ConsensusDeterminedVersionAssignments consensus_determined_version_assignments = 6;
+
+  // Digest of any additional state computed by the consensus handler.
+  // Used to detect forking bugs as early as possible.
+  //
+  // Present in V4.
+  optional Digest additional_state_digest = 7;
 }
 
 // Object version assignment from consensus.

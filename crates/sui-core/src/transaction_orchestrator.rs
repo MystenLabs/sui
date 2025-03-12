@@ -477,7 +477,9 @@ where
                 info!("Skipping loading pending transactions from pending_tx_log.");
                 return;
             }
-            let pending_txes = pending_tx_log.load_all_pending_transactions();
+            let pending_txes = pending_tx_log
+                .load_all_pending_transactions()
+                .expect("failed to load all pending transactions");
             info!(
                 "Recovering {} pending transactions from pending_tx_log.",
                 pending_txes.len()
@@ -518,7 +520,7 @@ where
         });
     }
 
-    pub fn load_all_pending_transactions(&self) -> Vec<VerifiedTransaction> {
+    pub fn load_all_pending_transactions(&self) -> SuiResult<Vec<VerifiedTransaction>> {
         self.pending_tx_log.load_all_pending_transactions()
     }
 }

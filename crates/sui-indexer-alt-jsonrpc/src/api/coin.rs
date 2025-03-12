@@ -2,17 +2,18 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::collections::{BTreeMap, HashMap};
+use std::str::FromStr;
 
 use anyhow::Context as _;
 use diesel::prelude::*;
 use diesel::sql_types::Bool;
 use futures::future;
 use jsonrpsee::{core::RpcResult, proc_macros::rpc};
-use move_core_types::language_storage::TypeTag;
+use move_core_types::language_storage::{StructTag, TypeTag};
 use serde::{Deserialize, Serialize};
 use sui_indexer_alt_schema::objects::StoredCoinOwnerKind;
 use sui_indexer_alt_schema::schema::coin_balance_buckets;
-use sui_json_rpc_types::{Balance, Coin, Page as PageResponse};
+use sui_json_rpc_types::{Balance, Coin, Page as PageResponse, SuiCoinMetadata};
 use sui_open_rpc::Module;
 use sui_open_rpc_macros::open_rpc;
 use sui_sql_macro::sql;
@@ -24,7 +25,7 @@ use sui_types::{
 
 use crate::{
     context::Context,
-    data::objects::load_latest,
+    data::{coin_metadata::CoinMetadataKey, objects::load_latest},
     error::{invalid_params, InternalContext, RpcError},
     paginate::{BcsCursor, Cursor as _, Page},
 };
@@ -56,6 +57,16 @@ trait CoinsApi {
         /// the owner's Sui address
         owner: SuiAddress,
     ) -> RpcResult<Vec<Balance>>;
+
+    /// Return metadata (e.g., symbol, decimals) for a coin. Note that if the coin's metadata was
+    /// wrapped in the transaction that published its marker type, or the latest version of the
+    /// metadata object is wrapped or deleted, it will not be found.
+    #[method(name = "getCoinMetadata")]
+    async fn get_coin_metadata(
+        &self,
+        /// type name for the coin (e.g., 0x168da5bf1f48dafc111b0a488fa454aca95e0b5e::usdc::USDC)
+        coin_type: String,
+    ) -> RpcResult<Option<SuiCoinMetadata>>;
 }
 
 pub(crate) struct Coins(pub Context);
@@ -160,6 +171,14 @@ impl CoinsApiServer for Coins {
             })
             .collect();
         Ok(balances)
+    }
+
+    async fn get_coin_metadata(&self, coin_type: String) -> RpcResult<Option<SuiCoinMetadata>> {
+        let Self(ctx) = self;
+
+        Ok(coin_metadata_response(ctx, &coin_type)
+            .await
+            .with_internal_context(|| format!("Failed to fetch CoinMetadata for {coin_type:?}"))?)
     }
 }
 
@@ -306,6 +325,38 @@ async fn coin_response(ctx: &Context, id: ObjectID) -> Result<Coin, RpcError<Err
         balance,
         previous_transaction,
     })
+}
+
+async fn coin_metadata_response(
+    ctx: &Context,
+    coin_type: &str,
+) -> Result<Option<SuiCoinMetadata>, RpcError<Error>> {
+    let coin_type = StructTag::from_str(coin_type)
+        .map_err(|e| invalid_params(Error::BadType(coin_type.to_owned(), e)))?;
+
+    let Some(stored) = ctx
+        .pg_loader()
+        .load_one(CoinMetadataKey(coin_type))
+        .await
+        .context("Failed to load info for CoinMetadata")?
+    else {
+        return Ok(None);
+    };
+
+    let id = ObjectID::from_bytes(&stored.object_id).context("Failed to parse ObjectID")?;
+
+    let Some(object) = load_latest(ctx, id)
+        .await
+        .context("Failed to load latest version of CoinMetadata")?
+    else {
+        return Ok(None);
+    };
+
+    let coin_metadata = object
+        .try_into()
+        .context("Failed to parse object as CoinMetadata")?;
+
+    Ok(Some(coin_metadata))
 }
 
 async fn object_with_coin_data(

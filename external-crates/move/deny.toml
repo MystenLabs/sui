@@ -42,8 +42,6 @@ yanked = "warn"
 # A list of advisory IDs to ignore. Note that ignored advisories will still
 # output a note when they are encountered.
 ignore = [
-    # `tui` is unmaintained; use `ratatui` instead
-    "RUSTSEC-2023-0049",
     # `yaml-rust` is unmaintained
     "RUSTSEC-2024-0320",
     # `proc-macro-error` is unmaintained, needed by `tabled`
@@ -55,6 +53,8 @@ ignore = [
 
     # allow unmaintained instant crate used in transitive dependencies (backoff, cached, fastrand, parking_lot_*)
     "RUSTSEC-2024-0384",
+    # `paste` is unmaintained
+    "RUSTSEC-2024-0436",
 ]
 # Threshold for security vulnerabilities, any vulnerability with a CVSS score
 # lower than the range specified will be ignored. Note that ignored advisories

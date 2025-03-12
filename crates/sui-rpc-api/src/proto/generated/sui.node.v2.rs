@@ -38,7 +38,7 @@ pub struct GetNodeInfoResponse {
 /// Request message for NodeService.GetCommittee.
 #[derive(Clone, Copy, PartialEq, ::prost::Message)]
 pub struct GetCommitteeRequest {
-    /// Optional. Request the sui.types.ValidatorCommittee corresponding to the
+    /// Request the sui.types.ValidatorCommittee corresponding to the
     /// provided epoch. If no epoch is provided the committee for the current
     /// epoch will be returned.
     #[prost(uint64, optional, tag = "1")]
@@ -57,8 +57,8 @@ pub struct GetTransactionRequest {
     /// Required. The digest of the requested transaction.
     #[prost(message, optional, tag = "1")]
     pub digest: ::core::option::Option<super::super::types::Digest>,
-    /// Optional. Mask for specifying which parts of the `GetTransactionResponse`
-    /// should be returned.
+    /// Mask specifying which fields to read.
+    /// If no mask is specified, defaults to `digest`.
     #[prost(message, optional, tag = "4")]
     pub read_mask: ::core::option::Option<::prost_types::FieldMask>,
 }
@@ -119,13 +119,13 @@ pub struct GetObjectRequest {
     /// Required. The `ObjectId` of the requested object.
     #[prost(message, optional, tag = "1")]
     pub object_id: ::core::option::Option<super::super::types::ObjectId>,
-    /// Optional. Request that a specific version of the requested object is
-    /// returned. If no version is provided, then then the latest version for
-    /// the object is returned.
+    /// Request a specific version of the object.
+    /// If no version is specified, and the object is live, then the latest
+    /// version of the object is returned.
     #[prost(uint64, optional, tag = "2")]
     pub version: ::core::option::Option<u64>,
-    /// Optional. Mask for specifying which parts of the `GetObjectResponse`
-    /// should be returned.
+    /// Mask specifying which fields to read.
+    /// If no mask is specified, defaults to `object_id,version,digest`.
     #[prost(message, optional, tag = "4")]
     pub read_mask: ::core::option::Option<::prost_types::FieldMask>,
 }
@@ -157,14 +157,14 @@ pub struct GetObjectResponse {
 /// returns the latest executed checkpoint.
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct GetCheckpointRequest {
-    /// Optional. The sequence number of the requested checkpoint.
+    /// The sequence number of the requested checkpoint.
     #[prost(uint64, optional, tag = "1")]
     pub sequence_number: ::core::option::Option<u64>,
-    /// Optional. The digest of the requested checkpoint.
+    /// The digest of the requested checkpoint.
     #[prost(message, optional, tag = "2")]
     pub digest: ::core::option::Option<super::super::types::Digest>,
-    /// Optional. Mask for specifying which parts of the `GetCheckpointResponse`
-    /// should be returned.
+    /// Mask specifying which fields to read.
+    /// If no mask is specified, defaults to `sequence_number,digest`.
     #[prost(message, optional, tag = "4")]
     pub read_mask: ::core::option::Option<::prost_types::FieldMask>,
 }
@@ -207,14 +207,14 @@ pub struct GetCheckpointResponse {
 /// returns the latest executed checkpoint.
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct GetFullCheckpointRequest {
-    /// Optional. The sequence number of the requested checkpoint.
+    /// The sequence number of the requested checkpoint.
     #[prost(uint64, optional, tag = "1")]
     pub sequence_number: ::core::option::Option<u64>,
-    /// Optional. The digest of the requested checkpoint.
+    /// The digest of the requested checkpoint.
     #[prost(message, optional, tag = "2")]
     pub digest: ::core::option::Option<super::super::types::Digest>,
-    /// Optional. Mask for specifying which parts of the `GetFullCheckpointResponse`
-    /// should be returned.
+    /// Mask specifying which fields to read.
+    /// If no mask is specified, defaults to `sequence_number,digest`.
     #[prost(message, optional, tag = "4")]
     pub read_mask: ::core::option::Option<::prost_types::FieldMask>,
 }
@@ -321,22 +321,22 @@ pub struct FullCheckpointObject {
 /// Note: You must provide only one of `transaction` or `transaction_bcs`.
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct ExecuteTransactionRequest {
-    /// Optional. The transaction to execute.
+    /// The transaction to execute.
     #[prost(message, optional, tag = "1")]
     pub transaction: ::core::option::Option<super::super::types::Transaction>,
-    /// Optional. The transaction to execute, encoded as BCS bytes.
+    /// The transaction to execute, encoded as BCS bytes.
     #[prost(message, optional, tag = "2")]
     pub transaction_bcs: ::core::option::Option<super::super::types::Bcs>,
-    /// Optional. Set of `UserSiganture`s authorizing the execution of the provided
+    /// Set of `UserSiganture`s authorizing the execution of the provided
     /// transaction.
     #[prost(message, repeated, tag = "3")]
     pub signatures: ::prost::alloc::vec::Vec<super::super::types::UserSignature>,
-    /// Optional. Set of `UserSiganture`s authorizing the execution of the provided
+    /// Set of `UserSiganture`s authorizing the execution of the provided
     /// transaction, encoded as bytes.
     #[prost(bytes = "bytes", repeated, tag = "4")]
     pub signatures_bytes: ::prost::alloc::vec::Vec<::prost::bytes::Bytes>,
-    /// Optional. Mask for specifying which parts of the
-    /// `ExecuteTransactionResponse` should be returned.
+    /// Mask specifying which fields to read.
+    /// If no mask is specified, defaults to `effects,events,finality`.
     #[prost(message, optional, tag = "6")]
     pub read_mask: ::core::option::Option<::prost_types::FieldMask>,
 }

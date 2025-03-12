@@ -1126,19 +1126,49 @@ TxContext
 sender
 	public fun
 	0x2::tx_context
+native_sender
+	fun
+	0x2::tx_context
 digest
 	public fun
 	0x2::tx_context
 epoch
 	public fun
 	0x2::tx_context
+native_epoch
+	fun
+	0x2::tx_context
 epoch_timestamp_ms
+	public fun
+	0x2::tx_context
+native_epoch_timestamp_ms
+	fun
+	0x2::tx_context
+sponsor
 	public fun
 	0x2::tx_context
 fresh_object_address
 	public fun
 	0x2::tx_context
+fresh_id
+	fun
+	0x2::tx_context
 ids_created
+	fun
+	0x2::tx_context
+native_ids_created
+	fun
+	0x2::tx_context
+native_gas_price
+	fun
+	0x2::tx_context
+native_gas_budget
+	fun
+	0x2::tx_context
+option_sponsor
+	fun
+	0x2::tx_context
+native_sponsor
 	fun
 	0x2::tx_context
 derive_id

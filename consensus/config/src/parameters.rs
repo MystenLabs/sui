@@ -94,7 +94,7 @@ pub struct Parameters {
 
 impl Parameters {
     pub(crate) fn default_leader_timeout() -> Duration {
-        Duration::from_millis(250)
+        Duration::from_millis(200)
     }
 
     pub(crate) fn default_min_round_delay() -> Duration {

@@ -1,6 +1,7 @@
 ---
 source: crates/sui-protocol-config/src/lib.rs
 expression: "ProtocolConfig::get_for_version(cur, *chain_id)"
+snapshot_kind: text
 ---
 version: 76
 feature_flags:
@@ -39,6 +40,7 @@ feature_flags:
   verify_legacy_zklogin_address: true
   recompute_has_public_transfer_in_execution: true
   accept_zklogin_in_multisig: true
+  accept_passkey_in_multisig: true
   include_consensus_digest_in_prologue: true
   hardened_otw_check: true
   allow_receiving_object_id: true
@@ -81,6 +83,7 @@ feature_flags:
   variant_nodes: true
   consensus_zstd_compression: true
   minimize_child_object_mutations: true
+  record_additional_state_digest_in_prologue: true
 max_tx_size_bytes: 131072
 max_input_objects: 2048
 max_size_written_objects: 5000000
@@ -365,3 +368,4 @@ gas_budget_based_txn_cost_cap_factor: 400000
 gas_budget_based_txn_cost_absolute_cap_commit_count: 50
 sip_45_consensus_amplification_threshold: 5
 use_object_per_epoch_marker_table_v2: true
+consensus_commit_rate_estimation_window_size: 10

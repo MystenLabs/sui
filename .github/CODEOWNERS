@@ -3,22 +3,22 @@
 /crates/sui-keys/ @joyqvq @patrickkuo
 /crates/sui-protocol-config @mystenmark
 
-*.md @randall-Mysten @ronny-mysten
+*.md @ronny-mysten
 # Omit auto-generated changelogs and changesets from docs review:
 /.changeset/*.md
 CHANGELOG.md
 
-# When snapshot changes, most likely we will need to recreate the genesis blob.
-/crates/sui-config/tests/snapshot_tests.rs @tharbert
-
 # When native functions change, so we can evaluate cost impact
-/crates/sui-framework/src/natives/ @oxade
+/crates/sui-framework/src/natives/ @dariorussi
 
 # GraphQL RPC working group
-/crates/sui-graphql-rpc/ @oxade @amnn @wlmyng @stefan-mysten @emmazzz @suiwombat
-/crates/sui-graphql-e2e-tests/ @oxade @amnn @wlmyng @stefan-mysten @emmazzz @suiwombat
+/crates/sui-graphql-rpc/ @amnn @wlmyng @stefan-mysten @emmazzz
+/crates/sui-graphql-e2e-tests/ @amnn @wlmyng @stefan-mysten @emmazzz
 
 # Consensus working group
 /consensus/ @MystenLabs/consensus
 /crates/sui-core/src/consensus_handler.rs @MystenLabs/consensus
 /crates/sui-core/src/consensus_adapter.rs @MystenLabs/consensus
+
+
+/docker/ @MystenLabs/mysten-pe
