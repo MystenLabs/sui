@@ -3317,9 +3317,7 @@ impl AuthorityState {
         );
 
         if cfg!(debug_assertions) {
-            cur_epoch_store
-                .check_all_executed_transactions_in_checkpoint()
-                .expect("failed to check all executed transactions in checkpoint");
+            cur_epoch_store.check_all_executed_transactions_in_checkpoint();
         }
 
         if let Err(err) = self
