@@ -10,7 +10,7 @@ use crate::{
     verifier_meter::{AccumulatingMeter, Accumulator},
 };
 use std::{
-    collections::{btree_map::Entry, BTreeMap},
+    collections::{btree_map::Entry, BTreeMap, BTreeSet},
     fmt::{Debug, Display, Formatter, Write},
     fs,
     path::{Path, PathBuf},
@@ -67,12 +67,12 @@ use sui_types::{
     base_types::{ObjectID, SequenceNumber, SuiAddress},
     crypto::{EmptySignInfo, SignatureScheme},
     digests::TransactionDigest,
-    error::{SuiError, SuiObjectResponseError},
+    error::SuiError,
     gas::GasCostSummary,
     gas_coin::GasCoin,
     message_envelope::Envelope,
     metrics::BytecodeVerifierMetrics,
-    move_package::{MovePackage, UpgradeCap, UpgradeInfo},
+    move_package::{MovePackage, UpgradeCap},
     object::Owner,
     parse_sui_type_tag,
     signature::GenericSignature,
@@ -3116,79 +3116,66 @@ async fn check_protocol_version_and_warn(read_api: &ReadApi) -> Result<(), anyho
     Ok(())
 }
 
+/// Try to convert this object into a package.
+fn to_package(o: SuiObjectResponse) -> anyhow::Result<MovePackage> {
+    let id = o.object_id()?;
+    let Some(SuiRawData::Package(p)) = o.into_object()?.bcs else {
+        bail!("Object {id} not a package");
+    };
+
+    Ok(p.to_move_package(u64::MAX /* safe as this pkg comes from the network */)?)
+}
+
 /// Fetch move packages
 async fn fetch_move_packages(
     read_api: &ReadApi,
     immediate_dep_packages: &BTreeMap<Symbol, ObjectID>,
 ) -> Result<Vec<MovePackage>, anyhow::Error> {
-    let package_ids: Vec<_> = immediate_dep_packages.values().cloned().collect();
-    let objects = read_api
-        .multi_get_object_with_options(package_ids, SuiObjectDataOptions::bcs_lossless())
-        .await?;
-
-    // a map from id to pkg name for finding package names for error reporting.
+    let package_ids: Vec<_> = immediate_dep_packages.values().cloned().collect(); // a map from id to pkg name for finding package names for error reporting.
     let pkg_id_to_name: BTreeMap<_, _> = immediate_dep_packages
         .iter()
         .map(|(name, id)| (id, name))
         .collect();
 
-    objects
-        .into_iter()
-        .map(|o| {
-            let o = o.into_object().map_err(|e| match e {
-                SuiObjectResponseError::NotExists { object_id } => {
-                    anyhow!(
-                        "Package {} with object ID {object_id} does not exist",
-                        // SAFETY it's ok to unwrap because we build the `objects` list from the
-                        // same data where `pkg_id_to_name` is created
-                        pkg_id_to_name.get(&object_id).unwrap()
-                    )
-                }
-                SuiObjectResponseError::Deleted {
-                    object_id,
-                    version,
-                    digest,
-                } => {
-                    anyhow!(
-                        "Package {} with object ID {object_id} was deleted at version {version} \
-                        with digest {digest}",
-                        // SAFETY it's ok to unwrap because we build the `objects` list from the
-                        // same data where `pkg_id_to_name` is created
-                        pkg_id_to_name.get(&object_id).unwrap()
-                    )
-                }
-                _ => anyhow!("Cannot convert data into an object: {e}"),
-            })?;
+    let objects = read_api
+        .multi_get_object_with_options(package_ids, SuiObjectDataOptions::bcs_lossless())
+        .await?;
 
-            let Some(SuiRawData::Package(p)) = o.bcs else {
-                bail!(
-                    "Expected package {} with object ID {} but got something else",
-                    // SAFETY it's ok to unwrap because we build the `objects` list from the
-                    // same data where `pkg_id_to_name` is created
-                    pkg_id_to_name.get(&o.object_id).unwrap(),
-                    o.object_id
-                );
-            };
-            p.to_move_package(u64::MAX /* safe as this pkg comes from the network */)
-                .map_err(|e| anyhow!(e))
-        })
-        .collect()
+    let mut packages = Vec::with_capacity(objects.len());
+    for o in objects {
+        let id = o.object_id()?;
+        packages.push(to_package(o).with_context(|| {
+            format!(
+                "Failed to fetch package {}",
+                pkg_id_to_name
+                    .get(&id)
+                    .map_or("of unknown name", |x| x.as_str())
+            )
+        })?);
+    }
+
+    Ok(packages)
 }
 
-async fn pkgs_linkage_tables(
+// Fetch the original ids of all the transitive dependencies of the immediate package dependencies
+async fn trans_deps_original_ids(
     read_api: &ReadApi,
     immediate_dep_packages: &BTreeMap<Symbol, ObjectID>,
-) -> Result<BTreeMap<ObjectID, UpgradeInfo>, anyhow::Error> {
+) -> Result<BTreeSet<ObjectID>, anyhow::Error> {
     let pkgs = fetch_move_packages(read_api, immediate_dep_packages).await?;
     let linkage_table = pkgs
-        .into_iter()
-        .flat_map(|pkg| pkg.linkage_table().clone())
+        .iter()
+        .flat_map(|pkg| pkg.linkage_table().keys())
+        .copied()
         .collect();
 
     Ok(linkage_table)
 }
 
-/// Filter out a package's dependencies which are not referenced in the source code.
+/// Filter out a package's dependencies which are not referenced in the source code. The algorithm
+/// finds the immediate dependencies of this package, and the original ids of each transitive
+/// dependencies for all these immediate package dependencies. For packages that are not referenced
+/// in the source code, they will be filtered out from the list of dependencies.
 pub(crate) async fn pkg_tree_shake(
     read_api: &ReadApi,
     with_unpublished_dependencies: bool,
@@ -3200,8 +3187,7 @@ pub(crate) async fn pkg_tree_shake(
 
     // for every immediate dependency package, we need to use its linkage table to determine its
     // transitive dependencies and ensure that we keep the required packages, so fetch those tables
-    let immediate_dep_pkgs_linkage_tables =
-        pkgs_linkage_tables(read_api, &immediate_dep_packages).await?;
+    let trans_deps_orig_ids = trans_deps_original_ids(read_api, &immediate_dep_packages).await?;
     let pkg_name_to_orig_id: BTreeMap<_, _> = compiled_package
         .package
         .deps_compiled_units
@@ -3216,7 +3202,7 @@ pub(crate) async fn pkg_tree_shake(
         immediate_dep_packages.contains_key(pkg)
             || pkg_name_to_orig_id
                 .get(pkg)
-                .is_some_and(|id| immediate_dep_pkgs_linkage_tables.contains_key(id))
+                .is_some_and(|id| trans_deps_orig_ids.contains(id))
     });
 
     Ok(())
