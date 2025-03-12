@@ -137,3 +137,19 @@ module test::counter {
     "@{digest_3}"
   ]
 }
+
+//# programmable --sender A --inputs 42 @B
+//> 0: SplitCoins(Gas, [Input(0)]);
+//> 1: TransferObjects([Result(0)], Input(1))
+
+//# advance-clock --duration-ns 1000000
+
+//# create-checkpoint
+
+//# run-jsonrpc
+{
+  "method": "sui_getTransactionBlock",
+  "params": [
+    "@{digest_13}"
+  ]
+}
