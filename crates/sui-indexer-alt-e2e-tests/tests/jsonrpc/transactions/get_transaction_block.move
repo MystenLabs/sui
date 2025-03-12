@@ -129,3 +129,11 @@ module test::counter {
     }
   ]
 }
+
+//# run-jsonrpc
+{
+  "method": "sui_getTransactionBlock",
+  "params": [
+    "@{digest_3}"
+  ]
+}
