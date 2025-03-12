@@ -1,5 +1,5 @@
 # Use a more standard Node.js image that includes a shell
-FROM node:23-bookworm
+FROM node:23-bookworm AS builder
 
 # Set working directory
 WORKDIR /app
@@ -16,8 +16,20 @@ RUN pnpm install
 # Build the application
 RUN pnpm build
 
-# Expose port for the application
+# Use a smaller Node.js image for production
+FROM node:23-bookworm-slim
+
+# Set working directory
+WORKDIR /app
+
+# Install a simple static file server
+RUN npm install -g serve
+
+# Copy the built app from the builder stage
+COPY --from=builder /app/dist /app
+
+# Expose port 4173
 EXPOSE 4173
 
-# Command to run the application with host flag to listen on all interfaces
-CMD ["pnpm", "preview", "--host", "0.0.0.0"]
+# Serve the static files
+CMD ["serve", "-s", ".", "-l", "4173"]
