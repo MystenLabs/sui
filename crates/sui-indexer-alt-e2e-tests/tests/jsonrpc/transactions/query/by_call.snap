@@ -132,7 +132,9 @@ Response: {
             "bcs": "AA==",
             "timestampMs": "0"
           }
-        ]
+        ],
+        "timestampMs": "0",
+        "checkpoint": "1"
       },
       {
         "digest": "qWrgRMDfbXXZ4xd5iHyBP6rkiVTi62MC4p4yNibGN3P",
@@ -153,7 +155,9 @@ Response: {
             "bcs": "AA==",
             "timestampMs": "0"
           }
-        ]
+        ],
+        "timestampMs": "0",
+        "checkpoint": "1"
       },
       {
         "digest": "2nKQ3MtBGCX6QoJwRTL5WB5vPybJi7Qj3H3Jkc6pugji",
@@ -174,7 +178,9 @@ Response: {
             "bcs": "AA==",
             "timestampMs": "0"
           }
-        ]
+        ],
+        "timestampMs": "0",
+        "checkpoint": "1"
       },
       {
         "digest": "6LNtqJmb5p8XRcDrJgabzMxhYtvm5c2e2E2DRodXMzXo",
@@ -195,7 +201,9 @@ Response: {
             "bcs": "AA==",
             "timestampMs": "0"
           }
-        ]
+        ],
+        "timestampMs": "0",
+        "checkpoint": "1"
       },
       {
         "digest": "4kLbqeuvmcLFJop6Q8GfsYhpzttevpz59GfRHztYwnxV",
@@ -216,7 +224,9 @@ Response: {
             "bcs": "AA==",
             "timestampMs": "0"
           }
-        ]
+        ],
+        "timestampMs": "0",
+        "checkpoint": "1"
       },
       {
         "digest": "G4mwJCdgFp3EdqBzu1T7vwhYM2kHGN9KUZfU8ouNFkdG",
@@ -237,7 +247,9 @@ Response: {
             "bcs": "AA==",
             "timestampMs": "0"
           }
-        ]
+        ],
+        "timestampMs": "0",
+        "checkpoint": "1"
       },
       {
         "digest": "41AWYX1pEDqX5wkEJAY14R3vryPAxufEJMCw5J2bWbih",
@@ -258,7 +270,9 @@ Response: {
             "bcs": "AA==",
             "timestampMs": "0"
           }
-        ]
+        ],
+        "timestampMs": "0",
+        "checkpoint": "1"
       },
       {
         "digest": "BWhH8VXVSD8rnGCXcLLBvtX375Lijzz9imJ9H5PQd955",
@@ -279,7 +293,9 @@ Response: {
             "bcs": "AA==",
             "timestampMs": "0"
           }
-        ]
+        ],
+        "timestampMs": "0",
+        "checkpoint": "1"
       },
       {
         "digest": "3hNt4BeLzvSdwSZypvynfP7uERdxeuea64qkqTJ1BiBs",
@@ -300,7 +316,9 @@ Response: {
             "bcs": "AA==",
             "timestampMs": "0"
           }
-        ]
+        ],
+        "timestampMs": "0",
+        "checkpoint": "1"
       }
     ],
     "nextCursor": "MTM=",
@@ -334,7 +352,9 @@ Response: {
             "bcs": "AA==",
             "timestampMs": "0"
           }
-        ]
+        ],
+        "timestampMs": "0",
+        "checkpoint": "1"
       },
       {
         "digest": "2nKQ3MtBGCX6QoJwRTL5WB5vPybJi7Qj3H3Jkc6pugji",
@@ -355,7 +375,9 @@ Response: {
             "bcs": "AA==",
             "timestampMs": "0"
           }
-        ]
+        ],
+        "timestampMs": "0",
+        "checkpoint": "1"
       },
       {
         "digest": "4kLbqeuvmcLFJop6Q8GfsYhpzttevpz59GfRHztYwnxV",
@@ -376,7 +398,9 @@ Response: {
             "bcs": "AA==",
             "timestampMs": "0"
           }
-        ]
+        ],
+        "timestampMs": "0",
+        "checkpoint": "1"
       },
       {
         "digest": "G4mwJCdgFp3EdqBzu1T7vwhYM2kHGN9KUZfU8ouNFkdG",
@@ -397,7 +421,9 @@ Response: {
             "bcs": "AA==",
             "timestampMs": "0"
           }
-        ]
+        ],
+        "timestampMs": "0",
+        "checkpoint": "1"
       },
       {
         "digest": "BWhH8VXVSD8rnGCXcLLBvtX375Lijzz9imJ9H5PQd955",
@@ -418,7 +444,9 @@ Response: {
             "bcs": "AA==",
             "timestampMs": "0"
           }
-        ]
+        ],
+        "timestampMs": "0",
+        "checkpoint": "1"
       },
       {
         "digest": "3hNt4BeLzvSdwSZypvynfP7uERdxeuea64qkqTJ1BiBs",
@@ -439,7 +467,9 @@ Response: {
             "bcs": "AA==",
             "timestampMs": "0"
           }
-        ]
+        ],
+        "timestampMs": "0",
+        "checkpoint": "1"
       }
     ],
     "nextCursor": "MTM=",
@@ -473,7 +503,9 @@ Response: {
             "bcs": "AA==",
             "timestampMs": "0"
           }
-        ]
+        ],
+        "timestampMs": "0",
+        "checkpoint": "1"
       },
       {
         "digest": "A4k5qryEEuEGCdtcXDMUVe9STVw7vQeXVhjH31rw21E7",
@@ -494,7 +526,9 @@ Response: {
             "bcs": "AA==",
             "timestampMs": "0"
           }
-        ]
+        ],
+        "timestampMs": "0",
+        "checkpoint": "1"
       },
       {
         "digest": "9dNCpuyieuA7zRYNAPqunTRfNemy7r4WYg6h8vW3FPQz",
@@ -515,7 +549,9 @@ Response: {
             "bcs": "AA==",
             "timestampMs": "0"
           }
-        ]
+        ],
+        "timestampMs": "0",
+        "checkpoint": "1"
       }
     ],
     "nextCursor": "MTQ=",

@@ -31,7 +31,7 @@ trait TransactionsApi {
         /// The digest of the queried transaction.
         digest: TransactionDigest,
         /// Options controlling the output format.
-        options: SuiTransactionBlockResponseOptions,
+        options: Option<SuiTransactionBlockResponseOptions>,
     ) -> RpcResult<SuiTransactionBlockResponse>;
 }
 
@@ -72,12 +72,14 @@ impl TransactionsApiServer for Transactions {
     async fn get_transaction_block(
         &self,
         digest: TransactionDigest,
-        options: SuiTransactionBlockResponseOptions,
+        options: Option<SuiTransactionBlockResponseOptions>,
     ) -> RpcResult<SuiTransactionBlockResponse> {
         let Self(ctx) = self;
-        Ok(response::transaction(ctx, digest, &options)
-            .await
-            .with_internal_context(|| format!("Failed to get transaction {digest}"))?)
+        Ok(
+            response::transaction(ctx, digest, &options.unwrap_or_default())
+                .await
+                .with_internal_context(|| format!("Failed to get transaction {digest}"))?,
+        )
     }
 }
 
