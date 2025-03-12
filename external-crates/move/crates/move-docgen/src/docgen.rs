@@ -1105,7 +1105,7 @@ impl<'env> Docgen<'env> {
             self.code_block(env, &self.get_source_with_indent(env, func_info.full_loc));
             self.end_collapsed();
         }
-        if self.options.flags.include_call_diagrams && func_env.compiled().is_some() {
+        if self.options.flags.include_call_diagrams && func_env.maybe_compiled().is_some() {
             let file_prefix = full_name.replace("::", "_");
             self.gen_call_diagram(env, module_env.id(), name, true);
             self.begin_collapsed(&format!("Show all the functions that \"{}\" calls", name,));

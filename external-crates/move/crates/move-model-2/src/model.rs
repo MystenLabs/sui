@@ -33,6 +33,12 @@ use move_symbol_pool::Symbol;
 pub const WITH_SOURCE: usize = 1;
 pub const WITHOUT_SOURCE: usize = 0;
 
+#[derive(Clone, Copy)]
+pub enum Source<TWith, TWithout> {
+    With(TWith),
+    Without(TWithout),
+}
+
 pub struct Model<const HAS_SOURCE: usize> {
     files: [MappedFiles; HAS_SOURCE],
     root_named_address_map: BTreeMap<Symbol, AccountAddress>,
@@ -258,7 +264,7 @@ impl<const HAS_SOURCE: usize> Model<HAS_SOURCE> {
         let package = self.maybe_package(&addr)?;
         package.maybe_module(name)
     }
-    pub fn module(&self, module: impl TModuleId) -> Module<'_, HAS_SOURCE> {
+    pub fn module(&self, module: impl TModuleId) -> Module<HAS_SOURCE> {
         self.maybe_module(module).unwrap()
     }
 
@@ -274,6 +280,18 @@ impl<const HAS_SOURCE: usize> Model<HAS_SOURCE> {
 
     pub fn compiled_packages(&self) -> &compiled::Packages {
         &self.compiled
+    }
+
+    pub fn has_source(&self) -> Source<&Model<WITH_SOURCE>, &Model<WITHOUT_SOURCE>> {
+        match HAS_SOURCE {
+            WITH_SOURCE => {
+                Source::With(unsafe { std::mem::transmute::<&Self, &Model<WITH_SOURCE>>(self) })
+            }
+            WITHOUT_SOURCE => Source::Without(unsafe {
+                std::mem::transmute::<&Self, &Model<WITHOUT_SOURCE>>(self)
+            }),
+            _ => unreachable!(),
+        }
     }
 }
 
@@ -312,6 +330,18 @@ impl<'a, const HAS_SOURCE: usize> Package<'a, HAS_SOURCE> {
 
     pub fn compiled(&self) -> &'a compiled::Package {
         self.compiled
+    }
+
+    pub fn has_source(self) -> Source<Package<'a, WITH_SOURCE>, Package<'a, WITHOUT_SOURCE>> {
+        match HAS_SOURCE {
+            WITH_SOURCE => {
+                Source::With(unsafe { std::mem::transmute::<Self, Package<'a, WITH_SOURCE>>(self) })
+            }
+            WITHOUT_SOURCE => Source::Without(unsafe {
+                std::mem::transmute::<Self, Package<'a, WITHOUT_SOURCE>>(self)
+            }),
+            _ => unreachable!(),
+        }
     }
 }
 
@@ -414,6 +444,18 @@ impl<'a, const HAS_SOURCE: usize> Module<'a, HAS_SOURCE> {
     pub fn used_by(&self) -> &'a BTreeMap<ModuleId, /* is immediate */ bool> {
         &self.compiled.used_by
     }
+
+    pub fn has_source(self) -> Source<Module<'a, WITH_SOURCE>, Module<'a, WITHOUT_SOURCE>> {
+        match HAS_SOURCE {
+            WITH_SOURCE => {
+                Source::With(unsafe { std::mem::transmute::<Self, Module<'a, WITH_SOURCE>>(self) })
+            }
+            WITHOUT_SOURCE => Source::Without(unsafe {
+                std::mem::transmute::<Self, Module<'a, WITHOUT_SOURCE>>(self)
+            }),
+            _ => unreachable!(),
+        }
+    }
 }
 
 impl<'a> Module<'a, WITH_SOURCE> {
@@ -515,6 +557,18 @@ impl<'a, const HAS_SOURCE: usize> Struct<'a, HAS_SOURCE> {
     pub fn compiled(&self) -> &'a compiled::Struct {
         self.compiled
     }
+
+    pub fn has_source(self) -> Source<Struct<'a, WITH_SOURCE>, Struct<'a, WITHOUT_SOURCE>> {
+        match HAS_SOURCE {
+            WITH_SOURCE => {
+                Source::With(unsafe { std::mem::transmute::<Self, Struct<'a, WITH_SOURCE>>(self) })
+            }
+            WITHOUT_SOURCE => Source::Without(unsafe {
+                std::mem::transmute::<Self, Struct<'a, WITHOUT_SOURCE>>(self)
+            }),
+            _ => unreachable!(),
+        }
+    }
 }
 
 impl<'a> Struct<'a, WITH_SOURCE> {
@@ -590,6 +644,18 @@ impl<'a, const HAS_SOURCE: usize> Variant<'a, HAS_SOURCE> {
     pub fn compiled(&self) -> &'a compiled::Variant {
         self.compiled
     }
+
+    pub fn has_source(self) -> Source<Variant<'a, WITH_SOURCE>, Variant<'a, WITHOUT_SOURCE>> {
+        match HAS_SOURCE {
+            WITH_SOURCE => {
+                Source::With(unsafe { std::mem::transmute::<Self, Variant<'a, WITH_SOURCE>>(self) })
+            }
+            WITHOUT_SOURCE => Source::Without(unsafe {
+                std::mem::transmute::<Self, Variant<'a, WITHOUT_SOURCE>>(self)
+            }),
+            _ => unreachable!(),
+        }
+    }
 }
 
 impl<'a> Variant<'a, WITH_SOURCE> {
@@ -619,7 +685,7 @@ impl<'a, const HAS_SOURCE: usize> Function<'a, HAS_SOURCE> {
     }
 
     /// Returns the compiled function if it exists. This will be `None` for `macro`s.
-    pub fn compiled(&self) -> Option<&'a compiled::Function> {
+    pub fn maybe_compiled(&self) -> Option<&'a compiled::Function> {
         self.compiled
     }
 
@@ -638,11 +704,29 @@ impl<'a, const HAS_SOURCE: usize> Function<'a, HAS_SOURCE> {
             None => &MACRO_EMPTY_SET,
         }
     }
+
+    pub fn has_source(self) -> Source<Function<'a, WITH_SOURCE>, Function<'a, WITHOUT_SOURCE>> {
+        match HAS_SOURCE {
+            WITH_SOURCE => Source::With(unsafe {
+                std::mem::transmute::<Self, Function<'a, WITH_SOURCE>>(self)
+            }),
+            WITHOUT_SOURCE => Source::Without(unsafe {
+                std::mem::transmute::<Self, Function<'a, WITHOUT_SOURCE>>(self)
+            }),
+            _ => unreachable!(),
+        }
+    }
 }
 
 impl<'a> Function<'a, WITH_SOURCE> {
     pub fn info(&self) -> &'a FunctionInfo {
         self.module.info().functions.get_(&self.name).unwrap()
+    }
+}
+
+impl<'a> Function<'a, WITHOUT_SOURCE> {
+    pub fn compiled(&self) -> &'a compiled::Function {
+        self.compiled.unwrap()
     }
 }
 
