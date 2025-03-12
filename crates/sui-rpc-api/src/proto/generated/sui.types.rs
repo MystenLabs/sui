@@ -170,6 +170,574 @@ pub struct Event {
     #[prost(bytes = "bytes", optional, tag = "5")]
     pub contents: ::core::option::Option<::prost::bytes::Bytes>,
 }
+/// The status of an executed transaction.
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct ExecutionStatus {
+    /// Indicates if the transaction was successful or not.
+    #[prost(bool, optional, tag = "1")]
+    pub success: ::core::option::Option<bool>,
+    /// The error if `success` is false.
+    #[prost(message, optional, tag = "2")]
+    pub error: ::core::option::Option<ExecutionError>,
+}
+/// An error that can occur during the execution of a transaction.
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct ExecutionError {
+    /// The command, if any, during which the error occurred.
+    #[prost(uint64, optional, tag = "1")]
+    pub command: ::core::option::Option<u64>,
+    #[prost(enumeration = "execution_error::ExecutionErrorKind", optional, tag = "2")]
+    pub kind: ::core::option::Option<i32>,
+    /// Abort code from Move.
+    #[prost(uint64, optional, tag = "3")]
+    pub abort_code: ::core::option::Option<u64>,
+    /// Location in Move where the error occurred.
+    #[prost(message, optional, tag = "4")]
+    pub location: ::core::option::Option<MoveLocation>,
+    #[prost(message, optional, tag = "5")]
+    pub size_error: ::core::option::Option<SizeError>,
+    #[prost(message, optional, tag = "6")]
+    pub command_argument_error: ::core::option::Option<CommandArgumentError>,
+    #[prost(message, optional, tag = "7")]
+    pub type_argument_error: ::core::option::Option<TypeArgumentError>,
+    #[prost(message, optional, tag = "8")]
+    pub package_upgrade_error: ::core::option::Option<PackageUpgradeError>,
+    /// Index of an input or result.
+    #[prost(uint32, optional, tag = "9")]
+    pub index: ::core::option::Option<u32>,
+    /// Index of a subresult.
+    #[prost(uint32, optional, tag = "10")]
+    pub subresult: ::core::option::Option<u32>,
+    #[prost(string, optional, tag = "11")]
+    pub object_id: ::core::option::Option<::prost::alloc::string::String>,
+    /// Denied address.
+    #[prost(string, optional, tag = "12")]
+    pub address: ::core::option::Option<::prost::alloc::string::String>,
+    /// Coin type.
+    #[prost(string, optional, tag = "13")]
+    pub coin_type: ::core::option::Option<::prost::alloc::string::String>,
+    /// Set of objects that were congested, leading to the transaction's cancellation.
+    #[prost(string, repeated, tag = "14")]
+    pub congested_objects: ::prost::alloc::vec::Vec<::prost::alloc::string::String>,
+}
+/// Nested message and enum types in `ExecutionError`.
+pub mod execution_error {
+    #[derive(
+        Clone,
+        Copy,
+        Debug,
+        PartialEq,
+        Eq,
+        Hash,
+        PartialOrd,
+        Ord,
+        ::prost::Enumeration
+    )]
+    #[repr(i32)]
+    pub enum ExecutionErrorKind {
+        Unknown = 0,
+        /// Insufficient gas.
+        InsufficientGas = 1,
+        /// Invalid `Gas` object.
+        InvalidGasObject = 2,
+        /// Invariant violation.
+        InvariantViolation = 3,
+        /// Attempted to use feature that is not supported yet.
+        FeatureNotYetSupported = 4,
+        /// Move object is larger than the maximum allowed size.
+        ObjectTooBig = 5,
+        /// Package is larger than the maximum allowed size.
+        PackageTooBig = 6,
+        /// Circular object ownership.
+        CircularObjectOwnership = 7,
+        /// Insufficient coin balance for requested operation.
+        InsufficientCoinBalance = 8,
+        /// Coin balance overflowed an u64.
+        CoinBalanceOverflow = 9,
+        /// Publish error, non-zero address.
+        /// The modules in the package must have their self-addresses set to zero.
+        PublishErrorNonZeroAddress = 10,
+        /// Sui Move bytecode verification error.
+        SuiMoveVerificationError = 11,
+        /// Error from a non-abort instruction.
+        /// Possible causes:
+        ///      Arithmetic error, stack overflow, max value depth, or similar.
+        MovePrimitiveRuntimeError = 12,
+        /// Move runtime abort.
+        MoveAbort = 13,
+        /// Bytecode verification error.
+        VmVerificationOrDeserializationError = 14,
+        /// MoveVm invariant violation.
+        VmInvariantViolation = 15,
+        /// Function not found.
+        FunctionNotFound = 16,
+        /// Parity mismatch for Move function.
+        /// The number of arguments does not match the number of parameters.
+        ArityMismatch = 17,
+        /// Type parity mismatch for Move function.
+        /// Mismatch between the number of actual versus expected type arguments.
+        TypeArityMismatch = 18,
+        /// Non-entry function invoked. Move Call must start with an entry function.
+        NonEntryFunctionInvoked = 19,
+        /// Invalid command argument.
+        CommandArgumentError = 20,
+        /// Type argument error.
+        TypeArgumentError = 21,
+        /// Unused result without the drop ability.
+        UnusedValueWithoutDrop = 22,
+        /// Invalid public Move function signature.
+        /// Unsupported return type for return value.
+        InvalidPublicFunctionReturnType = 23,
+        /// Invalid transfer object, object does not have public transfer.
+        InvalidTransferObject = 24,
+        /// Effects from the transaction are too large.
+        EffectsTooLarge = 25,
+        /// Publish or Upgrade is missing dependency.
+        PublishUpgradeMissingDependency = 26,
+        /// Publish or upgrade dependency downgrade.
+        ///
+        /// Indirect (transitive) dependency of published or upgraded package has been assigned an
+        /// on-chain version that is less than the version required by one of the package's
+        /// transitive dependencies.
+        PublishUpgradeDependencyDowngrade = 27,
+        /// Invalid package upgrade.
+        PackageUpgradeError = 28,
+        /// Indicates the transaction tried to write objects too large to storage.
+        WrittenObjectsTooLarge = 29,
+        /// Certificate is on the deny list.
+        CertificateDenied = 30,
+        /// Sui Move bytecode verification timed out.
+        SuiMoveVerificationTimedout = 31,
+        /// The requested shared object operation is not allowed.
+        SharedObjectOperationNotAllowed = 32,
+        /// Requested shared object has been deleted.
+        InputObjectDeleted = 33,
+        /// Certificate is cancelled due to congestion on shared objects.
+        ExecutionCancelledDueToSharedObjectCongestion = 34,
+        /// Address is denied for this coin type.
+        AddressDeniedForCoin = 35,
+        /// Coin type is globally paused for use.
+        CoinTypeGlobalPause = 36,
+        /// Certificate is cancelled because randomness could not be generated this epoch.
+        ExecutionCancelledDueToRandomnessUnavailable = 37,
+    }
+    impl ExecutionErrorKind {
+        /// String value of the enum field names used in the ProtoBuf definition.
+        ///
+        /// The values are not transformed in any way and thus are considered stable
+        /// (if the ProtoBuf definition does not change) and safe for programmatic use.
+        pub fn as_str_name(&self) -> &'static str {
+            match self {
+                Self::Unknown => "EXECUTION_ERROR_KIND_UNKNOWN",
+                Self::InsufficientGas => "INSUFFICIENT_GAS",
+                Self::InvalidGasObject => "INVALID_GAS_OBJECT",
+                Self::InvariantViolation => "INVARIANT_VIOLATION",
+                Self::FeatureNotYetSupported => "FEATURE_NOT_YET_SUPPORTED",
+                Self::ObjectTooBig => "OBJECT_TOO_BIG",
+                Self::PackageTooBig => "PACKAGE_TOO_BIG",
+                Self::CircularObjectOwnership => "CIRCULAR_OBJECT_OWNERSHIP",
+                Self::InsufficientCoinBalance => "INSUFFICIENT_COIN_BALANCE",
+                Self::CoinBalanceOverflow => "COIN_BALANCE_OVERFLOW",
+                Self::PublishErrorNonZeroAddress => "PUBLISH_ERROR_NON_ZERO_ADDRESS",
+                Self::SuiMoveVerificationError => "SUI_MOVE_VERIFICATION_ERROR",
+                Self::MovePrimitiveRuntimeError => "MOVE_PRIMITIVE_RUNTIME_ERROR",
+                Self::MoveAbort => "MOVE_ABORT",
+                Self::VmVerificationOrDeserializationError => {
+                    "VM_VERIFICATION_OR_DESERIALIZATION_ERROR"
+                }
+                Self::VmInvariantViolation => "VM_INVARIANT_VIOLATION",
+                Self::FunctionNotFound => "FUNCTION_NOT_FOUND",
+                Self::ArityMismatch => "ARITY_MISMATCH",
+                Self::TypeArityMismatch => "TYPE_ARITY_MISMATCH",
+                Self::NonEntryFunctionInvoked => "NON_ENTRY_FUNCTION_INVOKED",
+                Self::CommandArgumentError => "COMMAND_ARGUMENT_ERROR",
+                Self::TypeArgumentError => "TYPE_ARGUMENT_ERROR",
+                Self::UnusedValueWithoutDrop => "UNUSED_VALUE_WITHOUT_DROP",
+                Self::InvalidPublicFunctionReturnType => {
+                    "INVALID_PUBLIC_FUNCTION_RETURN_TYPE"
+                }
+                Self::InvalidTransferObject => "INVALID_TRANSFER_OBJECT",
+                Self::EffectsTooLarge => "EFFECTS_TOO_LARGE",
+                Self::PublishUpgradeMissingDependency => {
+                    "PUBLISH_UPGRADE_MISSING_DEPENDENCY"
+                }
+                Self::PublishUpgradeDependencyDowngrade => {
+                    "PUBLISH_UPGRADE_DEPENDENCY_DOWNGRADE"
+                }
+                Self::PackageUpgradeError => "PACKAGE_UPGRADE_ERROR",
+                Self::WrittenObjectsTooLarge => "WRITTEN_OBJECTS_TOO_LARGE",
+                Self::CertificateDenied => "CERTIFICATE_DENIED",
+                Self::SuiMoveVerificationTimedout => "SUI_MOVE_VERIFICATION_TIMEDOUT",
+                Self::SharedObjectOperationNotAllowed => {
+                    "SHARED_OBJECT_OPERATION_NOT_ALLOWED"
+                }
+                Self::InputObjectDeleted => "INPUT_OBJECT_DELETED",
+                Self::ExecutionCancelledDueToSharedObjectCongestion => {
+                    "EXECUTION_CANCELLED_DUE_TO_SHARED_OBJECT_CONGESTION"
+                }
+                Self::AddressDeniedForCoin => "ADDRESS_DENIED_FOR_COIN",
+                Self::CoinTypeGlobalPause => "COIN_TYPE_GLOBAL_PAUSE",
+                Self::ExecutionCancelledDueToRandomnessUnavailable => {
+                    "EXECUTION_CANCELLED_DUE_TO_RANDOMNESS_UNAVAILABLE"
+                }
+            }
+        }
+        /// Creates an enum from field names used in the ProtoBuf definition.
+        pub fn from_str_name(value: &str) -> ::core::option::Option<Self> {
+            match value {
+                "EXECUTION_ERROR_KIND_UNKNOWN" => Some(Self::Unknown),
+                "INSUFFICIENT_GAS" => Some(Self::InsufficientGas),
+                "INVALID_GAS_OBJECT" => Some(Self::InvalidGasObject),
+                "INVARIANT_VIOLATION" => Some(Self::InvariantViolation),
+                "FEATURE_NOT_YET_SUPPORTED" => Some(Self::FeatureNotYetSupported),
+                "OBJECT_TOO_BIG" => Some(Self::ObjectTooBig),
+                "PACKAGE_TOO_BIG" => Some(Self::PackageTooBig),
+                "CIRCULAR_OBJECT_OWNERSHIP" => Some(Self::CircularObjectOwnership),
+                "INSUFFICIENT_COIN_BALANCE" => Some(Self::InsufficientCoinBalance),
+                "COIN_BALANCE_OVERFLOW" => Some(Self::CoinBalanceOverflow),
+                "PUBLISH_ERROR_NON_ZERO_ADDRESS" => {
+                    Some(Self::PublishErrorNonZeroAddress)
+                }
+                "SUI_MOVE_VERIFICATION_ERROR" => Some(Self::SuiMoveVerificationError),
+                "MOVE_PRIMITIVE_RUNTIME_ERROR" => Some(Self::MovePrimitiveRuntimeError),
+                "MOVE_ABORT" => Some(Self::MoveAbort),
+                "VM_VERIFICATION_OR_DESERIALIZATION_ERROR" => {
+                    Some(Self::VmVerificationOrDeserializationError)
+                }
+                "VM_INVARIANT_VIOLATION" => Some(Self::VmInvariantViolation),
+                "FUNCTION_NOT_FOUND" => Some(Self::FunctionNotFound),
+                "ARITY_MISMATCH" => Some(Self::ArityMismatch),
+                "TYPE_ARITY_MISMATCH" => Some(Self::TypeArityMismatch),
+                "NON_ENTRY_FUNCTION_INVOKED" => Some(Self::NonEntryFunctionInvoked),
+                "COMMAND_ARGUMENT_ERROR" => Some(Self::CommandArgumentError),
+                "TYPE_ARGUMENT_ERROR" => Some(Self::TypeArgumentError),
+                "UNUSED_VALUE_WITHOUT_DROP" => Some(Self::UnusedValueWithoutDrop),
+                "INVALID_PUBLIC_FUNCTION_RETURN_TYPE" => {
+                    Some(Self::InvalidPublicFunctionReturnType)
+                }
+                "INVALID_TRANSFER_OBJECT" => Some(Self::InvalidTransferObject),
+                "EFFECTS_TOO_LARGE" => Some(Self::EffectsTooLarge),
+                "PUBLISH_UPGRADE_MISSING_DEPENDENCY" => {
+                    Some(Self::PublishUpgradeMissingDependency)
+                }
+                "PUBLISH_UPGRADE_DEPENDENCY_DOWNGRADE" => {
+                    Some(Self::PublishUpgradeDependencyDowngrade)
+                }
+                "PACKAGE_UPGRADE_ERROR" => Some(Self::PackageUpgradeError),
+                "WRITTEN_OBJECTS_TOO_LARGE" => Some(Self::WrittenObjectsTooLarge),
+                "CERTIFICATE_DENIED" => Some(Self::CertificateDenied),
+                "SUI_MOVE_VERIFICATION_TIMEDOUT" => {
+                    Some(Self::SuiMoveVerificationTimedout)
+                }
+                "SHARED_OBJECT_OPERATION_NOT_ALLOWED" => {
+                    Some(Self::SharedObjectOperationNotAllowed)
+                }
+                "INPUT_OBJECT_DELETED" => Some(Self::InputObjectDeleted),
+                "EXECUTION_CANCELLED_DUE_TO_SHARED_OBJECT_CONGESTION" => {
+                    Some(Self::ExecutionCancelledDueToSharedObjectCongestion)
+                }
+                "ADDRESS_DENIED_FOR_COIN" => Some(Self::AddressDeniedForCoin),
+                "COIN_TYPE_GLOBAL_PAUSE" => Some(Self::CoinTypeGlobalPause),
+                "EXECUTION_CANCELLED_DUE_TO_RANDOMNESS_UNAVAILABLE" => {
+                    Some(Self::ExecutionCancelledDueToRandomnessUnavailable)
+                }
+                _ => None,
+            }
+        }
+    }
+}
+/// A size error.
+#[derive(Clone, Copy, PartialEq, ::prost::Message)]
+pub struct SizeError {
+    /// The offending size.
+    #[prost(uint64, optional, tag = "1")]
+    pub size: ::core::option::Option<u64>,
+    /// The maximum allowable size.
+    #[prost(uint64, optional, tag = "2")]
+    pub max_size: ::core::option::Option<u64>,
+}
+/// Location in Move bytecode where an error occurred.s
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct MoveLocation {
+    /// The package ID.
+    #[prost(string, optional, tag = "1")]
+    pub package: ::core::option::Option<::prost::alloc::string::String>,
+    /// The module name.
+    #[prost(string, optional, tag = "2")]
+    pub module: ::core::option::Option<::prost::alloc::string::String>,
+    /// The function index.
+    #[prost(uint32, optional, tag = "3")]
+    pub function: ::core::option::Option<u32>,
+    /// Offset of the instruction where the error occurred.
+    #[prost(uint32, optional, tag = "4")]
+    pub instruction: ::core::option::Option<u32>,
+    /// The name of the function, if available.
+    #[prost(string, optional, tag = "5")]
+    pub function_name: ::core::option::Option<::prost::alloc::string::String>,
+}
+/// An error with an argument to a command.
+#[derive(Clone, Copy, PartialEq, ::prost::Message)]
+pub struct CommandArgumentError {
+    /// Position of the problematic argument.
+    #[prost(uint32, optional, tag = "1")]
+    pub argument: ::core::option::Option<u32>,
+    #[prost(
+        enumeration = "command_argument_error::CommandArgumentErrorKind",
+        optional,
+        tag = "2"
+    )]
+    pub kind: ::core::option::Option<i32>,
+    /// Index of an input or result.
+    #[prost(uint32, optional, tag = "3")]
+    pub index: ::core::option::Option<u32>,
+    /// Index of a subresult.
+    #[prost(uint32, optional, tag = "4")]
+    pub subresult: ::core::option::Option<u32>,
+}
+/// Nested message and enum types in `CommandArgumentError`.
+pub mod command_argument_error {
+    #[derive(
+        Clone,
+        Copy,
+        Debug,
+        PartialEq,
+        Eq,
+        Hash,
+        PartialOrd,
+        Ord,
+        ::prost::Enumeration
+    )]
+    #[repr(i32)]
+    pub enum CommandArgumentErrorKind {
+        Unknown = 0,
+        /// The type of the value does not match the expected type.
+        TypeMismatch = 1,
+        /// The argument cannot be deserialized into a value of the specified type.
+        InvalidBcsBytes = 2,
+        /// The argument cannot be instantiated from raw bytes.
+        InvalidUsageOfPureArgument = 3,
+        /// Invalid argument to private entry function.
+        /// Private entry functions cannot take arguments from other Move functions.
+        InvalidArgumentToPrivateEntryFunction = 4,
+        /// Out of bounds access to input or results.
+        ///
+        /// `index` field will be set indicating the invalid index value.
+        IndexOutOfBounds = 5,
+        /// Out of bounds access to subresult.
+        ///
+        /// `index` and `subresult` fields will be set indicating the invalid index value.
+        SecondaryIndexOutOfBounds = 6,
+        /// Invalid usage of result.
+        /// Expected a single result but found either no return value or multiple.
+        /// `index` field will be set indicating the invalid index value.
+        InvalidResultArity = 7,
+        /// Invalid usage of gas coin.
+        /// The gas coin can only be used by-value with a `TransferObject` command.
+        InvalidGasCoinUsage = 8,
+        /// Invalid usage of Move value.
+        ///     - Mutably borrowed values require unique usage.
+        ///     - Immutably borrowed values cannot be taken or borrowed mutably.
+        ///     - Taken values cannot be used again.
+        InvalidValueUsage = 9,
+        /// Immutable objects cannot be passed by-value.
+        InvalidObjectByValue = 10,
+        /// Immutable objects cannot be passed by mutable reference, `&mut`.
+        InvalidObjectByMutRef = 11,
+        /// Shared object operations such as wrapping, freezing, or converting to owned are not
+        /// allowed.
+        SharedObjectOperationNotAllowed = 12,
+    }
+    impl CommandArgumentErrorKind {
+        /// String value of the enum field names used in the ProtoBuf definition.
+        ///
+        /// The values are not transformed in any way and thus are considered stable
+        /// (if the ProtoBuf definition does not change) and safe for programmatic use.
+        pub fn as_str_name(&self) -> &'static str {
+            match self {
+                Self::Unknown => "COMMAND_ARGUMENT_ERROR_KIND_UNKNOWN",
+                Self::TypeMismatch => "TYPE_MISMATCH",
+                Self::InvalidBcsBytes => "INVALID_BCS_BYTES",
+                Self::InvalidUsageOfPureArgument => "INVALID_USAGE_OF_PURE_ARGUMENT",
+                Self::InvalidArgumentToPrivateEntryFunction => {
+                    "INVALID_ARGUMENT_TO_PRIVATE_ENTRY_FUNCTION"
+                }
+                Self::IndexOutOfBounds => "INDEX_OUT_OF_BOUNDS",
+                Self::SecondaryIndexOutOfBounds => "SECONDARY_INDEX_OUT_OF_BOUNDS",
+                Self::InvalidResultArity => "INVALID_RESULT_ARITY",
+                Self::InvalidGasCoinUsage => "INVALID_GAS_COIN_USAGE",
+                Self::InvalidValueUsage => "INVALID_VALUE_USAGE",
+                Self::InvalidObjectByValue => "INVALID_OBJECT_BY_VALUE",
+                Self::InvalidObjectByMutRef => "INVALID_OBJECT_BY_MUT_REF",
+                Self::SharedObjectOperationNotAllowed => {
+                    "SHARED_OBJECT_OPERATION_NOT_ALLOWED"
+                }
+            }
+        }
+        /// Creates an enum from field names used in the ProtoBuf definition.
+        pub fn from_str_name(value: &str) -> ::core::option::Option<Self> {
+            match value {
+                "COMMAND_ARGUMENT_ERROR_KIND_UNKNOWN" => Some(Self::Unknown),
+                "TYPE_MISMATCH" => Some(Self::TypeMismatch),
+                "INVALID_BCS_BYTES" => Some(Self::InvalidBcsBytes),
+                "INVALID_USAGE_OF_PURE_ARGUMENT" => {
+                    Some(Self::InvalidUsageOfPureArgument)
+                }
+                "INVALID_ARGUMENT_TO_PRIVATE_ENTRY_FUNCTION" => {
+                    Some(Self::InvalidArgumentToPrivateEntryFunction)
+                }
+                "INDEX_OUT_OF_BOUNDS" => Some(Self::IndexOutOfBounds),
+                "SECONDARY_INDEX_OUT_OF_BOUNDS" => Some(Self::SecondaryIndexOutOfBounds),
+                "INVALID_RESULT_ARITY" => Some(Self::InvalidResultArity),
+                "INVALID_GAS_COIN_USAGE" => Some(Self::InvalidGasCoinUsage),
+                "INVALID_VALUE_USAGE" => Some(Self::InvalidValueUsage),
+                "INVALID_OBJECT_BY_VALUE" => Some(Self::InvalidObjectByValue),
+                "INVALID_OBJECT_BY_MUT_REF" => Some(Self::InvalidObjectByMutRef),
+                "SHARED_OBJECT_OPERATION_NOT_ALLOWED" => {
+                    Some(Self::SharedObjectOperationNotAllowed)
+                }
+                _ => None,
+            }
+        }
+    }
+}
+/// An error with upgrading a package.
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct PackageUpgradeError {
+    #[prost(
+        enumeration = "package_upgrade_error::PackageUpgradeErrorKind",
+        optional,
+        tag = "1"
+    )]
+    pub kind: ::core::option::Option<i32>,
+    /// The Package Id.
+    #[prost(string, optional, tag = "2")]
+    pub package_id: ::core::option::Option<::prost::alloc::string::String>,
+    /// A digest.
+    #[prost(string, optional, tag = "3")]
+    pub digest: ::core::option::Option<::prost::alloc::string::String>,
+    #[prost(uint32, optional, tag = "4")]
+    pub policy: ::core::option::Option<u32>,
+    /// The ticket Id.
+    #[prost(string, optional, tag = "5")]
+    pub ticket_id: ::core::option::Option<::prost::alloc::string::String>,
+}
+/// Nested message and enum types in `PackageUpgradeError`.
+pub mod package_upgrade_error {
+    #[derive(
+        Clone,
+        Copy,
+        Debug,
+        PartialEq,
+        Eq,
+        Hash,
+        PartialOrd,
+        Ord,
+        ::prost::Enumeration
+    )]
+    #[repr(i32)]
+    pub enum PackageUpgradeErrorKind {
+        Unknown = 0,
+        /// Unable to fetch package.
+        UnableToFetchPackage = 1,
+        /// Object is not a package.
+        NotAPackage = 2,
+        /// Package upgrade is incompatible with previous version.
+        IncompatibleUpgrade = 3,
+        /// Digest in upgrade ticket and computed digest differ.
+        DigetsDoesNotMatch = 4,
+        /// Upgrade policy is not valid.
+        UnknownUpgradePolicy = 5,
+        /// Package ID does not match `PackageId` in upgrade ticket.
+        PackageIdDoesNotMatch = 6,
+    }
+    impl PackageUpgradeErrorKind {
+        /// String value of the enum field names used in the ProtoBuf definition.
+        ///
+        /// The values are not transformed in any way and thus are considered stable
+        /// (if the ProtoBuf definition does not change) and safe for programmatic use.
+        pub fn as_str_name(&self) -> &'static str {
+            match self {
+                Self::Unknown => "PACKAGE_UPGRADE_ERROR_KIND_UNKNOWN",
+                Self::UnableToFetchPackage => "UNABLE_TO_FETCH_PACKAGE",
+                Self::NotAPackage => "NOT_A_PACKAGE",
+                Self::IncompatibleUpgrade => "INCOMPATIBLE_UPGRADE",
+                Self::DigetsDoesNotMatch => "DIGETS_DOES_NOT_MATCH",
+                Self::UnknownUpgradePolicy => "UNKNOWN_UPGRADE_POLICY",
+                Self::PackageIdDoesNotMatch => "PACKAGE_ID_DOES_NOT_MATCH",
+            }
+        }
+        /// Creates an enum from field names used in the ProtoBuf definition.
+        pub fn from_str_name(value: &str) -> ::core::option::Option<Self> {
+            match value {
+                "PACKAGE_UPGRADE_ERROR_KIND_UNKNOWN" => Some(Self::Unknown),
+                "UNABLE_TO_FETCH_PACKAGE" => Some(Self::UnableToFetchPackage),
+                "NOT_A_PACKAGE" => Some(Self::NotAPackage),
+                "INCOMPATIBLE_UPGRADE" => Some(Self::IncompatibleUpgrade),
+                "DIGETS_DOES_NOT_MATCH" => Some(Self::DigetsDoesNotMatch),
+                "UNKNOWN_UPGRADE_POLICY" => Some(Self::UnknownUpgradePolicy),
+                "PACKAGE_ID_DOES_NOT_MATCH" => Some(Self::PackageIdDoesNotMatch),
+                _ => None,
+            }
+        }
+    }
+}
+/// Type argument error.
+#[derive(Clone, Copy, PartialEq, ::prost::Message)]
+pub struct TypeArgumentError {
+    /// Index of the problematic type argument.
+    #[prost(uint32, optional, tag = "1")]
+    pub type_argument: ::core::option::Option<u32>,
+    #[prost(
+        enumeration = "type_argument_error::TypeArgumentErrorKind",
+        optional,
+        tag = "2"
+    )]
+    pub kind: ::core::option::Option<i32>,
+}
+/// Nested message and enum types in `TypeArgumentError`.
+pub mod type_argument_error {
+    #[derive(
+        Clone,
+        Copy,
+        Debug,
+        PartialEq,
+        Eq,
+        Hash,
+        PartialOrd,
+        Ord,
+        ::prost::Enumeration
+    )]
+    #[repr(i32)]
+    pub enum TypeArgumentErrorKind {
+        Unknown = 0,
+        /// A type was not found in the module specified.
+        TypeNotFound = 1,
+        /// A type provided did not match the specified constraint.
+        ConstraintNotSatisfied = 2,
+    }
+    impl TypeArgumentErrorKind {
+        /// String value of the enum field names used in the ProtoBuf definition.
+        ///
+        /// The values are not transformed in any way and thus are considered stable
+        /// (if the ProtoBuf definition does not change) and safe for programmatic use.
+        pub fn as_str_name(&self) -> &'static str {
+            match self {
+                Self::Unknown => "TYPE_ARGUMENT_ERROR_KIND_UNKNOWN",
+                Self::TypeNotFound => "TYPE_NOT_FOUND",
+                Self::ConstraintNotSatisfied => "CONSTRAINT_NOT_SATISFIED",
+            }
+        }
+        /// Creates an enum from field names used in the ProtoBuf definition.
+        pub fn from_str_name(value: &str) -> ::core::option::Option<Self> {
+            match value {
+                "TYPE_ARGUMENT_ERROR_KIND_UNKNOWN" => Some(Self::Unknown),
+                "TYPE_NOT_FOUND" => Some(Self::TypeNotFound),
+                "CONSTRAINT_NOT_SATISFIED" => Some(Self::ConstraintNotSatisfied),
+                _ => None,
+            }
+        }
+    }
+}
 /// Summary of gas charges.
 ///
 /// Storage is charged independently of computation.
@@ -1055,16 +1623,6 @@ pub mod argument {
         NestedResult(super::NestedResult),
     }
 }
-/// An argument type for a nested result.
-#[derive(Clone, Copy, PartialEq, ::prost::Message)]
-pub struct NestedResult {
-    /// The command index.
-    #[prost(uint32, optional, tag = "1")]
-    pub result: ::core::option::Option<u32>,
-    /// The index into the command's output.
-    #[prost(uint32, optional, tag = "2")]
-    pub subresult: ::core::option::Option<u32>,
-}
 /// System transaction used to change the epoch.
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct ChangeEpoch {
@@ -1576,347 +2134,15 @@ pub struct ReadOnlyRoot {
     #[prost(string, optional, tag = "2")]
     pub digest: ::core::option::Option<::prost::alloc::string::String>,
 }
-/// / The status of an executed transaction.
-#[derive(Clone, PartialEq, ::prost::Message)]
-pub struct ExecutionStatus {
-    /// Indicates if the transaction was successful or not.
-    #[prost(bool, optional, tag = "1")]
-    pub success: ::core::option::Option<bool>,
-    /// The error if `success` is false.
-    #[prost(message, optional, tag = "2")]
-    pub status: ::core::option::Option<FailureStatus>,
-}
-/// A size error.
+/// An argument type for a nested result.
 #[derive(Clone, Copy, PartialEq, ::prost::Message)]
-pub struct SizeError {
-    /// The offending size.
-    #[prost(uint64, optional, tag = "1")]
-    pub size: ::core::option::Option<u64>,
-    /// The maximum allowable size.
-    #[prost(uint64, optional, tag = "2")]
-    pub max_size: ::core::option::Option<u64>,
-}
-/// Error that occurred in Move.
-#[derive(Clone, PartialEq, ::prost::Message)]
-pub struct MoveError {
-    /// Location in Move where the error occurred.
-    #[prost(message, optional, tag = "1")]
-    pub location: ::core::option::Option<MoveLocation>,
-    /// Abort code from Move.
-    #[prost(uint64, optional, tag = "2")]
-    pub abort_code: ::core::option::Option<u64>,
-}
-/// An error that can occur during the execution of a transaction.
-#[derive(Clone, PartialEq, ::prost::Message)]
-pub struct FailureStatus {
-    /// The command, if any, during which the error occurred.
-    #[prost(uint64, optional, tag = "1")]
-    pub command: ::core::option::Option<u64>,
-    #[prost(
-        oneof = "failure_status::ExecutionError",
-        tags = "2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38"
-    )]
-    pub execution_error: ::core::option::Option<failure_status::ExecutionError>,
-}
-/// Nested message and enum types in `FailureStatus`.
-pub mod failure_status {
-    #[derive(Clone, PartialEq, ::prost::Oneof)]
-    pub enum ExecutionError {
-        /// Insufficient gas.
-        #[prost(message, tag = "2")]
-        InsufficientGas(()),
-        /// Invalid `Gas` object.
-        #[prost(message, tag = "3")]
-        InvalidGasObject(()),
-        /// Invariant violation.
-        #[prost(message, tag = "4")]
-        InvariantViolation(()),
-        /// Attempted to use feature that is not supported yet.
-        #[prost(message, tag = "5")]
-        FeatureNotYetSupported(()),
-        /// Move object is larger than the maximum allowed size.
-        #[prost(message, tag = "6")]
-        ObjectTooBig(super::SizeError),
-        /// Package is larger than the maximum allowed size.
-        #[prost(message, tag = "7")]
-        PackageTooBig(super::SizeError),
-        /// Circular object ownership.
-        #[prost(string, tag = "8")]
-        CircularObjectOwnership(::prost::alloc::string::String),
-        ///
-        /// Coin errors.
-        ///
-        /// Insufficient coin balance for requested operation.
-        #[prost(message, tag = "9")]
-        InsufficientCoinBalance(()),
-        /// Coin balance overflowed an u64.
-        #[prost(message, tag = "10")]
-        CoinBalanceOverflow(()),
-        ///
-        /// Publish/Upgrade errors.
-        ///
-        /// Publish error, non-zero address.
-        /// The modules in the package must have their self-addresses set to zero.
-        #[prost(message, tag = "11")]
-        PublishErrorNonZeroAddress(()),
-        /// Sui Move bytecode verification error.
-        #[prost(message, tag = "12")]
-        SuiMoveVerificationError(()),
-        ///
-        /// MoveVm errors.
-        ///
-        /// Error from a non-abort instruction.
-        /// Possible causes:
-        ///      Arithmetic error, stack overflow, max value depth, or similar.
-        #[prost(message, tag = "13")]
-        MovePrimitiveRuntimeError(super::MoveError),
-        /// Move runtime abort.
-        #[prost(message, tag = "14")]
-        MoveAbort(super::MoveError),
-        /// Bytecode verification error.
-        #[prost(message, tag = "15")]
-        VmVerificationOrDeserializationError(()),
-        /// MoveVm invariant violation.
-        #[prost(message, tag = "16")]
-        VmInvariantViolation(()),
-        ///
-        /// Programmable transaction errors.
-        ///
-        /// Function not found.
-        #[prost(message, tag = "17")]
-        FunctionNotFound(()),
-        /// Parity mismatch for Move function.
-        /// The number of arguments does not match the number of parameters.
-        #[prost(message, tag = "18")]
-        ArityMismatch(()),
-        /// Type parity mismatch for Move function.
-        /// Mismatch between the number of actual versus expected type arguments.
-        #[prost(message, tag = "19")]
-        TypeArityMismatch(()),
-        /// Non-entry function invoked. Move Call must start with an entry function.
-        #[prost(message, tag = "20")]
-        NonEntryFunctionInvoked(()),
-        /// Invalid command argument.
-        #[prost(message, tag = "21")]
-        CommandArgumentError(super::CommandArgumentError),
-        /// Type argument error.
-        #[prost(message, tag = "22")]
-        TypeArgumentError(super::TypeArgumentError),
-        /// Unused result without the drop ability.
-        #[prost(message, tag = "23")]
-        UnusedValueWithoutDrop(super::NestedResult),
-        /// Invalid public Move function signature.
-        /// Unsupported return type for return value.
-        #[prost(uint32, tag = "24")]
-        InvalidPublicFunctionReturnType(u32),
-        /// Invalid transfer object, object does not have public transfer.
-        #[prost(message, tag = "25")]
-        InvalidTransferObject(()),
-        ///
-        /// Post-execution errors.
-        ///
-        /// Effects from the transaction are too large.
-        #[prost(message, tag = "26")]
-        EffectsTooLarge(super::SizeError),
-        /// Publish or Upgrade is missing dependency.
-        #[prost(message, tag = "27")]
-        PublishUpgradeMissingDependency(()),
-        /// Publish or upgrade dependency downgrade.
-        ///
-        /// Indirect (transitive) dependency of published or upgraded package has been assigned an
-        /// on-chain version that is less than the version required by one of the package's
-        /// transitive dependencies.
-        #[prost(message, tag = "28")]
-        PublishUpgradeDependencyDowngrade(()),
-        /// Invalid package upgrade.
-        #[prost(message, tag = "29")]
-        PackageUpgradeError(super::PackageUpgradeError),
-        /// Indicates the transaction tried to write objects too large to storage.
-        #[prost(message, tag = "30")]
-        WrittenObjectsTooLarge(super::SizeError),
-        /// Certificate is on the deny list.
-        #[prost(message, tag = "31")]
-        CertificateDenied(()),
-        /// Sui Move bytecode verification timed out.
-        #[prost(message, tag = "32")]
-        SuiMoveVerificationTimedout(()),
-        /// The requested shared object operation is not allowed.
-        #[prost(message, tag = "33")]
-        SharedObjectOperationNotAllowed(()),
-        /// Requested shared object has been deleted.
-        #[prost(message, tag = "34")]
-        InputObjectDeleted(()),
-        /// Certificate is cancelled due to congestion on shared objects.
-        #[prost(message, tag = "35")]
-        ExecutionCancelledDueToSharedObjectCongestion(super::CongestedObjectsError),
-        /// Address is denied for this coin type.
-        #[prost(message, tag = "36")]
-        AddressDeniedForCoin(super::AddressDeniedForCoinError),
-        /// Coin type is globally paused for use.
-        #[prost(string, tag = "37")]
-        CoinTypeGlobalPause(::prost::alloc::string::String),
-        /// Certificate is cancelled because randomness could not be generated this epoch.
-        #[prost(message, tag = "38")]
-        ExecutionCancelledDueToRandomnessUnavailable(()),
-    }
-}
-/// Address is denied for this coin type.
-#[derive(Clone, PartialEq, ::prost::Message)]
-pub struct AddressDeniedForCoinError {
-    /// Denied address.
-    #[prost(string, optional, tag = "1")]
-    pub address: ::core::option::Option<::prost::alloc::string::String>,
-    /// Coin type.
-    #[prost(string, optional, tag = "2")]
-    pub coin_type: ::core::option::Option<::prost::alloc::string::String>,
-}
-/// Set of objects that were congested, leading to the transaction's cancellation.
-#[derive(Clone, PartialEq, ::prost::Message)]
-pub struct CongestedObjectsError {
-    /// Set of congested objects.
-    #[prost(string, repeated, tag = "1")]
-    pub congested_objects: ::prost::alloc::vec::Vec<::prost::alloc::string::String>,
-}
-/// / Location in Move bytecode where an error occurred.s
-#[derive(Clone, PartialEq, ::prost::Message)]
-pub struct MoveLocation {
-    /// The package ID.
-    #[prost(string, optional, tag = "1")]
-    pub package: ::core::option::Option<::prost::alloc::string::String>,
-    /// The module name.
-    #[prost(string, optional, tag = "2")]
-    pub module: ::core::option::Option<::prost::alloc::string::String>,
-    /// The function index.
-    #[prost(uint32, optional, tag = "3")]
-    pub function: ::core::option::Option<u32>,
-    /// Offset of the instruction where the error occurred.
-    #[prost(uint32, optional, tag = "4")]
-    pub instruction: ::core::option::Option<u32>,
-    /// The name of the function, if available.
-    #[prost(string, optional, tag = "5")]
-    pub function_name: ::core::option::Option<::prost::alloc::string::String>,
-}
-/// An error with an argument to a command.
-#[derive(Clone, Copy, PartialEq, ::prost::Message)]
-pub struct CommandArgumentError {
-    /// Position of the problematic argument.
+pub struct NestedResult {
+    /// The command index.
     #[prost(uint32, optional, tag = "1")]
-    pub argument: ::core::option::Option<u32>,
-    #[prost(
-        oneof = "command_argument_error::Kind",
-        tags = "2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13"
-    )]
-    pub kind: ::core::option::Option<command_argument_error::Kind>,
-}
-/// Nested message and enum types in `CommandArgumentError`.
-pub mod command_argument_error {
-    #[derive(Clone, Copy, PartialEq, ::prost::Oneof)]
-    pub enum Kind {
-        /// The type of the value does not match the expected type.
-        #[prost(message, tag = "2")]
-        TypeMismatch(()),
-        /// The argument cannot be deserialized into a value of the specified type.
-        #[prost(message, tag = "3")]
-        InvalidBcsBytes(()),
-        /// The argument cannot be instantiated from raw bytes.
-        #[prost(message, tag = "4")]
-        InvalidUsageOfPureArgument(()),
-        /// Invalid argument to private entry function.
-        /// Private entry functions cannot take arguments from other Move functions.
-        #[prost(message, tag = "5")]
-        InvalidArgumentToPrivateEntryFunction(()),
-        /// Out of bounds access to input or results.
-        #[prost(uint32, tag = "6")]
-        IndexOutOfBounds(u32),
-        /// Out of bounds access to subresult.
-        #[prost(message, tag = "7")]
-        SecondaryIndexOutOfBounds(super::NestedResult),
-        /// Invalid usage of result.
-        /// Expected a single result but found either no return value or multiple.
-        #[prost(uint32, tag = "8")]
-        InvalidResultArity(u32),
-        /// Invalid usage of gas coin.
-        /// The gas coin can only be used by-value with a `TransferObject` command.
-        #[prost(message, tag = "9")]
-        InvalidGasCoinUsage(()),
-        /// Invalid usage of Move value.
-        ///     - Mutably borrowed values require unique usage.
-        ///     - Immutably borrowed values cannot be taken or borrowed mutably.
-        ///     - Taken values cannot be used again.
-        #[prost(message, tag = "10")]
-        InvalidValueUsage(()),
-        /// Immutable objects cannot be passed by-value.
-        #[prost(message, tag = "11")]
-        InvalidObjectByValue(()),
-        /// Immutable objects cannot be passed by mutable reference, `&mut`.
-        #[prost(message, tag = "12")]
-        InvalidObjectByMutRef(()),
-        /// Shared object operations such as wrapping, freezing, or converting to owned are not
-        /// allowed.
-        #[prost(message, tag = "13")]
-        SharedObjectOperationNotAllowed(()),
-    }
-}
-/// An error with a upgrading a package.
-#[derive(Clone, PartialEq, ::prost::Message)]
-pub struct PackageUpgradeError {
-    #[prost(oneof = "package_upgrade_error::Kind", tags = "2, 3, 4, 5, 6, 7")]
-    pub kind: ::core::option::Option<package_upgrade_error::Kind>,
-}
-/// Nested message and enum types in `PackageUpgradeError`.
-pub mod package_upgrade_error {
-    #[derive(Clone, PartialEq, ::prost::Oneof)]
-    pub enum Kind {
-        /// Unable to fetch package.
-        #[prost(string, tag = "2")]
-        UnableToFetchPackage(::prost::alloc::string::String),
-        /// Object is not a package.
-        #[prost(string, tag = "3")]
-        NotAPackage(::prost::alloc::string::String),
-        /// Package upgrade is incompatible with previous version.
-        #[prost(message, tag = "4")]
-        IncompatibleUpgrade(()),
-        /// Digest in upgrade ticket and computed digest differ.
-        #[prost(string, tag = "5")]
-        DigetsDoesNotMatch(::prost::alloc::string::String),
-        /// Upgrade policy is not valid.
-        #[prost(uint32, tag = "6")]
-        UnknownUpgradePolicy(u32),
-        /// Package ID does not match `PackageId` in upgrade ticket.
-        #[prost(message, tag = "7")]
-        PackageIdDoesNotMatch(super::PackageIdDoesNotMatch),
-    }
-}
-/// Package ID does not match `PackageId` in upgrade ticket.
-#[derive(Clone, PartialEq, ::prost::Message)]
-pub struct PackageIdDoesNotMatch {
-    /// The package ID.
-    #[prost(string, optional, tag = "1")]
-    pub package_id: ::core::option::Option<::prost::alloc::string::String>,
-    /// The ticket ID.
-    #[prost(string, optional, tag = "2")]
-    pub ticket_id: ::core::option::Option<::prost::alloc::string::String>,
-}
-/// Type argument error.
-#[derive(Clone, Copy, PartialEq, ::prost::Message)]
-pub struct TypeArgumentError {
-    /// Index of the problematic type argument.
-    #[prost(uint32, optional, tag = "1")]
-    pub type_argument: ::core::option::Option<u32>,
-    #[prost(oneof = "type_argument_error::Kind", tags = "2, 3")]
-    pub kind: ::core::option::Option<type_argument_error::Kind>,
-}
-/// Nested message and enum types in `TypeArgumentError`.
-pub mod type_argument_error {
-    #[derive(Clone, Copy, PartialEq, ::prost::Oneof)]
-    pub enum Kind {
-        /// A type was not found in the module specified.
-        #[prost(message, tag = "2")]
-        TypeNotFound(()),
-        /// A type provided did not match the specified constraint.
-        #[prost(message, tag = "3")]
-        ConstraintNotSatisfied(()),
-    }
+    pub result: ::core::option::Option<u32>,
+    /// The index into the command's output.
+    #[prost(uint32, optional, tag = "2")]
+    pub subresult: ::core::option::Option<u32>,
 }
 /// Flag used to indicate the version of a type.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, ::prost::Enumeration)]

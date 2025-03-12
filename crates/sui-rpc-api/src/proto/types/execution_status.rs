@@ -10,15 +10,16 @@ impl From<sui_sdk_types::ExecutionStatus> for super::ExecutionStatus {
         match value {
             sui_sdk_types::ExecutionStatus::Success => Self {
                 success: Some(true),
-                status: None,
+                error: None,
             },
-            sui_sdk_types::ExecutionStatus::Failure { error, command } => Self {
-                success: Some(false),
-                status: Some(super::FailureStatus {
-                    command,
-                    execution_error: Some(error.into()),
-                }),
-            },
+            sui_sdk_types::ExecutionStatus::Failure { error, command } => {
+                let mut error = super::ExecutionError::from(error);
+                error.command = command;
+                Self {
+                    success: Some(false),
+                    error: Some(error),
+                }
+            }
         }
     }
 }
@@ -30,20 +31,11 @@ impl TryFrom<&super::ExecutionStatus> for sui_sdk_types::ExecutionStatus {
         let success = value
             .success
             .ok_or_else(|| TryFromProtoError::missing("success"))?;
-        match (success, &value.status) {
+        match (success, &value.error) {
             (true, None) => Self::Success,
-            (
-                false,
-                Some(super::FailureStatus {
-                    command,
-                    execution_error,
-                }),
-            ) => Self::Failure {
-                error: execution_error
-                    .as_ref()
-                    .ok_or_else(|| TryFromProtoError::missing("execution_error"))?
-                    .try_into()?,
-                command: *command,
+            (false, Some(error)) => Self::Failure {
+                error: error.try_into()?,
+                command: error.command,
             },
             (true, Some(_)) | (false, None) => {
                 return Err(TryFromProtoError::from_error("invalid execution status"))
@@ -57,246 +49,324 @@ impl TryFrom<&super::ExecutionStatus> for sui_sdk_types::ExecutionStatus {
 // ExecutionError
 //
 
-impl From<sui_sdk_types::ExecutionError> for super::failure_status::ExecutionError {
+impl From<sui_sdk_types::ExecutionError> for super::ExecutionError {
     fn from(value: sui_sdk_types::ExecutionError) -> Self {
+        use super::execution_error::ExecutionErrorKind;
         use sui_sdk_types::ExecutionError::*;
-        match value {
-            InsufficientGas => Self::InsufficientGas(()),
-            InvalidGasObject => Self::InvalidGasObject(()),
-            InvariantViolation => Self::InvariantViolation(()),
-            FeatureNotYetSupported => Self::FeatureNotYetSupported(()),
+
+        let mut message = Self::default();
+
+        let kind = match value {
+            InsufficientGas => ExecutionErrorKind::InsufficientGas,
+            InvalidGasObject => ExecutionErrorKind::InvalidGasObject,
+            InvariantViolation => ExecutionErrorKind::InvariantViolation,
+            FeatureNotYetSupported => ExecutionErrorKind::FeatureNotYetSupported,
             ObjectTooBig {
                 object_size,
                 max_object_size,
-            } => Self::ObjectTooBig(super::SizeError {
-                size: Some(object_size),
-                max_size: Some(max_object_size),
-            }),
+            } => {
+                message.size_error = Some(super::SizeError {
+                    size: Some(object_size),
+                    max_size: Some(max_object_size),
+                });
+                ExecutionErrorKind::ObjectTooBig
+            }
             PackageTooBig {
                 object_size,
                 max_object_size,
-            } => Self::PackageTooBig(super::SizeError {
-                size: Some(object_size),
-                max_size: Some(max_object_size),
-            }),
-            CircularObjectOwnership { object } => Self::CircularObjectOwnership(object.to_string()),
-            InsufficientCoinBalance => Self::InsufficientCoinBalance(()),
-            CoinBalanceOverflow => Self::CoinBalanceOverflow(()),
-            PublishErrorNonZeroAddress => Self::PublishErrorNonZeroAddress(()),
-            SuiMoveVerificationError => Self::SuiMoveVerificationError(()),
-            MovePrimitiveRuntimeError { location } => {
-                Self::MovePrimitiveRuntimeError(super::MoveError {
-                    location: location.map(Into::into),
-                    abort_code: None,
-                })
+            } => {
+                message.size_error = Some(super::SizeError {
+                    size: Some(object_size),
+                    max_size: Some(max_object_size),
+                });
+                ExecutionErrorKind::PackageTooBig
             }
-            MoveAbort { location, code } => Self::MoveAbort(super::MoveError {
-                location: Some(location.into()),
-                abort_code: Some(code),
-            }),
-            VmVerificationOrDeserializationError => Self::VmVerificationOrDeserializationError(()),
-            VmInvariantViolation => Self::VmInvariantViolation(()),
-            FunctionNotFound => Self::FunctionNotFound(()),
-            ArityMismatch => Self::ArityMismatch(()),
-            TypeArityMismatch => Self::TypeArityMismatch(()),
-            NonEntryFunctionInvoked => Self::NonEntryFunctionInvoked(()),
+            CircularObjectOwnership { object } => {
+                message.object_id = Some(object.to_string());
+                ExecutionErrorKind::CircularObjectOwnership
+            }
+            InsufficientCoinBalance => ExecutionErrorKind::InsufficientCoinBalance,
+            CoinBalanceOverflow => ExecutionErrorKind::CoinBalanceOverflow,
+            PublishErrorNonZeroAddress => ExecutionErrorKind::PublishErrorNonZeroAddress,
+            SuiMoveVerificationError => ExecutionErrorKind::SuiMoveVerificationError,
+            MovePrimitiveRuntimeError { location } => {
+                message.location = location.map(Into::into);
+                ExecutionErrorKind::MovePrimitiveRuntimeError
+            }
+            MoveAbort { location, code } => {
+                message.location = Some(location.into());
+                message.abort_code = Some(code);
+                ExecutionErrorKind::MoveAbort
+            }
+            VmVerificationOrDeserializationError => {
+                ExecutionErrorKind::VmVerificationOrDeserializationError
+            }
+            VmInvariantViolation => ExecutionErrorKind::VmInvariantViolation,
+            FunctionNotFound => ExecutionErrorKind::FunctionNotFound,
+            ArityMismatch => ExecutionErrorKind::ArityMismatch,
+            TypeArityMismatch => ExecutionErrorKind::TypeArityMismatch,
+            NonEntryFunctionInvoked => ExecutionErrorKind::NonEntryFunctionInvoked,
             CommandArgumentError { argument, kind } => {
-                Self::CommandArgumentError(super::CommandArgumentError {
-                    argument: Some(argument.into()),
-                    kind: Some(kind.into()),
-                })
+                let mut command_argument_error = super::CommandArgumentError::from(kind);
+                command_argument_error.argument = Some(argument.into());
+                message.command_argument_error = Some(command_argument_error);
+                ExecutionErrorKind::CommandArgumentError
             }
             TypeArgumentError {
                 type_argument,
                 kind,
-            } => Self::TypeArgumentError(super::TypeArgumentError {
-                type_argument: Some(type_argument.into()),
-                kind: Some(kind.into()),
-            }),
+            } => {
+                message.type_argument_error = Some(super::TypeArgumentError {
+                    type_argument: Some(type_argument.into()),
+                    kind: Some(
+                        super::type_argument_error::TypeArgumentErrorKind::from(kind).into(),
+                    ),
+                });
+                ExecutionErrorKind::TypeArgumentError
+            }
             UnusedValueWithoutDrop { result, subresult } => {
-                Self::UnusedValueWithoutDrop(super::NestedResult {
-                    result: Some(result.into()),
-                    subresult: Some(subresult.into()),
-                })
+                message.index = Some(result.into());
+                message.subresult = Some(subresult.into());
+                ExecutionErrorKind::UnusedValueWithoutDrop
             }
             InvalidPublicFunctionReturnType { index } => {
-                Self::InvalidPublicFunctionReturnType(index.into())
+                message.index = Some(index.into());
+                ExecutionErrorKind::InvalidPublicFunctionReturnType
             }
-            InvalidTransferObject => Self::InvalidTransferObject(()),
+            InvalidTransferObject => ExecutionErrorKind::InvalidTransferObject,
             EffectsTooLarge {
                 current_size,
                 max_size,
-            } => Self::EffectsTooLarge(super::SizeError {
-                size: Some(current_size),
-                max_size: Some(max_size),
-            }),
-            PublishUpgradeMissingDependency => Self::PublishUpgradeMissingDependency(()),
-            PublishUpgradeDependencyDowngrade => Self::PublishUpgradeDependencyDowngrade(()),
-            PackageUpgradeError { kind } => Self::PackageUpgradeError(super::PackageUpgradeError {
-                kind: Some(kind.into()),
-            }),
+            } => {
+                message.size_error = Some(super::SizeError {
+                    size: Some(current_size),
+                    max_size: Some(max_size),
+                });
+                ExecutionErrorKind::EffectsTooLarge
+            }
+            PublishUpgradeMissingDependency => ExecutionErrorKind::PublishUpgradeMissingDependency,
+            PublishUpgradeDependencyDowngrade => {
+                ExecutionErrorKind::PublishUpgradeDependencyDowngrade
+            }
+            PackageUpgradeError { kind } => {
+                message.package_upgrade_error = Some(kind.into());
+                ExecutionErrorKind::PackageUpgradeError
+            }
             WrittenObjectsTooLarge {
                 object_size,
                 max_object_size,
-            } => Self::WrittenObjectsTooLarge(super::SizeError {
-                size: Some(object_size),
-                max_size: Some(max_object_size),
-            }),
-            CertificateDenied => Self::CertificateDenied(()),
-            SuiMoveVerificationTimedout => Self::SuiMoveVerificationTimedout(()),
-            SharedObjectOperationNotAllowed => Self::SharedObjectOperationNotAllowed(()),
-            InputObjectDeleted => Self::InputObjectDeleted(()),
+            } => {
+                message.size_error = Some(super::SizeError {
+                    size: Some(object_size),
+                    max_size: Some(max_object_size),
+                });
+
+                ExecutionErrorKind::WrittenObjectsTooLarge
+            }
+            CertificateDenied => ExecutionErrorKind::CertificateDenied,
+            SuiMoveVerificationTimedout => ExecutionErrorKind::SuiMoveVerificationTimedout,
+            SharedObjectOperationNotAllowed => ExecutionErrorKind::SharedObjectOperationNotAllowed,
+            InputObjectDeleted => ExecutionErrorKind::InputObjectDeleted,
             ExecutionCancelledDueToSharedObjectCongestion { congested_objects } => {
-                Self::ExecutionCancelledDueToSharedObjectCongestion(super::CongestedObjectsError {
-                    congested_objects: congested_objects.iter().map(ToString::to_string).collect(),
-                })
+                message.congested_objects =
+                    congested_objects.iter().map(ToString::to_string).collect();
+
+                ExecutionErrorKind::ExecutionCancelledDueToSharedObjectCongestion
             }
             AddressDeniedForCoin { address, coin_type } => {
-                Self::AddressDeniedForCoin(super::AddressDeniedForCoinError {
-                    coin_type: Some(coin_type),
-                    address: Some(address.to_string()),
-                })
+                message.coin_type = Some(coin_type);
+                message.address = Some(address.to_string());
+                ExecutionErrorKind::AddressDeniedForCoin
             }
-            CoinTypeGlobalPause { coin_type } => Self::CoinTypeGlobalPause(coin_type),
+            CoinTypeGlobalPause { coin_type } => {
+                message.coin_type = Some(coin_type);
+                ExecutionErrorKind::CoinTypeGlobalPause
+            }
             ExecutionCancelledDueToRandomnessUnavailable => {
-                Self::ExecutionCancelledDueToRandomnessUnavailable(())
+                ExecutionErrorKind::ExecutionCancelledDueToRandomnessUnavailable
             }
-        }
+        };
+
+        message.set_kind(kind);
+        message
     }
 }
 
-impl TryFrom<&super::failure_status::ExecutionError> for sui_sdk_types::ExecutionError {
+impl TryFrom<&super::ExecutionError> for sui_sdk_types::ExecutionError {
     type Error = TryFromProtoError;
 
-    fn try_from(value: &super::failure_status::ExecutionError) -> Result<Self, Self::Error> {
-        use super::failure_status::ExecutionError::*;
+    fn try_from(value: &super::ExecutionError) -> Result<Self, Self::Error> {
+        use super::execution_error::ExecutionErrorKind::*;
 
-        match value {
-            InsufficientGas(()) => Self::InsufficientGas,
-            InvalidGasObject(()) => Self::InvalidGasObject,
-            InvariantViolation(()) => Self::InvariantViolation,
-            FeatureNotYetSupported(()) => Self::FeatureNotYetSupported,
-            ObjectTooBig(super::SizeError { size, max_size }) => Self::ObjectTooBig {
-                object_size: size.ok_or_else(|| TryFromProtoError::missing("size"))?,
-                max_object_size: max_size.ok_or_else(|| TryFromProtoError::missing("max_size"))?,
+        match value.kind() {
+            Unknown => return Err(TryFromProtoError::from_error("unknown ExecutionErrorKind")),
+
+            InsufficientGas => Self::InsufficientGas,
+            InvalidGasObject => Self::InvalidGasObject,
+            InvariantViolation => Self::InvariantViolation,
+            FeatureNotYetSupported => Self::FeatureNotYetSupported,
+            ObjectTooBig => {
+                let super::SizeError { size, max_size } = value
+                    .size_error
+                    .as_ref()
+                    .ok_or_else(|| TryFromProtoError::missing("size_error"))?;
+                Self::ObjectTooBig {
+                    object_size: size.ok_or_else(|| TryFromProtoError::missing("size"))?,
+                    max_object_size: max_size
+                        .ok_or_else(|| TryFromProtoError::missing("max_size"))?,
+                }
+            }
+            PackageTooBig => {
+                let super::SizeError { size, max_size } = value
+                    .size_error
+                    .as_ref()
+                    .ok_or_else(|| TryFromProtoError::missing("size_error"))?;
+                Self::PackageTooBig {
+                    object_size: size.ok_or_else(|| TryFromProtoError::missing("size"))?,
+                    max_object_size: max_size
+                        .ok_or_else(|| TryFromProtoError::missing("max_size"))?,
+                }
+            }
+            CircularObjectOwnership => Self::CircularObjectOwnership {
+                object: value
+                    .object_id
+                    .as_ref()
+                    .ok_or_else(|| TryFromProtoError::missing("object_id"))?
+                    .parse()
+                    .map_err(TryFromProtoError::from_error)?,
             },
-            PackageTooBig(super::SizeError { size, max_size }) => Self::PackageTooBig {
-                object_size: size.ok_or_else(|| TryFromProtoError::missing("size"))?,
-                max_object_size: max_size.ok_or_else(|| TryFromProtoError::missing("max_size"))?,
+            InsufficientCoinBalance => Self::InsufficientCoinBalance,
+            CoinBalanceOverflow => Self::CoinBalanceOverflow,
+            PublishErrorNonZeroAddress => Self::PublishErrorNonZeroAddress,
+            SuiMoveVerificationError => Self::SuiMoveVerificationError,
+            MovePrimitiveRuntimeError => Self::MovePrimitiveRuntimeError {
+                location: value.location.as_ref().map(TryInto::try_into).transpose()?,
             },
-            CircularObjectOwnership(object) => Self::CircularObjectOwnership {
-                object: object.parse().map_err(TryFromProtoError::from_error)?,
+            MoveAbort => Self::MoveAbort {
+                location: value
+                    .location
+                    .as_ref()
+                    .ok_or_else(|| TryFromProtoError::missing("location"))?
+                    .try_into()?,
+                code: value
+                    .abort_code
+                    .ok_or_else(|| TryFromProtoError::missing("abort_code"))?,
             },
-            InsufficientCoinBalance(()) => Self::InsufficientCoinBalance,
-            CoinBalanceOverflow(()) => Self::CoinBalanceOverflow,
-            PublishErrorNonZeroAddress(()) => Self::PublishErrorNonZeroAddress,
-            SuiMoveVerificationError(()) => Self::SuiMoveVerificationError,
-            MovePrimitiveRuntimeError(super::MoveError {
-                location,
-                abort_code: _,
-            }) => Self::MovePrimitiveRuntimeError {
-                location: location.as_ref().map(TryInto::try_into).transpose()?,
-            },
-            MoveAbort(super::MoveError {
-                location: Some(location),
-                abort_code: Some(abort_code),
-            }) => Self::MoveAbort {
-                location: location.try_into()?,
-                code: *abort_code,
-            },
-            MoveAbort(_) => return Err(TryFromProtoError::missing("location or abort_code")),
-            VmVerificationOrDeserializationError(()) => Self::VmVerificationOrDeserializationError,
-            VmInvariantViolation(()) => Self::VmInvariantViolation,
-            FunctionNotFound(()) => Self::FunctionNotFound,
-            ArityMismatch(()) => Self::ArityMismatch,
-            TypeArityMismatch(()) => Self::TypeArityMismatch,
-            NonEntryFunctionInvoked(()) => Self::NonEntryFunctionInvoked,
-            CommandArgumentError(super::CommandArgumentError { argument, kind }) => {
+            VmVerificationOrDeserializationError => Self::VmVerificationOrDeserializationError,
+            VmInvariantViolation => Self::VmInvariantViolation,
+            FunctionNotFound => Self::FunctionNotFound,
+            ArityMismatch => Self::ArityMismatch,
+            TypeArityMismatch => Self::TypeArityMismatch,
+            NonEntryFunctionInvoked => Self::NonEntryFunctionInvoked,
+            CommandArgumentError => {
+                let command_argument_error = value
+                    .command_argument_error
+                    .as_ref()
+                    .ok_or_else(|| TryFromProtoError::missing("command_argument_error"))?;
                 Self::CommandArgumentError {
-                    argument: argument
+                    argument: command_argument_error
+                        .argument
                         .ok_or_else(|| TryFromProtoError::missing("argument"))?
                         .try_into()?,
-                    kind: kind
-                        .as_ref()
-                        .ok_or_else(|| TryFromProtoError::missing("kind"))?
-                        .try_into()?,
+                    kind: command_argument_error.try_into()?,
                 }
             }
-            TypeArgumentError(super::TypeArgumentError {
-                type_argument,
-                kind,
-            }) => Self::TypeArgumentError {
-                type_argument: type_argument
-                    .ok_or_else(|| TryFromProtoError::missing("type_argument"))?
-                    .try_into()?,
-                kind: kind
+            TypeArgumentError => {
+                let type_argument_error = value
+                    .type_argument_error
                     .as_ref()
-                    .ok_or_else(|| TryFromProtoError::missing("kind"))?
-                    .try_into()?,
-            },
-            UnusedValueWithoutDrop(super::NestedResult { result, subresult }) => {
-                Self::UnusedValueWithoutDrop {
-                    result: result
-                        .ok_or_else(|| TryFromProtoError::missing("result"))?
+                    .ok_or_else(|| TryFromProtoError::missing("type_argument_error"))?;
+                Self::TypeArgumentError {
+                    type_argument: type_argument_error
+                        .type_argument
+                        .ok_or_else(|| TryFromProtoError::missing("type_argument"))?
                         .try_into()?,
-                    subresult: subresult
-                        .ok_or_else(|| TryFromProtoError::missing("subresult"))?
-                        .try_into()?,
+                    kind: type_argument_error.kind().try_into()?,
                 }
             }
-            InvalidPublicFunctionReturnType(index) => Self::InvalidPublicFunctionReturnType {
-                index: (*index).try_into()?,
-            },
-            InvalidTransferObject(()) => Self::InvalidTransferObject,
-            EffectsTooLarge(super::SizeError { size, max_size }) => Self::EffectsTooLarge {
-                current_size: size.ok_or_else(|| TryFromProtoError::missing("size"))?,
-                max_size: max_size.ok_or_else(|| TryFromProtoError::missing("max_size"))?,
-            },
-            PublishUpgradeMissingDependency(()) => Self::PublishUpgradeMissingDependency,
-            PublishUpgradeDependencyDowngrade(()) => Self::PublishUpgradeDependencyDowngrade,
-            PackageUpgradeError(super::PackageUpgradeError { kind }) => Self::PackageUpgradeError {
-                kind: kind
-                    .as_ref()
-                    .ok_or_else(|| TryFromProtoError::missing("kind"))?
+            UnusedValueWithoutDrop => Self::UnusedValueWithoutDrop {
+                result: value
+                    .index
+                    .ok_or_else(|| TryFromProtoError::missing("result"))?
+                    .try_into()?,
+                subresult: value
+                    .subresult
+                    .ok_or_else(|| TryFromProtoError::missing("subresult"))?
                     .try_into()?,
             },
-            WrittenObjectsTooLarge(super::SizeError { size, max_size }) => {
+            InvalidPublicFunctionReturnType => Self::InvalidPublicFunctionReturnType {
+                index: value
+                    .index
+                    .ok_or_else(|| TryFromProtoError::missing("index"))?
+                    .try_into()?,
+            },
+            InvalidTransferObject => Self::InvalidTransferObject,
+            EffectsTooLarge => {
+                let super::SizeError { size, max_size } = value
+                    .size_error
+                    .as_ref()
+                    .ok_or_else(|| TryFromProtoError::missing("size_error"))?;
+                Self::EffectsTooLarge {
+                    current_size: size.ok_or_else(|| TryFromProtoError::missing("size"))?,
+                    max_size: max_size.ok_or_else(|| TryFromProtoError::missing("max_size"))?,
+                }
+            }
+            PublishUpgradeMissingDependency => Self::PublishUpgradeMissingDependency,
+            PublishUpgradeDependencyDowngrade => Self::PublishUpgradeDependencyDowngrade,
+            PackageUpgradeError => Self::PackageUpgradeError {
+                kind: value
+                    .package_upgrade_error
+                    .as_ref()
+                    .ok_or_else(|| TryFromProtoError::missing("package_upgrade_error"))?
+                    .try_into()?,
+            },
+            WrittenObjectsTooLarge => {
+                let super::SizeError { size, max_size } = value
+                    .size_error
+                    .as_ref()
+                    .ok_or_else(|| TryFromProtoError::missing("size_error"))?;
+
                 Self::WrittenObjectsTooLarge {
                     object_size: size.ok_or_else(|| TryFromProtoError::missing("size"))?,
                     max_object_size: max_size
                         .ok_or_else(|| TryFromProtoError::missing("max_size"))?,
                 }
             }
-            CertificateDenied(()) => Self::CertificateDenied,
-            SuiMoveVerificationTimedout(()) => Self::SuiMoveVerificationTimedout,
-            SharedObjectOperationNotAllowed(()) => Self::SharedObjectOperationNotAllowed,
-            InputObjectDeleted(()) => Self::InputObjectDeleted,
-            ExecutionCancelledDueToSharedObjectCongestion(super::CongestedObjectsError {
-                congested_objects,
-            }) => Self::ExecutionCancelledDueToSharedObjectCongestion {
-                congested_objects: congested_objects
-                    .iter()
-                    .map(|s| s.parse())
-                    .collect::<Result<_, _>>()
-                    .map_err(TryFromProtoError::from_error)?,
-            },
-            AddressDeniedForCoin(super::AddressDeniedForCoinError { address, coin_type }) => {
-                Self::AddressDeniedForCoin {
-                    address: address
-                        .as_ref()
-                        .ok_or_else(|| TryFromProtoError::missing("address"))?
-                        .parse()
+            CertificateDenied => Self::CertificateDenied,
+            SuiMoveVerificationTimedout => Self::SuiMoveVerificationTimedout,
+            SharedObjectOperationNotAllowed => Self::SharedObjectOperationNotAllowed,
+            InputObjectDeleted => Self::InputObjectDeleted,
+            ExecutionCancelledDueToSharedObjectCongestion => {
+                Self::ExecutionCancelledDueToSharedObjectCongestion {
+                    congested_objects: value
+                        .congested_objects
+                        .iter()
+                        .map(|s| s.parse())
+                        .collect::<Result<_, _>>()
                         .map_err(TryFromProtoError::from_error)?,
-                    coin_type: coin_type
-                        .as_ref()
-                        .ok_or_else(|| TryFromProtoError::missing("coin_type"))?
-                        .to_owned(),
                 }
             }
-            CoinTypeGlobalPause(coin_type) => Self::CoinTypeGlobalPause {
-                coin_type: coin_type.to_owned(),
+            AddressDeniedForCoin => Self::AddressDeniedForCoin {
+                address: value
+                    .address
+                    .as_ref()
+                    .ok_or_else(|| TryFromProtoError::missing("address"))?
+                    .parse()
+                    .map_err(TryFromProtoError::from_error)?,
+                coin_type: value
+                    .coin_type
+                    .as_ref()
+                    .ok_or_else(|| TryFromProtoError::missing("coin_type"))?
+                    .to_owned(),
             },
-            ExecutionCancelledDueToRandomnessUnavailable(()) => {
+            CoinTypeGlobalPause => Self::CoinTypeGlobalPause {
+                coin_type: value
+                    .coin_type
+                    .as_ref()
+                    .ok_or_else(|| TryFromProtoError::missing("coin_type"))?
+                    .to_owned(),
+            },
+            ExecutionCancelledDueToRandomnessUnavailable => {
                 Self::ExecutionCancelledDueToRandomnessUnavailable
             }
         }
@@ -308,69 +378,90 @@ impl TryFrom<&super::failure_status::ExecutionError> for sui_sdk_types::Executio
 // CommandArgumentError
 //
 
-impl From<sui_sdk_types::CommandArgumentError> for super::command_argument_error::Kind {
+impl From<sui_sdk_types::CommandArgumentError> for super::CommandArgumentError {
     fn from(value: sui_sdk_types::CommandArgumentError) -> Self {
+        use super::command_argument_error::CommandArgumentErrorKind;
         use sui_sdk_types::CommandArgumentError::*;
 
-        match value {
-            TypeMismatch => Self::TypeMismatch(()),
-            InvalidBcsBytes => Self::InvalidBcsBytes(()),
-            InvalidUsageOfPureArgument => Self::InvalidUsageOfPureArgument(()),
+        let mut message = Self::default();
+
+        let kind = match value {
+            TypeMismatch => CommandArgumentErrorKind::TypeMismatch,
+            InvalidBcsBytes => CommandArgumentErrorKind::InvalidBcsBytes,
+            InvalidUsageOfPureArgument => CommandArgumentErrorKind::InvalidUsageOfPureArgument,
             InvalidArgumentToPrivateEntryFunction => {
-                Self::InvalidArgumentToPrivateEntryFunction(())
+                CommandArgumentErrorKind::InvalidArgumentToPrivateEntryFunction
             }
-            IndexOutOfBounds { index } => Self::IndexOutOfBounds(index.into()),
+            IndexOutOfBounds { index } => {
+                message.index = Some(index.into());
+                CommandArgumentErrorKind::IndexOutOfBounds
+            }
             SecondaryIndexOutOfBounds { result, subresult } => {
-                Self::SecondaryIndexOutOfBounds(super::NestedResult {
-                    result: Some(result.into()),
-                    subresult: Some(subresult.into()),
-                })
+                message.index = Some(result.into());
+                message.subresult = Some(subresult.into());
+                CommandArgumentErrorKind::SecondaryIndexOutOfBounds
             }
-            InvalidResultArity { result } => Self::InvalidResultArity(result.into()),
-            InvalidGasCoinUsage => Self::InvalidGasCoinUsage(()),
-            InvalidValueUsage => Self::InvalidValueUsage(()),
-            InvalidObjectByValue => Self::InvalidObjectByValue(()),
-            InvalidObjectByMutRef => Self::InvalidObjectByMutRef(()),
-            SharedObjectOperationNotAllowed => Self::SharedObjectOperationNotAllowed(()),
-        }
+            InvalidResultArity { result } => {
+                message.index = Some(result.into());
+                CommandArgumentErrorKind::InvalidResultArity
+            }
+            InvalidGasCoinUsage => CommandArgumentErrorKind::InvalidGasCoinUsage,
+            InvalidValueUsage => CommandArgumentErrorKind::InvalidValueUsage,
+            InvalidObjectByValue => CommandArgumentErrorKind::InvalidObjectByValue,
+            InvalidObjectByMutRef => CommandArgumentErrorKind::InvalidObjectByMutRef,
+            SharedObjectOperationNotAllowed => {
+                CommandArgumentErrorKind::SharedObjectOperationNotAllowed
+            }
+        };
+
+        message.set_kind(kind);
+        message
     }
 }
 
-impl TryFrom<&super::command_argument_error::Kind> for sui_sdk_types::CommandArgumentError {
+impl TryFrom<&super::CommandArgumentError> for sui_sdk_types::CommandArgumentError {
     type Error = TryFromProtoError;
 
-    fn try_from(value: &super::command_argument_error::Kind) -> Result<Self, Self::Error> {
-        use super::command_argument_error::Kind::*;
-        use super::NestedResult;
+    fn try_from(value: &super::CommandArgumentError) -> Result<Self, Self::Error> {
+        use super::command_argument_error::CommandArgumentErrorKind::*;
 
-        match value {
-            TypeMismatch(()) => Self::TypeMismatch,
-            InvalidBcsBytes(()) => Self::InvalidBcsBytes,
-            InvalidUsageOfPureArgument(()) => Self::InvalidUsageOfPureArgument,
-            InvalidArgumentToPrivateEntryFunction(()) => {
-                Self::InvalidArgumentToPrivateEntryFunction
+        match value.kind() {
+            Unknown => {
+                return Err(TryFromProtoError::from_error(
+                    "unknown CommandArgumentErrorKind",
+                ))
             }
-            IndexOutOfBounds(index) => Self::IndexOutOfBounds {
-                index: (*index).try_into()?,
+            TypeMismatch => Self::TypeMismatch,
+            InvalidBcsBytes => Self::InvalidBcsBytes,
+            InvalidUsageOfPureArgument => Self::InvalidUsageOfPureArgument,
+            InvalidArgumentToPrivateEntryFunction => Self::InvalidArgumentToPrivateEntryFunction,
+            IndexOutOfBounds => Self::IndexOutOfBounds {
+                index: value
+                    .index
+                    .ok_or_else(|| TryFromProtoError::missing("index"))?
+                    .try_into()?,
             },
-            SecondaryIndexOutOfBounds(NestedResult { result, subresult }) => {
-                Self::SecondaryIndexOutOfBounds {
-                    result: result
-                        .ok_or_else(|| TryFromProtoError::missing("result"))?
-                        .try_into()?,
-                    subresult: subresult
-                        .ok_or_else(|| TryFromProtoError::missing("subresult"))?
-                        .try_into()?,
-                }
-            }
-            InvalidResultArity(result) => Self::InvalidResultArity {
-                result: (*result).try_into()?,
+            SecondaryIndexOutOfBounds => Self::SecondaryIndexOutOfBounds {
+                result: value
+                    .index
+                    .ok_or_else(|| TryFromProtoError::missing("index"))?
+                    .try_into()?,
+                subresult: value
+                    .subresult
+                    .ok_or_else(|| TryFromProtoError::missing("subresult"))?
+                    .try_into()?,
             },
-            InvalidGasCoinUsage(()) => Self::InvalidGasCoinUsage,
-            InvalidValueUsage(()) => Self::InvalidValueUsage,
-            InvalidObjectByValue(()) => Self::InvalidObjectByValue,
-            InvalidObjectByMutRef(()) => Self::InvalidObjectByMutRef,
-            SharedObjectOperationNotAllowed(()) => Self::SharedObjectOperationNotAllowed,
+            InvalidResultArity => Self::InvalidResultArity {
+                result: value
+                    .index
+                    .ok_or_else(|| TryFromProtoError::missing("index"))?
+                    .try_into()?,
+            },
+            InvalidGasCoinUsage => Self::InvalidGasCoinUsage,
+            InvalidValueUsage => Self::InvalidValueUsage,
+            InvalidObjectByValue => Self::InvalidObjectByValue,
+            InvalidObjectByMutRef => Self::InvalidObjectByMutRef,
+            SharedObjectOperationNotAllowed => Self::SharedObjectOperationNotAllowed,
         }
         .pipe(Ok)
     }
@@ -380,26 +471,35 @@ impl TryFrom<&super::command_argument_error::Kind> for sui_sdk_types::CommandArg
 // TypeArgumentError
 //
 
-impl From<sui_sdk_types::TypeArgumentError> for super::type_argument_error::Kind {
+impl From<sui_sdk_types::TypeArgumentError> for super::type_argument_error::TypeArgumentErrorKind {
     fn from(value: sui_sdk_types::TypeArgumentError) -> Self {
         use sui_sdk_types::TypeArgumentError::*;
 
         match value {
-            TypeNotFound => Self::TypeNotFound(()),
-            ConstraintNotSatisfied => Self::ConstraintNotSatisfied(()),
+            TypeNotFound => Self::TypeNotFound,
+            ConstraintNotSatisfied => Self::ConstraintNotSatisfied,
         }
     }
 }
 
-impl TryFrom<&super::type_argument_error::Kind> for sui_sdk_types::TypeArgumentError {
+impl TryFrom<super::type_argument_error::TypeArgumentErrorKind>
+    for sui_sdk_types::TypeArgumentError
+{
     type Error = TryFromProtoError;
 
-    fn try_from(value: &super::type_argument_error::Kind) -> Result<Self, Self::Error> {
-        use super::type_argument_error::Kind::*;
+    fn try_from(
+        value: super::type_argument_error::TypeArgumentErrorKind,
+    ) -> Result<Self, Self::Error> {
+        use super::type_argument_error::TypeArgumentErrorKind::*;
 
         match value {
-            TypeNotFound(()) => Self::TypeNotFound,
-            ConstraintNotSatisfied(()) => Self::ConstraintNotSatisfied,
+            Unknown => {
+                return Err(TryFromProtoError::from_error(
+                    "unknown TypeArgumentErrorKind",
+                ))
+            }
+            TypeNotFound => Self::TypeNotFound,
+            ConstraintNotSatisfied => Self::ConstraintNotSatisfied,
         }
         .pipe(Ok)
     }
@@ -409,61 +509,103 @@ impl TryFrom<&super::type_argument_error::Kind> for sui_sdk_types::TypeArgumentE
 // PackageUpgradeError
 //
 
-impl From<sui_sdk_types::PackageUpgradeError> for super::package_upgrade_error::Kind {
+impl From<sui_sdk_types::PackageUpgradeError> for super::PackageUpgradeError {
     fn from(value: sui_sdk_types::PackageUpgradeError) -> Self {
+        use super::package_upgrade_error::PackageUpgradeErrorKind;
         use sui_sdk_types::PackageUpgradeError::*;
 
-        match value {
+        let mut message = Self::default();
+
+        let kind = match value {
             UnableToFetchPackage { package_id } => {
-                Self::UnableToFetchPackage(package_id.to_string())
+                message.package_id = Some(package_id.to_string());
+                PackageUpgradeErrorKind::UnableToFetchPackage
             }
-            NotAPackage { object_id } => Self::NotAPackage(object_id.to_string()),
-            IncompatibleUpgrade => Self::IncompatibleUpgrade(()),
-            DigestDoesNotMatch { digest } => Self::DigetsDoesNotMatch(digest.to_string()),
-            UnknownUpgradePolicy { policy } => Self::UnknownUpgradePolicy(policy.into()),
+            NotAPackage { object_id } => {
+                message.package_id = Some(object_id.to_string());
+                PackageUpgradeErrorKind::NotAPackage
+            }
+            IncompatibleUpgrade => PackageUpgradeErrorKind::IncompatibleUpgrade,
+            DigestDoesNotMatch { digest } => {
+                message.digest = Some(digest.to_string());
+                PackageUpgradeErrorKind::DigetsDoesNotMatch
+            }
+            UnknownUpgradePolicy { policy } => {
+                message.policy = Some(policy.into());
+                PackageUpgradeErrorKind::UnknownUpgradePolicy
+            }
             PackageIdDoesNotMatch {
                 package_id,
                 ticket_id,
-            } => Self::PackageIdDoesNotMatch(super::PackageIdDoesNotMatch {
-                package_id: Some(package_id.to_string()),
-                ticket_id: Some(ticket_id.to_string()),
-            }),
-        }
+            } => {
+                message.package_id = Some(package_id.to_string());
+                message.ticket_id = Some(ticket_id.to_string());
+                PackageUpgradeErrorKind::PackageIdDoesNotMatch
+            }
+        };
+
+        message.set_kind(kind);
+        message
     }
 }
 
-impl TryFrom<&super::package_upgrade_error::Kind> for sui_sdk_types::PackageUpgradeError {
+impl TryFrom<&super::PackageUpgradeError> for sui_sdk_types::PackageUpgradeError {
     type Error = TryFromProtoError;
 
-    fn try_from(value: &super::package_upgrade_error::Kind) -> Result<Self, Self::Error> {
-        use super::package_upgrade_error::Kind::*;
+    fn try_from(value: &super::PackageUpgradeError) -> Result<Self, Self::Error> {
+        use super::package_upgrade_error::PackageUpgradeErrorKind::*;
 
-        match value {
-            UnableToFetchPackage(package_id) => Self::UnableToFetchPackage {
-                package_id: package_id.parse().map_err(TryFromProtoError::from_error)?,
-            },
-            NotAPackage(object_id) => Self::NotAPackage {
-                object_id: object_id.parse().map_err(TryFromProtoError::from_error)?,
-            },
-            IncompatibleUpgrade(()) => Self::IncompatibleUpgrade,
-            DigetsDoesNotMatch(digest) => Self::DigestDoesNotMatch {
-                digest: digest.parse().map_err(TryFromProtoError::from_error)?,
-            },
-            UnknownUpgradePolicy(policy) => Self::UnknownUpgradePolicy {
-                policy: (*policy).try_into()?,
-            },
-            PackageIdDoesNotMatch(super::PackageIdDoesNotMatch {
-                package_id: Some(package_id),
-                ticket_id: Some(ticket_id),
-            }) => Self::PackageIdDoesNotMatch {
-                package_id: package_id.parse().map_err(TryFromProtoError::from_error)?,
-                ticket_id: ticket_id.parse().map_err(TryFromProtoError::from_error)?,
-            },
-            PackageIdDoesNotMatch(_) => {
-                return Err(TryFromProtoError::missing(
-                    "missing package_id or ticket_id",
+        match value.kind() {
+            Unknown => {
+                return Err(TryFromProtoError::from_error(
+                    "unknown PackageUpgradeErrorKind",
                 ))
             }
+            UnableToFetchPackage => Self::UnableToFetchPackage {
+                package_id: value
+                    .package_id
+                    .as_ref()
+                    .ok_or_else(|| TryFromProtoError::missing("package_id"))?
+                    .parse()
+                    .map_err(TryFromProtoError::from_error)?,
+            },
+            NotAPackage => Self::NotAPackage {
+                object_id: value
+                    .package_id
+                    .as_ref()
+                    .ok_or_else(|| TryFromProtoError::missing("package_id"))?
+                    .parse()
+                    .map_err(TryFromProtoError::from_error)?,
+            },
+            IncompatibleUpgrade => Self::IncompatibleUpgrade,
+            DigetsDoesNotMatch => Self::DigestDoesNotMatch {
+                digest: value
+                    .digest
+                    .as_ref()
+                    .ok_or_else(|| TryFromProtoError::missing("digest"))?
+                    .parse()
+                    .map_err(TryFromProtoError::from_error)?,
+            },
+            UnknownUpgradePolicy => Self::UnknownUpgradePolicy {
+                policy: value
+                    .policy
+                    .ok_or_else(|| TryFromProtoError::missing("policy"))?
+                    .try_into()?,
+            },
+            PackageIdDoesNotMatch => Self::PackageIdDoesNotMatch {
+                package_id: value
+                    .package_id
+                    .as_ref()
+                    .ok_or_else(|| TryFromProtoError::missing("package_id"))?
+                    .parse()
+                    .map_err(TryFromProtoError::from_error)?,
+                ticket_id: value
+                    .ticket_id
+                    .as_ref()
+                    .ok_or_else(|| TryFromProtoError::missing("ticket_id"))?
+                    .parse()
+                    .map_err(TryFromProtoError::from_error)?,
+            },
         }
         .pipe(Ok)
     }
