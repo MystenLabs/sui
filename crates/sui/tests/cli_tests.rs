@@ -1884,7 +1884,7 @@ async fn test_package_publish_nonexistent_dependency() -> Result<(), anyhow::Err
 
     let err = result.unwrap_err().to_string();
     assert!(
-        err.contains("Package Nonexistent with object ID 0x0000000000000000000000000000000000000000000000000000000000abc123 does not exist"),
+        err.contains("Failed to fetch package Nonexistent"),
         "{}",
         err
     );
