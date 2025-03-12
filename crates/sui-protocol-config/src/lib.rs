@@ -18,7 +18,7 @@ use tracing::{info, warn};
 
 /// The minimum and maximum protocol versions supported by this build.
 const MIN_PROTOCOL_VERSION: u64 = 1;
-const MAX_PROTOCOL_VERSION: u64 = 77;
+const MAX_PROTOCOL_VERSION: u64 = 78;
 
 // Record history of protocol version allocations here:
 //
@@ -224,7 +224,8 @@ const MAX_PROTOCOL_VERSION: u64 = 77;
 // Version 77: Enable uncompressed point group ops on mainnet.
 //             Enable consensus garbage collection for testnet
 //             Enable the new consensus commit rule for testnet.
-//             Make `TxContext` Move API native
+// Version 78: Make `TxContext` Move API native
+
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
 
@@ -3358,7 +3359,8 @@ impl ProtocolConfig {
                         cfg.consensus_gc_depth = Some(60);
                         cfg.feature_flags.consensus_linearize_subdag_v2 = true;
                     }
-
+                }
+                78 => {
                     cfg.feature_flags.move_native_context = true;
                     cfg.tx_context_fresh_id_cost_base = Some(52);
                     cfg.tx_context_sender_cost_base = Some(30);
