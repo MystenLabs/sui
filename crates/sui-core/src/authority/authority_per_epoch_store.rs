@@ -404,7 +404,7 @@ pub struct AuthorityPerEpochStore {
     randomness_reporter: OnceCell<RandomnessReporter>,
 
     /// Manages recording execution time observations and generating estimates.
-    execution_time_estimator: tokio::sync::Mutex<ExecutionTimeEstimator>,
+    execution_time_estimator: tokio::sync::Mutex<Option<ExecutionTimeEstimator>>,
     tx_local_execution_time:
         OnceCell<mpsc::Sender<(ProgrammableTransaction, Vec<ExecutionTiming>, Duration)>>,
     // Saved at end of epoch for propagating observations to the next.
@@ -892,23 +892,31 @@ impl AuthorityPerEpochStore {
             .execution_time_observations
             .safe_iter()
             .collect::<Result<Vec<_>, _>>()?;
-        let execution_time_estimator = ExecutionTimeEstimator::new(
-            committee.clone(),
-            // Load observations stored at end of previous epoch.
-            Self::get_stored_execution_time_observations(
-                &protocol_config,
-                committee.clone(),
-                &*object_store,
-            )
-            // Load observations stored during the current epoch.
-            .chain(execution_time_observations.into_iter().flat_map(
-                |((generation, source), observations)| {
-                    observations
-                        .into_iter()
-                        .map(move |(key, duration)| (source, generation, key, duration))
-                },
-            )),
-        );
+        let execution_time_estimator =
+            if let PerObjectCongestionControlMode::ExecutionTimeEstimate(protocol_params) =
+                protocol_config.per_object_congestion_control_mode()
+            {
+                Some(ExecutionTimeEstimator::new(
+                    committee.clone(),
+                    protocol_params,
+                    // Load observations stored at end of previous epoch.
+                    Self::get_stored_execution_time_observations(
+                        &protocol_config,
+                        committee.clone(),
+                        &*object_store,
+                    )
+                    // Load observations stored during the current epoch.
+                    .chain(execution_time_observations.into_iter().flat_map(
+                        |((generation, source), observations)| {
+                            observations
+                                .into_iter()
+                                .map(move |(key, duration)| (source, generation, key, duration))
+                        },
+                    )),
+                ))
+            } else {
+                None
+            };
 
         let s = Arc::new(Self {
             name,
@@ -1993,7 +2001,7 @@ impl AuthorityPerEpochStore {
 
     fn should_defer(
         &self,
-        execution_time_estimator: &ExecutionTimeEstimator,
+        execution_time_estimator: Option<&ExecutionTimeEstimator>,
         cert: &VerifiedExecutableTransaction,
         commit_info: &ConsensusCommitInfo,
         dkg_failed: bool,
@@ -3001,12 +3009,12 @@ impl AuthorityPerEpochStore {
             estimates,
         } in execution_time_observations
         {
+            let Some(estimator) = execution_time_estimator.as_mut() else {
+                error!("dropping ExecutionTimeObservation from possibly-Byzantine authority {authority:?} sent when ExecutionTimeEstimate mode is not enabled");
+                continue;
+            };
             let authority_index = self.committee.authority_index(&authority).unwrap();
-            execution_time_estimator.process_observations_from_consensus(
-                authority_index,
-                generation,
-                &estimates,
-            );
+            estimator.process_observations_from_consensus(authority_index, generation, &estimates);
             output.insert_execution_time_observation(authority_index, generation, estimates);
         }
 
@@ -3063,7 +3071,7 @@ impl AuthorityPerEpochStore {
                 randomness_manager.as_deref_mut(),
                 dkg_failed,
                 randomness_round,
-                &execution_time_estimator,
+                execution_time_estimator.as_ref(),
                 authority_metrics,
             )
             .await?;
@@ -3073,11 +3081,13 @@ impl AuthorityPerEpochStore {
         // If this is the final round, record execution time observations for storage in the
         // end-of-epoch tx.
         if final_round {
-            self.end_of_epoch_execution_time_observations
-                .set(execution_time_estimator.take_observations())
+            if let Some(estimator) = execution_time_estimator.as_mut() {
+                self.end_of_epoch_execution_time_observations
+                .set(estimator.take_observations())
                 .expect(
                     "`stored_execution_time_observations` should only be set once at end of epoch",
                 );
+            }
             drop(execution_time_estimator); // make sure this is not used after `take_observations`
         }
 
@@ -3404,7 +3414,7 @@ impl AuthorityPerEpochStore {
         mut randomness_manager: Option<&mut RandomnessManager>,
         dkg_failed: bool,
         randomness_round: Option<RandomnessRound>,
-        execution_time_estimator: &ExecutionTimeEstimator,
+        execution_time_estimator: Option<&ExecutionTimeEstimator>,
         authority_metrics: &Arc<AuthorityMetrics>,
     ) -> SuiResult<(
         Vec<VerifiedExecutableTransaction>,    // transactions to schedule
@@ -3707,7 +3717,7 @@ impl AuthorityPerEpochStore {
         dkg_failed: bool,
         generating_randomness: bool,
         shared_object_congestion_tracker: &mut SharedObjectCongestionTracker,
-        execution_time_estimator: &ExecutionTimeEstimator,
+        execution_time_estimator: Option<&ExecutionTimeEstimator>,
         authority_metrics: &Arc<AuthorityMetrics>,
     ) -> SuiResult<ConsensusCertificateResult> {
         let _scope = monitored_scope("ConsensusCommitHandler::process_consensus_transaction");
@@ -3979,7 +3989,7 @@ impl AuthorityPerEpochStore {
         dkg_failed: bool,
         generating_randomness: bool,
         shared_object_congestion_tracker: &mut SharedObjectCongestionTracker,
-        execution_time_estimator: &ExecutionTimeEstimator,
+        execution_time_estimator: Option<&ExecutionTimeEstimator>,
         authority_metrics: &Arc<AuthorityMetrics>,
     ) -> SuiResult<ConsensusCertificateResult> {
         let _scope = monitored_scope("ConsensusCommitHandler::process_consensus_user_transaction");
