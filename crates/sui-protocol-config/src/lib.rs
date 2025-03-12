@@ -648,7 +648,7 @@ struct FeatureFlags {
     #[serde(skip_serializing_if = "is_false")]
     move_native_context: bool,
 
-    // If true, then it (1) will not enforce monotonicity checks for a block's ancestors and (2) calculates the commit's timestamp based on the 
+    // If true, then it (1) will not enforce monotonicity checks for a block's ancestors and (2) calculates the commit's timestamp based on the
     // median timestamp of the leader's ancestors.
     #[serde(skip_serializing_if = "is_false")]
     consensus_median_based_commit_timestamp: bool,
