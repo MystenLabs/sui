@@ -282,11 +282,11 @@ pub(crate) async fn make_authority(
         protocol_config,
         protocol_keypair,
         network_keypair,
+        Arc::new(Clock::new_for_test(clock_drift)),
         Arc::new(txn_verifier),
         commit_consumer,
         registry,
         boot_counter,
-        Arc::new(Clock::new_for_test(clock_drift)),
     )
     .await;
 
