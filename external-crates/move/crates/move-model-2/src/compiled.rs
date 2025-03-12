@@ -131,8 +131,7 @@ pub enum Type {
     Address,
     Vector(Box<Type>),
     Datatype(Box<(QualifiedMemberId, Vec<Type>)>),
-    Reference(Box<Type>),
-    MutableReference(Box<Type>),
+    Reference(/* is_mut */ bool, Box<Type>),
     TypeParameter(TypeParameterIndex),
 }
 
@@ -266,7 +265,7 @@ impl Constant {
             T::Address => L::Address,
             T::Vector(inner) => L::Vector(Box::new(Self::annotated_constant_layout(inner))),
 
-            T::Datatype(_) | T::Reference(_) | T::MutableReference(_) | T::TypeParameter(_) => {
+            T::Datatype(_) | T::Reference(_, _) | T::TypeParameter(_) => {
                 unreachable!("{ty:?} is not supported in constants")
             }
         }
@@ -672,8 +671,8 @@ fn make_type(module: &CompiledModule, token: &SignatureToken) -> Type {
                 .collect();
             Type::Datatype(Box::new((member_id, types)))
         }
-        S::Reference(token) => Type::Reference(Box::new(make_type(module, token))),
-        S::MutableReference(token) => Type::MutableReference(Box::new(make_type(module, token))),
+        S::Reference(token) => Type::Reference(false, Box::new(make_type(module, token))),
+        S::MutableReference(token) => Type::Reference(true, Box::new(make_type(module, token))),
         S::TypeParameter(idx) => Type::TypeParameter(*idx),
         S::U16 => Type::U16,
         S::U32 => Type::U32,
