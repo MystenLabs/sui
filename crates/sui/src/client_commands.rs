@@ -1979,8 +1979,7 @@ pub(crate) async fn compile_package(
 
     if compiled_package
         .get_package_bytes(with_unpublished_dependencies)
-        .len()
-        == 0
+        .is_empty()
     {
         return Err(SuiError::ModulePublishFailure {
             error: "No modules found in the package".to_string(),
