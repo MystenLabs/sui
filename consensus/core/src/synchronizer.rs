@@ -651,7 +651,7 @@ impl<C: NetworkClient, V: BlockVerifier, D: CoreThreadDispatcher> Synchronizer<C
                 context
                     .metrics
                     .node_metrics
-                    .block_timestamp_drift_wait_ms
+                    .block_timestamp_drift_ms
                     .with_label_values(&[peer_hostname, "synchronizer"])
                     .inc_by(drift);
 

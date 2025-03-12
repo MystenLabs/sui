@@ -54,6 +54,7 @@ impl ConsensusAuthority {
         protocol_config: ProtocolConfig,
         protocol_keypair: ProtocolKeyPair,
         network_keypair: NetworkKeyPair,
+        clock: Arc<Clock>,
         transaction_verifier: Arc<dyn TransactionVerifier>,
         commit_consumer: CommitConsumer,
         registry: Registry,
@@ -62,7 +63,6 @@ impl ConsensusAuthority {
         // make decisions on whether amnesia recovery should run or not. When `boot_counter` is 0, then `ConsensusAuthority`
         // will initiate the process of amnesia recovery if that's enabled in the parameters.
         boot_counter: u64,
-        clock: Arc<Clock>,
     ) -> Self {
         match network_type {
             ConsensusNetwork::Anemo => {
@@ -73,11 +73,11 @@ impl ConsensusAuthority {
                     protocol_config,
                     protocol_keypair,
                     network_keypair,
+                    clock,
                     transaction_verifier,
                     commit_consumer,
                     registry,
                     boot_counter,
-                    clock,
                 )
                 .await;
                 Self::WithAnemo(authority)
@@ -90,11 +90,11 @@ impl ConsensusAuthority {
                     protocol_config,
                     protocol_keypair,
                     network_keypair,
+                    clock,
                     transaction_verifier,
                     commit_consumer,
                     registry,
                     boot_counter,
-                    clock,
                 )
                 .await;
                 Self::WithTonic(authority)
@@ -175,11 +175,11 @@ where
         // kept in Core.
         protocol_keypair: ProtocolKeyPair,
         network_keypair: NetworkKeyPair,
+        clock: Arc<Clock>,
         transaction_verifier: Arc<dyn TransactionVerifier>,
         commit_consumer: CommitConsumer,
         registry: Registry,
         boot_counter: u64,
-        clock: Arc<Clock>,
     ) -> Self {
         assert!(
             committee.is_valid_index(own_index),
@@ -477,11 +477,11 @@ mod tests {
             ProtocolConfig::get_for_max_version_UNSAFE(),
             protocol_keypair,
             network_keypair,
+            Arc::new(Clock::default()),
             Arc::new(txn_verifier),
             commit_consumer,
             registry,
             0,
-            Arc::new(Clock::default()),
         )
         .await;
 
@@ -864,11 +864,11 @@ mod tests {
             protocol_config,
             protocol_keypair,
             network_keypair,
+            Arc::new(Clock::default()),
             Arc::new(txn_verifier),
             commit_consumer,
             registry,
             boot_counter,
-            Arc::new(Clock::default()),
         )
         .await;
 

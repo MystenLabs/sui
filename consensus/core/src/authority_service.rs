@@ -156,7 +156,7 @@ impl<C: CoreThreadDispatcher> NetworkService for AuthorityService<C> {
                 self.context
                     .metrics
                     .node_metrics
-                    .block_timestamp_drift_wait_ms
+                    .block_timestamp_drift_ms
                     .with_label_values(&[peer_hostname, "handle_send_block"])
                     .inc_by(forward_time_drift.as_millis() as u64);
                 debug!(
@@ -172,7 +172,7 @@ impl<C: CoreThreadDispatcher> NetworkService for AuthorityService<C> {
             self.context
                 .metrics
                 .node_metrics
-                .block_timestamp_drift_wait_ms
+                .block_timestamp_drift_ms
                 .with_label_values(&[peer_hostname, "handle_send_block"])
                 .inc_by(forward_time_drift.as_millis() as u64);
         }

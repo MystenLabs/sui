@@ -187,11 +187,11 @@ impl ConsensusManagerTrait for MysticetiManager {
             protocol_config.clone(),
             self.protocol_keypair.clone(),
             self.network_keypair.clone(),
+            Arc::new(Clock::default()),
             Arc::new(tx_validator.clone()),
             commit_consumer,
             registry.clone(),
             *boot_counter,
-            Arc::new(Clock::default()),
         )
         .await;
         let client = authority.transaction_client();

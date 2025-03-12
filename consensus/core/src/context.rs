@@ -54,7 +54,6 @@ impl Context {
 
     /// Create a test context with a committee of given size and even stake
     #[cfg(test)]
-    #[allow(unused)]
     pub(crate) fn new_for_test(
         committee_size: usize,
     ) -> (Self, Vec<(NetworkKeyPair, ProtocolKeyPair)>) {
