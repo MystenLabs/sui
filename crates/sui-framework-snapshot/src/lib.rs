@@ -5,6 +5,7 @@ use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, BTreeSet};
 use std::{fs, io::Read, path::PathBuf};
 use sui_framework::{SystemPackage, SystemPackageMetadata};
+use sui_protocol_config::ProtocolVersion;
 use sui_types::base_types::ObjectID;
 use sui_types::{
     BRIDGE_PACKAGE_ID, DEEPBOOK_PACKAGE_ID, MOVE_STDLIB_PACKAGE_ID, SUI_FRAMEWORK_PACKAGE_ID,
@@ -100,7 +101,7 @@ pub fn update_bytecode_snapshot_manifest(
 }
 
 pub fn load_bytecode_snapshot(protocol_version: u64) -> anyhow::Result<Vec<SystemPackage>> {
-    let snapshot_path = snapshot_path_for_version(protocol_version)?;
+    let snapshot_path = dbg!(snapshot_path_for_version(protocol_version))?;
     let mut snapshots: BTreeMap<ObjectID, SystemPackage> = fs::read_dir(&snapshot_path)?
         .flatten()
         .map(|entry| {
@@ -128,11 +129,6 @@ pub fn manifest_path() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("manifest.json")
 }
 
-/// Given a protocol version:
-/// * The path to the snapshot directory for that version is returned, if it exists.
-/// * If the version is greater than the latest snapshot version, then `Ok(None)` is returned.
-/// * If the version does not exist, but there are snapshots present with versions greater than
-///   `version`, then the smallest snapshot number greater than `version` is returned.
 fn snapshot_path_for_version(version: u64) -> anyhow::Result<PathBuf> {
     let snapshot_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("bytecode_snapshot");
     let mut snapshots = BTreeSet::new();
@@ -151,9 +147,13 @@ fn snapshot_path_for_version(version: u64) -> anyhow::Result<PathBuf> {
         }
     }
 
+    if version == ProtocolVersion::MAX.as_u64() && !snapshots.contains(&version) {
+        anyhow::bail!("No snapshot found for version {}", version)
+    }
+
     snapshots
-        .range(version..)
-        .next()
+        .range(..=version)
+        .next_back()
         .map(|v| snapshot_dir.join(v.to_string()))
         .ok_or_else(|| anyhow::anyhow!("No snapshot found for version {}", version))
 }
