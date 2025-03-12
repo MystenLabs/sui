@@ -233,4 +233,11 @@ impl TransactionContents {
             Self::Bigtable(kv) => kv.timestamp,
         }
     }
+
+    pub(crate) fn cp_sequence_number(&self) -> u64 {
+        match self {
+            Self::Pg(stored) => stored.cp_sequence_number as u64,
+            Self::Bigtable(kv) => kv.checkpoint_number,
+        }
+    }
 }
