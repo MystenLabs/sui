@@ -644,7 +644,7 @@ impl<C: NetworkClient> CommitSyncer<C> {
                 .context
                 .metrics
                 .node_metrics
-                .block_timestamp_drift_wait_ms
+                .block_timestamp_drift_ms
                 .with_label_values(&[peer_hostname, "commit_syncer"])
                 .inc_by(forward_drift);
 

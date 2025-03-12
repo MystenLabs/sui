@@ -790,7 +790,7 @@ impl DagState {
                 .saturating_sub(last_commit.timestamp_ms())
         } else {
             assert_eq!(commit.index(), 1);
-            commit.timestamp_ms()
+            0
         };
 
         self.context

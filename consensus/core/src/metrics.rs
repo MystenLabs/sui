@@ -109,7 +109,7 @@ pub(crate) struct NodeMetrics {
     pub(crate) block_proposal_interval: Histogram,
     pub(crate) block_proposal_leader_wait_ms: IntCounterVec,
     pub(crate) block_proposal_leader_wait_count: IntCounterVec,
-    pub(crate) block_timestamp_drift_wait_ms: IntCounterVec,
+    pub(crate) block_timestamp_drift_ms: IntCounterVec,
     pub(crate) blocks_per_commit_count: Histogram,
     pub(crate) blocks_pruned_on_commit: IntCounterVec,
     pub(crate) broadcaster_rtt_estimate_ms: IntGaugeVec,
@@ -279,9 +279,9 @@ impl NodeMetrics {
                 &["authority"],
                 registry,
             ).unwrap(),
-            block_timestamp_drift_wait_ms: register_int_counter_vec_with_registry!(
-                "block_timestamp_drift_wait_ms",
-                "Total time in ms spent waiting, when a received block has timestamp in future.",
+            block_timestamp_drift_ms: register_int_counter_vec_with_registry!(
+                "block_timestamp_drift_ms",
+                "The clock drift time between a received block and the current node's time.",
                 &["authority", "source"],
                 registry,
             ).unwrap(),
