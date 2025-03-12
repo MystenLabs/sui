@@ -9,6 +9,7 @@ import "google/protobuf/field_mask.proto";
 import "google/protobuf/timestamp.proto";
 import "sui/types/bcs.proto";
 import "sui/types/checkpoint_contents.proto";
+import "sui/types/event.proto";
 import "sui/types/signature.proto";
 import "sui/types/types.proto";
 

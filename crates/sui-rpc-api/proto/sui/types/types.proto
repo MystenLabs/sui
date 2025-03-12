@@ -110,31 +110,6 @@ message EndOfEpochData {
 
 // End Checkpoint }}}
 
-// TransactionEvents {{{
-
-// Events emitted during the successful execution of a transaction.
-message TransactionEvents {
-  repeated Event events = 1;
-}
-
-// An event.
-message Event {
-  // Package ID of the top-level function invoked by a `MoveCall` command that triggered this
-  // event to be emitted.
-  optional string package_id = 1;
-  // Module name of the top-level function invoked by a `MoveCall` command that triggered this
-  // event to be emitted.
-  optional string module = 2;
-  // Address of the account that sent the transaction where this event was emitted.
-  optional string sender = 3;
-  // The type of the event emitted.
-  optional string event_type = 4;
-  // BCS serialized bytes of the event.
-  optional bytes contents = 5;
-}
-
-// End TransactionEvents }}}
-
 // Object {{{
 
 // Reference to an object.

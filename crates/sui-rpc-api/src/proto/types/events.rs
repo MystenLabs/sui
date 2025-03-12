@@ -71,6 +71,8 @@ impl TryFrom<&super::Event> for sui_sdk_types::Event {
 impl From<sui_sdk_types::TransactionEvents> for super::TransactionEvents {
     fn from(value: sui_sdk_types::TransactionEvents) -> Self {
         Self {
+            bcs: None,
+            digest: Some(value.digest().to_string()),
             events: value.0.into_iter().map(Into::into).collect(),
         }
     }

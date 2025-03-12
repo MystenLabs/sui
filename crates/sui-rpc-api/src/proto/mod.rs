@@ -21,11 +21,11 @@ impl std::fmt::Display for TryFromProtoError {
         write!(f, "error converting from protobuf")?;
 
         if let Some(missing_field) = &self.missing_field {
-            write!(f, "missing_field: {missing_field}")?;
+            write!(f, " missing_field: {missing_field}")?;
         }
 
         if let Some(source) = &self.source {
-            write!(f, "source: {source}")?;
+            write!(f, " source: {source}")?;
         }
 
         Ok(())

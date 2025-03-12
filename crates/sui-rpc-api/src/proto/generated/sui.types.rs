@@ -40,6 +40,40 @@ pub struct CheckpointedTransactionInfo {
     #[prost(message, repeated, tag = "3")]
     pub signatures: ::prost::alloc::vec::Vec<UserSignature>,
 }
+/// Events emitted during the successful execution of a transaction.
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct TransactionEvents {
+    /// This TransactionEvents serialized as BCS.
+    #[prost(message, optional, tag = "1")]
+    pub bcs: ::core::option::Option<Bcs>,
+    /// The digest of this TransactionEvents.
+    #[prost(string, optional, tag = "2")]
+    pub digest: ::core::option::Option<::prost::alloc::string::String>,
+    /// Set of events emitted by a transaction.
+    #[prost(message, repeated, tag = "3")]
+    pub events: ::prost::alloc::vec::Vec<Event>,
+}
+/// An event.
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct Event {
+    /// Package ID of the top-level function invoked by a `MoveCall` command that triggered this
+    /// event to be emitted.
+    #[prost(string, optional, tag = "1")]
+    pub package_id: ::core::option::Option<::prost::alloc::string::String>,
+    /// Module name of the top-level function invoked by a `MoveCall` command that triggered this
+    /// event to be emitted.
+    #[prost(string, optional, tag = "2")]
+    pub module: ::core::option::Option<::prost::alloc::string::String>,
+    /// Address of the account that sent the transaction where this event was emitted.
+    #[prost(string, optional, tag = "3")]
+    pub sender: ::core::option::Option<::prost::alloc::string::String>,
+    /// The type of the event emitted.
+    #[prost(string, optional, tag = "4")]
+    pub event_type: ::core::option::Option<::prost::alloc::string::String>,
+    /// BCS serialized bytes of the event.
+    #[prost(bytes = "bytes", optional, tag = "5")]
+    pub contents: ::core::option::Option<::prost::bytes::Bytes>,
+}
 /// Summary of gas charges.
 ///
 /// Storage is charged independently of computation.
@@ -500,33 +534,6 @@ pub struct EndOfEpochData {
     /// Commitments to epoch specific state (live object set)
     #[prost(message, repeated, tag = "3")]
     pub epoch_commitments: ::prost::alloc::vec::Vec<CheckpointCommitment>,
-}
-/// Events emitted during the successful execution of a transaction.
-#[derive(Clone, PartialEq, ::prost::Message)]
-pub struct TransactionEvents {
-    #[prost(message, repeated, tag = "1")]
-    pub events: ::prost::alloc::vec::Vec<Event>,
-}
-/// An event.
-#[derive(Clone, PartialEq, ::prost::Message)]
-pub struct Event {
-    /// Package ID of the top-level function invoked by a `MoveCall` command that triggered this
-    /// event to be emitted.
-    #[prost(string, optional, tag = "1")]
-    pub package_id: ::core::option::Option<::prost::alloc::string::String>,
-    /// Module name of the top-level function invoked by a `MoveCall` command that triggered this
-    /// event to be emitted.
-    #[prost(string, optional, tag = "2")]
-    pub module: ::core::option::Option<::prost::alloc::string::String>,
-    /// Address of the account that sent the transaction where this event was emitted.
-    #[prost(string, optional, tag = "3")]
-    pub sender: ::core::option::Option<::prost::alloc::string::String>,
-    /// The type of the event emitted.
-    #[prost(string, optional, tag = "4")]
-    pub event_type: ::core::option::Option<::prost::alloc::string::String>,
-    /// BCS serialized bytes of the event.
-    #[prost(bytes = "bytes", optional, tag = "5")]
-    pub contents: ::core::option::Option<::prost::bytes::Bytes>,
 }
 /// Reference to an object.
 #[derive(Clone, PartialEq, ::prost::Message)]
