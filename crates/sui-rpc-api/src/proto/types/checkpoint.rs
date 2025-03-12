@@ -6,8 +6,10 @@ use tap::Pipe;
 //
 
 impl From<sui_sdk_types::CheckpointSummary> for super::CheckpointSummary {
-    fn from(
-        sui_sdk_types::CheckpointSummary {
+    fn from(summary: sui_sdk_types::CheckpointSummary) -> Self {
+        let digest = summary.digest();
+
+        let sui_sdk_types::CheckpointSummary {
             epoch,
             sequence_number,
             network_total_transactions,
@@ -18,9 +20,11 @@ impl From<sui_sdk_types::CheckpointSummary> for super::CheckpointSummary {
             checkpoint_commitments,
             end_of_epoch_data,
             version_specific_data,
-        }: sui_sdk_types::CheckpointSummary,
-    ) -> Self {
+        } = summary;
+
         Self {
+            bcs: None,
+            digest: Some(digest.to_string()),
             epoch: Some(epoch),
             sequence_number: Some(sequence_number),
             total_network_transactions: Some(network_total_transactions),
@@ -40,6 +44,8 @@ impl TryFrom<&super::CheckpointSummary> for sui_sdk_types::CheckpointSummary {
 
     fn try_from(
         super::CheckpointSummary {
+            bcs: _,
+            digest: _,
             epoch,
             sequence_number,
             total_network_transactions,

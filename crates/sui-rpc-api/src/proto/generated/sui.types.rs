@@ -40,6 +40,102 @@ pub struct CheckpointedTransactionInfo {
     #[prost(message, repeated, tag = "3")]
     pub signatures: ::prost::alloc::vec::Vec<UserSignature>,
 }
+/// A header for a checkpoint on the Sui blockchain.
+///
+/// On the Sui network, checkpoints define the history of the blockchain. They are quite similar to
+/// the concept of blocks used by other blockchains like Bitcoin or Ethereum. The Sui blockchain,
+/// however, forms checkpoints after transaction execution has already happened to provide a
+/// certified history of the chain, instead of being formed before execution.
+///
+/// Checkpoints commit to a variety of state, including but not limited to:
+/// - The hash of the previous checkpoint.
+/// - The set of transaction digests, their corresponding effects digests, as well as the set of
+///    user signatures that authorized its execution.
+/// - The objects produced by a transaction.
+/// - The set of live objects that make up the current state of the chain.
+/// - On epoch transitions, the next validator committee.
+///
+/// `CheckpointSummary`s themselves don't directly include all of the previous information but they
+/// are the top-level type by which all the information is committed to transitively via cryptographic
+/// hashes included in the summary. `CheckpointSummary`s are signed and certified by a quorum of
+/// the validator committee in a given epoch to allow verification of the chain's state.
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct CheckpointSummary {
+    /// This CheckpointSummary serialized as BCS.
+    #[prost(message, optional, tag = "1")]
+    pub bcs: ::core::option::Option<Bcs>,
+    /// The digest of this CheckpointSummary.
+    #[prost(string, optional, tag = "2")]
+    pub digest: ::core::option::Option<::prost::alloc::string::String>,
+    /// Epoch that this checkpoint belongs to.
+    #[prost(uint64, optional, tag = "3")]
+    pub epoch: ::core::option::Option<u64>,
+    /// The height of this checkpoint.
+    #[prost(uint64, optional, tag = "4")]
+    pub sequence_number: ::core::option::Option<u64>,
+    /// Total number of transactions committed since genesis, including those in this
+    /// checkpoint.
+    #[prost(uint64, optional, tag = "5")]
+    pub total_network_transactions: ::core::option::Option<u64>,
+    /// The hash of the `CheckpointContents` for this checkpoint.
+    #[prost(string, optional, tag = "6")]
+    pub content_digest: ::core::option::Option<::prost::alloc::string::String>,
+    /// The hash of the previous `CheckpointSummary`.
+    ///
+    /// This will be `None` only for the first, or genesis, checkpoint.
+    #[prost(string, optional, tag = "7")]
+    pub previous_digest: ::core::option::Option<::prost::alloc::string::String>,
+    /// The running total gas costs of all transactions included in the current epoch so far
+    /// until this checkpoint.
+    #[prost(message, optional, tag = "8")]
+    pub epoch_rolling_gas_cost_summary: ::core::option::Option<GasCostSummary>,
+    /// Timestamp of the checkpoint - number of milliseconds from the Unix epoch
+    /// Checkpoint timestamps are monotonic, but not strongly monotonic - subsequent
+    /// checkpoints can have the same timestamp if they originate from the same underlining consensus commit.
+    #[prost(uint64, optional, tag = "9")]
+    pub timestamp_ms: ::core::option::Option<u64>,
+    /// Commitments to checkpoint-specific state.
+    #[prost(message, repeated, tag = "10")]
+    pub commitments: ::prost::alloc::vec::Vec<CheckpointCommitment>,
+    /// Extra data only present in the final checkpoint of an epoch.
+    #[prost(message, optional, tag = "11")]
+    pub end_of_epoch_data: ::core::option::Option<EndOfEpochData>,
+    /// `CheckpointSummary` is not an evolvable structure - it must be readable by any version of
+    /// the code. Therefore, to allow extensions to be added to `CheckpointSummary`,
+    /// opaque data can be added to checkpoints, which can be deserialized based on the current
+    /// protocol version.
+    #[prost(bytes = "bytes", optional, tag = "12")]
+    pub version_specific_data: ::core::option::Option<::prost::bytes::Bytes>,
+}
+/// Data, which when included in a `CheckpointSummary`, signals the end of an `Epoch`.
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct EndOfEpochData {
+    /// The set of validators that will be in the `ValidatorCommittee` for the next epoch.
+    #[prost(message, repeated, tag = "1")]
+    pub next_epoch_committee: ::prost::alloc::vec::Vec<ValidatorCommitteeMember>,
+    /// The protocol version that is in effect during the next epoch.
+    #[prost(uint64, optional, tag = "2")]
+    pub next_epoch_protocol_version: ::core::option::Option<u64>,
+    /// Commitments to epoch specific state (live object set)
+    #[prost(message, repeated, tag = "3")]
+    pub epoch_commitments: ::prost::alloc::vec::Vec<CheckpointCommitment>,
+}
+/// A commitment made by a checkpoint.
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct CheckpointCommitment {
+    #[prost(oneof = "checkpoint_commitment::Commitment", tags = "1")]
+    pub commitment: ::core::option::Option<checkpoint_commitment::Commitment>,
+}
+/// Nested message and enum types in `CheckpointCommitment`.
+pub mod checkpoint_commitment {
+    #[derive(Clone, PartialEq, ::prost::Oneof)]
+    pub enum Commitment {
+        /// An elliptic curve multiset hash attesting to the set of objects that comprise the live
+        /// state of the Sui blockchain.
+        #[prost(string, tag = "1")]
+        EcmhLiveObjectSet(::prost::alloc::string::String),
+    }
+}
 /// Events emitted during the successful execution of a transaction.
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct TransactionEvents {
@@ -444,96 +540,6 @@ impl SignatureScheme {
             _ => None,
         }
     }
-}
-/// A header for a checkpoint on the Sui blockchain.
-///
-/// On the Sui network, checkpoints define the history of the blockchain. They are quite similar to
-/// the concept of blocks used by other blockchains like Bitcoin or Ethereum. The Sui blockchain,
-/// however, forms checkpoints after transaction execution has already happened to provide a
-/// certified history of the chain, instead of being formed before execution.
-///
-/// Checkpoints commit to a variety of state, including but not limited to:
-/// - The hash of the previous checkpoint.
-/// - The set of transaction digests, their corresponding effects digests, as well as the set of
-///    user signatures that authorized its execution.
-/// - The objects produced by a transaction.
-/// - The set of live objects that make up the current state of the chain.
-/// - On epoch transitions, the next validator committee.
-///
-/// `CheckpointSummary`s themselves don't directly include all of the previous information but they
-/// are the top-level type by which all the information is committed to transitively via cryptographic
-/// hashes included in the summary. `CheckpointSummary`s are signed and certified by a quorum of
-/// the validator committee in a given epoch to allow verification of the chain's state.
-#[derive(Clone, PartialEq, ::prost::Message)]
-pub struct CheckpointSummary {
-    /// Epoch that this checkpoint belongs to.
-    #[prost(uint64, optional, tag = "1")]
-    pub epoch: ::core::option::Option<u64>,
-    /// The height of this checkpoint.
-    #[prost(uint64, optional, tag = "2")]
-    pub sequence_number: ::core::option::Option<u64>,
-    /// Total number of transactions committed since genesis, including those in this
-    /// checkpoint.
-    #[prost(uint64, optional, tag = "3")]
-    pub total_network_transactions: ::core::option::Option<u64>,
-    /// The hash of the `CheckpointContents` for this checkpoint.
-    #[prost(string, optional, tag = "4")]
-    pub content_digest: ::core::option::Option<::prost::alloc::string::String>,
-    /// The hash of the previous `CheckpointSummary`.
-    ///
-    /// This will be `None` only for the first, or genesis, checkpoint.
-    #[prost(string, optional, tag = "5")]
-    pub previous_digest: ::core::option::Option<::prost::alloc::string::String>,
-    /// The running total gas costs of all transactions included in the current epoch so far
-    /// until this checkpoint.
-    #[prost(message, optional, tag = "6")]
-    pub epoch_rolling_gas_cost_summary: ::core::option::Option<GasCostSummary>,
-    /// Timestamp of the checkpoint - number of milliseconds from the Unix epoch
-    /// Checkpoint timestamps are monotonic, but not strongly monotonic - subsequent
-    /// checkpoints can have the same timestamp if they originate from the same underlining consensus commit.
-    #[prost(uint64, optional, tag = "7")]
-    pub timestamp_ms: ::core::option::Option<u64>,
-    /// Commitments to checkpoint-specific state.
-    #[prost(message, repeated, tag = "8")]
-    pub commitments: ::prost::alloc::vec::Vec<CheckpointCommitment>,
-    /// Extra data only present in the final checkpoint of an epoch.
-    #[prost(message, optional, tag = "9")]
-    pub end_of_epoch_data: ::core::option::Option<EndOfEpochData>,
-    /// `CheckpointSummary` is not an evolvable structure - it must be readable by any version of
-    /// the code. Therefore, to allow extensions to be added to `CheckpointSummary`,
-    /// opaque data can be added to checkpoints, which can be deserialized based on the current
-    /// protocol version.
-    #[prost(bytes = "bytes", optional, tag = "10")]
-    pub version_specific_data: ::core::option::Option<::prost::bytes::Bytes>,
-}
-/// A commitment made by a checkpoint.
-#[derive(Clone, PartialEq, ::prost::Message)]
-pub struct CheckpointCommitment {
-    #[prost(oneof = "checkpoint_commitment::Commitment", tags = "1")]
-    pub commitment: ::core::option::Option<checkpoint_commitment::Commitment>,
-}
-/// Nested message and enum types in `CheckpointCommitment`.
-pub mod checkpoint_commitment {
-    #[derive(Clone, PartialEq, ::prost::Oneof)]
-    pub enum Commitment {
-        /// An elliptic curve multiset hash attesting to the set of objects that comprise the live
-        /// state of the Sui blockchain.
-        #[prost(string, tag = "1")]
-        EcmhLiveObjectSet(::prost::alloc::string::String),
-    }
-}
-/// Data, which when included in a `CheckpointSummary`, signals the end of an `Epoch`.
-#[derive(Clone, PartialEq, ::prost::Message)]
-pub struct EndOfEpochData {
-    /// The set of validators that will be in the `ValidatorCommittee` for the next epoch.
-    #[prost(message, repeated, tag = "1")]
-    pub next_epoch_committee: ::prost::alloc::vec::Vec<ValidatorCommitteeMember>,
-    /// The protocol version that is in effect during the next epoch.
-    #[prost(uint64, optional, tag = "2")]
-    pub next_epoch_protocol_version: ::core::option::Option<u64>,
-    /// Commitments to epoch specific state (live object set)
-    #[prost(message, repeated, tag = "3")]
-    pub epoch_commitments: ::prost::alloc::vec::Vec<CheckpointCommitment>,
 }
 /// Reference to an object.
 #[derive(Clone, PartialEq, ::prost::Message)]
