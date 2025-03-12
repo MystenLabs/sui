@@ -477,10 +477,10 @@ impl From<sui_sdk_types::MoveLocation> for super::MoveLocation {
     fn from(value: sui_sdk_types::MoveLocation) -> Self {
         Self {
             package: Some(value.package.to_string()),
-            module: Some(value.module.into()),
+            module: Some(value.module.to_string()),
             function: Some(value.function.into()),
             instruction: Some(value.instruction.into()),
-            function_name: value.function_name.map(Into::into),
+            function_name: value.function_name.map(|name| name.to_string()),
         }
     }
 }
@@ -499,7 +499,8 @@ impl TryFrom<&super::MoveLocation> for sui_sdk_types::MoveLocation {
             .module
             .as_ref()
             .ok_or_else(|| TryFromProtoError::missing("module"))?
-            .try_into()?;
+            .parse()
+            .map_err(TryFromProtoError::from_error)?;
         let function = value
             .function
             .ok_or_else(|| TryFromProtoError::missing("function"))?
@@ -511,7 +512,7 @@ impl TryFrom<&super::MoveLocation> for sui_sdk_types::MoveLocation {
         let function_name = value
             .function_name
             .as_ref()
-            .map(TryFrom::try_from)
+            .map(|name| name.parse().map_err(TryFromProtoError::from_error))
             .transpose()?;
 
         Ok(Self {

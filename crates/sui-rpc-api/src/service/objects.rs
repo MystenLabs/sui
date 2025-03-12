@@ -238,7 +238,7 @@ impl DynamicFieldInfo {
         DynamicField {
             parent: Some(self.parent.to_string()),
             field_id: Some(self.field_id.to_string()),
-            name_type: Some(self.name_type.into()),
+            name_type: Some(self.name_type.to_string()),
             name_value: Some(self.name_value.into()),
             dynamic_object_id: self.dynamic_object_id.map(|id| id.to_string()),
         }

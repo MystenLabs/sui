@@ -1191,9 +1191,13 @@ impl From<sui_sdk_types::MoveCall> for super::MoveCall {
     fn from(value: sui_sdk_types::MoveCall) -> Self {
         Self {
             package: Some(value.package.to_string()),
-            module: Some(value.module.into()),
-            function: Some(value.function.into()),
-            type_arguments: value.type_arguments.into_iter().map(Into::into).collect(),
+            module: Some(value.module.to_string()),
+            function: Some(value.function.to_string()),
+            type_arguments: value
+                .type_arguments
+                .iter()
+                .map(ToString::to_string)
+                .collect(),
             arguments: value.arguments.into_iter().map(Into::into).collect(),
         }
     }
@@ -1214,18 +1218,20 @@ impl TryFrom<&super::MoveCall> for sui_sdk_types::MoveCall {
             .module
             .as_ref()
             .ok_or_else(|| TryFromProtoError::missing("module"))?
-            .try_into()?;
+            .parse()
+            .map_err(TryFromProtoError::from_error)?;
 
         let function = value
             .function
             .as_ref()
             .ok_or_else(|| TryFromProtoError::missing("function"))?
-            .try_into()?;
+            .parse()
+            .map_err(TryFromProtoError::from_error)?;
 
         let type_arguments = value
             .type_arguments
             .iter()
-            .map(TryInto::try_into)
+            .map(|t| t.parse().map_err(TryFromProtoError::from_error))
             .collect::<Result<_, _>>()?;
         let arguments = value
             .arguments
@@ -1385,7 +1391,7 @@ impl TryFrom<&super::Publish> for sui_sdk_types::Publish {
 impl From<sui_sdk_types::MakeMoveVector> for super::MakeMoveVector {
     fn from(value: sui_sdk_types::MakeMoveVector) -> Self {
         Self {
-            element_type: value.type_.map(Into::into),
+            element_type: value.type_.map(|t| t.to_string()),
             elements: value.elements.into_iter().map(Into::into).collect(),
         }
     }
@@ -1398,7 +1404,7 @@ impl TryFrom<&super::MakeMoveVector> for sui_sdk_types::MakeMoveVector {
         let element_type = value
             .element_type
             .as_ref()
-            .map(TryInto::try_into)
+            .map(|t| t.parse().map_err(TryFromProtoError::from_error))
             .transpose()?;
 
         let elements = value

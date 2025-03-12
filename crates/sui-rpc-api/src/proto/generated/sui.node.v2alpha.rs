@@ -3,15 +3,15 @@
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct GetCoinInfoRequest {
     /// The coin type to request information about
-    #[prost(message, optional, tag = "1")]
-    pub coin_type: ::core::option::Option<super::super::types::TypeTag>,
+    #[prost(string, optional, tag = "1")]
+    pub coin_type: ::core::option::Option<::prost::alloc::string::String>,
 }
 /// Response message for `NodeService.GetCoinInfo`.
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct GetCoinInfoResponse {
     /// Required. The coin type.
-    #[prost(message, optional, tag = "1")]
-    pub coin_type: ::core::option::Option<super::super::types::TypeTag>,
+    #[prost(string, optional, tag = "1")]
+    pub coin_type: ::core::option::Option<::prost::alloc::string::String>,
     /// This field will be populated with information about this coin
     /// type's `0x2::coin::CoinMetadata` if it exists and has not been wrapped.
     #[prost(message, optional, tag = "2")]
@@ -105,8 +105,8 @@ pub struct DynamicField {
     #[prost(string, optional, tag = "2")]
     pub field_id: ::core::option::Option<::prost::alloc::string::String>,
     /// Required. The type of the dynamic field "name"
-    #[prost(message, optional, tag = "3")]
-    pub name_type: ::core::option::Option<super::super::types::TypeTag>,
+    #[prost(string, optional, tag = "3")]
+    pub name_type: ::core::option::Option<::prost::alloc::string::String>,
     /// Required. The serialized move value of "name"
     #[prost(bytes = "bytes", optional, tag = "4")]
     pub name_value: ::core::option::Option<::prost::bytes::Bytes>,
@@ -220,8 +220,8 @@ pub struct AccountObject {
     pub object_id: ::core::option::Option<::prost::alloc::string::String>,
     #[prost(uint64, optional, tag = "3")]
     pub version: ::core::option::Option<u64>,
-    #[prost(message, optional, tag = "4")]
-    pub object_type: ::core::option::Option<super::super::types::StructTag>,
+    #[prost(string, optional, tag = "4")]
+    pub object_type: ::core::option::Option<::prost::alloc::string::String>,
 }
 /// Generated client implementations.
 pub mod node_service_client {

@@ -24,7 +24,6 @@ mod checkpoint;
 mod effects;
 mod events;
 mod execution_status;
-mod move_types;
 mod object;
 mod signatures;
 mod transaction_convert;

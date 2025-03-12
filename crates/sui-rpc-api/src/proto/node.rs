@@ -3,7 +3,6 @@
 
 use super::TryFromProtoError;
 use prost_types::FieldMask;
-use tap::Pipe;
 
 pub mod v2 {
     include!("generated/sui.node.v2.rs");
@@ -51,7 +50,7 @@ impl From<sui_sdk_types::BalanceChange> for BalanceChange {
     fn from(value: sui_sdk_types::BalanceChange) -> Self {
         Self {
             address: Some(value.address.to_string()),
-            coin_type: Some(value.coin_type.into()),
+            coin_type: Some(value.coin_type.to_string()),
             amount: Some(value.amount.to_string()),
         }
     }
@@ -71,7 +70,8 @@ impl TryFrom<&BalanceChange> for sui_sdk_types::BalanceChange {
             .coin_type
             .as_ref()
             .ok_or_else(|| TryFromProtoError::missing("coin_type"))?
-            .pipe(TryInto::try_into)?;
+            .parse()
+            .map_err(TryFromProtoError::from_error)?;
         let amount = value
             .amount
             .as_ref()

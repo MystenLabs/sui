@@ -381,8 +381,8 @@ pub struct BalanceChange {
     #[prost(string, optional, tag = "1")]
     pub address: ::core::option::Option<::prost::alloc::string::String>,
     /// The `Coin` type of this balance change event.
-    #[prost(message, optional, tag = "2")]
-    pub coin_type: ::core::option::Option<super::super::types::TypeTag>,
+    #[prost(string, optional, tag = "2")]
+    pub coin_type: ::core::option::Option<::prost::alloc::string::String>,
     /// The amount or change in balance.
     /// 128-bit signed integer encoded in base10
     #[prost(string, optional, tag = "3")]

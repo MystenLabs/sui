@@ -152,11 +152,11 @@ message Event {
   optional string package_id = 1;
   // Module name of the top-level function invoked by a `MoveCall` command that triggered this
   // event to be emitted.
-  optional Identifier module = 2;
+  optional string module = 2;
   // Address of the account that sent the transaction where this event was emitted.
   optional string sender = 3;
   // The type of the event emitted.
-  optional StructTag event_type = 4;
+  optional string event_type = 4;
   // BCS serialized bytes of the event.
   optional bytes contents = 5;
 }
@@ -194,15 +194,15 @@ message MovePackage {
 // Module defined by a package.
 message MoveModule {
   // Name of the module.
-  optional Identifier name = 1;
+  optional string name = 1;
   // Serialized bytecode of the module.
   optional bytes contents = 2;
 }
 
 // Identifies a struct and the module it was defined in.
 message TypeOrigin {
-  optional Identifier module_name = 1;
-  optional Identifier struct_name = 2;
+  optional string module_name = 1;
+  optional string struct_name = 2;
   optional string package_id = 3;
 }
 
@@ -235,7 +235,7 @@ message MoveStruct {
   // `ObjectId` for this object.
   optional string object_id = 1;
   // The type of this object.
-  optional StructTag object_type = 2;
+  optional string object_type = 2;
   // DEPRECATED this field is no longer used to determine whether a tx can transfer this
   // object. Instead, it is always calculated from the objects type when loaded in execution.
   optional bool has_public_transfer = 3;
@@ -321,92 +321,6 @@ message GasCostSummary {
 }
 
 // End GasCostSummary }}}
-
-// Move {{{
-
-// A Move identifier.
-//
-// Identifiers are only valid if they conform to the following ABNF:
-//
-// ```text
-// identifier = (ALPHA *127(ALPHA / DIGIT / UNDERSCORE)) /
-//              (UNDERSCORE 1*127(ALPHA / DIGIT / UNDERSCORE))
-// UNDERSCORE = %x95
-// ```
-message Identifier {
-  optional string identifier = 1;
-}
-
-// Type information for a Move struct.
-message StructTag {
-  // Address of the package where this type was defined.
-  optional string address = 1;
-  // Name of the module where this type was defined.
-  optional Identifier module = 2;
-  // Name of the type itself.
-  optional Identifier name = 3;
-  // List of type parameters, if any.
-  repeated TypeTag type_parameters = 4;
-}
-
-// Type of a Move value.
-message TypeTag {
-  oneof tag {
-    google.protobuf.Empty u8 = 1;
-    google.protobuf.Empty u16 = 2;
-    google.protobuf.Empty u32 = 3;
-    google.protobuf.Empty u64 = 4;
-    google.protobuf.Empty u128 = 5;
-    google.protobuf.Empty u256 = 6;
-    google.protobuf.Empty bool = 7;
-    google.protobuf.Empty address = 8;
-    google.protobuf.Empty signer = 9;
-    TypeTag vector = 10;
-    StructTag struct = 11;
-  }
-}
-
-message MoveStructValue {
-  optional StructTag struct_type = 1;
-  repeated MoveField fields = 2;
-}
-
-message MoveField {
-  optional Identifier name = 1;
-  optional MoveValue value = 2;
-}
-
-message MoveVariant {
-  optional StructTag enum_type = 1;
-  optional Identifier variant_name = 2;
-  optional uint32 tag = 3;
-  repeated MoveField fields = 4;
-}
-
-message MoveValue {
-  oneof kind {
-    bool bool = 2;
-    uint32 u8 = 3;
-    uint32 u16 = 4;
-    uint32 u32 = 5;
-    uint64 u64 = 6;
-    // 128-bit unsigned integer encoded in base10
-    string u128 = 7;
-    // 256-bit unsigned integer encoded in base10
-    string u256 = 8;
-    string address = 9;
-    MoveVector vector = 10;
-    MoveStructValue struct = 11;
-    string signer = 12;
-    MoveVariant variant = 13;
-  }
-}
-
-message MoveVector {
-  repeated MoveValue values = 1;
-}
-
-// End Move }}}
 
 // Transaction {{{
 
@@ -604,11 +518,11 @@ message MoveCall {
   // The package containing the module and function.
   optional string package = 1;
   // The specific module in the package containing the function.
-  optional Identifier module = 2;
+  optional string module = 2;
   // The function to be called.
-  optional Identifier function = 3;
+  optional string function = 3;
   // The type arguments to the function.
-  repeated TypeTag type_arguments = 4;
+  repeated string type_arguments = 4;
   // The arguments to the function.
   repeated Argument arguments = 5;
 }
@@ -655,7 +569,7 @@ message MakeMoveVector {
   //
   // This is required to be set when the type can't be inferred, for example when the set of
   // provided arguments are all pure input values.
-  optional TypeTag element_type = 1;
+  optional string element_type = 1;
 
   // The set individual elements to build the vector with.
   repeated Argument elements = 2;
@@ -1263,13 +1177,13 @@ message MoveLocation {
   // The package ID.
   optional string package = 1;
   // The module name.
-  optional Identifier module = 2;
+  optional string module = 2;
   // The function index.
   optional uint32 function = 3;
   // Offset of the instruction where the error occurred.
   optional uint32 instruction = 4;
   // The name of the function, if available.
-  optional Identifier function_name = 5;
+  optional string function_name = 5;
 }
 
 // An error with an argument to a command.

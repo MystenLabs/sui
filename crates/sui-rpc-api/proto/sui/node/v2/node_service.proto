@@ -446,7 +446,7 @@ message BalanceChange {
   optional string address = 1;
 
   // The `Coin` type of this balance change event.
-  optional sui.types.TypeTag coin_type = 2;
+  optional string coin_type = 2;
 
   // The amount or change in balance.
   // 128-bit signed integer encoded in base10

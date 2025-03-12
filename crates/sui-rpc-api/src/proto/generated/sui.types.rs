@@ -193,14 +193,14 @@ pub struct Event {
     pub package_id: ::core::option::Option<::prost::alloc::string::String>,
     /// Module name of the top-level function invoked by a `MoveCall` command that triggered this
     /// event to be emitted.
-    #[prost(message, optional, tag = "2")]
-    pub module: ::core::option::Option<Identifier>,
+    #[prost(string, optional, tag = "2")]
+    pub module: ::core::option::Option<::prost::alloc::string::String>,
     /// Address of the account that sent the transaction where this event was emitted.
     #[prost(string, optional, tag = "3")]
     pub sender: ::core::option::Option<::prost::alloc::string::String>,
     /// The type of the event emitted.
-    #[prost(message, optional, tag = "4")]
-    pub event_type: ::core::option::Option<StructTag>,
+    #[prost(string, optional, tag = "4")]
+    pub event_type: ::core::option::Option<::prost::alloc::string::String>,
     /// BCS serialized bytes of the event.
     #[prost(bytes = "bytes", optional, tag = "5")]
     pub contents: ::core::option::Option<::prost::bytes::Bytes>,
@@ -243,8 +243,8 @@ pub struct MovePackage {
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct MoveModule {
     /// Name of the module.
-    #[prost(message, optional, tag = "1")]
-    pub name: ::core::option::Option<Identifier>,
+    #[prost(string, optional, tag = "1")]
+    pub name: ::core::option::Option<::prost::alloc::string::String>,
     /// Serialized bytecode of the module.
     #[prost(bytes = "bytes", optional, tag = "2")]
     pub contents: ::core::option::Option<::prost::bytes::Bytes>,
@@ -252,10 +252,10 @@ pub struct MoveModule {
 /// Identifies a struct and the module it was defined in.
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct TypeOrigin {
-    #[prost(message, optional, tag = "1")]
-    pub module_name: ::core::option::Option<Identifier>,
-    #[prost(message, optional, tag = "2")]
-    pub struct_name: ::core::option::Option<Identifier>,
+    #[prost(string, optional, tag = "1")]
+    pub module_name: ::core::option::Option<::prost::alloc::string::String>,
+    #[prost(string, optional, tag = "2")]
+    pub struct_name: ::core::option::Option<::prost::alloc::string::String>,
     #[prost(string, optional, tag = "3")]
     pub package_id: ::core::option::Option<::prost::alloc::string::String>,
 }
@@ -303,8 +303,8 @@ pub struct MoveStruct {
     #[prost(string, optional, tag = "1")]
     pub object_id: ::core::option::Option<::prost::alloc::string::String>,
     /// The type of this object.
-    #[prost(message, optional, tag = "2")]
-    pub object_type: ::core::option::Option<StructTag>,
+    #[prost(string, optional, tag = "2")]
+    pub object_type: ::core::option::Option<::prost::alloc::string::String>,
     /// DEPRECATED this field is no longer used to determine whether a tx can transfer this
     /// object. Instead, it is always calculated from the objects type when loaded in execution.
     #[prost(bool, optional, tag = "3")]
@@ -406,137 +406,6 @@ pub struct GasCostSummary {
     /// The fee for the rebate. The portion of the storage rebate kept by the system.
     #[prost(uint64, optional, tag = "4")]
     pub non_refundable_storage_fee: ::core::option::Option<u64>,
-}
-/// A Move identifier.
-///
-/// Identifiers are only valid if they conform to the following ABNF:
-///
-/// ```text
-/// identifier = (ALPHA *127(ALPHA / DIGIT / UNDERSCORE)) /
-///               (UNDERSCORE 1*127(ALPHA / DIGIT / UNDERSCORE))
-/// UNDERSCORE = %x95
-/// ```
-#[derive(Clone, PartialEq, ::prost::Message)]
-pub struct Identifier {
-    #[prost(string, optional, tag = "1")]
-    pub identifier: ::core::option::Option<::prost::alloc::string::String>,
-}
-/// Type information for a Move struct.
-#[derive(Clone, PartialEq, ::prost::Message)]
-pub struct StructTag {
-    /// Address of the package where this type was defined.
-    #[prost(string, optional, tag = "1")]
-    pub address: ::core::option::Option<::prost::alloc::string::String>,
-    /// Name of the module where this type was defined.
-    #[prost(message, optional, tag = "2")]
-    pub module: ::core::option::Option<Identifier>,
-    /// Name of the type itself.
-    #[prost(message, optional, tag = "3")]
-    pub name: ::core::option::Option<Identifier>,
-    /// List of type parameters, if any.
-    #[prost(message, repeated, tag = "4")]
-    pub type_parameters: ::prost::alloc::vec::Vec<TypeTag>,
-}
-/// Type of a Move value.
-#[derive(Clone, PartialEq, ::prost::Message)]
-pub struct TypeTag {
-    #[prost(oneof = "type_tag::Tag", tags = "1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11")]
-    pub tag: ::core::option::Option<type_tag::Tag>,
-}
-/// Nested message and enum types in `TypeTag`.
-pub mod type_tag {
-    #[derive(Clone, PartialEq, ::prost::Oneof)]
-    pub enum Tag {
-        #[prost(message, tag = "1")]
-        U8(()),
-        #[prost(message, tag = "2")]
-        U16(()),
-        #[prost(message, tag = "3")]
-        U32(()),
-        #[prost(message, tag = "4")]
-        U64(()),
-        #[prost(message, tag = "5")]
-        U128(()),
-        #[prost(message, tag = "6")]
-        U256(()),
-        #[prost(message, tag = "7")]
-        Bool(()),
-        #[prost(message, tag = "8")]
-        Address(()),
-        #[prost(message, tag = "9")]
-        Signer(()),
-        #[prost(message, tag = "10")]
-        Vector(::prost::alloc::boxed::Box<super::TypeTag>),
-        #[prost(message, tag = "11")]
-        Struct(super::StructTag),
-    }
-}
-#[derive(Clone, PartialEq, ::prost::Message)]
-pub struct MoveStructValue {
-    #[prost(message, optional, tag = "1")]
-    pub struct_type: ::core::option::Option<StructTag>,
-    #[prost(message, repeated, tag = "2")]
-    pub fields: ::prost::alloc::vec::Vec<MoveField>,
-}
-#[derive(Clone, PartialEq, ::prost::Message)]
-pub struct MoveField {
-    #[prost(message, optional, tag = "1")]
-    pub name: ::core::option::Option<Identifier>,
-    #[prost(message, optional, tag = "2")]
-    pub value: ::core::option::Option<MoveValue>,
-}
-#[derive(Clone, PartialEq, ::prost::Message)]
-pub struct MoveVariant {
-    #[prost(message, optional, tag = "1")]
-    pub enum_type: ::core::option::Option<StructTag>,
-    #[prost(message, optional, tag = "2")]
-    pub variant_name: ::core::option::Option<Identifier>,
-    #[prost(uint32, optional, tag = "3")]
-    pub tag: ::core::option::Option<u32>,
-    #[prost(message, repeated, tag = "4")]
-    pub fields: ::prost::alloc::vec::Vec<MoveField>,
-}
-#[derive(Clone, PartialEq, ::prost::Message)]
-pub struct MoveValue {
-    #[prost(oneof = "move_value::Kind", tags = "2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13")]
-    pub kind: ::core::option::Option<move_value::Kind>,
-}
-/// Nested message and enum types in `MoveValue`.
-pub mod move_value {
-    #[derive(Clone, PartialEq, ::prost::Oneof)]
-    pub enum Kind {
-        #[prost(bool, tag = "2")]
-        Bool(bool),
-        #[prost(uint32, tag = "3")]
-        U8(u32),
-        #[prost(uint32, tag = "4")]
-        U16(u32),
-        #[prost(uint32, tag = "5")]
-        U32(u32),
-        #[prost(uint64, tag = "6")]
-        U64(u64),
-        /// 128-bit unsigned integer encoded in base10
-        #[prost(string, tag = "7")]
-        U128(::prost::alloc::string::String),
-        /// 256-bit unsigned integer encoded in base10
-        #[prost(string, tag = "8")]
-        U256(::prost::alloc::string::String),
-        #[prost(string, tag = "9")]
-        Address(::prost::alloc::string::String),
-        #[prost(message, tag = "10")]
-        Vector(super::MoveVector),
-        #[prost(message, tag = "11")]
-        Struct(super::MoveStructValue),
-        #[prost(string, tag = "12")]
-        Signer(::prost::alloc::string::String),
-        #[prost(message, tag = "13")]
-        Variant(super::MoveVariant),
-    }
-}
-#[derive(Clone, PartialEq, ::prost::Message)]
-pub struct MoveVector {
-    #[prost(message, repeated, tag = "1")]
-    pub values: ::prost::alloc::vec::Vec<MoveValue>,
 }
 /// A transaction.
 #[derive(Clone, PartialEq, ::prost::Message)]
@@ -780,14 +649,14 @@ pub struct MoveCall {
     #[prost(string, optional, tag = "1")]
     pub package: ::core::option::Option<::prost::alloc::string::String>,
     /// The specific module in the package containing the function.
-    #[prost(message, optional, tag = "2")]
-    pub module: ::core::option::Option<Identifier>,
+    #[prost(string, optional, tag = "2")]
+    pub module: ::core::option::Option<::prost::alloc::string::String>,
     /// The function to be called.
-    #[prost(message, optional, tag = "3")]
-    pub function: ::core::option::Option<Identifier>,
+    #[prost(string, optional, tag = "3")]
+    pub function: ::core::option::Option<::prost::alloc::string::String>,
     /// The type arguments to the function.
-    #[prost(message, repeated, tag = "4")]
-    pub type_arguments: ::prost::alloc::vec::Vec<TypeTag>,
+    #[prost(string, repeated, tag = "4")]
+    pub type_arguments: ::prost::alloc::vec::Vec<::prost::alloc::string::String>,
     /// The arguments to the function.
     #[prost(message, repeated, tag = "5")]
     pub arguments: ::prost::alloc::vec::Vec<Argument>,
@@ -841,8 +710,8 @@ pub struct MakeMoveVector {
     ///
     /// This is required to be set when the type can't be inferred, for example when the set of
     /// provided arguments are all pure input values.
-    #[prost(message, optional, tag = "1")]
-    pub element_type: ::core::option::Option<TypeTag>,
+    #[prost(string, optional, tag = "1")]
+    pub element_type: ::core::option::Option<::prost::alloc::string::String>,
     /// The set individual elements to build the vector with.
     #[prost(message, repeated, tag = "2")]
     pub elements: ::prost::alloc::vec::Vec<Argument>,
@@ -1619,8 +1488,8 @@ pub struct MoveLocation {
     #[prost(string, optional, tag = "1")]
     pub package: ::core::option::Option<::prost::alloc::string::String>,
     /// The module name.
-    #[prost(message, optional, tag = "2")]
-    pub module: ::core::option::Option<Identifier>,
+    #[prost(string, optional, tag = "2")]
+    pub module: ::core::option::Option<::prost::alloc::string::String>,
     /// The function index.
     #[prost(uint32, optional, tag = "3")]
     pub function: ::core::option::Option<u32>,
@@ -1628,8 +1497,8 @@ pub struct MoveLocation {
     #[prost(uint32, optional, tag = "4")]
     pub instruction: ::core::option::Option<u32>,
     /// The name of the function, if available.
-    #[prost(message, optional, tag = "5")]
-    pub function_name: ::core::option::Option<Identifier>,
+    #[prost(string, optional, tag = "5")]
+    pub function_name: ::core::option::Option<::prost::alloc::string::String>,
 }
 /// An error with an argument to a command.
 #[derive(Clone, Copy, PartialEq, ::prost::Message)]

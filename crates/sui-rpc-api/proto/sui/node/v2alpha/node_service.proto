@@ -33,13 +33,13 @@ service NodeService {
 // Request message for `NodeService.GetCoinInfo`.
 message GetCoinInfoRequest {
   // The coin type to request information about
-  optional sui.types.TypeTag coin_type = 1;
+  optional string coin_type = 1;
 }
 
 // Response message for `NodeService.GetCoinInfo`.
 message GetCoinInfoResponse {
   // Required. The coin type.
-  optional sui.types.TypeTag coin_type = 1;
+  optional string coin_type = 1;
 
   // This field will be populated with information about this coin
   // type's `0x2::coin::CoinMetadata` if it exists and has not been wrapped.
@@ -126,7 +126,7 @@ message DynamicField {
   optional string field_id = 2;
 
   // Required. The type of the dynamic field "name"
-  optional sui.types.TypeTag name_type = 3;
+  optional string name_type = 3;
 
   // Required. The serialized move value of "name"
   optional bytes name_value = 4;
@@ -214,5 +214,5 @@ message AccountObject {
   optional string owner = 1;
   optional string object_id = 2;
   optional uint64 version = 3;
-  optional sui.types.StructTag object_type = 4;
+  optional string object_type = 4;
 }

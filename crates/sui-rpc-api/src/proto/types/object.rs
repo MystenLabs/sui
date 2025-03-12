@@ -179,7 +179,7 @@ impl From<sui_sdk_types::MoveStruct> for super::MoveStruct {
     fn from(value: sui_sdk_types::MoveStruct) -> Self {
         Self {
             object_id: Some(value.object_id().to_string()),
-            object_type: Some(value.object_type().to_owned().into()),
+            object_type: Some(value.object_type().to_string()),
             has_public_transfer: Some(value.has_public_transfer()),
             version: Some(value.version()),
             contents: Some(value.contents().to_vec().into()),
@@ -202,7 +202,8 @@ impl TryFrom<&super::MoveStruct> for sui_sdk_types::MoveStruct {
         let object_type = object_type
             .as_ref()
             .ok_or_else(|| TryFromProtoError::missing("object_type"))?
-            .try_into()?;
+            .parse()
+            .map_err(TryFromProtoError::from_error)?;
 
         let has_public_transfer =
             has_public_transfer.ok_or_else(|| TryFromProtoError::missing("has_public_transfer"))?;
@@ -227,7 +228,7 @@ impl From<sui_sdk_types::MovePackage> for super::MovePackage {
             .modules
             .into_iter()
             .map(|(name, contents)| super::MoveModule {
-                name: Some(name.into()),
+                name: Some(name.to_string()),
                 contents: Some(contents.into()),
             })
             .collect();
@@ -287,7 +288,8 @@ impl TryFrom<&super::MovePackage> for sui_sdk_types::MovePackage {
                     .name
                     .as_ref()
                     .ok_or_else(|| TryFromProtoError::missing("name"))?
-                    .try_into()?;
+                    .parse()
+                    .map_err(TryFromProtoError::from_error)?;
 
                 let contents = module
                     .contents
@@ -357,8 +359,8 @@ impl TryFrom<&super::MovePackage> for sui_sdk_types::MovePackage {
 impl From<sui_sdk_types::TypeOrigin> for super::TypeOrigin {
     fn from(value: sui_sdk_types::TypeOrigin) -> Self {
         Self {
-            module_name: Some(value.module_name.into()),
-            struct_name: Some(value.struct_name.into()),
+            module_name: Some(value.module_name.to_string()),
+            struct_name: Some(value.struct_name.to_string()),
             package_id: Some(value.package.to_string()),
         }
     }
@@ -372,13 +374,15 @@ impl TryFrom<&super::TypeOrigin> for sui_sdk_types::TypeOrigin {
             .module_name
             .as_ref()
             .ok_or_else(|| TryFromProtoError::missing("module_name"))?
-            .try_into()?;
+            .parse()
+            .map_err(TryFromProtoError::from_error)?;
 
         let struct_name = value
             .struct_name
             .as_ref()
             .ok_or_else(|| TryFromProtoError::missing("struct_name"))?
-            .try_into()?;
+            .parse()
+            .map_err(TryFromProtoError::from_error)?;
 
         let package = value
             .package_id
