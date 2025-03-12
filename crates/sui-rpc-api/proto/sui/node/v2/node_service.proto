@@ -7,6 +7,7 @@ package sui.node.v2;
 import "google/protobuf/empty.proto";
 import "google/protobuf/field_mask.proto";
 import "google/protobuf/timestamp.proto";
+import "sui/types/bcs.proto";
 import "sui/types/types.proto";
 
 //

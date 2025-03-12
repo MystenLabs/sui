@@ -25,14 +25,6 @@ package sui.types;
 
 import "google/protobuf/empty.proto";
 
-// Message that represents a type that is serialized and encoded using the
-// [BCS](https://mystenlabs.github.io/sui-rust-sdk/sui_sdk_types/index.html#bcs)
-// format.
-message Bcs {
-  // Bytes of a BCS encoded value.
-  optional bytes bcs = 1;
-}
-
 // Checkpoint {{{
 
 // A header for a checkpoint on the Sui blockchain.

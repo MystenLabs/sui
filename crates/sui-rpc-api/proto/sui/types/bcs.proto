@@ -1,0 +1,14 @@
+syntax = "proto3";
+
+package sui.types;
+
+// `Bcs` contains an arbitrary type that is serialized using the
+// [BCS](https://mystenlabs.github.io/sui-rust-sdk/sui_sdk_types/index.html#bcs)
+// format as well as a name that identifies the type of the serialized value.
+message Bcs {
+  // Bytes of a BCS serialized value.
+  optional bytes value = 1;
+
+  // Name that identifies the type of the serialized value.
+  optional string name = 2;
+}

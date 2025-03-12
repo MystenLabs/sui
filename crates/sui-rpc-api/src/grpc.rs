@@ -358,7 +358,7 @@ impl crate::proto::node::v2alpha::node_service_server::NodeService for crate::Rp
             output_objects: false,
         };
         let transaction = if let Some(bcs) = request.transaction_bcs {
-            bcs::from_bytes(bcs.bcs()).map_err(|_| {
+            bcs::from_bytes(bcs.value()).map_err(|_| {
                 tonic::Status::new(tonic::Code::InvalidArgument, "invalid transaction bcs")
             })?
         } else {

@@ -54,19 +54,21 @@ pub fn proto_to_timestamp_ms(timestamp: prost_types::Timestamp) -> Result<u64, T
 impl Bcs {
     pub fn serialize<T: serde::Serialize>(value: &T) -> Result<Self, bcs::Error> {
         bcs::to_bytes(value).map(|bcs| Self {
-            bcs: Some(bcs.into()),
+            value: Some(bcs.into()),
+            name: None,
         })
     }
 
     pub fn deserialize<'de, T: serde::Deserialize<'de>>(&'de self) -> Result<T, bcs::Error> {
-        bcs::from_bytes(self.bcs.as_deref().unwrap_or(&[]))
+        bcs::from_bytes(self.value.as_deref().unwrap_or(&[]))
     }
 }
 
 impl From<Vec<u8>> for Bcs {
     fn from(value: Vec<u8>) -> Self {
         Self {
-            bcs: Some(value.into()),
+            value: Some(value.into()),
+            name: None,
         }
     }
 }
@@ -74,7 +76,7 @@ impl From<Vec<u8>> for Bcs {
 impl From<&Bcs> for Vec<u8> {
     fn from(value: &Bcs) -> Self {
         value
-            .bcs
+            .value
             .as_ref()
             .map(|bytes| bytes.to_vec())
             .unwrap_or_default()
@@ -84,7 +86,7 @@ impl From<&Bcs> for Vec<u8> {
 impl From<Bcs> for Vec<u8> {
     fn from(value: Bcs) -> Self {
         value
-            .bcs
+            .value
             .as_ref()
             .map(|bytes| bytes.to_vec())
             .unwrap_or_default()
@@ -93,18 +95,21 @@ impl From<Bcs> for Vec<u8> {
 
 impl From<prost::bytes::Bytes> for Bcs {
     fn from(value: prost::bytes::Bytes) -> Self {
-        Self { bcs: Some(value) }
+        Self {
+            value: Some(value),
+            name: None,
+        }
     }
 }
 
 impl From<&Bcs> for prost::bytes::Bytes {
     fn from(value: &Bcs) -> Self {
-        value.bcs.clone().unwrap_or_default()
+        value.value.clone().unwrap_or_default()
     }
 }
 
 impl From<Bcs> for prost::bytes::Bytes {
     fn from(value: Bcs) -> Self {
-        value.bcs.unwrap_or_default()
+        value.value.unwrap_or_default()
     }
 }
