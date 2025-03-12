@@ -1,7 +1,7 @@
 ---
 source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
 ---
-processed 12 tasks
+processed 13 tasks
 
 init:
 A: object(0,0), B: object(0,1)
@@ -955,5 +955,15 @@ Response: {
         "amount": "-1997922"
       }
     ]
+  }
+}
+
+task 12, lines 133-139:
+//# run-jsonrpc
+Response: {
+  "jsonrpc": "2.0",
+  "id": 7,
+  "result": {
+    "digest": "DQQTRmCg1KDocZb1JwChJa8nQjAG9UaY2Jy1GnFKamDQ"
   }
 }
