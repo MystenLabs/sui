@@ -4125,6 +4125,24 @@ pub mod prop {
                 .collect::<Vec<_>>()
                 .prop_map(move |vals| Value::struct_(Struct::pack(vals)))
                 .boxed(),
+
+            L::Enum(enum_layout) => {
+                let enum_layouts = (**enum_layout)
+                    .clone()
+                    .0
+                    .into_iter()
+                    .enumerate()
+                    .collect::<Vec<_>>();
+                proptest::sample::select(enum_layouts)
+                    .prop_flat_map(move |(tag, layout)| {
+                        layout
+                            .iter()
+                            .map(value_strategy_with_layout)
+                            .collect::<Vec<_>>()
+                            .prop_map(move |v| Value::variant(Variant::pack(tag as u16, v)))
+                    })
+                    .boxed()
+            }
         }
     }
 
@@ -4147,7 +4165,7 @@ pub mod prop {
             prop_oneof![
                 1 => inner.clone().prop_map(|layout| L::Vector(Box::new(layout))),
                 1 => vec(inner, 0..1).prop_map(|f_layouts| {
-                     L::Struct(MoveStructLayout::new(f_layouts))}),
+                     L::Struct(Box::new(MoveStructLayout::new(f_layouts)))}),
             ]
         })
     }
