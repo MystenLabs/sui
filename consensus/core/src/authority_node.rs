@@ -5,6 +5,7 @@ use std::{sync::Arc, time::Instant};
 
 use consensus_config::{AuthorityIndex, Committee, NetworkKeyPair, Parameters, ProtocolKeyPair};
 use itertools::Itertools;
+use mysten_metrics::spawn_logged_monitored_task;
 use parking_lot::RwLock;
 use prometheus::Registry;
 use sui_protocol_config::{ConsensusNetwork, ProtocolConfig};
@@ -29,6 +30,7 @@ use crate::{
         anemo_network::AnemoManager, tonic_network::TonicManager, NetworkClient as _,
         NetworkManager,
     },
+    proposed_block_handler::ProposedBlockHandler,
     round_prober::{RoundProber, RoundProberHandle},
     storage::rocksdb_store::RocksDBStore,
     subscriber::Subscriber,
@@ -236,6 +238,13 @@ where
             dag_state.clone(),
             commit_consumer.block_sender.clone(),
         );
+
+        let mut proposed_block_handler = ProposedBlockHandler::new(
+            signals_receivers.block_broadcast_receiver(),
+            txn_certifier.clone(),
+        );
+
+        spawn_logged_monitored_task!(proposed_block_handler.run(), "proposed_block_handler");
 
         let highest_known_commit_at_startup = dag_state.read().last_commit_index();
 

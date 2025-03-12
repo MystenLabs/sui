@@ -40,7 +40,7 @@ pub(crate) struct AuthorityService<C: CoreThreadDispatcher> {
     block_verifier: Arc<dyn BlockVerifier>,
     synchronizer: Arc<SynchronizerHandle>,
     core_dispatcher: Arc<C>,
-    rx_block_broadcaster: broadcast::Receiver<ExtendedBlock>,
+    rx_block_broadcast: broadcast::Receiver<ExtendedBlock>,
     subscription_counter: Arc<SubscriptionCounter>,
     txn_certifier: TransactionCertifier,
     dag_state: Arc<RwLock<DagState>>,
@@ -54,7 +54,7 @@ impl<C: CoreThreadDispatcher> AuthorityService<C> {
         commit_vote_monitor: Arc<CommitVoteMonitor>,
         synchronizer: Arc<SynchronizerHandle>,
         core_dispatcher: Arc<C>,
-        rx_block_broadcaster: broadcast::Receiver<ExtendedBlock>,
+        rx_block_broadcast: broadcast::Receiver<ExtendedBlock>,
         txn_certifier: TransactionCertifier,
         dag_state: Arc<RwLock<DagState>>,
         store: Arc<dyn Store>,
@@ -69,7 +69,7 @@ impl<C: CoreThreadDispatcher> AuthorityService<C> {
             commit_vote_monitor,
             synchronizer,
             core_dispatcher,
-            rx_block_broadcaster,
+            rx_block_broadcast,
             subscription_counter,
             txn_certifier,
             dag_state,
@@ -223,7 +223,7 @@ impl<C: CoreThreadDispatcher> NetworkService for AuthorityService<C> {
                 .add_voted_blocks(vec![(verified_block.clone(), reject_txn_votes)]);
         }
 
-        // Try to accept to block into the DAG.
+        // Try to accept the block into the DAG.
         let missing_ancestors = self
             .core_dispatcher
             .add_blocks(vec![verified_block])
@@ -335,7 +335,7 @@ impl<C: CoreThreadDispatcher> NetworkService for AuthorityService<C> {
 
         let broadcasted_blocks = BroadcastedBlockStream::new(
             peer,
-            self.rx_block_broadcaster.resubscribe(),
+            self.rx_block_broadcast.resubscribe(),
             self.subscription_counter.clone(),
         );
 

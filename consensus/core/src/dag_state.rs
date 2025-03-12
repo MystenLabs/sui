@@ -735,16 +735,6 @@ impl DagState {
         blocks.first().cloned().unwrap()
     }
 
-    // The round which the next block will be proposed at. This increases monotonically.
-    // With the local DAG, proposing at a higher round is impossible for anyone including this authority.
-    // The round may be skipped without proposing if blocks from higher rounds arrive before
-    // a block gets proposed.
-    pub(crate) fn next_propose_round(&self) -> Round {
-        self.threshold_clock
-            .get_round()
-            .max(self.get_last_proposed_block().round() + 1)
-    }
-
     pub(crate) fn threshold_clock_round(&self) -> Round {
         self.threshold_clock.get_round()
     }
