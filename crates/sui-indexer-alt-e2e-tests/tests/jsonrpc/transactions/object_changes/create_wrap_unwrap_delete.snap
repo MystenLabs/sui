@@ -70,7 +70,9 @@ Response: {
         "previousVersion": "2",
         "digest": "9M8HLgH8K16BkshyD9aJFPoQ6iHxcNrqyEJNtiz5SZop"
       }
-    ]
+    ],
+    "timestampMs": "0",
+    "checkpoint": "1"
   }
 }
 
@@ -106,6 +108,8 @@ Response: {
         "previousVersion": "3",
         "digest": "B5DRwEEFLfGp3KbXbJBv6jG4UzzmHdJW8iXi1Hqo3iSt"
       }
-    ]
+    ],
+    "timestampMs": "0",
+    "checkpoint": "1"
   }
 }
