@@ -189,7 +189,7 @@ pub enum ExecutionTimeObservationKey {
     TransferObjects,
     SplitCoins,
     MergeCoins,
-    Publish,
+    Publish, // special case: should not be used; we only use hard-coded estimate for this
     MakeMoveVec,
     Upgrade,
 }
