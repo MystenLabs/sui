@@ -803,12 +803,7 @@ impl WritebackCache {
 
     #[instrument(level = "debug", skip_all)]
     fn write_transaction_outputs(&self, epoch_id: EpochId, tx_outputs: Arc<TransactionOutputs>) {
-        let _metrics_guard =
-            mysten_metrics::monitored_scope("WritebackCache::write_transaction_outputs");
-        trace!(
-            digest = ?tx_outputs.transaction.digest(),
-            "writing transaction outputs to cache"
-        );
+        trace!(digest = ?tx_outputs.transaction.digest(), "writing transaction outputs to cache");
 
         let TransactionOutputs {
             transaction,

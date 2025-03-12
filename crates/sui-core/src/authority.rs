@@ -1543,7 +1543,7 @@ impl AuthorityState {
 
         // The insertion to epoch_store is not atomic with the insertion to the perpetual store. This is OK because
         // we insert to the epoch store first. And during lookups we always look up in the perpetual store first.
-        epoch_store.insert_tx_key(&tx_key, tx_digest)?; // XXX
+        epoch_store.insert_tx_key(&tx_key, tx_digest)?;
 
         // Allow testing what happens if we crash here.
         fail_point!("crash");
@@ -1553,7 +1553,6 @@ impl AuthorityState {
             effects.clone(),
             inner_temporary_store,
         );
-        // XXX
         self.get_cache_writer().write_transaction_outputs(
             epoch_store.epoch(),
             transaction_outputs.into(),
