@@ -596,7 +596,7 @@ mod test {
             info!("Simulated load config: {:?}", simulated_load_config);
         }
 
-        test_simulated_load_with_test_config(test_cluster, 180, simulated_load_config, None, None)
+        test_simulated_load_with_test_config(test_cluster, 60, simulated_load_config, None, None)
             .await;
     }
 
