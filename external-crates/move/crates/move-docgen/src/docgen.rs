@@ -586,7 +586,7 @@ impl<'env> Docgen<'env> {
             }
         }
 
-        if module_env.constants().next().is_some() {
+        if module_env.named_constants().next().is_some() {
             // Introduce a Constant section
             self.gen_named_constants(env);
         }
