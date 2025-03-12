@@ -1085,6 +1085,13 @@ impl SuiClientCommands {
                     compiled_package.get_package_bytes(with_unpublished_dependencies);
                 let dep_ids = compiled_package.get_published_dependencies_ids();
 
+                if compiled_modules.len() == 0 {
+                    return Err(SuiError::ModulePublishFailure {
+                        error: "No modules found in the package".to_string(),
+                    }
+                    .into());
+                }
+
                 let tx_kind = client
                     .transaction_builder()
                     .publish_tx_kind(sender, compiled_modules, dep_ids)
