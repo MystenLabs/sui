@@ -30,16 +30,18 @@ use move_symbol_pool::Symbol;
 // Types
 //**************************************************************************************************
 
-pub const WITH_SOURCE: usize = 1;
-pub const WITHOUT_SOURCE: usize = 0;
+pub const WITH_SOURCE: SourceKind = 1;
+pub const WITHOUT_SOURCE: SourceKind = 0;
+
+pub type SourceKind = usize;
 
 #[derive(Clone, Copy)]
-pub enum Source<TWith, TWithout> {
-    With(TWith),
-    Without(TWithout),
+pub enum Kind<TWithSource, TWithout> {
+    WithSource(TWithSource),
+    WithoutSource(TWithout),
 }
 
-pub struct Model<const HAS_SOURCE: usize> {
+pub struct Model<const HAS_SOURCE: SourceKind> {
     files: [MappedFiles; HAS_SOURCE],
     root_named_address_map: BTreeMap<Symbol, AccountAddress>,
     root_package_name: Option<Symbol>,
@@ -49,7 +51,7 @@ pub struct Model<const HAS_SOURCE: usize> {
 }
 
 #[derive(Clone, Copy)]
-pub struct Package<'a, const HAS_SOURCE: usize> {
+pub struct Package<'a, const HAS_SOURCE: SourceKind> {
     addr: AccountAddress,
     // TODO name. We likely want the package name from the root package's named address map
     model: &'a Model<HAS_SOURCE>,
@@ -58,7 +60,7 @@ pub struct Package<'a, const HAS_SOURCE: usize> {
 }
 
 #[derive(Clone, Copy)]
-pub struct Module<'a, const HAS_SOURCE: usize> {
+pub struct Module<'a, const HAS_SOURCE: SourceKind> {
     id: ModuleId,
     package: Package<'a, HAS_SOURCE>,
     compiled: &'a compiled::Module,
@@ -66,7 +68,7 @@ pub struct Module<'a, const HAS_SOURCE: usize> {
 }
 
 #[derive(Clone, Copy)]
-pub enum Member<'a, const HAS_SOURCE: usize> {
+pub enum Member<'a, const HAS_SOURCE: SourceKind> {
     Struct(Struct<'a, HAS_SOURCE>),
     Enum(Enum<'a, HAS_SOURCE>),
     Function(Function<'a, HAS_SOURCE>),
@@ -74,13 +76,13 @@ pub enum Member<'a, const HAS_SOURCE: usize> {
 }
 
 #[derive(Clone, Copy)]
-pub enum Datatype<'a, const HAS_SOURCE: usize> {
+pub enum Datatype<'a, const HAS_SOURCE: SourceKind> {
     Struct(Struct<'a, HAS_SOURCE>),
     Enum(Enum<'a, HAS_SOURCE>),
 }
 
 #[derive(Clone, Copy)]
-pub struct Struct<'a, const HAS_SOURCE: usize> {
+pub struct Struct<'a, const HAS_SOURCE: SourceKind> {
     name: Symbol,
     module: Module<'a, HAS_SOURCE>,
     compiled: &'a compiled::Struct,
@@ -89,7 +91,7 @@ pub struct Struct<'a, const HAS_SOURCE: usize> {
 }
 
 #[derive(Clone, Copy)]
-pub struct Enum<'a, const HAS_SOURCE: usize> {
+pub struct Enum<'a, const HAS_SOURCE: SourceKind> {
     name: Symbol,
     module: Module<'a, HAS_SOURCE>,
     compiled: &'a compiled::Enum,
@@ -98,14 +100,14 @@ pub struct Enum<'a, const HAS_SOURCE: usize> {
 }
 
 #[derive(Clone, Copy)]
-pub struct Variant<'a, const HAS_SOURCE: usize> {
+pub struct Variant<'a, const HAS_SOURCE: SourceKind> {
     name: Symbol,
     enum_: Enum<'a, HAS_SOURCE>,
     compiled: &'a compiled::Variant,
 }
 
 #[derive(Clone, Copy)]
-pub struct Function<'a, const HAS_SOURCE: usize> {
+pub struct Function<'a, const HAS_SOURCE: SourceKind> {
     name: Symbol,
     module: Module<'a, HAS_SOURCE>,
     // might be none for macros
@@ -234,7 +236,7 @@ impl Model<WITHOUT_SOURCE> {
     }
 }
 
-impl<const HAS_SOURCE: usize> Model<HAS_SOURCE> {
+impl<const HAS_SOURCE: SourceKind> Model<HAS_SOURCE> {
     pub fn root_package_name(&self) -> Option<Symbol> {
         self.root_package_name
     }
@@ -282,12 +284,12 @@ impl<const HAS_SOURCE: usize> Model<HAS_SOURCE> {
         &self.compiled
     }
 
-    pub fn has_source(&self) -> Source<&Model<WITH_SOURCE>, &Model<WITHOUT_SOURCE>> {
+    pub fn kind(&self) -> Kind<&Model<WITH_SOURCE>, &Model<WITHOUT_SOURCE>> {
         match HAS_SOURCE {
             WITH_SOURCE => {
-                Source::With(unsafe { std::mem::transmute::<&Self, &Model<WITH_SOURCE>>(self) })
+                Kind::WithSource(unsafe { std::mem::transmute::<&Self, &Model<WITH_SOURCE>>(self) })
             }
-            WITHOUT_SOURCE => Source::Without(unsafe {
+            WITHOUT_SOURCE => Kind::WithoutSource(unsafe {
                 std::mem::transmute::<&Self, &Model<WITHOUT_SOURCE>>(self)
             }),
             _ => unreachable!(),
@@ -295,7 +297,7 @@ impl<const HAS_SOURCE: usize> Model<HAS_SOURCE> {
     }
 }
 
-impl<'a, const HAS_SOURCE: usize> Package<'a, HAS_SOURCE> {
+impl<'a, const HAS_SOURCE: SourceKind> Package<'a, HAS_SOURCE> {
     pub fn address(&self) -> AccountAddress {
         self.addr
     }
@@ -332,12 +334,12 @@ impl<'a, const HAS_SOURCE: usize> Package<'a, HAS_SOURCE> {
         self.compiled
     }
 
-    pub fn has_source(self) -> Source<Package<'a, WITH_SOURCE>, Package<'a, WITHOUT_SOURCE>> {
+    pub fn kind(self) -> Kind<Package<'a, WITH_SOURCE>, Package<'a, WITHOUT_SOURCE>> {
         match HAS_SOURCE {
-            WITH_SOURCE => {
-                Source::With(unsafe { std::mem::transmute::<Self, Package<'a, WITH_SOURCE>>(self) })
-            }
-            WITHOUT_SOURCE => Source::Without(unsafe {
+            WITH_SOURCE => Kind::WithSource(unsafe {
+                std::mem::transmute::<Self, Package<'a, WITH_SOURCE>>(self)
+            }),
+            WITHOUT_SOURCE => Kind::WithoutSource(unsafe {
                 std::mem::transmute::<Self, Package<'a, WITHOUT_SOURCE>>(self)
             }),
             _ => unreachable!(),
@@ -345,7 +347,7 @@ impl<'a, const HAS_SOURCE: usize> Package<'a, HAS_SOURCE> {
     }
 }
 
-impl<'a, const HAS_SOURCE: usize> Module<'a, HAS_SOURCE> {
+impl<'a, const HAS_SOURCE: SourceKind> Module<'a, HAS_SOURCE> {
     pub fn model(&self) -> &'a Model<HAS_SOURCE> {
         self.package.model()
     }
@@ -445,12 +447,12 @@ impl<'a, const HAS_SOURCE: usize> Module<'a, HAS_SOURCE> {
         &self.compiled.used_by
     }
 
-    pub fn has_source(self) -> Source<Module<'a, WITH_SOURCE>, Module<'a, WITHOUT_SOURCE>> {
+    pub fn kind(self) -> Kind<Module<'a, WITH_SOURCE>, Module<'a, WITHOUT_SOURCE>> {
         match HAS_SOURCE {
-            WITH_SOURCE => {
-                Source::With(unsafe { std::mem::transmute::<Self, Module<'a, WITH_SOURCE>>(self) })
-            }
-            WITHOUT_SOURCE => Source::Without(unsafe {
+            WITH_SOURCE => Kind::WithSource(unsafe {
+                std::mem::transmute::<Self, Module<'a, WITH_SOURCE>>(self)
+            }),
+            WITHOUT_SOURCE => Kind::WithoutSource(unsafe {
                 std::mem::transmute::<Self, Module<'a, WITHOUT_SOURCE>>(self)
             }),
             _ => unreachable!(),
@@ -537,7 +539,7 @@ impl<'a> Module<'a, WITHOUT_SOURCE> {
     }
 }
 
-impl<'a, const HAS_SOURCE: usize> Struct<'a, HAS_SOURCE> {
+impl<'a, const HAS_SOURCE: SourceKind> Struct<'a, HAS_SOURCE> {
     pub fn name(&self) -> Symbol {
         self.name
     }
@@ -558,12 +560,12 @@ impl<'a, const HAS_SOURCE: usize> Struct<'a, HAS_SOURCE> {
         self.compiled
     }
 
-    pub fn has_source(self) -> Source<Struct<'a, WITH_SOURCE>, Struct<'a, WITHOUT_SOURCE>> {
+    pub fn kind(self) -> Kind<Struct<'a, WITH_SOURCE>, Struct<'a, WITHOUT_SOURCE>> {
         match HAS_SOURCE {
-            WITH_SOURCE => {
-                Source::With(unsafe { std::mem::transmute::<Self, Struct<'a, WITH_SOURCE>>(self) })
-            }
-            WITHOUT_SOURCE => Source::Without(unsafe {
+            WITH_SOURCE => Kind::WithSource(unsafe {
+                std::mem::transmute::<Self, Struct<'a, WITH_SOURCE>>(self)
+            }),
+            WITHOUT_SOURCE => Kind::WithoutSource(unsafe {
                 std::mem::transmute::<Self, Struct<'a, WITHOUT_SOURCE>>(self)
             }),
             _ => unreachable!(),
@@ -577,7 +579,7 @@ impl<'a> Struct<'a, WITH_SOURCE> {
     }
 }
 
-impl<'a, const HAS_SOURCE: usize> Enum<'a, HAS_SOURCE> {
+impl<'a, const HAS_SOURCE: SourceKind> Enum<'a, HAS_SOURCE> {
     pub fn name(&self) -> Symbol {
         self.name
     }
@@ -620,7 +622,7 @@ impl<'a> Enum<'a, WITH_SOURCE> {
     }
 }
 
-impl<'a, const HAS_SOURCE: usize> Variant<'a, HAS_SOURCE> {
+impl<'a, const HAS_SOURCE: SourceKind> Variant<'a, HAS_SOURCE> {
     pub fn name(&self) -> Symbol {
         self.name
     }
@@ -645,12 +647,12 @@ impl<'a, const HAS_SOURCE: usize> Variant<'a, HAS_SOURCE> {
         self.compiled
     }
 
-    pub fn has_source(self) -> Source<Variant<'a, WITH_SOURCE>, Variant<'a, WITHOUT_SOURCE>> {
+    pub fn kind(self) -> Kind<Variant<'a, WITH_SOURCE>, Variant<'a, WITHOUT_SOURCE>> {
         match HAS_SOURCE {
-            WITH_SOURCE => {
-                Source::With(unsafe { std::mem::transmute::<Self, Variant<'a, WITH_SOURCE>>(self) })
-            }
-            WITHOUT_SOURCE => Source::Without(unsafe {
+            WITH_SOURCE => Kind::WithSource(unsafe {
+                std::mem::transmute::<Self, Variant<'a, WITH_SOURCE>>(self)
+            }),
+            WITHOUT_SOURCE => Kind::WithoutSource(unsafe {
                 std::mem::transmute::<Self, Variant<'a, WITHOUT_SOURCE>>(self)
             }),
             _ => unreachable!(),
@@ -667,7 +669,7 @@ impl<'a> Variant<'a, WITH_SOURCE> {
 static MACRO_EMPTY_SET: LazyLock<&'static BTreeSet<QualifiedMemberId>> =
     LazyLock::new(|| Box::leak(Box::new(BTreeSet::new())));
 
-impl<'a, const HAS_SOURCE: usize> Function<'a, HAS_SOURCE> {
+impl<'a, const HAS_SOURCE: SourceKind> Function<'a, HAS_SOURCE> {
     pub fn name(&self) -> Symbol {
         self.name
     }
@@ -705,12 +707,12 @@ impl<'a, const HAS_SOURCE: usize> Function<'a, HAS_SOURCE> {
         }
     }
 
-    pub fn has_source(self) -> Source<Function<'a, WITH_SOURCE>, Function<'a, WITHOUT_SOURCE>> {
+    pub fn kind(self) -> Kind<Function<'a, WITH_SOURCE>, Function<'a, WITHOUT_SOURCE>> {
         match HAS_SOURCE {
-            WITH_SOURCE => Source::With(unsafe {
+            WITH_SOURCE => Kind::WithSource(unsafe {
                 std::mem::transmute::<Self, Function<'a, WITH_SOURCE>>(self)
             }),
-            WITHOUT_SOURCE => Source::Without(unsafe {
+            WITHOUT_SOURCE => Kind::WithoutSource(unsafe {
                 std::mem::transmute::<Self, Function<'a, WITHOUT_SOURCE>>(self)
             }),
             _ => unreachable!(),
@@ -792,13 +794,13 @@ impl<T: TModuleId> TModuleId for Spanned<T> {
 
 // The *Data structs are not used currently, but if we need extra source information these provide
 // a place to store it.
-struct PackageData<const HAS_SOURCE: usize> {
+struct PackageData<const HAS_SOURCE: SourceKind> {
     // Based on the root packages named address map
     name: Option<Symbol>,
     modules: BTreeMap<Symbol, ModuleData<HAS_SOURCE>>,
 }
 
-struct ModuleData<const HAS_SOURCE: usize> {
+struct ModuleData<const HAS_SOURCE: SourceKind> {
     ident: [E::ModuleIdent; HAS_SOURCE],
     structs: BTreeMap<Symbol, StructData>,
     enums: BTreeMap<Symbol, EnumData>,
