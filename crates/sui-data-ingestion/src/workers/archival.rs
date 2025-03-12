@@ -9,6 +9,7 @@ use bytes::Bytes;
 use object_store::path::Path;
 use object_store::ObjectStore;
 use serde::{Deserialize, Serialize};
+use std::collections::HashSet;
 use std::io::Cursor;
 use sui_archival::{
     create_file_metadata_from_bytes, finalize_manifest, read_manifest_from_bytes, FileType,
@@ -131,6 +132,12 @@ impl Reducer<CheckpointData> for ArchivalReducer {
         if batch.is_empty() {
             return Err(anyhow::anyhow!("commit batch can't be empty"));
         }
+        let affected_epochs: HashSet<_> =
+            batch.iter().map(|c| c.checkpoint_summary.epoch).collect();
+        assert!(
+            affected_epochs.len() == 1,
+            "archival batch contains multiple epochs"
+        );
         let mut summary_buffer = vec![];
         let mut buffer = vec![];
         let first_checkpoint = &batch[0];
