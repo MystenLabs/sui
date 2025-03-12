@@ -357,7 +357,11 @@ export class Runtime extends EventEmitter {
             hashToFileMap(path.join(pkgRoot, 'sources'), this.filesMap, MOVE_FILE_EXT);
 
             // create debug infos for all modules in the `build` directory
-            srcDebugInfo = readAllDebugInfos(path.join(pkgRoot, 'build', pkg_name, 'source_maps'), this.filesMap, true);
+            const srcSourceMapDir = path.join(pkgRoot, 'build', pkg_name, 'source_maps');
+            const srcDbgInfoDir = fs.existsSync(srcSourceMapDir)
+                ? srcSourceMapDir
+                : path.join(pkgRoot, 'build', pkg_name, 'debug_info');
+            srcDebugInfo = readAllDebugInfos(srcDbgInfoDir, this.filesMap, true);
 
             // reconstruct trace file path from trace info
             traceFilePath = path.join(pkgRoot, 'traces', traceInfo.replace(/:/g, '_') + JSON_FILE_EXT);

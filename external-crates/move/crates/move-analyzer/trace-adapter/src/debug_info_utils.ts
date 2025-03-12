@@ -39,6 +39,7 @@ interface JSONSrcFunctionMapEntry {
 }
 
 interface JSONSrcRootObject {
+    version?: number;
     definition_location: JSONSrcDefinitionLocation;
     module_name: string[];
     struct_map: Record<string, JSONSrcStructSourceMapEntry>;
