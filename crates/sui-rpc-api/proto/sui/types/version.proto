@@ -1,0 +1,10 @@
+syntax = "proto3";
+
+package sui.types;
+
+// Flag used to indicate the version of a type.
+enum Version {
+  VERSION_UNKNOWN = 0;
+  V1 = 1;
+  V2 = 2;
+}

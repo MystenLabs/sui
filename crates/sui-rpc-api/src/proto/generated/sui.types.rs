@@ -11,6 +11,359 @@ pub struct Bcs {
     #[prost(string, optional, tag = "2")]
     pub name: ::core::option::Option<::prost::alloc::string::String>,
 }
+/// The committed to contents of a checkpoint.
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct CheckpointContents {
+    /// This CheckpointContents serialized as BCS.
+    #[prost(message, optional, tag = "1")]
+    pub bcs: ::core::option::Option<Bcs>,
+    /// The digest of this CheckpointContents.
+    #[prost(string, optional, tag = "2")]
+    pub digest: ::core::option::Option<::prost::alloc::string::String>,
+    /// Version of this CheckpointContents
+    #[prost(enumeration = "Version", optional, tag = "3")]
+    pub version: ::core::option::Option<i32>,
+    /// Set of transactions committed to in this checkpoint.
+    #[prost(message, repeated, tag = "4")]
+    pub transactions: ::prost::alloc::vec::Vec<CheckpointedTransactionInfo>,
+}
+/// Transaction information committed to in a checkpoint.
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct CheckpointedTransactionInfo {
+    /// Digest of the transaction.
+    #[prost(string, optional, tag = "1")]
+    pub transaction: ::core::option::Option<::prost::alloc::string::String>,
+    /// Digest of the effects.
+    #[prost(string, optional, tag = "2")]
+    pub effects: ::core::option::Option<::prost::alloc::string::String>,
+    /// Set of user signatures that authorized the transaction.
+    #[prost(message, repeated, tag = "3")]
+    pub signatures: ::prost::alloc::vec::Vec<UserSignature>,
+}
+/// Summary of gas charges.
+///
+/// Storage is charged independently of computation.
+/// There are three parts to the storage charges:
+/// - `storage_cost`: the charge of storage at the time the transaction is executed.
+///                  The cost of storage is the number of bytes of the objects being mutated
+///                  multiplied by a variable storage cost per byte.
+/// - `storage_rebate`: the amount a user gets back when manipulating an object.
+///                    The `storage_rebate` is the `storage_cost` for an object minus fees.
+/// - `non_refundable_storage_fee`: not all the value of the object storage cost is
+///                                given back to user and there is a small fraction that
+///                                is kept by the system. This value tracks that charge.
+///
+/// When looking at a gas cost summary the amount charged to the user is
+/// `computation_cost + storage_cost - storage_rebate`
+/// and that is the amount that is deducted from the gas coins.
+/// `non_refundable_storage_fee` is collected from the objects being mutated/deleted
+/// and it is tracked by the system in storage funds.
+///
+/// Objects deleted, including the older versions of objects mutated, have the storage field
+/// on the objects added up to a pool of "potential rebate". This rebate then is reduced
+/// by the "nonrefundable rate" such that:
+/// `potential_rebate(storage cost of deleted/mutated objects) =
+/// storage_rebate + non_refundable_storage_fee`
+#[derive(Clone, Copy, PartialEq, ::prost::Message)]
+pub struct GasCostSummary {
+    /// Cost of computation/execution.
+    #[prost(uint64, optional, tag = "1")]
+    pub computation_cost: ::core::option::Option<u64>,
+    /// Storage cost, it's the sum of all storage cost for all objects created or mutated.
+    #[prost(uint64, optional, tag = "2")]
+    pub storage_cost: ::core::option::Option<u64>,
+    /// The amount of storage cost refunded to the user for all objects deleted or mutated in the
+    /// transaction.
+    #[prost(uint64, optional, tag = "3")]
+    pub storage_rebate: ::core::option::Option<u64>,
+    /// The fee for the rebate. The portion of the storage rebate kept by the system.
+    #[prost(uint64, optional, tag = "4")]
+    pub non_refundable_storage_fee: ::core::option::Option<u64>,
+}
+/// A signature from a user.
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct UserSignature {
+    #[prost(oneof = "user_signature::Signature", tags = "1, 2, 3, 4")]
+    pub signature: ::core::option::Option<user_signature::Signature>,
+}
+/// Nested message and enum types in `UserSignature`.
+pub mod user_signature {
+    #[derive(Clone, PartialEq, ::prost::Oneof)]
+    pub enum Signature {
+        #[prost(message, tag = "1")]
+        Simple(super::SimpleSignature),
+        #[prost(message, tag = "2")]
+        Multisig(super::MultisigAggregatedSignature),
+        #[prost(message, tag = "3")]
+        Zklogin(super::ZkLoginAuthenticator),
+        #[prost(message, tag = "4")]
+        Passkey(super::PasskeyAuthenticator),
+    }
+}
+/// A basic signature.
+///
+/// Can either be an ed25519, secp256k1, or secp256r1 signature with
+/// corresponding public key.
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct SimpleSignature {
+    /// The signature scheme of the signautre and public key, which should be an
+    /// enum value of [sui.types.SignatureScheme][sui.types.SignatureScheme]
+    #[prost(int32, optional, tag = "1")]
+    pub scheme: ::core::option::Option<i32>,
+    /// Signature bytes.
+    #[prost(bytes = "bytes", optional, tag = "2")]
+    pub signature: ::core::option::Option<::prost::bytes::Bytes>,
+    /// Public key bytes.
+    #[prost(bytes = "bytes", optional, tag = "3")]
+    pub public_key: ::core::option::Option<::prost::bytes::Bytes>,
+}
+/// Public key equivalent for zklogin authenticators.
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct ZkLoginPublicIdentifier {
+    #[prost(string, optional, tag = "1")]
+    pub iss: ::core::option::Option<::prost::alloc::string::String>,
+    /// base10 encoded Bn254FieldElement
+    #[prost(string, optional, tag = "2")]
+    pub address_seed: ::core::option::Option<::prost::alloc::string::String>,
+}
+/// Set of valid public keys for multisig committee members.
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct MultisigMemberPublicKey {
+    #[prost(oneof = "multisig_member_public_key::Scheme", tags = "1, 2, 3, 4")]
+    pub scheme: ::core::option::Option<multisig_member_public_key::Scheme>,
+}
+/// Nested message and enum types in `MultisigMemberPublicKey`.
+pub mod multisig_member_public_key {
+    #[derive(Clone, PartialEq, ::prost::Oneof)]
+    pub enum Scheme {
+        /// An ed25519 public key
+        #[prost(bytes, tag = "1")]
+        Ed25519(::prost::bytes::Bytes),
+        /// A secp256k1 public key
+        #[prost(bytes, tag = "2")]
+        Secp256k1(::prost::bytes::Bytes),
+        /// A secp256r1 public key
+        #[prost(bytes, tag = "3")]
+        Secp256r1(::prost::bytes::Bytes),
+        /// A zklogin public identifier
+        #[prost(message, tag = "4")]
+        Zklogin(super::ZkLoginPublicIdentifier),
+    }
+}
+/// A member in a multisig committee.
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct MultisigMember {
+    /// The public key of the committee member.
+    #[prost(message, optional, tag = "1")]
+    pub public_key: ::core::option::Option<MultisigMemberPublicKey>,
+    /// The weight of this member's signature.
+    #[prost(uint32, optional, tag = "2")]
+    pub weight: ::core::option::Option<u32>,
+}
+/// A multisig committee.
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct MultisigCommittee {
+    /// A list of committee members and their corresponding weight.
+    #[prost(message, repeated, tag = "1")]
+    pub members: ::prost::alloc::vec::Vec<MultisigMember>,
+    /// The threshold of signatures needed to validate a signature from
+    /// this committee.
+    #[prost(uint32, optional, tag = "2")]
+    pub threshold: ::core::option::Option<u32>,
+}
+/// Aggregated signature from members of a multisig committee.
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct MultisigAggregatedSignature {
+    /// The plain signatures encoded with signature scheme.
+    ///
+    /// The signatures must be in the same order as they are listed in the committee.
+    #[prost(message, repeated, tag = "1")]
+    pub signatures: ::prost::alloc::vec::Vec<MultisigMemberSignature>,
+    /// Bitmap indicating which committee members contributed to the
+    /// signature.
+    #[prost(uint32, optional, tag = "2")]
+    pub bitmap: ::core::option::Option<u32>,
+    /// If present, means this signature's on-chain format uses the old
+    /// legacy multisig format.
+    #[prost(message, optional, tag = "3")]
+    pub legacy_bitmap: ::core::option::Option<RoaringBitmap>,
+    /// The committee to use to validate this signature.
+    #[prost(message, optional, tag = "4")]
+    pub committee: ::core::option::Option<MultisigCommittee>,
+}
+/// A signature from a member of a multisig committee.
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct MultisigMemberSignature {
+    #[prost(oneof = "multisig_member_signature::Signature", tags = "1, 2, 3, 4")]
+    pub signature: ::core::option::Option<multisig_member_signature::Signature>,
+}
+/// Nested message and enum types in `MultisigMemberSignature`.
+pub mod multisig_member_signature {
+    #[derive(Clone, PartialEq, ::prost::Oneof)]
+    pub enum Signature {
+        /// An ed25519 signature.
+        #[prost(bytes, tag = "1")]
+        Ed25519(::prost::bytes::Bytes),
+        /// A secp256k1 signature.
+        #[prost(bytes, tag = "2")]
+        Secp256k1(::prost::bytes::Bytes),
+        /// A secp256r1 signature.
+        #[prost(bytes, tag = "3")]
+        Secp256r1(::prost::bytes::Bytes),
+        /// A zklogin signature.
+        #[prost(message, tag = "4")]
+        Zklogin(super::ZkLoginAuthenticator),
+    }
+}
+/// A zklogin authenticator.
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct ZkLoginAuthenticator {
+    /// Zklogin proof and inputs required to perform proof verification.
+    #[prost(message, optional, tag = "1")]
+    pub inputs: ::core::option::Option<ZkLoginInputs>,
+    /// Maximum epoch for which the proof is valid.
+    #[prost(uint64, optional, tag = "2")]
+    pub max_epoch: ::core::option::Option<u64>,
+    /// User signature with the public key attested to by the provided proof.
+    #[prost(message, optional, tag = "3")]
+    pub signature: ::core::option::Option<SimpleSignature>,
+}
+/// A zklogin groth16 proof and the required inputs to perform proof verification.
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct ZkLoginInputs {
+    #[prost(message, optional, tag = "1")]
+    pub proof_points: ::core::option::Option<ZkLoginProof>,
+    #[prost(message, optional, tag = "2")]
+    pub iss_base64_details: ::core::option::Option<ZkLoginClaim>,
+    #[prost(string, optional, tag = "3")]
+    pub header_base64: ::core::option::Option<::prost::alloc::string::String>,
+    /// base10 encoded Bn254FieldElement
+    #[prost(string, optional, tag = "4")]
+    pub address_seed: ::core::option::Option<::prost::alloc::string::String>,
+}
+/// A zklogin groth16 proof.
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct ZkLoginProof {
+    #[prost(message, optional, tag = "1")]
+    pub a: ::core::option::Option<CircomG1>,
+    #[prost(message, optional, tag = "2")]
+    pub b: ::core::option::Option<CircomG2>,
+    #[prost(message, optional, tag = "3")]
+    pub c: ::core::option::Option<CircomG1>,
+}
+/// A claim of the iss in a zklogin proof.
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct ZkLoginClaim {
+    #[prost(string, optional, tag = "1")]
+    pub value: ::core::option::Option<::prost::alloc::string::String>,
+    #[prost(uint32, optional, tag = "2")]
+    pub index_mod_4: ::core::option::Option<u32>,
+}
+/// A G1 point.
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct CircomG1 {
+    /// base10 encoded Bn254FieldElement
+    #[prost(string, optional, tag = "1")]
+    pub e0: ::core::option::Option<::prost::alloc::string::String>,
+    /// base10 encoded Bn254FieldElement
+    #[prost(string, optional, tag = "2")]
+    pub e1: ::core::option::Option<::prost::alloc::string::String>,
+    /// base10 encoded Bn254FieldElement
+    #[prost(string, optional, tag = "3")]
+    pub e2: ::core::option::Option<::prost::alloc::string::String>,
+}
+/// A G2 point.
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct CircomG2 {
+    /// base10 encoded Bn254FieldElement
+    #[prost(string, optional, tag = "1")]
+    pub e00: ::core::option::Option<::prost::alloc::string::String>,
+    /// base10 encoded Bn254FieldElement
+    #[prost(string, optional, tag = "2")]
+    pub e01: ::core::option::Option<::prost::alloc::string::String>,
+    /// base10 encoded Bn254FieldElement
+    #[prost(string, optional, tag = "3")]
+    pub e10: ::core::option::Option<::prost::alloc::string::String>,
+    /// base10 encoded Bn254FieldElement
+    #[prost(string, optional, tag = "4")]
+    pub e11: ::core::option::Option<::prost::alloc::string::String>,
+    /// base10 encoded Bn254FieldElement
+    #[prost(string, optional, tag = "5")]
+    pub e20: ::core::option::Option<::prost::alloc::string::String>,
+    /// base10 encoded Bn254FieldElement
+    #[prost(string, optional, tag = "6")]
+    pub e21: ::core::option::Option<::prost::alloc::string::String>,
+}
+/// A passkey authenticator.
+///
+/// See
+/// [struct.PasskeyAuthenticator](<https://mystenlabs.github.io/sui-rust-sdk/sui_sdk_types/struct.PasskeyAuthenticator.html#bcs>)
+/// for more information on the requirements on the shape of the
+/// `client_data_json` field.
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct PasskeyAuthenticator {
+    /// Opaque authenticator data for this passkey signature.
+    ///
+    /// See [Authenticator Data](<https://www.w3.org/TR/webauthn-2/#sctn-authenticator-data>) for
+    /// more information on this field.
+    #[prost(bytes = "bytes", optional, tag = "1")]
+    pub authenticator_data: ::core::option::Option<::prost::bytes::Bytes>,
+    /// Structured, unparsed, JSON for this passkey signature.
+    ///
+    /// See [CollectedClientData](<https://www.w3.org/TR/webauthn-2/#dictdef-collectedclientdata>)
+    /// for more information on this field.
+    #[prost(string, optional, tag = "2")]
+    pub client_data_json: ::core::option::Option<::prost::alloc::string::String>,
+    /// A secp256r1 signature.
+    #[prost(message, optional, tag = "3")]
+    pub signature: ::core::option::Option<SimpleSignature>,
+}
+/// The validator set for a particular epoch.
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct ValidatorCommittee {
+    /// The epoch where this committee governs.
+    #[prost(uint64, optional, tag = "1")]
+    pub epoch: ::core::option::Option<u64>,
+    /// The committee members.
+    #[prost(message, repeated, tag = "2")]
+    pub members: ::prost::alloc::vec::Vec<ValidatorCommitteeMember>,
+}
+/// A member of a validator committee.
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct ValidatorCommitteeMember {
+    /// The 96-byte Bls12381 public key for this validator.
+    #[prost(bytes = "bytes", optional, tag = "1")]
+    pub public_key: ::core::option::Option<::prost::bytes::Bytes>,
+    /// Stake weight this validator possesses.
+    #[prost(uint64, optional, tag = "2")]
+    pub stake: ::core::option::Option<u64>,
+}
+/// / An aggregated signature from multiple validators.
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct ValidatorAggregatedSignature {
+    /// The epoch when this signature was produced.
+    ///
+    /// This can be used to lookup the `ValidatorCommittee` from this epoch
+    /// to verify this signature.
+    #[prost(uint64, optional, tag = "1")]
+    pub epoch: ::core::option::Option<u64>,
+    /// The 48-byte Bls12381 aggregated signature.
+    #[prost(bytes = "bytes", optional, tag = "2")]
+    pub signature: ::core::option::Option<::prost::bytes::Bytes>,
+    /// Bitmap indicating which members of the committee contributed to
+    /// this signature.
+    #[prost(message, optional, tag = "3")]
+    pub bitmap: ::core::option::Option<RoaringBitmap>,
+}
+/// A RoaringBitmap. See
+/// [RoaringFormatSpec](<https://github.com/RoaringBitmap/RoaringFormatSpec>) for the
+/// specification for the serialized format of `RoaringBitmap`s.
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct RoaringBitmap {
+    /// Serialized `RoaringBitmap`.
+    #[prost(bytes = "bytes", optional, tag = "1")]
+    pub bitmap: ::core::option::Option<::prost::bytes::Bytes>,
+}
 /// Flag use to disambiguate the signature schemes supported by Sui.
 ///
 /// Note: the enum values defined by this proto message exactly match their
@@ -147,39 +500,6 @@ pub struct EndOfEpochData {
     /// Commitments to epoch specific state (live object set)
     #[prost(message, repeated, tag = "3")]
     pub epoch_commitments: ::prost::alloc::vec::Vec<CheckpointCommitment>,
-}
-/// Transaction information committed to in a checkpoint.
-#[derive(Clone, PartialEq, ::prost::Message)]
-pub struct CheckpointedTransactionInfo {
-    /// Digest of the transaction.
-    #[prost(string, optional, tag = "1")]
-    pub transaction: ::core::option::Option<::prost::alloc::string::String>,
-    /// Digest of the effects.
-    #[prost(string, optional, tag = "2")]
-    pub effects: ::core::option::Option<::prost::alloc::string::String>,
-    /// Set of user signatures that authorized the transaction.
-    #[prost(message, repeated, tag = "3")]
-    pub signatures: ::prost::alloc::vec::Vec<UserSignature>,
-}
-/// The committed to contents of a checkpoint.
-#[derive(Clone, PartialEq, ::prost::Message)]
-pub struct CheckpointContents {
-    #[prost(oneof = "checkpoint_contents::Contents", tags = "1")]
-    pub contents: ::core::option::Option<checkpoint_contents::Contents>,
-}
-/// Nested message and enum types in `CheckpointContents`.
-pub mod checkpoint_contents {
-    /// Version 1 of `CheckpointContents`.
-    #[derive(Clone, PartialEq, ::prost::Message)]
-    pub struct V1 {
-        #[prost(message, repeated, tag = "1")]
-        pub transactions: ::prost::alloc::vec::Vec<super::CheckpointedTransactionInfo>,
-    }
-    #[derive(Clone, PartialEq, ::prost::Oneof)]
-    pub enum Contents {
-        #[prost(message, tag = "1")]
-        V1(V1),
-    }
 }
 /// Events emitted during the successful execution of a transaction.
 #[derive(Clone, PartialEq, ::prost::Message)]
@@ -369,46 +689,6 @@ pub struct GenesisObject {
     pub owner: ::core::option::Option<Owner>,
     #[prost(message, optional, tag = "4")]
     pub object: ::core::option::Option<ObjectData>,
-}
-/// Summary of gas charges.
-///
-/// Storage is charged independently of computation.
-/// There are three parts to the storage charges:
-/// - `storage_cost`: the charge of storage at the time the transaction is executed.
-///                  The cost of storage is the number of bytes of the objects being mutated
-///                  multiplied by a variable storage cost per byte.
-/// - `storage_rebate`: the amount a user gets back when manipulating an object.
-///                    The `storage_rebate` is the `storage_cost` for an object minus fees.
-/// - `non_refundable_storage_fee`: not all the value of the object storage cost is
-///                                given back to user and there is a small fraction that
-///                                is kept by the system. This value tracks that charge.
-///
-/// When looking at a gas cost summary the amount charged to the user is
-/// `computation_cost + storage_cost - storage_rebate`
-/// and that is the amount that is deducted from the gas coins.
-/// `non_refundable_storage_fee` is collected from the objects being mutated/deleted
-/// and it is tracked by the system in storage funds.
-///
-/// Objects deleted, including the older versions of objects mutated, have the storage field
-/// on the objects added up to a pool of "potential rebate". This rebate then is reduced
-/// by the "nonrefundable rate" such that:
-/// `potential_rebate(storage cost of deleted/mutated objects) =
-/// storage_rebate + non_refundable_storage_fee`
-#[derive(Clone, Copy, PartialEq, ::prost::Message)]
-pub struct GasCostSummary {
-    /// Cost of computation/execution.
-    #[prost(uint64, optional, tag = "1")]
-    pub computation_cost: ::core::option::Option<u64>,
-    /// Storage cost, it's the sum of all storage cost for all objects created or mutated.
-    #[prost(uint64, optional, tag = "2")]
-    pub storage_cost: ::core::option::Option<u64>,
-    /// The amount of storage cost refunded to the user for all objects deleted or mutated in the
-    /// transaction.
-    #[prost(uint64, optional, tag = "3")]
-    pub storage_rebate: ::core::option::Option<u64>,
-    /// The fee for the rebate. The portion of the storage rebate kept by the system.
-    #[prost(uint64, optional, tag = "4")]
-    pub non_refundable_storage_fee: ::core::option::Option<u64>,
 }
 /// A transaction.
 #[derive(Clone, PartialEq, ::prost::Message)]
@@ -1625,287 +1905,33 @@ pub mod type_argument_error {
         ConstraintNotSatisfied(()),
     }
 }
-/// A signature from a user.
-#[derive(Clone, PartialEq, ::prost::Message)]
-pub struct UserSignature {
-    #[prost(oneof = "user_signature::Signature", tags = "1, 2, 3, 4")]
-    pub signature: ::core::option::Option<user_signature::Signature>,
+/// Flag used to indicate the version of a type.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, ::prost::Enumeration)]
+#[repr(i32)]
+pub enum Version {
+    Unknown = 0,
+    V1 = 1,
+    V2 = 2,
 }
-/// Nested message and enum types in `UserSignature`.
-pub mod user_signature {
-    #[derive(Clone, PartialEq, ::prost::Oneof)]
-    pub enum Signature {
-        #[prost(message, tag = "1")]
-        Simple(super::SimpleSignature),
-        #[prost(message, tag = "2")]
-        Multisig(super::MultisigAggregatedSignature),
-        #[prost(message, tag = "3")]
-        Zklogin(super::ZkLoginAuthenticator),
-        #[prost(message, tag = "4")]
-        Passkey(super::PasskeyAuthenticator),
+impl Version {
+    /// String value of the enum field names used in the ProtoBuf definition.
+    ///
+    /// The values are not transformed in any way and thus are considered stable
+    /// (if the ProtoBuf definition does not change) and safe for programmatic use.
+    pub fn as_str_name(&self) -> &'static str {
+        match self {
+            Self::Unknown => "VERSION_UNKNOWN",
+            Self::V1 => "V1",
+            Self::V2 => "V2",
+        }
     }
-}
-/// A basic signature.
-///
-/// Can either be an ed25519, secp256k1, or secp256r1 signature with
-/// corresponding public key.
-#[derive(Clone, PartialEq, ::prost::Message)]
-pub struct SimpleSignature {
-    /// The signature scheme of the signautre and public key, which should be an
-    /// enum value of [sui.types.SignatureScheme][sui.types.SignatureScheme]
-    #[prost(int32, optional, tag = "1")]
-    pub scheme: ::core::option::Option<i32>,
-    /// Signature bytes.
-    #[prost(bytes = "bytes", optional, tag = "2")]
-    pub signature: ::core::option::Option<::prost::bytes::Bytes>,
-    /// Public key bytes.
-    #[prost(bytes = "bytes", optional, tag = "3")]
-    pub public_key: ::core::option::Option<::prost::bytes::Bytes>,
-}
-/// Public key equivalent for zklogin authenticators.
-#[derive(Clone, PartialEq, ::prost::Message)]
-pub struct ZkLoginPublicIdentifier {
-    #[prost(string, optional, tag = "1")]
-    pub iss: ::core::option::Option<::prost::alloc::string::String>,
-    /// base10 encoded Bn254FieldElement
-    #[prost(string, optional, tag = "2")]
-    pub address_seed: ::core::option::Option<::prost::alloc::string::String>,
-}
-/// Set of valid public keys for multisig committee members.
-#[derive(Clone, PartialEq, ::prost::Message)]
-pub struct MultisigMemberPublicKey {
-    #[prost(oneof = "multisig_member_public_key::Scheme", tags = "1, 2, 3, 4")]
-    pub scheme: ::core::option::Option<multisig_member_public_key::Scheme>,
-}
-/// Nested message and enum types in `MultisigMemberPublicKey`.
-pub mod multisig_member_public_key {
-    #[derive(Clone, PartialEq, ::prost::Oneof)]
-    pub enum Scheme {
-        /// An ed25519 public key
-        #[prost(bytes, tag = "1")]
-        Ed25519(::prost::bytes::Bytes),
-        /// A secp256k1 public key
-        #[prost(bytes, tag = "2")]
-        Secp256k1(::prost::bytes::Bytes),
-        /// A secp256r1 public key
-        #[prost(bytes, tag = "3")]
-        Secp256r1(::prost::bytes::Bytes),
-        /// A zklogin public identifier
-        #[prost(message, tag = "4")]
-        Zklogin(super::ZkLoginPublicIdentifier),
+    /// Creates an enum from field names used in the ProtoBuf definition.
+    pub fn from_str_name(value: &str) -> ::core::option::Option<Self> {
+        match value {
+            "VERSION_UNKNOWN" => Some(Self::Unknown),
+            "V1" => Some(Self::V1),
+            "V2" => Some(Self::V2),
+            _ => None,
+        }
     }
-}
-/// A member in a multisig committee.
-#[derive(Clone, PartialEq, ::prost::Message)]
-pub struct MultisigMember {
-    /// The public key of the committee member.
-    #[prost(message, optional, tag = "1")]
-    pub public_key: ::core::option::Option<MultisigMemberPublicKey>,
-    /// The weight of this member's signature.
-    #[prost(uint32, optional, tag = "2")]
-    pub weight: ::core::option::Option<u32>,
-}
-/// A multisig committee.
-#[derive(Clone, PartialEq, ::prost::Message)]
-pub struct MultisigCommittee {
-    /// A list of committee members and their corresponding weight.
-    #[prost(message, repeated, tag = "1")]
-    pub members: ::prost::alloc::vec::Vec<MultisigMember>,
-    /// The threshold of signatures needed to validate a signature from
-    /// this committee.
-    #[prost(uint32, optional, tag = "2")]
-    pub threshold: ::core::option::Option<u32>,
-}
-/// Aggregated signature from members of a multisig committee.
-#[derive(Clone, PartialEq, ::prost::Message)]
-pub struct MultisigAggregatedSignature {
-    /// The plain signatures encoded with signature scheme.
-    ///
-    /// The signatures must be in the same order as they are listed in the committee.
-    #[prost(message, repeated, tag = "1")]
-    pub signatures: ::prost::alloc::vec::Vec<MultisigMemberSignature>,
-    /// Bitmap indicating which committee members contributed to the
-    /// signature.
-    #[prost(uint32, optional, tag = "2")]
-    pub bitmap: ::core::option::Option<u32>,
-    /// If present, means this signature's on-chain format uses the old
-    /// legacy multisig format.
-    #[prost(message, optional, tag = "3")]
-    pub legacy_bitmap: ::core::option::Option<RoaringBitmap>,
-    /// The committee to use to validate this signature.
-    #[prost(message, optional, tag = "4")]
-    pub committee: ::core::option::Option<MultisigCommittee>,
-}
-/// A signature from a member of a multisig committee.
-#[derive(Clone, PartialEq, ::prost::Message)]
-pub struct MultisigMemberSignature {
-    #[prost(oneof = "multisig_member_signature::Signature", tags = "1, 2, 3, 4")]
-    pub signature: ::core::option::Option<multisig_member_signature::Signature>,
-}
-/// Nested message and enum types in `MultisigMemberSignature`.
-pub mod multisig_member_signature {
-    #[derive(Clone, PartialEq, ::prost::Oneof)]
-    pub enum Signature {
-        /// An ed25519 signature.
-        #[prost(bytes, tag = "1")]
-        Ed25519(::prost::bytes::Bytes),
-        /// A secp256k1 signature.
-        #[prost(bytes, tag = "2")]
-        Secp256k1(::prost::bytes::Bytes),
-        /// A secp256r1 signature.
-        #[prost(bytes, tag = "3")]
-        Secp256r1(::prost::bytes::Bytes),
-        /// A zklogin signature.
-        #[prost(message, tag = "4")]
-        Zklogin(super::ZkLoginAuthenticator),
-    }
-}
-/// A zklogin authenticator.
-#[derive(Clone, PartialEq, ::prost::Message)]
-pub struct ZkLoginAuthenticator {
-    /// Zklogin proof and inputs required to perform proof verification.
-    #[prost(message, optional, tag = "1")]
-    pub inputs: ::core::option::Option<ZkLoginInputs>,
-    /// Maximum epoch for which the proof is valid.
-    #[prost(uint64, optional, tag = "2")]
-    pub max_epoch: ::core::option::Option<u64>,
-    /// User signature with the public key attested to by the provided proof.
-    #[prost(message, optional, tag = "3")]
-    pub signature: ::core::option::Option<SimpleSignature>,
-}
-/// A zklogin groth16 proof and the required inputs to perform proof verification.
-#[derive(Clone, PartialEq, ::prost::Message)]
-pub struct ZkLoginInputs {
-    #[prost(message, optional, tag = "1")]
-    pub proof_points: ::core::option::Option<ZkLoginProof>,
-    #[prost(message, optional, tag = "2")]
-    pub iss_base64_details: ::core::option::Option<ZkLoginClaim>,
-    #[prost(string, optional, tag = "3")]
-    pub header_base64: ::core::option::Option<::prost::alloc::string::String>,
-    /// base10 encoded Bn254FieldElement
-    #[prost(string, optional, tag = "4")]
-    pub address_seed: ::core::option::Option<::prost::alloc::string::String>,
-}
-/// A zklogin groth16 proof.
-#[derive(Clone, PartialEq, ::prost::Message)]
-pub struct ZkLoginProof {
-    #[prost(message, optional, tag = "1")]
-    pub a: ::core::option::Option<CircomG1>,
-    #[prost(message, optional, tag = "2")]
-    pub b: ::core::option::Option<CircomG2>,
-    #[prost(message, optional, tag = "3")]
-    pub c: ::core::option::Option<CircomG1>,
-}
-/// A claim of the iss in a zklogin proof.
-#[derive(Clone, PartialEq, ::prost::Message)]
-pub struct ZkLoginClaim {
-    #[prost(string, optional, tag = "1")]
-    pub value: ::core::option::Option<::prost::alloc::string::String>,
-    #[prost(uint32, optional, tag = "2")]
-    pub index_mod_4: ::core::option::Option<u32>,
-}
-/// A G1 point.
-#[derive(Clone, PartialEq, ::prost::Message)]
-pub struct CircomG1 {
-    /// base10 encoded Bn254FieldElement
-    #[prost(string, optional, tag = "1")]
-    pub e0: ::core::option::Option<::prost::alloc::string::String>,
-    /// base10 encoded Bn254FieldElement
-    #[prost(string, optional, tag = "2")]
-    pub e1: ::core::option::Option<::prost::alloc::string::String>,
-    /// base10 encoded Bn254FieldElement
-    #[prost(string, optional, tag = "3")]
-    pub e2: ::core::option::Option<::prost::alloc::string::String>,
-}
-/// A G2 point.
-#[derive(Clone, PartialEq, ::prost::Message)]
-pub struct CircomG2 {
-    /// base10 encoded Bn254FieldElement
-    #[prost(string, optional, tag = "1")]
-    pub e00: ::core::option::Option<::prost::alloc::string::String>,
-    /// base10 encoded Bn254FieldElement
-    #[prost(string, optional, tag = "2")]
-    pub e01: ::core::option::Option<::prost::alloc::string::String>,
-    /// base10 encoded Bn254FieldElement
-    #[prost(string, optional, tag = "3")]
-    pub e10: ::core::option::Option<::prost::alloc::string::String>,
-    /// base10 encoded Bn254FieldElement
-    #[prost(string, optional, tag = "4")]
-    pub e11: ::core::option::Option<::prost::alloc::string::String>,
-    /// base10 encoded Bn254FieldElement
-    #[prost(string, optional, tag = "5")]
-    pub e20: ::core::option::Option<::prost::alloc::string::String>,
-    /// base10 encoded Bn254FieldElement
-    #[prost(string, optional, tag = "6")]
-    pub e21: ::core::option::Option<::prost::alloc::string::String>,
-}
-/// A passkey authenticator.
-///
-/// See
-/// [struct.PasskeyAuthenticator](<https://mystenlabs.github.io/sui-rust-sdk/sui_sdk_types/struct.PasskeyAuthenticator.html#bcs>)
-/// for more information on the requirements on the shape of the
-/// `client_data_json` field.
-#[derive(Clone, PartialEq, ::prost::Message)]
-pub struct PasskeyAuthenticator {
-    /// Opaque authenticator data for this passkey signature.
-    ///
-    /// See [Authenticator Data](<https://www.w3.org/TR/webauthn-2/#sctn-authenticator-data>) for
-    /// more information on this field.
-    #[prost(bytes = "bytes", optional, tag = "1")]
-    pub authenticator_data: ::core::option::Option<::prost::bytes::Bytes>,
-    /// Structured, unparsed, JSON for this passkey signature.
-    ///
-    /// See [CollectedClientData](<https://www.w3.org/TR/webauthn-2/#dictdef-collectedclientdata>)
-    /// for more information on this field.
-    #[prost(string, optional, tag = "2")]
-    pub client_data_json: ::core::option::Option<::prost::alloc::string::String>,
-    /// A secp256r1 signature.
-    #[prost(message, optional, tag = "3")]
-    pub signature: ::core::option::Option<SimpleSignature>,
-}
-/// The validator set for a particular epoch.
-#[derive(Clone, PartialEq, ::prost::Message)]
-pub struct ValidatorCommittee {
-    /// The epoch where this committee governs.
-    #[prost(uint64, optional, tag = "1")]
-    pub epoch: ::core::option::Option<u64>,
-    /// The committee members.
-    #[prost(message, repeated, tag = "2")]
-    pub members: ::prost::alloc::vec::Vec<ValidatorCommitteeMember>,
-}
-/// A member of a validator committee.
-#[derive(Clone, PartialEq, ::prost::Message)]
-pub struct ValidatorCommitteeMember {
-    /// The 96-byte Bls12381 public key for this validator.
-    #[prost(bytes = "bytes", optional, tag = "1")]
-    pub public_key: ::core::option::Option<::prost::bytes::Bytes>,
-    /// Stake weight this validator possesses.
-    #[prost(uint64, optional, tag = "2")]
-    pub stake: ::core::option::Option<u64>,
-}
-/// / An aggregated signature from multiple validators.
-#[derive(Clone, PartialEq, ::prost::Message)]
-pub struct ValidatorAggregatedSignature {
-    /// The epoch when this signature was produced.
-    ///
-    /// This can be used to lookup the `ValidatorCommittee` from this epoch
-    /// to verify this signature.
-    #[prost(uint64, optional, tag = "1")]
-    pub epoch: ::core::option::Option<u64>,
-    /// The 48-byte Bls12381 aggregated signature.
-    #[prost(bytes = "bytes", optional, tag = "2")]
-    pub signature: ::core::option::Option<::prost::bytes::Bytes>,
-    /// Bitmap indicating which members of the committee contributed to
-    /// this signature.
-    #[prost(message, optional, tag = "3")]
-    pub bitmap: ::core::option::Option<RoaringBitmap>,
-}
-/// A RoaringBitmap. See
-/// [RoaringFormatSpec](<https://github.com/RoaringBitmap/RoaringFormatSpec>) for the
-/// specification for the serialized format of `RoaringBitmap`s.
-#[derive(Clone, PartialEq, ::prost::Message)]
-pub struct RoaringBitmap {
-    /// Serialized `RoaringBitmap`.
-    #[prost(bytes = "bytes", optional, tag = "1")]
-    pub bitmap: ::core::option::Option<::prost::bytes::Bytes>,
 }

@@ -290,12 +290,11 @@ impl TryFrom<&super::CheckpointedTransactionInfo> for sui_sdk_types::CheckpointT
 
 impl From<sui_sdk_types::CheckpointContents> for super::CheckpointContents {
     fn from(value: sui_sdk_types::CheckpointContents) -> Self {
-        let contents = super::checkpoint_contents::Contents::V1(super::checkpoint_contents::V1 {
-            transactions: value.into_v1().into_iter().map(Into::into).collect(),
-        });
-
         Self {
-            contents: Some(contents),
+            bcs: None,
+            digest: Some(value.digest().to_string()),
+            version: Some(super::Version::V1.into()),
+            transactions: value.into_v1().into_iter().map(Into::into).collect(),
         }
     }
 }
@@ -304,18 +303,19 @@ impl TryFrom<&super::CheckpointContents> for sui_sdk_types::CheckpointContents {
     type Error = TryFromProtoError;
 
     fn try_from(value: &super::CheckpointContents) -> Result<Self, Self::Error> {
-        match value
-            .contents
-            .as_ref()
-            .ok_or_else(|| TryFromProtoError::missing("commitment"))?
-        {
-            super::checkpoint_contents::Contents::V1(v1) => Self::new(
-                v1.transactions
-                    .iter()
-                    .map(TryInto::try_into)
-                    .collect::<Result<_, _>>()?,
-            ),
+        match value.version() {
+            super::Version::V1 => {}
+            _ => {
+                return Err(TryFromProtoError::from_error("unknown type version"));
+            }
         }
-        .pipe(Ok)
+
+        Ok(Self::new(
+            value
+                .transactions
+                .iter()
+                .map(TryInto::try_into)
+                .collect::<Result<_, _>>()?,
+        ))
     }
 }

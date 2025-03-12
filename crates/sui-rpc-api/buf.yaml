@@ -15,6 +15,7 @@ modules:
           - proto/sui/types
         ENUM_VALUE_PREFIX:
           - proto/sui/types/signature_scheme.proto
+          - proto/sui/types/version.proto
         ENUM_ZERO_VALUE_SUFFIX:
           - proto/sui/types/signature_scheme.proto
 

@@ -10,7 +10,6 @@ package sui.node.v2alpha;
 import "google/protobuf/field_mask.proto";
 import "sui/node/v2/node_service.proto";
 import "sui/types/bcs.proto";
-import "sui/types/types.proto";
 
 // Service for reading data from a Sui Full node.
 service NodeService {
