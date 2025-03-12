@@ -233,7 +233,7 @@ impl<const HAS_SOURCE: usize> Model<HAS_SOURCE> {
         self.root_package_name
     }
 
-    pub fn maybe_package(&self, addr: &AccountAddress) -> Option<Package<'_, HAS_SOURCE>> {
+    pub fn maybe_package<'a>(&'a self, addr: &AccountAddress) -> Option<Package<'a, HAS_SOURCE>> {
         let data = self.packages.get(addr)?;
         Some(Package {
             addr: *addr,
@@ -242,13 +242,13 @@ impl<const HAS_SOURCE: usize> Model<HAS_SOURCE> {
             data,
         })
     }
-    pub fn package(&self, addr: &AccountAddress) -> Package<'_, HAS_SOURCE> {
+    pub fn package<'a>(&'a self, addr: &AccountAddress) -> Package<'a, HAS_SOURCE> {
         self.maybe_package(addr).unwrap()
     }
 
     /// The name of the package corresponds to the name for the address in the root package's
     /// named address map. This is not the name of the package in the Move.toml file.
-    pub fn package_by_name(&self, name: &Symbol) -> Option<Package<'_, HAS_SOURCE>> {
+    pub fn package_by_name<'a>(&'a self, name: &Symbol) -> Option<Package<'a, HAS_SOURCE>> {
         let addr = self.root_named_address_map.get(name)?;
         self.maybe_package(addr)
     }
@@ -366,14 +366,14 @@ impl<'a, const HAS_SOURCE: usize> Module<'a, HAS_SOURCE> {
         self.maybe_function(name).unwrap()
     }
 
-    pub fn maybe_datatype(&self, name: impl Into<Symbol>) -> Option<Datatype<'_, HAS_SOURCE>> {
+    pub fn maybe_datatype(&self, name: impl Into<Symbol>) -> Option<Datatype<'a, HAS_SOURCE>> {
         let name = name.into();
         self.maybe_struct(name)
             .map(Datatype::Struct)
             .or_else(|| self.maybe_enum(name).map(Datatype::Enum))
     }
 
-    pub fn datatype(&self, name: impl Into<Symbol>) -> Datatype<'_, HAS_SOURCE> {
+    pub fn datatype(&self, name: impl Into<Symbol>) -> Datatype<'a, HAS_SOURCE> {
         self.maybe_datatype(name).unwrap()
     }
 
