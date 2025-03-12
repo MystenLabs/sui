@@ -1983,7 +1983,7 @@ pub(crate) async fn compile_package(
         == 0
     {
         return Err(SuiError::ModulePublishFailure {
-            error: "No modules found in theom    package".to_string(),
+            error: "No modules found in the package".to_string(),
         }
         .into());
     }
