@@ -104,7 +104,9 @@ impl TreeShakingTest {
         let temp_dir = tempfile::Builder::new().prefix("tree_shaking").tempdir()?;
         std::fs::create_dir_all(temp_dir.path()).unwrap();
         let tests_dir = PathBuf::from(TEST_DATA_DIR);
+        let framework_pkgs = PathBuf::from("../sui-framework/packages");
         copy_dir_all(tests_dir, temp_dir.path())?;
+        copy_dir_all(framework_pkgs, temp_dir.path().join("system-packages"))?;
 
         Ok(Self {
             test_cluster,
@@ -277,10 +279,15 @@ pub async fn fetch_move_packages(
         .collect()
 }
 
-fn add_published_id_to_manifest(
+/// Adds the `published-at` field to the Move.toml file. Pass in the `address_id` if you want to
+/// set the `addresses` field in the Move.toml file.
+///
+/// Note that address_id works only if there's one item in the addresses section. It does not know
+/// how to handle multiple addresses / addresses from deps.
+fn add_ids_to_manifest(
     package_path: &Path,
-    package_id: &ObjectID,
-    add_to_address_section: bool,
+    published_at_id: &ObjectID,
+    address_id: Option<ObjectID>,
 ) -> Result<(), anyhow::Error> {
     let content = std::fs::read_to_string(package_path.join("Move.toml"))?;
     let mut toml: toml::Value = toml::from_str(&content)?;
@@ -288,19 +295,19 @@ fn add_published_id_to_manifest(
         if let Some(tbl) = tbl.as_table_mut() {
             tbl.insert(
                 "published-at".to_string(),
-                toml::Value::String(package_id.to_hex_uncompressed()),
+                toml::Value::String(published_at_id.to_hex_uncompressed()),
             );
         }
     }
 
-    if add_to_address_section {
-        if let Some(tbl) = toml.get_mut("addresses") {
-            if let Some(tbl) = tbl.as_table_mut() {
-                tbl.insert(
-                    "a".to_string(),
-                    toml::Value::String(package_id.to_hex_uncompressed()),
-                );
-            }
+    if let (Some(address_id), Some(tbl)) = (address_id, toml.get_mut("addresses")) {
+        if let Some(tbl) = tbl.as_table_mut() {
+            // Get the first address item
+            let first_key = tbl.keys().next().unwrap();
+            tbl.insert(
+                first_key.to_string(),
+                toml::Value::String(address_id.to_hex_uncompressed()),
+            );
         }
     }
 
@@ -1877,7 +1884,7 @@ async fn test_package_publish_nonexistent_dependency() -> Result<(), anyhow::Err
 
     let err = result.unwrap_err().to_string();
     assert!(
-        err.contains("Dependency object does not exist or was deleted"),
+        err.contains("Failed to fetch package Nonexistent"),
         "{}",
         err
     );
@@ -4247,7 +4254,7 @@ async fn test_tree_shaking_package_with_bytecode_deps() -> Result<(), anyhow::Er
     // make pkg a to be a bytecode dep for package F
     // set published-at field to package id and addresses a to package id
     let package_path = test.package_path("A");
-    add_published_id_to_manifest(&package_path, &package_a_id, true)?;
+    add_ids_to_manifest(&package_path, &package_a_id, Some(package_a_id))?;
 
     // delete the sources folder from pkg A to setup A as bytecode dep for package F
     fs::remove_file(package_path.join("Move.lock"))?;
@@ -4331,7 +4338,7 @@ async fn test_tree_shaking_package_with_unused_dependency() -> Result<(), anyhow
 }
 
 #[sim_test]
-async fn test_tree_shaking_package_with_transitive_dependencies() -> Result<(), anyhow::Error> {
+async fn test_tree_shaking_package_with_transitive_dependencies1() -> Result<(), anyhow::Error> {
     let mut test = TreeShakingTest::new().await?;
 
     // Publish packages A and B
@@ -4463,7 +4470,7 @@ async fn test_tree_shaking_package_deps_on_pkg_upgrade_1() -> Result<(), anyhow:
     // Publish package A and D_depends_on_A_v1_but_no_code_references_A
     let (package_a_id, cap) = test.publish_package("A", false).await?;
     let package_path = test.package_path("A");
-    add_published_id_to_manifest(&package_path, &package_a_id, false)?;
+    add_ids_to_manifest(&package_path, &package_a_id, None)?;
     // Upgrade package A (named A_v1)
     std::fs::copy(
         test.package_path("A").join("Move.lock"),
@@ -4472,7 +4479,7 @@ async fn test_tree_shaking_package_deps_on_pkg_upgrade_1() -> Result<(), anyhow:
     let package_a_v1_id = test.upgrade_package("A_v1", cap).await?;
 
     let package_path = test.package_path("A_v1");
-    add_published_id_to_manifest(&package_path, &package_a_v1_id, false)?;
+    add_ids_to_manifest(&package_path, &package_a_v1_id, None)?;
 
     let package_d_id = test
         .publish_package_without_tree_shaking("D_depends_on_A_v1_but_no_code_references_A")
@@ -4485,10 +4492,10 @@ async fn test_tree_shaking_package_deps_on_pkg_upgrade_1() -> Result<(), anyhow:
 
     // published package D with the old stuff that isn't aware of automated address mgmt, so
     // need to update the published-at field in the manifest
-    add_published_id_to_manifest(
+    add_ids_to_manifest(
         &test.package_path("D_depends_on_A_v1_but_no_code_references_A"),
         &package_d_id,
-        false,
+        None,
     )?;
 
     // Upgrade package A (named A_v2)
@@ -4501,7 +4508,7 @@ async fn test_tree_shaking_package_deps_on_pkg_upgrade_1() -> Result<(), anyhow:
     // the old code for publishing a package from sui-test-transaction-builder does not know about
     // move.lock and so on, so we need to add manually the published-at address.
     let package_path = test.package_path("A_v2");
-    add_published_id_to_manifest(&package_path, &package_a_v2_id, false)?;
+    add_ids_to_manifest(&package_path, &package_a_v2_id, None)?;
 
     let (package_i_id, _) = test
         .publish_package(
@@ -4517,6 +4524,133 @@ async fn test_tree_shaking_package_deps_on_pkg_upgrade_1() -> Result<(), anyhow:
     assert!(linkage_table_i
         .get(&package_a_id)
         .is_some_and(|x| x.upgraded_id == package_a_v2_id), "Package I should depend on A_v2 after upgrade, and the UpgradeInfo should have matching ids");
+
+    Ok(())
+}
+
+#[sim_test]
+async fn test_tree_shaking_package_deps_on_pkg_upgrade_2() -> Result<(), anyhow::Error> {
+    let mut test = TreeShakingTest::new().await?;
+
+    // Publish package K
+    let (package_k_id, cap) = test.publish_package("K", false).await?;
+    let package_path = test.package_path("K");
+    add_ids_to_manifest(&package_path, &package_k_id, None)?;
+    // Upgrade package K (named K_v2)
+    std::fs::copy(
+        test.package_path("K").join("Move.lock"),
+        test.package_path("K_v2").join("Move.lock"),
+    )?;
+    let package_k_v2_id = test.upgrade_package("K_v2", cap).await?;
+
+    let package_path = test.package_path("K_v2");
+    add_ids_to_manifest(&package_path, &package_k_v2_id, None)?;
+
+    let (package_l_id, _) = test.publish_package("L_depends_on_K", false).await?;
+    let linkage_table_l = test.fetch_linkage_table(package_l_id).await;
+    assert!(
+        linkage_table_l.contains_key(&package_k_id),
+        "Package L should depend on K"
+    );
+
+    add_ids_to_manifest(&test.package_path("L_depends_on_K"), &package_l_id, None)?;
+
+    let (package_m_id, _) = test
+        .publish_package("M_depends_on_L_and_K_v2_no_code_references_K_v2", false)
+        .await?;
+    let linkage_table_m = test.fetch_linkage_table(package_m_id).await;
+    assert!(
+        linkage_table_m.contains_key(&package_k_id),
+        "Package M should depend on K"
+    );
+
+    assert!(linkage_table_m
+        .get(&package_k_id)
+        .is_some_and(|x| x.upgraded_id == package_k_v2_id), "Package I should depend on A_v2 after upgrade, and the UpgradeInfo should have matching ids");
+
+    // publish everything again but without automated address mgmt.
+
+    Ok(())
+}
+
+#[sim_test]
+async fn test_tree_shaking_package_deps_on_pkg_upgrade_3() -> Result<(), anyhow::Error> {
+    let mut test = TreeShakingTest::new().await?;
+
+    // This test is identic to #2, except it uses the old test-transaction-builder infrastructure
+    // to publish a package without tree shaking. It is also unaware of automated address mgmt,
+    // so this test sets up the published-at fields and addresses sections accordingly.
+
+    // Publish package K
+    let (package_k_id, cap) = test.publish_package("K", false).await?;
+    let package_path = test.package_path("K");
+    add_ids_to_manifest(&package_path, &package_k_id, Some(package_k_id))?;
+    // Upgrade package K (named K_v2)
+    std::fs::copy(
+        test.package_path("K").join("Move.lock"),
+        test.package_path("K_v2").join("Move.lock"),
+    )?;
+    let package_k_v2_id = test.upgrade_package("K_v2", cap).await?;
+    let package_path = test.package_path("K_v2");
+    add_ids_to_manifest(&package_path, &package_k_v2_id, Some(package_k_id))?;
+
+    let package_l_id = test
+        .publish_package_without_tree_shaking("L_depends_on_K")
+        .await;
+    let linkage_table_l = test.fetch_linkage_table(package_l_id).await;
+    assert!(
+        linkage_table_l.contains_key(&package_k_id),
+        "Package L should depend on K"
+    );
+
+    add_ids_to_manifest(
+        &test.package_path("L_depends_on_K"),
+        &package_l_id,
+        Some(package_l_id),
+    )?;
+
+    let (package_m_id, _) = test
+        .publish_package("M_depends_on_L_and_K_v2_no_code_references_K_v2", false)
+        .await?;
+    let linkage_table_m = test.fetch_linkage_table(package_m_id).await;
+    assert!(
+        linkage_table_m.contains_key(&package_k_id),
+        "Package M should depend on K"
+    );
+
+    assert!(linkage_table_m
+        .get(&package_k_id)
+        .is_some_and(|x| x.upgraded_id == package_k_v2_id), "Package I should depend on A_v2 after upgrade, and the UpgradeInfo should have matching ids");
+
+    Ok(())
+}
+
+#[sim_test]
+async fn test_tree_shaking_package_system_deps() -> Result<(), anyhow::Error> {
+    let mut test = TreeShakingTest::new().await?;
+
+    // Publish package J and verify empty linkage table
+    let (package_j_id, _) = test.publish_package("J_system_deps", false).await?;
+    let move_pkg_j = fetch_move_packages(&test.client, vec![package_j_id]).await;
+    let linkage_table_j = move_pkg_j.first().unwrap().linkage_table();
+    assert!(
+        linkage_table_j.is_empty(),
+        "Package J should have no dependencies"
+    );
+
+    // sui move build --dump-bytecode-as-base64 should also yield a json with no dependencies
+    let package_path = test.package_path("J_system_deps");
+    let binary_path = env!("CARGO_BIN_EXE_sui");
+    let cmd = std::process::Command::new(binary_path)
+        .arg("move")
+        .arg("build")
+        .arg("--dump-bytecode-as-base64")
+        .arg(package_path)
+        .output()
+        .expect("Failed to execute command");
+
+    let output = String::from_utf8_lossy(&cmd.stdout);
+    assert!(!output.contains("dependencies: []"));
 
     Ok(())
 }

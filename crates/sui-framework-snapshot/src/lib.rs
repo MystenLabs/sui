@@ -101,7 +101,7 @@ pub fn update_bytecode_snapshot_manifest(
 }
 
 pub fn load_bytecode_snapshot(protocol_version: u64) -> anyhow::Result<Vec<SystemPackage>> {
-    let snapshot_path = dbg!(snapshot_path_for_version(protocol_version))?;
+    let snapshot_path = snapshot_path_for_version(protocol_version)?;
     let mut snapshots: BTreeMap<ObjectID, SystemPackage> = fs::read_dir(&snapshot_path)?
         .flatten()
         .map(|entry| {
