@@ -220,6 +220,11 @@ pub struct ExecutionTimeObserverConfig {
     /// If unspecified, this will default to `10_000`.
     pub observation_cache_size: Option<NonZeroUsize>,
 
+    /// Size of the channel used for buffering object debt updates from consensus handler.
+    ///
+    /// If unspecified, this will default to `128`.
+    pub object_debt_channel_capacity: Option<NonZeroUsize>,
+
     /// Size of the LRU cache used for tracking object utilization.
     ///
     /// If unspecified, this will default to `50_000`.
@@ -262,6 +267,11 @@ impl ExecutionTimeObserverConfig {
 
     pub fn observation_cache_size(&self) -> NonZeroUsize {
         self.observation_cache_size.unwrap_or(nonzero!(10_000usize))
+    }
+
+    pub fn object_debt_channel_capacity(&self) -> NonZeroUsize {
+        self.object_debt_channel_capacity
+            .unwrap_or(nonzero!(128usize))
     }
 
     pub fn object_utilization_cache_size(&self) -> NonZeroUsize {
