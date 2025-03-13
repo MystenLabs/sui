@@ -2,11 +2,11 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { EventEmitter } from 'events';
-import * as crypto from 'crypto';
 import * as fs from 'fs';
 import * as path from 'path';
 import toml from 'toml';
 import {
+    createFileInfo,
     IFileInfo,
     ILocalInfo,
     IDebugInfo,
@@ -130,7 +130,7 @@ interface IRuntimeStackFrame {
     /**
     *  Path to the disassembled bytecode file containing currently executing instruction.
     */
-    bcodeFilePath: undefined | string;
+    bcodeFilePath?: string;
     /**
      *  File hash of the source file containing currently executing instruction.
      */
@@ -138,7 +138,7 @@ interface IRuntimeStackFrame {
     /**
      *  File hash of the disassembled bytecode file containing currently executing instruction.
      */
-    bcodeFileHash: undefined | string;
+    bcodeFileHash?: string;
     /**
      * Current line in the source file corresponding to currently viewed instruction.
      */
@@ -146,7 +146,7 @@ interface IRuntimeStackFrame {
     /**
      * Current line in the disassembled bytecode file corresponding to currently viewed instruction.
      */
-    bcodeLine: undefined | number; // 1-based
+    bcodeLine?: number; // 1-based
     /**
      *  Local variable types by variable frame index.
      */
@@ -165,12 +165,12 @@ interface IRuntimeStackFrame {
      * Line in the source file of the last call instruction that was processed in this frame.
      * It's needed to make sure that step/next into/over call works correctly.
      */
-    lastCallInstructionSrcLine: number | undefined;
+    lastCallInstructionSrcLine?: number;
     /**
      * Line in the disassembled bytecode file of the last call instruction that was processed in this frame.
      * It's needed to make sure that step/next into/over call works correctly.
      */
-    lastCallInstructionBcodeLine: number | undefined;
+    lastCallInstructionBcodeLine?: number;
     /**
      * Lines that are not present in the debug info.
      */
@@ -178,7 +178,7 @@ interface IRuntimeStackFrame {
     /**
      * Lines that are not present in the bytecode map.
      */
-    optimizedBcodeLines: undefined | number[];
+    optimizedBcodeLines?: number[];
     /**
      * Disassembly mode has been triggered (we have both
      * source and disassembly mode available for this frame).
@@ -378,8 +378,8 @@ export class Runtime extends EventEmitter {
 
         // create a mapping from source file hash to its corresponding debug info
         const srcDebugInfosHashMap = new Map<string, IDebugInfo>;
-        for (const [_, sourceMap] of srcDebugInfo) {
-            srcDebugInfosHashMap.set(sourceMap.fileHash, sourceMap);
+        for (const [_, info] of srcDebugInfo) {
+            srcDebugInfosHashMap.set(info.fileHash, info);
         }
 
         // if we are missing source debug infos (and thus source files), but have bytecode debug infos
@@ -1268,11 +1268,7 @@ function hashToFileMap(
             if (stats.isDirectory()) {
                 processDirectory(filePath);
             } else if (path.extname(f) === extension) {
-                const content = fs.readFileSync(filePath, 'utf8');
-                const numFileHash = computeFileHash(content);
-                const lines = content.split('\n');
-                const fileInfo = { path: filePath, content, lines };
-                const fileHash = Buffer.from(numFileHash).toString('base64');
+                const [fileHash, fileInfo] = createFileInfo(filePath);
                 filesMap.set(fileHash, fileInfo);
             }
         }
@@ -1390,14 +1386,4 @@ function getPkgNameFromManifest(pkgRoot: string): string | undefined {
     const parsedManifest = toml.parse(manifest);
     const packageName = parsedManifest.package.name;
     return packageName;
-}
-
-/**
- * Computes the SHA-256 hash of a file's contents.
- *
- * @param fileContents contents of the file.
- */
-function computeFileHash(fileContents: string): Uint8Array {
-    const hash = crypto.createHash('sha256').update(fileContents).digest();
-    return new Uint8Array(hash);
 }
