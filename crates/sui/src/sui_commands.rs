@@ -2,7 +2,6 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::client_commands::{pkg_tree_shake, SuiClientCommands};
-use crate::console::start_console;
 use crate::fire_drill::{run_fire_drill, FireDrill};
 use crate::genesis_ceremony::{run, Ceremony};
 use crate::keytool::KeyToolCommand;
@@ -14,7 +13,7 @@ use fastcrypto::traits::KeyPair;
 use move_analyzer::analyzer;
 use move_package::BuildConfig;
 use rand::rngs::OsRng;
-use std::io::{stderr, stdout, Write};
+use std::io::{stdout, Write};
 use std::net::{AddrParseError, IpAddr, Ipv4Addr, SocketAddr};
 use std::num::NonZeroUsize;
 use std::path::{Path, PathBuf};
@@ -277,13 +276,6 @@ pub enum SuiCommand {
         #[clap(subcommand)]
         cmd: KeyToolCommand,
     },
-    /// Start Sui interactive console.
-    #[clap(name = "console")]
-    Console {
-        /// Sets the file storing the state of our user accounts (an empty one will be created if missing)
-        #[clap(long = "client.config")]
-        config: Option<PathBuf>,
-    },
     /// Client for interacting with the Sui network.
     #[clap(name = "client")]
     Client {
@@ -441,17 +433,6 @@ impl SuiCommand {
                 let mut keystore = Keystore::from(FileBasedKeystore::new(&keystore_path)?);
                 cmd.execute(&mut keystore).await?.print(!json);
                 Ok(())
-            }
-            SuiCommand::Console { config } => {
-                let config = config.unwrap_or(sui_config_dir()?.join(SUI_CLIENT_CONFIG));
-                prompt_if_no_config(&config, false).await?;
-                let context = WalletContext::new(&config, None, None)?;
-                if let Ok(client) = context.get_client().await {
-                    if let Err(e) = client.check_api_version() {
-                        eprintln!("{}", format!("[warning] {e}").yellow().bold());
-                    }
-                }
-                start_console(context, &mut stdout(), &mut stderr()).await
             }
             SuiCommand::Client {
                 config,
