@@ -3,7 +3,7 @@
 
 use std::{
     collections::HashMap,
-    num::{NonZeroU32, NonZeroUsize},
+    num::NonZeroUsize,
     sync::{Arc, Weak},
     time::Duration,
 };
@@ -15,9 +15,9 @@ use itertools::Itertools;
 use lru::LruCache;
 use mysten_common::debug_fatal;
 use mysten_metrics::{monitored_scope, spawn_monitored_task};
-use nonzero_ext::nonzero;
 use simple_moving_average::{SingleSumSMA, SMA};
-use sui_protocol_config::PerObjectCongestionControlMode;
+use sui_config::node::ExecutionTimeObserverConfig;
+use sui_protocol_config::{ExecutionTimeEstimateParams, PerObjectCongestionControlMode};
 use sui_types::{
     base_types::ObjectID,
     committee::Committee,
@@ -32,38 +32,17 @@ use sui_types::{
 use tokio::{sync::mpsc, time::Instant};
 use tracing::{debug, info, warn};
 
-// TODO: Move all these consts into protocol configs once design stabilizes.
-
-const MAX_ESTIMATED_TRANSACTION_DURATION: Duration = Duration::from_millis(1_500);
-
+// TODO: Move this into ExecutionTimeObserverConfig, if we switch to a moving average
+// implmentation without the window size in the type.
 const LOCAL_OBSERVATION_WINDOW_SIZE: usize = 10;
-
-// We won't share a new observation with consensus unless our current local observation differs
-// from the last one we shared by more than this percentage.
-const OBSERVATION_SHARING_DIFF_THRESHOLD: f64 = 0.05;
-
-// We won't share a new observation with consensus unless target object utilization is exceeded
-// by at least this amount.
-const OBSERVATION_SHARING_OBJECT_UTILIZATION_THRESHOLD: Duration = Duration::from_millis(500);
-
-// Minimum interval between sharing multiple observations of the same key.
-const OBSERVATION_SHARING_MIN_INTERVAL: Duration = Duration::from_secs(5);
-
-// Global rate limit for sharing observations. This is a safety valve and should
-// not trigger during normal operation.
-const OBSERVATION_SHARING_RATE_LIMIT: NonZeroU32 = nonzero!(10u32); // per second
-const OBSERVATION_SHARING_BURST_LIMIT: NonZeroU32 = nonzero!(60u32);
-
-const OBJECT_UTILIZATION_TRACKER_CAPACITY: usize = 50_000;
-
-// TODO: source from time-based utilization target param in ProtocolConfig when available.
-const TARGET_OBJECT_UTILIZATION: f64 = 0.5;
 
 // Collects local execution time estimates to share via consensus.
 pub struct ExecutionTimeObserver {
     epoch_store: Weak<AuthorityPerEpochStore>,
     consensus_adapter: Box<dyn SubmitToConsensus>,
-    observation_sharing_object_utilization_threshold: Duration,
+
+    protocol_params: ExecutionTimeEstimateParams,
+    config: ExecutionTimeObserverConfig,
 
     local_observations: LruCache<ExecutionTimeObservationKey, LocalObservations>,
 
@@ -96,36 +75,32 @@ impl ExecutionTimeObserver {
     pub fn spawn(
         epoch_store: Arc<AuthorityPerEpochStore>,
         consensus_adapter: Box<dyn SubmitToConsensus>,
-        channel_size: usize,
-        observation_cache_size: NonZeroUsize,
+        config: ExecutionTimeObserverConfig,
     ) {
-        if !matches!(
-            epoch_store
-                .protocol_config()
-                .per_object_congestion_control_mode(),
-            PerObjectCongestionControlMode::ExecutionTimeEstimate(_)
-        ) {
+        let PerObjectCongestionControlMode::ExecutionTimeEstimate(protocol_params) = epoch_store
+            .protocol_config()
+            .per_object_congestion_control_mode()
+        else {
             info!("ExecutionTimeObserver disabled because per-object congestion control mode is not ExecutionTimeEstimate");
             return;
-        }
+        };
 
-        let (tx_local_execution_time, mut rx_local_execution_time) = mpsc::channel(channel_size);
+        let (tx_local_execution_time, mut rx_local_execution_time) =
+            mpsc::channel(config.observation_channel_capacity().into());
         epoch_store.set_local_execution_time_channel(tx_local_execution_time);
 
         // TODO: pre-populate local observations with stored data from prior epoch.
         let mut observer = Self {
             epoch_store: Arc::downgrade(&epoch_store),
             consensus_adapter,
-            local_observations: LruCache::new(observation_cache_size),
-            object_utilization_tracker: LruCache::new(
-                NonZeroUsize::new(OBJECT_UTILIZATION_TRACKER_CAPACITY).unwrap(),
-            ),
-            observation_sharing_object_utilization_threshold:
-                OBSERVATION_SHARING_OBJECT_UTILIZATION_THRESHOLD,
+            local_observations: LruCache::new(config.observation_cache_size()),
+            object_utilization_tracker: LruCache::new(config.object_utilization_cache_size()),
             sharing_rate_limiter: RateLimiter::direct(
-                Quota::per_second(OBSERVATION_SHARING_RATE_LIMIT)
-                    .allow_burst(OBSERVATION_SHARING_BURST_LIMIT),
+                Quota::per_second(config.observation_sharing_rate_limit())
+                    .allow_burst(config.observation_sharing_burst_limit()),
             ),
+            protocol_params,
+            config,
         };
         spawn_monitored_task!(epoch_store.within_alive_epoch(async move {
             while let Some((tx, timings, total_duration)) = rx_local_execution_time.recv().await {
@@ -143,15 +118,25 @@ impl ExecutionTimeObserver {
         consensus_adapter: Box<dyn SubmitToConsensus>,
         observation_sharing_object_utilization_threshold: Duration,
     ) -> Self {
+        let PerObjectCongestionControlMode::ExecutionTimeEstimate(protocol_params) = epoch_store
+            .protocol_config()
+            .per_object_congestion_control_mode()
+        else {
+            panic!("tried to construct test ExecutionTimeObserver when congestion control mode is not ExecutionTimeEstimate");
+        };
         Self {
             epoch_store: Arc::downgrade(&epoch_store),
             consensus_adapter,
+            protocol_params,
+            config: ExecutionTimeObserverConfig {
+                observation_sharing_object_utilization_threshold: Some(
+                    observation_sharing_object_utilization_threshold,
+                ),
+                ..ExecutionTimeObserverConfig::default()
+            },
             local_observations: LruCache::new(NonZeroUsize::new(10000).unwrap()),
-            object_utilization_tracker: LruCache::new(
-                NonZeroUsize::new(OBJECT_UTILIZATION_TRACKER_CAPACITY).unwrap(),
-            ),
-            observation_sharing_object_utilization_threshold,
-            sharing_rate_limiter: RateLimiter::direct(Quota::per_hour(NonZeroU32::MAX)),
+            object_utilization_tracker: LruCache::new(NonZeroUsize::new(50000).unwrap()),
+            sharing_rate_limiter: RateLimiter::direct(Quota::per_hour(std::num::NonZeroU32::MAX)),
         }
     }
 
@@ -196,9 +181,11 @@ impl ExecutionTimeObserver {
                     utilization.excess_execution_time.saturating_sub(
                         utilization
                             .last_measured
-                            .map(|last_measured| now.duration_since(last_measured))
-                            .unwrap_or(Duration::MAX)
-                            .mul_f64(TARGET_OBJECT_UTILIZATION),
+                            .map(|last_measured| {
+                                now.duration_since(last_measured)
+                                    .mul_f64(self.protocol_params.target_utilization as f64 / 100.0)
+                            })
+                            .unwrap_or(Duration::MAX),
                     );
                 utilization.last_measured = Some(now);
                 utilization.excess_execution_time
@@ -256,11 +243,15 @@ impl ExecutionTimeObserver {
                     .last_shared
                     .is_none_or(|(last_shared, last_shared_timestamp)| {
                         let diff = last_shared.abs_diff(new_average);
-                        diff >= new_average.mul_f64(OBSERVATION_SHARING_DIFF_THRESHOLD)
-                            && last_shared_timestamp.elapsed() >= OBSERVATION_SHARING_MIN_INTERVAL
+                        diff >= new_average
+                            .mul_f64(self.config.observation_sharing_diff_threshold())
+                            && last_shared_timestamp.elapsed()
+                                >= self.config.observation_sharing_min_interval()
                     });
             let utilization_exceeds_threshold = max_excess_per_object_execution_time
-                >= self.observation_sharing_object_utilization_threshold;
+                >= self
+                    .config
+                    .observation_sharing_object_utilization_threshold();
             if diff_exceeds_threshold && utilization_exceeds_threshold {
                 debug!("sharing new execution time observation for {key:?}: {new_average:?}");
                 to_share.push((key, new_average));
@@ -316,6 +307,7 @@ pub const EXTRA_FIELD_EXECUTION_TIME_ESTIMATES_KEY: u64 = 0;
 // and computes deterministic per-command estimates for use in congestion control.
 pub struct ExecutionTimeEstimator {
     committee: Arc<Committee>,
+    protocol_params: ExecutionTimeEstimateParams,
 
     consensus_observations: HashMap<ExecutionTimeObservationKey, ConsensusObservations>,
 }
@@ -358,14 +350,14 @@ impl ConsensusObservations {
 impl ExecutionTimeEstimator {
     pub fn new(
         committee: Arc<Committee>,
+        protocol_params: ExecutionTimeEstimateParams,
         initial_observations: impl Iterator<
             Item = (AuthorityIndex, u64, ExecutionTimeObservationKey, Duration),
         >,
     ) -> Self {
-        // TODO: At epoch start, prepopulate with end-of-epoch data from previous epoch.
-        // TODO: Load saved consensus observations from per-epoch tables for crash recovery.
         let mut estimator = Self {
             committee,
+            protocol_params,
             consensus_observations: HashMap::new(),
         };
         for (source, generation, key, duration) in initial_observations {
@@ -388,6 +380,11 @@ impl ExecutionTimeEstimator {
         let (committee, _) = Committee::new_simple_test_committee_of_size(1);
         Self {
             committee: Arc::new(committee),
+            protocol_params: ExecutionTimeEstimateParams {
+                target_utilization: 100,
+                max_estimate_us: u64::MAX,
+                ..ExecutionTimeEstimateParams::default()
+            },
             consensus_observations: HashMap::new(),
         }
     }
@@ -469,7 +466,7 @@ impl ExecutionTimeEstimator {
                     .mul_f64(command_length(command).get() as f64)
             })
             .sum::<Duration>()
-            .min(MAX_ESTIMATED_TRANSACTION_DURATION)
+            .min(Duration::from_micros(self.protocol_params.max_estimate_us))
     }
 
     pub fn take_observations(&mut self) -> StoredExecutionTimeObservations {
@@ -524,12 +521,27 @@ mod tests {
         ConnectionMonitorStatusForTests, ConsensusAdapter, ConsensusAdapterMetrics,
         MockConsensusClient,
     };
+    use sui_protocol_config::ProtocolConfig;
     use sui_types::base_types::{ObjectID, SequenceNumber, SuiAddress};
     use sui_types::transaction::{Argument, CallArg, ObjectArg, ProgrammableMoveCall};
 
     #[tokio::test]
     async fn test_record_local_observations() {
         telemetry_subscribers::init_for_testing();
+
+        let _guard = ProtocolConfig::apply_overrides_for_testing(|_, mut config| {
+            config.set_per_object_congestion_control_mode_for_testing(
+                PerObjectCongestionControlMode::ExecutionTimeEstimate(
+                    ExecutionTimeEstimateParams {
+                        target_utilization: 100,
+                        allowed_txn_cost_overage_burst_limit_us: 0,
+                        max_txn_cost_overage_per_object_in_commit_us: u64::MAX,
+                        max_estimate_us: u64::MAX,
+                    },
+                ),
+            );
+            config
+        });
 
         let mock_consensus_client = MockConsensusClient::new();
         let authority = TestAuthorityBuilder::new().build().await;
@@ -657,6 +669,20 @@ mod tests {
     async fn test_record_local_observations_with_multiple_commands() {
         telemetry_subscribers::init_for_testing();
 
+        let _guard = ProtocolConfig::apply_overrides_for_testing(|_, mut config| {
+            config.set_per_object_congestion_control_mode_for_testing(
+                PerObjectCongestionControlMode::ExecutionTimeEstimate(
+                    ExecutionTimeEstimateParams {
+                        target_utilization: 100,
+                        allowed_txn_cost_overage_burst_limit_us: 0,
+                        max_txn_cost_overage_per_object_in_commit_us: u64::MAX,
+                        max_estimate_us: u64::MAX,
+                    },
+                ),
+            );
+            config
+        });
+
         let mock_consensus_client = MockConsensusClient::new();
         let authority = TestAuthorityBuilder::new().build().await;
         let epoch_store = authority.epoch_store_for_testing();
@@ -738,6 +764,20 @@ mod tests {
     #[tokio::test]
     async fn test_record_local_observations_with_object_utilization_threshold() {
         telemetry_subscribers::init_for_testing();
+
+        let _guard = ProtocolConfig::apply_overrides_for_testing(|_, mut config| {
+            config.set_per_object_congestion_control_mode_for_testing(
+                PerObjectCongestionControlMode::ExecutionTimeEstimate(
+                    ExecutionTimeEstimateParams {
+                        target_utilization: 100,
+                        allowed_txn_cost_overage_burst_limit_us: 0,
+                        max_txn_cost_overage_per_object_in_commit_us: u64::MAX,
+                        max_estimate_us: u64::MAX,
+                    },
+                ),
+            );
+            config
+        });
 
         let mock_consensus_client = MockConsensusClient::new();
         let authority = TestAuthorityBuilder::new().build().await;
@@ -964,7 +1004,18 @@ mod tests {
 
         let (committee, _) =
             Committee::new_simple_test_committee_with_normalized_voting_power(vec![10, 20, 30, 40]);
-        let mut estimator = ExecutionTimeEstimator::new(Arc::new(committee), std::iter::empty());
+        let mut estimator = ExecutionTimeEstimator::new(
+            Arc::new(committee),
+            ExecutionTimeEstimateParams {
+                target_utilization: 50,
+                max_estimate_us: 1_500_000,
+
+                // Not used in this test.
+                allowed_txn_cost_overage_burst_limit_us: 0,
+                max_txn_cost_overage_per_object_in_commit_us: 0,
+            },
+            std::iter::empty(),
+        );
         // Create test keys
         let package = ObjectID::random();
         let module = "test_module".to_string();

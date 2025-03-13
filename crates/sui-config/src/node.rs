@@ -10,13 +10,14 @@ use crate::Config;
 use anyhow::Result;
 use consensus_config::Parameters as ConsensusParameters;
 use mysten_common::fatal;
+use nonzero_ext::nonzero;
 use once_cell::sync::OnceCell;
 use rand::rngs::OsRng;
 use serde::{Deserialize, Serialize};
 use serde_with::serde_as;
 use std::collections::{BTreeMap, BTreeSet};
 use std::net::SocketAddr;
-use std::num::NonZeroUsize;
+use std::num::{NonZeroU32, NonZeroUsize};
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::time::Duration;
@@ -33,7 +34,7 @@ use sui_types::traffic_control::{PolicyConfig, RemoteFirewallConfig};
 
 use sui_types::crypto::{get_key_pair_from_rng, AccountKeyPair, AuthorityKeyPair};
 use sui_types::multiaddr::Multiaddr;
-use tracing::{error, info};
+use tracing::info;
 
 // Default max number of concurrent requests served
 pub const DEFAULT_GRPC_CONCURRENCY_LIMIT: usize = 20000000000;
@@ -202,17 +203,95 @@ pub struct NodeConfig {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub enable_db_write_stall: Option<bool>,
 
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub execution_time_observer_config: Option<ExecutionTimeObserverConfig>,
+}
+
+#[derive(Clone, Debug, Default, Deserialize, Serialize)]
+#[serde(rename_all = "kebab-case")]
+pub struct ExecutionTimeObserverConfig {
     /// Size of the channel used for buffering local execution time observations.
     ///
     /// If unspecified, this will default to `128`.
-    #[serde(default = "default_local_execution_time_channel_capacity")]
-    pub local_execution_time_channel_capacity: usize,
+    pub observation_channel_capacity: Option<NonZeroUsize>,
 
     /// Size of the LRU cache used for storing local execution time observations.
     ///
-    /// If unspecified, this will default to `10000`.
-    #[serde(default = "default_local_execution_time_cache_size")]
-    pub local_execution_time_cache_size: usize,
+    /// If unspecified, this will default to `10_000`.
+    pub observation_cache_size: Option<NonZeroUsize>,
+
+    /// Size of the LRU cache used for tracking object utilization.
+    ///
+    /// If unspecified, this will default to `50_000`.
+    pub object_utilization_cache_size: Option<NonZeroUsize>,
+
+    /// Unless target object utilization is exceeded by at least this amount, no observation
+    /// will be shared with consensus.
+    ///
+    /// If unspecified, this will default to `100` milliseconds.
+    pub observation_sharing_object_utilization_threshold: Option<Duration>,
+
+    /// Unless the current local observation differs from the last one we shared by at least this
+    /// percentage, no observation will be shared with consensus.
+    ///
+    /// If unspecified, this will default to `0.05`.
+    pub observation_sharing_diff_threshold: Option<f64>,
+
+    /// Minimum interval between sharing multiple observations of the same key.
+    ///
+    /// If unspecified, this will default to `5` seconds.
+    pub observation_sharing_min_interval: Option<Duration>,
+
+    /// Global per-second rate limit for sharing observations. This is a safety valve and
+    /// should not trigger during normal operation.
+    ///
+    /// If unspecified, this will default to `10` observations per second.
+    pub observation_sharing_rate_limit: Option<NonZeroU32>,
+
+    /// Global burst limit for sharing observations.
+    ///
+    /// If unspecified, this will default to `100` observations.
+    pub observation_sharing_burst_limit: Option<NonZeroU32>,
+}
+
+impl ExecutionTimeObserverConfig {
+    pub fn observation_channel_capacity(&self) -> NonZeroUsize {
+        self.observation_channel_capacity
+            .unwrap_or(nonzero!(128usize))
+    }
+
+    pub fn observation_cache_size(&self) -> NonZeroUsize {
+        self.observation_cache_size.unwrap_or(nonzero!(10_000usize))
+    }
+
+    pub fn object_utilization_cache_size(&self) -> NonZeroUsize {
+        self.object_utilization_cache_size
+            .unwrap_or(nonzero!(50_000usize))
+    }
+
+    pub fn observation_sharing_object_utilization_threshold(&self) -> Duration {
+        self.observation_sharing_object_utilization_threshold
+            .unwrap_or(Duration::from_millis(100))
+    }
+
+    pub fn observation_sharing_diff_threshold(&self) -> f64 {
+        self.observation_sharing_diff_threshold.unwrap_or(0.05)
+    }
+
+    pub fn observation_sharing_min_interval(&self) -> Duration {
+        self.observation_sharing_min_interval
+            .unwrap_or(Duration::from_secs(5))
+    }
+
+    pub fn observation_sharing_rate_limit(&self) -> NonZeroU32 {
+        self.observation_sharing_rate_limit
+            .unwrap_or(nonzero!(10u32))
+    }
+
+    pub fn observation_sharing_burst_limit(&self) -> NonZeroU32 {
+        self.observation_sharing_burst_limit
+            .unwrap_or(nonzero!(100u32))
+    }
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
@@ -552,14 +631,6 @@ pub fn default_end_of_epoch_broadcast_channel_capacity() -> usize {
     128
 }
 
-pub fn default_local_execution_time_channel_capacity() -> usize {
-    128
-}
-
-pub fn default_local_execution_time_cache_size() -> usize {
-    10000
-}
-
 pub fn bool_true() -> bool {
     true
 }
@@ -654,13 +725,6 @@ impl NodeConfig {
 
     pub fn rpc(&self) -> Option<&sui_rpc_api::Config> {
         self.rpc.as_ref()
-    }
-
-    pub fn local_execution_time_cache_size(&self) -> NonZeroUsize {
-        NonZeroUsize::new(self.local_execution_time_cache_size).unwrap_or_else(|| {
-            error!("local_execution_time_cache_size must be non-zero - defaulting to 10000");
-            NonZeroUsize::new(10000).unwrap()
-        })
     }
 }
 

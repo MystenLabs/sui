@@ -13072,6 +13072,7 @@ dependencies = [
  "fastcrypto",
  "move-vm-config",
  "mysten-common",
+ "nonzero_ext",
  "object_store",
  "once_cell",
  "prometheus",

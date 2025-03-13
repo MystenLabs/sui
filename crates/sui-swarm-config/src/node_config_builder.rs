@@ -9,11 +9,10 @@ use fastcrypto::encoding::{Encoding, Hex};
 use fastcrypto::traits::KeyPair;
 use sui_config::node::{
     default_enable_index_processing, default_end_of_epoch_broadcast_channel_capacity,
-    default_local_execution_time_cache_size, default_local_execution_time_channel_capacity,
     AuthorityKeyPairWithPath, AuthorityOverloadConfig, AuthorityStorePruningConfig,
-    CheckpointExecutorConfig, DBCheckpointConfig, ExecutionCacheConfig, ExpensiveSafetyCheckConfig,
-    Genesis, KeyPairWithPath, StateArchiveConfig, StateSnapshotConfig,
-    DEFAULT_GRPC_CONCURRENCY_LIMIT,
+    CheckpointExecutorConfig, DBCheckpointConfig, ExecutionCacheConfig,
+    ExecutionTimeObserverConfig, ExpensiveSafetyCheckConfig, Genesis, KeyPairWithPath,
+    StateArchiveConfig, StateSnapshotConfig, DEFAULT_GRPC_CONCURRENCY_LIMIT,
 };
 use sui_config::node::{default_zklogin_oauth_providers, RunWithRange};
 use sui_config::p2p::{P2pConfig, SeedPeer, StateSyncConfig};
@@ -46,6 +45,7 @@ pub struct ValidatorConfigBuilder {
     max_submit_position: Option<usize>,
     submit_delay_step_override_millis: Option<u64>,
     state_accumulator_v2: bool,
+    execution_time_observer_config: Option<ExecutionTimeObserverConfig>,
 }
 
 impl ValidatorConfigBuilder {
@@ -121,6 +121,14 @@ impl ValidatorConfigBuilder {
 
     pub fn with_state_accumulator_v2_enabled(mut self, enabled: bool) -> Self {
         self.state_accumulator_v2 = enabled;
+        self
+    }
+
+    pub fn with_execution_time_observer_config(
+        mut self,
+        config: ExecutionTimeObserverConfig,
+    ) -> Self {
+        self.execution_time_observer_config = Some(config);
         self
     }
 
@@ -236,8 +244,7 @@ impl ValidatorConfigBuilder {
             enable_validator_tx_finalizer: true,
             verifier_signing_config: VerifierSigningConfig::default(),
             enable_db_write_stall: None,
-            local_execution_time_channel_capacity: default_local_execution_time_channel_capacity(),
-            local_execution_time_cache_size: default_local_execution_time_cache_size(),
+            execution_time_observer_config: self.execution_time_observer_config,
         }
     }
 
@@ -537,8 +544,7 @@ impl FullnodeConfigBuilder {
             enable_validator_tx_finalizer: false,
             verifier_signing_config: VerifierSigningConfig::default(),
             enable_db_write_stall: None,
-            local_execution_time_channel_capacity: default_local_execution_time_channel_capacity(),
-            local_execution_time_cache_size: default_local_execution_time_cache_size(),
+            execution_time_observer_config: None,
         }
     }
 }

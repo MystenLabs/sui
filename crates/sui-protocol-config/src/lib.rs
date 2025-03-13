@@ -684,6 +684,8 @@ pub struct ExecutionTimeEstimateParams {
     // absolute limit of how much estimated work to schedule in a commit,
     // even if it all comes from a single transaction
     pub max_txn_cost_overage_per_object_in_commit_us: u64,
+    // Absolute maximum allowed transaction duration estimate (in microseconds).
+    pub max_estimate_us: u64,
 }
 
 // The config for per object congestion control in consensus handler.

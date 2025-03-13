@@ -485,6 +485,7 @@ mod test {
                         target_utilization: rng.gen_range(1..=100),
                         allowed_txn_cost_overage_burst_limit_us: rng.gen_range(0..500_000),
                         max_txn_cost_overage_per_object_in_commit_us: 10_000_000_000,
+                        max_estimate_us: 1_500_000,
                     },
                 ),
             ]
