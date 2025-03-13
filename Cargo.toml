@@ -264,6 +264,7 @@ unexpected_cfgs = { level = "warn", check-cfg = [
 
 # Dependencies that should be kept in sync through the whole workspace
 [workspace.dependencies]
+antithesis_sdk = "0.2.5"
 anyhow = "1.0.71"
 arrow = "54"
 arrow-array = "54"

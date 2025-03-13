@@ -54,6 +54,7 @@ use dashmap::DashMap;
 use futures::{future::BoxFuture, FutureExt};
 use moka::sync::SegmentedCache as MokaCache;
 use mysten_common::sync::notify_read::NotifyRead;
+use mysten_common::util::randomize_cache_capacity;
 use parking_lot::Mutex;
 use prometheus::Registry;
 use std::collections::{BTreeMap, BTreeSet};
@@ -333,24 +334,33 @@ struct CachedCommittedData {
 impl CachedCommittedData {
     fn new(config: &ExecutionCacheConfig) -> Self {
         let object_cache = MokaCache::builder(8)
-            .max_capacity(config.object_cache_size())
+            .max_capacity(randomize_cache_capacity(config.object_cache_size()))
             .build();
         let marker_cache = MokaCache::builder(8)
-            .max_capacity(config.marker_cache_size())
+            .max_capacity(randomize_cache_capacity(config.marker_cache_size()))
             .build();
 
-        let transactions = MonotonicCache::new(config.transaction_cache_size());
-        let transaction_effects = MonotonicCache::new(config.effect_cache_size());
-        let transaction_events = MonotonicCache::new(config.events_cache_size());
-        let executed_effects_digests = MonotonicCache::new(config.executed_effect_cache_size());
+        let transactions =
+            MonotonicCache::new(randomize_cache_capacity(config.transaction_cache_size()));
+        let transaction_effects =
+            MonotonicCache::new(randomize_cache_capacity(config.effect_cache_size()));
+        let transaction_events =
+            MonotonicCache::new(randomize_cache_capacity(config.events_cache_size()));
+        let executed_effects_digests = MonotonicCache::new(randomize_cache_capacity(
+            config.executed_effect_cache_size(),
+        ));
 
         let transaction_objects = MokaCache::builder(8)
-            .max_capacity(config.transaction_objects_cache_size())
+            .max_capacity(randomize_cache_capacity(
+                config.transaction_objects_cache_size(),
+            ))
             .build();
 
         Self {
             object_cache,
-            object_by_id_cache: MonotonicCache::new(config.object_by_id_cache_size()),
+            object_by_id_cache: MonotonicCache::new(randomize_cache_capacity(
+                config.object_by_id_cache_size(),
+            )),
             marker_cache,
             transactions,
             transaction_effects,
@@ -461,7 +471,7 @@ impl WritebackCache {
         backpressure_manager: Arc<BackpressureManager>,
     ) -> Self {
         let packages = MokaCache::builder(8)
-            .max_capacity(config.package_cache_size())
+            .max_capacity(randomize_cache_capacity(config.package_cache_size()))
             .build();
         Self {
             dirty: UncommittedData::new(),

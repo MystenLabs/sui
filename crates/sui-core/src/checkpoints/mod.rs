@@ -19,8 +19,9 @@ use crate::stake_aggregator::{InsertResult, MultiStakeAggregator};
 use crate::state_accumulator::StateAccumulator;
 use diffy::create_patch;
 use itertools::Itertools;
+use mysten_common::random::get_rng;
 use mysten_common::sync::notify_read::NotifyRead;
-use mysten_common::{debug_fatal, fatal};
+use mysten_common::{assert_reachable, debug_fatal, fatal};
 use mysten_metrics::{monitored_future, monitored_scope, MonitoredFutureExt};
 use nonempty::NonEmpty;
 use parking_lot::Mutex;
@@ -36,7 +37,6 @@ use tokio::sync::{mpsc, watch};
 
 use crate::authority::authority_per_epoch_store::AuthorityPerEpochStore;
 use crate::consensus_handler::SequencedConsensusTransactionKey;
-use rand::rngs::OsRng;
 use rand::seq::SliceRandom;
 use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 use std::fs::File;
@@ -2076,6 +2076,7 @@ impl CheckpointAggregator {
                 // the current signature aggregator to the next checkpoint to
                 // be certified
                 if current.summary.sequence_number < next_to_certify {
+                    assert_reachable!("skip checkpoint certification");
                     self.current = None;
                     continue;
                 }
@@ -2300,7 +2301,7 @@ async fn diagnose_split_brain(
         .iter()
         .filter_map(|(digest, (validators, _))| {
             if *digest != local_summary.digest() {
-                let random_validator = validators.choose(&mut OsRng).unwrap();
+                let random_validator = validators.choose(&mut get_rng()).unwrap();
                 Some((*digest, *random_validator))
             } else {
                 None

@@ -1,6 +1,8 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use once_cell::sync::Lazy;
+
 #[macro_export]
 macro_rules! fatal {
     ($($arg:tt)*) => {{
@@ -9,10 +11,24 @@ macro_rules! fatal {
     }};
 }
 
+pub use antithesis_sdk::assert_reachable;
+
+#[inline(always)]
+pub fn crash_on_debug() -> bool {
+    static CRASH_ON_DEBUG: Lazy<bool> = Lazy::new(|| {
+        cfg!(msim)
+            || cfg!(debug_assertions)
+            || std::env::var("ANTITHESIS_OUTPUT_DIR").is_ok()
+            || std::env::var("SUI_ENABLE_DEBUG_ASSERTIONS").is_ok()
+    });
+
+    *CRASH_ON_DEBUG
+}
+
 #[macro_export]
 macro_rules! debug_fatal {
     ($($arg:tt)*) => {{
-        if cfg!(debug_assertions) {
+        if $crate::logging::crash_on_debug() {
             $crate::fatal!($($arg)*);
         } else {
             let stacktrace = std::backtrace::Backtrace::capture();
@@ -23,6 +39,16 @@ macro_rules! debug_fatal {
             }
         }
     }};
+}
+
+#[macro_export]
+macro_rules! assert_reachable {
+    () => {
+        $crate::logging::assert_reachable!("");
+    };
+    ($message:literal) => {
+        $crate::logging::assert_reachable!($message);
+    };
 }
 
 mod tests {

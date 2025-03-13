@@ -43,6 +43,8 @@ struct Args {
 }
 
 fn main() {
+    antithesis_sdk::antithesis_init();
+
     move_vm_profiler::ensure_move_vm_profiler_disabled();
 
     // Ensure that a validator never calls get_for_min_version/get_for_max_version_UNSAFE.

@@ -9,7 +9,7 @@ use std::{
 };
 
 use lru::LruCache;
-use mysten_common::fatal;
+use mysten_common::{fatal, util::randomize_cache_capacity};
 use mysten_metrics::monitored_scope;
 use parking_lot::RwLock;
 use sui_types::{
@@ -187,7 +187,7 @@ struct AvailableObjectsCache {
 
 impl AvailableObjectsCache {
     fn new(metrics: Arc<AuthorityMetrics>) -> Self {
-        Self::new_with_size(metrics, 100000)
+        Self::new_with_size(metrics, randomize_cache_capacity(100000))
     }
 
     fn new_with_size(metrics: Arc<AuthorityMetrics>, size: usize) -> Self {
@@ -195,6 +195,11 @@ impl AvailableObjectsCache {
             cache: CacheInner::new(size, metrics),
             unbounded_cache_enabled: 0,
         }
+    }
+
+    #[cfg(test)]
+    fn new_with_size_for_unittest(metrics: Arc<AuthorityMetrics>, size: usize) -> Self {
+        Self::new_with_size(metrics, size)
     }
 
     fn enable_unbounded_cache(&mut self) {
@@ -1016,7 +1021,7 @@ mod test {
     #[cfg_attr(msim, ignore)]
     fn test_available_objects_cache() {
         let metrics = Arc::new(AuthorityMetrics::new(&Registry::default()));
-        let mut cache = AvailableObjectsCache::new_with_size(metrics, 5);
+        let mut cache = AvailableObjectsCache::new_with_size_for_unittest(metrics, 5);
 
         // insert 10 unique unversioned objects
         for i in 0..10 {
