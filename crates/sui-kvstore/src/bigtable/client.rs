@@ -296,7 +296,7 @@ impl BigTableClient {
         is_read_only: bool,
         timeout: Option<Duration>,
         client_name: String,
-        registry: &Registry,
+        registry: Option<&Registry>,
     ) -> Result<Self> {
         let policy = if is_read_only {
             "https://www.googleapis.com/auth/bigtable.data.readonly"
@@ -329,7 +329,7 @@ impl BigTableClient {
             table_prefix,
             client: BigtableInternalClient::new(auth_channel),
             client_name,
-            metrics: Some(KvMetrics::new(registry)),
+            metrics: registry.map(KvMetrics::new),
         })
     }
 
@@ -400,6 +400,18 @@ impl BigTableClient {
     }
 
     async fn multi_set(
+        &mut self,
+        table_name: &str,
+        values: impl IntoIterator<Item = (Bytes, Vec<(&str, Bytes)>)> + std::marker::Send,
+    ) -> Result<()> {
+        for chunk in values.into_iter().collect::<Vec<_>>().chunks(50_000) {
+            self.multi_set_internal(table_name, chunk.iter().cloned())
+                .await?;
+        }
+        Ok(())
+    }
+
+    async fn multi_set_internal(
         &mut self,
         table_name: &str,
         values: impl IntoIterator<Item = (Bytes, Vec<(&str, Bytes)>)> + std::marker::Send,
