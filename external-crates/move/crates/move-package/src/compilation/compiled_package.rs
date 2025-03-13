@@ -376,13 +376,21 @@ impl OnDiskCompiledPackage {
         }
         .join(unit.unit.name.as_str());
         let d = Disassembler::from_unit(&unit.unit);
-        let (disassembled_string, bytecode_map) = d.disassemble_with_source_map()?;
+        let (disassembled_string, mut bytecode_map) = d.disassemble_with_source_map()?;
+        let disassembly_file_path = disassembly_dir
+            .join(&file_path)
+            .with_extension(MOVE_BYTECODE_EXTENSION);
         self.save_under(
-            disassembly_dir
-                .join(&file_path)
-                .with_extension(MOVE_BYTECODE_EXTENSION),
+            disassembly_file_path.clone(),
             disassembled_string.as_bytes(),
         )?;
+        // unwrap below is safe as we just successfully saved a file at disassembly_file_path
+        if let Ok(p) =
+            dunce::canonicalize(self.root_path.join(disassembly_file_path).parent().unwrap())
+        {
+            bytecode_map
+                .set_from_file_path(p.join(&file_path).with_extension(MOVE_BYTECODE_EXTENSION));
+        }
         self.save_under(
             disassembly_dir.join(&file_path).with_extension("json"),
             serialize_to_json_string(&bytecode_map)?.as_bytes(),
@@ -608,7 +616,7 @@ impl CompiledPackage {
         let mut all_compiled_units_vec = vec![];
         let mut root_compiled_units = vec![];
         let mut deps_compiled_units = vec![];
-        for annot_unit in all_compiled_units {
+        for mut annot_unit in all_compiled_units {
             let source_path = PathBuf::from(
                 file_map
                     .get(&annot_unit.loc().file_hash())
@@ -617,6 +625,15 @@ impl CompiledPackage {
                     .as_str(),
             );
             let package_name = annot_unit.named_module.package_name.unwrap();
+            // unwraps below are safe as the source path exists (or must have existed at some point)
+            // so it would be syntactically correct
+            let file_name = PathBuf::from(source_path.file_name().unwrap());
+            if let Ok(p) = dunce::canonicalize(source_path.parent().unwrap()) {
+                annot_unit
+                    .named_module
+                    .source_map
+                    .set_from_file_path(p.join(file_name));
+            }
             let unit = CompiledUnitWithSource {
                 unit: annot_unit.named_module,
                 source_path,
