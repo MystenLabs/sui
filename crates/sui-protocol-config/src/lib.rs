@@ -674,16 +674,17 @@ impl ConsensusTransactionOrdering {
 
 #[derive(Default, Copy, Clone, PartialEq, Eq, Serialize, Deserialize, Debug)]
 pub struct ExecutionTimeEstimateParams {
-    // targeted per-object utilization as an integer percentage (1-100)
+    // Targeted per-object utilization as an integer percentage (1-100).
     pub target_utilization: u64,
     // Schedule up to this much extra work (in microseconds) per object,
-    // but don't allow the running debt to exceed this limit (unless we
-    // are scheduling a single very large transaction, in which case the
-    // absolute limit will be used).
+    // but don't allow more than a single transaction to exceed this
+    // burst limit.
     pub allowed_txn_cost_overage_burst_limit_us: u64,
-    // absolute limit of how much estimated work to schedule in a commit,
-    // even if it all comes from a single transaction
-    pub max_txn_cost_overage_per_object_in_commit_us: u64,
+
+    // For separate budget for randomness-using tx, the above limits are
+    // used with this integer-percentage scaling factor (1-100).
+    pub randomness_scalar: u64,
+
     // Absolute maximum allowed transaction duration estimate (in microseconds).
     pub max_estimate_us: u64,
 }
