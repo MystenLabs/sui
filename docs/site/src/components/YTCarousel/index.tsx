@@ -13,6 +13,10 @@ const LeftChevron = () => (
     width="80"
     height="80"
     fill="none"
+    style={{
+      transition: "filter 0.3s ease-in-out",
+    }}
+    className="chevron"
   >
     <path
       d="M50 20 L30 40 L50 60"
@@ -31,6 +35,10 @@ const RightChevron = () => (
     width="80"
     height="80"
     fill="none"
+    style={{
+      transition: "filter 0.3s ease-in-out",
+    }}
+    className="chevron"
   >
     <path
       d="M30 20 L50 40 L30 60"
@@ -81,7 +89,7 @@ export default function YTCarousel(props) {
       <div className="">{currentVid}</div>
       <div className="flex flex-row items-center align-right bg-sui-ghost-white dark:bg-sui-ghost-dark rounded-lg mt-2">
         <div
-          className={`flex items-center justify-center w-[200px] h-[100px] ${currentIndex > 0 ? "cursor-pointer" : "opacity-10"}`}
+          className={`flex items-center justify-center w-[200px] h-[100px] drop-shadow-none transition-[filter] ease-in-out duration-300 hover:drop-shadow-[0_0_4px_rgba(0,249,251,0.8)] ${currentIndex > 0 ? "cursor-pointer" : "opacity-10"}`}
           onClick={handlePrev}
         >
           <LeftChevron />
@@ -94,7 +102,7 @@ export default function YTCarousel(props) {
           containerClassName="flex flex-row overflow-hidden mx-12"
         />
         <div
-          className={`flex items-center justify-center w-[200px] h-[100px] ${currentIndex < ids.length - 1 ? "cursor-pointer" : "opacity-10"}`}
+          className={`flex items-center justify-center w-[200px] h-[100px] drop-shadow-none transition-[filter] ease-in-out duration-300 hover:drop-shadow-[0_0_4px_rgba(0,249,251,0.8)] ${currentIndex < ids.length - 1 ? "cursor-pointer" : "opacity-10"}`}
           onClick={handleNext}
         >
           <RightChevron />
