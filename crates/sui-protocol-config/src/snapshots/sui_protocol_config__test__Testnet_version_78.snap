@@ -46,7 +46,12 @@ feature_flags:
   enable_coin_deny_list: true
   enable_group_ops_native_functions: true
   reject_mutable_random_on_entry_functions: true
-  per_object_congestion_control_mode: TotalGasBudgetWithCap
+  per_object_congestion_control_mode:
+    ExecutionTimeEstimate:
+      target_utilization: 30
+      allowed_txn_cost_overage_burst_limit_us: 100000
+      randomness_scalar: 20
+      max_estimate_us: 1500000
   consensus_choice: Mysticeti
   consensus_network: Tonic
   zklogin_max_epoch_upper_bound_delta: 30

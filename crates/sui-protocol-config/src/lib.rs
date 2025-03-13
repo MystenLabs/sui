@@ -225,6 +225,7 @@ const MAX_PROTOCOL_VERSION: u64 = 78;
 //             Enable consensus garbage collection for testnet
 //             Enable the new consensus commit rule for testnet.
 // Version 78: Make `TxContext` Move API native
+//             Enable execution time estimate mode for congestion control on testnet.
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
@@ -3375,6 +3376,19 @@ impl ProtocolConfig {
                     cfg.tx_context_ids_created_cost_base = Some(30);
                     cfg.tx_context_replace_cost_base = Some(30);
                     cfg.gas_model_version = Some(10);
+
+                    if chain != Chain::Mainnet {
+                        // Enable execution time estimate mode for congestion control on testnet.
+                        cfg.feature_flags.per_object_congestion_control_mode =
+                            PerObjectCongestionControlMode::ExecutionTimeEstimate(
+                                ExecutionTimeEstimateParams {
+                                    target_utilization: 30,
+                                    allowed_txn_cost_overage_burst_limit_us: 100_000, // 100 ms
+                                    randomness_scalar: 20,
+                                    max_estimate_us: 1_500_000, // 1.5s
+                                },
+                            );
+                    }
                 }
                 // Use this template when making changes:
                 //
