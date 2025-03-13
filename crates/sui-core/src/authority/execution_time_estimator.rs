@@ -535,7 +535,7 @@ mod tests {
                     ExecutionTimeEstimateParams {
                         target_utilization: 100,
                         allowed_txn_cost_overage_burst_limit_us: 0,
-                        max_txn_cost_overage_per_object_in_commit_us: u64::MAX,
+                        randomness_scalar: 100,
                         max_estimate_us: u64::MAX,
                     },
                 ),
@@ -675,7 +675,7 @@ mod tests {
                     ExecutionTimeEstimateParams {
                         target_utilization: 100,
                         allowed_txn_cost_overage_burst_limit_us: 0,
-                        max_txn_cost_overage_per_object_in_commit_us: u64::MAX,
+                        randomness_scalar: 0,
                         max_estimate_us: u64::MAX,
                     },
                 ),
@@ -771,7 +771,7 @@ mod tests {
                     ExecutionTimeEstimateParams {
                         target_utilization: 100,
                         allowed_txn_cost_overage_burst_limit_us: 0,
-                        max_txn_cost_overage_per_object_in_commit_us: u64::MAX,
+                        randomness_scalar: 0,
                         max_estimate_us: u64::MAX,
                     },
                 ),
@@ -1012,7 +1012,7 @@ mod tests {
 
                 // Not used in this test.
                 allowed_txn_cost_overage_burst_limit_us: 0,
-                max_txn_cost_overage_per_object_in_commit_us: 0,
+                randomness_scalar: 0,
             },
             std::iter::empty(),
         );
