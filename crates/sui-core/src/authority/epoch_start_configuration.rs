@@ -68,6 +68,10 @@ pub enum EpochFlag {
     // This flag indicates whether data quarantining has been enabled from the
     // beginning of the epoch.
     DataQuarantineFromBeginningOfEpoch = 9,
+
+    // Used for `test_epoch_flag_upgrade`.
+    #[cfg(msim)]
+    DummyFlag = 10,
 }
 
 impl EpochFlag {
@@ -75,6 +79,16 @@ impl EpochFlag {
         // NodeConfig arg is not currently used, but we keep it here for future
         // flags that might depend on the config.
         Self::default_flags_impl()
+    }
+
+    // Return flags that are mandatory for the current version of the code. This is used
+    // so that `test_epoch_flag_upgrade` can still work correctly even when there are no
+    // optional flags.
+    pub fn mandatory_flags() -> Vec<Self> {
+        vec![
+            EpochFlag::UseVersionAssignmentTablesV3,
+            EpochFlag::DataQuarantineFromBeginningOfEpoch,
+        ]
     }
 
     /// For situations in which there is no config available (e.g. setting up a downloaded snapshot).
@@ -86,6 +100,8 @@ impl EpochFlag {
         vec![
             EpochFlag::UseVersionAssignmentTablesV3,
             EpochFlag::DataQuarantineFromBeginningOfEpoch,
+            #[cfg(msim)]
+            EpochFlag::DummyFlag,
         ]
     }
 }
@@ -123,6 +139,10 @@ impl fmt::Display for EpochFlag {
             }
             EpochFlag::DataQuarantineFromBeginningOfEpoch => {
                 write!(f, "DataQuarantineFromBeginningOfEpoch")
+            }
+            #[cfg(msim)]
+            EpochFlag::DummyFlag => {
+                write!(f, "DummyFlag")
             }
         }
     }

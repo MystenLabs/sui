@@ -739,8 +739,7 @@ async fn test_epoch_flag_upgrade() {
             return None;
         }
 
-        // start with only UseVersionAssignmentTablesV3
-        let flags: Vec<EpochFlag> = vec![EpochFlag::UseVersionAssignmentTablesV3];
+        let flags: Vec<EpochFlag> = EpochFlag::mandatory_flags();
         Some(flags)
     });
 

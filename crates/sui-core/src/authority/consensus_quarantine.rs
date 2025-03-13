@@ -1,8 +1,6 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::collections::{hash_map, BTreeMap, BTreeSet, HashMap, VecDeque};
-
 use crate::authority::authority_per_epoch_store::{
     AuthorityEpochTables, EncG, ExecutionIndicesWithStats, PkG,
 };
@@ -13,8 +11,12 @@ use crate::epoch::randomness::SINGLETON_KEY;
 use dashmap::DashMap;
 use fastcrypto_tbls::{dkg_v1, nodes::PartyId};
 use fastcrypto_zkp::bn254::zk_login::{JwkId, JWK};
+use moka::policy::EvictionPolicy;
+use moka::sync::SegmentedCache as MokaCache;
 use mysten_common::fatal;
 use parking_lot::Mutex;
+use rand::seq::SliceRandom;
+use std::collections::{hash_map, BTreeMap, BTreeSet, HashMap, VecDeque};
 use sui_types::authenticator_state::ActiveJwk;
 use sui_types::base_types::{AuthorityName, SequenceNumber};
 use sui_types::crypto::RandomnessRound;
@@ -383,6 +385,9 @@ pub(crate) struct ConsensusOutputCache {
     pub(super) user_signatures_for_checkpoints:
         Mutex<HashMap<TransactionDigest, Vec<GenericSignature>>>,
 
+    executed_in_epoch: RwLock<DashMap<TransactionDigest, ()>>,
+    executed_in_epoch_cache: MokaCache<TransactionDigest, ()>,
+
     metrics: Arc<EpochMetrics>,
 }
 
@@ -396,27 +401,30 @@ impl ConsensusOutputCache {
             .get_all_deferred_transactions()
             .expect("load deferred transactions cannot fail");
 
-        if !epoch_start_configuration.is_data_quarantine_active_from_beginning_of_epoch() {
-            let shared_version_assignments =
-                Self::get_all_shared_version_assignments(epoch_start_configuration, tables);
+        assert!(
+            epoch_start_configuration.is_data_quarantine_active_from_beginning_of_epoch(),
+            "This version of sui-node can only run after data quarantining has been enabled. Please run version 1.45.0 or later to the end of the current epoch and retry"
+        );
 
-            let user_signatures_for_checkpoints = tables
-                .get_all_user_signatures_for_checkpoints()
-                .expect("load user signatures for checkpoints cannot fail");
-
-            Self {
-                shared_version_assignments: shared_version_assignments.into_iter().collect(),
-                deferred_transactions: Mutex::new(deferred_transactions),
-                user_signatures_for_checkpoints: Mutex::new(user_signatures_for_checkpoints),
-                metrics,
-            }
+        let executed_in_epoch_cache_capacity = if cfg!(msim) {
+            // Ensure that we test under conditions of constant, frequent,
+            // and rare cache evictions.
+            *[2, 100, 50000].choose(&mut rand::thread_rng()).unwrap()
         } else {
-            Self {
-                shared_version_assignments: Default::default(),
-                deferred_transactions: Mutex::new(deferred_transactions),
-                user_signatures_for_checkpoints: Default::default(),
-                metrics,
-            }
+            50_000
+        };
+
+        Self {
+            shared_version_assignments: Default::default(),
+            deferred_transactions: Mutex::new(deferred_transactions),
+            user_signatures_for_checkpoints: Default::default(),
+            executed_in_epoch: RwLock::new(DashMap::with_shard_amount(2048)),
+            executed_in_epoch_cache: MokaCache::builder(8)
+                // most queries should be for recent transactions
+                .max_capacity(executed_in_epoch_cache_capacity)
+                .eviction_policy(EvictionPolicy::lru())
+                .build(),
+            metrics,
         }
     }
 
@@ -476,39 +484,48 @@ impl ConsensusOutputCache {
             .sub(removed_count as i64);
     }
 
-    // Used to read pre-existing shared object versions from the database after a crash.
-    // TODO: remove this once all nodes have upgraded to data-quarantining.
-    fn get_all_shared_version_assignments(
-        epoch_start_configuration: &EpochStartConfiguration,
-        tables: &AuthorityEpochTables,
-    ) -> Vec<(
-        TransactionKey,
-        Vec<(ConsensusObjectSequenceKey, SequenceNumber)>,
-    )> {
-        if epoch_start_configuration.use_version_assignment_tables_v3() {
-            tables
-                .assigned_shared_object_versions_v3
-                .safe_iter()
-                .collect::<Result<_, _>>()
-                .expect("db error")
-        } else {
-            tables
-                .assigned_shared_object_versions_v2
-                .safe_iter()
-                .collect::<Result<Vec<_>, _>>()
-                .expect("db error")
-                .into_iter()
-                .map(|(key, value)| {
-                    (
-                        key,
-                        value
-                            .into_iter()
-                            .map(|(id, v)| ((id, SequenceNumber::UNKNOWN), v))
-                            .collect::<Vec<_>>(),
-                    )
-                })
-                .collect()
+    pub fn executed_in_current_epoch(&self, digest: &TransactionDigest) -> bool {
+        self.executed_in_epoch
+            .read()
+            .contains_key(digest) ||
+            // we use get instead of contains key to mark the entry as read
+            self.executed_in_epoch_cache.get(digest).is_some()
+    }
+
+    // Called by execution
+    pub fn insert_executed_in_epoch(&self, tx_digest: TransactionDigest) {
+        assert!(
+            self.executed_in_epoch
+                .read()
+                .insert(tx_digest, ())
+                .is_none(),
+            "transaction already executed"
+        );
+        self.executed_in_epoch_cache.insert(tx_digest, ());
+    }
+
+    // CheckpointExecutor calls this (indirectly) in order to prune the in-memory cache of executed
+    // transactions. By the time this is called, the transaction digests will have been committed to
+    // the `executed_transactions_to_checkpoint` table.
+    pub fn remove_executed_in_epoch(&self, tx_digests: &[TransactionDigest]) {
+        let executed_in_epoch = self.executed_in_epoch.read();
+        for tx_digest in tx_digests {
+            executed_in_epoch.remove(tx_digest);
         }
+    }
+
+    pub fn remove_reverted_transaction(&self, tx_digest: &TransactionDigest) {
+        // reverted transactions are not guaranteed to have been executed
+        self.executed_in_epoch.read().remove(tx_digest);
+    }
+
+    /// At reconfig time, all checkpointed transactions must have been removed from self.executed_in_epoch
+    pub fn get_uncheckpointed_transactions(&self) -> Vec<TransactionDigest> {
+        self.executed_in_epoch
+            .write() // exclusive lock to ensure consistent view
+            .iter()
+            .map(|e| *e.key())
+            .collect()
     }
 }
 
