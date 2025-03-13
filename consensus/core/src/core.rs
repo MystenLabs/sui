@@ -608,7 +608,7 @@ impl Core {
         ancestors.iter().for_each(|block| {
             if self.context.protocol_config.consensus_median_based_commit_timestamp() {
                 if block.timestamp_ms() > now {
-                    debug!("Ancestor block {:?} has timestamp {}, greater than current timestamp {now}. Proposing for round {}.", block, block.timestamp_ms(), clock_round);
+                    trace!("Ancestor block {:?} has timestamp {}, greater than current timestamp {now}. Proposing for round {}.", block, block.timestamp_ms(), clock_round);
                     let authority = &self.context.committee.authority(block.author()).hostname;
                     self.context
                         .metrics

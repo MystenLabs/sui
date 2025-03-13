@@ -106,14 +106,14 @@ impl Linearizer {
             &mut dag_state,
         );
 
-        drop(dag_state);
-
         let timestamp_ms = Self::calculate_commit_timestamp(
             &self.context,
+            &mut dag_state,
             &leader_block,
             last_commit_timestamp_ms,
-            &to_commit,
         );
+
+        drop(dag_state);
 
         // Create the Commit.
         let commit = Commit::new(
@@ -149,42 +149,39 @@ impl Linearizer {
     /// respected it is compared against the `last_commit_timestamp_ms` and the maximum of the two is returned.
     pub(crate) fn calculate_commit_timestamp(
         context: &Context,
+        dag_state: &mut impl BlockStoreAPI,
         leader_block: &VerifiedBlock,
         last_commit_timestamp_ms: BlockTimestampMs,
-        to_commit: &[VerifiedBlock],
     ) -> BlockTimestampMs {
         let timestamp_ms = if context
             .protocol_config
             .consensus_median_based_commit_timestamp()
         {
             // Attention should be paid that we are calculating the timestamp only using the leader's committed strong ancestors which should be all the blocks
-            // or round leader.round - 1. Not necessary to search and recheck here the leader's ancestors as by the protocol rules it's impossible to commit any block
-            // of round leader.round - 1 unless it is a leader's strong ancestor.
-            let timestamps = to_commit
+            // of round leader.round - 1.
+            let block_refs = leader_block
+                .ancestors()
                 .iter()
-                .filter_map(|block| {
-                    if block.round() == leader_block.round() - 1 {
-                        Some(block.timestamp_ms())
-                    } else {
-                        None
-                    }
+                .filter(|block_ref| block_ref.round == leader_block.round() - 1)
+                .cloned()
+                .collect::<Vec<_>>();
+            let timestamps = dag_state
+                .get_blocks(&block_refs)
+                .into_iter()
+                .map(|block_opt| {
+                    block_opt
+                        .expect("We should have all blocks in dag state.")
+                        .timestamp_ms()
                 })
                 .collect::<Vec<_>>();
 
-            // The only reason for the median to be `None` would be when there is only one authority in commitee and the only block that gets committed is the leader's.
-            // In this case we just return the leader's timestamp.
-            median(timestamps).unwrap_or_else(|| {
-                // Trust the leader's timestamp only if it has quorum on its own (most probably we are looking to a single committee network).
-                // Otherwise fallback to zero. This is also protecting us against the case where the very first sub dag is committed where the genesis blocks
-                // are not committed and leader could manipulate here the timestamp to a very high value. Setting it to zero ensures that we just fallback to
-                // whatever timestamp was set before the epoch change.
-                let leader_stake = context.committee.authority(leader_block.author()).stake;
-                if context.committee.reached_quorum(leader_stake) {
-                    leader_block.timestamp_ms()
-                } else {
-                    0
-                }
-            })
+            assert!(
+                !timestamps.is_empty(),
+                "Leader block {:?} should have at least one ancestor.",
+                leader_block
+            );
+
+            median(timestamps)
         } else {
             leader_block.timestamp_ms()
         };
@@ -397,19 +394,17 @@ impl Linearizer {
     }
 }
 
-pub(crate) fn median(mut numbers: Vec<BlockTimestampMs>) -> Option<BlockTimestampMs> {
+pub(crate) fn median(mut numbers: Vec<BlockTimestampMs>) -> BlockTimestampMs {
     let len = numbers.len();
-    if len == 0 {
-        return None;
-    }
+    assert!(len > 0, "Cannot calculate median of an empty list");
 
     numbers.sort_unstable();
 
-    Some(if len % 2 == 1 {
+    if len % 2 == 1 {
         numbers[len / 2]
     } else {
         (numbers[len / 2 - 1] + numbers[len / 2]) / 2
-    })
+    }
 }
 
 #[cfg(test)]
@@ -469,14 +464,24 @@ mod tests {
             assert_eq!(subdag.leader, leaders[idx].reference());
 
             let expected_ts = if consensus_median_timestamp {
-                let ancestor_timestamps = subdag
-                    .blocks
+                let block_refs = leaders[idx]
+                    .ancestors()
                     .iter()
-                    .filter(|block| block.round() == subdag.leader.round - 1)
-                    .map(|b| b.timestamp_ms())
+                    .filter(|block_ref| block_ref.round == leaders[idx].round() - 1)
+                    .cloned()
+                    .collect::<Vec<_>>();
+                let ancestor_timestamps = dag_state
+                    .read()
+                    .get_blocks(&block_refs)
+                    .into_iter()
+                    .map(|block_opt| {
+                        block_opt
+                            .expect("We should have all blocks in dag state.")
+                            .timestamp_ms()
+                    })
                     .collect::<Vec<_>>();
 
-                median(ancestor_timestamps).unwrap_or(0)
+                median(ancestor_timestamps)
             } else {
                 leaders[idx].timestamp_ms()
             };
@@ -676,7 +681,7 @@ mod tests {
                 .map(|b| b.timestamp_ms())
                 .collect::<Vec<_>>();
 
-            median(ancestor_timestamps).unwrap()
+            median(ancestor_timestamps)
         } else {
             leader.timestamp_ms()
         };
@@ -781,14 +786,24 @@ mod tests {
             assert_eq!(subdag.leader, leaders[idx].reference());
 
             let expected_ts = if consensus_median_timestamp {
-                let ancestor_timestamps = subdag
-                    .blocks
+                let block_refs = leaders[idx]
+                    .ancestors()
                     .iter()
-                    .filter(|block| block.round() == subdag.leader.round - 1)
-                    .map(|b| b.timestamp_ms())
+                    .filter(|block_ref| block_ref.round == leaders[idx].round() - 1)
+                    .cloned()
+                    .collect::<Vec<_>>();
+                let ancestor_timestamps = dag_state
+                    .read()
+                    .get_blocks(&block_refs)
+                    .into_iter()
+                    .map(|block_opt| {
+                        block_opt
+                            .expect("We should have all blocks in dag state.")
+                            .timestamp_ms()
+                    })
                     .collect::<Vec<_>>();
 
-                median(ancestor_timestamps).unwrap_or(0)
+                median(ancestor_timestamps)
             } else {
                 leaders[idx].timestamp_ms()
             };
@@ -910,14 +925,24 @@ mod tests {
             assert_eq!(subdag.leader, leaders[idx].reference());
 
             let expected_ts = if consensus_median_timestamp {
-                let ancestor_timestamps = subdag
-                    .blocks
+                let block_refs = leaders[idx]
+                    .ancestors()
                     .iter()
-                    .filter(|block| block.round() == subdag.leader.round - 1)
-                    .map(|b| b.timestamp_ms())
+                    .filter(|block_ref| block_ref.round == leaders[idx].round() - 1)
+                    .cloned()
+                    .collect::<Vec<_>>();
+                let ancestor_timestamps = dag_state
+                    .read()
+                    .get_blocks(&block_refs)
+                    .into_iter()
+                    .map(|block_opt| {
+                        block_opt
+                            .expect("We should have all blocks in dag state.")
+                            .timestamp_ms()
+                    })
                     .collect::<Vec<_>>();
 
-                median(ancestor_timestamps).unwrap_or(0)
+                median(ancestor_timestamps)
             } else {
                 leaders[idx].timestamp_ms()
             };
@@ -985,38 +1010,63 @@ mod tests {
             .set_consensus_median_based_commit_timestamp_for_testing(consensus_median_timestamp);
 
         let context = Arc::new(context);
+        let store = Arc::new(MemStore::new());
+        let dag_state = Arc::new(RwLock::new(DagState::new(context.clone(), store)));
+        let mut dag_state = dag_state.write();
 
-        let to_commit = vec![
-            TestBlock::new(4, 0).set_timestamp_ms(1_000).build(),
-            TestBlock::new(4, 1).set_timestamp_ms(2_000).build(),
-            TestBlock::new(4, 2).set_timestamp_ms(3_000).build(),
-            TestBlock::new(4, 3).set_timestamp_ms(4_000).build(),
-            TestBlock::new(5, 0).set_timestamp_ms(5_000).build(),
+        let ancestors = vec![
+            VerifiedBlock::new_for_test(TestBlock::new(4, 0).set_timestamp_ms(1_000).build()),
+            VerifiedBlock::new_for_test(TestBlock::new(4, 1).set_timestamp_ms(2_000).build()),
+            VerifiedBlock::new_for_test(TestBlock::new(4, 2).set_timestamp_ms(3_000).build()),
+            VerifiedBlock::new_for_test(TestBlock::new(4, 3).set_timestamp_ms(4_000).build()),
         ];
-        let mut to_commit = to_commit
-            .into_iter()
-            .map(VerifiedBlock::new_for_test)
-            .collect::<Vec<_>>();
-        let leader_block = to_commit.last().unwrap().clone();
+
+        let leader_block = VerifiedBlock::new_for_test(
+            TestBlock::new(5, 0)
+                .set_timestamp_ms(5_000)
+                .set_ancestors(
+                    ancestors
+                        .iter()
+                        .map(|block| block.reference())
+                        .collect::<Vec<_>>(),
+                )
+                .build(),
+        );
+
+        for block in &ancestors {
+            dag_state.accept_block(block.clone());
+        }
+
         let last_commit_timestamp_ms = 0;
 
         // WHEN
         let timestamp = Linearizer::calculate_commit_timestamp(
             &context,
+            &mut dag_state,
             &leader_block,
             last_commit_timestamp_ms,
-            &to_commit,
         );
         assert_eq!(timestamp, timestamp_1);
 
-        // AND remove the block of authority 0 and round 4.
-        to_commit.remove(0);
+        // AND skip the block of authority 0 and round 4.
+        let leader_block = VerifiedBlock::new_for_test(
+            TestBlock::new(5, 0)
+                .set_timestamp_ms(5_000)
+                .set_ancestors(
+                    ancestors
+                        .iter()
+                        .skip(1)
+                        .map(|block| block.reference())
+                        .collect::<Vec<_>>(),
+                )
+                .build(),
+        );
 
         let timestamp = Linearizer::calculate_commit_timestamp(
             &context,
+            &mut dag_state,
             &leader_block,
             last_commit_timestamp_ms,
-            &to_commit,
         );
         assert_eq!(timestamp, timestamp_2);
 
@@ -1024,23 +1074,34 @@ mod tests {
         let last_commit_timestamp_ms = 6_000;
         let timestamp = Linearizer::calculate_commit_timestamp(
             &context,
+            &mut dag_state,
             &leader_block,
             last_commit_timestamp_ms,
-            &to_commit,
         );
         assert_eq!(timestamp, timestamp_3);
 
-        // AND there is only one block to commit - the leader
+        // AND there is only one ancestor block to commit
+        let leader_block = VerifiedBlock::new_for_test(
+            TestBlock::new(5, 0)
+                .set_timestamp_ms(5_000)
+                .set_ancestors(
+                    ancestors
+                        .iter()
+                        .take(1)
+                        .map(|block| block.reference())
+                        .collect::<Vec<_>>(),
+                )
+                .build(),
+        );
         let last_commit_timestamp_ms = 0;
-        let to_commit = vec![leader_block.clone()];
         let timestamp = Linearizer::calculate_commit_timestamp(
             &context,
+            &mut dag_state,
             &leader_block,
             last_commit_timestamp_ms,
-            &to_commit,
         );
         if consensus_median_timestamp {
-            assert_eq!(timestamp, 0);
+            assert_eq!(timestamp, 1_000);
         } else {
             assert_eq!(timestamp, leader_block.timestamp_ms());
         }
