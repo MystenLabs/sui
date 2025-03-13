@@ -9,7 +9,7 @@ use clap::Parser;
 use move_binary_format::{errors::VMError, file_format::CompiledModule};
 use move_bytecode_verifier::{dependencies, verify_module_unmetered};
 use move_command_line_common::files::{
-    MOVE_COMPILED_EXTENSION, MOVE_IR_EXTENSION, SOURCE_MAP_EXTENSION,
+    DEBUG_INFO_EXTENSION, MOVE_COMPILED_EXTENSION, MOVE_IR_EXTENSION,
 };
 use move_ir_compiler::util;
 use move_ir_to_bytecode::parser::parse_module;
@@ -66,7 +66,7 @@ fn main() {
     let source_path = Path::new(&args.source_path);
     let mvir_extension = MOVE_IR_EXTENSION;
     let mv_extension = MOVE_COMPILED_EXTENSION;
-    let source_map_extension = SOURCE_MAP_EXTENSION;
+    let debug_info_extension = DEBUG_INFO_EXTENSION;
     let extension = source_path
         .extension()
         .expect("Missing file extension for input source file");
@@ -120,7 +120,7 @@ fn main() {
         let source_map_bytes =
             bcs::to_bytes(&source_map).expect("Unable to serialize source maps for module");
         write_output(
-            &source_path.with_extension(source_map_extension),
+            &source_path.with_extension(debug_info_extension),
             &source_map_bytes,
         );
     }
