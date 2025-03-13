@@ -228,9 +228,9 @@ impl DagBuilder {
 
             last_timestamp_ms = Linearizer::calculate_commit_timestamp(
                 &self.context.clone(),
+                &mut storage,
                 &leader_block,
                 last_timestamp_ms,
-                &to_commit,
             );
 
             // Update the last committed rounds

@@ -278,18 +278,24 @@ mod tests {
             assert_eq!(subdag.leader, leaders[idx].reference());
 
             let expected_ts = if consensus_median_timestamp {
-                let ancestor_timestamps = subdag
-                    .blocks
+                let block_refs = leaders[idx]
+                    .ancestors()
                     .iter()
-                    .filter(|block| block.round() == subdag.leader.round - 1)
-                    .map(|b| b.timestamp_ms())
+                    .filter(|block_ref| block_ref.round == leaders[idx].round() - 1)
+                    .cloned()
+                    .collect::<Vec<_>>();
+                let ancestor_timestamps = dag_state
+                    .read()
+                    .get_blocks(&block_refs)
+                    .into_iter()
+                    .map(|block_opt| {
+                        block_opt
+                            .expect("We should have all blocks in dag state.")
+                            .timestamp_ms()
+                    })
                     .collect::<Vec<_>>();
 
-                if ancestor_timestamps.is_empty() {
-                    0
-                } else {
-                    median(ancestor_timestamps).unwrap()
-                }
+                median(ancestor_timestamps)
             } else {
                 leaders[idx].timestamp_ms()
             };
