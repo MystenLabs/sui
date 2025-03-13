@@ -15,6 +15,7 @@ use moka::policy::EvictionPolicy;
 use moka::sync::SegmentedCache as MokaCache;
 use mysten_common::fatal;
 use parking_lot::Mutex;
+use rand::seq::SliceRandom;
 use std::collections::{hash_map, BTreeMap, BTreeSet, HashMap, VecDeque};
 use sui_types::authenticator_state::ActiveJwk;
 use sui_types::base_types::{AuthorityName, SequenceNumber};
@@ -405,6 +406,14 @@ impl ConsensusOutputCache {
             "This version of sui-node can only run after data quarantining has been enabled. Please run version 1.45.0 or later to the end of the current epoch and retry"
         );
 
+        let executed_in_epoch_cache_capacity = if cfg!(msim) {
+            // Ensure that we test under conditions of constant, frequent,
+            // and rare cache evictions.
+            *[2, 100, 50000].choose(&mut rand::thread_rng()).unwrap()
+        } else {
+            50_000
+        };
+
         Self {
             shared_version_assignments: Default::default(),
             deferred_transactions: Mutex::new(deferred_transactions),
@@ -412,7 +421,7 @@ impl ConsensusOutputCache {
             executed_in_epoch: RwLock::new(DashMap::with_shard_amount(2048)),
             executed_in_epoch_cache: MokaCache::builder(8)
                 // most queries should be for recent transactions
-                .max_capacity(50_000)
+                .max_capacity(executed_in_epoch_cache_capacity)
                 .eviction_policy(EvictionPolicy::lru())
                 .build(),
             metrics,
