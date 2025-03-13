@@ -36,7 +36,7 @@ pub fn build<W: Write>(
         .cloned()
         .map(|CompiledUnitWithSource { unit, source_path }| (source_path, unit))
         .collect::<Vec<_>>();
-    source_model::Model::new(
+    source_model::Model::from_source(
         compiled_package.file_map,
         Some(root_package_name),
         root_named_address_map,

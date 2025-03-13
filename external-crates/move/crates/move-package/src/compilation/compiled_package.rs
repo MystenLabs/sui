@@ -632,7 +632,7 @@ impl CompiledPackage {
         let mut compiled_docs = None;
         if resolution_graph.build_options.generate_docs {
             let root_named_address_map = resolved_package.resolved_table.clone();
-            let model = source_model::Model::new(
+            let model = source_model::Model::from_source(
                 file_map.clone(),
                 Some(root_package_name),
                 root_named_address_map,
