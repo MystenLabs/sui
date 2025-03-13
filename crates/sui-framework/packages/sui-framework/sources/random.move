@@ -285,7 +285,7 @@ public fun shuffle<T>(g: &mut RandomGenerator, v: &mut vector<T>) {
     let n = n as u16;
     let end = n - 1;
     end.do!(|i| {
-        let j = generate_u16_in_range(g, i, end);
+        let j = g.generate_u16_in_range(i, end);
         v.swap(i as u64, j as u64);
     });
 }
