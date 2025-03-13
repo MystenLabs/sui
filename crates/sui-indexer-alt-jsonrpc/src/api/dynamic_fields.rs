@@ -18,7 +18,7 @@ use tokio::try_join;
 
 use crate::{
     context::Context,
-    data::objects::load_latest,
+    data::objects::load_live,
     error::{invalid_params, rpc_bail, RpcError},
 };
 
@@ -164,7 +164,7 @@ async fn load_df(
     let id = derive_dynamic_field_id(parent_id, type_, value)
         .context("Failed to derive dynamic field ID")?;
 
-    Ok(load_latest(ctx, id)
+    Ok(load_live(ctx, id)
         .await
         .context("Failed to load dynamic field")?)
 }
@@ -184,7 +184,7 @@ async fn load_dof(
     let id = derive_dynamic_field_id(parent_id, &wrapper, name)
         .context("Failed to derive dynamic object field ID")?;
 
-    let Some(object) = load_latest(ctx, id)
+    let Some(object) = load_live(ctx, id)
         .await
         .context("Failed to load dynamic object field")?
     else {
@@ -199,7 +199,7 @@ async fn load_dof(
     let value = ObjectID::from_bytes(&move_object.contents()[ObjectID::LENGTH + name.len()..])
         .context("Failed to extract object ID from dynamic object field")?;
 
-    Ok(load_latest(ctx, value)
+    Ok(load_live(ctx, value)
         .await
         .context("Failed to load dynamic field object")?)
 }
