@@ -181,9 +181,11 @@ impl ExecutionTimeObserver {
                     utilization.excess_execution_time.saturating_sub(
                         utilization
                             .last_measured
-                            .map(|last_measured| now.duration_since(last_measured))
-                            .unwrap_or(Duration::MAX)
-                            .mul_f64(self.protocol_params.target_utilization as f64 / 100.0),
+                            .map(|last_measured| {
+                                now.duration_since(last_measured)
+                                    .mul_f64(self.protocol_params.target_utilization as f64 / 100.0)
+                            })
+                            .unwrap_or(Duration::MAX),
                     );
                 utilization.last_measured = Some(now);
                 utilization.excess_execution_time
@@ -505,12 +507,27 @@ mod tests {
         ConnectionMonitorStatusForTests, ConsensusAdapter, ConsensusAdapterMetrics,
         MockConsensusClient,
     };
+    use sui_protocol_config::ProtocolConfig;
     use sui_types::base_types::{ObjectID, SequenceNumber, SuiAddress};
     use sui_types::transaction::{Argument, CallArg, ObjectArg, ProgrammableMoveCall};
 
     #[tokio::test]
     async fn test_record_local_observations() {
         telemetry_subscribers::init_for_testing();
+
+        let _guard = ProtocolConfig::apply_overrides_for_testing(|_, mut config| {
+            config.set_per_object_congestion_control_mode_for_testing(
+                PerObjectCongestionControlMode::ExecutionTimeEstimate(
+                    ExecutionTimeEstimateParams {
+                        target_utilization: 100,
+                        allowed_txn_cost_overage_burst_limit_us: 0,
+                        max_txn_cost_overage_per_object_in_commit_us: u64::MAX,
+                        max_estimate_us: u64::MAX,
+                    },
+                ),
+            );
+            config
+        });
 
         let mock_consensus_client = MockConsensusClient::new();
         let authority = TestAuthorityBuilder::new().build().await;
@@ -638,6 +655,20 @@ mod tests {
     async fn test_record_local_observations_with_multiple_commands() {
         telemetry_subscribers::init_for_testing();
 
+        let _guard = ProtocolConfig::apply_overrides_for_testing(|_, mut config| {
+            config.set_per_object_congestion_control_mode_for_testing(
+                PerObjectCongestionControlMode::ExecutionTimeEstimate(
+                    ExecutionTimeEstimateParams {
+                        target_utilization: 100,
+                        allowed_txn_cost_overage_burst_limit_us: 0,
+                        max_txn_cost_overage_per_object_in_commit_us: u64::MAX,
+                        max_estimate_us: u64::MAX,
+                    },
+                ),
+            );
+            config
+        });
+
         let mock_consensus_client = MockConsensusClient::new();
         let authority = TestAuthorityBuilder::new().build().await;
         let epoch_store = authority.epoch_store_for_testing();
@@ -719,6 +750,20 @@ mod tests {
     #[tokio::test]
     async fn test_record_local_observations_with_object_utilization_threshold() {
         telemetry_subscribers::init_for_testing();
+
+        let _guard = ProtocolConfig::apply_overrides_for_testing(|_, mut config| {
+            config.set_per_object_congestion_control_mode_for_testing(
+                PerObjectCongestionControlMode::ExecutionTimeEstimate(
+                    ExecutionTimeEstimateParams {
+                        target_utilization: 100,
+                        allowed_txn_cost_overage_burst_limit_us: 0,
+                        max_txn_cost_overage_per_object_in_commit_us: u64::MAX,
+                        max_estimate_us: u64::MAX,
+                    },
+                ),
+            );
+            config
+        });
 
         let mock_consensus_client = MockConsensusClient::new();
         let authority = TestAuthorityBuilder::new().build().await;
