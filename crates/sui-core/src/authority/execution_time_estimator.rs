@@ -320,6 +320,8 @@ impl ExecutionTimeObserver {
     }
 
     fn update_indebted_objects(&mut self, mut object_debts: Vec<ObjectID>) {
+        let _scope = monitored_scope("ExecutionTimeObserver::update_indebted_objects");
+
         object_debts.sort_unstable();
         object_debts.dedup();
         self.indebted_objects = object_debts;
