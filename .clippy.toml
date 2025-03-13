@@ -13,4 +13,7 @@ disallowed-methods = [
     { path = "futures::executor::block_on", reason = "use tokio::runtime::runtime::Runtime::block_on instead"},
     # bincode::deserialize_from is easy to shoot your foot with
     { path = "bincode::deserialize_from", reason = "use bincode::deserialize instead" },
+    # setting env vars during runtime is unsafe and should never be done
+    { path = "std::env::set_var", reason = "updating env vars during runtime is unsafe" },
+    { path = "std::env::remove_var", reason = "updating env vars during runtime is unsafe" },
 ]
