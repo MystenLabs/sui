@@ -68,7 +68,6 @@ impl<P: ProgressStore> ProgressStoreWrapper<P> {
 }
 
 pub struct ShimProgressStore(pub u64);
-
 #[async_trait]
 impl ProgressStore for ShimProgressStore {
     async fn load(&mut self, _: String) -> Result<CheckpointSequenceNumber> {

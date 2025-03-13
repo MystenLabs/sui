@@ -509,6 +509,7 @@ impl FileMetadata {
 pub struct Processor {
     pub processor: Box<dyn Worker<Result = ()>>,
     pub starting_checkpoint_seq_num: CheckpointSequenceNumber,
+    pub task_name: String,
 }
 
 #[async_trait::async_trait]
@@ -531,6 +532,7 @@ impl Processor {
         config: Arc<AnalyticsIndexerConfig>,
         task_config: Arc<TaskConfig>,
     ) -> Result<Self> {
+        let task_name = task_config.task_name.clone();
         let processor = Box::new(
             AnalyticsProcessor::new(
                 handler,
@@ -547,6 +549,7 @@ impl Processor {
         Ok(Processor {
             processor,
             starting_checkpoint_seq_num,
+            task_name,
         })
     }
 
