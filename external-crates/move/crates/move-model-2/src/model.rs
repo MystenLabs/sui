@@ -666,8 +666,7 @@ impl<'a> Variant<'a, WITH_SOURCE> {
     }
 }
 
-static MACRO_EMPTY_SET: LazyLock<&'static BTreeSet<QualifiedMemberId>> =
-    LazyLock::new(|| Box::leak(Box::new(BTreeSet::new())));
+static MACRO_EMPTY_SET: LazyLock<BTreeSet<QualifiedMemberId>> = LazyLock::new(BTreeSet::new);
 
 impl<'a, const HAS_SOURCE: SourceKind> Function<'a, HAS_SOURCE> {
     pub fn name(&self) -> Symbol {
