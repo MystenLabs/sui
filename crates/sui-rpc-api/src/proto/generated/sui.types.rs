@@ -918,6 +918,134 @@ pub mod input {
         }
     }
 }
+/// An object on the Sui blockchain.
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct Object {
+    /// This Object serialized as BCS.
+    #[prost(message, optional, tag = "1")]
+    pub bcs: ::core::option::Option<Bcs>,
+    /// `ObjectId` for this object.
+    #[prost(string, optional, tag = "2")]
+    pub object_id: ::core::option::Option<::prost::alloc::string::String>,
+    /// Version of the object.
+    #[prost(uint64, optional, tag = "3")]
+    pub version: ::core::option::Option<u64>,
+    /// The digest of this Object.
+    #[prost(string, optional, tag = "4")]
+    pub digest: ::core::option::Option<::prost::alloc::string::String>,
+    /// Owner of the object.
+    #[prost(message, optional, tag = "5")]
+    pub owner: ::core::option::Option<Owner>,
+    /// The type of this object.
+    #[prost(string, optional, tag = "6")]
+    pub object_type: ::core::option::Option<::prost::alloc::string::String>,
+    /// DEPRECATED this field is no longer used to determine whether a tx can transfer this
+    /// object. Instead, it is always calculated from the objects type when loaded in execution.
+    ///
+    /// Only set for Move structs
+    #[prost(bool, optional, tag = "7")]
+    pub has_public_transfer: ::core::option::Option<bool>,
+    /// BCS bytes of a Move struct value.
+    ///
+    /// Only set for Move structs
+    #[prost(bytes = "bytes", optional, tag = "8")]
+    pub contents: ::core::option::Option<::prost::bytes::Bytes>,
+    /// Set of modules defined by this package.
+    ///
+    /// Only set for Packages
+    #[prost(message, repeated, tag = "9")]
+    pub modules: ::prost::alloc::vec::Vec<MoveModule>,
+    /// Maps struct/module to a package version where it was first defined, stored as a vector for
+    /// simple serialization and deserialization.
+    ///
+    /// Only set for Packages
+    #[prost(message, repeated, tag = "10")]
+    pub type_origin_table: ::prost::alloc::vec::Vec<TypeOrigin>,
+    /// For each dependency, maps original package ID to the info about the (upgraded) dependency
+    /// version that this package is using.
+    ///
+    /// Only set for Packages
+    #[prost(message, repeated, tag = "11")]
+    pub linkage_table: ::prost::alloc::vec::Vec<UpgradeInfo>,
+    /// The digest of the transaction that created or last mutated this object
+    #[prost(string, optional, tag = "12")]
+    pub previous_transaction: ::core::option::Option<::prost::alloc::string::String>,
+    /// The amount of SUI to rebate if this object gets deleted.
+    /// This number is re-calculated each time the object is mutated based on
+    /// the present storage gas price.
+    #[prost(uint64, optional, tag = "13")]
+    pub storage_rebate: ::core::option::Option<u64>,
+}
+/// Module defined by a package.
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct MoveModule {
+    /// Name of the module.
+    #[prost(string, optional, tag = "1")]
+    pub name: ::core::option::Option<::prost::alloc::string::String>,
+    /// Serialized bytecode of the module.
+    #[prost(bytes = "bytes", optional, tag = "2")]
+    pub contents: ::core::option::Option<::prost::bytes::Bytes>,
+}
+/// Identifies a struct and the module it was defined in.
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct TypeOrigin {
+    #[prost(string, optional, tag = "1")]
+    pub module_name: ::core::option::Option<::prost::alloc::string::String>,
+    #[prost(string, optional, tag = "2")]
+    pub struct_name: ::core::option::Option<::prost::alloc::string::String>,
+    #[prost(string, optional, tag = "3")]
+    pub package_id: ::core::option::Option<::prost::alloc::string::String>,
+}
+/// / Upgraded package info for the linkage table.
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct UpgradeInfo {
+    /// ID of the original package.
+    #[prost(string, optional, tag = "1")]
+    pub original_id: ::core::option::Option<::prost::alloc::string::String>,
+    /// ID of the upgraded package.
+    #[prost(string, optional, tag = "2")]
+    pub upgraded_id: ::core::option::Option<::prost::alloc::string::String>,
+    /// Version of the upgraded package.
+    #[prost(uint64, optional, tag = "3")]
+    pub upgraded_version: ::core::option::Option<u64>,
+}
+/// Reference to an object.
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct ObjectReference {
+    /// The object ID of this object.
+    #[prost(string, optional, tag = "1")]
+    pub object_id: ::core::option::Option<::prost::alloc::string::String>,
+    /// The version of this object.
+    #[prost(uint64, optional, tag = "2")]
+    pub version: ::core::option::Option<u64>,
+    /// The digest of this object.
+    #[prost(string, optional, tag = "3")]
+    pub digest: ::core::option::Option<::prost::alloc::string::String>,
+}
+/// Enum of different types of ownership for an object.
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct Owner {
+    #[prost(oneof = "owner::Kind", tags = "1, 2, 3, 4")]
+    pub kind: ::core::option::Option<owner::Kind>,
+}
+/// Nested message and enum types in `Owner`.
+pub mod owner {
+    #[derive(Clone, PartialEq, ::prost::Oneof)]
+    pub enum Kind {
+        /// Object is exclusively owned by a single address, and is mutable.
+        #[prost(string, tag = "1")]
+        Address(::prost::alloc::string::String),
+        /// Object is exclusively owned by a single object, and is mutable.
+        #[prost(string, tag = "2")]
+        Object(::prost::alloc::string::String),
+        /// Object is shared, can be used by any address, and is mutable.
+        #[prost(uint64, tag = "3")]
+        Shared(u64),
+        /// Object is immutable, and hence ownership doesn't matter.
+        #[prost(message, tag = "4")]
+        Immutable(()),
+    }
+}
 /// A signature from a user.
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct UserSignature {
@@ -1579,7 +1707,7 @@ pub struct SystemPackage {
 pub struct GenesisTransaction {
     /// Set of genesis objects.
     #[prost(message, repeated, tag = "1")]
-    pub objects: ::prost::alloc::vec::Vec<GenesisObject>,
+    pub objects: ::prost::alloc::vec::Vec<Object>,
 }
 /// Consensus commit prologue system transaction.
 ///
@@ -1778,168 +1906,6 @@ pub struct AuthenticatorStateExpire {
     /// The initial version of the authenticator object that it was shared at.
     #[prost(uint64, optional, tag = "2")]
     pub authenticator_object_initial_shared_version: ::core::option::Option<u64>,
-}
-/// Reference to an object.
-#[derive(Clone, PartialEq, ::prost::Message)]
-pub struct ObjectReference {
-    /// The object ID of this object.
-    #[prost(string, optional, tag = "1")]
-    pub object_id: ::core::option::Option<::prost::alloc::string::String>,
-    /// The version of this object.
-    #[prost(uint64, optional, tag = "2")]
-    pub version: ::core::option::Option<u64>,
-    /// The digest of this object.
-    #[prost(string, optional, tag = "3")]
-    pub digest: ::core::option::Option<::prost::alloc::string::String>,
-}
-/// A Move package.
-#[derive(Clone, PartialEq, ::prost::Message)]
-pub struct MovePackage {
-    /// Address or ID of this package.
-    #[prost(string, optional, tag = "1")]
-    pub id: ::core::option::Option<::prost::alloc::string::String>,
-    /// Version of the package.
-    #[prost(uint64, optional, tag = "2")]
-    pub version: ::core::option::Option<u64>,
-    /// Set of modules defined by this package.
-    #[prost(message, repeated, tag = "3")]
-    pub modules: ::prost::alloc::vec::Vec<MoveModule>,
-    /// Maps struct/module to a package version where it was first defined, stored as a vector for
-    /// simple serialization and deserialization.
-    #[prost(message, repeated, tag = "4")]
-    pub type_origin_table: ::prost::alloc::vec::Vec<TypeOrigin>,
-    /// For each dependency, maps original package ID to the info about the (upgraded) dependency
-    /// version that this package is using.
-    #[prost(message, repeated, tag = "5")]
-    pub linkage_table: ::prost::alloc::vec::Vec<UpgradeInfo>,
-}
-/// Module defined by a package.
-#[derive(Clone, PartialEq, ::prost::Message)]
-pub struct MoveModule {
-    /// Name of the module.
-    #[prost(string, optional, tag = "1")]
-    pub name: ::core::option::Option<::prost::alloc::string::String>,
-    /// Serialized bytecode of the module.
-    #[prost(bytes = "bytes", optional, tag = "2")]
-    pub contents: ::core::option::Option<::prost::bytes::Bytes>,
-}
-/// Identifies a struct and the module it was defined in.
-#[derive(Clone, PartialEq, ::prost::Message)]
-pub struct TypeOrigin {
-    #[prost(string, optional, tag = "1")]
-    pub module_name: ::core::option::Option<::prost::alloc::string::String>,
-    #[prost(string, optional, tag = "2")]
-    pub struct_name: ::core::option::Option<::prost::alloc::string::String>,
-    #[prost(string, optional, tag = "3")]
-    pub package_id: ::core::option::Option<::prost::alloc::string::String>,
-}
-/// / Upgraded package info for the linkage table.
-#[derive(Clone, PartialEq, ::prost::Message)]
-pub struct UpgradeInfo {
-    /// ID of the original package.
-    #[prost(string, optional, tag = "1")]
-    pub original_id: ::core::option::Option<::prost::alloc::string::String>,
-    /// ID of the upgraded package.
-    #[prost(string, optional, tag = "2")]
-    pub upgraded_id: ::core::option::Option<::prost::alloc::string::String>,
-    /// Version of the upgraded package.
-    #[prost(uint64, optional, tag = "3")]
-    pub upgraded_version: ::core::option::Option<u64>,
-}
-/// Enum of different types of ownership for an object.
-#[derive(Clone, PartialEq, ::prost::Message)]
-pub struct Owner {
-    #[prost(oneof = "owner::Kind", tags = "1, 2, 3, 4")]
-    pub kind: ::core::option::Option<owner::Kind>,
-}
-/// Nested message and enum types in `Owner`.
-pub mod owner {
-    #[derive(Clone, PartialEq, ::prost::Oneof)]
-    pub enum Kind {
-        /// Object is exclusively owned by a single address, and is mutable.
-        #[prost(string, tag = "1")]
-        Address(::prost::alloc::string::String),
-        /// Object is exclusively owned by a single object, and is mutable.
-        #[prost(string, tag = "2")]
-        Object(::prost::alloc::string::String),
-        /// Object is shared, can be used by any address, and is mutable.
-        #[prost(uint64, tag = "3")]
-        Shared(u64),
-        /// Object is immutable, and hence ownership doesn't matter.
-        #[prost(message, tag = "4")]
-        Immutable(()),
-    }
-}
-/// A Move struct.
-#[derive(Clone, PartialEq, ::prost::Message)]
-pub struct MoveStruct {
-    /// `ObjectId` for this object.
-    #[prost(string, optional, tag = "1")]
-    pub object_id: ::core::option::Option<::prost::alloc::string::String>,
-    /// The type of this object.
-    #[prost(string, optional, tag = "2")]
-    pub object_type: ::core::option::Option<::prost::alloc::string::String>,
-    /// DEPRECATED this field is no longer used to determine whether a tx can transfer this
-    /// object. Instead, it is always calculated from the objects type when loaded in execution.
-    #[prost(bool, optional, tag = "3")]
-    pub has_public_transfer: ::core::option::Option<bool>,
-    /// Version of the object.
-    #[prost(uint64, optional, tag = "4")]
-    pub version: ::core::option::Option<u64>,
-    /// BCS bytes of a Move struct value.
-    #[prost(bytes = "bytes", optional, tag = "5")]
-    pub contents: ::core::option::Option<::prost::bytes::Bytes>,
-}
-/// An object on the Sui blockchain.
-#[derive(Clone, PartialEq, ::prost::Message)]
-pub struct Object {
-    /// `ObjectId` for this object.
-    #[prost(string, optional, tag = "1")]
-    pub object_id: ::core::option::Option<::prost::alloc::string::String>,
-    /// Version of the object.
-    #[prost(uint64, optional, tag = "2")]
-    pub version: ::core::option::Option<u64>,
-    /// Owner of the object.
-    #[prost(message, optional, tag = "3")]
-    pub owner: ::core::option::Option<Owner>,
-    #[prost(message, optional, tag = "4")]
-    pub object: ::core::option::Option<ObjectData>,
-    /// The digest of the transaction that created or last mutated this object
-    #[prost(string, optional, tag = "5")]
-    pub previous_transaction: ::core::option::Option<::prost::alloc::string::String>,
-    /// The amount of SUI to rebate if this object gets deleted.
-    /// This number is re-calculated each time the object is mutated based on
-    /// the present storage gas price.
-    #[prost(uint64, optional, tag = "6")]
-    pub storage_rebate: ::core::option::Option<u64>,
-}
-/// Object data, either a package or struct.
-#[derive(Clone, PartialEq, ::prost::Message)]
-pub struct ObjectData {
-    #[prost(oneof = "object_data::Kind", tags = "1, 2")]
-    pub kind: ::core::option::Option<object_data::Kind>,
-}
-/// Nested message and enum types in `ObjectData`.
-pub mod object_data {
-    #[derive(Clone, PartialEq, ::prost::Oneof)]
-    pub enum Kind {
-        #[prost(message, tag = "1")]
-        Struct(super::MoveStruct),
-        #[prost(message, tag = "2")]
-        Package(super::MovePackage),
-    }
-}
-/// An object part of the initial chain state.
-#[derive(Clone, PartialEq, ::prost::Message)]
-pub struct GenesisObject {
-    #[prost(string, optional, tag = "1")]
-    pub object_id: ::core::option::Option<::prost::alloc::string::String>,
-    #[prost(uint64, optional, tag = "2")]
-    pub version: ::core::option::Option<u64>,
-    #[prost(message, optional, tag = "3")]
-    pub owner: ::core::option::Option<Owner>,
-    #[prost(message, optional, tag = "4")]
-    pub object: ::core::option::Option<ObjectData>,
 }
 /// The output or effects of executing a transaction.
 #[derive(Clone, PartialEq, ::prost::Message)]

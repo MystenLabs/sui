@@ -6,7 +6,8 @@ import "google/protobuf/empty.proto";
 import "sui/types/argument.proto";
 import "sui/types/bcs.proto";
 import "sui/types/input.proto";
-import "sui/types/types.proto";
+import "sui/types/object.proto";
+import "sui/types/object_reference.proto";
 import "sui/types/version.proto";
 
 // A transaction.
@@ -281,7 +282,7 @@ message SystemPackage {
 // The genesis transaction.
 message GenesisTransaction {
   // Set of genesis objects.
-  repeated GenesisObject objects = 1;
+  repeated Object objects = 1;
 }
 
 // Consensus commit prologue system transaction.

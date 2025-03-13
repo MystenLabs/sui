@@ -1,0 +1,19 @@
+syntax = "proto3";
+
+package sui.types;
+
+import "google/protobuf/empty.proto";
+
+// Enum of different types of ownership for an object.
+message Owner {
+  oneof kind {
+    // Object is exclusively owned by a single address, and is mutable.
+    string address = 1;
+    // Object is exclusively owned by a single object, and is mutable.
+    string object = 2;
+    // Object is shared, can be used by any address, and is mutable.
+    uint64 shared = 3;
+    // Object is immutable, and hence ownership doesn't matter.
+    google.protobuf.Empty immutable = 4;
+  }
+}
