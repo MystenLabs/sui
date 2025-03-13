@@ -199,6 +199,7 @@ impl Model<WITH_SOURCE> {
             compiled,
             packages,
         };
+        model.check_invariants();
         Ok(model)
     }
 
@@ -226,14 +227,16 @@ impl Model<WITHOUT_SOURCE> {
             .iter()
             .map(|(a, n)| (*n, *a))
             .collect();
-        Self {
+        let model = Self {
             files: [],
             root_package_name: None,
             root_named_address_map,
             info: [],
             compiled,
             packages,
-        }
+        };
+        model.check_invariants();
+        model
     }
 }
 
@@ -294,6 +297,50 @@ impl<const HAS_SOURCE: SourceKind> Model<HAS_SOURCE> {
                 std::mem::transmute::<&Self, &Model<WITHOUT_SOURCE>>(self)
             }),
             _ => unreachable!(),
+        }
+    }
+
+    fn check_invariants(&self) {
+        #[cfg(debug_assertions)]
+        {
+            for (p, package) in &self.packages {
+                for (m, module) in &package.modules {
+                    let compiled = &self.compiled.packages[p].modules[m];
+                    for (idx, s) in module.structs.keys().enumerate() {
+                        let map_idx = module.structs.get_index_of(s).unwrap();
+                        let compiled_map_idx = compiled.structs.get_index_of(s).unwrap();
+                        let compiled_idx = compiled.structs[s].def_idx.0 as usize;
+                        debug_assert_eq!(idx, map_idx);
+                        debug_assert_eq!(idx, compiled_map_idx);
+                        debug_assert_eq!(idx, compiled_idx);
+                    }
+                    for (idx, f) in module.functions.keys().enumerate() {
+                        let map_idx = module.functions.get_index_of(f).unwrap();
+                        let compiled_map_idx = compiled.functions.get_index_of(f).unwrap();
+                        let compiled_idx = compiled.functions[f].def_idx.0 as usize;
+                        debug_assert_eq!(idx, map_idx);
+                        debug_assert_eq!(idx, compiled_map_idx);
+                        debug_assert_eq!(idx, compiled_idx);
+                    }
+                    for (idx, (e, enum_)) in module.enums.iter().enumerate() {
+                        let map_idx = module.enums.get_index_of(e).unwrap();
+                        let compiled_map_idx = compiled.enums.get_index_of(e).unwrap();
+                        let compiled_idx = compiled.enums[e].def_idx.0 as usize;
+                        debug_assert_eq!(idx, map_idx);
+                        debug_assert_eq!(idx, compiled_map_idx);
+                        debug_assert_eq!(idx, compiled_idx);
+                        for (vidx, v) in enum_.variants.keys().enumerate() {
+                            let map_idx = enum_.variants.get_index_of(v).unwrap();
+                            let compiled_map_idx =
+                                compiled.enums[e].variants.get_index_of(v).unwrap();
+                            let compiled_idx = compiled.enums[e].variants[v].tag as usize;
+                            debug_assert_eq!(vidx, map_idx);
+                            debug_assert_eq!(vidx, compiled_map_idx);
+                            debug_assert_eq!(vidx, compiled_idx);
+                        }
+                    }
+                }
+            }
         }
     }
 }

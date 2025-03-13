@@ -511,6 +511,22 @@ impl Module {
             .map(|(idx, def)| make_constant(&compiled_module, def, ConstantPoolIndex(idx as u16)))
             .collect();
 
+        debug_assert!(structs
+            .values()
+            .enumerate()
+            .all(|(i, s)| i == s.def_idx.0 as usize));
+        debug_assert!(enums
+            .values()
+            .enumerate()
+            .all(|(i, e)| i == e.def_idx.0 as usize
+                && e.variants
+                    .values()
+                    .enumerate()
+                    .all(|(j, v)| j == v.tag as usize)));
+        debug_assert!(functions
+            .values()
+            .enumerate()
+            .all(|(i, f)| i == f.def_idx.0 as usize));
         Self {
             name,
             package,
