@@ -25,7 +25,7 @@ impl BigtableReader {
             true,
             None,
             "indexer-alt-jsonrpc".to_string(),
-            registry,
+            Some(registry),
         )
         .await
         .map_err(Error::BigtableCreate)?;

@@ -296,7 +296,7 @@ impl BigTableClient {
         is_read_only: bool,
         timeout: Option<Duration>,
         client_name: String,
-        registry: &Registry,
+        registry: Option<&Registry>,
     ) -> Result<Self> {
         let policy = if is_read_only {
             "https://www.googleapis.com/auth/bigtable.data.readonly"
@@ -329,7 +329,7 @@ impl BigTableClient {
             table_prefix,
             client: BigtableInternalClient::new(auth_channel),
             client_name,
-            metrics: Some(KvMetrics::new(registry)),
+            metrics: registry.map(KvMetrics::new),
         })
     }
 
