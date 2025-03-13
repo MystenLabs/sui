@@ -316,11 +316,12 @@ impl<const HAS_SOURCE: SourceKind> Model<HAS_SOURCE> {
                     }
                     for (idx, f) in module.functions.keys().enumerate() {
                         let map_idx = module.functions.get_index_of(f).unwrap();
-                        let compiled_map_idx = compiled.functions.get_index_of(f).unwrap();
-                        let compiled_idx = compiled.functions[f].def_idx.0 as usize;
                         debug_assert_eq!(idx, map_idx);
-                        debug_assert_eq!(idx, compiled_map_idx);
-                        debug_assert_eq!(idx, compiled_idx);
+                        if let Some(compiled_map_idx) = compiled.functions.get_index_of(f) {
+                            let compiled_idx = compiled.functions[f].def_idx.0 as usize;
+                            debug_assert_eq!(idx, compiled_map_idx);
+                            debug_assert_eq!(idx, compiled_idx);
+                        }
                     }
                     for (idx, (e, enum_)) in module.enums.iter().enumerate() {
                         let map_idx = module.enums.get_index_of(e).unwrap();
@@ -922,50 +923,37 @@ impl ModuleData<WITH_SOURCE> {
         info: &ModuleInfo,
         unit: &NamedCompiledModule,
     ) -> Self {
-        let structs = info
-            .structs
-            .iter()
-            .map(|(_loc, name, _sinfo)| {
-                let name = *name;
-                let (_idx, _struct_def) =
-                    unit.module.find_struct_def_by_name(name.as_str()).unwrap();
-                let struct_ = StructData::new();
-                (name, struct_)
-            })
-            .collect();
-        let enums = info
-            .enums
-            .iter()
-            .map(|(_loc, name, _einfo)| {
-                let name = *name;
-                let (_idx, enum_def) = unit.module.find_enum_def_by_name(name.as_str()).unwrap();
-                let enum_ = EnumData::new(&unit.module, enum_def);
-                (name, enum_)
-            })
-            .collect();
-        let functions = info
-            .functions
-            .iter()
-            .map(|(_loc, name, _finfo)| {
+        let structs = make_map(info.structs.iter().map(|(_loc, name, _sinfo)| {
+            let name = *name;
+            let (idx, _struct_def) = unit.module.find_struct_def_by_name(name.as_str()).unwrap();
+            let struct_ = StructData::new();
+            (idx, name, struct_)
+        }));
+        let enums = make_map(info.enums.iter().map(|(_loc, name, _einfo)| {
+            let name = *name;
+            let (idx, enum_def) = unit.module.find_enum_def_by_name(name.as_str()).unwrap();
+            let enum_ = EnumData::new(&unit.module, enum_def);
+            (idx, name, enum_)
+        }));
+        let num_functions = unit.module.function_defs.len();
+        let functions = make_map(info.functions.iter().enumerate().map(
+            |(map_idx, (_loc, name, _finfo))| {
                 let name = *name;
                 // Note, won't be found for macros
-                // let (_idx, _function_def) = unit
-                //     .module
-                //     .find_function_def_by_name(name.as_str())
-                //     .expect(&format!("cannot find fun {name}"));
+                let idx = unit
+                    .module
+                    .find_function_def_by_name(name.as_str())
+                    .map(|(idx, _fdef)| idx.0 as usize)
+                    .unwrap_or(num_functions + map_idx);
                 let function = FunctionData::new();
-                (name, function)
-            })
-            .collect();
-        let named_constants = info
-            .constants
-            .iter()
-            .map(|(_loc, name, _cinfo)| {
-                let name = *name;
-                let constant = ConstantData::from_source(&unit.source_map, name);
-                (name, constant)
-            })
-            .collect();
+                (idx, name, function)
+            },
+        ));
+        let named_constants = make_map(info.constants.iter().map(|(_loc, name, cinfo)| {
+            let name = *name;
+            let constant = ConstantData::from_source(&unit.source_map, name);
+            (cinfo.index, name, constant)
+        }));
         let constant_names = {
             let idx_to_name_map = unit
                 .source_map
@@ -1063,4 +1051,15 @@ impl ConstantData {
             .map(file_format::ConstantPoolIndex);
         Self { compiled_index }
     }
+}
+
+fn make_map<I: Ord + Copy, T>(
+    items: impl IntoIterator<Item = (I, Symbol, T)>,
+) -> IndexMap<Symbol, T> {
+    let mut items = items.into_iter().collect::<Vec<_>>();
+    items.sort_by_key(|(idx, _name, _data)| *idx);
+    items
+        .into_iter()
+        .map(|(_idx, name, data)| (name, data))
+        .collect::<IndexMap<_, _>>()
 }
