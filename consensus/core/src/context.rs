@@ -137,6 +137,13 @@ impl Clock {
     // Calculated with Tokio Instant to ensure monotonicity,
     // and to allow testing with tokio clock.
     pub(crate) fn timestamp_utc_ms(&self) -> BlockTimestampMs {
+        if cfg!(not(any(msim, test))) {
+            assert_eq!(
+                self.clock_drift, 0,
+                "Clock drift should not be set in non testing environments."
+            );
+        }
+
         let now: Instant = Instant::now();
         let monotonic_system_time = self
             .initial_system_time
