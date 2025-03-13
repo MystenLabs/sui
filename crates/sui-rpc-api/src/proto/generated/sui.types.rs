@@ -197,6 +197,306 @@ pub mod checkpoint_commitment {
         EcmhLiveObjectSet(::prost::alloc::string::String),
     }
 }
+/// The effects of executing a transaction.
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct TransactionEffects {
+    /// This TransactionEffects serialized as BCS.
+    #[prost(message, optional, tag = "1")]
+    pub bcs: ::core::option::Option<Bcs>,
+    /// The digest of this TransactionEffects.
+    #[prost(string, optional, tag = "2")]
+    pub digest: ::core::option::Option<::prost::alloc::string::String>,
+    /// Version of this TransactionEffects.
+    #[prost(enumeration = "Version", optional, tag = "3")]
+    pub version: ::core::option::Option<i32>,
+    /// The status of the execution.
+    #[prost(message, optional, tag = "4")]
+    pub status: ::core::option::Option<ExecutionStatus>,
+    /// The epoch when this transaction was executed.
+    #[prost(uint64, optional, tag = "5")]
+    pub epoch: ::core::option::Option<u64>,
+    /// The gas used by this transaction.
+    #[prost(message, optional, tag = "6")]
+    pub gas_used: ::core::option::Option<GasCostSummary>,
+    /// The transaction digest.
+    #[prost(string, optional, tag = "7")]
+    pub transaction_digest: ::core::option::Option<::prost::alloc::string::String>,
+    /// The updated gas object reference, as an index into the `changed_objects` vector.
+    /// Having a dedicated field for convenient access.
+    /// System transaction that don't require gas will leave this as `None`.
+    #[prost(uint32, optional, tag = "8")]
+    pub gas_object_index: ::core::option::Option<u32>,
+    /// The digest of the events emitted during execution,
+    /// can be `None` if the transaction does not emit any event.
+    #[prost(string, optional, tag = "9")]
+    pub events_digest: ::core::option::Option<::prost::alloc::string::String>,
+    /// The set of transaction digests this transaction depends on.
+    #[prost(string, repeated, tag = "10")]
+    pub dependencies: ::prost::alloc::vec::Vec<::prost::alloc::string::String>,
+    /// The version number of all the written Move objects by this transaction.
+    #[prost(uint64, optional, tag = "11")]
+    pub lamport_version: ::core::option::Option<u64>,
+    /// Objects whose state are changed by this transaction.
+    #[prost(message, repeated, tag = "12")]
+    pub changed_objects: ::prost::alloc::vec::Vec<ChangedObject>,
+    /// Shared objects that are not mutated in this transaction. Unlike owned objects,
+    /// read-only shared objects' version are not committed in the transaction,
+    /// and in order for a node to catch up and execute it without consensus sequencing,
+    /// the version needs to be committed in the effects.
+    #[prost(message, repeated, tag = "13")]
+    pub unchanged_shared_objects: ::prost::alloc::vec::Vec<UnchangedSharedObject>,
+    /// Auxiliary data that are not protocol-critical, generated as part of the effects but are stored separately.
+    /// Storing it separately allows us to avoid bloating the effects with data that are not critical.
+    /// It also provides more flexibility on the format and type of the data.
+    #[prost(string, optional, tag = "14")]
+    pub auxiliary_data_digest: ::core::option::Option<::prost::alloc::string::String>,
+}
+/// Input/output state of an object that was changed during execution.
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct ChangedObject {
+    /// ID of the object.
+    #[prost(string, optional, tag = "1")]
+    pub object_id: ::core::option::Option<::prost::alloc::string::String>,
+    #[prost(enumeration = "changed_object::InputObjectState", optional, tag = "2")]
+    pub input_state: ::core::option::Option<i32>,
+    /// Version of the object before this transaction executed.
+    #[prost(uint64, optional, tag = "3")]
+    pub input_version: ::core::option::Option<u64>,
+    /// Digest of the object before this transaction executed.
+    #[prost(string, optional, tag = "4")]
+    pub input_digest: ::core::option::Option<::prost::alloc::string::String>,
+    /// Owner of the object before this transaction executed.
+    #[prost(message, optional, tag = "5")]
+    pub input_owner: ::core::option::Option<Owner>,
+    #[prost(enumeration = "changed_object::OutputObjectState", optional, tag = "6")]
+    pub output_state: ::core::option::Option<i32>,
+    /// Version of the object after this transaction executed.
+    #[prost(uint64, optional, tag = "7")]
+    pub output_version: ::core::option::Option<u64>,
+    /// Digest of the object after this transaction executed.
+    #[prost(string, optional, tag = "8")]
+    pub output_digest: ::core::option::Option<::prost::alloc::string::String>,
+    /// Owner of the object after this transaction executed.
+    #[prost(message, optional, tag = "9")]
+    pub output_owner: ::core::option::Option<Owner>,
+    /// What happened to an `ObjectId` during execution.
+    #[prost(enumeration = "changed_object::IdOperation", optional, tag = "10")]
+    pub id_operation: ::core::option::Option<i32>,
+    /// Type information is not provided by the effects structure but is instead
+    /// provided by an indexing layer
+    #[prost(string, optional, tag = "11")]
+    pub object_type: ::core::option::Option<::prost::alloc::string::String>,
+}
+/// Nested message and enum types in `ChangedObject`.
+pub mod changed_object {
+    #[derive(
+        Clone,
+        Copy,
+        Debug,
+        PartialEq,
+        Eq,
+        Hash,
+        PartialOrd,
+        Ord,
+        ::prost::Enumeration
+    )]
+    #[repr(i32)]
+    pub enum InputObjectState {
+        Unknown = 0,
+        DoesNotExist = 1,
+        Exists = 2,
+    }
+    impl InputObjectState {
+        /// String value of the enum field names used in the ProtoBuf definition.
+        ///
+        /// The values are not transformed in any way and thus are considered stable
+        /// (if the ProtoBuf definition does not change) and safe for programmatic use.
+        pub fn as_str_name(&self) -> &'static str {
+            match self {
+                Self::Unknown => "INPUT_OBJECT_STATE_UNKNOWN",
+                Self::DoesNotExist => "INPUT_OBJECT_STATE_DOES_NOT_EXIST",
+                Self::Exists => "INPUT_OBJECT_STATE_EXISTS",
+            }
+        }
+        /// Creates an enum from field names used in the ProtoBuf definition.
+        pub fn from_str_name(value: &str) -> ::core::option::Option<Self> {
+            match value {
+                "INPUT_OBJECT_STATE_UNKNOWN" => Some(Self::Unknown),
+                "INPUT_OBJECT_STATE_DOES_NOT_EXIST" => Some(Self::DoesNotExist),
+                "INPUT_OBJECT_STATE_EXISTS" => Some(Self::Exists),
+                _ => None,
+            }
+        }
+    }
+    #[derive(
+        Clone,
+        Copy,
+        Debug,
+        PartialEq,
+        Eq,
+        Hash,
+        PartialOrd,
+        Ord,
+        ::prost::Enumeration
+    )]
+    #[repr(i32)]
+    pub enum OutputObjectState {
+        Unknown = 0,
+        DoesNotExist = 1,
+        ObjectWrite = 2,
+        PackageWrite = 3,
+    }
+    impl OutputObjectState {
+        /// String value of the enum field names used in the ProtoBuf definition.
+        ///
+        /// The values are not transformed in any way and thus are considered stable
+        /// (if the ProtoBuf definition does not change) and safe for programmatic use.
+        pub fn as_str_name(&self) -> &'static str {
+            match self {
+                Self::Unknown => "OUTPUT_OBJECT_STATE_UNKNOWN",
+                Self::DoesNotExist => "OUTPUT_OBJECT_STATE_DOES_NOT_EXIST",
+                Self::ObjectWrite => "OUTPUT_OBJECT_STATE_OBJECT_WRITE",
+                Self::PackageWrite => "OUTPUT_OBJECT_STATE_PACKAGE_WRITE",
+            }
+        }
+        /// Creates an enum from field names used in the ProtoBuf definition.
+        pub fn from_str_name(value: &str) -> ::core::option::Option<Self> {
+            match value {
+                "OUTPUT_OBJECT_STATE_UNKNOWN" => Some(Self::Unknown),
+                "OUTPUT_OBJECT_STATE_DOES_NOT_EXIST" => Some(Self::DoesNotExist),
+                "OUTPUT_OBJECT_STATE_OBJECT_WRITE" => Some(Self::ObjectWrite),
+                "OUTPUT_OBJECT_STATE_PACKAGE_WRITE" => Some(Self::PackageWrite),
+                _ => None,
+            }
+        }
+    }
+    #[derive(
+        Clone,
+        Copy,
+        Debug,
+        PartialEq,
+        Eq,
+        Hash,
+        PartialOrd,
+        Ord,
+        ::prost::Enumeration
+    )]
+    #[repr(i32)]
+    pub enum IdOperation {
+        Unknown = 0,
+        None = 1,
+        Created = 2,
+        Deleted = 3,
+    }
+    impl IdOperation {
+        /// String value of the enum field names used in the ProtoBuf definition.
+        ///
+        /// The values are not transformed in any way and thus are considered stable
+        /// (if the ProtoBuf definition does not change) and safe for programmatic use.
+        pub fn as_str_name(&self) -> &'static str {
+            match self {
+                Self::Unknown => "ID_OPERATION_UNKNOWN",
+                Self::None => "ID_OPERATION_NONE",
+                Self::Created => "ID_OPERATION_CREATED",
+                Self::Deleted => "ID_OPERATION_DELETED",
+            }
+        }
+        /// Creates an enum from field names used in the ProtoBuf definition.
+        pub fn from_str_name(value: &str) -> ::core::option::Option<Self> {
+            match value {
+                "ID_OPERATION_UNKNOWN" => Some(Self::Unknown),
+                "ID_OPERATION_NONE" => Some(Self::None),
+                "ID_OPERATION_CREATED" => Some(Self::Created),
+                "ID_OPERATION_DELETED" => Some(Self::Deleted),
+                _ => None,
+            }
+        }
+    }
+}
+/// A shared object that wasn't changed during execution.
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct UnchangedSharedObject {
+    #[prost(
+        enumeration = "unchanged_shared_object::UnchangedSharedObjectKind",
+        optional,
+        tag = "1"
+    )]
+    pub kind: ::core::option::Option<i32>,
+    /// ObjectId of the shared object.
+    #[prost(string, optional, tag = "2")]
+    pub object_id: ::core::option::Option<::prost::alloc::string::String>,
+    /// Version of the shared object.
+    #[prost(uint64, optional, tag = "3")]
+    pub version: ::core::option::Option<u64>,
+    /// Digest of the shared object.
+    #[prost(string, optional, tag = "4")]
+    pub digest: ::core::option::Option<::prost::alloc::string::String>,
+    /// Type information is not provided by the effects structure but is instead
+    /// provided by an indexing layer
+    #[prost(string, optional, tag = "5")]
+    pub object_type: ::core::option::Option<::prost::alloc::string::String>,
+}
+/// Nested message and enum types in `UnchangedSharedObject`.
+pub mod unchanged_shared_object {
+    #[derive(
+        Clone,
+        Copy,
+        Debug,
+        PartialEq,
+        Eq,
+        Hash,
+        PartialOrd,
+        Ord,
+        ::prost::Enumeration
+    )]
+    #[repr(i32)]
+    pub enum UnchangedSharedObjectKind {
+        Unknown = 0,
+        /// Read-only shared object from the input.
+        ReadOnlyRoot = 1,
+        /// Deleted shared objects that appear mutably/owned in the input.
+        MutateDeleted = 2,
+        /// Deleted shared objects that appear as read-only in the input.
+        ReadDeleted = 3,
+        /// Shared objects that was congested and resulted in this transaction being
+        /// cancelled.
+        Cancelled = 4,
+        /// Read of a per-epoch config object that should remain the same during an epoch.
+        PerEpochConfig = 5,
+    }
+    impl UnchangedSharedObjectKind {
+        /// String value of the enum field names used in the ProtoBuf definition.
+        ///
+        /// The values are not transformed in any way and thus are considered stable
+        /// (if the ProtoBuf definition does not change) and safe for programmatic use.
+        pub fn as_str_name(&self) -> &'static str {
+            match self {
+                Self::Unknown => "UNCHANGED_SHARED_OBJECT_KIND_UNKNOWN",
+                Self::ReadOnlyRoot => "UNCHANGED_SHARED_OBJECT_KIND_READ_ONLY_ROOT",
+                Self::MutateDeleted => "UNCHANGED_SHARED_OBJECT_KIND_MUTATE_DELETED",
+                Self::ReadDeleted => "UNCHANGED_SHARED_OBJECT_KIND_READ_DELETED",
+                Self::Cancelled => "UNCHANGED_SHARED_OBJECT_KIND_CANCELLED",
+                Self::PerEpochConfig => "UNCHANGED_SHARED_OBJECT_KIND_PER_EPOCH_CONFIG",
+            }
+        }
+        /// Creates an enum from field names used in the ProtoBuf definition.
+        pub fn from_str_name(value: &str) -> ::core::option::Option<Self> {
+            match value {
+                "UNCHANGED_SHARED_OBJECT_KIND_UNKNOWN" => Some(Self::Unknown),
+                "UNCHANGED_SHARED_OBJECT_KIND_READ_ONLY_ROOT" => Some(Self::ReadOnlyRoot),
+                "UNCHANGED_SHARED_OBJECT_KIND_MUTATE_DELETED" => {
+                    Some(Self::MutateDeleted)
+                }
+                "UNCHANGED_SHARED_OBJECT_KIND_READ_DELETED" => Some(Self::ReadDeleted),
+                "UNCHANGED_SHARED_OBJECT_KIND_CANCELLED" => Some(Self::Cancelled),
+                "UNCHANGED_SHARED_OBJECT_KIND_PER_EPOCH_CONFIG" => {
+                    Some(Self::PerEpochConfig)
+                }
+                _ => None,
+            }
+        }
+    }
+}
 /// Events emitted during the successful execution of a transaction.
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct TransactionEvents {
@@ -1906,267 +2206,6 @@ pub struct AuthenticatorStateExpire {
     /// The initial version of the authenticator object that it was shared at.
     #[prost(uint64, optional, tag = "2")]
     pub authenticator_object_initial_shared_version: ::core::option::Option<u64>,
-}
-/// The output or effects of executing a transaction.
-#[derive(Clone, PartialEq, ::prost::Message)]
-pub struct TransactionEffects {
-    #[prost(oneof = "transaction_effects::Version", tags = "1, 2")]
-    pub version: ::core::option::Option<transaction_effects::Version>,
-}
-/// Nested message and enum types in `TransactionEffects`.
-pub mod transaction_effects {
-    #[derive(Clone, PartialEq, ::prost::Oneof)]
-    pub enum Version {
-        #[prost(message, tag = "1")]
-        V1(super::TransactionEffectsV1),
-        #[prost(message, tag = "2")]
-        V2(super::TransactionEffectsV2),
-    }
-}
-/// Version 1 of `TransactionEffects`.
-#[derive(Clone, PartialEq, ::prost::Message)]
-pub struct TransactionEffectsV1 {
-    /// The status of the execution.
-    #[prost(message, optional, tag = "1")]
-    pub status: ::core::option::Option<ExecutionStatus>,
-    /// The epoch when this transaction was executed.
-    #[prost(uint64, optional, tag = "2")]
-    pub epoch: ::core::option::Option<u64>,
-    /// The gas used by this transaction.
-    #[prost(message, optional, tag = "3")]
-    pub gas_used: ::core::option::Option<GasCostSummary>,
-    /// The version that every modified (mutated or deleted) object had before it was modified by
-    /// this transaction.
-    #[prost(message, repeated, tag = "4")]
-    pub modified_at_versions: ::prost::alloc::vec::Vec<ModifiedAtVersion>,
-    /// The object references of the shared objects used in this transaction. Empty if no shared objects were used.
-    #[prost(message, repeated, tag = "5")]
-    pub shared_objects: ::prost::alloc::vec::Vec<ObjectReference>,
-    /// The transaction digest.
-    #[prost(string, optional, tag = "6")]
-    pub transaction_digest: ::core::option::Option<::prost::alloc::string::String>,
-    /// `ObjectReference` and owner of new objects created.
-    #[prost(message, repeated, tag = "7")]
-    pub created: ::prost::alloc::vec::Vec<ObjectReferenceWithOwner>,
-    /// `ObjectReference` and owner of mutated objects, including gas object.
-    #[prost(message, repeated, tag = "8")]
-    pub mutated: ::prost::alloc::vec::Vec<ObjectReferenceWithOwner>,
-    /// `ObjectReference` and owner of objects that are unwrapped in this transaction.
-    /// Unwrapped objects are objects that were wrapped into other objects in the past,
-    /// and just got extracted out.
-    #[prost(message, repeated, tag = "9")]
-    pub unwrapped: ::prost::alloc::vec::Vec<ObjectReferenceWithOwner>,
-    /// Object refs of objects now deleted (the new refs).
-    #[prost(message, repeated, tag = "10")]
-    pub deleted: ::prost::alloc::vec::Vec<ObjectReference>,
-    /// Object refs of objects previously wrapped in other objects but now deleted.
-    #[prost(message, repeated, tag = "11")]
-    pub unwrapped_then_deleted: ::prost::alloc::vec::Vec<ObjectReference>,
-    /// Object refs of objects now wrapped in other objects.
-    #[prost(message, repeated, tag = "12")]
-    pub wrapped: ::prost::alloc::vec::Vec<ObjectReference>,
-    /// The updated gas object reference. Have a dedicated field for convenient access.
-    /// It's also included in mutated.
-    #[prost(message, optional, tag = "13")]
-    pub gas_object: ::core::option::Option<ObjectReferenceWithOwner>,
-    /// The digest of the events emitted during execution,
-    /// can be `None` if the transaction does not emit any event.
-    #[prost(string, optional, tag = "14")]
-    pub events_digest: ::core::option::Option<::prost::alloc::string::String>,
-    /// The set of transaction digests this transaction depends on.
-    #[prost(string, repeated, tag = "15")]
-    pub dependencies: ::prost::alloc::vec::Vec<::prost::alloc::string::String>,
-}
-/// An object reference with owner information.
-#[derive(Clone, PartialEq, ::prost::Message)]
-pub struct ObjectReferenceWithOwner {
-    /// `ObjectReference`.
-    #[prost(message, optional, tag = "1")]
-    pub reference: ::core::option::Option<ObjectReference>,
-    /// `Owner`.
-    #[prost(message, optional, tag = "2")]
-    pub owner: ::core::option::Option<Owner>,
-}
-/// Indicates that an object was modified at a specific version.
-#[derive(Clone, PartialEq, ::prost::Message)]
-pub struct ModifiedAtVersion {
-    /// `ObjectId` of the object.
-    #[prost(string, optional, tag = "1")]
-    pub object_id: ::core::option::Option<::prost::alloc::string::String>,
-    /// Version of the object prior to this transaction.
-    #[prost(uint64, optional, tag = "2")]
-    pub version: ::core::option::Option<u64>,
-}
-/// Version 2 of `TransactionEffects`.
-#[derive(Clone, PartialEq, ::prost::Message)]
-pub struct TransactionEffectsV2 {
-    /// The status of the execution.
-    #[prost(message, optional, tag = "1")]
-    pub status: ::core::option::Option<ExecutionStatus>,
-    /// The epoch when this transaction was executed.
-    #[prost(uint64, optional, tag = "2")]
-    pub epoch: ::core::option::Option<u64>,
-    /// The gas used by this transaction.
-    #[prost(message, optional, tag = "3")]
-    pub gas_used: ::core::option::Option<GasCostSummary>,
-    /// The transaction digest.
-    #[prost(string, optional, tag = "4")]
-    pub transaction_digest: ::core::option::Option<::prost::alloc::string::String>,
-    /// The updated gas object reference, as an index into the `changed_objects` vector.
-    /// Having a dedicated field for convenient access.
-    /// System transaction that don't require gas will leave this as `None`.
-    #[prost(uint32, optional, tag = "5")]
-    pub gas_object_index: ::core::option::Option<u32>,
-    /// The digest of the events emitted during execution,
-    /// can be `None` if the transaction does not emit any event.
-    #[prost(string, optional, tag = "6")]
-    pub events_digest: ::core::option::Option<::prost::alloc::string::String>,
-    /// The set of transaction digests this transaction depends on.
-    #[prost(string, repeated, tag = "7")]
-    pub dependencies: ::prost::alloc::vec::Vec<::prost::alloc::string::String>,
-    /// The version number of all the written Move objects by this transaction.
-    #[prost(uint64, optional, tag = "8")]
-    pub lamport_version: ::core::option::Option<u64>,
-    /// Objects whose state are changed in the object store.
-    #[prost(message, repeated, tag = "9")]
-    pub changed_objects: ::prost::alloc::vec::Vec<ChangedObject>,
-    /// Shared objects that are not mutated in this transaction. Unlike owned objects,
-    /// read-only shared objects' version are not committed in the transaction,
-    /// and in order for a node to catch up and execute it without consensus sequencing,
-    /// the version needs to be committed in the effects.
-    #[prost(message, repeated, tag = "10")]
-    pub unchanged_shared_objects: ::prost::alloc::vec::Vec<UnchangedSharedObject>,
-    /// Auxiliary data that are not protocol-critical, generated as part of the effects but are stored separately.
-    /// Storing it separately allows us to avoid bloating the effects with data that are not critical.
-    /// It also provides more flexibility on the format and type of the data.
-    #[prost(string, optional, tag = "11")]
-    pub auxiliary_data_digest: ::core::option::Option<::prost::alloc::string::String>,
-}
-/// / Input/output state of an object that was changed during execution.
-#[derive(Clone, PartialEq, ::prost::Message)]
-pub struct ChangedObject {
-    /// ID of the object.
-    #[prost(string, optional, tag = "1")]
-    pub object_id: ::core::option::Option<::prost::alloc::string::String>,
-    /// State of the object in the store prior to this transaction.
-    #[prost(oneof = "changed_object::InputState", tags = "2, 3")]
-    pub input_state: ::core::option::Option<changed_object::InputState>,
-    /// State of the object in the store after this transaction.
-    #[prost(oneof = "changed_object::OutputState", tags = "4, 5, 6")]
-    pub output_state: ::core::option::Option<changed_object::OutputState>,
-    /// What happened to an `ObjectId` during execution.
-    #[prost(oneof = "changed_object::IdOperation", tags = "7, 8, 9")]
-    pub id_operation: ::core::option::Option<changed_object::IdOperation>,
-}
-/// Nested message and enum types in `ChangedObject`.
-pub mod changed_object {
-    /// State of the object in the store prior to this transaction.
-    #[derive(Clone, PartialEq, ::prost::Oneof)]
-    pub enum InputState {
-        /// Object did not exist prior to this transaction.
-        #[prost(message, tag = "2")]
-        NotExist(()),
-        /// Object existed prior to this transaction.
-        #[prost(message, tag = "3")]
-        Exist(super::ObjectExist),
-    }
-    /// State of the object in the store after this transaction.
-    #[derive(Clone, PartialEq, ::prost::Oneof)]
-    pub enum OutputState {
-        /// Object was removed from the store due to this transaction.
-        #[prost(message, tag = "4")]
-        Removed(()),
-        /// Object was written, including all of mutated, created, unwrapped.
-        #[prost(message, tag = "5")]
-        ObjectWrite(super::ObjectWrite),
-        /// Package was written.
-        #[prost(message, tag = "6")]
-        PackageWrite(super::PackageWrite),
-    }
-    /// What happened to an `ObjectId` during execution.
-    #[derive(Clone, Copy, PartialEq, ::prost::Oneof)]
-    pub enum IdOperation {
-        #[prost(message, tag = "7")]
-        None(()),
-        #[prost(message, tag = "8")]
-        Created(()),
-        #[prost(message, tag = "9")]
-        Deleted(()),
-    }
-}
-/// Information about the old version of the object.
-#[derive(Clone, PartialEq, ::prost::Message)]
-pub struct ObjectExist {
-    /// Version of the object.
-    #[prost(uint64, optional, tag = "1")]
-    pub version: ::core::option::Option<u64>,
-    /// Digest of the object.
-    #[prost(string, optional, tag = "2")]
-    pub digest: ::core::option::Option<::prost::alloc::string::String>,
-    /// Owner of the object.
-    #[prost(message, optional, tag = "3")]
-    pub owner: ::core::option::Option<Owner>,
-}
-/// Object write, including all of mutated, created, unwrapped.
-#[derive(Clone, PartialEq, ::prost::Message)]
-pub struct ObjectWrite {
-    /// Digest of the new version of the object.
-    #[prost(string, optional, tag = "2")]
-    pub digest: ::core::option::Option<::prost::alloc::string::String>,
-    /// Owner of the new version of the object.
-    #[prost(message, optional, tag = "3")]
-    pub owner: ::core::option::Option<Owner>,
-}
-/// Package write.
-#[derive(Clone, PartialEq, ::prost::Message)]
-pub struct PackageWrite {
-    /// Version of the new package.
-    #[prost(uint64, optional, tag = "1")]
-    pub version: ::core::option::Option<u64>,
-    /// Digest of the new package.
-    #[prost(string, optional, tag = "2")]
-    pub digest: ::core::option::Option<::prost::alloc::string::String>,
-}
-/// A shared object that wasn't changed during execution.
-#[derive(Clone, PartialEq, ::prost::Message)]
-pub struct UnchangedSharedObject {
-    /// ObjectId of the shared object.
-    #[prost(string, optional, tag = "1")]
-    pub object_id: ::core::option::Option<::prost::alloc::string::String>,
-    #[prost(oneof = "unchanged_shared_object::Kind", tags = "2, 3, 4, 5, 6")]
-    pub kind: ::core::option::Option<unchanged_shared_object::Kind>,
-}
-/// Nested message and enum types in `UnchangedSharedObject`.
-pub mod unchanged_shared_object {
-    #[derive(Clone, PartialEq, ::prost::Oneof)]
-    pub enum Kind {
-        /// Read-only shared object from the input.
-        #[prost(message, tag = "2")]
-        ReadOnlyRoot(super::ReadOnlyRoot),
-        /// Deleted shared objects that appear mutably/owned in the input.
-        #[prost(uint64, tag = "3")]
-        MutateDeleted(u64),
-        /// Deleted shared objects that appear as read-only in the input.
-        #[prost(uint64, tag = "4")]
-        ReadDeleted(u64),
-        /// Shared objects that was congested and resulted in this transaction being
-        /// cancelled.
-        #[prost(uint64, tag = "5")]
-        Cancelled(u64),
-        /// Read of a per-epoch config object that should remain the same during an epoch.
-        #[prost(message, tag = "6")]
-        PerEpochConfig(()),
-    }
-}
-/// Read-only shared object from the input.
-#[derive(Clone, PartialEq, ::prost::Message)]
-pub struct ReadOnlyRoot {
-    /// Version of the shared object.
-    #[prost(uint64, optional, tag = "1")]
-    pub version: ::core::option::Option<u64>,
-    /// Digest of the shared object.
-    #[prost(string, optional, tag = "2")]
-    pub digest: ::core::option::Option<::prost::alloc::string::String>,
 }
 /// Flag used to indicate the version of a type.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, ::prost::Enumeration)]
