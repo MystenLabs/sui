@@ -7,7 +7,7 @@ import { ModuleInfo } from './utils';
 import { JSON_FILE_EXT } from './utils';
 
 
-// Data types corresponding to source map file JSON schema.
+// Data types corresponding to debug info file JSON schema.
 
 interface JSONSrcDefinitionLocation {
     file_hash: number[];
@@ -39,6 +39,7 @@ interface JSONSrcFunctionMapEntry {
 }
 
 interface JSONSrcRootObject {
+    version?: number;
     definition_location: JSONSrcDefinitionLocation;
     module_name: string[];
     struct_map: Record<string, JSONSrcStructSourceMapEntry>;
@@ -80,9 +81,9 @@ export interface ILocalInfo {
 }
 
 /**
- * Describes a function in the source map.
+ * Describes a function in debug info.
  */
-export interface ISourceMapFunction {
+export interface IDebugInfoFunction {
     /**
      * Locations indexed with PC values.
      */
@@ -115,36 +116,38 @@ export interface IFileInfo {
 }
 
 /**
- * Source map for a Move module.
+ * Debug info for a Move module, including source map
+ * and optionally additional debugging information,
+ * depending on debug info version.
  */
-export interface ISourceMap {
+export interface IDebugInfo {
     filePath: string
     fileHash: string
     modInfo: ModuleInfo,
-    functions: Map<string, ISourceMapFunction>,
+    functions: Map<string, IDebugInfoFunction>,
     /**
-     * Lines that are not present in the source map.
+     * Lines that are not present in debug info's source map portion.
      */
     optimizedLines: number[]
 }
 
 /**
- * Reads all source maps from the given directory. If `mustHaveSourceFile` flag
- * is true, only source maps whose respective source files are present in the filesMap
+ * Reads all debug infos from the given directory. If `mustHaveSourceFile` flag
+ * is true, only debug infos whose respective source files are present in the filesMap
  * are included in the result.
- * @param directory directory containing source map files.
+ * @param directory directory containing debug info files.
  * @param filesMap map from file hash to file information.
- * @param mustHaveSourceFile indicates whether resulting source maps must have their
+ * @param mustHaveSourceFile indicates whether resulting debug infos must have their
  * respective source files present in the filesMap.
- * @returns map from stringified module info to source map.
+ * @returns map from stringified module info to debug info.
  */
-export function readAllSourceMaps(
+export function readAllDebugInfos(
     directory: string,
     filesMap: Map<string, IFileInfo>,
     mustHaveSourceFile: boolean,
-): Map<string, ISourceMap> {
-    const sourceMapsMap = new Map<string, ISourceMap>();
-    const allSourceMapLinesMap = new Map<string, Set<number>>;
+): Map<string, IDebugInfo> {
+    const debugInfosMap = new Map<string, IDebugInfo>();
+    const allDebugInfoLinesMap = new Map<string, Set<number>>;
 
     const processDirectory = (dir: string) => {
         const files = fs.readdirSync(dir);
@@ -154,10 +157,10 @@ export function readAllSourceMaps(
             if (stats.isDirectory()) {
                 processDirectory(filePath);
             } else if (path.extname(f) === JSON_FILE_EXT) {
-                const sourceMap =
-                    readSourceMap(filePath, filesMap, allSourceMapLinesMap, mustHaveSourceFile);
-                if (sourceMap) {
-                    sourceMapsMap.set(JSON.stringify(sourceMap.modInfo), sourceMap);
+                const debugInfo =
+                    readDebugInfo(filePath, filesMap, allDebugInfoLinesMap, mustHaveSourceFile);
+                if (debugInfo) {
+                    debugInfosMap.set(JSON.stringify(debugInfo.modInfo), debugInfo);
                 }
             }
         }
@@ -165,67 +168,67 @@ export function readAllSourceMaps(
 
     processDirectory(directory);
 
-    for (const sourceMap of sourceMapsMap.values()) {
-        const fileHash = sourceMap.fileHash;
-        const sourceMapLines = allSourceMapLinesMap.get(fileHash);
+    for (const debugInfo of debugInfosMap.values()) {
+        const fileHash = debugInfo.fileHash;
+        const debugInfoLines = allDebugInfoLinesMap.get(fileHash);
         const fileInfo = filesMap.get(fileHash);
-        if (sourceMapLines && fileInfo) {
+        if (debugInfoLines && fileInfo) {
             for (let i = 0; i < fileInfo.lines.length; i++) {
-                if (!sourceMapLines.has(i + 1)) { // allSourceMapLines is 1-based
-                    sourceMap.optimizedLines.push(i); // result must be 0-based
+                if (!debugInfoLines.has(i + 1)) { // allDebugInfoLines is 1-based
+                    debugInfo.optimizedLines.push(i); // result must be 0-based
                 }
             }
         }
     }
 
 
-    return sourceMapsMap;
+    return debugInfosMap;
 }
 
 /**
- * Reads a Move VM source map from a JSON file. If `failOnNoSourceFile` is true,
+ * Reads debug info from a JSON file. If `failOnNoSourceFile` is true,
  * the function throws an error if the source file is not present in the filesMap.
  *
- * @param sourceMapPath path to the source map JSON file.
+ * @param debugInfoPath path to the debug info JSON file.
  * @param filesMap map from file hash to file information.
- * @param sourceMapLinesMap map from file hash to set of lines present
- * in all source maps for a given file (a given source map may contain
+ * @param debugInfoLinesMap map from file hash to set of lines present
+ * in all debug infos for a given file (a given debug info may contain
  * source lines for different files due to inlining).
- * @param failOnNoSourceFile indicates if source map retrieval should fail if the
+ * @param failOnNoSourceFile indicates if debug info retrieval should fail if the
  * source file is not present in the filesMap or if it should return `undefined`.
  *
- * @returns source map or `undefined` if `failOnNoSourceFile` is true and the source file
+ * @returns debug info or `undefined` if `failOnNoSourceFile` is true and the source file
  * is not present in the filesMap.
  * @throws Error if with a descriptive error message if the source map cannot be read.
  */
-function readSourceMap(
-    sourceMapPath: string,
+function readDebugInfo(
+    debugInfoPath: string,
     filesMap: Map<string, IFileInfo>,
-    sourceMapLinesMap: Map<string, Set<number>>,
+    debugInfoLinesMap: Map<string, Set<number>>,
     failOnNoSourceFile: boolean,
-): ISourceMap | undefined {
-    const sourceMapJSON: JSONSrcRootObject = JSON.parse(fs.readFileSync(sourceMapPath, 'utf8'));
+): IDebugInfo | undefined {
+    const sourceMapJSON: JSONSrcRootObject = JSON.parse(fs.readFileSync(debugInfoPath, 'utf8'));
 
     const fileHash = Buffer.from(sourceMapJSON.definition_location.file_hash).toString('base64');
     const modInfo: ModuleInfo = {
         addr: sourceMapJSON.module_name[0],
         name: sourceMapJSON.module_name[1]
     };
-    const functions = new Map<string, ISourceMapFunction>();
+    const functions = new Map<string, IDebugInfoFunction>();
     const fileInfo = filesMap.get(fileHash);
     if (!fileInfo) {
         if (failOnNoSourceFile) {
             throw new Error('Could not find file with hash: '
                 + fileHash
-                + ' when processing source map at: '
-                + sourceMapPath);
+                + ' when processing debug info at: '
+                + debugInfoPath);
         } else {
             return undefined;
         }
     }
-    const sourceMapLines = sourceMapLinesMap.get(fileHash) ?? new Set<number>;
-    prePopulateSourceMapLines(sourceMapJSON, fileInfo, sourceMapLines);
-    sourceMapLinesMap.set(fileHash, sourceMapLines);
+    const debugInfoLines = debugInfoLinesMap.get(fileHash) ?? new Set<number>;
+    prePopulateDebugInfoLines(sourceMapJSON, fileInfo, debugInfoLines);
+    debugInfoLinesMap.set(fileHash, debugInfoLines);
     const functionMap = sourceMapJSON.function_map;
     for (const funEntry of Object.values(functionMap)) {
         let nameStart = funEntry.definition_location.start;
@@ -249,20 +252,20 @@ function readSourceMap(
             if (!fileInfo) {
                 throw new Error('Could not find file with hash: '
                     + fileHash
-                    + ' when processing source map at: '
-                    + sourceMapPath);
+                    + ' when processing debug info at: '
+                    + debugInfoPath);
             }
             const currentStartLoc = byteOffsetToLineColumn(fileInfo, defLocation.start);
             const currentFileStartLoc: IFileLoc = {
                 fileHash: defLocFileHash,
                 loc: currentStartLoc
             };
-            const sourceMapLines = sourceMapLinesMap.get(defLocFileHash) ?? new Set<number>;
-            sourceMapLines.add(currentStartLoc.line);
+            const debugInfoLines = debugInfoLinesMap.get(defLocFileHash) ?? new Set<number>;
+            debugInfoLines.add(currentStartLoc.line);
             // add the end line to the set as well even if we don't need it for pcLocs
             const currentEndLoc = byteOffsetToLineColumn(fileInfo, defLocation.end);
-            sourceMapLines.add(currentEndLoc.line);
-            sourceMapLinesMap.set(defLocFileHash, sourceMapLines);
+            debugInfoLines.add(currentEndLoc.line);
+            debugInfoLinesMap.set(defLocFileHash, debugInfoLines);
             for (let i = prevPC + 1; i < currentPC; i++) {
                 pcLocs.push(prevLoc);
             }
@@ -296,57 +299,57 @@ function readSourceMap(
 }
 
 /**
- * Pre-populates the set of source file lines that are present in the source map
+ * Pre-populates the set of source file lines that are present in the debug info
  * with lines corresponding to the definitions of module, structs, enums, and functions
  * (excluding location of instructions in the function body which are handled elsewhere).
  * Constants do not have location information in the source map and must be handled separately.
  *
  * @param sourceMapJSON
  * @param fileInfo
- * @param sourceMapLines
+ * @param debugInfoLines
  */
-function prePopulateSourceMapLines(
+function prePopulateDebugInfoLines(
     sourceMapJSON: JSONSrcRootObject,
     fileInfo: IFileInfo,
-    sourceMapLines: Set<number>
+    debugInfoLines: Set<number>
 ): void {
-    addLinesForLocation(sourceMapJSON.definition_location, fileInfo, sourceMapLines);
+    addLinesForLocation(sourceMapJSON.definition_location, fileInfo, debugInfoLines);
     const structMap = sourceMapJSON.struct_map;
     for (const structEntry of Object.values(structMap)) {
-        addLinesForLocation(structEntry.definition_location, fileInfo, sourceMapLines);
+        addLinesForLocation(structEntry.definition_location, fileInfo, debugInfoLines);
         for (const typeParam of structEntry.type_parameters) {
-            addLinesForLocation(typeParam[1], fileInfo, sourceMapLines);
+            addLinesForLocation(typeParam[1], fileInfo, debugInfoLines);
         }
         for (const fieldDef of structEntry.fields) {
-            addLinesForLocation(fieldDef, fileInfo, sourceMapLines);
+            addLinesForLocation(fieldDef, fileInfo, debugInfoLines);
         }
     }
 
     const enumMap = sourceMapJSON.enum_map;
     for (const enumEntry of Object.values(enumMap)) {
-        addLinesForLocation(enumEntry.definition_location, fileInfo, sourceMapLines);
+        addLinesForLocation(enumEntry.definition_location, fileInfo, debugInfoLines);
         for (const typeParam of enumEntry.type_parameters) {
-            addLinesForLocation(typeParam[1], fileInfo, sourceMapLines);
+            addLinesForLocation(typeParam[1], fileInfo, debugInfoLines);
         }
         for (const variant of enumEntry.variants) {
-            addLinesForLocation(variant[0][1], fileInfo, sourceMapLines);
+            addLinesForLocation(variant[0][1], fileInfo, debugInfoLines);
             for (const fieldDef of variant[1]) {
-                addLinesForLocation(fieldDef, fileInfo, sourceMapLines);
+                addLinesForLocation(fieldDef, fileInfo, debugInfoLines);
             }
         }
     }
 
     const functionMap = sourceMapJSON.function_map;
     for (const funEntry of Object.values(functionMap)) {
-        addLinesForLocation(funEntry.definition_location, fileInfo, sourceMapLines);
+        addLinesForLocation(funEntry.definition_location, fileInfo, debugInfoLines);
         for (const typeParam of funEntry.type_parameters) {
-            addLinesForLocation(typeParam[1], fileInfo, sourceMapLines);
+            addLinesForLocation(typeParam[1], fileInfo, debugInfoLines);
         }
         for (const param of funEntry.parameters) {
-            addLinesForLocation(param[1], fileInfo, sourceMapLines);
+            addLinesForLocation(param[1], fileInfo, debugInfoLines);
         }
         for (const local of funEntry.locals) {
-            addLinesForLocation(local[1], fileInfo, sourceMapLines);
+            addLinesForLocation(local[1], fileInfo, debugInfoLines);
         }
     }
 }
@@ -356,17 +359,17 @@ function prePopulateSourceMapLines(
  *
  * @param loc  location in the source file.
  * @param fileInfo  source file information.
- * @param sourceMapLines  set of source file lines.
+ * @param debugInfoLines  set of source file lines.
  */
 function addLinesForLocation(
     loc: JSONSrcDefinitionLocation,
     fileInfo: IFileInfo,
-    sourceMapLines: Set<number>
+    debugInfoLines: Set<number>
 ): void {
     const startLine = byteOffsetToLineColumn(fileInfo, loc.start).line;
-    sourceMapLines.add(startLine);
+    debugInfoLines.add(startLine);
     const endLine = byteOffsetToLineColumn(fileInfo, loc.end).line;
-    sourceMapLines.add(endLine);
+    debugInfoLines.add(endLine);
 }
 
 
