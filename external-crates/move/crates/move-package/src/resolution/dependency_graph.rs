@@ -273,7 +273,7 @@ impl<Progress: Write> DependencyGraphBuilder<Progress> {
                 root_manifest.dependencies.insert(*name, dep.clone());
             }
         } else if !is_implicit {
-            println!(
+            eprintln!(
                 "[{}] Dependencies on {} are automatically added, but this feature is \
                 disabled for your package because you have explicitly included dependencies on {}. Consider \
                 removing these dependencies from {}.",
