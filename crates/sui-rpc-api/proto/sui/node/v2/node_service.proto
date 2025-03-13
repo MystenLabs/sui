@@ -12,6 +12,7 @@ import "sui/types/checkpoint_contents.proto";
 import "sui/types/checkpoint_summary.proto";
 import "sui/types/event.proto";
 import "sui/types/signature.proto";
+import "sui/types/transaction.proto";
 import "sui/types/types.proto";
 
 //

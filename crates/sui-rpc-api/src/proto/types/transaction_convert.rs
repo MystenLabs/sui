@@ -7,36 +7,10 @@ use tap::Pipe;
 
 impl From<sui_sdk_types::Transaction> for super::Transaction {
     fn from(value: sui_sdk_types::Transaction) -> Self {
-        let version = super::transaction::Version::V1(value.into());
-
         Self {
-            version: Some(version),
-        }
-    }
-}
-
-impl TryFrom<&super::Transaction> for sui_sdk_types::Transaction {
-    type Error = TryFromProtoError;
-
-    fn try_from(value: &super::Transaction) -> Result<Self, Self::Error> {
-        match value
-            .version
-            .as_ref()
-            .ok_or_else(|| TryFromProtoError::missing("version"))?
-        {
-            super::transaction::Version::V1(v1) => Self::try_from(v1)?,
-        }
-        .pipe(Ok)
-    }
-}
-
-//
-// TransactionV1
-//
-
-impl From<sui_sdk_types::Transaction> for super::transaction::TransactionV1 {
-    fn from(value: sui_sdk_types::Transaction) -> Self {
-        Self {
+            bcs: None,
+            digest: Some(value.digest().to_string()),
+            version: Some(super::Version::V1.into()),
             kind: Some(value.kind.into()),
             sender: Some(value.sender.to_string()),
             gas_payment: Some(value.gas_payment.into()),
@@ -45,10 +19,17 @@ impl From<sui_sdk_types::Transaction> for super::transaction::TransactionV1 {
     }
 }
 
-impl TryFrom<&super::transaction::TransactionV1> for sui_sdk_types::Transaction {
+impl TryFrom<&super::Transaction> for sui_sdk_types::Transaction {
     type Error = TryFromProtoError;
 
-    fn try_from(value: &super::transaction::TransactionV1) -> Result<Self, Self::Error> {
+    fn try_from(value: &super::Transaction) -> Result<Self, Self::Error> {
+        match value.version() {
+            super::Version::V1 => {}
+            _ => {
+                return Err(TryFromProtoError::from_error("unknown Transaction version"));
+            }
+        }
+
         let kind = value
             .kind
             .as_ref()
@@ -1021,25 +1002,45 @@ impl TryFrom<&super::ProgrammableTransaction> for sui_sdk_types::ProgrammableTra
 
 impl From<sui_sdk_types::Input> for super::Input {
     fn from(value: sui_sdk_types::Input) -> Self {
-        use super::input::Kind;
+        use super::input::InputKind;
         use sui_sdk_types::Input::*;
 
+        let mut message = Self::default();
+
         let kind = match value {
-            Pure { value } => Kind::Pure(value.into()),
-            ImmutableOrOwned(reference) => Kind::ImmutableOrOwned(reference.into()),
+            Pure { value } => {
+                message.pure = Some(value.into());
+                InputKind::Pure
+            }
+
+            ImmutableOrOwned(reference) => {
+                message.object_id = Some(reference.object_id().to_string());
+                message.version = Some(reference.version());
+                message.digest = Some(reference.digest().to_string());
+                InputKind::ImmutableOrOwned
+            }
+
             Shared {
                 object_id,
                 initial_shared_version,
                 mutable,
-            } => Kind::Shared(super::SharedObjectInput {
-                object_id: Some(object_id.to_string()),
-                initial_shared_version: Some(initial_shared_version),
-                mutable: Some(mutable),
-            }),
-            Receiving(reference) => Kind::Receiving(reference.into()),
+            } => {
+                message.object_id = Some(object_id.to_string());
+                message.version = Some(initial_shared_version);
+                message.mutable = Some(mutable);
+                InputKind::Shared
+            }
+
+            Receiving(reference) => {
+                message.object_id = Some(reference.object_id().to_string());
+                message.version = Some(reference.version());
+                message.digest = Some(reference.digest().to_string());
+                InputKind::Receiving
+            }
         };
 
-        Self { kind: Some(kind) }
+        message.set_kind(kind);
+        message
     }
 }
 
@@ -1047,35 +1048,75 @@ impl TryFrom<&super::Input> for sui_sdk_types::Input {
     type Error = TryFromProtoError;
 
     fn try_from(value: &super::Input) -> Result<Self, Self::Error> {
-        use super::input::Kind;
+        use super::input::InputKind;
 
-        match value
-            .kind
-            .as_ref()
-            .ok_or_else(|| TryFromProtoError::missing("kind"))?
-        {
-            Kind::Pure(value) => Self::Pure {
-                value: value.to_vec(),
+        match value.kind() {
+            InputKind::Unknown => return Err(TryFromProtoError::from_error("unknown InputKind")),
+
+            InputKind::Pure => Self::Pure {
+                value: value
+                    .pure
+                    .as_ref()
+                    .ok_or_else(|| TryFromProtoError::missing("pure"))?
+                    .to_vec(),
             },
-            Kind::ImmutableOrOwned(reference) => Self::ImmutableOrOwned(reference.try_into()?),
-            Kind::Shared(shared) => {
-                let object_id = shared
+            InputKind::ImmutableOrOwned => {
+                let object_id = value
                     .object_id
                     .as_ref()
                     .ok_or_else(|| TryFromProtoError::missing("object_id"))?
                     .parse()
                     .map_err(TryFromProtoError::from_error)?;
+                let version = value
+                    .version
+                    .ok_or_else(|| TryFromProtoError::missing("version"))?;
+                let digest = value
+                    .digest
+                    .as_ref()
+                    .ok_or_else(|| TryFromProtoError::missing("digest"))?
+                    .parse()
+                    .map_err(TryFromProtoError::from_error)?;
+                let reference = sui_sdk_types::ObjectReference::new(object_id, version, digest);
+                Self::ImmutableOrOwned(reference)
+            }
+            InputKind::Shared => {
+                let object_id = value
+                    .object_id
+                    .as_ref()
+                    .ok_or_else(|| TryFromProtoError::missing("object_id"))?
+                    .parse()
+                    .map_err(TryFromProtoError::from_error)?;
+                let initial_shared_version = value
+                    .version
+                    .ok_or_else(|| TryFromProtoError::missing("version"))?;
+                let mutable = value
+                    .mutable
+                    .ok_or_else(|| TryFromProtoError::missing("mutable"))?;
                 Self::Shared {
                     object_id,
-                    initial_shared_version: shared
-                        .initial_shared_version
-                        .ok_or_else(|| TryFromProtoError::missing("initial_shared_version"))?,
-                    mutable: shared
-                        .mutable
-                        .ok_or_else(|| TryFromProtoError::missing("mutable"))?,
+                    initial_shared_version,
+                    mutable,
                 }
             }
-            Kind::Receiving(reference) => Self::Receiving(reference.try_into()?),
+            InputKind::Receiving => {
+                let object_id = value
+                    .object_id
+                    .as_ref()
+                    .ok_or_else(|| TryFromProtoError::missing("object_id"))?
+                    .parse()
+                    .map_err(TryFromProtoError::from_error)?;
+                let version = value
+                    .version
+                    .ok_or_else(|| TryFromProtoError::missing("version"))?;
+                let digest = value
+                    .digest
+                    .as_ref()
+                    .ok_or_else(|| TryFromProtoError::missing("digest"))?
+                    .parse()
+                    .map_err(TryFromProtoError::from_error)?;
+                let reference = sui_sdk_types::ObjectReference::new(object_id, version, digest);
+                Self::Receiving(reference)
+            }
         }
         .pipe(Ok)
     }
@@ -1087,20 +1128,30 @@ impl TryFrom<&super::Input> for sui_sdk_types::Input {
 
 impl From<sui_sdk_types::Argument> for super::Argument {
     fn from(value: sui_sdk_types::Argument) -> Self {
-        use super::argument::Kind;
+        use super::argument::ArgumentKind;
         use sui_sdk_types::Argument::*;
 
+        let mut message = Self::default();
+
         let kind = match value {
-            Gas => Kind::Gas(()),
-            Input(input) => Kind::Input(input.into()),
-            Result(result) => Kind::Result(result.into()),
-            NestedResult(result, subresult) => Kind::NestedResult(super::NestedResult {
-                result: Some(result.into()),
-                subresult: Some(subresult.into()),
-            }),
+            Gas => ArgumentKind::Gas,
+            Input(input) => {
+                message.index = Some(input.into());
+                ArgumentKind::Input
+            }
+            Result(result) => {
+                message.index = Some(result.into());
+                ArgumentKind::Result
+            }
+            NestedResult(result, subresult) => {
+                message.index = Some(result.into());
+                message.subresult = Some(subresult.into());
+                ArgumentKind::Result
+            }
         };
 
-        Self { kind: Some(kind) }
+        message.set_kind(kind);
+        message
     }
 }
 
@@ -1108,24 +1159,32 @@ impl TryFrom<&super::Argument> for sui_sdk_types::Argument {
     type Error = TryFromProtoError;
 
     fn try_from(value: &super::Argument) -> Result<Self, Self::Error> {
-        use super::argument::Kind;
+        use super::argument::ArgumentKind;
 
-        match value
-            .kind
-            .as_ref()
-            .ok_or_else(|| TryFromProtoError::missing("kind"))?
-        {
-            Kind::Gas(()) => Self::Gas,
-            Kind::Input(input) => Self::Input((*input).try_into()?),
-            Kind::Result(result) => Self::Result((*result).try_into()?),
-            Kind::NestedResult(super::NestedResult { result, subresult }) => Self::NestedResult(
-                result
-                    .ok_or_else(|| TryFromProtoError::missing("result"))?
-                    .try_into()?,
-                subresult
-                    .ok_or_else(|| TryFromProtoError::missing("subresult"))?
-                    .try_into()?,
-            ),
+        match value.kind() {
+            ArgumentKind::Unknown => {
+                return Err(TryFromProtoError::from_error("unknown ArgumentKind"))
+            }
+            ArgumentKind::Gas => Self::Gas,
+            ArgumentKind::Input => {
+                let input = value
+                    .index
+                    .ok_or_else(|| TryFromProtoError::missing("index"))?
+                    .try_into()?;
+                Self::Input(input)
+            }
+            ArgumentKind::Result => {
+                let result = value
+                    .index
+                    .ok_or_else(|| TryFromProtoError::missing("index"))?
+                    .try_into()?;
+
+                if let Some(subresult) = value.subresult {
+                    Self::NestedResult(result, subresult.try_into()?)
+                } else {
+                    Self::Result(result)
+                }
+            }
         }
         .pipe(Ok)
     }

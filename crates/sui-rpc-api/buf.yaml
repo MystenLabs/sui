@@ -14,9 +14,11 @@ modules:
         PACKAGE_VERSION_SUFFIX:
           - proto/sui/types
         ENUM_VALUE_PREFIX:
+          - proto/sui/types/argument.proto
+          - proto/sui/types/execution_status.proto
+          - proto/sui/types/input.proto
           - proto/sui/types/signature_scheme.proto
           - proto/sui/types/version.proto
-          - proto/sui/types/execution_status.proto
         ENUM_ZERO_VALUE_SUFFIX:
           - proto/sui/types/signature_scheme.proto
 
