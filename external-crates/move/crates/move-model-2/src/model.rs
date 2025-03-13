@@ -8,6 +8,7 @@ use std::{
 };
 
 use crate::compiled::{self, ModuleId, QualifiedMemberId, TModuleId};
+use indexmap::IndexMap;
 use move_binary_format::{file_format, CompiledModule};
 use move_bytecode_source_map::source_map::SourceMap;
 use move_compiler::{
@@ -801,10 +802,10 @@ struct PackageData<const HAS_SOURCE: SourceKind> {
 
 struct ModuleData<const HAS_SOURCE: SourceKind> {
     ident: [E::ModuleIdent; HAS_SOURCE],
-    structs: BTreeMap<Symbol, StructData>,
-    enums: BTreeMap<Symbol, EnumData>,
-    functions: BTreeMap<Symbol, FunctionData>,
-    named_constants: [BTreeMap<Symbol, ConstantData>; HAS_SOURCE],
+    structs: IndexMap<Symbol, StructData>,
+    enums: IndexMap<Symbol, EnumData>,
+    functions: IndexMap<Symbol, FunctionData>,
+    named_constants: [IndexMap<Symbol, ConstantData>; HAS_SOURCE],
     // mapping from file_format::ConstantPoolIndex to source constant name, if any
     constant_names: [Vec<Option<Symbol>>; HAS_SOURCE],
 }
@@ -813,7 +814,7 @@ struct StructData {}
 
 struct EnumData {
     #[allow(unused)]
-    variants: BTreeMap<Symbol, VariantData>,
+    variants: IndexMap<Symbol, VariantData>,
 }
 
 struct VariantData {}
@@ -983,7 +984,7 @@ impl StructData {
 
 impl EnumData {
     fn new(module: &file_format::CompiledModule, def: &file_format::EnumDefinition) -> Self {
-        let mut variants = BTreeMap::new();
+        let mut variants = IndexMap::new();
         for variant in &def.variants {
             let name = Symbol::from(module.identifier_at(variant.variant_name).as_str());
             let data = VariantData::new();
