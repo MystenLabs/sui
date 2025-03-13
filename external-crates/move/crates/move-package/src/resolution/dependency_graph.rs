@@ -272,8 +272,8 @@ impl<Progress: Write> DependencyGraphBuilder<Progress> {
             for (name, dep) in self.implicit_deps.iter() {
                 root_manifest.dependencies.insert(*name, dep.clone());
             }
-        } else if !is_implicit {
-            println!(
+        } else if !is_implicit && *parent == PM::DependencyKind::default() {
+            eprintln!(
                 "[{}] Dependencies on {} are automatically added, but this feature is \
                 disabled for your package because you have explicitly included dependencies on {}. Consider \
                 removing these dependencies from {}.",

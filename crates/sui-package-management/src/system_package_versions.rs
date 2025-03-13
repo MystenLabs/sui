@@ -16,6 +16,8 @@ static VERSION_TABLE: LazyLock<BTreeMap<ProtocolVersion, SystemPackagesVersion>>
         )))
     });
 
+pub const SYSTEM_GIT_REPO: &str = "https://github.com/MystenLabs/sui.git";
+
 #[derive(Debug)]
 pub struct SystemPackagesVersion {
     pub git_revision: String,
