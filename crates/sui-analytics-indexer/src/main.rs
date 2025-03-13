@@ -38,10 +38,10 @@ async fn main() -> Result<()> {
     let mut watermarks = HashMap::new();
     let mut processors = Vec::new();
     let config = Arc::new(config);
+    let metrics = AnalyticsMetrics::new(&registry);
     for task_config in config.tasks.clone() {
-        let metrics = AnalyticsMetrics::new(&registry);
         let task_name = task_config.task_name.clone();
-        let processor = make_analytics_processor(config.clone(), task_config, metrics)
+        let processor = make_analytics_processor(config.clone(), task_config, metrics.clone())
             .await
             .map_err(|e| AnalyticsIndexerError::GenericError(e.to_string()))?;
         let watermark = processor.last_committed_checkpoint().unwrap_or_default() + 1;
@@ -59,7 +59,8 @@ async fn main() -> Result<()> {
     );
 
     for processor in processors.into_iter() {
-        let worker_pool = WorkerPool::new(processor, "workflow".to_string(), 1);
+        let task_name = processor.task_name.clone();
+        let worker_pool = WorkerPool::new(processor, task_name, 1);
         executor.register(worker_pool).await?;
     }
 
