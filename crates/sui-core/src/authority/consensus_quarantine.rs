@@ -495,7 +495,9 @@ impl ConsensusOutputCache {
         self.executed_in_epoch_cache.insert(tx_digest, ());
     }
 
-    // Called by CheckpointExecutor
+    // CheckpointExecutor calls this (indirectly) in order to prune the in-memory cache of executed
+    // transactions. By the time this is called, the transaction digests will have been committed to
+    // the `executed_transactions_to_checkpoint` table.
     pub fn remove_executed_in_epoch(&self, tx_digests: &[TransactionDigest]) {
         let executed_in_epoch = self.executed_in_epoch.read();
         for tx_digest in tx_digests {

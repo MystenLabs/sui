@@ -1401,11 +1401,9 @@ impl AuthorityPerEpochStore {
 
         if !matches!(tx_key, TransactionKey::Digest(_)) {
             tables.transaction_key_to_digest.insert(tx_key, tx_digest)?;
-        }
-
-        if !matches!(tx_key, TransactionKey::Digest(_)) {
             self.executed_digests_notify_read.notify(tx_key, tx_digest);
         }
+
         Ok(())
     }
 
