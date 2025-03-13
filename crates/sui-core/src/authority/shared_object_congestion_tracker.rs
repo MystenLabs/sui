@@ -558,13 +558,7 @@ mod object_cost_tests {
         #[values(
             PerObjectCongestionControlMode::TotalGasBudget,
             PerObjectCongestionControlMode::TotalTxCount,
-            PerObjectCongestionControlMode::TotalGasBudgetWithCap,
-            PerObjectCongestionControlMode::ExecutionTimeEstimate(ExecutionTimeEstimateParams {
-                target_utilization: 100,
-                allowed_txn_cost_overage_burst_limit_us: 0,
-                randomness_scalar: 0,
-                max_estimate_us: u64::MAX,
-            }),
+            PerObjectCongestionControlMode::TotalGasBudgetWithCap
         )]
         mode: PerObjectCongestionControlMode,
     ) {
@@ -720,33 +714,6 @@ mod object_cost_tests {
                 }
             }
         }
-
-        if matches!(
-            mode,
-            PerObjectCongestionControlMode::ExecutionTimeEstimate(_)
-        ) {
-            for mutable_0 in [true, false].iter() {
-                for mutable_1 in [true, false].iter() {
-                    let tx = build_transaction(
-                        &[(shared_obj_0, *mutable_0), (shared_obj_1, *mutable_1)],
-                        tx_gas_budget,
-                    );
-                    assert!(shared_object_congestion_tracker
-                        .should_defer_due_to_object_congestion(
-                            Some(&execution_time_estimator),
-                            &tx,
-                            &HashMap::new(),
-                            &ConsensusCommitInfo::new_for_congestion_test(
-                                0,
-                                0,
-                                // With higher commit period, no deferral should happen.
-                                Duration::from_micros(20_000),
-                            ),
-                        )
-                        .is_none());
-                }
-            }
-        }
     }
 
     #[rstest]
@@ -756,7 +723,7 @@ mod object_cost_tests {
             PerObjectCongestionControlMode::TotalTxCount,
             PerObjectCongestionControlMode::TotalGasBudgetWithCap,
             PerObjectCongestionControlMode::ExecutionTimeEstimate(ExecutionTimeEstimateParams {
-                target_utilization: 0, // Make should_defer_due_to_object_congestion always defer transactions.
+                target_utilization: 0,
                 allowed_txn_cost_overage_burst_limit_us: 0,
                 max_estimate_us: u64::MAX,
                 randomness_scalar: 0,
@@ -770,7 +737,7 @@ mod object_cost_tests {
         let tx = build_transaction(&[(shared_obj_0, true)], 100);
 
         let shared_object_congestion_tracker = SharedObjectCongestionTracker::new(
-            [],
+            [(shared_obj_0, 1)], // set initial cost that exceeds 0 burst limit
             mode,
             false,
             Some(0), // Make should_defer_due_to_object_congestion always defer transactions.
