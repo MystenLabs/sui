@@ -82,12 +82,12 @@ pub struct AnalyticsIndexerConfig {
     /// Directory to contain the temporary files for checkpoint entries.
     #[serde(default = "default_checkpoint_dir")]
     pub checkpoint_dir: PathBuf,
-    // Remote object store where data gets written to
+    /// Remote object store where data gets written to
     pub remote_store_config: ObjectStoreConfig,
     /// Remote object store path prefix to use while writing
     #[serde(default = "default_remote_store_url")]
     pub remote_store_url: String,
-    // Directory to contain the package cache for pipelines
+    /// Directory to contain the package cache for pipelines
     #[serde(default = "default_package_cache_path")]
     pub package_cache_path: PathBuf,
     pub bq_service_account_key_file: Option<String>,
@@ -105,11 +105,11 @@ pub struct AnalyticsIndexerConfig {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct TaskConfig {
-    // Name of the task. Must be unique per process. Used to identify tasks in the Progress Store.
+    /// Name of the task. Must be unique per process. Used to identify tasks in the Progress Store.
     pub task_name: String,
     // Type of data to write i.e. checkpoint, object, transaction, etc
     pub file_type: FileType,
-    // File format to store data in i.e. csv, parquet, etc
+    /// File format to store data in i.e. csv, parquet, etc
     #[serde(default = "default_file_format")]
     pub file_format: FileFormat,
     /// Number of checkpoints to process before uploading to the datastore.
