@@ -212,6 +212,12 @@ impl ExecutionTimeObserver {
         let mut to_share = Vec::with_capacity(tx.commands.len());
         for (i, timing) in timings.iter().enumerate() {
             let command = &tx.commands[i];
+
+            // Special-case handling for Publish command: only use hard-coded default estimate.
+            if matches!(command, Command::Publish(_, _)) {
+                continue;
+            }
+
             // TODO: Consider using failure/success information in computing estimates.
             let mut command_duration = timing.duration();
 
@@ -411,6 +417,14 @@ impl ExecutionTimeEstimator {
         duration: Duration,
         skip_update: bool,
     ) {
+        if matches!(observation_key, ExecutionTimeObservationKey::Publish) {
+            // Special-case handling for Publish command: only use hard-coded default estimate.
+            warn!(
+                "dropping Publish observation received from possibly-Byzanitine authority {source}"
+            );
+            return;
+        }
+
         let observations = self
             .consensus_observations
             .entry(observation_key)
