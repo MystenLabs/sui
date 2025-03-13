@@ -297,16 +297,16 @@ impl ExecutionTimeObserver {
 
         // Enforce global observation-sharing rate limit.
         if let Err(e) = self.sharing_rate_limiter.check() {
+            epoch_store
+                .metrics
+                .epoch_execution_time_observation_dropped
+                .with_label_values(&["global_rate_limit"])
+                .inc_by(to_share.len() as i64);
             debug!("rate limit exceeded, dropping execution time observation; {e:?}");
-            // TODO: Increment a metric for dropped observations, for alerting.
             return;
         }
 
         let epoch_store = epoch_store.clone();
-        epoch_store
-            .metrics
-            .epoch_execution_time_observations_shared
-            .inc();
         let transaction = ConsensusTransaction::new_execution_time_observation(
             ExecutionTimeObservation::new(epoch_store.name, to_share),
         );
@@ -315,18 +315,36 @@ impl ExecutionTimeObserver {
             .submit_to_consensus(&[transaction], &epoch_store)
         {
             if !matches!(e, SuiError::EpochEnded(_)) {
-                // TODO: Increment a metric for dropped observations, for alerting.
+                epoch_store
+                    .metrics
+                    .epoch_execution_time_observations_dropped
+                    .with_label_values(&["submit_to_consensus"])
+                    .inc_by(to_share.len() as i64);
                 warn!("failed to submit execution time observation: {e:?}");
             }
+        } else {
+            epoch_store
+                .metrics
+                .epoch_execution_time_observations_shared
+                .inc_by(to_share.len() as i64);
         }
     }
 
     fn update_indebted_objects(&mut self, mut object_debts: Vec<ObjectID>) {
         let _scope = monitored_scope("ExecutionTimeObserver::update_indebted_objects");
 
+        let Some(epoch_store) = self.epoch_store.upgrade() else {
+            debug!("epoch is ending, dropping indebted object update");
+            return;
+        };
+
         object_debts.sort_unstable();
         object_debts.dedup();
         self.indebted_objects = object_debts;
+        epoch_store
+            .metrics
+            .epoch_execution_time_observer_indebted_objects
+            .set(self.indebted_objects.len() as i64);
     }
 }
 

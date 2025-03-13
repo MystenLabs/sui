@@ -2,8 +2,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use prometheus::{
-    register_int_counter_with_registry, register_int_gauge_with_registry, IntCounter, IntGauge,
-    Registry,
+    register_int_counter_vec_with_registry, register_int_counter_with_registry,
+    register_int_gauge_with_registry, IntCounter, IntCounterVec, IntGauge, Registry,
 };
 use std::sync::Arc;
 
@@ -103,10 +103,16 @@ pub struct EpochMetrics {
     pub epoch_random_beacon_dkg_confirmation_time_ms: IntGauge,
 
     /// The number of execution time observations messages shared by this node.
-    pub epoch_execution_time_observations_shared: IntCounter,
+    pub epoch_execution_time_observations_shared: IntCounterVec,
 
-    /// The number of execution time observations dropped due to backpressure from the observer.
-    pub epoch_execution_time_observations_dropped: IntCounter,
+    /// The number of execution time measurements dropped due to backpressure from the observer.
+    pub epoch_execution_time_measurements_dropped: IntCounter,
+
+    /// The number of execution time consensus messages dropped.
+    pub epoch_execution_time_observations_dropped: IntCounterVec,
+
+    /// The number of cached indebted objects in the execution time observer.
+    pub epoch_execution_time_observer_indebted_objects: IntGauge,
 
     /// The number of consensus output items in the quarantine.
     pub consensus_quarantine_queue_size: IntGauge,
@@ -237,9 +243,22 @@ impl EpochMetrics {
                 registry
             )
             .unwrap(),
-            epoch_execution_time_observations_dropped: register_int_counter_with_registry!(
+            epoch_execution_time_measurements_dropped: register_int_counter_with_registry!(
+                "epoch_execution_time_measurements_dropped",
+                "The number of execution time measurements dropped due to backpressure from the observer",
+                registry
+            )
+            .unwrap(),
+            epoch_execution_time_observations_dropped: register_int_counter_vec_with_registry!(
                 "epoch_execution_time_observations_dropped",
-                "The number of execution time observations dropped due to backpressure from the observer",
+                "The number of execution time observations dropped",
+                &["reason"],
+                registry
+            )
+            .unwrap(),
+            epoch_execution_time_observer_indebted_objects: register_int_gauge_with_registry!(
+                "epoch_execution_time_observer_indebted_objects",
+                "The number of cached indebted objects in the execution time observer",
                 registry
             )
             .unwrap(),
