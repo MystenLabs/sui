@@ -138,16 +138,6 @@ Nitro Attestation Document defined for AWS.
 ## Constants
 
 
-<a name="sui_nitro_attestation_EInvalidPCRsError"></a>
-
-Error that the PCRs are invalid.
-
-
-<pre><code><b>const</b> <a href="../sui/nitro_attestation.md#sui_nitro_attestation_EInvalidPCRsError">EInvalidPCRsError</a>: u64 = 3;
-</code></pre>
-
-
-
 <a name="sui_nitro_attestation_ENotSupportedError"></a>
 
 Error that the feature is not available on this network.
@@ -174,6 +164,16 @@ Error that the attestation failed to be verified.
 
 
 <pre><code><b>const</b> <a href="../sui/nitro_attestation.md#sui_nitro_attestation_EVerifyError">EVerifyError</a>: u64 = 2;
+</code></pre>
+
+
+
+<a name="sui_nitro_attestation_EInvalidPCRsError"></a>
+
+Error that the PCRs are invalid.
+
+
+<pre><code><b>const</b> <a href="../sui/nitro_attestation.md#sui_nitro_attestation_EInvalidPCRsError">EInvalidPCRsError</a>: u64 = 3;
 </code></pre>
 
 

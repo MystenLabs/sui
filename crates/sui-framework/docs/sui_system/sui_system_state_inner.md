@@ -612,20 +612,20 @@ the epoch advancement transaction.
 ## Constants
 
 
-<a name="sui_system_sui_system_state_inner_ACTIVE_OR_PENDING_VALIDATOR"></a>
-
-
-
-<pre><code><b>const</b> <a href="../sui_system/sui_system_state_inner.md#sui_system_sui_system_state_inner_ACTIVE_OR_PENDING_VALIDATOR">ACTIVE_OR_PENDING_VALIDATOR</a>: u8 = 2;
-</code></pre>
-
-
-
 <a name="sui_system_sui_system_state_inner_ACTIVE_VALIDATOR_ONLY"></a>
 
 
 
 <pre><code><b>const</b> <a href="../sui_system/sui_system_state_inner.md#sui_system_sui_system_state_inner_ACTIVE_VALIDATOR_ONLY">ACTIVE_VALIDATOR_ONLY</a>: u8 = 1;
+</code></pre>
+
+
+
+<a name="sui_system_sui_system_state_inner_ACTIVE_OR_PENDING_VALIDATOR"></a>
+
+
+
+<pre><code><b>const</b> <a href="../sui_system/sui_system_state_inner.md#sui_system_sui_system_state_inner_ACTIVE_OR_PENDING_VALIDATOR">ACTIVE_OR_PENDING_VALIDATOR</a>: u8 = 2;
 </code></pre>
 
 
@@ -639,38 +639,29 @@ the epoch advancement transaction.
 
 
 
-<a name="sui_system_sui_system_state_inner_BASIS_POINT_DENOMINATOR"></a>
+<a name="sui_system_sui_system_state_inner_SYSTEM_STATE_VERSION_V1"></a>
 
 
 
-<pre><code><b>const</b> <a href="../sui_system/sui_system_state_inner.md#sui_system_sui_system_state_inner_BASIS_POINT_DENOMINATOR">BASIS_POINT_DENOMINATOR</a>: u128 = 10000;
+<pre><code><b>const</b> <a href="../sui_system/sui_system_state_inner.md#sui_system_sui_system_state_inner_SYSTEM_STATE_VERSION_V1">SYSTEM_STATE_VERSION_V1</a>: u64 = 1;
 </code></pre>
 
 
 
-<a name="sui_system_sui_system_state_inner_EAdvancedToWrongEpoch"></a>
+<a name="sui_system_sui_system_state_inner_EXTRA_FIELD_EXECUTION_TIME_ESTIMATES_KEY"></a>
 
 
 
-<pre><code><b>const</b> <a href="../sui_system/sui_system_state_inner.md#sui_system_sui_system_state_inner_EAdvancedToWrongEpoch">EAdvancedToWrongEpoch</a>: u64 = 8;
+<pre><code><b>const</b> <a href="../sui_system/sui_system_state_inner.md#sui_system_sui_system_state_inner_EXTRA_FIELD_EXECUTION_TIME_ESTIMATES_KEY">EXTRA_FIELD_EXECUTION_TIME_ESTIMATES_KEY</a>: u64 = 0;
 </code></pre>
 
 
 
-<a name="sui_system_sui_system_state_inner_EBpsTooLarge"></a>
+<a name="sui_system_sui_system_state_inner_ENotValidator"></a>
 
 
 
-<pre><code><b>const</b> <a href="../sui_system/sui_system_state_inner.md#sui_system_sui_system_state_inner_EBpsTooLarge">EBpsTooLarge</a>: u64 = 5;
-</code></pre>
-
-
-
-<a name="sui_system_sui_system_state_inner_ECannotReportOneself"></a>
-
-
-
-<pre><code><b>const</b> <a href="../sui_system/sui_system_state_inner.md#sui_system_sui_system_state_inner_ECannotReportOneself">ECannotReportOneself</a>: u64 = 3;
+<pre><code><b>const</b> <a href="../sui_system/sui_system_state_inner.md#sui_system_sui_system_state_inner_ENotValidator">ENotValidator</a>: u64 = 0;
 </code></pre>
 
 
@@ -693,11 +684,11 @@ the epoch advancement transaction.
 
 
 
-<a name="sui_system_sui_system_state_inner_ENotValidator"></a>
+<a name="sui_system_sui_system_state_inner_ECannotReportOneself"></a>
 
 
 
-<pre><code><b>const</b> <a href="../sui_system/sui_system_state_inner.md#sui_system_sui_system_state_inner_ENotValidator">ENotValidator</a>: u64 = 0;
+<pre><code><b>const</b> <a href="../sui_system/sui_system_state_inner.md#sui_system_sui_system_state_inner_ECannotReportOneself">ECannotReportOneself</a>: u64 = 3;
 </code></pre>
 
 
@@ -711,6 +702,15 @@ the epoch advancement transaction.
 
 
 
+<a name="sui_system_sui_system_state_inner_EBpsTooLarge"></a>
+
+
+
+<pre><code><b>const</b> <a href="../sui_system/sui_system_state_inner.md#sui_system_sui_system_state_inner_EBpsTooLarge">EBpsTooLarge</a>: u64 = 5;
+</code></pre>
+
+
+
 <a name="sui_system_sui_system_state_inner_ESafeModeGasNotProcessed"></a>
 
 
@@ -720,20 +720,20 @@ the epoch advancement transaction.
 
 
 
-<a name="sui_system_sui_system_state_inner_EXTRA_FIELD_EXECUTION_TIME_ESTIMATES_KEY"></a>
+<a name="sui_system_sui_system_state_inner_EAdvancedToWrongEpoch"></a>
 
 
 
-<pre><code><b>const</b> <a href="../sui_system/sui_system_state_inner.md#sui_system_sui_system_state_inner_EXTRA_FIELD_EXECUTION_TIME_ESTIMATES_KEY">EXTRA_FIELD_EXECUTION_TIME_ESTIMATES_KEY</a>: u64 = 0;
+<pre><code><b>const</b> <a href="../sui_system/sui_system_state_inner.md#sui_system_sui_system_state_inner_EAdvancedToWrongEpoch">EAdvancedToWrongEpoch</a>: u64 = 8;
 </code></pre>
 
 
 
-<a name="sui_system_sui_system_state_inner_SYSTEM_STATE_VERSION_V1"></a>
+<a name="sui_system_sui_system_state_inner_BASIS_POINT_DENOMINATOR"></a>
 
 
 
-<pre><code><b>const</b> <a href="../sui_system/sui_system_state_inner.md#sui_system_sui_system_state_inner_SYSTEM_STATE_VERSION_V1">SYSTEM_STATE_VERSION_V1</a>: u64 = 1;
+<pre><code><b>const</b> <a href="../sui_system/sui_system_state_inner.md#sui_system_sui_system_state_inner_BASIS_POINT_DENOMINATOR">BASIS_POINT_DENOMINATOR</a>: u128 = 10000;
 </code></pre>
 
 

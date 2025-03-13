@@ -124,47 +124,16 @@ Deprecated. Use VotingPowerInfoV2 instead.
 ## Constants
 
 
-<a name="sui_system_voting_power_EInvalidVotingPower"></a>
+<a name="sui_system_voting_power_TOTAL_VOTING_POWER"></a>
+
+Set total_voting_power as 10_000 by convention. Individual voting powers can be interpreted
+as easily understandable basis points (e.g., voting_power: 100 = 1%, voting_power: 1 = 0.01%) rather than
+opaque quantities whose meaning changes from epoch to epoch as the total amount staked shifts.
+Fixing the total voting power allows clients to hardcode the quorum threshold and total_voting power rather
+than recomputing these.
 
 
-
-<pre><code><b>const</b> <a href="../sui_system/voting_power.md#sui_system_voting_power_EInvalidVotingPower">EInvalidVotingPower</a>: u64 = 4;
-</code></pre>
-
-
-
-<a name="sui_system_voting_power_ERelativePowerMismatch"></a>
-
-
-
-<pre><code><b>const</b> <a href="../sui_system/voting_power.md#sui_system_voting_power_ERelativePowerMismatch">ERelativePowerMismatch</a>: u64 = 2;
-</code></pre>
-
-
-
-<a name="sui_system_voting_power_ETotalPowerMismatch"></a>
-
-
-
-<pre><code><b>const</b> <a href="../sui_system/voting_power.md#sui_system_voting_power_ETotalPowerMismatch">ETotalPowerMismatch</a>: u64 = 1;
-</code></pre>
-
-
-
-<a name="sui_system_voting_power_EVotingPowerOverThreshold"></a>
-
-
-
-<pre><code><b>const</b> <a href="../sui_system/voting_power.md#sui_system_voting_power_EVotingPowerOverThreshold">EVotingPowerOverThreshold</a>: u64 = 3;
-</code></pre>
-
-
-
-<a name="sui_system_voting_power_MAX_VOTING_POWER"></a>
-
-
-
-<pre><code><b>const</b> <a href="../sui_system/voting_power.md#sui_system_voting_power_MAX_VOTING_POWER">MAX_VOTING_POWER</a>: u64 = 1000;
+<pre><code><b>const</b> <a href="../sui_system/voting_power.md#sui_system_voting_power_TOTAL_VOTING_POWER">TOTAL_VOTING_POWER</a>: u64 = 10000;
 </code></pre>
 
 
@@ -180,16 +149,47 @@ up to BFT assumptions
 
 
 
-<a name="sui_system_voting_power_TOTAL_VOTING_POWER"></a>
-
-Set total_voting_power as 10_000 by convention. Individual voting powers can be interpreted
-as easily understandable basis points (e.g., voting_power: 100 = 1%, voting_power: 1 = 0.01%) rather than
-opaque quantities whose meaning changes from epoch to epoch as the total amount staked shifts.
-Fixing the total voting power allows clients to hardcode the quorum threshold and total_voting power rather
-than recomputing these.
+<a name="sui_system_voting_power_MAX_VOTING_POWER"></a>
 
 
-<pre><code><b>const</b> <a href="../sui_system/voting_power.md#sui_system_voting_power_TOTAL_VOTING_POWER">TOTAL_VOTING_POWER</a>: u64 = 10000;
+
+<pre><code><b>const</b> <a href="../sui_system/voting_power.md#sui_system_voting_power_MAX_VOTING_POWER">MAX_VOTING_POWER</a>: u64 = 1000;
+</code></pre>
+
+
+
+<a name="sui_system_voting_power_ETotalPowerMismatch"></a>
+
+
+
+<pre><code><b>const</b> <a href="../sui_system/voting_power.md#sui_system_voting_power_ETotalPowerMismatch">ETotalPowerMismatch</a>: u64 = 1;
+</code></pre>
+
+
+
+<a name="sui_system_voting_power_ERelativePowerMismatch"></a>
+
+
+
+<pre><code><b>const</b> <a href="../sui_system/voting_power.md#sui_system_voting_power_ERelativePowerMismatch">ERelativePowerMismatch</a>: u64 = 2;
+</code></pre>
+
+
+
+<a name="sui_system_voting_power_EVotingPowerOverThreshold"></a>
+
+
+
+<pre><code><b>const</b> <a href="../sui_system/voting_power.md#sui_system_voting_power_EVotingPowerOverThreshold">EVotingPowerOverThreshold</a>: u64 = 3;
+</code></pre>
+
+
+
+<a name="sui_system_voting_power_EInvalidVotingPower"></a>
+
+
+
+<pre><code><b>const</b> <a href="../sui_system/voting_power.md#sui_system_voting_power_EInvalidVotingPower">EInvalidVotingPower</a>: u64 = 4;
 </code></pre>
 
 

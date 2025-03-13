@@ -69,22 +69,22 @@ format.
 ## Constants
 
 
-<a name="std_string_EInvalidIndex"></a>
-
-Index out of range.
-
-
-<pre><code><b>const</b> <a href="../std/string.md#std_string_EInvalidIndex">EInvalidIndex</a>: <a href="../std/u64.md#std_u64">u64</a> = 2;
-</code></pre>
-
-
-
 <a name="std_string_EInvalidUTF8"></a>
 
 An invalid UTF8 encoding.
 
 
 <pre><code><b>const</b> <a href="../std/string.md#std_string_EInvalidUTF8">EInvalidUTF8</a>: <a href="../std/u64.md#std_u64">u64</a> = 1;
+</code></pre>
+
+
+
+<a name="std_string_EInvalidIndex"></a>
+
+Index out of range.
+
+
+<pre><code><b>const</b> <a href="../std/string.md#std_string_EInvalidIndex">EInvalidIndex</a>: <a href="../std/u64.md#std_u64">u64</a> = 2;
 </code></pre>
 
 

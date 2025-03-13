@@ -433,20 +433,20 @@ The epoch value corresponds to the first epoch this change takes place.
 ## Constants
 
 
-<a name="sui_system_validator_set_ACTIVE_OR_PENDING_VALIDATOR"></a>
-
-
-
-<pre><code><b>const</b> <a href="../sui_system/validator_set.md#sui_system_validator_set_ACTIVE_OR_PENDING_VALIDATOR">ACTIVE_OR_PENDING_VALIDATOR</a>: u8 = 2;
-</code></pre>
-
-
-
 <a name="sui_system_validator_set_ACTIVE_VALIDATOR_ONLY"></a>
 
 
 
 <pre><code><b>const</b> <a href="../sui_system/validator_set.md#sui_system_validator_set_ACTIVE_VALIDATOR_ONLY">ACTIVE_VALIDATOR_ONLY</a>: u8 = 1;
+</code></pre>
+
+
+
+<a name="sui_system_validator_set_ACTIVE_OR_PENDING_VALIDATOR"></a>
+
+
+
+<pre><code><b>const</b> <a href="../sui_system/validator_set.md#sui_system_validator_set_ACTIVE_OR_PENDING_VALIDATOR">ACTIVE_OR_PENDING_VALIDATOR</a>: u8 = 2;
 </code></pre>
 
 
@@ -469,56 +469,11 @@ The epoch value corresponds to the first epoch this change takes place.
 
 
 
-<a name="sui_system_validator_set_EAlreadyValidatorCandidate"></a>
+<a name="sui_system_validator_set_MIN_STAKING_THRESHOLD"></a>
 
 
 
-<pre><code><b>const</b> <a href="../sui_system/validator_set.md#sui_system_validator_set_EAlreadyValidatorCandidate">EAlreadyValidatorCandidate</a>: u64 = 6;
-</code></pre>
-
-
-
-<a name="sui_system_validator_set_EDuplicateValidator"></a>
-
-
-
-<pre><code><b>const</b> <a href="../sui_system/validator_set.md#sui_system_validator_set_EDuplicateValidator">EDuplicateValidator</a>: u64 = 2;
-</code></pre>
-
-
-
-<a name="sui_system_validator_set_EInvalidCap"></a>
-
-
-
-<pre><code><b>const</b> <a href="../sui_system/validator_set.md#sui_system_validator_set_EInvalidCap">EInvalidCap</a>: u64 = 101;
-</code></pre>
-
-
-
-<a name="sui_system_validator_set_EInvalidStakeAdjustmentAmount"></a>
-
-
-
-<pre><code><b>const</b> <a href="../sui_system/validator_set.md#sui_system_validator_set_EInvalidStakeAdjustmentAmount">EInvalidStakeAdjustmentAmount</a>: u64 = 1;
-</code></pre>
-
-
-
-<a name="sui_system_validator_set_EMinJoiningStakeNotReached"></a>
-
-
-
-<pre><code><b>const</b> <a href="../sui_system/validator_set.md#sui_system_validator_set_EMinJoiningStakeNotReached">EMinJoiningStakeNotReached</a>: u64 = 5;
-</code></pre>
-
-
-
-<a name="sui_system_validator_set_ENoPoolFound"></a>
-
-
-
-<pre><code><b>const</b> <a href="../sui_system/validator_set.md#sui_system_validator_set_ENoPoolFound">ENoPoolFound</a>: u64 = 3;
+<pre><code><b>const</b> <a href="../sui_system/validator_set.md#sui_system_validator_set_MIN_STAKING_THRESHOLD">MIN_STAKING_THRESHOLD</a>: u64 = 1000000000;
 </code></pre>
 
 
@@ -532,11 +487,29 @@ The epoch value corresponds to the first epoch this change takes place.
 
 
 
-<a name="sui_system_validator_set_ENotAPendingValidator"></a>
+<a name="sui_system_validator_set_EInvalidStakeAdjustmentAmount"></a>
 
 
 
-<pre><code><b>const</b> <a href="../sui_system/validator_set.md#sui_system_validator_set_ENotAPendingValidator">ENotAPendingValidator</a>: u64 = 12;
+<pre><code><b>const</b> <a href="../sui_system/validator_set.md#sui_system_validator_set_EInvalidStakeAdjustmentAmount">EInvalidStakeAdjustmentAmount</a>: u64 = 1;
+</code></pre>
+
+
+
+<a name="sui_system_validator_set_EDuplicateValidator"></a>
+
+
+
+<pre><code><b>const</b> <a href="../sui_system/validator_set.md#sui_system_validator_set_EDuplicateValidator">EDuplicateValidator</a>: u64 = 2;
+</code></pre>
+
+
+
+<a name="sui_system_validator_set_ENoPoolFound"></a>
+
+
+
+<pre><code><b>const</b> <a href="../sui_system/validator_set.md#sui_system_validator_set_ENoPoolFound">ENoPoolFound</a>: u64 = 3;
 </code></pre>
 
 
@@ -550,11 +523,29 @@ The epoch value corresponds to the first epoch this change takes place.
 
 
 
-<a name="sui_system_validator_set_ENotActiveOrPendingValidator"></a>
+<a name="sui_system_validator_set_EMinJoiningStakeNotReached"></a>
 
 
 
-<pre><code><b>const</b> <a href="../sui_system/validator_set.md#sui_system_validator_set_ENotActiveOrPendingValidator">ENotActiveOrPendingValidator</a>: u64 = 9;
+<pre><code><b>const</b> <a href="../sui_system/validator_set.md#sui_system_validator_set_EMinJoiningStakeNotReached">EMinJoiningStakeNotReached</a>: u64 = 5;
+</code></pre>
+
+
+
+<a name="sui_system_validator_set_EAlreadyValidatorCandidate"></a>
+
+
+
+<pre><code><b>const</b> <a href="../sui_system/validator_set.md#sui_system_validator_set_EAlreadyValidatorCandidate">EAlreadyValidatorCandidate</a>: u64 = 6;
+</code></pre>
+
+
+
+<a name="sui_system_validator_set_EValidatorNotCandidate"></a>
+
+
+
+<pre><code><b>const</b> <a href="../sui_system/validator_set.md#sui_system_validator_set_EValidatorNotCandidate">EValidatorNotCandidate</a>: u64 = 7;
 </code></pre>
 
 
@@ -564,6 +555,15 @@ The epoch value corresponds to the first epoch this change takes place.
 
 
 <pre><code><b>const</b> <a href="../sui_system/validator_set.md#sui_system_validator_set_ENotValidatorCandidate">ENotValidatorCandidate</a>: u64 = 8;
+</code></pre>
+
+
+
+<a name="sui_system_validator_set_ENotActiveOrPendingValidator"></a>
+
+
+
+<pre><code><b>const</b> <a href="../sui_system/validator_set.md#sui_system_validator_set_ENotActiveOrPendingValidator">ENotActiveOrPendingValidator</a>: u64 = 9;
 </code></pre>
 
 
@@ -586,11 +586,11 @@ The epoch value corresponds to the first epoch this change takes place.
 
 
 
-<a name="sui_system_validator_set_EValidatorNotCandidate"></a>
+<a name="sui_system_validator_set_ENotAPendingValidator"></a>
 
 
 
-<pre><code><b>const</b> <a href="../sui_system/validator_set.md#sui_system_validator_set_EValidatorNotCandidate">EValidatorNotCandidate</a>: u64 = 7;
+<pre><code><b>const</b> <a href="../sui_system/validator_set.md#sui_system_validator_set_ENotAPendingValidator">ENotAPendingValidator</a>: u64 = 12;
 </code></pre>
 
 
@@ -604,11 +604,11 @@ The epoch value corresponds to the first epoch this change takes place.
 
 
 
-<a name="sui_system_validator_set_MIN_STAKING_THRESHOLD"></a>
+<a name="sui_system_validator_set_EInvalidCap"></a>
 
 
 
-<pre><code><b>const</b> <a href="../sui_system/validator_set.md#sui_system_validator_set_MIN_STAKING_THRESHOLD">MIN_STAKING_THRESHOLD</a>: u64 = 1000000000;
+<pre><code><b>const</b> <a href="../sui_system/validator_set.md#sui_system_validator_set_EInvalidCap">EInvalidCap</a>: u64 = 101;
 </code></pre>
 
 
