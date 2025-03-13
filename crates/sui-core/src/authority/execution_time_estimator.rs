@@ -374,7 +374,7 @@ impl ExecutionTimeEstimator {
             committee: Arc::new(committee),
             protocol_params: ExecutionTimeEstimateParams {
                 target_utilization: 100,
-                max_estimate_ms: u64::MAX,
+                max_estimate_us: u64::MAX,
                 ..ExecutionTimeEstimateParams::default()
             },
             consensus_observations: HashMap::new(),
@@ -450,7 +450,7 @@ impl ExecutionTimeEstimator {
                     .mul_f64(command_length(command).get() as f64)
             })
             .sum::<Duration>()
-            .min(Duration::from_millis(self.protocol_params.max_estimate_ms))
+            .min(Duration::from_micros(self.protocol_params.max_estimate_us))
     }
 
     pub fn take_observations(&mut self) -> StoredExecutionTimeObservations {
@@ -949,7 +949,7 @@ mod tests {
             Arc::new(committee),
             ExecutionTimeEstimateParams {
                 target_utilization: 50,
-                max_estimate_ms: 1500,
+                max_estimate_us: 1_500_000,
 
                 // Not used in this test.
                 allowed_txn_cost_overage_burst_limit_us: 0,

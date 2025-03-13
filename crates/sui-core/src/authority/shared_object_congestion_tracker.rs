@@ -546,7 +546,7 @@ mod object_cost_tests {
                 target_utilization: 100,
                 allowed_txn_cost_overage_burst_limit_us: 0,
                 max_txn_cost_overage_per_object_in_commit_us: 0,
-                max_estimate_ms: u64::MAX,
+                max_estimate_us: u64::MAX,
             }),
         )]
         mode: PerObjectCongestionControlMode,
@@ -738,7 +738,7 @@ mod object_cost_tests {
                 target_utilization: 0, // Make should_defer_due_to_object_congestion always defer transactions.
                 allowed_txn_cost_overage_burst_limit_us: 0,
                 max_txn_cost_overage_per_object_in_commit_us: 0,
-                max_estimate_ms: u64::MAX,
+                max_estimate_us: u64::MAX,
             }),
         )]
         mode: PerObjectCongestionControlMode,
@@ -865,7 +865,7 @@ mod object_cost_tests {
                 target_utilization: 16,
                 allowed_txn_cost_overage_burst_limit_us: 0,
                 max_txn_cost_overage_per_object_in_commit_us: 10_000_000,
-                max_estimate_ms: u64::MAX,
+                max_estimate_us: u64::MAX,
             }),
         )]
         mode: PerObjectCongestionControlMode,
@@ -1031,7 +1031,7 @@ mod object_cost_tests {
                 target_utilization: 16,
                 allowed_txn_cost_overage_burst_limit_us: 1_500_000,
                 max_txn_cost_overage_per_object_in_commit_us: 10_000_000,
-                max_estimate_ms: u64::MAX,
+                max_estimate_us: u64::MAX,
             }),
         )]
         mode: PerObjectCongestionControlMode,
@@ -1219,7 +1219,7 @@ mod object_cost_tests {
                 target_utilization: 0,
                 allowed_txn_cost_overage_burst_limit_us: 0,
                 max_txn_cost_overage_per_object_in_commit_us: 0,
-                max_estimate_ms: u64::MAX,
+                max_estimate_us: u64::MAX,
             }),
         )]
         mode: PerObjectCongestionControlMode,
@@ -1383,7 +1383,7 @@ mod object_cost_tests {
                 // set a burst limit to verify that it does not affect debt calculation.
                 allowed_txn_cost_overage_burst_limit_us: 1_600 * 5,
                 max_txn_cost_overage_per_object_in_commit_us: 1_600 * 10,
-                max_estimate_ms: u64::MAX,
+                max_estimate_us: u64::MAX,
             }),
         )]
         mode: PerObjectCongestionControlMode,
