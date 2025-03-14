@@ -158,7 +158,11 @@ impl RpcService {
         let mut dynamic_fields = indexes
             .dynamic_field_iter(parent.into(), page_token.map(Into::into))?
             .take(page_size + 1)
-            .map(DynamicFieldInfo::try_from)
+            .map(|result| {
+                result
+                    .map_err(|err| RpcError::new(tonic::Code::Internal, err.to_string()))
+                    .and_then(|x| DynamicFieldInfo::try_from(x)?.pipe(Ok))
+            })
             .collect::<Result<Vec<_>, _>>()?;
 
         let next_page_token = if dynamic_fields.len() > page_size {

@@ -411,25 +411,30 @@ impl IndexStoreTables {
         &self,
         owner: SuiAddress,
         cursor: Option<ObjectID>,
-    ) -> Result<impl Iterator<Item = (OwnerIndexKey, OwnerIndexInfo)> + '_, TypedStoreError> {
+    ) -> Result<
+        impl Iterator<Item = Result<(OwnerIndexKey, OwnerIndexInfo), TypedStoreError>> + '_,
+        TypedStoreError,
+    > {
         let lower_bound = OwnerIndexKey::new(owner, cursor.unwrap_or(ObjectID::ZERO));
         let upper_bound = OwnerIndexKey::new(owner, ObjectID::MAX);
         Ok(self
             .owner
-            .iter_with_bounds(Some(lower_bound), Some(upper_bound)))
+            .safe_iter_with_bounds(Some(lower_bound), Some(upper_bound)))
     }
 
     fn dynamic_field_iter(
         &self,
         parent: ObjectID,
         cursor: Option<ObjectID>,
-    ) -> Result<impl Iterator<Item = (DynamicFieldKey, DynamicFieldIndexInfo)> + '_, TypedStoreError>
-    {
+    ) -> Result<
+        impl Iterator<Item = Result<(DynamicFieldKey, DynamicFieldIndexInfo), TypedStoreError>> + '_,
+        TypedStoreError,
+    > {
         let lower_bound = DynamicFieldKey::new(parent, cursor.unwrap_or(ObjectID::ZERO));
         let upper_bound = DynamicFieldKey::new(parent, ObjectID::MAX);
         let iter = self
             .dynamic_field
-            .iter_with_bounds(Some(lower_bound), Some(upper_bound));
+            .safe_iter_with_bounds(Some(lower_bound), Some(upper_bound));
         Ok(iter)
     }
 
@@ -564,7 +569,10 @@ impl RpcIndexStore {
         &self,
         owner: SuiAddress,
         cursor: Option<ObjectID>,
-    ) -> Result<impl Iterator<Item = (OwnerIndexKey, OwnerIndexInfo)> + '_, TypedStoreError> {
+    ) -> Result<
+        impl Iterator<Item = Result<(OwnerIndexKey, OwnerIndexInfo), TypedStoreError>> + '_,
+        TypedStoreError,
+    > {
         self.tables.owner_iter(owner, cursor)
     }
 
@@ -572,8 +580,10 @@ impl RpcIndexStore {
         &self,
         parent: ObjectID,
         cursor: Option<ObjectID>,
-    ) -> Result<impl Iterator<Item = (DynamicFieldKey, DynamicFieldIndexInfo)> + '_, TypedStoreError>
-    {
+    ) -> Result<
+        impl Iterator<Item = Result<(DynamicFieldKey, DynamicFieldIndexInfo), TypedStoreError>> + '_,
+        TypedStoreError,
+    > {
         self.tables.dynamic_field_iter(parent, cursor)
     }
 

@@ -985,13 +985,13 @@ impl IndexStore {
                     let iter = self
                         .tables
                         .transaction_order
-                        .iter_with_bounds(Some(cursor.unwrap_or(TxSequenceNumber::MIN)), None)
+                        .safe_iter_with_bounds(Some(cursor.unwrap_or(TxSequenceNumber::MIN)), None)
                         .skip(usize::from(cursor.is_some()))
-                        .map(|(_, digest)| digest);
+                        .map(|result| result.map(|(_, digest)| digest));
                     if let Some(limit) = limit {
-                        Ok(iter.take(limit).collect())
+                        Ok(iter.take(limit).collect::<Result<Vec<_>, _>>()?)
                     } else {
-                        Ok(iter.collect())
+                        Ok(iter.collect::<Result<Vec<_>, _>>()?)
                     }
                 }
             }
@@ -1028,12 +1028,13 @@ impl IndexStore {
             }
         } else {
             let iter = index
-                .iter_with_bounds(
+                .safe_iter_with_bounds(
                     Some((key.clone(), cursor.unwrap_or(TxSequenceNumber::MIN))),
                     None,
                 )
                 // skip one more if exclusive cursor is Some
                 .skip(usize::from(cursor.is_some()))
+                .map(|result| result.expect("iterator db error"))
                 .take_while(|((id, _), _)| *id == key)
                 .map(|(_, digest)| digest);
             if let Some(limit) = limit {
@@ -1177,7 +1178,8 @@ impl IndexStore {
             let iter = self
                 .tables
                 .transactions_by_move_function
-                .iter_with_bounds(Some(key), None)
+                .safe_iter_with_bounds(Some(key), None)
+                .map(|result| result.expect("iterator db error"))
                 // skip one more if exclusive cursor is Some
                 .skip(usize::from(cursor.is_some()))
                 .take_while(|((id, m, f, _), _)| {
@@ -1241,12 +1243,14 @@ impl IndexStore {
         } else {
             self.tables
                 .event_order
-                .iter_with_bounds(Some((tx_seq, event_seq)), None)
+                .safe_iter_with_bounds(Some((tx_seq, event_seq)), None)
                 .take(limit)
-                .map(|((_, event_seq), (digest, tx_digest, time))| {
-                    (digest, tx_digest, event_seq, time)
+                .map(|result| {
+                    result.map(|((_, event_seq), (digest, tx_digest, time))| {
+                        (digest, tx_digest, event_seq, time)
+                    })
                 })
-                .collect()
+                .collect::<Result<Vec<_>, _>>()?
         })
     }
 
@@ -1282,7 +1286,8 @@ impl IndexStore {
         } else {
             self.tables
                 .event_order
-                .iter_with_bounds(Some((max(tx_seq, seq), event_seq)), None)
+                .safe_iter_with_bounds(Some((max(tx_seq, seq), event_seq)), None)
+                .map(|result| result.expect("iterator db error"))
                 .take_while(|((tx, _), _)| tx == &seq)
                 .take(limit)
                 .map(|((_, event_seq), (digest, tx_digest, time))| {
@@ -1314,7 +1319,8 @@ impl IndexStore {
                 .collect::<Result<Vec<_>, _>>()?
         } else {
             index
-                .iter_with_bounds(Some((key.clone(), (tx_seq, event_seq))), None)
+                .safe_iter_with_bounds(Some((key.clone(), (tx_seq, event_seq))), None)
+                .map(|result| result.expect("iterator db error"))
                 .take_while(|((m, _), _)| m == key)
                 .take(limit)
                 .map(|((_, (_, event_seq)), (digest, tx_digest, time))| {
@@ -1430,7 +1436,8 @@ impl IndexStore {
         } else {
             self.tables
                 .event_by_time
-                .iter_with_bounds(Some((start_time, (tx_seq, event_seq))), None)
+                .safe_iter_with_bounds(Some((start_time, (tx_seq, event_seq))), None)
+                .map(|result| result.expect("iterator db error"))
                 .take_while(|((m, _), _)| m <= &end_time)
                 .take(limit)
                 .map(|((_, (_, event_seq)), (digest, tx_digest, time))| {
@@ -1568,7 +1575,8 @@ impl IndexStore {
         let start_key =
             CoinIndexKey2::new(owner, starting_coin_type.clone(), u64::MAX, ObjectID::ZERO);
         Ok(coin_index
-            .iter_with_bounds(Some(start_key), None)
+            .safe_iter_with_bounds(Some(start_key), None)
+            .map(|result| result.expect("iterator db error"))
             .take_while(move |(key, _)| {
                 if key.owner != owner {
                     return false;
@@ -1597,7 +1605,8 @@ impl IndexStore {
         Ok(self
             .tables
             .coin_index_2
-            .iter_with_bounds(Some(start_key), None)
+            .safe_iter_with_bounds(Some(start_key), None)
+            .map(|result| result.expect("iterator db error"))
             .filter(move |(key, _)| key.object_id != starting_object_id)
             .enumerate()
             .take_while(move |(index, (key, _))| {
@@ -1627,7 +1636,8 @@ impl IndexStore {
             .tables
             .owner_index
             // The object id 0 is the smallest possible
-            .iter_with_bounds(Some((owner, starting_object_id)), None)
+            .safe_iter_with_bounds(Some((owner, starting_object_id)), None)
+            .map(|result| result.expect("iterator db error"))
             .skip(usize::from(starting_object_id != ObjectID::ZERO))
             .take_while(move |((address_owner, _), _)| address_owner == &owner)
             .filter(move |(_, o)| {
@@ -1784,7 +1794,7 @@ impl IndexStore {
         for (coin_type, coins) in &coins {
             let mut total_balance = 0i128;
             let mut coin_object_count = 0;
-            for (_key, coin_info) in coins {
+            for (_, coin_info) in coins {
                 total_balance += coin_info.balance as i128;
                 coin_object_count += 1;
             }
