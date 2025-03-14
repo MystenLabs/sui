@@ -9,38 +9,9 @@ Gaming on Sui leverages blockchain technology to enhance in-game economies, owne
 
 This topic explores the key features of Sui for gaming, real-world use cases, and essential tools for builders. Whether you're building an RPG, a racing game, or a digital card game, Sui provides the Web3 infrastructure to power your next-generation gaming projects.
 
-## Sui features in gaming
-
-Some features that you're likely to work with as a game builder on Sui include:
-
-- NFTs
-    - Soulbound
-    - Composable NFTs
-    - Simple NFTs (game characters, gear, battle passes, boxes, cards, game keys, tickets, avatars, cosmetics, skins, player identity)
-    - Dynamic NFTs
-    - NFT rental
-    - Time capsule NFTs/encrypted NFTs
-    - How are metadata displayed (Display Standard)
-    - Tokenization
-- Coins and tokens
-    - Staking/vesting
-    - Loyalty currency (CLT)
-- On-chain randomness
-- Marketplaces
-    - Kiosks
-    - Kiosk Apps (extensions)
-    - Royalties (`TransferPolicy`)
-- Enoki
-    - Transaction sponsorship
-    - Wallets
-- Sui dApp kit
-- SuiNS name service
-- Walrus decentralized storage
-
-
 ## Representing in-game objects on chain
 
-What makes a game a Web3 game is that some of the objects within the game reside on a blockchain. Whether it's in-game currency, battle passes, skins, or any number of other objects, knowing how to create and integrate these items is the first step in building the desired user experience on Sui.
+One of the aspects that defines a Web3 game is having objects within the game reside on a blockchain. Whether it's in-game currency, battle passes, skins, or any number of other objects, knowing how to create and integrate these items is the first step in building the desired user experience on Sui.
 
 ### In-game currencies
 
@@ -92,6 +63,8 @@ On Sui, you can update an NFT asset using a separate transaction, provided the s
 
 Using the tic-tac-toe example, you might instruct the smart contract to update the gameboard object to place an `x` on an available square. Because the computation effort required for most updates is less than the effort to create the original object, the resulting gas fees are typically less, as well.
 
+For more information on the computation of gas fees, see [Sui Gas Pricing](./tokenomics/gas-pricing.mdx).
+
 #### Composing assets
 
 On Sui, you can include one object inside of another (dynamic fields). For example, an object named `Parent` might contain objects of type `Child`. The smart contract can provide the necessary functions to add and remove the child objects from their parents. 
@@ -111,6 +84,8 @@ Composability is a really important feature of Sui. While it provides many optio
 Sui enables more use cases with the transfer to object feature, which allows an owned object to be sent to another object (shared or owned). In this case, the sent object appears as owned by the parent object. In the above examples, the objects are wrapped inside other objects and this can be seen in the parent object's metadata when inspecting the parent object.
 
 When an object is sent to another object, the metadata of the parent object remain the same, but its `id` has a new object. This feature can enable use cases such as on-chain wallets where a `Wallet` object is used to deposit other objects. Combining this with transfer to object can lead to complex and exciting use cases.
+
+See [Transfer to Object](./transfers/transfer-to-object.mdx) for more details on how to effectively transfer objects to other objects on Sui.
 
 #### Deleting assets
 
@@ -180,13 +155,13 @@ For another Asset, the `id` and `expiration` values change according to the new 
 
 An app can use the `Display` object, where any custom keys can be understood. By default, most third-party apps like explorers or wallets recognize the attributes described below.
 
-- `name` - A name for the object, displayed when users view the object.
-- `description` - A description for the object, displayed when users view the object.
-- `link` - A link to the object for use in an application.
-- `image_url` - A URL or a blob with the image for the object.
-- `thumbnail_url` - A URL to a smaller image for use in wallets, explorers, and other products as a preview.
-- `project_url` - A link to a website associated with the object or creator.
-- `creator` - A string indicating the object creator.
+- `name`: A name for the object, displayed when users view the object.
+- `description`: A description for the object, displayed when users view the object.
+- `link`: A link to the object for use in an application.
+- `image_url`: A URL or a blob with the image for the object.
+- `thumbnail_url`: A URL to a smaller image for use in wallets, explorers, and other products as a preview.
+- `project_url`: A link to a website associated with the object or creator.
+- `creator`: A string indicating the object creator.
 
 
 See [Sui Object Display](../standards/display) for more details on the standard.
@@ -298,48 +273,53 @@ The most important thing is during the initial airdrop or minting of the asset t
 
 There are a number of tools available in the Sui ecosystem to help you realize your Sui game vision.
 
-### Playtron GameOS
+<Tabs>
+
+<TabItem label="Playtron GameOS" value="playtron-os" >
 
 Playtron GameOS is a Linux-based operating system that seeks to turn PCs, handhelds, and desktops into dedicated gaming consoles. It supports multiple game stores like Steam and Epic Games, offering a seamless gaming experience across devices such as Steam Deck, ROG Ally, and Lenovo Legion Go. 
 
 https://www.playtron.one/playtron-os 
+</TabItem>
 
-### E4C: Ludus
+<TabItem label="E4C: Ludus" value="ludus" >
 
 E4C: Ludus is a cross-platform gaming layer designed to unify Web2 and Web3 gaming experiences on a single platform. Leveraging the Sui blockchain, it offers developers access to dynamic NFTs and zkLogin, facilitating integration of blockchain features into games across various platforms. The native E4C token is its primary currency, enabling in-game purchases and transactions. E4C: Ludus also provides a unified frontend for players to access a range of games, with the aim to enhance user engagement and simplify the gaming experience. The platform is set to launch globally in 2025, with a demo currently available for users to explore. 
 
 https://ludus.ambrus.studio/ 
-
-### Sui Coins
+</TabItem>
+<TabItem label="Sui Coins" value="suicoins" >
 
 Sui Coins is the utility layer for tokens and NFTs on the Sui network, offering asset management tools that include token swaps, automated dollar-cost averaging, airdrops, an incinerator for deleting assets, zkSend for private transfers, and a merger tool to consolidate small balances. Sui Coins also features an open-source SuiCoins Terminal for integrating crypto swaps across platforms.
 
 https://www.suicoins.com/ 
 https://terminal.suicoins.com/
-
-### Beamable
+</TabItem>
+<TabItem label="Beamable" value="beamable" >
 
 Beamable is a development platform that helps you integrate live services and backend features into your games. It offers SDKs for both Unity and Unreal Engine, facilitating development and deployment of online game functionalities. You can incorporate features such as player authentication, inventory management, and microservices within the environments of your chosen game engines. Beamable provides support for the Sui blockchain, allowing for the integration of Web3 elements like NFTs and on-chain assets into games. The Beamable SDKs offer tools and sample projects to help you build on the Sui network.
 
 https://beamable.com/ 
-
-### Forge.gg
-
+</TabItem>
+<TabItem label="Forge.gg" value="forge" >
 Forge is a platform that enables game developers to create custom loyalty programs, rewarding players for engaging in community activities and in-game challenges. Players earn loyalty points by completing actions you define, which can be redeemed for in-game items and digital content. Forge also offers analytics tools to help developers understand their audience and improve monetization strategies.
 
 https://forge.gg/
-
-### Snag Solutions
+</TabItem>
+<TabItem label="Snag Solutions" value="snagsolutions" >
 
 Snag Solutions provides white-label loyalty and marketplace platforms to enhance community engagement and control your digital ecosystems. Their solutions enable you to track and reward user contributions, create customizable marketplaces, and integrate social features like peer-to-peer trading and user profiles. Snag Solutions offers customization options, APIs, and SDKs to align with your brand's identity.
 
 https://www.snagsolutions.io/ 
-
-### Venly
+</TabItem>
+<TabItem label="Venly" value="venly" >
 
 Venly is a developer platform that aids blockchain integration for businesses through secure digital wallets, tokenization services, and payment solutions. It offers APIs and SDKs for management of digital assets. Venly enables you to create, trade, and manage NFTs, tokens, and payments securely while maintaining full ownership of your assets.
 
 https://www.venly.io/ 
+</TabItem>
+
+</Tabs>
 
 ## Videos
 
@@ -347,23 +327,19 @@ Cycle through the available videos using the thumbnails, then tap or click the v
 
 <YTCarousel ids={["qnnXCO5cXu4","h-csO8Z9g3o","uwtF8jFXX1U","OBNbxqoLPiw","udzx0vXEpjc","6mjj3isfrs0","K2ufEN6zzpM","P70R_p0xQEg","e4FWIupRehA"]}/>
 
-## Integrations
+## Example integrations
 
-The sections that follow detail some select gaming integrations on the Sui platform and the features leveraged to provide the desired gaming experience.
+There aren't real-world implementations for the integrations described in this section. These examples are meant to be a thought exercise to showcase the possibilities for viable game integration on the Sui network. 
 
-- [ShadowQuest](#shadowquest)
-- [Sui for Speed](#sui-for-speed)
-- [ArcaneBattles](#arcanebattles)
-
-## ShadowQuest integration on Sui {#shadowquest}
-
+<Tabs>
+<TabItem label="ShadowQuest" value="shadowquest">
 ShadowQuest is a multiplayer game that combines fantasy with RPG battle mechanics. To enhance the gaming experience with Web3 technologies, ShadowQuest is integrating with Sui offering seamless blockchain interactions to players without compromising the overall gaming experience.
 
-### Seamless player onboarding and wallet integration
+**Seamless player onboarding and wallet integration**
     
 ShadowQuest wants to onboard players without adding complexity, especially those unfamiliar with Web3. By using [zkLogin](../concepts/cryptography/zklogin.mdx), users can sign in using social platforms like Google, Facebook, Twitch, and Apple. This automatically creates a Sui wallet linked to their ShadowQuest account, making blockchain interactions seamless.
     
-### Simplified transaction handling 
+**Simplified transaction handling**
     
 Players in ShadowQuest earn or use in-game assets such as NFTs or $SHADOW tokens. To attract users unfamiliar with Web3, ShadowQuest manages game transactions to avoid Web3 friction, like wallets popping up for signing transactions. By sponsoring user transactions, the friction is minimized because ShadowQuest users do not directly pay for transaction costs and gas fees.
     
@@ -371,61 +347,61 @@ Enoki transactions can be signed without requiring confirmation from the user to
     
 ShadowQuest uses Enoki Gas Pool to sponsor transactions, covering gas fees for players. This ensures all in-game transactions are seamless and cost-free for players, providing a better user experience.
     
-### NFT marketplace and royalty enforcement
+**NFT marketplace and royalty enforcement**
     
 ShadowQuest allows players to buy, sell, or trade in-game items, such as weapons, armor, and cosmetics. The items should respect royalties to ensure that creators benefit from each transaction.
     
 Kiosk provides a decentralized marketplace solution, ensuring royalties are enforced on all NFT trades. This helps both the game developers and creators maintain control over secondary sales, ensuring revenue generation throughout the asset's lifecycle.
     
-### NFT usage for game access
+**NFT usage for game access**
     
 ShadowQuest uses NFTs as entry tickets for different game modes and events. Players can acquire or earn various Runes, which grant access to specific game challenges or seasonal competitions. These NFTs cannot be traded or transfered to other players.
     
 Soulbound NFTs represent different Runes that are either earned through gameplay or purchased. These NFTs grant exclusive access to matches and seasonal challenges but cannot be traded after bound to a player.
+</TabItem>
 
-## Sui for Speed integration on Sui {#sui-for-speed}
-
+<TabItem label="Sui for Speed" value="sui-for-speed">
 Sui for Speed is a racing game set in the Sui ecosystem. Players pilot customizable vehicles through fantastical terrains, competing in races, time trials, and exploration challenges. By integrating with the Sui network's blockchain technology—including features such as Walrus, dynamic NFTs, SuiNS, and asset tokenization—the game offers players true ownership of their vehicles and in-game assets, along with a vibrant, player-driven economy.
 
-### Customizable vehicles with dynamic NFTs
+**Customizable vehicles with dynamic NFTs**
 
 In Sui for Speed, players own racing vehicles represented by dynamic NFTs that you can upgrade and customize with new parts, skins, and abilities. As players progress and win races, their vehicles evolve, reflecting their achievements and style.
 
 Dynamic NFTs on the Sui network allow vehicles to securely update attributes and metadata over time. Every upgrade and customization is recorded on-chain, ensuring each vehicle's uniqueness and authenticity.
 
-### SuiNS: Personalized racer profiles and teams
+**SuiNS: Personalized racer profiles and teams**
 
 Players can register unique names for their racer profiles and teams using SuiNS, like speedster@suiforspeed.sui or dragonracer@suiforspeed.sui. This simplifies social interactions, team coordination, and improves the community aspect of the game.
 
 SuiNS provides a decentralized domain naming system, allowing memorable and personalized names on the blockchain.
 
-### Tokenized circuits and earnings from circuit usage
+**Tokenized circuits and earnings from circuit usage**
 
 Race circuits are tokenized as unique NFTs allowing players to own, design, and vote to enable track customization and drive better changes. When other players race on these circuits, the owners earn $RALLY tokens as usage fees or royalties. This system incentivizes creativity and allows players to monetize their track designs.
 
 Asset tokenization on the Sui network enables minting of circuits as unique assets with secure ownership. Smart contracts automatically distribute earnings to circuit owners when their tracks are used, enhancing the game's economy through player-driven content.
 
-### Decentralized storage for game data
+**Decentralized storage for game data**
 
 The game world includes extensive data such as track designs and leaderboards. Leveraging decentralized and efficient storage, combined with asset tokenization, enables true decentralization of these terrains and models.
 
 Walrus offers scalable off-chain storage for large amounts of game data. This ensures high availability and security, protecting against data loss and enhancing player trust.
 
-### Competitive events and betting mechanisms
+**Competitive events and betting mechanisms**
 
 The game hosts regular competitive events and tournaments where players can participate individually or as teams. Additionally, players can place bets on race outcomes using $RALLY tokens, adding an extra layer of excitement and engagement.
 
 On-chain logic enables secure and transparent management of events and betting systems. The Sui network ensures fairness, with immutable records of bets and outcomes.
+</TabItem>
 
-## ArcaneBattles integration {#arcanebattles}
-
+<TabItem label="ArcaneBattles" value="arcanebattles">
 ArcaneBattles is a strategic, multiplayer card game inspired by classics like Hearthstone. Players collect, trade, and battle with a variety of magical cards representing spells, creatures, and heroes. By integrating with the Sui blockchain, ArcaneBattles aims to enrich the gameplay experience through decentralized features that promote true ownership, fairness, and a dynamic in-game economy.
 
-### Dynamic in-game economy with two closed loop tokens
+**Dynamic in-game economy with two closed loop tokens**
 
 ArcaneBattles implemented two stable in-game currencies to facilitate various transactions, enhancing player engagement and economic depth.
 
-### Closed loop token (CLT)
+**Closed loop token (CLT)**
     
 ArcaneBattles utilizes two Closed Loop Tokens within its ecosystem:
 
@@ -434,19 +410,19 @@ ArcaneBattles utilizes two Closed Loop Tokens within its ecosystem:
 
 The dual-token system adds depth to the in-game economy, encouraging players to engage in various activities and make strategic decisions about resource allocation.
 
-### True ownership and NFT card rental
+**True ownership and NFT card rental**
 
 ArcaneBattles allows players to own their cards as NFTs and provide a rental marketplace for rare or powerful cards.
     
 Each card in ArcaneBattles is represented as an NFT on the Sui blockchain, granting players true ownership of their digital assets. The NFT Rental feature allows players to rent out their rare or high-level cards to others for a fee. This creates a community-driven economy where new or casual players can access powerful cards temporarily, while owners earn passive income from their collections.
 
-### Fair and unpredictable gameplay
+**Fair and unpredictable gameplay**
 
 ArcaneBattles ensures randomness in card draws and in-game events to prevent manipulation and enhance fairness.
     
 By leveraging Sui's on-chain randomness, ArcaneBattles introduces unpredictable elements such as random card draws, critical hit chances, and random effects from certain cards. This randomness is verifiable and secure, preventing manipulation by any party and maintaining fairness across all gameplay aspects.
     
-### Enhanced card visualization and dynamic wear mechanism
+**Enhanced card visualization and dynamic wear mechanism**
 
 ArcaneBattles provides rich, dynamic displays of card information and introduces a wear-and-tear mechanic to simulate card degradation over time.
     
@@ -457,22 +433,23 @@ This wear-and-tear mechanic simulates the experience of physical card games, whe
 Players can mitigate or repair wear on their cards by using **Mystic Dust** to restore them or upgrade them to gold versions, which are more durable and feature enhanced visuals. This system adds a strategic resource management element, as players must balance the benefits of using powerful cards against the potential cost of their degradation.
 
 By integrating these Sui blockchain features, ArcaneBattles not only enhances the gaming experience but also pioneers the next generation of digital card games. The dual-token economy adds complexity and depth to in-game transactions, encouraging strategic decision-making. The wear-and-tear mechanic introduces a novel layer of strategy and realism, as players must consider the longevity of their cards. Together, these features create a rich, engaging, and immersive experience that leverages the full potential of blockchain technology within a gaming context.
+</TabItem>
+</Tabs>
 
 ## Related links
 
-- [Coin Standard](../standards/coin.mdx)
-- [Create Coins and Tokens](../guides/developer/coin.mdx)
-- [Create a Non-Fungible Token](../guides/developer/nft.mdx) 
-- [Asset Tokenization](../guides/developer/nft/asset-tokenization.mdx)
-- [NFT Rental Example](../guides/developer/nft/nft-rental.mdx)
-- [Kiosk](../standards/kiosk.mdx)
-- [Kiosk Apps](../standards/kiosk-apps.mdx)
-- [zkLogin](../concepts/cryptography/zklogin.mdx)
-- [Enoki](https://docs.enoki.mystenlabs.com/): Enoki empowers builders with the ability to exploit blockchain superpowers with the ease and convenience we are all familiar with in Web 2.0.
+- [Coin Standard](../standards/coin.mdx): The Sui Coin standard enables you to create a broad range of fungible tokens on the Sui network to satisfy a number of use cases. The Coin standed on Sui is equivalent to the ERC-20 technical standard on Ethereum.
+- [Create Coins and Tokens](../guides/developer/coin.mdx): Learn how to mint coins and tokens on the Sui network.
+- [Create a Non-Fungible Token](../guides/developer/nft.mdx): On Sui, everything is an object. Moreover, everything is a non-fungible token (NFT) as its objects are unique, non-fungible, and owned.
+- [Asset Tokenization](../guides/developer/nft/asset-tokenization.mdx): Learn how to tokenize assets on the Sui blockchain. Asset tokenization refers to the process of representing real-world assets, such as real estate, art, commodities, stocks, or other valuable assets, as digital tokens on the blockchain network.
+- [NFT Rental Example](../guides/developer/nft/nft-rental.mdx): An example using the Kiosk Apps standard that provides the ability for users to rent NFTs according to the rules of a provided policy instead of outright owning them. This approach closely aligns with the ERC-4907 renting standard, making it a suitable choice for Solidity-based use cases intended for implementation on Sui.
+- [Kiosk](../standards/kiosk.mdx): Kiosk is a decentralized system for commerce applications on Sui. Kiosk is a part of the Sui framework, native to the system, and available to everyone.
+- [Kiosk Apps](../standards/kiosk-apps.mdx): Kiosk apps are a way to extend the functionality of Sui Kiosk while keeping the core functionality intact. You can develop apps to add new features to a kiosk without having to modify the core code or move the assets elsewhere.
+- [zkLogin](../concepts/cryptography/zklogin.mdx): zkLogin is a Sui primitive that enables you to send transactions from a Sui address using an OAuth credential, without publicly linking the two.
 - [Sui Foundation blog](https://blog.sui.io/tag/gaming/): Blog posts from the Sui Foundation with the `gaming` tag.
 - Guides for example games
-    - [Coin Flip](../guides/developer/app-examples/coin-flip.mdx)
-    - [Blackjack](../guides/developer/app-examples/blackjack.mdx)
-    - [Plinko](../guides/developer/app-examples/plinko.mdx)
+    - [Coin Flip](../guides/developer/app-examples/coin-flip.mdx): Learn Sui through a coin flip dApp that covers the full end-to-end flow of building a Sui Move module and connecting it to a React Sui dApp.
+    - [Blackjack](../guides/developer/app-examples/blackjack.mdx): Learn Sui using an example implementation of the popular casino game blackjack.
+    - [Plinko](../guides/developer/app-examples/plinko.mdx): Learn Sui through an example implementation of the popular casino game, Plinko.
 - [Mysticon Legends](https://github.com/MystenLabs/mysticon-legends) repo on GitHub: A blockchain-based game where players collect, train, and battle with mythical creatures called Mysticons.
 - [Web3 Mini Games built on Sui](https://mini-games.sui.io/): A collection of mini games, to inspire the community of Sui.
