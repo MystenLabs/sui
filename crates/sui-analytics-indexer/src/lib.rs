@@ -107,7 +107,7 @@ pub struct AnalyticsIndexerConfig {
 pub struct TaskConfig {
     /// Name of the task. Must be unique per process. Used to identify tasks in the Progress Store.
     pub task_name: String,
-    // Type of data to write i.e. checkpoint, object, transaction, etc
+    /// Type of data to write i.e. checkpoint, object, transaction, etc
     pub file_type: FileType,
     /// File format to store data in i.e. csv, parquet, etc
     #[serde(default = "default_file_format")]
