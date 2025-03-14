@@ -164,12 +164,13 @@ public fun generate_bytes(g: &mut RandomGenerator, num_of_bytes: u16): vector<u8
 
     // Fill the generator's buffer if needed.
     let num_of_bytes = num_of_bytes as u64;
-    if (g.buffer.length() < (num_of_bytes - result.length())) {
+    let remaining = num_of_bytes - result.length();
+    if (g.buffer.length() < remaining) {
         let next_block = g.derive_next_block();
         g.buffer.append(next_block);
     };
     // Take remaining bytes from the generator's buffer.
-    (num_of_bytes - result.length()).do!(|_| result.push_back(g.buffer.pop_back()));
+    remaining.do!(|_| result.push_back(g.buffer.pop_back()));
     result
 }
 
