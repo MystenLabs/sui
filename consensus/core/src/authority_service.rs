@@ -42,7 +42,7 @@ pub(crate) struct AuthorityService<C: CoreThreadDispatcher> {
     core_dispatcher: Arc<C>,
     rx_block_broadcast: broadcast::Receiver<ExtendedBlock>,
     subscription_counter: Arc<SubscriptionCounter>,
-    txn_certifier: TransactionCertifier,
+    transaction_certifier: TransactionCertifier,
     dag_state: Arc<RwLock<DagState>>,
     store: Arc<dyn Store>,
 }
@@ -55,7 +55,7 @@ impl<C: CoreThreadDispatcher> AuthorityService<C> {
         synchronizer: Arc<SynchronizerHandle>,
         core_dispatcher: Arc<C>,
         rx_block_broadcast: broadcast::Receiver<ExtendedBlock>,
-        txn_certifier: TransactionCertifier,
+        transaction_certifier: TransactionCertifier,
         dag_state: Arc<RwLock<DagState>>,
         store: Arc<dyn Store>,
     ) -> Self {
@@ -71,7 +71,7 @@ impl<C: CoreThreadDispatcher> AuthorityService<C> {
             core_dispatcher,
             rx_block_broadcast,
             subscription_counter,
-            txn_certifier,
+            transaction_certifier,
             dag_state,
             store,
         }
@@ -219,7 +219,7 @@ impl<C: CoreThreadDispatcher> NetworkService for AuthorityService<C> {
 
         // The block is verified and current, so it can be processed in the fastpath.
         if self.context.protocol_config.mysticeti_fastpath() {
-            self.txn_certifier
+            self.transaction_certifier
                 .add_voted_blocks(vec![(verified_block.clone(), reject_txn_votes)]);
         }
 
@@ -882,7 +882,7 @@ mod tests {
             monitored_mpsc::unbounded_channel("consensus_block_output");
         let store = Arc::new(MemStore::new());
         let dag_state = Arc::new(RwLock::new(DagState::new(context.clone(), store.clone())));
-        let txn_certifier =
+        let transaction_certifier =
             TransactionCertifier::new(context.clone(), dag_state.clone(), blocks_sender);
         let synchronizer = Synchronizer::start(
             network_client,
@@ -890,7 +890,7 @@ mod tests {
             core_dispatcher.clone(),
             commit_vote_monitor.clone(),
             block_verifier.clone(),
-            txn_certifier.clone(),
+            transaction_certifier.clone(),
             dag_state.clone(),
             false,
         );
@@ -901,7 +901,7 @@ mod tests {
             synchronizer,
             core_dispatcher.clone(),
             rx_block_broadcast,
-            txn_certifier,
+            transaction_certifier,
             dag_state,
             store,
         ));
@@ -951,7 +951,7 @@ mod tests {
             monitored_mpsc::unbounded_channel("consensus_block_output");
         let store = Arc::new(MemStore::new());
         let dag_state = Arc::new(RwLock::new(DagState::new(context.clone(), store.clone())));
-        let txn_certifier =
+        let transaction_certifier =
             TransactionCertifier::new(context.clone(), dag_state.clone(), blocks_sender);
         let synchronizer = Synchronizer::start(
             network_client,
@@ -959,7 +959,7 @@ mod tests {
             core_dispatcher.clone(),
             commit_vote_monitor.clone(),
             block_verifier.clone(),
-            txn_certifier.clone(),
+            transaction_certifier.clone(),
             dag_state.clone(),
             true,
         );
@@ -970,7 +970,7 @@ mod tests {
             synchronizer,
             core_dispatcher.clone(),
             rx_block_broadcast,
-            txn_certifier,
+            transaction_certifier,
             dag_state.clone(),
             store,
         ));

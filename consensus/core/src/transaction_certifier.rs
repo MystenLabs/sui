@@ -4,9 +4,9 @@
 use std::{collections::BTreeMap, sync::Arc};
 
 use consensus_config::Committee;
-use mysten_common::debug_fatal;
 use mysten_metrics::monitored_mpsc::UnboundedSender;
 use parking_lot::RwLock;
+use tracing::trace;
 
 use crate::{
     block::GENESIS_ROUND,
@@ -17,26 +17,28 @@ use crate::{
     VerifiedBlock,
 };
 
-/// TransactionCertifier tries to certify transactions and send them to execute on the fastpath.
+/// TransactionCertifier has the following functionalities:
+/// 1. Certifies transactions and sends them to execute on the fastpath.
+/// 2. Keeps track of own votes on transactions, and allows the votes to be retrieved
+///    later in core after acceptance of the blocks containing the transactions.
+/// 3. Aggregates reject votes on transactions, and allows the aggregated votes
+///    to be retrieved during post-commit finalization.
 ///
 /// A transaction is certified if a quorum of authorities voted to accept it. A block is certified
-/// if every transaction in the block is either certified or rejected. Output of TransactionCertifier
-/// is batched by certified blocks. Once a certified block is sent to output, it is assumed external
-/// clients can start receiving execution confirmations on fastpath transactions in the block.
+/// if every transaction in the block is either certified or rejected. TransactionCertifier outputs
+/// blocks certified in the causal history own proposed blocks.
 ///
-/// The invariant is that if a quorum of authorities certified a transaction, then the
-/// transaction must also be finalized via consensus commit eventually. The reverse is not
-/// necessarily true though, because fastpath execution is only an optimistic latency optimization.
-/// The implementation here takes advantage of this fact. By narrowing the scope of fastpath
-/// execution, post-commit finalization can be made simpler, more efficient and more robust.
+/// The invariant between TransactionCertifier and post-commit finalization is that if a quorum of
+/// authorities certified a transaction for fastpath and executed it, then the transaction
+/// must also be finalized post consensus commit. The reverse is not true though, because
+/// fastpath execution is only a latency optimization, and not required for correctness.
 #[derive(Clone)]
 pub(crate) struct TransactionCertifier {
     // The state of blocks being voted on and certified.
     certifier_state: Arc<RwLock<CertifierState>>,
     // The state of the DAG.
     dag_state: Arc<RwLock<DagState>>,
-    // An unbounded channel to send certified blocks to the block handler
-    // as part of the consensus output.
+    // An unbounded channel to output certified blocks to Sui consensus block handler.
     certified_blocks_sender: UnboundedSender<CertifiedBlocksOutput>,
 }
 
@@ -53,29 +55,37 @@ impl TransactionCertifier {
         }
     }
 
-    /// Process own votes on input blocks and votes contained in the input blocks.
-    /// Newly certified blocks are sent to the output channel.
-    ///
-    /// NOTE: blocks from commit sync do not need to be added, because transactions
-    /// arrived via commit sync should not need to be executed on the fastpath.
+    pub(crate) fn run_gc(&self) {
+        let gc_round = self.dag_state.read().gc_round();
+        let mut certifier_state = self.certifier_state.write();
+        certifier_state.update_gc_round(gc_round);
+    }
+
+    /// Stores own reject votes on input blocks, and aggregates reject votes from the input blocks.
+    /// Newly certified blocks are sent to the fastpath output channel.
     pub(crate) fn add_voted_blocks(
         &self,
         voted_blocks: Vec<(VerifiedBlock, Vec<TransactionIndex>)>,
     ) {
         let certified_blocks = self.certifier_state.write().add_voted_blocks(voted_blocks);
-        if let Err(e) = self.certified_blocks_sender.send(CertifiedBlocksOutput {
-            blocks: certified_blocks,
-        }) {
-            tracing::warn!("Failed to send certified blocks: {:?}", e);
-        }
+        self.send_certified_blocks(certified_blocks);
     }
 
+    /// Aggregates accept votes from the own proposed block.
+    /// Newly certified blocks are sent to the fastpath output channel.
     pub(crate) fn add_proposed_block(&self, proposed_block: VerifiedBlock) {
-        let gc_round = self.dag_state.read().gc_round();
-        let mut certifier_state = self.certifier_state.write();
-        certifier_state.update_gc_round(gc_round);
+        let certified_blocks = self
+            .certifier_state
+            .write()
+            .add_proposed_block(proposed_block);
+        self.send_certified_blocks(certified_blocks);
+    }
 
-        let certified_blocks = certifier_state.add_proposed_block(proposed_block);
+    // Sends certified blocks to the fastpath output channel.
+    fn send_certified_blocks(&self, certified_blocks: Vec<CertifiedBlock>) {
+        if certified_blocks.is_empty() {
+            return;
+        }
         if let Err(e) = self.certified_blocks_sender.send(CertifiedBlocksOutput {
             blocks: certified_blocks,
         }) {
@@ -85,8 +95,8 @@ impl TransactionCertifier {
 }
 
 /// CertifierState keeps track of votes received by each transaction and block,
-/// and helps determine if votes reach a quorum. Votes can start accumulating even
-/// before the target block is received by this authority.
+/// and helps determine if votes reach a quorum. Reject votes can start accumulating
+/// even before the target block is received by this authority.
 struct CertifierState {
     context: Arc<Context>,
 
@@ -138,7 +148,7 @@ impl CertifierState {
 
         let mut certified_blocks = vec![];
 
-        // Update reject votes from the block.
+        // Update reject votes from the input block.
         for block_votes in voted_block.transaction_votes() {
             if block_votes.block_ref.round <= self.gc_round {
                 // Block is outside of GC bound.
@@ -152,8 +162,8 @@ impl CertifierState {
                     .or_default()
                     .add_unique(voted_block.author(), &self.context.committee);
             }
-            // Check if the input block is now certified after including the reject votes.
-            // NOTE: votes can already exist for the block and its transactions.
+            // Check if the target block is now certified after including the reject votes.
+            // NOTE: votes can already exist for the target block and its transactions.
             if let Some(certified_block) = vote_info.take_certified_output(&self.context.committee)
             {
                 certified_blocks.push(certified_block);
@@ -173,29 +183,34 @@ impl CertifierState {
         }
 
         for voting_ancestor in proposed_block.ancestors() {
+            // Votes are 1 round before the proposed block.
             if voting_ancestor.round + 1 != proposed_block.round() {
                 continue;
             }
             let Some(voting_info) = self.votes.get(voting_ancestor) else {
-                debug_fatal!("voting info not found for ancestor {}", voting_ancestor);
+                // TODO(fastpath): switch to debug_fatal() after implementing crash recovery.
+                trace!("voting info not found for ancestor {}", voting_ancestor);
                 continue;
             };
             let Some(voting_block) = voting_info.block.clone() else {
-                debug_fatal!("voting info not found for ancestor {}", voting_ancestor);
+                // TODO(fastpath): switch to debug_fatal() after implementing crash recovery.
+                trace!("voting block not found for ancestor {}", voting_ancestor);
                 continue;
             };
             for target_ancestor in voting_block.ancestors() {
+                // Target blocks are 1 round before the voting block.
                 if target_ancestor.round + 1 != voting_block.round() {
                     continue;
                 }
                 let Some(target_vote_info) = self.votes.get_mut(target_ancestor) else {
-                    debug_fatal!("voting info not found for ancestor {}", target_ancestor);
+                    // TODO(fastpath): switch to debug_fatal() after implementing crash recovery.
+                    trace!("voting info not found for ancestor {}", target_ancestor);
                     continue;
                 };
                 target_vote_info
                     .accept_block_votes
                     .add_unique(voting_block.author(), &self.context.committee);
-                // Check if the input block is now certified after including the accept votes.
+                // Check if the target block is now certified after including the accept votes.
                 if let Some(certified_block) =
                     target_vote_info.take_certified_output(&self.context.committee)
                 {
@@ -227,10 +242,10 @@ struct VoteInfo {
     // None if the blocks has not been received.
     block: Option<VerifiedBlock>,
     // Rejection votes by this authority on this block.
-    // The purpose is to help propagate votes from receiving a block to after the block is
-    // in a consensus commit.
+    // This field is written when the block is first received and its transactions are voted on.
+    // It is read from core after the block is accepted.
     own_reject_txn_votes: Vec<TransactionIndex>,
-    // Accumulates implicit accept votes for all transactions.
+    // Accumulates implicit accept votes for the block and all transactions.
     accept_block_votes: StakeAggregator<QuorumThreshold>,
     // Accumulates reject votes per transaction.
     reject_txn_votes: BTreeMap<TransactionIndex, StakeAggregator<QuorumThreshold>>,
@@ -239,7 +254,7 @@ struct VoteInfo {
 }
 
 impl VoteInfo {
-    // If this block can now be certified but has not been sent to output, returns the output.
+    // If this block can now be certified, returns the output.
     // Otherwise, returns None.
     fn take_certified_output(&mut self, committee: &Committee) -> Option<CertifiedBlock> {
         if self.is_certified {
@@ -247,7 +262,7 @@ impl VoteInfo {
             return None;
         }
         let Some(block) = self.block.as_ref() else {
-            // Skip if the block has not been received.
+            // Skip if the content of the block has not been received.
             return None;
         };
         if !self.accept_block_votes.reached_threshold(committee) {
@@ -269,11 +284,11 @@ impl VoteInfo {
             // come from blocks more than 1 round higher, which do not add to the
             // accept votes of the block.
             //
-            // Also, the accept votes used to certify a transactions is undercounted here.
+            // Also, the total accept votes of a transactions is undercounted here.
             // If a block has accept votes from a quorum of authorities A, B and C, but one transaction
             // has a reject vote from D, the transaction and block are technically certified
             // and can be sent to fastpath. However, the computation here will not certify the transaction
-            // or the block, which is fine because the fastpath certification is optimistic.
+            // or the block. This is still fine because the fastpath certification is optional.
             // The definite status of the transaction will be decided during post commit finalization.
             if self
                 .accept_block_votes

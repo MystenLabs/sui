@@ -1380,7 +1380,7 @@ mod tests {
             monitored_mpsc::unbounded_channel("consensus_block_output");
         let store = Arc::new(MemStore::new());
         let dag_state = Arc::new(RwLock::new(DagState::new(context.clone(), store)));
-        let txn_certifier =
+        let transaction_certifier =
             TransactionCertifier::new(context.clone(), dag_state.clone(), blocks_sender);
 
         let handle = Synchronizer::start(
@@ -1389,7 +1389,7 @@ mod tests {
             core_dispatcher.clone(),
             commit_vote_monitor,
             block_verifier,
-            txn_certifier,
+            transaction_certifier,
             dag_state,
             false,
         );
@@ -1433,7 +1433,7 @@ mod tests {
             monitored_mpsc::unbounded_channel("consensus_block_output");
         let store = Arc::new(MemStore::new());
         let dag_state = Arc::new(RwLock::new(DagState::new(context.clone(), store)));
-        let txn_certifier =
+        let transaction_certifier =
             TransactionCertifier::new(context.clone(), dag_state.clone(), blocks_sender);
 
         let handle = Synchronizer::start(
@@ -1442,7 +1442,7 @@ mod tests {
             core_dispatcher.clone(),
             commit_vote_monitor,
             block_verifier,
-            txn_certifier,
+            transaction_certifier,
             dag_state,
             false,
         );
@@ -1497,7 +1497,7 @@ mod tests {
             monitored_mpsc::unbounded_channel("consensus_block_output");
         let store = Arc::new(MemStore::new());
         let dag_state = Arc::new(RwLock::new(DagState::new(context.clone(), store)));
-        let txn_certifier =
+        let transaction_certifier =
             TransactionCertifier::new(context.clone(), dag_state.clone(), blocks_sender);
 
         // Create some test blocks
@@ -1539,7 +1539,7 @@ mod tests {
             core_dispatcher.clone(),
             commit_vote_monitor,
             block_verifier,
-            txn_certifier,
+            transaction_certifier,
             dag_state,
             false,
         );
@@ -1577,7 +1577,7 @@ mod tests {
             monitored_mpsc::unbounded_channel("consensus_block_output");
         let store = Arc::new(MemStore::new());
         let dag_state = Arc::new(RwLock::new(DagState::new(context.clone(), store)));
-        let txn_certifier =
+        let transaction_certifier =
             TransactionCertifier::new(context.clone(), dag_state.clone(), blocks_sender);
         let commit_vote_monitor = Arc::new(CommitVoteMonitor::new(context.clone()));
 
@@ -1641,7 +1641,7 @@ mod tests {
             core_dispatcher.clone(),
             commit_vote_monitor.clone(),
             block_verifier.clone(),
-            txn_certifier,
+            transaction_certifier,
             dag_state.clone(),
             false,
         );
@@ -1669,7 +1669,7 @@ mod tests {
             monitored_mpsc::unbounded_channel("consensus_block_output");
         let store = Arc::new(MemStore::new());
         let dag_state = Arc::new(RwLock::new(DagState::new(context.clone(), store)));
-        let txn_certifier =
+        let transaction_certifier =
             TransactionCertifier::new(context.clone(), dag_state.clone(), blocks_sender);
         let commit_vote_monitor = Arc::new(CommitVoteMonitor::new(context.clone()));
 
@@ -1729,7 +1729,7 @@ mod tests {
             core_dispatcher.clone(),
             commit_vote_monitor.clone(),
             block_verifier,
-            txn_certifier,
+            transaction_certifier,
             dag_state.clone(),
             false,
         );
@@ -1790,7 +1790,7 @@ mod tests {
         let commit_vote_monitor = Arc::new(CommitVoteMonitor::new(context.clone()));
         let store = Arc::new(MemStore::new());
         let dag_state = Arc::new(RwLock::new(DagState::new(context.clone(), store)));
-        let txn_certifier =
+        let transaction_certifier =
             TransactionCertifier::new(context.clone(), dag_state.clone(), blocks_sender);
         let our_index = AuthorityIndex::new_for_test(0);
 
@@ -1863,7 +1863,7 @@ mod tests {
             core_dispatcher.clone(),
             commit_vote_monitor,
             block_verifier,
-            txn_certifier,
+            transaction_certifier,
             dag_state,
             true,
         );

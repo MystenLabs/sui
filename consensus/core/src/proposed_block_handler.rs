@@ -8,7 +8,8 @@ use crate::{block::ExtendedBlock, transaction_certifier::TransactionCertifier};
 
 /// Runs async processing logic for proposed blocks.
 /// Currently it only call transaction certifier with proposed blocks.
-/// In future, flushing dag state before proposing can be moved here.
+/// In future, more logic related to proposing should be moved here, for example
+/// flushing dag state.
 pub(crate) struct ProposedBlockHandler {
     rx_block_broadcast: broadcast::Receiver<ExtendedBlock>,
     transaction_certifier: TransactionCertifier,
@@ -43,6 +44,8 @@ impl ProposedBlockHandler {
     }
 
     fn handle_proposed_block(&self, extended_block: ExtendedBlock) {
+        // Run GC first to remove blocks that do not need be voted on.
+        self.transaction_certifier.run_gc();
         self.transaction_certifier
             .add_proposed_block(extended_block.block.clone());
     }
