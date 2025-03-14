@@ -407,6 +407,7 @@ pub struct AuthorityPerEpochStore {
     execution_time_estimator: tokio::sync::Mutex<Option<ExecutionTimeEstimator>>,
     tx_local_execution_time:
         OnceCell<mpsc::Sender<(ProgrammableTransaction, Vec<ExecutionTiming>, Duration)>>,
+    tx_object_debts: OnceCell<mpsc::Sender<Vec<ObjectID>>>,
     // Saved at end of epoch for propagating observations to the next.
     end_of_epoch_execution_time_observations: OnceCell<StoredExecutionTimeObservations>,
 }
@@ -948,6 +949,7 @@ impl AuthorityPerEpochStore {
             randomness_reporter: OnceCell::new(),
             execution_time_estimator: tokio::sync::Mutex::new(execution_time_estimator),
             tx_local_execution_time: OnceCell::new(),
+            tx_object_debts: OnceCell::new(),
             end_of_epoch_execution_time_observations: OnceCell::new(),
         });
 
@@ -1199,18 +1201,22 @@ impl AuthorityPerEpochStore {
         &self.execution_component.executor
     }
 
-    pub fn set_local_execution_time_channel(
+    pub fn set_local_execution_time_channels(
         &self,
         tx_local_execution_time: mpsc::Sender<(
             ProgrammableTransaction,
             Vec<ExecutionTiming>,
             Duration,
         )>,
+        tx_object_debts: mpsc::Sender<Vec<ObjectID>>,
     ) {
         if let Err(e) = self.tx_local_execution_time.set(tx_local_execution_time) {
             debug_fatal!(
                 "failed to set tx_local_execution_time channel on AuthorityPerEpochStore: {e:?}"
             );
+        }
+        if let Err(e) = self.tx_object_debts.set(tx_object_debts) {
+            debug_fatal!("failed to set tx_object_debts channel on AuthorityPerEpochStore: {e:?}");
         }
     }
 
@@ -3566,13 +3572,23 @@ impl AuthorityPerEpochStore {
             .with_label_values(&["randomness_commit"])
             .set(shared_object_using_randomness_congestion_tracker.max_cost() as i64);
 
-        output.set_congestion_control_object_debts(
-            shared_object_congestion_tracker.accumulated_debts(consensus_commit_info),
-        );
-        output.set_congestion_control_randomness_object_debts(
-            shared_object_using_randomness_congestion_tracker
-                .accumulated_debts(consensus_commit_info),
-        );
+        let object_debts =
+            shared_object_congestion_tracker.accumulated_debts(consensus_commit_info);
+        let randomness_object_debts = shared_object_using_randomness_congestion_tracker
+            .accumulated_debts(consensus_commit_info);
+        if let Some(tx_object_debts) = self.tx_object_debts.get() {
+            if let Err(e) = tx_object_debts.try_send(
+                object_debts
+                    .iter()
+                    .map(|(id, _)| *id)
+                    .chain(randomness_object_debts.iter().map(|(id, _)| *id))
+                    .collect(),
+            ) {
+                info!("failed to send updated object debts to ExecutionTimeObserver: {e:?}");
+            }
+        }
+        output.set_congestion_control_object_debts(object_debts);
+        output.set_congestion_control_randomness_object_debts(randomness_object_debts);
 
         if randomness_state_updated {
             if let Some(randomness_manager) = randomness_manager.as_mut() {

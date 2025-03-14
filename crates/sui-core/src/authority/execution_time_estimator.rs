@@ -51,6 +51,9 @@ pub struct ExecutionTimeObserver {
     // via consensus.
     object_utilization_tracker: LruCache<ObjectID, ObjectUtilization>,
 
+    // Sorted list of recently indebted objects, updated by consensus handler.
+    indebted_objects: Vec<ObjectID>,
+
     sharing_rate_limiter: RateLimiter<
         governor::state::NotKeyed,
         governor::state::InMemoryState,
@@ -87,7 +90,9 @@ impl ExecutionTimeObserver {
 
         let (tx_local_execution_time, mut rx_local_execution_time) =
             mpsc::channel(config.observation_channel_capacity().into());
-        epoch_store.set_local_execution_time_channel(tx_local_execution_time);
+        let (tx_object_debts, mut rx_object_debts) =
+            mpsc::channel(config.object_debt_channel_capacity().into());
+        epoch_store.set_local_execution_time_channels(tx_local_execution_time, tx_object_debts);
 
         // TODO: pre-populate local observations with stored data from prior epoch.
         let mut observer = Self {
@@ -95,6 +100,7 @@ impl ExecutionTimeObserver {
             consensus_adapter,
             local_observations: LruCache::new(config.observation_cache_size()),
             object_utilization_tracker: LruCache::new(config.object_utilization_cache_size()),
+            indebted_objects: Vec::new(),
             sharing_rate_limiter: RateLimiter::direct(
                 Quota::per_second(config.observation_sharing_rate_limit())
                     .allow_burst(config.observation_sharing_burst_limit()),
@@ -103,10 +109,19 @@ impl ExecutionTimeObserver {
             config,
         };
         spawn_monitored_task!(epoch_store.within_alive_epoch(async move {
-            while let Some((tx, timings, total_duration)) = rx_local_execution_time.recv().await {
-                observer
-                    .record_local_observations(&tx, &timings, total_duration)
-                    .await;
+            loop {
+                tokio::select! {
+                    // TODO: add metrics for messages received.
+                    Some(object_debts) = rx_object_debts.recv() => {
+                        observer.update_indebted_objects(object_debts);
+                    }
+                    Some((tx, timings, total_duration)) = rx_local_execution_time.recv() => {
+                        observer
+                            .record_local_observations(&tx, &timings, total_duration)
+                            .await;
+                    }
+                    else => { break }
+                }
             }
             info!("shutting down ExecutionTimeObserver");
         }));
@@ -136,6 +151,7 @@ impl ExecutionTimeObserver {
             },
             local_observations: LruCache::new(NonZeroUsize::new(10000).unwrap()),
             object_utilization_tracker: LruCache::new(NonZeroUsize::new(50000).unwrap()),
+            indebted_objects: Vec::new(),
             sharing_rate_limiter: RateLimiter::direct(Quota::per_hour(std::num::NonZeroU32::MAX)),
         }
     }
@@ -154,12 +170,19 @@ impl ExecutionTimeObserver {
 
         assert!(tx.commands.len() >= timings.len());
 
+        let mut uses_indebted_object = false;
+
         // Update the accumulated excess execution time for each mutable shared object
         // used in this transaction, and determine the max overage.
         let max_excess_per_object_execution_time = tx
             .shared_input_objects()
             .filter_map(|obj| obj.mutable.then_some(obj.id))
             .map(|id| {
+                // Mark if any object used in the tx is indebted.
+                if !uses_indebted_object && self.indebted_objects.binary_search(&id).is_ok() {
+                    uses_indebted_object = true;
+                }
+
                 // For each object:
                 // - add the execution time of the current transaction to the tracker
                 // - subtract the maximum amount of time available for execution according
@@ -252,7 +275,7 @@ impl ExecutionTimeObserver {
                 >= self
                     .config
                     .observation_sharing_object_utilization_threshold();
-            if diff_exceeds_threshold && utilization_exceeds_threshold {
+            if diff_exceeds_threshold && (utilization_exceeds_threshold || uses_indebted_object) {
                 debug!("sharing new execution time observation for {key:?}: {new_average:?}");
                 to_share.push((key, new_average));
                 local_observation.last_shared = Some((new_average, Instant::now()));
@@ -296,6 +319,14 @@ impl ExecutionTimeObserver {
                 warn!("failed to submit execution time observation: {e:?}");
             }
         }
+    }
+
+    fn update_indebted_objects(&mut self, mut object_debts: Vec<ObjectID>) {
+        let _scope = monitored_scope("ExecutionTimeObserver::update_indebted_objects");
+
+        object_debts.sort_unstable();
+        object_debts.dedup();
+        self.indebted_objects = object_debts;
     }
 }
 
