@@ -22,7 +22,7 @@ use tokio::join;
 
 use crate::{
     context::Context,
-    data::{displays::DisplayKey, object_info::LatestObjectInfoKey, objects::load_latest},
+    data::{displays::DisplayKey, objects::load_live},
     error::{rpc_bail, InternalContext, RpcError},
 };
 
@@ -33,46 +33,14 @@ pub(super) async fn live_object(
     object_id: ObjectID,
     options: &SuiObjectDataOptions,
 ) -> Result<SuiObjectResponse, RpcError> {
-    let Some(info) = ctx
-        .pg_loader()
-        .load_one(LatestObjectInfoKey(object_id))
+    let Some(object) = load_live(ctx, object_id)
         .await
-        .context("Failed to load object ownership information from store")?
+        .context("Failed to load latest object")?
     else {
         return Ok(SuiObjectResponse::new_with_error(
             SuiObjectResponseError::NotExists { object_id },
         ));
     };
-
-    // This means that the latest ownership record shows the object has been deleted, but our
-    // schema doesn't include the version the object was deleted at, and once the deletion moves
-    // out of the available range, this record will be deleted too, so we return a `NotExists`
-    // error instead of a `Deleted` error for consistency with the above error case.
-    if info.owner_kind.is_none() {
-        return Ok(SuiObjectResponse::new_with_error(
-            SuiObjectResponseError::NotExists { object_id },
-        ));
-    }
-
-    latest_object(ctx, object_id, options).await
-}
-
-/// Assuming the latest version of this object exists, fetch it from the database and convert it
-/// into a response. This is intended to be used after checking with `obj_info` that the object is
-/// live.
-pub(super) async fn latest_object(
-    ctx: &Context,
-    object_id: ObjectID,
-    options: &SuiObjectDataOptions,
-) -> Result<SuiObjectResponse, RpcError> {
-    // The fact that we found an `obj_info` record above means that the latest version of the
-    // object does exist, so the following calls should find a valid latest version for the object,
-    // and that version is expected to have content, so if either of those things don't happen,
-    // it's an internal error.
-    let object = load_latest(ctx, object_id)
-        .await
-        .context("Failed to load latest object")?
-        .context("Could not find latest content for live object")?;
 
     Ok(SuiObjectResponse::new_with_data(
         object_data_with_options(ctx, object, options).await?,
