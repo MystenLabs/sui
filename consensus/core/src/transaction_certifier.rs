@@ -53,29 +53,37 @@ impl TransactionCertifier {
         }
     }
 
-    /// Process own votes on input blocks and votes contained in the input blocks.
-    /// Newly certified blocks are sent to the output channel.
+    /// Stores own reject votes on input blocks, and aggregates reject votes from the input blocks.
+    /// Newly certified blocks are sent to the fastpath output channel.
     ///
     /// NOTE: blocks from commit sync do not need to be added, because transactions
-    /// arrived via commit sync should not need to be executed on the fastpath.
+    /// arrived via commit sync do not need to be voted and they should not need to
+    /// be executed on the fastpath.
     pub(crate) fn add_voted_blocks(
         &self,
         voted_blocks: Vec<(VerifiedBlock, Vec<TransactionIndex>)>,
     ) {
         let certified_blocks = self.certifier_state.write().add_voted_blocks(voted_blocks);
-        if let Err(e) = self.certified_blocks_sender.send(CertifiedBlocksOutput {
-            blocks: certified_blocks,
-        }) {
-            tracing::warn!("Failed to send certified blocks: {:?}", e);
-        }
+        self.send_certified_blocks(certified_blocks);
     }
 
+    /// Aggregates accept votes contained in the own proposed block.
+    /// Newly certified blocks are sent to the fastpath output channel.
+    ///
+    /// NOTE: this is the only place where accept votes are aggregated.
     pub(crate) fn add_proposed_block(&self, proposed_block: VerifiedBlock) {
         let gc_round = self.dag_state.read().gc_round();
         let mut certifier_state = self.certifier_state.write();
         certifier_state.update_gc_round(gc_round);
 
         let certified_blocks = certifier_state.add_proposed_block(proposed_block);
+        self.send_certified_blocks(certified_blocks);
+    }
+
+    fn send_certified_blocks(&self, certified_blocks: Vec<CertifiedBlock>) {
+        if certified_blocks.is_empty() {
+            return;
+        }
         if let Err(e) = self.certified_blocks_sender.send(CertifiedBlocksOutput {
             blocks: certified_blocks,
         }) {

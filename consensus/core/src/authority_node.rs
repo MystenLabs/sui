@@ -9,6 +9,7 @@ use mysten_metrics::spawn_logged_monitored_task;
 use parking_lot::RwLock;
 use prometheus::Registry;
 use sui_protocol_config::{ConsensusNetwork, ProtocolConfig};
+use tokio::task::JoinHandle;
 use tracing::{info, warn};
 
 use crate::{
@@ -152,6 +153,7 @@ where
 
     commit_syncer_handle: CommitSyncerHandle,
     round_prober_handle: Option<RoundProberHandle>,
+    proposed_block_handler: JoinHandle<()>,
     leader_timeout_handle: LeaderTimeoutTaskHandle,
     core_thread_handle: CoreThreadHandle,
     // Only one of broadcaster and subscriber gets created, depending on
@@ -244,7 +246,8 @@ where
             txn_certifier.clone(),
         );
 
-        spawn_logged_monitored_task!(proposed_block_handler.run(), "proposed_block_handler");
+        let proposed_block_handler =
+            spawn_logged_monitored_task!(proposed_block_handler.run(), "proposed_block_handler");
 
         let highest_known_commit_at_startup = dag_state.read().last_commit_index();
 
@@ -384,6 +387,7 @@ where
             commit_syncer_handle,
             round_prober_handle,
             commit_consumer_monitor,
+            proposed_block_handler,
             leader_timeout_handle,
             core_thread_handle,
             broadcaster,
@@ -413,6 +417,7 @@ where
         if let Some(round_prober_handle) = self.round_prober_handle.take() {
             round_prober_handle.stop().await;
         }
+        self.proposed_block_handler.abort();
         self.leader_timeout_handle.stop().await;
         // Shutdown Core to stop block productions and broadcast.
         // When using streaming, all subscribers to broadcasted blocks stop after this.
