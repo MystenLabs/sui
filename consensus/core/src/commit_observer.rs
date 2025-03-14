@@ -217,8 +217,9 @@ mod tests {
 
     use super::*;
     use crate::{
-        block::BlockRef, context::Context, dag_state::DagState, linearizer::median,
-        storage::mem_store::MemStore, test_dag_builder::DagBuilder,
+        block::BlockRef, context::Context, dag_state::DagState,
+        linearizer::median_timestamp_by_stake, storage::mem_store::MemStore,
+        test_dag_builder::DagBuilder,
     };
 
     #[rstest]
@@ -284,18 +285,12 @@ mod tests {
                     .filter(|block_ref| block_ref.round == leaders[idx].round() - 1)
                     .cloned()
                     .collect::<Vec<_>>();
-                let ancestor_timestamps = dag_state
+                let blocks = dag_state
                     .read()
                     .get_blocks(&block_refs)
                     .into_iter()
-                    .map(|block_opt| {
-                        block_opt
-                            .expect("We should have all blocks in dag state.")
-                            .timestamp_ms()
-                    })
-                    .collect::<Vec<_>>();
-
-                median(ancestor_timestamps)
+                    .map(|block_opt| block_opt.expect("We should have all blocks in dag state."));
+                median_timestamp_by_stake(&context, blocks).unwrap()
             } else {
                 leaders[idx].timestamp_ms()
             };
