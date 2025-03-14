@@ -50,7 +50,6 @@ pub async fn logs_for_ns(
 ) -> Result<LogResponse> {
     // Get an access token using gcloud
     let access_token = get_gcp_access_token()?;
-    info!("Access token: {}", access_token);
 
     // Build the filter for GKE logs
     let filter = format!(
