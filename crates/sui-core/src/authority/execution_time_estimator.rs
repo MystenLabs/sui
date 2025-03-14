@@ -204,9 +204,11 @@ impl ExecutionTimeObserver {
                     utilization.excess_execution_time.saturating_sub(
                         utilization
                             .last_measured
-                            .map(|last_measured| now.duration_since(last_measured))
-                            .unwrap_or(Duration::MAX)
-                            .mul_f64(self.protocol_params.target_utilization as f64 / 100.0),
+                            .map(|last_measured| {
+                                now.duration_since(last_measured)
+                                    .mul_f64(self.protocol_params.target_utilization as f64 / 100.0)
+                            })
+                            .unwrap_or(Duration::MAX),
                     );
                 utilization.last_measured = Some(now);
                 utilization.excess_execution_time
