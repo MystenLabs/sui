@@ -3,7 +3,7 @@
 
 use std::{collections::HashSet, sync::Arc};
 
-use consensus_config::AuthorityIndex;
+use consensus_config::{AuthorityIndex, Stake};
 use itertools::Itertools;
 use parking_lot::RwLock;
 
@@ -144,9 +144,11 @@ impl Linearizer {
         (sub_dag, commit)
     }
 
-    /// Calculates the commit's timestamp. If the median based timestamp calculation is enabled, then the timestamp will be calculated as the median of
-    /// leader's committed strong ancestors (leader.round - 1). Otherwise, the leader's timestamp will be used. To ensure that commit timestamp monotonicity is
-    /// respected it is compared against the `last_commit_timestamp_ms` and the maximum of the two is returned.
+    /// Calculates the commit's timestamp. If the median based timestamp calculation is enabled,
+    /// then the timestamp will be calculated as the median of leader's parents (leader.round - 1)
+    /// timestamps by stake. Otherwise, the leader's timestamp will be used. To ensure that commit
+    /// timestamp monotonicity is respected it is compared against the `last_commit_timestamp_ms`
+    /// and the maximum of the two is returned.
     pub(crate) fn calculate_commit_timestamp(
         context: &Context,
         dag_state: &mut impl BlockStoreAPI,
@@ -157,31 +159,24 @@ impl Linearizer {
             .protocol_config
             .consensus_median_based_commit_timestamp()
         {
-            // Attention should be paid that we are calculating the timestamp only using the leader's committed strong ancestors which should be all the blocks
-            // of round leader.round - 1.
+            // Select leaders' parent blocks.
             let block_refs = leader_block
                 .ancestors()
                 .iter()
                 .filter(|block_ref| block_ref.round == leader_block.round() - 1)
                 .cloned()
                 .collect::<Vec<_>>();
-            let timestamps = dag_state
+            // Get the blocks from dag state which should not fail.
+            let blocks = dag_state
                 .get_blocks(&block_refs)
                 .into_iter()
-                .map(|block_opt| {
-                    block_opt
-                        .expect("We should have all blocks in dag state.")
-                        .timestamp_ms()
-                })
-                .collect::<Vec<_>>();
-
-            assert!(
-                !timestamps.is_empty(),
-                "Leader block {:?} should have at least one ancestor.",
-                leader_block
-            );
-
-            median(timestamps)
+                .map(|block_opt| block_opt.expect("We should have all blocks in dag state."));
+            median_timestamp_by_stake(context, blocks).unwrap_or_else(|e| {
+                panic!(
+                    "Cannot compute median timestamp for leader block {:?} ancestors: {}",
+                    leader_block, e
+                )
+            })
         } else {
             leader_block.timestamp_ms()
         };
@@ -394,17 +389,54 @@ impl Linearizer {
     }
 }
 
-pub(crate) fn median(mut numbers: Vec<BlockTimestampMs>) -> BlockTimestampMs {
-    let len = numbers.len();
-    assert!(len > 0, "Cannot calculate median of an empty list");
-
-    numbers.sort_unstable();
-
-    if len % 2 == 1 {
-        numbers[len / 2]
-    } else {
-        (numbers[len / 2 - 1] + numbers[len / 2]) / 2
+/// Computes the median timestamp of the blocks weighted by the stake of their authorities.
+/// This function assumes each block comes from a different authority of the same round.
+/// Error is returned if no blocks are provided or total stake is less than quorum threshold.
+pub(crate) fn median_timestamp_by_stake(
+    context: &Context,
+    blocks: impl Iterator<Item = VerifiedBlock>,
+) -> Result<BlockTimestampMs, String> {
+    let mut total_stake = 0;
+    let mut timestamps = vec![];
+    for block in blocks {
+        let stake = context.committee.authority(block.author()).stake;
+        timestamps.push((block.timestamp_ms(), stake));
+        total_stake += stake;
     }
+
+    if timestamps.is_empty() {
+        return Err("No blocks provided".to_string());
+    }
+    if total_stake == 0 {
+        return Err("Total stake is 0".to_string());
+    }
+    if total_stake < context.committee.quorum_threshold() {
+        return Err(format!(
+            "Total stake {} < quorum threshold {}",
+            total_stake,
+            context.committee.quorum_threshold()
+        )
+        .to_string());
+    }
+
+    Ok(median_timestamps_by_stake_inner(timestamps, total_stake))
+}
+
+fn median_timestamps_by_stake_inner(
+    mut timestamps: Vec<(BlockTimestampMs, Stake)>,
+    total_stake: Stake,
+) -> BlockTimestampMs {
+    timestamps.sort_by_key(|(ts, _)| *ts);
+
+    let mut cumulative_stake = 0;
+    for (ts, stake) in &timestamps {
+        cumulative_stake += stake;
+        if cumulative_stake > total_stake / 2 {
+            return *ts;
+        }
+    }
+
+    timestamps.last().unwrap().0
 }
 
 #[cfg(test)]
@@ -470,18 +502,13 @@ mod tests {
                     .filter(|block_ref| block_ref.round == leaders[idx].round() - 1)
                     .cloned()
                     .collect::<Vec<_>>();
-                let ancestor_timestamps = dag_state
+                let blocks = dag_state
                     .read()
                     .get_blocks(&block_refs)
                     .into_iter()
-                    .map(|block_opt| {
-                        block_opt
-                            .expect("We should have all blocks in dag state.")
-                            .timestamp_ms()
-                    })
-                    .collect::<Vec<_>>();
+                    .map(|block_opt| block_opt.expect("We should have all blocks in dag state."));
 
-                median(ancestor_timestamps)
+                median_timestamp_by_stake(&context, blocks).unwrap()
             } else {
                 leaders[idx].timestamp_ms()
             };
@@ -674,14 +701,17 @@ mod tests {
         assert_eq!(subdag.commit_ref.index, expected_second_commit.index());
 
         let expected_ts = if consensus_median_timestamp {
-            let ancestor_timestamps = subdag
-                .blocks
-                .iter()
-                .filter(|block| block.round() == subdag.leader.round - 1)
-                .map(|b| b.timestamp_ms())
-                .collect::<Vec<_>>();
-
-            median(ancestor_timestamps)
+            median_timestamp_by_stake(
+                &context,
+                subdag.blocks.iter().filter_map(|block| {
+                    if block.round() == subdag.leader.round - 1 {
+                        Some(block.clone())
+                    } else {
+                        None
+                    }
+                }),
+            )
+            .unwrap()
         } else {
             leader.timestamp_ms()
         };
@@ -792,18 +822,13 @@ mod tests {
                     .filter(|block_ref| block_ref.round == leaders[idx].round() - 1)
                     .cloned()
                     .collect::<Vec<_>>();
-                let ancestor_timestamps = dag_state
+                let blocks = dag_state
                     .read()
                     .get_blocks(&block_refs)
                     .into_iter()
-                    .map(|block_opt| {
-                        block_opt
-                            .expect("We should have all blocks in dag state.")
-                            .timestamp_ms()
-                    })
-                    .collect::<Vec<_>>();
+                    .map(|block_opt| block_opt.expect("We should have all blocks in dag state."));
 
-                median(ancestor_timestamps)
+                median_timestamp_by_stake(&context, blocks).unwrap()
             } else {
                 leaders[idx].timestamp_ms()
             };
@@ -931,18 +956,13 @@ mod tests {
                     .filter(|block_ref| block_ref.round == leaders[idx].round() - 1)
                     .cloned()
                     .collect::<Vec<_>>();
-                let ancestor_timestamps = dag_state
+                let blocks = dag_state
                     .read()
                     .get_blocks(&block_refs)
                     .into_iter()
-                    .map(|block_opt| {
-                        block_opt
-                            .expect("We should have all blocks in dag state.")
-                            .timestamp_ms()
-                    })
-                    .collect::<Vec<_>>();
+                    .map(|block_opt| block_opt.expect("We should have all blocks in dag state."));
 
-                median(ancestor_timestamps)
+                median_timestamp_by_stake(&context, blocks).unwrap()
             } else {
                 leaders[idx].timestamp_ms()
             };
@@ -991,7 +1011,7 @@ mod tests {
 
     #[rstest]
     #[case(false, 5_000, 5_000, 6_000)]
-    #[case(true, 2_500, 3_000, 6_000)]
+    #[case(true, 3_000, 3_000, 6_000)]
     #[tokio::test]
     async fn test_calculate_commit_timestamp(
         #[case] consensus_median_timestamp: bool,
@@ -1081,6 +1101,10 @@ mod tests {
         assert_eq!(timestamp, timestamp_3);
 
         // AND there is only one ancestor block to commit
+        let (mut context, _) = Context::new_for_test(1);
+        context
+            .protocol_config
+            .set_consensus_median_based_commit_timestamp_for_testing(consensus_median_timestamp);
         let leader_block = VerifiedBlock::new_for_test(
             TestBlock::new(5, 0)
                 .set_timestamp_ms(5_000)
@@ -1105,5 +1129,43 @@ mod tests {
         } else {
             assert_eq!(timestamp, leader_block.timestamp_ms());
         }
+    }
+
+    #[test]
+    fn test_median_timestamps_by_stake() {
+        // One total stake.
+        let timestamps = vec![(1_000, 1)];
+        assert_eq!(median_timestamps_by_stake_inner(timestamps, 1), 1_000);
+
+        // Odd number of total stakes.
+        let timestamps = vec![(1_000, 1), (2_000, 1), (3_000, 1)];
+        assert_eq!(median_timestamps_by_stake_inner(timestamps, 3), 2_000);
+
+        // Even number of total stakes.
+        let timestamps = vec![(1_000, 1), (2_000, 1), (3_000, 1), (4_000, 1)];
+        assert_eq!(median_timestamps_by_stake_inner(timestamps, 4), 3_000);
+
+        // Even number of total stakes, different order.
+        let timestamps = vec![(4_000, 1), (3_000, 1), (1_000, 1), (2_000, 1)];
+        assert_eq!(median_timestamps_by_stake_inner(timestamps, 4), 3_000);
+
+        // Unequal stakes.
+        let timestamps = vec![(2_000, 2), (4_000, 2), (1_000, 3), (3_000, 3)];
+        assert_eq!(median_timestamps_by_stake_inner(timestamps, 10), 3_000);
+
+        // Unequal stakes.
+        let timestamps = vec![
+            (500, 2),
+            (4_000, 2),
+            (2_500, 3),
+            (1_000, 5),
+            (3_000, 3),
+            (2_000, 4),
+        ];
+        assert_eq!(median_timestamps_by_stake_inner(timestamps, 19), 2_000);
+
+        // One authority dominates.
+        let timestamps = vec![(1_000, 1), (2_000, 1), (3_000, 1), (4_000, 1), (5_000, 10)];
+        assert_eq!(median_timestamps_by_stake_inner(timestamps, 14), 5_000);
     }
 }
