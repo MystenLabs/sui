@@ -21,17 +21,28 @@ mod test {
         WorkloadConfig, WorkloadConfiguration, WorkloadWeights,
     };
     use sui_benchmark::{
+        bank::BenchmarkBank,
         drivers::{bench_driver::BenchDriver, driver::Driver, Interval},
+        system_state_observer::SystemStateObserver,
         util::get_ed25519_keypair_from_keystore,
+        workloads::{
+            adversarial::AdversarialPayloadCfg,
+            expected_failure::ExpectedFailurePayloadCfg,
+            workload::ExpectedFailureType,
+            workload_configuration::{WorkloadConfig, WorkloadConfiguration, WorkloadWeights},
+        },
         LocalValidatorAggregatorProxy, ValidatorProxy,
     };
-    use sui_config::node::AuthorityOverloadConfig;
-    use sui_config::ExecutionCacheConfig;
-    use sui_config::{AUTHORITIES_DB_NAME, SUI_KEYSTORE_FILENAME};
-    use sui_core::authority::authority_store_tables::AuthorityPerpetualTables;
-    use sui_core::authority::framework_injection;
-    use sui_core::authority::AuthorityState;
-    use sui_core::checkpoints::{CheckpointStore, CheckpointWatermark};
+    use sui_config::{
+        node::AuthorityOverloadConfig, ExecutionCacheConfig, AUTHORITIES_DB_NAME,
+        SUI_KEYSTORE_FILENAME,
+    };
+    use sui_core::{
+        authority::{
+            authority_store_tables::AuthorityPerpetualTables, framework_injection, AuthorityState,
+        },
+        checkpoints::{CheckpointStore, CheckpointWatermark},
+    };
     use sui_framework::BuiltInFramework;
     use sui_macros::{
         clear_fail_point, nondeterministic, register_fail_point, register_fail_point_arg,
@@ -41,19 +52,20 @@ mod test {
         ExecutionTimeEstimateParams, PerObjectCongestionControlMode, ProtocolConfig,
         ProtocolVersion,
     };
-    use sui_simulator::tempfile::TempDir;
-    use sui_simulator::{configs::*, SimConfig};
+    use sui_simulator::{configs::*, tempfile::TempDir, SimConfig};
     use sui_storage::blob::Blob;
     use sui_surfer::surf_strategy::SurfStrategy;
     use sui_swarm_config::network_config_builder::ConfigBuilder;
-    use sui_types::base_types::{ConciseableName, ObjectID, SequenceNumber};
-    use sui_types::digests::TransactionDigest;
-    use sui_types::full_checkpoint_content::CheckpointData;
-    use sui_types::messages_checkpoint::VerifiedCheckpoint;
-    use sui_types::supported_protocol_versions::SupportedProtocolVersions;
-    use sui_types::traffic_control::{FreqThresholdConfig, PolicyConfig, PolicyType};
-    use sui_types::transaction::{
-        DEFAULT_VALIDATOR_GAS_PRICE, TEST_ONLY_GAS_UNIT_FOR_HEAVY_COMPUTATION_STORAGE,
+    use sui_types::{
+        base_types::{ConciseableName, ObjectID, SequenceNumber},
+        digests::TransactionDigest,
+        full_checkpoint_content::CheckpointData,
+        messages_checkpoint::VerifiedCheckpoint,
+        supported_protocol_versions::SupportedProtocolVersions,
+        traffic_control::{FreqThresholdConfig, PolicyConfig, PolicyType},
+        transaction::{
+            DEFAULT_VALIDATOR_GAS_PRICE, TEST_ONLY_GAS_UNIT_FOR_HEAVY_COMPUTATION_STORAGE,
+        },
     };
     use test_cluster::{TestCluster, TestClusterBuilder};
     use tracing::{error, info, trace};
@@ -665,6 +677,16 @@ mod test {
             config.set_random_beacon_dkg_timeout_round_for_testing(0);
             config
         });
+
+        let test_cluster = build_test_cluster(4, 30_000, 1).await;
+        test_simulated_load(test_cluster, 120).await;
+    }
+
+    #[sim_test(config = "test_config()")]
+    async fn test_simulated_load_mysticeti_fastpath() {
+        unsafe {
+            std::env::set_var("CONSENSUS", "mysticeti_fpc");
+        }
 
         let test_cluster = build_test_cluster(4, 30_000, 1).await;
         test_simulated_load(test_cluster, 120).await;

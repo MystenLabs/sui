@@ -2,6 +2,15 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use std::{collections::BTreeMap, fmt::Debug};
+
+use schemars::JsonSchema;
+use serde::{Deserialize, Serialize};
+use strum_macros::{AsRefStr, IntoStaticStr};
+use thiserror::Error;
+use tonic::Status;
+use typed_store_error::TypedStoreError;
+
 use crate::{
     base_types::*,
     committee::{Committee, EpochId, StakeUnit},
@@ -10,14 +19,6 @@ use crate::{
     messages_checkpoint::CheckpointSequenceNumber,
     object::Owner,
 };
-
-use schemars::JsonSchema;
-use serde::{Deserialize, Serialize};
-use std::{collections::BTreeMap, fmt::Debug};
-use strum_macros::{AsRefStr, IntoStaticStr};
-use thiserror::Error;
-use tonic::Status;
-use typed_store_error::TypedStoreError;
 
 pub const TRANSACTION_NOT_FOUND_MSG_PREFIX: &str = "Could not find the referenced transaction";
 pub const TRANSACTIONS_NOT_FOUND_MSG_PREFIX: &str = "Could not find the referenced transactions";
@@ -39,6 +40,11 @@ macro_rules! fp_ensure {
 }
 use crate::execution_status::{CommandIndex, ExecutionFailureStatus};
 pub(crate) use fp_ensure;
+
+use crate::{
+    digests::TransactionEventsDigest,
+    execution_status::{CommandIndex, ExecutionFailureStatus},
+};
 
 #[macro_export]
 macro_rules! exit_main {
@@ -562,6 +568,31 @@ pub enum SuiError {
     // Errors returned by authority and client read API's
     #[error("Failure serializing transaction in the requested format: {:?}", error)]
     TransactionSerializationError { error: String },
+    #[error(
+        "Failure deserializing transaction from the provided format: {:?}",
+        error
+    )]
+    TransactionDeserializationError { error: String },
+    #[error(
+        "Failure serializing transaction effects from the provided format: {:?}",
+        error
+    )]
+    TransactionEffectsSerializationError { error: String },
+    #[error(
+        "Failure deserializing transaction effects from the provided format: {:?}",
+        error
+    )]
+    TransactionEffectsDeserializationError { error: String },
+    #[error(
+        "Failure serializing transaction events from the provided format: {:?}",
+        error
+    )]
+    TransactionEventsSerializationError { error: String },
+    #[error(
+        "Failure deserializing transaction events from the provided format: {:?}",
+        error
+    )]
+    TransactionEventsDeserializationError { error: String },
     #[error("Failure serializing object in the requested format: {:?}", error)]
     ObjectSerializationError { error: String },
     #[error("Failure deserializing object in the requested format: {:?}", error)]

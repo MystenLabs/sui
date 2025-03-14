@@ -1,12 +1,13 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
+use std::{collections::BTreeMap, sync::Arc, time::Duration};
+
 use anyhow::bail;
 use async_trait::async_trait;
 use embedded_reconfig_observer::EmbeddedReconfigObserver;
 use fullnode_reconfig_observer::FullNodeReconfigObserver;
 use prometheus::Registry;
 use rand::Rng;
-use std::{collections::BTreeMap, sync::Arc, time::Duration};
 use sui_config::genesis::Genesis;
 use sui_core::{
     authority_aggregator::{AuthorityAggregator, AuthorityAggregatorBuilder},
@@ -15,35 +16,29 @@ use sui_core::{
         reconfig_observer::ReconfigObserver, QuorumDriver, QuorumDriverHandler,
         QuorumDriverHandlerBuilder, QuorumDriverMetrics,
     },
+    transaction_driver::{SubmitTransactionOptions, TransactionDriver, TransactionDriverMetrics},
 };
 use sui_json_rpc_types::{
     SuiObjectDataOptions, SuiObjectResponse, SuiObjectResponseQuery, SuiTransactionBlockEffects,
     SuiTransactionBlockEffectsAPI, SuiTransactionBlockResponseOptions,
 };
+use sui_protocol_config::is_mysticeti_fpc_enabled_in_env;
 use sui_sdk::{SuiClient, SuiClientBuilder};
-use sui_types::effects::{TransactionEffectsAPI, TransactionEvents};
-use sui_types::gas::GasCostSummary;
-use sui_types::programmable_transaction_builder::ProgrammableTransactionBuilder;
-use sui_types::quorum_driver_types::EffectsFinalityInfo;
-use sui_types::quorum_driver_types::FinalizedEffects;
-use sui_types::sui_system_state::sui_system_state_summary::SuiSystemStateSummary;
-use sui_types::transaction::Argument;
-use sui_types::transaction::CallArg;
-use sui_types::transaction::ObjectArg;
 use sui_types::{
-    base_types::ObjectID,
+    base_types::{AuthorityName, ObjectID, ObjectRef, SequenceNumber, SuiAddress},
     committee::{Committee, EpochId},
-    object::Object,
-    transaction::Transaction,
-};
-use sui_types::{base_types::ObjectRef, crypto::AuthorityStrongQuorumSignInfo, object::Owner};
-use sui_types::{base_types::SequenceNumber, gas_coin::GasCoin};
-use sui_types::{
-    base_types::{AuthorityName, SuiAddress},
-    sui_system_state::SuiSystemStateTrait,
+    crypto::AuthorityStrongQuorumSignInfo,
+    effects::{TransactionEffectsAPI, TransactionEvents},
+    gas::GasCostSummary,
+    gas_coin::GasCoin,
+    object::{Object, Owner},
+    programmable_transaction_builder::ProgrammableTransactionBuilder,
+    quorum_driver_types::{EffectsFinalityInfo, FinalizedEffects},
+    sui_system_state::{sui_system_state_summary::SuiSystemStateSummary, SuiSystemStateTrait},
+    transaction::{Argument, CallArg, ObjectArg, Transaction},
 };
 use tokio::time::sleep;
-use tracing::{error, info, warn};
+use tracing::{info, warn};
 
 pub mod bank;
 pub mod benchmark_setup;
@@ -226,6 +221,7 @@ pub struct LocalValidatorAggregatorProxy {
     _qd_handler: QuorumDriverHandler<NetworkAuthorityClient>,
     // Stress client does not verify individual validator signatures since this is very expensive
     qd: Arc<QuorumDriver<NetworkAuthorityClient>>,
+    td: Arc<TransactionDriver<NetworkAuthorityClient>>,
     committee: Committee,
     clients: BTreeMap<AuthorityName, NetworkAuthorityClient>,
 }
@@ -259,6 +255,7 @@ impl LocalValidatorAggregatorProxy {
         committee: Committee,
     ) -> Self {
         let quorum_driver_metrics = Arc::new(QuorumDriverMetrics::new(registry));
+        let transaction_driver_metrics = Arc::new(TransactionDriverMetrics::new(registry));
         let (aggregator, reconfig_observer): (
             Arc<_>,
             Arc<dyn ReconfigObserver<NetworkAuthorityClient> + Sync + Send>,
@@ -293,12 +290,34 @@ impl LocalValidatorAggregatorProxy {
                 .with_reconfig_observer(reconfig_observer.clone());
         let qd_handler = qd_handler_builder.start();
         let qd = qd_handler.clone_quorum_driver();
+        let td = TransactionDriver::new(aggregator, reconfig_observer, transaction_driver_metrics);
         Self {
             _qd_handler: qd_handler,
             qd,
+            td,
             clients,
             committee,
         }
+    }
+
+    async fn submit_transaction_block(&self, tx: Transaction) -> anyhow::Result<ExecutionEffects> {
+        let response = self
+            .td
+            .submit_transaction(
+                sui_types::quorum_driver_types::ExecuteTransactionRequestV3 {
+                    transaction: tx.clone(),
+                    include_events: true,
+                    include_input_objects: false,
+                    include_output_objects: false,
+                    include_auxiliary_data: false,
+                },
+                SubmitTransactionOptions::default(),
+            )
+            .await?;
+        Ok(ExecutionEffects::FinalizedTransactionEffects(
+            response.effects,
+            response.events.unwrap_or_default(),
+        ))
     }
 }
 
@@ -327,6 +346,10 @@ impl ValidatorProxy for LocalValidatorAggregatorProxy {
     }
 
     async fn execute_transaction_block(&self, tx: Transaction) -> anyhow::Result<ExecutionEffects> {
+        if is_mysticeti_fpc_enabled_in_env().unwrap_or(false) {
+            return self.submit_transaction_block(tx).await;
+        }
+
         let tx_digest = *tx.digest();
         let mut retry_cnt = 0;
         while retry_cnt < 3 {
@@ -356,6 +379,10 @@ impl ValidatorProxy for LocalValidatorAggregatorProxy {
                     ));
                 }
                 Err(QuorumDriverError::NonRecoverableTransactionError { errors }) => {
+                    warn!(
+                        ?tx_digest,
+                        retry_cnt, "Transaction failed with non-recoverable err: {:?}", errors
+                    );
                     bail!(QuorumDriverError::NonRecoverableTransactionError { errors });
                 }
                 Err(err) => {
@@ -389,6 +416,7 @@ impl ValidatorProxy for LocalValidatorAggregatorProxy {
         Box::new(Self {
             _qd_handler: qdh,
             qd,
+            td: self.td.clone(),
             clients: self.clients.clone(),
             committee: self.committee.clone(),
         })
@@ -522,7 +550,7 @@ impl ValidatorProxy for FullNodeProxy {
                     ));
                 }
                 Err(err) => {
-                    error!(
+                    warn!(
                         ?tx_digest,
                         retry_cnt, "Transaction failed with err: {:?}", err
                     );

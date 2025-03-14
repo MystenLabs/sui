@@ -1,27 +1,28 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::authority::authority_per_epoch_store::AuthorityPerEpochStore;
-use crate::authority_aggregator::AuthorityAggregator;
-use crate::authority_client::AuthorityAPI;
-use crate::execution_cache::TransactionCacheRead;
+#[cfg(any(msim, test))]
+use std::sync::atomic::{AtomicU64, Ordering::Relaxed};
+use std::{cmp::min, ops::Add, sync::Arc, time::Duration};
+
 use arc_swap::ArcSwap;
 use mysten_metrics::LATENCY_SEC_BUCKETS;
 use prometheus::{
     register_histogram_with_registry, register_int_counter_with_registry, Histogram, IntCounter,
     Registry,
 };
-use std::cmp::min;
-use std::ops::Add;
-#[cfg(any(msim, test))]
-use std::sync::atomic::{AtomicU64, Ordering::Relaxed};
-use std::sync::Arc;
-use std::time::Duration;
-use sui_types::base_types::{AuthorityName, TransactionDigest};
-use sui_types::transaction::VerifiedSignedTransaction;
-use tokio::select;
-use tokio::time::Instant;
+use sui_types::{
+    base_types::{AuthorityName, TransactionDigest},
+    transaction::VerifiedSignedTransaction,
+};
+use tokio::{select, time::Instant};
 use tracing::{debug, error, trace};
+
+use crate::{
+    authority::authority_per_epoch_store::AuthorityPerEpochStore,
+    authority_aggregator::AuthorityAggregator, authority_client::AuthorityAPI,
+    execution_cache::TransactionCacheRead,
+};
 
 struct ValidatorTxFinalizerMetrics {
     num_finalization_attempts: IntCounter,
@@ -273,46 +274,55 @@ where
 
 #[cfg(test)]
 mod tests {
-    use crate::authority::test_authority_builder::TestAuthorityBuilder;
-    use crate::authority::AuthorityState;
-    use crate::authority_aggregator::{AuthorityAggregator, AuthorityAggregatorBuilder};
-    use crate::authority_client::AuthorityAPI;
-    use crate::validator_tx_finalizer::ValidatorTxFinalizer;
+    use std::{
+        cmp::min,
+        collections::BTreeMap,
+        iter,
+        net::SocketAddr,
+        num::NonZeroUsize,
+        sync::{
+            atomic::{AtomicBool, Ordering::Relaxed},
+            Arc,
+        },
+    };
+
     use arc_swap::ArcSwap;
     use async_trait::async_trait;
-    use std::cmp::min;
-    use std::collections::BTreeMap;
-    use std::iter;
-    use std::net::SocketAddr;
-    use std::num::NonZeroUsize;
-    use std::sync::atomic::AtomicBool;
-    use std::sync::atomic::Ordering::Relaxed;
-    use std::sync::Arc;
     use sui_macros::sim_test;
     use sui_swarm_config::network_config_builder::ConfigBuilder;
     use sui_test_transaction_builder::TestTransactionBuilder;
-    use sui_types::base_types::{AuthorityName, ObjectID, SuiAddress, TransactionDigest};
-    use sui_types::committee::{CommitteeTrait, StakeUnit};
-    use sui_types::crypto::{get_account_key_pair, AccountKeyPair};
-    use sui_types::effects::{TransactionEffectsAPI, TransactionEvents};
-    use sui_types::error::SuiError;
-    use sui_types::executable_transaction::VerifiedExecutableTransaction;
-    use sui_types::messages_checkpoint::{
-        CheckpointRequest, CheckpointRequestV2, CheckpointResponse, CheckpointResponseV2,
+    use sui_types::{
+        base_types::{AuthorityName, ObjectID, SuiAddress, TransactionDigest},
+        committee::{CommitteeTrait, StakeUnit},
+        crypto::{get_account_key_pair, AccountKeyPair},
+        effects::{TransactionEffectsAPI, TransactionEvents},
+        error::SuiError,
+        executable_transaction::VerifiedExecutableTransaction,
+        messages_checkpoint::{
+            CheckpointRequest, CheckpointRequestV2, CheckpointResponse, CheckpointResponseV2,
+        },
+        messages_grpc::{
+            HandleCertificateRequestV3, HandleCertificateResponseV2, HandleCertificateResponseV3,
+            HandleSoftBundleCertificatesRequestV3, HandleSoftBundleCertificatesResponseV3,
+            HandleTransactionResponse, ObjectInfoRequest, ObjectInfoResponse,
+            SubmitTransactionRequest, SubmitTransactionResponse, SystemStateRequest,
+            TransactionInfoRequest, TransactionInfoResponse,
+        },
+        object::Object,
+        sui_system_state::SuiSystemState,
+        transaction::{
+            CertifiedTransaction, SignedTransaction, Transaction, VerifiedCertificate,
+            VerifiedSignedTransaction, VerifiedTransaction,
+        },
+        utils::to_sender_signed_transaction,
     };
-    use sui_types::messages_grpc::{
-        HandleCertificateRequestV3, HandleCertificateResponseV2, HandleCertificateResponseV3,
-        HandleSoftBundleCertificatesRequestV3, HandleSoftBundleCertificatesResponseV3,
-        HandleTransactionResponse, ObjectInfoRequest, ObjectInfoResponse, SystemStateRequest,
-        TransactionInfoRequest, TransactionInfoResponse,
+
+    use crate::{
+        authority::{test_authority_builder::TestAuthorityBuilder, AuthorityState},
+        authority_aggregator::{AuthorityAggregator, AuthorityAggregatorBuilder},
+        authority_client::AuthorityAPI,
+        validator_tx_finalizer::ValidatorTxFinalizer,
     };
-    use sui_types::object::Object;
-    use sui_types::sui_system_state::SuiSystemState;
-    use sui_types::transaction::{
-        CertifiedTransaction, SignedTransaction, Transaction, VerifiedCertificate,
-        VerifiedSignedTransaction, VerifiedTransaction,
-    };
-    use sui_types::utils::to_sender_signed_transaction;
 
     #[derive(Clone)]
     struct MockAuthorityClient {
@@ -322,6 +332,14 @@ mod tests {
 
     #[async_trait]
     impl AuthorityAPI for MockAuthorityClient {
+        async fn submit_transaction(
+            &self,
+            _request: SubmitTransactionRequest,
+            _client_addr: Option<SocketAddr>,
+        ) -> Result<SubmitTransactionResponse, SuiError> {
+            unimplemented!();
+        }
+
         async fn handle_transaction(
             &self,
             transaction: Transaction,
