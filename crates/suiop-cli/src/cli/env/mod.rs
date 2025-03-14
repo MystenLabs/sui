@@ -14,7 +14,7 @@ use query_shell::get_shell_name;
 #[derive(Parser, Debug)]
 pub struct LoadEnvironmentArgs {
     /// the optional name of the environment to load
-    environment_name: Option<String>,
+    pub environment_name: Option<String>,
 }
 
 pub fn load_environment(args: &LoadEnvironmentArgs) -> Result<()> {

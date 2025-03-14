@@ -42,8 +42,12 @@ pub enum IncidentsAction {
         /// limit to incidents with any priority set
         #[arg(long, short = 'p', default_value = "false")]
         with_priority: bool,
-        #[arg(short, long, default_value = "false")]
+        /// output in interactive mode
+        #[arg(short, long, default_value = "false", conflicts_with = "json")]
         interactive: bool,
+        /// output as JSON
+        #[arg(long, default_value = "false", conflicts_with = "interactive")]
+        json: bool,
     },
     /// generate Jira tasks for incident follow ups
     #[command(name = "generate follow up tasks", aliases=["g", "gen", "generate"])]
@@ -85,12 +89,13 @@ pub async fn incidents_cmd(args: &IncidentsArgs) -> Result<()> {
             days,
             with_priority,
             interactive,
+            json,
         } => {
             let incidents = get_incidents(limit, days).await?;
             if *interactive {
                 review_recent_incidents(incidents).await?
             } else {
-                print_recent_incidents(incidents, *long, *with_priority).await?
+                print_recent_incidents(incidents, *long, *with_priority, *json).await?
             }
         }
         IncidentsAction::GenerateFollowUpTasks { input_filename } => {

@@ -1,79 +1,57 @@
 // Copyright (c) Mysten Labs, Inc.
-// SPDX-License-Identifier: Apache-2.0
+// SPDX-License-Idfier: Apache-2.0
 
 use anyhow::{Context, Result};
-use k8s_openapi::api::core::v1::Pod;
-use kube::{
-    api::{Api, LogParams},
-    config::Kubeconfig,
-    Client, Config,
-};
-use snailquote::unescape;
-use tracing::debug;
+use colored::Colorize;
+use tracing::info;
 
-use crate::{cache_local_raw, get_cached_local, run_cmd};
+use crate::cli::lib::gcp::log::logs_for_ns;
+use crate::cli::pulumi::config::get_pulumi_config;
 
-fn get_kubeconfig_key(stack: &str) -> String {
-    format!("kubeconfig.{}.yaml", stack)
-}
+pub async fn print_logs(project: &str, namespace: &str) -> Result<()> {
+    let config = get_pulumi_config()?;
+    let gcp_project_id = config
+        .config
+        .get("gcp:project")
+        .context("Failed to get gcp:project from pulumi config")?["value"]
+        .as_str()
+        .unwrap();
+    let cluster_name = config
+        .config
+        .get(&format!("{project}:cluster_id"))
+        .context("Failed to get cluster_id from pulumi config")?["value"]
+        .as_str()
+        .unwrap();
+    info!(
+        "Getting logs for project: {}, cluster: {}, project_id: {}, namespace: {}",
+        project, cluster_name, gcp_project_id, namespace
+    );
+    let log_entries = logs_for_ns(gcp_project_id, cluster_name, namespace).await?;
 
-pub async fn get_kubeconfig(stack: &str) -> Result<Client> {
-    // run pulumi config get config kubeconfig
-    let kubeconfig_yaml =
-        if let Ok(cached_kubeconfig) = get_cached_local::<String>(&get_kubeconfig_key(stack)) {
-            debug!("Using cached kubeconfig");
-            cached_kubeconfig.value
-        } else {
-            let cmd_output = run_cmd(vec!["pulumi", "config", "get", "kubeconfig"], None)?;
-            let raw_yaml = String::from_utf8(cmd_output.stdout)?;
-            let kubeconfig_yaml = unescape(&raw_yaml)?.to_string();
-            cache_local_raw(&get_kubeconfig_key(stack), kubeconfig_yaml.as_bytes())?;
-
-            kubeconfig_yaml
-        };
-    // create a new client
-    let kubeconfig = Kubeconfig::from_yaml(&kubeconfig_yaml)?;
-    let config = Config::from_custom_kubeconfig(kubeconfig, &Default::default())
-        .await
-        .context("Failed to create kubernetes client")?;
-    let client = Client::try_from(config)?;
-    Ok(client)
-}
-
-pub async fn get_logs(stack: &str, namespace: &str) -> Result<()> {
-    // Create kubernetes client
-    let client = get_kubeconfig(stack).await?;
-
-    // Get deployments API in the specified namespace
-    let pods: Api<Pod> = Api::namespaced(client, namespace);
-    // Get list of pods
-    let pod_list = pods
-        .list(&Default::default())
-        .await
-        .context("Failed to get pods")?;
-
-    // Extract pod names
-    let pod_names: Vec<String> = pod_list
-        .iter()
-        .map(|pod| pod.metadata.name.clone().unwrap_or_default())
-        .collect();
-
-    if pod_names.is_empty() {
-        println!("No pods found in namespace '{}'", namespace);
-        return Ok(());
+    // // Process and display the logs
+    if log_entries.entries.is_empty() {
+        println!("No logs found for the service namespace.");
+    } else {
+        println!("Received {} log entries:", log_entries.entries.len());
+        for (i, entry) in log_entries.entries.iter().enumerate() {
+            let timestamp = &entry.timestamp;
+            let app = entry
+                .labels
+                .get("k8s-pod/app")
+                .cloned()
+                .unwrap_or("unknown".to_string());
+            let message = entry
+                .text_payload
+                .clone()
+                .unwrap_or("No text payload".to_owned());
+            println!(
+                "[{}] {} ({}): {}",
+                i + 1,
+                timestamp.red(),
+                app.bright_purple(),
+                message
+            );
+        }
     }
-
-    // Ask user to select a pod
-    let pod_name = inquire::Select::new("Select pod to view logs from:", pod_names)
-        .prompt()
-        .map_err(|e| anyhow::anyhow!("Failed to get pod selection: {}", e))?;
-
-    // Get logs from the deployment named "deploy"
-    let logs = pods
-        .logs(&pod_name, &LogParams::default())
-        .await
-        .context("Failed to get logs")?;
-
-    println!("{}", logs);
     Ok(())
 }
