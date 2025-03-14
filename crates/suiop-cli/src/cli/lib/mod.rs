@@ -3,6 +3,7 @@
 
 mod autocomplete;
 pub mod cache;
+pub mod gcp;
 mod oauth;
 
 pub use autocomplete::FilePathCompleter;

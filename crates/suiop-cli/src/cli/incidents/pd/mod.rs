@@ -128,13 +128,33 @@ pub async fn print_recent_incidents(
     incidents: Vec<Incident>,
     long_output: bool,
     with_priority: bool,
+    json: bool,
 ) -> Result<()> {
-    for incident in &incidents {
-        if with_priority && incident.priority() == "  ".white() {
-            // skip incidents without priority
-            continue;
+    if json {
+        // Output as JSON
+        let filtered_incidents = if with_priority {
+            incidents
+                .into_iter()
+                .filter(|i| {
+                    // We need to check if the incident has a priority
+                    // The priority() method returns a ColoredString, but we just need to check if it's empty
+                    let priority_str = i.priority().to_string();
+                    !priority_str.trim().is_empty()
+                })
+                .collect::<Vec<_>>()
+        } else {
+            incidents
+        };
+        println!("{}", serde_json::to_string_pretty(&filtered_incidents)?);
+    } else {
+        // Output in human-readable format
+        for incident in &incidents {
+            if with_priority && incident.priority() == "  ".white() {
+                // skip incidents without priority
+                continue;
+            }
+            incident.print(long_output)?;
         }
-        incident.print(long_output)?;
     }
     Ok(())
 }
