@@ -10,7 +10,7 @@ use std::{
 
 use super::authority_per_epoch_store::AuthorityPerEpochStore;
 use crate::consensus_adapter::SubmitToConsensus;
-use governor::{Quota, RateLimiter};
+use governor::{clock::MonotonicClock, Quota, RateLimiter};
 use itertools::Itertools;
 use lru::LruCache;
 use mysten_common::debug_fatal;
@@ -57,7 +57,10 @@ pub struct ExecutionTimeObserver {
     sharing_rate_limiter: RateLimiter<
         governor::state::NotKeyed,
         governor::state::InMemoryState,
-        governor::clock::DefaultClock,
+        governor::clock::MonotonicClock,
+        governor::middleware::NoOpMiddleware<
+            <governor::clock::MonotonicClock as governor::clock::Clock>::Instant,
+        >,
     >,
 }
 
@@ -107,9 +110,10 @@ impl ExecutionTimeObserver {
             local_observations: LruCache::new(config.observation_cache_size()),
             object_utilization_tracker: LruCache::new(config.object_utilization_cache_size()),
             indebted_objects: Vec::new(),
-            sharing_rate_limiter: RateLimiter::direct(
+            sharing_rate_limiter: RateLimiter::direct_with_clock(
                 Quota::per_second(config.observation_sharing_rate_limit())
                     .allow_burst(config.observation_sharing_burst_limit()),
+                &MonotonicClock,
             ),
             protocol_params,
             config,
@@ -158,7 +162,10 @@ impl ExecutionTimeObserver {
             local_observations: LruCache::new(NonZeroUsize::new(10000).unwrap()),
             object_utilization_tracker: LruCache::new(NonZeroUsize::new(50000).unwrap()),
             indebted_objects: Vec::new(),
-            sharing_rate_limiter: RateLimiter::direct(Quota::per_hour(std::num::NonZeroU32::MAX)),
+            sharing_rate_limiter: RateLimiter::direct_with_clock(
+                Quota::per_hour(std::num::NonZeroU32::MAX),
+                &MonotonicClock,
+            ),
         }
     }
 
