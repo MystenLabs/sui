@@ -205,7 +205,7 @@ mod checked {
                 )]
             }
             Command::MakeMoveVec(tag_opt, args) => {
-                let args = context.splat_args(args)?;
+                let args = context.splat_args(0, args)?;
                 let mut res = vec![];
                 leb128::write::unsigned(&mut res, args.len() as u64).unwrap();
                 let mut arg_iter = args.into_iter().enumerate();
@@ -254,8 +254,9 @@ mod checked {
                 )]
             }
             Command::TransferObjects(objs, addr_arg) => {
-                let objs = context.splat_args(objs)?;
-                let addr_arg = context.one_arg(addr_arg)?;
+                let unsplat_objs_len = objs.len();
+                let objs = context.splat_args(0, objs)?;
+                let addr_arg = context.one_arg(unsplat_objs_len, addr_arg)?;
                 let objs: Vec<ObjectValue> = objs
                     .into_iter()
                     .enumerate()
@@ -270,8 +271,8 @@ mod checked {
                 vec![]
             }
             Command::SplitCoins(coin_arg, amount_args) => {
-                let coin_arg = context.one_arg(coin_arg)?;
-                let amount_args = context.splat_args(amount_args)?;
+                let coin_arg = context.one_arg(0, coin_arg)?;
+                let amount_args = context.splat_args(1, amount_args)?;
                 let mut obj: ObjectValue = context.borrow_arg_mut(0, coin_arg)?;
                 let ObjectContents::Coin(coin) = &mut obj.contents else {
                     let e = ExecutionErrorKind::command_argument_error(
@@ -299,8 +300,8 @@ mod checked {
                 split_coins
             }
             Command::MergeCoins(target_arg, coin_args) => {
-                let target_arg = context.one_arg(target_arg)?;
-                let coin_args = context.splat_args(coin_args)?;
+                let target_arg = context.one_arg(0, target_arg)?;
+                let coin_args = context.splat_args(1, coin_args)?;
                 let mut target: ObjectValue = context.borrow_arg_mut(0, target_arg)?;
                 let ObjectContents::Coin(target_coin) = &mut target.contents else {
                     let e = ExecutionErrorKind::command_argument_error(
@@ -348,7 +349,7 @@ mod checked {
                     type_arguments,
                     arguments,
                 } = *move_call;
-                let arguments = context.splat_args(arguments)?;
+                let arguments = context.splat_args(0, arguments)?;
 
                 let module = to_identifier(context, module)?;
                 let function = to_identifier(context, function)?;
@@ -389,7 +390,7 @@ mod checked {
                 trace_builder_opt,
             )?,
             Command::Upgrade(modules, dep_ids, current_package_id, upgrade_ticket) => {
-                let upgrade_ticket = context.one_arg(upgrade_ticket)?;
+                let upgrade_ticket = context.one_arg(0, upgrade_ticket)?;
                 execute_move_upgrade::<Mode>(
                     context,
                     modules,

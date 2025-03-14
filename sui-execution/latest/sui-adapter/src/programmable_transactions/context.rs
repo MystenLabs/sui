@@ -360,6 +360,7 @@ mod checked {
         /// in errors
         pub fn splat_args<Items: IntoIterator<Item = Argument>>(
             &self,
+            start_idx: usize,
             args: Items,
         ) -> Result<Vec<Arg>, ExecutionError>
         where
@@ -379,7 +380,7 @@ mod checked {
                             let Some(result) = self.results.get(i as usize) else {
                                 return Err(command_argument_error(
                                     CommandArgumentError::IndexOutOfBounds { idx: i },
-                                    arg_idx,
+                                    start_idx + arg_idx,
                                 ));
                             };
                             let Ok(len): Result<u16, _> = result.len().try_into() else {
@@ -389,7 +390,7 @@ mod checked {
                                 // TODO protocol config to allow splatting of args
                                 return Err(command_argument_error(
                                     CommandArgumentError::InvalidResultArity { result_idx: i },
-                                    arg_idx,
+                                    start_idx + arg_idx,
                                 ));
                             }
                             res.extend((0..len).map(|j| Arg(Arg_::V2(NormalizedArg::Result(i, j)))))
@@ -404,12 +405,16 @@ mod checked {
             }
         }
 
-        pub fn one_arg(&self, arg: Argument) -> Result<Arg, ExecutionError> {
-            let args = self.splat_args(vec![arg])?;
+        pub fn one_arg(
+            &self,
+            command_arg_idx: usize,
+            arg: Argument,
+        ) -> Result<Arg, ExecutionError> {
+            let args = self.splat_args(command_arg_idx, vec![arg])?;
             let Ok([arg]): Result<[Arg; 1], _> = args.try_into() else {
-                return Err(ExecutionError::new_with_source(
-                    ExecutionErrorKind::ArityMismatch,
-                    "Expected 1 argument but found many when expanding a Result into NestedResult",
+                return Err(command_argument_error(
+                    CommandArgumentError::InvalidArgumentArity,
+                    command_arg_idx,
                 ));
             };
             Ok(arg)
