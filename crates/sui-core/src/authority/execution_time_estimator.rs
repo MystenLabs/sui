@@ -73,6 +73,12 @@ pub struct ObjectUtilization {
     last_measured: Option<Instant>,
 }
 
+impl ObjectUtilization {
+    pub fn overutilized(&self) -> bool {
+        self.excess_execution_time > Duration::ZERO
+    }
+}
+
 // Tracks local execution time observations and shares them via consensus.
 impl ExecutionTimeObserver {
     pub fn spawn(
@@ -170,6 +176,11 @@ impl ExecutionTimeObserver {
 
         assert!(tx.commands.len() >= timings.len());
 
+        let Some(epoch_store) = self.epoch_store.upgrade() else {
+            debug!("epoch is ending, dropping execution time observation");
+            return;
+        };
+
         let mut uses_indebted_object = false;
 
         // Update the accumulated excess execution time for each mutable shared object
@@ -199,6 +210,7 @@ impl ExecutionTimeObserver {
                             excess_execution_time: Duration::ZERO,
                             last_measured: None,
                         });
+                let overutilized_at_start = utilization.overutilized();
                 utilization.excess_execution_time += total_duration;
                 utilization.excess_execution_time =
                     utilization.excess_execution_time.saturating_sub(
@@ -211,10 +223,28 @@ impl ExecutionTimeObserver {
                             .unwrap_or(Duration::MAX),
                     );
                 utilization.last_measured = Some(now);
+
+                // Update overutilized objects metric.
+                if !overutilized_at_start && utilization.overutilized() {
+                    epoch_store
+                        .metrics
+                        .epoch_execution_time_observer_overutilized_objects
+                        .inc();
+                } else if overutilized_at_start && !utilization.overutilized() {
+                    epoch_store
+                        .metrics
+                        .epoch_execution_time_observer_overutilized_objects
+                        .dec();
+                }
+
                 utilization.excess_execution_time
             })
             .max()
             .unwrap_or(Duration::ZERO);
+        epoch_store
+            .metrics
+            .epoch_execution_time_observer_utilization_cache_size
+            .set(self.object_utilization_tracker.len() as i64);
 
         let total_command_duration: Duration = timings.iter().map(|t| t.duration()).sum();
         let extra_overhead = total_duration - total_command_duration;
@@ -295,18 +325,20 @@ impl ExecutionTimeObserver {
             return;
         };
 
+        let num_observations = to_share.len() as u64;
+
         // Enforce global observation-sharing rate limit.
         if let Err(e) = self.sharing_rate_limiter.check() {
+            epoch_store
+                .metrics
+                .epoch_execution_time_observations_dropped
+                .with_label_values(&["global_rate_limit"])
+                .inc_by(num_observations);
             debug!("rate limit exceeded, dropping execution time observation; {e:?}");
-            // TODO: Increment a metric for dropped observations, for alerting.
             return;
         }
 
         let epoch_store = epoch_store.clone();
-        epoch_store
-            .metrics
-            .epoch_execution_time_observations_shared
-            .inc();
         let transaction = ConsensusTransaction::new_execution_time_observation(
             ExecutionTimeObservation::new(epoch_store.name, to_share),
         );
@@ -315,18 +347,36 @@ impl ExecutionTimeObserver {
             .submit_to_consensus(&[transaction], &epoch_store)
         {
             if !matches!(e, SuiError::EpochEnded(_)) {
-                // TODO: Increment a metric for dropped observations, for alerting.
+                epoch_store
+                    .metrics
+                    .epoch_execution_time_observations_dropped
+                    .with_label_values(&["submit_to_consensus"])
+                    .inc_by(num_observations);
                 warn!("failed to submit execution time observation: {e:?}");
             }
+        } else {
+            epoch_store
+                .metrics
+                .epoch_execution_time_observations_shared
+                .inc_by(num_observations);
         }
     }
 
     fn update_indebted_objects(&mut self, mut object_debts: Vec<ObjectID>) {
         let _scope = monitored_scope("ExecutionTimeObserver::update_indebted_objects");
 
+        let Some(epoch_store) = self.epoch_store.upgrade() else {
+            debug!("epoch is ending, dropping indebted object update");
+            return;
+        };
+
         object_debts.sort_unstable();
         object_debts.dedup();
         self.indebted_objects = object_debts;
+        epoch_store
+            .metrics
+            .epoch_execution_time_observer_indebted_objects
+            .set(self.indebted_objects.len() as i64);
     }
 }
 

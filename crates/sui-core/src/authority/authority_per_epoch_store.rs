@@ -1246,7 +1246,7 @@ impl AuthorityPerEpochStore {
         if let Err(e) = tx_local_execution_time.try_send((ptb.clone(), timings, total_duration)) {
             // This channel should not overflow, but if it does, don't wait; just log an error
             // and drop the observation.
-            self.metrics.epoch_execution_time_observations_dropped.inc();
+            self.metrics.epoch_execution_time_measurements_dropped.inc();
             warn!("failed to send local execution time to observer: {e}");
         }
     }
