@@ -7,11 +7,7 @@ use anyhow::Context as _;
 use diesel::prelude::*;
 use diesel::sql_types::Bool;
 use futures::future;
-use jsonrpsee::{
-    core::RpcResult,
-    http_client::{HeaderMap, HeaderValue, HttpClient, HttpClientBuilder},
-    proc_macros::rpc,
-};
+use jsonrpsee::{core::RpcResult, http_client::HttpClient, proc_macros::rpc};
 use move_core_types::language_storage::{StructTag, TypeTag};
 use serde::{Deserialize, Serialize};
 use sui_indexer_alt_schema::objects::StoredCoinOwnerKind;
@@ -27,7 +23,7 @@ use sui_types::{
 };
 
 use crate::{
-    config::WriteConfig,
+    config::NodeConfig,
     context::Context,
     data::{coin_metadata::CoinMetadataKey, objects::load_latest},
     error::{client_error_to_error_object, invalid_params, InternalContext, RpcError},
@@ -35,8 +31,6 @@ use crate::{
 };
 
 use super::rpc_module::RpcModule;
-
-pub const CLIENT_SDK_TYPE_HEADER: &str = "client-sdk-type";
 
 #[open_rpc(namespace = "suix", tag = "Coin API")]
 #[rpc(server, namespace = "suix")]
@@ -103,19 +97,8 @@ struct BalanceCursor {
 type Cursor = BcsCursor<BalanceCursor>;
 
 impl DelegationCoins {
-    pub fn new(fullnode_rpc_url: url::Url, config: WriteConfig) -> anyhow::Result<Self> {
-        let mut headers = HeaderMap::new();
-        headers.insert(
-            CLIENT_SDK_TYPE_HEADER,
-            HeaderValue::from_str(&config.header_value)?,
-        );
-
-        let client = HttpClientBuilder::default()
-            .max_request_size(config.max_request_size)
-            .set_headers(headers.clone())
-            .build(&fullnode_rpc_url)
-            .context("Failed to initialize fullnode RPC client")?;
-
+    pub fn new(fullnode_rpc_url: url::Url, config: NodeConfig) -> anyhow::Result<Self> {
+        let client = config.create_fullnode_rpc_client(fullnode_rpc_url)?;
         Ok(Self(client))
     }
 }
