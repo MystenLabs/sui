@@ -14083,6 +14083,23 @@ dependencies = [
 ]
 
 [[package]]
+name = "sui-indexer-alt-graphql"
+version = "1.48.0"
+dependencies = [
+ "anyhow",
+ "async-graphql",
+ "async-graphql-axum",
+ "async-trait",
+ "axum 0.7.5",
+ "clap",
+ "prometheus",
+ "telemetry-subscribers",
+ "tokio",
+ "tokio-util 0.7.13 (registry+https://github.com/rust-lang/crates.io-index)",
+ "tracing",
+]
+
+[[package]]
 name = "sui-indexer-alt-jsonrpc"
 version = "1.48.0"
 dependencies = [
