@@ -204,11 +204,18 @@ impl Core {
             .dag_state
             .read()
             .get_last_cached_block_per_authority(Round::MAX);
+
         let max_ancestor_timestamp = ancestor_blocks
             .iter()
             .fold(0, |ts, (b, _)| ts.max(b.timestamp_ms()));
         let wait_ms = max_ancestor_timestamp.saturating_sub(self.context.clock.timestamp_utc_ms());
-        if wait_ms > 0 {
+        if self
+            .context
+            .protocol_config
+            .consensus_median_based_commit_timestamp()
+        {
+            info!("Median based timestamp is enabled. Will not wait for {} ms while recovering ancestors from storage", wait_ms);
+        } else if wait_ms > 0 {
             warn!(
                 "Waiting for {} ms while recovering ancestors from storage",
                 wait_ms
@@ -597,15 +604,28 @@ impl Core {
                 .observe(clock_round.saturating_sub(ancestor.round()).into());
         }
 
-        // Ensure ancestor timestamps are not more advanced than the current time.
-        // Also catch the issue if system's clock go backwards.
         let now = self.context.clock.timestamp_utc_ms();
         ancestors.iter().for_each(|block| {
-            assert!(
-                block.timestamp_ms() <= now,
-                "Violation: ancestor block {:?} has timestamp {}, greater than current timestamp {now}. Proposing for round {}.",
-                block, block.timestamp_ms(), clock_round
-            );
+            if self.context.protocol_config.consensus_median_based_commit_timestamp() {
+                if block.timestamp_ms() > now {
+                    trace!("Ancestor block {:?} has timestamp {}, greater than current timestamp {now}. Proposing for round {}.", block, block.timestamp_ms(), clock_round);
+                    let authority = &self.context.committee.authority(block.author()).hostname;
+                    self.context
+                        .metrics
+                        .node_metrics
+                        .proposed_block_ancestors_timestamp_drift_ms
+                        .with_label_values(&[authority])
+                        .inc_by(block.timestamp_ms().saturating_sub(now));
+                }
+            } else {
+                // Ensure ancestor timestamps are not more advanced than the current time.
+                // Also catch the issue if system's clock go backwards.
+                assert!(
+                    block.timestamp_ms() <= now,
+                    "Violation: ancestor block {:?} has timestamp {}, greater than current timestamp {now}. Proposing for round {}.",
+                    block, block.timestamp_ms(), clock_round
+                );
+            }
         });
 
         // Consume the next transactions to be included. Do not drop the guards yet as this would acknowledge

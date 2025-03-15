@@ -54,6 +54,7 @@ impl ConsensusAuthority {
         protocol_config: ProtocolConfig,
         protocol_keypair: ProtocolKeyPair,
         network_keypair: NetworkKeyPair,
+        clock: Arc<Clock>,
         transaction_verifier: Arc<dyn TransactionVerifier>,
         commit_consumer: CommitConsumer,
         registry: Registry,
@@ -72,6 +73,7 @@ impl ConsensusAuthority {
                     protocol_config,
                     protocol_keypair,
                     network_keypair,
+                    clock,
                     transaction_verifier,
                     commit_consumer,
                     registry,
@@ -88,6 +90,7 @@ impl ConsensusAuthority {
                     protocol_config,
                     protocol_keypair,
                     network_keypair,
+                    clock,
                     transaction_verifier,
                     commit_consumer,
                     registry,
@@ -172,6 +175,7 @@ where
         // kept in Core.
         protocol_keypair: ProtocolKeyPair,
         network_keypair: NetworkKeyPair,
+        clock: Arc<Clock>,
         transaction_verifier: Arc<dyn TransactionVerifier>,
         commit_consumer: CommitConsumer,
         registry: Registry,
@@ -202,7 +206,7 @@ where
             parameters,
             protocol_config,
             initialise_metrics(registry),
-            Arc::new(Clock::new()),
+            clock,
         ));
         let start_time = Instant::now();
 
@@ -473,6 +477,7 @@ mod tests {
             ProtocolConfig::get_for_max_version_UNSAFE(),
             protocol_keypair,
             network_keypair,
+            Arc::new(Clock::default()),
             Arc::new(txn_verifier),
             commit_consumer,
             registry,
@@ -504,6 +509,7 @@ mod tests {
 
         if gc_depth == 0 {
             protocol_config.set_consensus_linearize_subdag_v2_for_testing(false);
+            protocol_config.set_consensus_median_based_commit_timestamp_for_testing(false);
         }
 
         let temp_dirs = (0..NUM_OF_AUTHORITIES)
@@ -714,6 +720,7 @@ mod tests {
 
         if gc_depth == 0 {
             protocol_config.set_consensus_linearize_subdag_v2_for_testing(false);
+            protocol_config.set_consensus_median_based_commit_timestamp_for_testing(false);
         }
 
         for (index, _authority_info) in committee.authorities() {
@@ -857,6 +864,7 @@ mod tests {
             protocol_config,
             protocol_keypair,
             network_keypair,
+            Arc::new(Clock::default()),
             Arc::new(txn_verifier),
             commit_consumer,
             registry,
