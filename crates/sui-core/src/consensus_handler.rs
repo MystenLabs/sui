@@ -11,8 +11,7 @@ use std::{
 
 use arc_swap::ArcSwap;
 use consensus_config::Committee as ConsensusCommittee;
-use consensus_core::{CommitConsumerMonitor, CommitIndex, TransactionIndex, VerifiedBlock};
-use fastcrypto::hash::HashFunction;
+use consensus_core::{CertifiedBlocksOutput, CommitConsumerMonitor, CommitIndex};
 use lru::LruCache;
 use mysten_common::debug_fatal;
 use mysten_metrics::{
@@ -134,6 +133,8 @@ impl ConsensusHandlerInitializer {
 
 mod additional_consensus_state {
     use std::marker::PhantomData;
+
+    use fastcrypto::hash::HashFunction as _;
 
     use super::*;
     /// AdditionalConsensusState tracks any in-memory state that is retained by ConsensusHandler
@@ -875,9 +876,9 @@ impl MysticetiConsensusHandler {
     pub(crate) fn new(
         last_processed_commit_at_startup: CommitIndex,
         mut consensus_handler: ConsensusHandler<CheckpointService>,
-        consensus_transaction_handler: ConsensusTransactionHandler,
+        consensus_block_handler: ConsensusBlockHandler,
         mut commit_receiver: UnboundedReceiver<consensus_core::CommittedSubDag>,
-        mut transaction_receiver: UnboundedReceiver<Vec<(VerifiedBlock, Vec<TransactionIndex>)>>,
+        mut block_receiver: UnboundedReceiver<consensus_core::CertifiedBlocksOutput>,
         commit_consumer_monitor: Arc<CommitConsumerMonitor>,
     ) -> Self {
         let mut tasks = JoinSet::new();
@@ -895,12 +896,11 @@ impl MysticetiConsensusHandler {
                 }
             }
         }));
-        if consensus_transaction_handler.enabled() {
+        if consensus_block_handler.enabled() {
             tasks.spawn(monitored_future!(async move {
-                while let Some(blocks_and_rejected_transactions) = transaction_receiver.recv().await
-                {
-                    consensus_transaction_handler
-                        .handle_consensus_transactions(blocks_and_rejected_transactions)
+                while let Some(blocks) = block_receiver.recv().await {
+                    consensus_block_handler
+                        .handle_certified_blocks(blocks)
                         .await;
                 }
             }));
@@ -1180,7 +1180,7 @@ impl SequencedConsensusTransaction {
 }
 
 /// Handles certified and rejected transactions output by consensus.
-pub(crate) struct ConsensusTransactionHandler {
+pub(crate) struct ConsensusBlockHandler {
     /// Whether to enable handling certified transactions.
     enabled: bool,
     /// Per-epoch store.
@@ -1193,7 +1193,7 @@ pub(crate) struct ConsensusTransactionHandler {
     metrics: Arc<AuthorityMetrics>,
 }
 
-impl ConsensusTransactionHandler {
+impl ConsensusBlockHandler {
     pub fn new(
         epoch_store: Arc<AuthorityPerEpochStore>,
         transaction_manager_sender: TransactionManagerSender,
@@ -1214,18 +1214,17 @@ impl ConsensusTransactionHandler {
     }
 
     #[instrument(level = "debug", skip_all)]
-    pub async fn handle_consensus_transactions(
-        &self,
-        blocks_and_rejected_transactions: Vec<(VerifiedBlock, Vec<TransactionIndex>)>,
-    ) {
+    async fn handle_certified_blocks(&self, blocks_output: CertifiedBlocksOutput) {
         self.backpressure_subscriber.await_no_backpressure().await;
 
-        let _scope = monitored_scope("ConsensusTransactionHandler::handle_consensus_transactions");
+        let _scope = monitored_scope("ConsensusBlockHandler::handle_certified_blocks");
+        self.metrics.consensus_block_handler_block_processed.inc();
 
-        let parsed_transactions = blocks_and_rejected_transactions
+        let parsed_transactions = blocks_output
+            .blocks
             .into_iter()
-            .flat_map(|(block, rejected_transactions)| {
-                parse_block_transactions(&block, &rejected_transactions)
+            .flat_map(|certified_block| {
+                parse_block_transactions(&certified_block.block, &certified_block.rejected)
             })
             .collect::<Vec<_>>();
         let mut pending_consensus_transactions = vec![];
@@ -1236,13 +1235,13 @@ impl ConsensusTransactionHandler {
                 // TODO(fastpath): maybe avoid parsing blocks twice between commit and transaction handling?
                 if parsed.rejected {
                     self.metrics
-                        .consensus_transaction_handler_processed
+                        .consensus_block_handler_txn_processed
                         .with_label_values(&["rejected"])
                         .inc();
                     return None;
                 }
                 self.metrics
-                    .consensus_transaction_handler_processed
+                    .consensus_block_handler_txn_processed
                     .with_label_values(&["certified"])
                     .inc();
                 match &parsed.transaction.kind {
@@ -1286,7 +1285,7 @@ impl ConsensusTransactionHandler {
                 });
         }
         self.metrics
-            .consensus_transaction_handler_fastpath_executions
+            .consensus_block_handler_fastpath_executions
             .inc_by(executable_transactions.len() as u64);
         self.transaction_manager_sender
             .send(executable_transactions);
@@ -1329,7 +1328,8 @@ impl CommitIntervalObserver {
 #[cfg(test)]
 mod tests {
     use consensus_core::{
-        BlockAPI, CommitDigest, CommitRef, CommittedSubDag, TestBlock, Transaction, VerifiedBlock,
+        BlockAPI, CertifiedBlock, CommitDigest, CommitRef, CommittedSubDag, TestBlock, Transaction,
+        VerifiedBlock,
     };
     use futures::pin_mut;
     use prometheus::Registry;
@@ -1365,7 +1365,7 @@ mod tests {
     };
 
     #[tokio::test(flavor = "current_thread", start_paused = true)]
-    pub async fn test_consensus_commit_handler() {
+    async fn test_consensus_commit_handler() {
         // GIVEN
         // 1 account keypair
         let (sender, keypair) = deterministic_random_account_key();
@@ -1585,7 +1585,7 @@ mod tests {
     }
 
     #[tokio::test]
-    pub async fn test_consensus_transaction_handler() {
+    async fn test_consensus_block_handler() {
         // GIVEN
         // 1 account keypair
         let (sender, keypair) = deterministic_random_account_key();
@@ -1621,7 +1621,7 @@ mod tests {
         );
 
         let backpressure_manager = BackpressureManager::new_for_tests();
-        let transaction_handler = ConsensusTransactionHandler::new(
+        let block_handler = ConsensusBlockHandler::new(
             epoch_store,
             transaction_manager_sender,
             backpressure_manager.subscribe(),
@@ -1671,8 +1671,13 @@ mod tests {
         let rejected_transactions = vec![0, 3, 4];
 
         // AND process the transactions from consensus output.
-        transaction_handler
-            .handle_consensus_transactions(vec![(block.clone(), rejected_transactions.clone())])
+        block_handler
+            .handle_certified_blocks(CertifiedBlocksOutput {
+                blocks: vec![CertifiedBlock {
+                    block: block.clone(),
+                    rejected: rejected_transactions.clone(),
+                }],
+            })
             .await;
 
         // THEN check for status of transactions that should have been executed.

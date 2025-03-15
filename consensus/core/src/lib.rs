@@ -45,6 +45,7 @@ mod universal_committer;
 #[path = "tests/randomized_tests.rs"]
 mod randomized_tests;
 
+mod proposed_block_handler;
 mod round_prober;
 #[cfg(test)]
 mod test_dag;
@@ -52,10 +53,13 @@ mod test_dag;
 mod test_dag_builder;
 #[cfg(test)]
 mod test_dag_parser;
+mod transaction_certifier;
 
 /// Exported consensus API.
 pub use authority_node::ConsensusAuthority;
-pub use block::{BlockAPI, BlockRef, Round, TransactionIndex};
+pub use block::{
+    BlockAPI, BlockRef, CertifiedBlock, CertifiedBlocksOutput, Round, TransactionIndex,
+};
 /// Exported API for testing.
 pub use block::{TestBlock, Transaction, VerifiedBlock};
 pub use commit::{CommitDigest, CommitIndex, CommitRef, CommittedSubDag};

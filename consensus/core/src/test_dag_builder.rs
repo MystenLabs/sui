@@ -21,7 +21,7 @@ use crate::{
     dag_state::DagState,
     leader_schedule::{LeaderSchedule, LeaderSwapTable},
     linearizer::{BlockStoreAPI, Linearizer},
-    CommitRef, CommittedSubDag,
+    CommitRef, CommittedSubDag, Transaction,
 };
 
 /// DagBuilder API
@@ -426,6 +426,8 @@ pub struct LayerBuilder<'a> {
     // Configuration options applied to specified authorities
     // TODO: convert configuration options into an enum
     specified_authorities: Option<Vec<AuthorityIndex>>,
+    // Number of transactions to include per block.
+    num_transactions: u32,
     // Number of equivocating blocks per specified authority
     equivocations: usize,
     // Skip block proposal for specified authorities
@@ -469,6 +471,7 @@ impl<'a> LayerBuilder<'a> {
             start_round,
             end_round: None,
             specified_authorities: None,
+            num_transactions: 0,
             equivocations: 0,
             skip_block: false,
             skip_ancestor_links: None,
@@ -551,6 +554,12 @@ impl<'a> LayerBuilder<'a> {
             "Specified authorities already set"
         );
         self.specified_authorities = Some(authorities);
+        self
+    }
+
+    // Number of transactions to include per block.
+    pub fn num_transactions(mut self, num_transactions: u32) -> Self {
+        self.num_transactions = num_transactions;
         self
     }
 
@@ -745,13 +754,16 @@ impl<'a> LayerBuilder<'a> {
             if self.should_skip_block(round, authority) {
                 continue;
             };
+            let transactions = (0..self.num_transactions)
+                .map(|_| Transaction::new(vec![1_u8; 16]))
+                .collect::<Vec<_>>();
             let num_blocks = self.num_blocks_to_create(authority);
-
             for num_block in 0..num_blocks {
                 let author = authority.value() as u32;
                 let base_ts = round as BlockTimestampMs * 1000;
                 let block = VerifiedBlock::new_for_test(
                     TestBlock::new(round, author)
+                        .set_transactions(transactions.clone())
                         .set_ancestors(ancestors.clone())
                         .set_timestamp_ms(base_ts + (author + round + num_block) as u64)
                         .build(),

@@ -27,7 +27,7 @@ use crate::{
 /// - The committed subdags are sent as consensus output via an unbounded tokio channel.
 ///
 /// No back pressure mechanism is needed as backpressure is handled as input into
-/// consenus.
+/// consensus.
 ///
 /// - Commit metadata including index is persisted in store, before the CommittedSubDag
 ///     is sent to the consumer.
@@ -37,8 +37,8 @@ pub(crate) struct CommitObserver {
     context: Arc<Context>,
     /// Component to deterministically collect subdags for committed leaders.
     commit_interpreter: Linearizer,
-    /// An unbounded channel to send committed sub-dags to the consumer of consensus output.
-    sender: UnboundedSender<CommittedSubDag>,
+    /// An unbounded channel to send commits to commit handler.
+    commit_sender: UnboundedSender<CommittedSubDag>,
     /// Persistent storage for blocks, commits and other consensus data.
     store: Arc<dyn Store>,
     leader_schedule: Arc<LeaderSchedule>,
@@ -52,14 +52,12 @@ impl CommitObserver {
         store: Arc<dyn Store>,
         leader_schedule: Arc<LeaderSchedule>,
     ) -> Self {
+        let commit_interpreter =
+            Linearizer::new(context.clone(), dag_state.clone(), leader_schedule.clone());
         let mut observer = Self {
-            commit_interpreter: Linearizer::new(
-                context.clone(),
-                dag_state.clone(),
-                leader_schedule.clone(),
-            ),
             context,
-            sender: commit_consumer.commit_sender,
+            commit_interpreter,
+            commit_sender: commit_consumer.commit_sender,
             store,
             leader_schedule,
         };
@@ -84,8 +82,8 @@ impl CommitObserver {
         let mut sent_sub_dags = Vec::with_capacity(committed_sub_dags.len());
         for committed_sub_dag in committed_sub_dags.into_iter() {
             // Failures in sender.send() are assumed to be permanent
-            if let Err(err) = self.sender.send(committed_sub_dag.clone()) {
-                tracing::error!(
+            if let Err(err) = self.commit_sender.send(committed_sub_dag.clone()) {
+                tracing::warn!(
                     "Failed to send committed sub-dag, probably due to shutdown: {err:?}"
                 );
                 return Err(ConsensusError::Shutdown);
@@ -153,12 +151,14 @@ impl CommitObserver {
             info!("Sending commit {} during recovery", commit.index());
             let committed_sub_dag =
                 load_committed_subdag_from_store(self.store.as_ref(), commit, reputation_scores);
-            self.sender.send(committed_sub_dag).unwrap_or_else(|e| {
-                panic!(
-                    "Failed to send commit during recovery, probably due to shutdown: {:?}",
-                    e
-                )
-            });
+            self.commit_sender
+                .send(committed_sub_dag)
+                .unwrap_or_else(|e| {
+                    panic!(
+                        "Failed to send commit during recovery, probably due to shutdown: {:?}",
+                        e
+                    )
+                });
 
             last_sent_commit_index += 1;
         }
