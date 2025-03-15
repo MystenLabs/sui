@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"constant":["CLIENT_SDK_TYPE_HEADER"],"enum":["Error"],"struct":["WriteApiOpenRpc","WriteArgs"],"trait":["WriteApiClient","WriteApiServer"]};
