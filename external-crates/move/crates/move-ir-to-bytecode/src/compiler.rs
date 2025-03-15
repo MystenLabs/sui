@@ -1991,6 +1991,7 @@ fn compile_bytecode(
             Bytecode::VecSwap(context.signature_index(sig)?)
         }
         IRBytecode_::ErrorConstant {
+            error_code,
             line_number,
             constant,
         } => {
@@ -2009,7 +2010,11 @@ fn compile_bytecode(
                 bitset_builder.with_identifier_index(constant_name_value_index.0);
             }
 
-            Bytecode::LdU64(bitset_builder.build().bits)
+            if let Some(error_code) = error_code {
+                bitset_builder.with_error_code(error_code);
+            }
+
+            Bytecode::LdU64(bitset_builder.build().bits())
         }
         IRBytecode_::PackVariant(name, variant_name, tys) => {
             let tokens = Signature(compile_types(
