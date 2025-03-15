@@ -84,6 +84,7 @@ const concepts = [
 				],
 			},
 			'concepts/graphql-rpc',
+			'concepts/gaming'
 		],
 	},
 	{

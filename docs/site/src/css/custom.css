@@ -262,6 +262,11 @@ h4 {
   }
 }
 
+/** Tabs component **/ 
+
+div[role="tabpanel"] {
+  @apply mx-4;
+}
 
 /** Navbar overrides **/
 

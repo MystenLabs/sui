@@ -105,12 +105,18 @@ importers:
       prismjs:
         specifier: ^1.29.0
         version: 1.29.0
+      pure-react-carousel-thumbs:
+        specifier: ^1.0.6
+        version: 1.0.6(react@18.3.1)
       react:
         specifier: ^18.0.0
         version: 18.3.1
       react-dom:
         specifier: ^18.0.0
         version: 18.3.1(react@18.3.1)
+      react-lite-youtube-embed:
+        specifier: ^2.4.0
+        version: 2.4.0(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
       react-scrollspy-navigation:
         specifier: ^1.0.3
         version: 1.0.3
@@ -5115,6 +5121,11 @@ packages:
     resolution: {integrity: sha512-FLpr4flz5xZTSJxSeaheeMKN/EDzMdK7b8PTOC6a5PYFKTucWbdqjgqaEyH0shFiSJrVB1+Qqi4Tk19ccU6Aug==}
     engines: {node: '>=12.20'}
 
+  pure-react-carousel-thumbs@1.0.6:
+    resolution: {integrity: sha512-xNACkay/9vUswQ7SUMY9PvHMOMdoBpSbzyYqvS9GTeir+eSWUCcwsTe3aufAWbv3LaW9qGd1IMQiQ3ytBUokUg==}
+    peerDependencies:
+      react: 18.2.0
+
   qs@6.13.0:
     resolution: {integrity: sha512-+38qI9SOr8tfZ4QmJNplMUxqjbe7LKvvZgWdExBOmd+egZTtjLB67Gu0HRX3u/XOq7UU2Nx6nsjvS16Z9uwfpg==}
     engines: {node: '>=0.6'}
@@ -5191,6 +5202,12 @@ packages:
     engines: {node: '>=14'}
     peerDependencies:
       react: ^16.13.1 || ^17.0.0 || ^18.0.0
+
+  react-lite-youtube-embed@2.4.0:
+    resolution: {integrity: sha512-Xo6cM1zPlROvvM97JkqQIoXstlQDaC4+DawmM7BB7Hh1cXrkBHEGq1iJlQxBTUWAUklmpcC7ph7qg7CztXtABQ==}
+    peerDependencies:
+      react: '>=18.2.0'
+      react-dom: '>=18.2.0'
 
   react-loadable-ssr-addon-v5-slorber@1.0.1:
     resolution: {integrity: sha512-lq3Lyw1lGku8zUEJPDxsNm1AfYHBrO9Y1+olAYwpUJ2IGFBskM0DMKok97A6LWUpHm+o7IvQBOWu9MLenp9Z+A==}
@@ -13101,6 +13118,10 @@ snapshots:
     dependencies:
       escape-goat: 4.0.0
 
+  pure-react-carousel-thumbs@1.0.6(react@18.3.1):
+    dependencies:
+      react: 18.3.1
+
   qs@6.13.0:
     dependencies:
       side-channel: 1.1.0
@@ -13203,6 +13224,11 @@ snapshots:
   react-json-view-lite@1.5.0(react@18.3.1):
     dependencies:
       react: 18.3.1
+
+  react-lite-youtube-embed@2.4.0(react-dom@18.3.1(react@18.3.1))(react@18.3.1):
+    dependencies:
+      react: 18.3.1
+      react-dom: 18.3.1(react@18.3.1)
 
   react-loadable-ssr-addon-v5-slorber@1.0.1(@docusaurus/react-loadable@5.5.2(react@18.3.1))(webpack@5.97.1):
     dependencies:
