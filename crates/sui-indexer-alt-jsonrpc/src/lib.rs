@@ -6,7 +6,7 @@ use std::sync::Arc;
 
 use anyhow::Context as _;
 use api::checkpoints::Checkpoints;
-use api::coin::Coins;
+use api::coin::{Coins, DelegationCoins};
 use api::dynamic_fields::DynamicFields;
 use api::move_utils::MoveUtils;
 use api::name_service::NameService;
@@ -26,7 +26,7 @@ use sui_pg_db::DbArgs;
 use tokio::task::JoinHandle;
 use tokio_util::sync::CancellationToken;
 use tower_layer::Identity;
-use tracing::info;
+use tracing::{info, warn};
 use url::Url;
 
 use crate::api::governance::Governance;
@@ -238,6 +238,14 @@ pub async fn start_rpc(
 
     rpc.add_module(Checkpoints(context.clone()))?;
     rpc.add_module(Coins(context.clone()))?;
+    if let Some(fullnode_rpc_url) = &write_args.fullnode_rpc_url {
+        rpc.add_module(DelegationCoins::new(
+            fullnode_rpc_url.clone(),
+            context.config().write.clone(),
+        )?)?;
+    } else {
+        warn!("No fullnode rpc url provided, DelegationCoins module will not be added.");
+    }
     rpc.add_module(DynamicFields(context.clone()))?;
     rpc.add_module(Governance(context.clone()))?;
     rpc.add_module(MoveUtils(context.clone()))?;
@@ -253,6 +261,8 @@ pub async fn start_rpc(
             fullnode_rpc_url,
             context.config().write.clone(),
         )?)?;
+    } else {
+        warn!("No fullnode rpc url provided, write module will not be added.");
     }
 
     let h_rpc = rpc.run().await.context("Failed to start RPC service")?;
