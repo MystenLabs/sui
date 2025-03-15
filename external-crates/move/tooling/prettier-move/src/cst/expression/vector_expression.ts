@@ -4,9 +4,9 @@
 import { Node } from '../..';
 import { MoveOptions, printFn, treeFn } from '../../printer';
 import { AstPath, Doc, doc } from 'prettier';
-import { list } from '../../utilities';
+import { list, printTrailingComment } from '../../utilities';
 import { printBreakableBlock } from './block';
-const { group } = doc.builders;
+const { group, lineSuffix } = doc.builders;
 
 /** The type of the node implemented in this file */
 export const NODE_TYPE = 'vector_expression';
@@ -29,12 +29,23 @@ function printVectorExpression(path: AstPath<Node>, options: MoveOptions, print:
 
 	// Injected print callback for elements in the vector
 	const printCb = (path: AstPath<Node>) => printElement(path, options, print);
+	const trailing = path.node.trailingComment;
+	let trailingComment: Doc = '';
+
+	if (trailing?.type === 'line_comment') {
+		trailingComment = printTrailingComment(path, false);
+		path.node.disableTrailingComment();
+	}
 
 	// Vector without type specified
 	// Eg: `vector[....]`
 	if (path.node.child(0)?.text == 'vector[') {
 		return group(
-			['vector', list({ path, print: printCb, options, open: '[', close: ']' }) as Doc[]],
+			[
+				'vector',
+				list({ path, print: printCb, options, open: '[', close: ']' }) as Doc[],
+				lineSuffix(trailingComment),
+			],
 			{ shouldBreak: false },
 		);
 	}
@@ -68,6 +79,7 @@ function printVectorExpression(path: AstPath<Node>, options: MoveOptions, print:
 				shouldBreak: false,
 			}) as Doc[],
 		),
+		lineSuffix(trailingComment),
 	];
 }
 
