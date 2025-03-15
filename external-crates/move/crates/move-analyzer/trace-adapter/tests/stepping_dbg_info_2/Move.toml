@@ -1,0 +1,10 @@
+[package]
+name = "stepping_dbg_info_2"
+edition = "2024.beta"
+
+[dependencies]
+MoveStdlib = { local = "../../../../move-stdlib" }
+
+[addresses]
+stepping_dbg_info_2 = "0x0"
+std = "0x1"
