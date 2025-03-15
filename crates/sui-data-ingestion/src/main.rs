@@ -130,7 +130,7 @@ async fn main() -> Result<()> {
                 false,
                 Some(Duration::from_secs(kv_config.timeout_secs as u64)),
                 "ingestion".to_string(),
-                &registry,
+                None,
             )
             .await?;
             bigtable_store = Some(BigTableProgressStore::new(bigtable_client));
@@ -176,7 +176,7 @@ async fn main() -> Result<()> {
                     false,
                     Some(Duration::from_secs(kv_config.timeout_secs as u64)),
                     "ingestion".to_string(),
-                    &registry,
+                    None,
                 )
                 .await?;
                 let worker_pool = WorkerPool::new(

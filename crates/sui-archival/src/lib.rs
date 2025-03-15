@@ -201,11 +201,18 @@ impl Manifest {
     ) {
         match self {
             Manifest::V1(manifest) => {
+                manifest.epoch = epoch_num;
+                manifest.next_checkpoint_seq_num = checkpoint_sequence_number;
+                if let Some(last_file_metadata) = manifest.file_metadata.last() {
+                    if last_file_metadata.checkpoint_seq_range
+                        == checkpoint_file_metadata.checkpoint_seq_range
+                    {
+                        return;
+                    }
+                }
                 manifest
                     .file_metadata
                     .extend(vec![checkpoint_file_metadata, summary_file_metadata]);
-                manifest.epoch = epoch_num;
-                manifest.next_checkpoint_seq_num = checkpoint_sequence_number;
             }
         }
     }
