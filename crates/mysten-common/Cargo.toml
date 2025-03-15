@@ -6,8 +6,15 @@ version = "0.1.0"
 edition = "2021"
 publish = false
 
+[lints]
+workspace = true
+
 [dependencies]
+rand.workspace = true
+antithesis_sdk.workspace = true
+either.workspace = true
 snap.workspace = true
+once_cell.workspace = true
 tokio.workspace = true
 futures.workspace = true
 parking_lot.workspace = true
