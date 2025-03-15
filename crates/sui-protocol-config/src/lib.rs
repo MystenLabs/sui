@@ -3378,6 +3378,9 @@ impl ProtocolConfig {
                     cfg.gas_model_version = Some(10);
 
                     if chain != Chain::Mainnet {
+                        cfg.feature_flags.record_additional_state_digest_in_prologue = true;
+                        cfg.consensus_commit_rate_estimation_window_size = Some(10);
+
                         // Enable execution time estimate mode for congestion control on testnet.
                         cfg.feature_flags.per_object_congestion_control_mode =
                             PerObjectCongestionControlMode::ExecutionTimeEstimate(
