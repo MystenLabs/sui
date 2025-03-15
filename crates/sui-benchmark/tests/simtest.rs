@@ -1215,6 +1215,8 @@ mod test {
             assert!(!results.unique_move_functions_called.is_empty());
         });
 
-        let _ = futures::join!(bench_task, surfer_task);
+        let (bench_result, surfer_result) = futures::join!(bench_task, surfer_task);
+            bench_result?;
+            surfer_result?;
     }
 }
