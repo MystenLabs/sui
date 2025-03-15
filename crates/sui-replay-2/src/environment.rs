@@ -80,7 +80,7 @@ impl ReplayEnvironment {
         &mut self,
         packages: &BTreeSet<ObjectID>,
     ) -> Result<(), ReplayError> {
-        debug!("Start load_package_objects");
+        debug!("Start load_package_objects {:#?}", packages);
         let pkg_ids = packages
             .iter()
             .map(|id| InputObject {
@@ -95,6 +95,7 @@ impl ReplayEnvironment {
             .into_iter()
             .map(|(id, _version, obj)| (id, obj))
             .collect::<BTreeMap<_, _>>();
+        debug!("package_objects: {:#?}", package_objects);
         let deps = get_packages_deps(&package_objects)
             .into_iter()
             .map(|object_id| InputObject {
@@ -102,6 +103,7 @@ impl ReplayEnvironment {
                 version: None,
             })
             .collect();
+        debug!("deps: {:#?}", deps);
         self.package_objects.extend(package_objects);
         let package_objects = self
             .data_store
@@ -110,6 +112,7 @@ impl ReplayEnvironment {
             .into_iter()
             .map(|(id, _version, obj)| (id, obj))
             .collect::<BTreeMap<_, _>>();
+        debug!("deps: {:#?}", package_objects);
         self.package_objects.extend(package_objects);
         debug!("End load_package_objects");
 

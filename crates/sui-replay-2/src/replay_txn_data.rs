@@ -150,7 +150,7 @@ fn get_input_ids(
             .collect::<Vec<_>>();
         all_objects.extend(input_objects);
 
-        let packages = ptb
+        let mut packages = ptb
             .commands
             .iter()
             .filter_map(|cmd| {
@@ -161,6 +161,21 @@ fn get_input_ids(
                 }
             })
             .collect::<BTreeSet<_>>();
+
+        let input_objects_kind =
+            txn_data
+                .input_objects()
+                .map_err(|e| ReplayError::InputObjectsError {
+                    digest: format!("{:?}", txn_data.digest()),
+                    err: format!("{:?}", e),
+                })?;
+
+        for kind in input_objects_kind.iter() {
+            if let InputObjectKind::MovePackage(object_id) = kind {
+                packages.insert(*object_id);
+            }
+        }
+
         Ok((all_objects, packages))
     } else {
         Ok((all_objects, BTreeSet::new()))
@@ -234,17 +249,7 @@ fn get_input_objects_for_replay(
         })?;
     for kind in input_objects_kind.iter() {
         match kind {
-            InputObjectKind::MovePackage(object_id) => {
-                let package = env.package_objects.get(object_id).ok_or_else(|| {
-                    ReplayError::PackageNotFound {
-                        pkg: object_id.to_string(),
-                    }
-                })?;
-                resolved_input_objs.push(ObjectReadResult {
-                    input_object_kind: InputObjectKind::MovePackage(*object_id),
-                    object: ObjectReadResultKind::Object(package.clone()),
-                });
-            }
+            InputObjectKind::MovePackage(_) => (),
             InputObjectKind::ImmOrOwnedMoveObject((obj_id, _version, _digest)) => {
                 let version = *object_versions.get(obj_id).ok_or_else(|| {
                     ReplayError::ObjectVersionNotFound {
