@@ -39,7 +39,7 @@ impl RpcService {
                     .with_description("missing object_id")
                     .with_reason(ErrorReason::FieldMissing)
             })?
-            .pipe_ref(ObjectId::try_from)
+            .parse()
             .map_err(|e| {
                 FieldViolation::new("object_id")
                     .with_description(format!("invalid object_id: {e}"))
@@ -74,9 +74,11 @@ impl RpcService {
         GetObjectResponse {
             object_id: read_mask
                 .contains("object_id")
-                .then(|| object.object_id().into()),
+                .then(|| object.object_id().to_string()),
             version: read_mask.contains("version").then_some(object.version()),
-            digest: read_mask.contains("digest").then(|| object.digest().into()),
+            digest: read_mask
+                .contains("digest")
+                .then(|| object.digest().to_string()),
             object: read_mask.contains("object").then(|| object.into()),
             object_bcs,
         }
@@ -141,7 +143,7 @@ impl RpcService {
             .parent
             .as_ref()
             .ok_or_else(|| RpcError::new(tonic::Code::InvalidArgument, "missing parent"))?
-            .try_into()
+            .parse()
             .map_err(|e| {
                 RpcError::new(tonic::Code::InvalidArgument, format!("invalid parent: {e}"))
             })?;
@@ -238,11 +240,11 @@ impl TryFrom<(DynamicFieldKey, DynamicFieldIndexInfo)> for DynamicFieldInfo {
 impl DynamicFieldInfo {
     fn into_proto(self) -> DynamicField {
         DynamicField {
-            parent: Some(self.parent.into()),
-            field_id: Some(self.field_id.into()),
-            name_type: Some(self.name_type.into()),
+            parent: Some(self.parent.to_string()),
+            field_id: Some(self.field_id.to_string()),
+            name_type: Some(self.name_type.to_string()),
             name_value: Some(self.name_value.into()),
-            dynamic_object_id: self.dynamic_object_id.map(Into::into),
+            dynamic_object_id: self.dynamic_object_id.map(|id| id.to_string()),
         }
     }
 }

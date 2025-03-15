@@ -8,7 +8,6 @@ use crate::proto::node::v2alpha::GetCoinInfoResponse;
 use crate::Result;
 use crate::RpcError;
 use crate::RpcService;
-use sui_sdk_types::TypeTag;
 use sui_sdk_types::{ObjectId, StructTag};
 use sui_types::sui_sdk_types_conversions::struct_tag_sdk_to_core;
 
@@ -25,24 +24,16 @@ impl RpcService {
             .indexes()
             .ok_or_else(RpcError::not_found)?;
 
-        let coin_type_proto = request
+        let coin_type = request
             .coin_type
-            .ok_or_else(|| RpcError::new(tonic::Code::InvalidArgument, "missing coin_type"))?;
-        let coin_type = TypeTag::try_from(&coin_type_proto).map_err(|e| {
-            RpcError::new(
-                tonic::Code::InvalidArgument,
-                format!("invalid coin_type: {e}"),
-            )
-        })?;
-
-        let coin_type = if let TypeTag::Struct(struct_tag) = coin_type {
-            *struct_tag
-        } else {
-            return Err(RpcError::new(
-                tonic::Code::InvalidArgument,
-                "invalid coin_type",
-            ));
-        };
+            .ok_or_else(|| RpcError::new(tonic::Code::InvalidArgument, "missing coin_type"))?
+            .parse::<StructTag>()
+            .map_err(|e| {
+                RpcError::new(
+                    tonic::Code::InvalidArgument,
+                    format!("invalid coin_type: {e}"),
+                )
+            })?;
 
         let core_coin_type = struct_tag_sdk_to_core(coin_type.clone())?;
 
@@ -66,7 +57,7 @@ impl RpcService {
                 )
             })?
             .map(|value| CoinMetadata {
-                id: Some(ObjectId::from(value.id.id.bytes).into()),
+                id: Some(ObjectId::from(value.id.id.bytes).to_string()),
                 decimals: Some(value.decimals.into()),
                 name: Some(value.name),
                 symbol: Some(value.symbol),
@@ -90,7 +81,7 @@ impl RpcService {
                 )
             })?
             .map(|treasury| CoinTreasury {
-                id: Some(ObjectId::from(treasury.id.id.bytes).into()),
+                id: Some(ObjectId::from(treasury.id.id.bytes).to_string()),
                 total_supply: Some(treasury.total_supply.value),
             })
         } else if sui_types::gas_coin::GAS::is_gas(&core_coin_type) {
@@ -100,7 +91,7 @@ impl RpcService {
         };
 
         Ok(GetCoinInfoResponse {
-            coin_type: Some(coin_type_proto),
+            coin_type: Some(coin_type.to_string()),
             metadata,
             treasury,
         })

@@ -7,17 +7,21 @@ use tap::Pipe;
 
 impl From<sui_sdk_types::TransactionEffects> for super::TransactionEffects {
     fn from(value: sui_sdk_types::TransactionEffects) -> Self {
-        use super::transaction_effects::Version;
-        use sui_sdk_types::TransactionEffects::*;
+        let digest = value.digest();
 
-        let version = match value {
-            V1(v1) => Version::V1((*v1).into()),
-            V2(v2) => Version::V2((*v2).into()),
+        let mut message = match value {
+            sui_sdk_types::TransactionEffects::V1(v1) => {
+                let bcs = super::Bcs::serialize(&sui_sdk_types::TransactionEffects::V1(v1.clone()))
+                    .unwrap();
+                let mut message = Self::from(*v1);
+                message.bcs = Some(bcs);
+                message
+            }
+            sui_sdk_types::TransactionEffects::V2(v2) => Self::from(*v2),
         };
 
-        Self {
-            version: Some(version),
-        }
+        message.digest = Some(digest.to_string());
+        message
     }
 }
 
@@ -25,15 +29,18 @@ impl TryFrom<&super::TransactionEffects> for sui_sdk_types::TransactionEffects {
     type Error = TryFromProtoError;
 
     fn try_from(value: &super::TransactionEffects) -> Result<Self, Self::Error> {
-        use super::transaction_effects::Version::*;
-
-        match value
-            .version
-            .as_ref()
-            .ok_or_else(|| TryFromProtoError::missing("version"))?
-        {
-            V1(v1) => Self::V1(Box::new(v1.try_into()?)),
-            V2(v2) => Self::V2(Box::new(v2.try_into()?)),
+        match value.version() {
+            super::Version::Unknown => {
+                return Err(TryFromProtoError::from_error(
+                    "unknown TransactionEffects version",
+                ))
+            }
+            super::Version::V1 => Self::V1(Box::new(
+                sui_sdk_types::TransactionEffectsV1::try_from(value)?,
+            )),
+            super::Version::V2 => Self::V2(Box::new(
+                sui_sdk_types::TransactionEffectsV2::try_from(value)?,
+            )),
         }
         .pipe(Ok)
     }
@@ -43,7 +50,9 @@ impl TryFrom<&super::TransactionEffects> for sui_sdk_types::TransactionEffects {
 // TransactionEffectsV1
 //
 
-impl From<sui_sdk_types::TransactionEffectsV1> for super::TransactionEffectsV1 {
+// There isn't a way to correctly encode the ordering needed to round-trip effects V1 through the
+// protobuf definition so this is a one-way trip without bcs
+impl From<sui_sdk_types::TransactionEffectsV1> for super::TransactionEffects {
     fn from(
         sui_sdk_types::TransactionEffectsV1 {
             status,
@@ -63,132 +72,220 @@ impl From<sui_sdk_types::TransactionEffectsV1> for super::TransactionEffectsV1 {
             dependencies,
         }: sui_sdk_types::TransactionEffectsV1,
     ) -> Self {
+        use super::ChangedObject;
+        use super::UnchangedSharedObject;
+
+        let mut changed_objects = Vec::new();
+        let mut unchanged_shared_objects = Vec::new();
+
+        for object in created {
+            let (object_id, version, digest) = object.reference.into_parts();
+            let owner = object.owner;
+            let change = ChangedObject {
+                object_id: Some(object_id.to_string()),
+                input_state: Some(super::changed_object::InputObjectState::DoesNotExist.into()),
+                input_version: None,
+                input_digest: None,
+                input_owner: None,
+                output_state: Some(super::changed_object::OutputObjectState::ObjectWrite.into()),
+                output_version: Some(version),
+                output_digest: Some(digest.to_string()),
+                output_owner: Some(owner.into()),
+                id_operation: Some(super::changed_object::IdOperation::Created.into()),
+                object_type: None,
+            };
+
+            changed_objects.push(change);
+        }
+
+        for object in mutated {
+            let (object_id, version, digest) = object.reference.into_parts();
+            let owner = object.owner;
+            let change = ChangedObject {
+                object_id: Some(object_id.to_string()),
+                input_state: Some(super::changed_object::InputObjectState::Exists.into()),
+                input_version: None,
+                input_digest: None,
+                input_owner: None,
+                output_state: Some(super::changed_object::OutputObjectState::ObjectWrite.into()),
+                output_version: Some(version),
+                output_digest: Some(digest.to_string()),
+                output_owner: Some(owner.into()),
+                id_operation: Some(super::changed_object::IdOperation::None.into()),
+                object_type: None,
+            };
+
+            changed_objects.push(change);
+        }
+
+        for object in unwrapped {
+            let (object_id, version, digest) = object.reference.into_parts();
+            let owner = object.owner;
+            let change = ChangedObject {
+                object_id: Some(object_id.to_string()),
+                input_state: Some(super::changed_object::InputObjectState::DoesNotExist.into()),
+                input_version: None,
+                input_digest: None,
+                input_owner: None,
+                output_state: Some(super::changed_object::OutputObjectState::ObjectWrite.into()),
+                output_version: Some(version),
+                output_digest: Some(digest.to_string()),
+                output_owner: Some(owner.into()),
+                id_operation: Some(super::changed_object::IdOperation::None.into()),
+                object_type: None,
+            };
+
+            changed_objects.push(change);
+        }
+
+        for object in deleted {
+            let (object_id, version, digest) = object.into_parts();
+            let change = ChangedObject {
+                object_id: Some(object_id.to_string()),
+                input_state: Some(super::changed_object::InputObjectState::Exists.into()),
+                input_version: None,
+                input_digest: None,
+                input_owner: None,
+                output_state: Some(super::changed_object::OutputObjectState::DoesNotExist.into()),
+                output_version: Some(version),
+                output_digest: Some(digest.to_string()),
+                output_owner: None,
+                id_operation: Some(super::changed_object::IdOperation::Deleted.into()),
+                object_type: None,
+            };
+
+            changed_objects.push(change);
+        }
+
+        for object in unwrapped_then_deleted {
+            let (object_id, version, digest) = object.into_parts();
+            let change = ChangedObject {
+                object_id: Some(object_id.to_string()),
+                input_state: Some(super::changed_object::InputObjectState::DoesNotExist.into()),
+                input_version: None,
+                input_digest: None,
+                input_owner: None,
+                output_state: Some(super::changed_object::OutputObjectState::DoesNotExist.into()),
+                output_version: Some(version),
+                output_digest: Some(digest.to_string()),
+                output_owner: None,
+                id_operation: Some(super::changed_object::IdOperation::Deleted.into()),
+                object_type: None,
+            };
+
+            changed_objects.push(change);
+        }
+
+        for object in wrapped {
+            let (object_id, version, digest) = object.into_parts();
+            let change = ChangedObject {
+                object_id: Some(object_id.to_string()),
+                input_state: Some(super::changed_object::InputObjectState::Exists.into()),
+                input_version: None,
+                input_digest: None,
+                input_owner: None,
+                output_state: Some(super::changed_object::OutputObjectState::DoesNotExist.into()),
+                output_version: Some(version),
+                output_digest: Some(digest.to_string()),
+                output_owner: None,
+                id_operation: Some(super::changed_object::IdOperation::Deleted.into()),
+                object_type: None,
+            };
+
+            changed_objects.push(change);
+        }
+
+        for modified_at_version in modified_at_versions {
+            let object_id = modified_at_version.object_id.to_string();
+            let version = modified_at_version.version;
+            if let Some(changed_object) = changed_objects
+                .iter_mut()
+                .find(|object| object.object_id() == object_id)
+            {
+                changed_object.input_version = Some(version);
+            }
+        }
+
+        for object in shared_objects {
+            let object_id = object.object_id().to_string();
+            let version = object.version();
+            let digest = object.digest().to_string();
+
+            if let Some(changed_object) = changed_objects
+                .iter_mut()
+                .find(|object| object.object_id() == object_id)
+            {
+                changed_object.input_version = Some(version);
+                changed_object.input_digest = Some(digest);
+            } else {
+                let unchanged_shared_object = UnchangedSharedObject {
+                    kind: Some(
+                        super::unchanged_shared_object::UnchangedSharedObjectKind::ReadOnlyRoot
+                            .into(),
+                    ),
+                    object_id: Some(object_id),
+                    version: Some(version),
+                    digest: Some(digest),
+                    object_type: None,
+                };
+
+                unchanged_shared_objects.push(unchanged_shared_object);
+            }
+        }
+
+        let gas_object_id = gas_object.reference.object_id().to_string();
+        let gas_object_index = changed_objects
+            .iter()
+            .position(|object| object.object_id() == gas_object_id)
+            .map(|i| i as u32);
+
         Self {
+            bcs: None,
+            digest: None,
+            version: Some(super::Version::V1.into()),
             status: Some(status.into()),
             epoch: Some(epoch),
             gas_used: Some(gas_used.into()),
-            modified_at_versions: modified_at_versions.into_iter().map(Into::into).collect(),
-            shared_objects: shared_objects.into_iter().map(Into::into).collect(),
-            transaction_digest: Some(transaction_digest.into()),
-            created: created.into_iter().map(Into::into).collect(),
-            mutated: mutated.into_iter().map(Into::into).collect(),
-            unwrapped: unwrapped.into_iter().map(Into::into).collect(),
-            deleted: deleted.into_iter().map(Into::into).collect(),
-            unwrapped_then_deleted: unwrapped_then_deleted.into_iter().map(Into::into).collect(),
-            wrapped: wrapped.into_iter().map(Into::into).collect(),
-            gas_object: Some(gas_object.into()),
-            events_digest: events_digest.map(Into::into),
-            dependencies: dependencies.into_iter().map(Into::into).collect(),
+            transaction_digest: Some(transaction_digest.to_string()),
+            events_digest: events_digest.map(|d| d.to_string()),
+            dependencies: dependencies.iter().map(ToString::to_string).collect(),
+            gas_object_index,
+            lamport_version: None,
+            changed_objects,
+            unchanged_shared_objects,
+            auxiliary_data_digest: None,
         }
     }
 }
 
-impl TryFrom<&super::TransactionEffectsV1> for sui_sdk_types::TransactionEffectsV1 {
+// There isn't a way to correctly encode the ordering needed to round-trip effects V1 through the
+// protobuf definition so if we want to go this back into an effects v1 struct we have to go
+// through bcs
+impl TryFrom<&super::TransactionEffects> for sui_sdk_types::TransactionEffectsV1 {
     type Error = TryFromProtoError;
 
     fn try_from(
-        super::TransactionEffectsV1 {
-            status,
-            epoch,
-            gas_used,
-            modified_at_versions,
-            shared_objects,
-            transaction_digest,
-            created,
-            mutated,
-            unwrapped,
-            deleted,
-            unwrapped_then_deleted,
-            wrapped,
-            gas_object,
-            events_digest,
-            dependencies,
-        }: &super::TransactionEffectsV1,
+        super::TransactionEffects { bcs, version, .. }: &super::TransactionEffects,
     ) -> Result<Self, Self::Error> {
-        let status = status
+        if *version != Some(super::Version::V1.into()) {
+            return Err(TryFromProtoError::from_error(
+                "expected TransactionEffects version 1",
+            ));
+        }
+
+        let effects = bcs
             .as_ref()
-            .ok_or_else(|| TryFromProtoError::missing("status"))?
-            .try_into()?;
+            .ok_or_else(|| TryFromProtoError::missing("bcs"))?
+            .deserialize::<sui_sdk_types::TransactionEffects>()
+            .map_err(TryFromProtoError::from_error)?;
 
-        let epoch = epoch.ok_or_else(|| TryFromProtoError::missing("epoch"))?;
-
-        let gas_used = gas_used
-            .as_ref()
-            .ok_or_else(|| TryFromProtoError::missing("gas_used"))?
-            .try_into()?;
-
-        let transaction_digest = transaction_digest
-            .as_ref()
-            .ok_or_else(|| TryFromProtoError::missing("transaction_digest"))?
-            .try_into()?;
-
-        let modified_at_versions = modified_at_versions
-            .iter()
-            .map(TryInto::try_into)
-            .collect::<Result<_, _>>()?;
-        let shared_objects = shared_objects
-            .iter()
-            .map(TryInto::try_into)
-            .collect::<Result<_, _>>()?;
-        let created = created
-            .iter()
-            .map(TryInto::try_into)
-            .collect::<Result<_, _>>()?;
-
-        let mutated = mutated
-            .iter()
-            .map(TryInto::try_into)
-            .collect::<Result<_, _>>()?;
-
-        let unwrapped = unwrapped
-            .iter()
-            .map(TryInto::try_into)
-            .collect::<Result<_, _>>()?;
-
-        let deleted = deleted
-            .iter()
-            .map(TryInto::try_into)
-            .collect::<Result<_, _>>()?;
-
-        let unwrapped_then_deleted = unwrapped_then_deleted
-            .iter()
-            .map(TryInto::try_into)
-            .collect::<Result<_, _>>()?;
-
-        let wrapped = wrapped
-            .iter()
-            .map(TryInto::try_into)
-            .collect::<Result<_, _>>()?;
-
-        let gas_object = gas_object
-            .as_ref()
-            .ok_or_else(|| TryFromProtoError::missing("gas_object"))?
-            .try_into()?;
-
-        let events_digest = events_digest.as_ref().map(TryInto::try_into).transpose()?;
-
-        let dependencies = dependencies
-            .iter()
-            .map(TryInto::try_into)
-            .collect::<Result<_, _>>()?;
-
-        Ok(Self {
-            status,
-            epoch,
-            gas_used,
-            modified_at_versions,
-            shared_objects,
-            transaction_digest,
-            created,
-            mutated,
-            unwrapped,
-            deleted,
-            unwrapped_then_deleted,
-            wrapped,
-            gas_object,
-            events_digest,
-            dependencies,
-        })
+        if let sui_sdk_types::TransactionEffects::V1(transaction_effects_v1) = effects {
+            Ok(*transaction_effects_v1)
+        } else {
+            Err(TryFromProtoError::from_error(
+                "expected TransactionEffects version 1",
+            ))
+        }
     }
 }
 
@@ -196,7 +293,7 @@ impl TryFrom<&super::TransactionEffectsV1> for sui_sdk_types::TransactionEffects
 // TransactionEffectsV2
 //
 
-impl From<sui_sdk_types::TransactionEffectsV2> for super::TransactionEffectsV2 {
+impl From<sui_sdk_types::TransactionEffectsV2> for super::TransactionEffects {
     fn from(
         sui_sdk_types::TransactionEffectsV2 {
             status,
@@ -213,29 +310,35 @@ impl From<sui_sdk_types::TransactionEffectsV2> for super::TransactionEffectsV2 {
         }: sui_sdk_types::TransactionEffectsV2,
     ) -> Self {
         Self {
+            bcs: None,
+            digest: None,
+            version: Some(super::Version::V2.into()),
             status: Some(status.into()),
             epoch: Some(epoch),
             gas_used: Some(gas_used.into()),
-            transaction_digest: Some(transaction_digest.into()),
+            transaction_digest: Some(transaction_digest.to_string()),
             gas_object_index,
-            events_digest: events_digest.map(Into::into),
-            dependencies: dependencies.into_iter().map(Into::into).collect(),
+            events_digest: events_digest.map(|d| d.to_string()),
+            dependencies: dependencies.iter().map(ToString::to_string).collect(),
             lamport_version: Some(lamport_version),
             changed_objects: changed_objects.into_iter().map(Into::into).collect(),
             unchanged_shared_objects: unchanged_shared_objects
                 .into_iter()
                 .map(Into::into)
                 .collect(),
-            auxiliary_data_digest: auxiliary_data_digest.map(Into::into),
+            auxiliary_data_digest: auxiliary_data_digest.map(|d| d.to_string()),
         }
     }
 }
 
-impl TryFrom<&super::TransactionEffectsV2> for sui_sdk_types::TransactionEffectsV2 {
+impl TryFrom<&super::TransactionEffects> for sui_sdk_types::TransactionEffectsV2 {
     type Error = TryFromProtoError;
 
     fn try_from(
-        super::TransactionEffectsV2 {
+        super::TransactionEffects {
+            bcs: _,
+            digest: _,
+            version,
             status,
             epoch,
             gas_used,
@@ -247,8 +350,14 @@ impl TryFrom<&super::TransactionEffectsV2> for sui_sdk_types::TransactionEffects
             changed_objects,
             unchanged_shared_objects,
             auxiliary_data_digest,
-        }: &super::TransactionEffectsV2,
+        }: &super::TransactionEffects,
     ) -> Result<Self, Self::Error> {
+        if *version != Some(super::Version::V2.into()) {
+            return Err(TryFromProtoError::from_error(
+                "expected TransactionEffects version 2",
+            ));
+        }
+
         let status = status
             .as_ref()
             .ok_or_else(|| TryFromProtoError::missing("status"))?
@@ -263,13 +372,17 @@ impl TryFrom<&super::TransactionEffectsV2> for sui_sdk_types::TransactionEffects
         let transaction_digest = transaction_digest
             .as_ref()
             .ok_or_else(|| TryFromProtoError::missing("transaction_digest"))?
-            .try_into()?;
+            .parse()
+            .map_err(TryFromProtoError::from_error)?;
 
-        let events_digest = events_digest.as_ref().map(TryInto::try_into).transpose()?;
+        let events_digest = events_digest
+            .as_ref()
+            .map(|s| s.parse().map_err(TryFromProtoError::from_error))
+            .transpose()?;
 
         let dependencies = dependencies
             .iter()
-            .map(TryInto::try_into)
+            .map(|s| s.parse().map_err(TryFromProtoError::from_error))
             .collect::<Result<_, _>>()?;
 
         let lamport_version =
@@ -287,7 +400,7 @@ impl TryFrom<&super::TransactionEffectsV2> for sui_sdk_types::TransactionEffects
 
         let auxiliary_data_digest = auxiliary_data_digest
             .as_ref()
-            .map(TryInto::try_into)
+            .map(|s| s.parse().map_err(TryFromProtoError::from_error))
             .transpose()?;
 
         Ok(Self {
@@ -307,80 +420,53 @@ impl TryFrom<&super::TransactionEffectsV2> for sui_sdk_types::TransactionEffects
 }
 
 //
-// ModifiedAtVersion
-//
-
-impl From<sui_sdk_types::ModifiedAtVersion> for super::ModifiedAtVersion {
-    fn from(value: sui_sdk_types::ModifiedAtVersion) -> Self {
-        Self {
-            object_id: Some(value.object_id.into()),
-            version: Some(value.version),
-        }
-    }
-}
-
-impl TryFrom<&super::ModifiedAtVersion> for sui_sdk_types::ModifiedAtVersion {
-    type Error = TryFromProtoError;
-
-    fn try_from(value: &super::ModifiedAtVersion) -> Result<Self, Self::Error> {
-        let object_id = value
-            .object_id
-            .as_ref()
-            .ok_or_else(|| TryFromProtoError::missing("object_id"))?
-            .try_into()?;
-        let version = value
-            .version
-            .ok_or_else(|| TryFromProtoError::missing("version"))?;
-
-        Ok(Self { object_id, version })
-    }
-}
-
-//
-// ObjectReferenceWithOwner
-//
-
-impl From<sui_sdk_types::ObjectReferenceWithOwner> for super::ObjectReferenceWithOwner {
-    fn from(value: sui_sdk_types::ObjectReferenceWithOwner) -> Self {
-        Self {
-            reference: Some(value.reference.into()),
-            owner: Some(value.owner.into()),
-        }
-    }
-}
-
-impl TryFrom<&super::ObjectReferenceWithOwner> for sui_sdk_types::ObjectReferenceWithOwner {
-    type Error = TryFromProtoError;
-
-    fn try_from(value: &super::ObjectReferenceWithOwner) -> Result<Self, Self::Error> {
-        let reference = value
-            .reference
-            .as_ref()
-            .ok_or_else(|| TryFromProtoError::missing("reference"))?
-            .try_into()?;
-
-        let owner = value
-            .owner
-            .as_ref()
-            .ok_or_else(|| TryFromProtoError::missing("owner"))?
-            .try_into()?;
-
-        Ok(Self { reference, owner })
-    }
-}
-
-//
 // ChangedObject
 //
 
 impl From<sui_sdk_types::ChangedObject> for super::ChangedObject {
     fn from(value: sui_sdk_types::ChangedObject) -> Self {
-        Self {
-            object_id: Some(value.object_id.into()),
-            input_state: Some(value.input_state.into()),
-            output_state: Some(value.output_state.into()),
-            id_operation: Some(value.id_operation.into()),
-        }
+        use super::changed_object::InputObjectState;
+        use super::changed_object::OutputObjectState;
+
+        let mut message = Self {
+            object_id: Some(value.object_id.to_string()),
+            ..Default::default()
+        };
+
+        // Input State
+        let input_state = match value.input_state {
+            sui_sdk_types::ObjectIn::NotExist => InputObjectState::DoesNotExist,
+            sui_sdk_types::ObjectIn::Exist {
+                version,
+                digest,
+                owner,
+            } => {
+                message.input_version = Some(version);
+                message.input_digest = Some(digest.to_string());
+                message.input_owner = Some(owner.into());
+                InputObjectState::Exists
+            }
+        };
+        message.set_input_state(input_state);
+
+        // Output State
+        let output_state = match value.output_state {
+            sui_sdk_types::ObjectOut::NotExist => OutputObjectState::DoesNotExist,
+            sui_sdk_types::ObjectOut::ObjectWrite { digest, owner } => {
+                message.output_digest = Some(digest.to_string());
+                message.output_owner = Some(owner.into());
+                OutputObjectState::ObjectWrite
+            }
+            sui_sdk_types::ObjectOut::PackageWrite { version, digest } => {
+                message.output_version = Some(version);
+                message.output_digest = Some(digest.to_string());
+                OutputObjectState::PackageWrite
+            }
+        };
+        message.set_output_state(output_state);
+
+        message.set_id_operation(value.id_operation.into());
+        message
     }
 }
 
@@ -388,29 +474,72 @@ impl TryFrom<&super::ChangedObject> for sui_sdk_types::ChangedObject {
     type Error = TryFromProtoError;
 
     fn try_from(value: &super::ChangedObject) -> Result<Self, Self::Error> {
+        use super::changed_object::InputObjectState;
+        use super::changed_object::OutputObjectState;
+
         let object_id = value
             .object_id
             .as_ref()
             .ok_or_else(|| TryFromProtoError::missing("object_id"))?
-            .try_into()?;
+            .parse()
+            .map_err(TryFromProtoError::from_error)?;
 
-        let input_state = value
-            .input_state
-            .as_ref()
-            .ok_or_else(|| TryFromProtoError::missing("input_state"))?
-            .try_into()?;
+        let input_state = match value.input_state() {
+            InputObjectState::Unknown => {
+                return Err(TryFromProtoError::from_error("unknown InputObjectState"))
+            }
+            InputObjectState::DoesNotExist => sui_sdk_types::ObjectIn::NotExist,
+            InputObjectState::Exists => sui_sdk_types::ObjectIn::Exist {
+                version: value
+                    .input_version
+                    .ok_or_else(|| TryFromProtoError::missing("version"))?,
+                digest: value
+                    .input_digest
+                    .as_ref()
+                    .ok_or_else(|| TryFromProtoError::missing("digest"))?
+                    .parse()
+                    .map_err(TryFromProtoError::from_error)?,
+                owner: value
+                    .input_owner
+                    .as_ref()
+                    .ok_or_else(|| TryFromProtoError::missing("owner"))?
+                    .try_into()?,
+            },
+        };
 
-        let output_state = value
-            .output_state
-            .as_ref()
-            .ok_or_else(|| TryFromProtoError::missing("output_state"))?
-            .try_into()?;
+        let output_state = match value.output_state() {
+            OutputObjectState::Unknown => {
+                return Err(TryFromProtoError::from_error("unknown OutputObjectState"))
+            }
+            OutputObjectState::DoesNotExist => sui_sdk_types::ObjectOut::NotExist,
+            OutputObjectState::ObjectWrite => sui_sdk_types::ObjectOut::ObjectWrite {
+                digest: value
+                    .output_digest
+                    .as_ref()
+                    .ok_or_else(|| TryFromProtoError::missing("digest"))?
+                    .parse()
+                    .map_err(TryFromProtoError::from_error)?,
 
-        let id_operation = value
-            .id_operation
-            .as_ref()
-            .ok_or_else(|| TryFromProtoError::missing("id_operation"))?
-            .try_into()?;
+                owner: value
+                    .output_owner
+                    .as_ref()
+                    .ok_or_else(|| TryFromProtoError::missing("owner"))?
+                    .try_into()?,
+            },
+            OutputObjectState::PackageWrite => sui_sdk_types::ObjectOut::PackageWrite {
+                version: value
+                    .output_version
+                    .ok_or_else(|| TryFromProtoError::missing("version"))?,
+                digest: value
+                    .output_digest
+                    .as_ref()
+                    .ok_or_else(|| TryFromProtoError::missing("digest"))?
+                    .parse()
+                    .map_err(TryFromProtoError::from_error)?,
+            },
+        };
+
+        let id_operation = value.id_operation().try_into()?;
 
         Ok(Self {
             object_id,
@@ -418,107 +547,6 @@ impl TryFrom<&super::ChangedObject> for sui_sdk_types::ChangedObject {
             output_state,
             id_operation,
         })
-    }
-}
-
-//
-// InputState
-//
-
-impl From<sui_sdk_types::ObjectIn> for super::changed_object::InputState {
-    fn from(value: sui_sdk_types::ObjectIn) -> Self {
-        match value {
-            sui_sdk_types::ObjectIn::NotExist => Self::NotExist(()),
-            sui_sdk_types::ObjectIn::Exist {
-                version,
-                digest,
-                owner,
-            } => Self::Exist(super::ObjectExist {
-                version: Some(version),
-                digest: Some(digest.into()),
-                owner: Some(owner.into()),
-            }),
-        }
-    }
-}
-
-impl TryFrom<&super::changed_object::InputState> for sui_sdk_types::ObjectIn {
-    type Error = TryFromProtoError;
-
-    fn try_from(value: &super::changed_object::InputState) -> Result<Self, Self::Error> {
-        use super::changed_object::InputState::*;
-
-        match value {
-            NotExist(()) => Self::NotExist,
-            Exist(super::ObjectExist {
-                version,
-                digest,
-                owner,
-            }) => Self::Exist {
-                version: version.ok_or_else(|| TryFromProtoError::missing("version"))?,
-                digest: digest
-                    .as_ref()
-                    .ok_or_else(|| TryFromProtoError::missing("digest"))?
-                    .try_into()?,
-                owner: owner
-                    .as_ref()
-                    .ok_or_else(|| TryFromProtoError::missing("owner"))?
-                    .try_into()?,
-            },
-        }
-        .pipe(Ok)
-    }
-}
-
-//
-// OutputState
-//
-
-impl From<sui_sdk_types::ObjectOut> for super::changed_object::OutputState {
-    fn from(value: sui_sdk_types::ObjectOut) -> Self {
-        use sui_sdk_types::ObjectOut::*;
-        match value {
-            NotExist => Self::Removed(()),
-            ObjectWrite { digest, owner } => Self::ObjectWrite(super::ObjectWrite {
-                digest: Some(digest.into()),
-                owner: Some(owner.into()),
-            }),
-            PackageWrite { version, digest } => Self::PackageWrite(super::PackageWrite {
-                version: Some(version),
-                digest: Some(digest.into()),
-            }),
-        }
-    }
-}
-
-impl TryFrom<&super::changed_object::OutputState> for sui_sdk_types::ObjectOut {
-    type Error = TryFromProtoError;
-
-    fn try_from(value: &super::changed_object::OutputState) -> Result<Self, Self::Error> {
-        use super::changed_object::OutputState::*;
-
-        match value {
-            Removed(()) => Self::NotExist,
-            ObjectWrite(super::ObjectWrite { digest, owner }) => Self::ObjectWrite {
-                digest: digest
-                    .as_ref()
-                    .ok_or_else(|| TryFromProtoError::missing("digest"))?
-                    .try_into()?,
-
-                owner: owner
-                    .as_ref()
-                    .ok_or_else(|| TryFromProtoError::missing("owner"))?
-                    .try_into()?,
-            },
-            PackageWrite(super::PackageWrite { version, digest }) => Self::PackageWrite {
-                version: version.ok_or_else(|| TryFromProtoError::missing("version"))?,
-                digest: digest
-                    .as_ref()
-                    .ok_or_else(|| TryFromProtoError::missing("digest"))?
-                    .try_into()?,
-            },
-        }
-        .pipe(Ok)
     }
 }
 
@@ -531,23 +559,26 @@ impl From<sui_sdk_types::IdOperation> for super::changed_object::IdOperation {
         use sui_sdk_types::IdOperation::*;
 
         match value {
-            None => Self::None(()),
-            Created => Self::Created(()),
-            Deleted => Self::Deleted(()),
+            None => Self::None,
+            Created => Self::Created,
+            Deleted => Self::Deleted,
         }
     }
 }
 
-impl TryFrom<&super::changed_object::IdOperation> for sui_sdk_types::IdOperation {
+impl TryFrom<super::changed_object::IdOperation> for sui_sdk_types::IdOperation {
     type Error = TryFromProtoError;
 
-    fn try_from(value: &super::changed_object::IdOperation) -> Result<Self, Self::Error> {
+    fn try_from(value: super::changed_object::IdOperation) -> Result<Self, Self::Error> {
         use super::changed_object::IdOperation;
 
         match value {
-            IdOperation::None(()) => Self::None,
-            IdOperation::Created(()) => Self::Created,
-            IdOperation::Deleted(()) => Self::Deleted,
+            IdOperation::Unknown => {
+                return Err(TryFromProtoError::from_error("unknown IdOperation"))
+            }
+            IdOperation::None => Self::None,
+            IdOperation::Created => Self::Created,
+            IdOperation::Deleted => Self::Deleted,
         }
         .pipe(Ok)
     }
@@ -559,10 +590,37 @@ impl TryFrom<&super::changed_object::IdOperation> for sui_sdk_types::IdOperation
 
 impl From<sui_sdk_types::UnchangedSharedObject> for super::UnchangedSharedObject {
     fn from(value: sui_sdk_types::UnchangedSharedObject) -> Self {
-        Self {
-            object_id: Some(value.object_id.into()),
-            kind: Some(value.kind.into()),
-        }
+        use super::unchanged_shared_object::UnchangedSharedObjectKind;
+        use sui_sdk_types::UnchangedSharedKind::*;
+
+        let mut message = Self {
+            object_id: Some(value.object_id.to_string()),
+            ..Default::default()
+        };
+
+        let kind = match value.kind {
+            ReadOnlyRoot { version, digest } => {
+                message.version = Some(version);
+                message.digest = Some(digest.to_string());
+                UnchangedSharedObjectKind::ReadOnlyRoot
+            }
+            MutateDeleted { version } => {
+                message.version = Some(version);
+                UnchangedSharedObjectKind::MutateDeleted
+            }
+            ReadDeleted { version } => {
+                message.version = Some(version);
+                UnchangedSharedObjectKind::ReadDeleted
+            }
+            Cancelled { version } => {
+                message.version = Some(version);
+                UnchangedSharedObjectKind::Cancelled
+            }
+            PerEpochConfig => UnchangedSharedObjectKind::PerEpochConfig,
+        };
+
+        message.set_kind(kind);
+        message
     }
 }
 
@@ -570,63 +628,51 @@ impl TryFrom<&super::UnchangedSharedObject> for sui_sdk_types::UnchangedSharedOb
     type Error = TryFromProtoError;
 
     fn try_from(value: &super::UnchangedSharedObject) -> Result<Self, Self::Error> {
+        use super::unchanged_shared_object::UnchangedSharedObjectKind;
+        use sui_sdk_types::UnchangedSharedKind;
+
         let object_id = value
             .object_id
             .as_ref()
             .ok_or_else(|| TryFromProtoError::missing("object_id"))?
-            .try_into()?;
+            .parse()
+            .map_err(TryFromProtoError::from_error)?;
 
-        let kind = value
-            .kind
-            .as_ref()
-            .ok_or_else(|| TryFromProtoError::missing("kind"))?
-            .try_into()?;
+        let kind = match value.kind() {
+            UnchangedSharedObjectKind::Unknown => {
+                return Err(TryFromProtoError::from_error("unknown InputKind"))
+            }
 
-        Ok(Self { object_id, kind })
-    }
-}
+            UnchangedSharedObjectKind::ReadOnlyRoot => UnchangedSharedKind::ReadOnlyRoot {
+                version: value
+                    .version
+                    .ok_or_else(|| TryFromProtoError::missing("version"))?,
 
-//
-// UnchangedSharedKind
-//
-
-impl From<sui_sdk_types::UnchangedSharedKind> for super::unchanged_shared_object::Kind {
-    fn from(value: sui_sdk_types::UnchangedSharedKind) -> Self {
-        use sui_sdk_types::UnchangedSharedKind::*;
-
-        match value {
-            ReadOnlyRoot { version, digest } => Self::ReadOnlyRoot(super::ReadOnlyRoot {
-                version: Some(version),
-                digest: Some(digest.into()),
-            }),
-            MutateDeleted { version } => Self::MutateDeleted(version),
-            ReadDeleted { version } => Self::ReadDeleted(version),
-            Cancelled { version } => Self::Cancelled(version),
-            PerEpochConfig => Self::PerEpochConfig(()),
-        }
-    }
-}
-
-impl TryFrom<&super::unchanged_shared_object::Kind> for sui_sdk_types::UnchangedSharedKind {
-    type Error = TryFromProtoError;
-
-    fn try_from(value: &super::unchanged_shared_object::Kind) -> Result<Self, Self::Error> {
-        use super::unchanged_shared_object::Kind::*;
-
-        match value {
-            ReadOnlyRoot(super::ReadOnlyRoot { version, digest }) => Self::ReadOnlyRoot {
-                version: version.ok_or_else(|| TryFromProtoError::missing("version"))?,
-
-                digest: digest
+                digest: value
+                    .digest
                     .as_ref()
                     .ok_or_else(|| TryFromProtoError::missing("digest"))?
-                    .try_into()?,
+                    .parse()
+                    .map_err(TryFromProtoError::from_error)?,
             },
-            MutateDeleted(version) => Self::MutateDeleted { version: *version },
-            ReadDeleted(version) => Self::ReadDeleted { version: *version },
-            Cancelled(version) => Self::Cancelled { version: *version },
-            PerEpochConfig(()) => Self::PerEpochConfig,
-        }
-        .pipe(Ok)
+            UnchangedSharedObjectKind::MutateDeleted => UnchangedSharedKind::MutateDeleted {
+                version: value
+                    .version
+                    .ok_or_else(|| TryFromProtoError::missing("version"))?,
+            },
+            UnchangedSharedObjectKind::ReadDeleted => UnchangedSharedKind::ReadDeleted {
+                version: value
+                    .version
+                    .ok_or_else(|| TryFromProtoError::missing("version"))?,
+            },
+            UnchangedSharedObjectKind::Cancelled => UnchangedSharedKind::Cancelled {
+                version: value
+                    .version
+                    .ok_or_else(|| TryFromProtoError::missing("version"))?,
+            },
+            UnchangedSharedObjectKind::PerEpochConfig => UnchangedSharedKind::PerEpochConfig,
+        };
+
+        Ok(Self { object_id, kind })
     }
 }

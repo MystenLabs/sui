@@ -23,7 +23,9 @@ impl RpcService {
             .pipe(Some);
 
         GetNodeInfoResponse {
-            chain_id: Some(CheckpointDigest::new(self.chain_id().as_bytes().to_owned()).into()),
+            chain_id: Some(
+                CheckpointDigest::new(self.chain_id().as_bytes().to_owned()).to_string(),
+            ),
             chain: Some(self.chain_id().chain().as_str().into()),
             epoch: Some(latest_checkpoint.epoch()),
             checkpoint_height: Some(latest_checkpoint.sequence_number),

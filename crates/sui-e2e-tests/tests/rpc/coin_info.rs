@@ -18,7 +18,7 @@ async fn get_coin_info() {
 
     let coin_type_sdk: TypeTag = "0x2::sui::SUI".parse().unwrap();
     let request = GetCoinInfoRequest {
-        coin_type: Some(coin_type_sdk.clone().into()),
+        coin_type: Some("0x2::sui::SUI".to_owned()),
     };
 
     let GetCoinInfoResponse {
@@ -31,7 +31,7 @@ async fn get_coin_info() {
         .unwrap()
         .into_inner();
 
-    assert_eq!(coin_type, Some(coin_type_sdk.into()));
+    assert_eq!(coin_type, Some(coin_type_sdk.to_string()));
     assert_eq!(metadata.unwrap().symbol, Some("SUI".to_owned()));
     assert_eq!(
         treasury.unwrap().total_supply,

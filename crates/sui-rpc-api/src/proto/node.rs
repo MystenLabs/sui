@@ -3,7 +3,6 @@
 
 use super::TryFromProtoError;
 use prost_types::FieldMask;
-use tap::Pipe;
 
 pub mod v2 {
     include!("generated/sui.node.v2.rs");
@@ -50,9 +49,9 @@ use v2::*;
 impl From<sui_sdk_types::BalanceChange> for BalanceChange {
     fn from(value: sui_sdk_types::BalanceChange) -> Self {
         Self {
-            address: Some(value.address.into()),
-            coin_type: Some(value.coin_type.into()),
-            amount: Some(value.amount.into()),
+            address: Some(value.address.to_string()),
+            coin_type: Some(value.coin_type.to_string()),
+            amount: Some(value.amount.to_string()),
         }
     }
 }
@@ -65,17 +64,20 @@ impl TryFrom<&BalanceChange> for sui_sdk_types::BalanceChange {
             .address
             .as_ref()
             .ok_or_else(|| TryFromProtoError::missing("address"))?
-            .pipe(TryInto::try_into)?;
+            .parse()
+            .map_err(TryFromProtoError::from_error)?;
         let coin_type = value
             .coin_type
             .as_ref()
             .ok_or_else(|| TryFromProtoError::missing("coin_type"))?
-            .pipe(TryInto::try_into)?;
+            .parse()
+            .map_err(TryFromProtoError::from_error)?;
         let amount = value
             .amount
             .as_ref()
             .ok_or_else(|| TryFromProtoError::missing("amount"))?
-            .pipe(TryInto::try_into)?;
+            .parse()
+            .map_err(TryFromProtoError::from_error)?;
         Ok(Self {
             address,
             coin_type,
@@ -91,9 +93,9 @@ impl TryFrom<&BalanceChange> for sui_sdk_types::BalanceChange {
 impl GetObjectRequest {
     pub const READ_MASK_DEFAULT: &str = "object_id,version,digest";
 
-    pub fn new<T: Into<super::types::ObjectId>>(object_id: T) -> Self {
+    pub fn new<T: Into<sui_sdk_types::ObjectId>>(object_id: T) -> Self {
         Self {
-            object_id: Some(object_id.into()),
+            object_id: Some(object_id.into().to_string()),
             version: None,
             read_mask: None,
         }
@@ -144,10 +146,10 @@ impl GetCheckpointRequest {
         }
     }
 
-    pub fn by_digest<T: Into<super::types::Digest>>(digest: T) -> Self {
+    pub fn by_digest(digest: sui_sdk_types::CheckpointDigest) -> Self {
         Self {
             sequence_number: None,
-            digest: Some(digest.into()),
+            digest: Some(digest.to_string()),
             read_mask: None,
         }
     }
@@ -173,9 +175,9 @@ impl GetCheckpointRequest {
 impl GetTransactionRequest {
     pub const READ_MASK_DEFAULT: &str = "digest";
 
-    pub fn new<T: Into<super::types::Digest>>(digest: T) -> Self {
+    pub fn new(digest: sui_sdk_types::TransactionDigest) -> Self {
         Self {
-            digest: Some(digest.into()),
+            digest: Some(digest.to_string()),
             read_mask: None,
         }
     }
@@ -222,10 +224,10 @@ impl GetFullCheckpointRequest {
         }
     }
 
-    pub fn by_digest<T: Into<super::types::Digest>>(digest: T) -> Self {
+    pub fn by_digest(digest: sui_sdk_types::CheckpointDigest) -> Self {
         Self {
             sequence_number: None,
-            digest: Some(digest.into()),
+            digest: Some(digest.to_string()),
             read_mask: None,
         }
     }

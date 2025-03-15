@@ -7,10 +7,14 @@ use tap::Pipe;
 
 impl From<sui_sdk_types::Transaction> for super::Transaction {
     fn from(value: sui_sdk_types::Transaction) -> Self {
-        let version = super::transaction::Version::V1(value.into());
-
         Self {
-            version: Some(version),
+            bcs: None,
+            digest: Some(value.digest().to_string()),
+            version: Some(super::Version::V1.into()),
+            kind: Some(value.kind.into()),
+            sender: Some(value.sender.to_string()),
+            gas_payment: Some(value.gas_payment.into()),
+            expiration: Some(value.expiration.into()),
         }
     }
 }
@@ -19,36 +23,13 @@ impl TryFrom<&super::Transaction> for sui_sdk_types::Transaction {
     type Error = TryFromProtoError;
 
     fn try_from(value: &super::Transaction) -> Result<Self, Self::Error> {
-        match value
-            .version
-            .as_ref()
-            .ok_or_else(|| TryFromProtoError::missing("version"))?
-        {
-            super::transaction::Version::V1(v1) => Self::try_from(v1)?,
+        match value.version() {
+            super::Version::V1 => {}
+            _ => {
+                return Err(TryFromProtoError::from_error("unknown Transaction version"));
+            }
         }
-        .pipe(Ok)
-    }
-}
 
-//
-// TransactionV1
-//
-
-impl From<sui_sdk_types::Transaction> for super::transaction::TransactionV1 {
-    fn from(value: sui_sdk_types::Transaction) -> Self {
-        Self {
-            kind: Some(value.kind.into()),
-            sender: Some(value.sender.into()),
-            gas_payment: Some(value.gas_payment.into()),
-            expiration: Some(value.expiration.into()),
-        }
-    }
-}
-
-impl TryFrom<&super::transaction::TransactionV1> for sui_sdk_types::Transaction {
-    type Error = TryFromProtoError;
-
-    fn try_from(value: &super::transaction::TransactionV1) -> Result<Self, Self::Error> {
         let kind = value
             .kind
             .as_ref()
@@ -59,7 +40,8 @@ impl TryFrom<&super::transaction::TransactionV1> for sui_sdk_types::Transaction 
             .sender
             .as_ref()
             .ok_or_else(|| TryFromProtoError::missing("sender"))?
-            .try_into()?;
+            .parse()
+            .map_err(TryFromProtoError::from_error)?;
 
         let gas_payment = value
             .gas_payment
@@ -90,7 +72,7 @@ impl From<sui_sdk_types::GasPayment> for super::GasPayment {
     fn from(value: sui_sdk_types::GasPayment) -> Self {
         Self {
             objects: value.objects.into_iter().map(Into::into).collect(),
-            owner: Some(value.owner.into()),
+            owner: Some(value.owner.to_string()),
             price: Some(value.price),
             budget: Some(value.budget),
         }
@@ -111,7 +93,8 @@ impl TryFrom<&super::GasPayment> for sui_sdk_types::GasPayment {
             .owner
             .as_ref()
             .ok_or_else(|| TryFromProtoError::missing("owner"))?
-            .try_into()?;
+            .parse()
+            .map_err(TryFromProtoError::from_error)?;
         let price = value
             .price
             .ok_or_else(|| TryFromProtoError::missing("price"))?;
@@ -280,7 +263,7 @@ impl From<sui_sdk_types::ConsensusCommitPrologueV2> for super::ConsensusCommitPr
             epoch: Some(value.epoch),
             round: Some(value.round),
             commit_timestamp_ms: Some(value.commit_timestamp_ms),
-            consensus_commit_digest: Some(value.consensus_commit_digest.into()),
+            consensus_commit_digest: Some(value.consensus_commit_digest.to_string()),
             sub_dag_index: None,
             consensus_determined_version_assignments: None,
             additional_state_digest: None,
@@ -306,7 +289,8 @@ impl TryFrom<&super::ConsensusCommitPrologue> for sui_sdk_types::ConsensusCommit
             .consensus_commit_digest
             .as_ref()
             .ok_or_else(|| TryFromProtoError::missing("consensus_commit_digest"))?
-            .try_into()?;
+            .parse()
+            .map_err(TryFromProtoError::from_error)?;
 
         Ok(Self {
             epoch,
@@ -323,7 +307,7 @@ impl From<sui_sdk_types::ConsensusCommitPrologueV3> for super::ConsensusCommitPr
             epoch: Some(value.epoch),
             round: Some(value.round),
             commit_timestamp_ms: Some(value.commit_timestamp_ms),
-            consensus_commit_digest: Some(value.consensus_commit_digest.into()),
+            consensus_commit_digest: Some(value.consensus_commit_digest.to_string()),
             sub_dag_index: value.sub_dag_index,
             consensus_determined_version_assignments: Some(
                 value.consensus_determined_version_assignments.into(),
@@ -351,7 +335,8 @@ impl TryFrom<&super::ConsensusCommitPrologue> for sui_sdk_types::ConsensusCommit
             .consensus_commit_digest
             .as_ref()
             .ok_or_else(|| TryFromProtoError::missing("consensus_commit_digest"))?
-            .try_into()?;
+            .parse()
+            .map_err(TryFromProtoError::from_error)?;
 
         let consensus_determined_version_assignments = value
             .consensus_determined_version_assignments
@@ -386,12 +371,12 @@ impl From<sui_sdk_types::ConsensusCommitPrologueV4> for super::ConsensusCommitPr
             epoch: Some(epoch),
             round: Some(round),
             commit_timestamp_ms: Some(commit_timestamp_ms),
-            consensus_commit_digest: Some(consensus_commit_digest.into()),
+            consensus_commit_digest: Some(consensus_commit_digest.to_string()),
             sub_dag_index,
             consensus_determined_version_assignments: Some(
                 consensus_determined_version_assignments.into(),
             ),
-            additional_state_digest: Some(additional_state_digest.into()),
+            additional_state_digest: Some(additional_state_digest.to_string()),
         }
     }
 }
@@ -414,7 +399,8 @@ impl TryFrom<&super::ConsensusCommitPrologue> for sui_sdk_types::ConsensusCommit
             .consensus_commit_digest
             .as_ref()
             .ok_or_else(|| TryFromProtoError::missing("consensus_commit_digest"))?
-            .try_into()?;
+            .parse()
+            .map_err(TryFromProtoError::from_error)?;
 
         let consensus_determined_version_assignments = value
             .consensus_determined_version_assignments
@@ -426,7 +412,8 @@ impl TryFrom<&super::ConsensusCommitPrologue> for sui_sdk_types::ConsensusCommit
             .additional_state_digest
             .as_ref()
             .ok_or_else(|| TryFromProtoError::missing("additional_state_digest"))?
-            .try_into()?;
+            .parse()
+            .map_err(TryFromProtoError::from_error)?;
 
         Ok(Self {
             epoch,
@@ -499,7 +486,7 @@ impl TryFrom<&super::ConsensusDeterminedVersionAssignments>
 impl From<sui_sdk_types::CancelledTransaction> for super::CancelledTransaction {
     fn from(value: sui_sdk_types::CancelledTransaction) -> Self {
         Self {
-            digest: Some(value.digest.into()),
+            digest: Some(value.digest.to_string()),
             version_assignments: value
                 .version_assignments
                 .into_iter()
@@ -517,7 +504,8 @@ impl TryFrom<&super::CancelledTransaction> for sui_sdk_types::CancelledTransacti
             .digest
             .as_ref()
             .ok_or_else(|| TryFromProtoError::missing("digest"))?
-            .try_into()?;
+            .parse()
+            .map_err(TryFromProtoError::from_error)?;
 
         let version_assignments = value
             .version_assignments
@@ -539,7 +527,7 @@ impl TryFrom<&super::CancelledTransaction> for sui_sdk_types::CancelledTransacti
 impl From<sui_sdk_types::VersionAssignment> for super::VersionAssignment {
     fn from(value: sui_sdk_types::VersionAssignment) -> Self {
         Self {
-            object_id: Some(value.object_id.into()),
+            object_id: Some(value.object_id.to_string()),
             version: Some(value.version),
         }
     }
@@ -553,7 +541,8 @@ impl TryFrom<&super::VersionAssignment> for sui_sdk_types::VersionAssignment {
             .object_id
             .as_ref()
             .ok_or_else(|| TryFromProtoError::missing("object_id"))?
-            .try_into()?;
+            .parse()
+            .map_err(TryFromProtoError::from_error)?;
         let version = value
             .version
             .ok_or_else(|| TryFromProtoError::missing("version"))?;
@@ -861,7 +850,7 @@ impl From<sui_sdk_types::SystemPackage> for super::SystemPackage {
         Self {
             version: Some(value.version),
             modules: value.modules.into_iter().map(Into::into).collect(),
-            dependencies: value.dependencies.into_iter().map(Into::into).collect(),
+            dependencies: value.dependencies.iter().map(ToString::to_string).collect(),
         }
     }
 }
@@ -878,8 +867,9 @@ impl TryFrom<&super::SystemPackage> for sui_sdk_types::SystemPackage {
             dependencies: value
                 .dependencies
                 .iter()
-                .map(TryInto::try_into)
-                .collect::<Result<_, _>>()?,
+                .map(|s| s.parse())
+                .collect::<Result<_, _>>()
+                .map_err(TryFromProtoError::from_error)?,
         })
     }
 }
@@ -899,7 +889,7 @@ impl From<sui_sdk_types::EndOfEpochTransactionKind> for super::EndOfEpochTransac
             AuthenticatorStateExpire(expire) => Kind::AuthenticatorStateExpire(expire.into()),
             RandomnessStateCreate => Kind::RandomnessStateCreate(()),
             DenyListStateCreate => Kind::DenyListStateCreate(()),
-            BridgeStateCreate { chain_id } => Kind::BridgeStateCreate(chain_id.into()),
+            BridgeStateCreate { chain_id } => Kind::BridgeStateCreate(chain_id.to_string()),
             BridgeCommitteeInit {
                 bridge_object_version,
             } => Kind::BridgeCommitteeInit(bridge_object_version),
@@ -928,7 +918,7 @@ impl TryFrom<&super::EndOfEpochTransactionKind> for sui_sdk_types::EndOfEpochTra
             Kind::RandomnessStateCreate(()) => Self::RandomnessStateCreate,
             Kind::DenyListStateCreate(()) => Self::DenyListStateCreate,
             Kind::BridgeStateCreate(digest) => Self::BridgeStateCreate {
-                chain_id: digest.try_into()?,
+                chain_id: digest.parse().map_err(TryFromProtoError::from_error)?,
             },
             Kind::BridgeCommitteeInit(version) => Self::BridgeCommitteeInit {
                 bridge_object_version: *version,
@@ -1012,25 +1002,45 @@ impl TryFrom<&super::ProgrammableTransaction> for sui_sdk_types::ProgrammableTra
 
 impl From<sui_sdk_types::Input> for super::Input {
     fn from(value: sui_sdk_types::Input) -> Self {
-        use super::input::Kind;
+        use super::input::InputKind;
         use sui_sdk_types::Input::*;
 
+        let mut message = Self::default();
+
         let kind = match value {
-            Pure { value } => Kind::Pure(value.into()),
-            ImmutableOrOwned(reference) => Kind::ImmutableOrOwned(reference.into()),
+            Pure { value } => {
+                message.pure = Some(value.into());
+                InputKind::Pure
+            }
+
+            ImmutableOrOwned(reference) => {
+                message.object_id = Some(reference.object_id().to_string());
+                message.version = Some(reference.version());
+                message.digest = Some(reference.digest().to_string());
+                InputKind::ImmutableOrOwned
+            }
+
             Shared {
                 object_id,
                 initial_shared_version,
                 mutable,
-            } => Kind::Shared(super::SharedObjectInput {
-                object_id: Some(object_id.into()),
-                initial_shared_version: Some(initial_shared_version),
-                mutable: Some(mutable),
-            }),
-            Receiving(reference) => Kind::Receiving(reference.into()),
+            } => {
+                message.object_id = Some(object_id.to_string());
+                message.version = Some(initial_shared_version);
+                message.mutable = Some(mutable);
+                InputKind::Shared
+            }
+
+            Receiving(reference) => {
+                message.object_id = Some(reference.object_id().to_string());
+                message.version = Some(reference.version());
+                message.digest = Some(reference.digest().to_string());
+                InputKind::Receiving
+            }
         };
 
-        Self { kind: Some(kind) }
+        message.set_kind(kind);
+        message
     }
 }
 
@@ -1038,34 +1048,75 @@ impl TryFrom<&super::Input> for sui_sdk_types::Input {
     type Error = TryFromProtoError;
 
     fn try_from(value: &super::Input) -> Result<Self, Self::Error> {
-        use super::input::Kind;
+        use super::input::InputKind;
 
-        match value
-            .kind
-            .as_ref()
-            .ok_or_else(|| TryFromProtoError::missing("kind"))?
-        {
-            Kind::Pure(value) => Self::Pure {
-                value: value.to_vec(),
+        match value.kind() {
+            InputKind::Unknown => return Err(TryFromProtoError::from_error("unknown InputKind")),
+
+            InputKind::Pure => Self::Pure {
+                value: value
+                    .pure
+                    .as_ref()
+                    .ok_or_else(|| TryFromProtoError::missing("pure"))?
+                    .to_vec(),
             },
-            Kind::ImmutableOrOwned(reference) => Self::ImmutableOrOwned(reference.try_into()?),
-            Kind::Shared(shared) => {
-                let object_id = shared
+            InputKind::ImmutableOrOwned => {
+                let object_id = value
                     .object_id
                     .as_ref()
                     .ok_or_else(|| TryFromProtoError::missing("object_id"))?
-                    .try_into()?;
+                    .parse()
+                    .map_err(TryFromProtoError::from_error)?;
+                let version = value
+                    .version
+                    .ok_or_else(|| TryFromProtoError::missing("version"))?;
+                let digest = value
+                    .digest
+                    .as_ref()
+                    .ok_or_else(|| TryFromProtoError::missing("digest"))?
+                    .parse()
+                    .map_err(TryFromProtoError::from_error)?;
+                let reference = sui_sdk_types::ObjectReference::new(object_id, version, digest);
+                Self::ImmutableOrOwned(reference)
+            }
+            InputKind::Shared => {
+                let object_id = value
+                    .object_id
+                    .as_ref()
+                    .ok_or_else(|| TryFromProtoError::missing("object_id"))?
+                    .parse()
+                    .map_err(TryFromProtoError::from_error)?;
+                let initial_shared_version = value
+                    .version
+                    .ok_or_else(|| TryFromProtoError::missing("version"))?;
+                let mutable = value
+                    .mutable
+                    .ok_or_else(|| TryFromProtoError::missing("mutable"))?;
                 Self::Shared {
                     object_id,
-                    initial_shared_version: shared
-                        .initial_shared_version
-                        .ok_or_else(|| TryFromProtoError::missing("initial_shared_version"))?,
-                    mutable: shared
-                        .mutable
-                        .ok_or_else(|| TryFromProtoError::missing("mutable"))?,
+                    initial_shared_version,
+                    mutable,
                 }
             }
-            Kind::Receiving(reference) => Self::Receiving(reference.try_into()?),
+            InputKind::Receiving => {
+                let object_id = value
+                    .object_id
+                    .as_ref()
+                    .ok_or_else(|| TryFromProtoError::missing("object_id"))?
+                    .parse()
+                    .map_err(TryFromProtoError::from_error)?;
+                let version = value
+                    .version
+                    .ok_or_else(|| TryFromProtoError::missing("version"))?;
+                let digest = value
+                    .digest
+                    .as_ref()
+                    .ok_or_else(|| TryFromProtoError::missing("digest"))?
+                    .parse()
+                    .map_err(TryFromProtoError::from_error)?;
+                let reference = sui_sdk_types::ObjectReference::new(object_id, version, digest);
+                Self::Receiving(reference)
+            }
         }
         .pipe(Ok)
     }
@@ -1077,20 +1128,30 @@ impl TryFrom<&super::Input> for sui_sdk_types::Input {
 
 impl From<sui_sdk_types::Argument> for super::Argument {
     fn from(value: sui_sdk_types::Argument) -> Self {
-        use super::argument::Kind;
+        use super::argument::ArgumentKind;
         use sui_sdk_types::Argument::*;
 
+        let mut message = Self::default();
+
         let kind = match value {
-            Gas => Kind::Gas(()),
-            Input(input) => Kind::Input(input.into()),
-            Result(result) => Kind::Result(result.into()),
-            NestedResult(result, subresult) => Kind::NestedResult(super::NestedResult {
-                result: Some(result.into()),
-                subresult: Some(subresult.into()),
-            }),
+            Gas => ArgumentKind::Gas,
+            Input(input) => {
+                message.index = Some(input.into());
+                ArgumentKind::Input
+            }
+            Result(result) => {
+                message.index = Some(result.into());
+                ArgumentKind::Result
+            }
+            NestedResult(result, subresult) => {
+                message.index = Some(result.into());
+                message.subresult = Some(subresult.into());
+                ArgumentKind::Result
+            }
         };
 
-        Self { kind: Some(kind) }
+        message.set_kind(kind);
+        message
     }
 }
 
@@ -1098,24 +1159,32 @@ impl TryFrom<&super::Argument> for sui_sdk_types::Argument {
     type Error = TryFromProtoError;
 
     fn try_from(value: &super::Argument) -> Result<Self, Self::Error> {
-        use super::argument::Kind;
+        use super::argument::ArgumentKind;
 
-        match value
-            .kind
-            .as_ref()
-            .ok_or_else(|| TryFromProtoError::missing("kind"))?
-        {
-            Kind::Gas(()) => Self::Gas,
-            Kind::Input(input) => Self::Input((*input).try_into()?),
-            Kind::Result(result) => Self::Result((*result).try_into()?),
-            Kind::NestedResult(super::NestedResult { result, subresult }) => Self::NestedResult(
-                result
-                    .ok_or_else(|| TryFromProtoError::missing("result"))?
-                    .try_into()?,
-                subresult
-                    .ok_or_else(|| TryFromProtoError::missing("subresult"))?
-                    .try_into()?,
-            ),
+        match value.kind() {
+            ArgumentKind::Unknown => {
+                return Err(TryFromProtoError::from_error("unknown ArgumentKind"))
+            }
+            ArgumentKind::Gas => Self::Gas,
+            ArgumentKind::Input => {
+                let input = value
+                    .index
+                    .ok_or_else(|| TryFromProtoError::missing("index"))?
+                    .try_into()?;
+                Self::Input(input)
+            }
+            ArgumentKind::Result => {
+                let result = value
+                    .index
+                    .ok_or_else(|| TryFromProtoError::missing("index"))?
+                    .try_into()?;
+
+                if let Some(subresult) = value.subresult {
+                    Self::NestedResult(result, subresult.try_into()?)
+                } else {
+                    Self::Result(result)
+                }
+            }
         }
         .pipe(Ok)
     }
@@ -1180,10 +1249,14 @@ impl TryFrom<&super::Command> for sui_sdk_types::Command {
 impl From<sui_sdk_types::MoveCall> for super::MoveCall {
     fn from(value: sui_sdk_types::MoveCall) -> Self {
         Self {
-            package: Some(value.package.into()),
-            module: Some(value.module.into()),
-            function: Some(value.function.into()),
-            type_arguments: value.type_arguments.into_iter().map(Into::into).collect(),
+            package: Some(value.package.to_string()),
+            module: Some(value.module.to_string()),
+            function: Some(value.function.to_string()),
+            type_arguments: value
+                .type_arguments
+                .iter()
+                .map(ToString::to_string)
+                .collect(),
             arguments: value.arguments.into_iter().map(Into::into).collect(),
         }
     }
@@ -1197,24 +1270,27 @@ impl TryFrom<&super::MoveCall> for sui_sdk_types::MoveCall {
             .package
             .as_ref()
             .ok_or_else(|| TryFromProtoError::missing("package"))?
-            .try_into()?;
+            .parse()
+            .map_err(TryFromProtoError::from_error)?;
 
         let module = value
             .module
             .as_ref()
             .ok_or_else(|| TryFromProtoError::missing("module"))?
-            .try_into()?;
+            .parse()
+            .map_err(TryFromProtoError::from_error)?;
 
         let function = value
             .function
             .as_ref()
             .ok_or_else(|| TryFromProtoError::missing("function"))?
-            .try_into()?;
+            .parse()
+            .map_err(TryFromProtoError::from_error)?;
 
         let type_arguments = value
             .type_arguments
             .iter()
-            .map(TryInto::try_into)
+            .map(|t| t.parse().map_err(TryFromProtoError::from_error))
             .collect::<Result<_, _>>()?;
         let arguments = value
             .arguments
@@ -1342,7 +1418,7 @@ impl From<sui_sdk_types::Publish> for super::Publish {
     fn from(value: sui_sdk_types::Publish) -> Self {
         Self {
             modules: value.modules.into_iter().map(Into::into).collect(),
-            dependencies: value.dependencies.into_iter().map(Into::into).collect(),
+            dependencies: value.dependencies.iter().map(ToString::to_string).collect(),
         }
     }
 }
@@ -1356,8 +1432,9 @@ impl TryFrom<&super::Publish> for sui_sdk_types::Publish {
         let dependencies = value
             .dependencies
             .iter()
-            .map(TryInto::try_into)
-            .collect::<Result<_, _>>()?;
+            .map(|s| s.parse())
+            .collect::<Result<_, _>>()
+            .map_err(TryFromProtoError::from_error)?;
 
         Ok(Self {
             modules,
@@ -1373,7 +1450,7 @@ impl TryFrom<&super::Publish> for sui_sdk_types::Publish {
 impl From<sui_sdk_types::MakeMoveVector> for super::MakeMoveVector {
     fn from(value: sui_sdk_types::MakeMoveVector) -> Self {
         Self {
-            element_type: value.type_.map(Into::into),
+            element_type: value.type_.map(|t| t.to_string()),
             elements: value.elements.into_iter().map(Into::into).collect(),
         }
     }
@@ -1386,7 +1463,7 @@ impl TryFrom<&super::MakeMoveVector> for sui_sdk_types::MakeMoveVector {
         let element_type = value
             .element_type
             .as_ref()
-            .map(TryInto::try_into)
+            .map(|t| t.parse().map_err(TryFromProtoError::from_error))
             .transpose()?;
 
         let elements = value
@@ -1410,8 +1487,8 @@ impl From<sui_sdk_types::Upgrade> for super::Upgrade {
     fn from(value: sui_sdk_types::Upgrade) -> Self {
         Self {
             modules: value.modules.into_iter().map(Into::into).collect(),
-            dependencies: value.dependencies.into_iter().map(Into::into).collect(),
-            package: Some(value.package.into()),
+            dependencies: value.dependencies.iter().map(ToString::to_string).collect(),
+            package: Some(value.package.to_string()),
             ticket: Some(value.ticket.into()),
         }
     }
@@ -1426,14 +1503,16 @@ impl TryFrom<&super::Upgrade> for sui_sdk_types::Upgrade {
         let dependencies = value
             .dependencies
             .iter()
-            .map(TryInto::try_into)
-            .collect::<Result<_, _>>()?;
+            .map(|s| s.parse())
+            .collect::<Result<_, _>>()
+            .map_err(TryFromProtoError::from_error)?;
 
         let package = value
             .package
             .as_ref()
             .ok_or_else(|| TryFromProtoError::missing("package"))?
-            .try_into()?;
+            .parse()
+            .map_err(TryFromProtoError::from_error)?;
 
         let ticket = value
             .ticket

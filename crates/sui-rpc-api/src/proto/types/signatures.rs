@@ -142,34 +142,6 @@ impl TryFrom<&super::ValidatorCommittee> for sui_sdk_types::ValidatorCommittee {
 }
 
 //
-// Bn254FieldElement
-//
-
-impl From<sui_sdk_types::Bn254FieldElement> for super::Bn254FieldElement {
-    fn from(value: sui_sdk_types::Bn254FieldElement) -> Self {
-        Self {
-            element: Some(value.padded().to_vec().into()),
-        }
-    }
-}
-
-impl TryFrom<&super::Bn254FieldElement> for sui_sdk_types::Bn254FieldElement {
-    type Error = TryFromProtoError;
-
-    fn try_from(value: &super::Bn254FieldElement) -> Result<Self, Self::Error> {
-        Ok(Self::new(
-            value
-                .element
-                .as_ref()
-                .ok_or_else(|| TryFromProtoError::missing("element"))?
-                .as_ref()
-                .try_into()
-                .map_err(TryFromProtoError::from_error)?,
-        ))
-    }
-}
-
-//
 // CircomG1
 //
 
@@ -178,9 +150,9 @@ impl From<sui_sdk_types::CircomG1> for super::CircomG1 {
         let [e0, e1, e2] = value.0;
 
         Self {
-            e0: Some(e0.into()),
-            e1: Some(e1.into()),
-            e2: Some(e2.into()),
+            e0: Some(e0.to_string()),
+            e1: Some(e1.to_string()),
+            e2: Some(e2.to_string()),
         }
     }
 }
@@ -193,17 +165,20 @@ impl TryFrom<&super::CircomG1> for sui_sdk_types::CircomG1 {
             .e0
             .as_ref()
             .ok_or_else(|| TryFromProtoError::missing("e0"))?
-            .try_into()?;
+            .parse()
+            .map_err(TryFromProtoError::from_error)?;
         let e1 = value
             .e1
             .as_ref()
             .ok_or_else(|| TryFromProtoError::missing("e1"))?
-            .try_into()?;
+            .parse()
+            .map_err(TryFromProtoError::from_error)?;
         let e2 = value
             .e2
             .as_ref()
             .ok_or_else(|| TryFromProtoError::missing("e2"))?
-            .try_into()?;
+            .parse()
+            .map_err(TryFromProtoError::from_error)?;
 
         Ok(Self([e0, e1, e2]))
     }
@@ -218,12 +193,12 @@ impl From<sui_sdk_types::CircomG2> for super::CircomG2 {
         let [[e00, e01], [e10, e11], [e20, e21]] = value.0;
 
         Self {
-            e00: Some(e00.into()),
-            e01: Some(e01.into()),
-            e10: Some(e10.into()),
-            e11: Some(e11.into()),
-            e20: Some(e20.into()),
-            e21: Some(e21.into()),
+            e00: Some(e00.to_string()),
+            e01: Some(e01.to_string()),
+            e10: Some(e10.to_string()),
+            e11: Some(e11.to_string()),
+            e20: Some(e20.to_string()),
+            e21: Some(e21.to_string()),
         }
     }
 }
@@ -236,34 +211,40 @@ impl TryFrom<&super::CircomG2> for sui_sdk_types::CircomG2 {
             .e00
             .as_ref()
             .ok_or_else(|| TryFromProtoError::missing("e00"))?
-            .try_into()?;
+            .parse()
+            .map_err(TryFromProtoError::from_error)?;
         let e01 = value
             .e01
             .as_ref()
             .ok_or_else(|| TryFromProtoError::missing("e01"))?
-            .try_into()?;
+            .parse()
+            .map_err(TryFromProtoError::from_error)?;
 
         let e10 = value
             .e10
             .as_ref()
             .ok_or_else(|| TryFromProtoError::missing("e10"))?
-            .try_into()?;
+            .parse()
+            .map_err(TryFromProtoError::from_error)?;
         let e11 = value
             .e11
             .as_ref()
             .ok_or_else(|| TryFromProtoError::missing("e11"))?
-            .try_into()?;
+            .parse()
+            .map_err(TryFromProtoError::from_error)?;
 
         let e20 = value
             .e20
             .as_ref()
             .ok_or_else(|| TryFromProtoError::missing("e20"))?
-            .try_into()?;
+            .parse()
+            .map_err(TryFromProtoError::from_error)?;
         let e21 = value
             .e21
             .as_ref()
             .ok_or_else(|| TryFromProtoError::missing("e21"))?
-            .try_into()?;
+            .parse()
+            .map_err(TryFromProtoError::from_error)?;
 
         Ok(Self([[e00, e01], [e10, e11], [e20, e21]]))
     }
@@ -357,7 +338,7 @@ impl From<sui_sdk_types::ZkLoginInputs> for super::ZkLoginInputs {
             proof_points: Some(proof_points.into()),
             iss_base64_details: Some(iss_base64_details.into()),
             header_base64: Some(header_base64),
-            address_seed: Some(address_seed.into()),
+            address_seed: Some(address_seed.to_string()),
         }
     }
 }
@@ -385,7 +366,8 @@ impl TryFrom<&super::ZkLoginInputs> for sui_sdk_types::ZkLoginInputs {
             .address_seed
             .as_ref()
             .ok_or_else(|| TryFromProtoError::missing("address_seed"))?
-            .try_into()?;
+            .parse()
+            .map_err(TryFromProtoError::from_error)?;
 
         Ok(Self {
             proof_points,
@@ -444,7 +426,7 @@ impl From<&sui_sdk_types::ZkLoginPublicIdentifier> for super::ZkLoginPublicIdent
     fn from(value: &sui_sdk_types::ZkLoginPublicIdentifier) -> Self {
         Self {
             iss: Some(value.iss().to_owned()),
-            address_seed: Some(value.address_seed().to_owned().into()),
+            address_seed: Some(value.address_seed().to_string()),
         }
     }
 }
@@ -462,7 +444,8 @@ impl TryFrom<&super::ZkLoginPublicIdentifier> for sui_sdk_types::ZkLoginPublicId
             .address_seed
             .as_ref()
             .ok_or_else(|| TryFromProtoError::missing("address_seed"))?
-            .try_into()?;
+            .parse()
+            .map_err(TryFromProtoError::from_error)?;
 
         Self::new(iss, address_seed)
             .ok_or_else(|| TryFromProtoError::from_error("invalid iss"))?

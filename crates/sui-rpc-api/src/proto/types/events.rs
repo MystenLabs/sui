@@ -7,10 +7,10 @@ use super::TryFromProtoError;
 impl From<sui_sdk_types::Event> for super::Event {
     fn from(value: sui_sdk_types::Event) -> Self {
         Self {
-            package_id: Some(value.package_id.into()),
-            module: Some(value.module.into()),
-            sender: Some(value.sender.into()),
-            event_type: Some(value.type_.into()),
+            package_id: Some(value.package_id.to_string()),
+            module: Some(value.module.to_string()),
+            sender: Some(value.sender.to_string()),
+            event_type: Some(value.type_.to_string()),
             contents: Some(value.contents.into()),
         }
     }
@@ -24,25 +24,29 @@ impl TryFrom<&super::Event> for sui_sdk_types::Event {
             .package_id
             .as_ref()
             .ok_or_else(|| TryFromProtoError::missing("package_id"))?
-            .try_into()?;
+            .parse()
+            .map_err(TryFromProtoError::from_error)?;
 
         let module = value
             .module
             .as_ref()
             .ok_or_else(|| TryFromProtoError::missing("module"))?
-            .try_into()?;
+            .parse()
+            .map_err(TryFromProtoError::from_error)?;
 
         let sender = value
             .sender
             .as_ref()
             .ok_or_else(|| TryFromProtoError::missing("sender"))?
-            .try_into()?;
+            .parse()
+            .map_err(TryFromProtoError::from_error)?;
 
         let type_ = value
             .event_type
             .as_ref()
             .ok_or_else(|| TryFromProtoError::missing("event_type"))?
-            .try_into()?;
+            .parse()
+            .map_err(TryFromProtoError::from_error)?;
 
         let contents = value
             .contents
@@ -67,6 +71,8 @@ impl TryFrom<&super::Event> for sui_sdk_types::Event {
 impl From<sui_sdk_types::TransactionEvents> for super::TransactionEvents {
     fn from(value: sui_sdk_types::TransactionEvents) -> Self {
         Self {
+            bcs: None,
+            digest: Some(value.digest().to_string()),
             events: value.0.into_iter().map(Into::into).collect(),
         }
     }

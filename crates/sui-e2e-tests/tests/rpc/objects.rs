@@ -43,7 +43,7 @@ async fn get_object() {
         .into_inner();
 
     // These fields default to being read
-    assert_eq!(object_id, Some(id.into()));
+    assert_eq!(object_id, Some(id.to_string()));
     assert!(version.is_some());
     assert!(digest.is_some());
 
@@ -68,7 +68,7 @@ async fn get_object() {
         .unwrap()
         .into_inner();
 
-    assert_eq!(object_id, Some(id.into()));
+    assert_eq!(object_id, Some(id.to_string()));
     assert_eq!(version, Some(1));
 
     // These fields were not requested

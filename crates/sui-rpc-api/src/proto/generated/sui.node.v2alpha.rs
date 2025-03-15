@@ -3,15 +3,15 @@
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct GetCoinInfoRequest {
     /// The coin type to request information about
-    #[prost(message, optional, tag = "1")]
-    pub coin_type: ::core::option::Option<super::super::types::TypeTag>,
+    #[prost(string, optional, tag = "1")]
+    pub coin_type: ::core::option::Option<::prost::alloc::string::String>,
 }
 /// Response message for `NodeService.GetCoinInfo`.
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct GetCoinInfoResponse {
     /// Required. The coin type.
-    #[prost(message, optional, tag = "1")]
-    pub coin_type: ::core::option::Option<super::super::types::TypeTag>,
+    #[prost(string, optional, tag = "1")]
+    pub coin_type: ::core::option::Option<::prost::alloc::string::String>,
     /// This field will be populated with information about this coin
     /// type's `0x2::coin::CoinMetadata` if it exists and has not been wrapped.
     #[prost(message, optional, tag = "2")]
@@ -25,8 +25,8 @@ pub struct GetCoinInfoResponse {
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct CoinMetadata {
     /// ObjectId of the `0x2::coin::CoinMetadata` object.
-    #[prost(message, optional, tag = "1")]
-    pub id: ::core::option::Option<super::super::types::ObjectId>,
+    #[prost(string, optional, tag = "1")]
+    pub id: ::core::option::Option<::prost::alloc::string::String>,
     /// Number of decimal places to coin uses.
     #[prost(uint32, optional, tag = "2")]
     pub decimals: ::core::option::Option<u32>,
@@ -47,8 +47,8 @@ pub struct CoinMetadata {
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct CoinTreasury {
     /// ObjectId of the `0x2::coin::TreasuryCap` object.
-    #[prost(message, optional, tag = "1")]
-    pub id: ::core::option::Option<super::super::types::ObjectId>,
+    #[prost(string, optional, tag = "1")]
+    pub id: ::core::option::Option<::prost::alloc::string::String>,
     /// Total available supply for this coin type.
     #[prost(uint64, optional, tag = "2")]
     pub total_supply: ::core::option::Option<u64>,
@@ -57,21 +57,21 @@ pub struct CoinTreasury {
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct RegulatedCoinMetadata {
     /// ObjectId of the `0x2::coin::RegulatedCoinMetadata` object.
-    #[prost(message, optional, tag = "1")]
-    pub id: ::core::option::Option<super::super::types::ObjectId>,
+    #[prost(string, optional, tag = "1")]
+    pub id: ::core::option::Option<::prost::alloc::string::String>,
     /// The ID of the coin's `CoinMetadata` object.
-    #[prost(message, optional, tag = "2")]
-    pub coin_metadata_object: ::core::option::Option<super::super::types::ObjectId>,
+    #[prost(string, optional, tag = "2")]
+    pub coin_metadata_object: ::core::option::Option<::prost::alloc::string::String>,
     /// The ID of the coin's `DenyCap` object.
-    #[prost(message, optional, tag = "3")]
-    pub deny_cap_object: ::core::option::Option<super::super::types::ObjectId>,
+    #[prost(string, optional, tag = "3")]
+    pub deny_cap_object: ::core::option::Option<::prost::alloc::string::String>,
 }
 /// Request message for `NodeService.ListDynamicFields`
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct ListDynamicFieldsRequest {
     /// Required. The `UID` of the parent, which owns the collections of dynamic fields.
-    #[prost(message, optional, tag = "1")]
-    pub parent: ::core::option::Option<super::super::types::ObjectId>,
+    #[prost(string, optional, tag = "1")]
+    pub parent: ::core::option::Option<::prost::alloc::string::String>,
     /// The maximum number of dynamic fields to return. The service may return fewer than this value.
     /// If unspecified, at most `50` entries will be returned.
     /// The maximum value is `1000`; values above `1000` will be coerced to `1000`.
@@ -99,14 +99,14 @@ pub struct ListDynamicFieldsResponse {
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct DynamicField {
     /// Required. ObjectId of this dynamic field's parent.
-    #[prost(message, optional, tag = "1")]
-    pub parent: ::core::option::Option<super::super::types::ObjectId>,
+    #[prost(string, optional, tag = "1")]
+    pub parent: ::core::option::Option<::prost::alloc::string::String>,
     /// Required. ObjectId of this dynamic field.
-    #[prost(message, optional, tag = "2")]
-    pub field_id: ::core::option::Option<super::super::types::ObjectId>,
+    #[prost(string, optional, tag = "2")]
+    pub field_id: ::core::option::Option<::prost::alloc::string::String>,
     /// Required. The type of the dynamic field "name"
-    #[prost(message, optional, tag = "3")]
-    pub name_type: ::core::option::Option<super::super::types::TypeTag>,
+    #[prost(string, optional, tag = "3")]
+    pub name_type: ::core::option::Option<::prost::alloc::string::String>,
     /// Required. The serialized move value of "name"
     #[prost(bytes = "bytes", optional, tag = "4")]
     pub name_value: ::core::option::Option<::prost::bytes::Bytes>,
@@ -115,8 +115,8 @@ pub struct DynamicField {
     ///
     /// The presence or absence of this field can be used to determine if a child
     /// is a dynamic field or a dynamic child object
-    #[prost(message, optional, tag = "5")]
-    pub dynamic_object_id: ::core::option::Option<super::super::types::ObjectId>,
+    #[prost(string, optional, tag = "5")]
+    pub dynamic_object_id: ::core::option::Option<::prost::alloc::string::String>,
 }
 #[derive(Clone, Copy, PartialEq, ::prost::Message)]
 pub struct GetProtocolConfigRequest {
@@ -186,8 +186,8 @@ pub struct ResolveTransactionResponse {
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct ListAccountObjectsRequest {
     /// Required. The address of the account that owns the objects.
-    #[prost(message, optional, tag = "1")]
-    pub owner: ::core::option::Option<super::super::types::Address>,
+    #[prost(string, optional, tag = "1")]
+    pub owner: ::core::option::Option<::prost::alloc::string::String>,
     /// The maximum number of entries return. The service may return fewer than this value.
     /// If unspecified, at most `50` entries will be returned.
     /// The maximum value is `1000`; values above `1000` will be coerced to `1000`.
@@ -214,14 +214,14 @@ pub struct ListAccountObjectsResponse {
 }
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct AccountObject {
-    #[prost(message, optional, tag = "1")]
-    pub owner: ::core::option::Option<super::super::types::Address>,
-    #[prost(message, optional, tag = "2")]
-    pub object_id: ::core::option::Option<super::super::types::ObjectId>,
+    #[prost(string, optional, tag = "1")]
+    pub owner: ::core::option::Option<::prost::alloc::string::String>,
+    #[prost(string, optional, tag = "2")]
+    pub object_id: ::core::option::Option<::prost::alloc::string::String>,
     #[prost(uint64, optional, tag = "3")]
     pub version: ::core::option::Option<u64>,
-    #[prost(message, optional, tag = "4")]
-    pub object_type: ::core::option::Option<super::super::types::StructTag>,
+    #[prost(string, optional, tag = "4")]
+    pub object_type: ::core::option::Option<::prost::alloc::string::String>,
 }
 /// Generated client implementations.
 pub mod node_service_client {
