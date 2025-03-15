@@ -11,8 +11,8 @@ use std::time::SystemTime;
 use std::{net::SocketAddr, sync::Arc};
 use sui_core::traffic_controller::{parse_ip, policies::TrafficTally, TrafficController};
 use sui_json_rpc_api::TRANSACTION_EXECUTION_CLIENT_ERROR_CODE;
-use sui_types::traffic_control::ClientIdSource;
 use sui_types::traffic_control::Weight;
+use sui_types::traffic_control::{ClientIdSource, PolicyConfig};
 use tracing::error;
 
 const TOO_MANY_REQUESTS_MSG: &str = "Too many requests";
@@ -21,13 +21,19 @@ const TOO_MANY_REQUESTS_MSG: &str = "Too many requests";
 pub struct TrafficControllerService<S> {
     inner: S,
     traffic_controller: Option<Arc<TrafficController>>,
+    policy_config: Option<PolicyConfig>,
 }
 
 impl<S> TrafficControllerService<S> {
-    pub fn new(service: S, traffic_controller: Option<Arc<TrafficController>>) -> Self {
+    pub fn new(
+        service: S,
+        traffic_controller: Option<Arc<TrafficController>>,
+        policy_config: Option<PolicyConfig>,
+    ) -> Self {
         Self {
             inner: service,
             traffic_controller,
+            policy_config,
         }
     }
 }
@@ -42,15 +48,31 @@ where
     fn call(&self, req: jsonrpsee::types::Request<'a>) -> Self::Future {
         let service = self.inner.clone();
         let traffic_controller = self.traffic_controller.clone();
-
+        let policy_config = self.policy_config.clone();
         async move {
             if let Some(traffic_controller) = traffic_controller {
                 let client = req.extensions().get::<IpAddr>().cloned();
                 if let Err(response) = handle_traffic_req(&traffic_controller, &client).await {
                     response
                 } else {
+                    // Scale the weight based on the request size
+                    let spam_weight = if policy_config.unwrap().weight_spam_by_request_size {
+                        println!("TESTING -- weighting spam by request size");
+                        let params_count = req.params.as_ref().and_then(|p| {
+                            let raw_value = p.get();
+                            let params: Option<Vec<serde_json::Value>> =
+                                serde_json::from_str(raw_value).ok();
+                            params.as_ref().map(|p| p.len())
+                        });
+                        params_count.map_or(Weight::new(0.1).unwrap(), |size| {
+                            Weight::new((size as f32 * 0.1).min(1.0)).unwrap()
+                        })
+                    } else {
+                        println!("TESTING -- not weighting spam by request size");
+                        Weight::one()
+                    };
                     let response = service.call(req).await;
-                    handle_traffic_resp(&traffic_controller, client, &response);
+                    handle_traffic_resp(&traffic_controller, client, &response, spam_weight);
                     response
                 }
             } else {
@@ -79,7 +101,9 @@ fn handle_traffic_resp(
     traffic_controller: &TrafficController,
     client: Option<IpAddr>,
     response: &MethodResponse,
+    spam_weight: Weight,
 ) {
+    println!("TESTING -- spam_weight: {:?}", spam_weight);
     let error = response.as_error_code().map(ErrorCode::from);
     traffic_controller.tally(TrafficTally {
         direct: client,
@@ -89,14 +113,7 @@ fn handle_traffic_resp(
             let error_weight = normalize(e);
             (error_weight, error_type)
         }),
-        // For now, count everything as spam with equal weight
-        // on the rpc node side, including gas-charging endpoints
-        // such as `sui_executeTransactionBlock`, as this can enable
-        // node operators who wish to rate limit their transcation
-        // traffic and incentivize high volume clients to choose a
-        // suitable rpc provider (or run their own). Later we may want
-        // to provide a weight distribution based on the method being called.
-        spam_weight: Weight::one(),
+        spam_weight,
         timestamp: SystemTime::now(),
     });
 }
