@@ -2003,6 +2003,16 @@ pub(crate) async fn compile_package(
         eprintln!("{}", "Skipping dependency verification".bold().yellow());
     }
 
+    if compiled_package
+        .get_package_bytes(with_unpublished_dependencies)
+        .is_empty()
+    {
+        return Err(SuiError::ModulePublishFailure {
+            error: "No modules found in the package".to_string(),
+        }
+        .into());
+    }
+
     compiled_package
         .package
         .compiled_package_info
