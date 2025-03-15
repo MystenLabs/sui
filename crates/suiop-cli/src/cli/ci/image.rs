@@ -90,7 +90,7 @@ pub struct ImageBuildArgs {
     /// The name of the git repository within the mystenlabs org
     #[arg(short, long)]
     repo_name: String,
-    /// The path to the dockerfile within the source code repository given by `--repo_name`
+    /// The path to the dockerfile within the source code repository given by `--repo_name` and `--context_sub_path` (if present)
     #[arg(short, long)]
     dockerfile: String,
     /// Optional repo region, default to "us-central1"
@@ -132,6 +132,11 @@ pub struct ImageBuildArgs {
     /// Optional arg to speciy the org to build the image for, default to "mystenlabs"
     #[arg(short = 'o', long)]
     org: Option<String>,
+    /// Optional arg to specify the context-sub-path, default to ""
+    #[arg(short = 'c', long)]
+    context_sub_path: Option<String>,
+    #[arg(long)]
+    disable_recurse_submodules: bool,
 }
 
 #[derive(Parser, Debug)]
@@ -188,6 +193,8 @@ struct RequestBuildRequest {
     force: bool,
     image_target: Option<String>,
     org: String,
+    subpath: Option<String>,
+    disable_recurse_submodules: bool,
 }
 
 #[derive(serde::Serialize)]
@@ -351,6 +358,8 @@ pub async fn send_image_request(token: &str, action: &ImageAction) -> Result<()>
                 force: _,
                 image_target,
                 org: _,
+                context_sub_path,
+                disable_recurse_submodules:_,
             }) => {
                 let ref_type = ref_type.clone().unwrap_or(RefType::Branch);
                 let ref_val = ref_val.clone().unwrap_or("main".to_string());
@@ -364,13 +373,17 @@ pub async fn send_image_request(token: &str, action: &ImageAction) -> Result<()>
                 if !image_target.is_none() {
                     image_info += &format!("@{}", image_target.as_ref().unwrap());
                 }
-                println!(
+                let mut info_str = format!(
                     "Requested built image for repo: {}, ref: {}, dockerfile: {}, image: {}",
                     repo_name.green(),
                     ref_name.green(),
                     dockerfile.green(),
                     image_info.green()
                 );
+                if let Some(context_sub_path) = context_sub_path {
+                    info_str += &format!(" (context-sub-path: {})", context_sub_path.green());
+                }
+                println!("{}", info_str);
                 let json_resp = resp.json::<JobStatus>().await?;
                 println!("Build Job Status: {}", json_resp.status.green());
                 println!("Build Job Name: {}", json_resp.name.green());
@@ -537,6 +550,8 @@ fn generate_image_request(token: &str, action: &ImageAction) -> reqwest::Request
             force,
             image_target,
             org,
+            context_sub_path,
+            disable_recurse_submodules,
         }) => {
             let full_url = format!("{}{}", api_server, ENDPOINT);
             debug!("full_url: {}", full_url);
@@ -586,6 +601,8 @@ fn generate_image_request(token: &str, action: &ImageAction) -> reqwest::Request
                 force: *force,
                 image_target: image_target.clone(),
                 org: org.clone().unwrap_or("mystenlabs".to_string()),
+                subpath: context_sub_path.clone(),
+                disable_recurse_submodules: disable_recurse_submodules.clone(),
             };
             debug!("req body: {:?}", body);
             req.json(&body).headers(generate_headers_with_auth(token))
