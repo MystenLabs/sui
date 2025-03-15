@@ -25,7 +25,7 @@ use sui_types::{
     },
     SUI_SYSTEM_PACKAGE_ID,
 };
-use tap::tap::TapOptional;
+use tap::TapOptional;
 
 use crate::fire_drill::get_gas_obj_ref;
 use clap::*;

@@ -32,7 +32,7 @@ use sui_types::{
     base_types::SuiAddress,
     transaction::{CallArg, TransactionData},
 };
-use tap::tap::TapFallible;
+use tap::TapFallible;
 
 use sui_sdk::wallet_context::WalletContext;
 use sui_types::base_types::{random_object_ref, ObjectID, ObjectRef};
