@@ -14297,13 +14297,17 @@ dependencies = [
  "serde",
  "serde_json",
  "serde_yaml 0.8.26",
+ "sui-archival",
  "sui-config",
  "sui-json-rpc-types",
  "sui-package-resolver",
  "sui-rpc-api",
  "sui-sdk",
+ "sui-storage",
  "sui-types",
+ "tempfile",
  "tokio",
+ "tracing",
  "url",
 ]
 

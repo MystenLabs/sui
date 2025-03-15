@@ -2,7 +2,7 @@
 name = "sui-archival"
 version.workspace = true
 edition = "2021"
-publish = false
+publish = true
 license = "Apache-2.0"
 authors = ["Mysten Labs <build@mystenlabs.com>"]
 
