@@ -1,16 +1,17 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::base_types::{ObjectID, SequenceNumber, TransactionDigest};
-use crate::crypto::{AuthoritySignInfo, AuthorityStrongQuorumSignInfo};
-use crate::effects::{
-    SignedTransactionEffects, TransactionEffects, TransactionEvents,
-    VerifiedSignedTransactionEffects,
-};
-use crate::object::Object;
-use crate::transaction::{CertifiedTransaction, SenderSignedData, SignedTransaction, Transaction};
+use bytes::Bytes;
 use move_core_types::annotated_value::MoveStructLayout;
 use serde::{Deserialize, Serialize};
+
+use crate::{
+    base_types::{ObjectID, SequenceNumber, TransactionDigest},
+    crypto::{AuthoritySignInfo, AuthorityStrongQuorumSignInfo},
+    effects::{SignedTransactionEffects, TransactionEvents, VerifiedSignedTransactionEffects},
+    object::Object,
+    transaction::{CertifiedTransaction, SenderSignedData, SignedTransaction},
+};
 
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
 pub enum ObjectInfoRequestKind {
@@ -220,41 +221,51 @@ pub struct HandleCertificateRequestV3 {
     pub include_auxiliary_data: bool,
 }
 
-#[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct HandleTransactionRequestV2 {
-    pub transaction: Transaction,
-
+#[derive(Clone, prost::Message)]
+pub struct SubmitTransactionRequest {
+    #[prost(bytes = "bytes", tag = "1")]
+    pub transaction: Bytes,
+    #[prost(bool, tag = "2")]
     pub include_events: bool,
+    #[prost(bool, tag = "3")]
     pub include_input_objects: bool,
+    #[prost(bool, tag = "4")]
     pub include_output_objects: bool,
+    #[prost(bool, tag = "5")]
     pub include_auxiliary_data: bool,
 }
 
-/// Response type for version 2 of the handle transaction validator API.
+/// Serialized response type for submit transaction validator API.
 ///
-/// The corresponding version 2 request type allows for a client to request events as well as
+/// The corresponding request type allows for a client to request events as well as
 /// input/output objects from a transaction's execution. Given Validators operate with very
 /// aggressive object pruning, the return of input/output objects is only done immediately after
 /// the transaction has been executed locally on the validator and will not be returned for
 /// requests to previously executed transactions.
-#[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct HandleTransactionResponseV2 {
-    pub effects: TransactionEffects,
-    pub events: Option<TransactionEvents>,
+#[derive(Clone, prost::Message)]
+pub struct SubmitTransactionResponse {
+    // Serialized TransactionEffects
+    #[prost(bytes = "bytes", tag = "1")]
+    pub effects: Bytes,
+    // Serialized TransactionEvents
+    #[prost(bytes = "bytes", optional, tag = "2")]
+    pub events: Option<Bytes>,
 
     /// If requested, will included all initial versions of objects modified in this transaction.
     /// This includes owned objects included as input into the transaction as well as the assigned
     /// versions of shared objects.
-    //
-    // TODO: In the future we may want to include shared objects or child objects which were read
-    // but not modified during execution.
-    pub input_objects: Option<Vec<Object>>,
+    /// Vec of serialized Object
+    #[prost(bytes = "vec", repeated, tag = "3")]
+    pub input_objects: Vec<Vec<u8>>,
 
     /// If requested, will included all changed objects, including mutated, created and unwrapped
     /// objects. In other words, all objects that still exist in the object state after this
     /// transaction.
-    pub output_objects: Option<Vec<Object>>,
-    pub auxiliary_data: Option<Vec<u8>>,
+    /// Vec of serialized Object
+    #[prost(bytes = "vec", repeated, tag = "4")]
+    pub output_objects: Vec<Vec<u8>>,
+    #[prost(bytes = "bytes", optional, tag = "5")]
+    pub auxiliary_data: Option<Bytes>,
 }
 
 impl From<HandleCertificateResponseV3> for HandleCertificateResponseV2 {
