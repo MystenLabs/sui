@@ -135,7 +135,7 @@ jobs:
           swap-size-gb: 256
       - name: cargo test (sui-graphql staging)
         run: |
-          cargo nextest run --profile ci --features staging -E 'package(sui-graphql-rpc)' -E 'package(sui-graphql-e2e-tests)'
+          cargo nextest run --profile ci --features staging -E 'package(sui-graphql-rpc)' -E 'package(sui-graphql-e2e-tests)' -E 'package(sui-indexer-alt-graphql)'
       - name: benchmark (smoke)
         run: |
           cargo run --package sui-benchmark --bin stress -- --log-path /tmp/stress.log --num-client-threads 10 --num-server-threads 24 --num-transfer-accounts 2 bench --target-qps 100 --num-workers 10  --transfer-object 50 --shared-counter 50 --run-duration 10s --stress-stat-collection

@@ -14092,6 +14092,7 @@ dependencies = [
  "async-trait",
  "axum 0.7.5",
  "clap",
+ "insta",
  "prometheus",
  "telemetry-subscribers",
  "tokio",
