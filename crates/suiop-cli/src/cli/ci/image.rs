@@ -602,7 +602,7 @@ fn generate_image_request(token: &str, action: &ImageAction) -> reqwest::Request
                 image_target: image_target.clone(),
                 org: org.clone().unwrap_or("mystenlabs".to_string()),
                 subpath: context_sub_path.clone(),
-                disable_recurse_submodules: disable_recurse_submodules.clone(),
+                disable_recurse_submodules: *disable_recurse_submodules,
             };
             debug!("req body: {:?}", body);
             req.json(&body).headers(generate_headers_with_auth(token))
