@@ -359,7 +359,7 @@ pub async fn send_image_request(token: &str, action: &ImageAction) -> Result<()>
                 image_target,
                 org: _,
                 context_sub_path,
-                disable_recurse_submodules:_,
+                disable_recurse_submodules: _,
             }) => {
                 let ref_type = ref_type.clone().unwrap_or(RefType::Branch);
                 let ref_val = ref_val.clone().unwrap_or("main".to_string());
