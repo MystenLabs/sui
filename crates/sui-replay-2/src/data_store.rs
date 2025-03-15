@@ -98,7 +98,7 @@ impl DataStore {
         &self,
         pkg_id: ObjectID,
     ) -> Result<Vec<(Object, u64)>, ReplayError> {
-        debug!("get_packages: {}", pkg_id);
+        debug!("get_system_package: {}", pkg_id);
         let pkg_address = Address::new(pkg_id.into_bytes());
         let mut packages = vec![];
         let mut pagination = PaginationFilter {
