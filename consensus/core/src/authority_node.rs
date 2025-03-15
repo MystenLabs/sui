@@ -30,6 +30,7 @@ use crate::{
         NetworkManager,
     },
     round_prober::{RoundProber, RoundProberHandle},
+    round_tracker::PeerRoundTracker,
     storage::rocksdb_store::RocksDBStore,
     subscriber::Subscriber,
     synchronizer::{Synchronizer, SynchronizerHandle},
@@ -264,6 +265,8 @@ where
             leader_schedule.clone(),
         );
 
+        let round_tracker = Arc::new(RwLock::new(PeerRoundTracker::new(context.clone())));
+
         let core = Core::new(
             context.clone(),
             leader_schedule,
@@ -278,6 +281,7 @@ where
             protocol_keypair,
             dag_state.clone(),
             sync_last_known_own_block,
+            round_tracker.clone(),
         );
 
         let (core_dispatcher, core_thread_handle) =
@@ -316,6 +320,7 @@ where
                     core_dispatcher.clone(),
                     dag_state.clone(),
                     network_client.clone(),
+                    round_tracker.clone(),
                 )
                 .start(),
             )
@@ -332,6 +337,7 @@ where
             signals_receivers.block_broadcast_receiver(),
             dag_state.clone(),
             store,
+            round_tracker.clone(),
         ));
 
         let subscriber = if N::Client::SUPPORT_STREAMING {
@@ -428,8 +434,11 @@ where
 mod tests {
     #![allow(non_snake_case)]
 
-    use std::collections::BTreeMap;
-    use std::{collections::BTreeSet, sync::Arc, time::Duration};
+    use std::{
+        collections::{BTreeMap, BTreeSet},
+        sync::Arc,
+        time::Duration,
+    };
 
     use consensus_config::{local_committee_and_keys, Parameters};
     use mysten_metrics::monitored_mpsc::UnboundedReceiver;
@@ -441,8 +450,11 @@ mod tests {
     use typed_store::DBMetrics;
 
     use super::*;
-    use crate::block::GENESIS_ROUND;
-    use crate::{block::BlockAPI as _, transaction::NoopTransactionVerifier, CommittedSubDag};
+    use crate::{
+        block::{BlockAPI as _, GENESIS_ROUND},
+        transaction::NoopTransactionVerifier,
+        CommittedSubDag,
+    };
 
     #[rstest]
     #[tokio::test]
@@ -494,6 +506,7 @@ mod tests {
         #[values(ConsensusNetwork::Anemo, ConsensusNetwork::Tonic)] network_type: ConsensusNetwork,
         #[values(0, 5, 10)] gc_depth: u32,
     ) {
+        telemetry_subscribers::init_for_testing();
         let db_registry = Registry::new();
         DBMetrics::init(&db_registry);
 
@@ -599,6 +612,7 @@ mod tests {
         #[values(ConsensusNetwork::Anemo, ConsensusNetwork::Tonic)] network_type: ConsensusNetwork,
         #[values(1, 2, 3)] num_authorities: usize,
     ) {
+        telemetry_subscribers::init_for_testing();
         let db_registry = Registry::new();
         DBMetrics::init(&db_registry);
 
