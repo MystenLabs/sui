@@ -14,6 +14,6 @@ COPY external-crates external-crates
 
 RUN cargo build --profile ${PROFILE} --bin sui-analytics-indexer
 
-FROM gcr.io/distroless/cc-debian12 as deploy
-
+FROM debian:12-slim as deploy
+RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates
 COPY --from=build --chmod=755 /work/target/release/sui-analytics-indexer /opt/sui/bin/sui-analytics-indexer
