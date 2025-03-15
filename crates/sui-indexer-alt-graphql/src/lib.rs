@@ -168,3 +168,31 @@ where
 async fn graphiql(path: MatchedPath) -> Html<String> {
     Html(GraphiQLSource::build().endpoint(path.as_str()).finish())
 }
+
+#[cfg(test)]
+mod tests {
+    use std::fs;
+    use std::path::PathBuf;
+
+    use insta::assert_snapshot;
+
+    use super::*;
+
+    /// Check that the exported schema is up-to-date.
+    #[test]
+    fn test_schema_sdl_export() {
+        let sdl = schema().finish().sdl();
+
+        let file = if cfg!(feature = "staging") {
+            "staging.graphql"
+        } else {
+            "schema.graphql"
+        };
+
+        // Update the current schema file
+        let path = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join(file);
+        fs::write(path, &sdl).unwrap();
+
+        assert_snapshot!(file, sdl);
+    }
+}

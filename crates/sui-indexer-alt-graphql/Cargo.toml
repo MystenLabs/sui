@@ -26,3 +26,9 @@ telemetry-subscribers.workspace = true
 tokio.workspace = true
 tokio-util.workspace = true
 tracing.workspace = true
+
+[dev-dependencies]
+insta.workspace = true
+
+[features]
+staging = []
