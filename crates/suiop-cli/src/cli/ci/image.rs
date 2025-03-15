@@ -352,8 +352,8 @@ pub async fn send_image_request(token: &str, action: &ImageAction) -> Result<()>
                 if !image_tag.is_empty() {
                     image_info += &format!(":{}", image_tag);
                 }
-                if !args.image_target.is_none() {
-                    image_info += &format!("@{}", args.image_target.as_ref().unwrap());
+                if let Some(image_target) = &args.image_target {
+                    image_info += &format!("@{}", image_target);
                 }
                 let mut info_str = format!(
                     "Requested built image for repo: {}, ref: {}, dockerfile: {}, image: {}",

@@ -38,7 +38,7 @@ pub(crate) enum Resource {
     #[clap(aliases = ["im"])]
     Image(ImageQueryArgs),
     #[clap(aliases = ["b", "build"])]
-    BuildImage(Box<ImageBuildArgs>),
+    BuildImage(ImageBuildArgs),
     #[clap(aliases = ["p"])]
     Pulumi(PulumiArgs),
     #[clap(aliases = ["s", "svc"])]
@@ -80,13 +80,13 @@ async fn main() -> Result<()> {
         }
         Resource::Image(args) => {
             image_cmd(&ImageArgs {
-                action: ImageAction::Query(args),
+                action: ImageAction::Query(Box::new(args)),
             })
             .await?;
         }
         Resource::BuildImage(args) => {
             image_cmd(&ImageArgs {
-                action: ImageAction::Build(*args),
+                action: ImageAction::Build(Box::new(args)),
             })
             .await?;
         }
