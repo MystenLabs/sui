@@ -3,6 +3,7 @@
 
 pub mod google;
 pub mod node;
+pub mod rpc;
 pub mod types;
 
 #[cfg(test)]
