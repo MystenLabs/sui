@@ -230,7 +230,18 @@ jobs:
           swap-size-gb: 256
       - name: cargo simtest
         run: |
-          MSIM_TEST_SEED="$(printf "%lu\n" 0x$(git rev-parse HEAD | cut -c1-16))" scripts/simtest/cargo-simtest simtest --no-fail-fast
+          MSIM_TEST_SEED="$(printf "%lu\n" 0x$(git rev-parse HEAD | cut -c1-16))" \
+          scripts/simtest/cargo-simtest simtest --no-fail-fast
+      - name: mainnet smoke test
+        run: |
+          SUI_PROTOCOL_CONFIG_CHAIN_OVERRIDE=mainnet \
+          MSIM_TEST_SEED="$(printf "%lu\n" 0x$(git rev-parse HEAD | cut -c1-16))" \
+          scripts/simtest/cargo-simtest simtest --test simtest test_simulated_load_with_reconfig
+      - name: testnet smoke test
+        run: |
+          SUI_PROTOCOL_CONFIG_CHAIN_OVERRIDE=testnet \
+          MSIM_TEST_SEED="$(printf "%lu\n" 0x$(git rev-parse HEAD | cut -c1-16))" \
+          scripts/simtest/cargo-simtest simtest --test simtest test_simulated_load_with_reconfig
       - name: check new tests for flakiness
         run: |
           scripts/simtest/stress-new-tests.sh
