@@ -14096,11 +14096,13 @@ dependencies = [
  "const-str",
  "insta",
  "prometheus",
+ "serde_json",
  "sui-indexer-alt-metrics",
  "telemetry-subscribers",
  "tokio",
  "tokio-util 0.7.13 (registry+https://github.com/rust-lang/crates.io-index)",
  "tracing",
+ "uuid 1.2.2",
 ]
 
 [[package]]

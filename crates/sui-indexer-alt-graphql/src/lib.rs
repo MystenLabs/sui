@@ -10,7 +10,7 @@ use async_graphql::{
 };
 use async_graphql_axum::{GraphQLRequest, GraphQLResponse};
 use axum::{
-    extract::MatchedPath,
+    extract::{ConnectInfo, MatchedPath},
     response::Html,
     routing::{get, post},
     Extension, Router,
@@ -21,7 +21,7 @@ use tokio_util::sync::CancellationToken;
 use tracing::{error, info};
 
 use crate::api::query::Query;
-use crate::extensions::metrics::Metrics;
+use crate::extensions::logging::{Logging, Session};
 use crate::metrics::RpcMetrics;
 use crate::middleware::version::Version;
 
@@ -112,7 +112,7 @@ where
             cancel,
         } = self;
 
-        let schema = schema.extension(Metrics(metrics.clone())).finish();
+        let schema = schema.extension(Logging(metrics.clone())).finish();
 
         let mut router: Router = Router::new()
             .route("/graphql", post(graphql::<Q, M, S>))
@@ -196,6 +196,7 @@ pub async fn start_rpc(
 
 /// Handler for RPC requests (POST requests making GraphQL queries).
 async fn graphql<Q, M, S>(
+    ConnectInfo(addr): ConnectInfo<SocketAddr>,
     Extension(schema): Extension<Schema<Q, M, S>>,
     request: GraphQLRequest,
 ) -> GraphQLResponse
@@ -204,7 +205,8 @@ where
     M: ObjectType + 'static,
     S: SubscriptionType + 'static,
 {
-    schema.execute(request.into_inner()).await.into()
+    let request = request.into_inner().data(Session::new(addr));
+    schema.execute(request).await.into()
 }
 
 /// Handler for GET requests for the online IDE. GraphQL requests are forwarded to the POST handler
