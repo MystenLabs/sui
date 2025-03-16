@@ -10,6 +10,19 @@ use tokio::signal;
 use tokio_util::sync::CancellationToken;
 use tracing::info;
 
+// Define the `GIT_REVISION` const
+bin_version::git_revision!();
+
+static VERSION: &str = const_str::concat!(
+    env!("CARGO_PKG_VERSION_MAJOR"),
+    ".",
+    env!("CARGO_PKG_VERSION_MINOR"),
+    ".",
+    env!("CARGO_PKG_VERSION_PATCH"),
+    "-",
+    GIT_REVISION
+);
+
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
     let args = Args::parse();
@@ -36,7 +49,7 @@ async fn main() -> anyhow::Result<()> {
                 }
             });
 
-            let h_rpc = start_rpc(rpc_args, cancel.child_token()).await?;
+            let h_rpc = start_rpc(rpc_args, VERSION, cancel.child_token()).await?;
 
             let _ = h_rpc.await;
             cancel.cancel();
