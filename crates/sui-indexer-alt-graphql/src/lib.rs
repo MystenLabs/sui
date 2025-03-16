@@ -16,12 +16,14 @@ use axum::{
     routing::{get, post},
     Extension, Router,
 };
+use middleware::version::Version;
 use tokio::{net::TcpListener, task::JoinHandle};
 use tokio_util::sync::CancellationToken;
 use tracing::{error, info};
 
 mod api;
 pub mod args;
+mod middleware;
 
 #[derive(clap::Args, Clone, Debug)]
 pub struct RpcArgs {
@@ -44,6 +46,9 @@ pub struct RpcService<Q, M, S> {
     /// Whether to expose GraphiQL IDE on GET requests
     with_ide: bool,
 
+    /// The version string to report with each response, as an HTTP header.
+    version: &'static str,
+
     /// The GraphQL schema this service will serve.
     schema: SchemaBuilder<Q, M, S>,
 
@@ -57,10 +62,16 @@ where
     M: ObjectType + 'static,
     S: SubscriptionType + 'static,
 {
-    pub fn new(args: RpcArgs, schema: SchemaBuilder<Q, M, S>, cancel: CancellationToken) -> Self {
+    pub fn new(
+        args: RpcArgs,
+        version: &'static str,
+        schema: SchemaBuilder<Q, M, S>,
+        cancel: CancellationToken,
+    ) -> Self {
         Self {
             rpc_listen_address: args.rpc_listen_address,
             with_ide: !args.no_ide,
+            version,
             schema,
             cancel,
         }
@@ -77,6 +88,7 @@ where
         let Self {
             rpc_listen_address,
             with_ide,
+            version,
             schema,
             cancel,
         } = self;
@@ -84,7 +96,11 @@ where
         let schema = schema.finish();
         let mut router: Router = Router::new()
             .route("/graphql", post(graphql::<Q, M, S>))
-            .layer(Extension(schema));
+            .layer(Extension(schema))
+            .layer(axum::middleware::from_fn_with_state(
+                Version(version),
+                middleware::version::set_version,
+            ));
 
         if with_ide {
             info!("Starting GraphiQL IDE at 'http://{rpc_listen_address}/graphql'");
@@ -137,10 +153,17 @@ pub fn schema() -> SchemaBuilder<Query, EmptyMutation, EmptySubscription> {
 /// command-line). The service will continue to run until the cancellation token is triggered, and
 /// will signal cancellation on the token when it is shutting down.
 ///
+/// `version` is the version string reported in response headers by the service as part of every
+/// request.
+///
 /// The service may spin up auxiliary services (such as the system package task) to support itself,
 /// and will clean these up on shutdown as well.
-pub async fn start_rpc(args: RpcArgs, cancel: CancellationToken) -> anyhow::Result<JoinHandle<()>> {
-    let h_rpc = RpcService::new(args, schema(), cancel.child_token())
+pub async fn start_rpc(
+    args: RpcArgs,
+    version: &'static str,
+    cancel: CancellationToken,
+) -> anyhow::Result<JoinHandle<()>> {
+    let h_rpc = RpcService::new(args, version, schema(), cancel.child_token())
         .run()
         .await?;
 

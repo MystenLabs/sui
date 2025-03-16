@@ -21,11 +21,14 @@ async-trait.workspace = true
 # axum.workspace = true
 axum = { version = "0.7", default-features = false, features = [ "macros", "tokio", "http1", "http2", "json", "matched-path", "original-uri", "form", "query", "ws", ] }
 clap.workspace = true
+const-str.workspace = true
 prometheus.workspace = true
 telemetry-subscribers.workspace = true
 tokio.workspace = true
 tokio-util.workspace = true
 tracing.workspace = true
+
+bin-version.workspace = true
 
 [dev-dependencies]
 insta.workspace = true
