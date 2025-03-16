@@ -4,8 +4,9 @@
 use std::sync::Arc;
 
 use prometheus::{
-    register_histogram_with_registry, register_int_counter_with_registry,
-    register_int_gauge_with_registry, Histogram, IntCounter, IntGauge, Registry,
+    register_histogram_with_registry, register_int_counter_vec_with_registry,
+    register_int_counter_with_registry, register_int_gauge_with_registry, Histogram, IntCounter,
+    IntCounterVec, IntGauge, Registry,
 };
 
 /// Histogram buckets for the distribution of latency (time between receiving a request and sending
@@ -22,6 +23,11 @@ pub struct RpcMetrics {
     pub queries_succeeded: IntCounter,
     pub queries_failed: IntCounter,
     pub queries_in_flight: IntGauge,
+
+    // Metrics per type and field.
+    pub fields_received: IntCounterVec,
+    pub fields_succeeded: IntCounterVec,
+    pub fields_failed: IntCounterVec,
 }
 
 impl RpcMetrics {
@@ -60,6 +66,30 @@ impl RpcMetrics {
                 "queries_in_flight",
                 "Number of read requests currently flowing through the service",
                 registry
+            )
+            .unwrap(),
+
+            fields_received: register_int_counter_vec_with_registry!(
+                "fields_received",
+                "Number of times a field of a type has been requested in the GraphQL schema",
+                &["type", "field"],
+                registry,
+            )
+            .unwrap(),
+
+            fields_succeeded: register_int_counter_vec_with_registry!(
+                "fields_succeeded",
+                "Number of times a field of a type has been successfully resolved",
+                &["type", "field"],
+                registry,
+            )
+            .unwrap(),
+
+            fields_failed: register_int_counter_vec_with_registry!(
+                "fields_failed",
+                "Number of times a field of a type has failed to resolve",
+                &["type", "field"],
+                registry,
             )
             .unwrap(),
         })
