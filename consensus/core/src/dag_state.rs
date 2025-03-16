@@ -739,6 +739,7 @@ impl DagState {
         self.threshold_clock.get_round()
     }
 
+    // The timestamp of when quorum threshold was last reached in the threshold clock.
     pub(crate) fn threshold_clock_quorum_ts(&self) -> Instant {
         self.threshold_clock.get_quorum_ts()
     }

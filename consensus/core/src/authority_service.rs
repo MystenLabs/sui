@@ -9,6 +9,7 @@ use consensus_config::AuthorityIndex;
 use futures::{ready, stream, task, Stream, StreamExt};
 use parking_lot::RwLock;
 use sui_macros::fail_point_async;
+use tap::TapFallible;
 use tokio::{sync::broadcast, time::sleep};
 use tokio_util::sync::ReusableBoxFuture;
 use tracing::{debug, info, warn};
@@ -26,6 +27,7 @@ use crate::{
     stake_aggregator::{QuorumThreshold, StakeAggregator},
     storage::Store,
     synchronizer::SynchronizerHandle,
+    transaction_certifier::TransactionCertifier,
     CommitIndex, Round,
 };
 
@@ -38,8 +40,9 @@ pub(crate) struct AuthorityService<C: CoreThreadDispatcher> {
     block_verifier: Arc<dyn BlockVerifier>,
     synchronizer: Arc<SynchronizerHandle>,
     core_dispatcher: Arc<C>,
-    rx_block_broadcaster: broadcast::Receiver<ExtendedBlock>,
+    rx_block_broadcast: broadcast::Receiver<ExtendedBlock>,
     subscription_counter: Arc<SubscriptionCounter>,
+    transaction_certifier: TransactionCertifier,
     dag_state: Arc<RwLock<DagState>>,
     store: Arc<dyn Store>,
 }
@@ -51,7 +54,8 @@ impl<C: CoreThreadDispatcher> AuthorityService<C> {
         commit_vote_monitor: Arc<CommitVoteMonitor>,
         synchronizer: Arc<SynchronizerHandle>,
         core_dispatcher: Arc<C>,
-        rx_block_broadcaster: broadcast::Receiver<ExtendedBlock>,
+        rx_block_broadcast: broadcast::Receiver<ExtendedBlock>,
+        transaction_certifier: TransactionCertifier,
         dag_state: Arc<RwLock<DagState>>,
         store: Arc<dyn Store>,
     ) -> Self {
@@ -65,8 +69,9 @@ impl<C: CoreThreadDispatcher> AuthorityService<C> {
             commit_vote_monitor,
             synchronizer,
             core_dispatcher,
-            rx_block_broadcaster,
+            rx_block_broadcast,
             subscription_counter,
+            transaction_certifier,
             dag_state,
             store,
         }
@@ -103,17 +108,18 @@ impl<C: CoreThreadDispatcher> NetworkService for AuthorityService<C> {
         let peer_hostname = &self.context.committee.authority(peer).hostname;
 
         // Reject blocks failing validations.
-        let verification_result = self.block_verifier.verify_and_vote(&signed_block);
-        if let Err(e) = verification_result {
-            self.context
-                .metrics
-                .node_metrics
-                .invalid_blocks
-                .with_label_values(&[peer_hostname, "handle_send_block", e.name()])
-                .inc();
-            info!("Invalid block from {}: {}", peer, e);
-            return Err(e);
-        }
+        let reject_txn_votes = self
+            .block_verifier
+            .verify_and_vote(&signed_block)
+            .tap_err(|e| {
+                self.context
+                    .metrics
+                    .node_metrics
+                    .invalid_blocks
+                    .with_label_values(&[peer_hostname, "handle_send_block", e.name()])
+                    .inc();
+                info!("Invalid block from {}: {}", peer, e);
+            })?;
         let verified_block = VerifiedBlock::new_verified(signed_block, serialized_block.block);
         let block_ref = verified_block.reference();
         debug!("Received block {} via send block.", block_ref);
@@ -167,7 +173,8 @@ impl<C: CoreThreadDispatcher> NetworkService for AuthorityService<C> {
         // commit sync loop will trigger fetching.
         self.commit_vote_monitor.observe_block(&verified_block);
 
-        // Reject blocks when local commit index is lagging too far from quorum commit index.
+        // Reject blocks when local commit index is lagging too far from quorum commit index,
+        // to avoid the memory overhead from suspended blocks.
         //
         // IMPORTANT: this must be done after observing votes from the block, otherwise
         // observed quorum commit will no longer progress.
@@ -210,6 +217,13 @@ impl<C: CoreThreadDispatcher> NetworkService for AuthorityService<C> {
             .with_label_values(&[peer_hostname])
             .inc();
 
+        // The block is verified and current, so it can be processed in the fastpath.
+        if self.context.protocol_config.mysticeti_fastpath() {
+            self.transaction_certifier
+                .add_voted_blocks(vec![(verified_block.clone(), reject_txn_votes)]);
+        }
+
+        // Try to accept the block into the DAG.
         let missing_ancestors = self
             .core_dispatcher
             .add_blocks(vec![verified_block])
@@ -321,7 +335,7 @@ impl<C: CoreThreadDispatcher> NetworkService for AuthorityService<C> {
 
         let broadcasted_blocks = BroadcastedBlockStream::new(
             peer,
-            self.rx_block_broadcaster.resubscribe(),
+            self.rx_block_broadcast.resubscribe(),
             self.subscription_counter.clone(),
         );
 
@@ -708,11 +722,13 @@ mod tests {
         storage::mem_store::MemStore,
         synchronizer::Synchronizer,
         test_dag_builder::DagBuilder,
+        transaction_certifier::TransactionCertifier,
         Round,
     };
     use async_trait::async_trait;
     use bytes::Bytes;
     use consensus_config::AuthorityIndex;
+    use mysten_metrics::monitored_mpsc;
     use parking_lot::{Mutex, RwLock};
     use std::collections::BTreeSet;
     use std::sync::Arc;
@@ -862,14 +878,19 @@ mod tests {
         let core_dispatcher = Arc::new(FakeCoreThreadDispatcher::new());
         let (_tx_block_broadcast, rx_block_broadcast) = broadcast::channel(100);
         let network_client = Arc::new(FakeNetworkClient::default());
+        let (blocks_sender, _blocks_receiver) =
+            monitored_mpsc::unbounded_channel("consensus_block_output");
         let store = Arc::new(MemStore::new());
         let dag_state = Arc::new(RwLock::new(DagState::new(context.clone(), store.clone())));
+        let transaction_certifier =
+            TransactionCertifier::new(context.clone(), dag_state.clone(), blocks_sender);
         let synchronizer = Synchronizer::start(
             network_client,
             context.clone(),
             core_dispatcher.clone(),
             commit_vote_monitor.clone(),
             block_verifier.clone(),
+            transaction_certifier.clone(),
             dag_state.clone(),
             false,
         );
@@ -880,6 +901,7 @@ mod tests {
             synchronizer,
             core_dispatcher.clone(),
             rx_block_broadcast,
+            transaction_certifier,
             dag_state,
             store,
         ));
@@ -925,14 +947,19 @@ mod tests {
         let core_dispatcher = Arc::new(FakeCoreThreadDispatcher::new());
         let (_tx_block_broadcast, rx_block_broadcast) = broadcast::channel(100);
         let network_client = Arc::new(FakeNetworkClient::default());
+        let (blocks_sender, _blocks_receiver) =
+            monitored_mpsc::unbounded_channel("consensus_block_output");
         let store = Arc::new(MemStore::new());
         let dag_state = Arc::new(RwLock::new(DagState::new(context.clone(), store.clone())));
+        let transaction_certifier =
+            TransactionCertifier::new(context.clone(), dag_state.clone(), blocks_sender);
         let synchronizer = Synchronizer::start(
             network_client,
             context.clone(),
             core_dispatcher.clone(),
             commit_vote_monitor.clone(),
             block_verifier.clone(),
+            transaction_certifier.clone(),
             dag_state.clone(),
             true,
         );
@@ -943,6 +970,7 @@ mod tests {
             synchronizer,
             core_dispatcher.clone(),
             rx_block_broadcast,
+            transaction_certifier,
             dag_state.clone(),
             store,
         ));

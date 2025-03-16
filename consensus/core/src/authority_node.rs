@@ -5,9 +5,11 @@ use std::{sync::Arc, time::Instant};
 
 use consensus_config::{AuthorityIndex, Committee, NetworkKeyPair, Parameters, ProtocolKeyPair};
 use itertools::Itertools;
+use mysten_metrics::spawn_logged_monitored_task;
 use parking_lot::RwLock;
 use prometheus::Registry;
 use sui_protocol_config::{ConsensusNetwork, ProtocolConfig};
+use tokio::task::JoinHandle;
 use tracing::{info, warn};
 
 use crate::{
@@ -29,11 +31,13 @@ use crate::{
         anemo_network::AnemoManager, tonic_network::TonicManager, NetworkClient as _,
         NetworkManager,
     },
+    proposed_block_handler::ProposedBlockHandler,
     round_prober::{RoundProber, RoundProberHandle},
     storage::rocksdb_store::RocksDBStore,
     subscriber::Subscriber,
     synchronizer::{Synchronizer, SynchronizerHandle},
     transaction::{TransactionClient, TransactionConsumer, TransactionVerifier},
+    transaction_certifier::TransactionCertifier,
     CommitConsumer, CommitConsumerMonitor,
 };
 
@@ -149,6 +153,7 @@ where
 
     commit_syncer_handle: CommitSyncerHandle,
     round_prober_handle: Option<RoundProberHandle>,
+    proposed_block_handler: JoinHandle<()>,
     leader_timeout_handle: LeaderTimeoutTaskHandle,
     core_thread_handle: CoreThreadHandle,
     // Only one of broadcaster and subscriber gets created, depending on
@@ -230,6 +235,20 @@ where
         let store = Arc::new(RocksDBStore::new(store_path));
         let dag_state = Arc::new(RwLock::new(DagState::new(context.clone(), store.clone())));
 
+        let transaction_certifier = TransactionCertifier::new(
+            context.clone(),
+            dag_state.clone(),
+            commit_consumer.block_sender.clone(),
+        );
+
+        let mut proposed_block_handler = ProposedBlockHandler::new(
+            signals_receivers.block_broadcast_receiver(),
+            transaction_certifier.clone(),
+        );
+
+        let proposed_block_handler =
+            spawn_logged_monitored_task!(proposed_block_handler.run(), "proposed_block_handler");
+
         let highest_known_commit_at_startup = dag_state.read().last_commit_index();
 
         let sync_last_known_own_block = boot_counter == 0
@@ -294,6 +313,7 @@ where
             core_dispatcher.clone(),
             commit_vote_monitor.clone(),
             block_verifier.clone(),
+            transaction_certifier.clone(),
             dag_state.clone(),
             sync_last_known_own_block,
         );
@@ -303,8 +323,9 @@ where
             core_dispatcher.clone(),
             commit_vote_monitor.clone(),
             commit_consumer_monitor.clone(),
-            network_client.clone(),
             block_verifier.clone(),
+            transaction_certifier.clone(),
+            network_client.clone(),
             dag_state.clone(),
         )
         .start();
@@ -330,6 +351,7 @@ where
             synchronizer.clone(),
             core_dispatcher,
             signals_receivers.block_broadcast_receiver(),
+            transaction_certifier,
             dag_state.clone(),
             store,
         ));
@@ -366,6 +388,7 @@ where
             commit_syncer_handle,
             round_prober_handle,
             commit_consumer_monitor,
+            proposed_block_handler,
             leader_timeout_handle,
             core_thread_handle,
             broadcaster,
@@ -395,6 +418,7 @@ where
         if let Some(round_prober_handle) = self.round_prober_handle.take() {
             round_prober_handle.stop().await;
         }
+        self.proposed_block_handler.abort();
         self.leader_timeout_handle.stop().await;
         // Shutdown Core to stop block productions and broadcast.
         // When using streaming, all subscribers to broadcasted blocks stop after this.
@@ -442,7 +466,10 @@ mod tests {
 
     use super::*;
     use crate::block::GENESIS_ROUND;
-    use crate::{block::BlockAPI as _, transaction::NoopTransactionVerifier, CommittedSubDag};
+    use crate::{
+        block::BlockAPI as _, block::CertifiedBlocksOutput, transaction::NoopTransactionVerifier,
+        CommittedSubDag,
+    };
 
     #[rstest]
     #[tokio::test]
@@ -510,12 +537,13 @@ mod tests {
             .map(|_| TempDir::new().unwrap())
             .collect::<Vec<_>>();
 
-        let mut output_receivers = Vec::with_capacity(committee.size());
+        let mut commit_receivers = Vec::with_capacity(committee.size());
+        let mut block_receivers = Vec::with_capacity(committee.size());
         let mut authorities = Vec::with_capacity(committee.size());
         let mut boot_counters = [0; NUM_OF_AUTHORITIES];
 
         for (index, _authority_info) in committee.authorities() {
-            let (authority, receiver) = make_authority(
+            let (authority, commit_receiver, block_receiver) = make_authority(
                 index,
                 &temp_dirs[index.value()],
                 committee.clone(),
@@ -526,7 +554,8 @@ mod tests {
             )
             .await;
             boot_counters[index] += 1;
-            output_receivers.push(receiver);
+            commit_receivers.push(commit_receiver);
+            block_receivers.push(block_receiver);
             authorities.push(authority);
         }
 
@@ -542,7 +571,7 @@ mod tests {
                 .unwrap();
         }
 
-        for receiver in &mut output_receivers {
+        for receiver in &mut commit_receivers {
             let mut expected_transactions = submitted_transactions.clone();
             loop {
                 let committed_subdag =
@@ -572,7 +601,7 @@ mod tests {
         sleep(Duration::from_secs(10)).await;
 
         // Restart authority 1 and let it run.
-        let (authority, receiver) = make_authority(
+        let (authority, commit_receiver, block_receiver) = make_authority(
             index,
             &temp_dirs[index.value()],
             committee.clone(),
@@ -583,7 +612,8 @@ mod tests {
         )
         .await;
         boot_counters[index] += 1;
-        output_receivers[index] = receiver;
+        commit_receivers[index] = commit_receiver;
+        block_receivers[index] = block_receiver;
         authorities.insert(index.value(), authority);
         sleep(Duration::from_secs(10)).await;
 
@@ -614,7 +644,7 @@ mod tests {
         let mut boot_counters = vec![0; num_authorities];
 
         for (index, _authority_info) in committee.authorities() {
-            let (authority, receiver) = make_authority(
+            let (authority, commit_receiver, _block_receiver) = make_authority(
                 index,
                 &temp_dirs[index.value()],
                 committee.clone(),
@@ -625,7 +655,7 @@ mod tests {
             )
             .await;
             boot_counters[index] += 1;
-            output_receivers.push(receiver);
+            output_receivers.push(commit_receiver);
             authorities.push(authority);
         }
 
@@ -671,7 +701,7 @@ mod tests {
         sleep(Duration::from_secs(10)).await;
 
         // Restart authority 0 and let it run.
-        let (authority, receiver) = make_authority(
+        let (authority, commit_receiver, _block_receiver) = make_authority(
             index,
             &temp_dirs[index.value()],
             committee.clone(),
@@ -682,7 +712,7 @@ mod tests {
         )
         .await;
         boot_counters[index] += 1;
-        output_receivers[index] = receiver;
+        output_receivers[index] = commit_receiver;
         authorities.insert(index.value(), authority);
         sleep(Duration::from_secs(10)).await;
 
@@ -704,7 +734,8 @@ mod tests {
 
         const NUM_OF_AUTHORITIES: usize = 4;
         let (committee, keypairs) = local_committee_and_keys(0, [1; NUM_OF_AUTHORITIES].to_vec());
-        let mut output_receivers = vec![];
+        let mut commit_receivers = vec![];
+        let mut block_receivers = vec![];
         let mut authorities = BTreeMap::new();
         let mut temp_dirs = BTreeMap::new();
         let mut boot_counters = [0; NUM_OF_AUTHORITIES];
@@ -718,7 +749,7 @@ mod tests {
 
         for (index, _authority_info) in committee.authorities() {
             let dir = TempDir::new().unwrap();
-            let (authority, receiver) = make_authority(
+            let (authority, commit_receiver, block_receiver) = make_authority(
                 index,
                 &dir,
                 committee.clone(),
@@ -730,7 +761,8 @@ mod tests {
             .await;
             assert!(authority.sync_last_known_own_block_enabled(), "Expected syncing of last known own block to be enabled as all authorities are of empty db and boot for first time.");
             boot_counters[index] += 1;
-            output_receivers.push(receiver);
+            commit_receivers.push(commit_receiver);
+            block_receivers.push(block_receiver);
             authorities.insert(index, authority);
             temp_dirs.insert(index, dir);
         }
@@ -740,7 +772,7 @@ mod tests {
         // at least one block has been proposed and successfully received by a quorum of nodes.
         let index_1 = committee.to_authority_index(1).unwrap();
         'outer: while let Some(result) =
-            timeout(Duration::from_secs(10), output_receivers[index_1].recv())
+            timeout(Duration::from_secs(10), commit_receivers[index_1].recv())
                 .await
                 .expect("Timed out while waiting for at least one committed block from authority 1")
         {
@@ -767,7 +799,7 @@ mod tests {
         let dir = TempDir::new().unwrap();
         // We do reset the boot counter for this one to simulate a "binary" restart
         boot_counters[index_1] = 0;
-        let (authority, mut receiver) = make_authority(
+        let (authority, mut commit_receiver, _block_receiver) = make_authority(
             index_1,
             &dir,
             committee.clone(),
@@ -788,7 +820,7 @@ mod tests {
 
         // Now spin up authority 2 using its earlier directly - so no amnesia recovery should be forced here.
         // Authority 1 should be able to recover from amnesia successfully.
-        let (authority, _receiver) = make_authority(
+        let (authority, _commit_receiver, _block_receiver) = make_authority(
             index_2,
             &temp_dirs[&index_2],
             committee.clone(),
@@ -807,7 +839,7 @@ mod tests {
         sleep(Duration::from_secs(5)).await;
 
         // We wait until we see at least one committed block authored from this authority
-        'outer: while let Some(result) = receiver.recv().await {
+        'outer: while let Some(result) = commit_receiver.recv().await {
             for block in result.blocks {
                 if block.round() > GENESIS_ROUND && block.author() == index_1 {
                     break 'outer;
@@ -830,7 +862,11 @@ mod tests {
         network_type: ConsensusNetwork,
         boot_counter: u64,
         protocol_config: ProtocolConfig,
-    ) -> (ConsensusAuthority, UnboundedReceiver<CommittedSubDag>) {
+    ) -> (
+        ConsensusAuthority,
+        UnboundedReceiver<CommittedSubDag>,
+        UnboundedReceiver<CertifiedBlocksOutput>,
+    ) {
         let registry = Registry::new();
 
         // Cache less blocks to exercise commit sync.
@@ -847,7 +883,7 @@ mod tests {
         let protocol_keypair = keypairs[index].1.clone();
         let network_keypair = keypairs[index].0.clone();
 
-        let (commit_consumer, commit_receiver, _) = CommitConsumer::new(0);
+        let (commit_consumer, commit_receiver, block_receiver) = CommitConsumer::new(0);
 
         let authority = ConsensusAuthority::start(
             network_type,
@@ -864,6 +900,6 @@ mod tests {
         )
         .await;
 
-        (authority, commit_receiver)
+        (authority, commit_receiver, block_receiver)
     }
 }
