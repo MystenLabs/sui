@@ -14101,6 +14101,7 @@ dependencies = [
  "telemetry-subscribers",
  "tokio",
  "tokio-util 0.7.13 (registry+https://github.com/rust-lang/crates.io-index)",
+ "tower-http",
  "tracing",
  "uuid 1.2.2",
 ]

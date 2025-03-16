@@ -11,6 +11,7 @@ use async_graphql::{
 use async_graphql_axum::{GraphQLRequest, GraphQLResponse};
 use axum::{
     extract::{ConnectInfo, MatchedPath},
+    http::Method,
     response::Html,
     routing::{get, post},
     Extension, Router,
@@ -18,6 +19,7 @@ use axum::{
 use prometheus::Registry;
 use tokio::{net::TcpListener, task::JoinHandle};
 use tokio_util::sync::CancellationToken;
+use tower_http::cors;
 use tracing::{error, info};
 
 use crate::api::query::Query;
@@ -120,7 +122,13 @@ where
             .layer(axum::middleware::from_fn_with_state(
                 Version(version),
                 middleware::version::set_version,
-            ));
+            ))
+            .layer(
+                cors::CorsLayer::new()
+                    .allow_methods([Method::POST])
+                    .allow_origin(cors::Any)
+                    .allow_headers(cors::Any),
+            );
 
         if with_ide {
             info!("Starting GraphiQL IDE at 'http://{rpc_listen_address}/graphql'");
