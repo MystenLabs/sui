@@ -4,9 +4,13 @@ expression: sdl
 ---
 type Query {
 	"""
-	Test query
+	Test query that always succeeds
 	"""
 	hello: String!
+	"""
+	Test query that always fails
+	"""
+	boom: String!
 }
 
 

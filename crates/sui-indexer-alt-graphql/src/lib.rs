@@ -1,10 +1,9 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::net::SocketAddr;
+use std::{net::SocketAddr, sync::Arc};
 
 use anyhow::{self, Context};
-use api::query::Query;
 use async_graphql::{
     http::GraphiQLSource, EmptyMutation, EmptySubscription, ObjectType, Schema, SchemaBuilder,
     SubscriptionType,
@@ -16,13 +15,20 @@ use axum::{
     routing::{get, post},
     Extension, Router,
 };
-use middleware::version::Version;
+use prometheus::Registry;
 use tokio::{net::TcpListener, task::JoinHandle};
 use tokio_util::sync::CancellationToken;
 use tracing::{error, info};
 
+use crate::api::query::Query;
+use crate::extensions::metrics::Metrics;
+use crate::metrics::RpcMetrics;
+use crate::middleware::version::Version;
+
 mod api;
 pub mod args;
+mod extensions;
+mod metrics;
 mod middleware;
 
 #[derive(clap::Args, Clone, Debug)]
@@ -49,6 +55,9 @@ pub struct RpcService<Q, M, S> {
     /// The version string to report with each response, as an HTTP header.
     version: &'static str,
 
+    /// Metrics for the RPC service.
+    metrics: Arc<RpcMetrics>,
+
     /// The GraphQL schema this service will serve.
     schema: SchemaBuilder<Q, M, S>,
 
@@ -66,12 +75,21 @@ where
         args: RpcArgs,
         version: &'static str,
         schema: SchemaBuilder<Q, M, S>,
+        registry: &Registry,
         cancel: CancellationToken,
     ) -> Self {
+        let RpcArgs {
+            rpc_listen_address,
+            no_ide,
+        } = args;
+
+        let metrics = RpcMetrics::new(registry);
+
         Self {
-            rpc_listen_address: args.rpc_listen_address,
-            with_ide: !args.no_ide,
+            rpc_listen_address,
+            with_ide: !no_ide,
             version,
+            metrics,
             schema,
             cancel,
         }
@@ -89,11 +107,13 @@ where
             rpc_listen_address,
             with_ide,
             version,
+            metrics,
             schema,
             cancel,
         } = self;
 
-        let schema = schema.finish();
+        let schema = schema.extension(Metrics(metrics.clone())).finish();
+
         let mut router: Router = Router::new()
             .route("/graphql", post(graphql::<Q, M, S>))
             .layer(Extension(schema))
@@ -161,9 +181,10 @@ pub fn schema() -> SchemaBuilder<Query, EmptyMutation, EmptySubscription> {
 pub async fn start_rpc(
     args: RpcArgs,
     version: &'static str,
+    registry: &Registry,
     cancel: CancellationToken,
 ) -> anyhow::Result<JoinHandle<()>> {
-    let h_rpc = RpcService::new(args, version, schema(), cancel.child_token())
+    let h_rpc = RpcService::new(args, version, schema(), registry, cancel.child_token())
         .run()
         .await?;
 

@@ -29,6 +29,7 @@ tokio-util.workspace = true
 tracing.workspace = true
 
 bin-version.workspace = true
+sui-indexer-alt-metrics.workspace = true
 
 [dev-dependencies]
 insta.workspace = true
