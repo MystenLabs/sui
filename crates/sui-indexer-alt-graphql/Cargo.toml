@@ -27,6 +27,7 @@ serde_json.workspace = true
 telemetry-subscribers.workspace = true
 tokio.workspace = true
 tokio-util.workspace = true
+tower-http.workspace = true
 tracing.workspace = true
 uuid.workspace = true
 
