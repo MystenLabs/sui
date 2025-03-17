@@ -54,9 +54,9 @@ pub(crate) struct AncestorStateManager {
 
 impl AncestorStateManager {
     #[cfg(not(test))]
-    const STATE_LOCK_CLOCK_ROUND_UPDATES: u32 = 450;
+    const STATE_LOCK_CLOCK_ROUNDS: u32 = 450;
     #[cfg(test)]
-    const STATE_LOCK_CLOCK_ROUND_UPDATES: u32 = 5;
+    const STATE_LOCK_CLOCK_ROUNDS: u32 = 5;
 
     // Exclusion threshold is based on propagation (reputation) scores
     const EXCLUSION_THRESHOLD_PERCENTAGE: u64 = 20;
@@ -145,8 +145,7 @@ impl AncestorStateManager {
             AncestorState::Include => {
                 if propagation_score <= low_score_threshold {
                     ancestor_info.state = AncestorState::Exclude(propagation_score);
-                    let lock_until_round =
-                        current_clock_round + Self::STATE_LOCK_CLOCK_ROUND_UPDATES;
+                    let lock_until_round = current_clock_round + Self::STATE_LOCK_CLOCK_ROUNDS;
                     ancestor_info.set_lock(lock_until_round);
                     info!(
                         "Authority {authority_id} moved to EXCLUDE state with score {propagation_score} <= threshold of {low_score_threshold} and locked until round {lock_until_round}",
@@ -168,8 +167,7 @@ impl AncestorStateManager {
                 {
                     ancestor_info.state = AncestorState::Include;
 
-                    let lock_until_round =
-                        current_clock_round + Self::STATE_LOCK_CLOCK_ROUND_UPDATES;
+                    let lock_until_round = current_clock_round + Self::STATE_LOCK_CLOCK_ROUNDS;
                     ancestor_info.set_lock(lock_until_round);
                     info!(
                         "Authority {authority_id} moved to INCLUDE state with {propagation_score} > threshold of {low_score_threshold} or {authority_high_quorum_round} >= {network_high_quorum_round} and locked until round {lock_until_round}",

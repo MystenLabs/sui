@@ -54,13 +54,13 @@ impl<C: CoreThreadDispatcher> AuthorityService<C> {
         context: Arc<Context>,
         block_verifier: Arc<dyn BlockVerifier>,
         commit_vote_monitor: Arc<CommitVoteMonitor>,
+        round_tracker: Arc<RwLock<PeerRoundTracker>>,
         synchronizer: Arc<SynchronizerHandle>,
         core_dispatcher: Arc<C>,
         rx_block_broadcast: broadcast::Receiver<ExtendedBlock>,
         transaction_certifier: TransactionCertifier,
         dag_state: Arc<RwLock<DagState>>,
         store: Arc<dyn Store>,
-        round_tracker: Arc<RwLock<PeerRoundTracker>>,
     ) -> Self {
         let subscription_counter = Arc::new(SubscriptionCounter::new(
             context.clone(),
@@ -922,13 +922,13 @@ mod tests {
             context.clone(),
             block_verifier,
             commit_vote_monitor,
+            round_tracker,
             synchronizer,
             core_dispatcher.clone(),
             rx_block_broadcast,
             transaction_certifier,
             dag_state,
             store,
-            round_tracker,
         ));
 
         // Test delaying blocks with time drift.
@@ -996,13 +996,13 @@ mod tests {
             context.clone(),
             block_verifier,
             commit_vote_monitor,
+            round_tracker,
             synchronizer,
             core_dispatcher.clone(),
             rx_block_broadcast,
             transaction_certifier,
             dag_state.clone(),
             store,
-            round_tracker,
         ));
 
         // Create some blocks for a few authorities. Create some equivocations as well and store in dag state.
