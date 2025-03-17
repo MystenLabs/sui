@@ -25,7 +25,7 @@ Key differences with Move on Sui include:
 - Addresses represent [Object IDs](#object-ids)
 - Sui objects have [globally unique IDs](#global-unique)
 - Sui has [module initializers](#module-initializers) (init)
-- Sui has unique usecases of the [`entry` keyword](#entry-functions)
+- Sui has unique usecases for the [`entry` keyword](#entry-functions)
 
 ### Object-centric global storage {#global-storage}
 
@@ -55,13 +55,13 @@ As described in [Object-centric global storage](#global-storage), you publish Mo
 
 ### Entry functions {#entry-functions}
 
-While the `entry` function exists in multiple flavors of Move, the `entry` keyword has a specific usecase in Move on Sui. Use `entry` when you want some functionality to be usable by anyone on chain, but not be wrapped around other Move logic. In other words, a function can be called in PTBs but not in other Sui packages. For example, this is utilized when using Sui's on-chain randomness standard to prevent other smart contract engineers from creating logic to essentially front or back-run the randomness generation. Find more information about this in the [on-chain randomness page](/guides/developer/advanced/randomness-onchain.mdx#use-non-public-entry-functions). 
+The `entry` keyword has a specific usecase in Move on Sui. Use `entry` when you want some functionality to be usable by anyone on chain, but not be wrapped around other Move logic. In other words, a function can be called in [PTBs](/concepts/transactions/prog-txn-blocks) but not in other Sui packages. For example, this is utilized when using Sui's on-chain randomness standard to prevent other smart contract engineers from creating logic to essentially front or back-run the randomness generation. Find more information about this in the [on-chain randomness page](/guides/developer/advanced/randomness-onchain.mdx#use-non-public-entry-functions). 
 
-Do this by making your function private (by not adding the `public` visibility keyword) and by marking it with the `entry` keyword. i.e. `entry fun example_function`.
+Do this by making your function private (don't add the `public` visibility keyword) and marking it with the `entry` keyword. i.e. `entry fun example_function`.
 
 In addition to this Sui-specific usecase, there are other rules and restrictions for `entry` functions. 
 - `entry` functions can only return types with the `drop` ability. 
-- `entry` functions, when used in a PTB, can only take objects as inputs as long as they weren't used as inputs in any non-`entry` functions. 
+- `entry` functions can only take objects as inputs as long as they weren't used as inputs in any non-`entry` functions in the same PTB. 
 
 ## Related links
 
