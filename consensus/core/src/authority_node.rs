@@ -343,9 +343,9 @@ where
                 RoundProber::new(
                     context.clone(),
                     core_dispatcher.clone(),
+                    round_tracker.clone(),
                     dag_state.clone(),
                     network_client.clone(),
-                    round_tracker.clone(),
                 )
                 .start(),
             )
