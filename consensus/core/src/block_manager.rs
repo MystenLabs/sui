@@ -362,11 +362,6 @@ impl BlockManager {
                     }
                 }
 
-                debug!(
-                    "Checking for ancestors {:?} for block: {:?} and gc_round {:?}",
-                    ancestor_blocks, b, gc_round
-                );
-
                 if let Err(e) =
                     self.block_verifier
                         .check_ancestors(&b, &ancestor_blocks, gc_enabled, gc_round)
