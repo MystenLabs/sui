@@ -1236,12 +1236,12 @@ impl<'l> ResolutionContext<'l> {
                     s.address = context.runtime_id;
                     let key = DatatypeRef::from(s.as_ref()).as_key();
 
-                    if def.type_params.len() != s.type_params.len() {
-                        return Err(Error::TypeArityMismatch(
-                            def.type_params.len(),
-                            s.type_params.len(),
-                        ));
-                    }
+                    // if def.type_params.len() != s.type_params.len() {
+                    //     return Err(Error::TypeArityMismatch(
+                    //         def.type_params.len(),
+                    //         s.type_params.len(),
+                    //     ));
+                    // }
 
                     check_max_limit!(
                         TooManyTypeParams, self.limits;
