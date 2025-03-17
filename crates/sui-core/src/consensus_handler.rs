@@ -6,7 +6,7 @@ use std::{
     hash::Hash,
     num::NonZeroUsize,
     sync::Arc,
-    time::Duration,
+    time::{Duration, SystemTime, UNIX_EPOCH},
 };
 
 use arc_swap::ArcSwap;
@@ -609,6 +609,17 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
         let timestamp = consensus_commit.commit_timestamp_ms();
         let leader_author = consensus_commit.leader_author_index();
         let commit_sub_dag_index = consensus_commit.commit_sub_dag_index();
+
+        let system_time_ms = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_millis() as i64;
+
+        let consensus_timestamp_bias_ms = system_time_ms - (timestamp as i64);
+        let consensus_timestamp_bias_seconds = consensus_timestamp_bias_ms as f64 / 1000.0;
+        self.metrics
+            .consensus_timestamp_bias
+            .observe(consensus_timestamp_bias_seconds);
 
         let epoch_start = self
             .epoch_store
