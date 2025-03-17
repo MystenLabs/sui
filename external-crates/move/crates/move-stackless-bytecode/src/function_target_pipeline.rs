@@ -39,6 +39,7 @@ pub struct FunctionTargetsHolder {
     targets: BTreeMap<QualifiedId<FunId>, BTreeMap<FunctionVariant, FunctionData>>,
     function_specs: BiBTreeMap<QualifiedId<FunId>, QualifiedId<FunId>>,
     no_verify_specs: BTreeSet<QualifiedId<FunId>>,
+    focus_specs: BTreeSet<QualifiedId<FunId>>,
     ignore_aborts: BTreeSet<QualifiedId<FunId>>,
     scenario_specs: BTreeSet<QualifiedId<FunId>>,
     datatype_invs: BiBTreeMap<QualifiedId<DatatypeId>, QualifiedId<FunId>>,
@@ -178,6 +179,7 @@ impl FunctionTargetsHolder {
             targets: BTreeMap::new(),
             function_specs: BiBTreeMap::new(),
             no_verify_specs: BTreeSet::new(),
+            focus_specs: BTreeSet::new(),
             ignore_aborts: BTreeSet::new(),
             scenario_specs: BTreeSet::new(),
             datatype_invs: BiBTreeMap::new(),
@@ -214,6 +216,10 @@ impl FunctionTargetsHolder {
         &self.no_verify_specs
     }
 
+    pub fn focus_specs(&self) -> &BTreeSet<QualifiedId<FunId>> {
+        &self.focus_specs
+    }
+
     pub fn ignore_aborts(&self) -> &BTreeSet<QualifiedId<FunId>> {
         &self.ignore_aborts
     }
@@ -228,6 +234,10 @@ impl FunctionTargetsHolder {
 
     pub fn is_verified_spec(&self, id: &QualifiedId<FunId>) -> bool {
         self.is_spec(id) && !self.no_verify_specs.contains(id)
+    }
+
+    pub fn is_focus_spec(&self, id: &QualifiedId<FunId>) -> bool {
+        self.is_spec(id) && self.focus_specs.contains(id)
     }
 
     pub fn specs(&self) -> impl Iterator<Item = &QualifiedId<FunId>> {
@@ -259,6 +269,9 @@ impl FunctionTargetsHolder {
             .entry(func_env.get_qualified_id())
             .or_default()
             .insert(FunctionVariant::Baseline, data);
+
+        let mut found_focus_specs = false;
+
         func_env.get_name_str().strip_suffix("_spec").map(|name| {
             if let Some(spec_attr) = func_env
                 .get_toplevel_attributes()
@@ -268,8 +281,15 @@ impl FunctionTargetsHolder {
                     Attribute_::Parameterized(_, inner_attrs) => inner_attrs,
                     _ => &UniqueMap::new(),
                 };
-                if !inner_attrs.contains_key_(&AttributeName_::Unknown(Symbol::from("verify"))) {
+
+                let is_focus_spec = inner_attrs.contains_key_(&AttributeName_::Unknown(Symbol::from("focus")));
+
+                if !inner_attrs.contains_key_(&AttributeName_::Unknown(Symbol::from("verify"))) && !is_focus_spec {
                     self.no_verify_specs.insert(func_env.get_qualified_id());
+                }
+                if is_focus_spec {
+                    self.focus_specs.insert(func_env.get_qualified_id());
+                    found_focus_specs = true
                 }
                 if inner_attrs.contains_key_(&AttributeName_::Unknown(Symbol::from("ignore_abort")))
                 {
@@ -292,6 +312,24 @@ impl FunctionTargetsHolder {
                 }
             }
         });
+
+        if found_focus_specs {
+            func_env.get_name_str().strip_suffix("_spec").map(|name| {
+                if let Some(spec_attr) = func_env
+                    .get_toplevel_attributes()
+                    .get_(&Verification(VerificationAttribute::Spec))
+                {
+                    let inner_attrs = match &spec_attr.value {
+                        Attribute_::Parameterized(_, inner_attrs) => inner_attrs,
+                        _ => &UniqueMap::new(),
+                    };
+    
+                    if !inner_attrs.contains_key_(&AttributeName_::Unknown(Symbol::from("focus"))) {
+                        self.no_verify_specs.insert(func_env.get_qualified_id());
+                    }
+                }
+            });
+        }
 
         func_env.get_name_str().strip_suffix("_inv").map(|name| {
             if let Some(struct_env) = func_env
@@ -440,6 +478,10 @@ impl FunctionTargetsHolder {
                 env.get_function(*spec).get_full_name_str(),
                 env.get_function(*fun).get_full_name_str()
             )?;
+        }
+        writeln!(f, "Focus specs:")?;
+        for spec in self.focus_specs.iter() {
+            writeln!(f, "  {}", env.get_function(*spec).get_full_name_str())?;
         }
         writeln!(f, "No verify specs:")?;
         for spec in self.no_verify_specs.iter() {
