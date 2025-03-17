@@ -79,8 +79,6 @@ members = [
     "crates/mysten-metrics",
     "crates/mysten-network",
     "crates/mysten-service",
-    "crates/mysten-util-mem",
-    "crates/mysten-util-mem-derive",
     "crates/prometheus-closure-metric",
     "crates/shared-crypto",
     "crates/simulacrum",
@@ -625,8 +623,6 @@ mysten-common = { path = "crates/mysten-common" }
 mysten-metrics = { path = "crates/mysten-metrics" }
 mysten-network = { path = "crates/mysten-network" }
 mysten-service = { path = "crates/mysten-service" }
-mysten-util-mem = { path = "crates/mysten-util-mem" }
-mysten-util-mem-derive = { path = "crates/mysten-util-mem-derive" }
 prometheus-closure-metric = { path = "crates/prometheus-closure-metric" }
 shared-crypto = { path = "crates/shared-crypto" }
 simulacrum = { path = "crates/simulacrum" }
