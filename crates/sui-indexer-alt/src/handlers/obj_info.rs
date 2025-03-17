@@ -44,6 +44,14 @@ impl Processor for ObjInfo {
             .into_iter()
             .map(|o| (o.id(), o))
             .collect::<BTreeMap<_, _>>();
+        let id = ObjectID::from_hex_literal(
+            "0x4fbf84f3029bd0c0b77164b587963be957f853eccf834a67bb9ecba6ec80f189",
+        )
+        .unwrap();
+        if !latest_live_output_objects.contains_key(&id) {
+            return Ok(vec![]);
+        }
+        println!("Found object in checkpoint {}", cp_sequence_number);
         let mut values: BTreeMap<ObjectID, Self::Value> = BTreeMap::new();
         let mut prune_info = PruningInfo::new();
         for object_id in checkpoint_input_objects.keys() {
@@ -59,6 +67,9 @@ impl Processor for ObjInfo {
                         update: ProcessedObjInfoUpdate::Delete(*object_id),
                     },
                 );
+                if *object_id == id {
+                    panic!("pruning object in checkpoint {}", cp_sequence_number);
+                }
                 prune_info.add_deleted_object(*object_id);
             }
         }
@@ -80,6 +91,9 @@ impl Processor for ObjInfo {
                 // We do not need to prune if the object was created in this checkpoint,
                 // because this object would not have been in the table prior to this checkpoint.
                 if checkpoint_input_objects.contains_key(object_id) {
+                    if *object_id == id {
+                        panic!("pruning object in checkpoint {}", cp_sequence_number);
+                    }
                     prune_info.add_mutated_object(*object_id);
                 }
             }
