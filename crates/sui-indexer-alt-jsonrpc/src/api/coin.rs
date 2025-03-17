@@ -61,7 +61,7 @@ trait CoinsApi {
     ) -> RpcResult<Option<SuiCoinMetadata>>;
 }
 
-/// Delegation Coin API for endpoints that are deleted to FN RPC
+/// Delegation Coin API for endpoints that are delegated to FN RPC
 #[open_rpc(namespace = "suix", tag = "Delegation Coin API")]
 #[rpc(server, client, namespace = "suix")]
 trait DelegationCoinsApi {

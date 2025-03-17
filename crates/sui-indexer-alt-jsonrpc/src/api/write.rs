@@ -45,13 +45,6 @@ pub trait WriteApi {
     ) -> RpcResult<DryRunTransactionBlockResponse>;
 }
 
-#[derive(clap::Args, Debug, Clone, Default)]
-pub struct WriteArgs {
-    /// The URL of the fullnode RPC we connect to for executing transactions.
-    #[arg(long)]
-    pub fullnode_rpc_url: Option<url::Url>,
-}
-
 pub(crate) struct Write(pub HttpClient);
 
 #[derive(Debug, thiserror::Error)]

@@ -28,8 +28,9 @@ pub struct RpcConfig {
     /// Configuration for coin-related RPC methods.
     pub coins: CoinsConfig,
 
-    /// Configuration for transaction execution RPC methods.
-    pub write: NodeConfig,
+    /// Configuration for methods that require a fullnode RPC connection,
+    /// including transaction execution, dry-running, and delegation coin queries etc.
+    pub node: NodeConfig,
 
     /// Configuration for bigtable kv store, if it is used.
     pub bigtable: Option<BigtableConfig>,
@@ -223,7 +224,7 @@ impl RpcLayer {
             transactions: self.transactions.finish(TransactionsConfig::default()),
             name_service: self.name_service.finish(NameServiceConfig::default()),
             coins: self.coins.finish(CoinsConfig::default()),
-            write: self.write.finish(NodeConfig::default()),
+            node: self.write.finish(NodeConfig::default()),
             bigtable: self.bigtable,
             package_resolver: self.package_resolver.finish(),
         }
@@ -331,7 +332,7 @@ impl Default for RpcConfig {
             transactions: TransactionsConfig::default(),
             name_service: NameServiceConfig::default(),
             coins: CoinsConfig::default(),
-            write: NodeConfig::default(),
+            node: NodeConfig::default(),
             bigtable: None,
             package_resolver: PackageResolverLayer::default().finish(),
         }

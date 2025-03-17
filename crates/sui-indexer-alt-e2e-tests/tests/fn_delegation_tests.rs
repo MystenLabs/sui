@@ -8,8 +8,8 @@ use prometheus::Registry;
 use reqwest::Client;
 use serde_json::{json, Value};
 use sui_indexer_alt_jsonrpc::{
-    api::write::WriteArgs, config::RpcConfig, data::system_package_task::SystemPackageTaskArgs,
-    start_rpc, RpcArgs,
+    config::RpcConfig, data::system_package_task::SystemPackageTaskArgs, start_rpc, NodeArgs,
+    RpcArgs,
 };
 use sui_macros::sim_test;
 use sui_pg_db::{temp::get_available_port, DbArgs};
@@ -65,7 +65,7 @@ impl FnDelegationTestCluster {
             None,
             DbArgs::default(),
             rpc_args,
-            WriteArgs {
+            NodeArgs {
                 fullnode_rpc_url: Some(fullnode_rpc_url),
             },
             SystemPackageTaskArgs::default(),
