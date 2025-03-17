@@ -396,3 +396,28 @@ async fn test_get_all_balances() {
     assert_eq!(response["result"][0]["coinType"], "0x2::sui::SUI");
     test_cluster.stopped().await;
 }
+
+#[sim_test]
+async fn test_get_all_balances_with_invalid_address() {
+    let test_cluster = FnDelegationTestCluster::new()
+        .await
+        .expect("Failed to create test cluster");
+    let invalid_address = "23333";
+
+    let response = test_cluster
+        .execute_jsonrpc(
+            "suix_getAllBalances".to_string(),
+            json!({ "owner": invalid_address }),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(response["error"]["code"], -32602);
+    assert_eq!(response["error"]["message"], "Invalid params");
+    assert!(response["error"]["data"]
+        .as_str()
+        .unwrap()
+        .contains("Deserialization failed"));
+
+    test_cluster.stopped().await;
+}
