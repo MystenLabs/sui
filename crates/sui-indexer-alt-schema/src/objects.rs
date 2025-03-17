@@ -30,6 +30,14 @@ pub struct StoredObjVersion {
     pub cp_sequence_number: i64,
 }
 
+/// Only the key fields of a row in `obj_versions`.
+#[derive(Selectable, Debug, Clone, QueryableByName)]
+#[diesel(table_name = obj_versions, primary_key(object_id, object_version))]
+pub struct StoredObjVersionKey {
+    pub object_id: Vec<u8>,
+    pub object_version: i64,
+}
+
 #[derive(AsExpression, FromSqlRow, Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
 #[diesel(sql_type = SmallInt)]
 #[repr(i16)]
