@@ -357,13 +357,13 @@ where
             context.clone(),
             block_verifier,
             commit_vote_monitor,
+            round_tracker.clone(),
             synchronizer.clone(),
             core_dispatcher,
             signals_receivers.block_broadcast_receiver(),
             transaction_certifier,
             dag_state.clone(),
             store,
-            round_tracker.clone(),
         ));
 
         let subscriber = if N::Client::SUPPORT_STREAMING {
