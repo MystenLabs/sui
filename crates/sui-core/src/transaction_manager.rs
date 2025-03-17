@@ -197,11 +197,6 @@ impl AvailableObjectsCache {
         }
     }
 
-    #[cfg(test)]
-    fn new_with_size_for_unittest(metrics: Arc<AuthorityMetrics>, size: usize) -> Self {
-        Self::new_with_size(metrics, size)
-    }
-
     fn enable_unbounded_cache(&mut self) {
         self.unbounded_cache_enabled += 1;
     }
@@ -1021,7 +1016,7 @@ mod test {
     #[cfg_attr(msim, ignore)]
     fn test_available_objects_cache() {
         let metrics = Arc::new(AuthorityMetrics::new(&Registry::default()));
-        let mut cache = AvailableObjectsCache::new_with_size_for_unittest(metrics, 5);
+        let mut cache = AvailableObjectsCache::new_with_size(metrics, 5);
 
         // insert 10 unique unversioned objects
         for i in 0..10 {
