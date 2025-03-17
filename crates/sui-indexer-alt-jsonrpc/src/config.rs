@@ -54,8 +54,8 @@ pub struct RpcLayer {
     /// Configuration for coin-related RPC methods.
     pub coins: CoinsLayer,
 
-    /// Configuration for transaction execution RPC methods.
-    pub write: WriteLayer,
+    /// Configuration for transaction execution, dry-running, and delegation coin queries etc.
+    pub node: NodeLayer,
 
     /// Configuration for bigtable kv store, if it is used.
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -174,7 +174,7 @@ pub struct NodeConfig {
 
 #[DefaultConfig]
 #[derive(Clone, Default, Debug)]
-pub struct WriteLayer {
+pub struct NodeLayer {
     pub header_value: Option<String>,
     pub max_request_size: Option<u32>,
 
@@ -212,7 +212,7 @@ impl RpcLayer {
             coins: CoinsConfig::default().into(),
             bigtable: None,
             package_resolver: PackageResolverLayer::default(),
-            write: NodeConfig::default().into(),
+            node: NodeConfig::default().into(),
             extra: Default::default(),
         }
     }
@@ -224,7 +224,7 @@ impl RpcLayer {
             transactions: self.transactions.finish(TransactionsConfig::default()),
             name_service: self.name_service.finish(NameServiceConfig::default()),
             coins: self.coins.finish(CoinsConfig::default()),
-            node: self.write.finish(NodeConfig::default()),
+            node: self.node.finish(NodeConfig::default()),
             bigtable: self.bigtable,
             package_resolver: self.package_resolver.finish(),
         }
@@ -285,10 +285,7 @@ impl CoinsLayer {
 }
 
 impl NodeConfig {
-    pub fn create_fullnode_rpc_client(
-        &self,
-        fullnode_rpc_url: url::Url,
-    ) -> anyhow::Result<HttpClient> {
+    pub fn client(&self, fullnode_rpc_url: url::Url) -> anyhow::Result<HttpClient> {
         let mut headers = HeaderMap::new();
         headers.insert(
             CLIENT_SDK_TYPE_HEADER,
@@ -303,9 +300,9 @@ impl NodeConfig {
     }
 }
 
-impl WriteLayer {
+impl NodeLayer {
     pub fn finish(self, base: NodeConfig) -> NodeConfig {
-        check_extra("write", self.extra);
+        check_extra("node", self.extra);
         NodeConfig {
             header_value: self.header_value.unwrap_or(base.header_value),
             max_request_size: self.max_request_size.unwrap_or(base.max_request_size),
@@ -446,7 +443,7 @@ impl From<CoinsConfig> for CoinsLayer {
     }
 }
 
-impl From<NodeConfig> for WriteLayer {
+impl From<NodeConfig> for NodeLayer {
     fn from(config: NodeConfig) -> Self {
         Self {
             header_value: Some(config.header_value),

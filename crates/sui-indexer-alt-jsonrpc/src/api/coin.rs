@@ -98,7 +98,7 @@ type Cursor = BcsCursor<BalanceCursor>;
 
 impl DelegationCoins {
     pub fn new(fullnode_rpc_url: url::Url, config: NodeConfig) -> anyhow::Result<Self> {
-        let client = config.create_fullnode_rpc_client(fullnode_rpc_url)?;
+        let client = config.client(fullnode_rpc_url)?;
         Ok(Self(client))
     }
 }
