@@ -423,7 +423,7 @@ async fn test_equivocating_direct_commit() {
     let b4_votes_all = VerifiedBlock::new_for_test(
         TestBlock::new(4, 1)
             .set_ancestors(block_refs_round_3)
-            .set_timestamp_ms(4 * 1000 + 1 as u64)
+            .set_timestamp_ms(4 * 1000 + 1_u64)
             .build(),
     );
 
@@ -516,7 +516,7 @@ async fn test_equivocating_direct_skip() {
     let c4_votes_none = VerifiedBlock::new_for_test(
         TestBlock::new(4, 2)
             .set_ancestors(vec![])
-            .set_timestamp_ms(4 * 1000 + 2 as u64)
+            .set_timestamp_ms(4 * 1000 + 2_u64)
             .build(),
     );
 
