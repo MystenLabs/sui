@@ -1166,8 +1166,8 @@ mod tests {
         assert_eq!(median_timestamps_by_stake_inner(timestamps, 14), 5_000);
     }
 
-    #[test]
-    fn test_median_timestamps_by_stake_errors() {
+    #[tokio::test]
+    async fn test_median_timestamps_by_stake_errors() {
         let num_authorities = 4;
         let (mut context, _keys) = Context::new_for_test(num_authorities);
         context
