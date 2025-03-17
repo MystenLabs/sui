@@ -73,7 +73,7 @@ fn process_directory(
                 return Ok(());
             }
 
-            if runtime_filter.as_ref().map_or(true, |f| f == &runtime) {
+            if runtime_filter.as_ref().is_none_or(|f| f == &runtime) {
                 info!("Updating dependencies for {}", runtime);
                 update_dependencies(dir_path, &runtime)?;
             }

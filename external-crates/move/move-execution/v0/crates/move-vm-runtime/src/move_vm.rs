@@ -17,7 +17,7 @@ use move_core_types::{
     metadata::Metadata,
 };
 use move_vm_config::runtime::VMConfig;
-use legacy_move_vm_types::data_store::MoveResolver;
+use move_vm_types::data_store::MoveResolver;
 
 pub struct MoveVM {
     runtime: VMRuntime,

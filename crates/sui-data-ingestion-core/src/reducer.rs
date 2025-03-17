@@ -81,4 +81,8 @@ where
     async fn commit(&self, batch: Vec<R>) -> Result<()> {
         self.as_ref().commit(batch).await
     }
+
+    fn should_close_batch(&self, batch: &[R], next_item: Option<&R>) -> bool {
+        self.as_ref().should_close_batch(batch, next_item)
+    }
 }

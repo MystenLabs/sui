@@ -7,7 +7,7 @@ use move_binary_format::errors::PartialVMResult;
 use move_core_types::{account_address::AccountAddress, gas_algebra::InternalGas};
 use move_vm_runtime::native_functions::{NativeContext, NativeFunction};
 #[allow(unused_imports)]
-use legacy_move_vm_types::{
+use move_vm_types::{
     loaded_data::runtime_types::Type,
     natives::function::NativeResult,
     pop_arg,
@@ -197,7 +197,7 @@ mod testing {
         vm_status::StatusCode,
     };
     use move_vm_runtime::native_functions::NativeContext;
-    use legacy_move_vm_types::{loaded_data::runtime_types::Type, values::Value};
+    use move_vm_types::{loaded_data::runtime_types::Type, values::Value};
     use std::{fmt, fmt::Write};
 
     const VECTOR_BEGIN: &str = "[";

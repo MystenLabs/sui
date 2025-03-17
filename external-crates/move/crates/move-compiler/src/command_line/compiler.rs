@@ -27,8 +27,8 @@ use crate::{
     unit_test,
 };
 use move_command_line_common::files::{
-    extension_equals, find_filenames_and_keep_specified, MOVE_COMPILED_EXTENSION, MOVE_EXTENSION,
-    SOURCE_MAP_EXTENSION,
+    extension_equals, find_filenames_and_keep_specified, DEBUG_INFO_EXTENSION,
+    MOVE_COMPILED_EXTENSION, MOVE_EXTENSION,
 };
 use move_core_types::language_storage::ModuleId as CompiledModuleId;
 use move_proc_macros::growing_stack;
@@ -735,7 +735,7 @@ pub fn output_compiled_units(
     macro_rules! emit_unit {
         ($path:ident, $unit:ident) => {{
             if emit_source_maps {
-                $path.set_extension(SOURCE_MAP_EXTENSION);
+                $path.set_extension(DEBUG_INFO_EXTENSION);
                 fs::write($path.as_path(), &$unit.serialize_source_map())?;
             }
 

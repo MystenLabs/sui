@@ -13,6 +13,7 @@ use tap::Pipe;
 pub mod client;
 mod config;
 mod error;
+pub mod field_mask;
 mod grpc;
 mod metrics;
 pub mod proto;
@@ -24,11 +25,8 @@ pub mod types;
 
 pub use client::Client;
 pub use config::Config;
-pub use error::{Result, RpcError};
+pub use error::{ErrorDetails, ErrorReason, Result, RpcError};
 pub use metrics::RpcMetrics;
-pub use sui_types::full_checkpoint_content::{CheckpointData, CheckpointTransaction};
-pub use types::CheckpointResponse;
-pub use types::ObjectResponse;
 
 #[derive(Clone)]
 pub struct RpcService {

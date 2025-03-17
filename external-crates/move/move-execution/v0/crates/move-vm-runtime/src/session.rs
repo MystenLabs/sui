@@ -18,7 +18,7 @@ use move_core_types::{
     language_storage::{ModuleId, TypeTag},
     runtime_value as R,
 };
-use legacy_move_vm_types::{
+use move_vm_types::{
     data_store::MoveResolver,
     gas::GasMeter,
     loaded_data::runtime_types::{CachedDatatype, CachedTypeIndex, Type},
@@ -42,7 +42,7 @@ pub struct SerializedReturnValues {
     pub return_values: Vec<(Vec<u8>, R::MoveTypeLayout)>,
 }
 
-impl<'r, 'l, S: MoveResolver> Session<'r, 'l, S> {
+impl<'r, S: MoveResolver> Session<'r, '_, S> {
     /// Execute a Move function with the given arguments. This is mainly designed for an external
     /// environment to invoke system logic written in Move.
     ///

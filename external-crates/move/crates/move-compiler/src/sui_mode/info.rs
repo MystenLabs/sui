@@ -271,7 +271,7 @@ fn add_private_transfers(
     struct TransferVisitor<'a> {
         transferred: &'a mut BTreeMap<(ModuleIdent, DatatypeName), TransferKind>,
     }
-    impl<'a> TypingVisitorContext for TransferVisitor<'a> {
+    impl TypingVisitorContext for TransferVisitor<'_> {
         fn push_warning_filter_scope(&mut self, _: WarningFilters) {
             unreachable!("no warning filters in function bodies")
         }

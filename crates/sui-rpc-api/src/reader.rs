@@ -217,22 +217,14 @@ impl Iterator for CheckpointTransactionsIter {
                     checkpoint
                 }
             } else {
-                let checkpoint = match self
+                let checkpoint = self
                     .reader
                     .inner()
-                    .get_checkpoint_by_sequence_number(current_checkpoint)
-                {
-                    Some(checkpoint) => checkpoint,
-                    None => return None,
-                };
-                let contents = match self
+                    .get_checkpoint_by_sequence_number(current_checkpoint)?;
+                let contents = self
                     .reader
                     .inner()
-                    .get_checkpoint_contents_by_sequence_number(checkpoint.sequence_number)
-                {
-                    Some(contents) => contents,
-                    None => return None,
-                };
+                    .get_checkpoint_contents_by_sequence_number(checkpoint.sequence_number)?;
 
                 self.checkpoint = Some((checkpoint.into_inner().into_data(), contents));
                 self.checkpoint.as_ref().unwrap()
@@ -326,23 +318,15 @@ impl Iterator for CheckpointIter {
     fn next(&mut self) -> Option<Self::Item> {
         let current_checkpoint = self.next_cursor?;
 
-        let checkpoint = match self
+        let checkpoint = self
             .reader
             .inner()
-            .get_checkpoint_by_sequence_number(current_checkpoint)
-        {
-            Some(checkpoint) => checkpoint,
-            None => return None,
-        }
-        .into_inner();
-        let contents = match self
+            .get_checkpoint_by_sequence_number(current_checkpoint)?
+            .into_inner();
+        let contents = self
             .reader
             .inner()
-            .get_checkpoint_contents_by_sequence_number(checkpoint.sequence_number)
-        {
-            Some(contents) => contents,
-            None => return None,
-        };
+            .get_checkpoint_contents_by_sequence_number(checkpoint.sequence_number)?;
 
         self.next_cursor = match self.direction {
             Direction::Ascending => current_checkpoint.checked_add(1),

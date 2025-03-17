@@ -38,7 +38,7 @@ use move_binary_format::errors::{PartialVMError, PartialVMResult};
 use move_core_types::{gas_algebra::InternalGas, identifier::Identifier};
 use move_stdlib_natives::{GasParameters, NurseryGasParameters};
 use move_vm_runtime::native_functions::{NativeFunction, NativeFunctionTable};
-use legacy_move_vm_types::{
+use move_vm_types::{
     natives::function::NativeResult,
     values::{Struct, Value},
 };

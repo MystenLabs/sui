@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use itertools::Itertools;
+use mysten_common::fatal;
 use mysten_metrics::monitored_scope;
 use prometheus::{register_int_gauge_with_registry, IntGauge, Registry};
 use serde::Serialize;
@@ -472,7 +473,66 @@ impl StateAccumulator {
             .into())
     }
 
-    pub async fn accumulate_running_root(
+    pub async fn wait_for_previous_running_root(
+        &self,
+        epoch_store: &AuthorityPerEpochStore,
+        checkpoint_seq_num: CheckpointSequenceNumber,
+    ) -> SuiResult {
+        assert!(checkpoint_seq_num > 0);
+
+        // Check if this is the first checkpoint of the new epoch, in which case
+        // there is nothing to wait for.
+        if self
+            .store
+            .get_root_state_accumulator_for_highest_epoch()?
+            .map(|(_, (last_checkpoint_prev_epoch, _))| last_checkpoint_prev_epoch)
+            == Some(checkpoint_seq_num - 1)
+        {
+            return Ok(());
+        }
+
+        // There is an edge case here where checkpoint_seq_num is 1. This means the previous
+        // checkpoint is the genesis checkpoint. CheckpointExecutor is guaranteed to execute
+        // and accumulate the genesis checkpoint, so this will resolve.
+        epoch_store
+            .notify_read_running_root(checkpoint_seq_num - 1)
+            .await?;
+        Ok(())
+    }
+
+    fn get_prior_root(
+        &self,
+        epoch_store: &AuthorityPerEpochStore,
+        checkpoint_seq_num: CheckpointSequenceNumber,
+    ) -> SuiResult<Accumulator> {
+        if checkpoint_seq_num == 0 {
+            return Ok(Accumulator::default());
+        }
+
+        if let Some((prev_epoch, (last_checkpoint_prev_epoch, prev_acc))) =
+            self.store.get_root_state_accumulator_for_highest_epoch()?
+        {
+            assert_eq!(prev_epoch + 1, epoch_store.epoch());
+            if last_checkpoint_prev_epoch == checkpoint_seq_num - 1 {
+                return Ok(prev_acc);
+            }
+        }
+
+        let Some(prior_running_root) =
+            epoch_store.get_running_root_accumulator(checkpoint_seq_num - 1)?
+        else {
+            fatal!(
+                "Running root accumulator must exist for checkpoint {}",
+                checkpoint_seq_num - 1
+            );
+        };
+
+        Ok(prior_running_root)
+    }
+
+    // Accumulate the running root.
+    // The previous checkpoint must be accumulated before calling this function, or it will panic.
+    pub fn accumulate_running_root(
         &self,
         epoch_store: &AuthorityPerEpochStore,
         checkpoint_seq_num: CheckpointSequenceNumber,
@@ -484,14 +544,9 @@ impl StateAccumulator {
             checkpoint_seq_num
         );
 
-        // For the last checkpoint of the epoch, this function will be called once by the
-        // checkpoint builder, and again by checkpoint executor.
-        //
-        // Normally this is fine, since the notify_read_running_root(checkpoint_seq_num - 1) will
-        // work normally. But if there is only one checkpoint in the epoch, that call will hang
-        // forever, since the previous checkpoint belongs to the previous epoch.
+        // Idempotency.
         if epoch_store
-            .get_running_root_accumulator(&checkpoint_seq_num)?
+            .get_running_root_accumulator(checkpoint_seq_num)?
             .is_some()
         {
             debug!(
@@ -502,49 +557,7 @@ impl StateAccumulator {
             return Ok(());
         }
 
-        let mut running_root = if checkpoint_seq_num == 0 {
-            // we're at genesis and need to start from scratch
-            Accumulator::default()
-        } else if epoch_store
-            .get_highest_running_root_accumulator()?
-            .is_none()
-        {
-            // we're at the beginning of a new epoch and need to
-            // bootstrap from the previous epoch's root state hash. Because this
-            // should only occur at beginning of epoch, we shouldn't have to worry
-            // about race conditions on reading the highest running root accumulator.
-            if let Some((prev_epoch, (last_checkpoint_prev_epoch, prev_acc))) =
-                self.store.get_root_state_accumulator_for_highest_epoch()?
-            {
-                if last_checkpoint_prev_epoch != checkpoint_seq_num - 1 {
-                    epoch_store
-                        .notify_read_running_root(checkpoint_seq_num - 1)
-                        .await?
-                } else {
-                    assert_eq!(
-                        prev_epoch + 1,
-                        epoch_store.epoch(),
-                        "Expected highest existing root state hash to be for previous epoch",
-                    );
-                    prev_acc
-                }
-            } else {
-                // Rare edge case where we manage to somehow lag in checkpoint execution from genesis
-                // such that the end of epoch checkpoint is built before we execute any checkpoints.
-                assert_eq!(
-                    epoch_store.epoch(),
-                    0,
-                    "Expected epoch to be 0 if previous root state hash does not exist"
-                );
-                epoch_store
-                    .notify_read_running_root(checkpoint_seq_num - 1)
-                    .await?
-            }
-        } else {
-            epoch_store
-                .notify_read_running_root(checkpoint_seq_num - 1)
-                .await?
-        };
+        let mut running_root = self.get_prior_root(epoch_store, checkpoint_seq_num)?;
 
         let checkpoint_acc = checkpoint_acc.unwrap_or_else(|| {
             epoch_store
@@ -568,7 +581,7 @@ impl StateAccumulator {
     ) -> SuiResult<Accumulator> {
         let _scope = monitored_scope("AccumulateEpochV2");
         let running_root = epoch_store
-            .get_running_root_accumulator(&last_checkpoint_of_epoch)?
+            .get_running_root_accumulator(last_checkpoint_of_epoch)?
             .expect("Expected running root accumulator to exist up to last checkpoint of epoch");
 
         self.store.insert_state_accumulator_for_epoch(

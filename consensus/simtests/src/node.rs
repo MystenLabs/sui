@@ -54,7 +54,7 @@ impl AuthorityNode {
 
     /// Start this Node
     pub async fn start(&self) -> Result<()> {
-        info!(index =% self.config.authority_index, "starting in-memory node");
+        info!(index = %self.config.authority_index, "starting in-memory node");
         let config = self.config.clone();
         *self.inner.lock() = Some(AuthorityNodeInner::spawn(config).await);
         Ok(())

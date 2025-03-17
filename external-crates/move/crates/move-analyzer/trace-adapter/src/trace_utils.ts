@@ -12,13 +12,13 @@ import {
     IRuntimeRefValue
 } from './runtime';
 import {
-    ISourceMap,
+    IDebugInfo,
     ILocalInfo,
     IFileLoc,
     IFileInfo,
     ILoc,
-    ISourceMapFunction
-} from './source_map_utils';
+    IDebugInfoFunction
+} from './debug_info_utils';
 
 
 // Data types corresponding to trace file JSON schema.
@@ -344,11 +344,11 @@ interface ITraceGenFrameInfo {
     /**
     * Information for a given function in a source file.
     */
-    srcFunEntry: ISourceMapFunction;
+    srcFunEntry: IDebugInfoFunction;
     /**
     * Information for a given function in a disassembled byc file.
     */
-    bcodeFunEntry: undefined | ISourceMapFunction;
+    bcodeFunEntry: undefined | IDebugInfoFunction;
 }
 
 /**
@@ -376,9 +376,9 @@ const INLINED_FRAME_ID_DIFFERENT_FILE = -2;
  */
 export function readTrace(
     traceFilePath: string,
-    sourceMapsHashMap: Map<string, ISourceMap>,
-    sourceMapsModMap: Map<string, ISourceMap>,
-    bcodeMapModMap: Map<string, ISourceMap>,
+    sourceMapsHashMap: Map<string, IDebugInfo>,
+    sourceMapsModMap: Map<string, IDebugInfo>,
+    bcodeMapModMap: Map<string, IDebugInfo>,
     filesMap: Map<string, IFileInfo>,
 ): ITrace {
     const traceJSON: JSONTraceRootObject = JSON.parse(fs.readFileSync(traceFilePath, 'utf8'));
@@ -682,7 +682,7 @@ function recordTracedLine(
  * an inlined macro defined in a different file, `false` otherwise.
  */
 function processInstructionIfMacro(
-    sourceMapsHashMap: Map<string, ISourceMap>,
+    sourceMapsHashMap: Map<string, IDebugInfo>,
     events: TraceEvent[],
     frameInfoStack: ITraceGenFrameInfo[],
     instPC: number,

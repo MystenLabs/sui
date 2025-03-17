@@ -5,7 +5,7 @@ use fastcrypto::hash::{Blake2b256, HashFunction, Keccak256};
 use move_binary_format::errors::PartialVMResult;
 use move_core_types::gas_algebra::InternalGas;
 use move_vm_runtime::{native_charge_gas_early_exit, native_functions::NativeContext};
-use legacy_move_vm_types::{
+use move_vm_types::{
     loaded_data::runtime_types::Type,
     natives::function::NativeResult,
     pop_arg,
@@ -42,7 +42,7 @@ fn hash<H: HashFunction<DIGEST_SIZE>, const DIGEST_SIZE: usize>(
         msg_cost_per_byte.mul((msg_ref.len() as u64).into())
             // Round up the blocks
             + msg_cost_per_block
-                .mul((((msg_ref.len() + block_size - 1) / block_size) as u64).into())
+                .mul((msg_ref.len().div_ceil(block_size) as u64).into())
     );
 
     Ok(NativeResult::ok(

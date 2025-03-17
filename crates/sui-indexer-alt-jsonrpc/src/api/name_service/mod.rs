@@ -2,7 +2,6 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use jsonrpsee::{core::RpcResult, proc_macros::rpc};
-use sui_name_service::NameServiceConfig;
 use sui_open_rpc::Module;
 use sui_open_rpc_macros::open_rpc;
 use sui_types::base_types::SuiAddress;
@@ -28,13 +27,13 @@ trait NameServiceApi {
     ) -> RpcResult<Option<SuiAddress>>;
 }
 
-pub(crate) struct NameService(pub Context, pub NameServiceConfig);
+pub(crate) struct NameService(pub Context);
 
 #[async_trait::async_trait]
 impl NameServiceApiServer for NameService {
     async fn resolve_name_service_address(&self, name: String) -> RpcResult<Option<SuiAddress>> {
-        let Self(ctx, config) = self;
-        Ok(response::resolved_address(ctx, config, &name)
+        let Self(ctx) = self;
+        Ok(response::resolved_address(ctx, &name)
             .await
             .with_internal_context(|| format!("Resolving SuiNS name {name:?}"))?)
     }

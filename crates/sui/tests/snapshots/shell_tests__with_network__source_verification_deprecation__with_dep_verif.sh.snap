@@ -71,20 +71,35 @@ Fix this by rebuilding your packages with source versions matching on-chain vers
 ----- stderr -----
 === munge Move.toml files ===
 === publish dependency ===
+[note] Dependencies on Bridge, DeepBook, MoveStdlib, Sui, and SuiSystem are automatically added, but this feature is disabled for your package because you have explicitly included dependencies on Sui. Consider removing these dependencies from Move.toml.
+INCLUDING DEPENDENCY Sui
+INCLUDING DEPENDENCY MoveStdlib
 BUILDING dependency
 Successfully verified dependencies on-chain against source.
 === publish package v0 (should NOT warn) ===
+[note] Dependencies on Bridge, DeepBook, MoveStdlib, Sui, and SuiSystem are automatically added, but this feature is disabled for your package because you have explicitly included dependencies on Sui. Consider removing these dependencies from Move.toml.
 INCLUDING DEPENDENCY dependency
+INCLUDING DEPENDENCY Sui
+INCLUDING DEPENDENCY MoveStdlib
 BUILDING example
 Successfully verified dependencies on-chain against source.
 === upgrade package (should NOT warn) ===
+[note] Dependencies on Bridge, DeepBook, MoveStdlib, Sui, and SuiSystem are automatically added, but this feature is disabled for your package because you have explicitly included dependencies on Sui. Consider removing these dependencies from Move.toml.
 INCLUDING DEPENDENCY dependency
+INCLUDING DEPENDENCY Sui
+INCLUDING DEPENDENCY MoveStdlib
 BUILDING example
 Successfully verified dependencies on-chain against source.
 === modify dependency ===
 === try to publish with modified dep (should fail) ===
+[note] Dependencies on Bridge, DeepBook, MoveStdlib, Sui, and SuiSystem are automatically added, but this feature is disabled for your package because you have explicitly included dependencies on Sui. Consider removing these dependencies from Move.toml.
 INCLUDING DEPENDENCY dependency
+INCLUDING DEPENDENCY Sui
+INCLUDING DEPENDENCY MoveStdlib
 BUILDING example
 === try to upgrade with modified dep (should fail) ===
+[note] Dependencies on Bridge, DeepBook, MoveStdlib, Sui, and SuiSystem are automatically added, but this feature is disabled for your package because you have explicitly included dependencies on Sui. Consider removing these dependencies from Move.toml.
 INCLUDING DEPENDENCY dependency
+INCLUDING DEPENDENCY Sui
+INCLUDING DEPENDENCY MoveStdlib
 BUILDING example

@@ -295,7 +295,7 @@ def auto_update_config():
 
     for directory in cargo_data["workspace"]["members"] + cargo_data["workspace"].get("exclude", []):
         for file in changed_files:
-            if file.startswith(directory):
+            if file.startswith(directory + "/"):
                 directories_to_checkout.append(directory)
                 break
 

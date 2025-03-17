@@ -137,7 +137,7 @@ impl EscapeAnalysis<'_> {
     }
 }
 
-impl<'a> TransferFunctions for EscapeAnalysis<'a> {
+impl TransferFunctions for EscapeAnalysis<'_> {
     type State = EscapeAnalysisState;
     const BACKWARD: bool = false;
 
@@ -239,7 +239,7 @@ impl<'a> TransferFunctions for EscapeAnalysis<'a> {
     }
 }
 
-impl<'a> DataflowAnalysis for EscapeAnalysis<'a> {}
+impl DataflowAnalysis for EscapeAnalysis<'_> {}
 pub struct EscapeAnalysisProcessor();
 impl EscapeAnalysisProcessor {
     pub fn new() -> Box<Self> {

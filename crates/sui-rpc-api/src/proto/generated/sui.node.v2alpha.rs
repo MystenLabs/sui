@@ -12,11 +12,11 @@ pub struct GetCoinInfoResponse {
     /// Required. The coin type.
     #[prost(message, optional, tag = "1")]
     pub coin_type: ::core::option::Option<super::super::types::TypeTag>,
-    /// Optional. This field will be populated with information about this coin
+    /// This field will be populated with information about this coin
     /// type's `0x2::coin::CoinMetadata` if it exists and has not been wrapped.
     #[prost(message, optional, tag = "2")]
     pub metadata: ::core::option::Option<CoinMetadata>,
-    /// Optional. This field will be populated with information about this coin
+    /// This field will be populated with information about this coin
     /// type's `0x2::coin::TreasuryCap` if it exists and has not been wrapped.
     #[prost(message, optional, tag = "3")]
     pub treasury: ::core::option::Option<CoinTreasury>,
@@ -110,7 +110,7 @@ pub struct DynamicField {
     /// Required. The serialized move value of "name"
     #[prost(bytes = "bytes", optional, tag = "4")]
     pub name_value: ::core::option::Option<::prost::bytes::Bytes>,
-    /// Optional. The ObjectId of the child object when a child is a dynamic
+    /// The ObjectId of the child object when a child is a dynamic
     /// object field.
     ///
     /// The presence or absence of this field can be used to determine if a child

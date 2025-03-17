@@ -21,7 +21,7 @@
 -- set at some checkpoint `C < T` where `T` is the tip of the chain, and
 -- `wal_obj_types` stores all the updates and deletes between `C` and `T`.
 --
--- To reconstruct the the live object set at some snapshot checkpoint `S`
+-- To reconstruct the live object set at some snapshot checkpoint `S`
 -- between `C` and `T`, a query can be constructed that starts with the set
 -- from `sum_obj_types` and adds updates in `wal_obj_types` from
 -- `cp_sequence_number <= S`.

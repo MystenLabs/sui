@@ -119,6 +119,7 @@ pub(crate) async fn verify_zklogin_signature(
         zklogin_env_native,
         true,
         true,
+        true,
         Some(30),
     );
 

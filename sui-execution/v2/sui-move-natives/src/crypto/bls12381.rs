@@ -7,7 +7,7 @@ use fastcrypto::{
 use move_binary_format::errors::PartialVMResult;
 use move_core_types::gas_algebra::InternalGas;
 use move_vm_runtime::{native_charge_gas_early_exit, native_functions::NativeContext};
-use legacy_move_vm_types::{
+use move_vm_types::{
     loaded_data::runtime_types::Type,
     natives::function::NativeResult,
     pop_arg,
@@ -74,7 +74,7 @@ pub fn bls12381_min_sig_verify(
             * (msg_ref.len() as u64).into()
             + bls12381_bls12381_min_sig_verify_cost_params
                 .bls12381_bls12381_min_sig_verify_msg_cost_per_block
-                * (((msg_ref.len() + BLS12381_BLOCK_SIZE - 1) / BLS12381_BLOCK_SIZE) as u64).into()
+                * (msg_ref.len().div_ceil(BLS12381_BLOCK_SIZE) as u64).into()
     );
 
     let cost = context.gas_used();
@@ -155,7 +155,7 @@ pub fn bls12381_min_pk_verify(
             * (msg_ref.len() as u64).into()
             + bls12381_bls12381_min_pk_verify_cost_params
                 .bls12381_bls12381_min_pk_verify_msg_cost_per_block
-                * (((msg_ref.len() + BLS12381_BLOCK_SIZE - 1) / BLS12381_BLOCK_SIZE) as u64).into()
+                * (msg_ref.len().div_ceil(BLS12381_BLOCK_SIZE) as u64).into()
     );
 
     let cost = context.gas_used();

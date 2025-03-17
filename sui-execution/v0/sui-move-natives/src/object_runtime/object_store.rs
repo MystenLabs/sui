@@ -6,7 +6,7 @@ use move_binary_format::errors::{PartialVMError, PartialVMResult};
 use move_core_types::{
     annotated_value as A, effects::Op, runtime_value as R, vm_status::StatusCode,
 };
-use legacy_move_vm_types::{
+use move_vm_types::{
     loaded_data::runtime_types::Type,
     values::{GlobalValue, StructRef, Value},
 };
@@ -80,7 +80,7 @@ pub(crate) enum ObjectResult<V> {
     Loaded(V),
 }
 
-impl<'a> Inner<'a> {
+impl Inner<'_> {
     fn get_or_fetch_object_from_store(
         &mut self,
         parent: ObjectID,

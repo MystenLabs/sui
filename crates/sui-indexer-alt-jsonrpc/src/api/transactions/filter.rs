@@ -3,7 +3,6 @@
 
 use anyhow::Context as _;
 use diesel::{
-    dsl::sql,
     expression::{
         is_aggregate::{Never, No},
         MixedAggregates, ValidGrouping,
@@ -20,20 +19,22 @@ use sui_indexer_alt_schema::schema::{
     tx_affected_addresses, tx_affected_objects, tx_calls, tx_digests,
 };
 use sui_json_rpc_types::{Page as PageResponse, SuiTransactionBlockResponseOptions};
+use sui_sql_macro::sql;
 use sui_types::{
     base_types::{ObjectID, SuiAddress},
     digests::TransactionDigest,
-    messages_checkpoint::{CheckpointContents, CheckpointSequenceNumber, CheckpointSummary},
+    messages_checkpoint::CheckpointSequenceNumber,
     sui_serde::{BigInt, Readable},
 };
 
 use crate::{
-    data::{checkpoints::CheckpointKey, tx_digests::TxDigestKey},
+    context::Context,
+    data::tx_digests::TxDigestKey,
     error::{invalid_params, RpcError},
     paginate::{Cursor as _, JsonCursor, Page},
 };
 
-use super::{error::Error, Context, TransactionsConfig};
+use super::error::Error;
 
 #[derive(Debug, Clone, Deserialize, Serialize, JsonSchema, Default)]
 #[serde(
@@ -71,6 +72,8 @@ pub(crate) enum TransactionFilter {
     FromAndToAddress { from: SuiAddress, to: SuiAddress },
     /// Query transactions that have a given address as sender or recipient.
     FromOrToAddress { addr: SuiAddress },
+    /// Query by recipient address. On this RPC, this is an alias for `FromOrToAddress`.
+    ToAddress(SuiAddress),
 }
 
 type Cursor = JsonCursor<u64>;
@@ -81,12 +84,12 @@ type Digests = PageResponse<TransactionDigest, String>;
 /// results).
 pub(super) async fn transactions(
     ctx: &Context,
-    config: &TransactionsConfig,
     filter: &Option<TransactionFilter>,
     cursor: Option<String>,
     limit: Option<usize>,
     descending_order: Option<bool>,
 ) -> Result<Digests, RpcError<Error>> {
+    let config = &ctx.config().transactions;
     let page: Page<Cursor> = Page::from_params(
         config.default_page_size,
         config.max_page_size,
@@ -116,6 +119,8 @@ pub(super) async fn transactions(
         }
 
         Some(F::FromOrToAddress { addr }) => tx_affected_addresses(ctx, &page, None, *addr).await,
+
+        Some(F::ToAddress(addr)) => tx_affected_addresses(ctx, &page, None, *addr).await,
     }
 }
 
@@ -128,7 +133,7 @@ async fn all_transactions(ctx: &Context, page: &Page<Cursor>) -> Result<Digests,
         .into_boxed();
 
     let results: Vec<(i64, Vec<u8>)> = ctx
-        .reader()
+        .pg_reader()
         .connect()
         .await
         .context("Failed to connect to the database")?
@@ -145,20 +150,14 @@ async fn by_checkpoint(
     page: &Page<Cursor>,
     checkpoint: u64,
 ) -> Result<Digests, RpcError<Error>> {
-    let Some(checkpoint) = ctx
-        .loader()
-        .load_one(CheckpointKey(checkpoint))
+    let Some((summary, contents, _)) = ctx
+        .kv_loader()
+        .load_one_checkpoint(checkpoint)
         .await
         .context("Failed to load checkpoint")?
     else {
         return Ok(PageResponse::empty());
     };
-
-    let summary: CheckpointSummary = bcs::from_bytes(&checkpoint.checkpoint_summary)
-        .context("Failed to deserialize checkpoint summary")?;
-
-    let contents: CheckpointContents = bcs::from_bytes(&checkpoint.checkpoint_contents)
-        .context("Failed to deserialize checkpoint contents")?;
 
     // Transaction sequence number bounds from the checkpoint
     let cp_hi = summary.network_total_transactions;
@@ -238,7 +237,7 @@ async fn tx_calls(
     }
 
     let results: Vec<i64> = ctx
-        .reader()
+        .pg_reader()
         .connect()
         .await
         .context("Failed to connect to the database")?
@@ -264,7 +263,7 @@ async fn tx_affected_objects(
         .into_boxed();
 
     let results: Vec<i64> = ctx
-        .reader()
+        .pg_reader()
         .connect()
         .await
         .context("Failed to connect to the database")?
@@ -304,7 +303,7 @@ async fn tx_affected_addresses(
     }
 
     let results: Vec<i64> = ctx
-        .reader()
+        .pg_reader()
         .connect()
         .await
         .context("Failed to connect to the database")?
@@ -341,8 +340,8 @@ where
     TX: ExpressionMethods + Expression<SqlType = SqlBigInt>,
     TX::IsAggregate: MixedAggregates<Never, Output = No>,
 {
-    query = query.filter(tx_sequence_number.ge(sql::<SqlBigInt>(&format!(
-        r#"COALESCE(
+    query = query.filter(tx_sequence_number.ge(sql!(as SqlBigInt,
+        "COALESCE(
             (
                 SELECT
                     MAX(tx_lo)
@@ -353,11 +352,12 @@ where
                 ON
                     w.reader_lo = c.cp_sequence_number
                 WHERE
-                    w.pipeline IN ('{pipeline}', 'tx_digests')
+                    w.pipeline IN ({Text}, 'tx_digests')
             ),
             0
-        )"#
-    ))));
+        )",
+        pipeline,
+    )));
 
     if let Some(JsonCursor(tx)) = page.cursor {
         if page.descending {
@@ -395,7 +395,7 @@ async fn from_sequence_numbers(
         .context("Failed to encode next cursor")?;
 
     let digests = ctx
-        .loader()
+        .pg_loader()
         .load_many(rows.iter().map(|&seq| TxDigestKey(seq as u64)))
         .await
         .context("Failed to load transaction digests")?;

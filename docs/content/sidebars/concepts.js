@@ -36,15 +36,6 @@ const concepts = [
 					},
 					{
 						type: 'category',
-						label: 'Dynamic Fields',
-						link: {
-							type: 'doc',
-							id: 'concepts/dynamic-fields',
-						},
-						items: ['concepts/dynamic-fields/tables-bags'],
-					},
-					{
-						type: 'category',
 						label: 'Transfers',
 						link: {
 							type: 'doc',
@@ -119,6 +110,7 @@ const concepts = [
 				],
 			},
 			'concepts/cryptography/zklogin',
+			'concepts/cryptography/passkeys',
 			'concepts/cryptography/system/checkpoint-verification',
 			/*{
 				type: 'category',
@@ -170,7 +162,6 @@ const concepts = [
 			'concepts/tokenomics/vesting-strategies'
 		],
 	},
-	'concepts/sui-bridge',
 	'concepts/research-papers',
 ];
 module.exports = concepts;

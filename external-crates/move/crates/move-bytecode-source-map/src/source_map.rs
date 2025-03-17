@@ -27,6 +27,9 @@ use std::{collections::BTreeMap, ops::Bound};
 
 pub type SourceName = (String, Loc);
 
+/// The current version of the trace format.
+const CURRENT_VERSION: u64 = 1;
+
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct StructSourceMap {
     /// The source declaration location of the struct
@@ -91,6 +94,9 @@ pub struct FunctionSourceMap {
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct SourceMap {
+    /// Version of the source map format
+    pub version: u64,
+
     /// The source location for the definition of the module or script that this source map is for.
     pub definition_location: Loc,
 
@@ -348,6 +354,7 @@ impl SourceMap {
             (module_name.address, ident)
         };
         Self {
+            version: CURRENT_VERSION,
             definition_location,
             module_name,
             struct_map: BTreeMap::new(),

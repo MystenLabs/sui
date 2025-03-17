@@ -423,8 +423,7 @@ impl AuthorityStore {
             let marker_entry = self
                 .perpetual_tables
                 .object_per_epoch_marker_table_v2
-                .safe_iter_with_bounds(Some(min_key), Some(max_key))
-                .skip_prior_to(&max_key)?
+                .reversed_safe_iter_with_bounds(Some(min_key), Some(max_key))?
                 .next();
             match marker_entry {
                 Some(Ok(((epoch, key), marker))) => {
@@ -443,8 +442,7 @@ impl AuthorityStore {
             let marker_entry = self
                 .perpetual_tables
                 .object_per_epoch_marker_table
-                .safe_iter_with_bounds(Some(min_key), Some(max_key))
-                .skip_prior_to(&max_key)?
+                .reversed_safe_iter_with_bounds(Some(min_key), Some(max_key))?
                 .next();
             match marker_entry {
                 Some(Ok(((epoch, key), marker))) => {
@@ -565,10 +563,12 @@ impl AuthorityStore {
         let mut iterator = self
             .perpetual_tables
             .objects
-            .unbounded_iter()
-            .skip_prior_to(&ObjectKey(*object_id, prior_version))?;
+            .reversed_safe_iter_with_bounds(
+                Some(ObjectKey::min_for_id(object_id)),
+                Some(ObjectKey(*object_id, prior_version)),
+            )?;
 
-        if let Some((object_key, value)) = iterator.next() {
+        if let Some((object_key, value)) = iterator.next().transpose()? {
             if object_key.0 == *object_id {
                 return Ok(Some(
                     self.perpetual_tables.object_reference(&object_key, value)?,
@@ -621,10 +621,9 @@ impl AuthorityStore {
         let marker_entry = self
             .perpetual_tables
             .object_per_epoch_marker_table
-            .unbounded_iter()
-            .skip_prior_to(&marker_key)?
+            .reversed_safe_iter_with_bounds(None, Some(marker_key))?
             .next();
-        match marker_entry {
+        match marker_entry.transpose()? {
             Some(((epoch, key), marker)) => {
                 // Make sure object id matches and version is >= `version`
                 let object_data_ok = key.0 == *object_id && key.1 >= version;
@@ -1049,11 +1048,13 @@ impl AuthorityStore {
         let mut iterator = self
             .perpetual_tables
             .live_owned_object_markers
-            .unbounded_iter()
-            // Make the max possible entry for this object ID.
-            .skip_prior_to(&(object_id, SequenceNumber::MAX, ObjectDigest::MAX))?;
+            .reversed_safe_iter_with_bounds(
+                None,
+                Some((object_id, SequenceNumber::MAX, ObjectDigest::MAX)),
+            )?;
         Ok(iterator
             .next()
+            .transpose()?
             .and_then(|value| {
                 if value.0 .0 == object_id {
                     Some(value)
@@ -1768,18 +1769,6 @@ impl AuthorityStore {
         Ok(())
     }
 
-    #[cfg(msim)]
-    pub fn remove_all_versions_of_object(&self, object_id: ObjectID) {
-        let entries: Vec<_> = self
-            .perpetual_tables
-            .objects
-            .unbounded_iter()
-            .filter_map(|(key, _)| if key.0 == object_id { Some(key) } else { None })
-            .collect();
-        info!("Removing all versions of object: {:?}", entries);
-        self.perpetual_tables.objects.multi_remove(entries).unwrap();
-    }
-
     // Counts the number of versions exist in object store for `object_id`. This includes tombstone.
     #[cfg(msim)]
     pub fn count_object_versions(&self, object_id: ObjectID) -> usize {
@@ -1820,8 +1809,7 @@ impl AccumulatorStore for AuthorityStore {
         Ok(self
             .perpetual_tables
             .root_state_hash_by_epoch
-            .safe_iter()
-            .skip_to_last()
+            .reversed_safe_iter_with_bounds(None, None)?
             .next()
             .transpose()?)
     }

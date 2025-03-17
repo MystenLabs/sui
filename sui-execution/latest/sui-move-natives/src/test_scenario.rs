@@ -294,7 +294,7 @@ pub fn end_transaction(
         &mut all_wrapped,
         object_runtime_ref
             .all_active_child_objects()
-            .filter_map(|child| Some((child.id, child.move_type, child.copied_value?))),
+            .filter_map(|child| Some((child.id, child.ty, child.copied_value?))),
     );
     // mark as "incorrect" if a shared/imm object was wrapped or is a child object
     incorrect_shared_or_imm_handling = incorrect_shared_or_imm_handling
@@ -317,14 +317,14 @@ pub fn end_transaction(
     // new input objects are remaining taken objects not written/deleted
     let mut config_settings = vec![];
     for child in object_runtime_ref.all_active_child_objects() {
-        let s: StructTag = child.move_type.clone().into();
+        let s: StructTag = child.ty.clone().into();
         let is_setting = DynamicFieldInfo::is_dynamic_field(&s)
             && matches!(&s.type_params[1], TypeTag::Struct(s) if config::is_setting(s));
         if is_setting {
             config_settings.push((
                 *child.owner,
                 *child.id,
-                child.move_type.clone(),
+                child.ty.clone(),
                 child.copied_value,
             ));
         }
@@ -954,7 +954,7 @@ fn find_all_wrapped_objects<'a, 'i>(
         uid: &'u MoveStructLayout,
     }
 
-    impl<'i, 'u, 'b, 'l> AV::Traversal<'b, 'l> for Traversal<'i, 'u> {
+    impl<'b, 'l> AV::Traversal<'b, 'l> for Traversal<'_, '_> {
         type Error = AV::Error;
 
         fn traverse_struct(

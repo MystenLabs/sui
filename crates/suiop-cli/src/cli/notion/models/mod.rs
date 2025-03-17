@@ -120,6 +120,7 @@ impl ListResponse<Object> {
         }
     }
 
+    #[allow(clippy::result_large_err)]
     pub(crate) fn expect_databases(self) -> Result<ListResponse<Database>, super::Error> {
         let databases: Result<Vec<_>, _> = self
             .results
@@ -137,6 +138,7 @@ impl ListResponse<Object> {
         })
     }
 
+    #[allow(clippy::result_large_err)]
     pub(crate) fn expect_pages(self) -> Result<ListResponse<Page>, super::Error> {
         let items: Result<Vec<_>, _> = self
             .results
@@ -154,6 +156,7 @@ impl ListResponse<Object> {
         })
     }
 
+    #[allow(clippy::result_large_err)]
     pub(crate) fn expect_blocks(self) -> Result<ListResponse<Block>, super::Error> {
         let items: Result<Vec<_>, _> = self
             .results

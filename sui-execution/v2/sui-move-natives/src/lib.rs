@@ -51,7 +51,7 @@ use move_core_types::{
 };
 use move_stdlib_natives::{GasParameters, NurseryGasParameters};
 use move_vm_runtime::native_functions::{NativeContext, NativeFunction, NativeFunctionTable};
-use legacy_move_vm_types::{
+use move_vm_types::{
     loaded_data::runtime_types::Type,
     natives::function::NativeResult,
     values::{Struct, Value},
@@ -602,9 +602,7 @@ impl NativesCostTable {
                 bls12381_g2_msm_base_cost_per_input: protocol_config
                     .group_ops_bls12381_g2_msm_base_cost_per_input_as_option()
                     .map(Into::into),
-                bls12381_msm_max_len: protocol_config
-                    .group_ops_bls12381_msm_max_len_as_option()
-                    .map(Into::into),
+                bls12381_msm_max_len: protocol_config.group_ops_bls12381_msm_max_len_as_option(),
                 bls12381_pairing_cost: protocol_config
                     .group_ops_bls12381_pairing_cost_as_option()
                     .map(Into::into),

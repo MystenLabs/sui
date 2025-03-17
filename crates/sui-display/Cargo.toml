@@ -1,0 +1,16 @@
+[package]
+name = "sui-display"
+version.workspace = true
+authors = ["Mysten Labs <build@mystenlabs.com"]
+license = "Apache-2.0"
+publish = false
+edition = "2021"
+
+[dependencies]
+anyhow.workspace = true
+thiserror.workspace = true
+
+move-core-types.workspace = true
+
+sui-json-rpc-types.workspace = true
+sui-types.workspace = true

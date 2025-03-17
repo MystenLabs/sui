@@ -8,15 +8,21 @@ use move_cli::base::{
 };
 use move_package::BuildConfig;
 use move_unit_test::{extensions::set_extension_hook, UnitTestingConfig};
-use move_vm_runtime::natives::extensions::NativeContextExtensions;
+use move_vm_runtime::natives::extensions::{NativeContextExtensions, NativeContextMut};
 use once_cell::sync::Lazy;
-use std::{cell::RefCell, collections::BTreeMap, path::Path, sync::Arc};
-use sui_move_build::decorate_warnings;
-use sui_move_natives::test_scenario::InMemoryTestStore;
-use sui_move_natives::{object_runtime::ObjectRuntime, NativesCostTable};
+use std::{cell::RefCell, collections::BTreeMap, path::Path, rc::Rc, sync::Arc};
+use sui_adapter::gas_meter::initial_cost_schedule_for_unit_tests;
+use sui_move_build::{decorate_warnings, implicit_deps};
+use sui_move_natives::{
+    object_runtime::ObjectRuntime, test_scenario::InMemoryTestStore,
+    transaction_context::TransactionContext, NativesCostTable,
+};
+use sui_package_management::system_package_versions::latest_system_packages;
 use sui_protocol_config::ProtocolConfig;
 use sui_types::{
-    gas_model::tables::initial_cost_schedule_for_unit_tests, in_memory_storage::InMemoryStorage,
+    base_types::{SuiAddress, TxContext},
+    digests::TransactionDigest,
+    in_memory_storage::InMemoryStorage,
     metrics::LimitsMetrics,
 };
 
@@ -71,7 +77,7 @@ static SET_EXTENSION_HOOK: Lazy<()> =
 /// successfully started running the test, and the inner result indicatests whether all tests pass.
 pub fn run_move_unit_tests(
     path: &Path,
-    build_config: BuildConfig,
+    mut build_config: BuildConfig,
     config: Option<UnitTestingConfig>,
     compute_coverage: bool,
     save_disassembly: bool,
@@ -81,6 +87,7 @@ pub fn run_move_unit_tests(
 
     let config = config
         .unwrap_or_else(|| UnitTestingConfig::default_with_bound(Some(MAX_UNIT_TEST_INSTRUCTIONS)));
+    build_config.implicit_dependencies = implicit_deps(latest_system_packages());
 
     let result = move_cli::base::test::run_move_unit_tests(
         path,
@@ -113,18 +120,29 @@ fn new_testing_object_and_natives_cost_runtime(ext: &mut NativeContextExtensions
     let registry = prometheus::Registry::new();
     let metrics = Arc::new(LimitsMetrics::new(&registry));
     let store = Lazy::force(&TEST_STORE);
+    let protocol_config = ProtocolConfig::get_for_max_version_UNSAFE();
 
-    ext.add(ObjectRuntime::new(
+    ext.add(NativeContextMut::new(ObjectRuntime::new(
         store,
         BTreeMap::new(),
         false,
         Box::leak(Box::new(ProtocolConfig::get_for_max_version_UNSAFE())), // leak for testing
         metrics,
         0, // epoch id
-    ));
-    ext.add(NativesCostTable::from_protocol_config(
-        &ProtocolConfig::get_for_max_version_UNSAFE(),
-    ));
-
+    )));
+    ext.add(NativesCostTable::from_protocol_config(&protocol_config));
+    let tx_context = TxContext::new_from_components(
+        &SuiAddress::ZERO,
+        &TransactionDigest::default(),
+        &0,
+        0,
+        0,
+        0,
+        None,
+        &protocol_config,
+    );
+    ext.add(TransactionContext::new_for_testing(Rc::new(RefCell::new(
+        tx_context,
+    ))));
     ext.add(store);
 }

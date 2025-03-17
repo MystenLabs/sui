@@ -191,9 +191,11 @@ impl SimulatorStore for PersistedStore {
     fn get_highest_checkpint(&self) -> Option<VerifiedCheckpoint> {
         self.read_write
             .checkpoints
-            .unbounded_iter()
-            .skip_to_last()
+            .reversed_safe_iter_with_bounds(None, None)
+            .expect("failed to fetch highest checkpoint")
             .next()
+            .transpose()
+            .expect("failed to fetch highest checkpoint")
             .map(|(_, checkpoint)| checkpoint.into())
     }
 
@@ -286,7 +288,8 @@ impl SimulatorStore for PersistedStore {
 
     fn owned_objects(&self, owner: SuiAddress) -> Box<dyn Iterator<Item = Object> + '_> {
         Box::new(self.read_write.live_objects
-            .unbounded_iter()
+            .safe_iter()
+            .map(|result| result.expect("rocksdb iteration failed"))
             .flat_map(|(id, version)| self.get_object_at_version(&id, version))
             .filter(
                 move |object| matches!(object.owner, Owner::AddressOwner(addr) if addr == owner),
@@ -583,9 +586,9 @@ impl ReadStore for PersistedStoreInnerReadOnlyWrapper {
         self.sync();
         self.inner
             .checkpoints
-            .unbounded_iter()
-            .skip_to_last()
+            .reversed_safe_iter_with_bounds(None, None)?
             .next()
+            .transpose()?
             .map(|(_, checkpoint)| checkpoint.into())
             .ok_or(SuiError::UserInputError {
                 error: UserInputError::LatestCheckpointSequenceNumberNotFound,

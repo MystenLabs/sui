@@ -607,6 +607,7 @@ impl DataFetcher for RemoteFetcher {
     }
 }
 
+#[allow(clippy::result_large_err)]
 fn convert_past_obj_response(resp: SuiPastObjectResponse) -> Result<Object, ReplayEngineError> {
     match resp {
         SuiPastObjectResponse::VersionFound(o) => obj_from_sui_obj_data(&o),
@@ -631,11 +632,13 @@ fn convert_past_obj_response(resp: SuiPastObjectResponse) -> Result<Object, Repl
     }
 }
 
+#[allow(clippy::result_large_err)]
 fn obj_from_sui_obj_response(o: &SuiObjectResponse) -> Result<Object, ReplayEngineError> {
     let o = o.object().map_err(ReplayEngineError::from)?.clone();
     obj_from_sui_obj_data(&o)
 }
 
+#[allow(clippy::result_large_err)]
 fn obj_from_sui_obj_data(o: &SuiObjectData) -> Result<Object, ReplayEngineError> {
     match TryInto::<Object>::try_into(o.clone()) {
         Ok(obj) => Ok(obj),
@@ -643,6 +646,7 @@ fn obj_from_sui_obj_data(o: &SuiObjectData) -> Result<Object, ReplayEngineError>
     }
 }
 
+#[allow(clippy::result_large_err)]
 pub fn extract_epoch_and_version(ev: SuiEvent) -> Result<(u64, u64), ReplayEngineError> {
     if let serde_json::Value::Object(w) = ev.parsed_json {
         let epoch = u64::from_str(&w["epoch"].to_string().replace('\"', "")).unwrap();

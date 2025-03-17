@@ -15,6 +15,7 @@ use crate::{
 use futures::executor::block_on;
 use move_binary_format::CompiledModule;
 use move_bytecode_utils::module_cache::GetModule;
+use move_core_types::resolver::SerializedPackage;
 use move_core_types::{
     account_address::AccountAddress,
     language_storage::{ModuleId, StructTag},
@@ -40,7 +41,8 @@ use sui_protocol_config::{Chain, ProtocolConfig};
 use sui_sdk::{SuiClient, SuiClientBuilder};
 use sui_types::in_memory_storage::InMemoryStorage;
 use sui_types::message_envelope::Message;
-use sui_types::storage::{get_module, PackageObject};
+use sui_types::storage::{get_module, get_package, PackageObject};
+use sui_types::transaction::GasData;
 use sui_types::transaction::TransactionKind::ProgrammableTransaction;
 use sui_types::SUI_DENY_LIST_OBJECT_ID;
 use sui_types::{
@@ -82,6 +84,7 @@ pub struct ExecutionSandboxState {
 }
 
 impl ExecutionSandboxState {
+    #[allow(clippy::result_large_err)]
     pub fn check_effects(&self) -> Result<(), ReplayEngineError> {
         if self.transaction_info.effects != self.local_exec_effects {
             error!("Replay tool forked {}", self.transaction_info.tx_digest);
@@ -514,7 +517,7 @@ impl LocalExec {
     }
 
     // TODO: remove this after `futures::executor::block_on` is removed.
-    #[allow(clippy::disallowed_methods)]
+    #[allow(clippy::disallowed_methods, clippy::result_large_err)]
     pub fn download_object(
         &self,
         object_id: &ObjectID,
@@ -559,7 +562,7 @@ impl LocalExec {
     }
 
     // TODO: remove this after `futures::executor::block_on` is removed.
-    #[allow(clippy::disallowed_methods)]
+    #[allow(clippy::disallowed_methods, clippy::result_large_err)]
     pub fn download_latest_object(
         &self,
         object_id: &ObjectID,
@@ -593,7 +596,7 @@ impl LocalExec {
         }
     }
 
-    #[allow(clippy::disallowed_methods)]
+    #[allow(clippy::disallowed_methods, clippy::result_large_err)]
     pub fn download_object_by_upper_bound(
         &self,
         object_id: &ObjectID,
@@ -764,6 +767,12 @@ impl LocalExec {
             )
             .expect("Failed to create gas status")
         };
+        let gas_data = GasData {
+            payment: tx_info.gas.clone(),
+            owner: tx_info.gas_owner.unwrap_or(tx_info.sender),
+            price: tx_info.gas_price,
+            budget: tx_info.gas_budget,
+        };
         let (inner_store, gas_status, effects, _timings, result) = executor
             .execute_transaction_to_effects(
                 &self,
@@ -774,7 +783,7 @@ impl LocalExec {
                 &tx_info.executed_epoch,
                 tx_info.epoch_start_timestamp,
                 CheckedInputObjects::new_for_replay(input_objects.clone()),
-                tx_info.gas.clone(),
+                gas_data,
                 gas_status,
                 transaction_kind.clone(),
                 tx_info.sender,
@@ -823,6 +832,12 @@ impl LocalExec {
         trace!(target: "replay_gas_info", "{}", Pretty(gas_status));
 
         let skip_checks = true;
+        let gas_data = GasData {
+            payment: tx_info.gas.clone(),
+            owner: tx_info.gas_owner.unwrap_or(tx_info.sender),
+            price: tx_info.gas_price,
+            budget: tx_info.gas_budget,
+        };
         if let ProgrammableTransaction(pt) = transaction_kind {
             trace!(
                 target: "replay_ptb_info",
@@ -841,7 +856,7 @@ impl LocalExec {
                             &tx_info.executed_epoch,
                             tx_info.epoch_start_timestamp,
                             CheckedInputObjects::new_for_replay(input_objects),
-                            tx_info.gas.clone(),
+                            gas_data,
                             SuiGasStatus::new(
                                 tx_info.gas_budget,
                                 tx_info.gas_price,
@@ -862,6 +877,7 @@ impl LocalExec {
     }
 
     /// Must be called after `init_for_execution`
+    #[allow(clippy::result_large_err)]
     pub async fn execution_engine_execute_impl(
         &mut self,
         tx_digest: &TransactionDigest,
@@ -891,6 +907,7 @@ impl LocalExec {
     /// Executes a transaction with the state specified in `pre_run_sandbox`
     /// This is useful for executing a transaction with a specific state
     /// However if the state in invalid, the behavior is undefined.
+    #[allow(clippy::result_large_err)]
     pub async fn certificate_execute_with_sandbox_state(
         pre_run_sandbox: &ExecutionSandboxState,
     ) -> Result<ExecutionSandboxState, ReplayEngineError> {
@@ -924,7 +941,7 @@ impl LocalExec {
             reference_gas_price,
         )
         .unwrap();
-        let (kind, signer, gas) = executable.transaction_data().execution_parts();
+        let (kind, signer, gas_data) = executable.transaction_data().execution_parts();
         let executor = sui_execution::executor(&protocol_config, true, None).unwrap();
         let (_, _, effects, _timings, exec_res) = executor.execute_transaction_to_effects(
             &store,
@@ -935,7 +952,7 @@ impl LocalExec {
             &executed_epoch,
             epoch_start_timestamp,
             input_objects,
-            gas,
+            gas_data,
             gas_status,
             kind,
             signer,
@@ -957,6 +974,7 @@ impl LocalExec {
 
     /// Must be called after `init_for_execution`
     /// This executes from `sui_core::authority::AuthorityState::try_execute_immediately`
+    #[allow(clippy::result_large_err)]
     pub async fn certificate_execute(
         &mut self,
         tx_digest: &TransactionDigest,
@@ -971,6 +989,7 @@ impl LocalExec {
 
     /// Must be called after `init_for_execution`
     /// This executes from `sui_adapter::execution_engine::execute_transaction_to_effects`
+    #[allow(clippy::result_large_err)]
     pub async fn execution_engine_execute(
         &mut self,
         tx_digest: &TransactionDigest,
@@ -983,6 +1002,7 @@ impl LocalExec {
         Ok(sandbox_state)
     }
 
+    #[allow(clippy::result_large_err)]
     pub async fn execute_state_dump(
         &mut self,
         expensive_safety_check_config: ExpensiveSafetyCheckConfig,
@@ -1001,6 +1021,7 @@ impl LocalExec {
         Ok((sandbox_state, d.node_state_dump))
     }
 
+    #[allow(clippy::result_large_err)]
     pub async fn execute_transaction(
         &mut self,
         tx_digest: &TransactionDigest,
@@ -1033,6 +1054,7 @@ impl LocalExec {
     }
 
     /// This is the only function which accesses the network during execution
+    #[allow(clippy::result_large_err)]
     pub fn get_or_download_object(
         &self,
         obj_id: &ObjectID,
@@ -1094,6 +1116,7 @@ impl LocalExec {
     }
 
     /// Must be called after `populate_protocol_version_tables`
+    #[allow(clippy::result_large_err)]
     pub fn system_package_versions_for_protocol_version(
         &self,
         protocol_version: u64,
@@ -1530,8 +1553,9 @@ impl LocalExec {
             input_objects: input_objs,
             shared_object_refs,
             gas: gas_object_refs,
-            gas_budget: gas_data.budget,
+            gas_owner: (gas_data.owner != sender).then_some(gas_data.owner),
             gas_price: gas_data.price,
+            gas_budget: gas_data.budget,
             executed_epoch: epoch_id,
             dependencies: effects.dependencies().to_vec(),
             effects: SuiTransactionBlockEffects::V1(effects),
@@ -1592,8 +1616,6 @@ impl LocalExec {
                 }
             })
             .collect();
-        let gas_data = orig_tx.transaction_data().gas_data();
-        let gas_object_refs: Vec<_> = gas_data.clone().payment.into_iter().collect();
         let receiving_objs = orig_tx
             .transaction_data()
             .receiving_objects()
@@ -1611,6 +1633,8 @@ impl LocalExec {
         let (epoch_start_timestamp, reference_gas_price) = self
             .get_epoch_start_timestamp_and_rgp(epoch_id, tx_digest)
             .await?;
+        let gas_data = orig_tx.transaction_data().gas_data();
+        let gas_object_refs: Vec<_> = gas_data.clone().payment.into_iter().collect();
 
         Ok(OnChainTransactionInfo {
             kind: tx_kind_orig.clone(),
@@ -1619,8 +1643,9 @@ impl LocalExec {
             input_objects: input_objs,
             shared_object_refs,
             gas: gas_object_refs,
-            gas_budget: gas_data.budget,
+            gas_owner: (gas_data.owner != sender).then_some(gas_data.owner),
             gas_price: gas_data.price,
+            gas_budget: gas_data.budget,
             executed_epoch: epoch_id,
             dependencies: effects.dependencies().to_vec(),
             effects,
@@ -1999,6 +2024,26 @@ impl ModuleResolver for LocalExec {
             });
         res
     }
+
+    fn get_packages_static<const N: usize>(
+        &self,
+        ids: [AccountAddress; N],
+    ) -> Result<[Option<SerializedPackage>; N], Self::Error> {
+        let mut res = [const { None }; N];
+        for i in 0..N {
+            res[i] = get_package(self, &ids[i].into())?;
+        }
+        Ok(res)
+    }
+
+    fn get_packages(
+        &self,
+        ids: &[AccountAddress],
+    ) -> Result<Vec<Option<SerializedPackage>>, Self::Error> {
+        ids.iter()
+            .map(|id| get_package(self, &(*id).into()))
+            .collect()
+    }
 }
 
 impl ModuleResolver for &mut LocalExec {
@@ -2007,6 +2052,20 @@ impl ModuleResolver for &mut LocalExec {
     fn get_module(&self, module_id: &ModuleId) -> SuiResult<Option<Vec<u8>>> {
         // Recording event here will be double-counting since its already recorded in the get_module fn
         (**self).get_module(module_id)
+    }
+
+    fn get_packages(
+        &self,
+        ids: &[AccountAddress],
+    ) -> Result<Vec<Option<SerializedPackage>>, Self::Error> {
+        (**self).get_packages(ids)
+    }
+
+    fn get_packages_static<const N: usize>(
+        &self,
+        ids: [AccountAddress; N],
+    ) -> Result<[Option<SerializedPackage>; N], Self::Error> {
+        (**self).get_packages_static(ids)
     }
 }
 

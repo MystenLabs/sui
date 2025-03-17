@@ -18,7 +18,7 @@ static NEWLINE: Lazy<&[u8]> = Lazy::new(|| "\n".as_bytes());
 static POS_YES_NO_PROMPT: Lazy<&[u8]> = Lazy::new(|| "(Y/n) ".as_bytes());
 static NEG_YES_NO_PROMPT: Lazy<&[u8]> = Lazy::new(|| "(y/N) ".as_bytes());
 
-impl<'a, W: Write, R: BufRead> Terminal<'a, W, R> {
+impl<W: Write, R: BufRead> Terminal<'_, W, R> {
     pub fn new<'new>(writer: &'new mut W, reader: &'new mut R) -> Terminal<'new, W, R> {
         Terminal { writer, reader }
     }

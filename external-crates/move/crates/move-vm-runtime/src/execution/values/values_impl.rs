@@ -1246,6 +1246,11 @@ macro_rules! impl_vec_vm_value_cast {
 
 impl_vec_vm_value_cast!(u8, VecU8, "cannot cast {:?} to vector<u8>");
 impl_vec_vm_value_cast!(u64, VecU64, "cannot cast {:?} to vector<u64>");
+impl_vec_vm_value_cast!(
+    AccountAddress,
+    VecAddress,
+    "cannot cast {:?} to vector<address>"
+);
 
 impl VMValueCast<Vec<Value>> for Value {
     fn cast(mut self) -> PartialVMResult<Vec<Value>> {
@@ -2201,6 +2206,18 @@ impl GlobalValueImpl {
             } => !fingerprint.same_value(container),
         }
     }
+
+    fn into_value(self) -> Option<Value> {
+        match self {
+            Self::None | Self::Deleted => None,
+            Self::Fresh { container } | Self::Cached { container, .. } => {
+                let struct_ @ Container::Struct(_) = *container else {
+                    unreachable!()
+                };
+                Some(Value::Container(Box::new(struct_)))
+            }
+        }
+    }
 }
 
 impl GlobalValue {
@@ -2236,6 +2253,10 @@ impl GlobalValue {
 
     pub fn is_mutated(&self) -> bool {
         self.0.is_mutated()
+    }
+
+    pub fn into_value(self) -> Option<Value> {
+        self.0.into_value()
     }
 }
 

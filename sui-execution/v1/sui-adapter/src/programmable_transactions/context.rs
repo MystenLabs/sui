@@ -11,7 +11,6 @@ mod checked {
         sync::Arc,
     };
 
-    use crate::adapter::new_native_extensions;
     use crate::error::convert_vm_error;
     use crate::execution_mode::ExecutionMode;
     use crate::execution_value::{CommandKind, ObjectContents, TryFromValue, Value};
@@ -22,6 +21,7 @@ mod checked {
     use crate::gas_charger::GasCharger;
     use crate::programmable_transactions::linkage_view::LinkageView;
     use crate::type_resolver::TypeTagResolver;
+    use crate::{adapter::new_native_extensions, gas_meter::SuiGasMeter};
     use move_binary_format::{
         errors::{Location, PartialVMError, PartialVMResult, VMError, VMResult},
         file_format::{CodeOffset, FunctionDefinitionIndex, TypeParameterIndex},
@@ -39,8 +39,8 @@ mod checked {
         move_vm::MoveVM,
         session::{LoadedFunctionInstantiation, SerializedReturnValues},
     };
-    use legacy_move_vm_types::data_store::DataStore;
-    use legacy_move_vm_types::loaded_data::runtime_types::Type;
+    use move_vm_types::data_store::DataStore;
+    use move_vm_types::loaded_data::runtime_types::Type;
     use sui_move_natives::object_runtime::{
         self, get_all_uids, max_event_error, LoadedRuntimeObject, ObjectRuntime, RuntimeResults,
     };
@@ -192,19 +192,19 @@ mod checked {
             #[skip_checked_arithmetic]
             move_vm_profiler::tracing_feature_enabled! {
                 use move_vm_profiler::GasProfiler;
-                use legacy_move_vm_types::gas::GasMeter;
+                use move_vm_types::gas::GasMeter;
+                use crate::gas_meter::SuiGasMeter;
 
                 let tx_digest = tx_context.digest();
-                let remaining_gas: u64 =
-                    legacy_move_vm_types::gas::GasMeter::remaining_gas(gas_charger.move_gas_status())
-                        .into();
-                gas_charger
-                    .move_gas_status_mut()
-                    .set_profiler(GasProfiler::init(
-                        &vm.config().profiler_config,
-                        format!("{}", tx_digest),
-                        remaining_gas,
-                    ));
+                let remaining_gas: u64 = move_vm_types::gas::GasMeter::remaining_gas(&SuiGasMeter(
+                    gas_charger.move_gas_status_mut(),
+                ))
+                .into();
+                SuiGasMeter(gas_charger.move_gas_status_mut()).set_profiler(GasProfiler::init(
+                    &vm.config().profiler_config,
+                    format!("{}", tx_digest),
+                    remaining_gas,
+                ));
             }
 
             Ok(Self {
@@ -893,7 +893,7 @@ mod checked {
                 ty_args,
                 args,
                 &mut data_store,
-                gas_status,
+                &mut SuiGasMeter(gas_status),
                 &mut self.native_extensions,
             )
         }
@@ -944,12 +944,12 @@ mod checked {
                 modules,
                 sender,
                 &mut data_store,
-                self.gas_charger.move_gas_status_mut(),
+                &mut SuiGasMeter(self.gas_charger.move_gas_status_mut()),
             )
         }
     }
 
-    impl<'vm, 'state, 'a> TypeTagResolver for ExecutionContext<'vm, 'state, 'a> {
+    impl TypeTagResolver for ExecutionContext<'_, '_, '_> {
         fn get_type_tag(&self, type_: &Type) -> Result<TypeTag, ExecutionError> {
             self.vm
                 .get_runtime()
@@ -1397,7 +1397,7 @@ mod checked {
 
     // TODO: `DataStore` will be reworked and this is likely to disappear.
     //       Leaving this comment around until then as testament to better days to come...
-    impl<'state, 'a> DataStore for SuiDataStore<'state, 'a> {
+    impl DataStore for SuiDataStore<'_, '_> {
         fn link_context(&self) -> AccountAddress {
             self.linkage_view.link_context()
         }

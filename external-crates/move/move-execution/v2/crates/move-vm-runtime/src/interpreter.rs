@@ -22,7 +22,7 @@ use move_vm_config::runtime::VMRuntimeLimitsConfig;
 use move_vm_profiler::{
     profile_close_frame, profile_close_instr, profile_open_frame, profile_open_instr,
 };
-use legacy_move_vm_types::{
+use move_vm_types::{
     data_store::DataStore,
     gas::{GasMeter, SimpleInstruction},
     loaded_data::runtime_types::Type,
@@ -87,7 +87,7 @@ struct TypeWithLoader<'a, 'b> {
     loader: &'b Loader,
 }
 
-impl<'a, 'b> TypeView for TypeWithLoader<'a, 'b> {
+impl TypeView for TypeWithLoader<'_, '_> {
     fn to_type_tag(&self) -> TypeTag {
         self.loader.type_to_type_tag(self.ty).unwrap()
     }

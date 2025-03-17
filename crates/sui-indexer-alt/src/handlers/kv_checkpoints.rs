@@ -6,10 +6,12 @@ use std::sync::Arc;
 use anyhow::{Context, Result};
 use diesel::{ExpressionMethods, QueryDsl};
 use diesel_async::RunQueryDsl;
-use sui_indexer_alt_framework::pipeline::{concurrent::Handler, Processor};
+use sui_indexer_alt_framework::{
+    db,
+    pipeline::{concurrent::Handler, Processor},
+    types::full_checkpoint_content::CheckpointData,
+};
 use sui_indexer_alt_schema::{checkpoints::StoredCheckpoint, schema::kv_checkpoints};
-use sui_pg_db as db;
-use sui_types::full_checkpoint_content::CheckpointData;
 
 pub(crate) struct KvCheckpoints;
 
@@ -61,9 +63,10 @@ impl Handler for KvCheckpoints {
 mod tests {
     use super::*;
     use diesel_async::RunQueryDsl;
-    use sui_indexer_alt_framework::Indexer;
+    use sui_indexer_alt_framework::{
+        types::test_checkpoint_data_builder::TestCheckpointDataBuilder, Indexer,
+    };
     use sui_indexer_alt_schema::MIGRATIONS;
-    use sui_types::test_checkpoint_data_builder::TestCheckpointDataBuilder;
 
     async fn get_all_kv_checkpoints(
         conn: &mut db::Connection<'_>,

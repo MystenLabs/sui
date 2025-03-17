@@ -65,26 +65,41 @@ exit_code: 0
 === munge Move.toml files ===
 === publish dependency ===
 [Note]: Dependency sources are no longer verified automatically during publication and upgrade. You can pass the `--verify-deps` option if you would like to verify them as part of publication or upgrade.
+[note] Dependencies on Bridge, DeepBook, MoveStdlib, Sui, and SuiSystem are automatically added, but this feature is disabled for your package because you have explicitly included dependencies on Sui. Consider removing these dependencies from Move.toml.
+INCLUDING DEPENDENCY Sui
+INCLUDING DEPENDENCY MoveStdlib
 BUILDING dependency
 Skipping dependency verification
 === publish package v0 (should note deprecation) ===
 [Note]: Dependency sources are no longer verified automatically during publication and upgrade. You can pass the `--verify-deps` option if you would like to verify them as part of publication or upgrade.
+[note] Dependencies on Bridge, DeepBook, MoveStdlib, Sui, and SuiSystem are automatically added, but this feature is disabled for your package because you have explicitly included dependencies on Sui. Consider removing these dependencies from Move.toml.
 INCLUDING DEPENDENCY dependency
+INCLUDING DEPENDENCY Sui
+INCLUDING DEPENDENCY MoveStdlib
 BUILDING example
 Skipping dependency verification
 === upgrade package (should note deprecation) ===
 [Note]: Dependency sources are no longer verified automatically during publication and upgrade. You can pass the `--verify-deps` option if you would like to verify them as part of publication or upgrade.
+[note] Dependencies on Bridge, DeepBook, MoveStdlib, Sui, and SuiSystem are automatically added, but this feature is disabled for your package because you have explicitly included dependencies on Sui. Consider removing these dependencies from Move.toml.
 INCLUDING DEPENDENCY dependency
+INCLUDING DEPENDENCY Sui
+INCLUDING DEPENDENCY MoveStdlib
 BUILDING example
 Skipping dependency verification
 === modify dependency ===
 === try to publish with modified dep (should succeed) ===
 [Note]: Dependency sources are no longer verified automatically during publication and upgrade. You can pass the `--verify-deps` option if you would like to verify them as part of publication or upgrade.
+[note] Dependencies on Bridge, DeepBook, MoveStdlib, Sui, and SuiSystem are automatically added, but this feature is disabled for your package because you have explicitly included dependencies on Sui. Consider removing these dependencies from Move.toml.
 INCLUDING DEPENDENCY dependency
+INCLUDING DEPENDENCY Sui
+INCLUDING DEPENDENCY MoveStdlib
 BUILDING example
 Skipping dependency verification
 === try to upgrade with modified dep (should succeed) ===
 [Note]: Dependency sources are no longer verified automatically during publication and upgrade. You can pass the `--verify-deps` option if you would like to verify them as part of publication or upgrade.
+[note] Dependencies on Bridge, DeepBook, MoveStdlib, Sui, and SuiSystem are automatically added, but this feature is disabled for your package because you have explicitly included dependencies on Sui. Consider removing these dependencies from Move.toml.
 INCLUDING DEPENDENCY dependency
+INCLUDING DEPENDENCY Sui
+INCLUDING DEPENDENCY MoveStdlib
 BUILDING example
 Skipping dependency verification

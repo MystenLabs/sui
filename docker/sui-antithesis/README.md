@@ -22,7 +22,7 @@ docker compose up
 
 
 **additional info**
-The version of `sui` which is used to generate the genesis outputs much be on the same protocol version as the fullnode/validators (eg: `mysten/sui-node:mainnet-v1.19.1`)
+The version of `sui` that generates  the genesis outputs must be on the same protocol version as the fullnode/validators (for example, `mysten/sui-node:mainnet-v1.19.1`)
 Here's an example of how to build a `sui` binary that creates a genesis which is compatible with the release: `v1.19.1`
 ```
 git checkout releases/sui-v1.19.0-release

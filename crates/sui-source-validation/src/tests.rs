@@ -668,6 +668,7 @@ async fn successful_versioned_dependency_verification() -> anyhow::Result<()> {
 }
 
 #[tokio::test]
+#[ignore] // TODO: DVX-786
 async fn successful_verification_with_bytecode_dep() -> anyhow::Result<()> {
     let mut cluster = TestClusterBuilder::new().build().await;
     let context = &mut cluster.wallet;
@@ -685,7 +686,7 @@ async fn successful_verification_with_bytecode_dep() -> anyhow::Result<()> {
         let pkg_path = copy_published_package(&tempdir, "b", b_ref.0.into()).await?;
 
         move_package::package_hooks::register_package_hooks(Box::new(SuiPackageHooks));
-        BuildConfig::default().build(&pkg_path).unwrap();
+        BuildConfig::new_for_testing().build(&pkg_path).unwrap();
 
         fs::remove_dir_all(pkg_path.join("sources"))?;
     };
@@ -785,7 +786,7 @@ async fn publish_package_and_deps(context: &WalletContext, package: PathBuf) -> 
 
 /// Copy `package` from fixtures into `directory`, setting its named address in the copied package's
 /// `Move.toml` to `address`. (A fixture's self-address is assumed to match its package name).
-async fn copy_published_package<'s>(
+async fn copy_published_package(
     directory: impl AsRef<Path>,
     package: &str,
     address: SuiAddress,
@@ -793,7 +794,7 @@ async fn copy_published_package<'s>(
     copy_upgraded_package(directory, package, address, address).await
 }
 
-async fn copy_upgraded_package<'s>(
+async fn copy_upgraded_package(
     directory: impl AsRef<Path>,
     package: &str,
     storage_id: SuiAddress,

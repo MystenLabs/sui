@@ -5,14 +5,17 @@
 use move_core_types::account_address::AccountAddress;
 use move_package::{
     resolution::{dependency_graph as DG, resolution_graph as RG},
-    source_package::{layout::SourcePackageLayout, parsed_manifest as PM},
+    source_package::{
+        layout::SourcePackageLayout,
+        parsed_manifest::{self as PM, Dependencies},
+    },
     BuildConfig,
 };
 use std::{collections::BTreeMap, path::PathBuf};
 use tempfile::tempdir;
 
 #[test]
-fn test_additonal_addresses() {
+fn test_additional_addresses() {
     let path: PathBuf = [
         "tests",
         "test_sources",
@@ -28,6 +31,7 @@ fn test_additonal_addresses() {
         /* skip_fetch_latest_git_deps */ true,
         std::io::sink(),
         tempdir().unwrap().path().to_path_buf(),
+        /* implicit_deps */ Dependencies::default(),
     );
     let (dg, _) = dep_graph_builder
         .get_graph(
@@ -74,7 +78,7 @@ fn test_additonal_addresses() {
 }
 
 #[test]
-fn test_additonal_addresses_already_assigned_same_value() {
+fn test_additional_addresses_already_assigned_same_value() {
     let path: PathBuf = ["tests", "test_sources", "basic_no_deps_address_assigned"]
         .into_iter()
         .collect();
@@ -86,6 +90,7 @@ fn test_additonal_addresses_already_assigned_same_value() {
         /* skip_fetch_latest_git_deps */ true,
         std::io::sink(),
         tempdir().unwrap().path().to_path_buf(),
+        /* implicit_deps */ Dependencies::default(),
     );
     let (dg, _) = dep_graph_builder
         .get_graph(
@@ -120,7 +125,7 @@ fn test_additonal_addresses_already_assigned_same_value() {
 }
 
 #[test]
-fn test_additonal_addresses_already_assigned_different_value() {
+fn test_additional_addresses_already_assigned_different_value() {
     let path: PathBuf = ["tests", "test_sources", "basic_no_deps_address_assigned"]
         .into_iter()
         .collect();
@@ -132,6 +137,7 @@ fn test_additonal_addresses_already_assigned_different_value() {
         /* skip_fetch_latest_git_deps */ true,
         std::io::sink(),
         tempdir().unwrap().path().to_path_buf(),
+        /* implicit_deps */ Dependencies::default(),
     );
     let (dg, _) = dep_graph_builder
         .get_graph(

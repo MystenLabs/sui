@@ -590,7 +590,7 @@ impl<'a> BorrowAnalysis<'a> {
     }
 }
 
-impl<'a> TransferFunctions for BorrowAnalysis<'a> {
+impl TransferFunctions for BorrowAnalysis<'_> {
     type State = BorrowInfo;
     const BACKWARD: bool = false;
 
@@ -731,7 +731,7 @@ impl<'a> TransferFunctions for BorrowAnalysis<'a> {
     }
 }
 
-impl<'a> DataflowAnalysis for BorrowAnalysis<'a> {}
+impl DataflowAnalysis for BorrowAnalysis<'_> {}
 
 impl AbstractDomain for BorrowInfo {
     fn join(&mut self, other: &Self) -> JoinResult {

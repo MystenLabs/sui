@@ -47,7 +47,7 @@ use move_core_types::{
 };
 use move_stdlib_natives::{GasParameters, NurseryGasParameters};
 use move_vm_runtime::native_functions::{NativeContext, NativeFunction, NativeFunctionTable};
-use legacy_move_vm_types::{
+use move_vm_types::{
     loaded_data::runtime_types::Type,
     natives::function::NativeResult,
     values::{Struct, Value},

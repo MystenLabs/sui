@@ -14,7 +14,7 @@ use move_core_types::{
     language_storage::ModuleId,
     resolver::ModuleResolver,
 };
-use legacy_move_vm_types::data_store::LinkageResolver;
+use move_vm_types::data_store::LinkageResolver;
 use sui_types::storage::{get_module, PackageObject};
 use sui_types::{
     base_types::ObjectID,
@@ -273,7 +273,7 @@ impl From<&MovePackage> for LinkageInfo {
     }
 }
 
-impl<'state> LinkageResolver for LinkageView<'state> {
+impl LinkageResolver for LinkageView<'_> {
     type Error = SuiError;
 
     fn link_context(&self) -> AccountAddress {
@@ -293,9 +293,9 @@ impl<'state> LinkageResolver for LinkageView<'state> {
     }
 }
 
-/** Remaining implementations delegated to state_view *************************/
+// Remaining implementations delegated to state_view
 
-impl<'state> ModuleResolver for LinkageView<'state> {
+impl ModuleResolver for LinkageView<'_> {
     type Error = SuiError;
 
     fn get_module(&self, id: &ModuleId) -> Result<Option<Vec<u8>>, Self::Error> {
@@ -317,7 +317,7 @@ impl<'state> ModuleResolver for LinkageView<'state> {
     }
 }
 
-impl<'state> BackingPackageStore for LinkageView<'state> {
+impl BackingPackageStore for LinkageView<'_> {
     fn get_package_object(&self, package_id: &ObjectID) -> SuiResult<Option<PackageObject>> {
         self.resolver.get_package_object(package_id)
     }

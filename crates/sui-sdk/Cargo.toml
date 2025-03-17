@@ -42,7 +42,6 @@ fastcrypto.workspace = true
 [dev-dependencies]
 clap.workspace = true
 dirs.workspace = true
-async-recursion.workspace = true
 tempfile.workspace = true
 futures-core.workspace = true
 futures.workspace = true

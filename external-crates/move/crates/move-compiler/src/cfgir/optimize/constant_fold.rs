@@ -120,21 +120,15 @@ fn optimize_exp(context: &Context, e: &mut Exp) -> bool {
             }
         }
 
-        E::ModuleCall(mcall) => mcall.arguments.iter_mut().map(optimize_exp).any(|x| x),
+        E::ModuleCall(mcall) => mcall.arguments.iter_mut().any(optimize_exp),
 
         E::Freeze(e) | E::Dereference(e) | E::Borrow(_, e, _, _) => optimize_exp(e),
 
-        E::Pack(_, _, fields) => fields
-            .iter_mut()
-            .map(|(_, _, e)| optimize_exp(e))
-            .any(|changed| changed),
+        E::Pack(_, _, fields) => fields.iter_mut().any(|(_, _, e)| optimize_exp(e)),
 
-        E::PackVariant(_, _, _, fields) => fields
-            .iter_mut()
-            .map(|(_, _, e)| optimize_exp(e))
-            .any(|changed| changed),
+        E::PackVariant(_, _, _, fields) => fields.iter_mut().any(|(_, _, e)| optimize_exp(e)),
 
-        E::Multiple(es) => es.iter_mut().map(optimize_exp).any(|changed| changed),
+        E::Multiple(es) => es.iter_mut().any(optimize_exp),
 
         //************************************
         // Foldable cases
@@ -201,7 +195,7 @@ fn optimize_exp(context: &Context, e: &mut Exp) -> bool {
                 E::Vector(_, n, ty, eargs) => (*n, ty, eargs),
                 _ => unreachable!(),
             };
-            let changed = eargs.iter_mut().map(optimize_exp).any(|changed| changed);
+            let changed = eargs.iter_mut().any(optimize_exp);
             if !is_valid_const_type(ty) {
                 return changed;
             }

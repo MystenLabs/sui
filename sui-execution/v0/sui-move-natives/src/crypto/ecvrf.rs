@@ -6,7 +6,7 @@ use fastcrypto::vrf::VRFProof;
 use move_binary_format::errors::PartialVMResult;
 use move_core_types::gas_algebra::InternalGas;
 use move_vm_runtime::{native_charge_gas_early_exit, native_functions::NativeContext};
-use legacy_move_vm_types::{
+use move_vm_types::{
     loaded_data::runtime_types::Type,
     natives::function::NativeResult,
     pop_arg,
@@ -71,9 +71,7 @@ pub fn ecvrf_verify(
         ecvrf_ecvrf_verify_cost_params.ecvrf_ecvrf_verify_alpha_string_cost_per_byte
             * (alpha_string_len as u64).into()
             + ecvrf_ecvrf_verify_cost_params.ecvrf_ecvrf_verify_alpha_string_cost_per_block
-                * (((alpha_string_len + ECVRF_SHA512_BLOCK_SIZE - 1) / ECVRF_SHA512_BLOCK_SIZE)
-                    as u64)
-                    .into()
+                * (alpha_string_len.div_ceil(ECVRF_SHA512_BLOCK_SIZE) as u64).into()
     );
 
     let cost = context.gas_used();

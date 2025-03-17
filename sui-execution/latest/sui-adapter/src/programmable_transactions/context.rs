@@ -6,11 +6,11 @@ pub use checked::*;
 #[sui_macros::with_checked_arithmetic]
 mod checked {
     use std::cell::RefMut;
-    use std::collections::BTreeSet;
-    use std::rc::Rc;
     use std::{
         borrow::Borrow,
-        collections::{BTreeMap, HashMap},
+        cell::RefCell,
+        collections::{BTreeMap, BTreeSet, HashMap},
+        rc::Rc,
         sync::Arc,
     };
 
@@ -23,6 +23,7 @@ mod checked {
         UsageKind,
     };
     use crate::gas_charger::GasCharger;
+    use crate::gas_meter::SuiGasMeter;
     use crate::linkage_resolution::{LinkageAnalysis, ResolvedLinkage};
     use crate::programmable_transactions::datastore::{PackageStore, SuiDataStore};
     use move_binary_format::{
@@ -80,7 +81,7 @@ mod checked {
         pub state_view: &'state dyn ExecutionState,
         /// A shared transaction context, contains transaction digest information and manages the
         /// creation of new object IDs
-        pub tx_context: &'a mut TxContext,
+        pub tx_context: Rc<RefCell<TxContext>>,
         /// The gas charger used for metering
         pub gas_charger: &'a mut GasCharger,
         /// Additional transfers not from the Move runtime
@@ -568,7 +569,7 @@ mod checked {
                 function_name,
                 ty_args,
                 args,
-                gas_status,
+                &mut SuiGasMeter(gas_status),
                 tracer.as_mut(),
             )
         }
@@ -629,7 +630,7 @@ mod checked {
                     &data_store,
                     runtime_id,
                     serialized_package,
-                    self.ctx.gas_charger.move_gas_status_mut(),
+                    &mut SuiGasMeter(self.ctx.gas_charger.move_gas_status_mut()),
                     self.vm_instance.extensions().clone(),
                 )
                 .map_err(|e| self.convert_vm_error(e))?;
@@ -714,7 +715,7 @@ mod checked {
 
         /// Create a new ID and update the state
         pub fn fresh_id(&mut self) -> Result<ObjectID, ExecutionError> {
-            let object_id = self.ctx.tx_context.fresh_id();
+            let object_id = self.ctx.tx_context.borrow_mut().fresh_id();
             let mut object_runtime: RefMut<ObjectRuntime> = self
                 .vm_instance
                 .extensions()
@@ -754,7 +755,7 @@ mod checked {
             vm: &'vm MoveRuntime,
             linkage_analyzer: &'a mut dyn LinkageAnalysis,
             state_view: &'state dyn ExecutionState,
-            tx_context: &'a mut TxContext,
+            tx_context: Rc<RefCell<TxContext>>,
             gas_charger: &'a mut GasCharger,
             inputs: Vec<CallArg>,
         ) -> Result<Self, ExecutionError>
@@ -819,7 +820,7 @@ mod checked {
                 !gas_charger.is_unmetered(),
                 protocol_config,
                 metrics.clone(),
-                tx_context.epoch(),
+                tx_context.clone(),
             );
 
             // Set the profiler if in CLI
@@ -828,13 +829,12 @@ mod checked {
                 use move_vm_profiler::GasProfiler;
                 use move_vm_runtime::shared::gas::GasMeter;
 
-                let tx_digest = tx_context.digest();
+                let ref_context: &RefCell<TxContext> = tx_context.borrow();
+                let tx_digest = ref_context.borrow().digest();
                 let remaining_gas: u64 =
-                    move_vm_runtime::shared::gas::GasMeter::remaining_gas(gas_charger.move_gas_status())
+                    move_vm_runtime::shared::gas::GasMeter::remaining_gas(&SuiGasMeter(gas_charger.move_gas_status_mut()))
                         .into();
-                gas_charger
-                    .move_gas_status_mut()
-                    .set_profiler(GasProfiler::init(
+                SuiGasMeter(gas_charger.move_gas_status_mut()).set_profiler(GasProfiler::init(
                         &vm.vm_config().profiler_config,
                         format!("{}", tx_digest),
                         remaining_gas,
@@ -878,7 +878,8 @@ mod checked {
                 mut native_extensions,
                 ..
             } = self;
-            let tx_digest = tx_context.digest();
+            let ref_context: &RefCell<TxContext> = tx_context.borrow();
+            let tx_digest = ref_context.borrow().digest();
             let gas_id_opt = gas.object_metadata.as_ref().map(|info| info.id());
             let mut loaded_runtime_objects = BTreeMap::new();
             let mut additional_writes = BTreeMap::new();
@@ -1139,7 +1140,7 @@ mod checked {
                     Event::new(
                         module_id.address(),
                         module_id.name(),
-                        tx_context.sender(),
+                        ref_context.borrow().sender(),
                         tag,
                         contents,
                     )

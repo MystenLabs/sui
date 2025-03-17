@@ -9,7 +9,9 @@ mod checked {
     use move_vm_runtime::natives::extensions::{NativeContextExtensions, NativeContextMut};
     use move_vm_runtime::natives::functions::{NativeFunctionTable, NativeFunctions};
     use move_vm_runtime::runtime::MoveRuntime;
+    use std::cell::RefCell;
     use std::path::PathBuf;
+    use std::rc::Rc;
     use std::{collections::BTreeMap, sync::Arc};
 
     use anyhow::Result;
@@ -21,7 +23,7 @@ mod checked {
         runtime::{VMConfig, VMRuntimeLimitsConfig},
         verifier::VerifierConfig,
     };
-    use sui_move_natives::object_runtime;
+    use sui_move_natives::{object_runtime, transaction_context::TransactionContext};
     use sui_types::metrics::BytecodeVerifierMetrics;
     use sui_verifier::check_for_verifier_timeout;
     use tracing::instrument;
@@ -86,8 +88,9 @@ mod checked {
         is_metered: bool,
         protocol_config: &'r ProtocolConfig,
         metrics: Arc<LimitsMetrics>,
-        current_epoch_id: EpochId,
+        tx_context: Rc<RefCell<TxContext>>,
     ) -> NativeContextExtensions<'r> {
+        let current_epoch_id: EpochId = tx_context.borrow().epoch();
         let mut extensions = NativeContextExtensions::default();
         extensions.add(NativeContextMut::new(ObjectRuntime::new(
             child_resolver,
@@ -98,6 +101,7 @@ mod checked {
             current_epoch_id,
         )));
         extensions.add(NativesCostTable::from_protocol_config(protocol_config));
+        extensions.add(TransactionContext::new(tx_context));
         extensions
     }
 

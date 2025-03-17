@@ -18,13 +18,13 @@ use move_binary_format::{
 use move_core_types::{
     account_address::AccountAddress,
     identifier::{IdentStr, Identifier},
-    language_storage::{ModuleId, StructTag, TypeTag},
-    resolver::{LinkageResolver, ModuleResolver, SerializedPackage},
+    language_storage::{ModuleId, TypeTag},
+    resolver::{ModuleResolver, SerializedPackage},
     runtime_value::{serialize_values, MoveValue},
     u256::U256,
     vm_status::{StatusCode, StatusType},
 };
-use legacy_move_vm_types::gas::UnmeteredGasMeter;
+use move_vm_types::{data_store::LinkageResolver, gas::UnmeteredGasMeter};
 
 fn make_module_with_function(
     visibility: Visibility,
@@ -159,14 +159,14 @@ impl ModuleResolver for RemoteStore {
 
     fn get_packages_static<const N: usize>(
         &self,
-        ids: [AccountAddress; N],
+        _ids: [AccountAddress; N],
     ) -> Result<[Option<SerializedPackage>; N], Self::Error> {
         unreachable!("Should never be called in v0")
     }
 
     fn get_packages(
         &self,
-        ids: &[AccountAddress],
+        _ids: &[AccountAddress],
     ) -> Result<Vec<Option<SerializedPackage>>, Self::Error> {
         unreachable!("Should never be called in v0")
     }

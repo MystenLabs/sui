@@ -16,10 +16,10 @@ use tracing::warn;
 use sui_indexer::types::owner_to_owner_info;
 use sui_json_rpc_types::SuiMoveValue;
 use sui_package_resolver::Resolver;
-use sui_rpc_api::{CheckpointData, CheckpointTransaction};
 use sui_types::base_types::ObjectID;
 use sui_types::dynamic_field::visitor as DFV;
 use sui_types::dynamic_field::{DynamicFieldName, DynamicFieldType};
+use sui_types::full_checkpoint_content::{CheckpointData, CheckpointTransaction};
 use sui_types::object::Object;
 
 use crate::handlers::AnalyticsHandler;

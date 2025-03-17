@@ -25,7 +25,7 @@ use move_core_types::{
     vm_status::StatusCode,
 };
 use move_vm_config::runtime::VMConfig;
-use legacy_move_vm_types::{
+use move_vm_types::{
     data_store::{DataStore, MoveResolver},
     gas::GasMeter,
     loaded_data::runtime_types::{CachedDatatype, CachedTypeIndex, Type},

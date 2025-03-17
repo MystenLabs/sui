@@ -31,7 +31,7 @@ mod checked {
         language_storage::{ModuleId, StructTag, TypeTag},
     };
     use move_vm_runtime::{move_vm::MoveVM, session::Session};
-    use legacy_move_vm_types::loaded_data::runtime_types::Type;
+    use move_vm_types::loaded_data::runtime_types::Type;
     use sui_move_natives::object_runtime::{
         self, get_all_uids, max_event_error, ObjectRuntime, RuntimeResults,
     };
@@ -201,19 +201,19 @@ mod checked {
             #[skip_checked_arithmetic]
             move_vm_profiler::tracing_feature_enabled! {
                 use move_vm_profiler::GasProfiler;
-                use legacy_move_vm_types::gas::GasMeter;
+                use move_vm_types::gas::GasMeter;
+                use crate::gas_meter::SuiGasMeter;
 
                 let tx_digest = tx_context.digest();
-                let remaining_gas: u64 =
-                    legacy_move_vm_types::gas::GasMeter::remaining_gas(gas_charger.move_gas_status())
-                        .into();
-                gas_charger
-                    .move_gas_status_mut()
-                    .set_profiler(GasProfiler::init(
-                        &vm.config().profiler_config,
-                        format!("{}", tx_digest),
-                        remaining_gas,
-                    ));
+                let remaining_gas: u64 = move_vm_types::gas::GasMeter::remaining_gas(&SuiGasMeter(
+                    gas_charger.move_gas_status_mut(),
+                ))
+                .into();
+                SuiGasMeter(gas_charger.move_gas_status_mut()).set_profiler(GasProfiler::init(
+                    &vm.config().profiler_config,
+                    format!("{}", tx_digest),
+                    remaining_gas,
+                ));
             }
 
             Ok(Self {
@@ -946,7 +946,7 @@ mod checked {
         }
     }
 
-    impl<'vm, 'state, 'a> TypeTagResolver for ExecutionContext<'vm, 'state, 'a> {
+    impl TypeTagResolver for ExecutionContext<'_, '_, '_> {
         fn get_type_tag(&self, type_: &Type) -> Result<TypeTag, ExecutionError> {
             self.session
                 .get_type_tag(type_)

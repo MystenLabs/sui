@@ -6,7 +6,7 @@ use move_binary_format::errors::{PartialVMError, PartialVMResult};
 use move_core_types::{
     annotated_value as A, effects::Op, runtime_value as R, vm_status::StatusCode,
 };
-use legacy_move_vm_types::{
+use move_vm_types::{
     loaded_data::runtime_types::Type,
     values::{GlobalValue, StructRef, Value},
 };
@@ -84,7 +84,7 @@ pub(crate) enum ObjectResult<V> {
 
 type LoadedWithMetadataResult<V> = Option<(V, DynamicallyLoadedObjectMetadata)>;
 
-impl<'a> Inner<'a> {
+impl Inner<'_> {
     fn receive_object_from_store(
         &self,
         owner: ObjectID,

@@ -12,11 +12,11 @@ mod checked {
         sync::Arc,
     };
 
-    use crate::execution_mode::ExecutionMode;
     use crate::execution_value::{
         CommandKind, ExecutionState, ObjectContents, ObjectValue, RawValueType, Value,
     };
     use crate::gas_charger::GasCharger;
+    use crate::{execution_mode::ExecutionMode, gas_meter::SuiGasMeter};
     use move_binary_format::{
         compatibility::{Compatibility, InclusionCheck},
         errors::{Location, PartialVMResult, VMResult},
@@ -34,7 +34,7 @@ mod checked {
         move_vm::MoveVM,
         session::{LoadedFunctionInstantiation, SerializedReturnValues},
     };
-    use legacy_move_vm_types::loaded_data::runtime_types::{CachedDatatype, Type};
+    use move_vm_types::loaded_data::runtime_types::{CachedDatatype, Type};
     use serde::{de::DeserializeSeed, Deserialize};
     use sui_move_natives::object_runtime::ObjectRuntime;
     use sui_protocol_config::ProtocolConfig;
@@ -833,7 +833,7 @@ mod checked {
                 function,
                 type_arguments,
                 serialized_arguments,
-                context.gas_charger.move_gas_status_mut(),
+                &mut SuiGasMeter(context.gas_charger.move_gas_status_mut()),
             )
             .map_err(|e| context.convert_vm_error(e))?;
 
@@ -902,7 +902,7 @@ mod checked {
                 AccountAddress::from(package_id),
                 // TODO: publish_module_bundle() currently doesn't charge gas.
                 // Do we want to charge there?
-                context.gas_charger.move_gas_status_mut(),
+                &mut SuiGasMeter(context.gas_charger.move_gas_status_mut()),
             )
             .map_err(|e| context.convert_vm_error(e))?;
 
@@ -1630,7 +1630,7 @@ mod checked {
 
     struct VectorElementVisitor<'a>(&'a PrimitiveArgumentLayout);
 
-    impl<'d, 'a> serde::de::Visitor<'d> for VectorElementVisitor<'a> {
+    impl<'d> serde::de::Visitor<'d> for VectorElementVisitor<'_> {
         type Value = ();
 
         fn expecting(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -1648,7 +1648,7 @@ mod checked {
 
     struct OptionElementVisitor<'a>(&'a PrimitiveArgumentLayout);
 
-    impl<'d, 'a> serde::de::Visitor<'d> for OptionElementVisitor<'a> {
+    impl<'d> serde::de::Visitor<'d> for OptionElementVisitor<'_> {
         type Value = ();
 
         fn expecting(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {

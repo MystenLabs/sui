@@ -66,7 +66,6 @@ sui-protocol-config.workspace = true
 telemetry-subscribers.workspace = true
 sui-rpc-api.workspace = true
 sui-transaction-builder.workspace = true
-sui-synthetic-ingestion.workspace = true
 
 move-core-types.workspace = true
 move-bytecode-utils.workspace = true
@@ -83,8 +82,6 @@ sui-move-build.workspace = true
 sui-swarm-config.workspace = true
 sui-test-transaction-builder.workspace = true
 test-cluster.workspace = true
-ntest.workspace = true
-criterion.workspace = true
 
 [[bin]]
 name = "sui-indexer"

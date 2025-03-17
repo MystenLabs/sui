@@ -34,5 +34,6 @@ CompiledPackageInfo {
             no_lint: false,
             lint: false,
         },
+        implicit_dependencies: {},
     },
 }

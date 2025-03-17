@@ -179,6 +179,12 @@ pub struct SymbolsComputationData {
     mod_to_alias_lengths: BTreeMap<String, BTreeMap<Position, usize>>,
 }
 
+impl Default for SymbolsComputationData {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl SymbolsComputationData {
     pub fn new() -> Self {
         Self {
@@ -452,6 +458,12 @@ pub type VariantFieldOrderInfo = BTreeMap<Symbol, BTreeMap<Symbol, BTreeMap<Symb
 pub struct FieldOrderInfo {
     structs: BTreeMap<String, StructFieldOrderInfo>,
     variants: BTreeMap<String, VariantFieldOrderInfo>,
+}
+
+impl Default for FieldOrderInfo {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl FieldOrderInfo {
@@ -1957,7 +1969,7 @@ pub fn get_compiled_pkg(
     );
     let compiler_flags = resolution_graph.build_options.compiler_flags().clone();
     let build_plan =
-        BuildPlan::create(resolution_graph)?.set_compiler_vfs_root(overlay_fs_root.clone());
+        BuildPlan::create(&resolution_graph)?.set_compiler_vfs_root(overlay_fs_root.clone());
     let mut parsed_ast = None;
     let mut typed_ast = None;
     let mut compiler_info = None;

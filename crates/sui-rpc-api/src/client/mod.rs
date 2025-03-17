@@ -2,19 +2,20 @@
 // SPDX-License-Identifier: Apache-2.0
 
 mod response_ext;
-use prost_types::FieldMask;
 pub use response_ext::ResponseExt;
 
 use tap::Pipe;
 use tonic::metadata::MetadataMap;
 
+use crate::field_mask::FieldMaskUtil;
 use crate::proto::node::v2::node_service_client::NodeServiceClient;
 use crate::proto::node::v2::{
-    ExecuteTransactionResponse, GetCheckpointResponse, GetFullCheckpointResponse, GetObjectResponse,
+    EffectsFinality, ExecuteTransactionResponse, GetCheckpointResponse, GetFullCheckpointResponse,
+    GetObjectResponse,
 };
 use crate::proto::types::Bcs;
 use crate::proto::TryFromProtoError;
-use crate::types::ExecuteTransactionOptions;
+use prost_types::FieldMask;
 use sui_types::base_types::{ObjectID, SequenceNumber};
 use sui_types::effects::{TransactionEffects, TransactionEvents};
 use sui_types::full_checkpoint_content::CheckpointData;
@@ -93,19 +94,7 @@ impl Client {
         let request = crate::proto::node::v2::GetCheckpointRequest {
             sequence_number,
             digest: None,
-            options: Some(crate::proto::node::v2::GetCheckpointOptions {
-                summary: Some(false),
-                summary_bcs: Some(true),
-                signature: Some(true),
-                contents: Some(false),
-                contents_bcs: Some(false),
-            }),
-            read_mask: Some(FieldMask {
-                paths: ["summary_bcs", "signature"]
-                    .into_iter()
-                    .map(ToOwned::to_owned)
-                    .collect(),
-            }),
+            read_mask: FieldMask::from_paths(["summary_bcs", "signature"]).pipe(Some),
         };
 
         let (
@@ -133,43 +122,22 @@ impl Client {
         let request = crate::proto::node::v2::GetFullCheckpointRequest {
             sequence_number: Some(sequence_number),
             digest: None,
-            options: Some(crate::proto::node::v2::GetFullCheckpointOptions {
-                summary: Some(false),
-                summary_bcs: Some(true),
-                signature: Some(true),
-                contents: Some(false),
-                contents_bcs: Some(true),
-                transaction: Some(false),
-                transaction_bcs: Some(true),
-                effects: Some(false),
-                effects_bcs: Some(true),
-                events: Some(false),
-                events_bcs: Some(true),
-                input_objects: Some(true),
-                output_objects: Some(true),
-                object: Some(false),
-                object_bcs: Some(true),
-            }),
-            read_mask: Some(FieldMask {
-                paths: [
-                    "summary_bcs",
-                    "signature",
-                    "contents_bcs",
-                    "transactions.transaction_bcs",
-                    "transactions.effects_bcs",
-                    "transactions.events_bcs",
-                    "transactions.input_objects.object_bcs",
-                    "transactions.output_objects.object_bcs",
-                ]
-                .into_iter()
-                .map(ToOwned::to_owned)
-                .collect(),
-            }),
+            read_mask: FieldMask::from_paths([
+                "summary_bcs",
+                "signature",
+                "contents_bcs",
+                "transactions.transaction_bcs",
+                "transactions.effects_bcs",
+                "transactions.events_bcs",
+                "transactions.input_objects.object_bcs",
+                "transactions.output_objects.object_bcs",
+            ])
+            .pipe(Some),
         };
 
         let (metadata, response, _extentions) = self
             .raw_client()
-            .max_decoding_message_size(64 * 1024 * 1024)
+            .max_decoding_message_size(128 * 1024 * 1024)
             .get_full_checkpoint(request)
             .await?
             .into_parts();
@@ -199,13 +167,7 @@ impl Client {
         let request = crate::proto::node::v2::GetObjectRequest {
             object_id: Some(sui_sdk_types::ObjectId::from(object_id).into()),
             version,
-            options: Some(crate::proto::node::v2::GetObjectOptions {
-                object: Some(false),
-                object_bcs: Some(true),
-            }),
-            read_mask: Some(FieldMask {
-                paths: ["object_bcs"].into_iter().map(ToOwned::to_owned).collect(),
-            }),
+            read_mask: FieldMask::from_paths(["object_bcs"]).pipe(Some),
         };
 
         let (metadata, GetObjectResponse { object_bcs, .. }, _extentions) =
@@ -216,7 +178,6 @@ impl Client {
 
     pub async fn execute_transaction(
         &self,
-        parameters: &ExecuteTransactionOptions,
         transaction: &Transaction,
     ) -> Result<TransactionExecutionResponse> {
         let signatures = transaction
@@ -234,20 +195,13 @@ impl Client {
             ),
             signatures: Vec::new(),
             signatures_bytes: signatures,
-
-            options: Some(crate::proto::node::v2::ExecuteTransactionOptions {
-                effects: Some(false),
-                effects_bcs: Some(true),
-                events: Some(false),
-                events_bcs: Some(true),
-                ..(parameters.to_owned().into())
-            }),
-            read_mask: Some(FieldMask {
-                paths: ["effects_bcs", "events_bcs", "balance_changes"]
-                    .into_iter()
-                    .map(ToOwned::to_owned)
-                    .collect(),
-            }),
+            read_mask: FieldMask::from_paths([
+                "finality",
+                "effects_bcs",
+                "events_bcs",
+                "balance_changes",
+            ])
+            .pipe(Some),
         };
 
         let (metadata, response, _extentions) = self
@@ -263,7 +217,7 @@ impl Client {
 
 #[derive(Debug)]
 pub struct TransactionExecutionResponse {
-    pub finality: crate::types::EffectsFinality,
+    pub finality: EffectsFinality,
 
     pub effects: TransactionEffects,
     pub events: Option<TransactionEvents>,
@@ -393,10 +347,7 @@ fn execute_transaction_response_try_from_proto(
         ..
     }: ExecuteTransactionResponse,
 ) -> Result<TransactionExecutionResponse, TryFromProtoError> {
-    let finality = finality
-        .as_ref()
-        .ok_or_else(|| TryFromProtoError::missing("finality"))?
-        .try_into()?;
+    let finality = finality.ok_or_else(|| TryFromProtoError::missing("finality"))?;
 
     let effects = effects_bcs
         .ok_or_else(|| TryFromProtoError::missing("effects_bcs"))?

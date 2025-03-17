@@ -46,7 +46,10 @@ impl CommitteeStore {
             tables,
             cache: RwLock::new(HashMap::new()),
         };
-        if store.database_is_empty() {
+        if store
+            .database_is_empty()
+            .expect("CommitteeStore initialization failed")
+        {
             store
                 .init_genesis_committee(genesis_committee.clone())
                 .expect("Init genesis committee data must not fail");
@@ -95,16 +98,17 @@ impl CommitteeStore {
     }
 
     // todo - make use of cache or remove this method
-    pub fn get_latest_committee(&self) -> Committee {
-        self.tables
+    pub fn get_latest_committee(&self) -> SuiResult<Committee> {
+        Ok(self
+            .tables
             .committee_map
-            .unbounded_iter()
-            .skip_to_last()
+            .reversed_safe_iter_with_bounds(None, None)?
             .next()
+            .transpose()?
             // unwrap safe because we guarantee there is at least a genesis epoch
             // when initializing the store.
             .unwrap()
-            .1
+            .1)
     }
     /// Return the committee specified by `epoch`. If `epoch` is `None`, return the latest committee.
     // todo - make use of cache or remove this method
@@ -114,7 +118,7 @@ impl CommitteeStore {
                 .get_committee(&epoch)?
                 .ok_or(SuiError::MissingCommitteeAtEpoch(epoch))
                 .map(|c| Committee::clone(&*c))?,
-            None => self.get_latest_committee(),
+            None => self.get_latest_committee()?,
         })
     }
 
@@ -125,7 +129,13 @@ impl CommitteeStore {
             .map_err(Into::into)
     }
 
-    fn database_is_empty(&self) -> bool {
-        self.tables.committee_map.unbounded_iter().next().is_none()
+    fn database_is_empty(&self) -> SuiResult<bool> {
+        Ok(self
+            .tables
+            .committee_map
+            .safe_iter()
+            .next()
+            .transpose()?
+            .is_none())
     }
 }

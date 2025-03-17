@@ -22,6 +22,6 @@ prometheus.workspace = true
 telemetry-subscribers.workspace = true
 async-trait.workspace = true
 uuid.workspace = true
-lexical-util = "0.8.5"
+lexical-util = "1.0.6"
 reqwest = { workspace = true, features = ["json"] }
 env_logger = "0.11.3"

@@ -121,7 +121,7 @@ impl SimpleClient {
     }
 }
 
-#[allow(clippy::type_complexity)]
+#[allow(clippy::type_complexity, clippy::result_large_err)]
 pub fn resolve_variables(
     vars: &[GraphqlQueryVariable],
 ) -> Result<(BTreeMap<String, String>, BTreeMap<String, Value>), ClientError> {
