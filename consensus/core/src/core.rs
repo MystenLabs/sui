@@ -172,7 +172,8 @@ impl Core {
             .read()
             .reputation_scores
             .clone();
-        let mut ancestor_state_manager = AncestorStateManager::new(context.clone());
+        let mut ancestor_state_manager =
+            AncestorStateManager::new(context.clone(), dag_state.clone());
         ancestor_state_manager.set_propagation_scores(propagation_scores);
 
         Self {
@@ -927,7 +928,7 @@ impl Core {
     }
 
     /// Whether the core should propose new blocks.
-    pub(crate) fn should_propose(&mut self) -> bool {
+    pub(crate) fn should_propose(&self) -> bool {
         let clock_round = self.dag_state.read().threshold_clock_round();
         let core_skipped_proposals = &self.context.metrics.node_metrics.core_skipped_proposals;
 
@@ -1048,16 +1049,11 @@ impl Core {
 
         // Ensure ancestor state is up to date before selecting for proposal.
         let round_tracker = self.round_tracker.read();
-        let (_, accepted_quorum_rounds) = round_tracker.calculate_quorum_rounds();
-        let round_prober_update_count = round_tracker.round_prober_update_count;
-        let new_block_update_count = round_tracker.new_block_update_count;
+        let accepted_quorum_rounds = round_tracker.compute_accepted_quorum_rounds();
         drop(round_tracker);
 
-        self.ancestor_state_manager.update_all_ancestors_state(
-            &accepted_quorum_rounds,
-            round_prober_update_count,
-            new_block_update_count,
-        );
+        self.ancestor_state_manager
+            .update_all_ancestors_state(&accepted_quorum_rounds);
 
         let ancestor_state_map = self.ancestor_state_manager.get_ancestor_states();
 
@@ -2764,6 +2760,15 @@ mod test {
         assert_eq!(extended_block.block.ancestors().len(), 5);
         assert_eq!(extended_block.excluded_ancestors.len(), 0);
 
+        // Excluded authority is locked until round 20, simulate enough rounds to
+        // unlock
+        builder
+            .layers(17..=22)
+            .authorities(vec![AuthorityIndex::new_for_test(0)])
+            .skip_block()
+            .build();
+        let blocks = builder.blocks(17..=22);
+
         // Simulate updating received and accepted rounds from prober.
         // New quorum rounds for authority can then be computed which will unlock
         // the Excluded authority (1) and then we should be able to create a new
@@ -2771,47 +2776,42 @@ mod test {
         // next proposal
         round_tracker.write().update_from_probe(
             vec![
-                vec![16, 16, 16, 16, 16, 16, 16],
-                vec![16, 16, 16, 16, 16, 16, 16],
-                vec![16, 16, 16, 16, 16, 16, 16],
-                vec![16, 16, 16, 16, 16, 16, 16],
-                vec![16, 16, 16, 16, 16, 16, 16],
-                vec![16, 16, 16, 16, 16, 16, 16],
-                vec![16, 16, 16, 16, 16, 16, 16],
+                vec![22, 22, 22, 22, 22, 22, 22],
+                vec![22, 22, 22, 22, 22, 22, 22],
+                vec![22, 22, 22, 22, 22, 22, 22],
+                vec![22, 22, 22, 22, 22, 22, 22],
+                vec![22, 22, 22, 22, 22, 22, 22],
+                vec![22, 22, 22, 22, 22, 22, 22],
+                vec![22, 22, 22, 22, 22, 22, 22],
             ],
             vec![
-                vec![16, 16, 16, 16, 16, 16, 16],
-                vec![16, 16, 16, 16, 16, 16, 16],
-                vec![16, 16, 16, 16, 16, 16, 16],
-                vec![16, 16, 16, 16, 16, 16, 16],
-                vec![16, 16, 16, 16, 16, 16, 16],
-                vec![16, 16, 16, 16, 16, 16, 16],
-                vec![16, 16, 16, 16, 16, 16, 16],
+                vec![22, 22, 22, 22, 22, 22, 22],
+                vec![22, 22, 22, 22, 22, 22, 22],
+                vec![22, 22, 22, 22, 22, 22, 22],
+                vec![22, 22, 22, 22, 22, 22, 22],
+                vec![22, 22, 22, 22, 22, 22, 22],
+                vec![22, 22, 22, 22, 22, 22, 22],
+                vec![22, 22, 22, 22, 22, 22, 22],
             ],
         );
 
-        builder
-            .layer(17)
-            .authorities(vec![AuthorityIndex::new_for_test(0)])
-            .skip_block()
-            .build();
-        let blocks = builder.blocks(17..=17);
         let included_block_references = iter::once(&core.last_proposed_block())
             .chain(blocks.iter())
+            .filter(|block| block.round() == 22 || block.author() == core.context.own_index)
             .map(|block| block.reference())
             .collect::<Vec<_>>();
 
         // Have enough ancestor blocks to propose now.
         sleep(context.parameters.min_round_delay).await;
         assert!(core.add_blocks(blocks).unwrap().is_empty());
-        assert_eq!(core.last_proposed_block().round(), 18);
+        assert_eq!(core.last_proposed_block().round(), 23);
 
         // Check that a new block has been proposed & signaled.
         let extended_block = tokio::time::timeout(Duration::from_secs(1), block_receiver.recv())
             .await
             .unwrap()
             .unwrap();
-        assert_eq!(extended_block.block.round(), 18);
+        assert_eq!(extended_block.block.round(), 23);
         assert_eq!(extended_block.block.author(), core.context.own_index);
         assert_eq!(extended_block.block.ancestors().len(), 7);
         assert_eq!(extended_block.block.ancestors(), included_block_references);
@@ -3462,10 +3462,7 @@ mod test {
             leader_schedule.clone(),
         );
 
-        let round_tracker = Arc::new(RwLock::new(PeerRoundTracker::new(
-            context.clone(),
-            dag_state.clone(),
-        )));
+        let round_tracker = Arc::new(RwLock::new(PeerRoundTracker::new(context.clone())));
         let mut core = Core::new(
             context.clone(),
             leader_schedule,

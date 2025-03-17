@@ -4,9 +4,13 @@
 use std::sync::Arc;
 
 use consensus_config::AuthorityIndex;
+use parking_lot::RwLock;
 use tracing::info;
 
-use crate::{context::Context, leader_scoring::ReputationScores, round_tracker::QuorumRound};
+use crate::{
+    context::Context, dag_state::DagState, leader_scoring::ReputationScores,
+    round_tracker::QuorumRound,
+};
 
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
 pub(crate) enum AncestorState {
@@ -17,94 +21,59 @@ pub(crate) enum AncestorState {
 #[derive(Clone)]
 struct AncestorInfo {
     state: AncestorState,
-    lock_condition: Arc<dyn Fn(u32, u32, u32) -> bool + Send + Sync>,
+    // This will be set to the future clock round for which this ancestor state
+    // will be locked.
+    lock_until_round: u32,
 }
 
 impl AncestorInfo {
     fn new() -> Self {
         Self {
             state: AncestorState::Include,
-            // Default to unlocked
-            lock_condition: Arc::new(|_, _, _| false),
+            lock_until_round: 0,
         }
     }
 
-    fn is_locked(
-        &self,
-        propagation_score_update_count: u32,
-        round_prober_update_count: u32,
-        new_block_update_count: u32,
-    ) -> bool {
-        (self.lock_condition)(
-            propagation_score_update_count,
-            round_prober_update_count,
-            new_block_update_count,
-        )
+    fn is_locked(&self, current_clock_round: u32) -> bool {
+        self.lock_until_round >= current_clock_round
     }
 
-    fn set_lock<F>(&mut self, condition: F)
-    where
-        F: Fn(u32, u32, u32) -> bool + Send + Sync + 'static,
-    {
-        self.lock_condition = Arc::new(condition);
+    fn set_lock(&mut self, lock_until_round: u32) {
+        self.lock_until_round = lock_until_round;
     }
 }
 
 pub(crate) struct AncestorStateManager {
     context: Arc<Context>,
+    dag_state: Arc<RwLock<DagState>>,
     state_map: Vec<AncestorInfo>,
-    // TODO: Get both score update count and current scores from LeaderSchedule
-    // component instead of storing it here or use new sync metric.
-    propagation_score_update_count: u32,
     // This is the reputation scores that we use for leader election but we are
     // using it here as a signal for high quality block propagation as well.
     pub(crate) propagation_scores: ReputationScores,
 }
 
 impl AncestorStateManager {
-    // Number of new block updates for which an ancestor is locked in the EXCLUDE state
-    // Chose 750 rounds worth of updates at ~10 rounds per second conservatively
-    // is ~75 seconds of waiting which is similar to the round prober updates.
-    // This number will be multiplied by the number of authorities in the committee
-    // to get the total number of blocks that need to be accepted before we unlock.
     #[cfg(not(test))]
-    const STATE_LOCK_NEW_BLOCK_UPDATES_IN_ROUNDS: u32 = 750;
+    const STATE_LOCK_CLOCK_ROUND_UPDATES: u32 = 450;
     #[cfg(test)]
-    const STATE_LOCK_NEW_BLOCK_UPDATES_IN_ROUNDS: u32 = 1;
-
-    // Number of round prober updates for which an ancestor is locked in the EXCLUDE state
-    // Chose 10 updates as that should be ~50 seconds of waiting with the current round tracker
-    // interval of 5s
-    #[cfg(not(test))]
-    const STATE_LOCK_ROUND_PROBER_UPDATES: u32 = 15;
-    #[cfg(test)]
-    const STATE_LOCK_ROUND_PROBER_UPDATES: u32 = 1;
-
-    // Number of propagation score updates for which an ancestor is locked in the INCLUDE state
-    // Chose 2 leader schedule updates (~300 commits per schedule) which should be ~30-90 seconds
-    // depending on the round rate for the authority to improve scores.
-    #[cfg(not(test))]
-    const STATE_LOCK_SCORE_UPDATES: u32 = 2;
-    #[cfg(test)]
-    const STATE_LOCK_SCORE_UPDATES: u32 = 1;
+    const STATE_LOCK_CLOCK_ROUND_UPDATES: u32 = 5;
 
     // Exclusion threshold is based on propagation (reputation) scores
     const EXCLUSION_THRESHOLD_PERCENTAGE: u64 = 20;
 
-    pub(crate) fn new(context: Arc<Context>) -> Self {
+    pub(crate) fn new(context: Arc<Context>, dag_state: Arc<RwLock<DagState>>) -> Self {
         let state_map = vec![AncestorInfo::new(); context.committee.size()];
 
         Self {
             context,
+            dag_state,
             state_map,
-            propagation_score_update_count: 0,
             propagation_scores: ReputationScores::default(),
         }
     }
 
     pub(crate) fn set_propagation_scores(&mut self, scores: ReputationScores) {
         self.propagation_scores = scores;
-        self.propagation_score_update_count += 1;
     }
 
     pub(crate) fn get_ancestor_states(&self) -> Vec<AncestorState> {
@@ -112,12 +81,7 @@ impl AncestorStateManager {
     }
 
     /// Updates the state of all ancestors based on the latest scores and quorum rounds
-    pub(crate) fn update_all_ancestors_state(
-        &mut self,
-        accepted_quorum_rounds: &[QuorumRound],
-        round_prober_update_count: u32,
-        new_block_update_count: u32,
-    ) {
+    pub(crate) fn update_all_ancestors_state(&mut self, accepted_quorum_rounds: &[QuorumRound]) {
         let propagation_scores_by_authority = self
             .propagation_scores
             .scores_per_authority
@@ -152,8 +116,6 @@ impl AncestorStateManager {
                 score,
                 authority_high_quorum_round,
                 network_high_quorum_round,
-                round_prober_update_count,
-                new_block_update_count,
             );
         }
     }
@@ -165,17 +127,12 @@ impl AncestorStateManager {
         propagation_score: u64,
         authority_high_quorum_round: u32,
         network_high_quorum_round: u32,
-        round_prober_update_count: u32,
-        new_block_update_count: u32,
     ) {
         let block_hostname = &self.context.committee.authority(authority_id).hostname;
         let mut ancestor_info = self.state_map[authority_id].clone();
 
-        if ancestor_info.is_locked(
-            self.propagation_score_update_count,
-            round_prober_update_count,
-            new_block_update_count,
-        ) {
+        let current_clock_round = self.dag_state.read().threshold_clock_round();
+        if ancestor_info.is_locked(current_clock_round) {
             // If still locked, we won't make any state changes.
             return;
         }
@@ -188,19 +145,11 @@ impl AncestorStateManager {
             AncestorState::Include => {
                 if propagation_score <= low_score_threshold {
                     ancestor_info.state = AncestorState::Exclude(propagation_score);
-                    let round_prober_update_expiry_count =
-                        round_prober_update_count + Self::STATE_LOCK_ROUND_PROBER_UPDATES;
-                    let new_block_update_expiry_count = new_block_update_count
-                        + Self::STATE_LOCK_NEW_BLOCK_UPDATES_IN_ROUNDS
-                            * self.context.committee.size() as u32;
-                    ancestor_info.set_lock(move |_score_updates, prober_updates, block_updates| {
-                        round_prober_update_expiry_count > prober_updates
-                            && new_block_update_expiry_count > block_updates
-                    });
+                    let lock_until_round =
+                        current_clock_round + Self::STATE_LOCK_CLOCK_ROUND_UPDATES;
+                    ancestor_info.set_lock(lock_until_round);
                     info!(
-                        "Authority {authority_id} moved to EXCLUDE state with score {propagation_score} <= threshold of {low_score_threshold} and locked for {:?} round prober updates or {:?} new block updates",
-                        Self::STATE_LOCK_ROUND_PROBER_UPDATES,
-                        Self::STATE_LOCK_NEW_BLOCK_UPDATES_IN_ROUNDS * self.context.committee.size() as u32
+                        "Authority {authority_id} moved to EXCLUDE state with score {propagation_score} <= threshold of {low_score_threshold} and locked until round {lock_until_round}",
                     );
                     self.context
                         .metrics
@@ -218,16 +167,12 @@ impl AncestorStateManager {
                     || authority_high_quorum_round >= network_high_quorum_round
                 {
                     ancestor_info.state = AncestorState::Include;
-                    let score_update_expiry_count =
-                        self.propagation_score_update_count + Self::STATE_LOCK_SCORE_UPDATES;
-                    ancestor_info.set_lock(
-                        move |score_updates, _prober_updates, _block_updates| {
-                            score_update_expiry_count > score_updates
-                        },
-                    );
+
+                    let lock_until_round =
+                        current_clock_round + Self::STATE_LOCK_CLOCK_ROUND_UPDATES;
+                    ancestor_info.set_lock(lock_until_round);
                     info!(
-                        "Authority {authority_id} moved to INCLUDE state with {propagation_score} > threshold of {low_score_threshold} or {authority_high_quorum_round} >= {network_high_quorum_round} and locked for {:?} score updates.",
-                        Self::STATE_LOCK_SCORE_UPDATES
+                        "Authority {authority_id} moved to INCLUDE state with {propagation_score} > threshold of {low_score_threshold} or {authority_high_quorum_round} >= {network_high_quorum_round} and locked until round {lock_until_round}",
                     );
                     self.context
                         .metrics
@@ -278,7 +223,10 @@ impl AncestorStateManager {
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::leader_scoring::ReputationScores;
+    use crate::{
+        leader_scoring::ReputationScores, storage::mem_store::MemStore,
+        test_dag_builder::DagBuilder,
+    };
 
     #[tokio::test]
     async fn test_calculate_network_high_accepted_quorum_round() {
@@ -286,9 +234,12 @@ mod test {
 
         let (context, _key_pairs) = Context::new_for_test(4);
         let context = Arc::new(context);
+        let store = Arc::new(MemStore::new());
+        let dag_state = Arc::new(RwLock::new(DagState::new(context.clone(), store.clone())));
 
         let scores = ReputationScores::new((1..=300).into(), vec![1, 2, 4, 3]);
-        let mut ancestor_state_manager = AncestorStateManager::new(context.clone());
+        let mut ancestor_state_manager =
+            AncestorStateManager::new(context.clone(), dag_state.clone());
         ancestor_state_manager.set_propagation_scores(scores);
 
         // Quorum rounds are not set yet, so we should calculate a network
@@ -315,13 +266,16 @@ mod test {
         telemetry_subscribers::init_for_testing();
         let (context, _key_pairs) = Context::new_for_test(4);
         let context = Arc::new(context);
+        let store = Arc::new(MemStore::new());
+        let dag_state = Arc::new(RwLock::new(DagState::new(context.clone(), store.clone())));
+        let mut dag_builder = DagBuilder::new(context.clone());
 
         let scores = ReputationScores::new((1..=300).into(), vec![1, 2, 4, 3]);
-        let mut ancestor_state_manager = AncestorStateManager::new(context);
+        let mut ancestor_state_manager = AncestorStateManager::new(context, dag_state.clone());
         ancestor_state_manager.set_propagation_scores(scores);
 
         let accepted_quorum_rounds = vec![(225, 229), (225, 229), (229, 300), (229, 300)];
-        ancestor_state_manager.update_all_ancestors_state(&accepted_quorum_rounds, 1, 0);
+        ancestor_state_manager.update_all_ancestors_state(&accepted_quorum_rounds);
 
         // Score threshold for exclude is (4 * 10) / 100 = 0
         // No ancestors should be excluded in with this threshold
@@ -332,7 +286,7 @@ mod test {
 
         let scores = ReputationScores::new((1..=300).into(), vec![10, 10, 100, 100]);
         ancestor_state_manager.set_propagation_scores(scores);
-        ancestor_state_manager.update_all_ancestors_state(&accepted_quorum_rounds, 1, 0);
+        ancestor_state_manager.update_all_ancestors_state(&accepted_quorum_rounds);
 
         // Score threshold for exclude is (100 * 10) / 100 = 10
         // 2 authorities should be excluded in with this threshold
@@ -345,10 +299,10 @@ mod test {
             }
         }
 
-        ancestor_state_manager.update_all_ancestors_state(&accepted_quorum_rounds, 1, 0);
+        ancestor_state_manager.update_all_ancestors_state(&accepted_quorum_rounds);
 
         // 2 authorities should still be excluded with these scores and no new
-        // quorum round updates have been set to expire the locks.
+        // clock round updates have happened to expire the locks.
         let state_map = ancestor_state_manager.get_ancestor_states();
         for (authority, state) in state_map.iter().enumerate() {
             if (0..=1).contains(&authority) {
@@ -358,10 +312,14 @@ mod test {
             }
         }
 
-        // Updating the quorum rounds will expire the lock as we only need 1
-        // quorum round update for tests.
+        // Updating the clock round will expire the lock as we only need 5
+        // clock round updates for tests.
+        dag_builder.layers(1..=6).build();
+        let blocks = dag_builder.blocks.values().cloned().collect::<Vec<_>>();
+        dag_state.write().accept_blocks(blocks);
+
         let accepted_quorum_rounds = vec![(229, 300), (225, 229), (229, 300), (229, 300)];
-        ancestor_state_manager.update_all_ancestors_state(&accepted_quorum_rounds, 2, 0);
+        ancestor_state_manager.update_all_ancestors_state(&accepted_quorum_rounds);
 
         // Authority 0 should now be included again because high quorum round is
         // at the network high quorum round of 300. Authority 1's quorum round is
@@ -376,7 +334,7 @@ mod test {
         }
 
         let accepted_quorum_rounds = vec![(229, 300), (229, 300), (229, 300), (229, 300)];
-        ancestor_state_manager.update_all_ancestors_state(&accepted_quorum_rounds, 3, 0);
+        ancestor_state_manager.update_all_ancestors_state(&accepted_quorum_rounds);
 
         // Ancestor 1 can transtion to the INCLUDE state. Ancestor 0 is still locked
         // in the INCLUDE state until a score update is performed which is why
@@ -387,10 +345,14 @@ mod test {
             assert_eq!(*state, AncestorState::Include);
         }
 
-        // Updating the scores will expire the lock as we only need 1 update for tests.
+        // Updating the clock round will expire the lock as we only need 5 updates for tests.
+        dag_builder.layers(7..=12).build();
+        let blocks = dag_builder.blocks.values().cloned().collect::<Vec<_>>();
+        dag_state.write().accept_blocks(blocks);
+
         let scores = ReputationScores::new((1..=300).into(), vec![100, 10, 100, 100]);
         ancestor_state_manager.set_propagation_scores(scores);
-        ancestor_state_manager.update_all_ancestors_state(&accepted_quorum_rounds, 3, 0);
+        ancestor_state_manager.update_all_ancestors_state(&accepted_quorum_rounds);
 
         // Ancestor 1 can transition to EXCLUDE state now that the lock expired
         // and its scores are below the threshold.

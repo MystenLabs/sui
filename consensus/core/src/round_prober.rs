@@ -50,27 +50,27 @@ impl RoundProberHandle {
 pub(crate) struct RoundProber<C: NetworkClient> {
     context: Arc<Context>,
     core_thread_dispatcher: Arc<dyn CoreThreadDispatcher>,
+    round_tracker: Arc<RwLock<PeerRoundTracker>>,
     dag_state: Arc<RwLock<DagState>>,
     network_client: Arc<C>,
     shutdown_notify: Arc<NotifyOnce>,
-    round_tracker: Arc<RwLock<PeerRoundTracker>>,
 }
 
 impl<C: NetworkClient> RoundProber<C> {
     pub(crate) fn new(
         context: Arc<Context>,
         core_thread_dispatcher: Arc<dyn CoreThreadDispatcher>,
+        round_tracker: Arc<RwLock<PeerRoundTracker>>,
         dag_state: Arc<RwLock<DagState>>,
         network_client: Arc<C>,
-        round_tracker: Arc<RwLock<PeerRoundTracker>>,
     ) -> Self {
         Self {
             context,
             core_thread_dispatcher,
+            round_tracker,
             dag_state,
             network_client,
             shutdown_notify: Arc::new(NotifyOnce::new()),
-            round_tracker,
         }
     }
 
@@ -414,9 +414,9 @@ mod test {
         let prober = RoundProber::new(
             context.clone(),
             core_thread_dispatcher.clone(),
+            round_tracker.clone(),
             dag_state.clone(),
             network_client.clone(),
-            round_tracker.clone(),
         );
 
         // Create test blocks for each authority with incrementing rounds starting at 110

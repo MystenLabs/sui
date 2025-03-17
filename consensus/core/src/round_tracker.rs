@@ -46,10 +46,6 @@ pub(crate) struct PeerRoundTracker {
     probed_accepted_rounds: Vec<Vec<Round>>,
     /// Highest received round per authority from round prober
     probed_received_rounds: Vec<Vec<Round>>,
-    /// Probe update count
-    pub(crate) round_prober_update_count: u32,
-    /// Block update count
-    pub(crate) new_block_update_count: u32,
 }
 
 impl PeerRoundTracker {
@@ -60,8 +56,6 @@ impl PeerRoundTracker {
             block_accepted_rounds: vec![vec![0; size]; size],
             probed_accepted_rounds: vec![vec![0; size]; size],
             probed_received_rounds: vec![vec![0; size]; size],
-            round_prober_update_count: 0,
-            new_block_update_count: 0,
         }
     }
 
@@ -88,7 +82,6 @@ impl PeerRoundTracker {
                 .block_accepted_rounds[author][excluded_ancestor.author]
                 .max(excluded_ancestor.round);
         }
-        self.new_block_update_count += 1;
     }
 
     /// Update accepted & received rounds based on probing results
@@ -99,14 +92,14 @@ impl PeerRoundTracker {
     ) {
         self.probed_accepted_rounds = accepted_rounds;
         self.probed_received_rounds = received_rounds;
-        self.round_prober_update_count += 1;
     }
 
     // Returns the propagation delay of own blocks.
     pub(crate) fn calculate_propagation_delay(&self, last_proposed_round: Round) -> Round {
         let own_index = self.context.own_index;
         let node_metrics = &self.context.metrics.node_metrics;
-        let (received_quorum_rounds, accepted_quorum_rounds) = self.calculate_quorum_rounds();
+        let received_quorum_rounds = self.compute_received_quorum_rounds();
+        let accepted_quorum_rounds = self.compute_accepted_quorum_rounds();
         for ((low, high), (_, authority)) in received_quorum_rounds
             .iter()
             .zip(self.context.committee.authorities())
@@ -178,44 +171,7 @@ impl PeerRoundTracker {
         propagation_delay
     }
 
-    // Returns received quorum rounds & accepted quorum rounds
-    pub(crate) fn calculate_quorum_rounds(&self) -> (Vec<QuorumRound>, Vec<QuorumRound>) {
-        let received_quorum_rounds = self.compute_received_quorum_rounds();
-        let accepted_quorum_rounds = self.compute_accepted_quorum_rounds();
-
-        debug!(
-            "Computed received quorum round per authority: {}",
-            self.context
-                .committee
-                .authorities()
-                .zip(received_quorum_rounds.iter())
-                .map(|((i, _), rounds)| format!("{i}: {rounds:?}"))
-                .join(", ")
-        );
-        debug!(
-            "Computed accepted quorum round per authority: {}",
-            self.context
-                .committee
-                .authorities()
-                .zip(accepted_quorum_rounds.iter())
-                .map(|((i, _), rounds)| format!("{i}: {rounds:?}"))
-                .join(", ")
-        );
-
-        (received_quorum_rounds, accepted_quorum_rounds)
-    }
-
-    fn compute_received_quorum_rounds(&self) -> Vec<QuorumRound> {
-        self.context
-            .committee
-            .authorities()
-            .map(|(peer, _)| {
-                compute_quorum_round(&self.context.committee, peer, &self.probed_received_rounds)
-            })
-            .collect()
-    }
-
-    fn compute_accepted_quorum_rounds(&self) -> Vec<QuorumRound> {
+    pub(crate) fn compute_accepted_quorum_rounds(&self) -> Vec<QuorumRound> {
         let highest_accepted_rounds = self
             .probed_accepted_rounds
             .iter()
@@ -228,13 +184,49 @@ impl PeerRoundTracker {
                     .collect::<Vec<Round>>()
             })
             .collect::<Vec<Vec<Round>>>();
-        self.context
+        let accepted_quorum_rounds = self
+            .context
             .committee
             .authorities()
             .map(|(peer, _)| {
                 compute_quorum_round(&self.context.committee, peer, &highest_accepted_rounds)
             })
-            .collect()
+            .collect::<Vec<_>>();
+
+        debug!(
+            "Computed accepted quorum round per authority: {}",
+            self.context
+                .committee
+                .authorities()
+                .zip(accepted_quorum_rounds.iter())
+                .map(|((i, _), rounds)| format!("{i}: {rounds:?}"))
+                .join(", ")
+        );
+
+        accepted_quorum_rounds
+    }
+
+    fn compute_received_quorum_rounds(&self) -> Vec<QuorumRound> {
+        let received_quorum_rounds = self
+            .context
+            .committee
+            .authorities()
+            .map(|(peer, _)| {
+                compute_quorum_round(&self.context.committee, peer, &self.probed_received_rounds)
+            })
+            .collect::<Vec<_>>();
+
+        debug!(
+            "Computed received quorum round per authority: {}",
+            self.context
+                .committee
+                .authorities()
+                .zip(received_quorum_rounds.iter())
+                .map(|((i, _), rounds)| format!("{i}: {rounds:?}"))
+                .join(", ")
+        );
+
+        received_quorum_rounds
     }
 }
 
@@ -472,9 +464,8 @@ mod test {
         // 105, 115, 103, 0,   125, 126, 127,
         // 0,   0,   0,   0,   0,   0,   0,
 
-        let (received_quorum_rounds, accepted_quorum_rounds) =
-            round_tracker.calculate_quorum_rounds();
-
+        let received_quorum_rounds = round_tracker.compute_received_quorum_rounds();
+        let accepted_quorum_rounds = round_tracker.compute_accepted_quorum_rounds();
         assert_eq!(
             received_quorum_rounds,
             vec![
