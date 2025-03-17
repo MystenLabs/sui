@@ -407,9 +407,6 @@ pub(crate) fn median_timestamp_by_stake(
     if timestamps.is_empty() {
         return Err("No blocks provided".to_string());
     }
-    if total_stake == 0 {
-        return Err("Total stake is 0".to_string());
-    }
     if total_stake < context.committee.quorum_threshold() {
         return Err(format!(
             "Total stake {} < quorum threshold {}",
@@ -1167,5 +1164,25 @@ mod tests {
         // One authority dominates.
         let timestamps = vec![(1_000, 1), (2_000, 1), (3_000, 1), (4_000, 1), (5_000, 10)];
         assert_eq!(median_timestamps_by_stake_inner(timestamps, 14), 5_000);
+    }
+
+    #[test]
+    fn test_median_timestamps_by_stake_errors() {
+        let num_authorities = 4;
+        let (mut context, _keys) = Context::new_for_test(num_authorities);
+        context
+            .protocol_config
+            .set_consensus_median_based_commit_timestamp_for_testing(true);
+
+        let context = Arc::new(context);
+
+        // No blocks provided
+        let err = median_timestamp_by_stake(&context, vec![].into_iter()).unwrap_err();
+        assert_eq!(err, "No blocks provided");
+
+        // Blocks provided but total stake is less than quorum threshold
+        let block = VerifiedBlock::new_for_test(TestBlock::new(5, 0).build());
+        let err = median_timestamp_by_stake(&context, vec![block].into_iter()).unwrap_err();
+        assert_eq!(err, "Total stake 1 < quorum threshold 3");
     }
 }
