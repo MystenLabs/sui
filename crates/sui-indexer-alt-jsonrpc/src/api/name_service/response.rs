@@ -116,13 +116,16 @@ pub(super) async fn resolved_name(
     )
     .context("Failed to deserialize reverse record")?;
 
-    // Before returning the domain, check that it is still valid and points to this address.
-    // If forward resolution fails with a user error, it means the reverse record is no longer
-    // valid. Internal errors are unexpected and should be propagated.
+    // Before returning the domain, check that it is still valid. If forward resolution fails with
+    // a user error, it means the reverse record is no longer valid. Internal errors are unexpected
+    // and should be propagated.
+    //
+    // There is strong on-chain enforcement that the forward and reverse mappings are consistent
+    // with each other, so we don't need to check the forward mapping, if we find one.
     let domain = reverse_record.value.to_string();
     match resolved_address(ctx, &domain).await {
-        Ok(Some(actual_address)) if actual_address == address => Ok(Some(domain)),
-        Ok(_) | Err(RpcError::InvalidParams(_)) => Ok(None),
+        Ok(Some(_)) => Ok(Some(domain)),
+        Ok(None) | Err(RpcError::InvalidParams(_)) => Ok(None),
         Err(e) => Err(e).internal_context("Failed to resolve address"),
     }
 }
