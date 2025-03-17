@@ -1593,11 +1593,9 @@ impl AuthorityStore {
         let old_simplified_unwrap_then_delete = cur_epoch_store
             .protocol_config()
             .simplified_unwrap_then_delete();
-        let new_simplified_unwrap_then_delete = ProtocolConfig::get_for_version(
-            new_protocol_version,
-            cur_epoch_store.get_chain_identifier().chain(),
-        )
-        .simplified_unwrap_then_delete();
+        let new_simplified_unwrap_then_delete =
+            ProtocolConfig::get_for_version(new_protocol_version, cur_epoch_store.get_chain())
+                .simplified_unwrap_then_delete();
         // If in the new epoch the simplified_unwrap_then_delete is enabled for the first time,
         // we re-accumulate state root.
         let should_reaccumulate =

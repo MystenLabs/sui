@@ -10,7 +10,7 @@ use sui_core::consensus_adapter::position_submit_certificate;
 use sui_json_rpc_types::SuiTransactionBlockEffectsAPI;
 use sui_macros::sim_test;
 use sui_node::SuiNodeHandle;
-use sui_protocol_config::ProtocolConfig;
+use sui_protocol_config::{Chain, ProtocolConfig};
 use sui_swarm_config::genesis_config::{ValidatorGenesisConfig, ValidatorGenesisConfigBuilder};
 use sui_test_transaction_builder::{make_transfer_sui_transaction, TestTransactionBuilder};
 use sui_types::base_types::SuiAddress;
@@ -206,15 +206,25 @@ async fn reconfig_with_revert_end_to_end_test() {
 // This test just starts up a cluster that reconfigures itself under 0 load.
 #[sim_test]
 async fn test_passive_reconfig() {
-    do_test_passive_reconfig().await;
+    do_test_passive_reconfig(None).await;
+}
+
+#[sim_test]
+async fn test_passive_reconfig_mainnet_smoke_test() {
+    do_test_passive_reconfig(Some(Chain::Mainnet)).await;
+}
+
+#[sim_test]
+async fn test_passive_reconfig_testnet_smoke_test() {
+    do_test_passive_reconfig(Some(Chain::Testnet)).await;
 }
 
 #[sim_test(check_determinism)]
 async fn test_passive_reconfig_determinism() {
-    do_test_passive_reconfig().await;
+    do_test_passive_reconfig(None).await;
 }
 
-async fn do_test_passive_reconfig() {
+async fn do_test_passive_reconfig(chain: Option<Chain>) {
     telemetry_subscribers::init_for_testing();
     let _commit_root_state_digest = ProtocolConfig::apply_overrides_for_testing(|_, mut config| {
         config.set_commit_root_state_digest_supported_for_testing(true);
@@ -222,10 +232,13 @@ async fn do_test_passive_reconfig() {
     });
     ProtocolConfig::poison_get_for_min_version();
 
-    let test_cluster = TestClusterBuilder::new()
-        .with_epoch_duration_ms(1000)
-        .build()
-        .await;
+    let mut builder = TestClusterBuilder::new().with_epoch_duration_ms(1000);
+
+    if let Some(chain) = chain {
+        builder = builder.with_chain_override(chain);
+    }
+
+    let test_cluster = builder.build().await;
 
     let target_epoch: u64 = std::env::var("RECONFIG_TARGET_EPOCH")
         .ok()

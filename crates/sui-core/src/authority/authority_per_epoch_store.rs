@@ -394,7 +394,9 @@ pub struct AuthorityPerEpochStore {
     /// Execution state that has to restart at each epoch change
     execution_component: ExecutionComponents,
 
-    chain_identifier: ChainIdentifier,
+    /// ChainIdentifier is always the true id (digest of genesis checkpoint). Chain is the
+    /// nominal identifier and can be overridden for testing purposes.
+    chain: (ChainIdentifier, Chain),
 
     /// aggregator for JWK votes
     jwk_aggregator: Mutex<JwkAggregator>,
@@ -772,7 +774,7 @@ impl AuthorityPerEpochStore {
         cache_metrics: Arc<ResolverMetrics>,
         signature_verifier_metrics: Arc<SignatureVerifierMetrics>,
         expensive_safety_check_config: &ExpensiveSafetyCheckConfig,
-        chain_identifier: ChainIdentifier,
+        chain: (ChainIdentifier, Chain),
         highest_executed_checkpoint: CheckpointSequenceNumber,
     ) -> SuiResult<Arc<Self>> {
         let current_time = Instant::now();
@@ -816,8 +818,16 @@ impl AuthorityPerEpochStore {
         let protocol_version = epoch_start_configuration
             .epoch_start_state()
             .protocol_version();
-        let protocol_config =
-            ProtocolConfig::get_for_version(protocol_version, chain_identifier.chain());
+
+        let chain_from_id = chain.0.chain();
+        if chain_from_id == Chain::Mainnet || chain_from_id == Chain::Testnet {
+            assert_eq!(
+                chain_from_id, chain.1,
+                "cannot override chain on production networks!"
+            );
+        }
+
+        let protocol_config = ProtocolConfig::get_for_version(protocol_version, chain.1);
 
         let execution_component = ExecutionComponents::new(
             &protocol_config,
@@ -826,7 +836,7 @@ impl AuthorityPerEpochStore {
             expensive_safety_check_config,
         );
 
-        let zklogin_env = match chain_identifier.chain() {
+        let zklogin_env = match chain.1 {
             // Testnet and mainnet are treated the same since it is permanent.
             Chain::Mainnet | Chain::Testnet => ZkLoginEnv::Prod,
             _ => ZkLoginEnv::Test,
@@ -943,7 +953,7 @@ impl AuthorityPerEpochStore {
             metrics,
             epoch_start_configuration,
             execution_component,
-            chain_identifier,
+            chain,
             jwk_aggregator,
             randomness_manager: OnceCell::new(),
             randomness_reporter: OnceCell::new(),
@@ -1055,7 +1065,11 @@ impl AuthorityPerEpochStore {
     }
 
     pub fn get_chain_identifier(&self) -> ChainIdentifier {
-        self.chain_identifier
+        self.chain.0
+    }
+
+    pub fn get_chain(&self) -> Chain {
+        self.chain.1
     }
 
     pub fn new_at_next_epoch(
@@ -1066,7 +1080,6 @@ impl AuthorityPerEpochStore {
         backing_package_store: Arc<dyn BackingPackageStore + Send + Sync>,
         object_store: Arc<dyn ObjectStore + Send + Sync>,
         expensive_safety_check_config: &ExpensiveSafetyCheckConfig,
-        chain_identifier: ChainIdentifier,
         previous_epoch_last_checkpoint: CheckpointSequenceNumber,
     ) -> SuiResult<Arc<Self>> {
         assert_eq!(self.epoch() + 1, new_committee.epoch);
@@ -1084,7 +1097,7 @@ impl AuthorityPerEpochStore {
             self.execution_component.metrics(),
             self.signature_verifier.metrics.clone(),
             expensive_safety_check_config,
-            chain_identifier,
+            self.chain,
             previous_epoch_last_checkpoint,
         )
     }
@@ -1109,7 +1122,6 @@ impl AuthorityPerEpochStore {
             backing_package_store,
             object_store,
             expensive_safety_check_config,
-            self.chain_identifier,
             previous_epoch_last_checkpoint,
         )
         .expect("failed to create new authority per epoch store")

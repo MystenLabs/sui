@@ -205,6 +205,12 @@ pub struct NodeConfig {
 
     #[serde(skip_serializing_if = "Option::is_none")]
     pub execution_time_observer_config: Option<ExecutionTimeObserverConfig>,
+
+    /// Allow overriding the chain for testing purposes. For instance, it allows you to
+    /// create a test network that believes it is mainnet or testnet. Attempting to
+    /// override this value on production networks will result in an error.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub chain_override_for_testing: Option<Chain>,
 }
 
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
