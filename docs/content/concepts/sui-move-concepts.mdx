@@ -61,7 +61,7 @@ Do this by making your function private (don't add the `public` visibility keywo
 
 In addition to this Sui-specific usecase, there are other rules and restrictions for `entry` functions. 
 - `entry` functions can only return types with the `drop` ability. 
-- `entry` functions can only take objects as inputs as long as they weren't used as inputs in any non-`entry` functions in the same PTB. 
+- `entry` functions can only take objects as inputs if they weren't used as inputs in any non-`entry` functions in the same PTB. 
 
 ## Related links
 
