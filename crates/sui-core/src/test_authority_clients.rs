@@ -8,39 +8,43 @@ use std::{
     time::Duration,
 };
 
-use crate::authority::test_authority_builder::TestAuthorityBuilder;
-use crate::{authority::AuthorityState, authority_client::AuthorityAPI};
 use async_trait::async_trait;
 use mysten_metrics::spawn_monitored_task;
 use sui_config::genesis::Genesis;
-use sui_types::messages_grpc::{
-    HandleCertificateResponseV2, HandleSoftBundleCertificatesRequestV3,
-    HandleSoftBundleCertificatesResponseV3, HandleTransactionResponse, ObjectInfoRequest,
-    ObjectInfoResponse, SystemStateRequest, TransactionInfoRequest, TransactionInfoResponse,
-};
-use sui_types::sui_system_state::SuiSystemState;
 use sui_types::{
     crypto::AuthorityKeyPair,
-    error::SuiError,
-    messages_checkpoint::{CheckpointRequest, CheckpointResponse},
-    transaction::{CertifiedTransaction, Transaction, VerifiedTransaction},
-};
-use sui_types::{
     effects::TransactionEffectsAPI,
-    messages_checkpoint::{CheckpointRequestV2, CheckpointResponseV2},
+    error::{SuiError, SuiResult},
+    messages_checkpoint::{
+        CheckpointRequest, CheckpointRequestV2, CheckpointResponse, CheckpointResponseV2,
+    },
+    messages_consensus::{ConsensusTransaction, ConsensusTransactionKind},
+    messages_grpc::{
+        HandleCertificateRequestV3, HandleCertificateResponseV2, HandleCertificateResponseV3,
+        HandleSoftBundleCertificatesRequestV3, HandleSoftBundleCertificatesResponseV3,
+        HandleTransactionResponse, ObjectInfoRequest, ObjectInfoResponse, SubmitTransactionRequest,
+        SubmitTransactionResponse, SystemStateRequest, TransactionInfoRequest,
+        TransactionInfoResponse,
+    },
+    sui_system_state::SuiSystemState,
+    transaction::{CertifiedTransaction, Transaction, VerifiedCertificate, VerifiedTransaction},
 };
-use sui_types::{
-    error::SuiResult,
-    messages_grpc::{HandleCertificateRequestV3, HandleCertificateResponseV3},
+
+use crate::{
+    authority::{test_authority_builder::TestAuthorityBuilder, AuthorityState},
+    authority_client::AuthorityAPI,
 };
 
 #[derive(Clone, Copy, Default)]
 pub struct LocalAuthorityClientFaultConfig {
     pub fail_before_handle_transaction: bool,
     pub fail_after_handle_transaction: bool,
+    pub fail_before_submit_transaction: bool,
+    pub fail_after_submit_transaction: bool,
     pub fail_before_handle_confirmation: bool,
     pub fail_after_handle_confirmation: bool,
     pub overload_retry_after_handle_transaction: Option<Duration>,
+    pub overload_retry_after_submit_transaction: Option<Duration>,
 }
 
 impl LocalAuthorityClientFaultConfig {
@@ -57,6 +61,160 @@ pub struct LocalAuthorityClient {
 
 #[async_trait]
 impl AuthorityAPI for LocalAuthorityClient {
+    async fn submit_transaction(
+        &self,
+        request: SubmitTransactionRequest,
+        _client_addr: Option<SocketAddr>,
+    ) -> Result<SubmitTransactionResponse, SuiError> {
+        if self.fault_config.fail_before_submit_transaction {
+            return Err(SuiError::from("Mock error before submit_transaction"));
+        }
+        let state = self.state.clone();
+        let epoch_store = self.state.load_epoch_store_one_call_per_task();
+        let deserialized_transaction = bcs::from_bytes::<Transaction>(&request.transaction)
+            .map_err(|e| SuiError::TransactionDeserializationError {
+                error: e.to_string(),
+            })?;
+        let transaction = epoch_store
+            .verify_transaction(deserialized_transaction.clone())
+            .map(|_| VerifiedTransaction::new_from_verified(deserialized_transaction))?;
+        let tx_output = state.handle_vote_transaction(&epoch_store, transaction.clone())?;
+        if self.fault_config.fail_after_submit_transaction {
+            return Err(SuiError::GenericAuthorityError {
+                error: "Mock error after submit_transaction".to_owned(),
+            });
+        }
+        if let Some(duration) = self.fault_config.overload_retry_after_submit_transaction {
+            return Err(SuiError::ValidatorOverloadedRetryAfter {
+                retry_after_secs: duration.as_secs(),
+            });
+        }
+
+        if let Some((effects, events)) = tx_output {
+            let input_objects = request
+                .include_input_objects
+                .then(|| state.get_transaction_input_objects(&effects))
+                .and_then(Result::ok);
+            let output_objects = request
+                .include_output_objects
+                .then(|| state.get_transaction_output_objects(&effects))
+                .and_then(Result::ok);
+
+            return Ok(SubmitTransactionResponse {
+                effects: bcs::to_bytes(&effects)
+                    .map_err(|e| SuiError::TransactionEffectsSerializationError {
+                        error: e.to_string(),
+                    })?
+                    .into(),
+                events: request.include_events.then_some(
+                    bcs::to_bytes(&events)
+                        .map_err(|e| SuiError::TransactionEventsSerializationError {
+                            error: e.to_string(),
+                        })?
+                        .into(),
+                ),
+                input_objects: input_objects
+                    .unwrap_or_default()
+                    .into_iter()
+                    .map(|obj| {
+                        bcs::to_bytes(&obj).map_err(|e| SuiError::ObjectSerializationError {
+                            error: e.to_string(),
+                        })
+                    })
+                    .collect::<Result<_, _>>()?,
+                output_objects: output_objects
+                    .unwrap_or_default()
+                    .into_iter()
+                    .map(|obj| {
+                        bcs::to_bytes(&obj).map_err(|e| SuiError::ObjectSerializationError {
+                            error: e.to_string(),
+                        })
+                    })
+                    .collect::<Result<_, _>>()?,
+                auxiliary_data: None, // We don't have any aux data generated presently
+            });
+        }
+
+        let consensus_transaction = ConsensusTransaction::new_user_transaction_message(
+            &self.state.name,
+            transaction.into(),
+        );
+        let effects = match &consensus_transaction.kind {
+            ConsensusTransactionKind::CertifiedTransaction(certificate) => {
+                let certificate = VerifiedCertificate::new_unchecked(*(certificate.clone()));
+                self.state
+                    .execute_certificate(&certificate, &epoch_store)
+                    .await?
+            }
+            ConsensusTransactionKind::UserTransaction(tx) => {
+                self.state.await_transaction_effects(*tx.digest(), &epoch_store).await?
+            }
+            _ => panic!("`submit_transaction` received transaction that is not a CertifiedTransaction or UserTransaction"),
+        };
+        let events = if request.include_events {
+            if let Some(digest) = effects.events_digest() {
+                Some(self.state.get_transaction_events(digest)?)
+            } else {
+                None
+            }
+        } else {
+            None
+        };
+
+        let input_objects = request
+            .include_input_objects
+            .then(|| self.state.get_transaction_input_objects(&effects))
+            .and_then(Result::ok);
+
+        let output_objects = request
+            .include_output_objects
+            .then(|| self.state.get_transaction_output_objects(&effects))
+            .and_then(Result::ok);
+
+        if let ConsensusTransactionKind::CertifiedTransaction(certificate) =
+            &consensus_transaction.kind
+        {
+            epoch_store.insert_tx_cert_sig(certificate.digest(), certificate.auth_sig())?;
+            // TODO(fastpath): Make sure consensus handler does this for a UserTransaction.
+        }
+
+        Ok::<_, SuiError>(SubmitTransactionResponse {
+            effects: bcs::to_bytes(&effects)
+                .map_err(|e| SuiError::TransactionEffectsSerializationError {
+                    error: e.to_string(),
+                })?
+                .into(),
+            events: events
+                .map(|e| {
+                    bcs::to_bytes(&e).map(|v| v.into()).map_err(|e| {
+                        SuiError::TransactionEventsSerializationError {
+                            error: e.to_string(),
+                        }
+                    })
+                })
+                .transpose()?,
+            input_objects: input_objects
+                .unwrap_or_default()
+                .into_iter()
+                .map(|obj| {
+                    bcs::to_bytes(&obj).map_err(|e| SuiError::ObjectSerializationError {
+                        error: e.to_string(),
+                    })
+                })
+                .collect::<Result<_, _>>()?,
+            output_objects: output_objects
+                .unwrap_or_default()
+                .into_iter()
+                .map(|obj| {
+                    bcs::to_bytes(&obj).map_err(|e| SuiError::ObjectSerializationError {
+                        error: e.to_string(),
+                    })
+                })
+                .collect::<Result<_, _>>()?,
+            auxiliary_data: None, // We don't have any aux data generated presently
+        })
+    }
+
     async fn handle_transaction(
         &self,
         transaction: Transaction,
@@ -284,6 +442,15 @@ impl MockAuthorityApi {
 
 #[async_trait]
 impl AuthorityAPI for MockAuthorityApi {
+    /// Submit a new transaction to a Sui or Primary account.
+    async fn submit_transaction(
+        &self,
+        _request: SubmitTransactionRequest,
+        _client_addr: Option<SocketAddr>,
+    ) -> Result<SubmitTransactionResponse, SuiError> {
+        unimplemented!();
+    }
+
     /// Initiate a new transaction to a Sui or Primary account.
     async fn handle_transaction(
         &self,
@@ -380,6 +547,14 @@ pub struct HandleTransactionTestAuthorityClient {
 
 #[async_trait]
 impl AuthorityAPI for HandleTransactionTestAuthorityClient {
+    async fn submit_transaction(
+        &self,
+        _request: SubmitTransactionRequest,
+        _client_addr: Option<SocketAddr>,
+    ) -> Result<SubmitTransactionResponse, SuiError> {
+        unimplemented!()
+    }
+
     async fn handle_transaction(
         &self,
         _transaction: Transaction,
