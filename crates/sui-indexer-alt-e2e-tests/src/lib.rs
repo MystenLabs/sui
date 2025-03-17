@@ -14,8 +14,8 @@ use simulacrum::Simulacrum;
 use sui_indexer_alt::{config::IndexerConfig, setup_indexer};
 use sui_indexer_alt_framework::{ingestion::ClientArgs, schema::watermarks, IndexerArgs};
 use sui_indexer_alt_jsonrpc::{
-    api::write::WriteArgs, config::RpcConfig, data::system_package_task::SystemPackageTaskArgs,
-    start_rpc, RpcArgs,
+    config::RpcConfig, data::system_package_task::SystemPackageTaskArgs, start_rpc, NodeArgs,
+    RpcArgs,
 };
 use sui_pg_db::{
     temp::{get_available_port, TempDb},
@@ -290,7 +290,7 @@ impl OffchainCluster {
             Some(database_url.clone()),
             DbArgs::default(),
             rpc_args,
-            WriteArgs::default(),
+            NodeArgs::default(),
             system_package_task_args,
             rpc_config,
             registry,
