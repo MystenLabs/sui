@@ -218,13 +218,19 @@ impl DagBuilder {
                 .saturating_sub(self.context.protocol_config.gc_depth());
 
             let leader_block_ref = leader_block.reference();
-            last_timestamp_ms = leader_block.timestamp_ms().max(last_timestamp_ms);
 
             let (to_commit, rejected_transactions) = Linearizer::linearize_sub_dag(
                 &self.context.clone(),
-                leader_block,
+                leader_block.clone(),
                 self.last_committed_rounds.clone(),
                 &mut storage,
+            );
+
+            last_timestamp_ms = Linearizer::calculate_commit_timestamp(
+                &self.context.clone(),
+                &mut storage,
+                &leader_block,
+                last_timestamp_ms,
             );
 
             // Update the last committed rounds
@@ -457,6 +463,9 @@ pub struct LayerBuilder<'a> {
     // Ancestors to link to the current layer
     ancestors: Vec<BlockRef>,
 
+    // The block timestamps for the layer for each specified authority. This will work as base timestamp and the round will be added to make sure that timestamps do offset.
+    timestamps: Vec<BlockTimestampMs>,
+
     // Accumulated blocks to write to dag state
     blocks: Vec<VerifiedBlock>,
 }
@@ -486,6 +495,7 @@ impl<'a> LayerBuilder<'a> {
             random_weak_links: false,
             random_weak_links_random_seed: None,
             ancestors,
+            timestamps: vec![],
             blocks: vec![],
         }
     }
@@ -576,6 +586,18 @@ impl<'a> LayerBuilder<'a> {
         // authorities must be specified for this to apply
         assert!(self.specified_authorities.is_some());
         self.skip_block = true;
+        self
+    }
+
+    pub fn with_timestamps(mut self, timestamps: Vec<BlockTimestampMs>) -> Self {
+        // authorities must be specified for this to apply
+        assert!(self.specified_authorities.is_some());
+        assert_eq!(
+            self.specified_authorities.as_ref().unwrap().len(),
+            timestamps.len(),
+            "Timestamps should be provided for each specified authority"
+        );
+        self.timestamps = timestamps;
         self
     }
 
@@ -759,13 +781,12 @@ impl<'a> LayerBuilder<'a> {
                 .collect::<Vec<_>>();
             let num_blocks = self.num_blocks_to_create(authority);
             for num_block in 0..num_blocks {
-                let author = authority.value() as u32;
-                let base_ts = round as BlockTimestampMs * 1000;
+                let timestamp = self.block_timestamp(authority, round, num_block);
                 let block = VerifiedBlock::new_for_test(
-                    TestBlock::new(round, author)
+                    TestBlock::new(round, authority.value() as u32)
                         .set_transactions(transactions.clone())
                         .set_ancestors(ancestors.clone())
-                        .set_timestamp_ms(base_ts + (author + round + num_block) as u64)
+                        .set_timestamp_ms(timestamp)
                         .build(),
                 );
                 references.push(block.reference());
@@ -791,6 +812,24 @@ impl<'a> LayerBuilder<'a> {
         } else {
             1
         }
+    }
+
+    fn block_timestamp(
+        &self,
+        authority: AuthorityIndex,
+        round: Round,
+        num_block: u32,
+    ) -> BlockTimestampMs {
+        if self.specified_authorities.is_some() && !self.timestamps.is_empty() {
+            let specified_authorities = self.specified_authorities.as_ref().unwrap();
+
+            if let Some(position) = specified_authorities.iter().position(|&x| x == authority) {
+                return self.timestamps[position] + (round + num_block) as u64;
+            }
+        }
+        let author = authority.value() as u32;
+        let base_ts = round as BlockTimestampMs * 1000;
+        base_ts + (author + round + num_block) as u64
     }
 
     fn should_skip_block(&self, round: Round, authority: AuthorityIndex) -> bool {

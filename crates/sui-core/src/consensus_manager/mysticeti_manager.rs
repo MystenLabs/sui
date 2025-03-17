@@ -5,7 +5,9 @@ use std::{path::PathBuf, sync::Arc};
 use arc_swap::ArcSwapOption;
 use async_trait::async_trait;
 use consensus_config::{Committee, NetworkKeyPair, Parameters, ProtocolKeyPair};
-use consensus_core::{CommitConsumer, CommitConsumerMonitor, CommitIndex, ConsensusAuthority};
+use consensus_core::{
+    Clock, CommitConsumer, CommitConsumerMonitor, CommitIndex, ConsensusAuthority,
+};
 use fastcrypto::ed25519;
 use mysten_metrics::{RegistryID, RegistryService};
 use prometheus::Registry;
@@ -185,6 +187,7 @@ impl ConsensusManagerTrait for MysticetiManager {
             protocol_config.clone(),
             self.protocol_keypair.clone(),
             self.network_keypair.clone(),
+            Arc::new(Clock::default()),
             Arc::new(tx_validator.clone()),
             commit_consumer,
             registry.clone(),

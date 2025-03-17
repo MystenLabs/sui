@@ -13,7 +13,7 @@ use std::{
 use consensus_config::AuthorityIndex;
 use itertools::Itertools as _;
 use tokio::time::Instant;
-use tracing::{debug, error, info};
+use tracing::{debug, error, info, trace};
 
 use crate::{
     block::{
@@ -292,11 +292,31 @@ impl DagState {
 
         let now = self.context.clock.timestamp_utc_ms();
         if block.timestamp_ms() > now {
-            panic!(
-                "Block {:?} cannot be accepted! Block timestamp {} is greater than local timestamp {}.",
-                block, block.timestamp_ms(), now,
-            );
+            if self
+                .context
+                .protocol_config
+                .consensus_median_based_commit_timestamp()
+            {
+                trace!(
+                    "Block {:?} with timestamp {} is greater than local timestamp {}.",
+                    block,
+                    block.timestamp_ms(),
+                    now,
+                );
+            } else {
+                panic!(
+                    "Block {:?} cannot be accepted! Block timestamp {} is greater than local timestamp {}.",
+                    block, block.timestamp_ms(), now,
+                );
+            }
         }
+        let hostname = &self.context.committee.authority(block_ref.author).hostname;
+        self.context
+            .metrics
+            .node_metrics
+            .accepted_block_time_drift_ms
+            .with_label_values(&[hostname])
+            .inc_by(block.timestamp_ms().saturating_sub(now));
 
         // TODO: Move this check to core
         // Ensure we don't write multiple blocks per slot for our own index
@@ -751,7 +771,7 @@ impl DagState {
     // Buffers a new commit in memory and updates last committed rounds.
     // REQUIRED: must not skip over any commit index.
     pub(crate) fn add_commit(&mut self, commit: TrustedCommit) {
-        if let Some(last_commit) = &self.last_commit {
+        let time_diff = if let Some(last_commit) = &self.last_commit {
             if commit.index() <= last_commit.index() {
                 error!(
                     "New commit index {} <= last commit index {}!",
@@ -765,9 +785,19 @@ impl DagState {
             if commit.timestamp_ms() < last_commit.timestamp_ms() {
                 panic!("Commit timestamps do not monotonically increment, prev commit {:?}, new commit {:?}", last_commit, commit);
             }
+            commit
+                .timestamp_ms()
+                .saturating_sub(last_commit.timestamp_ms())
         } else {
             assert_eq!(commit.index(), 1);
-        }
+            0
+        };
+
+        self.context
+            .metrics
+            .node_metrics
+            .last_commit_time_diff
+            .observe(time_diff as f64);
 
         let commit_round_advanced = if let Some(previous_commit) = &self.last_commit {
             previous_commit.round() < commit.round()
@@ -2381,5 +2411,55 @@ mod test {
                 }
             }
         }
+    }
+
+    #[tokio::test]
+    #[should_panic]
+    async fn test_accept_block_panics_when_timestamp_is_ahead() {
+        // GIVEN
+        let (mut context, _) = Context::new_for_test(4);
+        context
+            .protocol_config
+            .set_consensus_median_based_commit_timestamp_for_testing(false);
+        let context = Arc::new(context);
+        let store = Arc::new(MemStore::new());
+        let mut dag_state = DagState::new(context.clone(), store.clone());
+
+        // Set a timestamp for the block that is ahead of the current time
+        let block_timestamp = context.clock.timestamp_utc_ms() + 5_000;
+
+        let block = VerifiedBlock::new_for_test(
+            TestBlock::new(10, 0)
+                .set_timestamp_ms(block_timestamp)
+                .build(),
+        );
+
+        // Try to accept the block - it will panic as accepted block timestamp is ahead of the current time
+        dag_state.accept_block(block);
+    }
+
+    #[tokio::test]
+    async fn test_accept_block_not_panics_when_timestamp_is_ahead_and_median_timestamp() {
+        // GIVEN
+        let (mut context, _) = Context::new_for_test(4);
+        context
+            .protocol_config
+            .set_consensus_median_based_commit_timestamp_for_testing(true);
+
+        let context = Arc::new(context);
+        let store = Arc::new(MemStore::new());
+        let mut dag_state = DagState::new(context.clone(), store.clone());
+
+        // Set a timestamp for the block that is ahead of the current time
+        let block_timestamp = context.clock.timestamp_utc_ms() + 5_000;
+
+        let block = VerifiedBlock::new_for_test(
+            TestBlock::new(10, 0)
+                .set_timestamp_ms(block_timestamp)
+                .build(),
+        );
+
+        // Try to accept the block - it should not panic
+        dag_state.accept_block(block);
     }
 }

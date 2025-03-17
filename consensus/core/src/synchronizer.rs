@@ -663,14 +663,33 @@ impl<C: NetworkClient, V: BlockVerifier, D: CoreThreadDispatcher> Synchronizer<C
             // Dropping is ok because the block will be refetched.
             // TODO: improve efficiency, maybe suspend and continue processing the block asynchronously.
             let now = context.clock.timestamp_utc_ms();
-            if now < verified_block.timestamp_ms() {
-                warn!(
-                    "Synced block {} timestamp {} is in the future (now={}). Ignoring.",
-                    verified_block.reference(),
-                    verified_block.timestamp_ms(),
-                    now
-                );
-                continue;
+            let drift = verified_block.timestamp_ms().saturating_sub(now) as u64;
+            if drift > 0 {
+                let peer_hostname = &context
+                    .committee
+                    .authority(verified_block.author())
+                    .hostname;
+                context
+                    .metrics
+                    .node_metrics
+                    .block_timestamp_drift_ms
+                    .with_label_values(&[peer_hostname, "synchronizer"])
+                    .inc_by(drift);
+
+                if context
+                    .protocol_config
+                    .consensus_median_based_commit_timestamp()
+                {
+                    trace!("Synced block {} timestamp {} is in the future (now={}). Will not ignore as median based timestamp is enabled.", verified_block.reference(), verified_block.timestamp_ms(), now);
+                } else {
+                    warn!(
+                        "Synced block {} timestamp {} is in the future (now={}). Ignoring.",
+                        verified_block.reference(),
+                        verified_block.timestamp_ms(),
+                        now
+                    );
+                    continue;
+                }
             }
 
             verified_blocks.push(verified_block.clone());
