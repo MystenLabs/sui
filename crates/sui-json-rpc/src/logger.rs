@@ -19,7 +19,7 @@ macro_rules! with_tracing {
 
                 let rpc_error: ErrorObjectOwned = e.into();
 
-                error!(error=?anyhow_error);
+                error!(error=%anyhow_error);
                 rpc_error
             });
 
