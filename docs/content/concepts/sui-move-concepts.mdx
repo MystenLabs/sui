@@ -59,7 +59,7 @@ The `entry` keyword has a specific use case in Move on Sui. Use `entry` when you
 
 Make your function private (don't add the `public` visibility keyword) and mark it with the `entry` keyword, as in `entry fun example_function`.
 
-In addition to this Sui-specific usecase, there are other rules and restrictions for `entry` functions. 
+In addition to this Sui-specific use case, there are other rules and restrictions for `entry` functions. 
 - `entry` functions can only return types with the `drop` ability. 
 - `entry` functions can only take objects as inputs if they weren't used as inputs in any non-`entry` functions in the same PTB. 
 
