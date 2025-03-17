@@ -3,6 +3,7 @@
 
 use move_binary_format::errors::{PartialVMError, PartialVMResult};
 use move_core_types::{gas_algebra::InternalGas, vm_status::StatusCode};
+use move_vm_runtime::natives::extensions::NativeContextMut;
 use move_vm_runtime::natives::functions::NativeContext;
 use move_vm_runtime::{
     execution::{
@@ -49,7 +50,8 @@ macro_rules! native_charge_gas_early_exit_option {
 fn is_supported(context: &NativeContext) -> bool {
     context
         .extensions()
-        .get::<ObjectRuntime>()
+        .get::<NativeContextMut<ObjectRuntime>>()
+        .borrow()
         .protocol_config
         .enable_nitro_attestation()
 }

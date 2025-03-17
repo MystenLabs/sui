@@ -8,7 +8,7 @@ use move_vm_runtime::{
         values::{self, Value, VectorRef},
         Type,
     },
-    natives::functions::NativeResult,
+    natives::{extensions::NativeContextMut, functions::NativeResult},
     pop_arg,
 };
 use move_vm_runtime::{native_charge_gas_early_exit, natives::functions::NativeContext};
@@ -189,7 +189,8 @@ pub fn verify_groth16_proof_internal(
             context.charge_gas(crypto_invalid_arguments_cost);
             let cost = if context
                 .extensions()
-                .get::<ObjectRuntime>()
+                .get::<NativeContextMut<ObjectRuntime>>()
+                .borrow()
                 .protocol_config
                 .native_charging_v2()
             {

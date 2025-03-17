@@ -12,6 +12,7 @@ use move_binary_format::errors::{PartialVMError, PartialVMResult};
 use move_core_types::gas_algebra::InternalGas;
 use move_core_types::vm_status::StatusCode;
 use move_vm_runtime::native_charge_gas_early_exit;
+use move_vm_runtime::natives::extensions::NativeContextMut;
 use move_vm_runtime::natives::functions::NativeContext;
 use move_vm_runtime::{
     execution::{
@@ -31,7 +32,8 @@ pub const INPUT_TOO_LONG_ERROR: u64 = 2;
 fn is_supported(context: &NativeContext) -> bool {
     context
         .extensions()
-        .get::<ObjectRuntime>()
+        .get::<NativeContextMut<ObjectRuntime>>()
+        .borrow()
         .protocol_config
         .enable_group_ops_native_functions()
 }
@@ -39,7 +41,8 @@ fn is_supported(context: &NativeContext) -> bool {
 fn is_msm_supported(context: &NativeContext) -> bool {
     context
         .extensions()
-        .get::<ObjectRuntime>()
+        .get::<NativeContextMut<ObjectRuntime>>()
+        .borrow()
         .protocol_config
         .enable_group_ops_native_function_msm()
 }
@@ -47,7 +50,8 @@ fn is_msm_supported(context: &NativeContext) -> bool {
 fn is_uncompressed_g1_supported(context: &NativeContext) -> bool {
     context
         .extensions()
-        .get::<ObjectRuntime>()
+        .get::<NativeContextMut<ObjectRuntime>>()
+        .borrow()
         .protocol_config
         .uncompressed_g1_group_elements()
 }
@@ -55,7 +59,8 @@ fn is_uncompressed_g1_supported(context: &NativeContext) -> bool {
 fn v2_native_charge(context: &NativeContext, cost: InternalGas) -> InternalGas {
     if context
         .extensions()
-        .get::<ObjectRuntime>()
+        .get::<NativeContextMut<ObjectRuntime>>()
+        .borrow()
         .protocol_config
         .native_charging_v2()
     {

@@ -14,7 +14,10 @@ use move_vm_runtime::{
         values::{Value, VectorRef},
         Type,
     },
-    natives::functions::{NativeResult, PartialVMError},
+    natives::{
+        extensions::NativeContextMut,
+        functions::{NativeResult, PartialVMError},
+    },
     pop_arg,
 };
 use move_vm_runtime::{native_charge_gas_early_exit, natives::functions::NativeContext};
@@ -27,7 +30,8 @@ pub const NOT_SUPPORTED_ERROR: u64 = 1;
 fn is_supported(context: &NativeContext) -> bool {
     context
         .extensions()
-        .get::<ObjectRuntime>()
+        .get::<NativeContextMut<ObjectRuntime>>()
+        .borrow()
         .protocol_config
         .enable_vdf()
 }
