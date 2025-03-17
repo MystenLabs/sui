@@ -6,14 +6,14 @@ use std::sync::Arc;
 
 use anyhow::Context as _;
 use api::checkpoints::Checkpoints;
-use api::coin::Coins;
+use api::coin::{Coins, DelegationCoins};
 use api::dynamic_fields::DynamicFields;
 use api::move_utils::MoveUtils;
 use api::name_service::NameService;
 use api::objects::{Objects, QueryObjects};
 use api::rpc_module::RpcModule;
 use api::transactions::{QueryTransactions, Transactions};
-use api::write::{Write, WriteArgs};
+use api::write::Write;
 use config::RpcConfig;
 use data::system_package_task::{SystemPackageTask, SystemPackageTaskArgs};
 use jsonrpsee::server::{BatchRequestConfig, RpcServiceBuilder, ServerBuilder};
@@ -26,7 +26,7 @@ use sui_pg_db::DbArgs;
 use tokio::task::JoinHandle;
 use tokio_util::sync::CancellationToken;
 use tower_layer::Identity;
-use tracing::info;
+use tracing::{info, warn};
 use url::Url;
 
 use crate::api::governance::Governance;
@@ -197,13 +197,24 @@ impl Default for RpcArgs {
     }
 }
 
+#[derive(clap::Args, Debug, Clone, Default)]
+pub struct NodeArgs {
+    /// The URL of the fullnode RPC we connect to for transaction execution,
+    /// dry-running, and delegation coin queries etc.
+    #[arg(long)]
+    pub fullnode_rpc_url: Option<url::Url>,
+}
+
 /// Set-up and run the RPC service, using the provided arguments (expected to be extracted from the
 /// command-line). The service will continue to run until the cancellation token is triggered, and
 /// will signal cancellation on the token when it is shutting down.
 ///
-/// Access to reads is controlled by the `database_url` -- if it is `None`, reads will not work.
-/// Similarly, access to writes (executing and dry-running transactions) is controlled by
-/// `write_args.fullnode_rpc_url`, which can be omitted to disable writes from this RPC.
+/// Access to most reads is controlled by the `database_url` -- if it is `None`, reads will not work.
+/// The only exception is the `DelegationCoins` module, which is controlled by `node_args.fullnode_rpc_url`,
+/// which can be omitted to disable reads from this RPC.
+///
+/// Access to writes (executing and dry-running transactions) is controlled by `node_args.fullnode_rpc_url`,
+/// which can be omitted to disable writes from this RPC.
 ///
 /// The service may spin up auxiliary services (such as the system package task) to support itself,
 /// and will clean these up on shutdown as well.
@@ -211,7 +222,7 @@ pub async fn start_rpc(
     database_url: Option<Url>,
     db_args: DbArgs,
     rpc_args: RpcArgs,
-    write_args: WriteArgs,
+    node_args: NodeArgs,
     system_package_task_args: SystemPackageTaskArgs,
     rpc_config: RpcConfig,
     registry: &Registry,
@@ -246,13 +257,14 @@ pub async fn start_rpc(
     rpc.add_module(QueryObjects(context.clone()))?;
     rpc.add_module(QueryTransactions(context.clone()))?;
     rpc.add_module(Transactions(context.clone()))?;
-
-    // Add the write module if a fullnode rpc url is provided.
-    if let Some(fullnode_rpc_url) = write_args.fullnode_rpc_url {
-        rpc.add_module(Write::new(
-            fullnode_rpc_url,
-            context.config().write.clone(),
+    if let Some(fullnode_rpc_url) = node_args.fullnode_rpc_url {
+        rpc.add_module(DelegationCoins::new(
+            fullnode_rpc_url.clone(),
+            context.config().node.clone(),
         )?)?;
+        rpc.add_module(Write::new(fullnode_rpc_url, context.config().node.clone())?)?;
+    } else {
+        warn!("No fullnode rpc url provided, DelegationCoins and Write modules will not be added.");
     }
 
     let h_rpc = rpc.run().await.context("Failed to start RPC service")?;
