@@ -17,7 +17,7 @@ use sui_bridge::eth_syncer::EthSyncer;
 use sui_bridge::metered_eth_provider::MeteredEthHttpProvier;
 use sui_bridge::retry_with_max_elapsed_time;
 use sui_indexer_builder::Task;
-use tap::tap::TapFallible;
+use tap::TapFallible;
 use tokio::select;
 use tokio::task::JoinHandle;
 use tracing::{info, warn};

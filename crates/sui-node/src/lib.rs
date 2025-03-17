@@ -54,7 +54,7 @@ use sui_types::messages_consensus::AuthorityCapabilitiesV2;
 use sui_types::messages_consensus::ConsensusTransactionKind;
 use sui_types::sui_system_state::SuiSystemState;
 use sui_types::transaction::VerifiedCertificate;
-use tap::tap::TapFallible;
+use tap::TapFallible;
 use tokio::runtime::Handle;
 use tokio::sync::oneshot;
 use tokio::sync::{broadcast, mpsc, watch, Mutex};

@@ -9,7 +9,7 @@ use sui_data_ingestion_core::Worker;
 use sui_indexer::errors::IndexerError;
 use sui_types::object::bounded_visitor::BoundedVisitor;
 use sui_types::{TypeTag, SYSTEM_PACKAGE_ADDRESSES};
-use tap::tap::TapFallible;
+use tap::TapFallible;
 use tokio::sync::Mutex;
 use tracing::warn;
 

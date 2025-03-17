@@ -15,7 +15,7 @@ use std::fmt;
 use std::path::Path;
 use std::sync::{Arc, Weak};
 use sui_types::programmable_transaction_builder::ProgrammableTransactionBuilder;
-use tap::tap::TapFallible;
+use tap::TapFallible;
 use tokio::sync::oneshot;
 use ttl_cache::TtlCache;
 use typed_store::Map;
