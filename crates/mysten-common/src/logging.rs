@@ -12,7 +12,7 @@ macro_rules! fatal {
     }};
 }
 
-pub use antithesis_sdk::assert_reachable;
+pub use antithesis_sdk::assert_reachable as assert_reachable_antithesis;
 
 #[inline(always)]
 pub fn crash_on_debug() -> bool {
@@ -44,9 +44,12 @@ macro_rules! assert_reachable {
     () => {
         $crate::logging::assert_reachable!("");
     };
-    ($message:literal) => {
-        $crate::logging::assert_reachable!($message);
-    };
+    ($message:literal) => {{
+        // calling in to antithesis sdk breaks determinisim in simtests (on linux only)
+        if !cfg!(msim) {
+            $crate::logging::assert_reachable_antithesis!($message);
+        }
+    }};
 }
 
 mod tests {
