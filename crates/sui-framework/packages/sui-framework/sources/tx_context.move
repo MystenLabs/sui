@@ -11,6 +11,10 @@ const TX_HASH_LENGTH: u64 = 32;
 /// Expected an tx hash of length 32, but found a different length
 const EBadTxHashLength: u64 = 0;
 
+#[test_only]
+/// Attempt to set the epoch number to a value less than the current epoch number.
+const EEpochCantGoBackward: u64 = 2;
+
 #[allow(unused_field)]
 /// Information about the transaction currently being executed.
 /// This cannot be constructed by a transaction--it is a privileged object created by
@@ -141,6 +145,21 @@ fun dummy_tx_hash_with_hint(hint: u64): vector<u8> {
     let mut tx_hash = std::bcs::to_bytes(&hint);
     while (tx_hash.length() < TX_HASH_LENGTH) tx_hash.push_back(0);
     tx_hash
+}
+
+#[test_only]
+public fun set_epoch(self: &mut TxContext, epoch: u64) {
+    assert!(epoch >= self.epoch, EEpochCantGoBackward);
+    replace(
+        native_sender(),
+        self.tx_hash,
+        epoch,
+        native_epoch_timestamp_ms(),
+        native_ids_created(),
+        native_gas_price(),
+        native_gas_budget(),
+        native_sponsor(),
+    );
 }
 
 #[test_only]
