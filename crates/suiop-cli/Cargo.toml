@@ -28,7 +28,9 @@ crossterm = { workspace = true, features = ["event-stream"] }
 dirs.workspace = true
 include_dir.workspace = true
 inquire.workspace = true
-open = "5.1.2"
+itertools.workspace = true
+open = "5.3.2"
+prettytable-rs.workspace = true
 rand.workspace = true
 regex.workspace = true
 reqwest = { workspace = true, features = [
@@ -38,7 +40,7 @@ reqwest = { workspace = true, features = [
 serde = { workspace = true, features = ["derive"] }
 serde_json.workspace = true
 serde_yaml.workspace = true
-sha2 = "0.10.6"
+sha2 = "0.10.8"
 spinners.workspace = true
 strum.workspace = true
 tabled.workspace = true
@@ -52,8 +54,6 @@ thiserror.workspace = true
 strsim = "0.11.1"
 futures-timer = "3.0.3"
 tempfile.workspace = true
-kube = { version = "0.98.0", features = ["client", "config"] }
-k8s-openapi = { version = "0.24.0", features = ["latest"] }
 query-shell = "0.3.0"
 snailquote = "0.3.1"
 

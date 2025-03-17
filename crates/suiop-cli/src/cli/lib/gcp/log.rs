@@ -3,7 +3,6 @@ use reqwest::Client;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::process::Command;
-use tracing::info;
 
 // Structs to serialize/deserialize the Logging API request/response
 #[derive(Serialize)]
