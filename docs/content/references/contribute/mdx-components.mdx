@@ -394,3 +394,24 @@ flowchart LR
     AC2 <==>|Network TCP| Authority2
 ```
 
+## YouTube player with thumbnail carousel
+
+Displays a list of YouTube thumbnails and provides a player for the currently selected video.
+
+### When to use
+
+Use when you have three or more YouTube videos. You could use with as few as one but there is currently not a way to turn off the carousel so would look weird.
+
+### How to use
+
+Because there are not many videos on the site, you need to import the component on the page in which you're using it.
+
+`import YTCarousel from "@site/src/components/YTCarousel"`
+
+The import statement can go anywhere, but it's typically added to the top of the page. Then use the component by providing an array of YouTube video IDs. Sui videos should not have this problem, but be aware that videos might not have thumbnails like in the example.
+
+`<YTCarousel ids={["youtubeID1","youtubeID2","youtubeID3",...]}/>`
+
+import YTCarousel from "@site/src/components/YTCarousel"
+
+<YTCarousel ids={["dQw4w9WgXcQ","EwTZ2xpQwpA","1TewCPi92ro"]}/>
