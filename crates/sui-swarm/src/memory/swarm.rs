@@ -19,7 +19,7 @@ use sui_config::node::{AuthorityOverloadConfig, DBCheckpointConfig, RunWithRange
 use sui_config::{ExecutionCacheConfig, NodeConfig};
 use sui_macros::nondeterministic;
 use sui_node::SuiNodeHandle;
-use sui_protocol_config::ProtocolVersion;
+use sui_protocol_config::{Chain, ProtocolVersion};
 use sui_swarm_config::genesis_config::{AccountConfig, GenesisConfig, ValidatorGenesisConfig};
 use sui_swarm_config::network_config::NetworkConfig;
 use sui_swarm_config::network_config_builder::{
@@ -40,6 +40,7 @@ pub struct SwarmBuilder<R = OsRng> {
     committee: CommitteeConfig,
     genesis_config: Option<GenesisConfig>,
     network_config: Option<NetworkConfig>,
+    chain_override: Option<Chain>,
     additional_objects: Vec<Object>,
     fullnode_count: usize,
     fullnode_rpc_port: Option<u16>,
@@ -71,6 +72,7 @@ impl SwarmBuilder {
             committee: CommitteeConfig::Size(NonZeroUsize::new(1).unwrap()),
             genesis_config: None,
             network_config: None,
+            chain_override: None,
             additional_objects: vec![],
             fullnode_count: 0,
             fullnode_rpc_port: None,
@@ -102,6 +104,7 @@ impl<R> SwarmBuilder<R> {
             committee: self.committee,
             genesis_config: self.genesis_config,
             network_config: self.network_config,
+            chain_override: self.chain_override,
             additional_objects: self.additional_objects,
             fullnode_count: self.fullnode_count,
             fullnode_rpc_port: self.fullnode_rpc_port,
@@ -151,6 +154,12 @@ impl<R> SwarmBuilder<R> {
     pub fn with_genesis_config(mut self, genesis_config: GenesisConfig) -> Self {
         assert!(self.network_config.is_none() && self.genesis_config.is_none());
         self.genesis_config = Some(genesis_config);
+        self
+    }
+
+    pub fn with_chain_override(mut self, chain: Chain) -> Self {
+        assert!(self.chain_override.is_none());
+        self.chain_override = Some(chain);
         self
     }
 
@@ -335,6 +344,10 @@ impl<R: rand::RngCore + rand::CryptoRng> SwarmBuilder<R> {
                 config_builder = config_builder.with_genesis_config(genesis_config);
             }
 
+            if let Some(chain_override) = self.chain_override {
+                config_builder = config_builder.with_chain_override(chain_override);
+            }
+
             if let Some(num_unpruned_validators) = self.num_unpruned_validators {
                 config_builder =
                     config_builder.with_num_unpruned_validators(num_unpruned_validators);
@@ -400,6 +413,10 @@ impl<R: rand::RngCore + rand::CryptoRng> SwarmBuilder<R> {
             .with_data_ingestion_dir(ingest_data)
             .with_fw_config(self.fullnode_fw_config)
             .with_disable_pruning(self.disable_fullnode_pruning);
+
+        if let Some(chain) = self.chain_override {
+            fullnode_config_builder = fullnode_config_builder.with_chain_override(chain);
+        }
 
         if let Some(spvc) = &self.fullnode_supported_protocol_versions_config {
             let supported_versions = match spvc {

@@ -5348,7 +5348,6 @@ impl AuthorityState {
             self.get_backing_package_store().clone(),
             self.get_object_store().clone(),
             expensive_safety_check_config,
-            cur_epoch_store.get_chain_identifier(),
             epoch_last_checkpoint,
         )?;
         self.epoch_store.store(new_epoch_store.clone());
