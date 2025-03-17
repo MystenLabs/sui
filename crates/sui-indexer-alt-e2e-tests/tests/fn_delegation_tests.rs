@@ -8,8 +8,8 @@ use prometheus::Registry;
 use reqwest::Client;
 use serde_json::{json, Value};
 use sui_indexer_alt_jsonrpc::{
-    api::write::WriteArgs, config::RpcConfig, data::system_package_task::SystemPackageTaskArgs,
-    start_rpc, RpcArgs,
+    config::RpcConfig, data::system_package_task::SystemPackageTaskArgs, start_rpc, NodeArgs,
+    RpcArgs,
 };
 use sui_macros::sim_test;
 use sui_pg_db::{temp::get_available_port, DbArgs};
@@ -19,7 +19,7 @@ use tokio::task::JoinHandle;
 use tokio_util::sync::CancellationToken;
 use url::Url;
 
-struct WriteTestCluster {
+struct FnDelegationTestCluster {
     onchain_cluster: TestCluster,
     rpc_url: Url,
     rpc_handle: JoinHandle<()>,
@@ -27,7 +27,7 @@ struct WriteTestCluster {
     cancel: CancellationToken,
 }
 
-impl WriteTestCluster {
+impl FnDelegationTestCluster {
     /// Creates a new test cluster with an RPC with transaction execution enabled.
     async fn new() -> anyhow::Result<Self> {
         let onchain_cluster = TestClusterBuilder::new()
@@ -65,7 +65,7 @@ impl WriteTestCluster {
             None,
             DbArgs::default(),
             rpc_args,
-            WriteArgs {
+            NodeArgs {
                 fullnode_rpc_url: Some(fullnode_rpc_url),
             },
             SystemPackageTaskArgs::default(),
@@ -155,7 +155,7 @@ impl WriteTestCluster {
 #[sim_test]
 async fn test_execution() {
     telemetry_subscribers::init_for_testing();
-    let test_cluster = WriteTestCluster::new()
+    let test_cluster = FnDelegationTestCluster::new()
         .await
         .expect("Failed to create test cluster");
 
@@ -201,7 +201,7 @@ async fn test_execution() {
 async fn test_execution_with_deprecated_mode() {
     telemetry_subscribers::init_for_testing();
 
-    let test_cluster = WriteTestCluster::new()
+    let test_cluster = FnDelegationTestCluster::new()
         .await
         .expect("Failed to create test cluster");
 
@@ -235,7 +235,7 @@ async fn test_execution_with_deprecated_mode() {
 async fn test_execution_with_no_sigs() {
     telemetry_subscribers::init_for_testing();
 
-    let test_cluster = WriteTestCluster::new()
+    let test_cluster = FnDelegationTestCluster::new()
         .await
         .expect("Failed to create test cluster");
 
@@ -268,7 +268,7 @@ async fn test_execution_with_no_sigs() {
 async fn test_execution_with_empty_sigs() {
     telemetry_subscribers::init_for_testing();
 
-    let test_cluster = WriteTestCluster::new()
+    let test_cluster = FnDelegationTestCluster::new()
         .await
         .expect("Failed to create test cluster");
 
@@ -301,7 +301,7 @@ async fn test_execution_with_empty_sigs() {
 async fn test_execution_with_aborted_tx() {
     telemetry_subscribers::init_for_testing();
 
-    let test_cluster = WriteTestCluster::new()
+    let test_cluster = FnDelegationTestCluster::new()
         .await
         .expect("Failed to create test cluster");
 
@@ -331,7 +331,7 @@ async fn test_execution_with_aborted_tx() {
 
 #[sim_test]
 async fn test_dry_run() {
-    let test_cluster = WriteTestCluster::new()
+    let test_cluster = FnDelegationTestCluster::new()
         .await
         .expect("Failed to create test cluster");
 
@@ -354,7 +354,7 @@ async fn test_dry_run() {
 
 #[sim_test]
 async fn test_dry_run_with_invalid_tx() {
-    let test_cluster = WriteTestCluster::new()
+    let test_cluster = FnDelegationTestCluster::new()
         .await
         .expect("Failed to create test cluster");
 
@@ -374,5 +374,50 @@ async fn test_dry_run_with_invalid_tx() {
         .as_str()
         .unwrap()
         .starts_with("Invalid value was given to the function"));
+    test_cluster.stopped().await;
+}
+
+#[sim_test]
+async fn test_get_all_balances() {
+    let test_cluster = FnDelegationTestCluster::new()
+        .await
+        .expect("Failed to create test cluster");
+
+    let address = test_cluster.onchain_cluster.wallet.get_addresses()[1];
+    let response = test_cluster
+        .execute_jsonrpc(
+            "suix_getAllBalances".to_string(),
+            json!({ "owner": address.to_string().as_str()}),
+        )
+        .await
+        .unwrap();
+    // Only check that FN can return a valid response and not check the contents;
+    // the contents is FN logic and thus should be tested on the FN side.
+    assert_eq!(response["result"][0]["coinType"], "0x2::sui::SUI");
+    test_cluster.stopped().await;
+}
+
+#[sim_test]
+async fn test_get_all_balances_with_invalid_address() {
+    let test_cluster = FnDelegationTestCluster::new()
+        .await
+        .expect("Failed to create test cluster");
+    let invalid_address = "23333";
+
+    let response = test_cluster
+        .execute_jsonrpc(
+            "suix_getAllBalances".to_string(),
+            json!({ "owner": invalid_address }),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(response["error"]["code"], -32602);
+    assert_eq!(response["error"]["message"], "Invalid params");
+    assert!(response["error"]["data"]
+        .as_str()
+        .unwrap()
+        .contains("Deserialization failed"));
+
     test_cluster.stopped().await;
 }
