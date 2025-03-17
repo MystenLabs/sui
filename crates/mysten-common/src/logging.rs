@@ -1,6 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use crate::in_test_configuration;
 use once_cell::sync::Lazy;
 
 #[macro_export]
@@ -16,10 +17,7 @@ pub use antithesis_sdk::assert_reachable;
 #[inline(always)]
 pub fn crash_on_debug() -> bool {
     static CRASH_ON_DEBUG: Lazy<bool> = Lazy::new(|| {
-        cfg!(msim)
-            || cfg!(debug_assertions)
-            || std::env::var("ANTITHESIS_OUTPUT_DIR").is_ok()
-            || std::env::var("SUI_ENABLE_DEBUG_ASSERTIONS").is_ok()
+        in_test_configuration() || std::env::var("SUI_ENABLE_DEBUG_ASSERTIONS").is_ok()
     });
 
     *CRASH_ON_DEBUG

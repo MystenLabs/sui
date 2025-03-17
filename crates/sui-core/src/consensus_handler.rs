@@ -13,7 +13,7 @@ use arc_swap::ArcSwap;
 use consensus_config::Committee as ConsensusCommittee;
 use consensus_core::{CertifiedBlocksOutput, CommitConsumerMonitor, CommitIndex};
 use lru::LruCache;
-use mysten_common::{debug_fatal, util::randomize_cache_capacity};
+use mysten_common::{debug_fatal, util::randomize_cache_capacity_in_tests};
 use mysten_metrics::{
     monitored_future,
     monitored_mpsc::{self, UnboundedReceiver},
@@ -528,7 +528,7 @@ impl<C> ConsensusHandler<C> {
             committee,
             metrics,
             processed_cache: LruCache::new(
-                NonZeroUsize::new(randomize_cache_capacity(PROCESSED_CACHE_CAP)).unwrap(),
+                NonZeroUsize::new(randomize_cache_capacity_in_tests(PROCESSED_CACHE_CAP)).unwrap(),
             ),
             transaction_manager_sender,
             throughput_calculator,

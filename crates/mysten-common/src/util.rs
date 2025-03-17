@@ -1,16 +1,16 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::in_antithesis;
+use crate::in_test_configuration;
 use crate::random::get_rng;
 use rand::seq::SliceRandom;
 use rand::Rng;
 
-pub fn randomize_cache_capacity<T>(size: T) -> T
+pub fn randomize_cache_capacity_in_tests<T>(size: T) -> T
 where
     T: Copy + PartialOrd + rand::distributions::uniform::SampleUniform + TryFrom<usize>,
 {
-    if !in_antithesis() && !cfg!(msim) {
+    if !in_test_configuration() {
         return size;
     }
 

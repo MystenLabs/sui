@@ -21,3 +21,8 @@ pub fn in_antithesis() -> bool {
     });
     *IN_ANTITHESIS
 }
+
+#[inline(always)]
+pub fn in_test_configuration() -> bool {
+    in_antithesis() || cfg!(msim) || cfg!(debug_assertions)
+}
