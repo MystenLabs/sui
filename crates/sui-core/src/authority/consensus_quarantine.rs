@@ -279,17 +279,7 @@ impl ConsensusCommitOutput {
         )?;
 
         if let Some(next_versions) = self.next_shared_object_versions {
-            if epoch_store
-                .epoch_start_config()
-                .use_version_assignment_tables_v3()
-            {
-                batch.insert_batch(&tables.next_shared_object_versions_v2, next_versions)?;
-            } else {
-                batch.insert_batch(
-                    &tables.next_shared_object_versions,
-                    next_versions.into_iter().map(|((id, _), v)| (id, v)),
-                )?;
-            }
+            batch.insert_batch(&tables.next_shared_object_versions_v2, next_versions)?;
         }
 
         batch.delete_batch(&tables.deferred_transactions, self.deleted_deferred_txns)?;
@@ -847,7 +837,6 @@ impl ConsensusOutputQuarantine {
 
     pub(super) fn get_next_shared_object_versions(
         &self,
-        epoch_start_config: &EpochStartConfiguration,
         tables: &AuthorityEpochTables,
         objects_to_init: &[ConsensusObjectSequenceKey],
     ) -> SuiResult<Vec<Option<SequenceNumber>>> {
@@ -861,17 +850,10 @@ impl ConsensusOutputQuarantine {
                 }
             },
             |object_keys| {
-                if epoch_start_config.use_version_assignment_tables_v3() {
-                    tables
-                        .next_shared_object_versions_v2
-                        .multi_get(object_keys)
-                        .expect("db error")
-                } else {
-                    tables
-                        .next_shared_object_versions
-                        .multi_get(object_keys.iter().map(|(id, _)| *id))
-                        .expect("db error")
-                }
+                tables
+                    .next_shared_object_versions_v2
+                    .multi_get(object_keys)
+                    .expect("db error")
             },
         ))
     }

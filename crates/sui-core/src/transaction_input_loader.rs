@@ -2,10 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
-    authority::{
-        authority_per_epoch_store::{AuthorityPerEpochStore, CertLockGuard},
-        epoch_start_configuration::EpochStartConfigTrait,
-    },
+    authority::authority_per_epoch_store::{AuthorityPerEpochStore, CertLockGuard},
     execution_cache::ObjectCacheRead,
 };
 use itertools::izip;
@@ -14,7 +11,7 @@ use once_cell::unsync::OnceCell;
 use std::collections::HashMap;
 use std::sync::Arc;
 use sui_types::{
-    base_types::{EpochId, FullObjectID, ObjectRef, SequenceNumber, TransactionDigest},
+    base_types::{EpochId, FullObjectID, ObjectRef, TransactionDigest},
     error::{SuiError, SuiResult, UserInputError},
     storage::{FullObjectKey, ObjectKey},
     transaction::{
@@ -194,19 +191,9 @@ impl TransactionInputLoader {
                             );
                         });
 
-                    let initial_shared_version = if epoch_store
-                        .epoch_start_config()
-                        .use_version_assignment_tables_v3()
-                    {
-                        *initial_shared_version
-                    } else {
-                        // (before ConsensusV2 objects, we didn't track initial shared
-                        // version for shared object locks)
-                        SequenceNumber::UNKNOWN
-                    };
                     // If we find a set of assigned versions but an object is missing, it indicates
                     // a serious inconsistency:
-                    let version = assigned_shared_versions.get(&(*id, initial_shared_version)).unwrap_or_else(|| {
+                    let version = assigned_shared_versions.get(&(*id, *initial_shared_version)).unwrap_or_else(|| {
                         panic!("Shared object version should have been assigned. key: {tx_key:?}, obj id: {id:?}")
                     });
                     if version.is_cancelled() {
