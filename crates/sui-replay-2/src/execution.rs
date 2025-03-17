@@ -66,8 +66,8 @@ pub fn execute_transaction_to_effects(
         SuiGasStatus::new_unmetered()
     } else {
         SuiGasStatus::new(
-            txn.gas_budget,
-            txn.gas_price,
+            txn.gas_data.budget,
+            txn.gas_data.price,
             txn.reference_gas_price,
             &protocol_config,
         )
@@ -93,7 +93,7 @@ pub fn execute_transaction_to_effects(
             &txn.epoch,
             txn.epoch_start_timestamp,
             CheckedInputObjects::new_for_replay(txn.input_objects),
-            txn.gas,
+            txn.gas_data,
             gas_status,
             txn.kind,
             txn.sender,

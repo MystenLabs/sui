@@ -8,10 +8,10 @@ use crate::{
 use std::collections::{BTreeMap, BTreeSet};
 use sui_types::{
     base_types::{ObjectID, SequenceNumber, SuiAddress},
-    digests::{ObjectDigest, TransactionDigest},
+    digests::TransactionDigest,
     effects::{TransactionEffects, TransactionEffectsAPI},
     transaction::{
-        CallArg, Command, InputObjectKind, InputObjects, ObjectArg, ObjectReadResult,
+        CallArg, Command, GasData, InputObjectKind, InputObjects, ObjectArg, ObjectReadResult,
         ObjectReadResultKind, TransactionData, TransactionDataAPI, TransactionKind,
     },
 };
@@ -26,9 +26,7 @@ pub struct ReplayTransaction {
     pub epoch_start_timestamp: u64,
     pub sender: SuiAddress,
     pub input_objects: InputObjects,
-    pub gas: Vec<(ObjectID, SequenceNumber, ObjectDigest)>,
-    pub gas_budget: u64,
-    pub gas_price: u64,
+    pub gas_data: GasData,
     pub reference_gas_price: u64,
 }
 
@@ -78,10 +76,8 @@ impl ReplayTransaction {
             ReplayError::FailedToParseDigest { digest, err }
         })?;
 
-        let gas = txn_data.gas_data().payment.clone();
+        let gas_data = txn_data.gas_data().clone();
         let sender = txn_data.sender();
-        let gas_price = txn_data.gas_price();
-        let gas_budget = txn_data.gas_budget();
         let kind = txn_data.into_kind();
 
         let protocol_config = env
@@ -99,9 +95,7 @@ impl ReplayTransaction {
             epoch_start_timestamp,
             sender,
             input_objects,
-            gas,
-            gas_budget,
-            gas_price,
+            gas_data,
             reference_gas_price,
         })
     }
