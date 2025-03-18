@@ -30,11 +30,6 @@ pub trait EpochStartConfigTrait {
     fn bridge_obj_initial_shared_version(&self) -> Option<SequenceNumber>;
     fn bridge_committee_initiated(&self) -> bool;
 
-    fn use_version_assignment_tables_v3(&self) -> bool {
-        self.flags()
-            .contains(&EpochFlag::UseVersionAssignmentTablesV3)
-    }
-
     fn is_data_quarantine_active_from_beginning_of_epoch(&self) -> bool {
         self.flags()
             .contains(&EpochFlag::DataQuarantineFromBeginningOfEpoch)
@@ -62,8 +57,7 @@ pub enum EpochFlag {
     _StateAccumulatorV2EnabledTestnetDeprecated = 5,
     _StateAccumulatorV2EnabledMainnetDeprecated = 6,
     _ExecutedInEpochTableDeprecated = 7,
-
-    UseVersionAssignmentTablesV3 = 8,
+    _UseVersionAssignmentTablesV3 = 8,
 
     // This flag indicates whether data quarantining has been enabled from the
     // beginning of the epoch.
@@ -85,10 +79,7 @@ impl EpochFlag {
     // so that `test_epoch_flag_upgrade` can still work correctly even when there are no
     // optional flags.
     pub fn mandatory_flags() -> Vec<Self> {
-        vec![
-            EpochFlag::UseVersionAssignmentTablesV3,
-            EpochFlag::DataQuarantineFromBeginningOfEpoch,
-        ]
+        vec![EpochFlag::DataQuarantineFromBeginningOfEpoch]
     }
 
     /// For situations in which there is no config available (e.g. setting up a downloaded snapshot).
@@ -98,7 +89,6 @@ impl EpochFlag {
 
     fn default_flags_impl() -> Vec<Self> {
         vec![
-            EpochFlag::UseVersionAssignmentTablesV3,
             EpochFlag::DataQuarantineFromBeginningOfEpoch,
             #[cfg(msim)]
             EpochFlag::DummyFlag,
@@ -134,8 +124,8 @@ impl fmt::Display for EpochFlag {
             EpochFlag::_StateAccumulatorV2EnabledMainnetDeprecated => {
                 write!(f, "StateAccumulatorV2EnabledMainnet (DEPRECATED)")
             }
-            EpochFlag::UseVersionAssignmentTablesV3 => {
-                write!(f, "UseVersionAssignmentTablesV3")
+            EpochFlag::_UseVersionAssignmentTablesV3 => {
+                write!(f, "UseVersionAssignmentTablesV3 (DEPRECATED)")
             }
             EpochFlag::DataQuarantineFromBeginningOfEpoch => {
                 write!(f, "DataQuarantineFromBeginningOfEpoch")

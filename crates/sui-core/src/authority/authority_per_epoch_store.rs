@@ -454,8 +454,10 @@ pub struct AuthorityEpochTables {
     assigned_shared_object_versions_v3:
         DBMap<TransactionKey, Vec<(ConsensusObjectSequenceKey, SequenceNumber)>>,
 
-    /// Next available shared object versions for each shared object.
+    #[allow(dead_code)]
+    #[deprecated]
     next_shared_object_versions: DBMap<ObjectID, SequenceNumber>,
+    /// Next available shared object versions for each shared object.
     next_shared_object_versions_v2: DBMap<ConsensusObjectSequenceKey, SequenceNumber>,
 
     // TODO: delete after DQ is rolled out
@@ -806,10 +808,6 @@ impl AuthorityPerEpochStore {
             epoch_id
         );
         let epoch_start_configuration = Arc::new(epoch_start_configuration);
-        assert!(
-            epoch_start_configuration.use_version_assignment_tables_v3(),
-            "use_version_assignment_tables_v3 must be already be enabled for DataQuarantining"
-        );
         info!("epoch flags: {:?}", epoch_start_configuration.flags());
         metrics.current_epoch.set(epoch_id as i64);
         metrics
@@ -1544,17 +1542,9 @@ impl AuthorityPerEpochStore {
                                 error: "no assigned shared versions".to_string(),
                             })?;
 
-                        let modified_initial_shared_version =
-                            if self.epoch_start_config().use_version_assignment_tables_v3() {
-                                *initial_shared_version
-                            } else {
-                                // (before ConsensusV2 objects, we didn't track initial shared
-                                // version for shared object version assignments)
-                                SequenceNumber::UNKNOWN
-                            };
                         // If we found assigned versions, but they are missing the assignment for
                         // this object, it indicates a serious inconsistency!
-                        let Some(version) = assigned_shared_versions.get(&(*id, modified_initial_shared_version)) else {
+                        let Some(version) = assigned_shared_versions.get(&(*id, *initial_shared_version)) else {
                             panic!(
                                 "Shared object version should have been assigned. key: {key:?}, \
                                 obj id: {id:?}, initial_shared_version: {initial_shared_version:?}, \
@@ -1699,19 +1689,11 @@ impl AuthorityPerEpochStore {
         obj: &ObjectID,
         start_version: SequenceNumber,
     ) -> Option<SequenceNumber> {
-        if self.epoch_start_config().use_version_assignment_tables_v3() {
-            self.tables()
-                .expect("test should not cross epoch boundary")
-                .next_shared_object_versions_v2
-                .get(&(*obj, start_version))
-                .unwrap()
-        } else {
-            self.tables()
-                .expect("test should not cross epoch boundary")
-                .next_shared_object_versions
-                .get(obj)
-                .unwrap()
-        }
+        self.tables()
+            .expect("test should not cross epoch boundary")
+            .next_shared_object_versions_v2
+            .get(&(*obj, start_version))
+            .unwrap()
     }
 
     pub fn set_shared_object_versions_for_testing(
@@ -1818,7 +1800,7 @@ impl AuthorityPerEpochStore {
         let next_versions = self
             .consensus_quarantine
             .read()
-            .get_next_shared_object_versions(self.epoch_start_config(), &tables, objects_to_init)?;
+            .get_next_shared_object_versions(&tables, objects_to_init)?;
 
         let uninitialized_objects: Vec<ConsensusObjectSequenceKey> = next_versions
             .iter()
@@ -1876,16 +1858,9 @@ impl AuthorityPerEpochStore {
             ?versions_to_write,
             "initializing next_shared_object_versions"
         );
-        let mut batch = tables.next_shared_object_versions_v2.batch();
-        if self.epoch_start_config().use_version_assignment_tables_v3() {
-            batch.insert_batch(&tables.next_shared_object_versions_v2, versions_to_write)?;
-        } else {
-            batch.insert_batch(
-                &tables.next_shared_object_versions,
-                versions_to_write.into_iter().map(|(key, v)| (key.0, v)),
-            )?;
-        }
-        batch.write()?;
+        tables
+            .next_shared_object_versions_v2
+            .multi_insert(versions_to_write)?;
 
         Ok(ret)
     }
