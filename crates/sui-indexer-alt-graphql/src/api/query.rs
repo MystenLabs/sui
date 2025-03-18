@@ -31,4 +31,10 @@ impl Query {
             .context("Main problem")
             .into())
     }
+
+    /// Test query that times out
+    async fn tick_tock(&self) -> String {
+        tokio::time::sleep(std::time::Duration::from_secs(100)).await;
+        "Done!".to_string()
+    }
 }
