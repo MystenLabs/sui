@@ -8,9 +8,8 @@ use tokio_util::sync::CancellationToken;
 use tracing::{debug, info, warn};
 
 use crate::{
-    metrics::IndexerMetrics,
-    models::watermarks::ReaderWatermark,
-    store::{PgStore, WatermarkStore},
+    metrics::IndexerMetrics, models::watermarks::ReaderWatermark, pg_store::PgStore,
+    store::WatermarkStore,
 };
 
 use super::{Handler, PrunerConfig};

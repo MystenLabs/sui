@@ -18,8 +18,9 @@ use tracing::{debug, error, info, warn};
 use crate::{
     metrics::{CheckpointLagMetricReporter, IndexerMetrics},
     models::watermarks::CommitterWatermark,
+    pg_store::PgStore,
     pipeline::{logging::WatermarkLogger, CommitterConfig, WatermarkPart, WARN_PENDING_WATERMARKS},
-    store::{PgStore, WatermarkStore},
+    store::WatermarkStore,
 };
 
 use super::Handler;

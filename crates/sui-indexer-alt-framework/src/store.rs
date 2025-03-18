@@ -52,17 +52,20 @@ pub trait WatermarkStore: Send + Sync + 'static + Clone {
     /// Update the committer watermark, returns true if the watermark was actually updated
     async fn update_committer_watermark(
         &self,
-        watermark: &CommitterWatermark,
+        watermark: &CommitterWatermark<'_>,
     ) -> anyhow::Result<bool>;
-
-    /// Update the reader watermark, returns true if the watermark was actually updated
-    async fn update_reader_watermark(&self, watermark: &ReaderWatermark) -> anyhow::Result<bool>;
 
     /// Get the reader watermark for a pipeline
     async fn get_reader_watermark(
         &self,
         pipeline: &'static str,
     ) -> anyhow::Result<Option<StoredWatermark>>;
+
+    /// Update the reader watermark, returns true if the watermark was actually updated
+    async fn update_reader_watermark(
+        &self,
+        watermark: &ReaderWatermark<'_>,
+    ) -> anyhow::Result<bool>;
 
     /// Get the pruner watermark for a pipeline with the specified delay
     async fn get_pruner_watermark(
@@ -72,43 +75,8 @@ pub trait WatermarkStore: Send + Sync + 'static + Clone {
     ) -> anyhow::Result<Option<PrunerWatermark<'static>>>;
 
     /// Update the pruner watermark, returns true if the watermark was actually updated
-    async fn update_pruner_watermark(&self, watermark: &PrunerWatermark) -> anyhow::Result<bool>;
-}
-
-/// Trait for connection-based operations
-#[async_trait]
-pub trait ConnectionStore: Send + Sync + 'static + Clone {
-    /// The database type used by this store
-    type DB: Database;
-
-    /// Get a connection to the database
-    async fn connect<'c>(&'c self)
-        -> Result<<Self::DB as Database>::Connection<'c>, anyhow::Error>;
-
-    /// Execute a function with a connection
-    async fn with_connection<'c, F, T, E>(&self, f: F) -> Result<T, E>
-    where
-        F: FnOnce(
-                &mut <Self::DB as Database>::Connection<'c>,
-            ) -> Pin<Box<dyn Future<Output = Result<T, E>> + Send + 'c>>
-            + Send,
-        T: Send + 'static,
-        E: From<anyhow::Error> + Send + 'static;
-
-    /// Execute a function within a transaction
-    async fn with_transaction<'c, F, T, E>(&self, f: F) -> Result<T, E>
-    where
-        F: FnOnce(
-                &mut <Self::DB as Database>::Connection<'c>,
-            ) -> Pin<Box<dyn Future<Output = Result<T, E>> + Send + 'c>>
-            + Send,
-        T: Send + 'static,
-        E: From<anyhow::Error> + Send + 'static;
-}
-
-/// Combined trait for a complete store
-#[async_trait]
-pub trait Store: WatermarkStore + ConnectionStore {
-    // This trait combines WatermarkStore and ConnectionStore
-    // Additional methods that require both capabilities could be added here
+    async fn update_pruner_watermark(
+        &self,
+        watermark: &PrunerWatermark<'_>,
+    ) -> anyhow::Result<bool>;
 }

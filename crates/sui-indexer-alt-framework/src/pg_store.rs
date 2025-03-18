@@ -4,33 +4,28 @@ use std::future::Future;
 use std::pin::Pin;
 use std::time::Duration;
 
-use crate::db::{Connection, Db};
+use crate::db::{Connection as PgConnection, Db as PgDb};
 use crate::models::watermarks::{
     CommitterWatermark, PrunerWatermark, ReaderWatermark, StoredWatermark,
 };
-use crate::store::{ConnectionStore, Database, DbConnection, Store, WatermarkStore};
+use crate::store::{Database, DbConnection, WatermarkStore};
 use diesel_async::scoped_futures::ScopedFutureExt;
 use diesel_async::AsyncConnection;
 
 /// PostgreSQL implementation of Store
 #[derive(Clone)]
 pub struct PgStore {
-    pub db: Db,
+    pub db: PgDb,
 }
 
 impl PgStore {
-    pub fn new(db: Db) -> Self {
+    pub fn new(db: PgDb) -> Self {
         Self { db }
     }
 }
 
-/// A wrapper around the PostgreSQL connection
-pub struct PgConnectionWrapper<'c> {
-    pub conn: Connection<'c>,
-}
-
 #[async_trait]
-impl<'c> DbConnection for Connection<'c> {
+impl<'c> DbConnection for PgConnection<'c> {
     async fn transaction<F, T>(&mut self, f: F) -> Result<T, anyhow::Error>
     where
         F: FnOnce(&mut Self) -> Pin<Box<dyn Future<Output = Result<T, anyhow::Error>> + Send + '_>>
@@ -48,15 +43,14 @@ impl<'c> DbConnection for Connection<'c> {
 
 // Implement the Database trait for Db
 #[async_trait]
-impl Database for Db {
-    type Connection<'c> = Connection<'c>;
+impl Database for PgDb {
+    type Connection<'c> = PgConnection<'c>;
 
     async fn connect<'c>(&'c self) -> anyhow::Result<Self::Connection<'c>> {
         let conn = self.connect().await?;
         Ok(conn)
     }
 }
-
 #[async_trait]
 impl WatermarkStore for PgStore {
     async fn get_stored_watermark(
@@ -74,23 +68,9 @@ impl WatermarkStore for PgStore {
         pipeline: &'static str,
     ) -> anyhow::Result<Option<CommitterWatermark<'static>>> {
         let mut conn = self.db.connect().await?;
-
-        // Get the watermark with the connection's lifetime
-        let watermark_result = CommitterWatermark::get(&mut conn, pipeline).await?;
-
-        // Convert to 'static lifetime if there's a watermark
-        let static_watermark = watermark_result.map(|watermark| {
-            // Create a new watermark with 'static lifetime
-            // This requires cloning any data that depends on lifetimes
-            CommitterWatermark::new(
-                pipeline.to_string(), // Clone the string to make it 'static
-                watermark.sequence_number(),
-                watermark.timestamp(),
-                // Add any other fields that need to be copied
-            )
-        });
-
-        Ok(static_watermark)
+        CommitterWatermark::get(&mut conn, pipeline)
+            .await
+            .map_err(Into::into)
     }
 
     async fn update_committer_watermark(
@@ -125,23 +105,9 @@ impl WatermarkStore for PgStore {
         delay: Duration,
     ) -> anyhow::Result<Option<PrunerWatermark<'static>>> {
         let mut conn = self.db.connect().await?;
-
-        // Get the watermark with the connection's lifetime
-        let watermark_result = PrunerWatermark::get(&mut conn, pipeline, delay).await?;
-
-        // Convert to 'static lifetime if there's a watermark
-        let static_watermark = watermark_result.map(|watermark| {
-            // Create a new watermark with 'static lifetime
-            // This requires cloning any data that depends on lifetimes
-            PrunerWatermark::new(
-                pipeline.to_string(), // Clone the string to make it 'static
-                watermark.sequence_number(),
-                watermark.timestamp(),
-                // Add any other fields that need to be copied
-            )
-        });
-
-        Ok(static_watermark)
+        PrunerWatermark::get(&mut conn, pipeline, delay)
+            .await
+            .map_err(Into::into)
     }
 
     async fn update_pruner_watermark(
@@ -150,5 +116,15 @@ impl WatermarkStore for PgStore {
     ) -> anyhow::Result<bool> {
         let mut conn = self.db.connect().await?;
         watermark.update(&mut conn).await.map_err(Into::into)
+    }
+}
+
+#[async_trait]
+impl Database for PgStore {
+    type Connection<'c> = PgConnection<'c>;
+
+    async fn connect<'c>(&'c self) -> anyhow::Result<Self::Connection<'c>> {
+        let conn = self.db.connect().await?;
+        Ok(conn)
     }
 }

@@ -12,7 +12,7 @@ use crate::{
     db::{self, Db},
     metrics::IndexerMetrics,
     models::watermarks::CommitterWatermark,
-    store::PgStore,
+    pg_store::PgStore,
     types::full_checkpoint_content::CheckpointData,
     FieldCount,
 };
