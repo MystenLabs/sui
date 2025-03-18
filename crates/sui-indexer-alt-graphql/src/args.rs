@@ -1,6 +1,8 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use std::path::PathBuf;
+
 use sui_indexer_alt_metrics::MetricsArgs;
 
 use crate::RpcArgs;
@@ -19,5 +21,10 @@ pub enum Command {
 
         #[command(flatten)]
         metrics_args: MetricsArgs,
+
+        /// Path to the RPC's configuration TOML file. If one is not provided, the default values for
+        /// the configuration will be set.
+        #[arg(long)]
+        config: Option<PathBuf>,
     },
 }

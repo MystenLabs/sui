@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::convert::Infallible;
+use std::{convert::Infallible, time::Duration};
 
 use async_graphql::ErrorExtensions;
 
@@ -12,12 +12,14 @@ use async_graphql::ErrorExtensions;
 pub(crate) mod code {
     pub const BAD_USER_INPUT: &str = "BAD_USER_INPUT";
     pub const INTERNAL_SERVER_ERROR: &str = "INTERNAL_SERVER_ERROR";
+    pub const REQUEST_TIMEOUT: &str = "REQUEST_TIMEOUT";
 }
 
 #[derive(thiserror::Error, Debug)]
 pub(crate) enum RpcError<E: std::error::Error = Infallible> {
     BadUserInput(E),
     InternalError(#[from] anyhow::Error),
+    RequestTimeout { kind: &'static str, limit: Duration },
 }
 
 impl<E: std::error::Error> From<RpcError<E>> for async_graphql::Error {
@@ -42,6 +44,14 @@ impl<E: std::error::Error> From<RpcError<E>> for async_graphql::Error {
                     ext.set("code", code::INTERNAL_SERVER_ERROR);
                     ext.set("chain", chain);
                 })
+            }
+
+            RpcError::RequestTimeout { kind, limit } => {
+                format!("{kind} timed out after {:.2}s", limit.as_secs_f64()).extend_with(
+                    |_, ext| {
+                        ext.set("code", code::REQUEST_TIMEOUT);
+                    },
+                )
             }
         }
     }
@@ -68,6 +78,12 @@ impl<E: std::error::Error> From<RpcError<E>> for async_graphql::ServerError {
 /// Signal an error that is the user's fault.
 pub(crate) fn bad_user_input<E: std::error::Error>(err: E) -> RpcError<E> {
     RpcError::BadUserInput(err)
+}
+
+/// Signal a timeout. `kind` specifies what operation timed out and is included in the error
+/// message.
+pub(crate) fn request_timeout(kind: &'static str, limit: Duration) -> RpcError {
+    RpcError::RequestTimeout { kind, limit }
 }
 
 #[cfg(test)]
@@ -107,5 +123,15 @@ mod tests {
             ext.get("chain"),
             Some(&vec!["Immediate predecessor", "Root cause"].into())
         );
+    }
+
+    #[test]
+    fn test_request_timeout() {
+        let err: async_graphql::Error = request_timeout("Kind", Duration::from_secs(5)).into();
+
+        assert_eq!(err.message, "Kind timed out after 5.00s");
+
+        let ext = err.extensions.as_ref().expect("No extensions");
+        assert_eq!(ext.get("code"), Some(&code::REQUEST_TIMEOUT.into()));
     }
 }

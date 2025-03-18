@@ -1,12 +1,12 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{net::SocketAddr, sync::Arc};
+use std::{any::Any, net::SocketAddr};
 
 use anyhow::{self, Context};
 use async_graphql::{
-    http::GraphiQLSource, EmptyMutation, EmptySubscription, ObjectType, Schema, SchemaBuilder,
-    SubscriptionType,
+    extensions::ExtensionFactory, http::GraphiQLSource, EmptyMutation, EmptySubscription,
+    ObjectType, Schema, SchemaBuilder, SubscriptionType,
 };
 use async_graphql_axum::{GraphQLRequest, GraphQLResponse};
 use axum::{
@@ -16,6 +16,8 @@ use axum::{
     routing::{get, post},
     Extension, Router,
 };
+use config::RpcConfig;
+use extensions::timeout::Timeout;
 use prometheus::Registry;
 use tokio::{net::TcpListener, task::JoinHandle};
 use tokio_util::sync::CancellationToken;
@@ -29,6 +31,7 @@ use crate::middleware::version::Version;
 
 mod api;
 pub mod args;
+pub mod config;
 mod error;
 mod extensions;
 mod metrics;
@@ -58,9 +61,6 @@ pub struct RpcService<Q, M, S> {
     /// The version string to report with each response, as an HTTP header.
     version: &'static str,
 
-    /// Metrics for the RPC service.
-    metrics: Arc<RpcMetrics>,
-
     /// The GraphQL schema this service will serve.
     schema: SchemaBuilder<Q, M, S>,
 
@@ -88,14 +88,28 @@ where
 
         let metrics = RpcMetrics::new(registry);
 
+        // The logging extension should be outermost so that it can surround all other extensions.
+        let schema = schema.extension(Logging(metrics));
+
         Self {
             rpc_listen_address,
             with_ide: !no_ide,
             version,
-            metrics,
             schema,
             cancel,
         }
+    }
+
+    /// Add an extension to the GraphQL schema.
+    pub fn extension(self, ext: impl ExtensionFactory) -> Self {
+        let schema = self.schema.extension(ext);
+        Self { schema, ..self }
+    }
+
+    /// Add data to the GraphQL schema that can be accessed from the Context from any request.
+    pub fn data<D: Any + Send + Sync>(self, data: D) -> Self {
+        let schema = self.schema.data(data);
+        Self { schema, ..self }
     }
 
     /// Run the RPC service. This binds the listener and exposes handlers for the RPC service and IDE
@@ -110,16 +124,13 @@ where
             rpc_listen_address,
             with_ide,
             version,
-            metrics,
             schema,
             cancel,
         } = self;
 
-        let schema = schema.extension(Logging(metrics.clone())).finish();
-
         let mut router: Router = Router::new()
             .route("/graphql", post(graphql::<Q, M, S>))
-            .layer(Extension(schema))
+            .layer(Extension(schema.finish()))
             .layer(axum::middleware::from_fn_with_state(
                 Version(version),
                 middleware::version::set_version,
@@ -190,10 +201,13 @@ pub fn schema() -> SchemaBuilder<Query, EmptyMutation, EmptySubscription> {
 pub async fn start_rpc(
     args: RpcArgs,
     version: &'static str,
+    config: RpcConfig,
     registry: &Registry,
     cancel: CancellationToken,
 ) -> anyhow::Result<JoinHandle<()>> {
     let h_rpc = RpcService::new(args, version, schema(), registry, cancel.child_token())
+        .extension(Timeout)
+        .data(config.limits.timeouts())
         .run()
         .await?;
 

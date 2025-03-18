@@ -15,6 +15,10 @@ type Query {
 	Test query that fails with an internal error
 	"""
 	uhOh: String!
+	"""
+	Test query that times out
+	"""
+	tickTock: String!
 }
 
 

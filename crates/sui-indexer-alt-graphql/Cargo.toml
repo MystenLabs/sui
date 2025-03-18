@@ -23,16 +23,19 @@ axum = { version = "0.7", default-features = false, features = [ "macros", "toki
 clap.workspace = true
 const-str.workspace = true
 prometheus.workspace = true
+serde.workspace = true
 serde_json.workspace = true
 telemetry-subscribers.workspace = true
 thiserror.workspace = true
 tokio.workspace = true
 tokio-util.workspace = true
+toml.workspace = true
 tower-http.workspace = true
 tracing.workspace = true
 uuid.workspace = true
 
 bin-version.workspace = true
+sui-default-config.workspace = true
 sui-indexer-alt-metrics.workspace = true
 
 [dev-dependencies]

@@ -6,10 +6,11 @@ use clap::Parser;
 use prometheus::Registry;
 use sui_indexer_alt_graphql::{
     args::{Args, Command},
+    config::RpcConfig,
     start_rpc,
 };
 use sui_indexer_alt_metrics::MetricsService;
-use tokio::signal;
+use tokio::{fs, signal};
 use tokio_util::sync::CancellationToken;
 use tracing::info;
 
@@ -39,7 +40,18 @@ async fn main() -> anyhow::Result<()> {
         Command::Rpc {
             rpc_args,
             metrics_args,
+            config,
         } => {
+            let rpc_config = if let Some(path) = config {
+                let contents = fs::read_to_string(path)
+                    .await
+                    .context("Failed to read configuration TOML file")?;
+
+                toml::from_str(&contents).context("Failed to parse configuration TOML file")?
+            } else {
+                RpcConfig::default()
+            };
+
             let cancel = CancellationToken::new();
 
             let registry = Registry::new_custom(Some("graphql_alt".into()), None)
@@ -60,8 +72,14 @@ async fn main() -> anyhow::Result<()> {
                 }
             });
 
-            let h_rpc =
-                start_rpc(rpc_args, VERSION, metrics.registry(), cancel.child_token()).await?;
+            let h_rpc = start_rpc(
+                rpc_args,
+                VERSION,
+                rpc_config,
+                metrics.registry(),
+                cancel.child_token(),
+            )
+            .await?;
 
             let h_metrics = metrics.run().await?;
 
