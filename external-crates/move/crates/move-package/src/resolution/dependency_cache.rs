@@ -3,13 +3,7 @@
 
 use anyhow::Result;
 use colored::Colorize;
-use std::{
-    collections::BTreeSet,
-    ffi::OsStr,
-    io::Write,
-    path::PathBuf,
-    process::{Command, Stdio},
-};
+use std::{collections::BTreeSet, ffi::OsStr, io::Write, path::PathBuf, process::Command};
 
 use crate::{
     package_hooks,
@@ -45,6 +39,14 @@ impl DependencyCache {
         kind: &DependencyKind,
         progress_output: &mut Progress,
     ) -> Result<()> {
+        macro_rules! command_with_null_io {
+            ($cmd:expr) => {
+                $cmd.stdin(std::process::Stdio::null())
+                    .stdout(std::process::Stdio::null())
+                    .stderr(std::process::Stdio::null())
+            };
+        }
+
         match kind {
             DependencyKind::Local(_) => Ok(()),
 
@@ -67,11 +69,7 @@ impl DependencyCache {
                     return Ok(());
                 }
 
-                if Command::new("git")
-                    .arg("--version")
-                    .stdin(Stdio::null())
-                    .stdout(Stdio::null())
-                    .stderr(Stdio::null())
+                if command_with_null_io!(Command::new("git").arg("--version"))
                     .output()
                     .is_err()
                 {
@@ -91,12 +89,12 @@ impl DependencyCache {
                         git_url,
                     )?;
                     // If the cached folder does not exist, download and clone accordingly
-                    if let Ok(mut output) = Command::new("git")
-                        .args([OsStr::new("clone"), os_git_url, git_path.as_os_str()])
-                        .stdin(Stdio::null())
-                        .stdout(Stdio::null())
-                        .stderr(Stdio::null())
-                        .spawn()
+                    if let Ok(mut output) = command_with_null_io!(Command::new("git").args([
+                        OsStr::new("clone"),
+                        os_git_url,
+                        git_path.as_os_str()
+                    ]))
+                    .spawn()
                     {
                         output.wait().map_err(|_| {
                             anyhow::anyhow!(
@@ -114,40 +112,32 @@ impl DependencyCache {
                         ));
                     }
 
-                    Command::new("git")
-                        .args([
-                            OsStr::new("-C"),
-                            git_path.as_os_str(),
-                            OsStr::new("checkout"),
-                            os_git_rev,
-                        ])
-                        .stdin(Stdio::null())
-                        .stdout(Stdio::null())
-                        .stderr(Stdio::null())
-                        .output()
-                        .map_err(|_| {
-                            anyhow::anyhow!(
-                                "Failed to checkout Git reference '{}' for package '{}'",
-                                git_rev,
-                                dep_name
-                            )
-                        })?;
+                    command_with_null_io!(Command::new("git").args([
+                        OsStr::new("-C"),
+                        git_path.as_os_str(),
+                        OsStr::new("checkout"),
+                        os_git_rev,
+                    ]))
+                    .output()
+                    .map_err(|_| {
+                        anyhow::anyhow!(
+                            "Failed to checkout Git reference '{}' for package '{}'",
+                            git_rev,
+                            dep_name
+                        )
+                    })?;
                 } else if !self.skip_fetch_latest_git_deps {
                     // Update the git dependency
                     // Check first that it isn't a git rev (if it doesn't work, just continue with the
                     // fetch)
-                    if let Ok(rev) = Command::new("git")
-                        .args([
-                            OsStr::new("-C"),
-                            git_path.as_os_str(),
-                            OsStr::new("rev-parse"),
-                            OsStr::new("--verify"),
-                            os_git_rev,
-                        ])
-                        .stdin(Stdio::null())
-                        .stdout(Stdio::null())
-                        .stderr(Stdio::null())
-                        .output()
+                    if let Ok(rev) = command_with_null_io!(Command::new("git").args([
+                        OsStr::new("-C"),
+                        git_path.as_os_str(),
+                        OsStr::new("rev-parse"),
+                        OsStr::new("--verify"),
+                        os_git_rev,
+                    ]))
+                    .output()
                     {
                         if let Ok(parsable_version) = String::from_utf8(rev.stdout) {
                             // If it's exactly the same, then it's a git rev
@@ -157,18 +147,14 @@ impl DependencyCache {
                         }
                     }
 
-                    let tag = Command::new("git")
-                        .args([
-                            OsStr::new("-C"),
-                            git_path.as_os_str(),
-                            OsStr::new("tag"),
-                            OsStr::new("--list"),
-                            os_git_rev,
-                        ])
-                        .stdin(Stdio::null())
-                        .stdout(Stdio::null())
-                        .stderr(Stdio::null())
-                        .output();
+                    let tag = command_with_null_io!(Command::new("git").args([
+                        OsStr::new("-C"),
+                        git_path.as_os_str(),
+                        OsStr::new("tag"),
+                        OsStr::new("--list"),
+                        os_git_rev,
+                    ]))
+                    .output();
 
                     if let Ok(tag) = tag {
                         if let Ok(parsable_version) = String::from_utf8(tag.stdout) {
@@ -194,17 +180,13 @@ impl DependencyCache {
                     // NOTE: this means that you must run the package system with a working network
                     // connection.
 
-                    if let Ok(mut output) = Command::new("git")
-                        .args([
-                            OsStr::new("-C"),
-                            git_path.as_os_str(),
-                            OsStr::new("fetch"),
-                            OsStr::new("origin"),
-                        ])
-                        .stdin(Stdio::null())
-                        .stdout(Stdio::null())
-                        .stderr(Stdio::null())
-                        .spawn()
+                    if let Ok(mut output) = command_with_null_io!(Command::new("git").args([
+                        OsStr::new("-C"),
+                        git_path.as_os_str(),
+                        OsStr::new("fetch"),
+                        OsStr::new("origin"),
+                    ]))
+                    .spawn()
                     {
                         output.wait().map_err(|_| {
                             anyhow::anyhow!(
@@ -224,26 +206,22 @@ impl DependencyCache {
                         ));
                     }
 
-                    let status = Command::new("git")
-                        .args([
-                            OsStr::new("-C"),
-                            git_path.as_os_str(),
-                            OsStr::new("reset"),
-                            OsStr::new("--hard"),
-                            OsStr::new(&format!("origin/{}", git_rev)),
-                        ])
-                        .stdin(Stdio::null())
-                        .stdout(Stdio::null())
-                        .stderr(Stdio::null())
-                        .status()
-                        .map_err(|_| {
-                            anyhow::anyhow!(
+                    let status = command_with_null_io!(Command::new("git").args([
+                        OsStr::new("-C"),
+                        git_path.as_os_str(),
+                        OsStr::new("reset"),
+                        OsStr::new("--hard"),
+                        OsStr::new(&format!("origin/{}", git_rev)),
+                    ]))
+                    .status()
+                    .map_err(|_| {
+                        anyhow::anyhow!(
                             "Failed to reset to latest Git state '{}' for package '{}', to skip \
                              set --skip-fetch-latest-git-deps",
                             git_rev,
                             dep_name
                         )
-                        })?;
+                    })?;
 
                     if !status.success() {
                         return Err(anyhow::anyhow!(
