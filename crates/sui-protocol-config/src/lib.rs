@@ -18,7 +18,7 @@ use tracing::{info, warn};
 
 /// The minimum and maximum protocol versions supported by this build.
 const MIN_PROTOCOL_VERSION: u64 = 1;
-const MAX_PROTOCOL_VERSION: u64 = 78;
+const MAX_PROTOCOL_VERSION: u64 = 79;
 
 // Record history of protocol version allocations here:
 //
@@ -1857,7 +1857,7 @@ impl ProtocolConfig {
     }
 
     pub fn consensus_median_based_commit_timestamp(&self) -> bool {
-        let res self.feature_flags.consensus_median_based_commit_timestamp;
+        let res = self.feature_flags.consensus_median_based_commit_timestamp;
         assert!(
             !res || self.gc_depth() > 0,
             "The consensus median based commit timestamp requires GC to be enabled"
