@@ -431,6 +431,7 @@ impl ConsensusOutputCache {
         trace!("insert_shared_object_assignments: {:?}", versions);
         let mut inserted_count = 0;
         for (key, value) in versions {
+            debug!("inserting shared object assignments for {:?}", key);
             if self
                 .shared_version_assignments
                 .insert(*key, value.clone())
@@ -461,6 +462,7 @@ impl ConsensusOutputCache {
     ) {
         let mut removed_count = 0;
         for tx_key in keys {
+            debug!("removing shared object assignments for {:?}", tx_key);
             if self.shared_version_assignments.remove(tx_key).is_some() {
                 removed_count += 1;
             }
