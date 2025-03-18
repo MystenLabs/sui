@@ -393,66 +393,35 @@ impl AuthorityStore {
         &self,
         object_key: FullObjectKey,
         epoch_id: EpochId,
-        // TODO: Delete this parameter once table migration is complete.
-        use_object_per_epoch_marker_table_v2: bool,
     ) -> SuiResult<Option<MarkerValue>> {
-        if use_object_per_epoch_marker_table_v2 {
-            Ok(self
-                .perpetual_tables
-                .object_per_epoch_marker_table_v2
-                .get(&(epoch_id, object_key))?)
-        } else {
-            Ok(self
-                .perpetual_tables
-                .object_per_epoch_marker_table
-                .get(&(epoch_id, object_key.into_object_key()))?)
-        }
+        Ok(self
+            .perpetual_tables
+            .object_per_epoch_marker_table_v2
+            .get(&(epoch_id, object_key))?)
     }
 
     pub fn get_latest_marker(
         &self,
         object_id: FullObjectID,
         epoch_id: EpochId,
-        use_object_per_epoch_marker_table_v2: bool,
     ) -> SuiResult<Option<(SequenceNumber, MarkerValue)>> {
-        if use_object_per_epoch_marker_table_v2 {
-            let min_key = (epoch_id, FullObjectKey::min_for_id(&object_id));
-            let max_key = (epoch_id, FullObjectKey::max_for_id(&object_id));
+        let min_key = (epoch_id, FullObjectKey::min_for_id(&object_id));
+        let max_key = (epoch_id, FullObjectKey::max_for_id(&object_id));
 
-            let marker_entry = self
-                .perpetual_tables
-                .object_per_epoch_marker_table_v2
-                .reversed_safe_iter_with_bounds(Some(min_key), Some(max_key))?
-                .next();
-            match marker_entry {
-                Some(Ok(((epoch, key), marker))) => {
-                    // because of the iterator bounds these cannot fail
-                    assert_eq!(epoch, epoch_id);
-                    assert_eq!(key.id(), object_id);
-                    Ok(Some((key.version(), marker)))
-                }
-                Some(Err(e)) => Err(e.into()),
-                None => Ok(None),
+        let marker_entry = self
+            .perpetual_tables
+            .object_per_epoch_marker_table_v2
+            .reversed_safe_iter_with_bounds(Some(min_key), Some(max_key))?
+            .next();
+        match marker_entry {
+            Some(Ok(((epoch, key), marker))) => {
+                // because of the iterator bounds these cannot fail
+                assert_eq!(epoch, epoch_id);
+                assert_eq!(key.id(), object_id);
+                Ok(Some((key.version(), marker)))
             }
-        } else {
-            let min_key = (epoch_id, ObjectKey::min_for_id(&object_id.id()));
-            let max_key = (epoch_id, ObjectKey::max_for_id(&object_id.id()));
-
-            let marker_entry = self
-                .perpetual_tables
-                .object_per_epoch_marker_table
-                .reversed_safe_iter_with_bounds(Some(min_key), Some(max_key))?
-                .next();
-            match marker_entry {
-                Some(Ok(((epoch, key), marker))) => {
-                    // because of the iterator bounds these cannot fail
-                    assert_eq!(epoch, epoch_id);
-                    assert_eq!(key.0, object_id.id());
-                    Ok(Some((key.1, marker)))
-                }
-                Some(Err(e)) => Err(e.into()),
-                None => Ok(None),
-            }
+            Some(Err(e)) => Err(e.into()),
+            None => Ok(None),
         }
     }
 
@@ -779,8 +748,6 @@ impl AuthorityStore {
         &self,
         epoch_id: EpochId,
         tx_outputs: &[Arc<TransactionOutputs>],
-        // TODO: Delete this parameter once table migration is complete.
-        use_object_per_epoch_marker_table_v2: bool,
     ) -> SuiResult<DBBatch> {
         let mut written = Vec::with_capacity(tx_outputs.len());
         for outputs in tx_outputs {
@@ -789,12 +756,7 @@ impl AuthorityStore {
 
         let mut write_batch = self.perpetual_tables.transactions.batch();
         for outputs in tx_outputs {
-            self.write_one_transaction_outputs(
-                &mut write_batch,
-                epoch_id,
-                outputs,
-                use_object_per_epoch_marker_table_v2,
-            )?;
+            self.write_one_transaction_outputs(&mut write_batch, epoch_id, outputs)?;
         }
         // test crashing before writing the batch
         fail_point!("crash");
@@ -818,8 +780,6 @@ impl AuthorityStore {
         write_batch: &mut DBBatch,
         epoch_id: EpochId,
         tx_outputs: &TransactionOutputs,
-        // TODO: Delete this parameter once table migration is complete.
-        use_object_per_epoch_marker_table_v2: bool,
     ) -> SuiResult {
         let TransactionOutputs {
             transaction,
@@ -842,24 +802,12 @@ impl AuthorityStore {
         )?;
 
         // Add batched writes for objects and locks.
-        let effects_digest = effects.digest();
-
-        if use_object_per_epoch_marker_table_v2 {
-            write_batch.insert_batch(
-                &self.perpetual_tables.object_per_epoch_marker_table_v2,
-                markers
-                    .iter()
-                    .map(|(key, marker_value)| ((epoch_id, *key), *marker_value)),
-            )?;
-        } else {
-            write_batch.insert_batch(
-                &self.perpetual_tables.object_per_epoch_marker_table,
-                markers
-                    .iter()
-                    .map(|(key, marker_value)| ((epoch_id, key.into_object_key()), *marker_value)),
-            )?;
-        }
-
+        write_batch.insert_batch(
+            &self.perpetual_tables.object_per_epoch_marker_table_v2,
+            markers
+                .iter()
+                .map(|(key, marker_value)| ((epoch_id, *key), *marker_value)),
+        )?;
         write_batch.insert_batch(
             &self.perpetual_tables.objects,
             deleted
@@ -894,6 +842,7 @@ impl AuthorityStore {
         // `Receiving` arguments which were not received)
         self.delete_live_object_markers(write_batch, locks_to_delete)?;
 
+        let effects_digest = effects.digest();
         write_batch
             .insert_batch(
                 &self.perpetual_tables.effects,

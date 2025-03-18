@@ -511,10 +511,6 @@ impl TransactionManager {
                 &input_object_cache_misses,
                 receiving_objects,
                 epoch_store.epoch(),
-                epoch_store
-                    .protocol_config()
-                    .use_object_per_epoch_marker_table_v2_as_option()
-                    .unwrap_or(false),
             )
             .into_iter()
             .zip(input_object_cache_misses);

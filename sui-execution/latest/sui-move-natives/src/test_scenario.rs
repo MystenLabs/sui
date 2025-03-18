@@ -74,8 +74,6 @@ impl ChildObjectResolver for InMemoryTestStore {
         receiving_object_id: &ObjectID,
         receive_object_at_version: SequenceNumber,
         epoch_id: sui_types::committee::EpochId,
-        // TODO: Delete this parameter once table migration is complete.
-        use_object_per_epoch_marker_table_v2: bool,
     ) -> sui_types::error::SuiResult<Option<Object>> {
         self.0.with_borrow(|store| {
             store.get_object_received_at_version(
@@ -83,7 +81,6 @@ impl ChildObjectResolver for InMemoryTestStore {
                 receiving_object_id,
                 receive_object_at_version,
                 epoch_id,
-                use_object_per_epoch_marker_table_v2,
             )
         })
     }
