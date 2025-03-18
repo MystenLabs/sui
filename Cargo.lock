@@ -14099,6 +14099,7 @@ dependencies = [
  "serde_json",
  "sui-indexer-alt-metrics",
  "telemetry-subscribers",
+ "thiserror 1.0.69",
  "tokio",
  "tokio-util 0.7.13 (registry+https://github.com/rust-lang/crates.io-index)",
  "tower-http",
