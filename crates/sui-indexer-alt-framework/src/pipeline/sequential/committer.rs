@@ -4,7 +4,6 @@
 use std::{cmp::Ordering, collections::BTreeMap, sync::Arc};
 
 use diesel_async::{scoped_futures::ScopedFutureExt, AsyncConnection};
-use sui_pg_db::Db;
 use tokio::{
     sync::mpsc,
     task::JoinHandle,
@@ -16,7 +15,9 @@ use tracing::{debug, info, warn};
 use crate::{
     metrics::IndexerMetrics,
     models::watermarks::CommitterWatermark,
+    pg_store::PgStore,
     pipeline::{logging::WatermarkLogger, IndexedCheckpoint, WARN_PENDING_WATERMARKS},
+    store::Database,
 };
 
 use super::{Handler, SequentialConfig};
@@ -44,7 +45,7 @@ pub(super) fn committer<H: Handler + 'static>(
     watermark: Option<CommitterWatermark<'static>>,
     mut rx: mpsc::Receiver<IndexedCheckpoint<H>>,
     tx: mpsc::UnboundedSender<(&'static str, u64)>,
-    db: Db,
+    store: PgStore,
     metrics: Arc<IndexerMetrics>,
     cancel: CancellationToken,
 ) -> JoinHandle<()> {
@@ -217,7 +218,7 @@ pub(super) fn committer<H: Handler + 'static>(
                         .with_label_values(&[H::NAME])
                         .start_timer();
 
-                    let Ok(mut conn) = db.connect().await else {
+                    let Ok(mut conn) = store.connect().await else {
                         warn!(pipeline = H::NAME, "Failed to get connection for DB");
                         metrics
                             .total_committer_batches_failed

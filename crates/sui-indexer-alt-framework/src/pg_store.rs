@@ -1,16 +1,18 @@
-use async_trait::async_trait;
-use std::fmt::Debug;
+// Copyright (c) Mysten Labs, Inc.
+// SPDX-License-Identifier: Apache-2.0
+
 use std::future::Future;
 use std::pin::Pin;
 use std::time::Duration;
+
+use async_trait::async_trait;
+use diesel_async::AsyncConnection;
 
 use crate::db::{Connection as PgConnection, Db as PgDb};
 use crate::models::watermarks::{
     CommitterWatermark, PrunerWatermark, ReaderWatermark, StoredWatermark,
 };
 use crate::store::{Database, DbConnection, WatermarkStore};
-use diesel_async::scoped_futures::ScopedFutureExt;
-use diesel_async::AsyncConnection;
 
 /// PostgreSQL implementation of Store
 #[derive(Clone)]

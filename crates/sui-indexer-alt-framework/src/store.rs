@@ -1,12 +1,10 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::db::{Connection, Db};
 use crate::models::watermarks::{
     CommitterWatermark, PrunerWatermark, ReaderWatermark, StoredWatermark,
 };
 use async_trait::async_trait;
-use std::fmt::Debug;
 use std::future::Future;
 use std::pin::Pin;
 use std::time::Duration;

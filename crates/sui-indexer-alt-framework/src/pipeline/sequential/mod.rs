@@ -13,6 +13,7 @@ use crate::{
     db::{self, Db},
     metrics::IndexerMetrics,
     models::watermarks::CommitterWatermark,
+    pg_store::PgStore,
     types::full_checkpoint_content::CheckpointData,
 };
 
@@ -121,7 +122,7 @@ pub(crate) fn pipeline<H: Handler + Send + Sync + 'static>(
         initial_watermark,
         committer_rx,
         watermark_tx,
-        db.clone(),
+        PgStore::new(db),
         metrics.clone(),
         cancel.clone(),
     );
