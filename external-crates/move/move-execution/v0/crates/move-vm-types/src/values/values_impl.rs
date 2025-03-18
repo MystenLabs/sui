@@ -4115,24 +4115,15 @@ pub mod prop {
                 .collect::<Vec<_>>()
                 .prop_map(move |vals| Value::struct_(Struct::pack(vals)))
                 .boxed(),
-
-            L::Enum(enum_layout) => {
-                let enum_layouts = (**enum_layout)
-                    .clone()
-                    .0
-                    .into_iter()
-                    .enumerate()
-                    .collect::<Vec<_>>();
-                proptest::sample::select(enum_layouts)
-                    .prop_flat_map(move |(tag, layout)| {
-                        layout
-                            .iter()
-                            .map(value_strategy_with_layout)
-                            .collect::<Vec<_>>()
-                            .prop_map(move |v| Value::variant(Variant::pack(tag as u16, v)))
-                    })
-                    .boxed()
-            }
+            L::Enum(enum_layout) => pick_variant_layout((**enum_layout).clone())
+                .prop_flat_map(move |(tag, variant_layout)| {
+                    let v = variant_layout
+                        .into_iter()
+                        .map(move |l| value_strategy_with_layout(&l))
+                        .collect::<Vec<_>>();
+                    v.prop_map(move |vals| Value::variant(Variant::pack(tag as u16, vals)))
+                })
+                .boxed(),
         }
     }
 

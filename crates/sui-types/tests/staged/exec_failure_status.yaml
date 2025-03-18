@@ -36,3 +36,5 @@
 34: AddressDeniedForCoin
 35: CoinTypeGlobalPause
 36: ExecutionCancelledDueToRandomnessUnavailable
+37: InvalidLinkage
+38: DuplicateModuleName

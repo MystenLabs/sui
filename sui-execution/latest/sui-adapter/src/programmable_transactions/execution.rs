@@ -247,7 +247,7 @@ mod checked {
                 for (idx, arg) in arg_iter {
                     let value: Value =
                         linked_context.by_value_arg(CommandKind::MakeMoveVec, idx, arg)?;
-                    check_param_type::<Mode>(linked_context, idx, &value, &elem_ty)?;
+                    check_param_type::<Mode>(idx, &value, &elem_ty)?;
                     used_in_non_entry_move_call =
                         used_in_non_entry_move_call || value.was_used_in_non_entry_move_call();
                     value.write_bcs_bytes(&mut res);
@@ -507,7 +507,7 @@ mod checked {
         // write back mutable inputs. We also update if they were used in non entry Move calls
         // though we do not care for immutable usages of objects or other values
         let used_in_non_entry_move_call = kind == FunctionKind::NonEntry;
-        let res = write_back_results::<Mode>(
+        write_back_results::<Mode>(
             context,
             argument_updates,
             &arguments,
@@ -518,9 +518,7 @@ mod checked {
             by_mut_ref,
             return_values.into_iter().map(|(bytes, _layout)| bytes),
             return_value_kinds,
-        );
-
-        res
+        )
     }
 
     fn write_back_results<Mode: ExecutionMode>(
@@ -626,17 +624,19 @@ mod checked {
         // and if there is an error of any kind (verification or module init) we
         // remove it.
         // context.write_package(package);
-        let (mut new_context, package) =
-            publish_and_verify_modules(context, runtime_id, package, &modules)?;
+        let mut new_context = publish_and_verify_modules(context, runtime_id, package, &modules)?;
         init_modules::<Mode>(
             &mut new_context,
             argument_updates,
             &modules,
             trace_builder_opt,
         )?;
+        let Some(package) = new_context.destroy_publication_context() else {
+            invariant_violation!("Ephemeral package should be set in publication");
+        };
         // If we have successfully published and initialized the modules, we can write the package
-        // to the context.
-        new_context.write_package(package);
+        // to the _old_ context.
+        context.write_package(package);
 
         let values = if Mode::packages_are_predefined() {
             // no upgrade cap for genesis modules
@@ -681,7 +681,7 @@ mod checked {
             let mut ticket_bytes = Vec::new();
             let ticket_val: Value =
                 context.by_value_arg(CommandKind::Upgrade, 0, upgrade_ticket_arg)?;
-            check_param_type::<Mode>(context, 0, &ticket_val, &upgrade_ticket_type)?;
+            check_param_type::<Mode>(0, &ticket_val, &upgrade_ticket_type)?;
             ticket_val.write_bcs_bytes(&mut ticket_bytes);
             bcs::from_bytes(&ticket_bytes).map_err(|_| {
                 ExecutionError::from_kind(ExecutionErrorKind::CommandArgumentError {
@@ -736,8 +736,7 @@ mod checked {
             dependencies.iter().map(|p| p.move_package()),
         )?;
 
-        let (mut new_context, package) =
-            publish_and_verify_modules(context, runtime_id, package, &modules)?;
+        let new_context = publish_and_verify_modules(context, runtime_id, package, &modules)?;
 
         check_compatibility(
             &new_context,
@@ -746,8 +745,12 @@ mod checked {
             upgrade_ticket.policy,
         )?;
 
-        // We have successfully verified the modules, we can write the package to the context now.
-        new_context.write_package(package);
+        let Some(package) = new_context.destroy_publication_context() else {
+            invariant_violation!("Ephemeral package should be set in upgrade");
+        };
+
+        // We have successfully verified the modules, we can write the package to the _old_ context now.
+        context.write_package(package);
 
         debug_assert_eq!(upgrade_receipt_type.abilities, AbilitySet::EMPTY);
         Ok(vec![Value::Raw(
@@ -966,18 +969,18 @@ mod checked {
         Ok(modules)
     }
 
-    fn publish_and_verify_modules<'ctx, 'vm, 'state, 'a, 'outer_context>(
-        context: &'outer_context mut LinkedContext<'ctx, 'vm, 'state, 'a>,
+    fn publish_and_verify_modules<'vm, 'state, 'a, 'outer_context>(
+        context: &'outer_context mut LinkedContext<'_, 'vm, 'state, 'a>,
         runtime_id: ObjectID,
         pkg: MovePackage,
         modules: &[CompiledModule],
-    ) -> Result<(LinkedContext<'outer_context, 'vm, 'state, 'a>, MovePackage), ExecutionError> {
+    ) -> Result<LinkedContext<'outer_context, 'vm, 'state, 'a>, ExecutionError> {
         let signing_config = context
             .ctx
             .protocol_config
             .verifier_config(/* signing_limits */ None)
             .clone();
-        let (new_vm_instance, pkg) =
+        let new_vm_instance =
             context.publish_module_bundle(AccountAddress::from(runtime_id), pkg)?;
         // run the Sui verifier
         for module in modules {
@@ -989,7 +992,7 @@ mod checked {
                 &signing_config,
             )?;
         }
-        Ok((new_vm_instance, pkg))
+        Ok(new_vm_instance)
     }
 
     fn init_modules<Mode: ExecutionMode>(
@@ -1390,7 +1393,7 @@ mod checked {
                     idx,
                 ));
             }
-            check_param_type::<Mode>(context, idx, &value, &non_ref_param_ty)?;
+            check_param_type::<Mode>(idx, &value, &non_ref_param_ty)?;
             let bytes = {
                 let mut v = vec![];
                 value.write_bcs_bytes(&mut v);
@@ -1403,7 +1406,6 @@ mod checked {
 
     /// checks that the value is compatible with the specified type
     fn check_param_type<Mode: ExecutionMode>(
-        context: &mut LinkedContext<'_, '_, '_, '_>,
         idx: usize,
         value: &Value,
         param_ty: &ExecutionType,
@@ -1416,7 +1418,7 @@ mod checked {
             // generated from a Move function). Meaning we only allow "primitive" values
             // and might need to run validation in addition to the BCS layout
             Value::Raw(RawValueType::Any, bytes) => {
-                let Some(layout) = primitive_serialization_layout(context, &param_ty.type_)? else {
+                let Some(layout) = primitive_serialization_layout(&param_ty.type_)? else {
                     let msg = format!(
                         "Non-primitive argument at index {}. If it is an object, it must be \
                         populated by an object",
@@ -1513,81 +1515,74 @@ mod checked {
         context: &mut LinkedContext<'_, '_, '_, '_>,
         type_input: TypeInput,
     ) -> Result<TypeTag, ExecutionError> {
-        fn into_type_tag(
-            context: &mut LinkedContext<'_, '_, '_, '_>,
-            type_input: TypeInput,
-        ) -> Result<TypeTag, ExecutionError> {
-            use TypeInput as I;
-            use TypeTag as T;
-            Ok(match type_input {
-                I::Bool => T::Bool,
-                I::U8 => T::U8,
-                I::U16 => T::U16,
-                I::U32 => T::U32,
-                I::U64 => T::U64,
-                I::U128 => T::U128,
-                I::U256 => T::U256,
-                I::Address => T::Address,
-                I::Signer => T::Signer,
-                I::Vector(t) => T::Vector(Box::new(into_type_tag(context, *t)?)),
-                I::Struct(s) => {
-                    let StructInput {
-                        address,
-                        module,
-                        name,
-                        type_params,
-                    } = *s;
-                    let defining_id = context
-                        .linkage
-                        .resolve_type_to_defining_id(
-                            context.ctx.linkage_analyzer.resolver(),
-                            address.into(),
-                            module.clone(),
-                            name.clone(),
+        use TypeInput as I;
+        use TypeTag as T;
+
+        let validate_identifiers = context.ctx.protocol_config.validate_identifier_inputs();
+        let to_ident = move |s: String| {
+            // TODO(vm-rewrite): simplify this when we remove this protocol-gate check as this will be
+            // in an execution version greater than when this was turned on.
+            if validate_identifiers {
+                Identifier::new(s).map_err(|e| {
+                    ExecutionError::new_with_source(
+                        ExecutionErrorKind::VMInvariantViolation,
+                        e.to_string(),
+                    )
+                })
+            } else {
+                // SAFETY: Preserving existing behaviour for identifier deserialization within type
+                // tags and inputs.
+                unsafe { Ok(Identifier::new_unchecked(s)) }
+            }
+        };
+
+        Ok(match type_input {
+            I::Bool => T::Bool,
+            I::U8 => T::U8,
+            I::U16 => T::U16,
+            I::U32 => T::U32,
+            I::U64 => T::U64,
+            I::U128 => T::U128,
+            I::U256 => T::U256,
+            I::Address => T::Address,
+            I::Signer => T::Signer,
+            I::Vector(t) => T::Vector(Box::new(to_type_tag(context, *t)?)),
+            I::Struct(s) => {
+                let StructInput {
+                    address,
+                    module,
+                    name,
+                    type_params,
+                } = *s;
+                let defining_id = context
+                    .linkage
+                    .resolve_type_to_defining_id(
+                        context.ctx.linkage_analyzer.resolver(),
+                        address.into(),
+                        module.clone(),
+                        name.clone(),
+                    )
+                    .ok_or_else(|| {
+                        ExecutionError::new_with_source(
+                            ExecutionErrorKind::TypeArgumentError {
+                                argument_idx: 0,
+                                kind: TypeArgumentError::TypeNotFound,
+                            },
+                            format!("Unable to resolve type input: {address}::{module}::{name}"),
                         )
-                        .ok_or_else(|| {
-                            ExecutionError::new_with_source(
-                                ExecutionErrorKind::TypeArgumentError {
-                                    argument_idx: 0,
-                                    kind: TypeArgumentError::TypeNotFound,
-                                },
-                                format!(
-                                    "Unable to resolve type input: {address}::{module}::{name}"
-                                ),
-                            )
-                        })?;
-                    let type_params = type_params
-                        .into_iter()
-                        .map(|t| into_type_tag(context, t))
-                        .collect::<Result<_, _>>()?;
-                    T::Struct(Box::new(StructTag {
-                        address: defining_id.into(),
-                        module: Identifier::new(module).map_err(|e| {
-                            ExecutionError::new_with_source(
-                                ExecutionErrorKind::VMInvariantViolation,
-                                e.to_string(),
-                            )
-                        })?,
-                        name: Identifier::new(name).map_err(|e| {
-                            ExecutionError::new_with_source(
-                                ExecutionErrorKind::VMInvariantViolation,
-                                e.to_string(),
-                            )
-                        })?,
-                        type_params,
-                    }))
-                }
-            })
-        }
-        // TODO(vm-rewrite): simplify this when we remove this protocol-gate check as this will be
-        // in an execution version greater than when this was turned on.
-        if context.ctx.protocol_config.validate_identifier_inputs() {
-            into_type_tag(context, type_input)
-        } else {
-            // SAFETY: Preserving existing behaviour for identifier deserialization within type
-            // tags and inputs.
-            Ok(unsafe { type_input.into_type_tag_unchecked() })
-        }
+                    })?;
+                let type_params = type_params
+                    .into_iter()
+                    .map(|t| to_type_tag(context, t))
+                    .collect::<Result<_, _>>()?;
+                T::Struct(Box::new(StructTag {
+                    address: defining_id.into(),
+                    module: to_ident(module)?,
+                    name: to_ident(name)?,
+                    type_params,
+                }))
+            }
+        })
     }
 
     fn load_type_input(
@@ -1640,7 +1635,6 @@ mod checked {
 
     /// Returns Some(layout) iff it is a primitive, an ID, a String, or an option/vector of a valid type
     fn primitive_serialization_layout(
-        context: &mut LinkedContext<'_, '_, '_, '_>,
         param_ty: &TypeTag,
     ) -> Result<Option<PrimitiveArgumentLayout>, ExecutionError> {
         Ok(match param_ty {
@@ -1655,7 +1649,7 @@ mod checked {
             TypeTag::Address => Some(PrimitiveArgumentLayout::Address),
 
             TypeTag::Vector(inner) => {
-                let info_opt = primitive_serialization_layout(context, inner)?;
+                let info_opt = primitive_serialization_layout(inner)?;
                 info_opt.map(|layout| PrimitiveArgumentLayout::Vector(Box::new(layout)))
             }
             TypeTag::Struct(struct_tag) => {
@@ -1667,7 +1661,7 @@ mod checked {
                 let targs = &struct_tag.type_params;
                 // is option of a string
                 if resolved_struct == RESOLVED_STD_OPTION && targs.len() == 1 {
-                    let info_opt = primitive_serialization_layout(context, &targs[0])?;
+                    let info_opt = primitive_serialization_layout(&targs[0])?;
                     info_opt.map(|layout| PrimitiveArgumentLayout::Option(Box::new(layout)))
                 } else if targs.is_empty() {
                     if resolved_struct == RESOLVED_SUI_ID {

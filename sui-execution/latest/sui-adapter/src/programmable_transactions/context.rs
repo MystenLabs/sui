@@ -127,6 +127,7 @@ mod checked {
         /// The specified linkage for this linked context.
         /// This is a mapping of runtime_id -> storage_id
         pub linkage: ResolvedLinkage,
+        pub ephemeral_package: Option<MovePackage>,
     }
 
     impl<'ctx, 'vm, 'state, 'a> LinkedContext<'ctx, 'vm, 'state, 'a> {
@@ -143,6 +144,7 @@ mod checked {
                 ctx,
                 linkage,
                 vm_instance,
+                ephemeral_package: None,
             })
         }
 
@@ -155,16 +157,32 @@ mod checked {
                 ctx,
                 linkage,
                 vm_instance,
+                ephemeral_package: None,
             }
         }
 
-        pub fn destroy(self) -> NativeContextExtensions<'state> {
-            let Self {
+        pub fn new_with_vm_publication_instance(
+            ctx: &'ctx mut ExecutionContext<'vm, 'state, 'a>,
+            vm_instance: MoveVM<'state>,
+            linkage: ResolvedLinkage,
+            ephemeral_package: MovePackage,
+        ) -> Self {
+            Self {
+                ctx,
+                linkage,
                 vm_instance,
+                ephemeral_package: Some(ephemeral_package),
+            }
+        }
+
+        pub fn destroy_publication_context(self) -> Option<MovePackage> {
+            let Self {
+                vm_instance: _,
                 ctx: _,
                 linkage: _,
+                ephemeral_package,
             } = self;
-            vm_instance.into_extensions()
+            ephemeral_package
         }
 
         //---------------------------------------------------------------------------
@@ -213,8 +231,12 @@ mod checked {
             crate::error::convert_vm_error(
                 error,
                 &self.linkage,
-                &SuiDataStore::new(&self.ctx.state_view, &self.ctx.new_packages),
-                &self.ctx.protocol_config,
+                &SuiDataStore::new_with_ephemeral(
+                    &self.ctx.state_view,
+                    &self.ctx.new_packages,
+                    self.ephemeral_package.as_ref(),
+                ),
+                self.ctx.protocol_config,
             )
         }
 
@@ -602,7 +624,7 @@ mod checked {
             make_object_value(
                 self.ctx.protocol_config,
                 self.ctx.linkage_analyzer,
-                &self.ctx.vm,
+                self.ctx.vm,
                 &state,
                 type_,
                 has_public_transfer,
@@ -615,8 +637,7 @@ mod checked {
             &'outer_context mut self,
             runtime_id: AccountAddress,
             pkg: MovePackage,
-        ) -> Result<(LinkedContext<'outer_context, 'vm, 'state, 'a>, MovePackage), ExecutionError>
-        {
+        ) -> Result<LinkedContext<'outer_context, 'vm, 'state, 'a>, ExecutionError> {
             // // TODO: publish_module_bundle() currently doesn't charge gas.
             // // Do we want to charge there?
             let serialized_package = pkg.into_serialized_move_package();
@@ -640,9 +661,8 @@ mod checked {
                 .resolver()
                 .publication_linkage(vm.linkage_context(), &data_store)?;
             let [pkg] = new_packages;
-            Ok((
-                LinkedContext::new_with_vm_instance(self.ctx, vm, linkage),
-                pkg,
+            Ok(LinkedContext::new_with_vm_publication_instance(
+                self.ctx, vm, linkage, pkg,
             ))
         }
 

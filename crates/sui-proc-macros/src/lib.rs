@@ -41,6 +41,7 @@ pub fn init_static_initializers(_args: TokenStream, item: TokenStream) -> TokenS
                 ::sui_simulator::sui_types::execution::get_denied_certificates();
                 ::sui_simulator::sui_framework::BuiltInFramework::all_package_ids();
                 ::sui_simulator::sui_types::gas::SuiGasStatus::new_unmetered();
+                ::sui_simulator::sui_execution::init_vm_for_msim();
 
                 // For reasons I can't understand, LruCache causes divergent behavior the second
                 // time one is constructed and inserted into, so construct one before the first

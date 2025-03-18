@@ -501,6 +501,12 @@ def generate_lib(output_file: TextIO):
                 f"{spc}{feature or version} => Box::new({cut}::{call}),"
                 for (version, feature, cut) in cuts
             )
+        elif var == "INIT_CUTS":
+            call = "init_vm_for_msim()"
+            return "\n".join(
+                f"{cut}::{call};"
+                for (version, feature, cut) in cuts
+            )
         else:
             raise Exception(f"Don't know how to substitute {var}")
 

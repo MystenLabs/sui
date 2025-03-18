@@ -10,7 +10,7 @@ use move_vm_runtime::{
 };
 use move_vm_runtime::{native_charge_gas_early_exit, natives::functions::NativeContext};
 use smallvec::smallvec;
-use std::{cell::RefCell, collections::VecDeque, rc::Rc};
+use std::collections::VecDeque;
 use sui_types::{base_types::ObjectID, digests::TransactionDigest};
 
 use crate::{

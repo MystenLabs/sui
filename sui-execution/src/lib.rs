@@ -61,3 +61,13 @@ pub fn verifier<'m>(
         v => panic!("Unsupported execution version {v}"),
     }
 }
+
+#[cfg(msim)]
+/// Initialize the VM for MSIM -- MSIM doesn't like any global statics that are unititialized. This
+/// function is called by the MSIM runtime to initialize the VM and any statics/globals in it.
+pub fn init_vm_for_msim() {
+    v0::init_vm_for_msim();
+    v1::init_vm_for_msim();
+    v2::init_vm_for_msim();
+    latest::init_vm_for_msim();
+}

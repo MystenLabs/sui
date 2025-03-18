@@ -63,3 +63,6 @@ tracing = [
     "move-vm-config/tracing",
     "move-vm-profiler/tracing",
 ]
+
+[lints.rust]
+unexpected_cfgs = { level = "warn", check-cfg = ['cfg(msim)'] }

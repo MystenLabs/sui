@@ -17,9 +17,7 @@ use move_binary_format::CompiledModule;
 use move_bytecode_utils::module_cache::GetModule;
 use move_core_types::resolver::SerializedPackage;
 use move_core_types::{
-    account_address::AccountAddress,
-    language_storage::{ModuleId, StructTag},
-    resolver::ModuleResolver,
+    account_address::AccountAddress, language_storage::ModuleId, resolver::ModuleResolver,
 };
 use prometheus::Registry;
 use serde::{Deserialize, Serialize};
@@ -54,7 +52,7 @@ use sui_types::{
     gas::SuiGasStatus,
     inner_temporary_store::InnerTemporaryStore,
     metrics::LimitsMetrics,
-    object::{Data, Object, Owner},
+    object::{Object, Owner},
     storage::get_module_by_id,
     storage::{BackingPackageStore, ChildObjectResolver, ObjectStore, ParentSync},
     transaction::{
