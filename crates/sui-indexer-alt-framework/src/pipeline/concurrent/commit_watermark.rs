@@ -16,10 +16,11 @@ use tokio_util::sync::CancellationToken;
 use tracing::{debug, error, info, warn};
 
 use crate::{
-    db::Db,
     metrics::{CheckpointLagMetricReporter, IndexerMetrics},
     models::watermarks::CommitterWatermark,
+    pg_store::PgStore,
     pipeline::{logging::WatermarkLogger, CommitterConfig, WatermarkPart, WARN_PENDING_WATERMARKS},
+    store::Store,
 };
 
 use super::Handler;
@@ -49,7 +50,7 @@ pub(super) fn commit_watermark<H: Handler + 'static>(
     config: CommitterConfig,
     skip_watermark: bool,
     mut rx: mpsc::Receiver<Vec<WatermarkPart>>,
-    db: Db,
+    store: PgStore,
     metrics: Arc<IndexerMetrics>,
     cancel: CancellationToken,
 ) -> JoinHandle<()> {
@@ -102,11 +103,6 @@ pub(super) fn commit_watermark<H: Handler + 'static>(
                             "Pipeline has a large number of pending commit watermarks",
                         );
                     }
-
-                    let Ok(mut conn) = db.connect().await else {
-                        warn!(pipeline = H::NAME, "Commit watermark task failed to get connection for DB");
-                        continue;
-                    };
 
                     // Check if the pipeline's watermark needs to be updated
                     let guard = metrics
@@ -188,9 +184,11 @@ pub(super) fn commit_watermark<H: Handler + 'static>(
                             .with_label_values(&[H::NAME])
                             .start_timer();
 
+                        // TODO (wlmyng): non-pg store - or maintain the watermark.update(conn)? expose a conn?
+
                         // TODO: If initial_watermark is empty, when we update watermark
                         // for the first time, we should also update the low watermark.
-                        match watermark.update(&mut conn).await {
+                        match store.update_committer_watermark(&watermark).await {
                             // If there's an issue updating the watermark, log it but keep going,
                             // it's OK for the watermark to lag from a correctness perspective.
                             Err(e) => {

@@ -14,7 +14,7 @@ use crate::FieldCount;
 
 #[derive(Insertable, Selectable, Queryable, Debug, Clone, FieldCount)]
 #[diesel(table_name = watermarks)]
-pub(crate) struct StoredWatermark {
+pub struct StoredWatermark {
     pub pipeline: String,
     pub epoch_hi_inclusive: i64,
     pub checkpoint_hi_inclusive: i64,
@@ -28,7 +28,7 @@ pub(crate) struct StoredWatermark {
 /// Fields that the committer is responsible for setting.
 #[derive(AsChangeset, Selectable, Queryable, Debug, Clone, FieldCount)]
 #[diesel(table_name = watermarks)]
-pub(crate) struct CommitterWatermark<'p> {
+pub struct CommitterWatermark<'p> {
     pub pipeline: Cow<'p, str>,
     pub epoch_hi_inclusive: i64,
     pub checkpoint_hi_inclusive: i64,
@@ -38,14 +38,14 @@ pub(crate) struct CommitterWatermark<'p> {
 
 #[derive(AsChangeset, Selectable, Queryable, Debug, Clone, FieldCount)]
 #[diesel(table_name = watermarks)]
-pub(crate) struct ReaderWatermark<'p> {
+pub struct ReaderWatermark<'p> {
     pub pipeline: Cow<'p, str>,
     pub reader_lo: i64,
 }
 
 #[derive(Queryable, Debug, Clone, FieldCount, PartialEq, Eq)]
 #[diesel(table_name = watermarks)]
-pub(crate) struct PrunerWatermark<'p> {
+pub struct PrunerWatermark<'p> {
     /// The pipeline in question
     pub pipeline: Cow<'p, str>,
 

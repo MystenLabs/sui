@@ -5,6 +5,7 @@ use std::{collections::BTreeMap, sync::Arc};
 
 use futures::stream::FuturesUnordered;
 use futures::StreamExt;
+use sui_pg_db::Db;
 use tokio::{
     sync::Semaphore,
     task::JoinHandle,
@@ -14,10 +15,10 @@ use tokio_util::sync::CancellationToken;
 use tracing::{debug, error, info, warn};
 
 use crate::{
-    db::Db,
     metrics::IndexerMetrics,
-    models::watermarks::PrunerWatermark,
+    pg_store::PgStore,
     pipeline::logging::{LoggerWatermark, WatermarkLogger},
+    store::Store,
 };
 
 use super::{Handler, PrunerConfig};
@@ -98,7 +99,7 @@ impl PendingRanges {
 pub(super) fn pruner<H: Handler + Send + Sync + 'static>(
     handler: Arc<H>,
     config: Option<PrunerConfig>,
-    db: Db,
+    store: PgStore,
     metrics: Arc<IndexerMetrics>,
     cancel: CancellationToken,
 ) -> JoinHandle<()> {
@@ -142,12 +143,7 @@ pub(super) fn pruner<H: Handler + Send + Sync + 'static>(
                         .with_label_values(&[H::NAME])
                         .start_timer();
 
-                    let Ok(mut conn) = db.connect().await else {
-                        warn!(pipeline = H::NAME, "Pruner failed to connect, while fetching watermark");
-                        continue;
-                    };
-
-                    match PrunerWatermark::get(&mut conn, H::NAME, config.delay()).await {
+                    match store.get_pruner_watermark(H::NAME, config.delay()).await {
                         Ok(Some(current)) => {
                             guard.stop_and_record();
                             current
@@ -205,9 +201,10 @@ pub(super) fn pruner<H: Handler + Send + Sync + 'static>(
             for (from, to_exclusive) in pending_prune_ranges.iter() {
                 let semaphore = semaphore.clone();
                 let cancel = cancel.child_token();
-                let db = db.clone();
                 let metrics = metrics.clone();
                 let handler = handler.clone();
+
+                let db = store.db.clone();
 
                 tasks.push(tokio::spawn(async move {
                     let _permit = tokio::select! {
@@ -258,16 +255,8 @@ pub(super) fn pruner<H: Handler + Send + Sync + 'static>(
                         .with_label_values(&[H::NAME])
                         .start_timer();
 
-                    let Ok(mut conn) = db.connect().await else {
-                        warn!(
-                            pipeline = H::NAME,
-                            "Pruner failed to connect, while updating watermark"
-                        );
-                        continue;
-                    };
-
                     db_watermark.pruner_hi = highest_pruned;
-                    match db_watermark.update(&mut conn).await {
+                    match store.update_pruner_watermark(&db_watermark).await {
                         Err(e) => {
                             let elapsed = guard.stop_and_record();
                             error!(
@@ -295,6 +284,7 @@ pub(super) fn pruner<H: Handler + Send + Sync + 'static>(
     })
 }
 
+// TODO (wlmyng): non-pg store - requires conn too
 async fn prune_task_impl<H: Handler + Send + Sync + 'static>(
     metrics: Arc<IndexerMetrics>,
     db: Db,

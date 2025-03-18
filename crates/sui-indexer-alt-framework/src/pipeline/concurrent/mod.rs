@@ -12,6 +12,7 @@ use crate::{
     db::{self, Db},
     metrics::IndexerMetrics,
     models::watermarks::CommitterWatermark,
+    pg_store::PgStore,
     types::full_checkpoint_content::CheckpointData,
     FieldCount,
 };
@@ -256,19 +257,25 @@ pub(crate) fn pipeline<H: Handler + Send + Sync + 'static>(
         committer_config,
         skip_watermark,
         watermark_rx,
-        db.clone(),
+        PgStore::new(db.clone()),
         metrics.clone(),
         cancel,
     );
 
     let reader_watermark = reader_watermark::<H>(
         pruner_config.clone(),
-        db.clone(),
+        PgStore::new(db.clone()),
         metrics.clone(),
         pruner_cancel.clone(),
     );
 
-    let pruner = pruner(handler, pruner_config, db, metrics, pruner_cancel.clone());
+    let pruner = pruner(
+        handler,
+        pruner_config,
+        PgStore::new(db.clone()),
+        metrics,
+        pruner_cancel.clone(),
+    );
 
     tokio::spawn(async move {
         let (_, _, _, _) = futures::join!(processor, collector, committer, commit_watermark);
