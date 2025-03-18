@@ -3,11 +3,11 @@
 
 use futures::future::join_all;
 use rand::rngs::OsRng;
-use sui_json_rpc::authority_state::StateRead;
 use std::collections::BTreeSet;
 use std::sync::Arc;
 use std::time::Duration;
 use sui_core::consensus_adapter::position_submit_certificate;
+use sui_json_rpc::authority_state::StateRead;
 use sui_json_rpc_types::SuiTransactionBlockEffectsAPI;
 use sui_macros::sim_test;
 use sui_node::SuiNodeHandle;
@@ -1115,20 +1115,18 @@ async fn execute_add_validator_transactions(
         .1
         .object_ref();
 
-    execute_add_stake_transaction(test_cluster, address, stake_amount.unwrap_or(MIN_VALIDATOR_JOINING_STAKE_MIST)).await;
+    execute_add_stake_transaction(
+        test_cluster,
+        address,
+        stake_amount.unwrap_or(MIN_VALIDATOR_JOINING_STAKE_MIST),
+    )
+    .await;
 
     let rgp = test_cluster.get_reference_gas_price().await;
-    // let stake_tx = TestTransactionBuilder::new(address, gas, rgp)
-    //     .call_staking(stake_coin, address)
-    //     .build_and_sign(&new_validator.account_key_pair);
-    // test_cluster.execute_transaction(stake_tx).await;
-
     let gas = test_cluster.wallet.get_object_ref(gas.0).await.unwrap();
     let tx = TestTransactionBuilder::new(address, gas, rgp)
         .call_request_add_validator()
         .build_and_sign(&new_validator.account_key_pair);
-
-
 
     test_cluster.execute_transaction(tx).await;
 
