@@ -11,11 +11,14 @@ use std::{
 };
 use sui_core::authority::AuthorityState;
 use sui_macros::*;
-use sui_swarm_config::genesis_config::{AccountConfig, DEFAULT_GAS_AMOUNT};
+use sui_swarm_config::genesis_config::{
+    AccountConfig, DEFAULT_GAS_AMOUNT,
+};
 use sui_test_transaction_builder::TestTransactionBuilder;
 use sui_types::effects::{TransactionEffects, TransactionEffectsAPI};
 use sui_types::{
     base_types::{ObjectID, ObjectRef, SuiAddress},
+    governance::StakedSui,
     object::{Object, Owner},
     programmable_transaction_builder::ProgrammableTransactionBuilder,
     storage::ObjectStore,
@@ -29,8 +32,8 @@ use sui_types::{
 use test_cluster::{TestCluster, TestClusterBuilder};
 use tracing::info;
 
-const MAX_DELEGATION_AMOUNT: u64 = 10_000_000_000;
-const MIN_DELEGATION_AMOUNT: u64 = 1_000_000_000;
+const MAX_DELEGATION_AMOUNT: u64 = 1_000_000_000_000_000; // 1M SUI
+const MIN_DELEGATION_AMOUNT: u64 = 500_000_000_000_000; // 0.5M SUI
 
 macro_rules! move_call {
     {$builder:expr, ($addr:expr)::$module_name:ident::$func:ident($($args:expr),* $(,)?)} => {
@@ -54,7 +57,7 @@ trait StatePredicate {
     async fn run(&mut self, runner: &mut StressTestRunner) -> Result<TransactionEffects>;
     async fn pre_epoch_post_condition(
         &mut self,
-        runner: &StressTestRunner,
+        runner: &mut StressTestRunner,
         effects: &TransactionEffects,
     );
     #[allow(unused)]
@@ -81,8 +84,9 @@ struct StressTestRunner {
 }
 
 impl StressTestRunner {
-    pub async fn new() -> Self {
+    pub async fn new(size: usize) -> Self {
         let test_cluster = TestClusterBuilder::new()
+            .with_num_validators(size) // number of validators has to exceed 10
             .with_accounts(vec![
                 AccountConfig {
                     gas_amounts: vec![DEFAULT_GAS_AMOUNT],
@@ -309,7 +313,7 @@ mod add_stake {
 
         async fn pre_epoch_post_condition(
             &mut self,
-            runner: &StressTestRunner,
+            runner: &mut StressTestRunner,
             effects: &TransactionEffects,
         ) {
             // Assert that a `StakedSui` object matching the amount delegated is created.
@@ -318,16 +322,29 @@ mod add_stake {
                 .get_created_object_of_type_name(effects, "StakedSui")
                 .await
                 .unwrap();
-            let state = runner.state();
-            let cache = state.get_backing_package_store();
-            let epoch_store = state.load_epoch_store_one_call_per_task();
-            let mut layout_resolver = epoch_store
-                .executor()
-                .type_layout_resolver(Box::new(cache.as_ref()));
-            let staked_amount =
-                object.get_total_sui(layout_resolver.as_mut()).unwrap() - object.storage_rebate;
-            assert_eq!(staked_amount, self.stake_amount);
+
+            // Testing via effects
+            {
+                let state = runner.state();
+                let cache = state.get_backing_package_store();
+                let epoch_store = state.load_epoch_store_one_call_per_task();
+                let mut layout_resolver = epoch_store
+                    .executor()
+                    .type_layout_resolver(Box::new(cache.as_ref()));
+                let staked_amount =
+                    object.get_total_sui(layout_resolver.as_mut()).unwrap() - object.storage_rebate;
+                assert_eq!(staked_amount, self.stake_amount);
+            };
+
+            // Get object contents and make sure that the values in it are correct.
+            let staked_sui: StakedSui =
+                bcs::from_bytes(object.data.try_as_move().unwrap().contents()).unwrap();
+
+            assert_eq!(staked_sui.principal(), self.stake_amount);
             assert_eq!(object.owner.get_owner_address().unwrap(), self.sender);
+
+            // Keep track of all delegations, we will need it in stake withdrawals.
+            runner.delegations.insert(object.id(), self.staked_with);
             runner.display_effects(effects);
         }
 
@@ -344,20 +361,41 @@ mod add_stake {
 #[sim_test]
 async fn fuzz_dynamic_committee() {
     let num_operations = 10;
+    let committee_size = 20;
 
     // Add more actions here as we create them
+    let mut runner = StressTestRunner::new(committee_size).await;
     let actions = [Box::new(add_stake::RequestAddStakeGen)];
 
-    let mut runner = StressTestRunner::new().await;
-
-    for i in 0..num_operations {
-        if i == 5 {
-            runner.change_epoch().await;
-            continue;
-        }
+    for _ in 0..num_operations {
         let index = runner.rng.gen_range(0..actions.len());
         let mut task = actions[index].create(&mut runner);
         let effects = task.run(&mut runner).await.unwrap();
-        task.pre_epoch_post_condition(&runner, &effects).await;
+        task.pre_epoch_post_condition(&mut runner, &effects).await;
     }
+
+    // Advance epoch to see the resulting state.
+    runner.change_epoch().await;
+
+    // Collect information about total stake of validators, and then check if each validator's
+    // voting power is the right % of the total stake.
+    let active_validators = runner.system_state().active_validators;
+    let total_stake = active_validators
+        .iter()
+        .fold(0, |acc, v| acc + v.staking_pool_sui_balance);
+
+    // Use the formula for voting_power from Sui System to check if the voting power is correctly
+    // set. See `crates/sui-framework/packages/sui-system/sources/voting_power.move`.
+    // Validator voting power in a larger setup cannot exceed 1000.
+    // The remaining voting power is redistributed to the remaining validators.
+    //
+    // Note: this is a simplified condition with the assumption that no node can have more than
+    //  1000 voting power due to the number of validators being 20. If this was not the case, we'd
+    //  have to calculate remainder voting power and redistribute it to the remaining validators.
+    active_validators.iter().for_each(|v| {
+        assert!(v.voting_power <= 1_000); // limitation
+        let calculated_power =
+            ((v.staking_pool_sui_balance as u128 * 10_000) / total_stake as u128).min(1_000) as u64;
+        assert!(v.voting_power.abs_diff(calculated_power) < 2); // rounding error correction
+    });
 }
