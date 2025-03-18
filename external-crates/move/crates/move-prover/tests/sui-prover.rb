@@ -1,6 +1,8 @@
 class SuiProver < Formula
   desc "Sui Prover - a tool for verifying Move smart contracts on the Sui blockchain"
-  homepage "https://github.com/asymptotic-code/sui"
+  homepage "https://github.com/asymptotic-code/sui" 
+  url "https://github.com/asymptotic-code/sui" branch: "${{ github.ref_name }}"
+  version "1.0.0"
   license "Apache-2.0"
 
   depends_on "dotnet@8"
@@ -12,7 +14,7 @@ class SuiProver < Formula
     # This means you should fetch it in your GitHub Action and pass the path to Homebrew
 
     # Install Rust package from the local source
-    system "cargo", "install", "--locked", "--path", "#{buildpath}/crates/sui-move", "--features", "all"
+    system "cargo", "install", "--locked", "--path", "./crates/sui-move", "--features", "all"
 
     libexec.install "#{buildpath}/target/release/sui-move"
 
