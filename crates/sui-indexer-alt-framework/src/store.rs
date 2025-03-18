@@ -4,6 +4,7 @@
 use crate::models::watermarks::{
     CommitterWatermark, PrunerWatermark, ReaderWatermark, StoredWatermark,
 };
+pub use crate::pipeline::sequential::Handler as SequentialHandler;
 use async_trait::async_trait;
 use diesel_async::scoped_futures::ScopedFuture;
 use std::future::Future;
@@ -81,4 +82,19 @@ pub trait WatermarkStore: Send + Sync + 'static + Clone {
         &self,
         watermark: &PrunerWatermark<'_>,
     ) -> anyhow::Result<bool>;
+}
+
+pub trait Store: Database + WatermarkStore {}
+
+pub type HandlerBatch<H, C> = <H as SequentialHandler<C>>::Batch;
+
+#[async_trait]
+pub trait TransactionalStore: Database + WatermarkStore {
+    /// Execute a handler's commit function and update the watermark within a transaction
+    async fn transactional_commit_with_watermark<H>(
+        &self,
+        watermark: &CommitterWatermark<'static>,
+    ) -> anyhow::Result<usize>;
+    // where
+    // H: for<'c> SequentialHandler<Self::Connection<'c>> + Send + Sync;
 }

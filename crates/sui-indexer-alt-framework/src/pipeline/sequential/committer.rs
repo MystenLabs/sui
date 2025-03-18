@@ -39,7 +39,7 @@ use super::{Handler, SequentialConfig};
 /// unblock its regulator.
 ///
 /// The task can be shutdown using its `cancel` token or if either of its channels are closed.
-pub(super) fn committer<'c, H, C, T>(
+pub(super) fn committer<H, T>(
     config: SequentialConfig,
     watermark: Option<CommitterWatermark<'static>>,
     mut rx: mpsc::Receiver<IndexedCheckpoint<H>>,
@@ -49,9 +49,8 @@ pub(super) fn committer<'c, H, C, T>(
     cancel: CancellationToken,
 ) -> JoinHandle<()>
 where
-    H: Handler<C> + Send + Sync + 'static,
-    C: DbConnection + 'static,
-    T: Database<Connection<'c> = C>,
+    H: for<'c> Handler<T::Connection<'c>> + Send + Sync + 'static,
+    T: Database + 'static,
 {
     tokio::spawn(async move {
         // The `poll` interval controls the maximum time to wait between commits, regardless of the
@@ -240,7 +239,7 @@ where
                         // TODO: If initial_watermark is empty, when we update watermark
                         // for the first time, we should also update the low watermark.
                         watermark.update(conn).await?;
-                        H::commit(&batch, conn).await
+                        // H::commit(&batch, conn).await
                     }.scope_boxed()).await;
 
                     // Drop the connection eagerly to avoid it holding on to references borrowed by

@@ -97,7 +97,7 @@ pub struct SequentialConfig {
 /// channels are created to communicate between its various components. The pipeline can be
 /// shutdown using its `cancel` token, and will also shutdown if any of its input or output
 /// channels close, or any of its independent tasks fail.
-pub(crate) fn pipeline<'c, H, C, T>(
+pub(crate) fn pipeline<H, T>(
     handler: H,
     initial_watermark: Option<CommitterWatermark<'static>>,
     config: SequentialConfig,
@@ -108,9 +108,8 @@ pub(crate) fn pipeline<'c, H, C, T>(
     cancel: CancellationToken,
 ) -> JoinHandle<()>
 where
-    H: Handler<C> + Send + Sync + 'static,
-    C: DbConnection + 'static,
-    T: Database<Connection<'c> = C>,
+    H: for<'c> Handler<T::Connection<'c>> + Send + Sync + 'static,
+    T: Database + 'static,
 {
     let (processor_tx, committer_rx) = mpsc::channel(H::FANOUT + PIPELINE_BUFFER);
 
@@ -122,7 +121,7 @@ where
         cancel.clone(),
     );
 
-    let committer = committer::<H, C, T>(
+    let committer = committer::<H, T>(
         config,
         initial_watermark,
         committer_rx,

@@ -13,15 +13,16 @@ use futures::future;
 use ingestion::{client::IngestionClient, ClientArgs, IngestionConfig, IngestionService};
 use metrics::IndexerMetrics;
 use models::watermarks::{CommitterWatermark, PrunerWatermark};
+use pg_store::PgStore;
 use pipeline::{
     concurrent::{self, ConcurrentConfig},
-    sequential::{self, SequentialConfig},
+    sequential::{self, Handler, SequentialConfig},
     Processor,
 };
 use prometheus::Registry;
 use store::{Database, DbConnection};
 use sui_indexer_alt_metrics::db::DbConnectionStatsCollector;
-use sui_pg_db::{temp::TempDb, Db, DbArgs};
+use sui_pg_db::{temp::TempDb, Connection, Db, DbArgs};
 use tempfile::tempdir;
 use tokio::task::JoinHandle;
 use tokio_util::sync::CancellationToken;
@@ -283,15 +284,13 @@ impl Indexer {
     ///
     /// The pipeline can optionally be configured to lag behind the ingestion service by a fixed
     /// number of checkpoints (configured by `checkpoint_lag`).
-    pub async fn sequential_pipeline<'c, H, C, T>(
+    pub async fn sequential_pipeline<H>(
         &mut self,
         handler: H,
         config: SequentialConfig,
     ) -> Result<()>
     where
-        H: sequential::Handler<C> + Send + Sync + 'static,
-        C: DbConnection + 'static,
-        T: Database<Connection<'c> = C>,
+        H: for<'c> Handler<Connection<'c>> + Send + Sync + 'static,
     {
         let Some(watermark) = self.add_pipeline::<H>(false).await? else {
             return Ok(());
@@ -310,11 +309,14 @@ impl Indexer {
 
         let (checkpoint_rx, watermark_tx) = self.ingestion_service.subscribe();
 
-        self.handles.push(sequential::pipeline(
+        let db = PgStore::new(self.db.clone());
+
+        // Use turbofish to explicitly specify the types
+        self.handles.push(sequential::pipeline::<H, PgStore>(
             handler,
             watermark,
             config,
-            self.db.clone(),
+            db,
             checkpoint_rx,
             watermark_tx,
             self.metrics.clone(),
