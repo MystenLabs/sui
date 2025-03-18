@@ -226,6 +226,8 @@ pub(super) fn committer<H: Handler + 'static>(
                         continue;
                     };
 
+
+                    // TODO (wlmyng): non-pg store - requires consistent/atomic/transactional updates
                     // Write all the object updates out along with the watermark update, in a
                     // single transaction. The handler's `commit` implementation is responsible for
                     // chunking up the writes into a manageable size.

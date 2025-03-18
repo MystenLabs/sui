@@ -39,8 +39,10 @@ pub mod handlers;
 pub mod ingestion;
 pub(crate) mod metrics;
 pub mod models;
+pub mod pg_store;
 pub mod pipeline;
 pub mod schema;
+pub mod store;
 pub mod task;
 
 const MIGRATIONS: EmbeddedMigrations = embed_migrations!("migrations");
@@ -69,7 +71,9 @@ pub struct IndexerArgs {
     pub skip_watermark: bool,
 }
 
+// TODO (wlmyng): pg agnostic - something like Indexer<Store>
 pub struct Indexer {
+    // TODO (wlmyng): pg agnostic
     /// Connection pool to the database.
     db: Db,
 
