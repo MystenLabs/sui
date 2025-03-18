@@ -18,7 +18,7 @@ class SuiProver < Formula
   depends_on "z3"
 
   def install
-    system "cargo", "install", "--locked", "--path", "./crates/sui-move", "--features", "all"
+    system "cargo", "install", "--locked", "--path", "./crates/sui-move", "--features", "build"
 
     libexec.install "target/release/sui-move"
 

@@ -10,11 +10,13 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Install dependencies from formula
+      - name: Install dependencies from formula & build prover
         run: |
           brew update
-          export BRANCH=${{ github.ref_name }}
+          export BRANCH=${{ github.head_ref || github.ref_name }}
           brew install --formula ./external-crates/move/crates/move-prover/tests/sui-prover.rb
 
-      - name: Run the built application
-        run: sui-move build --prove
+      - name: Run the prover
+        run: |
+          cd ./crates/sui-framework/packages/prover
+          sui-move build --prove
