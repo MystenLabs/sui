@@ -1,6 +1,7 @@
 // Copyright (c) The Move Contributors
 // SPDX-License-Identifier: Apache-2.0
 
+import * as crypto from 'crypto';
 import * as fs from 'fs';
 import * as path from 'path';
 import { ModuleInfo } from './utils';
@@ -39,7 +40,8 @@ interface JSONSrcFunctionMapEntry {
 }
 
 interface JSONSrcRootObject {
-    version?: number;
+    version?: number; // introduced in debug info v1
+    from_file_path?: string; // introduced in debug info v2
     definition_location: JSONSrcDefinitionLocation;
     module_name: string[];
     struct_map: Record<string, JSONSrcStructSourceMapEntry>;
@@ -207,15 +209,10 @@ function readDebugInfo(
     debugInfoLinesMap: Map<string, Set<number>>,
     failOnNoSourceFile: boolean,
 ): IDebugInfo | undefined {
-    const sourceMapJSON: JSONSrcRootObject = JSON.parse(fs.readFileSync(debugInfoPath, 'utf8'));
+    const debugInfoJSON: JSONSrcRootObject = JSON.parse(fs.readFileSync(debugInfoPath, 'utf8'));
 
-    const fileHash = Buffer.from(sourceMapJSON.definition_location.file_hash).toString('base64');
-    const modInfo: ModuleInfo = {
-        addr: sourceMapJSON.module_name[0],
-        name: sourceMapJSON.module_name[1]
-    };
-    const functions = new Map<string, IDebugInfoFunction>();
-    const fileInfo = filesMap.get(fileHash);
+    let fileHash = Buffer.from(debugInfoJSON.definition_location.file_hash).toString('base64');
+    let fileInfo = filesMap.get(fileHash);
     if (!fileInfo) {
         if (failOnNoSourceFile) {
             throw new Error('Could not find file with hash: '
@@ -226,10 +223,26 @@ function readDebugInfo(
             return undefined;
         }
     }
+
+    /// If the actual file for which debug information was generated
+    /// still exists, use it as it will likely be "buildable" (after all
+    /// debug info was genrated at build time) and thus will work better
+    /// in the IDE setting (e.g., with IDE's code inspection features).
+    if (debugInfoJSON.from_file_path !== undefined &&
+        fs.existsSync(debugInfoJSON.from_file_path)) {
+        [fileHash, fileInfo] = createFileInfo(debugInfoJSON.from_file_path);
+        filesMap.set(fileHash, fileInfo);
+    }
+
+    const modInfo: ModuleInfo = {
+        addr: debugInfoJSON.module_name[0],
+        name: debugInfoJSON.module_name[1]
+    };
+    const functions = new Map<string, IDebugInfoFunction>();
     const debugInfoLines = debugInfoLinesMap.get(fileHash) ?? new Set<number>;
-    prePopulateDebugInfoLines(sourceMapJSON, fileInfo, debugInfoLines);
+    prePopulateDebugInfoLines(debugInfoJSON, fileInfo, debugInfoLines);
     debugInfoLinesMap.set(fileHash, debugInfoLines);
-    const functionMap = sourceMapJSON.function_map;
+    const functionMap = debugInfoJSON.function_map;
     for (const funEntry of Object.values(functionMap)) {
         let nameStart = funEntry.definition_location.start;
         let nameEnd = funEntry.definition_location.end;
@@ -296,6 +309,33 @@ function readDebugInfo(
         functions.set(funName, { pcLocs, localsInfo: localsNames, startLoc, endLoc });
     }
     return { filePath: fileInfo.path, fileHash, modInfo, functions, optimizedLines: [] };
+}
+
+
+/**
+ * Creates IFileInfo for a file on a given path and returns it along with
+ * the file hash.
+ *
+ * @param filePath path to the file.
+ * @returns a tuple with the file hash and the file info.
+ */
+export function createFileInfo(filePath: string): [string, IFileInfo] {
+    const content = fs.readFileSync(filePath, 'utf8');
+    const numFileHash = computeFileHash(content);
+    const lines = content.split('\n');
+    const fileInfo = { path: filePath, content, lines };
+    const fileHash = Buffer.from(numFileHash).toString('base64');
+    return [fileHash, fileInfo];
+}
+
+/**
+ * Computes the SHA-256 hash of a file's contents.
+ *
+ * @param fileContents contents of the file.
+ */
+function computeFileHash(fileContents: string): Uint8Array {
+    const hash = crypto.createHash('sha256').update(fileContents).digest();
+    return new Uint8Array(hash);
 }
 
 /**
