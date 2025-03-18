@@ -3,7 +3,7 @@ class SuiProver < Formula
   homepage "https://github.com/asymptotic-code/sui"
   license "Apache-2.0"
 
-  branch = ENV["BRANCH"] || "next"
+  branch = ENV["BRANCH_NAME"] || "next"
 
   stable do
     depends_on "dotnet@8"
