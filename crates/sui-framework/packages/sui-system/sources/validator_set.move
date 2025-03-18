@@ -240,10 +240,6 @@ public(package) fun request_add_validator(self: &mut ValidatorSet, ctx: &TxConte
         EDuplicateValidator
     );
     assert!(validator.is_preactive(), EValidatorNotCandidate);
-    if (!self.can_join(validator.total_stake_amount(), ctx)) {
-        std::debug::print(&validator.total_stake_amount());
-    };
-
     assert!(self.can_join(validator.total_stake_amount(), ctx), EMinJoiningStakeNotReached);
 
     self.pending_active_validators.push_back(validator);
