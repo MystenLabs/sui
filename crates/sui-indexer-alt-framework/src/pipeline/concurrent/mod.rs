@@ -11,7 +11,7 @@ use tracing::info;
 use crate::{
     db::{self, Db},
     metrics::IndexerMetrics,
-    models::watermarks::CommitterWatermark,
+    store::CommitterWatermark,
     types::full_checkpoint_content::CheckpointData,
     FieldCount,
 };
@@ -195,7 +195,7 @@ impl Default for PrunerConfig {
 /// reports an issue.
 pub(crate) fn pipeline<H: Handler + Send + Sync + 'static>(
     handler: H,
-    initial_commit_watermark: Option<CommitterWatermark<'static>>,
+    initial_commit_watermark: Option<CommitterWatermark>,
     config: ConcurrentConfig,
     skip_watermark: bool,
     db: Db,
@@ -268,7 +268,13 @@ pub(crate) fn pipeline<H: Handler + Send + Sync + 'static>(
         pruner_cancel.clone(),
     );
 
-    let pruner = pruner(handler, pruner_config, db, metrics, pruner_cancel.clone());
+    let pruner = pruner(
+        handler,
+        pruner_config,
+        db.clone(),
+        metrics,
+        pruner_cancel.clone(),
+    );
 
     tokio::spawn(async move {
         let (_, _, _, _) = futures::join!(processor, collector, committer, commit_watermark);

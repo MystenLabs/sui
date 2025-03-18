@@ -6,7 +6,7 @@ use std::time::Duration;
 pub use processor::Processor;
 use serde::{Deserialize, Serialize};
 
-use crate::models::watermarks::CommitterWatermark;
+use crate::store::CommitterWatermark;
 
 pub mod concurrent;
 mod logging;
@@ -44,14 +44,14 @@ struct IndexedCheckpoint<P: Processor> {
     /// Values to be inserted into the database from this checkpoint
     values: Vec<P::Value>,
     /// The watermark associated with this checkpoint
-    watermark: CommitterWatermark<'static>,
+    watermark: CommitterWatermark,
 }
 
 /// A representation of the proportion of a watermark.
 #[derive(Debug)]
 struct WatermarkPart {
     /// The watermark itself
-    watermark: CommitterWatermark<'static>,
+    watermark: CommitterWatermark,
     /// The number of rows from this watermark that are in this part
     batch_rows: usize,
     /// The total number of rows from this watermark
@@ -89,7 +89,6 @@ impl<P: Processor> IndexedCheckpoint<P> {
     ) -> Self {
         Self {
             watermark: CommitterWatermark {
-                pipeline: P::NAME.into(),
                 epoch_hi_inclusive: epoch as i64,
                 checkpoint_hi_inclusive: cp_sequence_number as i64,
                 tx_hi: tx_hi as i64,
