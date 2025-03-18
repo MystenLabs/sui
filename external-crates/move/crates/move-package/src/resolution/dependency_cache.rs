@@ -67,7 +67,14 @@ impl DependencyCache {
                     return Ok(());
                 }
 
-                if Command::new("git").arg("--version").output().is_err() {
+                if Command::new("git")
+                    .arg("--version")
+                    .stdin(Stdio::null())
+                    .stdout(Stdio::null())
+                    .stderr(Stdio::null())
+                    .output()
+                    .is_err()
+                {
                     writeln!(progress_output, "Git is not installed or not in the PATH.")?;
                     return Err(anyhow::anyhow!("Git is not installed or not in the PATH."));
                 }
@@ -86,6 +93,9 @@ impl DependencyCache {
                     // If the cached folder does not exist, download and clone accordingly
                     if let Ok(mut output) = Command::new("git")
                         .args([OsStr::new("clone"), os_git_url, git_path.as_os_str()])
+                        .stdin(Stdio::null())
+                        .stdout(Stdio::null())
+                        .stderr(Stdio::null())
                         .spawn()
                     {
                         output.wait().map_err(|_| {
@@ -111,6 +121,9 @@ impl DependencyCache {
                             OsStr::new("checkout"),
                             os_git_rev,
                         ])
+                        .stdin(Stdio::null())
+                        .stdout(Stdio::null())
+                        .stderr(Stdio::null())
                         .output()
                         .map_err(|_| {
                             anyhow::anyhow!(
@@ -131,6 +144,9 @@ impl DependencyCache {
                             OsStr::new("--verify"),
                             os_git_rev,
                         ])
+                        .stdin(Stdio::null())
+                        .stdout(Stdio::null())
+                        .stderr(Stdio::null())
                         .output()
                     {
                         if let Ok(parsable_version) = String::from_utf8(rev.stdout) {
@@ -149,6 +165,9 @@ impl DependencyCache {
                             OsStr::new("--list"),
                             os_git_rev,
                         ])
+                        .stdin(Stdio::null())
+                        .stdout(Stdio::null())
+                        .stderr(Stdio::null())
                         .output();
 
                     if let Ok(tag) = tag {
@@ -182,6 +201,9 @@ impl DependencyCache {
                             OsStr::new("fetch"),
                             OsStr::new("origin"),
                         ])
+                        .stdin(Stdio::null())
+                        .stdout(Stdio::null())
+                        .stderr(Stdio::null())
                         .spawn()
                     {
                         output.wait().map_err(|_| {
