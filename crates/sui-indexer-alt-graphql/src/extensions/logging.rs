@@ -1,7 +1,10 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{net::SocketAddr, sync::Arc};
+use std::{
+    net::SocketAddr,
+    sync::{Arc, Mutex},
+};
 
 use async_graphql::{
     extensions::{
@@ -12,10 +15,10 @@ use async_graphql::{
     Response, ServerResult, Value, Variables,
 };
 use serde_json::json;
-use tracing::{debug, info};
+use tracing::{debug, info, warn};
 use uuid::Uuid;
 
-use crate::metrics::RpcMetrics;
+use crate::{error::code, metrics::RpcMetrics};
 
 /// Context data that tracks the session UUID and the client's address, to associate logs with a
 /// particular request.
@@ -24,7 +27,10 @@ pub(crate) struct Session(Uuid, SocketAddr);
 /// This extension is responsible for tracing and recording metrics for various GraphQL queries.
 pub(crate) struct Logging(pub Arc<RpcMetrics>);
 
-struct LoggingExt(pub Arc<RpcMetrics>);
+struct LoggingExt {
+    query: Mutex<Option<String>>,
+    metrics: Arc<RpcMetrics>,
+}
 
 impl Session {
     pub(crate) fn new(addr: SocketAddr) -> Self {
@@ -34,7 +40,10 @@ impl Session {
 
 impl ExtensionFactory for Logging {
     fn create(&self) -> Arc<dyn Extension> {
-        Arc::new(LoggingExt(self.0.clone()))
+        Arc::new(LoggingExt {
+            query: Mutex::new(None),
+            metrics: self.0.clone(),
+        })
     }
 }
 
@@ -47,28 +56,33 @@ impl Extension for LoggingExt {
         operation_name: Option<&str>,
         next: NextExecute<'_>,
     ) -> Response {
-        let Some(Session(uuid, addr)) = ctx.data_opt() else {
-            return next.run(ctx, operation_name).await;
-        };
+        let Session(uuid, addr) = ctx.data_unchecked();
 
-        self.0.queries_received.inc();
-        self.0.queries_in_flight.inc();
+        self.metrics.queries_received.inc();
+        self.metrics.queries_in_flight.inc();
 
-        let guard = self.0.query_latency.start_timer();
+        let guard = self.metrics.query_latency.start_timer();
         let response = next.run(ctx, operation_name).await;
         let elapsed_ms = guard.stop_and_record() * 1000.0;
 
-        debug!(%uuid, %addr, response = %json!(response), "Response");
-
-        self.0.queries_in_flight.dec();
+        self.metrics.queries_in_flight.dec();
         if response.is_ok() {
             info!(%uuid, %addr, elapsed_ms, "Request succeeded");
-            self.0.queries_succeeded.inc();
+            self.metrics.queries_succeeded.inc();
         } else {
-            info!(%uuid, %addr, elapsed_ms, "Request failed");
-            self.0.queries_failed.inc();
+            let codes = error_codes(&response);
+            // Log internal errors and timeouts at a higher log level than other errors.
+            if is_loud_query(&codes) {
+                warn!(%uuid, %addr, query = self.query.lock().unwrap().as_ref().unwrap(), "Query");
+            } else {
+                debug!(%uuid, %addr, query = self.query.lock().unwrap().as_ref().unwrap(), "Query");
+            }
+
+            info!(%uuid, %addr, elapsed_ms, ?codes, "Request failed");
+            self.metrics.queries_failed.inc();
         }
 
+        debug!(%uuid, %addr, response = %json!(response), "Response");
         response
     }
 
@@ -80,12 +94,9 @@ impl Extension for LoggingExt {
         variables: &Variables,
         next: NextParseQuery<'_>,
     ) -> ServerResult<ExecutableDocument> {
-        let Some(Session(uuid, addr)) = ctx.data_opt() else {
-            return next.run(ctx, query, variables).await;
-        };
-
         let doc = next.run(ctx, query, variables).await?;
-        debug!(%uuid, %addr, query = ctx.stringify_execute_doc(&doc, variables), "Query");
+        let query = ctx.stringify_execute_doc(&doc, variables);
+        *self.query.lock().unwrap() = Some(query);
         Ok(doc)
     }
 
@@ -97,15 +108,42 @@ impl Extension for LoggingExt {
         next: NextResolve<'_>,
     ) -> ServerResult<Option<Value>> {
         let labels = &[info.parent_type, info.name];
-        self.0.fields_received.with_label_values(labels).inc();
+        self.metrics.fields_received.with_label_values(labels).inc();
 
         let result = next.run(ctx, info).await;
         if result.is_ok() {
-            self.0.fields_succeeded.with_label_values(labels).inc();
+            self.metrics.fields_succeeded.with_label_values(labels)
         } else {
-            self.0.fields_failed.with_label_values(labels).inc();
+            self.metrics.fields_failed.with_label_values(labels)
         }
+        .inc();
 
         result
     }
+}
+
+/// Get a list of error codes from a GraphQL response. We use these to figure out whether we should
+/// log the query at the `debug` or `info` level.
+fn error_codes(response: &Response) -> Vec<&str> {
+    response
+        .errors
+        .iter()
+        .flat_map(|err| &err.extensions)
+        .flat_map(|ext| ext.get("code"))
+        .filter_map(|code| {
+            if let Value::String(code) = code {
+                Some(code.as_str())
+            } else {
+                None
+            }
+        })
+        .collect()
+}
+
+/// Whether the query should be logged at a "louder" level (e.g. `warn!` instead of `debug!`),
+/// because it's related to some problem that we should probably investigate.
+fn is_loud_query(codes: &[&str]) -> bool {
+    codes
+        .iter()
+        .any(|c| matches!(*c, code::REQUEST_TIMEOUT | code::INTERNAL_SERVER_ERROR))
 }
