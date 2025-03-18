@@ -11,9 +11,7 @@ use std::{
 };
 use sui_core::authority::AuthorityState;
 use sui_macros::*;
-use sui_swarm_config::genesis_config::{
-    AccountConfig, DEFAULT_GAS_AMOUNT,
-};
+use sui_swarm_config::genesis_config::{AccountConfig, DEFAULT_GAS_AMOUNT};
 use sui_test_transaction_builder::TestTransactionBuilder;
 use sui_types::effects::{TransactionEffects, TransactionEffectsAPI};
 use sui_types::{
