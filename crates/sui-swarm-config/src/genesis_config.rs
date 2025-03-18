@@ -148,7 +148,9 @@ impl ValidatorGenesisConfigBuilder {
 
     pub fn build<R: rand::RngCore + rand::CryptoRng>(self, rng: &mut R) -> ValidatorGenesisConfig {
         let ip = self.ip.unwrap_or_else(local_ip_utils::get_new_ip);
-        let stake = self.stake.unwrap_or(sui_types::governance::VALIDATOR_LOW_STAKE_THRESHOLD_MIST);
+        let stake = self
+            .stake
+            .unwrap_or(sui_types::governance::VALIDATOR_LOW_STAKE_THRESHOLD_MIST);
         let localhost = local_ip_utils::localhost_for_testing();
 
         let protocol_key_pair = self
