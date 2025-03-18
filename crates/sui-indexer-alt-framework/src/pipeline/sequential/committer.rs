@@ -3,8 +3,7 @@
 
 use std::{cmp::Ordering, collections::BTreeMap, sync::Arc};
 
-use diesel_async::{scoped_futures::ScopedFutureExt, AsyncConnection};
-use sui_pg_db::Db;
+use scoped_futures::ScopedFutureExt;
 use tokio::{
     sync::mpsc,
     task::JoinHandle,
@@ -15,8 +14,8 @@ use tracing::{debug, info, warn};
 
 use crate::{
     metrics::IndexerMetrics,
-    models::watermarks::CommitterWatermark,
     pipeline::{logging::WatermarkLogger, IndexedCheckpoint, WARN_PENDING_WATERMARKS},
+    store::{CommitterWatermark, DbConnection, TransactionalStore},
 };
 
 use super::{Handler, SequentialConfig};
@@ -39,15 +38,20 @@ use super::{Handler, SequentialConfig};
 /// unblock its regulator.
 ///
 /// The task can be shutdown using its `cancel` token or if either of its channels are closed.
-pub(super) fn committer<H: Handler + 'static>(
+pub(super) fn committer<H>(
     config: SequentialConfig,
-    watermark: Option<CommitterWatermark<'static>>,
+    watermark: Option<CommitterWatermark>,
     mut rx: mpsc::Receiver<IndexedCheckpoint<H>>,
     tx: mpsc::UnboundedSender<(&'static str, u64)>,
-    db: Db,
+    store: H::Store,
     metrics: Arc<IndexerMetrics>,
     cancel: CancellationToken,
-) -> JoinHandle<()> {
+) -> JoinHandle<()>
+where
+    H: Handler + Send + Sync + 'static,
+    // Ensure that the store is transactional
+    H::Store: TransactionalStore + 'static,
+{
     tokio::spawn(async move {
         // The `poll` interval controls the maximum time to wait between commits, regardless of the
         // amount of data available.
@@ -75,7 +79,7 @@ pub(super) fn committer<H: Handler + 'static>(
             let next = watermark.checkpoint_hi_inclusive as u64 + 1;
             (watermark, next)
         } else {
-            (CommitterWatermark::initial(H::NAME.into()), 0)
+            (CommitterWatermark::default(), 0)
         };
 
         // The committer task will periodically output a log message at a higher log level to
@@ -217,28 +221,13 @@ pub(super) fn committer<H: Handler + 'static>(
                         .with_label_values(&[H::NAME])
                         .start_timer();
 
-                    let Ok(mut conn) = db.connect().await else {
-                        warn!(pipeline = H::NAME, "Failed to get connection for DB");
-                        metrics
-                            .total_committer_batches_failed
-                            .with_label_values(&[H::NAME])
-                            .inc();
-                        continue;
-                    };
+                    let affected = store.transaction(|conn| {
+                        async {
+                            conn.set_committer_watermark(H::NAME, watermark).await?;
+                            H::commit(&batch, conn).await
+                        }.scope_boxed()
+                    }).await;
 
-                    // Write all the object updates out along with the watermark update, in a
-                    // single transaction. The handler's `commit` implementation is responsible for
-                    // chunking up the writes into a manageable size.
-                    let affected = conn.transaction::<_, anyhow::Error, _>(|conn| async {
-                        // TODO: If initial_watermark is empty, when we update watermark
-                        // for the first time, we should also update the low watermark.
-                        watermark.update(conn).await?;
-                        H::commit(&batch, conn).await
-                    }.scope_boxed()).await;
-
-                    // Drop the connection eagerly to avoid it holding on to references borrowed by
-                    // the transaction closure.
-                    drop(conn);
 
                     let elapsed = guard.stop_and_record();
 

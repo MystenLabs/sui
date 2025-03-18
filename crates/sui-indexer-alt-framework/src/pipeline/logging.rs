@@ -5,7 +5,7 @@ use std::time::Instant;
 
 use tracing::{debug, info};
 
-use crate::models::watermarks::{CommitterWatermark, PrunerWatermark};
+use crate::store::CommitterWatermark;
 
 use super::Processor;
 
@@ -85,7 +85,7 @@ impl WatermarkLogger {
     }
 }
 
-impl From<&CommitterWatermark<'_>> for LoggerWatermark {
+impl From<&CommitterWatermark> for LoggerWatermark {
     fn from(watermark: &CommitterWatermark) -> Self {
         Self {
             checkpoint: watermark.checkpoint_hi_inclusive,
@@ -94,10 +94,10 @@ impl From<&CommitterWatermark<'_>> for LoggerWatermark {
     }
 }
 
-impl From<&PrunerWatermark<'_>> for LoggerWatermark {
-    fn from(watermark: &PrunerWatermark) -> Self {
+impl LoggerWatermark {
+    pub fn checkpoint(checkpoint: i64) -> Self {
         Self {
-            checkpoint: watermark.pruner_hi,
+            checkpoint,
             transaction: None,
         }
     }

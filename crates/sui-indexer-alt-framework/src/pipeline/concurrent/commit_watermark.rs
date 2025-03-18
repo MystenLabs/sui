@@ -7,6 +7,7 @@ use std::{
     sync::Arc,
 };
 
+use sui_pg_db::Db;
 use tokio::{
     sync::mpsc,
     task::JoinHandle,
@@ -16,10 +17,9 @@ use tokio_util::sync::CancellationToken;
 use tracing::{debug, error, info, warn};
 
 use crate::{
-    db::Db,
     metrics::{CheckpointLagMetricReporter, IndexerMetrics},
-    models::watermarks::CommitterWatermark,
     pipeline::{logging::WatermarkLogger, CommitterConfig, WatermarkPart, WARN_PENDING_WATERMARKS},
+    store::{CommitterWatermark, DbConnection},
 };
 
 use super::Handler;
@@ -45,11 +45,13 @@ use super::Handler;
 /// the watermark cannot be progressed. If `skip_watermark` is set, the task will shutdown
 /// immediately.
 pub(super) fn commit_watermark<H: Handler + 'static>(
-    initial_watermark: Option<CommitterWatermark<'static>>,
+    initial_watermark: Option<CommitterWatermark>,
     config: CommitterConfig,
     skip_watermark: bool,
     mut rx: mpsc::Receiver<Vec<WatermarkPart>>,
-    db: Db,
+    // TODO (wlmyng): this will eventually be H::Store once we add the associated type to
+    // concurrent::Handler
+    store: Db,
     metrics: Arc<IndexerMetrics>,
     cancel: CancellationToken,
 ) -> JoinHandle<()> {
@@ -72,7 +74,7 @@ pub(super) fn commit_watermark<H: Handler + 'static>(
             let next = watermark.checkpoint_hi_inclusive + 1;
             (watermark, next)
         } else {
-            (CommitterWatermark::initial(H::NAME.into()), 0)
+            (CommitterWatermark::default(), 0)
         };
 
         // The watermark task will periodically output a log message at a higher log level to
@@ -103,7 +105,7 @@ pub(super) fn commit_watermark<H: Handler + 'static>(
                         );
                     }
 
-                    let Ok(mut conn) = db.connect().await else {
+                    let Ok(mut conn) = store.connect().await else {
                         warn!(pipeline = H::NAME, "Commit watermark task failed to get connection for DB");
                         continue;
                     };
@@ -190,7 +192,10 @@ pub(super) fn commit_watermark<H: Handler + 'static>(
 
                         // TODO: If initial_watermark is empty, when we update watermark
                         // for the first time, we should also update the low watermark.
-                        match watermark.update(&mut conn).await {
+                        match conn.set_committer_watermark(
+                            H::NAME,
+                            watermark,
+                        ).await {
                             // If there's an issue updating the watermark, log it but keep going,
                             // it's OK for the watermark to lag from a correctness perspective.
                             Err(e) => {
