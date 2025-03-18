@@ -609,8 +609,6 @@ async fn test_reconfig_with_committee_change_basic() {
     // Using very rough calculation here:
     let min_barrier = stake / voting_power * 12;
 
-    // Add the validator to the candidate pool, but stake only 10 SUI.
-    // execute_add_validator_transactions(&test_cluster, &new_validator, Some(min_barrier)).await;
     execute_add_validator_transactions(&mut test_cluster, &new_validator, Some(min_barrier)).await;
 
     test_cluster.trigger_reconfiguration().await;
@@ -685,9 +683,8 @@ async fn test_reconfig_with_voting_power_decrease() {
 
     // 12/10_000 points is the minimum barrier to join the committee (1st phase)
     // Using very rough calculation here:
-    let min_barrier = stake / voting_power * 15;
+    let min_barrier = stake / voting_power * 12;
 
-    // Add the validator to the candidate pool, but stake only 10 SUI.
     execute_add_validator_transactions(&mut test_cluster, &new_validator, Some(min_barrier)).await;
 
     test_cluster.trigger_reconfiguration().await;
