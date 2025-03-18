@@ -385,7 +385,7 @@ mod checked {
             match arg {
                 Argument::GasCoin => res.push(Arg(Arg_::V2(NormalizedArg::GasCoin))),
                 Argument::Input(i) => {
-                    if i as usize > self.inputs.len() {
+                    if i as usize >= self.inputs.len() {
                         return Err(CommandArgumentError::IndexOutOfBounds { idx: i }.into());
                     }
                     res.push(Arg(Arg_::V2(NormalizedArg::Input(i))))
@@ -394,7 +394,7 @@ mod checked {
                     let Some(command_result) = self.results.get(i as usize) else {
                         return Err(CommandArgumentError::IndexOutOfBounds { idx: i }.into());
                     };
-                    if j as usize > command_result.len() {
+                    if j as usize >= command_result.len() {
                         return Err(CommandArgumentError::SecondaryIndexOutOfBounds {
                             result_idx: i,
                             secondary_idx: j,
