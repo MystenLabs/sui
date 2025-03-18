@@ -29,6 +29,7 @@ use crate::middleware::version::Version;
 
 mod api;
 pub mod args;
+mod error;
 mod extensions;
 mod metrics;
 mod middleware;

@@ -11,6 +11,10 @@ type Query {
 	Test query that always fails
 	"""
 	boom: String!
+	"""
+	Test query that fails with an internal error
+	"""
+	uhOh: String!
 }
 
 
