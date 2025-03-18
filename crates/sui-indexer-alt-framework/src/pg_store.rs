@@ -6,6 +6,7 @@ use std::pin::Pin;
 use std::time::Duration;
 
 use async_trait::async_trait;
+use diesel_async::scoped_futures::ScopedFuture;
 use diesel_async::AsyncConnection;
 
 use crate::db::{Connection as PgConnection, Db as PgDb};
@@ -30,7 +31,10 @@ impl PgStore {
 impl<'c> DbConnection for PgConnection<'c> {
     async fn transaction<F, T>(&mut self, f: F) -> Result<T, anyhow::Error>
     where
-        F: FnOnce(&mut Self) -> Pin<Box<dyn Future<Output = Result<T, anyhow::Error>> + Send + '_>>
+        F: FnOnce(
+                &mut Self,
+            )
+                -> Pin<Box<dyn ScopedFuture<Output = Result<T, anyhow::Error>> + Send + '_>>
             + Send,
         T: Send + 'static,
     {

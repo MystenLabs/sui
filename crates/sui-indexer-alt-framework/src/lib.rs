@@ -19,6 +19,7 @@ use pipeline::{
     Processor,
 };
 use prometheus::Registry;
+use store::{Database, DbConnection};
 use sui_indexer_alt_metrics::db::DbConnectionStatsCollector;
 use sui_pg_db::{temp::TempDb, Db, DbArgs};
 use tempfile::tempdir;
@@ -282,11 +283,16 @@ impl Indexer {
     ///
     /// The pipeline can optionally be configured to lag behind the ingestion service by a fixed
     /// number of checkpoints (configured by `checkpoint_lag`).
-    pub async fn sequential_pipeline<H: sequential::Handler + Send + Sync + 'static>(
+    pub async fn sequential_pipeline<'c, H, C, T>(
         &mut self,
         handler: H,
         config: SequentialConfig,
-    ) -> Result<()> {
+    ) -> Result<()>
+    where
+        H: sequential::Handler<C> + Send + Sync + 'static,
+        C: DbConnection + 'static,
+        T: Database<Connection<'c> = C>,
+    {
         let Some(watermark) = self.add_pipeline::<H>(false).await? else {
             return Ok(());
         };

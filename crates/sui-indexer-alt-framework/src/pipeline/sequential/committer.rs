@@ -15,9 +15,8 @@ use tracing::{debug, info, warn};
 use crate::{
     metrics::IndexerMetrics,
     models::watermarks::CommitterWatermark,
-    pg_store::PgStore,
     pipeline::{logging::WatermarkLogger, IndexedCheckpoint, WARN_PENDING_WATERMARKS},
-    store::Database,
+    store::{Database, DbConnection},
 };
 
 use super::{Handler, SequentialConfig};
@@ -40,15 +39,20 @@ use super::{Handler, SequentialConfig};
 /// unblock its regulator.
 ///
 /// The task can be shutdown using its `cancel` token or if either of its channels are closed.
-pub(super) fn committer<H: Handler + 'static>(
+pub(super) fn committer<'c, H, C, T>(
     config: SequentialConfig,
     watermark: Option<CommitterWatermark<'static>>,
     mut rx: mpsc::Receiver<IndexedCheckpoint<H>>,
     tx: mpsc::UnboundedSender<(&'static str, u64)>,
-    store: PgStore,
+    store: T,
     metrics: Arc<IndexerMetrics>,
     cancel: CancellationToken,
-) -> JoinHandle<()> {
+) -> JoinHandle<()>
+where
+    H: Handler<C> + Send + Sync + 'static,
+    C: DbConnection + 'static,
+    T: Database<Connection<'c> = C>,
+{
     tokio::spawn(async move {
         // The `poll` interval controls the maximum time to wait between commits, regardless of the
         // amount of data available.
@@ -232,7 +236,7 @@ pub(super) fn committer<H: Handler + 'static>(
                     // Write all the object updates out along with the watermark update, in a
                     // single transaction. The handler's `commit` implementation is responsible for
                     // chunking up the writes into a manageable size.
-                    let affected = conn.transaction::<_, anyhow::Error, _>(|conn| async {
+                    let affected = conn.transaction(|conn| async {
                         // TODO: If initial_watermark is empty, when we update watermark
                         // for the first time, we should also update the low watermark.
                         watermark.update(conn).await?;

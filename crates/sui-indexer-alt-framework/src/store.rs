@@ -5,6 +5,7 @@ use crate::models::watermarks::{
     CommitterWatermark, PrunerWatermark, ReaderWatermark, StoredWatermark,
 };
 use async_trait::async_trait;
+use diesel_async::scoped_futures::ScopedFuture;
 use std::future::Future;
 use std::pin::Pin;
 use std::time::Duration;
@@ -15,7 +16,10 @@ pub trait DbConnection: Send + Sync {
     /// Execute a function within a transaction
     async fn transaction<F, T>(&mut self, f: F) -> Result<T, anyhow::Error>
     where
-        F: FnOnce(&mut Self) -> Pin<Box<dyn Future<Output = Result<T, anyhow::Error>> + Send + '_>>
+        F: FnOnce(
+                &mut Self,
+            )
+                -> Pin<Box<dyn ScopedFuture<Output = Result<T, anyhow::Error>> + Send + '_>>
             + Send,
         T: Send + 'static;
 }
