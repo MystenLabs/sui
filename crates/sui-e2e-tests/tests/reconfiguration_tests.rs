@@ -581,11 +581,14 @@ async fn test_inactive_validator_pool_read() {
 #[sim_test]
 async fn test_reconfig_with_committee_change_basic() {
     // This test exercise the full flow of a validator joining the network, catch up and then leave.
-    // Validator starts with 1 SUI stake (MIN_STAKING_THRESHOLD).
     let initial_num_validators = 10;
     let new_validator = ValidatorGenesisConfigBuilder::new().build(&mut OsRng);
     let address = (&new_validator.account_key_pair.public()).into();
     let mut test_cluster = TestClusterBuilder::new()
+        .with_accounts(vec![AccountConfig {
+            gas_amounts: vec![MIN_VALIDATOR_JOINING_STAKE_MIST * 10],
+            address: None,
+        }])
         .with_num_validators(initial_num_validators)
         .with_validator_candidates([address])
         .build()
@@ -607,7 +610,7 @@ async fn test_reconfig_with_committee_change_basic() {
 
     // 12/10_000 points is the minimum barrier to join the committee (1st phase)
     // Using very rough calculation here:
-    let min_barrier = stake / voting_power * 12;
+    let min_barrier = stake / voting_power * 13; // multiplying by 14 to be sure
 
     execute_add_validator_transactions(&mut test_cluster, &new_validator, Some(min_barrier)).await;
 
@@ -650,7 +653,7 @@ const LOW_POWER_THRESHOLD: u64 = 12;
 #[sim_test]
 async fn test_reconfig_with_voting_power_decrease() {
     // This test exercise the full flow of a validator joining the network, catch up and then leave.
-    // Validator starts with 1 SUI stake (MIN_STAKING_THRESHOLD).
+    // Validator starts with .12% of the total voting power and then decreases to below the threshold.
     let initial_num_validators = 10;
     let new_validator = ValidatorGenesisConfigBuilder::new()
         .with_stake(0)
@@ -683,7 +686,7 @@ async fn test_reconfig_with_voting_power_decrease() {
 
     // 12/10_000 points is the minimum barrier to join the committee (1st phase)
     // Using very rough calculation here:
-    let min_barrier = stake / voting_power * 12;
+    let min_barrier = stake / voting_power * 13; // multiplying by 14 to be sure
 
     execute_add_validator_transactions(&mut test_cluster, &new_validator, Some(min_barrier)).await;
 
@@ -786,6 +789,10 @@ async fn do_test_reconfig_with_committee_change_stress() {
         .map(|c| (&c.account_key_pair.public()).into())
         .collect::<Vec<SuiAddress>>();
     let mut test_cluster = TestClusterBuilder::new()
+        .with_accounts(vec![AccountConfig {
+            gas_amounts: vec![MIN_VALIDATOR_JOINING_STAKE_MIST * 10],
+            address: None,
+        }])
         .with_num_validators(7)
         .with_validator_candidates(addresses)
         .with_num_unpruned_validators(2)
