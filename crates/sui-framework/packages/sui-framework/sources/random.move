@@ -231,7 +231,6 @@ public fun generate_bool(g: &mut RandomGenerator): bool {
 /// Helper macro to generate a random uint in [min, max] using a random number with num_of_bytes bytes.
 /// Assumes that the caller verified the inputs, and uses num_of_bytes to control the bias (e.g., 8 bytes larger
 /// than the actual type used by the caller function to limit the bias by 2^{-64}).
-/// TODO: Replace with a macro when we have support for it.
 macro fun uint_in_range<$T: drop>(
     $g: &mut RandomGenerator,
     $min: $T,

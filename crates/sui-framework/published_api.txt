@@ -3052,14 +3052,8 @@ new_generator
 derive_next_block
 	fun
 	0x2::random
-fill_buffer
-	fun
-	0x2::random
 generate_bytes
 	public fun
-	0x2::random
-u256_from_bytes
-	fun
 	0x2::random
 generate_u256
 	public fun
@@ -3081,9 +3075,6 @@ generate_u8
 	0x2::random
 generate_bool
 	public fun
-	0x2::random
-u128_in_range
-	fun
 	0x2::random
 generate_u128_in_range
 	public fun
