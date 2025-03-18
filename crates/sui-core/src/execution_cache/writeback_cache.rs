@@ -790,21 +790,34 @@ impl WritebackCache {
 
     fn get_object_impl(&self, request_type: &'static str, id: &ObjectID) -> Option<Object> {
         let ticket = self.cached.object_by_id_cache.get_ticket_for_read(id);
-        match self.get_object_by_id_cache_only(request_type, id) {
-            CacheResult::Hit((_, object)) => Some(object),
+        match self.get_object_entry_by_id_cache_only(request_type, id) {
+            CacheResult::Hit((_, entry)) => match entry {
+                ObjectEntry::Object(object) => Some(object),
+                ObjectEntry::Deleted | ObjectEntry::Wrapped => None,
+            },
             CacheResult::NegativeHit => None,
             CacheResult::Miss => {
-                let obj = self.store.get_object(id);
-                if let Some(obj) = &obj {
-                    self.cache_latest_object_by_id(
-                        id,
-                        LatestObjectCacheEntry::Object(obj.version(), obj.clone().into()),
-                        ticket,
-                    );
-                } else {
-                    self.cache_object_not_found(id, ticket);
+                let obj = self
+                    .store
+                    .get_latest_object_or_tombstone(*id)
+                    .expect("db error");
+                match obj {
+                    Some((key, obj)) => {
+                        self.cache_latest_object_by_id(
+                            id,
+                            LatestObjectCacheEntry::Object(key.1, obj.clone().into()),
+                            ticket,
+                        );
+                        match obj {
+                            ObjectOrTombstone::Object(object) => Some(object),
+                            ObjectOrTombstone::Tombstone(_) => None,
+                        }
+                    }
+                    None => {
+                        self.cache_object_not_found(id, ticket);
+                        None
+                    }
                 }
-                obj
             }
         }
     }
