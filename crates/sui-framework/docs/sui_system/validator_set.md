@@ -82,7 +82,6 @@ title: Module `sui_system::validator_set`
 <pre><code><b>use</b> <a href="../std/address.md#std_address">std::address</a>;
 <b>use</b> <a href="../std/ascii.md#std_ascii">std::ascii</a>;
 <b>use</b> <a href="../std/bcs.md#std_bcs">std::bcs</a>;
-<b>use</b> <a href="../std/debug.md#std_debug">std::debug</a>;
 <b>use</b> <a href="../std/option.md#std_option">std::option</a>;
 <b>use</b> <a href="../std/string.md#std_string">std::string</a>;
 <b>use</b> <a href="../std/type_name.md#std_type_name">std::type_name</a>;
@@ -816,9 +815,6 @@ processed at the end of epoch.
         <a href="../sui_system/validator_set.md#sui_system_validator_set_EDuplicateValidator">EDuplicateValidator</a>
     );
     <b>assert</b>!(<a href="../sui_system/validator.md#sui_system_validator">validator</a>.is_preactive(), <a href="../sui_system/validator_set.md#sui_system_validator_set_EValidatorNotCandidate">EValidatorNotCandidate</a>);
-    <b>if</b> (!self.<a href="../sui_system/validator_set.md#sui_system_validator_set_can_join">can_join</a>(<a href="../sui_system/validator.md#sui_system_validator">validator</a>.total_stake_amount(), ctx)) {
-        <a href="../std/debug.md#std_debug_print">std::debug::print</a>(&<a href="../sui_system/validator.md#sui_system_validator">validator</a>.total_stake_amount());
-    };
     <b>assert</b>!(self.<a href="../sui_system/validator_set.md#sui_system_validator_set_can_join">can_join</a>(<a href="../sui_system/validator.md#sui_system_validator">validator</a>.total_stake_amount(), ctx), <a href="../sui_system/validator_set.md#sui_system_validator_set_EMinJoiningStakeNotReached">EMinJoiningStakeNotReached</a>);
     self.pending_active_validators.push_back(<a href="../sui_system/validator.md#sui_system_validator">validator</a>);
 }
@@ -1662,7 +1658,7 @@ gas price, weighted by stake.
             <b>let</b> wrapper = &<b>mut</b> self.inactive_validators[*pool_id];
             wrapper.load_validator_maybe_upgrade()
         };
-<a href="../sui_system/validator.md#sui_system_validator">validator</a>.get_staking_pool_ref().exchange_rates()
+    <a href="../sui_system/validator.md#sui_system_validator">validator</a>.get_staking_pool_ref().exchange_rates()
 }
 </code></pre>
 

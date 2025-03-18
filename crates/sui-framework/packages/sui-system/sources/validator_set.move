@@ -695,7 +695,8 @@ public(package) fun pool_exchange_rates(
             let wrapper = &mut self.inactive_validators[*pool_id];
             wrapper.load_validator_maybe_upgrade()
         };
-validator.get_staking_pool_ref().exchange_rates()
+
+    validator.get_staking_pool_ref().exchange_rates()
 }
 
 /// Get the total number of validators in the next epoch.

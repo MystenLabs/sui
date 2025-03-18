@@ -3,6 +3,7 @@
 
 use futures::future::join_all;
 use rand::rngs::OsRng;
+use sui_json_rpc::authority_state::StateRead;
 use std::collections::BTreeSet;
 use std::sync::Arc;
 use std::time::Duration;
@@ -11,19 +12,29 @@ use sui_json_rpc_types::SuiTransactionBlockEffectsAPI;
 use sui_macros::sim_test;
 use sui_node::SuiNodeHandle;
 use sui_protocol_config::{Chain, ProtocolConfig};
-use sui_swarm_config::genesis_config::{ValidatorGenesisConfig, ValidatorGenesisConfigBuilder};
+use sui_swarm_config::genesis_config::{
+    AccountConfig, ValidatorGenesisConfig, ValidatorGenesisConfigBuilder,
+};
 use sui_test_transaction_builder::{make_transfer_sui_transaction, TestTransactionBuilder};
 use sui_types::base_types::SuiAddress;
 use sui_types::effects::TransactionEffectsAPI;
 use sui_types::error::SuiError;
 use sui_types::governance::MIN_VALIDATOR_JOINING_STAKE_MIST;
+use sui_types::programmable_transaction_builder::ProgrammableTransactionBuilder;
 use sui_types::sui_system_state::{
     get_validator_from_table, sui_system_state_summary::get_validator_by_pool_id,
     SuiSystemStateTrait,
 };
-use sui_types::transaction::{TransactionDataAPI, TransactionExpiration, VerifiedTransaction};
+use sui_types::transaction::{
+    Command, TransactionDataAPI, TransactionExpiration, VerifiedTransaction,
+};
+use sui_types::SUI_SYSTEM_PACKAGE_ID;
 use test_cluster::{TestCluster, TestClusterBuilder};
 use tokio::time::sleep;
+
+use sui_types::transaction::Argument;
+use sui_types::transaction::ObjectArg;
+use sui_types::transaction::ProgrammableMoveCall;
 
 #[sim_test]
 async fn basic_reconfig_end_to_end_test() {
@@ -570,15 +581,37 @@ async fn test_inactive_validator_pool_read() {
 #[sim_test]
 async fn test_reconfig_with_committee_change_basic() {
     // This test exercise the full flow of a validator joining the network, catch up and then leave.
-
+    // Validator starts with 1 SUI stake (MIN_STAKING_THRESHOLD).
+    let initial_num_validators = 10;
     let new_validator = ValidatorGenesisConfigBuilder::new().build(&mut OsRng);
     let address = (&new_validator.account_key_pair.public()).into();
     let mut test_cluster = TestClusterBuilder::new()
+        .with_num_validators(initial_num_validators)
         .with_validator_candidates([address])
         .build()
         .await;
 
-    execute_add_validator_transactions(&test_cluster, &new_validator).await;
+    // Get a single validator's stake and voting power. All of them are the same
+    // in the `TestCluster`, so we can pick any.
+    let (stake, voting_power) = test_cluster
+        .fullnode_handle
+        .sui_node
+        .state()
+        .get_sui_system_state_object_for_testing()
+        .unwrap()
+        .into_sui_system_state_summary()
+        .active_validators
+        .iter()
+        .map(|v| (v.staking_pool_sui_balance, v.voting_power))
+        .collect::<Vec<(u64, u64)>>()[0];
+
+    // 12/10_000 points is the minimum barrier to join the committee (1st phase)
+    // Using very rough calculation here:
+    let min_barrier = stake / voting_power * 12;
+
+    // Add the validator to the candidate pool, but stake only 10 SUI.
+    // execute_add_validator_transactions(&test_cluster, &new_validator, Some(min_barrier)).await;
+    execute_add_validator_transactions(&mut test_cluster, &new_validator, Some(min_barrier)).await;
 
     test_cluster.trigger_reconfiguration().await;
 
@@ -589,7 +622,7 @@ async fn test_reconfig_with_committee_change_basic() {
                 .epoch_store_for_testing()
                 .committee()
                 .num_members(),
-            5
+            initial_num_validators + 1
         );
     });
     let new_validator_handle = test_cluster.spawn_new_validator(new_validator).await;
@@ -609,7 +642,130 @@ async fn test_reconfig_with_committee_change_basic() {
                 .epoch_store_for_testing()
                 .committee()
                 .num_members(),
-            4
+            initial_num_validators
+        );
+    });
+}
+
+const LOW_POWER_THRESHOLD: u64 = 12;
+
+#[sim_test]
+async fn test_reconfig_with_voting_power_decrease() {
+    // This test exercise the full flow of a validator joining the network, catch up and then leave.
+    // Validator starts with 1 SUI stake (MIN_STAKING_THRESHOLD).
+    let initial_num_validators = 10;
+    let new_validator = ValidatorGenesisConfigBuilder::new()
+        .with_stake(0)
+        .build(&mut OsRng);
+
+    let address = (&new_validator.account_key_pair.public()).into();
+    let mut test_cluster = TestClusterBuilder::new()
+        .with_accounts(vec![AccountConfig {
+            gas_amounts: vec![MIN_VALIDATOR_JOINING_STAKE_MIST * 10],
+            address: None,
+        }])
+        .with_num_validators(initial_num_validators)
+        .with_validator_candidates([address])
+        .build()
+        .await;
+
+    // Get a single validator's stake and voting power. All of them are the same
+    // in the `TestCluster`, so we can pick any.
+    let (stake, voting_power) = test_cluster
+        .fullnode_handle
+        .sui_node
+        .state()
+        .get_sui_system_state_object_for_testing()
+        .unwrap()
+        .into_sui_system_state_summary()
+        .active_validators
+        .iter()
+        .map(|v| (v.staking_pool_sui_balance, v.voting_power))
+        .collect::<Vec<(u64, u64)>>()[0];
+
+    // 12/10_000 points is the minimum barrier to join the committee (1st phase)
+    // Using very rough calculation here:
+    let min_barrier = stake / voting_power * 15;
+
+    // Add the validator to the candidate pool, but stake only 10 SUI.
+    execute_add_validator_transactions(&mut test_cluster, &new_validator, Some(min_barrier)).await;
+
+    test_cluster.trigger_reconfiguration().await;
+
+    // The number of epochs a validator is present in the committee before it can be removed.
+    let low_stake_grace_period = test_cluster.fullnode_handle.sui_node.with(|node| {
+        node.state()
+            .get_system_state()
+            .unwrap()
+            .into_sui_system_state_summary()
+            .validator_low_stake_grace_period
+    });
+
+    // Check that a new validator has joined the committee.
+    test_cluster.fullnode_handle.sui_node.with(|node| {
+        assert_eq!(
+            node.state()
+                .epoch_store_for_testing()
+                .committee()
+                .num_members(),
+            initial_num_validators + 1
+        );
+    });
+
+    // Instead of removing the validator, we will increase stake of every other
+    // validator, thereby decreasing the voting power of the new validator.
+    let validators = test_cluster
+        .fullnode_handle
+        .sui_node
+        .state()
+        .get_sui_system_state_object_for_testing()
+        .unwrap()
+        .into_sui_system_state_summary()
+        .active_validators
+        .iter()
+        .map(|v| v.sui_address)
+        .filter(|v| v != &address)
+        .collect::<BTreeSet<_>>();
+
+    assert_eq!(validators.len(), initial_num_validators);
+
+    // Double the stake of every other validator, stake just as much as they had.
+    for validator in validators {
+        execute_add_stake_transaction(&mut test_cluster, validator, stake).await;
+    }
+
+    test_cluster.trigger_reconfiguration().await;
+
+    // list stakes and voting powers
+    test_cluster.fullnode_handle.sui_node.with(|node| {
+        let system_state = node
+            .state()
+            .get_sui_system_state_object_for_testing()
+            .unwrap()
+            .into_sui_system_state_summary()
+            .active_validators
+            .iter()
+            .find(|v| v.sui_address == address)
+            .unwrap()
+            .clone();
+
+        // Check that the validator voting power has decreased below the threshold.
+        assert!(system_state.voting_power < LOW_POWER_THRESHOLD);
+    });
+
+    // Wait for the grace period to expire.
+    for _ in 0..low_stake_grace_period {
+        test_cluster.trigger_reconfiguration().await;
+    }
+
+    // Check that the validator has been removed from the committee.
+    test_cluster.fullnode_handle.sui_node.with(|node| {
+        assert_eq!(
+            node.state()
+                .epoch_store_for_testing()
+                .committee()
+                .num_members(),
+            initial_num_validators
         );
     });
 }
@@ -643,8 +799,8 @@ async fn do_test_reconfig_with_committee_change_stress() {
 
     while let Some(v1) = candidates.pop() {
         let v2 = candidates.pop().unwrap();
-        execute_add_validator_transactions(&test_cluster, &v1).await;
-        execute_add_validator_transactions(&test_cluster, &v2).await;
+        execute_add_validator_transactions(&mut test_cluster, &v1, None).await;
+        execute_add_validator_transactions(&mut test_cluster, &v2, None).await;
         let mut removed_validators = vec![];
         for v in test_cluster
             .swarm
@@ -881,12 +1037,50 @@ async fn execute_remove_validator_tx(test_cluster: &TestCluster, handle: &SuiNod
     test_cluster.execute_transaction(tx).await;
 }
 
+/// Execute a single stake transaction to add stake to a validator.
+async fn execute_add_stake_transaction(
+    test_cluster: &mut TestCluster,
+    stake_for: SuiAddress,
+    stake: u64,
+) {
+    let (address, gas) = test_cluster
+        .wallet
+        .get_one_gas_object()
+        .await
+        .unwrap()
+        .unwrap();
+
+    let rgp = test_cluster.get_reference_gas_price().await;
+    let mut ptb = ProgrammableTransactionBuilder::new();
+    let amt_arg = ptb.pure(stake).unwrap();
+    let system_arg = ptb.obj(ObjectArg::SUI_SYSTEM_MUT).unwrap();
+    let stake_arg = ptb.command(Command::SplitCoins(Argument::GasCoin, vec![amt_arg]));
+    let stake_for_arg = ptb.pure(stake_for).unwrap();
+
+    ptb.command(Command::MoveCall(Box::new(ProgrammableMoveCall {
+        package: SUI_SYSTEM_PACKAGE_ID,
+        module: "sui_system".to_string(),
+        function: "request_add_stake".to_string(),
+        type_arguments: vec![],
+        arguments: vec![system_arg, stake_arg, stake_for_arg],
+    })));
+
+    let tx = TestTransactionBuilder::new(address, gas, rgp)
+        .programmable(ptb.finish())
+        .build();
+
+    test_cluster
+        .execute_transaction(test_cluster.wallet.sign_transaction(&tx))
+        .await;
+}
+
 /// Execute a sequence of transactions to add a validator, including adding candidate, adding stake
 /// and activate the validator.
 /// It does not however trigger reconfiguration yet.
 async fn execute_add_validator_transactions(
-    test_cluster: &TestCluster,
+    test_cluster: &mut TestCluster,
     new_validator: &ValidatorGenesisConfig,
+    stake_amount: Option<u64>,
 ) {
     let pending_active_count = test_cluster.fullnode_handle.sui_node.with(|node| {
         let system_state = node
@@ -905,13 +1099,14 @@ async fn execute_add_validator_transactions(
         .wallet
         .gas_for_owner_budget(
             address,
-            MIN_VALIDATOR_JOINING_STAKE_MIST,
+            stake_amount.unwrap_or(MIN_VALIDATOR_JOINING_STAKE_MIST),
             Default::default(),
         )
         .await
         .unwrap()
         .1
         .object_ref();
+
     let gas = test_cluster
         .wallet
         .gas_for_owner_budget(address, 0, BTreeSet::from([stake_coin.0]))
@@ -920,16 +1115,21 @@ async fn execute_add_validator_transactions(
         .1
         .object_ref();
 
+    execute_add_stake_transaction(test_cluster, address, stake_amount.unwrap_or(MIN_VALIDATOR_JOINING_STAKE_MIST)).await;
+
     let rgp = test_cluster.get_reference_gas_price().await;
-    let stake_tx = TestTransactionBuilder::new(address, gas, rgp)
-        .call_staking(stake_coin, address)
-        .build_and_sign(&new_validator.account_key_pair);
-    test_cluster.execute_transaction(stake_tx).await;
+    // let stake_tx = TestTransactionBuilder::new(address, gas, rgp)
+    //     .call_staking(stake_coin, address)
+    //     .build_and_sign(&new_validator.account_key_pair);
+    // test_cluster.execute_transaction(stake_tx).await;
 
     let gas = test_cluster.wallet.get_object_ref(gas.0).await.unwrap();
     let tx = TestTransactionBuilder::new(address, gas, rgp)
         .call_request_add_validator()
         .build_and_sign(&new_validator.account_key_pair);
+
+
+
     test_cluster.execute_transaction(tx).await;
 
     // Check that we can get the pending validator from 0x5.
