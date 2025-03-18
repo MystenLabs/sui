@@ -10,3 +10,4 @@ pub(crate) mod name_service;
 pub(crate) mod objects;
 pub(crate) mod rpc_module;
 pub(crate) mod transactions;
+pub mod write;

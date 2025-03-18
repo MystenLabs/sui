@@ -324,7 +324,7 @@ fn pki_error(error: webpki::Error) -> rustls::Error {
         | UnsupportedSignatureAlgorithmForPublicKey => {
             rustls::Error::InvalidCertificate(rustls::CertificateError::BadSignature)
         }
-        CertNotValidForName => {
+        CertNotValidForName(_) => {
             rustls::Error::InvalidCertificate(rustls::CertificateError::NotValidForName)
         }
         e => rustls::Error::General(format!("invalid peer certificate: {e}")),

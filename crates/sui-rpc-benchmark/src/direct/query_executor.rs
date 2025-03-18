@@ -6,7 +6,7 @@
 /// And the results are aggregated and reported via BenchmarkResult.
 use std::time::Instant;
 
-use anyhow::Result;
+use anyhow::{Context, Result};
 use bb8::Pool;
 use bb8_postgres::PostgresConnectionManager;
 use rand::seq::SliceRandom;
@@ -55,7 +55,7 @@ impl QueryExecutor {
         while Instant::now() < deadline {
             let enriched = enriched_queries
                 .choose(&mut rng)
-                .ok_or_else(|| anyhow::anyhow!("No queries available"))?;
+                .context("No queries available")?;
             let Some(row) = enriched.rows.choose(&mut rng) else {
                 // skip when the table is empty and thus no values to sample.
                 continue;

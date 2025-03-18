@@ -103,12 +103,13 @@ pub(crate) struct NodeMetrics {
     pub(crate) proposed_block_transactions: Histogram,
     pub(crate) proposed_block_ancestors: Histogram,
     pub(crate) proposed_block_ancestors_depth: HistogramVec,
+    pub(crate) proposed_block_ancestors_timestamp_drift_ms: IntCounterVec,
     pub(crate) highest_verified_authority_round: IntGaugeVec,
     pub(crate) lowest_verified_authority_round: IntGaugeVec,
     pub(crate) block_proposal_interval: Histogram,
     pub(crate) block_proposal_leader_wait_ms: IntCounterVec,
     pub(crate) block_proposal_leader_wait_count: IntCounterVec,
-    pub(crate) block_timestamp_drift_wait_ms: IntCounterVec,
+    pub(crate) block_timestamp_drift_ms: IntCounterVec,
     pub(crate) blocks_per_commit_count: Histogram,
     pub(crate) blocks_pruned_on_commit: IntCounterVec,
     pub(crate) broadcaster_rtt_estimate_ms: IntGaugeVec,
@@ -119,6 +120,7 @@ pub(crate) struct NodeMetrics {
     pub(crate) core_skipped_proposals: IntCounterVec,
     pub(crate) highest_accepted_authority_round: IntGaugeVec,
     pub(crate) highest_accepted_round: IntGauge,
+    pub(crate) accepted_block_time_drift_ms: IntCounterVec,
     pub(crate) accepted_blocks: IntCounterVec,
     pub(crate) dag_state_recent_blocks: IntGauge,
     pub(crate) dag_state_recent_refs: IntGauge,
@@ -142,6 +144,7 @@ pub(crate) struct NodeMetrics {
     pub(crate) last_committed_authority_round: IntGaugeVec,
     pub(crate) last_committed_leader_round: IntGauge,
     pub(crate) last_commit_index: IntGauge,
+    pub(crate) last_commit_time_diff: Histogram,
     pub(crate) last_known_own_block_round: IntGauge,
     pub(crate) sync_last_known_own_block_retries: IntCounter,
     pub(crate) commit_round_advancement_interval: Histogram,
@@ -233,6 +236,12 @@ impl NodeMetrics {
                 exponential_buckets(1.0, 1.4, 20).unwrap(),
                 registry,
             ).unwrap(),
+            proposed_block_ancestors_timestamp_drift_ms: register_int_counter_vec_with_registry!(
+                "proposed_block_ancestors_timestamp_drift_ms",
+                "The drift in ms of ancestors' timestamps included in newly proposed blocks",
+                &["authority"],
+                registry,
+            ).unwrap(),
             proposed_block_ancestors_depth: register_histogram_vec_with_registry!(
                 "proposed_block_ancestors_depth",
                 "The depth in rounds of ancestors included in newly proposed blocks",
@@ -270,9 +279,9 @@ impl NodeMetrics {
                 &["authority"],
                 registry,
             ).unwrap(),
-            block_timestamp_drift_wait_ms: register_int_counter_vec_with_registry!(
-                "block_timestamp_drift_wait_ms",
-                "Total time in ms spent waiting, when a received block has timestamp in future.",
+            block_timestamp_drift_ms: register_int_counter_vec_with_registry!(
+                "block_timestamp_drift_ms",
+                "The clock drift time between a received block and the current node's time.",
                 &["authority", "source"],
                 registry,
             ).unwrap(),
@@ -331,6 +340,12 @@ impl NodeMetrics {
             highest_accepted_round: register_int_gauge_with_registry!(
                 "highest_accepted_round",
                 "The highest round where a block has been accepted. Resets on restart.",
+                registry,
+            ).unwrap(),
+            accepted_block_time_drift_ms: register_int_counter_vec_with_registry!(
+                "accepted_block_time_drift_ms",
+                "The time drift in ms of an accepted block compared to local time",
+                &["authority"],
                 registry,
             ).unwrap(),
             accepted_blocks: register_int_counter_vec_with_registry!(
@@ -474,6 +489,12 @@ impl NodeMetrics {
             last_commit_index: register_int_gauge_with_registry!(
                 "last_commit_index",
                 "Index of the last commit.",
+                registry,
+            ).unwrap(),
+            last_commit_time_diff: register_histogram_with_registry!(
+                "last_commit_time_diff",
+                "The time diff between the last commit and previous one.",
+                LATENCY_SEC_BUCKETS.to_vec(),
                 registry,
             ).unwrap(),
             commit_round_advancement_interval: register_histogram_with_registry!(

@@ -5,5 +5,8 @@ edition = "2024.beta"
 # No published-at address for this package.
 # published-at = "0x0"
 
+[dependencies]
+MoveStdlib = { local = "../../../../sui-framework/packages/move-stdlib" }
+
 [addresses]
 invalid = "0x0"

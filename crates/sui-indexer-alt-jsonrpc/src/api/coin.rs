@@ -1,14 +1,13 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::collections::{BTreeMap, HashMap};
 use std::str::FromStr;
 
 use anyhow::Context as _;
 use diesel::prelude::*;
 use diesel::sql_types::Bool;
 use futures::future;
-use jsonrpsee::{core::RpcResult, proc_macros::rpc};
+use jsonrpsee::{core::RpcResult, http_client::HttpClient, proc_macros::rpc};
 use move_core_types::language_storage::{StructTag, TypeTag};
 use serde::{Deserialize, Serialize};
 use sui_indexer_alt_schema::objects::StoredCoinOwnerKind;
@@ -23,11 +22,11 @@ use sui_types::{
     gas_coin::GAS,
 };
 
-use crate::data::singleton_object::load_singleton_object_id;
 use crate::{
+    config::NodeConfig,
     context::Context,
-    data::objects::load_latest,
-    error::{invalid_params, InternalContext, RpcError},
+    data::{coin_metadata::CoinMetadataKey, objects::load_latest},
+    error::{client_error_to_error_object, invalid_params, InternalContext, RpcError},
     paginate::{BcsCursor, Cursor as _, Page},
 };
 
@@ -51,14 +50,6 @@ trait CoinsApi {
         limit: Option<usize>,
     ) -> RpcResult<PageResponse<Coin, String>>;
 
-    /// Return the total coin balance for all coin types, owned by the address owner.
-    #[method(name = "getAllBalances")]
-    async fn get_all_balances(
-        &self,
-        /// the owner's Sui address
-        owner: SuiAddress,
-    ) -> RpcResult<Vec<Balance>>;
-
     /// Return metadata (e.g., symbol, decimals) for a coin. Note that if the coin's metadata was
     /// wrapped in the transaction that published its marker type, or the latest version of the
     /// metadata object is wrapped or deleted, it will not be found.
@@ -70,7 +61,21 @@ trait CoinsApi {
     ) -> RpcResult<Option<SuiCoinMetadata>>;
 }
 
+/// Delegation Coin API for endpoints that are delegated to FN RPC
+#[open_rpc(namespace = "suix", tag = "Delegation Coin API")]
+#[rpc(server, client, namespace = "suix")]
+trait DelegationCoinsApi {
+    /// Return the total coin balance for all coin types, owned by the address owner.
+    #[method(name = "getAllBalances")]
+    async fn get_all_balances(
+        &self,
+        /// the owner's Sui address
+        owner: SuiAddress,
+    ) -> RpcResult<Vec<Balance>>;
+}
+
 pub(crate) struct Coins(pub Context);
+pub(crate) struct DelegationCoins(HttpClient);
 
 #[derive(thiserror::Error, Debug)]
 pub(crate) enum Error {
@@ -90,6 +95,13 @@ struct BalanceCursor {
 }
 
 type Cursor = BcsCursor<BalanceCursor>;
+
+impl DelegationCoins {
+    pub fn new(fullnode_rpc_url: url::Url, config: NodeConfig) -> anyhow::Result<Self> {
+        let client = config.client(fullnode_rpc_url)?;
+        Ok(Self(client))
+    }
+}
 
 #[async_trait::async_trait]
 impl CoinsApiServer for Coins {
@@ -137,60 +149,40 @@ impl CoinsApiServer for Coins {
         })
     }
 
-    async fn get_all_balances(&self, owner: SuiAddress) -> RpcResult<Vec<Balance>> {
-        let Self(ctx) = self;
-        let coin_ids = filter_coins(ctx, owner, None, None).await?;
-        let coin_futures = coin_ids
-            .data
-            .iter()
-            .map(|id| object_with_coin_data(ctx, *id));
-        let coins = future::join_all(coin_futures)
-            .await
-            .into_iter()
-            .zip(coin_ids.data)
-            .map(|(r, c)| {
-                let id = c;
-                r.with_internal_context(|| format!("Failed to get object {id}"))
-            })
-            .collect::<Result<Vec<_>, _>>()?;
-
-        // Using a BTreeMap so that the ordering of keys is deterministic.
-        let mut balance_map: BTreeMap<String, (usize, u128)> = BTreeMap::new();
-        for (_, coin_type, balance) in coins {
-            let entry = balance_map.entry(coin_type).or_insert((0, 0));
-            entry.0 += 1;
-            entry.1 += balance as u128;
-        }
-        let balances: Vec<Balance> = balance_map
-            .into_iter()
-            .map(|(coin_type, (coin_object_count, total_balance))| Balance {
-                coin_type,
-                coin_object_count,
-                total_balance,
-                // LockedCoin is deprecated
-                locked_balance: HashMap::new(),
-            })
-            .collect();
-        Ok(balances)
-    }
-
     async fn get_coin_metadata(&self, coin_type: String) -> RpcResult<Option<SuiCoinMetadata>> {
         let Self(ctx) = self;
-        let object_id = coin_metadata_object_id(ctx, coin_type).await?;
 
-        let Some(object_id) = object_id else {
-            return Ok(None);
-        };
+        Ok(coin_metadata_response(ctx, &coin_type)
+            .await
+            .with_internal_context(|| format!("Failed to fetch CoinMetadata for {coin_type:?}"))?)
+    }
+}
 
-        let coin_metadata = coin_metadata_response(ctx, object_id).await?;
+#[async_trait::async_trait]
+impl DelegationCoinsApiServer for DelegationCoins {
+    async fn get_all_balances(&self, owner: SuiAddress) -> RpcResult<Vec<Balance>> {
+        let Self(client) = self;
 
-        Ok(Some(coin_metadata))
+        client
+            .get_all_balances(owner)
+            .await
+            .map_err(client_error_to_error_object)
     }
 }
 
 impl RpcModule for Coins {
     fn schema(&self) -> Module {
         CoinsApiOpenRpc::module_doc()
+    }
+
+    fn into_impl(self) -> jsonrpsee::RpcModule<Self> {
+        self.into_rpc()
+    }
+}
+
+impl RpcModule for DelegationCoins {
+    fn schema(&self) -> Module {
+        DelegationCoinsApiOpenRpc::module_doc()
     }
 
     fn into_impl(self) -> jsonrpsee::RpcModule<Self> {
@@ -315,20 +307,6 @@ async fn filter_coins(
     })
 }
 
-async fn coin_metadata_object_id(
-    ctx: &Context,
-    coin_type: String,
-) -> Result<Option<ObjectID>, RpcError<Error>> {
-    let coin_type_param = StructTag::from_str(&coin_type)
-        .map_err(|e| invalid_params(Error::BadType(coin_type.clone(), e)))?;
-
-    let full_coin_type = sui_types::coin::CoinMetadata::type_(coin_type_param);
-
-    Ok(load_singleton_object_id(ctx.pg_reader(), full_coin_type)
-        .await
-        .context("Failed to load singleton object id")?)
-}
-
 async fn coin_response(ctx: &Context, id: ObjectID) -> Result<Coin, RpcError<Error>> {
     let (object, coin_type, balance) = object_with_coin_data(ctx, id).await?;
 
@@ -349,16 +327,34 @@ async fn coin_response(ctx: &Context, id: ObjectID) -> Result<Coin, RpcError<Err
 
 async fn coin_metadata_response(
     ctx: &Context,
-    id: ObjectID,
-) -> Result<SuiCoinMetadata, RpcError<Error>> {
-    let object = load_latest(ctx, id)
-        .await?
-        .context("Latest object not found")?;
+    coin_type: &str,
+) -> Result<Option<SuiCoinMetadata>, RpcError<Error>> {
+    let coin_type = StructTag::from_str(coin_type)
+        .map_err(|e| invalid_params(Error::BadType(coin_type.to_owned(), e)))?;
+
+    let Some(stored) = ctx
+        .pg_loader()
+        .load_one(CoinMetadataKey(coin_type))
+        .await
+        .context("Failed to load info for CoinMetadata")?
+    else {
+        return Ok(None);
+    };
+
+    let id = ObjectID::from_bytes(&stored.object_id).context("Failed to parse ObjectID")?;
+
+    let Some(object) = load_latest(ctx, id)
+        .await
+        .context("Failed to load latest version of CoinMetadata")?
+    else {
+        return Ok(None);
+    };
 
     let coin_metadata = object
         .try_into()
-        .context("Failed to convert object to coin metadata")?;
-    Ok(coin_metadata)
+        .context("Failed to parse object as CoinMetadata")?;
+
+    Ok(Some(coin_metadata))
 }
 
 async fn object_with_coin_data(

@@ -56,6 +56,7 @@ use sui_types::sui_system_state::SuiSystemState;
 use sui_types::transaction::VerifiedCertificate;
 use tap::tap::TapFallible;
 use tokio::runtime::Handle;
+use tokio::sync::oneshot;
 use tokio::sync::{broadcast, mpsc, watch, Mutex};
 use tokio::task::{JoinHandle, JoinSet};
 use tower::ServiceBuilder;
@@ -543,6 +544,12 @@ impl SuiNode {
             )))
         };
 
+        let chain_id = ChainIdentifier::from(*genesis.checkpoint().digest());
+        let chain = match config.chain_override_for_testing {
+            Some(chain) => chain,
+            None => ChainIdentifier::from(*genesis.checkpoint().digest()).chain(),
+        };
+
         let epoch_options = default_db_options().optimize_db_for_write_throughput(4);
         let epoch_store = AuthorityPerEpochStore::new(
             config.protocol_public_key(),
@@ -556,12 +563,12 @@ impl SuiNode {
             cache_metrics,
             signature_verifier_metrics,
             &config.expensive_safety_check_config,
-            ChainIdentifier::from(*genesis.checkpoint().digest()),
+            (chain_id, chain),
             checkpoint_store
                 .get_highest_executed_checkpoint_seq_number()
                 .expect("checkpoint store read cannot fail")
                 .unwrap_or(0),
-        );
+        )?;
 
         info!("created epoch store");
 
@@ -858,7 +865,7 @@ impl SuiNode {
             components.consensus_adapter.submit_recovered(&epoch_store);
 
             // Start the gRPC server
-            components.validator_server_handle = components.validator_server_handle.start();
+            components.validator_server_handle = components.validator_server_handle.start().await;
 
             Some(components)
         } else {
@@ -1371,8 +1378,10 @@ impl SuiNode {
         ExecutionTimeObserver::spawn(
             epoch_store.clone(),
             Box::new(consensus_adapter.clone()),
-            config.local_execution_time_channel_capacity,
-            config.local_execution_time_cache_size(),
+            config
+                .execution_time_observer_config
+                .clone()
+                .unwrap_or_default(),
         );
 
         let throughput_calculator = Arc::new(ConsensusThroughputCalculator::new(
@@ -1552,14 +1561,25 @@ impl SuiNode {
             config.network_key_pair().copy().private(),
             SUI_TLS_SERVER_NAME.to_string(),
         );
-        let server = server_builder
-            .bind(config.network_address(), Some(tls_config))
-            .await
-            .map_err(|err| anyhow!(err.to_string()))?;
-        let local_addr = server.local_addr();
-        info!("Listening to traffic on {local_addr}");
 
-        Ok(SpawnOnce::new(server.serve().map_err(Into::into)))
+        let network_address = config.network_address().clone();
+
+        let (ready_tx, ready_rx) = oneshot::channel();
+
+        Ok(SpawnOnce::new(ready_rx, async move {
+            let server = server_builder
+                .bind(&network_address, Some(tls_config))
+                .await
+                .map_err(|err| anyhow!(err.to_string()))?;
+            let local_addr = server.local_addr();
+            info!("Listening to traffic on {local_addr}");
+            ready_tx.send(()).unwrap();
+            server
+                .serve()
+                .map_err(|err| anyhow!(err.to_string()))
+                .await?;
+            Ok(())
+        }))
     }
 
     async fn reexecute_pending_consensus_certs(
@@ -1610,8 +1630,9 @@ impl SuiNode {
         // possible that it may temporarily "forget" about transactions that it had previously
         // executed. This could confuse clients in some circumstances. However, the transactions
         // are still in pending_consensus_certificates, so we cannot lose any finality guarantees.
+        let timeout = if cfg!(msim) { 120 } else { 60 };
         if tokio::time::timeout(
-            std::time::Duration::from_secs(60),
+            std::time::Duration::from_secs(timeout),
             state
                 .get_transaction_cache_reader()
                 .notify_read_executed_effects_digests(&digests),
@@ -1934,7 +1955,8 @@ impl SuiNode {
                     )
                     .await?;
 
-                    components.validator_server_handle = components.validator_server_handle.start();
+                    components.validator_server_handle =
+                        components.validator_server_handle.start().await;
 
                     Some(components)
                 } else {
@@ -2077,21 +2099,25 @@ impl SuiNode {
 
 enum SpawnOnce {
     // Mutex is only needed to make SpawnOnce Send
-    Unstarted(Mutex<BoxFuture<'static, Result<()>>>),
+    Unstarted(oneshot::Receiver<()>, Mutex<BoxFuture<'static, Result<()>>>),
     #[allow(unused)]
     Started(JoinHandle<Result<()>>),
 }
 
 impl SpawnOnce {
-    pub fn new(future: impl Future<Output = Result<()>> + Send + 'static) -> Self {
-        Self::Unstarted(Mutex::new(Box::pin(future)))
+    pub fn new(
+        ready_rx: oneshot::Receiver<()>,
+        future: impl Future<Output = Result<()>> + Send + 'static,
+    ) -> Self {
+        Self::Unstarted(ready_rx, Mutex::new(Box::pin(future)))
     }
 
-    pub fn start(self) -> Self {
+    pub async fn start(self) -> Self {
         match self {
-            Self::Unstarted(future) => {
+            Self::Unstarted(ready_rx, future) => {
                 let future = future.into_inner();
                 let handle = tokio::spawn(future);
+                ready_rx.await.unwrap();
                 Self::Started(handle)
             }
             Self::Started(_) => self,

@@ -5,6 +5,7 @@ pub mod config;
 pub mod direct;
 pub mod json_rpc;
 
+use std::collections::HashSet;
 use std::time::Duration;
 
 use anyhow::Result;
@@ -54,6 +55,8 @@ pub enum Command {
         duration_secs: u64,
         #[clap(long, default_value = "requests.jsonl")]
         requests_file: String,
+        #[clap(long, value_delimiter = ',', value_parser = value_parser!(String))]
+        methods_to_skip: HashSet<String>,
     },
     /// Benchmark GraphQL queries
     #[clap(name = "graphql")]
@@ -89,6 +92,7 @@ pub async fn run_benchmarks() -> Result<(), anyhow::Error> {
                 concurrency,
                 duration: Duration::from_secs(duration_secs),
                 json_rpc_file_path: None,
+                json_rpc_methods_to_skip: HashSet::new(),
             };
             let query_executor = QueryExecutor::new(&db_url, enriched_queries, config).await?;
             let result = query_executor.run().await?;
@@ -110,9 +114,17 @@ pub async fn run_benchmarks() -> Result<(), anyhow::Error> {
             concurrency,
             duration_secs,
             requests_file,
+            methods_to_skip,
         } => {
             info!("Running JSON RPC benchmark against {endpoint} with concurrency={concurrency} duration_secs={duration_secs} requests_file={requests_file}");
-            json_rpc::run_benchmark(&endpoint, &requests_file, concurrency, duration_secs).await?;
+            json_rpc::run_benchmark(
+                &endpoint,
+                &requests_file,
+                concurrency,
+                duration_secs,
+                methods_to_skip,
+            )
+            .await?;
             Ok(())
         }
         Command::GraphQL { endpoint } => {

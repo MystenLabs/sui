@@ -14,7 +14,8 @@ use simulacrum::Simulacrum;
 use sui_indexer_alt::{config::IndexerConfig, setup_indexer};
 use sui_indexer_alt_framework::{ingestion::ClientArgs, schema::watermarks, IndexerArgs};
 use sui_indexer_alt_jsonrpc::{
-    config::RpcConfig, data::system_package_task::SystemPackageTaskArgs, start_rpc, RpcArgs,
+    config::RpcConfig, data::system_package_task::SystemPackageTaskArgs, start_rpc, NodeArgs,
+    RpcArgs,
 };
 use sui_pg_db::{
     temp::{get_available_port, TempDb},
@@ -51,7 +52,8 @@ pub struct FullCluster {
 }
 
 /// A collection of the off-chain services (an indexer, a database and a JSON-RPC server that reads
-/// from that database), grouped together to simplify set-up and tear-down for tests.
+/// from that database), grouped together to simplify set-up and tear-down for tests. The included
+/// JSON-RPC server currently does not support transaction dry run and execution.
 ///
 /// The database is temporary, and will be cleaned up when the cluster is dropped, and the RPC is
 /// set-up to listen on a random, available port, to avoid conflicts when multiple instances are
@@ -116,6 +118,9 @@ impl FullCluster {
         let client_args = ClientArgs {
             local_ingestion_path: Some(temp_dir.path().to_owned()),
             remote_store_url: None,
+            rpc_api_url: None,
+            rpc_username: None,
+            rpc_password: None,
         };
 
         let offchain = OffchainCluster::new(
@@ -253,24 +258,21 @@ impl OffchainCluster {
         let rpc_listen_address = SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), rpc_port);
 
         let database = TempDb::new().context("Failed to create database")?;
-
-        let db_args = DbArgs {
-            database_url: database.database().url().clone(),
-            ..Default::default()
-        };
+        let database_url = database.database().url();
 
         let rpc_args = RpcArgs {
             rpc_listen_address,
             ..Default::default()
         };
 
-        let db = Db::for_read(db_args.clone())
+        let db = Db::for_read(database_url.clone(), DbArgs::default())
             .await
             .context("Failed to connect to database")?;
 
         let with_genesis = true;
         let indexer = setup_indexer(
-            db_args.clone(),
+            database_url.clone(),
+            DbArgs::default(),
             indexer_args,
             client_args,
             indexer_config,
@@ -285,8 +287,10 @@ impl OffchainCluster {
         let indexer = indexer.run().await.context("Failed to start indexer")?;
 
         let jsonrpc = start_rpc(
-            db_args,
+            Some(database_url.clone()),
+            DbArgs::default(),
             rpc_args,
+            NodeArgs::default(),
             system_package_task_args,
             rpc_config,
             registry,

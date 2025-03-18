@@ -84,6 +84,7 @@ const concepts = [
 				],
 			},
 			'concepts/graphql-rpc',
+			'concepts/gaming'
 		],
 	},
 	{
@@ -162,7 +163,6 @@ const concepts = [
 			'concepts/tokenomics/vesting-strategies'
 		],
 	},
-	'concepts/sui-bridge',
 	'concepts/research-papers',
 ];
 module.exports = concepts;

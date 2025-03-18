@@ -90,7 +90,7 @@ pub struct ImageBuildArgs {
     /// The name of the git repository within the mystenlabs org
     #[arg(short, long)]
     repo_name: String,
-    /// The path to the dockerfile within the source code repository given by `--repo_name`
+    /// The path to the dockerfile within the source code repository given by `--repo_name` and `--context_sub_path` (if present)
     #[arg(short, long)]
     dockerfile: String,
     /// Optional repo region, default to "us-central1"
@@ -132,6 +132,11 @@ pub struct ImageBuildArgs {
     /// Optional arg to speciy the org to build the image for, default to "mystenlabs"
     #[arg(short = 'o', long)]
     org: Option<String>,
+    /// Optional arg to specify the context-sub-path, default to ""
+    #[arg(short = 'c', long)]
+    context_sub_path: Option<String>,
+    #[arg(long)]
+    disable_recurse_submodules: bool,
 }
 
 #[derive(Parser, Debug)]
@@ -147,9 +152,9 @@ pub struct ImageQueryArgs {
 #[derive(clap::Subcommand, Debug)]
 pub enum ImageAction {
     #[command(name = "build")]
-    Build(ImageBuildArgs),
+    Build(Box<ImageBuildArgs>),
     #[command(name = "query")]
-    Query(ImageQueryArgs),
+    Query(Box<ImageQueryArgs>),
     #[command(name = "status")]
     Status {
         #[arg(short = 'r', long)]
@@ -188,6 +193,8 @@ struct RequestBuildRequest {
     force: bool,
     image_target: Option<String>,
     org: String,
+    subpath: Option<String>,
+    disable_recurse_submodules: bool,
 }
 
 #[derive(serde::Serialize)]
@@ -335,42 +342,30 @@ pub async fn send_image_request(token: &str, action: &ImageAction) -> Result<()>
 
     if status.is_success() {
         match action {
-            ImageAction::Build(ImageBuildArgs {
-                repo_name,
-                dockerfile,
-                image_name,
-                image_tag,
-                ref_type,
-                ref_val,
-                repo_region: _,
-                build_mode: _,
-                cpu: _,
-                memory: _,
-                disk: _,
-                build_args: _,
-                force: _,
-                image_target,
-                org: _,
-            }) => {
-                let ref_type = ref_type.clone().unwrap_or(RefType::Branch);
-                let ref_val = ref_val.clone().unwrap_or("main".to_string());
+            ImageAction::Build(args) => {
+                let ref_type = args.ref_type.clone().unwrap_or(RefType::Branch);
+                let ref_val = args.ref_val.clone().unwrap_or("main".to_string());
                 let ref_name = format!("{}:{}", ref_type, ref_val);
-                let image_name = image_name.clone().unwrap_or("app".to_string());
-                let image_tag = image_tag.clone().unwrap_or("".to_string());
+                let image_name = args.image_name.clone().unwrap_or("app".to_string());
+                let image_tag = args.image_tag.clone().unwrap_or("".to_string());
                 let mut image_info = image_name;
                 if !image_tag.is_empty() {
                     image_info += &format!(":{}", image_tag);
                 }
-                if !image_target.is_none() {
-                    image_info += &format!("@{}", image_target.as_ref().unwrap());
+                if let Some(image_target) = &args.image_target {
+                    image_info += &format!("@{}", image_target);
                 }
-                println!(
+                let mut info_str = format!(
                     "Requested built image for repo: {}, ref: {}, dockerfile: {}, image: {}",
-                    repo_name.green(),
+                    args.repo_name.green(),
                     ref_name.green(),
-                    dockerfile.green(),
+                    args.dockerfile.green(),
                     image_info.green()
                 );
+                if let Some(context_sub_path) = &args.context_sub_path {
+                    info_str += &format!(" (context-sub-path: {})", context_sub_path.green());
+                }
+                println!("{}", info_str);
                 let json_resp = resp.json::<JobStatus>().await?;
                 println!("Build Job Status: {}", json_resp.status.green());
                 println!("Build Job Name: {}", json_resp.name.green());
@@ -379,13 +374,9 @@ pub async fn send_image_request(token: &str, action: &ImageAction) -> Result<()>
                     utc_to_local_time(json_resp.start_time).green()
                 );
             }
-            ImageAction::Query(ImageQueryArgs {
-                repo_name,
-                watch,
-                limit: _,
-            }) => {
-                if !*watch {
-                    println!("Requested query for repo: {}", repo_name.green());
+            ImageAction::Query(args) => {
+                if !args.watch {
+                    println!("Requested query for repo: {}", args.repo_name.green());
                     let status_table = get_status_table(resp).await?.to_string();
                     println!("{}", status_table);
                 } else {
@@ -521,30 +512,14 @@ fn generate_image_request(token: &str, action: &ImageAction) -> reqwest::Request
     let client = reqwest::Client::new();
     let api_server = get_api_server();
     let req = match action {
-        ImageAction::Build(ImageBuildArgs {
-            repo_name,
-            dockerfile,
-            image_name,
-            repo_region,
-            image_tag,
-            ref_type,
-            ref_val,
-            build_mode,
-            cpu,
-            memory,
-            disk,
-            build_args,
-            force,
-            image_target,
-            org,
-        }) => {
+        ImageAction::Build(args) => {
             let full_url = format!("{}{}", api_server, ENDPOINT);
             debug!("full_url: {}", full_url);
             let req = client.post(full_url);
-            let mut cpu = cpu.clone().unwrap_or("2".to_string());
-            let mut memory = memory.clone().unwrap_or("4Gi".to_string());
-            let mut disk = disk.clone().unwrap_or("20Gi".to_string());
-            if let Some(build_mode) = build_mode {
+            let mut cpu = args.cpu.clone().unwrap_or("2".to_string());
+            let mut memory = args.memory.clone().unwrap_or("4Gi".to_string());
+            let mut disk = args.disk.clone().unwrap_or("20Gi".to_string());
+            if let Some(build_mode) = &args.build_mode {
                 match build_mode {
                     BuildMode::Light => {
                         cpu = "2".to_string();
@@ -564,7 +539,7 @@ fn generate_image_request(token: &str, action: &ImageAction) -> reqwest::Request
                 }
             }
             let mut region = "us-central1".to_string();
-            if let Some(repo_region) = repo_region {
+            if let Some(repo_region) = &args.repo_region {
                 match repo_region {
                     RepoRegion::UsCentral1 => region = "us-central1".to_string(),
                     RepoRegion::UsWest1 => region = "us-west1".to_string(),
@@ -572,35 +547,33 @@ fn generate_image_request(token: &str, action: &ImageAction) -> reqwest::Request
                 }
             }
             let body = RequestBuildRequest {
-                repo_name: repo_name.clone(),
-                dockerfile: dockerfile.clone(),
-                image_name: image_name.clone(),
-                image_tag: image_tag.clone(),
-                ref_type: ref_type.clone(),
-                ref_val: ref_val.clone(),
+                repo_name: args.repo_name.clone(),
+                dockerfile: args.dockerfile.clone(),
+                image_name: args.image_name.clone(),
+                image_tag: args.image_tag.clone(),
+                ref_type: args.ref_type.clone(),
+                ref_val: args.ref_val.clone(),
                 repo_region: region,
                 cpu,
                 memory,
                 disk,
-                build_args: build_args.clone(),
-                force: *force,
-                image_target: image_target.clone(),
-                org: org.clone().unwrap_or("mystenlabs".to_string()),
+                build_args: args.build_args.clone(),
+                force: args.force,
+                image_target: args.image_target.clone(),
+                org: args.org.clone().unwrap_or("mystenlabs".to_string()),
+                subpath: args.context_sub_path.clone(),
+                disable_recurse_submodules: args.disable_recurse_submodules,
             };
             debug!("req body: {:?}", body);
             req.json(&body).headers(generate_headers_with_auth(token))
         }
-        ImageAction::Query(ImageQueryArgs {
-            repo_name,
-            limit,
-            watch: _,
-        }) => {
+        ImageAction::Query(args) => {
             let full_url = format!("{}{}", api_server, ENDPOINT);
             debug!("full_url: {}", full_url);
             let req = client.get(full_url);
-            let limit = (*limit).unwrap_or(10);
+            let limit = args.limit.unwrap_or(10);
             let query = QueryBuildsRequest {
-                repo_name: repo_name.clone(),
+                repo_name: args.repo_name.clone(),
                 limit,
             };
             req.query(&query).headers(generate_headers_with_auth(token))

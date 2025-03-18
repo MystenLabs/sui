@@ -12,13 +12,13 @@ import {
     IRuntimeRefValue
 } from './runtime';
 import {
-    ISourceMap,
+    IDebugInfo,
     ILocalInfo,
     IFileLoc,
     IFileInfo,
     ILoc,
-    ISourceMapFunction
-} from './source_map_utils';
+    IDebugInfoFunction
+} from './debug_info_utils';
 
 
 // Data types corresponding to trace file JSON schema.
@@ -244,20 +244,20 @@ export type TraceEvent =
         id: number,
         name: string,
         srcFileHash: string
-        bcodeFileHash: undefined | string,
+        bcodeFileHash?: string,
         isNative: boolean,
         localsTypes: string[],
         localsNames: ILocalInfo[],
         paramValues: RuntimeValueType[]
         optimizedSrcLines: number[]
-        optimizedBcodeLines: undefined | number[]
+        optimizedBcodeLines?: number[]
     }
     | { type: TraceEventKind.CloseFrame, id: number }
     | {
         type: TraceEventKind.Instruction,
         pc: number,
         srcLoc: ILoc,
-        bcodeLoc: undefined | ILoc,
+        bcodeLoc?: ILoc,
         kind: TraceInstructionKind
     }
     | { type: TraceEventKind.Effect, effect: EventEffect };
@@ -320,7 +320,7 @@ interface ITraceGenFrameInfo {
     /**
      * Path to a disassembled bytecode file containing function represented by the frame.
      */
-    bcodeFilePath: undefined | string;
+    bcodeFilePath?: string;
     /**
      * Hash of a source file containing function represented by the frame.
      */
@@ -328,7 +328,7 @@ interface ITraceGenFrameInfo {
     /**
      * Hash of a disassembled bytecode file containing function represented by the frame.
      */
-    bcodeFileHash: undefined | string;
+    bcodeFileHash?: string;
     /**
      * Code lines in a given source file that have been optimized away.
      */
@@ -336,7 +336,7 @@ interface ITraceGenFrameInfo {
     /**
      * Code lines in a given disassembled bytecode file that have been optimized away.
      */
-    optimizedBcodeLines: undefined | number[];
+    optimizedBcodeLines?: number[];
     /**
      * Name of the function represented by the frame.
      */
@@ -344,11 +344,11 @@ interface ITraceGenFrameInfo {
     /**
     * Information for a given function in a source file.
     */
-    srcFunEntry: ISourceMapFunction;
+    srcFunEntry: IDebugInfoFunction;
     /**
     * Information for a given function in a disassembled byc file.
     */
-    bcodeFunEntry: undefined | ISourceMapFunction;
+    bcodeFunEntry?: IDebugInfoFunction;
 }
 
 /**
@@ -376,9 +376,9 @@ const INLINED_FRAME_ID_DIFFERENT_FILE = -2;
  */
 export function readTrace(
     traceFilePath: string,
-    sourceMapsHashMap: Map<string, ISourceMap>,
-    sourceMapsModMap: Map<string, ISourceMap>,
-    bcodeMapModMap: Map<string, ISourceMap>,
+    sourceMapsHashMap: Map<string, IDebugInfo>,
+    sourceMapsModMap: Map<string, IDebugInfo>,
+    bcodeMapModMap: Map<string, IDebugInfo>,
     filesMap: Map<string, IFileInfo>,
 ): ITrace {
     const traceJSON: JSONTraceRootObject = JSON.parse(fs.readFileSync(traceFilePath, 'utf8'));
@@ -682,7 +682,7 @@ function recordTracedLine(
  * an inlined macro defined in a different file, `false` otherwise.
  */
 function processInstructionIfMacro(
-    sourceMapsHashMap: Map<string, ISourceMap>,
+    sourceMapsHashMap: Map<string, IDebugInfo>,
     events: TraceEvent[],
     frameInfoStack: ITraceGenFrameInfo[],
     instPC: number,

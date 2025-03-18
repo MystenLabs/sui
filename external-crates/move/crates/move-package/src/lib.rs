@@ -25,7 +25,7 @@ use serde::{Deserialize, Serialize};
 use source_package::{
     layout::SourcePackageLayout,
     manifest_parser::{parse_move_manifest_string, parse_source_manifest},
-    parsed_manifest::DependencyKind,
+    parsed_manifest::{Dependencies, DependencyKind},
 };
 use std::{
     collections::BTreeMap,
@@ -114,6 +114,10 @@ pub struct BuildConfig {
 
     #[clap(flatten)]
     pub lint_flag: LintFlag,
+
+    /// Additional dependencies to be automatically included in every package
+    #[clap(skip)]
+    pub implicit_dependencies: Dependencies,
 }
 
 #[derive(
@@ -285,6 +289,7 @@ impl BuildConfig {
             self.skip_fetch_latest_git_deps,
             writer,
             install_dir.clone(),
+            self.implicit_dependencies.clone(),
         );
         let (dependency_graph, modified) = dep_graph_builder.get_graph(
             &DependencyKind::default(),

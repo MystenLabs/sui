@@ -223,24 +223,6 @@ async fn deprecate_test() {
     }
 }
 
-#[tokio::test]
-async fn macro_transactional_test() {
-    let key = "key".to_string();
-    let primary_path = temp_dir();
-    let tables = Tables::open_tables_transactional(primary_path, MetricConf::default(), None, None);
-    let mut transaction = tables
-        .table1
-        .transaction()
-        .expect("failed to init transaction");
-    transaction
-        .insert_batch(&tables.table1, vec![(key.to_string(), "1".to_string())])
-        .unwrap();
-    transaction
-        .commit()
-        .expect("failed to commit first transaction");
-    assert_eq!(tables.table1.get(&key), Ok(Some("1".to_string())));
-}
-
 /// We show that custom functions can be applied
 #[derive(DBMapUtils)]
 struct TablesCustomOptions {

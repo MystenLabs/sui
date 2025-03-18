@@ -733,7 +733,7 @@ impl ReadApiServer for ReadApi {
             let transaction_kv_store = self.transaction_kv_store.clone();
             let transaction = spawn_monitored_task!(async move {
                 let ret = transaction_kv_store.get_tx(digest).await.map_err(|err| {
-                    debug!(tx_digest=?digest, "Failed to get transaction: {:?}", err);
+                    debug!(tx_digest=?digest, "Failed to get transaction: {}", err);
                     Error::from(err)
                 });
                 add_server_timing("tx_kv_lookup");
@@ -1092,6 +1092,7 @@ impl ReadApiServer for ReadApi {
             oidc_provider_jwks,
             vec![],
             zklogin_env_native,
+            true,
             true,
             true,
             Some(30),

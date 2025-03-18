@@ -8,6 +8,7 @@ import * as path from 'path';
 
 export const MOVE_CONF_NAME = 'move';
 export const LINT_OPT = 'lint';
+export const FORCE_BUNDLED = 'force-bundled';
 export const TYPE_HINTS_OPT = 'inlay-hints.type';
 export const PARAM_HINTS_OPT = 'inlay-hints.param';
 export const SUI_PATH_OPT = 'sui.path';
@@ -72,6 +73,10 @@ export class Configuration {
 
     get lint(): string {
         return this.configuration.get(LINT_OPT) ?? 'default';
+    }
+
+    get forceBundled(): boolean {
+        return this.configuration.get(FORCE_BUNDLED) ?? false;
     }
 
     get inlayHintsForType(): boolean {

@@ -43,7 +43,7 @@ exclude = [
     "external-crates/move/crates/move-stdlib-natives",
     "external-crates/move/crates/move-symbol-pool",
     "external-crates/move/crates/move-transactional-test-runner",
-    "external-crates/move/crates/move-trace-format",    
+    "external-crates/move/crates/move-trace-format",
     "external-crates/move/crates/move-unit-test",
     "external-crates/move/crates/move-vm-config",
     "external-crates/move/crates/move-vm-integration-tests",
@@ -57,13 +57,16 @@ exclude = [
     "external-crates/move/move-execution/v0/crates/move-bytecode-verifier",
     "external-crates/move/move-execution/v0/crates/move-stdlib-natives",
     "external-crates/move/move-execution/v0/crates/move-vm-runtime",
+    "external-crates/move/move-execution/v0/crates/move-vm-types",
     "external-crates/move/move-execution/v1/crates/move-bytecode-verifier",
     "external-crates/move/move-execution/v1/crates/move-stdlib-natives",
     "external-crates/move/move-execution/v1/crates/move-vm-runtime",
+    "external-crates/move/move-execution/v1/crates/move-vm-types",
     "external-crates/move/move-execution/v2/crates/move-abstract-interpreter",
     "external-crates/move/move-execution/v2/crates/move-bytecode-verifier",
     "external-crates/move/move-execution/v2/crates/move-stdlib-natives",
     "external-crates/move/move-execution/v2/crates/move-vm-runtime",
+    "external-crates/move/move-execution/v2/crates/move-vm-types",
 ]
 
 members = [
@@ -76,8 +79,6 @@ members = [
     "crates/mysten-metrics",
     "crates/mysten-network",
     "crates/mysten-service",
-    "crates/mysten-util-mem",
-    "crates/mysten-util-mem-derive",
     "crates/prometheus-closure-metric",
     "crates/shared-crypto",
     "crates/simulacrum",
@@ -100,6 +101,7 @@ members = [
     "crates/sui-data-ingestion-core",
     "crates/sui-deepbook-indexer",
     "crates/sui-default-config",
+    "crates/sui-display",
     "crates/sui-e2e-tests",
     "crates/sui-edge-proxy",
     "crates/sui-enum-compat-util",
@@ -210,7 +212,7 @@ members = [
 
 [workspace.package]
 # This version string will be inherited by sui-core, sui-faucet, sui-node, sui-tools, sui-sdk, sui-move-build, and sui crates.
-version = "1.44.0"
+version = "1.46.0"
 
 [profile.release]
 # debug = 1 means line charts only, which is minimum needed for good stack traces
@@ -304,6 +306,7 @@ backoff = { version = "0.4.0", features = [
     "tokio",
     "tokio_1",
 ] }
+backon = "1.4.0"
 base64 = "0.21.2"
 base64-url = "2"
 bcs = "0.1.4"
@@ -316,7 +319,8 @@ bytes = { version = "1.5.0", features = ["serde"] }
 cached = "0.43.0"
 camino = "1.1.1"
 cfg-if = "1.0.0"
-chrono = { version = "0.4.26", features = ["clock", "serde"] }
+# Locked to this version until a release of `arrow` that includes https://github.com/apache/arrow-rs/pull/7198
+chrono = { version = "=0.4.39", features = ["clock", "serde"] }
 clap = { version = "4.4", features = ["derive", "wrap_help"] }
 codespan-reporting = "0.11.1"
 collectable = "0.0.2"
@@ -346,7 +350,7 @@ diesel_migrations = "2.2"
 diesel-async = "0.5"
 dirs = "4.0.0"
 duration-str = "0.5.0"
-ed25519 = { version = "1.5.0", features = ["pkcs8", "alloc", "zeroize"] }
+ed25519 = { version = "2", features = ["pkcs8", "alloc", "zeroize"] }
 ed25519-consensus = { version = "2.0.1", features = ["serde"] }
 either = "1.8.0"
 petgraph = "0.5.1"
@@ -402,12 +406,13 @@ moka = { version = "0.12", default-features = false, features = [
     "atomic64",
 ] }
 more-asserts = "0.3.1"
-msim = { git = "https://github.com/MystenLabs/mysten-sim.git", rev = "e06fc6fa9aeb978ffc621f8b27c06a404042279f", package = "msim" }
-msim-macros = { git = "https://github.com/MystenLabs/mysten-sim.git", rev = "e06fc6fa9aeb978ffc621f8b27c06a404042279f", package = "msim-macros" }
+msim = { git = "https://github.com/MystenLabs/mysten-sim.git", rev = "9f175e3517812929ad6bdd8db443f1bbd8107965", package = "msim" }
+msim-macros = { git = "https://github.com/MystenLabs/mysten-sim.git", rev = "9f175e3517812929ad6bdd8db443f1bbd8107965", package = "msim-macros" }
 multiaddr = "0.17.0"
 nexlint = { git = "https://github.com/nextest-rs/nexlint.git", rev = "7ce56bd591242a57660ed05f14ca2483c37d895b" }
 nexlint-lints = { git = "https://github.com/nextest-rs/nexlint.git", rev = "7ce56bd591242a57660ed05f14ca2483c37d895b" }
 nonempty = "0.9.0"
+nonzero_ext = "0.3.0"
 notify = "6.1.1"
 ntest = "0.9.0"
 num-bigint = "0.4.4"
@@ -419,7 +424,7 @@ ouroboros = "0.17"
 parking_lot = { version = "0.12.3", features = ["arc_lock"] }
 parquet = "54"
 pin-project-lite = "0.2.13"
-pkcs8 = { version = "0.9.0", features = ["std"] }
+pkcs8 = { version = "0.10.0", features = ["std"] }
 pprof = { version = "0.14.0", features = ["cpp", "frame-pointer"] }
 pretty_assertions = "1.3.0"
 prettytable-rs = "0.10.0"
@@ -547,12 +552,13 @@ ureq = "2.9.1"
 url = "2.3.1"
 uuid = { version = "1.1.2", features = ["v4", "fast-rng"] }
 walkdir = "2.5.0"
-webpki = { version = "0.102", package = "rustls-webpki", features = [
+webpki = { version = "0.103", package = "rustls-webpki", features = [
     "alloc",
     "std",
+    "ring",
 ] }
 wiremock = "0.5"
-x509-parser = { version = "0.14.0", features = ["verify"] }
+x509-parser = { version = "0.17.0", features = ["verify"] }
 zstd = "0.12.3"
 zeroize = "1.6.0"
 versions = "4.1.0"
@@ -574,7 +580,6 @@ move-vm-config = { path = "external-crates/move/crates/move-vm-config" }
 move-vm-test-utils = { path = "external-crates/move/crates/move-vm-test-utils/", features = [
     "tiered-gas",
 ] }
-move-vm-types = { path = "external-crates/move/crates/move-vm-types" }
 move-vm-profiler = { path = "external-crates/move/crates/move-vm-profiler" }
 move-command-line-common = { path = "external-crates/move/crates/move-command-line-common" }
 move-transactional-test-runner = { path = "external-crates/move/crates/move-transactional-test-runner" }
@@ -602,15 +607,14 @@ p384 = { version = "0.13.0", default-features = false, features = ["ecdsa","sha3
 ciborium = "0.2"
 
 # anemo dependencies
-anemo = { git = "https://github.com/mystenlabs/anemo.git", rev = "e609f7697ed6169bf0760882a0b6c032a57e4f3b" }
-anemo-build = { git = "https://github.com/mystenlabs/anemo.git", rev = "e609f7697ed6169bf0760882a0b6c032a57e4f3b" }
-anemo-cli = { git = "https://github.com/mystenlabs/anemo.git", rev = "e609f7697ed6169bf0760882a0b6c032a57e4f3b" }
-anemo-tower = { git = "https://github.com/mystenlabs/anemo.git", rev = "e609f7697ed6169bf0760882a0b6c032a57e4f3b" }
+anemo = { git = "https://github.com/mystenlabs/anemo.git", rev = "9c52c3c7946532163a79129db15180cdb984bab4" }
+anemo-build = { git = "https://github.com/mystenlabs/anemo.git", rev = "9c52c3c7946532163a79129db15180cdb984bab4" }
+anemo-cli = { git = "https://github.com/mystenlabs/anemo.git", rev = "9c52c3c7946532163a79129db15180cdb984bab4" }
+anemo-tower = { git = "https://github.com/mystenlabs/anemo.git", rev = "9c52c3c7946532163a79129db15180cdb984bab4" }
 
-# core-types with json format for REST api
-# sui-sdk-types = { version = "0.0.1", features = ["hash", "serde", "schemars"] }
-sui-sdk-types = { git = "https://github.com/MystenLabs/sui-rust-sdk.git", rev = "cb174b66714ea643e4b78bbfadb3f9c17e635460", features = ["hash", "serde"] }
-sui-sdk-transaction-builder = { git = "https://github.com/MystenLabs/sui-rust-sdk.git", rev = "cb174b66714ea643e4b78bbfadb3f9c17e635460", package = "sui-transaction-builder" }
+# core-types from the new sdk for use in gRPC
+sui-sdk-types = { git = "https://github.com/MystenLabs/sui-rust-sdk.git", rev = "5e11579031793f086178332219f5847ec94da0c4", features = ["hash", "serde"] }
+sui-sdk-transaction-builder = { git = "https://github.com/MystenLabs/sui-rust-sdk.git", rev = "5e11579031793f086178332219f5847ec94da0c4", package = "sui-transaction-builder" }
 
 ### Workspace Members ###
 anemo-benchmark = { path = "crates/anemo-benchmark" }
@@ -619,8 +623,6 @@ mysten-common = { path = "crates/mysten-common" }
 mysten-metrics = { path = "crates/mysten-metrics" }
 mysten-network = { path = "crates/mysten-network" }
 mysten-service = { path = "crates/mysten-service" }
-mysten-util-mem = { path = "crates/mysten-util-mem" }
-mysten-util-mem-derive = { path = "crates/mysten-util-mem-derive" }
 prometheus-closure-metric = { path = "crates/prometheus-closure-metric" }
 shared-crypto = { path = "crates/shared-crypto" }
 simulacrum = { path = "crates/simulacrum" }
@@ -639,6 +641,7 @@ sui-cost = { path = "crates/sui-cost" }
 sui-data-ingestion = { path = "crates/sui-data-ingestion" }
 sui-data-ingestion-core = { path = "crates/sui-data-ingestion-core" }
 sui-default-config = { path = "crates/sui-default-config" }
+sui-display = { path = "crates/sui-display" }
 sui-e2e-tests = { path = "crates/sui-e2e-tests" }
 sui-enum-compat-util = { path = "crates/sui-enum-compat-util" }
 sui-faucet = { path = "crates/sui-faucet" }
@@ -654,7 +657,7 @@ sui-genesis-builder = { path = "crates/sui-genesis-builder" }
 sui-http = { path = "crates/sui-http" }
 sui-indexer = { path = "crates/sui-indexer" }
 sui-indexer-alt = { path = "crates/sui-indexer-alt" }
-sui-indexer-alt-framework = { path = "crates/sui-indexer-alt-framework" }
+sui-indexer-alt-framework = { path = "crates/sui-indexer-alt-framework", default-features = false }
 sui-indexer-alt-jsonrpc = { path = "crates/sui-indexer-alt-jsonrpc" }
 sui-indexer-alt-metrics = { path = "crates/sui-indexer-alt-metrics" }
 sui-indexer-alt-restorer = { path = "crates/sui-indexer-alt-restorer" }

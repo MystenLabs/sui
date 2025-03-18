@@ -7,6 +7,8 @@ use async_graphql::dataloader::DataLoader;
 use prometheus::Registry;
 use sui_package_resolver::Resolver;
 use sui_pg_db::DbArgs;
+use tokio_util::sync::CancellationToken;
+use url::Url;
 
 use crate::{
     config::RpcConfig,
@@ -39,23 +41,31 @@ pub(crate) struct Context {
     /// through the same connection pool as `reader`).
     package_resolver: PackageResolver,
 
+    /// Access to the RPC's metrics.
+    metrics: Arc<RpcMetrics>,
+
     /// Access to the RPC's configuration.
     config: Arc<RpcConfig>,
 }
 
 impl Context {
-    /// Set-up access to the database through all the interfaces available in the context.
+    /// Set-up access to the database through all the interfaces available in the context. If
+    /// `database_url` is `None`, the interfaces will be set-up but will fail to accept any
+    /// connections.
     pub(crate) async fn new(
+        database_url: Option<Url>,
         db_args: DbArgs,
         config: RpcConfig,
         metrics: Arc<RpcMetrics>,
         registry: &Registry,
+        cancel: CancellationToken,
     ) -> Result<Self, Error> {
-        let pg_reader = PgReader::new(db_args, metrics, registry).await?;
+        let pg_reader =
+            PgReader::new(database_url, db_args, metrics.clone(), registry, cancel).await?;
         let pg_loader = Arc::new(pg_reader.as_data_loader());
 
         let kv_loader = if let Some(config) = config.bigtable.clone() {
-            let bigtable_reader = BigtableReader::new(config.instance_id).await?;
+            let bigtable_reader = BigtableReader::new(config.instance_id, registry).await?;
             KvLoader::new_with_bigtable(Arc::new(bigtable_reader.as_data_loader()))
         } else {
             KvLoader::new_with_pg(pg_loader.clone())
@@ -72,6 +82,7 @@ impl Context {
             pg_loader,
             kv_loader,
             package_resolver,
+            metrics,
             config: Arc::new(config),
         })
     }
@@ -96,6 +107,11 @@ impl Context {
     /// For querying type and function signature information.
     pub(crate) fn package_resolver(&self) -> &PackageResolver {
         &self.package_resolver
+    }
+
+    /// Access to the RPC metrics.
+    pub(crate) fn metrics(&self) -> &RpcMetrics {
+        self.metrics.as_ref()
     }
 
     /// Access to the RPC configuration.

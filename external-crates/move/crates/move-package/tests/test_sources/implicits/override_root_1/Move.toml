@@ -1,0 +1,7 @@
+[package]
+name = "A"
+edition = "2024.beta"
+
+[dependencies]
+B = { local = "../b" }
+I1 = { local = "../i1a", override = true }

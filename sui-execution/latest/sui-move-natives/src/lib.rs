@@ -31,7 +31,12 @@ use self::{
     transfer::{
         TransferFreezeObjectCostParams, TransferInternalCostParams, TransferShareObjectCostParams,
     },
-    tx_context::TxContextDeriveIdCostParams,
+    tx_context::{
+        TxContextDeriveIdCostParams, TxContextEpochCostParams, TxContextEpochTimestampMsCostParams,
+        TxContextFreshIdCostParams, TxContextGasBudgetCostParams, TxContextGasPriceCostParams,
+        TxContextIdsCreatedCostParams, TxContextReplaceCostParams, TxContextSenderCostParams,
+        TxContextSponsorCostParams,
+    },
     types::TypesIsOneTimeWitnessCostParams,
     validator::ValidatorValidateMetadataBcsCostParams,
 };
@@ -74,11 +79,14 @@ pub mod object_runtime;
 mod random;
 pub mod test_scenario;
 mod test_utils;
+pub mod transaction_context;
 mod transfer;
 mod tx_context;
 mod types;
 mod validator;
 
+// TODO: remove in later PRs once we define the proper cost of native functions
+const DEFAULT_UNUSED_TX_CONTEXT_ENTRY_COST: u64 = 10;
 #[derive(Tid)]
 pub struct NativesCostTable {
     // Address natives
@@ -113,6 +121,15 @@ pub struct NativesCostTable {
 
     // TxContext
     pub tx_context_derive_id_cost_params: TxContextDeriveIdCostParams,
+    pub tx_context_fresh_id_cost_params: TxContextFreshIdCostParams,
+    pub tx_context_sender_cost_params: TxContextSenderCostParams,
+    pub tx_context_epoch_cost_params: TxContextEpochCostParams,
+    pub tx_context_epoch_timestamp_ms_cost_params: TxContextEpochTimestampMsCostParams,
+    pub tx_context_sponsor_cost_params: TxContextSponsorCostParams,
+    pub tx_context_gas_price_cost_params: TxContextGasPriceCostParams,
+    pub tx_context_gas_budget_cost_params: TxContextGasBudgetCostParams,
+    pub tx_context_ids_created_cost_params: TxContextIdsCreatedCostParams,
+    pub tx_context_replace_cost_params: TxContextReplaceCostParams,
 
     // Type
     pub type_is_one_time_witness_cost_params: TypesIsOneTimeWitnessCostParams,
@@ -338,10 +355,76 @@ impl NativesCostTable {
                     .transfer_share_object_cost_base()
                     .into(),
             },
+            // tx_context
             tx_context_derive_id_cost_params: TxContextDeriveIdCostParams {
                 tx_context_derive_id_cost_base: protocol_config
                     .tx_context_derive_id_cost_base()
                     .into(),
+            },
+            tx_context_fresh_id_cost_params: TxContextFreshIdCostParams {
+                tx_context_fresh_id_cost_base: if protocol_config.move_native_context() {
+                    protocol_config.tx_context_fresh_id_cost_base().into()
+                } else {
+                    DEFAULT_UNUSED_TX_CONTEXT_ENTRY_COST.into()
+                },
+            },
+            tx_context_sender_cost_params: TxContextSenderCostParams {
+                tx_context_sender_cost_base: if protocol_config.move_native_context() {
+                    protocol_config.tx_context_sender_cost_base().into()
+                } else {
+                    DEFAULT_UNUSED_TX_CONTEXT_ENTRY_COST.into()
+                },
+            },
+            tx_context_epoch_cost_params: TxContextEpochCostParams {
+                tx_context_epoch_cost_base: if protocol_config.move_native_context() {
+                    protocol_config.tx_context_epoch_cost_base().into()
+                } else {
+                    DEFAULT_UNUSED_TX_CONTEXT_ENTRY_COST.into()
+                },
+            },
+            tx_context_epoch_timestamp_ms_cost_params: TxContextEpochTimestampMsCostParams {
+                tx_context_epoch_timestamp_ms_cost_base: if protocol_config.move_native_context() {
+                    protocol_config
+                        .tx_context_epoch_timestamp_ms_cost_base()
+                        .into()
+                } else {
+                    DEFAULT_UNUSED_TX_CONTEXT_ENTRY_COST.into()
+                },
+            },
+            tx_context_sponsor_cost_params: TxContextSponsorCostParams {
+                tx_context_sponsor_cost_base: if protocol_config.move_native_context() {
+                    protocol_config.tx_context_sponsor_cost_base().into()
+                } else {
+                    DEFAULT_UNUSED_TX_CONTEXT_ENTRY_COST.into()
+                },
+            },
+            tx_context_gas_price_cost_params: TxContextGasPriceCostParams {
+                tx_context_gas_price_cost_base: if protocol_config.move_native_context() {
+                    protocol_config.tx_context_gas_price_cost_base().into()
+                } else {
+                    DEFAULT_UNUSED_TX_CONTEXT_ENTRY_COST.into()
+                },
+            },
+            tx_context_gas_budget_cost_params: TxContextGasBudgetCostParams {
+                tx_context_gas_budget_cost_base: if protocol_config.move_native_context() {
+                    protocol_config.tx_context_gas_budget_cost_base().into()
+                } else {
+                    DEFAULT_UNUSED_TX_CONTEXT_ENTRY_COST.into()
+                },
+            },
+            tx_context_ids_created_cost_params: TxContextIdsCreatedCostParams {
+                tx_context_ids_created_cost_base: if protocol_config.move_native_context() {
+                    protocol_config.tx_context_ids_created_cost_base().into()
+                } else {
+                    DEFAULT_UNUSED_TX_CONTEXT_ENTRY_COST.into()
+                },
+            },
+            tx_context_replace_cost_params: TxContextReplaceCostParams {
+                tx_context_replace_cost_base: if protocol_config.move_native_context() {
+                    protocol_config.tx_context_replace_cost_base().into()
+                } else {
+                    DEFAULT_UNUSED_TX_CONTEXT_ENTRY_COST.into()
+                },
             },
             type_is_one_time_witness_cost_params: TypesIsOneTimeWitnessCostParams {
                 types_is_one_time_witness_cost_base: protocol_config
@@ -1024,9 +1107,51 @@ pub fn all_natives(silent: bool, protocol_config: &ProtocolConfig) -> NativeFunc
         ),
         (
             "tx_context",
+            "last_created_id",
+            make_native!(tx_context::last_created_id),
+        ),
+        (
+            "tx_context",
             "derive_id",
             make_native!(tx_context::derive_id),
         ),
+        ("tx_context", "fresh_id", make_native!(tx_context::fresh_id)),
+        (
+            "tx_context",
+            "native_sender",
+            make_native!(tx_context::sender),
+        ),
+        (
+            "tx_context",
+            "native_epoch",
+            make_native!(tx_context::epoch),
+        ),
+        (
+            "tx_context",
+            "native_epoch_timestamp_ms",
+            make_native!(tx_context::epoch_timestamp_ms),
+        ),
+        (
+            "tx_context",
+            "native_sponsor",
+            make_native!(tx_context::sponsor),
+        ),
+        (
+            "tx_context",
+            "native_gas_price",
+            make_native!(tx_context::gas_price),
+        ),
+        (
+            "tx_context",
+            "native_gas_budget",
+            make_native!(tx_context::gas_budget),
+        ),
+        (
+            "tx_context",
+            "native_ids_created",
+            make_native!(tx_context::ids_created),
+        ),
+        ("tx_context", "replace", make_native!(tx_context::replace)),
         (
             "types",
             "is_one_time_witness",

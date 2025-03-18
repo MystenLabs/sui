@@ -3,22 +3,20 @@
 
 use futures::future::join_all;
 use rand::rngs::OsRng;
-use std::collections::{BTreeSet, HashSet};
+use std::collections::BTreeSet;
 use std::sync::Arc;
 use std::time::Duration;
 use sui_core::consensus_adapter::position_submit_certificate;
 use sui_json_rpc_types::SuiTransactionBlockEffectsAPI;
 use sui_macros::sim_test;
 use sui_node::SuiNodeHandle;
-use sui_protocol_config::ProtocolConfig;
+use sui_protocol_config::{Chain, ProtocolConfig};
 use sui_swarm_config::genesis_config::{ValidatorGenesisConfig, ValidatorGenesisConfigBuilder};
 use sui_test_transaction_builder::{make_transfer_sui_transaction, TestTransactionBuilder};
 use sui_types::base_types::SuiAddress;
 use sui_types::effects::TransactionEffectsAPI;
 use sui_types::error::SuiError;
-use sui_types::gas::GasCostSummary;
 use sui_types::governance::MIN_VALIDATOR_JOINING_STAKE_MIST;
-use sui_types::message_envelope::Message;
 use sui_types::sui_system_state::{
     get_validator_from_table, sui_system_state_summary::get_validator_by_pool_id,
     SuiSystemStateTrait,
@@ -26,49 +24,6 @@ use sui_types::sui_system_state::{
 use sui_types::transaction::{TransactionDataAPI, TransactionExpiration, VerifiedTransaction};
 use test_cluster::{TestCluster, TestClusterBuilder};
 use tokio::time::sleep;
-
-#[sim_test]
-async fn advance_epoch_tx_test() {
-    let test_cluster = TestClusterBuilder::new().build().await;
-    let states = test_cluster
-        .swarm
-        .validator_node_handles()
-        .into_iter()
-        .map(|handle| handle.with(|node| node.state()))
-        .collect::<Vec<_>>();
-    let tasks: Vec<_> = states
-        .iter()
-        .map(|state| async {
-            let (_system_state, effects) = state
-                .create_and_execute_advance_epoch_tx(
-                    &state.epoch_store_for_testing(),
-                    &GasCostSummary::new(0, 0, 0, 0),
-                    0, // checkpoint
-                    0, // epoch_start_timestamp_ms
-                    vec![],
-                    0, // last_checkpoint
-                )
-                .await
-                .unwrap();
-            // Check that the validator didn't commit the transaction yet.
-            assert!(state
-                .get_signed_effects_and_maybe_resign(
-                    effects.transaction_digest(),
-                    &state.epoch_store_for_testing()
-                )
-                .unwrap()
-                .is_none());
-            effects
-        })
-        .collect();
-    let results: HashSet<_> = join_all(tasks)
-        .await
-        .into_iter()
-        .map(|result| result.digest())
-        .collect();
-    // Check that all validators have the same result.
-    assert_eq!(results.len(), 1);
-}
 
 #[sim_test]
 async fn basic_reconfig_end_to_end_test() {
@@ -251,15 +206,25 @@ async fn reconfig_with_revert_end_to_end_test() {
 // This test just starts up a cluster that reconfigures itself under 0 load.
 #[sim_test]
 async fn test_passive_reconfig() {
-    do_test_passive_reconfig().await;
+    do_test_passive_reconfig(None).await;
+}
+
+#[sim_test]
+async fn test_passive_reconfig_mainnet_smoke_test() {
+    do_test_passive_reconfig(Some(Chain::Mainnet)).await;
+}
+
+#[sim_test]
+async fn test_passive_reconfig_testnet_smoke_test() {
+    do_test_passive_reconfig(Some(Chain::Testnet)).await;
 }
 
 #[sim_test(check_determinism)]
 async fn test_passive_reconfig_determinism() {
-    do_test_passive_reconfig().await;
+    do_test_passive_reconfig(None).await;
 }
 
-async fn do_test_passive_reconfig() {
+async fn do_test_passive_reconfig(chain: Option<Chain>) {
     telemetry_subscribers::init_for_testing();
     let _commit_root_state_digest = ProtocolConfig::apply_overrides_for_testing(|_, mut config| {
         config.set_commit_root_state_digest_supported_for_testing(true);
@@ -267,10 +232,13 @@ async fn do_test_passive_reconfig() {
     });
     ProtocolConfig::poison_get_for_min_version();
 
-    let test_cluster = TestClusterBuilder::new()
-        .with_epoch_duration_ms(1000)
-        .build()
-        .await;
+    let mut builder = TestClusterBuilder::new().with_epoch_duration_ms(1000);
+
+    if let Some(chain) = chain {
+        builder = builder.with_chain_override(chain);
+    }
+
+    let test_cluster = builder.build().await;
 
     let target_epoch: u64 = std::env::var("RECONFIG_TARGET_EPOCH")
         .ok()
@@ -723,6 +691,7 @@ async fn do_test_reconfig_with_committee_change_stress() {
 #[cfg(msim)]
 #[sim_test]
 async fn test_epoch_flag_upgrade() {
+    use std::collections::HashSet;
     use std::sync::Mutex;
     use sui_core::authority::epoch_start_configuration::EpochFlag;
     use sui_core::authority::epoch_start_configuration::EpochStartConfigTrait;
@@ -739,8 +708,7 @@ async fn test_epoch_flag_upgrade() {
             return None;
         }
 
-        // start with only UseVersionAssignmentTablesV3
-        let flags: Vec<EpochFlag> = vec![EpochFlag::UseVersionAssignmentTablesV3];
+        let flags: Vec<EpochFlag> = EpochFlag::mandatory_flags();
         Some(flags)
     });
 

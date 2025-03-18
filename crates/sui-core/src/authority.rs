@@ -305,8 +305,10 @@ pub struct AuthorityMetrics {
     pub consensus_committed_user_transactions: IntGaugeVec,
     pub consensus_calculated_throughput: IntGauge,
     pub consensus_calculated_throughput_profile: IntGauge,
-    pub consensus_transaction_handler_processed: IntCounterVec,
-    pub consensus_transaction_handler_fastpath_executions: IntCounter,
+    pub consensus_block_handler_block_processed: IntCounter,
+    pub consensus_block_handler_txn_processed: IntCounterVec,
+    pub consensus_block_handler_fastpath_executions: IntCounter,
+    pub consensus_timestamp_bias: Histogram,
 
     pub limits_metrics: Arc<LimitsMetrics>,
 
@@ -351,6 +353,13 @@ const LATENCY_SEC_BUCKETS: &[f64] = &[
 const LOW_LATENCY_SEC_BUCKETS: &[f64] = &[
     0.00001, 0.00002, 0.00005, 0.0001, 0.0002, 0.0005, 0.001, 0.002, 0.005, 0.01, 0.02, 0.05, 0.1,
     0.2, 0.5, 1., 2., 5., 10., 20., 50., 100.,
+];
+
+// Buckets for consensus timestamp bias in seconds.
+// We expect 200-300ms, so we cluster the buckets more tightly in that range.
+const TIMESTAMP_BIAS_SEC_BUCKETS: &[f64] = &[
+    -2.0, 0.0, 0.2, 0.22, 0.24, 0.26, 0.28, 0.30, 0.32, 0.34, 0.36, 0.38, 0.40, 0.45, 0.50, 0.80,
+    2.0, 10.0, 30.0,
 ];
 
 const GAS_LATENCY_RATIO_BUCKETS: &[f64] = &[
@@ -759,16 +768,27 @@ impl AuthorityMetrics {
                 "The current active calculated throughput profile",
                 registry
             ).unwrap(),
-            consensus_transaction_handler_processed: register_int_counter_vec_with_registry!(
-                "consensus_transaction_handler_processed",
-                "Number of transactions processed by consensus transaction handler, by whether they are certified or rejected.",
+            consensus_block_handler_block_processed: register_int_counter_with_registry!(
+                "consensus_block_handler_block_processed",
+                "Number of blocks processed by consensus block handler.",
+                registry
+            ).unwrap(),
+            consensus_block_handler_txn_processed: register_int_counter_vec_with_registry!(
+                "consensus_block_handler_txn_processed",
+                "Number of transactions processed by consensus block handler, by whether they are certified or rejected.",
                 &["outcome"],
                 registry
             ).unwrap(),
-            consensus_transaction_handler_fastpath_executions: register_int_counter_with_registry!(
-                "consensus_transaction_handler_fastpath_executions",
+            consensus_block_handler_fastpath_executions: register_int_counter_with_registry!(
+                "consensus_block_handler_fastpath_executions",
                 "Number of fastpath transactions sent for execution by consensus transaction handler",
                 registry,
+            ).unwrap(),
+            consensus_timestamp_bias: register_histogram_with_registry!(
+                "consensus_timestamp_bias",
+                "Bias/delay from consensus timestamp to system time",
+                TIMESTAMP_BIAS_SEC_BUCKETS.to_vec(),
+                registry
             ).unwrap(),
             execution_queueing_latency: LatencyObserver::new(),
             txn_ready_rate_tracker: Arc::new(Mutex::new(RateTracker::new(Duration::from_secs(10)))),
@@ -1864,7 +1884,7 @@ impl AuthorityState {
             .expect("Creating an executor should not fail here");
 
         let expensive_checks = false;
-        let (inner_temp_store, _, effects, _timings, _execution_error) = executor
+        let (inner_temp_store, _, effects, _timings, execution_error) = executor
             .execute_transaction_to_effects(
                 self.get_backing_store().as_ref(),
                 protocol_config,
@@ -1925,6 +1945,11 @@ impl AuthorityState {
             })
             .collect();
 
+        let execution_error_source = execution_error
+            .as_ref()
+            .err()
+            .and_then(|e| e.source().as_ref().map(|e| e.to_string()));
+
         Ok((
             DryRunTransactionBlockResponse {
                 input: SuiTransactionBlockData::try_from(transaction, &module_cache).map_err(
@@ -1944,6 +1969,7 @@ impl AuthorityState {
                 )?,
                 object_changes,
                 balance_changes,
+                execution_error_source,
             },
             written_with_kind,
             effects,
@@ -2909,6 +2935,7 @@ impl AuthorityState {
             store.perpetual_tables.clone(),
             checkpoint_store.clone(),
             rpc_index.clone(),
+            indexes.clone(),
             config.authority_store_pruning_config.clone(),
             epoch_store.committee().authority_exists(&name),
             epoch_store.epoch_start_state().epoch_duration_ms(),
@@ -4968,11 +4995,12 @@ impl AuthorityState {
         end_of_epoch_observation_keys: Vec<ExecutionTimeObservationKey>,
         last_checkpoint_before_end_of_epoch: CheckpointSequenceNumber,
     ) -> Option<EndOfEpochTransactionKind> {
-        if epoch_store
-            .protocol_config()
-            .per_object_congestion_control_mode()
-            != PerObjectCongestionControlMode::ExecutionTimeEstimate
-        {
+        if !matches!(
+            epoch_store
+                .protocol_config()
+                .per_object_congestion_control_mode(),
+            PerObjectCongestionControlMode::ExecutionTimeEstimate(_)
+        ) {
             return None;
         }
 
@@ -4996,7 +5024,11 @@ impl AuthorityState {
                         )
                         + 1
                 })
-                .unwrap_or(0),
+                .unwrap_or(1),
+        );
+        info!(
+            "reading checkpoint range {:?}..={:?}",
+            start_checkpoint, last_checkpoint_before_end_of_epoch
         );
         let sequence_numbers =
             (start_checkpoint..=last_checkpoint_before_end_of_epoch).collect::<Vec<_>>();
@@ -5007,7 +5039,7 @@ impl AuthorityState {
             .into_iter()
             .map(|maybe_checkpoint| {
                 maybe_checkpoint
-                    .expect("preceding checkpoints must exist by end of epoch")
+                    .unwrap_or_else(|| fatal!("preceding checkpoints must exist by end of epoch"))
                     .content_digest
             })
             .collect();
@@ -5316,9 +5348,8 @@ impl AuthorityState {
             self.get_backing_package_store().clone(),
             self.get_object_store().clone(),
             expensive_safety_check_config,
-            cur_epoch_store.get_chain_identifier(),
             epoch_last_checkpoint,
-        );
+        )?;
         self.epoch_store.store(new_epoch_store.clone());
         Ok(new_epoch_store)
     }
