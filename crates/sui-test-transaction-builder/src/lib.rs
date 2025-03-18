@@ -24,8 +24,10 @@ use sui_types::transaction::{
     DEFAULT_VALIDATOR_GAS_PRICE, TEST_ONLY_GAS_UNIT_FOR_HEAVY_COMPUTATION_STORAGE,
     TEST_ONLY_GAS_UNIT_FOR_TRANSFER,
 };
-use sui_types::SUI_RANDOMNESS_STATE_OBJECT_ID;
 use sui_types::{TypeTag, SUI_SYSTEM_PACKAGE_ID};
+use sui_types::{
+    SUI_CLOCK_OBJECT_ID, SUI_CLOCK_OBJECT_SHARED_VERSION, SUI_RANDOMNESS_STATE_OBJECT_ID,
+};
 
 pub struct TestTransactionBuilder {
     test_data: TestTransactionData,
@@ -86,6 +88,31 @@ impl TestTransactionBuilder {
     pub fn with_gas_budget(mut self, gas_budget: u64) -> Self {
         self.gas_budget = Some(gas_budget);
         self
+    }
+
+    pub fn call_slow_entry(self, package_id: ObjectID, n: u64, size: u64) -> Self {
+        self.move_call(
+            package_id,
+            "slow",
+            "slow",
+            vec![
+                CallArg::Pure(bcs::to_bytes(&n).unwrap()),
+                CallArg::Pure(bcs::to_bytes(&size).unwrap()),
+            ],
+        )
+    }
+
+    pub fn call_bimodal(self, package_id: ObjectID) -> Self {
+        self.move_call(
+            package_id,
+            "slow",
+            "bimodal",
+            vec![CallArg::Object(ObjectArg::SharedObject {
+                id: SUI_CLOCK_OBJECT_ID,
+                initial_shared_version: SUI_CLOCK_OBJECT_SHARED_VERSION,
+                mutable: false,
+            })],
+        )
     }
 
     pub fn call_counter_create(self, package_id: ObjectID) -> Self {

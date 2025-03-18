@@ -14,15 +14,19 @@ use crate::workloads::{Gas, WorkloadBuilderInfo, WorkloadParams};
 use crate::{ExecutionEffects, ValidatorProxy};
 use async_trait::async_trait;
 use futures::future::join_all;
+use rand::seq::index::IndexVecIntoIter;
 use rand::seq::SliceRandom;
 use rand::Rng;
 use std::sync::Arc;
 use sui_test_transaction_builder::TestTransactionBuilder;
 use sui_types::crypto::get_key_pair;
+use sui_types::programmable_transaction_builder::ProgrammableTransactionBuilder;
+use sui_types::transaction::ObjectArg;
 use sui_types::{
     base_types::{ObjectDigest, ObjectID, SequenceNumber},
     transaction::Transaction,
 };
+use sui_types::{Identifier, SUI_CLOCK_OBJECT_ID, SUI_CLOCK_OBJECT_SHARED_VERSION};
 use tracing::{debug, error, info};
 
 /// The max amount of gas units needed for a payload.
@@ -64,12 +68,41 @@ impl Payload for SharedCounterTestPayload {
             rand::thread_rng().gen_range(0..self.max_tip_amount)
         };
         let gas_price = rgp + gas_price_increment;
+
+        let mut builder = ProgrammableTransactionBuilder::new();
+        let args = vec![builder
+            .obj(ObjectArg::SharedObject {
+                id: SUI_CLOCK_OBJECT_ID,
+                initial_shared_version: SUI_CLOCK_OBJECT_SHARED_VERSION,
+                mutable: false,
+            })
+            .unwrap()];
+        builder.programmable_move_call(
+            self.package_id,
+            Identifier::new("slow").unwrap(),
+            Identifier::new("slow").unwrap(),
+            vec![],
+            args,
+        );
+
+        let args = vec![builder
+            .obj(ObjectArg::SharedObject {
+                id: self.counter_id,
+                initial_shared_version: self.counter_initial_shared_version,
+                mutable: true,
+            })
+            .unwrap()];
+
+        builder.programmable_move_call(
+            self.package_id,
+            Identifier::new("counter").unwrap(),
+            Identifier::new("increment").unwrap(),
+            vec![],
+            args,
+        );
+
         TestTransactionBuilder::new(self.gas.1, self.gas.0, gas_price)
-            .call_counter_increment(
-                self.package_id,
-                self.counter_id,
-                self.counter_initial_shared_version,
-            )
+            .programmable(builder.finish())
             .build_and_sign(self.gas.2.as_ref())
     }
     fn get_failure_type(&self) -> Option<ExpectedFailureType> {
