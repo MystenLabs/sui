@@ -58,4 +58,25 @@ fn test_with_malformed_attestation() {
     ));
 }
 
-// TODO(joyqvq): add more validation tests for attestation format.
+#[test]
+fn test_bad_cabundle() {
+    // empty cabundle
+    // cert too long, 1025
+    // missing one from chain
+}
+
+#[test]
+fn bad_signature_cose() {}
+
+#[test]
+fn cose_invalid_header() {}
+#[test]
+fn invalid_attestation_doc() {
+    // invalid module id
+    // invalid digest
+    // empty pcrs
+    // 33 pcrs invalid
+    // pk too long
+    // user data too long
+    // nonce too long
+}
