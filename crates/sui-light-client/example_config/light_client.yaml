@@ -3,3 +3,11 @@ checkpoint_summary_dir: "checkpoints_dir"
 genesis_filename: "genesis.blob"
 object_store_url: "https://checkpoints.mainnet.sui.io"
 graphql_url: "https://sui-mainnet.mystenlabs.com/graphql"
+archive_store_config:
+  object-store: "S3"
+  # Use mysten-testnet-archives for testnet 
+  # Use mysten-mainnet-archives for mainnet
+  bucket: "mysten-mainnet-archives"
+  no-sign-request: true
+  aws-region: "us-west-2"
+  object-store-connection-limit: 20
