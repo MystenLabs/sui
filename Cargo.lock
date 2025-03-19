@@ -2768,7 +2768,7 @@ dependencies = [
  "rustls 0.23.20",
  "serde",
  "shared-crypto",
- "strum_macros 0.24.3",
+ "strum_macros 0.27.1",
  "sui-http",
  "sui-macros",
  "sui-protocol-config",
@@ -12312,9 +12312,6 @@ name = "strum"
 version = "0.24.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "063e6045c0e62079840579a7e47a355ae92f60eb74daaf156fb1e84ba164e63f"
-dependencies = [
- "strum_macros 0.24.3",
-]
 
 [[package]]
 name = "strum"
@@ -12332,6 +12329,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8fec0f0aef304996cf250b31b5a10dee7980c85da9d759361292b8bca5a18f06"
 dependencies = [
  "strum_macros 0.26.4",
+]
+
+[[package]]
+name = "strum"
+version = "0.27.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f64def088c51c9510a8579e3c5d67c65349dcf755e5479ad3d010aa6454e2c32"
+dependencies = [
+ "strum_macros 0.27.1",
 ]
 
 [[package]]
@@ -12365,6 +12371,19 @@ name = "strum_macros"
 version = "0.26.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "4c6bee85a5a24955dc440386795aa378cd9cf82acd5f764469152d2270e581be"
+dependencies = [
+ "heck 0.5.0",
+ "proc-macro2",
+ "quote",
+ "rustversion",
+ "syn 2.0.99",
+]
+
+[[package]]
+name = "strum_macros"
+version = "0.27.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c77a8c5abcaf0f9ce05d62342b7d298c346515365c36b673df4ebe3ced01fde8"
 dependencies = [
  "heck 0.5.0",
  "proc-macro2",
@@ -12643,8 +12662,8 @@ dependencies = [
  "serde_json",
  "simulacrum",
  "snowflake-api",
- "strum 0.24.1",
- "strum_macros 0.24.3",
+ "strum 0.27.1",
+ "strum_macros 0.27.1",
  "sui-analytics-indexer-derive",
  "sui-config",
  "sui-data-ingestion-core",
@@ -12770,8 +12789,8 @@ dependencies = [
  "roaring",
  "serde",
  "serde_json",
- "strum 0.24.1",
- "strum_macros 0.24.3",
+ "strum 0.27.1",
+ "strum_macros 0.27.1",
  "sui-config",
  "sui-core",
  "sui-framework",
@@ -12829,7 +12848,7 @@ dependencies = [
  "serde_json",
  "serde_with",
  "shared-crypto",
- "strum_macros 0.24.3",
+ "strum_macros 0.27.1",
  "sui-authority-aggregation",
  "sui-config",
  "sui-json-rpc-api",
@@ -12895,7 +12914,7 @@ dependencies = [
  "serde",
  "serde_json",
  "serde_yaml 0.8.26",
- "strum_macros 0.24.3",
+ "strum_macros 0.27.1",
  "sui-bridge",
  "sui-config",
  "sui-data-ingestion-core",
@@ -13055,6 +13074,8 @@ dependencies = [
  "shared-crypto",
  "simple_moving_average",
  "static_assertions",
+ "strum 0.27.1",
+ "strum_macros 0.27.1",
  "sui-archival",
  "sui-authority-aggregation",
  "sui-config",
@@ -13095,8 +13116,8 @@ dependencies = [
  "insta",
  "move-disassembler",
  "serde",
- "strum 0.24.1",
- "strum_macros 0.24.3",
+ "strum 0.27.1",
+ "strum_macros 0.27.1",
  "sui-config",
  "sui-json-rpc-types",
  "sui-move-build",
@@ -13690,8 +13711,8 @@ dependencies = [
  "serde_json",
  "serde_with",
  "simulacrum",
- "strum 0.24.1",
- "strum_macros 0.24.3",
+ "strum 0.27.1",
+ "strum_macros 0.27.1",
  "sui-archival",
  "sui-config",
  "sui-core",
@@ -14235,7 +14256,7 @@ dependencies = [
  "reqwest 0.12.9",
  "serde",
  "serde_yaml 0.9.21",
- "strum_macros 0.24.3",
+ "strum_macros 0.27.1",
  "telemetry-subscribers",
  "tokio",
  "tracing",
@@ -14896,8 +14917,8 @@ dependencies = [
  "serde_json",
  "shared-crypto",
  "signature 1.6.4",
- "strum 0.24.1",
- "strum_macros 0.24.3",
+ "strum 0.27.1",
+ "strum_macros 0.27.1",
  "sui-config",
  "sui-json-rpc-types",
  "sui-keys",
@@ -15003,8 +15024,8 @@ dependencies = [
  "serde_json",
  "shared-crypto",
  "shellexpand",
- "strum 0.24.1",
- "strum_macros 0.24.3",
+ "strum 0.27.1",
+ "strum_macros 0.27.1",
  "sui-json-rpc-types",
  "sui-keys",
  "sui-sdk",
@@ -15140,8 +15161,8 @@ dependencies = [
  "prometheus",
  "serde",
  "serde_json",
- "strum 0.24.1",
- "strum_macros 0.24.3",
+ "strum 0.27.1",
+ "strum_macros 0.27.1",
  "sui-config",
  "sui-core",
  "sui-macros",
@@ -15492,8 +15513,8 @@ dependencies = [
  "ron",
  "serde",
  "serde_json",
- "strum 0.24.1",
- "strum_macros 0.24.3",
+ "strum 0.27.1",
+ "strum_macros 0.27.1",
  "sui-archival",
  "sui-config",
  "sui-core",
@@ -15667,8 +15688,8 @@ dependencies = [
  "shared-crypto",
  "signature 1.6.4",
  "static_assertions",
- "strum 0.24.1",
- "strum_macros 0.24.3",
+ "strum 0.27.1",
+ "strum_macros 0.27.1",
  "sui-enum-compat-util",
  "sui-macros",
  "sui-protocol-config",

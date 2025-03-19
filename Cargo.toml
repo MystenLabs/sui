@@ -500,8 +500,8 @@ smallvec = "1.10.0"
 snap = "1.1.0"
 snowflake-api = "0.11.0"
 static_assertions = "1.1.0"
-strum = { version = "0.24", features = ["derive"] }
-strum_macros = "0.24.3"
+strum = { version = "0.27.1", features = ["derive"] }
+strum_macros = "0.27.1"
 syn = { version = "1.0.104", features = ["full", "derive", "extra-traits"] }
 # syn = { version = "2", features = ["full", "fold", "extra-traits"] }
 synstructure = "0.12"
