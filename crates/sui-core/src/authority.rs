@@ -3193,6 +3193,7 @@ impl AuthorityState {
             // committing the last checkpoint but before reconfiguring.
             if num_shared_version_assignments > 1 {
                 // If this happens in prod, we have a memory leak, but not a correctness issue.
+                cur_epoch_store.dump_shared_keys();
                 debug_fatal!("all shared_version_assignments should have been removed (num_shared_version_assignments: {num_shared_version_assignments})");
             }
         }

@@ -414,6 +414,12 @@ impl ConsensusOutputCache {
         }
     }
 
+    pub fn dump_shared_keys(&self) {
+        for e in self.shared_version_assignments.iter() {
+            debug!("shared key {:?}", e.key());
+        }
+    }
+
     pub fn num_shared_version_assignments(&self) -> usize {
         self.shared_version_assignments.len()
     }

@@ -1432,6 +1432,10 @@ impl AuthorityPerEpochStore {
             .remove_shared_object_assignments(keys);
     }
 
+    pub fn dump_shared_keys(&self) {
+        self.consensus_output_cache.dump_shared_keys()
+    }
+
     pub fn num_shared_version_assignments(&self) -> usize {
         self.consensus_output_cache.num_shared_version_assignments()
     }
