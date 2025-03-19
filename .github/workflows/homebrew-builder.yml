@@ -9,6 +9,8 @@ on:
 jobs:
   create-pr:
     runs-on: macos-latest
+    permissions:
+      contents: write 
 
     steps:
       - name: Checkout Source Repository
