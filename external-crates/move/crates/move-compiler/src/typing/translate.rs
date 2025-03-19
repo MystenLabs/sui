@@ -4004,7 +4004,7 @@ fn annotated_error_const(context: &mut Context, e: &mut T::Exp, abort_or_assert_
         if let Some(err_attribute) = attributes.get_(&known_attributes::ErrorAttribute.into()) {
             let attribute_fmt_msg = || {
                 format!(
-                "Expected only an error code or nothing for an error annotation, e.g., '{}' or '{}({})'",
+                "Expected only an error code or nothing for an error annotation, e.g., '{}' or '{}({} = <num>)'",
                 ErrorAttribute::ERROR,
                 ErrorAttribute::ERROR,
                 ErrorAttribute::CODE,
@@ -4072,7 +4072,7 @@ fn error_constant_attr_params(
     attributes: &UniqueMap<Spanned<AttributeName_>, Spanned<Attribute_>>,
 ) -> Option<u8> {
     let mut code = None;
-    const ERR_MSG: &str = "Invalid attribute, expected an argument of the form 'code = <num>'";
+    const ERR_MSG: &str = "Invalid attribute, expected an argument of the form 'code = <num>' where '<num>' is a u8";
     for (_, _, sp!(arg_loc, arg)) in attributes.iter() {
         match arg {
             Attribute_::Assigned(name, rhs) => {
@@ -4084,17 +4084,13 @@ fn error_constant_attr_params(
                     context.add_diag(diag!(Declarations::InvalidAttribute, (*arg_loc, ERR_MSG)));
                     continue;
                 };
-                let new_err_code = match value_ {
-                    Value_::InferredNum(value) => {
-                        if *value < U256::from(u8::MAX) {
-                            Some(value.unchecked_as_u8())
-                        } else {
-                            context.add_diag(diag!(
-                                Declarations::InvalidAttribute,
-                                (*arg_loc, "Error code must be a u8")
-                            ));
-                            None
-                        }
+let new_err_code = u8::try_from(*value).ok();
+if new_err_code.is_none() {
+    context.add_diag(diag!(
+      Declarations::InvalidAttribute,
+      (*arg_loc, "Error code must be a u8")
+    ));
+}
                     }
                     Value_::U8(value) => Some(*value),
                     Value_::Address(_)
