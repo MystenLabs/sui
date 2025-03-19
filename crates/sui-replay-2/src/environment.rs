@@ -75,6 +75,13 @@ impl ReplayEnvironment {
         Ok(())
     }
 
+    pub fn get_object(&self, object_id: &ObjectID) -> Option<Object> {
+        self.objects
+            .get(object_id)
+            .and_then(|versions| versions.last_key_value())
+            .map(|(_, v)| v.clone())
+    }
+
     // Load packages and their dependencies
     pub async fn load_packages(
         &mut self,

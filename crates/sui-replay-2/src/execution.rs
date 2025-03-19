@@ -389,7 +389,7 @@ impl ModuleResolver for ReplayStore<'_> {
 
 impl ObjectStore for ReplayStore<'_> {
     fn get_object(&self, object_id: &ObjectID) -> Option<Object> {
-        todo!("ObjectStore::get_object {:?}", object_id)
+        self.env.get_object(object_id)
     }
 
     fn get_object_by_key(&self, object_id: &ObjectID, version: VersionNumber) -> Option<Object> {
