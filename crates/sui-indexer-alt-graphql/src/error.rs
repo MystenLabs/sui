@@ -3,7 +3,7 @@
 
 use std::{convert::Infallible, time::Duration};
 
-use async_graphql::ErrorExtensions;
+use async_graphql::{ErrorExtensionValues, ErrorExtensions};
 
 /// Error codes for the `extensions.code` field of a GraphQL error that originates from outside
 /// GraphQL.
@@ -11,6 +11,8 @@ use async_graphql::ErrorExtensions;
 /// <https://www.apollographql.com/docs/apollo-server/data/errors/#built-in-error-codes>
 pub(crate) mod code {
     pub const BAD_USER_INPUT: &str = "BAD_USER_INPUT";
+    pub const GRAPHQL_PARSE_FAILED: &str = "GRAPHQL_PARSE_FAILED";
+    pub const GRAPHQL_VALIDATION_FAILED: &str = "GRAPHQL_VALIDATION_FAILED";
     pub const INTERNAL_SERVER_ERROR: &str = "INTERNAL_SERVER_ERROR";
     pub const REQUEST_TIMEOUT: &str = "REQUEST_TIMEOUT";
 }
@@ -38,14 +40,9 @@ impl<E: std::error::Error> From<RpcError<E>> for async_graphql::Error {
                 ext.set("code", code::BAD_USER_INPUT);
             }),
 
-            RpcError::GraphQlError(err) => {
-                if matches!(err.extensions, Some(ref ext) if ext.get("code").is_some()) {
-                    err
-                } else {
-                    err.extend_with(|_, ext| {
-                        ext.set("code", code::INTERNAL_SERVER_ERROR);
-                    })
-                }
+            RpcError::GraphQlError(mut err) => {
+                fill_error_code(&mut err.extensions, code::INTERNAL_SERVER_ERROR);
+                err
             }
 
             RpcError::InternalError(err) => {
@@ -109,6 +106,19 @@ pub(crate) fn bad_user_input<E: std::error::Error>(err: E) -> RpcError<E> {
 /// message.
 pub(crate) fn request_timeout(kind: &'static str, limit: Duration) -> RpcError {
     RpcError::RequestTimeout { kind, limit }
+}
+
+/// Add a code to the error, if one does not exist already in the error extensions.
+pub(crate) fn fill_error_code(ext: &mut Option<ErrorExtensionValues>, code: &str) {
+    match ext {
+        Some(ref ext) if ext.get("code").is_some() => {}
+        Some(ref mut ext) => ext.set("code", code),
+        None => {
+            let mut singleton = ErrorExtensionValues::default();
+            singleton.set("code", code);
+            *ext = Some(singleton);
+        }
+    }
 }
 
 #[cfg(test)]
