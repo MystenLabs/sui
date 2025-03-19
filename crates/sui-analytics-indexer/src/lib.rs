@@ -4,6 +4,7 @@
 use std::ops::Range;
 use std::path::PathBuf;
 use std::sync::Arc;
+use std::sync::OnceLock;
 
 use anyhow::{anyhow, Result};
 use arrow_array::{Array, Int32Array};
@@ -16,6 +17,7 @@ use package_store::LocalDBPackageStore;
 use serde::{Deserialize, Serialize};
 use snowflake_api::{QueryResult, SnowflakeApi};
 use strum_macros::EnumIter;
+use tempfile::TempDir;
 use tracing::info;
 
 use sui_config::object_storage_config::ObjectStoreConfig;
@@ -80,9 +82,6 @@ pub struct AnalyticsIndexerConfig {
     /// The port of the metrics client to connect to.
     #[serde(default = "default_client_metric_port")]
     pub client_metric_port: u16,
-    /// Directory to contain the temporary files for checkpoint entries.
-    #[serde(default = "default_checkpoint_dir")]
-    pub checkpoint_dir: PathBuf,
     /// Remote object store where data gets written to
     pub remote_store_config: ObjectStoreConfig,
     /// Remote object store path prefix to use while writing
@@ -124,6 +123,12 @@ pub struct TaskConfig {
     /// Time to process in seconds before uploding to the datastore.
     #[serde(default = "default_time_interval_s")]
     pub time_interval_s: u64,
+    /// Root directory to contain the temporary directory for checkpoint entries.
+    #[serde(default = "default_checkpoint_root")]
+    pub checkpoint_root: PathBuf,
+    /// Temporary checkpoint entry directory that is lazily initialized
+    #[serde(skip)]
+    checkpoint_dir: OnceLock<Arc<TempDir>>,
     /// Remote object store path prefix to use while writing
     #[serde(default)]
     remote_store_path_prefix: Option<PathBuf>,
@@ -146,7 +151,7 @@ fn default_client_metric_port() -> u16 {
     8081
 }
 
-fn default_checkpoint_dir() -> PathBuf {
+fn default_checkpoint_root() -> PathBuf {
     PathBuf::from("/tmp")
 }
 
@@ -180,6 +185,32 @@ impl TaskConfig {
             .as_ref()
             .map(|pb| Ok(Path::from_filesystem_path(pb)?))
             .transpose()
+    }
+
+    pub fn checkpoint_dir(&self) -> Result<&std::path::Path> {
+        // If we already have an initialized temp dir, return it
+        if let Some(temp_dir) = self.checkpoint_dir.get() {
+            return Ok(temp_dir.path());
+        }
+
+        // Otherwise, create a new temp dir
+        let temp_dir = tempfile::Builder::new()
+            // Task name is validated at start up to ensure it is unique.
+            .prefix(&format!("{}-work-dir", self.task_name))
+            .tempdir_in(&self.checkpoint_root)?;
+
+        // Try to set it in the OnceLock
+        let new_temp_dir = Arc::new(temp_dir);
+        match self.checkpoint_dir.set(new_temp_dir) {
+            Ok(()) => {
+                // We successfully set the value
+                Ok(self.checkpoint_dir.get().unwrap().path())
+            }
+            Err(_) => {
+                // Another thread set the value first - use that one
+                Ok(self.checkpoint_dir.get().unwrap().path())
+            }
+        }
     }
 }
 
@@ -671,7 +702,6 @@ pub async fn make_checkpoint_processor(
     let starting_checkpoint_seq_num =
         get_starting_checkpoint_seq_num(&config.remote_store_config, &task_config).await?;
     let writer = make_writer::<CheckpointEntry>(
-        &config,
         &task_config,
         FileType::Checkpoint,
         starting_checkpoint_seq_num,
@@ -698,7 +728,6 @@ pub async fn make_transaction_processor(
     let starting_checkpoint_seq_num =
         get_starting_checkpoint_seq_num(&config.remote_store_config, &task_config).await?;
     let writer = make_writer::<TransactionEntry>(
-        &config,
         &task_config,
         FileType::Transaction,
         starting_checkpoint_seq_num,
@@ -728,12 +757,8 @@ pub async fn make_object_processor(
     ));
     let starting_checkpoint_seq_num =
         get_starting_checkpoint_seq_num(&config.remote_store_config, &task_config).await?;
-    let writer = make_writer::<ObjectEntry>(
-        &config,
-        &task_config,
-        FileType::Object,
-        starting_checkpoint_seq_num,
-    )?;
+    let writer =
+        make_writer::<ObjectEntry>(&task_config, FileType::Object, starting_checkpoint_seq_num)?;
     let max_checkpoint_reader = make_max_checkpoint_reader(&config, &task_config).await?;
     Processor::new::<ObjectEntry>(
         handler,
@@ -756,12 +781,8 @@ pub async fn make_event_processor(
     let handler: Box<dyn AnalyticsHandler<EventEntry>> = Box::new(EventHandler::new(package_store));
     let starting_checkpoint_seq_num =
         get_starting_checkpoint_seq_num(&config.remote_store_config, &task_config).await?;
-    let writer = make_writer::<EventEntry>(
-        &config,
-        &task_config,
-        FileType::Event,
-        starting_checkpoint_seq_num,
-    )?;
+    let writer =
+        make_writer::<EventEntry>(&task_config, FileType::Event, starting_checkpoint_seq_num)?;
     let max_checkpoint_reader = make_max_checkpoint_reader(&config, &task_config).await?;
     Processor::new::<EventEntry>(
         handler,
@@ -784,7 +805,6 @@ pub async fn make_transaction_objects_processor(
         get_starting_checkpoint_seq_num(&config.remote_store_config, &task_config).await?;
     let handler = Box::new(TransactionObjectsHandler::new());
     let writer = make_writer(
-        &config,
         &task_config,
         FileType::TransactionObjects,
         starting_checkpoint_seq_num,
@@ -811,7 +831,6 @@ pub async fn make_move_package_processor(
     let starting_checkpoint_seq_num =
         get_starting_checkpoint_seq_num(&config.remote_store_config, &task_config).await?;
     let writer = make_writer::<MovePackageEntry>(
-        &config,
         &task_config,
         FileType::MovePackage,
         starting_checkpoint_seq_num,
@@ -838,7 +857,6 @@ pub async fn make_move_call_processor(
         get_starting_checkpoint_seq_num(&config.remote_store_config, &task_config).await?;
     let handler: Box<dyn AnalyticsHandler<MoveCallEntry>> = Box::new(MoveCallHandler::new());
     let writer = make_writer::<MoveCallEntry>(
-        &config,
         &task_config,
         FileType::MoveCall,
         starting_checkpoint_seq_num,
@@ -867,7 +885,6 @@ pub async fn make_dynamic_field_processor(
     let handler: Box<dyn AnalyticsHandler<DynamicFieldEntry>> =
         Box::new(DynamicFieldHandler::new(package_store));
     let writer = make_writer::<DynamicFieldEntry>(
-        &config,
         &task_config,
         FileType::DynamicField,
         starting_checkpoint_seq_num,
@@ -896,7 +913,6 @@ pub async fn make_wrapped_object_processor(
         WrappedObjectHandler::new(&config.package_cache_path, &config.rest_url),
     );
     let writer = make_writer::<WrappedObjectEntry>(
-        &config,
         &task_config,
         FileType::WrappedObject,
         starting_checkpoint_seq_num,
@@ -915,19 +931,18 @@ pub async fn make_wrapped_object_processor(
 }
 
 pub fn make_writer<S: Serialize + ParquetSchema>(
-    config: &AnalyticsIndexerConfig,
     task_config: &TaskConfig,
     file_type: FileType,
     starting_checkpoint_seq_num: u64,
 ) -> Result<Box<dyn AnalyticsWriter<S>>> {
     Ok(match task_config.file_format {
         FileFormat::CSV => Box::new(CSVWriter::new(
-            &config.checkpoint_dir,
+            task_config.checkpoint_dir()?,
             file_type,
             starting_checkpoint_seq_num,
         )?),
         FileFormat::PARQUET => Box::new(ParquetWriter::new(
-            &config.checkpoint_dir,
+            task_config.checkpoint_dir()?,
             file_type,
             starting_checkpoint_seq_num,
         )?),
