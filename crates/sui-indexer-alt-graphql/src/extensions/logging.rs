@@ -71,6 +71,7 @@ impl Extension for LoggingExt {
             self.metrics.queries_succeeded.inc();
         } else {
             let codes = error_codes(&response);
+
             // Log internal errors and timeouts at a higher log level than other errors.
             if is_loud_query(&codes) {
                 warn!(%uuid, %addr, query = self.query.lock().unwrap().as_ref().unwrap(), "Query");
@@ -79,7 +80,17 @@ impl Extension for LoggingExt {
             }
 
             info!(%uuid, %addr, elapsed_ms, ?codes, "Request failed");
-            self.metrics.queries_failed.inc();
+
+            if codes.is_empty() {
+                self.metrics
+                    .queries_failed
+                    .with_label_values(&["<UNKNOWN>"])
+                    .inc();
+            }
+
+            for code in &codes {
+                self.metrics.queries_failed.with_label_values(&[code]).inc();
+            }
         }
 
         debug!(%uuid, %addr, response = %json!(response), "Response");
