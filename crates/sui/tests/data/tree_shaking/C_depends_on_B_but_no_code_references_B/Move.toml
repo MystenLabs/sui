@@ -3,7 +3,7 @@ name = "C"
 edition = "2024.beta"
 
 [dependencies]
-B = { local = "../B_depends_on_A_but_no_code_references_A"}
+B = { local = "../B_A1"}
 
 [addresses]
 c = "0x0"

@@ -4307,7 +4307,7 @@ async fn test_tree_shaking_package_with_direct_dependency() -> Result<(), anyhow
     let (package_a_id, _) = test.publish_package("A", false).await?;
 
     // Then publish B which depends on A
-    let (package_b_id, _) = test.publish_package("B_depends_on_A", false).await?;
+    let (package_b_id, _) = test.publish_package("B_A", false).await?;
     let linkage_table_b = test.fetch_linkage_table(package_b_id).await;
     assert!(
         linkage_table_b.contains_key(&package_a_id),
@@ -4325,9 +4325,7 @@ async fn test_tree_shaking_package_with_unused_dependency() -> Result<(), anyhow
     let (_, _) = test.publish_package("A", false).await?;
 
     // Then publish B which declares but doesn't use A
-    let (package_b_id, _) = test
-        .publish_package("B_depends_on_A_but_no_code_references_A", false)
-        .await?;
+    let (package_b_id, _) = test.publish_package("B_A1", false).await?;
     let linkage_table_b = test.fetch_linkage_table(package_b_id).await;
     assert!(
         linkage_table_b.is_empty(),
@@ -4343,12 +4341,10 @@ async fn test_tree_shaking_package_with_transitive_dependencies1() -> Result<(),
 
     // Publish packages A and B
     let (package_a_id, _) = test.publish_package("A", false).await?;
-    let (package_b_id, _) = test.publish_package("B_depends_on_A", false).await?;
+    let (package_b_id, _) = test.publish_package("B_A", false).await?;
 
     // Publish C which depends on B (which depends on A)
-    let (package_c_id, _) = test
-        .publish_package("C_depends_on_B_which_depends_on_A", false)
-        .await?;
+    let (package_c_id, _) = test.publish_package("C_B_A", false).await?;
     let linkage_table_c = test.fetch_linkage_table(package_c_id).await;
 
     assert!(
@@ -4377,9 +4373,7 @@ async fn test_tree_shaking_package_with_transitive_dependencies_and_no_code_refe
 
     // Publish packages A and B
     let (_, _) = test.publish_package("A", false).await?;
-    let (_, _) = test
-        .publish_package("B_depends_on_A_but_no_code_references_A", false)
-        .await?;
+    let (_, _) = test.publish_package("B_A1", false).await?;
 
     // Publish C which depends on B
     let (package_c_id, _) = test
@@ -4402,7 +4396,7 @@ async fn test_tree_shaking_package_deps_on_pkg_upgrade() -> Result<(), anyhow::E
 
     // Publish package A and B
     let (package_a_id, cap) = test.publish_package("A", false).await?;
-    let (_, _) = test.publish_package("B_depends_on_A", false).await?;
+    let (_, _) = test.publish_package("B_A", false).await?;
 
     // Upgrade package A (named A_v1)
     std::fs::copy(

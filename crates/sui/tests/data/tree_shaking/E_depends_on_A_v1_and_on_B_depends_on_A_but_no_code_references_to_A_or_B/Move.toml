@@ -4,7 +4,7 @@ edition = "2024.beta"
 
 [dependencies]
 A = { local = "../A_v1", override = true }
-B = { local = "../B_depends_on_A" }
+B = { local = "../B_A" }
 
 [addresses]
 e_depends_on_a_v1_and_on_b_depends_on_a_but_no_code_references_to_a_or_b = "0x0"

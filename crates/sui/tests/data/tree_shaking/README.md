@@ -15,11 +15,11 @@ Tests projects are established as following
     - linkage table should be empty
 - A_v2 is a package upgrade of A (now at version 2).
     - linkage table should be empty
-- B_depends_on_A is a normal package that depends on A, and source code references A.
+- B_A is a normal package that depends on A, and source code references A.
     - linkage table should contain package A's ID
-- B_depends_on_A_but_no_code_references_A is a package that depends on A, but source code does not reference any code from A.
+- B_A1 is a package that depends on A, but source code does not reference any code from A.
      - linkage table should be empty
-- C_depends_on_B is a normal package that depends on B, and source code references B.
+- C_B_A is a normal package that depends on B_A, and source code references B.
      - linkage table should contain package B's ID and package A's ID
 - C_depends_on_B_but_no_code_references_B is a package that depends on B, but source code does not reference any code from B.
      - linkage table should be empty
