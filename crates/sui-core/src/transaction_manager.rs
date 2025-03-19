@@ -728,11 +728,11 @@ impl TransactionManager {
         output_object_keys: Vec<InputKey>,
         epoch_store: &AuthorityPerEpochStore,
     ) {
+        let _scope = monitored_scope("TransactionManager::notify_commit");
         let reconfig_lock = self.inner.read();
         {
             let commit_time = Instant::now();
             let mut inner = reconfig_lock.write();
-            let _scope = monitored_scope("TransactionManager::notify_commit::wlock");
 
             if inner.epoch != epoch_store.epoch() {
                 warn!("Ignoring committed certificate from wrong epoch. Expected={} Actual={} CertificateDigest={:?}", inner.epoch, epoch_store.epoch(), digest);

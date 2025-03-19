@@ -1394,6 +1394,8 @@ impl AuthorityState {
         let process_certificate_start_time = tokio::time::Instant::now();
         let digest = *certificate.digest();
 
+        let _scope = monitored_scope("Execution::process_certificate");
+
         fail_point_if!("correlated-crash-process-certificate", || {
             if sui_simulator::random::deterministic_probability_once(&digest, 0.01) {
                 sui_simulator::task::kill_current_node(None);
@@ -2621,6 +2623,8 @@ impl AuthorityState {
         if self.indexes.is_none() {
             return Ok(());
         }
+
+        let _scope = monitored_scope("Execution::post_process_one_tx");
 
         let tx_digest = certificate.digest();
         let timestamp_ms = Self::unixtime_now_ms();

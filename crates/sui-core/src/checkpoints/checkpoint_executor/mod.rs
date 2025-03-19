@@ -590,6 +590,7 @@ impl CheckpointExecutor {
         }
     }
 
+    #[instrument(level = "info", skip_all)]
     fn process_checkpoint_data(
         &self,
         ckpt_data: &CheckpointExecutionData,
@@ -631,6 +632,7 @@ impl CheckpointExecutor {
     }
 
     // Load all required transaction and effects data for the checkpoint.
+    #[instrument(level = "info", skip_all)]
     fn load_checkpoint_transactions(
         &self,
         checkpoint: VerifiedCheckpoint,
@@ -745,6 +747,7 @@ impl CheckpointExecutor {
     }
 
     // Schedule all unexecuted transactions in the checkpoint for execution
+    #[instrument(level = "info", skip_all)]
     fn schedule_transaction_execution(
         &self,
         ckpt_state: &CheckpointExecutionState,
@@ -800,6 +803,7 @@ impl CheckpointExecutor {
     }
 
     // Execute the change epoch txn
+    #[instrument(level = "error", skip_all)]
     async fn execute_change_epoch_tx(&self, tx_data: &CheckpointTransactionData) {
         let change_epoch_tx = tx_data.transactions.last().unwrap();
         let change_epoch_fx = tx_data.effects.last().unwrap();
@@ -853,6 +857,7 @@ impl CheckpointExecutor {
     }
 
     // Increment the highest executed checkpoint watermark and prune old full-checkpoint contents
+    #[instrument(level = "debug", skip_all)]
     fn bump_highest_executed_checkpoint(&self, checkpoint: &VerifiedCheckpoint) {
         // Ensure that we are not skipping checkpoints at any point
         let seq = *checkpoint.sequence_number();
@@ -917,6 +922,7 @@ impl CheckpointExecutor {
 
     /// If configured, commit the pending index updates for the provided checkpoint as well as
     /// enqueuing the checkpoint to the subscription service
+    #[instrument(level = "info", skip_all)]
     async fn commit_index_updates_and_enqueue_to_subscription_service(
         &self,
         checkpoint: CheckpointData,
@@ -936,6 +942,7 @@ impl CheckpointExecutor {
 
     // Extract randomness rounds from the checkpoint version-specific data (if available).
     // Otherwise, extract randomness rounds from the first transaction in the checkpoint
+    #[instrument(level = "debug", skip_all)]
     fn extract_randomness_rounds(
         &self,
         checkpoint: &VerifiedCheckpoint,
