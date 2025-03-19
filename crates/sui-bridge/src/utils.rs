@@ -115,7 +115,6 @@ pub async fn get_eth_contract_addresses<P: ethers::providers::JsonRpcClient + 's
     EthAddress,
     EthAddress,
     EthAddress,
-    EthAddress,
 )> {
     let sui_bridge = EthSuiBridge::new(bridge_proxy_address, provider.clone());
     let committee_address: EthAddress = sui_bridge.committee().call().await?;
@@ -128,7 +127,6 @@ pub async fn get_eth_contract_addresses<P: ethers::providers::JsonRpcClient + 's
     let weth_address: EthAddress = vault.w_eth().call().await?;
     let usdt_address: EthAddress = bridge_config.token_address_of(4).call().await?;
     let wbtc_address: EthAddress = bridge_config.token_address_of(1).call().await?;
-    let lbtc_address: EthAddress = bridge_config.token_address_of(6).call().await?;
 
     Ok((
         committee_address,
@@ -138,7 +136,6 @@ pub async fn get_eth_contract_addresses<P: ethers::providers::JsonRpcClient + 's
         weth_address,
         usdt_address,
         wbtc_address,
-        lbtc_address,
     ))
 }
 
