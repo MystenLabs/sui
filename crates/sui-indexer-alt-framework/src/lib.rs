@@ -20,7 +20,6 @@ use pipeline::{
     Processor,
 };
 use prometheus::Registry;
-use store::{Database, DbConnection};
 use sui_indexer_alt_metrics::db::DbConnectionStatsCollector;
 use sui_pg_db::{temp::TempDb, Connection, Db, DbArgs};
 use tempfile::tempdir;

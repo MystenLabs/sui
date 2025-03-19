@@ -10,10 +10,9 @@ use tokio_util::sync::CancellationToken;
 use super::{processor::processor, CommitterConfig, Processor, PIPELINE_BUFFER};
 
 use crate::{
-    db::{self},
     metrics::IndexerMetrics,
     models::watermarks::CommitterWatermark,
-    store::{Database, DbConnection},
+    store::{DbConnection, TransactionalStore},
     types::full_checkpoint_content::CheckpointData,
 };
 
@@ -109,7 +108,7 @@ pub(crate) fn pipeline<H, T>(
 ) -> JoinHandle<()>
 where
     H: for<'c> Handler<T::Connection<'c>> + Send + Sync + 'static,
-    T: Database + 'static,
+    T: TransactionalStore + 'static,
 {
     let (processor_tx, committer_rx) = mpsc::channel(H::FANOUT + PIPELINE_BUFFER);
 

@@ -55,7 +55,7 @@ impl Processor for SumPackages {
 }
 
 #[async_trait::async_trait]
-impl Handler for SumPackages {
+impl<'conn> Handler<db::Connection<'conn>> for SumPackages {
     type Batch = BTreeMap<Vec<u8>, StoredPackage>;
 
     fn batch(batch: &mut Self::Batch, values: Vec<Self::Value>) {
@@ -64,7 +64,7 @@ impl Handler for SumPackages {
         }
     }
 
-    async fn commit(batch: &Self::Batch, conn: &mut db::Connection<'_>) -> Result<usize> {
+    async fn commit(batch: &Self::Batch, conn: &mut db::Connection<'conn>) -> Result<usize> {
         let values: Vec<_> = batch.values().cloned().collect();
         let updates = values.chunks(MAX_INSERT_CHUNK_ROWS).map(|chunk| {
             diesel::insert_into(sum_packages::table)

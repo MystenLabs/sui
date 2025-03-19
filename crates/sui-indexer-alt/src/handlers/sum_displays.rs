@@ -59,7 +59,7 @@ impl Processor for SumDisplays {
 }
 
 #[async_trait::async_trait]
-impl Handler for SumDisplays {
+impl<'conn> Handler<db::Connection<'conn>> for SumDisplays {
     type Batch = BTreeMap<Vec<u8>, Self::Value>;
 
     fn batch(batch: &mut Self::Batch, values: Vec<Self::Value>) {
@@ -68,7 +68,7 @@ impl Handler for SumDisplays {
         }
     }
 
-    async fn commit(batch: &Self::Batch, conn: &mut db::Connection<'_>) -> Result<usize> {
+    async fn commit(batch: &Self::Batch, conn: &mut db::Connection<'conn>) -> Result<usize> {
         let values: Vec<_> = batch.values().cloned().collect();
         let updates = values
             .chunks(MAX_INSERT_CHUNK_ROWS)

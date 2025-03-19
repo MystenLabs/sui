@@ -1,7 +1,6 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::future::Future;
 use std::pin::Pin;
 use std::time::Duration;
 
@@ -139,21 +138,20 @@ impl Database for PgStore {
 
 #[async_trait]
 impl TransactionalStore for PgStore {
-    async fn transactional_commit_with_watermark<H>(
-        &self,
-        watermark: &CommitterWatermark<'static>,
+    async fn transactional_commit_with_watermark<'a, H>(
+        &'a self,
+        watermark: &'a CommitterWatermark<'static>,
+        batch: &'a HandlerBatch<H, Self::Connection<'a>>,
     ) -> anyhow::Result<usize>
-// where
-        // H: for<'c> SequentialHandler<Self::Connection<'c>> + Send + Sync,
+    where
+        H: for<'c> SequentialHandler<Self::Connection<'c>> + Send + Sync + 'a,
     {
         let mut conn = self.db.connect().await?;
 
-        // Explicitly move ownership into closure
         let result = AsyncConnection::transaction(&mut conn, |conn| {
             async {
-                let result: Result<bool, _> = watermark.update(conn).await;
-                result.map_err(|e: diesel::result::Error| anyhow::Error::from(e))?;
-                Ok::<usize, anyhow::Error>(5) // Return usize result to match expected type
+                watermark.update(conn).await?;
+                H::commit(batch, conn).await
             }
             .scope_boxed()
         })
