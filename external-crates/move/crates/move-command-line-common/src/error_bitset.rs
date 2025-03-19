@@ -185,25 +185,4 @@ mod tests {
             prop_assert_eq!(error_bitset.bits(), error_bitset_built.bits());
         }
     }
-
-    proptest! {
-        #[test]
-        #[allow(deprecated)]
-        fn test_error_legacy_bitset_builder(line_number in 0..u16::MAX, identifier_index in 0..u16::MAX, constant_index in 0..u16::MAX) {
-            let error_bitset = ErrorBitset::new(VERSION_0, 0, line_number, identifier_index, constant_index);
-            let mut error_bitset_builder = crate::legacy_error_bitset::ErrorBitsetBuilder::new(line_number);
-            error_bitset_builder.with_identifier_index(identifier_index);
-            error_bitset_builder.with_constant_index(constant_index);
-            let error_bitset_built = error_bitset_builder.build();
-            prop_assert_eq!(error_bitset.line_number(), Some(line_number));
-            prop_assert_eq!(error_bitset.identifier_index(), Some(identifier_index));
-            prop_assert_eq!(error_bitset.constant_index(), Some(constant_index));
-
-            prop_assert_eq!(error_bitset_built.line_number(), Some(line_number));
-            prop_assert_eq!(error_bitset_built.identifier_index(), Some(identifier_index));
-            prop_assert_eq!(error_bitset_built.constant_index(), Some(constant_index));
-
-            prop_assert_eq!(error_bitset.bits(), error_bitset_built.bits);
-        }
-    }
 }
