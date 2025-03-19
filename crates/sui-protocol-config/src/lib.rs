@@ -1436,7 +1436,8 @@ pub struct ProtocolConfig {
     /// This is the threshold for activating consensus amplification.
     sip_45_consensus_amplification_threshold: Option<u64>,
 
-    /// Enables use of v2 of the object per-epoch marker table with FullObjectID keys.
+    /// DEPRECATED: this was an ephemeral feature flag only used in per-epoch tables, which has now
+    /// been deployed everywhere.
     use_object_per_epoch_marker_table_v2: Option<bool>,
 
     /// The number of commits to consider when computing a deterministic commit rate.

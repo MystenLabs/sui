@@ -348,7 +348,7 @@ impl Scenario {
         assert!(self.transactions.insert(tx), "transaction is not unique");
 
         self.cache()
-            .write_transaction_outputs(1 /* epoch */, outputs.clone(), true);
+            .write_transaction_outputs(1 /* epoch */, outputs.clone());
 
         self.count_action();
         tx
@@ -356,7 +356,7 @@ impl Scenario {
 
     // commit a transaction to the database
     pub async fn commit(&mut self, tx: TransactionDigest) -> SuiResult {
-        let batch = self.cache().build_db_batch(1, &[tx], true);
+        let batch = self.cache().build_db_batch(1, &[tx]);
         self.cache().commit_transaction_outputs(1, batch, &[tx]);
         self.count_action();
         Ok(())
@@ -491,7 +491,6 @@ impl Scenario {
             assert!(self.cache().have_received_object_at_version(
                 FullObjectKey::new(object.full_id(), object.version()),
                 1,
-                true
             ));
         }
     }
@@ -555,7 +554,7 @@ async fn test_committed() {
 
         s.assert_live(&[1, 2]);
         s.assert_dirty(&[1, 2]);
-        let batch = s.cache().build_db_batch(1, &[tx], true);
+        let batch = s.cache().build_db_batch(1, &[tx]);
         s.cache().commit_transaction_outputs(1, batch, &[tx]);
         s.assert_not_dirty(&[1, 2]);
         s.assert_cached(&[1, 2]);

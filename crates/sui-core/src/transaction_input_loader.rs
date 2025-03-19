@@ -44,8 +44,6 @@ impl TransactionInputLoader {
         input_object_kinds: &[InputObjectKind],
         receiving_objects: &[ObjectRef],
         epoch_id: EpochId,
-        // TODO: Delete this parameter once table migration is complete.
-        use_object_per_epoch_marker_table_v2: bool,
     ) -> SuiResult<(InputObjects, ReceivingObjects)> {
         // Length of input_object_kinds have been checked via validity_check() for ProgrammableTransaction.
         let mut input_results = vec![None; input_object_kinds.len()];
@@ -77,7 +75,6 @@ impl TransactionInputLoader {
                             self.cache.get_last_shared_object_deletion_info(
                                 FullObjectID::new(*id, Some(*initial_shared_version)),
                                 epoch_id,
-                                use_object_per_epoch_marker_table_v2,
                             )
                         {
                             input_results[i] = Some(ObjectReadResult {
@@ -107,11 +104,8 @@ impl TransactionInputLoader {
             });
         }
 
-        let receiving_results = self.read_receiving_objects_for_signing(
-            receiving_objects,
-            epoch_id,
-            use_object_per_epoch_marker_table_v2,
-        )?;
+        let receiving_results =
+            self.read_receiving_objects_for_signing(receiving_objects, epoch_id)?;
 
         Ok((
             input_results
@@ -236,7 +230,6 @@ impl TransactionInputLoader {
                             version,
                         ),
                         epoch_id,
-                        epoch_store.protocol_config().use_object_per_epoch_marker_table_v2_as_option().unwrap_or(false),
                     ) {
                         ObjectReadResult {
                             input_object_kind: *input,
@@ -264,8 +257,6 @@ impl TransactionInputLoader {
         &self,
         receiving_objects: &[ObjectRef],
         epoch_id: EpochId,
-        // TODO: Delete this parameter once table migration is complete.
-        use_object_per_epoch_marker_table_v2: bool,
     ) -> SuiResult<ReceivingObjects> {
         let mut receiving_results = Vec::with_capacity(receiving_objects.len());
         for objref in receiving_objects {
@@ -276,7 +267,6 @@ impl TransactionInputLoader {
             if self.cache.have_received_object_at_version(
                 FullObjectKey::new(FullObjectID::new(*object_id, None), *version),
                 epoch_id,
-                use_object_per_epoch_marker_table_v2,
             ) {
                 receiving_results.push(ReceivingObjectReadResult::new(
                     *objref,

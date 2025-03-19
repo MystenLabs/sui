@@ -3246,7 +3246,7 @@ fn build_and_commit(
     epoch: EpochId,
     txs: &[TransactionDigest],
 ) {
-    let batch = cache_commit.build_db_batch(epoch, txs, true);
+    let batch = cache_commit.build_db_batch(epoch, txs);
     cache_commit.commit_transaction_outputs(epoch, batch, txs);
 }
 

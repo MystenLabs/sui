@@ -460,8 +460,6 @@ impl ChildObjectResolver for PersistedStore {
         receiving_object_id: &ObjectID,
         receive_object_at_version: SequenceNumber,
         _epoch_id: EpochId,
-        // TODO: Delete this parameter once table migration is complete.
-        _use_object_per_epoch_marker_table_v2: bool,
     ) -> sui_types::error::SuiResult<Option<Object>> {
         let recv_object = match SimulatorStore::get_object(self, receiving_object_id) {
             None => return Ok(None),

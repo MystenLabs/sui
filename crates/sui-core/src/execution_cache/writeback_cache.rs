@@ -939,12 +939,7 @@ impl WritebackCache {
         self.set_backpressure(pending_count);
     }
 
-    fn build_db_batch(
-        &self,
-        epoch: EpochId,
-        digests: &[TransactionDigest],
-        use_object_per_epoch_marker_table_v2: bool,
-    ) -> Batch {
+    fn build_db_batch(&self, epoch: EpochId, digests: &[TransactionDigest]) -> Batch {
         let _metrics_guard = mysten_metrics::monitored_scope("WritebackCache::build_db_batch");
         let mut all_outputs = Vec::with_capacity(digests.len());
         for tx in digests {
@@ -967,7 +962,7 @@ impl WritebackCache {
 
         let batch = self
             .store
-            .build_db_batch(epoch, &all_outputs, use_object_per_epoch_marker_table_v2)
+            .build_db_batch(epoch, &all_outputs)
             .expect("db error");
         (all_outputs, batch)
     }
@@ -1299,14 +1294,8 @@ impl WritebackCache {
 impl ExecutionCacheAPI for WritebackCache {}
 
 impl ExecutionCacheCommit for WritebackCache {
-    fn build_db_batch(
-        &self,
-        epoch: EpochId,
-        digests: &[TransactionDigest],
-        // TODO: Delete this parameter once table migration is complete.
-        use_object_per_epoch_marker_table_v2: bool,
-    ) -> Batch {
-        self.build_db_batch(epoch, digests, use_object_per_epoch_marker_table_v2)
+    fn build_db_batch(&self, epoch: EpochId, digests: &[TransactionDigest]) -> Batch {
+        self.build_db_batch(epoch, digests)
     }
 
     fn commit_transaction_outputs(
@@ -1672,15 +1661,13 @@ impl ObjectCacheRead for WritebackCache {
         &self,
         object_key: FullObjectKey,
         epoch_id: EpochId,
-        // TODO: Delete this parameter once table migration is complete.
-        use_object_per_epoch_marker_table_v2: bool,
     ) -> Option<MarkerValue> {
         match self.get_marker_value_cache_only(object_key, epoch_id) {
             CacheResult::Hit(marker) => Some(marker),
             CacheResult::NegativeHit => None,
             CacheResult::Miss => self
                 .record_db_get("marker_by_version")
-                .get_marker_value(object_key, epoch_id, use_object_per_epoch_marker_table_v2)
+                .get_marker_value(object_key, epoch_id)
                 .expect("db error"),
         }
     }
@@ -1689,8 +1676,6 @@ impl ObjectCacheRead for WritebackCache {
         &self,
         object_id: FullObjectID,
         epoch_id: EpochId,
-        // TODO: Delete this parameter once table migration is complete.
-        use_object_per_epoch_marker_table_v2: bool,
     ) -> Option<(SequenceNumber, MarkerValue)> {
         match self.get_latest_marker_value_cache_only(object_id, epoch_id) {
             CacheResult::Hit((v, marker)) => Some((v, marker)),
@@ -1699,7 +1684,7 @@ impl ObjectCacheRead for WritebackCache {
             }
             CacheResult::Miss => self
                 .record_db_get("marker_latest")
-                .get_latest_marker(object_id, epoch_id, use_object_per_epoch_marker_table_v2)
+                .get_latest_marker(object_id, epoch_id)
                 .expect("db error"),
         }
     }
@@ -2088,13 +2073,7 @@ impl ExecutionCacheWrite for WritebackCache {
         )
     }
 
-    fn write_transaction_outputs(
-        &self,
-        epoch_id: EpochId,
-        tx_outputs: Arc<TransactionOutputs>,
-        // TODO: Delete this parameter once table migration is complete.
-        _use_object_per_epoch_marker_table_v2: bool,
-    ) {
+    fn write_transaction_outputs(&self, epoch_id: EpochId, tx_outputs: Arc<TransactionOutputs>) {
         WritebackCache::write_transaction_outputs(self, epoch_id, tx_outputs);
     }
 }
