@@ -6,6 +6,8 @@ use async_graphql::{Object, Result};
 
 use crate::error::{bad_user_input, RpcError};
 
+use super::service_config::ServiceConfig;
+
 pub struct Query;
 
 #[derive(thiserror::Error, Debug)]
@@ -14,6 +16,11 @@ struct Error;
 
 #[Object]
 impl Query {
+    /// Configuration for this RPC service.
+    async fn service_config(&self) -> ServiceConfig {
+        ServiceConfig
+    }
+
     /// Test query that always succeeds
     async fn hello(&self) -> String {
         "Hello, GraphQL!".to_string()

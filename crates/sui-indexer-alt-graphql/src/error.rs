@@ -17,8 +17,17 @@ pub(crate) mod code {
 
 #[derive(thiserror::Error, Debug)]
 pub(crate) enum RpcError<E: std::error::Error = Infallible> {
+    /// An error that is the user's fault.
     BadUserInput(E),
+
+    /// An error that is produced by the framework, it gets wrapped so that we can add an error
+    /// extension to it.
+    GraphQlError(async_graphql::Error),
+
+    /// An error produced by the internal workings of the service (our fault).
     InternalError(#[from] anyhow::Error),
+
+    /// The request took too long to process.
     RequestTimeout { kind: &'static str, limit: Duration },
 }
 
@@ -28,6 +37,16 @@ impl<E: std::error::Error> From<RpcError<E>> for async_graphql::Error {
             RpcError::BadUserInput(err) => err.to_string().extend_with(|_, ext| {
                 ext.set("code", code::BAD_USER_INPUT);
             }),
+
+            RpcError::GraphQlError(err) => {
+                if matches!(err.extensions, Some(ref ext) if ext.get("code").is_some()) {
+                    err
+                } else {
+                    err.extend_with(|_, ext| {
+                        ext.set("code", code::INTERNAL_SERVER_ERROR);
+                    })
+                }
+            }
 
             RpcError::InternalError(err) => {
                 // Discard the root cause (which will be the main error message), and then capture
@@ -54,6 +73,12 @@ impl<E: std::error::Error> From<RpcError<E>> for async_graphql::Error {
                 )
             }
         }
+    }
+}
+
+impl From<async_graphql::Error> for RpcError {
+    fn from(err: async_graphql::Error) -> Self {
+        RpcError::GraphQlError(err)
     }
 }
 
@@ -99,6 +124,33 @@ mod tests {
     #[test]
     fn test_bad_user_input() {
         let err: async_graphql::Error = bad_user_input(Error).into();
+
+        assert_eq!(err.message, "Boom!");
+
+        let ext = err.extensions.as_ref().expect("No extensions");
+        assert_eq!(ext.get("code"), Some(&code::BAD_USER_INPUT.into()));
+    }
+
+    /// If the GraphQL error does not have a code, it should be set to `INTERNAL_SERVER_ERROR`.
+    #[test]
+    fn test_graphql_error() {
+        let err: async_graphql::Error =
+            RpcError::<Infallible>::from(async_graphql::Error::new("Boom!")).into();
+
+        assert_eq!(err.message, "Boom!");
+
+        let ext = err.extensions.as_ref().expect("No extensions");
+        assert_eq!(ext.get("code"), Some(&code::INTERNAL_SERVER_ERROR.into()));
+    }
+
+    /// If the GraphQL error does already have a code, it should be left as is.
+    #[test]
+    fn test_graphql_error_existing_code() {
+        let err: async_graphql::Error = RpcError::<Infallible>::from(
+            async_graphql::Error::new("Boom!")
+                .extend_with(|_, ext| ext.set("code", code::BAD_USER_INPUT)),
+        )
+        .into();
 
         assert_eq!(err.message, "Boom!");
 
