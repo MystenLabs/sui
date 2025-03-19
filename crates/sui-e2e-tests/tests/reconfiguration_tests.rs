@@ -599,21 +599,17 @@ async fn test_reconfig_with_committee_change_basic() {
 
     // Get a single validator's stake and voting power. All of them are the same
     // in the `TestCluster`, so we can pick any.
-    let (stake, voting_power) = test_cluster
-        .fullnode_handle
-        .sui_node
-        .state()
-        .get_sui_system_state_object_for_testing()
-        .unwrap()
-        .into_sui_system_state_summary()
-        .active_validators
-        .iter()
-        .map(|v| (v.staking_pool_sui_balance, v.voting_power))
-        .collect::<Vec<(u64, u64)>>()[0];
+    let total_stake = test_cluster.fullnode_handle.sui_node.with(|node| {
+        node.state()
+            .get_sui_system_state_object_for_testing()
+            .unwrap()
+            .into_sui_system_state_summary()
+            .total_stake
+    });
 
-    // 12/10_000 points is the minimum barrier to join the committee (1st phase)
-    // Using very rough calculation here:
-    let min_barrier = stake / voting_power * 13; // multiplying by 14 to be sure
+    // Setting voting power to roughly ~ .20% of the total voting power, which
+    // is higher than VALIDATOR_MIN_POWER_PHASE_1.
+    let min_barrier = total_stake / 10_000 * 20;
 
     execute_add_validator_transactions(&mut test_cluster, &new_validator, Some(min_barrier)).await;
 
