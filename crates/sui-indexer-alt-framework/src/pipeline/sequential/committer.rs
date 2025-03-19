@@ -48,7 +48,7 @@ pub(super) fn committer<H, T>(
     cancel: CancellationToken,
 ) -> JoinHandle<()>
 where
-    H: for<'c> Handler<T::Connection<'c>> + Send + Sync + 'static,
+    H: Handler<Store = T> + Send + Sync + 'static,
     T: TransactionalStore + 'static,
 {
     tokio::spawn(async move {

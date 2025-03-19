@@ -141,10 +141,10 @@ impl TransactionalStore for PgStore {
     async fn transactional_commit_with_watermark<'a, H>(
         &'a self,
         watermark: &'a CommitterWatermark<'static>,
-        batch: &'a HandlerBatch<H, Self::Connection<'a>>,
+        batch: &'a HandlerBatch<H>,
     ) -> anyhow::Result<usize>
     where
-        H: for<'c> SequentialHandler<Self::Connection<'c>> + Send + Sync + 'a,
+        H: SequentialHandler<Store = Self> + Send + Sync + 'a,
     {
         let mut conn = self.db.connect().await?;
 

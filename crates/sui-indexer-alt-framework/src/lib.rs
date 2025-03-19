@@ -21,7 +21,7 @@ use pipeline::{
 };
 use prometheus::Registry;
 use sui_indexer_alt_metrics::db::DbConnectionStatsCollector;
-use sui_pg_db::{temp::TempDb, Connection, Db, DbArgs};
+use sui_pg_db::{temp::TempDb, Db, DbArgs};
 use tempfile::tempdir;
 use tokio::task::JoinHandle;
 use tokio_util::sync::CancellationToken;
@@ -289,7 +289,9 @@ impl Indexer {
         config: SequentialConfig,
     ) -> Result<()>
     where
-        H: for<'c> Handler<Connection<'c>> + Send + Sync + 'static,
+        // TODO (wlmyng): non-pg store - eventually this will be on Indexer<S: TransactionalStore> and ...
+        // associate Indexer's Store with H::Store
+        H: Handler<Store = PgStore> + Send + Sync + 'static,
     {
         let Some(watermark) = self.add_pipeline::<H>(false).await? else {
             return Ok(());
@@ -311,7 +313,7 @@ impl Indexer {
         let db = PgStore::new(self.db.clone());
 
         // Use turbofish to explicitly specify the types
-        self.handles.push(sequential::pipeline::<H, PgStore>(
+        self.handles.push(sequential::pipeline::<H>(
             handler,
             watermark,
             config,

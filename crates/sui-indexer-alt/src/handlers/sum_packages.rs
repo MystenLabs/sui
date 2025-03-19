@@ -8,8 +8,9 @@ use diesel::{upsert::excluded, ExpressionMethods};
 use diesel_async::RunQueryDsl;
 use futures::future::try_join_all;
 use sui_indexer_alt_framework::{
-    db,
+    pg_store::PgStore,
     pipeline::{sequential::Handler, Processor},
+    store::Database,
     types::full_checkpoint_content::CheckpointData,
     FieldCount,
 };
@@ -55,7 +56,8 @@ impl Processor for SumPackages {
 }
 
 #[async_trait::async_trait]
-impl<'conn> Handler<db::Connection<'conn>> for SumPackages {
+impl Handler for SumPackages {
+    type Store = PgStore;
     type Batch = BTreeMap<Vec<u8>, StoredPackage>;
 
     fn batch(batch: &mut Self::Batch, values: Vec<Self::Value>) {
@@ -64,7 +66,10 @@ impl<'conn> Handler<db::Connection<'conn>> for SumPackages {
         }
     }
 
-    async fn commit(batch: &Self::Batch, conn: &mut db::Connection<'conn>) -> Result<usize> {
+    async fn commit<'a>(
+        batch: &Self::Batch,
+        conn: &mut <Self::Store as Database>::Connection<'a>,
+    ) -> Result<usize> {
         let values: Vec<_> = batch.values().cloned().collect();
         let updates = values.chunks(MAX_INSERT_CHUNK_ROWS).map(|chunk| {
             diesel::insert_into(sum_packages::table)

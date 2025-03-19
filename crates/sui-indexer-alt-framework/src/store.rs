@@ -85,7 +85,7 @@ pub trait WatermarkStore: Send + Sync + 'static + Clone {
 
 pub trait Store: Database + WatermarkStore {}
 
-pub type HandlerBatch<H, C> = <H as SequentialHandler<C>>::Batch;
+pub type HandlerBatch<H> = <H as SequentialHandler>::Batch;
 
 #[async_trait]
 pub trait TransactionalStore: Database + WatermarkStore {
@@ -93,8 +93,8 @@ pub trait TransactionalStore: Database + WatermarkStore {
     async fn transactional_commit_with_watermark<'a, H>(
         &'a self,
         watermark: &'a CommitterWatermark<'static>,
-        batch: &'a HandlerBatch<H, Self::Connection<'a>>,
+        batch: &'a HandlerBatch<H>,
     ) -> anyhow::Result<usize>
     where
-        H: for<'c> SequentialHandler<Self::Connection<'c>> + Send + Sync + 'a;
+        H: SequentialHandler<Store = Self> + Send + Sync + 'a;
 }
