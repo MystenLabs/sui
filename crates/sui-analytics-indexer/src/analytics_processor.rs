@@ -41,7 +41,6 @@ pub struct AnalyticsProcessor<S: Serialize + ParquetSchema> {
     handler: Box<dyn AnalyticsHandler<S>>,
     state: Mutex<State<S>>,
     metrics: AnalyticsMetrics,
-    config: Arc<AnalyticsIndexerConfig>,
     task_config: Arc<TaskConfig>,
     sender: mpsc::Sender<FileMetadata>,
     #[allow(dead_code)]
@@ -113,7 +112,7 @@ impl<S: Serialize + ParquetSchema + 'static> AnalyticsProcessor<S> {
         task_config: Arc<TaskConfig>,
     ) -> Result<Self> {
         let local_store_config = ObjectStoreConfig {
-            directory: Some(config.checkpoint_dir.clone()),
+            directory: Some(task_config.checkpoint_dir()?.to_path_buf()),
             object_store: Some(ObjectStoreType::File),
             ..Default::default()
         };
@@ -122,12 +121,12 @@ impl<S: Serialize + ParquetSchema + 'static> AnalyticsProcessor<S> {
         let (kill_sender, kill_receiver) = oneshot::channel::<()>();
         let (sender, receiver) = mpsc::channel::<FileMetadata>(100);
         let name: String = handler.name().parse()?;
-        let checkpoint_dir = config.checkpoint_dir.clone();
+        let checkpoint_dir = task_config.checkpoint_dir()?;
         let cloned_metrics = metrics.clone();
         tokio::task::spawn(Self::start_syncing_with_remote(
             remote_object_store,
             local_object_store.clone(),
-            checkpoint_dir,
+            checkpoint_dir.to_path_buf(),
             task_config.remote_store_path_prefix()?,
             receiver,
             kill_receiver,
@@ -155,7 +154,6 @@ impl<S: Serialize + ParquetSchema + 'static> AnalyticsProcessor<S> {
             sender,
             max_checkpoint_sender,
             metrics,
-            config,
             task_config,
         })
     }
@@ -186,7 +184,7 @@ impl<S: Serialize + ParquetSchema + 'static> AnalyticsProcessor<S> {
 
     fn epoch_dir(&self, state: &State<S>) -> Result<PathBuf> {
         let path = path_to_filesystem(
-            self.config.checkpoint_dir.to_path_buf(),
+            self.task_config.checkpoint_dir()?.to_path_buf(),
             &self.task_config.file_type.dir_prefix(),
         )?
         .join(format!("{}{}", EPOCH_DIR_PREFIX, state.current_epoch));
