@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-// arbitrary struct input allowed for dev inspect
+// arbitrary struct input disallowed for dry run
 
 //# init --addresses test=0x0 --accounts A
 

@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-// entry checks maintained during dry run
+// entry checks disabled during dev inspect
 
 //# init --addresses test=0x0 --accounts A
 
