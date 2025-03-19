@@ -10,6 +10,7 @@ pub mod randomized_transaction;
 pub mod randomness;
 pub mod shared_counter;
 pub mod shared_object_deletion;
+pub mod slow;
 pub mod transfer_object;
 pub mod workload;
 pub mod workload_configuration;
