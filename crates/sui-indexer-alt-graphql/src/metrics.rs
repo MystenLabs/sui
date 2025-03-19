@@ -21,7 +21,7 @@ pub struct RpcMetrics {
     pub query_latency: Histogram,
     pub queries_received: IntCounter,
     pub queries_succeeded: IntCounter,
-    pub queries_failed: IntCounter,
+    pub queries_failed: IntCounterVec,
     pub queries_in_flight: IntGauge,
 
     // Metrics per type and field.
@@ -55,9 +55,10 @@ impl RpcMetrics {
             )
             .unwrap(),
 
-            queries_failed: register_int_counter_with_registry!(
+            queries_failed: register_int_counter_vec_with_registry!(
                 "queries_failed",
                 "Number of read requests that have completed with at least one error",
+                &["code"],
                 registry,
             )
             .unwrap(),
