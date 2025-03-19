@@ -4367,7 +4367,7 @@ async fn test_tree_shaking_package_with_transitive_dependencies1() -> Result<(),
 #[sim_test]
 async fn test_tree_shaking_package_with_transitive_dependencies_and_no_code_references(
 ) -> Result<(), anyhow::Error> {
-    // Publish package C_depends_on_B_but_no_code_references_B and check the linkage table
+    // Publish package C_B with no code references_B and check the linkage table
     // we use here the package B published in TEST 3
     let mut test = TreeShakingTest::new().await?;
 
@@ -4376,9 +4376,7 @@ async fn test_tree_shaking_package_with_transitive_dependencies_and_no_code_refe
     let (_, _) = test.publish_package("B_A1", false).await?;
 
     // Publish C which depends on B
-    let (package_c_id, _) = test
-        .publish_package("C_depends_on_B_but_no_code_references_B", false)
-        .await?;
+    let (package_c_id, _) = test.publish_package("C_B", false).await?;
     let linkage_table_c = test.fetch_linkage_table(package_c_id).await;
 
     assert!(
@@ -4391,7 +4389,6 @@ async fn test_tree_shaking_package_with_transitive_dependencies_and_no_code_refe
 
 #[sim_test]
 async fn test_tree_shaking_package_deps_on_pkg_upgrade() -> Result<(), anyhow::Error> {
-    // Publish package C_depends_on_B_but_no_code_references_B and check the linkage table
     let mut test = TreeShakingTest::new().await?;
 
     // Publish package A and B
