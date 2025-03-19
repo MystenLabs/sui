@@ -173,6 +173,13 @@ impl LatestObjectCacheEntry {
             LatestObjectCacheEntry::NonExistent => None,
         }
     }
+
+    fn is_alive(&self) -> bool {
+        match self {
+            LatestObjectCacheEntry::Object(_, entry) => !entry.is_tombstone(),
+            LatestObjectCacheEntry::NonExistent => false,
+        }
+    }
 }
 
 impl IsNewer for LatestObjectCacheEntry {
@@ -1522,7 +1529,8 @@ impl ObjectCacheRead for WritebackCache {
         // if we have the latest version cached, and it is within the bound, we are done
         self.metrics
             .record_cache_request("object_lt_or_eq_version", "object_by_id");
-        if let Some(latest) = self.cached.object_by_id_cache.get(&object_id) {
+        let latest_cache_entry = self.cached.object_by_id_cache.get(&object_id);
+        if let Some(latest) = &latest_cache_entry {
             let latest = latest.lock();
             match &*latest {
                 LatestObjectCacheEntry::Object(latest_version, object) => {
@@ -1628,12 +1636,18 @@ impl ObjectCacheRead for WritebackCache {
                             .find_object_lt_or_eq_version(object_id, version_bound)
                             .expect("db error")
                     }
+
+                // no object found in dirty set or db, object does not exist
+                // When this is called from a read api (i.e. not the execution path) it is
+                // possible that the object has been deleted and pruned. In this case,
+                // there would be no entry at all on disk, but we may have a tombstone in the
+                // cache
+                } else if let Some(latest_cache_entry) = latest_cache_entry {
+                    // If there is a latest cache entry, it had better not be a live object!
+                    assert!(!latest_cache_entry.lock().is_alive());
+                    None
                 } else {
-                    // no object found in dirty set or db, object does not exist
-                    // When this is called from a read api (i.e. not the execution path) it is
-                    // possible that the object has been deleted and pruned. In this case,
-                    // there would be no entry at all on disk, but we may have a tombstone in the
-                    // cache
+                    // If there is no latest cache entry, we can insert one.
                     let highest = cached_entry.and_then(|c| c.get_highest());
                     assert!(highest.is_none() || highest.unwrap().1.is_tombstone());
                     self.cache_object_not_found(
