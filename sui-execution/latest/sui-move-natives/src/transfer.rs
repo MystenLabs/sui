@@ -48,7 +48,7 @@ pub fn receive_object_internal(
     debug_assert!(args.len() == 3);
     let transfer_receive_object_internal_cost_params = context
         .extensions_mut()
-        .get::<NativesCostTable>()
+        .get::<NativesCostTable>()?
         .transfer_receive_object_internal_cost_params
         .clone();
     native_charge_gas_early_exit!(
@@ -74,7 +74,7 @@ pub fn receive_object_internal(
         ));
     };
 
-    let object_runtime: &mut ObjectRuntime = context.extensions_mut().get_mut();
+    let object_runtime: &mut ObjectRuntime = context.extensions_mut().get_mut()?;
     let child = match object_runtime.receive_object(
         parent,
         child_id,
@@ -123,7 +123,7 @@ pub fn transfer_internal(
 
     let transfer_transfer_internal_cost_params = context
         .extensions_mut()
-        .get::<NativesCostTable>()
+        .get::<NativesCostTable>()?
         .transfer_transfer_internal_cost_params
         .clone();
 
@@ -161,7 +161,7 @@ pub fn freeze_object(
 
     let transfer_freeze_object_cost_params = context
         .extensions_mut()
-        .get::<NativesCostTable>()
+        .get::<NativesCostTable>()?
         .transfer_freeze_object_cost_params
         .clone();
 
@@ -197,7 +197,7 @@ pub fn share_object(
 
     let transfer_share_object_cost_params = context
         .extensions_mut()
-        .get::<NativesCostTable>()
+        .get::<NativesCostTable>()?
         .transfer_share_object_cost_params
         .clone();
 
@@ -240,6 +240,6 @@ fn object_runtime_transfer(
         );
     }
 
-    let obj_runtime: &mut ObjectRuntime = context.extensions_mut().get_mut();
+    let obj_runtime: &mut ObjectRuntime = context.extensions_mut().get_mut()?;
     obj_runtime.transfer(owner, ty, obj)
 }

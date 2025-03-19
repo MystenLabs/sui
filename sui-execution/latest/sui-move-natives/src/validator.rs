@@ -33,7 +33,7 @@ pub fn validate_metadata_bcs(
 
     let validator_validate_metadata_bcs_cost_params = context
         .extensions_mut()
-        .get::<NativesCostTable>()
+        .get::<NativesCostTable>()?
         .validator_validate_metadata_bcs_cost_params
         .clone();
 
