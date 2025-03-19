@@ -129,7 +129,7 @@ mod checked {
             if let Err(err) =
                 execute_command::<Mode>(&mut context, &mut mode_results, command, trace_builder_opt)
             {
-                let object_runtime: &ObjectRuntime = context.object_runtime();
+                let object_runtime: &ObjectRuntime = context.object_runtime()?;
                 // We still need to record the loaded child objects for replay
                 let loaded_runtime_objects = object_runtime.loaded_runtime_objects();
                 // we do not save the wrapped objects since on error, they should not be modified
@@ -142,7 +142,7 @@ mod checked {
         }
 
         // Save loaded objects table in case we fail in post execution
-        let object_runtime: &ObjectRuntime = context.object_runtime();
+        let object_runtime: &ObjectRuntime = context.object_runtime()?;
         // We still need to record the loaded child objects for replay
         // Record the objects loaded at runtime (dynamic fields + received) for
         // storage rebate calculation.
