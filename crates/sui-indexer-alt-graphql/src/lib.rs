@@ -208,6 +208,7 @@ pub async fn start_rpc(
     let h_rpc = RpcService::new(args, version, schema(), registry, cancel.child_token())
         .extension(Timeout)
         .data(config.limits.timeouts())
+        .data(config)
         .run()
         .await?;
 

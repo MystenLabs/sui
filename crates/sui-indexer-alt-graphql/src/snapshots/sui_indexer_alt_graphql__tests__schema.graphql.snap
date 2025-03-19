@@ -4,6 +4,10 @@ expression: sdl
 ---
 type Query {
 	"""
+	Configuration for this RPC service.
+	"""
+	serviceConfig: ServiceConfig!
+	"""
 	Test query that always succeeds
 	"""
 	hello: String!
@@ -19,6 +23,17 @@ type Query {
 	Test query that times out
 	"""
 	tickTock: String!
+}
+
+type ServiceConfig {
+	"""
+	Maximum time in milliseconds spent waiting for a response from fullnode after issuing a transaction to execute. Note that the transaction may still succeed even in the case of a timeout. Transactions are idempotent, so a transaction that times out should be re-submitted until the network returns a definite response (success or failure, not timeout).
+	"""
+	mutationTimeoutMs: Int!
+	"""
+	Maximum time in milliseconds that will be spent to serve one query request.
+	"""
+	queryTimeoutMs: Int!
 }
 
 
