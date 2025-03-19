@@ -3,6 +3,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use better_any::{Tid, TidAble, TidExt};
+use move_binary_format::errors::{PartialVMError, PartialVMResult};
+use move_core_types::vm_status::StatusCode;
 use std::{any::TypeId, collections::HashMap};
 
 /// A data type to represent a heterogeneous collection of extensions which are available to
@@ -26,35 +28,50 @@ impl<'a> NativeContextExtensions<'a> {
         )
     }
 
-    pub fn get<T: TidAble<'a>>(&self) -> &T {
+    pub fn get<T: TidAble<'a>>(&self) -> PartialVMResult<&T> {
         self.map
             .get(&T::id())
-            .expect("extension unknown")
-            .as_ref()
-            .downcast_ref::<T>()
-            .unwrap()
+            .ok_or_else(|| {
+                PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR)
+                    .with_message("native extension not found".to_string())
+            })
+            .and_then(|t| {
+                t.as_ref().downcast_ref::<T>().ok_or_else(|| {
+                    PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR)
+                        .with_message("downcast error".to_string())
+                })
+            })
     }
 
-    pub fn get_mut<T: TidAble<'a>>(&mut self) -> &mut T {
+    pub fn get_mut<T: TidAble<'a>>(&mut self) -> PartialVMResult<&mut T> {
         self.map
             .get_mut(&T::id())
-            .expect("extension unknown")
-            .as_mut()
-            .downcast_mut::<T>()
-            .unwrap()
+            .ok_or_else(|| {
+                PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR)
+                    .with_message("native extension not found".to_string())
+            })
+            .and_then(|t| {
+                t.as_mut().downcast_mut::<T>().ok_or_else(|| {
+                    PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR)
+                        .with_message("downcast error".to_string())
+                })
+            })
     }
 
-    pub fn remove<T: TidAble<'a>>(&mut self) -> T {
+    pub fn remove<T: TidAble<'a>>(&mut self) -> PartialVMResult<T> {
         // can't use expect below because it requires `T: Debug`.
-        match self
-            .map
+        self.map
             .remove(&T::id())
-            .expect("extension unknown")
-            .downcast_box::<T>()
-        {
-            Ok(val) => *val,
-            Err(_) => panic!("downcast error"),
-        }
+            .ok_or_else(|| {
+                PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR)
+                    .with_message("native extension not found".to_string())
+            })
+            .and_then(|t| {
+                t.downcast_box::<T>().map(|t| *t).map_err(|_| {
+                    PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR)
+                        .with_message("downcast error".to_string())
+                })
+            })
     }
 }
 
@@ -74,10 +91,10 @@ mod tests {
         let e = Ext { a: &mut v };
         let mut exts = NativeContextExtensions::default();
         exts.add(e);
-        *exts.get_mut::<Ext>().a += 1;
-        assert_eq!(*exts.get_mut::<Ext>().a, 24);
-        *exts.get_mut::<Ext>().a += 1;
-        let e1 = exts.remove::<Ext>();
+        *exts.get_mut::<Ext>().unwrap().a += 1;
+        assert_eq!(*exts.get_mut::<Ext>().unwrap().a, 24);
+        *exts.get_mut::<Ext>().unwrap().a += 1;
+        let e1 = exts.remove::<Ext>().unwrap();
         assert_eq!(*e1.a, 25)
     }
 }
