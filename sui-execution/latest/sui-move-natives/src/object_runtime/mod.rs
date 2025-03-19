@@ -21,6 +21,7 @@ use move_core_types::{
     runtime_value as R,
     vm_status::StatusCode,
 };
+use move_vm_runtime::native_extensions::NativeExtensionMarker;
 use move_vm_types::{
     loaded_data::runtime_types::Type,
     values::{GlobalValue, Value},
@@ -112,6 +113,8 @@ pub struct ObjectRuntime<'a> {
     pub(crate) protocol_config: &'a ProtocolConfig,
     pub(crate) metrics: Arc<LimitsMetrics>,
 }
+
+impl<'a> NativeExtensionMarker<'a> for ObjectRuntime<'a> {}
 
 pub enum TransferResult {
     New,

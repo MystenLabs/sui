@@ -15,7 +15,7 @@ use move_core_types::{
     language_storage::StructTag,
     vm_status::StatusCode,
 };
-use move_vm_runtime::native_functions::NativeContext;
+use move_vm_runtime::{native_extensions::NativeExtensionMarker, native_functions::NativeContext};
 use move_vm_types::{
     loaded_data::runtime_types::Type,
     natives::function::NativeResult,
@@ -56,6 +56,7 @@ type Set<K> = IndexSet<K>;
 /// writing) while hiding mutability.
 #[derive(Tid)]
 pub struct InMemoryTestStore(pub &'static LocalKey<RefCell<InMemoryStorage>>);
+impl<'a> NativeExtensionMarker<'a> for &'a InMemoryTestStore {}
 
 impl ChildObjectResolver for InMemoryTestStore {
     fn read_child_object(
