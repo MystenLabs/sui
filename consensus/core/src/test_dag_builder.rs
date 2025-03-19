@@ -156,11 +156,15 @@ impl DagBuilder {
             gc_round: Round,
             context: Arc<Context>,
             blocks: BTreeMap<BlockRef, (VerifiedBlock, bool)>, // the tuple represends the block and whether it is committed
+            genesis: BTreeMap<BlockRef, VerifiedBlock>,
         }
         impl BlockStoreAPI for BlockStorage {
             fn get_blocks(&self, refs: &[BlockRef]) -> Vec<Option<VerifiedBlock>> {
                 refs.iter()
                     .map(|block_ref| {
+                        if block_ref.round == 0 {
+                            return self.genesis.get(block_ref).cloned();
+                        }
                         self.blocks
                             .get(block_ref)
                             .map(|(block, _committed)| block.clone())
@@ -202,6 +206,7 @@ impl DagBuilder {
                 .into_iter()
                 .map(|(k, v)| (k, (v, false)))
                 .collect(),
+            genesis: self.genesis.clone(),
             gc_round: 0,
         };
 
