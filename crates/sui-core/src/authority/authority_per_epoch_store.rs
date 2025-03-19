@@ -19,6 +19,7 @@ use futures::future::{join_all, select, Either};
 use futures::FutureExt;
 use itertools::{izip, Itertools};
 use move_bytecode_utils::module_cache::SyncModuleCache;
+use mysten_common::assert_reachable;
 use mysten_common::sync::notify_once::NotifyOnce;
 use mysten_common::sync::notify_read::NotifyRead;
 use mysten_common::{debug_fatal, fatal};
@@ -3248,6 +3249,7 @@ impl AuthorityPerEpochStore {
             match cancelled_txns.get(txn.digest()) {
                 Some(CancelConsensusCertificateReason::CongestionOnObjects(_))
                 | Some(CancelConsensusCertificateReason::DkgFailed) => {
+                    assert_reachable!("cancelled transactions");
                     let assigned_versions = SharedObjVerManager::assign_versions_for_certificate(
                         txn,
                         &mut shared_input_next_version,

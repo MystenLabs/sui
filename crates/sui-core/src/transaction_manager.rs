@@ -9,7 +9,7 @@ use std::{
 };
 
 use lru::LruCache;
-use mysten_common::fatal;
+use mysten_common::{fatal, util::randomize_cache_capacity_in_tests};
 use mysten_metrics::monitored_scope;
 use parking_lot::RwLock;
 use sui_types::{
@@ -187,7 +187,7 @@ struct AvailableObjectsCache {
 
 impl AvailableObjectsCache {
     fn new(metrics: Arc<AuthorityMetrics>) -> Self {
-        Self::new_with_size(metrics, 100000)
+        Self::new_with_size(metrics, randomize_cache_capacity_in_tests(100000))
     }
 
     fn new_with_size(metrics: Arc<AuthorityMetrics>, size: usize) -> Self {
