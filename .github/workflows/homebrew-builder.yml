@@ -19,9 +19,6 @@ jobs:
       - name: Clone Target Repository
         run: |
           git clone https://github.com/asymptotic-code/homebrew-sui-prover.git
-          cd homebrew-sui-prover
-          git config user.name "github-actions"
-          git config user.email "github-actions@github.com"
 
       - name: Make Changes in Target Repo
         run: |
@@ -39,6 +36,8 @@ jobs:
       - name: Push Changes
         run: |
           cd homebrew-sui-prover
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
           git checkout -b "sui-prover"
           git add .
           git commit -m "Automated version update"
