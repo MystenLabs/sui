@@ -6,7 +6,7 @@ use clap::Parser;
 use prometheus::Registry;
 use sui_indexer_alt_graphql::{
     args::{Args, Command},
-    config::RpcConfig,
+    config::RpcLayer,
     start_rpc,
 };
 use sui_indexer_alt_metrics::MetricsService;
@@ -49,8 +49,9 @@ async fn main() -> anyhow::Result<()> {
 
                 toml::from_str(&contents).context("Failed to parse configuration TOML file")?
             } else {
-                RpcConfig::default()
-            };
+                RpcLayer::default()
+            }
+            .finish();
 
             let cancel = CancellationToken::new();
 
@@ -87,6 +88,14 @@ async fn main() -> anyhow::Result<()> {
             cancel.cancel();
             let _ = h_metrics.await;
             let _ = h_ctrl_c.await;
+        }
+
+        Command::GenerateConfig => {
+            let config = RpcLayer::example();
+            let config_toml = toml::to_string_pretty(&config)
+                .context("Failed to serialize default configuration to TOML.")?;
+
+            println!("{config_toml}");
         }
     }
 

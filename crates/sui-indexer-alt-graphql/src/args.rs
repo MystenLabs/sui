@@ -15,6 +15,7 @@ pub struct Args {
 
 #[derive(clap::Subcommand, Debug, Clone)]
 pub enum Command {
+    /// Run the RPC service.
     Rpc {
         #[command(flatten)]
         rpc_args: RpcArgs,
@@ -27,4 +28,7 @@ pub enum Command {
         #[arg(long)]
         config: Option<PathBuf>,
     },
+
+    /// Output the contents of the default configuration to STDOUT.
+    GenerateConfig,
 }
