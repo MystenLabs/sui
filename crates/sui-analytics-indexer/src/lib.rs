@@ -12,6 +12,7 @@ use gcp_bigquery_client::Client;
 use num_enum::IntoPrimitive;
 use num_enum::TryFromPrimitive;
 use object_store::path::Path;
+use package_store::LocalDBPackageStore;
 use serde::{Deserialize, Serialize};
 use snowflake_api::{QueryResult, SnowflakeApi};
 use strum_macros::EnumIter;
@@ -53,7 +54,7 @@ pub mod analytics_metrics;
 pub mod analytics_processor;
 pub mod errors;
 mod handlers;
-mod package_store;
+pub mod package_store;
 pub mod tables;
 mod writers;
 
@@ -716,13 +717,13 @@ pub async fn make_transaction_processor(
 }
 
 pub async fn make_object_processor(
+    package_store: LocalDBPackageStore,
     config: Arc<AnalyticsIndexerConfig>,
     task_config: Arc<TaskConfig>,
     metrics: AnalyticsMetrics,
 ) -> Result<Processor> {
     let handler: Box<dyn AnalyticsHandler<ObjectEntry>> = Box::new(ObjectHandler::new(
-        &config.package_cache_path,
-        &config.rest_url,
+        package_store,
         &task_config.package_id_filter,
     ));
     let starting_checkpoint_seq_num =
@@ -747,14 +748,12 @@ pub async fn make_object_processor(
 }
 
 pub async fn make_event_processor(
+    package_store: LocalDBPackageStore,
     config: Arc<AnalyticsIndexerConfig>,
     task_config: Arc<TaskConfig>,
     metrics: AnalyticsMetrics,
 ) -> Result<Processor> {
-    let handler: Box<dyn AnalyticsHandler<EventEntry>> = Box::new(EventHandler::new(
-        &config.package_cache_path,
-        &config.rest_url,
-    ));
+    let handler: Box<dyn AnalyticsHandler<EventEntry>> = Box::new(EventHandler::new(package_store));
     let starting_checkpoint_seq_num =
         get_starting_checkpoint_seq_num(&config.remote_store_config, &task_config).await?;
     let writer = make_writer::<EventEntry>(
@@ -858,16 +857,15 @@ pub async fn make_move_call_processor(
 }
 
 pub async fn make_dynamic_field_processor(
+    package_store: LocalDBPackageStore,
     config: Arc<AnalyticsIndexerConfig>,
     task_config: Arc<TaskConfig>,
     metrics: AnalyticsMetrics,
 ) -> Result<Processor> {
     let starting_checkpoint_seq_num =
         get_starting_checkpoint_seq_num(&config.remote_store_config, &task_config).await?;
-    let handler: Box<dyn AnalyticsHandler<DynamicFieldEntry>> = Box::new(DynamicFieldHandler::new(
-        &config.package_cache_path,
-        &config.rest_url,
-    ));
+    let handler: Box<dyn AnalyticsHandler<DynamicFieldEntry>> =
+        Box::new(DynamicFieldHandler::new(package_store));
     let writer = make_writer::<DynamicFieldEntry>(
         &config,
         &task_config,
@@ -953,21 +951,26 @@ pub async fn get_starting_checkpoint_seq_num(
 }
 
 pub async fn make_analytics_processor(
+    package_store: LocalDBPackageStore,
     config: Arc<AnalyticsIndexerConfig>,
     task_config: Arc<TaskConfig>,
     metrics: AnalyticsMetrics,
 ) -> Result<Processor> {
     match task_config.file_type {
         FileType::Checkpoint => make_checkpoint_processor(config, task_config, metrics).await,
-        FileType::Object => make_object_processor(config, task_config, metrics).await,
+        FileType::Object => {
+            make_object_processor(package_store, config, task_config, metrics).await
+        }
         FileType::Transaction => make_transaction_processor(config, task_config, metrics).await,
-        FileType::Event => make_event_processor(config, task_config, metrics).await,
+        FileType::Event => make_event_processor(package_store, config, task_config, metrics).await,
         FileType::TransactionObjects => {
             make_transaction_objects_processor(config, task_config, metrics).await
         }
         FileType::MoveCall => make_move_call_processor(config, task_config, metrics).await,
         FileType::MovePackage => make_move_package_processor(config, task_config, metrics).await,
-        FileType::DynamicField => make_dynamic_field_processor(config, task_config, metrics).await,
+        FileType::DynamicField => {
+            make_dynamic_field_processor(package_store, config, task_config, metrics).await
+        }
         FileType::WrappedObject => {
             make_wrapped_object_processor(config, task_config, metrics).await
         }

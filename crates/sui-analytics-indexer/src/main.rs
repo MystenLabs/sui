@@ -6,7 +6,7 @@ use prometheus::Registry;
 use std::{collections::HashMap, env, sync::Arc};
 use sui_analytics_indexer::{
     analytics_metrics::AnalyticsMetrics, errors::AnalyticsIndexerError, make_analytics_processor,
-    AnalyticsIndexerConfig,
+    package_store::LocalDBPackageStore, AnalyticsIndexerConfig,
 };
 use sui_data_ingestion_core::{
     DataIngestionMetrics, IndexerExecutor, ReaderOptions, ShimIndexerProgressStore, WorkerPool,
@@ -39,11 +39,17 @@ async fn main() -> Result<()> {
     let mut processors = Vec::new();
     let config = Arc::new(config);
     let metrics = AnalyticsMetrics::new(&registry);
+    let package_store = LocalDBPackageStore::new(&config.package_cache_path, &config.rest_url);
     for task_config in config.tasks.clone() {
         let task_name = task_config.task_name.clone();
-        let processor = make_analytics_processor(config.clone(), task_config, metrics.clone())
-            .await
-            .map_err(|e| AnalyticsIndexerError::GenericError(e.to_string()))?;
+        let processor = make_analytics_processor(
+            package_store.clone(),
+            config.clone(),
+            task_config,
+            metrics.clone(),
+        )
+        .await
+        .map_err(|e| AnalyticsIndexerError::GenericError(e.to_string()))?;
         let watermark = processor.last_committed_checkpoint().unwrap_or_default() + 1;
         if watermarks.insert(task_name.clone(), watermark).is_some() {
             return Err(anyhow!("Duplicate task_name '{}' found", task_name));
