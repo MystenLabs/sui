@@ -13,7 +13,7 @@ use crate::consensus_adapter::SubmitToConsensus;
 use governor::{clock::MonotonicClock, Quota, RateLimiter};
 use itertools::Itertools;
 use lru::LruCache;
-use mysten_common::debug_fatal;
+use mysten_common::{assert_reachable, debug_fatal};
 use mysten_metrics::{monitored_scope, spawn_monitored_task};
 use simple_moving_average::{SingleSumSMA, SMA};
 use sui_config::node::ExecutionTimeObserverConfig;
@@ -362,6 +362,7 @@ impl ExecutionTimeObserver {
                 warn!("failed to submit execution time observation: {e:?}");
             }
         } else {
+            assert_reachable!("successfully shares execution time observations");
             epoch_store
                 .metrics
                 .epoch_execution_time_observations_shared
@@ -509,6 +510,8 @@ impl ExecutionTimeEstimator {
             );
             return;
         }
+
+        assert_reachable!("receives some valid execution time observations");
 
         let observations = self
             .consensus_observations
