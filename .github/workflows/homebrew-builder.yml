@@ -8,7 +8,7 @@ on:
 
 jobs:
   create-pr:
-    runs-on: ubuntu-latest
+    runs-on: macos-latest
 
     steps:
       - name: Checkout Source Repository
@@ -17,21 +17,29 @@ jobs:
       - name: Clone Target Repository
         run: |
           git clone https://github.com/asymptotic-code/homebrew-sui-prover.git
-          cd target-repo
+          cd homebrew-sui-prover
           git config user.name "github-actions"
           git config user.email "github-actions@github.com"
 
       - name: Make Changes in Target Repo
         run: |
-          cd ./homebrew-sui-prover/Formula
-          echo "New content $(date)" >> sui-prover.rb
-          git checkout -b "sui-prover"
-          git add .
-          git commit -m "Automated version update"
+          cd homebrew-sui-prover/Formula
+          
+          FORMULA_FILE="sui-move-prover.rb"
+
+          CURRENT_VERSION=$(sed -n 's/version "\(.*\)"/\1/p' "$FORMULA_FILE" | sed 's/^ *//;s/ *$//' | head -n 1)
+          NEW_VERSION=$(echo "$CURRENT_VERSION" | awk -F. '{print $1"."$2"."$3+1}')
+          sed -i.bak "s/version \"$CURRENT_VERSION\"/version \"$NEW_VERSION\"/" "$FORMULA_FILE"
+          rm -f "$FORMULA_FILE.bak"
+
+          echo "Updated formula version: $CURRENT_VERSION → $NEW_VERSION"
 
       - name: Push Changes
         run: |
           cd homebrew-sui-prover
+          git checkout -b "sui-prover"
+          git add .
+          git commit -m "Automated version update"
           git push https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/asymptotic-code/homebrew-sui-prover.git update-branch
 
       - name: Create Pull Request
