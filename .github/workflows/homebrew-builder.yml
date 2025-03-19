@@ -1,0 +1,91 @@
+name: Create PR in Homebrew Repo to build binaries
+
+on:
+  push:
+    branches:
+      - next
+      - next-homebrew-workflow
+
+jobs:
+  create-pr:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Source Repository
+        uses: actions/checkout@v4
+
+      - name: Clone Target Repository
+        run: |
+          git clone https://github.com/asymptotic-code/homebrew-sui-prover.git
+          cd target-repo
+          git config user.name "github-actions"
+          git config user.email "github-actions@github.com"
+
+      - name: Make Changes in Target Repo
+        run: |
+          cd ./homebrew-sui-prover/Formula
+          echo "New content $(date)" >> sui-prover.rb
+          git checkout -b "sui-prover"
+          git add .
+          git commit -m "Automated version update"
+
+      - name: Push Changes
+        run: |
+          cd homebrew-sui-prover
+          git push https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/asymptotic-code/homebrew-sui-prover.git update-branch
+
+      - name: Create Pull Request
+        id: create_pr
+        uses: peter-evans/create-pull-request@v6
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          repository: asymptotic-code/homebrew-sui-prover
+          branch: sui-prover
+          base: main
+          title: "Automated version Update"
+          body: "This PR was created by a GitHub Action."
+
+  wait-for-checks:
+    needs: create-pr
+    runs-on: ubuntu-latest
+    steps:
+      - name: Wait for Workflow Runs to Complete
+        run: |
+          PR_NUMBER=$(curl -s -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
+            "https://api.github.com/repos/asymptotic-code/homebrew-sui-prover/pulls?state=open" | jq -r \
+            '.[] | select(.head.ref=="sui-prover") | .number')
+
+          echo "Waiting for workflows in my-org/target-repo PR #$PR_NUMBER..."
+
+          while true; do
+            STATUS=$(curl -s -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
+              "https://api.github.com/repos/asymptotic-code/homebrew-sui-prover/actions/runs" | jq -r \
+              '.workflow_runs | map(select(.head_branch == "sui-prover")) | map(.status) | unique[]')
+
+            echo "Current statuses: $STATUS"
+
+            if [[ "$STATUS" == "completed" ]]; then
+              echo "All checks passed!"
+              break
+            fi
+
+            echo "Waiting for checks to complete..."
+            sleep 60
+          done
+
+  add-label:
+    needs: wait-for-checks
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Add Label to PR
+        run: |
+          PR_NUMBER=$(curl -s -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
+            "https://api.github.com/repos/asymptotic-code/homebrew-sui-prove/pulls?state=open" | jq -r \
+            '.[] | select(.head.ref=="sui-prover") | .number')
+
+          curl -s -X POST -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
+            -H "Accept: application/vnd.github.v3+json" \
+            "https://api.github.com/repos/asymptotic-code/homebrew-sui-prove/issues/$PR_NUMBER/labels" \
+            -d '{"labels":["pr-pull"]}'
+  
