@@ -3,6 +3,7 @@
 
 use serde::de::{MapAccess, Visitor};
 use serde::{ser::SerializeSeq, Deserialize, Deserializer, Serialize, Serializer};
+use std::collections::HashMap;
 use std::fmt;
 use x509_parser::public_key::PublicKey;
 use x509_parser::time::ASN1Time;
@@ -22,6 +23,14 @@ mod nitro_attestation_tests;
 
 /// Maximum length of the certificate chain. This is to limit the absolute upper bound on execution.
 const MAX_CERT_CHAIN_LENGTH: usize = 10;
+/// Max user data length from aws nitro spec.
+const MAX_USER_DATA_LENGTH: usize = 512;
+/// Max pk length from aws nitro spec.
+const MAX_PK_LENGTH: usize = 1024;
+/// Max pcrs length from aws nitro spec.
+const MAX_PCRS_LENGTH: usize = 32;
+/// Max certificate length from aws nitro spec.
+const MAX_CERT_LENGTH: usize = 1024;
 
 /// Root certificate for AWS Nitro Attestation.
 static ROOT_CERTIFICATE: Lazy<Vec<u8>> = Lazy::new(|| {
@@ -366,7 +375,7 @@ impl CoseSign1 {
             Value::Bytes(vec![]),
             Value::Bytes(self.payload.as_slice().to_vec()),
         ]);
-        let mut bytes = Vec::with_capacity(self.protected.len() + self.payload.len());
+        let mut bytes = Vec::with_capacity(self.protected.len() + self.payload.len() + 17);
         ciborium::ser::into_writer(&value, &mut bytes).expect("can write bytes");
         bytes
     }
@@ -401,8 +410,19 @@ impl AttestationDocument {
             ))
         })?;
 
-        let document_map = match document_data {
-            ciborium::value::Value::Map(map) => map,
+        let document_map: HashMap<String, Value> = match document_data {
+            ciborium::value::Value::Map(map) => map
+                .into_iter()
+                .map(|(k, v)| {
+                    let k =
+                        k.as_text()
+                            .ok_or(NitroAttestationVerifyError::InvalidAttestationDoc(format!(
+                                "invalid key type: {:?}",
+                                k
+                            )))?;
+                    Ok((k.to_string(), v))
+                })
+                .collect::<Result<HashMap<String, Value>, NitroAttestationVerifyError>>()?,
             _ => {
                 return Err(NitroAttestationVerifyError::InvalidAttestationDoc(format!(
                     "expected map, got {:?}",
@@ -411,118 +431,168 @@ impl AttestationDocument {
             }
         };
 
-        let get_string = |key: &str| -> Result<String, NitroAttestationVerifyError> {
-            match document_map
-                .iter()
-                .find(|(k, _)| matches!(k, ciborium::value::Value::Text(s) if s == key))
-            {
-                Some((_, ciborium::value::Value::Text(val))) => Ok(val.clone()),
-                _ => Err(NitroAttestationVerifyError::InvalidAttestationDoc(format!(
-                    "cannot parse {}",
-                    key
-                ))),
-            }
-        };
+        let module_id = document_map
+            .get("module_id")
+            .ok_or(NitroAttestationVerifyError::InvalidAttestationDoc(
+                "module id not found".to_string(),
+            ))?
+            .as_text()
+            .filter(|s| !s.is_empty())
+            .ok_or(NitroAttestationVerifyError::InvalidAttestationDoc(
+                "invalid module id".to_string(),
+            ))?
+            .to_string();
 
-        let get_bytes = |key: &str| -> Result<Vec<u8>, NitroAttestationVerifyError> {
-            match document_map
-                .iter()
-                .find(|(k, _)| matches!(k, ciborium::value::Value::Text(s) if s == key))
-            {
-                Some((_, ciborium::value::Value::Bytes(val))) => Ok(val.clone()),
-                _ => Err(NitroAttestationVerifyError::InvalidAttestationDoc(format!(
-                    "cannot parse {}",
-                    key
-                ))),
-            }
-        };
+        let digest = document_map
+            .get("digest")
+            .ok_or(NitroAttestationVerifyError::InvalidAttestationDoc(
+                "digest not found".to_string(),
+            ))?
+            .as_text()
+            .filter(|s| s == &"SHA384")
+            .ok_or(NitroAttestationVerifyError::InvalidAttestationDoc(
+                "invalid digest".to_string(),
+            ))?
+            .to_string();
 
-        let get_optional_bytes = |key: &str| -> Option<Vec<u8>> {
-            document_map
-                .iter()
-                .find(|(k, _)| matches!(k, ciborium::value::Value::Text(s) if s == key))
-                .and_then(|(_, v)| match v {
-                    ciborium::value::Value::Bytes(val) => Some(val.clone()),
-                    _ => None,
-                })
-        };
+        let certificate = document_map
+            .get("certificate")
+            .ok_or(NitroAttestationVerifyError::InvalidAttestationDoc(
+                "certificate not found".to_string(),
+            ))?
+            .as_bytes()
+            .ok_or(NitroAttestationVerifyError::InvalidAttestationDoc(
+                "invalid certificate".to_string(),
+            ))?
+            .to_vec();
 
-        let module_id = get_string("module_id")?;
-        let digest = get_string("digest")?;
-        let certificate = get_bytes("certificate")?;
+        if certificate.len() > MAX_CERT_LENGTH {
+            return Err(NitroAttestationVerifyError::InvalidAttestationDoc(
+                "invalid certificate".to_string(),
+            ));
+        }
 
-        let timestamp = match document_map
-            .iter()
-            .find(|(k, _)| matches!(k, ciborium::value::Value::Text(s) if s == "timestamp"))
-        {
-            Some((_, ciborium::value::Value::Integer(val))) => {
-                // Convert Integer to i128 first, then to u64
-                let i128_val: i128 = (*val).into();
-                u64::try_from(i128_val).map_err(|err| {
-                    NitroAttestationVerifyError::InvalidAttestationDoc(format!(
-                        "cannot convert timestamp to u64: {}",
-                        err
-                    ))
-                })?
-            }
-            _ => {
+        let timestamp = document_map
+            .get("timestamp")
+            .ok_or(NitroAttestationVerifyError::InvalidAttestationDoc(
+                "timestamp not found".to_string(),
+            ))?
+            .as_integer()
+            .and_then(|integer| u64::try_from(integer).ok())
+            .ok_or(NitroAttestationVerifyError::InvalidAttestationDoc(
+                "invalid timestamp".to_string(),
+            ))?;
+
+        let public_key = document_map
+            .get("public_key")
+            .and_then(|v| v.as_bytes())
+            .map(|bytes| bytes.to_vec());
+
+        if let Some(data) = &public_key {
+            if data.len() > MAX_PK_LENGTH {
                 return Err(NitroAttestationVerifyError::InvalidAttestationDoc(
-                    "cannot parse timestamp".to_string(),
-                ))
+                    "invalid public key".to_string(),
+                ));
             }
-        };
+        }
 
-        let public_key = get_optional_bytes("public_key");
+        let user_data = document_map
+            .get("user_data")
+            .and_then(|v| v.as_bytes())
+            .map(|bytes| bytes.to_vec());
 
-        let pcrs = match document_map
-            .iter()
-            .find(|(k, _)| matches!(k, ciborium::value::Value::Text(s) if s == "pcrs"))
-        {
-            Some((_, ciborium::value::Value::Map(pcr_map))) => {
-                let mut pcr_vec = Vec::new();
-                // Valid PCR indices are 0, 1, 2, 3, 4, 8 for AWS.
-                for i in [0, 1, 2, 3, 4, 8] {
-                    if let Some((_, ciborium::value::Value::Bytes(val))) = pcr_map.iter().find(
-                        |(k, _)| matches!(k, ciborium::value::Value::Integer(n) if *n == i.into()),
-                    ) {
-                        pcr_vec.push(val.clone());
-                    } else {
-                        return Err(NitroAttestationVerifyError::InvalidAttestationDoc(
-                            "invalid PCR format".to_string(),
-                        ));
+        if let Some(data) = &user_data {
+            if data.len() > MAX_USER_DATA_LENGTH {
+                return Err(NitroAttestationVerifyError::InvalidAttestationDoc(
+                    "invalid user data".to_string(),
+                ));
+            }
+        }
+
+        let nonce = document_map
+            .get("nonce")
+            .and_then(|v| v.as_bytes())
+            .map(|bytes| bytes.to_vec());
+
+        if let Some(data) = &nonce {
+            if data.len() > MAX_USER_DATA_LENGTH {
+                return Err(NitroAttestationVerifyError::InvalidAttestationDoc(
+                    "invalid nonce".to_string(),
+                ));
+            }
+        }
+
+        let pcrs = document_map
+            .get("pcrs")
+            .ok_or(NitroAttestationVerifyError::InvalidAttestationDoc(
+                "pcrs not found".to_string(),
+            ))?
+            .as_map()
+            .ok_or(NitroAttestationVerifyError::InvalidAttestationDoc(
+                "invalid pcrs format".to_string(),
+            ))
+            .and_then(|pairs| {
+                if pairs.len() > MAX_PCRS_LENGTH {
+                    return Err(NitroAttestationVerifyError::InvalidAttestationDoc(
+                        "invalid PCRs length".to_string(),
+                    ));
+                }
+                let mut pcr_vec = Vec::with_capacity(pairs.len());
+                for (k, v) in pairs.iter() {
+                    let key = k.as_integer().ok_or(
+                        NitroAttestationVerifyError::InvalidAttestationDoc(
+                            "invalid PCR key format".to_string(),
+                        ),
+                    )?;
+                    let value =
+                        v.as_bytes()
+                            .ok_or(NitroAttestationVerifyError::InvalidAttestationDoc(
+                                "invalid PCR value format".to_string(),
+                            ))?;
+
+                    // Valid PCR indices are 0, 1, 2, 3, 4, 8 for AWS.
+                    let key_u64 = u64::try_from(key).map_err(|_| {
+                        NitroAttestationVerifyError::InvalidAttestationDoc(
+                            "invalid PCR index".to_string(),
+                        )
+                    })?;
+
+                    for i in [0, 1, 2, 3, 4, 8] {
+                        if key_u64 == i {
+                            pcr_vec.push(value.to_vec());
+                        }
                     }
                 }
-                pcr_vec
-            }
-            _ => {
-                return Err(NitroAttestationVerifyError::InvalidAttestationDoc(
-                    "cannot parse PCRs".to_string(),
-                ))
-            }
-        };
+                Ok(pcr_vec)
+            })?;
 
-        let user_data = get_optional_bytes("user_data");
-        let nonce = get_optional_bytes("nonce");
-
-        let cabundle = match document_map
-            .iter()
-            .find(|(k, _)| matches!(k, ciborium::value::Value::Text(s) if s == "cabundle"))
-        {
-            Some((_, ciborium::value::Value::Array(arr))) => arr
-                .iter()
-                .map(|v| match v {
-                    ciborium::value::Value::Bytes(bytes) => Ok(bytes.clone()),
-                    _ => Err(NitroAttestationVerifyError::InvalidAttestationDoc(
-                        "invalid cabundle format".to_string(),
-                    )),
-                })
-                .collect::<Result<Vec<_>, _>>()?,
-            _ => {
-                return Err(NitroAttestationVerifyError::InvalidAttestationDoc(
-                    "cannot parse cabundle".to_string(),
-                ))
-            }
-        };
+        let cabundle = document_map
+            .get("cabundle")
+            .ok_or(NitroAttestationVerifyError::InvalidAttestationDoc(
+                "cabundle not found".to_string(),
+            ))?
+            .as_array()
+            .map(|arr| {
+                if arr.is_empty() || arr.len() > MAX_CERT_CHAIN_LENGTH {
+                    return Err(NitroAttestationVerifyError::InvalidAttestationDoc(
+                        "invalid ca chain length".to_string(),
+                    ));
+                }
+                let mut certs = Vec::with_capacity(arr.len());
+                for cert in arr.iter() {
+                    let cert_bytes = cert.as_bytes().unwrap();
+                    if cert_bytes.is_empty() || cert_bytes.len() > MAX_CERT_LENGTH {
+                        return Err(NitroAttestationVerifyError::InvalidAttestationDoc(
+                            "invalid ca length".to_string(),
+                        ));
+                    }
+                    certs.push(cert_bytes.to_vec());
+                }
+                Ok(certs)
+            })
+            .ok_or(NitroAttestationVerifyError::InvalidAttestationDoc(
+                "invalid cabundle".to_string(),
+            ))??;
 
         let doc = AttestationDocument {
             module_id,
@@ -555,12 +625,6 @@ impl AttestationDocument {
 
 /// Verify the certificate chain against the root of trust.
 fn verify_cert_chain(cert_chain: &[&[u8]], now_ms: u64) -> Result<(), NitroAttestationVerifyError> {
-    if cert_chain.is_empty() || cert_chain.len() > MAX_CERT_CHAIN_LENGTH {
-        return Err(NitroAttestationVerifyError::InvalidCertificate(
-            "invalid certificate chain length".to_string(),
-        ));
-    }
-
     let root_cert = X509Certificate::from_der(ROOT_CERTIFICATE.as_slice())
         .map_err(|e| NitroAttestationVerifyError::InvalidCertificate(e.to_string()))?
         .1;
@@ -573,6 +637,50 @@ fn verify_cert_chain(cert_chain: &[&[u8]], now_ms: u64) -> Result<(), NitroAttes
         let cert = X509Certificate::from_der(cert_chain[i])
             .map_err(|e| NitroAttestationVerifyError::InvalidCertificate(e.to_string()))?
             .1;
+
+        // Check key usage for all certificates
+        if let Ok(Some(key_usage)) = cert.key_usage() {
+            if i == 0 {
+                // Target certificate must have digitalSignature
+                if !key_usage.value.digital_signature() {
+                    return Err(NitroAttestationVerifyError::InvalidCertificate(
+                        "Target certificate missing digitalSignature key usage".to_string(),
+                    ));
+                }
+            } else {
+                // CA certificates must have keyCertSign
+                if !key_usage.value.key_cert_sign() {
+                    return Err(NitroAttestationVerifyError::InvalidCertificate(
+                        "CA certificate missing keyCertSign key usage".to_string(),
+                    ));
+                }
+            }
+        } else {
+            return Err(NitroAttestationVerifyError::InvalidCertificate(
+                "Missing key usage extension".to_string(),
+            ));
+        }
+
+        // Check basic constraints except for target certificate
+        if i != 0 {
+            if let Ok(Some(bc)) = cert.basic_constraints() {
+                if !bc.critical || !bc.value.ca {
+                    return Err(NitroAttestationVerifyError::InvalidCertificate(
+                        "CA certificate invalid".to_string(),
+                    ));
+                }
+                if let Some(path_len) = bc.value.path_len_constraint {
+                    // path_len_constraint is the maximum number of CA certificates
+                    // that may follow this certificate. A value of zero indicates
+                    // that only an end-entity certificate may follow in the path.
+                    if i - 1 > path_len as usize {
+                        return Err(NitroAttestationVerifyError::InvalidCertificate(
+                            "Cert chain exceeds pathLenConstraint".to_string(),
+                        ));
+                    }
+                }
+            }
+        }
 
         // Check timestamp validity
         if !cert.validity().is_valid_at(now_secs) {
