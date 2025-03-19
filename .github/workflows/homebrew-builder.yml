@@ -25,7 +25,7 @@ jobs:
         run: |
           cd homebrew-sui-prover/Formula
           
-          FORMULA_FILE="sui-move-prover.rb"
+          FORMULA_FILE="sui-prover.rb"
 
           CURRENT_VERSION=$(sed -n 's/version "\(.*\)"/\1/p' "$FORMULA_FILE" | sed 's/^ *//;s/ *$//' | head -n 1)
           NEW_VERSION=$(echo "$CURRENT_VERSION" | awk -F. '{print $1"."$2"."$3+1}')
