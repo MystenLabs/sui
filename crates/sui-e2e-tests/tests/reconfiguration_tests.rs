@@ -720,7 +720,7 @@ async fn test_reconfig_with_voting_power_decrease() {
         &mut test_cluster,
         initial_validators
             .iter()
-            .map(|address| (address.clone(), default_stake))
+            .map(|address| (*address, default_stake))
             .collect::<Vec<_>>(),
     )
     .await;
@@ -758,7 +758,7 @@ async fn test_reconfig_with_voting_power_decrease() {
         &mut test_cluster,
         initial_validators
             .iter()
-            .map(|address| (address.clone(), default_stake))
+            .map(|address| (*address, default_stake))
             .collect::<Vec<_>>(),
     )
     .await;
