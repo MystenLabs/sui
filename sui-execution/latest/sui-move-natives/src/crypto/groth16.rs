@@ -47,7 +47,7 @@ pub fn prepare_verifying_key_internal(
 
     // Load the cost parameters from the protocol config
     let (groth16_prepare_verifying_key_cost_params, crypto_invalid_arguments_cost) = {
-        let cost_table = &context.extensions().get::<NativesCostTable>();
+        let cost_table = &context.extensions().get::<NativesCostTable>()?;
         (
             cost_table.groth16_prepare_verifying_key_cost_params.clone(),
             cost_table.crypto_invalid_arguments_cost,
@@ -135,7 +135,7 @@ pub fn verify_groth16_proof_internal(
 
     // Load the cost parameters from the protocol config
     let (groth16_verify_groth16_proof_internal_cost_params, crypto_invalid_arguments_cost) = {
-        let cost_table = &context.extensions().get::<NativesCostTable>();
+        let cost_table = &context.extensions().get::<NativesCostTable>()?;
         (
             cost_table
                 .groth16_verify_groth16_proof_internal_cost_params
@@ -187,7 +187,7 @@ pub fn verify_groth16_proof_internal(
             context.charge_gas(crypto_invalid_arguments_cost);
             let cost = if context
                 .extensions()
-                .get::<ObjectRuntime>()
+                .get::<ObjectRuntime>()?
                 .protocol_config
                 .native_charging_v2()
             {

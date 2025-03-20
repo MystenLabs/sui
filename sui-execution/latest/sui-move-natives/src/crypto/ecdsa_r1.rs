@@ -71,7 +71,7 @@ pub fn ecrecover(
 
     // Load the cost parameters from the protocol config
     let (ecdsa_r1_ecrecover_cost_params, crypto_invalid_arguments_cost) = {
-        let cost_table = &context.extensions().get::<NativesCostTable>();
+        let cost_table = &context.extensions().get::<NativesCostTable>()?;
         (
             cost_table.ecdsa_r1_ecrecover_cost_params.clone(),
             cost_table.crypto_invalid_arguments_cost,
@@ -175,7 +175,7 @@ pub fn secp256r1_verify(
     debug_assert!(args.len() == 4);
     // Load the cost parameters from the protocol config
     let (ecdsa_r1_secp256_r1_verify_cost_params, crypto_invalid_arguments_cost) = {
-        let cost_table = &context.extensions().get::<NativesCostTable>();
+        let cost_table = &context.extensions().get::<NativesCostTable>()?;
         (
             cost_table.ecdsa_r1_secp256_r1_verify_cost_params.clone(),
             cost_table.crypto_invalid_arguments_cost,
