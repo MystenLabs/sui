@@ -11,7 +11,7 @@ use std::{
 };
 
 use itertools::{Either, Itertools};
-use log::{debug, info};
+use log::debug;
 use petgraph::graph::{DiGraph, NodeIndex};
 
 use move_compiler::shared::known_attributes::{
@@ -284,48 +284,38 @@ impl FunctionTargetsHolder {
             .or_default()
             .insert(FunctionVariant::Baseline, data);
 
-        func_env.get_name_str().strip_suffix("_spec").map(|name| {
-            match func_env
-                .module_env
-                .find_function(func_env.symbol_pool().make(name))
-            {
-                Some(target_func_env) => {
-                    if let Some(spec_attr) = func_env
-                        .get_toplevel_attributes()
-                        .get_(&Verification(VerificationAttribute::Spec))
-                    {
-                        let inner_attrs = match &spec_attr.value {
-                            Attribute_::Parameterized(_, inner_attrs) => inner_attrs,
-                            _ => &UniqueMap::new(),
-                        };
-            
-                        let is_focus_spec = inner_attrs.contains_key_(&AttributeName_::Unknown(Symbol::from("focus")));
-                        let is_verify_spec = inner_attrs.contains_key_(&AttributeName_::Unknown(Symbol::from("verify")));
-            
-                        if !is_verify_spec && !is_focus_spec {
-                            self.no_verify_specs.insert(func_env.get_qualified_id());
-                        }
-                        if is_focus_spec {
-                            self.focus_specs.insert(func_env.get_qualified_id());
-                        } else {
-                            self.no_focus_specs.insert(func_env.get_qualified_id());
-                        }
-                        if inner_attrs.contains_key_(&AttributeName_::Unknown(Symbol::from("ignore_abort")))
-                        {
-                            self.ignore_aborts.insert(func_env.get_qualified_id());
-                        }
-                    }
+        if let Some(spec_attr) = func_env
+            .get_toplevel_attributes()
+            .get_(&Verification(VerificationAttribute::Spec))
+        {
+            let target_func_env = func_env.get_name_str().strip_suffix("_spec")
+                .map(|name| func_env.module_env.find_function(func_env.symbol_pool().make(name)));
 
-                    self.function_specs.insert(
-                        func_env.get_qualified_id(),
-                        target_func_env.get_qualified_id(),
-                    );
+            if target_func_env.is_some() {
+                let inner_attrs = match &spec_attr.value {
+                    Attribute_::Parameterized(_, inner_attrs) => inner_attrs,
+                    _ => &UniqueMap::new(),
+                };
+    
+                let is_focus_spec = inner_attrs.contains_key_(&AttributeName_::Unknown(Symbol::from("focus")));
+                let is_verify_spec = inner_attrs.contains_key_(&AttributeName_::Unknown(Symbol::from("verify")));
+    
+                if !is_verify_spec && !is_focus_spec {
+                    self.no_verify_specs.insert(func_env.get_qualified_id());
                 }
-                None => {
-                    self.scenario_specs.insert(func_env.get_qualified_id());
+                if is_focus_spec {
+                    self.focus_specs.insert(func_env.get_qualified_id());
+                } else {
+                    self.no_focus_specs.insert(func_env.get_qualified_id());
                 }
+                if inner_attrs.contains_key_(&AttributeName_::Unknown(Symbol::from("ignore_abort")))
+                {
+                    self.ignore_aborts.insert(func_env.get_qualified_id());
+                }
+            } else {
+                self.scenario_specs.insert(func_env.get_qualified_id());
             }
-        });
+        }
 
         func_env.get_name_str().strip_suffix("_inv").map(|name| {
             if let Some(struct_env) = func_env
