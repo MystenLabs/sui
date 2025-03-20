@@ -1,5 +1,5 @@
 [package]
-name = "J_system_deps"
+name = "J"
 edition = "2024.beta"
 
 [dependencies]
@@ -7,5 +7,5 @@ edition = "2024.beta"
 Sui = { local = "../../system-packages/sui-framework", override = true }
 
 [addresses]
-j_system_deps = "0x0"
+j = "0x0"
 

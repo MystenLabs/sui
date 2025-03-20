@@ -4598,7 +4598,7 @@ async fn test_tree_shaking_package_system_deps() -> Result<(), anyhow::Error> {
     let mut test = TreeShakingTest::new().await?;
 
     // Publish package J and verify empty linkage table
-    let (package_j_id, _) = test.publish_package("J_system_deps", false).await?;
+    let (package_j_id, _) = test.publish_package("J", false).await?;
     let move_pkg_j = fetch_move_packages(&test.client, vec![package_j_id]).await;
     let linkage_table_j = move_pkg_j.first().unwrap().linkage_table();
     assert!(
@@ -4607,7 +4607,7 @@ async fn test_tree_shaking_package_system_deps() -> Result<(), anyhow::Error> {
     );
 
     // sui move build --dump-bytecode-as-base64 should also yield a json with no dependencies
-    let package_path = test.package_path("J_system_deps");
+    let package_path = test.package_path("J");
     let binary_path = env!("CARGO_BIN_EXE_sui");
     let cmd = std::process::Command::new(binary_path)
         .arg("move")
