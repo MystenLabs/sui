@@ -4,7 +4,7 @@ set -e
 
 # Define dependencies
 dotnet_version="8"
-rust_toolchain="stable"
+rust_toolchain="nightly"
 z3_version="latest"
 sui_repo="https://github.com/asymptotic-code/sui.git"
 boogie_repo="https://github.com/boogie-org/boogie.git"
