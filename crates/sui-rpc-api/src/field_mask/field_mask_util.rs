@@ -1,8 +1,12 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use crate::message::MessageField;
+use crate::message::MessageFields;
+
 use super::FieldMaskTree;
 use super::FIELD_PATH_SEPARATOR;
+use super::FIELD_SEPARATOR;
 
 use prost_types::FieldMask;
 
@@ -14,6 +18,8 @@ pub trait FieldMaskUtil: sealed::Sealed {
     fn from_paths<I: AsRef<str>, T: IntoIterator<Item = I>>(paths: T) -> FieldMask;
 
     fn display(&self) -> impl std::fmt::Display + '_;
+
+    fn validate<M: MessageFields>(&self) -> Result<(), &str>;
 }
 
 impl FieldMaskUtil for FieldMask {
@@ -43,6 +49,41 @@ impl FieldMaskUtil for FieldMask {
 
     fn display(&self) -> impl std::fmt::Display + '_ {
         FieldMaskDisplay(self)
+    }
+
+    fn validate<M: MessageFields>(&self) -> Result<(), &str> {
+        // Determine if the provided path matches one of the provided fields. If a path matches a
+        // field and that field is a message type (which can have its own set of fields), attempt
+        // to match the remainder of the path against a field in the sub_message.
+        fn is_valid_path(mut fields: &[&MessageField], mut path: &str) -> bool {
+            loop {
+                let (field_name, remainder) = path
+                    .split_once(FIELD_SEPARATOR)
+                    .map(|(field, remainder)| (field, (!remainder.is_empty()).then_some(remainder)))
+                    .unwrap_or((path, None));
+
+                if let Some(field) = fields.iter().find(|field| field.name == field_name) {
+                    match (field.message_fields, remainder) {
+                        (None, None) | (Some(_), None) => return true,
+                        (None, Some(_)) => return false,
+                        (Some(sub_message_fields), Some(remainder)) => {
+                            fields = sub_message_fields;
+                            path = remainder;
+                        }
+                    }
+                } else {
+                    return false;
+                }
+            }
+        }
+
+        for path in &self.paths {
+            if !is_valid_path(M::FIELDS, path) {
+                return Err(path);
+            }
+        }
+
+        Ok(())
     }
 }
 
@@ -120,5 +161,47 @@ mod tests {
         assert_eq!(mask.paths.len(), 2);
         assert_eq!(mask.paths[0], "foo");
         assert_eq!(mask.paths[1], "bar");
+    }
+
+    #[test]
+    fn test_validate() {
+        struct Foo;
+        impl MessageFields for Foo {
+            const FIELDS: &'static [&'static MessageField] = &[
+                &MessageField::new("bar").with_message_fields(Bar::FIELDS),
+                &MessageField::new("baz"),
+            ];
+        }
+        struct Bar;
+
+        impl MessageFields for Bar {
+            const FIELDS: &'static [&'static MessageField] = &[
+                &MessageField {
+                    name: "a",
+                    message_fields: None,
+                },
+                &MessageField {
+                    name: "b",
+                    message_fields: None,
+                },
+            ];
+        }
+
+        let mask = FieldMask::from_str("");
+        assert_eq!(mask.validate::<Foo>(), Ok(()));
+        let mask = FieldMask::from_str("bar");
+        assert_eq!(mask.validate::<Foo>(), Ok(()));
+        let mask = FieldMask::from_str("bar.a");
+        assert_eq!(mask.validate::<Foo>(), Ok(()));
+        let mask = FieldMask::from_str("bar.a,bar.b");
+        assert_eq!(mask.validate::<Foo>(), Ok(()));
+        let mask = FieldMask::from_str("bar.a,bar.b,bar.c");
+        assert_eq!(mask.validate::<Foo>(), Err("bar.c"));
+        let mask = FieldMask::from_str("baz");
+        assert_eq!(mask.validate::<Foo>(), Ok(()));
+        let mask = FieldMask::from_str("baz.a");
+        assert_eq!(mask.validate::<Foo>(), Err("baz.a"));
+        let mask = FieldMask::from_str("foobar");
+        assert_eq!(mask.validate::<Foo>(), Err("foobar"));
     }
 }
