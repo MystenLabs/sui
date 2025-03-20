@@ -127,8 +127,7 @@ impl ExecutionTimeObserver {
                     }
                     Some((tx, timings, total_duration)) = rx_local_execution_time.recv() => {
                         observer
-                            .record_local_observations(&tx, &timings, total_duration)
-                            .await;
+                            .record_local_observations(&tx, &timings, total_duration);
                     }
                     else => { break }
                 }
@@ -173,7 +172,7 @@ impl ExecutionTimeObserver {
     // Updates moving averages and submits observation to consensus if local observation differs
     // from consensus median.
     // TODO: Consider more detailed heuristic to account for overhead outside of commands.
-    async fn record_local_observations(
+    fn record_local_observations(
         &mut self,
         tx: &ProgrammableTransaction,
         timings: &[ExecutionTiming],
@@ -320,10 +319,10 @@ impl ExecutionTimeObserver {
         }
 
         // Share new observations.
-        self.share_observations(to_share).await;
+        self.share_observations(to_share);
     }
 
-    async fn share_observations(&mut self, to_share: Vec<(ExecutionTimeObservationKey, Duration)>) {
+    fn share_observations(&mut self, to_share: Vec<(ExecutionTimeObservationKey, Duration)>) {
         if to_share.is_empty() {
             return;
         }
@@ -673,9 +672,7 @@ mod tests {
         // Record an observation
         let timings = vec![ExecutionTiming::Success(Duration::from_millis(100))];
         let total_duration = Duration::from_millis(110);
-        observer
-            .record_local_observations(&ptb, &timings, total_duration)
-            .await;
+        observer.record_local_observations(&ptb, &timings, total_duration);
 
         let key = ExecutionTimeObservationKey::MoveEntryPoint {
             package,
@@ -696,9 +693,7 @@ mod tests {
         // Record another observation
         let timings = vec![ExecutionTiming::Success(Duration::from_millis(110))];
         let total_duration = Duration::from_millis(120);
-        observer
-            .record_local_observations(&ptb, &timings, total_duration)
-            .await;
+        observer.record_local_observations(&ptb, &timings, total_duration);
 
         // Check that moving average was updated
         let local_obs = observer.local_observations.get(&key).unwrap();
@@ -713,9 +708,7 @@ mod tests {
         // Record another observation
         let timings = vec![ExecutionTiming::Success(Duration::from_millis(120))];
         let total_duration = Duration::from_millis(130);
-        observer
-            .record_local_observations(&ptb, &timings, total_duration)
-            .await;
+        observer.record_local_observations(&ptb, &timings, total_duration);
 
         // Check that moving average was updated
         let local_obs = observer.local_observations.get(&key).unwrap();
@@ -741,9 +734,7 @@ mod tests {
         // Record last observation
         let timings = vec![ExecutionTiming::Success(Duration::from_millis(120))];
         let total_duration = Duration::from_millis(120);
-        observer
-            .record_local_observations(&ptb, &timings, total_duration)
-            .await;
+        observer.record_local_observations(&ptb, &timings, total_duration);
 
         // Verify that moving average is the same and a new observation was shared, as
         // enough time has now elapsed
@@ -821,9 +812,7 @@ mod tests {
             ExecutionTiming::Success(Duration::from_millis(50)),
         ];
         let total_duration = Duration::from_millis(180);
-        observer
-            .record_local_observations(&ptb, &timings, total_duration)
-            .await;
+        observer.record_local_observations(&ptb, &timings, total_duration);
 
         // Check that both commands were recorded
         let move_key = ExecutionTimeObservationKey::MoveEntryPoint {
@@ -920,9 +909,7 @@ mod tests {
 
         // First observation - should not share due to low utilization
         let timings = vec![ExecutionTiming::Success(Duration::from_secs(1))];
-        observer
-            .record_local_observations(&ptb, &timings, Duration::from_secs(2))
-            .await;
+        observer.record_local_observations(&ptb, &timings, Duration::from_secs(2));
         assert!(observer
             .local_observations
             .get(&key)
@@ -932,9 +919,7 @@ mod tests {
 
         // Second observation - no time has passed, so now utilization is high; should share
         let timings = vec![ExecutionTiming::Success(Duration::from_secs(1))];
-        observer
-            .record_local_observations(&ptb, &timings, Duration::from_secs(2))
-            .await;
+        observer.record_local_observations(&ptb, &timings, Duration::from_secs(2));
         assert_eq!(
             observer
                 .local_observations
@@ -950,9 +935,7 @@ mod tests {
         // when accounting for the new observation; should share
         tokio::time::advance(Duration::from_secs(5)).await;
         let timings = vec![ExecutionTiming::Success(Duration::from_secs(3))];
-        observer
-            .record_local_observations(&ptb, &timings, Duration::from_secs(5))
-            .await;
+        observer.record_local_observations(&ptb, &timings, Duration::from_secs(5));
         assert_eq!(
             observer
                 .local_observations
@@ -967,9 +950,7 @@ mod tests {
         // Fourth execution after utilization drops - should not share, even though diff still high
         tokio::time::advance(Duration::from_secs(60)).await;
         let timings = vec![ExecutionTiming::Success(Duration::from_secs(11))];
-        observer
-            .record_local_observations(&ptb, &timings, Duration::from_secs(11))
-            .await;
+        observer.record_local_observations(&ptb, &timings, Duration::from_secs(11));
         assert_eq!(
             observer
                 .local_observations
