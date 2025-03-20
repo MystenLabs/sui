@@ -1413,7 +1413,7 @@ impl AuthorityPerEpochStore {
         tx_key: &TransactionKey,
         tx_digest: &TransactionDigest,
     ) -> SuiResult {
-        let _metrics_guard =
+        let _metrics_scope =
             mysten_metrics::monitored_scope("AuthorityPerEpochStore::insert_tx_key");
         let tables = self.tables()?;
 
@@ -1715,7 +1715,7 @@ impl AuthorityPerEpochStore {
         digests: &[TransactionDigest],
         sequence: CheckpointSequenceNumber,
     ) -> SuiResult {
-        let _metrics_guard = mysten_metrics::monitored_scope(
+        let _metrics_scope = mysten_metrics::monitored_scope(
             "AuthorityPerEpochStore::insert_finalized_transactions",
         );
 
