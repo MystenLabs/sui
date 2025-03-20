@@ -1304,10 +1304,12 @@ impl AuthorityPerEpochStore {
             bcs::from_bytes(&stored_observations_bytes)
                 .expect("failed to deserialize stored execution time estimates");
         let stored_observations = stored_observations.unwrap_v1();
+
         info!(
             "loaded stored execution time observations for {} keys",
             stored_observations.len()
         );
+        assert_reachable!("successfully loads stored execution time observations");
 
         // Make a single flattened iterator with every stored observation, for consumption
         // by the `ExecutionTimeEstimator` constructor.
