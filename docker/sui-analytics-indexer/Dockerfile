@@ -1,6 +1,6 @@
 FROM rust:1.85-bullseye as build
 
-ARG PROFILE=release
+ARG PROFILE=dev
 WORKDIR /work
 
 RUN apt-get update && apt-get install -y cmake clang
