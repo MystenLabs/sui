@@ -37,6 +37,7 @@ uuid.workspace = true
 bin-version.workspace = true
 sui-default-config.workspace = true
 sui-indexer-alt-metrics.workspace = true
+sui-protocol-config.workspace = true
 
 [dev-dependencies]
 insta.workspace = true
