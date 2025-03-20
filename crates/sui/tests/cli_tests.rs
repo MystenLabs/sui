@@ -4483,12 +4483,7 @@ async fn test_tree_shaking_package_deps_on_pkg_upgrade_1() -> Result<(), anyhow:
     let package_path = test.package_path("A_v2");
     add_ids_to_manifest(&package_path, &package_a_v2_id, None)?;
 
-    let (package_i_id, _) = test
-        .publish_package(
-            "I_depends_on_D_depends_on_A_v1_but_no_code_references_A_and_on_A_v2",
-            false,
-        )
-        .await?;
+    let (package_i_id, _) = test.publish_package("I", false).await?;
     let linkage_table_i = test.fetch_linkage_table(package_i_id).await;
     assert!(
         linkage_table_i.contains_key(&package_a_id),

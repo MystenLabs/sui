@@ -36,7 +36,7 @@ Tests projects are established as following
 - G just a normal package that is not published
 - H is just a package that depends on G
     - linkage table should be empty
-- I_depends_on_D_depends_on_A_v1_but_no_code_references_A_and_on_A_v2
+- I depends_on_D A but_no code references A, and depends on A_v2
     - linkage table should be empty
 - K is a normal package
 - K_v2 is a package upgrade of K
