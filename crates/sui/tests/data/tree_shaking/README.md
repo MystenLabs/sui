@@ -29,7 +29,7 @@ Tests projects are established as following
      - linkage table should be empty
 - E is a package that depends on A_v1 and on B_A
      - linkage table should contain package A's ID (and the related upgrade info) and package B's ID
-- E_depends_on_A_v1_and_on_B_depends_on_A_but_no_code_references_to_A_or_B/
+- E_A_v1
     - linkage table should be empty
 - F is a package that depends on A which is set to be a bytecode dep
     - linkage table should be empty

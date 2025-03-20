@@ -4415,12 +4415,7 @@ async fn test_tree_shaking_package_deps_on_pkg_upgrade() -> Result<(), anyhow::E
         .get(&package_a_id)
         .is_some_and(|x| x.upgraded_id == package_a_v1_id), "Package D should depend on A_v1 after upgrade, and the UpgradeInfo should have matching ids");
 
-    let (package_e_id, _) = test
-        .publish_package(
-            "E_depends_on_A_v1_and_on_B_depends_on_A_but_no_code_references_to_A_or_B",
-            false,
-        )
-        .await?;
+    let (package_e_id, _) = test.publish_package("E_A_v1", false).await?;
 
     let linkage_table_e = test.fetch_linkage_table(package_e_id).await;
     assert!(
