@@ -48,9 +48,10 @@ use sui_keys::keystore::{AccountKeystore, FileBasedKeystore, Keystore};
 use sui_move::manage_package::resolve_lock_file_path;
 use sui_move::{self, execute_move_command};
 use sui_move_build::{
-    check_invalid_dependencies, check_unpublished_dependencies, BuildConfig as SuiBuildConfig,
-    SuiPackageHooks,
+    check_invalid_dependencies, check_unpublished_dependencies, implicit_deps,
+    BuildConfig as SuiBuildConfig, SuiPackageHooks,
 };
+use sui_package_management::system_package_versions::latest_system_packages;
 use sui_sdk::sui_client_config::{SuiClientConfig, SuiEnv};
 use sui_sdk::wallet_context::WalletContext;
 use sui_swarm::memory::Swarm;
@@ -639,7 +640,7 @@ impl SuiCommand {
             }
             SuiCommand::FireDrill { fire_drill } => run_fire_drill(fire_drill).await,
             SuiCommand::Analyzer => {
-                analyzer::run();
+                analyzer::run(implicit_deps(latest_system_packages()));
                 Ok(())
             }
         }
