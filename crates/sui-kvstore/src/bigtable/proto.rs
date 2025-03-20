@@ -12,3 +12,6 @@ pub mod rpc;
 
 #[path = "proto/google.api.rs"]
 pub mod api;
+
+#[path = "proto/google.r#type.rs"]
+pub mod r#type;

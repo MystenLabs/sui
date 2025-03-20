@@ -2181,6 +2181,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "builder"
+version = "1.37.0"
+dependencies = [
+ "tonic-build",
+]
+
+[[package]]
 name = "bumpalo"
 version = "3.11.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
