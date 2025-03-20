@@ -16,6 +16,8 @@ use sui_light_client::config::Config;
 use sui_light_client::package_store::RemotePackageStore;
 use sui_light_client::verifier::{get_verified_effects_and_events, get_verified_object};
 
+use tracing::info;
+
 /// A light client for the Sui blockchain
 #[derive(Parser, Debug)]
 #[command(author, version, about, long_about = None)]
