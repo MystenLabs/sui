@@ -1,6 +1,6 @@
 name: Sui-Prover Test Action
 
-on: [push, pull_request]
+on: [pull_request]
 
 jobs:
   build-and-run:

@@ -45,8 +45,6 @@ mv Source/BoogieDriver/bin/Release/net8.0/BoogieDriver "$install_dir/boogie"
 
 # Verify installation
 echo "Verifying installation..."
-z3 --version
 sui-prover --version
-boogie --help
 
 echo "Installation complete. The formal verification toolchain is ready."
