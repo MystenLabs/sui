@@ -4436,12 +4436,7 @@ async fn test_tree_shaking_package_deps_on_pkg_upgrade() -> Result<(), anyhow::E
         "Package E should have no dependencies"
     );
 
-    let (package_e_id, _) = test
-        .publish_package(
-            "E_depends_on_A_v1_and_on_B_depends_on_A_and_code_references_A",
-            false,
-        )
-        .await?;
+    let (package_e_id, _) = test.publish_package("E", false).await?;
 
     let linkage_table_e = test.fetch_linkage_table(package_e_id).await;
     assert!(
