@@ -58,7 +58,10 @@ use move_core_types::{
     vm_status::StatusCode,
 };
 use move_stdlib_natives::{self as MSN, GasParameters};
-use move_vm_runtime::native_functions::{NativeContext, NativeFunction, NativeFunctionTable};
+use move_vm_runtime::{
+    native_extensions::NativeExtensionMarker,
+    native_functions::{NativeContext, NativeFunction, NativeFunctionTable},
+};
 use move_vm_types::{
     loaded_data::runtime_types::Type,
     natives::function::NativeResult,
@@ -189,6 +192,8 @@ pub struct NativesCostTable {
     // nitro attestation
     pub nitro_attestation_cost_params: NitroAttestationCostParams,
 }
+
+impl NativeExtensionMarker<'_> for NativesCostTable {}
 
 impl NativesCostTable {
     pub fn from_protocol_config(protocol_config: &ProtocolConfig) -> NativesCostTable {
