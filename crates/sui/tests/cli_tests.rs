@@ -4414,7 +4414,7 @@ async fn test_tree_shaking_package_deps_on_pkg_upgrade() -> Result<(), anyhow::E
     );
 
     // Publish D which depends on A_v1 and code references it
-    let (package_d_id, _) = test.publish_package("D_depends_on_A_v1", false).await?;
+    let (package_d_id, _) = test.publish_package("D_A_v1", false).await?;
     let linkage_table_d = test.fetch_linkage_table(package_d_id).await;
 
     assert!(
@@ -4458,7 +4458,7 @@ async fn test_tree_shaking_package_deps_on_pkg_upgrade() -> Result<(), anyhow::E
 async fn test_tree_shaking_package_deps_on_pkg_upgrade_1() -> Result<(), anyhow::Error> {
     let mut test = TreeShakingTest::new().await?;
 
-    // Publish package A and D_depends_on_A_v1_but_no_code_references_A
+    // Publish package A and D_A_v1_but_no_code_references_A
     let (package_a_id, cap) = test.publish_package("A", false).await?;
     let package_path = test.package_path("A");
     add_ids_to_manifest(&package_path, &package_a_id, None)?;
