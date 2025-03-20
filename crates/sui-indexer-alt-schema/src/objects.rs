@@ -26,7 +26,7 @@ pub struct StoredObject {
 pub struct StoredObjVersion {
     pub object_id: Vec<u8>,
     pub object_version: i64,
-    pub object_digest: Vec<u8>,
+    pub object_digest: Option<Vec<u8>>,
     pub cp_sequence_number: i64,
 }
 
