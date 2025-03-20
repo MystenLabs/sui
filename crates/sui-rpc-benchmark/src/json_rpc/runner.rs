@@ -18,7 +18,7 @@ use std::{
 };
 use sui_indexer_alt_framework::task::TrySpawnStreamExt;
 use tokio::time::timeout;
-use tracing::info;
+use tracing::{debug, info, warn};
 
 /// static map of method names to the index of their cursor parameter
 static METHOD_CURSOR_POSITIONS: phf::Map<&'static str, usize> = phf_map! {
@@ -188,104 +188,198 @@ pub async fn run_queries(
     let client = reqwest::Client::new();
     let endpoint = endpoint.to_owned();
 
-    info!("Skipping methods: {:?}", config.json_rpc_methods_to_skip);
+    let duration = config.duration;
+    let methods_to_skip = config.json_rpc_methods_to_skip.clone();
+    info!("Skipping methods: {:?}", methods_to_skip);
     let requests: Vec<_> = requests
         .iter()
-        .filter(|r| !config.json_rpc_methods_to_skip.contains(&r.method))
+        .filter(|r| !methods_to_skip.contains(&r.method))
         .cloned()
         .collect();
+    let total_requests = requests.len();
+    debug!(
+        "Starting benchmark with {} requests at concurrency {}",
+        total_requests, concurrency
+    );
+
+    let start_time = Instant::now();
     let stats = shared_stats.clone();
+    let process_requests = async {
+        #[derive(Debug)]
+        enum BenchmarkError {
+            DurationLimit,
+            Other(anyhow::Error),
+        }
 
-    let tasks = futures::stream::iter(requests.into_iter()).try_for_each_spawned(
-        concurrency,
-        |mut request_line| {
-            let task_stats = stats.clone();
-            let client = client.clone();
-            let endpoint = endpoint.clone();
-            let pagination_state = pagination_state.clone();
+        impl From<anyhow::Error> for BenchmarkError {
+            fn from(e: anyhow::Error) -> Self {
+                BenchmarkError::Other(e)
+            }
+        }
 
-            // adapt pagination cursor to new cursor format if needed
-            async move {
+        let result = futures::stream::iter(requests.into_iter())
+            .try_for_each_spawned(concurrency, |mut request_line| {
+                let client = client.clone();
+                let endpoint = endpoint.clone();
+                let pagination_state = pagination_state.clone();
+                let task_stats = stats.clone();
                 let params = request_line
                     .body_json
                     .get("params")
                     .and_then(|v| v.as_array())
                     .map(|a| a.to_vec())
-                    .with_context(|| {
-                        format!(
-                            "params not found or not an array for method: {}",
-                            request_line.method
-                        )
-                    })?;
-
-                if let Some(cursor_idx) =
-                    PaginationCursorState::get_method_cursor_index(&request_line.method)
-                {
-                    let method_key =
-                        PaginationCursorState::get_method_key(&request_line.method, &params)?;
-                    PaginationCursorState::update_params_cursor(
-                        &mut request_line.body_json,
-                        cursor_idx,
-                        pagination_state.get(&method_key).as_ref(),
-                        &request_line.method,
-                    )?;
-                }
-
-                let now = Instant::now();
-                let res = client
-                    .post(&endpoint)
-                    .json(&request_line.body_json)
-                    .send()
-                    .await;
-                let elapsed_ms = now.elapsed().as_millis() as f64;
-
-                // update pagination cursor if the request is successful.
-                let mut is_error = true;
-                if let Ok(resp) = res {
-                    if resp.status().is_success() {
-                        #[derive(Deserialize)]
-                        struct Body {
-                            result: Result,
-                        }
-                        #[derive(Deserialize)]
-                        #[serde(rename_all = "camelCase")]
-                        struct Result {
-                            has_next_page: bool,
-                            next_cursor: Option<Value>,
-                        }
-
-                        if let Ok(Body { result }) = resp.json().await {
-                            let method_key = PaginationCursorState::get_method_key(
+                    .unwrap_or_else(|| {
+                        // Some methods like rpc.discover might not have params
+                        debug!("No params found for method: {}, using empty array", request_line.method);
+                        Vec::new()
+                    });
+                async move {
+                    // Update the cursor parameter if the request uses pagination
+                    if let Some(cursor_idx) = PaginationCursorState::get_method_cursor_index(&request_line.method) {
+                        if !params.is_empty() {
+                            let method_key = match PaginationCursorState::get_method_key(&request_line.method, &params) {
+                                Ok(key) => key,
+                                Err(e) => return Err(BenchmarkError::Other(e)),
+                            };
+                            if let Err(e) = PaginationCursorState::update_params_cursor(
+                                &mut request_line.body_json,
+                                cursor_idx,
+                                pagination_state.get(&method_key).as_ref(),
                                 &request_line.method,
-                                &params,
-                            )?;
-                            pagination_state.update(
-                                method_key,
-                                if result.has_next_page {
-                                    result.next_cursor
-                                } else {
-                                    None
-                                },
-                            );
-                            is_error = false;
+                            ) {
+                                return Err(BenchmarkError::Other(e));
+                            }
                         }
                     }
+
+                    let now = Instant::now();
+                    debug!("Sending request for method: {}", request_line.method);
+                    let res = client
+                        .post(&endpoint)
+                        .json(&request_line.body_json)
+                        .send()
+                        .await;
+                    let elapsed_ms = now.elapsed().as_millis() as f64;
+
+                    // update pagination cursor if the request is successful.
+                    let mut is_error = true;
+                    if let Ok(resp) = res {
+                        if resp.status().is_success() {
+                            let supports_pagination = PaginationCursorState::get_method_cursor_index(&request_line.method).is_some();
+                            if supports_pagination {
+                                #[derive(Deserialize)]
+                                struct Body {
+                                    result: Result,
+                                }
+                                #[derive(Deserialize)]
+                                #[serde(rename_all = "camelCase")]
+                                struct Result {
+                                    has_next_page: bool,
+                                    next_cursor: Option<Value>,
+                                }
+
+                                let resp_text = match resp.text().await {
+                                    Ok(text) => text,
+                                    Err(e) => {
+                                        return Err(BenchmarkError::Other(anyhow::anyhow!(
+                                            "Failed to get response text for method {}: {}", 
+                                            request_line.method, e
+                                        )));
+                                    }
+                                };
+                                let parse_result = serde_json::from_str::<Body>(&resp_text);
+                                if let Ok(Body { result }) = parse_result {
+                                    let method_key = match PaginationCursorState::get_method_key(
+                                        &request_line.method,
+                                        &params,
+                                    ) {
+                                        Ok(key) => key,
+                                        Err(e) => return Err(BenchmarkError::Other(e)),
+                                    };
+                                    if result.has_next_page {
+                                        debug!("Updated pagination cursor for method: {}, has_next_page: true", 
+                                            request_line.method);
+                                        pagination_state.update(method_key, result.next_cursor);
+                                    } else {
+                                        pagination_state.update(method_key, None);
+                                    }
+                                    is_error = false;
+                                } else {
+                                    warn!("JSON parsing error for method: {}, error: {:?}, response: {}", 
+                                        request_line.method, parse_result.err(), resp_text);
+                                }
+                            } else {
+                                is_error = false;
+                            }
+                        } else {
+                            let status = resp.status();
+                            let resp_text = match resp.text().await {
+                                Ok(text) => text,
+                                Err(e) => {
+                                    return Err(BenchmarkError::Other(anyhow::anyhow!(
+                                        "Failed to get error response text for method {}: {}", 
+                                        request_line.method, e
+                                    )));
+                                }
+                            };
+                            warn!("Request failed with method: {}, status:{}, request: {}, response: {}", 
+                                request_line.method, status, request_line.body_json, resp_text);
+                        }
+                    } else {
+                        warn!("Request error for method {}: {:?}", request_line.method, res);
+                    }
+
+                    let mut stats = task_stats
+                        .lock()
+                        .expect("Thread holding stats lock panicked");
+                    stats.record_request(&request_line.method, elapsed_ms, is_error);
+                    if let Some(duration_val) = duration {
+                        if start_time.elapsed() > duration_val {
+                            debug!("Duration limit reached!");
+                            return Err(BenchmarkError::DurationLimit);
+                        }
+                    }
+                    Ok::<(), BenchmarkError>(())
                 }
+            })
+            .await;
 
-                // Record stats after all async operations to avoid error of sending future between threads
-                let mut stats = task_stats
-                    .lock()
-                    .expect("Thread holding stats lock panicked");
-                stats.record_request(&request_line.method, elapsed_ms, is_error);
-                Ok::<(), anyhow::Error>(())
+        // Handle early exit due to duration limit
+        match result {
+            Ok(()) => Ok(()),
+            Err(BenchmarkError::DurationLimit) => {
+                debug!("Stopped processing due to reaching duration limit");
+                Ok(())
             }
-        },
-    );
+            Err(BenchmarkError::Other(e)) => Err(e),
+        }
+    };
 
-    timeout(config.duration, tasks).await.unwrap_or(Ok(()))?;
+    if let Some(duration_val) = duration {
+        match timeout(duration_val, process_requests).await {
+            Ok(result) => result?,
+            Err(_) => debug!("Benchmark timed out after reaching duration limit"),
+        }
+    } else {
+        process_requests.await?;
+    }
+
+    let elapsed = start_time.elapsed();
     let final_stats = shared_stats
         .lock()
         .expect("Thread holding stats lock panicked")
         .clone();
+    debug!(
+        "Benchmark completed in {:?}. Total requests: {}, errors: {}, avg latency: {:.2}ms",
+        elapsed,
+        final_stats.total_sent,
+        final_stats.total_errors,
+        if final_stats.total_sent > 0 {
+            final_stats.total_latency_ms / final_stats.total_sent as f64
+        } else {
+            0.0
+        }
+    );
+
     Ok(final_stats)
 }

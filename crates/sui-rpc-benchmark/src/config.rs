@@ -9,7 +9,8 @@ pub struct BenchmarkConfig {
     /// Number of concurrent clients
     pub concurrency: usize,
     /// Duration to run the benchmark in seconds
-    pub duration: Duration,
+    /// If None, the benchmark will run until all requests are processed
+    pub duration: Option<Duration>,
     /// Optional path to a jsonl file for JSON RPC benchmark.
     /// The file contains a list of JSON RPC requests that are collected from Grafana,
     /// and will be run concurrently by the JSON RPC benchmark runner.
@@ -23,7 +24,7 @@ impl Default for BenchmarkConfig {
     fn default() -> Self {
         Self {
             concurrency: 50,
-            duration: Duration::from_secs(30),
+            duration: Some(Duration::from_secs(30)),
             json_rpc_file_path: None,
             json_rpc_methods_to_skip: HashSet::new(),
         }
