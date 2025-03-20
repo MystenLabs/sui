@@ -31,6 +31,7 @@ serde_json.workspace = true
 reqwest.workspace = true
 prost.workspace = true
 tokio-stream.workspace = true
+regex.workspace = true
 
 move-binary-format.workspace = true
 move-package.workspace = true
@@ -66,6 +67,7 @@ sui-sdk-types.workspace = true
 sui-sdk-transaction-builder.workspace = true
 tonic.workspace = true
 prost-types.workspace = true
+sui-surfer.workspace = true
 
 passkey-types.workspace = true
 passkey-client.workspace = true
