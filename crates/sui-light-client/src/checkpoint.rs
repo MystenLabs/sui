@@ -157,6 +157,7 @@ fn merge_checkpoint_lists(list1: &CheckpointsList, list2: &CheckpointsList) -> V
 async fn sync_checkpoint_list_to_latest_using_archive(
     config: &Config,
 ) -> anyhow::Result<CheckpointsList> {
+    info!("Syncing checkpoints from Archive store");
     let Some(archive_store_config) = &config.archive_store_config else {
         return Err(anyhow!("Archive store config is not provided"));
     };
@@ -176,6 +177,7 @@ async fn sync_checkpoint_list_to_latest_using_archive(
 async fn sync_checkpoint_list_to_latest_using_graphql(
     config: &Config,
 ) -> anyhow::Result<CheckpointsList> {
+    info!("Syncing checkpoints from GraphQL");
     // Get the local checkpoint list, or create an empty one if it doesn't exist
     let mut checkpoints_list = match read_checkpoint_list(config) {
         Ok(list) => list,

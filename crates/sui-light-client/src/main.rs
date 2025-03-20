@@ -16,6 +16,8 @@ use sui_light_client::config::Config;
 use sui_light_client::package_store::RemotePackageStore;
 use sui_light_client::verifier::{get_verified_effects_and_events, get_verified_object};
 
+use tracing::info;
+
 /// A light client for the Sui blockchain
 #[derive(Parser, Debug)]
 #[command(author, version, about, long_about = None)]
@@ -112,6 +114,7 @@ pub async fn main() {
         Some(SCommands::Object { oid }) => {
             let oid = ObjectID::from_str(&oid).unwrap();
             let object = get_verified_object(&config, oid).await.unwrap();
+            info!("Successfully verified object: {}", oid);
 
             if let Data::Move(move_object) = &object.data {
                 let object_type = move_object.type_().clone();
@@ -143,6 +146,8 @@ pub async fn main() {
                 .await
                 .expect("Failed to sync checkpoints");
         }
-        _ => {}
+        _ => {
+            println!("No command...");
+        }
     }
 }
