@@ -79,6 +79,7 @@ impl OwnerIndexInfo {
 #[derive(Clone, Copy, Serialize, Deserialize, Eq, PartialEq, Debug)]
 pub struct TransactionInfo {
     pub checkpoint: u64,
+    // TODO add balance changes and object type information
 }
 
 #[derive(Clone, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord, Hash, Debug)]

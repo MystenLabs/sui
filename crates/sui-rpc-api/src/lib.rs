@@ -2,7 +2,6 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use mysten_network::callback::CallbackLayer;
-use proto::node::v2alpha::subscription_service_server::SubscriptionServiceServer;
 use reader::StateReader;
 use std::sync::Arc;
 use subscription::SubscriptionServiceHandle;
@@ -15,6 +14,7 @@ mod config;
 mod error;
 pub mod field_mask;
 mod grpc;
+pub mod message;
 mod metrics;
 pub mod proto;
 mod reader;
@@ -88,12 +88,18 @@ impl RpcService {
         let metrics = self.metrics.clone();
 
         let router = {
-            let node_service =
-                crate::proto::node::v2::node_service_server::NodeServiceServer::new(self.clone());
-            let node_service_alpha =
-                crate::proto::node::v2alpha::node_service_server::NodeServiceServer::new(
+            let ledger_service =
+                crate::proto::rpc::v2beta::ledger_service_server::LedgerServiceServer::new(
                     self.clone(),
                 );
+            let transaction_execution_service = crate::proto::rpc::v2beta::transaction_execution_service_server::TransactionExecutionServiceServer::new(self.clone());
+            let live_data_service =
+                crate::proto::rpc::v2alpha::live_data_service_server::LiveDataServiceServer::new(
+                    self.clone(),
+                );
+
+            let node_service =
+                crate::proto::node::v2::node_service_server::NodeServiceServer::new(self.clone());
 
             let (mut health_reporter, health_service) = tonic_health::server::health_reporter();
 
@@ -104,10 +110,13 @@ impl RpcService {
                 .register_encoded_file_descriptor_set(
                     crate::proto::google::rpc::FILE_DESCRIPTOR_SET,
                 )
+                .register_encoded_file_descriptor_set(
+                    crate::proto::rpc::v2beta::FILE_DESCRIPTOR_SET,
+                )
                 .register_encoded_file_descriptor_set(crate::proto::types::FILE_DESCRIPTOR_SET)
                 .register_encoded_file_descriptor_set(crate::proto::node::v2::FILE_DESCRIPTOR_SET)
                 .register_encoded_file_descriptor_set(
-                    crate::proto::node::v2alpha::FILE_DESCRIPTOR_SET,
+                    crate::proto::rpc::v2alpha::FILE_DESCRIPTOR_SET,
                 )
                 .register_encoded_file_descriptor_set(tonic_health::pb::FILE_DESCRIPTOR_SET)
                 .build_v1()
@@ -120,10 +129,13 @@ impl RpcService {
                 .register_encoded_file_descriptor_set(
                     crate::proto::google::rpc::FILE_DESCRIPTOR_SET,
                 )
+                .register_encoded_file_descriptor_set(
+                    crate::proto::rpc::v2beta::FILE_DESCRIPTOR_SET,
+                )
                 .register_encoded_file_descriptor_set(crate::proto::types::FILE_DESCRIPTOR_SET)
                 .register_encoded_file_descriptor_set(crate::proto::node::v2::FILE_DESCRIPTOR_SET)
                 .register_encoded_file_descriptor_set(
-                    crate::proto::node::v2alpha::FILE_DESCRIPTOR_SET,
+                    crate::proto::rpc::v2alpha::FILE_DESCRIPTOR_SET,
                 )
                 .register_encoded_file_descriptor_set(tonic_health::pb::FILE_DESCRIPTOR_SET)
                 .build_v1alpha()
@@ -134,8 +146,10 @@ impl RpcService {
             }
 
             for service_name in [
+                service_name(&ledger_service),
+                service_name(&transaction_execution_service),
+                service_name(&live_data_service),
                 service_name(&node_service),
-                service_name(&node_service_alpha),
                 service_name(&reflection_v1),
                 service_name(&reflection_v1alpha),
             ] {
@@ -145,18 +159,26 @@ impl RpcService {
             }
 
             let mut services = grpc::Services::new()
-                .add_service(health_service)
                 .add_service(reflection_v1)
                 .add_service(reflection_v1alpha)
-                .add_service(node_service)
-                .add_service(node_service_alpha);
+                .add_service(ledger_service)
+                .add_service(transaction_execution_service)
+                .add_service(live_data_service)
+                .add_service(node_service);
 
             if let Some(subscription_service_handle) = self.subscription_service_handle.clone() {
-                services = services
-                    .add_service(SubscriptionServiceServer::new(subscription_service_handle));
+                let subscription_service =
+crate::proto::rpc::v2alpha::subscription_service_server::SubscriptionServiceServer::new(subscription_service_handle);
+                health_reporter
+                    .set_service_status(
+                        service_name(&subscription_service),
+                        tonic_health::ServingStatus::Serving,
+                    )
+                    .await;
+                services = services.add_service(subscription_service);
             }
 
-            services.into_router()
+            services.add_service(health_service).into_router()
         };
 
         let health_endpoint = axum::Router::new()

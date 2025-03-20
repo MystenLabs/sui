@@ -3,15 +3,15 @@
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct GetCoinInfoRequest {
     /// The coin type to request information about
-    #[prost(message, optional, tag = "1")]
-    pub coin_type: ::core::option::Option<super::super::types::TypeTag>,
+    #[prost(string, optional, tag = "1")]
+    pub coin_type: ::core::option::Option<::prost::alloc::string::String>,
 }
 /// Response message for `NodeService.GetCoinInfo`.
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct GetCoinInfoResponse {
     /// Required. The coin type.
-    #[prost(message, optional, tag = "1")]
-    pub coin_type: ::core::option::Option<super::super::types::TypeTag>,
+    #[prost(string, optional, tag = "1")]
+    pub coin_type: ::core::option::Option<::prost::alloc::string::String>,
     /// This field will be populated with information about this coin
     /// type's `0x2::coin::CoinMetadata` if it exists and has not been wrapped.
     #[prost(message, optional, tag = "2")]
@@ -25,8 +25,8 @@ pub struct GetCoinInfoResponse {
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct CoinMetadata {
     /// ObjectId of the `0x2::coin::CoinMetadata` object.
-    #[prost(message, optional, tag = "1")]
-    pub id: ::core::option::Option<super::super::types::ObjectId>,
+    #[prost(string, optional, tag = "1")]
+    pub id: ::core::option::Option<::prost::alloc::string::String>,
     /// Number of decimal places to coin uses.
     #[prost(uint32, optional, tag = "2")]
     pub decimals: ::core::option::Option<u32>,
@@ -47,8 +47,8 @@ pub struct CoinMetadata {
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct CoinTreasury {
     /// ObjectId of the `0x2::coin::TreasuryCap` object.
-    #[prost(message, optional, tag = "1")]
-    pub id: ::core::option::Option<super::super::types::ObjectId>,
+    #[prost(string, optional, tag = "1")]
+    pub id: ::core::option::Option<::prost::alloc::string::String>,
     /// Total available supply for this coin type.
     #[prost(uint64, optional, tag = "2")]
     pub total_supply: ::core::option::Option<u64>,
@@ -57,21 +57,21 @@ pub struct CoinTreasury {
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct RegulatedCoinMetadata {
     /// ObjectId of the `0x2::coin::RegulatedCoinMetadata` object.
-    #[prost(message, optional, tag = "1")]
-    pub id: ::core::option::Option<super::super::types::ObjectId>,
+    #[prost(string, optional, tag = "1")]
+    pub id: ::core::option::Option<::prost::alloc::string::String>,
     /// The ID of the coin's `CoinMetadata` object.
-    #[prost(message, optional, tag = "2")]
-    pub coin_metadata_object: ::core::option::Option<super::super::types::ObjectId>,
+    #[prost(string, optional, tag = "2")]
+    pub coin_metadata_object: ::core::option::Option<::prost::alloc::string::String>,
     /// The ID of the coin's `DenyCap` object.
-    #[prost(message, optional, tag = "3")]
-    pub deny_cap_object: ::core::option::Option<super::super::types::ObjectId>,
+    #[prost(string, optional, tag = "3")]
+    pub deny_cap_object: ::core::option::Option<::prost::alloc::string::String>,
 }
 /// Request message for `NodeService.ListDynamicFields`
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct ListDynamicFieldsRequest {
     /// Required. The `UID` of the parent, which owns the collections of dynamic fields.
-    #[prost(message, optional, tag = "1")]
-    pub parent: ::core::option::Option<super::super::types::ObjectId>,
+    #[prost(string, optional, tag = "1")]
+    pub parent: ::core::option::Option<::prost::alloc::string::String>,
     /// The maximum number of dynamic fields to return. The service may return fewer than this value.
     /// If unspecified, at most `50` entries will be returned.
     /// The maximum value is `1000`; values above `1000` will be coerced to `1000`.
@@ -82,8 +82,8 @@ pub struct ListDynamicFieldsRequest {
     ///
     /// When paginating, all other parameters provided to `ListDynamicFields` must
     /// match the call that provided the page token.
-    #[prost(string, optional, tag = "3")]
-    pub page_token: ::core::option::Option<::prost::alloc::string::String>,
+    #[prost(bytes = "bytes", optional, tag = "3")]
+    pub page_token: ::core::option::Option<::prost::bytes::Bytes>,
 }
 /// Response message for `NodeService.ListDynamicFields`
 #[derive(Clone, PartialEq, ::prost::Message)]
@@ -93,20 +93,20 @@ pub struct ListDynamicFieldsResponse {
     pub dynamic_fields: ::prost::alloc::vec::Vec<DynamicField>,
     /// A token, which can be sent as `page_token` to retrieve the next page.
     /// If this field is omitted, there are no subsequent pages.
-    #[prost(string, optional, tag = "2")]
-    pub next_page_token: ::core::option::Option<::prost::alloc::string::String>,
+    #[prost(bytes = "bytes", optional, tag = "2")]
+    pub next_page_token: ::core::option::Option<::prost::bytes::Bytes>,
 }
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct DynamicField {
     /// Required. ObjectId of this dynamic field's parent.
-    #[prost(message, optional, tag = "1")]
-    pub parent: ::core::option::Option<super::super::types::ObjectId>,
+    #[prost(string, optional, tag = "1")]
+    pub parent: ::core::option::Option<::prost::alloc::string::String>,
     /// Required. ObjectId of this dynamic field.
-    #[prost(message, optional, tag = "2")]
-    pub field_id: ::core::option::Option<super::super::types::ObjectId>,
+    #[prost(string, optional, tag = "2")]
+    pub field_id: ::core::option::Option<::prost::alloc::string::String>,
     /// Required. The type of the dynamic field "name"
-    #[prost(message, optional, tag = "3")]
-    pub name_type: ::core::option::Option<super::super::types::TypeTag>,
+    #[prost(string, optional, tag = "3")]
+    pub name_type: ::core::option::Option<::prost::alloc::string::String>,
     /// Required. The serialized move value of "name"
     #[prost(bytes = "bytes", optional, tag = "4")]
     pub name_value: ::core::option::Option<::prost::bytes::Bytes>,
@@ -115,116 +115,79 @@ pub struct DynamicField {
     ///
     /// The presence or absence of this field can be used to determine if a child
     /// is a dynamic field or a dynamic child object
-    #[prost(message, optional, tag = "5")]
-    pub dynamic_object_id: ::core::option::Option<super::super::types::ObjectId>,
-}
-#[derive(Clone, Copy, PartialEq, ::prost::Message)]
-pub struct GetProtocolConfigRequest {
-    #[prost(uint64, optional, tag = "1")]
-    pub version: ::core::option::Option<u64>,
-}
-#[derive(Clone, PartialEq, ::prost::Message)]
-pub struct GetProtocolConfigResponse {
-    #[prost(uint64, optional, tag = "1")]
-    pub protocol_version: ::core::option::Option<u64>,
-    #[prost(btree_map = "string, bool", tag = "2")]
-    pub feature_flags: ::prost::alloc::collections::BTreeMap<
-        ::prost::alloc::string::String,
-        bool,
-    >,
-    #[prost(btree_map = "string, string", tag = "3")]
-    pub attributes: ::prost::alloc::collections::BTreeMap<
-        ::prost::alloc::string::String,
-        ::prost::alloc::string::String,
-    >,
-    #[prost(uint64, optional, tag = "4")]
-    pub max_suppported_protocol_version: ::core::option::Option<u64>,
-    #[prost(uint64, optional, tag = "5")]
-    pub min_suppported_protocol_version: ::core::option::Option<u64>,
-}
-#[derive(Clone, Copy, PartialEq, ::prost::Message)]
-pub struct GetGasInfoRequest {}
-#[derive(Clone, Copy, PartialEq, ::prost::Message)]
-pub struct GetGasInfoResponse {
-    /// Reference gas price denominated in MIST
-    #[prost(uint64, optional, tag = "1")]
-    pub reference_gas_price: ::core::option::Option<u64>,
+    #[prost(string, optional, tag = "5")]
+    pub dynamic_object_id: ::core::option::Option<::prost::alloc::string::String>,
 }
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct SimulateTransactionRequest {
+    #[prost(message, optional, tag = "1")]
+    pub transaction: ::core::option::Option<super::v2beta::Transaction>,
     #[prost(message, optional, tag = "2")]
-    pub transaction_bcs: ::core::option::Option<super::super::types::Bcs>,
-    #[prost(message, optional, tag = "3")]
     pub read_mask: ::core::option::Option<::prost_types::FieldMask>,
 }
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct SimulateTransactionResponse {
-    #[prost(message, optional, tag = "3")]
-    pub effects_bcs: ::core::option::Option<super::super::types::Bcs>,
-    #[prost(message, optional, tag = "5")]
-    pub events_bcs: ::core::option::Option<super::super::types::Bcs>,
-    #[prost(message, repeated, tag = "6")]
-    pub balance_changes: ::prost::alloc::vec::Vec<super::v2::BalanceChange>,
+    #[prost(message, optional, tag = "1")]
+    pub transaction: ::core::option::Option<super::v2beta::ExecutedTransaction>,
 }
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct ResolveTransactionRequest {
+    /// optional sui.rpc.v2beta.Transaction unresolved_transaction = 1;
     /// TODO FIX TYPE
     /// Json unresolved transaction type
     #[prost(string, optional, tag = "1")]
     pub unresolved_transaction: ::core::option::Option<::prost::alloc::string::String>,
-    #[prost(message, optional, tag = "3")]
+    #[prost(message, optional, tag = "2")]
     pub read_mask: ::core::option::Option<::prost_types::FieldMask>,
 }
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct ResolveTransactionResponse {
+    #[prost(message, optional, tag = "1")]
+    pub transaction: ::core::option::Option<super::v2beta::Transaction>,
     #[prost(message, optional, tag = "2")]
-    pub transaction_bcs: ::core::option::Option<super::super::types::Bcs>,
-    #[prost(message, optional, tag = "3")]
     pub simulation: ::core::option::Option<SimulateTransactionResponse>,
 }
-/// Request message for `NodeService.ListAccountObjects`
 #[derive(Clone, PartialEq, ::prost::Message)]
-pub struct ListAccountObjectsRequest {
+pub struct ListOwnedObjectsRequest {
     /// Required. The address of the account that owns the objects.
-    #[prost(message, optional, tag = "1")]
-    pub owner: ::core::option::Option<super::super::types::Address>,
+    #[prost(string, optional, tag = "1")]
+    pub owner: ::core::option::Option<::prost::alloc::string::String>,
     /// The maximum number of entries return. The service may return fewer than this value.
     /// If unspecified, at most `50` entries will be returned.
     /// The maximum value is `1000`; values above `1000` will be coerced to `1000`.
     #[prost(uint32, optional, tag = "2")]
     pub page_size: ::core::option::Option<u32>,
-    /// A page token, received from a previous `ListAccountObjects` call.
+    /// A page token, received from a previous `ListOwnedObjects` call.
     /// Provide this to retrieve the subsequent page.
     ///
-    /// When paginating, all other parameters provided to `ListAccountObjects` must
+    /// When paginating, all other parameters provided to `ListOwnedObjects` must
     /// match the call that provided the page token.
-    #[prost(string, optional, tag = "3")]
-    pub page_token: ::core::option::Option<::prost::alloc::string::String>,
+    #[prost(bytes = "bytes", optional, tag = "3")]
+    pub page_token: ::core::option::Option<::prost::bytes::Bytes>,
 }
-/// Response message for `NodeService.ListAccountObjects`
 #[derive(Clone, PartialEq, ::prost::Message)]
-pub struct ListAccountObjectsResponse {
+pub struct ListOwnedObjectsResponse {
     /// Page of dynamic fields owned by the specified parent.
     #[prost(message, repeated, tag = "1")]
-    pub objects: ::prost::alloc::vec::Vec<AccountObject>,
+    pub objects: ::prost::alloc::vec::Vec<OwnedObject>,
     /// A token, which can be sent as `page_token` to retrieve the next page.
     /// If this field is omitted, there are no subsequent pages.
-    #[prost(string, optional, tag = "2")]
-    pub next_page_token: ::core::option::Option<::prost::alloc::string::String>,
+    #[prost(bytes = "bytes", optional, tag = "2")]
+    pub next_page_token: ::core::option::Option<::prost::bytes::Bytes>,
 }
 #[derive(Clone, PartialEq, ::prost::Message)]
-pub struct AccountObject {
-    #[prost(message, optional, tag = "1")]
-    pub owner: ::core::option::Option<super::super::types::Address>,
-    #[prost(message, optional, tag = "2")]
-    pub object_id: ::core::option::Option<super::super::types::ObjectId>,
+pub struct OwnedObject {
+    #[prost(string, optional, tag = "1")]
+    pub owner: ::core::option::Option<::prost::alloc::string::String>,
+    #[prost(string, optional, tag = "2")]
+    pub object_id: ::core::option::Option<::prost::alloc::string::String>,
     #[prost(uint64, optional, tag = "3")]
     pub version: ::core::option::Option<u64>,
-    #[prost(message, optional, tag = "4")]
-    pub object_type: ::core::option::Option<super::super::types::StructTag>,
+    #[prost(string, optional, tag = "4")]
+    pub object_type: ::core::option::Option<::prost::alloc::string::String>,
 }
 /// Generated client implementations.
-pub mod node_service_client {
+pub mod live_data_service_client {
     #![allow(
         unused_variables,
         dead_code,
@@ -234,12 +197,11 @@ pub mod node_service_client {
     )]
     use tonic::codegen::*;
     use tonic::codegen::http::Uri;
-    /// Service for reading data from a Sui Full node.
     #[derive(Debug, Clone)]
-    pub struct NodeServiceClient<T> {
+    pub struct LiveDataServiceClient<T> {
         inner: tonic::client::Grpc<T>,
     }
-    impl NodeServiceClient<tonic::transport::Channel> {
+    impl LiveDataServiceClient<tonic::transport::Channel> {
         /// Attempt to create a new client by connecting to a given endpoint.
         pub async fn connect<D>(dst: D) -> Result<Self, tonic::transport::Error>
         where
@@ -250,7 +212,7 @@ pub mod node_service_client {
             Ok(Self::new(conn))
         }
     }
-    impl<T> NodeServiceClient<T>
+    impl<T> LiveDataServiceClient<T>
     where
         T: tonic::client::GrpcService<tonic::body::BoxBody>,
         T::Error: Into<StdError>,
@@ -268,7 +230,7 @@ pub mod node_service_client {
         pub fn with_interceptor<F>(
             inner: T,
             interceptor: F,
-        ) -> NodeServiceClient<InterceptedService<T, F>>
+        ) -> LiveDataServiceClient<InterceptedService<T, F>>
         where
             F: tonic::service::Interceptor,
             T::ResponseBody: Default,
@@ -282,7 +244,7 @@ pub mod node_service_client {
                 http::Request<tonic::body::BoxBody>,
             >>::Error: Into<StdError> + std::marker::Send + std::marker::Sync,
         {
-            NodeServiceClient::new(InterceptedService::new(inner, interceptor))
+            LiveDataServiceClient::new(InterceptedService::new(inner, interceptor))
         }
         /// Compress requests with the given encoding.
         ///
@@ -315,32 +277,6 @@ pub mod node_service_client {
             self.inner = self.inner.max_encoding_message_size(limit);
             self
         }
-        /// Request information for the specified coin type.
-        pub async fn get_coin_info(
-            &mut self,
-            request: impl tonic::IntoRequest<super::GetCoinInfoRequest>,
-        ) -> std::result::Result<
-            tonic::Response<super::GetCoinInfoResponse>,
-            tonic::Status,
-        > {
-            self.inner
-                .ready()
-                .await
-                .map_err(|e| {
-                    tonic::Status::unknown(
-                        format!("Service was not ready: {}", e.into()),
-                    )
-                })?;
-            let codec = tonic::codec::ProstCodec::default();
-            let path = http::uri::PathAndQuery::from_static(
-                "/sui.node.v2alpha.NodeService/GetCoinInfo",
-            );
-            let mut req = request.into_request();
-            req.extensions_mut()
-                .insert(GrpcMethod::new("sui.node.v2alpha.NodeService", "GetCoinInfo"));
-            self.inner.unary(req, path, codec).await
-        }
-        /// List the dynamic fields for provided parent.
         pub async fn list_dynamic_fields(
             &mut self,
             request: impl tonic::IntoRequest<super::ListDynamicFieldsRequest>,
@@ -358,20 +294,23 @@ pub mod node_service_client {
                 })?;
             let codec = tonic::codec::ProstCodec::default();
             let path = http::uri::PathAndQuery::from_static(
-                "/sui.node.v2alpha.NodeService/ListDynamicFields",
+                "/sui.rpc.v2alpha.LiveDataService/ListDynamicFields",
             );
             let mut req = request.into_request();
             req.extensions_mut()
                 .insert(
-                    GrpcMethod::new("sui.node.v2alpha.NodeService", "ListDynamicFields"),
+                    GrpcMethod::new(
+                        "sui.rpc.v2alpha.LiveDataService",
+                        "ListDynamicFields",
+                    ),
                 );
             self.inner.unary(req, path, codec).await
         }
-        pub async fn list_account_objects(
+        pub async fn list_owned_objects(
             &mut self,
-            request: impl tonic::IntoRequest<super::ListAccountObjectsRequest>,
+            request: impl tonic::IntoRequest<super::ListOwnedObjectsRequest>,
         ) -> std::result::Result<
-            tonic::Response<super::ListAccountObjectsResponse>,
+            tonic::Response<super::ListOwnedObjectsResponse>,
             tonic::Status,
         > {
             self.inner
@@ -384,20 +323,23 @@ pub mod node_service_client {
                 })?;
             let codec = tonic::codec::ProstCodec::default();
             let path = http::uri::PathAndQuery::from_static(
-                "/sui.node.v2alpha.NodeService/ListAccountObjects",
+                "/sui.rpc.v2alpha.LiveDataService/ListOwnedObjects",
             );
             let mut req = request.into_request();
             req.extensions_mut()
                 .insert(
-                    GrpcMethod::new("sui.node.v2alpha.NodeService", "ListAccountObjects"),
+                    GrpcMethod::new(
+                        "sui.rpc.v2alpha.LiveDataService",
+                        "ListOwnedObjects",
+                    ),
                 );
             self.inner.unary(req, path, codec).await
         }
-        pub async fn get_protocol_config(
+        pub async fn get_coin_info(
             &mut self,
-            request: impl tonic::IntoRequest<super::GetProtocolConfigRequest>,
+            request: impl tonic::IntoRequest<super::GetCoinInfoRequest>,
         ) -> std::result::Result<
-            tonic::Response<super::GetProtocolConfigResponse>,
+            tonic::Response<super::GetCoinInfoResponse>,
             tonic::Status,
         > {
             self.inner
@@ -410,37 +352,13 @@ pub mod node_service_client {
                 })?;
             let codec = tonic::codec::ProstCodec::default();
             let path = http::uri::PathAndQuery::from_static(
-                "/sui.node.v2alpha.NodeService/GetProtocolConfig",
+                "/sui.rpc.v2alpha.LiveDataService/GetCoinInfo",
             );
             let mut req = request.into_request();
             req.extensions_mut()
                 .insert(
-                    GrpcMethod::new("sui.node.v2alpha.NodeService", "GetProtocolConfig"),
+                    GrpcMethod::new("sui.rpc.v2alpha.LiveDataService", "GetCoinInfo"),
                 );
-            self.inner.unary(req, path, codec).await
-        }
-        pub async fn get_gas_info(
-            &mut self,
-            request: impl tonic::IntoRequest<super::GetGasInfoRequest>,
-        ) -> std::result::Result<
-            tonic::Response<super::GetGasInfoResponse>,
-            tonic::Status,
-        > {
-            self.inner
-                .ready()
-                .await
-                .map_err(|e| {
-                    tonic::Status::unknown(
-                        format!("Service was not ready: {}", e.into()),
-                    )
-                })?;
-            let codec = tonic::codec::ProstCodec::default();
-            let path = http::uri::PathAndQuery::from_static(
-                "/sui.node.v2alpha.NodeService/GetGasInfo",
-            );
-            let mut req = request.into_request();
-            req.extensions_mut()
-                .insert(GrpcMethod::new("sui.node.v2alpha.NodeService", "GetGasInfo"));
             self.inner.unary(req, path, codec).await
         }
         pub async fn simulate_transaction(
@@ -460,13 +378,13 @@ pub mod node_service_client {
                 })?;
             let codec = tonic::codec::ProstCodec::default();
             let path = http::uri::PathAndQuery::from_static(
-                "/sui.node.v2alpha.NodeService/SimulateTransaction",
+                "/sui.rpc.v2alpha.LiveDataService/SimulateTransaction",
             );
             let mut req = request.into_request();
             req.extensions_mut()
                 .insert(
                     GrpcMethod::new(
-                        "sui.node.v2alpha.NodeService",
+                        "sui.rpc.v2alpha.LiveDataService",
                         "SimulateTransaction",
                     ),
                 );
@@ -489,19 +407,22 @@ pub mod node_service_client {
                 })?;
             let codec = tonic::codec::ProstCodec::default();
             let path = http::uri::PathAndQuery::from_static(
-                "/sui.node.v2alpha.NodeService/ResolveTransaction",
+                "/sui.rpc.v2alpha.LiveDataService/ResolveTransaction",
             );
             let mut req = request.into_request();
             req.extensions_mut()
                 .insert(
-                    GrpcMethod::new("sui.node.v2alpha.NodeService", "ResolveTransaction"),
+                    GrpcMethod::new(
+                        "sui.rpc.v2alpha.LiveDataService",
+                        "ResolveTransaction",
+                    ),
                 );
             self.inner.unary(req, path, codec).await
         }
     }
 }
 /// Generated server implementations.
-pub mod node_service_server {
+pub mod live_data_service_server {
     #![allow(
         unused_variables,
         dead_code,
@@ -510,18 +431,9 @@ pub mod node_service_server {
         clippy::let_unit_value,
     )]
     use tonic::codegen::*;
-    /// Generated trait containing gRPC methods that should be implemented for use with NodeServiceServer.
+    /// Generated trait containing gRPC methods that should be implemented for use with LiveDataServiceServer.
     #[async_trait]
-    pub trait NodeService: std::marker::Send + std::marker::Sync + 'static {
-        /// Request information for the specified coin type.
-        async fn get_coin_info(
-            &self,
-            request: tonic::Request<super::GetCoinInfoRequest>,
-        ) -> std::result::Result<
-            tonic::Response<super::GetCoinInfoResponse>,
-            tonic::Status,
-        >;
-        /// List the dynamic fields for provided parent.
+    pub trait LiveDataService: std::marker::Send + std::marker::Sync + 'static {
         async fn list_dynamic_fields(
             &self,
             request: tonic::Request<super::ListDynamicFieldsRequest>,
@@ -529,25 +441,18 @@ pub mod node_service_server {
             tonic::Response<super::ListDynamicFieldsResponse>,
             tonic::Status,
         >;
-        async fn list_account_objects(
+        async fn list_owned_objects(
             &self,
-            request: tonic::Request<super::ListAccountObjectsRequest>,
+            request: tonic::Request<super::ListOwnedObjectsRequest>,
         ) -> std::result::Result<
-            tonic::Response<super::ListAccountObjectsResponse>,
+            tonic::Response<super::ListOwnedObjectsResponse>,
             tonic::Status,
         >;
-        async fn get_protocol_config(
+        async fn get_coin_info(
             &self,
-            request: tonic::Request<super::GetProtocolConfigRequest>,
+            request: tonic::Request<super::GetCoinInfoRequest>,
         ) -> std::result::Result<
-            tonic::Response<super::GetProtocolConfigResponse>,
-            tonic::Status,
-        >;
-        async fn get_gas_info(
-            &self,
-            request: tonic::Request<super::GetGasInfoRequest>,
-        ) -> std::result::Result<
-            tonic::Response<super::GetGasInfoResponse>,
+            tonic::Response<super::GetCoinInfoResponse>,
             tonic::Status,
         >;
         async fn simulate_transaction(
@@ -565,16 +470,15 @@ pub mod node_service_server {
             tonic::Status,
         >;
     }
-    /// Service for reading data from a Sui Full node.
     #[derive(Debug)]
-    pub struct NodeServiceServer<T> {
+    pub struct LiveDataServiceServer<T> {
         inner: Arc<T>,
         accept_compression_encodings: EnabledCompressionEncodings,
         send_compression_encodings: EnabledCompressionEncodings,
         max_decoding_message_size: Option<usize>,
         max_encoding_message_size: Option<usize>,
     }
-    impl<T> NodeServiceServer<T> {
+    impl<T> LiveDataServiceServer<T> {
         pub fn new(inner: T) -> Self {
             Self::from_arc(Arc::new(inner))
         }
@@ -625,9 +529,9 @@ pub mod node_service_server {
             self
         }
     }
-    impl<T, B> tonic::codegen::Service<http::Request<B>> for NodeServiceServer<T>
+    impl<T, B> tonic::codegen::Service<http::Request<B>> for LiveDataServiceServer<T>
     where
-        T: NodeService,
+        T: LiveDataService,
         B: Body + std::marker::Send + 'static,
         B::Error: Into<StdError> + std::marker::Send + 'static,
     {
@@ -642,56 +546,11 @@ pub mod node_service_server {
         }
         fn call(&mut self, req: http::Request<B>) -> Self::Future {
             match req.uri().path() {
-                "/sui.node.v2alpha.NodeService/GetCoinInfo" => {
+                "/sui.rpc.v2alpha.LiveDataService/ListDynamicFields" => {
                     #[allow(non_camel_case_types)]
-                    struct GetCoinInfoSvc<T: NodeService>(pub Arc<T>);
+                    struct ListDynamicFieldsSvc<T: LiveDataService>(pub Arc<T>);
                     impl<
-                        T: NodeService,
-                    > tonic::server::UnaryService<super::GetCoinInfoRequest>
-                    for GetCoinInfoSvc<T> {
-                        type Response = super::GetCoinInfoResponse;
-                        type Future = BoxFuture<
-                            tonic::Response<Self::Response>,
-                            tonic::Status,
-                        >;
-                        fn call(
-                            &mut self,
-                            request: tonic::Request<super::GetCoinInfoRequest>,
-                        ) -> Self::Future {
-                            let inner = Arc::clone(&self.0);
-                            let fut = async move {
-                                <T as NodeService>::get_coin_info(&inner, request).await
-                            };
-                            Box::pin(fut)
-                        }
-                    }
-                    let accept_compression_encodings = self.accept_compression_encodings;
-                    let send_compression_encodings = self.send_compression_encodings;
-                    let max_decoding_message_size = self.max_decoding_message_size;
-                    let max_encoding_message_size = self.max_encoding_message_size;
-                    let inner = self.inner.clone();
-                    let fut = async move {
-                        let method = GetCoinInfoSvc(inner);
-                        let codec = tonic::codec::ProstCodec::default();
-                        let mut grpc = tonic::server::Grpc::new(codec)
-                            .apply_compression_config(
-                                accept_compression_encodings,
-                                send_compression_encodings,
-                            )
-                            .apply_max_message_size_config(
-                                max_decoding_message_size,
-                                max_encoding_message_size,
-                            );
-                        let res = grpc.unary(method, req).await;
-                        Ok(res)
-                    };
-                    Box::pin(fut)
-                }
-                "/sui.node.v2alpha.NodeService/ListDynamicFields" => {
-                    #[allow(non_camel_case_types)]
-                    struct ListDynamicFieldsSvc<T: NodeService>(pub Arc<T>);
-                    impl<
-                        T: NodeService,
+                        T: LiveDataService,
                     > tonic::server::UnaryService<super::ListDynamicFieldsRequest>
                     for ListDynamicFieldsSvc<T> {
                         type Response = super::ListDynamicFieldsResponse;
@@ -705,7 +564,7 @@ pub mod node_service_server {
                         ) -> Self::Future {
                             let inner = Arc::clone(&self.0);
                             let fut = async move {
-                                <T as NodeService>::list_dynamic_fields(&inner, request)
+                                <T as LiveDataService>::list_dynamic_fields(&inner, request)
                                     .await
                             };
                             Box::pin(fut)
@@ -733,25 +592,25 @@ pub mod node_service_server {
                     };
                     Box::pin(fut)
                 }
-                "/sui.node.v2alpha.NodeService/ListAccountObjects" => {
+                "/sui.rpc.v2alpha.LiveDataService/ListOwnedObjects" => {
                     #[allow(non_camel_case_types)]
-                    struct ListAccountObjectsSvc<T: NodeService>(pub Arc<T>);
+                    struct ListOwnedObjectsSvc<T: LiveDataService>(pub Arc<T>);
                     impl<
-                        T: NodeService,
-                    > tonic::server::UnaryService<super::ListAccountObjectsRequest>
-                    for ListAccountObjectsSvc<T> {
-                        type Response = super::ListAccountObjectsResponse;
+                        T: LiveDataService,
+                    > tonic::server::UnaryService<super::ListOwnedObjectsRequest>
+                    for ListOwnedObjectsSvc<T> {
+                        type Response = super::ListOwnedObjectsResponse;
                         type Future = BoxFuture<
                             tonic::Response<Self::Response>,
                             tonic::Status,
                         >;
                         fn call(
                             &mut self,
-                            request: tonic::Request<super::ListAccountObjectsRequest>,
+                            request: tonic::Request<super::ListOwnedObjectsRequest>,
                         ) -> Self::Future {
                             let inner = Arc::clone(&self.0);
                             let fut = async move {
-                                <T as NodeService>::list_account_objects(&inner, request)
+                                <T as LiveDataService>::list_owned_objects(&inner, request)
                                     .await
                             };
                             Box::pin(fut)
@@ -763,7 +622,7 @@ pub mod node_service_server {
                     let max_encoding_message_size = self.max_encoding_message_size;
                     let inner = self.inner.clone();
                     let fut = async move {
-                        let method = ListAccountObjectsSvc(inner);
+                        let method = ListOwnedObjectsSvc(inner);
                         let codec = tonic::codec::ProstCodec::default();
                         let mut grpc = tonic::server::Grpc::new(codec)
                             .apply_compression_config(
@@ -779,26 +638,25 @@ pub mod node_service_server {
                     };
                     Box::pin(fut)
                 }
-                "/sui.node.v2alpha.NodeService/GetProtocolConfig" => {
+                "/sui.rpc.v2alpha.LiveDataService/GetCoinInfo" => {
                     #[allow(non_camel_case_types)]
-                    struct GetProtocolConfigSvc<T: NodeService>(pub Arc<T>);
+                    struct GetCoinInfoSvc<T: LiveDataService>(pub Arc<T>);
                     impl<
-                        T: NodeService,
-                    > tonic::server::UnaryService<super::GetProtocolConfigRequest>
-                    for GetProtocolConfigSvc<T> {
-                        type Response = super::GetProtocolConfigResponse;
+                        T: LiveDataService,
+                    > tonic::server::UnaryService<super::GetCoinInfoRequest>
+                    for GetCoinInfoSvc<T> {
+                        type Response = super::GetCoinInfoResponse;
                         type Future = BoxFuture<
                             tonic::Response<Self::Response>,
                             tonic::Status,
                         >;
                         fn call(
                             &mut self,
-                            request: tonic::Request<super::GetProtocolConfigRequest>,
+                            request: tonic::Request<super::GetCoinInfoRequest>,
                         ) -> Self::Future {
                             let inner = Arc::clone(&self.0);
                             let fut = async move {
-                                <T as NodeService>::get_protocol_config(&inner, request)
-                                    .await
+                                <T as LiveDataService>::get_coin_info(&inner, request).await
                             };
                             Box::pin(fut)
                         }
@@ -809,7 +667,7 @@ pub mod node_service_server {
                     let max_encoding_message_size = self.max_encoding_message_size;
                     let inner = self.inner.clone();
                     let fut = async move {
-                        let method = GetProtocolConfigSvc(inner);
+                        let method = GetCoinInfoSvc(inner);
                         let codec = tonic::codec::ProstCodec::default();
                         let mut grpc = tonic::server::Grpc::new(codec)
                             .apply_compression_config(
@@ -825,56 +683,11 @@ pub mod node_service_server {
                     };
                     Box::pin(fut)
                 }
-                "/sui.node.v2alpha.NodeService/GetGasInfo" => {
+                "/sui.rpc.v2alpha.LiveDataService/SimulateTransaction" => {
                     #[allow(non_camel_case_types)]
-                    struct GetGasInfoSvc<T: NodeService>(pub Arc<T>);
+                    struct SimulateTransactionSvc<T: LiveDataService>(pub Arc<T>);
                     impl<
-                        T: NodeService,
-                    > tonic::server::UnaryService<super::GetGasInfoRequest>
-                    for GetGasInfoSvc<T> {
-                        type Response = super::GetGasInfoResponse;
-                        type Future = BoxFuture<
-                            tonic::Response<Self::Response>,
-                            tonic::Status,
-                        >;
-                        fn call(
-                            &mut self,
-                            request: tonic::Request<super::GetGasInfoRequest>,
-                        ) -> Self::Future {
-                            let inner = Arc::clone(&self.0);
-                            let fut = async move {
-                                <T as NodeService>::get_gas_info(&inner, request).await
-                            };
-                            Box::pin(fut)
-                        }
-                    }
-                    let accept_compression_encodings = self.accept_compression_encodings;
-                    let send_compression_encodings = self.send_compression_encodings;
-                    let max_decoding_message_size = self.max_decoding_message_size;
-                    let max_encoding_message_size = self.max_encoding_message_size;
-                    let inner = self.inner.clone();
-                    let fut = async move {
-                        let method = GetGasInfoSvc(inner);
-                        let codec = tonic::codec::ProstCodec::default();
-                        let mut grpc = tonic::server::Grpc::new(codec)
-                            .apply_compression_config(
-                                accept_compression_encodings,
-                                send_compression_encodings,
-                            )
-                            .apply_max_message_size_config(
-                                max_decoding_message_size,
-                                max_encoding_message_size,
-                            );
-                        let res = grpc.unary(method, req).await;
-                        Ok(res)
-                    };
-                    Box::pin(fut)
-                }
-                "/sui.node.v2alpha.NodeService/SimulateTransaction" => {
-                    #[allow(non_camel_case_types)]
-                    struct SimulateTransactionSvc<T: NodeService>(pub Arc<T>);
-                    impl<
-                        T: NodeService,
+                        T: LiveDataService,
                     > tonic::server::UnaryService<super::SimulateTransactionRequest>
                     for SimulateTransactionSvc<T> {
                         type Response = super::SimulateTransactionResponse;
@@ -888,7 +701,10 @@ pub mod node_service_server {
                         ) -> Self::Future {
                             let inner = Arc::clone(&self.0);
                             let fut = async move {
-                                <T as NodeService>::simulate_transaction(&inner, request)
+                                <T as LiveDataService>::simulate_transaction(
+                                        &inner,
+                                        request,
+                                    )
                                     .await
                             };
                             Box::pin(fut)
@@ -916,11 +732,11 @@ pub mod node_service_server {
                     };
                     Box::pin(fut)
                 }
-                "/sui.node.v2alpha.NodeService/ResolveTransaction" => {
+                "/sui.rpc.v2alpha.LiveDataService/ResolveTransaction" => {
                     #[allow(non_camel_case_types)]
-                    struct ResolveTransactionSvc<T: NodeService>(pub Arc<T>);
+                    struct ResolveTransactionSvc<T: LiveDataService>(pub Arc<T>);
                     impl<
-                        T: NodeService,
+                        T: LiveDataService,
                     > tonic::server::UnaryService<super::ResolveTransactionRequest>
                     for ResolveTransactionSvc<T> {
                         type Response = super::ResolveTransactionResponse;
@@ -934,7 +750,7 @@ pub mod node_service_server {
                         ) -> Self::Future {
                             let inner = Arc::clone(&self.0);
                             let fut = async move {
-                                <T as NodeService>::resolve_transaction(&inner, request)
+                                <T as LiveDataService>::resolve_transaction(&inner, request)
                                     .await
                             };
                             Box::pin(fut)
@@ -982,7 +798,7 @@ pub mod node_service_server {
             }
         }
     }
-    impl<T> Clone for NodeServiceServer<T> {
+    impl<T> Clone for LiveDataServiceServer<T> {
         fn clone(&self) -> Self {
             let inner = self.inner.clone();
             Self {
@@ -995,8 +811,8 @@ pub mod node_service_server {
         }
     }
     /// Generated gRPC service name
-    pub const SERVICE_NAME: &str = "sui.node.v2alpha.NodeService";
-    impl<T> tonic::server::NamedService for NodeServiceServer<T> {
+    pub const SERVICE_NAME: &str = "sui.rpc.v2alpha.LiveDataService";
+    impl<T> tonic::server::NamedService for LiveDataServiceServer<T> {
         const NAME: &'static str = SERVICE_NAME;
     }
 }
@@ -1005,7 +821,7 @@ pub mod node_service_server {
 pub struct SubscribeCheckpointsRequest {
     /// Optional. Mask for specifiying which parts of the
     /// SubscribeCheckpointsResponse should be returned.
-    #[prost(message, optional, tag = "3")]
+    #[prost(message, optional, tag = "1")]
     pub read_mask: ::core::option::Option<::prost_types::FieldMask>,
 }
 /// Response message for SubscriptionService.SubscribeCheckpoints
@@ -1017,7 +833,7 @@ pub struct SubscribeCheckpointsResponse {
     pub cursor: ::core::option::Option<u64>,
     /// The requested data for this checkpoint
     #[prost(message, optional, tag = "2")]
-    pub checkpoint: ::core::option::Option<super::v2::GetFullCheckpointResponse>,
+    pub checkpoint: ::core::option::Option<super::v2beta::Checkpoint>,
 }
 /// Generated client implementations.
 pub mod subscription_service_client {
@@ -1030,7 +846,6 @@ pub mod subscription_service_client {
     )]
     use tonic::codegen::*;
     use tonic::codegen::http::Uri;
-    /// Service for subscribing to data from a Sui Fullnode
     #[derive(Debug, Clone)]
     pub struct SubscriptionServiceClient<T> {
         inner: tonic::client::Grpc<T>,
@@ -1120,9 +935,8 @@ pub mod subscription_service_client {
         /// clients to know exactly the last checkpoint they have processed and in the
         /// event the subscription terminates (either by the client/server or by the
         /// connection breaking), clients will be able to reinitailize a subscription
-        /// and then leverage other APIs (e.g.
-        /// sui.node.v2.NodeService.GetFullCheckpoint) in order to request data for
-        /// the checkpoints they missed.
+        /// and then leverage other APIs in order to request data for the checkpoints
+        /// they missed.
         pub async fn subscribe_checkpoints(
             &mut self,
             request: impl tonic::IntoRequest<super::SubscribeCheckpointsRequest>,
@@ -1142,13 +956,13 @@ pub mod subscription_service_client {
                 })?;
             let codec = tonic::codec::ProstCodec::default();
             let path = http::uri::PathAndQuery::from_static(
-                "/sui.node.v2alpha.SubscriptionService/SubscribeCheckpoints",
+                "/sui.rpc.v2alpha.SubscriptionService/SubscribeCheckpoints",
             );
             let mut req = request.into_request();
             req.extensions_mut()
                 .insert(
                     GrpcMethod::new(
-                        "sui.node.v2alpha.SubscriptionService",
+                        "sui.rpc.v2alpha.SubscriptionService",
                         "SubscribeCheckpoints",
                     ),
                 );
@@ -1187,9 +1001,8 @@ pub mod subscription_service_server {
         /// clients to know exactly the last checkpoint they have processed and in the
         /// event the subscription terminates (either by the client/server or by the
         /// connection breaking), clients will be able to reinitailize a subscription
-        /// and then leverage other APIs (e.g.
-        /// sui.node.v2.NodeService.GetFullCheckpoint) in order to request data for
-        /// the checkpoints they missed.
+        /// and then leverage other APIs in order to request data for the checkpoints
+        /// they missed.
         async fn subscribe_checkpoints(
             &self,
             request: tonic::Request<super::SubscribeCheckpointsRequest>,
@@ -1198,7 +1011,6 @@ pub mod subscription_service_server {
             tonic::Status,
         >;
     }
-    /// Service for subscribing to data from a Sui Fullnode
     #[derive(Debug)]
     pub struct SubscriptionServiceServer<T> {
         inner: Arc<T>,
@@ -1275,7 +1087,7 @@ pub mod subscription_service_server {
         }
         fn call(&mut self, req: http::Request<B>) -> Self::Future {
             match req.uri().path() {
-                "/sui.node.v2alpha.SubscriptionService/SubscribeCheckpoints" => {
+                "/sui.rpc.v2alpha.SubscriptionService/SubscribeCheckpoints" => {
                     #[allow(non_camel_case_types)]
                     struct SubscribeCheckpointsSvc<T: SubscriptionService>(pub Arc<T>);
                     impl<
@@ -1359,7 +1171,7 @@ pub mod subscription_service_server {
         }
     }
     /// Generated gRPC service name
-    pub const SERVICE_NAME: &str = "sui.node.v2alpha.SubscriptionService";
+    pub const SERVICE_NAME: &str = "sui.rpc.v2alpha.SubscriptionService";
     impl<T> tonic::server::NamedService for SubscriptionServiceServer<T> {
         const NAME: &'static str = SERVICE_NAME;
     }

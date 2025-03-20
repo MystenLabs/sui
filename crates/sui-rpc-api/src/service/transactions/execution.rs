@@ -308,7 +308,7 @@ fn coins(objects: &[Object]) -> impl Iterator<Item = (&Address, Coin<'_>)> + '_ 
     })
 }
 
-fn derive_balance_changes(
+pub(crate) fn derive_balance_changes(
     _effects: &TransactionEffects,
     input_objects: &[Object],
     output_objects: &[Object],

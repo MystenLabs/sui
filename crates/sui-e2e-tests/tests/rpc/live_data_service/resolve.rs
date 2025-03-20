@@ -5,7 +5,8 @@ use prost_types::FieldMask;
 use shared_crypto::intent::Intent;
 use sui_keys::keystore::AccountKeystore;
 use sui_macros::sim_test;
-use sui_rpc_api::proto::node::v2alpha::ResolveTransactionRequest;
+use sui_rpc_api::proto::rpc::v2alpha::live_data_service_client::LiveDataServiceClient;
+use sui_rpc_api::proto::rpc::v2alpha::ResolveTransactionRequest;
 use sui_rpc_api::types::ResolveTransactionResponse;
 use sui_rpc_api::types::TransactionSimulationResponse;
 use sui_rpc_api::Client;
@@ -35,21 +36,28 @@ fn build_resolve_request(
 }
 
 fn proto_to_response(
-    proto: sui_rpc_api::proto::node::v2alpha::ResolveTransactionResponse,
+    proto: sui_rpc_api::proto::rpc::v2alpha::ResolveTransactionResponse,
 ) -> ResolveTransactionResponse {
     ResolveTransactionResponse {
-        transaction: proto.transaction_bcs.unwrap().deserialize().unwrap(),
-        simulation: proto
-            .simulation
-            .map(|simulation| TransactionSimulationResponse {
-                effects: simulation.effects_bcs.unwrap().deserialize().unwrap(),
-                events: simulation
-                    .events_bcs
-                    .map(|events_bcs| events_bcs.deserialize().unwrap()),
+        transaction: proto
+            .transaction
+            .unwrap()
+            .bcs
+            .unwrap()
+            .deserialize()
+            .unwrap(),
+        simulation: proto.simulation.map(|simulation| {
+            let txn = simulation.transaction.unwrap();
+            TransactionSimulationResponse {
+                effects: txn.effects.unwrap().bcs.unwrap().deserialize().unwrap(),
+                events: txn
+                    .events
+                    .map(|events| events.bcs.unwrap().deserialize().unwrap()),
                 balance_changes: None,
                 input_objects: None,
                 output_objects: None,
-            }),
+            }
+        }),
     }
 }
 
@@ -58,10 +66,7 @@ async fn resolve_transaction_simple_transfer() {
     let test_cluster = TestClusterBuilder::new().build().await;
 
     let client = Client::new(test_cluster.rpc_url()).unwrap();
-    let mut alpha_client =
-        sui_rpc_api::proto::node::v2alpha::node_service_client::NodeServiceClient::connect(
-            test_cluster.rpc_url().to_owned(),
-        )
+    let mut alpha_client = LiveDataServiceClient::connect(test_cluster.rpc_url().to_owned())
         .await
         .unwrap();
     let recipient = SuiAddress::random_for_testing_only();
@@ -120,10 +125,7 @@ async fn resolve_transaction_transfer_with_sponsor() {
     let test_cluster = TestClusterBuilder::new().build().await;
 
     let client = Client::new(test_cluster.rpc_url()).unwrap();
-    let mut alpha_client =
-        sui_rpc_api::proto::node::v2alpha::node_service_client::NodeServiceClient::connect(
-            test_cluster.rpc_url().to_owned(),
-        )
+    let mut alpha_client = LiveDataServiceClient::connect(test_cluster.rpc_url().to_owned())
         .await
         .unwrap();
     let recipient = SuiAddress::random_for_testing_only();
@@ -202,10 +204,7 @@ async fn resolve_transaction_borrowed_shared_object() {
     let test_cluster = TestClusterBuilder::new().build().await;
 
     let client = Client::new(test_cluster.rpc_url()).unwrap();
-    let mut alpha_client =
-        sui_rpc_api::proto::node::v2alpha::node_service_client::NodeServiceClient::connect(
-            test_cluster.rpc_url().to_owned(),
-        )
+    let mut alpha_client = LiveDataServiceClient::connect(test_cluster.rpc_url().to_owned())
         .await
         .unwrap();
 
@@ -254,10 +253,7 @@ async fn resolve_transaction_mutable_shared_object() {
     let test_cluster = TestClusterBuilder::new().build().await;
 
     let client = Client::new(test_cluster.rpc_url()).unwrap();
-    let mut alpha_client =
-        sui_rpc_api::proto::node::v2alpha::node_service_client::NodeServiceClient::connect(
-            test_cluster.rpc_url().to_owned(),
-        )
+    let mut alpha_client = LiveDataServiceClient::connect(test_cluster.rpc_url().to_owned())
         .await
         .unwrap();
 
@@ -322,10 +318,7 @@ async fn resolve_transaction_mutable_shared_object() {
 #[sim_test]
 async fn resolve_transaction_insufficient_gas() {
     let test_cluster = TestClusterBuilder::new().build().await;
-    let mut alpha_client =
-        sui_rpc_api::proto::node::v2alpha::node_service_client::NodeServiceClient::connect(
-            test_cluster.rpc_url().to_owned(),
-        )
+    let mut alpha_client = LiveDataServiceClient::connect(test_cluster.rpc_url().to_owned())
         .await
         .unwrap();
 
