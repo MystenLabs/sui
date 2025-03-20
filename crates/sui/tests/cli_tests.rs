@@ -4533,9 +4533,7 @@ async fn test_tree_shaking_package_deps_on_pkg_upgrade_2() -> Result<(), anyhow:
 
     add_ids_to_manifest(&test.package_path("L"), &package_l_id, None)?;
 
-    let (package_m_id, _) = test
-        .publish_package("M_depends_on_L_and_K_v2_no_code_references_K_v2", false)
-        .await?;
+    let (package_m_id, _) = test.publish_package("M", false).await?;
     let linkage_table_m = test.fetch_linkage_table(package_m_id).await;
     assert!(
         linkage_table_m.contains_key(&package_k_id),
@@ -4581,9 +4579,7 @@ async fn test_tree_shaking_package_deps_on_pkg_upgrade_3() -> Result<(), anyhow:
 
     add_ids_to_manifest(&test.package_path("L"), &package_l_id, Some(package_l_id))?;
 
-    let (package_m_id, _) = test
-        .publish_package("M_depends_on_L_and_K_v2_no_code_references_K_v2", false)
-        .await?;
+    let (package_m_id, _) = test.publish_package("M", false).await?;
     let linkage_table_m = test.fetch_linkage_table(package_m_id).await;
     assert!(
         linkage_table_m.contains_key(&package_k_id),
