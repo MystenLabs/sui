@@ -211,20 +211,6 @@ fn get_input_ids(txn_data: &TransactionData) -> Result<BTreeSet<InputObject>, Re
 }
 
 fn get_effects_ids(effects: &TransactionEffects) -> Result<BTreeSet<InputObject>, ReplayError> {
-    // let object_ids = effects
-    //     .object_changes()
-    //     .iter()
-    //     .filter_map(|object_change| {
-    //         object_change.input_version
-    //         .and_then(|seq_num| {
-    //             info!("Object changes: {:?}[{}]", object_change.id, seq_num.value());
-    //             Some(InputObject {
-    //                 object_id: object_change.id,
-    //                 version: Some(seq_num.value()),
-    //             })
-    //         })
-    //     })
-    //     .collect::<BTreeSet<_>>();
     let mut object_ids = effects
         .modified_at_versions()
         .iter()

@@ -308,7 +308,6 @@ struct ReplayStore<'a> {
 
 impl BackingPackageStore for ReplayStore<'_> {
     fn get_package_object(&self, package_id: &ObjectID) -> SuiResult<Option<PackageObject>> {
-        println!("get_package_object {:?}", package_id);
         if is_framework_package(package_id) {
             let pkg = self
                 .env
