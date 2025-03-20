@@ -4,7 +4,7 @@ version.workspace = true
 authors = ["Asymptotic <info@asymptotic.tech>"]
 license = "Apache-2.0"
 publish = false
-edition = "2024"
+edition = "2021"
 
 [dependencies]
 anyhow.workspace = true
