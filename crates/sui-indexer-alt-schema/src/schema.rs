@@ -141,7 +141,7 @@ diesel::table! {
     obj_versions (object_id, object_version) {
         object_id -> Bytea,
         object_version -> Int8,
-        object_digest -> Bytea,
+        object_digest -> Nullable<Bytea>,
         cp_sequence_number -> Int8,
     }
 }
