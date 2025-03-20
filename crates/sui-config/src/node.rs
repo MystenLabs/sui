@@ -218,7 +218,7 @@ pub struct NodeConfig {
 pub struct ExecutionTimeObserverConfig {
     /// Size of the channel used for buffering local execution time observations.
     ///
-    /// If unspecified, this will default to `128`.
+    /// If unspecified, this will default to `1_024`.
     pub observation_channel_capacity: Option<NonZeroUsize>,
 
     /// Size of the LRU cache used for storing local execution time observations.
@@ -268,7 +268,7 @@ pub struct ExecutionTimeObserverConfig {
 impl ExecutionTimeObserverConfig {
     pub fn observation_channel_capacity(&self) -> NonZeroUsize {
         self.observation_channel_capacity
-            .unwrap_or(nonzero!(128usize))
+            .unwrap_or(nonzero!(1_024usize))
     }
 
     pub fn observation_cache_size(&self) -> NonZeroUsize {
