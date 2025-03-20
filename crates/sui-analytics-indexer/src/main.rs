@@ -47,7 +47,7 @@ async fn main() -> Result<()> {
         let watermark = processor
             .last_committed_checkpoint()
             .map(|seq_num| seq_num + 1)
-            .or(0);
+            .unwrap_or(0);
         watermarks.insert(processor.task_name.clone(), watermark);
     }
 
