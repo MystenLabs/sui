@@ -1,10 +1,10 @@
 [package]
-name = "F_depends_on_A_as_bytecode_dep"
+name = "F"
 edition = "2024.beta"
 
 [dependencies]
 A = { local = "../A" }
 
 [addresses]
-f_depends_on_a_as_bytecode_dep = "0x0"
+f = "0x0"
 

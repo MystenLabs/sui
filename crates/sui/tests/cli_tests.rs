@@ -4263,10 +4263,7 @@ async fn test_tree_shaking_package_with_bytecode_deps() -> Result<(), anyhow::Er
     fs::remove_dir_all(package_path.join("sources"))?;
 
     let (package_f_id, _) = test
-        .publish_package(
-            "F_depends_on_A_as_bytecode_dep",
-            with_unpublished_dependencies,
-        )
+        .publish_package("F", with_unpublished_dependencies)
         .await?;
     let linkage_table_f = test.fetch_linkage_table(package_f_id).await;
     // F depends on A as a bytecode dep, so the linkage table should not be empty
