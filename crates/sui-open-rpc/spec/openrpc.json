@@ -6101,6 +6101,16 @@
             "items": {
               "$ref": "#/components/schemas/ObjectChange"
             }
+          },
+          "suggestedGasPrice": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/BigInt_for_uint64"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         }
       },

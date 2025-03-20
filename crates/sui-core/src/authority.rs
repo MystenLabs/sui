@@ -1938,6 +1938,9 @@ impl AuthorityState {
 
         Ok((
             DryRunTransactionBlockResponse {
+                suggested_gas_price: self
+                    .congestion_tracker
+                    .get_suggested_gas_prices(&transaction),
                 input: SuiTransactionBlockData::try_from(transaction, &module_cache).map_err(
                     |e| SuiError::TransactionSerializationError {
                         error: format!(
