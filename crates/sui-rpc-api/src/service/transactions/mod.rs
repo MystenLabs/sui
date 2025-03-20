@@ -13,7 +13,7 @@ use prost_types::FieldMask;
 use sui_sdk_types::TransactionDigest;
 use tap::Pipe;
 
-mod execution;
+pub(crate) mod execution;
 mod resolve;
 
 impl RpcService {
