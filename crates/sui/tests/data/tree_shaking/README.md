@@ -33,8 +33,8 @@ Tests projects are established as following
     - linkage table should be empty
 - F_depends_on_A_as_bytecode_dep/
     - linkage table should be empty
-- G_unpublished just a normal package that is not published
-- H_depends_on_G_unpublished
+- G just a normal package that is not published
+- H is just a package that depends on G
     - linkage table should be empty
 - I_depends_on_D_depends_on_A_v1_but_no_code_references_A_and_on_A_v2
     - linkage table should be empty

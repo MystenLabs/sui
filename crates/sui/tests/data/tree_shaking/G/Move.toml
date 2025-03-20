@@ -1,9 +1,9 @@
 [package]
-name = "G_unpublished"
+name = "G"
 edition = "2024.beta"
 
 [dependencies]
 
 [addresses]
-g_unpublished = "0x0"
+g = "0x0"
 

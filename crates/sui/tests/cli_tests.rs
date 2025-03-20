@@ -4220,10 +4220,7 @@ async fn test_parse_host_port() {
 async fn test_tree_shaking_package_with_unpublished_deps() -> Result<(), anyhow::Error> {
     let mut test = TreeShakingTest::new().await.unwrap();
     // A package and with unpublished deps
-    let (package_id, _) = test
-        .publish_package("H_depends_on_G_unpublished", true)
-        .await
-        .unwrap();
+    let (package_id, _) = test.publish_package("H", true).await.unwrap();
 
     // set with_unpublished_dependencies to true and publish package H
     let linkage_table_h = test.fetch_linkage_table(package_id).await;
@@ -4232,9 +4229,7 @@ async fn test_tree_shaking_package_with_unpublished_deps() -> Result<(), anyhow:
     assert!(linkage_table_h.is_empty());
 
     // try publish package H but `with_unpublished_dependencies` is false. Should error
-    let resp = test
-        .publish_package("H_depends_on_G_unpublished", false)
-        .await;
+    let resp = test.publish_package("H", false).await;
     assert!(resp.is_err());
 
     Ok(())
