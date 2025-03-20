@@ -7,15 +7,18 @@ use crate::checkpoints::CheckpointServiceNoop;
 use crate::consensus_adapter::{BlockStatusReceiver, ConsensusClient, SubmitToConsensus};
 use crate::consensus_handler::SequencedConsensusTransaction;
 use consensus_core::BlockRef;
+use mysten_common::random::get_rng;
 use prometheus::Registry;
+use rand::Rng;
 use std::sync::{Arc, Weak};
+use std::time::Duration;
 use sui_types::error::{SuiError, SuiResult};
 use sui_types::executable_transaction::VerifiedExecutableTransaction;
 use sui_types::messages_consensus::{ConsensusTransaction, ConsensusTransactionKind};
 use sui_types::transaction::{VerifiedCertificate, VerifiedTransaction};
 use tokio::sync::{mpsc, oneshot};
 use tokio::task::JoinHandle;
-use tracing::debug;
+use tracing::{debug, warn};
 
 pub struct MockConsensusClient {
     tx_sender: mpsc::Sender<ConsensusTransaction>,
@@ -118,6 +121,15 @@ impl SubmitToConsensus for MockConsensusClient {
         _epoch_store: &Arc<AuthorityPerEpochStore>,
     ) -> SuiResult {
         self.submit_impl(transactions).map(|_response| ())
+    }
+
+    fn submit_best_effort(
+        &self,
+        transaction: &ConsensusTransaction,
+        _epoch_store: &Arc<AuthorityPerEpochStore>,
+        _timeout: Duration,
+    ) -> SuiResult {
+        self.submit_impl(&[transaction.clone()]).map(|_response| ())
     }
 }
 
