@@ -42,7 +42,6 @@ use crate::{
     },
     FullyCompiledProgram,
 };
-use move_core_types::u256::U256;
 use move_ir_types::location::*;
 use move_proc_macros::growing_stack;
 use rayon::prelude::*;
@@ -4072,7 +4071,8 @@ fn error_constant_attr_params(
     attributes: &UniqueMap<Spanned<AttributeName_>, Spanned<Attribute_>>,
 ) -> Option<u8> {
     let mut code = None;
-    const ERR_MSG: &str = "Invalid attribute, expected an argument of the form 'code = <num>' where '<num>' is a u8";
+    const ERR_MSG: &str =
+        "Invalid attribute, expected an argument of the form 'code = <num>' where '<num>' is a u8";
     for (_, _, sp!(arg_loc, arg)) in attributes.iter() {
         match arg {
             Attribute_::Assigned(name, rhs) => {
@@ -4084,13 +4084,16 @@ fn error_constant_attr_params(
                     context.add_diag(diag!(Declarations::InvalidAttribute, (*arg_loc, ERR_MSG)));
                     continue;
                 };
-let new_err_code = u8::try_from(*value).ok();
-if new_err_code.is_none() {
-    context.add_diag(diag!(
-      Declarations::InvalidAttribute,
-      (*arg_loc, "Error code must be a u8")
-    ));
-}
+                let new_err_code = match value_ {
+                    Value_::InferredNum(value) => {
+                        let new_err_code = u8::try_from(*value).ok();
+                        if new_err_code.is_none() {
+                            context.add_diag(diag!(
+                                Declarations::InvalidAttribute,
+                                (*arg_loc, "Error code must be a u8")
+                            ));
+                        }
+                        new_err_code
                     }
                     Value_::U8(value) => Some(*value),
                     Value_::Address(_)
