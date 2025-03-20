@@ -145,7 +145,7 @@ pub(crate) struct CheckpointLagMetricReporter {
 }
 
 impl IndexerMetrics {
-    pub(crate) fn new(registry: &Registry) -> Arc<Self> {
+    pub fn new(registry: &Registry) -> Arc<Self> {
         Arc::new(Self {
             total_ingested_checkpoints: register_int_counter_with_registry!(
                 "indexer_total_ingested_checkpoints",

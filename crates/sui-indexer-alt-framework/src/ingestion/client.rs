@@ -28,7 +28,7 @@ use crate::types::full_checkpoint_content::CheckpointData;
 const MAX_TRANSIENT_RETRY_INTERVAL: Duration = Duration::from_secs(60);
 
 #[async_trait::async_trait]
-pub(crate) trait IngestionClientTrait: Send + Sync {
+pub trait IngestionClientTrait: Send + Sync {
     async fn fetch(&self, checkpoint: u64) -> FetchResult;
 }
 
@@ -62,7 +62,7 @@ pub struct IngestionClient {
 }
 
 impl IngestionClient {
-    pub(crate) fn new_remote(url: Url, metrics: Arc<IndexerMetrics>) -> IngestionResult<Self> {
+    pub fn new_remote(url: Url, metrics: Arc<IndexerMetrics>) -> IngestionResult<Self> {
         let client = Arc::new(RemoteIngestionClient::new(url)?);
         Ok(Self::new_impl(client, metrics))
     }
@@ -143,7 +143,7 @@ impl IngestionClient {
     ///   [FetchError::NotFound] and [FetchError::Permanent] variants.
     ///
     /// - Cancellation of the supplied `cancel` token.
-    pub(crate) async fn fetch(
+    pub async fn fetch(
         &self,
         checkpoint: u64,
         cancel: &CancellationToken,

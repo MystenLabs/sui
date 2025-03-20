@@ -15855,6 +15855,31 @@ dependencies = [
 ]
 
 [[package]]
+name = "sui-upload-display"
+version = "1.44.0"
+dependencies = [
+ "anyhow",
+ "bcs",
+ "bytes",
+ "clap",
+ "csv",
+ "dashmap",
+ "futures",
+ "hex",
+ "object_store",
+ "prometheus",
+ "regex",
+ "sui-indexer-alt-framework",
+ "sui-types",
+ "telemetry-subscribers",
+ "tempfile",
+ "tokio",
+ "tokio-util 0.7.13 (registry+https://github.com/rust-lang/crates.io-index)",
+ "tracing",
+ "url",
+]
+
+[[package]]
 name = "sui-verifier-latest"
 version = "0.1.0"
 dependencies = [
