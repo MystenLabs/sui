@@ -14,6 +14,7 @@ mod test {
     use sui_benchmark::bank::BenchmarkBank;
     use sui_benchmark::system_state_observer::SystemStateObserver;
     use sui_benchmark::workloads::adversarial::AdversarialPayloadCfg;
+    use sui_benchmark::workloads::benchmark_move_base_dir;
     use sui_benchmark::workloads::expected_failure::ExpectedFailurePayloadCfg;
     use sui_benchmark::workloads::workload::ExpectedFailureType;
     use sui_benchmark::workloads::workload_configuration::{
@@ -1193,7 +1194,7 @@ mod test {
 
         let surfer_task = tokio::spawn(async move {
             // now do a sui-surfer test
-            let mut test_packages_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+            let mut test_packages_dir = benchmark_move_base_dir();
             test_packages_dir.extend(["..", "..", "crates", "sui-surfer", "tests"]);
             let test_package_paths: Vec<PathBuf> = std::fs::read_dir(test_packages_dir)
                 .unwrap()

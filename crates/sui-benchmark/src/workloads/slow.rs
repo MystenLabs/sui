@@ -8,13 +8,13 @@ use super::{
 use crate::drivers::Interval;
 use crate::in_memory_wallet::InMemoryWallet;
 use crate::system_state_observer::{SystemState, SystemStateObserver};
+use crate::workloads::benchmark_move_base_dir;
 use crate::workloads::payload::Payload;
 use crate::workloads::{workload::ExpectedFailureType, Gas, GasCoinConfig};
 use crate::ProgrammableTransactionBuilder;
 use crate::{ExecutionEffects, ValidatorProxy};
 use async_trait::async_trait;
 use move_core_types::identifier::Identifier;
-use std::path::PathBuf;
 use std::sync::Arc;
 use sui_test_transaction_builder::TestTransactionBuilder;
 use sui_types::transaction::ObjectArg;
@@ -205,7 +205,7 @@ impl Workload<dyn Payload> for SlowWorkload {
         system_state_observer: Arc<SystemStateObserver>,
     ) {
         let gas = &self.init_gas;
-        let mut path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+        let mut path = benchmark_move_base_dir();
         path.push("src/workloads/data/slow");
         let SystemState {
             reference_gas_price,
