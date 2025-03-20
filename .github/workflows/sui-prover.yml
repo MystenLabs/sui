@@ -12,11 +12,6 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Install dependencies from formula & build prover
+      - name: Install dependencies from formula & build prover & run prover
         run: |
           sh ./external-crates/move/crates/move-prover/tests/sui-prover.sh
-
-      - name: Run the prover
-        run: |
-          cd ./crates/sui-framework/packages/prover
-          sui-prover

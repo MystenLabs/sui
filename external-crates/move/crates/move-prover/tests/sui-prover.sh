@@ -43,8 +43,16 @@ cd boogie-src
 dotnet build Source/Boogie.sln -c Release
 mv Source/BoogieDriver/bin/Release/net8.0/BoogieDriver "$install_dir/boogie"
 
+cd ..
+
+export BOOGIE_EXE="$install_dir/boogie"
+export Z3_EXE="/usr/local/bin/z3"
+
 # Verify installation
 echo "Verifying installation..."
 sui-prover --version
 
 echo "Installation complete. The formal verification toolchain is ready."
+
+cd ./crates/sui-framework/packages/prover
+sui-prover
