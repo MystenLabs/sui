@@ -11,7 +11,7 @@ boogie_repo="https://github.com/boogie-org/boogie.git"
 install_dir="/usr/local/bin"
 
 # Install dependencies
-if ! command -v dotnet &>/dev/null; then
+if ! brew list --versions "dotnet@$dotnet_version" &>/dev/null; then
     echo "Installing .NET SDK $dotnet_version..."
     brew install "dotnet@$dotnet_version"
 fi
