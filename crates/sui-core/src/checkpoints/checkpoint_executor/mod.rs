@@ -242,7 +242,7 @@ impl CheckpointExecutor {
             .and_then(|s| s.parse().ok())
             .unwrap_or(this.config.checkpoint_execution_max_concurrency);
 
-        let pipeline_stages = Arc::new(PipelineStages::new(next_to_schedule, this.metrics.clone()));
+        let pipeline_stages = PipelineStages::new(next_to_schedule, this.metrics.clone());
 
         let final_checkpoint_executed = stream_synced_checkpoints(
             this.checkpoint_store.clone(),
