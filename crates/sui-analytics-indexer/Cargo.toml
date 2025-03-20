@@ -15,7 +15,6 @@ bcs.workspace = true
 byteorder.workspace = true
 bytes.workspace = true
 chrono.workspace = true
-clap.workspace = true
 csv.workspace = true
 move-core-types.workspace = true
 object_store.workspace = true
@@ -54,6 +53,7 @@ arrow.workspace = true
 gcp-bigquery-client = "0.25.0"
 snowflake-api.workspace = true
 tap.workspace = true
+serde_yaml.workspace = true
 
 [dev-dependencies]
 

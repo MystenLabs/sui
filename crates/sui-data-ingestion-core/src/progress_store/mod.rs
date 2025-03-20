@@ -68,12 +68,33 @@ impl<P: ProgressStore> ProgressStoreWrapper<P> {
 }
 
 pub struct ShimProgressStore(pub u64);
-
 #[async_trait]
 impl ProgressStore for ShimProgressStore {
     async fn load(&mut self, _: String) -> Result<CheckpointSequenceNumber> {
         Ok(self.0)
     }
+    async fn save(&mut self, _: String, _: CheckpointSequenceNumber) -> Result<()> {
+        Ok(())
+    }
+}
+
+#[derive(Clone)]
+pub struct ShimIndexerProgressStore {
+    watermarks: HashMap<String, CheckpointSequenceNumber>,
+}
+
+impl ShimIndexerProgressStore {
+    pub fn new(watermarks: HashMap<String, CheckpointSequenceNumber>) -> Self {
+        Self { watermarks }
+    }
+}
+
+#[async_trait]
+impl ProgressStore for ShimIndexerProgressStore {
+    async fn load(&mut self, task_name: String) -> Result<CheckpointSequenceNumber> {
+        Ok(*self.watermarks.get(&task_name).expect("missing watermark"))
+    }
+
     async fn save(&mut self, _: String, _: CheckpointSequenceNumber) -> Result<()> {
         Ok(())
     }
