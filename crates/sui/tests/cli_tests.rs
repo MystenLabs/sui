@@ -4403,9 +4403,7 @@ async fn test_tree_shaking_package_deps_on_pkg_upgrade() -> Result<(), anyhow::E
     let package_a_v1_id = test.upgrade_package("A_v1", cap).await?;
 
     // Publish D which depends on A_v1 but no code references A
-    let (package_d_id, _) = test
-        .publish_package("D_depends_on_A_v1_but_no_code_references_A", false)
-        .await?;
+    let (package_d_id, _) = test.publish_package("D_A", false).await?;
     let linkage_table_d = test.fetch_linkage_table(package_d_id).await;
 
     assert!(
@@ -4472,9 +4470,7 @@ async fn test_tree_shaking_package_deps_on_pkg_upgrade_1() -> Result<(), anyhow:
     let package_path = test.package_path("A_v1");
     add_ids_to_manifest(&package_path, &package_a_v1_id, None)?;
 
-    let package_d_id = test
-        .publish_package_without_tree_shaking("D_depends_on_A_v1_but_no_code_references_A")
-        .await;
+    let package_d_id = test.publish_package_without_tree_shaking("D_A").await;
     let linkage_table_d = test.fetch_linkage_table(package_d_id).await;
     assert!(
         linkage_table_d.contains_key(&package_a_id),
@@ -4483,11 +4479,7 @@ async fn test_tree_shaking_package_deps_on_pkg_upgrade_1() -> Result<(), anyhow:
 
     // published package D with the old stuff that isn't aware of automated address mgmt, so
     // need to update the published-at field in the manifest
-    add_ids_to_manifest(
-        &test.package_path("D_depends_on_A_v1_but_no_code_references_A"),
-        &package_d_id,
-        None,
-    )?;
+    add_ids_to_manifest(&test.package_path("D_A"), &package_d_id, None)?;
 
     // Upgrade package A (named A_v2)
     std::fs::copy(
