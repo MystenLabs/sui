@@ -89,7 +89,7 @@ impl fmt::Display for NitroAttestationVerifyError {
 
 impl From<NitroAttestationVerifyError> for SuiError {
     fn from(err: NitroAttestationVerifyError) -> Self {
-        SuiError::AttestationFailedToVerify(err.to_string())
+        SuiError::NitroAttestationFailedToVerify(err.to_string())
     }
 }
 
@@ -400,15 +400,20 @@ impl AttestationDocument {
     /// Parse the payload of the attestation document, validate the cert based on timestamp, and the pcrs match.
     /// Adapted from <https://github.com/EternisAI/remote-attestation-verifier/blob/main/src/lib.rs>
     pub fn parse_payload(
-        payload: &Vec<u8>,
+        payload: &[u8],
     ) -> Result<AttestationDocument, NitroAttestationVerifyError> {
-        let document_data: ciborium::value::Value = ciborium::de::from_reader(payload.as_slice())
-            .map_err(|err| {
-            NitroAttestationVerifyError::InvalidAttestationDoc(format!(
-                "cannot parse payload CBOR: {}",
-                err
-            ))
-        })?;
+        let document_map = Self::to_map(payload)?;
+        Self::validate_document_map(&document_map)
+    }
+
+    fn to_map(payload: &[u8]) -> Result<HashMap<String, Value>, NitroAttestationVerifyError> {
+        let document_data: ciborium::value::Value =
+            ciborium::de::from_reader(payload).map_err(|err| {
+                NitroAttestationVerifyError::InvalidAttestationDoc(format!(
+                    "cannot parse payload CBOR: {}",
+                    err
+                ))
+            })?;
 
         let document_map: HashMap<String, Value> = match document_data {
             ciborium::value::Value::Map(map) => map
@@ -430,7 +435,12 @@ impl AttestationDocument {
                 )))
             }
         };
+        Ok(document_map)
+    }
 
+    fn validate_document_map(
+        document_map: &HashMap<String, Value>,
+    ) -> Result<AttestationDocument, NitroAttestationVerifyError> {
         let module_id = document_map
             .get("module_id")
             .ok_or(NitroAttestationVerifyError::InvalidAttestationDoc(
@@ -466,7 +476,7 @@ impl AttestationDocument {
             ))?
             .to_vec();
 
-        if certificate.len() > MAX_CERT_LENGTH {
+        if certificate.is_empty() || certificate.len() > MAX_CERT_LENGTH {
             return Err(NitroAttestationVerifyError::InvalidAttestationDoc(
                 "invalid certificate".to_string(),
             ));
@@ -550,6 +560,12 @@ impl AttestationDocument {
                                 "invalid PCR value format".to_string(),
                             ))?;
 
+                    if value.len() != 32 && value.len() != 48 && value.len() != 64 {
+                        return Err(NitroAttestationVerifyError::InvalidAttestationDoc(
+                            "invalid PCR value length".to_string(),
+                        ));
+                    }
+
                     // Valid PCR indices are 0, 1, 2, 3, 4, 8 for AWS.
                     let key_u64 = u64::try_from(key).map_err(|_| {
                         NitroAttestationVerifyError::InvalidAttestationDoc(
@@ -622,7 +638,6 @@ impl AttestationDocument {
         self.cabundle.len()
     }
 }
-
 /// Verify the certificate chain against the root of trust.
 fn verify_cert_chain(cert_chain: &[&[u8]], now_ms: u64) -> Result<(), NitroAttestationVerifyError> {
     let root_cert = X509Certificate::from_der(ROOT_CERTIFICATE.as_slice())
