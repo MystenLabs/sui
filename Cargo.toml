@@ -143,6 +143,7 @@ members = [
     "crates/sui-package-resolver",
     "crates/sui-pg-temp-db",
     "crates/sui-proc-macros",
+    "crates/sui-prover",
     "crates/sui-protocol-config",
     "crates/sui-protocol-config-macros",
     "crates/sui-proxy",
