@@ -1,0 +1,51 @@
+// Copyright (c) Mysten Labs, Inc.
+// SPDX-License-Identifier: Apache-2.0
+
+syntax = "proto3";
+
+package sui.rpc.v2beta;
+
+import "google/protobuf/timestamp.proto";
+import "sui/rpc/v2beta/balance_change.proto";
+import "sui/rpc/v2beta/effects.proto";
+import "sui/rpc/v2beta/event.proto";
+import "sui/rpc/v2beta/object.proto";
+import "sui/rpc/v2beta/signature.proto";
+import "sui/rpc/v2beta/transaction.proto";
+
+message ExecutedTransaction {
+  // The digest of this Transaction.
+  optional string digest = 1;
+
+  // The transaction itself.
+  optional Transaction transaction = 2;
+
+  // List of user signatures that are used to authorize the
+  // execution of this transaction.
+  repeated UserSignature signatures = 3;
+
+  // The `TransactionEffects` for this transaction.
+  optional TransactionEffects effects = 4;
+
+  // The `TransactionEvents` for this transaction.
+  //
+  // This field might be empty, even if it was explicitly requested, if the
+  // transaction didn't produce any events.
+  // `sui.types.TransactionEffects.events_digest` is populated if the
+  // transaction produced any events.
+  optional TransactionEvents events = 5;
+
+  // The sequence number for the checkpoint that includes this transaction.
+  optional uint64 checkpoint = 6;
+
+  // The Unix timestamp of the checkpoint that includes this transaction.
+  optional google.protobuf.Timestamp timestamp = 7;
+
+  repeated BalanceChange balance_changes = 8;
+
+  // Set of input objects used during the execution of this transaction.
+  repeated Object input_objects = 10;
+
+  // Set of output objects produced from the execution of this transaction.
+  repeated Object output_objects = 11;
+}

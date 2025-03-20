@@ -1,0 +1,102 @@
+// Copyright (c) Mysten Labs, Inc.
+// SPDX-License-Identifier: Apache-2.0
+
+syntax = "proto3";
+
+package sui.rpc.v2beta;
+
+import "google/protobuf/timestamp.proto";
+import "sui/rpc/v2beta/bcs.proto";
+import "sui/rpc/v2beta/gas_cost_summary.proto";
+import "sui/rpc/v2beta/signature.proto";
+
+// A header for a checkpoint on the Sui blockchain.
+//
+// On the Sui network, checkpoints define the history of the blockchain. They are quite similar to
+// the concept of blocks used by other blockchains like Bitcoin or Ethereum. The Sui blockchain,
+// however, forms checkpoints after transaction execution has already happened to provide a
+// certified history of the chain, instead of being formed before execution.
+//
+// Checkpoints commit to a variety of state, including but not limited to:
+// - The hash of the previous checkpoint.
+// - The set of transaction digests, their corresponding effects digests, as well as the set of
+//   user signatures that authorized its execution.
+// - The objects produced by a transaction.
+// - The set of live objects that make up the current state of the chain.
+// - On epoch transitions, the next validator committee.
+//
+// `CheckpointSummary`s themselves don't directly include all of the previous information but they
+// are the top-level type by which all the information is committed to transitively via cryptographic
+// hashes included in the summary. `CheckpointSummary`s are signed and certified by a quorum of
+// the validator committee in a given epoch to allow verification of the chain's state.
+message CheckpointSummary {
+  // This CheckpointSummary serialized as BCS.
+  optional Bcs bcs = 1;
+
+  // The digest of this CheckpointSummary.
+  optional string digest = 2;
+
+  // Epoch that this checkpoint belongs to.
+  optional uint64 epoch = 3;
+
+  // The height of this checkpoint.
+  optional uint64 sequence_number = 4;
+
+  // Total number of transactions committed since genesis, including those in this
+  // checkpoint.
+  optional uint64 total_network_transactions = 5;
+
+  // The hash of the `CheckpointContents` for this checkpoint.
+  optional string content_digest = 6;
+
+  // The hash of the previous `CheckpointSummary`.
+  //
+  // This will be `None` only for the first, or genesis, checkpoint.
+  optional string previous_digest = 7;
+
+  // The running total gas costs of all transactions included in the current epoch so far
+  // until this checkpoint.
+  optional GasCostSummary epoch_rolling_gas_cost_summary = 8;
+
+  // Timestamp of the checkpoint - number of milliseconds from the Unix epoch
+  // Checkpoint timestamps are monotonic, but not strongly monotonic - subsequent
+  // checkpoints can have the same timestamp if they originate from the same underlining consensus commit.
+  optional google.protobuf.Timestamp timestamp = 9;
+
+  // Commitments to checkpoint-specific state.
+  repeated CheckpointCommitment commitments = 10;
+
+  // Extra data only present in the final checkpoint of an epoch.
+  optional EndOfEpochData end_of_epoch_data = 11;
+
+  // `CheckpointSummary` is not an evolvable structure - it must be readable by any version of
+  // the code. Therefore, to allow extensions to be added to `CheckpointSummary`,
+  // opaque data can be added to checkpoints, which can be deserialized based on the current
+  // protocol version.
+  optional bytes version_specific_data = 12;
+}
+
+// Data, which when included in a `CheckpointSummary`, signals the end of an `Epoch`.
+message EndOfEpochData {
+  // The set of validators that will be in the `ValidatorCommittee` for the next epoch.
+  repeated ValidatorCommitteeMember next_epoch_committee = 1;
+  // The protocol version that is in effect during the next epoch.
+  optional uint64 next_epoch_protocol_version = 2;
+  // Commitments to epoch specific state (live object set)
+  repeated CheckpointCommitment epoch_commitments = 3;
+}
+
+// A commitment made by a checkpoint.
+message CheckpointCommitment {
+  enum CheckpointCommitmentKind {
+    CHECKPOINT_COMMITMENT_KIND_UNKNOWN = 0;
+
+    // An elliptic curve multiset hash attesting to the set of objects that
+    // comprise the live state of the Sui blockchain.
+    ECMH_LIVE_OBJECT_SET = 1;
+  }
+
+  optional CheckpointCommitmentKind kind = 1;
+
+  optional string digest = 2;
+}

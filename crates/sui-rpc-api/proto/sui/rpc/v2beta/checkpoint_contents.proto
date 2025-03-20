@@ -1,0 +1,34 @@
+// Copyright (c) Mysten Labs, Inc.
+// SPDX-License-Identifier: Apache-2.0
+
+syntax = "proto3";
+
+package sui.rpc.v2beta;
+
+import "sui/rpc/v2beta/bcs.proto";
+import "sui/rpc/v2beta/signature.proto";
+
+// The committed to contents of a checkpoint.
+message CheckpointContents {
+  // This CheckpointContents serialized as BCS.
+  optional Bcs bcs = 1;
+
+  // The digest of this CheckpointContents.
+  optional string digest = 2;
+
+  // Version of this CheckpointContents
+  optional int32 version = 3;
+
+  // Set of transactions committed to in this checkpoint.
+  repeated CheckpointedTransactionInfo transactions = 4;
+}
+
+// Transaction information committed to in a checkpoint.
+message CheckpointedTransactionInfo {
+  // Digest of the transaction.
+  optional string transaction = 1;
+  // Digest of the effects.
+  optional string effects = 2;
+  // Set of user signatures that authorized the transaction.
+  repeated UserSignature signatures = 3;
+}

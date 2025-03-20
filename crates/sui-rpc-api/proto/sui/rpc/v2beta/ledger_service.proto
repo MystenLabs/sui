@@ -1,0 +1,107 @@
+// Copyright (c) Mysten Labs, Inc.
+// SPDX-License-Identifier: Apache-2.0
+
+syntax = "proto3";
+
+package sui.rpc.v2beta;
+
+import "google/protobuf/field_mask.proto";
+import "sui/rpc/v2beta/checkpoint.proto";
+import "sui/rpc/v2beta/epoch.proto";
+import "sui/rpc/v2beta/executed_transaction.proto";
+import "sui/rpc/v2beta/object.proto";
+
+service LedgerService {
+  rpc GetObject(GetObjectRequest) returns (Object);
+  rpc BatchGetObjects(BatchGetObjectsRequest) returns (BatchGetObjectsResponse);
+
+  rpc GetTransaction(GetTransactionRequest) returns (ExecutedTransaction);
+  rpc BatchGetTransactions(BatchGetTransactionsRequest) returns (BatchGetTransactionsResponse);
+
+  rpc GetCheckpoint(GetCheckpointRequest) returns (Checkpoint);
+  rpc BatchGetCheckpoints(BatchGetCheckpointsRequest) returns (BatchGetCheckpointsResponse);
+
+  rpc GetEpoch(GetEpochRequest) returns (Epoch);
+}
+
+message GetObjectRequest {
+  // Required. The `ObjectId` of the requested object.
+  optional string object_id = 1;
+
+  // Request a specific version of the object.
+  // If no version is specified, and the object is live, then the latest
+  // version of the object is returned.
+  optional uint64 version = 2;
+
+  // Mask specifying which fields to read.
+  // If no mask is specified, defaults to `object_id,version,digest`.
+  optional google.protobuf.FieldMask read_mask = 3;
+}
+
+message BatchGetObjectsRequest {
+  repeated GetObjectRequest requests = 1;
+
+  // Mask specifying which fields to read.
+  // If no mask is specified, defaults to `object_id,version,digest`.
+  optional google.protobuf.FieldMask read_mask = 2;
+}
+
+message BatchGetObjectsResponse {
+  repeated Object objects = 1;
+}
+
+message GetTransactionRequest {
+  // Required. The digest of the requested transaction.
+  optional string digest = 1;
+
+  // Mask specifying which fields to read.
+  // If no mask is specified, defaults to `digest`.
+  optional google.protobuf.FieldMask read_mask = 2;
+}
+
+message BatchGetTransactionsRequest {
+  // Required. The digests of the requested transactions.
+  repeated string digests = 1;
+
+  // Mask specifying which fields to read.
+  // If no mask is specified, defaults to `object_id,version,digest`.
+  optional google.protobuf.FieldMask read_mask = 2;
+}
+
+message BatchGetTransactionsResponse {
+  repeated ExecutedTransaction transactions = 1;
+}
+
+message GetCheckpointRequest {
+  // The sequence number of the requested checkpoint.
+  optional uint64 sequence_number = 1;
+
+  // The digest of the requested checkpoint.
+  optional string digest = 2;
+
+  // Mask specifying which fields to read.
+  // If no mask is specified, defaults to `object_id,version,digest`.
+  optional google.protobuf.FieldMask read_mask = 3;
+}
+
+message BatchGetCheckpointsRequest {
+  repeated GetCheckpointRequest requests = 1;
+
+  // Mask specifying which fields to read.
+  // If no mask is specified, defaults to `object_id,version,digest`.
+  optional google.protobuf.FieldMask read_mask = 2;
+}
+
+message BatchGetCheckpointsResponse {
+  repeated Checkpoint checkpoints = 1;
+}
+
+message GetEpochRequest {
+  // The requested epoch.
+  // If no epoch is provided the current epoch will be returned.
+  optional uint64 epoch = 1;
+
+  // Mask specifying which fields to read.
+  // If no mask is specified, defaults to `epoch`.
+  optional google.protobuf.FieldMask read_mask = 2;
+}

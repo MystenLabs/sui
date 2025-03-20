@@ -1,0 +1,22 @@
+// Copyright (c) Mysten Labs, Inc.
+// SPDX-License-Identifier: Apache-2.0
+
+syntax = "proto3";
+
+package sui.rpc.v2beta;
+
+// Enum of different types of ownership for an object.
+message Owner {
+  enum OwnerKind {
+    OWNER_KIND_UNKNOWN = 0;
+    ADDRESS = 1;
+    OBJECT = 2;
+    SHARED = 3;
+    IMMUTABLE = 4;
+  }
+  optional OwnerKind kind = 1;
+
+  // Address or ObjectId of the owner
+  optional string address = 2;
+  optional uint64 version = 3;
+}
