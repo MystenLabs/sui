@@ -43,7 +43,10 @@ async fn main() -> Result<()> {
 
     let mut watermarks = HashMap::new();
     for processor in processors.iter() {
-        let watermark = processor.last_committed_checkpoint().unwrap_or_default() + 1;
+        let watermark = processor
+            .last_committed_checkpoint()
+            .map(|seq_num| seq_num + 1)
+            .unwrap_or(0);
         watermarks.insert(processor.task_name.clone(), watermark);
     }
 
