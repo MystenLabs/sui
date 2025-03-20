@@ -212,7 +212,7 @@ impl CheckpointExecutor {
     /// If `run_with_range` is set, execution will stop early.
     #[instrument(level = "error", skip_all, fields(epoch = ?self.epoch_store.epoch()))]
     pub async fn run_epoch(self, run_with_range: Option<RunWithRange>) -> StopReason {
-        let _metrics_guard = mysten_metrics::monitored_scope("CheckpointExecutor::run_epoch");
+        let _metrics_scope = mysten_metrics::monitored_scope("CheckpointExecutor::run_epoch");
         info!(?run_with_range, "CheckpointExecutor::run_epoch");
         debug!(
             "Checkpoint executor running for epoch {:?}",
@@ -311,7 +311,7 @@ impl CheckpointExecutor {
         let _parallel_step_guard =
             mysten_metrics::monitored_scope("CheckpointExecutor::parallel_step");
 
-        // Note: only the fullnode path has end-of-epoch logic.
+        // Note: only `execute_transactions_from_synced_checkpoint` has end-of-epoch logic.
         let ckpt_state = if self.state.is_fullnode(&self.epoch_store)
             || checkpoint.is_last_checkpoint_of_epoch()
         {
@@ -440,7 +440,7 @@ impl CheckpointExecutor {
             .expect("db error");
 
         let Some(locally_built_checkpoint) = locally_built_checkpoint else {
-            // fall back to full node path if we are catching up.
+            // fall back to tx-by-tx execution path if we are catching up.
             return self
                 .execute_transactions_from_synced_checkpoint(checkpoint, pipeline_handle)
                 .await;
@@ -457,7 +457,7 @@ impl CheckpointExecutor {
 
         // Checkpoint builder triggers accumulation of the checkpoint, so this is guaranteed to finish.
         let accumulator = {
-            let _metrics_guard =
+            let _metrics_scope =
                 mysten_metrics::monitored_scope("CheckpointExecutor::notify_read_accumulator");
             self.epoch_store
                 .notify_read_checkpoint_state_accumulator(&[sequence_number])
@@ -486,9 +486,7 @@ impl CheckpointExecutor {
         // But in the future, fullnodes may follow the mysticeti dag and build their own checkpoints.
         self.insert_finalized_transactions(&tx_digests, sequence_number);
 
-        pipeline_handle
-            .skip_to(PipelineStage::ProcessCheckpointData)
-            .await;
+        pipeline_handle.skip_to(PipelineStage::BuildDbBatch).await;
 
         CheckpointExecutionState::new_with_accumulator(
             CheckpointExecutionData {
@@ -519,7 +517,7 @@ impl CheckpointExecutor {
         finish_stage!(pipeline_handle, ExecuteTransactions);
 
         {
-            let _metrics_guard = mysten_metrics::monitored_scope(
+            let _metrics_scope = mysten_metrics::monitored_scope(
                 "CheckpointExecutor::notify_read_executed_effects_digests",
             );
             self.transaction_cache_reader

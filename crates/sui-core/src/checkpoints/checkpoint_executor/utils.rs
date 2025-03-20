@@ -322,7 +322,17 @@ impl SequenceWatch {
 
 /// Names of the pipeline stages for CheckpointExecutor.
 #[derive(
-    Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, strum::EnumIter, strum_macros::VariantNames,
+    Debug,
+    Clone,
+    Copy,
+    PartialEq,
+    Eq,
+    PartialOrd,
+    Ord,
+    strum::EnumIter,
+    strum_macros::VariantNames,
+    strum_macros::FromRepr,
+    strum_macros::EnumCount,
 )]
 pub(crate) enum PipelineStage {
     ExecuteTransactions = 0,
@@ -344,8 +354,7 @@ impl PipelineStage {
 
     fn next(self) -> Self {
         assert!(self < Self::End);
-        // Safe to unwrap since we know the value exists and we checked it's not End
-        Self::iter().nth((self as usize) + 1).unwrap()
+        Self::from_repr((self as usize) + 1).unwrap()
     }
 
     fn as_str(self) -> &'static str {
@@ -528,47 +537,48 @@ mod test {
                     val
                 };
 
-                macro_rules! finish_stage {
-                    ($stage:ident) => {
-                        handle.finish_stage(PipelineStage::$stage).await;
-                        let sleep_time = Duration::from_millis(thread_rng().gen_range(0..10));
-                        tokio::time::sleep(sleep_time).await;
-                    };
+                async fn finish_stage(handle: &mut PipelineHandle, stage: PipelineStage) {
+                    handle.finish_stage(stage).await;
+                    let sleep_time = Duration::from_millis(thread_rng().gen_range(0..10));
+                    tokio::time::sleep(sleep_time).await;
                 }
 
-                macro_rules! push_output {
-                    () => {
-                        let sleep_time = Duration::from_millis(thread_rng().gen_range(0..10));
-                        tokio::time::sleep(sleep_time).await;
-                        let val = get_next_val();
-                        debug!("pushing output ({val}) for seq: {}", seq);
-                        output_by_stage
-                            .lock()
-                            .entry(val)
-                            .or_insert_with(Vec::new)
-                            .push(seq);
-                        output_by_order.lock().push(val);
-                    };
+                async fn push_output(
+                    seq: CheckpointSequenceNumber,
+                    get_next_val: &mut impl FnMut() -> u64,
+                    output_by_stage: &Arc<Mutex<HashMap<u64, Vec<CheckpointSequenceNumber>>>>,
+                    output_by_order: &Arc<Mutex<Vec<u64>>>,
+                ) {
+                    let sleep_time = Duration::from_millis(thread_rng().gen_range(0..10));
+                    tokio::time::sleep(sleep_time).await;
+                    let val = get_next_val();
+                    debug!("pushing output ({val}) for seq: {}", seq);
+                    output_by_stage
+                        .lock()
+                        .entry(val)
+                        .or_insert_with(Vec::new)
+                        .push(seq);
+                    output_by_order.lock().push(val);
                 }
 
-                push_output!();
-                finish_stage!(ExecuteTransactions);
-                push_output!();
-                finish_stage!(WaitForTransactions);
-                push_output!();
-                finish_stage!(FinalizeTransactions);
-                push_output!();
-                finish_stage!(ProcessCheckpointData);
-                push_output!();
-                finish_stage!(BuildDbBatch);
-                push_output!();
-                finish_stage!(CommitTransactionOutputs);
-                push_output!();
-                finish_stage!(FinalizeCheckpoint);
-                push_output!();
-                finish_stage!(UpdateRpcIndex);
-                push_output!();
-                finish_stage!(BumpHighestExecutedCheckpoint);
+                push_output(seq, &mut get_next_val, &output_by_stage, &output_by_order).await;
+                finish_stage(&mut handle, PipelineStage::ExecuteTransactions).await;
+                push_output(seq, &mut get_next_val, &output_by_stage, &output_by_order).await;
+                finish_stage(&mut handle, PipelineStage::WaitForTransactions).await;
+                push_output(seq, &mut get_next_val, &output_by_stage, &output_by_order).await;
+                finish_stage(&mut handle, PipelineStage::FinalizeTransactions).await;
+                push_output(seq, &mut get_next_val, &output_by_stage, &output_by_order).await;
+                finish_stage(&mut handle, PipelineStage::ProcessCheckpointData).await;
+                push_output(seq, &mut get_next_val, &output_by_stage, &output_by_order).await;
+                finish_stage(&mut handle, PipelineStage::BuildDbBatch).await;
+                push_output(seq, &mut get_next_val, &output_by_stage, &output_by_order).await;
+                finish_stage(&mut handle, PipelineStage::CommitTransactionOutputs).await;
+                push_output(seq, &mut get_next_val, &output_by_stage, &output_by_order).await;
+                finish_stage(&mut handle, PipelineStage::FinalizeCheckpoint).await;
+                push_output(seq, &mut get_next_val, &output_by_stage, &output_by_order).await;
+                finish_stage(&mut handle, PipelineStage::UpdateRpcIndex).await;
+                push_output(seq, &mut get_next_val, &output_by_stage, &output_by_order).await;
+                finish_stage(&mut handle, PipelineStage::BumpHighestExecutedCheckpoint).await;
             }));
         }
 
