@@ -194,8 +194,21 @@ pub async fn run_queries(
     let requests: Vec<_> = requests
         .iter()
         .filter(|r| !methods_to_skip.contains(&r.method))
+        // TODO: remove this hack when the SDK has removed all MatchAny related implementation.
+        // Skip suix_getOwnedObjects requests with MatchAny filter b/c it's not supported.
+        .filter(|r| {
+            !(r.method == "suix_getOwnedObjects"
+                && r.body_json
+                    .get("params")
+                    .and_then(|p| p.as_array())
+                    .and_then(|p| p.get(1))
+                    .and_then(|p| p.get("filter"))
+                    .and_then(|f| f.get("MatchAny"))
+                    .is_some())
+        })
         .cloned()
         .collect();
+
     let total_requests = requests.len();
     debug!(
         "Starting benchmark with {} requests at concurrency {}",
@@ -305,8 +318,8 @@ pub async fn run_queries(
                                     }
                                     is_error = false;
                                 } else {
-                                    warn!("JSON parsing error for method: {}, error: {:?}, response: {}", 
-                                        request_line.method, parse_result.err(), resp_text);
+                                    warn!("Response received but JSON parsing failed for method: {}, body: {:?}, error: {:?}, response: {}", 
+                                        request_line.method, request_line.body_json, parse_result.err(), resp_text);
                                 }
                             } else {
                                 is_error = false;
@@ -322,11 +335,12 @@ pub async fn run_queries(
                                     )));
                                 }
                             };
-                            warn!("Request failed with method: {}, status:{}, request: {}, response: {}", 
+                            warn!("Response received but status is not success for method: {}, status:{}, body: {:?}, response: {}", 
                                 request_line.method, status, request_line.body_json, resp_text);
                         }
                     } else {
-                        warn!("Request error for method {}: {:?}", request_line.method, res);
+                        warn!("Failed to get response for method: {}, body: {:?}, error: {:?}", 
+                            request_line.method, request_line.body_json, res);
                     }
 
                     let mut stats = task_stats
@@ -369,7 +383,7 @@ pub async fn run_queries(
         .lock()
         .expect("Thread holding stats lock panicked")
         .clone();
-    debug!(
+    info!(
         "Benchmark completed in {:?}. Total requests: {}, errors: {}, avg latency: {:.2}ms",
         elapsed,
         final_stats.total_sent,
