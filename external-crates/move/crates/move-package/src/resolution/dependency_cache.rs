@@ -3,7 +3,13 @@
 
 use anyhow::Result;
 use colored::Colorize;
-use std::{collections::BTreeSet, ffi::OsStr, io::Write, path::PathBuf, process::Command};
+use std::{
+    collections::BTreeSet,
+    ffi::OsStr,
+    io::Write,
+    path::PathBuf,
+    process::{Command, Stdio},
+};
 
 use crate::{
     package_hooks,
@@ -63,7 +69,7 @@ impl DependencyCache {
 
                 if Command::new("git")
                     .arg("--version")
-                    .stdin(std::process::Stdio::null())
+                    .stdin(Stdio::null())
                     .output()
                     .is_err()
                 {
@@ -85,7 +91,7 @@ impl DependencyCache {
                     // If the cached folder does not exist, download and clone accordingly
                     if let Ok(mut output) = Command::new("git")
                         .args([OsStr::new("clone"), os_git_url, git_path.as_os_str()])
-                        .stdin(std::process::Stdio::null())
+                        .stdin(Stdio::null())
                         .spawn()
                     {
                         output.wait().map_err(|_| {
@@ -111,7 +117,7 @@ impl DependencyCache {
                             OsStr::new("checkout"),
                             os_git_rev,
                         ])
-                        .stdin(std::process::Stdio::null())
+                        .stdin(Stdio::null())
                         .output()
                         .map_err(|_| {
                             anyhow::anyhow!(
@@ -132,7 +138,7 @@ impl DependencyCache {
                             OsStr::new("--verify"),
                             os_git_rev,
                         ])
-                        .stdin(std::process::Stdio::null())
+                        .stdin(Stdio::null())
                         .output()
                     {
                         if let Ok(parsable_version) = String::from_utf8(rev.stdout) {
@@ -151,7 +157,7 @@ impl DependencyCache {
                             OsStr::new("--list"),
                             os_git_rev,
                         ])
-                        .stdin(std::process::Stdio::null())
+                        .stdin(Stdio::null())
                         .output();
 
                     if let Ok(tag) = tag {
@@ -185,7 +191,7 @@ impl DependencyCache {
                             OsStr::new("fetch"),
                             OsStr::new("origin"),
                         ])
-                        .stdin(std::process::Stdio::null())
+                        .stdin(Stdio::null())
                         .spawn()
                     {
                         output.wait().map_err(|_| {
@@ -214,7 +220,9 @@ impl DependencyCache {
                             OsStr::new("--hard"),
                             OsStr::new(&format!("origin/{}", git_rev)),
                         ])
-                        .stdin(std::process::Stdio::null())
+                        .stdin(Stdio::null())
+                        .stdout(Stdio::null())
+                        .stderr(Stdio::null())
                         .status()
                         .map_err(|_| {
                             anyhow::anyhow!(
