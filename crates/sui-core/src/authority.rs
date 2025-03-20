@@ -9,7 +9,7 @@ use crate::execution_cache::TransactionCacheRead;
 use crate::jsonrpc_index::CoinIndexKey2;
 use crate::rpc_index::RpcIndexStore;
 use crate::transaction_outputs::TransactionOutputs;
-use crate::verify_indexes::verify_indexes;
+use crate::verify_indexes::{fix_indexes, verify_indexes};
 use anyhow::anyhow;
 use arc_swap::{ArcSwap, Guard};
 use async_trait::async_trait;
@@ -2952,6 +2952,8 @@ impl AuthorityState {
             congestion_tracker: Arc::new(CongestionTracker::new()),
         });
 
+        let state_clone = Arc::downgrade(&state);
+        spawn_monitored_task!(fix_indexes(state_clone));
         // Start a task to execute ready certificates.
         let authority_state = Arc::downgrade(&state);
         spawn_monitored_task!(execution_process(
