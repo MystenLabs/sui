@@ -1,12 +1,12 @@
-// Copyright (c) Mysten Labs, Inc.
-// SPDX-License-Identifier: Apache-2.0
 
 use std::path::PathBuf;
 
 use clap::*;
 use colored::Colorize;
-use sui_prover::{execute_command, Command};
+use prove::{BoogieConfig, GeneralConfig, BuildConfig, execute};
 use tracing::debug;
+
+mod prove;
 
 bin_version::bin_version!();
 
@@ -22,9 +22,18 @@ struct Args {
     /// Path to a package which the command should be run with respect to.
     #[clap(long = "path", short = 'p', global = true)]
     pub package_path: Option<PathBuf>,
-    /// Subcommands.
-    #[clap(subcommand)]
-    pub cmd: Command,
+
+    /// General options
+    #[clap(flatten)]
+    pub general_config: GeneralConfig,
+
+    /// Boggie options
+    #[clap(flatten)]
+    pub boogie_config: BoogieConfig,
+
+    /// Package build options
+    #[clap(flatten)]
+    pub build_config: BuildConfig,
 }
 
 #[tokio::main]
@@ -42,10 +51,7 @@ async fn main() {
 
     debug!("Sui-Prover CLI version: {VERSION}");
 
-    let result: Result<(), anyhow::Error> = execute_command(
-        args.package_path.as_deref(),
-        args.cmd
-    );
+    let result = execute(args.package_path.as_deref(), args.general_config, args.build_config, args.boogie_config);
 
     match result {
         Ok(_) => (),
