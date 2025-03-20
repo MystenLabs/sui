@@ -4,6 +4,7 @@
 use crate::{
     environment::{is_framework_package, ReplayEnvironment},
     errors::ReplayError,
+    gql_queries::dynamic_field_at_version,
     replay_txn_data::ReplayTransaction,
 };
 use move_binary_format::CompiledModule;
@@ -24,7 +25,6 @@ use std::{
     sync::Arc,
 };
 use sui_execution::Executor;
-use sui_types::digests::TransactionDigest;
 use sui_types::{
     base_types::{ObjectID, ObjectRef, SequenceNumber, VersionNumber},
     committee::EpochId,
@@ -36,6 +36,7 @@ use sui_types::{
     supported_protocol_versions::ProtocolConfig,
     transaction::CheckedInputObjects,
 };
+use sui_types::{digests::TransactionDigest, error::SuiError};
 use tracing::info;
 
 const DEFAULT_TRACE_OUTPUT_DIR: &str = "replay";
@@ -307,6 +308,7 @@ struct ReplayStore<'a> {
 
 impl BackingPackageStore for ReplayStore<'_> {
     fn get_package_object(&self, package_id: &ObjectID) -> SuiResult<Option<PackageObject>> {
+        println!("get_package_object {:?}", package_id);
         if is_framework_package(package_id) {
             let pkg = self
                 .env
@@ -327,16 +329,25 @@ impl BackingPackageStore for ReplayStore<'_> {
 impl ChildObjectResolver for ReplayStore<'_> {
     fn read_child_object(
         &self,
-        parent: &ObjectID,
+        _parent: &ObjectID,
         child: &ObjectID,
         child_version_upper_bound: SequenceNumber,
     ) -> SuiResult<Option<Object>> {
-        todo!(
-            "ChildObjectResolver::read_child_object {:?} -> {:?} at {:?}",
-            parent,
-            child,
-            child_version_upper_bound,
-        )
+        #[allow(clippy::disallowed_methods)]
+        let obj = futures::executor::block_on(dynamic_field_at_version(
+            self.env.data_store.client(),
+            *child,
+            child_version_upper_bound.value(),
+        ))
+        .map_err(|e| SuiError::DynamicFieldReadError(e.to_string()))?;
+        match obj {
+            None => Ok(None),
+            Some(obj) => {
+                let obj = Object::try_from(obj)
+                    .map_err(|e| SuiError::DynamicFieldReadError(e.to_string()))?;
+                Ok(Some(obj))
+            }
+        }
     }
 
     fn get_object_received_at_version(
@@ -393,10 +404,6 @@ impl ObjectStore for ReplayStore<'_> {
     }
 
     fn get_object_by_key(&self, object_id: &ObjectID, version: VersionNumber) -> Option<Object> {
-        todo!(
-            "ObjectStore::get_object_by_key {:?} at {}",
-            object_id,
-            version.value()
-        )
+        self.env.get_object_by_version(object_id, version.value())
     }
 }

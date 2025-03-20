@@ -14,6 +14,7 @@ use sui_types::{
         CallArg, Command, GasData, InputObjectKind, InputObjects, ObjectArg, ObjectReadResult,
         ObjectReadResultKind, TransactionData, TransactionDataAPI, TransactionKind,
     },
+    TypeTag,
 };
 use tracing::{debug, info};
 
@@ -38,7 +39,8 @@ impl ReplayTransaction {
         let effects = env.data_store.transaction_effects(tx_digest).await?;
         info!("Transaction effects: {:#?}", effects);
 
-        let (input_object_ids, packages) = get_input_ids(&txn_data)?;
+        let mut packages = get_packages(&txn_data)?;
+        let input_object_ids = get_input_ids(&txn_data)?;
         info!("Input Object IDs: {:#?}", input_object_ids);
         let effects_object_ids = get_effects_ids(&effects)?;
         info!("Effects Object IDs: {:#?}", effects_object_ids);
@@ -59,7 +61,8 @@ impl ReplayTransaction {
             })
             .collect::<BTreeSet<InputObject>>();
 
-        env.load_objects(&object_versions).await?;
+        let obj_pkgs = env.load_objects(&object_versions).await?;
+        packages.extend(&obj_pkgs);
         env.load_packages(&packages).await?;
 
         let epoch = effects.executed_epoch();
@@ -101,9 +104,67 @@ impl ReplayTransaction {
     }
 }
 
-fn get_input_ids(
-    txn_data: &TransactionData,
-) -> Result<(BTreeSet<InputObject>, BTreeSet<ObjectID>), ReplayError> {
+fn get_packages(txn_data: &TransactionData) -> Result<BTreeSet<ObjectID>, ReplayError> {
+    let mut packages = BTreeSet::new();
+    if let TransactionKind::ProgrammableTransaction(ptb) = txn_data.kind() {
+        for cmd in &ptb.commands {
+            match cmd {
+                Command::MoveCall(move_call) => {
+                    packages.insert(move_call.package);
+                    for type_input in move_call.type_arguments.iter() {
+                        let typ =
+                            type_input
+                                .as_type_tag()
+                                .map_err(|err| ReplayError::GenericError {
+                                    err: format!("{:?}", err),
+                                })?;
+                        packages_from_type_tag(&typ, &mut packages);
+                    }
+                }
+                Command::MakeMoveVec(type_input, _) => {
+                    if let Some(t) = type_input {
+                        let typ = t.as_type_tag().map_err(|err| ReplayError::GenericError {
+                            err: format!("{:?}", err),
+                        })?;
+                        packages_from_type_tag(&typ, &mut packages);
+                    }
+                }
+                Command::Publish(_, deps) | Command::Upgrade(_, deps, _, _) => {
+                    packages.extend(deps);
+                }
+                Command::TransferObjects(_, _)
+                | Command::SplitCoins(_, _)
+                | Command::MergeCoins(_, _) => (),
+            }
+        }
+    }
+    Ok(packages)
+}
+
+pub fn packages_from_type_tag(typ: &TypeTag, packages: &mut BTreeSet<ObjectID>) {
+    match typ {
+        TypeTag::Struct(struct_tag) => {
+            packages.insert(struct_tag.address.into());
+            for ty in struct_tag.type_params.iter() {
+                packages_from_type_tag(ty, packages);
+            }
+        }
+        TypeTag::Vector(type_tag) => {
+            packages_from_type_tag(type_tag, packages);
+        }
+        TypeTag::Bool
+        | TypeTag::U8
+        | TypeTag::U64
+        | TypeTag::U128
+        | TypeTag::Address
+        | TypeTag::Signer
+        | TypeTag::U16
+        | TypeTag::U32
+        | TypeTag::U256 => (),
+    }
+}
+
+fn get_input_ids(txn_data: &TransactionData) -> Result<BTreeSet<InputObject>, ReplayError> {
     let mut all_objects = txn_data
         .gas_data()
         .payment
@@ -143,36 +204,9 @@ fn get_input_ids(
             })
             .collect::<Vec<_>>();
         all_objects.extend(input_objects);
-
-        let mut packages = ptb
-            .commands
-            .iter()
-            .filter_map(|cmd| {
-                if let Command::MoveCall(move_call) = cmd {
-                    Some(move_call.package)
-                } else {
-                    None
-                }
-            })
-            .collect::<BTreeSet<_>>();
-
-        let input_objects_kind =
-            txn_data
-                .input_objects()
-                .map_err(|e| ReplayError::InputObjectsError {
-                    digest: format!("{:?}", txn_data.digest()),
-                    err: format!("{:?}", e),
-                })?;
-
-        for kind in input_objects_kind.iter() {
-            if let InputObjectKind::MovePackage(object_id) = kind {
-                packages.insert(*object_id);
-            }
-        }
-
-        Ok((all_objects, packages))
+        Ok(all_objects)
     } else {
-        Ok((all_objects, BTreeSet::new()))
+        Ok(all_objects)
     }
 }
 

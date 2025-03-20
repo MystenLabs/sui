@@ -15162,6 +15162,7 @@ dependencies = [
  "clap",
  "cynic",
  "cynic-codegen",
+ "futures",
  "move-binary-format",
  "move-bytecode-source-map",
  "move-command-line-common",

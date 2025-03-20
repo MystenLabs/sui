@@ -1,8 +1,6 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use sui_sdk_types::{Address, EpochId, Object, TransactionEffects, Version};
-
 use crate::errors::ReplayError;
 use base64ct::Encoding;
 use chrono::DateTime as ChronoDateTime;
@@ -12,6 +10,8 @@ use sui_graphql_client::{
     query_types::{schema, Base64, BigInt, DateTime, PageInfo},
     Client, Page, PaginationFilter,
 };
+use sui_sdk_types::{Address, EpochId, Object, TransactionEffects, Version};
+use sui_types::base_types::ObjectID;
 
 // "Output" types
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -255,4 +255,82 @@ impl TryFrom<Epoch> for EpochData {
             protocol_version,
         })
     }
+}
+
+// ===========================================================================
+// Dynamic Fields
+// ===========================================================================
+
+#[derive(cynic::QueryFragment)]
+#[cynic(schema = "rpc", graphql_type = "Query", variables = "DynamicFieldArgs")]
+pub struct DynamicFieldAtVersionQuery {
+    #[arguments(address: $address, rootVersion: $root_version)]
+    pub owner: Option<OwnerData>,
+}
+
+#[derive(cynic::QueryVariables, Debug)]
+pub struct DynamicFieldArgs {
+    pub address: Address,
+    pub root_version: Option<u64>,
+}
+
+#[derive(cynic::QueryFragment, Debug)]
+#[cynic(schema = "rpc", graphql_type = "Owner")]
+pub struct OwnerData {
+    pub as_object: Option<GqlObject>,
+}
+
+#[derive(cynic::QueryFragment, Debug)]
+#[cynic(schema = "rpc", graphql_type = "Object")]
+pub struct GqlObject {
+    pub bcs: Option<Base64>,
+}
+
+/// Return a (Option<MovePackage>, version, Option<EpochId>) tuple for each version of the
+/// package at address. The Option<EpochId> is the epoch in which this package was published.
+pub async fn dynamic_field_at_version(
+    client: &Client,
+    obj: ObjectID,
+    root_version: u64,
+) -> Result<Option<Object>, ReplayError> {
+    let operation = DynamicFieldAtVersionQuery::build(DynamicFieldArgs {
+        address: Address::from_bytes(obj.into_bytes()).map_err(|err| {
+            ReplayError::GenericError {
+                err: format!("{:?}", err),
+            }
+        })?,
+        root_version: Some(root_version),
+    });
+
+    let response = client
+        .run_query(&operation)
+        .await
+        .map_err(|err| ReplayError::GenericError {
+            err: format!("{:?}", err),
+        })?;
+
+    if response.errors.is_some() {
+        return Err(ReplayError::GenericError {
+            err: "Error in dynamic_field_at_version".to_string(),
+        });
+    }
+
+    if let Some(dyn_field) = response.data {
+        let bcs = dyn_field
+            .owner
+            .and_then(|obj| obj.as_object)
+            .and_then(|obj| obj.bcs);
+        if let Some(bcs) = bcs {
+            let bcs = base64ct::Base64::decode_vec(bcs.0.as_str()).map_err(|err| {
+                ReplayError::GenericError {
+                    err: format!("{:?}", err),
+                }
+            })?;
+            let obj = bcs::from_bytes::<Object>(&bcs).map_err(|err| ReplayError::GenericError {
+                err: format!("{:?}", err),
+            })?;
+            return Ok(Some(obj));
+        }
+    }
+    Ok(None)
 }

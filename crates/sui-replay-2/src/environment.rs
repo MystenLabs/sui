@@ -5,6 +5,7 @@ use crate::{
     data_store::{DataStore, InputObject},
     epoch_store::EpochStore,
     errors::ReplayError,
+    replay_txn_data::packages_from_type_tag,
 };
 use std::{
     collections::{BTreeMap, BTreeSet},
@@ -61,18 +62,22 @@ impl ReplayEnvironment {
     pub async fn load_objects(
         &mut self,
         object_ids: &BTreeSet<InputObject>,
-    ) -> Result<(), ReplayError> {
+    ) -> Result<BTreeSet<ObjectID>, ReplayError> {
+        let mut packages = BTreeSet::new();
         debug!("Start load_objects");
         let objects = self.data_store.load_objects(object_ids).await?;
         debug!("End load_objects");
         for (object_id, version, object) in objects {
+            if let Some(tag) = object.as_inner().struct_tag() {
+                packages_from_type_tag(&tag.into(), &mut packages);
+            }
             let version = version.unwrap();
             self.objects
                 .entry(object_id)
                 .or_default()
                 .insert(version, object);
         }
-        Ok(())
+        Ok(packages)
     }
 
     pub fn get_object(&self, object_id: &ObjectID) -> Option<Object> {
@@ -80,6 +85,13 @@ impl ReplayEnvironment {
             .get(object_id)
             .and_then(|versions| versions.last_key_value())
             .map(|(_, v)| v.clone())
+    }
+
+    pub fn get_object_by_version(&self, object_id: &ObjectID, version: u64) -> Option<Object> {
+        self.objects
+            .get(object_id)
+            .and_then(|versions| versions.get(&version))
+            .cloned()
     }
 
     // Load packages and their dependencies
@@ -132,7 +144,7 @@ impl ReplayEnvironment {
         epoch: u64,
     ) -> Result<Object, ReplayError> {
         let pkgs = self.system_packages.get(pkg_id);
-        return match pkgs {
+        match pkgs {
             Some(versions) => {
                 if let Some((_, pkg)) = versions
                     .range((Bound::Unbounded, Bound::Included(&epoch)))
@@ -149,7 +161,7 @@ impl ReplayEnvironment {
             None => Err(ReplayError::MissingSystemPackage {
                 pkg: pkg_id.to_string(),
             }),
-        };
+        }
     }
 }
 

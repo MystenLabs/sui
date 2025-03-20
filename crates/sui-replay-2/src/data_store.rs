@@ -70,6 +70,10 @@ impl DataStore {
         self.node.chain()
     }
 
+    pub fn client(&self) -> &Client {
+        &self.client
+    }
+
     //
     // Package operations
     //

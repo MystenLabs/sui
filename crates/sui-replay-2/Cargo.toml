@@ -13,6 +13,7 @@ clap = { version = "4.1.4", features = ["derive"] }
 chrono.workspace = true
 cynic.workspace = true
 cynic-codegen.workspace = true
+futures.workspace = true
 move-binary-format.workspace = true
 move-bytecode-source-map.workspace = true
 move-command-line-common.workspace = true
