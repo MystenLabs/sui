@@ -13,9 +13,10 @@ use futures::future;
 use ingestion::{client::IngestionClient, ClientArgs, IngestionConfig, IngestionService};
 use metrics::IndexerMetrics;
 use models::watermarks::{CommitterWatermark, PrunerWatermark};
+use pg_store::PgStore;
 use pipeline::{
     concurrent::{self, ConcurrentConfig},
-    sequential::{self, SequentialConfig},
+    sequential::{self, Handler, SequentialConfig},
     Processor,
 };
 use prometheus::Registry;
@@ -39,8 +40,10 @@ pub mod handlers;
 pub mod ingestion;
 pub(crate) mod metrics;
 pub mod models;
+pub mod pg_store;
 pub mod pipeline;
 pub mod schema;
+pub mod store;
 pub mod task;
 
 const MIGRATIONS: EmbeddedMigrations = embed_migrations!("migrations");
@@ -69,7 +72,9 @@ pub struct IndexerArgs {
     pub skip_watermark: bool,
 }
 
+// TODO (wlmyng): pg agnostic - something like Indexer<Store>
 pub struct Indexer {
+    // TODO (wlmyng): pg agnostic
     /// Connection pool to the database.
     db: Db,
 
@@ -278,11 +283,16 @@ impl Indexer {
     ///
     /// The pipeline can optionally be configured to lag behind the ingestion service by a fixed
     /// number of checkpoints (configured by `checkpoint_lag`).
-    pub async fn sequential_pipeline<H: sequential::Handler + Send + Sync + 'static>(
+    pub async fn sequential_pipeline<H>(
         &mut self,
         handler: H,
         config: SequentialConfig,
-    ) -> Result<()> {
+    ) -> Result<()>
+    where
+        // TODO (wlmyng): non-pg store - eventually this will be on Indexer<S: TransactionalStore> and ...
+        // associate Indexer's Store with H::Store
+        H: Handler<Store = PgStore> + Send + Sync + 'static,
+    {
         let Some(watermark) = self.add_pipeline::<H>(false).await? else {
             return Ok(());
         };
@@ -300,11 +310,14 @@ impl Indexer {
 
         let (checkpoint_rx, watermark_tx) = self.ingestion_service.subscribe();
 
-        self.handles.push(sequential::pipeline(
+        let db = PgStore::new(self.db.clone());
+
+        // Use turbofish to explicitly specify the types
+        self.handles.push(sequential::pipeline::<H>(
             handler,
             watermark,
             config,
-            self.db.clone(),
+            db,
             checkpoint_rx,
             watermark_tx,
             self.metrics.clone(),

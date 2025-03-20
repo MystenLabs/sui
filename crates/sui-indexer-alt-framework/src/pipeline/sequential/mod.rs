@@ -10,9 +10,9 @@ use tokio_util::sync::CancellationToken;
 use super::{processor::processor, CommitterConfig, Processor, PIPELINE_BUFFER};
 
 use crate::{
-    db::{self, Db},
     metrics::IndexerMetrics,
     models::watermarks::CommitterWatermark,
+    store::{Database, TransactionalStore},
     types::full_checkpoint_content::CheckpointData,
 };
 
@@ -39,6 +39,8 @@ mod committer;
 /// checkpoints that can be received before the next checkpoint.
 #[async_trait::async_trait]
 pub trait Handler: Processor {
+    type Store: TransactionalStore;
+
     /// If at least this many rows are pending, the committer will commit them eagerly.
     const MIN_EAGER_ROWS: usize = 50;
 
@@ -58,7 +60,10 @@ pub trait Handler: Processor {
 
     /// Take a batch of values and commit them to the database, returning the number of rows
     /// affected.
-    async fn commit(batch: &Self::Batch, conn: &mut db::Connection<'_>) -> anyhow::Result<usize>;
+    async fn commit<'a>(
+        batch: &Self::Batch,
+        conn: &mut <Self::Store as Database>::Connection<'a>,
+    ) -> anyhow::Result<usize>;
 }
 
 /// Configuration for a sequential pipeline
@@ -96,16 +101,19 @@ pub struct SequentialConfig {
 /// channels are created to communicate between its various components. The pipeline can be
 /// shutdown using its `cancel` token, and will also shutdown if any of its input or output
 /// channels close, or any of its independent tasks fail.
-pub(crate) fn pipeline<H: Handler + Send + Sync + 'static>(
+pub(crate) fn pipeline<H>(
     handler: H,
     initial_watermark: Option<CommitterWatermark<'static>>,
     config: SequentialConfig,
-    db: Db,
+    db: H::Store,
     checkpoint_rx: mpsc::Receiver<Arc<CheckpointData>>,
     watermark_tx: mpsc::UnboundedSender<(&'static str, u64)>,
     metrics: Arc<IndexerMetrics>,
     cancel: CancellationToken,
-) -> JoinHandle<()> {
+) -> JoinHandle<()>
+where
+    H: Handler + Send + Sync + 'static,
+{
     let (processor_tx, committer_rx) = mpsc::channel(H::FANOUT + PIPELINE_BUFFER);
 
     let processor = processor(
@@ -116,12 +124,12 @@ pub(crate) fn pipeline<H: Handler + Send + Sync + 'static>(
         cancel.clone(),
     );
 
-    let committer = committer::<H>(
+    let committer = committer::<H, H::Store>(
         config,
         initial_watermark,
         committer_rx,
         watermark_tx,
-        db.clone(),
+        db,
         metrics.clone(),
         cancel.clone(),
     );
