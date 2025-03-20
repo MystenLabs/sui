@@ -349,13 +349,12 @@ impl JobConfig {
     ) -> Result<Vec<Processor>> {
         let package_store = LocalDBPackageStore::new(&self.package_cache_path, &self.rest_url);
         let job_config = Arc::new(self);
-        let mut tasks = Vec::with_capacity(job_config.task_configs.len());
+        let mut processors = Vec::with_capacity(job_config.task_configs.len());
         let mut task_names = HashSet::new();
 
         for task_config in job_config.task_configs.clone() {
             let task_name = &task_config.task_name;
 
-            // Validate task name uniqueness
             if !task_names.insert(task_name.clone()) {
                 return Err(anyhow!("Duplicate task_name '{}' found", task_name));
             }
@@ -364,7 +363,6 @@ impl JobConfig {
                 .prefix(&format!("{}-work-dir", task_name))
                 .tempdir_in(&job_config.checkpoint_root)?;
 
-            // Create and add the task
             let task = Task {
                 job_config: Arc::clone(&job_config),
                 config: task_config,
@@ -373,10 +371,10 @@ impl JobConfig {
                 package_store: package_store.clone(),
             };
 
-            tasks.push(task.create_analytics_processor().await?);
+            processors.push(task.create_analytics_processor().await?);
         }
 
-        Ok(tasks)
+        Ok(processors)
     }
 
     // Convenience method to get task configs for compatibility
