@@ -4,7 +4,7 @@ edition = "2024.beta"
 
 [dependencies]
 K = { local = "../K_v2", override = true }
-L_depends_on_K = { local = "../L_depends_on_K" }
+L = { local = "../L" }
 
 [addresses]
 m_depends_on_l_and_k_v2_no_code_references_k_v2 = "0x0"

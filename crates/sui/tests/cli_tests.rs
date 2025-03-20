@@ -4524,14 +4524,14 @@ async fn test_tree_shaking_package_deps_on_pkg_upgrade_2() -> Result<(), anyhow:
     let package_path = test.package_path("K_v2");
     add_ids_to_manifest(&package_path, &package_k_v2_id, None)?;
 
-    let (package_l_id, _) = test.publish_package("L_depends_on_K", false).await?;
+    let (package_l_id, _) = test.publish_package("L", false).await?;
     let linkage_table_l = test.fetch_linkage_table(package_l_id).await;
     assert!(
         linkage_table_l.contains_key(&package_k_id),
         "Package L should depend on K"
     );
 
-    add_ids_to_manifest(&test.package_path("L_depends_on_K"), &package_l_id, None)?;
+    add_ids_to_manifest(&test.package_path("L"), &package_l_id, None)?;
 
     let (package_m_id, _) = test
         .publish_package("M_depends_on_L_and_K_v2_no_code_references_K_v2", false)
@@ -4572,20 +4572,14 @@ async fn test_tree_shaking_package_deps_on_pkg_upgrade_3() -> Result<(), anyhow:
     let package_path = test.package_path("K_v2");
     add_ids_to_manifest(&package_path, &package_k_v2_id, Some(package_k_id))?;
 
-    let package_l_id = test
-        .publish_package_without_tree_shaking("L_depends_on_K")
-        .await;
+    let package_l_id = test.publish_package_without_tree_shaking("L").await;
     let linkage_table_l = test.fetch_linkage_table(package_l_id).await;
     assert!(
         linkage_table_l.contains_key(&package_k_id),
         "Package L should depend on K"
     );
 
-    add_ids_to_manifest(
-        &test.package_path("L_depends_on_K"),
-        &package_l_id,
-        Some(package_l_id),
-    )?;
+    add_ids_to_manifest(&test.package_path("L"), &package_l_id, Some(package_l_id))?;
 
     let (package_m_id, _) = test
         .publish_package("M_depends_on_L_and_K_v2_no_code_references_K_v2", false)
