@@ -17,7 +17,6 @@ use sui_types::transaction::{CallArg, ObjectArg, TransactionData, TransactionKin
 use sui_types::Identifier;
 use test_cluster::TestClusterBuilder;
 
-#[should_panic] // Test should panic since tracking of balance for TTO is broken
 #[tokio::test]
 async fn test_indexing_with_tto() {
     let cluster = TestClusterBuilder::new().build().await;
