@@ -13,7 +13,7 @@ bin_version::bin_version!();
 #[derive(Parser)]
 #[clap(
     name = env!("CARGO_BIN_NAME"),
-    about = "A command-line tool for formal verification of Move code within Sui projects. When executed from the project's root directory, it attempts to prove all specifications annotated with #[spec(verify)]",
+    about = "Command-line tool for formal verification of Move code within Sui projects. When executed from the project's root directory, it attempts to prove all specifications annotated with #[spec(prove)]",
     rename_all = "kebab-case",
     author,
     version = VERSION,
