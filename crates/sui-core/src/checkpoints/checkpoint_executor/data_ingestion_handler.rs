@@ -17,29 +17,32 @@ pub(crate) fn load_checkpoint_data(
     object_cache_reader: &dyn ObjectCacheRead,
     transaction_cache_reader: &dyn TransactionCacheRead,
 ) -> SuiResult<CheckpointData> {
-    let event_digests = ckpt_tx_data
+    let event_tx_digests = ckpt_tx_data
         .effects
         .iter()
-        .flat_map(|fx| fx.events_digest().copied())
+        .flat_map(|fx| fx.events_digest().map(|_| fx.transaction_digest()).copied())
         .collect::<Vec<_>>();
 
     let events = transaction_cache_reader
-        .multi_get_events(&event_digests)
+        .multi_get_events(&event_tx_digests)
         .into_iter()
-        .zip(&event_digests)
-        .map(|(event, digest)| event.ok_or(SuiError::TransactionEventsNotFound { digest: *digest }))
-        .collect::<SuiResult<Vec<_>>>()?;
+        .zip(event_tx_digests)
+        .map(|(maybe_event, tx_digest)| {
+            maybe_event
+                .ok_or(SuiError::TransactionEventsNotFound { digest: tx_digest })
+                .map(|event| (tx_digest, event))
+        })
+        .collect::<SuiResult<HashMap<_, _>>>()?;
 
-    let events: HashMap<_, _> = event_digests.into_iter().zip(events).collect();
     let mut full_transactions = Vec::with_capacity(ckpt_tx_data.transactions.len());
     for (tx, fx) in ckpt_tx_data
         .transactions
         .iter()
         .zip(ckpt_tx_data.effects.iter())
     {
-        let events = fx.events_digest().map(|event_digest| {
+        let events = fx.events_digest().map(|_event_digest| {
             events
-                .get(event_digest)
+                .get(fx.transaction_digest())
                 .cloned()
                 .expect("event was already checked to be present")
         });

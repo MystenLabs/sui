@@ -57,7 +57,7 @@ use mysten_common::sync::notify_read::NotifyRead;
 use mysten_common::util::randomize_cache_capacity_in_tests;
 use parking_lot::Mutex;
 use prometheus::Registry;
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::BTreeMap;
 use std::hash::Hash;
 use std::sync::atomic::AtomicU64;
 use std::sync::Arc;
@@ -69,9 +69,7 @@ use sui_types::base_types::{
     EpochId, FullObjectID, ObjectID, ObjectRef, SequenceNumber, VerifiedExecutionData,
 };
 use sui_types::bridge::{get_bridge, Bridge};
-use sui_types::digests::{
-    ObjectDigest, TransactionDigest, TransactionEffectsDigest, TransactionEventsDigest,
-};
+use sui_types::digests::{ObjectDigest, TransactionDigest, TransactionEffectsDigest};
 use sui_types::effects::{TransactionEffects, TransactionEvents};
 use sui_types::error::{SuiError, SuiResult, UserInputError};
 use sui_types::executable_transaction::VerifiedExecutableTransaction;
@@ -221,12 +219,7 @@ struct UncommittedData {
 
     transaction_effects: DashMap<TransactionEffectsDigest, TransactionEffects>,
 
-    // Because TransactionEvents are not unique to the transaction that created them, we must
-    // reference count them in order to know when we can remove them from the cache. For now
-    // we track all referers explicitly, but we can use a ref count when we are confident in
-    // the correctness of the code.
-    transaction_events:
-        DashMap<TransactionEventsDigest, (BTreeSet<TransactionDigest>, TransactionEvents)>,
+    transaction_events: DashMap<TransactionDigest, TransactionEvents>,
 
     executed_effects_digests: DashMap<TransactionDigest, TransactionEffectsDigest>,
 
@@ -327,8 +320,7 @@ struct CachedCommittedData {
     transaction_effects:
         MonotonicCache<TransactionEffectsDigest, PointCacheItem<Arc<TransactionEffects>>>,
 
-    transaction_events:
-        MonotonicCache<TransactionEventsDigest, PointCacheItem<Arc<TransactionEvents>>>,
+    transaction_events: MonotonicCache<TransactionDigest, PointCacheItem<Arc<TransactionEvents>>>,
 
     executed_effects_digests:
         MonotonicCache<TransactionDigest, PointCacheItem<TransactionEffectsDigest>>,
@@ -909,16 +901,9 @@ impl WritebackCache {
         // store it anyway to avoid special cases in commint_transaction_outputs, and translate
         // an empty events structure to None when reading.
         self.metrics.record_cache_write("transaction_events");
-        match self.dirty.transaction_events.entry(events.digest()) {
-            DashMapEntry::Occupied(mut occupied) => {
-                occupied.get_mut().0.insert(tx_digest);
-            }
-            DashMapEntry::Vacant(entry) => {
-                let mut txns = BTreeSet::new();
-                txns.insert(tx_digest);
-                entry.insert((txns, events.clone()));
-            }
-        }
+        self.dirty
+            .transaction_events
+            .insert(tx_digest, events.clone());
 
         self.metrics.record_cache_write("executed_effects_digests");
         self.dirty
@@ -1063,7 +1048,6 @@ impl WritebackCache {
         } = outputs;
 
         let effects_digest = effects.digest();
-        let events_digest = events.digest();
 
         // Update cache before removing from self.dirty to avoid
         // unnecessary cache misses
@@ -1094,7 +1078,7 @@ impl WritebackCache {
         self.cached
             .transaction_events
             .insert(
-                &events_digest,
+                &tx_digest,
                 PointCacheItem::Some(events.clone().into()),
                 Ticket::Write,
             )
@@ -1105,18 +1089,10 @@ impl WritebackCache {
             .remove(&effects_digest)
             .expect("effects must exist");
 
-        match self.dirty.transaction_events.entry(events.digest()) {
-            DashMapEntry::Occupied(mut occupied) => {
-                let txns = &mut occupied.get_mut().0;
-                assert!(txns.remove(&tx_digest), "transaction must exist");
-                if txns.is_empty() {
-                    occupied.remove();
-                }
-            }
-            DashMapEntry::Vacant(_) => {
-                panic!("events must exist");
-            }
-        }
+        self.dirty
+            .transaction_events
+            .remove(&tx_digest)
+            .expect("events must exist");
 
         self.dirty
             .executed_effects_digests
@@ -1995,7 +1971,7 @@ impl TransactionCacheRead for WritebackCache {
 
     fn multi_get_events(
         &self,
-        event_digests: &[TransactionEventsDigest],
+        event_digests: &[TransactionDigest],
     ) -> Vec<Option<TransactionEvents>> {
         fn map_events(events: TransactionEvents) -> Option<TransactionEvents> {
             if events.data.is_empty() {
@@ -2014,12 +1990,7 @@ impl TransactionCacheRead for WritebackCache {
             |(digest, _)| {
                 self.metrics
                     .record_cache_request("transaction_events", "uncommitted");
-                if let Some(events) = self
-                    .dirty
-                    .transaction_events
-                    .get(digest)
-                    .map(|e| e.1.clone())
-                {
+                if let Some(events) = self.dirty.transaction_events.get(digest).map(|e| e.clone()) {
                     self.metrics
                         .record_cache_hit("transaction_events", "uncommitted");
 

@@ -20,7 +20,7 @@ use std::sync::Arc;
 use sui_config::ExecutionCacheConfig;
 use sui_protocol_config::ProtocolVersion;
 use sui_types::base_types::{FullObjectID, VerifiedExecutionData};
-use sui_types::digests::{TransactionDigest, TransactionEffectsDigest, TransactionEventsDigest};
+use sui_types::digests::{TransactionDigest, TransactionEffectsDigest};
 use sui_types::effects::{TransactionEffects, TransactionEvents};
 use sui_types::error::{SuiError, SuiResult, UserInputError};
 use sui_types::executable_transaction::VerifiedExecutableTransaction;
@@ -499,12 +499,9 @@ pub trait TransactionCacheRead: Send + Sync {
             .expect("multi-get must return correct number of items")
     }
 
-    fn multi_get_events(
-        &self,
-        event_digests: &[TransactionEventsDigest],
-    ) -> Vec<Option<TransactionEvents>>;
+    fn multi_get_events(&self, digests: &[TransactionDigest]) -> Vec<Option<TransactionEvents>>;
 
-    fn get_events(&self, digest: &TransactionEventsDigest) -> Option<TransactionEvents> {
+    fn get_events(&self, digest: &TransactionDigest) -> Option<TransactionEvents> {
         self.multi_get_events(&[*digest])
             .pop()
             .expect("multi-get must return correct number of items")

@@ -4,11 +4,13 @@
 use prometheus::default_registry;
 use rand::{rngs::StdRng, Rng, SeedableRng};
 use std::{
-    collections::BTreeMap,
+    collections::{BTreeMap, BTreeSet},
     future::Future,
     path::PathBuf,
-    sync::atomic::Ordering,
-    sync::{atomic::AtomicU32, Arc},
+    sync::{
+        atomic::{AtomicU32, Ordering},
+        Arc,
+    },
     time::{Duration, Instant},
 };
 use sui_framework::BuiltInFramework;
@@ -151,9 +153,7 @@ impl Scenario {
         let tx = VerifiedTransaction::new_unchecked(tx);
         let events: TransactionEvents = Default::default();
 
-        let effects = TestEffectsBuilder::new(tx.inner())
-            .with_events_digest(events.digest())
-            .build();
+        let effects = TestEffectsBuilder::new(tx.inner()).build();
 
         TransactionOutputs {
             transaction: Arc::new(tx),
@@ -642,42 +642,42 @@ async fn test_extra_outputs() {
 
         s.cache.get_transaction_block(&tx).unwrap();
         let fx = s.cache.get_executed_effects(&tx).unwrap();
-        let events_digest = fx.events_digest().unwrap();
-        s.cache.get_events(events_digest).unwrap();
+        let _events_digest = fx.events_digest().unwrap();
+        s.cache.get_events(&tx).unwrap();
 
         s.commit(tx).await.unwrap();
 
         s.cache.get_transaction_block(&tx).unwrap();
         s.cache.get_executed_effects(&tx).unwrap();
-        s.cache.get_events(events_digest).unwrap();
+        s.cache.get_events(&tx).unwrap();
 
         // clear cache
         s.reset_cache();
 
         s.cache.get_transaction_block(&tx).unwrap();
         s.cache.get_executed_effects(&tx).unwrap();
-        s.cache.get_events(events_digest).unwrap();
+        s.cache.get_events(&tx).unwrap();
 
         s.with_created(&[3]);
         let tx = s.do_tx().await;
 
         // when Events is empty, it should be treated as None
         let fx = s.cache.get_executed_effects(&tx).unwrap();
-        let events_digest = fx.events_digest().unwrap();
+        assert!(fx.events_digest().is_none());
         assert!(
-            s.cache.get_events(events_digest).is_none(),
+            s.cache.get_events(&tx).is_none(),
             "empty events should be none"
         );
 
         s.commit(tx).await.unwrap();
         assert!(
-            s.cache.get_events(events_digest).is_none(),
+            s.cache.get_events(&tx).is_none(),
             "empty events should be none"
         );
 
         s.reset_cache();
         assert!(
-            s.cache.get_events(events_digest).is_none(),
+            s.cache.get_events(&tx).is_none(),
             "empty events should be none"
         );
     })

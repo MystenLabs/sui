@@ -258,6 +258,8 @@ impl AuthorityStorePruner {
             effect_digests.push(effects_digest);
 
             if let Some(event_digest) = effects.events_digest() {
+                perpetual_batch
+                    .delete_batch(&perpetual_db.events_2, [effects.transaction_digest()])?;
                 if let Some(next_digest) = event_digest.next_lexicographical() {
                     perpetual_batch.schedule_delete_range(
                         &perpetual_db.events,

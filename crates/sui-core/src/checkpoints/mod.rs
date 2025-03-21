@@ -2771,7 +2771,6 @@ mod tests {
     use sui_protocol_config::{Chain, ProtocolConfig};
     use sui_types::base_types::{ObjectID, SequenceNumber, TransactionEffectsDigest};
     use sui_types::crypto::Signature;
-    use sui_types::digests::TransactionEventsDigest;
     use sui_types::effects::{TransactionEffects, TransactionEvents};
     use sui_types::messages_checkpoint::SignedCheckpointSummary;
     use sui_types::move_package::MovePackage;
@@ -3068,10 +3067,7 @@ mod tests {
             unimplemented!()
         }
 
-        fn multi_get_events(
-            &self,
-            _: &[TransactionEventsDigest],
-        ) -> Vec<Option<TransactionEvents>> {
+        fn multi_get_events(&self, _: &[TransactionDigest]) -> Vec<Option<TransactionEvents>> {
             unimplemented!()
         }
     }

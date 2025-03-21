@@ -1238,10 +1238,10 @@ async fn test_upgraded_types_in_one_txn() {
     let e1_type = StructTag::from_str(&format!("{package_v2}::base::BModEvent")).unwrap();
     let e2_type = StructTag::from_str(&format!("{package_v3}::base::CModEvent")).unwrap();
 
-    let event_digest = effects.events_digest().unwrap();
+    let _event_digest = effects.events_digest().unwrap();
     let mut events = runner
         .authority_state
-        .get_transaction_events(event_digest)
+        .get_transaction_events(effects.transaction_digest())
         .unwrap()
         .data;
     events.sort_by(|a, b| a.type_.name.as_str().cmp(b.type_.name.as_str()));
