@@ -1,0 +1,47 @@
+// Copyright (c) Mysten Labs, Inc.
+// SPDX-License-Identifier: Apache-2.0
+
+syntax = "proto3";
+
+package sui.rpc.v2beta;
+
+import "google/protobuf/timestamp.proto";
+
+service InfoService {
+  // Query a sui service for general information about its current state and
+  // capabilities.
+  rpc GetServiceInfo(GetServiceInfoRequest) returns (GetServiceInfoResponse);
+}
+
+message GetServiceInfoRequest {}
+
+message GetServiceInfoResponse {
+  // The chain identifier of the chain that this node is on.
+  //
+  // The chain identifier is the digest of the genesis checkpoint, the
+  // checkpoint with sequence number 0.
+  optional string chain_id = 1;
+
+  // Human-readable name of the chain that this node is on.
+  //
+  // This is intended to be a human-readable name like `mainnet`, `testnet`, and so on.
+  optional string chain = 2;
+
+  // Current epoch of the node based on its highest executed checkpoint.
+  optional uint64 epoch = 3;
+
+  // Checkpoint height of the most recently executed checkpoint.
+  optional uint64 checkpoint_height = 4;
+
+  // Unix timestamp of the most recently executed checkpoint.
+  optional google.protobuf.Timestamp timestamp = 5;
+
+  // The lowest checkpoint for which checkpoints and transaction data are available.
+  optional uint64 lowest_available_checkpoint = 6;
+
+  // The lowest checkpoint for which object data is available.
+  optional uint64 lowest_available_checkpoint_objects = 7;
+
+  // Software version of the service. Similar to the `server` http header.
+  optional string server_version = 8;
+}

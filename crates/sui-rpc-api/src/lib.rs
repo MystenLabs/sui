@@ -15,6 +15,7 @@ mod config;
 mod error;
 pub mod field_mask;
 mod grpc;
+pub mod message;
 mod metrics;
 pub mod proto;
 mod reader;
