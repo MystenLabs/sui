@@ -412,6 +412,34 @@ impl VMTracer<'_> {
             .expect("Link context always set by this point")
     }
 
+    /// Load global data into the tracer state returning back the `TraceValue` and the `TraceIndex`
+    /// of the load (suitable for use in global locations).
+    fn emit_data_load(&mut self, value: MoveValue, ref_type: &RefType) -> (TraceIndex, TraceValue) {
+        // We treat any references coming out of a native as global reference.
+        // This generally works fine as long as you don't have a native function returning a
+        // mutable reference within a mutable reference passed-in.
+        let id = self.trace.current_trace_offset();
+
+        let location = RuntimeLocation::Global(id);
+
+        self.trace.effect(EF::DataLoad(DataLoad {
+            ref_type: ref_type.clone(),
+            location: location.as_trace_location(),
+            snapshot: value.clone(),
+        }));
+        let trace_value = match ref_type {
+            RefType::Imm => TraceValue::ImmRef {
+                location: location.as_trace_location(),
+                snapshot: Box::new(value),
+            },
+            RefType::Mut => TraceValue::MutRef {
+                location: location.as_trace_location(),
+                snapshot: Box::new(value),
+            },
+        };
+        (id, trace_value)
+    }
+
     /// Load data returned by a native function into the tracer state.
     /// We also emit a data load event for the data loaded from the native function.
     fn load_data(
@@ -425,31 +453,10 @@ impl VMTracer<'_> {
         let Some(ref_type) = reftype else {
             return None;
         };
+        let (trace_index, trace_value) = self.emit_data_load(value, ref_type);
 
-        // We treat any references coming out of a native as global reference.
-        // This generally works fine as long as you don't have a native function returning a
-        // mutable reference within a mutable reference passed-in.
-        let id = self.trace.current_trace_offset();
-
-        let location = RuntimeLocation::Global(id);
-
-        self.trace.effect(EF::DataLoad(DataLoad {
-            ref_type: ref_type.clone(),
-            location: location.as_trace_location(),
-            snapshot: value.clone(),
-        }));
-        let trace_value = match &ref_type {
-            RefType::Imm => TraceValue::ImmRef {
-                location: location.as_trace_location(),
-                snapshot: Box::new(value),
-            },
-            RefType::Mut => TraceValue::MutRef {
-                location: location.as_trace_location(),
-                snapshot: Box::new(value),
-            },
-        };
-        self.loaded_data.insert(id, trace_value);
-        Some((ref_type.clone(), location))
+        self.loaded_data.insert(trace_index, trace_value);
+        Some((ref_type.clone(), RuntimeLocation::Global(trace_index)))
     }
 
     /// Handle (and load) any data returned by a native function.
@@ -505,23 +512,7 @@ impl VMTracer<'_> {
                 let move_value = value.as_annotated_move_value_for_tracing_only(&layout?)?;
                 match ref_type {
                     Some(ref_type) => {
-                        let id = self.trace.current_trace_offset();
-                        let location = RuntimeLocation::Global(id);
-                        self.trace.effect(EF::DataLoad(DataLoad {
-                            ref_type: ref_type.clone(),
-                            location: location.as_trace_location(),
-                            snapshot: move_value.clone(),
-                        }));
-                        let trace_value = match &ref_type {
-                            RefType::Imm => TraceValue::ImmRef {
-                                location: location.as_trace_location(),
-                                snapshot: Box::new(move_value),
-                            },
-                            RefType::Mut => TraceValue::MutRef {
-                                location: location.as_trace_location(),
-                                snapshot: Box::new(move_value),
-                            },
-                        };
+                        let (id, trace_value) = self.emit_data_load(move_value, &ref_type);
                         self.loaded_data.insert(id, trace_value.clone());
                         Some(trace_value)
                     }
@@ -605,23 +596,7 @@ impl VMTracer<'_> {
                 let move_value = value.as_annotated_move_value_for_tracing_only(&layout?)?;
                 match ref_type {
                     Some(ref_type) => {
-                        let id = self.trace.current_trace_offset();
-                        let location = RuntimeLocation::Global(id);
-                        self.trace.effect(EF::DataLoad(DataLoad {
-                            ref_type: ref_type.clone(),
-                            location: location.as_trace_location(),
-                            snapshot: move_value.clone(),
-                        }));
-                        let trace_value = match &ref_type {
-                            RefType::Imm => TraceValue::ImmRef {
-                                location: location.as_trace_location(),
-                                snapshot: Box::new(move_value),
-                            },
-                            RefType::Mut => TraceValue::MutRef {
-                                location: location.as_trace_location(),
-                                snapshot: Box::new(move_value),
-                            },
-                        };
+                        let (id, trace_value) = self.emit_data_load(move_value, &ref_type);
                         self.loaded_data.insert(id, trace_value.clone());
                         Some(trace_value)
                     }
