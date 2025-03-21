@@ -45,3 +45,15 @@ pub type TempDir = tempfile::TempDir;
 pub fn tempdir() -> std::io::Result<TempDir> {
     nondeterministic!(tempfile::tempdir())
 }
+
+pub fn randomize_limit_in_tests<T>(min: T, limit: T) -> T
+where
+    T: Copy + PartialOrd + rand::distributions::uniform::SampleUniform + TryFrom<usize>,
+{
+    if !in_test_configuration() {
+        return limit;
+    }
+
+    let mut rng = get_rng();
+    rng.gen_range(min..=limit)
+}

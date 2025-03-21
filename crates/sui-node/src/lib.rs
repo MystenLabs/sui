@@ -13,6 +13,7 @@ use arc_swap::ArcSwap;
 use fastcrypto_zkp::bn254::zk_login::JwkId;
 use fastcrypto_zkp::bn254::zk_login::OIDCProvider;
 use futures::future::BoxFuture;
+use mysten_common::random_util::randomize_limit_in_tests;
 use mysten_network::server::SUI_TLS_SERVER_NAME;
 use prometheus::Registry;
 use std::collections::{BTreeSet, HashMap, HashSet};
@@ -1484,13 +1485,20 @@ impl SuiNode {
         let ca_metrics = ConsensusAdapterMetrics::new(prometheus_registry);
         // The consensus adapter allows the authority to send user certificates through consensus.
 
+        let max_pending_transactions = consensus_config.max_pending_transactions();
+        let max_pending_local_submissions = max_pending_transactions * 2 / committee.num_members();
+
+        let max_pending_transactions = randomize_limit_in_tests(5, max_pending_transactions);
+        let max_pending_local_submissions =
+            randomize_limit_in_tests(5, max_pending_local_submissions);
+
         ConsensusAdapter::new(
             consensus_client,
             checkpoint_store,
             authority,
             connection_monitor_status,
-            consensus_config.max_pending_transactions(),
-            consensus_config.max_pending_transactions() * 2 / committee.num_members(),
+            max_pending_transactions,
+            max_pending_local_submissions,
             consensus_config.max_submit_position,
             consensus_config.submit_delay_step_override(),
             ca_metrics,

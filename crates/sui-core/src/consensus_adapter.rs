@@ -18,6 +18,7 @@ use futures::stream::FuturesUnordered;
 use futures::FutureExt;
 use futures::{pin_mut, StreamExt};
 use itertools::Itertools;
+use mysten_common::debug_fatal;
 use mysten_metrics::{spawn_monitored_task, GaugeGuard, GaugeGuardFutureExt, LATENCY_SEC_BUCKETS};
 use parking_lot::RwLockReadGuard;
 use prometheus::Histogram;
@@ -691,6 +692,31 @@ impl ConsensusAdapter {
             .ok(); // result here indicates if epoch ended earlier, we don't care about it
     }
 
+    async fn acquire_submit_semaphore(&self) -> SemaphorePermit {
+        loop {
+            match tokio::time::timeout(Duration::from_secs(5), async {
+                self.submit_semaphore
+                    .acquire()
+                    .count_in_flight(&self.metrics.sequencing_in_flight_semaphore_wait)
+                    .await
+                    .expect("Consensus adapter does not close semaphore")
+            })
+            .await
+            {
+                Ok(permit) => return permit,
+                Err(_) => {
+                    // This should not happen under normal circumstances, so panic in tests.
+                    // In production we have no choice but to retry (unless we add a higher level retry mechanism).
+                    // Giving up during submission could lead to epoch failing to terminate.
+                    debug_fatal!(
+                        "Failed to acquire submission semaphore within 30 seconds, retrying"
+                    );
+                    continue;
+                }
+            }
+        }
+    }
+
     #[allow(clippy::option_map_unit_fn)]
     async fn submit_and_wait_inner(
         self: Arc<Self>,
@@ -789,12 +815,8 @@ impl ConsensusAdapter {
             guard.preceding_disconnected = Some(preceding_disconnected);
             guard.amplification_factor = Some(amplification_factor);
 
-            let _permit: SemaphorePermit = self
-                .submit_semaphore
-                .acquire()
-                .count_in_flight(&self.metrics.sequencing_in_flight_semaphore_wait)
-                .await
-                .expect("Consensus adapter does not close semaphore");
+            let _permit = self.acquire_submit_semaphore().await;
+
             let _in_flight_submission_guard =
                 GaugeGuard::acquire(&self.metrics.sequencing_in_flight_submissions);
 
