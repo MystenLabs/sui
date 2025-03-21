@@ -46,8 +46,6 @@ pub enum TestingAttribute {
 pub enum VerificationAttribute {
     // Denotes a function is a spec
     Spec,
-    // Focus on this function, deactivates verification for all other functions
-    Focus,
     // Denotes a function is only used by specs, only included in compilation in verify mode
     SpecOnly,
 }
@@ -104,7 +102,6 @@ impl KnownAttribute {
             TestingAttribute::RAND_TEST => TestingAttribute::RandTest.into(),
             VerificationAttribute::SPEC => VerificationAttribute::Spec.into(),
             VerificationAttribute::SPEC_ONLY => VerificationAttribute::SpecOnly.into(),
-            VerificationAttribute::FOCUS => VerificationAttribute::Focus.into(),
             NativeAttribute::BYTECODE_INSTRUCTION => NativeAttribute::BytecodeInstruction.into(),
             DiagnosticAttribute::ALLOW => DiagnosticAttribute::Allow.into(),
             DiagnosticAttribute::LINT_ALLOW => DiagnosticAttribute::LintAllow.into(),
@@ -206,13 +203,11 @@ impl TestingAttribute {
 impl VerificationAttribute {
     pub const SPEC: &'static str = "spec";
     pub const SPEC_ONLY: &'static str = "spec_only";
-    pub const FOCUS: &'static str = "focus";
 
     pub const fn name(&self) -> &str {
         match self {
             Self::Spec => Self::SPEC,
-            Self::SpecOnly => Self::SPEC_ONLY,
-            Self::Focus => Self::FOCUS,
+            Self::SpecOnly => Self::SPEC_ONLY
         }
     }
 
@@ -234,8 +229,7 @@ impl VerificationAttribute {
 
         match self {
             Self::Spec => &FUNCTION_POSITIONS,
-            Self::SpecOnly => &VERIFY_ONLY_POSITIONS,
-            Self::Focus => &FUNCTION_POSITIONS,
+            Self::SpecOnly => &VERIFY_ONLY_POSITIONS
         }
     }
 }
