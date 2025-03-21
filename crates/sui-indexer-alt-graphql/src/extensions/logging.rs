@@ -19,7 +19,7 @@ use tracing::{debug, info, warn};
 use uuid::Uuid;
 
 use crate::{
-    error::{code, fill_error_code},
+    error::{code, error_codes, fill_error_code},
     metrics::RpcMetrics,
 };
 
@@ -162,24 +162,6 @@ impl Extension for LoggingExt {
 
         result
     }
-}
-
-/// Get a list of error codes from a GraphQL response. We use these to figure out whether we should
-/// log the query at the `debug` or `info` level.
-fn error_codes(response: &Response) -> Vec<&str> {
-    response
-        .errors
-        .iter()
-        .flat_map(|err| &err.extensions)
-        .flat_map(|ext| ext.get("code"))
-        .filter_map(|code| {
-            if let Value::String(code) = code {
-                Some(code.as_str())
-            } else {
-                None
-            }
-        })
-        .collect()
 }
 
 /// Whether the query should be logged at a "louder" level (e.g. `warn!` instead of `debug!`),

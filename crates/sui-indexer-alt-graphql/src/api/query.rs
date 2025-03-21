@@ -44,4 +44,9 @@ impl Query {
         tokio::time::sleep(std::time::Duration::from_secs(100)).await;
         "Done!".to_string()
     }
+
+    /// Test query that can be used to test simulate nesting.
+    async fn dot(&self) -> Query {
+        Query
+    }
 }
