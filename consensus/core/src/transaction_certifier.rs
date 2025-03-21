@@ -4,12 +4,13 @@
 use std::{collections::BTreeMap, sync::Arc};
 
 use consensus_config::Committee;
+use mysten_common::debug_fatal;
 use mysten_metrics::monitored_mpsc::UnboundedSender;
 use parking_lot::RwLock;
-use tracing::trace;
 
 use crate::{
-    block::GENESIS_ROUND,
+    block::{BlockTransactionVotes, GENESIS_ROUND},
+    block_verifier::BlockVerifier,
     context::Context,
     dag_state::DagState,
     stake_aggregator::{QuorumThreshold, StakeAggregator},
@@ -17,16 +18,27 @@ use crate::{
     VerifiedBlock,
 };
 
-/// TransactionCertifier has the following functionalities:
+/// TransactionCertifier has the following purposes:
 /// 1. Certifies transactions and sends them to execute on the fastpath.
 /// 2. Keeps track of own votes on transactions, and allows the votes to be retrieved
 ///    later in core after acceptance of the blocks containing the transactions.
 /// 3. Aggregates reject votes on transactions, and allows the aggregated votes
 ///    to be retrieved during post-commit finalization.
 ///
-/// A transaction is certified if a quorum of authorities voted to accept it. A block is certified
-/// if every transaction in the block is either certified or rejected. TransactionCertifier outputs
-/// blocks certified in the causal history own proposed blocks.
+/// A transaction is certified if a quorum of authorities in the causal history of a proposed block
+/// vote to accept the transaction. Accept votes are implicit in blocks: if a transaction is in
+/// the causal history of a block and the block does not vote to reject it, the block
+/// is considered to vote to accept the transaction. Transaction finalization are eventually resolved
+/// post commit, by checking if there is a certification of the transaction in the causal history
+/// of the leader. So only accept votes are only considered if they are in the causal history of own
+/// proposed blocks.
+///
+/// A transaction is rejected if a quorum of authorities vote to reject it. When this happens, it is
+/// guaranteed that no validator can observe a certification of the transaction, with <= f malicious
+/// stake.
+///
+/// A block is certified if every transaction in the block is either certified or rejected.
+/// TransactionCertifier outputs certified blocks.
 ///
 /// The invariant between TransactionCertifier and post-commit finalization is that if a quorum of
 /// authorities certified a transaction for fastpath and executed it, then the transaction
@@ -55,9 +67,40 @@ impl TransactionCertifier {
         }
     }
 
-    pub(crate) fn run_gc(&self) {
-        let gc_round = self.dag_state.read().gc_round();
+    /// Recovers internal state from blocks in storage.
+    /// Since votes are not stored persistently, blocks where votes have not been proposed are re-verified and voted.
+    pub(crate) fn recover(&self, block_verifier: &impl BlockVerifier) {
         let mut certifier_state = self.certifier_state.write();
+        let dag_state = self.dag_state.read();
+
+        let gc_round = dag_state.gc_round();
+        let authorities = certifier_state
+            .context
+            .committee
+            .authorities()
+            .map(|(index, _)| index)
+            .collect::<Vec<_>>();
+        for authority_index in authorities {
+            let blocks = dag_state.get_cached_blocks(authority_index, gc_round + 1);
+            let voted_blocks = blocks
+                .into_iter()
+                .map(|b| {
+                    if dag_state.is_hard_linked(&b.reference()) {
+                        (b, vec![])
+                    } else {
+                        let reject_transaction_votes = block_verifier
+                            .verify_and_vote(b.signed_block())
+                            .unwrap_or_else(|e| {
+                                panic!("Failed to verify block during recovery: {}", e)
+                            });
+                        (b, reject_transaction_votes)
+                    }
+                })
+                .collect::<Vec<_>>();
+            let certified_blocks = certifier_state.add_voted_blocks(voted_blocks);
+            self.send_certified_blocks(certified_blocks);
+        }
+
         certifier_state.update_gc_round(gc_round);
     }
 
@@ -91,6 +134,37 @@ impl TransactionCertifier {
         }) {
             tracing::warn!("Failed to send certified blocks: {:?}", e);
         }
+    }
+
+    /// Retrieves votes on transactions from the peer blocks.
+    pub(crate) fn get_block_transaction_votes(
+        &self,
+        block_refs: Vec<BlockRef>,
+    ) -> Vec<BlockTransactionVotes> {
+        let mut votes = vec![];
+        let certifier_state = self.certifier_state.read();
+        for block_ref in block_refs {
+            if block_ref.round <= certifier_state.gc_round {
+                continue;
+            }
+            let vote_info = certifier_state.votes.get(&block_ref).unwrap_or_else(|| {
+                panic!("Ancestor block {} not found in certifier state", block_ref)
+            });
+            if !vote_info.own_reject_txn_votes.is_empty() {
+                votes.push(BlockTransactionVotes {
+                    block_ref,
+                    rejects: vote_info.own_reject_txn_votes.clone(),
+                });
+            }
+        }
+        votes
+    }
+
+    /// Runs garbage collection on the internal state and updates the GC round for the certifier.
+    pub(crate) fn run_gc(&self) {
+        let gc_round = self.dag_state.read().gc_round();
+        let mut certifier_state = self.certifier_state.write();
+        certifier_state.update_gc_round(gc_round);
     }
 }
 
@@ -174,27 +248,30 @@ impl CertifierState {
     }
 
     fn add_proposed_block(&mut self, proposed_block: VerifiedBlock) -> Vec<CertifiedBlock> {
-        // Create vote entry for the proposed block and process its reject votes.
-        let mut certified_blocks = self.add_voted_block(proposed_block.clone(), vec![]);
-
         if proposed_block.round() <= self.gc_round + 2 {
             // Skip additional certification if transactions that can be certified have already been GC'ed.
-            return certified_blocks;
+            return vec![];
         }
 
+        // Vote entry for the proposed block must already exist.
+        assert!(
+            self.votes.contains_key(&proposed_block.reference()),
+            "Proposed block {} not found in certifier state",
+            proposed_block.reference()
+        );
+
+        let mut certified_blocks = vec![];
         for voting_ancestor in proposed_block.ancestors() {
             // Votes are 1 round before the proposed block.
             if voting_ancestor.round + 1 != proposed_block.round() {
                 continue;
             }
             let Some(voting_info) = self.votes.get(voting_ancestor) else {
-                // TODO(fastpath): switch to debug_fatal() after implementing crash recovery.
-                trace!("voting info not found for ancestor {}", voting_ancestor);
+                debug_fatal!("voting info not found for ancestor {}", voting_ancestor);
                 continue;
             };
             let Some(voting_block) = voting_info.block.clone() else {
-                // TODO(fastpath): switch to debug_fatal() after implementing crash recovery.
-                trace!("voting block not found for ancestor {}", voting_ancestor);
+                debug_fatal!("voting block not found for ancestor {}", voting_ancestor);
                 continue;
             };
             for target_ancestor in voting_block.ancestors() {
@@ -203,8 +280,7 @@ impl CertifierState {
                     continue;
                 }
                 let Some(target_vote_info) = self.votes.get_mut(target_ancestor) else {
-                    // TODO(fastpath): switch to debug_fatal() after implementing crash recovery.
-                    trace!("voting info not found for ancestor {}", target_ancestor);
+                    debug_fatal!("voting info not found for ancestor {}", target_ancestor);
                     continue;
                 };
                 target_vote_info
@@ -574,7 +650,10 @@ mod test {
         // THEN: Round 3: with 1 round 3 block, A & C round 1 blocks are certified.
         let mut certifier = CertifierState::new(context.clone());
         certifier.add_voted_blocks(all_blocks.iter().map(|b| (b.clone(), vec![])).collect());
-        let certified_blocks = certifier.add_proposed_block(round_3_blocks.pop().unwrap());
+        let proposed_block = round_3_blocks.pop().unwrap();
+        let mut certified_blocks =
+            certifier.add_voted_blocks(vec![(proposed_block.clone(), vec![])]);
+        certified_blocks.extend(certifier.add_proposed_block(proposed_block));
         assert_eq!(
             certified_blocks.len(),
             2,
