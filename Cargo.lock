@@ -7921,6 +7921,7 @@ name = "move-prover"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "bimap",
  "clap",
  "codespan-reporting",
  "itertools 0.10.5",
@@ -7943,6 +7944,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "async-trait",
+ "bimap",
  "codespan",
  "codespan-reporting",
  "futures",
@@ -14778,7 +14780,7 @@ dependencies = [
  "tokio-util 0.7.10",
  "toml 0.7.4",
  "tower 0.4.13",
- "tower-http",
+ "tower-http 0.5.2",
  "tracing",
  "uuid 1.2.2",
 ]
@@ -15120,6 +15122,45 @@ dependencies = [
  "proc-macro2 1.0.87",
  "quote 1.0.35",
  "syn 1.0.107",
+]
+
+[[package]]
+name = "sui-prover"
+version = "1.39.0"
+dependencies = [
+ "anyhow",
+ "assert_cmd",
+ "better_any",
+ "bin-version",
+ "clap",
+ "colored",
+ "futures",
+ "jemalloc-ctl",
+ "jsonrpsee",
+ "move-binary-format",
+ "move-cli",
+ "move-compiler",
+ "move-core-types",
+ "move-disassembler",
+ "move-ir-types",
+ "move-package",
+ "move-prover",
+ "move-unit-test",
+ "move-vm-runtime",
+ "mysten-metrics",
+ "rand 0.8.5",
+ "sui-core",
+ "sui-macros",
+ "sui-move-build",
+ "sui-move-natives-latest",
+ "sui-node",
+ "sui-protocol-config",
+ "sui-simulator",
+ "sui-types",
+ "telemetry-subscribers",
+ "tempfile",
+ "tokio",
+ "tracing",
 ]
 
 [[package]]
