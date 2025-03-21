@@ -10,7 +10,7 @@ jobs:
   create-pr:
     runs-on: macos-latest
     permissions:
-      contents: write 
+      contents: write
 
     steps:
       - name: Checkout Source Repository
@@ -38,10 +38,10 @@ jobs:
           cd homebrew-sui-prover
           git config --global user.name "github-actions[bot]"
           git config --global user.email "github-actions[bot]@users.noreply.github.com"
-          git checkout -b "sui-prover"
+          git checkout -b "sui-prover-automation"
           git add .
           git commit -m "Automated version update"
-          git push https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/asymptotic-code/homebrew-sui-prover.git sui-prover
+          git push https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/asymptotic-code/homebrew-sui-prover.git sui-prover-automation
 
       - name: Create Pull Request
         id: create_pr
