@@ -148,7 +148,6 @@ impl ErrorBitset {
 
 #[cfg(test)]
 mod tests {
-    use crate::error_bitset::VERSION_0;
     use crate::error_bitset::VERSION_1;
 
     use super::{ErrorBitset, ErrorBitsetBuilder};
