@@ -1935,6 +1935,61 @@ async fn test_package_publish_test_flag() -> Result<(), anyhow::Error> {
 }
 
 #[sim_test]
+async fn test_package_publish_empty() -> Result<(), anyhow::Error> {
+    let mut test_cluster = TestClusterBuilder::new().build().await;
+    let rgp = test_cluster.get_reference_gas_price().await;
+    let address = test_cluster.get_address_0();
+    let context = &mut test_cluster.wallet;
+
+    let client = context.get_client().await?;
+    let object_refs = client
+        .read_api()
+        .get_owned_objects(
+            address,
+            Some(SuiObjectResponseQuery::new_with_options(
+                SuiObjectDataOptions::new()
+                    .with_type()
+                    .with_owner()
+                    .with_previous_transaction(),
+            )),
+            None,
+            None,
+        )
+        .await?
+        .data;
+
+    // Check log output contains all object ids.
+    let gas_obj_id = object_refs.first().unwrap().object().unwrap().object_id;
+
+    // Provide path to well formed package sources
+    let mut package_path = PathBuf::from(TEST_DATA_DIR);
+    package_path.push("empty");
+    let build_config = BuildConfig::new_for_testing().config;
+    let result = SuiClientCommands::Publish {
+        package_path,
+        build_config,
+        opts: OptsWithGas::for_testing(Some(gas_obj_id), rgp * TEST_ONLY_GAS_UNIT_FOR_PUBLISH),
+        skip_dependency_verification: false,
+        verify_deps: true,
+        with_unpublished_dependencies: false,
+    }
+    .execute(context)
+    .await;
+
+    // should return error
+    let expect = expect![[r#"
+        Err(
+            ModulePublishFailure {
+                error: "No modules found in the package",
+            },
+        )
+    "#]];
+
+    expect.assert_debug_eq(&result);
+    Ok(())
+}
+
+#[sim_test]
 async fn test_package_upgrade_command() -> Result<(), anyhow::Error> {
     move_package::package_hooks::register_package_hooks(Box::new(SuiPackageHooks));
     let mut test_cluster = TestClusterBuilder::new().build().await;
