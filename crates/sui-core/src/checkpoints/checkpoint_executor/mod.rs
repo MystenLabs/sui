@@ -18,13 +18,14 @@
 //! CheckpointExecutor enforces the invariant that if `run` returns successfully, we have reached the
 //! end of epoch. This allows us to use it as a signal for reconfig.
 
+use fastcrypto::hash::MultisetHash;
 use futures::StreamExt;
 use mysten_common::{debug_fatal, fatal};
 use parking_lot::Mutex;
 use std::{sync::Arc, time::Instant};
 use sui_types::crypto::RandomnessRound;
 use sui_types::inner_temporary_store::PackageStoreWithFallback;
-use sui_types::messages_checkpoint::{CheckpointContents, CheckpointSequenceNumber};
+use sui_types::messages_checkpoint::{CheckpointContents, CheckpointSequenceNumber, ECMHLiveObjectSetDigest};
 use sui_types::transaction::{TransactionDataAPI, TransactionKind};
 
 use sui_config::node::{CheckpointExecutorConfig, RunWithRange};
@@ -524,6 +525,23 @@ impl CheckpointExecutor {
                     .accumulate_checkpoint(&tx_data.effects, sequence_number, &self.epoch_store)
                     .expect("epoch cannot have ended"),
             );
+
+            self.accumulator
+                .accumulate_running_root(&self.epoch_store, sequence_number, ckpt_state.accumulator.clone())
+                .expect("Failed to accumulate running root");
+
+            if ckpt_state.data.checkpoint.is_last_checkpoint_of_epoch() {
+                let live_object_set_hash = self.accumulator.digest_live_object_set(
+                    false,
+                );
+                tracing::error!("Epoch {} live object set hash: {:?}", self.epoch_store.epoch(), live_object_set_hash);
+                let root_state_digest: ECMHLiveObjectSetDigest = self.accumulator
+                    .accumulate_epoch(self.epoch_store.clone(), sequence_number)
+                    .expect("Accumulating epoch cannot fail")
+                    .digest()
+                    .into();
+                tracing::error!("Epoch {} root state hash digest: {:?}", self.epoch_store.epoch(), root_state_digest);
+            }
 
             ckpt_state.full_data = self.process_checkpoint_data(&ckpt_state.data, &tx_data);
             ckpt_state

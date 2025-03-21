@@ -119,6 +119,7 @@ members = [
     "crates/sui-http",
     "crates/sui-indexer",
     "crates/sui-indexer-alt",
+    "crates/sui-indexer-alt-data-integrity-check",
     "crates/sui-indexer-alt-e2e-tests",
     "crates/sui-indexer-alt-framework",
     "crates/sui-indexer-alt-jsonrpc",
@@ -657,6 +658,7 @@ sui-genesis-builder = { path = "crates/sui-genesis-builder" }
 sui-http = { path = "crates/sui-http" }
 sui-indexer = { path = "crates/sui-indexer" }
 sui-indexer-alt = { path = "crates/sui-indexer-alt" }
+sui-indexer-alt-data-integrity-check = { path = "crates/sui-indexer-alt-data-integrity-check" }
 sui-indexer-alt-framework = { path = "crates/sui-indexer-alt-framework", default-features = false }
 sui-indexer-alt-jsonrpc = { path = "crates/sui-indexer-alt-jsonrpc" }
 sui-indexer-alt-metrics = { path = "crates/sui-indexer-alt-metrics" }

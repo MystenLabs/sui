@@ -1,0 +1,23 @@
+[package]
+name = "sui-indexer-alt-data-integrity-check"
+version.workspace = true
+authors = ["Mysten Labs <build@mystenlabs.com>"]
+license = "Apache-2.0"
+publish = false
+edition = "2021"
+
+[dependencies]
+anyhow.workspace = true
+diesel = { workspace = true, features = ["chrono"] }
+diesel-async = { workspace = true, features = ["bb8", "postgres", "async-connection-wrapper"] }
+fastcrypto.workspace = true
+sui-indexer-alt-schema.workspace = true
+sui-types.workspace = true
+sui-core.workspace = true
+sui-pg-db.workspace = true
+sui-sql-macro.workspace = true
+telemetry-subscribers.workspace = true
+tokio.workspace = true
+tokio-util.workspace = true
+tracing.workspace = true
+url.workspace = true

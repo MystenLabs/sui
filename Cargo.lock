@@ -13861,6 +13861,26 @@ dependencies = [
 ]
 
 [[package]]
+name = "sui-indexer-alt-data-integrity-check"
+version = "1.46.0"
+dependencies = [
+ "anyhow",
+ "diesel",
+ "diesel-async",
+ "fastcrypto",
+ "sui-core",
+ "sui-indexer-alt-schema",
+ "sui-pg-db",
+ "sui-sql-macro",
+ "sui-types",
+ "telemetry-subscribers",
+ "tokio",
+ "tokio-util 0.7.13 (registry+https://github.com/rust-lang/crates.io-index)",
+ "tracing",
+ "url",
+]
+
+[[package]]
 name = "sui-indexer-alt-e2e-tests"
 version = "0.1.0"
 dependencies = [
