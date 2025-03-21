@@ -2670,6 +2670,7 @@ mod test {
 
         // Build blocks for a quorum of the network including the EXCLUDE authority (1)
         // which will trigger smart select and we will not propose a block
+        let round_14_ancestors = builder.last_ancestors.clone();
         builder
             .layer(15)
             .authorities(vec![
@@ -2701,8 +2702,14 @@ mod test {
                 AuthorityIndex::new_for_test(4),
             ])
             .skip_block()
+            .override_last_ancestors(round_14_ancestors)
             .build();
         let blocks = builder.blocks(15..=15);
+        let round_15_ancestors: Vec<BlockRef> = blocks
+            .iter()
+            .filter(|block| block.round() == 15)
+            .map(|block| block.reference())
+            .collect();
         let included_block_references = iter::once(&core.last_proposed_block())
             .chain(blocks.iter())
             .filter(|block| block.author() != AuthorityIndex::new_for_test(1))
@@ -2746,6 +2753,7 @@ mod test {
                 AuthorityIndex::new_for_test(6),
             ])
             .skip_block()
+            .override_last_ancestors(round_15_ancestors)
             .build();
         let blocks = builder.blocks(16..=16);
         // Wait for leader timeout to force blocks to be proposed.
