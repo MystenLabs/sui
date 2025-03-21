@@ -13,7 +13,7 @@ bin_version::bin_version!();
 #[derive(Parser)]
 #[clap(
     name = env!("CARGO_BIN_NAME"),
-    about = "A command-line tool for formal verification of Move code in Sui projects. When run in the root of a project, it executes all proofs automatically.",
+    about = "A command-line tool for formal verification of Move code within Sui projects. When executed from the project's root directory, it attempts to prove all specifications annotated with #[spec(verify)]",
     rename_all = "kebab-case",
     author,
     version = VERSION,
@@ -27,7 +27,7 @@ struct Args {
     #[clap(flatten)]
     pub general_config: GeneralConfig,
 
-    /// Boggie options
+    /// Boogie options
     #[clap(flatten)]
     pub boogie_config: BoogieConfig,
 
