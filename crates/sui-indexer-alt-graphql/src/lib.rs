@@ -16,8 +16,12 @@ use axum::{
     routing::{get, post},
     Extension, Router,
 };
+use axum_extra::TypedHeader;
 use config::RpcConfig;
-use extensions::{query_limits::QueryLimitsChecker, timeout::Timeout};
+use extensions::{
+    query_limits::{show_usage::ShowUsage, QueryLimitsChecker},
+    timeout::Timeout,
+};
 use prometheus::Registry;
 use tokio::{net::TcpListener, task::JoinHandle};
 use tokio_util::sync::CancellationToken;
@@ -224,6 +228,7 @@ pub async fn start_rpc(
 async fn graphql<Q, M, S>(
     ConnectInfo(addr): ConnectInfo<SocketAddr>,
     Extension(schema): Extension<Schema<Q, M, S>>,
+    show_usage: Option<TypedHeader<ShowUsage>>,
     request: GraphQLRequest,
 ) -> GraphQLResponse
 where
@@ -231,7 +236,11 @@ where
     M: ObjectType + 'static,
     S: SubscriptionType + 'static,
 {
-    let request = request.into_inner().data(Session::new(addr));
+    let mut request = request.into_inner().data(Session::new(addr));
+    if let Some(TypedHeader(show_usage)) = show_usage {
+        request = request.data(show_usage);
+    }
+
     schema.execute(request).await.into()
 }
 
