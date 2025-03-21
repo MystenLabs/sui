@@ -1,0 +1,17 @@
+name: Sui-Prover Test Action
+
+on: [pull_request]
+
+jobs:
+  build-and-run:
+    runs-on: macos-latest
+    env: 
+      BRANCH_NAME: ${{ github.head_ref || github.ref_name }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install dependencies from formula & build prover & run prover
+        run: |
+          sh ./external-crates/move/crates/move-prover/tests/sui-prover.sh
