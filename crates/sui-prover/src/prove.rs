@@ -35,10 +35,6 @@ impl From<BuildConfig> for MoveBuildConfig {
 #[derive(Args)]
 #[clap(next_help_heading = "General Options")]
 pub struct GeneralConfig {
-    /// Split verification into separate proof goals for each execution path
-    #[clap(name = "split-paths", long, short = 's', global = true)]
-    pub split_paths: Option<usize>,
-
     /// Set verification timeout in seconds (default: 3000)
     #[clap(name = "timeout", long, short = 't', global = true)]
     pub timeout: Option<usize>,
@@ -54,11 +50,15 @@ pub struct GeneralConfig {
 
 /// Boogie options
 #[derive(Args)]
-#[clap(next_help_heading = "Boggie Options")]
+#[clap(next_help_heading = "Modeling Options")]
 pub struct BoogieConfig {
-    /// Display detailed verification progress
+    /// Use the array theory instead of uninterpreted functions to model arrays
     #[clap(name = "use_array_theory", long = "use_array_theory", global = true)]
     pub use_array_theory: bool,
+
+    /// Split verification into separate proof goals for each execution path
+    #[clap(name = "split-paths", long, short = 's', global = true)]
+    pub split_paths: Option<usize>,
 }
 
 #[derive(Args)]
@@ -123,7 +123,7 @@ pub fn execute(
     options.backend.use_array_theory = boogie_config.use_array_theory;
     options.backend.keep_artifacts = general_config.keep_temp;
     options.backend.vc_timeout = general_config.timeout.unwrap_or(3000);
-    options.backend.path_split = general_config.split_paths;
+    options.backend.path_split = boogie_config.split_paths;
     options.verbosity_level = if general_config.verbose { LevelFilter::Trace } else { LevelFilter::Info };
     
     run_boogie_gen(&model, options)?;
