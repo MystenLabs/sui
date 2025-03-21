@@ -92,11 +92,11 @@ jobs:
       - name: Add Label to PR
         run: |
           PR_NUMBER=$(curl -s -H "Authorization: token ${{ secrets.PAT_TOKEN }}" \
-            "https://api.github.com/repos/asymptotic-code/homebrew-sui-prove/pulls?state=open" | jq -r \
+            "https://api.github.com/repos/asymptotic-code/homebrew-sui-prover/pulls?state=open" | jq -r \
             '.[] | select(.head.ref=="sui-prover") | .number')
 
           curl -s -X POST -H "Authorization: token ${{ secrets.PAT_TOKEN }}" \
             -H "Accept: application/vnd.github.v3+json" \
-            "https://api.github.com/repos/asymptotic-code/homebrew-sui-prove/issues/$PR_NUMBER/labels" \
+            "https://api.github.com/repos/asymptotic-code/homebrew-sui-prover/issues/$PR_NUMBER/labels" \
             -d '{"labels":["pr-pull"]}'
   
