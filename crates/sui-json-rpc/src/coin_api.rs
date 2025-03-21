@@ -12,7 +12,7 @@ use jsonrpsee::RpcModule;
 use move_core_types::language_storage::{StructTag, TypeTag};
 use sui_core::jsonrpc_index::TotalBalance;
 use tap::TapFallible;
-use tracing::{debug, info, instrument};
+use tracing::{debug, instrument};
 
 use mysten_metrics::spawn_monitored_task;
 use sui_core::authority::AuthorityState;

@@ -4,7 +4,7 @@
 #[macro_export]
 macro_rules! with_tracing {
     ($time_spent_threshold:expr, $future:expr) => {{
-        use tracing::{info, error, Instrument, Span};
+        use tracing::{debug, Instrument, Span};
         use jsonrpsee::core::{RpcResult};
         use jsonrpsee::types::error::ErrorObjectOwned;
         use $crate::error::RpcInterimResult;
@@ -19,12 +19,12 @@ macro_rules! with_tracing {
 
                 let rpc_error: ErrorObjectOwned = e.into();
 
-                error!(error=%anyhow_error);
+                debug!(error=%anyhow_error);
                 rpc_error
             });
 
             if elapsed > $time_spent_threshold {
-                info!(?elapsed, "RPC took longer than threshold to complete.");
+                debug!(?elapsed, "RPC took longer than threshold to complete.");
             }
             result
         }
