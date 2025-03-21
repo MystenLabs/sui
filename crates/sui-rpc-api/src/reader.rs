@@ -86,9 +86,9 @@ impl StateReader {
             .inner()
             .get_transaction_effects(&transaction_digest)
             .ok_or(TransactionNotFoundError(digest))?;
-        let events = if let Some(event_digest) = effects.events_digest() {
+        let events = if effects.events_digest().is_some() {
             self.inner()
-                .get_events(event_digest)
+                .get_events(effects.transaction_digest())
                 .ok_or(TransactionNotFoundError(digest))?
                 .pipe(Some)
         } else {

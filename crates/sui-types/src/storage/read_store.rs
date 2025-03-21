@@ -7,7 +7,6 @@ use crate::base_types::{EpochId, MoveObjectType, ObjectID, SequenceNumber, SuiAd
 use crate::committee::Committee;
 use crate::digests::{
     ChainIdentifier, CheckpointContentsDigest, CheckpointDigest, TransactionDigest,
-    TransactionEventsDigest,
 };
 use crate::dynamic_field::DynamicFieldType;
 use crate::effects::{TransactionEffects, TransactionEvents};
@@ -118,11 +117,11 @@ pub trait ReadStore: ObjectStore {
             .collect()
     }
 
-    fn get_events(&self, event_digest: &TransactionEventsDigest) -> Option<TransactionEvents>;
+    fn get_events(&self, event_digest: &TransactionDigest) -> Option<TransactionEvents>;
 
     fn multi_get_events(
         &self,
-        event_digests: &[TransactionEventsDigest],
+        event_digests: &[TransactionDigest],
     ) -> Vec<Option<TransactionEvents>> {
         event_digests
             .iter()
@@ -178,26 +177,27 @@ pub trait ReadStore: ObjectStore {
             .map(|maybe_effects| maybe_effects.ok_or_else(|| anyhow::anyhow!("missing effects")))
             .collect::<anyhow::Result<Vec<_>>>()?;
 
-        let event_digests = effects
+        let event_tx_digests = effects
             .iter()
-            .flat_map(|fx| fx.events_digest().copied())
+            .flat_map(|fx| fx.events_digest().map(|_| fx.transaction_digest()).copied())
             .collect::<Vec<_>>();
 
         let events = self
-            .multi_get_events(&event_digests)
+            .multi_get_events(&event_tx_digests)
             .into_iter()
-            .map(|maybe_event| maybe_event.ok_or_else(|| anyhow::anyhow!("missing event")))
-            .collect::<anyhow::Result<Vec<_>>>()?;
+            .zip(event_tx_digests)
+            .map(|(maybe_event, tx_digest)| {
+                maybe_event
+                    .ok_or_else(|| anyhow::anyhow!("missing event for tx {tx_digest}"))
+                    .map(|event| (tx_digest, event))
+            })
+            .collect::<anyhow::Result<HashMap<_, _>>>()?;
 
-        let events = event_digests
-            .into_iter()
-            .zip(events)
-            .collect::<HashMap<_, _>>();
         let mut full_transactions = Vec::with_capacity(transactions.len());
         for (tx, fx) in transactions.into_iter().zip(effects) {
-            let events = fx.events_digest().map(|event_digest| {
+            let events = fx.events_digest().map(|_event_digest| {
                 events
-                    .get(event_digest)
+                    .get(fx.transaction_digest())
                     .cloned()
                     .expect("event was already checked to be present")
             });
@@ -341,13 +341,13 @@ impl<T: ReadStore + ?Sized> ReadStore for &T {
         (*self).multi_get_transaction_effects(tx_digests)
     }
 
-    fn get_events(&self, event_digest: &TransactionEventsDigest) -> Option<TransactionEvents> {
+    fn get_events(&self, event_digest: &TransactionDigest) -> Option<TransactionEvents> {
         (*self).get_events(event_digest)
     }
 
     fn multi_get_events(
         &self,
-        event_digests: &[TransactionEventsDigest],
+        event_digests: &[TransactionDigest],
     ) -> Vec<Option<TransactionEvents>> {
         (*self).multi_get_events(event_digests)
     }
@@ -451,13 +451,13 @@ impl<T: ReadStore + ?Sized> ReadStore for Box<T> {
         (**self).multi_get_transaction_effects(tx_digests)
     }
 
-    fn get_events(&self, event_digest: &TransactionEventsDigest) -> Option<TransactionEvents> {
+    fn get_events(&self, event_digest: &TransactionDigest) -> Option<TransactionEvents> {
         (**self).get_events(event_digest)
     }
 
     fn multi_get_events(
         &self,
-        event_digests: &[TransactionEventsDigest],
+        event_digests: &[TransactionDigest],
     ) -> Vec<Option<TransactionEvents>> {
         (**self).multi_get_events(event_digests)
     }
@@ -561,13 +561,13 @@ impl<T: ReadStore + ?Sized> ReadStore for Arc<T> {
         (**self).multi_get_transaction_effects(tx_digests)
     }
 
-    fn get_events(&self, event_digest: &TransactionEventsDigest) -> Option<TransactionEvents> {
+    fn get_events(&self, event_digest: &TransactionDigest) -> Option<TransactionEvents> {
         (**self).get_events(event_digest)
     }
 
     fn multi_get_events(
         &self,
-        event_digests: &[TransactionEventsDigest],
+        event_digests: &[TransactionDigest],
     ) -> Vec<Option<TransactionEvents>> {
         (**self).multi_get_events(event_digests)
     }

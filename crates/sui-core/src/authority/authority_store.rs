@@ -262,6 +262,13 @@ impl AuthorityStore {
             // We don't insert the effects to executed_effects yet because the genesis tx hasn't but will be executed.
             // This is important for fullnodes to be able to generate indexing data right now.
 
+            if genesis.effects().events_digest().is_some() {
+                store
+                    .perpetual_tables
+                    .events_2
+                    .insert(transaction.digest(), genesis.events())
+                    .unwrap();
+            }
             let event_digests = genesis.events().digest();
             let events = genesis
                 .events()
@@ -315,6 +322,23 @@ impl AuthorityStore {
 
     pub fn get_events(
         &self,
+        digest: &TransactionDigest,
+    ) -> Result<Option<TransactionEvents>, TypedStoreError> {
+        // For now, during this transition period, if we don't find events for a particular
+        // Transaction we need to fallback to try and read from the older table. Once the migration
+        // has finished and we've removed the older events table we can stop doing the fallback
+        if let Some(events) = self.perpetual_tables.events_2.get(digest)? {
+            return Ok(Some(events));
+        }
+
+        self.get_executed_effects(digest)?
+            .and_then(|effects| effects.events_digest().copied())
+            .and_then(|events_digest| self.get_events_by_events_digest(&events_digest).transpose())
+            .transpose()
+    }
+
+    pub fn get_events_by_events_digest(
+        &self,
         event_digest: &TransactionEventsDigest,
     ) -> Result<Option<TransactionEvents>, TypedStoreError> {
         let data = self
@@ -328,7 +352,7 @@ impl AuthorityStore {
 
     pub fn multi_get_events(
         &self,
-        event_digests: &[TransactionEventsDigest],
+        event_digests: &[TransactionDigest],
     ) -> SuiResult<Vec<Option<TransactionEvents>>> {
         Ok(event_digests
             .iter()
@@ -346,7 +370,7 @@ impl AuthorityStore {
     pub fn get_executed_effects(
         &self,
         tx_digest: &TransactionDigest,
-    ) -> SuiResult<Option<TransactionEffects>> {
+    ) -> Result<Option<TransactionEffects>, TypedStoreError> {
         let effects_digest = self.perpetual_tables.executed_effects.get(tx_digest)?;
         match effects_digest {
             Some(digest) => Ok(self.perpetual_tables.effects.get(&digest)?),
@@ -827,6 +851,15 @@ impl AuthorityStore {
 
         write_batch.insert_batch(&self.perpetual_tables.objects, new_objects)?;
 
+        // Write events into the new table keyed off of transaction_digest
+        if effects.events_digest().is_some() {
+            write_batch.insert_batch(
+                &self.perpetual_tables.events_2,
+                [(transaction_digest, events)],
+            )?;
+        }
+
+        // Continue writting events into the old table for now keyed off of events digest
         let event_digest = events.digest();
         let events = events
             .data
@@ -1166,6 +1199,7 @@ impl AuthorityStore {
             iter::once(tx_digest),
         )?;
         if let Some(events_digest) = effects.events_digest() {
+            write_batch.delete_batch(&self.perpetual_tables.events_2, [tx_digest])?;
             write_batch.schedule_delete_range(
                 &self.perpetual_tables.events,
                 &(*events_digest, usize::MIN),

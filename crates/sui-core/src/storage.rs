@@ -17,7 +17,6 @@ use sui_types::base_types::SuiAddress;
 use sui_types::base_types::TransactionDigest;
 use sui_types::committee::Committee;
 use sui_types::committee::EpochId;
-use sui_types::digests::TransactionEventsDigest;
 use sui_types::effects::{TransactionEffects, TransactionEvents};
 use sui_types::messages_checkpoint::CheckpointContentsDigest;
 use sui_types::messages_checkpoint::CheckpointDigest;
@@ -206,7 +205,7 @@ impl ReadStore for RocksDbStore {
             .get_executed_effects(digest)
     }
 
-    fn get_events(&self, digest: &TransactionEventsDigest) -> Option<TransactionEvents> {
+    fn get_events(&self, digest: &TransactionDigest) -> Option<TransactionEvents> {
         self.cache_traits
             .transaction_cache_reader
             .get_events(digest)
@@ -426,7 +425,7 @@ impl ReadStore for RestReadStore {
         self.rocks.get_transaction_effects(digest)
     }
 
-    fn get_events(&self, digest: &TransactionEventsDigest) -> Option<TransactionEvents> {
+    fn get_events(&self, digest: &TransactionDigest) -> Option<TransactionEvents> {
         self.rocks.get_events(digest)
     }
 

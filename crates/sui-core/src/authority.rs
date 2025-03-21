@@ -97,7 +97,6 @@ use sui_types::committee::{EpochId, ProtocolVersion};
 use sui_types::crypto::{default_hash, AuthoritySignInfo, Signer};
 use sui_types::deny_list_v1::check_coin_deny_list_v1;
 use sui_types::digests::ChainIdentifier;
-use sui_types::digests::TransactionEventsDigest;
 use sui_types::dynamic_field::{DynamicFieldInfo, DynamicFieldName};
 use sui_types::effects::{
     InputSharedObject, SignedTransactionEffects, TransactionEffects, TransactionEffectsAPI,
@@ -3842,7 +3841,7 @@ impl AuthorityState {
     #[instrument(level = "trace", skip_all)]
     pub fn get_transaction_events(
         &self,
-        digest: &TransactionEventsDigest,
+        digest: &TransactionDigest,
     ) -> SuiResult<TransactionEvents> {
         self.get_transaction_cache_reader()
             .get_events(digest)
@@ -4208,11 +4207,13 @@ impl AuthorityState {
                         .and_then(|e| e.data.get(k.2).cloned()),
                 )
             })
-            .map(|((digest, tx_digest, event_seq, timestamp), event)| {
-                event
-                    .map(|e| (e, tx_digest, event_seq, timestamp))
-                    .ok_or(SuiError::TransactionEventsNotFound { digest })
-            })
+            .map(
+                |((_event_digest, tx_digest, event_seq, timestamp), event)| {
+                    event
+                        .map(|e| (e, tx_digest, event_seq, timestamp))
+                        .ok_or(SuiError::TransactionEventsNotFound { digest: tx_digest })
+                },
+            )
             .collect::<Result<Vec<_>, _>>()?;
 
         let epoch_store = self.load_epoch_store_one_call_per_task();
@@ -4256,8 +4257,8 @@ impl AuthorityState {
             .get_transaction_cache_reader()
             .get_executed_effects(transaction_digest);
         if let Some(effects) = effects {
-            let events = if let Some(digest) = effects.events_digest() {
-                self.get_transaction_events(digest)?
+            let events = if effects.events_digest().is_some() {
+                self.get_transaction_events(effects.transaction_digest())?
             } else {
                 TransactionEvents::default()
             };
@@ -4283,8 +4284,8 @@ impl AuthorityState {
                 .get_transaction_block(transaction_digest)
             {
                 let cert_sig = epoch_store.get_transaction_cert_sig(transaction_digest)?;
-                let events = if let Some(digest) = effects.events_digest() {
-                    self.get_transaction_events(digest)?
+                let events = if effects.events_digest().is_some() {
+                    self.get_transaction_events(effects.transaction_digest())?
                 } else {
                     TransactionEvents::default()
                 };
@@ -5626,21 +5627,10 @@ impl TransactionKeyValueStoreTrait for AuthorityState {
         if digests.is_empty() {
             return Ok(vec![]);
         }
-        let events_digests: Vec<_> = self
+
+        Ok(self
             .get_transaction_cache_reader()
-            .multi_get_executed_effects(digests)
-            .into_iter()
-            .map(|t| t.and_then(|t| t.events_digest().cloned()))
-            .collect();
-        let non_empty_events: Vec<_> = events_digests.iter().filter_map(|e| *e).collect();
-        let mut events = self
-            .get_transaction_cache_reader()
-            .multi_get_events(&non_empty_events)
-            .into_iter();
-        Ok(events_digests
-            .into_iter()
-            .map(|ev| ev.and_then(|_| events.next()?))
-            .collect())
+            .multi_get_events(digests))
     }
 }
 
