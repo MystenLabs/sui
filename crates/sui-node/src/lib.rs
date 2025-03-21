@@ -643,7 +643,7 @@ impl SuiNode {
             None
         };
 
-        let chain_identifier = ChainIdentifier::from(*genesis.checkpoint().digest());
+        let chain_identifier = epoch_store.get_chain_identifier();
 
         info!("creating archive reader");
         // Create network

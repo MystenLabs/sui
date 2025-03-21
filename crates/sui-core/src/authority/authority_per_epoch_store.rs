@@ -825,6 +825,10 @@ impl AuthorityPerEpochStore {
                 "cannot override chain on production networks!"
             );
         }
+        info!(
+            "initializing epoch store from chain id {:?} to chain id {:?}",
+            chain_from_id, chain.1
+        );
 
         let protocol_config = ProtocolConfig::get_for_version(protocol_version, chain.1);
 

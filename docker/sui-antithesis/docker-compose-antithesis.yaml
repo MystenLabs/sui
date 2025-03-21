@@ -15,6 +15,7 @@ services:
       - RPC_WORKER_THREAD=12
       - NEW_CHECKPOINT_WARNING_TIMEOUT_MS=30000
       - NEW_CHECKPOINT_PANIC_TIMEOUT_MS=60000
+      - SUI_PROTOCOL_CONFIG_CHAIN_OVERRIDE=${SUI_PROTOCOL_CONFIG_CHAIN_OVERRIDE}
       - TOKIO_WORKER_THREADS=4
     volumes:
       - ./genesis/files/validator1-8080.yaml:/opt/sui/config/validator.yaml:ro
@@ -43,6 +44,7 @@ services:
       - RPC_WORKER_THREAD=12
       - NEW_CHECKPOINT_WARNING_TIMEOUT_MS=30000
       - NEW_CHECKPOINT_PANIC_TIMEOUT_MS=60000
+      - SUI_PROTOCOL_CONFIG_CHAIN_OVERRIDE=${SUI_PROTOCOL_CONFIG_CHAIN_OVERRIDE}
       - TOKIO_WORKER_THREADS=4
     volumes:
       - ./genesis/files/validator2-8080.yaml:/opt/sui/config/validator.yaml:ro
@@ -71,6 +73,7 @@ services:
       - RPC_WORKER_THREAD=12
       - NEW_CHECKPOINT_WARNING_TIMEOUT_MS=30000
       - NEW_CHECKPOINT_PANIC_TIMEOUT_MS=60000
+      - SUI_PROTOCOL_CONFIG_CHAIN_OVERRIDE=${SUI_PROTOCOL_CONFIG_CHAIN_OVERRIDE}
       - TOKIO_WORKER_THREADS=4
     volumes:
       - ./genesis/files/validator3-8080.yaml:/opt/sui/config/validator.yaml:ro
@@ -99,6 +102,7 @@ services:
       - RPC_WORKER_THREAD=12
       - NEW_CHECKPOINT_WARNING_TIMEOUT_MS=30000
       - NEW_CHECKPOINT_PANIC_TIMEOUT_MS=60000
+      - SUI_PROTOCOL_CONFIG_CHAIN_OVERRIDE=${SUI_PROTOCOL_CONFIG_CHAIN_OVERRIDE}
       - TOKIO_WORKER_THREADS=4
     volumes:
       - ./genesis/files/validator4-8080.yaml:/opt/sui/config/validator.yaml:ro
@@ -127,6 +131,7 @@ services:
       - RPC_WORKER_THREAD=12
       - NEW_CHECKPOINT_WARNING_TIMEOUT_MS=30000
       - NEW_CHECKPOINT_PANIC_TIMEOUT_MS=60000
+      - SUI_PROTOCOL_CONFIG_CHAIN_OVERRIDE=${SUI_PROTOCOL_CONFIG_CHAIN_OVERRIDE}
       - TOKIO_WORKER_THREADS=4
     volumes:
       - ./genesis/static/fullnode.yaml:/opt/sui/config/fullnode.yaml:ro
@@ -161,6 +166,7 @@ services:
       - STRESS_SHARED_COUNTER=1
       - STRESS_TRANSFER_OBJECT=1
       - STRESS_DELEGATION=0
+      - SUI_PROTOCOL_CONFIG_CHAIN_OVERRIDE=${SUI_PROTOCOL_CONFIG_CHAIN_OVERRIDE}
       - BATCH_PAYMENT=1
       - BATCH_PAYMENT_SIZE=15
       - STRESS_ADVERSARIAL=0
