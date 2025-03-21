@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["ImageAction"],"fn":["ci_cmd","image_cmd"],"struct":["CIArgs","ImageArgs","ImageBuildArgs","ImageQueryArgs"]};

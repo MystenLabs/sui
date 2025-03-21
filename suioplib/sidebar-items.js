@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"mod":["cli","command"],"static":["DEBUG_MODE"]};

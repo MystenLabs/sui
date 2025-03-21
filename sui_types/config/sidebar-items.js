@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"constant":["CONFIG_MODULE_NAME","CONFIG_STRUCT_NAME","RESOLVED_SUI_CONFIG","SETTING_DATA_STRUCT_NAME","SETTING_STRUCT_NAME"],"fn":["is_setting","setting_type"],"struct":["Config","Setting","SettingData"]};

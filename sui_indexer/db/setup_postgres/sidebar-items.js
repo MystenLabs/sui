@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["clear_database","reset_database","run_migrations"]};
