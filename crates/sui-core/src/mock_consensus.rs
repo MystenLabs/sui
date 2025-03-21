@@ -7,9 +7,7 @@ use crate::checkpoints::CheckpointServiceNoop;
 use crate::consensus_adapter::{BlockStatusReceiver, ConsensusClient, SubmitToConsensus};
 use crate::consensus_handler::SequencedConsensusTransaction;
 use consensus_core::BlockRef;
-use mysten_common::random::get_rng;
 use prometheus::Registry;
-use rand::Rng;
 use std::sync::{Arc, Weak};
 use std::time::Duration;
 use sui_types::error::{SuiError, SuiResult};
@@ -18,7 +16,7 @@ use sui_types::messages_consensus::{ConsensusTransaction, ConsensusTransactionKi
 use sui_types::transaction::{VerifiedCertificate, VerifiedTransaction};
 use tokio::sync::{mpsc, oneshot};
 use tokio::task::JoinHandle;
-use tracing::{debug, warn};
+use tracing::debug;
 
 pub struct MockConsensusClient {
     tx_sender: mpsc::Sender<ConsensusTransaction>,
