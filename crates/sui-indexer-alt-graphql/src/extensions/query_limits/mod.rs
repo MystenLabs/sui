@@ -1,16 +1,19 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 
 use async_graphql::{
-    extensions::{Extension, ExtensionContext, ExtensionFactory, NextParseQuery},
+    extensions::{Extension, ExtensionContext, ExtensionFactory, NextParseQuery, NextRequest},
     parser::types::ExecutableDocument,
-    ServerResult, Variables,
+    value, Response, ServerResult, Variables,
 };
+
+use self::show_usage::ShowUsage;
 
 mod error;
 mod input;
+pub(crate) mod show_usage;
 
 pub(crate) struct QueryLimitsConfig {
     pub max_query_nodes: u32,
@@ -20,11 +23,15 @@ pub(crate) struct QueryLimitsConfig {
 /// Extension factory for adding checks that the query is within configurable limits.
 pub(crate) struct QueryLimitsChecker;
 
-struct QueryLimitsCheckerExt;
+struct QueryLimitsCheckerExt {
+    input_usage: Mutex<Option<input::Usage>>,
+}
 
 impl ExtensionFactory for QueryLimitsChecker {
     fn create(&self) -> Arc<dyn Extension> {
-        Arc::new(QueryLimitsCheckerExt)
+        Arc::new(QueryLimitsCheckerExt {
+            input_usage: Mutex::new(None),
+        })
     }
 }
 
@@ -51,9 +58,22 @@ impl Extension for QueryLimitsCheckerExt {
 
         let doc = next.run(ctx, query, variables).await?;
 
-        input::check(limits, &doc)?;
+        let input_usage = input::check(limits, &doc)?;
+        if let Some(ShowUsage(_)) = ctx.data_opt() {
+            *self.input_usage.lock().unwrap() = Some(input_usage);
+        }
 
         Ok(doc)
+    }
+
+    async fn request(&self, ctx: &ExtensionContext<'_>, next: NextRequest<'_>) -> Response {
+        let mut response = next.run(ctx).await;
+
+        if let Some(input_usage) = self.input_usage.lock().unwrap().take() {
+            response = response.extension("inputUsage", value!(input_usage))
+        }
+
+        response
     }
 }
 

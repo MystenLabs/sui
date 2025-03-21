@@ -7,6 +7,7 @@ use async_graphql::{
     parser::types::{ExecutableDocument, Selection},
     Name, PathSegment, ServerResult,
 };
+use serde::{Deserialize, Serialize};
 
 use super::{
     error::{Error, ErrorKind},
@@ -18,6 +19,13 @@ use super::{
 struct Chain {
     seg: PathSegment,
     pred: Option<Rc<Chain>>,
+}
+
+/// How many input nodes the query used, and how deep the deepest part of the query was.
+#[derive(Serialize, Deserialize)]
+pub(super) struct Usage {
+    pub nodes: u32,
+    pub depth: u32,
 }
 
 impl Chain {
@@ -59,7 +67,7 @@ impl Chain {
 /// The check returns the number of nodes and max depth found if they are at or below the limits,
 /// or an error specifying which limit was hit, and at what point in the query it was hit
 /// otherwise.
-pub(super) fn check(limits: &QueryLimitsConfig, doc: &ExecutableDocument) -> ServerResult<()> {
+pub(super) fn check(limits: &QueryLimitsConfig, doc: &ExecutableDocument) -> ServerResult<Usage> {
     let mut node_budget = limits.max_query_nodes;
     let mut depth_budget = limits.max_query_depth;
 
@@ -124,5 +132,8 @@ pub(super) fn check(limits: &QueryLimitsConfig, doc: &ExecutableDocument) -> Ser
         }
     }
 
-    Ok(())
+    Ok(Usage {
+        nodes: limits.max_query_nodes - node_budget,
+        depth: limits.max_query_depth - depth_budget,
+    })
 }
