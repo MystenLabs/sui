@@ -2424,13 +2424,16 @@ mod test {
             sleep(wait_time).await;
         }
 
-        let (context, _) = Context::new_for_test(4);
+        let (mut context, _) = Context::new_for_test(5);
+        context
+            .protocol_config
+            .set_consensus_bad_nodes_stake_threshold_for_testing(33);
 
         // Create the cores for all authorities
-        let mut all_cores = create_cores(context, vec![1, 1, 1, 1]);
+        let mut all_cores = create_cores(context, vec![1, 1, 1, 1, 1]);
         let (_last_core, cores) = all_cores.split_last_mut().unwrap();
 
-        // Create blocks for rounds 1..=30 from all Cores except last Core of authority 3.
+        // Create blocks for rounds 1..=30 from all Cores except last Core of authority 4.
         let mut last_round_blocks = Vec::<VerifiedBlock>::new();
         for round in 1..=30 {
             let mut this_round_blocks = Vec::new();
@@ -2445,16 +2448,18 @@ mod test {
 
                 core_fixture.core.round_tracker.write().update_from_probe(
                     vec![
-                        vec![round, round, round, 0],
-                        vec![round, round, round, 0],
-                        vec![round, round, round, 0],
-                        vec![0, 0, 0, 0],
+                        vec![round, round, round, round, 0],
+                        vec![round, round, round, round, 0],
+                        vec![round, round, round, round, 0],
+                        vec![round, round, round, round, 0],
+                        vec![0, 0, 0, 0, 0],
                     ],
                     vec![
-                        vec![round, round, round, 0],
-                        vec![round, round, round, 0],
-                        vec![round, round, round, 0],
-                        vec![0, 0, 0, 0],
+                        vec![round, round, round, round, 0],
+                        vec![round, round, round, round, 0],
+                        vec![round, round, round, round, 0],
+                        vec![round, round, round, round, 0],
+                        vec![0, 0, 0, 0, 0],
                     ],
                 );
 
@@ -2497,16 +2502,18 @@ mod test {
                 // excluded
                 core_fixture.core.round_tracker.write().update_from_probe(
                     vec![
-                        vec![round, round, round, 0],
-                        vec![round, round, round, 0],
-                        vec![round, round, round, 0],
-                        vec![round, round, round, round],
+                        vec![round, round, round, round, 0],
+                        vec![round, round, round, round, 0],
+                        vec![round, round, round, round, 0],
+                        vec![round, round, round, round, 0],
+                        vec![0, 0, 0, 0, 0],
                     ],
                     vec![
-                        vec![round, round, round, 0],
-                        vec![round, round, round, 0],
-                        vec![round, round, round, 0],
-                        vec![round, round, round, round],
+                        vec![round, round, round, round, 0],
+                        vec![round, round, round, round, 0],
+                        vec![round, round, round, round, 0],
+                        vec![round, round, round, round, 0],
+                        vec![0, 0, 0, 0, 0],
                     ],
                 );
 
@@ -2528,14 +2535,14 @@ mod test {
                 this_round_blocks.push(core_fixture.core.last_proposed_block().clone());
 
                 for block in this_round_blocks.iter() {
-                    if block.author() != AuthorityIndex::new_for_test(3) {
-                        // Assert blocks created include only 3 ancestors per block as one
+                    if block.author() != AuthorityIndex::new_for_test(4) {
+                        // Assert blocks created include only 4 ancestors per block as one
                         // should be excluded
-                        assert_eq!(block.ancestors().len(), 3);
+                        assert_eq!(block.ancestors().len(), 4);
                     } else {
                         // Authority 3 is the low scoring authority so it will still include
                         // its own blocks.
-                        assert_eq!(block.ancestors().len(), 4);
+                        assert_eq!(block.ancestors().len(), 5);
                     }
                 }
             }
@@ -2547,7 +2554,10 @@ mod test {
     #[tokio::test]
     async fn test_smart_ancestor_selection() {
         telemetry_subscribers::init_for_testing();
-        let (context, mut key_pairs) = Context::new_for_test(7);
+        let (mut context, mut key_pairs) = Context::new_for_test(7);
+        context
+            .protocol_config
+            .set_consensus_bad_nodes_stake_threshold_for_testing(33);
         let context = Arc::new(context.with_parameters(Parameters {
             sync_last_known_own_block_timeout: Duration::from_millis(2_000),
             ..Default::default()
