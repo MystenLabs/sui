@@ -55,6 +55,8 @@ jobs:
   wait-for-checks:
     needs: create-pr
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
     steps:
       - name: Wait for Workflow Runs to Complete
         run: |
@@ -83,6 +85,8 @@ jobs:
   add-label:
     needs: wait-for-checks
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
 
     steps:
       - name: Add Label to PR
