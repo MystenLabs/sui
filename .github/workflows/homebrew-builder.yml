@@ -60,14 +60,14 @@ jobs:
     steps:
       - name: Wait for Workflow Runs to Complete
         run: |
-          PR_NUMBER=$(curl -s -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
+          PR_NUMBER=$(curl -s -H "Authorization: token ${{ secrets.PAT_TOKEN }}" \
             "https://api.github.com/repos/asymptotic-code/homebrew-sui-prover/pulls?state=open" | jq -r \
             '.[] | select(.head.ref=="sui-prover") | .number')
 
           echo "Waiting for workflows in my-org/target-repo PR #$PR_NUMBER..."
 
           while true; do
-            STATUS=$(curl -s -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
+            STATUS=$(curl -s -H "Authorization: token ${{ secrets.PAT_TOKEN }}" \
               "https://api.github.com/repos/asymptotic-code/homebrew-sui-prover/actions/runs" | jq -r \
               '.workflow_runs | map(select(.head_branch == "sui-prover")) | map(.status) | unique[]')
 
@@ -89,11 +89,11 @@ jobs:
     steps:
       - name: Add Label to PR
         run: |
-          PR_NUMBER=$(curl -s -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
+          PR_NUMBER=$(curl -s -H "Authorization: token ${{ secrets.PAT_TOKEN }}" \
             "https://api.github.com/repos/asymptotic-code/homebrew-sui-prove/pulls?state=open" | jq -r \
             '.[] | select(.head.ref=="sui-prover") | .number')
 
-          curl -s -X POST -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
+          curl -s -X POST -H "Authorization: token ${{ secrets.PAT_TOKEN }}" \
             -H "Accept: application/vnd.github.v3+json" \
             "https://api.github.com/repos/asymptotic-code/homebrew-sui-prove/issues/$PR_NUMBER/labels" \
             -d '{"labels":["pr-pull"]}'
