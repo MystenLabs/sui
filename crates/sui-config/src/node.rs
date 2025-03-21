@@ -783,7 +783,7 @@ impl ConsensusConfig {
     }
 
     pub fn max_pending_transactions(&self) -> usize {
-        self.max_pending_transactions.unwrap_or(20_000)
+        self.max_pending_transactions.unwrap_or(40_000)
     }
 
     pub fn submit_delay_step_override(&self) -> Option<Duration> {

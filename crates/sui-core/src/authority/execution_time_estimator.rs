@@ -349,10 +349,12 @@ impl ExecutionTimeObserver {
         let transaction = ConsensusTransaction::new_execution_time_observation(
             ExecutionTimeObservation::new(epoch_store.name, to_share),
         );
-        if let Err(e) = self
-            .consensus_adapter
-            .submit_to_consensus(&[transaction], &epoch_store)
-        {
+
+        if let Err(e) = self.consensus_adapter.submit_best_effort(
+            &transaction,
+            &epoch_store,
+            Duration::from_secs(5),
+        ) {
             if !matches!(e, SuiError::EpochEnded(_)) {
                 epoch_store
                     .metrics
