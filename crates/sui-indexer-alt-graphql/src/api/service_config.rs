@@ -3,7 +3,7 @@
 
 use async_graphql::{Context, Object, Result};
 
-use crate::{config::RpcConfig, error::RpcError};
+use crate::{config::Limits, error::RpcError};
 
 pub(crate) struct ServiceConfig;
 
@@ -11,26 +11,26 @@ pub(crate) struct ServiceConfig;
 impl ServiceConfig {
     /// Maximum time in milliseconds spent waiting for a response from fullnode after issuing a transaction to execute. Note that the transaction may still succeed even in the case of a timeout. Transactions are idempotent, so a transaction that times out should be re-submitted until the network returns a definite response (success or failure, not timeout).
     async fn mutation_timeout_ms(&self, ctx: &Context<'_>) -> Result<u32, RpcError> {
-        let config: &RpcConfig = ctx.data()?;
-        Ok(config.limits.mutation_timeout_ms)
+        let limits: &Limits = ctx.data()?;
+        Ok(limits.mutation_timeout_ms)
     }
 
     /// Maximum time in milliseconds that will be spent to serve one query request.
     async fn query_timeout_ms(&self, ctx: &Context<'_>) -> Result<u32, RpcError> {
-        let config: &RpcConfig = ctx.data()?;
-        Ok(config.limits.query_timeout_ms)
+        let limits: &Limits = ctx.data()?;
+        Ok(limits.query_timeout_ms)
     }
 
     /// Maximum depth of a GraphQL query that can be accepted by this service.
     async fn max_query_depth(&self, ctx: &Context<'_>) -> Result<u32, RpcError> {
-        let config: &RpcConfig = ctx.data()?;
-        Ok(config.limits.max_query_depth)
+        let limits: &Limits = ctx.data()?;
+        Ok(limits.max_query_depth)
     }
 
     /// The maximum number of nodes (field names) the service will accept in a single query.
     async fn max_query_nodes(&self, ctx: &Context<'_>) -> Result<u32, RpcError> {
-        let config: &RpcConfig = ctx.data()?;
-        Ok(config.limits.max_query_nodes)
+        let limits: &Limits = ctx.data()?;
+        Ok(limits.max_query_nodes)
     }
 
     /// Maximum number of estimated output nodes in a GraphQL response.
@@ -69,33 +69,33 @@ impl ServiceConfig {
     /// | 28: }
     /// ```
     async fn max_output_nodes(&self, ctx: &Context<'_>) -> Result<u32, RpcError> {
-        let config: &RpcConfig = ctx.data()?;
-        Ok(config.limits.max_output_nodes)
+        let limits: &Limits = ctx.data()?;
+        Ok(limits.max_output_nodes)
     }
 
     /// Maximum size in bytes allowed for the `txBytes` and `signatures` parameters of an `executeTransaction` or `simulateTransaction` field, or the `bytes` and `signature` parameters of a `verifyZkLoginSignature` field.
     ///
     /// This is cumulative across all matching fields in a single GraphQL request.
     async fn max_transaction_payload_size(&self, ctx: &Context<'_>) -> Result<u32, RpcError> {
-        let config: &RpcConfig = ctx.data()?;
-        Ok(config.limits.max_tx_payload_size)
+        let limits: &Limits = ctx.data()?;
+        Ok(limits.max_tx_payload_size)
     }
 
     /// Maximum size in bytes of a single GraphQL request, excluding the elements covered by `maxTransactionPayloadSize`.
     async fn max_query_payload_size(&self, ctx: &Context<'_>) -> Result<u32, RpcError> {
-        let config: &RpcConfig = ctx.data()?;
-        Ok(config.limits.max_query_payload_size)
+        let limits: &Limits = ctx.data()?;
+        Ok(limits.max_query_payload_size)
     }
 
     /// By default, paginated queries will return this many elements if a page size is not provided. This may be overridden for paginated queries that are limited by the protocol.
     async fn default_page_size(&self, ctx: &Context<'_>) -> Result<u32, RpcError> {
-        let config: &RpcConfig = ctx.data()?;
-        Ok(config.limits.default_page_size)
+        let limits: &Limits = ctx.data()?;
+        Ok(limits.default_page_size)
     }
 
     /// By default, paginated queries can return at most this many elements. A request to fetch more elements will result in an error. This limit may be superseded when the field being paginated is limited by the protocol (e.g. object changes for a transaction).
     async fn max_page_size(&self, ctx: &Context<'_>) -> Result<u32, RpcError> {
-        let config: &RpcConfig = ctx.data()?;
-        Ok(config.limits.max_page_size)
+        let limits: &Limits = ctx.data()?;
+        Ok(limits.max_page_size)
     }
 }

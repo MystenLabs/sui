@@ -23,6 +23,10 @@ type Query {
 	Test query that times out
 	"""
 	tickTock: String!
+	"""
+	Test query that can be used to test simulate nesting.
+	"""
+	dot: Query!
 }
 
 type ServiceConfig {

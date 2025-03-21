@@ -7,7 +7,7 @@ use sui_default_config::DefaultConfig;
 use sui_protocol_config::{Chain, ProtocolConfig, ProtocolVersion};
 use tracing::warn;
 
-use crate::extensions::timeout::TimeoutConfig;
+use crate::extensions::{query_limits::QueryLimitsConfig, timeout::TimeoutConfig};
 
 #[derive(Default)]
 pub struct RpcConfig {
@@ -103,6 +103,13 @@ impl Limits {
         TimeoutConfig {
             query: Duration::from_millis(self.query_timeout_ms as u64),
             mutation: Duration::from_millis(self.mutation_timeout_ms as u64),
+        }
+    }
+
+    pub(crate) fn query_limits(&self) -> QueryLimitsConfig {
+        QueryLimitsConfig {
+            max_query_nodes: self.max_query_nodes,
+            max_query_depth: self.max_query_depth,
         }
     }
 }

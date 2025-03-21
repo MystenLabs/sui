@@ -3,7 +3,7 @@
 
 use std::{convert::Infallible, time::Duration};
 
-use async_graphql::{ErrorExtensionValues, ErrorExtensions};
+use async_graphql::{ErrorExtensionValues, ErrorExtensions, Response, Value};
 
 /// Error codes for the `extensions.code` field of a GraphQL error that originates from outside
 /// GraphQL.
@@ -119,6 +119,24 @@ pub(crate) fn fill_error_code(ext: &mut Option<ErrorExtensionValues>, code: &str
             *ext = Some(singleton);
         }
     }
+}
+
+/// Get a list of error codes from a GraphQL response. We use these to figure out whether we should
+/// log the query at the `debug` or `info` level.
+pub(crate) fn error_codes(response: &Response) -> Vec<&str> {
+    response
+        .errors
+        .iter()
+        .flat_map(|err| &err.extensions)
+        .flat_map(|ext| ext.get("code"))
+        .filter_map(|code| {
+            if let Value::String(code) = code {
+                Some(code.as_str())
+            } else {
+                None
+            }
+        })
+        .collect()
 }
 
 #[cfg(test)]

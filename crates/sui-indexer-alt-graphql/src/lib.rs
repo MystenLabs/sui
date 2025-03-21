@@ -17,7 +17,7 @@ use axum::{
     Extension, Router,
 };
 use config::RpcConfig;
-use extensions::timeout::Timeout;
+use extensions::{query_limits::QueryLimitsChecker, timeout::Timeout};
 use prometheus::Registry;
 use tokio::{net::TcpListener, task::JoinHandle};
 use tokio_util::sync::CancellationToken;
@@ -208,7 +208,9 @@ pub async fn start_rpc(
     let h_rpc = RpcService::new(args, version, schema(), registry, cancel.child_token())
         .extension(Timeout)
         .data(config.limits.timeouts())
-        .data(config)
+        .extension(QueryLimitsChecker)
+        .data(config.limits.query_limits())
+        .data(config.limits)
         .run()
         .await?;
 
