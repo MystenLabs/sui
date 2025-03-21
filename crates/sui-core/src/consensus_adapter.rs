@@ -1330,7 +1330,6 @@ impl SubmitToConsensus for Arc<ConsensusAdapter> {
             async move {
                 let _permit = permit; // Hold permit for lifetime of task
 
-                // 3. timeout submission attempt inside task
                 let result = tokio::time::timeout(
                     timeout,
                     this.submit_inner(&[transaction], &epoch_store, &[key], tx_type, false),
