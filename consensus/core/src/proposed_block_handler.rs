@@ -1,26 +1,32 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use std::sync::Arc;
+
+use mysten_metrics::monitored_scope;
 use tokio::sync::broadcast;
 use tracing::{trace, warn};
 
-use crate::{block::ExtendedBlock, transaction_certifier::TransactionCertifier};
+use crate::{block::ExtendedBlock, context::Context, transaction_certifier::TransactionCertifier};
 
 /// Runs async processing logic for proposed blocks.
 /// Currently it only call transaction certifier with proposed blocks.
 /// In future, more logic related to proposing should be moved here, for example
 /// flushing dag state.
 pub(crate) struct ProposedBlockHandler {
+    context: Arc<Context>,
     rx_block_broadcast: broadcast::Receiver<ExtendedBlock>,
     transaction_certifier: TransactionCertifier,
 }
 
 impl ProposedBlockHandler {
     pub(crate) fn new(
+        context: Arc<Context>,
         rx_block_broadcast: broadcast::Receiver<ExtendedBlock>,
         transaction_certifier: TransactionCertifier,
     ) -> Self {
         Self {
+            context,
             rx_block_broadcast,
             transaction_certifier,
         }
@@ -44,6 +50,10 @@ impl ProposedBlockHandler {
     }
 
     fn handle_proposed_block(&self, extended_block: ExtendedBlock) {
+        if !self.context.protocol_config.mysticeti_fastpath() {
+            return;
+        }
+        let _scope = monitored_scope("handle_proposed_block");
         // Run GC first to remove blocks that do not need be voted on.
         self.transaction_certifier.run_gc();
         self.transaction_certifier
