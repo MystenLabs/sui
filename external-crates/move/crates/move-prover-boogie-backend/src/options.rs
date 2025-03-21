@@ -147,6 +147,8 @@ pub struct BoogieOptions {
     pub borrow_aggregates: Vec<BorrowAggregate>,
     pub prelude_extra: Option<PathBuf>,
     pub path_split: Option<usize>,
+    /// All possible additional options as simle string
+    pub string_options: Option<String>,
 }
 
 impl Default for BoogieOptions {
@@ -186,6 +188,7 @@ impl Default for BoogieOptions {
             borrow_aggregates: vec![],
             prelude_extra: Some(PathBuf::from("prelude_extra.bpl")),
             path_split: Some(10),
+            string_options: None,
         }
     }
 }
@@ -281,6 +284,14 @@ impl BoogieOptions {
             ]);
         }
         add(&[boogie_file]);
+
+        let additional_options: Vec<&str> = self.string_options
+            .as_deref()
+            .map(|s| s.split(' ').collect()) 
+            .unwrap_or_else(Vec::new);
+
+        add(&additional_options);
+
         Ok(result)
     }
 
