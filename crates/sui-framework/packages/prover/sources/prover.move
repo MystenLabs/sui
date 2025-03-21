@@ -24,7 +24,7 @@ native public fun invariant_end();
 
 #[spec_only]
 native public fun val<T>(x: &T): T;
-#[spec_only]
+#[spec]
 fun val_spec<T>(x: &T): T {
     let result = val(x);
 
@@ -35,7 +35,7 @@ fun val_spec<T>(x: &T): T {
 
 #[spec_only]
 native public fun ref<T>(x: T): &T;
-#[spec_only]
+#[spec]
 fun ref_spec<T>(x: T): &T {
     let old_x = val(&x);
 
@@ -49,7 +49,7 @@ fun ref_spec<T>(x: T): &T {
 
 #[spec_only]
 native public fun drop<T>(x: T);
-#[spec_only]
+#[spec]
 fun drop_spec<T>(x: T) {
     drop(x);
 }
@@ -61,7 +61,7 @@ public macro fun old<$T>($x: &$T): &$T {
 
 #[spec_only]
 native public fun fresh<T>(): T;
-#[spec_only]
+#[spec]
 fun fresh_spec<T>(): T {
     fresh()
 }

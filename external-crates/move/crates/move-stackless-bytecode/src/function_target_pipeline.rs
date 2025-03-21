@@ -243,11 +243,7 @@ impl FunctionTargetsHolder {
     }
 
     pub fn is_verified_spec(&self, id: &QualifiedId<FunId>) -> bool {
-        self.is_spec(id) && 
-        !(
-            if self.focus_specs.is_empty() 
-                { self.no_verify_specs.contains(id) } else { self.no_focus_specs.contains(id) }
-        )
+        self.is_spec(id) && !self.no_verify_specs().contains(id)
     }
 
     pub fn is_focus_spec(&self, id: &QualifiedId<FunId>) -> bool {
@@ -262,7 +258,7 @@ impl FunctionTargetsHolder {
 
     pub fn has_no_verify_spec(&self, id: &QualifiedId<FunId>) -> bool {
         match self.get_spec_by_fun(id) {
-            Some(spec_id) => self.no_verify_specs.contains(spec_id),
+            Some(spec_id) => self.no_verify_specs().contains(spec_id),
             None => false,
         }
     }
@@ -288,32 +284,47 @@ impl FunctionTargetsHolder {
             .get_toplevel_attributes()
             .get_(&Verification(VerificationAttribute::Spec))
         {
-            let target_func_env = func_env.get_name_str().strip_suffix("_spec")
-                .map(|name| func_env.module_env.find_function(func_env.symbol_pool().make(name)));
+            let inner_attrs = match &spec_attr.value {
+                Attribute_::Parameterized(_, inner_attrs) => inner_attrs,
+                _ => &UniqueMap::new(),
+            };
 
-            if target_func_env.is_some() {
-                let inner_attrs = match &spec_attr.value {
-                    Attribute_::Parameterized(_, inner_attrs) => inner_attrs,
-                    _ => &UniqueMap::new(),
-                };
-    
-                let is_focus_spec = inner_attrs.contains_key_(&AttributeName_::Unknown(Symbol::from("focus")));
-                let is_verify_spec = inner_attrs.contains_key_(&AttributeName_::Unknown(Symbol::from("verify")));
-    
-                if !is_verify_spec && !is_focus_spec {
-                    self.no_verify_specs.insert(func_env.get_qualified_id());
-                }
-                if is_focus_spec {
-                    self.focus_specs.insert(func_env.get_qualified_id());
-                } else {
-                    self.no_focus_specs.insert(func_env.get_qualified_id());
-                }
-                if inner_attrs.contains_key_(&AttributeName_::Unknown(Symbol::from("ignore_abort")))
-                {
-                    self.ignore_aborts.insert(func_env.get_qualified_id());
-                }
+            let is_focus_spec =
+                inner_attrs.contains_key_(&AttributeName_::Unknown(Symbol::from("focus")));
+            let is_verify_spec =
+                inner_attrs.contains_key_(&AttributeName_::Unknown(Symbol::from("verify")));
+
+            if !is_verify_spec && !is_focus_spec {
+                self.no_verify_specs.insert(func_env.get_qualified_id());
+            }
+            if is_focus_spec {
+                self.focus_specs.insert(func_env.get_qualified_id());
             } else {
-                self.scenario_specs.insert(func_env.get_qualified_id());
+                self.no_focus_specs.insert(func_env.get_qualified_id());
+            }
+            if inner_attrs.contains_key_(&AttributeName_::Unknown(Symbol::from("ignore_abort"))) {
+                self.ignore_aborts.insert(func_env.get_qualified_id());
+            }
+
+            let target_func_env_opt =
+                func_env
+                    .get_name_str()
+                    .strip_suffix("_spec")
+                    .and_then(|name| {
+                        func_env
+                            .module_env
+                            .find_function(func_env.symbol_pool().make(name))
+                    });
+            match target_func_env_opt {
+                Some(target_func_env) => {
+                    self.function_specs.insert(
+                        func_env.get_qualified_id(),
+                        target_func_env.get_qualified_id(),
+                    );
+                }
+                None => {
+                    self.scenario_specs.insert(func_env.get_qualified_id());
+                }
             }
         }
 
