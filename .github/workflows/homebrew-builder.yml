@@ -44,15 +44,13 @@ jobs:
           git push https://x-access-token:${{ secrets.PAT_TOKEN }}@github.com/asymptotic-code/homebrew-sui-prover.git sui-prover
 
       - name: Create Pull Request
-        id: create_pr
-        uses: peter-evans/create-pull-request@v6
-        with:
-          token: ${{ secrets.PAT_TOKEN }}
-          repository: asymptotic-code/homebrew-sui-prover
-          branch: sui-prover
-          base: main
-          title: "Automated version Update"
-          body: "This PR was created by a GitHub Action."
+        run: |
+          gh auth login --with-token <<< "${{ secrets.PAT_TOKEN }}"
+          gh pr create --repo asymptotic-code/homebrew-sui-prover \
+            --base main \
+            --head sui-prover \
+            --title "Automated version Update" \
+            --body "This PR was created by a GitHub Action."
 
   wait-for-checks:
     needs: create-pr
