@@ -299,7 +299,7 @@ pub struct AuthorityMetrics {
     pub consensus_handler_deferred_transactions: IntCounter,
     pub consensus_handler_congested_transactions: IntCounter,
     pub consensus_handler_cancelled_transactions: IntCounter,
-    pub consensus_handler_max_object_costs: HistogramVec,
+    pub congestion_control_max_object_costs_seconds: HistogramVec,
 
     pub consensus_committed_subdags: IntCounterVec,
     pub consensus_committed_messages: IntGaugeVec,
@@ -721,11 +721,11 @@ impl AuthorityMetrics {
                 "Number of transactions cancelled by consensus handler",
                 registry,
             ).unwrap(),
-            consensus_handler_max_object_costs: register_histogram_vec_with_registry!(
-                "consensus_handler_max_congestion_control_object_costs",
-                "Max object costs for congestion control in the current consensus commit",
+            congestion_control_max_object_costs_seconds: register_histogram_vec_with_registry!(
+                "congestion_control_max_object_costs_seconds",
+                "Max object costs (in seconds) for congestion control in the current consensus commit",
                 &["commit_type"],
-                vec![5.0, 10.0, 15.0, 20.0, 25.0, 30.0, 35.0, 40.0, 45.0, 50.0, 60.0, 100.0, 200.0, 300.0],
+                vec![0.005, 0.01, 0.015, 0.02, 0.025, 0.03, 0.035, 0.04, 0.045, 0.05, 0.06, 0.1, 0.2, 0.3],
                 registry,
             ).unwrap(),
             consensus_committed_subdags: register_int_counter_vec_with_registry!(

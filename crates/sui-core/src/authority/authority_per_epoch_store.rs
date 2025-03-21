@@ -3560,14 +3560,16 @@ impl AuthorityPerEpochStore {
 
         let max_cost_us = shared_object_congestion_tracker.max_cost();
         let max_cost_randomness_us = shared_object_using_randomness_congestion_tracker.max_cost();
+        let max_cost_seconds = max_cost_us as f64 / 1_000_000.0;
+        let max_cost_randomness_seconds = max_cost_randomness_us as f64 / 1_000_000.0;
         authority_metrics
-            .consensus_handler_max_object_costs
+            .congestion_control_max_object_costs_seconds
             .with_label_values(&["regular_commit"])
-            .observe(max_cost_us as f64 / 1_000.0);
+            .observe(max_cost_seconds);
         authority_metrics
-            .consensus_handler_max_object_costs
+            .congestion_control_max_object_costs_seconds
             .with_label_values(&["randomness_commit"])
-            .observe(max_cost_randomness_us as f64 / 1_000.0);
+            .observe(max_cost_randomness_seconds);
 
         let object_debts =
             shared_object_congestion_tracker.accumulated_debts(consensus_commit_info);
