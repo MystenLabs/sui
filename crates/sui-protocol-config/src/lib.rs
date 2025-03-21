@@ -3407,6 +3407,8 @@ impl ProtocolConfig {
                                     max_estimate_us: 1_500_000, // 1.5s
                                 },
                             );
+
+                        cfg.consensus_bad_nodes_stake_threshold = Some(30);
                     }
                 }
                 79 => {
