@@ -38,16 +38,16 @@ jobs:
           cd homebrew-sui-prover
           git config --global user.name "github-actions[bot]"
           git config --global user.email "github-actions[bot]@users.noreply.github.com"
-          git checkout -b "sui-prover-automation"
+          git checkout -b "sui-prover"
           git add .
           git commit -m "Automated version update"
-          git push https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/asymptotic-code/homebrew-sui-prover.git sui-prover-automation
+          git push https://x-access-token:${{ secrets.PAT_TOKEN }}@github.com/asymptotic-code/homebrew-sui-prover.git sui-prover
 
       - name: Create Pull Request
         id: create_pr
         uses: peter-evans/create-pull-request@v6
         with:
-          token: ${{ secrets.GITHUB_TOKEN }}
+          token: ${{ secrets.PAT_TOKEN }}
           repository: asymptotic-code/homebrew-sui-prover
           branch: sui-prover
           base: main
