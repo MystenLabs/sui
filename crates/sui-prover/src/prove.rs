@@ -62,7 +62,7 @@ pub struct BoogieConfig {
 }
 
 #[derive(Args)]
-#[clap(next_help_heading = "Build Options")]
+#[clap(next_help_heading = "Build Options (subset of sui move build)")]
 pub struct BuildConfig {
     /// Installation directory for compiled artifacts. Defaults to current directory.
     #[clap(long = "install-dir", global = true)]
