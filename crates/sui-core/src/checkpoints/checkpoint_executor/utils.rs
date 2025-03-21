@@ -8,7 +8,6 @@ use crate::execution_cache::TransactionCacheRead;
 use futures::{future::Either, Stream};
 use mysten_common::fatal;
 use std::time::Duration;
-use strum::IntoEnumIterator;
 use strum::VariantNames;
 use sui_types::{
     base_types::{TransactionDigest, TransactionEffectsDigest},
@@ -277,48 +276,48 @@ impl SequenceWatch {
     }
 }
 
-/// Pipeline system for coordinating concurrent, pipelined execution without having to break code
-/// down into a one-stage-per-function style.
-///
-/// Pipeline concurrency can be achieved when you have the following sort of execution dependency.
-///
-///      0   A → B → C → D
-///          ↓   ↓   ↓   ↓
-///      1   A → B → C → D
-///          ↓   ↓   ↓   ↓
-///      2   A → B → C → D
-///          ↓   ↓   ↓   ↓
-///      3   A → B → C → D
-///
-/// In this case, we have the following requirements:
-/// - Stage A for seq i must complete before Stage A of seq i+1 begins.
-/// - Stage A for seq i must complete before Stage B of seq i begins.
-/// - (and likewise for B, C, D)
-/// - But, crucially, there is no dependency from (i, D) to (i+1, A)! In
-///   other words, we can being sequence i+1 before i is completely finished.
-///
-/// For CheckpointExecutor, we can see that this sort of pipelining can work. For instance,
-/// we require that the transaction outputs are committed in order by checkpoint sequence number.
-/// But there is no requirement that we commit outputs for seq i before we begin executing transactions
-/// for seq i+1.
-///
-/// The code here allows you to write pipelined executions without breaking up every stage into
-/// its own function. Instead you can write monolithic functions like:
-///
-///       async fn execute_seq() {
-///           pipeline.begin().await;
-///           // do first stage
-///           pipeline.finish_stage(FirstStage).await;
-///           // do second stage
-///           pipeline.finish_stage(SecondStage).await;
-///           ...
-///       }
-///
-/// Then, simply run many instances of this function concurrently, and the pipeline ordering
-/// will be maintained.
-///
-/// Currently this code is not generic with respect to the names of the stages. We can make the
-/// stage enum a generic param when we need to use this code in other places.
+// Pipeline system for coordinating concurrent, pipelined execution without having to break code
+// down into a one-stage-per-function style.
+//
+// Pipeline concurrency can be achieved when you have the following sort of execution dependency.
+//
+//      0   A → B → C → D
+//          ↓   ↓   ↓   ↓
+//      1   A → B → C → D
+//          ↓   ↓   ↓   ↓
+//      2   A → B → C → D
+//          ↓   ↓   ↓   ↓
+//      3   A → B → C → D
+//
+// In this case, we have the following requirements:
+// - Stage A for seq i must complete before Stage A of seq i+1 begins.
+// - Stage A for seq i must complete before Stage B of seq i begins.
+// - (and likewise for B, C, D)
+// - But, crucially, there is no dependency from (i, D) to (i+1, A)! In
+//   other words, we can being sequence i+1 before i is completely finished.
+//
+// For CheckpointExecutor, we can see that this sort of pipelining can work. For instance,
+// we require that the transaction outputs are committed in order by checkpoint sequence number.
+// But there is no requirement that we commit outputs for seq i before we begin executing transactions
+// for seq i+1.
+//
+// The code here allows you to write pipelined executions without breaking up every stage into
+// its own function. Instead you can write monolithic functions like:
+//
+//       async fn execute_seq() {
+//           pipeline.begin().await;
+//           // do first stage
+//           pipeline.finish_stage(FirstStage).await;
+//           // do second stage
+//           pipeline.finish_stage(SecondStage).await;
+//           ...
+//       }
+//
+// Then, simply run many instances of this function concurrently, and the pipeline ordering
+// will be maintained.
+//
+// Currently this code is not generic with respect to the names of the stages. We can make the
+// stage enum a generic param when we need to use this code in other places.
 
 /// Names of the pipeline stages for CheckpointExecutor.
 #[derive(
@@ -334,6 +333,8 @@ impl SequenceWatch {
     strum_macros::FromRepr,
     strum_macros::EnumCount,
 )]
+
+/// Names of the pipeline stages for CheckpointExecutor.
 pub(crate) enum PipelineStage {
     ExecuteTransactions = 0,
     WaitForTransactions = 1,
@@ -416,6 +417,8 @@ impl PipelineHandle {
 }
 
 /// Catch errors in which the PipelineHandle is dropped early.
+/// Cannot use this check in the simulator because it drops tasks to simulate killing nodes.
+#[cfg(not(msim))]
 impl Drop for PipelineHandle {
     fn drop(&mut self) {
         if !std::thread::panicking() {
@@ -553,11 +556,7 @@ mod test {
                     tokio::time::sleep(sleep_time).await;
                     let val = get_next_val();
                     debug!("pushing output ({val}) for seq: {}", seq);
-                    output_by_stage
-                        .lock()
-                        .entry(val)
-                        .or_insert_with(Vec::new)
-                        .push(seq);
+                    output_by_stage.lock().entry(val).or_default().push(seq);
                     output_by_order.lock().push(val);
                 }
 
