@@ -8,7 +8,6 @@ info:
   no_collapsed_sections: false
   include_dep_diagrams: false
   include_call_diagrams: false
-input_file: crates/move-docgen-tests/tests/move/annotation/Move.toml
 ---
 <a name="a_m"></a>
 
@@ -29,17 +28,6 @@ This is a doc comment above an annotation.
 <a name="@Constants_0"></a>
 
 ## Constants
-
-
-<a name="a_m_Cool"></a>
-
-This is the top doc comment
-This is the middle doc comment
-
-
-<pre><code><b>const</b> <a href="../a/m.md#a_m_Cool">Cool</a>: u32 = 0;
-</code></pre>
-
 
 
 <a name="a_m_Error"></a>
@@ -70,6 +58,17 @@ This is the bottom doc comment
 
 
 <pre><code><b>const</b> <a href="../a/m.md#a_m_Woah">Woah</a>: u32 = 0;
+</code></pre>
+
+
+
+<a name="a_m_Cool"></a>
+
+This is the top doc comment
+This is the middle doc comment
+
+
+<pre><code><b>const</b> <a href="../a/m.md#a_m_Cool">Cool</a>: u32 = 0;
 </code></pre>
 
 
