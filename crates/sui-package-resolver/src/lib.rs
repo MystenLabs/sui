@@ -480,27 +480,29 @@ impl<S: PackageStore> Resolver<S> {
         let mut tags = vec![None; tx.inputs.len()];
         let mut register_type = |arg: &Argument, tag: &TypeTag| {
             let &Argument::Input(ix) = arg else {
-                return Ok(());
+                return;
             };
 
             if !matches!(tx.inputs.get(ix as usize), Some(CallArg::Pure(_))) {
-                return Ok(());
+                return;
             }
 
             let Some(type_) = tags.get_mut(ix as usize) else {
-                return Ok(());
+                return;
             };
 
+            // Types are initially `None`, and are set to `Some(Ok(_))` as long as the input can be
+            // mapped to a unique type, and to `Some(Err(()))` if the input is used with
+            // conflicting types at some point.
             match type_ {
-                None => *type_ = Some(tag.clone()),
-                Some(prev) => {
+                None => *type_ = Some(Ok(tag.clone())),
+                Some(Err(())) => {}
+                Some(Ok(prev)) => {
                     if prev != tag {
-                        return Err(Error::InputTypeConflict(ix, prev.clone(), tag.clone()));
+                        *type_ = Some(Err(()));
                     }
                 }
             }
-
-            Ok(())
         };
 
         // (1). Infer type tags for pure inputs from their uses.
@@ -518,15 +520,15 @@ impl<S: PackageStore> Resolver<S> {
 
                     for (open_sig, arg) in params.iter().zip(call.arguments.iter()) {
                         let sig = open_sig.instantiate(&call.type_arguments)?;
-                        register_type(arg, &sig.body)?;
+                        register_type(arg, &sig.body);
                     }
                 }
 
-                Command::TransferObjects(_, arg) => register_type(arg, &TypeTag::Address)?,
+                Command::TransferObjects(_, arg) => register_type(arg, &TypeTag::Address),
 
                 Command::SplitCoins(_, amounts) => {
                     for amount in amounts {
-                        register_type(amount, &TypeTag::U64)?;
+                        register_type(amount, &TypeTag::U64);
                     }
                 }
 
@@ -534,7 +536,7 @@ impl<S: PackageStore> Resolver<S> {
                     let tag = as_type_tag(tag)?;
                     if is_primitive_type_tag(&tag) {
                         for elem in elems {
-                            register_type(elem, &tag)?;
+                            register_type(elem, &tag);
                         }
                     }
                 }
@@ -545,7 +547,11 @@ impl<S: PackageStore> Resolver<S> {
 
         // (2). Gather all the unique type tags to convert into layouts. There are relatively few
         // primitive types so this is worth doing to avoid redundant work.
-        let unique_tags: BTreeSet<_> = tags.iter().filter_map(|t| t.clone()).collect();
+        let unique_tags: BTreeSet<_> = tags
+            .iter()
+            .flat_map(|t| t.clone())
+            .flat_map(|t| t.ok())
+            .collect();
 
         // (3). Convert the type tags into layouts.
         let mut layouts = BTreeMap::new();
@@ -557,7 +563,11 @@ impl<S: PackageStore> Resolver<S> {
         // (4) Prepare the result vector.
         Ok(tags
             .iter()
-            .map(|t| t.as_ref().and_then(|t| layouts.get(t).cloned()))
+            .map(|t| -> Option<_> {
+                let t = t.as_ref()?;
+                let t = t.as_ref().ok()?;
+                layouts.get(t).cloned()
+            })
             .collect())
     }
 
@@ -2856,6 +2866,7 @@ mod tests {
 
         insta::assert_snapshot!(output);
     }
+
     #[tokio::test]
     async fn test_pure_input_layouts_conflicting() {
         use CallArg as I;
@@ -2895,10 +2906,19 @@ mod tests {
             ],
         };
 
-        insta::assert_snapshot!(
-            resolver.pure_input_layouts(&ptb).await.unwrap_err(),
-            @"Conflicting types for input 3: u64 and u32"
-        );
+        let inputs = resolver.pure_input_layouts(&ptb).await.unwrap();
+
+        // Make the output format a little nicer for the snapshot
+        let mut output = String::new();
+        for input in inputs {
+            if let Some(layout) = input {
+                output += &format!("{layout:#}\n");
+            } else {
+                output += "???\n";
+            }
+        }
+
+        insta::assert_snapshot!(output);
     }
 
     /***** Test Helpers ***************************************************************************/
