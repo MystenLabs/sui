@@ -319,8 +319,17 @@ impl<const HAS_SOURCE: SourceKind> Model<HAS_SOURCE> {
                         debug_assert_eq!(idx, map_idx);
                         if let Some(compiled_map_idx) = compiled.functions.get_index_of(f) {
                             let compiled_idx = compiled.functions[f].def_idx.0 as usize;
-                            debug_assert_eq!(idx, compiled_map_idx);
-                            debug_assert_eq!(idx, compiled_idx);
+                            debug_assert!(idx >= compiled_map_idx);
+                            debug_assert!(idx >= compiled_idx);
+                        }
+                        if HAS_SOURCE == WITH_SOURCE {
+                            let declared_idx = self.info[0]
+                                .module(&module.ident[0])
+                                .functions
+                                .get_(f)
+                                .unwrap()
+                                .index;
+                            debug_assert_eq!(idx, declared_idx);
                         }
                     }
                     for (idx, (e, enum_)) in module.enums.iter().enumerate() {
@@ -935,20 +944,11 @@ impl ModuleData<WITH_SOURCE> {
             let enum_ = EnumData::new(&unit.module, enum_def);
             (idx, name, enum_)
         }));
-        let num_functions = unit.module.function_defs.len();
-        let functions = make_map(info.functions.iter().enumerate().map(
-            |(map_idx, (_loc, name, _finfo))| {
-                let name = *name;
-                // Note, won't be found for macros
-                let idx = unit
-                    .module
-                    .find_function_def_by_name(name.as_str())
-                    .map(|(idx, _fdef)| idx.0 as usize)
-                    .unwrap_or(num_functions + map_idx);
-                let function = FunctionData::new();
-                (idx, name, function)
-            },
-        ));
+        let functions = make_map(info.functions.iter().map(|(_loc, name, finfo)| {
+            let name = *name;
+            let function = FunctionData::new();
+            (finfo.index, name, function)
+        }));
         let named_constants = make_map(info.constants.iter().map(|(_loc, name, cinfo)| {
             let name = *name;
             let constant = ConstantData::from_source(&unit.source_map, name);

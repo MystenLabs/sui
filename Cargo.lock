@@ -686,7 +686,7 @@ dependencies = [
  "arrow-schema",
  "chrono",
  "half 2.3.1",
- "indexmap 2.7.0",
+ "indexmap 2.8.0",
  "lexical-core",
  "num",
  "serde",
@@ -882,7 +882,7 @@ dependencies = [
  "futures-util",
  "handlebars",
  "http 1.1.0",
- "indexmap 2.7.0",
+ "indexmap 2.8.0",
  "lru 0.7.8",
  "mime",
  "multer",
@@ -955,7 +955,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7cf4d4e86208f4f9b81a503943c07e6e7f29ad3505e6c9ce6431fe64dc241681"
 dependencies = [
  "bytes",
- "indexmap 2.7.0",
+ "indexmap 2.8.0",
  "serde",
  "serde_json",
 ]
@@ -3368,7 +3368,7 @@ version = "0.9.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "cbb0f21f2f8d3134c2e887a16564c165694231f48b6ae2769193299081ecf662"
 dependencies = [
- "indexmap 2.7.0",
+ "indexmap 2.8.0",
  "lalrpop-util 0.22.1",
  "logos",
 ]
@@ -5346,7 +5346,7 @@ dependencies = [
  "fixedbitset 0.4.2",
  "guppy-summaries",
  "guppy-workspace-hack",
- "indexmap 2.7.0",
+ "indexmap 2.8.0",
  "itertools 0.13.0",
  "nested",
  "once_cell",
@@ -5395,7 +5395,7 @@ dependencies = [
  "futures-sink",
  "futures-util",
  "http 0.2.9",
- "indexmap 2.7.0",
+ "indexmap 2.8.0",
  "slab",
  "tokio",
  "tokio-util 0.7.13 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -5414,7 +5414,7 @@ dependencies = [
  "futures-core",
  "futures-sink",
  "http 1.1.0",
- "indexmap 2.7.0",
+ "indexmap 2.8.0",
  "slab",
  "tokio",
  "tokio-util 0.7.13 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -6163,9 +6163,9 @@ dependencies = [
 
 [[package]]
 name = "indexmap"
-version = "2.7.0"
+version = "2.8.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "62f822373a4fe84d4bb149bf54e584a7f4abec90e072ed49cda0edea5b95471f"
+checksum = "3954d50fe15b02142bf25d3b8bdadb634ec3948f103d04ffe3031bc8fe9d7058"
 dependencies = [
  "equivalent",
  "hashbrown 0.15.2",
@@ -7519,7 +7519,7 @@ name = "move-bytecode-utils"
 version = "0.1.0"
 dependencies = [
  "anyhow",
- "indexmap 2.7.0",
+ "indexmap 2.8.0",
  "move-binary-format",
  "move-core-types",
  "petgraph 0.5.1",
@@ -7731,7 +7731,7 @@ dependencies = [
  "clap",
  "codespan",
  "colored",
- "indexmap 2.7.0",
+ "indexmap 2.8.0",
  "move-abstract-interpreter",
  "move-binary-format",
  "move-bytecode-source-map",
@@ -7873,6 +7873,7 @@ dependencies = [
  "bcs",
  "codespan",
  "codespan-reporting",
+ "indexmap 2.8.0",
  "move-binary-format",
  "move-bytecode-source-map",
  "move-command-line-common",
@@ -8993,7 +8994,7 @@ checksum = "1e32339a5dc40459130b3bd269e9892439f55b33e772d2a9d402a789baaf4e8a"
 dependencies = [
  "futures-core",
  "futures-sink",
- "indexmap 2.7.0",
+ "indexmap 2.8.0",
  "js-sys",
  "once_cell",
  "pin-project-lite",
@@ -9394,7 +9395,7 @@ dependencies = [
  "data-encoding",
  "getrandom 0.2.15",
  "hmac",
- "indexmap 2.7.0",
+ "indexmap 2.8.0",
  "rand 0.8.5",
  "serde",
  "serde_json",
@@ -9586,7 +9587,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b4c5cc86750666a3ed20bdaf5ca2a0344f9c67674cae0515bec2da16fbaa47db"
 dependencies = [
  "fixedbitset 0.4.2",
- "indexmap 2.7.0",
+ "indexmap 2.8.0",
 ]
 
 [[package]]
@@ -11785,7 +11786,7 @@ version = "1.0.135"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "2b0d7ba2887406110130a978386c4e1befb98c674b4fba677954e4db976630d9"
 dependencies = [
- "indexmap 2.7.0",
+ "indexmap 2.8.0",
  "itoa",
  "memchr",
  "ryu",
@@ -11854,7 +11855,7 @@ dependencies = [
  "chrono",
  "hex",
  "indexmap 1.9.3",
- "indexmap 2.7.0",
+ "indexmap 2.8.0",
  "serde",
  "serde_derive",
  "serde_json",
@@ -13392,7 +13393,7 @@ dependencies = [
  "fastcrypto",
  "fastcrypto-zkp",
  "futures",
- "indexmap 2.7.0",
+ "indexmap 2.8.0",
  "insta",
  "jsonrpsee",
  "move-binary-format",
@@ -14167,7 +14168,7 @@ dependencies = [
  "http-body 0.4.5",
  "hyper 1.5.2",
  "im",
- "indexmap 2.7.0",
+ "indexmap 2.8.0",
  "itertools 0.13.0",
  "jsonrpsee",
  "mockall",
@@ -14484,7 +14485,7 @@ dependencies = [
  "fastcrypto",
  "fastcrypto-vdf",
  "fastcrypto-zkp",
- "indexmap 2.7.0",
+ "indexmap 2.8.0",
  "move-binary-format",
  "move-core-types",
  "move-stdlib-natives",
@@ -14545,7 +14546,7 @@ dependencies = [
  "better_any",
  "fastcrypto",
  "fastcrypto-zkp",
- "indexmap 2.7.0",
+ "indexmap 2.8.0",
  "move-binary-format",
  "move-core-types",
  "move-stdlib-natives-v2",
@@ -15486,7 +15487,7 @@ dependencies = [
  "bcs",
  "clap",
  "futures",
- "indexmap 2.7.0",
+ "indexmap 2.8.0",
  "move-binary-format",
  "move-core-types",
  "move-package",
@@ -15790,7 +15791,7 @@ dependencies = [
  "fastcrypto-tbls",
  "fastcrypto-zkp",
  "im",
- "indexmap 2.7.0",
+ "indexmap 2.8.0",
  "itertools 0.13.0",
  "lru 0.10.0",
  "move-binary-format",
@@ -16866,7 +16867,7 @@ version = "0.22.22"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "4ae48d6208a266e853d946088ed816055e556cc6028c5e8e2b84d9fa5dd7c7f5"
 dependencies = [
- "indexmap 2.7.0",
+ "indexmap 2.8.0",
  "serde",
  "serde_spanned",
  "toml_datetime 0.6.8",
@@ -17044,7 +17045,7 @@ checksum = "2873938d487c3cfb9aed7546dc9f2711d867c9f90c46b889989a2cb84eba6b4f"
 dependencies = [
  "futures-core",
  "futures-util",
- "indexmap 2.7.0",
+ "indexmap 2.8.0",
  "pin-project-lite",
  "slab",
  "sync_wrapper 0.1.2",
