@@ -6,10 +6,10 @@ If changes need to be made to the framework's Move code, additional actions need
 
 ### Snapshot tests update
 
-Run the following commands in Sui's [root directory](../../) and accept the changes, if any (if you do not have `cargo-insta` command installed, please run the `cargo install cargo-insta` command first):
+Run the following script from the Sui's [root directory](../../) and accept any changes (if you do not have `cargo-insta` installed, run the `cargo install cargo-insta` command first):
 
 ```bash
-cargo insta test -p sui-swarm-config --review
+./scripts/update_all_snapshots.sh
 ```
 
 Please use your best judgment to decide if the changes between old and new versions of the snapshots look "reasonable" (e.g., a minor change in gas costs). When in doubt, please reach out to a member of Sui core team.

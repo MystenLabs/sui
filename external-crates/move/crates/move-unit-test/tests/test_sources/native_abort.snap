@@ -1,0 +1,38 @@
+---
+source: crates/move-unit-test/tests/move_unit_test_testsuite.rs
+---
+Running Move unit tests
+[ PASS    ] 0x6::A::native_abort_good_right_code
+[ FAIL    ] 0x6::A::native_abort_good_wrong_code
+[ FAIL    ] 0x6::A::native_abort_unexpected_abort
+
+Test failures:
+
+Failures in 0x6::A:
+
+┌── native_abort_good_wrong_code ──────
+│ error[E11001]: test failure
+│    ┌─ native_abort.move:11:9
+│    │
+│ 10 │     fun native_abort_good_wrong_code() {
+│    │         ---------------------------- In this function in 0x6::A
+│ 11 │         vector::borrow(&vector::empty<u64>(), 1);
+│    │         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ Test did not error as expected. Expected test to give a vector operation error with sub-status 0 originating in the module 0x6::A but instead it gave a vector operation error with sub-status 1 originating in the module 0x6::A rooted here
+│ 
+│ 
+└──────────────────
+
+
+┌── native_abort_unexpected_abort ──────
+│ error[E11001]: test failure
+│   ┌─ native_abort.move:5:9
+│   │
+│ 4 │     fun native_abort_unexpected_abort() {
+│   │         ----------------------------- In this function in 0x6::A
+│ 5 │         vector::borrow(&vector::empty<u64>(), 1);
+│   │         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ Test was not expected to error, but it gave a vector operation error with sub-status 1 originating in the module 0x6::A rooted here
+│ 
+│ 
+└──────────────────
+
+Test result: FAILED. Total tests: 3; passed: 1; failed: 2

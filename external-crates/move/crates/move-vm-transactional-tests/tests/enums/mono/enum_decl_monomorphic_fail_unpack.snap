@@ -1,0 +1,18 @@
+---
+source: crates/move-transactional-test-runner/src/framework.rs
+---
+processed 2 tasks
+
+task 0, lines 1-23:
+//# publish
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000006::MonomorphicEnums'. Got VMError: {
+    major_status: UNSAFE_RET_UNUSED_VALUES_WITHOUT_DROP,
+    sub_status: None,
+    location: 0x6::MonomorphicEnums,
+    indices: [(FunctionDefinition, 0)],
+    offsets: [(FunctionDefinitionIndex(0), 6)],
+}
+
+task 1, lines 25-35:
+//# run
+Error: Dependency not provided for 0000000000000000000000000000000000000000000000000000000000000006.MonomorphicEnums

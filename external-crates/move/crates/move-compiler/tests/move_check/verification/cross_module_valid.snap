@@ -1,0 +1,36 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: legacy
+  lint: false
+---
+warning[W00001]: DEPRECATED. will be removed
+  ┌─ tests/move_check/verification/cross_module_valid.move:5:7
+  │
+5 │     #[verify_only]
+  │       ^^^^^^^^^^^ The 'verify_only' attribute has been deprecated along with specification blocks
+
+warning[W00001]: DEPRECATED. will be removed
+  ┌─ tests/move_check/verification/cross_module_valid.move:8:7
+  │
+8 │     #[verify_only]
+  │       ^^^^^^^^^^^ The 'verify_only' attribute has been deprecated along with specification blocks
+
+warning[W00001]: DEPRECATED. will be removed
+   ┌─ tests/move_check/verification/cross_module_valid.move:13:7
+   │
+13 │     #[verify_only]
+   │       ^^^^^^^^^^^ The 'verify_only' attribute has been deprecated along with specification blocks
+
+warning[W00001]: DEPRECATED. will be removed
+   ┌─ tests/move_check/verification/cross_module_valid.move:16:7
+   │
+16 │     #[verify_only]
+   │       ^^^^^^^^^^^ The 'verify_only' attribute has been deprecated along with specification blocks
+
+warning[W00001]: DEPRECATED. will be removed
+   ┌─ tests/move_check/verification/cross_module_valid.move:19:7
+   │
+19 │     #[verify_only]
+   │       ^^^^^^^^^^^ The 'verify_only' attribute has been deprecated along with specification blocks

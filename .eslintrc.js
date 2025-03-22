@@ -28,7 +28,6 @@ module.exports = {
 		'build',
 		'dist',
 		'coverage',
-		'apps/icons/src',
 		'next-env.d.ts',
 		'doc/book',
 		'external-crates',
@@ -72,33 +71,6 @@ module.exports = {
 		],
 	},
 	overrides: [
-		{
-			files: ['apps/wallet/**/*'],
-			rules: {
-				'react/display-name': 'off',
-				'import/no-duplicates': ['error'],
-				'@typescript-eslint/consistent-type-imports': [
-					'error',
-					{
-						prefer: 'type-imports',
-						disallowTypeAnnotations: true,
-						fixStyle: 'inline-type-imports',
-					},
-				],
-				'@typescript-eslint/unified-signatures': 'error',
-				'@typescript-eslint/parameter-properties': 'error',
-				'no-console': ['warn'],
-				'@typescript-eslint/no-non-null-assertion': 'off',
-			},
-		},
-		{
-			files: ['apps/wallet/src/**/*.test.*', 'apps/wallet/src/**/*.spec.*'],
-
-			rules: {
-				// Allow any casting in tests:
-				'@typescript-eslint/no-explicit-any': 'off',
-			},
-		},
 		{
 			files: ['dapps/kiosk/**/*'],
 			rules: {

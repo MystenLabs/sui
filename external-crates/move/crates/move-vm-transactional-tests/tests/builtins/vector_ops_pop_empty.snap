@@ -1,0 +1,24 @@
+---
+source: crates/move-transactional-test-runner/src/framework.rs
+---
+processed 2 tasks
+
+task 0, lines 1-13:
+//# run
+Error: Function execution failed with VMError: {
+    major_status: VECTOR_OPERATION_ERROR,
+    sub_status: Some(2),
+    location: 0x5::m,
+    indices: [],
+    offsets: [(FunctionDefinitionIndex(0), 3)],
+}
+
+task 1, lines 14-27:
+//# run
+Error: Function execution failed with VMError: {
+    major_status: VECTOR_OPERATION_ERROR,
+    sub_status: Some(2),
+    location: 0x6::m,
+    indices: [],
+    offsets: [(FunctionDefinitionIndex(0), 7)],
+}

@@ -7,7 +7,7 @@ use clap::{Args, Parser, Subcommand};
 use serde::{Deserialize, Serialize};
 use std::{collections::HashMap, net::SocketAddr, path::PathBuf};
 use strum::IntoEnumIterator;
-use sui_json_rpc::name_service::NameServiceConfig;
+use sui_name_service::NameServiceConfig;
 use sui_types::base_types::{ObjectID, SuiAddress};
 use url::Url;
 
@@ -146,6 +146,7 @@ pub struct IngestionConfig {
         long,
         default_value_t = true,
         default_missing_value = "true",
+        action = clap::ArgAction::Set,
         num_args = 0..=1,
         require_equals = false,
     )]

@@ -121,6 +121,7 @@ fn execute<M: Measurement + 'static>(
                     vec![],
                     Vec::<Vec<u8>>::new(),
                     &mut UnmeteredGasMeter,
+                    None,
                 )
                 .unwrap_or_else(|err| {
                     panic!("{:?}::bench in {file} failed with {:?}", &module_id, err)

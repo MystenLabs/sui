@@ -22,7 +22,6 @@ sui-storage.workspace = true
 async-trait.workspace = true
 bcs.workspace = true
 clap.workspace = true
-fs_extra.workspace = true
 futures.workspace = true
 prometheus.workspace = true
 once_cell.workspace = true

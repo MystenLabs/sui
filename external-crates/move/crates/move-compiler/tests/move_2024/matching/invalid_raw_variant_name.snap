@@ -1,0 +1,39 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: 2024.alpha
+  lint: false
+---
+error[E04036]: non-exhaustive pattern
+   ┌─ tests/move_2024/matching/invalid_raw_variant_name.move:10:12
+   │
+10 │     match (e) {
+   │            ^ Pattern 'E::Z { z: _ }' not covered
+
+error[E03019]: invalid pattern
+   ┌─ tests/move_2024/matching/invalid_raw_variant_name.move:11:30
+   │
+11 │         E::X { x: y } | E::Y(y) | Z { z: y } => *y
+   │                              ^    ---------- right or-pattern does not
+   │                              │     
+   │                              left or-pattern binds variable y
+   │
+   = Both sides of an or-pattern must bind the same variables.
+
+error[E04007]: incompatible types
+   ┌─ tests/move_2024/matching/invalid_raw_variant_name.move:11:30
+   │
+ 4 │     X { x: u64 },
+   │            --- Given: 'u64'
+ 5 │     Y(u32),
+   │       --- Expected: 'u32'
+   ·
+11 │         E::X { x: y } | E::Y(y) | Z { z: y } => *y
+   │                              ^ Invalid pattern field type
+
+error[E01002]: unexpected token
+   ┌─ tests/move_2024/matching/invalid_raw_variant_name.move:11:35
+   │
+11 │         E::X { x: y } | E::Y(y) | Z { z: y } => *y
+   │                                   ^ Unexpected name access. Expected a valid 'enum' variant, 'struct', or 'const'.

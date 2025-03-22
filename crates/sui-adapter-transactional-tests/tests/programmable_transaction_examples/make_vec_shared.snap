@@ -1,0 +1,39 @@
+---
+source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
+---
+processed 5 tasks
+
+init:
+A: object(0,0), B: object(0,1)
+
+task 1, lines 8-29:
+//# publish
+created: object(1,0)
+mutated: object(0,2)
+gas summary: computation_cost: 1000000, storage_cost: 6034400,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 2, line 31:
+//# run t2::o2::create
+created: object(2,0)
+mutated: object(0,2)
+gas summary: computation_cost: 1000000, storage_cost: 2226800,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 3, line 33:
+//# view-object 2,0
+Owner: Shared( 3 )
+Version: 3
+Contents: t2::o2::Obj2 {
+    id: sui::object::UID {
+        id: sui::object::ID {
+            bytes: fake(2,0),
+        },
+    },
+}
+
+task 4, lines 35-37:
+//# programmable --sender A --inputs object(2,0)
+//> 0: MakeMoveVec<t2::o2::Obj2>([Input(0)]);
+//> t2::o2::consume(Result(0))
+mutated: object(0,0)
+deleted: object(2,0)
+gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 1226412, non_refundable_storage_fee: 12388

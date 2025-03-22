@@ -7,10 +7,19 @@ use std::sync::atomic::AtomicU64;
 use std::sync::Arc;
 use std::{cmp::Ordering, hash::DefaultHasher};
 
-use moka::sync::Cache as MokaCache;
+use moka::sync::SegmentedCache as MokaCache;
 use mysten_common::debug_fatal;
 use parking_lot::Mutex;
 use sui_types::base_types::SequenceNumber;
+
+pub enum CacheResult<T> {
+    /// Entry is in the cache
+    Hit(T),
+    /// Entry is not in the cache and is known to not exist
+    NegativeHit,
+    /// Entry is not in the cache and may or may not exist in the store
+    Miss,
+}
 
 /// CachedVersionMap is a map from version to value, with the additional contraints:
 /// - The key (SequenceNumber) must be monotonically increasing for each insert. If
@@ -179,12 +188,12 @@ const KEY_GENERATION_SIZE: usize = 1024 * 16;
 
 impl<K, V> MonotonicCache<K, V>
 where
-    K: Hash + Eq + Send + Sync + Copy + 'static,
+    K: Hash + Eq + Send + Sync + Copy + std::fmt::Debug + 'static,
     V: IsNewer + Clone + Send + Sync + 'static,
 {
     pub fn new(cache_size: u64) -> Self {
         Self {
-            cache: MokaCache::builder().max_capacity(cache_size).build(),
+            cache: MokaCache::builder(8).max_capacity(cache_size).build(),
             key_generation: (0..KEY_GENERATION_SIZE)
                 .map(|_| AtomicU64::new(0))
                 .collect(),
@@ -295,7 +304,7 @@ where
 
             // Ticket expiry should make this assert impossible.
             if entry.is_newer_than(&value) {
-                debug_fatal!("entry is newer than value");
+                debug_fatal!("entry is newer than value {:?}", key);
             } else {
                 *entry = value;
             }

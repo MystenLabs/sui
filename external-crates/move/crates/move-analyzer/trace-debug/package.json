@@ -5,7 +5,7 @@
   "publisher": "mysten",
   "icon": "images/move.png",
   "license": "Apache-2.0",
-  "version": "0.0.4",
+  "version": "0.0.5",
   "preview": true,
   "repository": {
     "url": "https://github.com/MystenLabs/sui.git",
@@ -55,6 +55,16 @@
           "extensions": [
             ".mvb"
           ]
+        },
+        {
+          "id": "mtrace",
+          "aliases": [
+            "mtrace"
+          ],
+          "extensions": [
+            ".json",
+            ".JSON"
+          ]
         }
       ],
     "breakpoints": [{ "language": "move" }, { "language": "mvb" }],
@@ -69,7 +79,8 @@
         ],
         "languages": [
           "move",
-          "mvb"
+          "mvb",
+          "mtrace"
         ],
         "configurationAttributes": {
           "launch": {

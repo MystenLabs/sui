@@ -7,7 +7,7 @@ use async_trait::async_trait;
 use futures::{FutureExt, StreamExt};
 
 use serde::{Deserialize, Serialize};
-use sui_rpc_api::CheckpointData;
+use sui_types::full_checkpoint_content::CheckpointData;
 use tokio_util::sync::CancellationToken;
 
 use crate::{

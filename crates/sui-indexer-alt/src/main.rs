@@ -12,12 +12,13 @@ use sui_indexer_alt::args::Args;
 use sui_indexer_alt::args::Command;
 use sui_indexer_alt::config::IndexerConfig;
 use sui_indexer_alt::config::Merge;
-use sui_indexer_alt::start_indexer;
+use sui_indexer_alt::setup_indexer;
+use sui_indexer_alt_framework::db::reset_database;
 use sui_indexer_alt_framework::Indexer;
 use sui_indexer_alt_metrics::MetricsService;
 use sui_indexer_alt_schema::MIGRATIONS;
-use sui_pg_db::reset_database;
 use tokio::fs;
+use tokio::signal;
 use tokio_util::sync::CancellationToken;
 use tracing::info;
 
@@ -32,6 +33,8 @@ async fn main() -> Result<()> {
 
     match args.command {
         Command::Indexer {
+            database_url,
+            db_args,
             client_args,
             indexer_args,
             metrics_args,
@@ -47,8 +50,22 @@ async fn main() -> Result<()> {
 
             let metrics = MetricsService::new(metrics_args, registry, cancel.child_token());
 
-            let h_indexer = start_indexer(
-                args.db_args,
+            let h_ctrl_c = tokio::spawn({
+                let cancel = cancel.clone();
+                async move {
+                    tokio::select! {
+                        _ = cancel.cancelled() => {}
+                        _ = signal::ctrl_c() => {
+                            info!("Received Ctrl-C, shutting down...");
+                            cancel.cancel();
+                        }
+                    }
+                }
+            });
+
+            let h_indexer = setup_indexer(
+                database_url,
+                db_args,
                 indexer_args,
                 client_args,
                 indexer_config,
@@ -56,7 +73,10 @@ async fn main() -> Result<()> {
                 metrics.registry(),
                 cancel.child_token(),
             )
-            .await?;
+            .await?
+            .run()
+            .await
+            .context("Failed to start indexer")?;
 
             let h_metrics = metrics.run().await?;
 
@@ -65,6 +85,7 @@ async fn main() -> Result<()> {
             let _ = h_indexer.await;
             cancel.cancel();
             let _ = h_metrics.await;
+            let _ = h_ctrl_c.await;
         }
 
         Command::GenerateConfig => {
@@ -96,28 +117,34 @@ async fn main() -> Result<()> {
             println!("{config_toml}");
         }
 
-        Command::ResetDatabase { skip_migrations } => {
+        Command::ResetDatabase {
+            database_url,
+            db_args,
+            skip_migrations,
+        } => {
             reset_database(
-                args.db_args,
-                (!skip_migrations).then(|| Indexer::migrations(&MIGRATIONS)),
+                database_url,
+                db_args,
+                (!skip_migrations).then(|| Indexer::migrations(Some(&MIGRATIONS))),
             )
             .await?;
         }
 
         #[cfg(feature = "benchmark")]
         Command::Benchmark {
+            database_url,
+            db_args,
             benchmark_args,
             config,
         } => {
-            let config_contents = fs::read_to_string(config)
-                .await
-                .context("failed to read configuration TOML file")?;
-
-            let indexer_config: IndexerConfig = toml::from_str(&config_contents)
-                .context("Failed to parse configuration TOML file.")?;
-
-            sui_indexer_alt::benchmark::run_benchmark(args.db_args, benchmark_args, indexer_config)
-                .await?;
+            let indexer_config = read_config(&config).await?;
+            sui_indexer_alt::benchmark::run_benchmark(
+                database_url,
+                db_args,
+                benchmark_args,
+                indexer_config,
+            )
+            .await?;
         }
     }
 

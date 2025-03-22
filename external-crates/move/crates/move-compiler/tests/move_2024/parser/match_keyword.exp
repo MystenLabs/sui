@@ -1,9 +1,0 @@
-error[E01002]: unexpected token
-  ┌─ tests/move_2024/parser/match_keyword.move:2:9
-  │
-2 │     fun match(_: u64): bool { false }
-  │         ^^^^^
-  │         │
-  │         Unexpected 'match'
-  │         Expected an identifier
-

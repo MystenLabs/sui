@@ -75,7 +75,7 @@ impl AccountAddress {
             with_prefix: bool,
         }
 
-        impl<'a> fmt::Display for HexDisplay<'a> {
+        impl fmt::Display for HexDisplay<'_> {
             fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
                 if self.with_prefix {
                     write!(f, "0x{}", hex::encode(self.data))

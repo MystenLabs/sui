@@ -1,0 +1,9 @@
+---
+source: crates/move-package/tests/test_runner.rs
+---
+RESOLVING DEPENDENCIES IN A FROM Root WITH ../resolvers/successful.sh
+../resolvers/successful.sh stderr:
+Successful External Resolver
+PWD:     $ROOT/external-crates/move/crates/move-package/tests/test_sources/external
+Type:    dependencies
+Package: A

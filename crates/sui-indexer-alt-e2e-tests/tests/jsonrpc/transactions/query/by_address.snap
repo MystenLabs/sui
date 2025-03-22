@@ -1,0 +1,389 @@
+---
+source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
+---
+processed 18 tasks
+
+init:
+A: object(0,0), B: object(0,1), C: object(0,2)
+
+task 1, lines 22-24:
+//# programmable --sender A --inputs 42 @A
+//> 0: SplitCoins(Gas, [Input(0)]);
+//> TransferObjects([Result(0)], Input(1))
+created: object(1,0)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 1976000,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 2, lines 26-28:
+//# programmable --sender A --inputs 43 @B
+//> 0: SplitCoins(Gas, [Input(0)]);
+//> TransferObjects([Result(0)], Input(1))
+created: object(2,0)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 1976000,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 3, lines 30-32:
+//# programmable --sender A --inputs 44 @C
+//> 0: SplitCoins(Gas, [Input(0)]);
+//> TransferObjects([Result(0)], Input(1))
+created: object(3,0)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 1976000,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 4, lines 34-37:
+//# programmable --sender A --inputs 45 @B @C
+//> 0: SplitCoins(Gas, [Input(0), Input(0)]);
+//> TransferObjects([NestedResult(0, 0)], Input(1));
+//> TransferObjects([NestedResult(0, 1)], Input(2))
+created: object(4,0), object(4,1)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 2964000,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 5, lines 39-41:
+//# programmable --sender B --inputs 46 @A
+//> 0: SplitCoins(Gas, [Input(0)]);
+//> TransferObjects([Result(0)], Input(1))
+created: object(5,0)
+mutated: object(0,1)
+gas summary: computation_cost: 1000000, storage_cost: 1976000,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 6, line 43:
+//# create-checkpoint
+Checkpoint created: 1
+
+task 7, lines 45-49:
+//# run-jsonrpc
+Response: {
+  "jsonrpc": "2.0",
+  "id": 0,
+  "result": {
+    "data": [
+      {
+        "digest": "8qp8ApXWxQd51P9Gpm3TUVJ34AZDez92XCbYEiP3APnG",
+        "timestampMs": "0",
+        "checkpoint": "0"
+      },
+      {
+        "digest": "4ruQaWZMoHKvnjehy4z1x4414aFDR4bq2FZvvdu9r632",
+        "timestampMs": "0",
+        "checkpoint": "1"
+      },
+      {
+        "digest": "BuLMtUTq3SkN2kthNpyahw1Uk4fMfyzZoWYxbibG7hMz",
+        "timestampMs": "0",
+        "checkpoint": "1"
+      },
+      {
+        "digest": "EwxPaLPt5JequknCPY6czc6Pv2UBNibCcYaZeRnGgEyC",
+        "timestampMs": "0",
+        "checkpoint": "1"
+      },
+      {
+        "digest": "CRzUqkJKvbfpKMwjkaBShpspHz155ghjb4mXbBdCeuFn",
+        "timestampMs": "0",
+        "checkpoint": "1"
+      },
+      {
+        "digest": "8LKQRN6iSH3rQKkAWGjR82qxpLrG1Pj572BBLECC2p91",
+        "timestampMs": "0",
+        "checkpoint": "1"
+      }
+    ],
+    "nextCursor": "NQ==",
+    "hasNextPage": false
+  }
+}
+
+task 8, lines 51-57:
+//# run-jsonrpc
+Response: {
+  "jsonrpc": "2.0",
+  "id": 1,
+  "result": {
+    "data": [
+      {
+        "digest": "8qp8ApXWxQd51P9Gpm3TUVJ34AZDez92XCbYEiP3APnG",
+        "timestampMs": "0",
+        "checkpoint": "0"
+      },
+      {
+        "digest": "4ruQaWZMoHKvnjehy4z1x4414aFDR4bq2FZvvdu9r632",
+        "timestampMs": "0",
+        "checkpoint": "1"
+      },
+      {
+        "digest": "BuLMtUTq3SkN2kthNpyahw1Uk4fMfyzZoWYxbibG7hMz",
+        "timestampMs": "0",
+        "checkpoint": "1"
+      },
+      {
+        "digest": "EwxPaLPt5JequknCPY6czc6Pv2UBNibCcYaZeRnGgEyC",
+        "timestampMs": "0",
+        "checkpoint": "1"
+      },
+      {
+        "digest": "CRzUqkJKvbfpKMwjkaBShpspHz155ghjb4mXbBdCeuFn",
+        "timestampMs": "0",
+        "checkpoint": "1"
+      },
+      {
+        "digest": "8LKQRN6iSH3rQKkAWGjR82qxpLrG1Pj572BBLECC2p91",
+        "timestampMs": "0",
+        "checkpoint": "1"
+      }
+    ],
+    "nextCursor": "NQ==",
+    "hasNextPage": false
+  }
+}
+
+task 9, lines 59-65:
+//# run-jsonrpc
+Response: {
+  "jsonrpc": "2.0",
+  "id": 2,
+  "result": {
+    "data": [
+      {
+        "digest": "8qp8ApXWxQd51P9Gpm3TUVJ34AZDez92XCbYEiP3APnG",
+        "timestampMs": "0",
+        "checkpoint": "0"
+      },
+      {
+        "digest": "4ruQaWZMoHKvnjehy4z1x4414aFDR4bq2FZvvdu9r632",
+        "timestampMs": "0",
+        "checkpoint": "1"
+      },
+      {
+        "digest": "BuLMtUTq3SkN2kthNpyahw1Uk4fMfyzZoWYxbibG7hMz",
+        "timestampMs": "0",
+        "checkpoint": "1"
+      },
+      {
+        "digest": "EwxPaLPt5JequknCPY6czc6Pv2UBNibCcYaZeRnGgEyC",
+        "timestampMs": "0",
+        "checkpoint": "1"
+      },
+      {
+        "digest": "CRzUqkJKvbfpKMwjkaBShpspHz155ghjb4mXbBdCeuFn",
+        "timestampMs": "0",
+        "checkpoint": "1"
+      },
+      {
+        "digest": "8LKQRN6iSH3rQKkAWGjR82qxpLrG1Pj572BBLECC2p91",
+        "timestampMs": "0",
+        "checkpoint": "1"
+      }
+    ],
+    "nextCursor": "NQ==",
+    "hasNextPage": false
+  }
+}
+
+task 10, lines 67-73:
+//# run-jsonrpc
+Response: {
+  "jsonrpc": "2.0",
+  "id": 3,
+  "result": {
+    "data": [
+      {
+        "digest": "8qp8ApXWxQd51P9Gpm3TUVJ34AZDez92XCbYEiP3APnG",
+        "timestampMs": "0",
+        "checkpoint": "0"
+      },
+      {
+        "digest": "BuLMtUTq3SkN2kthNpyahw1Uk4fMfyzZoWYxbibG7hMz",
+        "timestampMs": "0",
+        "checkpoint": "1"
+      },
+      {
+        "digest": "CRzUqkJKvbfpKMwjkaBShpspHz155ghjb4mXbBdCeuFn",
+        "timestampMs": "0",
+        "checkpoint": "1"
+      },
+      {
+        "digest": "8LKQRN6iSH3rQKkAWGjR82qxpLrG1Pj572BBLECC2p91",
+        "timestampMs": "0",
+        "checkpoint": "1"
+      }
+    ],
+    "nextCursor": "NQ==",
+    "hasNextPage": false
+  }
+}
+
+task 11, lines 75-81:
+//# run-jsonrpc
+Response: {
+  "jsonrpc": "2.0",
+  "id": 4,
+  "result": {
+    "data": [
+      {
+        "digest": "8qp8ApXWxQd51P9Gpm3TUVJ34AZDez92XCbYEiP3APnG",
+        "timestampMs": "0",
+        "checkpoint": "0"
+      },
+      {
+        "digest": "BuLMtUTq3SkN2kthNpyahw1Uk4fMfyzZoWYxbibG7hMz",
+        "timestampMs": "0",
+        "checkpoint": "1"
+      },
+      {
+        "digest": "CRzUqkJKvbfpKMwjkaBShpspHz155ghjb4mXbBdCeuFn",
+        "timestampMs": "0",
+        "checkpoint": "1"
+      },
+      {
+        "digest": "8LKQRN6iSH3rQKkAWGjR82qxpLrG1Pj572BBLECC2p91",
+        "timestampMs": "0",
+        "checkpoint": "1"
+      }
+    ],
+    "nextCursor": "NQ==",
+    "hasNextPage": false
+  }
+}
+
+task 12, lines 83-89:
+//# run-jsonrpc
+Response: {
+  "jsonrpc": "2.0",
+  "id": 5,
+  "result": {
+    "data": [
+      {
+        "digest": "8qp8ApXWxQd51P9Gpm3TUVJ34AZDez92XCbYEiP3APnG",
+        "timestampMs": "0",
+        "checkpoint": "0"
+      },
+      {
+        "digest": "EwxPaLPt5JequknCPY6czc6Pv2UBNibCcYaZeRnGgEyC",
+        "timestampMs": "0",
+        "checkpoint": "1"
+      },
+      {
+        "digest": "CRzUqkJKvbfpKMwjkaBShpspHz155ghjb4mXbBdCeuFn",
+        "timestampMs": "0",
+        "checkpoint": "1"
+      }
+    ],
+    "nextCursor": "NA==",
+    "hasNextPage": false
+  }
+}
+
+task 13, lines 91-97:
+//# run-jsonrpc
+Response: {
+  "jsonrpc": "2.0",
+  "id": 6,
+  "result": {
+    "data": [
+      {
+        "digest": "8qp8ApXWxQd51P9Gpm3TUVJ34AZDez92XCbYEiP3APnG",
+        "timestampMs": "0",
+        "checkpoint": "0"
+      },
+      {
+        "digest": "EwxPaLPt5JequknCPY6czc6Pv2UBNibCcYaZeRnGgEyC",
+        "timestampMs": "0",
+        "checkpoint": "1"
+      },
+      {
+        "digest": "CRzUqkJKvbfpKMwjkaBShpspHz155ghjb4mXbBdCeuFn",
+        "timestampMs": "0",
+        "checkpoint": "1"
+      }
+    ],
+    "nextCursor": "NA==",
+    "hasNextPage": false
+  }
+}
+
+task 14, lines 99-105:
+//# run-jsonrpc
+Response: {
+  "jsonrpc": "2.0",
+  "id": 7,
+  "result": {
+    "data": [
+      {
+        "digest": "4ruQaWZMoHKvnjehy4z1x4414aFDR4bq2FZvvdu9r632",
+        "timestampMs": "0",
+        "checkpoint": "1"
+      },
+      {
+        "digest": "BuLMtUTq3SkN2kthNpyahw1Uk4fMfyzZoWYxbibG7hMz",
+        "timestampMs": "0",
+        "checkpoint": "1"
+      },
+      {
+        "digest": "EwxPaLPt5JequknCPY6czc6Pv2UBNibCcYaZeRnGgEyC",
+        "timestampMs": "0",
+        "checkpoint": "1"
+      },
+      {
+        "digest": "CRzUqkJKvbfpKMwjkaBShpspHz155ghjb4mXbBdCeuFn",
+        "timestampMs": "0",
+        "checkpoint": "1"
+      }
+    ],
+    "nextCursor": "NA==",
+    "hasNextPage": false
+  }
+}
+
+task 15, lines 107-113:
+//# run-jsonrpc
+Response: {
+  "jsonrpc": "2.0",
+  "id": 8,
+  "result": {
+    "data": [
+      {
+        "digest": "8LKQRN6iSH3rQKkAWGjR82qxpLrG1Pj572BBLECC2p91",
+        "timestampMs": "0",
+        "checkpoint": "1"
+      }
+    ],
+    "nextCursor": "NQ==",
+    "hasNextPage": false
+  }
+}
+
+task 16, lines 115-121:
+//# run-jsonrpc
+Response: {
+  "jsonrpc": "2.0",
+  "id": 9,
+  "result": {
+    "data": [],
+    "nextCursor": null,
+    "hasNextPage": false
+  }
+}
+
+task 17, lines 123-129:
+//# run-jsonrpc
+Response: {
+  "jsonrpc": "2.0",
+  "id": 10,
+  "result": {
+    "data": [
+      {
+        "digest": "BuLMtUTq3SkN2kthNpyahw1Uk4fMfyzZoWYxbibG7hMz",
+        "timestampMs": "0",
+        "checkpoint": "1"
+      },
+      {
+        "digest": "CRzUqkJKvbfpKMwjkaBShpspHz155ghjb4mXbBdCeuFn",
+        "timestampMs": "0",
+        "checkpoint": "1"
+      }
+    ],
+    "nextCursor": "NA==",
+    "hasNextPage": false
+  }
+}

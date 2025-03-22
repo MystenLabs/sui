@@ -11,7 +11,7 @@ use sui_types::{
     base_types::{AuthorityName, ObjectID, SequenceNumber, SuiAddress},
     committee::{Committee, EpochId},
     crypto::{AccountKeyPair, AuthorityKeyPair},
-    digests::{ObjectDigest, TransactionDigest, TransactionEventsDigest},
+    digests::{ObjectDigest, TransactionDigest},
     effects::{TransactionEffects, TransactionEffectsAPI, TransactionEvents},
     error::SuiError,
     messages_checkpoint::{
@@ -35,9 +35,7 @@ pub struct InMemoryStore {
     // Transaction data
     transactions: HashMap<TransactionDigest, VerifiedTransaction>,
     effects: HashMap<TransactionDigest, TransactionEffects>,
-    events: HashMap<TransactionEventsDigest, TransactionEvents>,
-    // Map from transaction digest to events digest for easy lookup
-    events_tx_digest_index: HashMap<TransactionDigest, TransactionEventsDigest>,
+    events: HashMap<TransactionDigest, TransactionEvents>,
 
     // Committee data
     epoch_to_committee: Vec<Committee>,
@@ -97,10 +95,7 @@ impl InMemoryStore {
         self.effects.get(digest)
     }
 
-    pub fn get_transaction_events(
-        &self,
-        digest: &TransactionEventsDigest,
-    ) -> Option<&TransactionEvents> {
+    pub fn get_transaction_events(&self, digest: &TransactionDigest) -> Option<&TransactionEvents> {
         self.events.get(digest)
     }
 
@@ -198,9 +193,7 @@ impl InMemoryStore {
     }
 
     pub fn insert_events(&mut self, tx_digest: &TransactionDigest, events: TransactionEvents) {
-        self.events_tx_digest_index
-            .insert(*tx_digest, events.digest());
-        self.events.insert(events.digest(), events);
+        self.events.insert(*tx_digest, events);
     }
 
     pub fn update_objects(
@@ -269,8 +262,6 @@ impl ChildObjectResolver for InMemoryStore {
         receiving_object_id: &ObjectID,
         receive_object_at_version: SequenceNumber,
         _epoch_id: EpochId,
-        // TODO: Delete this parameter once table migration is complete.
-        _use_object_per_epoch_marker_table_v2: bool,
     ) -> sui_types::error::SuiResult<Option<Object>> {
         let recv_object = match crate::store::SimulatorStore::get_object(self, receiving_object_id)
         {
@@ -410,21 +401,8 @@ impl SimulatorStore for InMemoryStore {
         self.get_transaction_effects(digest).cloned()
     }
 
-    fn get_transaction_events(
-        &self,
-        digest: &TransactionEventsDigest,
-    ) -> Option<TransactionEvents> {
+    fn get_transaction_events(&self, digest: &TransactionDigest) -> Option<TransactionEvents> {
         self.get_transaction_events(digest).cloned()
-    }
-
-    fn get_transaction_events_by_tx_digest(
-        &self,
-        tx_digest: &TransactionDigest,
-    ) -> Option<TransactionEvents> {
-        self.events_tx_digest_index
-            .get(tx_digest)
-            .and_then(|x| self.events.get(x))
-            .cloned()
     }
 
     fn get_object(&self, id: &ObjectID) -> Option<Object> {

@@ -2,17 +2,22 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use async_trait::async_trait;
+use move_core_types::account_address::AccountAddress;
+#[cfg(not(test))]
+use std::collections::HashMap;
 use std::path::Path;
 use std::sync::Arc;
-
-use move_core_types::account_address::AccountAddress;
 use sui_package_resolver::{
     error::Error as PackageResolverError, Package, PackageStore, PackageStoreWithLruCache, Result,
 };
 use sui_rpc_api::Client;
 use sui_types::base_types::ObjectID;
+#[cfg(not(test))]
+use sui_types::object::Data;
 use sui_types::object::Object;
 use thiserror::Error;
+#[cfg(not(test))]
+use tokio::sync::RwLock;
 use typed_store::rocks::{DBMap, MetricConf};
 use typed_store::traits::TableSummary;
 use typed_store::traits::TypedStoreDebug;
@@ -70,6 +75,8 @@ impl PackageStoreTables {
 pub struct LocalDBPackageStore {
     package_store_tables: Arc<PackageStoreTables>,
     fallback_client: Client,
+    #[cfg(not(test))]
+    original_id_cache: Arc<RwLock<HashMap<AccountAddress, ObjectID>>>,
 }
 
 impl LocalDBPackageStore {
@@ -77,6 +84,8 @@ impl LocalDBPackageStore {
         Self {
             package_store_tables: PackageStoreTables::new(path),
             fallback_client: Client::new(rest_url).unwrap(),
+            #[cfg(not(test))]
+            original_id_cache: Arc::new(RwLock::new(HashMap::new())),
         }
     }
 
@@ -106,6 +115,30 @@ impl LocalDBPackageStore {
             object
         };
         Ok(object)
+    }
+
+    /// Gets the original package id for the given package id.
+    #[cfg(not(test))]
+    pub async fn get_original_package_id(&self, id: AccountAddress) -> Result<ObjectID> {
+        if let Some(&original_id) = self.original_id_cache.read().await.get(&id) {
+            return Ok(original_id);
+        }
+
+        let object = self.get(id).await?;
+        let Data::Package(package) = &object.data else {
+            return Err(PackageResolverError::PackageNotFound(id));
+        };
+
+        let original_id = package.original_package_id();
+
+        self.original_id_cache.write().await.insert(id, original_id);
+
+        Ok(original_id)
+    }
+
+    #[cfg(test)]
+    pub async fn get_original_package_id(&self, id: AccountAddress) -> Result<ObjectID> {
+        Ok(id.into())
     }
 }
 

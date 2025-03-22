@@ -5,6 +5,7 @@ use crate::{randomness::*, utils};
 use fastcrypto::{groups::bls12381, serde_helpers::ToFromByteArray};
 use fastcrypto_tbls::{mocked_dkg, nodes};
 use std::collections::BTreeSet;
+use sui_macros::sim_test;
 use sui_swarm_config::test_utils::CommitteeFixture;
 use sui_types::{
     base_types::ConciseableName,
@@ -16,7 +17,7 @@ use tracing::Instrument;
 type PkG = bls12381::G2Element;
 type EncG = bls12381::G2Element;
 
-#[tokio::test]
+#[sim_test]
 async fn test_multiple_epochs() {
     telemetry_subscribers::init_for_testing();
     let committee_fixture = CommitteeFixture::generate(rand::rngs::OsRng, 0, 4);
@@ -136,7 +137,7 @@ async fn test_multiple_epochs() {
     assert!(rounds_seen.contains(&RandomnessRound(1)));
 }
 
-#[tokio::test]
+#[sim_test]
 async fn test_record_own_partial_sigs() {
     telemetry_subscribers::init_for_testing();
     let committee_fixture = CommitteeFixture::generate(rand::rngs::OsRng, 0, 4);
@@ -212,7 +213,7 @@ async fn test_record_own_partial_sigs() {
     }
 }
 
-#[tokio::test]
+#[sim_test]
 async fn test_receive_full_sig() {
     telemetry_subscribers::init_for_testing();
     let committee_fixture = CommitteeFixture::generate(rand::rngs::OsRng, 0, 8);
@@ -296,7 +297,7 @@ async fn test_receive_full_sig() {
     assert_ne!(0, bytes.len());
 }
 
-#[tokio::test]
+#[sim_test]
 async fn test_restart_recovery() {
     telemetry_subscribers::init_for_testing();
     let committee_fixture = CommitteeFixture::generate(rand::rngs::OsRng, 0, 4);
@@ -366,7 +367,7 @@ async fn test_restart_recovery() {
     }
 }
 
-#[tokio::test]
+#[sim_test]
 async fn test_byzantine_peer_handling() {
     telemetry_subscribers::init_for_testing();
     let committee_fixture = CommitteeFixture::generate(rand::rngs::OsRng, 0, 4);

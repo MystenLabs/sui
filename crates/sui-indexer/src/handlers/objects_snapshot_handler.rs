@@ -6,7 +6,7 @@ use mysten_metrics::get_metrics;
 use mysten_metrics::metered_channel::Sender;
 use mysten_metrics::spawn_monitored_task;
 use sui_data_ingestion_core::Worker;
-use sui_rpc_api::CheckpointData;
+use sui_types::full_checkpoint_content::CheckpointData;
 use tokio_util::sync::CancellationToken;
 use tracing::info;
 

@@ -1,0 +1,61 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: legacy
+  lint: false
+---
+error[E13001]: feature is not supported in specified edition
+  ┌─ tests/move_check/naming/syntax_annotations_unsupported.move:6:7
+  │
+6 │     #[syntax(index)]
+  │       ^^^^^^^^^^^^^ 'syntax' methods are not supported by current edition 'legacy'; the '2024' edition supports this feature
+  │
+  = You can update the edition in the 'Move.toml', or via command line flag if invoking the compiler directly.
+
+error[E13001]: feature is not supported in specified edition
+   ┌─ tests/move_check/naming/syntax_annotations_unsupported.move:10:7
+   │
+10 │     #[syntax(index)]
+   │       ^^^^^^^^^^^^^ 'syntax' methods are not supported by current edition 'legacy'; the '2024' edition supports this feature
+   │
+   = You can update the edition in the 'Move.toml', or via command line flag if invoking the compiler directly.
+
+error[E02015]: invalid attribute
+   ┌─ tests/move_check/naming/syntax_annotations_unsupported.move:17:7
+   │
+17 │     #[syntax(index)]
+   │       ^^^^^^
+   │       │
+   │       Known attribute 'syntax' is not expected with a struct
+   │       Expected to be used with one of the following: function
+
+error[E13001]: feature is not supported in specified edition
+   ┌─ tests/move_check/naming/syntax_annotations_unsupported.move:21:7
+   │
+21 │     #[syntax(for)]
+   │       ^^^^^^^^^^^ 'syntax' methods are not supported by current edition 'legacy'; the '2024' edition supports this feature
+   │
+   = You can update the edition in the 'Move.toml', or via command line flag if invoking the compiler directly.
+
+error[E13001]: feature is not supported in specified edition
+   ┌─ tests/move_check/naming/syntax_annotations_unsupported.move:25:7
+   │
+25 │     #[syntax(assign)]
+   │       ^^^^^^^^^^^^^^ 'syntax' methods are not supported by current edition 'legacy'; the '2024' edition supports this feature
+   │
+   = You can update the edition in the 'Move.toml', or via command line flag if invoking the compiler directly.
+
+error[E13001]: feature is not supported in specified edition
+   ┌─ tests/move_check/naming/syntax_annotations_unsupported.move:29:7
+   │
+29 │     #[syntax(nonsense)]
+   │       ^^^^^^^^^^^^^^^^ 'syntax' methods are not supported by current edition 'legacy'; the '2024' edition supports this feature
+   │
+   = You can update the edition in the 'Move.toml', or via command line flag if invoking the compiler directly.
+
+error[E02015]: invalid attribute
+   ┌─ tests/move_check/naming/syntax_annotations_unsupported.move:29:14
+   │
+29 │     #[syntax(nonsense)]
+   │              ^^^^^^^^ Invalid syntax method identifier 'nonsense'

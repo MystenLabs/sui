@@ -10,7 +10,7 @@ use sui_types::event::{Event, EventID};
 
 use sui_types::{committee::Committee, effects::TransactionEffectsAPI, object::Object};
 
-use sui_rpc_api::CheckpointData;
+use sui_types::full_checkpoint_content::CheckpointData;
 
 use std::io::Read;
 use std::{fs, path::PathBuf};
@@ -27,7 +27,7 @@ async fn read_full_checkpoint(checkpoint_path: &PathBuf) -> anyhow::Result<Check
 
 async fn read_data(committee_seq: u64, seq: u64) -> (Committee, CheckpointData) {
     let mut d = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-    d.push(format!("example_config/{}.chk", committee_seq));
+    d.push(format!("test_files/{}.chk", committee_seq));
 
     let committee_checkpoint = read_full_checkpoint(&d).await.unwrap();
 
@@ -53,7 +53,7 @@ async fn read_data(committee_seq: u64, seq: u64) -> (Committee, CheckpointData) 
     );
 
     let mut d = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-    d.push(format!("example_config/{}.chk", seq));
+    d.push(format!("test_files/{}.chk", seq));
 
     let full_checkpoint = read_full_checkpoint(&d).await.unwrap();
 

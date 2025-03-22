@@ -1,0 +1,10 @@
+[package]
+name="regulated_coin_example"
+version="0.0.1"
+
+[dependencies]
+# Starting with Sui 1.45, dependencies on system packages are no longer required.
+Sui = { local = "../../../crates/sui-framework/packages/sui-framework" }
+
+[addresses]
+regulated_coin_example="0x0"

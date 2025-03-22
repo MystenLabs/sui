@@ -14,6 +14,8 @@ anemo.workspace = true
 anyhow.workspace = true
 async-recursion.workspace = true
 async-trait.workspace = true
+aws-config.workspace = true
+aws-sdk-kms.workspace = true
 axum.workspace = true
 bcs.workspace = true
 bin-version.workspace = true
@@ -26,7 +28,6 @@ futures.workspace = true
 http.workspace = true
 im.workspace = true
 inquire.workspace = true
-insta.workspace = true
 json_to_table.workspace = true
 miette.workspace = true
 num-bigint.workspace = true
@@ -34,8 +35,6 @@ prometheus.workspace = true
 rand.workspace = true
 regex.workspace = true
 reqwest.workspace = true
-rusoto_core.workspace = true
-rusoto_kms.workspace = true
 serde_json.workspace = true
 serde_yaml.workspace = true
 serde.workspace = true
@@ -53,7 +52,6 @@ url.workspace = true
 
 sui-config.workspace = true
 sui-bridge.workspace = true
-sui-cluster-test.workspace = true
 sui-execution.workspace = true
 sui-faucet.workspace = true
 sui-swarm-config.workspace = true
@@ -100,6 +98,8 @@ move-vm-profiler.workspace = true
 move-vm-config.workspace = true
 move-ir-types.workspace = true
 move-command-line-common.workspace = true
+move-cli.workspace = true
+move-symbol-pool.workspace = true
 
 [target.'cfg(not(target_env = "msvc"))'.dependencies]
 jemalloc-ctl.workspace = true
@@ -110,11 +110,14 @@ fs_extra.workspace = true
 expect-test.workspace = true
 assert_cmd.workspace = true
 toml.workspace = true
+insta.workspace = true
+insta-cmd.workspace = true
 
 test-cluster.workspace = true
 sui-macros.workspace = true
 sui-simulator.workspace = true
 sui-test-transaction-builder.workspace = true
+sui-protocol-config.workspace = true
 serde_json.workspace = true
 
 [target.'cfg(msim)'.dependencies]
@@ -130,6 +133,10 @@ test = false
 
 [[test]]
 name = "ptb_files_tests"
+harness = false
+
+[[test]]
+name = "shell_tests"
 harness = false
 
 [features]

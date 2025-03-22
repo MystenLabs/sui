@@ -1,6 +1,14 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use crate::authority::AuthorityState;
+use crate::checkpoints::CheckpointStore;
+use crate::epoch::committee_store::CommitteeStore;
+use crate::execution_cache::ExecutionCacheTraitPointers;
+use crate::rpc_index::CoinIndexInfo;
+use crate::rpc_index::OwnerIndexInfo;
+use crate::rpc_index::OwnerIndexKey;
+use crate::rpc_index::RpcIndexStore;
 use move_core_types::language_storage::StructTag;
 use parking_lot::Mutex;
 use std::sync::Arc;
@@ -9,7 +17,6 @@ use sui_types::base_types::SuiAddress;
 use sui_types::base_types::TransactionDigest;
 use sui_types::committee::Committee;
 use sui_types::committee::EpochId;
-use sui_types::digests::TransactionEventsDigest;
 use sui_types::effects::{TransactionEffects, TransactionEvents};
 use sui_types::messages_checkpoint::CheckpointContentsDigest;
 use sui_types::messages_checkpoint::CheckpointDigest;
@@ -32,15 +39,7 @@ use sui_types::storage::WriteStore;
 use sui_types::storage::{ObjectKey, ReadStore};
 use sui_types::transaction::VerifiedTransaction;
 use tap::Pipe;
-
-use crate::authority::AuthorityState;
-use crate::checkpoints::CheckpointStore;
-use crate::epoch::committee_store::CommitteeStore;
-use crate::execution_cache::ExecutionCacheTraitPointers;
-use crate::rpc_index::CoinIndexInfo;
-use crate::rpc_index::OwnerIndexInfo;
-use crate::rpc_index::OwnerIndexKey;
-use crate::rpc_index::RpcIndexStore;
+use typed_store::TypedStoreError;
 
 #[derive(Clone)]
 pub struct RocksDbStore {
@@ -206,7 +205,7 @@ impl ReadStore for RocksDbStore {
             .get_executed_effects(digest)
     }
 
-    fn get_events(&self, digest: &TransactionEventsDigest) -> Option<TransactionEvents> {
+    fn get_events(&self, digest: &TransactionDigest) -> Option<TransactionEvents> {
         self.cache_traits
             .transaction_cache_reader
             .get_events(digest)
@@ -426,7 +425,7 @@ impl ReadStore for RestReadStore {
         self.rocks.get_transaction_effects(digest)
     }
 
-    fn get_events(&self, digest: &TransactionEventsDigest) -> Option<TransactionEvents> {
+    fn get_events(&self, digest: &TransactionDigest) -> Option<TransactionEvents> {
         self.rocks.get_events(digest)
     }
 
@@ -485,17 +484,20 @@ impl RpcIndexes for RpcIndexStore {
         &self,
         owner: SuiAddress,
         cursor: Option<ObjectID>,
-    ) -> Result<Box<dyn Iterator<Item = AccountOwnedObjectInfo> + '_>> {
-        let iter = self.owner_iter(owner, cursor)?.map(
-            |(OwnerIndexKey { owner, object_id }, OwnerIndexInfo { version, type_ })| {
-                AccountOwnedObjectInfo {
-                    owner,
-                    object_id,
-                    version,
-                    type_,
-                }
-            },
-        );
+    ) -> Result<Box<dyn Iterator<Item = Result<AccountOwnedObjectInfo, TypedStoreError>> + '_>>
+    {
+        let iter = self.owner_iter(owner, cursor)?.map(|result| {
+            result.map(
+                |(OwnerIndexKey { owner, object_id }, OwnerIndexInfo { version, type_ })| {
+                    AccountOwnedObjectInfo {
+                        owner,
+                        object_id,
+                        version,
+                        type_,
+                    }
+                },
+            )
+        });
 
         Ok(Box::new(iter) as _)
     }
@@ -505,10 +507,12 @@ impl RpcIndexes for RpcIndexStore {
         parent: ObjectID,
         cursor: Option<ObjectID>,
     ) -> sui_types::storage::error::Result<
-        Box<dyn Iterator<Item = (DynamicFieldKey, DynamicFieldIndexInfo)> + '_>,
+        Box<
+            dyn Iterator<Item = Result<(DynamicFieldKey, DynamicFieldIndexInfo), TypedStoreError>>
+                + '_,
+        >,
     > {
         let iter = self.dynamic_field_iter(parent, cursor)?;
-
         Ok(Box::new(iter) as _)
     }
 

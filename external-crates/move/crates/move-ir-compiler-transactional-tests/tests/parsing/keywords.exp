@@ -1,5 +1,0 @@
-processed 1 task
-
-task 0, lines 1-8:
-//# print-bytecode
-Error: ParserError: Invalid Token: expected Tok::NameValue

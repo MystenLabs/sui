@@ -26,11 +26,11 @@ macro_rules! open_initial_frame {
 }
 
 #[macro_export]
-macro_rules! close_initial_frame {
+macro_rules! close_initial_native_frame {
     ($tracer: expr, $function: expr, $return_values: expr, $gas_meter: expr) => {
         if $crate::tracing2::TRACING_ENABLED {
             $tracer.as_mut().map(|tracer| {
-                tracer.close_initial_frame($return_values, $gas_meter.remaining_gas().into())
+                tracer.close_initial_native_frame($return_values, $gas_meter.remaining_gas().into())
             });
             move_vm_profiler::profile_close_frame!($gas_meter, $function.pretty_string());
         }

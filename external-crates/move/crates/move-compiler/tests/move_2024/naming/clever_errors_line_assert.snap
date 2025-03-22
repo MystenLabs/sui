@@ -1,0 +1,23 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: 2024.alpha
+  lint: false
+---
+warning[W00001]: DEPRECATED. will be removed
+  ┌─ tests/move_2024/naming/clever_errors_line_assert.move:3:9
+  │
+3 │         assert(false);
+  │         ^^^^^^^^^^^^^ 'assert' function syntax has been deprecated and will be removed
+  │
+  = Replace with 'assert!'. 'assert' has been replaced with a 'assert!' built-in macro so that arguments are no longer eagerly evaluated
+
+error[E04016]: too few arguments
+  ┌─ tests/move_2024/naming/clever_errors_line_assert.move:3:9
+  │
+3 │         assert(false);
+  │         ^^^^^^^^^^^^^
+  │         │     │
+  │         │     Found 1 argument(s) here
+  │         Invalid call of 'assert'. The call expected 2 argument(s) but got 1

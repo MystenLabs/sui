@@ -1,0 +1,46 @@
+---
+source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
+---
+processed 7 tasks
+
+init:
+A: object(0,0)
+
+task 1, lines 8-36:
+//# publish
+created: object(1,0)
+mutated: object(0,1)
+gas summary: computation_cost: 1000000, storage_cost: 7440400,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 2, line 38:
+//# run t::m::create --sender A
+created: object(2,0), object(2,1), object(2,2), object(2,3)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 7835600,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 3, line 40:
+//# view-object 2,2
+Owner: Account Address ( A )
+Version: 2
+Contents: t::m::Obj {
+    id: sui::object::UID {
+        id: sui::object::ID {
+            bytes: fake(2,2),
+        },
+    },
+}
+
+task 4, line 42:
+//# run t::m::share --args object(2,2) --sender A
+Error: Transaction Effects Status: Move Runtime Abort. Location: sui::transfer::share_object_impl (function index 10) at offset 0, Abort Code: 0
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: MoveAbort(MoveLocation { module: ModuleId { address: sui, name: Identifier("transfer") }, function: 10, instruction: 0, function_name: Some("share_object_impl") }, 0), source: Some(VMError { major_status: ABORTED, sub_status: Some(0), message: None, exec_state: None, location: Module(ModuleId { address: sui, name: Identifier("transfer") }), indices: [], offsets: [(FunctionDefinitionIndex(10), 0)] }), command: Some(0) } }
+
+task 5, line 44:
+//# run t::m::share_wrapped --args object(2,2) --sender A
+Error: Transaction Effects Status: Move Runtime Abort. Location: sui::transfer::share_object_impl (function index 10) at offset 0, Abort Code: 0
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: MoveAbort(MoveLocation { module: ModuleId { address: sui, name: Identifier("transfer") }, function: 10, instruction: 0, function_name: Some("share_object_impl") }, 0), source: Some(VMError { major_status: ABORTED, sub_status: Some(0), message: None, exec_state: None, location: Module(ModuleId { address: sui, name: Identifier("transfer") }), indices: [], offsets: [(FunctionDefinitionIndex(10), 0)] }), command: Some(0) } }
+
+task 6, line 46:
+//# run t::m::share_child --args object(2,2) --sender A
+Error: Transaction Effects Status: Move Runtime Abort. Location: sui::transfer::share_object_impl (function index 10) at offset 0, Abort Code: 0
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: MoveAbort(MoveLocation { module: ModuleId { address: sui, name: Identifier("transfer") }, function: 10, instruction: 0, function_name: Some("share_object_impl") }, 0), source: Some(VMError { major_status: ABORTED, sub_status: Some(0), message: None, exec_state: None, location: Module(ModuleId { address: sui, name: Identifier("transfer") }), indices: [], offsets: [(FunctionDefinitionIndex(10), 0)] }), command: Some(0) } }

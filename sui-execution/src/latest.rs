@@ -1,15 +1,15 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::path::PathBuf;
-use std::{collections::HashSet, sync::Arc};
-
 use move_binary_format::CompiledModule;
+use move_trace_format::format::MoveTraceBuilder;
 use move_vm_config::verifier::{MeterConfig, VerifierConfig};
+use std::{cell::RefCell, collections::HashSet, path::PathBuf, rc::Rc, sync::Arc};
 use sui_protocol_config::ProtocolConfig;
 use sui_types::execution::ExecutionTiming;
+use sui_types::transaction::GasData;
 use sui_types::{
-    base_types::{ObjectRef, SuiAddress, TxContext},
+    base_types::{SuiAddress, TxContext},
     committee::EpochId,
     digests::TransactionDigest,
     effects::TransactionEffects,
@@ -75,11 +75,12 @@ impl executor::Executor for Executor {
         epoch_id: &EpochId,
         epoch_timestamp_ms: u64,
         input_objects: CheckedInputObjects,
-        gas_coins: Vec<ObjectRef>,
+        gas: GasData,
         gas_status: SuiGasStatus,
         transaction_kind: TransactionKind,
         transaction_signer: SuiAddress,
         transaction_digest: TransactionDigest,
+        trace_builder_opt: &mut Option<MoveTraceBuilder>,
     ) -> (
         InnerTemporaryStore,
         SuiGasStatus,
@@ -90,7 +91,7 @@ impl executor::Executor for Executor {
         execute_transaction_to_effects::<execution_mode::Normal>(
             store,
             input_objects,
-            gas_coins,
+            gas,
             gas_status,
             transaction_kind,
             transaction_signer,
@@ -102,6 +103,7 @@ impl executor::Executor for Executor {
             metrics,
             enable_expensive_checks,
             certificate_deny_set,
+            trace_builder_opt,
         )
     }
 
@@ -115,7 +117,7 @@ impl executor::Executor for Executor {
         epoch_id: &EpochId,
         epoch_timestamp_ms: u64,
         input_objects: CheckedInputObjects,
-        gas_coins: Vec<ObjectRef>,
+        gas: GasData,
         gas_status: SuiGasStatus,
         transaction_kind: TransactionKind,
         transaction_signer: SuiAddress,
@@ -131,7 +133,7 @@ impl executor::Executor for Executor {
             execute_transaction_to_effects::<execution_mode::DevInspect<true>>(
                 store,
                 input_objects,
-                gas_coins,
+                gas,
                 gas_status,
                 transaction_kind,
                 transaction_signer,
@@ -143,12 +145,13 @@ impl executor::Executor for Executor {
                 metrics,
                 enable_expensive_checks,
                 certificate_deny_set,
+                &mut None,
             )
         } else {
             execute_transaction_to_effects::<execution_mode::DevInspect<false>>(
                 store,
                 input_objects,
-                gas_coins,
+                gas,
                 gas_status,
                 transaction_kind,
                 transaction_signer,
@@ -160,6 +163,7 @@ impl executor::Executor for Executor {
                 metrics,
                 enable_expensive_checks,
                 certificate_deny_set,
+                &mut None,
             )
         };
         (inner_temp_store, gas_status, effects, result)
@@ -170,10 +174,24 @@ impl executor::Executor for Executor {
         store: &dyn BackingStore,
         protocol_config: &ProtocolConfig,
         metrics: Arc<LimitsMetrics>,
-        tx_context: &mut TxContext,
+        epoch_id: EpochId,
+        epoch_timestamp_ms: u64,
+        transaction_digest: &TransactionDigest,
         input_objects: CheckedInputObjects,
         pt: ProgrammableTransaction,
     ) -> Result<InnerTemporaryStore, ExecutionError> {
+        let tx_context = TxContext::new_from_components(
+            &SuiAddress::default(),
+            transaction_digest,
+            &epoch_id,
+            epoch_timestamp_ms,
+            // genesis transaction: RGP: 1, budget: 1M, sponsor: None
+            1,
+            1_000_000,
+            None,
+            protocol_config,
+        );
+        let tx_context = Rc::new(RefCell::new(tx_context));
         execute_genesis_state_update(
             store,
             protocol_config,
@@ -193,7 +211,7 @@ impl executor::Executor for Executor {
     }
 }
 
-impl<'m> verifier::Verifier for Verifier<'m> {
+impl verifier::Verifier for Verifier<'_> {
     fn meter(&self, config: MeterConfig) -> Box<dyn Meter> {
         Box::new(SuiVerifierMeter::new(config))
     }

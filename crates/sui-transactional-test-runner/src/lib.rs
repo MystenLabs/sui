@@ -22,15 +22,14 @@ use sui_core::authority::authority_per_epoch_store::CertLockGuard;
 use sui_core::authority::authority_test_utils::send_and_confirm_transaction_with_execution_error;
 use sui_core::authority::AuthorityState;
 use sui_json_rpc::authority_state::StateRead;
-use sui_json_rpc_types::DevInspectResults;
 use sui_json_rpc_types::EventFilter;
+use sui_json_rpc_types::{DevInspectResults, DryRunTransactionBlockResponse};
 use sui_storage::key_value_store::TransactionKeyValueStore;
 use sui_types::base_types::ObjectID;
 use sui_types::base_types::SuiAddress;
 use sui_types::base_types::VersionNumber;
 use sui_types::committee::EpochId;
 use sui_types::digests::TransactionDigest;
-use sui_types::digests::TransactionEventsDigest;
 use sui_types::effects::TransactionEffects;
 use sui_types::effects::TransactionEvents;
 use sui_types::error::ExecutionError;
@@ -45,10 +44,10 @@ use sui_types::storage::ObjectStore;
 use sui_types::storage::ReadStore;
 use sui_types::sui_system_state::epoch_start_sui_system_state::EpochStartSystemStateTrait;
 use sui_types::sui_system_state::SuiSystemStateTrait;
-use sui_types::transaction::InputObjects;
 use sui_types::transaction::Transaction;
 use sui_types::transaction::TransactionDataAPI;
 use sui_types::transaction::TransactionKind;
+use sui_types::transaction::{InputObjects, TransactionData};
 use test_adapter::{SuiTestAdapter, PRE_COMPILED};
 
 #[cfg_attr(not(msim), tokio::main)]
@@ -98,6 +97,12 @@ pub trait TransactionalAdapter: Send + Sync + ReadStore {
         address: SuiAddress,
         amount: u64,
     ) -> anyhow::Result<TransactionEffects>;
+
+    async fn dry_run_transaction_block(
+        &self,
+        transaction_block: TransactionData,
+        transaction_digest: TransactionDigest,
+    ) -> SuiResult<DryRunTransactionBlockResponse>;
 
     async fn dev_inspect_transaction_block(
         &self,
@@ -170,6 +175,17 @@ impl TransactionalAdapter for ValidatorWithFullnode {
             self.validator
                 .prepare_certificate_for_benchmark(&tx, input_objects, &epoch_store)?;
         Ok((effects, error))
+    }
+
+    async fn dry_run_transaction_block(
+        &self,
+        transaction_block: TransactionData,
+        transaction_digest: TransactionDigest,
+    ) -> SuiResult<DryRunTransactionBlockResponse> {
+        self.fullnode
+            .dry_exec_transaction(transaction_block, transaction_digest)
+            .await
+            .map(|result| result.0)
     }
 
     async fn dev_inspect_transaction_block(
@@ -346,10 +362,10 @@ impl ReadStore for ValidatorWithFullnode {
             .get_executed_effects(tx_digest)
     }
 
-    fn get_events(&self, event_digest: &TransactionEventsDigest) -> Option<TransactionEvents> {
+    fn get_events(&self, digest: &TransactionDigest) -> Option<TransactionEvents> {
         self.validator
             .get_transaction_cache_reader()
-            .get_events(event_digest)
+            .get_events(digest)
     }
 
     fn get_full_checkpoint_contents_by_sequence_number(
@@ -409,6 +425,14 @@ impl TransactionalAdapter for Simulacrum<StdRng, PersistedStore> {
         unimplemented!("dev_inspect_transaction_block not supported in simulator mode")
     }
 
+    async fn dry_run_transaction_block(
+        &self,
+        _transaction_block: TransactionData,
+        _transaction_digest: TransactionDigest,
+    ) -> SuiResult<DryRunTransactionBlockResponse> {
+        unimplemented!("dry_run_transaction_block not supported in simulator mode")
+    }
+
     async fn query_tx_events_asc(
         &self,
         tx_digest: &TransactionDigest,
@@ -416,7 +440,7 @@ impl TransactionalAdapter for Simulacrum<StdRng, PersistedStore> {
     ) -> SuiResult<Vec<Event>> {
         Ok(self
             .store()
-            .get_transaction_events_by_tx_digest(tx_digest)
+            .get_transaction_events(tx_digest)
             .map(|x| x.data)
             .unwrap_or_default())
     }

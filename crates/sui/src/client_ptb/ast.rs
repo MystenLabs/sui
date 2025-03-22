@@ -10,6 +10,7 @@ use move_core_types::parsing::{
 use move_core_types::runtime_value::MoveValue;
 use sui_types::{
     base_types::{ObjectID, RESOLVED_ASCII_STR, RESOLVED_STD_OPTION, RESOLVED_UTF8_STR},
+    id::RESOLVED_SUI_ID,
     Identifier, TypeTag,
 };
 
@@ -201,6 +202,30 @@ impl Argument {
                 } =>
             {
                 MoveValue::Vector(s.bytes().map(MoveValue::U8).collect::<Vec<_>>())
+            }
+            (Argument::Address(a), TypeTag::Struct(stag))
+                if (
+                    &stag.address,
+                    stag.module.as_ident_str(),
+                    stag.name.as_ident_str(),
+                ) == RESOLVED_SUI_ID =>
+            {
+                MoveValue::Address(a.into_inner())
+            }
+            (Argument::Option(sp!(loc, o)), TypeTag::Vector(ty)) => {
+                if let Some(v) = o {
+                    let v = v
+                        .as_ref()
+                        .checked_to_pure_move_value(*loc, ty)
+                        .map_err(|e| {
+                            e.with_help(
+                                "Literal option values cannot contain object values.".to_string(),
+                            )
+                        })?;
+                    MoveValue::Vector(vec![v])
+                } else {
+                    MoveValue::Vector(vec![])
+                }
             }
             (Argument::Option(sp!(loc, o)), TypeTag::Struct(stag))
                 if (
@@ -433,7 +458,7 @@ impl fmt::Display for ParsedPTBCommand {
 
 struct TyDisplay<'a>(&'a ParsedType);
 
-impl<'a> fmt::Display for TyDisplay<'a> {
+impl fmt::Display for TyDisplay<'_> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         use ParsedType::*;
         match self.0 {

@@ -18,7 +18,6 @@ byteorder.workspace = true
 bytes.workspace = true
 futures.workspace = true
 mysten-metrics.workspace = true
-notify.workspace = true
 object_store.workspace = true
 serde.workspace = true
 serde_json.workspace = true

@@ -24,6 +24,7 @@ const NOTION_API_VERSION: &str = "2022-02-22";
 
 /// An wrapper Error type for all errors produced by the [`NotionApi`](NotionApi) client.
 #[derive(Debug, thiserror::Error)]
+#[allow(clippy::large_enum_variant)]
 pub enum Error {
     #[error("Invalid Notion API Token: {}", source)]
     InvalidApiToken { source: header::InvalidHeaderValue },
@@ -60,6 +61,7 @@ pub struct NotionApi {
 impl NotionApi {
     /// Creates an instance of NotionApi.
     /// May fail if the provided api_token is an improper value.
+    #[allow(clippy::result_large_err)]
     pub fn new(api_token: String) -> Result<Self, Error> {
         let mut headers = HeaderMap::new();
         headers.insert(

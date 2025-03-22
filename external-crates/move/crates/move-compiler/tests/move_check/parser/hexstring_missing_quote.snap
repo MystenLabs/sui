@@ -1,0 +1,12 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: legacy
+  lint: false
+---
+error[E01008]: invalid hex string
+  ┌─ tests/move_check/parser/hexstring_missing_quote.move:3:9
+  │
+3 │         x"abcd
+  │         ^^^^^^ Missing closing quote (") after byte string

@@ -452,10 +452,9 @@ Aborts if <code>i</code> is out of bounds.
     // i out of bounds; <b>abort</b>
     <b>if</b> (i &gt;= len) <b>abort</b> <a href="../std/vector.md#std_vector_EINDEX_OUT_OF_BOUNDS">EINDEX_OUT_OF_BOUNDS</a>;
     len = len - 1;
-    <b>while</b> (i &lt; len) v.<a href="../std/vector.md#std_vector_swap">swap</a>(i, {
-        i = i + 1;
-        i
-    });
+    <b>while</b> (i &lt; len) {
+        v.<a href="../std/vector.md#std_vector_swap">swap</a>(i, { i = i + 1; i });
+    };
     v.<a href="../std/vector.md#std_vector_pop_back">pop_back</a>()
 }
 </code></pre>
@@ -566,7 +565,7 @@ Destroy the vector <code>v</code> by calling <code>f</code> on each element and 
 Does not preserve the order of elements in the vector (starts from the end of the vector).
 
 
-<pre><code><b>public</b> <b>macro</b> <b>fun</b> <a href="../std/vector.md#std_vector_destroy">destroy</a>&lt;$T&gt;($v: <a href="../std/vector.md#std_vector">vector</a>&lt;$T&gt;, $f: |$T| -&gt; ())
+<pre><code><b>public</b> <b>macro</b> <b>fun</b> <a href="../std/vector.md#std_vector_destroy">destroy</a>&lt;$T, $R: drop&gt;($v: <a href="../std/vector.md#std_vector">vector</a>&lt;$T&gt;, $f: |$T| -&gt; $R)
 </code></pre>
 
 
@@ -575,9 +574,9 @@ Does not preserve the order of elements in the vector (starts from the end of th
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>macro</b> <b>fun</b> <a href="../std/vector.md#std_vector_destroy">destroy</a>&lt;$T&gt;($v: <a href="../std/vector.md#std_vector">vector</a>&lt;$T&gt;, $f: |$T|) {
+<pre><code><b>public</b> <b>macro</b> <b>fun</b> <a href="../std/vector.md#std_vector_destroy">destroy</a>&lt;$T, $R: drop&gt;($v: <a href="../std/vector.md#std_vector">vector</a>&lt;$T&gt;, $f: |$T| -&gt; $R) {
     <b>let</b> <b>mut</b> v = $v;
-    <b>while</b> (v.<a href="../std/vector.md#std_vector_length">length</a>() != 0) $f(v.<a href="../std/vector.md#std_vector_pop_back">pop_back</a>());
+    v.<a href="../std/vector.md#std_vector_length">length</a>().<a href="../std/vector.md#std_vector_do">do</a>!(|_| $f(v.<a href="../std/vector.md#std_vector_pop_back">pop_back</a>()));
     v.<a href="../std/vector.md#std_vector_destroy_empty">destroy_empty</a>();
 }
 </code></pre>
@@ -594,7 +593,7 @@ Destroy the vector <code>v</code> by calling <code>f</code> on each element and 
 Preserves the order of elements in the vector.
 
 
-<pre><code><b>public</b> <b>macro</b> <b>fun</b> <a href="../std/vector.md#std_vector_do">do</a>&lt;$T&gt;($v: <a href="../std/vector.md#std_vector">vector</a>&lt;$T&gt;, $f: |$T| -&gt; ())
+<pre><code><b>public</b> <b>macro</b> <b>fun</b> <a href="../std/vector.md#std_vector_do">do</a>&lt;$T, $R: drop&gt;($v: <a href="../std/vector.md#std_vector">vector</a>&lt;$T&gt;, $f: |$T| -&gt; $R)
 </code></pre>
 
 
@@ -603,7 +602,7 @@ Preserves the order of elements in the vector.
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>macro</b> <b>fun</b> <a href="../std/vector.md#std_vector_do">do</a>&lt;$T&gt;($v: <a href="../std/vector.md#std_vector">vector</a>&lt;$T&gt;, $f: |$T|) {
+<pre><code><b>public</b> <b>macro</b> <b>fun</b> <a href="../std/vector.md#std_vector_do">do</a>&lt;$T, $R: drop&gt;($v: <a href="../std/vector.md#std_vector">vector</a>&lt;$T&gt;, $f: |$T| -&gt; $R) {
     <b>let</b> <b>mut</b> v = $v;
     v.<a href="../std/vector.md#std_vector_reverse">reverse</a>();
     v.<a href="../std/vector.md#std_vector_length">length</a>().<a href="../std/vector.md#std_vector_do">do</a>!(|_| $f(v.<a href="../std/vector.md#std_vector_pop_back">pop_back</a>()));
@@ -622,7 +621,7 @@ Preserves the order of elements in the vector.
 Perform an action <code>f</code> on each element of the vector <code>v</code>. The vector is not modified.
 
 
-<pre><code><b>public</b> <b>macro</b> <b>fun</b> <a href="../std/vector.md#std_vector_do_ref">do_ref</a>&lt;$T&gt;($v: &<a href="../std/vector.md#std_vector">vector</a>&lt;$T&gt;, $f: |&$T| -&gt; ())
+<pre><code><b>public</b> <b>macro</b> <b>fun</b> <a href="../std/vector.md#std_vector_do_ref">do_ref</a>&lt;$T, $R: drop&gt;($v: &<a href="../std/vector.md#std_vector">vector</a>&lt;$T&gt;, $f: |&$T| -&gt; $R)
 </code></pre>
 
 
@@ -631,7 +630,7 @@ Perform an action <code>f</code> on each element of the vector <code>v</code>. T
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>macro</b> <b>fun</b> <a href="../std/vector.md#std_vector_do_ref">do_ref</a>&lt;$T&gt;($v: &<a href="../std/vector.md#std_vector">vector</a>&lt;$T&gt;, $f: |&$T|) {
+<pre><code><b>public</b> <b>macro</b> <b>fun</b> <a href="../std/vector.md#std_vector_do_ref">do_ref</a>&lt;$T, $R: drop&gt;($v: &<a href="../std/vector.md#std_vector">vector</a>&lt;$T&gt;, $f: |&$T| -&gt; $R) {
     <b>let</b> v = $v;
     v.<a href="../std/vector.md#std_vector_length">length</a>().<a href="../std/vector.md#std_vector_do">do</a>!(|i| $f(&v[i]))
 }
@@ -649,7 +648,7 @@ Perform an action <code>f</code> on each element of the vector <code>v</code>.
 The function <code>f</code> takes a mutable reference to the element.
 
 
-<pre><code><b>public</b> <b>macro</b> <b>fun</b> <a href="../std/vector.md#std_vector_do_mut">do_mut</a>&lt;$T&gt;($v: &<b>mut</b> <a href="../std/vector.md#std_vector">vector</a>&lt;$T&gt;, $f: |&<b>mut</b> $T| -&gt; ())
+<pre><code><b>public</b> <b>macro</b> <b>fun</b> <a href="../std/vector.md#std_vector_do_mut">do_mut</a>&lt;$T, $R: drop&gt;($v: &<b>mut</b> <a href="../std/vector.md#std_vector">vector</a>&lt;$T&gt;, $f: |&<b>mut</b> $T| -&gt; $R)
 </code></pre>
 
 
@@ -658,7 +657,7 @@ The function <code>f</code> takes a mutable reference to the element.
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>macro</b> <b>fun</b> <a href="../std/vector.md#std_vector_do_mut">do_mut</a>&lt;$T&gt;($v: &<b>mut</b> <a href="../std/vector.md#std_vector">vector</a>&lt;$T&gt;, $f: |&<b>mut</b> $T|) {
+<pre><code><b>public</b> <b>macro</b> <b>fun</b> <a href="../std/vector.md#std_vector_do_mut">do_mut</a>&lt;$T, $R: drop&gt;($v: &<b>mut</b> <a href="../std/vector.md#std_vector">vector</a>&lt;$T&gt;, $f: |&<b>mut</b> $T| -&gt; $R) {
     <b>let</b> v = $v;
     v.<a href="../std/vector.md#std_vector_length">length</a>().<a href="../std/vector.md#std_vector_do">do</a>!(|i| $f(&<b>mut</b> v[i]))
 }
@@ -969,7 +968,7 @@ Aborts if the vectors are not of the same length.
 The order of elements in the vectors is preserved.
 
 
-<pre><code><b>public</b> <b>macro</b> <b>fun</b> <a href="../std/vector.md#std_vector_zip_do">zip_do</a>&lt;$T1, $T2&gt;($v1: <a href="../std/vector.md#std_vector">vector</a>&lt;$T1&gt;, $v2: <a href="../std/vector.md#std_vector">vector</a>&lt;$T2&gt;, $f: |$T1, $T2| -&gt; ())
+<pre><code><b>public</b> <b>macro</b> <b>fun</b> <a href="../std/vector.md#std_vector_zip_do">zip_do</a>&lt;$T1, $T2, $R: drop&gt;($v1: <a href="../std/vector.md#std_vector">vector</a>&lt;$T1&gt;, $v2: <a href="../std/vector.md#std_vector">vector</a>&lt;$T2&gt;, $f: |$T1, $T2| -&gt; $R)
 </code></pre>
 
 
@@ -978,13 +977,18 @@ The order of elements in the vectors is preserved.
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>macro</b> <b>fun</b> <a href="../std/vector.md#std_vector_zip_do">zip_do</a>&lt;$T1, $T2&gt;($v1: <a href="../std/vector.md#std_vector">vector</a>&lt;$T1&gt;, $v2: <a href="../std/vector.md#std_vector">vector</a>&lt;$T2&gt;, $f: |$T1, $T2|) {
+<pre><code><b>public</b> <b>macro</b> <b>fun</b> <a href="../std/vector.md#std_vector_zip_do">zip_do</a>&lt;$T1, $T2, $R: drop&gt;(
+    $v1: <a href="../std/vector.md#std_vector">vector</a>&lt;$T1&gt;,
+    $v2: <a href="../std/vector.md#std_vector">vector</a>&lt;$T2&gt;,
+    $f: |$T1, $T2| -&gt; $R,
+) {
     <b>let</b> v1 = $v1;
     <b>let</b> <b>mut</b> v2 = $v2;
     v2.<a href="../std/vector.md#std_vector_reverse">reverse</a>();
     <b>let</b> len = v1.<a href="../std/vector.md#std_vector_length">length</a>();
     <b>assert</b>!(len == v2.<a href="../std/vector.md#std_vector_length">length</a>());
     v1.<a href="../std/vector.md#std_vector_do">do</a>!(|el1| $f(el1, v2.<a href="../std/vector.md#std_vector_pop_back">pop_back</a>()));
+    v2.<a href="../std/vector.md#std_vector_destroy_empty">destroy_empty</a>();
 }
 </code></pre>
 
@@ -1001,7 +1005,7 @@ Aborts if the vectors are not of the same length.
 Starts from the end of the vectors.
 
 
-<pre><code><b>public</b> <b>macro</b> <b>fun</b> <a href="../std/vector.md#std_vector_zip_do_reverse">zip_do_reverse</a>&lt;$T1, $T2&gt;($v1: <a href="../std/vector.md#std_vector">vector</a>&lt;$T1&gt;, $v2: <a href="../std/vector.md#std_vector">vector</a>&lt;$T2&gt;, $f: |$T1, $T2| -&gt; ())
+<pre><code><b>public</b> <b>macro</b> <b>fun</b> <a href="../std/vector.md#std_vector_zip_do_reverse">zip_do_reverse</a>&lt;$T1, $T2, $R: drop&gt;($v1: <a href="../std/vector.md#std_vector">vector</a>&lt;$T1&gt;, $v2: <a href="../std/vector.md#std_vector">vector</a>&lt;$T2&gt;, $f: |$T1, $T2| -&gt; $R)
 </code></pre>
 
 
@@ -1010,7 +1014,11 @@ Starts from the end of the vectors.
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>macro</b> <b>fun</b> <a href="../std/vector.md#std_vector_zip_do_reverse">zip_do_reverse</a>&lt;$T1, $T2&gt;($v1: <a href="../std/vector.md#std_vector">vector</a>&lt;$T1&gt;, $v2: <a href="../std/vector.md#std_vector">vector</a>&lt;$T2&gt;, $f: |$T1, $T2|) {
+<pre><code><b>public</b> <b>macro</b> <b>fun</b> <a href="../std/vector.md#std_vector_zip_do_reverse">zip_do_reverse</a>&lt;$T1, $T2, $R: drop&gt;(
+    $v1: <a href="../std/vector.md#std_vector">vector</a>&lt;$T1&gt;,
+    $v2: <a href="../std/vector.md#std_vector">vector</a>&lt;$T2&gt;,
+    $f: |$T1, $T2| -&gt; $R,
+) {
     <b>let</b> v1 = $v1;
     <b>let</b> <b>mut</b> v2 = $v2;
     <b>let</b> len = v1.<a href="../std/vector.md#std_vector_length">length</a>();
@@ -1033,7 +1041,7 @@ Aborts if the vectors are not of the same length.
 The order of elements in the vectors is preserved.
 
 
-<pre><code><b>public</b> <b>macro</b> <b>fun</b> <a href="../std/vector.md#std_vector_zip_do_ref">zip_do_ref</a>&lt;$T1, $T2&gt;($v1: &<a href="../std/vector.md#std_vector">vector</a>&lt;$T1&gt;, $v2: &<a href="../std/vector.md#std_vector">vector</a>&lt;$T2&gt;, $f: |&$T1, &$T2| -&gt; ())
+<pre><code><b>public</b> <b>macro</b> <b>fun</b> <a href="../std/vector.md#std_vector_zip_do_ref">zip_do_ref</a>&lt;$T1, $T2, $R: drop&gt;($v1: &<a href="../std/vector.md#std_vector">vector</a>&lt;$T1&gt;, $v2: &<a href="../std/vector.md#std_vector">vector</a>&lt;$T2&gt;, $f: |&$T1, &$T2| -&gt; $R)
 </code></pre>
 
 
@@ -1042,7 +1050,11 @@ The order of elements in the vectors is preserved.
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>macro</b> <b>fun</b> <a href="../std/vector.md#std_vector_zip_do_ref">zip_do_ref</a>&lt;$T1, $T2&gt;($v1: &<a href="../std/vector.md#std_vector">vector</a>&lt;$T1&gt;, $v2: &<a href="../std/vector.md#std_vector">vector</a>&lt;$T2&gt;, $f: |&$T1, &$T2|) {
+<pre><code><b>public</b> <b>macro</b> <b>fun</b> <a href="../std/vector.md#std_vector_zip_do_ref">zip_do_ref</a>&lt;$T1, $T2, $R: drop&gt;(
+    $v1: &<a href="../std/vector.md#std_vector">vector</a>&lt;$T1&gt;,
+    $v2: &<a href="../std/vector.md#std_vector">vector</a>&lt;$T2&gt;,
+    $f: |&$T1, &$T2| -&gt; $R,
+) {
     <b>let</b> v1 = $v1;
     <b>let</b> v2 = $v2;
     <b>let</b> len = v1.<a href="../std/vector.md#std_vector_length">length</a>();
@@ -1065,7 +1077,7 @@ Aborts if the vectors are not of the same length.
 The order of elements in the vectors is preserved.
 
 
-<pre><code><b>public</b> <b>macro</b> <b>fun</b> <a href="../std/vector.md#std_vector_zip_do_mut">zip_do_mut</a>&lt;$T1, $T2&gt;($v1: &<b>mut</b> <a href="../std/vector.md#std_vector">vector</a>&lt;$T1&gt;, $v2: &<b>mut</b> <a href="../std/vector.md#std_vector">vector</a>&lt;$T2&gt;, $f: |&<b>mut</b> $T1, &<b>mut</b> $T2| -&gt; ())
+<pre><code><b>public</b> <b>macro</b> <b>fun</b> <a href="../std/vector.md#std_vector_zip_do_mut">zip_do_mut</a>&lt;$T1, $T2, $R: drop&gt;($v1: &<b>mut</b> <a href="../std/vector.md#std_vector">vector</a>&lt;$T1&gt;, $v2: &<b>mut</b> <a href="../std/vector.md#std_vector">vector</a>&lt;$T2&gt;, $f: |&<b>mut</b> $T1, &<b>mut</b> $T2| -&gt; $R)
 </code></pre>
 
 
@@ -1074,10 +1086,10 @@ The order of elements in the vectors is preserved.
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>macro</b> <b>fun</b> <a href="../std/vector.md#std_vector_zip_do_mut">zip_do_mut</a>&lt;$T1, $T2&gt;(
+<pre><code><b>public</b> <b>macro</b> <b>fun</b> <a href="../std/vector.md#std_vector_zip_do_mut">zip_do_mut</a>&lt;$T1, $T2, $R: drop&gt;(
     $v1: &<b>mut</b> <a href="../std/vector.md#std_vector">vector</a>&lt;$T1&gt;,
     $v2: &<b>mut</b> <a href="../std/vector.md#std_vector">vector</a>&lt;$T2&gt;,
-    $f: |&<b>mut</b> $T1, &<b>mut</b> $T2|,
+    $f: |&<b>mut</b> $T1, &<b>mut</b> $T2| -&gt; $R,
 ) {
     <b>let</b> v1 = $v1;
     <b>let</b> v2 = $v2;

@@ -1,0 +1,48 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: legacy
+  lint: false
+---
+error[E01003]: invalid modifier
+  ┌─ tests/move_check/parser/use_with_modifiers.move:3:5
+  │
+3 │     public use a::m as m1;
+  │     ^^^^^^ Invalid use declaration. Non-'use fun' declarations cannot have visibility modifiers as they are always internal
+
+error[E01003]: invalid modifier
+  ┌─ tests/move_check/parser/use_with_modifiers.move:4:5
+  │
+4 │     public(friend) use a::m as m2;
+  │     ^^^^^^^^^^^^^^ Invalid use declaration. Non-'use fun' declarations cannot have visibility modifiers as they are always internal
+
+error[E01003]: invalid modifier
+  ┌─ tests/move_check/parser/use_with_modifiers.move:5:5
+  │
+5 │     entry use a::m as m3;
+  │     ^^^^^ Invalid use declaration. 'entry' is used only on functions
+
+error[E01003]: invalid modifier
+  ┌─ tests/move_check/parser/use_with_modifiers.move:6:5
+  │
+6 │     native use a::m as m4;
+  │     ^^^^^^ Invalid use declaration. 'native' is used only on functions or structs
+
+error[E01003]: invalid modifier
+  ┌─ tests/move_check/parser/use_with_modifiers.move:7:5
+  │
+7 │     public native entry use a::m as m5;
+  │     ^^^^^^ Invalid use declaration. Non-'use fun' declarations cannot have visibility modifiers as they are always internal
+
+error[E01003]: invalid modifier
+  ┌─ tests/move_check/parser/use_with_modifiers.move:7:12
+  │
+7 │     public native entry use a::m as m5;
+  │            ^^^^^^ Invalid use declaration. 'native' is used only on functions or structs
+
+error[E01003]: invalid modifier
+  ┌─ tests/move_check/parser/use_with_modifiers.move:7:19
+  │
+7 │     public native entry use a::m as m5;
+  │                   ^^^^^ Invalid use declaration. 'entry' is used only on functions

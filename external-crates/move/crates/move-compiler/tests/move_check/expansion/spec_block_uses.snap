@@ -1,0 +1,15 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: legacy
+  lint: false
+---
+warning[W00001]: DEPRECATED. will be removed
+   ┌─ tests/move_check/expansion/spec_block_uses.move:10:5
+   │  
+10 │ ╭     spec module {
+11 │ │         use 0x2::M::{S as R, R as S};
+12 │ │         ensures exists<S<u64>>(0x1) == exists<R>(0x1);
+13 │ │     }
+   │ ╰─────^ Specification blocks are deprecated and are no longer used

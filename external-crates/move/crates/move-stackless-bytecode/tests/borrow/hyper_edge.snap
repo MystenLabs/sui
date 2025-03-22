@@ -1,0 +1,4437 @@
+---
+source: crates/move-stackless-bytecode/tests/testsuite.rs
+---
+============ initial translation from Move ================
+
+[variant baseline]
+public fun u64::diff($t0|x: u64, $t1|y: u64): u64 {
+     var $t2|tmp#$2: u64
+     var $t3|x#1#1: u64
+     var $t4|y#1#1: u64
+     var $t5: u64
+     var $t6: u64
+     var $t7: u64
+     var $t8: u64
+     var $t9: bool
+     var $t10: u64
+     var $t11: u64
+     var $t12: u64
+     var $t13: u64
+     var $t14: u64
+     var $t15: u64
+     var $t16: u64
+  0: $t5 := move($t0)
+  1: $t3 := $t5
+  2: $t6 := move($t1)
+  3: $t4 := $t6
+  4: $t7 := copy($t3)
+  5: $t8 := copy($t4)
+  6: $t9 := >($t7, $t8)
+  7: if ($t9) goto 8 else goto 14
+  8: label L1
+  9: $t10 := move($t3)
+ 10: $t11 := move($t4)
+ 11: $t12 := -($t10, $t11)
+ 12: $t2 := $t12
+ 13: goto 20
+ 14: label L0
+ 15: $t13 := move($t4)
+ 16: $t14 := move($t3)
+ 17: $t15 := -($t13, $t14)
+ 18: $t2 := $t15
+ 19: goto 20
+ 20: label L2
+ 21: $t16 := move($t2)
+ 22: return $t16
+}
+
+
+[variant baseline]
+public fun u64::divide_and_round_up($t0|x: u64, $t1|y: u64): u64 {
+     var $t2|tmp#$2: u64
+     var $t3|x#1#1: u64
+     var $t4|y#1#1: u64
+     var $t5: u64
+     var $t6: u64
+     var $t7: u64
+     var $t8: u64
+     var $t9: u64
+     var $t10: u64
+     var $t11: bool
+     var $t12: u64
+     var $t13: u64
+     var $t14: u64
+     var $t15: u64
+     var $t16: u64
+     var $t17: u64
+     var $t18: u64
+     var $t19: u64
+     var $t20: u64
+  0: $t5 := move($t0)
+  1: $t3 := $t5
+  2: $t6 := move($t1)
+  3: $t4 := $t6
+  4: $t7 := copy($t3)
+  5: $t8 := copy($t4)
+  6: $t9 := %($t7, $t8)
+  7: $t10 := 0
+  8: $t11 := ==($t9, $t10)
+  9: if ($t11) goto 10 else goto 16
+ 10: label L1
+ 11: $t12 := move($t3)
+ 12: $t13 := move($t4)
+ 13: $t14 := /($t12, $t13)
+ 14: $t2 := $t14
+ 15: goto 24
+ 16: label L0
+ 17: $t15 := move($t3)
+ 18: $t16 := move($t4)
+ 19: $t17 := /($t15, $t16)
+ 20: $t18 := 1
+ 21: $t19 := +($t17, $t18)
+ 22: $t2 := $t19
+ 23: goto 24
+ 24: label L2
+ 25: $t20 := move($t2)
+ 26: return $t20
+}
+
+
+[variant baseline]
+public fun u64::max($t0|x: u64, $t1|y: u64): u64 {
+     var $t2|tmp#$2: u64
+     var $t3|x#1#1: u64
+     var $t4|y#1#1: u64
+     var $t5: u64
+     var $t6: u64
+     var $t7: u64
+     var $t8: u64
+     var $t9: bool
+     var $t10: u64
+     var $t11: u64
+     var $t12: u64
+  0: $t5 := move($t0)
+  1: $t3 := $t5
+  2: $t6 := move($t1)
+  3: $t4 := $t6
+  4: $t7 := copy($t3)
+  5: $t8 := copy($t4)
+  6: $t9 := >($t7, $t8)
+  7: if ($t9) goto 8 else goto 12
+  8: label L1
+  9: $t10 := move($t3)
+ 10: $t2 := $t10
+ 11: goto 16
+ 12: label L0
+ 13: $t11 := move($t4)
+ 14: $t2 := $t11
+ 15: goto 16
+ 16: label L2
+ 17: $t12 := move($t2)
+ 18: return $t12
+}
+
+
+[variant baseline]
+public fun u64::min($t0|x: u64, $t1|y: u64): u64 {
+     var $t2|tmp#$2: u64
+     var $t3|x#1#1: u64
+     var $t4|y#1#1: u64
+     var $t5: u64
+     var $t6: u64
+     var $t7: u64
+     var $t8: u64
+     var $t9: bool
+     var $t10: u64
+     var $t11: u64
+     var $t12: u64
+  0: $t5 := move($t0)
+  1: $t3 := $t5
+  2: $t6 := move($t1)
+  3: $t4 := $t6
+  4: $t7 := copy($t3)
+  5: $t8 := copy($t4)
+  6: $t9 := <($t7, $t8)
+  7: if ($t9) goto 8 else goto 12
+  8: label L1
+  9: $t10 := move($t3)
+ 10: $t2 := $t10
+ 11: goto 16
+ 12: label L0
+ 13: $t11 := move($t4)
+ 14: $t2 := $t11
+ 15: goto 16
+ 16: label L2
+ 17: $t12 := move($t2)
+ 18: return $t12
+}
+
+
+[variant baseline]
+public fun u64::pow($t0|base: u64, $t1|exponent: u8): u64 {
+     var $t2|base#1#1: u64
+     var $t3|exponent#1#1: u8
+     var $t4|res#1#1: u64
+     var $t5: u64
+     var $t6: u8
+     var $t7: u64
+     var $t8: u8
+     var $t9: u8
+     var $t10: bool
+     var $t11: u8
+     var $t12: u8
+     var $t13: u8
+     var $t14: u8
+     var $t15: bool
+     var $t16: u64
+     var $t17: u64
+     var $t18: u64
+     var $t19: u8
+     var $t20: u8
+     var $t21: u8
+     var $t22: u64
+     var $t23: u64
+     var $t24: u64
+     var $t25: u8
+     var $t26: u8
+     var $t27: u8
+     var $t28: u64
+  0: $t5 := move($t0)
+  1: $t2 := $t5
+  2: $t6 := move($t1)
+  3: $t3 := $t6
+  4: $t7 := 1
+  5: $t4 := $t7
+  6: goto 7
+  7: label L5
+  8: $t8 := copy($t3)
+  9: $t9 := 1
+ 10: $t10 := >=($t8, $t9)
+ 11: if ($t10) goto 12 else goto 41
+ 12: label L1
+ 13: goto 14
+ 14: label L2
+ 15: $t11 := copy($t3)
+ 16: $t12 := 2
+ 17: $t13 := %($t11, $t12)
+ 18: $t14 := 0
+ 19: $t15 := ==($t13, $t14)
+ 20: if ($t15) goto 21 else goto 31
+ 21: label L4
+ 22: $t16 := copy($t2)
+ 23: $t17 := move($t2)
+ 24: $t18 := *($t16, $t17)
+ 25: $t2 := $t18
+ 26: $t19 := move($t3)
+ 27: $t20 := 2
+ 28: $t21 := /($t19, $t20)
+ 29: $t3 := $t21
+ 30: goto 7
+ 31: label L3
+ 32: $t22 := move($t4)
+ 33: $t23 := copy($t2)
+ 34: $t24 := *($t22, $t23)
+ 35: $t4 := $t24
+ 36: $t25 := move($t3)
+ 37: $t26 := 1
+ 38: $t27 := -($t25, $t26)
+ 39: $t3 := $t27
+ 40: goto 7
+ 41: label L0
+ 42: $t28 := move($t4)
+ 43: return $t28
+}
+
+
+[variant baseline]
+public fun u64::sqrt($t0|x: u64): u64 {
+     var $t1|bit#1#1: u128
+     var $t2|res#1#1: u128
+     var $t3|x#1#1: u64
+     var $t4|x#2#1: u128
+     var $t5: u64
+     var $t6: u128
+     var $t7: u128
+     var $t8: u64
+     var $t9: u128
+     var $t10: u128
+     var $t11: u128
+     var $t12: bool
+     var $t13: u128
+     var $t14: u128
+     var $t15: u128
+     var $t16: u128
+     var $t17: bool
+     var $t18: u128
+     var $t19: u128
+     var $t20: u128
+     var $t21: u128
+     var $t22: u128
+     var $t23: u128
+     var $t24: u8
+     var $t25: u128
+     var $t26: u128
+     var $t27: u128
+     var $t28: u128
+     var $t29: u8
+     var $t30: u128
+     var $t31: u128
+     var $t32: u8
+     var $t33: u128
+     var $t34: u128
+     var $t35: u64
+  0: $t5 := move($t0)
+  1: $t3 := $t5
+  2: $t6 := 18446744073709551616
+  3: $t1 := $t6
+  4: $t7 := 0
+  5: $t2 := $t7
+  6: $t8 := move($t3)
+  7: $t9 := (u128)($t8)
+  8: $t4 := $t9
+  9: goto 10
+ 10: label L6
+ 11: $t10 := copy($t1)
+ 12: $t11 := 0
+ 13: $t12 := !=($t10, $t11)
+ 14: if ($t12) goto 15 else goto 50
+ 15: label L1
+ 16: goto 17
+ 17: label L2
+ 18: $t13 := copy($t4)
+ 19: $t14 := copy($t2)
+ 20: $t15 := copy($t1)
+ 21: $t16 := +($t14, $t15)
+ 22: $t17 := >=($t13, $t16)
+ 23: if ($t17) goto 24 else goto 38
+ 24: label L4
+ 25: $t18 := move($t4)
+ 26: $t19 := copy($t2)
+ 27: $t20 := copy($t1)
+ 28: $t21 := +($t19, $t20)
+ 29: $t22 := -($t18, $t21)
+ 30: $t4 := $t22
+ 31: $t23 := move($t2)
+ 32: $t24 := 1
+ 33: $t25 := >>($t23, $t24)
+ 34: $t26 := copy($t1)
+ 35: $t27 := +($t25, $t26)
+ 36: $t2 := $t27
+ 37: goto 44
+ 38: label L3
+ 39: $t28 := move($t2)
+ 40: $t29 := 1
+ 41: $t30 := >>($t28, $t29)
+ 42: $t2 := $t30
+ 43: goto 44
+ 44: label L5
+ 45: $t31 := move($t1)
+ 46: $t32 := 2
+ 47: $t33 := >>($t31, $t32)
+ 48: $t1 := $t33
+ 49: goto 10
+ 50: label L0
+ 51: $t34 := move($t2)
+ 52: $t35 := (u64)($t34)
+ 53: return $t35
+}
+
+
+[variant baseline]
+public fun vector::append<#0>($t0|lhs: &mut vector<#0>, $t1|other: vector<#0>) {
+     var $t2: &mut vector<#0>
+     var $t3: &vector<#0>
+     var $t4: bool
+     var $t5: bool
+     var $t6: &mut vector<#0>
+     var $t7: &mut vector<#0>
+     var $t8: #0
+     var $t9: &mut vector<#0>
+     var $t10: vector<#0>
+  0: $t2 := borrow_local($t1)
+  1: vector::reverse<#0>($t2)
+  2: goto 3
+  3: label L3
+  4: $t3 := borrow_local($t1)
+  5: $t4 := vector::is_empty<#0>($t3)
+  6: $t5 := !($t4)
+  7: if ($t5) goto 8 else goto 16
+  8: label L1
+  9: goto 10
+ 10: label L2
+ 11: $t6 := copy($t0)
+ 12: $t7 := borrow_local($t1)
+ 13: $t8 := vector::pop_back<#0>($t7)
+ 14: vector::push_back<#0>($t6, $t8)
+ 15: goto 3
+ 16: label L0
+ 17: $t9 := move($t0)
+ 18: destroy($t9)
+ 19: $t10 := move($t1)
+ 20: vector::destroy_empty<#0>($t10)
+ 21: return ()
+}
+
+
+[variant baseline]
+public native fun vector::borrow<#0>($t0|v: &vector<#0>, $t1|i: u64): &#0;
+
+
+[variant baseline]
+public native fun vector::borrow_mut<#0>($t0|v: &mut vector<#0>, $t1|i: u64): &mut #0;
+
+
+[variant baseline]
+public fun vector::contains<#0>($t0|v: &vector<#0>, $t1|e: &#0): bool {
+     var $t2|i#1#0: u64
+     var $t3|len#1#0: u64
+     var $t4: u64
+     var $t5: &vector<#0>
+     var $t6: u64
+     var $t7: u64
+     var $t8: u64
+     var $t9: bool
+     var $t10: &vector<#0>
+     var $t11: u64
+     var $t12: &#0
+     var $t13: &#0
+     var $t14: bool
+     var $t15: &vector<#0>
+     var $t16: &#0
+     var $t17: bool
+     var $t18: u64
+     var $t19: u64
+     var $t20: u64
+     var $t21: &vector<#0>
+     var $t22: &#0
+     var $t23: bool
+  0: $t4 := 0
+  1: $t2 := $t4
+  2: $t5 := copy($t0)
+  3: $t6 := vector::length<#0>($t5)
+  4: $t3 := $t6
+  5: goto 6
+  6: label L5
+  7: $t7 := copy($t2)
+  8: $t8 := copy($t3)
+  9: $t9 := <($t7, $t8)
+ 10: if ($t9) goto 11 else goto 33
+ 11: label L1
+ 12: goto 13
+ 13: label L2
+ 14: $t10 := copy($t0)
+ 15: $t11 := copy($t2)
+ 16: $t12 := vector::borrow<#0>($t10, $t11)
+ 17: $t13 := copy($t1)
+ 18: $t14 := ==($t12, $t13)
+ 19: if ($t14) goto 20 else goto 27
+ 20: label L4
+ 21: $t15 := move($t0)
+ 22: destroy($t15)
+ 23: $t16 := move($t1)
+ 24: destroy($t16)
+ 25: $t17 := true
+ 26: return $t17
+ 27: label L3
+ 28: $t18 := move($t2)
+ 29: $t19 := 1
+ 30: $t20 := +($t18, $t19)
+ 31: $t2 := $t20
+ 32: goto 6
+ 33: label L0
+ 34: $t21 := move($t0)
+ 35: destroy($t21)
+ 36: $t22 := move($t1)
+ 37: destroy($t22)
+ 38: $t23 := false
+ 39: return $t23
+}
+
+
+[variant baseline]
+public native fun vector::destroy_empty<#0>($t0|v: vector<#0>);
+
+
+[variant baseline]
+public native fun vector::empty<#0>(): vector<#0>;
+
+
+[variant baseline]
+public fun vector::index_of<#0>($t0|v: &vector<#0>, $t1|e: &#0): (bool, u64) {
+     var $t2|i#1#0: u64
+     var $t3|len#1#0: u64
+     var $t4: u64
+     var $t5: &vector<#0>
+     var $t6: u64
+     var $t7: u64
+     var $t8: u64
+     var $t9: bool
+     var $t10: &vector<#0>
+     var $t11: u64
+     var $t12: &#0
+     var $t13: &#0
+     var $t14: bool
+     var $t15: &vector<#0>
+     var $t16: &#0
+     var $t17: bool
+     var $t18: u64
+     var $t19: u64
+     var $t20: u64
+     var $t21: u64
+     var $t22: &vector<#0>
+     var $t23: &#0
+     var $t24: bool
+     var $t25: u64
+  0: $t4 := 0
+  1: $t2 := $t4
+  2: $t5 := copy($t0)
+  3: $t6 := vector::length<#0>($t5)
+  4: $t3 := $t6
+  5: goto 6
+  6: label L5
+  7: $t7 := copy($t2)
+  8: $t8 := copy($t3)
+  9: $t9 := <($t7, $t8)
+ 10: if ($t9) goto 11 else goto 34
+ 11: label L1
+ 12: goto 13
+ 13: label L2
+ 14: $t10 := copy($t0)
+ 15: $t11 := copy($t2)
+ 16: $t12 := vector::borrow<#0>($t10, $t11)
+ 17: $t13 := copy($t1)
+ 18: $t14 := ==($t12, $t13)
+ 19: if ($t14) goto 20 else goto 28
+ 20: label L4
+ 21: $t15 := move($t0)
+ 22: destroy($t15)
+ 23: $t16 := move($t1)
+ 24: destroy($t16)
+ 25: $t17 := true
+ 26: $t18 := move($t2)
+ 27: return ($t17, $t18)
+ 28: label L3
+ 29: $t19 := move($t2)
+ 30: $t20 := 1
+ 31: $t21 := +($t19, $t20)
+ 32: $t2 := $t21
+ 33: goto 6
+ 34: label L0
+ 35: $t22 := move($t0)
+ 36: destroy($t22)
+ 37: $t23 := move($t1)
+ 38: destroy($t23)
+ 39: $t24 := false
+ 40: $t25 := 0
+ 41: return ($t24, $t25)
+}
+
+
+[variant baseline]
+public fun vector::insert<#0>($t0|v: &mut vector<#0>, $t1|e: #0, $t2|i: u64) {
+     var $t3|len#1#0: u64
+     var $t4: &mut vector<#0>
+     var $t5: &vector<#0>
+     var $t6: u64
+     var $t7: u64
+     var $t8: u64
+     var $t9: bool
+     var $t10: &mut vector<#0>
+     var $t11: u64
+     var $t12: &mut vector<#0>
+     var $t13: #0
+     var $t14: u64
+     var $t15: u64
+     var $t16: bool
+     var $t17: &mut vector<#0>
+     var $t18: u64
+     var $t19: u64
+     var $t20: u64
+     var $t21: u64
+     var $t22: u64
+     var $t23: &mut vector<#0>
+  0: $t4 := copy($t0)
+  1: $t5 := freeze_ref($t4)
+  2: $t6 := vector::length<#0>($t5)
+  3: $t3 := $t6
+  4: $t7 := copy($t2)
+  5: $t8 := copy($t3)
+  6: $t9 := >($t7, $t8)
+  7: if ($t9) goto 8 else goto 13
+  8: label L1
+  9: $t10 := move($t0)
+ 10: destroy($t10)
+ 11: $t11 := 131072
+ 12: abort($t11)
+ 13: label L0
+ 14: $t12 := copy($t0)
+ 15: $t13 := move($t1)
+ 16: vector::push_back<#0>($t12, $t13)
+ 17: goto 18
+ 18: label L4
+ 19: $t14 := copy($t2)
+ 20: $t15 := copy($t3)
+ 21: $t16 := <($t14, $t15)
+ 22: if ($t16) goto 23 else goto 33
+ 23: label L3
+ 24: $t17 := copy($t0)
+ 25: $t18 := copy($t2)
+ 26: $t19 := copy($t3)
+ 27: vector::swap<#0>($t17, $t18, $t19)
+ 28: $t20 := move($t2)
+ 29: $t21 := 1
+ 30: $t22 := +($t20, $t21)
+ 31: $t2 := $t22
+ 32: goto 18
+ 33: label L2
+ 34: $t23 := move($t0)
+ 35: destroy($t23)
+ 36: return ()
+}
+
+
+[variant baseline]
+public fun vector::is_empty<#0>($t0|v: &vector<#0>): bool {
+     var $t1: &vector<#0>
+     var $t2: u64
+     var $t3: u64
+     var $t4: bool
+  0: $t1 := move($t0)
+  1: $t2 := vector::length<#0>($t1)
+  2: $t3 := 0
+  3: $t4 := ==($t2, $t3)
+  4: return $t4
+}
+
+
+[variant baseline]
+public native fun vector::length<#0>($t0|v: &vector<#0>): u64;
+
+
+[variant baseline]
+public native fun vector::pop_back<#0>($t0|v: &mut vector<#0>): #0;
+
+
+[variant baseline]
+public native fun vector::push_back<#0>($t0|v: &mut vector<#0>, $t1|e: #0);
+
+
+[variant baseline]
+public fun vector::remove<#0>($t0|v: &mut vector<#0>, $t1|i: u64): #0 {
+     var $t2|tmp#$2: u64
+     var $t3|tmp#$3: &mut vector<#0>
+     var $t4|len#1#0: u64
+     var $t5: &mut vector<#0>
+     var $t6: &vector<#0>
+     var $t7: u64
+     var $t8: u64
+     var $t9: u64
+     var $t10: bool
+     var $t11: &mut vector<#0>
+     var $t12: u64
+     var $t13: u64
+     var $t14: u64
+     var $t15: u64
+     var $t16: u64
+     var $t17: u64
+     var $t18: bool
+     var $t19: &mut vector<#0>
+     var $t20: u64
+     var $t21: u64
+     var $t22: u64
+     var $t23: u64
+     var $t24: &mut vector<#0>
+     var $t25: u64
+     var $t26: u64
+     var $t27: &mut vector<#0>
+     var $t28: #0
+  0: $t5 := copy($t0)
+  1: $t6 := freeze_ref($t5)
+  2: $t7 := vector::length<#0>($t6)
+  3: $t4 := $t7
+  4: $t8 := copy($t1)
+  5: $t9 := copy($t4)
+  6: $t10 := >=($t8, $t9)
+  7: if ($t10) goto 8 else goto 13
+  8: label L1
+  9: $t11 := move($t0)
+ 10: destroy($t11)
+ 11: $t12 := 131072
+ 12: abort($t12)
+ 13: label L0
+ 14: $t13 := move($t4)
+ 15: $t14 := 1
+ 16: $t15 := -($t13, $t14)
+ 17: $t4 := $t15
+ 18: goto 19
+ 19: label L4
+ 20: $t16 := copy($t1)
+ 21: $t17 := copy($t4)
+ 22: $t18 := <($t16, $t17)
+ 23: if ($t18) goto 24 else goto 38
+ 24: label L3
+ 25: $t19 := copy($t0)
+ 26: $t3 := $t19
+ 27: $t20 := copy($t1)
+ 28: $t2 := $t20
+ 29: $t21 := move($t1)
+ 30: $t22 := 1
+ 31: $t23 := +($t21, $t22)
+ 32: $t1 := $t23
+ 33: $t24 := move($t3)
+ 34: $t25 := move($t2)
+ 35: $t26 := copy($t1)
+ 36: vector::swap<#0>($t24, $t25, $t26)
+ 37: goto 19
+ 38: label L2
+ 39: $t27 := move($t0)
+ 40: $t28 := vector::pop_back<#0>($t27)
+ 41: return $t28
+}
+
+
+[variant baseline]
+public fun vector::reverse<#0>($t0|v: &mut vector<#0>) {
+     var $t1|back_index#1#0: u64
+     var $t2|front_index#1#0: u64
+     var $t3|len#1#0: u64
+     var $t4: &mut vector<#0>
+     var $t5: &vector<#0>
+     var $t6: u64
+     var $t7: u64
+     var $t8: u64
+     var $t9: bool
+     var $t10: &mut vector<#0>
+     var $t11: u64
+     var $t12: u64
+     var $t13: u64
+     var $t14: u64
+     var $t15: u64
+     var $t16: u64
+     var $t17: bool
+     var $t18: &mut vector<#0>
+     var $t19: u64
+     var $t20: u64
+     var $t21: u64
+     var $t22: u64
+     var $t23: u64
+     var $t24: u64
+     var $t25: u64
+     var $t26: u64
+     var $t27: &mut vector<#0>
+  0: $t4 := copy($t0)
+  1: $t5 := freeze_ref($t4)
+  2: $t6 := vector::length<#0>($t5)
+  3: $t3 := $t6
+  4: $t7 := copy($t3)
+  5: $t8 := 0
+  6: $t9 := ==($t7, $t8)
+  7: if ($t9) goto 8 else goto 12
+  8: label L1
+  9: $t10 := move($t0)
+ 10: destroy($t10)
+ 11: return ()
+ 12: label L0
+ 13: $t11 := 0
+ 14: $t2 := $t11
+ 15: $t12 := move($t3)
+ 16: $t13 := 1
+ 17: $t14 := -($t12, $t13)
+ 18: $t1 := $t14
+ 19: goto 20
+ 20: label L4
+ 21: $t15 := copy($t2)
+ 22: $t16 := copy($t1)
+ 23: $t17 := <($t15, $t16)
+ 24: if ($t17) goto 25 else goto 39
+ 25: label L3
+ 26: $t18 := copy($t0)
+ 27: $t19 := copy($t2)
+ 28: $t20 := copy($t1)
+ 29: vector::swap<#0>($t18, $t19, $t20)
+ 30: $t21 := move($t2)
+ 31: $t22 := 1
+ 32: $t23 := +($t21, $t22)
+ 33: $t2 := $t23
+ 34: $t24 := move($t1)
+ 35: $t25 := 1
+ 36: $t26 := -($t24, $t25)
+ 37: $t1 := $t26
+ 38: goto 20
+ 39: label L2
+ 40: $t27 := move($t0)
+ 41: destroy($t27)
+ 42: return ()
+}
+
+
+[variant baseline]
+public fun vector::singleton<#0>($t0|e: #0): vector<#0> {
+     var $t1|v#1#0: vector<#0>
+     var $t2: vector<#0>
+     var $t3: &mut vector<#0>
+     var $t4: #0
+     var $t5: vector<#0>
+  0: $t2 := vector::empty<#0>()
+  1: $t1 := $t2
+  2: $t3 := borrow_local($t1)
+  3: $t4 := move($t0)
+  4: vector::push_back<#0>($t3, $t4)
+  5: $t5 := move($t1)
+  6: return $t5
+}
+
+
+[variant baseline]
+public native fun vector::swap<#0>($t0|v: &mut vector<#0>, $t1|i: u64, $t2|j: u64);
+
+
+[variant baseline]
+public fun vector::swap_remove<#0>($t0|v: &mut vector<#0>, $t1|i: u64): #0 {
+     var $t2|last_idx#1#0: u64
+     var $t3: &mut vector<#0>
+     var $t4: &vector<#0>
+     var $t5: bool
+     var $t6: bool
+     var $t7: &mut vector<#0>
+     var $t8: u64
+     var $t9: &mut vector<#0>
+     var $t10: &vector<#0>
+     var $t11: u64
+     var $t12: u64
+     var $t13: u64
+     var $t14: &mut vector<#0>
+     var $t15: u64
+     var $t16: u64
+     var $t17: &mut vector<#0>
+     var $t18: #0
+  0: $t3 := copy($t0)
+  1: $t4 := freeze_ref($t3)
+  2: $t5 := vector::is_empty<#0>($t4)
+  3: $t6 := !($t5)
+  4: if ($t6) goto 5 else goto 7
+  5: label L1
+  6: goto 12
+  7: label L0
+  8: $t7 := move($t0)
+  9: destroy($t7)
+ 10: $t8 := 131072
+ 11: abort($t8)
+ 12: label L2
+ 13: $t9 := copy($t0)
+ 14: $t10 := freeze_ref($t9)
+ 15: $t11 := vector::length<#0>($t10)
+ 16: $t12 := 1
+ 17: $t13 := -($t11, $t12)
+ 18: $t2 := $t13
+ 19: $t14 := copy($t0)
+ 20: $t15 := move($t1)
+ 21: $t16 := move($t2)
+ 22: vector::swap<#0>($t14, $t15, $t16)
+ 23: $t17 := move($t0)
+ 24: $t18 := vector::pop_back<#0>($t17)
+ 25: return $t18
+}
+
+
+[variant baseline]
+public fun option::borrow<#0>($t0|t: &option::Option<#0>): &#0 {
+     var $t1: &option::Option<#0>
+     var $t2: bool
+     var $t3: &option::Option<#0>
+     var $t4: u64
+     var $t5: &option::Option<#0>
+     var $t6: &vector<#0>
+     var $t7: u64
+     var $t8: &#0
+  0: $t1 := copy($t0)
+  1: $t2 := option::is_some<#0>($t1)
+  2: if ($t2) goto 3 else goto 5
+  3: label L1
+  4: goto 10
+  5: label L0
+  6: $t3 := move($t0)
+  7: destroy($t3)
+  8: $t4 := 262145
+  9: abort($t4)
+ 10: label L2
+ 11: $t5 := move($t0)
+ 12: $t6 := borrow_field<option::Option<#0>>.vec($t5)
+ 13: $t7 := 0
+ 14: $t8 := vector::borrow<#0>($t6, $t7)
+ 15: return $t8
+}
+
+
+[variant baseline]
+public fun option::borrow_mut<#0>($t0|t: &mut option::Option<#0>): &mut #0 {
+     var $t1: &mut option::Option<#0>
+     var $t2: &option::Option<#0>
+     var $t3: bool
+     var $t4: &mut option::Option<#0>
+     var $t5: u64
+     var $t6: &mut option::Option<#0>
+     var $t7: &mut vector<#0>
+     var $t8: u64
+     var $t9: &mut #0
+  0: $t1 := copy($t0)
+  1: $t2 := freeze_ref($t1)
+  2: $t3 := option::is_some<#0>($t2)
+  3: if ($t3) goto 4 else goto 6
+  4: label L1
+  5: goto 11
+  6: label L0
+  7: $t4 := move($t0)
+  8: destroy($t4)
+  9: $t5 := 262145
+ 10: abort($t5)
+ 11: label L2
+ 12: $t6 := move($t0)
+ 13: $t7 := borrow_field<option::Option<#0>>.vec($t6)
+ 14: $t8 := 0
+ 15: $t9 := vector::borrow_mut<#0>($t7, $t8)
+ 16: return $t9
+}
+
+
+[variant baseline]
+public fun option::contains<#0>($t0|t: &option::Option<#0>, $t1|e_ref: &#0): bool {
+     var $t2: &option::Option<#0>
+     var $t3: &vector<#0>
+     var $t4: &#0
+     var $t5: bool
+  0: $t2 := move($t0)
+  1: $t3 := borrow_field<option::Option<#0>>.vec($t2)
+  2: $t4 := move($t1)
+  3: $t5 := vector::contains<#0>($t3, $t4)
+  4: return $t5
+}
+
+
+[variant baseline]
+public fun option::swap<#0>($t0|t: &mut option::Option<#0>, $t1|e: #0): #0 {
+     var $t2|old_value#1#0: #0
+     var $t3|vec_ref#1#0: &mut vector<#0>
+     var $t4: &mut option::Option<#0>
+     var $t5: &option::Option<#0>
+     var $t6: bool
+     var $t7: &mut option::Option<#0>
+     var $t8: u64
+     var $t9: &mut option::Option<#0>
+     var $t10: &mut vector<#0>
+     var $t11: &mut vector<#0>
+     var $t12: #0
+     var $t13: &mut vector<#0>
+     var $t14: #0
+     var $t15: #0
+  0: $t4 := copy($t0)
+  1: $t5 := freeze_ref($t4)
+  2: $t6 := option::is_some<#0>($t5)
+  3: if ($t6) goto 4 else goto 6
+  4: label L1
+  5: goto 11
+  6: label L0
+  7: $t7 := move($t0)
+  8: destroy($t7)
+  9: $t8 := 262145
+ 10: abort($t8)
+ 11: label L2
+ 12: $t9 := move($t0)
+ 13: $t10 := borrow_field<option::Option<#0>>.vec($t9)
+ 14: $t3 := $t10
+ 15: $t11 := copy($t3)
+ 16: $t12 := vector::pop_back<#0>($t11)
+ 17: $t2 := $t12
+ 18: $t13 := move($t3)
+ 19: $t14 := move($t1)
+ 20: vector::push_back<#0>($t13, $t14)
+ 21: $t15 := move($t2)
+ 22: return $t15
+}
+
+
+[variant baseline]
+public fun option::borrow_with_default<#0>($t0|t: &option::Option<#0>, $t1|default_ref: &#0): &#0 {
+     var $t2|tmp#$2: &#0
+     var $t3|vec_ref#1#0: &vector<#0>
+     var $t4: &option::Option<#0>
+     var $t5: &vector<#0>
+     var $t6: &vector<#0>
+     var $t7: bool
+     var $t8: &vector<#0>
+     var $t9: &#0
+     var $t10: &#0
+     var $t11: &vector<#0>
+     var $t12: u64
+     var $t13: &#0
+     var $t14: &#0
+  0: $t4 := move($t0)
+  1: $t5 := borrow_field<option::Option<#0>>.vec($t4)
+  2: $t3 := $t5
+  3: $t6 := copy($t3)
+  4: $t7 := vector::is_empty<#0>($t6)
+  5: if ($t7) goto 6 else goto 12
+  6: label L1
+  7: $t8 := move($t3)
+  8: destroy($t8)
+  9: $t9 := move($t1)
+ 10: $t2 := $t9
+ 11: goto 20
+ 12: label L0
+ 13: $t10 := move($t1)
+ 14: destroy($t10)
+ 15: $t11 := move($t3)
+ 16: $t12 := 0
+ 17: $t13 := vector::borrow<#0>($t11, $t12)
+ 18: $t2 := $t13
+ 19: goto 20
+ 20: label L2
+ 21: $t14 := move($t2)
+ 22: return $t14
+}
+
+
+[variant baseline]
+public fun option::destroy_none<#0>($t0|t: option::Option<#0>) {
+     var $t1: &option::Option<#0>
+     var $t2: bool
+     var $t3: u64
+     var $t4: option::Option<#0>
+     var $t5: vector<#0>
+  0: $t1 := borrow_local($t0)
+  1: $t2 := option::is_none<#0>($t1)
+  2: if ($t2) goto 3 else goto 5
+  3: label L1
+  4: goto 8
+  5: label L0
+  6: $t3 := 262144
+  7: abort($t3)
+  8: label L2
+  9: $t4 := move($t0)
+ 10: $t5 := unpack option::Option<#0>($t4)
+ 11: vector::destroy_empty<#0>($t5)
+ 12: return ()
+}
+
+
+[variant baseline]
+public fun option::destroy_some<#0>($t0|t: option::Option<#0>): #0 {
+     var $t1|elem#1#0: #0
+     var $t2|vec#1#0: vector<#0>
+     var $t3: &option::Option<#0>
+     var $t4: bool
+     var $t5: u64
+     var $t6: option::Option<#0>
+     var $t7: vector<#0>
+     var $t8: &mut vector<#0>
+     var $t9: #0
+     var $t10: vector<#0>
+     var $t11: #0
+  0: $t3 := borrow_local($t0)
+  1: $t4 := option::is_some<#0>($t3)
+  2: if ($t4) goto 3 else goto 5
+  3: label L1
+  4: goto 8
+  5: label L0
+  6: $t5 := 262145
+  7: abort($t5)
+  8: label L2
+  9: $t6 := move($t0)
+ 10: $t7 := unpack option::Option<#0>($t6)
+ 11: $t2 := $t7
+ 12: $t8 := borrow_local($t2)
+ 13: $t9 := vector::pop_back<#0>($t8)
+ 14: $t1 := $t9
+ 15: $t10 := move($t2)
+ 16: vector::destroy_empty<#0>($t10)
+ 17: $t11 := move($t1)
+ 18: return $t11
+}
+
+
+[variant baseline]
+public fun option::destroy_with_default<#0>($t0|t: option::Option<#0>, $t1|default: #0): #0 {
+     var $t2|tmp#$2: #0
+     var $t3|vec#1#0: vector<#0>
+     var $t4: option::Option<#0>
+     var $t5: vector<#0>
+     var $t6: &vector<#0>
+     var $t7: bool
+     var $t8: #0
+     var $t9: &mut vector<#0>
+     var $t10: #0
+     var $t11: #0
+  0: $t4 := move($t0)
+  1: $t5 := unpack option::Option<#0>($t4)
+  2: $t3 := $t5
+  3: $t6 := borrow_local($t3)
+  4: $t7 := vector::is_empty<#0>($t6)
+  5: if ($t7) goto 6 else goto 10
+  6: label L1
+  7: $t8 := move($t1)
+  8: $t2 := $t8
+  9: goto 15
+ 10: label L0
+ 11: $t9 := borrow_local($t3)
+ 12: $t10 := vector::pop_back<#0>($t9)
+ 13: $t2 := $t10
+ 14: goto 15
+ 15: label L2
+ 16: $t11 := move($t2)
+ 17: return $t11
+}
+
+
+[variant baseline]
+public fun option::extract<#0>($t0|t: &mut option::Option<#0>): #0 {
+     var $t1: &mut option::Option<#0>
+     var $t2: &option::Option<#0>
+     var $t3: bool
+     var $t4: &mut option::Option<#0>
+     var $t5: u64
+     var $t6: &mut option::Option<#0>
+     var $t7: &mut vector<#0>
+     var $t8: #0
+  0: $t1 := copy($t0)
+  1: $t2 := freeze_ref($t1)
+  2: $t3 := option::is_some<#0>($t2)
+  3: if ($t3) goto 4 else goto 6
+  4: label L1
+  5: goto 11
+  6: label L0
+  7: $t4 := move($t0)
+  8: destroy($t4)
+  9: $t5 := 262145
+ 10: abort($t5)
+ 11: label L2
+ 12: $t6 := move($t0)
+ 13: $t7 := borrow_field<option::Option<#0>>.vec($t6)
+ 14: $t8 := vector::pop_back<#0>($t7)
+ 15: return $t8
+}
+
+
+[variant baseline]
+public fun option::fill<#0>($t0|t: &mut option::Option<#0>, $t1|e: #0) {
+     var $t2|vec_ref#1#0: &mut vector<#0>
+     var $t3: &mut option::Option<#0>
+     var $t4: &mut vector<#0>
+     var $t5: &mut vector<#0>
+     var $t6: &vector<#0>
+     var $t7: bool
+     var $t8: &mut vector<#0>
+     var $t9: u64
+     var $t10: &mut vector<#0>
+     var $t11: #0
+  0: $t3 := move($t0)
+  1: $t4 := borrow_field<option::Option<#0>>.vec($t3)
+  2: $t2 := $t4
+  3: $t5 := copy($t2)
+  4: $t6 := freeze_ref($t5)
+  5: $t7 := vector::is_empty<#0>($t6)
+  6: if ($t7) goto 7 else goto 9
+  7: label L1
+  8: goto 14
+  9: label L0
+ 10: $t8 := move($t2)
+ 11: destroy($t8)
+ 12: $t9 := 262144
+ 13: abort($t9)
+ 14: label L2
+ 15: $t10 := move($t2)
+ 16: $t11 := move($t1)
+ 17: vector::push_back<#0>($t10, $t11)
+ 18: return ()
+}
+
+
+[variant baseline]
+public fun option::get_with_default<#0>($t0|t: &option::Option<#0>, $t1|default: #0): #0 {
+     var $t2|tmp#$2: #0
+     var $t3|vec_ref#1#0: &vector<#0>
+     var $t4: &option::Option<#0>
+     var $t5: &vector<#0>
+     var $t6: &vector<#0>
+     var $t7: bool
+     var $t8: &vector<#0>
+     var $t9: #0
+     var $t10: &vector<#0>
+     var $t11: u64
+     var $t12: &#0
+     var $t13: #0
+     var $t14: #0
+  0: $t4 := move($t0)
+  1: $t5 := borrow_field<option::Option<#0>>.vec($t4)
+  2: $t3 := $t5
+  3: $t6 := copy($t3)
+  4: $t7 := vector::is_empty<#0>($t6)
+  5: if ($t7) goto 6 else goto 12
+  6: label L1
+  7: $t8 := move($t3)
+  8: destroy($t8)
+  9: $t9 := move($t1)
+ 10: $t2 := $t9
+ 11: goto 19
+ 12: label L0
+ 13: $t10 := move($t3)
+ 14: $t11 := 0
+ 15: $t12 := vector::borrow<#0>($t10, $t11)
+ 16: $t13 := read_ref($t12)
+ 17: $t2 := $t13
+ 18: goto 19
+ 19: label L2
+ 20: $t14 := move($t2)
+ 21: return $t14
+}
+
+
+[variant baseline]
+public fun option::is_none<#0>($t0|t: &option::Option<#0>): bool {
+     var $t1: &option::Option<#0>
+     var $t2: &vector<#0>
+     var $t3: bool
+  0: $t1 := move($t0)
+  1: $t2 := borrow_field<option::Option<#0>>.vec($t1)
+  2: $t3 := vector::is_empty<#0>($t2)
+  3: return $t3
+}
+
+
+[variant baseline]
+public fun option::is_some<#0>($t0|t: &option::Option<#0>): bool {
+     var $t1: &option::Option<#0>
+     var $t2: &vector<#0>
+     var $t3: bool
+     var $t4: bool
+  0: $t1 := move($t0)
+  1: $t2 := borrow_field<option::Option<#0>>.vec($t1)
+  2: $t3 := vector::is_empty<#0>($t2)
+  3: $t4 := !($t3)
+  4: return $t4
+}
+
+
+[variant baseline]
+public fun option::none<#0>(): option::Option<#0> {
+     var $t0: vector<#0>
+     var $t1: option::Option<#0>
+  0: $t0 := vector::empty<#0>()
+  1: $t1 := pack option::Option<#0>($t0)
+  2: return $t1
+}
+
+
+[variant baseline]
+public fun option::some<#0>($t0|e: #0): option::Option<#0> {
+     var $t1: #0
+     var $t2: vector<#0>
+     var $t3: option::Option<#0>
+  0: $t1 := move($t0)
+  1: $t2 := vector::singleton<#0>($t1)
+  2: $t3 := pack option::Option<#0>($t2)
+  3: return $t3
+}
+
+
+[variant baseline]
+public fun option::swap_or_fill<#0>($t0|t: &mut option::Option<#0>, $t1|e: #0): option::Option<#0> {
+     var $t2|tmp#$2: option::Option<#0>
+     var $t3|old_value#1#0: option::Option<#0>
+     var $t4|vec_ref#1#0: &mut vector<#0>
+     var $t5: &mut option::Option<#0>
+     var $t6: &mut vector<#0>
+     var $t7: &mut vector<#0>
+     var $t8: &vector<#0>
+     var $t9: bool
+     var $t10: option::Option<#0>
+     var $t11: &mut vector<#0>
+     var $t12: #0
+     var $t13: option::Option<#0>
+     var $t14: option::Option<#0>
+     var $t15: &mut vector<#0>
+     var $t16: #0
+     var $t17: option::Option<#0>
+  0: $t5 := move($t0)
+  1: $t6 := borrow_field<option::Option<#0>>.vec($t5)
+  2: $t4 := $t6
+  3: $t7 := copy($t4)
+  4: $t8 := freeze_ref($t7)
+  5: $t9 := vector::is_empty<#0>($t8)
+  6: if ($t9) goto 7 else goto 11
+  7: label L1
+  8: $t10 := option::none<#0>()
+  9: $t2 := $t10
+ 10: goto 17
+ 11: label L0
+ 12: $t11 := copy($t4)
+ 13: $t12 := vector::pop_back<#0>($t11)
+ 14: $t13 := option::some<#0>($t12)
+ 15: $t2 := $t13
+ 16: goto 17
+ 17: label L2
+ 18: $t14 := move($t2)
+ 19: $t3 := $t14
+ 20: $t15 := move($t4)
+ 21: $t16 := move($t1)
+ 22: vector::push_back<#0>($t15, $t16)
+ 23: $t17 := move($t3)
+ 24: return $t17
+}
+
+
+[variant baseline]
+public fun option::to_vec<#0>($t0|t: option::Option<#0>): vector<#0> {
+     var $t1: option::Option<#0>
+     var $t2: vector<#0>
+  0: $t1 := move($t0)
+  1: $t2 := unpack option::Option<#0>($t1)
+  2: return $t2
+}
+
+
+[variant baseline]
+public fun ascii::append($t0|string: &mut ascii::String, $t1|other: ascii::String) {
+     var $t2: &mut ascii::String
+     var $t3: &mut vector<u8>
+     var $t4: ascii::String
+     var $t5: vector<u8>
+  0: $t2 := move($t0)
+  1: $t3 := borrow_field<ascii::String>.bytes($t2)
+  2: $t4 := move($t1)
+  3: $t5 := ascii::into_bytes($t4)
+  4: vector::append<u8>($t3, $t5)
+  5: return ()
+}
+
+
+[variant baseline]
+public fun ascii::index_of($t0|string: &ascii::String, $t1|substr: &ascii::String): u64 {
+     var $t2|tmp#$2: bool
+     var $t3|i#1#0: u64
+     var $t4|j#1#0: u64
+     var $t5|m#1#0: u64
+     var $t6|n#1#0: u64
+     var $t7: u64
+     var $t8: &ascii::String
+     var $t9: u64
+     var $t10: &ascii::String
+     var $t11: u64
+     var $t12: u64
+     var $t13: u64
+     var $t14: bool
+     var $t15: &ascii::String
+     var $t16: &ascii::String
+     var $t17: u64
+     var $t18: u64
+     var $t19: u64
+     var $t20: u64
+     var $t21: u64
+     var $t22: bool
+     var $t23: u64
+     var $t24: u64
+     var $t25: u64
+     var $t26: bool
+     var $t27: &ascii::String
+     var $t28: &vector<u8>
+     var $t29: u64
+     var $t30: u64
+     var $t31: u64
+     var $t32: &u8
+     var $t33: u8
+     var $t34: &ascii::String
+     var $t35: &vector<u8>
+     var $t36: u64
+     var $t37: &u8
+     var $t38: u8
+     var $t39: bool
+     var $t40: bool
+     var $t41: bool
+     var $t42: u64
+     var $t43: u64
+     var $t44: u64
+     var $t45: u64
+     var $t46: u64
+     var $t47: bool
+     var $t48: &ascii::String
+     var $t49: &ascii::String
+     var $t50: u64
+     var $t51: u64
+     var $t52: u64
+     var $t53: u64
+     var $t54: &ascii::String
+     var $t55: &ascii::String
+     var $t56: u64
+  0: $t7 := 0
+  1: $t3 := $t7
+  2: $t8 := copy($t0)
+  3: $t9 := ascii::length($t8)
+  4: $t10 := copy($t1)
+  5: $t11 := ascii::length($t10)
+  6: $t5 := $t11
+  7: $t6 := $t9
+  8: $t12 := copy($t6)
+  9: $t13 := copy($t5)
+ 10: $t14 := <($t12, $t13)
+ 11: if ($t14) goto 12 else goto 19
+ 12: label L1
+ 13: $t15 := move($t1)
+ 14: destroy($t15)
+ 15: $t16 := move($t0)
+ 16: destroy($t16)
+ 17: $t17 := move($t6)
+ 18: return $t17
+ 19: label L0
+ 20: $t18 := copy($t3)
+ 21: $t19 := copy($t6)
+ 22: $t20 := copy($t5)
+ 23: $t21 := -($t19, $t20)
+ 24: $t22 := <=($t18, $t21)
+ 25: if ($t22) goto 26 else goto 84
+ 26: label L3
+ 27: $t23 := 0
+ 28: $t4 := $t23
+ 29: goto 30
+ 30: label L10
+ 31: $t24 := copy($t4)
+ 32: $t25 := copy($t5)
+ 33: $t26 := <($t24, $t25)
+ 34: if ($t26) goto 35 else goto 53
+ 35: label L5
+ 36: goto 37
+ 37: label L6
+ 38: $t27 := copy($t0)
+ 39: $t28 := borrow_field<ascii::String>.bytes($t27)
+ 40: $t29 := copy($t3)
+ 41: $t30 := copy($t4)
+ 42: $t31 := +($t29, $t30)
+ 43: $t32 := vector::borrow<u8>($t28, $t31)
+ 44: $t33 := read_ref($t32)
+ 45: $t34 := copy($t1)
+ 46: $t35 := borrow_field<ascii::String>.bytes($t34)
+ 47: $t36 := copy($t4)
+ 48: $t37 := vector::borrow<u8>($t35, $t36)
+ 49: $t38 := read_ref($t37)
+ 50: $t39 := ==($t33, $t38)
+ 51: $t2 := $t39
+ 52: goto 57
+ 53: label L4
+ 54: $t40 := false
+ 55: $t2 := $t40
+ 56: goto 57
+ 57: label L7
+ 58: $t41 := move($t2)
+ 59: if ($t41) goto 60 else goto 66
+ 60: label L9
+ 61: $t42 := move($t4)
+ 62: $t43 := 1
+ 63: $t44 := +($t42, $t43)
+ 64: $t4 := $t44
+ 65: goto 30
+ 66: label L8
+ 67: $t45 := move($t4)
+ 68: $t46 := copy($t5)
+ 69: $t47 := ==($t45, $t46)
+ 70: if ($t47) goto 71 else goto 78
+ 71: label L12
+ 72: $t48 := move($t1)
+ 73: destroy($t48)
+ 74: $t49 := move($t0)
+ 75: destroy($t49)
+ 76: $t50 := move($t3)
+ 77: return $t50
+ 78: label L11
+ 79: $t51 := move($t3)
+ 80: $t52 := 1
+ 81: $t53 := +($t51, $t52)
+ 82: $t3 := $t53
+ 83: goto 19
+ 84: label L2
+ 85: $t54 := move($t1)
+ 86: destroy($t54)
+ 87: $t55 := move($t0)
+ 88: destroy($t55)
+ 89: $t56 := move($t6)
+ 90: return $t56
+}
+
+
+[variant baseline]
+public fun ascii::insert($t0|s: &mut ascii::String, $t1|at: u64, $t2|o: ascii::String) {
+     var $t3|e#1#2: u8
+     var $t4|v#1#1: vector<u8>
+     var $t5: u64
+     var $t6: &mut ascii::String
+     var $t7: &ascii::String
+     var $t8: u64
+     var $t9: bool
+     var $t10: &mut ascii::String
+     var $t11: u64
+     var $t12: ascii::String
+     var $t13: vector<u8>
+     var $t14: &vector<u8>
+     var $t15: bool
+     var $t16: bool
+     var $t17: &mut vector<u8>
+     var $t18: u8
+     var $t19: &mut ascii::String
+     var $t20: &mut vector<u8>
+     var $t21: u8
+     var $t22: u64
+     var $t23: &mut ascii::String
+     var $t24: vector<u8>
+  0: $t5 := copy($t1)
+  1: $t6 := copy($t0)
+  2: $t7 := freeze_ref($t6)
+  3: $t8 := ascii::length($t7)
+  4: $t9 := <=($t5, $t8)
+  5: if ($t9) goto 6 else goto 8
+  6: label L1
+  7: goto 13
+  8: label L0
+  9: $t10 := move($t0)
+ 10: destroy($t10)
+ 11: $t11 := 65537
+ 12: abort($t11)
+ 13: label L2
+ 14: $t12 := move($t2)
+ 15: $t13 := ascii::into_bytes($t12)
+ 16: $t4 := $t13
+ 17: goto 18
+ 18: label L5
+ 19: $t14 := borrow_local($t4)
+ 20: $t15 := vector::is_empty<u8>($t14)
+ 21: $t16 := !($t15)
+ 22: if ($t16) goto 23 else goto 33
+ 23: label L4
+ 24: $t17 := borrow_local($t4)
+ 25: $t18 := vector::pop_back<u8>($t17)
+ 26: $t3 := $t18
+ 27: $t19 := copy($t0)
+ 28: $t20 := borrow_field<ascii::String>.bytes($t19)
+ 29: $t21 := move($t3)
+ 30: $t22 := copy($t1)
+ 31: vector::insert<u8>($t20, $t21, $t22)
+ 32: goto 18
+ 33: label L3
+ 34: $t23 := move($t0)
+ 35: destroy($t23)
+ 36: $t24 := move($t4)
+ 37: vector::destroy_empty<u8>($t24)
+ 38: return ()
+}
+
+
+[variant baseline]
+public fun ascii::is_empty($t0|string: &ascii::String): bool {
+     var $t1: &ascii::String
+     var $t2: &vector<u8>
+     var $t3: bool
+  0: $t1 := move($t0)
+  1: $t2 := borrow_field<ascii::String>.bytes($t1)
+  2: $t3 := vector::is_empty<u8>($t2)
+  3: return $t3
+}
+
+
+[variant baseline]
+public fun ascii::length($t0|string: &ascii::String): u64 {
+     var $t1: &ascii::String
+     var $t2: &vector<u8>
+     var $t3: u64
+  0: $t1 := move($t0)
+  1: $t2 := ascii::as_bytes($t1)
+  2: $t3 := vector::length<u8>($t2)
+  3: return $t3
+}
+
+
+[variant baseline]
+public fun ascii::all_characters_printable($t0|string: &ascii::String): bool {
+     var $t1|$stop#0#6: u64
+     var $t2|tmp#$2: bool
+     var $t3|i#1#12: u64
+     var $t4|i#1#9: u64
+     var $t5|stop#1#9: u64
+     var $t6|v#1#3: &vector<u8>
+     var $t7: &ascii::String
+     var $t8: &vector<u8>
+     var $t9: &vector<u8>
+     var $t10: u64
+     var $t11: u64
+     var $t12: u64
+     var $t13: u64
+     var $t14: u64
+     var $t15: bool
+     var $t16: u64
+     var $t17: &vector<u8>
+     var $t18: u64
+     var $t19: &u8
+     var $t20: u8
+     var $t21: bool
+     var $t22: bool
+     var $t23: &vector<u8>
+     var $t24: bool
+     var $t25: u64
+     var $t26: u64
+     var $t27: u64
+     var $t28: &vector<u8>
+     var $t29: bool
+     var $t30: bool
+  0: $t7 := move($t0)
+  1: $t8 := borrow_field<ascii::String>.bytes($t7)
+  2: $t6 := $t8
+  3: $t9 := copy($t6)
+  4: $t10 := vector::length<u8>($t9)
+  5: $t1 := $t10
+  6: $t11 := 0
+  7: $t4 := $t11
+  8: $t12 := move($t1)
+  9: $t5 := $t12
+ 10: goto 11
+ 11: label L5
+ 12: $t13 := copy($t4)
+ 13: $t14 := copy($t5)
+ 14: $t15 := <($t13, $t14)
+ 15: if ($t15) goto 16 else goto 38
+ 16: label L1
+ 17: $t16 := copy($t4)
+ 18: $t3 := $t16
+ 19: $t17 := copy($t6)
+ 20: $t18 := move($t3)
+ 21: $t19 := vector::borrow<u8>($t17, $t18)
+ 22: $t20 := read_ref($t19)
+ 23: $t21 := ascii::is_printable_char($t20)
+ 24: $t22 := !($t21)
+ 25: if ($t22) goto 26 else goto 32
+ 26: label L3
+ 27: $t23 := move($t6)
+ 28: destroy($t23)
+ 29: $t24 := false
+ 30: $t2 := $t24
+ 31: goto 44
+ 32: label L2
+ 33: $t25 := move($t4)
+ 34: $t26 := 1
+ 35: $t27 := +($t25, $t26)
+ 36: $t4 := $t27
+ 37: goto 11
+ 38: label L0
+ 39: $t28 := move($t6)
+ 40: destroy($t28)
+ 41: $t29 := true
+ 42: $t2 := $t29
+ 43: goto 44
+ 44: label L4
+ 45: $t30 := move($t2)
+ 46: return $t30
+}
+
+
+[variant baseline]
+public fun ascii::string($t0|bytes: vector<u8>): ascii::String {
+     var $t1|x#1#0: option::Option<ascii::String>
+     var $t2: vector<u8>
+     var $t3: option::Option<ascii::String>
+     var $t4: &option::Option<ascii::String>
+     var $t5: bool
+     var $t6: u64
+     var $t7: option::Option<ascii::String>
+     var $t8: ascii::String
+  0: $t2 := move($t0)
+  1: $t3 := ascii::try_string($t2)
+  2: $t1 := $t3
+  3: $t4 := borrow_local($t1)
+  4: $t5 := option::is_some<ascii::String>($t4)
+  5: if ($t5) goto 6 else goto 8
+  6: label L1
+  7: goto 11
+  8: label L0
+  9: $t6 := 65536
+ 10: abort($t6)
+ 11: label L2
+ 12: $t7 := move($t1)
+ 13: $t8 := option::destroy_some<ascii::String>($t7)
+ 14: return $t8
+}
+
+
+[variant baseline]
+public fun ascii::as_bytes($t0|string: &ascii::String): &vector<u8> {
+     var $t1: &ascii::String
+     var $t2: &vector<u8>
+  0: $t1 := move($t0)
+  1: $t2 := borrow_field<ascii::String>.bytes($t1)
+  2: return $t2
+}
+
+
+[variant baseline]
+public fun ascii::byte($t0|char: ascii::Char): u8 {
+     var $t1: ascii::Char
+     var $t2: u8
+  0: $t1 := move($t0)
+  1: $t2 := unpack ascii::Char($t1)
+  2: return $t2
+}
+
+
+[variant baseline]
+public fun ascii::char($t0|byte: u8): ascii::Char {
+     var $t1: u8
+     var $t2: bool
+     var $t3: u64
+     var $t4: u8
+     var $t5: ascii::Char
+  0: $t1 := copy($t0)
+  1: $t2 := ascii::is_valid_char($t1)
+  2: if ($t2) goto 3 else goto 5
+  3: label L1
+  4: goto 8
+  5: label L0
+  6: $t3 := 65536
+  7: abort($t3)
+  8: label L2
+  9: $t4 := move($t0)
+ 10: $t5 := pack ascii::Char($t4)
+ 11: return $t5
+}
+
+
+[variant baseline]
+fun ascii::char_to_lowercase($t0|byte: u8): u8 {
+     var $t1|tmp#$1: bool
+     var $t2|tmp#$2: u8
+     var $t3: u8
+     var $t4: u8
+     var $t5: bool
+     var $t6: u8
+     var $t7: u8
+     var $t8: bool
+     var $t9: bool
+     var $t10: bool
+     var $t11: u8
+     var $t12: u8
+     var $t13: u8
+     var $t14: u8
+     var $t15: u8
+  0: $t3 := copy($t0)
+  1: $t4 := 65
+  2: $t5 := >=($t3, $t4)
+  3: if ($t5) goto 4 else goto 10
+  4: label L1
+  5: $t6 := copy($t0)
+  6: $t7 := 90
+  7: $t8 := <=($t6, $t7)
+  8: $t1 := $t8
+  9: goto 14
+ 10: label L0
+ 11: $t9 := false
+ 12: $t1 := $t9
+ 13: goto 14
+ 14: label L2
+ 15: $t10 := move($t1)
+ 16: if ($t10) goto 17 else goto 23
+ 17: label L4
+ 18: $t11 := move($t0)
+ 19: $t12 := 32
+ 20: $t13 := +($t11, $t12)
+ 21: $t2 := $t13
+ 22: goto 27
+ 23: label L3
+ 24: $t14 := move($t0)
+ 25: $t2 := $t14
+ 26: goto 27
+ 27: label L5
+ 28: $t15 := move($t2)
+ 29: return $t15
+}
+
+
+[variant baseline]
+fun ascii::char_to_uppercase($t0|byte: u8): u8 {
+     var $t1|tmp#$1: bool
+     var $t2|tmp#$2: u8
+     var $t3: u8
+     var $t4: u8
+     var $t5: bool
+     var $t6: u8
+     var $t7: u8
+     var $t8: bool
+     var $t9: bool
+     var $t10: bool
+     var $t11: u8
+     var $t12: u8
+     var $t13: u8
+     var $t14: u8
+     var $t15: u8
+  0: $t3 := copy($t0)
+  1: $t4 := 97
+  2: $t5 := >=($t3, $t4)
+  3: if ($t5) goto 4 else goto 10
+  4: label L1
+  5: $t6 := copy($t0)
+  6: $t7 := 122
+  7: $t8 := <=($t6, $t7)
+  8: $t1 := $t8
+  9: goto 14
+ 10: label L0
+ 11: $t9 := false
+ 12: $t1 := $t9
+ 13: goto 14
+ 14: label L2
+ 15: $t10 := move($t1)
+ 16: if ($t10) goto 17 else goto 23
+ 17: label L4
+ 18: $t11 := move($t0)
+ 19: $t12 := 32
+ 20: $t13 := -($t11, $t12)
+ 21: $t2 := $t13
+ 22: goto 27
+ 23: label L3
+ 24: $t14 := move($t0)
+ 25: $t2 := $t14
+ 26: goto 27
+ 27: label L5
+ 28: $t15 := move($t2)
+ 29: return $t15
+}
+
+
+[variant baseline]
+public fun ascii::into_bytes($t0|string: ascii::String): vector<u8> {
+     var $t1: ascii::String
+     var $t2: vector<u8>
+  0: $t1 := move($t0)
+  1: $t2 := unpack ascii::String($t1)
+  2: return $t2
+}
+
+
+[variant baseline]
+public fun ascii::is_printable_char($t0|byte: u8): bool {
+     var $t1|tmp#$1: bool
+     var $t2: u8
+     var $t3: u8
+     var $t4: bool
+     var $t5: u8
+     var $t6: u8
+     var $t7: bool
+     var $t8: bool
+     var $t9: bool
+  0: $t2 := copy($t0)
+  1: $t3 := 32
+  2: $t4 := >=($t2, $t3)
+  3: if ($t4) goto 4 else goto 10
+  4: label L1
+  5: $t5 := move($t0)
+  6: $t6 := 126
+  7: $t7 := <=($t5, $t6)
+  8: $t1 := $t7
+  9: goto 14
+ 10: label L0
+ 11: $t8 := false
+ 12: $t1 := $t8
+ 13: goto 14
+ 14: label L2
+ 15: $t9 := move($t1)
+ 16: return $t9
+}
+
+
+[variant baseline]
+public fun ascii::is_valid_char($t0|b: u8): bool {
+     var $t1: u8
+     var $t2: u8
+     var $t3: bool
+  0: $t1 := move($t0)
+  1: $t2 := 127
+  2: $t3 := <=($t1, $t2)
+  3: return $t3
+}
+
+
+[variant baseline]
+public fun ascii::pop_char($t0|string: &mut ascii::String): ascii::Char {
+     var $t1: &mut ascii::String
+     var $t2: &mut vector<u8>
+     var $t3: u8
+     var $t4: ascii::Char
+  0: $t1 := move($t0)
+  1: $t2 := borrow_field<ascii::String>.bytes($t1)
+  2: $t3 := vector::pop_back<u8>($t2)
+  3: $t4 := pack ascii::Char($t3)
+  4: return $t4
+}
+
+
+[variant baseline]
+public fun ascii::push_char($t0|string: &mut ascii::String, $t1|char: ascii::Char) {
+     var $t2: &mut ascii::String
+     var $t3: &mut vector<u8>
+     var $t4: &ascii::Char
+     var $t5: &u8
+     var $t6: u8
+  0: $t2 := move($t0)
+  1: $t3 := borrow_field<ascii::String>.bytes($t2)
+  2: $t4 := borrow_local($t1)
+  3: $t5 := borrow_field<ascii::Char>.byte($t4)
+  4: $t6 := read_ref($t5)
+  5: vector::push_back<u8>($t3, $t6)
+  6: return ()
+}
+
+
+[variant baseline]
+public fun ascii::substring($t0|string: &ascii::String, $t1|i: u64, $t2|j: u64): ascii::String {
+     var $t3|tmp#$3: bool
+     var $t4|bytes#1#0: vector<u8>
+     var $t5|i#1#3: u64
+     var $t6|i#1#6: u64
+     var $t7|stop#1#3: u64
+     var $t8: u64
+     var $t9: u64
+     var $t10: bool
+     var $t11: u64
+     var $t12: &ascii::String
+     var $t13: u64
+     var $t14: bool
+     var $t15: bool
+     var $t16: bool
+     var $t17: &ascii::String
+     var $t18: u64
+     var $t19: vector<u8>
+     var $t20: u64
+     var $t21: u64
+     var $t22: u64
+     var $t23: u64
+     var $t24: bool
+     var $t25: u64
+     var $t26: &mut vector<u8>
+     var $t27: &ascii::String
+     var $t28: &vector<u8>
+     var $t29: u64
+     var $t30: &u8
+     var $t31: u8
+     var $t32: u64
+     var $t33: u64
+     var $t34: u64
+     var $t35: &ascii::String
+     var $t36: vector<u8>
+     var $t37: ascii::String
+  0: $t8 := copy($t1)
+  1: $t9 := copy($t2)
+  2: $t10 := <=($t8, $t9)
+  3: if ($t10) goto 4 else goto 11
+  4: label L1
+  5: $t11 := copy($t2)
+  6: $t12 := copy($t0)
+  7: $t13 := ascii::length($t12)
+  8: $t14 := <=($t11, $t13)
+  9: $t3 := $t14
+ 10: goto 15
+ 11: label L0
+ 12: $t15 := false
+ 13: $t3 := $t15
+ 14: goto 15
+ 15: label L2
+ 16: $t16 := move($t3)
+ 17: if ($t16) goto 18 else goto 20
+ 18: label L4
+ 19: goto 25
+ 20: label L3
+ 21: $t17 := move($t0)
+ 22: destroy($t17)
+ 23: $t18 := 65537
+ 24: abort($t18)
+ 25: label L5
+ 26: $t19 := []
+ 27: $t4 := $t19
+ 28: $t20 := move($t1)
+ 29: $t5 := $t20
+ 30: $t21 := move($t2)
+ 31: $t7 := $t21
+ 32: goto 33
+ 33: label L8
+ 34: $t22 := copy($t5)
+ 35: $t23 := copy($t7)
+ 36: $t24 := <($t22, $t23)
+ 37: if ($t24) goto 38 else goto 53
+ 38: label L7
+ 39: $t25 := copy($t5)
+ 40: $t6 := $t25
+ 41: $t26 := borrow_local($t4)
+ 42: $t27 := copy($t0)
+ 43: $t28 := borrow_field<ascii::String>.bytes($t27)
+ 44: $t29 := move($t6)
+ 45: $t30 := vector::borrow<u8>($t28, $t29)
+ 46: $t31 := read_ref($t30)
+ 47: vector::push_back<u8>($t26, $t31)
+ 48: $t32 := move($t5)
+ 49: $t33 := 1
+ 50: $t34 := +($t32, $t33)
+ 51: $t5 := $t34
+ 52: goto 33
+ 53: label L6
+ 54: $t35 := move($t0)
+ 55: destroy($t35)
+ 56: $t36 := move($t4)
+ 57: $t37 := pack ascii::String($t36)
+ 58: return $t37
+}
+
+
+[variant baseline]
+public fun ascii::to_lowercase($t0|string: &ascii::String): ascii::String {
+     var $t1|$stop#0#6: u64
+     var $t2|tmp#$2: u8
+     var $t3|tmp#$3: &mut vector<u8>
+     var $t4|e#1#13: &u8
+     var $t5|i#1#12: u64
+     var $t6|i#1#9: u64
+     var $t7|r#1#1: vector<u8>
+     var $t8|stop#1#9: u64
+     var $t9|v#1#1: &vector<u8>
+     var $t10|v#1#3: &vector<u8>
+     var $t11: &ascii::String
+     var $t12: &vector<u8>
+     var $t13: vector<u8>
+     var $t14: &vector<u8>
+     var $t15: &vector<u8>
+     var $t16: u64
+     var $t17: u64
+     var $t18: u64
+     var $t19: u64
+     var $t20: u64
+     var $t21: bool
+     var $t22: u64
+     var $t23: &vector<u8>
+     var $t24: u64
+     var $t25: &u8
+     var $t26: &mut vector<u8>
+     var $t27: &u8
+     var $t28: u8
+     var $t29: u8
+     var $t30: &mut vector<u8>
+     var $t31: u8
+     var $t32: u64
+     var $t33: u64
+     var $t34: u64
+     var $t35: &vector<u8>
+     var $t36: vector<u8>
+     var $t37: ascii::String
+  0: $t11 := move($t0)
+  1: $t12 := ascii::as_bytes($t11)
+  2: $t9 := $t12
+  3: $t13 := []
+  4: $t7 := $t13
+  5: $t14 := move($t9)
+  6: $t10 := $t14
+  7: $t15 := copy($t10)
+  8: $t16 := vector::length<u8>($t15)
+  9: $t1 := $t16
+ 10: $t17 := 0
+ 11: $t6 := $t17
+ 12: $t18 := move($t1)
+ 13: $t8 := $t18
+ 14: goto 15
+ 15: label L2
+ 16: $t19 := copy($t6)
+ 17: $t20 := copy($t8)
+ 18: $t21 := <($t19, $t20)
+ 19: if ($t21) goto 20 else goto 41
+ 20: label L1
+ 21: $t22 := copy($t6)
+ 22: $t5 := $t22
+ 23: $t23 := copy($t10)
+ 24: $t24 := move($t5)
+ 25: $t25 := vector::borrow<u8>($t23, $t24)
+ 26: $t4 := $t25
+ 27: $t26 := borrow_local($t7)
+ 28: $t3 := $t26
+ 29: $t27 := move($t4)
+ 30: $t28 := read_ref($t27)
+ 31: $t29 := ascii::char_to_lowercase($t28)
+ 32: $t2 := $t29
+ 33: $t30 := move($t3)
+ 34: $t31 := move($t2)
+ 35: vector::push_back<u8>($t30, $t31)
+ 36: $t32 := move($t6)
+ 37: $t33 := 1
+ 38: $t34 := +($t32, $t33)
+ 39: $t6 := $t34
+ 40: goto 15
+ 41: label L0
+ 42: $t35 := move($t10)
+ 43: destroy($t35)
+ 44: $t36 := move($t7)
+ 45: $t37 := pack ascii::String($t36)
+ 46: return $t37
+}
+
+
+[variant baseline]
+public fun ascii::to_uppercase($t0|string: &ascii::String): ascii::String {
+     var $t1|$stop#0#6: u64
+     var $t2|tmp#$2: u8
+     var $t3|tmp#$3: &mut vector<u8>
+     var $t4|e#1#13: &u8
+     var $t5|i#1#12: u64
+     var $t6|i#1#9: u64
+     var $t7|r#1#1: vector<u8>
+     var $t8|stop#1#9: u64
+     var $t9|v#1#1: &vector<u8>
+     var $t10|v#1#3: &vector<u8>
+     var $t11: &ascii::String
+     var $t12: &vector<u8>
+     var $t13: vector<u8>
+     var $t14: &vector<u8>
+     var $t15: &vector<u8>
+     var $t16: u64
+     var $t17: u64
+     var $t18: u64
+     var $t19: u64
+     var $t20: u64
+     var $t21: bool
+     var $t22: u64
+     var $t23: &vector<u8>
+     var $t24: u64
+     var $t25: &u8
+     var $t26: &mut vector<u8>
+     var $t27: &u8
+     var $t28: u8
+     var $t29: u8
+     var $t30: &mut vector<u8>
+     var $t31: u8
+     var $t32: u64
+     var $t33: u64
+     var $t34: u64
+     var $t35: &vector<u8>
+     var $t36: vector<u8>
+     var $t37: ascii::String
+  0: $t11 := move($t0)
+  1: $t12 := ascii::as_bytes($t11)
+  2: $t9 := $t12
+  3: $t13 := []
+  4: $t7 := $t13
+  5: $t14 := move($t9)
+  6: $t10 := $t14
+  7: $t15 := copy($t10)
+  8: $t16 := vector::length<u8>($t15)
+  9: $t1 := $t16
+ 10: $t17 := 0
+ 11: $t6 := $t17
+ 12: $t18 := move($t1)
+ 13: $t8 := $t18
+ 14: goto 15
+ 15: label L2
+ 16: $t19 := copy($t6)
+ 17: $t20 := copy($t8)
+ 18: $t21 := <($t19, $t20)
+ 19: if ($t21) goto 20 else goto 41
+ 20: label L1
+ 21: $t22 := copy($t6)
+ 22: $t5 := $t22
+ 23: $t23 := copy($t10)
+ 24: $t24 := move($t5)
+ 25: $t25 := vector::borrow<u8>($t23, $t24)
+ 26: $t4 := $t25
+ 27: $t26 := borrow_local($t7)
+ 28: $t3 := $t26
+ 29: $t27 := move($t4)
+ 30: $t28 := read_ref($t27)
+ 31: $t29 := ascii::char_to_uppercase($t28)
+ 32: $t2 := $t29
+ 33: $t30 := move($t3)
+ 34: $t31 := move($t2)
+ 35: vector::push_back<u8>($t30, $t31)
+ 36: $t32 := move($t6)
+ 37: $t33 := 1
+ 38: $t34 := +($t32, $t33)
+ 39: $t6 := $t34
+ 40: goto 15
+ 41: label L0
+ 42: $t35 := move($t10)
+ 43: destroy($t35)
+ 44: $t36 := move($t7)
+ 45: $t37 := pack ascii::String($t36)
+ 46: return $t37
+}
+
+
+[variant baseline]
+public fun ascii::try_string($t0|bytes: vector<u8>): option::Option<ascii::String> {
+     var $t1|$stop#0#6: u64
+     var $t2|tmp#$2: bool
+     var $t3|tmp#$3: option::Option<ascii::String>
+     var $t4|i#1#12: u64
+     var $t5|i#1#9: u64
+     var $t6|stop#1#9: u64
+     var $t7|v#1#3: &vector<u8>
+     var $t8: &vector<u8>
+     var $t9: &vector<u8>
+     var $t10: u64
+     var $t11: u64
+     var $t12: u64
+     var $t13: u64
+     var $t14: u64
+     var $t15: bool
+     var $t16: u64
+     var $t17: &vector<u8>
+     var $t18: u64
+     var $t19: &u8
+     var $t20: u8
+     var $t21: bool
+     var $t22: bool
+     var $t23: &vector<u8>
+     var $t24: bool
+     var $t25: u64
+     var $t26: u64
+     var $t27: u64
+     var $t28: &vector<u8>
+     var $t29: bool
+     var $t30: bool
+     var $t31: vector<u8>
+     var $t32: ascii::String
+     var $t33: option::Option<ascii::String>
+     var $t34: option::Option<ascii::String>
+     var $t35: option::Option<ascii::String>
+  0: $t8 := borrow_local($t0)
+  1: $t7 := $t8
+  2: $t9 := copy($t7)
+  3: $t10 := vector::length<u8>($t9)
+  4: $t1 := $t10
+  5: $t11 := 0
+  6: $t5 := $t11
+  7: $t12 := move($t1)
+  8: $t6 := $t12
+  9: goto 10
+ 10: label L5
+ 11: $t13 := copy($t5)
+ 12: $t14 := copy($t6)
+ 13: $t15 := <($t13, $t14)
+ 14: if ($t15) goto 15 else goto 37
+ 15: label L1
+ 16: $t16 := copy($t5)
+ 17: $t4 := $t16
+ 18: $t17 := copy($t7)
+ 19: $t18 := move($t4)
+ 20: $t19 := vector::borrow<u8>($t17, $t18)
+ 21: $t20 := read_ref($t19)
+ 22: $t21 := ascii::is_valid_char($t20)
+ 23: $t22 := !($t21)
+ 24: if ($t22) goto 25 else goto 31
+ 25: label L3
+ 26: $t23 := move($t7)
+ 27: destroy($t23)
+ 28: $t24 := false
+ 29: $t2 := $t24
+ 30: goto 43
+ 31: label L2
+ 32: $t25 := move($t5)
+ 33: $t26 := 1
+ 34: $t27 := +($t25, $t26)
+ 35: $t5 := $t27
+ 36: goto 10
+ 37: label L0
+ 38: $t28 := move($t7)
+ 39: destroy($t28)
+ 40: $t29 := true
+ 41: $t2 := $t29
+ 42: goto 43
+ 43: label L4
+ 44: $t30 := move($t2)
+ 45: if ($t30) goto 46 else goto 52
+ 46: label L7
+ 47: $t31 := move($t0)
+ 48: $t32 := pack ascii::String($t31)
+ 49: $t33 := option::some<ascii::String>($t32)
+ 50: $t3 := $t33
+ 51: goto 56
+ 52: label L6
+ 53: $t34 := option::none<ascii::String>()
+ 54: $t3 := $t34
+ 55: goto 56
+ 56: label L8
+ 57: $t35 := move($t3)
+ 58: return $t35
+}
+
+
+[variant baseline]
+public fun string::append($t0|s: &mut string::String, $t1|r: string::String) {
+     var $t2: &mut string::String
+     var $t3: &mut vector<u8>
+     var $t4: &string::String
+     var $t5: &vector<u8>
+     var $t6: vector<u8>
+  0: $t2 := move($t0)
+  1: $t3 := borrow_field<string::String>.bytes($t2)
+  2: $t4 := borrow_local($t1)
+  3: $t5 := borrow_field<string::String>.bytes($t4)
+  4: $t6 := read_ref($t5)
+  5: vector::append<u8>($t3, $t6)
+  6: return ()
+}
+
+
+[variant baseline]
+public fun string::index_of($t0|s: &string::String, $t1|r: &string::String): u64 {
+     var $t2: &string::String
+     var $t3: &vector<u8>
+     var $t4: &string::String
+     var $t5: &vector<u8>
+     var $t6: u64
+  0: $t2 := move($t0)
+  1: $t3 := borrow_field<string::String>.bytes($t2)
+  2: $t4 := move($t1)
+  3: $t5 := borrow_field<string::String>.bytes($t4)
+  4: $t6 := string::internal_index_of($t3, $t5)
+  5: return $t6
+}
+
+
+[variant baseline]
+public fun string::insert($t0|s: &mut string::String, $t1|at: u64, $t2|o: string::String) {
+     var $t3|tmp#$3: bool
+     var $t4|bytes#1#0: &vector<u8>
+     var $t5|end#1#0: string::String
+     var $t6|front#1#0: string::String
+     var $t7|l#1#0: u64
+     var $t8: &mut string::String
+     var $t9: &vector<u8>
+     var $t10: u64
+     var $t11: &vector<u8>
+     var $t12: u64
+     var $t13: bool
+     var $t14: &vector<u8>
+     var $t15: u64
+     var $t16: bool
+     var $t17: &vector<u8>
+     var $t18: bool
+     var $t19: bool
+     var $t20: &mut string::String
+     var $t21: u64
+     var $t22: &mut string::String
+     var $t23: &string::String
+     var $t24: u64
+     var $t25: &mut string::String
+     var $t26: &string::String
+     var $t27: u64
+     var $t28: u64
+     var $t29: string::String
+     var $t30: &mut string::String
+     var $t31: &string::String
+     var $t32: u64
+     var $t33: u64
+     var $t34: string::String
+     var $t35: &mut string::String
+     var $t36: string::String
+     var $t37: &mut string::String
+     var $t38: string::String
+     var $t39: string::String
+     var $t40: &mut string::String
+  0: $t8 := copy($t0)
+  1: $t9 := borrow_field<string::String>.bytes($t8)
+  2: $t4 := $t9
+  3: $t10 := copy($t1)
+  4: $t11 := copy($t4)
+  5: $t12 := vector::length<u8>($t11)
+  6: $t13 := <=($t10, $t12)
+  7: if ($t13) goto 8 else goto 14
+  8: label L1
+  9: $t14 := move($t4)
+ 10: $t15 := copy($t1)
+ 11: $t16 := string::internal_is_char_boundary($t14, $t15)
+ 12: $t3 := $t16
+ 13: goto 20
+ 14: label L0
+ 15: $t17 := move($t4)
+ 16: destroy($t17)
+ 17: $t18 := false
+ 18: $t3 := $t18
+ 19: goto 20
+ 20: label L2
+ 21: $t19 := move($t3)
+ 22: if ($t19) goto 23 else goto 25
+ 23: label L4
+ 24: goto 30
+ 25: label L3
+ 26: $t20 := move($t0)
+ 27: destroy($t20)
+ 28: $t21 := 2
+ 29: abort($t21)
+ 30: label L5
+ 31: $t22 := copy($t0)
+ 32: $t23 := freeze_ref($t22)
+ 33: $t24 := string::length($t23)
+ 34: $t7 := $t24
+ 35: $t25 := copy($t0)
+ 36: $t26 := freeze_ref($t25)
+ 37: $t27 := 0
+ 38: $t28 := copy($t1)
+ 39: $t29 := string::substring($t26, $t27, $t28)
+ 40: $t6 := $t29
+ 41: $t30 := copy($t0)
+ 42: $t31 := freeze_ref($t30)
+ 43: $t32 := move($t1)
+ 44: $t33 := move($t7)
+ 45: $t34 := string::substring($t31, $t32, $t33)
+ 46: $t5 := $t34
+ 47: $t35 := borrow_local($t6)
+ 48: $t36 := move($t2)
+ 49: string::append($t35, $t36)
+ 50: $t37 := borrow_local($t6)
+ 51: $t38 := move($t5)
+ 52: string::append($t37, $t38)
+ 53: $t39 := move($t6)
+ 54: $t40 := move($t0)
+ 55: write_ref($t40, $t39)
+ 56: return ()
+}
+
+
+[variant baseline]
+public fun string::is_empty($t0|s: &string::String): bool {
+     var $t1: &string::String
+     var $t2: &vector<u8>
+     var $t3: bool
+  0: $t1 := move($t0)
+  1: $t2 := borrow_field<string::String>.bytes($t1)
+  2: $t3 := vector::is_empty<u8>($t2)
+  3: return $t3
+}
+
+
+[variant baseline]
+public fun string::length($t0|s: &string::String): u64 {
+     var $t1: &string::String
+     var $t2: &vector<u8>
+     var $t3: u64
+  0: $t1 := move($t0)
+  1: $t2 := borrow_field<string::String>.bytes($t1)
+  2: $t3 := vector::length<u8>($t2)
+  3: return $t3
+}
+
+
+[variant baseline]
+public fun string::as_bytes($t0|s: &string::String): &vector<u8> {
+     var $t1: &string::String
+     var $t2: &vector<u8>
+  0: $t1 := move($t0)
+  1: $t2 := borrow_field<string::String>.bytes($t1)
+  2: return $t2
+}
+
+
+[variant baseline]
+public fun string::into_bytes($t0|s: string::String): vector<u8> {
+     var $t1: string::String
+     var $t2: vector<u8>
+  0: $t1 := move($t0)
+  1: $t2 := unpack string::String($t1)
+  2: return $t2
+}
+
+
+[variant baseline]
+public fun string::bytes($t0|s: &string::String): &vector<u8> {
+     var $t1: &string::String
+     var $t2: &vector<u8>
+  0: $t1 := move($t0)
+  1: $t2 := string::as_bytes($t1)
+  2: return $t2
+}
+
+
+[variant baseline]
+public fun string::substring($t0|s: &string::String, $t1|i: u64, $t2|j: u64): string::String {
+     var $t3|tmp#$3: bool
+     var $t4|bytes#1#0: &vector<u8>
+     var $t5|l#1#0: u64
+     var $t6: &string::String
+     var $t7: &vector<u8>
+     var $t8: &vector<u8>
+     var $t9: u64
+     var $t10: u64
+     var $t11: u64
+     var $t12: bool
+     var $t13: u64
+     var $t14: u64
+     var $t15: bool
+     var $t16: &vector<u8>
+     var $t17: u64
+     var $t18: bool
+     var $t19: &vector<u8>
+     var $t20: u64
+     var $t21: bool
+     var $t22: bool
+     var $t23: bool
+     var $t24: bool
+     var $t25: bool
+     var $t26: &vector<u8>
+     var $t27: u64
+     var $t28: &vector<u8>
+     var $t29: u64
+     var $t30: u64
+     var $t31: vector<u8>
+     var $t32: string::String
+  0: $t6 := move($t0)
+  1: $t7 := borrow_field<string::String>.bytes($t6)
+  2: $t4 := $t7
+  3: $t8 := copy($t4)
+  4: $t9 := vector::length<u8>($t8)
+  5: $t5 := $t9
+  6: $t10 := copy($t2)
+  7: $t11 := move($t5)
+  8: $t12 := <=($t10, $t11)
+  9: if ($t12) goto 10 else goto 34
+ 10: label L1
+ 11: $t13 := copy($t1)
+ 12: $t14 := copy($t2)
+ 13: $t15 := <=($t13, $t14)
+ 14: if ($t15) goto 15 else goto 30
+ 15: label L3
+ 16: $t16 := copy($t4)
+ 17: $t17 := copy($t1)
+ 18: $t18 := string::internal_is_char_boundary($t16, $t17)
+ 19: if ($t18) goto 20 else goto 26
+ 20: label L5
+ 21: $t19 := copy($t4)
+ 22: $t20 := copy($t2)
+ 23: $t21 := string::internal_is_char_boundary($t19, $t20)
+ 24: $t3 := $t21
+ 25: goto 38
+ 26: label L4
+ 27: $t22 := false
+ 28: $t3 := $t22
+ 29: goto 38
+ 30: label L2
+ 31: $t23 := false
+ 32: $t3 := $t23
+ 33: goto 38
+ 34: label L0
+ 35: $t24 := false
+ 36: $t3 := $t24
+ 37: goto 38
+ 38: label L6
+ 39: $t25 := move($t3)
+ 40: if ($t25) goto 41 else goto 43
+ 41: label L8
+ 42: goto 48
+ 43: label L7
+ 44: $t26 := move($t4)
+ 45: destroy($t26)
+ 46: $t27 := 2
+ 47: abort($t27)
+ 48: label L9
+ 49: $t28 := move($t4)
+ 50: $t29 := move($t1)
+ 51: $t30 := move($t2)
+ 52: $t31 := string::internal_sub_string($t28, $t29, $t30)
+ 53: $t32 := pack string::String($t31)
+ 54: return $t32
+}
+
+
+[variant baseline]
+public fun string::append_utf8($t0|s: &mut string::String, $t1|bytes: vector<u8>) {
+     var $t2: &mut string::String
+     var $t3: vector<u8>
+     var $t4: string::String
+  0: $t2 := move($t0)
+  1: $t3 := move($t1)
+  2: $t4 := string::utf8($t3)
+  3: string::append($t2, $t4)
+  4: return ()
+}
+
+
+[variant baseline]
+public fun string::from_ascii($t0|s: ascii::String): string::String {
+     var $t1: ascii::String
+     var $t2: vector<u8>
+     var $t3: string::String
+  0: $t1 := move($t0)
+  1: $t2 := ascii::into_bytes($t1)
+  2: $t3 := pack string::String($t2)
+  3: return $t3
+}
+
+
+[variant baseline]
+native fun string::internal_check_utf8($t0|v: &vector<u8>): bool;
+
+
+[variant baseline]
+native fun string::internal_index_of($t0|v: &vector<u8>, $t1|r: &vector<u8>): u64;
+
+
+[variant baseline]
+native fun string::internal_is_char_boundary($t0|v: &vector<u8>, $t1|i: u64): bool;
+
+
+[variant baseline]
+native fun string::internal_sub_string($t0|v: &vector<u8>, $t1|i: u64, $t2|j: u64): vector<u8>;
+
+
+[variant baseline]
+public fun string::sub_string($t0|s: &string::String, $t1|i: u64, $t2|j: u64): string::String {
+     var $t3: &string::String
+     var $t4: u64
+     var $t5: u64
+     var $t6: string::String
+  0: $t3 := move($t0)
+  1: $t4 := move($t1)
+  2: $t5 := move($t2)
+  3: $t6 := string::substring($t3, $t4, $t5)
+  4: return $t6
+}
+
+
+[variant baseline]
+public fun string::to_ascii($t0|s: string::String): ascii::String {
+     var $t1: string::String
+     var $t2: vector<u8>
+     var $t3: ascii::String
+  0: $t1 := move($t0)
+  1: $t2 := unpack string::String($t1)
+  2: $t3 := ascii::string($t2)
+  3: return $t3
+}
+
+
+[variant baseline]
+public fun string::try_utf8($t0|bytes: vector<u8>): option::Option<string::String> {
+     var $t1|tmp#$1: option::Option<string::String>
+     var $t2: &vector<u8>
+     var $t3: bool
+     var $t4: vector<u8>
+     var $t5: string::String
+     var $t6: option::Option<string::String>
+     var $t7: option::Option<string::String>
+     var $t8: option::Option<string::String>
+  0: $t2 := borrow_local($t0)
+  1: $t3 := string::internal_check_utf8($t2)
+  2: if ($t3) goto 3 else goto 9
+  3: label L1
+  4: $t4 := move($t0)
+  5: $t5 := pack string::String($t4)
+  6: $t6 := option::some<string::String>($t5)
+  7: $t1 := $t6
+  8: goto 13
+  9: label L0
+ 10: $t7 := option::none<string::String>()
+ 11: $t1 := $t7
+ 12: goto 13
+ 13: label L2
+ 14: $t8 := move($t1)
+ 15: return $t8
+}
+
+
+[variant baseline]
+public fun string::utf8($t0|bytes: vector<u8>): string::String {
+     var $t1: &vector<u8>
+     var $t2: bool
+     var $t3: u64
+     var $t4: vector<u8>
+     var $t5: string::String
+  0: $t1 := borrow_local($t0)
+  1: $t2 := string::internal_check_utf8($t1)
+  2: if ($t2) goto 3 else goto 5
+  3: label L1
+  4: goto 8
+  5: label L0
+  6: $t3 := 1
+  7: abort($t3)
+  8: label L2
+  9: $t4 := move($t0)
+ 10: $t5 := pack string::String($t4)
+ 11: return $t5
+}
+
+
+[variant baseline]
+public fun Collection::borrow_mut<#0>($t0|c: &mut Collection::Collection<#0>, $t1|i: u64): &mut #0 {
+     var $t2: &mut Collection::Collection<#0>
+     var $t3: &mut vector<#0>
+     var $t4: u64
+     var $t5: &mut #0
+  0: $t2 := move($t0)
+  1: $t3 := borrow_field<Collection::Collection<#0>>.items($t2)
+  2: $t4 := move($t1)
+  3: $t5 := vector::borrow_mut<#0>($t3, $t4)
+  4: return $t5
+}
+
+
+[variant baseline]
+public fun Collection::make_collection<#0>(): Collection::Collection<#0> {
+     var $t0: vector<#0>
+     var $t1: address
+     var $t2: Collection::Collection<#0>
+  0: $t0 := vector::empty<#0>()
+  1: $t1 := 0x2
+  2: $t2 := pack Collection::Collection<#0>($t0, $t1)
+  3: return $t2
+}
+
+
+[variant baseline]
+public fun Test::foo<#0>($t0|i: u64) {
+     var $t1|c#1#0: Collection::Collection<Test::Token<#0>>
+     var $t2|t#1#0: &mut Test::Token<#0>
+     var $t3: Collection::Collection<Test::Token<#0>>
+     var $t4: &mut Collection::Collection<Test::Token<#0>>
+     var $t5: u64
+     var $t6: &mut Test::Token<#0>
+     var $t7: u64
+     var $t8: &mut Test::Token<#0>
+     var $t9: &mut u64
+  0: $t3 := Collection::make_collection<Test::Token<#0>>()
+  1: $t1 := $t3
+  2: $t4 := borrow_local($t1)
+  3: $t5 := move($t0)
+  4: $t6 := Collection::borrow_mut<Test::Token<#0>>($t4, $t5)
+  5: $t2 := $t6
+  6: $t7 := 0
+  7: $t8 := move($t2)
+  8: $t9 := borrow_field<Test::Token<#0>>.value($t8)
+  9: write_ref($t9, $t7)
+ 10: return ()
+}
+
+============ after pipeline `borrow` ================
+
+[variant baseline]
+public fun u64::diff($t0|x: u64, $t1|y: u64): u64 {
+     var $t2|tmp#$2: u64
+     var $t3|x#1#1: u64
+     var $t4|y#1#1: u64
+     var $t5: bool
+  0: $t5 := >($t0, $t1)
+  1: if ($t5) goto 2 else goto 5
+  2: label L1
+  3: $t2 := -($t0, $t1)
+  4: goto 7
+  5: label L0
+  6: $t2 := -($t1, $t0)
+  7: label L2
+  8: return $t2
+}
+
+
+[variant baseline]
+public fun u64::divide_and_round_up($t0|x: u64, $t1|y: u64): u64 {
+     var $t2|tmp#$2: u64
+     var $t3|x#1#1: u64
+     var $t4|y#1#1: u64
+     var $t5: u64
+     var $t6: u64
+     var $t7: bool
+     var $t8: u64
+     var $t9: u64
+  0: $t5 := %($t0, $t1)
+  1: $t6 := 0
+  2: $t7 := ==($t5, $t6)
+  3: if ($t7) goto 4 else goto 7
+  4: label L1
+  5: $t2 := /($t0, $t1)
+  6: goto 11
+  7: label L0
+  8: $t8 := /($t0, $t1)
+  9: $t9 := 1
+ 10: $t2 := +($t8, $t9)
+ 11: label L2
+ 12: return $t2
+}
+
+
+[variant baseline]
+public fun u64::max($t0|x: u64, $t1|y: u64): u64 {
+     var $t2|tmp#$2: u64
+     var $t3|x#1#1: u64
+     var $t4|y#1#1: u64
+     var $t5: bool
+  0: $t5 := >($t0, $t1)
+  1: if ($t5) goto 2 else goto 5
+  2: label L1
+  3: $t2 := $t0
+  4: goto 7
+  5: label L0
+  6: $t2 := $t1
+  7: label L2
+  8: return $t2
+}
+
+
+[variant baseline]
+public fun u64::min($t0|x: u64, $t1|y: u64): u64 {
+     var $t2|tmp#$2: u64
+     var $t3|x#1#1: u64
+     var $t4|y#1#1: u64
+     var $t5: bool
+  0: $t5 := <($t0, $t1)
+  1: if ($t5) goto 2 else goto 5
+  2: label L1
+  3: $t2 := $t0
+  4: goto 7
+  5: label L0
+  6: $t2 := $t1
+  7: label L2
+  8: return $t2
+}
+
+
+[variant baseline]
+public fun u64::pow($t0|base: u64, $t1|exponent: u8): u64 {
+     var $t2|base#1#1: u64
+     var $t3|exponent#1#1: u8
+     var $t4|res#1#1: u64
+     var $t5: u64
+     var $t6: u8
+     var $t7: bool
+     var $t8: u8
+     var $t9: u8
+     var $t10: u8
+     var $t11: bool
+     var $t12: u8
+     var $t13: u8
+  0: $t2 := $t0
+  1: $t3 := $t1
+  2: $t5 := 1
+  3: $t4 := $t5
+  4: label L5
+  5: $t6 := 1
+  6: $t7 := >=($t3, $t6)
+  7: if ($t7) goto 8 else goto 25
+  8: label L1
+  9: label L2
+ 10: $t8 := 2
+ 11: $t9 := %($t3, $t8)
+ 12: $t10 := 0
+ 13: $t11 := ==($t9, $t10)
+ 14: if ($t11) goto 15 else goto 20
+ 15: label L4
+ 16: $t2 := *($t2, $t2)
+ 17: $t12 := 2
+ 18: $t3 := /($t3, $t12)
+ 19: goto 4
+ 20: label L3
+ 21: $t4 := *($t4, $t2)
+ 22: $t13 := 1
+ 23: $t3 := -($t3, $t13)
+ 24: goto 4
+ 25: label L0
+ 26: return $t4
+}
+
+
+[variant baseline]
+public fun u64::sqrt($t0|x: u64): u64 {
+     var $t1|bit#1#1: u128
+     var $t2|res#1#1: u128
+     var $t3|x#1#1: u64
+     var $t4|x#2#1: u128
+     var $t5: u128
+     var $t6: u128
+     var $t7: u128
+     var $t8: bool
+     var $t9: u128
+     var $t10: bool
+     var $t11: u128
+     var $t12: u8
+     var $t13: u128
+     var $t14: u8
+     var $t15: u8
+     var $t16: u64
+  0: $t5 := 18446744073709551616
+  1: $t1 := $t5
+  2: $t6 := 0
+  3: $t2 := $t6
+  4: $t4 := (u128)($t0)
+  5: label L6
+  6: $t7 := 0
+  7: $t8 := !=($t1, $t7)
+  8: if ($t8) goto 9 else goto 28
+  9: label L1
+ 10: label L2
+ 11: $t9 := +($t2, $t1)
+ 12: $t10 := >=($t4, $t9)
+ 13: if ($t10) goto 14 else goto 21
+ 14: label L4
+ 15: $t11 := +($t2, $t1)
+ 16: $t4 := -($t4, $t11)
+ 17: $t12 := 1
+ 18: $t13 := >>($t2, $t12)
+ 19: $t2 := +($t13, $t1)
+ 20: goto 24
+ 21: label L3
+ 22: $t14 := 1
+ 23: $t2 := >>($t2, $t14)
+ 24: label L5
+ 25: $t15 := 2
+ 26: $t1 := >>($t1, $t15)
+ 27: goto 5
+ 28: label L0
+ 29: $t16 := (u64)($t2)
+ 30: return $t16
+}
+
+
+[variant baseline]
+public fun vector::append<#0>($t0|lhs: &mut vector<#0>, $t1|other: vector<#0>) {
+     var $t2: &mut vector<#0>
+     var $t3: vector<#0>
+     var $t4: bool
+     var $t5: bool
+     var $t6: &mut vector<#0>
+     var $t7: #0
+     var $t8: vector<#0>
+  0: $t2 := borrow_local($t1)
+  1: vector::reverse<#0>($t2)
+  2: label L3
+  3: $t3 := copy($t1)
+  4: $t4 := vector::is_empty<#0>($t3)
+  5: $t5 := !($t4)
+  6: if ($t5) goto 7 else goto 13
+  7: label L1
+  8: label L2
+  9: $t6 := borrow_local($t1)
+ 10: $t7 := vector::pop_back<#0>($t6)
+ 11: vector::push_back<#0>($t0, $t7)
+ 12: goto 2
+ 13: label L0
+ 14: destroy($t0)
+ 15: $t8 := move($t1)
+ 16: vector::destroy_empty<#0>($t8)
+ 17: trace_local[lhs]($t0)
+ 18: return ()
+}
+
+
+[variant baseline]
+public native fun vector::borrow<#0>($t0|v: vector<#0>, $t1|i: u64): #0;
+
+
+[variant baseline]
+public native fun vector::borrow_mut<#0>($t0|v: &mut vector<#0>, $t1|i: u64): &mut #0;
+
+
+[variant baseline]
+public fun vector::contains<#0>($t0|v: vector<#0>, $t1|e: #0): bool {
+     var $t2|i#1#0: u64
+     var $t3|len#1#0: u64
+     var $t4: u64
+     var $t5: u64
+     var $t6: bool
+     var $t7: #0
+     var $t8: bool
+     var $t9: bool
+     var $t10: u64
+     var $t11: bool
+  0: $t4 := 0
+  1: $t2 := $t4
+  2: $t5 := vector::length<#0>($t0)
+  3: label L5
+  4: $t6 := <($t2, $t5)
+  5: if ($t6) goto 6 else goto 18
+  6: label L1
+  7: label L2
+  8: $t7 := vector::borrow<#0>($t0, $t2)
+  9: $t8 := ==($t7, $t1)
+ 10: if ($t8) goto 11 else goto 14
+ 11: label L4
+ 12: $t9 := true
+ 13: return $t9
+ 14: label L3
+ 15: $t10 := 1
+ 16: $t2 := +($t2, $t10)
+ 17: goto 3
+ 18: label L0
+ 19: $t11 := false
+ 20: return $t11
+}
+
+
+[variant baseline]
+public native fun vector::destroy_empty<#0>($t0|v: vector<#0>);
+
+
+[variant baseline]
+public native fun vector::empty<#0>(): vector<#0>;
+
+
+[variant baseline]
+public fun vector::index_of<#0>($t0|v: vector<#0>, $t1|e: #0): (bool, u64) {
+     var $t2|i#1#0: u64
+     var $t3|len#1#0: u64
+     var $t4: u64
+     var $t5: u64
+     var $t6: bool
+     var $t7: #0
+     var $t8: bool
+     var $t9: bool
+     var $t10: u64
+     var $t11: bool
+     var $t12: u64
+  0: $t4 := 0
+  1: $t2 := $t4
+  2: $t5 := vector::length<#0>($t0)
+  3: label L5
+  4: $t6 := <($t2, $t5)
+  5: if ($t6) goto 6 else goto 18
+  6: label L1
+  7: label L2
+  8: $t7 := vector::borrow<#0>($t0, $t2)
+  9: $t8 := ==($t7, $t1)
+ 10: if ($t8) goto 11 else goto 14
+ 11: label L4
+ 12: $t9 := true
+ 13: return ($t9, $t2)
+ 14: label L3
+ 15: $t10 := 1
+ 16: $t2 := +($t2, $t10)
+ 17: goto 3
+ 18: label L0
+ 19: $t11 := false
+ 20: $t12 := 0
+ 21: return ($t11, $t12)
+}
+
+
+[variant baseline]
+public fun vector::insert<#0>($t0|v: &mut vector<#0>, $t1|e: #0, $t2|i: u64) {
+     var $t3|len#1#0: u64
+     var $t4: vector<#0>
+     var $t5: u64
+     var $t6: bool
+     var $t7: u64
+     var $t8: bool
+     var $t9: u64
+  0: $t4 := read_ref($t0)
+  1: $t5 := vector::length<#0>($t4)
+  2: $t6 := >($t2, $t5)
+  3: if ($t6) goto 4 else goto 8
+  4: label L1
+  5: destroy($t0)
+  6: $t7 := 131072
+  7: abort($t7)
+  8: label L0
+  9: vector::push_back<#0>($t0, $t1)
+ 10: label L4
+ 11: $t8 := <($t2, $t5)
+ 12: if ($t8) goto 13 else goto 18
+ 13: label L3
+ 14: vector::swap<#0>($t0, $t2, $t5)
+ 15: $t9 := 1
+ 16: $t2 := +($t2, $t9)
+ 17: goto 10
+ 18: label L2
+ 19: destroy($t0)
+ 20: trace_local[v]($t0)
+ 21: return ()
+}
+
+
+[variant baseline]
+public fun vector::is_empty<#0>($t0|v: vector<#0>): bool {
+     var $t1: u64
+     var $t2: u64
+     var $t3: bool
+  0: $t1 := vector::length<#0>($t0)
+  1: $t2 := 0
+  2: $t3 := ==($t1, $t2)
+  3: return $t3
+}
+
+
+[variant baseline]
+public native fun vector::length<#0>($t0|v: vector<#0>): u64;
+
+
+[variant baseline]
+public native fun vector::pop_back<#0>($t0|v: &mut vector<#0>): #0;
+
+
+[variant baseline]
+public native fun vector::push_back<#0>($t0|v: &mut vector<#0>, $t1|e: #0);
+
+
+[variant baseline]
+public fun vector::remove<#0>($t0|v: &mut vector<#0>, $t1|i: u64): #0 {
+     var $t2|tmp#$2: u64
+     var $t3|tmp#$3: &mut vector<#0>
+     var $t4|len#1#0: u64
+     var $t5: vector<#0>
+     var $t6: u64
+     var $t7: bool
+     var $t8: u64
+     var $t9: u64
+     var $t10: u64
+     var $t11: bool
+     var $t12: u64
+     var $t13: u64
+     var $t14: u64
+     var $t15: #0
+  0: $t5 := read_ref($t0)
+  1: $t6 := vector::length<#0>($t5)
+  2: $t7 := >=($t1, $t6)
+  3: if ($t7) goto 4 else goto 8
+  4: label L1
+  5: destroy($t0)
+  6: $t8 := 131072
+  7: abort($t8)
+  8: label L0
+  9: $t9 := 1
+ 10: $t10 := -($t6, $t9)
+ 11: label L4
+ 12: $t11 := <($t1, $t10)
+ 13: if ($t11) goto 14 else goto 21
+ 14: label L3
+ 15: $t12 := copy($t1)
+ 16: $t13 := 1
+ 17: $t14 := +($t1, $t13)
+ 18: $t1 := $t14
+ 19: vector::swap<#0>($t0, $t12, $t14)
+ 20: goto 11
+ 21: label L2
+ 22: $t15 := vector::pop_back<#0>($t0)
+ 23: trace_local[v]($t0)
+ 24: return $t15
+}
+
+
+[variant baseline]
+public fun vector::reverse<#0>($t0|v: &mut vector<#0>) {
+     var $t1|back_index#1#0: u64
+     var $t2|front_index#1#0: u64
+     var $t3|len#1#0: u64
+     var $t4: vector<#0>
+     var $t5: u64
+     var $t6: u64
+     var $t7: bool
+     var $t8: u64
+     var $t9: u64
+     var $t10: bool
+     var $t11: u64
+     var $t12: u64
+  0: $t4 := read_ref($t0)
+  1: $t5 := vector::length<#0>($t4)
+  2: $t6 := 0
+  3: $t7 := ==($t5, $t6)
+  4: if ($t7) goto 5 else goto 9
+  5: label L1
+  6: destroy($t0)
+  7: trace_local[v]($t0)
+  8: return ()
+  9: label L0
+ 10: $t8 := 0
+ 11: $t2 := $t8
+ 12: $t9 := 1
+ 13: $t1 := -($t5, $t9)
+ 14: label L4
+ 15: $t10 := <($t2, $t1)
+ 16: if ($t10) goto 17 else goto 24
+ 17: label L3
+ 18: vector::swap<#0>($t0, $t2, $t1)
+ 19: $t11 := 1
+ 20: $t2 := +($t2, $t11)
+ 21: $t12 := 1
+ 22: $t1 := -($t1, $t12)
+ 23: goto 14
+ 24: label L2
+ 25: destroy($t0)
+ 26: trace_local[v]($t0)
+ 27: return ()
+}
+
+
+[variant baseline]
+public fun vector::singleton<#0>($t0|e: #0): vector<#0> {
+     var $t1|v#1#0: vector<#0>
+     var $t2: &mut vector<#0>
+     var $t3: vector<#0>
+  0: $t1 := vector::empty<#0>()
+  1: $t2 := borrow_local($t1)
+  2: vector::push_back<#0>($t2, $t0)
+  3: $t3 := move($t1)
+  4: return $t3
+}
+
+
+[variant baseline]
+public native fun vector::swap<#0>($t0|v: &mut vector<#0>, $t1|i: u64, $t2|j: u64);
+
+
+[variant baseline]
+public fun vector::swap_remove<#0>($t0|v: &mut vector<#0>, $t1|i: u64): #0 {
+     var $t2|last_idx#1#0: u64
+     var $t3: vector<#0>
+     var $t4: bool
+     var $t5: bool
+     var $t6: u64
+     var $t7: vector<#0>
+     var $t8: u64
+     var $t9: u64
+     var $t10: u64
+     var $t11: #0
+  0: $t3 := read_ref($t0)
+  1: $t4 := vector::is_empty<#0>($t3)
+  2: $t5 := !($t4)
+  3: if ($t5) goto 4 else goto 6
+  4: label L1
+  5: goto 10
+  6: label L0
+  7: destroy($t0)
+  8: $t6 := 131072
+  9: abort($t6)
+ 10: label L2
+ 11: $t7 := read_ref($t0)
+ 12: $t8 := vector::length<#0>($t7)
+ 13: $t9 := 1
+ 14: $t10 := -($t8, $t9)
+ 15: vector::swap<#0>($t0, $t1, $t10)
+ 16: $t11 := vector::pop_back<#0>($t0)
+ 17: trace_local[v]($t0)
+ 18: return $t11
+}
+
+
+[variant baseline]
+public fun option::borrow<#0>($t0|t: option::Option<#0>): #0 {
+     var $t1: bool
+     var $t2: u64
+     var $t3: vector<#0>
+     var $t4: u64
+     var $t5: #0
+  0: $t1 := option::is_some<#0>($t0)
+  1: if ($t1) goto 2 else goto 4
+  2: label L1
+  3: goto 7
+  4: label L0
+  5: $t2 := 262145
+  6: abort($t2)
+  7: label L2
+  8: $t3 := get_field<option::Option<#0>>.vec($t0)
+  9: $t4 := 0
+ 10: $t5 := vector::borrow<#0>($t3, $t4)
+ 11: return $t5
+}
+
+
+[variant baseline]
+public fun option::borrow_mut<#0>($t0|t: &mut option::Option<#0>): &mut #0 {
+     var $t1: option::Option<#0>
+     var $t2: bool
+     var $t3: u64
+     var $t4: &mut vector<#0>
+     var $t5: u64
+     var $t6: &mut #0
+  0: $t1 := read_ref($t0)
+  1: $t2 := option::is_some<#0>($t1)
+  2: if ($t2) goto 3 else goto 5
+  3: label L1
+  4: goto 9
+  5: label L0
+  6: destroy($t0)
+  7: $t3 := 262145
+  8: abort($t3)
+  9: label L2
+ 10: $t4 := borrow_field<option::Option<#0>>.vec($t0)
+ 11: $t5 := 0
+ 12: $t6 := vector::borrow_mut<#0>($t4, $t5)
+ 13: trace_local[t]($t0)
+ 14: return $t6
+}
+
+
+[variant baseline]
+public fun option::contains<#0>($t0|t: option::Option<#0>, $t1|e_ref: #0): bool {
+     var $t2: vector<#0>
+     var $t3: bool
+  0: $t2 := get_field<option::Option<#0>>.vec($t0)
+  1: $t3 := vector::contains<#0>($t2, $t1)
+  2: return $t3
+}
+
+
+[variant baseline]
+public fun option::swap<#0>($t0|t: &mut option::Option<#0>, $t1|e: #0): #0 {
+     var $t2|old_value#1#0: #0
+     var $t3|vec_ref#1#0: &mut vector<#0>
+     var $t4: option::Option<#0>
+     var $t5: bool
+     var $t6: u64
+     var $t7: &mut vector<#0>
+     var $t8: #0
+  0: $t4 := read_ref($t0)
+  1: $t5 := option::is_some<#0>($t4)
+  2: if ($t5) goto 3 else goto 5
+  3: label L1
+  4: goto 9
+  5: label L0
+  6: destroy($t0)
+  7: $t6 := 262145
+  8: abort($t6)
+  9: label L2
+ 10: $t7 := borrow_field<option::Option<#0>>.vec($t0)
+ 11: $t8 := vector::pop_back<#0>($t7)
+ 12: vector::push_back<#0>($t7, $t1)
+ 13: trace_local[t]($t0)
+ 14: return $t8
+}
+
+
+[variant baseline]
+public fun option::borrow_with_default<#0>($t0|t: option::Option<#0>, $t1|default_ref: #0): #0 {
+     var $t2|tmp#$2: #0
+     var $t3|vec_ref#1#0: vector<#0>
+     var $t4: vector<#0>
+     var $t5: bool
+     var $t6: u64
+  0: $t4 := get_field<option::Option<#0>>.vec($t0)
+  1: $t5 := vector::is_empty<#0>($t4)
+  2: if ($t5) goto 3 else goto 6
+  3: label L1
+  4: $t2 := $t1
+  5: goto 9
+  6: label L0
+  7: $t6 := 0
+  8: $t2 := vector::borrow<#0>($t4, $t6)
+  9: label L2
+ 10: return $t2
+}
+
+
+[variant baseline]
+public fun option::destroy_none<#0>($t0|t: option::Option<#0>) {
+     var $t1: bool
+     var $t2: u64
+     var $t3: vector<#0>
+  0: $t1 := option::is_none<#0>($t0)
+  1: if ($t1) goto 2 else goto 4
+  2: label L1
+  3: goto 7
+  4: label L0
+  5: $t2 := 262144
+  6: abort($t2)
+  7: label L2
+  8: $t3 := unpack option::Option<#0>($t0)
+  9: vector::destroy_empty<#0>($t3)
+ 10: return ()
+}
+
+
+[variant baseline]
+public fun option::destroy_some<#0>($t0|t: option::Option<#0>): #0 {
+     var $t1|elem#1#0: #0
+     var $t2|vec#1#0: vector<#0>
+     var $t3: bool
+     var $t4: u64
+     var $t5: &mut vector<#0>
+     var $t6: #0
+     var $t7: vector<#0>
+  0: $t3 := option::is_some<#0>($t0)
+  1: if ($t3) goto 2 else goto 4
+  2: label L1
+  3: goto 7
+  4: label L0
+  5: $t4 := 262145
+  6: abort($t4)
+  7: label L2
+  8: $t2 := unpack option::Option<#0>($t0)
+  9: $t5 := borrow_local($t2)
+ 10: $t6 := vector::pop_back<#0>($t5)
+ 11: $t7 := move($t2)
+ 12: vector::destroy_empty<#0>($t7)
+ 13: return $t6
+}
+
+
+[variant baseline]
+public fun option::destroy_with_default<#0>($t0|t: option::Option<#0>, $t1|default: #0): #0 {
+     var $t2|tmp#$2: #0
+     var $t3|vec#1#0: vector<#0>
+     var $t4: vector<#0>
+     var $t5: bool
+     var $t6: &mut vector<#0>
+  0: $t3 := unpack option::Option<#0>($t0)
+  1: $t4 := copy($t3)
+  2: $t5 := vector::is_empty<#0>($t4)
+  3: if ($t5) goto 4 else goto 7
+  4: label L1
+  5: $t2 := $t1
+  6: goto 10
+  7: label L0
+  8: $t6 := borrow_local($t3)
+  9: $t2 := vector::pop_back<#0>($t6)
+ 10: label L2
+ 11: return $t2
+}
+
+
+[variant baseline]
+public fun option::extract<#0>($t0|t: &mut option::Option<#0>): #0 {
+     var $t1: option::Option<#0>
+     var $t2: bool
+     var $t3: u64
+     var $t4: &mut vector<#0>
+     var $t5: #0
+  0: $t1 := read_ref($t0)
+  1: $t2 := option::is_some<#0>($t1)
+  2: if ($t2) goto 3 else goto 5
+  3: label L1
+  4: goto 9
+  5: label L0
+  6: destroy($t0)
+  7: $t3 := 262145
+  8: abort($t3)
+  9: label L2
+ 10: $t4 := borrow_field<option::Option<#0>>.vec($t0)
+ 11: $t5 := vector::pop_back<#0>($t4)
+ 12: trace_local[t]($t0)
+ 13: return $t5
+}
+
+
+[variant baseline]
+public fun option::fill<#0>($t0|t: &mut option::Option<#0>, $t1|e: #0) {
+     var $t2|vec_ref#1#0: &mut vector<#0>
+     var $t3: &mut vector<#0>
+     var $t4: vector<#0>
+     var $t5: bool
+     var $t6: u64
+  0: $t3 := borrow_field<option::Option<#0>>.vec($t0)
+  1: $t4 := read_ref($t3)
+  2: $t5 := vector::is_empty<#0>($t4)
+  3: if ($t5) goto 4 else goto 14
+  4: label L1
+  5: goto 10
+  6: label L0
+  7: destroy($t3)
+  8: $t6 := 262144
+  9: abort($t6)
+ 10: label L2
+ 11: vector::push_back<#0>($t3, $t1)
+ 12: trace_local[t]($t0)
+ 13: return ()
+ 14: label L3
+ 15: destroy($t0)
+ 16: goto 6
+}
+
+
+[variant baseline]
+public fun option::get_with_default<#0>($t0|t: option::Option<#0>, $t1|default: #0): #0 {
+     var $t2|tmp#$2: #0
+     var $t3|vec_ref#1#0: vector<#0>
+     var $t4: vector<#0>
+     var $t5: bool
+     var $t6: u64
+     var $t7: #0
+  0: $t4 := get_field<option::Option<#0>>.vec($t0)
+  1: $t5 := vector::is_empty<#0>($t4)
+  2: if ($t5) goto 3 else goto 6
+  3: label L1
+  4: $t2 := $t1
+  5: goto 10
+  6: label L0
+  7: $t6 := 0
+  8: $t7 := vector::borrow<#0>($t4, $t6)
+  9: $t2 := $t7
+ 10: label L2
+ 11: return $t2
+}
+
+
+[variant baseline]
+public fun option::is_none<#0>($t0|t: option::Option<#0>): bool {
+     var $t1: vector<#0>
+     var $t2: bool
+  0: $t1 := get_field<option::Option<#0>>.vec($t0)
+  1: $t2 := vector::is_empty<#0>($t1)
+  2: return $t2
+}
+
+
+[variant baseline]
+public fun option::is_some<#0>($t0|t: option::Option<#0>): bool {
+     var $t1: vector<#0>
+     var $t2: bool
+     var $t3: bool
+  0: $t1 := get_field<option::Option<#0>>.vec($t0)
+  1: $t2 := vector::is_empty<#0>($t1)
+  2: $t3 := !($t2)
+  3: return $t3
+}
+
+
+[variant baseline]
+public fun option::none<#0>(): option::Option<#0> {
+     var $t0: vector<#0>
+     var $t1: option::Option<#0>
+  0: $t0 := vector::empty<#0>()
+  1: $t1 := pack option::Option<#0>($t0)
+  2: return $t1
+}
+
+
+[variant baseline]
+public fun option::some<#0>($t0|e: #0): option::Option<#0> {
+     var $t1: vector<#0>
+     var $t2: option::Option<#0>
+  0: $t1 := vector::singleton<#0>($t0)
+  1: $t2 := pack option::Option<#0>($t1)
+  2: return $t2
+}
+
+
+[variant baseline]
+public fun option::swap_or_fill<#0>($t0|t: &mut option::Option<#0>, $t1|e: #0): option::Option<#0> {
+     var $t2|tmp#$2: option::Option<#0>
+     var $t3|old_value#1#0: option::Option<#0>
+     var $t4|vec_ref#1#0: &mut vector<#0>
+     var $t5: &mut vector<#0>
+     var $t6: vector<#0>
+     var $t7: bool
+     var $t8: #0
+  0: $t5 := borrow_field<option::Option<#0>>.vec($t0)
+  1: $t6 := read_ref($t5)
+  2: $t7 := vector::is_empty<#0>($t6)
+  3: if ($t7) goto 4 else goto 7
+  4: label L1
+  5: $t2 := option::none<#0>()
+  6: goto 10
+  7: label L0
+  8: $t8 := vector::pop_back<#0>($t5)
+  9: $t2 := option::some<#0>($t8)
+ 10: label L2
+ 11: vector::push_back<#0>($t5, $t1)
+ 12: trace_local[t]($t0)
+ 13: return $t2
+}
+
+
+[variant baseline]
+public fun option::to_vec<#0>($t0|t: option::Option<#0>): vector<#0> {
+     var $t1: vector<#0>
+  0: $t1 := unpack option::Option<#0>($t0)
+  1: return $t1
+}
+
+
+[variant baseline]
+public fun ascii::append($t0|string: &mut ascii::String, $t1|other: ascii::String) {
+     var $t2: &mut vector<u8>
+     var $t3: vector<u8>
+  0: $t2 := borrow_field<ascii::String>.bytes($t0)
+  1: $t3 := ascii::into_bytes($t1)
+  2: vector::append<u8>($t2, $t3)
+  3: trace_local[string]($t0)
+  4: return ()
+}
+
+
+[variant baseline]
+public fun ascii::index_of($t0|string: ascii::String, $t1|substr: ascii::String): u64 {
+     var $t2|tmp#$2: bool
+     var $t3|i#1#0: u64
+     var $t4|j#1#0: u64
+     var $t5|m#1#0: u64
+     var $t6|n#1#0: u64
+     var $t7: u64
+     var $t8: u64
+     var $t9: u64
+     var $t10: bool
+     var $t11: u64
+     var $t12: bool
+     var $t13: u64
+     var $t14: bool
+     var $t15: vector<u8>
+     var $t16: u64
+     var $t17: u8
+     var $t18: vector<u8>
+     var $t19: u8
+     var $t20: bool
+     var $t21: u64
+     var $t22: bool
+     var $t23: u64
+  0: $t7 := 0
+  1: $t3 := $t7
+  2: $t8 := ascii::length($t0)
+  3: $t9 := ascii::length($t1)
+  4: $t10 := <($t8, $t9)
+  5: if ($t10) goto 6 else goto 8
+  6: label L1
+  7: return $t8
+  8: label L0
+  9: $t11 := -($t8, $t9)
+ 10: $t12 := <=($t3, $t11)
+ 11: if ($t12) goto 12 else goto 45
+ 12: label L3
+ 13: $t13 := 0
+ 14: $t4 := $t13
+ 15: label L10
+ 16: $t14 := <($t4, $t9)
+ 17: if ($t14) goto 18 else goto 27
+ 18: label L5
+ 19: label L6
+ 20: $t15 := get_field<ascii::String>.bytes($t0)
+ 21: $t16 := +($t3, $t4)
+ 22: $t17 := vector::borrow<u8>($t15, $t16)
+ 23: $t18 := get_field<ascii::String>.bytes($t1)
+ 24: $t19 := vector::borrow<u8>($t18, $t4)
+ 25: $t2 := ==($t17, $t19)
+ 26: goto 30
+ 27: label L4
+ 28: $t20 := false
+ 29: $t2 := $t20
+ 30: label L7
+ 31: if ($t2) goto 32 else goto 36
+ 32: label L9
+ 33: $t21 := 1
+ 34: $t4 := +($t4, $t21)
+ 35: goto 15
+ 36: label L8
+ 37: $t22 := ==($t4, $t9)
+ 38: if ($t22) goto 39 else goto 41
+ 39: label L12
+ 40: return $t3
+ 41: label L11
+ 42: $t23 := 1
+ 43: $t3 := +($t3, $t23)
+ 44: goto 8
+ 45: label L2
+ 46: return $t8
+}
+
+
+[variant baseline]
+public fun ascii::insert($t0|s: &mut ascii::String, $t1|at: u64, $t2|o: ascii::String) {
+     var $t3|e#1#2: u8
+     var $t4|v#1#1: vector<u8>
+     var $t5: ascii::String
+     var $t6: u64
+     var $t7: bool
+     var $t8: u64
+     var $t9: vector<u8>
+     var $t10: bool
+     var $t11: bool
+     var $t12: &mut vector<u8>
+     var $t13: u8
+     var $t14: &mut vector<u8>
+     var $t15: vector<u8>
+  0: $t5 := read_ref($t0)
+  1: $t6 := ascii::length($t5)
+  2: $t7 := <=($t1, $t6)
+  3: if ($t7) goto 4 else goto 6
+  4: label L1
+  5: goto 10
+  6: label L0
+  7: destroy($t0)
+  8: $t8 := 65537
+  9: abort($t8)
+ 10: label L2
+ 11: $t4 := ascii::into_bytes($t2)
+ 12: label L5
+ 13: $t9 := copy($t4)
+ 14: $t10 := vector::is_empty<u8>($t9)
+ 15: $t11 := !($t10)
+ 16: if ($t11) goto 17 else goto 23
+ 17: label L4
+ 18: $t12 := borrow_local($t4)
+ 19: $t13 := vector::pop_back<u8>($t12)
+ 20: $t14 := borrow_field<ascii::String>.bytes($t0)
+ 21: vector::insert<u8>($t14, $t13, $t1)
+ 22: goto 12
+ 23: label L3
+ 24: destroy($t0)
+ 25: $t15 := move($t4)
+ 26: vector::destroy_empty<u8>($t15)
+ 27: trace_local[s]($t0)
+ 28: return ()
+}
+
+
+[variant baseline]
+public fun ascii::is_empty($t0|string: ascii::String): bool {
+     var $t1: vector<u8>
+     var $t2: bool
+  0: $t1 := get_field<ascii::String>.bytes($t0)
+  1: $t2 := vector::is_empty<u8>($t1)
+  2: return $t2
+}
+
+
+[variant baseline]
+public fun ascii::length($t0|string: ascii::String): u64 {
+     var $t1: vector<u8>
+     var $t2: u64
+  0: $t1 := ascii::as_bytes($t0)
+  1: $t2 := vector::length<u8>($t1)
+  2: return $t2
+}
+
+
+[variant baseline]
+public fun ascii::all_characters_printable($t0|string: ascii::String): bool {
+     var $t1|$stop#0#6: u64
+     var $t2|tmp#$2: bool
+     var $t3|i#1#12: u64
+     var $t4|i#1#9: u64
+     var $t5|stop#1#9: u64
+     var $t6|v#1#3: vector<u8>
+     var $t7: vector<u8>
+     var $t8: u64
+     var $t9: u64
+     var $t10: bool
+     var $t11: u8
+     var $t12: bool
+     var $t13: bool
+     var $t14: bool
+     var $t15: u64
+     var $t16: bool
+  0: $t7 := get_field<ascii::String>.bytes($t0)
+  1: $t8 := vector::length<u8>($t7)
+  2: $t9 := 0
+  3: $t4 := $t9
+  4: label L5
+  5: $t10 := <($t4, $t8)
+  6: if ($t10) goto 7 else goto 20
+  7: label L1
+  8: $t11 := vector::borrow<u8>($t7, $t4)
+  9: $t12 := ascii::is_printable_char($t11)
+ 10: $t13 := !($t12)
+ 11: if ($t13) goto 12 else goto 16
+ 12: label L3
+ 13: $t14 := false
+ 14: $t2 := $t14
+ 15: goto 23
+ 16: label L2
+ 17: $t15 := 1
+ 18: $t4 := +($t4, $t15)
+ 19: goto 4
+ 20: label L0
+ 21: $t16 := true
+ 22: $t2 := $t16
+ 23: label L4
+ 24: return $t2
+}
+
+
+[variant baseline]
+public fun ascii::string($t0|bytes: vector<u8>): ascii::String {
+     var $t1|x#1#0: option::Option<ascii::String>
+     var $t2: option::Option<ascii::String>
+     var $t3: bool
+     var $t4: u64
+     var $t5: ascii::String
+  0: $t2 := ascii::try_string($t0)
+  1: $t3 := option::is_some<ascii::String>($t2)
+  2: if ($t3) goto 3 else goto 5
+  3: label L1
+  4: goto 8
+  5: label L0
+  6: $t4 := 65536
+  7: abort($t4)
+  8: label L2
+  9: $t5 := option::destroy_some<ascii::String>($t2)
+ 10: return $t5
+}
+
+
+[variant baseline]
+public fun ascii::as_bytes($t0|string: ascii::String): vector<u8> {
+     var $t1: vector<u8>
+  0: $t1 := get_field<ascii::String>.bytes($t0)
+  1: return $t1
+}
+
+
+[variant baseline]
+public fun ascii::byte($t0|char: ascii::Char): u8 {
+     var $t1: u8
+  0: $t1 := unpack ascii::Char($t0)
+  1: return $t1
+}
+
+
+[variant baseline]
+public fun ascii::char($t0|byte: u8): ascii::Char {
+     var $t1: bool
+     var $t2: u64
+     var $t3: ascii::Char
+  0: $t1 := ascii::is_valid_char($t0)
+  1: if ($t1) goto 2 else goto 4
+  2: label L1
+  3: goto 7
+  4: label L0
+  5: $t2 := 65536
+  6: abort($t2)
+  7: label L2
+  8: $t3 := pack ascii::Char($t0)
+  9: return $t3
+}
+
+
+[variant baseline]
+fun ascii::char_to_lowercase($t0|byte: u8): u8 {
+     var $t1|tmp#$1: bool
+     var $t2|tmp#$2: u8
+     var $t3: u8
+     var $t4: bool
+     var $t5: u8
+     var $t6: bool
+     var $t7: u8
+  0: $t3 := 65
+  1: $t4 := >=($t0, $t3)
+  2: if ($t4) goto 3 else goto 7
+  3: label L1
+  4: $t5 := 90
+  5: $t1 := <=($t0, $t5)
+  6: goto 10
+  7: label L0
+  8: $t6 := false
+  9: $t1 := $t6
+ 10: label L2
+ 11: if ($t1) goto 12 else goto 16
+ 12: label L4
+ 13: $t7 := 32
+ 14: $t2 := +($t0, $t7)
+ 15: goto 18
+ 16: label L3
+ 17: $t2 := $t0
+ 18: label L5
+ 19: return $t2
+}
+
+
+[variant baseline]
+fun ascii::char_to_uppercase($t0|byte: u8): u8 {
+     var $t1|tmp#$1: bool
+     var $t2|tmp#$2: u8
+     var $t3: u8
+     var $t4: bool
+     var $t5: u8
+     var $t6: bool
+     var $t7: u8
+  0: $t3 := 97
+  1: $t4 := >=($t0, $t3)
+  2: if ($t4) goto 3 else goto 7
+  3: label L1
+  4: $t5 := 122
+  5: $t1 := <=($t0, $t5)
+  6: goto 10
+  7: label L0
+  8: $t6 := false
+  9: $t1 := $t6
+ 10: label L2
+ 11: if ($t1) goto 12 else goto 16
+ 12: label L4
+ 13: $t7 := 32
+ 14: $t2 := -($t0, $t7)
+ 15: goto 18
+ 16: label L3
+ 17: $t2 := $t0
+ 18: label L5
+ 19: return $t2
+}
+
+
+[variant baseline]
+public fun ascii::into_bytes($t0|string: ascii::String): vector<u8> {
+     var $t1: vector<u8>
+  0: $t1 := unpack ascii::String($t0)
+  1: return $t1
+}
+
+
+[variant baseline]
+public fun ascii::is_printable_char($t0|byte: u8): bool {
+     var $t1|tmp#$1: bool
+     var $t2: u8
+     var $t3: bool
+     var $t4: u8
+     var $t5: bool
+  0: $t2 := 32
+  1: $t3 := >=($t0, $t2)
+  2: if ($t3) goto 3 else goto 7
+  3: label L1
+  4: $t4 := 126
+  5: $t1 := <=($t0, $t4)
+  6: goto 10
+  7: label L0
+  8: $t5 := false
+  9: $t1 := $t5
+ 10: label L2
+ 11: return $t1
+}
+
+
+[variant baseline]
+public fun ascii::is_valid_char($t0|b: u8): bool {
+     var $t1: u8
+     var $t2: bool
+  0: $t1 := 127
+  1: $t2 := <=($t0, $t1)
+  2: return $t2
+}
+
+
+[variant baseline]
+public fun ascii::pop_char($t0|string: &mut ascii::String): ascii::Char {
+     var $t1: &mut vector<u8>
+     var $t2: u8
+     var $t3: ascii::Char
+  0: $t1 := borrow_field<ascii::String>.bytes($t0)
+  1: $t2 := vector::pop_back<u8>($t1)
+  2: $t3 := pack ascii::Char($t2)
+  3: trace_local[string]($t0)
+  4: return $t3
+}
+
+
+[variant baseline]
+public fun ascii::push_char($t0|string: &mut ascii::String, $t1|char: ascii::Char) {
+     var $t2: &mut vector<u8>
+     var $t3: u8
+  0: $t2 := borrow_field<ascii::String>.bytes($t0)
+  1: $t3 := get_field<ascii::Char>.byte($t1)
+  2: vector::push_back<u8>($t2, $t3)
+  3: trace_local[string]($t0)
+  4: return ()
+}
+
+
+[variant baseline]
+public fun ascii::substring($t0|string: ascii::String, $t1|i: u64, $t2|j: u64): ascii::String {
+     var $t3|tmp#$3: bool
+     var $t4|bytes#1#0: vector<u8>
+     var $t5|i#1#3: u64
+     var $t6|i#1#6: u64
+     var $t7|stop#1#3: u64
+     var $t8: bool
+     var $t9: u64
+     var $t10: bool
+     var $t11: u64
+     var $t12: vector<u8>
+     var $t13: bool
+     var $t14: &mut vector<u8>
+     var $t15: vector<u8>
+     var $t16: u8
+     var $t17: u64
+     var $t18: vector<u8>
+     var $t19: ascii::String
+  0: $t8 := <=($t1, $t2)
+  1: if ($t8) goto 2 else goto 6
+  2: label L1
+  3: $t9 := ascii::length($t0)
+  4: $t3 := <=($t2, $t9)
+  5: goto 9
+  6: label L0
+  7: $t10 := false
+  8: $t3 := $t10
+  9: label L2
+ 10: if ($t3) goto 11 else goto 13
+ 11: label L4
+ 12: goto 16
+ 13: label L3
+ 14: $t11 := 65537
+ 15: abort($t11)
+ 16: label L5
+ 17: $t12 := []
+ 18: $t4 := $t12
+ 19: $t5 := $t1
+ 20: label L8
+ 21: $t13 := <($t5, $t2)
+ 22: if ($t13) goto 23 else goto 31
+ 23: label L7
+ 24: $t14 := borrow_local($t4)
+ 25: $t15 := get_field<ascii::String>.bytes($t0)
+ 26: $t16 := vector::borrow<u8>($t15, $t5)
+ 27: vector::push_back<u8>($t14, $t16)
+ 28: $t17 := 1
+ 29: $t5 := +($t5, $t17)
+ 30: goto 20
+ 31: label L6
+ 32: $t18 := move($t4)
+ 33: $t19 := pack ascii::String($t18)
+ 34: return $t19
+}
+
+
+[variant baseline]
+public fun ascii::to_lowercase($t0|string: ascii::String): ascii::String {
+     var $t1|$stop#0#6: u64
+     var $t2|tmp#$2: u8
+     var $t3|tmp#$3: &mut vector<u8>
+     var $t4|e#1#13: u8
+     var $t5|i#1#12: u64
+     var $t6|i#1#9: u64
+     var $t7|r#1#1: vector<u8>
+     var $t8|stop#1#9: u64
+     var $t9|v#1#1: vector<u8>
+     var $t10|v#1#3: vector<u8>
+     var $t11: vector<u8>
+     var $t12: vector<u8>
+     var $t13: u64
+     var $t14: u64
+     var $t15: bool
+     var $t16: u8
+     var $t17: &mut vector<u8>
+     var $t18: u8
+     var $t19: u64
+     var $t20: vector<u8>
+     var $t21: ascii::String
+  0: $t11 := ascii::as_bytes($t0)
+  1: $t12 := []
+  2: $t7 := $t12
+  3: $t13 := vector::length<u8>($t11)
+  4: $t14 := 0
+  5: $t6 := $t14
+  6: label L2
+  7: $t15 := <($t6, $t13)
+  8: if ($t15) goto 9 else goto 17
+  9: label L1
+ 10: $t16 := vector::borrow<u8>($t11, $t6)
+ 11: $t17 := borrow_local($t7)
+ 12: $t18 := ascii::char_to_lowercase($t16)
+ 13: vector::push_back<u8>($t17, $t18)
+ 14: $t19 := 1
+ 15: $t6 := +($t6, $t19)
+ 16: goto 6
+ 17: label L0
+ 18: $t20 := move($t7)
+ 19: $t21 := pack ascii::String($t20)
+ 20: return $t21
+}
+
+
+[variant baseline]
+public fun ascii::to_uppercase($t0|string: ascii::String): ascii::String {
+     var $t1|$stop#0#6: u64
+     var $t2|tmp#$2: u8
+     var $t3|tmp#$3: &mut vector<u8>
+     var $t4|e#1#13: u8
+     var $t5|i#1#12: u64
+     var $t6|i#1#9: u64
+     var $t7|r#1#1: vector<u8>
+     var $t8|stop#1#9: u64
+     var $t9|v#1#1: vector<u8>
+     var $t10|v#1#3: vector<u8>
+     var $t11: vector<u8>
+     var $t12: vector<u8>
+     var $t13: u64
+     var $t14: u64
+     var $t15: bool
+     var $t16: u8
+     var $t17: &mut vector<u8>
+     var $t18: u8
+     var $t19: u64
+     var $t20: vector<u8>
+     var $t21: ascii::String
+  0: $t11 := ascii::as_bytes($t0)
+  1: $t12 := []
+  2: $t7 := $t12
+  3: $t13 := vector::length<u8>($t11)
+  4: $t14 := 0
+  5: $t6 := $t14
+  6: label L2
+  7: $t15 := <($t6, $t13)
+  8: if ($t15) goto 9 else goto 17
+  9: label L1
+ 10: $t16 := vector::borrow<u8>($t11, $t6)
+ 11: $t17 := borrow_local($t7)
+ 12: $t18 := ascii::char_to_uppercase($t16)
+ 13: vector::push_back<u8>($t17, $t18)
+ 14: $t19 := 1
+ 15: $t6 := +($t6, $t19)
+ 16: goto 6
+ 17: label L0
+ 18: $t20 := move($t7)
+ 19: $t21 := pack ascii::String($t20)
+ 20: return $t21
+}
+
+
+[variant baseline]
+public fun ascii::try_string($t0|bytes: vector<u8>): option::Option<ascii::String> {
+     var $t1|$stop#0#6: u64
+     var $t2|tmp#$2: bool
+     var $t3|tmp#$3: option::Option<ascii::String>
+     var $t4|i#1#12: u64
+     var $t5|i#1#9: u64
+     var $t6|stop#1#9: u64
+     var $t7|v#1#3: vector<u8>
+     var $t8: u64
+     var $t9: u64
+     var $t10: bool
+     var $t11: u8
+     var $t12: bool
+     var $t13: bool
+     var $t14: bool
+     var $t15: u64
+     var $t16: bool
+     var $t17: ascii::String
+  0: $t8 := vector::length<u8>($t0)
+  1: $t9 := 0
+  2: $t5 := $t9
+  3: label L5
+  4: $t10 := <($t5, $t8)
+  5: if ($t10) goto 6 else goto 19
+  6: label L1
+  7: $t11 := vector::borrow<u8>($t0, $t5)
+  8: $t12 := ascii::is_valid_char($t11)
+  9: $t13 := !($t12)
+ 10: if ($t13) goto 11 else goto 15
+ 11: label L3
+ 12: $t14 := false
+ 13: $t2 := $t14
+ 14: goto 22
+ 15: label L2
+ 16: $t15 := 1
+ 17: $t5 := +($t5, $t15)
+ 18: goto 3
+ 19: label L0
+ 20: $t16 := true
+ 21: $t2 := $t16
+ 22: label L4
+ 23: if ($t2) goto 24 else goto 28
+ 24: label L7
+ 25: $t17 := pack ascii::String($t0)
+ 26: $t3 := option::some<ascii::String>($t17)
+ 27: goto 30
+ 28: label L6
+ 29: $t3 := option::none<ascii::String>()
+ 30: label L8
+ 31: return $t3
+}
+
+
+[variant baseline]
+public fun string::append($t0|s: &mut string::String, $t1|r: string::String) {
+     var $t2: &mut vector<u8>
+     var $t3: vector<u8>
+  0: $t2 := borrow_field<string::String>.bytes($t0)
+  1: $t3 := get_field<string::String>.bytes($t1)
+  2: vector::append<u8>($t2, $t3)
+  3: trace_local[s]($t0)
+  4: return ()
+}
+
+
+[variant baseline]
+public fun string::index_of($t0|s: string::String, $t1|r: string::String): u64 {
+     var $t2: vector<u8>
+     var $t3: vector<u8>
+     var $t4: u64
+  0: $t2 := get_field<string::String>.bytes($t0)
+  1: $t3 := get_field<string::String>.bytes($t1)
+  2: $t4 := string::internal_index_of($t2, $t3)
+  3: return $t4
+}
+
+
+[variant baseline]
+public fun string::insert($t0|s: &mut string::String, $t1|at: u64, $t2|o: string::String) {
+     var $t3|tmp#$3: bool
+     var $t4|bytes#1#0: vector<u8>
+     var $t5|end#1#0: string::String
+     var $t6|front#1#0: string::String
+     var $t7|l#1#0: u64
+     var $t8: vector<u8>
+     var $t9: u64
+     var $t10: bool
+     var $t11: bool
+     var $t12: u64
+     var $t13: string::String
+     var $t14: u64
+     var $t15: string::String
+     var $t16: u64
+     var $t17: string::String
+     var $t18: string::String
+     var $t19: &mut string::String
+     var $t20: &mut string::String
+     var $t21: string::String
+  0: $t8 := get_field<string::String>.bytes($t0)
+  1: $t9 := vector::length<u8>($t8)
+  2: $t10 := <=($t1, $t9)
+  3: if ($t10) goto 4 else goto 7
+  4: label L1
+  5: $t3 := string::internal_is_char_boundary($t8, $t1)
+  6: goto 10
+  7: label L0
+  8: $t11 := false
+  9: $t3 := $t11
+ 10: label L2
+ 11: if ($t3) goto 12 else goto 14
+ 12: label L4
+ 13: goto 18
+ 14: label L3
+ 15: destroy($t0)
+ 16: $t12 := 2
+ 17: abort($t12)
+ 18: label L5
+ 19: $t13 := read_ref($t0)
+ 20: $t14 := string::length($t13)
+ 21: $t15 := read_ref($t0)
+ 22: $t16 := 0
+ 23: $t6 := string::substring($t15, $t16, $t1)
+ 24: $t17 := read_ref($t0)
+ 25: $t18 := string::substring($t17, $t1, $t14)
+ 26: $t19 := borrow_local($t6)
+ 27: string::append($t19, $t2)
+ 28: $t20 := borrow_local($t6)
+ 29: string::append($t20, $t18)
+ 30: $t21 := move($t6)
+ 31: write_ref($t0, $t21)
+ 32: trace_local[s]($t0)
+ 33: return ()
+}
+
+
+[variant baseline]
+public fun string::is_empty($t0|s: string::String): bool {
+     var $t1: vector<u8>
+     var $t2: bool
+  0: $t1 := get_field<string::String>.bytes($t0)
+  1: $t2 := vector::is_empty<u8>($t1)
+  2: return $t2
+}
+
+
+[variant baseline]
+public fun string::length($t0|s: string::String): u64 {
+     var $t1: vector<u8>
+     var $t2: u64
+  0: $t1 := get_field<string::String>.bytes($t0)
+  1: $t2 := vector::length<u8>($t1)
+  2: return $t2
+}
+
+
+[variant baseline]
+public fun string::as_bytes($t0|s: string::String): vector<u8> {
+     var $t1: vector<u8>
+  0: $t1 := get_field<string::String>.bytes($t0)
+  1: return $t1
+}
+
+
+[variant baseline]
+public fun string::into_bytes($t0|s: string::String): vector<u8> {
+     var $t1: vector<u8>
+  0: $t1 := unpack string::String($t0)
+  1: return $t1
+}
+
+
+[variant baseline]
+public fun string::bytes($t0|s: string::String): vector<u8> {
+     var $t1: vector<u8>
+  0: $t1 := string::as_bytes($t0)
+  1: return $t1
+}
+
+
+[variant baseline]
+public fun string::substring($t0|s: string::String, $t1|i: u64, $t2|j: u64): string::String {
+     var $t3|tmp#$3: bool
+     var $t4|bytes#1#0: vector<u8>
+     var $t5|l#1#0: u64
+     var $t6: vector<u8>
+     var $t7: u64
+     var $t8: bool
+     var $t9: bool
+     var $t10: bool
+     var $t11: bool
+     var $t12: bool
+     var $t13: bool
+     var $t14: u64
+     var $t15: vector<u8>
+     var $t16: string::String
+  0: $t6 := get_field<string::String>.bytes($t0)
+  1: $t7 := vector::length<u8>($t6)
+  2: $t8 := <=($t2, $t7)
+  3: if ($t8) goto 4 else goto 21
+  4: label L1
+  5: $t9 := <=($t1, $t2)
+  6: if ($t9) goto 7 else goto 17
+  7: label L3
+  8: $t10 := string::internal_is_char_boundary($t6, $t1)
+  9: if ($t10) goto 10 else goto 13
+ 10: label L5
+ 11: $t3 := string::internal_is_char_boundary($t6, $t2)
+ 12: goto 24
+ 13: label L4
+ 14: $t11 := false
+ 15: $t3 := $t11
+ 16: goto 24
+ 17: label L2
+ 18: $t12 := false
+ 19: $t3 := $t12
+ 20: goto 24
+ 21: label L0
+ 22: $t13 := false
+ 23: $t3 := $t13
+ 24: label L6
+ 25: if ($t3) goto 26 else goto 28
+ 26: label L8
+ 27: goto 31
+ 28: label L7
+ 29: $t14 := 2
+ 30: abort($t14)
+ 31: label L9
+ 32: $t15 := string::internal_sub_string($t6, $t1, $t2)
+ 33: $t16 := pack string::String($t15)
+ 34: return $t16
+}
+
+
+[variant baseline]
+public fun string::append_utf8($t0|s: &mut string::String, $t1|bytes: vector<u8>) {
+     var $t2: string::String
+  0: $t2 := string::utf8($t1)
+  1: string::append($t0, $t2)
+  2: trace_local[s]($t0)
+  3: return ()
+}
+
+
+[variant baseline]
+public fun string::from_ascii($t0|s: ascii::String): string::String {
+     var $t1: vector<u8>
+     var $t2: string::String
+  0: $t1 := ascii::into_bytes($t0)
+  1: $t2 := pack string::String($t1)
+  2: return $t2
+}
+
+
+[variant baseline]
+native fun string::internal_check_utf8($t0|v: vector<u8>): bool;
+
+
+[variant baseline]
+native fun string::internal_index_of($t0|v: vector<u8>, $t1|r: vector<u8>): u64;
+
+
+[variant baseline]
+native fun string::internal_is_char_boundary($t0|v: vector<u8>, $t1|i: u64): bool;
+
+
+[variant baseline]
+native fun string::internal_sub_string($t0|v: vector<u8>, $t1|i: u64, $t2|j: u64): vector<u8>;
+
+
+[variant baseline]
+public fun string::sub_string($t0|s: string::String, $t1|i: u64, $t2|j: u64): string::String {
+     var $t3: string::String
+  0: $t3 := string::substring($t0, $t1, $t2)
+  1: return $t3
+}
+
+
+[variant baseline]
+public fun string::to_ascii($t0|s: string::String): ascii::String {
+     var $t1: vector<u8>
+     var $t2: ascii::String
+  0: $t1 := unpack string::String($t0)
+  1: $t2 := ascii::string($t1)
+  2: return $t2
+}
+
+
+[variant baseline]
+public fun string::try_utf8($t0|bytes: vector<u8>): option::Option<string::String> {
+     var $t1|tmp#$1: option::Option<string::String>
+     var $t2: bool
+     var $t3: string::String
+  0: $t2 := string::internal_check_utf8($t0)
+  1: if ($t2) goto 2 else goto 6
+  2: label L1
+  3: $t3 := pack string::String($t0)
+  4: $t1 := option::some<string::String>($t3)
+  5: goto 8
+  6: label L0
+  7: $t1 := option::none<string::String>()
+  8: label L2
+  9: return $t1
+}
+
+
+[variant baseline]
+public fun string::utf8($t0|bytes: vector<u8>): string::String {
+     var $t1: bool
+     var $t2: u64
+     var $t3: string::String
+  0: $t1 := string::internal_check_utf8($t0)
+  1: if ($t1) goto 2 else goto 4
+  2: label L1
+  3: goto 7
+  4: label L0
+  5: $t2 := 1
+  6: abort($t2)
+  7: label L2
+  8: $t3 := pack string::String($t0)
+  9: return $t3
+}
+
+
+[variant baseline]
+public fun Collection::borrow_mut<#0>($t0|c: &mut Collection::Collection<#0>, $t1|i: u64): &mut #0 {
+     var $t2: &mut vector<#0>
+     var $t3: &mut #0
+  0: $t2 := borrow_field<Collection::Collection<#0>>.items($t0)
+  1: $t3 := vector::borrow_mut<#0>($t2, $t1)
+  2: trace_local[c]($t0)
+  3: return $t3
+}
+
+
+[variant baseline]
+public fun Collection::make_collection<#0>(): Collection::Collection<#0> {
+     var $t0: vector<#0>
+     var $t1: address
+     var $t2: Collection::Collection<#0>
+  0: $t0 := vector::empty<#0>()
+  1: $t1 := 0x2
+  2: $t2 := pack Collection::Collection<#0>($t0, $t1)
+  3: return $t2
+}
+
+
+[variant baseline]
+public fun Test::foo<#0>($t0|i: u64) {
+     var $t1|c#1#0: Collection::Collection<Test::Token<#0>>
+     var $t2|t#1#0: &mut Test::Token<#0>
+     var $t3: &mut Collection::Collection<Test::Token<#0>>
+     var $t4: &mut Test::Token<#0>
+     var $t5: u64
+     var $t6: &mut u64
+  0: $t1 := Collection::make_collection<Test::Token<#0>>()
+  1: $t3 := borrow_local($t1)
+  2: $t4 := Collection::borrow_mut<Test::Token<#0>>($t3, $t0)
+  3: $t5 := 0
+  4: $t6 := borrow_field<Test::Token<#0>>.value($t4)
+  5: write_ref($t6, $t5)
+  6: return ()
+}
+
+
+
+==== borrow analysis summaries ====
+
+fun vector::borrow_mut[baseline]
+borrowed_by: Reference($t0) -> {([], Return(0))}
+borrows_from: Return(0) -> {([], Reference($t0))}
+
+fun option::borrow_mut[baseline]
+borrowed_by: Reference($t0) -> {(.vec (vector<#0>)/[], Return(0))}
+borrows_from: Return(0) -> {(.vec (vector<#0>)/[], Reference($t0))}
+
+fun Collection::borrow_mut[baseline]
+borrowed_by: Reference($t0) -> {(.items (vector<#0>)/[], Return(0))}
+borrows_from: Return(0) -> {(.items (vector<#0>)/[], Reference($t0))}

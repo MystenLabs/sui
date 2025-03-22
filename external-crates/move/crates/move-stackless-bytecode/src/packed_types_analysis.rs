@@ -98,7 +98,7 @@ struct PackedTypesAnalysis<'a> {
     cache: SummaryCache<'a>,
 }
 
-impl<'a> TransferFunctions for PackedTypesAnalysis<'a> {
+impl TransferFunctions for PackedTypesAnalysis<'_> {
     type State = PackedTypesState;
     const BACKWARD: bool = false;
 
@@ -157,8 +157,8 @@ impl<'a> TransferFunctions for PackedTypesAnalysis<'a> {
     }
 }
 
-impl<'a> DataflowAnalysis for PackedTypesAnalysis<'a> {}
-impl<'a> CompositionalAnalysis<PackedTypesState> for PackedTypesAnalysis<'a> {
+impl DataflowAnalysis for PackedTypesAnalysis<'_> {}
+impl CompositionalAnalysis<PackedTypesState> for PackedTypesAnalysis<'_> {
     fn to_summary(
         &self,
         state: PackedTypesState,

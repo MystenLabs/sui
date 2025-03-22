@@ -19,12 +19,12 @@ use tracing::info;
 
 use sui_config::object_storage_config::ObjectStoreConfig;
 use sui_data_ingestion_core::Worker;
-use sui_rpc_api::CheckpointData;
 use sui_storage::object_store::util::{
     find_all_dirs_with_epoch_prefix, find_all_files_with_epoch_prefix,
 };
 use sui_types::base_types::EpochId;
 use sui_types::dynamic_field::DynamicFieldType;
+use sui_types::full_checkpoint_content::CheckpointData;
 use sui_types::messages_checkpoint::CheckpointSequenceNumber;
 
 use crate::analytics_metrics::AnalyticsMetrics;
@@ -887,17 +887,16 @@ pub async fn get_starting_checkpoint_seq_num(
     config: AnalyticsIndexerConfig,
     file_type: FileType,
 ) -> Result<u64> {
-    let checkpoint = if let Some(starting_checkpoint_seq_num) = config.starting_checkpoint_seq_num {
-        starting_checkpoint_seq_num
-    } else {
-        read_store_for_checkpoint(
-            config.remote_store_config.clone(),
-            file_type,
-            config.remote_store_path_prefix,
-        )
-        .await?
-    };
-    Ok(checkpoint)
+    let remote_latest = read_store_for_checkpoint(
+        config.remote_store_config,
+        file_type,
+        config.remote_store_path_prefix,
+    )
+    .await?;
+
+    Ok(config
+        .starting_checkpoint_seq_num
+        .map_or(remote_latest, |start| start.max(remote_latest)))
 }
 
 pub async fn make_analytics_processor(

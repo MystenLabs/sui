@@ -116,11 +116,6 @@ pub(crate) struct LocalProtocolConfig {
 
 impl LocalProtocolConfig {
     fn new(config: &ProtocolConfig) -> Self {
-        // This should always be false for old protocol versions.
-        assert!(!config
-            .use_object_per_epoch_marker_table_v2_as_option()
-            .unwrap_or(false));
-
         Self {
             max_num_deleted_move_object_ids: config.max_num_deleted_move_object_ids(),
             max_num_event_emit: config.max_num_event_emit(),
@@ -686,7 +681,7 @@ pub fn get_all_uids(
     struct UIDTraversal<'i>(&'i mut BTreeSet<ObjectID>);
     struct UIDCollector<'i>(&'i mut BTreeSet<ObjectID>);
 
-    impl<'i, 'b, 'l> AV::Traversal<'b, 'l> for UIDTraversal<'i> {
+    impl<'b, 'l> AV::Traversal<'b, 'l> for UIDTraversal<'_> {
         type Error = AV::Error;
 
         fn traverse_struct(
@@ -702,7 +697,7 @@ pub fn get_all_uids(
         }
     }
 
-    impl<'i, 'b, 'l> AV::Traversal<'b, 'l> for UIDCollector<'i> {
+    impl<'b, 'l> AV::Traversal<'b, 'l> for UIDCollector<'_> {
         type Error = AV::Error;
         fn traverse_address(
             &mut self,

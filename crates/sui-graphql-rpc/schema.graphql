@@ -1046,7 +1046,7 @@ type EndOfEpochTransaction {
 	transactions(first: Int, before: String, last: Int, after: String): EndOfEpochTransactionKindConnection!
 }
 
-union EndOfEpochTransactionKind = ChangeEpochTransaction | AuthenticatorStateCreateTransaction | AuthenticatorStateExpireTransaction | RandomnessStateCreateTransaction | CoinDenyListStateCreateTransaction | BridgeStateCreateTransaction | BridgeCommitteeInitTransaction
+union EndOfEpochTransactionKind = ChangeEpochTransaction | AuthenticatorStateCreateTransaction | AuthenticatorStateExpireTransaction | RandomnessStateCreateTransaction | CoinDenyListStateCreateTransaction | BridgeStateCreateTransaction | BridgeCommitteeInitTransaction | StoreExecutionTimeObservationsTransaction
 
 type EndOfEpochTransactionKindConnection {
 	"""
@@ -2879,7 +2879,7 @@ objects are ones whose
 
 - Type matches the `type` filter,
 - AND, whose owner matches the `owner` filter,
-- AND, whose ID is in `objectIds` OR whose ID and version is in `objectKeys`.
+- AND, whose ID is in `objectIds`.
 """
 input ObjectFilter {
 	"""
@@ -2898,12 +2898,6 @@ input ObjectFilter {
 	Filter for live objects by their IDs.
 	"""
 	objectIds: [SuiAddress!]
-	"""
-	Filter for live objects by their ID and version. NOTE:  this input filter has been
-	deprecated in favor of `multiGetObjects` query as it does not make sense to query for live
-	objects by their versions. This filter will be removed with v1.42.0 release.
-	"""
-	objectKeys: [ObjectKey!]
 }
 
 input ObjectKey {
@@ -3329,7 +3323,7 @@ type Query {
 	"""
 	Fetch a list of objects by their IDs and versions.
 	"""
-	multiGetObjects(keys: [ObjectKey!]!): [Object!]!
+	multiGetObjects(keys: [ObjectKey!]!): [Object]!
 	"""
 	The coin objects that exist in the network.
 	
@@ -3978,6 +3972,13 @@ type StorageFund {
 	non-refundable balance.
 	"""
 	nonRefundableBalance: BigInt
+}
+
+type StoreExecutionTimeObservationsTransaction {
+	"""
+	A workaround to define an empty variant of a GraphQL union.
+	"""
+	_: Boolean
 }
 
 

@@ -86,6 +86,9 @@ const frameworkPlugin = (context, options) => {
           // Remove code blocks without pre's. Render automatically adds
           // pre element that messes up formatting.
           // Remove empty code blocks because it looks lame.
+          // Replace named anchor tags for titles with id'd title.
+          // Replace remaining named anchor tags with ids and scroll margin
+          // inline. Necessary for mdx to process correctly.
           let reMarkdown = markdown
             .replace(/<a\s+(.*?)\.md(.*?)>/g, `<a $1$2>`)
             .replace(
@@ -93,7 +96,12 @@ const frameworkPlugin = (context, options) => {
               `$1 Module $2$3\nsidebar_label: $3`,
             )
             .replace(/(?<!<pre>)<code>(.*?)<\/code>/gs, `$1`)
-            .replace(/<pre><code><\/code><\/pre>/g, "");
+            .replace(/<pre><code><\/code><\/pre>/g, "")
+            .replace(
+              /<a name="([^"]+)"><\/a>\n\n(#+) (.+) `([^`]+)`/g,
+              `$2 $3 \`$4\` {#$1}`,
+            )
+            .replace(/<a name=/g, "<a style='scroll-margin-top:80px' id=");
           const filename = file.replace(/.*\/docs\/(.*)$/, `$1`);
           const parts = filename.split("/");
           const fileWrite = path.join(DOCS_PATH, filename);

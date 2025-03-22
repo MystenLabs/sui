@@ -1,0 +1,408 @@
+---
+source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
+---
+processed 17 tasks
+
+init:
+A: object(0,0), B: object(0,1)
+
+task 1, lines 14-81:
+//# publish
+created: object(1,0)
+mutated: object(0,2)
+gas summary: computation_cost: 1000000, storage_cost: 11263200,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 2, line 83:
+//# run Test::M1::create --sender A --args 0 @A
+created: object(2,0)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 2302800,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 3, line 85:
+//# run Test::M1::emit_a --sender A --args object(2,0) 0
+events: Event { package_id: Test, transaction_module: Identifier("M1"), sender: A, type_: StructTag { address: Test, module: Identifier("M1"), name: Identifier("EventA"), type_params: [] }, contents: [0, 0, 0, 0, 0, 0, 0, 0] }
+mutated: object(0,0), object(2,0)
+gas summary: computation_cost: 1000000, storage_cost: 2302800,  storage_rebate: 2279772, non_refundable_storage_fee: 23028
+
+task 4, line 87:
+//# run Test::M1::emit_b --sender A --args object(2,0) 1
+events: Event { package_id: Test, transaction_module: Identifier("M1"), sender: A, type_: StructTag { address: Test, module: Identifier("M1"), name: Identifier("EventB"), type_params: [Struct(StructTag { address: Test, module: Identifier("M1"), name: Identifier("Object"), type_params: [] })] }, contents: [1, 0, 0, 0, 0, 0, 0, 0] }
+mutated: object(0,0), object(2,0)
+gas summary: computation_cost: 1000000, storage_cost: 2302800,  storage_rebate: 2279772, non_refundable_storage_fee: 23028
+
+task 5, line 89:
+//# run Test::M2::create --sender A --args 2 @A
+created: object(5,0)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 2302800,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 6, line 91:
+//# run Test::M2::emit_a --sender A --args object(5,0) 2
+events: Event { package_id: Test, transaction_module: Identifier("M2"), sender: A, type_: StructTag { address: Test, module: Identifier("M2"), name: Identifier("EventA"), type_params: [] }, contents: [2, 0, 0, 0, 0, 0, 0, 0] }
+mutated: object(0,0), object(5,0)
+gas summary: computation_cost: 1000000, storage_cost: 2302800,  storage_rebate: 2279772, non_refundable_storage_fee: 23028
+
+task 7, line 93:
+//# run Test::M2::emit_b --sender A --args object(5,0) 3
+events: Event { package_id: Test, transaction_module: Identifier("M2"), sender: A, type_: StructTag { address: Test, module: Identifier("M2"), name: Identifier("EventB"), type_params: [Struct(StructTag { address: Test, module: Identifier("M2"), name: Identifier("Object"), type_params: [] })] }, contents: [3, 0, 0, 0, 0, 0, 0, 0] }
+mutated: object(0,0), object(5,0)
+gas summary: computation_cost: 1000000, storage_cost: 2302800,  storage_rebate: 2279772, non_refundable_storage_fee: 23028
+
+task 8, line 95:
+//# create-checkpoint
+Checkpoint created: 1
+
+task 9, lines 97-119:
+//# run-graphql
+Response: {
+  "data": {
+    "events": {
+      "edges": [
+        {
+          "cursor": "eyJ0eCI6MywiZSI6MCwiYyI6MX0",
+          "node": {
+            "sendingModule": {
+              "name": "M1"
+            },
+            "sender": {
+              "address": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
+            },
+            "contents": {
+              "type": {
+                "repr": "0x08c5d7466382add5a3962c5fbe295af8fc8331bd3140f4f23b031cc1439416ab::M1::EventA"
+              },
+              "json": {
+                "new_value": "0"
+              },
+              "bcs": "AAAAAAAAAAA="
+            }
+          }
+        },
+        {
+          "cursor": "eyJ0eCI6NCwiZSI6MCwiYyI6MX0",
+          "node": {
+            "sendingModule": {
+              "name": "M1"
+            },
+            "sender": {
+              "address": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
+            },
+            "contents": {
+              "type": {
+                "repr": "0x08c5d7466382add5a3962c5fbe295af8fc8331bd3140f4f23b031cc1439416ab::M1::EventB<0x08c5d7466382add5a3962c5fbe295af8fc8331bd3140f4f23b031cc1439416ab::M1::Object>"
+              },
+              "json": {
+                "new_value": "1"
+              },
+              "bcs": "AQAAAAAAAAA="
+            }
+          }
+        },
+        {
+          "cursor": "eyJ0eCI6NiwiZSI6MCwiYyI6MX0",
+          "node": {
+            "sendingModule": {
+              "name": "M2"
+            },
+            "sender": {
+              "address": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
+            },
+            "contents": {
+              "type": {
+                "repr": "0x08c5d7466382add5a3962c5fbe295af8fc8331bd3140f4f23b031cc1439416ab::M2::EventA"
+              },
+              "json": {
+                "new_value": "2"
+              },
+              "bcs": "AgAAAAAAAAA="
+            }
+          }
+        },
+        {
+          "cursor": "eyJ0eCI6NywiZSI6MCwiYyI6MX0",
+          "node": {
+            "sendingModule": {
+              "name": "M2"
+            },
+            "sender": {
+              "address": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
+            },
+            "contents": {
+              "type": {
+                "repr": "0x08c5d7466382add5a3962c5fbe295af8fc8331bd3140f4f23b031cc1439416ab::M2::EventB<0x08c5d7466382add5a3962c5fbe295af8fc8331bd3140f4f23b031cc1439416ab::M2::Object>"
+              },
+              "json": {
+                "new_value": "3"
+              },
+              "bcs": "AwAAAAAAAAA="
+            }
+          }
+        }
+      ]
+    }
+  }
+}
+
+task 10, lines 121-143:
+//# run-graphql
+Response: {
+  "data": {
+    "events": {
+      "edges": [
+        {
+          "cursor": "eyJ0eCI6MywiZSI6MCwiYyI6MX0",
+          "node": {
+            "sendingModule": {
+              "name": "M1"
+            },
+            "sender": {
+              "address": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
+            },
+            "contents": {
+              "type": {
+                "repr": "0x08c5d7466382add5a3962c5fbe295af8fc8331bd3140f4f23b031cc1439416ab::M1::EventA"
+              },
+              "json": {
+                "new_value": "0"
+              },
+              "bcs": "AAAAAAAAAAA="
+            }
+          }
+        },
+        {
+          "cursor": "eyJ0eCI6NCwiZSI6MCwiYyI6MX0",
+          "node": {
+            "sendingModule": {
+              "name": "M1"
+            },
+            "sender": {
+              "address": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
+            },
+            "contents": {
+              "type": {
+                "repr": "0x08c5d7466382add5a3962c5fbe295af8fc8331bd3140f4f23b031cc1439416ab::M1::EventB<0x08c5d7466382add5a3962c5fbe295af8fc8331bd3140f4f23b031cc1439416ab::M1::Object>"
+              },
+              "json": {
+                "new_value": "1"
+              },
+              "bcs": "AQAAAAAAAAA="
+            }
+          }
+        },
+        {
+          "cursor": "eyJ0eCI6NiwiZSI6MCwiYyI6MX0",
+          "node": {
+            "sendingModule": {
+              "name": "M2"
+            },
+            "sender": {
+              "address": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
+            },
+            "contents": {
+              "type": {
+                "repr": "0x08c5d7466382add5a3962c5fbe295af8fc8331bd3140f4f23b031cc1439416ab::M2::EventA"
+              },
+              "json": {
+                "new_value": "2"
+              },
+              "bcs": "AgAAAAAAAAA="
+            }
+          }
+        },
+        {
+          "cursor": "eyJ0eCI6NywiZSI6MCwiYyI6MX0",
+          "node": {
+            "sendingModule": {
+              "name": "M2"
+            },
+            "sender": {
+              "address": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
+            },
+            "contents": {
+              "type": {
+                "repr": "0x08c5d7466382add5a3962c5fbe295af8fc8331bd3140f4f23b031cc1439416ab::M2::EventB<0x08c5d7466382add5a3962c5fbe295af8fc8331bd3140f4f23b031cc1439416ab::M2::Object>"
+              },
+              "json": {
+                "new_value": "3"
+              },
+              "bcs": "AwAAAAAAAAA="
+            }
+          }
+        }
+      ]
+    }
+  }
+}
+
+task 11, lines 145-168:
+//# run-graphql
+Response: {
+  "data": {
+    "events": {
+      "edges": [
+        {
+          "cursor": "eyJ0eCI6MywiZSI6MCwiYyI6MX0",
+          "node": {
+            "sendingModule": {
+              "name": "M1"
+            },
+            "sender": {
+              "address": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
+            },
+            "contents": {
+              "type": {
+                "repr": "0x08c5d7466382add5a3962c5fbe295af8fc8331bd3140f4f23b031cc1439416ab::M1::EventA"
+              },
+              "json": {
+                "new_value": "0"
+              },
+              "bcs": "AAAAAAAAAAA="
+            }
+          }
+        },
+        {
+          "cursor": "eyJ0eCI6NCwiZSI6MCwiYyI6MX0",
+          "node": {
+            "sendingModule": {
+              "name": "M1"
+            },
+            "sender": {
+              "address": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
+            },
+            "contents": {
+              "type": {
+                "repr": "0x08c5d7466382add5a3962c5fbe295af8fc8331bd3140f4f23b031cc1439416ab::M1::EventB<0x08c5d7466382add5a3962c5fbe295af8fc8331bd3140f4f23b031cc1439416ab::M1::Object>"
+              },
+              "json": {
+                "new_value": "1"
+              },
+              "bcs": "AQAAAAAAAAA="
+            }
+          }
+        }
+      ]
+    }
+  }
+}
+
+task 12, lines 170-193:
+//# run-graphql
+Response: {
+  "data": {
+    "events": {
+      "edges": [
+        {
+          "cursor": "eyJ0eCI6MywiZSI6MCwiYyI6MX0",
+          "node": {
+            "sendingModule": {
+              "name": "M1"
+            },
+            "sender": {
+              "address": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
+            },
+            "contents": {
+              "type": {
+                "repr": "0x08c5d7466382add5a3962c5fbe295af8fc8331bd3140f4f23b031cc1439416ab::M1::EventA"
+              },
+              "json": {
+                "new_value": "0"
+              },
+              "bcs": "AAAAAAAAAAA="
+            }
+          }
+        }
+      ]
+    }
+  }
+}
+
+task 13, lines 195-218:
+//# run-graphql
+Response: {
+  "data": {
+    "events": {
+      "edges": [
+        {
+          "cursor": "eyJ0eCI6NCwiZSI6MCwiYyI6MX0",
+          "node": {
+            "sendingModule": {
+              "name": "M1"
+            },
+            "sender": {
+              "address": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
+            },
+            "contents": {
+              "type": {
+                "repr": "0x08c5d7466382add5a3962c5fbe295af8fc8331bd3140f4f23b031cc1439416ab::M1::EventB<0x08c5d7466382add5a3962c5fbe295af8fc8331bd3140f4f23b031cc1439416ab::M1::Object>"
+              },
+              "json": {
+                "new_value": "1"
+              },
+              "bcs": "AQAAAAAAAAA="
+            }
+          }
+        }
+      ]
+    }
+  }
+}
+
+task 14, lines 220-243:
+//# run-graphql
+Response: {
+  "data": null,
+  "errors": [
+    {
+      "message": "Failed to parse \"String\": Invalid filter, expected: package[::module[::type[<type_params>]]] or primitive type (occurred while parsing \"EventFilter\")",
+      "locations": [
+        {
+          "line": 2,
+          "column": 18
+        }
+      ],
+      "path": [
+        "events"
+      ]
+    }
+  ]
+}
+
+task 15, lines 245-267:
+//# run-graphql
+Response: {
+  "data": null,
+  "errors": [
+    {
+      "message": "Failed to parse \"String\": Invalid filter, expected: package[::module[::type[<type_params>]]] or primitive type (occurred while parsing \"EventFilter\")",
+      "locations": [
+        {
+          "line": 2,
+          "column": 18
+        }
+      ],
+      "path": [
+        "events"
+      ]
+    }
+  ]
+}
+
+task 16, lines 269-291:
+//# run-graphql
+Response: {
+  "data": null,
+  "errors": [
+    {
+      "message": "Failed to parse \"String\": Invalid filter, expected: package[::module[::type[<type_params>]]] or primitive type (occurred while parsing \"EventFilter\")",
+      "locations": [
+        {
+          "line": 2,
+          "column": 18
+        }
+      ],
+      "path": [
+        "events"
+      ]
+    }
+  ]
+}

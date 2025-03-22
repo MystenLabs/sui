@@ -1,0 +1,18 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: 2024.alpha
+  lint: false
+---
+error[E10004]: invalid usage of known attribute
+  ┌─ tests/move_2024/typing/unknown_defines_primitive.move:1:21
+  │
+1 │ #[defines_primitive(X)]
+  │                     ^ Invalid parameterization of 'defines_primitive'. Unknown primitive type 'X'
+
+error[E10004]: invalid usage of known attribute
+  ┌─ tests/move_2024/typing/unknown_defines_primitive.move:6:21
+  │
+6 │ #[defines_primitive(Y)]
+  │                     ^ Invalid parameterization of 'defines_primitive'. Unknown primitive type 'Y'

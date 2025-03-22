@@ -1,0 +1,18 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: sui
+  edition: legacy
+  lint: false
+---
+error[E05001]: ability constraint not satisfied
+   ┌─ tests/sui_mode/entry_points/receiving_non_object_type.move:6:28
+   │
+ 6 │     public entry fun no(_: Receiving<u64>) { abort 0 }
+   │                            ^^^^^^^^^^^^^^
+   │                            │         │
+   │                            │         The type 'u64' does not have the ability 'key'
+   │                            'key' constraint not satisifed
+   ·
+10 │     struct Receiving<phantom T: key> has drop {
+   │                                 --- 'key' constraint declared here

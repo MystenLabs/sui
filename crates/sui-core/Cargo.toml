@@ -10,9 +10,11 @@ edition = "2021"
 workspace = true
 
 [dependencies]
+antithesis_sdk.workspace = true
 anyhow = { workspace = true, features = ["backtrace"] }
 arc-swap.workspace = true
 async-trait.workspace = true
+async-stream.workspace = true
 axum.workspace = true
 bcs.workspace = true
 bincode.workspace = true
@@ -26,10 +28,12 @@ either.workspace = true
 enum_dispatch.workspace = true
 eyre.workspace = true
 futures.workspace = true
+governor.workspace = true
 im.workspace = true
 itertools.workspace = true
 lru.workspace = true
 mockall.workspace = true
+nonzero_ext.workspace = true
 num_cpus.workspace = true
 object_store.workspace = true
 once_cell.workspace = true
@@ -43,6 +47,7 @@ scopeguard.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 serde_with.workspace = true
+simple_moving_average.workspace = true
 static_assertions.workspace = true
 tap.workspace = true
 tempfile.workspace = true

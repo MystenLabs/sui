@@ -96,21 +96,21 @@ public macro fun max_value(): u128 {
 }
 
 /// Loops applying `$f` to each number from `$start` to `$stop` (exclusive)
-public macro fun range_do($start: u128, $stop: u128, $f: |u128|) {
+public macro fun range_do<$R: drop>($start: u128, $stop: u128, $f: |u128| -> $R) {
     std::macros::range_do!($start, $stop, $f)
 }
 
 /// Loops applying `$f` to each number from `$start` to `$stop` (inclusive)
-public macro fun range_do_eq($start: u128, $stop: u128, $f: |u128|) {
+public macro fun range_do_eq<$R: drop>($start: u128, $stop: u128, $f: |u128| -> $R) {
     std::macros::range_do_eq!($start, $stop, $f)
 }
 
 /// Loops applying `$f` to each number from `0` to `$stop` (exclusive)
-public macro fun do($stop: u128, $f: |u128|) {
+public macro fun do<$R: drop>($stop: u128, $f: |u128| -> $R) {
     std::macros::do!($stop, $f)
 }
 
 /// Loops applying `$f` to each number from `0` to `$stop` (inclusive)
-public macro fun do_eq($stop: u128, $f: |u128|) {
+public macro fun do_eq<$R: drop>($stop: u128, $f: |u128| -> $R) {
     std::macros::do_eq!($stop, $f)
 }

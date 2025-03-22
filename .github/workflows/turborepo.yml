@@ -83,19 +83,3 @@ jobs:
           GOOGLE_KEY_NAME_VERSION: ${{ secrets.GOOGLE_KEY_NAME_VERSION }}
           E2E_GCP_KMS_TEST_ENABLE: ${{ env.E2E_GCP_KMS_TEST_ENABLE }}
         run: pnpm turbo test
-
-      # Pack wallet extension and upload it as an artifact for easy developer use:
-      - name: Wallet Extension Has Changes?
-        id: wallet-diff
-        continue-on-error: true
-        run: pnpm dlx turbo-ignore sui-wallet
-      - name: Wallet Extension Preview Package
-        if: ${{ steps.wallet-diff.outcome == 'failure' }}
-        run: pnpm --filter sui-wallet pack:zip
-      - uses: actions/upload-artifact@b4b15b8c7c6ac21ea08fcf65892d2ee8f75cf882 # pin@4.4.3
-        if: ${{ steps.wallet-diff.outcome == 'failure' }}
-        with:
-          name: wallet-extension
-          path: apps/wallet/web-ext-artifacts/*
-          if-no-files-found: error
-          retention-days: 7

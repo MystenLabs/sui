@@ -42,7 +42,7 @@ fn hash<H: HashFunction<DIGEST_SIZE>, const DIGEST_SIZE: usize>(
         msg_cost_per_byte.mul((msg_ref.len() as u64).into())
             // Round up the blocks
             + msg_cost_per_block
-                .mul((((msg_ref.len() + block_size - 1) / block_size) as u64).into())
+                .mul((msg_ref.len().div_ceil(block_size) as u64).into())
     );
 
     Ok(NativeResult::ok(

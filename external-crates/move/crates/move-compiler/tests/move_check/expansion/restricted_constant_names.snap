@@ -1,0 +1,60 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: legacy
+  lint: false
+---
+error[E02010]: invalid name
+  ┌─ tests/move_check/expansion/restricted_constant_names.move:5:11
+  │
+5 │     const address: u64 = 0;
+  │           ^^^^^^^ Invalid constant name 'address'. Constant names must start with 'A'..'Z'
+
+error[E02010]: invalid name
+  ┌─ tests/move_check/expansion/restricted_constant_names.move:6:11
+  │
+6 │     const signer: u64 = 0;
+  │           ^^^^^^ Invalid constant name 'signer'. Constant names must start with 'A'..'Z'
+
+error[E02010]: invalid name
+  ┌─ tests/move_check/expansion/restricted_constant_names.move:7:11
+  │
+7 │     const u8: u64 = 0;
+  │           ^^ Invalid constant name 'u8'. Constant names must start with 'A'..'Z'
+
+error[E02010]: invalid name
+  ┌─ tests/move_check/expansion/restricted_constant_names.move:8:11
+  │
+8 │     const u64: u64 = 0;
+  │           ^^^ Invalid constant name 'u64'. Constant names must start with 'A'..'Z'
+
+error[E02010]: invalid name
+  ┌─ tests/move_check/expansion/restricted_constant_names.move:9:11
+  │
+9 │     const u128: u64 = 0;
+  │           ^^^^ Invalid constant name 'u128'. Constant names must start with 'A'..'Z'
+
+error[E02010]: invalid name
+   ┌─ tests/move_check/expansion/restricted_constant_names.move:10:11
+   │
+10 │     const vector: u64 = 0;
+   │           ^^^^^^ Invalid constant name 'vector'. Constant names must start with 'A'..'Z'
+
+error[E02010]: invalid name
+   ┌─ tests/move_check/expansion/restricted_constant_names.move:11:11
+   │
+11 │     const freeze: u64 = 0;
+   │           ^^^^^^ Invalid constant name 'freeze'. Constant names must start with 'A'..'Z'
+
+error[E02010]: invalid name
+   ┌─ tests/move_check/expansion/restricted_constant_names.move:12:11
+   │
+12 │     const assert: u64 = 0;
+   │           ^^^^^^ Invalid constant name 'assert'. Constant names must start with 'A'..'Z'
+
+error[E03011]: invalid use of reserved name
+   ┌─ tests/move_check/expansion/restricted_constant_names.move:14:11
+   │
+14 │     const Self: u64 = 0;
+   │           ^^^^ Invalid constant name 'Self'. 'Self' is restricted and cannot be used to name a constant

@@ -1,0 +1,58 @@
+---
+source: crates/move-unit-test/tests/move_unit_test_testsuite.rs
+---
+Running Move unit tests
+[ FAIL    ] 0x6::random_test::should_fail_test_div_mod_10
+[ FAIL    ] 0x6::random_test::should_fail_test_div_mod_10_2_vec
+[ FAIL    ] 0x6::random_test::should_fail_test_expected_failure
+[ PASS    ] 0x6::random_test::should_pass_test_expected_failure_pass
+[ TIMEOUT ] 0x6::random_test::should_timeout_test_timeout
+
+Test failures:
+
+Failures in 0x6::random_test:
+
+┌── should_fail_test_div_mod_10 ────── (seed = 8)
+│ error[E11001]: test failure
+│   ┌─ random_test.move:4:11
+│   │
+│ 3 │     fun should_fail_test_div_mod_10(x: u64) {
+│   │         --------------------------- In this function in 0x6::random_test
+│ 4 │         x / (x % 10);
+│   │           ^ Test was not expected to error, but it gave an arithmetic error originating in the module 0x6::random_test rooted here
+│ 
+│ 
+│ This test uses randomly generated inputs. Rerun with `test should_fail_test_div_mod_10 --seed 8` to recreate this test failure.
+│ 
+└──────────────────
+
+
+┌── should_fail_test_div_mod_10_2_vec ────── (seed = 5)
+│ error[E11001]: test failure
+│   ┌─ random_test.move:9:33
+│   │
+│ 8 │     fun should_fail_test_div_mod_10_2_vec(x: vector<vector<u64>>) {
+│   │         --------------------------------- In this function in 0x6::random_test
+│ 9 │         std::vector::length(&x) / (std::vector::length(&x) % 10);
+│   │                                 ^ Test was not expected to error, but it gave an arithmetic error originating in the module 0x6::random_test rooted here
+│ 
+│ 
+│ This test uses randomly generated inputs. Rerun with `test should_fail_test_div_mod_10_2_vec --seed 5` to recreate this test failure.
+│ 
+└──────────────────
+
+
+┌── should_fail_test_expected_failure ────── (seed = 2)
+│ Test did not error as expected
+│ This test uses randomly generated inputs. Rerun with `test should_fail_test_expected_failure --seed 2` to recreate this test failure.
+│ 
+└──────────────────
+
+
+┌── should_timeout_test_timeout ────── (seed = 0)
+│ Test timed out
+│ This test uses randomly generated inputs. Rerun with `test should_timeout_test_timeout --seed 0` to recreate this test failure.
+│ 
+└──────────────────
+
+Test result: FAILED. Total tests: 8; passed: 4; failed: 4

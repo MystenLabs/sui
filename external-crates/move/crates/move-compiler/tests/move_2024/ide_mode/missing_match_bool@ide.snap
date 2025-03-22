@@ -1,0 +1,35 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: 2024.alpha
+  lint: false
+---
+error[E04036]: non-exhaustive pattern
+  ┌─ tests/move_2024/ide_mode/missing_match_bool.move:4:16
+  │
+4 │         match (true) {
+  │                ^^^^ Pattern 'false' not covered
+
+note[I15004]: IDE missing match arms
+  ┌─ tests/move_2024/ide_mode/missing_match_bool.move:4:22
+  │  
+4 │           match (true) {
+  │ ╭──────────────────────^
+5 │ │             true => 0
+6 │ │         }
+  │ ╰─────────^ Missing arms: 'false'
+
+error[E04036]: non-exhaustive pattern
+   ┌─ tests/move_2024/ide_mode/missing_match_bool.move:10:16
+   │
+10 │         match (true) {
+   │                ^^^^ Pattern '_' not covered
+
+note[I15004]: IDE missing match arms
+   ┌─ tests/move_2024/ide_mode/missing_match_bool.move:10:22
+   │  
+10 │           match (true) {
+   │ ╭──────────────────────^
+11 │ │         }
+   │ ╰─────────^ Missing arms: 'false' and 'true'

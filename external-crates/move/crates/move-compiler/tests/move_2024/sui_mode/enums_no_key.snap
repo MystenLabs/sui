@@ -1,0 +1,14 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: sui
+  edition: 2024.alpha
+  lint: false
+---
+error[Sui E02007]: invalid object declaration
+  ┌─ tests/move_2024/sui_mode/enums_no_key.move:3:17
+  │
+3 │     public enum S has key {
+  │                 ^     --- Enums cannot have the 'key' ability.
+  │                 │      
+  │                 Invalid object 'S'

@@ -30,9 +30,9 @@ pub trait EpochStartConfigTrait {
     fn bridge_obj_initial_shared_version(&self) -> Option<SequenceNumber>;
     fn bridge_committee_initiated(&self) -> bool;
 
-    fn use_version_assignment_tables_v3(&self) -> bool {
+    fn is_data_quarantine_active_from_beginning_of_epoch(&self) -> bool {
         self.flags()
-            .contains(&EpochFlag::UseVersionAssignmentTablesV3)
+            .contains(&EpochFlag::DataQuarantineFromBeginningOfEpoch)
     }
 }
 
@@ -57,8 +57,15 @@ pub enum EpochFlag {
     _StateAccumulatorV2EnabledTestnetDeprecated = 5,
     _StateAccumulatorV2EnabledMainnetDeprecated = 6,
     _ExecutedInEpochTableDeprecated = 7,
+    _UseVersionAssignmentTablesV3 = 8,
 
-    UseVersionAssignmentTablesV3 = 8,
+    // This flag indicates whether data quarantining has been enabled from the
+    // beginning of the epoch.
+    DataQuarantineFromBeginningOfEpoch = 9,
+
+    // Used for `test_epoch_flag_upgrade`.
+    #[cfg(msim)]
+    DummyFlag = 10,
 }
 
 impl EpochFlag {
@@ -68,13 +75,24 @@ impl EpochFlag {
         Self::default_flags_impl()
     }
 
+    // Return flags that are mandatory for the current version of the code. This is used
+    // so that `test_epoch_flag_upgrade` can still work correctly even when there are no
+    // optional flags.
+    pub fn mandatory_flags() -> Vec<Self> {
+        vec![EpochFlag::DataQuarantineFromBeginningOfEpoch]
+    }
+
     /// For situations in which there is no config available (e.g. setting up a downloaded snapshot).
     pub fn default_for_no_config() -> Vec<Self> {
         Self::default_flags_impl()
     }
 
     fn default_flags_impl() -> Vec<Self> {
-        vec![EpochFlag::UseVersionAssignmentTablesV3]
+        vec![
+            EpochFlag::DataQuarantineFromBeginningOfEpoch,
+            #[cfg(msim)]
+            EpochFlag::DummyFlag,
+        ]
     }
 }
 
@@ -106,8 +124,15 @@ impl fmt::Display for EpochFlag {
             EpochFlag::_StateAccumulatorV2EnabledMainnetDeprecated => {
                 write!(f, "StateAccumulatorV2EnabledMainnet (DEPRECATED)")
             }
-            EpochFlag::UseVersionAssignmentTablesV3 => {
-                write!(f, "UseVersionAssignmentTablesV3")
+            EpochFlag::_UseVersionAssignmentTablesV3 => {
+                write!(f, "UseVersionAssignmentTablesV3 (DEPRECATED)")
+            }
+            EpochFlag::DataQuarantineFromBeginningOfEpoch => {
+                write!(f, "DataQuarantineFromBeginningOfEpoch")
+            }
+            #[cfg(msim)]
+            EpochFlag::DummyFlag => {
+                write!(f, "DummyFlag")
             }
         }
     }

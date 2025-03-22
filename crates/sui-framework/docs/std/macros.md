@@ -40,7 +40,7 @@ This module holds shared implementation of macros used in <code>std</code>
 
 
 
-<pre><code><b>public</b> <b>macro</b> <b>fun</b> <a href="../std/macros.md#std_macros_num_max">num_max</a>($x: _, $y: _): _
+<pre><code><b>public</b> <b>macro</b> <b>fun</b> <a href="../std/macros.md#std_macros_num_max">num_max</a>&lt;$T&gt;($x: $T, $y: $T): $T
 </code></pre>
 
 
@@ -49,7 +49,7 @@ This module holds shared implementation of macros used in <code>std</code>
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>macro</b> <b>fun</b> <a href="../std/macros.md#std_macros_num_max">num_max</a>($x: _, $y: _): _ {
+<pre><code><b>public</b> <b>macro</b> <b>fun</b> <a href="../std/macros.md#std_macros_num_max">num_max</a>&lt;$T&gt;($x: $T, $y: $T): $T {
     <b>let</b> x = $x;
     <b>let</b> y = $y;
     <b>if</b> (x &gt; y) x
@@ -67,7 +67,7 @@ This module holds shared implementation of macros used in <code>std</code>
 
 
 
-<pre><code><b>public</b> <b>macro</b> <b>fun</b> <a href="../std/macros.md#std_macros_num_min">num_min</a>($x: _, $y: _): _
+<pre><code><b>public</b> <b>macro</b> <b>fun</b> <a href="../std/macros.md#std_macros_num_min">num_min</a>&lt;$T&gt;($x: $T, $y: $T): $T
 </code></pre>
 
 
@@ -76,7 +76,7 @@ This module holds shared implementation of macros used in <code>std</code>
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>macro</b> <b>fun</b> <a href="../std/macros.md#std_macros_num_min">num_min</a>($x: _, $y: _): _ {
+<pre><code><b>public</b> <b>macro</b> <b>fun</b> <a href="../std/macros.md#std_macros_num_min">num_min</a>&lt;$T&gt;($x: $T, $y: $T): $T {
     <b>let</b> x = $x;
     <b>let</b> y = $y;
     <b>if</b> (x &lt; y) x
@@ -94,7 +94,7 @@ This module holds shared implementation of macros used in <code>std</code>
 
 
 
-<pre><code><b>public</b> <b>macro</b> <b>fun</b> <a href="../std/macros.md#std_macros_num_diff">num_diff</a>($x: _, $y: _): _
+<pre><code><b>public</b> <b>macro</b> <b>fun</b> <a href="../std/macros.md#std_macros_num_diff">num_diff</a>&lt;$T&gt;($x: $T, $y: $T): $T
 </code></pre>
 
 
@@ -103,7 +103,7 @@ This module holds shared implementation of macros used in <code>std</code>
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>macro</b> <b>fun</b> <a href="../std/macros.md#std_macros_num_diff">num_diff</a>($x: _, $y: _): _ {
+<pre><code><b>public</b> <b>macro</b> <b>fun</b> <a href="../std/macros.md#std_macros_num_diff">num_diff</a>&lt;$T&gt;($x: $T, $y: $T): $T {
     <b>let</b> x = $x;
     <b>let</b> y = $y;
     <b>if</b> (x &gt; y) x - y
@@ -121,7 +121,7 @@ This module holds shared implementation of macros used in <code>std</code>
 
 
 
-<pre><code><b>public</b> <b>macro</b> <b>fun</b> <a href="../std/macros.md#std_macros_num_divide_and_round_up">num_divide_and_round_up</a>($x: _, $y: _): _
+<pre><code><b>public</b> <b>macro</b> <b>fun</b> <a href="../std/macros.md#std_macros_num_divide_and_round_up">num_divide_and_round_up</a>&lt;$T&gt;($x: $T, $y: $T): $T
 </code></pre>
 
 
@@ -130,7 +130,7 @@ This module holds shared implementation of macros used in <code>std</code>
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>macro</b> <b>fun</b> <a href="../std/macros.md#std_macros_num_divide_and_round_up">num_divide_and_round_up</a>($x: _, $y: _): _ {
+<pre><code><b>public</b> <b>macro</b> <b>fun</b> <a href="../std/macros.md#std_macros_num_divide_and_round_up">num_divide_and_round_up</a>&lt;$T&gt;($x: $T, $y: $T): $T {
     <b>let</b> x = $x;
     <b>let</b> y = $y;
     <b>if</b> (x % y == 0) x / y
@@ -255,7 +255,7 @@ This module holds shared implementation of macros used in <code>std</code>
 
 
 
-<pre><code><b>public</b> <b>macro</b> <b>fun</b> <a href="../std/macros.md#std_macros_range_do">range_do</a>($start: _, $stop: _, $f: |_| -&gt; ())
+<pre><code><b>public</b> <b>macro</b> <b>fun</b> <a href="../std/macros.md#std_macros_range_do">range_do</a>&lt;$T, $R: drop&gt;($start: $T, $stop: $T, $f: |$T| -&gt; $R)
 </code></pre>
 
 
@@ -264,7 +264,7 @@ This module holds shared implementation of macros used in <code>std</code>
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>macro</b> <b>fun</b> <a href="../std/macros.md#std_macros_range_do">range_do</a>($start: _, $stop: _, $f: |_|) {
+<pre><code><b>public</b> <b>macro</b> <b>fun</b> <a href="../std/macros.md#std_macros_range_do">range_do</a>&lt;$T, $R: drop&gt;($start: $T, $stop: $T, $f: |$T| -&gt; $R) {
     <b>let</b> <b>mut</b> i = $start;
     <b>let</b> stop = $stop;
     <b>while</b> (i &lt; stop) {
@@ -284,7 +284,7 @@ This module holds shared implementation of macros used in <code>std</code>
 
 
 
-<pre><code><b>public</b> <b>macro</b> <b>fun</b> <a href="../std/macros.md#std_macros_range_do_eq">range_do_eq</a>($start: _, $stop: _, $f: |_| -&gt; ())
+<pre><code><b>public</b> <b>macro</b> <b>fun</b> <a href="../std/macros.md#std_macros_range_do_eq">range_do_eq</a>&lt;$T, $R: drop&gt;($start: $T, $stop: $T, $f: |$T| -&gt; $R)
 </code></pre>
 
 
@@ -293,7 +293,7 @@ This module holds shared implementation of macros used in <code>std</code>
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>macro</b> <b>fun</b> <a href="../std/macros.md#std_macros_range_do_eq">range_do_eq</a>($start: _, $stop: _, $f: |_|) {
+<pre><code><b>public</b> <b>macro</b> <b>fun</b> <a href="../std/macros.md#std_macros_range_do_eq">range_do_eq</a>&lt;$T, $R: drop&gt;($start: $T, $stop: $T, $f: |$T| -&gt; $R) {
     <b>let</b> <b>mut</b> i = $start;
     <b>let</b> stop = $stop;
     // we check `i &gt;= stop` inside the <b>loop</b> instead of `i &lt;= stop` <b>as</b> `<b>while</b>` condition to avoid
@@ -319,7 +319,7 @@ This module holds shared implementation of macros used in <code>std</code>
 
 
 
-<pre><code><b>public</b> <b>macro</b> <b>fun</b> <a href="../std/macros.md#std_macros_do">do</a>($stop: _, $f: |_| -&gt; ())
+<pre><code><b>public</b> <b>macro</b> <b>fun</b> <a href="../std/macros.md#std_macros_do">do</a>&lt;$T, $R: drop&gt;($stop: $T, $f: |$T| -&gt; $R)
 </code></pre>
 
 
@@ -328,7 +328,7 @@ This module holds shared implementation of macros used in <code>std</code>
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>macro</b> <b>fun</b> <a href="../std/macros.md#std_macros_do">do</a>($stop: _, $f: |_|) {
+<pre><code><b>public</b> <b>macro</b> <b>fun</b> <a href="../std/macros.md#std_macros_do">do</a>&lt;$T, $R: drop&gt;($stop: $T, $f: |$T| -&gt; $R) {
     <a href="../std/macros.md#std_macros_range_do">range_do</a>!(0, $stop, $f)
 }
 </code></pre>
@@ -343,7 +343,7 @@ This module holds shared implementation of macros used in <code>std</code>
 
 
 
-<pre><code><b>public</b> <b>macro</b> <b>fun</b> <a href="../std/macros.md#std_macros_do_eq">do_eq</a>($stop: _, $f: |_| -&gt; ())
+<pre><code><b>public</b> <b>macro</b> <b>fun</b> <a href="../std/macros.md#std_macros_do_eq">do_eq</a>&lt;$T, $R: drop&gt;($stop: $T, $f: |$T| -&gt; $R)
 </code></pre>
 
 
@@ -352,7 +352,7 @@ This module holds shared implementation of macros used in <code>std</code>
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>macro</b> <b>fun</b> <a href="../std/macros.md#std_macros_do_eq">do_eq</a>($stop: _, $f: |_|) {
+<pre><code><b>public</b> <b>macro</b> <b>fun</b> <a href="../std/macros.md#std_macros_do_eq">do_eq</a>&lt;$T, $R: drop&gt;($stop: $T, $f: |$T| -&gt; $R) {
     <a href="../std/macros.md#std_macros_range_do_eq">range_do_eq</a>!(0, $stop, $f)
 }
 </code></pre>

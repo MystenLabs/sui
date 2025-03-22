@@ -1,0 +1,56 @@
+---
+source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
+---
+processed 7 tasks
+
+init:
+A: object(0,0), B: object(0,1)
+
+task 1, lines 8-35:
+//# publish
+created: object(1,0)
+mutated: object(0,2)
+gas summary: computation_cost: 1000000, storage_cost: 6148400,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 2, lines 36-39:
+//# programmable --sender A --inputs @A
+//> TransferObjects([], Input(0));
+// not an object
+Error: Error checking transaction input objects: EmptyCommandInput
+
+task 3, lines 40-44:
+//# programmable --sender A --inputs @A
+//> 0: test::m1::cap();
+//> TransferObjects([Result(0)], Input(0));
+// not an object (but sneaky)
+Error: Transaction Effects Status: Invalid command argument at 0. The type of the value does not match the expected type
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: CommandArgumentError { arg_idx: 0, kind: TypeMismatch }, source: None, command: Some(1) } }
+
+task 4, lines 45-51:
+//# programmable --sender A --inputs @A
+//> 0: test::m1::cap();
+// Cup<Cap> is not an object since Cap does not have store
+//> 1: test::m1::cup<test::m1::Cap>(Result(0));
+//> TransferObjects([Result(1)], Input(0));
+// one object, one not
+Error: Transaction Effects Status: Invalid command argument at 0. The type of the value does not match the expected type
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: CommandArgumentError { arg_idx: 0, kind: TypeMismatch }, source: None, command: Some(2) } }
+
+task 5, lines 52-57:
+//# programmable --sender A --inputs @A
+//> 0: test::m1::new();
+//> 1: test::m1::cap();
+//> TransferObjects([Result(0), Result(1)], Input(0));
+// one object, one not (but sneaky)
+Error: Transaction Effects Status: Invalid command argument at 1. The type of the value does not match the expected type
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: CommandArgumentError { arg_idx: 1, kind: TypeMismatch }, source: None, command: Some(2) } }
+
+task 6, lines 58-63:
+//# programmable --sender A --inputs @A
+//> 0: test::m1::new();
+//> 1: test::m1::cap();
+// Cup<Cap> is not an object since Cap does not have store
+//> 2: test::m1::cup<test::m1::Cap>(Result(0));
+//> TransferObjects([Result(0), Result(2)], Input(0));
+Error: Transaction Effects Status: Invalid command argument at 0. The type of the value does not match the expected type
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: CommandArgumentError { arg_idx: 0, kind: TypeMismatch }, source: None, command: Some(2) } }

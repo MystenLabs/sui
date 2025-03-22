@@ -1,0 +1,24 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: 2024.alpha
+  lint: false
+---
+error[E04023]: invalid method call
+   ┌─ tests/move_2024/typing/dot_call_fails_to_resolve_help_under_alias.move:34:9
+   │
+34 │         p.z();
+   │         ^^^^^
+   │         │ │
+   │         │ No local 'use fun' alias was found for 'a::space::Point.z', and no function 'z' was found in the defining module 'a::space'
+   │         Invalid method call. No known method 'z' on type 'a::space::Point'
+
+error[E04023]: invalid method call
+   ┌─ tests/move_2024/typing/dot_call_fails_to_resolve_help_under_alias.move:35:9
+   │
+35 │         p.l();
+   │         ^^^^^
+   │         │ │
+   │         │ No local 'use fun' alias was found for 'a::space::Point.l', and no function 'l' was found in the defining module 'a::space'
+   │         Invalid method call. No known method 'l' on type 'a::space::Point'

@@ -25,7 +25,7 @@ Key differences with Move on Sui include:
 - Addresses represent [Object IDs](#object-ids)
 - Sui objects have [globally unique IDs](#global-unique)
 - Sui has [module initializers](#module-initializers) (init)
-- Sui [entry points](#entry-points) take object references as input
+- Sui has unique use cases for the [`entry` keyword](#entry-functions)
 
 ### Object-centric global storage {#global-storage}
 
@@ -53,11 +53,15 @@ On Sui, the `key` ability indicates that a struct is an object type and comes wi
 
 As described in [Object-centric global storage](#global-storage), you publish Move modules into Sui storage. The Sui runtime executes a special initializer function you optionally define in a module only once at the time of module publication to pre-initialize module-specific data (for example, creating singleton objects). See [Module Initializer](https://move-book.com/programmability/module-initializer.html) in The Move Book for more information.
 
-### Entry points take object references as input {#entry-points}
+### Entry functions {#entry-functions}
 
-You can call public functions from Sui transactions (called programmable transaction blocks). These functions can take objects by value, by immutable reference, or by mutable reference. If taken by value, you can destroy the object, wrap it (in another object), or transfer it (to a Sui ID specified by an address). If taken by mutable reference, the modified version of the object saves to storage without any change in ownership. In any case, the Sui network authenticates the object and declares it's usage as a part of the transaction.
+The `entry` keyword has a specific use case in Move on Sui. Use `entry` when you want some functionality to be usable by anyone on chain, but not be wrapped around other Move logic. In other words, a function can be called in [PTBs](/concepts/transactions/prog-txn-blocks) but not in other Sui packages. For example, this is utilized when using Sui's on-chain randomness standard to prevent other smart contract engineers from creating logic to essentially front- or back-run the randomness generation. Find more information about this in the [on-chain randomness page](/guides/developer/advanced/randomness-onchain.mdx#use-non-public-entry-functions). 
 
-In addition to calling public functions, you can call a function that is marked `entry`, even if it is private, as long as other non-`entry` functions have not used its inputs. See [entry modifier](https://move-book.com/reference/functions.html#entry-modifier) in The Move Reference for more information.
+Make your function private (don't add the `public` visibility keyword) and mark it with the `entry` keyword, as in `entry fun example_function`.
+
+In addition to this Sui-specific use case, there are other rules and restrictions for `entry` functions. 
+- `entry` functions can only return types with the `drop` ability. 
+- `entry` functions can only take objects as inputs if they weren't used as inputs in any non-`entry` functions in the same PTB. 
 
 ## Related links
 

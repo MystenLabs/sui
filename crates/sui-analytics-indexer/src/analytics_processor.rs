@@ -17,8 +17,8 @@ use tracing::{error, info};
 
 use sui_config::object_storage_config::{ObjectStoreConfig, ObjectStoreType};
 use sui_data_ingestion_core::Worker;
-use sui_rpc_api::CheckpointData;
 use sui_storage::object_store::util::{copy_file, path_to_filesystem};
+use sui_types::full_checkpoint_content::CheckpointData;
 use sui_types::messages_checkpoint::CheckpointSequenceNumber;
 
 use crate::analytics_metrics::AnalyticsMetrics;

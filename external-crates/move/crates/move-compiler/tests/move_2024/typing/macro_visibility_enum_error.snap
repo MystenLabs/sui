@@ -1,0 +1,36 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: 2024.alpha
+  lint: false
+---
+error[E04001]: restricted visibility
+   ┌─ tests/move_2024/typing/macro_visibility_enum_error.move:8:17
+   │
+ 3 │     public enum E {
+   │                 - Enum defined in module 'a::m'
+   ·
+ 8 │         let e = E::V();
+   │                 ^^^^^^ Enum variant 'a::m::E::V' can only be instantiated within its defining module 'a::m'
+   ·
+19 │         test!();
+   │         ------- While expanding this macro
+   │
+   = This visibility error occurs in a macro body while expanding the macro 'a::m::test'
+   = Visibility inside of expanded macros is resolved in the scope of the caller.
+
+error[E04001]: restricted visibility
+   ┌─ tests/move_2024/typing/macro_visibility_enum_error.move:10:13
+   │
+ 3 │     public enum E {
+   │                 - Enum defined in module 'a::m'
+   ·
+10 │             E::V() => (),
+   │             ^^^^^^ Enum variant 'a::m::E::V' can only be matched within its defining module 'a::m'
+   ·
+19 │         test!();
+   │         ------- While expanding this macro
+   │
+   = This visibility error occurs in a macro body while expanding the macro 'a::m::test'
+   = Visibility inside of expanded macros is resolved in the scope of the caller.

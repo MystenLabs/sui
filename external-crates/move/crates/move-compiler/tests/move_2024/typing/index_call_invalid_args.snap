@@ -1,0 +1,17 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: 2024.alpha
+  lint: false
+---
+error[E04007]: incompatible types
+   ┌─ tests/move_2024/typing/index_call_invalid_args.move:13:5
+   │
+10 │ public fun f(_self: &X, z: &Z): &Z { z }
+   │                             - Expected: '0x42::t::Z'
+11 │ 
+12 │ public fun foo (y: Y, i: &u64) {
+   │                           --- Given: 'u64'
+13 │     y.x[i].i;
+   │     ^^^^^^ Invalid call of '0x42::t::f'. Invalid argument for parameter 'z'

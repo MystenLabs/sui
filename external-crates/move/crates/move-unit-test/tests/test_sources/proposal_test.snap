@@ -1,0 +1,8 @@
+---
+source: crates/move-unit-test/tests/move_unit_test_testsuite.rs
+---
+Running Move unit tests
+[ PASS    ] 0x7::Module::other_module_aborts
+[ PASS    ] 0x7::Module::tests_a
+[ PASS    ] 0x7::Module::tests_aborts
+Test result: OK. Total tests: 3; passed: 3; failed: 0

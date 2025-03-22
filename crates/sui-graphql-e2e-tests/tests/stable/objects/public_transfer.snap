@@ -1,0 +1,81 @@
+---
+source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
+---
+processed 5 tasks
+
+init:
+A: object(0,0)
+
+task 1, lines 6-26:
+//# publish
+created: object(1,0)
+mutated: object(0,1)
+gas summary: computation_cost: 1000000, storage_cost: 5570800,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 2, lines 28-31:
+//# programmable --inputs @A
+//> 0: P0::m::foo();
+//> 1: P0::m::bar();
+//> TransferObjects([Result(0)], Input(0))
+created: object(2,0), object(2,1)
+mutated: object(0,1)
+gas summary: computation_cost: 1000000, storage_cost: 3435200,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 3, line 33:
+//# create-checkpoint
+Checkpoint created: 1
+
+task 4, lines 35-53:
+//# run-graphql
+Response: {
+  "data": {
+    "transactionBlocks": {
+      "nodes": [
+        {
+          "effects": {
+            "objectChanges": {
+              "nodes": [
+                {
+                  "outputState": {
+                    "asMoveObject": {
+                      "contents": {
+                        "type": {
+                          "repr": "0xc896d0db7835d08180ada6f21f1a74d90c4bf4722a6915fa3f03675e255fdf92::m::Bar"
+                        }
+                      },
+                      "hasPublicTransfer": false
+                    }
+                  }
+                },
+                {
+                  "outputState": {
+                    "asMoveObject": {
+                      "contents": {
+                        "type": {
+                          "repr": "0x0000000000000000000000000000000000000000000000000000000000000002::coin::Coin<0x0000000000000000000000000000000000000000000000000000000000000002::sui::SUI>"
+                        }
+                      },
+                      "hasPublicTransfer": true
+                    }
+                  }
+                },
+                {
+                  "outputState": {
+                    "asMoveObject": {
+                      "contents": {
+                        "type": {
+                          "repr": "0xc896d0db7835d08180ada6f21f1a74d90c4bf4722a6915fa3f03675e255fdf92::m::Foo"
+                        }
+                      },
+                      "hasPublicTransfer": true
+                    }
+                  }
+                }
+              ]
+            }
+          }
+        }
+      ]
+    }
+  }
+}

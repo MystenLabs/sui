@@ -5,10 +5,11 @@ pub use checked::*;
 
 #[sui_macros::with_checked_arithmetic]
 mod checked {
-    use std::collections::BTreeSet;
     use std::{
         borrow::Borrow,
-        collections::{BTreeMap, HashMap},
+        cell::RefCell,
+        collections::{BTreeMap, BTreeSet, HashMap},
+        rc::Rc,
         sync::Arc,
     };
 
@@ -21,6 +22,7 @@ mod checked {
         UsageKind,
     };
     use crate::gas_charger::GasCharger;
+    use crate::gas_meter::SuiGasMeter;
     use crate::programmable_transactions::linkage_view::LinkageView;
     use crate::type_resolver::TypeTagResolver;
     use move_binary_format::{
@@ -35,6 +37,7 @@ mod checked {
         identifier::IdentStr,
         language_storage::{ModuleId, StructTag, TypeTag},
     };
+    use move_trace_format::format::MoveTraceBuilder;
     use move_vm_runtime::native_extensions::NativeContextExtensions;
     use move_vm_runtime::{
         move_vm::MoveVM,
@@ -79,7 +82,7 @@ mod checked {
         pub state_view: &'state dyn ExecutionState,
         /// A shared transaction context, contains transaction digest information and manages the
         /// creation of new object IDs
-        pub tx_context: &'a mut TxContext,
+        pub tx_context: Rc<RefCell<TxContext>>,
         /// The gas charger used for metering
         pub gas_charger: &'a mut GasCharger,
         /// Additional transfers not from the Move runtime
@@ -121,7 +124,7 @@ mod checked {
             metrics: Arc<LimitsMetrics>,
             vm: &'vm MoveVM,
             state_view: &'state dyn ExecutionState,
-            tx_context: &'a mut TxContext,
+            tx_context: Rc<RefCell<TxContext>>,
             gas_charger: &'a mut GasCharger,
             inputs: Vec<CallArg>,
         ) -> Result<Self, ExecutionError>
@@ -189,7 +192,7 @@ mod checked {
                 !gas_charger.is_unmetered(),
                 protocol_config,
                 metrics.clone(),
-                tx_context.epoch(),
+                tx_context.clone(),
             );
 
             // Set the profiler if in CLI
@@ -197,14 +200,15 @@ mod checked {
             move_vm_profiler::tracing_feature_enabled! {
                 use move_vm_profiler::GasProfiler;
                 use move_vm_types::gas::GasMeter;
+                use crate::gas_meter::SuiGasMeter;
 
-                let tx_digest = tx_context.digest();
-                let remaining_gas: u64 =
-                    move_vm_types::gas::GasMeter::remaining_gas(gas_charger.move_gas_status())
+                let ref_context: &RefCell<TxContext> = tx_context.borrow();
+                let tx_digest = ref_context.borrow().digest();
+                let remaining_gas: u64 = move_vm_types::gas::GasMeter::remaining_gas(&SuiGasMeter(
+                    gas_charger.move_gas_status_mut(),
+                ))
                         .into();
-                gas_charger
-                    .move_gas_status_mut()
-                    .set_profiler(GasProfiler::init(
+                SuiGasMeter(gas_charger.move_gas_status_mut()).set_profiler(GasProfiler::init(
                         &vm.config().profiler_config,
                         format!("{}", tx_digest),
                         remaining_gas,
@@ -230,25 +234,27 @@ mod checked {
             })
         }
 
-        pub fn object_runtime(&mut self) -> &ObjectRuntime {
-            self.native_extensions.get()
+        pub fn object_runtime(&self) -> Result<&ObjectRuntime, ExecutionError> {
+            self.native_extensions
+                .get::<ObjectRuntime>()
+                .map_err(|e| self.convert_vm_error(e.finish(Location::Undefined)))
         }
 
         /// Create a new ID and update the state
         pub fn fresh_id(&mut self) -> Result<ObjectID, ExecutionError> {
-            let object_id = self.tx_context.fresh_id();
-            let object_runtime: &mut ObjectRuntime = self.native_extensions.get_mut();
-            object_runtime
-                .new_id(object_id)
+            let object_id = self.tx_context.borrow_mut().fresh_id();
+            self.native_extensions
+                .get_mut()
+                .and_then(|object_runtime: &mut ObjectRuntime| object_runtime.new_id(object_id))
                 .map_err(|e| self.convert_vm_error(e.finish(Location::Undefined)))?;
             Ok(object_id)
         }
 
         /// Delete an ID and update the state
         pub fn delete_id(&mut self, object_id: ObjectID) -> Result<(), ExecutionError> {
-            let object_runtime: &mut ObjectRuntime = self.native_extensions.get_mut();
-            object_runtime
-                .delete_id(object_id)
+            self.native_extensions
+                .get_mut()
+                .and_then(|object_runtime: &mut ObjectRuntime| object_runtime.delete_id(object_id))
                 .map_err(|e| self.convert_vm_error(e.finish(Location::Undefined)))
         }
 
@@ -300,8 +306,11 @@ mod checked {
             function: FunctionDefinitionIndex,
             last_offset: CodeOffset,
         ) -> Result<(), ExecutionError> {
-            let object_runtime: &mut ObjectRuntime = self.native_extensions.get_mut();
-            let events = object_runtime.take_user_events();
+            let events = self
+                .native_extensions
+                .get_mut()
+                .map(|object_runtime: &mut ObjectRuntime| object_runtime.take_user_events())
+                .map_err(|e| self.convert_vm_error(e.finish(Location::Undefined)))?;
             let num_events = self.user_events.len() + events.len();
             let max_events = self.protocol_config.max_num_event_emit();
             if num_events as u64 > max_events {
@@ -609,7 +618,8 @@ mod checked {
                 state_view,
                 ..
             } = self;
-            let tx_digest = tx_context.digest();
+            let ref_context: &RefCell<TxContext> = tx_context.borrow();
+            let tx_digest = ref_context.borrow().digest();
             let gas_id_opt = gas.object_metadata.as_ref().map(|info| info.id());
             let mut loaded_runtime_objects = BTreeMap::new();
             let mut additional_writes = BTreeMap::new();
@@ -703,7 +713,14 @@ mod checked {
                 refund_max_gas_budget(&mut additional_writes, gas_charger, gas_id)?;
             }
 
-            let object_runtime: ObjectRuntime = native_extensions.remove();
+            let object_runtime: ObjectRuntime = native_extensions.remove().map_err(|e| {
+                convert_vm_error(
+                    e.finish(Location::Undefined),
+                    vm,
+                    &linkage_view,
+                    protocol_config.resolve_abort_locations_to_package_id(),
+                )
+            })?;
 
             let RuntimeResults {
                 writes,
@@ -842,7 +859,7 @@ mod checked {
                     Event::new(
                         module_id.address(),
                         module_id.name(),
-                        tx_context.sender(),
+                        ref_context.borrow().sender(),
                         tag,
                         contents,
                     )
@@ -963,6 +980,7 @@ mod checked {
             function_name: &IdentStr,
             ty_args: Vec<Type>,
             args: Vec<impl Borrow<[u8]>>,
+            tracer: &mut Option<MoveTraceBuilder>,
         ) -> VMResult<SerializedReturnValues> {
             let gas_status = self.gas_charger.move_gas_status_mut();
             let mut data_store = SuiDataStore::new(&self.linkage_view, &self.new_packages);
@@ -972,8 +990,9 @@ mod checked {
                 ty_args,
                 args,
                 &mut data_store,
-                gas_status,
+                &mut SuiGasMeter(gas_status),
                 &mut self.native_extensions,
+                tracer.as_mut(),
             )
         }
 
@@ -1023,12 +1042,12 @@ mod checked {
                 modules,
                 sender,
                 &mut data_store,
-                self.gas_charger.move_gas_status_mut(),
+                &mut SuiGasMeter(self.gas_charger.move_gas_status_mut()),
             )
         }
     }
 
-    impl<'vm, 'state, 'a> TypeTagResolver for ExecutionContext<'vm, 'state, 'a> {
+    impl TypeTagResolver for ExecutionContext<'_, '_, '_> {
         fn get_type_tag(&self, type_: &Type) -> Result<TypeTag, ExecutionError> {
             self.vm
                 .get_runtime()
@@ -1495,7 +1514,7 @@ mod checked {
 
     // TODO: `DataStore` will be reworked and this is likely to disappear.
     //       Leaving this comment around until then as testament to better days to come...
-    impl<'state, 'a> DataStore for SuiDataStore<'state, 'a> {
+    impl DataStore for SuiDataStore<'_, '_> {
         fn link_context(&self) -> AccountAddress {
             self.linkage_view.link_context()
         }

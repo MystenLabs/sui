@@ -3,12 +3,13 @@
 
 use std::{collections::BTreeSet, sync::Arc};
 
-use anyhow::{ensure, Context, Result};
+use anyhow::{ensure, Context};
 use diesel::{
     migration::{self, Migration, MigrationSource},
     pg::Pg,
 };
 use diesel_migrations::{embed_migrations, EmbeddedMigrations};
+use futures::future;
 use ingestion::{client::IngestionClient, ClientArgs, IngestionConfig, IngestionService};
 use metrics::IndexerMetrics;
 use models::watermarks::{CommitterWatermark, PrunerWatermark};
@@ -20,12 +21,20 @@ use pipeline::{
 use prometheus::Registry;
 use sui_indexer_alt_metrics::db::DbConnectionStatsCollector;
 use sui_pg_db::{temp::TempDb, Db, DbArgs};
-use task::graceful_shutdown;
 use tempfile::tempdir;
 use tokio::task::JoinHandle;
 use tokio_util::sync::CancellationToken;
 use tracing::{info, warn};
+use url::Url;
 
+pub use anyhow::Result;
+pub use sui_field_count::FieldCount;
+pub use sui_pg_db as db;
+pub use sui_sql_macro::sql;
+pub use sui_types as types;
+
+#[cfg(feature = "cluster")]
+pub mod cluster;
 pub mod handlers;
 pub mod ingestion;
 pub(crate) mod metrics;
@@ -101,8 +110,9 @@ pub struct Indexer {
 }
 
 impl Indexer {
-    /// Create a new instance of the indexer framework. `db_args`, `indexer_args,`, `client_args`,
-    /// and `ingestion_config` contain configurations for the following, respectively:
+    /// Create a new instance of the indexer framework. `database_url`, `db_args`, `indexer_args,`,
+    /// `client_args`, and `ingestion_config` contain configurations for the following,
+    /// respectively:
     ///
     /// - Connecting to the database,
     /// - What is indexed (which checkpoints, which pipelines, whether to update the watermarks
@@ -110,18 +120,19 @@ impl Indexer {
     /// - Where to download checkpoints from,
     /// - Concurrency and buffering parameters for downloading checkpoints.
     ///
-    /// `migrations` contains the SQL to run in order to bring the database schema up-to-date for
+    /// Optional `migrations` contains the SQL to run in order to bring the database schema up-to-date for
     /// the specific instance of the indexer, generated using diesel's `embed_migrations!` macro.
-    /// These migrations will be run as part of initializing the indexer.
+    /// These migrations will be run as part of initializing the indexer if provided.
     ///
     /// After initialization, at least one pipeline must be added using [Self::concurrent_pipeline]
     /// or [Self::sequential_pipeline], before the indexer is started using [Self::run].
     pub async fn new(
+        database_url: Url,
         db_args: DbArgs,
         indexer_args: IndexerArgs,
         client_args: ClientArgs,
         ingestion_config: IngestionConfig,
-        migrations: &'static EmbeddedMigrations,
+        migrations: Option<&'static EmbeddedMigrations>,
         registry: &Registry,
         cancel: CancellationToken,
     ) -> Result<Self> {
@@ -132,7 +143,7 @@ impl Indexer {
             skip_watermark,
         } = indexer_args;
 
-        let db = Db::for_write(db_args)
+        let db = Db::for_write(database_url, db_args)
             .await
             .context("Failed to connect to database")?;
 
@@ -175,16 +186,19 @@ impl Indexer {
 
     pub async fn new_for_testing(migrations: &'static EmbeddedMigrations) -> (Self, TempDb) {
         let temp_db = TempDb::new().unwrap();
-        let db_args = DbArgs::new_for_testing(temp_db.database().url().clone());
         let indexer = Indexer::new(
-            db_args,
+            temp_db.database().url().clone(),
+            DbArgs::default(),
             IndexerArgs::default(),
             ClientArgs {
                 remote_store_url: None,
                 local_ingestion_path: Some(tempdir().unwrap().into_path()),
+                rpc_api_url: None,
+                rpc_username: None,
+                rpc_password: None,
             },
             IngestionConfig::default(),
-            migrations,
+            Some(migrations),
             &Registry::new(),
             CancellationToken::new(),
         )
@@ -201,6 +215,20 @@ impl Indexer {
     /// The ingestion client used by the indexer to fetch checkpoints.
     pub fn ingestion_client(&self) -> &IngestionClient {
         self.ingestion_service.client()
+    }
+
+    /// The indexer's metrics.
+    pub fn metrics(&self) -> &Arc<IndexerMetrics> {
+        &self.metrics
+    }
+
+    /// The pipelines that this indexer will run.
+    pub fn pipelines(&self) -> impl Iterator<Item = &'static str> + '_ {
+        self.added_pipelines.iter().copied().filter(|p| {
+            self.enabled_pipelines
+                .as_ref()
+                .is_none_or(|e| e.contains(*p))
+        })
     }
 
     /// Adds a new pipeline to this indexer and starts it up. Although their tasks have started,
@@ -345,7 +373,7 @@ impl Indexer {
             // If ingestion has been configured to only handle a specific range of checkpoints, we
             // want to make sure that tasks are allowed to run to completion before shutting them
             // down.
-            graceful_shutdown(self.handles, self.cancel).await;
+            future::join_all(self.handles).await;
             info!("Indexing pipeline gracefully shut down");
         }))
     }
@@ -355,13 +383,15 @@ impl Indexer {
     /// the database's schema is up-to-date for both the indexer framework and the specific
     /// indexer.
     pub fn migrations(
-        migrations: &'static EmbeddedMigrations,
+        migrations: Option<&'static EmbeddedMigrations>,
     ) -> impl MigrationSource<Pg> + Send + Sync + 'static {
-        struct Migrations(&'static EmbeddedMigrations);
+        struct Migrations(Option<&'static EmbeddedMigrations>);
         impl MigrationSource<Pg> for Migrations {
             fn migrations(&self) -> migration::Result<Vec<Box<dyn Migration<Pg>>>> {
                 let mut migrations = MIGRATIONS.migrations()?;
-                migrations.extend(self.0.migrations()?);
+                if let Some(more_migrations) = self.0 {
+                    migrations.extend(more_migrations.migrations()?);
+                }
                 Ok(migrations)
             }
         }
@@ -426,9 +456,8 @@ impl Indexer {
 #[cfg(test)]
 mod tests {
     use async_trait::async_trait;
-    use sui_field_count::FieldCount;
-    use sui_pg_db as db;
-    use sui_types::full_checkpoint_content::CheckpointData;
+
+    use crate::types::full_checkpoint_content::CheckpointData;
 
     use super::*;
 

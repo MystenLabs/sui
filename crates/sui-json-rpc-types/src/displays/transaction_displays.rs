@@ -14,7 +14,7 @@ use tabled::{
     settings::{style::HorizontalLine, Panel as TablePanel, Style as TableStyle},
 };
 
-impl<'a> Display for Pretty<'a, SuiProgrammableTransactionBlock> {
+impl Display for Pretty<'_, SuiProgrammableTransactionBlock> {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         let Pretty(ptb) = self;
         let SuiProgrammableTransactionBlock { inputs, commands } = ptb;
@@ -88,7 +88,7 @@ impl<'a> Display for Pretty<'a, SuiProgrammableTransactionBlock> {
     }
 }
 
-impl<'a> Display for Pretty<'a, SuiCommand> {
+impl Display for Pretty<'_, SuiCommand> {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         let Pretty(command) = self;
         match command {
@@ -147,7 +147,7 @@ impl<'a> Display for Pretty<'a, SuiCommand> {
     }
 }
 
-impl<'a> Display for Pretty<'a, SuiProgrammableMoveCall> {
+impl Display for Pretty<'_, SuiProgrammableMoveCall> {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         let Pretty(move_call) = self;
         let SuiProgrammableMoveCall {
@@ -177,7 +177,7 @@ impl<'a> Display for Pretty<'a, SuiProgrammableMoveCall> {
     }
 }
 
-impl<'a> Display for Pretty<'a, SuiArgument> {
+impl Display for Pretty<'_, SuiArgument> {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         let Pretty(argument) = self;
 

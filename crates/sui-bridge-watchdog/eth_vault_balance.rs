@@ -16,6 +16,8 @@ use tracing::{error, info};
 pub enum VaultAsset {
     WETH,
     USDT,
+    WBTC,
+    LBTC,
 }
 
 pub struct EthereumVaultBalance {

@@ -1,0 +1,78 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: sui
+  edition: legacy
+  lint: true
+---
+warning[Lint W99005]: possibly useless collections compare
+   ┌─ tests/sui_mode/linter/collection_equality.move:17:14
+   │
+17 │         bag1 == bag2
+   │              ^^ Comparing collections of type 'sui::bag::Bag' may yield unexpected result.
+   │
+   = Equality for collections of type 'sui::bag::Bag' IS NOT a structural check based on content
+   = This warning can be suppressed with '#[allow(lint(collection_equality))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[Lint W99005]: possibly useless collections compare
+   ┌─ tests/sui_mode/linter/collection_equality.move:21:14
+   │
+21 │         bag1 != bag2
+   │              ^^ Comparing collections of type 'sui::object_bag::ObjectBag' may yield unexpected result.
+   │
+   = Equality for collections of type 'sui::object_bag::ObjectBag' IS NOT a structural check based on content
+   = This warning can be suppressed with '#[allow(lint(collection_equality))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[Lint W99005]: possibly useless collections compare
+   ┌─ tests/sui_mode/linter/collection_equality.move:25:16
+   │
+25 │         table1 == table2
+   │                ^^ Comparing collections of type 'sui::table::Table' may yield unexpected result.
+   │
+   = Equality for collections of type 'sui::table::Table' IS NOT a structural check based on content
+   = This warning can be suppressed with '#[allow(lint(collection_equality))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[Lint W99005]: possibly useless collections compare
+   ┌─ tests/sui_mode/linter/collection_equality.move:32:20
+   │
+32 │             table1 == table2
+   │                    ^^ Comparing collections of type 'sui::object_table::ObjectTable' may yield unexpected result.
+   │
+   = Equality for collections of type 'sui::object_table::ObjectTable' IS NOT a structural check based on content
+   = This warning can be suppressed with '#[allow(lint(collection_equality))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[Lint W99005]: possibly useless collections compare
+   ┌─ tests/sui_mode/linter/collection_equality.move:36:16
+   │
+36 │         table1 == table2
+   │                ^^ Comparing collections of type 'sui::linked_table::LinkedTable' may yield unexpected result.
+   │
+   = Equality for collections of type 'sui::linked_table::LinkedTable' IS NOT a structural check based on content
+   = This warning can be suppressed with '#[allow(lint(collection_equality))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[Lint W99005]: possibly useless collections compare
+   ┌─ tests/sui_mode/linter/collection_equality.move:40:16
+   │
+40 │         table1 == table2
+   │                ^^ Comparing collections of type 'sui::table_vec::TableVec' may yield unexpected result.
+   │
+   = Equality for collections of type 'sui::table_vec::TableVec' IS NOT a structural check based on content
+   = This warning can be suppressed with '#[allow(lint(collection_equality))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[Lint W99005]: possibly useless collections compare
+   ┌─ tests/sui_mode/linter/collection_equality.move:44:14
+   │
+44 │         vec1 == vec2
+   │              ^^ Comparing collections of type 'sui::vec_map::VecMap' may yield unexpected result.
+   │
+   = Equality for collections of type 'sui::vec_map::VecMap' IS NOT a structural check based on content
+   = This warning can be suppressed with '#[allow(lint(collection_equality))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[Lint W99005]: possibly useless collections compare
+   ┌─ tests/sui_mode/linter/collection_equality.move:48:14
+   │
+48 │         vec1 == vec2
+   │              ^^ Comparing collections of type 'sui::vec_set::VecSet' may yield unexpected result.
+   │
+   = Equality for collections of type 'sui::vec_set::VecSet' IS NOT a structural check based on content
+   = This warning can be suppressed with '#[allow(lint(collection_equality))]' applied to the 'module' or module member ('const', 'fun', or 'struct')

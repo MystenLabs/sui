@@ -124,12 +124,12 @@ pub fn verify_proof_of_possession(
     )
 }
 ///////////////////////////////////////////////
-/// Account Keys
-///
-/// * The following section defines the keypairs that are used by
-/// * accounts to interact with Sui.
-/// * Currently we support eddsa and ecdsa on Sui.
-///
+// Account Keys
+//
+// * The following section defines the keypairs that are used by
+// * accounts to interact with Sui.
+// * Currently we support eddsa and ecdsa on Sui.
+//
 
 #[allow(clippy::large_enum_variant)]
 #[derive(Debug, From, PartialEq, Eq)]
@@ -1376,7 +1376,7 @@ impl<const STRONG_THRESHOLD: bool> AuthorityQuorumSignInfo<STRONG_THRESHOLD> {
     pub fn authorities<'a>(
         &'a self,
         committee: &'a Committee,
-    ) -> impl Iterator<Item = SuiResult<&AuthorityName>> {
+    ) -> impl Iterator<Item = SuiResult<&'a AuthorityName>> {
         self.signers_map.iter().map(|i| {
             committee
                 .authority_by_index(i)
@@ -1708,9 +1708,14 @@ pub enum CompressedSignature {
     Secp256k1(Secp256k1SignatureAsBytes),
     Secp256r1(Secp256r1SignatureAsBytes),
     ZkLogin(ZkLoginAuthenticatorAsBytes),
+    Passkey(PasskeyAuthenticatorAsBytes),
 }
+
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, JsonSchema)]
 pub struct ZkLoginAuthenticatorAsBytes(#[schemars(with = "Base64")] pub Vec<u8>);
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, JsonSchema)]
+pub struct PasskeyAuthenticatorAsBytes(#[schemars(with = "Base64")] pub Vec<u8>);
 
 impl AsRef<[u8]> for CompressedSignature {
     fn as_ref(&self) -> &[u8] {
@@ -1719,6 +1724,7 @@ impl AsRef<[u8]> for CompressedSignature {
             CompressedSignature::Secp256k1(sig) => &sig.0,
             CompressedSignature::Secp256r1(sig) => &sig.0,
             CompressedSignature::ZkLogin(sig) => &sig.0,
+            CompressedSignature::Passkey(sig) => &sig.0,
         }
     }
 }

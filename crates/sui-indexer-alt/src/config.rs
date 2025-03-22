@@ -68,8 +68,8 @@ pub struct IngestionLayer {
 #[DefaultConfig]
 #[derive(Clone, Default, Debug)]
 pub struct SequentialLayer {
-    committer: Option<CommitterLayer>,
-    checkpoint_lag: Option<u64>,
+    pub committer: Option<CommitterLayer>,
+    pub checkpoint_lag: Option<u64>,
 
     #[serde(flatten)]
     pub extra: toml::Table,
@@ -78,8 +78,8 @@ pub struct SequentialLayer {
 #[DefaultConfig]
 #[derive(Clone, Default, Debug)]
 pub struct ConcurrentLayer {
-    committer: Option<CommitterLayer>,
-    pruner: Option<PrunerLayer>,
+    pub committer: Option<CommitterLayer>,
+    pub pruner: Option<PrunerLayer>,
 
     #[serde(flatten)]
     pub extra: toml::Table,
@@ -88,9 +88,9 @@ pub struct ConcurrentLayer {
 #[DefaultConfig]
 #[derive(Clone, Default, Debug)]
 pub struct CommitterLayer {
-    write_concurrency: Option<usize>,
-    collect_interval_ms: Option<u64>,
-    watermark_interval_ms: Option<u64>,
+    pub write_concurrency: Option<usize>,
+    pub collect_interval_ms: Option<u64>,
+    pub watermark_interval_ms: Option<u64>,
 
     #[serde(flatten)]
     pub extra: toml::Table,
@@ -133,6 +133,7 @@ pub struct PipelineLayer {
     pub kv_protocol_configs: Option<ConcurrentLayer>,
     pub kv_transactions: Option<ConcurrentLayer>,
     pub obj_versions: Option<ConcurrentLayer>,
+    pub obj_versions_sentinel_backfill: Option<ConcurrentLayer>,
     pub tx_affected_addresses: Option<ConcurrentLayer>,
     pub tx_affected_objects: Option<ConcurrentLayer>,
     pub tx_balance_changes: Option<ConcurrentLayer>,
@@ -161,6 +162,36 @@ impl IndexerConfig {
         example.pipeline = PipelineLayer::example();
 
         example
+    }
+
+    /// Generate a configuration suitable for testing. This is the same as the example
+    /// configuration, but with reduced concurrency and faster polling intervals so tests spend
+    /// less time waiting.
+    pub fn for_test() -> Self {
+        Self::example().merge(IndexerConfig {
+            ingestion: IngestionLayer {
+                retry_interval_ms: Some(10),
+                ingest_concurrency: Some(1),
+                ..Default::default()
+            },
+            committer: CommitterLayer {
+                collect_interval_ms: Some(50),
+                watermark_interval_ms: Some(50),
+                write_concurrency: Some(1),
+                ..Default::default()
+            },
+            consistency: PrunerLayer {
+                interval_ms: Some(50),
+                delay_ms: Some(0),
+                ..Default::default()
+            },
+            pruner: PrunerLayer {
+                interval_ms: Some(50),
+                delay_ms: Some(0),
+                ..Default::default()
+            },
+            ..Default::default()
+        })
     }
 
     pub fn finish(mut self) -> IndexerConfig {
@@ -230,6 +261,7 @@ impl CommitterLayer {
 
 impl PrunerLayer {
     pub fn finish(self, base: PrunerConfig) -> PrunerConfig {
+        check_extra("pruner", self.extra);
         PrunerConfig {
             interval_ms: self.interval_ms.unwrap_or(base.interval_ms),
             delay_ms: self.delay_ms.unwrap_or(base.delay_ms),
@@ -260,6 +292,7 @@ impl PipelineLayer {
             kv_protocol_configs: Some(Default::default()),
             kv_transactions: Some(Default::default()),
             obj_versions: Some(Default::default()),
+            obj_versions_sentinel_backfill: None,
             tx_affected_addresses: Some(Default::default()),
             tx_affected_objects: Some(Default::default()),
             tx_balance_changes: Some(Default::default()),
@@ -382,6 +415,9 @@ impl Merge for PipelineLayer {
             kv_protocol_configs: self.kv_protocol_configs.merge(other.kv_protocol_configs),
             kv_transactions: self.kv_transactions.merge(other.kv_transactions),
             obj_versions: self.obj_versions.merge(other.obj_versions),
+            obj_versions_sentinel_backfill: self
+                .obj_versions_sentinel_backfill
+                .merge(other.obj_versions_sentinel_backfill),
             tx_affected_addresses: self
                 .tx_affected_addresses
                 .merge(other.tx_affected_addresses),

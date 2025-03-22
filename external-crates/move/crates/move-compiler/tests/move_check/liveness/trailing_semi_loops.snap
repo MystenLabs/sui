@@ -1,0 +1,171 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: legacy
+  lint: false
+---
+warning[W09004]: unnecessary trailing semicolon
+  ┌─ tests/move_check/liveness/trailing_semi_loops.move:3:16
+  │
+3 │         loop ();
+  │         -------^
+  │         │      │
+  │         │      Invalid trailing ';'
+  │         │      A trailing ';' in an expression block implicitly adds a '()' value after the semicolon. That '()' value will not be reachable
+  │         Any code after this expression will not be reached
+  │
+  = This warning can be suppressed with '#[allow(unused_trailing_semi)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[W09005]: dead or unreachable code
+  ┌─ tests/move_check/liveness/trailing_semi_loops.move:7:12
+  │
+7 │         { (loop (): ()) };
+  │            ^^^^^^^ Expected a value. Any code surrounding or after this expression will not be reached
+  │
+  = This warning can be suppressed with '#[allow(dead_code)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[W09004]: unnecessary trailing semicolon
+   ┌─ tests/move_check/liveness/trailing_semi_loops.move:14:10
+   │  
+11 │ ╭         loop {
+12 │ │             let x = 0;
+13 │ │             0 + x + 0;
+14 │ │         };
+   │ │          ^
+   │ │          │
+   │ │          Invalid trailing ';'
+   │ │          A trailing ';' in an expression block implicitly adds a '()' value after the semicolon. That '()' value will not be reachable
+   │ ╰─────────' Any code after this expression will not be reached
+   │  
+   = This warning can be suppressed with '#[allow(unused_trailing_semi)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[W09005]: dead or unreachable code
+   ┌─ tests/move_check/liveness/trailing_semi_loops.move:21:26
+   │
+21 │             let _: u64 = if (true) break else break;
+   │                          ^^^^^^^^^^^^^^^^^^^^^^^^^^ Expected a value. Any code surrounding or after this expression will not be reached
+   │
+   = This warning can be suppressed with '#[allow(dead_code)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[W09004]: unnecessary trailing semicolon
+   ┌─ tests/move_check/liveness/trailing_semi_loops.move:27:18
+   │
+27 │             break;
+   │             -----^
+   │             │    │
+   │             │    Invalid trailing ';'
+   │             │    A trailing ';' in an expression block implicitly adds a '()' value after the semicolon. That '()' value will not be reachable
+   │             Any code after this expression will not be reached
+   │
+   = This warning can be suppressed with '#[allow(unused_trailing_semi)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[W09004]: unnecessary trailing semicolon
+   ┌─ tests/move_check/liveness/trailing_semi_loops.move:34:22
+   │
+34 │                 break;
+   │                 -----^
+   │                 │    │
+   │                 │    Invalid trailing ';'
+   │                 │    A trailing ';' in an expression block implicitly adds a '()' value after the semicolon. That '()' value will not be reachable
+   │                 Any code after this expression will not be reached
+   │
+   = This warning can be suppressed with '#[allow(unused_trailing_semi)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[W09004]: unnecessary trailing semicolon
+   ┌─ tests/move_check/liveness/trailing_semi_loops.move:43:42
+   │
+43 │             if (cond) continue else break;
+   │             -----------------------------^
+   │             │                            │
+   │             │                            Invalid trailing ';'
+   │             │                            A trailing ';' in an expression block implicitly adds a '()' value after the semicolon. That '()' value will not be reachable
+   │             Any code after this expression will not be reached
+   │
+   = This warning can be suppressed with '#[allow(unused_trailing_semi)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[W09004]: unnecessary trailing semicolon
+   ┌─ tests/move_check/liveness/trailing_semi_loops.move:49:42
+   │
+49 │             if (cond) abort 0 else return;
+   │             -----------------------------^
+   │             │                            │
+   │             │                            Invalid trailing ';'
+   │             │                            A trailing ';' in an expression block implicitly adds a '()' value after the semicolon. That '()' value will not be reachable
+   │             Any code after this expression will not be reached
+   │
+   = This warning can be suppressed with '#[allow(unused_trailing_semi)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[W09003]: unused assignment
+   ┌─ tests/move_check/liveness/trailing_semi_loops.move:60:17
+   │
+60 │                 x = 2;
+   │                 ^ Unused assignment for variable 'x'. Consider removing, replacing with '_', or prefixing with '_' (e.g., '_x')
+   │
+   = This warning can be suppressed with '#[allow(unused_assignment)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[W09004]: unnecessary trailing semicolon
+   ┌─ tests/move_check/liveness/trailing_semi_loops.move:62:14
+   │  
+56 │ ╭             if (cond) {
+57 │ │                 x = 1;
+58 │ │                 break
+59 │ │             } else {
+60 │ │                 x = 2;
+61 │ │                 continue
+62 │ │             };
+   │ │              ^
+   │ │              │
+   │ │              Invalid trailing ';'
+   │ │              A trailing ';' in an expression block implicitly adds a '()' value after the semicolon. That '()' value will not be reachable
+   │ ╰─────────────' Any code after this expression will not be reached
+   │  
+   = This warning can be suppressed with '#[allow(unused_trailing_semi)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[W09004]: unnecessary trailing semicolon
+   ┌─ tests/move_check/liveness/trailing_semi_loops.move:70:22
+   │
+70 │                 break;
+   │                 -----^
+   │                 │    │
+   │                 │    Invalid trailing ';'
+   │                 │    A trailing ';' in an expression block implicitly adds a '()' value after the semicolon. That '()' value will not be reachable
+   │                 Any code after this expression will not be reached
+   │
+   = This warning can be suppressed with '#[allow(unused_trailing_semi)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[W09004]: unnecessary trailing semicolon
+   ┌─ tests/move_check/liveness/trailing_semi_loops.move:72:25
+   │
+72 │                 continue;
+   │                 --------^
+   │                 │       │
+   │                 │       Invalid trailing ';'
+   │                 │       A trailing ';' in an expression block implicitly adds a '()' value after the semicolon. That '()' value will not be reachable
+   │                 Any code after this expression will not be reached
+   │
+   = This warning can be suppressed with '#[allow(unused_trailing_semi)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[W09004]: unnecessary trailing semicolon
+   ┌─ tests/move_check/liveness/trailing_semi_loops.move:80:23
+   │
+80 │                 return;
+   │                 ------^
+   │                 │     │
+   │                 │     Invalid trailing ';'
+   │                 │     A trailing ';' in an expression block implicitly adds a '()' value after the semicolon. That '()' value will not be reachable
+   │                 Any code after this expression will not be reached
+   │
+   = This warning can be suppressed with '#[allow(unused_trailing_semi)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[W09004]: unnecessary trailing semicolon
+   ┌─ tests/move_check/liveness/trailing_semi_loops.move:82:24
+   │
+82 │                 abort 0;
+   │                 -------^
+   │                 │      │
+   │                 │      Invalid trailing ';'
+   │                 │      A trailing ';' in an expression block implicitly adds a '()' value after the semicolon. That '()' value will not be reachable
+   │                 Any code after this expression will not be reached
+   │
+   = This warning can be suppressed with '#[allow(unused_trailing_semi)]' applied to the 'module' or module member ('const', 'fun', or 'struct')

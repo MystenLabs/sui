@@ -1,0 +1,14 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: legacy
+  lint: false
+---
+warning[W09006]: unused struct type parameter
+  ┌─ tests/move_check/typing/unused_non_phantom_param.move:2:18
+  │
+2 │     struct S<T1, T2> {
+  │                  ^^ Unused type parameter 'T2'. Consider declaring it as phantom
+  │
+  = This warning can be suppressed with '#[allow(unused_type_parameter)]' applied to the 'module' or module member ('const', 'fun', or 'struct')

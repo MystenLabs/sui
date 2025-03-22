@@ -1,0 +1,38 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: sui
+  edition: legacy
+  lint: false
+---
+error[Sui E02008]: invalid event
+  ┌─ tests/sui_mode/private_generics/private_event_emit.move:8:9
+  │
+7 │     public fun t(s: a::other::Event) {
+  │                     --------------- The type 'a::other::Event' is not declared in the current module
+8 │         event::emit(s)
+  │         ^^^^^^^^^^^^^^ Invalid event. The function 'sui::event::emit' must be called with a type defined in the current module
+
+error[Sui E02008]: invalid event
+   ┌─ tests/sui_mode/private_generics/private_event_emit.move:12:9
+   │
+11 │     public fun gen<T: copy + drop>(x: T) {
+   │                                       - The type 'T' is not declared in the current module
+12 │         event::emit(move x)
+   │         ^^^^^^^^^^^^^^^^^^^ Invalid event. The function 'sui::event::emit' must be called with a type defined in the current module
+
+error[Sui E02008]: invalid event
+   ┌─ tests/sui_mode/private_generics/private_event_emit.move:16:9
+   │
+15 │     public fun prim(x: u64) {
+   │                        --- The type 'u64' is not declared in the current module
+16 │         event::emit(x)
+   │         ^^^^^^^^^^^^^^ Invalid event. The function 'sui::event::emit' must be called with a type defined in the current module
+
+error[Sui E02008]: invalid event
+   ┌─ tests/sui_mode/private_generics/private_event_emit.move:20:9
+   │
+19 │     public fun vec(x: vector<X>) {
+   │                       --------- The type 'vector<a::m::X>' is not declared in the current module
+20 │         event::emit(move x)
+   │         ^^^^^^^^^^^^^^^^^^^ Invalid event. The function 'sui::event::emit' must be called with a type defined in the current module

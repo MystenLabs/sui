@@ -1,0 +1,12 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: legacy
+  lint: false
+---
+warning[W01004]: invalid documentation comment
+  ┌─ tests/move_check/parser/doc_comments_annotations_invalid.move:2:5
+  │
+2 │     /// Can't have doc comments inside an attribute.
+  │     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ Documentation comment cannot be matched to a language item

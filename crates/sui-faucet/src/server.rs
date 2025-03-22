@@ -54,6 +54,9 @@ static CLOUDFLARE_TURNSTILE_URL: Lazy<Option<String>> =
 static TURNSTILE_SECRET_KEY: Lazy<Option<String>> =
     Lazy::new(|| std::env::var("TURNSTILE_SECRET_KEY").ok());
 
+static DISCORD_BOT_PWD: Lazy<String> =
+    Lazy::new(|| std::env::var("DISCORD_BOT_PWD").unwrap_or_else(|_| "".to_string()));
+
 /// Keep track of every IP address' requests.
 #[derive(Debug)]
 struct RequestsManager {
@@ -265,6 +268,7 @@ pub async fn start_faucet(
     let unrestricted_routes = Router::new()
         .route("/", get(redirect))
         .route("/health", get(health))
+        .route("/v1/faucet_discord", post(batch_faucet_discord))
         .route("/v1/status/:task_id", get(request_status));
 
     // Combine all routes
@@ -331,6 +335,47 @@ async fn redirect(Host(host): Host) -> Response {
     } else {
         health().await.into_response()
     }
+}
+
+/// A route for requests coming from the discord bot.
+async fn batch_faucet_discord(
+    headers: HeaderMap,
+    Extension(state): Extension<Arc<AppState>>,
+    Json(payload): Json<FaucetRequest>,
+) -> impl IntoResponse {
+    if state.config.authenticated {
+        let Some(agent_value) = headers
+            .get(reqwest::header::USER_AGENT)
+            .and_then(|v| v.to_str().ok())
+        else {
+            return (
+                StatusCode::BAD_REQUEST,
+                Json(BatchFaucetResponse::from(FaucetError::InvalidUserAgent(
+                    "Invalid user agent for this route".to_string(),
+                ))),
+            );
+        };
+
+        if agent_value != *DISCORD_BOT_PWD {
+            return (
+                StatusCode::BAD_REQUEST,
+                Json(BatchFaucetResponse::from(FaucetError::InvalidUserAgent(
+                    "Invalid user agent for this route".to_string(),
+                ))),
+            );
+        }
+    }
+
+    let FaucetRequest::FixedAmountRequest(request) = payload else {
+        return (
+            StatusCode::BAD_REQUEST,
+            Json(BatchFaucetResponse::from(FaucetError::Internal(
+                "Input Error.".to_string(),
+            ))),
+        );
+    };
+
+    batch_request_spawn_task(request, state).await
 }
 
 /// Handler for requests coming from the frontend faucet web app.

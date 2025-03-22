@@ -205,6 +205,7 @@ fn call_script_function_with_args_ty_args_signers(
         ty_args,
         combine_signers_and_args(signers, non_signer_args),
         &mut UnmeteredGasMeter,
+        None,
     )?;
     Ok(())
 }
@@ -626,7 +627,7 @@ fn call_missing_item() {
     let module = empty_module();
     let id = &module.self_id();
     let function_name = IdentStr::new("foo").unwrap();
-    // mising module
+    // missing module
     let move_vm = MoveVM::new(vec![]).unwrap();
     let mut remote_view = RemoteStore::new();
     let mut session = move_vm.new_session(&remote_view);
@@ -637,6 +638,7 @@ fn call_missing_item() {
             vec![],
             Vec::<Vec<u8>>::new(),
             &mut UnmeteredGasMeter,
+            None,
         )
         .err()
         .unwrap();
@@ -654,6 +656,7 @@ fn call_missing_item() {
             vec![],
             Vec::<Vec<u8>>::new(),
             &mut UnmeteredGasMeter,
+            None,
         )
         .err()
         .unwrap();

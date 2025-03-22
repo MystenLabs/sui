@@ -1,0 +1,344 @@
+---
+source: crates/move-stackless-bytecode/tests/testsuite.rs
+---
+============ initial translation from Move ================
+
+[variant baseline]
+public fun address::length(): u64 {
+     var $t0: u64
+  0: $t0 := 32
+  1: return $t0
+}
+
+
+[variant baseline]
+fun SmokeTest::arithmetic_ops($t0|a: u64): (u64, u64) {
+     var $t1|c#1#0: u64
+     var $t2: u64
+     var $t3: u64
+     var $t4: u64
+     var $t5: bool
+     var $t6: u64
+     var $t7: u64
+     var $t8: u64
+  0: $t2 := 2
+  1: $t1 := $t2
+  2: $t3 := copy($t1)
+  3: $t4 := 2
+  4: $t5 := !=($t3, $t4)
+  5: if ($t5) goto 6 else goto 9
+  6: label L1
+  7: $t6 := 42
+  8: abort($t6)
+  9: label L0
+ 10: $t7 := move($t1)
+ 11: $t8 := move($t0)
+ 12: return ($t7, $t8)
+}
+
+
+[variant baseline]
+fun SmokeTest::bool_ops($t0|a: u64, $t1|b: u64): (bool, bool) {
+     var $t2|tmp#$2: bool
+     var $t3|tmp#$3: bool
+     var $t4|c#1#0: bool
+     var $t5|d#1#0: bool
+     var $t6: u64
+     var $t7: u64
+     var $t8: bool
+     var $t9: u64
+     var $t10: u64
+     var $t11: bool
+     var $t12: bool
+     var $t13: bool
+     var $t14: u64
+     var $t15: u64
+     var $t16: bool
+     var $t17: bool
+     var $t18: u64
+     var $t19: u64
+     var $t20: bool
+     var $t21: bool
+     var $t22: bool
+     var $t23: bool
+     var $t24: bool
+     var $t25: bool
+     var $t26: u64
+     var $t27: bool
+     var $t28: bool
+  0: $t6 := copy($t0)
+  1: $t7 := copy($t1)
+  2: $t8 := >($t6, $t7)
+  3: if ($t8) goto 4 else goto 10
+  4: label L1
+  5: $t9 := copy($t0)
+  6: $t10 := copy($t1)
+  7: $t11 := >=($t9, $t10)
+  8: $t2 := $t11
+  9: goto 14
+ 10: label L0
+ 11: $t12 := false
+ 12: $t2 := $t12
+ 13: goto 14
+ 14: label L2
+ 15: $t13 := move($t2)
+ 16: $t4 := $t13
+ 17: $t14 := copy($t0)
+ 18: $t15 := copy($t1)
+ 19: $t16 := <($t14, $t15)
+ 20: if ($t16) goto 21 else goto 25
+ 21: label L4
+ 22: $t17 := true
+ 23: $t3 := $t17
+ 24: goto 31
+ 25: label L3
+ 26: $t18 := move($t0)
+ 27: $t19 := move($t1)
+ 28: $t20 := <=($t18, $t19)
+ 29: $t3 := $t20
+ 30: goto 31
+ 31: label L5
+ 32: $t21 := move($t3)
+ 33: $t5 := $t21
+ 34: $t22 := copy($t4)
+ 35: $t23 := copy($t5)
+ 36: $t24 := !=($t22, $t23)
+ 37: $t25 := !($t24)
+ 38: if ($t25) goto 39 else goto 42
+ 39: label L7
+ 40: $t26 := 42
+ 41: abort($t26)
+ 42: label L6
+ 43: $t27 := move($t4)
+ 44: $t28 := move($t5)
+ 45: return ($t27, $t28)
+}
+
+
+[variant baseline]
+fun SmokeTest::identity($t0|a: SmokeTest::A, $t1|b: SmokeTest::B, $t2|c: SmokeTest::C): (SmokeTest::A, SmokeTest::B, SmokeTest::C) {
+     var $t3: SmokeTest::A
+     var $t4: SmokeTest::B
+     var $t5: SmokeTest::C
+  0: $t3 := move($t0)
+  1: $t4 := move($t1)
+  2: $t5 := move($t2)
+  3: return ($t3, $t4, $t5)
+}
+
+
+[variant baseline]
+fun SmokeTest::pack_A($t0|a: address, $t1|va: u64): SmokeTest::A {
+     var $t2: address
+     var $t3: u64
+     var $t4: SmokeTest::A
+  0: $t2 := move($t0)
+  1: $t3 := move($t1)
+  2: $t4 := pack SmokeTest::A($t2, $t3)
+  3: return $t4
+}
+
+
+[variant baseline]
+fun SmokeTest::pack_B($t0|a: address, $t1|va: u64, $t2|vb: u64): SmokeTest::B {
+     var $t3|var_a#1#0: SmokeTest::A
+     var $t4: address
+     var $t5: u64
+     var $t6: SmokeTest::A
+     var $t7: u64
+     var $t8: SmokeTest::A
+     var $t9: SmokeTest::B
+  0: $t4 := move($t0)
+  1: $t5 := move($t1)
+  2: $t6 := pack SmokeTest::A($t4, $t5)
+  3: $t3 := $t6
+  4: $t7 := move($t2)
+  5: $t8 := move($t3)
+  6: $t9 := pack SmokeTest::B($t7, $t8)
+  7: return $t9
+}
+
+
+[variant baseline]
+fun SmokeTest::pack_C($t0|a: address, $t1|va: u64, $t2|vb: u64, $t3|vc: u64): SmokeTest::C {
+     var $t4|var_a#1#0: SmokeTest::A
+     var $t5|var_b#1#0: SmokeTest::B
+     var $t6: address
+     var $t7: u64
+     var $t8: SmokeTest::A
+     var $t9: u64
+     var $t10: SmokeTest::A
+     var $t11: SmokeTest::B
+     var $t12: u64
+     var $t13: SmokeTest::B
+     var $t14: SmokeTest::C
+  0: $t6 := move($t0)
+  1: $t7 := move($t1)
+  2: $t8 := pack SmokeTest::A($t6, $t7)
+  3: $t4 := $t8
+  4: $t9 := move($t2)
+  5: $t10 := move($t4)
+  6: $t11 := pack SmokeTest::B($t9, $t10)
+  7: $t5 := $t11
+  8: $t12 := move($t3)
+  9: $t13 := move($t5)
+ 10: $t14 := pack SmokeTest::C($t12, $t13)
+ 11: return $t14
+}
+
+
+[variant baseline]
+fun SmokeTest::ref_A($t0|a: address, $t1|b: bool): SmokeTest::A {
+     var $t2|tmp#$2: SmokeTest::A
+     var $t3|var_a#1#0: SmokeTest::A
+     var $t4: bool
+     var $t5: address
+     var $t6: u64
+     var $t7: SmokeTest::A
+     var $t8: address
+     var $t9: u64
+     var $t10: SmokeTest::A
+     var $t11: SmokeTest::A
+     var $t12: &SmokeTest::A
+     var $t13: &u64
+     var $t14: u64
+     var $t15: u64
+     var $t16: bool
+     var $t17: u64
+     var $t18: SmokeTest::A
+  0: $t4 := move($t1)
+  1: if ($t4) goto 2 else goto 8
+  2: label L1
+  3: $t5 := move($t0)
+  4: $t6 := 1
+  5: $t7 := pack SmokeTest::A($t5, $t6)
+  6: $t2 := $t7
+  7: goto 14
+  8: label L0
+  9: $t8 := move($t0)
+ 10: $t9 := 42
+ 11: $t10 := pack SmokeTest::A($t8, $t9)
+ 12: $t2 := $t10
+ 13: goto 14
+ 14: label L2
+ 15: $t11 := move($t2)
+ 16: $t3 := $t11
+ 17: $t12 := borrow_local($t3)
+ 18: $t13 := borrow_field<SmokeTest::A>.val($t12)
+ 19: $t14 := read_ref($t13)
+ 20: $t15 := 42
+ 21: $t16 := !=($t14, $t15)
+ 22: if ($t16) goto 23 else goto 26
+ 23: label L4
+ 24: $t17 := 42
+ 25: abort($t17)
+ 26: label L3
+ 27: $t18 := move($t3)
+ 28: return $t18
+}
+
+
+[variant baseline]
+fun SmokeTest::unpack_A($t0|a: address, $t1|va: u64): (address, u64) {
+     var $t2: address
+     var $t3: u64
+     var $t4: SmokeTest::A
+     var $t5: address
+     var $t6: u64
+  0: $t2 := move($t0)
+  1: $t3 := move($t1)
+  2: $t4 := pack SmokeTest::A($t2, $t3)
+  3: ($t5, $t6) := unpack SmokeTest::A($t4)
+  4: return ($t5, $t6)
+}
+
+
+[variant baseline]
+fun SmokeTest::unpack_B($t0|a: address, $t1|va: u64, $t2|vb: u64): (address, u64, u64) {
+     var $t3|aa#1#0: address
+     var $t4|v1#1#0: u64
+     var $t5|v2#1#0: u64
+     var $t6|var_a#1#0: SmokeTest::A
+     var $t7: address
+     var $t8: u64
+     var $t9: SmokeTest::A
+     var $t10: u64
+     var $t11: SmokeTest::A
+     var $t12: SmokeTest::B
+     var $t13: u64
+     var $t14: SmokeTest::A
+     var $t15: address
+     var $t16: u64
+     var $t17: address
+     var $t18: u64
+     var $t19: u64
+  0: $t7 := move($t0)
+  1: $t8 := move($t1)
+  2: $t9 := pack SmokeTest::A($t7, $t8)
+  3: $t6 := $t9
+  4: $t10 := move($t2)
+  5: $t11 := move($t6)
+  6: $t12 := pack SmokeTest::B($t10, $t11)
+  7: ($t13, $t14) := unpack SmokeTest::B($t12)
+  8: ($t15, $t16) := unpack SmokeTest::A($t14)
+  9: $t4 := $t16
+ 10: $t3 := $t15
+ 11: $t5 := $t13
+ 12: $t17 := move($t3)
+ 13: $t18 := move($t4)
+ 14: $t19 := move($t5)
+ 15: return ($t17, $t18, $t19)
+}
+
+
+[variant baseline]
+fun SmokeTest::unpack_C($t0|a: address, $t1|va: u64, $t2|vb: u64, $t3|vc: u64): (address, u64, u64, u64) {
+     var $t4|aa#1#0: address
+     var $t5|v1#1#0: u64
+     var $t6|v2#1#0: u64
+     var $t7|v3#1#0: u64
+     var $t8|var_a#1#0: SmokeTest::A
+     var $t9|var_b#1#0: SmokeTest::B
+     var $t10: address
+     var $t11: u64
+     var $t12: SmokeTest::A
+     var $t13: u64
+     var $t14: SmokeTest::A
+     var $t15: SmokeTest::B
+     var $t16: u64
+     var $t17: SmokeTest::B
+     var $t18: SmokeTest::C
+     var $t19: u64
+     var $t20: SmokeTest::B
+     var $t21: u64
+     var $t22: SmokeTest::A
+     var $t23: address
+     var $t24: u64
+     var $t25: address
+     var $t26: u64
+     var $t27: u64
+     var $t28: u64
+  0: $t10 := move($t0)
+  1: $t11 := move($t1)
+  2: $t12 := pack SmokeTest::A($t10, $t11)
+  3: $t8 := $t12
+  4: $t13 := move($t2)
+  5: $t14 := move($t8)
+  6: $t15 := pack SmokeTest::B($t13, $t14)
+  7: $t9 := $t15
+  8: $t16 := move($t3)
+  9: $t17 := move($t9)
+ 10: $t18 := pack SmokeTest::C($t16, $t17)
+ 11: ($t19, $t20) := unpack SmokeTest::C($t18)
+ 12: ($t21, $t22) := unpack SmokeTest::B($t20)
+ 13: ($t23, $t24) := unpack SmokeTest::A($t22)
+ 14: $t5 := $t24
+ 15: $t4 := $t23
+ 16: $t6 := $t21
+ 17: $t7 := $t19
+ 18: $t25 := move($t4)
+ 19: $t26 := move($t5)
+ 20: $t27 := move($t6)
+ 21: $t28 := move($t7)
+ 22: return ($t25, $t26, $t27, $t28)
+}

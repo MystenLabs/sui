@@ -8,6 +8,11 @@ metrics-address: "0.0.0.0:9184"
 json-rpc-address: "0.0.0.0:9000"
 enable-event-processing: true
 
+p2p-config:
+  listen-address: "0.0.0.0:8084"
+  # add state-sync seed peers below
+  # seed-peers:
+
 genesis:
   # Update this to the location of where the genesis file is stored
   genesis-file-location: "/opt/sui/config/genesis.blob"

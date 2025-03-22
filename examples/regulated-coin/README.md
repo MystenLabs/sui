@@ -1,0 +1,1 @@
+This example is based on the code in the following repo: https://github.com/MystenLabs/regulated-coin-sample

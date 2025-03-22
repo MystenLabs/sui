@@ -39,14 +39,14 @@ impl TriggerExchangeRatesTask {
 
                 _ = self.epoch_rx.changed() => {
                     info!("Detected epoch boundary, triggering call to exchange rates");
-                    let latest_sui_sytem_state = self.db.inner
+                    let latest_sui_system_state = self.db.inner
                         .get_latest_sui_system_state()
                         .await.map_err(|_| error!("Failed to fetch latest Sui system state"));
 
-                    if let Ok(latest_sui_sytem_state) = latest_sui_sytem_state {
+                    if let Ok(latest_sui_system_state) = latest_sui_system_state {
                         let db = self.db.clone();
                         let governance_api = GovernanceReadApi::new(db.inner) ;
-                        exchange_rates(&governance_api, &latest_sui_sytem_state)
+                        exchange_rates(&governance_api, &latest_sui_system_state)
                             .await
                             .map_err(|e| error!("Failed to fetch exchange rates: {:?}", e))
                             .ok();

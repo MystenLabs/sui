@@ -1,0 +1,142 @@
+---
+source: crates/move-transactional-test-runner/src/framework.rs
+---
+processed 9 tasks
+
+task 0, lines 1-13:
+//# print-bytecode
+// Move bytecode v6
+module 6.m {
+
+entry foo() {
+L0:	loc0: u64
+L1:	loc1: &u64
+B0:
+	0: LdU64(3)
+	1: StLoc[0](loc0: u64)
+	2: ImmBorrowLoc[0](loc0: u64)
+	3: StLoc[1](loc1: &u64)
+	4: MoveLoc[1](loc1: &u64)
+	5: Pop
+	6: Ret
+}
+
+}
+
+
+task 1, lines 15-28:
+//# print-bytecode
+// Move bytecode v6
+module 7.m {
+
+entry foo() {
+L0:	loc0: u64
+L1:	loc1: &u64
+L2:	loc2: &u64
+B0:
+	0: LdU64(3)
+	1: StLoc[0](loc0: u64)
+	2: ImmBorrowLoc[0](loc0: u64)
+	3: StLoc[1](loc1: &u64)
+	4: ImmBorrowLoc[1](loc1: &u64)
+	5: StLoc[2](loc2: &u64)
+	6: Ret
+}
+
+}
+
+
+task 2, lines 30-63:
+//# print-bytecode
+// Move bytecode v6
+module 1d4.M {
+
+struct T {
+	u: u64
+}
+
+f(Arg0: &T) {
+L1:	loc0: &u64
+B0:
+	0: MoveLoc[0](Arg0: &T)
+	1: ImmBorrowField[0](T.u: u64)
+	2: StLoc[1](loc0: &u64)
+	3: MoveLoc[1](loc0: &u64)
+	4: Pop
+	5: Ret
+}
+
+g(Arg0: &mut T) {
+L1:	loc0: &u64
+B0:
+	0: MoveLoc[0](Arg0: &mut T)
+	1: ImmBorrowField[0](T.u: u64)
+	2: StLoc[1](loc0: &u64)
+	3: MoveLoc[1](loc0: &u64)
+	4: Pop
+	5: Ret
+}
+
+public h(Arg0: &mut T) {
+L1:	loc0: &mut u64
+B0:
+	0: MoveLoc[0](Arg0: &mut T)
+	1: MutBorrowField[0](T.u: u64)
+	2: StLoc[1](loc0: &mut u64)
+	3: MoveLoc[1](loc0: &mut u64)
+	4: Pop
+	5: Ret
+}
+
+}
+
+
+task 3, lines 65-84:
+//# print-bytecode
+// Move bytecode v6
+module 2d4.M {
+
+struct T<Ty0> {
+	u: Ty0
+}
+
+f(Arg0: &T<u64>) {
+L1:	loc0: &u64
+B0:
+	0: MoveLoc[0](Arg0: &T<u64>)
+	1: ImmBorrowFieldGeneric[0](T.u: u64)
+	2: StLoc[1](loc0: &u64)
+	3: MoveLoc[1](loc0: &u64)
+	4: Pop
+	5: Ret
+}
+
+g(Arg0: &mut T<u128>) {
+L1:	loc0: &u128
+B0:
+	0: MoveLoc[0](Arg0: &mut T<u128>)
+	1: ImmBorrowFieldGeneric[1](T.u: u128)
+	2: StLoc[1](loc0: &u128)
+	3: MoveLoc[1](loc0: &u128)
+	4: Pop
+	5: Ret
+}
+
+}
+
+
+task 5, lines 97-112:
+//# print-bytecode
+Error: Unbound struct Self.T
+
+task 6, lines 114-125:
+//# print-bytecode
+Error: Unbound struct Self.T
+
+task 7, lines 127-142:
+//# print-bytecode
+Error: Unbound struct Self.T
+
+task 8, lines 144-154:
+//# print-bytecode
+Error: Unbound module alias M

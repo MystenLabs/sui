@@ -6,6 +6,8 @@ use std::str::FromStr;
 
 use move_core_types::identifier::Identifier;
 use sui_json::{call_args, type_args};
+use sui_json_rpc_api::ReadApiClient;
+use sui_json_rpc_types::SuiTransactionBlockDataAPI;
 use sui_json_rpc_types::SuiTransactionBlockResponseQuery;
 use sui_json_rpc_types::TransactionFilter;
 use sui_json_rpc_types::{
@@ -14,6 +16,7 @@ use sui_json_rpc_types::{
 };
 use sui_macros::sim_test;
 use sui_types::base_types::ObjectID;
+use sui_types::base_types::SuiAddress;
 use sui_types::gas_coin::GAS;
 use sui_types::programmable_transaction_builder::ProgrammableTransactionBuilder;
 use sui_types::quorum_driver_types::ExecuteTransactionRequestType;
@@ -442,4 +445,38 @@ async fn test_query_transaction_blocks() -> Result<(), anyhow::Error> {
     // verify that only 1 tx is returned and no SuiRpcInputError::ContainsDuplicates error
     assert_eq!(1, tx.data.len());
     Ok(())
+}
+
+#[sim_test]
+async fn test_display_transaction_block_with_empty_balance_changes() {
+    let cluster = TestClusterBuilder::new()
+        .with_epoch_duration_ms(5_000)
+        .build()
+        .await;
+    cluster.wait_for_epoch(Some(1)).await;
+
+    let client = cluster.rpc_client();
+
+    let checkpoint = client.get_checkpoint(1.into()).await.unwrap();
+
+    // Empty balance changes occur for system transactions like ConsensusCommitPrologueV3.
+    // The first transaction in checkpoint 1 should be such transaction.
+    let digest = checkpoint.transactions.first().unwrap();
+    let tx_block = client
+        .get_transaction_block(
+            *digest,
+            Some(SuiTransactionBlockResponseOptions::full_content()),
+        )
+        .await
+        .unwrap();
+
+    // Ensure that it is indeed a system tx with empty balance changes
+    assert_eq!(
+        *tx_block.transaction.as_ref().unwrap().data.sender(),
+        SuiAddress::ZERO
+    );
+    assert!(tx_block.balance_changes.is_some());
+    assert!(tx_block.balance_changes.as_ref().unwrap().is_empty());
+
+    let _ = tx_block.to_string();
 }

@@ -1,0 +1,324 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: legacy
+  lint: true
+---
+warning[Lint W02008]: assignment preserves the same value
+  ┌─ tests/linter/true_positive_self_assignment.move:5:9
+  │
+5 │         p = p; // warn
+  │         ^   - Is the same as this location
+  │         │    
+  │         Unnecessary self-assignment. The assignment is redundant and will not change the value
+  │         This location
+  │
+  = This warning can be suppressed with '#[allow(lint(self_assignment))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[Lint W02008]: assignment preserves the same value
+   ┌─ tests/linter/true_positive_self_assignment.move:10:9
+   │
+10 │         x = x; // warn
+   │         ^   - Is the same as this location
+   │         │    
+   │         Unnecessary self-assignment. The assignment is redundant and will not change the value
+   │         This location
+   │
+   = This warning can be suppressed with '#[allow(lint(self_assignment))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[Lint W02008]: assignment preserves the same value
+   ┌─ tests/linter/true_positive_self_assignment.move:13:9
+   │
+13 │         x = move x; // warn
+   │         ^   ------ Is the same as this location
+   │         │    
+   │         Unnecessary self-assignment. The assignment is redundant and will not change the value
+   │         This location
+   │
+   = This warning can be suppressed with '#[allow(lint(self_assignment))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[Lint W02008]: assignment preserves the same value
+   ┌─ tests/linter/true_positive_self_assignment.move:15:9
+   │
+15 │         x = copy x; // warn
+   │         ^   ------ Is the same as this location
+   │         │    
+   │         Unnecessary self-assignment. The assignment is redundant and will not change the value
+   │         This location
+   │
+   = This warning can be suppressed with '#[allow(lint(self_assignment))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[Lint W02008]: assignment preserves the same value
+   ┌─ tests/linter/true_positive_self_assignment.move:18:10
+   │
+18 │         (p, other, x) = (p, 0, x); // warn x2
+   │          ^               - Is the same as this location
+   │          │                
+   │          Unnecessary self-assignment. The assignment is redundant and will not change the value
+   │          This location
+   │
+   = This warning can be suppressed with '#[allow(lint(self_assignment))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[Lint W02008]: assignment preserves the same value
+   ┌─ tests/linter/true_positive_self_assignment.move:18:20
+   │
+18 │         (p, other, x) = (p, 0, x); // warn x2
+   │                    ^           - Is the same as this location
+   │                    │            
+   │                    Unnecessary self-assignment. The assignment is redundant and will not change the value
+   │                    This location
+   │
+   = This warning can be suppressed with '#[allow(lint(self_assignment))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[Lint W02008]: assignment preserves the same value
+   ┌─ tests/linter/true_positive_self_assignment.move:27:9
+   │
+27 │         *&mut m.f1 = m.f1;
+   │         ^^^^^^^^^^^^^^^^^
+   │         ││           │
+   │         ││           Is the same as this location
+   │         │This location
+   │         Unnecessary self-mutation. The mutation is redundant and will not change the value
+   │
+   = This warning can be suppressed with '#[allow(lint(self_assignment))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[Lint W02008]: assignment preserves the same value
+   ┌─ tests/linter/true_positive_self_assignment.move:28:9
+   │
+28 │         m.f1 =  *&mut m.f1;
+   │         ^^^^^^^^^^^^^^^^^^
+   │         │        │
+   │         │        Is the same as this location
+   │         Unnecessary self-mutation. The mutation is redundant and will not change the value
+   │         This location
+   │
+   = This warning can be suppressed with '#[allow(lint(self_assignment))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[Lint W01009]: redundant reference/dereference
+   ┌─ tests/linter/true_positive_self_assignment.move:28:17
+   │
+28 │         m.f1 =  *&mut m.f1;
+   │                 ^^^^^^^^^^ Redundant borrow-dereference detected. Replace this borrow-deref with 'copy'.
+   │
+   = This warning can be suppressed with '#[allow(lint(redundant_ref_deref))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[Lint W02008]: assignment preserves the same value
+   ┌─ tests/linter/true_positive_self_assignment.move:29:9
+   │
+29 │         m.f1 =  *&m.f1;
+   │         ^^^^^^^^^^^^^^
+   │         │        │
+   │         │        Is the same as this location
+   │         Unnecessary self-mutation. The mutation is redundant and will not change the value
+   │         This location
+   │
+   = This warning can be suppressed with '#[allow(lint(self_assignment))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[Lint W01009]: redundant reference/dereference
+   ┌─ tests/linter/true_positive_self_assignment.move:29:17
+   │
+29 │         m.f1 =  *&m.f1;
+   │                 ^^^^^^ Redundant borrow-dereference detected. Use the field access directly.
+   │
+   = This warning can be suppressed with '#[allow(lint(redundant_ref_deref))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[Lint W02008]: assignment preserves the same value
+   ┌─ tests/linter/true_positive_self_assignment.move:30:9
+   │
+30 │         *&mut m.f1 =  *&m.f1;
+   │         ^^^^^^^^^^^^^^^^^^^^
+   │         ││             │
+   │         ││             Is the same as this location
+   │         │This location
+   │         Unnecessary self-mutation. The mutation is redundant and will not change the value
+   │
+   = This warning can be suppressed with '#[allow(lint(self_assignment))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[Lint W01009]: redundant reference/dereference
+   ┌─ tests/linter/true_positive_self_assignment.move:30:23
+   │
+30 │         *&mut m.f1 =  *&m.f1;
+   │                       ^^^^^^ Redundant borrow-dereference detected. Use the field access directly.
+   │
+   = This warning can be suppressed with '#[allow(lint(redundant_ref_deref))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[Lint W02008]: assignment preserves the same value
+   ┌─ tests/linter/true_positive_self_assignment.move:31:9
+   │
+31 │         *&mut m.f1 =  *&mut m.f1;
+   │         ^^^^^^^^^^^^^^^^^^^^^^^^
+   │         ││             │
+   │         ││             Is the same as this location
+   │         │This location
+   │         Unnecessary self-mutation. The mutation is redundant and will not change the value
+   │
+   = This warning can be suppressed with '#[allow(lint(self_assignment))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[Lint W01009]: redundant reference/dereference
+   ┌─ tests/linter/true_positive_self_assignment.move:31:23
+   │
+31 │         *&mut m.f1 =  *&mut m.f1;
+   │                       ^^^^^^^^^^ Redundant borrow-dereference detected. Replace this borrow-deref with 'copy'.
+   │
+   = This warning can be suppressed with '#[allow(lint(redundant_ref_deref))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[Lint W02008]: assignment preserves the same value
+   ┌─ tests/linter/true_positive_self_assignment.move:33:9
+   │
+33 │         *&mut s.f1 = s.f1;
+   │         ^^^^^^^^^^^^^^^^^
+   │         ││           │
+   │         ││           Is the same as this location
+   │         │This location
+   │         Unnecessary self-mutation. The mutation is redundant and will not change the value
+   │
+   = This warning can be suppressed with '#[allow(lint(self_assignment))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[Lint W02008]: assignment preserves the same value
+   ┌─ tests/linter/true_positive_self_assignment.move:34:9
+   │
+34 │         s.f1 =  *&mut s.f1;
+   │         ^^^^^^^^^^^^^^^^^^
+   │         │        │
+   │         │        Is the same as this location
+   │         Unnecessary self-mutation. The mutation is redundant and will not change the value
+   │         This location
+   │
+   = This warning can be suppressed with '#[allow(lint(self_assignment))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[Lint W01009]: redundant reference/dereference
+   ┌─ tests/linter/true_positive_self_assignment.move:34:17
+   │
+34 │         s.f1 =  *&mut s.f1;
+   │                 ^^^^^^^^^^ Redundant borrow-dereference detected. Replace this borrow-deref with 'copy'.
+   │
+   = This warning can be suppressed with '#[allow(lint(redundant_ref_deref))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[Lint W02008]: assignment preserves the same value
+   ┌─ tests/linter/true_positive_self_assignment.move:35:9
+   │
+35 │         s.f1 =  *&s.f1;
+   │         ^^^^^^^^^^^^^^
+   │         │        │
+   │         │        Is the same as this location
+   │         Unnecessary self-mutation. The mutation is redundant and will not change the value
+   │         This location
+   │
+   = This warning can be suppressed with '#[allow(lint(self_assignment))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[Lint W01009]: redundant reference/dereference
+   ┌─ tests/linter/true_positive_self_assignment.move:35:17
+   │
+35 │         s.f1 =  *&s.f1;
+   │                 ^^^^^^ Redundant borrow-dereference detected. Use the field access directly.
+   │
+   = This warning can be suppressed with '#[allow(lint(redundant_ref_deref))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[Lint W02008]: assignment preserves the same value
+   ┌─ tests/linter/true_positive_self_assignment.move:36:9
+   │
+36 │         *&mut s.f1 =  *&s.f1;
+   │         ^^^^^^^^^^^^^^^^^^^^
+   │         ││             │
+   │         ││             Is the same as this location
+   │         │This location
+   │         Unnecessary self-mutation. The mutation is redundant and will not change the value
+   │
+   = This warning can be suppressed with '#[allow(lint(self_assignment))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[Lint W01009]: redundant reference/dereference
+   ┌─ tests/linter/true_positive_self_assignment.move:36:23
+   │
+36 │         *&mut s.f1 =  *&s.f1;
+   │                       ^^^^^^ Redundant borrow-dereference detected. Use the field access directly.
+   │
+   = This warning can be suppressed with '#[allow(lint(redundant_ref_deref))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[Lint W02008]: assignment preserves the same value
+   ┌─ tests/linter/true_positive_self_assignment.move:37:9
+   │
+37 │         *&mut s.f1 =  *&mut s.f1;
+   │         ^^^^^^^^^^^^^^^^^^^^^^^^
+   │         ││             │
+   │         ││             Is the same as this location
+   │         │This location
+   │         Unnecessary self-mutation. The mutation is redundant and will not change the value
+   │
+   = This warning can be suppressed with '#[allow(lint(self_assignment))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[Lint W01009]: redundant reference/dereference
+   ┌─ tests/linter/true_positive_self_assignment.move:37:23
+   │
+37 │         *&mut s.f1 =  *&mut s.f1;
+   │                       ^^^^^^^^^^ Redundant borrow-dereference detected. Replace this borrow-deref with 'copy'.
+   │
+   = This warning can be suppressed with '#[allow(lint(redundant_ref_deref))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[Lint W02008]: assignment preserves the same value
+   ┌─ tests/linter/true_positive_self_assignment.move:43:9
+   │
+43 │         p.s1.f1 = p.s1.f1;
+   │         ^^^^^^^^^^^^^^^^^
+   │         │         │
+   │         │         Is the same as this location
+   │         Unnecessary self-mutation. The mutation is redundant and will not change the value
+   │         This location
+   │
+   = This warning can be suppressed with '#[allow(lint(self_assignment))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[Lint W02008]: assignment preserves the same value
+   ┌─ tests/linter/true_positive_self_assignment.move:47:9
+   │
+47 │         *r = *r;
+   │         ^^^^^^^
+   │         ││    │
+   │         ││    Is the same as this location
+   │         │This location
+   │         Unnecessary self-mutation. The mutation is redundant and will not change the value
+   │
+   = This warning can be suppressed with '#[allow(lint(self_assignment))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[Lint W02008]: assignment preserves the same value
+   ┌─ tests/linter/true_positive_self_assignment.move:49:9
+   │
+49 │         *copy r = *r;
+   │         ^^^^^^^^^^^^
+   │         │     │    │
+   │         │     │    Is the same as this location
+   │         │     This location
+   │         Unnecessary self-mutation. The mutation is redundant and will not change the value
+   │
+   = This warning can be suppressed with '#[allow(lint(self_assignment))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[Lint W02008]: assignment preserves the same value
+   ┌─ tests/linter/true_positive_self_assignment.move:50:9
+   │
+50 │         *move r = *copy r;
+   │         ^^^^^^^^^^^^^^^^^
+   │         │     │    │
+   │         │     │    Is the same as this location
+   │         │     This location
+   │         Unnecessary self-mutation. The mutation is redundant and will not change the value
+   │
+   = This warning can be suppressed with '#[allow(lint(self_assignment))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[Lint W02008]: assignment preserves the same value
+   ┌─ tests/linter/true_positive_self_assignment.move:53:9
+   │
+53 │         *&mut x = *&mut x;
+   │         ^^^^^^^^^^^^^^^^^
+   │         │     │    │
+   │         │     │    Is the same as this location
+   │         │     This location
+   │         Unnecessary self-mutation. The mutation is redundant and will not change the value
+   │
+   = This warning can be suppressed with '#[allow(lint(self_assignment))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[Lint W01009]: redundant reference/dereference
+   ┌─ tests/linter/true_positive_self_assignment.move:53:19
+   │
+53 │         *&mut x = *&mut x;
+   │                   ^^^^^^^ Redundant borrow-dereference detected. Replace this borrow-deref with 'copy'.
+   │
+   = This warning can be suppressed with '#[allow(lint(redundant_ref_deref))]' applied to the 'module' or module member ('const', 'fun', or 'struct')

@@ -1,0 +1,14 @@
+---
+source: crates/move-transactional-test-runner/src/framework.rs
+---
+processed 2 tasks
+
+task 1, lines 26-36:
+//# run
+Error: Function execution failed with VMError: {
+    major_status: VARIANT_TAG_MISMATCH,
+    sub_status: None,
+    location: 0x6::MonomorphicEnums,
+    indices: [],
+    offsets: [(FunctionDefinitionIndex(0), 11)],
+}

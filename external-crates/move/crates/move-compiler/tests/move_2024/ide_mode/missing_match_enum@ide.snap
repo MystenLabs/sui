@@ -1,0 +1,67 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: 2024.alpha
+  lint: false
+---
+error[E04036]: non-exhaustive pattern
+   ┌─ tests/move_2024/ide_mode/missing_match_enum.move:10:16
+   │
+10 │         match (e) {
+   │                ^ Pattern '_' not covered
+
+note[I15004]: IDE missing match arms
+   ┌─ tests/move_2024/ide_mode/missing_match_enum.move:10:19
+   │  
+10 │           match (e) {
+   │ ╭───────────────────^
+11 │ │         }
+   │ ╰─────────^ Missing arms: '0x42::m::E::One', '0x42::m::E::Two(_)', and '0x42::m::E::Three { x }'
+
+error[E04036]: non-exhaustive pattern
+   ┌─ tests/move_2024/ide_mode/missing_match_enum.move:15:16
+   │
+15 │         match (e) {
+   │                ^ Pattern 'E::One' not covered
+
+note[I15004]: IDE missing match arms
+   ┌─ tests/move_2024/ide_mode/missing_match_enum.move:15:19
+   │  
+15 │           match (e) {
+   │ ╭───────────────────^
+16 │ │             E::Two(n) => *n
+17 │ │         }
+   │ ╰─────────^ Missing arms: '0x42::m::E::One' and '0x42::m::E::Three { x }'
+
+error[E04036]: non-exhaustive pattern
+   ┌─ tests/move_2024/ide_mode/missing_match_enum.move:21:16
+   │
+21 │         match (e) {
+   │                ^ Pattern 'E::Three { x: _ }' not covered
+
+note[I15004]: IDE missing match arms
+   ┌─ tests/move_2024/ide_mode/missing_match_enum.move:21:19
+   │  
+21 │           match (e) {
+   │ ╭───────────────────^
+22 │ │             E::One => 0,
+23 │ │             E::Two(n) => *n
+24 │ │         }
+   │ ╰─────────^ Missing arms: '0x42::m::E::Three { x }'
+
+error[E04036]: non-exhaustive pattern
+   ┌─ tests/move_2024/ide_mode/missing_match_enum.move:28:16
+   │
+28 │         match (e) {
+   │                ^ Pattern 'E::One' not covered
+
+note[I15004]: IDE missing match arms
+   ┌─ tests/move_2024/ide_mode/missing_match_enum.move:28:19
+   │  
+28 │           match (e) {
+   │ ╭───────────────────^
+29 │ │             E::Three { x } => *x,
+30 │ │             E::Two(n) => *n
+31 │ │         }
+   │ ╰─────────^ Missing arms: '0x42::m::E::One'

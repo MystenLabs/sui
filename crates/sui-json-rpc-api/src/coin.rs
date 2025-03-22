@@ -6,7 +6,7 @@ use jsonrpsee::proc_macros::rpc;
 use sui_json_rpc_types::{Balance, CoinPage, SuiCoinMetadata};
 use sui_open_rpc_macros::open_rpc;
 use sui_types::balance::Supply;
-use sui_types::base_types::{ObjectID, SuiAddress};
+use sui_types::base_types::SuiAddress;
 
 #[open_rpc(namespace = "suix", tag = "Coin Query API")]
 #[rpc(server, client, namespace = "suix")]
@@ -20,7 +20,7 @@ pub trait CoinReadApi {
         /// optional type name for the coin (e.g., 0x168da5bf1f48dafc111b0a488fa454aca95e0b5e::usdc::USDC), default to 0x2::sui::SUI if not specified.
         coin_type: Option<String>,
         /// optional paging cursor
-        cursor: Option<ObjectID>,
+        cursor: Option<String>,
         /// maximum number of items per page
         limit: Option<usize>,
     ) -> RpcResult<CoinPage>;
@@ -32,7 +32,7 @@ pub trait CoinReadApi {
         /// the owner's Sui address
         owner: SuiAddress,
         /// optional paging cursor
-        cursor: Option<ObjectID>,
+        cursor: Option<String>,
         /// maximum number of items per page
         limit: Option<usize>,
     ) -> RpcResult<CoinPage>;

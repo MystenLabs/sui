@@ -5,8 +5,6 @@
 	"scripts": {
 		"test": "turbo run test",
 		"test:dev": "turbo run test -- --run",
-		"icons": "pnpm --filter ./apps/icons",
-		"wallet": "turbo --filter ./apps/wallet",
 		"changeset-version": "pnpm changeset version && pnpm --filter @mysten/sui codegen:version",
 		"prettier:check": "prettier -c --ignore-unknown .",
 		"prettier:fix": "prettier -w --ignore-unknown .",

@@ -1,0 +1,24 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: legacy
+  lint: false
+---
+error[E03006]: unexpected name in this position
+  ┌─ tests/move_check/naming/generics_with_type_parameters.move:2:22
+  │
+2 │     struct S<T> { f: T<u64> }
+  │                      ^^^^^^ Generic type parameters cannot take type arguments
+
+error[E03006]: unexpected name in this position
+  ┌─ tests/move_check/naming/generics_with_type_parameters.move:3:19
+  │
+3 │     fun foo<T>(_: T<bool>): T<u64> {}
+  │                   ^^^^^^^ Generic type parameters cannot take type arguments
+
+error[E03006]: unexpected name in this position
+  ┌─ tests/move_check/naming/generics_with_type_parameters.move:3:29
+  │
+3 │     fun foo<T>(_: T<bool>): T<u64> {}
+  │                             ^^^^^^ Generic type parameters cannot take type arguments

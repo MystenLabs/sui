@@ -21,7 +21,7 @@ pub fn build<W: Write>(
     writer: &mut W,
 ) -> Result<source_model::Model> {
     let root_package_name = resolved_graph.root_package();
-    let build_plan = BuildPlan::create(resolved_graph)?;
+    let build_plan = BuildPlan::create(&resolved_graph)?;
     let program_info_hook = SaveHook::new([SaveFlag::TypingInfo]);
     let compiled_package = build_plan.compile_no_exit(writer, |compiler| {
         compiler.add_save_hook(&program_info_hook)
@@ -36,7 +36,7 @@ pub fn build<W: Write>(
         .cloned()
         .map(|CompiledUnitWithSource { unit, source_path }| (source_path, unit))
         .collect::<Vec<_>>();
-    source_model::Model::new(
+    source_model::Model::from_source(
         compiled_package.file_map,
         Some(root_package_name),
         root_named_address_map,

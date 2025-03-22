@@ -121,9 +121,11 @@ pub struct ProgrammableTransactionCommand {
     #[clap(long = "gas-price")]
     pub gas_price: Option<u64>,
     #[clap(long = "gas-payment", value_parser = parse_fake_id)]
-    pub gas_payment: Option<FakeID>,
+    pub gas_payment: Option<Vec<FakeID>>,
     #[clap(long = "dev-inspect")]
     pub dev_inspect: bool,
+    #[clap(long = "dry-run")]
+    pub dry_run: bool,
     #[clap(
         long = "inputs",
         value_parser = ParsedValue::<SuiExtraValueArgs>::parse,
@@ -145,6 +147,8 @@ pub struct UpgradePackageCommand {
     pub sender: String,
     #[clap(long = "gas-budget")]
     pub gas_budget: Option<u64>,
+    #[clap(long = "dry-run")]
+    pub dry_run: bool,
     #[clap(long = "syntax")]
     pub syntax: Option<SyntaxChoice>,
     #[clap(long = "policy", default_value="compatible", value_parser = parse_policy)]
@@ -192,6 +196,8 @@ pub struct RunGraphqlCommand {
 pub struct RunJsonRpcCommand {
     #[clap(long = "show-headers")]
     pub show_headers: bool,
+    #[clap(long, num_args(1..))]
+    pub cursors: Vec<String>,
 }
 
 #[derive(Debug, clap::Parser)]

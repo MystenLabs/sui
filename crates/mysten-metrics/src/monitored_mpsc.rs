@@ -169,7 +169,7 @@ impl<'a, T> Permit<'a, T> {
     }
 }
 
-impl<'a, T> Drop for Permit<'a, T> {
+impl<T> Drop for Permit<'_, T> {
     fn drop(&mut self) {
         // In the case the permit is dropped without sending, we still want to decrease the occupancy of the channel.
         // Otherwise, receiver should be responsible for decreasing the inflight gauge.

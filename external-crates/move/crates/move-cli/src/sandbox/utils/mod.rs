@@ -357,7 +357,7 @@ pub(crate) fn explain_execution_error(
 /// Return `true` if `path` is a Move bytecode file based on its extension
 pub(crate) fn is_bytecode_file(path: &Path) -> bool {
     path.extension()
-        .map_or(false, |ext| ext == MOVE_COMPILED_EXTENSION)
+        .is_some_and(|ext| ext == MOVE_COMPILED_EXTENSION)
 }
 
 /// Return `true` if path contains a valid Move bytecode module

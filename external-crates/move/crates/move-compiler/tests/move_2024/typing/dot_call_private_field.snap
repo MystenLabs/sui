@@ -1,0 +1,12 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: 2024.alpha
+  lint: false
+---
+error[E04001]: restricted visibility
+   ┌─ tests/move_2024/typing/dot_call_private_field.move:13:5
+   │
+13 │     y.x.f()
+   │     ^^^ Invalid access of field 'x' on the struct '0x42::t::Y'. The field 'x' can only be accessed within the module '0x42::t' since it defines 'Y'

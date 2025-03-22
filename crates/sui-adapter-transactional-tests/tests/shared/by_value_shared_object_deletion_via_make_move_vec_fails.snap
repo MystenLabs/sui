@@ -1,0 +1,198 @@
+---
+source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
+---
+processed 22 tasks
+
+task 1, lines 6-97:
+//# publish
+created: object(1,0)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 10944000,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 2, line 99:
+//# run t2::o2::create
+created: object(2,0)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 2226800,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 3, line 101:
+//# run t2::o2::create
+created: object(3,0)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 2226800,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 4, line 103:
+//# view-object 2,0
+Owner: Shared( 3 )
+Version: 3
+Contents: t2::o2::Obj2 {
+    id: sui::object::UID {
+        id: sui::object::ID {
+            bytes: fake(2,0),
+        },
+    },
+}
+
+task 5, lines 105-107:
+//# view-object 3,0
+Owner: Shared( 4 )
+Version: 4
+Contents: t2::o2::Obj2 {
+    id: sui::object::UID {
+        id: sui::object::ID {
+            bytes: fake(3,0),
+        },
+    },
+}
+
+task 6, lines 108-112:
+//# programmable --inputs object(2,0) object(3,0)
+//> 0: MakeMoveVec<t2::o2::Obj2>([Input(1)]);
+//> 1: t2::o2::freezee(Result(0));
+// Make MoveVec and then try to add as dof
+Error: Transaction Effects Status: The shared object operation is not allowed.
+Debug of error: SharedObjectOperationNotAllowed at command None
+
+task 7, lines 113-117:
+//# programmable --inputs object(2,0) object(3,0)
+//> 0: MakeMoveVec<t2::o2::Obj2>([Input(1)]);
+//> 1: t2::o2::dof_(Input(0), Result(0));
+// Make MoveVec and then try to add as df
+Error: Transaction Effects Status: The shared object operation is not allowed.
+Debug of error: SharedObjectOperationNotAllowed at command None
+
+task 8, lines 118-122:
+//# programmable --inputs object(2,0) object(3,0)
+//> 0: MakeMoveVec<t2::o2::Obj2>([Input(1)]);
+//> 1: t2::o2::df_(Input(0), Result(0));
+// Make MoveVec and then try to transfer it
+Error: Transaction Effects Status: The shared object operation is not allowed.
+Debug of error: SharedObjectOperationNotAllowed at command None
+
+task 9, lines 123-127:
+//# programmable --inputs object(2,0) object(3,0)
+//> 0: MakeMoveVec<t2::o2::Obj2>([Input(1)]);
+//> 1: t2::o2::transfer_(Result(0));
+// Make MoveVec pop and return it, then try to freeze
+Error: Transaction Effects Status: The shared object operation is not allowed.
+Debug of error: SharedObjectOperationNotAllowed at command None
+
+task 10, lines 128-133:
+//# programmable --inputs object(2,0) object(3,0)
+//> 0: MakeMoveVec<t2::o2::Obj2>([Input(1)]);
+//> 1: t2::o2::pop_it(Result(0));
+//> 2: t2::o2::freezer(Result(1));
+// Make MoveVec pop and return it, then try to add as dof
+Error: Transaction Effects Status: The shared object operation is not allowed.
+Debug of error: SharedObjectOperationNotAllowed at command None
+
+task 11, lines 134-139:
+//# programmable --inputs object(2,0) object(3,0)
+//> 0: MakeMoveVec<t2::o2::Obj2>([Input(1)]);
+//> 1: t2::o2::pop_it(Result(0));
+//> 2: t2::o2::dofer(Input(0), Result(1));
+// Make MoveVec pop and return it, then try to add as df
+Error: Transaction Effects Status: The shared object operation is not allowed.
+Debug of error: SharedObjectOperationNotAllowed at command None
+
+task 12, lines 140-145:
+//# programmable --inputs object(2,0) object(3,0)
+//> 0: MakeMoveVec<t2::o2::Obj2>([Input(1)]);
+//> 1: t2::o2::pop_it(Result(0));
+//> 2: t2::o2::dfer(Input(0), Result(1));
+// Make MoveVec pop and return it, then try to transfer it
+Error: Transaction Effects Status: The shared object operation is not allowed.
+Debug of error: SharedObjectOperationNotAllowed at command None
+
+task 13, lines 146-151:
+//# programmable --inputs object(2,0) object(3,0)
+//> 0: MakeMoveVec<t2::o2::Obj2>([Input(1)]);
+//> 1: t2::o2::pop_it(Result(0));
+//> 2: t2::o2::transferer(Result(1));
+// Make MoveVec pop and return it, then try to transfer it with PT transfer
+Error: Transaction Effects Status: The shared object operation is not allowed.
+Debug of error: SharedObjectOperationNotAllowed at command None
+
+task 14, lines 152-155:
+//# programmable --inputs object(3,0) @0x0
+//> 0: MakeMoveVec<t2::o2::Obj2>([Input(0)]);
+//> 1: t2::o2::pop_it(Result(0));
+//> 2: TransferObjects([Result(1)], Input(1));
+Error: Transaction Effects Status: The shared object operation is not allowed.
+Debug of error: SharedObjectOperationNotAllowed at command None
+
+task 15, line 157:
+//# run t2::o2::mint_shared_coin
+created: object(15,0)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 1976000,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 16, lines 159-162:
+//# view-object 15,0
+Owner: Shared( 14 )
+Version: 14
+Contents: sui::coin::Coin<sui::sui::SUI> {
+    id: sui::object::UID {
+        id: sui::object::ID {
+            bytes: fake(15,0),
+        },
+    },
+    balance: sui::balance::Balance<sui::sui::SUI> {
+        value: 0u64,
+    },
+}
+
+task 17, lines 163-169:
+//# programmable --inputs 0 object(15,0) @0x0
+//> 0: MakeMoveVec([Input(1)]);
+//> 1: t2::o2::pop_coin(Result(0));
+//> 2: SplitCoins(Result(1), [Input(0)]);
+//> 3: TransferObjects([Result(2)], Input(2));
+// Try to call public_share_object directly -- this should fail
+Error: Transaction Effects Status: Unused result without the drop ability. Command result 1, return value 0
+Debug of error: UnusedValueWithoutDrop { result_idx: 1, secondary_idx: 0 } at command None
+
+task 18, lines 170-178:
+//# programmable --inputs 0 object(15,0) @0x0
+//> 0: MakeMoveVec([Input(1)]);
+//> 1: t2::o2::pop_coin(Result(0));
+//> 2: SplitCoins(Result(1), [Input(0)]);
+//> 3: TransferObjects([Result(2)], Input(2));
+//> 4: sui::transfer::public_share_object(Input(1));
+// Try to reshare the shared object -- this should fail since the input was
+// used for the `MakeMoveVec` call
+Error: Transaction Effects Status: Move Bytecode Verification Error. Please run the Bytecode Verifier for more information.
+Debug of error: VMVerificationOrDeserializationError at command Some(4)
+
+task 19, lines 179-187:
+//# programmable --inputs 0 object(15,0) @0x0
+//> 0: MakeMoveVec([Input(1)]);
+//> 1: t2::o2::pop_coin(Result(0));
+//> 2: SplitCoins(Result(1), [Input(0)]);
+//> 3: TransferObjects([Result(2)], Input(2));
+//> 4: t2::o2::share_coin(Input(1));
+// Try to transfer the shared object -- this should fail since the input was
+// used for the `MakeMoveVec` call
+Error: Transaction Effects Status: Invalid command argument at 0. Invalid usage of value. Mutably borrowed values require unique usage. Immutably borrowed values cannot be taken or borrowed mutably. Taken values cannot be used again.
+Debug of error: CommandArgumentError { arg_idx: 0, kind: InvalidValueUsage } at command Some(4)
+
+task 20, lines 188-195:
+//# programmable --inputs 0 object(15,0) @0x0
+//> 0: MakeMoveVec([Input(1)]);
+//> 1: t2::o2::pop_coin(Result(0));
+//> 2: SplitCoins(Result(1), [Input(0)]);
+//> 3: TransferObjects([Result(2)], Input(2));
+//> 4: TransferObjects([Input(1)], Input(2));
+// Try to transfer the shared object
+Error: Transaction Effects Status: Invalid command argument at 0. Invalid usage of value. Mutably borrowed values require unique usage. Immutably borrowed values cannot be taken or borrowed mutably. Taken values cannot be used again.
+Debug of error: CommandArgumentError { arg_idx: 0, kind: InvalidValueUsage } at command Some(4)
+
+task 21, lines 196-201:
+//# programmable --inputs 0 object(15,0) @0x0
+//> 0: MakeMoveVec([Input(1)]);
+//> 1: t2::o2::pop_coin(Result(0));
+//> 2: SplitCoins(Result(1), [Input(0)]);
+//> 3: TransferObjects([Result(2)], Input(2));
+//> 4: TransferObjects([Result(1)], Input(2));
+Error: Transaction Effects Status: The shared object operation is not allowed.
+Debug of error: SharedObjectOperationNotAllowed at command None

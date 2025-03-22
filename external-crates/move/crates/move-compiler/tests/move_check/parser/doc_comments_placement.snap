@@ -1,0 +1,24 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: legacy
+  lint: false
+---
+warning[W01004]: invalid documentation comment
+   ┌─ tests/move_check/parser/doc_comments_placement.move:16:9
+   │
+16 │         /// There can be no doc comment after last field.
+   │         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ Documentation comment cannot be matched to a language item
+
+warning[W01004]: invalid documentation comment
+   ┌─ tests/move_check/parser/doc_comments_placement.move:19:5
+   │
+19 │     /// There can be no doc comment after last module item.
+   │     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ Documentation comment cannot be matched to a language item
+
+warning[W01004]: invalid documentation comment
+   ┌─ tests/move_check/parser/doc_comments_placement.move:22:1
+   │
+22 │ /// There can be no doc comment at end of file.
+   │ ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ Documentation comment cannot be matched to a language item

@@ -1,0 +1,49 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: legacy
+  lint: false
+---
+warning[W00001]: DEPRECATED. will be removed
+  ┌─ tests/move_check/expansion/use_spec_schema.move:3:5
+  │  
+3 │ ╭     spec schema Foo<T> {
+4 │ │         ensures true;
+5 │ │     }
+  │ ╰─────^ Specification blocks are deprecated and are no longer used
+
+warning[W00001]: DEPRECATED. will be removed
+  ┌─ tests/move_check/expansion/use_spec_schema.move:7:5
+  │  
+7 │ ╭     spec schema Bar<T> {
+8 │ │         ensures true;
+9 │ │     }
+  │ ╰─────^ Specification blocks are deprecated and are no longer used
+
+error[E03003]: unbound module member
+   ┌─ tests/move_check/expansion/use_spec_schema.move:13:18
+   │
+ 2 │ module X {
+   │        - Module '0x2::X' declared here
+   ·
+13 │     use 0x2::X::{Foo, Bar as Baz};
+   │                  ^^^ Invalid 'use'. Unbound member 'Foo' in module '0x2::X'
+
+error[E03003]: unbound module member
+   ┌─ tests/move_check/expansion/use_spec_schema.move:13:23
+   │
+ 2 │ module X {
+   │        - Module '0x2::X' declared here
+   ·
+13 │     use 0x2::X::{Foo, Bar as Baz};
+   │                       ^^^ Invalid 'use'. Unbound member 'Bar' in module '0x2::X'
+
+warning[W00001]: DEPRECATED. will be removed
+   ┌─ tests/move_check/expansion/use_spec_schema.move:18:5
+   │  
+18 │ ╭     spec t {
+19 │ │         apply Foo<S> to t;
+20 │ │         apply Baz<S> to t;
+21 │ │     }
+   │ ╰─────^ Specification blocks are deprecated and are no longer used

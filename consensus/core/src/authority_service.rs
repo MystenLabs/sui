@@ -9,6 +9,7 @@ use consensus_config::AuthorityIndex;
 use futures::{ready, stream, task, Stream, StreamExt};
 use parking_lot::RwLock;
 use sui_macros::fail_point_async;
+use tap::TapFallible;
 use tokio::{sync::broadcast, time::sleep};
 use tokio_util::sync::ReusableBoxFuture;
 use tracing::{debug, info, warn};
@@ -26,6 +27,7 @@ use crate::{
     stake_aggregator::{QuorumThreshold, StakeAggregator},
     storage::Store,
     synchronizer::SynchronizerHandle,
+    transaction_certifier::TransactionCertifier,
     CommitIndex, Round,
 };
 
@@ -38,8 +40,9 @@ pub(crate) struct AuthorityService<C: CoreThreadDispatcher> {
     block_verifier: Arc<dyn BlockVerifier>,
     synchronizer: Arc<SynchronizerHandle>,
     core_dispatcher: Arc<C>,
-    rx_block_broadcaster: broadcast::Receiver<ExtendedBlock>,
+    rx_block_broadcast: broadcast::Receiver<ExtendedBlock>,
     subscription_counter: Arc<SubscriptionCounter>,
+    transaction_certifier: TransactionCertifier,
     dag_state: Arc<RwLock<DagState>>,
     store: Arc<dyn Store>,
 }
@@ -51,7 +54,8 @@ impl<C: CoreThreadDispatcher> AuthorityService<C> {
         commit_vote_monitor: Arc<CommitVoteMonitor>,
         synchronizer: Arc<SynchronizerHandle>,
         core_dispatcher: Arc<C>,
-        rx_block_broadcaster: broadcast::Receiver<ExtendedBlock>,
+        rx_block_broadcast: broadcast::Receiver<ExtendedBlock>,
+        transaction_certifier: TransactionCertifier,
         dag_state: Arc<RwLock<DagState>>,
         store: Arc<dyn Store>,
     ) -> Self {
@@ -65,8 +69,9 @@ impl<C: CoreThreadDispatcher> AuthorityService<C> {
             commit_vote_monitor,
             synchronizer,
             core_dispatcher,
-            rx_block_broadcaster,
+            rx_block_broadcast,
             subscription_counter,
+            transaction_certifier,
             dag_state,
             store,
         }
@@ -103,70 +108,87 @@ impl<C: CoreThreadDispatcher> NetworkService for AuthorityService<C> {
         let peer_hostname = &self.context.committee.authority(peer).hostname;
 
         // Reject blocks failing validations.
-        if let Err(e) = self.block_verifier.verify(&signed_block) {
-            self.context
-                .metrics
-                .node_metrics
-                .invalid_blocks
-                .with_label_values(&[peer_hostname, "handle_send_block", e.clone().name()])
-                .inc();
-            info!("Invalid block from {}: {}", peer, e);
-            return Err(e);
-        }
+        let reject_txn_votes = self
+            .block_verifier
+            .verify_and_vote(&signed_block)
+            .tap_err(|e| {
+                self.context
+                    .metrics
+                    .node_metrics
+                    .invalid_blocks
+                    .with_label_values(&[peer_hostname, "handle_send_block", e.name()])
+                    .inc();
+                info!("Invalid block from {}: {}", peer, e);
+            })?;
         let verified_block = VerifiedBlock::new_verified(signed_block, serialized_block.block);
         let block_ref = verified_block.reference();
         debug!("Received block {} via send block.", block_ref);
 
-        // Reject block with timestamp too far in the future.
         let now = self.context.clock.timestamp_utc_ms();
         let forward_time_drift =
             Duration::from_millis(verified_block.timestamp_ms().saturating_sub(now));
-        if forward_time_drift > self.context.parameters.max_forward_time_drift {
-            self.context
-                .metrics
-                .node_metrics
-                .rejected_future_blocks
-                .with_label_values(&[peer_hostname])
-                .inc();
-            debug!(
-                "Block {:?} timestamp ({} > {}) is too far in the future, rejected.",
-                block_ref,
-                verified_block.timestamp_ms(),
-                now,
-            );
-            return Err(ConsensusError::BlockRejected {
-                block_ref,
-                reason: format!(
-                    "Block timestamp is too far in the future: {} > {}",
-                    verified_block.timestamp_ms(),
-                    now
-                ),
-            });
-        }
 
-        // Wait until the block's timestamp is current.
-        if forward_time_drift > Duration::ZERO {
+        if !self
+            .context
+            .protocol_config
+            .consensus_median_based_commit_timestamp()
+        {
+            // Reject block with timestamp too far in the future.
+            if forward_time_drift > self.context.parameters.max_forward_time_drift {
+                self.context
+                    .metrics
+                    .node_metrics
+                    .rejected_future_blocks
+                    .with_label_values(&[peer_hostname])
+                    .inc();
+                debug!(
+                    "Block {:?} timestamp ({} > {}) is too far in the future, rejected.",
+                    block_ref,
+                    verified_block.timestamp_ms(),
+                    now,
+                );
+                return Err(ConsensusError::BlockRejected {
+                    block_ref,
+                    reason: format!(
+                        "Block timestamp is too far in the future: {} > {}",
+                        verified_block.timestamp_ms(),
+                        now
+                    ),
+                });
+            }
+
+            // Wait until the block's timestamp is current.
+            if forward_time_drift > Duration::ZERO {
+                self.context
+                    .metrics
+                    .node_metrics
+                    .block_timestamp_drift_ms
+                    .with_label_values(&[peer_hostname, "handle_send_block"])
+                    .inc_by(forward_time_drift.as_millis() as u64);
+                debug!(
+                    "Block {:?} timestamp ({} > {}) is in the future, waiting for {}ms",
+                    block_ref,
+                    verified_block.timestamp_ms(),
+                    now,
+                    forward_time_drift.as_millis(),
+                );
+                sleep(forward_time_drift).await;
+            }
+        } else {
             self.context
                 .metrics
                 .node_metrics
-                .block_timestamp_drift_wait_ms
+                .block_timestamp_drift_ms
                 .with_label_values(&[peer_hostname, "handle_send_block"])
                 .inc_by(forward_time_drift.as_millis() as u64);
-            debug!(
-                "Block {:?} timestamp ({} > {}) is in the future, waiting for {}ms",
-                block_ref,
-                verified_block.timestamp_ms(),
-                now,
-                forward_time_drift.as_millis(),
-            );
-            sleep(forward_time_drift).await;
         }
 
         // Observe the block for the commit votes. When local commit is lagging too much,
         // commit sync loop will trigger fetching.
         self.commit_vote_monitor.observe_block(&verified_block);
 
-        // Reject blocks when local commit index is lagging too far from quorum commit index.
+        // Reject blocks when local commit index is lagging too far from quorum commit index,
+        // to avoid the memory overhead from suspended blocks.
         //
         // IMPORTANT: this must be done after observing votes from the block, otherwise
         // observed quorum commit will no longer progress.
@@ -209,6 +231,13 @@ impl<C: CoreThreadDispatcher> NetworkService for AuthorityService<C> {
             .with_label_values(&[peer_hostname])
             .inc();
 
+        // The block is verified and current, so it can be processed in the fastpath.
+        if self.context.protocol_config.mysticeti_fastpath() {
+            self.transaction_certifier
+                .add_voted_blocks(vec![(verified_block.clone(), reject_txn_votes)]);
+        }
+
+        // Try to accept the block into the DAG.
         let missing_ancestors = self
             .core_dispatcher
             .add_blocks(vec![verified_block])
@@ -320,7 +349,7 @@ impl<C: CoreThreadDispatcher> NetworkService for AuthorityService<C> {
 
         let broadcasted_blocks = BroadcastedBlockStream::new(
             peer,
-            self.rx_block_broadcaster.resubscribe(),
+            self.rx_block_broadcast.resubscribe(),
             self.subscription_counter.clone(),
         );
 
@@ -423,6 +452,17 @@ impl<C: CoreThreadDispatcher> NetworkService for AuthorityService<C> {
                 certifier_block_refs = votes;
                 break 'commit;
             } else {
+                debug!(
+                    "Commit {} votes did not reach quorum to certify, {} < {}, skipping",
+                    index,
+                    stake_aggregator.stake(),
+                    stake_aggregator.threshold(&self.context.committee)
+                );
+                self.context
+                    .metrics
+                    .node_metrics
+                    .commit_sync_fetch_commits_handler_uncertified_skipped
+                    .inc();
                 commits.pop();
             }
         }
@@ -685,7 +725,7 @@ mod tests {
     use crate::{
         authority_service::AuthorityService,
         block::{BlockAPI, BlockRef, SignedBlock, TestBlock, VerifiedBlock},
-        commit::CommitRange,
+        commit::{CertifiedCommits, CommitRange},
         commit_vote_monitor::CommitVoteMonitor,
         context::Context,
         core_thread::{CoreError, CoreThreadDispatcher},
@@ -696,12 +736,15 @@ mod tests {
         storage::mem_store::MemStore,
         synchronizer::Synchronizer,
         test_dag_builder::DagBuilder,
+        transaction_certifier::TransactionCertifier,
         Round,
     };
     use async_trait::async_trait;
     use bytes::Bytes;
     use consensus_config::AuthorityIndex;
+    use mysten_metrics::monitored_mpsc;
     use parking_lot::{Mutex, RwLock};
+    use rstest::rstest;
     use std::collections::BTreeSet;
     use std::sync::Arc;
     use std::time::Duration;
@@ -740,6 +783,13 @@ mod tests {
             _block_refs: Vec<BlockRef>,
         ) -> Result<BTreeSet<BlockRef>, CoreError> {
             Ok(BTreeSet::new())
+        }
+
+        async fn add_certified_commits(
+            &self,
+            _commits: CertifiedCommits,
+        ) -> Result<BTreeSet<BlockRef>, CoreError> {
+            todo!()
         }
 
         async fn new_block(&self, _round: Round, _force: bool) -> Result<(), CoreError> {
@@ -834,23 +884,32 @@ mod tests {
         }
     }
 
+    #[rstest]
     #[tokio::test(flavor = "current_thread", start_paused = true)]
-    async fn test_handle_send_block() {
-        let (context, _keys) = Context::new_for_test(4);
+    async fn test_handle_send_block(#[values(false, true)] median_based_timestamp: bool) {
+        let (mut context, _keys) = Context::new_for_test(4);
+        context
+            .protocol_config
+            .set_consensus_median_based_commit_timestamp_for_testing(median_based_timestamp);
         let context = Arc::new(context);
         let block_verifier = Arc::new(crate::block_verifier::NoopBlockVerifier {});
         let commit_vote_monitor = Arc::new(CommitVoteMonitor::new(context.clone()));
         let core_dispatcher = Arc::new(FakeCoreThreadDispatcher::new());
         let (_tx_block_broadcast, rx_block_broadcast) = broadcast::channel(100);
         let network_client = Arc::new(FakeNetworkClient::default());
+        let (blocks_sender, _blocks_receiver) =
+            monitored_mpsc::unbounded_channel("consensus_block_output");
         let store = Arc::new(MemStore::new());
         let dag_state = Arc::new(RwLock::new(DagState::new(context.clone(), store.clone())));
+        let transaction_certifier =
+            TransactionCertifier::new(context.clone(), dag_state.clone(), blocks_sender);
         let synchronizer = Synchronizer::start(
             network_client,
             context.clone(),
             core_dispatcher.clone(),
             commit_vote_monitor.clone(),
             block_verifier.clone(),
+            transaction_certifier.clone(),
             dag_state.clone(),
             false,
         );
@@ -861,6 +920,7 @@ mod tests {
             synchronizer,
             core_dispatcher.clone(),
             rx_block_broadcast,
+            transaction_certifier,
             dag_state,
             store,
         ));
@@ -888,9 +948,12 @@ mod tests {
         });
 
         sleep(max_drift / 2).await;
-        assert!(core_dispatcher.get_blocks().is_empty());
 
-        sleep(max_drift).await;
+        if !median_based_timestamp {
+            assert!(core_dispatcher.get_blocks().is_empty());
+            sleep(max_drift).await;
+        }
+
         let blocks = core_dispatcher.get_blocks();
         assert_eq!(blocks.len(), 1);
         assert_eq!(blocks[0], input_block);
@@ -906,14 +969,19 @@ mod tests {
         let core_dispatcher = Arc::new(FakeCoreThreadDispatcher::new());
         let (_tx_block_broadcast, rx_block_broadcast) = broadcast::channel(100);
         let network_client = Arc::new(FakeNetworkClient::default());
+        let (blocks_sender, _blocks_receiver) =
+            monitored_mpsc::unbounded_channel("consensus_block_output");
         let store = Arc::new(MemStore::new());
         let dag_state = Arc::new(RwLock::new(DagState::new(context.clone(), store.clone())));
+        let transaction_certifier =
+            TransactionCertifier::new(context.clone(), dag_state.clone(), blocks_sender);
         let synchronizer = Synchronizer::start(
             network_client,
             context.clone(),
             core_dispatcher.clone(),
             commit_vote_monitor.clone(),
             block_verifier.clone(),
+            transaction_certifier.clone(),
             dag_state.clone(),
             true,
         );
@@ -924,6 +992,7 @@ mod tests {
             synchronizer,
             core_dispatcher.clone(),
             rx_block_broadcast,
+            transaction_certifier,
             dag_state.clone(),
             store,
         ));

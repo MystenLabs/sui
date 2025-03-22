@@ -81,7 +81,7 @@ pub(crate) enum ObjectResult<V> {
 
 type LoadedWithMetadataResult<V> = Option<(V, DynamicallyLoadedObjectMetadata)>;
 
-impl<'a> Inner<'a> {
+impl Inner<'_> {
     fn receive_object_from_store(
         &self,
         owner: ObjectID,
@@ -90,13 +90,7 @@ impl<'a> Inner<'a> {
     ) -> PartialVMResult<LoadedWithMetadataResult<MoveObject>> {
         let child_opt = self
             .resolver
-            .get_object_received_at_version(
-                &owner,
-                &child,
-                version,
-                self.current_epoch_id,
-                false, // invariant verified in LocalProtocolConfig::new
-            )
+            .get_object_received_at_version(&owner, &child, version, self.current_epoch_id)
             .map_err(|msg| {
                 PartialVMError::new(StatusCode::STORAGE_ERROR).with_message(format!("{msg}"))
             })?;

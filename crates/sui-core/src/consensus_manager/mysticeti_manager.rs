@@ -5,7 +5,9 @@ use std::{path::PathBuf, sync::Arc};
 use arc_swap::ArcSwapOption;
 use async_trait::async_trait;
 use consensus_config::{Committee, NetworkKeyPair, Parameters, ProtocolKeyPair};
-use consensus_core::{CommitConsumer, CommitConsumerMonitor, CommitIndex, ConsensusAuthority};
+use consensus_core::{
+    Clock, CommitConsumer, CommitConsumerMonitor, CommitIndex, ConsensusAuthority,
+};
 use fastcrypto::ed25519;
 use mysten_metrics::{RegistryID, RegistryService};
 use prometheus::Registry;
@@ -20,7 +22,7 @@ use tracing::info;
 use crate::{
     authority::authority_per_epoch_store::AuthorityPerEpochStore,
     consensus_handler::{
-        ConsensusHandlerInitializer, ConsensusTransactionHandler, MysticetiConsensusHandler,
+        ConsensusBlockHandler, ConsensusHandlerInitializer, MysticetiConsensusHandler,
     },
     consensus_manager::{
         ConsensusManagerMetrics, ConsensusManagerTrait, Running, RunningLockGuard,
@@ -144,8 +146,13 @@ impl ConsensusManagerTrait for MysticetiManager {
         let registry = Registry::new_custom(Some("consensus".to_string()), None).unwrap();
 
         let consensus_handler = consensus_handler_initializer.new_consensus_handler();
-        let (commit_consumer, commit_receiver, transaction_receiver) =
-            CommitConsumer::new(consensus_handler.last_processed_subdag_index() as CommitIndex);
+
+        let num_prior_commits = protocol_config.consensus_num_requested_prior_commits_at_startup();
+        let last_processed_commit = consensus_handler.last_processed_subdag_index() as CommitIndex;
+        let starting_commit = last_processed_commit.saturating_sub(num_prior_commits);
+
+        let (commit_consumer, commit_receiver, block_receiver) =
+            CommitConsumer::new(starting_commit);
         let monitor = commit_consumer.monitor();
 
         // If there is a previous consumer monitor, it indicates that the consensus engine has been restarted, due to an epoch change. However, that on its
@@ -180,6 +187,7 @@ impl ConsensusManagerTrait for MysticetiManager {
             protocol_config.clone(),
             self.protocol_keypair.clone(),
             self.network_keypair.clone(),
+            Arc::new(Clock::default()),
             Arc::new(tx_validator.clone()),
             commit_consumer,
             registry.clone(),
@@ -197,17 +205,18 @@ impl ConsensusManagerTrait for MysticetiManager {
         self.client.set(client);
 
         // spin up the new mysticeti consensus handler to listen for committed sub dags
-        let consensus_transaction_handler = ConsensusTransactionHandler::new(
+        let consensus_block_handler = ConsensusBlockHandler::new(
             epoch_store.clone(),
             consensus_handler.transaction_manager_sender().clone(),
             consensus_handler_initializer.backpressure_subscriber(),
             consensus_handler_initializer.metrics().clone(),
         );
         let handler = MysticetiConsensusHandler::new(
+            last_processed_commit,
             consensus_handler,
-            consensus_transaction_handler,
+            consensus_block_handler,
             commit_receiver,
-            transaction_receiver,
+            block_receiver,
             monitor,
         );
 
@@ -215,7 +224,9 @@ impl ConsensusManagerTrait for MysticetiManager {
         *consensus_handler = Some(handler);
 
         // Wait until all locally available commits have been processed
+        info!("replaying commits at startup");
         registered_authority.0.replay_complete().await;
+        info!("Startup commit replay complete");
     }
 
     async fn shutdown(&self) {

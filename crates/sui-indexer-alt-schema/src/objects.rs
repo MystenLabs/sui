@@ -12,7 +12,7 @@ use sui_types::object::{Object, Owner};
 
 use crate::schema::{coin_balance_buckets, kv_objects, obj_info, obj_versions};
 
-#[derive(Insertable, Debug, Clone, FieldCount)]
+#[derive(Insertable, Debug, Clone, FieldCount, Queryable)]
 #[diesel(table_name = kv_objects, primary_key(object_id, object_version))]
 #[diesel(treat_none_as_default_value = false)]
 pub struct StoredObject {
@@ -21,13 +21,21 @@ pub struct StoredObject {
     pub serialized_object: Option<Vec<u8>>,
 }
 
-#[derive(Insertable, Debug, Clone, FieldCount)]
+#[derive(Insertable, Selectable, Debug, Clone, FieldCount, Queryable)]
 #[diesel(table_name = obj_versions, primary_key(object_id, object_version))]
 pub struct StoredObjVersion {
     pub object_id: Vec<u8>,
     pub object_version: i64,
-    pub object_digest: Vec<u8>,
+    pub object_digest: Option<Vec<u8>>,
     pub cp_sequence_number: i64,
+}
+
+/// Only the key fields of a row in `obj_versions`.
+#[derive(Selectable, Debug, Clone, QueryableByName)]
+#[diesel(table_name = obj_versions, primary_key(object_id, object_version))]
+pub struct StoredObjVersionKey {
+    pub object_id: Vec<u8>,
+    pub object_version: i64,
 }
 
 #[derive(AsExpression, FromSqlRow, Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]

@@ -1,32 +1,45 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use anyhow::Context;
 use bootstrap::bootstrap;
 use config::{IndexerConfig, PipelineLayer};
-use handlers::coin_balance_buckets::CoinBalanceBuckets;
 use handlers::{
-    ev_emit_mod::EvEmitMod, ev_struct_inst::EvStructInst, kv_checkpoints::KvCheckpoints,
-    kv_epoch_ends::KvEpochEnds, kv_epoch_starts::KvEpochStarts, kv_feature_flags::KvFeatureFlags,
-    kv_objects::KvObjects, kv_protocol_configs::KvProtocolConfigs, kv_transactions::KvTransactions,
-    obj_info::ObjInfo, obj_versions::ObjVersions, sum_displays::SumDisplays,
-    sum_packages::SumPackages, tx_affected_addresses::TxAffectedAddresses,
-    tx_affected_objects::TxAffectedObjects, tx_balance_changes::TxBalanceChanges,
-    tx_calls::TxCalls, tx_digests::TxDigests, tx_kinds::TxKinds,
+    coin_balance_buckets::CoinBalanceBuckets,
+    ev_emit_mod::EvEmitMod,
+    ev_struct_inst::EvStructInst,
+    kv_checkpoints::KvCheckpoints,
+    kv_epoch_ends::KvEpochEnds,
+    kv_epoch_starts::KvEpochStarts,
+    kv_feature_flags::KvFeatureFlags,
+    kv_objects::KvObjects,
+    kv_protocol_configs::KvProtocolConfigs,
+    kv_transactions::KvTransactions,
+    obj_info::ObjInfo,
+    obj_versions::{ObjVersions, ObjVersionsSentinelBackfill},
+    sum_displays::SumDisplays,
+    sum_packages::SumPackages,
+    tx_affected_addresses::TxAffectedAddresses,
+    tx_affected_objects::TxAffectedObjects,
+    tx_balance_changes::TxBalanceChanges,
+    tx_calls::TxCalls,
+    tx_digests::TxDigests,
+    tx_kinds::TxKinds,
 };
 use prometheus::Registry;
-use sui_indexer_alt_framework::handlers::cp_sequence_numbers::CpSequenceNumbers;
-use sui_indexer_alt_framework::ingestion::{ClientArgs, IngestionConfig};
-use sui_indexer_alt_framework::pipeline::{
-    concurrent::{ConcurrentConfig, PrunerConfig},
-    sequential::SequentialConfig,
-    CommitterConfig,
+use sui_indexer_alt_framework::{
+    db::DbArgs,
+    handlers::cp_sequence_numbers::CpSequenceNumbers,
+    ingestion::{ClientArgs, IngestionConfig},
+    pipeline::{
+        concurrent::{ConcurrentConfig, PrunerConfig},
+        sequential::SequentialConfig,
+        CommitterConfig,
+    },
+    Indexer, IndexerArgs,
 };
-use sui_indexer_alt_framework::{Indexer, IndexerArgs};
 use sui_indexer_alt_schema::MIGRATIONS;
-use sui_pg_db::DbArgs;
-use tokio::task::JoinHandle;
 use tokio_util::sync::CancellationToken;
+use url::Url;
 
 pub mod args;
 #[cfg(feature = "benchmark")]
@@ -36,7 +49,8 @@ pub mod config;
 pub(crate) mod consistent_pruning;
 pub(crate) mod handlers;
 
-pub async fn start_indexer(
+pub async fn setup_indexer(
+    database_url: Url,
     db_args: DbArgs,
     indexer_args: IndexerArgs,
     client_args: ClientArgs,
@@ -48,7 +62,7 @@ pub async fn start_indexer(
     with_genesis: bool,
     registry: &Registry,
     cancel: CancellationToken,
-) -> anyhow::Result<JoinHandle<()>> {
+) -> anyhow::Result<Indexer> {
     let IndexerConfig {
         ingestion,
         consistency,
@@ -74,6 +88,7 @@ pub async fn start_indexer(
         kv_transactions,
         obj_info,
         obj_versions,
+        obj_versions_sentinel_backfill,
         tx_affected_addresses,
         tx_affected_objects,
         tx_balance_changes,
@@ -91,11 +106,12 @@ pub async fn start_indexer(
     let retry_interval = ingestion.retry_interval();
 
     let mut indexer = Indexer::new(
+        database_url,
         db_args,
         indexer_args,
         client_args,
         ingestion,
-        &MIGRATIONS,
+        Some(&MIGRATIONS),
         registry,
         cancel.clone(),
     )
@@ -190,6 +206,7 @@ pub async fn start_indexer(
     add_concurrent!(KvObjects, kv_objects);
     add_concurrent!(KvTransactions, kv_transactions);
     add_concurrent!(ObjVersions, obj_versions);
+    add_concurrent!(ObjVersionsSentinelBackfill, obj_versions_sentinel_backfill);
     add_concurrent!(TxAffectedAddresses, tx_affected_addresses);
     add_concurrent!(TxAffectedObjects, tx_affected_objects);
     add_concurrent!(TxBalanceChanges, tx_balance_changes);
@@ -197,5 +214,5 @@ pub async fn start_indexer(
     add_concurrent!(TxDigests, tx_digests);
     add_concurrent!(TxKinds, tx_kinds);
 
-    indexer.run().await.context("Failed to start indexer")
+    Ok(indexer)
 }

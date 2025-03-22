@@ -659,7 +659,7 @@ impl TypingAnalysisContext<'_> {
     }
 }
 
-impl<'a> TypingVisitorContext for TypingAnalysisContext<'a> {
+impl TypingVisitorContext for TypingAnalysisContext<'_> {
     // Nothing to do -- we're not producing errors.
     fn push_warning_filter_scope(&mut self, _filter: WarningFilters) {}
 

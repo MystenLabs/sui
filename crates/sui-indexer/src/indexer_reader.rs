@@ -280,7 +280,6 @@ impl IndexerReader {
             .into_iter()
             .map(EpochInfo::try_from)
             .collect::<Result<Vec<_>, _>>()
-            .map_err(Into::into)
     }
 
     pub async fn get_latest_sui_system_state(&self) -> Result<SuiSystemStateSummary, IndexerError> {
@@ -1527,7 +1526,6 @@ impl ConnectionAsObjectStore {
             .optional()?
             .map(|o| o.try_into())
             .transpose()
-            .map_err(Into::into)
     }
 
     fn get_object(
@@ -1542,7 +1540,7 @@ impl ConnectionAsObjectStore {
             result = self.get_object_from_history(object_id, version)?;
         }
 
-        result.map(|o| o.try_into()).transpose().map_err(Into::into)
+        result.map(|o| o.try_into()).transpose()
     }
 }
 

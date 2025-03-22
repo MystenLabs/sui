@@ -1,0 +1,238 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: 2024.alpha
+  lint: false
+---
+error[E04003]: built-in operation not supported
+   ┌─ tests/move_2024/matching/struct_match_mut_invalid.move:33:21
+   │
+ 6 │     public struct NBase has copy, drop { t: u64 }
+   │                                             --- Found: '&u64'. But expected: 'u8', 'u16', 'u32', 'u64', 'u128', 'u256'
+   ·
+33 │                 t = t + 1;
+   │                     ^ Invalid argument to '+'
+
+error[E04007]: incompatible types
+   ┌─ tests/move_2024/matching/struct_match_mut_invalid.move:33:23
+   │
+ 6 │     public struct NBase has copy, drop { t: u64 }
+   │                                             --- Found: '&u64'. It is not compatible with the other type.
+   ·
+33 │                 t = t + 1;
+   │                       ^ - Found: integer. It is not compatible with the other type.
+   │                       │  
+   │                       Incompatible arguments to '+'
+
+error[E04003]: built-in operation not supported
+   ┌─ tests/move_2024/matching/struct_match_mut_invalid.move:33:25
+   │
+ 6 │     public struct NBase has copy, drop { t: u64 }
+   │                                             --- Found: '&u64'. But expected: 'u8', 'u16', 'u32', 'u64', 'u128', 'u256'
+   ·
+33 │                 t = t + 1;
+   │                         ^ Invalid argument to '+'
+
+error[E04003]: built-in operation not supported
+   ┌─ tests/move_2024/matching/struct_match_mut_invalid.move:42:21
+   │
+ 6 │     public struct NBase has copy, drop { t: u64 }
+   │                                             --- Found: '&u64'. But expected: 'u8', 'u16', 'u32', 'u64', 'u128', 'u256'
+   ·
+42 │                 x = x + 1;
+   │                     ^ Invalid argument to '+'
+
+error[E04007]: incompatible types
+   ┌─ tests/move_2024/matching/struct_match_mut_invalid.move:42:23
+   │
+ 6 │     public struct NBase has copy, drop { t: u64 }
+   │                                             --- Found: '&u64'. It is not compatible with the other type.
+   ·
+42 │                 x = x + 1;
+   │                       ^ - Found: integer. It is not compatible with the other type.
+   │                       │  
+   │                       Incompatible arguments to '+'
+
+error[E04003]: built-in operation not supported
+   ┌─ tests/move_2024/matching/struct_match_mut_invalid.move:42:25
+   │
+ 6 │     public struct NBase has copy, drop { t: u64 }
+   │                                             --- Found: '&u64'. But expected: 'u8', 'u16', 'u32', 'u64', 'u128', 'u256'
+   ·
+42 │                 x = x + 1;
+   │                         ^ Invalid argument to '+'
+
+error[E04003]: built-in operation not supported
+   ┌─ tests/move_2024/matching/struct_match_mut_invalid.move:51:20
+   │
+ 8 │     public struct PBase(u64) has copy, drop;
+   │                         --- Found: '&u64'. But expected: 'u8', 'u16', 'u32', 'u64', 'u128', 'u256'
+   ·
+51 │                x = x + 1;
+   │                    ^ Invalid argument to '+'
+
+error[E04007]: incompatible types
+   ┌─ tests/move_2024/matching/struct_match_mut_invalid.move:51:22
+   │
+ 8 │     public struct PBase(u64) has copy, drop;
+   │                         --- Found: '&u64'. It is not compatible with the other type.
+   ·
+51 │                x = x + 1;
+   │                      ^ - Found: integer. It is not compatible with the other type.
+   │                      │  
+   │                      Incompatible arguments to '+'
+
+error[E04003]: built-in operation not supported
+   ┌─ tests/move_2024/matching/struct_match_mut_invalid.move:51:24
+   │
+ 8 │     public struct PBase(u64) has copy, drop;
+   │                         --- Found: '&u64'. But expected: 'u8', 'u16', 'u32', 'u64', 'u128', 'u256'
+   ·
+51 │                x = x + 1;
+   │                        ^ Invalid argument to '+'
+
+error[E04003]: built-in operation not supported
+   ┌─ tests/move_2024/matching/struct_match_mut_invalid.move:60:21
+   │
+ 6 │     public struct NBase has copy, drop { t: u64 }
+   │                                             --- Found: '&u64'. But expected: 'u8', 'u16', 'u32', 'u64', 'u128', 'u256'
+   ·
+60 │                 t = t + 1;
+   │                     ^ Invalid argument to '+'
+
+error[E04007]: incompatible types
+   ┌─ tests/move_2024/matching/struct_match_mut_invalid.move:60:23
+   │
+ 6 │     public struct NBase has copy, drop { t: u64 }
+   │                                             --- Found: '&u64'. It is not compatible with the other type.
+   ·
+60 │                 t = t + 1;
+   │                       ^ - Found: integer. It is not compatible with the other type.
+   │                       │  
+   │                       Incompatible arguments to '+'
+
+error[E04003]: built-in operation not supported
+   ┌─ tests/move_2024/matching/struct_match_mut_invalid.move:60:25
+   │
+ 6 │     public struct NBase has copy, drop { t: u64 }
+   │                                             --- Found: '&u64'. But expected: 'u8', 'u16', 'u32', 'u64', 'u128', 'u256'
+   ·
+60 │                 t = t + 1;
+   │                         ^ Invalid argument to '+'
+
+error[E04003]: built-in operation not supported
+   ┌─ tests/move_2024/matching/struct_match_mut_invalid.move:69:21
+   │
+ 6 │     public struct NBase has copy, drop { t: u64 }
+   │                                             --- Found: '&u64'. But expected: 'u8', 'u16', 'u32', 'u64', 'u128', 'u256'
+   ·
+69 │                 x = x + 1;
+   │                     ^ Invalid argument to '+'
+
+error[E04007]: incompatible types
+   ┌─ tests/move_2024/matching/struct_match_mut_invalid.move:69:23
+   │
+ 6 │     public struct NBase has copy, drop { t: u64 }
+   │                                             --- Found: '&u64'. It is not compatible with the other type.
+   ·
+69 │                 x = x + 1;
+   │                       ^ - Found: integer. It is not compatible with the other type.
+   │                       │  
+   │                       Incompatible arguments to '+'
+
+error[E04003]: built-in operation not supported
+   ┌─ tests/move_2024/matching/struct_match_mut_invalid.move:69:25
+   │
+ 6 │     public struct NBase has copy, drop { t: u64 }
+   │                                             --- Found: '&u64'. But expected: 'u8', 'u16', 'u32', 'u64', 'u128', 'u256'
+   ·
+69 │                 x = x + 1;
+   │                         ^ Invalid argument to '+'
+
+error[E04003]: built-in operation not supported
+   ┌─ tests/move_2024/matching/struct_match_mut_invalid.move:78:21
+   │
+ 8 │     public struct PBase(u64) has copy, drop;
+   │                         --- Found: '&u64'. But expected: 'u8', 'u16', 'u32', 'u64', 'u128', 'u256'
+   ·
+78 │                 x = x + 1;
+   │                     ^ Invalid argument to '+'
+
+error[E04007]: incompatible types
+   ┌─ tests/move_2024/matching/struct_match_mut_invalid.move:78:23
+   │
+ 8 │     public struct PBase(u64) has copy, drop;
+   │                         --- Found: '&u64'. It is not compatible with the other type.
+   ·
+78 │                 x = x + 1;
+   │                       ^ - Found: integer. It is not compatible with the other type.
+   │                       │  
+   │                       Incompatible arguments to '+'
+
+error[E04003]: built-in operation not supported
+   ┌─ tests/move_2024/matching/struct_match_mut_invalid.move:78:25
+   │
+ 8 │     public struct PBase(u64) has copy, drop;
+   │                         --- Found: '&u64'. But expected: 'u8', 'u16', 'u32', 'u64', 'u128', 'u256'
+   ·
+78 │                 x = x + 1;
+   │                         ^ Invalid argument to '+'
+
+error[E04003]: built-in operation not supported
+   ┌─ tests/move_2024/matching/struct_match_mut_invalid.move:87:21
+   │
+ 6 │     public struct NBase has copy, drop { t: u64 }
+   │                                             --- Found: '&u64'. But expected: 'u8', 'u16', 'u32', 'u64', 'u128', 'u256'
+   ·
+87 │                 x = x + 1;
+   │                     ^ Invalid argument to '+'
+
+error[E04007]: incompatible types
+   ┌─ tests/move_2024/matching/struct_match_mut_invalid.move:87:23
+   │
+ 6 │     public struct NBase has copy, drop { t: u64 }
+   │                                             --- Found: '&u64'. It is not compatible with the other type.
+   ·
+87 │                 x = x + 1;
+   │                       ^ - Found: integer. It is not compatible with the other type.
+   │                       │  
+   │                       Incompatible arguments to '+'
+
+error[E04003]: built-in operation not supported
+   ┌─ tests/move_2024/matching/struct_match_mut_invalid.move:87:25
+   │
+ 6 │     public struct NBase has copy, drop { t: u64 }
+   │                                             --- Found: '&u64'. But expected: 'u8', 'u16', 'u32', 'u64', 'u128', 'u256'
+   ·
+87 │                 x = x + 1;
+   │                         ^ Invalid argument to '+'
+
+error[E04003]: built-in operation not supported
+   ┌─ tests/move_2024/matching/struct_match_mut_invalid.move:96:21
+   │
+ 8 │     public struct PBase(u64) has copy, drop;
+   │                         --- Found: '&u64'. But expected: 'u8', 'u16', 'u32', 'u64', 'u128', 'u256'
+   ·
+96 │                 x = x + 1;
+   │                     ^ Invalid argument to '+'
+
+error[E04007]: incompatible types
+   ┌─ tests/move_2024/matching/struct_match_mut_invalid.move:96:23
+   │
+ 8 │     public struct PBase(u64) has copy, drop;
+   │                         --- Found: '&u64'. It is not compatible with the other type.
+   ·
+96 │                 x = x + 1;
+   │                       ^ - Found: integer. It is not compatible with the other type.
+   │                       │  
+   │                       Incompatible arguments to '+'
+
+error[E04003]: built-in operation not supported
+   ┌─ tests/move_2024/matching/struct_match_mut_invalid.move:96:25
+   │
+ 8 │     public struct PBase(u64) has copy, drop;
+   │                         --- Found: '&u64'. But expected: 'u8', 'u16', 'u32', 'u64', 'u128', 'u256'
+   ·
+96 │                 x = x + 1;
+   │                         ^ Invalid argument to '+'

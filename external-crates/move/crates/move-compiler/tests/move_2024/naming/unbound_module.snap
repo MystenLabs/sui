@@ -1,0 +1,18 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: 2024.alpha
+  lint: false
+---
+error[E03002]: unbound module
+  ┌─ tests/move_2024/naming/unbound_module.move:2:9
+  │
+2 │     use 0x1::X as X;
+  │         ^^^^^^ Invalid 'use'. Unbound module: '0x1::X'
+
+error[E03006]: unexpected name in this position
+  ┌─ tests/move_2024/naming/unbound_module.move:4:9
+  │
+4 │         X::foo();
+  │         ^ Could not resolve the name 'X'

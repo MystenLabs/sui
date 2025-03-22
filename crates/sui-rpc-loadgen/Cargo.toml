@@ -25,16 +25,11 @@ sui-types.workspace = true
 sui-keys.workspace = true
 sui-sdk.workspace = true
 telemetry-subscribers.workspace = true
-sui-json-rpc.workspace = true
 sui-json-rpc-types.workspace = true
 strum.workspace = true
 shared-crypto.workspace = true
 serde_json.workspace = true
 strum_macros.workspace = true
-
-[dev-dependencies]
-test-cluster.workspace = true
-
 
 [[bin]]
 name = "sui-rpc-loadgen"

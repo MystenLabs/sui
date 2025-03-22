@@ -3,7 +3,7 @@
 
 #[cfg(msim)]
 mod test {
-    use rand::{distributions::uniform::SampleRange, thread_rng, Rng};
+    use rand::{distributions::uniform::SampleRange, seq::SliceRandom, thread_rng, Rng};
     use std::collections::HashSet;
     use std::num::NonZeroUsize;
     use std::path::PathBuf;
@@ -14,6 +14,7 @@ mod test {
     use sui_benchmark::bank::BenchmarkBank;
     use sui_benchmark::system_state_observer::SystemStateObserver;
     use sui_benchmark::workloads::adversarial::AdversarialPayloadCfg;
+    use sui_benchmark::workloads::benchmark_move_base_dir;
     use sui_benchmark::workloads::expected_failure::ExpectedFailurePayloadCfg;
     use sui_benchmark::workloads::workload::ExpectedFailureType;
     use sui_benchmark::workloads::workload_configuration::{
@@ -33,10 +34,13 @@ mod test {
     use sui_core::checkpoints::{CheckpointStore, CheckpointWatermark};
     use sui_framework::BuiltInFramework;
     use sui_macros::{
-        clear_fail_point, nondeterministic, register_fail_point_arg, register_fail_point_async,
-        register_fail_point_if, register_fail_points, sim_test,
+        clear_fail_point, nondeterministic, register_fail_point, register_fail_point_arg,
+        register_fail_point_async, register_fail_point_if, register_fail_points, sim_test,
     };
-    use sui_protocol_config::{PerObjectCongestionControlMode, ProtocolConfig, ProtocolVersion};
+    use sui_protocol_config::{
+        ExecutionTimeEstimateParams, PerObjectCongestionControlMode, ProtocolConfig,
+        ProtocolVersion,
+    };
     use sui_simulator::tempfile::TempDir;
     use sui_simulator::{configs::*, SimConfig};
     use sui_storage::blob::Blob;
@@ -365,18 +369,13 @@ mod test {
         let dead_validator = dead_validator_orig.clone();
         let keep_alive_nodes_clone = keep_alive_nodes.clone();
         let grace_period_clone = grace_period.clone();
-        register_fail_point_async("crash", move || {
-            let dead_validator = dead_validator.clone();
-            let keep_alive_nodes_clone = keep_alive_nodes_clone.clone();
-            let grace_period_clone = grace_period_clone.clone();
-            async move {
-                handle_failpoint(
-                    dead_validator.clone(),
-                    keep_alive_nodes_clone.clone(),
-                    grace_period_clone.clone(),
-                    0.01,
-                );
-            }
+        register_fail_point("crash", move || {
+            handle_failpoint(
+                dead_validator.clone(),
+                keep_alive_nodes_clone.clone(),
+                grace_period_clone.clone(),
+                0.01,
+            );
         });
 
         // Narwhal & Consensus 2.0 fail points.
@@ -421,9 +420,6 @@ mod test {
             }
         });
         register_fail_point_async("consensus-delay", || delay_failpoint(10..20, 0.001));
-        register_fail_point_async("write_object_entry", || delay_failpoint(10..20, 0.001));
-
-        register_fail_point_async("writeback-cache-commit", || delay_failpoint(10..20, 0.001));
 
         test_simulated_load(test_cluster, 120).await;
     }
@@ -481,13 +477,21 @@ mod test {
         let separate_randomness_budget;
         {
             let mut rng = thread_rng();
-            mode = if rng.gen_bool(0.33) {
-                PerObjectCongestionControlMode::TotalGasBudget
-            } else if rng.gen_bool(0.5) {
-                PerObjectCongestionControlMode::TotalTxCount
-            } else {
-                PerObjectCongestionControlMode::TotalGasBudgetWithCap
-            };
+            mode = *[
+                PerObjectCongestionControlMode::TotalGasBudget,
+                PerObjectCongestionControlMode::TotalTxCount,
+                PerObjectCongestionControlMode::TotalGasBudgetWithCap,
+                PerObjectCongestionControlMode::ExecutionTimeEstimate(
+                    ExecutionTimeEstimateParams {
+                        target_utilization: rng.gen_range(1..=100),
+                        allowed_txn_cost_overage_burst_limit_us: rng.gen_range(0..500_000),
+                        randomness_scalar: rng.gen_range(10..=50),
+                        max_estimate_us: 1_500_000,
+                    },
+                ),
+            ]
+            .choose(&mut rng)
+            .unwrap();
             checkpoint_budget_factor = rng.gen_range(1..20);
             txn_count_limit = rng.gen_range(1..=10);
             max_deferral_rounds = if rng.gen_bool(0.5) {
@@ -528,6 +532,12 @@ mod test {
                 PerObjectCongestionControlMode::TotalGasBudget => {
                     config.set_max_accumulated_txn_cost_per_object_in_narwhal_commit_for_testing(total_gas_limit);
                     config.set_max_accumulated_txn_cost_per_object_in_mysticeti_commit_for_testing(total_gas_limit);
+                    config.set_max_txn_cost_overage_per_object_in_commit_for_testing(
+                        allow_overage_factor * total_gas_limit,
+                    );
+                    config.set_allowed_txn_cost_overage_burst_per_object_in_commit_for_testing(
+                        burst_limit_factor * total_gas_limit,
+                    );
                 },
                 PerObjectCongestionControlMode::TotalTxCount => {
                     config.set_max_accumulated_txn_cost_per_object_in_narwhal_commit_for_testing(
@@ -542,15 +552,17 @@ mod test {
                     config.set_max_accumulated_txn_cost_per_object_in_mysticeti_commit_for_testing(total_gas_limit);
                     config.set_gas_budget_based_txn_cost_cap_factor_for_testing(total_gas_limit/cap_factor_denominator);
                     config.set_gas_budget_based_txn_cost_absolute_cap_commit_count_for_testing(absolute_cap_factor);
+                    config.set_max_txn_cost_overage_per_object_in_commit_for_testing(
+                        allow_overage_factor * total_gas_limit,
+                    );
+                    config.set_allowed_txn_cost_overage_burst_per_object_in_commit_for_testing(
+                        burst_limit_factor * total_gas_limit,
+                    );
                 },
+                // Ignore, params are in ExecutionTimeEstimateParams
+                PerObjectCongestionControlMode::ExecutionTimeEstimate(_) => {}
             }
             config.set_max_deferral_rounds_for_congestion_control_for_testing(max_deferral_rounds);
-            config.set_max_txn_cost_overage_per_object_in_commit_for_testing(
-                allow_overage_factor * total_gas_limit,
-            );
-            config.set_allowed_txn_cost_overage_burst_per_object_in_commit_for_testing(
-                burst_limit_factor * total_gas_limit,
-            );
             if separate_randomness_budget {
                 config
                 .set_max_accumulated_randomness_txn_cost_per_object_in_mysticeti_commit_for_testing(
@@ -586,7 +598,7 @@ mod test {
             info!("Simulated load config: {:?}", simulated_load_config);
         }
 
-        test_simulated_load_with_test_config(test_cluster, 180, simulated_load_config, None, None)
+        test_simulated_load_with_test_config(test_cluster, 60, simulated_load_config, None, None)
             .await;
     }
 
@@ -823,7 +835,7 @@ mod test {
                 };
                 if let Some(new_framework_ref) = new_framework_ref {
                     for package in new_framework_ref {
-                        framework_injection::set_override(*package.id(), package.modules().clone());
+                        framework_injection::set_override(package.id, package.modules().clone());
                     }
                     info!("Framework injected for next_version {next_version}");
                 } else {
@@ -998,6 +1010,7 @@ mod test {
     struct SimulatedLoadConfig {
         num_transfer_accounts: u64,
         shared_counter_weight: u32,
+        slow_weight: u32,
         transfer_object_weight: u32,
         delegation_weight: u32,
         batch_payment_weight: u32,
@@ -1016,6 +1029,7 @@ mod test {
         fn default() -> Self {
             Self {
                 shared_counter_weight: 1,
+                slow_weight: 1,
                 transfer_object_weight: 1,
                 num_transfer_accounts: 2,
                 delegation_weight: 1,
@@ -1113,6 +1127,7 @@ mod test {
             adversarial: adversarial_weight,
             expected_failure: config.expected_failure_weight,
             randomized_transaction: config.randomized_transaction_weight,
+            slow: config.slow_weight,
         };
 
         let workload_config = WorkloadConfig {
@@ -1179,7 +1194,7 @@ mod test {
 
         let surfer_task = tokio::spawn(async move {
             // now do a sui-surfer test
-            let mut test_packages_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+            let mut test_packages_dir = benchmark_move_base_dir();
             test_packages_dir.extend(["..", "..", "crates", "sui-surfer", "tests"]);
             let test_package_paths: Vec<PathBuf> = std::fs::read_dir(test_packages_dir)
                 .unwrap()

@@ -1,0 +1,584 @@
+---
+source: crates/move-analyzer/tests/ide_testsuite.rs
+---
+== int_match.move ========================================================
+-- test 0 -------------------
+use line: 5, use_ndx: 0
+Use: 'bound_var', start: 12, end: 21
+Def: 'bound_var', line: 4, def char: 12
+TypeDef: no info
+On Hover:
+bound_var: u64
+
+-- test 1 -------------------
+use line: 5, use_ndx: 1
+Use: 'bound_var', start: 38, end: 47
+Def: 'bound_var', line: 4, def char: 12
+TypeDef: no info
+On Hover:
+bound_var: &u64
+
+-- test 2 -------------------
+use line: 5, use_ndx: 2
+Use: 'bound_var', start: 57, end: 66
+Def: 'bound_var', line: 4, def char: 12
+TypeDef: no info
+On Hover:
+bound_var: u64
+
+-- test 3 -------------------
+use line: 6, use_ndx: 0
+Use: 'another_var', start: 12, end: 23
+Def: 'another_var', line: 5, def char: 12
+TypeDef: no info
+On Hover:
+another_var: u64
+
+-- test 4 -------------------
+use line: 6, use_ndx: 1
+Use: 'another_var', start: 27, end: 38
+Def: 'another_var', line: 5, def char: 12
+TypeDef: no info
+On Hover:
+another_var: u64
+
+== long_enum.move ========================================================
+-- test 0 -------------------
+use line: 3, use_ndx: 0
+Use: 'LongEnum', start: 16, end: 24
+Def: 'LongEnum', line: 2, def char: 16
+TypeDef: 'LongEnum', line: 2, char: 16
+On Hover:
+public enum Enums::long_enum::LongEnum {
+	V1,
+	V2,
+	V3,
+	V4,
+	V5,
+	V6,
+	/* ... */
+}
+
+== mut_match.move ========================================================
+-- test 0 -------------------
+use line: 4, use_ndx: 0
+Use: 'mut_param', start: 15, end: 24
+Def: 'mut_param', line: 2, def char: 25
+TypeDef: no info
+On Hover:
+mut_param: &mut u64
+
+-- test 1 -------------------
+use line: 5, use_ndx: 0
+Use: 'mut_var', start: 12, end: 19
+Def: 'mut_var', line: 4, def char: 12
+TypeDef: no info
+On Hover:
+mut_var: &mut u64
+
+-- test 2 -------------------
+use line: 5, use_ndx: 1
+Use: 'mut_var', start: 25, end: 32
+Def: 'mut_var', line: 4, def char: 12
+TypeDef: no info
+On Hover:
+mut_var: &u64
+
+-- test 3 -------------------
+use line: 5, use_ndx: 2
+Use: 'mut_var', start: 43, end: 50
+Def: 'mut_var', line: 4, def char: 12
+TypeDef: no info
+On Hover:
+mut_var: &mut u64
+
+== nested_guard.move ========================================================
+-- test 0 -------------------
+use line: 4, use_ndx: 2
+Use: 'nested_var', start: 30, end: 40
+Def: 'nested_var', line: 3, def char: 30
+TypeDef: no info
+On Hover:
+nested_var: bool
+
+-- test 1 -------------------
+use line: 4, use_ndx: 3
+Use: 'nested_var', start: 47, end: 57
+Def: 'nested_var', line: 3, def char: 30
+TypeDef: no info
+On Hover:
+nested_var: &bool
+
+-- test 2 -------------------
+use line: 4, use_ndx: 4
+Use: 'nested_var', start: 62, end: 72
+Def: 'nested_var', line: 3, def char: 30
+TypeDef: no info
+On Hover:
+nested_var: bool
+
+== nested_match.move ========================================================
+-- test 0 -------------------
+use line: 15, use_ndx: 2
+Use: 'num', start: 40, end: 43
+Def: 'T1', line: 3, def char: 25
+TypeDef: no info
+On Hover:
+Enums::nested_match::OuterEnum
+0: T1
+
+-- test 1 -------------------
+use line: 15, use_ndx: 3
+Use: 'InnerEnum', start: 45, end: 54
+Def: 'InnerEnum', line: 7, def char: 16
+TypeDef: 'InnerEnum', line: 7, char: 16
+On Hover:
+public enum Enums::nested_match::InnerEnum<L, R> has drop {
+	Left( /* ... */ ),
+	Right( /* ... */ )
+}
+
+-- test 2 -------------------
+use line: 15, use_ndx: 4
+Use: 'Left', start: 56, end: 60
+Def: 'Left', line: 8, def char: 8
+TypeDef: no info
+On Hover:
+Enums::nested_match::InnerEnum::Left(L)
+
+-- test 3 -------------------
+use line: 15, use_ndx: 5
+Use: 'inner_num', start: 61, end: 70
+Def: 'L', line: 8, def char: 13
+TypeDef: no info
+On Hover:
+Enums::nested_match::InnerEnum
+0: L
+
+-- test 4 -------------------
+use line: 15, use_ndx: 6
+Use: 'num', start: 76, end: 79
+Def: 'num', line: 14, def char: 40
+TypeDef: no info
+On Hover:
+num: u64
+
+-- test 5 -------------------
+use line: 15, use_ndx: 7
+Use: 'inner_num', start: 82, end: 91
+Def: 'inner_num', line: 14, def char: 61
+TypeDef: no info
+On Hover:
+inner_num: u64
+
+-- test 6 -------------------
+use line: 16, use_ndx: 2
+Use: 'field', start: 37, end: 42
+Def: 'field', line: 4, def char: 22
+TypeDef: no info
+On Hover:
+Enums::nested_match::OuterEnum
+field: T2
+
+-- test 7 -------------------
+use line: 16, use_ndx: 3
+Use: 'InnerEnum', start: 44, end: 53
+Def: 'InnerEnum', line: 7, def char: 16
+TypeDef: 'InnerEnum', line: 7, char: 16
+On Hover:
+public enum Enums::nested_match::InnerEnum<L, R> has drop {
+	Left( /* ... */ ),
+	Right( /* ... */ )
+}
+
+-- test 8 -------------------
+use line: 16, use_ndx: 4
+Use: 'Right', start: 55, end: 60
+Def: 'Right', line: 9, def char: 8
+TypeDef: no info
+On Hover:
+Enums::nested_match::InnerEnum::Right(R)
+
+-- test 9 -------------------
+use line: 16, use_ndx: 5
+Use: 'inner_num', start: 61, end: 70
+Def: 'R', line: 9, def char: 14
+TypeDef: no info
+On Hover:
+Enums::nested_match::InnerEnum
+0: R
+
+-- test 10 -------------------
+use line: 16, use_ndx: 6
+Use: 'inner_num', start: 77, end: 86
+Def: 'inner_num', line: 15, def char: 61
+TypeDef: no info
+On Hover:
+inner_num: u64
+
+== struct_match.move ========================================================
+-- test 0 -------------------
+use line: 13, use_ndx: 0
+Use: 's', start: 15, end: 16
+Def: 's', line: 11, def char: 28
+TypeDef: 'AnotherStruct', line: 6, char: 18
+On Hover:
+s: Enums::struct_match::AnotherStruct
+
+-- test 1 -------------------
+use line: 14, use_ndx: 0
+Use: 'AnotherStruct', start: 12, end: 25
+Def: 'AnotherStruct', line: 6, def char: 18
+TypeDef: 'AnotherStruct', line: 6, char: 18
+On Hover:
+public struct Enums::struct_match::AnotherStruct has drop {
+	field: u64,
+	another_field: Enums::struct_match::SomeStruct
+}
+
+-- test 2 -------------------
+use line: 14, use_ndx: 1
+Use: 'field', start: 28, end: 33
+Def: 'field', line: 7, def char: 8
+TypeDef: no info
+On Hover:
+Enums::struct_match::AnotherStruct
+field: u64
+
+-- test 3 -------------------
+use line: 14, use_ndx: 2
+Use: 'field', start: 43, end: 48
+Def: 'field', line: 13, def char: 28
+TypeDef: no info
+On Hover:
+field: u64
+
+-- test 4 -------------------
+use line: 15, use_ndx: 1
+Use: 'another_field', start: 33, end: 46
+Def: 'another_field', line: 8, def char: 8
+TypeDef: 'SomeStruct', line: 2, char: 18
+On Hover:
+Enums::struct_match::AnotherStruct
+another_field: Enums::struct_match::SomeStruct
+
+-- test 5 -------------------
+use line: 15, use_ndx: 2
+Use: 'SomeStruct', start: 48, end: 58
+Def: 'SomeStruct', line: 2, def char: 18
+TypeDef: 'SomeStruct', line: 2, char: 18
+On Hover:
+public struct Enums::struct_match::SomeStruct has drop {
+	some_field: u64
+}
+
+-- test 6 -------------------
+use line: 15, use_ndx: 3
+Use: 'some_field', start: 61, end: 71
+Def: 'some_field', line: 3, def char: 8
+TypeDef: no info
+On Hover:
+Enums::struct_match::SomeStruct
+some_field: u64
+
+-- test 7 -------------------
+use line: 15, use_ndx: 4
+Use: 'some_field', start: 79, end: 89
+Def: 'some_field', line: 14, def char: 61
+TypeDef: no info
+On Hover:
+some_field: u64
+
+== variant_match.move ========================================================
+-- test 0 -------------------
+use line: 7, use_ndx: 0
+Use: 'SomeEnum', start: 16, end: 24
+Def: 'SomeEnum', line: 6, def char: 16
+TypeDef: 'SomeEnum', line: 6, char: 16
+On Hover:
+public enum Enums::variant_match::SomeEnum has drop {
+	Empty,
+	NamedFields{ /* ... */ },
+	PositionalFields( /* ... */ )
+}
+
+-- test 1 -------------------
+use line: 8, use_ndx: 0
+Use: 'PositionalFields', start: 8, end: 24
+Def: 'PositionalFields', line: 7, def char: 8
+TypeDef: no info
+On Hover:
+Enums::variant_match::SomeEnum::PositionalFields(u64, Enums::variant_match::SomeStruct)
+
+-- test 2 -------------------
+use line: 8, use_ndx: 1
+Use: 'SomeStruct', start: 30, end: 40
+Def: 'SomeStruct', line: 2, def char: 18
+TypeDef: 'SomeStruct', line: 2, char: 18
+On Hover:
+public struct Enums::variant_match::SomeStruct has drop {
+	some_field: u64
+}
+
+-- test 3 -------------------
+use line: 9, use_ndx: 0
+Use: 'NamedFields', start: 8, end: 19
+Def: 'NamedFields', line: 8, def char: 8
+TypeDef: no info
+On Hover:
+Enums::variant_match::SomeEnum::NamedFields{num1: u64, num2: u64, s: Enums::variant_match::SomeStruct}
+
+-- test 4 -------------------
+use line: 9, use_ndx: 1
+Use: 'num1', start: 21, end: 25
+Def: 'num1', line: 8, def char: 21
+TypeDef: no info
+On Hover:
+Enums::variant_match::SomeEnum
+num1: u64
+
+-- test 5 -------------------
+use line: 9, use_ndx: 2
+Use: 'num2', start: 32, end: 36
+Def: 'num2', line: 8, def char: 32
+TypeDef: no info
+On Hover:
+Enums::variant_match::SomeEnum
+num2: u64
+
+-- test 6 -------------------
+use line: 9, use_ndx: 3
+Use: 's', start: 43, end: 44
+Def: 's', line: 8, def char: 43
+TypeDef: 'SomeStruct', line: 2, char: 18
+On Hover:
+Enums::variant_match::SomeEnum
+s: Enums::variant_match::SomeStruct
+
+-- test 7 -------------------
+use line: 9, use_ndx: 4
+Use: 'SomeStruct', start: 46, end: 56
+Def: 'SomeStruct', line: 2, def char: 18
+TypeDef: 'SomeStruct', line: 2, char: 18
+On Hover:
+public struct Enums::variant_match::SomeStruct has drop {
+	some_field: u64
+}
+
+-- test 8 -------------------
+use line: 10, use_ndx: 0
+Use: 'Empty', start: 8, end: 13
+Def: 'Empty', line: 9, def char: 8
+TypeDef: no info
+On Hover:
+Enums::variant_match::SomeEnum::Empty
+
+-- test 9 -------------------
+use line: 15, use_ndx: 0
+Use: 'e', start: 16, end: 17
+Def: 'e', line: 14, def char: 16
+TypeDef: 'SomeEnum', line: 6, char: 16
+On Hover:
+let mut e: Enums::variant_match::SomeEnum
+
+-- test 10 -------------------
+use line: 15, use_ndx: 1
+Use: 'SE', start: 20, end: 22
+Def: 'SomeEnum', line: 6, def char: 16
+TypeDef: 'SomeEnum', line: 6, char: 16
+On Hover:
+public enum Enums::variant_match::SomeEnum has drop {
+	Empty,
+	NamedFields{ /* ... */ },
+	PositionalFields( /* ... */ )
+}
+
+-- test 11 -------------------
+use line: 15, use_ndx: 2
+Use: 'PositionalFields', start: 24, end: 40
+Def: 'PositionalFields', line: 7, def char: 8
+TypeDef: no info
+On Hover:
+Enums::variant_match::SomeEnum::PositionalFields(u64, Enums::variant_match::SomeStruct)
+
+-- test 12 -------------------
+use line: 15, use_ndx: 3
+Use: 's', start: 45, end: 46
+Def: 's', line: 12, def char: 29
+TypeDef: 'SomeStruct', line: 2, char: 18
+On Hover:
+s: Enums::variant_match::SomeStruct
+
+-- test 13 -------------------
+use line: 19, use_ndx: 0
+Use: 'e', start: 20, end: 21
+Def: 'e', line: 14, def char: 16
+TypeDef: 'SomeEnum', line: 6, char: 16
+On Hover:
+let mut e: Enums::variant_match::SomeEnum
+
+-- test 14 -------------------
+use line: 20, use_ndx: 0
+Use: 'SomeEnum', start: 12, end: 20
+Def: 'SomeEnum', line: 6, def char: 16
+TypeDef: 'SomeEnum', line: 6, char: 16
+On Hover:
+public enum Enums::variant_match::SomeEnum has drop {
+	Empty,
+	NamedFields{ /* ... */ },
+	PositionalFields( /* ... */ )
+}
+
+-- test 15 -------------------
+use line: 20, use_ndx: 1
+Use: 'PositionalFields', start: 22, end: 38
+Def: 'PositionalFields', line: 7, def char: 8
+TypeDef: no info
+On Hover:
+Enums::variant_match::SomeEnum::PositionalFields(u64, Enums::variant_match::SomeStruct)
+
+-- test 16 -------------------
+use line: 20, use_ndx: 2
+Use: 'num', start: 39, end: 42
+Def: 'u64', line: 7, def char: 25
+TypeDef: no info
+On Hover:
+Enums::variant_match::SomeEnum
+0: u64
+
+-- test 17 -------------------
+use line: 20, use_ndx: 3
+Use: 's', start: 44, end: 45
+Def: 'SomeStruct', line: 7, def char: 30
+TypeDef: 'SomeStruct', line: 2, char: 18
+On Hover:
+Enums::variant_match::SomeEnum
+1: Enums::variant_match::SomeStruct
+
+-- test 18 -------------------
+use line: 21, use_ndx: 0
+Use: 'num', start: 17, end: 20
+Def: 'num', line: 19, def char: 39
+TypeDef: no info
+On Hover:
+num: &mut u64
+
+-- test 19 -------------------
+use line: 21, use_ndx: 1
+Use: 's', start: 23, end: 24
+Def: 's', line: 19, def char: 44
+TypeDef: 'SomeStruct', line: 2, char: 18
+On Hover:
+s: &mut Enums::variant_match::SomeStruct
+
+-- test 20 -------------------
+use line: 21, use_ndx: 2
+Use: 'some_field', start: 25, end: 35
+Def: 'some_field', line: 3, def char: 8
+TypeDef: no info
+On Hover:
+Enums::variant_match::SomeStruct
+some_field: u64
+
+-- test 21 -------------------
+use line: 24, use_ndx: 0
+Use: 'SE', start: 12, end: 14
+Def: 'SomeEnum', line: 6, def char: 16
+TypeDef: 'SomeEnum', line: 6, char: 16
+On Hover:
+public enum Enums::variant_match::SomeEnum has drop {
+	Empty,
+	NamedFields{ /* ... */ },
+	PositionalFields( /* ... */ )
+}
+
+-- test 22 -------------------
+use line: 24, use_ndx: 1
+Use: 'NamedFields', start: 16, end: 27
+Def: 'NamedFields', line: 8, def char: 8
+TypeDef: no info
+On Hover:
+Enums::variant_match::SomeEnum::NamedFields{num1: u64, num2: u64, s: Enums::variant_match::SomeStruct}
+
+-- test 23 -------------------
+use line: 24, use_ndx: 2
+Use: 'num1', start: 30, end: 34
+Def: 'num1', line: 8, def char: 21
+TypeDef: no info
+On Hover:
+Enums::variant_match::SomeEnum
+num1: u64
+
+-- test 24 -------------------
+use line: 24, use_ndx: 3
+Use: 'num2', start: 36, end: 40
+Def: 'num2', line: 8, def char: 32
+TypeDef: no info
+On Hover:
+Enums::variant_match::SomeEnum
+num2: u64
+
+-- test 25 -------------------
+use line: 24, use_ndx: 4
+Use: 's', start: 46, end: 47
+Def: 's', line: 8, def char: 43
+TypeDef: 'SomeStruct', line: 2, char: 18
+On Hover:
+Enums::variant_match::SomeEnum
+s: Enums::variant_match::SomeStruct
+
+-- test 26 -------------------
+use line: 24, use_ndx: 5
+Use: 'num1', start: 55, end: 59
+Def: 'num1', line: 23, def char: 30
+TypeDef: no info
+On Hover:
+num1: &u64
+
+-- test 27 -------------------
+use line: 24, use_ndx: 6
+Use: 's', start: 62, end: 63
+Def: 's', line: 23, def char: 46
+TypeDef: 'SomeStruct', line: 2, char: 18
+On Hover:
+s: &Enums::variant_match::SomeStruct
+
+-- test 28 -------------------
+use line: 24, use_ndx: 8
+Use: 'num1', start: 79, end: 83
+Def: 'num1', line: 23, def char: 30
+TypeDef: no info
+On Hover:
+num1: &u64
+
+-- test 29 -------------------
+use line: 24, use_ndx: 9
+Use: 'local', start: 86, end: 91
+Def: 'local', line: 16, def char: 12
+TypeDef: no info
+On Hover:
+let local: u64
+
+-- test 30 -------------------
+use line: 25, use_ndx: 0
+Use: 's', start: 16, end: 17
+Def: 's', line: 23, def char: 46
+TypeDef: 'SomeStruct', line: 2, char: 18
+On Hover:
+s: &mut Enums::variant_match::SomeStruct
+
+-- test 31 -------------------
+use line: 25, use_ndx: 2
+Use: 'num1', start: 32, end: 36
+Def: 'num1', line: 23, def char: 30
+TypeDef: no info
+On Hover:
+num1: &mut u64
+
+-- test 32 -------------------
+use line: 25, use_ndx: 3
+Use: 'num2', start: 40, end: 44
+Def: 'num2', line: 23, def char: 36
+TypeDef: no info
+On Hover:
+num2: &mut u64

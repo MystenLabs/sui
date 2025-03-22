@@ -1,0 +1,57 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: 2024.alpha
+  lint: false
+---
+warning[W10007]: issue with attribute value
+  ┌─ tests/move_2024/ide_mode/dot_incomplete.move:1:9
+  │
+1 │ #[allow(ide_path_autocomplete)]
+  │         ^^^^^^^^^^^^^^^^^^^^^ Unknown warning filter 'ide_path_autocomplete'
+
+error[E01002]: unexpected token
+   ┌─ tests/move_2024/ide_mode/dot_incomplete.move:14:24
+   │
+14 │         let _tmp1 = _s.;                // incomplete with `;` (next line should parse)
+   │                        ^
+   │                        │
+   │                        Unexpected ';'
+   │                        Expected an identifier or a decimal number
+
+error[E01002]: unexpected token
+   ┌─ tests/move_2024/ide_mode/dot_incomplete.move:15:26
+   │
+15 │         let _tmp2 = _s.a.;  // incomplete with `;` (next line should parse)
+   │                          ^
+   │                          │
+   │                          Unexpected ';'
+   │                          Expected an identifier or a decimal number
+
+error[E01002]: unexpected token
+   ┌─ tests/move_2024/ide_mode/dot_incomplete.move:17:9
+   │
+17 │         let _tmp4 = _s.
+   │         ^^^
+   │         │
+   │         Unexpected 'let'
+   │         Expected an identifier or a decimal number
+
+error[E01002]: unexpected token
+   ┌─ tests/move_2024/ide_mode/dot_incomplete.move:18:9
+   │
+18 │         let _tmp5 = _s.                  // incomplete without `;` (unexpected `}`)
+   │         ^^^
+   │         │
+   │         Unexpected 'let'
+   │         Expected an identifier or a decimal number
+
+error[E01002]: unexpected token
+   ┌─ tests/move_2024/ide_mode/dot_incomplete.move:19:5
+   │
+19 │     }
+   │     ^
+   │     │
+   │     Unexpected '}'
+   │     Expected an identifier or a decimal number

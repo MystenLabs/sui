@@ -349,14 +349,16 @@ async fn test_package_denied() {
     .await
     .unwrap();
 
-    state
-        .get_cache_commit()
-        .commit_transaction_outputs(
-            state.epoch_store_for_testing().epoch(),
-            &[tx_c, tx_b, tx_a, tx_c_prime, tx_b_prime],
-            true,
-        )
-        .await;
+    let batch = state.get_cache_commit().build_db_batch(
+        state.epoch_store_for_testing().epoch(),
+        &[tx_c, tx_b, tx_a, tx_c_prime, tx_b_prime],
+    );
+
+    state.get_cache_commit().commit_transaction_outputs(
+        state.epoch_store_for_testing().epoch(),
+        batch,
+        &[tx_c, tx_b, tx_a, tx_c_prime, tx_b_prime],
+    );
 
     // Re-create the state such that we could deny package c.
     let state = reload_state_with_new_deny_config(

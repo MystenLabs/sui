@@ -9,7 +9,7 @@ use std::{
 };
 
 use lru::LruCache;
-use mysten_common::fatal;
+use mysten_common::{fatal, util::randomize_cache_capacity_in_tests};
 use mysten_metrics::monitored_scope;
 use parking_lot::RwLock;
 use sui_types::{
@@ -187,7 +187,7 @@ struct AvailableObjectsCache {
 
 impl AvailableObjectsCache {
     fn new(metrics: Arc<AuthorityMetrics>) -> Self {
-        Self::new_with_size(metrics, 100000)
+        Self::new_with_size(metrics, randomize_cache_capacity_in_tests(100000))
     }
 
     fn new_with_size(metrics: Arc<AuthorityMetrics>, size: usize) -> Self {
@@ -511,10 +511,6 @@ impl TransactionManager {
                 &input_object_cache_misses,
                 receiving_objects,
                 epoch_store.epoch(),
-                epoch_store
-                    .protocol_config()
-                    .use_object_per_epoch_marker_table_v2_as_option()
-                    .unwrap_or(false),
             )
             .into_iter()
             .zip(input_object_cache_misses);
@@ -776,16 +772,6 @@ impl TransactionManager {
         let _ = self.tx_ready_certificates.send(pending_certificate);
         self.metrics.transaction_manager_num_ready.inc();
         self.metrics.execution_driver_dispatch_queue.inc();
-    }
-
-    /// Gets the missing input object keys for the given transaction.
-    pub(crate) fn get_missing_input(&self, digest: &TransactionDigest) -> Option<Vec<InputKey>> {
-        let reconfig_lock = self.inner.read();
-        let inner = reconfig_lock.read();
-        inner
-            .pending_certificates
-            .get(digest)
-            .map(|cert| cert.waiting_input_objects.clone().into_iter().collect())
     }
 
     // Returns the number of transactions waiting on each object ID, as well as the age of the oldest transaction in the queue.

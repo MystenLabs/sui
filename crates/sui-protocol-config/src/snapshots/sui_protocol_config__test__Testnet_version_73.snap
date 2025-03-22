@@ -71,6 +71,7 @@ feature_flags:
   native_charging_v2: true
   convert_type_argument_error: true
   variant_nodes: true
+  consensus_zstd_compression: true
 max_tx_size_bytes: 131072
 max_input_objects: 2048
 max_size_written_objects: 5000000
@@ -336,15 +337,14 @@ consensus_voting_rounds: 40
 max_accumulated_txn_cost_per_object_in_narwhal_commit: 40
 max_deferral_rounds_for_congestion_control: 10
 max_txn_cost_overage_per_object_in_commit: 18446744073709551615
-allowed_txn_cost_overage_burst_per_object_in_commit: 185000000
+allowed_txn_cost_overage_burst_per_object_in_commit: 370000000
 min_checkpoint_interval_ms: 200
 checkpoint_summary_version_specific_data: 1
 max_soft_bundle_size: 5
 bridge_should_try_to_finalize_committee: true
-max_accumulated_txn_cost_per_object_in_mysticeti_commit: 18500000
-max_accumulated_randomness_txn_cost_per_object_in_mysticeti_commit: 3700000
+max_accumulated_txn_cost_per_object_in_mysticeti_commit: 37000000
+max_accumulated_randomness_txn_cost_per_object_in_mysticeti_commit: 7400000
 gas_budget_based_txn_cost_cap_factor: 400000
 gas_budget_based_txn_cost_absolute_cap_commit_count: 50
 sip_45_consensus_amplification_threshold: 5
 use_object_per_epoch_marker_table_v2: true
-

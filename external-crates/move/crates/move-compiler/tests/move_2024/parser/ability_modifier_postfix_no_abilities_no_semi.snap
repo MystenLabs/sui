@@ -1,0 +1,21 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: 2024.alpha
+  lint: false
+---
+error[E01002]: unexpected token
+  ┌─ tests/move_2024/parser/ability_modifier_postfix_no_abilities_no_semi.move:4:1
+  │
+4 │ }
+  │ ^ Unexpected '}'. Expected a type ability, one of: 'copy', 'drop', 'store', or 'key'
+
+error[E01002]: unexpected token
+  ┌─ tests/move_2024/parser/ability_modifier_postfix_no_abilities_no_semi.move:5:1
+  │
+5 │ 
+  │ ^
+  │ 
+  │ Unexpected end-of-file
+  │ Expected a module member: 'spec', 'use', 'friend', 'const', 'fun', 'struct', or 'enum'

@@ -21,7 +21,7 @@
 -- chain, and `wal_coin_balances` stores all the updates and deletes between
 -- `C` and `T`.
 --
--- To reconstruct the the live object set at some snapshot checkpoint `S`
+-- To reconstruct the live object set at some snapshot checkpoint `S`
 -- between `C` and `T`, a query can be constructed that starts with the set
 -- from `sum_coin_balances` and adds updates in `wal_coin_balances` from
 -- `cp_sequence_number <= S`.

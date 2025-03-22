@@ -1,0 +1,8 @@
+---
+source: crates/move-transactional-test-runner/src/framework.rs
+---
+processed 4 tasks
+
+task 3, line 21:
+//# run 43::M::test
+return values: { 43 }

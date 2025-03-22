@@ -1,0 +1,29 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: legacy
+  lint: false
+---
+error[E01002]: unexpected token
+  ┌─ tests/move_check/parser/less_than_space.move:5:16
+  │
+5 │         if (v< 10) return v;
+  │                ^^ Expected '::' after the anonymous address in this module access chain
+
+error[E01002]: unexpected token
+  ┌─ tests/move_check/parser/less_than_space.move:5:28
+  │
+5 │         if (v< 10) return v;
+  │              -             ^ Expected '>'
+  │              │              
+  │              To match this '<'
+
+error[E01002]: unexpected token
+  ┌─ tests/move_check/parser/less_than_space.move:5:28
+  │
+5 │         if (v< 10) return v;
+  │                            ^
+  │                            │
+  │                            Unexpected ';'
+  │                            Expected ')'

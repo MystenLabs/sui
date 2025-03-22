@@ -7,6 +7,7 @@ use crate::consensus_handler::SequencedConsensusTransaction;
 use core::default::Default;
 use fastcrypto::hash::MultisetHash;
 use fastcrypto::traits::KeyPair;
+use sui_protocol_config::Chain;
 use sui_types::crypto::{AccountKeyPair, AuthorityKeyPair};
 use sui_types::messages_consensus::ConsensusTransaction;
 use sui_types::utils::to_sender_signed_transaction;
@@ -106,8 +107,7 @@ pub async fn execute_certificate_with_execution_error(
                     &vec![VerifiedExecutableTransaction::new_from_certificate(
                         certificate.clone(),
                     )],
-                )
-                .await?;
+                )?;
         }
         if let Some(fullnode) = fullnode {
             fullnode
@@ -117,8 +117,7 @@ pub async fn execute_certificate_with_execution_error(
                     &vec![VerifiedExecutableTransaction::new_from_certificate(
                         certificate.clone(),
                     )],
-                )
-                .await?;
+                )?;
         }
     }
 
@@ -128,7 +127,7 @@ pub async fn execute_certificate_with_execution_error(
     let state_after =
         state_acc.accumulate_cached_live_object_set_for_testing(include_wrapped_tombstone);
     let effects_acc = state_acc.accumulate_effects(
-        vec![result.inner().data().clone()],
+        &[result.inner().data().clone()],
         epoch_store.protocol_config(),
     );
     state.union(&effects_acc);
@@ -186,8 +185,14 @@ pub async fn init_state_with_committee(
     genesis: &Genesis,
     authority_key: &AuthorityKeyPair,
 ) -> Arc<AuthorityState> {
+    let mut protocol_config =
+        ProtocolConfig::get_for_version(ProtocolVersion::max(), Chain::Unknown);
+    protocol_config
+        .set_per_object_congestion_control_mode_for_testing(PerObjectCongestionControlMode::None);
+
     TestAuthorityBuilder::new()
         .with_genesis_and_keypair(genesis, authority_key)
+        .with_protocol_config(protocol_config)
         .build()
         .await
 }
@@ -405,6 +410,7 @@ pub async fn send_consensus(authority: &AuthorityState, cert: &VerifiedCertifica
             vec![transaction],
             &Arc::new(CheckpointServiceNoop {}),
             authority.get_object_cache_reader().as_ref(),
+            authority.get_transaction_cache_reader().as_ref(),
             &authority.metrics,
             true,
         )
@@ -429,6 +435,7 @@ pub async fn send_consensus_no_execution(authority: &AuthorityState, cert: &Veri
             vec![transaction],
             &Arc::new(CheckpointServiceNoop {}),
             authority.get_object_cache_reader().as_ref(),
+            authority.get_transaction_cache_reader().as_ref(),
             &authority.metrics,
             true,
         )
@@ -459,6 +466,7 @@ pub async fn send_batch_consensus_no_execution(
             transactions,
             &Arc::new(CheckpointServiceNoop {}),
             authority.get_object_cache_reader().as_ref(),
+            authority.get_transaction_cache_reader().as_ref(),
             &authority.metrics,
             skip_consensus_commit_prologue_in_test,
         )
