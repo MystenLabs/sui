@@ -68,7 +68,7 @@ pub struct IngestionConfig {
     pub retry_interval_ms: u64,
 }
 
-pub(crate) struct IngestionService {
+pub struct IngestionService {
     config: IngestionConfig,
     client: IngestionClient,
     ingest_hi_tx: mpsc::UnboundedSender<(&'static str, u64)>,
@@ -86,7 +86,7 @@ impl IngestionConfig {
 impl IngestionService {
     /// TODO: If we want to expose this as part of the framework, so people can run just an
     /// ingestion service, we will need to split `IngestionMetrics` out from `IndexerMetrics`.
-    pub(crate) fn new(
+    pub fn new(
         args: ClientArgs,
         config: IngestionConfig,
         metrics: Arc<IndexerMetrics>,
@@ -134,7 +134,7 @@ impl IngestionService {
     /// run ahead of the watermark by more than the config's buffer_size.
     ///
     /// Returns the channel to receive checkpoints from and the channel to accept watermarks from.
-    pub(crate) fn subscribe(
+    pub fn subscribe(
         &mut self,
     ) -> (
         mpsc::Receiver<Arc<CheckpointData>>,
@@ -159,7 +159,7 @@ impl IngestionService {
     /// If ingestion reaches the leading edge of the network, it will encounter checkpoints that do
     /// not exist yet. These will be retried repeatedly on a fixed `retry_interval` until they
     /// become available.
-    pub(crate) async fn run<I>(self, checkpoints: I) -> Result<(JoinHandle<()>, JoinHandle<()>)>
+    pub async fn run<I>(self, checkpoints: I) -> Result<(JoinHandle<()>, JoinHandle<()>)>
     where
         I: IntoIterator<Item = u64> + Send + Sync + 'static,
         I::IntoIter: Send + Sync + 'static,
