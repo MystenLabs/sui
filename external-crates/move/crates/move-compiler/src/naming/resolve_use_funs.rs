@@ -234,13 +234,13 @@ fn use_funs(context: &mut Context, uf: &mut N::UseFuns) {
             loc,
             attributes,
             is_public,
-            tname: tn.clone(),
+            tname: tn,
             target_function: (target_m, target_f),
             kind,
             used,
         };
         let nuf_loc = nuf.loc;
-        let methods = resolved.entry(tn.clone()).or_insert_with(UniqueMap::new);
+        let methods = resolved.entry(tn).or_insert_with(UniqueMap::new);
         if let Err((_, prev)) = methods.add(method, nuf) {
             let msg = format!("Duplicate 'use fun' for '{}.{}'", tn, method);
             let tn_msg = match ekind {
@@ -287,7 +287,7 @@ fn is_valid_method(
         N::TypeName_::ModuleType(m, _) => m,
     };
     if defining_module == target_m {
-        Some((target_f, tn.clone()))
+        Some((target_f, *tn))
     } else {
         None
     }
