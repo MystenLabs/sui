@@ -5,27 +5,27 @@ use std::{collections::HashMap, sync::Arc};
 
 use async_graphql::dataloader::Loader;
 use diesel::sql_types::{Array, Bytea};
-use sui_indexer_alt_schema::objects::StoredObjVersionKey;
+use sui_indexer_alt_schema::objects::StoredObjVersion;
 use sui_types::base_types::ObjectID;
 
 use crate::data::error::Error;
 
 use super::pg_reader::PgReader;
 
-/// Key for fetching the latest version of an object, not accounting for deletions or wraps. If the
-/// object has been deleted or wrapped, the version before the delete/wrap is returned.
+/// Key for fetching the latest version of an object. If the object has been deleted or wrapped,
+/// the latest version will return the version it was deleted/wrapped at.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub(crate) struct LatestObjectVersionKey(pub ObjectID);
 
 #[async_trait::async_trait]
 impl Loader<LatestObjectVersionKey> for PgReader {
-    type Value = StoredObjVersionKey;
+    type Value = StoredObjVersion;
     type Error = Arc<Error>;
 
     async fn load(
         &self,
         keys: &[LatestObjectVersionKey],
-    ) -> Result<HashMap<LatestObjectVersionKey, StoredObjVersionKey>, Self::Error> {
+    ) -> Result<HashMap<LatestObjectVersionKey, StoredObjVersion>, Self::Error> {
         if keys.is_empty() {
             return Ok(HashMap::new());
         }
@@ -37,13 +37,17 @@ impl Loader<LatestObjectVersionKey> for PgReader {
             r#"
                 SELECT
                     k.object_id,
-                    v.object_version
+                    v.object_version,
+                    v.object_digest,
+                    v.cp_sequence_number
                 FROM (
                     SELECT UNNEST($1) object_id
                 ) k
                 CROSS JOIN LATERAL (
                     SELECT
-                        object_version
+                        object_version,
+                        object_digest,
+                        cp_sequence_number
                     FROM
                         obj_versions
                     WHERE
@@ -57,7 +61,7 @@ impl Loader<LatestObjectVersionKey> for PgReader {
         )
         .bind::<Array<Bytea>, _>(ids);
 
-        let obj_versions: Vec<StoredObjVersionKey> = conn.results(query).await.map_err(Arc::new)?;
+        let obj_versions: Vec<StoredObjVersion> = conn.results(query).await.map_err(Arc::new)?;
         let id_to_stored: HashMap<_, _> = obj_versions
             .into_iter()
             .map(|stored| (stored.object_id.clone(), stored))

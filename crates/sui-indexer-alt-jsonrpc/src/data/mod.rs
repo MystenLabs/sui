@@ -7,7 +7,6 @@ pub(crate) mod coin_metadata;
 pub(crate) mod displays;
 pub(crate) mod error;
 pub(crate) mod kv_loader;
-pub(crate) mod object_info;
 pub(crate) mod object_versions;
 pub(crate) mod objects;
 pub(crate) mod package_resolver;
