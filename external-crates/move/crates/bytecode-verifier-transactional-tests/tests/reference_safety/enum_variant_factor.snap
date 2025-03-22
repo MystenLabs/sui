@@ -1,45 +1,44 @@
 ---
 source: crates/move-transactional-test-runner/src/framework.rs
-input_file: crates/bytecode-verifier-transactional-tests/tests/reference_safety/enum_variant_factor.mvir
 ---
 processed 7 tasks
 
 task 0, lines 1-17:
 //# publish
-Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000001::o'. Got VMError: {
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000001::o1'. Got VMError: {
     major_status: FIELD_EXISTS_MUTABLE_BORROW_ERROR,
     sub_status: None,
-    location: 0x1::o,
+    location: 0x1::o1,
     indices: [(FunctionDefinition, 0)],
     offsets: [(FunctionDefinitionIndex(0), 5)],
 }
 
 task 1, lines 19-36:
 //# publish
-Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000001::o'. Got VMError: {
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000001::o2'. Got VMError: {
     major_status: FIELD_EXISTS_MUTABLE_BORROW_ERROR,
     sub_status: None,
-    location: 0x1::o,
+    location: 0x1::o2,
     indices: [(FunctionDefinition, 0)],
     offsets: [(FunctionDefinitionIndex(0), 3)],
 }
 
 task 2, lines 38-54:
 //# publish
-Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000001::o'. Got VMError: {
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000001::o3'. Got VMError: {
     major_status: FIELD_EXISTS_MUTABLE_BORROW_ERROR,
     sub_status: None,
-    location: 0x1::o,
+    location: 0x1::o3,
     indices: [(FunctionDefinition, 0)],
     offsets: [(FunctionDefinitionIndex(0), 3)],
 }
 
 task 3, lines 56-74:
 //# publish
-Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000001::o'. Got VMError: {
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000001::o4'. Got VMError: {
     major_status: FIELD_EXISTS_MUTABLE_BORROW_ERROR,
     sub_status: None,
-    location: 0x1::o,
+    location: 0x1::o4,
     indices: [(FunctionDefinition, 0)],
     offsets: [(FunctionDefinitionIndex(0), 5)],
 }
@@ -56,10 +55,10 @@ Error: Unable to publish module '00000000000000000000000000000000000000000000000
 
 task 6, lines 120-142:
 //# publish
-Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000001::invalid'. Got VMError: {
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000001::invalid2'. Got VMError: {
     major_status: READREF_EXISTS_MUTABLE_BORROW_ERROR,
     sub_status: None,
-    location: 0x1::invalid,
+    location: 0x1::invalid2,
     indices: [(FunctionDefinition, 0)],
     offsets: [(FunctionDefinitionIndex(0), 17)],
 }
