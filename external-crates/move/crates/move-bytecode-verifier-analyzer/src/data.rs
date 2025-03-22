@@ -3,7 +3,7 @@
 
 use std::{collections::BTreeMap, fmt::Display};
 
-use move_binary_format::{errors::VMError, CompiledModule};
+use move_binary_format::{CompiledModule, errors::VMError};
 use move_core_types::{account_address::AccountAddress, identifier::Identifier};
 
 pub struct Data {
@@ -26,7 +26,8 @@ pub struct ModuleData {
 pub struct ModuleVerificationResult {
     pub status: ModuleVerificationStatus,
     pub ticks: u128,
-    pub function_ticks: BTreeMap<String, u128>,
+    pub time: u128, // in microseconds
+    pub function_ticks: BTreeMap<String, (u128 /* ticks */, u128 /* microseconds */)>,
 }
 
 pub enum ModuleVerificationStatus {
@@ -70,7 +71,10 @@ impl Display for DataDisplay<'_> {
             }
             for (module_name, module_data) in modules {
                 let ticks_msg = if show_ticks {
-                    format!(" ({} ticks)", module_data.result.ticks)
+                    format!(
+                        " ({} ticks, {} μs)",
+                        module_data.result.ticks, module_data.result.time
+                    )
                 } else {
                     String::new()
                 };
@@ -92,13 +96,13 @@ impl Display for DataDisplay<'_> {
                     ModuleVerificationStatus::FunctionsFailed(failures) => failures,
                     _ => &empty_function_failures,
                 };
-                for (fname, ticks) in &module_data.result.function_ticks {
+                for (fname, (ticks, time)) in &module_data.result.function_ticks {
                     if show_ticks {
                         let status = match function_failures.get(fname) {
                             Some(err) => format!("FAILED {}", err),
                             None => "Verified".to_string(),
                         };
-                        writeln!(f, "    {fname} ({} ticks) {status}", ticks)?;
+                        writeln!(f, "    {fname} ({} ticks, {} μs) {status}", ticks, time)?;
                     } else if let Some(err) = function_failures.get(fname) {
                         writeln!(f, "    {fname}: {}", err)?;
                     }

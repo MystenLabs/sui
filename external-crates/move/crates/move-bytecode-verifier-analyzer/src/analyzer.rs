@@ -1,12 +1,12 @@
 use clap::*;
-use move_binary_format::{file_format::FunctionDefinitionIndex, CompiledModule};
+use move_binary_format::{CompiledModule, file_format::FunctionDefinitionIndex};
 use move_bytecode_verifier::{
     ability_cache::AbilityCache, code_unit_verifier,
     verifier::verify_module_with_config_metered_up_to_code_units,
     verify_module_with_config_metered,
 };
-use move_bytecode_verifier_meter::{bound::BoundMeter, Meter, Scope};
-use move_command_line_common::files::{extension_equals, find_filenames, MOVE_COMPILED_EXTENSION};
+use move_bytecode_verifier_meter::{Meter, Scope, bound::BoundMeter};
+use move_command_line_common::files::{MOVE_COMPILED_EXTENSION, extension_equals, find_filenames};
 use move_core_types::{account_address::AccountAddress, identifier::Identifier};
 use move_vm_config::verifier::VerifierConfig;
 use std::collections::{BTreeMap, HashMap};
@@ -145,7 +145,9 @@ fn analyze_module(
     // everything passed so rerun to ensure accurate ticks at the package level
     package_meter.enter_scope(module.name().as_str(), Scope::Module);
     // ignore result since we ran it already
+    let now = std::time::Instant::now();
     let _ = verify_module_with_config_metered(&config(), module, package_meter);
+    result.time = now.elapsed().as_micros();
     result.ticks = package_meter.get_usage(Scope::Module);
     package_meter
         .transfer(Scope::Module, Scope::Package, 1.0)
@@ -172,6 +174,7 @@ fn analyze_module_(
         }
         return Ok(ModuleVerificationResult {
             ticks: 0, // set above
+            time: 0,  // set above
             function_ticks: BTreeMap::new(),
             status: ModuleVerificationStatus::Failed(error),
         });
@@ -206,6 +209,7 @@ fn analyze_module_(
                 name
             );
         }
+        let now = std::time::Instant::now();
         if let Err(e) = code_unit_verifier::verify_function(
             &config,
             FunctionDefinitionIndex(idx as u16),
@@ -232,12 +236,14 @@ fn analyze_module_(
                 )),
             );
         }
+        let time = now.elapsed().as_micros();
         let ticks = meter.get_usage(Scope::Function);
-        function_ticks.insert(name.to_owned(), ticks);
+        function_ticks.insert(name.to_owned(), (ticks, time));
     }
     if !functions_failed.is_empty() {
         return Ok(ModuleVerificationResult {
             ticks: 0, // set above
+            time: 0,  // set above
             function_ticks,
             status: ModuleVerificationStatus::FunctionsFailed(functions_failed),
         });
@@ -245,6 +251,7 @@ fn analyze_module_(
 
     Ok(ModuleVerificationResult {
         ticks: 0, // set above
+        time: 0,  // set above
         function_ticks,
         status: ModuleVerificationStatus::Verified,
     })
@@ -252,9 +259,9 @@ fn analyze_module_(
 
 fn new_meter() -> BoundMeter {
     BoundMeter::new(move_vm_config::verifier::MeterConfig {
-        max_per_pkg_meter_units: None,
-        max_per_mod_meter_units: None,
-        max_per_fun_meter_units: None,
+        max_per_pkg_meter_units: Some(u128::MAX),
+        max_per_mod_meter_units: Some(u128::MAX),
+        max_per_fun_meter_units: Some(u128::MAX),
     })
 }
 
