@@ -227,6 +227,7 @@ const MAX_PROTOCOL_VERSION: u64 = 79;
 // Version 78: Make `TxContext` Move API native
 //             Enable execution time estimate mode for congestion control on testnet.
 // Version 79: Enable median based commit timestamp in consensus on testnet.
+//             Increase threshold for bad nodes that won't be considered leaders in consensus in testnet
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
@@ -3412,6 +3413,10 @@ impl ProtocolConfig {
                 79 => {
                     if chain != Chain::Mainnet {
                         cfg.feature_flags.consensus_median_based_commit_timestamp = true;
+
+                        // Increase threshold for bad nodes that won't be considered
+                        // leaders in consensus in testnet
+                        cfg.consensus_bad_nodes_stake_threshold = Some(30);
                     }
                 }
                 // Use this template when making changes:
