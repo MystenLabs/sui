@@ -1,0 +1,26 @@
+[package]
+name = "move-bytecode-verifier-analyzer"
+version = "0.0.1"
+authors = ["The Move Contributors"]
+publish = false
+edition = "2024"
+license = "Apache-2.0"
+
+[dependencies]
+anyhow.workspace = true
+clap.workspace = true
+
+move-binary-format.workspace = true
+move-bytecode-verifier.workspace = true
+move-bytecode-verifier-meter.workspace = true
+move-command-line-common.workspace = true
+move-core-types.workspace = true
+move-vm-config.workspace = true
+
+[features]
+default = []
+
+[[bin]]
+edition = "2024"
+name = "move-bytecode-verifier-analyzer"
+path = "bin/main.rs"
