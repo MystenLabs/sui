@@ -78,6 +78,8 @@ struct BasicBlock<InstructionIndex> {
 }
 
 /// The control flow graph that we build from the bytecode.
+/// Assumes a list of bytecode isntructions that satisfy the invariants specified in the VM's
+/// file format.
 pub struct VMControlFlowGraph<'a, I: Instruction> {
     code: &'a [I],
     /// The basic blocks

@@ -13,10 +13,10 @@
 //!
 //! For bytecode versions 5 and below, delegates to `control_flow_v5`.
 use crate::{
+    absint::FunctionContext,
     control_flow_v5,
     loop_summary::{LoopPartition, LoopSummary},
 };
-use move_abstract_interpreter::absint::FunctionContext;
 use move_binary_format::{
     CompiledModule,
     errors::{PartialVMError, PartialVMResult},
