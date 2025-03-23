@@ -6,6 +6,8 @@ use move_abstract_interpreter::control_flow_graph::{
 };
 use std::collections::{BTreeMap, BTreeSet, btree_map::Entry};
 
+type BlockId = CodeOffset;
+
 /// Dense index into nodes in the same `LoopSummary`
 #[derive(Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub struct NodeId(u16);
