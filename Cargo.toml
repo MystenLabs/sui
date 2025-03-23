@@ -185,7 +185,6 @@ members = [
   "crates/sui-upgrade-compatibility-transactional-tests",
   "crates/sui-verifier-transactional-tests",
   "crates/suins-indexer",
-  "crates/suiop-cli",
   "crates/telemetry-subscribers",
   "crates/test-cluster",
   "crates/transaction-fuzzer",
