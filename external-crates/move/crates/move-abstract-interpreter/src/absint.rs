@@ -12,7 +12,6 @@ pub enum JoinResult {
 
 pub trait AbstractDomain: Clone + Sized {
     type Error;
-    fn join(&mut self, other: &Self) -> Result<JoinResult, Self::Error>;
 }
 
 pub trait AbstractInterpreter {
@@ -37,6 +36,16 @@ pub trait AbstractInterpreter {
         to: Self::BlockId,
     ) -> Result<(), Self::Error>;
 
+    /// Execute local@instr found at index local@index in the current basic block from pre-state
+    /// local@pre.
+    /// Should return an Err if executing the instruction is unsuccessful, and () if
+    /// the effects of successfully executing local@instr have been reflected by mutating
+    /// local@pre.
+    /// Auxiliary data from the analysis that is not part of the abstract state can be collected by
+    /// mutating local@self.
+    /// The last instruction index in the current block is local@last_index. Knowing this
+    /// information allows clients to detect the end of a basic block and special-case appropriately
+    /// (e.g., normalizing the abstract state before a join).
     fn execute(
         &mut self,
         state: &mut Self::State,

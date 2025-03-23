@@ -1784,8 +1784,6 @@ name = "move-abstract-interpreter"
 version = "0.1.0"
 dependencies = [
  "itertools 0.10.5",
- "move-binary-format",
- "move-bytecode-verifier-meter",
 ]
 
 [[package]]
@@ -1837,6 +1835,7 @@ dependencies = [
  "arbitrary",
  "enum-compat-util",
  "getrandom 0.2.15",
+ "move-abstract-interpreter",
  "move-core-types",
  "move-proc-macros",
  "proptest",
