@@ -144,13 +144,13 @@ const EXECUTE_BLOCK_BASE_COST: u128 = 10;
 const PER_BACKEDGE_COST: u128 = 10;
 const PER_SUCCESSOR_COST: u128 = 10;
 
-struct AbstractInterpreter<'meter, 'tf, M: Meter + ?Sized, TF: TransferFunctions> {
-    pub meter: &'meter mut M,
-    pub transfer_functions: &'tf mut TF,
+struct AbstractInterpreter<'a, M: Meter + ?Sized, TF: TransferFunctions> {
+    pub meter: &'a mut M,
+    pub transfer_functions: &'a mut TF,
 }
 
-impl<'meter, 'tf, M: Meter + ?Sized, TF: TransferFunctions> absint::AbstractInterpreter
-    for AbstractInterpreter<'meter, 'tf, M, TF>
+impl<M: Meter + ?Sized, TF: TransferFunctions> absint::AbstractInterpreter
+    for AbstractInterpreter<'_, M, TF>
 {
     type Error = PartialVMError;
     type BlockId = CodeOffset;

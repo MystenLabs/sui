@@ -75,7 +75,7 @@ impl LoopSummary {
             },
         }
 
-        let num_blocks = cfg.num_blocks() as usize;
+        let num_blocks = cfg.num_blocks();
 
         // Fields in LoopSummary that are filled via a depth-first traversal of `cfg`.
         let mut blocks = vec![0; num_blocks];

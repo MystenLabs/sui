@@ -345,7 +345,7 @@ impl<I: Instruction> ControlFlowGraph for VMControlFlowGraph<'_, I> {
     ) -> impl IntoIterator<Item = (Self::BlockId, &I)> {
         let start = I::index_as_usize(self.block_start(block_id));
         let end = I::index_as_usize(self.block_end(block_id));
-        (start..=end).map(|pc| (I::usize_as_index(pc), &self.code[pc as usize]))
+        (start..=end).map(|pc| (I::usize_as_index(pc), &self.code[pc]))
     }
 
     fn blocks(&self) -> Vec<Self::BlockId> {
