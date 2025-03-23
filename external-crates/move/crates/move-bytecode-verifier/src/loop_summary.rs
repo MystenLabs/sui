@@ -1,10 +1,12 @@
 // Copyright (c) The Move Contributors
 // SPDX-License-Identifier: Apache-2.0
 
-use move_abstract_interpreter::control_flow_graph::{
-    BlockId, ControlFlowGraph, VMControlFlowGraph,
-};
+use crate::absint::VMControlFlowGraph;
+use move_abstract_interpreter::control_flow_graph::ControlFlowGraph;
+use move_binary_format::file_format::CodeOffset;
 use std::collections::{btree_map::Entry, BTreeMap, BTreeSet};
+
+type BlockId = CodeOffset;
 
 /// Dense index into nodes in the same `LoopSummary`
 #[derive(Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]

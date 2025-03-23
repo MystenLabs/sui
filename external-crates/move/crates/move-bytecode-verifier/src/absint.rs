@@ -1,10 +1,7 @@
 // Copyright (c) The Move Contributors
 // SPDX-License-Identifier: Apache-2.0
 
-use move_abstract_interpreter::{
-    absint::{self},
-    control_flow_graph,
-};
+use move_abstract_interpreter::{absint, control_flow_graph};
 use move_binary_format::{
     errors::{PartialVMError, PartialVMResult},
     file_format::{
@@ -59,7 +56,6 @@ pub fn analyze_function<TF: TransferFunctions, M: Meter + ?Sized>(
     initial_state: TF::State,
 ) -> Result<(), PartialVMError> {
     let mut interpreter = AbstractInterpreter {
-        function_context,
         meter,
         transfer_functions,
     };
@@ -74,11 +70,12 @@ pub fn analyze_function<TF: TransferFunctions, M: Meter + ?Sized>(
 /// A control flow graph is built for a function when the `FunctionContext` is created.
 pub struct FunctionContext<'a> {
     index: Option<FunctionDefinitionIndex>,
+    code: &'a CodeUnit,
     parameters: &'a Signature,
     return_: &'a Signature,
     locals: &'a Signature,
     type_parameters: &'a [AbilitySet],
-    cfg: ControlFlowGraph<'a>,
+    cfg: VMControlFlowGraph<'a>,
 }
 
 impl<'a> FunctionContext<'a> {
@@ -91,16 +88,21 @@ impl<'a> FunctionContext<'a> {
     ) -> Self {
         Self {
             index: Some(index),
+            code,
             parameters: module.signature_at(function_handle.parameters),
             return_: module.signature_at(function_handle.return_),
             locals: module.signature_at(code.locals),
             type_parameters: &function_handle.type_parameters,
-            cfg: ControlFlowGraph::new(&code.code, &code.jump_tables),
+            cfg: VMControlFlowGraph::new(&code.code, &code.jump_tables),
         }
     }
 
     pub fn index(&self) -> Option<FunctionDefinitionIndex> {
         self.index
+    }
+
+    pub fn code(&self) -> &'a CodeUnit {
+        self.code
     }
 
     pub fn parameters(&self) -> &'a Signature {
@@ -119,7 +121,7 @@ impl<'a> FunctionContext<'a> {
         self.type_parameters
     }
 
-    pub fn cfg(&self) -> &ControlFlowGraph {
+    pub fn cfg(&self) -> &VMControlFlowGraph {
         &self.cfg
     }
 }
@@ -134,7 +136,7 @@ impl<T: AbstractDomain> absint::AbstractDomain for DomainWrapper<T> {
     type Error = PartialVMError;
 }
 
-pub type ControlFlowGraph<'a> = control_flow_graph::VMControlFlowGraph<'a, Bytecode>;
+pub type VMControlFlowGraph<'a> = control_flow_graph::VMControlFlowGraph<'a, Bytecode>;
 
 /// Costs for metered verification
 const ANALYZE_FUNCTION_BASE_COST: u128 = 10;
@@ -142,14 +144,13 @@ const EXECUTE_BLOCK_BASE_COST: u128 = 10;
 const PER_BACKEDGE_COST: u128 = 10;
 const PER_SUCCESSOR_COST: u128 = 10;
 
-struct AbstractInterpreter<'context, 'meter, 'tf, M: Meter + ?Sized, TF: TransferFunctions> {
-    pub function_context: &'context FunctionContext<'context>,
+struct AbstractInterpreter<'meter, 'tf, M: Meter + ?Sized, TF: TransferFunctions> {
     pub meter: &'meter mut M,
     pub transfer_functions: &'tf mut TF,
 }
 
-impl<'context, 'meter, 'tf, M: Meter + ?Sized, TF: TransferFunctions> absint::AbstractInterpreter
-    for AbstractInterpreter<'context, 'meter, 'tf, M, TF>
+impl<'meter, 'tf, M: Meter + ?Sized, TF: TransferFunctions> absint::AbstractInterpreter
+    for AbstractInterpreter<'meter, 'tf, M, TF>
 {
     type Error = PartialVMError;
     type BlockId = CodeOffset;
