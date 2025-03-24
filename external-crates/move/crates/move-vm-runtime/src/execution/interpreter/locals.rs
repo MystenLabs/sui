@@ -3,7 +3,7 @@
 
 #![allow(unsafe_code)]
 
-use crate::execution::values::values_impl::Value;
+use crate::execution::values::{values_impl::Value, MemBox};
 
 use move_binary_format::errors::{PartialVMError, PartialVMResult};
 use move_core_types::vm_status::StatusCode;
@@ -19,7 +19,7 @@ use std::collections::HashMap;
 #[derive(Debug)]
 pub struct BaseHeap {
     next_id: usize,
-    values: HashMap<BaseHeapId, Box<Value>>,
+    values: HashMap<BaseHeapId, MemBox<Value>>,
 }
 
 /// An ID for an entry in a Base Heap.
@@ -36,7 +36,7 @@ pub struct MachineHeap {}
 /// is freed, we need to check that we are freeing the one on the end of the heap.
 #[derive(Debug)]
 pub struct StackFrame {
-    slice: Vec<Value>,
+    slice: Vec<MemBox<Value>>,
 }
 
 // -------------------------------------------------------------------------------------------------
@@ -64,12 +64,12 @@ impl BaseHeap {
     ) -> PartialVMResult<(BaseHeapId, Value)> {
         let next_id = BaseHeapId(self.next_id);
         self.next_id += 1;
-        self.values.insert(next_id, Box::new(value));
+        self.values.insert(next_id, MemBox::new(value));
         let ref_ = self.borrow_loc(next_id)?;
         Ok((next_id, ref_))
     }
 
-    /// Moves a location out of memory, swapping it with `ValueImpl::Invalid`
+    /// Moves a location out of memory
     pub fn take_loc(&mut self, ndx: BaseHeapId) -> PartialVMResult<Value> {
         if self.is_invalid(ndx)? {
             return Err(
@@ -78,15 +78,14 @@ impl BaseHeap {
             );
         }
 
-        let Some(value_box) = self.values.get_mut(&ndx) else {
+        let Some(value_box) = self.values.remove(&ndx) else {
             return Err(
                 PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR)
                     .with_message(format!("Invalid index: {}", ndx)),
             );
         };
 
-        let value = std::mem::replace(value_box.as_mut(), Value::invalid());
-        Ok(value)
+        value_box.take()
     }
 
     /// Borrows the specified location
@@ -97,14 +96,14 @@ impl BaseHeap {
                 PartialVMError::new(StatusCode::INTERNAL_TYPE_ERROR)
                     .with_message(format!("Local index out of bounds: {}", ndx))
             })
-            .and_then(|value| value.take_ref())
+            .map(|value| value.as_ref_value())
     }
 
     /// Checks if the value at the location is invalid
     pub fn is_invalid(&self, ndx: BaseHeapId) -> PartialVMResult<bool> {
         self.values
             .get(&ndx)
-            .map(|value| matches!(value.as_ref(), &Value::Invalid))
+            .map(|value| matches!(&*value.borrow(), &Value::Invalid))
             .ok_or_else(|| {
                 PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR)
                     .with_message(format!("Invalid index: {}", ndx))
@@ -141,7 +140,8 @@ impl MachineHeap {
         let local_values = params
             .into_iter()
             .chain((0..invalids_len).map(|_| Value::invalid())) // Fill the rest with `Invalid`
-            .collect::<Vec<Value>>();
+            .map(MemBox::new) // Make them into MemBoxes
+            .collect::<Vec<MemBox<Value>>>();
 
         Ok(StackFrame {
             slice: local_values,
@@ -159,38 +159,26 @@ impl MachineHeap {
 // -------------------------------------------------------------------------------------------------
 
 impl StackFrame {
-    pub fn iter(&self) -> std::slice::Iter<'_, Value> {
+    pub(crate) fn iter(&self) -> std::slice::Iter<'_, MemBox<Value>> {
         self.slice.iter()
     }
 
     /// Makes a copy of the value, via `value.copy_value`
     pub fn copy_loc(&self, ndx: usize) -> PartialVMResult<Value> {
-        if self.is_invalid(ndx)? {
-            return Err(
-                PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR)
-                    .with_message("Cannot copy from an invalid memory location".to_string()),
-            );
-        }
-        self.slice
-            .get(ndx)
-            .ok_or_else(|| {
-                PartialVMError::new(StatusCode::INTERNAL_TYPE_ERROR)
-                    .with_message(format!("Local index out of bounds: {}", ndx))
-            })
-            .map(|value| value.copy_value())
+        self.get_valid(ndx).map(|value| value.borrow().copy_value())
     }
 
     /// Moves a location out of memory, swapping it with `ValueImpl::Invalid`
     pub fn move_loc(&mut self, ndx: usize) -> PartialVMResult<Value> {
-        if self.is_invalid(ndx)? {
-            return Err(
-                PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR)
-                    .with_message("Cannot move from an invalid memory location".to_string()),
-            );
-        }
+        let value_slot = self.get_valid_mut(ndx)?;
+        Ok(std::mem::replace(
+            &mut *value_slot.borrow_mut(),
+            Value::invalid(),
+        ))
+    }
 
-        let value = std::mem::replace(&mut self.slice[ndx], Value::invalid());
-        Ok(value)
+    pub fn borrow_loc(&mut self, ndx: usize) -> PartialVMResult<Value> {
+        self.get_valid_mut(ndx).map(|value| value.as_ref_value())
     }
 
     /// Stores the value at the location
@@ -199,49 +187,56 @@ impl StackFrame {
             return Err(PartialVMError::new(StatusCode::INTERNAL_TYPE_ERROR)
                 .with_message(format!("Local index out of bounds: {}", ndx)));
         }
-        self.slice[ndx] = x;
+        let _ = self.slice[ndx].replace(x);
         Ok(())
     }
 
-    pub fn borrow_loc(&self, ndx: usize) -> PartialVMResult<Value> {
-        if self.is_invalid(ndx)? {
-            return Err(
-                PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR)
-                    .with_message("Cannot copy from an invalid memory location".to_string()),
-            );
-        }
+    /// Gets an index, or returns an error if the index is out of range or the value is unset.
+    fn get_valid(&self, ndx: usize) -> PartialVMResult<&MemBox<Value>> {
         self.slice
             .get(ndx)
-            .ok_or_else(|| {
-                PartialVMError::new(StatusCode::INTERNAL_TYPE_ERROR)
-                    .with_message(format!("Index out of bounds: {}", ndx))
-            })
-            .and_then(|value| value.take_ref())
-    }
-
-    /// Checks if the value at the location is invalid
-    pub fn is_invalid(&self, ndx: usize) -> PartialVMResult<bool> {
-        self.slice
-            .get(ndx)
-            .map(|value| matches!(value, Value::Invalid))
             .ok_or_else(|| {
                 PartialVMError::new(StatusCode::INTERNAL_TYPE_ERROR)
                     .with_message(format!("Local index out of bounds: {}", ndx))
             })
+            .and_then(|value| {
+                if matches!(&*value.borrow(), &Value::Invalid) {
+                    Err(PartialVMError::new(StatusCode::INTERNAL_TYPE_ERROR)
+                        .with_message(format!("Local index {} is unset", ndx)))
+                } else {
+                    Ok(value)
+                }
+            })
     }
 
-    /// Drop all Move values onto a different Vec to avoid leaking memory.
-    /// References are excluded since they may point to invalid data.
-    pub fn drop_all_values(&mut self) -> impl Iterator<Item = (usize, Value)> {
-        let mut res = vec![];
-
-        for (ndx, value) in self.slice.iter_mut().enumerate() {
-            match &value {
-                Value::Invalid => (),
-                Value::Reference(_) => {
-                    let _ = std::mem::replace(value, Value::invalid());
+    /// Gets an index, or returns an error if the index is out of range or the value is unset.
+    fn get_valid_mut(&mut self, ndx: usize) -> PartialVMResult<&mut MemBox<Value>> {
+        self.slice
+            .get_mut(ndx)
+            .ok_or_else(|| {
+                PartialVMError::new(StatusCode::INTERNAL_TYPE_ERROR)
+                    .with_message(format!("Local index out of bounds: {}", ndx))
+            })
+            .and_then(|value| {
+                if matches!(&*value.borrow(), &Value::Invalid) {
+                    Err(PartialVMError::new(StatusCode::INTERNAL_TYPE_ERROR)
+                        .with_message(format!("Local index {} is unset", ndx)))
+                } else {
+                    Ok(value)
                 }
-                Value::U8(_)
+            })
+    }
+
+    pub fn drop_all_values(&mut self) -> impl Iterator<Item = Value> {
+        self.slice
+            .iter_mut()
+            .filter_map(|value| match &mut *value.borrow_mut() {
+                Value::Invalid => None,
+                value @ Value::Reference(_) => {
+                    *value = Value::Invalid;
+                    None
+                }
+                value @ (Value::U8(_)
                 | Value::U16(_)
                 | Value::U32(_)
                 | Value::U64(_)
@@ -249,12 +244,16 @@ impl StackFrame {
                 | Value::U256(_)
                 | Value::Bool(_)
                 | Value::Address(_)
-                | Value::Container(_) => {
-                    res.push((ndx, std::mem::replace(value, Value::invalid())))
+                | Value::Vec(_)
+                | Value::PrimVec(_)
+                | Value::Struct(_)
+                | Value::Variant(_)) => {
+                    let result = std::mem::replace(value, Value::Invalid);
+                    Some(result)
                 }
-            }
-        }
-        res.into_iter()
+            })
+            .collect::<Vec<_>>()
+            .into_iter()
     }
 }
 
@@ -275,17 +274,5 @@ impl std::fmt::Display for StackFrame {
 impl std::fmt::Display for BaseHeapId {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "base#{}", self.0)
-    }
-}
-
-// -------------------------------------------------------------------------------------------------
-// Destructors / Drop
-// -------------------------------------------------------------------------------------------------
-// Locals may contain reference values that points to the same cotnainer through Rc, hencing forming
-// a cycle. Therefore values need to be manually taken out of the Locals in order to not leak memory.
-
-impl Drop for StackFrame {
-    fn drop(&mut self) {
-        _ = self.drop_all_values();
     }
 }

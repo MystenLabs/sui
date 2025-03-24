@@ -147,7 +147,7 @@ fn parse_type_origin(
 }
 
 #[async_trait]
-impl<'a> MoveTestAdapter<'a> for SimpleRuntimeTestAdapter {
+impl MoveTestAdapter<'_> for SimpleRuntimeTestAdapter {
     type ExtraInitArgs = AdapterInitArgs;
     type ExtraPublishArgs = PublishLinkageArgs;
     type ExtraValueArgs = ();
@@ -525,8 +525,10 @@ fn call_vm_function(
         .collect();
 
     println!("Doing call");
-    vm_instance
-        .execute_function_bypass_visibility(module, function, type_args, args, gas_meter, None)
+    let result = vm_instance
+        .execute_function_bypass_visibility(module, function, type_args, args, gas_meter, None);
+    println!("Done calling");
+    result
 }
 
 pub static PRECOMPILED_MOVE_STDLIB: Lazy<FullyCompiledProgram> = Lazy::new(|| {

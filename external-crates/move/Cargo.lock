@@ -2689,6 +2689,7 @@ name = "move-vm-transactional-tests"
 version = "0.1.0"
 dependencies = [
  "datatest-stable",
+ "insta",
  "move-transactional-test-runner",
 ]
 

@@ -109,7 +109,8 @@ pub struct Module {
 
     /// a map from signatures in instantiations to the `ArenaVec<ArenaType>` that reperesent it.
     /// [ALLOC] This vector (and sub-definitions) are allocated in the package arena
-    pub instantiation_signatures: ArenaVec<ArenaVec<ArenaType>>,
+    #[allow(dead_code)]
+    pub(crate) instantiation_signatures: ArenaVec<ArenaVec<ArenaType>>,
 
     /// constant references carry an index into a global vector of values.
     /// [ALLOC] This vector (and sub-definitions) are allocated in the package arena
@@ -119,8 +120,8 @@ pub struct Module {
 // A runtime constant
 #[derive(Debug)]
 pub struct Constant {
-    pub value: ConstantValue,
-    pub type_: ArenaType,
+    pub(crate) value: ConstantValue,
+    pub(crate) type_: ArenaType,
     // Size of constant -- used for gas charging.
     pub size: u64,
 }
@@ -134,11 +135,11 @@ pub struct Function {
     pub is_entry: bool,
     pub visibility: Visibility,
     pub index: FunctionDefinitionIndex,
-    pub code: ArenaVec<Bytecode>,
-    pub parameters: ArenaVec<ArenaType>,
-    pub locals: ArenaVec<ArenaType>,
-    pub return_: ArenaVec<ArenaType>,
-    pub type_parameters: ArenaVec<AbilitySet>,
+    pub(crate) code: ArenaVec<Bytecode>,
+    pub(crate) parameters: ArenaVec<ArenaType>,
+    pub(crate) locals: ArenaVec<ArenaType>,
+    pub(crate) return_: ArenaVec<ArenaType>,
+    pub(crate) type_parameters: ArenaVec<AbilitySet>,
     // TODO(vm-rewrite): This field probably leaks
     pub native: Option<NativeFunction>,
     pub def_is_native: bool,
@@ -177,7 +178,7 @@ pub struct StructDef {
     pub def_vtable_key: VirtualTableKey,
     pub abilities: AbilitySet,
     pub type_parameters: ArenaVec<DatatypeTyParameter>,
-    pub fields: ArenaVec<ArenaType>,
+    pub(crate) fields: ArenaVec<ArenaType>,
     pub field_names: ArenaVec<IdentifierKey>,
 }
 
@@ -195,7 +196,7 @@ pub struct EnumDef {
 pub struct VariantDef {
     pub variant_tag: VariantTag,
     pub variant_name: IdentifierKey,
-    pub fields: ArenaVec<ArenaType>,
+    pub(crate) fields: ArenaVec<ArenaType>,
     pub field_names: ArenaVec<IdentifierKey>,
     pub enum_def: VMPointer<EnumDef>,
 }
@@ -208,7 +209,7 @@ pub struct VariantDef {
 #[derive(Debug)]
 pub struct FunctionInstantiation {
     pub handle: CallType,
-    pub instantiation: VMPointer<ArenaVec<ArenaType>>,
+    pub(crate) instantiation: VMPointer<ArenaVec<ArenaType>>,
 }
 
 #[derive(Debug)]
@@ -216,8 +217,9 @@ pub struct StructInstantiation {
     // struct field count
     pub field_count: u16,
     pub def_vtable_key: VirtualTableKey,
-    pub type_params: VMPointer<ArenaVec<ArenaType>>,
-    pub instantiation: VMPointer<ArenaVec<ArenaType>>,
+    pub(crate) type_params: VMPointer<ArenaVec<ArenaType>>,
+    #[allow(dead_code)]
+    pub(crate) instantiation: VMPointer<ArenaVec<ArenaType>>,
 }
 
 // A field handle. The offset is the only used information when operating on a field
@@ -241,8 +243,9 @@ pub struct EnumInstantiation {
     pub variant_count_map: ArenaVec<u16>,
     pub enum_def: VMPointer<EnumDef>,
     pub def_vtable_key: VirtualTableKey,
-    pub type_params: VMPointer<ArenaVec<ArenaType>>,
-    pub instantiation: VMPointer<ArenaVec<ArenaType>>,
+    pub(crate) type_params: VMPointer<ArenaVec<ArenaType>>,
+    #[allow(dead_code)]
+    pub(crate) instantiation: VMPointer<ArenaVec<ArenaType>>,
 }
 
 // A variant instantiation.
@@ -256,7 +259,7 @@ pub struct VariantInstantiation {
 // Runtime Type representation
 // -------------------------------------------------------------------------------------------------
 
-pub enum ArenaType {
+pub(crate) enum ArenaType {
     Bool,
     U8,
     U64,
@@ -326,7 +329,7 @@ pub enum Type {
 ///
 /// Bytecodes operate on a stack machine and each bytecode has side effect on the stack and the
 /// instruction stream.
-pub enum Bytecode {
+pub(crate) enum Bytecode {
     /// Pop and discard the value at the top of the stack.
     /// The value on the stack must be an copyable type.
     ///
@@ -859,7 +862,7 @@ impl Function {
         self.name.member_name().unwrap()
     }
 
-    pub fn code(&self) -> &[Bytecode] {
+    pub(crate) fn code(&self) -> &[Bytecode] {
         &self.code
     }
 

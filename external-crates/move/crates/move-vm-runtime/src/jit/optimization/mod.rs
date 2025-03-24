@@ -16,7 +16,7 @@ pub fn optimize(input: input::Package) -> ast::Package {
     dbg_println!(flag: optimizer, "Blocks: {:#?}", opt);
     optimizations::dead_code_elim::package(&mut opt);
     dbg_println!(flag: optimizer, "Dead Code elim: {:#?}", opt);
-    optimizations::inline_immediate_constants::package(&mut opt);
-    dbg_println!(flag: optimizer, "Immediate Constants Inlined: {:#?}", opt);
+    // optimizations::inline_immediate_constants::package(&mut opt);
+    // dbg_println!(flag: optimizer, "Immediate Constants Inlined: {:#?}", opt);
     opt
 }

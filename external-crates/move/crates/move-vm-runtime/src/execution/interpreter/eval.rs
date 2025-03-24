@@ -135,7 +135,6 @@ fn step(
         fun_ref.name()
     );
     let instruction = &instructions[pc];
-
     fail_point!("move_vm::interpreter_loop", |_| {
         Err(state.set_location(
             PartialVMError::new(StatusCode::VERIFIER_INVARIANT_VIOLATION)
@@ -169,12 +168,7 @@ fn step(
             });
 
             partial_error_to_error(state, run_context, charge_result)?;
-            let non_ref_vals = state
-                .call_stack
-                .current_frame
-                .stack_frame
-                .drop_all_values()
-                .map(|(_idx, val)| val);
+            let non_ref_vals = state.call_stack.current_frame.stack_frame.drop_all_values();
 
             // TODO: Check if the error location is set correctly.
             gas_meter
@@ -486,13 +480,12 @@ fn op_step_impl(
                 _ => S::ImmBorrowLoc,
             };
             gas_meter.charge_simple_instr(instr)?;
-            state.push_operand(
-                state
-                    .call_stack
-                    .current_frame
-                    .stack_frame
-                    .borrow_loc(*idx as usize)?,
-            )?;
+            let loc_ref = state
+                .call_stack
+                .current_frame
+                .stack_frame
+                .borrow_loc(*idx as usize)?;
+            state.push_operand(loc_ref)?;
         }
         Bytecode::ImmBorrowField(fh_ptr) | Bytecode::MutBorrowField(fh_ptr) => {
             let instr = match instruction {
@@ -526,7 +519,7 @@ fn op_step_impl(
             check_depth_of_type(run_context, &struct_type)?;
             gas_meter.charge_pack(false, state.last_n_operands(field_count as usize)?)?;
             let args = state.pop_n_operands(field_count)?;
-            state.push_operand(Value::struct_(Struct::pack(args)))?;
+            state.push_operand(Value::make_struct(args))?;
         }
         Bytecode::PackGeneric(struct_inst_ptr) => {
             let field_count = struct_inst_ptr.field_count;
@@ -535,7 +528,7 @@ fn op_step_impl(
             check_depth_of_type(run_context, &ty)?;
             gas_meter.charge_pack(true, state.last_n_operands(field_count as usize)?)?;
             let args = state.pop_n_operands(field_count)?;
-            state.push_operand(Value::struct_(Struct::pack(args)))?;
+            state.push_operand(Value::make_struct(args))?;
         }
         Bytecode::Unpack(_struct_ptr) => {
             let struct_ = state.pop_operand_as::<Struct>()?;
@@ -782,10 +775,7 @@ fn op_step_impl(
             check_depth_of_type(run_context, &enum_type)?;
             gas_meter.charge_pack(false, state.last_n_operands(field_count)?)?;
             let args = state.pop_n_operands(field_count as u16)?;
-            state.push_operand(Value::variant(Variant::pack(
-                variant_def_ptr.variant_tag,
-                args,
-            )))?;
+            state.push_operand(Value::make_variant(variant_def_ptr.variant_tag, args))?;
         }
         Bytecode::PackVariantGeneric(vinst_ptr) => {
             let variant = &vinst_ptr.variant;
@@ -794,7 +784,7 @@ fn op_step_impl(
             check_depth_of_type(run_context, &ty)?;
             gas_meter.charge_pack(true, state.last_n_operands(field_count)?)?;
             let args = state.pop_n_operands(field_count as u16)?;
-            state.push_operand(Value::variant(Variant::pack(variant_tag, args)))?;
+            state.push_operand(Value::make_variant(variant_tag, args))?;
         }
         Bytecode::UnpackVariant(variant_ptr) => {
             let variant = state.pop_operand_as::<Variant>()?;
@@ -828,7 +818,8 @@ fn op_step_impl(
         | Bytecode::UnpackVariantGenericMutRef(variant_inst_ptr) => {
             let reference = state.pop_operand_as::<VariantRef>()?;
             let variant_tag = variant_inst_ptr.variant.variant_tag;
-            reference.check_tag(variant_tag)?;
+            let tag_check = reference.check_tag(variant_tag);
+            tag_check?;
             let references = reference.unpack_variant()?;
             gas_meter.charge_unpack(true, references.iter())?;
             for reference in references {
