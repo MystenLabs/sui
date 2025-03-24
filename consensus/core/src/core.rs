@@ -48,8 +48,8 @@ use crate::{
 };
 #[cfg(test)]
 use crate::{
-    block_verifier::NoopBlockVerifier, storage::mem_store::MemStore, CommitConsumer,
-    TransactionClient,
+    block::CertifiedBlocksOutput, block_verifier::NoopBlockVerifier, storage::mem_store::MemStore,
+    CommitConsumer, TransactionClient,
 };
 
 // Maximum number of commit votes to include in a block.
@@ -204,11 +204,18 @@ impl Core {
             .dag_state
             .read()
             .get_last_cached_block_per_authority(Round::MAX);
+
         let max_ancestor_timestamp = ancestor_blocks
             .iter()
             .fold(0, |ts, (b, _)| ts.max(b.timestamp_ms()));
         let wait_ms = max_ancestor_timestamp.saturating_sub(self.context.clock.timestamp_utc_ms());
-        if wait_ms > 0 {
+        if self
+            .context
+            .protocol_config
+            .consensus_median_based_commit_timestamp()
+        {
+            info!("Median based timestamp is enabled. Will not wait for {} ms while recovering ancestors from storage", wait_ms);
+        } else if wait_ms > 0 {
             warn!(
                 "Waiting for {} ms while recovering ancestors from storage",
                 wait_ms
@@ -597,15 +604,28 @@ impl Core {
                 .observe(clock_round.saturating_sub(ancestor.round()).into());
         }
 
-        // Ensure ancestor timestamps are not more advanced than the current time.
-        // Also catch the issue if system's clock go backwards.
         let now = self.context.clock.timestamp_utc_ms();
         ancestors.iter().for_each(|block| {
-            assert!(
-                block.timestamp_ms() <= now,
-                "Violation: ancestor block {:?} has timestamp {}, greater than current timestamp {now}. Proposing for round {}.",
-                block, block.timestamp_ms(), clock_round
-            );
+            if self.context.protocol_config.consensus_median_based_commit_timestamp() {
+                if block.timestamp_ms() > now {
+                    trace!("Ancestor block {:?} has timestamp {}, greater than current timestamp {now}. Proposing for round {}.", block, block.timestamp_ms(), clock_round);
+                    let authority = &self.context.committee.authority(block.author()).hostname;
+                    self.context
+                        .metrics
+                        .node_metrics
+                        .proposed_block_ancestors_timestamp_drift_ms
+                        .with_label_values(&[authority])
+                        .inc_by(block.timestamp_ms().saturating_sub(now));
+                }
+            } else {
+                // Ensure ancestor timestamps are not more advanced than the current time.
+                // Also catch the issue if system's clock go backwards.
+                assert!(
+                    block.timestamp_ms() <= now,
+                    "Violation: ancestor block {:?} has timestamp {}, greater than current timestamp {now}. Proposing for round {}.",
+                    block, block.timestamp_ms(), clock_round
+                );
+            }
         });
 
         // Consume the next transactions to be included. Do not drop the guards yet as this would acknowledge
@@ -1353,12 +1373,12 @@ pub(crate) fn create_cores(context: Context, authorities: Vec<Stake>) -> Vec<Cor
 
 #[cfg(test)]
 pub(crate) struct CoreTextFixture {
-    pub core: Core,
-    pub signal_receivers: CoreSignalsReceivers,
-    pub block_receiver: broadcast::Receiver<ExtendedBlock>,
-    #[allow(unused)]
-    pub commit_receiver: UnboundedReceiver<CommittedSubDag>,
-    pub store: Arc<MemStore>,
+    pub(crate) core: Core,
+    pub(crate) signal_receivers: CoreSignalsReceivers,
+    pub(crate) block_receiver: broadcast::Receiver<ExtendedBlock>,
+    pub(crate) _commit_output_receiver: UnboundedReceiver<CommittedSubDag>,
+    pub(crate) _blocks_output_receiver: UnboundedReceiver<CertifiedBlocksOutput>,
+    pub(crate) store: Arc<MemStore>,
 }
 
 #[cfg(test)]
@@ -1397,7 +1417,8 @@ impl CoreTextFixture {
         // Need at least one subscriber to the block broadcast channel.
         let block_receiver = signal_receivers.block_broadcast_receiver();
 
-        let (commit_consumer, commit_receiver, _transaction_receiver) = CommitConsumer::new(0);
+        let (commit_consumer, commit_output_receiver, blocks_output_receiver) =
+            CommitConsumer::new(0);
         let commit_observer = CommitObserver::new(
             context.clone(),
             commit_consumer,
@@ -1425,7 +1446,8 @@ impl CoreTextFixture {
             core,
             signal_receivers,
             block_receiver,
-            commit_receiver,
+            _commit_output_receiver: commit_output_receiver,
+            _blocks_output_receiver: blocks_output_receiver,
             store,
         }
     }
@@ -2065,14 +2087,15 @@ mod test {
                 D -> [*],
             },
             Round 5 : { 
+                A -> [*],
                 B -> [*],
                 C -> [*],
                 D -> [*],
             },
             Round 6 : { 
-                B -> [A6, B6, C6, D1],
-                C -> [A6, B6, C6, D1],
-                D -> [A6, B6, C6, D1],
+                B -> [A5, B5, C5, D1],
+                C -> [A5, B5, C5, D1],
+                D -> [A5, B5, C5, D1],
             },
             Round 7 : { 
                 B -> [*],

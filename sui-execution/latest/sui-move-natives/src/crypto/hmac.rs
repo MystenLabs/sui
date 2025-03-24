@@ -45,7 +45,7 @@ pub fn hmac_sha3_256(
     // Load the cost parameters from the protocol config
     let hmac_hmac_sha3_256_cost_params = &context
         .extensions()
-        .get::<NativesCostTable>()
+        .get::<NativesCostTable>()?
         .hmac_hmac_sha3_256_cost_params
         .clone();
 

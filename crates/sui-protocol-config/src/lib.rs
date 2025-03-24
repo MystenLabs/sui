@@ -18,7 +18,7 @@ use tracing::{info, warn};
 
 /// The minimum and maximum protocol versions supported by this build.
 const MIN_PROTOCOL_VERSION: u64 = 1;
-const MAX_PROTOCOL_VERSION: u64 = 78;
+const MAX_PROTOCOL_VERSION: u64 = 79;
 
 // Record history of protocol version allocations here:
 //
@@ -225,6 +225,9 @@ const MAX_PROTOCOL_VERSION: u64 = 78;
 //             Enable consensus garbage collection for testnet
 //             Enable the new consensus commit rule for testnet.
 // Version 78: Make `TxContext` Move API native
+//             Enable execution time estimate mode for congestion control on testnet.
+// Version 79: Enable median based commit timestamp in consensus on testnet.
+//             Increase threshold for bad nodes that won't be considered leaders in consensus in testnet
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
@@ -646,6 +649,11 @@ struct FeatureFlags {
     // If true, enable `TxContext` Move API to go native.
     #[serde(skip_serializing_if = "is_false")]
     move_native_context: bool,
+
+    // If true, then it (1) will not enforce monotonicity checks for a block's ancestors and (2) calculates the commit's timestamp based on the
+    // weighted by stake median timestamp of the leader's ancestors.
+    #[serde(skip_serializing_if = "is_false")]
+    consensus_median_based_commit_timestamp: bool,
 }
 
 fn is_false(b: &bool) -> bool {
@@ -674,16 +682,19 @@ impl ConsensusTransactionOrdering {
 
 #[derive(Default, Copy, Clone, PartialEq, Eq, Serialize, Deserialize, Debug)]
 pub struct ExecutionTimeEstimateParams {
-    // targeted per-object utilization as an integer percentage (1-100)
+    // Targeted per-object utilization as an integer percentage (1-100).
     pub target_utilization: u64,
     // Schedule up to this much extra work (in microseconds) per object,
-    // but don't allow the running debt to exceed this limit (unless we
-    // are scheduling a single very large transaction, in which case the
-    // absolute limit will be used).
+    // but don't allow more than a single transaction to exceed this
+    // burst limit.
     pub allowed_txn_cost_overage_burst_limit_us: u64,
-    // absolute limit of how much estimated work to schedule in a commit,
-    // even if it all comes from a single transaction
-    pub max_txn_cost_overage_per_object_in_commit_us: u64,
+
+    // For separate budget for randomness-using tx, the above limits are
+    // used with this integer-percentage scaling factor (1-100).
+    pub randomness_scalar: u64,
+
+    // Absolute maximum allowed transaction duration estimate (in microseconds).
+    pub max_estimate_us: u64,
 }
 
 // The config for per object congestion control in consensus handler.
@@ -1426,7 +1437,8 @@ pub struct ProtocolConfig {
     /// This is the threshold for activating consensus amplification.
     sip_45_consensus_amplification_threshold: Option<u64>,
 
-    /// Enables use of v2 of the object per-epoch marker table with FullObjectID keys.
+    /// DEPRECATED: this was an ephemeral feature flag only used in per-epoch tables, which has now
+    /// been deployed everywhere.
     use_object_per_epoch_marker_table_v2: Option<bool>,
 
     /// The number of commits to consider when computing a deterministic commit rate.
@@ -1842,6 +1854,15 @@ impl ProtocolConfig {
         assert!(
             !res || self.gc_depth() > 0,
             "The consensus linearize sub dag V2 requires GC to be enabled"
+        );
+        res
+    }
+
+    pub fn consensus_median_based_commit_timestamp(&self) -> bool {
+        let res = self.feature_flags.consensus_median_based_commit_timestamp;
+        assert!(
+            !res || self.gc_depth() > 0,
+            "The consensus median based commit timestamp requires GC to be enabled"
         );
         res
     }
@@ -3372,6 +3393,31 @@ impl ProtocolConfig {
                     cfg.tx_context_ids_created_cost_base = Some(30);
                     cfg.tx_context_replace_cost_base = Some(30);
                     cfg.gas_model_version = Some(10);
+
+                    if chain != Chain::Mainnet {
+                        cfg.feature_flags.record_additional_state_digest_in_prologue = true;
+                        cfg.consensus_commit_rate_estimation_window_size = Some(10);
+
+                        // Enable execution time estimate mode for congestion control on testnet.
+                        cfg.feature_flags.per_object_congestion_control_mode =
+                            PerObjectCongestionControlMode::ExecutionTimeEstimate(
+                                ExecutionTimeEstimateParams {
+                                    target_utilization: 30,
+                                    allowed_txn_cost_overage_burst_limit_us: 100_000, // 100 ms
+                                    randomness_scalar: 20,
+                                    max_estimate_us: 1_500_000, // 1.5s
+                                },
+                            );
+                    }
+                }
+                79 => {
+                    if chain != Chain::Mainnet {
+                        cfg.feature_flags.consensus_median_based_commit_timestamp = true;
+
+                        // Increase threshold for bad nodes that won't be considered
+                        // leaders in consensus in testnet
+                        cfg.consensus_bad_nodes_stake_threshold = Some(30);
+                    }
                 }
                 // Use this template when making changes:
                 //
@@ -3555,6 +3601,10 @@ impl ProtocolConfig {
 
     pub fn set_accept_passkey_in_multisig_for_testing(&mut self, val: bool) {
         self.feature_flags.accept_passkey_in_multisig = val;
+    }
+
+    pub fn set_consensus_median_based_commit_timestamp_for_testing(&mut self, val: bool) {
+        self.feature_flags.consensus_median_based_commit_timestamp = val;
     }
 }
 

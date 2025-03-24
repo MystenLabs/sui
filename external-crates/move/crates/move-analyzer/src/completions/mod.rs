@@ -23,6 +23,7 @@ use move_compiler::{
         lexer::{Lexer, Tok},
     },
 };
+use move_package::source_package::parsed_manifest::Dependencies;
 use move_symbol_pool::Symbol;
 
 use once_cell::sync::Lazy;
@@ -79,6 +80,7 @@ pub fn on_completion_request(
     request: &Request,
     ide_files_root: VfsPath,
     pkg_dependencies: Arc<Mutex<BTreeMap<PathBuf, PrecomputedPkgInfo>>>,
+    implicit_deps: Dependencies,
 ) {
     eprintln!("handling completion request");
     let parameters = serde_json::from_value::<CompletionParams>(request.params.clone())
@@ -97,8 +99,15 @@ pub fn on_completion_request(
         // it (unless we are at the very first column)
         pos = Position::new(pos.line, pos.character - 1);
     }
-    let completions =
-        completions(context, ide_files_root, pkg_dependencies, &path, pos).unwrap_or_default();
+    let completions = completions(
+        context,
+        ide_files_root,
+        pkg_dependencies,
+        &path,
+        pos,
+        implicit_deps,
+    )
+    .unwrap_or_default();
     let completions_len = completions.len();
 
     let result =
@@ -122,6 +131,7 @@ fn completions(
     pkg_dependencies: Arc<Mutex<BTreeMap<PathBuf, PrecomputedPkgInfo>>>,
     path: &Path,
     pos: Position,
+    implicit_deps: Dependencies,
 ) -> Option<Vec<CompletionItem>> {
     let Some(pkg_path) = SymbolicatorRunner::root_dir(path) else {
         eprintln!("failed completion for {:?} (package root not found)", path);
@@ -135,6 +145,7 @@ fn completions(
         pkg_dependencies,
         path,
         pos,
+        implicit_deps,
     ))
 }
 
@@ -146,8 +157,9 @@ pub fn compute_completions(
     pkg_dependencies: Arc<Mutex<BTreeMap<PathBuf, PrecomputedPkgInfo>>>,
     path: &Path,
     pos: Position,
+    implicit_deps: Dependencies,
 ) -> Vec<CompletionItem> {
-    compute_completions_new_symbols(ide_files_root, pkg_dependencies, path, pos)
+    compute_completions_new_symbols(ide_files_root, pkg_dependencies, path, pos, implicit_deps)
         .unwrap_or_else(|| compute_completions_with_symbols(current_symbols, path, pos))
 }
 
@@ -159,6 +171,7 @@ fn compute_completions_new_symbols(
     pkg_dependencies: Arc<Mutex<BTreeMap<PathBuf, PrecomputedPkgInfo>>>,
     path: &Path,
     cursor_position: Position,
+    implicit_deps: Dependencies,
 ) -> Option<Vec<CompletionItem>> {
     let Some(pkg_path) = SymbolicatorRunner::root_dir(path) else {
         eprintln!("failed completion for {:?} (package root not found)", path);
@@ -173,6 +186,7 @@ fn compute_completions_new_symbols(
         Some(vec![path.to_path_buf()]),
         LintLevel::None,
         cursor_info,
+        implicit_deps,
     )
     .ok()?;
     let symbols = symbols?;

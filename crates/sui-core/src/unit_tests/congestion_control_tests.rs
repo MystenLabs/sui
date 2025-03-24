@@ -295,6 +295,7 @@ async fn test_congestion_control_execution_cancellation() {
         Some(SharedObjectCongestionTracker::new(
             [(shared_object_1.0, 10)],
             PerObjectCongestionControlMode::TotalGasBudget,
+            false,
             Some(
                 test_setup
                     .protocol_config

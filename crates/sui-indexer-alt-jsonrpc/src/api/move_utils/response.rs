@@ -60,7 +60,6 @@ pub(super) async fn function(
                 | PRE::DatatypeNotFound(_, _, _)
                 | PRE::Deserialize(_)
                 | PRE::EmptyPackage(_)
-                | PRE::InputTypeConflict(_, _, _)
                 | PRE::LinkageNotFound(_)
                 | PRE::NoTypeOrigin(_, _, _)
                 | PRE::NotAnIdentifier(_)

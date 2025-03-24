@@ -1087,6 +1087,7 @@ impl TypingVisitorContext for TypingAnalysisContext<'_> {
                 }
                 TE::ErrorConstant {
                     line_number_loc: _,
+                    error_code: _,
                     error_constant,
                 } => {
                     // assume that constant is defined in the same module where it's used

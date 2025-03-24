@@ -113,6 +113,7 @@ use move_ir_types::location::*;
 use move_package::{
     compilation::{build_plan::BuildPlan, compiled_package::ModuleFormat},
     resolution::resolution_graph::ResolvedGraph,
+    source_package::parsed_manifest::Dependencies,
 };
 use move_symbol_pool::Symbol;
 
@@ -1383,6 +1384,7 @@ impl SymbolicatorRunner {
         packages_info: Arc<Mutex<BTreeMap<PathBuf, PrecomputedPkgInfo>>>,
         sender: Sender<Result<BTreeMap<PathBuf, Vec<Diagnostic>>>>,
         lint: LintLevel,
+        implicit_deps: Dependencies,
     ) -> Self {
         let mtx_cvar = Arc::new((Mutex::new(RunnerState::Wait), Condvar::new()));
         let thread_mtx_cvar = mtx_cvar.clone();
@@ -1436,6 +1438,7 @@ impl SymbolicatorRunner {
                                 Some(modified_files.into_iter().collect()),
                                 lint,
                                 None,
+                                implicit_deps.clone(),
                             ) {
                                 Ok((symbols_opt, lsp_diagnostics)) => {
                                     eprintln!("symbolication finished");
@@ -1920,6 +1923,7 @@ pub fn get_compiled_pkg(
     pkg_path: &Path,
     modified_files: Option<Vec<PathBuf>>,
     lint: LintLevel,
+    implicit_deps: Dependencies,
 ) -> Result<(Option<CompiledPkgInfo>, BTreeMap<PathBuf, Vec<Diagnostic>>)> {
     let build_config = move_package::BuildConfig {
         test_mode: true,
@@ -1927,6 +1931,7 @@ pub fn get_compiled_pkg(
         default_flavor: Some(Flavor::Sui),
         lint_flag: lint.into(),
         skip_fetch_latest_git_deps: has_precompiled_deps(pkg_path, packages_info.clone()),
+        implicit_dependencies: implicit_deps,
         ..Default::default()
     };
 
@@ -2499,6 +2504,7 @@ pub fn get_symbols(
     modified_files: Option<Vec<PathBuf>>,
     lint: LintLevel,
     cursor_info: Option<(&PathBuf, Position)>,
+    implicit_deps: Dependencies,
 ) -> Result<(Option<Symbols>, BTreeMap<PathBuf, Vec<Diagnostic>>)> {
     let compilation_start = Instant::now();
     let (compiled_pkg_info_opt, ide_diagnostics) = get_compiled_pkg(
@@ -2507,6 +2513,7 @@ pub fn get_symbols(
         pkg_path,
         modified_files,
         lint,
+        implicit_deps,
     )?;
     eprintln!("compilation complete in: {:?}", compilation_start.elapsed());
     let Some(compiled_pkg_info) = compiled_pkg_info_opt else {

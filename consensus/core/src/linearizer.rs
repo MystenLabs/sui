@@ -3,12 +3,12 @@
 
 use std::{collections::HashSet, sync::Arc};
 
-use consensus_config::AuthorityIndex;
+use consensus_config::{AuthorityIndex, Stake};
 use itertools::Itertools;
 use parking_lot::RwLock;
 
 use crate::{
-    block::{BlockAPI, BlockRef, VerifiedBlock},
+    block::{BlockAPI, BlockRef, BlockTimestampMs, VerifiedBlock},
     commit::{sort_sub_dag_blocks, Commit, CommittedSubDag, TrustedCommit},
     context::Context,
     dag_state::DagState,
@@ -97,7 +97,6 @@ impl Linearizer {
         let last_commit_digest = dag_state.last_commit_digest();
         let last_commit_timestamp_ms = dag_state.last_commit_timestamp_ms();
         let last_committed_rounds = dag_state.last_committed_rounds();
-        let timestamp_ms = leader_block.timestamp_ms().max(last_commit_timestamp_ms);
 
         // Now linearize the sub-dag starting from the leader block
         let (to_commit, rejected_transactions) = Self::linearize_sub_dag(
@@ -105,6 +104,13 @@ impl Linearizer {
             leader_block.clone(),
             last_committed_rounds,
             &mut dag_state,
+        );
+
+        let timestamp_ms = Self::calculate_commit_timestamp(
+            &self.context,
+            &mut dag_state,
+            &leader_block,
+            last_commit_timestamp_ms,
         );
 
         drop(dag_state);
@@ -136,6 +142,47 @@ impl Linearizer {
         );
 
         (sub_dag, commit)
+    }
+
+    /// Calculates the commit's timestamp. If the median based timestamp calculation is enabled,
+    /// then the timestamp will be calculated as the median of leader's parents (leader.round - 1)
+    /// timestamps by stake. Otherwise, the leader's timestamp will be used. To ensure that commit
+    /// timestamp monotonicity is respected it is compared against the `last_commit_timestamp_ms`
+    /// and the maximum of the two is returned.
+    pub(crate) fn calculate_commit_timestamp(
+        context: &Context,
+        dag_state: &mut impl BlockStoreAPI,
+        leader_block: &VerifiedBlock,
+        last_commit_timestamp_ms: BlockTimestampMs,
+    ) -> BlockTimestampMs {
+        let timestamp_ms = if context
+            .protocol_config
+            .consensus_median_based_commit_timestamp()
+        {
+            // Select leaders' parent blocks.
+            let block_refs = leader_block
+                .ancestors()
+                .iter()
+                .filter(|block_ref| block_ref.round == leader_block.round() - 1)
+                .cloned()
+                .collect::<Vec<_>>();
+            // Get the blocks from dag state which should not fail.
+            let blocks = dag_state
+                .get_blocks(&block_refs)
+                .into_iter()
+                .map(|block_opt| block_opt.expect("We should have all blocks in dag state."));
+            median_timestamp_by_stake(context, blocks).unwrap_or_else(|e| {
+                panic!(
+                    "Cannot compute median timestamp for leader block {:?} ancestors: {}",
+                    leader_block, e
+                )
+            })
+        } else {
+            leader_block.timestamp_ms()
+        };
+
+        // Always make sure that commit timestamps are monotonic, so override if necessary.
+        timestamp_ms.max(last_commit_timestamp_ms)
     }
 
     pub(crate) fn linearize_sub_dag(
@@ -342,6 +389,53 @@ impl Linearizer {
     }
 }
 
+/// Computes the median timestamp of the blocks weighted by the stake of their authorities.
+/// This function assumes each block comes from a different authority of the same round.
+/// Error is returned if no blocks are provided or total stake is less than quorum threshold.
+pub(crate) fn median_timestamp_by_stake(
+    context: &Context,
+    blocks: impl Iterator<Item = VerifiedBlock>,
+) -> Result<BlockTimestampMs, String> {
+    let mut total_stake = 0;
+    let mut timestamps = vec![];
+    for block in blocks {
+        let stake = context.committee.authority(block.author()).stake;
+        timestamps.push((block.timestamp_ms(), stake));
+        total_stake += stake;
+    }
+
+    if timestamps.is_empty() {
+        return Err("No blocks provided".to_string());
+    }
+    if total_stake < context.committee.quorum_threshold() {
+        return Err(format!(
+            "Total stake {} < quorum threshold {}",
+            total_stake,
+            context.committee.quorum_threshold()
+        )
+        .to_string());
+    }
+
+    Ok(median_timestamps_by_stake_inner(timestamps, total_stake))
+}
+
+fn median_timestamps_by_stake_inner(
+    mut timestamps: Vec<(BlockTimestampMs, Stake)>,
+    total_stake: Stake,
+) -> BlockTimestampMs {
+    timestamps.sort_by_key(|(ts, _)| *ts);
+
+    let mut cumulative_stake = 0;
+    for (ts, stake) in &timestamps {
+        cumulative_stake += stake;
+        if cumulative_stake > total_stake / 2 {
+            return *ts;
+        }
+    }
+
+    timestamps.last().unwrap().0
+}
+
 #[cfg(test)]
 mod tests {
     use rstest::rstest;
@@ -354,14 +448,21 @@ mod tests {
         storage::mem_store::MemStore,
         test_dag_builder::DagBuilder,
         test_dag_parser::parse_dag,
-        CommitIndex,
+        CommitIndex, TestBlock,
     };
 
+    #[rstest]
     #[tokio::test]
-    async fn test_handle_commit() {
+    async fn test_handle_commit(#[values(true, false)] consensus_median_timestamp: bool) {
         telemetry_subscribers::init_for_testing();
         let num_authorities = 4;
-        let context = Arc::new(Context::new_for_test(num_authorities).0);
+        let (mut context, _keys) = Context::new_for_test(num_authorities);
+        context
+            .protocol_config
+            .set_consensus_median_based_commit_timestamp_for_testing(consensus_median_timestamp);
+
+        let context = Arc::new(context);
+
         let dag_state = Arc::new(RwLock::new(DagState::new(
             context.clone(),
             Arc::new(MemStore::new()),
@@ -390,7 +491,26 @@ mod tests {
         for (idx, subdag) in commits.into_iter().enumerate() {
             tracing::info!("{subdag:?}");
             assert_eq!(subdag.leader, leaders[idx].reference());
-            assert_eq!(subdag.timestamp_ms, leaders[idx].timestamp_ms());
+
+            let expected_ts = if consensus_median_timestamp {
+                let block_refs = leaders[idx]
+                    .ancestors()
+                    .iter()
+                    .filter(|block_ref| block_ref.round == leaders[idx].round() - 1)
+                    .cloned()
+                    .collect::<Vec<_>>();
+                let blocks = dag_state
+                    .read()
+                    .get_blocks(&block_refs)
+                    .into_iter()
+                    .map(|block_opt| block_opt.expect("We should have all blocks in dag state."));
+
+                median_timestamp_by_stake(&context, blocks).unwrap()
+            } else {
+                leaders[idx].timestamp_ms()
+            };
+            assert_eq!(subdag.timestamp_ms, expected_ts);
+
             if idx == 0 {
                 // First subdag includes the leader block only
                 assert_eq!(subdag.blocks.len(), 1);
@@ -475,17 +595,17 @@ mod tests {
         }
     }
 
+    #[rstest]
     #[tokio::test]
-    async fn test_handle_already_committed() {
+    async fn test_handle_already_committed(
+        #[values(true, false)] consensus_median_timestamp: bool,
+    ) {
         telemetry_subscribers::init_for_testing();
         let num_authorities = 4;
         let (mut context, _) = Context::new_for_test(num_authorities);
         context
             .protocol_config
-            .set_consensus_gc_depth_for_testing(0);
-        context
-            .protocol_config
-            .set_consensus_linearize_subdag_v2_for_testing(false);
+            .set_consensus_median_based_commit_timestamp_for_testing(consensus_median_timestamp);
 
         let context = Arc::new(context);
 
@@ -528,9 +648,14 @@ mod tests {
             CommitDigest::MIN,
             0,
             first_leader.reference(),
-            blocks.into_iter().map(|block| block.reference()).collect(),
+            blocks.iter().map(|block| block.reference()).collect(),
         );
         dag_state.write().add_commit(first_commit_data);
+
+        // Mark the blocks as committed in DagState. This will allow to correctly detect the committed blocks when the new linearizer logic is enabled.
+        for block in blocks.iter() {
+            dag_state.write().set_committed(&block.reference());
+        }
 
         // Now take all the blocks from round `leader_round_wave_1` up to round `leader_round_wave_2-1`
         let mut blocks = dag_builder.blocks(leader_round_wave_1..=leader_round_wave_2 - 1);
@@ -570,8 +695,24 @@ mod tests {
         let subdag = &commit[0];
         tracing::info!("{subdag:?}");
         assert_eq!(subdag.leader, leader.reference());
-        assert_eq!(subdag.timestamp_ms, leader.timestamp_ms());
         assert_eq!(subdag.commit_ref.index, expected_second_commit.index());
+
+        let expected_ts = if consensus_median_timestamp {
+            median_timestamp_by_stake(
+                &context,
+                subdag.blocks.iter().filter_map(|block| {
+                    if block.round() == subdag.leader.round - 1 {
+                        Some(block.clone())
+                    } else {
+                        None
+                    }
+                }),
+            )
+            .unwrap()
+        } else {
+            leader.timestamp_ms()
+        };
+        assert_eq!(subdag.timestamp_ms, expected_ts);
 
         // Using the same sorting as used in CommittedSubDag::sort
         blocks.sort_by(|a, b| a.round.cmp(&b.round).then_with(|| a.author.cmp(&b.author)));
@@ -592,8 +733,14 @@ mod tests {
     /// This test will run the linearizer with GC disabled (gc_depth = 0) and gc enabled (gc_depth = 3) and make
     /// sure that for the exact same DAG the linearizer will commit different blocks according to the rules.
     #[rstest]
+    #[case(0, false)]
+    #[case(3, false)]
+    #[case(3, true)]
     #[tokio::test]
-    async fn test_handle_commit_with_gc_simple(#[values(0, 3)] gc_depth: u32) {
+    async fn test_handle_commit_with_gc_simple(
+        #[case] gc_depth: u32,
+        #[case] consensus_median_timestamp: bool,
+    ) {
         telemetry_subscribers::init_for_testing();
 
         let num_authorities = 4;
@@ -601,6 +748,9 @@ mod tests {
         context
             .protocol_config
             .set_consensus_gc_depth_for_testing(gc_depth);
+        context
+            .protocol_config
+            .set_consensus_median_based_commit_timestamp_for_testing(consensus_median_timestamp);
 
         if gc_depth == 0 {
             context
@@ -661,7 +811,26 @@ mod tests {
         for (idx, subdag) in commits.into_iter().enumerate() {
             tracing::info!("{subdag:?}");
             assert_eq!(subdag.leader, leaders[idx].reference());
-            assert_eq!(subdag.timestamp_ms, leaders[idx].timestamp_ms());
+
+            let expected_ts = if consensus_median_timestamp {
+                let block_refs = leaders[idx]
+                    .ancestors()
+                    .iter()
+                    .filter(|block_ref| block_ref.round == leaders[idx].round() - 1)
+                    .cloned()
+                    .collect::<Vec<_>>();
+                let blocks = dag_state
+                    .read()
+                    .get_blocks(&block_refs)
+                    .into_iter()
+                    .map(|block_opt| block_opt.expect("We should have all blocks in dag state."));
+
+                median_timestamp_by_stake(&context, blocks).unwrap()
+            } else {
+                leaders[idx].timestamp_ms()
+            };
+            assert_eq!(subdag.timestamp_ms, expected_ts);
+
             if idx == 0 {
                 // First subdag includes the leader block only
                 assert_eq!(subdag.blocks.len(), 1);
@@ -709,8 +878,13 @@ mod tests {
     }
 
     #[rstest]
+    #[case(3, false)]
+    #[case(3, true)]
     #[tokio::test]
-    async fn test_handle_commit_below_highest_committed_round(#[values(3)] gc_depth: u32) {
+    async fn test_handle_commit_below_highest_committed_round(
+        #[case] gc_depth: u32,
+        #[case] consensus_median_timestamp: bool,
+    ) {
         telemetry_subscribers::init_for_testing();
 
         let num_authorities = 4;
@@ -718,6 +892,9 @@ mod tests {
         context
             .protocol_config
             .set_consensus_gc_depth_for_testing(gc_depth);
+        context
+            .protocol_config
+            .set_consensus_median_based_commit_timestamp_for_testing(consensus_median_timestamp);
         context
             .protocol_config
             .set_consensus_linearize_subdag_v2_for_testing(true);
@@ -768,7 +945,26 @@ mod tests {
         for (idx, subdag) in commits.into_iter().enumerate() {
             tracing::info!("{subdag:?}");
             assert_eq!(subdag.leader, leaders[idx].reference());
-            assert_eq!(subdag.timestamp_ms, leaders[idx].timestamp_ms());
+
+            let expected_ts = if consensus_median_timestamp {
+                let block_refs = leaders[idx]
+                    .ancestors()
+                    .iter()
+                    .filter(|block_ref| block_ref.round == leaders[idx].round() - 1)
+                    .cloned()
+                    .collect::<Vec<_>>();
+                let blocks = dag_state
+                    .read()
+                    .get_blocks(&block_refs)
+                    .into_iter()
+                    .map(|block_opt| block_opt.expect("We should have all blocks in dag state."));
+
+                median_timestamp_by_stake(&context, blocks).unwrap()
+            } else {
+                leaders[idx].timestamp_ms()
+            };
+            assert_eq!(subdag.timestamp_ms, expected_ts);
+
             if idx == 0 {
                 // First subdag includes the leader block only B1
                 assert_eq!(subdag.blocks.len(), 1);
@@ -808,5 +1004,185 @@ mod tests {
             }
             assert_eq!(subdag.commit_ref.index, idx as CommitIndex + 1);
         }
+    }
+
+    #[rstest]
+    #[case(false, 5_000, 5_000, 6_000)]
+    #[case(true, 3_000, 3_000, 6_000)]
+    #[tokio::test]
+    async fn test_calculate_commit_timestamp(
+        #[case] consensus_median_timestamp: bool,
+        #[case] timestamp_1: u64,
+        #[case] timestamp_2: u64,
+        #[case] timestamp_3: u64,
+    ) {
+        // GIVEN
+        telemetry_subscribers::init_for_testing();
+
+        let num_authorities = 4;
+        let (mut context, _keys) = Context::new_for_test(num_authorities);
+
+        context
+            .protocol_config
+            .set_consensus_median_based_commit_timestamp_for_testing(consensus_median_timestamp);
+
+        let context = Arc::new(context);
+        let store = Arc::new(MemStore::new());
+        let dag_state = Arc::new(RwLock::new(DagState::new(context.clone(), store)));
+        let mut dag_state = dag_state.write();
+
+        let ancestors = vec![
+            VerifiedBlock::new_for_test(TestBlock::new(4, 0).set_timestamp_ms(1_000).build()),
+            VerifiedBlock::new_for_test(TestBlock::new(4, 1).set_timestamp_ms(2_000).build()),
+            VerifiedBlock::new_for_test(TestBlock::new(4, 2).set_timestamp_ms(3_000).build()),
+            VerifiedBlock::new_for_test(TestBlock::new(4, 3).set_timestamp_ms(4_000).build()),
+        ];
+
+        let leader_block = VerifiedBlock::new_for_test(
+            TestBlock::new(5, 0)
+                .set_timestamp_ms(5_000)
+                .set_ancestors(
+                    ancestors
+                        .iter()
+                        .map(|block| block.reference())
+                        .collect::<Vec<_>>(),
+                )
+                .build(),
+        );
+
+        for block in &ancestors {
+            dag_state.accept_block(block.clone());
+        }
+
+        let last_commit_timestamp_ms = 0;
+
+        // WHEN
+        let timestamp = Linearizer::calculate_commit_timestamp(
+            &context,
+            &mut dag_state,
+            &leader_block,
+            last_commit_timestamp_ms,
+        );
+        assert_eq!(timestamp, timestamp_1);
+
+        // AND skip the block of authority 0 and round 4.
+        let leader_block = VerifiedBlock::new_for_test(
+            TestBlock::new(5, 0)
+                .set_timestamp_ms(5_000)
+                .set_ancestors(
+                    ancestors
+                        .iter()
+                        .skip(1)
+                        .map(|block| block.reference())
+                        .collect::<Vec<_>>(),
+                )
+                .build(),
+        );
+
+        let timestamp = Linearizer::calculate_commit_timestamp(
+            &context,
+            &mut dag_state,
+            &leader_block,
+            last_commit_timestamp_ms,
+        );
+        assert_eq!(timestamp, timestamp_2);
+
+        // AND set the `last_commit_timestamp_ms` to 6_000
+        let last_commit_timestamp_ms = 6_000;
+        let timestamp = Linearizer::calculate_commit_timestamp(
+            &context,
+            &mut dag_state,
+            &leader_block,
+            last_commit_timestamp_ms,
+        );
+        assert_eq!(timestamp, timestamp_3);
+
+        // AND there is only one ancestor block to commit
+        let (mut context, _) = Context::new_for_test(1);
+        context
+            .protocol_config
+            .set_consensus_median_based_commit_timestamp_for_testing(consensus_median_timestamp);
+        let leader_block = VerifiedBlock::new_for_test(
+            TestBlock::new(5, 0)
+                .set_timestamp_ms(5_000)
+                .set_ancestors(
+                    ancestors
+                        .iter()
+                        .take(1)
+                        .map(|block| block.reference())
+                        .collect::<Vec<_>>(),
+                )
+                .build(),
+        );
+        let last_commit_timestamp_ms = 0;
+        let timestamp = Linearizer::calculate_commit_timestamp(
+            &context,
+            &mut dag_state,
+            &leader_block,
+            last_commit_timestamp_ms,
+        );
+        if consensus_median_timestamp {
+            assert_eq!(timestamp, 1_000);
+        } else {
+            assert_eq!(timestamp, leader_block.timestamp_ms());
+        }
+    }
+
+    #[test]
+    fn test_median_timestamps_by_stake() {
+        // One total stake.
+        let timestamps = vec![(1_000, 1)];
+        assert_eq!(median_timestamps_by_stake_inner(timestamps, 1), 1_000);
+
+        // Odd number of total stakes.
+        let timestamps = vec![(1_000, 1), (2_000, 1), (3_000, 1)];
+        assert_eq!(median_timestamps_by_stake_inner(timestamps, 3), 2_000);
+
+        // Even number of total stakes.
+        let timestamps = vec![(1_000, 1), (2_000, 1), (3_000, 1), (4_000, 1)];
+        assert_eq!(median_timestamps_by_stake_inner(timestamps, 4), 3_000);
+
+        // Even number of total stakes, different order.
+        let timestamps = vec![(4_000, 1), (3_000, 1), (1_000, 1), (2_000, 1)];
+        assert_eq!(median_timestamps_by_stake_inner(timestamps, 4), 3_000);
+
+        // Unequal stakes.
+        let timestamps = vec![(2_000, 2), (4_000, 2), (1_000, 3), (3_000, 3)];
+        assert_eq!(median_timestamps_by_stake_inner(timestamps, 10), 3_000);
+
+        // Unequal stakes.
+        let timestamps = vec![
+            (500, 2),
+            (4_000, 2),
+            (2_500, 3),
+            (1_000, 5),
+            (3_000, 3),
+            (2_000, 4),
+        ];
+        assert_eq!(median_timestamps_by_stake_inner(timestamps, 19), 2_000);
+
+        // One authority dominates.
+        let timestamps = vec![(1_000, 1), (2_000, 1), (3_000, 1), (4_000, 1), (5_000, 10)];
+        assert_eq!(median_timestamps_by_stake_inner(timestamps, 14), 5_000);
+    }
+
+    #[tokio::test]
+    async fn test_median_timestamps_by_stake_errors() {
+        let num_authorities = 4;
+        let (mut context, _keys) = Context::new_for_test(num_authorities);
+        context
+            .protocol_config
+            .set_consensus_median_based_commit_timestamp_for_testing(true);
+
+        let context = Arc::new(context);
+
+        // No blocks provided
+        let err = median_timestamp_by_stake(&context, vec![].into_iter()).unwrap_err();
+        assert_eq!(err, "No blocks provided");
+
+        // Blocks provided but total stake is less than quorum threshold
+        let block = VerifiedBlock::new_for_test(TestBlock::new(5, 0).build());
+        let err = median_timestamp_by_stake(&context, vec![block].into_iter()).unwrap_err();
+        assert_eq!(err, "Total stake 1 < quorum threshold 3");
     }
 }

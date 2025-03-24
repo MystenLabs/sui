@@ -17,7 +17,7 @@ use sui_types::{
     base_types::{ObjectID, SequenceNumber, SuiAddress, VersionNumber},
     committee::{Committee, EpochId},
     crypto::AccountKeyPair,
-    digests::{ObjectDigest, TransactionDigest, TransactionEventsDigest},
+    digests::{ObjectDigest, TransactionDigest},
     effects::{TransactionEffects, TransactionEffectsAPI, TransactionEvents},
     error::{SuiError, UserInputError},
     messages_checkpoint::{
@@ -63,8 +63,7 @@ pub struct PersistedStoreInner {
     // Transaction data
     transactions: DBMap<TransactionDigest, sui_types::transaction::TrustedTransaction>,
     effects: DBMap<TransactionDigest, TransactionEffects>,
-    events: DBMap<TransactionEventsDigest, TransactionEvents>,
-    events_tx_digest_index: DBMap<TransactionDigest, TransactionEventsDigest>,
+    events: DBMap<TransactionDigest, TransactionEvents>,
 
     // Committee data
     epoch_to_committee: DBMap<(), Vec<Committee>>,
@@ -230,30 +229,11 @@ impl SimulatorStore for PersistedStore {
             .expect("Fatal: DB read failed")
     }
 
-    fn get_transaction_events(
-        &self,
-        digest: &TransactionEventsDigest,
-    ) -> Option<TransactionEvents> {
+    fn get_transaction_events(&self, digest: &TransactionDigest) -> Option<TransactionEvents> {
         self.read_write
             .events
             .get(digest)
             .expect("Fatal: DB read failed")
-    }
-
-    fn get_transaction_events_by_tx_digest(
-        &self,
-        tx_digest: &TransactionDigest,
-    ) -> Option<TransactionEvents> {
-        self.read_write
-            .events_tx_digest_index
-            .get(tx_digest)
-            .expect("Fatal: DB read failed")
-            .and_then(|x| {
-                self.read_write
-                    .events
-                    .get(&x)
-                    .expect("Fatal: DB read failed")
-            })
     }
 
     fn get_object(&self, id: &ObjectID) -> Option<Object> {
@@ -368,12 +348,8 @@ impl SimulatorStore for PersistedStore {
 
     fn insert_events(&mut self, tx_digest: &TransactionDigest, events: TransactionEvents) {
         self.read_write
-            .events_tx_digest_index
-            .insert(tx_digest, &events.digest())
-            .expect("Fatal: DB write failed");
-        self.read_write
             .events
-            .insert(&events.digest(), &events)
+            .insert(tx_digest, &events)
             .expect("Fatal: DB write failed");
     }
 
@@ -460,8 +436,6 @@ impl ChildObjectResolver for PersistedStore {
         receiving_object_id: &ObjectID,
         receive_object_at_version: SequenceNumber,
         _epoch_id: EpochId,
-        // TODO: Delete this parameter once table migration is complete.
-        _use_object_per_epoch_marker_table_v2: bool,
     ) -> sui_types::error::SuiResult<Option<Object>> {
         let recv_object = match SimulatorStore::get_object(self, receiving_object_id) {
             None => return Ok(None),
@@ -638,7 +612,7 @@ impl ReadStore for PersistedStoreInnerReadOnlyWrapper {
             .expect("Fatal: DB read failed")
     }
 
-    fn get_events(&self, event_digest: &TransactionEventsDigest) -> Option<TransactionEvents> {
+    fn get_events(&self, event_digest: &TransactionDigest) -> Option<TransactionEvents> {
         self.sync();
         self.inner
             .events

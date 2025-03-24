@@ -1,6 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use std::collections::HashSet;
 use std::time::Duration;
 
 #[derive(Debug, Clone)]
@@ -13,6 +14,9 @@ pub struct BenchmarkConfig {
     /// The file contains a list of JSON RPC requests that are collected from Grafana,
     /// and will be run concurrently by the JSON RPC benchmark runner.
     pub json_rpc_file_path: Option<String>,
+    /// List of methods to skip during benchmark.
+    /// These methods will not be sent to the JSON RPC server.
+    pub json_rpc_methods_to_skip: HashSet<String>,
 }
 
 impl Default for BenchmarkConfig {
@@ -21,6 +25,7 @@ impl Default for BenchmarkConfig {
             concurrency: 50,
             duration: Duration::from_secs(30),
             json_rpc_file_path: None,
+            json_rpc_methods_to_skip: HashSet::new(),
         }
     }
 }

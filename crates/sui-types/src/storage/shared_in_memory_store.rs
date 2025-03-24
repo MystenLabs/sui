@@ -5,7 +5,7 @@ use super::error::Result;
 use super::ObjectStore;
 use crate::base_types::{EpochId, TransactionDigest};
 use crate::committee::Committee;
-use crate::digests::{CheckpointContentsDigest, CheckpointDigest, TransactionEventsDigest};
+use crate::digests::{CheckpointContentsDigest, CheckpointDigest};
 use crate::effects::{TransactionEffects, TransactionEvents};
 use crate::messages_checkpoint::{
     CheckpointContents, CheckpointSequenceNumber, FullCheckpointContents, VerifiedCheckpoint,
@@ -111,7 +111,7 @@ impl ReadStore for SharedInMemoryStore {
         self.inner().get_transaction_effects(digest).cloned()
     }
 
-    fn get_events(&self, digest: &TransactionEventsDigest) -> Option<TransactionEvents> {
+    fn get_events(&self, digest: &TransactionDigest) -> Option<TransactionEvents> {
         self.inner().get_transaction_events(digest).cloned()
     }
 
@@ -202,7 +202,7 @@ pub struct InMemoryStore {
     checkpoint_contents: HashMap<CheckpointContentsDigest, CheckpointContents>,
     transactions: HashMap<TransactionDigest, VerifiedTransaction>,
     effects: HashMap<TransactionDigest, TransactionEffects>,
-    events: HashMap<TransactionEventsDigest, TransactionEvents>,
+    events: HashMap<TransactionDigest, TransactionEvents>,
 
     epoch_to_committee: Vec<Committee>,
 
@@ -419,10 +419,7 @@ impl InMemoryStore {
         self.effects.get(digest)
     }
 
-    pub fn get_transaction_events(
-        &self,
-        digest: &TransactionEventsDigest,
-    ) -> Option<&TransactionEvents> {
+    pub fn get_transaction_events(&self, digest: &TransactionDigest) -> Option<&TransactionEvents> {
         self.events.get(digest)
     }
 }
@@ -512,7 +509,7 @@ impl ReadStore for SingleCheckpointSharedInMemoryStore {
         self.0.get_transaction_effects(digest)
     }
 
-    fn get_events(&self, digest: &TransactionEventsDigest) -> Option<TransactionEvents> {
+    fn get_events(&self, digest: &TransactionDigest) -> Option<TransactionEvents> {
         self.0.get_events(digest)
     }
 

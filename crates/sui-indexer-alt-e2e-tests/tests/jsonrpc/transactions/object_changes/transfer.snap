@@ -61,6 +61,8 @@ Response: {
         "previousVersion": "2",
         "digest": "GNoT9p5mUDUpCiAs4enq3HKjFZE8DjnKfC5xZyFZwgdR"
       }
-    ]
+    ],
+    "timestampMs": "0",
+    "checkpoint": "1"
   }
 }

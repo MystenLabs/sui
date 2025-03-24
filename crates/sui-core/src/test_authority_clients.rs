@@ -226,8 +226,8 @@ impl LocalAuthorityClient {
         .into_inner();
 
         let events = if request.include_events {
-            if let Some(digest) = signed_effects.events_digest() {
-                Some(state.get_transaction_events(digest)?)
+            if signed_effects.events_digest().is_some() {
+                Some(state.get_transaction_events(signed_effects.transaction_digest())?)
             } else {
                 None
             }

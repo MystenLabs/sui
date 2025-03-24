@@ -2,8 +2,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use prometheus::{
-    register_int_counter_with_registry, register_int_gauge_with_registry, IntCounter, IntGauge,
-    Registry,
+    register_int_counter_vec_with_registry, register_int_counter_with_registry,
+    register_int_gauge_with_registry, IntCounter, IntCounterVec, IntGauge, Registry,
 };
 use std::sync::Arc;
 
@@ -105,8 +105,22 @@ pub struct EpochMetrics {
     /// The number of execution time observations messages shared by this node.
     pub epoch_execution_time_observations_shared: IntCounter,
 
-    /// The number of execution time observations dropped due to backpressure from the observer.
-    pub epoch_execution_time_observations_dropped: IntCounter,
+    /// The number of execution time measurements dropped due to backpressure from the observer.
+    pub epoch_execution_time_measurements_dropped: IntCounter,
+
+    /// The number of execution time consensus messages dropped.
+    pub epoch_execution_time_observations_dropped: IntCounterVec,
+
+    /// The number of cached indebted objects in the execution time observer.
+    pub epoch_execution_time_observer_indebted_objects: IntGauge,
+
+    /// The number of objects tracked by the object utilization cache.
+    pub epoch_execution_time_observer_utilization_cache_size: IntGauge,
+
+    /// The number of objects determined by the execution time observer to be overutilized.
+    /// Note: this may overcount if objects are evicted from the cache before being computed
+    /// as not-overutilized.
+    pub epoch_execution_time_observer_overutilized_objects: IntGauge,
 
     /// The number of consensus output items in the quarantine.
     pub consensus_quarantine_queue_size: IntGauge,
@@ -237,9 +251,34 @@ impl EpochMetrics {
                 registry
             )
             .unwrap(),
-            epoch_execution_time_observations_dropped: register_int_counter_with_registry!(
+            epoch_execution_time_measurements_dropped: register_int_counter_with_registry!(
+                "epoch_execution_time_measurements_dropped",
+                "The number of execution time measurements dropped due to backpressure from the observer",
+                registry
+            )
+            .unwrap(),
+            epoch_execution_time_observations_dropped: register_int_counter_vec_with_registry!(
                 "epoch_execution_time_observations_dropped",
-                "The number of execution time observations dropped due to backpressure from the observer",
+                "The number of execution time observations dropped",
+                &["reason"],
+                registry
+            )
+            .unwrap(),
+            epoch_execution_time_observer_indebted_objects: register_int_gauge_with_registry!(
+                "epoch_execution_time_observer_indebted_objects",
+                "The number of cached indebted objects in the execution time observer",
+                registry
+            )
+            .unwrap(),
+            epoch_execution_time_observer_utilization_cache_size: register_int_gauge_with_registry!(
+                "epoch_execution_time_observer_utilization_cache_size",
+                "The number of objects tracked by the object utilization cache",
+                registry
+            )
+            .unwrap(),
+            epoch_execution_time_observer_overutilized_objects: register_int_gauge_with_registry!(
+                "epoch_execution_time_observer_overutilized_objects",
+                "The number of objects determined by the execution time observer to be overutilized. Note: this may overcount if objects are evicted from the cache before being computed as not-overutilized.",
                 registry
             )
             .unwrap(),

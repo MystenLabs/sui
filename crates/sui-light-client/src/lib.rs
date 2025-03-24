@@ -4,6 +4,17 @@
 pub mod construct;
 pub mod proof;
 
+pub mod checkpoint;
+
+pub mod config;
+
+pub mod object_store;
+pub mod package_store;
+
+pub mod graphql;
+
+pub mod verifier;
+
 #[doc(inline)]
 pub use proof::*;
 

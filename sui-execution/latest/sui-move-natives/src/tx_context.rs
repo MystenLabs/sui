@@ -34,7 +34,7 @@ pub fn derive_id(
 
     let tx_context_derive_id_cost_params = context
         .extensions_mut()
-        .get::<NativesCostTable>()
+        .get::<NativesCostTable>()?
         .tx_context_derive_id_cost_params
         .clone();
     native_charge_gas_early_exit!(
@@ -48,7 +48,7 @@ pub fn derive_id(
     // unwrap safe because all digests in Move are serialized from the Rust `TransactionDigest`
     let digest = TransactionDigest::try_from(tx_hash.as_slice()).unwrap();
     let address = AccountAddress::from(ObjectID::derive_id(digest, ids_created));
-    let obj_runtime: &mut ObjectRuntime = context.extensions_mut().get_mut();
+    let obj_runtime: &mut ObjectRuntime = context.extensions_mut().get_mut()?;
     obj_runtime.new_id(address.into())?;
 
     Ok(NativeResult::ok(
@@ -74,7 +74,7 @@ pub fn fresh_id(
 
     let tx_context_fresh_id_cost_params = context
         .extensions_mut()
-        .get::<NativesCostTable>()
+        .get::<NativesCostTable>()?
         .tx_context_fresh_id_cost_params
         .clone();
     native_charge_gas_early_exit!(
@@ -82,9 +82,9 @@ pub fn fresh_id(
         tx_context_fresh_id_cost_params.tx_context_fresh_id_cost_base
     );
 
-    let transaction_context: &mut TransactionContext = context.extensions_mut().get_mut();
+    let transaction_context: &mut TransactionContext = context.extensions_mut().get_mut()?;
     let fresh_id = transaction_context.fresh_id();
-    let object_runtime: &mut ObjectRuntime = context.extensions_mut().get_mut();
+    let object_runtime: &mut ObjectRuntime = context.extensions_mut().get_mut()?;
     object_runtime.new_id(fresh_id)?;
 
     Ok(NativeResult::ok(
@@ -111,7 +111,7 @@ pub fn sender(
 
     let tx_context_sender_cost_params = context
         .extensions_mut()
-        .get::<NativesCostTable>()
+        .get::<NativesCostTable>()?
         .tx_context_sender_cost_params
         .clone();
     native_charge_gas_early_exit!(
@@ -119,7 +119,7 @@ pub fn sender(
         tx_context_sender_cost_params.tx_context_sender_cost_base
     );
 
-    let transaction_context: &mut TransactionContext = context.extensions_mut().get_mut();
+    let transaction_context: &mut TransactionContext = context.extensions_mut().get_mut()?;
     let sender = transaction_context.sender();
 
     Ok(NativeResult::ok(
@@ -146,7 +146,7 @@ pub fn epoch(
 
     let tx_context_epoch_cost_params = context
         .extensions_mut()
-        .get::<NativesCostTable>()
+        .get::<NativesCostTable>()?
         .tx_context_epoch_cost_params
         .clone();
     native_charge_gas_early_exit!(
@@ -154,7 +154,7 @@ pub fn epoch(
         tx_context_epoch_cost_params.tx_context_epoch_cost_base
     );
 
-    let transaction_context: &mut TransactionContext = context.extensions_mut().get_mut();
+    let transaction_context: &mut TransactionContext = context.extensions_mut().get_mut()?;
     let epoch = transaction_context.epoch();
 
     Ok(NativeResult::ok(
@@ -181,7 +181,7 @@ pub fn epoch_timestamp_ms(
 
     let tx_context_epoch_timestamp_ms_cost_params = context
         .extensions_mut()
-        .get::<NativesCostTable>()
+        .get::<NativesCostTable>()?
         .tx_context_epoch_timestamp_ms_cost_params
         .clone();
     native_charge_gas_early_exit!(
@@ -189,7 +189,7 @@ pub fn epoch_timestamp_ms(
         tx_context_epoch_timestamp_ms_cost_params.tx_context_epoch_timestamp_ms_cost_base
     );
 
-    let transaction_context: &mut TransactionContext = context.extensions_mut().get_mut();
+    let transaction_context: &mut TransactionContext = context.extensions_mut().get_mut()?;
     let timestamp = transaction_context.epoch_timestamp_ms();
 
     Ok(NativeResult::ok(
@@ -216,7 +216,7 @@ pub fn sponsor(
 
     let tx_context_sponsor_cost_params = context
         .extensions_mut()
-        .get::<NativesCostTable>()
+        .get::<NativesCostTable>()?
         .tx_context_sponsor_cost_params
         .clone();
     native_charge_gas_early_exit!(
@@ -224,7 +224,7 @@ pub fn sponsor(
         tx_context_sponsor_cost_params.tx_context_sponsor_cost_base
     );
 
-    let transaction_context: &mut TransactionContext = context.extensions_mut().get_mut();
+    let transaction_context: &mut TransactionContext = context.extensions_mut().get_mut()?;
     let sponsor = transaction_context
         .sponsor()
         .map(|addr| addr.into())
@@ -251,7 +251,7 @@ pub fn gas_price(
 
     let tx_context_gas_price_cost_params = context
         .extensions_mut()
-        .get::<NativesCostTable>()
+        .get::<NativesCostTable>()?
         .tx_context_gas_price_cost_params
         .clone();
     native_charge_gas_early_exit!(
@@ -259,7 +259,7 @@ pub fn gas_price(
         tx_context_gas_price_cost_params.tx_context_gas_price_cost_base
     );
 
-    let transaction_context: &mut TransactionContext = context.extensions_mut().get_mut();
+    let transaction_context: &mut TransactionContext = context.extensions_mut().get_mut()?;
     let gas_price = transaction_context.gas_price();
 
     Ok(NativeResult::ok(
@@ -286,7 +286,7 @@ pub fn gas_budget(
 
     let tx_context_gas_budget_cost_params = context
         .extensions_mut()
-        .get::<NativesCostTable>()
+        .get::<NativesCostTable>()?
         .tx_context_gas_budget_cost_params
         .clone();
     native_charge_gas_early_exit!(
@@ -294,7 +294,7 @@ pub fn gas_budget(
         tx_context_gas_budget_cost_params.tx_context_gas_budget_cost_base
     );
 
-    let transaction_context: &mut TransactionContext = context.extensions_mut().get_mut();
+    let transaction_context: &mut TransactionContext = context.extensions_mut().get_mut()?;
     let gas_budget = transaction_context.gas_budget();
 
     Ok(NativeResult::ok(
@@ -321,7 +321,7 @@ pub fn ids_created(
 
     let tx_context_ids_created_cost_params = context
         .extensions_mut()
-        .get::<NativesCostTable>()
+        .get::<NativesCostTable>()?
         .tx_context_ids_created_cost_params
         .clone();
     native_charge_gas_early_exit!(
@@ -329,7 +329,7 @@ pub fn ids_created(
         tx_context_ids_created_cost_params.tx_context_ids_created_cost_base
     );
 
-    let transaction_context: &mut TransactionContext = context.extensions_mut().get_mut();
+    let transaction_context: &mut TransactionContext = context.extensions_mut().get_mut()?;
     let ids_created = transaction_context.ids_created();
 
     Ok(NativeResult::ok(
@@ -369,7 +369,7 @@ pub fn replace(
 
     let tx_context_replace_cost_params = context
         .extensions_mut()
-        .get::<NativesCostTable>()
+        .get::<NativesCostTable>()?
         .tx_context_replace_cost_params
         .clone();
     native_charge_gas_early_exit!(
@@ -385,7 +385,7 @@ pub fn replace(
     let epoch: u64 = pop_arg!(args, u64);
     let tx_hash: Vec<u8> = pop_arg!(args, Vec<u8>);
     let sender: AccountAddress = pop_arg!(args, AccountAddress);
-    let transaction_context: &mut TransactionContext = context.extensions_mut().get_mut();
+    let transaction_context: &mut TransactionContext = context.extensions_mut().get_mut()?;
     transaction_context.replace(
         sender,
         tx_hash,
@@ -418,7 +418,7 @@ pub fn last_created_id(
 
     let tx_context_derive_id_cost_params = context
         .extensions_mut()
-        .get::<NativesCostTable>()
+        .get::<NativesCostTable>()?
         .tx_context_derive_id_cost_params
         .clone();
     native_charge_gas_early_exit!(
@@ -426,7 +426,7 @@ pub fn last_created_id(
         tx_context_derive_id_cost_params.tx_context_derive_id_cost_base
     );
 
-    let transaction_context: &mut TransactionContext = context.extensions_mut().get_mut();
+    let transaction_context: &mut TransactionContext = context.extensions_mut().get_mut()?;
     let mut ids_created = transaction_context.ids_created();
     if ids_created == 0 {
         return Ok(NativeResult::err(context.gas_used(), E_NO_IDS_CREATED));
@@ -434,7 +434,7 @@ pub fn last_created_id(
     ids_created -= 1;
     let digest = transaction_context.digest();
     let address = AccountAddress::from(ObjectID::derive_id(digest, ids_created));
-    let obj_runtime: &mut ObjectRuntime = context.extensions_mut().get_mut();
+    let obj_runtime: &mut ObjectRuntime = context.extensions_mut().get_mut()?;
     obj_runtime.new_id(address.into())?;
 
     Ok(NativeResult::ok(

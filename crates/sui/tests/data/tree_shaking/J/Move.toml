@@ -1,0 +1,11 @@
+[package]
+name = "J"
+edition = "2024.beta"
+
+[dependencies]
+# this is relative to the temp directory where this whole tree shaking dir is copied to
+Sui = { local = "../../system-packages/sui-framework", override = true }
+
+[addresses]
+j = "0x0"
+

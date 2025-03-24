@@ -234,25 +234,27 @@ mod checked {
             })
         }
 
-        pub fn object_runtime(&mut self) -> &ObjectRuntime {
-            self.native_extensions.get()
+        pub fn object_runtime(&self) -> Result<&ObjectRuntime, ExecutionError> {
+            self.native_extensions
+                .get::<ObjectRuntime>()
+                .map_err(|e| self.convert_vm_error(e.finish(Location::Undefined)))
         }
 
         /// Create a new ID and update the state
         pub fn fresh_id(&mut self) -> Result<ObjectID, ExecutionError> {
             let object_id = self.tx_context.borrow_mut().fresh_id();
-            let object_runtime: &mut ObjectRuntime = self.native_extensions.get_mut();
-            object_runtime
-                .new_id(object_id)
+            self.native_extensions
+                .get_mut()
+                .and_then(|object_runtime: &mut ObjectRuntime| object_runtime.new_id(object_id))
                 .map_err(|e| self.convert_vm_error(e.finish(Location::Undefined)))?;
             Ok(object_id)
         }
 
         /// Delete an ID and update the state
         pub fn delete_id(&mut self, object_id: ObjectID) -> Result<(), ExecutionError> {
-            let object_runtime: &mut ObjectRuntime = self.native_extensions.get_mut();
-            object_runtime
-                .delete_id(object_id)
+            self.native_extensions
+                .get_mut()
+                .and_then(|object_runtime: &mut ObjectRuntime| object_runtime.delete_id(object_id))
                 .map_err(|e| self.convert_vm_error(e.finish(Location::Undefined)))
         }
 
@@ -304,8 +306,11 @@ mod checked {
             function: FunctionDefinitionIndex,
             last_offset: CodeOffset,
         ) -> Result<(), ExecutionError> {
-            let object_runtime: &mut ObjectRuntime = self.native_extensions.get_mut();
-            let events = object_runtime.take_user_events();
+            let events = self
+                .native_extensions
+                .get_mut()
+                .map(|object_runtime: &mut ObjectRuntime| object_runtime.take_user_events())
+                .map_err(|e| self.convert_vm_error(e.finish(Location::Undefined)))?;
             let num_events = self.user_events.len() + events.len();
             let max_events = self.protocol_config.max_num_event_emit();
             if num_events as u64 > max_events {
@@ -708,7 +713,14 @@ mod checked {
                 refund_max_gas_budget(&mut additional_writes, gas_charger, gas_id)?;
             }
 
-            let object_runtime: ObjectRuntime = native_extensions.remove();
+            let object_runtime: ObjectRuntime = native_extensions.remove().map_err(|e| {
+                convert_vm_error(
+                    e.finish(Location::Undefined),
+                    vm,
+                    &linkage_view,
+                    protocol_config.resolve_abort_locations_to_package_id(),
+                )
+            })?;
 
             let RuntimeResults {
                 writes,

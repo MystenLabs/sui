@@ -78,7 +78,7 @@ pub fn keccak256(
     // Load the cost parameters from the protocol config
     let hash_keccak256_cost_params = &context
         .extensions()
-        .get::<NativesCostTable>()
+        .get::<NativesCostTable>()?
         .hash_keccak256_cost_params
         .clone();
     // Charge the base cost for this oper
@@ -118,7 +118,7 @@ pub fn blake2b256(
     // Load the cost parameters from the protocol config
     let hash_blake2b256_cost_params = &context
         .extensions()
-        .get::<NativesCostTable>()
+        .get::<NativesCostTable>()?
         .hash_blake2b256_cost_params
         .clone();
     // Charge the base cost for this oper

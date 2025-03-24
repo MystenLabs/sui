@@ -9,6 +9,7 @@ use crate::drivers::Interval;
 use crate::in_memory_wallet::move_call_pt_impl;
 use crate::in_memory_wallet::InMemoryWallet;
 use crate::system_state_observer::{SystemState, SystemStateObserver};
+use crate::workloads::benchmark_move_base_dir;
 use crate::workloads::payload::Payload;
 use crate::workloads::{workload::ExpectedFailureType, Gas, GasCoinConfig};
 use crate::ProgrammableTransactionBuilder;
@@ -19,7 +20,6 @@ use move_core_types::identifier::Identifier;
 use rand::distributions::{Distribution, Standard};
 use rand::Rng;
 use regex::Regex;
-use std::path::PathBuf;
 use std::str::FromStr;
 use std::sync::Arc;
 use strum::{EnumCount, IntoEnumIterator};
@@ -243,7 +243,7 @@ impl AdversarialTestPayload {
                 to_sender_signed_transaction(data, account.key())
             }
             AdversarialPayloadType::MaxPackagePublish => {
-                let mut path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+                let mut path = benchmark_move_base_dir();
                 path.push("src/workloads/data/max_package");
                 TestTransactionBuilder::new(self.sender, account.gas, gas_price)
                     .publish(path)
@@ -461,7 +461,7 @@ impl Workload<dyn Payload> for AdversarialWorkload {
         system_state_observer: Arc<SystemStateObserver>,
     ) {
         let gas = &self.init_gas;
-        let mut path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+        let mut path = benchmark_move_base_dir();
         path.push("src/workloads/data/adversarial");
         let SystemState {
             reference_gas_price,

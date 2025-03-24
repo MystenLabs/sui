@@ -12,7 +12,7 @@
       "name": "Apache-2.0",
       "url": "https://raw.githubusercontent.com/MystenLabs/sui/main/LICENSE"
     },
-    "version": "1.45.0"
+    "version": "1.46.0"
   },
   "methods": [
     {
@@ -1294,7 +1294,7 @@
             "name": "Result",
             "value": {
               "minSupportedProtocolVersion": "1",
-              "maxSupportedProtocolVersion": "78",
+              "maxSupportedProtocolVersion": "79",
               "protocolVersion": "6",
               "featureFlags": {
                 "accept_passkey_in_multisig": false,
@@ -1308,6 +1308,7 @@
                 "commit_root_state_digest": false,
                 "consensus_distributed_vote_scoring_strategy": false,
                 "consensus_linearize_subdag_v2": false,
+                "consensus_median_based_commit_timestamp": false,
                 "consensus_order_end_of_epoch_last": true,
                 "consensus_round_prober": false,
                 "consensus_round_prober_probe_accepted_rounds": false,
@@ -6100,6 +6101,16 @@
             "items": {
               "$ref": "#/components/schemas/ObjectChange"
             }
+          },
+          "suggestedGasPrice": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/BigInt_for_uint64"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         }
       },

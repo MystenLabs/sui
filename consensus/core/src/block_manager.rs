@@ -279,10 +279,34 @@ impl BlockManager {
         missing_blocks
     }
 
+    fn verify_block_timestamps_and_accept(
+        &mut self,
+        unsuspended_blocks: impl IntoIterator<Item = VerifiedBlock>,
+    ) -> Vec<VerifiedBlock> {
+        // If the median based timestamp is enabled, then we skip all the timestamp verification and we go straight and accept the blocks.
+        let blocks_to_accept = if self
+            .context
+            .protocol_config
+            .consensus_median_based_commit_timestamp()
+        {
+            unsuspended_blocks.into_iter().collect::<Vec<_>>()
+        } else {
+            self.verify_block_timestamps(unsuspended_blocks)
+        };
+
+        // Insert the accepted blocks into DAG state so future blocks including them as
+        // ancestors do not get suspended.
+        self.dag_state
+            .write()
+            .accept_blocks(blocks_to_accept.clone());
+
+        blocks_to_accept
+    }
+
     // TODO: remove once timestamping is refactored to the new approach.
     // Verifies each block's timestamp based on its ancestors, and persists in store all the valid blocks that should be accepted. Method
     // returns the accepted and persisted blocks.
-    fn verify_block_timestamps_and_accept(
+    fn verify_block_timestamps(
         &mut self,
         unsuspended_blocks: impl IntoIterator<Item = VerifiedBlock>,
     ) -> Vec<VerifiedBlock> {
@@ -290,6 +314,7 @@ impl BlockManager {
             let dag_state = self.dag_state.read();
             (dag_state.gc_enabled(), dag_state.gc_round())
         };
+
         // Try to verify the block and its children for timestamp, with ancestor blocks.
         let mut blocks_to_accept: BTreeMap<BlockRef, VerifiedBlock> = BTreeMap::new();
         let mut blocks_to_reject: BTreeMap<BlockRef, VerifiedBlock> = BTreeMap::new();
@@ -336,6 +361,7 @@ impl BlockManager {
                         panic!("Unsuspended block {:?} has a missing ancestor! Ancestor not found in DagState: {:?}", b, ancestor_ref);
                     }
                 }
+
                 if let Err(e) =
                     self.block_verifier
                         .check_ancestors(&b, &ancestor_blocks, gc_enabled, gc_round)
@@ -725,7 +751,7 @@ mod tests {
     use crate::{
         block::{BlockAPI, BlockDigest, BlockRef, SignedBlock, VerifiedBlock},
         block_manager::BlockManager,
-        block_verifier::{BlockVerifier, NoopBlockVerifier},
+        block_verifier::{BlockVerifier, NoopBlockVerifier, SignedBlockVerifier},
         commit::TrustedCommit,
         context::Context,
         dag_state::DagState,
@@ -733,6 +759,7 @@ mod tests {
         storage::mem_store::MemStore,
         test_dag_builder::DagBuilder,
         test_dag_parser::parse_dag,
+        transaction::NoopTransactionVerifier,
         CommitDigest, Round, TransactionIndex,
     };
 
@@ -1237,7 +1264,10 @@ mod tests {
 
     #[tokio::test]
     async fn reject_blocks_failing_verifications() {
-        let (context, _key_pairs) = Context::new_for_test(4);
+        let (mut context, _key_pairs) = Context::new_for_test(4);
+        context
+            .protocol_config
+            .set_consensus_median_based_commit_timestamp_for_testing(false);
         let context = Arc::new(context);
 
         // create a DAG of rounds 1 ~ 5.
@@ -1379,5 +1409,75 @@ mod tests {
                 .chain(missing_block_refs_from_find.into_iter())
                 .collect()
         );
+    }
+
+    #[rstest]
+    #[tokio::test]
+    async fn test_verify_block_timestamps_and_accept(
+        #[values(false, true)] median_based_timestamp: bool,
+    ) {
+        telemetry_subscribers::init_for_testing();
+        let (mut context, _key_pairs) = Context::new_for_test(4);
+        context
+            .protocol_config
+            .set_consensus_median_based_commit_timestamp_for_testing(median_based_timestamp);
+
+        let context = Arc::new(context);
+        let store = Arc::new(MemStore::new());
+        let dag_state = Arc::new(RwLock::new(DagState::new(context.clone(), store.clone())));
+
+        let mut block_manager = BlockManager::new(
+            context.clone(),
+            dag_state.clone(),
+            Arc::new(SignedBlockVerifier::new(
+                context.clone(),
+                Arc::new(NoopTransactionVerifier {}),
+            )),
+        );
+
+        // create a DAG where authority 0 timestamp is always higher than the others.
+        let mut dag_builder = DagBuilder::new(context.clone());
+        let authorities = context
+            .committee
+            .authorities()
+            .map(|(index, _)| index)
+            .collect::<Vec<_>>();
+        dag_builder
+            .layers(1..=1)
+            .authorities(authorities.clone())
+            .with_timestamps(vec![1000, 500, 550, 580])
+            .build();
+        dag_builder
+            .layers(2..=2)
+            .authorities(authorities.clone())
+            .with_timestamps(vec![2000, 600, 650, 680])
+            .build();
+        dag_builder
+            .layers(3..=3)
+            .authorities(authorities)
+            .with_timestamps(vec![3000, 700, 750, 780])
+            .build();
+
+        // take all the blocks and try to accept them.
+        let all_blocks = dag_builder.blocks.values().cloned().collect::<Vec<_>>();
+
+        // All blocks should get accepted
+        let (accepted_blocks, missing) = block_manager.try_accept_blocks(all_blocks.clone());
+
+        if median_based_timestamp {
+            // If the median based timestamp is enabled then all the blocks should be accepted
+            assert_eq!(all_blocks, accepted_blocks);
+            assert!(missing.is_empty());
+        } else {
+            // only the blocks of first round will be accepted (and the block of round 2 for authority 0) as the rest will be rejected
+            assert_eq!(accepted_blocks.len(), 5);
+            for block in accepted_blocks {
+                if block.author() == AuthorityIndex::new_for_test(0) {
+                    assert!(block.round() == 1 || block.round() == 2);
+                } else {
+                    assert_eq!(block.round(), 1);
+                }
+            }
+        }
     }
 }
