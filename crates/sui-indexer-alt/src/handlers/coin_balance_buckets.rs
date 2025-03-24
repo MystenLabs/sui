@@ -7,8 +7,9 @@ use anyhow::{anyhow, bail, Result};
 use diesel::sql_query;
 use diesel_async::RunQueryDsl;
 use sui_indexer_alt_framework::{
-    db,
+    pg_store::PgStore,
     pipeline::{concurrent::Handler, Processor},
+    store::Store,
     types::{
         base_types::{ObjectID, SuiAddress},
         full_checkpoint_content::CheckpointData,
@@ -159,9 +160,14 @@ impl Processor for CoinBalanceBuckets {
 
 #[async_trait::async_trait]
 impl Handler for CoinBalanceBuckets {
+    type Store = PgStore;
+
     const PRUNING_REQUIRES_PROCESSED_VALUES: bool = true;
 
-    async fn commit(values: &[Self::Value], conn: &mut db::Connection<'_>) -> Result<usize> {
+    async fn commit<'a>(
+        values: &[Self::Value],
+        conn: &mut <Self::Store as Store>::Connection<'a>,
+    ) -> Result<usize> {
         let values = values
             .iter()
             .map(|v| v.try_into())
@@ -174,11 +180,11 @@ impl Handler for CoinBalanceBuckets {
     }
 
     // TODO: Add tests for this function.
-    async fn prune(
+    async fn prune<'a>(
         &self,
         from: u64,
         to_exclusive: u64,
-        conn: &mut db::Connection<'_>,
+        conn: &mut <Self::Store as Store>::Connection<'a>,
     ) -> anyhow::Result<usize> {
         use sui_indexer_alt_schema::schema::coin_balance_buckets::dsl;
 
@@ -302,6 +308,7 @@ mod tests {
     use super::*;
     use diesel::QueryDsl;
     use sui_indexer_alt_framework::{
+        db,
         types::{
             base_types::{dbg_addr, MoveObjectType, ObjectID, SequenceNumber, SuiAddress},
             digests::TransactionDigest,
