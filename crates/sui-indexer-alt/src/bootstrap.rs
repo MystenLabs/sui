@@ -3,11 +3,11 @@
 
 use std::time::Duration;
 
+use crate::pg_store::PgStore;
 use anyhow::{bail, Context, Result};
 use diesel::{OptionalExtension, QueryDsl, SelectableHelper};
 use diesel_async::RunQueryDsl;
 use sui_indexer_alt_framework::{
-    pg_store::PgStore,
     store::Store,
     types::{
         full_checkpoint_content::CheckpointData,

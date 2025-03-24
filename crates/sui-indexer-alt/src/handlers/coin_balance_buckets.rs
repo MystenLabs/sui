@@ -3,11 +3,11 @@
 
 use std::{collections::BTreeMap, sync::Arc};
 
+use crate::pg_store::PgStore;
 use anyhow::{anyhow, bail, Result};
 use diesel::sql_query;
 use diesel_async::RunQueryDsl;
 use sui_indexer_alt_framework::{
-    pg_store::PgStore,
     pipeline::{concurrent::Handler, Processor},
     store::Store,
     types::{

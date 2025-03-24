@@ -3,12 +3,12 @@
 
 use std::{collections::BTreeMap, sync::Arc};
 
+use crate::pg_store::PgStore;
 use anyhow::{anyhow, Result};
 use diesel::{upsert::excluded, ExpressionMethods};
 use diesel_async::RunQueryDsl;
 use futures::future::try_join_all;
 use sui_indexer_alt_framework::{
-    pg_store::PgStore,
     pipeline::{sequential::Handler, Processor},
     store::Store,
     types::full_checkpoint_content::CheckpointData,

@@ -4,10 +4,10 @@
 use std::ops::Range;
 use std::{collections::BTreeSet, sync::Arc};
 
+use crate::pg_store::PgStore;
 use anyhow::Result;
 use diesel::{ExpressionMethods, QueryDsl};
 use diesel_async::RunQueryDsl;
-use sui_indexer_alt_framework::pg_store::PgStore;
 use sui_indexer_alt_framework::store::Store;
 use sui_indexer_alt_framework::{
     models::cp_sequence_numbers::tx_interval,

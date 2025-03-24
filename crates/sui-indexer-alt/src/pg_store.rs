@@ -1,0 +1,243 @@
+// Copyright (c) Mysten Labs, Inc.
+// SPDX-License-Identifier: Apache-2.0
+
+use std::ops::{Deref, DerefMut};
+use std::time::Duration;
+
+use async_trait::async_trait;
+use diesel_async::scoped_futures::ScopedFutureExt;
+use diesel_async::AsyncConnection;
+use sui_indexer_alt_metrics::stats::{DbConnectionStats, DbConnectionStatsSnapshot};
+
+use sui_indexer_alt_framework::db::{Connection as PgConnection, Db as PgDb};
+use sui_indexer_alt_framework::models::watermarks::{
+    PgCommitterWatermark, PgPrunerWatermark, PgReaderWatermark, StoredWatermark,
+};
+use sui_indexer_alt_framework::store::{
+    CommitterWatermark, DbConnection, HandlerBatch, SequentialHandler, Store, TransactionalStore,
+};
+
+/// PostgreSQL implementation of Store
+#[derive(Clone)]
+pub struct PgStore {
+    pub db: PgDb,
+}
+
+impl PgStore {
+    pub fn new(db: PgDb) -> Self {
+        Self { db }
+    }
+}
+
+// Instead, create a newtype wrapper
+pub struct MyPgConnection<'c>(pub sui_indexer_alt_framework::db::Connection<'c>);
+
+// Implement DbConnection for your newtype
+impl<'c> DbConnection for MyPgConnection<'c> {}
+
+// Add methods to delegate to the inner connection
+impl<'c> MyPgConnection<'c> {
+    // Access the inner connection
+    pub fn inner(&self) -> &sui_indexer_alt_framework::db::Connection<'c> {
+        &self.0
+    }
+
+    pub fn inner_mut(&mut self) -> &mut sui_indexer_alt_framework::db::Connection<'c> {
+        &mut self.0
+    }
+
+    // You can add convenience methods that delegate to the inner connection if needed
+}
+
+impl<'c> Deref for MyPgConnection<'c> {
+    type Target = sui_indexer_alt_framework::db::Connection<'c>;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+impl<'c> DerefMut for MyPgConnection<'c> {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.0
+    }
+}
+
+/// PostgreSQL implementation of Store
+#[async_trait]
+impl Store for PgStore {
+    type Connection<'c>
+        = MyPgConnection<'c>
+    where
+        Self: 'c;
+
+    async fn connect<'c>(&'c self) -> anyhow::Result<Self::Connection<'c>> {
+        let conn = self.db.connect().await?;
+        Ok(MyPgConnection(conn))
+    }
+
+    async fn get_committer_watermark(
+        &self,
+        pipeline: &'static str,
+    ) -> anyhow::Result<Option<(i64, i64, i64, i64)>> {
+        let mut conn = self.db.connect().await?;
+        let watermark = PgCommitterWatermark::get(&mut conn, pipeline)
+            .await
+            .map_err(anyhow::Error::from)?;
+
+        if let Some(watermark) = watermark {
+            Ok(Some((
+                watermark.epoch_hi_inclusive,
+                watermark.checkpoint_hi_inclusive,
+                watermark.tx_hi,
+                watermark.timestamp_ms_hi_inclusive,
+            )))
+        } else {
+            Ok(None)
+        }
+    }
+
+    async fn get_reader_watermark(
+        &self,
+        pipeline: &'static str,
+    ) -> anyhow::Result<Option<(i64, i64)>> {
+        let mut conn = self.db.connect().await?;
+        let watermark = StoredWatermark::get(&mut conn, pipeline)
+            .await
+            .map_err(anyhow::Error::from)?;
+
+        if let Some(watermark) = watermark {
+            Ok(Some((
+                watermark.checkpoint_hi_inclusive,
+                watermark.reader_lo,
+            )))
+        } else {
+            Ok(None)
+        }
+    }
+
+    async fn update_committer_watermark(
+        &self,
+        pipeline: &'static str,
+        epoch_hi_inclusive: i64,
+        checkpoint_hi_inclusive: i64,
+        tx_hi: i64,
+        timestamp_ms_hi_inclusive: i64,
+    ) -> anyhow::Result<bool> {
+        let mut conn = self.db.connect().await?;
+        let watermark = PgCommitterWatermark {
+            pipeline: pipeline.into(),
+            epoch_hi_inclusive,
+            checkpoint_hi_inclusive,
+            tx_hi,
+            timestamp_ms_hi_inclusive,
+        };
+        watermark.update(&mut conn).await.map_err(Into::into)
+    }
+
+    async fn update_reader_watermark(
+        &self,
+        pipeline: &'static str,
+        reader_lo: i64,
+    ) -> anyhow::Result<bool> {
+        let mut conn = self.db.connect().await?;
+        let watermark = PgReaderWatermark {
+            pipeline: pipeline.into(),
+            reader_lo,
+        };
+        watermark.update(&mut conn).await.map_err(Into::into)
+    }
+
+    async fn get_pruner_watermark(
+        &self,
+        pipeline: &'static str,
+        delay: Duration,
+    ) -> anyhow::Result<Option<(i64, i64, i64)>> {
+        let mut conn = self.db.connect().await?;
+        let watermark = PgPrunerWatermark::get(&mut conn, pipeline, delay)
+            .await
+            .map_err(anyhow::Error::from)?;
+
+        if let Some(watermark) = watermark {
+            Ok(Some((
+                watermark.pruner_hi,
+                watermark.reader_lo,
+                watermark.wait_for,
+            )))
+        } else {
+            Ok(None)
+        }
+    }
+
+    async fn update_pruner_watermark(
+        &self,
+        pipeline: &'static str,
+        pruner_hi: i64,
+    ) -> anyhow::Result<bool> {
+        let mut conn = self.db.connect().await?;
+        let watermark = PgPrunerWatermark {
+            pipeline: pipeline.into(),
+            pruner_hi,
+            // These values are ignored by the update method
+            reader_lo: 0,
+            wait_for: 0,
+        };
+        watermark.update(&mut conn).await.map_err(Into::into)
+    }
+}
+
+#[async_trait]
+impl TransactionalStore for PgStore {
+    async fn transactional_commit_with_watermark<'a, H>(
+        &'a self,
+        pipeline: &'static str,
+        watermark: &'a CommitterWatermark,
+        batch: &'a HandlerBatch<H>,
+    ) -> anyhow::Result<usize>
+    where
+        H: SequentialHandler<Store = Self> + Send + Sync + 'a,
+    {
+        let mut conn = self.db.connect().await?;
+
+        let result = AsyncConnection::transaction(&mut conn, |conn| {
+            async {
+                let watermark = PgCommitterWatermark {
+                    pipeline: pipeline.into(),
+                    epoch_hi_inclusive: watermark.epoch_hi_inclusive,
+                    checkpoint_hi_inclusive: watermark.checkpoint_hi_inclusive,
+                    tx_hi: watermark.tx_hi,
+                    timestamp_ms_hi_inclusive: watermark.timestamp_ms_hi_inclusive,
+                };
+                watermark.update(conn).await.map_err(anyhow::Error::from)?;
+
+                // Wrap the connection in your newtype before passing to commit
+                let mut wrapped_conn = MyPgConnection(conn);
+                H::commit(batch, &mut wrapped_conn).await
+            }
+            .scope_boxed()
+        })
+        .await?;
+
+        Ok(result)
+    }
+}
+
+impl DbConnectionStats for PgStore {
+    fn get_connection_stats(&self) -> DbConnectionStatsSnapshot {
+        let state = self.db.state();
+        let stats = state.statistics;
+        DbConnectionStatsSnapshot {
+            connections: state.connections as usize,
+            idle_connections: state.idle_connections as usize,
+            get_direct: stats.get_direct as u64,
+            get_waited: stats.get_waited as u64,
+            get_timed_out: stats.get_timed_out as u64,
+            get_wait_time_ms: stats.get_wait_time.as_millis() as u64,
+            connections_created: stats.connections_created as u64,
+            connections_closed_broken: stats.connections_closed_broken,
+            connections_closed_invalid: stats.connections_closed_invalid,
+            connections_closed_max_lifetime: stats.connections_closed_max_lifetime,
+            connections_closed_idle_timeout: stats.connections_closed_idle_timeout,
+        }
+    }
+}
