@@ -8,8 +8,9 @@ use anyhow::{bail, Context, Result};
 use diesel::{ExpressionMethods, QueryDsl};
 use diesel_async::RunQueryDsl;
 use sui_indexer_alt_framework::{
-    db,
+    db::Db,
     pipeline::{concurrent::Handler, Processor},
+    store::Store,
     types::{
         event::SystemEpochInfoEvent,
         full_checkpoint_content::CheckpointData,
@@ -122,9 +123,14 @@ impl Processor for KvEpochEnds {
 
 #[async_trait::async_trait]
 impl Handler for KvEpochEnds {
+    type Store = Db;
+
     const MIN_EAGER_ROWS: usize = 1;
 
-    async fn commit(values: &[Self::Value], conn: &mut db::Connection<'_>) -> Result<usize> {
+    async fn commit<'a>(
+        values: &[Self::Value],
+        conn: &mut <Self::Store as Store>::Connection<'a>,
+    ) -> Result<usize> {
         Ok(diesel::insert_into(kv_epoch_ends::table)
             .values(values)
             .on_conflict_do_nothing()
@@ -132,11 +138,11 @@ impl Handler for KvEpochEnds {
             .await?)
     }
 
-    async fn prune(
+    async fn prune<'a>(
         &self,
         from: u64,
         to_exclusive: u64,
-        conn: &mut db::Connection<'_>,
+        conn: &mut <Self::Store as Store>::Connection<'a>,
     ) -> Result<usize> {
         let Range {
             start: from_epoch,
@@ -157,13 +163,15 @@ mod tests {
     use super::*;
     use anyhow::Result;
     use sui_indexer_alt_framework::{
-        db::Connection, types::test_checkpoint_data_builder::TestCheckpointDataBuilder, Indexer,
+        types::test_checkpoint_data_builder::TestCheckpointDataBuilder, Indexer,
     };
     use sui_indexer_alt_schema::MIGRATIONS;
 
     use crate::handlers::cp_sequence_numbers::CpSequenceNumbers;
 
-    async fn get_all_kv_epoch_ends(conn: &mut Connection<'_>) -> Result<Vec<StoredEpochEnd>> {
+    async fn get_all_kv_epoch_ends(
+        conn: &mut <Db as Store>::Connection<'_>,
+    ) -> Result<Vec<StoredEpochEnd>> {
         let result = kv_epoch_ends::table
             .order_by(kv_epoch_ends::epoch.asc())
             .load(conn)
@@ -171,7 +179,9 @@ mod tests {
         Ok(result)
     }
 
-    async fn get_epoch_num_of_all_kv_epoch_ends(conn: &mut Connection<'_>) -> Result<Vec<i64>> {
+    async fn get_epoch_num_of_all_kv_epoch_ends(
+        conn: &mut <Db as Store>::Connection<'_>,
+    ) -> Result<Vec<i64>> {
         let epochs = get_all_kv_epoch_ends(conn).await?;
         Ok(epochs.iter().map(|e| e.epoch).collect())
     }
