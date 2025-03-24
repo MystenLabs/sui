@@ -220,8 +220,8 @@ async fn run() -> Result<(), Box<dyn Error>> {
         info!("Found {} logs for method: {}", count, method);
     }
 
-    let file_path = env::var("FILE_PATH").unwrap_or_else(|_| ".".to_string());
-    let output_file = format!("{}/sampled_read_requests.jsonl", file_path);
+    let output_dir = env::var("OUTPUT_DIR").unwrap_or_else(|_| ".".to_string());
+    let output_file = format!("{}/sampled_read_requests.jsonl", output_dir);
     if let Some(parent) = std::path::Path::new(&output_file).parent() {
         if !parent.exists() {
             std::fs::create_dir_all(parent)?;
