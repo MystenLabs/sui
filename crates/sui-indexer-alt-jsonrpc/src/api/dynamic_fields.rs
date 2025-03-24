@@ -110,7 +110,6 @@ async fn dynamic_field_object_response(
                 | PRE::Deserialize(_)
                 | PRE::EmptyPackage(_)
                 | PRE::FunctionNotFound(_, _, _)
-                | PRE::InputTypeConflict(_, _, _)
                 | PRE::LinkageNotFound(_)
                 | PRE::NoTypeOrigin(_, _, _)
                 | PRE::NotAnIdentifier(_)
