@@ -204,7 +204,7 @@ pub struct TaskConfig {
     pub time_interval_s: u64,
     /// Remote object store path prefix to use while writing
     #[serde(default)]
-    remote_store_path_prefix: Option<PathBuf>,
+    remote_store_path_prefix: Option<String>,
     pub bq_table_id: Option<String>,
     pub bq_checkpoint_col_id: Option<String>,
     #[serde(default)]
@@ -220,7 +220,7 @@ impl TaskConfig {
     pub fn remote_store_path_prefix(&self) -> Result<Option<Path>> {
         self.remote_store_path_prefix
             .as_ref()
-            .map(|pb| Ok(Path::from_filesystem_path(pb)?))
+            .map(|pb| Ok(Path::from(pb.as_str())))
             .transpose()
     }
 }
