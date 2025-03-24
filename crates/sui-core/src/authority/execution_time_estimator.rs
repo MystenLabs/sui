@@ -252,7 +252,7 @@ impl ExecutionTimeObserver {
                         .metrics
                         .epoch_execution_time_observer_object_utilization
                         .with_label_values(&[id.to_string().as_str()])
-                        .set(utilization.excess_execution_time.as_secs_f64());
+                        .inc_by(total_duration.as_secs_f64());
                 }
 
                 utilization.excess_execution_time
