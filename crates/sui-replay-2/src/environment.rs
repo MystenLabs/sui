@@ -24,7 +24,7 @@ pub struct ReplayEnvironment {
     // data store access
     pub data_store: DataStore,
     // responsible for epoch information (protocol configs, rgps, timestamps)
-    pub epoch_info: EpochStore,
+    pub epoch_store: EpochStore,
 
     //
     // caches
@@ -39,11 +39,10 @@ pub struct ReplayEnvironment {
 }
 
 impl ReplayEnvironment {
-    pub async fn new(data_store: DataStore) -> Result<Self, ReplayError> {
-        // load epoch info
-        debug!("Start epoch store");
-        let epoch_info = EpochStore::gql_table(&data_store).await?;
-        debug!("End epoch store");
+    pub async fn new(
+        data_store: DataStore, 
+        epoch_store: EpochStore,
+    ) -> Result<Self, ReplayError> {
         // load system packages
         debug!("Start get_system_packages");
         let system_packages = data_store.get_system_packages().await?;
@@ -51,7 +50,7 @@ impl ReplayEnvironment {
 
         Ok(Self {
             data_store,
-            epoch_info,
+            epoch_store,
             system_packages,
             package_objects: BTreeMap::new(),
             objects: BTreeMap::new(),
@@ -188,7 +187,7 @@ impl Debug for ReplayEnvironment {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let ReplayEnvironment {
             data_store: _,
-            epoch_info,
+            epoch_store: epoch_info,
             system_packages,
             package_objects,
             objects,

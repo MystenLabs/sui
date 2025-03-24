@@ -35,7 +35,6 @@ use sui_types::{
     SUI_DENY_LIST_OBJECT_ID,
 };
 use sui_types::{is_system_package, SUI_SYSTEM_STATE_OBJECT_ID};
-use tracing::info;
 
 pub struct TemporaryStore<'backing> {
     // The backing store for retrieving Move packages onchain.
@@ -379,14 +378,6 @@ impl<'backing> TemporaryStore<'backing> {
 
     pub fn read_object(&self, id: &ObjectID) -> Option<&Object> {
         // there should be no read after delete
-        info!(
-            "TemporaryStore::read_object - input_objects: {:?}",
-            self.input_objects
-        );
-        info!(
-            "TemporaryStore::read_object - written objects: {:?}",
-            self.execution_results.written_objects
-        );
         debug_assert!(!self.execution_results.deleted_object_ids.contains(id));
         self.execution_results
             .written_objects

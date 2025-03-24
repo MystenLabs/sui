@@ -28,7 +28,8 @@ use sui_execution::Executor;
 use sui_types::{
     base_types::{ObjectID, ObjectRef, SequenceNumber, VersionNumber},
     committee::EpochId,
-    error::SuiResult,
+    effects::TransactionEffects,
+    error::{ExecutionError, SuiResult},
     gas::SuiGasStatus,
     metrics::LimitsMetrics,
     object::{Data, Object},
@@ -37,7 +38,7 @@ use sui_types::{
     transaction::CheckedInputObjects,
 };
 use sui_types::{digests::TransactionDigest, error::SuiError};
-use tracing::info;
+use tracing::debug;
 
 const DEFAULT_TRACE_OUTPUT_DIR: &str = "replay";
 
@@ -54,23 +55,23 @@ pub struct ReplayExecutor {
 }
 
 pub fn execute_transaction_to_effects(
-    txn: ReplayTransaction,
+    txn: &ReplayTransaction,
     env: &ReplayEnvironment,
     trace_execution: Option<Option<String>>,
-) -> Result<(), ReplayError> {
+) -> Result<(Result<(), ExecutionError>, TransactionEffects, SuiGasStatus), ReplayError> {
     // TODO: Hook up...
     let certificate_deny_set = HashSet::new();
 
-    let protocol_config = txn.executor.protocol_config;
+    let protocol_config = &txn.executor.protocol_config;
 
-    let gas_status = if txn.kind.is_system_tx() {
+    let gas_status = if txn.kind().is_system_tx() {
         SuiGasStatus::new_unmetered()
     } else {
         SuiGasStatus::new(
-            txn.gas_data.budget,
-            txn.gas_data.price,
+            txn.gas_data().budget,
+            txn.gas_data().price,
             txn.reference_gas_price,
-            &protocol_config,
+            protocol_config,
         )
         .expect("Failed to create gas status")
     };
@@ -87,30 +88,30 @@ pub fn execute_transaction_to_effects(
     let (_inner_store, gas_status, effects, _execution_timing, result) =
         txn.executor.executor.execute_transaction_to_effects(
             &store,
-            &protocol_config,
+            protocol_config,
             txn.executor.metrics.clone(),
             false, // expensive checks
             &certificate_deny_set,
             &txn.epoch,
             txn.epoch_start_timestamp,
-            CheckedInputObjects::new_for_replay(txn.input_objects),
-            txn.gas_data,
+            CheckedInputObjects::new_for_replay(txn.input_objects.clone()),
+            txn.gas_data().clone(),
             gas_status,
-            txn.kind,
-            txn.sender,
+            txn.kind().clone(),
+            txn.sender(),
             txn.digest,
             &mut trace_builder_opt,
         );
-    info!("Transaction executed: {:?}", result);
-    info!("Effects: {:?}", effects);
-    info!("Gas status: {:?}", gas_status);
+    debug!("Transaction executed: {:?}", result);
+    debug!("Effects: {:?}", effects);
+    debug!("Gas status: {:?}", gas_status);
 
     if let Some(trace_builder) = trace_builder_opt {
         // unwrap is safe if trace_builder_opt.is_some() holds
         let output_path = get_trace_output_path(trace_execution.unwrap())?;
         save_trace_output(&output_path, txn.digest, trace_builder, env)?;
     }
-    Ok(())
+    Ok((result, effects, gas_status))
 }
 
 /// Gets the path to store trace output (either the default one './replay' or user-specified).

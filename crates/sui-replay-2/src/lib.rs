@@ -19,31 +19,22 @@ pub mod replay_txn_data;
     about = "Replay executed transactions.",
     rename_all = "kebab-case"
 )]
-pub enum ReplayCommand {
-    /// Replay transaction
-    #[command(name = "tx")]
-    ReplayTransaction {
-        /// RPC of the fullnode used to replay the transaction.
-        #[arg(long, short, default_value = "mainnet")]
-        node: Node,
-        /// Transaction digest to replay.
-        #[arg(long, short)]
-        tx_digest: String,
-        /// Show transaction effects.
-        #[arg(long, short, default_value = "false")]
-        show_effects: bool,
-        /// Verify transaction execution matches what was executed on chain.
-        #[arg(long, short, default_value = "false")]
-        verify: bool,
-        /// Required config objects and versions of the config objects to use if replaying a
-        /// transaction that utilizes the config object for regulated coin types and that has been
-        /// denied.
-        #[arg(long, short, num_args = 2..)]
-        config_objects: Option<Vec<String>>,
-        // Enable tracing for tests
-        #[arg(long = "trace-execution", default_value = None)]
-        trace_execution: Option<Option<String>>,
-    },
+pub struct ReplayConfig {
+    /// RPC of the fullnode used to replay the transaction.
+    #[arg(long, short, default_value = "mainnet")]
+    pub node: Node,
+    /// Transaction digest to replay.
+    #[arg(long, short)]
+    pub tx_digest: String,
+    /// Show transaction effects.
+    #[arg(long, short, default_value = "false")]
+    pub show_effects: bool,
+    /// Verify transaction execution matches what was executed on chain.
+    #[arg(long, short, default_value = "false")]
+    pub verify: bool,
+    // Enable tracing for tests
+    #[arg(long = "trace-execution", default_value = None)]
+    pub trace_execution: Option<Option<String>>,
 }
 
 #[derive(Clone, Debug)]

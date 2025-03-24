@@ -2,26 +2,19 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
-    epoch_store::EpochStoreRpc,
     errors::ReplayError,
     gql_queries::{package_versions_for_replay, EpochData},
     Node,
 };
 
 use std::collections::{BTreeMap, BTreeSet};
-use sui_graphql_client::{query_types::EventFilter, Client, Direction, PaginationFilter};
-use sui_sdk_types::{
-    Address, EndOfEpochTransactionKind, TransactionDigest as SdkTransactionDigest,
-    TransactionKind as SdkTransactionKind,
-};
+use sui_graphql_client::{Client, Direction, PaginationFilter};
+use sui_sdk_types::Address;
 use sui_types::{
-    base_types::ObjectID, digests::TransactionDigest, effects::TransactionEffects,
-    event::SystemEpochInfoEvent, move_package::MovePackage, object::Object,
+    base_types::ObjectID, effects::TransactionEffects, move_package::MovePackage, object::Object,
     supported_protocol_versions::Chain, transaction::TransactionData,
 };
 use tracing::debug;
-
-const EPOCH_CHANGE_STRUCT_TAG: &str = "0x3::sui_system_state_inner::SystemEpochInfoEvent";
 
 //
 // Macro helpers
@@ -35,6 +28,7 @@ macro_rules! from_package {
     };
 }
 
+// Wrapper around the GQL client.
 pub struct DataStore {
     client: Client,
     node: Node,
@@ -276,7 +270,7 @@ impl DataStore {
     }
 
     //
-    // Epoch operations
+    // Epoch store load
     //
     pub async fn epochs_gql_table(&self) -> Result<BTreeMap<u64, EpochData>, ReplayError> {
         let mut pag_filter = PaginationFilter {
@@ -310,112 +304,5 @@ impl DataStore {
         }
 
         Ok(epochs_data)
-    }
-
-    pub async fn epoch_store_rpc(&self) -> Result<EpochStoreRpc, ReplayError> {
-        let mut protocol_configs = vec![];
-        let mut rgps = vec![];
-        let mut epoch_info = BTreeMap::new();
-
-        let filter = EventFilter {
-            emitting_module: None,
-            event_type: Some(EPOCH_CHANGE_STRUCT_TAG.to_string()),
-            sender: None,
-            transaction_digest: None,
-        };
-        let mut pagination = PaginationFilter {
-            direction: Direction::Backward,
-            cursor: None,
-            limit: None,
-        };
-        loop {
-            let paged_events = self
-                .client
-                .events(Some(filter.clone()), pagination)
-                .await
-                .map_err(|e| {
-                    let err = format!("{:?}", e);
-                    ReplayError::ChangeEpochEventsFailure { err }
-                })?;
-            let (page_info, events) = paged_events.into_parts();
-            for (event, digest) in events.into_iter().rev() {
-                let change_epoch_event: SystemEpochInfoEvent =
-                    bcs::from_bytes(&event.contents).unwrap();
-                let epoch = change_epoch_event.epoch;
-                let timestamp = self.get_epoch_timestamp(digest).await?;
-                epoch_info.insert(epoch, (timestamp, TransactionDigest::from(digest)));
-                if rgps.is_empty() {
-                    rgps.push((change_epoch_event.reference_gas_price, epoch, epoch));
-                } else {
-                    let last = rgps.last_mut().unwrap();
-                    if last.0 != change_epoch_event.reference_gas_price {
-                        last.1 = epoch;
-                        rgps.push((change_epoch_event.reference_gas_price, epoch, epoch));
-                    }
-                }
-                if protocol_configs.is_empty() {
-                    protocol_configs.push((change_epoch_event.protocol_version, epoch, epoch));
-                } else {
-                    let last = protocol_configs.last_mut().unwrap();
-                    if last.0 != change_epoch_event.protocol_version {
-                        last.1 = epoch;
-                        protocol_configs.push((change_epoch_event.protocol_version, epoch, epoch));
-                    }
-                }
-            }
-            if page_info.has_previous_page {
-                pagination = PaginationFilter {
-                    direction: Direction::Backward,
-                    cursor: page_info.start_cursor.clone(),
-                    limit: None,
-                };
-            } else {
-                break;
-            }
-        }
-        protocol_configs.reverse();
-        if let Some(ref mut protocol_config) = protocol_configs.get_mut(0) {
-            protocol_config.1 = 0;
-        }
-        rgps.reverse();
-        if let Some(ref mut rgp) = rgps.get_mut(0) {
-            rgp.1 = 0;
-        }
-
-        Ok(EpochStoreRpc {
-            protocol_configs,
-            rgps,
-            epoch_info,
-        })
-    }
-
-    async fn get_epoch_timestamp(&self, digest: SdkTransactionDigest) -> Result<u64, ReplayError> {
-        let txn_info = self
-            .client
-            .transaction(digest)
-            .await
-            .map_err(|e| {
-                let err = format!("{:?}", e);
-                let digest = digest.to_string();
-                ReplayError::FailedToLoadTransaction { digest, err }
-            })?
-            .ok_or(ReplayError::TransactionNotFound {
-                digest: digest.to_string(),
-                node: self.node.clone(),
-            })?;
-        match txn_info.transaction.kind {
-            SdkTransactionKind::ChangeEpoch(change) => return Ok(change.epoch_start_timestamp_ms),
-            SdkTransactionKind::EndOfEpoch(kinds) => {
-                for kind in kinds {
-                    if let EndOfEpochTransactionKind::ChangeEpoch(change) = kind {
-                        return Ok(change.epoch_start_timestamp_ms);
-                    }
-                }
-            }
-            _ => (),
-        };
-        Err(ReplayError::NoEpochTimestamp {
-            digest: digest.to_string(),
-        })
     }
 }

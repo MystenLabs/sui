@@ -16,18 +16,17 @@ use sui_types::{
     },
     TypeTag,
 };
-use tracing::{debug, info};
+use tracing::debug;
 
 // #[derive(Debug)]
 pub struct ReplayTransaction {
     pub executor: ReplayExecutor,
     pub digest: TransactionDigest,
-    pub kind: TransactionKind,
+    pub txn_data: TransactionData,
+    pub effects: TransactionEffects,
     pub epoch: u64,
     pub epoch_start_timestamp: u64,
-    pub sender: SuiAddress,
     pub input_objects: InputObjects,
-    pub gas_data: GasData,
     pub reference_gas_price: u64,
 }
 
@@ -35,15 +34,15 @@ impl ReplayTransaction {
     pub async fn load(env: &mut ReplayEnvironment, tx_digest: &str) -> Result<Self, ReplayError> {
         // load transaction data and effects
         let txn_data = env.data_store.transaction_data(tx_digest).await?;
-        info!("Transaction data: {:#?}", txn_data);
+        debug!("Transaction data: {:#?}", txn_data);
         let effects = env.data_store.transaction_effects(tx_digest).await?;
-        info!("Transaction effects: {:#?}", effects);
+        debug!("Transaction effects: {:#?}", effects);
 
         let mut packages = get_packages(&txn_data)?;
         let input_object_ids = get_input_ids(&txn_data)?;
-        info!("Input Object IDs: {:#?}", input_object_ids);
+        debug!("Input Object IDs: {:#?}", input_object_ids);
         let effects_object_ids = get_effects_ids(&effects)?;
-        info!("Effects Object IDs: {:#?}", effects_object_ids);
+        debug!("Effects Object IDs: {:#?}", effects_object_ids);
         let mut input_versions = effects_object_ids
             .into_iter()
             .map(|input| (input.object_id, input.version.unwrap()))
@@ -66,10 +65,10 @@ impl ReplayTransaction {
         env.load_packages(&packages).await?;
 
         let epoch = effects.executed_epoch();
-        let epoch_start_timestamp = env.epoch_info.epoch_timestamp(epoch)?;
-        let reference_gas_price = env.epoch_info.rgp(epoch)?;
+        let epoch_start_timestamp = env.epoch_store.epoch_timestamp(epoch)?;
+        let reference_gas_price = env.epoch_store.rgp(epoch)?;
 
-        info!("Object Versions: {:#?}", object_versions);
+        debug!("Object Versions: {:#?}", object_versions);
         let input_objects =
             get_input_objects_for_replay(env, &txn_data, tx_digest, &object_versions)?;
 
@@ -79,28 +78,37 @@ impl ReplayTransaction {
             ReplayError::FailedToParseDigest { digest, err }
         })?;
 
-        let gas_data = txn_data.gas_data().clone();
-        let sender = txn_data.sender();
-        let kind = txn_data.into_kind();
-
         let protocol_config = env
-            .epoch_info
+            .epoch_store
             .protocol_config(epoch, env.data_store.chain())
             .unwrap_or_else(|e| panic!("Failed to get protocl config: {:?}", e));
         let executor =
             ReplayExecutor::new(protocol_config, None).unwrap_or_else(|e| panic!("{:?}", e));
 
-        Ok(Self {
-            executor,
-            digest,
-            kind,
-            epoch,
-            epoch_start_timestamp,
-            sender,
-            input_objects,
-            gas_data,
-            reference_gas_price,
-        })
+        Ok(
+            Self {
+                executor,
+                digest,
+                txn_data,
+                effects,
+                epoch,  
+                epoch_start_timestamp,
+                input_objects,
+                reference_gas_price,
+            }
+        )
+    }
+    
+    pub fn kind(&self) -> &TransactionKind {
+        self.txn_data.kind()
+    }
+
+    pub fn sender(&self) -> SuiAddress {
+        self.txn_data.sender()
+    }
+
+    pub fn gas_data(&self) -> &GasData {
+        self.txn_data.gas_data()
     }
 }
 
@@ -345,6 +353,6 @@ fn get_input_objects_for_replay(
             }
         }
     }
-    info!("resolved input objects: {:#?}", resolved_input_objs);
+    debug!("resolved input objects: {:#?}", resolved_input_objs);
     Ok(InputObjects::new(resolved_input_objs))
 }
