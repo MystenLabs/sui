@@ -6,10 +6,11 @@ use std::sync::Arc;
 use anyhow::Result;
 use diesel_async::RunQueryDsl;
 
-use crate::db;
 use crate::models::cp_sequence_numbers::StoredCpSequenceNumbers;
+use crate::pg_store::PgStore;
 use crate::pipeline::{concurrent::Handler, Processor};
 use crate::schema::cp_sequence_numbers;
+use crate::store::Store;
 use crate::types::full_checkpoint_content::CheckpointData;
 
 pub struct CpSequenceNumbers;
@@ -35,7 +36,12 @@ impl Processor for CpSequenceNumbers {
 
 #[async_trait::async_trait]
 impl Handler for CpSequenceNumbers {
-    async fn commit(values: &[Self::Value], conn: &mut db::Connection<'_>) -> Result<usize> {
+    type Store = PgStore;
+
+    async fn commit<'a>(
+        values: &[Self::Value],
+        conn: &mut <Self::Store as Store>::Connection<'a>,
+    ) -> Result<usize> {
         Ok(diesel::insert_into(cp_sequence_numbers::table)
             .values(values)
             .on_conflict_do_nothing()

@@ -7,7 +7,7 @@ use tokio::{task::JoinHandle, time::interval};
 use tokio_util::sync::CancellationToken;
 use tracing::{debug, info, warn};
 
-use crate::{metrics::IndexerMetrics, pg_store::PgStore, store::Store, StoreExt};
+use crate::{metrics::IndexerMetrics, store::Store, StoreExt};
 
 use super::{Handler, PrunerConfig};
 
@@ -24,7 +24,7 @@ use super::{Handler, PrunerConfig};
 /// when the provided cancellation token is triggered.
 pub(super) fn reader_watermark<H: Handler + 'static>(
     config: Option<PrunerConfig>,
-    store: PgStore,
+    store: H::Store,
     metrics: Arc<IndexerMetrics>,
     cancel: CancellationToken,
 ) -> JoinHandle<()> {

@@ -197,9 +197,10 @@ pub(super) fn collector<H: Handler + 'static>(
 mod tests {
 
     use crate::{
-        db,
         metrics::tests::test_metrics,
+        pg_store::PgStore,
         pipeline::{concurrent::max_chunk_rows, Processor},
+        store::Store,
         types::full_checkpoint_content::CheckpointData,
         FieldCount,
     };
@@ -230,10 +231,12 @@ mod tests {
 
     #[async_trait::async_trait]
     impl Handler for TestHandler {
+        type Store = PgStore;
+
         const MAX_PENDING_ROWS: usize = 10000;
-        async fn commit(
+        async fn commit<'a>(
             _values: &[Self::Value],
-            _conn: &mut db::Connection<'_>,
+            _conn: &mut <Self::Store as Store>::Connection<'a>,
         ) -> anyhow::Result<usize> {
             tokio::time::sleep(Duration::from_millis(1000)).await;
             Ok(0)

@@ -9,10 +9,8 @@ use tokio_util::sync::CancellationToken;
 use tracing::info;
 
 use crate::{
-    db::{self, Db},
     metrics::IndexerMetrics,
-    pg_store::PgStore,
-    store::CommitterWatermark,
+    store::{CommitterWatermark, Store},
     types::full_checkpoint_content::CheckpointData,
     FieldCount,
 };
@@ -56,6 +54,8 @@ const MAX_WATERMARK_UPDATES: usize = 10_000;
 /// back to the ingestion service.
 #[async_trait::async_trait]
 pub trait Handler: Processor<Value: FieldCount> {
+    type Store: Store;
+
     /// If at least this many rows are pending, the committer will commit them eagerly.
     const MIN_EAGER_ROWS: usize = 50;
 
@@ -76,16 +76,18 @@ pub trait Handler: Processor<Value: FieldCount> {
 
     /// Take a chunk of values and commit them to the database, returning the number of rows
     /// affected.
-    async fn commit(values: &[Self::Value], conn: &mut db::Connection<'_>)
-        -> anyhow::Result<usize>;
+    async fn commit<'a>(
+        values: &[Self::Value],
+        conn: &mut <Self::Store as Store>::Connection<'a>,
+    ) -> anyhow::Result<usize>;
 
     /// Clean up data between checkpoints `_from` and `_to_exclusive` (exclusive) in the database, returning
     /// the number of rows affected. This function is optional, and defaults to not pruning at all.
-    async fn prune(
+    async fn prune<'a>(
         &self,
         _from: u64,
         _to_exclusive: u64,
-        _conn: &mut db::Connection<'_>,
+        _conn: &mut <Self::Store as Store>::Connection<'a>,
     ) -> anyhow::Result<usize> {
         Ok(0)
     }
@@ -199,7 +201,7 @@ pub(crate) fn pipeline<H: Handler + Send + Sync + 'static>(
     initial_commit_watermark: Option<CommitterWatermark>,
     config: ConcurrentConfig,
     skip_watermark: bool,
-    db: Db,
+    db: H::Store,
     checkpoint_rx: mpsc::Receiver<Arc<CheckpointData>>,
     metrics: Arc<IndexerMetrics>,
     cancel: CancellationToken,
@@ -257,14 +259,14 @@ pub(crate) fn pipeline<H: Handler + Send + Sync + 'static>(
         committer_config,
         skip_watermark,
         watermark_rx,
-        PgStore::new(db.clone()),
+        db.clone(),
         metrics.clone(),
         cancel,
     );
 
     let reader_watermark = reader_watermark::<H>(
         pruner_config.clone(),
-        PgStore::new(db.clone()),
+        db.clone(),
         metrics.clone(),
         pruner_cancel.clone(),
     );
@@ -272,7 +274,7 @@ pub(crate) fn pipeline<H: Handler + Send + Sync + 'static>(
     let pruner = pruner(
         handler,
         pruner_config,
-        PgStore::new(db.clone()),
+        db.clone(),
         metrics,
         pruner_cancel.clone(),
     );

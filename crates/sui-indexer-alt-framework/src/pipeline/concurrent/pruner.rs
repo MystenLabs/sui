@@ -5,7 +5,6 @@ use std::{collections::BTreeMap, sync::Arc, time::Duration};
 
 use futures::stream::FuturesUnordered;
 use futures::StreamExt;
-use sui_pg_db::Db;
 use tokio::{
     sync::Semaphore,
     task::JoinHandle,
@@ -16,7 +15,6 @@ use tracing::{debug, error, info, warn};
 
 use crate::{
     metrics::IndexerMetrics,
-    pg_store::PgStore,
     pipeline::logging::{LoggerWatermark, WatermarkLogger},
     store::Store,
 };
@@ -99,7 +97,7 @@ impl PendingRanges {
 pub(super) fn pruner<H: Handler + Send + Sync + 'static>(
     handler: Arc<H>,
     config: Option<PrunerConfig>,
-    store: PgStore,
+    store: H::Store,
     metrics: Arc<IndexerMetrics>,
     cancel: CancellationToken,
 ) -> JoinHandle<()> {
@@ -204,7 +202,7 @@ pub(super) fn pruner<H: Handler + Send + Sync + 'static>(
                 let metrics = metrics.clone();
                 let handler = handler.clone();
 
-                let db = store.db.clone();
+                let db = store.clone();
 
                 tasks.push(tokio::spawn(async move {
                     let _permit = tokio::select! {
@@ -287,7 +285,7 @@ pub(super) fn pruner<H: Handler + Send + Sync + 'static>(
 // TODO (wlmyng): non-pg store - requires conn too
 async fn prune_task_impl<H: Handler + Send + Sync + 'static>(
     metrics: Arc<IndexerMetrics>,
-    db: Db,
+    db: H::Store,
     handler: Arc<H>,
     from: u64,
     to_exclusive: u64,

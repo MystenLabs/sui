@@ -17,7 +17,6 @@ use tracing::{debug, error, info, warn};
 
 use crate::{
     metrics::{CheckpointLagMetricReporter, IndexerMetrics},
-    pg_store::PgStore,
     pipeline::{logging::WatermarkLogger, CommitterConfig, WatermarkPart, WARN_PENDING_WATERMARKS},
     store::{CommitterWatermark, Store},
 };
@@ -49,7 +48,7 @@ pub(super) fn commit_watermark<H: Handler + 'static>(
     config: CommitterConfig,
     skip_watermark: bool,
     mut rx: mpsc::Receiver<Vec<WatermarkPart>>,
-    store: PgStore,
+    store: H::Store,
     metrics: Arc<IndexerMetrics>,
     cancel: CancellationToken,
 ) -> JoinHandle<()> {
