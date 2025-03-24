@@ -2,10 +2,11 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
-    base_types::VersionDigest,
+    base_types::{SuiAddress, VersionDigest},
     digests::ObjectDigest,
     object::{Object, Owner},
 };
+use move_core_types::language_storage::TypeTag;
 use serde::{Deserialize, Serialize};
 
 use super::IDOperation;
@@ -67,6 +68,34 @@ pub enum ObjectIn {
 }
 
 #[derive(Eq, PartialEq, Clone, Debug, Serialize, Deserialize)]
+pub enum AccmulatorOperation {
+    /// Merge the value into the accumulator.
+    Merge,
+    /// Split the value from the accumulator.
+    Split,
+}
+
+#[derive(Eq, PartialEq, Clone, Debug, Serialize, Deserialize)]
+pub enum AccumulatorValue {
+    IntegerTuple(u128, u128),
+    // New accumulator types can be added here.
+    // For custom or complex types, we can use a `Vec<u8>` to store the raw value.
+}
+
+#[derive(Eq, PartialEq, Clone, Debug, Serialize, Deserialize)]
+pub struct AccumulatorWriteV1 {
+    /// The recipient of the accumulator.
+    pub recipient: SuiAddress,
+    /// The type of the accumulator.
+    pub accumulator_type: TypeTag,
+    /// The operation to be applied to the accumulator.
+    pub operation: AccmulatorOperation,
+    /// The cached deserialized value of the operation.
+    /// This is an optimization to avoid deserializing the value multiple times.
+    pub value: AccumulatorValue,
+}
+
+#[derive(Eq, PartialEq, Clone, Debug, Serialize, Deserialize)]
 pub enum ObjectOut {
     /// Same definition as in ObjectIn.
     NotExist,
@@ -75,4 +104,6 @@ pub enum ObjectOut {
     /// Packages writes need to be tracked separately with version because
     /// we don't use lamport version for package publish and upgrades.
     PackageWrite(VersionDigest),
+    /// This isn't an object write, but a special write to an accumulator.
+    AccumulatorWriteV1(AccumulatorWriteV1),
 }
