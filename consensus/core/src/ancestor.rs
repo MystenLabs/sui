@@ -15,6 +15,7 @@ use crate::{
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
 pub(crate) enum AncestorState {
     Include,
+    // Exclusion score is the value stored in this state
     Exclude(u64),
 }
 
@@ -46,8 +47,12 @@ impl AncestorInfo {
 #[derive(Debug)]
 struct StateTransition {
     authority_id: AuthorityIndex,
+    // The authority propagation score taken from leader scoring.
     score: u64,
+    // The stake of the authority that is transitioning state.
     stake: u64,
+    // The authority high quorum round is the lowest round higher or equal to rounds
+    // from a quorum of authorities
     high_quorum_round: u32,
 }
 
@@ -181,13 +186,7 @@ impl AncestorStateManager {
         // We can apply the state change for all ancestors that are moving to the
         // include state as that will never cause us to exceed the excluded_nodes_stake_threshold
         for transition in exclude_to_include {
-            self.apply_state_change(
-                transition.authority_id,
-                transition.score,
-                transition.high_quorum_round,
-                AncestorState::Include,
-                current_clock_round,
-            );
+            self.apply_state_change(transition, AncestorState::Include, current_clock_round);
         }
 
         // Sort include_to_exclude by worst scores first as these should take priority
@@ -202,13 +201,8 @@ impl AncestorStateManager {
             // we do nothing. The lock will continue to be unlocked meaning we can
             // try again immediately on the next call to update_all_ancestors_state
             if self.total_excluded_stake + transition.stake <= self.excluded_nodes_stake_threshold {
-                self.apply_state_change(
-                    transition.authority_id,
-                    transition.score,
-                    transition.high_quorum_round,
-                    AncestorState::Exclude(transition.score),
-                    current_clock_round,
-                );
+                let new_state = AncestorState::Exclude(transition.score);
+                self.apply_state_change(transition, new_state, current_clock_round);
             } else {
                 info!(
                     "Authority {} would have moved to {:?} state with score {} & quorum_round {} but we would have exceeded total excluded stake threshold. current_excluded_stake {} + authority_stake {} > exclude_stake_threshold {}",
@@ -226,24 +220,25 @@ impl AncestorStateManager {
 
     fn apply_state_change(
         &mut self,
-        authority_id: AuthorityIndex,
-        authority_score: u64,
-        authority_high_quorum_round: u32,
+        transition: StateTransition,
         new_state: AncestorState,
         current_clock_round: u32,
     ) {
-        let stake = self.context.committee.authority(authority_id).stake;
-        let block_hostname = &self.context.committee.authority(authority_id).hostname;
-        let ancestor_info = &mut self.state_map[authority_id.value()];
+        let block_hostname = &self
+            .context
+            .committee
+            .authority(transition.authority_id)
+            .hostname;
+        let ancestor_info = &mut self.state_map[transition.authority_id.value()];
 
         match (ancestor_info.state, new_state) {
             (AncestorState::Exclude(_), AncestorState::Include) => {
                 self.total_excluded_stake = self.total_excluded_stake
-                    .checked_sub(stake)
+                    .checked_sub(transition.stake)
                     .expect("total_excluded_stake underflow - trying to subtract more stake than we're tracking as excluded");
             }
             (AncestorState::Include, AncestorState::Exclude(_)) => {
-                self.total_excluded_stake += stake;
+                self.total_excluded_stake += transition.stake;
             }
             _ => {
                 panic!("Calls to this function should only be made for state transition.")
@@ -255,7 +250,10 @@ impl AncestorStateManager {
         ancestor_info.set_lock(lock_until_round);
 
         info!(
-            "Authority {authority_id} moved to {new_state:?} state with score {authority_score} & quorum_round {authority_high_quorum_round} and locked until round {lock_until_round}. Total excluded stake: {}",
+            "Authority {} moved to {new_state:?} state with score {} & quorum_round {} and locked until round {lock_until_round}. Total excluded stake: {}",
+            transition.authority_id,
+            transition.score,
+            transition.high_quorum_round,
             self.total_excluded_stake
         );
 
