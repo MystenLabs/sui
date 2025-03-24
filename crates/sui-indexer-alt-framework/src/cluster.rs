@@ -163,7 +163,7 @@ mod tests {
 
     use crate::db::temp::{get_available_port, TempDb};
     use crate::db::Db;
-    use crate::pg_store::PgStore;
+    use crate::in_memory_store::InMemoryStore;
     use crate::pipeline::concurrent::{self, ConcurrentConfig};
     use crate::pipeline::Processor;
     use crate::store::Store;
@@ -204,7 +204,7 @@ mod tests {
 
     #[async_trait::async_trait]
     impl concurrent::Handler for TxCounts {
-        type Store = PgStore;
+        type Store = InMemoryStore;
         async fn commit<'a>(
             values: &[Self::Value],
             conn: &mut <Self::Store as Store>::Connection<'a>,

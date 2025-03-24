@@ -11,6 +11,7 @@ use diesel::{
 use diesel_migrations::EmbeddedMigrations;
 use handlers::{
     coin_balance_buckets::CoinBalanceBuckets,
+    cp_sequence_numbers::CpSequenceNumbers,
     ev_emit_mod::EvEmitMod,
     ev_struct_inst::EvStructInst,
     kv_checkpoints::KvCheckpoints,
@@ -31,14 +32,13 @@ use handlers::{
     tx_digests::TxDigests,
     tx_kinds::TxKinds,
 };
+use pg_store::PgStore;
 use prometheus::Registry;
 #[cfg(test)]
 use sui_indexer_alt_framework::db::temp::TempDb;
 use sui_indexer_alt_framework::{
     db::{Db, DbArgs},
-    handlers::cp_sequence_numbers::CpSequenceNumbers,
     ingestion::{ClientArgs, IngestionConfig},
-    pg_store::PgStore,
     pipeline::{
         concurrent::{ConcurrentConfig, PrunerConfig},
         sequential::SequentialConfig,
@@ -59,6 +59,7 @@ pub(crate) mod bootstrap;
 pub mod config;
 pub(crate) mod consistent_pruning;
 pub(crate) mod handlers;
+pub mod pg_store;
 
 pub async fn setup_indexer(
     database_url: Url,

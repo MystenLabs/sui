@@ -12,7 +12,6 @@ use diesel_migrations::{embed_migrations, EmbeddedMigrations};
 use futures::future;
 use ingestion::{client::IngestionClient, ClientArgs, IngestionConfig, IngestionService};
 use metrics::IndexerMetrics;
-use pg_store::PgStore;
 use pipeline::{
     concurrent::{self, ConcurrentConfig},
     sequential::{self, Handler, SequentialConfig},
@@ -35,11 +34,9 @@ pub use sui_types as types;
 
 #[cfg(feature = "cluster")]
 pub mod cluster;
-pub mod handlers;
+pub mod in_memory_store;
 pub mod ingestion;
 pub(crate) mod metrics;
-pub mod models;
-pub mod pg_store;
 pub mod pipeline;
 pub mod schema;
 pub mod store;
@@ -179,42 +176,6 @@ where
             first_checkpoint_from_watermark: u64::MAX,
             handles: vec![],
         })
-    }
-
-    // TODO (wlmyng): make generic, not just PgStore
-    pub async fn new_for_testing(
-        migrations: &'static EmbeddedMigrations,
-    ) -> (Indexer<PgStore>, TempDb) {
-        let temp_db = TempDb::new().unwrap();
-
-        let db = Db::for_write(temp_db.database().url().clone(), DbArgs::default())
-            .await
-            .context("Failed to connect to database")
-            .unwrap();
-        // At indexer initialization, we ensure that the DB schema is up-to-date.
-        db.run_migrations(Self::migrations(Some(migrations)))
-            .await
-            .context("Failed to run pending migrations")
-            .unwrap();
-
-        let store = PgStore::new(db);
-        let indexer = Indexer::new(
-            store,
-            IndexerArgs::default(),
-            ClientArgs {
-                remote_store_url: None,
-                local_ingestion_path: Some(tempdir().unwrap().into_path()),
-                rpc_api_url: None,
-                rpc_username: None,
-                rpc_password: None,
-            },
-            IngestionConfig::default(),
-            &Registry::new(),
-            CancellationToken::new(),
-        )
-        .await
-        .unwrap();
-        (indexer, temp_db)
     }
 
     /// The database connection pool used by the indexer.
@@ -475,12 +436,7 @@ where
 mod tests {
     use async_trait::async_trait;
 
-    use crate::{
-        models::watermarks::{PgCommitterWatermark, PgPrunerWatermark},
-        pg_store::PgStore,
-        store::Store,
-        types::full_checkpoint_content::CheckpointData,
-    };
+    use crate::{store::Store, types::full_checkpoint_content::CheckpointData};
 
     use super::*;
 

@@ -11,5 +11,6 @@ pub mod objects;
 pub mod packages;
 pub mod schema;
 pub mod transactions;
+pub mod watermarks;
 
 pub const MIGRATIONS: EmbeddedMigrations = embed_migrations!("migrations");

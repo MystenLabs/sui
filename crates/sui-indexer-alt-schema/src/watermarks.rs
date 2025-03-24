@@ -10,7 +10,7 @@ use diesel_async::RunQueryDsl;
 use crate::db::Connection;
 use crate::schema::watermarks;
 use crate::sql;
-use crate::FieldCount;
+use sui_field_count::FieldCount;
 
 #[derive(Insertable, Selectable, Queryable, Debug, Clone, FieldCount)]
 #[diesel(table_name = watermarks)]

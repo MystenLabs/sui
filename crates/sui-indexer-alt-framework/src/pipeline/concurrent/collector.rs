@@ -197,8 +197,8 @@ pub(super) fn collector<H: Handler + 'static>(
 mod tests {
 
     use crate::{
+        in_memory_store::InMemoryStore,
         metrics::tests::test_metrics,
-        pg_store::PgStore,
         pipeline::{concurrent::max_chunk_rows, Processor},
         store::Store,
         types::full_checkpoint_content::CheckpointData,
@@ -231,7 +231,7 @@ mod tests {
 
     #[async_trait::async_trait]
     impl Handler for TestHandler {
-        type Store = PgStore;
+        type Store = InMemoryStore;
 
         const MAX_PENDING_ROWS: usize = 10000;
         async fn commit<'a>(

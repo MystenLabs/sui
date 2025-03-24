@@ -9,11 +9,11 @@ use diesel_async::AsyncConnection;
 use sui_indexer_alt_metrics::stats::{DbConnectionStats, DbConnectionStatsSnapshot};
 
 use crate::db::{Connection as PgConnection, Db as PgDb};
-use crate::models::watermarks::{
-    PgCommitterWatermark, PgPrunerWatermark, PgReaderWatermark, StoredWatermark,
-};
 use crate::store::{
     CommitterWatermark, DbConnection, HandlerBatch, SequentialHandler, Store, TransactionalStore,
+};
+use sui_indexer_alt_schema::watermarks::{
+    PgCommitterWatermark, PgPrunerWatermark, PgReaderWatermark, StoredWatermark,
 };
 
 /// PostgreSQL implementation of Store
