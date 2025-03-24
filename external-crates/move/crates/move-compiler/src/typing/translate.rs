@@ -22,7 +22,6 @@ use crate::{
     shared::{
         ide::{DotAutocompleteInfo, IDEAnnotation, MacroCallInfo},
         known_attributes::{ErrorAttribute, SyntaxAttribute, TestingAttribute},
-        matching::MatchContext,
         process_binops,
         program_info::{ConstantInfo, DatatypeKind, NamingProgramInfo, TypingProgramInfo},
         string_utils::{debug_print, make_ascii_titlecase},
