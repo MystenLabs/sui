@@ -519,8 +519,10 @@ impl SuiCommand {
                         };
 
                         let rerooted_path = move_cli::base::reroot_path(package_path.as_deref())?;
-                        let build_config =
+                        let mut build_config =
                             resolve_lock_file_path(build_config, Some(&rerooted_path))?;
+                        build_config.implicit_dependencies =
+                            implicit_deps(latest_system_packages());
                         let mut pkg = SuiBuildConfig {
                             config: build_config,
                             run_bytecode_verifier: true,
