@@ -19,7 +19,7 @@ use sui_types::base_types::SuiAddress;
 use sui_types::crypto::{
     AggregateAuthoritySignature, AuthorityQuorumSignInfo, AuthorityStrongQuorumSignInfo,
 };
-use sui_types::effects::TransactionEvents;
+use sui_types::effects::{AccumulatorOperation, AccumulatorValue, TransactionEvents};
 use sui_types::event::Event;
 use sui_types::execution::ExecutionTimeObservationKey;
 use sui_types::execution_status::{
@@ -239,6 +239,8 @@ fn get_registry() -> Result<Registry> {
     tracer.trace_type::<ObjectIn>(&samples).unwrap();
     tracer.trace_type::<ObjectOut>(&samples).unwrap();
     tracer.trace_type::<UnchangedSharedKind>(&samples).unwrap();
+    tracer.trace_type::<AccumulatorValue>(&samples).unwrap();
+    tracer.trace_type::<AccumulatorOperation>(&samples).unwrap();
     tracer.trace_type::<TransactionEffects>(&samples).unwrap();
 
     // uncomment once GenericSignature is added
