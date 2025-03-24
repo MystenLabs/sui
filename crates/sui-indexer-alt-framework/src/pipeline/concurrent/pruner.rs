@@ -14,10 +14,9 @@ use tokio_util::sync::CancellationToken;
 use tracing::{debug, error, info, warn};
 
 use crate::{
-    db::Db,
     metrics::IndexerMetrics,
     pipeline::logging::{LoggerWatermark, WatermarkLogger},
-    store::Connection,
+    store::{Connection, Store},
 };
 
 use super::{Handler, PrunerConfig};
@@ -98,9 +97,7 @@ impl PendingRanges {
 pub(super) fn pruner<H: Handler + Send + Sync + 'static>(
     handler: Arc<H>,
     config: Option<PrunerConfig>,
-    // TODO (wlmyng): this will eventually be H::Store once we add the associated type to
-    // concurrent::Handler
-    store: Db,
+    store: H::Store,
     metrics: Arc<IndexerMetrics>,
     cancel: CancellationToken,
 ) -> JoinHandle<()> {
@@ -302,7 +299,7 @@ pub(super) fn pruner<H: Handler + Send + Sync + 'static>(
 // TODO (wlmyng): non-pg store - requires conn too
 async fn prune_task_impl<H: Handler + Send + Sync + 'static>(
     metrics: Arc<IndexerMetrics>,
-    db: Db,
+    db: H::Store,
     handler: Arc<H>,
     from: u64,
     to_exclusive: u64,

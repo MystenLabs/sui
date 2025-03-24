@@ -6,8 +6,9 @@ use std::sync::Arc;
 use anyhow::{Context, Result};
 use diesel_async::RunQueryDsl;
 use sui_indexer_alt_framework::{
-    db,
+    db::Db,
     pipeline::{concurrent::Handler, Processor},
+    store::Store,
     types::full_checkpoint_content::CheckpointData,
 };
 use sui_indexer_alt_schema::{
@@ -54,10 +55,14 @@ impl Processor for KvFeatureFlags {
 
 #[async_trait::async_trait]
 impl Handler for KvFeatureFlags {
+    type Store = Db;
     const MIN_EAGER_ROWS: usize = 1;
     const MAX_PENDING_ROWS: usize = 10000;
 
-    async fn commit(values: &[Self::Value], conn: &mut db::Connection<'_>) -> Result<usize> {
+    async fn commit<'a>(
+        values: &[Self::Value],
+        conn: &mut <Self::Store as Store>::Connection<'a>,
+    ) -> Result<usize> {
         Ok(diesel::insert_into(kv_feature_flags::table)
             .values(values)
             .on_conflict_do_nothing()

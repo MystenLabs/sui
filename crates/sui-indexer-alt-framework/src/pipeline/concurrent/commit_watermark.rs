@@ -16,10 +16,9 @@ use tokio_util::sync::CancellationToken;
 use tracing::{debug, error, info, warn};
 
 use crate::{
-    db::Db,
     metrics::{CheckpointLagMetricReporter, IndexerMetrics},
     pipeline::{logging::WatermarkLogger, CommitterConfig, WatermarkPart, WARN_PENDING_WATERMARKS},
-    store::{CommitterWatermark, Connection},
+    store::{CommitterWatermark, Connection, Store},
 };
 
 use super::Handler;
@@ -49,9 +48,7 @@ pub(super) fn commit_watermark<H: Handler + 'static>(
     config: CommitterConfig,
     skip_watermark: bool,
     mut rx: mpsc::Receiver<Vec<WatermarkPart>>,
-    // TODO (wlmyng): this will eventually be H::Store once we add the associated type to
-    // concurrent::Handler
-    store: Db,
+    store: H::Store,
     metrics: Arc<IndexerMetrics>,
     cancel: CancellationToken,
 ) -> JoinHandle<()> {
