@@ -9,7 +9,7 @@ use std::{
 };
 
 use lru::LruCache;
-use mysten_common::{fatal, util::randomize_cache_capacity_in_tests};
+use mysten_common::{fatal, random_util::randomize_cache_capacity_in_tests};
 use mysten_metrics::monitored_scope;
 use parking_lot::RwLock;
 use sui_types::{
