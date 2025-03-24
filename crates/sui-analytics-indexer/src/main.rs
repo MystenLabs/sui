@@ -1,13 +1,10 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use anyhow::{anyhow, Result};
+use anyhow::Result;
 use prometheus::Registry;
-use std::{collections::HashMap, env, sync::Arc};
-use sui_analytics_indexer::{
-    analytics_metrics::AnalyticsMetrics, errors::AnalyticsIndexerError, make_analytics_processor,
-    AnalyticsIndexerConfig,
-};
+use std::{collections::HashMap, env};
+use sui_analytics_indexer::{analytics_metrics::AnalyticsMetrics, JobConfig};
 use sui_data_ingestion_core::{
     DataIngestionMetrics, IndexerExecutor, ReaderOptions, ShimIndexerProgressStore, WorkerPool,
 };
@@ -22,8 +19,12 @@ async fn main() -> Result<()> {
 
     let args: Vec<String> = env::args().collect();
     assert_eq!(args.len(), 2, "configuration yaml file is required");
-    let config: AnalyticsIndexerConfig = serde_yaml::from_str(&std::fs::read_to_string(&args[1])?)?;
+
+    // Parse the config
+    let config: JobConfig = serde_yaml::from_str(&std::fs::read_to_string(&args[1])?)?;
     info!("Parsed config: {:#?}", config);
+
+    // Setup metrics
     let registry_service = mysten_metrics::start_prometheus_server(
         format!(
             "{}:{}",
@@ -34,37 +35,33 @@ async fn main() -> Result<()> {
     );
     let registry: Registry = registry_service.default_registry();
     mysten_metrics::init_metrics(&registry);
+    let metrics = AnalyticsMetrics::new(&registry);
+
+    let remote_store_url = config.remote_store_url.clone();
+
+    let processors = config.create_checkpoint_processors(metrics).await?;
 
     let mut watermarks = HashMap::new();
-    let mut processors = Vec::new();
-    let config = Arc::new(config);
-    let metrics = AnalyticsMetrics::new(&registry);
-    for task_config in config.tasks.clone() {
-        let task_name = task_config.task_name.clone();
-        let processor = make_analytics_processor(config.clone(), task_config, metrics.clone())
-            .await
-            .map_err(|e| AnalyticsIndexerError::GenericError(e.to_string()))?;
-        let watermark = processor.last_committed_checkpoint().unwrap_or_default() + 1;
-        if watermarks.insert(task_name.clone(), watermark).is_some() {
-            return Err(anyhow!("Duplicate task_name '{}' found", task_name));
-        }
-        processors.push(processor);
+    for processor in processors.iter() {
+        let watermark = processor
+            .last_committed_checkpoint()
+            .map(|seq_num| seq_num + 1)
+            .unwrap_or(0);
+        watermarks.insert(processor.task_name.clone(), watermark);
     }
 
     let progress_store = ShimIndexerProgressStore::new(watermarks);
     let mut executor = IndexerExecutor::new(
         progress_store,
-        config.tasks.len(),
+        processors.len(),
         DataIngestionMetrics::new(&Registry::new()),
     );
 
-    for processor in processors.into_iter() {
+    for processor in processors {
         let task_name = processor.task_name.clone();
         let worker_pool = WorkerPool::new(processor, task_name, 1);
         executor.register(worker_pool).await?;
     }
-
-    let remote_store_url = config.remote_store_url.clone();
 
     let reader_options = ReaderOptions {
         batch_size: 10,
