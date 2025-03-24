@@ -7,8 +7,8 @@ use crate::{
     diagnostics::{codes::*, Diagnostic},
     editions::{FeatureGate, Flavor},
     expansion::ast::{
-        AbilitySet, Attribute, AttributeValue_, Attribute_, DottedUsage, Fields, Friend,
-        ModuleAccess_, ModuleIdent, ModuleIdent_, Mutability, Value_, Visibility,
+        AbilitySet, Attribute, AttributeName_, AttributeValue_, Attribute_, DottedUsage, Fields,
+        Friend, ModuleAccess_, ModuleIdent, ModuleIdent_, Mutability, Value_, Visibility,
     },
     ice, ice_assert,
     naming::ast::{
@@ -21,7 +21,8 @@ use crate::{
     },
     shared::{
         ide::{DotAutocompleteInfo, IDEAnnotation, MacroCallInfo},
-        known_attributes::{SyntaxAttribute, TestingAttribute},
+        known_attributes::{ErrorAttribute, SyntaxAttribute, TestingAttribute},
+        matching::MatchContext,
         process_binops,
         program_info::{ConstantInfo, DatatypeKind, NamingProgramInfo, TypingProgramInfo},
         string_utils::{debug_print, make_ascii_titlecase},
@@ -1572,6 +1573,7 @@ fn exp(context: &mut Context, ne: Box<N::Exp>) -> Box<T::Exp> {
             TE::ErrorConstant {
                 line_number_loc,
                 error_constant: None,
+                error_code: None,
             },
         ),
         NE::Unit { trailing } => (sp(eloc, Type_::Unit), TE::Unit { trailing }),
@@ -4073,15 +4075,32 @@ fn annotated_error_const(context: &mut Context, e: &mut T::Exp, abort_or_assert_
             defined_loc,
             signature: _,
             value: _,
-        } = context.constant_info(module_ident, constant_name);
-        const_name = Some((*defined_loc, *constant_name));
-        let has_error_annotation =
-            attributes.contains_key_(&known_attributes::ErrorAttribute.into());
-
-        if has_error_annotation {
+        } = context.constant_info(module_ident, constant_name).clone();
+        const_name = Some((defined_loc, *constant_name));
+        if let Some(err_attribute) = attributes.get_(&known_attributes::ErrorAttribute.into()) {
+            let attribute_fmt_msg = || {
+                format!(
+                "Expected only an error code or nothing for an error annotation, e.g., '{}' or '{}({} = <num>)'",
+                ErrorAttribute::ERROR,
+                ErrorAttribute::ERROR,
+                ErrorAttribute::CODE,
+            )
+            };
+            let error_code = match &err_attribute.value {
+                Attribute_::Name(_) => None,
+                Attribute_::Assigned(_, _) => {
+                    context.add_diag(diag!(
+                        Declarations::InvalidAttribute,
+                        (err_attribute.loc, attribute_fmt_msg())
+                    ));
+                    None
+                }
+                Attribute_::Parameterized(_, inner) => error_constant_attr_params(context, inner),
+            };
             let econst = T::UnannotatedExp_::ErrorConstant {
                 line_number_loc: *const_loc,
                 error_constant: Some(*constant_name),
+                error_code,
             };
             *e = T::exp(u64_type.clone(), sp(*const_loc, econst));
         }
@@ -4122,6 +4141,66 @@ fn annotated_error_const(context: &mut Context, e: &mut T::Exp, abort_or_assert_
         e.ty = context.error_type(e.ty.loc);
         e.exp = sp(e.exp.loc, T::UnannotatedExp_::UnresolvedError);
     }
+}
+
+fn error_constant_attr_params(
+    context: &mut Context,
+    attributes: &UniqueMap<Spanned<AttributeName_>, Spanned<Attribute_>>,
+) -> Option<u8> {
+    let mut code = None;
+    const ERR_MSG: &str =
+        "Invalid attribute, expected an argument of the form 'code = <num>' where '<num>' is a u8";
+    for (_, _, sp!(arg_loc, arg)) in attributes.iter() {
+        match arg {
+            Attribute_::Assigned(name, rhs) => {
+                if name.value.as_str() != ErrorAttribute::CODE {
+                    context.add_diag(diag!(Declarations::InvalidAttribute, (*arg_loc, ERR_MSG)));
+                    continue;
+                };
+                let AttributeValue_::Value(sp!(_, value_)) = &rhs.value else {
+                    context.add_diag(diag!(Declarations::InvalidAttribute, (*arg_loc, ERR_MSG)));
+                    continue;
+                };
+                let new_err_code = match value_ {
+                    Value_::InferredNum(value) => {
+                        let new_err_code = u8::try_from(*value).ok();
+                        if new_err_code.is_none() {
+                            context.add_diag(diag!(
+                                Declarations::InvalidAttribute,
+                                (*arg_loc, "Error code must be a u8")
+                            ));
+                        }
+                        new_err_code
+                    }
+                    Value_::U8(value) => Some(*value),
+                    Value_::Address(_)
+                    | Value_::U16(_)
+                    | Value_::U32(_)
+                    | Value_::U64(_)
+                    | Value_::U128(_)
+                    | Value_::U256(_)
+                    | Value_::Bool(_)
+                    | Value_::Bytearray(_) => {
+                        context.add_diag(diag!(
+                            Declarations::InvalidAttribute,
+                            (*arg_loc, "Error code must be a u8")
+                        ));
+                        None
+                    }
+                };
+                if code.is_some() {
+                    assert!(context.env().has_errors());
+                    continue;
+                } else {
+                    code = new_err_code;
+                }
+            }
+            _ => {
+                context.add_diag(diag!(Declarations::InvalidAttribute, (*arg_loc, ERR_MSG)));
+            }
+        }
+    }
+    code
 }
 
 fn builtin_call(
