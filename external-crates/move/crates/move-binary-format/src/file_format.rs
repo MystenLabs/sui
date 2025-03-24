@@ -2283,19 +2283,19 @@ impl Bytecode {
 
 impl move_abstract_interpreter::control_flow_graph::Instruction for Bytecode {
     type Index = CodeOffset;
-    type VariantJumpTable = VariantJumpTable;
+    type VariantJumpTables = [VariantJumpTable];
 
     const ENTRY_BLOCK_ID: CodeOffset = 0;
 
     fn get_successors(
         pc: Self::Index,
         code: &[Self],
-        jump_tables: &[Self::VariantJumpTable],
+        jump_tables: &Self::VariantJumpTables,
     ) -> Vec<Self::Index> {
         Bytecode::get_successors(pc, code, jump_tables)
     }
 
-    fn offsets(&self, jump_tables: &[Self::VariantJumpTable]) -> Vec<Self::Index> {
+    fn offsets(&self, jump_tables: &Self::VariantJumpTables) -> Vec<Self::Index> {
         self.offsets(jump_tables)
     }
 

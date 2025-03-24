@@ -54,18 +54,18 @@ pub trait ControlFlowGraph {
 /// Used for the VM control flow graph
 pub trait Instruction: Sized {
     type Index: Copy + Ord;
-    type VariantJumpTable;
+    type VariantJumpTables: ?Sized;
     const ENTRY_BLOCK_ID: Self::Index;
 
     /// Return the successors of a given instruction
     fn get_successors(
         pc: Self::Index,
         code: &[Self],
-        jump_tables: &[Self::VariantJumpTable],
+        jump_tables: &Self::VariantJumpTables,
     ) -> Vec<Self::Index>;
 
     /// Return the offsets of jump targets for a given instruction
-    fn offsets(&self, jump_tables: &[Self::VariantJumpTable]) -> Vec<Self::Index>;
+    fn offsets(&self, jump_tables: &Self::VariantJumpTables) -> Vec<Self::Index>;
 
     fn usize_as_index(i: usize) -> Self::Index;
     fn index_as_usize(i: Self::Index) -> usize;
@@ -104,7 +104,7 @@ impl<InstructionIndex: std::fmt::Display + std::fmt::Debug> BasicBlock<Instructi
 }
 
 impl<'a, I: Instruction> VMControlFlowGraph<'a, I> {
-    pub fn new(code: &'a [I], jump_tables: &[I::VariantJumpTable]) -> Self {
+    pub fn new(code: &'a [I], jump_tables: &I::VariantJumpTables) -> Self {
         use std::collections::{BTreeMap as Map, BTreeSet as Set};
 
         let code_len = code.len();
@@ -267,7 +267,7 @@ impl<'a, I: Instruction> VMControlFlowGraph<'a, I> {
     fn record_block_ids(
         pc: usize,
         code: &[I],
-        jump_tables: &[I::VariantJumpTable],
+        jump_tables: &I::VariantJumpTables,
         block_ids: &mut BTreeSet<I::Index>,
     ) {
         let bytecode = &code[pc];
