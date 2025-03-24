@@ -3,7 +3,10 @@
 
 use crate::{legacy_test_cost, object_runtime::ObjectRuntime, NativesCostTable};
 use move_binary_format::errors::{PartialVMError, PartialVMResult};
-use move_core_types::{gas_algebra::InternalGas, language_storage::TypeTag, vm_status::StatusCode};
+use move_core_types::{
+    account_address::AccountAddress, gas_algebra::InternalGas, language_storage::TypeTag,
+    vm_status::StatusCode,
+};
 use move_vm_runtime::{native_charge_gas_early_exit, native_functions::NativeContext};
 use move_vm_types::{
     loaded_data::runtime_types::Type, natives::function::NativeResult, values::Value,
@@ -18,7 +21,9 @@ pub struct EventEmitCostParams {
     pub event_emit_value_size_derivation_cost_per_byte: InternalGas,
     pub event_emit_tag_size_derivation_cost_per_byte: InternalGas,
     pub event_emit_output_cost_per_byte: InternalGas,
+    pub event_emit_auth_stream_cost: InternalGas,
 }
+
 /***************************************************************************************************
  * native fun emit
  * Implementation of the Move native function `event::emit<T: copy + drop>(event: T)`
@@ -36,6 +41,32 @@ pub fn emit(
     debug_assert!(ty_args.len() == 1);
     debug_assert!(args.len() == 1);
 
+    let ty = ty_args.pop().unwrap();
+    let event_value = args.pop_back().unwrap();
+    emit_impl(context, ty, event_value, None)
+}
+
+pub fn emit_authenticated(
+    context: &mut NativeContext,
+    mut ty_args: Vec<Type>,
+    mut args: VecDeque<Value>,
+) -> PartialVMResult<NativeResult> {
+    debug_assert!(ty_args.len() == 1);
+    debug_assert!(args.len() == 2);
+
+    let ty = ty_args.pop().unwrap();
+    let stream_ref = args.pop_back().unwrap();
+    let event_value = args.pop_back().unwrap();
+
+    emit_impl(context, ty, event_value, Some(stream_ref))
+}
+
+fn emit_impl(
+    context: &mut NativeContext,
+    ty: Type,
+    event_value: Value,
+    stream_ref: Option<Value>,
+) -> PartialVMResult<NativeResult> {
     let event_emit_cost_params = context
         .extensions_mut()
         .get::<NativesCostTable>()?
@@ -43,9 +74,6 @@ pub fn emit(
         .clone();
 
     native_charge_gas_early_exit!(context, event_emit_cost_params.event_emit_cost_base);
-
-    let ty = ty_args.pop().unwrap();
-    let event_value = args.pop_back().unwrap();
 
     let event_value_size = event_value.legacy_size();
 
@@ -111,6 +139,10 @@ pub fn emit(
         context,
         event_emit_cost_params.event_emit_output_cost_per_byte * ev_size.into()
     );
+
+    if let Some(stream_ref) = stream_ref {
+        let stream_ref_address: AccountAddress = stream_ref.value_as::<AccountAddress>().unwrap();
+    }
 
     let obj_runtime: &mut ObjectRuntime = context.extensions_mut().get_mut()?;
 
