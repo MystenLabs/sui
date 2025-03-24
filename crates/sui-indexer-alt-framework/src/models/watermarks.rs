@@ -3,7 +3,7 @@
 
 use std::{borrow::Cow, time::Duration};
 
-use chrono::{naive::NaiveDateTime, DateTime, Utc};
+use chrono::naive::NaiveDateTime;
 use diesel::{prelude::*, sql_types::BigInt};
 use diesel_async::RunQueryDsl;
 
@@ -28,7 +28,7 @@ pub struct StoredWatermark {
 /// Fields that the committer is responsible for setting.
 #[derive(AsChangeset, Selectable, Queryable, Debug, Clone, FieldCount)]
 #[diesel(table_name = watermarks)]
-pub struct CommitterWatermark<'p> {
+pub struct PgCommitterWatermark<'p> {
     pub pipeline: Cow<'p, str>,
     pub epoch_hi_inclusive: i64,
     pub checkpoint_hi_inclusive: i64,
@@ -38,14 +38,14 @@ pub struct CommitterWatermark<'p> {
 
 #[derive(AsChangeset, Selectable, Queryable, Debug, Clone, FieldCount)]
 #[diesel(table_name = watermarks)]
-pub struct ReaderWatermark<'p> {
+pub struct PgReaderWatermark<'p> {
     pub pipeline: Cow<'p, str>,
     pub reader_lo: i64,
 }
 
 #[derive(Queryable, Debug, Clone, FieldCount, PartialEq, Eq)]
 #[diesel(table_name = watermarks)]
-pub struct PrunerWatermark<'p> {
+pub struct PgPrunerWatermark<'p> {
     /// The pipeline in question
     pub pipeline: Cow<'p, str>,
 
@@ -75,14 +75,14 @@ impl StoredWatermark {
     }
 }
 
-impl CommitterWatermark<'static> {
+impl PgCommitterWatermark<'static> {
     /// Get the current high watermark for the pipeline.
     pub(crate) async fn get(
         conn: &mut Connection<'_>,
         pipeline: &'static str,
     ) -> QueryResult<Option<Self>> {
         watermarks::table
-            .select(CommitterWatermark::as_select())
+            .select(PgCommitterWatermark::as_select())
             .filter(watermarks::pipeline.eq(pipeline))
             .first(conn)
             .await
@@ -90,32 +90,16 @@ impl CommitterWatermark<'static> {
     }
 }
 
-impl<'p> CommitterWatermark<'p> {
-    /// A new watermark with the given pipeline name indicating zero progress.
-    pub(crate) fn initial(pipeline: Cow<'p, str>) -> Self {
-        CommitterWatermark {
-            pipeline,
-            epoch_hi_inclusive: 0,
-            checkpoint_hi_inclusive: 0,
-            tx_hi: 0,
-            timestamp_ms_hi_inclusive: 0,
-        }
-    }
-
+impl<'p> PgCommitterWatermark<'p> {
     #[cfg(test)]
     pub(crate) fn new_for_testing(pipeline: &'p str, checkpoint_hi_inclusive: u64) -> Self {
-        CommitterWatermark {
+        PgCommitterWatermark {
             pipeline: pipeline.into(),
             epoch_hi_inclusive: 0,
             checkpoint_hi_inclusive: checkpoint_hi_inclusive as i64,
             tx_hi: 0,
             timestamp_ms_hi_inclusive: 0,
         }
-    }
-
-    /// The consensus timestamp associated with this checkpoint.
-    pub(crate) fn timestamp(&self) -> DateTime<Utc> {
-        DateTime::from_timestamp_millis(self.timestamp_ms_hi_inclusive).unwrap_or_default()
     }
 
     /// Upsert the high watermark as long as it raises the watermark stored in the database.
@@ -136,7 +120,7 @@ impl<'p> CommitterWatermark<'p> {
     }
 }
 
-impl<'p> ReaderWatermark<'p> {
+impl<'p> PgReaderWatermark<'p> {
     /// Update the reader low watermark for an existing watermark row, as long as this raises the
     /// watermark, and updates the timestamp this update happened to the database's current time.
     ///
@@ -152,7 +136,7 @@ impl<'p> ReaderWatermark<'p> {
     }
 }
 
-impl PrunerWatermark<'static> {
+impl PgPrunerWatermark<'static> {
     /// Get the bounds for the region that the pruner still has to prune for the given `pipeline`,
     /// along with a duration to wait before acting on this information, based on the time at which
     /// the pruner last updated the bounds, and the configured `delay`.
@@ -189,10 +173,10 @@ impl PrunerWatermark<'static> {
     }
 }
 
-impl PrunerWatermark<'_> {
+impl PgPrunerWatermark<'_> {
     #[cfg(test)]
     pub(crate) fn new_for_testing(pipeline: &'static str, pruner_hi: u64) -> Self {
-        PrunerWatermark {
+        PgPrunerWatermark {
             pipeline: pipeline.into(),
             wait_for: 0,
             reader_lo: 0,
@@ -214,8 +198,8 @@ impl PrunerWatermark<'_> {
     }
 }
 
-impl<'p> From<CommitterWatermark<'p>> for StoredWatermark {
-    fn from(watermark: CommitterWatermark<'p>) -> Self {
+impl<'p> From<PgCommitterWatermark<'p>> for StoredWatermark {
+    fn from(watermark: PgCommitterWatermark<'p>) -> Self {
         StoredWatermark {
             pipeline: watermark.pipeline.into_owned(),
             epoch_hi_inclusive: watermark.epoch_hi_inclusive,

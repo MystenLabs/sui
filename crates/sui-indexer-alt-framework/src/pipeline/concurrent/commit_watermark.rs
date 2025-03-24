@@ -17,10 +17,9 @@ use tracing::{debug, error, info, warn};
 
 use crate::{
     metrics::{CheckpointLagMetricReporter, IndexerMetrics},
-    models::watermarks::CommitterWatermark,
     pg_store::PgStore,
     pipeline::{logging::WatermarkLogger, CommitterConfig, WatermarkPart, WARN_PENDING_WATERMARKS},
-    store::Store,
+    store::{CommitterWatermark, Store},
 };
 
 use super::Handler;
@@ -46,7 +45,7 @@ use super::Handler;
 /// the watermark cannot be progressed. If `skip_watermark` is set, the task will shutdown
 /// immediately.
 pub(super) fn commit_watermark<H: Handler + 'static>(
-    initial_watermark: Option<CommitterWatermark<'static>>,
+    initial_watermark: Option<CommitterWatermark>,
     config: CommitterConfig,
     skip_watermark: bool,
     mut rx: mpsc::Receiver<Vec<WatermarkPart>>,
@@ -73,7 +72,7 @@ pub(super) fn commit_watermark<H: Handler + 'static>(
             let next = watermark.checkpoint_hi_inclusive + 1;
             (watermark, next)
         } else {
-            (CommitterWatermark::initial(H::NAME.into()), 0)
+            (CommitterWatermark::default(), 0)
         };
 
         // The watermark task will periodically output a log message at a higher log level to

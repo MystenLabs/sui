@@ -13,9 +13,8 @@ use tracing::{debug, info, warn};
 
 use crate::{
     metrics::IndexerMetrics,
-    models::watermarks::CommitterWatermark,
     pipeline::{logging::WatermarkLogger, IndexedCheckpoint, WARN_PENDING_WATERMARKS},
-    store::TransactionalStore,
+    store::{CommitterWatermark, TransactionalStore},
 };
 
 use super::{Handler, SequentialConfig};
@@ -40,7 +39,7 @@ use super::{Handler, SequentialConfig};
 /// The task can be shutdown using its `cancel` token or if either of its channels are closed.
 pub(super) fn committer<H>(
     config: SequentialConfig,
-    watermark: Option<CommitterWatermark<'static>>,
+    watermark: Option<CommitterWatermark>,
     mut rx: mpsc::Receiver<IndexedCheckpoint<H>>,
     tx: mpsc::UnboundedSender<(&'static str, u64)>,
     store: H::Store,
@@ -79,7 +78,7 @@ where
             let next = watermark.checkpoint_hi_inclusive as u64 + 1;
             (watermark, next)
         } else {
-            (CommitterWatermark::initial(H::NAME.into()), 0)
+            (CommitterWatermark::default(), 0)
         };
 
         // The committer task will periodically output a log message at a higher log level to
@@ -235,7 +234,7 @@ where
                     // Write all the object updates out along with the watermark update, in a
                     // single transaction. The handler's `commit` implementation is responsible for
                     // chunking up the writes into a manageable size.
-                    let affected = store.transactional_commit_with_watermark::<H>(&watermark, &batch).await;
+                    let affected = store.transactional_commit_with_watermark::<H>(H::NAME, &watermark, &batch).await;
 
                     let elapsed = guard.stop_and_record();
 

@@ -9,9 +9,11 @@ use diesel_async::AsyncConnection;
 
 use crate::db::{Connection as PgConnection, Db as PgDb};
 use crate::models::watermarks::{
-    CommitterWatermark, PrunerWatermark, ReaderWatermark, StoredWatermark,
+    PgCommitterWatermark, PgPrunerWatermark, PgReaderWatermark, StoredWatermark,
 };
-use crate::store::{DbConnection, HandlerBatch, SequentialHandler, Store, TransactionalStore};
+use crate::store::{
+    CommitterWatermark, DbConnection, HandlerBatch, SequentialHandler, Store, TransactionalStore,
+};
 
 /// PostgreSQL implementation of Store
 #[derive(Clone)]
@@ -39,15 +41,17 @@ impl Store for PgStore {
     async fn get_committer_watermark(
         &self,
         pipeline: &'static str,
-    ) -> anyhow::Result<Option<(i64, i64)>> {
+    ) -> anyhow::Result<Option<(i64, i64, i64, i64)>> {
         let mut conn = self.db.connect().await?;
-        let watermark = CommitterWatermark::get(&mut conn, pipeline)
+        let watermark = PgCommitterWatermark::get(&mut conn, pipeline)
             .await
             .map_err(anyhow::Error::from)?;
 
         if let Some(watermark) = watermark {
             Ok(Some((
+                watermark.epoch_hi_inclusive,
                 watermark.checkpoint_hi_inclusive,
+                watermark.tx_hi,
                 watermark.timestamp_ms_hi_inclusive,
             )))
         } else {
@@ -83,7 +87,7 @@ impl Store for PgStore {
         timestamp_ms_hi_inclusive: i64,
     ) -> anyhow::Result<bool> {
         let mut conn = self.db.connect().await?;
-        let watermark = CommitterWatermark {
+        let watermark = PgCommitterWatermark {
             pipeline: pipeline.into(),
             epoch_hi_inclusive,
             checkpoint_hi_inclusive,
@@ -99,7 +103,7 @@ impl Store for PgStore {
         reader_lo: i64,
     ) -> anyhow::Result<bool> {
         let mut conn = self.db.connect().await?;
-        let watermark = ReaderWatermark {
+        let watermark = PgReaderWatermark {
             pipeline: pipeline.into(),
             reader_lo,
         };
@@ -112,7 +116,7 @@ impl Store for PgStore {
         delay: Duration,
     ) -> anyhow::Result<Option<(i64, i64, i64)>> {
         let mut conn = self.db.connect().await?;
-        let watermark = PrunerWatermark::get(&mut conn, pipeline, delay)
+        let watermark = PgPrunerWatermark::get(&mut conn, pipeline, delay)
             .await
             .map_err(anyhow::Error::from)?;
 
@@ -133,7 +137,7 @@ impl Store for PgStore {
         pruner_hi: i64,
     ) -> anyhow::Result<bool> {
         let mut conn = self.db.connect().await?;
-        let watermark = PrunerWatermark {
+        let watermark = PgPrunerWatermark {
             pipeline: pipeline.into(),
             pruner_hi,
             // These values are ignored by the update method
@@ -148,7 +152,8 @@ impl Store for PgStore {
 impl TransactionalStore for PgStore {
     async fn transactional_commit_with_watermark<'a, H>(
         &'a self,
-        watermark: &'a CommitterWatermark<'static>,
+        pipeline: &'static str,
+        watermark: &'a CommitterWatermark,
         batch: &'a HandlerBatch<H>,
     ) -> anyhow::Result<usize>
     where
@@ -158,7 +163,14 @@ impl TransactionalStore for PgStore {
 
         let result = AsyncConnection::transaction(&mut conn, |conn| {
             async {
-                watermark.update(conn).await?;
+                let watermark = PgCommitterWatermark {
+                    pipeline: pipeline.into(),
+                    epoch_hi_inclusive: watermark.epoch_hi_inclusive,
+                    checkpoint_hi_inclusive: watermark.checkpoint_hi_inclusive,
+                    tx_hi: watermark.tx_hi,
+                    timestamp_ms_hi_inclusive: watermark.timestamp_ms_hi_inclusive,
+                };
+                watermark.update(conn).await.map_err(anyhow::Error::from)?;
                 H::commit(batch, conn).await
             }
             .scope_boxed()
