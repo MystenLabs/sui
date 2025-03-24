@@ -125,7 +125,7 @@ async fn main() -> Result<()> {
             reset_database(
                 database_url,
                 db_args,
-                (!skip_migrations).then(|| Indexer::migrations(Some(&MIGRATIONS))),
+                (!skip_migrations).then(|| &MIGRATIONS),
             )
             .await?;
         }

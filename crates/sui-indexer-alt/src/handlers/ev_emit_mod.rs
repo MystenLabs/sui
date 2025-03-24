@@ -88,13 +88,14 @@ impl Handler for EvEmitMod {
 
 #[cfg(test)]
 mod tests {
+    use crate::new_for_testing;
+
     use super::*;
     use diesel_async::RunQueryDsl;
     use sui_indexer_alt_framework::{
         db,
         handlers::cp_sequence_numbers::CpSequenceNumbers,
         types::{event::Event, test_checkpoint_data_builder::TestCheckpointDataBuilder},
-        Indexer,
     };
     use sui_indexer_alt_schema::MIGRATIONS;
 
@@ -115,7 +116,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_ev_emit_mod_pruning_complains_if_no_mapping() {
-        let (indexer, _db) = Indexer::new_for_testing(&MIGRATIONS).await;
+        let (indexer, _db) = new_for_testing(&MIGRATIONS).await;
         let mut conn = indexer.db().connect().await.unwrap();
 
         let result = EvEmitMod.prune(0, 2, &mut conn).await;
@@ -129,7 +130,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_ev_emit_mod_no_events() {
-        let (indexer, _db) = Indexer::new_for_testing(&MIGRATIONS).await;
+        let (indexer, _db) = new_for_testing(&MIGRATIONS).await;
         let mut conn = indexer.db().connect().await.unwrap();
 
         let checkpoint = Arc::new(
@@ -147,7 +148,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_ev_emit_mod_single_event() {
-        let (indexer, _db) = Indexer::new_for_testing(&MIGRATIONS).await;
+        let (indexer, _db) = new_for_testing(&MIGRATIONS).await;
         let mut conn = indexer.db().connect().await.unwrap();
 
         let checkpoint = Arc::new(
@@ -168,7 +169,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_ev_emit_mod_prune_events() {
-        let (indexer, _db) = Indexer::new_for_testing(&MIGRATIONS).await;
+        let (indexer, _db) = new_for_testing(&MIGRATIONS).await;
         let mut conn = indexer.db().connect().await.unwrap();
 
         // 0th checkpoint has no events

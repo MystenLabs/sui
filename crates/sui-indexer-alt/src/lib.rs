@@ -1,8 +1,14 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use anyhow::Context;
 use bootstrap::bootstrap;
 use config::{IndexerConfig, PipelineLayer};
+use diesel::{
+    migration::{self, Migration, MigrationSource},
+    pg::Pg,
+};
+use diesel_migrations::EmbeddedMigrations;
 use handlers::{
     coin_balance_buckets::CoinBalanceBuckets,
     ev_emit_mod::EvEmitMod,
@@ -27,7 +33,7 @@ use handlers::{
 };
 use prometheus::Registry;
 use sui_indexer_alt_framework::{
-    db::DbArgs,
+    db::{temp::TempDb, Db, DbArgs},
     handlers::cp_sequence_numbers::CpSequenceNumbers,
     ingestion::{ClientArgs, IngestionConfig},
     pg_store::PgStore,
@@ -39,6 +45,7 @@ use sui_indexer_alt_framework::{
     Indexer, IndexerArgs,
 };
 use sui_indexer_alt_schema::MIGRATIONS;
+use tempfile::tempdir;
 use tokio_util::sync::CancellationToken;
 use url::Url;
 
@@ -106,13 +113,22 @@ pub async fn setup_indexer(
 
     let retry_interval = ingestion.retry_interval();
 
+    let db = Db::for_write(database_url, db_args)
+        .await
+        .context("Failed to connect to database")?;
+
+    // At indexer initialization, we ensure that the DB schema is up-to-date.
+    db.run_migrations(MIGRATIONS)
+        .await
+        .context("Failed to run pending migrations")?;
+
+    let pg_store = PgStore::new(db);
+
     let mut indexer = Indexer::new(
-        database_url,
-        db_args,
+        pg_store,
         indexer_args,
         client_args,
         ingestion,
-        Some(&MIGRATIONS),
         registry,
         cancel.clone(),
     )
@@ -216,4 +232,61 @@ pub async fn setup_indexer(
     add_concurrent!(TxKinds, tx_kinds);
 
     Ok(indexer)
+}
+
+/// Combine the provided `migrations` with the migrations necessary to set up the indexer
+/// framework. The returned migration source can be passed to [Db::run_migrations] to ensure
+/// the database's schema is up-to-date for both the indexer framework and the specific
+/// indexer.
+pub fn transform_migrations(
+    migrations: Option<&'static EmbeddedMigrations>,
+) -> impl MigrationSource<Pg> + Send + Sync + 'static {
+    struct Migrations(Option<&'static EmbeddedMigrations>);
+    impl MigrationSource<Pg> for Migrations {
+        fn migrations(&self) -> migration::Result<Vec<Box<dyn Migration<Pg>>>> {
+            let mut migrations = MIGRATIONS.migrations()?;
+            if let Some(more_migrations) = self.0 {
+                migrations.extend(more_migrations.migrations()?);
+            }
+            Ok(migrations)
+        }
+    }
+
+    Migrations(migrations)
+}
+
+// TODO (wlmyng): make generic, not just PgStore
+pub async fn new_for_testing(
+    migrations: &'static EmbeddedMigrations,
+) -> (Indexer<PgStore>, TempDb) {
+    let temp_db = TempDb::new().unwrap();
+
+    let db = Db::for_write(temp_db.database().url().clone(), DbArgs::default())
+        .await
+        .context("Failed to connect to database")
+        .unwrap();
+    // At indexer initialization, we ensure that the DB schema is up-to-date.
+    db.run_migrations(transform_migrations(Some(migrations)))
+        .await
+        .context("Failed to run pending migrations")
+        .unwrap();
+
+    let store = PgStore::new(db);
+    let indexer = Indexer::new(
+        store,
+        IndexerArgs::default(),
+        ClientArgs {
+            remote_store_url: None,
+            local_ingestion_path: Some(tempdir().unwrap().into_path()),
+            rpc_api_url: None,
+            rpc_username: None,
+            rpc_password: None,
+        },
+        IngestionConfig::default(),
+        &Registry::new(),
+        CancellationToken::new(),
+    )
+    .await
+    .unwrap();
+    (indexer, temp_db)
 }

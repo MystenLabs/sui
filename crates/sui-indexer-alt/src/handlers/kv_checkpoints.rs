@@ -68,9 +68,10 @@ impl Handler for KvCheckpoints {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::new_for_testing;
     use diesel_async::RunQueryDsl;
     use sui_indexer_alt_framework::{
-        db, types::test_checkpoint_data_builder::TestCheckpointDataBuilder, Indexer,
+        db, types::test_checkpoint_data_builder::TestCheckpointDataBuilder,
     };
     use sui_indexer_alt_schema::MIGRATIONS;
 
@@ -85,7 +86,7 @@ mod tests {
     /// checkpoint sequence number range.
     #[tokio::test]
     async fn test_kv_checkpoints_pruning() {
-        let (indexer, _db) = Indexer::new_for_testing(&MIGRATIONS).await;
+        let (indexer, _db) = new_for_testing(&MIGRATIONS).await;
         let mut conn = indexer.db().connect().await.unwrap();
 
         // Create 3 checkpoints

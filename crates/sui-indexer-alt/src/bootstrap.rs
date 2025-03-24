@@ -8,6 +8,7 @@ use diesel::{OptionalExtension, QueryDsl, SelectableHelper};
 use diesel_async::RunQueryDsl;
 use sui_indexer_alt_framework::{
     pg_store::PgStore,
+    store::Store,
     types::{
         full_checkpoint_content::CheckpointData,
         sui_system_state::{get_sui_system_state, SuiSystemStateTrait},

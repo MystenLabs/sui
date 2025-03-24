@@ -205,9 +205,10 @@ mod tests {
             object::{Authenticator, Owner},
             test_checkpoint_data_builder::TestCheckpointDataBuilder,
         },
-        Indexer,
     };
     use sui_indexer_alt_schema::{objects::StoredOwnerKind, MIGRATIONS};
+
+    use crate::new_for_testing;
 
     use super::*;
 
@@ -220,7 +221,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_process_basics() {
-        let (indexer, _db) = Indexer::new_for_testing(&MIGRATIONS).await;
+        let (indexer, _db) = new_for_testing(&MIGRATIONS).await;
         let mut conn = indexer.db().connect().await.unwrap();
         let obj_info = ObjInfo::default();
         let mut builder = TestCheckpointDataBuilder::new(0);
@@ -329,7 +330,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_process_noop() {
-        let (indexer, _db) = Indexer::new_for_testing(&MIGRATIONS).await;
+        let (indexer, _db) = new_for_testing(&MIGRATIONS).await;
         let mut conn = indexer.db().connect().await.unwrap();
         let obj_info = ObjInfo::default();
         // In this checkpoint, an object is created and deleted in the same checkpoint.
@@ -356,7 +357,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_process_wrap() {
-        let (indexer, _db) = Indexer::new_for_testing(&MIGRATIONS).await;
+        let (indexer, _db) = new_for_testing(&MIGRATIONS).await;
         let mut conn = indexer.db().connect().await.unwrap();
         let obj_info = ObjInfo::default();
         let mut builder = TestCheckpointDataBuilder::new(0)
@@ -427,7 +428,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_process_shared_object() {
-        let (indexer, _db) = Indexer::new_for_testing(&MIGRATIONS).await;
+        let (indexer, _db) = new_for_testing(&MIGRATIONS).await;
         let mut conn = indexer.db().connect().await.unwrap();
         let obj_info = ObjInfo::default();
         let mut builder = TestCheckpointDataBuilder::new(0)
@@ -458,7 +459,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_process_immutable_object() {
-        let (indexer, _db) = Indexer::new_for_testing(&MIGRATIONS).await;
+        let (indexer, _db) = new_for_testing(&MIGRATIONS).await;
         let mut conn = indexer.db().connect().await.unwrap();
         let obj_info = ObjInfo::default();
         let mut builder = TestCheckpointDataBuilder::new(0)
@@ -497,7 +498,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_process_object_owned_object() {
-        let (indexer, _db) = Indexer::new_for_testing(&MIGRATIONS).await;
+        let (indexer, _db) = new_for_testing(&MIGRATIONS).await;
         let mut conn = indexer.db().connect().await.unwrap();
         let obj_info = ObjInfo::default();
         let mut builder = TestCheckpointDataBuilder::new(0)
@@ -539,7 +540,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_process_consensus_v2_object() {
-        let (indexer, _db) = Indexer::new_for_testing(&MIGRATIONS).await;
+        let (indexer, _db) = new_for_testing(&MIGRATIONS).await;
         let mut conn = indexer.db().connect().await.unwrap();
         let obj_info = ObjInfo::default();
         let mut builder = TestCheckpointDataBuilder::new(0)
@@ -591,7 +592,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_obj_info_batch_prune() {
-        let (indexer, _db) = Indexer::new_for_testing(&MIGRATIONS).await;
+        let (indexer, _db) = new_for_testing(&MIGRATIONS).await;
         let mut conn = indexer.db().connect().await.unwrap();
         let obj_info = ObjInfo::default();
         let mut builder = TestCheckpointDataBuilder::new(0);
@@ -628,7 +629,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_obj_info_prune_with_missing_data() {
-        let (indexer, _db) = Indexer::new_for_testing(&MIGRATIONS).await;
+        let (indexer, _db) = new_for_testing(&MIGRATIONS).await;
         let mut conn = indexer.db().connect().await.unwrap();
         let obj_info = ObjInfo::default();
         let mut builder = TestCheckpointDataBuilder::new(0);

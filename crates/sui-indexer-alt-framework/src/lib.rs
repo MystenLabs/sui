@@ -19,14 +19,13 @@ use pipeline::{
     Processor,
 };
 use prometheus::Registry;
-use store::{CommitterWatermark, Store, StoreExt};
-use sui_indexer_alt_metrics::db::DbConnectionStatsCollector;
+use store::{CommitterWatermark, Store, StoreExt, TransactionalStore};
+use sui_indexer_alt_metrics::{db::DbConnectionStatsCollector, stats::DbConnectionStats};
 use sui_pg_db::{temp::TempDb, Db, DbArgs};
 use tempfile::tempdir;
 use tokio::task::JoinHandle;
 use tokio_util::sync::CancellationToken;
 use tracing::{info, warn};
-use url::Url;
 
 pub use anyhow::Result;
 pub use sui_field_count::FieldCount;
@@ -115,8 +114,10 @@ pub struct Indexer<S: Store> {
     handles: Vec<JoinHandle<()>>,
 }
 
-// TODO (wlmyng): non-pg store impl<S: TransactionalStore> Indexer<S> {
-impl Indexer<PgStore> {
+impl<S> Indexer<S>
+where
+    S: Store + DbConnectionStats,
+{
     /// Create a new instance of the indexer framework. `database_url`, `db_args`, `indexer_args,`,
     /// `client_args`, and `ingestion_config` contain configurations for the following,
     /// respectively:
@@ -134,12 +135,10 @@ impl Indexer<PgStore> {
     /// After initialization, at least one pipeline must be added using [Self::concurrent_pipeline]
     /// or [Self::sequential_pipeline], before the indexer is started using [Self::run].
     pub async fn new(
-        database_url: Url,
-        db_args: DbArgs,
+        store: S,
         indexer_args: IndexerArgs,
         client_args: ClientArgs,
         ingestion_config: IngestionConfig,
-        migrations: Option<&'static EmbeddedMigrations>,
         registry: &Registry,
         cancel: CancellationToken,
     ) -> Result<Self> {
@@ -149,19 +148,6 @@ impl Indexer<PgStore> {
             pipeline,
             skip_watermark,
         } = indexer_args;
-
-        // TODO (wlmyng): Indexer::new no longer responsible for instantiating the db and applying
-        // migrations
-        let db = Db::for_write(database_url, db_args)
-            .await
-            .context("Failed to connect to database")?;
-
-        // At indexer initialization, we ensure that the DB schema is up-to-date.
-        db.run_migrations(Self::migrations(migrations))
-            .await
-            .context("Failed to run pending migrations")?;
-
-        let store = PgStore::new(db);
 
         let metrics = IndexerMetrics::new(registry);
         registry.register(Box::new(DbConnectionStatsCollector::new(
@@ -195,11 +181,25 @@ impl Indexer<PgStore> {
         })
     }
 
-    pub async fn new_for_testing(migrations: &'static EmbeddedMigrations) -> (Self, TempDb) {
+    // TODO (wlmyng): make generic, not just PgStore
+    pub async fn new_for_testing(
+        migrations: &'static EmbeddedMigrations,
+    ) -> (Indexer<PgStore>, TempDb) {
         let temp_db = TempDb::new().unwrap();
+
+        let db = Db::for_write(temp_db.database().url().clone(), DbArgs::default())
+            .await
+            .context("Failed to connect to database")
+            .unwrap();
+        // At indexer initialization, we ensure that the DB schema is up-to-date.
+        db.run_migrations(Self::migrations(Some(migrations)))
+            .await
+            .context("Failed to run pending migrations")
+            .unwrap();
+
+        let store = PgStore::new(db);
         let indexer = Indexer::new(
-            temp_db.database().url().clone(),
-            DbArgs::default(),
+            store,
             IndexerArgs::default(),
             ClientArgs {
                 remote_store_url: None,
@@ -209,7 +209,6 @@ impl Indexer<PgStore> {
                 rpc_password: None,
             },
             IngestionConfig::default(),
-            Some(migrations),
             &Registry::new(),
             CancellationToken::new(),
         )
@@ -220,8 +219,8 @@ impl Indexer<PgStore> {
 
     /// The database connection pool used by the indexer.
     // TODO (wlmyng): non-pg store - provide the entire store?
-    pub fn db(&self) -> &Db {
-        &self.db.db
+    pub fn db(&self) -> &S {
+        &self.db
     }
 
     /// The ingestion client used by the indexer to fetch checkpoints.
@@ -255,7 +254,7 @@ impl Indexer<PgStore> {
         config: ConcurrentConfig,
     ) -> Result<()>
     where
-        H: concurrent::Handler<Store = PgStore> + Send + Sync + 'static,
+        H: concurrent::Handler<Store = S> + Send + Sync + 'static,
     {
         let start_from_pruner_watermark = H::PRUNING_REQUIRES_PROCESSED_VALUES;
         let Some(watermark) = self.add_pipeline::<H>(start_from_pruner_watermark).await? else {
@@ -301,7 +300,8 @@ impl Indexer<PgStore> {
     where
         // TODO (wlmyng): non-pg store - eventually this will be on Indexer<S: TransactionalStore> and ...
         // associate Indexer's Store with H::Store
-        H: Handler<Store = PgStore> + Send + Sync + 'static, // Here, we'd set Store = S
+        H: Handler<Store = S> + Send + Sync + 'static,
+        S: TransactionalStore,
     {
         let Some(watermark) = self.add_pipeline::<H>(false).await? else {
             return Ok(());
@@ -528,7 +528,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_add_new_pipeline() {
-        let (mut indexer, _temp_db) = Indexer::new_for_testing(&MIGRATIONS).await;
+        let (mut indexer, _temp_db) = Indexer::<PgStore>::new_for_testing(&MIGRATIONS).await;
         indexer
             .concurrent_pipeline(ConcurrentPipeline1, ConcurrentConfig::default())
             .await
@@ -538,7 +538,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_add_existing_pipeline() {
-        let (mut indexer, _temp_db) = Indexer::new_for_testing(&MIGRATIONS).await;
+        let (mut indexer, _temp_db) = Indexer::<PgStore>::new_for_testing(&MIGRATIONS).await;
         let watermark = PgCommitterWatermark::new_for_testing(ConcurrentPipeline1::NAME, 10);
         watermark
             .update(&mut indexer.db().connect().await.unwrap())
@@ -553,7 +553,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_add_multiple_pipelines() {
-        let (mut indexer, _temp_db) = Indexer::new_for_testing(&MIGRATIONS).await;
+        let (mut indexer, _temp_db) = Indexer::<PgStore>::new_for_testing(&MIGRATIONS).await;
         let watermark1 = PgCommitterWatermark::new_for_testing(ConcurrentPipeline1::NAME, 10);
         watermark1
             .update(&mut indexer.db().connect().await.unwrap())
@@ -579,7 +579,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_add_multiple_pipelines_pruning_requires_processed_values() {
-        let (mut indexer, _temp_db) = Indexer::new_for_testing(&MIGRATIONS).await;
+        let (mut indexer, _temp_db) = Indexer::<PgStore>::new_for_testing(&MIGRATIONS).await;
         let watermark1 = PgCommitterWatermark::new_for_testing(ConcurrentPipeline1::NAME, 10);
         watermark1
             .update(&mut indexer.db().connect().await.unwrap())

@@ -305,6 +305,8 @@ pub(crate) fn get_coin_balance_bucket(coin: &Object) -> anyhow::Result<i16> {
 mod tests {
     use std::str::FromStr;
 
+    use crate::new_for_testing;
+
     use super::*;
     use diesel::QueryDsl;
     use sui_indexer_alt_framework::{
@@ -316,7 +318,6 @@ mod tests {
             object::{Authenticator, MoveObject, Object},
             test_checkpoint_data_builder::TestCheckpointDataBuilder,
         },
-        Indexer,
     };
     use sui_indexer_alt_schema::MIGRATIONS;
     use sui_protocol_config::ProtocolConfig;
@@ -411,7 +412,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_process_coin_balance_buckets_new_sui_coin() {
-        let (indexer, _db) = Indexer::new_for_testing(&MIGRATIONS).await;
+        let (indexer, _db) = new_for_testing(&MIGRATIONS).await;
         let mut conn = indexer.db().connect().await.unwrap();
         let handler = CoinBalanceBuckets::default();
         let mut builder = TestCheckpointDataBuilder::new(0);
@@ -451,7 +452,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_process_coin_balance_buckets_new_other_coin() {
-        let (indexer, _db) = Indexer::new_for_testing(&MIGRATIONS).await;
+        let (indexer, _db) = new_for_testing(&MIGRATIONS).await;
         let mut conn = indexer.db().connect().await.unwrap();
         let handler = CoinBalanceBuckets::default();
         let mut builder = TestCheckpointDataBuilder::new(0);
@@ -484,7 +485,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_process_coin_balance_buckets_balance_change() {
-        let (indexer, _db) = Indexer::new_for_testing(&MIGRATIONS).await;
+        let (indexer, _db) = new_for_testing(&MIGRATIONS).await;
         let mut conn = indexer.db().connect().await.unwrap();
         let handler = CoinBalanceBuckets::default();
         let mut builder = TestCheckpointDataBuilder::new(0);
@@ -615,7 +616,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_process_coin_balance_buckets_coin_deleted() {
-        let (indexer, _db) = Indexer::new_for_testing(&MIGRATIONS).await;
+        let (indexer, _db) = new_for_testing(&MIGRATIONS).await;
         let mut conn = indexer.db().connect().await.unwrap();
         let handler = CoinBalanceBuckets::default();
         let mut builder = TestCheckpointDataBuilder::new(0);
@@ -664,7 +665,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_process_coin_balance_buckets_owner_change() {
-        let (indexer, _db) = Indexer::new_for_testing(&MIGRATIONS).await;
+        let (indexer, _db) = new_for_testing(&MIGRATIONS).await;
         let mut conn = indexer.db().connect().await.unwrap();
         let handler = CoinBalanceBuckets::default();
         let mut builder = TestCheckpointDataBuilder::new(0);
@@ -719,7 +720,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_process_coin_balance_buckets_object_owned() {
-        let (indexer, _db) = Indexer::new_for_testing(&MIGRATIONS).await;
+        let (indexer, _db) = new_for_testing(&MIGRATIONS).await;
         let mut conn = indexer.db().connect().await.unwrap();
         let handler = CoinBalanceBuckets::default();
         let mut builder = TestCheckpointDataBuilder::new(0);
