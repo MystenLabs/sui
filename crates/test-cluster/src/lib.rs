@@ -824,6 +824,7 @@ pub struct TestClusterBuilder {
     network_config: Option<NetworkConfig>,
     additional_objects: Vec<Object>,
     num_validators: Option<usize>,
+    validators: Option<Vec<ValidatorGenesisConfig>>,
     fullnode_rpc_port: Option<u16>,
     enable_fullnode_events: bool,
     disable_fullnode_pruning: bool,
@@ -861,6 +862,7 @@ impl TestClusterBuilder {
             additional_objects: vec![],
             fullnode_rpc_port: None,
             num_validators: None,
+            validators: None,
             enable_fullnode_events: false,
             disable_fullnode_pruning: false,
             validator_supported_protocol_versions_config: ProtocolVersionsConfig::Default,
@@ -925,8 +927,16 @@ impl TestClusterBuilder {
         self
     }
 
+    /// Set the number of default validators to spawn. Can be overridden by `with_validators`, if
+    /// you need to provide more specific genesis configs for each validator.
     pub fn with_num_validators(mut self, num: usize) -> Self {
         self.num_validators = Some(num);
+        self
+    }
+
+    /// Provide validator genesis configs, overrides the `num_validators` setting.
+    pub fn with_validators(mut self, validators: Vec<ValidatorGenesisConfig>) -> Self {
+        self.validators = Some(validators);
         self
     }
 
@@ -1195,9 +1205,6 @@ impl TestClusterBuilder {
     /// Start a Swarm and set up WalletConfig
     async fn start_swarm(&mut self) -> Result<Swarm, anyhow::Error> {
         let mut builder: SwarmBuilder = Swarm::builder()
-            .committee_size(
-                NonZeroUsize::new(self.num_validators.unwrap_or(NUM_VALIDATOR)).unwrap(),
-            )
             .with_objects(self.additional_objects.clone())
             .with_db_checkpoint_config(self.db_checkpoint_config_validators.clone())
             .with_supported_protocol_versions_config(
@@ -1216,6 +1223,14 @@ impl TestClusterBuilder {
             .with_fullnode_run_with_range(self.fullnode_run_with_range)
             .with_fullnode_policy_config(self.fullnode_policy_config.clone())
             .with_fullnode_fw_config(self.fullnode_fw_config.clone());
+
+        if let Some(validators) = self.validators.take() {
+            builder = builder.with_validators(validators);
+        } else {
+            builder = builder.committee_size(
+                NonZeroUsize::new(self.num_validators.unwrap_or(NUM_VALIDATOR)).unwrap(),
+            )
+        };
 
         if let Some(chain) = self.chain_override {
             builder = builder.with_chain_override(chain);
