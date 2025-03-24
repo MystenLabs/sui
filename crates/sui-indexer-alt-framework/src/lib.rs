@@ -161,10 +161,12 @@ impl Indexer<PgStore> {
             .await
             .context("Failed to run pending migrations")?;
 
+        let store = PgStore::new(db);
+
         let metrics = IndexerMetrics::new(registry);
         registry.register(Box::new(DbConnectionStatsCollector::new(
             Some("indexer_db"),
-            db.clone(),
+            store.clone(),
         )))?;
 
         let ingestion_service = IngestionService::new(
@@ -173,8 +175,6 @@ impl Indexer<PgStore> {
             metrics.clone(),
             cancel.clone(),
         )?;
-
-        let store = PgStore::new(db);
 
         Ok(Self {
             db: store,

@@ -5,16 +5,17 @@ use prometheus::{
     core::{Collector, Desc},
     proto::{Counter, Gauge, LabelPair, Metric, MetricFamily, MetricType, Summary},
 };
-use sui_pg_db::Db;
+
+use crate::stats::DbConnectionStats;
 
 /// Collects information about the database connection pool.
-pub struct DbConnectionStatsCollector {
-    db: Db,
+pub struct DbConnectionStatsCollector<T: DbConnectionStats> {
+    stats_provider: T,
     desc: Vec<(MetricType, Desc)>,
 }
 
-impl DbConnectionStatsCollector {
-    pub fn new(prefix: Option<&str>, db: Db) -> Self {
+impl<T: DbConnectionStats> DbConnectionStatsCollector<T> {
+    pub fn new(prefix: Option<&str>, stats_provider: T) -> Self {
         let prefix = prefix.unwrap_or("db");
         let name = |n| format!("{prefix}_{n}");
 
@@ -68,26 +69,28 @@ impl DbConnectionStatsCollector {
             ),
         ];
 
-        Self { db, desc }
+        Self {
+            stats_provider,
+            desc,
+        }
     }
 }
 
-impl Collector for DbConnectionStatsCollector {
+impl<T: DbConnectionStats> Collector for DbConnectionStatsCollector<T> {
     fn desc(&self) -> Vec<&Desc> {
         self.desc.iter().map(|d| &d.1).collect()
     }
 
     fn collect(&self) -> Vec<MetricFamily> {
-        let state = self.db.state();
-        let stats = state.statistics;
+        let stats = self.stats_provider.get_connection_stats();
 
         vec![
-            gauge(&self.desc[0].1, state.connections as f64),
-            gauge(&self.desc[1].1, state.idle_connections as f64),
+            gauge(&self.desc[0].1, stats.connections as f64),
+            gauge(&self.desc[1].1, stats.idle_connections as f64),
             counter(&self.desc[2].1, stats.get_direct as f64),
             summary(
                 &self.desc[3].1,
-                stats.get_wait_time.as_millis() as f64,
+                stats.get_wait_time_ms as f64,
                 stats.get_waited + stats.get_timed_out,
             ),
             counter(&self.desc[4].1, stats.get_timed_out as f64),
