@@ -17,7 +17,7 @@ use move_bytecode_verifier_meter::{Meter, Scope};
 //**************************************************************************************************
 
 pub use absint::JoinResult;
-pub type VMControlFlowGraph<'a> = control_flow_graph::VMControlFlowGraph<'a, Bytecode>;
+pub type VMControlFlowGraph = control_flow_graph::VMControlFlowGraph<Bytecode>;
 
 pub trait AbstractDomain: Clone + Sized {
     fn join(
@@ -60,7 +60,12 @@ pub fn analyze_function<TF: TransferFunctions, M: Meter + ?Sized>(
         meter,
         transfer_functions,
     };
-    absint::analyze_function(&mut interpreter, &function_context.cfg, initial_state)
+    absint::analyze_function(
+        &mut interpreter,
+        &function_context.cfg,
+        &function_context.code.code,
+        initial_state,
+    )
 }
 
 /// A `FunctionContext` holds all the information needed by the verifier for `FunctionDefinition`.`
@@ -72,7 +77,7 @@ pub struct FunctionContext<'a> {
     return_: &'a Signature,
     locals: &'a Signature,
     type_parameters: &'a [AbilitySet],
-    cfg: VMControlFlowGraph<'a>,
+    cfg: VMControlFlowGraph,
 }
 
 impl<'a> FunctionContext<'a> {
