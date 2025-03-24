@@ -1,7 +1,9 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::client_commands::{pkg_tree_shake, SuiClientCommands};
+use crate::client_commands::{
+    implicit_deps_for_protocol_version, pkg_tree_shake, SuiClientCommands,
+};
 use crate::fire_drill::{run_fire_drill, FireDrill};
 use crate::genesis_ceremony::{run, Ceremony};
 use crate::keytool::KeyToolCommand;
@@ -519,8 +521,12 @@ impl SuiCommand {
                         };
 
                         let rerooted_path = move_cli::base::reroot_path(package_path.as_deref())?;
-                        let build_config =
+                        let mut build_config =
                             resolve_lock_file_path(build_config, Some(&rerooted_path))?;
+                        let protocol_config = read_api.get_protocol_config(None).await?;
+                        build_config.implicit_dependencies =
+                            implicit_deps_for_protocol_version(protocol_config.protocol_version)?;
+
                         let mut pkg = SuiBuildConfig {
                             config: build_config,
                             run_bytecode_verifier: true,
