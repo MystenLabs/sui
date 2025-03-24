@@ -188,7 +188,13 @@ pub(super) fn commit_watermark<H: Handler + 'static>(
 
                         // TODO: If initial_watermark is empty, when we update watermark
                         // for the first time, we should also update the low watermark.
-                        match store.update_committer_watermark(&watermark).await {
+                        match store.update_committer_watermark(
+                            H::NAME,
+                            watermark.epoch_hi_inclusive,
+                            watermark.checkpoint_hi_inclusive,
+                            watermark.tx_hi,
+                            watermark.timestamp_ms_hi_inclusive,
+                        ).await {
                             // If there's an issue updating the watermark, log it but keep going,
                             // it's OK for the watermark to lag from a correctness perspective.
                             Err(e) => {

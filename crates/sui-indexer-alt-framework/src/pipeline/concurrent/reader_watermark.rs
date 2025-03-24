@@ -7,9 +7,7 @@ use tokio::{task::JoinHandle, time::interval};
 use tokio_util::sync::CancellationToken;
 use tracing::{debug, info, warn};
 
-use crate::{
-    metrics::IndexerMetrics, models::watermarks::ReaderWatermark, pg_store::PgStore, store::Store,
-};
+use crate::{metrics::IndexerMetrics, pg_store::PgStore, store::Store};
 
 use super::{Handler, PrunerConfig};
 
@@ -61,13 +59,13 @@ pub(super) fn reader_watermark<H: Handler + 'static>(
                     };
 
                     // Calculate the new reader watermark based on the current high watermark.
-                    let new_reader_lo = (current.checkpoint_hi_inclusive as u64 + 1)
+                    let new_reader_lo = (current.0 as u64 + 1)
                         .saturating_sub(config.retention);
 
-                    if new_reader_lo <= current.reader_lo as u64 {
+                    if new_reader_lo <= current.1 as u64 {
                         debug!(
                             pipeline = H::NAME,
-                            current = current.reader_lo,
+                            current = current.1,
                             new = new_reader_lo,
                             "No change to reader watermark",
                         );
@@ -79,7 +77,7 @@ pub(super) fn reader_watermark<H: Handler + 'static>(
                         .with_label_values(&[H::NAME])
                         .set(new_reader_lo as i64);
 
-                    let Ok(updated) = store.update_reader_watermark(&ReaderWatermark::new(H::NAME, new_reader_lo)).await else {
+                    let Ok(updated) = store.update_reader_watermark(H::NAME, new_reader_lo as i64).await else {
                         warn!(pipeline = H::NAME, "Failed to update reader watermark");
                         continue;
                     };

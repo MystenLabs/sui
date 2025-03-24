@@ -1,16 +1,14 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::models::watermarks::{
-    CommitterWatermark, PrunerWatermark, ReaderWatermark, StoredWatermark,
-};
+use crate::models::watermarks::CommitterWatermark;
 pub use crate::pipeline::sequential::Handler as SequentialHandler;
 use async_trait::async_trait;
 use std::time::Duration;
 
 pub trait DbConnection: Send + Sync {}
 
-/// Trait for storage-agnostic watermark operations
+/// Public trait for storage-agnostic watermark operations
 #[async_trait]
 pub trait Store: Send + Sync + 'static + Clone {
     type Connection<'c>: DbConnection
@@ -19,47 +17,53 @@ pub trait Store: Send + Sync + 'static + Clone {
 
     async fn connect<'c>(&'c self) -> Result<Self::Connection<'c>, anyhow::Error>;
 
-    /// Get the current stored watermark for a pipeline
-    async fn get_stored_watermark(
-        &self,
-        pipeline: &'static str,
-    ) -> anyhow::Result<Option<StoredWatermark>>;
-
-    /// Get the committer watermark for a pipeline
+    /// Given a pipeline, return the `checkpoint_hi_inclusive` and `timestamp_ms` from the database
     async fn get_committer_watermark(
         &self,
         pipeline: &'static str,
-    ) -> anyhow::Result<Option<CommitterWatermark<'static>>>;
+    ) -> anyhow::Result<Option<(i64, i64)>>;
 
-    /// Update the committer watermark, returns true if the watermark was actually updated
+    /// Update the committer watermark, returns true if the watermark was actually updated.
+    /// Watermark update managed by the framework ...
     async fn update_committer_watermark(
         &self,
-        watermark: &CommitterWatermark<'_>,
+        pipeline: &'static str,
+        epoch_hi_inclusive: i64,
+        checkpoint_hi_inclusive: i64,
+        tx_hi: i64,
+        timestamp_ms_hi_inclusive: i64,
     ) -> anyhow::Result<bool>;
 
-    /// Get the reader watermark for a pipeline
+    /// Given a pipeline, return the `checkpoint_hi_inclusive` and `reader_lo` from the database
     async fn get_reader_watermark(
         &self,
         pipeline: &'static str,
-    ) -> anyhow::Result<Option<StoredWatermark>>;
+    ) -> anyhow::Result<Option<(i64, i64)>>;
 
     /// Update the reader watermark, returns true if the watermark was actually updated
     async fn update_reader_watermark(
         &self,
-        watermark: &ReaderWatermark<'_>,
+        pipeline: &'static str,
+        reader_lo: i64,
     ) -> anyhow::Result<bool>;
 
-    /// Get the pruner watermark for a pipeline with the specified delay
+    /// Get the pruner watermark with wait_for calculated
+    ///
+    /// # Implementation Requirements
+    /// This method MUST:
+    /// 1. Calculate wait_for as: delay + (pruner_timestamp - current_database_time)
+    /// 2. Return (pruner_hi, reader_lo, wait_for)
     async fn get_pruner_watermark(
         &self,
         pipeline: &'static str,
         delay: Duration,
-    ) -> anyhow::Result<Option<PrunerWatermark<'static>>>;
+    ) -> anyhow::Result<Option<(i64, i64, i64)>>; // (pruner_hi, reader_lo, wait_for_ms)
 
     /// Update the pruner watermark, returns true if the watermark was actually updated
     async fn update_pruner_watermark(
         &self,
-        watermark: &PrunerWatermark<'_>,
+        pipeline: &'static str,
+        pruner_hi: i64,
     ) -> anyhow::Result<bool>;
 }
 
