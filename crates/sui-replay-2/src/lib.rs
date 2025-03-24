@@ -2,8 +2,9 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use clap::Parser;
+use similar::{ChangeTag, TextDiff};
 use std::str::FromStr;
-use sui_types::supported_protocol_versions::Chain;
+use sui_types::{effects::TransactionEffects, supported_protocol_versions::Chain};
 
 pub mod data_store;
 pub mod environment;
@@ -67,4 +68,26 @@ impl FromStr for Node {
             _ => Ok(Node::Custom(s.to_string())),
         }
     }
+}
+
+/// Utility to diff effects in a human readable format
+pub fn diff_effects(
+    expected_effect: &TransactionEffects,
+    txn_effects: &TransactionEffects,
+) -> String {
+    let expected = format!("{:#?}", expected_effect);
+    let result = format!("{:#?}", txn_effects);
+    let mut res = vec![];
+
+    let diff = TextDiff::from_lines(&expected, &result);
+    for change in diff.iter_all_changes() {
+        let sign = match change.tag() {
+            ChangeTag::Delete => "---",
+            ChangeTag::Insert => "+++",
+            ChangeTag::Equal => "   ",
+        };
+        res.push(format!("{}{}", sign, change));
+    }
+
+    res.join("")
 }

@@ -22,6 +22,7 @@ move-disassembler.workspace = true
 move-ir-types.workspace = true
 move-trace-format.workspace = true
 prometheus.workspace = true
+similar.workspace = true
 sui-execution.workspace = true
 sui-graphql-client.workspace = true
 sui-framework.workspace = true

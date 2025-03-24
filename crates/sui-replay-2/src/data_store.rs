@@ -155,6 +155,7 @@ impl DataStore {
     pub async fn get_system_packages(
         &self,
     ) -> Result<BTreeMap<ObjectID, BTreeMap<u64, Object>>, ReplayError> {
+        debug!("Start get_system_packages");
         let mut system_packages = BTreeMap::new();
         for pkg_id in sui_framework::BuiltInFramework::all_package_ids() {
             let packages = self.get_system_package(pkg_id).await?;
@@ -167,6 +168,7 @@ impl DataStore {
                 .collect();
             system_packages.insert(pkg_id, all_versions);
         }
+        debug!("End get_system_packages");
         Ok(system_packages)
     }
 

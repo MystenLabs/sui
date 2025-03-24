@@ -4,7 +4,7 @@
 use clap::*;
 use core::panic;
 use sui_replay_2::{
-    data_store::DataStore, environment::ReplayEnvironment, epoch_store::EpochStore,
+    data_store::DataStore, diff_effects, environment::ReplayEnvironment, epoch_store::EpochStore,
     execution::execute_transaction_to_effects, replay_txn_data::ReplayTransaction, ReplayConfig,
 };
 use tracing::debug;
@@ -51,9 +51,11 @@ async fn main() {
 
     //
     // replay transaction
+    debug!("Start execute_transaction_to_effects");
     let (result, effects, gas_status) =
         execute_transaction_to_effects(&replay_txn, &env, trace_execution)
             .unwrap_or_else(|e| panic!("Error running a transaction: {:?}", e));
+    debug!("End execute_transaction_to_effects");
     debug!("Environment After Execution: {:#?}", env);
 
     println!("\n** TRANSACTION RESULT -> {:?}", result);
@@ -64,6 +66,7 @@ async fn main() {
     if verify {
         if effects != replay_txn.effects {
             println!("\n** FORKING: TRANSACTION EFFECTS DO NOT MATCH");
+            println!("{}", diff_effects(&replay_txn.effects, &effects));
         }
     }
 }

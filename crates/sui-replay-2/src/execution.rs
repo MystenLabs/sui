@@ -63,23 +63,23 @@ pub fn execute_transaction_to_effects(
     let certificate_deny_set = HashSet::new();
 
     let protocol_config = &txn.executor.protocol_config;
+    let epoch = txn.epoch();
+    let epoch_start_timestamp = env.epoch_store.epoch_timestamp(epoch)?;
 
     let gas_status = if txn.kind().is_system_tx() {
         SuiGasStatus::new_unmetered()
     } else {
+        let reference_gas_price = env.epoch_store.rgp(epoch)?;
         SuiGasStatus::new(
             txn.gas_data().budget,
             txn.gas_data().price,
-            txn.reference_gas_price,
+            reference_gas_price,
             protocol_config,
         )
         .expect("Failed to create gas status")
     };
 
-    let store: ReplayStore<'_> = ReplayStore {
-        env,
-        epoch: txn.epoch,
-    };
+    let store: ReplayStore<'_> = ReplayStore { env, epoch };
     let mut trace_builder_opt = if trace_execution.is_some() {
         Some(MoveTraceBuilder::new())
     } else {
@@ -92,8 +92,8 @@ pub fn execute_transaction_to_effects(
             txn.executor.metrics.clone(),
             false, // expensive checks
             &certificate_deny_set,
-            &txn.epoch,
-            txn.epoch_start_timestamp,
+            &txn.epoch(),
+            epoch_start_timestamp,
             CheckedInputObjects::new_for_replay(txn.input_objects.clone()),
             txn.gas_data().clone(),
             gas_status,

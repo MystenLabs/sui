@@ -39,15 +39,9 @@ pub struct ReplayEnvironment {
 }
 
 impl ReplayEnvironment {
-    pub async fn new(
-        data_store: DataStore, 
-        epoch_store: EpochStore,
-    ) -> Result<Self, ReplayError> {
+    pub async fn new(data_store: DataStore, epoch_store: EpochStore) -> Result<Self, ReplayError> {
         // load system packages
-        debug!("Start get_system_packages");
         let system_packages = data_store.get_system_packages().await?;
-        debug!("End get_system_packages");
-
         Ok(Self {
             data_store,
             epoch_store,
@@ -63,9 +57,7 @@ impl ReplayEnvironment {
         object_ids: &BTreeSet<InputObject>,
     ) -> Result<BTreeSet<ObjectID>, ReplayError> {
         let mut packages = BTreeSet::new();
-        debug!("Start load_objects");
         let objects = self.data_store.load_objects(object_ids).await?;
-        debug!("End load_objects");
         for (object_id, version, object) in objects {
             if let Some(tag) = object.as_inner().struct_tag() {
                 packages_from_type_tag(&tag.into(), &mut packages);
@@ -98,7 +90,6 @@ impl ReplayEnvironment {
         &mut self,
         packages: &BTreeSet<ObjectID>,
     ) -> Result<(), ReplayError> {
-        debug!("Start load_package_objects {:#?}", packages);
         let pkg_ids = packages
             .iter()
             .map(|id| InputObject {
@@ -132,7 +123,6 @@ impl ReplayEnvironment {
             .collect::<BTreeMap<_, _>>();
         debug!("deps: {:#?}", package_objects);
         self.package_objects.extend(package_objects);
-        debug!("End load_package_objects");
 
         Ok(())
     }

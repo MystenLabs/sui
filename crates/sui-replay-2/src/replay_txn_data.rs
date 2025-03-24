@@ -20,22 +20,23 @@ use tracing::debug;
 
 // #[derive(Debug)]
 pub struct ReplayTransaction {
-    pub executor: ReplayExecutor,
     pub digest: TransactionDigest,
     pub txn_data: TransactionData,
     pub effects: TransactionEffects,
-    pub epoch: u64,
-    pub epoch_start_timestamp: u64,
+    pub executor: ReplayExecutor,
     pub input_objects: InputObjects,
-    pub reference_gas_price: u64,
 }
 
 impl ReplayTransaction {
     pub async fn load(env: &mut ReplayEnvironment, tx_digest: &str) -> Result<Self, ReplayError> {
         // load transaction data and effects
+        debug!("Start transaction_data");
         let txn_data = env.data_store.transaction_data(tx_digest).await?;
+        debug!("End transaction_data");
         debug!("Transaction data: {:#?}", txn_data);
+        debug!("Start transaction_effects");
         let effects = env.data_store.transaction_effects(tx_digest).await?;
+        debug!("End transaction_effects");
         debug!("Transaction effects: {:#?}", effects);
 
         let mut packages = get_packages(&txn_data)?;
@@ -60,13 +61,13 @@ impl ReplayTransaction {
             })
             .collect::<BTreeSet<InputObject>>();
 
+        debug!("Start transaction load_objects");
         let obj_pkgs = env.load_objects(&object_versions).await?;
+        debug!("End transaction load_objects");
         packages.extend(&obj_pkgs);
+        debug!("Start transaction load_packages");
         env.load_packages(&packages).await?;
-
-        let epoch = effects.executed_epoch();
-        let epoch_start_timestamp = env.epoch_store.epoch_timestamp(epoch)?;
-        let reference_gas_price = env.epoch_store.rgp(epoch)?;
+        debug!("End transaction load_packages");
 
         debug!("Object Versions: {:#?}", object_versions);
         let input_objects =
@@ -78,6 +79,7 @@ impl ReplayTransaction {
             ReplayError::FailedToParseDigest { digest, err }
         })?;
 
+        let epoch = effects.executed_epoch();
         let protocol_config = env
             .epoch_store
             .protocol_config(epoch, env.data_store.chain())
@@ -85,20 +87,15 @@ impl ReplayTransaction {
         let executor =
             ReplayExecutor::new(protocol_config, None).unwrap_or_else(|e| panic!("{:?}", e));
 
-        Ok(
-            Self {
-                executor,
-                digest,
-                txn_data,
-                effects,
-                epoch,  
-                epoch_start_timestamp,
-                input_objects,
-                reference_gas_price,
-            }
-        )
+        Ok(Self {
+            executor,
+            digest,
+            txn_data,
+            effects,
+            input_objects,
+        })
     }
-    
+
     pub fn kind(&self) -> &TransactionKind {
         self.txn_data.kind()
     }
@@ -109,6 +106,10 @@ impl ReplayTransaction {
 
     pub fn gas_data(&self) -> &GasData {
         self.txn_data.gas_data()
+    }
+
+    pub fn epoch(&self) -> u64 {
+        self.effects.executed_epoch()
     }
 }
 

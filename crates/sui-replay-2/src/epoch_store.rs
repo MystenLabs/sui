@@ -12,6 +12,7 @@ use sui_types::{
     committee::ProtocolVersion,
     supported_protocol_versions::{Chain, ProtocolConfig},
 };
+use tracing::debug;
 
 type EpochId = u64;
 
@@ -25,7 +26,9 @@ pub struct EpochStore {
 
 impl EpochStore {
     pub async fn new(data_store: &DataStore) -> Result<Self, ReplayError> {
+        debug!("Start EpochStore::new");
         let data = data_store.epochs_gql_table().await?;
+        debug!("End EpochStore::new");
         Ok(Self { data })
     }
 
