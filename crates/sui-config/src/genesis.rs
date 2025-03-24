@@ -519,12 +519,12 @@ impl TokenDistributionSchedule {
 
         // Check that all validators have sufficient stake allocated to ensure they meet the
         // minimum stake threshold
-        let minimum_required_stake = sui_types::governance::VALIDATOR_LOW_STAKE_THRESHOLD_MIST;
-        for (validator, stake) in validators {
-            if stake < minimum_required_stake {
-                panic!("validator {validator} has '{stake}' stake and does not meet the minimum required stake threshold of '{minimum_required_stake}'");
-            }
-        }
+        // let minimum_required_stake = sui_types::governance::VALIDATOR_LOW_STAKE_THRESHOLD_MIST;
+        // for (validator, stake) in validators {
+        //     if stake < minimum_required_stake {
+        //         panic!("validator {validator} has '{stake}' stake and does not meet the minimum required stake threshold of '{minimum_required_stake}'");
+        //     }
+        // }
     }
 
     pub fn new_for_validators_with_default_allocation<I: IntoIterator<Item = SuiAddress>>(

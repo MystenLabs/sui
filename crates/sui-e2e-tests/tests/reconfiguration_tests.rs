@@ -7,7 +7,6 @@ use std::collections::BTreeSet;
 use std::sync::Arc;
 use std::time::Duration;
 use sui_core::consensus_adapter::position_submit_certificate;
-use sui_json_rpc::authority_state::StateRead;
 use sui_json_rpc_types::SuiTransactionBlockEffectsAPI;
 use sui_macros::sim_test;
 use sui_node::SuiNodeHandle;
@@ -581,6 +580,8 @@ async fn test_inactive_validator_pool_read() {
     })
 }
 
+const VALIDATOR_STARTING_STAKE: u64 = 1_000_000_000_000_000; // 1M SUI
+
 #[sim_test]
 async fn test_reconfig_with_committee_change_basic() {
     // This test exercise the full flow of a validator joining the network, catch up and then leave.
@@ -589,7 +590,7 @@ async fn test_reconfig_with_committee_change_basic() {
     let address = (&new_validator.account_key_pair.public()).into();
     let mut test_cluster = TestClusterBuilder::new()
         .with_accounts(vec![AccountConfig {
-            gas_amounts: vec![MIN_VALIDATOR_JOINING_STAKE_MIST * 10],
+            gas_amounts: vec![VALIDATOR_STARTING_STAKE * 1_000],
             address: None,
         }])
         .with_num_validators(initial_num_validators)
@@ -610,7 +611,6 @@ async fn test_reconfig_with_committee_change_basic() {
     // Setting voting power to roughly ~ .20% of the total voting power, which
     // is higher than VALIDATOR_MIN_POWER_PHASE_1.
     let min_barrier = total_stake / 10_000 * 20;
-
     execute_add_validator_transactions(&mut test_cluster, &new_validator, Some(min_barrier)).await;
 
     test_cluster.trigger_reconfiguration().await;
@@ -658,6 +658,11 @@ async fn test_reconfig_with_voting_power_decrease() {
 
     let address = (&new_validator.account_key_pair.public()).into();
     let mut test_cluster = TestClusterBuilder::new()
+        .with_validators((0..10).map(|_| {
+            ValidatorGenesisConfigBuilder::new()
+                .with_stake(VALIDATOR_STARTING_STAKE)
+                .build(&mut OsRng)
+        }).collect())
         .with_accounts(vec![AccountConfig {
             gas_amounts: vec![MIN_VALIDATOR_JOINING_STAKE_MIST * initial_num_validators as u64 * 3],
             address: None,
