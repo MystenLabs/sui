@@ -6,10 +6,13 @@ use std::time::Duration;
 use anyhow::{bail, Context, Result};
 use diesel::{OptionalExtension, QueryDsl, SelectableHelper};
 use diesel_async::RunQueryDsl;
-use sui_indexer_alt_framework::types::{
-    full_checkpoint_content::CheckpointData,
-    sui_system_state::{get_sui_system_state, SuiSystemStateTrait},
-    transaction::{TransactionDataAPI, TransactionKind},
+use sui_indexer_alt_framework::{
+    pg_store::PgStore,
+    types::{
+        full_checkpoint_content::CheckpointData,
+        sui_system_state::{get_sui_system_state, SuiSystemStateTrait},
+        transaction::{TransactionDataAPI, TransactionKind},
+    },
 };
 use sui_indexer_alt_schema::{
     checkpoints::StoredGenesis,
@@ -29,7 +32,7 @@ use crate::Indexer;
 /// Can be cancelled via the `cancel` token, or through an interrupt signal (which will also cancel
 /// the token).
 pub async fn bootstrap(
-    indexer: &Indexer,
+    indexer: &Indexer<PgStore>,
     retry_interval: Duration,
     cancel: CancellationToken,
 ) -> Result<StoredGenesis> {

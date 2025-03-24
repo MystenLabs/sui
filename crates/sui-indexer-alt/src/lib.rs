@@ -30,6 +30,7 @@ use sui_indexer_alt_framework::{
     db::DbArgs,
     handlers::cp_sequence_numbers::CpSequenceNumbers,
     ingestion::{ClientArgs, IngestionConfig},
+    pg_store::PgStore,
     pipeline::{
         concurrent::{ConcurrentConfig, PrunerConfig},
         sequential::SequentialConfig,
@@ -62,7 +63,7 @@ pub async fn setup_indexer(
     with_genesis: bool,
     registry: &Registry,
     cancel: CancellationToken,
-) -> anyhow::Result<Indexer> {
+) -> anyhow::Result<Indexer<PgStore>> {
     let IndexerConfig {
         ingestion,
         consistency,

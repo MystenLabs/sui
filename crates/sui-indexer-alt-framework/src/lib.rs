@@ -19,7 +19,7 @@ use pipeline::{
     Processor,
 };
 use prometheus::Registry;
-use store::{CommitterWatermark, StoreExt};
+use store::{CommitterWatermark, Store, StoreExt};
 use sui_indexer_alt_metrics::db::DbConnectionStatsCollector;
 use sui_pg_db::{temp::TempDb, Db, DbArgs};
 use tempfile::tempdir;
@@ -73,11 +73,11 @@ pub struct IndexerArgs {
 }
 
 // TODO (wlmyng): pg agnostic - something like Indexer<Store>
-pub struct Indexer {
+pub struct Indexer<S: Store> {
     // Indexer<S: TransactionalStore> or something
     // TODO (wlmyng): pg agnostic, so something like store: S
     /// Connection pool to the database.
-    db: Db,
+    db: S,
 
     /// Prometheus Metrics.
     metrics: Arc<IndexerMetrics>,
@@ -116,7 +116,7 @@ pub struct Indexer {
 }
 
 // TODO (wlmyng): non-pg store impl<S: TransactionalStore> Indexer<S> {
-impl Indexer {
+impl Indexer<PgStore> {
     /// Create a new instance of the indexer framework. `database_url`, `db_args`, `indexer_args,`,
     /// `client_args`, and `ingestion_config` contain configurations for the following,
     /// respectively:
@@ -174,8 +174,10 @@ impl Indexer {
             cancel.clone(),
         )?;
 
+        let store = PgStore::new(db);
+
         Ok(Self {
-            db,
+            db: store,
             metrics,
             ingestion_service,
             first_checkpoint,
@@ -217,8 +219,9 @@ impl Indexer {
     }
 
     /// The database connection pool used by the indexer.
+    // TODO (wlmyng): non-pg store - provide the entire store?
     pub fn db(&self) -> &Db {
-        &self.db
+        &self.db.db
     }
 
     /// The ingestion client used by the indexer to fetch checkpoints.
@@ -266,14 +269,12 @@ impl Indexer {
             self.check_first_checkpoint_consistency::<H>(&watermark)?;
         }
 
-        let pg_store = PgStore::new(self.db.clone());
-
         self.handles.push(concurrent::pipeline::<H>(
             handler,
             watermark,
             config,
             self.skip_watermark,
-            pg_store,
+            self.db.clone(),
             self.ingestion_service.subscribe().0,
             self.metrics.clone(),
             self.cancel.clone(),
@@ -319,14 +320,11 @@ impl Indexer {
 
         let (checkpoint_rx, watermark_tx) = self.ingestion_service.subscribe();
 
-        // TODO (wlmyng): non-pg store - we'd use self.store directly when that's setup
-        let db = PgStore::new(self.db.clone());
-
         self.handles.push(sequential::pipeline::<H>(
             handler,
             watermark,
             config,
-            db,
+            self.db.clone(),
             checkpoint_rx,
             watermark_tx,
             self.metrics.clone(),
@@ -446,9 +444,7 @@ impl Indexer {
             }
         }
 
-        let store = PgStore::new(self.db.clone());
-
-        let watermark = StoreExt::get_committer_watermark(&store, P::NAME)
+        let watermark = StoreExt::get_committer_watermark(&self.db, P::NAME)
             .await
             .with_context(|| format!("Failed to get watermark for {}", P::NAME))?;
 
@@ -456,7 +452,7 @@ impl Indexer {
             // If the pruner of this pipeline requires processed values in order to prune,
             // we must start ingestion from just after the pruner watermark,
             // so that we can process all values needed by the pruner.
-            StoreExt::get_pruner_watermark(&store, P::NAME, Default::default())
+            StoreExt::get_pruner_watermark(&self.db, P::NAME, Default::default())
                 .await
                 .with_context(|| format!("Failed to get pruner watermark for {}", P::NAME))?
                 .map(|w| w.pruner_hi as u64)

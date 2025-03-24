@@ -10,7 +10,7 @@ use tokio_util::sync::CancellationToken;
 use tracing::info;
 
 pub mod db;
-
+pub mod stats;
 #[derive(clap::Args, Debug, Clone)]
 pub struct MetricsArgs {
     /// Address to serve Prometheus metrics from.

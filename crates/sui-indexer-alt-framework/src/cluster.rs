@@ -18,6 +18,8 @@ use url::Url;
 use crate::{
     db::DbArgs,
     ingestion::{ClientArgs, IngestionConfig},
+    pg_store::PgStore,
+    store::Store,
     Indexer, IndexerArgs, IndexerMetrics, Result,
 };
 
@@ -42,15 +44,15 @@ pub struct Args {
 /// An [IndexerCluster] combines an [Indexer] with a [MetricsService] and a tracing subscriber
 /// (outputting to stderr) to provide observability. It is a useful starting point for an indexer
 /// binary.
-pub struct IndexerCluster {
-    indexer: Indexer,
+pub struct IndexerCluster<S: Store> {
+    indexer: Indexer<S>,
     metrics: MetricsService,
 
     /// Cancelling this token signals cancellation to both the indexer and metrics service.
     cancel: CancellationToken,
 }
 
-impl IndexerCluster {
+impl IndexerCluster<PgStore> {
     /// Create a new cluster with most of the configuration set to its default value. Use
     /// [Self::new_with_configs] to construct a cluster with full customization.
     pub async fn new(
@@ -155,15 +157,15 @@ impl IndexerCluster {
     }
 }
 
-impl Deref for IndexerCluster {
-    type Target = Indexer;
+impl<S: Store> Deref for IndexerCluster<S> {
+    type Target = Indexer<S>;
 
     fn deref(&self) -> &Self::Target {
         &self.indexer
     }
 }
 
-impl DerefMut for IndexerCluster {
+impl<S: Store> DerefMut for IndexerCluster<S> {
     fn deref_mut(&mut self) -> &mut Self::Target {
         &mut self.indexer
     }
