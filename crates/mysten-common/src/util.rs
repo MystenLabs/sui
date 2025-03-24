@@ -35,3 +35,15 @@ where
     let choices = [two, size, random_size];
     *choices.choose(&mut rng).unwrap()
 }
+
+pub fn randomize_limit_in_tests<T>(min: T, limit: T) -> T
+where
+    T: Copy + PartialOrd + rand::distributions::uniform::SampleUniform + TryFrom<usize>,
+{
+    if !in_test_configuration() {
+        return limit;
+    }
+
+    let mut rng = get_rng();
+    rng.gen_range(min..=limit)
+}
