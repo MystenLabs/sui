@@ -17,6 +17,5 @@
         "sui-metric-checker",
         "sui-analytics-indexer",
         "sui-security-watchdog",
-		"suiop"
 	]
 }
