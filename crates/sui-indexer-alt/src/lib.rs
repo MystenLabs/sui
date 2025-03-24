@@ -32,8 +32,10 @@ use handlers::{
     tx_kinds::TxKinds,
 };
 use prometheus::Registry;
+#[cfg(test)]
+use sui_indexer_alt_framework::db::temp::TempDb;
 use sui_indexer_alt_framework::{
-    db::{temp::TempDb, Db, DbArgs},
+    db::{Db, DbArgs},
     handlers::cp_sequence_numbers::CpSequenceNumbers,
     ingestion::{ClientArgs, IngestionConfig},
     pg_store::PgStore,
@@ -45,6 +47,7 @@ use sui_indexer_alt_framework::{
     Indexer, IndexerArgs,
 };
 use sui_indexer_alt_schema::MIGRATIONS;
+#[cfg(test)]
 use tempfile::tempdir;
 use tokio_util::sync::CancellationToken;
 use url::Url;
@@ -255,7 +258,7 @@ pub fn transform_migrations(
     Migrations(migrations)
 }
 
-// TODO (wlmyng): make generic, not just PgStore
+#[cfg(test)]
 pub async fn new_for_testing(
     migrations: &'static EmbeddedMigrations,
 ) -> (Indexer<PgStore>, TempDb) {
