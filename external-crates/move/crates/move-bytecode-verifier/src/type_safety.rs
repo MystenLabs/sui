@@ -159,7 +159,10 @@ pub(crate) fn verify<'env>(
     let jump_tables = &verifier.function_context.code().jump_tables;
 
     for block_id in function_context.cfg().blocks() {
-        for (offset, instr) in function_context.cfg().instructions(block_id) {
+        for (offset, instr) in function_context
+            .cfg()
+            .instructions(&function_context.code().code, block_id)
+        {
             verify_instr(verifier, instr, jump_tables, offset, meter)?
         }
     }

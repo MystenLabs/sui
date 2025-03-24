@@ -11,6 +11,7 @@ pub trait ControlFlowGraph {
     type BlockId: Copy + Ord;
     type InstructionIndex: Copy + Ord;
     type Instruction;
+    type Instructions: ?Sized;
 
     /// Start index of the block ID in the bytecode vector
     fn block_start(&self, block_id: Self::BlockId) -> Self::InstructionIndex;
@@ -25,10 +26,13 @@ pub trait ControlFlowGraph {
     fn next_block(&self, block_id: Self::BlockId) -> Option<Self::BlockId>;
 
     /// Iterator over the indexes of instructions in this block
-    fn instructions(
+    fn instructions<'a>(
         &self,
+        function_code: &'a Self::Instructions,
         block_id: Self::BlockId,
-    ) -> impl IntoIterator<Item = (Self::InstructionIndex, &Self::Instruction)>;
+    ) -> impl IntoIterator<Item = (Self::InstructionIndex, &'a Self::Instruction)>
+    where
+        Self::Instruction: 'a;
 
     /// Return an iterator over the blocks of the CFG
     fn blocks(&self) -> Vec<Self::BlockId>;
@@ -81,8 +85,7 @@ struct BasicBlock<InstructionIndex> {
 /// The control flow graph that we build from the bytecode.
 /// Assumes a list of bytecode isntructions that satisfy the invariants specified in the VM's
 /// file format.
-pub struct VMControlFlowGraph<'a, I: Instruction> {
-    code: &'a [I],
+pub struct VMControlFlowGraph<I: Instruction> {
     /// The basic blocks
     blocks: BTreeMap<I::Index, BasicBlock<I::Index>>,
     /// Basic block ordering for traversal
@@ -103,8 +106,8 @@ impl<InstructionIndex: std::fmt::Display + std::fmt::Debug> BasicBlock<Instructi
     }
 }
 
-impl<'a, I: Instruction> VMControlFlowGraph<'a, I> {
-    pub fn new(code: &'a [I], jump_tables: &I::VariantJumpTables) -> Self {
+impl<I: Instruction> VMControlFlowGraph<I> {
+    pub fn new(code: &[I], jump_tables: &I::VariantJumpTables) -> Self {
         use std::collections::{BTreeMap as Map, BTreeSet as Set};
 
         let code_len = code.len();
@@ -243,7 +246,6 @@ impl<'a, I: Instruction> VMControlFlowGraph<'a, I> {
             .collect();
 
         VMControlFlowGraph {
-            code,
             blocks,
             traversal_successors,
             loop_heads,
@@ -311,10 +313,11 @@ impl<'a, I: Instruction> VMControlFlowGraph<'a, I> {
     }
 }
 
-impl<I: Instruction> ControlFlowGraph for VMControlFlowGraph<'_, I> {
+impl<I: Instruction> ControlFlowGraph for VMControlFlowGraph<I> {
     type BlockId = I::Index;
     type InstructionIndex = I::Index;
     type Instruction = I;
+    type Instructions = [I];
 
     // Note: in the following procedures, it's safe not to check bounds because:
     // - Every CFG (even one with no instructions) has a block at ENTRY_BLOCK_ID
@@ -340,13 +343,17 @@ impl<I: Instruction> ControlFlowGraph for VMControlFlowGraph<'_, I> {
         self.traversal_successors.get(&block_id).copied()
     }
 
-    fn instructions(
+    fn instructions<'a>(
         &self,
+        function_code: &'a [I],
         block_id: Self::BlockId,
-    ) -> impl IntoIterator<Item = (Self::BlockId, &I)> {
+    ) -> impl IntoIterator<Item = (Self::BlockId, &'a I)>
+    where
+        I: 'a,
+    {
         let start = I::index_as_usize(self.block_start(block_id));
         let end = I::index_as_usize(self.block_end(block_id));
-        (start..=end).map(|pc| (I::usize_as_index(pc), &self.code[pc]))
+        (start..=end).map(|pc| (I::usize_as_index(pc), &function_code[pc]))
     }
 
     fn blocks(&self) -> Vec<Self::BlockId> {

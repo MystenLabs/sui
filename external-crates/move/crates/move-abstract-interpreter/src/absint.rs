@@ -55,6 +55,7 @@ pub trait AbstractInterpreter {
 pub fn analyze_function<A, CFG>(
     interpreter: &mut A,
     cfg: &CFG,
+    code: &<CFG as ControlFlowGraph>::Instructions,
     initial_state: A::State,
 ) -> Result<(), A::Error>
 where
@@ -86,7 +87,7 @@ where
         let pre_state = &block_invariant;
         // Note: this will stop analysis after the first error occurs, to avoid the risk of
         // subsequent crashes
-        let post_state = execute_block(interpreter, cfg, block_id, pre_state)?;
+        let post_state = execute_block(interpreter, cfg, code, block_id, pre_state)?;
 
         let mut next_block_candidate = cfg.next_block(block_id);
         // propagate postcondition of this block to successor blocks
@@ -128,6 +129,7 @@ where
 fn execute_block<A, CFG>(
     interpreter: &mut A,
     cfg: &CFG,
+    code: &<CFG as ControlFlowGraph>::Instructions,
     block_id: A::BlockId,
     pre_state: &A::State,
 ) -> Result<A::State, A::Error>
@@ -142,7 +144,7 @@ where
     interpreter.visit_block_execution(block_id)?;
     let mut state_acc = pre_state.clone();
     let bounds = (cfg.block_start(block_id), cfg.block_end(block_id));
-    for (offset, instr) in cfg.instructions(block_id) {
+    for (offset, instr) in cfg.instructions(code, block_id) {
         interpreter.execute(&mut state_acc, bounds, offset, instr)?
     }
     Ok(state_acc)
