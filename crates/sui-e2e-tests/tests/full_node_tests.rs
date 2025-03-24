@@ -487,7 +487,10 @@ async fn test_full_node_indexes() -> Result<(), anyhow::Error> {
 // Test for syncing a node to an authority that already has many txes.
 #[sim_test]
 async fn test_full_node_cold_sync() -> Result<(), anyhow::Error> {
-    let mut test_cluster = TestClusterBuilder::new().build().await;
+    let mut test_cluster = TestClusterBuilder::new()
+        .with_num_validators(2)
+        .build()
+        .await;
 
     let context = &mut test_cluster.wallet;
     let _ = transfer_coin(context).await?;
