@@ -10,15 +10,11 @@ pub enum JoinResult {
     Unchanged,
 }
 
-pub trait AbstractDomain: Clone + Sized {
-    type Error;
-}
-
 pub trait AbstractInterpreter {
     type Error;
     type BlockId: Copy + Ord;
 
-    type State: AbstractDomain<Error = Self::Error>;
+    type State: Clone;
     type InstructionIndex: Copy + Ord;
     type Instruction;
 
@@ -56,21 +52,18 @@ pub trait AbstractInterpreter {
 }
 
 /// Analyze procedure local@function_context starting from pre-state local@initial_state.
-pub fn analyze_function<A, CFG, S, E>(
+pub fn analyze_function<A, CFG>(
     interpreter: &mut A,
     cfg: &CFG,
-    initial_state: S,
-) -> Result<(), E>
+    initial_state: A::State,
+) -> Result<(), A::Error>
 where
-    A: AbstractInterpreter<
-        Error = E,
-        State = S,
-        BlockId = CFG::BlockId,
-        InstructionIndex = CFG::InstructionIndex,
-        Instruction = CFG::Instruction,
+    A: AbstractInterpreter,
+    CFG: ControlFlowGraph<
+        BlockId = A::BlockId,
+        InstructionIndex = A::InstructionIndex,
+        Instruction = A::Instruction,
     >,
-    CFG: ControlFlowGraph,
-    S: AbstractDomain<Error = E>,
 {
     interpreter.start()?;
     // meter.add(Scope::Function, ANALYZE_FUNCTION_BASE_COST)?;
@@ -132,22 +125,19 @@ where
     Ok(())
 }
 
-pub fn execute_block<A, S, CFG, E>(
+fn execute_block<A, CFG>(
     interpreter: &mut A,
     cfg: &CFG,
-    block_id: CFG::BlockId,
-    pre_state: &S,
-) -> Result<S, E>
+    block_id: A::BlockId,
+    pre_state: &A::State,
+) -> Result<A::State, A::Error>
 where
-    A: AbstractInterpreter<
-        Error = E,
-        State = S,
-        BlockId = CFG::BlockId,
-        InstructionIndex = CFG::InstructionIndex,
-        Instruction = CFG::Instruction,
+    A: AbstractInterpreter,
+    CFG: ControlFlowGraph<
+        BlockId = A::BlockId,
+        InstructionIndex = A::InstructionIndex,
+        Instruction = A::Instruction,
     >,
-    CFG: ControlFlowGraph,
-    S: AbstractDomain<Error = E>,
 {
     interpreter.visit_block_execution(block_id)?;
     let mut state_acc = pre_state.clone();

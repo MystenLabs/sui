@@ -51,6 +51,7 @@ pub trait ControlFlowGraph {
     fn num_back_edges(&self) -> usize;
 }
 
+/// Used for the VM control flow graph
 pub trait Instruction: Sized {
     type Index: Copy + Ord;
     type VariantJumpTable;

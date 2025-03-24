@@ -17,6 +17,7 @@ use move_bytecode_verifier_meter::{Meter, Scope};
 //**************************************************************************************************
 
 pub use absint::JoinResult;
+pub type VMControlFlowGraph<'a> = control_flow_graph::VMControlFlowGraph<'a, Bytecode>;
 
 pub trait AbstractDomain: Clone + Sized {
     fn join(
@@ -59,11 +60,7 @@ pub fn analyze_function<TF: TransferFunctions, M: Meter + ?Sized>(
         meter,
         transfer_functions,
     };
-    absint::analyze_function(
-        &mut interpreter,
-        &function_context.cfg,
-        DomainWrapper(initial_state),
-    )
+    absint::analyze_function(&mut interpreter, &function_context.cfg, initial_state)
 }
 
 /// A `FunctionContext` holds all the information needed by the verifier for `FunctionDefinition`.`
@@ -130,14 +127,6 @@ impl<'a> FunctionContext<'a> {
 // Wrappers around shared absint and control flow graph implementations
 //**************************************************************************************************
 
-#[derive(Clone)]
-struct DomainWrapper<T: AbstractDomain>(T);
-impl<T: AbstractDomain> absint::AbstractDomain for DomainWrapper<T> {
-    type Error = PartialVMError;
-}
-
-pub type VMControlFlowGraph<'a> = control_flow_graph::VMControlFlowGraph<'a, Bytecode>;
-
 /// Costs for metered verification
 const ANALYZE_FUNCTION_BASE_COST: u128 = 10;
 const EXECUTE_BLOCK_BASE_COST: u128 = 10;
@@ -154,7 +143,7 @@ impl<M: Meter + ?Sized, TF: TransferFunctions> absint::AbstractInterpreter
 {
     type Error = PartialVMError;
     type BlockId = CodeOffset;
-    type State = DomainWrapper<<TF as TransferFunctions>::State>;
+    type State = <TF as TransferFunctions>::State;
     type InstructionIndex = CodeOffset;
     type Instruction = Bytecode;
 
@@ -167,7 +156,7 @@ impl<M: Meter + ?Sized, TF: TransferFunctions> absint::AbstractInterpreter
         pre: &mut Self::State,
         post: &Self::State,
     ) -> Result<absint::JoinResult, Self::Error> {
-        pre.0.join(&post.0, self.meter)
+        pre.join(post, self.meter)
     }
 
     fn visit_block_execution(&mut self, _block_id: Self::BlockId) -> Result<(), Self::Error> {
@@ -194,6 +183,6 @@ impl<M: Meter + ?Sized, TF: TransferFunctions> absint::AbstractInterpreter
         instr: &Self::Instruction,
     ) -> Result<(), Self::Error> {
         self.transfer_functions
-            .execute(&mut state.0, instr, offset, bounds, self.meter)
+            .execute(state, instr, offset, bounds, self.meter)
     }
 }
