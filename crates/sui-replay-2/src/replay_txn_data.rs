@@ -272,7 +272,20 @@ fn get_input_objects_for_replay(
         })?;
     for kind in input_objects_kind.iter() {
         match kind {
-            InputObjectKind::MovePackage(_) => (),
+            InputObjectKind::MovePackage(pkg_id) => {
+                env.package_objects
+                    .get(pkg_id)
+                    .ok_or_else(|| ReplayError::PackageNotFound {
+                        pkg: pkg_id.to_string(),
+                    })
+                    .and_then(|pkg| {
+                        resolved_input_objs.push(ObjectReadResult {
+                            input_object_kind: *kind,
+                            object: ObjectReadResultKind::Object(pkg.clone()),
+                        });
+                        Ok(())
+                    })?;
+            }
             InputObjectKind::ImmOrOwnedMoveObject((obj_id, _version, _digest)) => {
                 let version = *object_versions.get(obj_id).ok_or_else(|| {
                     ReplayError::ObjectVersionNotFound {
