@@ -125,27 +125,19 @@ mod tests {
 
     #[Object]
     impl Query {
-        async fn on(&self) -> Query {
+        async fn a(&self) -> Query {
             Query
         }
 
-        async fn and(&self) -> Query {
+        async fn b(&self) -> Query {
             Query
         }
 
-        async fn this(&self) -> Query {
+        async fn c(&self) -> Query {
             Query
         }
 
-        async fn that(&self) -> Query {
-            Query
-        }
-
-        async fn the_other(&self) -> Query {
-            Query
-        }
-
-        async fn x(&self) -> bool {
+        async fn z(&self) -> bool {
             true
         }
 
@@ -213,45 +205,15 @@ mod tests {
     #[tokio::test]
     async fn test_pass_limits() {
         let schema = schema(config());
-        let response = execute(&schema, "{ on { and { on { and { x } } } } }").await;
+        let response = execute(&schema, "{ a { b { c { a { z } } } } }").await;
 
-        assert_json_snapshot!(response, @r###"
-        {
-          "data": {
-            "on": {
-              "and": {
-                "on": {
-                  "and": {
-                    "x": true
-                  }
-                }
-              }
-            }
-          },
-          "extensions": {
-            "usage": {
-              "input": {
-                "nodes": 5,
-                "depth": 5
-              },
-              "payload": {
-                "query_payload_size": 35,
-                "tx_payload_size": 0
-              }
-            }
-          }
-        }
-        "###);
+        assert_snapshot!(response.extensions.get("usage").unwrap(), @"{input: {nodes: 5,depth: 5},payload: {query_payload_size: 29,tx_payload_size: 0}}");
     }
 
     #[tokio::test]
     async fn test_too_deep() {
         let schema = schema(config());
-        let response = execute(
-            &schema,
-            "{ on { and { on { and { on { and { x } } } } } } }",
-        )
-        .await;
+        let response = execute(&schema, "{ a { b { c { a { b { c { z } } } } } } }").await;
 
         assert_json_snapshot!(response, @r###"
         {
@@ -262,15 +224,15 @@ mod tests {
               "locations": [
                 {
                   "line": 1,
-                  "column": 30
+                  "column": 23
                 }
               ],
               "path": [
-                "on",
-                "and",
-                "on",
-                "and",
-                "on"
+                "a",
+                "b",
+                "c",
+                "a",
+                "b"
               ],
               "extensions": {
                 "code": "GRAPHQL_VALIDATION_FAILED"
@@ -287,12 +249,12 @@ mod tests {
         let response = execute(
             &schema,
             r#"{
-                on       { x }
-                this     { x }
-                and      { x }
-                that     { x }
-                and      { x }
-                theOther { x }
+              a { z }
+              b { z }
+              c { z }
+              d: a { z }
+              e: b { z }
+              f: c { z }
             }"#,
         )
         .await;
@@ -306,11 +268,11 @@ mod tests {
               "locations": [
                 {
                   "line": 6,
-                  "column": 28
+                  "column": 22
                 }
               ],
               "path": [
-                "and"
+                "b"
               ],
               "extensions": {
                 "code": "GRAPHQL_VALIDATION_FAILED"
@@ -356,12 +318,12 @@ mod tests {
             &schema,
             r#"
             query {
-                this     { ...F }
-                that     { ...F }
-                theOther { ...F }
+              a { ...F }
+              b { ...F }
+              c { ...F }
             }
 
-            fragment F on Query { this { that { and { theOther { x } } } } }
+            fragment F on Query { a { b { c { a { z } } } } }
             "#,
         )
         .await;
@@ -375,12 +337,12 @@ mod tests {
               "locations": [
                 {
                   "line": 8,
-                  "column": 42
+                  "column": 39
                 }
               ],
               "path": [
-                "that",
-                "this"
+                "b",
+                "a"
               ],
               "extensions": {
                 "code": "GRAPHQL_VALIDATION_FAILED"
@@ -398,8 +360,8 @@ mod tests {
         let response = execute(
             &schema,
             r#"
-            query { this { that { and { ...F } } } }
-            fragment F on Query { theOther { x } }
+            query { a { b { c { ...F } } } }
+            fragment F on Query { a { z } }
             "#,
         )
         .await;
@@ -413,14 +375,14 @@ mod tests {
               "locations": [
                 {
                   "line": 3,
-                  "column": 46
+                  "column": 39
                 }
               ],
               "path": [
-                "this",
-                "that",
-                "and",
-                "theOther"
+                "a",
+                "b",
+                "c",
+                "a"
               ],
               "extensions": {
                 "code": "GRAPHQL_VALIDATION_FAILED"
@@ -441,14 +403,14 @@ mod tests {
             ..config()
         });
 
-        let response = execute(&schema, "{ on { and { on { and { x } } } } }").await;
+        let response = execute(&schema, "{ a { b { c { a { z } } } } }").await;
 
         assert_json_snapshot!(response, @r###"
         {
           "data": null,
           "errors": [
             {
-              "message": "Request too large 35B > 10B",
+              "message": "Request too large 29B > 10B",
               "extensions": {
                 "code": "GRAPHQL_VALIDATION_FAILED"
               }
@@ -466,14 +428,14 @@ mod tests {
             ..config()
         });
 
-        let response = execute(&schema, "{ on { and { on { and { x } } } } }").await;
+        let response = execute(&schema, "{ a { b { c { a { z } } } } }").await;
 
         assert_json_snapshot!(response, @r###"
         {
           "data": null,
           "errors": [
             {
-              "message": "Query payload too large: 35B > 5B",
+              "message": "Query payload too large: 29B > 5B",
               "extensions": {
                 "code": "GRAPHQL_VALIDATION_FAILED"
               }
@@ -540,7 +502,7 @@ mod tests {
             &schema,
             r#"
             {
-              on {
+              a {
                 tx(bytes: "hello world", other: 1)
                 zk(bytes: "hello world", sigs: ["a", "b", "c"])
               }
@@ -549,7 +511,7 @@ mod tests {
         )
         .await;
 
-        assert_snapshot!(usage(response, "payload"), @"{query_payload_size: 191,tx_payload_size: 0}");
+        assert_snapshot!(usage(response, "payload"), @"{query_payload_size: 190,tx_payload_size: 0}");
     }
 
     /// The test config specifies the Query.zk contains transaction payloads, but `Mutation.zk`
