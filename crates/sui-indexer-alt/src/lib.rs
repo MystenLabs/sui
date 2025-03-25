@@ -11,6 +11,7 @@ use diesel::{
 use diesel_migrations::EmbeddedMigrations;
 use handlers::{
     coin_balance_buckets::CoinBalanceBuckets,
+    cp_sequence_numbers::CpSequenceNumbers,
     ev_emit_mod::EvEmitMod,
     ev_struct_inst::EvStructInst,
     kv_checkpoints::KvCheckpoints,
@@ -37,7 +38,6 @@ use prometheus::Registry;
 use sui_indexer_alt_framework::db::temp::TempDb;
 use sui_indexer_alt_framework::{
     db::{Db, DbArgs},
-    handlers::cp_sequence_numbers::CpSequenceNumbers,
     ingestion::{ClientArgs, IngestionConfig},
     pipeline::{
         concurrent::{ConcurrentConfig, PrunerConfig},
@@ -218,7 +218,7 @@ pub async fn setup_indexer(
     add_sequential!(SumPackages, sum_packages);
 
     // Unpruned concurrent pipelines
-    // add_concurrent!(CpSequenceNumbers, cp_sequence_numbers);
+    add_concurrent!(CpSequenceNumbers, cp_sequence_numbers);
     add_concurrent!(EvEmitMod, ev_emit_mod);
     add_concurrent!(EvStructInst, ev_struct_inst);
     add_concurrent!(KvCheckpoints, kv_checkpoints);
