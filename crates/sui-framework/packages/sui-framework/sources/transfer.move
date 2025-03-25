@@ -66,7 +66,7 @@ public fun public_transfer<T: key + store>(obj: T, recipient: address) {
 }
 
 /// NOT YET SUPPORTED. The function will abort with `ENotSupported` if used on a network,
-/// e.g. mainnet, where multiparty objects are not yet supported.
+/// e.g. mainnet, where multiparty objects other than `legacy_shared` are not yet supported.
 /// Transfer ownership of `obj` to the `multiparty`. This transfer behaves similar to both
 /// `transfer` and `share_object`. It is similar to `transfer` in that the object be authenticated
 /// only by the recipient(s), in this case the `multiparty`. This means that only the members
@@ -88,7 +88,7 @@ public fun multiparty_transfer<T: key>(obj: T, multiparty: sui::multiparty::Mult
 }
 
 /// NOT YET SUPPORTED. The function will abort with `ENotSupported` if used on a network,
-/// e.g. mainnet, where multiparty objects are not yet supported.
+/// e.g. mainnet, where multiparty objects other than `legacy_shared` are not yet supported.
 /// Transfer ownership of `obj` to the `multiparty`. This transfer behaves similar to both
 /// `transfer` and `share_object`. It is similar to `transfer` in that the object be authenticated
 /// only by the recipient(s), in this case the `multiparty`. This means that only the members

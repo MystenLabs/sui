@@ -159,12 +159,19 @@ pub fn multiparty_transfer_internal(
     mut ty_args: Vec<Type>,
     mut args: VecDeque<Value>,
 ) -> PartialVMResult<NativeResult> {
+    const NONE: u64 = 0;
+    const READ: u64 = 0b0001;
+    const WRITE: u64 = 0b0010;
+    const DELETE: u64 = 0b0100;
+    const TRANSFER: u64 = 0b1000;
+    const ALL: u64 = READ | WRITE | DELETE | TRANSFER;
+
     debug_assert!(ty_args.len() == 1);
-    debug_assert!(args.len() == 2);
+    debug_assert!(args.len() == 4);
 
     let is_supported = context
         .extensions()
-        .get::<ObjectRuntime>()
+        .get::<ObjectRuntime>()?
         .protocol_config
         .enable_multiparty_transfer();
     if !is_supported {
@@ -185,8 +192,24 @@ pub fn multiparty_transfer_internal(
     );
 
     let ty = ty_args.pop().unwrap();
-    let party_members = pop_arg!(args, Vec<AccountAddress>);
-    let Ok([party_member]): Result<[AccountAddress; 1], _> = party_members.try_into() else {
+    let permissions = pop_arg!(args, Vec<u64>);
+    let addresses = pop_arg!(args, Vec<AccountAddress>);
+    let default_permissions = pop_arg!(args, u64);
+    let Ok([permissions]): Result<[u64; 1], _> = permissions.try_into() else {
+        return Err(
+            PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR)
+                .with_message("Multiparty transfer only supports one party member".to_string()),
+        );
+    };
+    if permissions != ALL || default_permissions != NONE {
+        return Err(
+            PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR).with_message(
+                "Multiparty transfer only supports one party member with all permissions"
+                    .to_string(),
+            ),
+        );
+    }
+    let Ok([address]): Result<[AccountAddress; 1], _> = addresses.try_into() else {
         return Err(
             PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR)
                 .with_message("Multiparty transfer only supports one party member".to_string()),
@@ -198,7 +221,7 @@ pub fn multiparty_transfer_internal(
     // transaction are written to storage.
     let owner = Owner::ConsensusV2 {
         start_version: SequenceNumber::new(),
-        authenticator: Box::new(Authenticator::SingleOwner(party_member.into())),
+        authenticator: Box::new(Authenticator::SingleOwner(address.into())),
     };
     object_runtime_transfer(context, owner, ty, obj)?;
     let cost = context.gas_used();
