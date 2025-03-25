@@ -1,0 +1,9 @@
+[package]
+name = "struct_metadata"
+version = "0.0.1"
+
+[dependencies]
+Sui = { local = "../../../../../../crates/sui-framework"}
+
+[addresses]
+struct_metadata =  "0x0"
