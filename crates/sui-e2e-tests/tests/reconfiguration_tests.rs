@@ -19,8 +19,7 @@ use sui_types::base_types::SuiAddress;
 use sui_types::effects::TransactionEffectsAPI;
 use sui_types::error::SuiError;
 use sui_types::governance::{
-    MIN_VALIDATOR_JOINING_STAKE_MIST, VALIDATOR_LOW_POWER_PHASE_1, VALIDATOR_MIN_POWER_PHASE_1,
-    VALIDATOR_VERY_LOW_POWER_PHASE_1,
+    VALIDATOR_LOW_POWER_PHASE_1, VALIDATOR_MIN_POWER_PHASE_1, VALIDATOR_VERY_LOW_POWER_PHASE_1,
 };
 use sui_types::programmable_transaction_builder::ProgrammableTransactionBuilder;
 use sui_types::sui_system_state::{
@@ -37,6 +36,8 @@ use tokio::time::sleep;
 use sui_types::transaction::Argument;
 use sui_types::transaction::ObjectArg;
 use sui_types::transaction::ProgrammableMoveCall;
+
+const DEFAULT_GAS_AMOUNT: u64 = 30_000_000__000_000_000; // 30M Sui
 
 #[sim_test]
 async fn basic_reconfig_end_to_end_test() {
@@ -658,13 +659,17 @@ async fn test_reconfig_with_voting_power_decrease() {
 
     let address = (&new_validator.account_key_pair.public()).into();
     let mut test_cluster = TestClusterBuilder::new()
-        .with_validators((0..10).map(|_| {
-            ValidatorGenesisConfigBuilder::new()
-                .with_stake(VALIDATOR_STARTING_STAKE)
-                .build(&mut OsRng)
-        }).collect())
+        .with_validators(
+            (0..10)
+                .map(|_| {
+                    ValidatorGenesisConfigBuilder::new()
+                        .with_stake(VALIDATOR_STARTING_STAKE)
+                        .build(&mut OsRng)
+                })
+                .collect(),
+        )
         .with_accounts(vec![AccountConfig {
-            gas_amounts: vec![MIN_VALIDATOR_JOINING_STAKE_MIST * initial_num_validators as u64 * 3],
+            gas_amounts: vec![DEFAULT_GAS_AMOUNT * initial_num_validators as u64 * 3],
             address: None,
         }])
         .with_num_validators(initial_num_validators)
@@ -829,7 +834,7 @@ async fn do_test_reconfig_with_committee_change_stress() {
         .collect::<Vec<SuiAddress>>();
     let mut test_cluster = TestClusterBuilder::new()
         .with_accounts(vec![AccountConfig {
-            gas_amounts: vec![MIN_VALIDATOR_JOINING_STAKE_MIST * 10],
+            gas_amounts: vec![DEFAULT_GAS_AMOUNT * 10],
             address: None,
         }])
         .with_num_validators(7)
@@ -1144,7 +1149,7 @@ async fn execute_add_validator_transactions(
         .wallet
         .gas_for_owner_budget(
             address,
-            stake_amount.unwrap_or(MIN_VALIDATOR_JOINING_STAKE_MIST),
+            stake_amount.unwrap_or(DEFAULT_GAS_AMOUNT),
             Default::default(),
         )
         .await
@@ -1164,7 +1169,7 @@ async fn execute_add_validator_transactions(
         test_cluster,
         vec![(
             address,
-            stake_amount.unwrap_or(MIN_VALIDATOR_JOINING_STAKE_MIST),
+            stake_amount.unwrap_or(DEFAULT_GAS_AMOUNT),
         )],
     )
     .await;
