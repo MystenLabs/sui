@@ -25,7 +25,9 @@ wget https://github.com/MystenLabs/sui/raw/main/crates/sui-config/data/fullnode-
 
 The genesis blob contains the information that defined the Sui network configuration. Before you can start the Full node, you need to download the most recent file to ensure compatibility with the version of Sui you use. Use the following command to download the [genesis.blob](https://github.com/MystenLabs/sui-genesis/raw/main/devnet/genesis.blob) from the `devnet` branch of the Sui repository:
 
-```wget https://github.com/MystenLabs/sui-genesis/raw/main/devnet/genesis.blob```
+```shell
+wget https://github.com/MystenLabs/sui-genesis/raw/main/devnet/genesis.blob
+```
 
 ## Start your Sui Full node
 
