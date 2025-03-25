@@ -34,7 +34,7 @@ public fun test_is_A_unwrap_A(x: u64) {
   assert!(x == y);
 }
 
-#[spec(verify)]
+#[spec(prove)]
 public fun test_is_A_unwrap_A_spec(x: u64) {
   test_is_A_unwrap_A(x);
 }
