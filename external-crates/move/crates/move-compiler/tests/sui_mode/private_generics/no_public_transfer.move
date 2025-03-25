@@ -25,7 +25,7 @@ module a::m {
         transfer::receiving_object_id(s);
     }
 
-    public fun t6(s: other::S, p: vector<address>) {
+    public fun t6(s: other::S, p: sui::multiparty::Multiparty) {
         transfer::multiparty_transfer(s, p);
     }
 }
@@ -58,11 +58,11 @@ module sui::transfer {
         abort 0
     }
 
-    public fun multiparty_transfer<T: key>(_: T, _: vector<address>) {
+    public fun multiparty_transfer<T: key>(_: T, _: sui::multiparty::Multiparty) {
         abort 0
     }
 
-    public fun public_multiparty_transfer<T: key + store>(_: T, _: vector<address>) {
+    public fun public_multiparty_transfer<T: key + store>(_: T, _: sui::multiparty::Multiparty) {
         abort 0
     }
 
@@ -93,4 +93,8 @@ module sui::transfer {
     public fun receiving_object_id<T: key>(_: &Receiving<T>): ID {
         abort 0
     }
+}
+
+module sui::multiparty {
+    struct Multiparty has copy, drop {}
 }

@@ -35,10 +35,10 @@ module a::m {
         transfer::public_receive(p, s)
     }
 
-    public fun m<T: store>(s: other::S<T>, p: vector<address>) {
+    public fun m<T: store>(s: other::S<T>, p: sui::multiparty::Multiparty) {
         transfer::public_multiparty_transfer(s, p)
     }
-    public fun m_gen<T: key + store>(s: T, p: vector<address>) {
+    public fun m_gen<T: key + store>(s: T, p: sui::multiparty::Multiparty) {
         transfer::public_multiparty_transfer(s, p)
     }
 }
@@ -69,11 +69,11 @@ module sui::transfer {
         abort 0
     }
 
-    public fun multiparty_transfer<T: key>(_: T, _: vector<address>) {
+    public fun multiparty_transfer<T: key>(_: T, _: sui::multiparty::Multiparty) {
         abort 0
     }
 
-    public fun public_multiparty_transfer<T: key + store>(_: T, _: vector<address>) {
+    public fun public_multiparty_transfer<T: key + store>(_: T, _: sui::multiparty::Multiparty) {
         abort 0
     }
 
@@ -100,4 +100,8 @@ module sui::transfer {
     public fun public_receive<T: key + store>(_: &mut UID, _: Receiving<T>): T {
         abort 0
     }
+}
+
+module sui::multiparty {
+    struct Multiparty has copy, drop {}
 }
