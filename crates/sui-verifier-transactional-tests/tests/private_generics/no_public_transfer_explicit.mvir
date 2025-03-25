@@ -92,8 +92,9 @@ module 0x0.u {
 module 0x0.u {
     import test.m;
     import 0x2.transfer;
+    import 0x2.multiparty;
 
-    f(x: m.KeyStruct, p: vector<address>) {
+    f(x: m.KeyStruct, p: multiparty.Multiparty) {
         label l0:
         transfer.multiparty_transfer<m.KeyStruct>(move(x), move(p));
         return;
@@ -156,8 +157,9 @@ module 0x0.u {
 module 0x0.u {
     import test.m;
     import 0x2.transfer;
+    import 0x2.multiparty;
 
-    f(x: m.KeyStoreStruct, p: vector<address>) {
+    f(x: m.KeyStoreStruct, p: multiparty.Multiparty) {
         label l0:
         transfer.multiparty_transfer<m.KeyStoreStruct>(move(x), move(p));
         return;
@@ -220,8 +222,9 @@ module 0x0.u {
 module 0x0.u {
     import test.m;
     import 0x2.transfer;
+    import 0x2.multiparty;
 
-    f(x: m.StoreEnum, p: vector<address>) {
+    f(x: m.StoreEnum, p: multiparty.Multiparty) {
         label l0:
         transfer.multiparty_transfer<m.StoreEnum>(move(x), move(p));
         return;

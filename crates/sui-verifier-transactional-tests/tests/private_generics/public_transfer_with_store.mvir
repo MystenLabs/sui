@@ -58,8 +58,9 @@ module 0x0.m {
 module 0x0.m {
     import 0x2.coin;
     import 0x2.transfer;
+    import 0x2.multiparty;
 
-    t(s: coin.Coin<u64>, p: vector<address>) {
+    t(s: coin.Coin<u64>, p: multiparty.Multiparty) {
         label l0:
         transfer.public_multiparty_transfer<coin.Coin<u64>>(move(s), move(p));
         return;

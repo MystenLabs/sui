@@ -54,8 +54,9 @@ module 0x0.m {
 //# publish
 module 0x0.m {
     import 0x2.transfer;
+    import 0x2.multiparty;
 
-    t<T: key>(s: T, p: vector<address>) {
+    t<T: key>(s: T, p: multiparty.Multiparty) {
         label l0:
         transfer.multiparty_transfer<T>(move(s), move(p));
         return;
