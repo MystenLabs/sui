@@ -820,6 +820,7 @@ mod checked {
             let RuntimeResults {
                 writes,
                 user_events: remaining_events,
+                accumulator_events: remaining_accumulator_events,
                 loaded_child_objects,
                 mut created_object_ids,
                 deleted_object_ids,
@@ -827,6 +828,10 @@ mod checked {
             assert_invariant!(
                 remaining_events.is_empty(),
                 "Events should be taken after every Move call"
+            );
+            assert_invariant!(
+                remaining_accumulator_events.is_empty(),
+                "Accumulator events should be taken after every Move call"
             );
 
             loaded_runtime_objects.extend(loaded_child_objects);

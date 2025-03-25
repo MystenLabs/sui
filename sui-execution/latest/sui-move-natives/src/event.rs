@@ -1,7 +1,11 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::{legacy_test_cost, object_runtime::ObjectRuntime, NativesCostTable};
+use crate::{
+    legacy_test_cost,
+    object_runtime::{AccumulatorAction, AccumulatorValue, ObjectRuntime},
+    NativesCostTable,
+};
 use move_binary_format::errors::{PartialVMError, PartialVMResult};
 use move_core_types::{
     account_address::AccountAddress, gas_algebra::InternalGas, language_storage::TypeTag,
@@ -140,14 +144,23 @@ fn emit_impl(
         event_emit_cost_params.event_emit_output_cost_per_byte * ev_size.into()
     );
 
-    if let Some(stream_ref) = stream_ref {
-        let stream_ref_address: AccountAddress = stream_ref.value_as::<AccountAddress>().unwrap();
-    }
-
     let obj_runtime: &mut ObjectRuntime = context.extensions_mut().get_mut()?;
 
-    obj_runtime.emit_event(ty, *tag, event_value)?;
-    Ok(NativeResult::ok(context.gas_used(), smallvec![]))
+    let event_idx = obj_runtime.emit_event(ty, *tag, event_value)?;
+
+    if let Some(stream_ref) = stream_ref {
+        let stream_ref_address: AccountAddress = stream_ref.value_as::<AccountAddress>().unwrap();
+        obj_runtime.emit_accumulator_event(
+            AccumulatorAction::Merge,
+            stream_ref_address,
+            AccumulatorValue::EventRef(event_idx),
+        )?;
+    }
+
+    Ok(NativeResult::ok(
+        context.gas_used(),
+        smallvec![Value::u32(event_idx as u32)],
+    ))
 }
 
 /// Get the all emitted events of type `T`, starting at the specified index

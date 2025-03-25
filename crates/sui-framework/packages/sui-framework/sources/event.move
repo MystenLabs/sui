@@ -80,7 +80,6 @@ public fun default_event_stream_cap<T: copy + drop>(ctx: &mut TxContext): EventS
     }
 }
 
-/// TODO: needs verifier rule like `emit` to ensure it is only called in package that defines `T`
 public fun emit_authenticated<T: copy + drop>(cap: &EventStreamCap, event: T) {
     emit_authenticated_impl(cap.stream_id, event);
 }
@@ -90,6 +89,7 @@ public fun destroy_cap(cap: EventStreamCap) {
     id.delete();
 }
 
+/// TODO: needs verifier rule like `emit` to ensure it is only called in package that defines `T`
 /// Like `emit`, but also adds an on-chain committment to the event to the
 /// stream `stream`.
 public native fun emit_authenticated_impl<T: copy + drop>(stream: address, event: T);

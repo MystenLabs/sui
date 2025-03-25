@@ -18,6 +18,7 @@ use crate::{verification_failure, TEST_SCENARIO_MODULE_NAME};
 pub const TRANSFER_MODULE: &IdentStr = ident_str!("transfer");
 pub const EVENT_MODULE: &IdentStr = ident_str!("event");
 pub const EVENT_FUNCTION: &IdentStr = ident_str!("emit");
+pub const EMIT_AUTHENTICATED_FUNCTION: &IdentStr = ident_str!("emit_authenticated");
 pub const GET_EVENTS_TEST_FUNCTION: &IdentStr = ident_str!("events_by_type");
 pub const PUBLIC_TRANSFER_FUNCTIONS: &[&IdentStr] = &[
     ident_str!("public_transfer"),
@@ -165,7 +166,8 @@ fn verify_private_event_emit(
         // test-only function witn no params--no need to verify
         return Ok(());
     }
-    if fident != EVENT_FUNCTION {
+
+    if fident != EVENT_FUNCTION && fident != EMIT_AUTHENTICATED_FUNCTION {
         debug_assert!(false, "unknown event function {}", fident);
         return Err(format!("Calling unknown event function, {}", fident));
     };

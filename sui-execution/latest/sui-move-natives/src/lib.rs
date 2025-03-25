@@ -3,7 +3,6 @@
 
 use self::{
     address::{AddressFromBytesCostParams, AddressFromU256CostParams, AddressToU256CostParams},
-    auth_stream::AddToAuthStreamCostParams,
     config::ConfigReadSettingImplCostParams,
     crypto::{bls12381, ecdsa_k1, ecdsa_r1, ecvrf, ed25519, groth16, hash, hmac},
     crypto::{
@@ -954,8 +953,8 @@ pub fn all_natives(silent: bool, protocol_config: &ProtocolConfig) -> NativeFunc
         ("event", "emit", make_native!(event::emit)),
         (
             "event",
-            "add_stream_commitment",
-            make_native!(auth_stream::add_stream_commitment),
+            "emit_authenticated_impl",
+            make_native!(event::emit_authenticated),
         ),
         (
             "event",
