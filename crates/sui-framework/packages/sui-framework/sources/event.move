@@ -92,7 +92,7 @@ public fun destroy_cap(cap: EventStreamCap) {
 /// TODO: needs verifier rule like `emit` to ensure it is only called in package that defines `T`
 /// Like `emit`, but also adds an on-chain committment to the event to the
 /// stream `stream`.
-public native fun emit_authenticated_impl<T: copy + drop>(stream: address, event: T);
+native fun emit_authenticated_impl<T: copy + drop>(stream: address, event: T);
 
 #[test_only]
 /// Get the total number of events emitted during execution so far

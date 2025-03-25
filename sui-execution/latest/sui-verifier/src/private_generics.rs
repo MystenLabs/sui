@@ -19,6 +19,7 @@ pub const TRANSFER_MODULE: &IdentStr = ident_str!("transfer");
 pub const EVENT_MODULE: &IdentStr = ident_str!("event");
 pub const EVENT_FUNCTION: &IdentStr = ident_str!("emit");
 pub const EMIT_AUTHENTICATED_FUNCTION: &IdentStr = ident_str!("emit_authenticated");
+pub const EMIT_AUTHENTICATED_IMPL_FUNCTION: &IdentStr = ident_str!("emit_authenticated_impl");
 pub const GET_EVENTS_TEST_FUNCTION: &IdentStr = ident_str!("events_by_type");
 pub const PUBLIC_TRANSFER_FUNCTIONS: &[&IdentStr] = &[
     ident_str!("public_transfer"),
@@ -164,6 +165,11 @@ fn verify_private_event_emit(
     let fident = view.identifier_at(fhandle.name);
     if fident == GET_EVENTS_TEST_FUNCTION {
         // test-only function witn no params--no need to verify
+        return Ok(());
+    }
+
+    if fident == EMIT_AUTHENTICATED_IMPL_FUNCTION {
+        // private function, cannot be called directly from outside the module
         return Ok(());
     }
 
