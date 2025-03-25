@@ -38,7 +38,9 @@ enum CoreThreadCommand {
     AddBlocks(Vec<VerifiedBlock>, oneshot::Sender<BTreeSet<BlockRef>>),
     /// Checks if block refs exist locally and sync missing ones.
     CheckBlockRefs(Vec<BlockRef>, oneshot::Sender<BTreeSet<BlockRef>>),
-    /// Add committed sub dag blocks for processing and acceptance.
+    /// Adds certified commits and their certification blocks for processing and acceptance.
+    /// Returns missing ancestors of certification voting blocks. Blocks included in certified commits
+    /// cannot have missing ancestors.
     AddCertifiedCommits(CertifiedCommits, oneshot::Sender<BTreeSet<BlockRef>>),
     /// Called when the min round has passed or the leader timeout occurred and a block should be produced.
     /// When the command is called with `force = true`, then the block will be created for `round` skipping

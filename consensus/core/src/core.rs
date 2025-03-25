@@ -341,12 +341,13 @@ impl Core {
         if self.dag_state.read().gc_enabled() {
             let votes = certified_commits.votes().to_vec();
             let commits = self
-                .validate_certified_commits(certified_commits.commits().to_vec())
+                .filter_new_commits(certified_commits.commits().to_vec())
                 .expect("Certified commits validation failed");
 
-            // Accept the certified commit votes. This is optimistically done to increase the chances of having votes available when this node
-            // will need to sync commits to other nodes.
-            self.block_manager.try_accept_blocks(votes);
+            // Try to accept the certified commit votes.
+            // Even if they may not be part of a future commit, these blocks are useful for certifying
+            // commits when helping peers sync commits.
+            let (_, missing_block_refs) = self.block_manager.try_accept_blocks(votes);
 
             // Try to commit the new blocks. Take into account the trusted commit that has been provided.
             self.try_commit(commits)?;
@@ -359,7 +360,7 @@ impl Core {
             // have advanced the threshold clock round.
             self.try_signal_new_round();
 
-            return Ok(BTreeSet::new());
+            return Ok(missing_block_refs);
         }
 
         // If GC is not enabled then process blocks as usual.
@@ -451,8 +452,9 @@ impl Core {
         Ok(None)
     }
 
-    /// Keeps only the certified commits that have a commit index > last commit index. It also ensures that the first commit in the list is the next one in line, otherwise it panics.
-    fn validate_certified_commits(
+    /// Keeps only the certified commits that have a commit index > last commit index.
+    /// It also ensures that the first commit in the list is the next one in line, otherwise it panics.
+    fn filter_new_commits(
         &mut self,
         commits: Vec<CertifiedCommit>,
     ) -> ConsensusResult<Vec<CertifiedCommit>> {
@@ -3150,6 +3152,7 @@ mod test {
         // low quorum round for own index should get calculated to round 0.
         let test_block = VerifiedBlock::new_for_test(TestBlock::new(1000, 0).build());
         transaction_certifier.add_voted_blocks(vec![(test_block.clone(), vec![])]);
+        // Force accepting the block to dag state because its causal history is incomplete.
         dag_state.write().accept_block(test_block);
 
         round_tracker.write().update_from_probe(
@@ -3196,6 +3199,7 @@ mod test {
         for author in 1..4 {
             let block = VerifiedBlock::new_for_test(TestBlock::new(1000, author).build());
             transaction_certifier.add_voted_blocks(vec![(block.clone(), vec![])]);
+            // Force accepting the block to dag state because its causal history is incomplete.
             dag_state.write().accept_block(block);
         }
 
@@ -3339,7 +3343,7 @@ mod test {
     }
 
     #[tokio::test]
-    async fn test_validate_certified_commits() {
+    async fn test_filter_new_commits() {
         telemetry_subscribers::init_for_testing();
 
         let (context, _key_pairs) = Context::new_for_test(4);
@@ -3396,7 +3400,7 @@ mod test {
             "Highest certified commit should older than the highest committed index."
         );
 
-        let certified_commits = core.validate_certified_commits(certified_commits).unwrap();
+        let certified_commits = core.filter_new_commits(certified_commits).unwrap();
 
         // No commits should be processed
         assert!(certified_commits.is_empty());
@@ -3410,9 +3414,7 @@ mod test {
             .map(|(_, c)| c.clone())
             .collect::<Vec<_>>();
 
-        let certified_commits = core
-            .validate_certified_commits(certified_commits.clone())
-            .unwrap();
+        let certified_commits = core.filter_new_commits(certified_commits.clone()).unwrap();
 
         // The certified commit of index 5 should be processed.
         assert_eq!(certified_commits.len(), 1);
@@ -3429,7 +3431,7 @@ mod test {
             .collect::<Vec<_>>();
 
         let err = core
-            .validate_certified_commits(certified_commits.clone())
+            .filter_new_commits(certified_commits.clone())
             .unwrap_err();
         match err {
             ConsensusError::UnexpectedCertifiedCommitIndex {
