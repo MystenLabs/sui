@@ -1132,7 +1132,7 @@ impl TestClusterBuilder {
 
         if self.indexer_backed_rpc {
             if self.data_ingestion_dir.is_none() {
-                temp_data_ingestion_dir = Some(tempfile::tempdir().unwrap());
+                temp_data_ingestion_dir = Some(mysten_common::tempdir().unwrap());
                 self.data_ingestion_dir = Some(
                     temp_data_ingestion_dir
                         .as_ref()
