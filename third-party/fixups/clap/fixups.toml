@@ -1,0 +1,3 @@
+omit_features = ["deprecated"]
+extra_srcs = ["examples/**/*.rs", "examples/**/*.md"]
+buildscript = []
