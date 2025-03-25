@@ -319,21 +319,23 @@ impl<C: NetworkClient> CommitSyncer<C> {
                     .join(","),
             );
 
-            // If core thread cannot handle the incoming blocks, it is ok to block here.
-            // Also it is possible to have missing ancestors because an equivocating validator
-            // may produce blocks that are not included in commits but are ancestors to other blocks.
-            // Synchronizer is needed to fill in the missing ancestors in this case.
+            // If core thread cannot handle the incoming blocks, it is ok to block here
+            // to slow down the commit syncer.
             match self
                 .inner
                 .core_thread_dispatcher
                 .add_certified_commits(commits)
                 .await
             {
+                // Missing ancestors are possible from certification blocks, but
+                // it is unnecessary to try to sync their causal history. If they are required
+                // for the progress of the DAG, they will be included in a future commit.
                 Ok(missing) => {
                     if !missing.is_empty() {
-                        warn!(
-                            "Fetched blocks have missing ancestors: {:?} for commit range {:?}",
-                            missing, fetched_commit_range
+                        info!(
+                            "Certification blocks have missing ancestors: {} for commit range {:?}",
+                            missing.iter().map(|b| b.to_string()).join(","),
+                            fetched_commit_range,
                         );
                     }
                     for block_ref in missing {

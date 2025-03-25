@@ -240,13 +240,20 @@ where
         let store = Arc::new(RocksDBStore::new(store_path));
         let dag_state = Arc::new(RwLock::new(DagState::new(context.clone(), store.clone())));
 
+        let block_verifier = Arc::new(SignedBlockVerifier::new(
+            context.clone(),
+            transaction_verifier,
+        ));
+
         let transaction_certifier = TransactionCertifier::new(
             context.clone(),
             dag_state.clone(),
             commit_consumer.block_sender.clone(),
         );
+        transaction_certifier.recover(block_verifier.as_ref());
 
         let mut proposed_block_handler = ProposedBlockHandler::new(
+            context.clone(),
             signals_receivers.block_broadcast_receiver(),
             transaction_certifier.clone(),
         );
@@ -263,11 +270,6 @@ where
                 .sync_last_known_own_block_timeout
                 .is_zero();
         info!("Sync last known own block: {sync_last_known_own_block}");
-
-        let block_verifier = Arc::new(SignedBlockVerifier::new(
-            context.clone(),
-            transaction_verifier,
-        ));
 
         let block_manager =
             BlockManager::new(context.clone(), dag_state.clone(), block_verifier.clone());
@@ -294,6 +296,7 @@ where
             context.clone(),
             leader_schedule,
             tx_consumer,
+            transaction_certifier.clone(),
             block_manager,
             // For streaming RPC, Core will be notified when consumer is available.
             // For non-streaming RPC, there is no way to know so default to true.
@@ -547,6 +550,7 @@ mod tests {
         if gc_depth == 0 {
             protocol_config.set_consensus_linearize_subdag_v2_for_testing(false);
             protocol_config.set_consensus_median_based_commit_timestamp_for_testing(false);
+            protocol_config.set_mysticeti_fastpath_for_testing(false);
         }
 
         let temp_dirs = (0..NUM_OF_AUTHORITIES)
@@ -763,6 +767,7 @@ mod tests {
         if gc_depth == 0 {
             protocol_config.set_consensus_linearize_subdag_v2_for_testing(false);
             protocol_config.set_consensus_median_based_commit_timestamp_for_testing(false);
+            protocol_config.set_mysticeti_fastpath_for_testing(false);
         }
 
         for (index, _authority_info) in committee.authorities() {
