@@ -22,19 +22,23 @@ public fun priv(ctx: &mut TxContext): Priv {
 //# run ex::m::mint
 
 // Does not have store
-//# programmable --inputs object(2,0) vector[@0]
-//> sui::transfer::public_multiparty_transfer<ex::m::Priv>(Input(0), Input(1))
+//# programmable --inputs object(2,0) @0
+//> 0: sui::multiparty::single_owner(Input(1));
+//> sui::transfer::public_multiparty_transfer<ex::m::Priv>(Input(0), Result(0))
 
 // Does not have store
-//# programmable --inputs vector[@0]
+//# programmable --inputs @0
 //> 0: ex::m::priv();
-//> sui::transfer::public_multiparty_transfer<ex::m::Priv>(Result(0), Input(0))
+//> 1: sui::multiparty::single_owner(Input(0));
+//> sui::transfer::public_multiparty_transfer<ex::m::Priv>(Result(0), Result(1))
 
 // Private transfer
-//# programmable --inputs object(2,0) vector[@0]
-//> sui::transfer::multiparty_transfer<ex::m::Priv>(Input(0), Input(1))
+//# programmable --inputs object(2,0) @0
+//> 0: sui::multiparty::single_owner(Input(1));
+//> sui::transfer::multiparty_transfer<ex::m::Priv>(Input(0), Result(0))
 
 // Private transfer
-//# programmable --inputs vector[@0]
+//# programmable --inputs @0
 //> 0: ex::m::priv();
-//> sui::transfer::multiparty_transfer<ex::m::Priv>(Result(0), Input(0))
+//> 1: sui::multiparty::single_owner(Input(0));
+//> sui::transfer::multiparty_transfer<ex::m::Priv>(Result(0), Result(1))

@@ -23,14 +23,14 @@ public fun mint(ctx: &mut TxContext) {
 
 public fun create_multiparty(ctx: &mut TxContext) {
     let p = Pub { id: object::new(ctx) };
-    transfer::public_multiparty_transfer(p, vector[@0])
+    transfer::public_multiparty_transfer(p, sui::multiparty::single_owner(@0))
 }
 
-public fun pub_multiparty(obj: Pub, p: vector<address>) {
+public fun pub_multiparty(obj: Pub, p: sui::multiparty::Multiparty) {
     transfer::public_multiparty_transfer(obj, p)
 }
 
-public fun priv_multiparty(obj: Priv, p: vector<address>) {
+public fun priv_multiparty(obj: Priv, p: sui::multiparty::Multiparty) {
     transfer::multiparty_transfer(obj, p)
 }
 
@@ -40,12 +40,17 @@ public fun priv_multiparty(obj: Priv, p: vector<address>) {
 //# run ex::m::create_multiparty
 
 // Aborts since multiparty transfer is not enabled
-//# run ex::m::priv_multiparty --args object(2,0) vector[@0]
+//# programmable --inputs object(2,0) @0
+//> 0: sui::multiparty::single_owner(Input(1));
+//> ex::m::priv_multiparty(Input(0), Result(0))
+
 
 // Aborts since multiparty transfer is not enabled
-//# run ex::m::pub_multiparty --args object(2,1) vector[@0]
+//# programmable --inputs object(2,1) @0
+//> 0: sui::multiparty::single_owner(Input(1));
+//> ex::m::pub_multiparty(Input(0), Result(0))
 
 // Aborts since multiparty transfer is not enabled
-//# run sui::transfer::public_multiparty_transfer
-//#     --type-args ex::m::Pub
-//#     --args object(2,1) vector[@0]
+//# programmable --inputs object(2,1) @0
+//> 0: sui::multiparty::single_owner(Input(1));
+//> sui::transfer::public_multiparty_transfer<ex::m::Pub>(Input(0), Result(0))
