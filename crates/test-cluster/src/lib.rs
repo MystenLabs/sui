@@ -45,6 +45,7 @@ use sui_types::committee::CommitteeTrait;
 use sui_types::committee::{Committee, EpochId};
 use sui_types::crypto::KeypairTraits;
 use sui_types::crypto::SuiKeyPair;
+use sui_types::digests::TransactionDigest;
 use sui_types::effects::{TransactionEffects, TransactionEvents};
 use sui_types::error::SuiResult;
 use sui_types::governance::MIN_VALIDATOR_JOINING_STAKE_MIST;
@@ -192,6 +193,13 @@ impl TestCluster {
         self.swarm.active_validators().map(|v| v.name()).collect()
     }
 
+    pub fn get_validator_addresses(&self) -> Vec<SuiAddress> {
+        self.swarm
+            .active_validators()
+            .map(|v| v.sui_address())
+            .collect()
+    }
+
     pub fn get_genesis(&self) -> Genesis {
         self.swarm.config().genesis.clone()
     }
@@ -251,6 +259,39 @@ impl TestCluster {
             .sui_node
             .with_async(|node| async { node.state().get_object(object_id).await })
             .await
+    }
+
+    pub async fn wait_for_transaction_on_fullnode(
+        &self,
+        tx_digest: &TransactionDigest,
+        timeout_dur: Duration,
+    ) {
+        self.fullnode_handle
+            .sui_node
+            .with_async(|node| async {
+                let tx_reader = node.state().get_transaction_cache_reader().clone();
+                timeout(timeout_dur, async move {
+                    loop {
+                        if let Some(tx) = tx_reader
+                            .get_transaction_block(tx_digest)
+                            .expect("read should not fail")
+                        {
+                            break tx;
+                        }
+                        tokio::time::sleep(Duration::from_millis(100)).await;
+                    }
+                })
+                .await
+                .expect("Timed out waiting for transaction")
+            })
+            .await;
+    }
+
+    /// Get the current SuiSystemState object from the fullnode store.
+    pub fn get_system_object_from_fullnode_store(&self) -> SuiResult<SuiSystemState> {
+        self.fullnode_handle
+            .sui_node
+            .with(|node| node.state().get_sui_system_state_object_for_testing())
     }
 
     pub async fn get_latest_object_ref(&self, object_id: &ObjectID) -> ObjectRef {
