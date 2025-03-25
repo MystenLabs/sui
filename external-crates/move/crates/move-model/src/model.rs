@@ -4633,6 +4633,30 @@ impl<'env> FunctionEnv<'env> {
         called
     }
 
+    pub fn get_called_functions_iter(&self) -> Vec<FunctionEnv> {    
+        let called: Vec<_> = self
+            .get_bytecode()
+            .iter()
+            .filter_map(|c| {
+                if let Bytecode::Call(i) = c {
+                    Some(self.module_env.get_used_function(*i))
+                } else if let Bytecode::CallGeneric(i) = c {
+                    let handle_idx = self
+                        .module_env
+                        .data
+                        .module
+                        .function_instantiation_at(*i)
+                        .handle;
+                    Some(self.module_env.get_used_function(handle_idx))
+                } else {
+                    None
+                }
+            })
+            .collect();
+
+        called
+    }
+
     /// Get the transitive closure of the called functions
     pub fn get_transitive_closure_of_called_functions(&self) -> BTreeSet<QualifiedId<FunId>> {
         if let Some(trans_called) = &*self.data.transitive_closure_of_called_funs.borrow() {
