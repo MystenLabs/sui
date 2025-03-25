@@ -1252,6 +1252,96 @@ delete_impl
 record_new_uid
 	fun
 	0x2::object
+VecMap
+	public struct
+	0x2::vec_map
+Entry
+	public struct
+	0x2::vec_map
+empty
+	public fun
+	0x2::vec_map
+insert
+	public fun
+	0x2::vec_map
+remove
+	public fun
+	0x2::vec_map
+pop
+	public fun
+	0x2::vec_map
+get_mut
+	public fun
+	0x2::vec_map
+get
+	public fun
+	0x2::vec_map
+try_get
+	public fun
+	0x2::vec_map
+contains
+	public fun
+	0x2::vec_map
+size
+	public fun
+	0x2::vec_map
+is_empty
+	public fun
+	0x2::vec_map
+destroy_empty
+	public fun
+	0x2::vec_map
+into_keys_values
+	public fun
+	0x2::vec_map
+from_keys_values
+	public fun
+	0x2::vec_map
+keys
+	public fun
+	0x2::vec_map
+get_idx_opt
+	public fun
+	0x2::vec_map
+get_idx
+	public fun
+	0x2::vec_map
+get_entry_by_idx
+	public fun
+	0x2::vec_map
+get_entry_by_idx_mut
+	public fun
+	0x2::vec_map
+remove_entry_by_idx
+	public fun
+	0x2::vec_map
+Multiparty
+	public struct
+	0x2::multiparty
+Permissions
+	public struct
+	0x2::multiparty
+single_owner
+	public fun
+	0x2::multiparty
+legacy_shared
+	public fun
+	0x2::multiparty
+empty
+	fun
+	0x2::multiparty
+set_permissions
+	fun
+	0x2::multiparty
+is_single_owner
+	public(package) fun
+	0x2::multiparty
+is_legacy_shared
+	public(package) fun
+	0x2::multiparty
+into_native
+	public(package) fun
+	0x2::multiparty
 Receiving
 	public struct
 	0x2::transfer
@@ -2239,69 +2329,6 @@ deny_list_remove
 deny_list_contains
 	public fun
 	0x2::coin
-VecMap
-	public struct
-	0x2::vec_map
-Entry
-	public struct
-	0x2::vec_map
-empty
-	public fun
-	0x2::vec_map
-insert
-	public fun
-	0x2::vec_map
-remove
-	public fun
-	0x2::vec_map
-pop
-	public fun
-	0x2::vec_map
-get_mut
-	public fun
-	0x2::vec_map
-get
-	public fun
-	0x2::vec_map
-try_get
-	public fun
-	0x2::vec_map
-contains
-	public fun
-	0x2::vec_map
-size
-	public fun
-	0x2::vec_map
-is_empty
-	public fun
-	0x2::vec_map
-destroy_empty
-	public fun
-	0x2::vec_map
-into_keys_values
-	public fun
-	0x2::vec_map
-from_keys_values
-	public fun
-	0x2::vec_map
-keys
-	public fun
-	0x2::vec_map
-get_idx_opt
-	public fun
-	0x2::vec_map
-get_idx
-	public fun
-	0x2::vec_map
-get_entry_by_idx
-	public fun
-	0x2::vec_map
-get_entry_by_idx_mut
-	public fun
-	0x2::vec_map
-remove_entry_by_idx
-	public fun
-	0x2::vec_map
 Publisher
 	public struct
 	0x2::package
