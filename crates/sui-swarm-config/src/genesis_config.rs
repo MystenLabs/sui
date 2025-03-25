@@ -150,7 +150,7 @@ impl ValidatorGenesisConfigBuilder {
         let ip = self.ip.unwrap_or_else(local_ip_utils::get_new_ip);
         let stake = self
             .stake
-            .unwrap_or(sui_types::governance::VALIDATOR_LOW_STAKE_THRESHOLD_MIST);
+            .unwrap_or(default_stake());
         let localhost = local_ip_utils::localhost_for_testing();
 
         let protocol_key_pair = self
@@ -276,7 +276,7 @@ fn default_multiaddr_address() -> Multiaddr {
 }
 
 fn default_stake() -> u64 {
-    sui_types::governance::VALIDATOR_LOW_STAKE_THRESHOLD_MIST
+    DEFAULT_GAS_AMOUNT
 }
 
 fn default_bls12381_key_pair() -> AuthorityKeyPair {
