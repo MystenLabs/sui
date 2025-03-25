@@ -17,6 +17,7 @@ workspace = true
 anyhow.workspace = true
 async-graphql = { workspace = true, features = ["dataloader"] }
 async-graphql-axum.workspace = true
+async-graphql-value.workspace = true
 async-trait.workspace = true
 # axum.workspace = true
 # axum-extra.workspace = true

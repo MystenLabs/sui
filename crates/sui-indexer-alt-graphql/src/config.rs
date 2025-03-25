@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{mem, time::Duration};
+use std::{collections::BTreeSet, mem, time::Duration};
 
 use sui_default_config::DefaultConfig;
 use sui_protocol_config::{Chain, ProtocolConfig, ProtocolVersion};
@@ -110,6 +110,15 @@ impl Limits {
         QueryLimitsConfig {
             max_query_nodes: self.max_query_nodes,
             max_query_depth: self.max_query_depth,
+            max_query_payload_size: self.max_query_payload_size,
+            max_tx_payload_size: self.max_tx_payload_size,
+            tx_payload_args: BTreeSet::from_iter([
+                ("Mutation", "executeTransaction", "txBytes"),
+                ("Mutation", "executeTransaction", "signatures"),
+                ("Query", "simulateTransaction", "txBytes"),
+                ("Query", "verifyZkloginSignature", "bytes"),
+                ("Query", "verifyZkloginSignature", "signature"),
+            ]),
         }
     }
 }

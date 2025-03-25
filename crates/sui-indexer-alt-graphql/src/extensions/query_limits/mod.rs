@@ -1,36 +1,60 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::sync::{Arc, Mutex};
+use std::{
+    collections::BTreeSet,
+    sync::{Arc, Mutex},
+};
 
 use async_graphql::{
     extensions::{Extension, ExtensionContext, ExtensionFactory, NextParseQuery, NextRequest},
     parser::types::ExecutableDocument,
     value, Response, ServerResult, Variables,
 };
+use headers::ContentLength;
 
+use self::error::{Error, ErrorKind};
 use self::show_usage::ShowUsage;
 
+mod chain;
 mod error;
 mod input;
+mod payload;
 pub(crate) mod show_usage;
+mod visitor;
 
 pub(crate) struct QueryLimitsConfig {
     pub max_query_nodes: u32,
     pub max_query_depth: u32,
+    pub max_query_payload_size: u32,
+    pub max_tx_payload_size: u32,
+
+    pub tx_payload_args: BTreeSet<(&'static str, &'static str, &'static str)>,
 }
 
 /// Extension factory for adding checks that the query is within configurable limits.
 pub(crate) struct QueryLimitsChecker;
 
 struct QueryLimitsCheckerExt {
-    input_usage: Mutex<Option<input::Usage>>,
+    usage: Mutex<Option<Usage>>,
+}
+
+struct Usage {
+    input: input::Usage,
+    payload: payload::Usage,
+}
+
+impl QueryLimitsConfig {
+    /// Requests to this service can definitely not exceed this size, in bytes.
+    pub fn max_payload_size(&self) -> u32 {
+        self.max_query_payload_size + self.max_tx_payload_size
+    }
 }
 
 impl ExtensionFactory for QueryLimitsChecker {
     fn create(&self) -> Arc<dyn Extension> {
         Arc::new(QueryLimitsCheckerExt {
-            input_usage: Mutex::new(None),
+            usage: Mutex::new(None),
         })
     }
 }
@@ -55,12 +79,22 @@ impl Extension for QueryLimitsCheckerExt {
         next: NextParseQuery<'_>,
     ) -> ServerResult<ExecutableDocument> {
         let limits: &QueryLimitsConfig = ctx.data_unchecked();
+        let &ContentLength(length) = ctx.data_unchecked();
+
+        if length > limits.max_payload_size() as u64 {
+            Err(Error::new_global(ErrorKind::PayloadSizeOverall {
+                limit: limits.max_payload_size(),
+                actual: length,
+            }))?;
+        }
 
         let doc = next.run(ctx, query, variables).await?;
 
-        let input_usage = input::check(limits, &doc)?;
+        let input = input::check(limits, &doc)?;
+        let payload = payload::check(limits, length, &ctx.schema_env.registry, &doc, variables)?;
+
         if let Some(ShowUsage(_)) = ctx.data_opt() {
-            *self.input_usage.lock().unwrap() = Some(input_usage);
+            *self.usage.lock().unwrap() = Some(Usage { input, payload });
         }
 
         Ok(doc)
@@ -69,8 +103,8 @@ impl Extension for QueryLimitsCheckerExt {
     async fn request(&self, ctx: &ExtensionContext<'_>, next: NextRequest<'_>) -> Response {
         let mut response = next.run(ctx).await;
 
-        if let Some(input_usage) = self.input_usage.lock().unwrap().take() {
-            response = response.extension("inputUsage", value!(input_usage))
+        if let Some(Usage { input, payload }) = self.usage.lock().unwrap().take() {
+            response = response.extension("usage", value!({"input": input, "payload": payload}));
         }
 
         response
@@ -79,12 +113,15 @@ impl Extension for QueryLimitsCheckerExt {
 
 #[cfg(test)]
 mod tests {
-    use async_graphql::{EmptyMutation, EmptySubscription, Object, Schema};
-    use insta::assert_json_snapshot;
+    use async_graphql::{EmptySubscription, Object, Request, Schema};
+    use async_graphql_value::ConstValue;
+    use axum::http::HeaderValue;
+    use insta::{assert_json_snapshot, assert_snapshot};
 
     use super::*;
 
     struct Query;
+    struct Mutation;
 
     #[Object]
     impl Query {
@@ -111,23 +148,72 @@ mod tests {
         async fn x(&self) -> bool {
             true
         }
+
+        async fn tx(&self, bytes: String, other: usize) -> usize {
+            bytes.len() + other
+        }
+
+        async fn zk(&self, bytes: String, sigs: Vec<String>) -> usize {
+            bytes.len() + sigs.len()
+        }
     }
 
-    fn schema(limits: QueryLimitsConfig) -> Schema<Query, EmptyMutation, EmptySubscription> {
-        Schema::build(Query, EmptyMutation, EmptySubscription)
+    #[Object]
+    impl Mutation {
+        async fn tx(&self, bytes: String, other: usize) -> usize {
+            bytes.len() + other
+        }
+
+        async fn zk(&self, bytes: String, sigs: Vec<String>) -> usize {
+            bytes.len() + sigs.len()
+        }
+    }
+
+    fn config() -> QueryLimitsConfig {
+        QueryLimitsConfig {
+            max_query_nodes: 10,
+            max_query_depth: 5,
+            max_query_payload_size: 1000,
+            max_tx_payload_size: 1000,
+            tx_payload_args: BTreeSet::from_iter([
+                ("Mutation", "tx", "bytes"),
+                ("Query", "tx", "bytes"),
+                ("Query", "zk", "bytes"),
+                ("Query", "zk", "sigs"),
+            ]),
+        }
+    }
+
+    fn schema(limits: QueryLimitsConfig) -> Schema<Query, Mutation, EmptySubscription> {
+        Schema::build(Query, Mutation, EmptySubscription)
             .extension(QueryLimitsChecker)
             .data(limits)
             .finish()
     }
 
-    #[tokio::test]
-    async fn test_pass_input_limits() {
-        let schema = schema(QueryLimitsConfig {
-            max_query_nodes: 10,
-            max_query_depth: 5,
-        });
+    async fn execute(schema: &Schema<Query, Mutation, EmptySubscription>, query: &str) -> Response {
+        schema
+            .execute(
+                Request::from(query)
+                    .data(ShowUsage(HeaderValue::from_static("true")))
+                    .data(ContentLength(query.len() as u64)),
+            )
+            .await
+    }
 
-        let response = schema.execute("{ on { and { on { and { x } } } } }").await;
+    /// Extract a particular `kind` of usage information from the response.
+    fn usage(response: Response, kind: &str) -> ConstValue {
+        let ConstValue::Object(usage) = response.extensions.get("usage").unwrap() else {
+            panic!("Expected usage to be an object");
+        };
+
+        usage.get(kind).unwrap().clone()
+    }
+
+    #[tokio::test]
+    async fn test_pass_limits() {
+        let schema = schema(config());
+        let response = execute(&schema, "{ on { and { on { and { x } } } } }").await;
 
         assert_json_snapshot!(response, @r###"
         {
@@ -141,6 +227,18 @@ mod tests {
                 }
               }
             }
+          },
+          "extensions": {
+            "usage": {
+              "input": {
+                "nodes": 5,
+                "depth": 5
+              },
+              "payload": {
+                "query_payload_size": 35,
+                "tx_payload_size": 0
+              }
+            }
           }
         }
         "###);
@@ -148,14 +246,12 @@ mod tests {
 
     #[tokio::test]
     async fn test_too_deep() {
-        let schema = schema(QueryLimitsConfig {
-            max_query_nodes: 10,
-            max_query_depth: 5,
-        });
-
-        let response = schema
-            .execute("{ on { and { on { and { on { and { x } } } } } } }")
-            .await;
+        let schema = schema(config());
+        let response = execute(
+            &schema,
+            "{ on { and { on { and { on { and { x } } } } } } }",
+        )
+        .await;
 
         assert_json_snapshot!(response, @r###"
         {
@@ -187,23 +283,19 @@ mod tests {
 
     #[tokio::test]
     async fn test_too_many_input_nodes() {
-        let schema = schema(QueryLimitsConfig {
-            max_query_nodes: 10,
-            max_query_depth: 5,
-        });
-
-        let response = schema
-            .execute(
-                r#"{
-                    on       { x }
-                    this     { x }
-                    and      { x }
-                    that     { x }
-                    and      { x }
-                    theOther { x }
-                }"#,
-            )
-            .await;
+        let schema = schema(config());
+        let response = execute(
+            &schema,
+            r#"{
+                on       { x }
+                this     { x }
+                and      { x }
+                that     { x }
+                and      { x }
+                theOther { x }
+            }"#,
+        )
+        .await;
 
         assert_json_snapshot!(response, @r###"
         {
@@ -214,7 +306,7 @@ mod tests {
               "locations": [
                 {
                   "line": 6,
-                  "column": 32
+                  "column": 28
                 }
               ],
               "path": [
@@ -231,12 +323,8 @@ mod tests {
 
     #[tokio::test]
     async fn test_missing_fragment_def() {
-        let schema = schema(QueryLimitsConfig {
-            max_query_nodes: 10,
-            max_query_depth: 5,
-        });
-
-        let response = schema.execute("query { ...IDontExist }").await;
+        let schema = schema(config());
+        let response = execute(&schema, "query { ...IDontExist }").await;
 
         assert_json_snapshot!(response, @r###"
         {
@@ -263,24 +351,20 @@ mod tests {
     /// count.
     #[tokio::test]
     async fn test_too_many_input_nodes_fragment_spread() {
-        let schema = schema(QueryLimitsConfig {
-            max_query_nodes: 10,
-            max_query_depth: 5,
-        });
+        let schema = schema(config());
+        let response = execute(
+            &schema,
+            r#"
+            query {
+                this     { ...F }
+                that     { ...F }
+                theOther { ...F }
+            }
 
-        let response = schema
-            .execute(
-                r#"
-                query {
-                    this     { ...F }
-                    that     { ...F }
-                    theOther { ...F }
-                }
-
-                fragment F on Query { this { that { and { theOther { x } } } } }
-                "#,
-            )
-            .await;
+            fragment F on Query { this { that { and { theOther { x } } } } }
+            "#,
+        )
+        .await;
 
         assert_json_snapshot!(response, @r###"
         {
@@ -291,7 +375,7 @@ mod tests {
               "locations": [
                 {
                   "line": 8,
-                  "column": 46
+                  "column": 42
                 }
               ],
               "path": [
@@ -310,20 +394,15 @@ mod tests {
     /// The depth of a fragment is added to the depth at which the fragment is spread.
     #[tokio::test]
     async fn test_too_deep_fragment_spread() {
-        let schema = schema(QueryLimitsConfig {
-            max_query_nodes: 10,
-            max_query_depth: 5,
-        });
-
-        let response = schema
-            .execute(
-                r#"
-                query { this { that { and { ...F } } } }
-
-                fragment F on Query { theOther { x } }
-                "#,
-            )
-            .await;
+        let schema = schema(config());
+        let response = execute(
+            &schema,
+            r#"
+            query { this { that { and { ...F } } } }
+            fragment F on Query { theOther { x } }
+            "#,
+        )
+        .await;
 
         assert_json_snapshot!(response, @r###"
         {
@@ -333,8 +412,8 @@ mod tests {
               "message": "Query nesting is over 5",
               "locations": [
                 {
-                  "line": 4,
-                  "column": 50
+                  "line": 3,
+                  "column": 46
                 }
               ],
               "path": [
@@ -350,5 +429,146 @@ mod tests {
           ]
         }
         "###);
+    }
+
+    /// The checker performs an initial size test before parsing the request -- if there is no chance
+    /// the request will fit within size constraints, it is rejected immediately.
+    #[tokio::test]
+    async fn test_overall_payload_size_too_small() {
+        let schema = schema(QueryLimitsConfig {
+            max_query_payload_size: 5,
+            max_tx_payload_size: 5,
+            ..config()
+        });
+
+        let response = execute(&schema, "{ on { and { on { and { x } } } } }").await;
+
+        assert_json_snapshot!(response, @r###"
+        {
+          "data": null,
+          "errors": [
+            {
+              "message": "Request too large 35B > 10B",
+              "extensions": {
+                "code": "GRAPHQL_VALIDATION_FAILED"
+              }
+            }
+          ]
+        }
+        "###);
+    }
+
+    #[tokio::test]
+    async fn test_query_payload_too_large() {
+        let schema = schema(QueryLimitsConfig {
+            max_query_payload_size: 5,
+            max_tx_payload_size: 50,
+            ..config()
+        });
+
+        let response = execute(&schema, "{ on { and { on { and { x } } } } }").await;
+
+        assert_json_snapshot!(response, @r###"
+        {
+          "data": null,
+          "errors": [
+            {
+              "message": "Query payload too large: 35B > 5B",
+              "extensions": {
+                "code": "GRAPHQL_VALIDATION_FAILED"
+              }
+            }
+          ]
+        }
+        "###);
+    }
+
+    #[tokio::test]
+    async fn test_tx_payload_too_large() {
+        let schema = schema(QueryLimitsConfig {
+            max_tx_payload_size: 5,
+            max_query_payload_size: 50,
+            ..config()
+        });
+
+        let response = execute(&schema, r#"{ tx(bytes: "hello world", other: 1) }"#).await;
+
+        assert_json_snapshot!(response, @r###"
+        {
+          "data": null,
+          "errors": [
+            {
+              "message": "Transaction payload exceeded limit of 5B",
+              "locations": [
+                {
+                  "line": 1,
+                  "column": 13
+                }
+              ],
+              "extensions": {
+                "code": "GRAPHQL_VALIDATION_FAILED"
+              }
+            }
+          ]
+        }
+        "###);
+    }
+
+    /// Test that transaction payloads in top-level fields get picked up and counted correctly.
+    #[tokio::test]
+    async fn test_tx_payload_accounting() {
+        let schema = schema(config());
+        let response = execute(
+            &schema,
+            r#"
+            {
+              tx(bytes: "hello world", other: 1)
+              zk(bytes: "hello world", sigs: ["a", "b", "c"])
+            }
+            "#,
+        )
+        .await;
+
+        assert_snapshot!(usage(response, "payload"), @"{query_payload_size: 113,tx_payload_size: 39}");
+    }
+
+    /// Transaction payloads that are in nested fields are not counted.
+    #[tokio::test]
+    async fn test_nested_tx_payload_ignored() {
+        let schema = schema(config());
+        let response = execute(
+            &schema,
+            r#"
+            {
+              on {
+                tx(bytes: "hello world", other: 1)
+                zk(bytes: "hello world", sigs: ["a", "b", "c"])
+              }
+            }
+            "#,
+        )
+        .await;
+
+        assert_snapshot!(usage(response, "payload"), @"{query_payload_size: 191,tx_payload_size: 0}");
+    }
+
+    /// The test config specifies the Query.zk contains transaction payloads, but `Mutation.zk`
+    /// does not, so the transaction payload reported is different here compared to
+    /// [test_tx_payload_accounting].
+    #[tokio::test]
+    async fn test_tx_payload_type_filter() {
+        let schema = schema(config());
+        let response = execute(
+            &schema,
+            r#"
+            mutation {
+              tx(bytes: "hello world", other: 1)
+              zk(bytes: "hello world", sigs: ["a", "b", "c"])
+            }
+            "#,
+        )
+        .await;
+
+        assert_snapshot!(usage(response, "payload"), @"{query_payload_size: 148,tx_payload_size: 13}");
     }
 }

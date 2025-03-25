@@ -22,6 +22,7 @@ use extensions::{
     query_limits::{show_usage::ShowUsage, QueryLimitsChecker},
     timeout::Timeout,
 };
+use headers::ContentLength;
 use prometheus::Registry;
 use tokio::{net::TcpListener, task::JoinHandle};
 use tokio_util::sync::CancellationToken;
@@ -228,6 +229,7 @@ pub async fn start_rpc(
 async fn graphql<Q, M, S>(
     ConnectInfo(addr): ConnectInfo<SocketAddr>,
     Extension(schema): Extension<Schema<Q, M, S>>,
+    TypedHeader(content_length): TypedHeader<ContentLength>,
     show_usage: Option<TypedHeader<ShowUsage>>,
     request: GraphQLRequest,
 ) -> GraphQLResponse
@@ -236,7 +238,11 @@ where
     M: ObjectType + 'static,
     S: SubscriptionType + 'static,
 {
-    let mut request = request.into_inner().data(Session::new(addr));
+    let mut request = request
+        .into_inner()
+        .data(content_length)
+        .data(Session::new(addr));
+
     if let Some(TypedHeader(show_usage)) = show_usage {
         request = request.data(show_usage);
     }
