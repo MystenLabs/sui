@@ -19,7 +19,7 @@ bin_version::bin_version!();
     version = VERSION,
 )]
 struct Args {
-    /// Path to a package which the command should be run with respect to.
+    /// Path to package directory with a Move.toml inside
     #[clap(long = "path", short = 'p', global = true)]
     pub package_path: Option<PathBuf>,
 
