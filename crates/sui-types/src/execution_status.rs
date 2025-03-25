@@ -265,7 +265,8 @@ pub enum CommandArgumentError {
         "Invalid usage of value. \
         Mutably borrowed values require unique usage. \
         Immutably borrowed values cannot be taken or borrowed mutably. \
-        Taken values cannot be used again."
+        Taken values cannot be used again. \
+        Taken values cannot be implicitly passed by mutable or immutable reference."
     )]
     InvalidValueUsage,
     #[error("Immutable objects cannot be passed by-value.")]
