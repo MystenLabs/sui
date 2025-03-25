@@ -16,7 +16,7 @@ use prometheus::Registry;
 use sui_indexer_alt_metrics::db::DbConnectionStatsCollector;
 use sui_pg_db as db;
 use tokio_util::sync::CancellationToken;
-use tracing::debug;
+use tracing::{debug, warn};
 use url::Url;
 
 use crate::{data::error::Error, metrics::RpcMetrics};
@@ -107,10 +107,19 @@ impl Connection<'_> {
         ST: 'static,
     {
         let query = query.limit(1);
-        debug!("{}", diesel::debug_query(&query));
+        let query_debug = diesel::debug_query(&query).to_string();
+        debug!("{}", query_debug);
+        let timer = self.metrics.db_latency.start_timer();
 
-        let _guard = self.metrics.db_latency.start_timer();
         let res = query.get_result(&mut self.conn).await;
+        let elapsed_seconds = timer.stop_and_record();
+        if elapsed_seconds > 60.0 {
+            warn!(
+                elapsed_seconds,
+                query = query_debug,
+                "Slow database query detected (>60s)"
+            );
+        }
 
         if res.is_ok() {
             self.metrics.db_requests_succeeded.inc();
@@ -129,10 +138,19 @@ impl Connection<'_> {
         Pg: QueryMetadata<Q::SqlType>,
         ST: 'static,
     {
-        debug!("{}", diesel::debug_query(&query));
+        let query_debug = diesel::debug_query(&query).to_string();
+        debug!("{}", query_debug);
+        let timer = self.metrics.db_latency.start_timer();
 
-        let _guard = self.metrics.db_latency.start_timer();
         let res = query.get_results(&mut self.conn).await;
+        let elapsed_seconds = timer.stop_and_record();
+        if elapsed_seconds > 60.0 {
+            warn!(
+                elapsed_seconds,
+                query = query_debug,
+                "Slow database query detected (>60s)"
+            );
+        }
 
         if res.is_ok() {
             self.metrics.db_requests_succeeded.inc();
