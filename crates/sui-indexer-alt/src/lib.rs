@@ -218,7 +218,7 @@ pub async fn setup_indexer(
     add_sequential!(SumPackages, sum_packages);
 
     // Unpruned concurrent pipelines
-    add_concurrent!(CpSequenceNumbers, cp_sequence_numbers);
+    // add_concurrent!(CpSequenceNumbers, cp_sequence_numbers);
     add_concurrent!(EvEmitMod, ev_emit_mod);
     add_concurrent!(EvStructInst, ev_struct_inst);
     add_concurrent!(KvCheckpoints, kv_checkpoints);

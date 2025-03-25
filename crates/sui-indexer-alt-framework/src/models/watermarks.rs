@@ -62,7 +62,7 @@ pub struct PgPrunerWatermark<'p> {
 }
 
 impl StoredWatermark {
-    pub(crate) async fn get(
+    pub async fn get(
         conn: &mut Connection<'_>,
         pipeline: &'static str,
     ) -> QueryResult<Option<Self>> {
@@ -77,7 +77,7 @@ impl StoredWatermark {
 
 impl PgCommitterWatermark<'static> {
     /// Get the current high watermark for the pipeline.
-    pub(crate) async fn get(
+    pub async fn get(
         conn: &mut Connection<'_>,
         pipeline: &'static str,
     ) -> QueryResult<Option<Self>> {
@@ -92,7 +92,7 @@ impl PgCommitterWatermark<'static> {
 
 impl<'p> PgCommitterWatermark<'p> {
     #[cfg(test)]
-    pub(crate) fn new_for_testing(pipeline: &'p str, checkpoint_hi_inclusive: u64) -> Self {
+    pub fn new_for_testing(pipeline: &'p str, checkpoint_hi_inclusive: u64) -> Self {
         PgCommitterWatermark {
             pipeline: pipeline.into(),
             epoch_hi_inclusive: 0,
@@ -106,7 +106,7 @@ impl<'p> PgCommitterWatermark<'p> {
     /// Returns a boolean indicating whether the watermark was actually updated or not.
     ///
     /// TODO(amnn): Test this (depends on supporting migrations and tempdb).
-    pub(crate) async fn update(&self, conn: &mut Connection<'_>) -> QueryResult<bool> {
+    pub async fn update(&self, conn: &mut Connection<'_>) -> QueryResult<bool> {
         use diesel::query_dsl::methods::FilterDsl;
         Ok(diesel::insert_into(watermarks::table)
             .values(StoredWatermark::from(self.clone()))
@@ -125,7 +125,7 @@ impl<'p> PgReaderWatermark<'p> {
     /// watermark, and updates the timestamp this update happened to the database's current time.
     ///
     /// Returns a boolean indicating whether the watermark was actually updated or not.
-    pub(crate) async fn update(&self, conn: &mut Connection<'_>) -> QueryResult<bool> {
+    pub async fn update(&self, conn: &mut Connection<'_>) -> QueryResult<bool> {
         Ok(diesel::update(watermarks::table)
             .set((self, watermarks::pruner_timestamp.eq(diesel::dsl::now)))
             .filter(watermarks::pipeline.eq(&self.pipeline))
@@ -144,7 +144,7 @@ impl PgPrunerWatermark<'static> {
     /// The pruner is allowed to prune the region between the returned `pruner_hi` (inclusive) and
     /// `reader_lo` (exclusive) after `wait_for` milliseconds have passed since this response was
     /// returned.
-    pub(crate) async fn get(
+    pub async fn get(
         conn: &mut Connection<'_>,
         pipeline: &'static str,
         delay: Duration,
@@ -175,7 +175,7 @@ impl PgPrunerWatermark<'static> {
 
 impl PgPrunerWatermark<'_> {
     #[cfg(test)]
-    pub(crate) fn new_for_testing(pipeline: &'static str, pruner_hi: u64) -> Self {
+    pub fn new_for_testing(pipeline: &'static str, pruner_hi: u64) -> Self {
         PgPrunerWatermark {
             pipeline: pipeline.into(),
             wait_for: 0,
@@ -188,7 +188,7 @@ impl PgPrunerWatermark<'_> {
     /// raises the watermark.
     ///
     /// Returns a boolean indicating whether the watermark was actually updated or not.
-    pub(crate) async fn update(&self, conn: &mut Connection<'_>) -> QueryResult<bool> {
+    pub async fn update(&self, conn: &mut Connection<'_>) -> QueryResult<bool> {
         Ok(diesel::update(watermarks::table)
             .set(watermarks::pruner_hi.eq(self.pruner_hi))
             .filter(watermarks::pipeline.eq(&self.pipeline))

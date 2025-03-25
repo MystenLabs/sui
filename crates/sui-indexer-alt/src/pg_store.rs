@@ -9,7 +9,7 @@ use diesel_async::scoped_futures::ScopedFutureExt;
 use diesel_async::AsyncConnection;
 use sui_indexer_alt_metrics::stats::{DbConnectionStats, DbConnectionStatsSnapshot};
 
-use sui_indexer_alt_framework::db::{Connection as PgConnection, Db as PgDb};
+use sui_indexer_alt_framework::db::Db as PgDb;
 use sui_indexer_alt_framework::models::watermarks::{
     PgCommitterWatermark, PgPrunerWatermark, PgReaderWatermark, StoredWatermark,
 };
@@ -34,20 +34,6 @@ pub struct MyPgConnection<'c>(pub sui_indexer_alt_framework::db::Connection<'c>)
 
 // Implement DbConnection for your newtype
 impl<'c> DbConnection for MyPgConnection<'c> {}
-
-// Add methods to delegate to the inner connection
-impl<'c> MyPgConnection<'c> {
-    // Access the inner connection
-    pub fn inner(&self) -> &sui_indexer_alt_framework::db::Connection<'c> {
-        &self.0
-    }
-
-    pub fn inner_mut(&mut self) -> &mut sui_indexer_alt_framework::db::Connection<'c> {
-        &mut self.0
-    }
-
-    // You can add convenience methods that delegate to the inner connection if needed
-}
 
 impl<'c> Deref for MyPgConnection<'c> {
     type Target = sui_indexer_alt_framework::db::Connection<'c>;
@@ -197,7 +183,7 @@ impl TransactionalStore for PgStore {
     where
         H: SequentialHandler<Store = Self> + Send + Sync + 'a,
     {
-        let mut conn = self.db.connect().await?;
+        let mut conn = self.connect().await?;
 
         let result = AsyncConnection::transaction(&mut conn, |conn| {
             async {
@@ -210,9 +196,9 @@ impl TransactionalStore for PgStore {
                 };
                 watermark.update(conn).await.map_err(anyhow::Error::from)?;
 
-                // Wrap the connection in your newtype before passing to commit
-                let mut wrapped_conn = MyPgConnection(conn);
-                H::commit(batch, &mut wrapped_conn).await
+                // Use the conn directly with the Handler
+                // The Handler would need to accept any type that implements AsPgConnection
+                H::commit(batch, conn).await
             }
             .scope_boxed()
         })
