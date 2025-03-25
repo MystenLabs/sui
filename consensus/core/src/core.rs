@@ -721,7 +721,7 @@ impl Core {
         // Update round tracker with our own highest accepted blocks
         self.round_tracker
             .write()
-            .update_from_block(&extended_block);
+            .update_from_accepted_block(&extended_block);
 
         Some(extended_block)
     }
@@ -1048,9 +1048,7 @@ impl Core {
         );
 
         // Ensure ancestor state is up to date before selecting for proposal.
-        let round_tracker = self.round_tracker.read();
-        let accepted_quorum_rounds = round_tracker.compute_accepted_quorum_rounds();
-        drop(round_tracker);
+        let accepted_quorum_rounds = self.round_tracker.read().compute_accepted_quorum_rounds();
 
         self.ancestor_state_manager
             .update_all_ancestors_state(&accepted_quorum_rounds);

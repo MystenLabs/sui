@@ -13,7 +13,7 @@ use std::sync::Arc;
 use consensus_config::{AuthorityIndex, Committee};
 use itertools::Itertools;
 
-use tracing::debug;
+use tracing::{debug, trace};
 
 use crate::{
     block::{BlockAPI, ExtendedBlock},
@@ -61,7 +61,7 @@ impl PeerRoundTracker {
 
     /// Update accepted rounds based on a new block created locally or received from the network
     /// and its excluded ancestors
-    pub(crate) fn update_from_block(&mut self, extended_block: &ExtendedBlock) {
+    pub(crate) fn update_from_accepted_block(&mut self, extended_block: &ExtendedBlock) {
         let block = &extended_block.block;
         let excluded_ancestors = &extended_block.excluded_ancestors;
         let author = block.author();
@@ -193,7 +193,7 @@ impl PeerRoundTracker {
             })
             .collect::<Vec<_>>();
 
-        debug!(
+        trace!(
             "Computed accepted quorum round per authority: {}",
             self.context
                 .committee
@@ -216,7 +216,7 @@ impl PeerRoundTracker {
             })
             .collect::<Vec<_>>();
 
-        debug!(
+        trace!(
             "Computed received quorum round per authority: {}",
             self.context
                 .committee
@@ -325,6 +325,7 @@ mod test {
 
     #[tokio::test]
     async fn test_compute_received_quorum_round() {
+        telemetry_subscribers::init_for_testing();
         let (context, _) = Context::new_for_test(4);
         let context = Arc::new(context);
         let mut round_tracker = PeerRoundTracker::new(context);
@@ -364,7 +365,7 @@ mod test {
 
         round_tracker.update_from_probe(highest_accepted_rounds, vec![]);
 
-        // Simulate receiving a block from authority 3
+        // Simulate accepting a block from authority 3
         let test_block = TestBlock::new(7, 2)
             .set_ancestors(vec![BlockRef::new(
                 6,
@@ -373,7 +374,7 @@ mod test {
             )])
             .build();
         let block = VerifiedBlock::new_for_test(test_block);
-        round_tracker.update_from_block(&ExtendedBlock {
+        round_tracker.update_from_accepted_block(&ExtendedBlock {
             block,
             excluded_ancestors: vec![BlockRef::new(
                 8,
@@ -392,7 +393,7 @@ mod test {
             ])
             .build();
         let block = VerifiedBlock::new_for_test(test_block);
-        round_tracker.update_from_block(&ExtendedBlock {
+        round_tracker.update_from_accepted_block(&ExtendedBlock {
             block,
             excluded_ancestors: vec![BlockRef::new(
                 8,
@@ -448,7 +449,7 @@ mod test {
             let round = 110 + (authority as u32 * 10);
             let block =
                 VerifiedBlock::new_for_test(TestBlock::new(round, authority as u32).build());
-            round_tracker.update_from_block(&ExtendedBlock {
+            round_tracker.update_from_accepted_block(&ExtendedBlock {
                 block,
                 excluded_ancestors: vec![],
             });

@@ -280,7 +280,7 @@ impl<C: CoreThreadDispatcher> NetworkService for AuthorityService<C> {
 
         self.round_tracker
             .write()
-            .update_from_block(&ExtendedBlock {
+            .update_from_accepted_block(&ExtendedBlock {
                 block: verified_block,
                 excluded_ancestors: excluded_ancestors.clone(),
             });
