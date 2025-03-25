@@ -3868,7 +3868,9 @@ fn method_call(
     let (m, f, fty, usage) =
         match method_call_resolve(context, call_loc, &edotted, method, ty_args_opt) {
             ResolvedMethodCall::Resolved(m, f, fty, usage) => (*m, f, fty, usage),
-            ResolvedMethodCall::UnknownName if context.env().ide_mode() => {
+            ResolvedMethodCall::InvalidBaseType | ResolvedMethodCall::UnknownName
+                if context.env().ide_mode() =>
+            {
                 // Even if the method name fails to resolve, we want autocomplete information.
                 edotted.autocomplete_last = Some(method.loc);
                 let err_ty = context.error_type(call_loc);
