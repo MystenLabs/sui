@@ -14,7 +14,7 @@ use jsonrpsee::{server::middleware::rpc::RpcServiceT, types::Request, MethodResp
 use pin_project_lite::pin_project;
 use prometheus::{HistogramTimer, IntCounterVec};
 use tower_layer::Layer;
-use tracing::info;
+use tracing::{info, warn};
 
 use super::RpcMetrics;
 
@@ -42,6 +42,8 @@ pin_project! {
     pub(crate) struct MetricsFuture<'a, F> {
         metrics: Option<RequestMetrics>,
         method: Cow<'a, str>,
+        // RPC request params for logging
+        params: String,
         #[pin]
         inner: F,
     }
@@ -102,6 +104,7 @@ where
                 failed: self.layer.metrics.requests_failed.clone(),
             }),
             method,
+            params: format!("{:?}", request.params()),
             inner: self.inner.call(request),
         }
     }
@@ -136,6 +139,30 @@ where
         } else {
             metrics.succeeded.with_label_values(&[method]).inc();
             info!(method, elapsed_ms, "Request succeeded");
+        }
+
+        if elapsed_ms > 60000.0 {
+            let response_str = if resp.is_error() {
+                format!("Error: {:?}", resp.as_error_code())
+            } else {
+                let result = resp.as_result();
+                if result.len() > 1000 {
+                    format!(
+                        "{}... (truncated, total size: {})",
+                        &result[..1000],
+                        result.len()
+                    )
+                } else {
+                    result.to_string()
+                }
+            };
+            warn!(
+                method,
+                elapsed_ms,
+                this.params,
+                response = response_str,
+                "Slow RPC request detected (>60s)"
+            );
         }
 
         Poll::Ready(resp)
