@@ -8,6 +8,7 @@ edition = "2021"
 
 [dependencies]
 anyhow.workspace = true
+chrono.workspace = true
 diesel = {workspace = true, features = ["postgres_backend", "chrono"]}
 diesel_migrations.workspace = true
 serde.workspace = true

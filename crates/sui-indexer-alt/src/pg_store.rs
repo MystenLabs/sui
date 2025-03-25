@@ -5,17 +5,22 @@ use std::ops::{Deref, DerefMut};
 use std::time::Duration;
 
 use async_trait::async_trait;
+use diesel::prelude::*;
+use diesel::sql_types::BigInt;
 use diesel_async::scoped_futures::ScopedFutureExt;
 use diesel_async::AsyncConnection;
-use sui_indexer_alt_metrics::stats::{DbConnectionStats, DbConnectionStatsSnapshot};
+use diesel_async::RunQueryDsl;
 
 use sui_indexer_alt_framework::db::Db as PgDb;
-use sui_indexer_alt_framework::models::watermarks::{
-    PgCommitterWatermark, PgPrunerWatermark, PgReaderWatermark, StoredWatermark,
-};
 use sui_indexer_alt_framework::store::{
     CommitterWatermark, DbConnection, HandlerBatch, SequentialHandler, Store, TransactionalStore,
 };
+use sui_indexer_alt_metrics::stats::{DbConnectionStats, DbConnectionStatsSnapshot};
+use sui_indexer_alt_schema::schema::watermarks;
+use sui_indexer_alt_schema::watermarks::{
+    PgCommitterWatermark, PgPrunerWatermark, PgReaderWatermark, StoredWatermark,
+};
+use sui_sql_macro::sql;
 
 /// PostgreSQL implementation of Store
 #[derive(Clone)]
@@ -67,8 +72,12 @@ impl Store for PgStore {
         pipeline: &'static str,
     ) -> anyhow::Result<Option<(i64, i64, i64, i64)>> {
         let mut conn = self.db.connect().await?;
-        let watermark = PgCommitterWatermark::get(&mut conn, pipeline)
+        let watermark = watermarks::table
+            .select(PgCommitterWatermark::as_select())
+            .filter(watermarks::pipeline.eq(pipeline))
+            .first(&mut conn)
             .await
+            .optional()
             .map_err(anyhow::Error::from)?;
 
         if let Some(watermark) = watermark {
@@ -88,8 +97,12 @@ impl Store for PgStore {
         pipeline: &'static str,
     ) -> anyhow::Result<Option<(i64, i64)>> {
         let mut conn = self.db.connect().await?;
-        let watermark = StoredWatermark::get(&mut conn, pipeline)
+        let watermark = watermarks::table
+            .select(StoredWatermark::as_select())
+            .filter(watermarks::pipeline.eq(pipeline))
+            .first(&mut conn)
             .await
+            .optional()
             .map_err(anyhow::Error::from)?;
 
         if let Some(watermark) = watermark {
@@ -118,7 +131,16 @@ impl Store for PgStore {
             tx_hi,
             timestamp_ms_hi_inclusive,
         };
-        watermark.update(&mut conn).await.map_err(Into::into)
+        use diesel::query_dsl::methods::FilterDsl;
+        Ok(diesel::insert_into(watermarks::table)
+            .values(StoredWatermark::from(watermark.clone()))
+            .on_conflict(watermarks::pipeline)
+            .do_update()
+            .set(watermark.clone())
+            .filter(watermarks::checkpoint_hi_inclusive.lt(checkpoint_hi_inclusive))
+            .execute(&mut conn)
+            .await?
+            > 0)
     }
 
     async fn update_reader_watermark(
@@ -131,7 +153,16 @@ impl Store for PgStore {
             pipeline: pipeline.into(),
             reader_lo,
         };
-        watermark.update(&mut conn).await.map_err(Into::into)
+        Ok(diesel::update(watermarks::table)
+            .set((
+                watermark.clone(),
+                watermarks::pruner_timestamp.eq(diesel::dsl::now),
+            ))
+            .filter(watermarks::pipeline.eq(&watermark.pipeline))
+            .filter(watermarks::reader_lo.lt(watermark.reader_lo))
+            .execute(&mut conn)
+            .await?
+            > 0)
     }
 
     async fn get_pruner_watermark(
@@ -140,9 +171,25 @@ impl Store for PgStore {
         delay: Duration,
     ) -> anyhow::Result<Option<(i64, i64, i64)>> {
         let mut conn = self.db.connect().await?;
-        let watermark = PgPrunerWatermark::get(&mut conn, pipeline, delay)
-            .await
-            .map_err(anyhow::Error::from)?;
+        let watermark: Option<PgPrunerWatermark> = {
+            let wait_for = sql!(as BigInt,
+                "CAST({BigInt} + 1000 * EXTRACT(EPOCH FROM pruner_timestamp - NOW()) AS BIGINT)",
+                delay.as_millis() as i64,
+            );
+
+            watermarks::table
+                .select((
+                    watermarks::pipeline,
+                    wait_for,
+                    watermarks::reader_lo,
+                    watermarks::pruner_hi,
+                ))
+                .filter(watermarks::pipeline.eq(pipeline))
+                .first(&mut conn)
+                .await
+                .optional()
+                .map_err(anyhow::Error::from)?
+        };
 
         if let Some(watermark) = watermark {
             Ok(Some((
@@ -168,7 +215,12 @@ impl Store for PgStore {
             reader_lo: 0,
             wait_for: 0,
         };
-        watermark.update(&mut conn).await.map_err(Into::into)
+        Ok(diesel::update(watermarks::table)
+            .set(watermarks::pruner_hi.eq(watermark.pruner_hi))
+            .filter(watermarks::pipeline.eq(&watermark.pipeline))
+            .execute(&mut conn)
+            .await?
+            > 0)
     }
 }
 
@@ -194,7 +246,11 @@ impl TransactionalStore for PgStore {
                     tx_hi: watermark.tx_hi,
                     timestamp_ms_hi_inclusive: watermark.timestamp_ms_hi_inclusive,
                 };
-                watermark.update(conn).await.map_err(anyhow::Error::from)?;
+                diesel::update(watermarks::table)
+                    .set(watermark.clone())
+                    .filter(watermarks::pipeline.eq(&watermark.pipeline))
+                    .execute(conn)
+                    .await?;
 
                 // Use the conn directly with the Handler
                 // The Handler would need to accept any type that implements AsPgConnection

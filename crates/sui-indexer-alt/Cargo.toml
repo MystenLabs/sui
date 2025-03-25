@@ -37,6 +37,7 @@ sui-indexer-alt-metrics.workspace = true
 sui-indexer-alt-schema.workspace = true
 sui-protocol-config.workspace = true
 sui-synthetic-ingestion = { workspace = true, optional = true }
+sui-sql-macro.workspace = true
 
 [dev-dependencies]
 rand.workspace = true

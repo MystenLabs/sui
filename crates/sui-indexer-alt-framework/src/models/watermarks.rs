@@ -3,7 +3,7 @@
 
 use std::{borrow::Cow, time::Duration};
 
-use chrono::naive::NaiveDateTime;
+pub use chrono::naive::NaiveDateTime;
 use diesel::{prelude::*, sql_types::BigInt};
 use diesel_async::RunQueryDsl;
 
