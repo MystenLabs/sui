@@ -211,10 +211,8 @@ pub async fn start_rpc(
     cancel: CancellationToken,
 ) -> anyhow::Result<JoinHandle<()>> {
     let h_rpc = RpcService::new(args, version, schema(), registry, cancel.child_token())
-        .extension(Timeout)
-        .data(config.limits.timeouts())
-        .extension(QueryLimitsChecker)
-        .data(config.limits.query_limits())
+        .extension(Timeout::new(config.limits.timeouts()))
+        .extension(QueryLimitsChecker::new(config.limits.query_limits()))
         .data(config.limits)
         .run()
         .await?;

@@ -18,24 +18,32 @@ use tokio::time::timeout;
 
 use crate::error::request_timeout;
 
-/// The timeout extension is responsible for limiting the amount of time spent serving any single
-/// request. It is configured by [RpcConfig] which it expects to find in its context. Timeout
-/// durations are configured separately for mutations and for queries.
-pub(crate) struct Timeout;
-
 /// How long to wait for each kind of operation before timing out.
 pub(crate) struct TimeoutConfig {
     pub query: Duration,
     pub mutation: Duration,
 }
 
+/// The timeout extension is responsible for limiting the amount of time spent serving any single
+/// request. It is configured by [RpcConfig] which it expects to find in its context. Timeout
+/// durations are configured separately for mutations and for queries.
+pub(crate) struct Timeout(Arc<TimeoutConfig>);
+
 struct TimeoutExt {
+    config: Arc<TimeoutConfig>,
     is_mutation: AtomicBool,
+}
+
+impl Timeout {
+    pub(crate) fn new(config: TimeoutConfig) -> Self {
+        Self(Arc::new(config))
+    }
 }
 
 impl ExtensionFactory for Timeout {
     fn create(&self) -> Arc<dyn Extension> {
         Arc::new(TimeoutExt {
+            config: self.0.clone(),
             is_mutation: AtomicBool::new(false),
         })
     }
@@ -69,12 +77,11 @@ impl Extension for TimeoutExt {
         operation_name: Option<&str>,
         next: NextExecute<'_>,
     ) -> Response {
-        let config: &TimeoutConfig = ctx.data_unchecked();
         let is_mutation = self.is_mutation.load(Ordering::Relaxed);
         let limit = if is_mutation {
-            config.mutation
+            self.config.mutation
         } else {
-            config.query
+            self.config.query
         };
 
         timeout(limit, next.run(ctx, operation_name))
@@ -110,11 +117,10 @@ mod tests {
         let zero = Duration::from_millis(0);
         let delay = Duration::from_millis(200);
         let response = Schema::build(Root(delay / 2), EmptyMutation, EmptySubscription)
-            .extension(Timeout)
-            .data(TimeoutConfig {
+            .extension(Timeout::new(TimeoutConfig {
                 query: delay,
                 mutation: zero,
-            })
+            }))
             .finish()
             .execute("query { op }")
             .await;
@@ -128,11 +134,10 @@ mod tests {
         let zero = Duration::from_millis(0);
         let delay = Duration::from_millis(200);
         let response = Schema::build(Root(zero), Root(delay / 2), EmptySubscription)
-            .extension(Timeout)
-            .data(TimeoutConfig {
+            .extension(Timeout::new(TimeoutConfig {
                 query: zero,
                 mutation: delay,
-            })
+            }))
             .finish()
             .execute("mutation { op }")
             .await;
@@ -143,13 +148,13 @@ mod tests {
     /// The request takes longer than the timeout to handle, so it should fail.
     #[tokio::test]
     async fn test_query_timeout_fail() {
+        let zero = Duration::from_millis(0);
         let delay = Duration::from_millis(200);
         let response = Schema::build(Root(delay * 2), EmptyMutation, EmptySubscription)
-            .extension(Timeout)
-            .data(TimeoutConfig {
+            .extension(Timeout::new(TimeoutConfig {
                 query: delay,
-                mutation: Duration::from_millis(0),
-            })
+                mutation: zero,
+            }))
             .finish()
             .execute("query { op }")
             .await;
@@ -170,11 +175,10 @@ mod tests {
         let zero = Duration::from_millis(0);
         let delay = Duration::from_millis(200);
         let response = Schema::build(Root(zero), Root(delay * 2), EmptySubscription)
-            .extension(Timeout)
-            .data(TimeoutConfig {
+            .extension(Timeout::new(TimeoutConfig {
                 query: zero,
                 mutation: delay,
-            })
+            }))
             .finish()
             .execute("mutation { op }")
             .await;
@@ -196,11 +200,10 @@ mod tests {
         let zero = Duration::from_millis(0);
         let delay = Duration::from_millis(200);
         let response = Schema::build(Root(zero), Root(delay / 2), EmptySubscription)
-            .extension(Timeout)
-            .data(TimeoutConfig {
+            .extension(Timeout::new(TimeoutConfig {
                 query: zero,
                 mutation: delay,
-            })
+            }))
             .finish()
             .execute("mutation { a:op b:op c:op }")
             .await;

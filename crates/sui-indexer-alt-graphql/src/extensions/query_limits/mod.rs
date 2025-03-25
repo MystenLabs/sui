@@ -33,9 +33,10 @@ pub(crate) struct QueryLimitsConfig {
 }
 
 /// Extension factory for adding checks that the query is within configurable limits.
-pub(crate) struct QueryLimitsChecker;
+pub(crate) struct QueryLimitsChecker(Arc<QueryLimitsConfig>);
 
 struct QueryLimitsCheckerExt {
+    limits: Arc<QueryLimitsConfig>,
     usage: Mutex<Option<Usage>>,
 }
 
@@ -51,9 +52,16 @@ impl QueryLimitsConfig {
     }
 }
 
+impl QueryLimitsChecker {
+    pub(crate) fn new(limits: QueryLimitsConfig) -> Self {
+        Self(Arc::new(limits))
+    }
+}
+
 impl ExtensionFactory for QueryLimitsChecker {
     fn create(&self) -> Arc<dyn Extension> {
         Arc::new(QueryLimitsCheckerExt {
+            limits: self.0.clone(),
             usage: Mutex::new(None),
         })
     }
@@ -78,20 +86,25 @@ impl Extension for QueryLimitsCheckerExt {
         variables: &Variables,
         next: NextParseQuery<'_>,
     ) -> ServerResult<ExecutableDocument> {
-        let limits: &QueryLimitsConfig = ctx.data_unchecked();
         let &ContentLength(length) = ctx.data_unchecked();
 
-        if length > limits.max_payload_size() as u64 {
+        if length > self.limits.max_payload_size() as u64 {
             Err(Error::new_global(ErrorKind::PayloadSizeOverall {
-                limit: limits.max_payload_size(),
+                limit: self.limits.max_payload_size(),
                 actual: length,
             }))?;
         }
 
         let doc = next.run(ctx, query, variables).await?;
 
-        let input = input::check(limits, &doc)?;
-        let payload = payload::check(limits, length, &ctx.schema_env.registry, &doc, variables)?;
+        let input = input::check(self.limits.as_ref(), &doc)?;
+        let payload = payload::check(
+            self.limits.as_ref(),
+            length,
+            &ctx.schema_env.registry,
+            &doc,
+            variables,
+        )?;
 
         if let Some(ShowUsage(_)) = ctx.data_opt() {
             *self.usage.lock().unwrap() = Some(Usage { input, payload });
@@ -178,8 +191,7 @@ mod tests {
 
     fn schema(limits: QueryLimitsConfig) -> Schema<Query, Mutation, EmptySubscription> {
         Schema::build(Query, Mutation, EmptySubscription)
-            .extension(QueryLimitsChecker)
-            .data(limits)
+            .extension(QueryLimitsChecker::new(limits))
             .finish()
     }
 
