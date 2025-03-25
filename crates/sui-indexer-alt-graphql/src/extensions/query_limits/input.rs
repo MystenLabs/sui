@@ -1,58 +1,25 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{mem, rc::Rc};
+use std::mem;
 
 use async_graphql::{
     parser::types::{ExecutableDocument, Selection},
-    Name, PathSegment, ServerResult,
+    ServerResult,
 };
 use serde::{Deserialize, Serialize};
 
 use super::{
+    chain::Chain,
     error::{Error, ErrorKind},
     QueryLimitsConfig,
 };
-
-/// Chains represent a tree of [PathSegment]s, where each link in the chain knows its parent. They
-/// are used to recover the path of (nested) fields at which an error occurred.
-struct Chain {
-    seg: PathSegment,
-    pred: Option<Rc<Chain>>,
-}
 
 /// How many input nodes the query used, and how deep the deepest part of the query was.
 #[derive(Serialize, Deserialize)]
 pub(super) struct Usage {
     pub nodes: u32,
     pub depth: u32,
-}
-
-impl Chain {
-    /// Create a new chain with `name` appended to `pred`.
-    fn new(pred: Option<Rc<Chain>>, name: Name) -> Rc<Self> {
-        Rc::new(Self {
-            seg: PathSegment::Field(name.as_str().to_owned()),
-            pred,
-        })
-    }
-
-    /// Recover the path ending at this chain node.
-    fn to_path(&self) -> Vec<PathSegment> {
-        let mut path = vec![];
-        let mut curr = self;
-        loop {
-            path.push(curr.seg.clone());
-            if let Some(pred) = &curr.pred {
-                curr = pred;
-            } else {
-                break;
-            }
-        }
-
-        path.reverse();
-        path
-    }
 }
 
 /// Check input node limits for the query in `doc` regarding depth and number of nodes. These
@@ -83,7 +50,7 @@ pub(super) fn check(limits: &QueryLimitsConfig, doc: &ExecutableDocument) -> Ser
         if depth_budget == 0 {
             Err(Error::new(
                 ErrorKind::InputNesting(limits.max_query_depth),
-                chain.as_deref().map_or(vec![], Chain::to_path),
+                Chain::path(chain),
                 next.pos,
             ))?
         } else {
@@ -96,7 +63,7 @@ pub(super) fn check(limits: &QueryLimitsConfig, doc: &ExecutableDocument) -> Ser
             if node_budget == 0 {
                 Err(Error::new(
                     ErrorKind::InputNodes(limits.max_query_nodes),
-                    pred.as_deref().map_or(vec![], Chain::to_path),
+                    Chain::path(&pred),
                     selection.pos,
                 ))?
             } else {
@@ -120,7 +87,7 @@ pub(super) fn check(limits: &QueryLimitsConfig, doc: &ExecutableDocument) -> Ser
                     let def = doc.fragments.get(name).ok_or_else(|| {
                         Error::new(
                             ErrorKind::UnknownFragment(name.as_str().to_owned()),
-                            pred.as_deref().map_or(vec![], Chain::to_path),
+                            Chain::path(&pred),
                             fs.pos,
                         )
                     })?;
