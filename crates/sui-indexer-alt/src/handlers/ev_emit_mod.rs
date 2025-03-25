@@ -4,17 +4,18 @@
 use std::ops::Range;
 use std::{collections::BTreeSet, sync::Arc};
 
-use crate::pg_store::PgStore;
 use anyhow::Result;
 use diesel::{ExpressionMethods, QueryDsl};
 use diesel_async::RunQueryDsl;
 use sui_indexer_alt_framework::store::Store;
 use sui_indexer_alt_framework::{
-    models::cp_sequence_numbers::tx_interval,
     pipeline::{concurrent::Handler, Processor},
     types::full_checkpoint_content::CheckpointData,
 };
 use sui_indexer_alt_schema::{events::StoredEvEmitMod, schema::ev_emit_mod};
+
+use crate::handlers::cp_sequence_numbers::tx_interval;
+use crate::pg_store::PgStore;
 
 pub(crate) struct EvEmitMod;
 
@@ -88,13 +89,13 @@ impl Handler for EvEmitMod {
 
 #[cfg(test)]
 mod tests {
+    use crate::handlers::cp_sequence_numbers::CpSequenceNumbers;
     use crate::new_for_testing;
 
     use super::*;
     use diesel_async::RunQueryDsl;
     use sui_indexer_alt_framework::{
         db,
-        handlers::cp_sequence_numbers::CpSequenceNumbers,
         types::{event::Event, test_checkpoint_data_builder::TestCheckpointDataBuilder},
     };
     use sui_indexer_alt_schema::MIGRATIONS;

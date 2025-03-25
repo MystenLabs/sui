@@ -4,12 +4,10 @@
 use std::ops::Range;
 use std::sync::Arc;
 
-use crate::pg_store::PgStore;
 use anyhow::{bail, Context, Result};
 use diesel::{ExpressionMethods, QueryDsl};
 use diesel_async::RunQueryDsl;
 use sui_indexer_alt_framework::{
-    models::cp_sequence_numbers::epoch_interval,
     pipeline::{concurrent::Handler, Processor},
     store::Store,
     types::{
@@ -19,6 +17,9 @@ use sui_indexer_alt_framework::{
     },
 };
 use sui_indexer_alt_schema::{epochs::StoredEpochEnd, schema::kv_epoch_ends};
+
+use crate::handlers::cp_sequence_numbers::epoch_interval;
+use crate::pg_store::PgStore;
 
 pub(crate) struct KvEpochEnds;
 
@@ -159,13 +160,13 @@ impl Handler for KvEpochEnds {
 
 #[cfg(test)]
 mod tests {
+    use crate::handlers::cp_sequence_numbers::CpSequenceNumbers;
     use crate::new_for_testing;
 
     use super::*;
     use anyhow::Result;
     use sui_indexer_alt_framework::{
-        db::Connection, handlers::cp_sequence_numbers::CpSequenceNumbers,
-        types::test_checkpoint_data_builder::TestCheckpointDataBuilder,
+        db::Connection, types::test_checkpoint_data_builder::TestCheckpointDataBuilder,
     };
     use sui_indexer_alt_schema::MIGRATIONS;
 

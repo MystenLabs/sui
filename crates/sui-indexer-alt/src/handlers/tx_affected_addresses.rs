@@ -4,13 +4,11 @@
 use std::ops::Range;
 use std::sync::Arc;
 
-use crate::pg_store::PgStore;
 use anyhow::Result;
 use diesel::{ExpressionMethods, QueryDsl};
 use diesel_async::RunQueryDsl;
 use itertools::Itertools;
 use sui_indexer_alt_framework::{
-    models::cp_sequence_numbers::tx_interval,
     pipeline::{concurrent::Handler, Processor},
     store::Store,
     types::{full_checkpoint_content::CheckpointData, object::Owner},
@@ -18,6 +16,9 @@ use sui_indexer_alt_framework::{
 use sui_indexer_alt_schema::{
     schema::tx_affected_addresses, transactions::StoredTxAffectedAddress,
 };
+
+use crate::handlers::cp_sequence_numbers::tx_interval;
+use crate::pg_store::PgStore;
 
 pub(crate) struct TxAffectedAddresses;
 
@@ -100,13 +101,13 @@ impl Handler for TxAffectedAddresses {
 
 #[cfg(test)]
 mod tests {
+    use crate::handlers::cp_sequence_numbers::CpSequenceNumbers;
     use crate::new_for_testing;
 
     use super::*;
     use diesel_async::RunQueryDsl;
     use sui_indexer_alt_framework::{
-        db, handlers::cp_sequence_numbers::CpSequenceNumbers,
-        types::test_checkpoint_data_builder::TestCheckpointDataBuilder,
+        db, types::test_checkpoint_data_builder::TestCheckpointDataBuilder,
     };
     use sui_indexer_alt_schema::MIGRATIONS;
 
