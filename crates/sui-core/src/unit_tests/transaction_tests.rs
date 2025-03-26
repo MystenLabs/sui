@@ -390,7 +390,7 @@ pub fn init_move_call_transaction(
 async fn do_transaction_test_skip_cert_checks(
     pre_sign_mutations: impl Fn(&mut TransactionData),
     post_sign_mutations: impl Fn(&mut Transaction),
-    err_check: impl Fn(&SuiError) + Clone + 'static,
+    err_check: impl Fn(&SuiError),
 ) {
     let (sender1, sender_key1): (_, AccountKeyPair) = get_key_pair();
     let (sender2, sender_key2): (_, AccountKeyPair) = get_key_pair();
@@ -410,7 +410,7 @@ async fn do_transaction_test_skip_cert_checks(
 async fn do_transaction_test(
     pre_sign_mutations: impl Fn(&mut TransactionData),
     post_sign_mutations: impl Fn(&mut Transaction),
-    err_check: impl Fn(&SuiError) + Clone + 'static,
+    err_check: impl Fn(&SuiError),
 ) {
     let (sender1, sender_key1): (_, AccountKeyPair) = get_key_pair();
     let (sender2, sender_key2): (_, AccountKeyPair) = get_key_pair();
