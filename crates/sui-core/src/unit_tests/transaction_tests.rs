@@ -442,12 +442,15 @@ async fn do_transaction_test_impl(
     let recipient = dbg_addr(2);
     let input_object_id = input_object.id();
     let mut gas_object_ids = Vec::new();
-    let authority_state = init_state_with_ids(senders.iter().map(|(sender, _)| {
-        let object_id = ObjectID::random();
-        gas_object_ids.push(object_id);
-        (*sender, object_id)
-    }))
-    .await;
+    let init_state_input: Vec<_> = senders
+        .iter()
+        .map(|(sender, _)| {
+            let object_id = ObjectID::random();
+            gas_object_ids.push(object_id);
+            (*sender, object_id)
+        })
+        .collect();
+    let authority_state = init_state_with_ids(init_state_input).await;
     authority_state.insert_genesis_object(input_object).await;
     let rgp = authority_state.reference_gas_price_for_testing().unwrap();
     let object = authority_state.get_object(&input_object_id).await.unwrap();
