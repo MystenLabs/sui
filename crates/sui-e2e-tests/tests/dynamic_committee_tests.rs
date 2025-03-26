@@ -381,7 +381,7 @@ mod remove_stake {
             // pick next delegation object
             let delegation_object_id = *runner.delegations.keys().next().unwrap();
             let (owner, object_id, digest, version) =
-                *runner.delegations.get(&delegation_object_id).unwrap();
+                runner.delegations.remove(&delegation_object_id).unwrap();
 
             RequestWithdrawStake {
                 object_id,
@@ -461,7 +461,8 @@ async fn fuzz_dynamic_committee() {
         .map(|v| (v.sui_address, v.voting_power))
         .collect::<Vec<_>>();
 
-    initial_committee.sort_by(|a, b| a.1.cmp(&b.1));
+    // Sorted by address.
+    initial_committee.sort_by(|a, b| a.0.cmp(&b.0));
 
     // Advance epoch to see the resulting state.
     runner.change_epoch().await;
@@ -479,7 +480,7 @@ async fn fuzz_dynamic_committee() {
     // The remaining voting power is redistributed to the remaining validators.
     //
     // Note: this is a simplified condition with the assumption that no node can have more than
-    //  1000 voting power due to the number of validators being 12. If this was not the case, we'd
+    //  1000 voting power due to the number of validators being > 10. If this was not the case, we'd
     //  have to calculate remainder voting power and redistribute it to the remaining validators.
     active_validators.iter().for_each(|v| {
         assert!(v.voting_power <= 1_000); // limitation
@@ -506,7 +507,12 @@ async fn fuzz_dynamic_committee() {
         .map(|v| (v.sui_address, v.voting_power))
         .collect::<Vec<_>>();
 
-    post_epoch_committee.sort_by(|a, b| a.1.cmp(&b.1));
-
-    assert_eq!(initial_committee, post_epoch_committee);
+    post_epoch_committee.sort_by(|a, b| a.0.cmp(&b.0));
+    post_epoch_committee
+        .iter()
+        .zip(initial_committee.iter())
+        .for_each(|(a, b)| {
+            assert_eq!(a.0, b.0); // same address
+            assert!(a.1.abs_diff(b.1) < 2); // rounding error correction
+        });
 }
