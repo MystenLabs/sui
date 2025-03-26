@@ -78,6 +78,11 @@ pub trait TransactionalStore: Store {
     ) -> anyhow::Result<usize>
     where
         H: SequentialHandler<Store = Self> + Send + Sync + 'a;
+
+    async fn transaction<R, F>(&self, f: F) -> anyhow::Result<R>
+    where
+        R: Send,
+        F: FnOnce(&mut Self::Connection<'_>) -> ScopedFu<'_, '_, anyhow::Result<R>>;
 }
 
 #[derive(Default, Debug, Clone, Copy)]
