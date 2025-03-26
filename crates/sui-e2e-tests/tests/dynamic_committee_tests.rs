@@ -13,9 +13,12 @@ use sui_core::authority::AuthorityState;
 use sui_macros::*;
 use sui_swarm_config::genesis_config::{AccountConfig, DEFAULT_GAS_AMOUNT};
 use sui_test_transaction_builder::TestTransactionBuilder;
-use sui_types::effects::{TransactionEffects, TransactionEffectsAPI};
 use sui_types::{
-    base_types::{ObjectID, ObjectRef, SuiAddress},
+    base_types::SequenceNumber,
+    effects::{TransactionEffects, TransactionEffectsAPI},
+};
+use sui_types::{
+    base_types::{ObjectDigest, ObjectID, ObjectRef, SuiAddress},
     governance::StakedSui,
     object::{Object, Owner},
     programmable_transaction_builder::ProgrammableTransactionBuilder,
@@ -30,7 +33,7 @@ use sui_types::{
 use test_cluster::{TestCluster, TestClusterBuilder};
 use tracing::info;
 
-const MAX_DELEGATION_AMOUNT: u64 = 10_000_000_000_000_000; // 10M SUI
+const MAX_DELEGATION_AMOUNT: u64 = 1_000_000_000_000_000; // 1M SUI
 const MIN_DELEGATION_AMOUNT: u64 = 500_000_000_000_000; // 0.5M SUI
 
 macro_rules! move_call {
@@ -76,7 +79,7 @@ struct StressTestRunner {
     pub removed_validators: BTreeSet<SuiAddress>,
     pub delegation_requests_this_epoch: BTreeMap<ObjectID, SuiAddress>,
     pub delegation_withdraws_this_epoch: u64,
-    pub delegations: BTreeMap<ObjectID, SuiAddress>,
+    pub delegations: BTreeMap<ObjectID, (SuiAddress, ObjectID, ObjectDigest, SequenceNumber)>,
     pub reports: BTreeMap<SuiAddress, BTreeSet<SuiAddress>>,
     pub rng: StdRng,
 }
@@ -342,8 +345,88 @@ mod add_stake {
             assert_eq!(object.owner.get_owner_address().unwrap(), self.sender);
 
             // Keep track of all delegations, we will need it in stake withdrawals.
-            runner.delegations.insert(object.id(), self.staked_with);
+            runner.delegations.insert(
+                object.id(),
+                (self.sender, object.id(), object.digest(), object.version()),
+            );
             runner.display_effects(effects);
+        }
+
+        async fn post_epoch_post_condition(
+            &mut self,
+            _runner: &StressTestRunner,
+            _effects: &TransactionEffects,
+        ) {
+            todo!()
+        }
+    }
+}
+
+mod remove_stake {
+    use super::*;
+
+    pub struct RequestRemoveStakeGen;
+
+    pub struct RequestRemoveStake {
+        object_id: ObjectID,
+        digest: ObjectDigest,
+        version: SequenceNumber,
+        owner: SuiAddress,
+    }
+
+    impl GenStateChange for RequestRemoveStakeGen {
+        type StateChange = RequestRemoveStake;
+
+        fn create(&self, runner: &mut StressTestRunner) -> Self::StateChange {
+            // pick next delegation object
+            let delegation_object_id = *runner.delegations.keys().next().unwrap();
+            let (owner, object_id, digest, version) =
+                *runner.delegations.get(&delegation_object_id).unwrap();
+
+            RequestRemoveStake {
+                object_id,
+                digest,
+                owner,
+                version,
+            }
+        }
+    }
+
+    #[async_trait]
+    impl StatePredicate for RequestRemoveStake {
+        async fn run(&mut self, runner: &mut StressTestRunner) -> Result<TransactionEffects> {
+            let pt = {
+                let mut builder = ProgrammableTransactionBuilder::new();
+                builder.obj(ObjectArg::SUI_SYSTEM_MUT).unwrap();
+                let staked_sui = builder
+                    .obj(ObjectArg::ImmOrOwnedObject((
+                        self.object_id,
+                        self.version,
+                        self.digest,
+                    )))
+                    .unwrap();
+
+                // builder.pure(self.staked_with).unwrap();
+                // let coin = StressTestRunner::split_off(&mut builder, self.stake_amount);
+                move_call! {
+                    builder,
+                    (SUI_SYSTEM_PACKAGE_ID)::sui_system::request_remove_stake(Argument::Input(0), staked_sui)
+                };
+                builder.finish()
+            };
+            let effects = runner.run(self.owner, pt).await;
+
+            Ok(effects)
+        }
+
+        async fn pre_epoch_post_condition(
+            &mut self,
+            _runner: &mut StressTestRunner,
+            _effects: &TransactionEffects,
+        ) {
+            // keeping the body empty, nothing will really change on that
+            // operation except consuming the StakedWal object; actual withdrawal
+            // will happen in the next epoch.
         }
 
         async fn post_epoch_post_condition(
@@ -372,6 +455,15 @@ async fn fuzz_dynamic_committee() {
         task.pre_epoch_post_condition(&mut runner, &effects).await;
     }
 
+    let mut initial_committee = runner
+        .system_state()
+        .active_validators
+        .iter()
+        .map(|v| (v.sui_address, v.voting_power))
+        .collect::<Vec<_>>();
+
+    initial_committee.sort_by(|a, b| a.1.cmp(&b.1));
+
     // Advance epoch to see the resulting state.
     runner.change_epoch().await;
 
@@ -396,4 +488,26 @@ async fn fuzz_dynamic_committee() {
             ((v.staking_pool_sui_balance as u128 * 10_000) / total_stake as u128).min(1_000) as u64;
         assert!(v.voting_power.abs_diff(calculated_power) < 2); // rounding error correction
     });
+
+    // Unstake all randomly assigned stakes.
+    for _ in 0..num_operations {
+        let mut task = remove_stake::RequestRemoveStakeGen.create(&mut runner);
+        let effects = task.run(&mut runner).await.unwrap();
+        task.pre_epoch_post_condition(&mut runner, &effects).await;
+    }
+
+    // Advance epoch, so requests are processed.
+    runner.change_epoch().await;
+
+    // Expect the active set to return to initial state.
+    let mut post_epoch_committee = runner
+        .system_state()
+        .active_validators
+        .iter()
+        .map(|v| (v.sui_address, v.voting_power))
+        .collect::<Vec<_>>();
+
+    post_epoch_committee.sort_by(|a, b| a.1.cmp(&b.1));
+
+    assert_eq!(initial_committee, post_epoch_committee);
 }

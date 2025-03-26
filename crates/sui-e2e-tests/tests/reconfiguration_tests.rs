@@ -1167,10 +1167,7 @@ async fn execute_add_validator_transactions(
 
     execute_add_stake_transaction(
         test_cluster,
-        vec![(
-            address,
-            stake_amount.unwrap_or(DEFAULT_GAS_AMOUNT),
-        )],
+        vec![(address, stake_amount.unwrap_or(DEFAULT_GAS_AMOUNT))],
     )
     .await;
 
