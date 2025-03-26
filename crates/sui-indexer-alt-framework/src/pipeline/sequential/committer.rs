@@ -3,6 +3,7 @@
 
 use std::{cmp::Ordering, collections::BTreeMap, sync::Arc};
 
+use scoped_futures::ScopedFutureExt;
 use tokio::{
     sync::mpsc,
     task::JoinHandle,
@@ -14,7 +15,7 @@ use tracing::{debug, info, warn};
 use crate::{
     metrics::IndexerMetrics,
     pipeline::{logging::WatermarkLogger, IndexedCheckpoint, WARN_PENDING_WATERMARKS},
-    store::{CommitterWatermark, TransactionalStore},
+    store::{CommitterWatermark, DbConnection, TransactionalStore},
 };
 
 use super::{Handler, SequentialConfig};
@@ -234,7 +235,14 @@ where
                     // Write all the object updates out along with the watermark update, in a
                     // single transaction. The handler's `commit` implementation is responsible for
                     // chunking up the writes into a manageable size.
-                    let affected = store.transactional_commit_with_watermark::<H>(H::NAME, &watermark, &batch).await;
+                    // let affected = store.transactional_commit_with_watermark::<H>(H::NAME, &watermark, &batch).await;
+
+                    let affected = store.transaction(|conn| {
+                        async {
+                            conn.set_committer_watermark(H::NAME, watermark).await?;
+                            H::commit(&batch, conn).await
+                        }.scope_boxed()
+                    }).await;
 
                     let elapsed = guard.stop_and_record();
 

@@ -4,7 +4,10 @@
 pub use crate::pipeline::sequential::Handler as SequentialHandler;
 use async_trait::async_trait;
 use chrono::{DateTime, Utc};
+use scoped_futures::ScopedBoxFuture;
 use std::time::Duration;
+
+pub use scoped_futures;
 
 #[async_trait]
 pub trait DbConnection: Send + Sync {
@@ -79,10 +82,13 @@ pub trait TransactionalStore: Store {
     where
         H: SequentialHandler<Store = Self> + Send + Sync + 'a;
 
-    async fn transaction<R, F>(&self, f: F) -> anyhow::Result<R>
+    async fn transaction<'a, R, F>(&self, f: F) -> anyhow::Result<R>
     where
-        R: Send,
-        F: FnOnce(&mut Self::Connection<'_>) -> ScopedFu<'_, '_, anyhow::Result<R>>;
+        R: Send + 'a,
+        F: Send + 'a,
+        F: for<'r> FnOnce(
+            &'r mut Self::Connection<'_>,
+        ) -> ScopedBoxFuture<'a, 'r, anyhow::Result<R>>;
 }
 
 #[derive(Default, Debug, Clone, Copy)]

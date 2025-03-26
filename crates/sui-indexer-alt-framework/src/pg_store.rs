@@ -6,6 +6,7 @@ use std::time::Duration;
 use async_trait::async_trait;
 use diesel_async::scoped_futures::ScopedFutureExt;
 use diesel_async::AsyncConnection;
+use scoped_futures::ScopedBoxFuture;
 use sui_indexer_alt_metrics::stats::{DbConnectionStats, DbConnectionStatsSnapshot};
 
 use crate::db::{Connection as PgConnection, Db as PgDb};
@@ -172,6 +173,18 @@ impl TransactionalStore for PgStore {
         .await?;
 
         Ok(result)
+    }
+
+    async fn transaction<'a, R, F>(&self, f: F) -> anyhow::Result<R>
+    where
+        R: Send + 'a,
+        F: Send + 'a,
+        F: for<'r> FnOnce(
+            &'r mut Self::Connection<'_>,
+        ) -> ScopedBoxFuture<'a, 'r, anyhow::Result<R>>,
+    {
+        let mut conn = self.connect().await?;
+        AsyncConnection::transaction(&mut conn, |conn| f(conn)).await
     }
 }
 
