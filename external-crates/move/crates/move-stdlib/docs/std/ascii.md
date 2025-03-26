@@ -507,7 +507,7 @@ Returns <code><b>false</b></code> otherwise.
 
 <pre><code><b>public</b> <b>fun</b> <a href="../std/ascii.md#std_ascii_is_printable_char">is_printable_char</a>(<a href="../std/ascii.md#std_ascii_byte">byte</a>: <a href="../std/u8.md#std_u8">u8</a>): bool {
     <a href="../std/ascii.md#std_ascii_byte">byte</a> &gt;= 0x20 && // Disallow metacharacters
-    <a href="../std/ascii.md#std_ascii_byte">byte</a> &lt;= 0x7E // Don't allow DEL metacharacter
+        <a href="../std/ascii.md#std_ascii_byte">byte</a> &lt;= 0x7E // Don't allow DEL metacharacter
 }
 </code></pre>
 
