@@ -103,26 +103,6 @@ Serialization of the object failed.
 
 
 
-<a name="sui_transfer_EInvalidMultipartyPermissions"></a>
-
-
-
-<pre><code>#[error]
-<b>const</b> <a href="../sui/transfer.md#sui_transfer_EInvalidMultipartyPermissions">EInvalidMultipartyPermissions</a>: vector&lt;u8&gt; = b"Multiparty <a href="../sui/transfer.md#sui_transfer">transfer</a> is currently limited to one party.";
-</code></pre>
-
-
-
-<a name="sui_transfer_ENotSupported"></a>
-
-Operation is not yet supported by the network. The functionality might still be in development.
-
-
-<pre><code><b>const</b> <a href="../sui/transfer.md#sui_transfer_ENotSupported">ENotSupported</a>: u64 = 5;
-</code></pre>
-
-
-
 <a name="sui_transfer_EReceivingObjectTypeMismatch"></a>
 
 The object being received is not of the expected type.
@@ -150,6 +130,26 @@ Shared object operations such as wrapping, freezing, and converting to owned are
 
 
 <pre><code><b>const</b> <a href="../sui/transfer.md#sui_transfer_ESharedObjectOperationNotSupported">ESharedObjectOperationNotSupported</a>: u64 = 4;
+</code></pre>
+
+
+
+<a name="sui_transfer_ENotSupported"></a>
+
+Operation is not yet supported by the network. The functionality might still be in development.
+
+
+<pre><code><b>const</b> <a href="../sui/transfer.md#sui_transfer_ENotSupported">ENotSupported</a>: u64 = 5;
+</code></pre>
+
+
+
+<a name="sui_transfer_EInvalidMultipartyPermissions"></a>
+
+
+
+<pre><code>#[error]
+<b>const</b> <a href="../sui/transfer.md#sui_transfer_EInvalidMultipartyPermissions">EInvalidMultipartyPermissions</a>: vector&lt;u8&gt; = b"Multiparty <a href="../sui/transfer.md#sui_transfer">transfer</a> is currently limited to one party.";
 </code></pre>
 
 

@@ -98,12 +98,24 @@ The permissions that a party has. The permissions are a bitset of the <code><a h
 ## Constants
 
 
-<a name="sui_multiparty_ALL_PERMISSIONS"></a>
+<a name="sui_multiparty_READ"></a>
 
-All permissions.
+A party can read the object, taking it as an immutable argument. This restriction is checked
+when sending the transaction.
 
 
-<pre><code><b>const</b> <a href="../sui/multiparty.md#sui_multiparty_ALL_PERMISSIONS">ALL_PERMISSIONS</a>: u64 = 15;
+<pre><code><b>const</b> <a href="../sui/multiparty.md#sui_multiparty_READ">READ</a>: u8 = 1;
+</code></pre>
+
+
+
+<a name="sui_multiparty_WRITE"></a>
+
+The party can mutate the object, but not change its owner or delete it. This is checked at
+end end of transaction execution.
+
+
+<pre><code><b>const</b> <a href="../sui/multiparty.md#sui_multiparty_WRITE">WRITE</a>: u8 = 2;
 </code></pre>
 
 
@@ -119,12 +131,13 @@ transaction execution.
 
 
 
-<a name="sui_multiparty_LEGACY_SHARED"></a>
+<a name="sui_multiparty_TRANSFER"></a>
 
-Permissions corresponding to shared objects as defined by <code><a href="../sui/transfer.md#sui_transfer_share_object">sui::transfer::share_object</a></code>.
+The party can change the owner of the object, but not otherwise modify it. This is checked at
+the end of transaction execution.
 
 
-<pre><code><b>const</b> <a href="../sui/multiparty.md#sui_multiparty_LEGACY_SHARED">LEGACY_SHARED</a>: u64 = 7;
+<pre><code><b>const</b> <a href="../sui/multiparty.md#sui_multiparty_TRANSFER">TRANSFER</a>: u8 = 8;
 </code></pre>
 
 
@@ -139,35 +152,22 @@ No permissions.
 
 
 
-<a name="sui_multiparty_READ"></a>
+<a name="sui_multiparty_LEGACY_SHARED"></a>
 
-A party can read the object, taking it as an immutable argument. This restriction is checked
-when sending the transaction.
+Permissions corresponding to shared objects as defined by <code><a href="../sui/transfer.md#sui_transfer_share_object">sui::transfer::share_object</a></code>.
 
 
-<pre><code><b>const</b> <a href="../sui/multiparty.md#sui_multiparty_READ">READ</a>: u8 = 1;
+<pre><code><b>const</b> <a href="../sui/multiparty.md#sui_multiparty_LEGACY_SHARED">LEGACY_SHARED</a>: u64 = 7;
 </code></pre>
 
 
 
-<a name="sui_multiparty_TRANSFER"></a>
+<a name="sui_multiparty_ALL_PERMISSIONS"></a>
 
-The party can change the owner of the object, but not otherwise modify it. This is checked at
-the end of transaction execution.
-
-
-<pre><code><b>const</b> <a href="../sui/multiparty.md#sui_multiparty_TRANSFER">TRANSFER</a>: u8 = 8;
-</code></pre>
+All permissions.
 
 
-
-<a name="sui_multiparty_WRITE"></a>
-
-The party can mutate the object, but not change its owner or delete it. This is checked at
-end end of transaction execution.
-
-
-<pre><code><b>const</b> <a href="../sui/multiparty.md#sui_multiparty_WRITE">WRITE</a>: u8 = 2;
+<pre><code><b>const</b> <a href="../sui/multiparty.md#sui_multiparty_ALL_PERMISSIONS">ALL_PERMISSIONS</a>: u64 = 15;
 </code></pre>
 
 
