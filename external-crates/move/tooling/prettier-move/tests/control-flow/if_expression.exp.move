@@ -260,9 +260,7 @@ fun if_expression() {
         another_long_expression
     };
 
-    if ({
-        expression
-    }) {
+    if ({ expression }) {
         return expression
     } else expression;
 }
