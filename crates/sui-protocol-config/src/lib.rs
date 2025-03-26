@@ -654,6 +654,11 @@ struct FeatureFlags {
     // weighted by stake median timestamp of the leader's ancestors.
     #[serde(skip_serializing_if = "is_false")]
     consensus_median_based_commit_timestamp: bool,
+
+    // If true, enables the normalization of PTB arguments but does not yet enable splatting
+    // `Result`s of length not equal to 1
+    #[serde(skip_serializing_if = "is_false")]
+    normalize_ptb_arguments: bool,
 }
 
 fn is_false(b: &bool) -> bool {
@@ -1904,6 +1909,10 @@ impl ProtocolConfig {
 
     pub fn move_native_context(&self) -> bool {
         self.feature_flags.move_native_context
+    }
+
+    pub fn normalize_ptb_arguments(&self) -> bool {
+        self.feature_flags.normalize_ptb_arguments
     }
 }
 
@@ -3418,6 +3427,7 @@ impl ProtocolConfig {
                         // leaders in consensus in testnet
                         cfg.consensus_bad_nodes_stake_threshold = Some(30);
                     }
+                    cfg.feature_flags.normalize_ptb_arguments = true;
                 }
                 // Use this template when making changes:
                 //

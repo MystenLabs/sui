@@ -102,7 +102,7 @@ mod checked {
         results: Vec<Vec<ResultValue>>,
         /// Map of arguments that are currently borrowed in this command, true if the borrow is mutable
         /// This gets cleared out when new results are pushed, i.e. the end of a command
-        borrowed: HashMap<Argument, /* mut */ bool>,
+        borrowed: HashMap<Arg, /* mut */ bool>,
     }
 
     /// A write for an object that was generated outside of the Move ObjectRuntime
@@ -115,6 +115,22 @@ mod checked {
         has_public_transfer: bool,
         /// contents of the object
         bytes: Vec<u8>,
+    }
+
+    #[derive(Clone, Copy, Debug, Eq, PartialEq, Hash)]
+    pub struct Arg(Arg_);
+
+    #[derive(Clone, Copy, Debug, Eq, PartialEq, Hash)]
+    enum Arg_ {
+        V1(Argument),
+        V2(NormalizedArg),
+    }
+
+    #[derive(Clone, Copy, Debug, Eq, PartialEq, Hash)]
+    enum NormalizedArg {
+        GasCoin,
+        Input(u16),
+        Result(u16, u16),
     }
 
     impl<'vm, 'state, 'a> ExecutionContext<'vm, 'state, 'a> {
@@ -337,6 +353,90 @@ mod checked {
             Ok(())
         }
 
+        /// Takes an iterator of arguments and flattens a Result into a NestedResult if there
+        /// is more than one result.
+        /// However, it is currently gated to 1 result, so this function is in place for future
+        /// changes. This is currently blocked by more invasive work needed to update argument idx
+        /// in errors
+        pub fn splat_args<Items: IntoIterator<Item = Argument>>(
+            &self,
+            start_idx: usize,
+            args: Items,
+        ) -> Result<Vec<Arg>, ExecutionError>
+        where
+            Items::IntoIter: ExactSizeIterator,
+        {
+            if !self.protocol_config.normalize_ptb_arguments() {
+                Ok(args.into_iter().map(|arg| Arg(Arg_::V1(arg))).collect())
+            } else {
+                let args = args.into_iter();
+                let _args_len = args.len();
+                let mut res = vec![];
+                for (arg_idx, arg) in args.enumerate() {
+                    self.splat_arg(&mut res, arg)
+                        .map_err(|e| e.into_execution_error(start_idx + arg_idx))?;
+                }
+                debug_assert_eq!(res.len(), _args_len);
+                Ok(res)
+            }
+        }
+
+        fn splat_arg(&self, res: &mut Vec<Arg>, arg: Argument) -> Result<(), EitherError> {
+            match arg {
+                Argument::GasCoin => res.push(Arg(Arg_::V2(NormalizedArg::GasCoin))),
+                Argument::Input(i) => {
+                    if i as usize >= self.inputs.len() {
+                        return Err(CommandArgumentError::IndexOutOfBounds { idx: i }.into());
+                    }
+                    res.push(Arg(Arg_::V2(NormalizedArg::Input(i))))
+                }
+                Argument::NestedResult(i, j) => {
+                    let Some(command_result) = self.results.get(i as usize) else {
+                        return Err(CommandArgumentError::IndexOutOfBounds { idx: i }.into());
+                    };
+                    if j as usize >= command_result.len() {
+                        return Err(CommandArgumentError::SecondaryIndexOutOfBounds {
+                            result_idx: i,
+                            secondary_idx: j,
+                        }
+                        .into());
+                    };
+                    res.push(Arg(Arg_::V2(NormalizedArg::Result(i, j))))
+                }
+                Argument::Result(i) => {
+                    let Some(result) = self.results.get(i as usize) else {
+                        return Err(CommandArgumentError::IndexOutOfBounds { idx: i }.into());
+                    };
+                    let Ok(len): Result<u16, _> = result.len().try_into() else {
+                        invariant_violation!("Result of length greater than u16::MAX");
+                    };
+                    if len != 1 {
+                        // TODO protocol config to allow splatting of args
+                        return Err(
+                            CommandArgumentError::InvalidResultArity { result_idx: i }.into()
+                        );
+                    }
+                    res.extend((0..len).map(|j| Arg(Arg_::V2(NormalizedArg::Result(i, j)))))
+                }
+            }
+            Ok(())
+        }
+
+        pub fn one_arg(
+            &self,
+            command_arg_idx: usize,
+            arg: Argument,
+        ) -> Result<Arg, ExecutionError> {
+            let args = self.splat_args(command_arg_idx, vec![arg])?;
+            let Ok([arg]): Result<[Arg; 1], _> = args.try_into() else {
+                return Err(command_argument_error(
+                    CommandArgumentError::InvalidArgumentArity,
+                    command_arg_idx,
+                ));
+            };
+            Ok(arg)
+        }
+
         /// Get the argument value. Cloning the value if it is copyable, and setting its value to None
         /// if it is not (making it unavailable).
         /// Errors if out of bounds, if the argument is borrowed, if it is unavailable (already taken),
@@ -345,23 +445,23 @@ mod checked {
             &mut self,
             command_kind: CommandKind<'_>,
             arg_idx: usize,
-            arg: Argument,
+            arg: Arg,
         ) -> Result<V, ExecutionError> {
             self.by_value_arg_(command_kind, arg)
-                .map_err(|e| command_argument_error(e, arg_idx))
+                .map_err(|e| e.into_execution_error(arg_idx))
         }
         fn by_value_arg_<V: TryFromValue>(
             &mut self,
             command_kind: CommandKind<'_>,
-            arg: Argument,
-        ) -> Result<V, CommandArgumentError> {
+            arg: Arg,
+        ) -> Result<V, EitherError> {
             let shared_obj_deletion_enabled = self.protocol_config.shared_object_deletion();
             let is_borrowed = self.arg_is_borrowed(&arg);
             let (input_metadata_opt, val_opt) = self.borrow_mut(arg, UsageKind::ByValue)?;
             let is_copyable = if let Some(val) = val_opt {
                 val.is_copyable()
             } else {
-                return Err(CommandArgumentError::InvalidValueUsage);
+                return Err(CommandArgumentError::InvalidValueUsage.into());
             };
             // If it was taken, we catch this above.
             // If it was not copyable and was borrowed, error as it creates a dangling reference in
@@ -369,13 +469,11 @@ mod checked {
             // We allow copyable values to be copied out even if borrowed, as we do not care about
             // referential transparency at this level.
             if !is_copyable && is_borrowed {
-                return Err(CommandArgumentError::InvalidValueUsage);
+                return Err(CommandArgumentError::InvalidValueUsage.into());
             }
             // Gas coin cannot be taken by value, except in TransferObjects
-            if matches!(arg, Argument::GasCoin)
-                && !matches!(command_kind, CommandKind::TransferObjects)
-            {
-                return Err(CommandArgumentError::InvalidGasCoinUsage);
+            if arg.is_gas_coin() && !matches!(command_kind, CommandKind::TransferObjects) {
+                return Err(CommandArgumentError::InvalidGasCoinUsage.into());
             }
             // Immutable objects cannot be taken by value
             if matches!(
@@ -385,7 +483,7 @@ mod checked {
                     ..
                 })
             ) {
-                return Err(CommandArgumentError::InvalidObjectByValue);
+                return Err(CommandArgumentError::InvalidObjectByValue.into());
             }
             if (
                 // this check can be removed after shared_object_deletion feature flag is removed
@@ -397,7 +495,7 @@ mod checked {
                     })
                 ) && !shared_obj_deletion_enabled
             ) {
-                return Err(CommandArgumentError::InvalidObjectByValue);
+                return Err(CommandArgumentError::InvalidObjectByValue.into());
             }
 
             // Any input object taken by value must be mutable
@@ -408,7 +506,7 @@ mod checked {
                     ..
                 })
             ) {
-                return Err(CommandArgumentError::InvalidObjectByValue);
+                return Err(CommandArgumentError::InvalidObjectByValue.into());
             }
 
             let val = if is_copyable {
@@ -416,7 +514,7 @@ mod checked {
             } else {
                 val_opt.take().unwrap()
             };
-            V::try_from_value(val)
+            Ok(V::try_from_value(val)?)
         }
 
         /// Mimic a mutable borrow by taking the argument value, setting its value to None,
@@ -427,18 +525,15 @@ mod checked {
         pub fn borrow_arg_mut<V: TryFromValue>(
             &mut self,
             arg_idx: usize,
-            arg: Argument,
+            arg: Arg,
         ) -> Result<V, ExecutionError> {
             self.borrow_arg_mut_(arg)
-                .map_err(|e| command_argument_error(e, arg_idx))
+                .map_err(|e| e.into_execution_error(arg_idx))
         }
-        fn borrow_arg_mut_<V: TryFromValue>(
-            &mut self,
-            arg: Argument,
-        ) -> Result<V, CommandArgumentError> {
+        fn borrow_arg_mut_<V: TryFromValue>(&mut self, arg: Arg) -> Result<V, EitherError> {
             // mutable borrowing requires unique usage
             if self.arg_is_borrowed(&arg) {
-                return Err(CommandArgumentError::InvalidValueUsage);
+                return Err(CommandArgumentError::InvalidValueUsage.into());
             }
             self.borrowed.insert(arg, /* is_mut */ true);
             let (input_metadata_opt, val_opt) = self.borrow_mut(arg, UsageKind::BorrowMut)?;
@@ -446,14 +541,14 @@ mod checked {
                 val.is_copyable()
             } else {
                 // error if taken
-                return Err(CommandArgumentError::InvalidValueUsage);
+                return Err(CommandArgumentError::InvalidValueUsage.into());
             };
             if let Some(InputObjectMetadata::InputObject {
                 is_mutable_input: false,
                 ..
             }) = input_metadata_opt
             {
-                return Err(CommandArgumentError::InvalidObjectByMutRef);
+                return Err(CommandArgumentError::InvalidObjectByMutRef.into());
             }
             // if it is copyable, don't take it as we allow for the value to be copied even if
             // mutably borrowed
@@ -462,7 +557,7 @@ mod checked {
             } else {
                 val_opt.take().unwrap()
             };
-            V::try_from_value(val)
+            Ok(V::try_from_value(val)?)
         }
 
         /// Mimics an immutable borrow by cloning the argument value without setting its value to None
@@ -471,48 +566,48 @@ mod checked {
         pub fn borrow_arg<V: TryFromValue>(
             &mut self,
             arg_idx: usize,
-            arg: Argument,
+            arg: Arg,
             type_: &Type,
         ) -> Result<V, ExecutionError> {
             self.borrow_arg_(arg, type_)
-                .map_err(|e| command_argument_error(e, arg_idx))
+                .map_err(|e| e.into_execution_error(arg_idx))
         }
         fn borrow_arg_<V: TryFromValue>(
             &mut self,
-            arg: Argument,
+            arg: Arg,
             arg_type: &Type,
-        ) -> Result<V, CommandArgumentError> {
+        ) -> Result<V, EitherError> {
             // immutable borrowing requires the value was not mutably borrowed.
             // If it was copied, that is okay.
             // If it was taken/moved, we will find out below
             if self.arg_is_mut_borrowed(&arg) {
-                return Err(CommandArgumentError::InvalidValueUsage);
+                return Err(CommandArgumentError::InvalidValueUsage.into());
             }
             self.borrowed.insert(arg, /* is_mut */ false);
             let (_input_metadata_opt, val_opt) = self.borrow_mut(arg, UsageKind::BorrowImm)?;
             if val_opt.is_none() {
-                return Err(CommandArgumentError::InvalidValueUsage);
+                return Err(CommandArgumentError::InvalidValueUsage.into());
             }
 
             // We eagerly reify receiving argument types at the first usage of them.
             if let &mut Some(Value::Receiving(_, _, ref mut recv_arg_type @ None)) = val_opt {
                 let Type::Reference(inner) = arg_type else {
-                    return Err(CommandArgumentError::InvalidValueUsage);
+                    return Err(CommandArgumentError::InvalidValueUsage.into());
                 };
                 *recv_arg_type = Some(*(*inner).clone());
             }
 
-            V::try_from_value(val_opt.as_ref().unwrap().clone())
+            Ok(V::try_from_value(val_opt.as_ref().unwrap().clone())?)
         }
 
         /// Restore an argument after being mutably borrowed
         pub fn restore_arg<Mode: ExecutionMode>(
             &mut self,
             updates: &mut Mode::ArgumentUpdates,
-            arg: Argument,
+            arg: Arg,
             value: Value,
         ) -> Result<(), ExecutionError> {
-            Mode::add_argument_update(self, updates, arg, &value)?;
+            Mode::add_argument_update(self, updates, arg.into(), &value)?;
             let was_mut_opt = self.borrowed.remove(&arg);
             assert_invariant!(
                 was_mut_opt.is_some() && was_mut_opt.unwrap(),
@@ -911,28 +1006,51 @@ mod checked {
         }
 
         /// Returns true if the value at the argument's location is borrowed, mutably or immutably
-        fn arg_is_borrowed(&self, arg: &Argument) -> bool {
+        fn arg_is_borrowed(&self, arg: &Arg) -> bool {
             self.borrowed.contains_key(arg)
         }
 
         /// Returns true if the value at the argument's location is mutably borrowed
-        fn arg_is_mut_borrowed(&self, arg: &Argument) -> bool {
+        fn arg_is_mut_borrowed(&self, arg: &Arg) -> bool {
             matches!(self.borrowed.get(arg), Some(/* mut */ true))
         }
 
         /// Internal helper to borrow the value for an argument and update the most recent usage
         fn borrow_mut(
             &mut self,
-            arg: Argument,
+            arg: Arg,
             usage: UsageKind,
-        ) -> Result<(Option<&InputObjectMetadata>, &mut Option<Value>), CommandArgumentError>
-        {
+        ) -> Result<(Option<&InputObjectMetadata>, &mut Option<Value>), EitherError> {
             self.borrow_mut_impl(arg, Some(usage))
         }
 
         /// Internal helper to borrow the value for an argument
         /// Updates the most recent usage if specified
         fn borrow_mut_impl(
+            &mut self,
+            arg: Arg,
+            update_last_usage: Option<UsageKind>,
+        ) -> Result<(Option<&InputObjectMetadata>, &mut Option<Value>), EitherError> {
+            match arg.0 {
+                Arg_::V1(arg) => {
+                    assert_invariant!(
+                        !self.protocol_config.normalize_ptb_arguments(),
+                        "Should not be using v1 args with normalized args"
+                    );
+                    Ok(self.borrow_mut_impl_v1(arg, update_last_usage)?)
+                }
+                Arg_::V2(arg) => {
+                    assert_invariant!(
+                        self.protocol_config.normalize_ptb_arguments(),
+                        "Should be using only v2 args with normalized args"
+                    );
+                    Ok(self.borrow_mut_impl_v2(arg, update_last_usage)?)
+                }
+            }
+        }
+
+        // v1 of borrow_mut_impl
+        fn borrow_mut_impl_v1(
             &mut self,
             arg: Argument,
             update_last_usage: Option<UsageKind>,
@@ -965,6 +1083,37 @@ mod checked {
                             secondary_idx: j,
                         });
                     };
+                    (None, result_value)
+                }
+            };
+            if let Some(usage) = update_last_usage {
+                result_value.last_usage_kind = Some(usage);
+            }
+            Ok((metadata, &mut result_value.value))
+        }
+
+        // v2 of borrow_mut_impl
+        fn borrow_mut_impl_v2(
+            &mut self,
+            arg: NormalizedArg,
+            update_last_usage: Option<UsageKind>,
+        ) -> Result<(Option<&InputObjectMetadata>, &mut Option<Value>), ExecutionError> {
+            let (metadata, result_value) = match arg {
+                NormalizedArg::GasCoin => (self.gas.object_metadata.as_ref(), &mut self.gas.inner),
+                NormalizedArg::Input(i) => {
+                    let input_value = self
+                        .inputs
+                        .get_mut(i as usize)
+                        .ok_or_else(|| make_invariant_violation!("bounds already checked"))?;
+                    (input_value.object_metadata.as_ref(), &mut input_value.inner)
+                }
+                NormalizedArg::Result(i, j) => {
+                    let result_value = self
+                        .results
+                        .get_mut(i as usize)
+                        .ok_or_else(|| make_invariant_violation!("bounds already checked"))?
+                        .get_mut(j as usize)
+                        .ok_or_else(|| make_invariant_violation!("bounds already checked"))?;
                     (None, result_value)
                 }
             };
@@ -1044,6 +1193,29 @@ mod checked {
                 &mut data_store,
                 &mut SuiGasMeter(self.gas_charger.move_gas_status_mut()),
             )
+        }
+    }
+
+    impl Arg {
+        fn is_gas_coin(&self) -> bool {
+            // kept as two separate matches for exhaustiveness
+            match self {
+                Arg(Arg_::V1(a)) => matches!(a, Argument::GasCoin),
+                Arg(Arg_::V2(n)) => matches!(n, NormalizedArg::GasCoin),
+            }
+        }
+    }
+
+    impl From<Arg> for Argument {
+        fn from(arg: Arg) -> Self {
+            match arg.0 {
+                Arg_::V1(a) => a,
+                Arg_::V2(normalized) => match normalized {
+                    NormalizedArg::GasCoin => Argument::GasCoin,
+                    NormalizedArg::Input(i) => Argument::Input(i),
+                    NormalizedArg::Result(i, j) => Argument::NestedResult(i, j),
+                },
+            }
         }
     }
 
@@ -1564,6 +1736,32 @@ mod checked {
             // we cannot panic here because during execution and publishing this is
             // currently called from the publish flow in the Move runtime
             Ok(())
+        }
+    }
+
+    enum EitherError {
+        CommandArgument(CommandArgumentError),
+        Execution(ExecutionError),
+    }
+
+    impl From<ExecutionError> for EitherError {
+        fn from(e: ExecutionError) -> Self {
+            EitherError::Execution(e)
+        }
+    }
+
+    impl From<CommandArgumentError> for EitherError {
+        fn from(e: CommandArgumentError) -> Self {
+            EitherError::CommandArgument(e)
+        }
+    }
+
+    impl EitherError {
+        fn into_execution_error(self, command_index: usize) -> ExecutionError {
+            match self {
+                EitherError::CommandArgument(e) => command_argument_error(e, command_index),
+                EitherError::Execution(e) => e,
+            }
         }
     }
 }

@@ -277,6 +277,11 @@ pub enum CommandArgumentError {
         allowed."
     )]
     SharedObjectOperationNotAllowed,
+    #[error(
+        "Invalid argument arity. Expected a single argument but found a result that expanded to \
+        multiple arguments."
+    )]
+    InvalidArgumentArity,
 }
 
 #[derive(Eq, PartialEq, Clone, Debug, Serialize, Deserialize, Hash, Error)]
