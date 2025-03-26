@@ -16,9 +16,8 @@ fun assign_expression() {
     a =
         if (long_condition)
             long_expression
-        else {
-            another_long_expression
-        };
+        else
+            another_long_expression;
 
     a = if (true) { a } else { b };
 
