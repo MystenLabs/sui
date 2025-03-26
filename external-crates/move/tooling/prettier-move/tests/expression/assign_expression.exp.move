@@ -14,9 +14,9 @@ fun assign_expression() {
 
     // assignment with if + break
     a =
-        if (long_condition) {
+        if (long_condition)
             long_expression
-        } else {
+        else {
             another_long_expression
         };
 

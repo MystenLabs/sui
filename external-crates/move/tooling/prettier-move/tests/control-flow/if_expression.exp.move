@@ -6,9 +6,8 @@ module test::if_expression;
 
 fun basic() {
     if (true) call_something();
-    if (false) {
-        call_some_long_func()
-    };
+    if (false)
+        call_some_long_func();
 
     if (cond) do_this() else {
         do_that();
@@ -46,9 +45,8 @@ fun control_flow() {
     if (true) break;
     if (true) abort;
     if (true) return call();
-    if (true) {
-        return call_something()
-    };
+    if (true)
+        return call_something();
 
     'a: if (true) { break 'a; }
 }
@@ -57,13 +55,13 @@ fun dot_expression() {
     if (true) a.dot().expression()
     else b.dot().expression();
 
-    if (true) {
+    if (true)
         staking
             .pools[pool]
             .borrow_mut()
             .unwrap()
             .stake(amount)
-    } else {
+    else {
         staking
             .pools[pool]
             .borrow_mut()
@@ -159,9 +157,9 @@ fun lists() {
 
 fun folding() {
     if (true) call_something()
-    else if (false) {
+    else if (false)
         call_something_else()
-    } else last_call();
+    else last_call();
 
     if (true) {
         call_something()
@@ -176,9 +174,8 @@ fun folding() {
 
     if (
         very_very_long_if_condition
-    ) {
-        very_very_long_if_condition > very_very_long_if_condition
-    };
+    )
+        very_very_long_if_condition > very_very_long_if_condition;
 
     let a = if (true) {
         call_something_else();
@@ -190,11 +187,10 @@ fun folding() {
         very_very_long_if_condition > very_very_long_if_condition ||
         very_very_long_if_condition + very_very_long_if_condition > 100 &&
         very_very_long_if_condition
-    ) {
+    )
         very_very_long_if_condition > very_very_long_if_condition &&
         very_very_long_if_condition > very_very_long_if_condition &&
-        very_very_long_if_condition > very_very_long_if_condition
-    };
+        very_very_long_if_condition > very_very_long_if_condition;
     // should break list of expressions inside parens, with indent;
     if (
         very_very_long_if_condition > very_very_long_if_condition ||
@@ -208,19 +204,17 @@ fun folding() {
 
     if (
         very_very_long_if_condition > very_very_long_if_condition
-    ) {
-        return very_very > very_very_long_if_condition + 100
-    };
+    )
+        return very_very > very_very_long_if_condition + 100;
 
     if (
         very_very_long_if_condition > very_very_long_if_condition &&
         very_very_long_if_condition > very_very_long_if_condition &&
         very_very_long_if_condition > very_very_long_if_condition
-    ) {
+    )
         return very_very_long_if_condition > very_very_long_if_condition &&
             very_very_long_if_condition > very_very_long_if_condition ||
             very_very_long_if_condition > very_very_long_if_condition
-    }
 }
 
 fun if_expression() {
@@ -254,9 +248,9 @@ fun if_expression() {
     // should break on expression
     // and add block to both
     // branches that break
-    if (expression) {
+    if (expression)
         expression_that_is_too_long
-    } else {
+    else {
         another_long_expression_too
     };
 
