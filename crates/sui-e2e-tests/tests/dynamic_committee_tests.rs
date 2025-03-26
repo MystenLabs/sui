@@ -365,17 +365,17 @@ mod add_stake {
 mod remove_stake {
     use super::*;
 
-    pub struct RequestRemoveStakeGen;
+    pub struct RequestWithdrawStakeGen;
 
-    pub struct RequestRemoveStake {
+    pub struct RequestWithdrawStake {
         object_id: ObjectID,
         digest: ObjectDigest,
         version: SequenceNumber,
         owner: SuiAddress,
     }
 
-    impl GenStateChange for RequestRemoveStakeGen {
-        type StateChange = RequestRemoveStake;
+    impl GenStateChange for RequestWithdrawStakeGen {
+        type StateChange = RequestWithdrawStake;
 
         fn create(&self, runner: &mut StressTestRunner) -> Self::StateChange {
             // pick next delegation object
@@ -383,7 +383,7 @@ mod remove_stake {
             let (owner, object_id, digest, version) =
                 *runner.delegations.get(&delegation_object_id).unwrap();
 
-            RequestRemoveStake {
+            RequestWithdrawStake {
                 object_id,
                 digest,
                 owner,
@@ -393,7 +393,7 @@ mod remove_stake {
     }
 
     #[async_trait]
-    impl StatePredicate for RequestRemoveStake {
+    impl StatePredicate for RequestWithdrawStake {
         async fn run(&mut self, runner: &mut StressTestRunner) -> Result<TransactionEffects> {
             let pt = {
                 let mut builder = ProgrammableTransactionBuilder::new();
@@ -410,12 +410,11 @@ mod remove_stake {
                 // let coin = StressTestRunner::split_off(&mut builder, self.stake_amount);
                 move_call! {
                     builder,
-                    (SUI_SYSTEM_PACKAGE_ID)::sui_system::request_remove_stake(Argument::Input(0), staked_sui)
+                    (SUI_SYSTEM_PACKAGE_ID)::sui_system::request_withdraw_stake(Argument::Input(0), staked_sui)
                 };
                 builder.finish()
             };
             let effects = runner.run(self.owner, pt).await;
-
             Ok(effects)
         }
 
@@ -442,7 +441,7 @@ mod remove_stake {
 #[sim_test]
 async fn fuzz_dynamic_committee() {
     let num_operations = 20;
-    let committee_size = 20;
+    let committee_size = 12;
 
     // Add more actions here as we create them
     let mut runner = StressTestRunner::new(committee_size).await;
@@ -480,7 +479,7 @@ async fn fuzz_dynamic_committee() {
     // The remaining voting power is redistributed to the remaining validators.
     //
     // Note: this is a simplified condition with the assumption that no node can have more than
-    //  1000 voting power due to the number of validators being 20. If this was not the case, we'd
+    //  1000 voting power due to the number of validators being 12. If this was not the case, we'd
     //  have to calculate remainder voting power and redistribute it to the remaining validators.
     active_validators.iter().for_each(|v| {
         assert!(v.voting_power <= 1_000); // limitation
@@ -491,7 +490,7 @@ async fn fuzz_dynamic_committee() {
 
     // Unstake all randomly assigned stakes.
     for _ in 0..num_operations {
-        let mut task = remove_stake::RequestRemoveStakeGen.create(&mut runner);
+        let mut task = remove_stake::RequestWithdrawStakeGen.create(&mut runner);
         let effects = task.run(&mut runner).await.unwrap();
         task.pre_epoch_post_condition(&mut runner, &effects).await;
     }
