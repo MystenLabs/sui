@@ -28,11 +28,13 @@ pub(crate) struct PgReader {
     db: Option<db::Db>,
     metrics: Arc<RpcMetrics>,
     cancel: CancellationToken,
+    slow_query_threshold_ms: u64,
 }
 
 pub(crate) struct Connection<'p> {
     conn: db::Connection<'p>,
     metrics: Arc<RpcMetrics>,
+    slow_query_threshold_ms: u64,
 }
 
 impl PgReader {
@@ -45,6 +47,7 @@ impl PgReader {
         registry: &Registry,
         cancel: CancellationToken,
     ) -> Result<Self, Error> {
+        let slow_query_threshold_ms = db_args.slow_query_threshold_ms;
         let db = if let Some(database_url) = database_url {
             let db = db::Db::for_read(database_url, db_args)
                 .await
@@ -66,6 +69,7 @@ impl PgReader {
             db,
             metrics,
             cancel,
+            slow_query_threshold_ms,
         })
     }
 
@@ -90,6 +94,7 @@ impl PgReader {
                 Ok(Connection {
                     conn: conn.map_err(Error::PgConnect)?,
                     metrics: self.metrics.clone(),
+                    slow_query_threshold_ms: self.slow_query_threshold_ms,
                 })
             }
         }
@@ -113,11 +118,14 @@ impl Connection<'_> {
 
         let res = query.get_result(&mut self.conn).await;
         let elapsed_seconds = timer.stop_and_record();
-        if elapsed_seconds > 60.0 {
+        let elapsed_ms = (elapsed_seconds * 1000.0) as u64;
+        if elapsed_ms > self.slow_query_threshold_ms {
             warn!(
                 elapsed_seconds,
+                elapsed_ms,
                 query = query_debug,
-                "Slow database query detected (>60s)"
+                "Slow database query detected (> {} ms)",
+                self.slow_query_threshold_ms
             );
         }
 
@@ -144,11 +152,15 @@ impl Connection<'_> {
 
         let res = query.get_results(&mut self.conn).await;
         let elapsed_seconds = timer.stop_and_record();
-        if elapsed_seconds > 60.0 {
+        let elapsed_ms = (elapsed_seconds * 1000.0) as u64;
+        if elapsed_ms > self.slow_query_threshold_ms {
             warn!(
                 elapsed_seconds,
+                elapsed_ms,
                 query = query_debug,
-                "Slow database query detected (>60s)"
+                threshold_ms = self.slow_query_threshold_ms,
+                "Slow database query detected (>{} ms)",
+                self.slow_query_threshold_ms
             );
         }
 
