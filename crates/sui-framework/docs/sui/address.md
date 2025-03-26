@@ -32,16 +32,6 @@ title: Module `sui::address`
 ## Constants
 
 
-<a name="sui_address_EAddressParseError"></a>
-
-Error from <code><a href="../sui/address.md#sui_address_from_bytes">from_bytes</a></code> when it is supplied too many or too few bytes.
-
-
-<pre><code><b>const</b> <a href="../sui/address.md#sui_address_EAddressParseError">EAddressParseError</a>: u64 = 0;
-</code></pre>
-
-
-
 <a name="sui_address_LENGTH"></a>
 
 The length of an address, in bytes
@@ -57,6 +47,16 @@ The length of an address, in bytes
 
 
 <pre><code><b>const</b> <a href="../sui/address.md#sui_address_MAX">MAX</a>: u256 = 115792089237316195423570985008687907853269984665640564039457584007913129639935;
+</code></pre>
+
+
+
+<a name="sui_address_EAddressParseError"></a>
+
+Error from <code><a href="../sui/address.md#sui_address_from_bytes">from_bytes</a></code> when it is supplied too many or too few bytes.
+
+
+<pre><code><b>const</b> <a href="../sui/address.md#sui_address_EAddressParseError">EAddressParseError</a>: u64 = 0;
 </code></pre>
 
 

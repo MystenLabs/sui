@@ -43,6 +43,8 @@ pub struct TransactionEffectsV2 {
     /// The version number of all the written Move objects by this transaction.
     pub(crate) lamport_version: SequenceNumber,
     /// Objects whose state are changed in the object store.
+    /// This field should not be exposed to the public API.
+    /// Otherwise it will make it harder to use effects of different versions.
     changed_objects: Vec<(ObjectID, EffectsObjectChange)>,
     /// Shared objects that are not mutated in this transaction. Unlike owned objects,
     /// read-only shared objects' version are not committed in the transaction,
@@ -571,10 +573,6 @@ impl TransactionEffectsV2 {
                 self
             );
         }
-    }
-
-    pub fn changed_objects(&self) -> &[(ObjectID, EffectsObjectChange)] {
-        &self.changed_objects
     }
 }
 

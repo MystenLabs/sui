@@ -4,7 +4,7 @@
 /// This module executes enriched benchmark queries against the database.
 /// Each query's execution is timed and recorded via MetricsCollector.
 /// And the results are aggregated and reported via BenchmarkResult.
-use std::time::Instant;
+use std::time::{Duration, Instant};
 
 use anyhow::{Context, Result};
 use bb8::Pool;
@@ -95,7 +95,10 @@ impl QueryExecutor {
         );
 
         let start = Instant::now();
-        let deadline = start + self.config.duration;
+        let deadline = match self.config.duration {
+            Some(duration) => start + duration,
+            None => Instant::now() + Duration::from_secs(3600 * 24 * 365), // Effectively no timeout (1 year)
+        };
         let (concurrency, metrics, pool, queries) = (
             self.config.concurrency,
             self.metrics.clone(),

@@ -2027,7 +2027,9 @@ pub(crate) async fn compile_package(
 
 /// Return the correct implicit dependencies for the [version], producing a warning or error if the
 /// protocol version is unknown or old
-fn implicit_deps_for_protocol_version(version: ProtocolVersion) -> anyhow::Result<Dependencies> {
+pub(crate) fn implicit_deps_for_protocol_version(
+    version: ProtocolVersion,
+) -> anyhow::Result<Dependencies> {
     if version > ProtocolVersion::MAX + 2 {
         eprintln!(
             "[{}]: The network is using protocol version {:?}, but this binary only recognizes protocol version {:?}; \

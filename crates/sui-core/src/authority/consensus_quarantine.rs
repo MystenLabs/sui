@@ -14,7 +14,7 @@ use fastcrypto_zkp::bn254::zk_login::{JwkId, JWK};
 use moka::policy::EvictionPolicy;
 use moka::sync::SegmentedCache as MokaCache;
 use mysten_common::fatal;
-use mysten_common::util::randomize_cache_capacity_in_tests;
+use mysten_common::random_util::randomize_cache_capacity_in_tests;
 use parking_lot::Mutex;
 use std::collections::{hash_map, BTreeMap, BTreeSet, HashMap, VecDeque};
 use sui_types::authenticator_state::ActiveJwk;

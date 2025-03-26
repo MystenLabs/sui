@@ -1114,7 +1114,7 @@ impl Frame {
                     .push(Value::u16(integer_value.cast_u16()?))?;
             }
             Bytecode::CastU32 => {
-                gas_meter.charge_simple_instr(S::CastU16)?;
+                gas_meter.charge_simple_instr(S::CastU32)?;
                 let integer_value = interpreter.operand_stack.pop_as::<IntegerValue>()?;
                 interpreter
                     .operand_stack
@@ -1135,7 +1135,7 @@ impl Frame {
                     .push(Value::u128(integer_value.cast_u128()?))?;
             }
             Bytecode::CastU256 => {
-                gas_meter.charge_simple_instr(S::CastU16)?;
+                gas_meter.charge_simple_instr(S::CastU256)?;
                 let integer_value = interpreter.operand_stack.pop_as::<IntegerValue>()?;
                 interpreter
                     .operand_stack

@@ -159,7 +159,7 @@ impl DagState {
         scoring_subdag.add_subdags(std::mem::take(&mut unscored_committed_subdags));
 
         let mut state = Self {
-            context,
+            context: context.clone(),
             genesis,
             recent_blocks: BTreeMap::new(),
             recent_refs_by_authority: vec![BTreeSet::new(); num_authorities],
@@ -271,6 +271,14 @@ impl DagState {
                         break;
                     }
                 }
+            }
+
+            // Recover hard linked statuses for blocks within GC round.
+            let proposed_blocks = store
+                .scan_blocks_by_author(context.own_index, state.gc_round() + 1)
+                .expect("Database error");
+            for block in proposed_blocks {
+                state.recursive_hard_link(block.reference());
             }
         }
 
@@ -434,30 +442,6 @@ impl DagState {
         }
 
         blocks
-    }
-
-    // Sets the block as committed in the cache. If the block is set as committed for first time, then true is returned, otherwise false is returned instead.
-    // Method will panic if the block is not found in the cache.
-    pub(crate) fn set_committed(&mut self, block_ref: &BlockRef) -> bool {
-        if let Some(block_info) = self.recent_blocks.get_mut(block_ref) {
-            if !block_info.committed {
-                block_info.committed = true;
-                return true;
-            }
-            false
-        } else {
-            panic!(
-                "Block {:?} not found in cache to set as committed.",
-                block_ref
-            );
-        }
-    }
-
-    pub(crate) fn is_committed(&self, block_ref: &BlockRef) -> bool {
-        self.recent_blocks
-            .get(block_ref)
-            .unwrap_or_else(|| panic!("Attempted to query for commit status for a block not in cached data {block_ref}"))
-            .committed
     }
 
     /// Gets all uncommitted blocks in a slot.
@@ -753,6 +737,67 @@ impl DagState {
     pub(crate) fn contains_block(&self, block_ref: &BlockRef) -> bool {
         let blocks = self.contains_blocks(vec![*block_ref]);
         blocks.first().cloned().unwrap()
+    }
+
+    // Sets the block as committed in the cache. If the block is set as committed for first time, then true is returned, otherwise false is returned instead.
+    // Method will panic if the block is not found in the cache.
+    pub(crate) fn set_committed(&mut self, block_ref: &BlockRef) -> bool {
+        if let Some(block_info) = self.recent_blocks.get_mut(block_ref) {
+            if !block_info.committed {
+                block_info.committed = true;
+                return true;
+            }
+            false
+        } else {
+            panic!(
+                "Block {:?} not found in cache to set as committed.",
+                block_ref
+            );
+        }
+    }
+
+    /// Returns true if the block is committed. Only valid for blocks above the GC round.
+    pub(crate) fn is_committed(&self, block_ref: &BlockRef) -> bool {
+        self.recent_blocks
+            .get(block_ref)
+            .unwrap_or_else(|| panic!("Attempted to query for commit status for a block not in cached data {block_ref}"))
+            .committed
+    }
+
+    /// Recursively sets blocks in the causal history of the root block as hard linked, including the root block itself.
+    /// Returns the list of blocks that are newly linked.
+    /// The returned blocks are guaranteed to be above the GC round.
+    /// NOTE: this function should only be called with GC enabled.
+    pub(crate) fn recursive_hard_link(&mut self, root_block: BlockRef) -> Vec<BlockRef> {
+        let gc_round = self.gc_round();
+        let mut linked_blocks = vec![];
+        let mut targets = VecDeque::new();
+        targets.push_back(root_block);
+        while let Some(block_ref) = targets.pop_front() {
+            // This is only correct with GC enabled.
+            if block_ref.round <= gc_round {
+                continue;
+            }
+            let block_info = self
+                .recent_blocks
+                .get_mut(&block_ref)
+                .unwrap_or_else(|| panic!("Block {:?} is not in DAG state", block_ref));
+            if block_info.hard_linked {
+                continue;
+            }
+            linked_blocks.push(block_ref);
+            block_info.hard_linked = true;
+            targets.extend(block_info.block.ancestors().iter());
+        }
+        linked_blocks
+    }
+
+    /// Returns true if the block is hard linked by a proposed block.
+    pub(crate) fn is_hard_linked(&self, block_ref: &BlockRef) -> bool {
+        self.recent_blocks
+            .get(block_ref)
+            .unwrap_or_else(|| panic!("Attempted to query for hard link status for a block not in cached data {block_ref}"))
+            .hard_linked
     }
 
     pub(crate) fn threshold_clock_round(&self) -> Round {
@@ -1111,6 +1156,8 @@ struct BlockInfo {
     block: VerifiedBlock,
     // Whether the block has been committed
     committed: bool,
+    // Whether the block has been hard linked by a proposed block.
+    hard_linked: bool,
 }
 
 impl BlockInfo {
@@ -1118,6 +1165,7 @@ impl BlockInfo {
         Self {
             block,
             committed: false,
+            hard_linked: false,
         }
     }
 }

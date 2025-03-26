@@ -227,6 +227,7 @@ const MAX_PROTOCOL_VERSION: u64 = 79;
 // Version 78: Make `TxContext` Move API native
 //             Enable execution time estimate mode for congestion control on testnet.
 // Version 79: Enable median based commit timestamp in consensus on testnet.
+//             Increase threshold for bad nodes that won't be considered leaders in consensus in testnet
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
@@ -653,6 +654,11 @@ struct FeatureFlags {
     // weighted by stake median timestamp of the leader's ancestors.
     #[serde(skip_serializing_if = "is_false")]
     consensus_median_based_commit_timestamp: bool,
+
+    // If true, enables the normalization of PTB arguments but does not yet enable splatting
+    // `Result`s of length not equal to 1
+    #[serde(skip_serializing_if = "is_false")]
+    normalize_ptb_arguments: bool,
 
     // Enable native function for multiparty transfer
     #[serde(skip_serializing_if = "is_false")]
@@ -1909,6 +1915,10 @@ impl ProtocolConfig {
 
     pub fn move_native_context(&self) -> bool {
         self.feature_flags.move_native_context
+    }
+
+    pub fn normalize_ptb_arguments(&self) -> bool {
+        self.feature_flags.normalize_ptb_arguments
     }
 
     pub fn enable_multiparty_transfer(&self) -> bool {
@@ -3424,7 +3434,12 @@ impl ProtocolConfig {
                 79 => {
                     if chain != Chain::Mainnet {
                         cfg.feature_flags.consensus_median_based_commit_timestamp = true;
+
+                        // Increase threshold for bad nodes that won't be considered
+                        // leaders in consensus in testnet
+                        cfg.consensus_bad_nodes_stake_threshold = Some(30);
                     }
+                    cfg.feature_flags.normalize_ptb_arguments = true;
                 }
                 // Use this template when making changes:
                 //

@@ -1,10 +1,12 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::in_test_configuration;
-use crate::random::get_rng;
 use rand::seq::SliceRandom;
 use rand::Rng;
+use sui_macros::nondeterministic;
+
+use crate::in_test_configuration;
+use crate::random::get_rng;
 
 pub fn randomize_cache_capacity_in_tests<T>(size: T) -> T
 where
@@ -34,4 +36,12 @@ where
     let random_size = rng.gen_range(two..size);
     let choices = [two, size, random_size];
     *choices.choose(&mut rng).unwrap()
+}
+
+pub type TempDir = tempfile::TempDir;
+
+/// Creates a temporary directory with random name.
+/// Ensure the name is randomized even in simtests.
+pub fn tempdir() -> std::io::Result<TempDir> {
+    nondeterministic!(tempfile::tempdir())
 }

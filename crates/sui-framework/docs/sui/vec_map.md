@@ -103,16 +103,6 @@ An entry in the map
 ## Constants
 
 
-<a name="sui_vec_map_EIndexOutOfBounds"></a>
-
-Trying to access an element of the map at an invalid index
-
-
-<pre><code><b>const</b> <a href="../sui/vec_map.md#sui_vec_map_EIndexOutOfBounds">EIndexOutOfBounds</a>: u64 = 3;
-</code></pre>
-
-
-
 <a name="sui_vec_map_EKeyAlreadyExists"></a>
 
 This key already exists in the map
@@ -133,22 +123,32 @@ This key does not exist in the map
 
 
 
-<a name="sui_vec_map_EMapEmpty"></a>
-
-Trying to pop from a map that is empty
-
-
-<pre><code><b>const</b> <a href="../sui/vec_map.md#sui_vec_map_EMapEmpty">EMapEmpty</a>: u64 = 4;
-</code></pre>
-
-
-
 <a name="sui_vec_map_EMapNotEmpty"></a>
 
 Trying to destroy a map that is not empty
 
 
 <pre><code><b>const</b> <a href="../sui/vec_map.md#sui_vec_map_EMapNotEmpty">EMapNotEmpty</a>: u64 = 2;
+</code></pre>
+
+
+
+<a name="sui_vec_map_EIndexOutOfBounds"></a>
+
+Trying to access an element of the map at an invalid index
+
+
+<pre><code><b>const</b> <a href="../sui/vec_map.md#sui_vec_map_EIndexOutOfBounds">EIndexOutOfBounds</a>: u64 = 3;
+</code></pre>
+
+
+
+<a name="sui_vec_map_EMapEmpty"></a>
+
+Trying to pop from a map that is empty
+
+
+<pre><code><b>const</b> <a href="../sui/vec_map.md#sui_vec_map_EMapEmpty">EMapEmpty</a>: u64 = 4;
 </code></pre>
 
 

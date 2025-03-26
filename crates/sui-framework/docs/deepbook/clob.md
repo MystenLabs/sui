@@ -645,6 +645,15 @@ Deprecated since v1.0.0, use <code><a href="../deepbook/clob.md#deepbook_clob_Or
 
 
 
+<a name="deepbook_clob_EUnauthorizedCancel"></a>
+
+
+
+<pre><code><b>const</b> <a href="../deepbook/clob.md#deepbook_clob_EUnauthorizedCancel">EUnauthorizedCancel</a>: u64 = 4;
+</code></pre>
+
+
+
 <a name="deepbook_clob_EInvalidQuantity"></a>
 
 
@@ -668,15 +677,6 @@ Deprecated since v1.0.0, use <code><a href="../deepbook/clob.md#deepbook_clob_Or
 
 
 <pre><code><b>const</b> <a href="../deepbook/clob.md#deepbook_clob_EInvalidUser">EInvalidUser</a>: u64 = 12;
-</code></pre>
-
-
-
-<a name="deepbook_clob_EUnauthorizedCancel"></a>
-
-
-
-<pre><code><b>const</b> <a href="../deepbook/clob.md#deepbook_clob_EUnauthorizedCancel">EUnauthorizedCancel</a>: u64 = 4;
 </code></pre>
 
 
