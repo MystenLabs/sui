@@ -35,7 +35,6 @@ use crate::{
         exp_translator::ExpTranslator,
         model_builder::{ConstEntry, DatatypeData, ModelBuilder},
     },
-    exp_rewriter::{ExpRewriter, ExpRewriterFunctions, RewriteTarget},
     model::{
         AbilityConstraint, DatatypeId, EnumData, FieldId, FunId, FunctionData, FunctionVisibility,
         Loc, ModuleId, NamedConstantData, NamedConstantId, NodeId, QualifiedId, QualifiedInstId,
@@ -607,7 +606,7 @@ impl<'env, 'translator> ModuleBuilder<'env, 'translator> {
     /// Definition analysis for Move functions.
     /// If the function is pure, we translate its body.
     fn def_ana_fun(&mut self, name: &PA::FunctionName, body: &EA::FunctionBody) {
-        if let EA::FunctionBody_::Defined(seq) = &body.value {
+        if let EA::FunctionBody_::Defined(_) = &body.value {
             let full_name = self.qualified_by_module_from_name(&name.0);
             let entry = self
                 .parent
@@ -616,9 +615,7 @@ impl<'env, 'translator> ModuleBuilder<'env, 'translator> {
                 .expect("function defined");
             let type_params = entry.type_params.clone();
             let params = entry.params.clone();
-            let result_type = entry.result_type.clone();
             let mut et = ExpTranslator::new(self);
-            et.translate_fun_as_spec_fun();
             let loc = et.to_loc(&body.loc);
             for (n, ty) in &type_params {
                 et.define_type_param(&loc, *n, ty.clone());
@@ -627,16 +624,7 @@ impl<'env, 'translator> ModuleBuilder<'env, 'translator> {
             for (idx, (n, ty)) in params.iter().enumerate() {
                 et.define_local(&loc, *n, ty.clone(), None, Some(idx));
             }
-            let translated = et.translate_seq(&loc, seq, &result_type);
             et.finalize_types();
-            // If no errors were generated, then the function is considered pure.
-            if !*et.errors_generated.borrow() {
-                // Rewrite all type annotations in expressions to skip references.
-                for node_id in translated.node_ids() {
-                    let ty = et.get_node_type(node_id);
-                    et.update_node_type(node_id, ty.skip_reference().clone());
-                }
-            }
         }
     }
 }
