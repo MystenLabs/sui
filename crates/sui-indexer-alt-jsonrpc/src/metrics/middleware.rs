@@ -14,6 +14,7 @@ use std::{
 use jsonrpsee::{server::middleware::rpc::RpcServiceT, types::Request, MethodResponse};
 use pin_project_lite::pin_project;
 use prometheus::{HistogramTimer, IntCounterVec};
+use serde_json::value::RawValue;
 use tower_layer::Layer;
 use tracing::{info, warn};
 
@@ -45,7 +46,7 @@ pin_project! {
         metrics: Option<RequestMetrics>,
         method: Cow<'a, str>,
         // RPC request params for logging
-        params: String,
+        params: Option<Cow<'a, RawValue>>,
         // Threshold in ms for logging slow requests
         slow_request_threshold: Duration,
         #[pin]
@@ -113,7 +114,7 @@ where
                 failed: self.layer.metrics.requests_failed.clone(),
             }),
             method,
-            params: format!("{:?}", request.params()),
+            params: request.params.clone(),
             slow_request_threshold: self.layer.slow_request_threshold,
             inner: self.inner.call(request),
         }
@@ -167,10 +168,12 @@ where
                     result.to_string()
                 }
             };
+
+            let params = this.params.as_ref().map(|p| p.get()).unwrap_or("{}");
             warn!(
                 method,
                 elapsed_ms,
-                this.params,
+                params,
                 response = response_str,
                 "Slow RPC request detected (>{} seconds)",
                 this.slow_request_threshold.as_secs()
