@@ -274,7 +274,7 @@ fn default_multiaddr_address() -> Multiaddr {
 }
 
 fn default_stake() -> u64 {
-    DEFAULT_GAS_AMOUNT
+    20_000_000_000_000_000
 }
 
 fn default_bls12381_key_pair() -> AuthorityKeyPair {
