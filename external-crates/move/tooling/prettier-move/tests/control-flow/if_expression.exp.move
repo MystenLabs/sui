@@ -61,12 +61,11 @@ fun dot_expression() {
             .borrow_mut()
             .unwrap()
             .stake(amount)
-    else {
+    else
         staking
             .pools[pool]
             .borrow_mut()
             .stake(0)
-    }
 }
 
 fun lists() {
@@ -250,9 +249,8 @@ fun if_expression() {
     // branches that break
     if (expression)
         expression_that_is_too_long
-    else {
-        another_long_expression_too
-    };
+    else
+        another_long_expression_too;
 
     // same example with block will
     // be broken into multiple lines
@@ -276,8 +274,7 @@ fun if_comments() {
     if (
         /* expr */ expression // comment
     ) expression
-    else {
+    else
         // comment
-        expression
-    };
+        expression;
 }

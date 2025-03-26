@@ -4,7 +4,8 @@
 import { Node } from '../..';
 import { MoveOptions, printFn, treeFn } from '../../printer';
 import { AstPath, Doc, doc } from 'prettier';
-const { group, softline, line, ifBreak, indent, indentIfBreak, hardlineWithoutBreakParent } = doc.builders;
+const { group, softline, line, ifBreak, indent, indentIfBreak, hardlineWithoutBreakParent } =
+	doc.builders;
 
 /** The type of the node implemented in this file */
 export const NODE_TYPE = 'if_expression';
@@ -76,23 +77,24 @@ function printIfExpression(path: AstPath<Node>, options: MoveOptions, print: pri
 			trueBranch.leadingComment.some((e) => e.type == 'line_comment') ||
 			trueBranch.trailingComment?.type == 'line_comment';
 
-		result.push(group([' ', path.call(print, 'nonFormattingChildren', 1)], { shouldBreak: false }));
+		result.push(
+			group([' ', path.call(print, 'nonFormattingChildren', 1)], { shouldBreak: false }),
+		);
 		hasElse && result.push(group([line, 'else'], { shouldBreak }));
 	} else {
 		result.push(
-			group(
-				[
-					indent(line),
-					indent(path.call(print, 'nonFormattingChildren', 1)),
-				],
-				{ id: groupId },
-			),
+			group([indent(line), indent(path.call(print, 'nonFormattingChildren', 1))], {
+				id: groupId,
+			}),
 		);
 
 		// link group breaking to the true branch, add `else` either with a
 		// newline or without - depends on whether true branch is converted into
 		// a block
-		hasElse && result.push([ifBreak([hardlineWithoutBreakParent, 'else'], [line, 'else'], { groupId })]);
+		hasElse &&
+			result.push([
+				ifBreak([hardlineWithoutBreakParent, 'else'], [line, 'else'], { groupId }),
+			]);
 	}
 
 	// else block
@@ -108,14 +110,9 @@ function printIfExpression(path: AstPath<Node>, options: MoveOptions, print: pri
 			result.push([' ', path.call(print, 'nonFormattingChildren', 2)]);
 		} else {
 			result.push(
-				group(
-					[
-						ifBreak([' {', indent(hardlineWithoutBreakParent)], ' '),
-						indent(path.call(print, 'nonFormattingChildren', 2)),
-						ifBreak([hardlineWithoutBreakParent, '}'], ''),
-					],
-					{ shouldBreak },
-				),
+				group([indent(line), indent(path.call(print, 'nonFormattingChildren', 2))], {
+					shouldBreak,
+				}),
 			);
 		}
 	}
