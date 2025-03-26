@@ -291,11 +291,11 @@ title: Module `bridge::treasury`
 ## Constants
 
 
-<a name="bridge_treasury_EInvalidNotionalValue"></a>
+<a name="bridge_treasury_EUnsupportedTokenType"></a>
 
 
 
-<pre><code><b>const</b> <a href="../bridge/treasury.md#bridge_treasury_EInvalidNotionalValue">EInvalidNotionalValue</a>: u64 = 4;
+<pre><code><b>const</b> <a href="../bridge/treasury.md#bridge_treasury_EUnsupportedTokenType">EUnsupportedTokenType</a>: u64 = 1;
 </code></pre>
 
 
@@ -318,11 +318,11 @@ title: Module `bridge::treasury`
 
 
 
-<a name="bridge_treasury_EUnsupportedTokenType"></a>
+<a name="bridge_treasury_EInvalidNotionalValue"></a>
 
 
 
-<pre><code><b>const</b> <a href="../bridge/treasury.md#bridge_treasury_EUnsupportedTokenType">EUnsupportedTokenType</a>: u64 = 1;
+<pre><code><b>const</b> <a href="../bridge/treasury.md#bridge_treasury_EInvalidNotionalValue">EInvalidNotionalValue</a>: u64 = 4;
 </code></pre>
 
 

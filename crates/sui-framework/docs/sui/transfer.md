@@ -77,6 +77,17 @@ Internals of this struct are opaque outside this module.
 ## Constants
 
 
+<a name="sui_transfer_ESharedNonNewObject"></a>
+
+Shared an object that was previously created. Shared objects must currently
+be constructed in the transaction they are created.
+
+
+<pre><code><b>const</b> <a href="../sui/transfer.md#sui_transfer_ESharedNonNewObject">ESharedNonNewObject</a>: u64 = 0;
+</code></pre>
+
+
+
 <a name="sui_transfer_EBCSSerializationFailure"></a>
 
 Serialization of the object failed.
@@ -97,13 +108,13 @@ The object being received is not of the expected type.
 
 
 
-<a name="sui_transfer_ESharedNonNewObject"></a>
+<a name="sui_transfer_EUnableToReceiveObject"></a>
 
-Shared an object that was previously created. Shared objects must currently
-be constructed in the transaction they are created.
+Represents both the case where the object does not exist and the case where the object is not
+able to be accessed through the parent that is passed-in.
 
 
-<pre><code><b>const</b> <a href="../sui/transfer.md#sui_transfer_ESharedNonNewObject">ESharedNonNewObject</a>: u64 = 0;
+<pre><code><b>const</b> <a href="../sui/transfer.md#sui_transfer_EUnableToReceiveObject">EUnableToReceiveObject</a>: u64 = 3;
 </code></pre>
 
 
@@ -114,17 +125,6 @@ Shared object operations such as wrapping, freezing, and converting to owned are
 
 
 <pre><code><b>const</b> <a href="../sui/transfer.md#sui_transfer_ESharedObjectOperationNotSupported">ESharedObjectOperationNotSupported</a>: u64 = 4;
-</code></pre>
-
-
-
-<a name="sui_transfer_EUnableToReceiveObject"></a>
-
-Represents both the case where the object does not exist and the case where the object is not
-able to be accessed through the parent that is passed-in.
-
-
-<pre><code><b>const</b> <a href="../sui/transfer.md#sui_transfer_EUnableToReceiveObject">EUnableToReceiveObject</a>: u64 = 3;
 </code></pre>
 
 
