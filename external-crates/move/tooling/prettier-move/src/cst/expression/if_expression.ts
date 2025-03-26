@@ -4,7 +4,7 @@
 import { Node } from '../..';
 import { MoveOptions, printFn, treeFn } from '../../printer';
 import { AstPath, Doc, doc } from 'prettier';
-const { group, softline, line, ifBreak, indent, hardlineWithoutBreakParent } = doc.builders;
+const { group, softline, line, ifBreak, indent, indentIfBreak, hardlineWithoutBreakParent } = doc.builders;
 
 /** The type of the node implemented in this file */
 export const NODE_TYPE = 'if_expression';
@@ -82,9 +82,8 @@ function printIfExpression(path: AstPath<Node>, options: MoveOptions, print: pri
 		result.push(
 			group(
 				[
-					ifBreak([' {', indent(hardlineWithoutBreakParent)], ' '),
+					indent(line),
 					indent(path.call(print, 'nonFormattingChildren', 1)),
-					ifBreak([hardlineWithoutBreakParent, '}'], ''),
 				],
 				{ id: groupId },
 			),
@@ -93,7 +92,7 @@ function printIfExpression(path: AstPath<Node>, options: MoveOptions, print: pri
 		// link group breaking to the true branch, add `else` either with a
 		// newline or without - depends on whether true branch is converted into
 		// a block
-		hasElse && result.push([ifBreak([' else'], [line, 'else'], { groupId })]);
+		hasElse && result.push([ifBreak([hardlineWithoutBreakParent, 'else'], [line, 'else'], { groupId })]);
 	}
 
 	// else block
