@@ -151,7 +151,7 @@ public fun later_epoch(
 /// Advance the scenario to a future `epoch`. Will abort if the `epoch` is in the past.
 public fun skip_to_epoch(scenario: &mut Scenario, epoch: u64) {
     assert!(epoch >= scenario.ctx.epoch());
-    (scenario.ctx.epoch() - epoch).do!(|_| {
+    (epoch - scenario.ctx.epoch()).do!(|_| {
         scenario.ctx.increment_epoch_number();
         end_transaction()
     })
