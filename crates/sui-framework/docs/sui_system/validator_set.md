@@ -506,6 +506,15 @@ of new validators based on a minimum voting power rather than a minimum stake.
 
 
 
+<a name="sui_system_validator_set_PHASE_LENGTH"></a>
+
+
+
+<pre><code><b>const</b> <a href="../sui_system/validator_set.md#sui_system_validator_set_PHASE_LENGTH">PHASE_LENGTH</a>: u64 = 14;
+</code></pre>
+
+
+
 <a name="sui_system_validator_set_ENonValidatorInReportRecords"></a>
 
 
@@ -637,15 +646,6 @@ of new validators based on a minimum voting power rather than a minimum stake.
 
 
 <pre><code><b>const</b> <a href="../sui_system/validator_set.md#sui_system_validator_set_EInvalidCap">EInvalidCap</a>: u64 = 101;
-</code></pre>
-
-
-
-<a name="sui_system_validator_set_PHASE_LENGTH"></a>
-
-
-
-<pre><code><b>const</b> <a href="../sui_system/validator_set.md#sui_system_validator_set_PHASE_LENGTH">PHASE_LENGTH</a>: u64 = 14;
 </code></pre>
 
 
