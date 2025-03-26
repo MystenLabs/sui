@@ -7,7 +7,10 @@ use tokio::{task::JoinHandle, time::interval};
 use tokio_util::sync::CancellationToken;
 use tracing::{debug, info, warn};
 
-use crate::{metrics::IndexerMetrics, store::Store, StoreExt};
+use crate::{
+    metrics::IndexerMetrics,
+    store::{DbConnection, Store},
+};
 
 use super::{Handler, PrunerConfig};
 
@@ -44,7 +47,12 @@ pub(super) fn reader_watermark<H: Handler + 'static>(
                 }
 
                 _ = poll.tick() => {
-                    let current = match StoreExt::get_reader_watermark(&store, H::NAME).await {
+                    let Ok(mut conn) = store.connect().await else {
+                        warn!(pipeline = H::NAME, "Reader watermark task failed to get connection for DB");
+                        continue;
+                    };
+
+                    let current = match conn.reader_watermark(H::NAME).await {
                         Ok(Some(current)) => current,
 
                         Ok(None) => {
@@ -77,7 +85,7 @@ pub(super) fn reader_watermark<H: Handler + 'static>(
                         .with_label_values(&[H::NAME])
                         .set(new_reader_lo as i64);
 
-                    let Ok(updated) = store.update_reader_watermark(H::NAME, new_reader_lo as i64).await else {
+                    let Ok(updated) = conn.set_reader_watermark(H::NAME, new_reader_lo as i64).await else {
                         warn!(pipeline = H::NAME, "Failed to update reader watermark");
                         continue;
                     };

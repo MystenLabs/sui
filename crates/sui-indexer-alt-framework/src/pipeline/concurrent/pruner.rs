@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{collections::BTreeMap, sync::Arc, time::Duration};
+use std::{collections::BTreeMap, sync::Arc};
 
 use futures::stream::FuturesUnordered;
 use futures::StreamExt;
@@ -16,7 +16,7 @@ use tracing::{debug, error, info, warn};
 use crate::{
     metrics::IndexerMetrics,
     pipeline::logging::{LoggerWatermark, WatermarkLogger},
-    store::Store,
+    store::{DbConnection, Store},
 };
 
 use super::{Handler, PrunerConfig};
@@ -141,7 +141,12 @@ pub(super) fn pruner<H: Handler + Send + Sync + 'static>(
                         .with_label_values(&[H::NAME])
                         .start_timer();
 
-                    match store.get_pruner_watermark(H::NAME, config.delay()).await {
+                    let Ok(mut conn) = store.connect().await else {
+                        warn!(pipeline = H::NAME, "Pruner failed to connect, while fetching watermark");
+                        continue;
+                    };
+
+                    match conn.pruner_watermark(H::NAME, config.delay()).await {
                         Ok(Some(current)) => {
                             guard.stop_and_record();
                             current
@@ -163,7 +168,7 @@ pub(super) fn pruner<H: Handler + Send + Sync + 'static>(
             };
 
             // (2) Wait until this information can be acted upon.
-            if let Some(wait_for) = wait_for(watermark) {
+            if let Some(wait_for) = watermark.wait_for() {
                 debug!(pipeline = H::NAME, ?wait_for, "Waiting to prune");
                 tokio::select! {
                     _ = tokio::time::sleep(wait_for) => {}
@@ -174,14 +179,13 @@ pub(super) fn pruner<H: Handler + Send + Sync + 'static>(
                 }
             }
 
-            // Keep a copy of the watermark for the db_watermark.
-            // This is because we can only advance db_watermark when all checkpoints
-            // up to it have been pruned.
-            let mut db_watermark = watermark.clone();
+            // TODO (wlmyng) update comments
+            let mut highest_pruned = watermark.pruner_hi;
+            let mut highest_watermarked = watermark.pruner_hi;
 
             // (3) Collect all the new chunks that are ready to be pruned.
             // This will also advance the watermark.
-            while let Some((from, to_exclusive)) = next_chunk(watermark, config.max_chunk_size) {
+            while let Some((from, to_exclusive)) = watermark.next_chunk(config.max_chunk_size) {
                 pending_prune_ranges.schedule(from, to_exclusive);
             }
 
@@ -218,9 +222,6 @@ pub(super) fn pruner<H: Handler + Send + Sync + 'static>(
                 }));
             }
 
-            // Track highest successful prune
-            let mut highest_pruned = db_watermark.0;
-
             // (4) Wait for all tasks to finish. For each task, if it succeeds, remove the range
             // from the pending_prune_ranges. Otherwise the range will remain in the map and will be
             // retried in the next iteration. Update the highest_pruned watermark if the task
@@ -242,7 +243,7 @@ pub(super) fn pruner<H: Handler + Send + Sync + 'static>(
                     }
                 }
 
-                if highest_pruned > db_watermark.0 {
+                if highest_pruned > highest_watermarked {
                     metrics
                         .watermark_pruner_hi
                         .with_label_values(&[H::NAME])
@@ -253,8 +254,15 @@ pub(super) fn pruner<H: Handler + Send + Sync + 'static>(
                         .with_label_values(&[H::NAME])
                         .start_timer();
 
-                    db_watermark.0 = highest_pruned;
-                    match store.update_pruner_watermark(H::NAME, db_watermark.0).await {
+                    let Ok(mut conn) = store.connect().await else {
+                        warn!(
+                            pipeline = H::NAME,
+                            "Pruner failed to connect while updating watermark"
+                        );
+                        continue;
+                    };
+
+                    match conn.set_pruner_watermark(H::NAME, highest_pruned).await {
                         Err(e) => {
                             let elapsed = guard.stop_and_record();
                             error!(
@@ -264,13 +272,17 @@ pub(super) fn pruner<H: Handler + Send + Sync + 'static>(
                             )
                         }
                         Ok(true) => {
+                            highest_watermarked = highest_pruned;
                             let elapsed = guard.stop_and_record();
-                            logger.log::<H>(db_watermark.clone(), elapsed);
+                            logger.log::<H>(
+                                LoggerWatermark::checkpoint(highest_watermarked),
+                                elapsed,
+                            );
 
                             metrics
                                 .watermark_pruner_hi_in_db
                                 .with_label_values(&[H::NAME])
-                                .set(db_watermark.0);
+                                .set(highest_watermarked);
                         }
                         Ok(false) => {}
                     }
@@ -327,18 +339,4 @@ async fn prune_task_impl<H: Handler + Send + Sync + 'static>(
         .inc_by(affected as u64);
 
     Ok(())
-}
-
-fn wait_for(watermark: (i64, i64, i64)) -> Option<Duration> {
-    (watermark.2 > 0).then(|| Duration::from_millis(watermark.2 as u64))
-}
-
-fn next_chunk(watermark: (i64, i64, i64), size: u64) -> Option<(u64, u64)> {
-    if watermark.0 >= watermark.1 {
-        return None;
-    }
-
-    let from = watermark.0 as u64;
-    let to_exclusive = (from + size).min(watermark.1 as u64);
-    Some((from, to_exclusive))
 }

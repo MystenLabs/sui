@@ -13,7 +13,8 @@ use crate::models::watermarks::{
     PgCommitterWatermark, PgPrunerWatermark, PgReaderWatermark, StoredWatermark,
 };
 use crate::store::{
-    CommitterWatermark, DbConnection, HandlerBatch, SequentialHandler, Store, TransactionalStore,
+    CommitterWatermark, DbConnection, HandlerBatch, PrunerWatermark, ReaderWatermark,
+    SequentialHandler, Store, TransactionalStore,
 };
 
 /// PostgreSQL implementation of Store
@@ -28,7 +29,108 @@ impl PgStore {
     }
 }
 
-impl<'c> DbConnection for PgConnection<'c> {}
+#[async_trait]
+impl<'c> DbConnection for PgConnection<'c> {
+    async fn committer_watermark(
+        &mut self,
+        pipeline: &'static str,
+    ) -> anyhow::Result<Option<CommitterWatermark>> {
+        let watermark = PgCommitterWatermark::get(self, pipeline)
+            .await
+            .map_err(anyhow::Error::from)?;
+
+        if let Some(watermark) = watermark {
+            Ok(Some(CommitterWatermark {
+                epoch_hi_inclusive: watermark.epoch_hi_inclusive,
+                checkpoint_hi_inclusive: watermark.checkpoint_hi_inclusive,
+                tx_hi: watermark.tx_hi,
+                timestamp_ms_hi_inclusive: watermark.timestamp_ms_hi_inclusive,
+            }))
+        } else {
+            Ok(None)
+        }
+    }
+
+    async fn reader_watermark(
+        &mut self,
+        pipeline: &'static str,
+    ) -> anyhow::Result<Option<ReaderWatermark>> {
+        let watermark = StoredWatermark::get(self, pipeline)
+            .await
+            .map_err(anyhow::Error::from)?;
+
+        if let Some(watermark) = watermark {
+            Ok(Some(ReaderWatermark {
+                checkpoint_hi_inclusive: watermark.checkpoint_hi_inclusive,
+                reader_lo: watermark.reader_lo,
+            }))
+        } else {
+            Ok(None)
+        }
+    }
+
+    async fn set_committer_watermark(
+        &mut self,
+        pipeline: &'static str,
+        watermark: CommitterWatermark,
+    ) -> anyhow::Result<bool> {
+        let watermark = PgCommitterWatermark {
+            pipeline: pipeline.into(),
+            epoch_hi_inclusive: watermark.epoch_hi_inclusive,
+            checkpoint_hi_inclusive: watermark.checkpoint_hi_inclusive,
+            tx_hi: watermark.tx_hi,
+            timestamp_ms_hi_inclusive: watermark.timestamp_ms_hi_inclusive,
+        };
+        watermark.update(self).await.map_err(Into::into)
+    }
+
+    async fn set_reader_watermark(
+        &mut self,
+        pipeline: &'static str,
+        reader_lo: i64,
+    ) -> anyhow::Result<bool> {
+        let watermark = PgReaderWatermark {
+            pipeline: pipeline.into(),
+            reader_lo,
+        };
+        watermark.update(self).await.map_err(Into::into)
+    }
+
+    async fn pruner_watermark(
+        &mut self,
+        pipeline: &'static str,
+        delay: Duration,
+    ) -> anyhow::Result<Option<PrunerWatermark>> {
+        let watermark = PgPrunerWatermark::get(self, pipeline, delay)
+            .await
+            .map_err(anyhow::Error::from)?;
+
+        if let Some(watermark) = watermark {
+            Ok(Some(PrunerWatermark {
+                pruner_hi: watermark.pruner_hi,
+                reader_lo: watermark.reader_lo,
+                wait_for: watermark.wait_for,
+            }))
+        } else {
+            Ok(None)
+        }
+    }
+
+    async fn set_pruner_watermark(
+        &mut self,
+        pipeline: &'static str,
+        pruner_hi: i64,
+    ) -> anyhow::Result<bool> {
+        let watermark = PgPrunerWatermark {
+            pipeline: pipeline.into(),
+            pruner_hi,
+            // These values are ignored by the update method
+            reader_lo: 0,
+            wait_for: 0,
+        };
+        watermark.update(self).await.map_err(Into::into)
+    }
+}
 
 #[async_trait]
 impl Store for PgStore {
@@ -37,115 +139,6 @@ impl Store for PgStore {
     async fn connect<'c>(&'c self) -> anyhow::Result<Self::Connection<'c>> {
         let conn = self.connect().await?;
         Ok(conn)
-    }
-
-    async fn get_committer_watermark(
-        &self,
-        pipeline: &'static str,
-    ) -> anyhow::Result<Option<(i64, i64, i64, i64)>> {
-        let mut conn = self.db.connect().await?;
-        let watermark = PgCommitterWatermark::get(&mut conn, pipeline)
-            .await
-            .map_err(anyhow::Error::from)?;
-
-        if let Some(watermark) = watermark {
-            Ok(Some((
-                watermark.epoch_hi_inclusive,
-                watermark.checkpoint_hi_inclusive,
-                watermark.tx_hi,
-                watermark.timestamp_ms_hi_inclusive,
-            )))
-        } else {
-            Ok(None)
-        }
-    }
-
-    async fn get_reader_watermark(
-        &self,
-        pipeline: &'static str,
-    ) -> anyhow::Result<Option<(i64, i64)>> {
-        let mut conn = self.db.connect().await?;
-        let watermark = StoredWatermark::get(&mut conn, pipeline)
-            .await
-            .map_err(anyhow::Error::from)?;
-
-        if let Some(watermark) = watermark {
-            Ok(Some((
-                watermark.checkpoint_hi_inclusive,
-                watermark.reader_lo,
-            )))
-        } else {
-            Ok(None)
-        }
-    }
-
-    async fn update_committer_watermark(
-        &self,
-        pipeline: &'static str,
-        epoch_hi_inclusive: i64,
-        checkpoint_hi_inclusive: i64,
-        tx_hi: i64,
-        timestamp_ms_hi_inclusive: i64,
-    ) -> anyhow::Result<bool> {
-        let mut conn = self.db.connect().await?;
-        let watermark = PgCommitterWatermark {
-            pipeline: pipeline.into(),
-            epoch_hi_inclusive,
-            checkpoint_hi_inclusive,
-            tx_hi,
-            timestamp_ms_hi_inclusive,
-        };
-        watermark.update(&mut conn).await.map_err(Into::into)
-    }
-
-    async fn update_reader_watermark(
-        &self,
-        pipeline: &'static str,
-        reader_lo: i64,
-    ) -> anyhow::Result<bool> {
-        let mut conn = self.db.connect().await?;
-        let watermark = PgReaderWatermark {
-            pipeline: pipeline.into(),
-            reader_lo,
-        };
-        watermark.update(&mut conn).await.map_err(Into::into)
-    }
-
-    async fn get_pruner_watermark(
-        &self,
-        pipeline: &'static str,
-        delay: Duration,
-    ) -> anyhow::Result<Option<(i64, i64, i64)>> {
-        let mut conn = self.db.connect().await?;
-        let watermark = PgPrunerWatermark::get(&mut conn, pipeline, delay)
-            .await
-            .map_err(anyhow::Error::from)?;
-
-        if let Some(watermark) = watermark {
-            Ok(Some((
-                watermark.pruner_hi,
-                watermark.reader_lo,
-                watermark.wait_for,
-            )))
-        } else {
-            Ok(None)
-        }
-    }
-
-    async fn update_pruner_watermark(
-        &self,
-        pipeline: &'static str,
-        pruner_hi: i64,
-    ) -> anyhow::Result<bool> {
-        let mut conn = self.db.connect().await?;
-        let watermark = PgPrunerWatermark {
-            pipeline: pipeline.into(),
-            pruner_hi,
-            // These values are ignored by the update method
-            reader_lo: 0,
-            wait_for: 0,
-        };
-        watermark.update(&mut conn).await.map_err(Into::into)
     }
 }
 

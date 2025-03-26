@@ -19,13 +19,14 @@ use pipeline::{
     Processor,
 };
 use prometheus::Registry;
-use store::{CommitterWatermark, Store, StoreExt, TransactionalStore};
 use sui_indexer_alt_metrics::{db::DbConnectionStatsCollector, stats::DbConnectionStats};
 use sui_pg_db::{temp::TempDb, Db, DbArgs};
 use tempfile::tempdir;
 use tokio::task::JoinHandle;
 use tokio_util::sync::CancellationToken;
 use tracing::{info, warn};
+
+use crate::store::{CommitterWatermark, DbConnection, Store, TransactionalStore};
 
 pub use anyhow::Result;
 pub use sui_field_count::FieldCount;
@@ -443,7 +444,10 @@ where
             }
         }
 
-        let watermark = StoreExt::get_committer_watermark(&self.db, P::NAME)
+        let mut conn = self.db.connect().await.context("Failed DB connection")?;
+
+        let watermark = conn
+            .committer_watermark(&P::NAME)
             .await
             .with_context(|| format!("Failed to get watermark for {}", P::NAME))?;
 
@@ -451,7 +455,7 @@ where
             // If the pruner of this pipeline requires processed values in order to prune,
             // we must start ingestion from just after the pruner watermark,
             // so that we can process all values needed by the pruner.
-            StoreExt::get_pruner_watermark(&self.db, P::NAME, Default::default())
+            conn.pruner_watermark(&P::NAME, Default::default())
                 .await
                 .with_context(|| format!("Failed to get pruner watermark for {}", P::NAME))?
                 .map(|w| w.pruner_hi as u64)

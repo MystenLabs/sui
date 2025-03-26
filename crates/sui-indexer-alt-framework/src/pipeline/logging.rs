@@ -94,10 +94,10 @@ impl From<&CommitterWatermark> for LoggerWatermark {
     }
 }
 
-impl From<(i64, i64, i64)> for LoggerWatermark {
-    fn from(watermark: (i64, i64, i64)) -> Self {
+impl LoggerWatermark {
+    pub fn checkpoint(checkpoint: i64) -> Self {
         Self {
-            checkpoint: watermark.0,
+            checkpoint,
             transaction: None,
         }
     }

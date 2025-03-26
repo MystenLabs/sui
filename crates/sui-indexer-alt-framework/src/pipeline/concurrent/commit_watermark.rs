@@ -18,7 +18,7 @@ use tracing::{debug, error, info, warn};
 use crate::{
     metrics::{CheckpointLagMetricReporter, IndexerMetrics},
     pipeline::{logging::WatermarkLogger, CommitterConfig, WatermarkPart, WARN_PENDING_WATERMARKS},
-    store::{CommitterWatermark, Store},
+    store::{CommitterWatermark, DbConnection, Store},
 };
 
 use super::Handler;
@@ -102,6 +102,12 @@ pub(super) fn commit_watermark<H: Handler + 'static>(
                         );
                     }
 
+
+                    let Ok(mut conn) = store.connect().await else {
+                        warn!(pipeline = H::NAME, "Commit watermark task failed to get connection for DB");
+                        continue;
+                    };
+
                     // Check if the pipeline's watermark needs to be updated
                     let guard = metrics
                         .watermark_gather_latency
@@ -182,16 +188,11 @@ pub(super) fn commit_watermark<H: Handler + 'static>(
                             .with_label_values(&[H::NAME])
                             .start_timer();
 
-                        // TODO (wlmyng): non-pg store - or maintain the watermark.update(conn)? expose a conn?
-
                         // TODO: If initial_watermark is empty, when we update watermark
                         // for the first time, we should also update the low watermark.
-                        match store.update_committer_watermark(
+                        match conn.set_committer_watermark(
                             H::NAME,
-                            watermark.epoch_hi_inclusive,
-                            watermark.checkpoint_hi_inclusive,
-                            watermark.tx_hi,
-                            watermark.timestamp_ms_hi_inclusive,
+                            watermark,
                         ).await {
                             // If there's an issue updating the watermark, log it but keep going,
                             // it's OK for the watermark to lag from a correctness perspective.
