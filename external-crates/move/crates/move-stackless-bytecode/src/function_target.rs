@@ -10,7 +10,6 @@ use crate::{
 use itertools::Itertools;
 use move_binary_format::file_format::CodeOffset;
 use move_model::{
-    ast::Spec,
     model::{
         DatatypeId, FunId, FunctionEnv, FunctionVisibility, GlobalEnv, Loc, ModuleEnv, QualifiedId,
     },
@@ -154,7 +153,8 @@ impl<'env> FunctionTarget<'env> {
 
     /// Returns true if this function is opaque.
     pub fn is_opaque(&self) -> bool {
-        self.func_env.is_opaque()
+        // self.func_env.is_opaque()
+        false
     }
 
     /// Returns true if this function has public, friend, or script visibility.
@@ -253,16 +253,12 @@ impl<'env> FunctionTarget<'env> {
         &self.data.local_types[idx]
     }
 
-    /// Returns specification associated with this function.
-    pub fn get_spec(&'env self) -> &'env Spec {
-        self.func_env.get_spec()
-    }
-
     /// Returns the value of a boolean pragma for this function. This first looks up a
     /// pragma in this function, then the enclosing module, and finally uses the provided default.
     /// property
     pub fn is_pragma_true(&self, name: &str, default: impl FnOnce() -> bool) -> bool {
-        self.func_env.is_pragma_true(name, default)
+        // self.func_env.is_pragma_true(name, default)
+        false
     }
 
     /// Gets the bytecode.
@@ -412,7 +408,8 @@ impl FunctionData {
         let name_to_index = (0..func_env.get_local_count())
             .map(|idx| (func_env.get_local_name(idx), idx))
             .collect();
-        let modify_targets = func_env.get_modify_targets();
+        // let modify_targets = func_env.get_modify_targets();
+        let modify_targets = Default::default();
         FunctionData {
             variant: FunctionVariant::Baseline,
             type_args: vec![],
@@ -564,8 +561,8 @@ impl<'env> fmt::Display for FunctionTarget<'env> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let modifier = if self.func_env.is_native() {
             "native "
-        } else if self.func_env.is_intrinsic() {
-            "intrinsic "
+        // } else if self.func_env.is_intrinsic() {
+        //     "intrinsic "
         } else {
             ""
         };
@@ -637,7 +634,7 @@ impl<'env> fmt::Display for FunctionTarget<'env> {
                 write!(f, ")")?;
             }
         }
-        if self.func_env.is_native_or_intrinsic() {
+        if self.func_env.is_native() {
             writeln!(f, ";")?;
         } else {
             writeln!(f, " {{")?;

@@ -27,7 +27,7 @@ use crate::{
     exp_rewriter::ExpRewriterFunctions,
     model::{
         DatatypeId, EnvDisplay, FieldId, FunId, FunctionVisibility, GlobalEnv, GlobalId, Loc,
-        ModuleId, NodeId, QualifiedId, QualifiedInstId, SchemaId, SpecFunId, TypeParameter,
+        ModuleId, NodeId, QualifiedId, QualifiedInstId, TypeParameter,
         GHOST_MEMORY_PREFIX,
     },
     symbol::{Symbol, SymbolPool},
@@ -35,35 +35,6 @@ use crate::{
 };
 
 const MAX_ADDR_STRING: &str = "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff";
-
-// =================================================================================================
-/// # Declarations
-
-#[derive(Debug)]
-pub struct SpecVarDecl {
-    pub loc: Loc,
-    pub name: Symbol,
-    pub type_params: Vec<(Symbol, Type)>,
-    pub type_: Type,
-    pub init: Option<Exp>,
-}
-
-#[derive(Clone, Debug)]
-pub struct SpecFunDecl {
-    pub loc: Loc,
-    pub name: Symbol,
-    pub type_params: Vec<(Symbol, Type)>,
-    pub params: Vec<(Symbol, Type)>,
-    pub context_params: Option<Vec<(Symbol, bool)>>,
-    pub result_type: Type,
-    pub used_memory: BTreeSet<QualifiedInstId<DatatypeId>>,
-    pub uninterpreted: bool,
-    pub is_move_fun: bool,
-    pub is_native: bool,
-    pub body: Option<Exp>,
-    pub callees: BTreeSet<QualifiedId<SpecFunId>>,
-    pub is_recursive: RefCell<Option<bool>>,
-}
 
 // =================================================================================================
 /// # Attributes
@@ -273,75 +244,6 @@ pub enum PropertyValue {
     Value(Value),
     Symbol(Symbol),
     QualifiedSymbol(QualifiedSymbol),
-}
-
-/// Specification and properties associated with a language item.
-#[derive(Debug, Clone, Default)]
-pub struct Spec {
-    // The location of this specification, if available.
-    pub loc: Option<Loc>,
-    // The set of conditions associated with this item.
-    pub conditions: Vec<Condition>,
-    // Any pragma properties associated with this item.
-    pub properties: PropertyBag,
-    // If this is a function, specs associated with individual code points.
-    pub on_impl: BTreeMap<CodeOffset, Spec>,
-}
-
-impl Spec {
-    pub fn has_conditions(&self) -> bool {
-        !self.conditions.is_empty()
-    }
-
-    pub fn filter<P>(&self, pred: P) -> impl Iterator<Item = &Condition>
-    where
-        P: FnMut(&&Condition) -> bool,
-    {
-        self.conditions.iter().filter(pred)
-    }
-
-    pub fn filter_kind(&self, kind: ConditionKind) -> impl Iterator<Item = &Condition> {
-        self.filter(move |c| c.kind == kind)
-    }
-
-    pub fn filter_kind_axiom(&self) -> impl Iterator<Item = &Condition> {
-        self.filter(move |c| matches!(c.kind, ConditionKind::Axiom(..)))
-    }
-
-    pub fn any<P>(&self, pred: P) -> bool
-    where
-        P: FnMut(&Condition) -> bool,
-    {
-        self.conditions.iter().any(pred)
-    }
-
-    pub fn any_kind(&self, kind: ConditionKind) -> bool {
-        self.any(move |c| c.kind == kind)
-    }
-}
-
-/// Information about a specification block in the source. This is used for documentation
-/// generation. In the object model, the original locations and documentation of spec blocks
-/// is reduced to conditions on a `Spec`, with expansion of schemas. This data structure
-/// allows us to discover the original spec blocks and their content.
-#[derive(Debug, Clone)]
-pub struct SpecBlockInfo {
-    /// The location of the entire spec block.
-    pub loc: Loc,
-    /// The target of the spec block.
-    pub target: SpecBlockTarget,
-    /// The locations of all members of the spec block.
-    pub member_locs: Vec<Loc>,
-}
-
-/// Describes the target of a spec block.
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
-pub enum SpecBlockTarget {
-    Module,
-    Struct(ModuleId, DatatypeId),
-    Function(ModuleId, FunId),
-    FunctionCode(ModuleId, FunId, usize),
-    Schema(ModuleId, SchemaId, Vec<TypeParameter>),
 }
 
 /// Describes a global invariant.
@@ -556,39 +458,6 @@ impl ExpData {
         vars
     }
 
-    /// Returns the used memory of this expression.
-    pub fn used_memory(
-        &self,
-        env: &GlobalEnv,
-    ) -> BTreeSet<(QualifiedInstId<DatatypeId>, Option<MemoryLabel>)> {
-        let mut result = BTreeSet::new();
-        let mut visitor = |e: &ExpData| {
-            use ExpData::*;
-            use Operation::*;
-            match e {
-                Call(id, Exists(label), _) | Call(id, Global(label), _) => {
-                    let inst = &env.get_node_instantiation(*id);
-                    let (mid, sid, sinst) = inst[0].require_datatype();
-                    result.insert((mid.qualified_inst(sid, sinst.to_owned()), label.to_owned()));
-                }
-                Call(id, Function(mid, fid, labels), _) => {
-                    let inst = &env.get_node_instantiation(*id);
-                    let module = env.get_module(*mid);
-                    let fun = module.get_spec_fun(*fid);
-                    for (i, mem) in fun.used_memory.iter().enumerate() {
-                        result.insert((
-                            mem.to_owned().instantiate(inst),
-                            labels.as_ref().map(|l| l[i]),
-                        ));
-                    }
-                }
-                _ => {}
-            }
-        };
-        self.visit(&mut visitor);
-        result
-    }
-
     /// Returns the temporaries used in this expression. Result is ordered by occurrence.
     pub fn used_temporaries(&self, env: &GlobalEnv) -> Vec<(TempIndex, Type)> {
         let mut temps = vec![];
@@ -763,7 +632,7 @@ impl ExpData {
             if let ExpData::Call(_, oper, _) = e {
                 use Operation::*;
                 match oper {
-                    Function(mid, ..) | Pack(mid, ..) | Select(mid, ..) | UpdateField(mid, ..) => {
+                    Pack(mid, ..) | Select(mid, ..) | UpdateField(mid, ..) => {
                         usage.insert(*mid);
                     }
                     _ => {}
@@ -865,7 +734,6 @@ impl<'a> ExpRewriterFunctions for ExpRewriter<'a> {
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum Operation {
-    Function(ModuleId, SpecFunId, Option<Vec<MemoryLabel>>),
     Pack(ModuleId, DatatypeId),
     Tuple,
     Select(ModuleId, DatatypeId, FieldId),
@@ -1005,38 +873,6 @@ impl fmt::Display for Value {
 // =================================================================================================
 /// # Purity of Expressions
 
-impl Operation {
-    /// Determines whether this operation depends on global memory
-    pub fn uses_memory<F>(&self, check_pure: &F) -> bool
-    where
-        F: Fn(ModuleId, SpecFunId) -> bool,
-    {
-        use Operation::*;
-        match self {
-            Exists(_) | Global(_) => false,
-            Function(mid, fid, _) => check_pure(*mid, *fid),
-            _ => true,
-        }
-    }
-}
-
-impl ExpData {
-    /// Determines whether this expression depends on global memory
-    pub fn uses_memory<F>(&self, check_pure: &F) -> bool
-    where
-        F: Fn(ModuleId, SpecFunId) -> bool,
-    {
-        use ExpData::*;
-        let mut no_use = true;
-        self.visit(&mut |exp: &ExpData| {
-            if let Call(_, oper, _) = exp {
-                no_use = no_use && oper.uses_memory(check_pure);
-            }
-        });
-        no_use
-    }
-}
-
 impl ExpData {
     /// Checks whether the expression is pure, i.e. does not depend on memory or mutable
     /// variables.
@@ -1053,13 +889,6 @@ impl ExpData {
                 }
                 Call(_, oper, _) => match oper {
                     Exists(..) | Global(..) => is_pure = false,
-                    Function(mid, fid, _) => {
-                        let module = env.get_module(*mid);
-                        let fun = module.get_spec_fun(*fid);
-                        if !fun.used_memory.is_empty() {
-                            is_pure = false;
-                        }
-                    }
                     _ => {}
                 },
                 _ => {}
@@ -1354,17 +1183,6 @@ impl<'a> fmt::Display for OperationDisplay<'a> {
     fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), Error> {
         use Operation::*;
         match self.oper {
-            Function(mid, fid, labels_opt) => {
-                write!(f, "{}", self.fun_str(mid, fid))?;
-                if let Some(labels) = labels_opt {
-                    write!(
-                        f,
-                        "[{}]",
-                        labels.iter().map(|l| format!("{}", l)).join(", ")
-                    )?;
-                }
-                Ok(())
-            }
             Global(label_opt) => {
                 write!(f, "global")?;
                 if let Some(label) = label_opt {
@@ -1408,16 +1226,6 @@ impl<'a> fmt::Display for OperationDisplay<'a> {
 }
 
 impl<'a> OperationDisplay<'a> {
-    fn fun_str(&self, mid: &ModuleId, fid: &SpecFunId) -> String {
-        let module_env = self.env.get_module(*mid);
-        let fun = module_env.get_spec_fun(*fid);
-        format!(
-            "{}::{}",
-            module_env.get_name().display(self.env.symbol_pool()),
-            fun.name.display(self.env.symbol_pool()),
-        )
-    }
-
     fn struct_str(&self, mid: &ModuleId, sid: &DatatypeId) -> String {
         let module_env = self.env.get_module(*mid);
         let struct_env = module_env.get_struct(*sid);
@@ -1481,17 +1289,6 @@ impl<'a> fmt::Display for EnvDisplay<'a, Condition> {
             )?,
             _ => write!(f, "{} {};", self.val.kind, self.val.exp.display(self.env))?,
         }
-        Ok(())
-    }
-}
-
-impl<'a> fmt::Display for EnvDisplay<'a, Spec> {
-    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        writeln!(f, "spec {{")?;
-        for cond in &self.val.conditions {
-            writeln!(f, "  {}", self.env.display(cond))?
-        }
-        writeln!(f, "}}")?;
         Ok(())
     }
 }

@@ -51,8 +51,8 @@ impl FunctionTargetProcessor for WellFormedInstrumentationProcessor {
             // only need to do this for verified functions
             return data;
         }
-        // Rerun usage analysis for this function.
-        let usage = UsageProcessor::analyze(targets, fun_env, &data);
+        // // Rerun usage analysis for this function.
+        // let usage = UsageProcessor::analyze(targets, fun_env, &data);
         let mut builder = FunctionDataBuilder::new(fun_env, data);
         builder.set_loc(fun_env.get_loc().at_start());
         let old_code = std::mem::take(&mut builder.data.code);
@@ -67,52 +67,52 @@ impl FunctionTargetProcessor for WellFormedInstrumentationProcessor {
             builder.emit_prop(PropKind::Assume, exp);
         }
 
-        // Inject well-formedness assumption for used memory.
-        for mem in usage.accessed.all {
-            let struct_env = builder.global_env().get_struct_qid(mem.to_qualified_id());
-            if struct_env.is_native_or_intrinsic() {
-                // If this is native or intrinsic memory, skip this.
-                continue;
-            }
-            let exp = builder
-                .mk_inst_mem_quant_opt(QuantKind::Forall, &mem, &mut |val| {
-                    Some(builder.mk_call(&BOOL_TYPE, Operation::WellFormed, vec![val]))
-                })
-                .expect("quant defined");
-            builder.emit_prop(PropKind::Assume, exp);
+        // // Inject well-formedness assumption for used memory.
+        // for mem in usage.accessed.all {
+        //     let struct_env = builder.global_env().get_struct_qid(mem.to_qualified_id());
+        //     if struct_env.is_native_or_intrinsic() {
+        //         // If this is native or intrinsic memory, skip this.
+        //         continue;
+        //     }
+        //     let exp = builder
+        //         .mk_inst_mem_quant_opt(QuantKind::Forall, &mem, &mut |val| {
+        //             Some(builder.mk_call(&BOOL_TYPE, Operation::WellFormed, vec![val]))
+        //         })
+        //         .expect("quant defined");
+        //     builder.emit_prop(PropKind::Assume, exp);
 
-            // If this is ghost memory, assume it exists, and if it has an initializer,
-            // assume it has this value.
-            if let Some(spec_var) = struct_env.get_ghost_memory_spec_var() {
-                let mem_ty = mem.to_type();
-                let zero_addr = builder.mk_address_const(BigUint::zero());
-                let exists = builder.mk_call_with_inst(
-                    &BOOL_TYPE,
-                    vec![mem_ty.clone()],
-                    Operation::Exists(None),
-                    vec![zero_addr.clone()],
-                );
-                builder.emit_prop(PropKind::Assume, exists);
-                let svar_module = builder.global_env().get_module(spec_var.module_id);
-                let svar = svar_module.get_spec_var(spec_var.id);
-                if let Some(init) = &svar.init {
-                    let mem_val = builder.mk_call_with_inst(
-                        &mem_ty,
-                        mem.inst.clone(),
-                        Operation::Pack(mem.module_id, mem.id),
-                        vec![init.clone()],
-                    );
-                    let mem_access = builder.mk_call_with_inst(
-                        &mem_ty,
-                        vec![mem_ty.clone()],
-                        Operation::Global(None),
-                        vec![zero_addr],
-                    );
-                    let eq_with_init = builder.mk_identical(mem_access, mem_val);
-                    builder.emit_prop(PropKind::Assume, eq_with_init);
-                }
-            }
-        }
+        //     // If this is ghost memory, assume it exists, and if it has an initializer,
+        //     // assume it has this value.
+        //     if let Some(spec_var) = struct_env.get_ghost_memory_spec_var() {
+        //         let mem_ty = mem.to_type();
+        //         let zero_addr = builder.mk_address_const(BigUint::zero());
+        //         let exists = builder.mk_call_with_inst(
+        //             &BOOL_TYPE,
+        //             vec![mem_ty.clone()],
+        //             Operation::Exists(None),
+        //             vec![zero_addr.clone()],
+        //         );
+        //         builder.emit_prop(PropKind::Assume, exists);
+        //         let svar_module = builder.global_env().get_module(spec_var.module_id);
+        //         let svar = svar_module.get_spec_var(spec_var.id);
+        //         if let Some(init) = &svar.init {
+        //             let mem_val = builder.mk_call_with_inst(
+        //                 &mem_ty,
+        //                 mem.inst.clone(),
+        //                 Operation::Pack(mem.module_id, mem.id),
+        //                 vec![init.clone()],
+        //             );
+        //             let mem_access = builder.mk_call_with_inst(
+        //                 &mem_ty,
+        //                 vec![mem_ty.clone()],
+        //                 Operation::Global(None),
+        //                 vec![zero_addr],
+        //             );
+        //             let eq_with_init = builder.mk_identical(mem_access, mem_val);
+        //             builder.emit_prop(PropKind::Assume, eq_with_init);
+        //         }
+        //     }
+        // }
 
         // Append the old code
         for bc in old_code {

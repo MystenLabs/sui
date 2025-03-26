@@ -12,7 +12,7 @@ use move_model::{
     exp_rewriter::{ExpRewriter, ExpRewriterFunctions, RewriteTarget},
     model::{
         DatatypeId, FunId, GlobalEnv, ModuleId, NodeId, QualifiedId, QualifiedInstId, RefType,
-        SpecVarId, VariantId,
+        VariantId,
     },
     ty::{Type, TypeDisplayContext},
 };
@@ -391,7 +391,6 @@ pub enum Bytecode {
     Nop(AttrId),
 
     SaveMem(AttrId, MemoryLabel, QualifiedInstId<DatatypeId>),
-    SaveSpecVar(AttrId, MemoryLabel, QualifiedInstId<SpecVarId>),
     Prop(AttrId, PropKind, Exp),
 }
 
@@ -410,7 +409,6 @@ impl Bytecode {
             | Abort(id, ..)
             | Nop(id)
             | SaveMem(id, ..)
-            | SaveSpecVar(id, ..)
             | Prop(id, ..) => *id,
         }
     }
@@ -677,9 +675,6 @@ impl Bytecode {
             Self::SaveMem(attr_id, label, qid) => {
                 Self::SaveMem(*attr_id, *label, qid.instantiate_ref(params))
             }
-            Self::SaveSpecVar(attr_id, label, qid) => {
-                Self::SaveSpecVar(*attr_id, *label, qid.instantiate_ref(params))
-            }
             Self::Prop(attr_id, kind, exp) => Self::Prop(
                 *attr_id,
                 *kind,
@@ -924,18 +919,6 @@ impl<'env> fmt::Display for BytecodeDisplay<'env> {
             SaveMem(_, label, qid) => {
                 let env = self.func_target.global_env();
                 write!(f, "@{} := save_mem({})", label.as_usize(), env.display(qid))?;
-            }
-            SaveSpecVar(_, label, qid) => {
-                let env = self.func_target.global_env();
-                let module_env = env.get_module(qid.module_id);
-                let spec_var = module_env.get_spec_var(qid.id);
-                write!(
-                    f,
-                    "@{} := save_spec_var({}::{})",
-                    label.as_usize(),
-                    module_env.get_name().display(env.symbol_pool()),
-                    spec_var.name.display(env.symbol_pool())
-                )?;
             }
             Prop(_, kind, exp) => {
                 let exp_display = exp.display(self.func_target.func_env.module_env.env);

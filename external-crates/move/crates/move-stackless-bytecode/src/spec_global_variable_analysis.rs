@@ -179,7 +179,7 @@ pub fn collect_spec_global_variable_info(
                 .module_env
                 .env
                 .get_function(*fun_id_with_info)
-                .is_native_or_intrinsic()
+                .is_native()
             {
                 return None;
             }

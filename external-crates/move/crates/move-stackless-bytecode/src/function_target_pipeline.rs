@@ -292,7 +292,7 @@ impl FunctionTargetsHolder {
             let is_focus_spec =
                 inner_attrs.contains_key_(&AttributeName_::Unknown(Symbol::from("focus")));
             let is_verify_spec =
-                inner_attrs.contains_key_(&AttributeName_::Unknown(Symbol::from("verify")));
+                inner_attrs.contains_key_(&AttributeName_::Unknown(Symbol::from("prove")));
 
             if !is_verify_spec && !is_focus_spec {
                 self.no_verify_specs.insert(func_env.get_qualified_id());

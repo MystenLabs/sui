@@ -192,11 +192,12 @@ pub fn add_prelude(
         .collect::<BTreeSet<_>>()
         .into_iter()
         .collect_vec();
-    let mut table_instances = mono_info
-        .table_inst
-        .iter()
-        .map(|(qid, ty_args)| MapImpl::new(env, options, *qid, ty_args, false))
-        .collect_vec();
+    // let mut table_instances = mono_info
+    //     .table_inst
+    //     .iter()
+    //     .map(|(qid, ty_args)| MapImpl::new(env, options, *qid, ty_args, false))
+    //     .collect_vec();
+    let table_instances: Vec<MapImpl> = vec![];
     // If not using cvc5, generate vector functions for bv types
     if !options.use_cvc5 {
         let mut bv_vec_instances = mono_info
@@ -207,18 +208,18 @@ pub fn add_prelude(
             .collect::<BTreeSet<_>>()
             .into_iter()
             .collect_vec();
-        let mut bv_table_instances = mono_info
-            .table_inst
-            .iter()
-            .map(|(qid, ty_args)| {
-                let v_ty = ty_args.iter().map(|(_, vty)| vty).collect_vec();
-                let bv_flag = v_ty.iter().all(|ty| ty.skip_reference().is_number());
-                MapImpl::new(env, options, *qid, ty_args, bv_flag)
-            })
-            .filter(|map_impl| !table_instances.contains(map_impl))
-            .collect_vec();
+        // let mut bv_table_instances = mono_info
+        //     .table_inst
+        //     .iter()
+        //     .map(|(qid, ty_args)| {
+        //         let v_ty = ty_args.iter().map(|(_, vty)| vty).collect_vec();
+        //         let bv_flag = v_ty.iter().all(|ty| ty.skip_reference().is_number());
+        //         MapImpl::new(env, options, *qid, ty_args, bv_flag)
+        //     })
+        //     .filter(|map_impl| !table_instances.contains(map_impl))
+        //     .collect_vec();
         vec_instances.append(&mut bv_vec_instances);
-        table_instances.append(&mut bv_table_instances);
+        // table_instances.append(&mut bv_table_instances);
     }
     context.insert("vec_instances", &vec_instances);
     context.insert("table_instances", &table_instances);
@@ -328,97 +329,97 @@ impl TypeInfo {
     }
 }
 
-impl MapImpl {
-    fn new(
-        env: &GlobalEnv,
-        options: &BoogieOptions,
-        struct_qid: QualifiedId<DatatypeId>,
-        ty_args: &BTreeSet<(Type, Type)>,
-        bv_flag: bool,
-    ) -> Self {
-        let insts = ty_args
-            .iter()
-            .map(|(kty, vty)| {
-                (
-                    TypeInfo::new(env, options, kty, false),
-                    TypeInfo::new(env, options, vty, bv_flag),
-                )
-            })
-            .collect();
-        let struct_env = env.get_struct(struct_qid);
-        let struct_name = format!(
-            "${}_{}",
-            boogie_module_name(&struct_env.module_env),
-            struct_env.get_name().display(struct_env.symbol_pool()),
-        );
+// impl MapImpl {
+//     fn new(
+//         env: &GlobalEnv,
+//         options: &BoogieOptions,
+//         struct_qid: QualifiedId<DatatypeId>,
+//         ty_args: &BTreeSet<(Type, Type)>,
+//         bv_flag: bool,
+//     ) -> Self {
+//         let insts = ty_args
+//             .iter()
+//             .map(|(kty, vty)| {
+//                 (
+//                     TypeInfo::new(env, options, kty, false),
+//                     TypeInfo::new(env, options, vty, bv_flag),
+//                 )
+//             })
+//             .collect();
+//         let struct_env = env.get_struct(struct_qid);
+//         let struct_name = format!(
+//             "${}_{}",
+//             boogie_module_name(&struct_env.module_env),
+//             struct_env.get_name().display(struct_env.symbol_pool()),
+//         );
 
-        let decl = env
-            .intrinsics
-            .get_decl_for_struct(&struct_qid)
-            .expect("intrinsic decl");
+//         let decl = env
+//             .intrinsics
+//             .get_decl_for_struct(&struct_qid)
+//             .expect("intrinsic decl");
 
-        MapImpl {
-            struct_name,
-            insts,
-            fun_new: Self::triple_opt_to_name(decl.get_fun_triple(env, INTRINSIC_FUN_MAP_NEW)),
-            fun_destroy_empty: Self::triple_opt_to_name(
-                decl.get_fun_triple(env, INTRINSIC_FUN_MAP_DESTROY_EMPTY),
-            ),
-            fun_len: Self::triple_opt_to_name(decl.get_fun_triple(env, INTRINSIC_FUN_MAP_LEN)),
-            fun_is_empty: Self::triple_opt_to_name(
-                decl.get_fun_triple(env, INTRINSIC_FUN_MAP_IS_EMPTY),
-            ),
-            fun_has_key: Self::triple_opt_to_name(
-                decl.get_fun_triple(env, INTRINSIC_FUN_MAP_HAS_KEY),
-            ),
-            fun_add_no_override: Self::triple_opt_to_name(
-                decl.get_fun_triple(env, INTRINSIC_FUN_MAP_ADD_NO_OVERRIDE),
-            ),
-            fun_add_override_if_exists: Self::triple_opt_to_name(
-                decl.get_fun_triple(env, INTRINSIC_FUN_MAP_ADD_OVERRIDE_IF_EXISTS),
-            ),
-            fun_del_must_exist: Self::triple_opt_to_name(
-                decl.get_fun_triple(env, INTRINSIC_FUN_MAP_DEL_MUST_EXIST),
-            ),
-            fun_del_return_key: Self::triple_opt_to_name(
-                decl.get_fun_triple(env, INTRINSIC_FUN_MAP_DEL_RETURN_KEY),
-            ),
-            fun_borrow: Self::triple_opt_to_name(
-                decl.get_fun_triple(env, INTRINSIC_FUN_MAP_BORROW),
-            ),
-            fun_borrow_mut: Self::triple_opt_to_name(
-                decl.get_fun_triple(env, INTRINSIC_FUN_MAP_BORROW_MUT),
-            ),
-            fun_spec_new: Self::triple_opt_to_name(
-                decl.get_fun_triple(env, INTRINSIC_FUN_MAP_SPEC_NEW),
-            ),
-            fun_spec_get: Self::triple_opt_to_name(
-                decl.get_fun_triple(env, INTRINSIC_FUN_MAP_SPEC_GET),
-            ),
-            fun_spec_set: Self::triple_opt_to_name(
-                decl.get_fun_triple(env, INTRINSIC_FUN_MAP_SPEC_SET),
-            ),
-            fun_spec_del: Self::triple_opt_to_name(
-                decl.get_fun_triple(env, INTRINSIC_FUN_MAP_SPEC_DEL),
-            ),
-            fun_spec_len: Self::triple_opt_to_name(
-                decl.get_fun_triple(env, INTRINSIC_FUN_MAP_SPEC_LEN),
-            ),
-            fun_spec_is_empty: Self::triple_opt_to_name(
-                decl.get_fun_triple(env, INTRINSIC_FUN_MAP_SPEC_IS_EMPTY),
-            ),
-            fun_spec_has_key: Self::triple_opt_to_name(
-                decl.get_fun_triple(env, INTRINSIC_FUN_MAP_SPEC_HAS_KEY),
-            ),
-        }
-    }
+//         MapImpl {
+//             struct_name,
+//             insts,
+//             fun_new: Self::triple_opt_to_name(decl.get_fun_triple(env, INTRINSIC_FUN_MAP_NEW)),
+//             fun_destroy_empty: Self::triple_opt_to_name(
+//                 decl.get_fun_triple(env, INTRINSIC_FUN_MAP_DESTROY_EMPTY),
+//             ),
+//             fun_len: Self::triple_opt_to_name(decl.get_fun_triple(env, INTRINSIC_FUN_MAP_LEN)),
+//             fun_is_empty: Self::triple_opt_to_name(
+//                 decl.get_fun_triple(env, INTRINSIC_FUN_MAP_IS_EMPTY),
+//             ),
+//             fun_has_key: Self::triple_opt_to_name(
+//                 decl.get_fun_triple(env, INTRINSIC_FUN_MAP_HAS_KEY),
+//             ),
+//             fun_add_no_override: Self::triple_opt_to_name(
+//                 decl.get_fun_triple(env, INTRINSIC_FUN_MAP_ADD_NO_OVERRIDE),
+//             ),
+//             fun_add_override_if_exists: Self::triple_opt_to_name(
+//                 decl.get_fun_triple(env, INTRINSIC_FUN_MAP_ADD_OVERRIDE_IF_EXISTS),
+//             ),
+//             fun_del_must_exist: Self::triple_opt_to_name(
+//                 decl.get_fun_triple(env, INTRINSIC_FUN_MAP_DEL_MUST_EXIST),
+//             ),
+//             fun_del_return_key: Self::triple_opt_to_name(
+//                 decl.get_fun_triple(env, INTRINSIC_FUN_MAP_DEL_RETURN_KEY),
+//             ),
+//             fun_borrow: Self::triple_opt_to_name(
+//                 decl.get_fun_triple(env, INTRINSIC_FUN_MAP_BORROW),
+//             ),
+//             fun_borrow_mut: Self::triple_opt_to_name(
+//                 decl.get_fun_triple(env, INTRINSIC_FUN_MAP_BORROW_MUT),
+//             ),
+//             fun_spec_new: Self::triple_opt_to_name(
+//                 decl.get_fun_triple(env, INTRINSIC_FUN_MAP_SPEC_NEW),
+//             ),
+//             fun_spec_get: Self::triple_opt_to_name(
+//                 decl.get_fun_triple(env, INTRINSIC_FUN_MAP_SPEC_GET),
+//             ),
+//             fun_spec_set: Self::triple_opt_to_name(
+//                 decl.get_fun_triple(env, INTRINSIC_FUN_MAP_SPEC_SET),
+//             ),
+//             fun_spec_del: Self::triple_opt_to_name(
+//                 decl.get_fun_triple(env, INTRINSIC_FUN_MAP_SPEC_DEL),
+//             ),
+//             fun_spec_len: Self::triple_opt_to_name(
+//                 decl.get_fun_triple(env, INTRINSIC_FUN_MAP_SPEC_LEN),
+//             ),
+//             fun_spec_is_empty: Self::triple_opt_to_name(
+//                 decl.get_fun_triple(env, INTRINSIC_FUN_MAP_SPEC_IS_EMPTY),
+//             ),
+//             fun_spec_has_key: Self::triple_opt_to_name(
+//                 decl.get_fun_triple(env, INTRINSIC_FUN_MAP_SPEC_HAS_KEY),
+//             ),
+//         }
+//     }
 
-    fn triple_opt_to_name(triple_opt: Option<(BigUint, String, String)>) -> String {
-        match triple_opt {
-            None => String::new(),
-            Some((addr, mod_name, fun_name)) => {
-                format!("${}_{}_{}", addr.to_str_radix(16), mod_name, fun_name)
-            }
-        }
-    }
-}
+//     fn triple_opt_to_name(triple_opt: Option<(BigUint, String, String)>) -> String {
+//         match triple_opt {
+//             None => String::new(),
+//             Some((addr, mod_name, fun_name)) => {
+//                 format!("${}_{}_{}", addr.to_str_radix(16), mod_name, fun_name)
+//             }
+//         }
+//     }
+// }

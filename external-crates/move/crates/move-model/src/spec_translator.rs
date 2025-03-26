@@ -12,11 +12,11 @@ use std::collections::{BTreeMap, BTreeSet};
 use crate::{
     ast::{
         Condition, ConditionKind, Exp, ExpData, GlobalInvariant, LocalVarDecl, MemoryLabel,
-        Operation, Spec, TempIndex, TraceKind,
+        Operation, TempIndex, TraceKind,
     },
     exp_generator::ExpGenerator,
     exp_rewriter::ExpRewriterFunctions,
-    model::{DatatypeId, FunctionEnv, GlobalId, Loc, NodeId, QualifiedInstId, SpecVarId},
+    model::{DatatypeId, FunctionEnv, GlobalId, Loc, NodeId, QualifiedInstId},
     pragmas::{
         ABORTS_IF_IS_STRICT_PRAGMA, CONDITION_ABSTRACT_PROP, CONDITION_CONCRETE_PROP,
         CONDITION_EXPORT_PROP, CONDITION_INJECTED_PROP,
@@ -57,7 +57,7 @@ pub struct SpecTranslator<'a, 'b, T: ExpGenerator<'a>> {
 #[derive(Default)]
 pub struct TranslatedSpec {
     pub saved_memory: BTreeMap<QualifiedInstId<DatatypeId>, MemoryLabel>,
-    pub saved_spec_vars: BTreeMap<QualifiedInstId<SpecVarId>, MemoryLabel>,
+    // pub saved_spec_vars: BTreeMap<QualifiedInstId<SpecVarId>, MemoryLabel>,
     pub saved_params: BTreeMap<TempIndex, TempIndex>,
     pub debug_traces: Vec<(NodeId, TraceKind, Exp)>,
     pub pre: Vec<(Loc, Exp)>,
@@ -282,44 +282,44 @@ impl<'a, 'b, T: ExpGenerator<'a>> SpecTranslator<'a, 'b, T> {
             in_old: false,
         };
 
-        // Handle updating of global spec variables
-        for impl_spec in translator.fun_env.get_spec().on_impl.values() {
-            for cond in &impl_spec.conditions {
-                if cond.exp == prop.clone() && !cond.additional_exps.is_empty() {
-                    translator.in_post_state = false;
-                    let lhs = translator.translate_exp(
-                        &translator.auto_trace(&cond.loc, &cond.additional_exps[0]),
-                        false,
-                    );
-                    let rhs = translator
-                        .translate_exp(&translator.auto_trace(&cond.loc, &cond.exp), false);
-                    translator.result.updates.push((cond.loc.clone(), lhs, rhs));
-                    return (translator.result, cond.clone().exp);
-                }
-            }
-        }
+        // // Handle updating of global spec variables
+        // for impl_spec in translator.fun_env.get_spec().on_impl.values() {
+        //     for cond in &impl_spec.conditions {
+        //         if cond.exp == prop.clone() && !cond.additional_exps.is_empty() {
+        //             translator.in_post_state = false;
+        //             let lhs = translator.translate_exp(
+        //                 &translator.auto_trace(&cond.loc, &cond.additional_exps[0]),
+        //                 false,
+        //             );
+        //             let rhs = translator
+        //                 .translate_exp(&translator.auto_trace(&cond.loc, &cond.exp), false);
+        //             translator.result.updates.push((cond.loc.clone(), lhs, rhs));
+        //             return (translator.result, cond.clone().exp);
+        //         }
+        //     }
+        // }
 
         let exp = translator.translate_exp(&translator.auto_trace(loc, prop), false);
         (translator.result, exp)
     }
 
-    pub fn translate_invariants_by_id(
-        auto_trace: bool,
-        builder: &'b mut T,
-        inv_ids: impl Iterator<Item = (GlobalId, Vec<Type>)>,
-    ) -> TranslatedSpec {
-        let global_env = builder.global_env();
-        SpecTranslator::translate_invariants(
-            auto_trace,
-            builder,
-            inv_ids.map(|(inv_id, inst)| (global_env.get_global_invariant(inv_id).unwrap(), inst)),
-        )
-    }
+    // pub fn translate_invariants_by_id(
+    //     auto_trace: bool,
+    //     builder: &'b mut T,
+    //     inv_ids: impl Iterator<Item = (GlobalId, Vec<Type>)>,
+    // ) -> TranslatedSpec {
+    //     let global_env = builder.global_env();
+    //     SpecTranslator::translate_invariants(
+    //         auto_trace,
+    //         builder,
+    //         inv_ids.map(|(inv_id, inst)| (global_env.get_global_invariant(inv_id).unwrap(), inst)),
+    //     )
+    // }
 
     fn translate_spec(&mut self, for_call: bool) {
         let fun_env = self.fun_env;
         let env = fun_env.module_env.env;
-        let spec = fun_env.get_spec();
+        // let spec = fun_env.get_spec();
 
         // A function which determines whether a condition is applicable in the context, which
         // is `for_call` for the function being called, and `!for_call` if its verified.
@@ -327,163 +327,164 @@ impl<'a, 'b, T: ExpGenerator<'a>> SpecTranslator<'a, 'b, T> {
         // and if it has the `[concrete]` property only for verification. Also, conditions
         // which are injected from a schema are only included on call site if they are also
         // exported.
-        let is_applicable = |cond: &&Condition| {
-            let abstract_ = env
-                .is_property_true(&cond.properties, CONDITION_ABSTRACT_PROP)
-                .unwrap_or(false);
-            let concrete = env
-                .is_property_true(&cond.properties, CONDITION_CONCRETE_PROP)
-                .unwrap_or(false);
-            let injected = env
-                .is_property_true(&cond.properties, CONDITION_INJECTED_PROP)
-                .unwrap_or(false);
-            let exported = env
-                .is_property_true(&cond.properties, CONDITION_EXPORT_PROP)
-                .unwrap_or(false);
-            if for_call {
-                (!injected || exported) && (abstract_ || !concrete)
-            } else {
-                concrete || !abstract_
-            }
-        };
+        // let is_applicable = |cond: &&Condition| {
+        //     let abstract_ = env
+        //         .is_property_true(&cond.properties, CONDITION_ABSTRACT_PROP)
+        //         .unwrap_or(false);
+        //     let concrete = env
+        //         .is_property_true(&cond.properties, CONDITION_CONCRETE_PROP)
+        //         .unwrap_or(false);
+        //     let injected = env
+        //         .is_property_true(&cond.properties, CONDITION_INJECTED_PROP)
+        //         .unwrap_or(false);
+        //     let exported = env
+        //         .is_property_true(&cond.properties, CONDITION_EXPORT_PROP)
+        //         .unwrap_or(false);
+        //     if for_call {
+        //         (!injected || exported) && (abstract_ || !concrete)
+        //     } else {
+        //         concrete || !abstract_
+        //     }
+        // };
+        let is_applicable = true;
 
-        // First process `let` so subsequently expressions can refer to them.
-        self.translate_lets(false, spec);
+        // // First process `let` so subsequently expressions can refer to them.
+        // self.translate_lets(false, spec);
 
-        // Next process requires
-        for cond in spec
-            .filter_kind(ConditionKind::Requires)
-            .filter(is_applicable)
-        {
-            self.in_post_state = false;
-            let exp = self.translate_exp(&self.auto_trace(&cond.loc, &cond.exp), false);
-            self.result.pre.push((cond.loc.clone(), exp));
-        }
+        // // Next process requires
+        // for cond in spec
+        //     .filter_kind(ConditionKind::Requires)
+        //     .filter(is_applicable)
+        // {
+        //     self.in_post_state = false;
+        //     let exp = self.translate_exp(&self.auto_trace(&cond.loc, &cond.exp), false);
+        //     self.result.pre.push((cond.loc.clone(), exp));
+        // }
 
-        // Next process updates. They come between pre and post conditions.
-        for cond in spec
-            .filter_kind(ConditionKind::Update)
-            .filter(is_applicable)
-        {
-            self.in_post_state = false;
-            let lhs =
-                self.translate_exp(&self.auto_trace(&cond.loc, &cond.additional_exps[0]), false);
-            let rhs = self.translate_exp(&self.auto_trace(&cond.loc, &cond.exp), false);
-            self.result.updates.push((cond.loc.clone(), lhs, rhs));
-        }
+        // // Next process updates. They come between pre and post conditions.
+        // for cond in spec
+        //     .filter_kind(ConditionKind::Update)
+        //     .filter(is_applicable)
+        // {
+        //     self.in_post_state = false;
+        //     let lhs =
+        //         self.translate_exp(&self.auto_trace(&cond.loc, &cond.additional_exps[0]), false);
+        //     let rhs = self.translate_exp(&self.auto_trace(&cond.loc, &cond.exp), false);
+        //     self.result.updates.push((cond.loc.clone(), lhs, rhs));
+        // }
 
-        // Aborts conditions are translated in post state when they aren't handled for a call
-        // but for a definition. Otherwise, they are translated for a call of an opaque function
-        // and are evaluated in pre state.
-        self.in_post_state = !for_call;
-        for cond in spec
-            .filter_kind(ConditionKind::AbortsIf)
-            .filter(is_applicable)
-        {
-            let code_opt = if cond.additional_exps.is_empty() {
-                None
-            } else {
-                Some(self.translate_exp(&cond.additional_exps[0], self.in_post_state))
-            };
-            let exp =
-                self.translate_exp(&self.auto_trace(&cond.loc, &cond.exp), self.in_post_state);
-            self.result.aborts.push((cond.loc.clone(), exp, code_opt));
-        }
+        // // Aborts conditions are translated in post state when they aren't handled for a call
+        // // but for a definition. Otherwise, they are translated for a call of an opaque function
+        // // and are evaluated in pre state.
+        // self.in_post_state = !for_call;
+        // for cond in spec
+        //     .filter_kind(ConditionKind::AbortsIf)
+        //     .filter(is_applicable)
+        // {
+        //     let code_opt = if cond.additional_exps.is_empty() {
+        //         None
+        //     } else {
+        //         Some(self.translate_exp(&cond.additional_exps[0], self.in_post_state))
+        //     };
+        //     let exp =
+        //         self.translate_exp(&self.auto_trace(&cond.loc, &cond.exp), self.in_post_state);
+        //     self.result.aborts.push((cond.loc.clone(), exp, code_opt));
+        // }
 
-        for cond in spec
-            .filter_kind(ConditionKind::AbortsWith)
-            .filter(is_applicable)
-        {
-            let codes = cond
-                .all_exps()
-                .map(|e| self.translate_exp(&self.auto_trace_no_loc(e), self.in_post_state))
-                .collect_vec();
-            self.result.aborts_with.push((cond.loc.clone(), codes));
-        }
+        // for cond in spec
+        //     .filter_kind(ConditionKind::AbortsWith)
+        //     .filter(is_applicable)
+        // {
+        //     let codes = cond
+        //         .all_exps()
+        //         .map(|e| self.translate_exp(&self.auto_trace_no_loc(e), self.in_post_state))
+        //         .collect_vec();
+        //     self.result.aborts_with.push((cond.loc.clone(), codes));
+        // }
 
-        // If there are no aborts_if and aborts_with, and the pragma `aborts_if_is_strict` is set,
-        // add an implicit aborts_if false.
-        if self.result.aborts.is_empty()
-            && self.result.aborts_with.is_empty()
-            && self
-                .fun_env
-                .is_pragma_true(ABORTS_IF_IS_STRICT_PRAGMA, || false)
-        {
-            self.result.aborts.push((
-                self.fun_env.get_loc().at_end(),
-                self.builder.mk_bool_const(false),
-                None,
-            ));
-        }
+        // // If there are no aborts_if and aborts_with, and the pragma `aborts_if_is_strict` is set,
+        // // add an implicit aborts_if false.
+        // if self.result.aborts.is_empty()
+        //     && self.result.aborts_with.is_empty()
+        //     && self
+        //         .fun_env
+        //         .is_pragma_true(ABORTS_IF_IS_STRICT_PRAGMA, || false)
+        // {
+        //     self.result.aborts.push((
+        //         self.fun_env.get_loc().at_end(),
+        //         self.builder.mk_bool_const(false),
+        //         None,
+        //     ));
+        // }
 
-        // Translate modifies.
-        for cond in spec
-            .filter_kind(ConditionKind::Modifies)
-            .filter(is_applicable)
-        {
-            self.in_post_state = false;
-            for exp in cond.all_exps() {
-                // Auto trace the inner address expression.
-                let exp = match exp.as_ref() {
-                    ExpData::Call(id, oper, args) if args.len() == 1 => ExpData::Call(
-                        *id,
-                        oper.clone(),
-                        vec![self.auto_trace(&cond.loc, &args[0])],
-                    )
-                    .into_exp(),
-                    _ => cond.exp.to_owned(),
-                };
-                let exp = self.translate_exp(&exp, false);
-                self.result.modifies.push((cond.loc.clone(), exp));
-            }
-        }
+        // // Translate modifies.
+        // for cond in spec
+        //     .filter_kind(ConditionKind::Modifies)
+        //     .filter(is_applicable)
+        // {
+        //     self.in_post_state = false;
+        //     for exp in cond.all_exps() {
+        //         // Auto trace the inner address expression.
+        //         let exp = match exp.as_ref() {
+        //             ExpData::Call(id, oper, args) if args.len() == 1 => ExpData::Call(
+        //                 *id,
+        //                 oper.clone(),
+        //                 vec![self.auto_trace(&cond.loc, &args[0])],
+        //             )
+        //             .into_exp(),
+        //             _ => cond.exp.to_owned(),
+        //         };
+        //         let exp = self.translate_exp(&exp, false);
+        //         self.result.modifies.push((cond.loc.clone(), exp));
+        //     }
+        // }
 
-        // Now translate `let update` which are evaluated in post state.
-        self.translate_lets(true, spec);
+        // // Now translate `let update` which are evaluated in post state.
+        // self.translate_lets(true, spec);
 
-        // Translate ensures.
-        for cond in spec
-            .filter_kind(ConditionKind::Ensures)
-            .filter(is_applicable)
-        {
-            self.in_post_state = true;
-            let exp = self.translate_exp(&self.auto_trace(&cond.loc, &cond.exp), false);
-            self.result.post.push((cond.loc.clone(), exp));
-        }
+        // // Translate ensures.
+        // for cond in spec
+        //     .filter_kind(ConditionKind::Ensures)
+        //     .filter(is_applicable)
+        // {
+        //     self.in_post_state = true;
+        //     let exp = self.translate_exp(&self.auto_trace(&cond.loc, &cond.exp), false);
+        //     self.result.post.push((cond.loc.clone(), exp));
+        // }
 
-        // Translate emits.
-        for cond in spec.filter_kind(ConditionKind::Emits).filter(is_applicable) {
-            self.in_post_state = true;
-            let event_exp = self.translate_exp(&self.auto_trace(&cond.loc, &cond.exp), false);
-            let handle_exp =
-                self.translate_exp(&self.auto_trace_no_loc(&cond.additional_exps[0]), false);
-            let cond_exp = if cond.additional_exps.len() > 1 {
-                Some(self.translate_exp(&self.auto_trace_no_loc(&cond.additional_exps[1]), false))
-            } else {
-                None
-            };
-            self.result
-                .emits
-                .push((cond.loc.clone(), event_exp, handle_exp, cond_exp));
-        }
+        // // Translate emits.
+        // for cond in spec.filter_kind(ConditionKind::Emits).filter(is_applicable) {
+        //     self.in_post_state = true;
+        //     let event_exp = self.translate_exp(&self.auto_trace(&cond.loc, &cond.exp), false);
+        //     let handle_exp =
+        //         self.translate_exp(&self.auto_trace_no_loc(&cond.additional_exps[0]), false);
+        //     let cond_exp = if cond.additional_exps.len() > 1 {
+        //         Some(self.translate_exp(&self.auto_trace_no_loc(&cond.additional_exps[1]), false))
+        //     } else {
+        //         None
+        //     };
+        //     self.result
+        //         .emits
+        //         .push((cond.loc.clone(), event_exp, handle_exp, cond_exp));
+        // }
     }
 
-    fn translate_lets(&mut self, post_state: bool, spec: &Spec) {
-        for cond in &spec.conditions {
-            let sym = match &cond.kind {
-                ConditionKind::LetPost(sym) if post_state => sym,
-                ConditionKind::LetPre(sym) if !post_state => sym,
-                _ => continue,
-            };
-            let exp = self.translate_exp(&self.auto_trace(&cond.loc, &cond.exp), false);
-            let ty = self.builder.global_env().get_node_type(exp.node_id());
-            let temp = self.builder.add_local(ty.skip_reference().clone());
-            self.let_locals.insert(*sym, temp);
-            self.result
-                .lets
-                .push((cond.loc.clone(), post_state, temp, exp));
-        }
-    }
+    // fn translate_lets(&mut self, post_state: bool, spec: &Spec) {
+    //     for cond in &spec.conditions {
+    //         let sym = match &cond.kind {
+    //             ConditionKind::LetPost(sym) if post_state => sym,
+    //             ConditionKind::LetPre(sym) if !post_state => sym,
+    //             _ => continue,
+    //         };
+    //         let exp = self.translate_exp(&self.auto_trace(&cond.loc, &cond.exp), false);
+    //         let ty = self.builder.global_env().get_node_type(exp.node_id());
+    //         let temp = self.builder.add_local(ty.skip_reference().clone());
+    //         self.let_locals.insert(*sym, temp);
+    //         self.result
+    //             .lets
+    //             .push((cond.loc.clone(), post_state, temp, exp));
+    //     }
+    // }
 
     fn auto_trace(&self, loc: &Loc, exp: &Exp) -> Exp {
         if self.auto_trace {
@@ -499,15 +500,15 @@ impl<'a, 'b, T: ExpGenerator<'a>> SpecTranslator<'a, 'b, T> {
                 ExpData::Temporary(..)
                 | ExpData::Call(_, Operation::Old, ..)
                 | ExpData::Call(_, Operation::Result(_), ..) => (true, e),
-                ExpData::Call(id, op @ Operation::Function(..), args) => (
-                    true,
-                    ExpData::Call(
-                        *id,
-                        op.clone(),
-                        args.iter().map(|e| self.auto_trace_sub(e)).collect(),
-                    )
-                    .into_exp(),
-                ),
+                // ExpData::Call(id, op @ Operation::Function(..), args) => (
+                //     true,
+                //     ExpData::Call(
+                //         *id,
+                //         op.clone(),
+                //         args.iter().map(|e| self.auto_trace_sub(e)).collect(),
+                //     )
+                //     .into_exp(),
+                // ),
                 ExpData::LocalVar(_, sym) => (self.let_locals.contains_key(sym), e),
                 ExpData::Call(id, Operation::Global(None), args) => (
                     true,
@@ -720,22 +721,22 @@ impl<'a, 'b, T: ExpGenerator<'a>> ExpRewriterFunctions for SpecTranslator<'a, 'b
                 )
                 .into_exp(),
             ),
-            Function(mid, fid, None) if self.in_old => {
-                let used_memory = {
-                    let module_env = self.builder.global_env().get_module(*mid);
-                    let decl = module_env.get_spec_fun(*fid);
-                    // Unfortunately, the below clones are necessary, as we cannot borrow decl
-                    // and at the same time mutate self later.
-                    decl.used_memory.clone()
-                };
-                let inst = self.builder.global_env().get_node_instantiation(id);
-                let mut labels = vec![];
-                for mem in used_memory {
-                    let mem = mem.instantiate(&inst);
-                    labels.push(self.save_memory(mem));
-                }
-                Some(Call(id, Function(*mid, *fid, Some(labels)), args.to_owned()).into_exp())
-            }
+            // Function(mid, fid, None) if self.in_old => {
+            //     let used_memory = {
+            //         let module_env = self.builder.global_env().get_module(*mid);
+            //         let decl = module_env.get_spec_fun(*fid);
+            //         // Unfortunately, the below clones are necessary, as we cannot borrow decl
+            //         // and at the same time mutate self later.
+            //         decl.used_memory.clone()
+            //     };
+            //     let inst = self.builder.global_env().get_node_instantiation(id);
+            //     let mut labels = vec![];
+            //     for mem in used_memory {
+            //         let mem = mem.instantiate(&inst);
+            //         labels.push(self.save_memory(mem));
+            //     }
+            //     Some(Call(id, Function(*mid, *fid, Some(labels)), args.to_owned()).into_exp())
+            // }
             Old => Some(args[0].to_owned()),
             Result(n) => {
                 self.builder.set_loc_from_node(id);

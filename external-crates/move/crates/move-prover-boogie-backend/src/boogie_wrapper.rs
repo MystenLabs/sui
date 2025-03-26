@@ -264,20 +264,7 @@ impl<'env> BoogieWrapper<'env> {
             let mut abort_in_progress = None;
             let print_loc = |loc: &Loc, last_loc: &mut Loc, display: &mut Vec<String>| {
                 let info = if let Some(fun) = self.env.get_enclosing_function(loc) {
-                    let spec_suffix = if let Some(spec_loc) = &fun.get_spec().loc {
-                        if spec_loc.is_enclosing(loc) {
-                            " (spec)"
-                        } else {
-                            ""
-                        }
-                    } else {
-                        ""
-                    };
-                    format!(
-                        ": {}{}",
-                        fun.get_name().display(self.env.symbol_pool()),
-                        spec_suffix
-                    )
+                    format!(": {}", fun.get_name().display(self.env.symbol_pool()),)
                 } else {
                     "".to_string()
                 };
@@ -1493,12 +1480,12 @@ impl ModelValue {
                     .get_struct_or_enum_qid(module_id.qualified(*struct_id))
                 {
                     StructOrEnumEnv::Struct(struct_env) => {
-                        if struct_env.is_intrinsic_of(INTRINSIC_TYPE_MAP) {
-                            self.pretty_table(wrapper, model, &params[0], &params[1])
-                        } else if struct_env.is_native()
+                        if struct_env.is_native()
                             && struct_env.get_full_name_str() == "integer::Integer"
                         {
                             Some(PrettyDoc::text(format!("{}", self.extract_integer()?)))
+                        // } else if struct_env.is_intrinsic_of(INTRINSIC_TYPE_MAP) {
+                        //     self.pretty_table(wrapper, model, &params[0], &params[1])
                         } else {
                             self.pretty_struct(wrapper, model, &struct_env, params)
                         }
@@ -1593,7 +1580,7 @@ impl ModelValue {
         struct_env: &StructEnv,
         inst: &[Type],
     ) -> Option<PrettyDoc> {
-        let entries = if struct_env.is_native_or_intrinsic() {
+        let entries = if struct_env.is_native() {
             let mut rep = self.extract_literal()?.to_string();
             if rep.starts_with("T@") {
                 if let Some(i) = rep.rfind('!') {

@@ -9,7 +9,7 @@ use crate::{
     ast::{Exp, ExpData, LocalVarDecl, Operation, QuantKind, TempIndex, Value},
     model::{
         DatatypeId, EnclosingEnv, FieldEnv, FunctionEnv, GlobalEnv, Loc, NodeId, QualifiedId,
-        QualifiedInstId, SpecFunId,
+        QualifiedInstId,
     },
     symbol::Symbol,
     ty::{PrimitiveType, Type, BOOL_TYPE, NUM_TYPE},
@@ -203,50 +203,6 @@ pub trait ExpGenerator<'env> {
                     body,
                 )
                 .into_exp(),
-            )
-        } else {
-            None
-        }
-    }
-
-    /// Creates a quantifier over the content of a map. The passed function `f` receives
-    /// an expression representing an element of the map and returns the quantifiers predicate;
-    /// if it returns None, this function will also return None, otherwise the quantifier will be
-    /// returned.
-    ///
-    /// NOTE: the `spec_fun_get` argument is needed due to the fact that we do not have a native
-    /// operator of getting the value by key in from a map. In the `mk_vector_quant_opt` case,
-    /// we have the `Index` operator to map from an index to a value. But in the `map` case, we
-    /// need to use the spec function for the key-to-value conversion.
-    ///
-    /// Alternative design choices including:
-    /// - re-purpose the `Index` operator to take key and intrinsic maps
-    /// - add a new `Get` operator for this specific operation.
-    fn mk_map_quant_opt<F>(
-        &self,
-        kind: QuantKind,
-        map: Exp,
-        spec_fun_get: QualifiedId<SpecFunId>,
-        key_ty: &Type,
-        val_ty: &Type,
-        f: &mut F,
-    ) -> Option<Exp>
-    where
-        F: FnMut(Exp) -> Option<Exp>,
-    {
-        let key = self.mk_local("$key", key_ty.clone());
-        let val = self.mk_call_with_inst(
-            val_ty,
-            vec![key_ty.clone(), val_ty.clone()],
-            Operation::Function(spec_fun_get.module_id, spec_fun_get.id, None),
-            vec![map.clone(), key.clone()],
-        );
-        if let Some(body) = self.mk_join_opt_bool(Operation::And, f(key), f(val)) {
-            let range_decl = self.mk_decl(self.mk_symbol("$key"), key_ty.clone(), None);
-            let node_id = self.new_node(BOOL_TYPE.clone(), None);
-            Some(
-                ExpData::Quant(node_id, kind, vec![(range_decl, map)], vec![], None, body)
-                    .into_exp(),
             )
         } else {
             None

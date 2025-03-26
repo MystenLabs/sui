@@ -9,7 +9,7 @@
 use itertools::Itertools;
 use move_model::{
     ast::{PropertyValue, TempIndex, Value},
-    model::{DatatypeId, FieldId, FunId, FunctionEnv, ModuleId, NodeId, SpecFunId, StructEnv},
+    model::{DatatypeId, FieldId, FunId, FunctionEnv, ModuleId, NodeId, StructEnv},
     pragmas::{BV_PARAM_PROP, BV_RET_PROP},
     ty::Type,
 };
@@ -52,7 +52,6 @@ pub type OperationVec = Vec<NumOperation>;
 // NumOperation of a field
 pub type StructFieldOperationMap = BTreeMap<FieldId, NumOperation>;
 pub type FuncOperationMap = BTreeMap<(ModuleId, FunId), OperationMap>;
-pub type SpecFuncOperationMap = BTreeMap<(ModuleId, SpecFunId), (OperationVec, OperationVec)>;
 pub type StructOperationMap = BTreeMap<(ModuleId, DatatypeId), StructFieldOperationMap>;
 
 #[derive(Default, Debug, Clone, Eq, PartialEq, PartialOrd)]
@@ -68,8 +67,6 @@ pub struct GlobalNumberOperationState {
     local_oper_baseline: FuncOperationMap,
     // Each node id appearing the function has a corresponding NumOperation
     pub exp_operation_map: ExpMap,
-    // NumberOperation state for spec functions
-    pub spec_fun_operation_map: SpecFuncOperationMap,
     // Each field in the struct has a corresponding NumOperation
     pub struct_operation_map: StructOperationMap,
 }
@@ -194,13 +191,16 @@ impl GlobalNumberOperationState {
     pub fn create_initial_func_oper_state(&mut self, func_env: &FunctionEnv) {
         use NumOperation::*;
 
-        // Obtain positions that are marked as Bitwise by analyzing the pragma
-        let para_sym = &func_env.module_env.env.symbol_pool().make(BV_PARAM_PROP);
-        let ret_sym = &func_env.module_env.env.symbol_pool().make(BV_RET_PROP);
-        let number_param_property = func_env.get_spec().properties.get(para_sym);
-        let number_ret_property = func_env.get_spec().properties.get(ret_sym);
-        let para_idx_vec = Self::extract_bv_vars(number_param_property);
-        let ret_idx_vec = Self::extract_bv_vars(number_ret_property);
+        // // Obtain positions that are marked as Bitwise by analyzing the pragma
+        // let para_sym = &func_env.module_env.env.symbol_pool().make(BV_PARAM_PROP);
+        // let ret_sym = &func_env.module_env.env.symbol_pool().make(BV_RET_PROP);
+        // let number_param_property = func_env.get_spec().properties.get(para_sym);
+        // let number_ret_property = func_env.get_spec().properties.get(ret_sym);
+        // let para_idx_vec = Self::extract_bv_vars(number_param_property);
+        // let ret_idx_vec = Self::extract_bv_vars(number_ret_property);
+        let para_idx_vec = vec![];
+        let ret_idx_vec = vec![];
+
 
         let mid = func_env.module_env.get_id();
         let fid = func_env.get_id();
@@ -264,9 +264,10 @@ impl GlobalNumberOperationState {
         use NumOperation::*;
 
         // Obtain positions that are marked as Bitwise by analyzing the pragma
-        let para_sym = &struct_env.module_env.env.symbol_pool().make(BV_PARAM_PROP);
-        let bv_struct_opt = struct_env.get_spec().properties.get(para_sym);
-        let field_idx_vec = Self::extract_bv_vars(bv_struct_opt);
+        // let para_sym = &struct_env.module_env.env.symbol_pool().make(BV_PARAM_PROP);
+        // let bv_struct_opt = struct_env.get_spec().properties.get(para_sym);
+        // let field_idx_vec = Self::extract_bv_vars(bv_struct_opt);
+        let field_idx_vec = vec![];
 
         let mid = struct_env.module_env.get_id();
         let sid = struct_env.get_id();
@@ -325,14 +326,5 @@ impl GlobalNumberOperationState {
     /// Gets the number operation of the given node, if available.
     pub fn get_node_num_oper_opt(&self, node_id: NodeId) -> Option<NumOperation> {
         self.exp_operation_map.get(&node_id).copied()
-    }
-
-    pub fn update_spec_ret(&mut self, mid: &ModuleId, fid: &SpecFunId, oper: NumOperation) {
-        let ret_num_oper_vec = &mut self
-            .spec_fun_operation_map
-            .get_mut(&(*mid, *fid))
-            .unwrap()
-            .1;
-        ret_num_oper_vec[0] = oper;
     }
 }
