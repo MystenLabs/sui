@@ -100,7 +100,7 @@ pub fn parse_nitro_attestation(
     let cose_sign1 = CoseSign1::parse_and_validate(attestation_bytes)?;
     let doc = AttestationDocument::parse_payload(&cose_sign1.payload)?;
     let signature = cose_sign1.clone().signature;
-    Ok((signature, cose_sign1.to_signed_message(), doc))
+    Ok((signature, cose_sign1.to_signed_message()?, doc))
 }
 
 /// Given the signature bytes, signed message and parsed payload, verify everything according to
@@ -368,16 +368,19 @@ impl CoseSign1 {
     }
 
     /// This is the content that the signature is committed over.
-    fn to_signed_message(&self) -> Vec<u8> {
+    fn to_signed_message(&self) -> SuiResult<Vec<u8>> {
         let value = Value::Array(vec![
             Value::Text("Signature1".to_string()),
             Value::Bytes(self.protected.as_slice().to_vec()),
             Value::Bytes(vec![]),
             Value::Bytes(self.payload.as_slice().to_vec()),
         ]);
+        // 17 for extra metadata bytes
         let mut bytes = Vec::with_capacity(self.protected.len() + self.payload.len() + 17);
-        ciborium::ser::into_writer(&value, &mut bytes).expect("can write bytes");
-        bytes
+        ciborium::ser::into_writer(&value, &mut bytes).map_err(|_| {
+            SuiError::NitroAttestationFailedToVerify("cannot parse message".to_string())
+        })?;
+        Ok(bytes)
     }
 }
 
@@ -488,10 +491,16 @@ impl AttestationDocument {
                 "timestamp not found".to_string(),
             ))?
             .as_integer()
-            .and_then(|integer| u64::try_from(integer).ok())
             .ok_or(NitroAttestationVerifyError::InvalidAttestationDoc(
-                "invalid timestamp".to_string(),
-            ))?;
+                "timestamp is not an integer".to_string(),
+            ))
+            .and_then(|integer| {
+                u64::try_from(integer).map_err(|_| {
+                    NitroAttestationVerifyError::InvalidAttestationDoc(
+                        "timestamp not u64".to_string(),
+                    )
+                })
+            })?;
 
         let public_key = document_map
             .get("public_key")
@@ -572,7 +581,6 @@ impl AttestationDocument {
                             "invalid PCR index".to_string(),
                         )
                     })?;
-
                     for i in [0, 1, 2, 3, 4, 8] {
                         if key_u64 == i {
                             pcr_vec.push(value.to_vec());
@@ -596,7 +604,11 @@ impl AttestationDocument {
                 }
                 let mut certs = Vec::with_capacity(arr.len());
                 for cert in arr.iter() {
-                    let cert_bytes = cert.as_bytes().unwrap();
+                    let cert_bytes = cert.as_bytes().ok_or(
+                        NitroAttestationVerifyError::InvalidAttestationDoc(
+                            "invalid certificate bytes".to_string(),
+                        ),
+                    )?;
                     if cert_bytes.is_empty() || cert_bytes.len() > MAX_CERT_LENGTH {
                         return Err(NitroAttestationVerifyError::InvalidAttestationDoc(
                             "invalid ca length".to_string(),
@@ -644,7 +656,10 @@ fn verify_cert_chain(cert_chain: &[&[u8]], now_ms: u64) -> Result<(), NitroAttes
         .map_err(|e| NitroAttestationVerifyError::InvalidCertificate(e.to_string()))?
         .1;
 
-    let now_secs = ASN1Time::from_timestamp(now_ms as i64 / 1000_i64)
+    let now_secs =
+        ASN1Time::from_timestamp((now_ms as i64).checked_div(1000).ok_or_else(|| {
+            NitroAttestationVerifyError::InvalidAttestationDoc("timestamp overflow".to_string())
+        })?)
         .map_err(|e| NitroAttestationVerifyError::InvalidCertificate(e.to_string()))?;
 
     // Validate the chain starting from the leaf
