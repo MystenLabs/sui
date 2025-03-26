@@ -12,8 +12,7 @@ use std::{
 use itertools::Itertools;
 
 use move_model::{
-    ast,
-    ast::{Exp, ExpData, TempIndex, Value},
+    ast::{self, Exp, ExpData, TempIndex, Value},
     exp_generator::ExpGenerator,
     model::{
         DatatypeId, FunId, FunctionEnv, GlobalEnv, Loc, ModuleId, QualifiedId, QualifiedInstId,
@@ -105,7 +104,7 @@ impl FunctionTargetProcessor for SpecInstrumentationProcessor {
         scc_opt: Option<&[FunctionEnv]>,
     ) -> FunctionData {
         assert_eq!(data.variant, FunctionVariant::Baseline);
-        if fun_env.is_native() || fun_env.is_intrinsic() {
+        if fun_env.is_native() {
             return data;
         }
 
@@ -167,16 +166,16 @@ impl FunctionTargetProcessor for SpecInstrumentationProcessor {
             }
             for ref fun in module.get_functions() {
                 for (variant, target) in targets.get_targets(fun) {
-                    let spec = target.get_spec();
-                    if !spec.conditions.is_empty() {
-                        writeln!(
-                            f,
-                            "fun {}[{}]\n{}",
-                            fun.get_full_name_str(),
-                            variant,
-                            fun.module_env.env.display(spec)
-                        )?;
-                    }
+                    // let spec = target.get_spec();
+                    // if !spec.conditions.is_empty() {
+                    //     writeln!(
+                    //         f,
+                    //         "fun {}[{}]\n{}",
+                    //         fun.get_full_name_str(),
+                    //         variant,
+                    //         fun.module_env.env.display(spec)
+                    //     )?;
+                    // }
                 }
             }
         }
@@ -355,11 +354,11 @@ impl<'a> Instrumenter<'a> {
                     self.builder
                         .emit_with(|attr_id| SaveMem(attr_id, *label, mem));
                 }
-                for (spec_var, label) in &translated_spec.saved_spec_vars {
-                    let spec_var = spec_var.clone();
-                    self.builder
-                        .emit_with(|attr_id| SaveSpecVar(attr_id, *label, spec_var));
-                }
+                // for (spec_var, label) in &translated_spec.saved_spec_vars {
+                //     let spec_var = spec_var.clone();
+                //     self.builder
+                //         .emit_with(|attr_id| SaveSpecVar(attr_id, *label, spec_var));
+                // }
                 let saved_params = translated_spec.saved_params.clone();
                 self.emit_save_for_old(&saved_params);
             }
@@ -506,7 +505,8 @@ impl<'a> Instrumenter<'a> {
         let env = self.builder.global_env();
 
         let callee_env = env.get_module(mid).into_function(fid);
-        let callee_opaque = callee_env.is_opaque();
+        // let callee_opaque = callee_env.is_opaque();
+        let callee_opaque = false;
         let mut callee_spec = SpecTranslator::translate_fun_spec(
             self.options.auto_trace_level.functions(),
             true,
@@ -563,7 +563,7 @@ impl<'a> Instrumenter<'a> {
         }
 
         // From here on code differs depending on whether the callee is opaque or not.
-        if !callee_env.is_opaque() || self.options.for_interpretation {
+        if !callee_opaque || self.options.for_interpretation {
             self.builder.emit(Call(
                 id,
                 dests,
@@ -589,7 +589,8 @@ impl<'a> Instrumenter<'a> {
             self.emit_save_for_old(&callee_spec.saved_params);
 
             let callee_aborts_if_is_partial =
-                callee_env.is_pragma_true(ABORTS_IF_IS_PARTIAL_PRAGMA, || false);
+                // callee_env.is_pragma_true(ABORTS_IF_IS_PARTIAL_PRAGMA, || false);
+                false;
 
             // Translate the abort condition. If the abort_cond_temp_opt is None, it indicates
             // that the abort condition is known to be false, so we can skip the abort handling.
@@ -619,9 +620,9 @@ impl<'a> Instrumenter<'a> {
             for (mem, label) in std::mem::take(&mut callee_spec.saved_memory) {
                 self.builder.emit_with(|id| SaveMem(id, label, mem));
             }
-            for (var, label) in std::mem::take(&mut callee_spec.saved_spec_vars) {
-                self.builder.emit_with(|id| SaveSpecVar(id, label, var));
-            }
+            // for (var, label) in std::mem::take(&mut callee_spec.saved_spec_vars) {
+            //     self.builder.emit_with(|id| SaveSpecVar(id, label, var));
+            // }
 
             // Emit modifies properties which havoc memory at the modified location.
             for (_, exp) in std::mem::take(&mut callee_spec.modifies) {
@@ -642,10 +643,10 @@ impl<'a> Instrumenter<'a> {
                 .filter(|src| {
                     let ty = &self.builder.data.local_types[*src];
                     ty.is_mutable_reference()
-                        && !self
-                            .builder
-                            .global_env()
-                            .is_wellknown_event_handle_type(ty.skip_reference())
+                        // && !self
+                        //     .builder
+                        //     .global_env()
+                        //     .is_wellknown_event_handle_type(ty.skip_reference())
                 })
                 .collect_vec();
             for src in &mut_srcs {
@@ -704,12 +705,12 @@ impl<'a> Instrumenter<'a> {
                 self.builder
                     .emit(Call(id, vec![], Operation::EmitEvent, temp_list, None));
             }
-            // TODO: We treat the emits spec of a opaque function "strictly" for convenience,
-            //   ignoring its own EMITS_IS_STRICT_PRAGMA flag.
-            if callee_env.is_pragma_true(EMITS_IS_PARTIAL_PRAGMA, || false) {
-                self.builder
-                    .emit(Call(id, vec![], Operation::EventStoreDiverge, vec![], None));
-            }
+            // // TODO: We treat the emits spec of a opaque function "strictly" for convenience,
+            // //   ignoring its own EMITS_IS_STRICT_PRAGMA flag.
+            // if callee_env.is_pragma_true(EMITS_IS_PARTIAL_PRAGMA, || false) {
+            //     self.builder
+            //         .emit(Call(id, vec![], Operation::EventStoreDiverge, vec![], None));
+            // }
 
             // Generate OpaqueCallEnd instruction if invariant_v2.
             self.generate_opaque_call(dests, mid, fid, targs, srcs, aa, false);
@@ -894,15 +895,16 @@ impl<'a> Instrumenter<'a> {
         use Bytecode::*;
         use PropKind::*;
 
-        let is_partial = self
-            .builder
-            .fun_env
-            .is_pragma_true(ABORTS_IF_IS_PARTIAL_PRAGMA, || false);
+        // let is_partial = self
+        //     .builder
+        //     .fun_env
+        //     .is_pragma_true(ABORTS_IF_IS_PARTIAL_PRAGMA, || false);
+        let is_partial = false;
 
         if !is_partial {
             // If not partial, emit an assertion for the overall aborts condition.
             if let Some(cond) = spec.aborts_condition(&self.builder) {
-                let loc = self.builder.fun_env.get_spec_loc();
+                let loc = self.builder.fun_env.get_loc();
                 self.emit_traces(spec, &cond);
                 self.builder.set_loc_and_vc_info(loc, ABORT_NOT_COVERED);
                 self.builder.emit_with(move |id| Prop(id, Assert, cond));
@@ -913,7 +915,7 @@ impl<'a> Instrumenter<'a> {
             // If any codes are specified, emit an assertion for the code condition.
             let actual_code = self.builder.mk_temporary(self.abort_local);
             if let Some(code_cond) = spec.aborts_code_condition(&self.builder, &actual_code) {
-                let loc = self.builder.fun_env.get_spec_loc();
+                let loc = self.builder.fun_env.get_loc();
                 self.emit_traces(spec, &code_cond);
                 self.builder
                     .set_loc_and_vc_info(loc, ABORTS_CODE_NOT_COVERED);
@@ -1008,24 +1010,24 @@ impl<'a> Instrumenter<'a> {
                 self.builder.emit_with(move |id| Prop(id, Assert, cond))
             }
 
-            let emits_is_partial = self
-                .builder
-                .fun_env
-                .is_pragma_true(EMITS_IS_PARTIAL_PRAGMA, || false);
-            let emits_is_strict = self
-                .builder
-                .fun_env
-                .is_pragma_true(EMITS_IS_STRICT_PRAGMA, || false);
-            if (!spec.emits.is_empty() && !emits_is_partial)
-                || (spec.emits.is_empty() && emits_is_strict)
-            {
-                // If not partial, emit an assertion for the completeness of the emits specs.
-                let cond = spec.emits_completeness_condition(&self.builder);
-                let loc = self.builder.fun_env.get_spec_loc();
-                self.emit_traces(spec, &cond);
-                self.builder.set_loc_and_vc_info(loc, EMITS_NOT_COVERED);
-                self.builder.emit_with(move |id| Prop(id, Assert, cond));
-            }
+            // let emits_is_partial = self
+            //     .builder
+            //     .fun_env
+            //     .is_pragma_true(EMITS_IS_PARTIAL_PRAGMA, || false);
+            // let emits_is_strict = self
+            //     .builder
+            //     .fun_env
+            //     .is_pragma_true(EMITS_IS_STRICT_PRAGMA, || false);
+            // if (!spec.emits.is_empty() && !emits_is_partial)
+            //     || (spec.emits.is_empty() && emits_is_strict)
+            // {
+            //     // If not partial, emit an assertion for the completeness of the emits specs.
+            //     let cond = spec.emits_completeness_condition(&self.builder);
+            //     let loc = self.builder.fun_env.get_spec_loc();
+            //     self.emit_traces(spec, &cond);
+            //     self.builder.set_loc_and_vc_info(loc, EMITS_NOT_COVERED);
+            //     self.builder.emit_with(move |id| Prop(id, Assert, cond));
+            // }
         }
 
         // Emit return
@@ -1112,13 +1114,13 @@ fn check_caller_callee_modifies_relation(
     targets: &FunctionTargetsHolder,
     fun_env: &FunctionEnv,
 ) {
-    if fun_env.is_native() || fun_env.is_intrinsic() {
+    if fun_env.is_native() {
         return;
     }
     let caller_func_target = targets.get_target(fun_env, &FunctionVariant::Baseline);
     for callee in fun_env.get_called_functions() {
         let callee_fun_env = env.get_function(callee);
-        if callee_fun_env.is_native() || callee_fun_env.is_intrinsic() {
+        if callee_fun_env.is_native() {
             continue;
         }
         let callee_func_target = targets.get_target(&callee_fun_env, &FunctionVariant::Baseline);
@@ -1166,15 +1168,15 @@ fn check_opaque_modifies_completeness(
         .all
         .iter()
     {
-        if env.is_wellknown_event_handle_type(&Type::Datatype(mem.module_id, mem.id, vec![])) {
-            continue;
-        }
-        if env.get_struct_qid(mem.to_qualified_id()).is_ghost_memory() {
-            continue;
-        }
+        // if env.is_wellknown_event_handle_type(&Type::Datatype(mem.module_id, mem.id, vec![])) {
+        //     continue;
+        // }
+        // if env.get_struct_qid(mem.to_qualified_id()).is_ghost_memory() {
+        //     continue;
+        // }
         let found = target.get_modify_ids().iter().any(|id| mem == id);
         if !found {
-            let loc = fun_env.get_spec_loc();
+            let loc = fun_env.get_loc();
             env.error(&loc,
             &format!("function `{}` is opaque but its specification does not have a modifies clause for `{}`",
                 fun_env.get_full_name_str(),

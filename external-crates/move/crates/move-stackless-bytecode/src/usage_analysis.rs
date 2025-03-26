@@ -9,7 +9,7 @@ use paste::paste;
 
 use move_binary_format::file_format::CodeOffset;
 use move_model::{
-    ast::{ConditionKind, Spec},
+    ast::{ConditionKind},
     model::{DatatypeId, FunctionEnv, GlobalEnv, QualifiedId, QualifiedInstId},
     ty::Type,
 };
@@ -253,16 +253,18 @@ impl<'a> TransferFunctions for MemoryUsageAnalysis<'a> {
             },
             // memory accesses in expressions
             Prop(_, kind, exp) => match kind {
-                Assume => state.add_direct_assumed_iter(
-                    exp.used_memory(self.cache.global_env())
-                        .into_iter()
-                        .map(|(usage, _)| usage),
-                ),
-                Assert => state.add_direct_asserted_iter(
-                    exp.used_memory(self.cache.global_env())
-                        .into_iter()
-                        .map(|(usage, _)| usage),
-                ),
+                // Assume => state.add_direct_assumed_iter(
+                //     exp.used_memory(self.cache.global_env())
+                //         .into_iter()
+                //         .map(|(usage, _)| usage),
+                // ),
+                Assume => {},
+                // Assert => state.add_direct_asserted_iter(
+                //     exp.used_memory(self.cache.global_env())
+                //         .into_iter()
+                //         .map(|(usage, _)| usage),
+                // ),
+                Assert => {},
                 Modifies => {
                     // do nothing, as the `modifies` memories are captured by other sets
                 }
@@ -271,51 +273,6 @@ impl<'a> TransferFunctions for MemoryUsageAnalysis<'a> {
         }
     }
 }
-
-impl<'a> MemoryUsageAnalysis<'a> {
-    /// Compute usage information for the given spec. This spec maybe injected in later
-    /// phases into the code, but we need to account for it's memory usage already here
-    /// as spec injection itself depends on this information.
-    fn compute_spec_usage(&self, spec: &Spec, state: &mut UsageState) {
-        use ConditionKind::*;
-        for cond in &spec.conditions {
-            let mut used_memory = cond.exp.used_memory(self.cache.global_env());
-            for exp in &cond.additional_exps {
-                used_memory.extend(exp.used_memory(self.cache.global_env()));
-            }
-            match &cond.kind {
-                Ensures | AbortsIf | Emits => {
-                    state.add_direct_asserted_iter(used_memory.into_iter().map(|(usage, _)| usage));
-                }
-                _ => {
-                    state.add_direct_assumed_iter(used_memory.into_iter().map(|(usage, _)| usage));
-                }
-            }
-            if matches!(cond.kind, Update) {
-                // Add target of spec update to modified memory
-                if let Some((mem, _, _)) =
-                    cond.additional_exps[0].extract_ghost_mem_access(self.cache.global_env())
-                {
-                    state.add_direct_modified(mem);
-                }
-            }
-        }
-
-        // Handle memory update of the specs in the function body
-        for impl_spec in spec.on_impl.values() {
-            for cond in &impl_spec.conditions {
-                if matches!(cond.kind, Update) && !cond.additional_exps.is_empty() {
-                    if let Some((mem, _, _)) =
-                        cond.additional_exps[0].extract_ghost_mem_access(self.cache.global_env())
-                    {
-                        state.add_direct_modified(mem);
-                    }
-                }
-            }
-        }
-    }
-}
-
 pub struct UsageProcessor();
 
 impl UsageProcessor {
@@ -332,7 +289,6 @@ impl UsageProcessor {
         let cache = SummaryCache::new(targets, func_env.module_env.env);
         let analysis = MemoryUsageAnalysis { cache };
         let mut summary = analysis.summarize(&func_target, UsageState::default());
-        analysis.compute_spec_usage(func_env.get_spec(), &mut summary);
         summary
     }
 }

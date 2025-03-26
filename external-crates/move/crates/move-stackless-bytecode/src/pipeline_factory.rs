@@ -5,12 +5,12 @@
 use crate::{
     borrow_analysis::BorrowAnalysisProcessor,
     clean_and_optimize::CleanAndOptimizeProcessor,
-    data_invariant_instrumentation::DataInvariantInstrumentationProcessor,
+    // data_invariant_instrumentation::DataInvariantInstrumentationProcessor,
     debug_instrumentation::DebugInstrumenter,
     eliminate_imm_refs::EliminateImmRefsProcessor,
     function_target_pipeline::{FunctionTargetPipeline, FunctionTargetProcessor},
-    global_invariant_analysis::GlobalInvariantAnalysisProcessor,
-    global_invariant_instrumentation::GlobalInvariantInstrumentationProcessor,
+    // global_invariant_analysis::GlobalInvariantAnalysisProcessor,
+    // global_invariant_instrumentation::GlobalInvariantInstrumentationProcessor,
     inconsistency_check::InconsistencyCheckInstrumenter,
     livevar_analysis::LiveVarAnalysisProcessor,
     loop_analysis::LoopAnalysisProcessor,
@@ -56,10 +56,10 @@ pub fn default_pipeline_with_options(options: &ProverOptions) -> FunctionTargetP
     processors.append(&mut vec![
         // spec instrumentation
         SpecInstrumentationProcessor::new(),
-        GlobalInvariantAnalysisProcessor::new(),
-        GlobalInvariantInstrumentationProcessor::new(),
+        // GlobalInvariantAnalysisProcessor::new(),
+        // GlobalInvariantInstrumentationProcessor::new(),
         WellFormedInstrumentationProcessor::new(),
-        DataInvariantInstrumentationProcessor::new(),
+        // DataInvariantInstrumentationProcessor::new(),
         // monomorphization
         MonoAnalysisProcessor::new(),
     ]);

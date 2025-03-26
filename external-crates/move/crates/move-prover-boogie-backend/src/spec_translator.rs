@@ -16,14 +16,13 @@ use log::{debug, info, warn};
 
 use move_model::{
     ast::{
-        Exp, ExpData, LocalVarDecl, MemoryLabel, Operation, QuantKind, SpecFunDecl, SpecVarDecl,
+        Exp, ExpData, LocalVarDecl, MemoryLabel, Operation, QuantKind,
         TempIndex, Value,
     },
     code_writer::CodeWriter,
     emit, emitln,
     model::{
         DatatypeId, FieldId, GlobalEnv, Loc, ModuleEnv, ModuleId, NodeId, QualifiedInstId,
-        SpecFunId, SpecVarId,
     },
     pragmas::INTRINSIC_TYPE_MAP,
     symbol::Symbol,
@@ -40,7 +39,7 @@ use crate::{
         boogie_address_blob, boogie_bv_type, boogie_byte_blob, boogie_choice_fun_name,
         boogie_declare_global, boogie_field_sel, boogie_inst_suffix, boogie_modifies_memory_name,
         boogie_num_type_base, boogie_reflection_type_info, boogie_reflection_type_is_struct,
-        boogie_reflection_type_name, boogie_resource_memory_name, boogie_spec_fun_name,
+        boogie_reflection_type_name, boogie_resource_memory_name,
         boogie_spec_var_name, boogie_struct_name, boogie_type, boogie_type_suffix,
         boogie_type_suffix_bv, boogie_value_blob, boogie_well_formed_expr,
         boogie_well_formed_expr_bv,
@@ -136,273 +135,6 @@ impl<'env> SpecTranslator<'env> {
             }
             f(item);
         }
-    }
-}
-
-// Axioms
-// ======
-
-impl<'env> SpecTranslator<'env> {
-    pub fn translate_axioms(&self, env: &GlobalEnv, mono_info: &MonoInfo) {
-        let type_display_ctx = env.get_type_display_ctx();
-        for (axiom, type_insts) in &mono_info.axioms {
-            for type_inst in type_insts {
-                self.writer.set_location(&axiom.loc);
-                emit!(self.writer, "// axiom {}", axiom.loc.display(env));
-                if !type_inst.is_empty() {
-                    emitln!(
-                        self.writer,
-                        ", instance <{}>",
-                        type_inst
-                            .iter()
-                            .map(|t| t.display(&type_display_ctx).to_string())
-                            .join(", ")
-                    );
-                } else {
-                    emitln!(self.writer);
-                }
-                emit!(self.writer, "axiom ");
-                self.translate(&axiom.exp, type_inst);
-                emitln!(self.writer, ";\n");
-            }
-        }
-    }
-}
-
-// Specification Variables
-// =======================
-
-impl<'env> SpecTranslator<'env> {
-    pub fn translate_spec_vars(&self, module_env: &ModuleEnv<'_>, mono_info: &MonoInfo) {
-        let empty = &BTreeSet::new();
-        let mut translated = BTreeSet::new();
-        for (id, var) in module_env.get_spec_vars() {
-            for type_inst in mono_info
-                .spec_vars
-                .get(&module_env.get_id().qualified(*id))
-                .unwrap_or(empty)
-                .iter()
-                .cloned()
-            {
-                let name = boogie_spec_var_name(
-                    module_env,
-                    module_env.get_spec_var(*id).name,
-                    &type_inst,
-                    &None,
-                );
-                if !translated.insert(name) {
-                    continue;
-                }
-                if type_inst.is_empty() {
-                    self.translate_spec_var(module_env, *id, var);
-                } else {
-                    SpecTranslator {
-                        type_inst,
-                        ..self.clone()
-                    }
-                    .translate_spec_var(module_env, *id, var);
-                }
-            }
-        }
-    }
-
-    pub fn translate_spec_var(
-        &self,
-        module_env: &ModuleEnv<'_>,
-        _id: SpecVarId,
-        var: &SpecVarDecl,
-    ) {
-        emitln!(self.writer, "// spec var {}", var.loc.display(self.env));
-        let boogie_name = boogie_spec_var_name(module_env, var.name, &self.type_inst, &None);
-        emitln!(
-            self.writer,
-            &boogie_declare_global(self.env, &boogie_name, &self.inst(&var.type_))
-        );
-    }
-}
-
-// Specification Functions
-// =======================
-
-impl<'env> SpecTranslator<'env> {
-    pub fn translate_spec_funs(&self, module_env: &ModuleEnv<'_>, mono_info: &MonoInfo) {
-        let empty = &BTreeSet::new();
-        let mut translated = BTreeSet::new();
-        for (id, fun) in module_env.get_spec_funs() {
-            for type_inst in mono_info
-                .spec_funs
-                .get(&module_env.get_id().qualified(*id))
-                .unwrap_or(empty)
-                .iter()
-                .cloned()
-            {
-                let name = boogie_spec_fun_name(module_env, *id, &type_inst, false);
-                if !translated.insert(name) {
-                    continue;
-                }
-                if type_inst.is_empty() {
-                    self.translate_spec_fun(module_env, *id, fun);
-                } else {
-                    let new_spec_trans = SpecTranslator {
-                        type_inst,
-                        ..self.clone()
-                    };
-                    new_spec_trans.translate_spec_fun(module_env, *id, fun);
-                }
-            }
-        }
-    }
-
-    fn translate_spec_fun(&self, module_env: &ModuleEnv, id: SpecFunId, fun: &SpecFunDecl) {
-        if fun.body.is_none() && !fun.uninterpreted {
-            // This function is native and expected to be found in the prelude.
-            return;
-        }
-        if fun.is_move_fun && fun.is_native {
-            // This function is a native Move function and its spec version is
-            // expected to be found in the prelude.
-            return;
-        }
-        if fun.is_move_fun && !module_env.spec_fun_is_used(id) {
-            // This function is a pure Move function but is never used,
-            // so we don't need to translate it.
-            return;
-        }
-        if let Type::Tuple(..) | Type::Fun(..) = fun.result_type {
-            self.error(&fun.loc, "function or tuple result type not yet supported");
-            return;
-        }
-        let recursive = self
-            .env
-            .is_spec_fun_recursive(module_env.get_id().qualified(id));
-        emitln!(
-            self.writer,
-            "// {}spec fun {}",
-            if recursive { "recursive " } else { "" },
-            fun.loc.display(self.env)
-        );
-        let global_state = &self
-            .env
-            .get_extension::<GlobalNumberOperationState>()
-            .expect("global number operation state");
-        let bv_flag_result = if global_state
-            .spec_fun_operation_map
-            .contains_key(&(module_env.get_id(), id))
-        {
-            let ret_oper_map = &global_state
-                .spec_fun_operation_map
-                .get(&(module_env.get_id(), id))
-                .unwrap()
-                .1;
-            ret_oper_map[0] == Bitwise
-        } else {
-            false
-        };
-        let ty_str_fn = |bv_flag: bool| {
-            if bv_flag {
-                boogie_bv_type
-            } else {
-                boogie_type
-            }
-        };
-        let result_type = ty_str_fn(bv_flag_result)(self.env, &self.inst(&fun.result_type));
-        // it is possible that the spec fun may refer to the same memory after monomorphization,
-        // (e.g., one via concrete type and the other via type parameter being instantiated).
-        // In this case, we mark the other parameter as unused
-        let mut mem_inst_seen = BTreeSet::new();
-        let mem_params = fun.used_memory.iter().map(|memory| {
-            let memory = memory.to_owned().instantiate(&self.type_inst);
-            let struct_env = &self.env.get_struct_qid(memory.to_qualified_id());
-            let param_repr = format!(
-                "{}: $Memory {}",
-                boogie_resource_memory_name(self.env, &memory, &None),
-                boogie_struct_name(struct_env, &memory.inst)
-            );
-            if mem_inst_seen.insert(memory) {
-                param_repr
-            } else {
-                format!("__unused_{}", param_repr)
-            }
-        });
-        let params = fun.params.iter().enumerate().map(|(i, (name, ty))| {
-            let bv_flag = if global_state
-                .spec_fun_operation_map
-                .contains_key(&(module_env.get_id(), id))
-            {
-                global_state
-                    .spec_fun_operation_map
-                    .get(&(module_env.get_id(), id))
-                    .unwrap()
-                    .0[i]
-                    == Bitwise
-            } else {
-                false
-            };
-            format!(
-                "{}: {}",
-                name.display(module_env.symbol_pool()),
-                ty_str_fn(bv_flag)(self.env, &self.inst(ty))
-            )
-        });
-        self.writer.set_location(&fun.loc);
-        let boogie_name = boogie_spec_fun_name(module_env, id, &self.type_inst, bv_flag_result);
-        let param_list = mem_params.chain(params).join(", ");
-        let attrs = if fun.uninterpreted || recursive {
-            ""
-        } else {
-            "{:inline}"
-        };
-        emit!(
-            self.writer,
-            "function {} {}({}): {}",
-            attrs,
-            boogie_name,
-            param_list,
-            result_type
-        );
-        if fun.uninterpreted {
-            // Uninterpreted function has no body.
-            emitln!(self.writer, ";");
-            // Emit axiom about return type. Notice we don't need to process spec_var or memory
-            // parameters because an interpreted functions does not have those.
-            let call = format!(
-                "{}({})",
-                boogie_name,
-                fun.params
-                    .iter()
-                    .map(|(n, _)| { format!("{}", n.display(module_env.symbol_pool())) })
-                    .join(", ")
-            );
-            let type_check =
-                boogie_well_formed_expr(self.env, "$$res", &self.inst(&fun.result_type));
-            if !type_check.is_empty() {
-                if !param_list.is_empty() {
-                    emitln!(
-                        self.writer,
-                        "axiom (forall {} ::\n(var $$res := {};\n{}));",
-                        param_list,
-                        call,
-                        type_check
-                    );
-                } else {
-                    emitln!(
-                        self.writer,
-                        "axiom (var $$res := {};\n{});",
-                        call,
-                        type_check
-                    );
-                }
-            }
-        } else {
-            emitln!(self.writer, " {");
-            self.writer.indent();
-            self.translate_exp(fun.body.as_ref().unwrap());
-            emitln!(self.writer);
-            self.writer.unindent();
-            emitln!(self.writer, "}");
-        }
-
-        emitln!(self.writer);
     }
 }
 
@@ -777,9 +509,6 @@ impl<'env> SpecTranslator<'env> {
             Operation::EventStoreIncludedIn => self.translate_event_store_included_in(args),
 
             // Regular expressions
-            Operation::Function(module_id, fun_id, memory_labels) => {
-                self.translate_spec_fun_call(node_id, *module_id, *fun_id, args, memory_labels)
-            }
             Operation::Pack(mid, sid) => self.translate_pack(node_id, *mid, *sid, args),
             Operation::Tuple => self.error(&loc, "Tuple not yet supported"),
             Operation::Select(module_id, struct_id, field_id) => {
@@ -950,111 +679,6 @@ impl<'env> SpecTranslator<'env> {
         emit!(self.writer, ")");
     }
 
-    fn translate_spec_fun_call(
-        &self,
-        node_id: NodeId,
-        module_id: ModuleId,
-        fun_id: SpecFunId,
-        args: &[Exp],
-        memory_labels: &Option<Vec<MemoryLabel>>,
-    ) {
-        let inst = &self.get_node_instantiation(node_id);
-        let module_env = &self.env.get_module(module_id);
-        let fun_decl = module_env.get_spec_fun(fun_id);
-        let global_state = &self
-            .env
-            .get_extension::<GlobalNumberOperationState>()
-            .expect("global number operation state");
-
-        // special casing for type reflection
-        let mut processed = false;
-
-        // TODO(mengxu): change it to a better address name instead of extlib
-        if self.env.get_extlib_address() == *module_env.get_name().addr() {
-            let qualified_name = format!(
-                "{}::{}",
-                module_env.get_name().name().display(self.env.symbol_pool()),
-                fun_decl.name.display(self.env.symbol_pool()),
-            );
-            if qualified_name == TYPE_NAME_SPEC {
-                assert_eq!(inst.len(), 1);
-                emit!(
-                    self.writer,
-                    "{}",
-                    boogie_reflection_type_name(self.env, &inst[0], false)
-                );
-                processed = true;
-            } else if qualified_name == TYPE_INFO_SPEC {
-                assert_eq!(inst.len(), 1);
-                // TODO(mengxu): by ignoring the first return value of this function, we are
-                // essentially ignoring the condition where this `type_info` call may abort, e.g.,
-                // invoking `type_info` on a primitive type like: `type_info<bool>`.
-                let (_, info) = boogie_reflection_type_info(self.env, &inst[0]);
-                emit!(self.writer, "{}", info);
-                processed = true;
-            } else if qualified_name == TYPE_SPEC_IS_STRUCT {
-                assert_eq!(inst.len(), 1);
-                emit!(
-                    self.writer,
-                    "{}",
-                    boogie_reflection_type_is_struct(self.env, &inst[0])
-                );
-                processed = true;
-            }
-        }
-
-        if self.env.get_stdlib_address() == *module_env.get_name().addr() {
-            let qualified_name = format!(
-                "{}::{}",
-                module_env.get_name().name().display(self.env.symbol_pool()),
-                fun_decl.name.display(self.env.symbol_pool()),
-            );
-            if qualified_name == TYPE_NAME_GET_SPEC {
-                assert_eq!(inst.len(), 1);
-                emit!(
-                    self.writer,
-                    "{}",
-                    boogie_reflection_type_name(self.env, &inst[0], true)
-                );
-                processed = true;
-            }
-        }
-
-        let is_vector_table_module = module_env.is_std_vector() || module_env.is_table();
-        // regular path
-        if !processed {
-            let bv_flag = if is_vector_table_module && !args.is_empty() {
-                global_state.get_node_num_oper(args[0].node_id()) == Bitwise
-            } else {
-                global_state.get_node_num_oper(node_id) == Bitwise
-            };
-            let name = boogie_spec_fun_name(module_env, fun_id, inst, bv_flag);
-            emit!(self.writer, "{}(", name);
-            let mut first = true;
-            let mut maybe_comma = || {
-                if first {
-                    first = false;
-                } else {
-                    emit!(self.writer, ", ");
-                }
-            };
-            let label_at = |i| memory_labels.as_ref().map(|labels| labels[i]);
-            let mut i = 0;
-            for memory in &fun_decl.used_memory {
-                let memory = &memory.to_owned().instantiate(inst);
-                maybe_comma();
-                let memory = boogie_resource_memory_name(self.env, memory, &label_at(i));
-                emit!(self.writer, &memory);
-                i = usize::saturating_add(i, 1);
-            }
-            for exp in args {
-                maybe_comma();
-                self.translate_exp(exp);
-            }
-            emit!(self.writer, ")");
-        }
-    }
-
     fn translate_select(
         &self,
         node_id: NodeId,
@@ -1064,7 +688,7 @@ impl<'env> SpecTranslator<'env> {
         args: &[Exp],
     ) {
         let struct_env = self.env.get_module(module_id).into_struct(struct_id);
-        if struct_env.is_native_or_intrinsic() {
+        if struct_env.is_native() {
             self.env.error(
                 &self.env.get_node_loc(node_id),
                 "cannot select field of intrinsic struct",
@@ -1235,7 +859,8 @@ impl<'env> SpecTranslator<'env> {
                 Type::Vector(..) | Type::Primitive(PrimitiveType::Range) => true,
                 Type::Datatype(mid, sid, ..) => {
                     let struct_env = self.env.get_struct(mid.qualified(*sid));
-                    struct_env.is_intrinsic_of(INTRINSIC_TYPE_MAP)
+                    // struct_env.is_intrinsic_of(INTRINSIC_TYPE_MAP)
+                    false
                 }
                 Type::Primitive(_)
                 | Type::Tuple(_)
@@ -1277,11 +902,11 @@ impl<'env> SpecTranslator<'env> {
                 }
                 Type::Datatype(mid, sid, targs) => {
                     let struct_env = self.env.get_struct(mid.qualified(*sid));
-                    if struct_env.is_intrinsic_of(INTRINSIC_TYPE_MAP) {
-                        emit!(self.writer, "{}{}: {}", comma, var_name, ty_str(&targs[0]));
-                    } else {
+                    // if struct_env.is_intrinsic_of(INTRINSIC_TYPE_MAP) {
+                    //     emit!(self.writer, "{}{}: {}", comma, var_name, ty_str(&targs[0]));
+                    // } else {
                         panic!("unexpected type");
-                    }
+                    // }
                 }
                 Type::ResourceDomain(..) => {
                     let addr_quant_var = self.fresh_var_name("a");
@@ -1366,18 +991,18 @@ impl<'env> SpecTranslator<'env> {
                 }
                 Type::Datatype(mid, sid, targs) => {
                     let struct_env = self.env.get_struct(mid.qualified(*sid));
-                    if struct_env.is_intrinsic_of(INTRINSIC_TYPE_MAP) {
-                        emit!(
-                            self.writer,
-                            "{}ContainsTable({}, $EncodeKey'{}'({}))",
-                            separator,
-                            range_tmps.get(&var.name).unwrap(),
-                            boogie_type_suffix_bv(self.env, &targs[0], num_oper == Bitwise),
-                            var_name,
-                        );
-                    } else {
+                    // if struct_env.is_intrinsic_of(INTRINSIC_TYPE_MAP) {
+                    //     emit!(
+                    //         self.writer,
+                    //         "{}ContainsTable({}, $EncodeKey'{}'({}))",
+                    //         separator,
+                    //         range_tmps.get(&var.name).unwrap(),
+                    //         boogie_type_suffix_bv(self.env, &targs[0], num_oper == Bitwise),
+                    //         var_name,
+                    //     );
+                    // } else {
                         panic!("unexpected type");
-                    }
+                    // }
                 }
                 Type::Primitive(PrimitiveType::Range) => {
                     let range_tmp = range_tmps.get(&var.name).unwrap();
@@ -1454,10 +1079,11 @@ impl<'env> SpecTranslator<'env> {
             .used_temporaries(self.env)
             .into_iter()
             .collect_vec();
-        let used_memory = range_and_body
-            .used_memory(self.env)
-            .into_iter()
-            .collect_vec();
+        // let used_memory = range_and_body
+        //     .used_memory(self.env)
+        //     .into_iter()
+        //     .collect_vec();
+        let used_memory = vec![];
 
         // Create a new uninterpreted function and choice info only if it does not
         // stem from the same original source than an existing one. This needs to be done to

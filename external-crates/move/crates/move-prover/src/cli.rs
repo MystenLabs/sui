@@ -26,7 +26,7 @@ use simplelog::{
 use codespan_reporting::diagnostic::Severity;
 use move_docgen::DocgenOptions;
 use move_model::{
-    model::VerificationScope, options::ModelBuilderOptions, simplifier::SimplificationPass,
+    model::VerificationScope, options::ModelBuilderOptions,
 };
 use move_prover_boogie_backend::options::{BoogieOptions, VectorTheory};
 use move_stackless_bytecode::options::{AutoTraceLevel, ProverOptions};
@@ -660,19 +660,19 @@ impl Options {
                 .unwrap()
                 .parse::<usize>()?;
         }
-        if matches.get_flag("ignore-pragma-opaque-when-possible") {
-            options.model_builder.ignore_pragma_opaque_when_possible = true;
-        }
-        if matches.get_flag("ignore-pragma-opaque-internal-only") {
-            options.model_builder.ignore_pragma_opaque_internal_only = true;
-        }
-        if let Some(m) = matches.get_many::<String>("simplification-pipeline") {
-            for name in m {
-                let pass = SimplificationPass::from_str(name)
-                    .map_err(|e| anyhow!("Unknown simplification pass: {}", e))?;
-                options.model_builder.simplification_pipeline.push(pass);
-            }
-        }
+        // if matches.get_flag("ignore-pragma-opaque-when-possible") {
+        //     options.model_builder.ignore_pragma_opaque_when_possible = true;
+        // }
+        // if matches.get_flag("ignore-pragma-opaque-internal-only") {
+        //     options.model_builder.ignore_pragma_opaque_internal_only = true;
+        // }
+        // if let Some(m) = matches.get_many::<String>("simplification-pipeline") {
+        //     for name in m {
+        //         let pass = SimplificationPass::from_str(name)
+        //             .map_err(|e| anyhow!("Unknown simplification pass: {}", e))?;
+        //         options.model_builder.simplification_pipeline.push(pass);
+        //     }
+        // }
         if matches.get_flag("docgen") {
             options.run_docgen = true;
         }

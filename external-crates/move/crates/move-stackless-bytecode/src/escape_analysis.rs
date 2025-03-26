@@ -323,7 +323,7 @@ impl<'a> TransferFunctions for EscapeAnalysis<'a> {
                     }
                 }
             }
-            Abort(..) | SaveMem(..) | Prop(..) | SaveSpecVar(..) | Branch(..) | Jump(..)
+            Abort(..) | SaveMem(..) | Prop(..) | Branch(..) | Jump(..)
             | Label(..) | Nop(..) => {
                 // these operations do not assign any locals
             }
@@ -370,20 +370,6 @@ impl FunctionTargetProcessor for EscapeAnalysisProcessor {
         let mut relevant_fields = BTreeSet::new();
         let mut relevant_structs = BTreeSet::new();
         let mut vector_operations = HashSet::new();
-        for struct_env in menv.get_structs() {
-            let struct_spec = struct_env.get_spec();
-            if !struct_spec.conditions.is_empty() {
-                relevant_structs.insert(struct_env.get_qualified_id());
-            }
-            for condition in &struct_spec.conditions {
-                for exp in condition.all_exps() {
-                    exp.field_usage(&mut relevant_fields);
-                    exp.struct_usage(&mut relevant_structs);
-                    exp.vector_usage(&mut vector_operations);
-                    has_specs = true
-                }
-            }
-        }
 
         let cfg = StacklessControlFlowGraph::new_forward(&data.code);
         let analysis = EscapeAnalysis {

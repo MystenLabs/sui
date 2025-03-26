@@ -14,7 +14,7 @@ use move_model::{
     ast::{MemoryLabel, TempIndex, Value},
     model::{
         DatatypeId, EnclosingEnv, EnumEnv, FieldEnv, FunctionEnv, GlobalEnv, ModuleEnv,
-        QualifiedInstId, SpecFunId, StructEnv, StructOrEnumEnv, VariantEnv, SCRIPT_MODULE_NAME,
+        QualifiedInstId, StructEnv, StructOrEnumEnv, VariantEnv, SCRIPT_MODULE_NAME,
     },
     pragmas::INTRINSIC_TYPE_MAP,
     symbol::Symbol,
@@ -45,20 +45,20 @@ pub fn boogie_struct_name(struct_env: &StructEnv<'_>, inst: &[Type]) -> String {
 }
 
 pub fn boogie_struct_name_bv(struct_env: &StructEnv<'_>, inst: &[Type], bv_flag: bool) -> String {
-    if struct_env.is_intrinsic_of(INTRINSIC_TYPE_MAP) {
-        // Map to the theory type representation, which is `Table int V`. The key
-        // is encoded as an integer to avoid extensionality problems, and to support
-        // $Mutation paths, which are sequences of ints.
-        let env = struct_env.module_env.env;
-        let type_fun = if bv_flag { boogie_bv_type } else { boogie_type };
-        format!("Table int ({})", type_fun(env, &inst[1]))
-    } else {
+    // if struct_env.is_intrinsic_of(INTRINSIC_TYPE_MAP) {
+    //     // Map to the theory type representation, which is `Table int V`. The key
+    //     // is encoded as an integer to avoid extensionality problems, and to support
+    //     // $Mutation paths, which are sequences of ints.
+    //     let env = struct_env.module_env.env;
+    //     let type_fun = if bv_flag { boogie_bv_type } else { boogie_type };
+    //     format!("Table int ({})", type_fun(env, &inst[1]))
+    // } else {
         format!(
             "{}{}",
             boogie_struct_name_prefix(struct_env),
             boogie_inst_suffix(struct_env.module_env.env, inst)
         )
-    }
+    // }
 }
 
 pub fn boogie_struct_name_prefix(struct_env: &StructEnv<'_>) -> String {
@@ -203,37 +203,6 @@ pub fn boogie_spec_var_name(
         name.display(module_env.symbol_pool()),
         boogie_inst_suffix(module_env.env, inst),
         boogie_memory_label(memory_label)
-    )
-}
-
-/// Return boogie name of given spec function.
-pub fn boogie_spec_fun_name(
-    env: &ModuleEnv<'_>,
-    id: SpecFunId,
-    inst: &[Type],
-    bv_flag: bool,
-) -> String {
-    let decl = env.get_spec_fun(id);
-    let pos = env
-        .get_spec_funs_of_name(decl.name)
-        .position(|(overload_id, _)| &id == overload_id)
-        .expect("spec fun env inconsistent");
-    let overload_qualifier = if pos > 0 {
-        format!("_{}", pos)
-    } else {
-        "".to_string()
-    };
-    let mut suffix = boogie_inst_suffix_bv(env.env, inst, &[bv_flag]);
-    if env.is_table() {
-        assert_eq!(inst.len(), 2);
-        suffix = boogie_inst_suffix_bv_pair(env.env, inst, &[false, bv_flag]);
-    };
-    format!(
-        "${}_{}{}{}",
-        boogie_module_name(env),
-        decl.name.display(env.symbol_pool()),
-        overload_qualifier,
-        suffix
     )
 }
 
@@ -456,16 +425,16 @@ pub fn boogie_type_suffix_for_struct(
     inst: &[Type],
     bv_flag: bool,
 ) -> String {
-    if struct_env.is_intrinsic_of(INTRINSIC_TYPE_MAP) {
-        format!(
-            "${}_{}{}",
-            boogie_module_name(&struct_env.module_env),
-            struct_env.get_name().display(struct_env.symbol_pool()),
-            boogie_inst_suffix_bv_pair(struct_env.module_env.env, inst, &[false, bv_flag])
-        )
-    } else {
+    // if struct_env.is_intrinsic_of(INTRINSIC_TYPE_MAP) {
+    //     format!(
+    //         "${}_{}{}",
+    //         boogie_module_name(&struct_env.module_env),
+    //         struct_env.get_name().display(struct_env.symbol_pool()),
+    //         boogie_inst_suffix_bv_pair(struct_env.module_env.env, inst, &[false, bv_flag])
+    //     )
+    // } else {
         boogie_struct_name(struct_env, inst)
-    }
+    // }
 }
 
 /// Generate suffix after instantiation of type parameters

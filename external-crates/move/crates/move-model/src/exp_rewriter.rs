@@ -6,7 +6,7 @@ use std::collections::{BTreeSet, VecDeque};
 
 use crate::{
     ast::{Exp, ExpData, LocalVarDecl, MemoryLabel, Operation, TempIndex, Value},
-    model::{GlobalEnv, ModuleId, NodeId, SpecVarId},
+    model::{GlobalEnv, ModuleId, NodeId},
     symbol::Symbol,
     ty::Type,
 };
@@ -118,15 +118,6 @@ pub trait ExpRewriterFunctions {
         None
     }
     fn rewrite_value(&mut self, id: NodeId, value: &Value) -> Option<Exp> {
-        None
-    }
-    fn rewrite_spec_var(
-        &mut self,
-        id: NodeId,
-        mid: ModuleId,
-        vid: SpecVarId,
-        label: &Option<MemoryLabel>,
-    ) -> Option<Exp> {
         None
     }
     fn rewrite_call(&mut self, id: NodeId, oper: &Operation, args: &[Exp]) -> Option<Exp> {

@@ -241,9 +241,6 @@ impl<'env> BoogieTranslator<'env> {
         }
         emitln!(writer);
 
-        self.spec_translator
-            .translate_axioms(env, mono_info.as_ref());
-
         self.translate_ghost_global(&mono_info);
 
         self.add_type(&Type::Primitive(PrimitiveType::Bool));
@@ -289,13 +286,8 @@ impl<'env> BoogieTranslator<'env> {
         for module_env in self.env.get_modules() {
             self.writer.set_location(&module_env.env.internal_loc());
 
-            self.spec_translator
-                .translate_spec_vars(&module_env, mono_info.as_ref());
-            self.spec_translator
-                .translate_spec_funs(&module_env, mono_info.as_ref());
-
             for ref struct_env in module_env.get_structs() {
-                if struct_env.is_native_or_intrinsic() {
+                if struct_env.is_native() {
                     continue;
                 }
                 for type_inst in mono_info
@@ -336,7 +328,7 @@ impl<'env> BoogieTranslator<'env> {
             }
 
             for ref fun_env in module_env.get_functions() {
-                if fun_env.is_native_or_intrinsic()
+                if fun_env.is_native()
                     || intrinsic_fun_ids.contains(&fun_env.get_qualified_id())
                 {
                     continue;
@@ -418,7 +410,7 @@ impl<'env> BoogieTranslator<'env> {
             }
 
             for ref struct_env in module_env.get_structs() {
-                if struct_env.is_native_or_intrinsic() {
+                if struct_env.is_native() {
                     continue;
                 }
                 if let Some(inv_fun_id) = self
@@ -932,7 +924,7 @@ impl<'env> StructTranslator<'env> {
             "", // not inlined!
             &format!("$IsValid'{}'(s: {}): bool", suffix, struct_name),
             || {
-                if struct_env.is_native_or_intrinsic() {
+                if struct_env.is_native() {
                     emitln!(writer, "true")
                 } else {
                     let mut sep = "";
@@ -1466,16 +1458,17 @@ impl<'env> FunctionTranslator<'env> {
         let attribs = match &fun_target.data.variant {
             FunctionVariant::Baseline => "{:inline 1} ".to_string(),
             FunctionVariant::Verification(flavor) => {
-                let timeout = fun_target
-                    .func_env
-                    .get_num_pragma(TIMEOUT_PRAGMA, || options.vc_timeout);
-                let mut attribs = vec![format!("{{:timeLimit {}}} ", timeout)];
-                if fun_target.func_env.is_num_pragma_set(SEED_PRAGMA) {
-                    let seed = fun_target
-                        .func_env
-                        .get_num_pragma(SEED_PRAGMA, || options.random_seed);
-                    attribs.push(format!("{{:random_seed {}}} ", seed));
-                };
+                // let timeout = fun_target
+                //     .func_env
+                //     .get_num_pragma(TIMEOUT_PRAGMA, || options.vc_timeout);
+                // let mut attribs = vec![format!("{{:timeLimit {}}} ", timeout)];
+                // if fun_target.func_env.is_num_pragma_set(SEED_PRAGMA) {
+                //     let seed = fun_target
+                //         .func_env
+                //         .get_num_pragma(SEED_PRAGMA, || options.random_seed);
+                //     attribs.push(format!("{{:random_seed {}}} ", seed));
+                // };
+                let mut attribs = vec![format!("{{:timeLimit {}}} ", options.vc_timeout)];
                 match flavor {
                     VerificationFlavor::Regular => "".to_string(),
                     VerificationFlavor::Instantiated(_) => "".to_string(),
@@ -1701,7 +1694,6 @@ impl<'env> FunctionTranslator<'env> {
                 use Bytecode::*;
                 match bc {
                     SaveMem(_, lab, mem) => Some((lab, mem)),
-                    SaveSpecVar(..) => panic!("spec var memory snapshots NYI"),
                     _ => None,
                 }
             })
@@ -1872,9 +1864,6 @@ impl<'env> FunctionTranslator<'env> {
                 let snapshot = boogie_resource_memory_name(env, mem, &Some(*label));
                 let current = boogie_resource_memory_name(env, mem, &None);
                 emitln!(self.writer(), "{} := {};", snapshot, current);
-            }
-            SaveSpecVar(_, _label, _var) => {
-                panic!("spec var snapshot NYI")
             }
             Prop(id, kind, exp) => match kind {
                 PropKind::Assert => {
