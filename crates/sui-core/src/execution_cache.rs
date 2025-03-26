@@ -507,6 +507,8 @@ pub trait TransactionCacheRead: Send + Sync {
             .expect("multi-get must return correct number of items")
     }
 
+    fn get_accumulator_events(&self, digests: &[TransactionDigest]) -> Vec<AccumulatorEvent>;
+
     fn notify_read_executed_effects_digests<'a>(
         &'a self,
         digests: &'a [TransactionDigest],

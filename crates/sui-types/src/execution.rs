@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
+    accumulator_event::AccumulatorEvent,
     base_types::{ObjectID, ObjectRef, SequenceNumber},
     digests::{ObjectDigest, TransactionDigest},
     event::Event,
@@ -78,6 +79,8 @@ pub struct ExecutionResultsV2 {
     pub deleted_object_ids: BTreeSet<ObjectID>,
     /// All Move events emitted in this transaction.
     pub user_events: Vec<Event>,
+    /// All accumulator events emitted in this transaction.
+    pub accumulator_events: Vec<AccumulatorEvent>,
 }
 
 pub type ExecutionResult = (

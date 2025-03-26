@@ -4,6 +4,8 @@
 use std::str::FromStr;
 
 use anyhow::ensure;
+use fastcrypto::hash::HashFunction;
+use fastcrypto::hash::Sha256;
 use move_core_types::account_address::AccountAddress;
 use move_core_types::annotated_value::MoveDatatypeLayout;
 use move_core_types::annotated_value::MoveValue;
@@ -18,6 +20,7 @@ use serde_with::serde_as;
 use serde_with::Bytes;
 
 use crate::base_types::{ObjectID, SuiAddress, TransactionDigest};
+use crate::digests::Digest;
 use crate::error::{SuiError, SuiResult};
 use crate::object::bounded_visitor::BoundedVisitor;
 use crate::sui_serde::BigInt;
@@ -139,6 +142,17 @@ impl Event {
         self.type_.address == SUI_SYSTEM_ADDRESS
             && self.type_.module.as_ident_str() == ident_str!("sui_system_state_inner")
             && self.type_.name.as_ident_str() == ident_str!("SystemEpochInfoEvent")
+    }
+
+    /// Returns a digest of the (tx_digest, position, event) tuple, where position is the index of
+    /// the event in the transaction events. This ensures that the resulting digest is unique even
+    /// if the same event is emitted multiple times in a transaction, or from one transaction
+    /// to another.
+    pub fn unique_digest(&self, transaction_digest: TransactionDigest, position: usize) -> Digest {
+        let mut h = Sha256::new();
+        bcs::serialize_into(&mut h, &(transaction_digest, position, &self)).unwrap();
+        let digest = h.finalize();
+        Digest::new(digest.digest)
     }
 }
 

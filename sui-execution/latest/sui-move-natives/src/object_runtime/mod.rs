@@ -81,7 +81,7 @@ pub struct LoadedRuntimeObject {
 pub struct RuntimeResults {
     pub writes: IndexMap<ObjectID, (Owner, Type, Value)>,
     pub user_events: Vec<(Type, StructTag, Value)>,
-    pub accumulator_events: Vec<AccumulatorEvent>,
+    pub accumulator_events: Vec<MoveAccumulatorEvent>,
     // Loaded child objects, their loaded version/digest and whether they were modified.
     pub loaded_child_objects: BTreeMap<ObjectID, LoadedRuntimeObject>,
     pub created_object_ids: Set<ObjectID>,
@@ -99,7 +99,7 @@ pub(crate) struct ObjectRuntimeState {
     // TODO these struct tags can be removed if type_to_type_tag was exposed in the session
     transfers: IndexMap<ObjectID, (Owner, Type, Value)>,
     events: Vec<(Type, StructTag, Value)>,
-    accumulator_events: Vec<AccumulatorEvent>,
+    accumulator_events: Vec<MoveAccumulatorEvent>,
     // number of events emitted up to the current Move call (incremented in take_user_events)
     total_event_count: u64,
     // total size of events emitted so far
@@ -331,11 +331,11 @@ impl<'a> ObjectRuntime<'a> {
 
     pub fn emit_accumulator_event(
         &mut self,
-        action: AccumulatorAction,
+        action: MoveAccumulatorAction,
         target: AccountAddress,
-        value: AccumulatorValue,
+        value: MoveAccumulatorValue,
     ) -> PartialVMResult<()> {
-        let event = AccumulatorEvent {
+        let event = MoveAccumulatorEvent {
             action,
             target,
             value,

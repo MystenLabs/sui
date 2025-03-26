@@ -2039,6 +2039,17 @@ impl TransactionCacheRead for WritebackCache {
             },
         )
     }
+
+    fn get_accumulator_events(&self, digests: &[TransactionDigest]) -> Vec<AccumulatorEvent> {
+        let mut ret = Vec::with_capacity(digests.len());
+
+        for digest in digests {
+            if let Some(events) = self.dirty.accumulator_events.get(digest) {
+                return events.clone();
+            }
+        }
+        vec![]
+    }
 }
 
 impl ExecutionCacheWrite for WritebackCache {

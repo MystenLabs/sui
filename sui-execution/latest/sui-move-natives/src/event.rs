@@ -3,7 +3,7 @@
 
 use crate::{
     legacy_test_cost,
-    object_runtime::{AccumulatorAction, AccumulatorValue, ObjectRuntime},
+    object_runtime::{MoveAccumulatorAction, MoveAccumulatorValue, ObjectRuntime},
     NativesCostTable,
 };
 use move_binary_format::errors::{PartialVMError, PartialVMResult};
@@ -59,8 +59,8 @@ pub fn emit_authenticated(
     debug_assert!(args.len() == 2);
 
     let ty = ty_args.pop().unwrap();
-    let stream_ref = args.pop_back().unwrap();
     let event_value = args.pop_back().unwrap();
+    let stream_ref = args.pop_back().unwrap();
 
     emit_impl(context, ty, event_value, Some(stream_ref))
 }
@@ -151,16 +151,13 @@ fn emit_impl(
     if let Some(stream_ref) = stream_ref {
         let stream_ref_address: AccountAddress = stream_ref.value_as::<AccountAddress>().unwrap();
         obj_runtime.emit_accumulator_event(
-            AccumulatorAction::Merge,
+            MoveAccumulatorAction::Merge,
             stream_ref_address,
-            AccumulatorValue::EventRef(event_idx),
+            MoveAccumulatorValue::EventRef(event_idx),
         )?;
     }
 
-    Ok(NativeResult::ok(
-        context.gas_used(),
-        smallvec![Value::u32(event_idx as u32)],
-    ))
+    Ok(NativeResult::ok(context.gas_used(), smallvec![]))
 }
 
 /// Get the all emitted events of type `T`, starting at the specified index

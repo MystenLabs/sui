@@ -1247,6 +1247,7 @@ impl CheckpointBuilder {
                 .await?;
             sorted_tx_effects_included_in_checkpoint.extend(txn_in_checkpoint);
         }
+
         let new_checkpoints = self
             .create_checkpoints(sorted_tx_effects_included_in_checkpoint, &last_details)
             .await?;

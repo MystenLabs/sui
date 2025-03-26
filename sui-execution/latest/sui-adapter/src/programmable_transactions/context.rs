@@ -46,11 +46,15 @@ mod checked {
     use move_vm_types::data_store::DataStore;
     use move_vm_types::loaded_data::runtime_types::Type;
     use sui_move_natives::object_runtime::{
-        self, get_all_uids, max_event_error, LoadedRuntimeObject, ObjectRuntime, RuntimeResults,
+        self, get_all_uids, max_event_error, LoadedRuntimeObject, MoveAccumulatorValue,
+        ObjectRuntime, RuntimeResults,
     };
     use sui_protocol_config::ProtocolConfig;
-    use sui_types::execution::ExecutionResults;
-    use sui_types::storage::{DenyListResult, PackageObject};
+    use sui_types::{accumulator_event::AccumulatorEvent, execution::ExecutionResults};
+    use sui_types::{
+        accumulator_event::AccumulatorValue,
+        storage::{DenyListResult, PackageObject},
+    };
     use sui_types::{
         balance::Balance,
         base_types::{MoveObjectType, ObjectID, SuiAddress, TxContext},
@@ -820,7 +824,7 @@ mod checked {
             let RuntimeResults {
                 writes,
                 user_events: remaining_events,
-                accumulator_events: remaining_accumulator_events,
+                accumulator_events,
                 loaded_child_objects,
                 mut created_object_ids,
                 deleted_object_ids,
@@ -828,10 +832,6 @@ mod checked {
             assert_invariant!(
                 remaining_events.is_empty(),
                 "Events should be taken after every Move call"
-            );
-            assert_invariant!(
-                remaining_accumulator_events.is_empty(),
-                "Accumulator events should be taken after every Move call"
             );
 
             loaded_runtime_objects.extend(loaded_child_objects);
@@ -953,7 +953,7 @@ mod checked {
                 result?;
             }
 
-            let user_events = user_events
+            let user_events: Vec<_> = user_events
                 .into_iter()
                 .map(|(module_id, tag, contents)| {
                     Event::new(
@@ -966,6 +966,21 @@ mod checked {
                 })
                 .collect();
 
+            let accumulator_events = accumulator_events
+                .into_iter()
+                .map(|accum_event| match accum_event.value {
+                    MoveAccumulatorValue::EventRef(idx) => {
+                        let event = &user_events[idx as usize];
+                        let digest = event.unique_digest(tx_digest, idx as usize);
+                        let value = AccumulatorValue::EventCommitment(digest);
+                        let action = accum_event.action.into_sui_accumulator_action();
+
+                        AccumulatorEvent::new(action, accum_event.target.into(), value)
+                    }
+                    MoveAccumulatorValue::MoveValue(_, _, _) => todo!(),
+                })
+                .collect();
+
             Ok(ExecutionResults::V2(ExecutionResultsV2 {
                 written_objects,
                 modified_objects: loaded_runtime_objects
@@ -975,6 +990,7 @@ mod checked {
                 created_object_ids: created_object_ids.into_iter().collect(),
                 deleted_object_ids: deleted_object_ids.into_iter().collect(),
                 user_events,
+                accumulator_events,
             }))
         }
 

@@ -9,23 +9,51 @@ A: object(0,0), B: object(0,1)
 
 task 1, lines 8-49:
 //# publish
-Error: Transaction Effects Status: Move Bytecode Verification Error. Please run the Bytecode Verifier for more information.
-Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: VMVerificationOrDeserializationError, source: Some(VMError { major_status: LOOKUP_FAILED, sub_status: None, message: None, exec_state: None, location: Module(ModuleId { address: _, name: Identifier("event_streams") }), indices: [(DatatypeHandle, 2)], offsets: [] }), command: Some(0) } }
+created: object(1,0)
+mutated: object(0,2)
+gas summary: computation_cost: 1000000, storage_cost: 8420800,  storage_rebate: 0, non_refundable_storage_fee: 0
 
 task 2, line 51:
 //# run test::event_streams::create --sender A --args @A
-Error: Error checking transaction input objects: DependentPackageNotFound { package_id: 0x0000000000000000000000000000000000000000000000000000000000000000 }
+created: object(2,0)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 3055200,  storage_rebate: 0, non_refundable_storage_fee: 0
 
 task 3, line 53:
 //# view-object 2,0
-Error: task 3, lines 53-53
-//# view-object 2,0
-. Unbound fake id 2,0
+Owner: Account Address ( A )
+Version: 2
+Contents: test::event_streams::Object {
+    id: sui::object::UID {
+        id: sui::object::ID {
+            bytes: fake(2,0),
+        },
+    },
+    event_stream: sui::event::EventStream {
+        name: sui::object::UID {
+            id: sui::object::ID {
+                bytes: _,
+            },
+        },
+    },
+    event_stream_cap: sui::event::EventStreamCap {
+        id: sui::object::UID {
+            id: sui::object::ID {
+                bytes: _,
+            },
+        },
+        stream_id: _,
+    },
+}
 
 task 4, line 55:
 //# run test::event_streams::emit_event --sender A --args object(2,0) 10
-Error: INVALID TEST. Unknown object, object(2,0)
+Error: Transaction Effects Status: MOVE VM INVARIANT VIOLATION.
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: VMInvariantViolation, source: Some(VMError { major_status: UNKNOWN_INVARIANT_VIOLATION_ERROR, sub_status: None, message: Some("Arity mismatch: return value count does not match return type count"), exec_state: None, location: Module(ModuleId { address: sui, name: Identifier("event") }), indices: [], offsets: [(FunctionDefinitionIndex(7), 0)] }), command: Some(0) } }
 
 task 5, line 57:
 //# run test::event_streams::delete --sender A --args object(2,0)
-Error: INVALID TEST. Unknown object, object(2,0)
+mutated: object(0,0)
+deleted: object(2,0)
+unwrapped_then_deleted: object(_), object(_)
+gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 3024648, non_refundable_storage_fee: 30552
