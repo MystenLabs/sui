@@ -47,3 +47,22 @@ echo "Sui Prover installed successfully! Use 'sui-prover' command."
 
 cd ./crates/sui-framework/packages/prover
 sui-prover
+cd ..
+
+git clone https://github.com/andrii-a8c/sui-kit.git sui-kit
+cd sui-kit/examples
+
+cd amm
+sui-prover
+cd .. 
+
+git guide
+sui-prover
+cd ../../..
+
+git clone https://github.com/asymptotic-code/sui-prover-workshop.git prover-workshop
+cd prover-workshop
+
+sui-prover
+
+echo "All tests passed!"
