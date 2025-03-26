@@ -3,6 +3,7 @@ title: Module `sui::poseidon`
 ---
 
 Module which defines instances of the poseidon hash functions.
+Only available on Devnet.
 
 
 -  [Constants](#@Constants_0)
