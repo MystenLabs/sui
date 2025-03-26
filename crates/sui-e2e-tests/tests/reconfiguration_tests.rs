@@ -37,7 +37,7 @@ use sui_types::transaction::Argument;
 use sui_types::transaction::ObjectArg;
 use sui_types::transaction::ProgrammableMoveCall;
 
-const DEFAULT_GAS_AMOUNT: u64 = 30_000_000__000_000_000; // 30M Sui
+const DEFAULT_GAS_AMOUNT: u64 = 30_000_000_000_000_000; // 30M Sui
 
 #[sim_test]
 async fn basic_reconfig_end_to_end_test() {
