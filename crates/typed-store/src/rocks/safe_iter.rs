@@ -8,13 +8,13 @@ use rocksdb::Direction;
 
 use crate::metrics::{DBMetrics, RocksDBPerfContext};
 
-use super::{RocksDBRawIter, TypedStoreError};
+use super::{RawIter, TypedStoreError};
 use serde::de::DeserializeOwned;
 
 /// An iterator over all key-value pairs in a data map.
 pub struct SafeIter<'a, K, V> {
     cf_name: String,
-    db_iter: RocksDBRawIter<'a>,
+    db_iter: RawIter<'a>,
     _phantom: PhantomData<(K, V)>,
     direction: Direction,
     is_initialized: bool,
@@ -30,7 +30,7 @@ pub struct SafeIter<'a, K, V> {
 impl<'a, K: DeserializeOwned, V: DeserializeOwned> SafeIter<'a, K, V> {
     pub(super) fn new(
         cf_name: String,
-        db_iter: RocksDBRawIter<'a>,
+        db_iter: RawIter<'a>,
         _timer: Option<HistogramTimer>,
         _perf_ctx: Option<RocksDBPerfContext>,
         bytes_scanned: Option<Histogram>,
