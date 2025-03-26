@@ -58,7 +58,11 @@ cd ..
 
 git guide
 sui-prover
-cd ..
+cd ../../..
 
+git clone https://github.com/asymptotic-code/sui-prover-workshop.git prover-workshop
+cd prover-workshop
+
+sui-prover
 
 echo "All tests passed!"
