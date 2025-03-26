@@ -3437,7 +3437,7 @@ impl ProtocolConfig {
                         cfg.feature_flags.enable_nitro_attestation = true
                     }
                     cfg.feature_flags.normalize_ptb_arguments = true;
-                    
+
                     cfg.consensus_gc_depth = Some(60);
                     cfg.feature_flags.consensus_linearize_subdag_v2 = true;
                 }
