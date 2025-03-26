@@ -213,9 +213,7 @@ fun if_expression() {
     if (expression) { expression_that_is_too_long }
     else { another_long_expression };
 
-    if ({
-        expression
-    }) {
+    if ({ expression }) {
        return expression
     } else expression;
 }
