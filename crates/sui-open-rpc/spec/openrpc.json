@@ -1346,6 +1346,7 @@
                 "narwhal_versioned_metadata": false,
                 "native_charging_v2": false,
                 "no_extraneous_module_bytes": false,
+                "normalize_ptb_arguments": false,
                 "package_digest_hash_module": false,
                 "package_upgrades": true,
                 "passkey_auth": false,
