@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use sui_types::accumulator_event::AccumulatorEvent;
-use sui_types::effects::TransactionEffects;
+use sui_types::effects::{TransactionEffects, TransactionEffectsAPI};
 use sui_types::transaction::Transaction;
 
 use crate::execution_cache::TransactionCacheRead;
