@@ -175,9 +175,8 @@ fn check_package_dependencies(
             Command::MoveCall(call) => {
                 let package = package_store.get_package_object(&call.package)?.ok_or(
                     SuiError::UserInputError {
-                        error: UserInputError::ObjectNotFound {
-                            object_id: call.package,
-                            version: None,
+                        error: UserInputError::DependentPackageNotFound {
+                            package_id: call.package,
                         },
                     },
                 )?;
