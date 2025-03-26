@@ -239,7 +239,7 @@ fun skip_to_min_stake_v2_final_thresholds(scenario: &mut Scenario) {
     let min_stake_v2_phase_length = 14;
     let num_phases = 3;
     let epoch = scenario.ctx().epoch();
-    scenario.set_epoch(epoch + min_stake_v2_phase_length * num_phases)
+    scenario.skip_to_epoch(epoch + min_stake_v2_phase_length * num_phases)
 }
 
 #[test]
