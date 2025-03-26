@@ -309,7 +309,7 @@ async fn test_sender_is_not_consensus_v2_owner() {
         );
     };
     do_transaction_test_impl(
-        false, // can't test forged cert handling because consensus doesn't function in this test
+        false,
         &[(sender1, sender_key1), (sender2, sender_key2)],
         Object::with_id_owner_version_for_testing(
             ObjectID::random(),
