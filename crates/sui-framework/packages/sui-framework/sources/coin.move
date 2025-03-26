@@ -10,7 +10,7 @@ use std::ascii;
 use std::string::{Self, String};
 use std::type_name;
 use sui::balance::{Self, Balance, Supply};
-use sui::coin_metadata_registry::{Self, Metadata, CoinMetadataRegistry, MetadataCap};
+use sui::coin_metadata_registry::{Self, Metadata, InitMetadata, CoinMetadataRegistry, MetadataCap};
 use sui::deny_list::DenyList;
 use sui::url::{Self, Url};
 
@@ -32,6 +32,12 @@ const EBadWitness: u64 = 0;
 const EInvalidArg: u64 = 1;
 /// Trying to split a coin more times than its balance allows.
 const ENotEnough: u64 = 2;
+/// The metadata for the coin type already exists.
+const EMetadataAlreadyExists: u64 = 3;
+/// The metadata for the coin type was not found.
+const EMetadataNotFound: u64 = 4;
+/// The metadata for the coin type was not claimed.
+const EMetadataCapNotClaimed: u64 = 5;
 
 // #[error]
 // const EGlobalPauseNotAllowed: vector<u8> =
@@ -115,10 +121,6 @@ public fun supply_immut<T>(treasury: &TreasuryCap<T>): &Supply<T> {
 /// Get mutable reference to the treasury's `Supply`.
 public fun supply_mut<T>(treasury: &mut TreasuryCap<T>): &mut Supply<T> {
     &mut treasury.total_supply
-}
-
-public(package) fun treasury_cap_uid_mut<T>(treasury_cap: &mut TreasuryCap<T>): &mut UID {
-    &mut treasury_cap.id
 }
 
 // === Balance <-> Coin accessors and type morphing ===
@@ -211,16 +213,17 @@ public fun destroy_zero<T>(c: Coin<T>) {
 
 /// ============ NEW METADATA REGISTRY ============
 
-// TODO: specify shared and owned
+/// migration of shared and owned metadata to the new registry
 public fun migrate_to_registry<T>(
     registry: &mut CoinMetadataRegistry,
     metadata_v1: CoinMetadata<T>,
     ctx: &mut TxContext,
 ) {
-    registry.attach_metadata(from_v1(&metadata_v1, ctx));
+    registry.overwrite_metadata(from_v1(&metadata_v1, option::none(), ctx));
     metadata_v1.destroy_metadata()
 }
 
+/// migration of frozen metadata to the new registry
 public fun migrate_frozen_to_registry<T>(
     registry: &mut CoinMetadataRegistry,
     metadata_v1: &CoinMetadata<T>,
@@ -229,10 +232,28 @@ public fun migrate_frozen_to_registry<T>(
     // we only allow one migration with frozen metadata, to avoid overwriting
     // in cases of "shared" metadata objects.
     assert!(!registry.exists<T>(), EMetadataAlreadyExists);
-    registry.attach_metadata(from_v1(metadata_v1, ctx));
+    registry.attach_metadata(from_v1(metadata_v1, option::none(), ctx));
 }
 
-fun from_v1<T>(metadata_v1: &CoinMetadata<T>, ctx: &mut TxContext): Metadata<T> {
+/// migration of frozen regulated metadata to the new registry
+public fun migrate_frozen_regulated_to_registry<T>(
+    registry: &mut CoinMetadataRegistry,
+    regulated_metadata_v1: &RegulatedCoinMetadata<T>,
+    metadata_v1: &CoinMetadata<T>,
+    ctx: &mut TxContext,
+) {
+    assert!(!registry.exists<T>(), EMetadataAlreadyExists);
+    assert!(regulated_metadata_v1.coin_metadata_object == metadata_v1.id.to_inner(), EInvalidArg);
+    let metadata = from_v1(metadata_v1, option::some(regulated_metadata_v1.deny_cap_object), ctx);
+    registry.attach_metadata(metadata);
+}
+
+/// Create a new `CoinMetadata` object from the old `CoinMetadata` object.
+fun from_v1<T>(
+    metadata_v1: &CoinMetadata<T>,
+    deny_cap: Option<ID>,
+    ctx: &mut TxContext,
+): Metadata<T> {
     let icon_url = metadata_v1
         .get_icon_url()
         .map!(|u| u.inner_url().to_string())
@@ -246,7 +267,7 @@ fun from_v1<T>(metadata_v1: &CoinMetadata<T>, ctx: &mut TxContext): Metadata<T> 
         icon_url,
         option::none(),
         option::none(),
-        option::none(),
+        deny_cap,
         ctx,
     )
 }
@@ -261,6 +282,7 @@ public fun freeze_supply<T>(registry: &mut CoinMetadataRegistry, cap: TreasuryCa
     registry.freeze_supply(cap.treasury_into_supply());
 }
 
+/// Claim the metadata cap for the given `TreasuryCap`
 public fun claim_cap<T>(
     metadata: &mut Metadata<T>,
     _: &TreasuryCap<T>,
@@ -278,7 +300,7 @@ public fun new_currency<T: drop>(
     description: String,
     icon_url: String,
     ctx: &mut TxContext,
-): (TreasuryCap<T>, MetadataCap<T>) {
+): (TreasuryCap<T>, MetadataCap<T>, InitMetadata<T>) {
     // Make sure there's only one instance of the type T
     assert!(sui::types::is_one_time_witness(&witness), EBadWitness);
 
@@ -287,7 +309,7 @@ public fun new_currency<T: drop>(
         total_supply: balance::create_supply(witness),
     };
 
-    let metadata: Metadata<T> = coin_metadata_registry::create_metadata(
+    let mut init_metadata: InitMetadata<T> = coin_metadata_registry::create_metadata_init(
         decimals,
         name,
         symbol,
@@ -299,14 +321,9 @@ public fun new_currency<T: drop>(
         ctx,
     );
 
-    let metadata_cap = claim_cap(&mut metadata, &treasury_cap, ctx);
+    let metadata_cap = claim_cap(init_metadata.to_inner_mut(), &treasury_cap, ctx);
 
-    transfer::public_transfer(
-        metadata,
-        coin_metadata_registry::coin_metadata_registry_id().to_address(),
-    );
-
-    (treasury_cap, metadata_cap)
+    (treasury_cap, metadata_cap, init_metadata)
 }
 
 /// replacement for create_regulated_currency_v2
@@ -319,7 +336,7 @@ public fun new_regulated_currency<T: drop>(
     icon_url: String,
     allow_global_pause: bool,
     ctx: &mut TxContext,
-): (TreasuryCap<T>, MetadataCap<T>, DenyCapV2<T>) {
+): (TreasuryCap<T>, MetadataCap<T>, DenyCapV2<T>, InitMetadata<T>) {
     // Make sure there's only one instance of the type T
     assert!(sui::types::is_one_time_witness(&witness), EBadWitness);
 
@@ -333,7 +350,7 @@ public fun new_regulated_currency<T: drop>(
         allow_global_pause,
     };
 
-    let metadata: Metadata<T> = coin_metadata_registry::create_metadata(
+    let mut init_metadata: InitMetadata<T> = coin_metadata_registry::create_metadata_init(
         decimals,
         name,
         symbol,
@@ -345,9 +362,9 @@ public fun new_regulated_currency<T: drop>(
         ctx,
     );
 
-    let metadata_cap = claim_cap(&mut metadata, &treasury_cap, ctx);
+    let metadata_cap = claim_cap(init_metadata.to_inner_mut(), &treasury_cap, ctx);
 
-    (treasury_cap, metadata_cap, deny_cap)
+    (treasury_cap, metadata_cap, deny_cap, init_metadata)
 }
 
 /// ============ END METADATA REGISTRY ============
@@ -367,7 +384,7 @@ public fun create_currency<T: drop>(
     icon_url: Option<Url>,
     ctx: &mut TxContext,
 ): (TreasuryCap<T>, CoinMetadata<T>) {
-    abort 1337
+    abort
 }
 
 /// This creates a new currency, via `create_currency`, but with an extra capability that
@@ -388,7 +405,7 @@ public fun create_regulated_currency_v2<T: drop>(
     allow_global_pause: bool,
     ctx: &mut TxContext,
 ): (TreasuryCap<T>, DenyCapV2<T>, CoinMetadata<T>) {
-    abort 1337
+    abort
 }
 
 /// Given the `DenyCap` for a regulated currency, migrate it to the new `DenyCapV2` type.

@@ -3,12 +3,12 @@ module sui::coin_metadata_registry;
 use std::string::String;
 use sui::balance::Supply;
 use sui::dynamic_field;
+use sui::package::Publisher;
 use sui::transfer::Receiving;
 
-const ENotSystemAddress: u64 = 0;
-const EMetadataAlreadyExists: u64 = 1;
 const EMetadataNotFound: u64 = 2;
 const EAlreadyClaimed: u64 = 3;
+const ENotSystemAddress: u64 = 4;
 
 /// @0x10.
 public struct CoinMetadataRegistry has key { id: UID }
@@ -34,6 +34,23 @@ public struct Metadata<phantom T> has key, store {
     deny_cap_id: Option<ID>,
 }
 
+public struct InitMetadata<phantom T> {
+    metadata: Metadata<T>,
+}
+
+public(package) fun to_inner_mut<T>(init: &mut InitMetadata<T>): &mut Metadata<T> {
+    &mut init.metadata
+}
+
+public fun transfer<T>(init: InitMetadata<T>) {
+    let InitMetadata { metadata } = init;
+
+    transfer::public_transfer(
+        metadata,
+        coin_metadata_registry_id().to_address(),
+    );
+}
+
 /// This is for TTO registration flow.
 public fun migrate_receiving<T>(
     registry: &mut CoinMetadataRegistry,
@@ -43,13 +60,15 @@ public fun migrate_receiving<T>(
     registry.attach_metadata(received_metadata);
 }
 
-/// Similar to the above, we need to consider allowing more than 1 cap.
+/// ? Similar to the above, we need to consider allowing more than 1 cap.
 public fun create_cap_for_supply<T>(
     registry: &CoinMetadataRegistry,
-    // Adding &mut to make sure the owner has exclusive access to the supply.
     _supply: &mut Supply<T>,
+    publisher: &Publisher,
     ctx: &mut TxContext,
 ): MetadataCap<T> {
+    // only coin metadata objects can be registered
+    assert!(publisher.from_package<T>(), ENotSystemAddress);
     let metadata = registry.metadata<T>();
     assert!(!metadata.cap_claimed(), EAlreadyClaimed);
     MetadataCap { id: object::new(ctx) }
@@ -138,8 +157,53 @@ public(package) fun exists<T>(registry: &CoinMetadataRegistry): bool {
 }
 
 public(package) fun attach_metadata<T>(registry: &mut CoinMetadataRegistry, metadata: Metadata<T>) {
-    assert!(!registry.exists<T>(), EMetadataAlreadyExists);
     dynamic_field::add(&mut registry.id, CoinMetadataKey<T>(), metadata);
+}
+
+public(package) fun overwrite_metadata<T>(
+    registry: &mut CoinMetadataRegistry,
+    mut metadata: Metadata<T>,
+) {
+    // if metadata exists, remove it
+    if (dynamic_field::exists_(&registry.id, CoinMetadataKey<T>())) {
+        let old_metadata: Metadata<T> = dynamic_field::remove(
+            &mut registry.id,
+            CoinMetadataKey<T>(),
+        );
+        let Metadata<T> { id, mut supply, .. } = old_metadata;
+        id.delete();
+        if (supply.is_some()) {
+            metadata.supply.fill(supply.extract());
+        };
+        supply.destroy_none();
+    };
+    dynamic_field::add(&mut registry.id, CoinMetadataKey<T>(), metadata);
+}
+
+public(package) fun create_metadata_init<T>(
+    decimals: u8,
+    name: String,
+    symbol: String,
+    description: String,
+    icon_url: String,
+    supply: Option<Supply<T>>,
+    metadata_cap_id: Option<ID>,
+    deny_cap_id: Option<ID>,
+    ctx: &mut TxContext,
+): InitMetadata<T> {
+    InitMetadata {
+        metadata: create_metadata(
+            decimals,
+            name,
+            symbol,
+            description,
+            icon_url,
+            supply,
+            metadata_cap_id,
+            deny_cap_id,
+            ctx,
+        ),
+    }
 }
 
 public(package) fun create_metadata<T>(
