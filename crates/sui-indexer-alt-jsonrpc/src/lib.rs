@@ -3,6 +3,7 @@
 
 use std::net::SocketAddr;
 use std::sync::Arc;
+use std::time::Duration;
 
 use anyhow::Context as _;
 use api::checkpoints::Checkpoints;
@@ -14,7 +15,10 @@ use api::objects::{Objects, QueryObjects};
 use api::rpc_module::RpcModule;
 use api::transactions::{QueryTransactions, Transactions};
 use api::write::Write;
-use config::RpcConfig;
+use config::{
+    CoinsConfig, NameServiceConfig, NodeConfig, ObjectsConfig, PackageResolverLayer, RpcConfig,
+    TransactionsConfig,
+};
 use data::system_package_task::{SystemPackageTask, SystemPackageTaskArgs};
 use jsonrpsee::server::{BatchRequestConfig, RpcServiceBuilder, ServerBuilder};
 use metrics::middleware::MetricsLayer;
@@ -51,6 +55,10 @@ pub struct RpcArgs {
     /// many requests, it will start responding with 429.
     #[clap(long, default_value_t = Self::default().max_in_flight_requests)]
     pub max_in_flight_requests: u32,
+
+    /// Threshold in ms for logging slow requests. Requests that take longer than this will be logged as warnings.
+    #[clap(long, default_value_t = Self::default().slow_request_threshold_ms)]
+    pub slow_request_threshold_ms: u64,
 }
 
 pub struct RpcService {
@@ -71,6 +79,9 @@ pub struct RpcService {
 
     /// Cancellation token controlling all services.
     cancel: CancellationToken,
+
+    /// Configuration for the RPC service
+    config: Option<RpcConfig>,
 }
 
 impl RpcService {
@@ -84,6 +95,7 @@ impl RpcService {
         let RpcArgs {
             rpc_listen_address,
             max_in_flight_requests,
+            slow_request_threshold_ms,
         } = rpc_args;
 
         let metrics = RpcMetrics::new(registry);
@@ -107,6 +119,18 @@ impl RpcService {
             "https://raw.githubusercontent.com/MystenLabs/sui/main/LICENSE",
         );
 
+        // Create default config with the threshold from args
+        let config = RpcConfig {
+            objects: ObjectsConfig::default(),
+            transactions: TransactionsConfig::default(),
+            name_service: NameServiceConfig::default(),
+            coins: CoinsConfig::default(),
+            node: NodeConfig::default(),
+            bigtable: None,
+            package_resolver: PackageResolverLayer::default().finish(),
+            slow_request_threshold: Duration::from_secs(slow_request_threshold_ms),
+        };
+
         Ok(Self {
             rpc_listen_address,
             server,
@@ -114,7 +138,13 @@ impl RpcService {
             modules: jsonrpsee::RpcModule::new(()),
             schema,
             cancel,
+            config: Some(config),
         })
+    }
+
+    /// Set the configuration for the RPC service
+    pub fn with_config(&mut self, config: RpcConfig) {
+        self.config = Some(config);
     }
 
     /// Return a copy of the metrics.
@@ -141,6 +171,7 @@ impl RpcService {
             mut modules,
             schema,
             cancel,
+            config,
         } = self;
 
         info!("Starting JSON-RPC service on {rpc_listen_address}",);
@@ -151,9 +182,15 @@ impl RpcService {
             .register_method("rpc.discover", move |_, _, _| json!(schema.clone()))
             .context("Failed to add schema discovery method")?;
 
+        // Get the slow request threshold from the config
+        let slow_request_threshold = config
+            .map(|c| c.slow_request_threshold)
+            .unwrap_or_else(|| Duration::from_secs(60));
+
         let middleware = RpcServiceBuilder::new().layer(MetricsLayer::new(
             metrics,
             modules.method_names().map(|n| n.to_owned()).collect(),
+            slow_request_threshold,
         ));
 
         let handle = server
@@ -193,6 +230,7 @@ impl Default for RpcArgs {
         Self {
             rpc_listen_address: "0.0.0.0:6000".parse().unwrap(),
             max_in_flight_requests: 2000,
+            slow_request_threshold_ms: 60_000,
         }
     }
 }
@@ -224,12 +262,14 @@ pub async fn start_rpc(
     rpc_args: RpcArgs,
     node_args: NodeArgs,
     system_package_task_args: SystemPackageTaskArgs,
-    rpc_config: RpcConfig,
+    mut rpc_config: RpcConfig,
     registry: &Registry,
     cancel: CancellationToken,
 ) -> anyhow::Result<JoinHandle<()>> {
+    rpc_config.slow_request_threshold = Duration::from_millis(rpc_args.slow_request_threshold_ms);
     let mut rpc = RpcService::new(rpc_args, registry, cancel.child_token())
         .context("Failed to create RPC service")?;
+    rpc.with_config(rpc_config.clone());
 
     let context = Context::new(
         database_url,

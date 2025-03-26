@@ -8,6 +8,7 @@ use std::{
     pin::Pin,
     sync::Arc,
     task::{Context, Poll},
+    time::Duration,
 };
 
 use jsonrpsee::{server::middleware::rpc::RpcServiceT, types::Request, MethodResponse};
@@ -24,6 +25,7 @@ use super::RpcMetrics;
 pub(crate) struct MetricsLayer {
     metrics: Arc<RpcMetrics>,
     methods: Arc<HashSet<String>>,
+    slow_request_threshold: Duration,
 }
 
 /// The Tower Service responsible for wrapping the JSON-RPC request handler with metrics handling.
@@ -44,6 +46,8 @@ pin_project! {
         method: Cow<'a, str>,
         // RPC request params for logging
         params: String,
+        // Threshold in ms for logging slow requests
+        slow_request_threshold: Duration,
         #[pin]
         inner: F,
     }
@@ -52,10 +56,15 @@ pin_project! {
 impl MetricsLayer {
     /// Create a new metrics layer that only records statistics for the given methods (any other
     /// methods will be replaced with "<UNKNOWN>").
-    pub fn new(metrics: Arc<RpcMetrics>, methods: HashSet<String>) -> Self {
+    pub fn new(
+        metrics: Arc<RpcMetrics>,
+        methods: HashSet<String>,
+        slow_request_threshold: Duration,
+    ) -> Self {
         Self {
             metrics,
             methods: Arc::new(methods),
+            slow_request_threshold,
         }
     }
 }
@@ -105,6 +114,7 @@ where
             }),
             method,
             params: format!("{:?}", request.params()),
+            slow_request_threshold: self.layer.slow_request_threshold,
             inner: self.inner.call(request),
         }
     }
@@ -141,7 +151,8 @@ where
             info!(method, elapsed_ms, "Request succeeded");
         }
 
-        if elapsed_ms > 60000.0 {
+        let slow_request_threshold_ms = this.slow_request_threshold.as_millis() as f64;
+        if elapsed_ms > slow_request_threshold_ms {
             let response_str = if resp.is_error() {
                 format!("Error: {:?}", resp.as_error_code())
             } else {
@@ -161,7 +172,8 @@ where
                 elapsed_ms,
                 this.params,
                 response = response_str,
-                "Slow RPC request detected (>60s)"
+                "Slow RPC request detected (>{} seconds)",
+                this.slow_request_threshold.as_secs()
             );
         }
 
