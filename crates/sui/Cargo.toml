@@ -144,4 +144,5 @@ harness = false
 tracing = [
     "sui-types/tracing",
     "sui-execution/tracing",
+    "sui-move/tracing",
 ]
