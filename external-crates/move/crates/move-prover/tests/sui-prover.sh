@@ -49,7 +49,7 @@ cd ./crates/sui-framework/packages/prover
 sui-prover
 cd ..
 
-git clone https://github.com/asymptotic-code/sui-kit.git sui-kit
+git clone https://github.com/andrii-a8c/sui-kit.git sui-kit
 cd sui-kit/examples
 
 cd amm
