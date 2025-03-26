@@ -234,7 +234,7 @@ impl QueryObjectsApiServer for QueryObjects {
 
         let obj_futures = object_ids
             .iter()
-            .map(|id| response::latest_object(ctx, *id, &options));
+            .map(|id| response::live_object(ctx, *id, &options));
 
         let data = future::join_all(obj_futures)
             .await
