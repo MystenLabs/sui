@@ -1288,7 +1288,6 @@ Remove validators in violation of the low staking rules, and return the new tota
         <b>let</b> validator_ref = &self.<a href="../sui_system/validator_set.md#sui_system_validator_set_active_validators">active_validators</a>[i];
         <b>let</b> validator_address = validator_ref.sui_address();
         <b>let</b> validator_stake = validator_ref.total_stake_amount();
-        //<b>let</b> new_total_stake = initial_total_stake + validator_stake;
         // calculate the voting power <b>for</b> this <a href="../sui_system/validator.md#sui_system_validator">validator</a> in the next epoch <b>if</b> no validators are removed
         // <b>if</b> one of more low stake validators are removed, it's possible this <a href="../sui_system/validator.md#sui_system_validator">validator</a> will have higher voting power--that's ok.
         <b>let</b> <a href="../sui_system/voting_power.md#sui_system_voting_power">voting_power</a> = <a href="../sui_system/voting_power.md#sui_system_voting_power_derive_voting_power">voting_power::derive_voting_power</a>(validator_stake, initial_total_stake);

@@ -521,7 +521,7 @@ fun update_and_process_low_stake_departures(
         let validator_ref = &self.active_validators[i];
         let validator_address = validator_ref.sui_address();
         let validator_stake = validator_ref.total_stake_amount();
-        //let new_total_stake = initial_total_stake + validator_stake;
+
         // calculate the voting power for this validator in the next epoch if no validators are removed
         // if one of more low stake validators are removed, it's possible this validator will have higher voting power--that's ok.
         let voting_power = voting_power::derive_voting_power(validator_stake, initial_total_stake);
