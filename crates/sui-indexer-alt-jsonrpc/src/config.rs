@@ -2,7 +2,6 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::mem;
-use std::time::Duration;
 
 use anyhow::Context as _;
 use jsonrpsee::http_client::{HeaderMap, HeaderValue, HttpClient, HttpClientBuilder};
@@ -15,7 +14,7 @@ pub use sui_name_service::NameServiceConfig;
 
 pub const CLIENT_SDK_TYPE_HEADER: &str = "client-sdk-type";
 
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub struct RpcConfig {
     /// Configuration for object-related RPC methods.
     pub objects: ObjectsConfig,
@@ -38,9 +37,6 @@ pub struct RpcConfig {
 
     /// Configuring limits for the package resolver.
     pub package_resolver: sui_package_resolver::Limits,
-
-    /// Threshold for logging slow requests. Requests that take longer than this will be logged as warnings.
-    pub slow_request_threshold: Duration,
 }
 
 #[DefaultConfig]
@@ -68,16 +64,8 @@ pub struct RpcLayer {
     /// Configuring limits for the package resolver.
     pub package_resolver: PackageResolverLayer,
 
-    /// Threshold for logging slow requests in seconds. Default: 60s
-    #[serde(with = "serde_with::As::<serde_with::DurationSeconds<u64>>")]
-    pub slow_request_threshold: Duration,
-
     #[serde(flatten)]
     pub extra: toml::Table,
-}
-
-fn default_slow_request_threshold() -> Duration {
-    Duration::from_secs(60)
 }
 
 #[derive(Debug, Clone)]
@@ -225,7 +213,6 @@ impl RpcLayer {
             bigtable: None,
             package_resolver: PackageResolverLayer::default(),
             node: NodeConfig::default().into(),
-            slow_request_threshold: default_slow_request_threshold(),
             extra: Default::default(),
         }
     }
@@ -240,7 +227,6 @@ impl RpcLayer {
             node: self.node.finish(NodeConfig::default()),
             bigtable: self.bigtable,
             package_resolver: self.package_resolver.finish(),
-            slow_request_threshold: self.slow_request_threshold,
         }
     }
 }
@@ -346,7 +332,6 @@ impl Default for RpcConfig {
             node: NodeConfig::default(),
             bigtable: None,
             package_resolver: PackageResolverLayer::default().finish(),
-            slow_request_threshold: default_slow_request_threshold(),
         }
     }
 }

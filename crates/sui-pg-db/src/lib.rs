@@ -27,7 +27,7 @@ pub struct DbArgs {
     /// Time spent waiting for a connection from the pool to become available, in milliseconds.
     #[arg(long, default_value_t = Self::default().connection_timeout_ms)]
     pub connection_timeout_ms: u64,
-    
+
     /// Threshold in milliseconds for logging slow database queries. Queries that take longer than this will be logged as warnings.
     #[arg(long, default_value_t = Self::default().slow_query_threshold_ms)]
     pub slow_query_threshold_ms: u64,
@@ -168,7 +168,7 @@ impl Default for DbArgs {
         Self {
             db_connection_pool_size: 100,
             connection_timeout_ms: 60_000,
-            slow_query_threshold_ms: 1000,
+            slow_query_threshold_ms: 60_000,
         }
     }
 }

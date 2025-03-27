@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::sync::Arc;
+use std::time::Duration;
 
 use anyhow::anyhow;
 use async_graphql::dataloader::DataLoader;
@@ -28,13 +29,13 @@ pub(crate) struct PgReader {
     db: Option<db::Db>,
     metrics: Arc<RpcMetrics>,
     cancel: CancellationToken,
-    slow_query_threshold_ms: u64,
+    slow_query_threshold: Duration,
 }
 
 pub(crate) struct Connection<'p> {
     conn: db::Connection<'p>,
     metrics: Arc<RpcMetrics>,
-    slow_query_threshold_ms: u64,
+    slow_query_threshold: Duration,
 }
 
 impl PgReader {
@@ -47,7 +48,7 @@ impl PgReader {
         registry: &Registry,
         cancel: CancellationToken,
     ) -> Result<Self, Error> {
-        let slow_query_threshold_ms = db_args.slow_query_threshold_ms;
+        let slow_query_threshold = Duration::from_millis(db_args.slow_query_threshold_ms);
         let db = if let Some(database_url) = database_url {
             let db = db::Db::for_read(database_url, db_args)
                 .await
@@ -69,7 +70,7 @@ impl PgReader {
             db,
             metrics,
             cancel,
-            slow_query_threshold_ms,
+            slow_query_threshold,
         })
     }
 
@@ -94,7 +95,7 @@ impl PgReader {
                 Ok(Connection {
                     conn: conn.map_err(Error::PgConnect)?,
                     metrics: self.metrics.clone(),
-                    slow_query_threshold_ms: self.slow_query_threshold_ms,
+                    slow_query_threshold: self.slow_query_threshold,
                 })
             }
         }
@@ -118,14 +119,13 @@ impl Connection<'_> {
 
         let res = query.get_result(&mut self.conn).await;
         let elapsed_seconds = timer.stop_and_record();
-        let elapsed_ms = (elapsed_seconds * 1000.0) as u64;
-        if elapsed_ms > self.slow_query_threshold_ms {
+        let threshold_seconds = self.slow_query_threshold.as_secs() as f64;
+        if elapsed_seconds > threshold_seconds {
             warn!(
                 elapsed_seconds,
-                elapsed_ms,
+                threshold_seconds,
                 query = query_debug,
-                "Slow database query detected (> {} ms)",
-                self.slow_query_threshold_ms
+                "Slow database query detected!",
             );
         }
 
@@ -152,15 +152,13 @@ impl Connection<'_> {
 
         let res = query.get_results(&mut self.conn).await;
         let elapsed_seconds = timer.stop_and_record();
-        let elapsed_ms = (elapsed_seconds * 1000.0) as u64;
-        if elapsed_ms > self.slow_query_threshold_ms {
+        let threshold_seconds = self.slow_query_threshold.as_secs() as f64;
+        if elapsed_seconds > threshold_seconds {
             warn!(
                 elapsed_seconds,
-                elapsed_ms,
                 query = query_debug,
-                threshold_ms = self.slow_query_threshold_ms,
-                "Slow database query detected (>{} ms)",
-                self.slow_query_threshold_ms
+                threshold_seconds,
+                "Slow database query detected!",
             );
         }
 

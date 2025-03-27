@@ -154,29 +154,24 @@ where
 
         let slow_request_threshold_ms = this.slow_request_threshold.as_millis() as f64;
         if elapsed_ms > slow_request_threshold_ms {
-            let response_str = if resp.is_error() {
-                format!("Error: {:?}", resp.as_error_code())
+            let result = resp.as_result();
+            let response = if result.len() > 1000 {
+                format!("{}...", &result[..997])
             } else {
-                let result = resp.as_result();
-                if result.len() > 1000 {
-                    format!(
-                        "{}... (truncated, total size: {})",
-                        &result[..1000],
-                        result.len()
-                    )
-                } else {
-                    result.to_string()
-                }
+                result.to_string()
             };
 
-            let params = this.params.as_ref().map(|p| p.get()).unwrap_or("{}");
+            let params = this.params.as_ref().map(|p| p.get()).unwrap_or("[]");
+
             warn!(
-                method,
                 elapsed_ms,
+                method,
                 params,
-                response = response_str,
-                "Slow RPC request detected (>{} seconds)",
-                this.slow_request_threshold.as_secs()
+                error = ?resp.as_error_code(),
+                response_length = result.len(),
+                response,
+                "Slow request (>{:.02}s)",
+                this.slow_request_threshold.as_secs_f64(),
             );
         }
 
