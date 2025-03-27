@@ -396,7 +396,9 @@ pub struct Lambda {
     pub return_label: BlockLabel,
     pub use_fun_color: Color,
     pub body: Box<Exp>,
-    // collected during expansion. Conceptually we could handle this by eta-expanding the lambda
+    // Collected during macro expansion. These additional annotations can come from `Annotate` or
+    // more subtly by passing a lambda from one macro to another.
+    // Conceptually we could handle this by eta-expanding the lambda
     // invocation, so that `$f` becomes `|...|$f(...)`, but due to the limited nature here, just
     // collecting the annotations is easier
     pub extra_annotations: Vec<Spanned<(Vec<Type>, Type)>>,

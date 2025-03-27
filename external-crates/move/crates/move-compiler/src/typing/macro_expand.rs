@@ -10,7 +10,7 @@ use crate::{
         self as N, BlockLabel, Color, MatchArm_, TParamID, Type, Type_, UseFuns, Var, Var_,
     },
     parser::ast::FunctionName,
-    shared::{ide::IDEAnnotation, program_info::FunctionInfo, unique_map::UniqueMap, AstDebug},
+    shared::{ide::IDEAnnotation, program_info::FunctionInfo, unique_map::UniqueMap},
     typing::{
         ast as T,
         core::{self, TParamSubst},
