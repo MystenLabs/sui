@@ -42,6 +42,7 @@
     "graphql-config": "^5.0.3",
     "gray-matter": "^4.0.3",
     "hast-util-is-element": "^1.1.0",
+    "js-yaml": "^4.1.0",
     "lodash": "^4.17.21",
     "markdown-to-jsx": "^7.4.3",
     "nightOwl": "link:prism-react-renderer/themes/nightOwl",
@@ -59,7 +60,8 @@
     "rehype-katex": "^7.0.0",
     "remark-math": "^6.0.0",
     "tailwindcss": "^3.4.1",
-    "turndown": "^7.2.0"
+    "turndown": "^7.2.0",
+    "unist-util-visit": "^5.0.0"
   },
   "devDependencies": {
     "@babel/plugin-transform-react-jsx": "^7.23.4",

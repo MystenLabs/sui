@@ -8,6 +8,7 @@ import katex from "rehype-katex";
 
 const effortRemarkPlugin = require("./src/plugins/effort");
 const betaRemarkPlugin = require("./src/plugins/betatag");
+const remarkVariableReplacer = require("./src/plugins/variable-replace");
 
 require("dotenv").config();
 
@@ -130,6 +131,7 @@ const config = {
             ],
             effortRemarkPlugin,
             betaRemarkPlugin,
+            remarkVariableReplacer,
           ],
           rehypePlugins: [katex],
         },
