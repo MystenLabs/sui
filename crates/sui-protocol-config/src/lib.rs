@@ -228,13 +228,10 @@ const MAX_PROTOCOL_VERSION: u64 = 79;
 //             Enable execution time estimate mode for congestion control on testnet.
 // Version 79: Enable median based commit timestamp in consensus on testnet.
 //             Increase threshold for bad nodes that won't be considered leaders in consensus in testnet
-<<<<<<< HEAD
 //             Enable load_nitro_attestation move function in sui framework in testnet.
-=======
 //             Enable consensus garbage collection for mainnet
 //             Enable the new consensus commit rule for mainnet.
 
->>>>>>> ffb5f97685 ([chore] enable consensus garbage collection on mainnet.)
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
 
