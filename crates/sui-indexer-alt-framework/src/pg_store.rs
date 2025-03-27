@@ -4,7 +4,6 @@
 use std::time::Duration;
 
 use async_trait::async_trait;
-use diesel_async::scoped_futures::ScopedFutureExt;
 use diesel_async::AsyncConnection;
 use scoped_futures::ScopedBoxFuture;
 
@@ -13,8 +12,7 @@ use crate::models::watermarks::{
     PgCommitterWatermark, PgPrunerWatermark, PgReaderWatermark, StoredWatermark,
 };
 use crate::store::{
-    CommitterWatermark, DbConnection, HandlerBatch, PrunerWatermark, ReaderWatermark,
-    SequentialHandler, Store, TransactionalStore,
+    CommitterWatermark, DbConnection, PrunerWatermark, ReaderWatermark, Store, TransactionalStore,
 };
 
 #[async_trait]
@@ -132,36 +130,6 @@ impl Store for PgDb {
 
 #[async_trait]
 impl TransactionalStore for PgDb {
-    async fn transactional_commit_with_watermark<'a, H>(
-        &'a self,
-        pipeline: &'static str,
-        watermark: &'a CommitterWatermark,
-        batch: &'a HandlerBatch<H>,
-    ) -> anyhow::Result<usize>
-    where
-        H: SequentialHandler<Store = Self> + Send + Sync + 'a,
-    {
-        let mut conn = self.connect().await?;
-
-        let result = AsyncConnection::transaction(&mut conn, |conn| {
-            async {
-                let watermark = PgCommitterWatermark {
-                    pipeline: pipeline.into(),
-                    epoch_hi_inclusive: watermark.epoch_hi_inclusive,
-                    checkpoint_hi_inclusive: watermark.checkpoint_hi_inclusive,
-                    tx_hi: watermark.tx_hi,
-                    timestamp_ms_hi_inclusive: watermark.timestamp_ms_hi_inclusive,
-                };
-                watermark.update(conn).await.map_err(anyhow::Error::from)?;
-                H::commit(batch, conn).await
-            }
-            .scope_boxed()
-        })
-        .await?;
-
-        Ok(result)
-    }
-
     async fn transaction<'a, R, F>(&self, f: F) -> anyhow::Result<R>
     where
         R: Send + 'a,
