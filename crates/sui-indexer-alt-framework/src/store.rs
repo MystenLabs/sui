@@ -89,16 +89,6 @@ pub type HandlerBatch<H> = <H as SequentialHandler>::Batch;
 /// or fail together.
 #[async_trait]
 pub trait TransactionalStore: Store {
-    /// Execute a handler's commit function and update the watermark within a transaction
-    async fn transactional_commit_with_watermark<'a, H>(
-        &'a self,
-        pipeline: &'static str,
-        watermark: &'a CommitterWatermark,
-        batch: &'a HandlerBatch<H>,
-    ) -> anyhow::Result<usize>
-    where
-        H: SequentialHandler<Store = Self> + Send + Sync + 'a;
-
     async fn transaction<'a, R, F>(&self, f: F) -> anyhow::Result<R>
     where
         R: Send + 'a,
@@ -132,6 +122,16 @@ pub struct PrunerWatermark {
 impl CommitterWatermark {
     pub(crate) fn timestamp(&self) -> DateTime<Utc> {
         DateTime::from_timestamp_millis(self.timestamp_ms_hi_inclusive).unwrap_or_default()
+    }
+
+    #[cfg(test)]
+    pub(crate) fn new_for_testing(checkpoint_hi_inclusive: u64) -> Self {
+        CommitterWatermark {
+            epoch_hi_inclusive: 0,
+            checkpoint_hi_inclusive: checkpoint_hi_inclusive as i64,
+            tx_hi: 0,
+            timestamp_ms_hi_inclusive: 0,
+        }
     }
 }
 

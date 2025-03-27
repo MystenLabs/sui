@@ -91,17 +91,6 @@ impl PgCommitterWatermark<'static> {
 }
 
 impl<'p> PgCommitterWatermark<'p> {
-    #[cfg(test)]
-    pub(crate) fn new_for_testing(pipeline: &'p str, checkpoint_hi_inclusive: u64) -> Self {
-        PgCommitterWatermark {
-            pipeline: pipeline.into(),
-            epoch_hi_inclusive: 0,
-            checkpoint_hi_inclusive: checkpoint_hi_inclusive as i64,
-            tx_hi: 0,
-            timestamp_ms_hi_inclusive: 0,
-        }
-    }
-
     /// Upsert the high watermark as long as it raises the watermark stored in the database.
     /// Returns a boolean indicating whether the watermark was actually updated or not.
     ///
@@ -174,16 +163,6 @@ impl PgPrunerWatermark<'static> {
 }
 
 impl PgPrunerWatermark<'_> {
-    #[cfg(test)]
-    pub(crate) fn new_for_testing(pipeline: &'static str, pruner_hi: u64) -> Self {
-        PgPrunerWatermark {
-            pipeline: pipeline.into(),
-            wait_for: 0,
-            reader_lo: 0,
-            pruner_hi: pruner_hi as i64,
-        }
-    }
-
     /// Update the pruner high watermark (only) for an existing watermark row, as long as this
     /// raises the watermark.
     ///
