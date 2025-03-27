@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use serde::de::{MapAccess, Visitor};
+use serde::de::{Error, MapAccess, Visitor};
 use serde::{ser::SerializeSeq, Deserialize, Deserializer, Serialize, Serializer};
 use std::collections::HashMap;
 use std::fmt;
@@ -190,8 +190,15 @@ impl<'de> Deserialize<'de> for HeaderMap {
             where
                 A: MapAccess<'de>,
             {
-                // Consume but ignore any map entries
-                while access.next_entry::<Value, Value>()?.is_some() {}
+                let mut seen_keys = Vec::new();
+
+                // Check for duplicate keys while consuming entries
+                while let Some((key, _value)) = access.next_entry::<Value, Value>()? {
+                    if seen_keys.contains(&key) {
+                        return Err(Error::custom("duplicate key found in CBOR map"));
+                    }
+                    seen_keys.push(key);
+                }
                 Ok(HeaderMap)
             }
         }
@@ -508,7 +515,7 @@ impl AttestationDocument {
             .map(|bytes| bytes.to_vec());
 
         if let Some(data) = &public_key {
-            if data.len() > MAX_PK_LENGTH {
+            if data.len() == 0 || data.len() > MAX_PK_LENGTH {
                 return Err(NitroAttestationVerifyError::InvalidAttestationDoc(
                     "invalid public key".to_string(),
                 ));
@@ -710,6 +717,15 @@ fn verify_cert_chain(cert_chain: &[&[u8]], now_ms: u64) -> Result<(), NitroAttes
                             "Cert chain exceeds pathLenConstraint".to_string(),
                         ));
                     }
+                }
+            }
+        } else {
+            if let Ok(Some(bc)) = cert.basic_constraints() {
+                // `pathLenConstraint` must be undefined since this is a client certificate.
+                if bc.value.path_len_constraint.is_some() {
+                    return Err(NitroAttestationVerifyError::InvalidCertificate(
+                        "Cert chain exceeds pathLenConstraint".to_string(),
+                    ));
                 }
             }
         }
