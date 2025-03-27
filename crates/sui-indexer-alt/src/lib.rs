@@ -8,10 +8,10 @@ use handlers::{
     kv_checkpoints::KvCheckpoints, kv_epoch_ends::KvEpochEnds, kv_epoch_starts::KvEpochStarts,
     kv_feature_flags::KvFeatureFlags, kv_objects::KvObjects,
     kv_protocol_configs::KvProtocolConfigs, kv_transactions::KvTransactions, obj_info::ObjInfo,
-    obj_versions::ObjVersions, sum_displays::SumDisplays, sum_packages::SumPackages,
-    tx_affected_addresses::TxAffectedAddresses, tx_affected_objects::TxAffectedObjects,
-    tx_balance_changes::TxBalanceChanges, tx_calls::TxCalls, tx_digests::TxDigests,
-    tx_kinds::TxKinds,
+    obj_info_temp::ObjInfoTemp, obj_versions::ObjVersions, sum_displays::SumDisplays,
+    sum_packages::SumPackages, tx_affected_addresses::TxAffectedAddresses,
+    tx_affected_objects::TxAffectedObjects, tx_balance_changes::TxBalanceChanges,
+    tx_calls::TxCalls, tx_digests::TxDigests, tx_kinds::TxKinds,
 };
 use prometheus::Registry;
 use sui_indexer_alt_framework::{
@@ -176,8 +176,11 @@ pub async fn setup_indexer(
     }
 
     // Consistent pipelines
+    let obj_info_temp = obj_info.clone();
     add_consistent!(CoinBalanceBuckets::default(), coin_balance_buckets);
     add_consistent!(ObjInfo::default(), obj_info);
+    // TODO: Remove this once the backfill is complete.
+    add_consistent!(ObjInfoTemp::default(), obj_info_temp);
 
     // Summary tables (without write-ahead log)
     add_sequential!(SumDisplays, sum_displays);
