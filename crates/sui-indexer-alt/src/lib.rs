@@ -88,6 +88,7 @@ pub async fn setup_indexer(
         kv_protocol_configs,
         kv_transactions,
         obj_info,
+        obj_info_temp,
         obj_versions,
         obj_versions_sentinel_backfill,
         tx_affected_addresses,
@@ -190,7 +191,6 @@ pub async fn setup_indexer(
     }
 
     // Consistent pipelines
-    let obj_info_temp = obj_info.clone();
     add_consistent!(CoinBalanceBuckets::default(), coin_balance_buckets);
     add_consistent!(ObjInfo::default(), obj_info);
     // TODO: Remove this once the backfill is complete.
