@@ -16,7 +16,7 @@ Please use your best judgment to decide if the changes between old and new versi
 
 ## Documentation updates
 
-Do not make updates to the documentation directly in the .md files. You must update the relevant code comment and then build it, which updates the relevant documentation file during the process. To build, run the following command in the crates/sui-framework directory:
+Do not make updates to the documentation directly in the .md files. You must update the relevant code comment and then build the framework, which updates the relevant documentation file during the process. To build, run the following command in the `crates/sui-framework` directory:
 
 ```bash
 UPDATE=1 cargo nextest run build_system_packages
