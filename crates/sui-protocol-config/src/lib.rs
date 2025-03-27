@@ -1,6 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use once_cell::sync::Lazy;
 use std::{
     cell::RefCell,
     collections::BTreeSet,
@@ -1813,9 +1814,9 @@ impl ProtocolConfig {
     }
 
     pub fn gc_depth(&self) -> u32 {
-        if cfg!(msim) {
+        if cfg!(msim) || in_antithesis() {
             // exercise a very low gc_depth
-            5
+            3
         } else {
             self.consensus_gc_depth.unwrap_or(0)
         }
@@ -3718,6 +3719,18 @@ pub fn is_mysticeti_fpc_enabled_in_env() -> Option<bool> {
         }
     }
     None
+}
+
+#[inline(always)]
+pub fn in_antithesis() -> bool {
+    static IN_ANTITHESIS: Lazy<bool> = Lazy::new(|| {
+        let in_antithesis = std::env::var("ANTITHESIS_OUTPUT_DIR").is_ok();
+        if in_antithesis {
+            warn!("Detected that we are running in antithesis");
+        }
+        in_antithesis
+    });
+    *IN_ANTITHESIS
 }
 
 #[cfg(all(test, not(msim)))]

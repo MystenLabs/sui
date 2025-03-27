@@ -10,6 +10,7 @@ edition = "2021"
 workspace = true
 
 [dependencies]
+once_cell.workspace = true
 serde.workspace = true
 tracing.workspace = true
 serde_with.workspace = true
