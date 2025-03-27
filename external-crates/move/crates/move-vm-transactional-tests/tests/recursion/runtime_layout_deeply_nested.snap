@@ -15,6 +15,7 @@ Error: Function execution failed with VMError: {
     location: 0x42::M,
     indices: [],
     offsets: [(FunctionDefinitionIndex(6), 2)],
+    message: None,
 }
 
 task 3, line 79:
@@ -25,6 +26,7 @@ Error: Function execution failed with VMError: {
     location: 0x42::M,
     indices: [],
     offsets: [(FunctionDefinitionIndex(0), 1)],
+    message: None,
 }
 
 task 4, line 81:
@@ -35,4 +37,5 @@ Error: Function execution failed with VMError: {
     location: 0x42::M,
     indices: [],
     offsets: [(FunctionDefinitionIndex(0), 1)],
+    message: None,
 }

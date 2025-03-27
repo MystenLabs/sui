@@ -939,23 +939,26 @@ impl VariantRef {
     /// Checks that the variant tag matches the expected tag.
     pub fn check_tag(&self, expected_tag: VariantTag) -> PartialVMResult<()> {
         let tag = *self.0.borrow().variant_ref()?.as_ref().0;
+        println!("borrowed");
         if tag == expected_tag {
+            println!("tag checked");
             Ok(())
         } else {
+            println!("error");
+            println!("formatted");
             Err(
-                PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR).with_message(
+                PartialVMError::new(StatusCode::VARIANT_TAG_MISMATCH).with_message(
                     format!(
                         "Variant tag mismatch: expected {:?}, found {:?}",
                         expected_tag, tag
-                    ),
-                ),
-            )
+                    )))
         }
     }
 
     /// Unpacks the variant and returns a Vec of field references (in order).
     /// Each field is returned as a Value::Reference wrapping a cloned pointer.
     pub fn unpack_variant(&self) -> PartialVMResult<Vec<Value>> {
+        println!("Unpacking variant: {:?}", self.0);
         let value_ref = self.0.borrow();
         if let Value::Variant(boxed_variant) = &*value_ref {
             let (_tag, fixed_vec) = boxed_variant.as_ref();
@@ -986,7 +989,8 @@ impl VectorRef {
             // For a Vec container, extract the element.
             Value::Vec(vec) => {
                 if index >= vec.len() {
-                    return Err(PartialVMError::new(StatusCode::INDEX_OUT_OF_BOUNDS)
+                    return Err(PartialVMError::new(StatusCode::VECTOR_OPERATION_ERROR)
+                        .with_sub_status(INDEX_OUT_OF_BOUNDS)
                         .with_message("Index out of bounds in Vec".to_string()));
                 }
                 let elem = &vec[index];
@@ -1007,7 +1011,8 @@ impl VectorRef {
                     PrimVec::VecAddress(items) => items.len(),
                 };
                 if index >= len {
-                    return Err(PartialVMError::new(StatusCode::INDEX_OUT_OF_BOUNDS)
+                    return Err(PartialVMError::new(StatusCode::VECTOR_OPERATION_ERROR)
+                        .with_sub_status(INDEX_OUT_OF_BOUNDS)
                         .with_message("Index out of bounds in PrimVec".to_string()));
                 }
                 // Return an indexed reference.
@@ -3351,9 +3356,20 @@ impl Reference {
     pub fn value_view<'a>(&'a self) -> impl ValueView + 'a {
         struct ValueBehindRef<'b>(&'b Reference);
 
+        /// Returns a `value` behind a reference; visiting it visits the underlying vaouel.
         impl<'b> ValueView for ValueBehindRef<'b> {
             fn visit(&self, visitor: &mut impl ValueVisitor) {
-                self.0.visit_impl(visitor, 0)
+                match self.0 {
+                    Reference::Value(mem_box) => mem_box.borrow().visit_impl(visitor, 0),
+                    Reference::Indexed(entry) => {
+                        let (vec, ndx) = entry.as_ref();
+                        let Value::PrimVec(prim_vec) = &*vec.borrow() else {
+                            panic!("Expected prim vec for indexed reference, got {:?}", vec);
+                        };
+                        prim_vec.visit_indexed(*ndx, visitor, 0);
+                    }
+                }
+
             }
         }
 

@@ -1,6 +1,5 @@
 ---
 source: crates/move-transactional-test-runner/src/framework.rs
-input_file: crates/bytecode-verifier-transactional-tests/tests/enum_defs/recursive_enum.mvir
 ---
 processed 6 tasks
 
@@ -12,6 +11,7 @@ Error: Unable to publish module '00000000000000000000000000000000000000000000000
     location: 0x1::M0,
     indices: [(EnumDefinition, 0)],
     offsets: [],
+    message: None,
 }
 
 task 2, lines 16-28:
@@ -22,6 +22,7 @@ Error: Unable to publish module '00000000000000000000000000000000000000000000000
     location: 0x1::M1,
     indices: [(EnumDefinition, 0)],
     offsets: [],
+    message: None,
 }
 
 task 3, lines 30-36:
@@ -32,6 +33,7 @@ Error: Unable to publish module '00000000000000000000000000000000000000000000000
     location: 0x1::M2,
     indices: [(EnumDefinition, 1)],
     offsets: [],
+    message: None,
 }
 
 task 4, lines 38-45:
@@ -42,6 +44,7 @@ Error: Unable to publish module '00000000000000000000000000000000000000000000000
     location: 0x1::M3,
     indices: [(EnumDefinition, 0)],
     offsets: [],
+    message: None,
 }
 
 task 5, lines 47-56:
@@ -52,4 +55,5 @@ Error: Unable to publish module '00000000000000000000000000000000000000000000000
     location: 0x1::M3,
     indices: [(EnumDefinition, 3)],
     offsets: [],
+    message: None,
 }

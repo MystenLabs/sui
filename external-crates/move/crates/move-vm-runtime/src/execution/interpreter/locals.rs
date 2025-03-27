@@ -159,7 +159,7 @@ impl MachineHeap {
 // -------------------------------------------------------------------------------------------------
 
 impl StackFrame {
-    pub fn iter(&self) -> std::slice::Iter<'_, MemBox<Value>> {
+    pub(crate) fn iter(&self) -> std::slice::Iter<'_, MemBox<Value>> {
         self.slice.iter()
     }
 
@@ -170,8 +170,8 @@ impl StackFrame {
 
     /// Moves a location out of memory, swapping it with `ValueImpl::Invalid`
     pub fn move_loc(&mut self, ndx: usize) -> PartialVMResult<Value> {
-        let value = self.get_takeable(ndx)?.replace(Value::invalid());
-        Ok(value)
+        let value_slot = self.get_valid_mut(ndx)?;
+        Ok(std::mem::replace(&mut*value_slot.borrow_mut(), Value::invalid()))
     }
 
     pub fn borrow_loc(&mut self, ndx: usize) -> PartialVMResult<Value> {
@@ -224,19 +224,12 @@ impl StackFrame {
             })
     }
 
-    /// Gets an index, or returns an error if the index is out of range, the value is unset, or the
-    /// value's RC count is too high.
-    fn get_takeable(&mut self, ndx: usize) -> PartialVMResult<&mut MemBox<Value>> {
-        self.get_valid_mut(ndx).and_then(|value| {
-            if value.rc_count() > 1 {
-                Err(
-                    PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR)
-                        .with_message("moving value with dangling references".to_string()),
-                )
-            } else {
-                Ok(value)
-            }
-        })
+    /// Takes the value out of the slot, replacing it with a `Value::Invalid` or raising an error
+    /// if it is not able to be.
+    fn take(&mut self, ndx: usize) -> PartialVMResult<Value> {
+        println!("Current frame: {:?}", self.slice);
+        self.get_valid_mut(ndx)
+            .and_then(|value| std::mem::replace(value, MemBox::new(Value::invalid())).take())
     }
 
     pub fn drop_all_values(&mut self) -> impl Iterator<Item = Value> {

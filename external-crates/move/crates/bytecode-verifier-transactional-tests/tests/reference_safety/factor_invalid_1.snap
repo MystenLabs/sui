@@ -1,6 +1,5 @@
 ---
 source: crates/move-transactional-test-runner/src/framework.rs
-input_file: crates/bytecode-verifier-transactional-tests/tests/reference_safety/factor_invalid_1.mvir
 ---
 processed 2 tasks
 
@@ -12,6 +11,7 @@ Error: Unable to publish module '00000000000000000000000000000000000000000000000
     location: 0x1::M,
     indices: [(FunctionDefinition, 0)],
     offsets: [(FunctionDefinitionIndex(0), 15)],
+    message: None,
 }
 
 task 1, lines 30-57:
@@ -22,4 +22,5 @@ Error: Unable to publish module '00000000000000000000000000000000000000000000000
     location: 0x1::M2,
     indices: [(FunctionDefinition, 0)],
     offsets: [(FunctionDefinitionIndex(0), 15)],
+    message: None,
 }

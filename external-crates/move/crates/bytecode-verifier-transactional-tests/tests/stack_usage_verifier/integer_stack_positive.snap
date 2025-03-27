@@ -1,6 +1,5 @@
 ---
 source: crates/move-transactional-test-runner/src/framework.rs
-input_file: crates/bytecode-verifier-transactional-tests/tests/stack_usage_verifier/integer_stack_positive.mvir
 ---
 processed 6 tasks
 
@@ -12,6 +11,7 @@ Error: Unable to publish module '00000000000000000000000000000000000000000000000
     location: 0x6::A,
     indices: [(FunctionDefinition, 1)],
     offsets: [(FunctionDefinitionIndex(1), 0)],
+    message: None,
 }
 
 task 1, lines 17-30:
@@ -22,6 +22,7 @@ Error: Unable to publish module '00000000000000000000000000000000000000000000000
     location: 0x7::A,
     indices: [(FunctionDefinition, 1)],
     offsets: [(FunctionDefinitionIndex(1), 0)],
+    message: None,
 }
 
 task 2, lines 32-45:
@@ -32,6 +33,7 @@ Error: Unable to publish module '00000000000000000000000000000000000000000000000
     location: 0x8::A,
     indices: [(FunctionDefinition, 1)],
     offsets: [(FunctionDefinitionIndex(1), 0)],
+    message: None,
 }
 
 task 3, lines 47-60:
@@ -42,6 +44,7 @@ Error: Unable to publish module '00000000000000000000000000000000000000000000000
     location: 0x9::A,
     indices: [(FunctionDefinition, 1)],
     offsets: [(FunctionDefinitionIndex(1), 0)],
+    message: None,
 }
 
 task 4, lines 62-75:
@@ -52,6 +55,7 @@ Error: Unable to publish module '00000000000000000000000000000000000000000000000
     location: 0xa::A,
     indices: [(FunctionDefinition, 1)],
     offsets: [(FunctionDefinitionIndex(1), 0)],
+    message: None,
 }
 
 task 5, lines 77-90:
@@ -62,4 +66,5 @@ Error: Unable to publish module '00000000000000000000000000000000000000000000000
     location: 0xb::A,
     indices: [(FunctionDefinition, 1)],
     offsets: [(FunctionDefinitionIndex(1), 0)],
+    message: None,
 }

@@ -27,7 +27,7 @@ use crate::{
     },
 };
 use fail::fail_point;
-use move_binary_format::errors::*;
+use move_binary_format::{errors::*, file_format_common::Opcodes};
 use move_core_types::{
     gas_algebra::{NumArgs, NumBytes},
     vm_status::StatusCode,
@@ -135,7 +135,7 @@ fn step(
         fun_ref.name()
     );
     let instruction = &instructions[pc];
-
+    let op: Opcodes = instruction.into();
     fail_point!("move_vm::interpreter_loop", |_| {
         Err(state.set_location(
             PartialVMError::new(StatusCode::VERIFIER_INVARIANT_VIOLATION)
@@ -819,7 +819,8 @@ fn op_step_impl(
         | Bytecode::UnpackVariantGenericMutRef(variant_inst_ptr) => {
             let reference = state.pop_operand_as::<VariantRef>()?;
             let variant_tag = variant_inst_ptr.variant.variant_tag;
-            reference.check_tag(variant_tag)?;
+            let tag_check = reference.check_tag(variant_tag);
+            tag_check?;
             let references = reference.unpack_variant()?;
             gas_meter.charge_unpack(true, references.iter())?;
             for reference in references {

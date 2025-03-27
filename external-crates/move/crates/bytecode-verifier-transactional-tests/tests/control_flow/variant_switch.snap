@@ -1,6 +1,5 @@
 ---
 source: crates/move-transactional-test-runner/src/framework.rs
-input_file: crates/bytecode-verifier-transactional-tests/tests/control_flow/variant_switch.mvir
 ---
 processed 2 tasks
 
@@ -12,6 +11,7 @@ Error: Unable to publish module '00000000000000000000000000000000000000000000000
     location: 0x1::PolymorphicEnums,
     indices: [(FunctionDefinition, 0)],
     offsets: [(FunctionDefinitionIndex(0), 13)],
+    message: None,
 }
 
 task 1, lines 27-51:
@@ -22,4 +22,5 @@ Error: Unable to publish module '00000000000000000000000000000000000000000000000
     location: 0x2::MonomorphicEnums,
     indices: [(FunctionDefinition, 0)],
     offsets: [(FunctionDefinitionIndex(0), 12)],
+    message: None,
 }

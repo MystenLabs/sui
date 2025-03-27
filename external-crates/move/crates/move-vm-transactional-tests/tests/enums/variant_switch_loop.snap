@@ -44,4 +44,5 @@ Error: Function execution failed with VMError: {
     location: 0x6::InfiniteSwith,
     indices: [],
     offsets: [(FunctionDefinitionIndex(0), 1)],
+    message: None,
 }

@@ -1,6 +1,5 @@
 ---
 source: crates/move-transactional-test-runner/src/framework.rs
-input_file: crates/bytecode-verifier-transactional-tests/tests/type_safety/phantom_params/bytecode_ops_abilities_bad.mvir
 ---
 processed 12 tasks
 
@@ -12,6 +11,7 @@ Error: Unable to publish module '00000000000000000000000000000000000000000000000
     location: 0x1::M2,
     indices: [(FunctionDefinition, 0)],
     offsets: [(FunctionDefinitionIndex(0), 3)],
+    message: None,
 }
 
 task 2, lines 24-36:
@@ -22,6 +22,7 @@ Error: Unable to publish module '00000000000000000000000000000000000000000000000
     location: 0x1::M3,
     indices: [(FunctionDefinition, 0)],
     offsets: [(FunctionDefinitionIndex(0), 2)],
+    message: None,
 }
 
 task 3, lines 38-49:
@@ -32,6 +33,7 @@ Error: Unable to publish module '00000000000000000000000000000000000000000000000
     location: 0x1::M4,
     indices: [(FunctionDefinition, 0)],
     offsets: [(FunctionDefinitionIndex(0), 0)],
+    message: None,
 }
 
 task 4, lines 51-61:
@@ -42,6 +44,7 @@ Error: Unable to publish module '00000000000000000000000000000000000000000000000
     location: 0x1::M5,
     indices: [(FunctionDefinition, 0)],
     offsets: [(FunctionDefinitionIndex(0), 0)],
+    message: None,
 }
 
 task 5, lines 63-74:
@@ -52,6 +55,7 @@ Error: Unable to publish module '00000000000000000000000000000000000000000000000
     location: 0x1::M9,
     indices: [(Signature, 0), (FunctionHandle, 0)],
     offsets: [],
+    message: Some("expected type with abilities [Store, ] got type actual StructInstantiation(DatatypeHandleIndex(0), [Struct(DatatypeHandleIndex(2)), Struct(DatatypeHandleIndex(2))]) with incompatible abilities []"),
 }
 
 task 7, lines 82-94:
@@ -62,6 +66,7 @@ Error: Unable to publish module '00000000000000000000000000000000000000000000000
     location: 0x2::M2,
     indices: [(FunctionDefinition, 0)],
     offsets: [(FunctionDefinitionIndex(0), 3)],
+    message: None,
 }
 
 task 8, lines 96-108:
@@ -72,6 +77,7 @@ Error: Unable to publish module '00000000000000000000000000000000000000000000000
     location: 0x2::M3,
     indices: [(FunctionDefinition, 0)],
     offsets: [(FunctionDefinitionIndex(0), 2)],
+    message: None,
 }
 
 task 9, lines 110-121:
@@ -82,6 +88,7 @@ Error: Unable to publish module '00000000000000000000000000000000000000000000000
     location: 0x2::M4,
     indices: [(FunctionDefinition, 0)],
     offsets: [(FunctionDefinitionIndex(0), 0)],
+    message: None,
 }
 
 task 10, lines 123-133:
@@ -92,6 +99,7 @@ Error: Unable to publish module '00000000000000000000000000000000000000000000000
     location: 0x2::M5,
     indices: [(FunctionDefinition, 0)],
     offsets: [(FunctionDefinitionIndex(0), 0)],
+    message: None,
 }
 
 task 11, lines 135-146:
@@ -102,4 +110,5 @@ Error: Unable to publish module '00000000000000000000000000000000000000000000000
     location: 0x2::M9,
     indices: [(Signature, 0), (FunctionHandle, 0)],
     offsets: [],
+    message: Some("expected type with abilities [Store, ] got type actual StructInstantiation(DatatypeHandleIndex(0), [Struct(DatatypeHandleIndex(2)), Struct(DatatypeHandleIndex(2))]) with incompatible abilities []"),
 }

@@ -1,6 +1,5 @@
 ---
 source: crates/move-transactional-test-runner/src/framework.rs
-input_file: crates/bytecode-verifier-transactional-tests/tests/stack_usage_verifier/pack_invalid_number_arguments_enum.mvir
 ---
 processed 4 tasks
 
@@ -12,6 +11,7 @@ Error: Unable to publish module '00000000000000000000000000000000000000000000000
     location: 0x6::MonoTooMany,
     indices: [(FunctionDefinition, 0)],
     offsets: [(FunctionDefinitionIndex(0), 0)],
+    message: None,
 }
 
 task 1, lines 13-23:
@@ -22,6 +22,7 @@ Error: Unable to publish module '00000000000000000000000000000000000000000000000
     location: 0x7::MonoTooFew,
     indices: [(FunctionDefinition, 0)],
     offsets: [(FunctionDefinitionIndex(0), 0)],
+    message: None,
 }
 
 task 2, lines 25-35:
@@ -32,6 +33,7 @@ Error: Unable to publish module '00000000000000000000000000000000000000000000000
     location: 0x8::PolyTooMany,
     indices: [(FunctionDefinition, 0)],
     offsets: [(FunctionDefinitionIndex(0), 0)],
+    message: None,
 }
 
 task 3, lines 37-47:
@@ -42,4 +44,5 @@ Error: Unable to publish module '00000000000000000000000000000000000000000000000
     location: 0x9::PolyTooFew,
     indices: [(FunctionDefinition, 0)],
     offsets: [(FunctionDefinitionIndex(0), 0)],
+    message: None,
 }

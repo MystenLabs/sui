@@ -1,6 +1,5 @@
 ---
 source: crates/move-transactional-test-runner/src/framework.rs
-input_file: crates/bytecode-verifier-transactional-tests/tests/type_safety/unpack_wrong_type.mvir
 ---
 processed 2 tasks
 
@@ -12,6 +11,7 @@ Error: Unable to publish module '00000000000000000000000000000000000000000000000
     location: 0x1::Test,
     indices: [(FunctionDefinition, 1)],
     offsets: [(FunctionDefinitionIndex(1), 1)],
+    message: None,
 }
 
 task 1, lines 21-38:
@@ -22,4 +22,5 @@ Error: Unable to publish module '00000000000000000000000000000000000000000000000
     location: 0x2::Test,
     indices: [(FunctionDefinition, 1)],
     offsets: [(FunctionDefinitionIndex(1), 1)],
+    message: None,
 }

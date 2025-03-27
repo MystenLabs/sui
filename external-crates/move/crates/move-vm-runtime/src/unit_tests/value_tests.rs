@@ -228,7 +228,7 @@ fn legacy_val_abstract_memory_size_consistency() -> PartialVMResult<()> {
         let ref_: Reference = VMValueCast::cast(locals.borrow_loc(idx)?)?;
         let val_size_through_ref = ref_.value_view().legacy_abstract_memory_size();
 
-        assert_eq!(val_size_through_ref, val_size_old, "{:?}", val);
+        assert_eq!(val_size_through_ref, val_size_old, "{:?} (ref size {} != old size {})", val, val_size_through_ref, val_size_old);
     }
 
     Ok(())
