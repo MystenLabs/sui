@@ -13,7 +13,7 @@ use async_graphql::{
 };
 use headers::ContentLength;
 
-use crate::pagination::PaginationConfig;
+use crate::{metrics::RpcMetrics, pagination::PaginationConfig};
 
 use self::error::{Error, ErrorKind};
 use self::show_usage::ShowUsage;
@@ -37,10 +37,14 @@ pub(crate) struct QueryLimitsConfig {
 }
 
 /// Extension factory for adding checks that the query is within configurable limits.
-pub(crate) struct QueryLimitsChecker(Arc<QueryLimitsConfig>);
+pub(crate) struct QueryLimitsChecker {
+    limits: Arc<QueryLimitsConfig>,
+    metrics: Arc<RpcMetrics>,
+}
 
 struct QueryLimitsCheckerExt {
     limits: Arc<QueryLimitsConfig>,
+    metrics: Arc<RpcMetrics>,
     usage: Mutex<Option<Usage>>,
 }
 
@@ -58,15 +62,19 @@ impl QueryLimitsConfig {
 }
 
 impl QueryLimitsChecker {
-    pub(crate) fn new(limits: QueryLimitsConfig) -> Self {
-        Self(Arc::new(limits))
+    pub(crate) fn new(limits: QueryLimitsConfig, metrics: Arc<RpcMetrics>) -> Self {
+        Self {
+            limits: Arc::new(limits),
+            metrics,
+        }
     }
 }
 
 impl ExtensionFactory for QueryLimitsChecker {
     fn create(&self) -> Arc<dyn Extension> {
         Arc::new(QueryLimitsCheckerExt {
-            limits: self.0.clone(),
+            limits: self.limits.clone(),
+            metrics: self.metrics.clone(),
             usage: Mutex::new(None),
         })
     }
@@ -103,6 +111,8 @@ impl Extension for QueryLimitsCheckerExt {
 
         let doc = next.run(ctx, query, variables).await?;
 
+        let _guard = self.metrics.limits_validation_latency.start_timer();
+
         let input = input::check(self.limits.as_ref(), &doc)?;
 
         let payload = payload::check(
@@ -120,6 +130,17 @@ impl Extension for QueryLimitsCheckerExt {
             &doc,
             variables,
         )?;
+
+        self.metrics.input_depth.observe(input.depth as f64);
+        self.metrics.input_nodes.observe(input.nodes as f64);
+        self.metrics.total_payload_size.observe(length as f64);
+        self.metrics
+            .query_payload_size
+            .observe(payload.query_payload_size as f64);
+        self.metrics
+            .tx_payload_size
+            .observe(payload.tx_payload_size as f64);
+        self.metrics.output_nodes.observe(output.nodes as f64);
 
         if let Some(ShowUsage(_)) = ctx.data_opt() {
             *self.usage.lock().unwrap() = Some(Usage {
@@ -283,8 +304,12 @@ mod tests {
         limits: QueryLimitsConfig,
         pagination_config: PaginationConfig,
     ) -> Schema<Query, Mutation, EmptySubscription> {
+        // Create a throwaway registry and metrics so we can set-up the extension.
+        let registry = prometheus::Registry::new();
+        let metrics = RpcMetrics::new(&registry);
+
         Schema::build(Query, Mutation, EmptySubscription)
-            .extension(QueryLimitsChecker::new(limits))
+            .extension(QueryLimitsChecker::new(limits, metrics))
             .data(pagination_config)
             .finish()
     }
