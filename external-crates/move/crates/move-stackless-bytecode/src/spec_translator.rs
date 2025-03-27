@@ -9,12 +9,11 @@ use codespan_reporting::diagnostic::Severity;
 use itertools::Itertools;
 use std::collections::{BTreeMap, BTreeSet};
 
-use crate::{
+use move_model::{
     ast::{
         Condition, ConditionKind, Exp, ExpData, GlobalInvariant, LocalVarDecl, MemoryLabel,
         Operation, TempIndex, TraceKind,
     },
-    exp_generator::ExpGenerator,
     exp_rewriter::ExpRewriterFunctions,
     model::{DatatypeId, FunctionEnv, GlobalId, Loc, NodeId, QualifiedInstId},
     pragmas::{
@@ -24,6 +23,8 @@ use crate::{
     symbol::Symbol,
     ty::{PrimitiveType, Type},
 };
+
+use crate::exp_generator::ExpGenerator;
 
 /// A helper which reduces specification conditions to assume/assert statements.
 pub struct SpecTranslator<'a, 'b, T: ExpGenerator<'a>> {

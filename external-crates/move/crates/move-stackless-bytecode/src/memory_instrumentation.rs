@@ -6,13 +6,13 @@ use std::collections::BTreeSet;
 
 use move_binary_format::file_format::CodeOffset;
 use move_model::{
-    exp_generator::ExpGenerator,
     model::{FunctionEnv, StructEnv, StructOrEnumEnv},
     ty::{Type, BOOL_TYPE},
 };
 
 use crate::{
     borrow_analysis::{BorrowAnnotation, WriteBackAction},
+    exp_generator::ExpGenerator,
     function_data_builder::FunctionDataBuilder,
     function_target::FunctionData,
     function_target_pipeline::{FunctionTargetProcessor, FunctionTargetsHolder},

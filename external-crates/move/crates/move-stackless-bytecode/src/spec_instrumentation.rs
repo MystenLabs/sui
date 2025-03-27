@@ -13,16 +13,15 @@ use itertools::Itertools;
 
 use move_model::{
     ast::{self, Exp, ExpData, TempIndex, Value},
-    exp_generator::ExpGenerator,
     model::{
         DatatypeId, FunId, FunctionEnv, GlobalEnv, Loc, ModuleId, QualifiedId, QualifiedInstId,
     },
     pragmas::{ABORTS_IF_IS_PARTIAL_PRAGMA, EMITS_IS_PARTIAL_PRAGMA, EMITS_IS_STRICT_PRAGMA},
-    spec_translator::{SpecTranslator, TranslatedSpec},
     ty::{Type, TypeDisplayContext, BOOL_TYPE, NUM_TYPE},
 };
 
 use crate::{
+    exp_generator::ExpGenerator,
     function_data_builder::FunctionDataBuilder,
     function_target::{FunctionData, FunctionTarget},
     function_target_pipeline::{
@@ -35,6 +34,7 @@ use crate::{
         AbortAction, AssignKind, AttrId, BorrowEdge, BorrowNode, Bytecode, HavocKind, Label,
         Operation, PropKind,
     },
+    spec_translator::{SpecTranslator, TranslatedSpec},
     usage_analysis, verification_analysis,
 };
 

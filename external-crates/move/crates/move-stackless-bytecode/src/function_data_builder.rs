@@ -6,6 +6,7 @@
 //! bytecode.
 
 use crate::{
+    exp_generator::ExpGenerator,
     function_target::{FunctionData, FunctionTarget},
     function_target_pipeline::FunctionVariant,
     number_operation::GlobalNumberOperationState,
@@ -14,7 +15,6 @@ use crate::{
 use itertools::Itertools;
 use move_model::{
     ast::{Exp, TempIndex},
-    exp_generator::ExpGenerator,
     model::{FunctionEnv, Loc},
     ty::{Type, BOOL_TYPE},
 };

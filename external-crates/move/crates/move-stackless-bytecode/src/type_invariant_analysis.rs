@@ -1,6 +1,7 @@
-use move_model::{exp_generator::ExpGenerator, model::FunctionEnv, ty::Type};
+use move_model::{model::FunctionEnv, ty::Type};
 
 use crate::{
+    exp_generator::ExpGenerator,
     function_data_builder::FunctionDataBuilder,
     function_target::FunctionData,
     function_target_pipeline::{FunctionTargetProcessor, FunctionTargetsHolder},

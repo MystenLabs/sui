@@ -18,12 +18,12 @@ use num::{BigUint, Zero};
 
 use move_model::{
     ast::{Operation, QuantKind},
-    exp_generator::ExpGenerator,
     model::FunctionEnv,
     ty::BOOL_TYPE,
 };
 
 use crate::{
+    exp_generator::ExpGenerator,
     function_data_builder::FunctionDataBuilder,
     function_target::FunctionData,
     function_target_pipeline::{FunctionTargetProcessor, FunctionTargetsHolder},

@@ -5,7 +5,7 @@
 use itertools::Itertools;
 use num::BigUint;
 
-use crate::{
+use move_model::{
     ast::{Exp, ExpData, LocalVarDecl, Operation, QuantKind, TempIndex, Value},
     model::{
         DatatypeId, EnclosingEnv, FieldEnv, FunctionEnv, GlobalEnv, Loc, NodeId, QualifiedId,
