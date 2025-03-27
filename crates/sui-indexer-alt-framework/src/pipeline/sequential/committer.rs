@@ -49,7 +49,6 @@ pub(super) fn committer<H>(
 ) -> JoinHandle<()>
 where
     H: Handler + Send + Sync + 'static,
-    // Ensure that the store is transactional
     H::Store: TransactionalStore + 'static,
 {
     tokio::spawn(async move {
