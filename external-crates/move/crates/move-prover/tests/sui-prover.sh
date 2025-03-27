@@ -56,7 +56,7 @@ cd amm
 sui-prover
 cd .. 
 
-git guide
+cd guide
 sui-prover
 cd ../../..
 
