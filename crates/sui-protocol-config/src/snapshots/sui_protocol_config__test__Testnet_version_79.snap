@@ -1,6 +1,7 @@
 ---
 source: crates/sui-protocol-config/src/lib.rs
 expression: "ProtocolConfig::get_for_version(cur, *chain_id)"
+snapshot_kind: text
 ---
 version: 79
 feature_flags:
@@ -45,6 +46,7 @@ feature_flags:
   allow_receiving_object_id: true
   enable_coin_deny_list: true
   enable_group_ops_native_functions: true
+  enable_nitro_attestation: true
   reject_mutable_random_on_entry_functions: true
   per_object_congestion_control_mode:
     ExecutionTimeEstimate:

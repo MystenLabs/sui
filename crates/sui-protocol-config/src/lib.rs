@@ -228,7 +228,7 @@ const MAX_PROTOCOL_VERSION: u64 = 79;
 //             Enable execution time estimate mode for congestion control on testnet.
 // Version 79: Enable median based commit timestamp in consensus on testnet.
 //             Increase threshold for bad nodes that won't be considered leaders in consensus in testnet
-
+//             Enable load_nitro_attestation move function in sui framework in testnet.
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
 
@@ -3426,6 +3426,9 @@ impl ProtocolConfig {
                         // Increase threshold for bad nodes that won't be considered
                         // leaders in consensus in testnet
                         cfg.consensus_bad_nodes_stake_threshold = Some(30);
+
+                        // Enable verify nitro attestation in testnet.
+                        cfg.feature_flags.enable_nitro_attestation = true
                     }
                     cfg.feature_flags.normalize_ptb_arguments = true;
                 }
