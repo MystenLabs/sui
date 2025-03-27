@@ -787,7 +787,7 @@ async fn test_reconfig_with_voting_power_decrease() {
             .clone();
 
         // Check that the validator voting power has decreased just below the
-        // "min" threshold but not below the "low" threshold.
+        // "min" threshold and also below the "low" threshold.
         // Yet the candidate is not at risk.
         assert!(candidate.voting_power < VALIDATOR_MIN_POWER_PHASE_1);
         assert!(candidate.voting_power < VALIDATOR_LOW_POWER_PHASE_1);
