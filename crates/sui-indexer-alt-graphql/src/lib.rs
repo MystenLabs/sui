@@ -41,6 +41,7 @@ mod error;
 mod extensions;
 mod metrics;
 mod middleware;
+mod pagination;
 
 #[derive(clap::Args, Clone, Debug)]
 pub struct RpcArgs {
@@ -213,6 +214,7 @@ pub async fn start_rpc(
     let h_rpc = RpcService::new(args, version, schema(), registry, cancel.child_token())
         .extension(Timeout::new(config.limits.timeouts()))
         .extension(QueryLimitsChecker::new(config.limits.query_limits()))
+        .data(config.limits.pagination())
         .data(config.limits)
         .run()
         .await?;

@@ -12,7 +12,7 @@ use async_graphql::{
     registry::{MetaField, MetaType, Registry},
     Name, Pos, Positioned, Variables,
 };
-use async_graphql_value::ConstValue;
+use async_graphql_value::{ConstValue, Value};
 
 use super::{
     chain::Chain,
@@ -65,14 +65,62 @@ impl<'r> FieldDriver<'_, 'r> {
         self.field
     }
 
+    /// Find an argument on the current field by its name, and return its fully resolved value if
+    /// it exists, or `None` if it does not. Fails if the argument references a GraphQL variable
+    /// that has not been bound.
+    pub(super) fn resolve_arg(&self, name: &str) -> Result<Option<ConstValue>, Error> {
+        let Some(val) = self
+            .field
+            .node
+            .arguments
+            .iter()
+            .find_map(|(n, v)| (n.node.as_str() == name).then_some(&v.node))
+        else {
+            return Ok(None);
+        };
+
+        Ok(Some(self.resolve_val(val.clone())?))
+    }
+
+    /// Return `val` with variables all resolved. Fails if a referenced variable is not found.
+    pub(super) fn resolve_val(&self, val: Value) -> Result<ConstValue, Error> {
+        val.into_const_with(|name| {
+            self.resolve_var(&name)
+                .ok_or_else(|| self.err(ErrorKind::VariableNotFound(name)))
+                .cloned()
+        })
+    }
+
     /// Find the value bound to a given GraphQL variable name.
     pub(super) fn resolve_var(&self, name: &Name) -> Option<&'r ConstValue> {
         self.driver.variables.get(name)
     }
 
+    /// Helper to contextualize an error with the field's position and path.
+    pub(super) fn err(&self, kind: ErrorKind) -> Error {
+        self.err_at(self.field.pos, kind)
+    }
+
     /// Helper to contextualize an error with the field's path and a custom position.
     pub(super) fn err_at(&self, pos: Pos, kind: ErrorKind) -> Error {
         Error::new(kind, Chain::path(&self.chain), pos)
+    }
+
+    /// Continue traversing the query, visiting the selection of fields nested within these field,
+    /// if there are any.
+    pub(super) fn visit_selection_set<V: Visitor<'r> + ?Sized>(
+        &self,
+        visitor: &mut V,
+    ) -> Result<(), Error> {
+        self.driver.visit_selection_set(
+            &self.meta_field.ty,
+            Some(Chain::new(
+                self.chain.clone(),
+                self.field.node.name.node.clone(),
+            )),
+            &self.field.node.selection_set,
+            visitor,
+        )
     }
 }
 
