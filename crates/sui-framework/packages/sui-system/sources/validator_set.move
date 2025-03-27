@@ -22,7 +22,7 @@ use sui::bag;
 
 public struct ValidatorSet has store {
     /// Total amount of stake from all active validators at the beginning of the epoch.
-    /// Written only once, at the very end of `advance_epoch`
+    /// Written only once per epoch, in `advance_epoch` function.
     total_stake: u64,
 
     /// The current list of active validators.
@@ -533,12 +533,16 @@ fun update_validator_positions_and_calculate_total_stake(
         // calculate the voting power for this validator in the next epoch if no validators are removed
         // if one of more low stake validators are removed, it's possible this validator will have higher voting power--that's ok.
         let voting_power = voting_power::derive_voting_power(validator_stake, initial_total_stake);
-        if (voting_power > low_voting_power_threshold) {
+
+        // SIP-39: a validator can remain indefinitely with a voting power ≥ LOW_VOTING_POWER_THRESHOLD
+        if (voting_power >= low_voting_power_threshold) {
             // The validator is safe. We remove their entry from the at_risk map if there exists one.
             if (self.at_risk_validators.contains(&validator_address)) {
                 self.at_risk_validators.remove(&validator_address);
             }
-        } else if (voting_power > very_low_voting_power_threshold) {
+        // SIP-39: as soon as the validator’s voting power falls to VERY_LOW_VOTING_POWER_THRESHOLD,
+        //      they are on probation and must acquire sufficient stake to recover to voting power
+        } else if (voting_power >= very_low_voting_power_threshold) {
             // The stake is a bit below the threshold so we increment the entry of the validator in the map.
             let new_low_stake_period =
                 if (self.at_risk_validators.contains(&validator_address)) {
@@ -561,6 +565,8 @@ fun update_validator_positions_and_calculate_total_stake(
                 );
                 total_removed_stake = total_removed_stake + removed_stake;
             }
+        // SIP-39: at the end of an epoch when new voting powers are computed based on stake changes,
+        //      any validator with VOTING_POWER < VERY_LOW_VOTING_POWER_THRESHOLD will be removed
         } else {
             // The validator's stake is lower than the very low threshold so we kick them out immediately.
             let validator = self.active_validators.remove(i);
