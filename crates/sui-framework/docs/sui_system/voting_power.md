@@ -260,8 +260,7 @@ Anything beyond the threshold is added to the remaining_power, which is also ret
     <b>while</b> (i &lt; len) {
         <b>let</b> <a href="../sui_system/validator.md#sui_system_validator">validator</a> = &validators[i];
         <b>let</b> stake = <a href="../sui_system/validator.md#sui_system_validator">validator</a>.total_stake();
-        <b>let</b> adjusted_stake = <a href="../sui_system/voting_power.md#sui_system_voting_power_derive_voting_power">derive_voting_power</a>(stake, total_stake);
-        <b>let</b> <a href="../sui_system/voting_power.md#sui_system_voting_power">voting_power</a> = adjusted_stake.min(threshold);
+        <b>let</b> <a href="../sui_system/voting_power.md#sui_system_voting_power">voting_power</a> = <a href="../sui_system/voting_power.md#sui_system_voting_power_derive_voting_power">derive_voting_power</a>(stake, total_stake).min(threshold);
         <b>let</b> info = <a href="../sui_system/voting_power.md#sui_system_voting_power_VotingPowerInfoV2">VotingPowerInfoV2</a> {
             validator_index: i,
             <a href="../sui_system/voting_power.md#sui_system_voting_power">voting_power</a>,
