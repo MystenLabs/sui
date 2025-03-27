@@ -7,9 +7,11 @@ use std::{
 };
 
 use async_graphql::{
-    extensions::{Extension, ExtensionContext, ExtensionFactory, NextParseQuery, NextRequest},
+    extensions::{
+        Extension, ExtensionContext, ExtensionFactory, NextParseQuery, NextRequest, NextValidation,
+    },
     parser::types::ExecutableDocument,
-    value, Response, ServerResult, Variables,
+    value, Response, ServerError, ServerResult, ValidationResult, Variables,
 };
 use headers::ContentLength;
 
@@ -45,7 +47,13 @@ pub(crate) struct QueryLimitsChecker {
 struct QueryLimitsCheckerExt {
     limits: Arc<QueryLimitsConfig>,
     metrics: Arc<RpcMetrics>,
+    doc: Mutex<Option<ParsedDocument>>,
     usage: Mutex<Option<Usage>>,
+}
+
+struct ParsedDocument {
+    var: Variables,
+    doc: ExecutableDocument,
 }
 
 struct Usage {
@@ -75,6 +83,7 @@ impl ExtensionFactory for QueryLimitsChecker {
         Arc::new(QueryLimitsCheckerExt {
             limits: self.limits.clone(),
             metrics: self.metrics.clone(),
+            doc: Mutex::new(None),
             usage: Mutex::new(None),
         })
     }
@@ -82,16 +91,8 @@ impl ExtensionFactory for QueryLimitsChecker {
 
 #[async_trait::async_trait]
 impl Extension for QueryLimitsCheckerExt {
-    /// Validates that the query is within configurable limits before it is run, to protect the
-    /// rest of the system from doing too much work. Tests ensure that:
-    ///
-    /// - The query does not take up too much space.
-    /// - The query is not too large or too deep, as an AST.
-    /// - If the query is large, that does not translate into a lot of query work (it's okay to
-    ///   have large binary payloads to handle execution, but we don't want a query with a big
-    ///   footprint to translate into a query that requires a lot of work to execute).
-    /// - The query will not produce too large a response (estimated based on the upperbound number
-    ///   of output nodes that input query could produce).
+    /// Performs initial checks about content length, and then stashes the parsed document so that
+    /// we can run our validation checks on it.
     async fn parse_query(
         &self,
         ctx: &ExtensionContext<'_>,
@@ -100,8 +101,6 @@ impl Extension for QueryLimitsCheckerExt {
         next: NextParseQuery<'_>,
     ) -> ServerResult<ExecutableDocument> {
         let &ContentLength(length) = ctx.data_unchecked();
-        let pagination_config: &PaginationConfig = ctx.data_unchecked();
-
         if length > self.limits.max_payload_size() as u64 {
             Err(Error::new_global(ErrorKind::PayloadSizeOverall {
                 limit: self.limits.max_payload_size(),
@@ -110,6 +109,40 @@ impl Extension for QueryLimitsCheckerExt {
         }
 
         let doc = next.run(ctx, query, variables).await?;
+
+        // Stash the parsed document so that we can run our validations on it, after the
+        // framework's validations have run.
+        *self.doc.lock().unwrap() = Some(ParsedDocument {
+            var: variables.clone(),
+            doc: doc.clone(),
+        });
+
+        Ok(doc)
+    }
+
+    /// Run the framework's validation rules, and then run our own validation rules to validate
+    /// that the query is within configurable limits before it is run, to protect the rest of the
+    /// system from doing too much work. Tests ensure that:
+    ///
+    /// - The query is not too large or too deep, as an AST.
+    /// - If the query is large, that does not translate into a lot of query work (it's okay to
+    ///   have large binary payloads to handle execution, but we don't want a query with a big
+    ///   footprint to translate into a query that requires a lot of work to execute).
+    /// - The query will not produce too large a response (estimated based on the upperbound number
+    ///   of output nodes that input query could produce).
+    async fn validation(
+        &self,
+        ctx: &ExtensionContext<'_>,
+        next: NextValidation<'_>,
+    ) -> Result<ValidationResult, Vec<ServerError>> {
+        let res = next.run(ctx).await?;
+
+        let Some(ParsedDocument { doc, var }) = self.doc.lock().unwrap().take() else {
+            return Ok(res);
+        };
+
+        let &ContentLength(length) = ctx.data_unchecked();
+        let pagination_config: &PaginationConfig = ctx.data_unchecked();
 
         let _guard = self.metrics.limits_validation_latency.start_timer();
 
@@ -120,7 +153,7 @@ impl Extension for QueryLimitsCheckerExt {
             length,
             &ctx.schema_env.registry,
             &doc,
-            variables,
+            &var,
         )?;
 
         let output = output::check(
@@ -128,7 +161,7 @@ impl Extension for QueryLimitsCheckerExt {
             pagination_config,
             &ctx.schema_env.registry,
             &doc,
-            variables,
+            &var,
         )?;
 
         self.metrics.input_depth.observe(input.depth as f64);
@@ -150,7 +183,7 @@ impl Extension for QueryLimitsCheckerExt {
             });
         }
 
-        Ok(doc)
+        Ok(res)
     }
 
     async fn request(&self, ctx: &ExtensionContext<'_>, next: NextRequest<'_>) -> Response {
@@ -424,16 +457,13 @@ mod tests {
           "data": null,
           "errors": [
             {
-              "message": "Fragment IDontExist referred to but not found in document",
+              "message": "Unknown fragment: \"IDontExist\"",
               "locations": [
                 {
                   "line": 1,
                   "column": 9
                 }
-              ],
-              "extensions": {
-                "code": "GRAPHQL_VALIDATION_FAILED"
-              }
+              ]
             }
           ]
         }

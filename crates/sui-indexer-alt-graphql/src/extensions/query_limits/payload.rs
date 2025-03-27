@@ -4,7 +4,8 @@
 use std::collections::BTreeSet;
 
 use async_graphql::{
-    parser::types::ExecutableDocument, registry::Registry, Name, Pos, Positioned, Variables,
+    parser::types::ExecutableDocument, registry::Registry, Name, Pos, Positioned, ServerResult,
+    Variables,
 };
 use async_graphql_value::{ConstValue, Value};
 use serde::{Deserialize, Serialize};
@@ -243,7 +244,7 @@ pub(super) fn check(
     registry: &Registry,
     doc: &ExecutableDocument,
     variables: &Variables,
-) -> Result<Usage, Error> {
+) -> ServerResult<Usage> {
     let mut rule = TxPayloadRule {
         max_tx_payload_size: limits.max_tx_payload_size,
         tx_payload_budget: limits.max_tx_payload_size,
@@ -257,10 +258,10 @@ pub(super) fn check(
     let query_payload_size = total_payload_size as u32 - tx_payload_size;
 
     if query_payload_size > limits.max_query_payload_size {
-        return Err(Error::new_global(ErrorKind::PayloadSizeQuery {
+        Err(Error::new_global(ErrorKind::PayloadSizeQuery {
             limit: limits.max_query_payload_size,
             actual: query_payload_size,
-        }));
+        }))?;
     }
 
     Ok(Usage {

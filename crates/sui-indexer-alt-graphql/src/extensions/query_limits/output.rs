@@ -1,7 +1,9 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use async_graphql::{parser::types::ExecutableDocument, registry::Registry, Value, Variables};
+use async_graphql::{
+    parser::types::ExecutableDocument, registry::Registry, ServerResult, Value, Variables,
+};
 use serde::{Deserialize, Serialize};
 
 use crate::pagination::PaginationConfig;
@@ -170,7 +172,7 @@ pub(super) fn check(
     registry: &Registry,
     doc: &ExecutableDocument,
     variables: &Variables,
-) -> Result<Usage, Error> {
+) -> ServerResult<Usage> {
     let mut budget = OutputNodeBudget {
         max_output_nodes: limits.max_output_nodes,
         output_node_budget: limits.max_output_nodes,
