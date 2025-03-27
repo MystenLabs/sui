@@ -214,9 +214,7 @@ impl StacklessControlFlowGraph {
             block_ids.insert(*label_offsets.get(&label).unwrap());
         }
 
-        if bytecode.is_branch() && pc + 1 < (code.len() as CodeOffset) {
-            block_ids.insert(pc + 1);
-        }
+        block_ids.insert(pc + 1);
     }
 }
 
