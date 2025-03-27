@@ -1,7 +1,9 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use async_graphql::{parser::types::OperationType, ErrorExtensions, PathSegment, Pos, ServerError};
+use async_graphql::{
+    parser::types::OperationType, ErrorExtensions, Name, PathSegment, Pos, ServerError,
+};
 
 use crate::error::code;
 
@@ -22,6 +24,12 @@ pub(super) enum ErrorKind {
     #[error(transparent)]
     InternalError(#[from] anyhow::Error),
 
+    #[error(
+        "Query is estimated to produce over {0} output nodes. Try fetching fewer fields or \
+         fetching fewer items per page in paginated or multi-get fields."
+    )]
+    OutputNodes(u32),
+
     #[error("Request too large {actual}B > {limit}B")]
     PayloadSizeOverall { limit: u32, actual: u64 },
 
@@ -36,6 +44,9 @@ pub(super) enum ErrorKind {
 
     #[error("Fragment {0} referred to but not found in document")]
     UnknownFragment(String),
+
+    #[error("Variable {0} is not provided in the query")]
+    VariableNotFound(Name),
 }
 
 impl Error {

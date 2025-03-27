@@ -1,13 +1,20 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{collections::BTreeSet, mem, time::Duration};
+use std::{
+    collections::{BTreeMap, BTreeSet},
+    mem,
+    time::Duration,
+};
 
 use sui_default_config::DefaultConfig;
 use sui_protocol_config::{Chain, ProtocolConfig, ProtocolVersion};
 use tracing::warn;
 
-use crate::extensions::{query_limits::QueryLimitsConfig, timeout::TimeoutConfig};
+use crate::{
+    extensions::{query_limits::QueryLimitsConfig, timeout::TimeoutConfig},
+    pagination::PaginationConfig,
+};
 
 #[derive(Default)]
 pub struct RpcConfig {
@@ -108,6 +115,7 @@ impl Limits {
 
     pub(crate) fn query_limits(&self) -> QueryLimitsConfig {
         QueryLimitsConfig {
+            max_output_nodes: self.max_output_nodes,
             max_query_nodes: self.max_query_nodes,
             max_query_depth: self.max_query_depth,
             max_query_payload_size: self.max_query_payload_size,
@@ -120,6 +128,10 @@ impl Limits {
                 ("Query", "verifyZkloginSignature", "signature"),
             ]),
         }
+    }
+
+    pub(crate) fn pagination(&self) -> PaginationConfig {
+        PaginationConfig::new(self.default_page_size, BTreeMap::new())
     }
 }
 
