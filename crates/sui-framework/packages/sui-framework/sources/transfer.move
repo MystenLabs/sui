@@ -37,6 +37,14 @@ const EUnableToReceiveObject: u64 = 3;
 /// Shared object operations such as wrapping, freezing, and converting to owned are not allowed.
 const ESharedObjectOperationNotSupported: u64 = 4;
 
+#[allow(unused_const)]
+/// Operation is not yet supported by the network. The functionality might still be in development.
+const ENotSupported: u64 = 5;
+
+#[error]
+const EInvalidMultipartyPermissions: vector<u8> =
+    b"Multiparty transfer is currently limited to one party.";
+
 /// Transfer ownership of `obj` to `recipient`. `obj` must have the `key` attribute,
 /// which (in turn) ensures that `obj` has a globally unique ID. Note that if the recipient
 /// address represents an object ID, the `obj` sent will be inaccessible after the transfer
@@ -55,6 +63,51 @@ public fun transfer<T: key>(obj: T, recipient: address) {
 /// The object must have `store` to be transferred outside of its module.
 public fun public_transfer<T: key + store>(obj: T, recipient: address) {
     transfer_impl(obj, recipient)
+}
+
+/// NOT YET SUPPORTED. The function will abort with `ENotSupported` if used on a network,
+/// e.g. mainnet, where multiparty objects other than `legacy_shared` are not yet supported.
+/// Transfer ownership of `obj` to the `multiparty`. This transfer behaves similar to both
+/// `transfer` and `share_object`. It is similar to `transfer` in that the object be authenticated
+/// only by the recipient(s), in this case the `multiparty`. This means that only the members
+/// can use the object as an input to a transaction. It is similar to `share_object` two ways. One
+/// in that the object can potentially be used by anyone, as defined by the `default` permissions of
+/// the `Multiparty` value. The other in that the object must be used in consensus and cannot be
+/// used in the fast path.
+/// This function has custom rules performed by the Sui Move bytecode verifier that ensures that `T`
+/// is an object defined in the module where `transfer` is invoked. Use `public_multiparty_transfer`
+/// to transfer an object with `store` outside of its module.
+public fun multiparty_transfer<T: key>(obj: T, multiparty: sui::multiparty::Multiparty) {
+    if (multiparty.is_legacy_shared()) {
+        share_object_impl(obj)
+    } else {
+        assert!(multiparty.is_single_owner(), EInvalidMultipartyPermissions);
+        let (default, addresses, permissions) = multiparty.into_native();
+        multiparty_transfer_impl(obj, default, addresses, permissions)
+    }
+}
+
+/// NOT YET SUPPORTED. The function will abort with `ENotSupported` if used on a network,
+/// e.g. mainnet, where multiparty objects other than `legacy_shared` are not yet supported.
+/// Transfer ownership of `obj` to the `multiparty`. This transfer behaves similar to both
+/// `transfer` and `share_object`. It is similar to `transfer` in that the object be authenticated
+/// only by the recipient(s), in this case the `multiparty`. This means that only the members
+/// can use the object as an input to a transaction. It is similar to `share_object` two ways. One
+/// in that the object can potentially be used by anyone, as defined by the `default` permissions of
+/// the `Multiparty` value. The other in that the object must be used in consensus and cannot be
+/// used in the fast path.
+/// The object must have `store` to be transferred outside of its module.
+public fun public_multiparty_transfer<T: key + store>(
+    obj: T,
+    multiparty: sui::multiparty::Multiparty,
+) {
+    if (multiparty.is_legacy_shared()) {
+        share_object_impl(obj)
+    } else {
+        assert!(multiparty.is_single_owner(), EInvalidMultipartyPermissions);
+        let (default, addresses, permissions) = multiparty.into_native();
+        multiparty_transfer_impl(obj, default, addresses, permissions)
+    }
 }
 
 /// Freeze `obj`. After freezing `obj` becomes immutable and can no longer be transferred or
@@ -121,6 +174,13 @@ public fun receiving_object_id<T: key>(receiving: &Receiving<T>): ID {
 public(package) native fun freeze_object_impl<T: key>(obj: T);
 
 public(package) native fun share_object_impl<T: key>(obj: T);
+
+public(package) native fun multiparty_transfer_impl<T: key>(
+    obj: T,
+    default_permissions: u64,
+    addresses: vector<address>,
+    permissions: vector<u64>,
+);
 
 public(package) native fun transfer_impl<T: key>(obj: T, recipient: address);
 

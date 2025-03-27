@@ -24,6 +24,10 @@ module a::m {
     public fun t5(s: &Receiving<other::S>) {
         transfer::receiving_object_id(s);
     }
+
+    public fun t6(s: other::S, p: sui::multiparty::Multiparty) {
+        transfer::multiparty_transfer(s, p);
+    }
 }
 
 module a::other {
@@ -54,6 +58,14 @@ module sui::transfer {
         abort 0
     }
 
+    public fun multiparty_transfer<T: key>(_: T, _: sui::multiparty::Multiparty) {
+        abort 0
+    }
+
+    public fun public_multiparty_transfer<T: key + store>(_: T, _: sui::multiparty::Multiparty) {
+        abort 0
+    }
+
     public fun freeze_object<T: key>(_: T) {
         abort 0
     }
@@ -81,4 +93,8 @@ module sui::transfer {
     public fun receiving_object_id<T: key>(_: &Receiving<T>): ID {
         abort 0
     }
+}
+
+module sui::multiparty {
+    struct Multiparty has copy, drop {}
 }

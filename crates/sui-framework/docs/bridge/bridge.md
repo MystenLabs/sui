@@ -68,6 +68,7 @@ title: Module `bridge::bridge`
 <b>use</b> <a href="../sui/hash.md#sui_hash">sui::hash</a>;
 <b>use</b> <a href="../sui/hex.md#sui_hex">sui::hex</a>;
 <b>use</b> <a href="../sui/linked_table.md#sui_linked_table">sui::linked_table</a>;
+<b>use</b> <a href="../sui/multiparty.md#sui_multiparty">sui::multiparty</a>;
 <b>use</b> <a href="../sui/object.md#sui_object">sui::object</a>;
 <b>use</b> <a href="../sui/object_bag.md#sui_object_bag">sui::object_bag</a>;
 <b>use</b> <a href="../sui/package.md#sui_package">sui::package</a>;
