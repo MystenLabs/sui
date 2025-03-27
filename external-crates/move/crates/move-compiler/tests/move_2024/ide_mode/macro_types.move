@@ -26,3 +26,27 @@ module a::collection {
         }
     }
 }
+
+
+#[allow(ide_path_autocomplete)]
+module std::my_macros {
+    public macro fun range_do<$T, $R: drop>($start: $T, $stop: $T, $f: |$T| -> $R) {
+        let mut i = $start;
+        let stop = $stop;
+        while (i < stop) {
+            $f(i);
+            i = i + 1;
+        }
+    }
+
+    public macro fun do<$T, $R: drop>($stop: $T, $f: |$T| -> $R) {
+        range_do!(0, $stop, $f)
+    }
+}
+
+#[allow(ide_path_autocomplete)]
+module std::u64 {
+    public macro fun do<$R: drop>($stop: u64, $f: |u64| -> $R) {
+        std::my_macros::do!($stop, $f)
+    }
+}
