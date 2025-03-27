@@ -460,9 +460,10 @@ impl BigTableClient {
         table_name: &str,
         keys: Vec<Vec<u8>>,
     ) -> Result<Vec<Vec<(Bytes, Bytes)>>> {
-        let elapsed = Instant::now().elapsed();
+        let start_time = Instant::now();
         let num_keys_requested = keys.len();
         let result = self.multi_get_internal(table_name, keys).await;
+        let elapsed_ms = start_time.elapsed().as_millis() as f64;
         let labels = [&self.client_name, table_name];
         match &self.metrics {
             None => result,
@@ -486,7 +487,7 @@ impl BigTableClient {
                         .kv_get_success
                         .with_label_values(&labels)
                         .inc_by(result.len() as u64);
-                    let elapsed_ms = elapsed.as_millis() as f64;
+
                     metrics
                         .kv_get_latency_ms
                         .with_label_values(&labels)
@@ -529,8 +530,9 @@ impl BigTableClient {
         table_name: &str,
         upper_limit: Bytes,
     ) -> Result<Vec<(Bytes, Vec<(Bytes, Bytes)>)>> {
-        let elapsed = Instant::now().elapsed();
+        let start_time = Instant::now();
         let result = self.reversed_scan_internal(table_name, upper_limit).await;
+        let elapsed_ms = start_time.elapsed().as_millis() as f64;
         let labels = [&self.client_name, table_name];
         match &self.metrics {
             Some(metrics) => match result {
@@ -542,7 +544,7 @@ impl BigTableClient {
                     metrics
                         .kv_scan_latency_ms
                         .with_label_values(&labels)
-                        .observe(elapsed.as_millis() as f64);
+                        .observe(elapsed_ms);
                     Ok(result)
                 }
                 Err(e) => {
