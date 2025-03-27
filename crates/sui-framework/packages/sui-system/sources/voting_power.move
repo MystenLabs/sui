@@ -69,8 +69,7 @@ fun init_voting_power_info(
     while (i < len) {
         let validator = &validators[i];
         let stake = validator.total_stake();
-        let adjusted_stake = derive_voting_power(stake, total_stake);
-        let voting_power = adjusted_stake.min(threshold);
+        let voting_power = derive_voting_power(stake, total_stake).min(threshold);
         let info = VotingPowerInfoV2 {
             validator_index: i,
             voting_power,

@@ -520,7 +520,7 @@ request_set_commission_rate
 advance_epoch
 	public(package) fun
 	0x3::validator_set
-update_and_process_low_stake_departures
+update_validator_positions_and_calculate_total_stake
 	fun
 	0x3::validator_set
 effectuate_staged_metadata

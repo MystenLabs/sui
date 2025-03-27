@@ -483,7 +483,7 @@ public(package) fun advance_epoch(
     process_pending_removals(self, validator_report_records, ctx);
 
     // kick low stake validators out.
-    let new_total_stake = update_and_process_low_stake_departures(
+    let new_total_stake = update_validator_positions_and_calculate_total_stake(
         self,
         low_stake_grace_period,
         validator_report_records,
@@ -497,8 +497,15 @@ public(package) fun advance_epoch(
     effectuate_staged_metadata(self);
 }
 
-/// Remove validators in violation of the low staking rules, and return the new total stake
-fun update_and_process_low_stake_departures(
+/// This function does the following:
+/// - removes validators from `at_risk` group if their voting power is above the LOW threshold
+/// - increments the number of epochs a validator has been below the LOW threshold but above the
+///     VERY LOW threshold
+/// - removes validators from the active set if they have been below the LOW threshold for more than
+///     `low_stake_grace_period` epochs
+/// - removes validators from the active set immediately if they are below the VERY LOW threshold
+/// - activates pending validators if they have sufficient voting power
+fun update_validator_positions_and_calculate_total_stake(
     self: &mut ValidatorSet,
     low_stake_grace_period: u64,
     validator_report_records: &mut VecMap<address, VecSet<address>>,
@@ -510,6 +517,7 @@ fun update_and_process_low_stake_departures(
         |_| self.pending_active_validators.pop_back()
     );
 
+    // Note: we count the total stake of pending validators as well!
     let pending_total_stake = calculate_total_stakes(&pending_active_validators);
     let initial_total_stake = calculate_total_stakes(&self.active_validators) + pending_total_stake;
     let (min_joining_voting_power_threshold, low_voting_power_threshold, very_low_voting_power_threshold) = self.get_voting_power_thresholds(ctx);
@@ -601,9 +609,7 @@ fun update_and_process_low_stake_departures(
 }
 
 /// Effectutate pending next epoch metadata if they are staged.
-fun effectuate_staged_metadata(
-    self: &mut ValidatorSet,
-) {
+fun effectuate_staged_metadata(self: &mut ValidatorSet) {
     let num_validators = self.active_validators.length();
     let mut i = 0;
     while (i < num_validators) {
