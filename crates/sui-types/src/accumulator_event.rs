@@ -1,35 +1,20 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::base_types::SuiAddress;
-use crate::digests::Digest;
-use move_core_types::language_storage::StructTag;
+use crate::base_types::ObjectID;
+use crate::effects::AccumulatorWriteV1;
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub enum AccumulatorAction {
-    Merge,
-    Split,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub enum AccumulatorValue {
-    MoveValue(StructTag, Vec<u8>),
-    EventCommitment(Digest),
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone)]
 pub struct AccumulatorEvent {
-    pub action: AccumulatorAction,
-    pub target: SuiAddress,
-    pub value: AccumulatorValue,
+    pub accumulator_obj: ObjectID,
+    pub write: AccumulatorWriteV1,
 }
 
 impl AccumulatorEvent {
-    pub fn new(action: AccumulatorAction, target: SuiAddress, value: AccumulatorValue) -> Self {
+    pub fn new(accumulator_obj: ObjectID, write: AccumulatorWriteV1) -> Self {
         Self {
-            action,
-            target,
-            value,
+            accumulator_obj,
+            write,
         }
     }
 }

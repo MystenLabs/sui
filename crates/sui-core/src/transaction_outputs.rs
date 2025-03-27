@@ -148,4 +148,8 @@ impl TransactionOutputs {
             written,
         }
     }
+
+    pub fn take_accumulator_events(&mut self) -> Vec<AccumulatorEvent> {
+        std::mem::take(&mut self.accumulator_events)
+    }
 }

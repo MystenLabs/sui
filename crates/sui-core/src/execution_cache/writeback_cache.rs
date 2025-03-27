@@ -65,12 +65,13 @@ use sui_config::ExecutionCacheConfig;
 use sui_macros::fail_point;
 use sui_protocol_config::ProtocolVersion;
 use sui_types::accumulator::Accumulator;
+use sui_types::accumulator_event::AccumulatorEvent;
 use sui_types::base_types::{
     EpochId, FullObjectID, ObjectID, ObjectRef, SequenceNumber, VerifiedExecutionData,
 };
 use sui_types::bridge::{get_bridge, Bridge};
 use sui_types::digests::{ObjectDigest, TransactionDigest, TransactionEffectsDigest};
-use sui_types::effects::{TransactionEffects, TransactionEvents};
+use sui_types::effects::{TransactionEffects, TransactionEffectsAPI, TransactionEvents};
 use sui_types::error::{SuiError, SuiResult, UserInputError};
 use sui_types::executable_transaction::VerifiedExecutableTransaction;
 use sui_types::message_envelope::Message;
@@ -2040,15 +2041,12 @@ impl TransactionCacheRead for WritebackCache {
         )
     }
 
-    fn get_accumulator_events(&self, digests: &[TransactionDigest]) -> Vec<AccumulatorEvent> {
-        let mut ret = Vec::with_capacity(digests.len());
-
-        for digest in digests {
-            if let Some(events) = self.dirty.accumulator_events.get(digest) {
-                return events.clone();
-            }
+    fn take_accumulator_events(&self, digest: &TransactionDigest) -> Option<Vec<AccumulatorEvent>> {
+        if let Some(transaction_output) = self.dirty.pending_transaction_writes.get_mut(digest) {
+            Some(transaction_output.take_accumulator_events())
+        } else {
+            None
         }
-        vec![]
     }
 }
 

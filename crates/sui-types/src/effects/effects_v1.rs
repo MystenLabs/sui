@@ -263,6 +263,11 @@ impl TransactionEffectsAPI for TransactionEffectsV1 {
             .collect()
     }
 
+    fn accumulator_events(&self) -> Vec<AccumulatorEvent> {
+        // v1 did not have accumulator events
+        vec![]
+    }
+
     fn gas_object(&self) -> (ObjectRef, Owner) {
         self.gas_object.clone()
     }

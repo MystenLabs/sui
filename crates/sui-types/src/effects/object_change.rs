@@ -3,7 +3,7 @@
 
 use crate::{
     base_types::{SuiAddress, VersionDigest},
-    digests::ObjectDigest,
+    digests::{Digest, ObjectDigest},
     object::{Object, Owner},
 };
 use move_core_types::language_storage::TypeTag;
@@ -77,17 +77,21 @@ pub enum AccmulatorOperation {
 
 #[derive(Eq, PartialEq, Clone, Debug, Serialize, Deserialize)]
 pub enum AccumulatorValue {
+    Integer(u128),
     IntegerTuple(u128, u128),
+    EventDigest(Digest),
     // New accumulator types can be added here.
     // For custom or complex types, we can use a `Vec<u8>` to store the raw value.
 }
 
+/// Accumulator objects are named by an address (can be an account address or a UID)
+/// and a type tag.
+#[derive(Eq, PartialEq, Clone, Debug, Serialize, Deserialize)]
+pub struct AccumulatorAddress(SuiAddress, TypeTag);
+
 #[derive(Eq, PartialEq, Clone, Debug, Serialize, Deserialize)]
 pub struct AccumulatorWriteV1 {
-    /// The recipient of the accumulator.
-    pub recipient: SuiAddress,
-    /// The type of the accumulator.
-    pub accumulator_type: TypeTag,
+    pub address: AccumulatorAddress,
     /// The operation to be applied to the accumulator.
     pub operation: AccmulatorOperation,
     /// The cached deserialized value of the operation.
