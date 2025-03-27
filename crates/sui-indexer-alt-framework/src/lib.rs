@@ -35,7 +35,6 @@ pub use sui_types as types;
 
 #[cfg(feature = "cluster")]
 pub mod cluster;
-pub mod handlers;
 pub mod ingestion;
 pub mod metrics;
 pub mod models;

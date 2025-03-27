@@ -5,6 +5,7 @@ use bootstrap::bootstrap;
 use config::{IndexerConfig, PipelineLayer};
 use handlers::{
     coin_balance_buckets::CoinBalanceBuckets,
+    cp_sequence_numbers::CpSequenceNumbers,
     ev_emit_mod::EvEmitMod,
     ev_struct_inst::EvStructInst,
     kv_checkpoints::KvCheckpoints,
@@ -29,7 +30,6 @@ use handlers::{
 use prometheus::Registry;
 use sui_indexer_alt_framework::{
     db::DbArgs,
-    handlers::cp_sequence_numbers::CpSequenceNumbers,
     ingestion::{ClientArgs, IngestionConfig},
     pipeline::{
         concurrent::{ConcurrentConfig, PrunerConfig},
