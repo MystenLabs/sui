@@ -1,6 +1,5 @@
 ---
 source: crates/move-compiler/tests/move_check_testsuite.rs
-assertion_line: 252
 info:
   flavor: core
   edition: 2024.alpha
@@ -13,13 +12,15 @@ note[I15002]: IDE macro call info
     │     ^^^^^^^^^^^^^^^^^^^^^^^^^^^ macro call info
     │
     = Called std::macros::do
-    = Type arguments: u64, _|_
+    = Type arguments: u64, ()
 
-error[E04010]: cannot infer type
-    ┌─ /Users/tmn/sui/external-crates/move/crates/move-stdlib/sources/u64.move:105:5
-    │
-105 │     std::macros::do!($stop, $f)
-    │     ^^^^^^^^^^^^^^^^^^^^^^^^^^^ Could not infer this type. Try adding an annotation
+warning[W09009]: unused struct field
+   ┌─ tests/move_2024/ide_mode/macro_types.move:10:9
+   │
+10 │         cost: u64,
+   │         ^^^^ The 'cost' field of the 'Collection' type is unused
+   │
+   = This warning can be suppressed with '#[allow(unused_field)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
 
 note[I15002]: IDE macro call info
    ┌─ tests/move_2024/ide_mode/macro_types.move:17:9
@@ -31,16 +32,7 @@ note[I15002]: IDE macro call info
    │ ╰──────────^ macro call info
    │  
    = Called std::u64::do
-   = Type arguments: _|_
-
-error[E04010]: cannot infer type
-   ┌─ tests/move_2024/ide_mode/macro_types.move:17:9
-   │  
-17 │ ╭         std::u64::do!(count, |_| {
-18 │ │             let content = new_empty_content();
-19 │ │             collection.items.push_back(content);
-20 │ │         });
-   │ ╰──────────^ Could not infer this type. Try adding an annotation
+   = Type arguments: ()
 
 note[I15001]: IDE dot autocomplete
    ┌─ tests/move_2024/ide_mode/macro_types.move:19:23

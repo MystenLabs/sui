@@ -4406,7 +4406,7 @@ fn make_arg_types<S: std::fmt::Display, F: Fn() -> S>(
     mut given: Vec<Type>,
 ) -> Vec<Type> {
     let given_len = given.len();
-    core::check_call_arity(context, loc, msg, arity, argloc, given_len);
+    core::check_call_arity(context, loc, msg, None, arity, argloc, given_len);
     while given.len() < arity {
         given.push(context.error_type(argloc))
     }
@@ -4566,6 +4566,7 @@ fn macro_call_impl(
         context,
         loc,
         || format!("Invalid call of '{}::{}'", &m, &f),
+        None,
         parameters.len(),
         argloc,
         args.len(),

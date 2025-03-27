@@ -1007,7 +1007,7 @@ fn exp(context: &mut Context, sp!(eloc, e_): &mut N::Exp) {
                 .into_iter()
                 .map(|sp!(loc, (ps, r))| (sp(loc, ps), r))
                 .unzip();
-            let all_param_tys = {
+            let mut all_param_tys = {
                 extra_param_tys.push(sp(tfunloc, param_tys));
                 extra_param_tys
             };
@@ -1051,6 +1051,10 @@ fn exp(context: &mut Context, sp!(eloc, e_): &mut N::Exp) {
             }
 
             let all_param_tys_annot = {
+                // we have a vector of annotations of all parameters, we will split these
+                // into the individual annotations for each parameter.
+                // If there is a length mismatch, we will have an error already but there
+                // might be some strange edge cases to fix
                 let num_params = all_param_tys
                     .iter()
                     .map(|sp!(_, tys)| tys.len())

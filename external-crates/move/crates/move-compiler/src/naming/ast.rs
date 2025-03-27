@@ -396,7 +396,9 @@ pub struct Lambda {
     pub return_label: BlockLabel,
     pub use_fun_color: Color,
     pub body: Box<Exp>,
-    // collected during expansion
+    // collected during expansion. Conceptually we could handle this by eta-expanding the lambda
+    // invocation, so that `$f` becomes `|...|$f(...)`, but due to the limited nature here, just
+    // collecting the annotations is easier
     pub extra_annotations: Vec<Spanned<(Vec<Type>, Type)>>,
 }
 
@@ -1872,7 +1874,7 @@ impl AstDebug for Lambda {
             w.write(format!("use_funs#{}", use_fun_color));
             e.ast_debug(w);
         });
-        for annot in extra_annotations {
+        for sp!(_, annot) in extra_annotations {
             display = Box::new(|w: &mut AstWriter| w.annotate(display, &LambdaAnnot(annot)));
         }
         display(w)
