@@ -515,7 +515,7 @@ impl AttestationDocument {
             .map(|bytes| bytes.to_vec());
 
         if let Some(data) = &public_key {
-            if data.len() == 0 || data.len() > MAX_PK_LENGTH {
+            if data.is_empty() || data.len() > MAX_PK_LENGTH {
                 return Err(NitroAttestationVerifyError::InvalidAttestationDoc(
                     "invalid public key".to_string(),
                 ));
@@ -700,8 +700,9 @@ fn verify_cert_chain(cert_chain: &[&[u8]], now_ms: u64) -> Result<(), NitroAttes
             ));
         }
 
-        // Check basic constraints except for target certificate
         if i != 0 {
+            // all ca certs must have basic contraint, must be critical, ca flag must be true,
+            // pathLenConstraint is optional but if present must be checked.
             if let Ok(Some(bc)) = cert.basic_constraints() {
                 if !bc.critical || !bc.value.ca {
                     return Err(NitroAttestationVerifyError::InvalidCertificate(
@@ -718,15 +719,18 @@ fn verify_cert_chain(cert_chain: &[&[u8]], now_ms: u64) -> Result<(), NitroAttes
                         ));
                     }
                 }
+            } else {
+                return Err(NitroAttestationVerifyError::InvalidCertificate(
+                    "missing basic constraint".to_string(),
+                ));
             }
-        } else {
-            if let Ok(Some(bc)) = cert.basic_constraints() {
-                // `pathLenConstraint` must be undefined since this is a client certificate.
-                if bc.value.path_len_constraint.is_some() {
-                    return Err(NitroAttestationVerifyError::InvalidCertificate(
-                        "Cert chain exceeds pathLenConstraint".to_string(),
-                    ));
-                }
+        } else if let Ok(Some(bc)) = cert.basic_constraints() {
+            // end entity can have basic constraint optionally, if present, ca must be false and
+            // pathLenConstraint is undefined.
+            if bc.value.path_len_constraint.is_some() || bc.value.ca {
+                return Err(NitroAttestationVerifyError::InvalidCertificate(
+                    "Cert chain exceeds pathLenConstraint".to_string(),
+                ));
             }
         }
 
