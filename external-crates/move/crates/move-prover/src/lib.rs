@@ -28,6 +28,7 @@ use move_stackless_bytecode::{
     escape_analysis::EscapeAnalysisProcessor,
     function_target_pipeline::{
         FunctionTargetPipeline, FunctionTargetsHolder, FunctionTargetsHolderDisplay,
+        FunctionVariant, VerificationFlavor,
     },
     mono_analysis,
     number_operation::GlobalNumberOperationState,
@@ -179,7 +180,17 @@ pub fn run_move_prover_with_model<W: WriteColor>(
         "exiting with verification errors",
     )?;
 
-    println!("✅ All specs proved!");
+    for spec in targets.specs() {
+        let fun_env = env.get_function(*spec);
+        if targets.is_verified_spec(spec)
+            && targets.has_target(
+                &fun_env,
+                &FunctionVariant::Verification(VerificationFlavor::Regular),
+            )
+        {
+            println!("\x1b[32m✔\x1b[0m {}", fun_env.get_full_name_str());
+        }
+    }
     Ok(())
 }
 
@@ -259,14 +270,6 @@ pub fn create_and_process_bytecode(options: &Options, env: &GlobalEnv) -> Functi
             targets.add_target(&func_env)
         }
     }
-
-    // println!(
-    //     "{}",
-    //     FunctionTargetsHolderDisplay {
-    //         targets: &targets,
-    //         env
-    //     }
-    // );
 
     // Create processing pipeline and run it.
     let pipeline = if options.experimental_pipeline {
