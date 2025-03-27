@@ -17,40 +17,46 @@ pub use scoped_futures;
 /// different pipeline stages.
 #[async_trait]
 pub trait DbConnection: Send + Sync {
-    /// Given a pipeline, return the committer watermark from the database.
+    /// Given a pipeline, return the committer watermark from the database. This is used on indexer
+    /// startup to determine which checkpoint to start or continue processing from.
     async fn committer_watermark(
         &mut self,
         pipeline: &'static str,
     ) -> anyhow::Result<Option<CommitterWatermark>>;
 
-    /// Update the committer watermark, returns true if the watermark was actually updated.
+    /// Given a pipeline, return the reader watermark from the database. This is used by the indexer
+    /// to report progress to the database.
+    async fn reader_watermark(
+        &mut self,
+        pipeline: &'static str,
+    ) -> anyhow::Result<Option<ReaderWatermark>>;
+
+    /// Upsert the high watermark as long as it raises the watermark stored in the database.
+    /// Returns a boolean indicating whether the watermark was actually updated or not.
     async fn set_committer_watermark(
         &mut self,
         pipeline: &'static str,
         watermark: CommitterWatermark,
     ) -> anyhow::Result<bool>;
 
-    /// Given a pipeline, return the `checkpoint_hi_inclusive` and `reader_lo` from the database.
-    /// Checkpoint hi used to determine new reader lo and reader lo used to check whether to
-    /// actually make
-    async fn reader_watermark(
-        &mut self,
-        pipeline: &'static str,
-    ) -> anyhow::Result<Option<ReaderWatermark>>;
-
-    /// Update the reader watermark, returns true if the watermark was actually updated
+    /// Update the reader low watermark for an existing watermark row, as long as this raises the
+    /// watermark, and updates the timestamp this update happened to the database's current time.
+    ///
+    /// Returns a boolean indicating whether the watermark was actually updated or not.
     async fn set_reader_watermark(
         &mut self,
         pipeline: &'static str,
         reader_lo: i64,
     ) -> anyhow::Result<bool>;
 
-    /// Get the pruner watermark with wait_for calculated
+    /// Get the bounds for the region that the pruner still has to prune for the given `pipeline`,
+    /// along with a duration to wait before acting on this information, based on the time at which
+    /// the pruner last updated the bounds, and the configured `delay`. More specifically, this is
+    /// the result of delay + (pruner_timestamp - current_database_time)
     ///
-    /// # Implementation Requirements
-    /// This method MUST:
-    /// 1. Calculate wait_for as: delay + (pruner_timestamp - current_database_time)
-    /// 2. Return (pruner_hi, reader_lo, wait_for)
+    /// The pruner is allowed to prune the region between the returned `pruner_hi` (inclusive) and
+    /// `reader_lo` (exclusive) after `wait_for` milliseconds have passed since this response was
+    /// returned.
     async fn pruner_watermark(
         &mut self,
         pipeline: &'static str,
@@ -108,15 +114,25 @@ pub struct CommitterWatermark {
 
 #[derive(Default, Debug, Clone, Copy)]
 pub struct ReaderWatermark {
+    /// Within the framework, this value is used to determine the new `reader_lo`.
     pub checkpoint_hi_inclusive: i64,
+    /// Within the framework, this value is used to check whether to actually make an update
+    /// transaction to the database.
     pub reader_lo: i64,
 }
 
 #[derive(Default, Debug, Clone, Copy)]
 pub struct PrunerWatermark {
-    pub pruner_hi: i64,
-    pub reader_lo: i64,
+    /// How long to wait from when this query ran on the database until this information can be
+    /// used to prune the database. This number could be negative, meaning no waiting is necessary.
     pub wait_for: i64,
+
+    /// The pruner can delete up to this checkpoint, (exclusive).
+    pub reader_lo: i64,
+
+    /// The pruner has already deleted up to this checkpoint (exclusive), so can continue from this
+    /// point.
+    pub pruner_hi: i64,
 }
 
 impl CommitterWatermark {

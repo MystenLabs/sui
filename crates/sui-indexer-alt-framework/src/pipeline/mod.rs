@@ -138,7 +138,7 @@ impl WatermarkPart {
 
         self.batch_rows -= rows;
         WatermarkPart {
-            watermark: self.watermark.clone(),
+            watermark: self.watermark,
             batch_rows: rows,
             total_rows: self.total_rows,
         }

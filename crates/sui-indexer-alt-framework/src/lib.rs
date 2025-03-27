@@ -439,7 +439,7 @@ impl Indexer {
         let mut conn = self.db.connect().await.context("Failed DB connection")?;
 
         let watermark = conn
-            .committer_watermark(&P::NAME)
+            .committer_watermark(P::NAME)
             .await
             .with_context(|| format!("Failed to get watermark for {}", P::NAME))?;
 
@@ -447,7 +447,7 @@ impl Indexer {
             // If the pruner of this pipeline requires processed values in order to prune,
             // we must start ingestion from just after the pruner watermark,
             // so that we can process all values needed by the pruner.
-            conn.pruner_watermark(&P::NAME, Default::default())
+            conn.pruner_watermark(P::NAME, Default::default())
                 .await
                 .with_context(|| format!("Failed to get pruner watermark for {}", P::NAME))?
                 .map(|w| w.pruner_hi as u64)

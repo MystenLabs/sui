@@ -4,24 +4,29 @@
 use std::time::Duration;
 
 use async_trait::async_trait;
-use diesel_async::AsyncConnection;
+use chrono::NaiveDateTime;
+use diesel::prelude::*;
+use diesel::sql_types::BigInt;
+use diesel::ExpressionMethods;
+use diesel::OptionalExtension;
+use diesel_async::{AsyncConnection, RunQueryDsl};
 use scoped_futures::ScopedBoxFuture;
+use sui_sql_macro::sql;
 
 use crate::db::{Connection as PgConnection, Db as PgDb};
-use crate::models::watermarks::{
-    PgCommitterWatermark, PgPrunerWatermark, PgReaderWatermark, StoredWatermark,
-};
+use crate::models::watermarks::StoredWatermark;
+use crate::schema::watermarks;
 use crate::store::{
     CommitterWatermark, DbConnection, PrunerWatermark, ReaderWatermark, Store, TransactionalStore,
 };
 
 #[async_trait]
-impl<'c> DbConnection for PgConnection<'c> {
+impl DbConnection for PgConnection<'_> {
     async fn committer_watermark(
         &mut self,
         pipeline: &'static str,
     ) -> anyhow::Result<Option<CommitterWatermark>> {
-        let watermark = PgCommitterWatermark::get(self, pipeline)
+        let watermark = StoredWatermark::get(self, pipeline)
             .await
             .map_err(anyhow::Error::from)?;
 
@@ -60,14 +65,35 @@ impl<'c> DbConnection for PgConnection<'c> {
         pipeline: &'static str,
         watermark: CommitterWatermark,
     ) -> anyhow::Result<bool> {
-        let watermark = PgCommitterWatermark {
-            pipeline: pipeline.into(),
+        // Create a StoredWatermark directly from CommitterWatermark
+        let stored_watermark = StoredWatermark {
+            pipeline: pipeline.to_string(),
             epoch_hi_inclusive: watermark.epoch_hi_inclusive,
             checkpoint_hi_inclusive: watermark.checkpoint_hi_inclusive,
             tx_hi: watermark.tx_hi,
             timestamp_ms_hi_inclusive: watermark.timestamp_ms_hi_inclusive,
+            reader_lo: 0,
+            pruner_timestamp: NaiveDateTime::UNIX_EPOCH,
+            pruner_hi: 0,
         };
-        watermark.update(self).await.map_err(Into::into)
+
+        use diesel::query_dsl::methods::FilterDsl;
+        Ok(diesel::insert_into(watermarks::table)
+            .values(&stored_watermark)
+            // There is an existing entry, so only write the new `hi` values
+            .on_conflict(watermarks::pipeline)
+            .do_update()
+            .set((
+                watermarks::epoch_hi_inclusive.eq(watermark.epoch_hi_inclusive),
+                watermarks::checkpoint_hi_inclusive.eq(watermark.checkpoint_hi_inclusive),
+                watermarks::tx_hi.eq(watermark.tx_hi),
+                watermarks::timestamp_ms_hi_inclusive.eq(watermark.timestamp_ms_hi_inclusive),
+            ))
+            .filter(watermarks::checkpoint_hi_inclusive.lt(watermark.checkpoint_hi_inclusive))
+            .execute(self)
+            .await
+            .map_err(anyhow::Error::from)?
+            > 0)
     }
 
     async fn set_reader_watermark(
@@ -75,11 +101,17 @@ impl<'c> DbConnection for PgConnection<'c> {
         pipeline: &'static str,
         reader_lo: i64,
     ) -> anyhow::Result<bool> {
-        let watermark = PgReaderWatermark {
-            pipeline: pipeline.into(),
-            reader_lo,
-        };
-        watermark.update(self).await.map_err(Into::into)
+        Ok(diesel::update(watermarks::table)
+            .set((
+                watermarks::reader_lo.eq(reader_lo),
+                watermarks::pruner_timestamp.eq(diesel::dsl::now),
+            ))
+            .filter(watermarks::pipeline.eq(pipeline))
+            .filter(watermarks::reader_lo.lt(reader_lo))
+            .execute(self)
+            .await
+            .map_err(anyhow::Error::from)?
+            > 0)
     }
 
     async fn pruner_watermark(
@@ -87,15 +119,29 @@ impl<'c> DbConnection for PgConnection<'c> {
         pipeline: &'static str,
         delay: Duration,
     ) -> anyhow::Result<Option<PrunerWatermark>> {
-        let watermark = PgPrunerWatermark::get(self, pipeline, delay)
+        //     |---------- + delay ---------------------|
+        //                             |--- wait_for ---|
+        //     |-----------------------|----------------|
+        //     ^                       ^
+        //     pruner_timestamp        NOW()
+        let wait_for = sql!(as BigInt,
+            "CAST({BigInt} + 1000 * EXTRACT(EPOCH FROM pruner_timestamp - NOW()) AS BIGINT)",
+            delay.as_millis() as i64,
+        );
+
+        let watermark: Option<(i64, i64, i64)> = watermarks::table
+            .select((wait_for, watermarks::pruner_hi, watermarks::reader_lo))
+            .filter(watermarks::pipeline.eq(pipeline))
+            .first(self)
             .await
+            .optional()
             .map_err(anyhow::Error::from)?;
 
         if let Some(watermark) = watermark {
             Ok(Some(PrunerWatermark {
-                pruner_hi: watermark.pruner_hi,
-                reader_lo: watermark.reader_lo,
-                wait_for: watermark.wait_for,
+                wait_for: watermark.0,
+                pruner_hi: watermark.1,
+                reader_lo: watermark.2,
             }))
         } else {
             Ok(None)
@@ -107,14 +153,13 @@ impl<'c> DbConnection for PgConnection<'c> {
         pipeline: &'static str,
         pruner_hi: i64,
     ) -> anyhow::Result<bool> {
-        let watermark = PgPrunerWatermark {
-            pipeline: pipeline.into(),
-            pruner_hi,
-            // These values are ignored by the update method
-            reader_lo: 0,
-            wait_for: 0,
-        };
-        watermark.update(self).await.map_err(Into::into)
+        Ok(diesel::update(watermarks::table)
+            .set(watermarks::pruner_hi.eq(pruner_hi))
+            .filter(watermarks::pipeline.eq(pipeline))
+            .execute(self)
+            .await
+            .map_err(anyhow::Error::from)?
+            > 0)
     }
 }
 
