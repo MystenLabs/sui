@@ -2978,10 +2978,18 @@ pub enum InputObjectKind {
 
 impl InputObjectKind {
     pub fn object_id(&self) -> ObjectID {
+        self.full_object_id().id()
+    }
+
+    pub fn full_object_id(&self) -> FullObjectID {
         match self {
-            Self::MovePackage(id) => *id,
-            Self::ImmOrOwnedMoveObject((id, _, _)) => *id,
-            Self::SharedMoveObject { id, .. } => *id,
+            Self::MovePackage(id) => FullObjectID::Fastpath(*id),
+            Self::ImmOrOwnedMoveObject((id, _, _)) => FullObjectID::Fastpath(*id),
+            Self::SharedMoveObject {
+                id,
+                initial_shared_version,
+                ..
+            } => FullObjectID::Consensus((*id, *initial_shared_version)),
         }
     }
 
@@ -3035,6 +3043,7 @@ pub enum ObjectReadResultKind {
     Object(Object),
     // The version of the object that the transaction intended to read, and the digest of the tx
     // that deleted it.
+    // TODO: Rename this to something more accurate, like "UnavailableConsensusObject".
     DeletedSharedObject(SequenceNumber, TransactionDigest),
     // A shared object in a cancelled transaction. The sequence number embeds cancellation reason.
     CancelledTransactionSharedObject(SequenceNumber),

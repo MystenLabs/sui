@@ -240,11 +240,9 @@ impl ProgrammableTransactionBuilder {
     ) -> anyhow::Result<()> {
         let rec_arg = self.pure(recipient).unwrap();
         let obj_arg = self.obj(match full_object_ref.0 {
-            FullObjectID::Fastpath(_) => ObjectArg::ImmOrOwnedObject((
-                full_object_ref.0.id(),
-                full_object_ref.1,
-                full_object_ref.2,
-            )),
+            FullObjectID::Fastpath(_) => {
+                ObjectArg::ImmOrOwnedObject(full_object_ref.as_object_ref())
+            }
             FullObjectID::Consensus((id, initial_shared_version)) => ObjectArg::SharedObject {
                 id,
                 initial_shared_version,
