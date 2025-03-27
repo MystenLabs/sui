@@ -176,6 +176,8 @@ impl ExecutionResultsV2 {
                     ..
                 }) = input_objects.get(id).map(|obj| &obj.owner)
                 {
+                    // Assign existing start_version in case a ConsensusV2 object was
+                    // transferred to the same Owner type.
                     *start_version = *previous_start_version;
                 } else {
                     // ConsensusV2 object was created, transferred from another Owner type,
