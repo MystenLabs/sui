@@ -10,7 +10,7 @@ use crate::{
         self as N, BlockLabel, Color, MatchArm_, TParamID, Type, Type_, UseFuns, Var, Var_,
     },
     parser::ast::FunctionName,
-    shared::{ide::IDEAnnotation, program_info::FunctionInfo, unique_map::UniqueMap},
+    shared::{ide::IDEAnnotation, program_info::FunctionInfo, unique_map::UniqueMap, AstDebug},
     typing::{
         ast as T,
         core::{self, TParamSubst},
@@ -1060,15 +1060,15 @@ fn exp(context: &mut Context, sp!(eloc, e_): &mut N::Exp) {
                     .map(|sp!(_, tys)| tys.len())
                     .max()
                     .unwrap();
-                let annots = (0..num_params)
+                let mut annots = (0..num_params)
                     .map(|_| {
                         all_param_tys
                             .iter_mut()
                             .filter_map(|sp!(_, tys)| tys.pop())
                             .collect::<Vec<_>>()
                     })
-                    .rev()
                     .collect::<Vec<_>>();
+                annots.reverse();
                 assert!(all_param_tys.iter().all(|sp!(_, tys)| tys.is_empty()));
                 annots
             };
