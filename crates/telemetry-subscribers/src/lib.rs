@@ -381,10 +381,21 @@ impl TelemetryConfig {
 
         if config.enable_otlp_tracing {
             let trace_file = env::var("TRACE_FILE").ok();
-            let resource = Resource::new(vec![opentelemetry::KeyValue::new(
+            let mut otel_kv_vec = vec![opentelemetry::KeyValue::new(
                 "service.name",
                 service_name.clone(),
-            )]);
+            )];
+            if let Ok(namespace) = env::var("NAMESPACE") {
+                otel_kv_vec.push(opentelemetry::KeyValue::new("service.namespace", namespace));
+            }
+            if let Ok(hostname) = env::var("HOSTNAME") {
+                otel_kv_vec.push(opentelemetry::KeyValue::new("host", hostname));
+            }
+            if let Ok(network) = env::var("NETWORK") {
+                otel_kv_vec.push(opentelemetry::KeyValue::new("network", network));
+            }
+
+            let resource = Resource::new(otel_kv_vec);
             let sampler = Sampler::ParentBased(Box::new(sampler.clone()));
 
             // We can either do file output or OTLP, but not both. tracing-opentelemetry
