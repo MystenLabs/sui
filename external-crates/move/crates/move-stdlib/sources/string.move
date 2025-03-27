@@ -118,6 +118,11 @@ native fun internal_is_char_boundary(v: &vector<u8>, i: u64): bool;
 native fun internal_sub_string(v: &vector<u8>, i: u64, j: u64): vector<u8>;
 native fun internal_index_of(v: &vector<u8>, r: &vector<u8>): u64;
 
+#[test_only]
+public fun internal_sub_string_for_testing(v: &vector<u8>, i: u64, j: u64): vector<u8> {
+    internal_sub_string(v, i, j)
+}
+
 // === Deprecated ===
 
 #[deprecated(note = b"Use `std::string::as_bytes` instead.")]
