@@ -1664,6 +1664,8 @@ impl AuthorityState {
         tx_data.validity_check(epoch_store.protocol_config())?;
 
         // The cost of partially re-auditing a transaction before execution is tolerated.
+        // This step is required for correctness because, for example, ConsensusV2 object
+        // owner may have changed between signing and execution.
         let (gas_status, input_objects) = sui_transaction_checks::check_certificate_input(
             certificate,
             input_objects,

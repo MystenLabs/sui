@@ -45,11 +45,11 @@ mod checked {
     };
     use move_vm_types::data_store::DataStore;
     use move_vm_types::loaded_data::runtime_types::Type;
+    use mysten_common::debug_fatal;
     use sui_move_natives::object_runtime::{
         self, get_all_uids, max_event_error, LoadedRuntimeObject, ObjectRuntime, RuntimeResults,
     };
     use sui_protocol_config::ProtocolConfig;
-    use sui_types::execution::ExecutionResults;
     use sui_types::storage::{DenyListResult, PackageObject};
     use sui_types::{
         balance::Balance,
@@ -65,6 +65,7 @@ mod checked {
         transaction::{Argument, CallArg, ObjectArg},
     };
     use sui_types::{error::command_argument_error, execution_status::CommandArgumentError};
+    use sui_types::{execution::ExecutionResults, object::Authenticator};
     use tracing::instrument;
 
     /// Maintains all runtime state specific to programmable transactions
@@ -719,6 +720,7 @@ mod checked {
             let mut loaded_runtime_objects = BTreeMap::new();
             let mut additional_writes = BTreeMap::new();
             let mut by_value_shared_objects = BTreeSet::new();
+            let mut authenticator_objects = BTreeMap::new();
             for input in inputs.into_iter().chain(std::iter::once(gas)) {
                 let InputValue {
                     object_metadata:
@@ -745,6 +747,8 @@ mod checked {
                     add_additional_write(&mut additional_writes, owner, object_value)?;
                 } else if owner.is_shared() {
                     by_value_shared_objects.insert(id);
+                } else if owner.authenticator().is_some() {
+                    authenticator_objects.insert(id, owner.clone());
                 }
             }
             // check for unused values
@@ -936,6 +940,35 @@ mod checked {
                             ),
                         ));
                     }
+                }
+            }
+
+            // Before finishing, enforce restrictions on transfer and deletion for objects configured
+            // with authenticators.
+            for (id, original_owner) in authenticator_objects {
+                let authenticator = original_owner.authenticator().expect("verified before adding to `authenticator_objects` that these have authenticators");
+
+                match authenticator {
+                    Authenticator::SingleOwner(owner) => {
+                        // Already verified in pre-execution checks that tx sender is the object owner.
+                        // SingleOwner is allowed to do anything with the object.
+                        if ref_context.borrow().sender() != *owner {
+                            debug_fatal!("transaction with a singly owned input object where the tx sender is not the owner should never be executed");
+                            return Err(ExecutionError::new(
+                                ExecutionErrorKind::SharedObjectOperationNotAllowed,
+                                Some(
+                                    format!("Shared object operation on {} not allowed: \
+                                             transaction with singly owned input object must be sent by the owner", id).into(),
+                                ),
+                            ));
+                        }
+                    } // Future authenticators with fewer permissions should be checked here. For
+                      // example, transfers and wraps can be detected by comparing `original_owner`
+                      // with:
+                      // let new_owner = written_objects.get(&id).map(|obj| obj.owner);
+                      //
+                      // Deletions can be detected with:
+                      // let deleted = deleted_object_ids.contains(&id);
                 }
             }
 

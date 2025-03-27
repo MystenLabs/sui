@@ -12537,6 +12537,7 @@ dependencies = [
  "move-vm-profiler",
  "move-vm-runtime",
  "move-vm-types",
+ "mysten-common",
  "mysten-metrics",
  "parking_lot 0.12.3",
  "serde",
