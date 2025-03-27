@@ -62,10 +62,15 @@ impl Context {
         cancel: CancellationToken,
         slow_request_threshold: Duration,
     ) -> Result<Self, Error> {
-        let mut db_args = db_args;
-        db_args.slow_query_threshold_ms = slow_request_threshold.as_millis() as u64;
-        let pg_reader =
-            PgReader::new(database_url, db_args, metrics.clone(), registry, cancel).await?;
+        let pg_reader = PgReader::new(
+            database_url,
+            db_args,
+            metrics.clone(),
+            registry,
+            cancel,
+            slow_request_threshold,
+        )
+        .await?;
         let pg_loader = Arc::new(pg_reader.as_data_loader());
 
         let kv_loader = if let Some(config) = config.bigtable.clone() {

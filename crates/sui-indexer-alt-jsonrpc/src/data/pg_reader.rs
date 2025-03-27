@@ -47,8 +47,8 @@ impl PgReader {
         metrics: Arc<RpcMetrics>,
         registry: &Registry,
         cancel: CancellationToken,
+        slow_query_threshold: Duration,
     ) -> Result<Self, Error> {
-        let slow_query_threshold = Duration::from_millis(db_args.slow_query_threshold_ms);
         let db = if let Some(database_url) = database_url {
             let db = db::Db::for_read(database_url, db_args)
                 .await
