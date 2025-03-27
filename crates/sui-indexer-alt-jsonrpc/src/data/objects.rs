@@ -90,9 +90,11 @@ impl Loader<VersionedObjectKey> for BigtableReader {
             .collect();
 
         let objects = self
-            .0
-            .clone()
-            .get_objects(&object_keys)
+            .timed_load(
+                "get_objects",
+                &object_keys,
+                self.0.clone().get_objects(&object_keys),
+            )
             .await
             .map_err(|e| Arc::new(Error::BigtableRead(e)))?;
 
