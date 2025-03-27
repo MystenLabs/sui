@@ -1,0 +1,82 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+assertion_line: 252
+info:
+  flavor: core
+  edition: 2024.alpha
+  lint: false
+---
+note[I15002]: IDE macro call info
+    ┌─ /Users/tmn/sui/external-crates/move/crates/move-stdlib/sources/u64.move:105:5
+    │
+105 │     std::macros::do!($stop, $f)
+    │     ^^^^^^^^^^^^^^^^^^^^^^^^^^^ macro call info
+    │
+    = Called std::macros::do
+    = Type arguments: u64, _|_
+
+error[E04010]: cannot infer type
+    ┌─ /Users/tmn/sui/external-crates/move/crates/move-stdlib/sources/u64.move:105:5
+    │
+105 │     std::macros::do!($stop, $f)
+    │     ^^^^^^^^^^^^^^^^^^^^^^^^^^^ Could not infer this type. Try adding an annotation
+
+note[I15002]: IDE macro call info
+   ┌─ tests/move_2024/ide_mode/macro_types.move:17:9
+   │  
+17 │ ╭         std::u64::do!(count, |_| {
+18 │ │             let content = new_empty_content();
+19 │ │             collection.items.push_back(content);
+20 │ │         });
+   │ ╰──────────^ macro call info
+   │  
+   = Called std::u64::do
+   = Type arguments: _|_
+
+error[E04010]: cannot infer type
+   ┌─ tests/move_2024/ide_mode/macro_types.move:17:9
+   │  
+17 │ ╭         std::u64::do!(count, |_| {
+18 │ │             let content = new_empty_content();
+19 │ │             collection.items.push_back(content);
+20 │ │         });
+   │ ╰──────────^ Could not infer this type. Try adding an annotation
+
+note[I15001]: IDE dot autocomplete
+   ┌─ tests/move_2024/ide_mode/macro_types.move:19:23
+   │
+19 │             collection.items.push_back(content);
+   │                       ^ Possible dot names: 'a::collection::do_stuff', 'cost', or 'items'
+
+note[I15001]: IDE dot autocomplete
+   ┌─ tests/move_2024/ide_mode/macro_types.move:19:24
+   │
+19 │             collection.items.push_back(content);
+   │                        ^^^^^ Possible dot names: 'a::collection::do_stuff', 'cost', or 'items'
+
+note[I15001]: IDE dot autocomplete
+   ┌─ tests/move_2024/ide_mode/macro_types.move:19:29
+   │
+19 │             collection.items.push_back(content);
+   │                             ^ Possible dot names: 'std::vector::all', 'std::vector::any', 'std::vector::append', 'std::vector::borrow', 'std::vector::borrow_mut', 'std::vector::contains', 'std::vector::count', 'std::vector::destroy', 'std::vector::destroy_empty', 'std::vector::do', 'std::vector::do_mut', 'std::vector::do_ref', 'std::vector::filter', 'std::vector::find_index', 'std::vector::flatten', 'std::vector::fold', 'std::vector::index_of', 'std::vector::insert', 'std::vector::is_empty', 'std::vector::length', 'std::vector::map', 'std::vector::map_ref', 'std::vector::partition', 'std::vector::pop_back', 'std::vector::push_back', 'std::vector::remove', 'std::vector::reverse', 'std::vector::swap', 'std::vector::swap_remove', 'std::ascii::to_ascii_string', 'std::string::to_string', 'std::ascii::try_to_ascii_string', 'std::string::try_to_string', 'std::vector::zip_do', 'std::vector::zip_do_mut', 'std::vector::zip_do_ref', 'std::vector::zip_do_reverse', 'std::vector::zip_map', or 'std::vector::zip_map_ref'
+
+note[I15001]: IDE dot autocomplete
+   ┌─ tests/move_2024/ide_mode/macro_types.move:19:30
+   │
+19 │             collection.items.push_back(content);
+   │                              ^^^^^^^^^ Possible dot names: 'std::vector::all', 'std::vector::any', 'std::vector::append', 'std::vector::borrow', 'std::vector::borrow_mut', 'std::vector::contains', 'std::vector::count', 'std::vector::destroy', 'std::vector::destroy_empty', 'std::vector::do', 'std::vector::do_mut', 'std::vector::do_ref', 'std::vector::filter', 'std::vector::find_index', 'std::vector::flatten', 'std::vector::fold', 'std::vector::index_of', 'std::vector::insert', 'std::vector::is_empty', 'std::vector::length', 'std::vector::map', 'std::vector::map_ref', 'std::vector::partition', 'std::vector::pop_back', 'std::vector::push_back', 'std::vector::remove', 'std::vector::reverse', 'std::vector::swap', 'std::vector::swap_remove', 'std::ascii::to_ascii_string', 'std::string::to_string', 'std::ascii::try_to_ascii_string', 'std::string::try_to_string', 'std::vector::zip_do', 'std::vector::zip_do_mut', 'std::vector::zip_do_ref', 'std::vector::zip_do_reverse', 'std::vector::zip_map', or 'std::vector::zip_map_ref'
+
+note[I15003]: IDE expanded lambda
+   ┌─ /Users/tmn/sui/external-crates/move/crates/move-stdlib/sources/macros.move:91:9
+   │
+91 │         $f(i);
+   │         ^^^^^ expanded lambda
+
+note[I15002]: IDE macro call info
+    ┌─ /Users/tmn/sui/external-crates/move/crates/move-stdlib/sources/macros.move:112:5
+    │
+112 │     range_do!(0, $stop, $f)
+    │     ^^^^^^^^^^^^^^^^^^^^^^^ macro call info
+    │
+    = Called std::macros::range_do
+    = Type arguments: u64, ()
