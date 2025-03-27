@@ -30,18 +30,17 @@ public struct Metadata<phantom T> has key, store {
     description: String,
     icon_url: String,
     supply: Option<Supply<T>>,
+    treasury_cap_id: Option<ID>,
     metadata_cap_id: Option<ID>,
     deny_cap_id: Option<ID>,
 }
 
+// hot potato pattern to enforce registration after "new_currency" metadata creation
 public struct InitMetadata<phantom T> {
     metadata: Metadata<T>,
 }
 
-public(package) fun to_inner_mut<T>(init: &mut InitMetadata<T>): &mut Metadata<T> {
-    &mut init.metadata
-}
-
+// call this after create_currency to register the metadata
 public fun transfer<T>(init: InitMetadata<T>) {
     let InitMetadata { metadata } = init;
 
@@ -60,7 +59,6 @@ public fun migrate_receiving<T>(
     registry.attach_metadata(received_metadata);
 }
 
-/// ? Similar to the above, we need to consider allowing more than 1 cap.
 public fun create_cap_for_supply<T>(
     registry: &CoinMetadataRegistry,
     _supply: &mut Supply<T>,
@@ -72,17 +70,6 @@ public fun create_cap_for_supply<T>(
     let metadata = registry.metadata<T>();
     assert!(!metadata.cap_claimed(), EAlreadyClaimed);
     MetadataCap { id: object::new(ctx) }
-}
-
-public fun init_metadata_for_supply<T>(
-    registry: &mut CoinMetadataRegistry,
-    _: &mut Supply<T>,
-    decimals: u8,
-    ctx: &mut TxContext,
-) {
-    let mut metadata = empty<T>(ctx);
-    metadata.decimals = decimals;
-    registry.attach_metadata(metadata);
 }
 
 /// === Setters ===
@@ -115,6 +102,14 @@ public(package) fun freeze_supply<T>(registry: &mut CoinMetadataRegistry, supply
     registry.metadata_mut<T>().supply.fill(supply);
 }
 
+public(package) fun set_decimals<T>(registry: &mut CoinMetadataRegistry, decimals: u8) {
+    registry.metadata_mut<T>().decimals = decimals;
+}
+
+public(package) fun set_deny_cap<T>(metadata: &mut Metadata<T>, deny_cap_id: Option<ID>) {
+    metadata.deny_cap_id = deny_cap_id;
+}
+
 /// === Getters ===
 
 public fun metadata<T>(registry: &CoinMetadataRegistry): &Metadata<T> {
@@ -140,11 +135,14 @@ public fun total_fixed_supply<T>(metadata: &Metadata<T>): u64 {
     metadata.supply.borrow().supply_value()
 }
 
-/// Assumptions are painful here :(
 public fun is_regulated<T>(metadata: &Metadata<T>): bool { metadata.deny_cap_id.is_some() }
 
 public fun cap_claimed<T>(metadata: &Metadata<T>): bool { metadata.metadata_cap_id.is_some() }
 
+/// TODO: Assumptions are painful here :( (no way to verify supply is fixed outside of registry)
+/// It is safer to mark a supply as not frozen when it is actually frozen than to incorrectly
+/// mark it as frozen when it is not. This method supports the happy path so I think the trade
+/// off is worth it.
 public fun is_fixed_supply<T>(metadata: &Metadata<T>): bool { metadata.supply.is_some() }
 
 public(package) fun metadata_mut<T>(registry: &mut CoinMetadataRegistry): &mut Metadata<T> {
@@ -154,6 +152,10 @@ public(package) fun metadata_mut<T>(registry: &mut CoinMetadataRegistry): &mut M
 
 public(package) fun exists<T>(registry: &CoinMetadataRegistry): bool {
     dynamic_field::exists_(&registry.id, CoinMetadataKey<T>())
+}
+
+public(package) fun to_inner_mut<T>(init: &mut InitMetadata<T>): &mut Metadata<T> {
+    &mut init.metadata
 }
 
 public(package) fun attach_metadata<T>(registry: &mut CoinMetadataRegistry, metadata: Metadata<T>) {
@@ -187,6 +189,7 @@ public(package) fun create_metadata_init<T>(
     description: String,
     icon_url: String,
     supply: Option<Supply<T>>,
+    treasury_cap_id: Option<ID>,
     metadata_cap_id: Option<ID>,
     deny_cap_id: Option<ID>,
     ctx: &mut TxContext,
@@ -199,6 +202,7 @@ public(package) fun create_metadata_init<T>(
             description,
             icon_url,
             supply,
+            treasury_cap_id,
             metadata_cap_id,
             deny_cap_id,
             ctx,
@@ -213,6 +217,7 @@ public(package) fun create_metadata<T>(
     description: String,
     icon_url: String,
     supply: Option<Supply<T>>,
+    treasury_cap_id: Option<ID>,
     metadata_cap_id: Option<ID>,
     deny_cap_id: Option<ID>,
     ctx: &mut TxContext,
@@ -225,12 +230,13 @@ public(package) fun create_metadata<T>(
         description,
         icon_url,
         supply,
+        treasury_cap_id,
         metadata_cap_id,
         deny_cap_id,
     }
 }
 
-fun empty<T>(ctx: &mut TxContext): Metadata<T> {
+public(package) fun empty<T>(ctx: &mut TxContext): Metadata<T> {
     Metadata {
         id: object::new(ctx),
         decimals: 0,
@@ -239,6 +245,7 @@ fun empty<T>(ctx: &mut TxContext): Metadata<T> {
         description: b"".to_string(),
         icon_url: b"".to_string(),
         supply: option::none(),
+        treasury_cap_id: option::none(),
         metadata_cap_id: option::none(),
         deny_cap_id: option::none(),
     }
