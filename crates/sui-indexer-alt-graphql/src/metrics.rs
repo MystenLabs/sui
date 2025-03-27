@@ -16,6 +16,19 @@ const LATENCY_SEC_BUCKETS: &[f64] = &[
     200.0, 500.0, 1000.0,
 ];
 
+const INPUT_NODES_BUCKETS: &[f64] = &[1., 2., 5., 10., 20., 50., 100., 200., 500., 1000.];
+
+const INPUT_DEPTH_BUCKETS: &[f64] = &[1., 2., 5., 10., 20., 50.];
+
+const OUTPUT_NODES_BUCKETS: &[f64] = &[
+    10., 20., 50., 100., 200., 500., 1000., 2000., 5000., 10000., 20000., 50000., 100000., 200000.,
+    500000., 1000000.,
+];
+
+const PAYLOAD_SIZE_BUCKETS: &[f64] = &[
+    0., 100., 200., 500., 1000., 2000., 5000., 10000., 20000., 50000., 100000., 200000., 500000.,
+];
+
 pub struct RpcMetrics {
     // Top-level metrics for all read requests (queries).
     pub query_latency: Histogram,
@@ -23,6 +36,17 @@ pub struct RpcMetrics {
     pub queries_succeeded: IntCounter,
     pub queries_failed: IntCounterVec,
     pub queries_in_flight: IntGauge,
+
+    pub limits_validation_latency: Histogram,
+
+    // Limits checked during validation, for requests that pass all checks.
+    pub input_nodes: Histogram,
+    pub input_depth: Histogram,
+    pub output_nodes: Histogram,
+
+    pub total_payload_size: Histogram,
+    pub query_payload_size: Histogram,
+    pub tx_payload_size: Histogram,
 
     // Metrics per type and field.
     pub fields_received: IntCounterVec,
@@ -67,6 +91,62 @@ impl RpcMetrics {
                 "queries_in_flight",
                 "Number of read requests currently flowing through the service",
                 registry
+            )
+            .unwrap(),
+
+            limits_validation_latency: register_histogram_with_registry!(
+                "limits_validation_latency",
+                "Time taken to validate query limits",
+                LATENCY_SEC_BUCKETS.to_vec(),
+                registry,
+            )
+            .unwrap(),
+
+            input_nodes: register_histogram_with_registry!(
+                "input_nodes",
+                "Number of nodes in the request input",
+                INPUT_NODES_BUCKETS.to_vec(),
+                registry
+            )
+            .unwrap(),
+
+            input_depth: register_histogram_with_registry!(
+                "input_depth",
+                "Depth of the request input",
+                INPUT_DEPTH_BUCKETS.to_vec(),
+                registry
+            )
+            .unwrap(),
+
+            output_nodes: register_histogram_with_registry!(
+                "output_nodes",
+                "Number of nodes in the response output",
+                OUTPUT_NODES_BUCKETS.to_vec(),
+                registry
+            )
+            .unwrap(),
+
+            total_payload_size: register_histogram_with_registry!(
+                "total_payload_size",
+                "Total size of the request",
+                PAYLOAD_SIZE_BUCKETS.to_vec(),
+                registry,
+            )
+            .unwrap(),
+
+            query_payload_size: register_histogram_with_registry!(
+                "query_payload_size",
+                "Size of the query part of a request",
+                PAYLOAD_SIZE_BUCKETS.to_vec(),
+                registry,
+            )
+            .unwrap(),
+
+            tx_payload_size: register_histogram_with_registry!(
+                "tx_payload_size",
+                "Size of the transaction part of a request",
+                PAYLOAD_SIZE_BUCKETS.to_vec(),
+                registry,
             )
             .unwrap(),
 

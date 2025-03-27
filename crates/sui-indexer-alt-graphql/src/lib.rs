@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{any::Any, net::SocketAddr};
+use std::{any::Any, net::SocketAddr, sync::Arc};
 
 use anyhow::{self, Context};
 use async_graphql::{
@@ -70,6 +70,9 @@ pub struct RpcService<Q, M, S> {
     /// The GraphQL schema this service will serve.
     schema: SchemaBuilder<Q, M, S>,
 
+    /// Metrics for the RPC service.
+    metrics: Arc<RpcMetrics>,
+
     /// Cancellation token controls lifecycle of all RPC-related services.
     cancel: CancellationToken,
 }
@@ -95,15 +98,21 @@ where
         let metrics = RpcMetrics::new(registry);
 
         // The logging extension should be outermost so that it can surround all other extensions.
-        let schema = schema.extension(Logging(metrics));
+        let schema = schema.extension(Logging(metrics.clone()));
 
         Self {
             rpc_listen_address,
             with_ide: !no_ide,
             version,
             schema,
+            metrics,
             cancel,
         }
+    }
+
+    /// Return a copy of the metrics.
+    pub fn metrics(&self) -> Arc<RpcMetrics> {
+        self.metrics.clone()
     }
 
     /// Add an extension to the GraphQL schema.
@@ -131,6 +140,7 @@ where
             with_ide,
             version,
             schema,
+            metrics: _,
             cancel,
         } = self;
 
@@ -211,13 +221,19 @@ pub async fn start_rpc(
     registry: &Registry,
     cancel: CancellationToken,
 ) -> anyhow::Result<JoinHandle<()>> {
-    let h_rpc = RpcService::new(args, version, schema(), registry, cancel.child_token())
+    let rpc = RpcService::new(args, version, schema(), registry, cancel.child_token());
+    let metrics = rpc.metrics();
+
+    let rpc = rpc
         .extension(Timeout::new(config.limits.timeouts()))
-        .extension(QueryLimitsChecker::new(config.limits.query_limits()))
+        .extension(QueryLimitsChecker::new(
+            config.limits.query_limits(),
+            metrics,
+        ))
         .data(config.limits.pagination())
-        .data(config.limits)
-        .run()
-        .await?;
+        .data(config.limits);
+
+    let h_rpc = rpc.run().await?;
 
     Ok(tokio::spawn(async move {
         let _ = h_rpc.await;
