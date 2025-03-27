@@ -9,6 +9,8 @@ Functionality for converting Move types into values. Use with care!
 -  [Constants](#@Constants_0)
 -  [Function `get`](#std_type_name_get)
 -  [Function `get_with_original_ids`](#std_type_name_get_with_original_ids)
+-  [Function `get_package_id`](#std_type_name_get_package_id)
+-  [Function `get_original_package_id`](#std_type_name_get_original_package_id)
 -  [Function `is_primitive`](#std_type_name_is_primitive)
 -  [Function `borrow_string`](#std_type_name_borrow_string)
 -  [Function `get_address`](#std_type_name_get_address)
@@ -189,6 +191,57 @@ later upgrade).
 
 
 <pre><code><b>public</b> <b>native</b> <b>fun</b> <a href="../std/type_name.md#std_type_name_get_with_original_ids">get_with_original_ids</a>&lt;T&gt;(): <a href="../std/type_name.md#std_type_name_TypeName">TypeName</a>;
+</code></pre>
+
+
+
+</details>
+
+<a name="std_type_name_get_package_id"></a>
+
+## Function `get_package_id`
+
+Returns the package ID in which type <code>T</code> was originally defined.
+If T was added in a later version of the package, it will return the
+id of the package in which it was added.
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="../std/type_name.md#std_type_name_get_package_id">get_package_id</a>&lt;T&gt;(): <b>address</b>
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b> <b>native</b> <b>fun</b> <a href="../std/type_name.md#std_type_name_get_package_id">get_package_id</a>&lt;T&gt;(): <b>address</b>;
+</code></pre>
+
+
+
+</details>
+
+<a name="std_type_name_get_original_package_id"></a>
+
+## Function `get_original_package_id`
+
+Returns the original ID of the package in which type <code>T</code> was defined.
+If T was added in a later version of the package, it will return the
+id of the initial version of that package even if T did not exist in
+that version.
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="../std/type_name.md#std_type_name_get_original_package_id">get_original_package_id</a>&lt;T&gt;(): <b>address</b>
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b> <b>native</b> <b>fun</b> <a href="../std/type_name.md#std_type_name_get_original_package_id">get_original_package_id</a>&lt;T&gt;(): <b>address</b>;
 </code></pre>
 
 

@@ -1906,8 +1906,35 @@ destroy_empty
 drop
 	public fun
 	0x2::table
+EventStream
+	public struct
+	0x2::event
+EventStreamCap
+	public struct
+	0x2::event
 emit
 	public fun
+	0x2::event
+destroy_stream
+	public fun
+	0x2::event
+new_event_stream
+	public fun
+	0x2::event
+get_cap
+	public fun
+	0x2::event
+default_event_stream_cap
+	public fun
+	0x2::event
+emit_authenticated
+	public fun
+	0x2::event
+destroy_cap
+	public fun
+	0x2::event
+emit_authenticated_impl
+	fun
 	0x2::event
 Wrapper
 	public struct
@@ -4697,6 +4724,12 @@ get
 	public fun
 	0x1::type_name
 get_with_original_ids
+	public fun
+	0x1::type_name
+get_package_id
+	public fun
+	0x1::type_name
+get_original_package_id
 	public fun
 	0x1::type_name
 is_primitive
