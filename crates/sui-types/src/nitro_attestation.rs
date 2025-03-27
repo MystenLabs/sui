@@ -576,6 +576,7 @@ impl AttestationDocument {
                     }
 
                     // Valid PCR indices are 0, 1, 2, 3, 4, 8 for AWS.
+                    // See: <https://docs.aws.amazon.com/enclaves/latest/user/set-up-attestation.html#where>
                     let key_u64 = u64::try_from(key).map_err(|_| {
                         NitroAttestationVerifyError::InvalidAttestationDoc(
                             "invalid PCR index".to_string(),
@@ -637,6 +638,7 @@ impl AttestationDocument {
     }
 
     /// Verify the certificate against AWS Nitro root of trust and checks expiry.
+    /// Assume the cabundle is in order.
     fn verify_cert(&self, now: u64) -> Result<(), NitroAttestationVerifyError> {
         // Create chain starting with leaf cert all the way to root.
         let mut chain = Vec::with_capacity(1 + self.cabundle.len());
