@@ -1855,7 +1855,7 @@ checksum = "230c5f1ca6a325a32553f8640d31ac9b49f2411e901e427570154868b46da4f7"
 
 [[package]]
 name = "bin-version"
-version = "1.46.0"
+version = "1.47.0"
 dependencies = [
  "const-str",
  "git-version",
@@ -12419,7 +12419,7 @@ checksum = "734676eb262c623cec13c3155096e08d1f8f29adce39ba17948b18dad1e54142"
 
 [[package]]
 name = "sui"
-version = "1.46.0"
+version = "1.47.0"
 dependencies = [
  "anemo",
  "anyhow",
@@ -12639,7 +12639,7 @@ dependencies = [
 
 [[package]]
 name = "sui-analytics-indexer"
-version = "1.46.0"
+version = "1.47.0"
 dependencies = [
  "anyhow",
  "arrow",
@@ -12691,7 +12691,7 @@ dependencies = [
 
 [[package]]
 name = "sui-analytics-indexer-derive"
-version = "1.46.0"
+version = "1.47.0"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -12700,7 +12700,7 @@ dependencies = [
 
 [[package]]
 name = "sui-archival"
-version = "1.46.0"
+version = "1.47.0"
 dependencies = [
  "anyhow",
  "byteorder",
@@ -12823,7 +12823,7 @@ dependencies = [
 
 [[package]]
 name = "sui-bridge"
-version = "1.46.0"
+version = "1.47.0"
 dependencies = [
  "anyhow",
  "arc-swap",
@@ -12874,7 +12874,7 @@ dependencies = [
 
 [[package]]
 name = "sui-bridge-cli"
-version = "1.46.0"
+version = "1.47.0"
 dependencies = [
  "anyhow",
  "clap",
@@ -12940,7 +12940,7 @@ dependencies = [
 
 [[package]]
 name = "sui-cluster-test"
-version = "1.46.0"
+version = "1.47.0"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -13135,7 +13135,7 @@ dependencies = [
 
 [[package]]
 name = "sui-data-ingestion"
-version = "1.46.0"
+version = "1.47.0"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -13230,7 +13230,7 @@ dependencies = [
 
 [[package]]
 name = "sui-default-config"
-version = "1.46.0"
+version = "1.47.0"
 dependencies = [
  "quote",
  "syn 1.0.107",
@@ -13238,7 +13238,7 @@ dependencies = [
 
 [[package]]
 name = "sui-display"
-version = "1.46.0"
+version = "1.47.0"
 dependencies = [
  "anyhow",
  "move-core-types",
@@ -13249,7 +13249,7 @@ dependencies = [
 
 [[package]]
 name = "sui-e2e-tests"
-version = "1.46.0"
+version = "1.47.0"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -13397,7 +13397,7 @@ dependencies = [
 
 [[package]]
 name = "sui-faucet"
-version = "1.46.0"
+version = "1.47.0"
 dependencies = [
  "anyhow",
  "async-recursion",
@@ -13443,14 +13443,14 @@ dependencies = [
 
 [[package]]
 name = "sui-field-count"
-version = "1.46.0"
+version = "1.47.0"
 dependencies = [
  "sui-field-count-derive",
 ]
 
 [[package]]
 name = "sui-field-count-derive"
-version = "1.46.0"
+version = "1.47.0"
 dependencies = [
  "quote",
  "syn 1.0.107",
@@ -13478,7 +13478,7 @@ dependencies = [
 
 [[package]]
 name = "sui-framework-snapshot"
-version = "1.46.0"
+version = "1.47.0"
 dependencies = [
  "anyhow",
  "bcs",
@@ -13558,7 +13558,7 @@ dependencies = [
 
 [[package]]
 name = "sui-graphql-rpc"
-version = "1.46.0"
+version = "1.47.0"
 dependencies = [
  "anyhow",
  "async-graphql",
@@ -13680,7 +13680,7 @@ dependencies = [
 
 [[package]]
 name = "sui-indexer"
-version = "1.46.0"
+version = "1.47.0"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -13756,7 +13756,7 @@ dependencies = [
 
 [[package]]
 name = "sui-indexer-alt"
-version = "1.46.0"
+version = "1.47.0"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -13828,7 +13828,7 @@ dependencies = [
 
 [[package]]
 name = "sui-indexer-alt-framework"
-version = "1.46.0"
+version = "1.47.0"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -13868,7 +13868,7 @@ dependencies = [
 
 [[package]]
 name = "sui-indexer-alt-jsonrpc"
-version = "1.46.0"
+version = "1.47.0"
 dependencies = [
  "anyhow",
  "async-graphql",
@@ -13920,7 +13920,7 @@ dependencies = [
 
 [[package]]
 name = "sui-indexer-alt-metrics"
-version = "1.46.0"
+version = "1.47.0"
 dependencies = [
  "anyhow",
  "axum 0.7.5",
@@ -13963,7 +13963,7 @@ dependencies = [
 
 [[package]]
 name = "sui-indexer-alt-schema"
-version = "1.46.0"
+version = "1.47.0"
 dependencies = [
  "anyhow",
  "bcs",
@@ -14182,7 +14182,7 @@ dependencies = [
 
 [[package]]
 name = "sui-kvstore"
-version = "1.46.0"
+version = "1.47.0"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -14205,7 +14205,7 @@ dependencies = [
 
 [[package]]
 name = "sui-light-client"
-version = "1.46.0"
+version = "1.47.0"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -14248,7 +14248,7 @@ dependencies = [
 
 [[package]]
 name = "sui-metric-checker"
-version = "1.46.0"
+version = "1.47.0"
 dependencies = [
  "anyhow",
  "backoff",
@@ -14269,7 +14269,7 @@ dependencies = [
 
 [[package]]
 name = "sui-move"
-version = "1.46.0"
+version = "1.47.0"
 dependencies = [
  "anyhow",
  "better_any",
@@ -14310,7 +14310,7 @@ dependencies = [
 
 [[package]]
 name = "sui-move-build"
-version = "1.46.0"
+version = "1.47.0"
 dependencies = [
  "anyhow",
  "fastcrypto",
@@ -14333,7 +14333,7 @@ dependencies = [
 
 [[package]]
 name = "sui-move-lsp"
-version = "1.46.0"
+version = "1.47.0"
 dependencies = [
  "bin-version",
  "clap",
@@ -14441,7 +14441,7 @@ dependencies = [
 
 [[package]]
 name = "sui-mvr-graphql-rpc"
-version = "1.46.0"
+version = "1.47.0"
 dependencies = [
  "anyhow",
  "async-graphql",
@@ -14522,7 +14522,7 @@ dependencies = [
 
 [[package]]
 name = "sui-name-service"
-version = "1.46.0"
+version = "1.47.0"
 dependencies = [
  "bcs",
  "move-core-types",
@@ -14575,7 +14575,7 @@ dependencies = [
 
 [[package]]
 name = "sui-node"
-version = "1.46.0"
+version = "1.47.0"
 dependencies = [
  "anemo",
  "anemo-tower",
@@ -14631,7 +14631,7 @@ dependencies = [
 
 [[package]]
 name = "sui-open-rpc"
-version = "1.46.0"
+version = "1.47.0"
 dependencies = [
  "anyhow",
  "bcs",
@@ -14667,7 +14667,7 @@ dependencies = [
 
 [[package]]
 name = "sui-oracle"
-version = "1.46.0"
+version = "1.47.0"
 dependencies = [
  "anyhow",
  "bcs",
@@ -14697,7 +14697,7 @@ dependencies = [
 
 [[package]]
 name = "sui-package-dump"
-version = "1.46.0"
+version = "1.47.0"
 dependencies = [
  "anyhow",
  "bcs",
@@ -14714,7 +14714,7 @@ dependencies = [
 
 [[package]]
 name = "sui-package-management"
-version = "1.46.0"
+version = "1.47.0"
 dependencies = [
  "anyhow",
  "move-core-types",
@@ -14755,7 +14755,7 @@ dependencies = [
 
 [[package]]
 name = "sui-pg-db"
-version = "1.46.0"
+version = "1.47.0"
 dependencies = [
  "anyhow",
  "bb8",
@@ -14898,7 +14898,7 @@ dependencies = [
 
 [[package]]
 name = "sui-rosetta"
-version = "1.46.0"
+version = "1.47.0"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -14991,7 +14991,7 @@ dependencies = [
 
 [[package]]
 name = "sui-rpc-benchmark"
-version = "1.46.0"
+version = "1.47.0"
 dependencies = [
  "anyhow",
  "bb8",
@@ -15016,7 +15016,7 @@ dependencies = [
 
 [[package]]
 name = "sui-rpc-loadgen"
-version = "1.46.0"
+version = "1.47.0"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -15043,7 +15043,7 @@ dependencies = [
 
 [[package]]
 name = "sui-sdk"
-version = "1.46.0"
+version = "1.47.0"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -15104,7 +15104,7 @@ dependencies = [
 
 [[package]]
 name = "sui-security-watchdog"
-version = "1.46.0"
+version = "1.47.0"
 dependencies = [
  "anyhow",
  "arrow-array",
@@ -15151,7 +15151,7 @@ dependencies = [
 
 [[package]]
 name = "sui-single-node-benchmark"
-version = "1.46.0"
+version = "1.47.0"
 dependencies = [
  "async-trait",
  "bcs",
@@ -15214,7 +15214,7 @@ dependencies = [
 
 [[package]]
 name = "sui-source-validation"
-version = "1.46.0"
+version = "1.47.0"
 dependencies = [
  "anyhow",
  "colored",
@@ -15284,7 +15284,7 @@ dependencies = [
 
 [[package]]
 name = "sui-sql-macro"
-version = "1.46.0"
+version = "1.47.0"
 dependencies = [
  "quote",
  "syn 1.0.107",
@@ -15347,7 +15347,7 @@ dependencies = [
 
 [[package]]
 name = "sui-surfer"
-version = "1.46.0"
+version = "1.47.0"
 dependencies = [
  "async-trait",
  "bcs",
@@ -15470,7 +15470,7 @@ dependencies = [
 
 [[package]]
 name = "sui-test-validator"
-version = "1.46.0"
+version = "1.47.0"
 
 [[package]]
 name = "sui-tls"
@@ -15496,7 +15496,7 @@ dependencies = [
 
 [[package]]
 name = "sui-tool"
-version = "1.46.0"
+version = "1.47.0"
 dependencies = [
  "anemo",
  "anemo-cli",
@@ -15793,7 +15793,7 @@ dependencies = [
 
 [[package]]
 name = "suins-indexer"
-version = "1.46.0"
+version = "1.47.0"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -18174,7 +18174,7 @@ dependencies = [
 
 [[package]]
 name = "x"
-version = "1.46.0"
+version = "1.47.0"
 dependencies = [
  "anyhow",
  "camino",
