@@ -5,11 +5,12 @@ use crate::{
     client_commands::{dry_run_or_execute_or_serialize, Opts, OptsWithGas, SuiClientCommandResult},
     client_ptb::{
         ast::{ParsedProgram, Program},
-        builder::PTBBuilder,
-        error::{build_error_reports, PTBError},
+        builder::{resolve_package, PTBBuilder},
+        error::{build_error_reports, PTBError, Span},
         token::{Lexeme, Token},
     },
     displays::Pretty,
+    mvr_resolver::MvrResolver,
     sp,
 };
 
@@ -18,12 +19,15 @@ use anyhow::{anyhow, ensure, Error};
 use clap::{arg, Args, ValueHint};
 use move_core_types::account_address::AccountAddress;
 use serde::Serialize;
+use std::collections::BTreeMap;
 use sui_json_rpc_types::{SuiExecutionStatus, SuiTransactionBlockEffectsAPI};
 use sui_keys::keystore::AccountKeystore;
 use sui_sdk::{wallet_context::WalletContext, SuiClient};
 use sui_types::{
+    base_types::ObjectID,
     digests::TransactionDigest,
     gas::GasCostSummary,
+    move_package::MovePackage,
     transaction::{ProgrammableTransaction, TransactionKind},
 };
 
@@ -44,6 +48,28 @@ pub struct Summary {
     pub digest: TransactionDigest,
     pub status: SuiExecutionStatus,
     pub gas_cost: GasCostSummary,
+}
+
+/// An enum holding either an account address or a move package information. The Move Package data
+/// is used to resolve the origin id for a typetag, in the `PTBBuilder`.
+#[derive(Clone, Debug)]
+pub enum AddressData {
+    /// The account address
+    AccountAddress(AccountAddress),
+    /// The MovePackage itself and the TypeOrigin table in a (module, type) -> origin ID map.
+    MovePackage((MovePackage, BTreeMap<(String, String), ObjectID>)),
+}
+
+impl AddressData {
+    /// Return the account address
+    pub fn address(&self) -> Option<AccountAddress> {
+        match self {
+            AddressData::AccountAddress(account_address) => Some(*account_address),
+            AddressData::MovePackage((pkg, _)) => {
+                AccountAddress::from_bytes(pkg.id().into_bytes()).ok()
+            }
+        }
+    }
 }
 
 impl PTB {
@@ -101,7 +127,39 @@ impl PTB {
 
         let client = context.get_client().await?;
 
-        let (res, warnings) = Self::build_ptb(program, context, client).await;
+        let mut starting_addresses: BTreeMap<String, AddressData> = context
+            .config
+            .keystore
+            .addresses_with_alias()
+            .into_iter()
+            .map(|(sa, alias)| {
+                (
+                    alias.alias.clone(),
+                    AddressData::AccountAddress(AccountAddress::from(*sa)),
+                )
+            })
+            .collect();
+
+        let mvr_names = program_metadata.mvr_names.clone();
+        let mvr_resolver = MvrResolver {
+            names: program_metadata.mvr_names.into_keys().collect(),
+        };
+        if mvr_resolver.should_resolve() {
+            let resolved = mvr_resolver
+                .resolve_names(context.get_client().await?.read_api())
+                .await?;
+            let mut mvr_data: BTreeMap<String, AddressData> = BTreeMap::new();
+            for (name, package_id) in resolved.resolution {
+                let span = mvr_names.get(&name).unwrap_or(&Span { start: 0, end: 0 });
+                let pkg = resolve_package(client.read_api(), package_id.package_id, *span).await?;
+                let type_origin_id_map = pkg.type_origin_map();
+                mvr_data.insert(name, AddressData::MovePackage((pkg, type_origin_id_map)));
+            }
+
+            starting_addresses.extend(mvr_data);
+        }
+
+        let (res, warnings) = Self::build_ptb(program, starting_addresses, client).await;
 
         // Render warnings
         if !warnings.is_empty() {
@@ -219,27 +277,20 @@ impl PTB {
         Ok(())
     }
 
-    /// Exposed for testing
+    // Also used in testing, thus public
     pub async fn build_ptb(
         program: Program,
-        context: &WalletContext,
+        starting_addresses: BTreeMap<String, AddressData>,
         client: SuiClient,
     ) -> (
         Result<ProgrammableTransaction, Vec<PTBError>>,
         Vec<PTBError>,
     ) {
-        let starting_addresses = context
-            .config
-            .keystore
-            .addresses_with_alias()
-            .into_iter()
-            .map(|(sa, alias)| (alias.alias.clone(), AccountAddress::from(*sa)))
-            .collect();
         let builder = PTBBuilder::new(starting_addresses, client.read_api());
         builder.build(program).await
     }
 
-    /// Exposed for testing
+    // Also used in testing, thus public
     pub fn parse_ptb_commands(args: Vec<String>) -> Result<ParsedProgram, Vec<PTBError>> {
         ProgramParser::new(args.iter().map(|s| s.as_str()))
             .map_err(|e| vec![e])
