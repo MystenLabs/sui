@@ -137,7 +137,7 @@ impl<T: Ord + Copy + Debug> Graph<T> {
     }
 }
 
-struct DomRelation<T: Ord + Copy + Debug> {
+pub struct DomRelation<T: Ord + Copy + Debug> {
     node_to_postorder_num: BTreeMap<T, usize>,
     postorder_num_to_node: Vec<T>,
     idom_tree: BTreeMap<usize, usize>,
