@@ -13,14 +13,11 @@ fn run_prover(file_path: &PathBuf) -> String {
 
     // Always add standard Sui dependencies for all tests
     let sui_packages_base = "../../../../crates/sui-framework/packages";
-    options
-        .move_deps
-        .push(format!("{}/move-stdlib", sui_packages_base));
-    options
-        .move_deps
-        .push(format!("{}/prover", sui_packages_base));
-
-    // Add basic named address values for all tests
+    // Add dependencies in a more concise way
+    options.move_deps = vec![
+        format!("{sui_packages_base}/move-stdlib"),
+        format!("{sui_packages_base}/prover"),
+    ];
     options.move_named_address_values = vec!["std=0x1".to_string(), "prover=0x0".to_string()];
 
     // Capture output using a Vec buffer with NoColor writer
@@ -46,9 +43,7 @@ fn run_prover(file_path: &PathBuf) -> String {
 fn run_move_tests() {
     for entry in glob::glob("tests/inputs/*.move").expect("Invalid glob pattern") {
         let move_path = entry.expect("Failed to read file path");
-
         let output = run_prover(&move_path);
-
         let filename = move_path.file_name().unwrap().to_string_lossy().to_string();
 
         insta::with_settings!({
