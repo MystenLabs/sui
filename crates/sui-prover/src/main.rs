@@ -3,7 +3,7 @@ use std::path::PathBuf;
 
 use clap::*;
 use colored::Colorize;
-use prove::{BoogieConfig, GeneralConfig, BuildConfig, execute};
+use prove::{GeneralConfig, BuildConfig, execute};
 use tracing::debug;
 
 mod prove;
@@ -23,13 +23,13 @@ struct Args {
     #[clap(long = "path", short = 'p', global = true)]
     pub package_path: Option<PathBuf>,
 
+    /// Boggie options
+    #[clap(long = "boogie-config", short = 'b', global = true)]
+    pub boogie_config: Option<String>,
+
     /// General options
     #[clap(flatten)]
     pub general_config: GeneralConfig,
-
-    /// Boogie options
-    #[clap(flatten)]
-    pub boogie_config: BoogieConfig,
 
     /// Package build options
     #[clap(flatten)]
