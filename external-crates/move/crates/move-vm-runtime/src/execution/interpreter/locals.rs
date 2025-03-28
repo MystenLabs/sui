@@ -224,14 +224,6 @@ impl StackFrame {
             })
     }
 
-    /// Takes the value out of the slot, replacing it with a `Value::Invalid` or raising an error
-    /// if it is not able to be.
-    fn take(&mut self, ndx: usize) -> PartialVMResult<Value> {
-        println!("Current frame: {:?}", self.slice);
-        self.get_valid_mut(ndx)
-            .and_then(|value| std::mem::replace(value, MemBox::new(Value::invalid())).take())
-    }
-
     pub fn drop_all_values(&mut self) -> impl Iterator<Item = Value> {
         self.slice
             .iter_mut()

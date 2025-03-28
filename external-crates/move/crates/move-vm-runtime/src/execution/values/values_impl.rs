@@ -51,7 +51,7 @@ macro_rules! debug_writeln {
 //  language, but required by the implementation.
 
 #[derive(Debug)]
-pub(crate) struct MemBox<T: Sized>(std::rc::Rc<std::cell::RefCell<T>>);
+pub struct MemBox<T: Sized>(std::rc::Rc<std::cell::RefCell<T>>);
 
 #[derive(Debug)]
 pub enum Value {
@@ -90,7 +90,7 @@ pub enum PrimVec {
 }
 
 #[derive(Debug)]
-pub(crate) struct FixedSizeVec(Box<[MemBox<Value>]>);
+pub struct FixedSizeVec(Box<[MemBox<Value>]>);
 
 /// Runtime representation of a Move value.
 #[derive(Debug)]
@@ -117,7 +117,7 @@ pub struct GlobalFingerprint(Option<String>);
 /// An integer value in Move.
 
 #[derive(Debug)]
-pub(crate) enum IntegerValue {
+pub enum IntegerValue {
     U8(u8),
     U16(u16),
     U32(u32),
@@ -127,36 +127,36 @@ pub(crate) enum IntegerValue {
 }
 
 #[derive(Debug)]
-pub(crate) struct Struct(FixedSizeVec);
+pub struct Struct(FixedSizeVec);
 
 #[derive(Debug)]
-pub(crate) struct Variant(Box<(VariantTag, FixedSizeVec)>);
+pub struct Variant(Box<(VariantTag, FixedSizeVec)>);
 
 // A vector. This is an alias for a Container for now but we may change
 // it once Containers are restructured.
 // It's used from vector native functions to get a vector and operate on that.
 // There is an impl for Vector which implements the API private to this module.
 #[derive(Debug)]
-pub(crate) struct Vector(Value);
+pub struct Vector(Value);
 
 /// A reference to a Move struct that allows you to take a reference to one of its fields.
 #[derive(Debug)]
-pub(crate) struct StructRef(MemBox<Value>);
+pub struct StructRef(MemBox<Value>);
 
 // A reference to a signer. Clients can attempt a cast to this struct if they are
 // expecting a Signer on the stack or as an argument.
 #[derive(Debug)]
-pub(crate) struct SignerRef(MemBox<Value>);
+pub struct SignerRef(MemBox<Value>);
 
 // A reference to a vector. This is an alias for a ContainerRef for now but we may change
 // it once Containers are restructured.
 // It's used from vector native functions to get a reference to a vector and operate on that.
 // There is an impl for VectorRef which implements the API private to this module.
 #[derive(Debug)]
-pub(crate) struct VectorRef(MemBox<Value>);
+pub struct VectorRef(MemBox<Value>);
 
 #[derive(Debug)]
-pub(crate) struct VariantRef(MemBox<Value>);
+pub struct VariantRef(MemBox<Value>);
 
 // Internal type to ease writing vector operations.
 enum VectorMatch<Vec, PrimVec> {
@@ -173,7 +173,7 @@ struct VectorMatchRefMut<'v>(VectorMatch<&'v mut Vec<MemBox<Value>>, &'v mut Pri
 /// of the resource relative to the global state, which is necessary to compute the effects to emit
 /// at the end of transaction execution.
 #[derive(Debug)]
-enum GlobalValueImpl {
+pub enum GlobalValueImpl {
     /// No resource resides in this slot or in storage.
     None,
     /// A resource has been published to this slot and it did not previously exist in storage.
@@ -191,7 +191,7 @@ enum GlobalValueImpl {
 /// A wrapper around `GlobalValueImpl`, representing a "slot" in global storage that can
 /// hold a resource.
 #[derive(Debug)]
-pub(crate) struct GlobalValue(GlobalValueImpl);
+pub struct GlobalValue(GlobalValueImpl);
 
 /// Constant representation of a Move value.
 #[derive(Debug)]
@@ -283,10 +283,6 @@ macro_rules! map_prim_vec {
 impl Value {
     pub fn invalid() -> Value {
         Value::Invalid
-    }
-
-    pub(crate) fn is_invalid(&self) -> bool {
-        matches!(self, Value::Invalid)
     }
 
     fn variant_ref(&self) -> PartialVMResult<&Variant> {
@@ -397,10 +393,6 @@ impl<T: Debug> MemBox<T> {
 
     fn ptr_clone(&self) -> Self {
         MemBox(std::rc::Rc::clone(&self.0))
-    }
-
-    pub(crate) fn rc_count(&self) -> usize {
-        std::rc::Rc::strong_count(&self.0)
     }
 }
 
@@ -577,7 +569,7 @@ impl Reference {
 
 impl Value {
     /// Allocates the constant in the provided arena
-    pub fn to_constant_value(self, arena: &Arena) -> PartialVMResult<ConstantValue> {
+    pub(crate) fn to_constant_value(self, arena: &Arena) -> PartialVMResult<ConstantValue> {
         macro_rules! alloc_vec {
             ($values:expr) => {
                 arena.alloc_vec($values.into_iter())?
@@ -835,6 +827,7 @@ impl Reference {
 }
 
 impl StructRef {
+    #[allow(dead_code)]
     pub fn read_ref(self) -> PartialVMResult<Value> {
         Ok(self.0.borrow().copy_value())
     }
@@ -1882,7 +1875,7 @@ impl VectorMatchRef<'_> {
         }
     }
 
-    #[must_use]
+    #[allow(dead_code)]
     pub fn is_empty(&self) -> bool {
         self.len() == 0
     }
@@ -1896,14 +1889,10 @@ impl VectorMatchRefMut<'_> {
         }
     }
 
-    #[must_use]
+    #[allow(dead_code)]
     pub fn is_empty(&self) -> bool {
         self.len() == 0
     }
-}
-
-fn borrow_at<'a, T>(cell: &'a MemBox<T>) -> std::cell::Ref<'a, T> {
-    cell.0.borrow()
 }
 
 // A custom type that holds both the outer borrow and the inner borrow.
@@ -2121,6 +2110,7 @@ impl Vector {
         Ok(())
     }
 
+    #[allow(dead_code)]
     pub fn to_vec_u8(self) -> PartialVMResult<Vec<u8>> {
         check_elem_layout(&Type::U8, &self.0)?;
         if let Value::PrimVec(PrimVec::VecU8(xs)) = self.0 {
