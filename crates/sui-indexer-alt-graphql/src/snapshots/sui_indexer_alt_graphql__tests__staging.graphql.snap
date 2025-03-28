@@ -97,13 +97,17 @@ type ServiceConfig {
 	"""
 	maxQueryPayloadSize: Int!
 	"""
-	By default, paginated queries will return this many elements if a page size is not provided. This may be overridden for paginated queries that are limited by the protocol.
+	Returns the number of elements a paginated connection will return if a page size is not supplied.
+	
+	Accepts `type` and `field` arguments which identify the connection that is being queried. If the field in question is paginated, its default page size is returned. If it does not exist or is not paginated, `null` is returned.
 	"""
-	defaultPageSize: Int!
+	defaultPageSize(type: String!, field: String!): Int
 	"""
-	By default, paginated queries can return at most this many elements. A request to fetch more elements will result in an error. This limit may be superseded when the field being paginated is limited by the protocol (e.g. object changes for a transaction).
+	Returns the maximum number of elements that can be requested from a paginated connection. A request to fetch more elements will result in an error.
+	
+	Accepts `type` and `field` arguments which identify the connection that is being queried. If the field in question is paginated, its max page size is returned. If it does not exist or is not paginated, `null` is returned.
 	"""
-	maxPageSize: Int!
+	maxPageSize(type: String!, field: String!): Int
 }
 
 
