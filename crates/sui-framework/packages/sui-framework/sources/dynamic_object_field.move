@@ -3,7 +3,7 @@
 
 /// Similar to `sui::dynamic_field`, this module allows for the access of dynamic fields. But
 /// unlike, `sui::dynamic_field` the values bound to these dynamic fields _must_ be objects
-/// themselves. This allows for the objects to still exist within in storage, which may be important
+/// themselves. This allows for the objects to still exist within storage, which may be important
 /// for external tools. The difference is otherwise not observable from within Move.
 module sui::dynamic_object_field;
 
