@@ -1306,6 +1306,7 @@
                 "ban_entry_init": false,
                 "bridge": false,
                 "commit_root_state_digest": false,
+                "consensus_batched_block_sync": false,
                 "consensus_distributed_vote_scoring_strategy": false,
                 "consensus_linearize_subdag_v2": false,
                 "consensus_median_based_commit_timestamp": false,

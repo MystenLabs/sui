@@ -106,6 +106,7 @@ mod test {
             sleep(Duration::from_secs(60)).await;
 
             // Now start the fourth authority and let it start
+            tracing::info!(authority =% NUM_OF_AUTHORITIES - 1, "Starting authority and waiting for it to catch up");
             authorities[NUM_OF_AUTHORITIES - 1].start().await.unwrap();
             authorities[NUM_OF_AUTHORITIES - 1]
                 .spawn_committed_subdag_consumer()

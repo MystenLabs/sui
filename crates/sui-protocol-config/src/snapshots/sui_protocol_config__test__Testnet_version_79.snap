@@ -1,7 +1,6 @@
 ---
 source: crates/sui-protocol-config/src/lib.rs
 expression: "ProtocolConfig::get_for_version(cur, *chain_id)"
-snapshot_kind: text
 ---
 version: 79
 feature_flags:
@@ -87,6 +86,7 @@ feature_flags:
   move_native_context: true
   consensus_median_based_commit_timestamp: true
   normalize_ptb_arguments: true
+  consensus_batched_block_sync: true
 max_tx_size_bytes: 131072
 max_input_objects: 2048
 max_size_written_objects: 5000000

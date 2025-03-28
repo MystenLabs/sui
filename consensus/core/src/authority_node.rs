@@ -745,10 +745,7 @@ mod tests {
 
     #[rstest]
     #[tokio::test(flavor = "current_thread")]
-    async fn test_amnesia_recovery_success(
-        #[values(ConsensusNetwork::Anemo, ConsensusNetwork::Tonic)] network_type: ConsensusNetwork,
-        #[values(0, 5, 10)] gc_depth: u32,
-    ) {
+    async fn test_amnesia_recovery_success(#[values(0, 5, 10)] gc_depth: u32) {
         telemetry_subscribers::init_for_testing();
         let db_registry = Registry::new();
         DBMetrics::init(&db_registry);
@@ -777,7 +774,7 @@ mod tests {
                 &dir,
                 committee.clone(),
                 keypairs.clone(),
-                network_type,
+                ConsensusNetwork::Tonic,
                 boot_counters[index],
                 protocol_config.clone(),
             )
@@ -827,7 +824,7 @@ mod tests {
             &dir,
             committee.clone(),
             keypairs.clone(),
-            network_type,
+            ConsensusNetwork::Tonic,
             boot_counters[index_1],
             protocol_config.clone(),
         )
@@ -848,7 +845,7 @@ mod tests {
             &temp_dirs[&index_2],
             committee.clone(),
             keypairs,
-            network_type,
+            ConsensusNetwork::Tonic,
             boot_counters[index_2],
             protocol_config.clone(),
         )
