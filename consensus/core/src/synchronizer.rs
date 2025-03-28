@@ -471,6 +471,7 @@ impl<C: NetworkClient, V: BlockVerifier, D: CoreThreadDispatcher> Synchronizer<C
                             }
                         },
                         Err(_) => {
+                            context.metrics.node_metrics.synchronizer_fetch_failures.with_label_values(&[peer_hostname, "live"]).inc();
                             if retries <= MAX_RETRIES {
                                 requests.push(Self::fetch_blocks_request(network_client.clone(), peer_index, blocks_guard, highest_rounds, FETCH_REQUEST_TIMEOUT, retries))
                             } else {
@@ -1090,6 +1091,7 @@ impl<C: NetworkClient, V: BlockVerifier, D: CoreThreadDispatcher> Synchronizer<C
                             }
                         },
                         Err(_) => {
+                            context.metrics.node_metrics.synchronizer_fetch_failures.with_label_values(&[peer_hostname, "periodic_old"]).inc();
                             // try again if there is any peer left
                             if let Some(next_peer) = peers.next() {
                                 // do best effort to lock guards. If we can't lock then don't bother at this run.
@@ -1271,6 +1273,7 @@ impl<C: NetworkClient, V: BlockVerifier, D: CoreThreadDispatcher> Synchronizer<C
                             }
                         },
                         Err(_) => {
+                            context.metrics.node_metrics.synchronizer_fetch_failures.with_label_values(&[peer_hostname, "periodic"]).inc();
                             // try again if there is any peer left
                             if let Some(next_peer) = peers.next() {
                                 // do best effort to lock guards. If we can't lock then don't bother at this run.
