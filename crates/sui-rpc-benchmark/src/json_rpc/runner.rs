@@ -194,8 +194,8 @@ pub async fn run_queries(
     let requests: Vec<_> = requests
         .iter()
         .filter(|r| !methods_to_skip.contains(&r.method))
-        // TODO: remove this hack when the SDK has removed all MatchAny related implementation.
-        // Skip suix_getOwnedObjects requests with MatchAny filter b/c it's not supported.
+        // TODO: remove this hack when the SDK has removed all MatchAny & MatchAll related implementation.
+        // Skip suix_getOwnedObjects requests with MatchAny & MatchAll filters b/c it's not supported.
         .filter(|r| {
             !(r.method == "suix_getOwnedObjects"
                 && r.body_json
@@ -203,8 +203,9 @@ pub async fn run_queries(
                     .and_then(|p| p.as_array())
                     .and_then(|p| p.get(1))
                     .and_then(|p| p.get("filter"))
-                    .and_then(|f| f.get("MatchAny"))
-                    .is_some())
+                    .and_then(|f| f.as_object())
+                    .map(|f| f.contains_key("MatchAny") || f.contains_key("MatchAll"))
+                    .unwrap_or(false))
         })
         .cloned()
         .collect();
