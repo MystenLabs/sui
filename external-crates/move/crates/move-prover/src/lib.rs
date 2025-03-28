@@ -19,7 +19,7 @@ use move_compiler::{shared::PackagePaths, Flags};
 use move_docgen::Docgen;
 use move_model::{
     code_writer::CodeWriter, model::GlobalEnv, parse_addresses_from_options,
-    run_model_builder_with_options, run_model_builder_with_options_and_compilation_flags, ty::Type,
+    run_model_builder_with_options_and_compilation_flags, ty::Type,
 };
 use move_prover_boogie_backend::{
     add_prelude, boogie_wrapper::BoogieWrapper, bytecode_translator::BoogieTranslator,

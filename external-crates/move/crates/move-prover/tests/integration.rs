@@ -10,6 +10,42 @@ fn run_prover(file_path: &PathBuf) -> String {
     options.move_sources = vec![file_path.to_string_lossy().to_string()];
     options.prover.stable_test_output = true; // For consistent snapshot testing
 
+    // Only add Sui framework for specific test files that require it
+    let filename = file_path.file_name().unwrap().to_string_lossy().to_string();
+    if filename.contains("sui_") {
+        // Add Sui SDK to the dependencies - include all required packages
+        let sui_packages_base = "../../../../crates/sui-framework/packages";
+        options
+            .move_deps
+            .push(format!("{}/sui-framework", sui_packages_base));
+        options
+            .move_deps
+            .push(format!("{}/move-stdlib", sui_packages_base));
+        options
+            .move_deps
+            .push(format!("{}/sui-system", sui_packages_base));
+        options
+            .move_deps
+            .push(format!("{}/bridge", sui_packages_base));
+        options
+            .move_deps
+            .push(format!("{}/deepbook", sui_packages_base));
+        options
+            .move_deps
+            .push(format!("{}/prover", sui_packages_base));
+
+        // Add named address values used in Sui framework
+        options.move_named_address_values = vec![
+            "sui=0x2".to_string(),
+            "sui_system=0x3".to_string(),
+            "sui_framework=0x2".to_string(),
+            "deepbook=0xdee9".to_string(),
+            "bridge=0xb".to_string(),
+            "std=0x1".to_string(),
+            "prover=0x0".to_string(),
+        ];
+    }
+
     // Capture output using a Vec buffer with NoColor writer
     let mut buffer = Vec::new();
     let mut writer = NoColor::new(&mut buffer);
