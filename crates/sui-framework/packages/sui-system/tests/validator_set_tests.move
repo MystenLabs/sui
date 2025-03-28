@@ -376,7 +376,7 @@ fun test_very_low_voting_power_departure() {
     let scenario = &mut scenario_val;
     // create 10 validators with equal-ish stake so we don't run up against max voting power limits
     let init_validators = get_10_validators(scenario.ctx());
-    let new_v = create_validator_with_initial_stake(@0xB, 11, 0, false, scenario.ctx());
+    let new_v = create_validator_with_initial_stake(@0xB, 12, 0, false, scenario.ctx());
     let mut validator_set = validator_set::new(init_validators, scenario.ctx());
     advance_epoch_with_dummy_rewards(&mut validator_set, scenario);
     skip_to_min_stake_v2_final_thresholds(scenario);
@@ -391,7 +391,7 @@ fun test_very_low_voting_power_departure() {
     assert!(validator_set.find_for_testing(@0xB).voting_power() == 3);
     let num_validators = validator_set.active_validators().length();
     // withdraw most of the stake. validator will now have voting power 1 and will be kicked out immediately
-    let bal = validator_set.request_withdraw_stake(stake.split(2 * MIST_PER_SUI, scenario.ctx()), scenario.ctx());
+    let bal = validator_set.request_withdraw_stake(stake.split(3 * MIST_PER_SUI, scenario.ctx()), scenario.ctx());
     advance_epoch_with_low_stake_grace_period(&mut validator_set, grace_period, scenario);
     assert!(!validator_set.is_active_validator(@0xB));
     // epoch change should emit one ValidatorEpochInfoEvent per validator and one ValidatorLeaveEvent for the departed validator
@@ -425,23 +425,23 @@ fun test_low_voting_power_departure() {
     assert!(validator_set.find_for_testing(@0xB).voting_power() == 3);
     let num_validators = validator_set.active_validators().length();
     // withdraw part of the stake. validator will now have voting power 2 and is now at risk
-    let bal = validator_set.request_withdraw_stake(stake.split(1 * MIST_PER_SUI, scenario.ctx()), scenario.ctx());
+    let bal = validator_set.request_withdraw_stake(stake.split(2 * MIST_PER_SUI, scenario.ctx()), scenario.ctx());
     advance_epoch_with_low_stake_grace_period(&mut validator_set, grace_period, scenario);
     assert!(validator_set.is_active_validator(@0xB));
-    assert!(validator_set.find_for_testing(@0xB).voting_power() == 2);
-    assert_eq(validator_set.find_for_testing(@0xB).voting_power(), 2);
+    assert!(validator_set.find_for_testing(@0xB).voting_power() == 1);
+    assert_eq(validator_set.find_for_testing(@0xB).voting_power(), 1);
     assert!(validator_set.is_at_risk_validator(@0xB));
 
     // ... 1 epoch goes by. still in the grace period
     advance_epoch_with_low_stake_grace_period(&mut validator_set, grace_period, scenario);
     assert!(validator_set.is_active_validator(@0xB));
     assert!(validator_set.is_at_risk_validator(@0xB));
-    assert!(validator_set.find_for_testing(@0xB).voting_power() == 2);
+    assert!(validator_set.find_for_testing(@0xB).voting_power() == 1);
     // ... 2 epochs go by. still in the grace period
     advance_epoch_with_low_stake_grace_period(&mut validator_set, grace_period, scenario);
     assert!(validator_set.is_active_validator(@0xB));
     assert!(validator_set.is_at_risk_validator(@0xB));
-    assert!(validator_set.find_for_testing(@0xB).voting_power() == 2);
+    assert!(validator_set.find_for_testing(@0xB).voting_power() == 1);
     // ... 3 epochs go by, grace period over. validator is kicked out
     advance_epoch_with_low_stake_grace_period(&mut validator_set, grace_period, scenario);
     assert!(!validator_set.is_active_validator(@0xB));
@@ -462,7 +462,7 @@ fun test_low_voting_power_recovery() {
     let scenario = &mut scenario_val;
     // create 10 validators with equal-ish stake so we don't run up against max voting power limits
     let init_validators = get_10_validators(scenario.ctx());
-    let new_v = create_validator_with_initial_stake(@0xB, 11, 0, false, scenario.ctx());
+    let new_v = create_validator_with_initial_stake(@0xB, 12, 0, false, scenario.ctx());
     let mut validator_set = validator_set::new(init_validators, scenario.ctx());
     advance_epoch_with_dummy_rewards(&mut validator_set, scenario);
     skip_to_min_stake_v2_final_thresholds(scenario);
@@ -476,10 +476,10 @@ fun test_low_voting_power_recovery() {
     assert!(validator_set.is_active_validator(@0xB));
     assert!(validator_set.find_for_testing(@0xB).voting_power() == 3);
     // withdraw part of the stake. validator will now have voting power 2 and is now at risk
-    let bal = validator_set.request_withdraw_stake(stake1.split(1 * MIST_PER_SUI, scenario.ctx()), scenario.ctx());
+    let bal = validator_set.request_withdraw_stake(stake1.split(2 * MIST_PER_SUI, scenario.ctx()), scenario.ctx());
     advance_epoch_with_low_stake_grace_period(&mut validator_set, grace_period, scenario);
     assert!(validator_set.is_active_validator(@0xB));
-    assert!(validator_set.find_for_testing(@0xB).voting_power() == 2);
+    assert!(validator_set.find_for_testing(@0xB).voting_power() == 1);
     assert!(validator_set.is_at_risk_validator(@0xB));
 
     // add back the stake and get the validator above the threshold. should no longer be at risk
