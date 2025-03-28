@@ -11,7 +11,6 @@ use sui_json_rpc_types::ObjectChange;
 use sui_json_rpc_types::SuiTransactionBlockEffectsAPI;
 use sui_macros::sim_test;
 use sui_node::SuiNodeHandle;
-use sui_protocol_config::ProtocolVersion;
 use sui_protocol_config::{Chain, ProtocolConfig};
 use sui_swarm_config::genesis_config::{
     AccountConfig, ValidatorGenesisConfig, ValidatorGenesisConfigBuilder,
@@ -42,6 +41,7 @@ use sui_types::transaction::ObjectArg;
 use sui_types::transaction::ProgrammableMoveCall;
 
 const DEFAULT_GAS_AMOUNT: u64 = 30_000_000_000_000_000; // 30M Sui
+const SIP_39_PROTOCOL_VERSION: u64 = 79;
 
 #[sim_test]
 async fn basic_reconfig_end_to_end_test() {
@@ -659,7 +659,7 @@ async fn test_switch_to_new_protocol_version() {
 
     let address = (&new_validator.account_key_pair.public()).into();
     let mut test_cluster = TestClusterBuilder::new()
-        .with_protocol_version(ProtocolVersion::MAX - 1)
+        .with_protocol_version((SIP_39_PROTOCOL_VERSION - 1).into())
         .with_epoch_duration_ms(10000)
         .with_accounts(vec![
             AccountConfig {
@@ -707,7 +707,7 @@ async fn test_switch_to_new_protocol_version() {
 
     // switch to new protocol version
     test_cluster
-        .wait_for_protocol_version(ProtocolVersion::MAX)
+        .wait_for_protocol_version(SIP_39_PROTOCOL_VERSION.into())
         .await;
 
     // next epoch
