@@ -662,6 +662,10 @@ struct FeatureFlags {
     // `Result`s of length not equal to 1
     #[serde(skip_serializing_if = "is_false")]
     normalize_ptb_arguments: bool,
+
+    // If true, enabled batched block sync in consensus.
+    #[serde(skip_serializing_if = "is_false")]
+    consensus_batched_block_sync: bool,
 }
 
 fn is_false(b: &bool) -> bool {
@@ -1873,6 +1877,10 @@ impl ProtocolConfig {
             "The consensus median based commit timestamp requires GC to be enabled"
         );
         res
+    }
+
+    pub fn consensus_batched_block_sync(&self) -> bool {
+        self.feature_flags.consensus_batched_block_sync
     }
 
     pub fn convert_type_argument_error(&self) -> bool {
@@ -3430,6 +3438,8 @@ impl ProtocolConfig {
                         // leaders in consensus in testnet
                         cfg.consensus_bad_nodes_stake_threshold = Some(30);
 
+                        cfg.feature_flags.consensus_batched_block_sync = true;
+
                         // Enable verify nitro attestation in testnet.
                         cfg.feature_flags.enable_nitro_attestation = true
                     }
@@ -3624,6 +3634,10 @@ impl ProtocolConfig {
 
     pub fn set_consensus_median_based_commit_timestamp_for_testing(&mut self, val: bool) {
         self.feature_flags.consensus_median_based_commit_timestamp = val;
+    }
+
+    pub fn set_consensus_batched_block_sync_for_testing(&mut self, val: bool) {
+        self.feature_flags.consensus_batched_block_sync = val;
     }
 }
 
