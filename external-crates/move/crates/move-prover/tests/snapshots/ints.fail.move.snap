@@ -1,8 +1,6 @@
 ---
 source: crates/move-prover/tests/integration.rs
-assertion_line: 52
 expression: output
-snapshot_kind: text
 ---
 Verification failed: exiting with verification errors
 error: prover::ensures assertion does not hold
@@ -20,5 +18,5 @@ error: prover::ensures assertion does not hold
    =     at tests/inputs/ints.fail.move:8: foo
    =         res#1#0 = 26501u64
    =     at tests/inputs/ints.fail.move:14: foo_spec
-   =         x_int#1#0 = 26500
+   =         x_int#1#0 = integer::Integer { 26500 }
    =     at tests/inputs/ints.fail.move:15: foo_spec
