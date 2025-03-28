@@ -1802,8 +1802,6 @@ name = "move-abstract-interpreter"
 version = "0.1.0"
 dependencies = [
  "itertools 0.10.5",
- "move-binary-format",
- "move-bytecode-verifier-meter",
 ]
 
 [[package]]
@@ -1855,6 +1853,7 @@ dependencies = [
  "arbitrary",
  "enum-compat-util",
  "getrandom 0.2.15",
+ "move-abstract-interpreter",
  "move-core-types",
  "move-proc-macros",
  "proptest",
@@ -1909,6 +1908,20 @@ dependencies = [
  "move-core-types",
  "move-vm-config",
  "petgraph",
+]
+
+[[package]]
+name = "move-bytecode-verifier-analyzer"
+version = "0.0.1"
+dependencies = [
+ "anyhow",
+ "clap 4.5.28",
+ "move-binary-format",
+ "move-bytecode-verifier",
+ "move-bytecode-verifier-meter",
+ "move-command-line-common",
+ "move-core-types",
+ "move-vm-config",
 ]
 
 [[package]]
