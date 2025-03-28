@@ -5,7 +5,7 @@ snapshot_kind: text
 ---
 Verification failed: exiting with model building errors
 error: unexpected token
-  ┌─ tests/inputs/simple-compile-error.move:5:1
+  ┌─ tests/inputs/compile-error.fail.move:5:1
   │
 4 │   assert!(true
   │          - To match this '('

@@ -1,14 +1,13 @@
 ---
 source: crates/move-prover/tests/integration.rs
-assertion_line: 86
 expression: output
 snapshot_kind: text
 ---
 Verification failed: exiting with verification errors
 error: prover::ensures assertion does not hold
-   ┌─ tests/inputs/simple.one-failing-assert.move:13:3
+   ┌─ tests/inputs/one-assert.fail.move:13:3
    │
 13 │   ensures(false);
    │   ^^^^^^^^^^^^^^
    │
-   =     at tests/inputs/simple.one-failing-assert.move:12: foo_failing_spec
+   =     at tests/inputs/one-assert.fail.move:12: foo_failing_spec
