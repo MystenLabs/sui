@@ -2,21 +2,25 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use futures::future::join_all;
+use move_core_types::ident_str;
 use rand::rngs::OsRng;
-use std::collections::BTreeSet;
 use std::sync::Arc;
 use std::time::Duration;
 use sui_core::consensus_adapter::position_submit_certificate;
+use sui_json_rpc_types::ObjectChange;
 use sui_json_rpc_types::SuiTransactionBlockEffectsAPI;
 use sui_macros::sim_test;
 use sui_node::SuiNodeHandle;
+use sui_protocol_config::ProtocolVersion;
 use sui_protocol_config::{Chain, ProtocolConfig};
 use sui_swarm_config::genesis_config::{
     AccountConfig, ValidatorGenesisConfig, ValidatorGenesisConfigBuilder,
 };
 use sui_test_transaction_builder::{make_transfer_sui_transaction, TestTransactionBuilder};
 use sui_types::base_types::SuiAddress;
+use sui_types::effects::TransactionEffects;
 use sui_types::effects::TransactionEffectsAPI;
+use sui_types::effects::TransactionEvents;
 use sui_types::error::SuiError;
 use sui_types::governance::{
     VALIDATOR_LOW_POWER_PHASE_1, VALIDATOR_MIN_POWER_PHASE_1, VALIDATOR_VERY_LOW_POWER_PHASE_1,
@@ -649,6 +653,81 @@ async fn test_reconfig_with_committee_change_basic() {
 }
 
 #[sim_test]
+async fn test_switch_to_new_protocol_version() {
+    let initial_num_validators = 10;
+    let new_validator = ValidatorGenesisConfigBuilder::new().build(&mut OsRng);
+
+    let address = (&new_validator.account_key_pair.public()).into();
+    let mut test_cluster = TestClusterBuilder::new()
+        .with_protocol_version(ProtocolVersion::MAX - 1)
+        .with_epoch_duration_ms(10000)
+        .with_accounts(vec![
+            AccountConfig {
+                gas_amounts: vec![DEFAULT_GAS_AMOUNT],
+                address: None,
+            },
+            AccountConfig {
+                gas_amounts: vec![DEFAULT_GAS_AMOUNT],
+                address: Some(address),
+            },
+        ])
+        .with_num_validators(initial_num_validators)
+        .build()
+        .await;
+
+    // adds a validator candidate which cannot enter the commitee before SIP-39
+    add_validator_candidate(&test_cluster, &new_validator).await;
+    execute_add_stake_transaction(
+        &mut test_cluster,
+        // voting power: ~0.2%
+        vec![(
+            address,
+            (VALIDATOR_STARTING_STAKE * (initial_num_validators as u64)) / 10_000 * 20,
+        )],
+    )
+    .await;
+
+    // stake is applied, validator is still a candidate
+    test_cluster.trigger_reconfiguration().await;
+
+    // check that the validator candidate is in the system state
+    test_cluster.fullnode_handle.sui_node.with(|node| {
+        let system_state = node
+            .state()
+            .get_sui_system_state_object_for_testing()
+            .unwrap()
+            .into_sui_system_state_summary();
+        assert_eq!(system_state.validator_candidates_size, 1);
+    });
+
+    // try adding the validator candidate to the committee
+    // this tx will fail because the protocol version is not high enough
+    let res = try_request_add_validator(&mut test_cluster, &new_validator).await;
+    assert!(res.unwrap().0.status().is_err());
+
+    // switch to new protocol version
+    test_cluster
+        .wait_for_protocol_version(ProtocolVersion::MAX)
+        .await;
+
+    // next epoch
+    test_cluster.trigger_reconfiguration().await;
+
+    test_cluster.fullnode_handle.sui_node.with(|node| {
+        let system_state = node
+            .state()
+            .get_sui_system_state_object_for_testing()
+            .unwrap()
+            .into_sui_system_state_summary();
+
+        assert_eq!(
+            system_state.active_validators.len(),
+            initial_num_validators + 1
+        );
+    })
+}
+
+#[sim_test]
 async fn test_reconfig_with_voting_power_decrease() {
     // This test exercise the full flow of a validator joining the network, catch up and then leave.
     // Validator starts with .12% of the total voting power and then decreases to below the threshold.
@@ -1089,7 +1168,7 @@ async fn execute_remove_validator_tx(test_cluster: &TestCluster, handle: &SuiNod
 async fn execute_add_stake_transaction(
     test_cluster: &mut TestCluster,
     stakes: Vec<(SuiAddress, u64)>,
-) {
+) -> Vec<ObjectChange> {
     let (address, gas) = test_cluster
         .wallet
         .get_one_gas_object()
@@ -1110,8 +1189,8 @@ async fn execute_add_stake_transaction(
             package: SUI_SYSTEM_PACKAGE_ID,
             module: "sui_system".to_string(),
             function: "request_add_stake".to_string(),
-            type_arguments: vec![],
             arguments: vec![system_arg, stake_arg, stake_for_arg],
+            type_arguments: vec![],
         })));
     });
 
@@ -1119,9 +1198,21 @@ async fn execute_add_stake_transaction(
         .programmable(ptb.finish())
         .build();
 
-    test_cluster
+    let response = test_cluster
         .execute_transaction(test_cluster.wallet.sign_transaction(&tx))
         .await;
+
+    response
+        .object_changes
+        .unwrap()
+        .into_iter()
+        .filter(|change| match change {
+            ObjectChange::Created { object_type, .. } => {
+                object_type.name == ident_str!("StakedSui").into()
+            }
+            _ => false,
+        })
+        .collect::<Vec<_>>()
 }
 
 /// Execute a sequence of transactions to add a validator, including adding candidate, adding stake
@@ -1145,25 +1236,6 @@ async fn execute_add_validator_transactions(
     add_validator_candidate(test_cluster, new_validator).await;
 
     let address = (&new_validator.account_key_pair.public()).into();
-    let stake_coin = test_cluster
-        .wallet
-        .gas_for_owner_budget(
-            address,
-            stake_amount.unwrap_or(DEFAULT_GAS_AMOUNT),
-            Default::default(),
-        )
-        .await
-        .unwrap()
-        .1
-        .object_ref();
-
-    let gas = test_cluster
-        .wallet
-        .gas_for_owner_budget(address, 0, BTreeSet::from([stake_coin.0]))
-        .await
-        .unwrap()
-        .1
-        .object_ref();
 
     execute_add_stake_transaction(
         test_cluster,
@@ -1171,13 +1243,12 @@ async fn execute_add_validator_transactions(
     )
     .await;
 
-    let rgp = test_cluster.get_reference_gas_price().await;
-    let gas = test_cluster.wallet.get_object_ref(gas.0).await.unwrap();
-    let tx = TestTransactionBuilder::new(address, gas, rgp)
-        .call_request_add_validator()
-        .build_and_sign(&new_validator.account_key_pair);
-
-    test_cluster.execute_transaction(tx).await;
+    assert!(try_request_add_validator(test_cluster, new_validator)
+        .await
+        .unwrap()
+        .0
+        .status()
+        .is_ok());
 
     // Check that we can get the pending validator from 0x5.
     test_cluster.fullnode_handle.sui_node.with(|node| {
@@ -1194,4 +1265,26 @@ async fn execute_add_validator_transactions(
             address
         );
     });
+}
+
+async fn try_request_add_validator(
+    test_cluster: &mut TestCluster,
+    new_validator: &ValidatorGenesisConfig,
+) -> Result<(TransactionEffects, TransactionEvents), anyhow::Error> {
+    let address = (&new_validator.account_key_pair.public()).into();
+    let gas = test_cluster
+        .wallet
+        .get_one_gas_object_owned_by_address(address)
+        .await
+        .unwrap()
+        .unwrap();
+
+    let rgp = test_cluster.get_reference_gas_price().await;
+    let tx = TestTransactionBuilder::new(address, gas, rgp)
+        .call_request_add_validator()
+        .build_and_sign(&new_validator.account_key_pair);
+
+    test_cluster
+        .execute_transaction_return_raw_effects(tx)
+        .await
 }
