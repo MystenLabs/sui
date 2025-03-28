@@ -8,13 +8,15 @@ use std::{
     pin::Pin,
     sync::Arc,
     task::{Context, Poll},
+    time::Duration,
 };
 
 use jsonrpsee::{server::middleware::rpc::RpcServiceT, types::Request, MethodResponse};
 use pin_project_lite::pin_project;
 use prometheus::{HistogramTimer, IntCounterVec};
+use serde_json::value::RawValue;
 use tower_layer::Layer;
-use tracing::info;
+use tracing::{info, warn};
 
 use super::RpcMetrics;
 
@@ -24,6 +26,7 @@ use super::RpcMetrics;
 pub(crate) struct MetricsLayer {
     metrics: Arc<RpcMetrics>,
     methods: Arc<HashSet<String>>,
+    slow_request_threshold: Duration,
 }
 
 /// The Tower Service responsible for wrapping the JSON-RPC request handler with metrics handling.
@@ -42,6 +45,10 @@ pin_project! {
     pub(crate) struct MetricsFuture<'a, F> {
         metrics: Option<RequestMetrics>,
         method: Cow<'a, str>,
+        // RPC request params for logging
+        params: Option<Cow<'a, RawValue>>,
+        // Threshold in ms for logging slow requests
+        slow_request_threshold: Duration,
         #[pin]
         inner: F,
     }
@@ -50,10 +57,15 @@ pin_project! {
 impl MetricsLayer {
     /// Create a new metrics layer that only records statistics for the given methods (any other
     /// methods will be replaced with "<UNKNOWN>").
-    pub fn new(metrics: Arc<RpcMetrics>, methods: HashSet<String>) -> Self {
+    pub fn new(
+        metrics: Arc<RpcMetrics>,
+        methods: HashSet<String>,
+        slow_request_threshold: Duration,
+    ) -> Self {
         Self {
             metrics,
             methods: Arc::new(methods),
+            slow_request_threshold,
         }
     }
 }
@@ -102,6 +114,8 @@ where
                 failed: self.layer.metrics.requests_failed.clone(),
             }),
             method,
+            params: request.params.clone(),
+            slow_request_threshold: self.layer.slow_request_threshold,
             inner: self.inner.call(request),
         }
     }
@@ -136,6 +150,29 @@ where
         } else {
             metrics.succeeded.with_label_values(&[method]).inc();
             info!(method, elapsed_ms, "Request succeeded");
+        }
+
+        let slow_request_threshold_ms = this.slow_request_threshold.as_millis() as f64;
+        if elapsed_ms > slow_request_threshold_ms {
+            let result = resp.as_result();
+            let response = if result.len() > 1000 {
+                format!("{}...", &result[..997])
+            } else {
+                result.to_string()
+            };
+
+            let params = this.params.as_ref().map(|p| p.get()).unwrap_or("[]");
+
+            warn!(
+                elapsed_ms,
+                method,
+                params,
+                error = ?resp.as_error_code(),
+                response_length = result.len(),
+                response,
+                "Slow request (>{:.02}s)",
+                this.slow_request_threshold.as_secs_f64(),
+            );
         }
 
         Poll::Ready(resp)
