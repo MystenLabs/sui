@@ -3,7 +3,11 @@
 
 use async_graphql::{Context, Object, Result};
 
-use crate::{config::Limits, error::RpcError};
+use crate::{
+    config::Limits,
+    error::RpcError,
+    pagination::{is_connection, PaginationConfig},
+};
 
 pub(crate) struct ServiceConfig;
 
@@ -89,15 +93,49 @@ impl ServiceConfig {
         Ok(limits.max_query_payload_size)
     }
 
-    /// By default, paginated queries will return this many elements if a page size is not provided. This may be overridden for paginated queries that are limited by the protocol.
-    async fn default_page_size(&self, ctx: &Context<'_>) -> Result<u32, RpcError> {
-        let limits: &Limits = ctx.data()?;
-        Ok(limits.default_page_size)
+    /// Returns the number of elements a paginated connection will return if a page size is not supplied.
+    ///
+    /// Accepts `type` and `field` arguments which identify the connection that is being queried. If the field in question is paginated, its default page size is returned. If it does not exist or is not paginated, `null` is returned.
+    async fn default_page_size(
+        &self,
+        ctx: &Context<'_>,
+        type_: String,
+        field: String,
+    ) -> Result<Option<u32>, RpcError> {
+        let registry = &ctx.schema_env.registry;
+
+        if !registry
+            .concrete_type_by_name(&type_)
+            .and_then(|t| t.field_by_name(&field))
+            .is_some_and(is_connection)
+        {
+            return Ok(None);
+        }
+
+        let config: &PaginationConfig = ctx.data()?;
+        Ok(Some(config.limits(&type_, &field).default))
     }
 
-    /// By default, paginated queries can return at most this many elements. A request to fetch more elements will result in an error. This limit may be superseded when the field being paginated is limited by the protocol (e.g. object changes for a transaction).
-    async fn max_page_size(&self, ctx: &Context<'_>) -> Result<u32, RpcError> {
-        let limits: &Limits = ctx.data()?;
-        Ok(limits.max_page_size)
+    /// Returns the maximum number of elements that can be requested from a paginated connection. A request to fetch more elements will result in an error.
+    ///
+    /// Accepts `type` and `field` arguments which identify the connection that is being queried. If the field in question is paginated, its max page size is returned. If it does not exist or is not paginated, `null` is returned.
+    async fn max_page_size(
+        &self,
+        ctx: &Context<'_>,
+        type_: String,
+        field: String,
+    ) -> Result<Option<u32>, RpcError> {
+        let registry = &ctx.schema_env.registry;
+
+        if !registry
+            .concrete_type_by_name(&type_)
+            .and_then(|t| t.field_by_name(&field))
+            .is_some_and(is_connection)
+        {
+            return Ok(None);
+        }
+
+        let config: &PaginationConfig = ctx.data()?;
+        Ok(Some(config.limits(&type_, &field).max))
     }
 }
