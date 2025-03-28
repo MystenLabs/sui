@@ -21,11 +21,6 @@ export PATH="$DOTNET_ROOT/bin:$BIN_DIR:$PATH"
 # Clone and build Sui Prover
 cargo install --locked --path ./crates/sui-prover --root "$INSTALL_DIR"
 
-# Run cargo test in move-prover directory
-cd ./external-crates/move/crates/move-prover
-cargo test
-cd ../../../../
-
 # Clone and build Boogie
 git clone --branch master https://github.com/boogie-org/boogie.git boogie-src
 cd boogie-src
@@ -49,6 +44,15 @@ chmod +x "$BIN_DIR/sui-prover"
 # Add $BIN_DIR to PATH in the current session
 echo "export PATH=$BIN_DIR:\$PATH" >> ~/.bashrc
 echo "Sui Prover installed successfully! Use 'sui-prover' command."
+
+# Run cargo test in move-prover directory
+export DOTNET_ROOT="$DOTNET_ROOT"
+export BOOGIE_EXE="$BIN_DIR/boogie"
+export Z3_EXE="$(brew --prefix z3)/bin/z3"
+cd ./external-crates/move/crates/move-prover
+cargo test
+cd ../../../../
+
 
 cd ./crates/sui-framework/packages/prover
 sui-prover
