@@ -3,6 +3,7 @@
 
 use std::net::SocketAddr;
 use std::sync::Arc;
+use std::time::Duration;
 
 use anyhow::Context as _;
 use api::checkpoints::Checkpoints;
@@ -51,6 +52,10 @@ pub struct RpcArgs {
     /// many requests, it will start responding with 429.
     #[clap(long, default_value_t = Self::default().max_in_flight_requests)]
     pub max_in_flight_requests: u32,
+
+    /// Threshold in ms for logging slow requests. Requests that take longer than this will be logged as warnings.
+    #[clap(long, default_value_t = Self::default().slow_request_threshold_ms)]
+    pub slow_request_threshold_ms: u64,
 }
 
 pub struct RpcService {
@@ -71,6 +76,9 @@ pub struct RpcService {
 
     /// Cancellation token controlling all services.
     cancel: CancellationToken,
+
+    /// Threshold for logging slow requests.
+    slow_request_threshold: Duration,
 }
 
 impl RpcService {
@@ -84,6 +92,7 @@ impl RpcService {
         let RpcArgs {
             rpc_listen_address,
             max_in_flight_requests,
+            slow_request_threshold_ms,
         } = rpc_args;
 
         let metrics = RpcMetrics::new(registry);
@@ -114,6 +123,7 @@ impl RpcService {
             modules: jsonrpsee::RpcModule::new(()),
             schema,
             cancel,
+            slow_request_threshold: Duration::from_millis(slow_request_threshold_ms),
         })
     }
 
@@ -141,6 +151,7 @@ impl RpcService {
             mut modules,
             schema,
             cancel,
+            slow_request_threshold,
         } = self;
 
         info!("Starting JSON-RPC service on {rpc_listen_address}",);
@@ -154,6 +165,7 @@ impl RpcService {
         let middleware = RpcServiceBuilder::new().layer(MetricsLayer::new(
             metrics,
             modules.method_names().map(|n| n.to_owned()).collect(),
+            slow_request_threshold,
         ));
 
         let handle = server
@@ -193,6 +205,7 @@ impl Default for RpcArgs {
         Self {
             rpc_listen_address: "0.0.0.0:6000".parse().unwrap(),
             max_in_flight_requests: 2000,
+            slow_request_threshold_ms: 60_000,
         }
     }
 }
@@ -228,7 +241,7 @@ pub async fn start_rpc(
     registry: &Registry,
     cancel: CancellationToken,
 ) -> anyhow::Result<JoinHandle<()>> {
-    let mut rpc = RpcService::new(rpc_args, registry, cancel.child_token())
+    let mut rpc = RpcService::new(rpc_args.clone(), registry, cancel.child_token())
         .context("Failed to create RPC service")?;
 
     let context = Context::new(
@@ -238,6 +251,7 @@ pub async fn start_rpc(
         rpc.metrics(),
         registry,
         cancel.child_token(),
+        Duration::from_millis(rpc_args.slow_request_threshold_ms),
     )
     .await?;
 

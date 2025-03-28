@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::sync::Arc;
+use std::time::Duration;
 
 use anyhow::anyhow;
 use async_graphql::dataloader::DataLoader;
@@ -16,7 +17,7 @@ use prometheus::Registry;
 use sui_indexer_alt_metrics::db::DbConnectionStatsCollector;
 use sui_pg_db as db;
 use tokio_util::sync::CancellationToken;
-use tracing::debug;
+use tracing::{debug, warn};
 use url::Url;
 
 use crate::{data::error::Error, metrics::RpcMetrics};
@@ -28,11 +29,13 @@ pub(crate) struct PgReader {
     db: Option<db::Db>,
     metrics: Arc<RpcMetrics>,
     cancel: CancellationToken,
+    slow_query_threshold: Duration,
 }
 
 pub(crate) struct Connection<'p> {
     conn: db::Connection<'p>,
     metrics: Arc<RpcMetrics>,
+    slow_query_threshold: Duration,
 }
 
 impl PgReader {
@@ -44,6 +47,7 @@ impl PgReader {
         metrics: Arc<RpcMetrics>,
         registry: &Registry,
         cancel: CancellationToken,
+        slow_query_threshold: Duration,
     ) -> Result<Self, Error> {
         let db = if let Some(database_url) = database_url {
             let db = db::Db::for_read(database_url, db_args)
@@ -66,6 +70,7 @@ impl PgReader {
             db,
             metrics,
             cancel,
+            slow_query_threshold,
         })
     }
 
@@ -90,6 +95,7 @@ impl PgReader {
                 Ok(Connection {
                     conn: conn.map_err(Error::PgConnect)?,
                     metrics: self.metrics.clone(),
+                    slow_query_threshold: self.slow_query_threshold,
                 })
             }
         }
@@ -107,10 +113,21 @@ impl Connection<'_> {
         ST: 'static,
     {
         let query = query.limit(1);
-        debug!("{}", diesel::debug_query(&query));
+        let query_debug = diesel::debug_query(&query).to_string();
+        debug!("{}", query_debug);
+        let timer = self.metrics.db_latency.start_timer();
 
-        let _guard = self.metrics.db_latency.start_timer();
         let res = query.get_result(&mut self.conn).await;
+        let elapsed_seconds = timer.stop_and_record();
+        let threshold_seconds = self.slow_query_threshold.as_secs() as f64;
+        if elapsed_seconds > threshold_seconds {
+            warn!(
+                elapsed_seconds,
+                threshold_seconds,
+                query = query_debug,
+                "Slow database query detected!",
+            );
+        }
 
         if res.is_ok() {
             self.metrics.db_requests_succeeded.inc();
@@ -129,10 +146,21 @@ impl Connection<'_> {
         Pg: QueryMetadata<Q::SqlType>,
         ST: 'static,
     {
-        debug!("{}", diesel::debug_query(&query));
+        let query_debug = diesel::debug_query(&query).to_string();
+        debug!("{}", query_debug);
+        let timer = self.metrics.db_latency.start_timer();
 
-        let _guard = self.metrics.db_latency.start_timer();
         let res = query.get_results(&mut self.conn).await;
+        let elapsed_seconds = timer.stop_and_record();
+        let threshold_seconds = self.slow_query_threshold.as_secs() as f64;
+        if elapsed_seconds > threshold_seconds {
+            warn!(
+                elapsed_seconds,
+                query = query_debug,
+                threshold_seconds,
+                "Slow database query detected!",
+            );
+        }
 
         if res.is_ok() {
             self.metrics.db_requests_succeeded.inc();
