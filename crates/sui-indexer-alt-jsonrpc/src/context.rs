@@ -74,7 +74,8 @@ impl Context {
         let pg_loader = Arc::new(pg_reader.as_data_loader());
 
         let kv_loader = if let Some(config) = config.bigtable.clone() {
-            let bigtable_reader = BigtableReader::new(config.instance_id, registry).await?;
+            let bigtable_reader =
+                BigtableReader::new(config.instance_id, registry, slow_request_threshold).await?;
             KvLoader::new_with_bigtable(Arc::new(bigtable_reader.as_data_loader()))
         } else {
             KvLoader::new_with_pg(pg_loader.clone())

@@ -71,9 +71,11 @@ impl Loader<CheckpointKey> for BigtableReader {
         let checkpoint_keys: Vec<CheckpointSequenceNumber> = keys.iter().map(|k| k.0).collect();
 
         let checkpoints = self
-            .0
-            .clone()
-            .get_checkpoints(&checkpoint_keys)
+            .timed_load(
+                "get_checkpoints",
+                &checkpoint_keys,
+                self.0.clone().get_checkpoints(&checkpoint_keys),
+            )
             .await
             .map_err(|e| Arc::new(Error::BigtableRead(e)))?;
 
