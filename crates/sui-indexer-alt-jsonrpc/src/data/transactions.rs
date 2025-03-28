@@ -68,10 +68,13 @@ impl Loader<TransactionKey> for BigtableReader {
         keys: &[TransactionKey],
     ) -> Result<HashMap<TransactionKey, Self::Value>, Self::Error> {
         let digests: Vec<_> = keys.iter().map(|k| k.0).collect();
+
         let transactions = self
-            .0
-            .clone()
-            .get_transactions(&digests)
+            .timed_load(
+                "get_transactions",
+                &digests,
+                self.0.clone().get_transactions(&digests),
+            )
             .await
             .map_err(|e| Arc::new(Error::BigtableRead(e)))?;
 
