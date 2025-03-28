@@ -8,13 +8,13 @@
 //! Each node is (optionally) associated with abstract value of a generic type `T`.
 
 use crate::{
+    ast::TempIndex,
     access_path::{AbsAddr, AccessPath, AccessPathMap, FootprintDomain, Offset, Root},
     dataflow_domains::{AbstractDomain, JoinResult, MapDomain},
 };
 use im::ordmap::Entry;
 use move_core_types::language_storage::TypeTag;
 use move_model::{
-    ast::TempIndex,
     model::{FunctionEnv, GlobalEnv},
     ty::Type,
 };

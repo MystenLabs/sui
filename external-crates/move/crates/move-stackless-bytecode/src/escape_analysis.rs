@@ -16,11 +16,11 @@ use codespan_reporting::diagnostic::{Diagnostic, Label, Severity};
 
 use move_binary_format::file_format::CodeOffset;
 use move_model::{
-    ast::{Operation as ASTOperation, TempIndex},
     model::{DatatypeId, FieldId, FunctionEnv, ModuleId, QualifiedId},
 };
 
 use crate::{
+    ast::{Operation as ASTOperation, TempIndex},
     dataflow_analysis::{DataflowAnalysis, TransferFunctions},
     dataflow_domains::{AbstractDomain, JoinResult, MapDomain},
     function_target::FunctionData,

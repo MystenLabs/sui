@@ -3,6 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
+    ast::TempIndex,
     function_target::FunctionData,
     stackless_bytecode::{
         AssignKind, AttrId,
@@ -20,7 +21,6 @@ use move_core_types::{
     runtime_value::MoveValue,
 };
 use move_model::{
-    ast::TempIndex,
     model::{DatatypeId, FunId, FunctionEnv, Loc, ModuleId, RefType},
     ty::{PrimitiveType, Type},
 };

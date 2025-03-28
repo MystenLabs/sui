@@ -10,13 +10,13 @@ use itertools::Itertools;
 
 use move_binary_format::file_format::CodeOffset;
 use move_model::{
-    ast::TempIndex,
     model::{FunctionEnv, GlobalEnv, QualifiedInstId},
     ty::Type,
     well_known::{BORROW_CHILD_OBJECT_MUT, VECTOR_BORROW_MUT},
 };
 
 use crate::{
+    ast::TempIndex,
     dataflow_analysis::{DataflowAnalysis, TransferFunctions},
     dataflow_domains::{AbstractDomain, JoinResult, MapDomain, SetDomain},
     function_target::{FunctionData, FunctionTarget},

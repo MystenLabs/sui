@@ -17,12 +17,12 @@
 use num::{BigUint, Zero};
 
 use move_model::{
-    ast::{Operation, QuantKind},
     model::FunctionEnv,
     ty::BOOL_TYPE,
 };
 
 use crate::{
+    ast::{Operation, QuantKind},
     exp_generator::ExpGenerator,
     function_data_builder::FunctionDataBuilder,
     function_target::FunctionData,

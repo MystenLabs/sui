@@ -43,7 +43,6 @@ use crate::{
 pub mod ast;
 mod builder;
 pub mod code_writer;
-pub mod exp_rewriter;
 pub mod model;
 pub mod options;
 pub mod pragmas;

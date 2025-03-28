@@ -23,10 +23,12 @@
 //!```
 //!, the value of `a` will be `{ 0x1, Footprint(x/f) }` at program point 1.
 
-use crate::dataflow_domains::{AbstractDomain, SetDomain};
+use crate::{
+    ast::TempIndex,
+    dataflow_domains::{AbstractDomain, SetDomain},
+};
 use move_core_types::{account_address::AccountAddress, language_storage::StructTag};
 use move_model::{
-    ast::TempIndex,
     model::{DatatypeId, FunctionEnv, GlobalEnv, ModuleId, QualifiedId},
     ty::{PrimitiveType, Type, TypeDisplayContext},
 };

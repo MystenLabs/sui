@@ -4,6 +4,7 @@
 
 use crate::{
     annotations::Annotations,
+    ast::{Exp, ExpData, TempIndex},
     borrow_analysis, livevar_analysis, reaching_def_analysis,
     stackless_bytecode::{AttrId, Bytecode, Label},
 };
@@ -11,17 +12,13 @@ use itertools::Itertools;
 use move_binary_format::file_format::CodeOffset;
 use move_model::{
     model::{
-        DatatypeId, FunId, FunctionEnv, FunctionVisibility, GlobalEnv, Loc, ModuleEnv, QualifiedId,
+        DatatypeId, FunId, FunctionEnv, FunctionVisibility, GlobalEnv, Loc, ModuleEnv, QualifiedId, QualifiedInstId,
     },
     symbol::{Symbol, SymbolPool},
     ty::{Type, TypeDisplayContext},
 };
 
 use crate::function_target_pipeline::FunctionVariant;
-use move_model::{
-    ast::{Exp, ExpData, TempIndex},
-    model::QualifiedInstId,
-};
 use std::{
     cell::RefCell,
     collections::{BTreeMap, BTreeSet},

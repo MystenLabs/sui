@@ -16,7 +16,6 @@ use codespan_reporting::diagnostic::Severity;
 use itertools::Itertools;
 
 use move_model::{
-    ast::GlobalInvariant,
     model::{FunId, FunctionEnv, GlobalEnv, GlobalId, QualifiedId, VerificationScope},
     pragmas::{
         CONDITION_SUSPENDABLE_PROP, DELEGATE_INVARIANTS_TO_CALLER_PRAGMA,
