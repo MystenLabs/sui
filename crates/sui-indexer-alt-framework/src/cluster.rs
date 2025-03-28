@@ -7,16 +7,14 @@ use std::{
 };
 
 use anyhow::Context;
-use diesel_migrations::EmbeddedMigrations;
 use prometheus::Registry;
+use sui_indexer_alt_framework_store_traits::Store;
 use sui_indexer_alt_metrics::{MetricsArgs, MetricsService};
 use tokio::{signal, task::JoinHandle};
 use tokio_util::sync::CancellationToken;
 use tracing::info;
-use url::Url;
 
 use crate::{
-    db::DbArgs,
     ingestion::{ClientArgs, IngestionConfig},
     Indexer, IndexerArgs, IndexerMetrics, Result,
 };
@@ -42,48 +40,32 @@ pub struct Args {
 /// An [IndexerCluster] combines an [Indexer] with a [MetricsService] and a tracing subscriber
 /// (outputting to stderr) to provide observability. It is a useful starting point for an indexer
 /// binary.
-pub struct IndexerCluster {
-    indexer: Indexer,
+pub struct IndexerCluster<S: Store> {
+    indexer: Indexer<S>,
     metrics: MetricsService,
 
     /// Cancelling this token signals cancellation to both the indexer and metrics service.
     cancel: CancellationToken,
 }
 
-impl IndexerCluster {
+impl<S: Store> IndexerCluster<S> {
+    // TODO (wlmyng): probably want to feature gate this to postgres
     /// Create a new cluster with most of the configuration set to its default value. Use
     /// [Self::new_with_configs] to construct a cluster with full customization.
-    pub async fn new(
-        database_url: Url,
-        args: Args,
-        migrations: Option<&'static EmbeddedMigrations>,
-    ) -> Result<Self> {
-        Self::new_with_configs(
-            database_url,
-            DbArgs::default(),
-            args,
-            IngestionConfig::default(),
-            migrations,
-            None,
-        )
-        .await
+    pub async fn new(store: S, args: Args) -> Result<Self> {
+        Self::new_with_configs(store, args, IngestionConfig::default(), None).await
     }
 
     /// Create a new cluster.
     ///
-    /// - `database_url` and `db_args` configure its database connection.
     /// - `args` configures where checkpoints are come from, what is indexed and metrics.
     /// - `ingestion_config` controls how the ingestion service is set-up (its concurrency, polling
     ///    intervals, etc).
-    /// - `migrations` are any database migrations the indexer needs to run before starting to
-    ///   ensure the database schema is ready for the data that is about to be committed.
     /// - `metric_label` is an optional custom label to add to metrics reported by this service.
     pub async fn new_with_configs(
-        database_url: Url,
-        db_args: DbArgs,
+        store: S,
         args: Args,
         ingestion_config: IngestionConfig,
-        migrations: Option<&'static EmbeddedMigrations>,
         metric_label: Option<String>,
     ) -> Result<Self> {
         tracing_subscriber::fmt::init();
@@ -96,12 +78,10 @@ impl IndexerCluster {
         let metrics = MetricsService::new(args.metrics_args, registry, cancel.child_token());
 
         let indexer = Indexer::new(
-            database_url,
-            db_args,
+            store,
             args.indexer_args,
             args.client_args,
             ingestion_config,
-            migrations,
             metrics.registry(),
             cancel.child_token(),
         )
@@ -155,15 +135,15 @@ impl IndexerCluster {
     }
 }
 
-impl Deref for IndexerCluster {
-    type Target = Indexer;
+impl<S: Store> Deref for IndexerCluster<S> {
+    type Target = Indexer<S>;
 
     fn deref(&self) -> &Self::Target {
         &self.indexer
     }
 }
 
-impl DerefMut for IndexerCluster {
+impl<S: Store> DerefMut for IndexerCluster<S> {
     fn deref_mut(&mut self) -> &mut Self::Target {
         &mut self.indexer
     }
@@ -176,6 +156,7 @@ mod tests {
     use diesel::{Insertable, QueryDsl, Queryable};
     use diesel_async::RunQueryDsl;
     use sui_indexer_alt_framework_store_pg::pg_store::PgStore;
+    use sui_pg_db::DbArgs;
     use sui_synthetic_ingestion::synthetic_ingestion;
     use tempfile::tempdir;
 
@@ -288,7 +269,17 @@ mod tests {
             metrics_args: MetricsArgs { metrics_address },
         };
 
-        let mut indexer = IndexerCluster::new(url.clone(), args, None).await.unwrap();
+        // Prepare store
+        let store = PgStore(Db::for_write(url.clone(), DbArgs::default()).await.unwrap());
+
+        // Run migrations
+        store
+            .0
+            .run_migrations(Indexer::<PgStore>::migrations(None))
+            .await
+            .unwrap();
+
+        let mut indexer = IndexerCluster::new(store, args).await.unwrap();
 
         indexer
             .concurrent_pipeline(TxCounts, ConcurrentConfig::default())

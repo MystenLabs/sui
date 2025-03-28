@@ -410,8 +410,8 @@ mod tests {
 
     #[tokio::test]
     async fn test_process_coin_balance_buckets_new_sui_coin() {
-        let (indexer, _db) = Indexer::new_for_testing(&MIGRATIONS).await;
-        let mut conn = indexer.db().connect().await.unwrap();
+        let (indexer, _db) = Indexer::<PgStore>::new_for_testing(&MIGRATIONS).await;
+        let mut conn = indexer.store().connect().await.unwrap();
         let handler = CoinBalanceBuckets::default();
         let mut builder = TestCheckpointDataBuilder::new(0);
         builder = builder
@@ -450,8 +450,8 @@ mod tests {
 
     #[tokio::test]
     async fn test_process_coin_balance_buckets_new_other_coin() {
-        let (indexer, _db) = Indexer::new_for_testing(&MIGRATIONS).await;
-        let mut conn = indexer.db().connect().await.unwrap();
+        let (indexer, _db) = Indexer::<PgStore>::new_for_testing(&MIGRATIONS).await;
+        let mut conn = indexer.store().connect().await.unwrap();
         let handler = CoinBalanceBuckets::default();
         let mut builder = TestCheckpointDataBuilder::new(0);
         let coin_type = TypeTag::from_str("0x0::a::b").unwrap();
@@ -483,8 +483,8 @@ mod tests {
 
     #[tokio::test]
     async fn test_process_coin_balance_buckets_balance_change() {
-        let (indexer, _db) = Indexer::new_for_testing(&MIGRATIONS).await;
-        let mut conn = indexer.db().connect().await.unwrap();
+        let (indexer, _db) = Indexer::<PgStore>::new_for_testing(&MIGRATIONS).await;
+        let mut conn = indexer.store().connect().await.unwrap();
         let handler = CoinBalanceBuckets::default();
         let mut builder = TestCheckpointDataBuilder::new(0);
         builder = builder
@@ -614,8 +614,8 @@ mod tests {
 
     #[tokio::test]
     async fn test_process_coin_balance_buckets_coin_deleted() {
-        let (indexer, _db) = Indexer::new_for_testing(&MIGRATIONS).await;
-        let mut conn = indexer.db().connect().await.unwrap();
+        let (indexer, _db) = Indexer::<PgStore>::new_for_testing(&MIGRATIONS).await;
+        let mut conn = indexer.store().connect().await.unwrap();
         let handler = CoinBalanceBuckets::default();
         let mut builder = TestCheckpointDataBuilder::new(0);
         builder = builder
@@ -663,8 +663,8 @@ mod tests {
 
     #[tokio::test]
     async fn test_process_coin_balance_buckets_owner_change() {
-        let (indexer, _db) = Indexer::new_for_testing(&MIGRATIONS).await;
-        let mut conn = indexer.db().connect().await.unwrap();
+        let (indexer, _db) = Indexer::<PgStore>::new_for_testing(&MIGRATIONS).await;
+        let mut conn = indexer.store().connect().await.unwrap();
         let handler = CoinBalanceBuckets::default();
         let mut builder = TestCheckpointDataBuilder::new(0);
         builder = builder
@@ -718,8 +718,8 @@ mod tests {
 
     #[tokio::test]
     async fn test_process_coin_balance_buckets_object_owned() {
-        let (indexer, _db) = Indexer::new_for_testing(&MIGRATIONS).await;
-        let mut conn = indexer.db().connect().await.unwrap();
+        let (indexer, _db) = Indexer::<PgStore>::new_for_testing(&MIGRATIONS).await;
+        let mut conn = indexer.store().connect().await.unwrap();
         let handler = CoinBalanceBuckets::default();
         let mut builder = TestCheckpointDataBuilder::new(0);
         builder = builder

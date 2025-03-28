@@ -85,8 +85,8 @@ mod tests {
     /// checkpoint sequence number range.
     #[tokio::test]
     async fn test_kv_checkpoints_pruning() {
-        let (indexer, _db) = Indexer::new_for_testing(&MIGRATIONS).await;
-        let mut conn = indexer.db().connect().await.unwrap();
+        let (indexer, _db) = Indexer::<PgStore>::new_for_testing(&MIGRATIONS).await;
+        let mut conn = indexer.store().connect().await.unwrap();
 
         // Create 3 checkpoints
         let mut builder = TestCheckpointDataBuilder::new(0);

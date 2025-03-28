@@ -14,6 +14,7 @@ use sui_indexer_alt::config::IndexerConfig;
 use sui_indexer_alt::config::Merge;
 use sui_indexer_alt::setup_indexer;
 use sui_indexer_alt_framework::db::reset_database;
+use sui_indexer_alt_framework::sui_indexer_alt_framework_store_pg::pg_store::PgStore;
 use sui_indexer_alt_framework::Indexer;
 use sui_indexer_alt_metrics::MetricsService;
 use sui_indexer_alt_schema::MIGRATIONS;
@@ -125,7 +126,7 @@ async fn main() -> Result<()> {
             reset_database(
                 database_url,
                 db_args,
-                (!skip_migrations).then(|| Indexer::migrations(Some(&MIGRATIONS))),
+                (!skip_migrations).then(|| Indexer::<PgStore>::migrations(Some(&MIGRATIONS))),
             )
             .await?;
         }

@@ -109,8 +109,8 @@ mod tests {
 
     #[tokio::test]
     async fn test_tx_kinds_pruning_complains_if_no_mapping() {
-        let (indexer, _db) = Indexer::new_for_testing(&MIGRATIONS).await;
-        let mut conn = indexer.db().connect().await.unwrap();
+        let (indexer, _db) = Indexer::<PgStore>::new_for_testing(&MIGRATIONS).await;
+        let mut conn = indexer.store().connect().await.unwrap();
 
         let result = TxKinds.prune(0, 2, &mut conn).await;
 
@@ -125,8 +125,8 @@ mod tests {
     /// the checkpoint sequence number range.
     #[tokio::test]
     async fn test_tx_kinds_pruning() {
-        let (indexer, _db) = Indexer::new_for_testing(&MIGRATIONS).await;
-        let mut conn = indexer.db().connect().await.unwrap();
+        let (indexer, _db) = Indexer::<PgStore>::new_for_testing(&MIGRATIONS).await;
+        let mut conn = indexer.store().connect().await.unwrap();
 
         let mut builder = TestCheckpointDataBuilder::new(0);
         builder = builder.start_transaction(0).finish_transaction();
