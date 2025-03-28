@@ -11,7 +11,6 @@ where
     V: Serialize + DeserializeOwned,
 {
     type Error: Error;
-    type SafeIterator: Iterator<Item = Result<(K, V), TypedStoreError>>;
 
     /// Returns true if the map contains a value for the specified key.
     fn contains_key(&self, key: &K) -> Result<bool, Self::Error>;
@@ -48,17 +47,20 @@ where
     fn is_empty(&self) -> bool;
 
     /// Same as `iter` but performs status check.
-    fn safe_iter(&'a self) -> Self::SafeIterator;
+    fn safe_iter(&'a self) -> Box<dyn Iterator<Item = Result<(K, V), TypedStoreError>> + 'a>;
 
     // Same as `iter_with_bounds` but performs status check.
     fn safe_iter_with_bounds(
         &'a self,
         lower_bound: Option<K>,
         upper_bound: Option<K>,
-    ) -> Self::SafeIterator;
+    ) -> Box<dyn Iterator<Item = Result<(K, V), TypedStoreError>> + 'a>;
 
     // Same as `range_iter` but performs status check.
-    fn safe_range_iter(&'a self, range: impl RangeBounds<K>) -> Self::SafeIterator;
+    fn safe_range_iter(
+        &'a self,
+        range: impl RangeBounds<K>,
+    ) -> Box<dyn Iterator<Item = Result<(K, V), TypedStoreError>> + 'a>;
 
     /// Returns a vector of values corresponding to the keys provided, non-atomically.
     fn multi_get<J>(&self, keys: impl IntoIterator<Item = J>) -> Result<Vec<Option<V>>, Self::Error>

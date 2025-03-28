@@ -13,11 +13,11 @@ use std::time::Duration;
 use typed_store::metrics::SamplingInterval;
 use typed_store::rocks::list_tables;
 use typed_store::rocks::DBMap;
-use typed_store::rocks::{be_fix_int_ser, MetricConf};
+use typed_store::rocks::MetricConf;
 use typed_store::traits::Map;
 use typed_store::traits::TableSummary;
 use typed_store::traits::TypedStoreDebug;
-use typed_store::DBMapUtils;
+use typed_store::{be_fix_int_ser, DBMapUtils};
 
 fn temp_dir() -> std::path::PathBuf {
     tempfile::tempdir()

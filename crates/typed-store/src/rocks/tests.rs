@@ -2,7 +2,6 @@
 // SPDX-License-Identifier: Apache-2.0
 use super::*;
 use crate::reopen;
-use crate::rocks::safe_iter::{SafeIter, SafeRevIter};
 use rstest::rstest;
 
 fn temp_dir() -> std::path::PathBuf {
@@ -11,35 +10,19 @@ fn temp_dir() -> std::path::PathBuf {
         .into_path()
 }
 
-enum TestIteratorWrapper<'a, K, V> {
-    SafeIter(SafeIter<'a, K, V>),
-}
-
-// Implement Iterator for TestIteratorWrapper that returns the same type result for different types of Iterator.
-// For non-safe Iterator, it returns the key value pair. For SafeIterator, it consumes the result (assuming no error),
-// and return they key value pairs.
-impl<K: DeserializeOwned, V: DeserializeOwned> Iterator for TestIteratorWrapper<'_, K, V> {
-    type Item = (K, V);
-    fn next(&mut self) -> Option<Self::Item> {
-        match self {
-            TestIteratorWrapper::SafeIter(iter) => iter.next().map(|result| result.unwrap()),
-        }
-    }
-}
-
-fn get_iter<K, V>(db: &DBMap<K, V>) -> TestIteratorWrapper<'_, K, V>
+fn get_iter<K, V>(db: &DBMap<K, V>) -> impl Iterator<Item = (K, V)> + use<'_, K, V>
 where
     K: Serialize + DeserializeOwned,
     V: Serialize + DeserializeOwned,
 {
-    TestIteratorWrapper::SafeIter(db.safe_iter())
+    db.safe_iter().map(|item| item.unwrap())
 }
 
 fn get_reverse_iter<K, V>(
     db: &DBMap<K, V>,
     lower_bound: Option<K>,
     upper_bound: Option<K>,
-) -> SafeRevIter<'_, K, V>
+) -> impl Iterator<Item = Result<(K, V), TypedStoreError>> + use<'_, K, V>
 where
     K: Serialize + DeserializeOwned,
     V: Serialize + DeserializeOwned,
@@ -52,23 +35,24 @@ fn get_iter_with_bounds<K, V>(
     db: &DBMap<K, V>,
     lower_bound: Option<K>,
     upper_bound: Option<K>,
-) -> TestIteratorWrapper<'_, K, V>
+) -> impl Iterator<Item = (K, V)> + use<'_, K, V>
 where
     K: Serialize + DeserializeOwned,
     V: Serialize + DeserializeOwned,
 {
-    TestIteratorWrapper::SafeIter(db.safe_iter_with_bounds(lower_bound, upper_bound))
+    db.safe_iter_with_bounds(lower_bound, upper_bound)
+        .map(|item| item.unwrap())
 }
 
-fn get_range_iter<K, V>(
-    db: &DBMap<K, V>,
-    range: impl RangeBounds<K>,
-) -> TestIteratorWrapper<'_, K, V>
+fn get_range_iter<'a, K, V>(
+    db: &'a DBMap<K, V>,
+    range: impl RangeBounds<K> + 'a,
+) -> impl Iterator<Item = (K, V)> + 'a
 where
     K: Serialize + DeserializeOwned,
     V: Serialize + DeserializeOwned,
 {
-    TestIteratorWrapper::SafeIter(db.safe_range_iter(range))
+    db.safe_range_iter(range).map(|item| item.unwrap())
 }
 
 #[tokio::test]

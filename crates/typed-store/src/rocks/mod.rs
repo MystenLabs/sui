@@ -1,28 +1,29 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 pub mod errors;
-pub mod memstore;
+mod rocks_util;
 pub(crate) mod safe_iter;
 
+use crate::memstore::{InMemoryBatch, InMemoryDB};
 use crate::rocks::errors::typed_store_err_from_bcs_err;
-use crate::rocks::errors::typed_store_err_from_bincode_err;
 use crate::rocks::errors::typed_store_err_from_rocks_err;
-#[cfg(all(not(target_os = "windows"), feature = "tide_hunter"))]
-use crate::rocks::errors::typed_store_error_from_th_error;
-use crate::rocks::memstore::{InMemoryBatch, InMemoryDB};
 use crate::rocks::safe_iter::{SafeIter, SafeRevIter};
+#[cfg(all(not(target_os = "windows"), feature = "tide_hunter"))]
+use crate::tidehunter_util::{
+    apply_range_bounds, transform_th_iterator, typed_store_error_from_th_error,
+};
+use crate::util::{be_fix_int_ser, iterator_bounds, iterator_bounds_with_range};
 use crate::TypedStoreError;
 use crate::{
     metrics::{DBMetrics, RocksDBPerfContext, SamplingInterval},
     traits::{Map, TableSummary},
 };
-use bincode::Options;
 use prometheus::{Histogram, HistogramTimer};
 use rocksdb::properties::num_files_at_level;
 use rocksdb::{checkpoint::Checkpoint, BlockBasedOptions, Cache, DBPinnableSlice, LiveFile};
 use rocksdb::{
-    properties, AsColumnFamilyRef, ColumnFamilyDescriptor, DBWithThreadMode, Error, MultiThreaded,
-    ReadOptions, WriteBatch,
+    properties, AsColumnFamilyRef, ColumnFamilyDescriptor, Error, MultiThreaded, ReadOptions,
+    WriteBatch,
 };
 use serde::{de::DeserializeOwned, Serialize};
 use std::ops::{Bound, Deref};
@@ -172,7 +173,7 @@ pub enum Storage {
     Rocks(RocksDB),
     InMemory(InMemoryDB),
     #[cfg(all(not(target_os = "windows"), feature = "tide_hunter"))]
-    TideHunter(TideHunterDb),
+    TideHunter(Arc<TideHunterDb>),
 }
 
 impl std::fmt::Debug for Storage {
@@ -438,15 +439,6 @@ impl Database {
         fail_point!("batch-write-after");
         #[allow(clippy::let_and_return)]
         ret
-    }
-
-    fn raw_iterator_cf<'a: 'b, 'b>(&'a self, cf_name: &str, readopts: ReadOptions) -> RawIter<'b> {
-        match &self.storage {
-            Storage::Rocks(rocksdb) => rocksdb
-                .underlying
-                .raw_iterator_cf_opt(&rocks_cf(rocksdb, cf_name), readopts),
-            _ => unimplemented!("iterators not yet supported for other backends"),
-        }
     }
 
     pub fn compact_range_cf<K: AsRef<[u8]>>(
@@ -1083,41 +1075,19 @@ impl<K, V> DBMap<K, V> {
         )
     }
 
-    // Creates a RocksDB read option with specified lower and upper bounds.
-    /// Lower bound is inclusive, and upper bound is exclusive.
-    fn create_read_options_with_bounds(
-        &self,
-        lower_bound: Option<K>,
-        upper_bound: Option<K>,
-    ) -> ReadOptions
-    where
-        K: Serialize,
-    {
-        let mut readopts = self.opts.readopts();
-        if let Some(lower_bound) = lower_bound {
-            let key_buf = be_fix_int_ser(&lower_bound).unwrap();
-            readopts.set_iterate_lower_bound(key_buf);
-        }
-        if let Some(upper_bound) = upper_bound {
-            let key_buf = be_fix_int_ser(&upper_bound).unwrap();
-            readopts.set_iterate_upper_bound(key_buf);
-        }
-        readopts
-    }
-
     /// Creates a safe reversed iterator with optional bounds.
-    /// Upper bound is included.
+    /// Both upper bound and lower bound are included.
+    #[allow(clippy::complexity)]
     pub fn reversed_safe_iter_with_bounds(
         &self,
         lower_bound: Option<K>,
         upper_bound: Option<K>,
-    ) -> Result<SafeRevIter<'_, K, V>, TypedStoreError>
+    ) -> Result<Box<dyn Iterator<Item = Result<(K, V), TypedStoreError>> + '_>, TypedStoreError>
     where
         K: Serialize + DeserializeOwned,
         V: Serialize + DeserializeOwned,
     {
-        let upper_bound_key = upper_bound.as_ref().map(|k| be_fix_int_ser(&k));
-        let readopts = self.create_read_options_with_range((
+        let (it_lower_bound, it_upper_bound) = iterator_bounds_with_range::<K>((
             lower_bound
                 .as_ref()
                 .map(Bound::Included)
@@ -1127,69 +1097,46 @@ impl<K, V> DBMap<K, V> {
                 .map(Bound::Included)
                 .unwrap_or(Bound::Unbounded),
         ));
-
-        let db_iter = self.db.raw_iterator_cf(&self.cf, readopts);
-        let (_timer, bytes_scanned, keys_scanned, _perf_ctx) = self.create_iter_context();
-        let iter = SafeIter::new(
-            self.cf.clone(),
-            db_iter,
-            _timer,
-            _perf_ctx,
-            bytes_scanned,
-            keys_scanned,
-            Some(self.db_metrics.clone()),
-        );
-        Ok(SafeRevIter::new(iter, upper_bound_key.transpose()?))
-    }
-
-    // Creates a RocksDB read option with lower and upper bounds set corresponding to `range`.
-    fn create_read_options_with_range(&self, range: impl RangeBounds<K>) -> ReadOptions
-    where
-        K: Serialize,
-    {
-        let mut readopts = self.opts.readopts();
-
-        let lower_bound = range.start_bound();
-        let upper_bound = range.end_bound();
-
-        match lower_bound {
-            Bound::Included(lower_bound) => {
-                // Rocksdb lower bound is inclusive by default so nothing to do
-                let key_buf = be_fix_int_ser(&lower_bound).expect("Serialization must not fail");
-                readopts.set_iterate_lower_bound(key_buf);
+        match &self.db.storage {
+            Storage::Rocks(db) => {
+                let readopts = rocks_util::apply_range_bounds(
+                    self.opts.readopts(),
+                    it_lower_bound,
+                    it_upper_bound,
+                );
+                let upper_bound_key = upper_bound.as_ref().map(|k| be_fix_int_ser(&k));
+                let db_iter = db
+                    .underlying
+                    .raw_iterator_cf_opt(&rocks_cf(db, &self.cf), readopts);
+                let (_timer, bytes_scanned, keys_scanned, _perf_ctx) = self.create_iter_context();
+                let iter = SafeIter::new(
+                    self.cf.clone(),
+                    db_iter,
+                    _timer,
+                    _perf_ctx,
+                    bytes_scanned,
+                    keys_scanned,
+                    Some(self.db_metrics.clone()),
+                );
+                Ok(Box::new(SafeRevIter::new(
+                    iter,
+                    upper_bound_key.transpose()?,
+                )))
             }
-            Bound::Excluded(lower_bound) => {
-                let mut key_buf =
-                    be_fix_int_ser(&lower_bound).expect("Serialization must not fail");
-
-                // Since we want exclusive, we need to increment the key to exclude the previous
-                big_endian_saturating_add_one(&mut key_buf);
-                readopts.set_iterate_lower_bound(key_buf);
+            Storage::InMemory(db) => {
+                Ok(db.iterator(&self.cf, it_lower_bound, it_upper_bound, true))
             }
-            Bound::Unbounded => (),
-        };
-
-        match upper_bound {
-            Bound::Included(upper_bound) => {
-                let mut key_buf =
-                    be_fix_int_ser(&upper_bound).expect("Serialization must not fail");
-
-                // If the key is already at the limit, there's nowhere else to go, so no upper bound
-                if !is_max(&key_buf) {
-                    // Since we want exclusive, we need to increment the key to get the upper bound
-                    big_endian_saturating_add_one(&mut key_buf);
-                    readopts.set_iterate_upper_bound(key_buf);
+            #[cfg(all(not(target_os = "windows"), feature = "tide_hunter"))]
+            Storage::TideHunter(db) => match &self.column_family {
+                ColumnFamily::TideHunter(ks) => {
+                    let mut iter = db.iterator(*ks);
+                    apply_range_bounds(&mut iter, it_lower_bound, it_upper_bound);
+                    iter.reverse();
+                    Ok(Box::new(transform_th_iterator(iter)))
                 }
-            }
-            Bound::Excluded(upper_bound) => {
-                // Rocksdb upper bound is inclusive by default so nothing to do
-                let key_buf = be_fix_int_ser(&upper_bound).expect("Serialization must not fail");
-                readopts.set_iterate_upper_bound(key_buf);
-            }
-            Bound::Unbounded => (),
-        };
-
-        readopts
+                _ => unreachable!("storage backend invariant violation"),
+            },
+        }
     }
 }
 
@@ -1462,15 +1409,12 @@ impl DBBatch {
     }
 }
 
-pub type RawIter<'a> = rocksdb::DBRawIteratorWithThreadMode<'a, DBWithThreadMode<MultiThreaded>>;
-
 impl<'a, K, V> Map<'a, K, V> for DBMap<K, V>
 where
     K: Serialize + DeserializeOwned,
     V: Serialize + DeserializeOwned,
 {
     type Error = TypedStoreError;
-    type SafeIterator = SafeIter<'a, K, V>;
 
     #[instrument(level = "trace", skip_all, err)]
     fn contains_key(&self, key: &K) -> Result<bool, TypedStoreError> {
@@ -1644,52 +1588,103 @@ where
         self.safe_iter().next().is_none()
     }
 
-    fn safe_iter(&'a self) -> Self::SafeIterator {
-        let db_iter = self.db.raw_iterator_cf(&self.cf, self.opts.readopts());
-        let (_timer, bytes_scanned, keys_scanned, _perf_ctx) = self.create_iter_context();
-        SafeIter::new(
-            self.cf.clone(),
-            db_iter,
-            _timer,
-            _perf_ctx,
-            bytes_scanned,
-            keys_scanned,
-            Some(self.db_metrics.clone()),
-        )
+    fn safe_iter(&'a self) -> Box<dyn Iterator<Item = Result<(K, V), TypedStoreError>> + 'a> {
+        match &self.db.storage {
+            Storage::Rocks(db) => {
+                let db_iter = db
+                    .underlying
+                    .raw_iterator_cf_opt(&rocks_cf(db, &self.cf), self.opts.readopts());
+                let (_timer, bytes_scanned, keys_scanned, _perf_ctx) = self.create_iter_context();
+                Box::new(SafeIter::new(
+                    self.cf.clone(),
+                    db_iter,
+                    _timer,
+                    _perf_ctx,
+                    bytes_scanned,
+                    keys_scanned,
+                    Some(self.db_metrics.clone()),
+                ))
+            }
+            Storage::InMemory(db) => db.iterator(&self.cf, None, None, false),
+            #[cfg(all(not(target_os = "windows"), feature = "tide_hunter"))]
+            Storage::TideHunter(db) => match &self.column_family {
+                ColumnFamily::TideHunter(ks) => Box::new(transform_th_iterator(db.iterator(*ks))),
+                _ => unreachable!("storage backend invariant violation"),
+            },
+        }
     }
 
     fn safe_iter_with_bounds(
         &'a self,
         lower_bound: Option<K>,
         upper_bound: Option<K>,
-    ) -> Self::SafeIterator {
-        let readopts = self.create_read_options_with_bounds(lower_bound, upper_bound);
-        let db_iter = self.db.raw_iterator_cf(&self.cf, readopts);
-        let (_timer, bytes_scanned, keys_scanned, _perf_ctx) = self.create_iter_context();
-        SafeIter::new(
-            self.cf.clone(),
-            db_iter,
-            _timer,
-            _perf_ctx,
-            bytes_scanned,
-            keys_scanned,
-            Some(self.db_metrics.clone()),
-        )
+    ) -> Box<dyn Iterator<Item = Result<(K, V), TypedStoreError>> + 'a> {
+        let (lower_bound, upper_bound) = iterator_bounds(lower_bound, upper_bound);
+        match &self.db.storage {
+            Storage::Rocks(db) => {
+                let readopts =
+                    rocks_util::apply_range_bounds(self.opts.readopts(), lower_bound, upper_bound);
+                let db_iter = db
+                    .underlying
+                    .raw_iterator_cf_opt(&rocks_cf(db, &self.cf), readopts);
+                let (_timer, bytes_scanned, keys_scanned, _perf_ctx) = self.create_iter_context();
+                Box::new(SafeIter::new(
+                    self.cf.clone(),
+                    db_iter,
+                    _timer,
+                    _perf_ctx,
+                    bytes_scanned,
+                    keys_scanned,
+                    Some(self.db_metrics.clone()),
+                ))
+            }
+            Storage::InMemory(db) => db.iterator(&self.cf, lower_bound, upper_bound, false),
+            #[cfg(all(not(target_os = "windows"), feature = "tide_hunter"))]
+            Storage::TideHunter(db) => match &self.column_family {
+                ColumnFamily::TideHunter(ks) => {
+                    let mut iter = db.iterator(*ks);
+                    apply_range_bounds(&mut iter, lower_bound, upper_bound);
+                    Box::new(transform_th_iterator(iter))
+                }
+                _ => unreachable!("storage backend invariant violation"),
+            },
+        }
     }
 
-    fn safe_range_iter(&'a self, range: impl RangeBounds<K>) -> Self::SafeIterator {
-        let readopts = self.create_read_options_with_range(range);
-        let db_iter = self.db.raw_iterator_cf(&self.cf, readopts);
-        let (_timer, bytes_scanned, keys_scanned, _perf_ctx) = self.create_iter_context();
-        SafeIter::new(
-            self.cf.clone(),
-            db_iter,
-            _timer,
-            _perf_ctx,
-            bytes_scanned,
-            keys_scanned,
-            Some(self.db_metrics.clone()),
-        )
+    fn safe_range_iter(
+        &'a self,
+        range: impl RangeBounds<K>,
+    ) -> Box<dyn Iterator<Item = Result<(K, V), TypedStoreError>> + 'a> {
+        let (lower_bound, upper_bound) = iterator_bounds_with_range(range);
+        match &self.db.storage {
+            Storage::Rocks(db) => {
+                let readopts =
+                    rocks_util::apply_range_bounds(self.opts.readopts(), lower_bound, upper_bound);
+                let db_iter = db
+                    .underlying
+                    .raw_iterator_cf_opt(&rocks_cf(db, &self.cf), readopts);
+                let (_timer, bytes_scanned, keys_scanned, _perf_ctx) = self.create_iter_context();
+                Box::new(SafeIter::new(
+                    self.cf.clone(),
+                    db_iter,
+                    _timer,
+                    _perf_ctx,
+                    bytes_scanned,
+                    keys_scanned,
+                    Some(self.db_metrics.clone()),
+                ))
+            }
+            Storage::InMemory(db) => db.iterator(&self.cf, lower_bound, upper_bound, false),
+            #[cfg(all(not(target_os = "windows"), feature = "tide_hunter"))]
+            Storage::TideHunter(db) => match &self.column_family {
+                ColumnFamily::TideHunter(ks) => {
+                    let mut iter = db.iterator(*ks);
+                    apply_range_bounds(&mut iter, lower_bound, upper_bound);
+                    Box::new(transform_th_iterator(iter))
+                }
+                _ => unreachable!("storage backend invariant violation"),
+            },
+        }
     }
 
     /// Returns a vector of values corresponding to the keys provided.
@@ -2209,19 +2204,6 @@ pub fn list_tables(path: std::path::PathBuf) -> eyre::Result<Vec<String>> {
         })
 }
 
-/// TODO: Good description of why we're doing this : RocksDB stores keys in BE and has a seek operator on iterators, see `https://github.com/facebook/rocksdb/wiki/Iterator#introduction`
-#[inline]
-pub fn be_fix_int_ser<S>(t: &S) -> Result<Vec<u8>, TypedStoreError>
-where
-    S: ?Sized + serde::Serialize,
-{
-    bincode::DefaultOptions::new()
-        .with_big_endian()
-        .with_fixint_encoding()
-        .serialize(t)
-        .map_err(typed_store_err_from_bincode_err)
-}
-
 #[derive(Clone)]
 pub struct DBMapTableConfigMap(BTreeMap<String, DBOptions>);
 impl DBMapTableConfigMap {
@@ -2232,11 +2214,6 @@ impl DBMapTableConfigMap {
     pub fn to_map(&self) -> BTreeMap<String, DBOptions> {
         self.0.clone()
     }
-}
-
-pub enum RocksDBAccessType {
-    Primary,
-    Secondary(Option<PathBuf>),
 }
 
 pub fn safe_drop_db(path: PathBuf) -> Result<(), rocksdb::Error> {
@@ -2265,55 +2242,4 @@ fn populate_missing_cfs(
             .map(|(name, opts)| (name.to_string(), (*opts).clone())),
     );
     Ok(cfs)
-}
-
-/// Given a vec<u8>, find the value which is one more than the vector
-/// if the vector was a big endian number.
-/// If the vector is already minimum, don't change it.
-fn big_endian_saturating_add_one(v: &mut [u8]) {
-    if is_max(v) {
-        return;
-    }
-    for i in (0..v.len()).rev() {
-        if v[i] == u8::MAX {
-            v[i] = 0;
-        } else {
-            v[i] += 1;
-            break;
-        }
-    }
-}
-
-/// Check if all the bytes in the vector are 0xFF
-fn is_max(v: &[u8]) -> bool {
-    v.iter().all(|&x| x == u8::MAX)
-}
-
-#[allow(clippy::assign_op_pattern)]
-#[test]
-fn test_helpers() {
-    let v = vec![];
-    assert!(is_max(&v));
-
-    fn check_add(v: Vec<u8>) {
-        let mut v = v;
-        let num = Num32::from_big_endian(&v);
-        big_endian_saturating_add_one(&mut v);
-        assert!(num + 1 == Num32::from_big_endian(&v));
-    }
-
-    uint::construct_uint! {
-        // 32 byte number
-        struct Num32(4);
-    }
-
-    let mut v = vec![255; 32];
-    big_endian_saturating_add_one(&mut v);
-    assert!(Num32::MAX == Num32::from_big_endian(&v));
-
-    check_add(vec![1; 32]);
-    check_add(vec![6; 32]);
-    check_add(vec![254; 32]);
-
-    // TBD: More tests coming with randomized arrays
 }

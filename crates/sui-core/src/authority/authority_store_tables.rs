@@ -423,7 +423,7 @@ impl AuthorityPerpetualTables {
 
     pub fn iter_live_object_set(&self, include_wrapped_object: bool) -> LiveSetIter<'_> {
         LiveSetIter {
-            iter: self.objects.safe_iter(),
+            iter: Box::new(self.objects.safe_iter()),
             tables: self,
             prev: None,
             include_wrapped_object,
@@ -440,7 +440,7 @@ impl AuthorityPerpetualTables {
         let upper_bound = upper_bound.as_ref().map(ObjectKey::max_for_id);
 
         LiveSetIter {
-            iter: self.objects.safe_iter_with_bounds(lower_bound, upper_bound),
+            iter: Box::new(self.objects.safe_iter_with_bounds(lower_bound, upper_bound)),
             tables: self,
             prev: None,
             include_wrapped_object,
@@ -544,8 +544,7 @@ impl ObjectStore for AuthorityPerpetualTables {
 }
 
 pub struct LiveSetIter<'a> {
-    iter:
-        <DBMap<ObjectKey, StoreObjectWrapper> as Map<'a, ObjectKey, StoreObjectWrapper>>::SafeIterator,
+    iter: Box<dyn Iterator<Item = Result<(ObjectKey, StoreObjectWrapper), TypedStoreError>> + 'a>,
     tables: &'a AuthorityPerpetualTables,
     prev: Option<(ObjectKey, StoreObjectWrapper)>,
     /// Whether a wrapped object is considered as a live object.
