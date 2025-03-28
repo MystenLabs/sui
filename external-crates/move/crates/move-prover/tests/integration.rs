@@ -10,17 +10,27 @@ fn run_prover(file_path: &PathBuf) -> String {
     options.move_sources = vec![file_path.to_string_lossy().to_string()];
     options.prover.stable_test_output = true; // For consistent snapshot testing
 
-    // Only add Sui framework for specific test files that require it
+    // Always add standard Sui dependencies for all tests
+    let sui_packages_base = "../../../../crates/sui-framework/packages";
+    options
+        .move_deps
+        .push(format!("{}/move-stdlib", sui_packages_base));
+    options
+        .move_deps
+        .push(format!("{}/prover", sui_packages_base));
+
+    // Add basic named address values for all tests
+    options.move_named_address_values = vec!["std=0x1".to_string(), "prover=0x0".to_string()];
+
+    // Get the filename for conditional handling
     let filename = file_path.file_name().unwrap().to_string_lossy().to_string();
+
+    // Add full Sui framework for specific test files that require it
     if filename.contains("sui_") {
-        // Add Sui SDK to the dependencies - include all required packages
-        let sui_packages_base = "../../../../crates/sui-framework/packages";
+        // Add additional Sui SDK packages
         options
             .move_deps
             .push(format!("{}/sui-framework", sui_packages_base));
-        options
-            .move_deps
-            .push(format!("{}/move-stdlib", sui_packages_base));
         options
             .move_deps
             .push(format!("{}/sui-system", sui_packages_base));
@@ -30,20 +40,15 @@ fn run_prover(file_path: &PathBuf) -> String {
         options
             .move_deps
             .push(format!("{}/deepbook", sui_packages_base));
-        options
-            .move_deps
-            .push(format!("{}/prover", sui_packages_base));
 
-        // Add named address values used in Sui framework
-        options.move_named_address_values = vec![
+        // Add additional named address values for Sui framework
+        options.move_named_address_values.extend(vec![
             "sui=0x2".to_string(),
             "sui_system=0x3".to_string(),
             "sui_framework=0x2".to_string(),
             "deepbook=0xdee9".to_string(),
             "bridge=0xb".to_string(),
-            "std=0x1".to_string(),
-            "prover=0x0".to_string(),
-        ];
+        ]);
     }
 
     // Capture output using a Vec buffer with NoColor writer
