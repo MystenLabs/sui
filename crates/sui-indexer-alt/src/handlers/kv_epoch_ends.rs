@@ -8,9 +8,9 @@ use anyhow::{bail, Context, Result};
 use diesel::{ExpressionMethods, QueryDsl};
 use diesel_async::RunQueryDsl;
 use sui_indexer_alt_framework::{
-    db::Db,
     pipeline::{concurrent::Handler, Processor},
     store::Store,
+    sui_indexer_alt_framework_store_pg::pg_store::PgStore,
     types::{
         event::SystemEpochInfoEvent,
         full_checkpoint_content::CheckpointData,
@@ -123,7 +123,7 @@ impl Processor for KvEpochEnds {
 
 #[async_trait::async_trait]
 impl Handler for KvEpochEnds {
-    type Store = Db;
+    type Store = PgStore;
 
     const MIN_EAGER_ROWS: usize = 1;
 
@@ -170,7 +170,7 @@ mod tests {
     use crate::handlers::cp_sequence_numbers::CpSequenceNumbers;
 
     async fn get_all_kv_epoch_ends(
-        conn: &mut <Db as Store>::Connection<'_>,
+        conn: &mut <PgStore as Store>::Connection<'_>,
     ) -> Result<Vec<StoredEpochEnd>> {
         let result = kv_epoch_ends::table
             .order_by(kv_epoch_ends::epoch.asc())
@@ -180,7 +180,7 @@ mod tests {
     }
 
     async fn get_epoch_num_of_all_kv_epoch_ends(
-        conn: &mut <Db as Store>::Connection<'_>,
+        conn: &mut <PgStore as Store>::Connection<'_>,
     ) -> Result<Vec<i64>> {
         let epochs = get_all_kv_epoch_ends(conn).await?;
         Ok(epochs.iter().map(|e| e.epoch).collect())

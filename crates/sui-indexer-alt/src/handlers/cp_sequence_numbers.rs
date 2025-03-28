@@ -8,9 +8,9 @@ use anyhow::{bail, Result};
 use diesel::prelude::*;
 use diesel_async::RunQueryDsl;
 use sui_indexer_alt_framework::{
-    db::Db,
     pipeline::{concurrent::Handler, Processor},
     store::Store,
+    sui_indexer_alt_framework_store_pg::pg_store::PgStore,
     types::full_checkpoint_content::CheckpointData,
 };
 use sui_indexer_alt_schema::cp_sequence_numbers::StoredCpSequenceNumbers;
@@ -39,7 +39,7 @@ impl Processor for CpSequenceNumbers {
 
 #[async_trait::async_trait]
 impl Handler for CpSequenceNumbers {
-    type Store = Db;
+    type Store = PgStore;
 
     async fn commit<'a>(
         values: &[Self::Value],
@@ -55,7 +55,7 @@ impl Handler for CpSequenceNumbers {
 
 /// Inclusive start and exclusive end range of prunable txs.
 pub async fn tx_interval(
-    conn: &mut <Db as Store>::Connection<'_>,
+    conn: &mut <PgStore as Store>::Connection<'_>,
     cps: Range<u64>,
 ) -> Result<Range<u64>> {
     let result = get_range(conn, cps).await?;
@@ -69,7 +69,7 @@ pub async fn tx_interval(
 /// Returns the epochs of the given checkpoint range. `start` is the epoch of the first checkpoint
 /// and `end` is the epoch of the last checkpoint.
 pub async fn epoch_interval(
-    conn: &mut <Db as Store>::Connection<'_>,
+    conn: &mut <PgStore as Store>::Connection<'_>,
     cps: Range<u64>,
 ) -> Result<Range<u64>> {
     let result = get_range(conn, cps).await?;
@@ -85,7 +85,7 @@ pub async fn epoch_interval(
 /// The values are expected to exist since the cp_sequence_numbers table must have enough information to
 /// encompass the retention of other tables.
 pub(crate) async fn get_range(
-    conn: &mut <Db as Store>::Connection<'_>,
+    conn: &mut <PgStore as Store>::Connection<'_>,
     cps: Range<u64>,
 ) -> Result<(StoredCpSequenceNumbers, StoredCpSequenceNumbers)> {
     let Range {

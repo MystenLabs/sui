@@ -175,6 +175,7 @@ mod tests {
 
     use diesel::{Insertable, QueryDsl, Queryable};
     use diesel_async::RunQueryDsl;
+    use sui_indexer_alt_framework_store_pg::pg_store::PgStore;
     use sui_synthetic_ingestion::synthetic_ingestion;
     use tempfile::tempdir;
 
@@ -182,9 +183,9 @@ mod tests {
     use crate::db::Db;
     use crate::pipeline::concurrent::{self, ConcurrentConfig};
     use crate::pipeline::Processor;
-    use crate::store::Store;
     use crate::types::full_checkpoint_content::CheckpointData;
     use crate::FieldCount;
+    use sui_indexer_alt_framework_store_traits::Store;
 
     use super::*;
 
@@ -220,7 +221,7 @@ mod tests {
 
     #[async_trait::async_trait]
     impl concurrent::Handler for TxCounts {
-        type Store = Db;
+        type Store = PgStore;
         async fn commit<'a>(
             values: &[Self::Value],
             conn: &mut <Self::Store as Store>::Connection<'a>,

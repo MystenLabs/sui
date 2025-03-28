@@ -7,9 +7,9 @@ use anyhow::{Context, Result};
 use diesel::{ExpressionMethods, QueryDsl};
 use diesel_async::RunQueryDsl;
 use sui_indexer_alt_framework::{
-    db::Db,
     pipeline::{concurrent::Handler, Processor},
     store::Store,
+    sui_indexer_alt_framework_store_pg::pg_store::PgStore,
     types::full_checkpoint_content::CheckpointData,
 };
 use sui_indexer_alt_schema::{checkpoints::StoredCheckpoint, schema::kv_checkpoints};
@@ -39,7 +39,7 @@ impl Processor for KvCheckpoints {
 
 #[async_trait::async_trait]
 impl Handler for KvCheckpoints {
-    type Store = Db;
+    type Store = PgStore;
 
     async fn commit<'a>(
         values: &[Self::Value],
@@ -75,7 +75,7 @@ mod tests {
     use sui_indexer_alt_schema::MIGRATIONS;
 
     async fn get_all_kv_checkpoints(
-        conn: &mut <Db as Store>::Connection<'_>,
+        conn: &mut <PgStore as Store>::Connection<'_>,
     ) -> Result<Vec<StoredCheckpoint>> {
         let query = kv_checkpoints::table.load(conn).await?;
         Ok(query)
