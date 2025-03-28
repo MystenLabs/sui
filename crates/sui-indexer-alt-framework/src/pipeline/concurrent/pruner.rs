@@ -5,7 +5,6 @@ use std::{collections::BTreeMap, sync::Arc};
 
 use futures::stream::FuturesUnordered;
 use futures::StreamExt;
-use sui_pg_db::Db;
 use tokio::{
     sync::Semaphore,
     task::JoinHandle,
@@ -15,6 +14,7 @@ use tokio_util::sync::CancellationToken;
 use tracing::{debug, error, info, warn};
 
 use crate::{
+    db::Db,
     metrics::IndexerMetrics,
     pipeline::logging::{LoggerWatermark, WatermarkLogger},
     store::DbConnection,
@@ -132,7 +132,7 @@ pub(super) fn pruner<H: Handler + Send + Sync + 'static>(
 
         loop {
             // (1) Get the latest pruning bounds from the database.
-            let watermark = tokio::select! {
+            let mut watermark = tokio::select! {
                 _ = cancel.cancelled() => {
                     info!(pipeline = H::NAME, "Shutdown received");
                     break;

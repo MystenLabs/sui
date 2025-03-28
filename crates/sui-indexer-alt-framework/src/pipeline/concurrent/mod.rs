@@ -268,13 +268,7 @@ pub(crate) fn pipeline<H: Handler + Send + Sync + 'static>(
         pruner_cancel.clone(),
     );
 
-    let pruner = pruner(
-        handler,
-        pruner_config,
-        db.clone(),
-        metrics,
-        pruner_cancel.clone(),
-    );
+    let pruner = pruner(handler, pruner_config, db, metrics, pruner_cancel.clone());
 
     tokio::spawn(async move {
         let (_, _, _, _) = futures::join!(processor, collector, committer, commit_watermark);

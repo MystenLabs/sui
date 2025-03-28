@@ -156,13 +156,18 @@ impl PrunerWatermark {
         (self.wait_for > 0).then(|| Duration::from_millis(self.wait_for as u64))
     }
 
-    pub(crate) fn next_chunk(&self, size: u64) -> Option<(u64, u64)> {
+    /// The next chunk of checkpoints that the pruner should work on, to advance the watermark.
+    /// If no more checkpoints to prune, returns `None`.
+    /// Otherwise, returns a tuple (from, to_exclusive) where `from` is inclusive and `to_exclusive` is exclusive.
+    /// Advance the watermark as well.
+    pub(crate) fn next_chunk(&mut self, size: u64) -> Option<(u64, u64)> {
         if self.pruner_hi >= self.reader_lo {
             return None;
         }
 
         let from = self.pruner_hi as u64;
         let to_exclusive = (from + size).min(self.reader_lo as u64);
+        self.pruner_hi = to_exclusive as i64;
         Some((from, to_exclusive))
     }
 }
