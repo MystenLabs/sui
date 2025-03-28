@@ -81,6 +81,7 @@ pub fn on_completion_request(
     ide_files_root: VfsPath,
     pkg_dependencies: Arc<Mutex<BTreeMap<PathBuf, PrecomputedPkgInfo>>>,
     implicit_deps: Dependencies,
+    auto_import: bool,
 ) {
     eprintln!("handling completion request");
     let parameters = serde_json::from_value::<CompletionParams>(request.params.clone())
@@ -106,6 +107,7 @@ pub fn on_completion_request(
         &path,
         pos,
         implicit_deps,
+        auto_import,
     )
     .unwrap_or_default();
     let completions_len = completions.len();
@@ -132,6 +134,7 @@ fn completions(
     path: &Path,
     pos: Position,
     implicit_deps: Dependencies,
+    auto_import: bool,
 ) -> Option<Vec<CompletionItem>> {
     let Some(pkg_path) = SymbolicatorRunner::root_dir(path) else {
         eprintln!("failed completion for {:?} (package root not found)", path);
@@ -146,6 +149,7 @@ fn completions(
         path,
         pos,
         implicit_deps,
+        auto_import,
     ))
 }
 
@@ -158,9 +162,17 @@ pub fn compute_completions(
     path: &Path,
     pos: Position,
     implicit_deps: Dependencies,
+    auto_import: bool,
 ) -> Vec<CompletionItem> {
-    compute_completions_new_symbols(ide_files_root, pkg_dependencies, path, pos, implicit_deps)
-        .unwrap_or_else(|| compute_completions_with_symbols(current_symbols, path, pos))
+    compute_completions_new_symbols(
+        ide_files_root,
+        pkg_dependencies,
+        path,
+        pos,
+        implicit_deps,
+        auto_import,
+    )
+    .unwrap_or_else(|| compute_completions_with_symbols(current_symbols, path, pos, auto_import))
 }
 
 /// Computes a list of auto-completions for a given position in a file,
@@ -172,6 +184,7 @@ fn compute_completions_new_symbols(
     path: &Path,
     cursor_position: Position,
     implicit_deps: Dependencies,
+    auto_import: bool,
 ) -> Option<Vec<CompletionItem>> {
     let Some(pkg_path) = SymbolicatorRunner::root_dir(path) else {
         eprintln!("failed completion for {:?} (package root not found)", path);
@@ -194,6 +207,7 @@ fn compute_completions_new_symbols(
         &symbols,
         path,
         cursor_position,
+        auto_import,
     ))
 }
 
@@ -203,6 +217,7 @@ pub fn compute_completions_with_symbols(
     symbols: &Symbols,
     path: &Path,
     pos: Position,
+    auto_import: bool,
 ) -> Vec<CompletionItem> {
     let mut completions = vec![];
 
@@ -222,8 +237,14 @@ pub fn compute_completions_with_symbols(
         match &symbols.cursor_context {
             Some(cursor_context) => {
                 eprintln!("cursor completion");
-                let (cursor_completions, cursor_finalized) =
-                    cursor_completion_items(symbols, path, &file_source, pos, cursor_context);
+                let (cursor_completions, cursor_finalized) = cursor_completion_items(
+                    symbols,
+                    path,
+                    &file_source,
+                    pos,
+                    cursor_context,
+                    auto_import,
+                );
                 completion_finalized = cursor_finalized;
                 completions.extend(cursor_completions);
             }
@@ -256,6 +277,7 @@ fn cursor_completion_items(
     file_source: &str,
     pos: Position,
     cursor: &CursorContext,
+    auto_import: bool,
 ) -> (Vec<CompletionItem>, bool) {
     let cursor_leader = get_cursor_token(file_source, &pos);
     match cursor_leader {
@@ -264,8 +286,12 @@ fn cursor_completion_items(
         Some(Tok::ColonColon) => {
             let mut completions = vec![];
             let mut completion_finalized = false;
-            let (name_chain_completions, name_chain_finalized) =
-                name_chain_completions(symbols, cursor, /* colon_colon_triggered */ true);
+            let (name_chain_completions, name_chain_finalized) = name_chain_completions(
+                symbols,
+                cursor,
+                /* colon_colon_triggered */ true,
+                auto_import,
+            );
             completions.extend(name_chain_completions);
             completion_finalized |= name_chain_finalized;
             if !completion_finalized {
@@ -299,8 +325,12 @@ fn cursor_completion_items(
             eprintln!("no relevant cursor leader");
             let mut completions = vec![];
             let mut completion_finalized = false;
-            let (name_chain_completions, name_chain_finalized) =
-                name_chain_completions(symbols, cursor, /* colon_colon_triggered */ false);
+            let (name_chain_completions, name_chain_finalized) = name_chain_completions(
+                symbols,
+                cursor,
+                /* colon_colon_triggered */ false,
+                auto_import,
+            );
             completions.extend(name_chain_completions);
             completion_finalized |= name_chain_finalized;
             if !completion_finalized {

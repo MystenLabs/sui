@@ -14,7 +14,10 @@ use crate::{
     },
 };
 use itertools::Itertools;
-use lsp_types::{CompletionItem, CompletionItemKind, InsertTextFormat};
+use lsp_types::{
+    CompletionItem, CompletionItemKind, CompletionItemLabelDetails, InsertTextFormat, Position,
+    Range, TextEdit,
+};
 use move_compiler::{
     expansion::ast::{Address, ModuleIdent, ModuleIdent_, Visibility},
     parser::ast as P,
@@ -22,7 +25,7 @@ use move_compiler::{
 };
 use move_ir_types::location::{sp, Loc};
 use move_symbol_pool::Symbol;
-use std::collections::BTreeSet;
+use std::collections::{BTreeMap, BTreeSet};
 
 /// Describes kind of the name access chain component.
 enum ChainComponentKind {
@@ -52,6 +55,7 @@ pub fn name_chain_completions(
     symbols: &Symbols,
     cursor: &CursorContext,
     colon_colon_triggered: bool,
+    auto_import: bool,
 ) -> (Vec<CompletionItem>, bool) {
     eprintln!("looking for name access chains");
     let mut completions = vec![];
@@ -92,6 +96,16 @@ pub fn name_chain_completions(
     // if we are auto-completing for an access chain, there is no need to include default completions
     completion_finalized = true;
 
+    let mut auto_import_pos_opt = None;
+    if auto_import {
+        auto_import_pos_opt = cursor
+            .module
+            .map(|m| mod_defs(symbols, &m.value))
+            .flatten()
+            .map(|m| m.auto_import_pos)
+            .flatten();
+    }
+
     if leading_name.loc.contains(&cursor.loc) {
         // at first position of the chain suggest all packages that are available regardless of what
         // the leading name represents, as a package always fits at that position, for example:
@@ -106,18 +120,47 @@ pub fn name_chain_completions(
         );
 
         // only if leading name is actually a name, modules or module members are a correct
-        // auto-completion in the first position
+        // auto-completion in the first position, and auto-imports may kick in
         if let P::LeadingNameAccess_::Name(_) = &leading_name.value {
+            // modules
             completions.extend(
                 info.modules
                     .keys()
                     .map(|n| completion_item(n.as_str(), CompletionItemKind::MODULE)),
             );
+            // module auto-imports
+            if let Some(auto_import_pos) = auto_import_pos_opt {
+                let in_scope_modules = info
+                    .modules
+                    .values()
+                    .map(|sp!(_, mi)| mi)
+                    .collect::<BTreeSet<_>>();
+                for mod_ident in symbols.file_mods.values().flatten().map(|mdef| &mdef.ident) {
+                    // exclude modules that are already imported
+                    if in_scope_modules.contains(&mod_ident) {
+                        continue;
+                    }
+                    let mut item = completion_item(
+                        mod_ident.module.value().as_str(),
+                        CompletionItemKind::MODULE,
+                    );
+                    let auto_import_text =
+                        format!("use {}::{}", mod_ident.address, mod_ident.module);
+                    add_auto_import_to_completion_item(
+                        &mut item,
+                        auto_import_text,
+                        auto_import_pos,
+                    );
+                    completions.push(item);
+                }
+            }
+            // members
             completions.extend(all_single_name_member_completions(
                 symbols,
                 cursor,
                 &info.members,
                 chain_kind,
+                auto_import_pos_opt,
             ));
             if matches!(chain_kind, ChainCompletionKind::Type) {
                 completions.extend(PRIMITIVE_TYPE_COMPLETIONS.clone());
@@ -494,6 +537,7 @@ fn single_name_member_completion(
     member_alias: &Symbol,
     member_name: &Symbol,
     chain_kind: ChainCompletionKind,
+    source_mod_ident: Option<ModuleIdent_>,
 ) -> Vec<CompletionItem> {
     use ChainCompletionKind as CT;
 
@@ -562,22 +606,101 @@ fn single_name_member_completion(
 fn all_single_name_member_completions(
     symbols: &Symbols,
     cursor: &CursorContext,
-    members_info: &BTreeSet<(Symbol, ModuleIdent, Name)>,
+    members_info: &BTreeMap<(ModuleIdent, Symbol), BTreeSet<Symbol>>,
     chain_kind: ChainCompletionKind,
+    auto_import_pos_opt: Option<Position>,
 ) -> Vec<CompletionItem> {
     let mut completions = vec![];
-    for (member_alias, sp!(_, mod_ident), member_name) in members_info {
-        let member_completions = single_name_member_completion(
-            symbols,
-            cursor,
-            mod_ident,
-            member_alias,
-            &member_name.value,
-            chain_kind,
-        );
-        completions.extend(member_completions);
+    for ((sp!(_, mod_ident), member_name), member_aliases) in members_info {
+        for member_alias in member_aliases {
+            let member_completions = single_name_member_completion(
+                symbols,
+                cursor,
+                mod_ident,
+                member_alias,
+                &member_name,
+                chain_kind,
+                None,
+            );
+            completions.extend(member_completions);
+        }
     }
+    // member auto-imports
+    if let Some(auto_import_pos) = auto_import_pos_opt {
+        if let Some(source_mod_ident) = cursor.module {
+            // need source module information to filter out auto-imports
+            // of non-public module members
+            let mod_members = symbols.file_mods.values().flatten().map(|mdef| {
+                (
+                    sp(mdef.name_loc, mdef.ident),
+                    mdef.functions
+                        .keys()
+                        .chain(mdef.structs.keys().chain(mdef.enums.keys())),
+                )
+            });
+            for (mod_ident, import_members) in mod_members {
+                for member_name in import_members {
+                    // exclude members that are already imported
+                    if members_info.contains_key(&(mod_ident, *member_name)) {
+                        continue;
+                    }
+                    let mut member_completions = single_name_member_completion(
+                        symbols,
+                        cursor,
+                        &mod_ident.value,
+                        member_name,
+                        member_name,
+                        chain_kind,
+                        Some(source_mod_ident.value),
+                    );
+                    member_completions.iter_mut().for_each(|item| {
+                        let auto_import_text = format!(
+                            "use {}::{}::{}",
+                            mod_ident.value.address, mod_ident.value.module, member_name,
+                        );
+                        add_auto_import_to_completion_item(item, auto_import_text, auto_import_pos);
+                    });
+                    completions.extend(member_completions);
+                }
+            }
+        }
+    }
+
     completions
+}
+
+/// Adds additional edit to a completion item at a given position
+fn add_auto_import_to_completion_item(
+    item: &mut CompletionItem,
+    auto_import_text: String,
+    auto_import_pos: Position,
+) {
+    if let Some(ref mut d) = item.label_details {
+        d.detail = Some(format!("({})", auto_import_text));
+    } else {
+        item.label_details = Some(CompletionItemLabelDetails {
+            detail: Some(format!("({})", auto_import_text)),
+            description: None,
+        });
+    }
+    item.detail = Some(format!("({})", auto_import_text));
+    let r = Range {
+        start: auto_import_pos,
+        end: auto_import_pos,
+    };
+    if auto_import_pos.character > 0 {
+        // after the last import
+        item.additional_text_edits = Some(vec![TextEdit {
+            range: r,
+            new_text: format!("\n{};", auto_import_text),
+        }]);
+    } else {
+        // before the first member
+        item.additional_text_edits = Some(vec![TextEdit {
+            range: r,
+            new_text: format!("{};\n\n", auto_import_text),
+        }]);
+    }
 }
 
 /// Checks if a given module identifier represents a module in a package identifier by
@@ -887,15 +1010,15 @@ fn first_name_chain_component_kind(
             } else if let Some((mod_ident, member_name)) =
                 info.members
                     .iter()
-                    .find_map(|(alias_name, mod_ident, member_name)| {
-                        if alias_name == &n.value {
+                    .find_map(|((mod_ident, member_name), alias_names)| {
+                        if alias_names.contains(&(n.value)) {
                             Some((*mod_ident, member_name))
                         } else {
                             None
                         }
                     })
             {
-                Some(ChainComponentKind::Member(mod_ident, member_name.value))
+                Some(ChainComponentKind::Member(mod_ident, *member_name))
             } else {
                 None
             }

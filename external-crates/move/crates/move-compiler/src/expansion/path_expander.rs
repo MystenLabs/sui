@@ -1242,7 +1242,10 @@ impl PathExpander for LegacyPathExpander {
                 info.modules.insert(*name, *mident);
             }
             for (_, name, (_, (mident, member))) in self.aliases.members.iter() {
-                info.members.insert((*name, *mident, *member));
+                info.members
+                    .entry((*mident, member.value))
+                    .or_default()
+                    .insert(*name);
             }
             let annotation = IDEAnnotation::PathAutocompleteInfo(Box::new(info));
             context.add_ide_annotation(loc, annotation)

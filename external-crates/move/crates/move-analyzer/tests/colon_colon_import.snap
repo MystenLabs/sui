@@ -1,0 +1,18 @@
+---
+source: crates/move-analyzer/tests/ide_testsuite.rs
+---
+== colon_colon.move ========================================================
+-- test 0 -------------------
+use line: 6, use_col: 9
+Unit '0xCAFE'
+Unit 'Import'
+Module 'Self'
+Module 'dep'
+Module 'another_dep'
+    TARGET     : '(use Import::another_dep)'
+    ADDITIONAL EDIT: '
+use Import::another_dep;'
+Method 'foo()'
+    INSERT TEXT: 'foo()'
+    TARGET     : '(Import::colon_colon::foo)'
+    TYPE       : 'fun ()'

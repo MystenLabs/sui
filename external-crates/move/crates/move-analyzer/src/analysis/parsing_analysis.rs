@@ -8,12 +8,12 @@ use crate::{
         CursorContext, CursorDefinition, CursorPosition, DefMap, ModuleDefs, References, UseDef,
         UseDefMap,
     },
-    utils::loc_start_to_lsp_position_opt,
+    utils::{loc_start_to_lsp_position_opt, offset_to_lsp_position},
 };
 
 use lsp_types::Position;
 
-use std::collections::BTreeMap;
+use std::{collections::BTreeMap, u32};
 
 use move_compiler::{
     parser::ast as P,
@@ -145,6 +145,8 @@ impl<'a> ParsingAnalysisContext<'a> {
             .iter()
             .for_each(|sp!(_, attrs)| attrs.iter().for_each(|a| self.attr_symbols(a.clone())));
 
+        let mut latest_use_offset = 0; // offset of the end of the latest use declaration (if any)
+        let mut earliest_member_offset = u32::MAX; // offset of the end of the earliest member (if any)
         for m in &mod_def.members {
             use P::ModuleMember as MM;
             match m {
@@ -152,7 +154,7 @@ impl<'a> ParsingAnalysisContext<'a> {
                     if ignored_function(fun.name.value()) {
                         continue;
                     }
-
+                    earliest_member_offset = earliest_member_offset.min(fun.loc.start());
                     // Unit returns span the entire function signature, so we process them first
                     // for cursor ordering.
                     self.type_symbols(&fun.signature.return_type);
@@ -189,6 +191,7 @@ impl<'a> ParsingAnalysisContext<'a> {
                     };
                 }
                 MM::Struct(sdef) => {
+                    earliest_member_offset = earliest_member_offset.min(sdef.loc.start());
                     // If the cursor is in this item, mark that down.
                     // This may be overridden by the recursion below.
                     if let Some(cursor) = &mut self.cursor {
@@ -217,6 +220,7 @@ impl<'a> ParsingAnalysisContext<'a> {
                     }
                 }
                 MM::Enum(edef) => {
+                    earliest_member_offset = earliest_member_offset.min(edef.loc.start());
                     // If the cursor is in this item, mark that down.
                     // This may be overridden by the recursion below.
                     if let Some(cursor) = &mut self.cursor {
@@ -248,9 +252,16 @@ impl<'a> ParsingAnalysisContext<'a> {
                         }
                     }
                 }
-                MM::Use(use_decl) => self.use_decl_symbols(use_decl),
-                MM::Friend(fdecl) => self.chain_symbols(&fdecl.friend),
+                MM::Use(use_decl) => {
+                    latest_use_offset = latest_use_offset.max(use_decl.loc.end());
+                    self.use_decl_symbols(use_decl)
+                }
+                MM::Friend(fdecl) => {
+                    earliest_member_offset = earliest_member_offset.min(fdecl.loc.start());
+                    self.chain_symbols(&fdecl.friend)
+                }
                 MM::Constant(c) => {
+                    earliest_member_offset = earliest_member_offset.min(c.loc.start());
                     // If the cursor is in this item, mark that down.
                     // This may be overridden by the recursion below.
                     if let Some(cursor) = &mut self.cursor {
@@ -270,9 +281,38 @@ impl<'a> ParsingAnalysisContext<'a> {
                     self.type_symbols(&c.signature);
                     self.exp_symbols(&c.value);
                 }
-                MM::Spec(_) => (),
+                MM::Spec(s) => {
+                    earliest_member_offset = earliest_member_offset.min(s.loc.start());
+                    ()
+                }
             }
         }
+        if let Some(mod_defs) = self
+            .mod_outer_defs
+            .get_mut(&self.current_mod_ident_str.clone().unwrap())
+        {
+            mod_defs.auto_import_pos = if latest_use_offset > 0 {
+                // imports exist, auto-imports position is at the end of the last
+                // auto import
+                offset_to_lsp_position(self.files, &mod_def.loc.file_hash(), latest_use_offset)
+            } else if earliest_member_offset < u32::MAX {
+                // Imports don't exist, but some members do, and auot-imports position
+                // is at the beginning of the line where the first member starts, with
+                // the intention to insert auto-imports on the same line pushing
+                // the member down. The reason why we don't insert auto-imports
+                // on the previous line is that if we are unlucky, we may
+                // hit a curly starting module or module declaration itself.
+                offset_to_lsp_position(self.files, &mod_def.loc.file_hash(), earliest_member_offset)
+                    .map(|pos| Position::new(pos.line, 0))
+            } else {
+                // Otherwise it's unclear where to insert auto-imports.
+                // We could speculate here but this should not really happen
+                // since for auto-import to make sense we need some code
+                // in the module.
+                None
+            };
+        }
+
         self.current_mod_ident_str = None;
         let processed_defs = std::mem::replace(&mut self.use_defs, old_defs);
         mod_use_defs.insert(mod_ident_str.clone(), processed_defs);
