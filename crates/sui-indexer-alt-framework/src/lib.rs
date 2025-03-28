@@ -8,7 +8,7 @@ use diesel::{
     migration::{self, Migration, MigrationSource},
     pg::Pg,
 };
-use diesel_migrations::{embed_migrations, EmbeddedMigrations};
+use diesel_migrations::EmbeddedMigrations;
 use futures::future;
 use ingestion::{client::IngestionClient, ClientArgs, IngestionConfig, IngestionService};
 use metrics::IndexerMetrics;
@@ -18,7 +18,7 @@ use pipeline::{
     Processor,
 };
 use prometheus::Registry;
-use store::{CommitterWatermark, DbConnection};
+use sui_indexer_alt_framework_store::store::{CommitterWatermark, DbConnection};
 use sui_indexer_alt_metrics::db::DbConnectionStatsCollector;
 use sui_pg_db::{temp::TempDb, Db, DbArgs};
 use tempfile::tempdir;
@@ -29,6 +29,10 @@ use url::Url;
 
 pub use anyhow::Result;
 pub use sui_field_count::FieldCount;
+pub use sui_indexer_alt_framework_store::store;
+// TODO (wlmyng)
+// #[cfg(feature = "postgres")]
+// pub use sui_indexer_alt_framework_store::pg_store;
 pub use sui_pg_db as db;
 pub use sui_sql_macro::sql;
 pub use sui_types as types;
@@ -37,14 +41,13 @@ pub use sui_types as types;
 pub mod cluster;
 pub mod ingestion;
 pub mod metrics;
-pub mod models;
-pub mod pg_store;
 pub mod pipeline;
 pub mod schema;
-pub mod store;
 pub mod task;
 
-const MIGRATIONS: EmbeddedMigrations = embed_migrations!("migrations");
+// TODO (wlmyng)
+// #[cfg(feature = "postgres")]
+const MIGRATIONS: EmbeddedMigrations = sui_indexer_alt_framework_store::MIGRATIONS;
 
 /// Command-line arguments for the indexer
 #[derive(clap::Args, Default, Debug, Clone)]

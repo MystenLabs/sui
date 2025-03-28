@@ -1,0 +1,23 @@
+[package]
+name = "sui-indexer-alt-framework-store"
+version.workspace = true
+authors = ["Mysten Labs <build@mystenlabs.com>"]
+license = "Apache-2.0"
+publish = false
+edition = "2021"
+
+[dependencies]
+anyhow.workspace = true
+async-trait.workspace = true
+chrono.workspace = true
+scoped-futures.workspace = true
+
+sui-pg-db = { path = "../sui-pg-db", optional = true }
+diesel = { workspace = true, optional = true }
+diesel-async = { workspace = true, optional = true }
+diesel_migrations = { workspace = true, optional = true }
+sui-field-count = { workspace = true, optional = true }
+sui-sql-macro = { workspace = true, optional = true }
+
+[features]
+postgres = ["sui-pg-db", "diesel", "diesel-async", "diesel_migrations", "sui-field-count", "sui-sql-macro"]

@@ -11,14 +11,27 @@ use diesel::ExpressionMethods;
 use diesel::OptionalExtension;
 use diesel_async::{AsyncConnection, RunQueryDsl};
 use scoped_futures::ScopedBoxFuture;
+use sui_field_count::FieldCount;
+use sui_pg_db::{Connection as PgConnection, Db as PgDb};
 use sui_sql_macro::sql;
 
-use crate::db::{Connection as PgConnection, Db as PgDb};
-use crate::models::watermarks::StoredWatermark;
 use crate::schema::watermarks;
 use crate::store::{
     CommitterWatermark, DbConnection, PrunerWatermark, ReaderWatermark, Store, TransactionalStore,
 };
+
+#[derive(Insertable, Selectable, Queryable, Debug, Clone, FieldCount)]
+#[diesel(table_name = watermarks)]
+pub struct StoredWatermark {
+    pub pipeline: String,
+    pub epoch_hi_inclusive: i64,
+    pub checkpoint_hi_inclusive: i64,
+    pub tx_hi: i64,
+    pub timestamp_ms_hi_inclusive: i64,
+    pub reader_lo: i64,
+    pub pruner_timestamp: NaiveDateTime,
+    pub pruner_hi: i64,
+}
 
 #[async_trait]
 impl DbConnection for PgConnection<'_> {
@@ -26,8 +39,12 @@ impl DbConnection for PgConnection<'_> {
         &mut self,
         pipeline: &'static str,
     ) -> anyhow::Result<Option<CommitterWatermark>> {
-        let watermark = StoredWatermark::get(self, pipeline)
+        let watermark: Option<StoredWatermark> = watermarks::table
+            .select(StoredWatermark::as_select())
+            .filter(watermarks::pipeline.eq(pipeline))
+            .first(self)
             .await
+            .optional()
             .map_err(anyhow::Error::from)?;
 
         if let Some(watermark) = watermark {
@@ -46,8 +63,12 @@ impl DbConnection for PgConnection<'_> {
         &mut self,
         pipeline: &'static str,
     ) -> anyhow::Result<Option<ReaderWatermark>> {
-        let watermark = StoredWatermark::get(self, pipeline)
+        let watermark: Option<StoredWatermark> = watermarks::table
+            .select(StoredWatermark::as_select())
+            .filter(watermarks::pipeline.eq(pipeline))
+            .first(self)
             .await
+            .optional()
             .map_err(anyhow::Error::from)?;
 
         if let Some(watermark) = watermark {

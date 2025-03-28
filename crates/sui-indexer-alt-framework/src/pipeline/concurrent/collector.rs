@@ -231,7 +231,6 @@ mod tests {
 
     #[async_trait::async_trait]
     impl Handler for TestHandler {
-        // TODO (wlmyng): replace with InMemoryStore
         type Store = Db;
 
         const MAX_PENDING_ROWS: usize = 10000;
