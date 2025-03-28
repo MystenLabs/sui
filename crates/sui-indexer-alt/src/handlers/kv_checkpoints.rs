@@ -7,8 +7,8 @@ use anyhow::{Context, Result};
 use diesel::{ExpressionMethods, QueryDsl};
 use diesel_async::RunQueryDsl;
 use sui_indexer_alt_framework::{
-    db::{Connection, Db},
     pipeline::{concurrent::Handler, Processor},
+    postgres::{Connection, Db},
     types::full_checkpoint_content::CheckpointData,
 };
 use sui_indexer_alt_schema::{checkpoints::StoredCheckpoint, schema::kv_checkpoints};
@@ -80,7 +80,7 @@ mod tests {
     #[tokio::test]
     async fn test_kv_checkpoints_pruning() {
         let (indexer, _db) = Indexer::new_for_testing(&MIGRATIONS).await;
-        let mut conn = indexer.db().connect().await.unwrap();
+        let mut conn = indexer.store().connect().await.unwrap();
 
         // Create 3 checkpoints
         let mut builder = TestCheckpointDataBuilder::new(0);

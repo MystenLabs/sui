@@ -5,7 +5,7 @@ use std::ops::{Deref, DerefMut};
 use std::time::Duration;
 
 use anyhow::anyhow;
-use diesel::migration::{MigrationSource, MigrationVersion};
+use diesel::migration::{Migration, MigrationSource, MigrationVersion};
 use diesel::pg::Pg;
 use diesel::ConnectionError;
 use diesel_async::async_connection_wrapper::AsyncConnectionWrapper;
@@ -23,6 +23,9 @@ use tracing::info;
 use url::Url;
 
 mod model;
+
+pub use sui_field_count::FieldCount;
+pub use sui_sql_macro::sql;
 
 pub mod schema;
 pub mod store;
@@ -190,6 +193,20 @@ pub async fn reset_database<S: MigrationSource<Pg> + Send + Sync + 'static>(
     Ok(())
 }
 
+impl<'a> Deref for Connection<'a> {
+    type Target = PooledConnection<'a, AsyncPgConnection>;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+impl DerefMut for Connection<'_> {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.0
+    }
+}
+
 async fn pool(
     database_url: Url,
     args: DbArgs,
@@ -230,18 +247,23 @@ async fn pool(
         .await?)
 }
 
-impl<'a> Deref for Connection<'a> {
-    type Target = PooledConnection<'a, AsyncPgConnection>;
-
-    fn deref(&self) -> &Self::Target {
-        &self.0
+/// Returns new migrations derived from the combination of provided migrations and migrations
+/// defined in this crate.
+pub fn migrations(
+    migrations: Option<&'static EmbeddedMigrations>,
+) -> impl MigrationSource<Pg> + Send + Sync + 'static {
+    struct Migrations(Option<&'static EmbeddedMigrations>);
+    impl MigrationSource<Pg> for Migrations {
+        fn migrations(&self) -> diesel::migration::Result<Vec<Box<dyn Migration<Pg>>>> {
+            let mut migrations = MIGRATIONS.migrations()?;
+            if let Some(more_migrations) = self.0 {
+                migrations.extend(more_migrations.migrations()?);
+            }
+            Ok(migrations)
+        }
     }
-}
 
-impl DerefMut for Connection<'_> {
-    fn deref_mut(&mut self) -> &mut Self::Target {
-        &mut self.0
-    }
+    Migrations(migrations)
 }
 
 #[cfg(test)]
