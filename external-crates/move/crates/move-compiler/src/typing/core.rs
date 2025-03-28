@@ -2138,6 +2138,7 @@ pub fn check_call_arity<S: std::fmt::Display, F: Fn() -> S>(
     context: &mut Context,
     loc: Loc,
     msg: F,
+    arity_loc: Option<Loc>,
     arity: usize,
     argloc: Loc,
     given_len: usize,
@@ -2156,11 +2157,17 @@ pub fn check_call_arity<S: std::fmt::Display, F: Fn() -> S>(
         arity,
         given_len
     );
-    context.add_diag(diag!(
-        code,
-        (loc, cmsg),
-        (argloc, format!("Found {} argument(s) here", given_len)),
-    ));
+    let args_msg = format!("Found {} argument(s) here", given_len);
+    let diag = match arity_loc {
+        None => diag!(code, (loc, cmsg), (argloc, args_msg)),
+        Some(arity_loc) => diag!(
+            code,
+            (loc, cmsg),
+            (arity_loc, format!("Expected {} argument(s)", arity)),
+            (argloc, args_msg)
+        ),
+    };
+    context.add_diag(diag);
 }
 
 //**************************************************************************************************

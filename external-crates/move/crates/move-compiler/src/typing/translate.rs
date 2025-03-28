@@ -4406,7 +4406,7 @@ fn make_arg_types<S: std::fmt::Display, F: Fn() -> S>(
     mut given: Vec<Type>,
 ) -> Vec<Type> {
     let given_len = given.len();
-    core::check_call_arity(context, loc, msg, arity, argloc, given_len);
+    core::check_call_arity(context, loc, msg, None, arity, argloc, given_len);
     while given.len() < arity {
         given.push(context.error_type(argloc))
     }
@@ -4566,6 +4566,7 @@ fn macro_call_impl(
         context,
         loc,
         || format!("Invalid call of '{}::{}'", &m, &f),
+        None,
         parameters.len(),
         argloc,
         args.len(),
@@ -4746,9 +4747,58 @@ fn expand_macro(
 /// 1) We can track the use_fun_scope, which is used for resolving method calls correctly
 /// 2) After substitution, we can mark the Block as coming from a macro expansion which is used
 ///    for tracking recursive macro calls
-fn convert_macro_arg_to_block(context: &Context, sp!(loc, ne_): N::Exp) -> N::Exp {
+fn convert_macro_arg_to_block(context: &mut Context, sp!(loc, ne_): N::Exp) -> N::Exp {
+    fn is_lambda(ne_: &N::Exp_) -> bool {
+        match ne_ {
+            N::Exp_::Lambda(_) => true,
+            N::Exp_::Annotate(e, _) => is_lambda(&e.value),
+            _ => false,
+        }
+    }
+
+    fn gather_lambda_annotations(
+        context: &mut Context,
+        loc: Loc,
+        ne_: N::Exp_,
+        mut extra_annotations: Vec<Type>,
+    ) -> N::Exp_ {
+        match ne_ {
+            N::Exp_::Lambda(lambda) if extra_annotations.is_empty() => N::Exp_::Lambda(lambda),
+            N::Exp_::Lambda(mut lambda) => {
+                let param_tys = lambda
+                    .parameters
+                    .value
+                    .iter()
+                    .map(|(sp!(loc, _), _)| core::make_tvar(context, *loc))
+                    .collect::<Vec<_>>();
+                let res_ty = core::make_tvar(context, lambda.body.loc);
+                let tfun = sp(loc, Type_::Fun(param_tys.clone(), Box::new(res_ty.clone())));
+                for annot in extra_annotations {
+                    let annot_loc = annot.loc;
+                    subtype(
+                        context,
+                        annot_loc,
+                        || "Invalid annotation for lambda",
+                        tfun.clone(),
+                        annot,
+                    );
+                }
+                lambda.extra_annotations.push(sp(loc, (param_tys, res_ty)));
+                N::Exp_::Lambda(lambda)
+            }
+
+            N::Exp_::Annotate(e, annot) => {
+                extra_annotations.push(annot);
+                let sp!(eloc, e_) = *e;
+                gather_lambda_annotations(context, eloc, e_, extra_annotations)
+            }
+            _ => unreachable!(),
+        }
+    }
+
     let ne_ = match ne_ {
-        N::Exp_::Block(_) | N::Exp_::Lambda(_) | N::Exp_::UnresolvedError => ne_,
+        _ if is_lambda(&ne_) => gather_lambda_annotations(context, loc, ne_, vec![]),
+        N::Exp_::Block(_) | N::Exp_::UnresolvedError => ne_,
         ne_ => {
             let color = context.current_call_color();
             let seq_ = VecDeque::from([sp(loc, N::SequenceItem_::Seq(Box::new(sp(loc, ne_))))]);
