@@ -193,8 +193,6 @@ pub fn run_move_prover_with_model<W: WriteColor>(
         }
     }
 
-    println!("HERE {:?}", targets.specs().count());
-
     Ok(())
 }
 
