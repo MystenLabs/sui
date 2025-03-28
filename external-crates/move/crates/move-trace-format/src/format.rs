@@ -481,7 +481,7 @@ pub struct MoveTraceReader<'a, R: std::io::Read> {
     reader: BufReader<zstd::stream::Decoder<'a, BufReader<R>>>,
 }
 
-impl<'a, R: std::io::Read> MoveTraceReader<'a, R> {
+impl<R: std::io::Read> MoveTraceReader<'_, R> {
     pub fn new(data: R) -> std::io::Result<Self> {
         let data = zstd::stream::Decoder::new(data)?;
         let mut reader = std::io::BufReader::new(data);
@@ -504,7 +504,7 @@ impl<'a, R: std::io::Read> MoveTraceReader<'a, R> {
     }
 }
 
-impl<'a, R: std::io::Read> Iterator for MoveTraceReader<'a, R> {
+impl<R: std::io::Read> Iterator for MoveTraceReader<'_, R> {
     type Item = std::io::Result<TraceEvent>;
 
     fn next(&mut self) -> Option<Self::Item> {

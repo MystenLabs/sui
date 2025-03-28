@@ -56,12 +56,12 @@ interface JSONTraceType {
     ref_type?: JSONTraceRefType
 }
 
-type JSONTraceRuntimeValueType = {
+type JSONTraceMoveValue = {
     type: JSONBaseType;
-    value: boolean | number | string | JSONTraceRuntimeValueType[] | JSONTraceCompound
+    value: boolean | number | string | JSONTraceMoveValue[] | JSONTraceCompound
 };
 
-type JSONTraceFields = [string, JSONTraceRuntimeValueType][];
+type JSONTraceFields = [string, JSONTraceMoveValue][];
 
 interface JSONTraceCompound {
     fields: JSONTraceFields;
@@ -72,7 +72,7 @@ interface JSONTraceCompound {
 
 interface JSONTraceRefValueContent {
     location: JSONTraceLocation;
-    snapshot: JSONTraceRuntimeValueType;
+    snapshot: JSONTraceMoveValue;
 }
 
 interface JSONTraceMutRefValue {
@@ -84,7 +84,7 @@ interface JSONTraceImmRefValue {
 }
 
 interface JSONTraceRuntimeValueContent {
-    value: JSONTraceRuntimeValueType;
+    value: JSONTraceMoveValue;
 }
 
 interface JSONTraceRuntimeValue {
@@ -164,7 +164,7 @@ interface JSONTracePopEffect {
 interface JSONDataLoadEffect {
     ref_type: JSONTraceRefType;
     location: JSONTraceLocation;
-    snapshot: JSONTraceRuntimeValueType;
+    snapshot: JSONTraceMoveValue;
 }
 
 interface JSONTraceEffect {
@@ -995,41 +995,41 @@ function traceRefValueFromJSON(value: JSONTraceRefValue): RuntimeValueType {
 /**
  * Converts a JSON trace runtime value to a runtime trace value.
  *
- * @param value JSON trace runtime value.
+ * @param moveValue JSON trace runtime value.
  * @returns runtime trace value.
  */
-function traceRuntimeValueFromJSON(value: JSONTraceRuntimeValueType): RuntimeValueType {
+function traceRuntimeValueFromJSON(moveValue: JSONTraceMoveValue): RuntimeValueType {
     if (
-        value.type === 'U8' ||
-        value.type === 'U16' ||
-        value.type === 'U32' ||
-        value.type === 'U64' ||
-        value.type === 'U128' ||
-        value.type === 'Bool' ||
-        value.type === 'Address') {
-        return String(value.value);
-    } else if (value.type === 'U256' && Array.isArray(value.value)) {
+        moveValue.type === 'U8' ||
+        moveValue.type === 'U16' ||
+        moveValue.type === 'U32' ||
+        moveValue.type === 'U64' ||
+        moveValue.type === 'U128' ||
+        moveValue.type === 'Bool' ||
+        moveValue.type === 'Address') {
+        return String(moveValue.value);
+    } else if (moveValue.type === 'U256' && Array.isArray(moveValue.value)) {
         let result = 0n;
-        const arr: string[] = value.value as unknown as string[];
+        const arr: string[] = moveValue.value as unknown as string[];
         for (let i = 0; i < arr.length; i++) {
             const word = BigInt(arr[i]);
             result += word << BigInt(64 * i);
         }
         return String(result);
-    } else if (value.type === 'Vector' && Array.isArray(value.value)) {
-        return value.value.map(item => traceRuntimeValueFromJSON(item));
-    } else if (Array.isArray(value.value)) {
+    } else if (moveValue.type === 'Vector' && Array.isArray(moveValue.value)) {
+        return moveValue.value.map(item => traceRuntimeValueFromJSON(item));
+    } else if (Array.isArray(moveValue.value)) {
         throw new Error("Impossible");
-    } else if ((value.type === 'Struct' || value.type == 'Variant') && typeof value.value === 'object' && 'type_' in value.value) {
+    } else if ((moveValue.type === 'Struct' || moveValue.type === 'Variant') && typeof moveValue.value === 'object' && 'type_' in moveValue.value) {
         const fields: [string, RuntimeValueType][] =
-            value.value.fields.map(([key, value]) =>
+            moveValue.value.fields.map(([key, value]) =>
                 [key, traceRuntimeValueFromJSON(value)]
             );
         const compoundValue: IRuntimeCompoundValue = {
             fields,
-            type: JSONTraceTypeToString(value.value.type_ as JSONBaseType),
-            variantName: value.value.variant_name,
-            variantTag: value.value.variant_tag,
+            type: JSONTraceTypeToString(moveValue.value.type_ as JSONBaseType),
+            variantName: moveValue.value.variant_name,
+            variantTag: moveValue.value.variant_tag,
         };
         return compoundValue;
     } else {
