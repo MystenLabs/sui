@@ -13,7 +13,7 @@ use tracing::warn;
 
 use crate::{
     extensions::{query_limits::QueryLimitsConfig, timeout::TimeoutConfig},
-    pagination::PaginationConfig,
+    pagination::{PageLimits, PaginationConfig},
 };
 
 #[derive(Default)]
@@ -131,7 +131,13 @@ impl Limits {
     }
 
     pub(crate) fn pagination(&self) -> PaginationConfig {
-        PaginationConfig::new(self.default_page_size, BTreeMap::new())
+        PaginationConfig::new(
+            PageLimits {
+                default: self.default_page_size,
+                max: self.max_page_size,
+            },
+            BTreeMap::new(),
+        )
     }
 }
 

@@ -218,6 +218,8 @@ mod tests {
     use axum::http::HeaderValue;
     use insta::{assert_json_snapshot, assert_snapshot};
 
+    use crate::pagination::PageLimits;
+
     use super::*;
 
     #[derive(Clone)]
@@ -329,8 +331,22 @@ mod tests {
         }
     }
 
-    fn no_page() -> PaginationConfig {
-        PaginationConfig::new(0, Default::default())
+    fn page() -> PaginationConfig {
+        PaginationConfig::new(small_page(), Default::default())
+    }
+
+    fn small_page() -> PageLimits {
+        PageLimits {
+            default: 5,
+            max: 10,
+        }
+    }
+
+    fn big_page() -> PageLimits {
+        PageLimits {
+            default: 10,
+            max: 20,
+        }
     }
 
     fn schema(
@@ -368,7 +384,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_pass_limits() {
-        let schema = schema(config(), no_page());
+        let schema = schema(config(), page());
         let response = execute(&schema, "{ a { b { c { a { z } } } } }").await;
 
         assert_snapshot!(response.extensions.get("usage").unwrap(), @"{input: {nodes: 5,depth: 5},payload: {query_payload_size: 29,tx_payload_size: 0},output: {nodes: 5}}");
@@ -376,7 +392,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_too_deep() {
-        let schema = schema(config(), no_page());
+        let schema = schema(config(), page());
         let response = execute(&schema, "{ a { b { c { a { b { c { z } } } } } } }").await;
 
         assert_json_snapshot!(response, @r###"
@@ -409,7 +425,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_too_many_input_nodes() {
-        let schema = schema(config(), no_page());
+        let schema = schema(config(), page());
         let response = execute(
             &schema,
             r#"{
@@ -449,7 +465,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_missing_fragment_def() {
-        let schema = schema(config(), no_page());
+        let schema = schema(config(), page());
         let response = execute(&schema, "query { ...IDontExist }").await;
 
         assert_json_snapshot!(response, @r###"
@@ -474,7 +490,7 @@ mod tests {
     /// count.
     #[tokio::test]
     async fn test_too_many_input_nodes_fragment_spread() {
-        let schema = schema(config(), no_page());
+        let schema = schema(config(), page());
         let response = execute(
             &schema,
             r#"
@@ -517,7 +533,7 @@ mod tests {
     /// The depth of a fragment is added to the depth at which the fragment is spread.
     #[tokio::test]
     async fn test_too_deep_fragment_spread() {
-        let schema = schema(config(), no_page());
+        let schema = schema(config(), page());
         let response = execute(
             &schema,
             r#"
@@ -564,7 +580,7 @@ mod tests {
                 max_tx_payload_size: 5,
                 ..config()
             },
-            no_page(),
+            page(),
         );
 
         let response = execute(&schema, "{ a { b { c { a { z } } } } }").await;
@@ -592,7 +608,7 @@ mod tests {
                 max_tx_payload_size: 50,
                 ..config()
             },
-            no_page(),
+            page(),
         );
 
         let response = execute(&schema, "{ a { b { c { a { z } } } } }").await;
@@ -620,7 +636,7 @@ mod tests {
                 max_query_payload_size: 50,
                 ..config()
             },
-            no_page(),
+            page(),
         );
 
         let response = execute(&schema, r#"{ tx(bytes: "hello world", other: 1) }"#).await;
@@ -649,7 +665,7 @@ mod tests {
     /// Test that transaction payloads in top-level fields get picked up and counted correctly.
     #[tokio::test]
     async fn test_tx_payload_accounting() {
-        let schema = schema(config(), no_page());
+        let schema = schema(config(), page());
         let response = execute(
             &schema,
             r#"
@@ -667,7 +683,7 @@ mod tests {
     /// Transaction payloads that are in nested fields are not counted.
     #[tokio::test]
     async fn test_nested_tx_payload_ignored() {
-        let schema = schema(config(), no_page());
+        let schema = schema(config(), page());
         let response = execute(
             &schema,
             r#"
@@ -689,7 +705,7 @@ mod tests {
     /// [test_tx_payload_accounting].
     #[tokio::test]
     async fn test_tx_payload_type_filter() {
-        let schema = schema(config(), no_page());
+        let schema = schema(config(), page());
         let response = execute(
             &schema,
             r#"
@@ -712,7 +728,7 @@ mod tests {
                 max_query_depth: 10,
                 ..config()
             },
-            PaginationConfig::new(10, Default::default()),
+            PaginationConfig::new(big_page(), Default::default()),
         );
 
         let response = execute(&schema, "{ p { nodes { a { b { c { z } } } } } }").await;
@@ -746,7 +762,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_output_huge_page() {
-        let schema = schema(config(), no_page());
+        let schema = schema(config(), page());
         let response = execute(&schema, "{ p(first: 9999999999) { nodes { z } } }").await;
 
         assert_json_snapshot!(response, @r###"
@@ -772,35 +788,39 @@ mod tests {
 
     #[tokio::test]
     async fn test_output_multi_get() {
-        let schema = schema(config(), no_page());
+        let schema = schema(config(), page());
         let response = execute(&schema, r#"{ multiGetQ(keys: ["a", "b", "c"]) { z } }"#).await;
         assert_snapshot!(usage(response, "output"), @"{nodes: 7}");
     }
 
     #[tokio::test]
     async fn test_output_page_first() {
-        let schema = schema(config(), no_page());
+        let schema = schema(config(), page());
         let response = execute(&schema, r#"{ p(first: 5) { nodes { z } } }"#).await;
         assert_snapshot!(usage(response, "output"), @"{nodes: 12}");
     }
 
     #[tokio::test]
     async fn test_output_page_last() {
-        let schema = schema(config(), no_page());
+        let schema = schema(config(), page());
         let response = execute(&schema, r#"{ p(last: 5) { nodes { z } } }"#).await;
         assert_snapshot!(usage(response, "output"), @"{nodes: 12}");
     }
 
     #[tokio::test]
     async fn test_output_page_both() {
-        let schema = schema(config(), no_page());
+        let schema = schema(config(), page());
         let response = execute(&schema, r#"{ p(first: 3, last: 5) { nodes { z } } }"#).await;
         assert_snapshot!(usage(response, "output"), @"{nodes: 12}");
     }
 
     #[tokio::test]
     async fn test_output_page_default() {
-        let pagination = PaginationConfig::new(5, BTreeMap::from_iter([(("Query", "q"), 10)]));
+        let pagination = PaginationConfig::new(
+            small_page(),
+            BTreeMap::from_iter([(("Query", "q"), big_page())]),
+        );
+
         let schema = schema(config(), pagination);
         let response = execute(&schema, r#"{ p { nodes { z } } }"#).await;
         assert_snapshot!(usage(response, "output"), @"{nodes: 12}");
@@ -808,7 +828,11 @@ mod tests {
 
     #[tokio::test]
     async fn test_output_page_override() {
-        let pagination = PaginationConfig::new(5, BTreeMap::from_iter([(("Query", "q"), 10)]));
+        let pagination = PaginationConfig::new(
+            small_page(),
+            BTreeMap::from_iter([(("Query", "q"), big_page())]),
+        );
+
         let schema = schema(config(), pagination);
         let response = execute(&schema, r#"{ q { nodes { z } } }"#).await;
         assert_snapshot!(usage(response, "output"), @"{nodes: 22}");
@@ -816,7 +840,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_output_nest_multi_get() {
-        let schema = schema(config(), no_page());
+        let schema = schema(config(), page());
 
         let response = execute(
             &schema,
@@ -839,7 +863,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_output_nest_page_page() {
-        let schema = schema(config(), no_page());
+        let schema = schema(config(), page());
 
         let response = execute(
             &schema,
@@ -866,7 +890,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_output_nest_page_multi_get() {
-        let schema = schema(config(), no_page());
+        let schema = schema(config(), page());
 
         let response = execute(
             &schema,
@@ -891,7 +915,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_output_nest_multi_get_page() {
-        let schema = schema(config(), no_page());
+        let schema = schema(config(), page());
 
         let response = execute(
             &schema,
@@ -917,7 +941,7 @@ mod tests {
     /// A connection's page info is nested within it, but that is not multiplied by the page size.
     #[tokio::test]
     async fn test_output_nest_page_page_info() {
-        let schema = schema(config(), no_page());
+        let schema = schema(config(), page());
 
         let response = execute(
             &schema,
@@ -946,7 +970,7 @@ mod tests {
     /// not multiplied by the page size.
     #[tokio::test]
     async fn test_output_nest_page_extra() {
-        let schema = schema(config(), no_page());
+        let schema = schema(config(), page());
 
         let response = execute(
             &schema,
@@ -965,7 +989,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_output_bare_node_edge() {
-        let schema = schema(config(), no_page());
+        let schema = schema(config(), page());
 
         let response = execute(
             &schema,
@@ -983,7 +1007,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_output_nest_page_bare_node() {
-        let schema = schema(config(), no_page());
+        let schema = schema(config(), page());
 
         let response = execute(
             &schema,
@@ -1008,5 +1032,67 @@ mod tests {
         .await;
 
         assert_snapshot!(usage(response, "output"), @"{nodes: 38}");
+    }
+
+    #[tokio::test]
+    async fn test_output_fallback_max_page_size_exceeded() {
+        let schema = schema(
+            config(),
+            PaginationConfig::new(
+                small_page(),
+                BTreeMap::from_iter([(("Query", "p"), big_page())]),
+            ),
+        );
+
+        let response = execute(
+            &schema,
+            &format!(
+                "{{ q(first: {}) {{ nodes {{ z }} }} }}",
+                small_page().max + 1
+            ),
+        )
+        .await;
+
+        assert_json_snapshot!(response, @r###"
+        {
+          "data": null,
+          "errors": [
+            {
+              "message": "Page size is too large: 11 > 10",
+              "locations": [
+                {
+                  "line": 1,
+                  "column": 3
+                }
+              ],
+              "extensions": {
+                "code": "GRAPHQL_VALIDATION_FAILED"
+              }
+            }
+          ]
+        }
+        "###);
+    }
+
+    #[tokio::test]
+    async fn test_output_override_max_page_size_met() {
+        let schema = schema(
+            config(),
+            PaginationConfig::new(
+                small_page(),
+                BTreeMap::from_iter([(("Query", "p"), big_page())]),
+            ),
+        );
+
+        let response = execute(
+            &schema,
+            &format!(
+                "{{ p(first: {}) {{ nodes {{ z }} }} }}",
+                small_page().max + 1
+            ),
+        )
+        .await;
+
+        assert_snapshot!(response.extensions.get("usage").unwrap(), @"{input: {nodes: 3,depth: 3},payload: {query_payload_size: 32,tx_payload_size: 0},output: {nodes: 24}}");
     }
 }

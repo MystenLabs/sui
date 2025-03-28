@@ -30,6 +30,9 @@ pub(super) enum ErrorKind {
     )]
     OutputNodes(u32),
 
+    #[error("Page size is too large: {actual} > {limit}")]
+    PageSizeTooLarge { limit: u32, actual: u32 },
+
     #[error("Request too large {actual}B > {limit}B")]
     PayloadSizeOverall { limit: u32, actual: u64 },
 
