@@ -21,6 +21,11 @@ export PATH="$DOTNET_ROOT/bin:$BIN_DIR:$PATH"
 # Clone and build Sui Prover
 cargo install --locked --path ./crates/sui-prover --root "$INSTALL_DIR"
 
+# Run cargo test in move-prover directory
+cd ./external-crates/move/crates/move-prover
+cargo test
+cd ../../../../
+
 # Clone and build Boogie
 git clone --branch master https://github.com/boogie-org/boogie.git boogie-src
 cd boogie-src
