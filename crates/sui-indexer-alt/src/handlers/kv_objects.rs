@@ -6,9 +6,9 @@ use std::sync::Arc;
 use anyhow::{Context, Result};
 use diesel_async::RunQueryDsl;
 use sui_indexer_alt_framework::{
-    db::Db,
     pipeline::{concurrent::Handler, Processor},
     store::Store,
+    sui_indexer_alt_framework_store_pg::pg_store::PgStore,
     types::full_checkpoint_content::CheckpointData,
 };
 use sui_indexer_alt_schema::{objects::StoredObject, schema::kv_objects};
@@ -56,7 +56,7 @@ impl Processor for KvObjects {
 
 #[async_trait::async_trait]
 impl Handler for KvObjects {
-    type Store = Db;
+    type Store = PgStore;
 
     const MIN_EAGER_ROWS: usize = 100;
     const MAX_PENDING_ROWS: usize = 10000;

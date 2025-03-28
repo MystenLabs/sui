@@ -7,10 +7,10 @@ use std::{collections::BTreeSet, sync::Arc};
 use anyhow::Result;
 use diesel::{ExpressionMethods, QueryDsl};
 use diesel_async::RunQueryDsl;
-use sui_indexer_alt_framework::db::Db;
-use sui_indexer_alt_framework::store::Store;
 use sui_indexer_alt_framework::{
     pipeline::{concurrent::Handler, Processor},
+    store::Store,
+    sui_indexer_alt_framework_store_pg::pg_store::PgStore,
     types::full_checkpoint_content::CheckpointData,
 };
 use sui_indexer_alt_schema::{events::StoredEvEmitMod, schema::ev_emit_mod};
@@ -54,7 +54,7 @@ impl Processor for EvEmitMod {
 
 #[async_trait::async_trait]
 impl Handler for EvEmitMod {
-    type Store = Db;
+    type Store = PgStore;
     const MIN_EAGER_ROWS: usize = 100;
     const MAX_PENDING_ROWS: usize = 10000;
 
@@ -102,7 +102,7 @@ mod tests {
     // A helper function to return all entries in the ev_emit_mod table sorted by package, module,
     // tx_sequence_number, and sender.
     async fn get_all_ev_emit_mod(
-        conn: &mut <Db as Store>::Connection<'_>,
+        conn: &mut <PgStore as Store>::Connection<'_>,
     ) -> Result<Vec<StoredEvEmitMod>> {
         let query = ev_emit_mod::table
             .order_by((

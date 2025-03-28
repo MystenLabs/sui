@@ -6,9 +6,9 @@ use std::sync::Arc;
 use anyhow::Result;
 use diesel_async::RunQueryDsl;
 use sui_indexer_alt_framework::{
-    db::Db,
     pipeline::{concurrent::Handler, Processor},
     store::Store,
+    sui_indexer_alt_framework_store_pg::pg_store::PgStore,
     types::{effects::TransactionEffectsAPI, full_checkpoint_content::CheckpointData},
 };
 use sui_indexer_alt_schema::{objects::StoredObjVersion, schema::obj_versions};
@@ -65,7 +65,7 @@ impl Processor for ObjVersionsSentinelBackfill {
 
 #[async_trait::async_trait]
 impl Handler for ObjVersions {
-    type Store = Db;
+    type Store = PgStore;
 
     const MIN_EAGER_ROWS: usize = 100;
     const MAX_PENDING_ROWS: usize = 10000;
@@ -84,7 +84,7 @@ impl Handler for ObjVersions {
 
 #[async_trait::async_trait]
 impl Handler for ObjVersionsSentinelBackfill {
-    type Store = Db;
+    type Store = PgStore;
 
     const MIN_EAGER_ROWS: usize = 100;
     const MAX_PENDING_ROWS: usize = 10000;

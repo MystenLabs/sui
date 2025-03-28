@@ -67,7 +67,7 @@ done
 # Run all migrations on the new database, for the framework and the indexer
 diesel migration run                                                          \
   --database-url "postgres://postgres:postgrespw@localhost:$PORT"             \
-  --migration-dir "$REPO/crates/sui-indexer-alt-framework/migrations"
+  --migration-dir "$REPO/crates/sui-indexer-alt-framework-store-pg/migrations"
 
 diesel migration run                                                          \
   --database-url "postgres://postgres:postgrespw@localhost:$PORT"             \

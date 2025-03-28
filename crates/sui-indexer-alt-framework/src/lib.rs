@@ -8,7 +8,7 @@ use diesel::{
     migration::{self, Migration, MigrationSource},
     pg::Pg,
 };
-use diesel_migrations::{embed_migrations, EmbeddedMigrations};
+use diesel_migrations::EmbeddedMigrations;
 use futures::future;
 use ingestion::{client::IngestionClient, ClientArgs, IngestionConfig, IngestionService};
 use metrics::IndexerMetrics;
@@ -18,7 +18,8 @@ use pipeline::{
     Processor,
 };
 use prometheus::Registry;
-use store::{CommitterWatermark, DbConnection};
+use sui_indexer_alt_framework_store_pg::pg_store::PgStore;
+use sui_indexer_alt_framework_store_traits::{CommitterWatermark, DbConnection, Store};
 use sui_indexer_alt_metrics::db::DbConnectionStatsCollector;
 use sui_pg_db::{temp::TempDb, Db, DbArgs};
 use tempfile::tempdir;
@@ -29,6 +30,12 @@ use url::Url;
 
 pub use anyhow::Result;
 pub use sui_field_count::FieldCount;
+pub use sui_indexer_alt_framework_store_traits as store;
+// TODO (wlmyng)
+// #[cfg(feature = "postgres")]
+// pub use sui_indexer_alt_framework_store_pg::pg_store;
+pub use sui_indexer_alt_framework_store_pg;
+pub use sui_indexer_alt_framework_store_pg::schema;
 pub use sui_pg_db as db;
 pub use sui_sql_macro::sql;
 pub use sui_types as types;
@@ -37,14 +44,12 @@ pub use sui_types as types;
 pub mod cluster;
 pub mod ingestion;
 pub mod metrics;
-pub mod models;
-pub mod pg_store;
 pub mod pipeline;
-pub mod schema;
-pub mod store;
 pub mod task;
 
-const MIGRATIONS: EmbeddedMigrations = embed_migrations!("migrations");
+// TODO (wlmyng)
+// #[cfg(feature = "postgres")]
+const MIGRATIONS: EmbeddedMigrations = sui_indexer_alt_framework_store_pg::MIGRATIONS;
 
 /// Command-line arguments for the indexer
 #[derive(clap::Args, Default, Debug, Clone)]
@@ -74,7 +79,7 @@ pub struct IndexerArgs {
 pub struct Indexer {
     // TODO (wlmyng): rename to `Store`
     /// Connection pool to the database.
-    db: Db,
+    db: PgStore,
 
     /// Prometheus Metrics.
     metrics: Arc<IndexerMetrics>,
@@ -172,8 +177,10 @@ impl Indexer {
             cancel.clone(),
         )?;
 
+        let store = PgStore(db);
+
         Ok(Self {
-            db,
+            db: store,
             metrics,
             ingestion_service,
             first_checkpoint,
@@ -215,7 +222,7 @@ impl Indexer {
     }
 
     /// The database connection pool used by the indexer.
-    pub fn db(&self) -> &Db {
+    pub fn db(&self) -> &PgStore {
         &self.db
     }
 
@@ -251,7 +258,7 @@ impl Indexer {
     ) -> Result<()>
     where
         // TODO (wlmyng): eventually this will be Handler<Store = S>
-        H: concurrent::Handler<Store = Db> + Send + Sync + 'static,
+        H: concurrent::Handler<Store = PgStore> + Send + Sync + 'static,
     {
         let start_from_pruner_watermark = H::PRUNING_REQUIRES_PROCESSED_VALUES;
         let Some(watermark) = self.add_pipeline::<H>(start_from_pruner_watermark).await? else {
@@ -297,7 +304,7 @@ impl Indexer {
     where
         // TODO (wlmyng): eventually this will be Handler<Store = S>
         // And additionally, S: TransactionalStore
-        H: Handler<Store = Db> + Send + Sync + 'static,
+        H: Handler<Store = PgStore> + Send + Sync + 'static,
     {
         let Some(watermark) = self.add_pipeline::<H>(false).await? else {
             return Ok(());
@@ -475,7 +482,7 @@ mod tests {
     use async_trait::async_trait;
 
     use crate::types::full_checkpoint_content::CheckpointData;
-    use store::Store;
+    use sui_indexer_alt_framework_store_traits::{CommitterWatermark, Store};
 
     use super::*;
 
@@ -503,9 +510,7 @@ mod tests {
 
             #[async_trait]
             impl concurrent::Handler for $name {
-                // TODO (wlmyng): For testing, we should replace sui_pg_db::Db with a mock, like an
-                // in-memory store, that doesn't have external dependencies
-                type Store = Db;
+                type Store = PgStore;
 
                 const PRUNING_REQUIRES_PROCESSED_VALUES: bool = $pruning_requires_processed_values;
                 async fn commit<'a>(

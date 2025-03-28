@@ -215,7 +215,7 @@ mod tests {
     }
 
     use std::time::Duration;
-    use sui_pg_db::Db;
+    use sui_indexer_alt_framework_store_pg::pg_store::PgStore;
     use tokio::sync::mpsc;
 
     struct TestHandler;
@@ -231,8 +231,7 @@ mod tests {
 
     #[async_trait::async_trait]
     impl Handler for TestHandler {
-        // TODO (wlmyng): replace with InMemoryStore
-        type Store = Db;
+        type Store = PgStore;
 
         const MAX_PENDING_ROWS: usize = 10000;
         async fn commit<'a>(

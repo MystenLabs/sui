@@ -1,0 +1,7 @@
+diff --git a/crates/sui-indexer-alt/src/schema.rs b/crates/sui-indexer-alt/src/schema.rs
+--- a/crates/sui-indexer-alt/src/schema.rs
++++ b/crates/sui-indexer-alt/src/schema.rs
+@@ -1 +1,3 @@
++// Copyright (c) Mysten Labs, Inc.
++// SPDX-License-Identifier: Apache-2.0
+ // @generated automatically by Diesel CLI.

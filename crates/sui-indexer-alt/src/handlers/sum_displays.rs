@@ -8,9 +8,9 @@ use diesel::{upsert::excluded, ExpressionMethods};
 use diesel_async::RunQueryDsl;
 use futures::future::try_join_all;
 use sui_indexer_alt_framework::{
-    db::Db,
     pipeline::{sequential::Handler, Processor},
     store::Store,
+    sui_indexer_alt_framework_store_pg::pg_store::PgStore,
     types::{display::DisplayVersionUpdatedEvent, full_checkpoint_content::CheckpointData},
     FieldCount,
 };
@@ -61,7 +61,7 @@ impl Processor for SumDisplays {
 
 #[async_trait::async_trait]
 impl Handler for SumDisplays {
-    type Store = Db;
+    type Store = PgStore;
     type Batch = BTreeMap<Vec<u8>, Self::Value>;
 
     fn batch(batch: &mut Self::Batch, values: Vec<Self::Value>) {

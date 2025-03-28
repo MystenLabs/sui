@@ -38,6 +38,8 @@ sui-sql-macro.workspace = true
 sui-storage.workspace = true
 sui-types.workspace = true
 sui-rpc-api.workspace = true
+sui-indexer-alt-framework-store-pg.workspace = true
+sui-indexer-alt-framework-store-traits.workspace = true
 tonic.workspace = true
 
 [dev-dependencies]

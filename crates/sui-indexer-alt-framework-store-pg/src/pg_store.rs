@@ -1,6 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use std::ops::{Deref, DerefMut};
 use std::time::Duration;
 
 use async_trait::async_trait;
@@ -11,23 +12,59 @@ use diesel::ExpressionMethods;
 use diesel::OptionalExtension;
 use diesel_async::{AsyncConnection, RunQueryDsl};
 use scoped_futures::ScopedBoxFuture;
-use sui_sql_macro::sql;
-
-use crate::db::{Connection as PgConnection, Db as PgDb};
-use crate::models::watermarks::StoredWatermark;
-use crate::schema::watermarks;
-use crate::store::{
+use sui_field_count::FieldCount;
+use sui_indexer_alt_framework_store_traits::{
     CommitterWatermark, DbConnection, PrunerWatermark, ReaderWatermark, Store, TransactionalStore,
 };
+use sui_pg_db::{Connection as PgConnection, Db as PgDb};
+use sui_sql_macro::sql;
+
+use crate::schema::watermarks;
+
+#[derive(Insertable, Selectable, Queryable, Debug, Clone, FieldCount)]
+#[diesel(table_name = watermarks)]
+pub struct StoredWatermark {
+    pub pipeline: String,
+    pub epoch_hi_inclusive: i64,
+    pub checkpoint_hi_inclusive: i64,
+    pub tx_hi: i64,
+    pub timestamp_ms_hi_inclusive: i64,
+    pub reader_lo: i64,
+    pub pruner_timestamp: NaiveDateTime,
+    pub pruner_hi: i64,
+}
+
+#[derive(Clone)]
+pub struct PgStore(pub PgDb);
+
+pub struct PgStoreConnection<'a>(PgConnection<'a>);
+
+impl<'a> Deref for PgStoreConnection<'a> {
+    type Target = PgConnection<'a>;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+impl DerefMut for PgStoreConnection<'_> {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.0
+    }
+}
 
 #[async_trait]
-impl DbConnection for PgConnection<'_> {
+impl DbConnection for PgStoreConnection<'_> {
     async fn committer_watermark(
         &mut self,
         pipeline: &'static str,
     ) -> anyhow::Result<Option<CommitterWatermark>> {
-        let watermark = StoredWatermark::get(self, pipeline)
+        let watermark: Option<StoredWatermark> = watermarks::table
+            .select(StoredWatermark::as_select())
+            .filter(watermarks::pipeline.eq(pipeline))
+            .first(self)
             .await
+            .optional()
             .map_err(anyhow::Error::from)?;
 
         if let Some(watermark) = watermark {
@@ -46,8 +83,12 @@ impl DbConnection for PgConnection<'_> {
         &mut self,
         pipeline: &'static str,
     ) -> anyhow::Result<Option<ReaderWatermark>> {
-        let watermark = StoredWatermark::get(self, pipeline)
+        let watermark: Option<StoredWatermark> = watermarks::table
+            .select(StoredWatermark::as_select())
+            .filter(watermarks::pipeline.eq(pipeline))
+            .first(self)
             .await
+            .optional()
             .map_err(anyhow::Error::from)?;
 
         if let Some(watermark) = watermark {
@@ -164,17 +205,17 @@ impl DbConnection for PgConnection<'_> {
 }
 
 #[async_trait]
-impl Store for PgDb {
-    type Connection<'c> = PgConnection<'c>;
+impl Store for PgStore {
+    type Connection<'c> = PgStoreConnection<'c>;
 
     async fn connect<'c>(&'c self) -> anyhow::Result<Self::Connection<'c>> {
-        let conn = self.connect().await?;
-        Ok(conn)
+        let conn = self.0.connect().await?;
+        Ok(PgStoreConnection(conn))
     }
 }
 
 #[async_trait]
-impl TransactionalStore for PgDb {
+impl TransactionalStore for PgStore {
     async fn transaction<'a, R, F>(&self, f: F) -> anyhow::Result<R>
     where
         R: Send + 'a,

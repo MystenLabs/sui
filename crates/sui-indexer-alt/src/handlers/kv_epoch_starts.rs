@@ -8,9 +8,9 @@ use anyhow::{bail, Context, Result};
 use diesel::{ExpressionMethods, QueryDsl};
 use diesel_async::RunQueryDsl;
 use sui_indexer_alt_framework::{
-    db::Db,
     pipeline::{concurrent::Handler, Processor},
     store::Store,
+    sui_indexer_alt_framework_store_pg::pg_store::PgStore,
     types::{
         full_checkpoint_content::CheckpointData,
         sui_system_state::{get_sui_system_state, SuiSystemStateTrait},
@@ -70,7 +70,7 @@ impl Processor for KvEpochStarts {
 
 #[async_trait::async_trait]
 impl Handler for KvEpochStarts {
-    type Store = Db;
+    type Store = PgStore;
 
     const MIN_EAGER_ROWS: usize = 1;
 
