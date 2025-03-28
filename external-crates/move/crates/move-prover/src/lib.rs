@@ -4,7 +4,7 @@
 
 #![forbid(unsafe_code)]
 
-use std::cell::RefCell;
+use std::{cell::RefCell, io::empty};
 
 use crate::cli::Options;
 use anyhow::anyhow;
@@ -15,11 +15,11 @@ use codespan_reporting::{
 };
 #[allow(unused_imports)]
 use log::{debug, info, warn};
-use move_compiler::shared::PackagePaths;
+use move_compiler::{shared::PackagePaths, Flags};
 use move_docgen::Docgen;
 use move_model::{
     code_writer::CodeWriter, model::GlobalEnv, parse_addresses_from_options,
-    run_model_builder_with_options, ty::Type,
+    run_model_builder_with_options_and_compilation_flags, ty::Type,
 };
 use move_prover_boogie_backend::{
     add_prelude, boogie_wrapper::BoogieWrapper, bytecode_translator::BoogieTranslator,
@@ -57,7 +57,7 @@ pub fn run_move_prover<W: WriteColor>(
     let now = Instant::now();
     // Run the model builder.
     let addrs = parse_addresses_from_options(options.move_named_address_values.clone())?;
-    let env = run_model_builder_with_options(
+    let env = run_model_builder_with_options_and_compilation_flags(
         vec![PackagePaths {
             name: None,
             paths: options.move_sources.clone(),
@@ -69,6 +69,7 @@ pub fn run_move_prover<W: WriteColor>(
             named_address_map: addrs,
         }],
         options.model_builder.clone(),
+        Flags::empty().set_verify(true),
         None,
     )?;
     run_move_prover_with_model(&env, error_writer, options, Some(now))
@@ -191,6 +192,7 @@ pub fn run_move_prover_with_model<W: WriteColor>(
             println!("\x1b[32m✔\x1b[0m {}", fun_env.get_full_name_str());
         }
     }
+
     Ok(())
 }
 

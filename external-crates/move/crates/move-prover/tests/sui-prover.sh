@@ -45,6 +45,15 @@ chmod +x "$BIN_DIR/sui-prover"
 echo "export PATH=$BIN_DIR:\$PATH" >> ~/.bashrc
 echo "Sui Prover installed successfully! Use 'sui-prover' command."
 
+# Run cargo test in move-prover directory
+export DOTNET_ROOT="$DOTNET_ROOT"
+export BOOGIE_EXE="$BIN_DIR/boogie"
+export Z3_EXE="$(brew --prefix z3)/bin/z3"
+cd ./external-crates/move/crates/move-prover
+cargo test
+cd ../../../../
+
+
 cd ./crates/sui-framework/packages/prover
 sui-prover
 cd ..
