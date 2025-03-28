@@ -1,58 +1,79 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use std::ops::{Deref, DerefMut};
 use std::time::Duration;
 
 use anyhow::anyhow;
+use async_trait::async_trait;
+use chrono::NaiveDateTime;
 use diesel::migration::{MigrationSource, MigrationVersion};
 use diesel::pg::Pg;
-use diesel::ConnectionError;
+use diesel::prelude::*;
+use diesel::sql_types::BigInt;
+use diesel::ExpressionMethods;
+use diesel::OptionalExtension;
 use diesel_async::async_connection_wrapper::AsyncConnectionWrapper;
-use diesel_async::pooled_connection::ManagerConfig;
-use diesel_async::AsyncConnection;
 use diesel_async::{
     pooled_connection::{
         bb8::{Pool, PooledConnection},
         AsyncDieselConnectionManager,
     },
-    AsyncPgConnection, RunQueryDsl,
+    AsyncConnection, AsyncPgConnection, RunQueryDsl,
 };
-use futures::FutureExt;
+use scoped_futures::ScopedBoxFuture;
+use sui_indexer_alt_framework_store_traits::{
+    CommitterWatermark, Connection as StoreConnection, PrunerWatermark, ReaderWatermark, Store,
+    TransactionalStore,
+};
+use sui_sql_macro::sql;
 use tracing::info;
 use url::Url;
 
-mod db;
-pub mod schema;
-pub mod temp;
+use crate::schema::watermarks;
+use crate::FieldCount;
 
-use diesel_migrations::{embed_migrations, EmbeddedMigrations};
-
-#[derive(Clone)]
+#[derive(clap::Args, Debug, Clone)]
 pub struct DbArgs {
     /// Number of connections to keep in the pool.
-    pub db_connection_pool_size: usize,
+    #[arg(long, default_value_t = Self::default().db_connection_pool_size)]
+    pub db_connection_pool_size: u32,
 
     /// Time spent waiting for a connection from the pool to become available, in milliseconds.
-    #[arg(long, default_value_t = Self::default().db_connection_timeout_ms)]
-    pub db_connection_timeout_ms: u64,
-
-    #[arg(long)]
-    /// Time spent waiting for statements to complete, in milliseconds.
-    pub db_statement_timeout_ms: Option<u64>,
+    #[arg(long, default_value_t = Self::default().connection_timeout_ms)]
+    pub connection_timeout_ms: u64,
 }
 
+/// Wrapper struct over a diesel async connection pool.
 #[derive(Clone)]
-pub struct Db(Pool<AsyncPgConnection>);
+pub struct Db {
+    read_only: bool,
+    pool: Pool<AsyncPgConnection>,
+}
 
-pub type Connection<'p> = PooledConnection<'p, AsyncPgConnection>;
+pub type ManagedConnection = AsyncPgConnection;
+/// Type alias for a connection from the pool.
+pub type Connection<'p> = PooledConnection<'p, ManagedConnection>;
+
+/// Wrapper struct over the `Connection` type alias for dealing with the `Store` trait.
+pub struct DbConnection<'a>(Connection<'a>);
+
+#[derive(Insertable, Selectable, Queryable, Debug, Clone, FieldCount)]
+#[diesel(table_name = watermarks)]
+pub struct StoredWatermark {
+    pub pipeline: String,
+    pub epoch_hi_inclusive: i64,
+    pub checkpoint_hi_inclusive: i64,
+    pub tx_hi: i64,
+    pub timestamp_ms_hi_inclusive: i64,
+    pub reader_lo: i64,
+    pub pruner_timestamp: NaiveDateTime,
+    pub pruner_hi: i64,
+}
 
 impl DbArgs {
     pub fn connection_timeout(&self) -> Duration {
-        Duration::from_millis(self.db_connection_timeout_ms)
-    }
-
-    pub fn statement_timeout(&self) -> Option<Duration> {
-        self.db_statement_timeout_ms.map(Duration::from_millis)
+        Duration::from_millis(self.connection_timeout_ms)
     }
 }
 
@@ -60,25 +81,38 @@ impl Db {
     /// Construct a new DB connection pool talking to the database at `database_url` that supports
     /// write and reads. Instances of [Db] can be cloned to share access to the same pool.
     pub async fn for_write(database_url: Url, config: DbArgs) -> anyhow::Result<Self> {
-        Ok(Self(pool(database_url, config, false).await?))
+        Ok(Self {
+            read_only: false,
+            pool: pool(database_url, config).await?,
+        })
     }
 
     /// Construct a new DB connection pool talking to the database at `database_url` that defaults
     /// to read-only transactions. Instances of [Db] can be cloned to share access to the same
     /// pool.
     pub async fn for_read(database_url: Url, config: DbArgs) -> anyhow::Result<Self> {
-        Ok(Self(pool(database_url, config, true).await?))
+        Ok(Self {
+            read_only: true,
+            pool: pool(database_url, config).await?,
+        })
     }
 
     /// Retrieves a connection from the pool. Can fail with a timeout if a connection cannot be
     /// established before the [DbArgs::connection_timeout] has elapsed.
-    pub async fn connect(&self) -> anyhow::Result<Connection<'_>> {
-        Ok(self.0.get().await?)
+    pub async fn connection(&self) -> anyhow::Result<Connection<'_>> {
+        let mut conn = self.pool.get().await?;
+        if self.read_only {
+            diesel::sql_query("SET default_transaction_read_only = 'on'")
+                .execute(&mut conn)
+                .await?;
+        }
+
+        Ok(conn)
     }
 
     /// Statistics about the connection pool
     pub fn state(&self) -> bb8::State {
-        self.0.state()
+        self.pool.state()
     }
 
     async fn clear_database(&self) -> anyhow::Result<()> {
@@ -141,7 +175,7 @@ impl Db {
         use diesel_migrations::MigrationHarness;
 
         info!("Running migrations ...");
-        let conn = self.0.dedicated_connection().await?;
+        let conn = self.pool.dedicated_connection().await?;
         let mut wrapper: AsyncConnectionWrapper<AsyncPgConnection> =
             diesel_async::async_connection_wrapper::AsyncConnectionWrapper::from(conn);
 
@@ -162,9 +196,201 @@ impl Default for DbArgs {
     fn default() -> Self {
         Self {
             db_connection_pool_size: 100,
-            db_connection_timeout_ms: 60_000,
-            db_statement_timeout_ms: None,
+            connection_timeout_ms: 60_000,
         }
+    }
+}
+
+impl<'a> Deref for DbConnection<'a> {
+    type Target = Connection<'a>;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+impl DerefMut for DbConnection<'_> {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.0
+    }
+}
+
+#[async_trait]
+impl StoreConnection for DbConnection<'_> {
+    async fn committer_watermark(
+        &mut self,
+        pipeline: &'static str,
+    ) -> anyhow::Result<Option<CommitterWatermark>> {
+        let watermark: Option<StoredWatermark> = watermarks::table
+            .select(StoredWatermark::as_select())
+            .filter(watermarks::pipeline.eq(pipeline))
+            .first(self)
+            .await
+            .optional()
+            .map_err(anyhow::Error::from)?;
+
+        if let Some(watermark) = watermark {
+            Ok(Some(CommitterWatermark {
+                epoch_hi_inclusive: watermark.epoch_hi_inclusive as u64,
+                checkpoint_hi_inclusive: watermark.checkpoint_hi_inclusive as u64,
+                tx_hi: watermark.tx_hi as u64,
+                timestamp_ms_hi_inclusive: watermark.timestamp_ms_hi_inclusive as u64,
+            }))
+        } else {
+            Ok(None)
+        }
+    }
+
+    async fn reader_watermark(
+        &mut self,
+        pipeline: &'static str,
+    ) -> anyhow::Result<Option<ReaderWatermark>> {
+        let watermark: Option<StoredWatermark> = watermarks::table
+            .select(StoredWatermark::as_select())
+            .filter(watermarks::pipeline.eq(pipeline))
+            .first(self)
+            .await
+            .optional()
+            .map_err(anyhow::Error::from)?;
+
+        if let Some(watermark) = watermark {
+            Ok(Some(ReaderWatermark {
+                checkpoint_hi_inclusive: watermark.checkpoint_hi_inclusive as u64,
+                reader_lo: watermark.reader_lo as u64,
+            }))
+        } else {
+            Ok(None)
+        }
+    }
+
+    async fn set_committer_watermark(
+        &mut self,
+        pipeline: &'static str,
+        watermark: CommitterWatermark,
+    ) -> anyhow::Result<bool> {
+        // Create a StoredWatermark directly from CommitterWatermark
+        let stored_watermark = StoredWatermark {
+            pipeline: pipeline.to_string(),
+            epoch_hi_inclusive: watermark.epoch_hi_inclusive as i64,
+            checkpoint_hi_inclusive: watermark.checkpoint_hi_inclusive as i64,
+            tx_hi: watermark.tx_hi as i64,
+            timestamp_ms_hi_inclusive: watermark.timestamp_ms_hi_inclusive as i64,
+            reader_lo: 0,
+            pruner_timestamp: NaiveDateTime::UNIX_EPOCH,
+            pruner_hi: 0,
+        };
+
+        use diesel::query_dsl::methods::FilterDsl;
+        Ok(diesel::insert_into(watermarks::table)
+            .values(&stored_watermark)
+            // There is an existing entry, so only write the new `hi` values
+            .on_conflict(watermarks::pipeline)
+            .do_update()
+            .set((
+                watermarks::epoch_hi_inclusive.eq(stored_watermark.epoch_hi_inclusive),
+                watermarks::checkpoint_hi_inclusive.eq(stored_watermark.checkpoint_hi_inclusive),
+                watermarks::tx_hi.eq(stored_watermark.tx_hi),
+                watermarks::timestamp_ms_hi_inclusive
+                    .eq(stored_watermark.timestamp_ms_hi_inclusive),
+            ))
+            .filter(
+                watermarks::checkpoint_hi_inclusive.lt(stored_watermark.checkpoint_hi_inclusive),
+            )
+            .execute(self)
+            .await
+            .map_err(anyhow::Error::from)?
+            > 0)
+    }
+
+    async fn set_reader_watermark(
+        &mut self,
+        pipeline: &'static str,
+        reader_lo: u64,
+    ) -> anyhow::Result<bool> {
+        Ok(diesel::update(watermarks::table)
+            .set((
+                watermarks::reader_lo.eq(reader_lo as i64),
+                watermarks::pruner_timestamp.eq(diesel::dsl::now),
+            ))
+            .filter(watermarks::pipeline.eq(pipeline))
+            .filter(watermarks::reader_lo.lt(reader_lo as i64))
+            .execute(self)
+            .await
+            .map_err(anyhow::Error::from)?
+            > 0)
+    }
+
+    async fn pruner_watermark(
+        &mut self,
+        pipeline: &'static str,
+        delay: Duration,
+    ) -> anyhow::Result<Option<PrunerWatermark>> {
+        //     |---------- + delay ---------------------|
+        //                             |--- wait_for ---|
+        //     |-----------------------|----------------|
+        //     ^                       ^
+        //     pruner_timestamp        NOW()
+        let wait_for = sql!(as BigInt,
+            "CAST({BigInt} + 1000 * EXTRACT(EPOCH FROM pruner_timestamp - NOW()) AS BIGINT)",
+            delay.as_millis() as i64,
+        );
+
+        let watermark: Option<(i64, i64, i64)> = watermarks::table
+            .select((wait_for, watermarks::pruner_hi, watermarks::reader_lo))
+            .filter(watermarks::pipeline.eq(pipeline))
+            .first(self)
+            .await
+            .optional()
+            .map_err(anyhow::Error::from)?;
+
+        if let Some(watermark) = watermark {
+            Ok(Some(PrunerWatermark {
+                wait_for_ms: watermark.0 as u64,
+                pruner_hi: watermark.1 as u64,
+                reader_lo: watermark.2 as u64,
+            }))
+        } else {
+            Ok(None)
+        }
+    }
+
+    async fn set_pruner_watermark(
+        &mut self,
+        pipeline: &'static str,
+        pruner_hi: u64,
+    ) -> anyhow::Result<bool> {
+        Ok(diesel::update(watermarks::table)
+            .set(watermarks::pruner_hi.eq(pruner_hi as i64))
+            .filter(watermarks::pipeline.eq(pipeline))
+            .execute(self)
+            .await
+            .map_err(anyhow::Error::from)?
+            > 0)
+    }
+}
+
+#[async_trait]
+impl Store for Db {
+    type Connection<'c> = DbConnection<'c>;
+
+    async fn connect<'c>(&'c self) -> anyhow::Result<Self::Connection<'c>> {
+        let conn = self.connection().await?;
+        Ok(DbConnection(conn))
+    }
+}
+
+#[async_trait]
+impl TransactionalStore for Db {
+    async fn transaction<'a, R, F>(&self, f: F) -> anyhow::Result<R>
+    where
+        R: Send + 'a,
+        F: Send + 'a,
+        F: for<'r> FnOnce(
+            &'r mut Self::Connection<'_>,
+        ) -> ScopedBoxFuture<'a, 'r, anyhow::Result<R>>,
+    {
+        let mut conn = Store::connect(self).await?;
+        AsyncConnection::transaction(&mut conn, |conn| f(conn)).await
     }
 }
 
@@ -183,38 +409,8 @@ pub async fn reset_database<S: MigrationSource<Pg> + Send + Sync + 'static>(
     Ok(())
 }
 
-async fn pool(
-    database_url: Url,
-    args: DbArgs,
-    read_only: bool,
-) -> anyhow::Result<Pool<AsyncPgConnection>> {
-    let statement_timeout = args.statement_timeout();
-
-    let mut config = ManagerConfig::default();
-    config.custom_setup = Box::new(move |url| {
-        async move {
-            let mut conn = AsyncPgConnection::establish(url).await?;
-
-            if let Some(timeout) = statement_timeout {
-                diesel::sql_query(format!("SET statement_timeout = {}", timeout.as_millis()))
-                    .execute(&mut conn)
-                    .await
-                    .map_err(ConnectionError::CouldntSetupConfiguration)?;
-            }
-
-            if read_only {
-                diesel::sql_query("SET default_transaction_read_only = 'on'")
-                    .execute(&mut conn)
-                    .await
-                    .map_err(ConnectionError::CouldntSetupConfiguration)?;
-            }
-
-            Ok(conn)
-        }
-        .boxed()
-    });
-
-    let manager = AsyncDieselConnectionManager::new_with_config(database_url.as_str(), config);
+async fn pool(database_url: Url, args: DbArgs) -> anyhow::Result<Pool<AsyncPgConnection>> {
+    let manager = AsyncDieselConnectionManager::new(database_url.as_str());
 
     Ok(Pool::builder()
         .max_size(args.db_connection_pool_size)
@@ -226,9 +422,12 @@ async fn pool(
 #[cfg(test)]
 mod tests {
     use super::*;
+
     use diesel::prelude::QueryableByName;
     use diesel_async::RunQueryDsl;
     use diesel_migrations::EmbeddedMigrations;
+
+    use crate::temp;
 
     #[tokio::test]
     async fn temp_db_smoketest() {
@@ -249,7 +448,7 @@ mod tests {
         info!(?resp);
     }
 
-    #[derive(Debug, QueryableByName)]
+    #[derive(QueryableByName)]
     struct CountResult {
         #[diesel(sql_type = diesel::sql_types::BigInt)]
         cnt: i64,
@@ -345,45 +544,4 @@ mod tests {
             assert_eq!(cnt.cnt, 1);
         }
     }
-
-    #[tokio::test]
-    async fn test_statement_timeout() {
-        let temp_db = temp::TempDb::new().unwrap();
-        let url = temp_db.database().url();
-
-        let reader = Db::for_read(
-            url.clone(),
-            DbArgs {
-                db_statement_timeout_ms: Some(200),
-                ..DbArgs::default()
-            },
-        )
-        .await
-        .unwrap();
-
-        {
-            // A simple query should not timeout
-            let mut conn = reader.connect().await.unwrap();
-            let cnt: CountResult = diesel::sql_query("SELECT 1::BIGINT AS cnt")
-                .get_result(&mut conn)
-                .await
-                .unwrap();
-
-            assert_eq!(cnt.cnt, 1);
-        }
-
-        {
-            // A query that waits a bit, which should cause a timeout
-            let mut conn = reader.connect().await.unwrap();
-            diesel::sql_query("SELECT PG_SLEEP(2), 1::BIGINT AS cnt")
-                .get_result::<CountResult>(&mut conn)
-                .await
-                .expect_err("This request should fail because of a timeout");
-        }
-    }
 }
-// Re-export everything from db
-pub use db::*;
-pub use sui_field_count::FieldCount;
-
-pub const MIGRATIONS: EmbeddedMigrations = embed_migrations!("migrations");

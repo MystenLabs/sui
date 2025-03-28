@@ -8,7 +8,7 @@ use anyhow::{bail, Context, Result};
 use diesel::{ExpressionMethods, QueryDsl};
 use diesel_async::RunQueryDsl;
 use sui_indexer_alt_framework::{
-    db::{Connection, Db},
+    db::{Db, DbConnection},
     pipeline::{concurrent::Handler, Processor},
     types::{
         event::SystemEpochInfoEvent,
@@ -126,7 +126,7 @@ impl Handler for KvEpochEnds {
 
     const MIN_EAGER_ROWS: usize = 1;
 
-    async fn commit<'a>(values: &[Self::Value], conn: &mut Connection<'a>) -> Result<usize> {
+    async fn commit<'a>(values: &[Self::Value], conn: &mut DbConnection<'a>) -> Result<usize> {
         Ok(diesel::insert_into(kv_epoch_ends::table)
             .values(values)
             .on_conflict_do_nothing()
@@ -138,7 +138,7 @@ impl Handler for KvEpochEnds {
         &self,
         from: u64,
         to_exclusive: u64,
-        conn: &mut Connection<'a>,
+        conn: &mut DbConnection<'a>,
     ) -> Result<usize> {
         let Range {
             start: from_epoch,
@@ -159,13 +159,13 @@ mod tests {
     use super::*;
     use anyhow::Result;
     use sui_indexer_alt_framework::{
-        types::test_checkpoint_data_builder::TestCheckpointDataBuilder, Indexer,
+        store::Store, types::test_checkpoint_data_builder::TestCheckpointDataBuilder, Indexer,
     };
     use sui_indexer_alt_schema::MIGRATIONS;
 
     use crate::handlers::cp_sequence_numbers::CpSequenceNumbers;
 
-    async fn get_all_kv_epoch_ends(conn: &mut Connection<'_>) -> Result<Vec<StoredEpochEnd>> {
+    async fn get_all_kv_epoch_ends(conn: &mut DbConnection<'_>) -> Result<Vec<StoredEpochEnd>> {
         let result = kv_epoch_ends::table
             .order_by(kv_epoch_ends::epoch.asc())
             .load(conn)
@@ -173,7 +173,7 @@ mod tests {
         Ok(result)
     }
 
-    async fn get_epoch_num_of_all_kv_epoch_ends(conn: &mut Connection<'_>) -> Result<Vec<i64>> {
+    async fn get_epoch_num_of_all_kv_epoch_ends(conn: &mut DbConnection<'_>) -> Result<Vec<i64>> {
         let epochs = get_all_kv_epoch_ends(conn).await?;
         Ok(epochs.iter().map(|e| e.epoch).collect())
     }

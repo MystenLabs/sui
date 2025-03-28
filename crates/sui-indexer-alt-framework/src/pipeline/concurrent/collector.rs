@@ -195,12 +195,11 @@ pub(super) fn collector<H: Handler + 'static>(
 
 #[cfg(test)]
 mod tests {
-
     use crate::{
+        db::{DbConnection, FieldCount},
         metrics::tests::test_metrics,
         pipeline::{concurrent::max_chunk_rows, Processor},
         types::full_checkpoint_content::CheckpointData,
-        FieldCount,
     };
 
     use super::*;
@@ -213,8 +212,8 @@ mod tests {
         const FIELD_COUNT: usize = 32;
     }
 
+    use crate::db::Db;
     use std::time::Duration;
-    use sui_pg_db::{Connection, Db};
     use tokio::sync::mpsc;
 
     struct TestHandler;
@@ -235,7 +234,7 @@ mod tests {
         const MAX_PENDING_ROWS: usize = 10000;
         async fn commit<'a>(
             _values: &[Self::Value],
-            _conn: &mut Connection<'a>,
+            _conn: &mut DbConnection<'a>,
         ) -> anyhow::Result<usize> {
             tokio::time::sleep(Duration::from_millis(1000)).await;
             Ok(0)

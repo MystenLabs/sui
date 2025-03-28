@@ -14438,7 +14438,7 @@ dependencies = [
  "reqwest 0.12.9",
  "scoped-futures",
  "serde",
- "sui-field-count",
+ "sui-indexer-alt-framework-store-traits",
  "sui-indexer-alt-metrics",
  "sui-pg-db",
  "sui-rpc-api",
@@ -14457,6 +14457,16 @@ dependencies = [
  "tracing-subscriber",
  "url",
  "wiremock",
+]
+
+[[package]]
+name = "sui-indexer-alt-framework-store-traits"
+version = "1.48.0"
+dependencies = [
+ "anyhow",
+ "async-trait",
+ "chrono",
+ "scoped-futures",
 ]
 
 [[package]]
@@ -15352,12 +15362,18 @@ name = "sui-pg-db"
 version = "1.49.0"
 dependencies = [
  "anyhow",
+ "async-trait",
  "bb8",
+ "chrono",
  "clap",
  "diesel",
  "diesel-async",
  "diesel_migrations",
  "futures",
+ "scoped-futures",
+ "sui-field-count",
+ "sui-indexer-alt-framework-store-traits",
+ "sui-sql-macro",
  "telemetry-subscribers",
  "tempfile",
  "tokio",

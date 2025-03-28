@@ -6,6 +6,7 @@ use std::time::Duration;
 use anyhow::{bail, Context, Result};
 use diesel::{OptionalExtension, QueryDsl, SelectableHelper};
 use diesel_async::RunQueryDsl;
+use sui_indexer_alt_framework::store::Store;
 use sui_indexer_alt_framework::types::{
     full_checkpoint_content::CheckpointData,
     sui_system_state::{get_sui_system_state, SuiSystemStateTrait},
