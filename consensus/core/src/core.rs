@@ -662,7 +662,7 @@ impl Core {
                 let mut dag_state = self.dag_state.write();
                 ancestors
                     .iter()
-                    .flat_map(|ancestor| dag_state.recursive_hard_link(ancestor.reference()))
+                    .flat_map(|ancestor| dag_state.link_causal_history(ancestor.reference()))
                     .collect()
             };
             self.transaction_certifier
@@ -739,7 +739,7 @@ impl Core {
                 .add_voted_blocks(vec![(verified_block.clone(), vec![])]);
             self.dag_state
                 .write()
-                .recursive_hard_link(verified_block.reference());
+                .link_causal_history(verified_block.reference());
         }
 
         // Ensure the new block and its ancestors are persisted, before broadcasting it.
@@ -1259,7 +1259,7 @@ impl Core {
 
         assert!(parent_round_quorum.reached_threshold(&self.context.committee), "Fatal error, quorum not reached for parent round when proposing for round {clock_round}. Possible mismatch between DagState and Core.");
 
-        info!(
+        debug!(
             "Included {} ancestors & excluded {} low performing or equivocating ancestors for proposal in round {clock_round}",
             ancestors_to_propose.len(),
             excluded_and_equivocating_ancestors.len()

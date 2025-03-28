@@ -558,8 +558,9 @@ impl<C: NetworkClient> CommitSyncer<C> {
             .await
             .expect("Spawn blocking should not fail")?;
 
-        // 3. Fetch blocks referenced by the commits, from the same authority.
-        let block_refs: Vec<_> = commits.iter().flat_map(|c| c.blocks()).cloned().collect();
+        // 3. Fetch blocks referenced by the commits, from the same peer where commits are fetched.
+        let mut block_refs: Vec<_> = commits.iter().flat_map(|c| c.blocks()).cloned().collect();
+        block_refs.sort();
         let num_chunks = block_refs
             .len()
             .div_ceil(inner.context.parameters.max_blocks_per_fetch)
