@@ -3,9 +3,10 @@ use move_cli::base;
 use move_compiler::editions::{Edition, Flavor};
 use move_package::{source_package::layout::SourcePackageLayout, BuildConfig as MoveBuildConfig, LintFlag, ModelConfig};
 use move_core_types::account_address::AccountAddress;
-use move_prover::run_boogie_gen;
+use move_prover::{run_boogie_gen, run_move_prover_with_model};
 use tracing::log::LevelFilter;
 use std::{collections::BTreeMap, path::{Path,PathBuf}};
+use codespan_reporting::term::termcolor::{Buffer, ColorChoice, StandardStream, WriteColor};
 
 impl From<BuildConfig> for MoveBuildConfig {
     fn from(config: BuildConfig) -> Self {
@@ -46,6 +47,10 @@ pub struct GeneralConfig {
     /// Display detailed verification progress
     #[clap(name = "verbose", long, short = 'v', global = true)]
     pub verbose: bool,
+
+    /// Explain the proving outputs via LLM 
+    #[clap(name = "explain", long, global = true)]
+    pub explain: bool,
 }
 
 /// Boogie options
@@ -126,7 +131,15 @@ pub fn execute(
     options.backend.path_split = boogie_config.split_paths;
     options.verbosity_level = if general_config.verbose { LevelFilter::Trace } else { LevelFilter::Info };
     
-    run_boogie_gen(&model, options)?;
+    if general_config.explain {
+        let mut error_writer = Buffer::no_color();
+        run_move_prover_with_model(&model, &mut error_writer, options, None)?;
+        // let output = String::from_utf8_lossy(&error_writer.into_inner()).to_string(); /// todo: fetch actual output
+        let output = format!("This is a test output to verify the --explain flag is working.\n");
+        println!("Output: {}", output);
+    } else {
+        run_boogie_gen(&model, options)?;
+    }
 
     Ok(())
 }

@@ -15133,6 +15133,7 @@ dependencies = [
  "better_any",
  "bin-version",
  "clap",
+ "codespan-reporting",
  "colored",
  "futures",
  "jemalloc-ctl",
