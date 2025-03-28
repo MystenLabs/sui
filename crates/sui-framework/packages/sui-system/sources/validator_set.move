@@ -252,7 +252,7 @@ fun can_join(self: &ValidatorSet, stake: u64, ctx: &TxContext): bool {
     // if the validator will have at least `min_joining_voting_power` after joining, they can join.
     // this formula comes from SIP-39 TODO link once landed
     let future_total_stake = self.total_stake + stake;
-    let future_validator_voting_power = voting_power::derive_voting_power(stake, future_total_stake);
+    let future_validator_voting_power = voting_power::derive_raw_voting_power(stake, future_total_stake);
     future_validator_voting_power >= min_joining_voting_power
 }
 
@@ -532,7 +532,7 @@ fun update_validator_positions_and_calculate_total_stake(
 
         // calculate the voting power for this validator in the next epoch if no validators are removed
         // if one of more low stake validators are removed, it's possible this validator will have higher voting power--that's ok.
-        let voting_power = voting_power::derive_voting_power(validator_stake, initial_total_stake);
+        let voting_power = voting_power::derive_raw_voting_power(validator_stake, initial_total_stake);
 
         // SIP-39: a validator can remain indefinitely with a voting power ≥ LOW_VOTING_POWER_THRESHOLD
         if (voting_power >= low_voting_power_threshold) {
@@ -584,7 +584,7 @@ fun update_validator_positions_and_calculate_total_stake(
     // validators may have increased significantly
     pending_active_validators.do!(|mut validator| {
         let validator_stake = validator.total_stake_amount();
-        let voting_power = voting_power::derive_voting_power(
+        let voting_power = voting_power::derive_raw_voting_power(
             validator_stake,
             initial_total_stake
         );
