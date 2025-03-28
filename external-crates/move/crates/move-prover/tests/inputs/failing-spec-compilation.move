@@ -5,7 +5,7 @@ public fun foo() {
 }
 
 #[spec(prove)]
-fun foo_spec() {
+public fun foo_spec() {
   foo();
-  this_is_fine_for_some_reason();
+  and_this_function_does_not_exist();
 }

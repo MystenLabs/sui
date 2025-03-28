@@ -1,0 +1,11 @@
+---
+source: crates/move-prover/tests/integration.rs
+expression: output
+snapshot_kind: text
+---
+Verification failed: exiting with model building errors
+error: unbound unscoped name
+   ┌─ tests/inputs/failing-spec-compilation.move:10:3
+   │
+10 │   and_this_function_does_not_exist();
+   │   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ Unbound function 'and_this_function_does_not_exist' in current scope

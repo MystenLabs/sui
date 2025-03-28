@@ -5,6 +5,6 @@ public fun foo() {
 }
 
 #[spec(prove)]
-fun foo_spec(x: u64) {
+public fun foo_spec() {
   foo();
 }
