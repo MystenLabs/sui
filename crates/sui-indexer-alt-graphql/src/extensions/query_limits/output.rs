@@ -6,7 +6,7 @@ use async_graphql::{
 };
 use serde::{Deserialize, Serialize};
 
-use crate::pagination::PaginationConfig;
+use crate::pagination::{is_connection, PaginationConfig};
 
 use super::{
     error::{Error, ErrorKind},
@@ -62,14 +62,17 @@ impl<'r> OutputNodeRule<'r, '_> {
     }
 
     /// Returns the page size implied by the current field's arguments, assuming it is a paginated
-    /// field. If the field is not paginated, returns `None`, and if the resulting page size is
-    /// definitely too large, returns an error.
+    /// field.
+    ///
+    /// - If the field is not paginated, returns `None`,
+    /// - If the page size exceeds the configured max page size, returns an error.
+    /// - If the page size would cause the estimated output node size to overflow, returns an
+    ///   error.
     ///
     /// If the field does not specify a page size, a default page size is fetched from the config,
     /// based on the parent type and field name.
     fn page_size(&self, driver: &FieldDriver<'_, 'r>) -> Result<Option<u32>, Error> {
-        let type_ = driver.meta_field().ty.as_str();
-        if !type_.ends_with("Connection") && !type_.ends_with("Connection!") {
+        if !is_connection(driver.meta_field()) {
             return Ok(None);
         }
 
@@ -78,11 +81,22 @@ impl<'r> OutputNodeRule<'r, '_> {
 
         let type_ = driver.parent_type().name();
         let name = driver.meta_field().name.as_str();
-        Ok(Some(match (first, last) {
+        let limits = self.budget.pagination_config.limits(type_, name);
+
+        let size = match (first, last) {
             (Some(f), Some(l)) => f.max(l),
             (Some(p), _) | (_, Some(p)) => p,
-            (None, None) => self.budget.pagination_config.default(type_, name),
-        }))
+            (None, None) => limits.default,
+        };
+
+        if size > limits.max {
+            return Err(driver.err(ErrorKind::PageSizeTooLarge {
+                limit: limits.max,
+                actual: size,
+            }));
+        }
+
+        Ok(Some(size))
     }
 
     /// Look for an argument on the current field with the name `name`, and assume that it is a
