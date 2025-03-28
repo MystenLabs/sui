@@ -150,9 +150,7 @@ impl PTB {
                 .await?;
             let mut mvr_data: BTreeMap<String, AddressData> = BTreeMap::new();
             for (name, package_id) in resolved.resolution {
-                let span = mvr_names
-                    .get(&name)
-                    .unwrap_or_else(|| &Span { start: 0, end: 0 });
+                let span = mvr_names.get(&name).unwrap_or(&Span { start: 0, end: 0 });
                 let pkg = resolve_package(client.read_api(), package_id.package_id, *span).await?;
                 let type_origin_id_map = pkg.type_origin_map();
                 mvr_data.insert(name, AddressData::MovePackage((pkg, type_origin_id_map)));

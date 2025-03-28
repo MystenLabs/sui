@@ -765,7 +765,7 @@ impl<'a, I: Iterator<Item = &'a str>> ProgramParser<'a, I> {
                     match t {
                         T::Ident => ParsedAddress::Named(contents.to_owned()),
                         T::Number => {
-                            let number = format!("{contents}");
+                            let number = contents.to_string();
                             NumericalAddress::parse_str(&number)
                                 .map_err(|e| err!(sp, "Failed to parse address {number:?}: {e}"))
                                 .map(ParsedAddress::Numerical)?
