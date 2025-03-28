@@ -62,30 +62,37 @@ impl TransactionInputLoader {
                         object: ObjectReadResultKind::Object(package),
                     });
                 }
-                InputObjectKind::SharedMoveObject {
-                    id,
-                    initial_shared_version,
-                    ..
-                } => match self.cache.get_object(id) {
-                    Some(object) => {
-                        input_results[i] = Some(ObjectReadResult::new(*kind, object.into()))
-                    }
-                    None => {
-                        if let Some((version, digest)) =
-                            self.cache.get_last_shared_object_deletion_info(
-                                FullObjectID::new(*id, Some(*initial_shared_version)),
-                                epoch_id,
-                            )
-                        {
-                            input_results[i] = Some(ObjectReadResult {
-                                input_object_kind: *kind,
-                                object: ObjectReadResultKind::DeletedSharedObject(version, digest),
-                            });
-                        } else {
-                            return Err(SuiError::from(kind.object_not_found_error()));
+                InputObjectKind::SharedMoveObject { .. } => {
+                    let input_full_id = kind.full_object_id();
+
+                    // Load the most current version from the cache.
+                    match self.cache.get_object(&kind.object_id()) {
+                        // If full ID matches, we're done.
+                        // (Full ID may not match if object was transferred in or out of
+                        // consensus. We have to double-check this because cache is keyed
+                        // on ObjectID and not FullObjectID.)
+                        Some(object) if object.full_id() == input_full_id => {
+                            input_results[i] = Some(ObjectReadResult::new(*kind, object.into()))
+                        }
+                        _ => {
+                            // If the full ID doesn't match, check if the object was marked
+                            // as unavailable.
+                            if let Some((version, digest)) = self
+                                .cache
+                                .get_last_shared_object_deletion_info(input_full_id, epoch_id)
+                            {
+                                input_results[i] = Some(ObjectReadResult {
+                                    input_object_kind: *kind,
+                                    object: ObjectReadResultKind::DeletedSharedObject(
+                                        version, digest,
+                                    ),
+                                });
+                            } else {
+                                return Err(SuiError::from(kind.object_not_found_error()));
+                            }
                         }
                     }
-                },
+                }
                 InputObjectKind::ImmOrOwnedMoveObject(objref) => {
                     object_refs.push(*objref);
                     fetch_indices.push(i);
@@ -185,8 +192,8 @@ impl TransactionInputLoader {
                             );
                         });
 
-                    // If we find a set of assigned versions but an object is missing, it indicates
-                    // a serious inconsistency:
+                    // If we find a set of assigned versions but one object's version assignments
+                    // are missing from the set, it indicates a serious inconsistency:
                     let version = assigned_shared_versions.get(&(*id, *initial_shared_version)).unwrap_or_else(|| {
                         panic!("Shared object version should have been assigned. key: {tx_key:?}, obj id: {id:?}")
                     });
@@ -216,19 +223,17 @@ impl TransactionInputLoader {
             fetches.into_iter()
         ) {
             results[index] = Some(match (object, input) {
-                (Some(obj), input_object_kind) => ObjectReadResult {
-                    input_object_kind: *input_object_kind,
+                (Some(obj), InputObjectKind::SharedMoveObject { .. }) if obj.full_id() == input.full_object_id() => ObjectReadResult {
+                    input_object_kind: *input,
                     object: obj.into(),
                 },
-                (None, InputObjectKind::SharedMoveObject { id, initial_shared_version, .. }) => {
+                (_, InputObjectKind::SharedMoveObject { .. }) => {
                     assert!(key.1.is_valid());
-                    // Check if the object was deleted by a concurrently certified tx
+                    // If the full ID on a shared input doesn't match, check if the object was
+                    // marked as unavailable by a concurrently certified tx.
                     let version = key.1;
                     if let Some(dependency) = self.cache.get_deleted_shared_object_previous_tx_digest(
-                        FullObjectKey::new(
-                            FullObjectID::new(*id, Some(*initial_shared_version)),
-                            version,
-                        ),
+                        FullObjectKey::new(input.full_object_id(), version),
                         epoch_id,
                     ) {
                         ObjectReadResult {
@@ -236,8 +241,12 @@ impl TransactionInputLoader {
                             object: ObjectReadResultKind::DeletedSharedObject(version, dependency),
                         }
                     } else {
-                        panic!("All dependencies of tx {tx_key:?} should have been executed now, but Shared Object id: {}, version: {version} is absent in epoch {epoch_id}", *id);
+                        panic!("All dependencies of tx {tx_key:?} should have been executed now, but Shared Object id: {:?}, version: {version} is absent in epoch {epoch_id}", input.full_object_id());
                     }
+                },
+                (Some(obj), input_object_kind) => ObjectReadResult {
+                    input_object_kind: *input_object_kind,
+                    object: obj.into(),
                 },
                 _ => panic!("All dependencies of tx {tx_key:?} should have been executed now, but obj {key:?} is absent"),
             });

@@ -117,8 +117,9 @@ pub enum MarkerValue {
     /// An owned object was deleted (or wrapped) at the given version, and is no longer able to be
     /// accessed or used in subsequent transactions.
     OwnedDeleted,
-    /// A shared object was deleted by the transaction and is no longer able to be accessed or
-    /// used in subsequent transactions.
+    /// A shared object was deleted or removed from consensus by the transaction and is no longer
+    /// able to be accessed or used in subsequent transactions.
+    // TODO: Rename this to something more accurate, like "ConsensusUnavailable".
     SharedDeleted(TransactionDigest),
 }
 

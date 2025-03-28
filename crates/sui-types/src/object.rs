@@ -845,7 +845,7 @@ impl ObjectInner {
     }
 
     pub fn compute_full_object_reference(&self) -> FullObjectRef {
-        (self.full_id(), self.version(), self.digest())
+        FullObjectRef(self.full_id(), self.version(), self.digest())
     }
 
     pub fn digest(&self) -> ObjectDigest {
