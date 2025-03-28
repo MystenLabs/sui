@@ -12,6 +12,7 @@ pub mod genesis_ceremony;
 pub mod genesis_inspector;
 pub mod key_identity;
 pub mod keytool;
+pub mod mvr_resolver;
 pub mod sui_commands;
 pub mod upgrade_compatibility;
 pub mod validator_commands;

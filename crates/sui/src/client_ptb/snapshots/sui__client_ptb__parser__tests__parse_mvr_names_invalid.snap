@@ -1,0 +1,168 @@
+---
+source: crates/sui/src/client_ptb/parser.rs
+expression: parsed
+---
+[
+    PTBError {
+        message: "Invalid MVR package reference",
+        span: Span {
+            start: 6,
+            end: 6,
+        },
+        help: Some(
+            "MVR packages must contain a slash and be in the format '(@<domain>|<domain>.sui)/<package>[/<version>]'",
+        ),
+        severity: Error,
+    },
+    PTBError {
+        message: "Invalid MVR package reference",
+        span: Span {
+            start: 4,
+            end: 4,
+        },
+        help: Some(
+            "MVR packages must contain a slash and be in the format '(@<domain>|<domain>.sui)/<package>[/<version>]'",
+        ),
+        severity: Error,
+    },
+    PTBError {
+        message: "Invalid MVR package reference",
+        span: Span {
+            start: 4,
+            end: 5,
+        },
+        help: Some(
+            "MVR packages must contain a slash and be in the format '(@<domain>|<domain>.sui)/<package>[/<version>]'",
+        ),
+        severity: Error,
+    },
+    PTBError {
+        message: "Invalid MVR package reference",
+        span: Span {
+            start: 7,
+            end: 7,
+        },
+        help: Some(
+            "MVR packages must contain a slash and be in the format '(@<domain>|<domain>.sui)/<package>[/<version>]'",
+        ),
+        severity: Error,
+    },
+    PTBError {
+        message: "Invalid MVR package reference",
+        span: Span {
+            start: 4,
+            end: 5,
+        },
+        help: Some(
+            "MVR packages must contain a slash and be in the format '(@<domain>|<domain>.sui)/<package>[/<version>]'",
+        ),
+        severity: Error,
+    },
+    PTBError {
+        message: "Expected a MVR domain name but got end of input",
+        span: Span {
+            start: 1,
+            end: 1,
+        },
+        help: None,
+        severity: Error,
+    },
+    PTBError {
+        message: "Expected a MVR domain name but got '@'",
+        span: Span {
+            start: 1,
+            end: 2,
+        },
+        help: None,
+        severity: Error,
+    },
+    PTBError {
+        message: "Expected a MVR domain name but got '/'",
+        span: Span {
+            start: 1,
+            end: 2,
+        },
+        help: None,
+        severity: Error,
+    },
+    PTBError {
+        message: "Expected a MVR domain name but got '@'",
+        span: Span {
+            start: 1,
+            end: 2,
+        },
+        help: None,
+        severity: Error,
+    },
+    PTBError {
+        message: "Expected a MVR domain name but got '@'",
+        span: Span {
+            start: 1,
+            end: 2,
+        },
+        help: None,
+        severity: Error,
+    },
+    PTBError {
+        message: "Expected a MVR domain name but got '/'",
+        span: Span {
+            start: 1,
+            end: 2,
+        },
+        help: None,
+        severity: Error,
+    },
+    PTBError {
+        message: "Unexpected '/'",
+        span: Span {
+            start: 0,
+            end: 1,
+        },
+        help: Some(
+            "Value addresses can either be a variable in-scope, or a numerical address, e.g., 0xc0ffee",
+        ),
+        severity: Error,
+    },
+    PTBError {
+        message: "Unexpected input \"-\"",
+        span: Span {
+            start: 0,
+            end: 1,
+        },
+        help: Some(
+            "Value addresses can either be a variable in-scope, or a numerical address, e.g., 0xc0ffee",
+        ),
+        severity: Error,
+    },
+    PTBError {
+        message: "Unexpected input \"/\"",
+        span: Span {
+            start: 1,
+            end: 2,
+        },
+        help: Some(
+            "Value addresses can either be a variable in-scope, or a numerical address, e.g., 0xc0ffee",
+        ),
+        severity: Error,
+    },
+    PTBError {
+        message: "Unexpected input \"/\"",
+        span: Span {
+            start: 1,
+            end: 2,
+        },
+        help: Some(
+            "Value addresses can either be a variable in-scope, or a numerical address, e.g., 0xc0ffee",
+        ),
+        severity: Error,
+    },
+    PTBError {
+        message: "Expected a valid MVR version, but got identifier 'b'",
+        span: Span {
+            start: 9,
+            end: 10,
+        },
+        help: None,
+        severity: Error,
+    },
+]

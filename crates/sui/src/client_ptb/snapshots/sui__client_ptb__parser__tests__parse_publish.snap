@@ -42,6 +42,7 @@ expression: parsed
                     value: 1,
                 },
             ),
+            mvr_names: {},
         },
     ),
     (
@@ -83,6 +84,7 @@ expression: parsed
                     value: 1,
                 },
             ),
+            mvr_names: {},
         },
     ),
 ]

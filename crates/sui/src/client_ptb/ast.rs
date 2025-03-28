@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::fmt;
+use std::{collections::BTreeMap, fmt};
 
 use move_core_types::parsing::{
     address::{NumericalAddress, ParsedAddress},
@@ -116,6 +116,7 @@ pub struct ProgramMetadata {
     pub dry_run_set: bool,
     pub dev_inspect_set: bool,
     pub gas_budget: Option<Spanned<u64>>,
+    pub mvr_names: BTreeMap<String, Span>,
 }
 
 /// A parsed module access consisting of the address, module name, and function name.
