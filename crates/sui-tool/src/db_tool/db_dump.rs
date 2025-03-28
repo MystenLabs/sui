@@ -102,22 +102,20 @@ pub fn print_table_metadata(
                 let epoch = epoch.ok_or_else(|| anyhow!("--epoch is required"))?;
                 AuthorityEpochTables::open_readonly(epoch, &db_path)
                     .next_shared_object_versions
-                    .rocksdb
+                    .db
             } else {
-                AuthorityPerpetualTables::open_readonly(&db_path)
-                    .objects
-                    .rocksdb
+                AuthorityPerpetualTables::open_readonly(&db_path).objects.db
             }
         }
         StoreName::Index => {
             IndexStoreTables::get_read_only_handle(db_path, None, None, MetricConf::default())
                 .event_by_move_module
-                .rocksdb
+                .db
         }
         StoreName::Epoch => {
             CommitteeStoreTables::get_read_only_handle(db_path, None, None, MetricConf::default())
                 .committee_map
-                .rocksdb
+                .db
         }
     };
 

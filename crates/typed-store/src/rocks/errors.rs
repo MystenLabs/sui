@@ -91,3 +91,8 @@ pub fn typed_store_err_from_bcs_err(err: bcs::Error) -> TypedStoreError {
 pub fn typed_store_err_from_rocks_err(err: RocksError) -> TypedStoreError {
     TypedStoreError::RocksDBError(format!("{err}"))
 }
+
+#[cfg(all(not(target_os = "windows"), feature = "tide_hunter"))]
+pub fn typed_store_error_from_th_error(err: tidehunter::db::DbError) -> TypedStoreError {
+    TypedStoreError::RocksDBError(format!("tidehunter error: {:?}", err))
+}
