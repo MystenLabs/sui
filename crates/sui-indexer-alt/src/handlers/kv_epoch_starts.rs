@@ -8,8 +8,9 @@ use anyhow::{bail, Context, Result};
 use diesel::{ExpressionMethods, QueryDsl};
 use diesel_async::RunQueryDsl;
 use sui_indexer_alt_framework::{
-    db,
+    db::Db,
     pipeline::{concurrent::Handler, Processor},
+    store::Store,
     types::{
         full_checkpoint_content::CheckpointData,
         sui_system_state::{get_sui_system_state, SuiSystemStateTrait},
@@ -69,9 +70,14 @@ impl Processor for KvEpochStarts {
 
 #[async_trait::async_trait]
 impl Handler for KvEpochStarts {
+    type Store = Db;
+
     const MIN_EAGER_ROWS: usize = 1;
 
-    async fn commit(values: &[Self::Value], conn: &mut db::Connection<'_>) -> Result<usize> {
+    async fn commit<'a>(
+        values: &[Self::Value],
+        conn: &mut <Self::Store as Store>::Connection<'a>,
+    ) -> Result<usize> {
         Ok(diesel::insert_into(kv_epoch_starts::table)
             .values(values)
             .on_conflict_do_nothing()
@@ -79,11 +85,11 @@ impl Handler for KvEpochStarts {
             .await?)
     }
 
-    async fn prune(
+    async fn prune<'a>(
         &self,
         from: u64,
         to_exclusive: u64,
-        conn: &mut db::Connection<'_>,
+        conn: &mut <Self::Store as Store>::Connection<'a>,
     ) -> Result<usize> {
         let Range {
             start: from_epoch,
