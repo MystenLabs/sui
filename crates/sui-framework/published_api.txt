@@ -421,7 +421,7 @@ set_voting_power
 init_voting_power_info
 	fun
 	0x3::voting_power
-derive_voting_power
+derive_raw_voting_power
 	public(package) fun
 	0x3::voting_power
 insert

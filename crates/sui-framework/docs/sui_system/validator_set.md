@@ -139,7 +139,7 @@ title: Module `sui_system::validator_set`
 </dt>
 <dd>
  Total amount of stake from all active validators at the beginning of the epoch.
- Written only once, at the very end of <code><a href="../sui_system/validator_set.md#sui_system_validator_set_advance_epoch">advance_epoch</a></code>
+ Written only once per epoch, in <code><a href="../sui_system/validator_set.md#sui_system_validator_set_advance_epoch">advance_epoch</a></code> function.
 </dd>
 <dt>
 <code><a href="../sui_system/validator_set.md#sui_system_validator_set_active_validators">active_validators</a>: vector&lt;<a href="../sui_system/validator.md#sui_system_validator_Validator">sui_system::validator::Validator</a>&gt;</code>
@@ -845,7 +845,7 @@ Return <code><b>true</b></code> if a  candidate validator with <code>stake</code
     // <b>if</b> the <a href="../sui_system/validator.md#sui_system_validator">validator</a> will have at least `min_joining_voting_power` after joining, they can join.
     // this formula comes from SIP-39 TODO link once landed
     <b>let</b> future_total_stake = self.<a href="../sui_system/validator_set.md#sui_system_validator_set_total_stake">total_stake</a> + stake;
-    <b>let</b> future_validator_voting_power = <a href="../sui_system/voting_power.md#sui_system_voting_power_derive_voting_power">voting_power::derive_voting_power</a>(stake, future_total_stake);
+    <b>let</b> future_validator_voting_power = <a href="../sui_system/voting_power.md#sui_system_voting_power_derive_raw_voting_power">voting_power::derive_raw_voting_power</a>(stake, future_total_stake);
     future_validator_voting_power &gt;= min_joining_voting_power
 }
 </code></pre>
@@ -1298,13 +1298,16 @@ VERY LOW threshold
         <b>let</b> validator_stake = validator_ref.total_stake_amount();
         // calculate the voting power <b>for</b> this <a href="../sui_system/validator.md#sui_system_validator">validator</a> in the next epoch <b>if</b> no validators are removed
         // <b>if</b> one of more low stake validators are removed, it's possible this <a href="../sui_system/validator.md#sui_system_validator">validator</a> will have higher voting power--that's ok.
-        <b>let</b> <a href="../sui_system/voting_power.md#sui_system_voting_power">voting_power</a> = <a href="../sui_system/voting_power.md#sui_system_voting_power_derive_voting_power">voting_power::derive_voting_power</a>(validator_stake, initial_total_stake);
-        <b>if</b> (<a href="../sui_system/voting_power.md#sui_system_voting_power">voting_power</a> &gt; low_voting_power_threshold) {
+        <b>let</b> <a href="../sui_system/voting_power.md#sui_system_voting_power">voting_power</a> = <a href="../sui_system/voting_power.md#sui_system_voting_power_derive_raw_voting_power">voting_power::derive_raw_voting_power</a>(validator_stake, initial_total_stake);
+        // SIP-39: a <a href="../sui_system/validator.md#sui_system_validator">validator</a> can remain indefinitely with a voting power ≥ LOW_VOTING_POWER_THRESHOLD
+        <b>if</b> (<a href="../sui_system/voting_power.md#sui_system_voting_power">voting_power</a> &gt;= low_voting_power_threshold) {
             // The <a href="../sui_system/validator.md#sui_system_validator">validator</a> is safe. We remove their <b>entry</b> from the at_risk map <b>if</b> there exists one.
             <b>if</b> (self.at_risk_validators.contains(&validator_address)) {
                 self.at_risk_validators.remove(&validator_address);
             }
-        } <b>else</b> <b>if</b> (<a href="../sui_system/voting_power.md#sui_system_voting_power">voting_power</a> &gt; very_low_voting_power_threshold) {
+        // SIP-39: <b>as</b> soon <b>as</b> the <a href="../sui_system/validator.md#sui_system_validator">validator</a>’s voting power falls to VERY_LOW_VOTING_POWER_THRESHOLD,
+        //      they are on probation and must acquire sufficient stake to recover to voting power
+        } <b>else</b> <b>if</b> (<a href="../sui_system/voting_power.md#sui_system_voting_power">voting_power</a> &gt;= very_low_voting_power_threshold) {
             // The stake is a bit below the threshold so we increment the <b>entry</b> of the <a href="../sui_system/validator.md#sui_system_validator">validator</a> in the map.
             <b>let</b> new_low_stake_period =
                 <b>if</b> (self.at_risk_validators.contains(&validator_address)) {
@@ -1326,6 +1329,8 @@ VERY LOW threshold
                 );
                 total_removed_stake = total_removed_stake + removed_stake;
             }
+        // SIP-39: at the end of an epoch when <a href="../sui_system/validator_set.md#sui_system_validator_set_new">new</a> voting powers are computed based on stake changes,
+        //      any <a href="../sui_system/validator.md#sui_system_validator">validator</a> with VOTING_POWER &lt; VERY_LOW_VOTING_POWER_THRESHOLD will be removed
         } <b>else</b> {
             // The <a href="../sui_system/validator.md#sui_system_validator">validator</a>'s stake is lower than the very low threshold so we kick them out immediately.
             <b>let</b> <a href="../sui_system/validator.md#sui_system_validator">validator</a> = self.<a href="../sui_system/validator_set.md#sui_system_validator_set_active_validators">active_validators</a>.remove(i);
@@ -1343,7 +1348,7 @@ VERY LOW threshold
     // validators may have increased significantly
     pending_active_validators.do!(|<b>mut</b> <a href="../sui_system/validator.md#sui_system_validator">validator</a>| {
         <b>let</b> validator_stake = <a href="../sui_system/validator.md#sui_system_validator">validator</a>.total_stake_amount();
-        <b>let</b> <a href="../sui_system/voting_power.md#sui_system_voting_power">voting_power</a> = <a href="../sui_system/voting_power.md#sui_system_voting_power_derive_voting_power">voting_power::derive_voting_power</a>(
+        <b>let</b> <a href="../sui_system/voting_power.md#sui_system_voting_power">voting_power</a> = <a href="../sui_system/voting_power.md#sui_system_voting_power_derive_raw_voting_power">voting_power::derive_raw_voting_power</a>(
             validator_stake,
             initial_total_stake
         );

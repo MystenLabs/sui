@@ -9,7 +9,7 @@ title: Module `sui_system::voting_power`
 -  [Constants](#@Constants_0)
 -  [Function `set_voting_power`](#sui_system_voting_power_set_voting_power)
 -  [Function `init_voting_power_info`](#sui_system_voting_power_init_voting_power_info)
--  [Function `derive_voting_power`](#sui_system_voting_power_derive_voting_power)
+-  [Function `derive_raw_voting_power`](#sui_system_voting_power_derive_raw_voting_power)
 -  [Function `insert`](#sui_system_voting_power_insert)
 -  [Function `adjust_voting_power`](#sui_system_voting_power_adjust_voting_power)
 -  [Function `update_voting_power`](#sui_system_voting_power_update_voting_power)
@@ -260,7 +260,7 @@ Anything beyond the threshold is added to the remaining_power, which is also ret
     <b>while</b> (i &lt; len) {
         <b>let</b> <a href="../sui_system/validator.md#sui_system_validator">validator</a> = &validators[i];
         <b>let</b> stake = <a href="../sui_system/validator.md#sui_system_validator">validator</a>.total_stake();
-        <b>let</b> <a href="../sui_system/voting_power.md#sui_system_voting_power">voting_power</a> = <a href="../sui_system/voting_power.md#sui_system_voting_power_derive_voting_power">derive_voting_power</a>(stake, total_stake).min(threshold);
+        <b>let</b> <a href="../sui_system/voting_power.md#sui_system_voting_power">voting_power</a> = <a href="../sui_system/voting_power.md#sui_system_voting_power_derive_raw_voting_power">derive_raw_voting_power</a>(stake, total_stake).min(threshold);
         <b>let</b> info = <a href="../sui_system/voting_power.md#sui_system_voting_power_VotingPowerInfoV2">VotingPowerInfoV2</a> {
             validator_index: i,
             <a href="../sui_system/voting_power.md#sui_system_voting_power">voting_power</a>,
@@ -278,13 +278,13 @@ Anything beyond the threshold is added to the remaining_power, which is also ret
 
 </details>
 
-<a name="sui_system_voting_power_derive_voting_power"></a>
+<a name="sui_system_voting_power_derive_raw_voting_power"></a>
 
-## Function `derive_voting_power`
+## Function `derive_raw_voting_power`
 
 
 
-<pre><code><b>public</b>(package) <b>fun</b> <a href="../sui_system/voting_power.md#sui_system_voting_power_derive_voting_power">derive_voting_power</a>(stake: u64, total_stake: u64): u64
+<pre><code><b>public</b>(package) <b>fun</b> <a href="../sui_system/voting_power.md#sui_system_voting_power_derive_raw_voting_power">derive_raw_voting_power</a>(stake: u64, total_stake: u64): u64
 </code></pre>
 
 
@@ -293,7 +293,7 @@ Anything beyond the threshold is added to the remaining_power, which is also ret
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b>(package) <b>fun</b> <a href="../sui_system/voting_power.md#sui_system_voting_power_derive_voting_power">derive_voting_power</a>(stake: u64, total_stake: u64): u64 {
+<pre><code><b>public</b>(package) <b>fun</b> <a href="../sui_system/voting_power.md#sui_system_voting_power_derive_raw_voting_power">derive_raw_voting_power</a>(stake: u64, total_stake: u64): u64 {
     ((stake <b>as</b> u128 * (<a href="../sui_system/voting_power.md#sui_system_voting_power_TOTAL_VOTING_POWER">TOTAL_VOTING_POWER</a> <b>as</b> u128) / (total_stake <b>as</b> u128)) <b>as</b> u64)
 }
 </code></pre>
