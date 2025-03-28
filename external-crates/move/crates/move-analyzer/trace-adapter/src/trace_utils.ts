@@ -19,6 +19,7 @@ import {
     ILoc,
     IDebugInfoFunction
 } from './debug_info_utils';
+import { decompress } from '@mongodb-js/zstd';
 
 
 // Data types corresponding to trace file JSON schema.
@@ -43,7 +44,7 @@ interface JSONVectorType {
     vector: JSONBaseType;
 }
 
-type JSONBaseType = string | JSONStructType | JSONVectorType;
+type JSONBaseType = string | JSONStructType | JSONVectorType | JSONStructTypeDescription;
 
 enum JSONTraceRefType {
     Mut = 'Mut',
@@ -55,11 +56,12 @@ interface JSONTraceType {
     ref_type?: JSONTraceRefType
 }
 
-type JSONTraceRuntimeValueType = boolean | number | string | JSONTraceRuntimeValueType[] | JSONTraceCompound;
+type JSONTraceRuntimeValueType = {
+    type: JSONBaseType;
+    value: boolean | number | string | JSONTraceRuntimeValueType[] | JSONTraceCompound
+};
 
-interface JSONTraceFields {
-    [key: string]: JSONTraceRuntimeValueType;
-}
+type JSONTraceFields = [string, JSONTraceRuntimeValueType][];
 
 interface JSONTraceCompound {
     fields: JSONTraceFields;
@@ -374,14 +376,25 @@ const INLINED_FRAME_ID_DIFFERENT_FILE = -2;
  * @returns execution trace.
  * @throws Error with a descriptive error message if reading trace has failed.
  */
-export function readTrace(
+export async function readTrace(
     traceFilePath: string,
     sourceMapsHashMap: Map<string, IDebugInfo>,
     sourceMapsModMap: Map<string, IDebugInfo>,
     bcodeMapModMap: Map<string, IDebugInfo>,
     filesMap: Map<string, IFileInfo>,
-): ITrace {
-    const traceJSON: JSONTraceRootObject = JSON.parse(fs.readFileSync(traceFilePath, 'utf8'));
+): Promise<ITrace> {
+    const buf = Buffer.from(fs.readFileSync(traceFilePath));
+    const decompressed = await decompress(buf);
+    const [header, ...rest] = decompressed.toString('utf8').trimEnd().split('\n');
+    const jsonVersion: number = JSON.parse(header).version;
+    const jsonEvents: JSONTraceEvent[] = rest.map((line) => {
+        return JSON.parse(line);
+    });
+
+    const traceJSON: JSONTraceRootObject = {
+        events: jsonEvents,
+        version: jsonVersion,
+    };
     if (traceJSON.events.length === 0) {
         throw new Error('Trace contains no events');
     }
@@ -884,13 +897,20 @@ function JSONTraceTypeToString(baseType: JSONBaseType, refType?: JSONTraceRefTyp
         return refPrefix + baseType;
     } else if ('vector' in baseType) {
         return refPrefix + `vector<${JSONTraceTypeToString(baseType.vector)}>`;
-    } else {
+    } else if ('struct' in baseType) {
         return refPrefix
             + JSONTraceAddressToHexString(baseType.struct.address)
             + "::"
             + baseType.struct.module
             + "::"
             + baseType.struct.name;
+    } else {
+        return refPrefix
+            + JSONTraceAddressToHexString(baseType.address)
+            + "::"
+            + baseType.module
+            + "::"
+            + baseType.name;
     }
 }
 
@@ -979,22 +999,41 @@ function traceRefValueFromJSON(value: JSONTraceRefValue): RuntimeValueType {
  * @returns runtime trace value.
  */
 function traceRuntimeValueFromJSON(value: JSONTraceRuntimeValueType): RuntimeValueType {
-    if (typeof value === 'boolean'
-        || typeof value === 'number'
-        || typeof value === 'string') {
-        return String(value);
-    } else if (Array.isArray(value)) {
-        return value.map(item => traceRuntimeValueFromJSON(item));
-    } else {
+    if (
+        value.type === 'U8' ||
+        value.type === 'U16' ||
+        value.type === 'U32' ||
+        value.type === 'U64' ||
+        value.type === 'U128' ||
+        value.type === 'Bool' ||
+        value.type === 'Address') {
+        return String(value.value);
+    } else if (value.type === 'U256' && Array.isArray(value.value)) {
+        let result = 0n;
+        const arr: string[] = value.value as unknown as string[];
+        for (let i = 0; i < arr.length; i++) {
+            const word = BigInt(arr[i]);
+            result += word << BigInt(64 * i);
+        }
+        return String(result);
+    } else if (value.type === 'Vector' && Array.isArray(value.value)) {
+        return value.value.map(item => traceRuntimeValueFromJSON(item));
+    } else if (Array.isArray(value.value)) {
+        throw new Error("Impossible");
+    } else if ((value.type === 'Struct' || value.type == 'Variant') && typeof value.value === 'object' && 'type_' in value.value) {
         const fields: [string, RuntimeValueType][] =
-            Object.entries(value.fields).map(([key, value]) => [key, traceRuntimeValueFromJSON(value)]);
+            value.value.fields.map(([key, value]) =>
+                [key, traceRuntimeValueFromJSON(value)]
+            );
         const compoundValue: IRuntimeCompoundValue = {
             fields,
-            type: value.type,
-            variantName: value.variant_name,
-            variantTag: value.variant_tag
+            type: JSONTraceTypeToString(value.value.type_ as JSONBaseType),
+            variantName: value.value.variant_name,
+            variantTag: value.value.variant_tag,
         };
         return compoundValue;
+    } else {
+        throw new Error("Impossible");
     }
 }
 
