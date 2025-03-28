@@ -9,6 +9,7 @@ fn run_prover(file_path: &PathBuf) -> String {
     let mut options = Options::default();
     options.move_sources = vec![file_path.to_string_lossy().to_string()];
     options.prover.stable_test_output = true; // For consistent snapshot testing
+    options.prover.report_severity = codespan_reporting::diagnostic::Severity::Error; // Only show errors, suppress warnings
 
     // Always add standard Sui dependencies for all tests
     let sui_packages_base = "../../../../crates/sui-framework/packages";
