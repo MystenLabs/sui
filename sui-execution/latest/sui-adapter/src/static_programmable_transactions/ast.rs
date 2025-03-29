@@ -3,6 +3,7 @@
 
 use move_core_types::{identifier::Identifier, language_storage::ModuleId};
 use move_vm_runtime::session::LoadedFunctionInstantiation;
+use std::collections::BTreeSet;
 use sui_types::{base_types::ObjectID, transaction::CallArg};
 
 pub struct Transaction {
@@ -17,9 +18,12 @@ pub type Commands = Vec<(Command, ResultType)>;
 pub type Type = move_vm_types::loaded_data::runtime_types::Type;
 
 pub enum InputType {
-    BCSBytes,
+    BCSBytes(/* all types that this must satisfy */ BTreeSet<Type>),
+    // receiving is essentially `forall a. Receiving<a>`
+    Receiving,
     Fixed(Type),
 }
+pub type ArgumentTypes = Vec<Type>;
 pub type ResultType = Vec<Type>;
 
 pub enum Command {
@@ -49,5 +53,5 @@ pub enum Location {
 pub enum Argument {
     Move(Location),
     Copy(Location),
-    Borrow(Location),
+    Borrow(/* mut */ bool, Location),
 }
