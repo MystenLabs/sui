@@ -8,7 +8,6 @@ use async_graphql::dataloader::Loader;
 use diesel::{BoolExpressionMethods, ExpressionMethods, QueryDsl};
 use serde::de::DeserializeOwned;
 use sui_indexer_alt_schema::{objects::StoredObject, schema::kv_objects};
-use sui_kvstore::KeyValueStoreReader;
 use sui_types::{base_types::ObjectID, object::Object, storage::ObjectKey};
 
 use crate::context::Context;
@@ -89,16 +88,9 @@ impl Loader<VersionedObjectKey> for BigtableReader {
             .map(|key| ObjectKey(key.0, key.1.into()))
             .collect();
 
-        let objects = self
-            .timed_load(
-                "get_objects",
-                &object_keys,
-                self.0.clone().get_objects(&object_keys),
-            )
-            .await
-            .map_err(|e| Arc::new(Error::BigtableRead(e)))?;
-
-        Ok(objects
+        Ok(self
+            .objects(&object_keys)
+            .await?
             .into_iter()
             .map(|o| (VersionedObjectKey(o.id(), o.version().into()), o))
             .collect())
