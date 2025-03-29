@@ -1,6 +1,5 @@
 ---
 source: crates/move-transactional-test-runner/src/framework.rs
-input_file: crates/bytecode-verifier-transactional-tests/tests/locals_safety/join_failure.mvir
 ---
 processed 5 tasks
 
@@ -12,6 +11,7 @@ Error: Unable to publish module '00000000000000000000000000000000000000000000000
     location: 0x1::M,
     indices: [(FunctionDefinition, 0)],
     offsets: [(FunctionDefinitionIndex(0), 15)],
+    message: None,
 }
 
 task 1, lines 22-40:
@@ -22,6 +22,7 @@ Error: Unable to publish module '00000000000000000000000000000000000000000000000
     location: 0x1::M,
     indices: [(FunctionDefinition, 0)],
     offsets: [(FunctionDefinitionIndex(0), 15)],
+    message: None,
 }
 
 task 2, lines 42-61:
@@ -32,6 +33,7 @@ Error: Unable to publish module '00000000000000000000000000000000000000000000000
     location: 0x1::M,
     indices: [(FunctionDefinition, 0)],
     offsets: [(FunctionDefinitionIndex(0), 17)],
+    message: None,
 }
 
 task 3, lines 63-82:
@@ -42,6 +44,7 @@ Error: Unable to publish module '00000000000000000000000000000000000000000000000
     location: 0x1::M,
     indices: [(FunctionDefinition, 0)],
     offsets: [(FunctionDefinitionIndex(0), 15)],
+    message: None,
 }
 
 task 4, lines 84-104:
@@ -52,4 +55,5 @@ Error: Unable to publish module '00000000000000000000000000000000000000000000000
     location: 0x1::M,
     indices: [(FunctionDefinition, 0)],
     offsets: [(FunctionDefinitionIndex(0), 15)],
+    message: None,
 }

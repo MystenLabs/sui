@@ -1,6 +1,5 @@
 ---
 source: crates/move-transactional-test-runner/src/framework.rs
-input_file: crates/bytecode-verifier-transactional-tests/tests/type_safety/vector_ops_type_mismatch.mvir
 ---
 processed 8 tasks
 
@@ -12,6 +11,7 @@ Error: Unable to publish module '00000000000000000000000000000000000000000000000
     location: 0x42::m,
     indices: [(FunctionDefinition, 0)],
     offsets: [(FunctionDefinitionIndex(0), 1)],
+    message: None,
 }
 
 task 1, lines 12-25:
@@ -22,6 +22,7 @@ Error: Unable to publish module '00000000000000000000000000000000000000000000000
     location: 0x42::m,
     indices: [(FunctionDefinition, 0)],
     offsets: [(FunctionDefinitionIndex(0), 3)],
+    message: None,
 }
 
 task 2, lines 26-41:
@@ -32,6 +33,7 @@ Error: Unable to publish module '00000000000000000000000000000000000000000000000
     location: 0x42::m,
     indices: [(FunctionDefinition, 0)],
     offsets: [(FunctionDefinitionIndex(0), 6)],
+    message: None,
 }
 
 task 3, lines 42-58:
@@ -42,6 +44,7 @@ Error: Unable to publish module '00000000000000000000000000000000000000000000000
     location: 0x42::m,
     indices: [(FunctionDefinition, 0)],
     offsets: [(FunctionDefinitionIndex(0), 8)],
+    message: None,
 }
 
 task 4, lines 59-75:
@@ -52,6 +55,7 @@ Error: Unable to publish module '00000000000000000000000000000000000000000000000
     location: 0x42::m,
     indices: [(FunctionDefinition, 0)],
     offsets: [(FunctionDefinitionIndex(0), 6)],
+    message: None,
 }
 
 task 5, lines 76-95:
@@ -62,6 +66,7 @@ Error: Unable to publish module '00000000000000000000000000000000000000000000000
     location: 0x42::m,
     indices: [(FunctionDefinition, 0)],
     offsets: [(FunctionDefinitionIndex(0), 1)],
+    message: None,
 }
 
 task 6, lines 96-107:
@@ -72,6 +77,7 @@ Error: Unable to publish module '00000000000000000000000000000000000000000000000
     location: 0x42::m,
     indices: [(FunctionDefinition, 0)],
     offsets: [(FunctionDefinitionIndex(0), 1)],
+    message: None,
 }
 
 task 7, lines 108-121:
@@ -82,4 +88,5 @@ Error: Unable to publish module '00000000000000000000000000000000000000000000000
     location: 0x42::m,
     indices: [(FunctionDefinition, 0)],
     offsets: [(FunctionDefinitionIndex(0), 5)],
+    message: None,
 }

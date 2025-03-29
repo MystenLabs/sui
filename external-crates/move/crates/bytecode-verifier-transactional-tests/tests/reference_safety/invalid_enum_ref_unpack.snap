@@ -1,6 +1,5 @@
 ---
 source: crates/move-transactional-test-runner/src/framework.rs
-input_file: crates/bytecode-verifier-transactional-tests/tests/reference_safety/invalid_enum_ref_unpack.mvir
 ---
 processed 7 tasks
 
@@ -12,6 +11,7 @@ Error: Unable to publish module '00000000000000000000000000000000000000000000000
     location: 0x1::o,
     indices: [(FunctionDefinition, 0)],
     offsets: [(FunctionDefinitionIndex(0), 13)],
+    message: None,
 }
 
 task 1, lines 22-47:
@@ -22,6 +22,7 @@ Error: Unable to publish module '00000000000000000000000000000000000000000000000
     location: 0x1::o,
     indices: [(FunctionDefinition, 0)],
     offsets: [(FunctionDefinitionIndex(0), 11)],
+    message: None,
 }
 
 task 2, lines 49-68:
@@ -32,6 +33,7 @@ Error: Unable to publish module '00000000000000000000000000000000000000000000000
     location: 0x1::o,
     indices: [(FunctionDefinition, 0)],
     offsets: [(FunctionDefinitionIndex(0), 10)],
+    message: None,
 }
 
 task 3, lines 70-95:
@@ -42,6 +44,7 @@ Error: Unable to publish module '00000000000000000000000000000000000000000000000
     location: 0x1::o,
     indices: [(FunctionDefinition, 0)],
     offsets: [(FunctionDefinitionIndex(0), 8)],
+    message: None,
 }
 
 task 4, lines 97-114:
@@ -52,6 +55,7 @@ Error: Unable to publish module '00000000000000000000000000000000000000000000000
     location: 0x1::o,
     indices: [(FunctionDefinition, 0)],
     offsets: [(FunctionDefinitionIndex(0), 10)],
+    message: None,
 }
 
 task 5, lines 116-134:
@@ -62,6 +66,7 @@ Error: Unable to publish module '00000000000000000000000000000000000000000000000
     location: 0x1::o,
     indices: [(FunctionDefinition, 0)],
     offsets: [(FunctionDefinitionIndex(0), 10)],
+    message: None,
 }
 
 task 6, lines 136-160:
@@ -72,4 +77,5 @@ Error: Unable to publish module '00000000000000000000000000000000000000000000000
     location: 0x1::o,
     indices: [(FunctionDefinition, 0)],
     offsets: [(FunctionDefinitionIndex(0), 8)],
+    message: None,
 }

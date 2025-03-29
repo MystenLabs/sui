@@ -1,6 +1,5 @@
 ---
 source: crates/move-transactional-test-runner/src/framework.rs
-input_file: crates/bytecode-verifier-transactional-tests/tests/type_safety/return_type_mismatch_and_unused_resource.mvir
 ---
 processed 6 tasks
 
@@ -12,6 +11,7 @@ Error: Unable to publish module '00000000000000000000000000000000000000000000000
     location: 0x1::M,
     indices: [(FunctionDefinition, 0)],
     offsets: [(FunctionDefinitionIndex(0), 4)],
+    message: None,
 }
 
 task 1, lines 15-27:
@@ -22,6 +22,7 @@ Error: Unable to publish module '00000000000000000000000000000000000000000000000
     location: 0x1::M2,
     indices: [(FunctionDefinition, 0)],
     offsets: [(FunctionDefinitionIndex(0), 5)],
+    message: None,
 }
 
 task 2, lines 29-40:
@@ -32,6 +33,7 @@ Error: Unable to publish module '00000000000000000000000000000000000000000000000
     location: 0x1::M,
     indices: [(FunctionDefinition, 0)],
     offsets: [(FunctionDefinitionIndex(0), 4)],
+    message: None,
 }
 
 task 3, lines 42-53:
@@ -42,6 +44,7 @@ Error: Unable to publish module '00000000000000000000000000000000000000000000000
     location: 0x1::M2,
     indices: [(FunctionDefinition, 0)],
     offsets: [(FunctionDefinitionIndex(0), 5)],
+    message: None,
 }
 
 task 4, lines 55-67:
@@ -52,6 +55,7 @@ Error: Unable to publish module '00000000000000000000000000000000000000000000000
     location: 0x2::M,
     indices: [(FunctionDefinition, 0)],
     offsets: [(FunctionDefinitionIndex(0), 4)],
+    message: None,
 }
 
 task 5, lines 69-80:
@@ -62,4 +66,5 @@ Error: Unable to publish module '00000000000000000000000000000000000000000000000
     location: 0x2::M,
     indices: [(FunctionDefinition, 0)],
     offsets: [(FunctionDefinitionIndex(0), 4)],
+    message: None,
 }

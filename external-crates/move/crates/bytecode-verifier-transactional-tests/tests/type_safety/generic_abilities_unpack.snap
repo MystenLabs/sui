@@ -1,6 +1,5 @@
 ---
 source: crates/move-transactional-test-runner/src/framework.rs
-input_file: crates/bytecode-verifier-transactional-tests/tests/type_safety/generic_abilities_unpack.mvir
 ---
 processed 2 tasks
 
@@ -12,6 +11,7 @@ Error: Unable to publish module '00000000000000000000000000000000000000000000000
     location: 0x1::M,
     indices: [(FunctionDefinition, 0)],
     offsets: [(FunctionDefinitionIndex(0), 3)],
+    message: None,
 }
 
 task 1, lines 13-23:
@@ -22,4 +22,5 @@ Error: Unable to publish module '00000000000000000000000000000000000000000000000
     location: 0x2::M,
     indices: [(FunctionDefinition, 0)],
     offsets: [(FunctionDefinitionIndex(0), 3)],
+    message: None,
 }

@@ -11,6 +11,7 @@ Error: Function execution failed with VMError: {
     location: 0x2::m,
     indices: [],
     offsets: [(FunctionDefinitionIndex(0), 2)],
+    message: None,
 }
 
 task 2, lines 25-31:
@@ -21,6 +22,7 @@ Error: Function execution failed with VMError: {
     location: 0x3::m,
     indices: [],
     offsets: [(FunctionDefinitionIndex(0), 2)],
+    message: None,
 }
 
 task 4, lines 48-54:
@@ -31,6 +33,7 @@ Error: Function execution failed with VMError: {
     location: 0x5::m,
     indices: [],
     offsets: [(FunctionDefinitionIndex(0), 2)],
+    message: None,
 }
 
 task 5, lines 56-62:
@@ -41,6 +44,7 @@ Error: Function execution failed with VMError: {
     location: 0x6::m,
     indices: [],
     offsets: [(FunctionDefinitionIndex(0), 2)],
+    message: None,
 }
 
 task 7, lines 79-85:
@@ -51,6 +55,7 @@ Error: Function execution failed with VMError: {
     location: 0x8::m,
     indices: [],
     offsets: [(FunctionDefinitionIndex(0), 2)],
+    message: None,
 }
 
 task 8, lines 87-93:
@@ -61,6 +66,7 @@ Error: Function execution failed with VMError: {
     location: 0x9::m,
     indices: [],
     offsets: [(FunctionDefinitionIndex(0), 2)],
+    message: None,
 }
 
 task 10, lines 112-119:
@@ -71,6 +77,7 @@ Error: Function execution failed with VMError: {
     location: 0xb::m,
     indices: [],
     offsets: [(FunctionDefinitionIndex(0), 2)],
+    message: None,
 }
 
 task 11, lines 121-126:
@@ -81,6 +88,7 @@ Error: Function execution failed with VMError: {
     location: 0xc::m,
     indices: [],
     offsets: [(FunctionDefinitionIndex(0), 2)],
+    message: None,
 }
 
 task 12, lines 128-134:
@@ -91,6 +99,7 @@ Error: Function execution failed with VMError: {
     location: 0xd::m,
     indices: [],
     offsets: [(FunctionDefinitionIndex(0), 2)],
+    message: None,
 }
 
 task 14, lines 152-158:
@@ -101,6 +110,7 @@ Error: Function execution failed with VMError: {
     location: 0xf::m,
     indices: [],
     offsets: [(FunctionDefinitionIndex(0), 2)],
+    message: None,
 }
 
 task 15, lines 160-166:
@@ -111,6 +121,7 @@ Error: Function execution failed with VMError: {
     location: 0x10::m,
     indices: [],
     offsets: [(FunctionDefinitionIndex(0), 2)],
+    message: None,
 }
 
 task 16, lines 168-174:
@@ -121,4 +132,5 @@ Error: Function execution failed with VMError: {
     location: 0x11::m,
     indices: [],
     offsets: [(FunctionDefinitionIndex(0), 2)],
+    message: None,
 }

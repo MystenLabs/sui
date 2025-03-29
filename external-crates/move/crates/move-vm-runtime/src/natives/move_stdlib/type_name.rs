@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
-    execution::values::{Struct, Value},
+    execution::values::Value,
     jit::execution::ast::Type,
     native_charge_gas_early_exit,
     natives::functions::{NativeContext, NativeFunction, NativeResult},
@@ -47,11 +47,9 @@ fn native_get(
     );
 
     // make a std::string::String
-    let string_val = Value::struct_(Struct::pack(vec![Value::vector_u8(
-        type_name.as_bytes().to_vec(),
-    )]));
+    let string_val = Value::make_struct(vec![Value::vector_u8(type_name.as_bytes().to_vec())]);
     // make a std::type_name::TypeName
-    let type_name_val = Value::struct_(Struct::pack(vec![string_val]));
+    let type_name_val = Value::make_struct(vec![string_val]);
 
     Ok(NativeResult::ok(
         context.gas_used(),

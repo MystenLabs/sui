@@ -1,6 +1,5 @@
 ---
 source: crates/move-transactional-test-runner/src/framework.rs
-input_file: crates/bytecode-verifier-transactional-tests/tests/type_safety/mut_borrow_from_imm_ref_enum.mvir
 ---
 processed 2 tasks
 
@@ -12,6 +11,7 @@ Error: Unable to publish module '00000000000000000000000000000000000000000000000
     location: 0x42::Token,
     indices: [(FunctionDefinition, 2)],
     offsets: [(FunctionDefinitionIndex(2), 1)],
+    message: None,
 }
 
 task 1, lines 27-38:
@@ -22,4 +22,5 @@ Error: Unable to publish module '00000000000000000000000000000000000000000000000
     location: 0x42::Token,
     indices: [(FunctionDefinition, 0)],
     offsets: [(FunctionDefinitionIndex(0), 1)],
+    message: None,
 }

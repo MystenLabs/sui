@@ -11,4 +11,5 @@ Error: Unable to publish module '00000000000000000000000000000000000000000000000
     location: undefined,
     indices: [(AddressIdentifier, 0)],
     offsets: [],
+    message: None,
 }

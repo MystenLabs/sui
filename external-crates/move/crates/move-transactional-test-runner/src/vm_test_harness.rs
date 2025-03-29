@@ -450,6 +450,7 @@ pub fn format_vm_error(e: &VMError) -> String {
     location: {location_string},
     indices: {indices:?},
     offsets: {offsets:?},
+    message: {message:?},
 }}",
         major_status = e.major_status(),
         sub_status = e.sub_status(),
@@ -457,7 +458,7 @@ pub fn format_vm_error(e: &VMError) -> String {
         // TODO maybe include source map info?
         indices = e.indices(),
         offsets = e.offsets(),
-        // message = e.message(),
+        message = e.message(),
     )
 }
 
@@ -517,8 +518,10 @@ fn call_vm_function(
         .collect();
 
     println!("Doing call");
-    vm_instance
-        .execute_function_bypass_visibility(module, function, type_args, args, gas_meter, None)
+    let result = vm_instance
+        .execute_function_bypass_visibility(module, function, type_args, args, gas_meter, None);
+    println!("Done calling");
+    result
 }
 
 pub static PRECOMPILED_MOVE_STDLIB: Lazy<FullyCompiledProgram> = Lazy::new(|| {

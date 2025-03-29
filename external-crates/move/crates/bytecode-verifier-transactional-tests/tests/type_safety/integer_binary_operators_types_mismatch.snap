@@ -1,6 +1,5 @@
 ---
 source: crates/move-transactional-test-runner/src/framework.rs
-input_file: crates/bytecode-verifier-transactional-tests/tests/type_safety/integer_binary_operators_types_mismatch.mvir
 ---
 processed 191 tasks
 
@@ -12,6 +11,7 @@ Error: Unable to publish module '00000000000000000000000000000000000000000000000
     location: 0x42::m,
     indices: [(FunctionDefinition, 0)],
     offsets: [(FunctionDefinitionIndex(0), 2)],
+    message: None,
 }
 
 task 1, lines 15-24:
@@ -22,6 +22,7 @@ Error: Unable to publish module '00000000000000000000000000000000000000000000000
     location: 0x42::m,
     indices: [(FunctionDefinition, 0)],
     offsets: [(FunctionDefinitionIndex(0), 2)],
+    message: None,
 }
 
 task 2, lines 26-35:
@@ -32,6 +33,7 @@ Error: Unable to publish module '00000000000000000000000000000000000000000000000
     location: 0x42::m,
     indices: [(FunctionDefinition, 0)],
     offsets: [(FunctionDefinitionIndex(0), 2)],
+    message: None,
 }
 
 task 3, lines 37-46:
@@ -42,6 +44,7 @@ Error: Unable to publish module '00000000000000000000000000000000000000000000000
     location: 0x42::m,
     indices: [(FunctionDefinition, 0)],
     offsets: [(FunctionDefinitionIndex(0), 2)],
+    message: None,
 }
 
 task 4, lines 48-57:
@@ -52,6 +55,7 @@ Error: Unable to publish module '00000000000000000000000000000000000000000000000
     location: 0x42::m,
     indices: [(FunctionDefinition, 0)],
     offsets: [(FunctionDefinitionIndex(0), 2)],
+    message: None,
 }
 
 task 5, lines 59-68:
@@ -62,6 +66,7 @@ Error: Unable to publish module '00000000000000000000000000000000000000000000000
     location: 0x42::m,
     indices: [(FunctionDefinition, 0)],
     offsets: [(FunctionDefinitionIndex(0), 2)],
+    message: None,
 }
 
 task 6, lines 70-79:
@@ -72,6 +77,7 @@ Error: Unable to publish module '00000000000000000000000000000000000000000000000
     location: 0x42::m,
     indices: [(FunctionDefinition, 0)],
     offsets: [(FunctionDefinitionIndex(0), 2)],
+    message: None,
 }
 
 task 7, lines 81-90:
@@ -82,6 +88,7 @@ Error: Unable to publish module '00000000000000000000000000000000000000000000000
     location: 0x42::m,
     indices: [(FunctionDefinition, 0)],
     offsets: [(FunctionDefinitionIndex(0), 2)],
+    message: None,
 }
 
 task 8, lines 92-101:
@@ -92,6 +99,7 @@ Error: Unable to publish module '00000000000000000000000000000000000000000000000
     location: 0x42::m,
     indices: [(FunctionDefinition, 0)],
     offsets: [(FunctionDefinitionIndex(0), 2)],
+    message: None,
 }
 
 task 9, lines 103-112:
@@ -102,6 +110,7 @@ Error: Unable to publish module '00000000000000000000000000000000000000000000000
     location: 0x42::m,
     indices: [(FunctionDefinition, 0)],
     offsets: [(FunctionDefinitionIndex(0), 2)],
+    message: None,
 }
 
 task 10, lines 114-123:
@@ -112,6 +121,7 @@ Error: Unable to publish module '00000000000000000000000000000000000000000000000
     location: 0x42::m,
     indices: [(FunctionDefinition, 0)],
     offsets: [(FunctionDefinitionIndex(0), 2)],
+    message: None,
 }
 
 task 11, lines 125-134:
@@ -122,6 +132,7 @@ Error: Unable to publish module '00000000000000000000000000000000000000000000000
     location: 0x42::m,
     indices: [(FunctionDefinition, 0)],
     offsets: [(FunctionDefinitionIndex(0), 2)],
+    message: None,
 }
 
 task 12, lines 136-144:
@@ -132,6 +143,7 @@ Error: Unable to publish module '00000000000000000000000000000000000000000000000
     location: 0x42::M,
     indices: [(FunctionDefinition, 0)],
     offsets: [(FunctionDefinitionIndex(0), 3)],
+    message: None,
 }
 
 task 13, lines 146-154:
@@ -142,6 +154,7 @@ Error: Unable to publish module '00000000000000000000000000000000000000000000000
     location: 0x42::M,
     indices: [(FunctionDefinition, 0)],
     offsets: [(FunctionDefinitionIndex(0), 3)],
+    message: None,
 }
 
 task 14, lines 156-168:
@@ -152,6 +165,7 @@ Error: Unable to publish module '00000000000000000000000000000000000000000000000
     location: 0x42::M,
     indices: [(FunctionDefinition, 0)],
     offsets: [(FunctionDefinitionIndex(0), 4)],
+    message: None,
 }
 
 task 15, lines 169-178:
@@ -162,6 +176,7 @@ Error: Unable to publish module '00000000000000000000000000000000000000000000000
     location: 0x42::m,
     indices: [(FunctionDefinition, 0)],
     offsets: [(FunctionDefinitionIndex(0), 2)],
+    message: None,
 }
 
 task 16, lines 180-189:
@@ -172,6 +187,7 @@ Error: Unable to publish module '00000000000000000000000000000000000000000000000
     location: 0x42::m,
     indices: [(FunctionDefinition, 0)],
     offsets: [(FunctionDefinitionIndex(0), 2)],
+    message: None,
 }
 
 task 17, lines 191-200:
@@ -182,6 +198,7 @@ Error: Unable to publish module '00000000000000000000000000000000000000000000000
     location: 0x42::m,
     indices: [(FunctionDefinition, 0)],
     offsets: [(FunctionDefinitionIndex(0), 2)],
+    message: None,
 }
 
 task 18, lines 202-211:
@@ -192,6 +209,7 @@ Error: Unable to publish module '00000000000000000000000000000000000000000000000
     location: 0x42::m,
     indices: [(FunctionDefinition, 0)],
     offsets: [(FunctionDefinitionIndex(0), 2)],
+    message: None,
 }
 
 task 19, lines 213-222:
@@ -202,6 +220,7 @@ Error: Unable to publish module '00000000000000000000000000000000000000000000000
     location: 0x42::m,
     indices: [(FunctionDefinition, 0)],
     offsets: [(FunctionDefinitionIndex(0), 2)],
+    message: None,
 }
 
 task 20, lines 224-233:
@@ -212,6 +231,7 @@ Error: Unable to publish module '00000000000000000000000000000000000000000000000
     location: 0x42::m,
     indices: [(FunctionDefinition, 0)],
     offsets: [(FunctionDefinitionIndex(0), 2)],
+    message: None,
 }
 
 task 21, lines 235-244:
@@ -222,6 +242,7 @@ Error: Unable to publish module '00000000000000000000000000000000000000000000000
     location: 0x42::m,
     indices: [(FunctionDefinition, 0)],
     offsets: [(FunctionDefinitionIndex(0), 2)],
+    message: None,
 }
 
 task 22, lines 246-255:
@@ -232,6 +253,7 @@ Error: Unable to publish module '00000000000000000000000000000000000000000000000
     location: 0x42::m,
     indices: [(FunctionDefinition, 0)],
     offsets: [(FunctionDefinitionIndex(0), 2)],
+    message: None,
 }
 
 task 23, lines 257-266:
@@ -242,6 +264,7 @@ Error: Unable to publish module '00000000000000000000000000000000000000000000000
     location: 0x42::m,
     indices: [(FunctionDefinition, 0)],
     offsets: [(FunctionDefinitionIndex(0), 2)],
+    message: None,
 }
 
 task 24, lines 268-277:
@@ -252,6 +275,7 @@ Error: Unable to publish module '00000000000000000000000000000000000000000000000
     location: 0x42::m,
     indices: [(FunctionDefinition, 0)],
     offsets: [(FunctionDefinitionIndex(0), 2)],
+    message: None,
 }
 
 task 25, lines 279-288:
@@ -262,6 +286,7 @@ Error: Unable to publish module '00000000000000000000000000000000000000000000000
     location: 0x42::m,
     indices: [(FunctionDefinition, 0)],
     offsets: [(FunctionDefinitionIndex(0), 2)],
+    message: None,
 }
 
 task 26, lines 290-299:
@@ -272,6 +297,7 @@ Error: Unable to publish module '00000000000000000000000000000000000000000000000
     location: 0x42::m,
     indices: [(FunctionDefinition, 0)],
     offsets: [(FunctionDefinitionIndex(0), 2)],
+    message: None,
 }
 
 task 27, lines 301-309:
@@ -282,6 +308,7 @@ Error: Unable to publish module '00000000000000000000000000000000000000000000000
     location: 0x42::M,
     indices: [(FunctionDefinition, 0)],
     offsets: [(FunctionDefinitionIndex(0), 3)],
+    message: None,
 }
 
 task 28, lines 311-319:
@@ -292,6 +319,7 @@ Error: Unable to publish module '00000000000000000000000000000000000000000000000
     location: 0x42::M,
     indices: [(FunctionDefinition, 0)],
     offsets: [(FunctionDefinitionIndex(0), 3)],
+    message: None,
 }
 
 task 29, lines 321-333:
@@ -302,6 +330,7 @@ Error: Unable to publish module '00000000000000000000000000000000000000000000000
     location: 0x42::M,
     indices: [(FunctionDefinition, 0)],
     offsets: [(FunctionDefinitionIndex(0), 4)],
+    message: None,
 }
 
 task 30, lines 334-343:
@@ -312,6 +341,7 @@ Error: Unable to publish module '00000000000000000000000000000000000000000000000
     location: 0x42::m,
     indices: [(FunctionDefinition, 0)],
     offsets: [(FunctionDefinitionIndex(0), 2)],
+    message: None,
 }
 
 task 31, lines 345-354:
@@ -322,6 +352,7 @@ Error: Unable to publish module '00000000000000000000000000000000000000000000000
     location: 0x42::m,
     indices: [(FunctionDefinition, 0)],
     offsets: [(FunctionDefinitionIndex(0), 2)],
+    message: None,
 }
 
 task 32, lines 356-365:
@@ -332,6 +363,7 @@ Error: Unable to publish module '00000000000000000000000000000000000000000000000
     location: 0x42::m,
     indices: [(FunctionDefinition, 0)],
     offsets: [(FunctionDefinitionIndex(0), 2)],
+    message: None,
 }
 
 task 33, lines 367-376:
@@ -342,6 +374,7 @@ Error: Unable to publish module '00000000000000000000000000000000000000000000000
     location: 0x42::m,
     indices: [(FunctionDefinition, 0)],
     offsets: [(FunctionDefinitionIndex(0), 2)],
+    message: None,
 }
 
 task 34, lines 378-387:
@@ -352,6 +385,7 @@ Error: Unable to publish module '00000000000000000000000000000000000000000000000
     location: 0x42::m,
     indices: [(FunctionDefinition, 0)],
     offsets: [(FunctionDefinitionIndex(0), 2)],
+    message: None,
 }
 
 task 35, lines 389-398:
@@ -362,6 +396,7 @@ Error: Unable to publish module '00000000000000000000000000000000000000000000000
     location: 0x42::m,
     indices: [(FunctionDefinition, 0)],
     offsets: [(FunctionDefinitionIndex(0), 2)],
+    message: None,
 }
 
 task 36, lines 400-409:
@@ -372,6 +407,7 @@ Error: Unable to publish module '00000000000000000000000000000000000000000000000
     location: 0x42::m,
     indices: [(FunctionDefinition, 0)],
     offsets: [(FunctionDefinitionIndex(0), 2)],
+    message: None,
 }
 
 task 37, lines 411-420:
@@ -382,6 +418,7 @@ Error: Unable to publish module '00000000000000000000000000000000000000000000000
     location: 0x42::m,
     indices: [(FunctionDefinition, 0)],
     offsets: [(FunctionDefinitionIndex(0), 2)],
+    message: None,
 }
 
 task 38, lines 422-431:
@@ -392,6 +429,7 @@ Error: Unable to publish module '00000000000000000000000000000000000000000000000
     location: 0x42::m,
     indices: [(FunctionDefinition, 0)],
     offsets: [(FunctionDefinitionIndex(0), 2)],
+    message: None,
 }
 
 task 39, lines 433-442:
@@ -402,6 +440,7 @@ Error: Unable to publish module '00000000000000000000000000000000000000000000000
     location: 0x42::m,
     indices: [(FunctionDefinition, 0)],
     offsets: [(FunctionDefinitionIndex(0), 2)],
+    message: None,
 }
 
 task 40, lines 444-453:
@@ -412,6 +451,7 @@ Error: Unable to publish module '00000000000000000000000000000000000000000000000
     location: 0x42::m,
     indices: [(FunctionDefinition, 0)],
     offsets: [(FunctionDefinitionIndex(0), 2)],
+    message: None,
 }
 
 task 41, lines 455-464:
@@ -422,6 +462,7 @@ Error: Unable to publish module '00000000000000000000000000000000000000000000000
     location: 0x42::m,
     indices: [(FunctionDefinition, 0)],
     offsets: [(FunctionDefinitionIndex(0), 2)],
+    message: None,
 }
 
 task 42, lines 466-474:
@@ -432,6 +473,7 @@ Error: Unable to publish module '00000000000000000000000000000000000000000000000
     location: 0x42::M,
     indices: [(FunctionDefinition, 0)],
     offsets: [(FunctionDefinitionIndex(0), 3)],
+    message: None,
 }
 
 task 43, lines 476-484:
@@ -442,6 +484,7 @@ Error: Unable to publish module '00000000000000000000000000000000000000000000000
     location: 0x42::M,
     indices: [(FunctionDefinition, 0)],
     offsets: [(FunctionDefinitionIndex(0), 3)],
+    message: None,
 }
 
 task 44, lines 486-498:
@@ -452,6 +495,7 @@ Error: Unable to publish module '00000000000000000000000000000000000000000000000
     location: 0x42::M,
     indices: [(FunctionDefinition, 0)],
     offsets: [(FunctionDefinitionIndex(0), 4)],
+    message: None,
 }
 
 task 45, lines 499-508:
@@ -462,6 +506,7 @@ Error: Unable to publish module '00000000000000000000000000000000000000000000000
     location: 0x42::m,
     indices: [(FunctionDefinition, 0)],
     offsets: [(FunctionDefinitionIndex(0), 2)],
+    message: None,
 }
 
 task 46, lines 510-519:
@@ -472,6 +517,7 @@ Error: Unable to publish module '00000000000000000000000000000000000000000000000
     location: 0x42::m,
     indices: [(FunctionDefinition, 0)],
     offsets: [(FunctionDefinitionIndex(0), 2)],
+    message: None,
 }
 
 task 47, lines 521-530:
@@ -482,6 +528,7 @@ Error: Unable to publish module '00000000000000000000000000000000000000000000000
     location: 0x42::m,
     indices: [(FunctionDefinition, 0)],
     offsets: [(FunctionDefinitionIndex(0), 2)],
+    message: None,
 }
 
 task 48, lines 532-541:
@@ -492,6 +539,7 @@ Error: Unable to publish module '00000000000000000000000000000000000000000000000
     location: 0x42::m,
     indices: [(FunctionDefinition, 0)],
     offsets: [(FunctionDefinitionIndex(0), 2)],
+    message: None,
 }
 
 task 49, lines 543-552:
@@ -502,6 +550,7 @@ Error: Unable to publish module '00000000000000000000000000000000000000000000000
     location: 0x42::m,
     indices: [(FunctionDefinition, 0)],
     offsets: [(FunctionDefinitionIndex(0), 2)],
+    message: None,
 }
 
 task 50, lines 554-563:
@@ -512,6 +561,7 @@ Error: Unable to publish module '00000000000000000000000000000000000000000000000
     location: 0x42::m,
     indices: [(FunctionDefinition, 0)],
     offsets: [(FunctionDefinitionIndex(0), 2)],
+    message: None,
 }
 
 task 51, lines 565-574:
@@ -522,6 +572,7 @@ Error: Unable to publish module '00000000000000000000000000000000000000000000000
     location: 0x42::m,
     indices: [(FunctionDefinition, 0)],
     offsets: [(FunctionDefinitionIndex(0), 2)],
+    message: None,
 }
 
 task 52, lines 576-585:
@@ -532,6 +583,7 @@ Error: Unable to publish module '00000000000000000000000000000000000000000000000
     location: 0x42::m,
     indices: [(FunctionDefinition, 0)],
     offsets: [(FunctionDefinitionIndex(0), 2)],
+    message: None,
 }
 
 task 53, lines 587-596:
@@ -542,6 +594,7 @@ Error: Unable to publish module '00000000000000000000000000000000000000000000000
     location: 0x42::m,
     indices: [(FunctionDefinition, 0)],
     offsets: [(FunctionDefinitionIndex(0), 2)],
+    message: None,
 }
 
 task 54, lines 598-607:
@@ -552,6 +605,7 @@ Error: Unable to publish module '00000000000000000000000000000000000000000000000
     location: 0x42::m,
     indices: [(FunctionDefinition, 0)],
     offsets: [(FunctionDefinitionIndex(0), 2)],
+    message: None,
 }
 
 task 55, lines 609-618:
@@ -562,6 +616,7 @@ Error: Unable to publish module '00000000000000000000000000000000000000000000000
     location: 0x42::m,
     indices: [(FunctionDefinition, 0)],
     offsets: [(FunctionDefinitionIndex(0), 2)],
+    message: None,
 }
 
 task 56, lines 620-629:
@@ -572,6 +627,7 @@ Error: Unable to publish module '00000000000000000000000000000000000000000000000
     location: 0x42::m,
     indices: [(FunctionDefinition, 0)],
     offsets: [(FunctionDefinitionIndex(0), 2)],
+    message: None,
 }
 
 task 57, lines 631-639:
@@ -582,6 +638,7 @@ Error: Unable to publish module '00000000000000000000000000000000000000000000000
     location: 0x42::M,
     indices: [(FunctionDefinition, 0)],
     offsets: [(FunctionDefinitionIndex(0), 3)],
+    message: None,
 }
 
 task 58, lines 641-649:
@@ -592,6 +649,7 @@ Error: Unable to publish module '00000000000000000000000000000000000000000000000
     location: 0x42::M,
     indices: [(FunctionDefinition, 0)],
     offsets: [(FunctionDefinitionIndex(0), 3)],
+    message: None,
 }
 
 task 59, lines 651-663:
@@ -602,6 +660,7 @@ Error: Unable to publish module '00000000000000000000000000000000000000000000000
     location: 0x42::M,
     indices: [(FunctionDefinition, 0)],
     offsets: [(FunctionDefinitionIndex(0), 4)],
+    message: None,
 }
 
 task 60, lines 664-673:
@@ -612,6 +671,7 @@ Error: Unable to publish module '00000000000000000000000000000000000000000000000
     location: 0x42::m,
     indices: [(FunctionDefinition, 0)],
     offsets: [(FunctionDefinitionIndex(0), 2)],
+    message: None,
 }
 
 task 61, lines 675-684:
@@ -622,6 +682,7 @@ Error: Unable to publish module '00000000000000000000000000000000000000000000000
     location: 0x42::m,
     indices: [(FunctionDefinition, 0)],
     offsets: [(FunctionDefinitionIndex(0), 2)],
+    message: None,
 }
 
 task 62, lines 686-695:
@@ -632,6 +693,7 @@ Error: Unable to publish module '00000000000000000000000000000000000000000000000
     location: 0x42::m,
     indices: [(FunctionDefinition, 0)],
     offsets: [(FunctionDefinitionIndex(0), 2)],
+    message: None,
 }
 
 task 63, lines 697-706:
@@ -642,6 +704,7 @@ Error: Unable to publish module '00000000000000000000000000000000000000000000000
     location: 0x42::m,
     indices: [(FunctionDefinition, 0)],
     offsets: [(FunctionDefinitionIndex(0), 2)],
+    message: None,
 }
 
 task 64, lines 708-717:
@@ -652,6 +715,7 @@ Error: Unable to publish module '00000000000000000000000000000000000000000000000
     location: 0x42::m,
     indices: [(FunctionDefinition, 0)],
     offsets: [(FunctionDefinitionIndex(0), 2)],
+    message: None,
 }
 
 task 65, lines 719-728:
@@ -662,6 +726,7 @@ Error: Unable to publish module '00000000000000000000000000000000000000000000000
     location: 0x42::m,
     indices: [(FunctionDefinition, 0)],
     offsets: [(FunctionDefinitionIndex(0), 2)],
+    message: None,
 }
 
 task 66, lines 730-739:
@@ -672,6 +737,7 @@ Error: Unable to publish module '00000000000000000000000000000000000000000000000
     location: 0x42::m,
     indices: [(FunctionDefinition, 0)],
     offsets: [(FunctionDefinitionIndex(0), 2)],
+    message: None,
 }
 
 task 67, lines 741-750:
@@ -682,6 +748,7 @@ Error: Unable to publish module '00000000000000000000000000000000000000000000000
     location: 0x42::m,
     indices: [(FunctionDefinition, 0)],
     offsets: [(FunctionDefinitionIndex(0), 2)],
+    message: None,
 }
 
 task 68, lines 752-761:
@@ -692,6 +759,7 @@ Error: Unable to publish module '00000000000000000000000000000000000000000000000
     location: 0x42::m,
     indices: [(FunctionDefinition, 0)],
     offsets: [(FunctionDefinitionIndex(0), 2)],
+    message: None,
 }
 
 task 69, lines 763-772:
@@ -702,6 +770,7 @@ Error: Unable to publish module '00000000000000000000000000000000000000000000000
     location: 0x42::m,
     indices: [(FunctionDefinition, 0)],
     offsets: [(FunctionDefinitionIndex(0), 2)],
+    message: None,
 }
 
 task 70, lines 774-783:
@@ -712,6 +781,7 @@ Error: Unable to publish module '00000000000000000000000000000000000000000000000
     location: 0x42::m,
     indices: [(FunctionDefinition, 0)],
     offsets: [(FunctionDefinitionIndex(0), 2)],
+    message: None,
 }
 
 task 71, lines 785-794:
@@ -722,6 +792,7 @@ Error: Unable to publish module '00000000000000000000000000000000000000000000000
     location: 0x42::m,
     indices: [(FunctionDefinition, 0)],
     offsets: [(FunctionDefinitionIndex(0), 2)],
+    message: None,
 }
 
 task 72, lines 796-804:
@@ -732,6 +803,7 @@ Error: Unable to publish module '00000000000000000000000000000000000000000000000
     location: 0x42::M,
     indices: [(FunctionDefinition, 0)],
     offsets: [(FunctionDefinitionIndex(0), 3)],
+    message: None,
 }
 
 task 73, lines 806-814:
@@ -742,6 +814,7 @@ Error: Unable to publish module '00000000000000000000000000000000000000000000000
     location: 0x42::M,
     indices: [(FunctionDefinition, 0)],
     offsets: [(FunctionDefinitionIndex(0), 3)],
+    message: None,
 }
 
 task 74, lines 816-828:
@@ -752,6 +825,7 @@ Error: Unable to publish module '00000000000000000000000000000000000000000000000
     location: 0x42::M,
     indices: [(FunctionDefinition, 0)],
     offsets: [(FunctionDefinitionIndex(0), 4)],
+    message: None,
 }
 
 task 75, lines 829-838:
@@ -762,6 +836,7 @@ Error: Unable to publish module '00000000000000000000000000000000000000000000000
     location: 0x42::m,
     indices: [(FunctionDefinition, 0)],
     offsets: [(FunctionDefinitionIndex(0), 2)],
+    message: None,
 }
 
 task 76, lines 840-849:
@@ -772,6 +847,7 @@ Error: Unable to publish module '00000000000000000000000000000000000000000000000
     location: 0x42::m,
     indices: [(FunctionDefinition, 0)],
     offsets: [(FunctionDefinitionIndex(0), 2)],
+    message: None,
 }
 
 task 77, lines 851-860:
@@ -782,6 +858,7 @@ Error: Unable to publish module '00000000000000000000000000000000000000000000000
     location: 0x42::m,
     indices: [(FunctionDefinition, 0)],
     offsets: [(FunctionDefinitionIndex(0), 2)],
+    message: None,
 }
 
 task 78, lines 862-871:
@@ -792,6 +869,7 @@ Error: Unable to publish module '00000000000000000000000000000000000000000000000
     location: 0x42::m,
     indices: [(FunctionDefinition, 0)],
     offsets: [(FunctionDefinitionIndex(0), 2)],
+    message: None,
 }
 
 task 79, lines 873-882:
@@ -802,6 +880,7 @@ Error: Unable to publish module '00000000000000000000000000000000000000000000000
     location: 0x42::m,
     indices: [(FunctionDefinition, 0)],
     offsets: [(FunctionDefinitionIndex(0), 2)],
+    message: None,
 }
 
 task 80, lines 884-893:
@@ -812,6 +891,7 @@ Error: Unable to publish module '00000000000000000000000000000000000000000000000
     location: 0x42::m,
     indices: [(FunctionDefinition, 0)],
     offsets: [(FunctionDefinitionIndex(0), 2)],
+    message: None,
 }
 
 task 81, lines 895-904:
@@ -822,6 +902,7 @@ Error: Unable to publish module '00000000000000000000000000000000000000000000000
     location: 0x42::m,
     indices: [(FunctionDefinition, 0)],
     offsets: [(FunctionDefinitionIndex(0), 2)],
+    message: None,
 }
 
 task 82, lines 906-915:
@@ -832,6 +913,7 @@ Error: Unable to publish module '00000000000000000000000000000000000000000000000
     location: 0x42::m,
     indices: [(FunctionDefinition, 0)],
     offsets: [(FunctionDefinitionIndex(0), 2)],
+    message: None,
 }
 
 task 83, lines 917-926:
@@ -842,6 +924,7 @@ Error: Unable to publish module '00000000000000000000000000000000000000000000000
     location: 0x42::m,
     indices: [(FunctionDefinition, 0)],
     offsets: [(FunctionDefinitionIndex(0), 2)],
+    message: None,
 }
 
 task 84, lines 928-937:
@@ -852,6 +935,7 @@ Error: Unable to publish module '00000000000000000000000000000000000000000000000
     location: 0x42::m,
     indices: [(FunctionDefinition, 0)],
     offsets: [(FunctionDefinitionIndex(0), 2)],
+    message: None,
 }
 
 task 85, lines 939-948:
@@ -862,6 +946,7 @@ Error: Unable to publish module '00000000000000000000000000000000000000000000000
     location: 0x42::m,
     indices: [(FunctionDefinition, 0)],
     offsets: [(FunctionDefinitionIndex(0), 2)],
+    message: None,
 }
 
 task 86, lines 950-959:
@@ -872,6 +957,7 @@ Error: Unable to publish module '00000000000000000000000000000000000000000000000
     location: 0x42::m,
     indices: [(FunctionDefinition, 0)],
     offsets: [(FunctionDefinitionIndex(0), 2)],
+    message: None,
 }
 
 task 87, lines 961-969:
@@ -882,6 +968,7 @@ Error: Unable to publish module '00000000000000000000000000000000000000000000000
     location: 0x42::M,
     indices: [(FunctionDefinition, 0)],
     offsets: [(FunctionDefinitionIndex(0), 3)],
+    message: None,
 }
 
 task 88, lines 971-979:
@@ -892,6 +979,7 @@ Error: Unable to publish module '00000000000000000000000000000000000000000000000
     location: 0x42::M,
     indices: [(FunctionDefinition, 0)],
     offsets: [(FunctionDefinitionIndex(0), 3)],
+    message: None,
 }
 
 task 89, lines 981-993:
@@ -902,6 +990,7 @@ Error: Unable to publish module '00000000000000000000000000000000000000000000000
     location: 0x42::M,
     indices: [(FunctionDefinition, 0)],
     offsets: [(FunctionDefinitionIndex(0), 4)],
+    message: None,
 }
 
 task 90, lines 994-1003:
@@ -912,6 +1001,7 @@ Error: Unable to publish module '00000000000000000000000000000000000000000000000
     location: 0x42::m,
     indices: [(FunctionDefinition, 0)],
     offsets: [(FunctionDefinitionIndex(0), 2)],
+    message: None,
 }
 
 task 91, lines 1005-1014:
@@ -922,6 +1012,7 @@ Error: Unable to publish module '00000000000000000000000000000000000000000000000
     location: 0x42::m,
     indices: [(FunctionDefinition, 0)],
     offsets: [(FunctionDefinitionIndex(0), 2)],
+    message: None,
 }
 
 task 92, lines 1016-1025:
@@ -932,6 +1023,7 @@ Error: Unable to publish module '00000000000000000000000000000000000000000000000
     location: 0x42::m,
     indices: [(FunctionDefinition, 0)],
     offsets: [(FunctionDefinitionIndex(0), 2)],
+    message: None,
 }
 
 task 93, lines 1027-1036:
@@ -942,6 +1034,7 @@ Error: Unable to publish module '00000000000000000000000000000000000000000000000
     location: 0x42::m,
     indices: [(FunctionDefinition, 0)],
     offsets: [(FunctionDefinitionIndex(0), 2)],
+    message: None,
 }
 
 task 94, lines 1038-1047:
@@ -952,6 +1045,7 @@ Error: Unable to publish module '00000000000000000000000000000000000000000000000
     location: 0x42::m,
     indices: [(FunctionDefinition, 0)],
     offsets: [(FunctionDefinitionIndex(0), 2)],
+    message: None,
 }
 
 task 95, lines 1049-1058:
@@ -962,6 +1056,7 @@ Error: Unable to publish module '00000000000000000000000000000000000000000000000
     location: 0x42::m,
     indices: [(FunctionDefinition, 0)],
     offsets: [(FunctionDefinitionIndex(0), 2)],
+    message: None,
 }
 
 task 96, lines 1060-1069:
@@ -972,6 +1067,7 @@ Error: Unable to publish module '00000000000000000000000000000000000000000000000
     location: 0x42::m,
     indices: [(FunctionDefinition, 0)],
     offsets: [(FunctionDefinitionIndex(0), 2)],
+    message: None,
 }
 
 task 97, lines 1071-1080:
@@ -982,6 +1078,7 @@ Error: Unable to publish module '00000000000000000000000000000000000000000000000
     location: 0x42::m,
     indices: [(FunctionDefinition, 0)],
     offsets: [(FunctionDefinitionIndex(0), 2)],
+    message: None,
 }
 
 task 98, lines 1082-1091:
@@ -992,6 +1089,7 @@ Error: Unable to publish module '00000000000000000000000000000000000000000000000
     location: 0x42::m,
     indices: [(FunctionDefinition, 0)],
     offsets: [(FunctionDefinitionIndex(0), 2)],
+    message: None,
 }
 
 task 99, lines 1093-1102:
@@ -1002,6 +1100,7 @@ Error: Unable to publish module '00000000000000000000000000000000000000000000000
     location: 0x42::m,
     indices: [(FunctionDefinition, 0)],
     offsets: [(FunctionDefinitionIndex(0), 2)],
+    message: None,
 }
 
 task 100, lines 1104-1113:
@@ -1012,6 +1111,7 @@ Error: Unable to publish module '00000000000000000000000000000000000000000000000
     location: 0x42::m,
     indices: [(FunctionDefinition, 0)],
     offsets: [(FunctionDefinitionIndex(0), 2)],
+    message: None,
 }
 
 task 101, lines 1115-1124:
@@ -1022,6 +1122,7 @@ Error: Unable to publish module '00000000000000000000000000000000000000000000000
     location: 0x42::m,
     indices: [(FunctionDefinition, 0)],
     offsets: [(FunctionDefinitionIndex(0), 2)],
+    message: None,
 }
 
 task 102, lines 1126-1134:
@@ -1032,6 +1133,7 @@ Error: Unable to publish module '00000000000000000000000000000000000000000000000
     location: 0x42::M,
     indices: [(FunctionDefinition, 0)],
     offsets: [(FunctionDefinitionIndex(0), 3)],
+    message: None,
 }
 
 task 103, lines 1136-1144:
@@ -1042,6 +1144,7 @@ Error: Unable to publish module '00000000000000000000000000000000000000000000000
     location: 0x42::M,
     indices: [(FunctionDefinition, 0)],
     offsets: [(FunctionDefinitionIndex(0), 3)],
+    message: None,
 }
 
 task 104, lines 1146-1158:
@@ -1052,6 +1155,7 @@ Error: Unable to publish module '00000000000000000000000000000000000000000000000
     location: 0x42::M,
     indices: [(FunctionDefinition, 0)],
     offsets: [(FunctionDefinitionIndex(0), 4)],
+    message: None,
 }
 
 task 105, lines 1159-1168:
@@ -1062,6 +1166,7 @@ Error: Unable to publish module '00000000000000000000000000000000000000000000000
     location: 0x42::m,
     indices: [(FunctionDefinition, 0)],
     offsets: [(FunctionDefinitionIndex(0), 2)],
+    message: None,
 }
 
 task 106, lines 1170-1179:
@@ -1072,6 +1177,7 @@ Error: Unable to publish module '00000000000000000000000000000000000000000000000
     location: 0x42::m,
     indices: [(FunctionDefinition, 0)],
     offsets: [(FunctionDefinitionIndex(0), 2)],
+    message: None,
 }
 
 task 107, lines 1181-1190:
@@ -1082,6 +1188,7 @@ Error: Unable to publish module '00000000000000000000000000000000000000000000000
     location: 0x42::m,
     indices: [(FunctionDefinition, 0)],
     offsets: [(FunctionDefinitionIndex(0), 2)],
+    message: None,
 }
 
 task 108, lines 1192-1201:
@@ -1092,6 +1199,7 @@ Error: Unable to publish module '00000000000000000000000000000000000000000000000
     location: 0x42::m,
     indices: [(FunctionDefinition, 0)],
     offsets: [(FunctionDefinitionIndex(0), 2)],
+    message: None,
 }
 
 task 109, lines 1203-1212:
@@ -1102,6 +1210,7 @@ Error: Unable to publish module '00000000000000000000000000000000000000000000000
     location: 0x42::m,
     indices: [(FunctionDefinition, 0)],
     offsets: [(FunctionDefinitionIndex(0), 2)],
+    message: None,
 }
 
 task 110, lines 1214-1223:
@@ -1112,6 +1221,7 @@ Error: Unable to publish module '00000000000000000000000000000000000000000000000
     location: 0x42::m,
     indices: [(FunctionDefinition, 0)],
     offsets: [(FunctionDefinitionIndex(0), 2)],
+    message: None,
 }
 
 task 111, lines 1225-1234:
@@ -1122,6 +1232,7 @@ Error: Unable to publish module '00000000000000000000000000000000000000000000000
     location: 0x42::m,
     indices: [(FunctionDefinition, 0)],
     offsets: [(FunctionDefinitionIndex(0), 2)],
+    message: None,
 }
 
 task 112, lines 1236-1245:
@@ -1132,6 +1243,7 @@ Error: Unable to publish module '00000000000000000000000000000000000000000000000
     location: 0x42::m,
     indices: [(FunctionDefinition, 0)],
     offsets: [(FunctionDefinitionIndex(0), 2)],
+    message: None,
 }
 
 task 113, lines 1247-1256:
@@ -1142,6 +1254,7 @@ Error: Unable to publish module '00000000000000000000000000000000000000000000000
     location: 0x42::m,
     indices: [(FunctionDefinition, 0)],
     offsets: [(FunctionDefinitionIndex(0), 2)],
+    message: None,
 }
 
 task 114, lines 1258-1267:
@@ -1152,6 +1265,7 @@ Error: Unable to publish module '00000000000000000000000000000000000000000000000
     location: 0x42::m,
     indices: [(FunctionDefinition, 0)],
     offsets: [(FunctionDefinitionIndex(0), 2)],
+    message: None,
 }
 
 task 115, lines 1269-1277:
@@ -1162,6 +1276,7 @@ Error: Unable to publish module '00000000000000000000000000000000000000000000000
     location: 0x42::M,
     indices: [(FunctionDefinition, 0)],
     offsets: [(FunctionDefinitionIndex(0), 3)],
+    message: None,
 }
 
 task 116, lines 1279-1290:
@@ -1172,6 +1287,7 @@ Error: Unable to publish module '00000000000000000000000000000000000000000000000
     location: 0x42::M,
     indices: [(FunctionDefinition, 0)],
     offsets: [(FunctionDefinitionIndex(0), 3)],
+    message: None,
 }
 
 task 117, lines 1291-1300:
@@ -1182,6 +1298,7 @@ Error: Unable to publish module '00000000000000000000000000000000000000000000000
     location: 0x42::m,
     indices: [(FunctionDefinition, 0)],
     offsets: [(FunctionDefinitionIndex(0), 2)],
+    message: None,
 }
 
 task 118, lines 1302-1311:
@@ -1192,6 +1309,7 @@ Error: Unable to publish module '00000000000000000000000000000000000000000000000
     location: 0x42::m,
     indices: [(FunctionDefinition, 0)],
     offsets: [(FunctionDefinitionIndex(0), 2)],
+    message: None,
 }
 
 task 119, lines 1313-1322:
@@ -1202,6 +1320,7 @@ Error: Unable to publish module '00000000000000000000000000000000000000000000000
     location: 0x42::m,
     indices: [(FunctionDefinition, 0)],
     offsets: [(FunctionDefinitionIndex(0), 2)],
+    message: None,
 }
 
 task 120, lines 1324-1333:
@@ -1212,6 +1331,7 @@ Error: Unable to publish module '00000000000000000000000000000000000000000000000
     location: 0x42::m,
     indices: [(FunctionDefinition, 0)],
     offsets: [(FunctionDefinitionIndex(0), 2)],
+    message: None,
 }
 
 task 121, lines 1335-1344:
@@ -1222,6 +1342,7 @@ Error: Unable to publish module '00000000000000000000000000000000000000000000000
     location: 0x42::m,
     indices: [(FunctionDefinition, 0)],
     offsets: [(FunctionDefinitionIndex(0), 2)],
+    message: None,
 }
 
 task 122, lines 1346-1355:
@@ -1232,6 +1353,7 @@ Error: Unable to publish module '00000000000000000000000000000000000000000000000
     location: 0x42::m,
     indices: [(FunctionDefinition, 0)],
     offsets: [(FunctionDefinitionIndex(0), 2)],
+    message: None,
 }
 
 task 123, lines 1357-1366:
@@ -1242,6 +1364,7 @@ Error: Unable to publish module '00000000000000000000000000000000000000000000000
     location: 0x42::m,
     indices: [(FunctionDefinition, 0)],
     offsets: [(FunctionDefinitionIndex(0), 2)],
+    message: None,
 }
 
 task 124, lines 1368-1377:
@@ -1252,6 +1375,7 @@ Error: Unable to publish module '00000000000000000000000000000000000000000000000
     location: 0x42::m,
     indices: [(FunctionDefinition, 0)],
     offsets: [(FunctionDefinitionIndex(0), 2)],
+    message: None,
 }
 
 task 125, lines 1379-1388:
@@ -1262,6 +1386,7 @@ Error: Unable to publish module '00000000000000000000000000000000000000000000000
     location: 0x42::m,
     indices: [(FunctionDefinition, 0)],
     offsets: [(FunctionDefinitionIndex(0), 2)],
+    message: None,
 }
 
 task 126, lines 1390-1399:
@@ -1272,6 +1397,7 @@ Error: Unable to publish module '00000000000000000000000000000000000000000000000
     location: 0x42::m,
     indices: [(FunctionDefinition, 0)],
     offsets: [(FunctionDefinitionIndex(0), 2)],
+    message: None,
 }
 
 task 127, lines 1401-1409:
@@ -1282,6 +1408,7 @@ Error: Unable to publish module '00000000000000000000000000000000000000000000000
     location: 0x42::M,
     indices: [(FunctionDefinition, 0)],
     offsets: [(FunctionDefinitionIndex(0), 3)],
+    message: None,
 }
 
 task 128, lines 1411-1423:
@@ -1292,6 +1419,7 @@ Error: Unable to publish module '00000000000000000000000000000000000000000000000
     location: 0x42::M,
     indices: [(FunctionDefinition, 0)],
     offsets: [(FunctionDefinitionIndex(0), 3)],
+    message: None,
 }
 
 task 129, lines 1424-1433:
@@ -1302,6 +1430,7 @@ Error: Unable to publish module '00000000000000000000000000000000000000000000000
     location: 0x42::m,
     indices: [(FunctionDefinition, 0)],
     offsets: [(FunctionDefinitionIndex(0), 2)],
+    message: None,
 }
 
 task 130, lines 1435-1444:
@@ -1312,6 +1441,7 @@ Error: Unable to publish module '00000000000000000000000000000000000000000000000
     location: 0x42::m,
     indices: [(FunctionDefinition, 0)],
     offsets: [(FunctionDefinitionIndex(0), 2)],
+    message: None,
 }
 
 task 131, lines 1446-1455:
@@ -1322,6 +1452,7 @@ Error: Unable to publish module '00000000000000000000000000000000000000000000000
     location: 0x42::m,
     indices: [(FunctionDefinition, 0)],
     offsets: [(FunctionDefinitionIndex(0), 2)],
+    message: None,
 }
 
 task 132, lines 1457-1466:
@@ -1332,6 +1463,7 @@ Error: Unable to publish module '00000000000000000000000000000000000000000000000
     location: 0x42::m,
     indices: [(FunctionDefinition, 0)],
     offsets: [(FunctionDefinitionIndex(0), 2)],
+    message: None,
 }
 
 task 133, lines 1468-1477:
@@ -1342,6 +1474,7 @@ Error: Unable to publish module '00000000000000000000000000000000000000000000000
     location: 0x42::m,
     indices: [(FunctionDefinition, 0)],
     offsets: [(FunctionDefinitionIndex(0), 2)],
+    message: None,
 }
 
 task 134, lines 1479-1488:
@@ -1352,6 +1485,7 @@ Error: Unable to publish module '00000000000000000000000000000000000000000000000
     location: 0x42::m,
     indices: [(FunctionDefinition, 0)],
     offsets: [(FunctionDefinitionIndex(0), 2)],
+    message: None,
 }
 
 task 135, lines 1490-1499:
@@ -1362,6 +1496,7 @@ Error: Unable to publish module '00000000000000000000000000000000000000000000000
     location: 0x42::m,
     indices: [(FunctionDefinition, 0)],
     offsets: [(FunctionDefinitionIndex(0), 2)],
+    message: None,
 }
 
 task 136, lines 1501-1510:
@@ -1372,6 +1507,7 @@ Error: Unable to publish module '00000000000000000000000000000000000000000000000
     location: 0x42::m,
     indices: [(FunctionDefinition, 0)],
     offsets: [(FunctionDefinitionIndex(0), 2)],
+    message: None,
 }
 
 task 137, lines 1512-1521:
@@ -1382,6 +1518,7 @@ Error: Unable to publish module '00000000000000000000000000000000000000000000000
     location: 0x42::m,
     indices: [(FunctionDefinition, 0)],
     offsets: [(FunctionDefinitionIndex(0), 2)],
+    message: None,
 }
 
 task 138, lines 1523-1534:
@@ -1392,6 +1529,7 @@ Error: Unable to publish module '00000000000000000000000000000000000000000000000
     location: 0x42::m,
     indices: [(FunctionDefinition, 0)],
     offsets: [(FunctionDefinitionIndex(0), 2)],
+    message: None,
 }
 
 task 139, lines 1535-1544:
@@ -1402,6 +1540,7 @@ Error: Unable to publish module '00000000000000000000000000000000000000000000000
     location: 0x42::m,
     indices: [(FunctionDefinition, 0)],
     offsets: [(FunctionDefinitionIndex(0), 2)],
+    message: None,
 }
 
 task 140, lines 1546-1555:
@@ -1412,6 +1551,7 @@ Error: Unable to publish module '00000000000000000000000000000000000000000000000
     location: 0x42::m,
     indices: [(FunctionDefinition, 0)],
     offsets: [(FunctionDefinitionIndex(0), 2)],
+    message: None,
 }
 
 task 141, lines 1557-1566:
@@ -1422,6 +1562,7 @@ Error: Unable to publish module '00000000000000000000000000000000000000000000000
     location: 0x42::m,
     indices: [(FunctionDefinition, 0)],
     offsets: [(FunctionDefinitionIndex(0), 2)],
+    message: None,
 }
 
 task 142, lines 1568-1577:
@@ -1432,6 +1573,7 @@ Error: Unable to publish module '00000000000000000000000000000000000000000000000
     location: 0x42::m,
     indices: [(FunctionDefinition, 0)],
     offsets: [(FunctionDefinitionIndex(0), 2)],
+    message: None,
 }
 
 task 143, lines 1579-1588:
@@ -1442,6 +1584,7 @@ Error: Unable to publish module '00000000000000000000000000000000000000000000000
     location: 0x42::m,
     indices: [(FunctionDefinition, 0)],
     offsets: [(FunctionDefinitionIndex(0), 2)],
+    message: None,
 }
 
 task 144, lines 1590-1599:
@@ -1452,6 +1595,7 @@ Error: Unable to publish module '00000000000000000000000000000000000000000000000
     location: 0x42::m,
     indices: [(FunctionDefinition, 0)],
     offsets: [(FunctionDefinitionIndex(0), 2)],
+    message: None,
 }
 
 task 145, lines 1601-1610:
@@ -1462,6 +1606,7 @@ Error: Unable to publish module '00000000000000000000000000000000000000000000000
     location: 0x42::m,
     indices: [(FunctionDefinition, 0)],
     offsets: [(FunctionDefinitionIndex(0), 2)],
+    message: None,
 }
 
 task 146, lines 1612-1621:
@@ -1472,6 +1617,7 @@ Error: Unable to publish module '00000000000000000000000000000000000000000000000
     location: 0x42::m,
     indices: [(FunctionDefinition, 0)],
     offsets: [(FunctionDefinitionIndex(0), 2)],
+    message: None,
 }
 
 task 147, lines 1623-1632:
@@ -1482,6 +1628,7 @@ Error: Unable to publish module '00000000000000000000000000000000000000000000000
     location: 0x42::m,
     indices: [(FunctionDefinition, 0)],
     offsets: [(FunctionDefinitionIndex(0), 2)],
+    message: None,
 }
 
 task 148, lines 1634-1645:
@@ -1492,6 +1639,7 @@ Error: Unable to publish module '00000000000000000000000000000000000000000000000
     location: 0x42::m,
     indices: [(FunctionDefinition, 0)],
     offsets: [(FunctionDefinitionIndex(0), 2)],
+    message: None,
 }
 
 task 149, lines 1646-1655:
@@ -1502,6 +1650,7 @@ Error: Unable to publish module '00000000000000000000000000000000000000000000000
     location: 0x42::m,
     indices: [(FunctionDefinition, 0)],
     offsets: [(FunctionDefinitionIndex(0), 2)],
+    message: None,
 }
 
 task 150, lines 1657-1666:
@@ -1512,6 +1661,7 @@ Error: Unable to publish module '00000000000000000000000000000000000000000000000
     location: 0x42::m,
     indices: [(FunctionDefinition, 0)],
     offsets: [(FunctionDefinitionIndex(0), 2)],
+    message: None,
 }
 
 task 151, lines 1668-1677:
@@ -1522,6 +1672,7 @@ Error: Unable to publish module '00000000000000000000000000000000000000000000000
     location: 0x42::m,
     indices: [(FunctionDefinition, 0)],
     offsets: [(FunctionDefinitionIndex(0), 2)],
+    message: None,
 }
 
 task 152, lines 1679-1688:
@@ -1532,6 +1683,7 @@ Error: Unable to publish module '00000000000000000000000000000000000000000000000
     location: 0x42::m,
     indices: [(FunctionDefinition, 0)],
     offsets: [(FunctionDefinitionIndex(0), 2)],
+    message: None,
 }
 
 task 153, lines 1690-1699:
@@ -1542,6 +1694,7 @@ Error: Unable to publish module '00000000000000000000000000000000000000000000000
     location: 0x42::m,
     indices: [(FunctionDefinition, 0)],
     offsets: [(FunctionDefinitionIndex(0), 2)],
+    message: None,
 }
 
 task 154, lines 1701-1710:
@@ -1552,6 +1705,7 @@ Error: Unable to publish module '00000000000000000000000000000000000000000000000
     location: 0x42::m,
     indices: [(FunctionDefinition, 0)],
     offsets: [(FunctionDefinitionIndex(0), 2)],
+    message: None,
 }
 
 task 155, lines 1712-1721:
@@ -1562,6 +1716,7 @@ Error: Unable to publish module '00000000000000000000000000000000000000000000000
     location: 0x42::m,
     indices: [(FunctionDefinition, 0)],
     offsets: [(FunctionDefinitionIndex(0), 2)],
+    message: None,
 }
 
 task 156, lines 1723-1732:
@@ -1572,6 +1727,7 @@ Error: Unable to publish module '00000000000000000000000000000000000000000000000
     location: 0x42::m,
     indices: [(FunctionDefinition, 0)],
     offsets: [(FunctionDefinitionIndex(0), 2)],
+    message: None,
 }
 
 task 157, lines 1734-1743:
@@ -1582,6 +1738,7 @@ Error: Unable to publish module '00000000000000000000000000000000000000000000000
     location: 0x42::m,
     indices: [(FunctionDefinition, 0)],
     offsets: [(FunctionDefinitionIndex(0), 2)],
+    message: None,
 }
 
 task 158, lines 1745-1756:
@@ -1592,6 +1749,7 @@ Error: Unable to publish module '00000000000000000000000000000000000000000000000
     location: 0x42::m,
     indices: [(FunctionDefinition, 0)],
     offsets: [(FunctionDefinitionIndex(0), 2)],
+    message: None,
 }
 
 task 159, lines 1757-1766:
@@ -1602,6 +1760,7 @@ Error: Unable to publish module '00000000000000000000000000000000000000000000000
     location: 0x42::m,
     indices: [(FunctionDefinition, 0)],
     offsets: [(FunctionDefinitionIndex(0), 2)],
+    message: None,
 }
 
 task 160, lines 1768-1777:
@@ -1612,6 +1771,7 @@ Error: Unable to publish module '00000000000000000000000000000000000000000000000
     location: 0x42::m,
     indices: [(FunctionDefinition, 0)],
     offsets: [(FunctionDefinitionIndex(0), 2)],
+    message: None,
 }
 
 task 161, lines 1779-1788:
@@ -1622,6 +1782,7 @@ Error: Unable to publish module '00000000000000000000000000000000000000000000000
     location: 0x42::m,
     indices: [(FunctionDefinition, 0)],
     offsets: [(FunctionDefinitionIndex(0), 2)],
+    message: None,
 }
 
 task 162, lines 1790-1799:
@@ -1632,6 +1793,7 @@ Error: Unable to publish module '00000000000000000000000000000000000000000000000
     location: 0x42::m,
     indices: [(FunctionDefinition, 0)],
     offsets: [(FunctionDefinitionIndex(0), 2)],
+    message: None,
 }
 
 task 163, lines 1801-1810:
@@ -1642,6 +1804,7 @@ Error: Unable to publish module '00000000000000000000000000000000000000000000000
     location: 0x42::m,
     indices: [(FunctionDefinition, 0)],
     offsets: [(FunctionDefinitionIndex(0), 2)],
+    message: None,
 }
 
 task 164, lines 1812-1821:
@@ -1652,6 +1815,7 @@ Error: Unable to publish module '00000000000000000000000000000000000000000000000
     location: 0x42::m,
     indices: [(FunctionDefinition, 0)],
     offsets: [(FunctionDefinitionIndex(0), 2)],
+    message: None,
 }
 
 task 165, lines 1823-1832:
@@ -1662,6 +1826,7 @@ Error: Unable to publish module '00000000000000000000000000000000000000000000000
     location: 0x42::m,
     indices: [(FunctionDefinition, 0)],
     offsets: [(FunctionDefinitionIndex(0), 2)],
+    message: None,
 }
 
 task 166, lines 1834-1843:
@@ -1672,6 +1837,7 @@ Error: Unable to publish module '00000000000000000000000000000000000000000000000
     location: 0x42::m,
     indices: [(FunctionDefinition, 0)],
     offsets: [(FunctionDefinitionIndex(0), 2)],
+    message: None,
 }
 
 task 167, lines 1845-1854:
@@ -1682,6 +1848,7 @@ Error: Unable to publish module '00000000000000000000000000000000000000000000000
     location: 0x42::m,
     indices: [(FunctionDefinition, 0)],
     offsets: [(FunctionDefinitionIndex(0), 2)],
+    message: None,
 }
 
 task 168, lines 1856-1867:
@@ -1692,6 +1859,7 @@ Error: Unable to publish module '00000000000000000000000000000000000000000000000
     location: 0x42::m,
     indices: [(FunctionDefinition, 0)],
     offsets: [(FunctionDefinitionIndex(0), 2)],
+    message: None,
 }
 
 task 169, lines 1868-1877:
@@ -1702,6 +1870,7 @@ Error: Unable to publish module '00000000000000000000000000000000000000000000000
     location: 0x42::m,
     indices: [(FunctionDefinition, 0)],
     offsets: [(FunctionDefinitionIndex(0), 2)],
+    message: None,
 }
 
 task 170, lines 1879-1888:
@@ -1712,6 +1881,7 @@ Error: Unable to publish module '00000000000000000000000000000000000000000000000
     location: 0x42::m,
     indices: [(FunctionDefinition, 0)],
     offsets: [(FunctionDefinitionIndex(0), 2)],
+    message: None,
 }
 
 task 171, lines 1890-1899:
@@ -1722,6 +1892,7 @@ Error: Unable to publish module '00000000000000000000000000000000000000000000000
     location: 0x42::m,
     indices: [(FunctionDefinition, 0)],
     offsets: [(FunctionDefinitionIndex(0), 2)],
+    message: None,
 }
 
 task 172, lines 1901-1910:
@@ -1732,6 +1903,7 @@ Error: Unable to publish module '00000000000000000000000000000000000000000000000
     location: 0x42::m,
     indices: [(FunctionDefinition, 0)],
     offsets: [(FunctionDefinitionIndex(0), 2)],
+    message: None,
 }
 
 task 173, lines 1912-1921:
@@ -1742,6 +1914,7 @@ Error: Unable to publish module '00000000000000000000000000000000000000000000000
     location: 0x42::m,
     indices: [(FunctionDefinition, 0)],
     offsets: [(FunctionDefinitionIndex(0), 2)],
+    message: None,
 }
 
 task 174, lines 1923-1932:
@@ -1752,6 +1925,7 @@ Error: Unable to publish module '00000000000000000000000000000000000000000000000
     location: 0x42::m,
     indices: [(FunctionDefinition, 0)],
     offsets: [(FunctionDefinitionIndex(0), 2)],
+    message: None,
 }
 
 task 175, lines 1934-1943:
@@ -1762,6 +1936,7 @@ Error: Unable to publish module '00000000000000000000000000000000000000000000000
     location: 0x42::m,
     indices: [(FunctionDefinition, 0)],
     offsets: [(FunctionDefinitionIndex(0), 2)],
+    message: None,
 }
 
 task 176, lines 1945-1954:
@@ -1772,6 +1947,7 @@ Error: Unable to publish module '00000000000000000000000000000000000000000000000
     location: 0x42::m,
     indices: [(FunctionDefinition, 0)],
     offsets: [(FunctionDefinitionIndex(0), 2)],
+    message: None,
 }
 
 task 177, lines 1956-1964:
@@ -1782,6 +1958,7 @@ Error: Unable to publish module '00000000000000000000000000000000000000000000000
     location: 0x42::M,
     indices: [(FunctionDefinition, 0)],
     offsets: [(FunctionDefinitionIndex(0), 3)],
+    message: None,
 }
 
 task 178, lines 1966-1974:
@@ -1792,6 +1969,7 @@ Error: Unable to publish module '00000000000000000000000000000000000000000000000
     location: 0x42::M,
     indices: [(FunctionDefinition, 0)],
     offsets: [(FunctionDefinitionIndex(0), 3)],
+    message: None,
 }
 
 task 179, lines 1976-1988:
@@ -1802,6 +1980,7 @@ Error: Unable to publish module '00000000000000000000000000000000000000000000000
     location: 0x42::M,
     indices: [(FunctionDefinition, 0)],
     offsets: [(FunctionDefinitionIndex(0), 4)],
+    message: None,
 }
 
 task 180, lines 1989-1998:
@@ -1812,6 +1991,7 @@ Error: Unable to publish module '00000000000000000000000000000000000000000000000
     location: 0x42::m,
     indices: [(FunctionDefinition, 0)],
     offsets: [(FunctionDefinitionIndex(0), 2)],
+    message: None,
 }
 
 task 181, lines 2000-2009:
@@ -1822,6 +2002,7 @@ Error: Unable to publish module '00000000000000000000000000000000000000000000000
     location: 0x42::m,
     indices: [(FunctionDefinition, 0)],
     offsets: [(FunctionDefinitionIndex(0), 2)],
+    message: None,
 }
 
 task 182, lines 2011-2020:
@@ -1832,6 +2013,7 @@ Error: Unable to publish module '00000000000000000000000000000000000000000000000
     location: 0x42::m,
     indices: [(FunctionDefinition, 0)],
     offsets: [(FunctionDefinitionIndex(0), 2)],
+    message: None,
 }
 
 task 183, lines 2022-2031:
@@ -1842,6 +2024,7 @@ Error: Unable to publish module '00000000000000000000000000000000000000000000000
     location: 0x42::m,
     indices: [(FunctionDefinition, 0)],
     offsets: [(FunctionDefinitionIndex(0), 2)],
+    message: None,
 }
 
 task 184, lines 2033-2042:
@@ -1852,6 +2035,7 @@ Error: Unable to publish module '00000000000000000000000000000000000000000000000
     location: 0x42::m,
     indices: [(FunctionDefinition, 0)],
     offsets: [(FunctionDefinitionIndex(0), 2)],
+    message: None,
 }
 
 task 185, lines 2044-2053:
@@ -1862,6 +2046,7 @@ Error: Unable to publish module '00000000000000000000000000000000000000000000000
     location: 0x42::m,
     indices: [(FunctionDefinition, 0)],
     offsets: [(FunctionDefinitionIndex(0), 2)],
+    message: None,
 }
 
 task 186, lines 2055-2064:
@@ -1872,6 +2057,7 @@ Error: Unable to publish module '00000000000000000000000000000000000000000000000
     location: 0x42::m,
     indices: [(FunctionDefinition, 0)],
     offsets: [(FunctionDefinitionIndex(0), 2)],
+    message: None,
 }
 
 task 187, lines 2066-2075:
@@ -1882,6 +2068,7 @@ Error: Unable to publish module '00000000000000000000000000000000000000000000000
     location: 0x42::m,
     indices: [(FunctionDefinition, 0)],
     offsets: [(FunctionDefinitionIndex(0), 2)],
+    message: None,
 }
 
 task 188, lines 2077-2085:
@@ -1892,6 +2079,7 @@ Error: Unable to publish module '00000000000000000000000000000000000000000000000
     location: 0x42::M,
     indices: [(FunctionDefinition, 0)],
     offsets: [(FunctionDefinitionIndex(0), 3)],
+    message: None,
 }
 
 task 189, lines 2087-2095:
@@ -1902,6 +2090,7 @@ Error: Unable to publish module '00000000000000000000000000000000000000000000000
     location: 0x42::M,
     indices: [(FunctionDefinition, 0)],
     offsets: [(FunctionDefinitionIndex(0), 3)],
+    message: None,
 }
 
 task 190, lines 2097-2105:
@@ -1912,4 +2101,5 @@ Error: Unable to publish module '00000000000000000000000000000000000000000000000
     location: 0x42::M,
     indices: [(FunctionDefinition, 0)],
     offsets: [(FunctionDefinitionIndex(0), 4)],
+    message: None,
 }

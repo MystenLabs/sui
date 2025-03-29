@@ -1,6 +1,5 @@
 ---
 source: crates/move-transactional-test-runner/src/framework.rs
-input_file: crates/bytecode-verifier-transactional-tests/tests/type_safety/pack_enum_with_refs.mvir
 ---
 processed 9 tasks
 
@@ -12,6 +11,7 @@ Error: Unable to publish module '00000000000000000000000000000000000000000000000
     location: 0x2::O,
     indices: [(FunctionDefinition, 0)],
     offsets: [(FunctionDefinitionIndex(0), 1)],
+    message: None,
 }
 
 task 1, lines 13-23:
@@ -22,6 +22,7 @@ Error: Unable to publish module '00000000000000000000000000000000000000000000000
     location: 0x2::O,
     indices: [],
     offsets: [],
+    message: Some("reference not allowed"),
 }
 
 task 2, lines 25-28:
@@ -32,6 +33,7 @@ Error: Unable to publish module '00000000000000000000000000000000000000000000000
     location: 0x2::O,
     indices: [(FieldDefinition, 0), (VariantTag, 0), (EnumDefinition, 0)],
     offsets: [],
+    message: Some("reference not allowed"),
 }
 
 task 3, lines 30-40:
@@ -42,6 +44,7 @@ Error: Unable to publish module '00000000000000000000000000000000000000000000000
     location: 0x2::O,
     indices: [(FunctionDefinition, 0)],
     offsets: [(FunctionDefinitionIndex(0), 1)],
+    message: None,
 }
 
 task 4, lines 42-52:
@@ -52,6 +55,7 @@ Error: Unable to publish module '00000000000000000000000000000000000000000000000
     location: 0x2::O,
     indices: [],
     offsets: [],
+    message: Some("reference not allowed"),
 }
 
 task 5, lines 54-60:
@@ -62,6 +66,7 @@ Error: Unable to publish module '00000000000000000000000000000000000000000000000
     location: 0x2::O,
     indices: [(FieldDefinition, 0), (VariantTag, 0), (EnumDefinition, 0)],
     offsets: [],
+    message: Some("reference not allowed"),
 }
 
 task 6, lines 62-72:
@@ -72,6 +77,7 @@ Error: Unable to publish module '00000000000000000000000000000000000000000000000
     location: 0x2::O,
     indices: [(FunctionDefinition, 0)],
     offsets: [(FunctionDefinitionIndex(0), 1)],
+    message: None,
 }
 
 task 7, lines 74-84:
@@ -82,6 +88,7 @@ Error: Unable to publish module '00000000000000000000000000000000000000000000000
     location: 0x2::O,
     indices: [(FieldDefinition, 0), (VariantTag, 0), (EnumDefinition, 0)],
     offsets: [],
+    message: Some("reference not allowed"),
 }
 
 task 8, lines 86-89:
@@ -92,4 +99,5 @@ Error: Unable to publish module '00000000000000000000000000000000000000000000000
     location: 0x2::O,
     indices: [(FieldDefinition, 0), (VariantTag, 0), (EnumDefinition, 0)],
     offsets: [],
+    message: Some("reference not allowed"),
 }
