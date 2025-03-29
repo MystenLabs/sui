@@ -286,9 +286,10 @@ const protocolInject = async function (source) {
           content.push(
             `<div className="${colHeaderStyle}"><code>${val.name}</code></div>`,
           );
-          content.push(``);
+          //content.push(``);
           content.push(
-            `<div className="${colCellStyle}">${val.description}</div>`,
+            `<div className="${colCellStyle}">${handleCurlies(val.description).replace(/\n+\/?/g, " ")
+              .replace(/<(http.*)>/g, "$1")}</div>`,
           );
         }
         content.push(`</div>`);
