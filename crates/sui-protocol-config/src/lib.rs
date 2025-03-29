@@ -1,7 +1,6 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use once_cell::sync::Lazy;
 use std::{
     cell::RefCell,
     collections::BTreeSet,
@@ -10,6 +9,7 @@ use std::{
 
 use clap::*;
 use move_vm_config::verifier::VerifierConfig;
+use once_cell::sync::Lazy;
 use serde::{Deserialize, Serialize};
 use serde_with::skip_serializing_none;
 use sui_protocol_config_macros::{
