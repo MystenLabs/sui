@@ -41,13 +41,13 @@ const EInvalidVotingPower: u64 = 4;
 /// Set the voting power of all validators.
 /// Each validator's voting power is initialized using their stake. We then attempt to cap their voting power
 /// at `MAX_VOTING_POWER`. If `MAX_VOTING_POWER` is not a feasible cap, we pick the lowest possible cap.
-public(package) fun set_voting_power(validators: &mut vector<Validator>) {
+public(package) fun set_voting_power(validators: &mut vector<Validator>, total_stake: u64) {
     // If threshold_pct is too small, it's possible that even when all validators reach the threshold we still don't
     // have 100%. So we bound the threshold_pct to be always enough to find a solution.
     let threshold = TOTAL_VOTING_POWER.min(
         MAX_VOTING_POWER.max(TOTAL_VOTING_POWER.divide_and_round_up(validators.length())),
     );
-    let (mut info_list, remaining_power) = init_voting_power_info(validators, threshold);
+    let (mut info_list, remaining_power) = init_voting_power_info(validators, threshold, total_stake);
     adjust_voting_power(&mut info_list, threshold, remaining_power);
     update_voting_power(validators, info_list);
     check_invariants(validators);
@@ -60,8 +60,8 @@ public(package) fun set_voting_power(validators: &mut vector<Validator>) {
 fun init_voting_power_info(
     validators: &vector<Validator>,
     threshold: u64,
+    total_stake: u64,
 ): (vector<VotingPowerInfoV2>, u64) {
-    let total_stake = total_stake(validators);
     let mut i = 0;
     let len = validators.length();
     let mut total_power = 0;
@@ -69,8 +69,7 @@ fun init_voting_power_info(
     while (i < len) {
         let validator = &validators[i];
         let stake = validator.total_stake();
-        let adjusted_stake = stake as u128 * (TOTAL_VOTING_POWER as u128) / (total_stake as u128);
-        let voting_power = (adjusted_stake as u64).min(threshold);
+        let voting_power = derive_raw_voting_power(stake, total_stake).min(threshold);
         let info = VotingPowerInfoV2 {
             validator_index: i,
             voting_power,
@@ -83,16 +82,8 @@ fun init_voting_power_info(
     (result, TOTAL_VOTING_POWER - total_power)
 }
 
-/// Sum up the total stake of all validators.
-fun total_stake(validators: &vector<Validator>): u64 {
-    let mut i = 0;
-    let len = validators.length();
-    let mut total_stake =0 ;
-    while (i < len) {
-        total_stake = total_stake + validators[i].total_stake();
-        i = i + 1;
-    };
-    total_stake
+public(package) fun derive_raw_voting_power(stake: u64, total_stake: u64): u64 {
+    ((stake as u128 * (TOTAL_VOTING_POWER as u128) / (total_stake as u128)) as u64)
 }
 
 /// Insert `new_info` to `info_list` as part of insertion sort, such that `info_list` is always sorted

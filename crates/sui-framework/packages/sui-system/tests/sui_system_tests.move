@@ -692,7 +692,11 @@ fun test_active_validator_update_metadata() {
             0,
             ctx,
         );
-        system_state.request_add_validator_for_testing(0, ctx);
+        let staked_sui = system_state.request_add_stake_non_entry(
+            coin::mint_for_testing(100_000_000_000, ctx), new_validator_addr, ctx
+        );
+        transfer::public_transfer(staked_sui, @0x0);
+        system_state.request_add_validator_for_testing(ctx);
     };
 
     scenario.next_tx(new_validator_addr);
