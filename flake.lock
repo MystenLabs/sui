@@ -39,7 +39,7 @@
         "type": "github"
       }
     },
-    "genesis": {
+    "genesisgit": {
       "flake": false,
       "locked": {
         "lastModified": 1742833285,
@@ -75,7 +75,7 @@
       "inputs": {
         "fenix": "fenix",
         "flake-utils": "flake-utils",
-        "genesis": "genesis",
+        "genesisgit": "genesisgit",
         "nixpkgs": "nixpkgs"
       }
     },

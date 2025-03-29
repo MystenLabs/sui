@@ -11,7 +11,7 @@
     # rebased version on master
     nixpkgs.url = "github:poelzi/nixpkgs?ref=fetch-cargo-vendor-dup";
 
-    genesis = {
+    genesisgit = {
       url = "github:MystenLabs/sui-genesis";
       flake = false;
     };
@@ -24,7 +24,7 @@
       fenix,
       flake-utils,
       nixpkgs,
-      genesis,
+      genesisgit,
     }:
     flake-utils.lib.eachDefaultSystem (
       system:
@@ -80,6 +80,19 @@
         basePkgs = with pkgs; [
           zstd
         ];
+        genesisPkg = pkgs.stdenvNoCC.mkDerivation {
+          name = "sui-genesis";
+          version = suiVersion;
+
+          src = genesisgit;
+
+          installPhase = ''
+            mkdir -p $out/share
+            cp -r ${genesisgit}/devnet $out/share
+            cp -r ${genesisgit}/testnet $out/share
+            cp -r ${genesisgit}/mainnet $out/share
+          '';
+        };
       in
       let
         # builts a sui rust crate
@@ -88,6 +101,7 @@
             name ? null,
             path ? null,
             bins ? null,
+            genesis ? false,
             extraDeps ? [ ],
             features ? [ ],
             noDefaultFeatures ? false,
@@ -148,11 +162,12 @@
                   darwin.apple_sdk.frameworks.SystemConfiguration
                 ]
               )
-              ++ extraDeps;
+              ++ extraDeps
+              ++ lib.optional genesis genesisPkg;
 
-            preBuild = ''
-              export GIT_REVISION="${self.rev or self.dirtyRev or "dirty"}";
-            '';
+            # preBuild = ''
+            #   export GIT_REVISION="${self.rev or self.dirtyRev or "dirty"}";
+            # '';
 
             cargoTestFlags = [
               "--profile"
@@ -189,6 +204,7 @@
             labels ? { },
             jemalloc ? false,
             debug ? false,
+            genesis ? false,
           }:
           pkgs.dockerTools.buildImage {
             # pkgs.dockerTools.buildLayeredImage {
@@ -219,6 +235,7 @@
                 ]
                 ++ extraPackages
                 ++ lib.optional jemalloc pkgs.jemalloc
+                ++ lib.optional genesis genesisPkg
                 ++ lib.optionals debug [
                   pkgs.bashInteractive
                   pkgs.coreutils
@@ -227,6 +244,7 @@
               pathsToLink = [
                 "/bin"
                 "/lib"
+                "/share"
               ];
             };
 
@@ -251,15 +269,16 @@
           sui-full = mkCrate { };
           sui-node = mkCrate {
             name = "sui-node";
+            genesis = true;
             bins = [ "sui-node" ];
           };
           sui-dev-tools = mkCrate {
             name = "sui-dev-tools";
             bins = dev-tools;
           };
-
           sui-node-tools = mkCrate {
             name = "sui-tools";
+            genesis = true;
             bins = node-tools;
           };
           sui-indexer = mkCrate { bins = [ "sui-indexer" ]; };
@@ -286,6 +305,8 @@
             tpkg = suipkgs.default;
             cmd = [ "sui-node" ];
             extraPackages = [ pkgs.curl ];
+            genesis = true;
+            jemalloc = true;
           };
           docker-indexer = {
             name = "sui-indexer";
@@ -356,6 +377,7 @@
         packages =
           suipkgs
           // {
+            genesis = genesisPkg;
             default = suipkgs.dev-tool;
           }
           // (lib.attrsets.mapAttrs (name: spec: (mkDocker spec)) dockerImages)
