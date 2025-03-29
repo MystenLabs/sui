@@ -21,8 +21,7 @@ use move_core_types::{
     VARIANT_COUNT_MAX,
 };
 use std::{
-    fmt::{self, Debug, Display, Formatter},
-    ops::{Index, IndexMut},
+    fmt::{self, Debug, Display, Formatter}, ops::{Index, IndexMut}
 };
 
 macro_rules! debug_write {
@@ -318,7 +317,7 @@ impl Value {
         }
     }
 
-    fn vector_ref<'v>(&'v self) -> PartialVMResult<VectorMatchRef<'v>> {
+    fn vector_ref(&self) -> PartialVMResult<VectorMatchRef<'_>> {
         match self {
             Value::Vec(vec) => Ok(VectorMatchRef(VectorMatch::Vec(vec))),
             Value::PrimVec(mem_box) => Ok(VectorMatchRef(VectorMatch::PrimVec(mem_box))),
@@ -340,7 +339,7 @@ impl Value {
         }
     }
 
-    fn vector_mut_ref<'v>(&'v mut self) -> PartialVMResult<VectorMatchRefMut<'v>> {
+    fn vector_mut_ref(&mut self) -> PartialVMResult<VectorMatchRefMut<'_>> {
         match self {
             Value::Vec(vec) => Ok(VectorMatchRefMut(VectorMatch::Vec(vec))),
             Value::PrimVec(mem_box) => Ok(VectorMatchRefMut(VectorMatch::PrimVec(mem_box))),
@@ -483,7 +482,7 @@ trait IndexRef {
 impl IndexRef for Box<(MemBox<Value>, usize)> {
     fn copy_element(&self) -> PartialVMResult<Value> {
         let (vec, ndx) = self.as_ref();
-        let opt_ = match &*vec.borrow().prim_vec_ref()? {
+        let opt_ = match vec.borrow().prim_vec_ref()? {
             PrimVec::VecU8(items) => items.get(*ndx).copied().map(Value::U8),
             PrimVec::VecU16(items) => items.get(*ndx).copied().map(Value::U16),
             PrimVec::VecU32(items) => items.get(*ndx).copied().map(Value::U32),
@@ -627,9 +626,21 @@ impl Value {
                     })
                     .collect::<PartialVMResult<Vec<_>>>()?;
                 let constants = alloc_vec!(constants);
-                Ok(ConstantValue::Container(ConstantContainer::Vec(constants)))
+                Ok(ConstantValue::Container(ConstantContainer::Struct(constants)))
             }
-            Value::Variant(_) => todo!(),
+            Value::Variant(variant) => {
+                let (tag, values) = *variant.0;
+                let constants = values
+                    .into_iter()
+                    .map(|v| {
+                        v.take()
+                            .expect("Could not take a value during constant creation")
+                            .to_constant_value(arena)
+                    })
+                    .collect::<PartialVMResult<Vec<_>>>()?;
+                let constants = alloc_vec!(constants);
+                Ok(ConstantValue::Container(ConstantContainer::Variant(tag, constants)))
+            }
         }
     }
 }
@@ -747,11 +758,11 @@ impl Value {
                 )?),
             (Self::Vec(v1), Self::Vec(v2)) => Ok(v1.len() == v2.len()
                 && v1.iter().zip(v2.iter()).try_fold(true, |acc, (a, b)| {
-                    a.borrow().equals(&*b.borrow()).map(|eq| acc && eq)
+                    a.borrow().equals(&b.borrow()).map(|eq| acc && eq)
                 })?),
             (Self::Struct(v1), Self::Struct(v2)) => Ok(v1.len() == v2.len()
                 && v1.iter().zip(v2.iter()).try_fold(true, |acc, (a, b)| {
-                    a.borrow().equals(&*b.borrow()).map(|eq| acc && eq)
+                    a.borrow().equals(&b.borrow()).map(|eq| acc && eq)
                 })?),
             (Self::Variant(tv1), Self::Variant(tv2)) => {
                 let (tag1, v1) = tv1.as_ref();
@@ -759,7 +770,7 @@ impl Value {
                 Ok(tag1 == tag2
                     && v1.len() == v2.len()
                     && v1.iter().zip(v2.iter()).try_fold(true, |acc, (a, b)| {
-                        a.borrow().equals(&*b.borrow()).map(|eq| acc && eq)
+                        a.borrow().equals(&b.borrow()).map(|eq| acc && eq)
                     })?)
             }
             _ => Err(PartialVMError::new(StatusCode::INTERNAL_TYPE_ERROR)
@@ -772,14 +783,14 @@ impl Reference {
     pub fn equals(&self, other: &Reference) -> PartialVMResult<bool> {
         match (self, other) {
             (Reference::Value(mem_box_1), Reference::Value(mem_box_2)) => {
-                mem_box_1.borrow().equals(&*mem_box_2.borrow())
+                mem_box_1.borrow().equals(&mem_box_2.borrow())
             }
             (Reference::Indexed(ref_1), Reference::Indexed(ref_2)) => {
                 let (vec_1, ndx_1) = ref_1.as_ref();
                 let (vec_2, ndx_2) = ref_2.as_ref();
                 match_prim_vec_pair!(
-                    &*vec_1.borrow().prim_vec_ref()?,
-                    &*vec_2.borrow().prim_vec_ref()?,
+                    vec_1.borrow().prim_vec_ref()?,
+                    vec_2.borrow().prim_vec_ref()?,
                     items1,
                     items2,
                     items1[*ndx_1] == items2[*ndx_2],
@@ -804,7 +815,7 @@ impl FixedSizeVec {
             );
         }
         for (a, b) in self.iter().zip(other.iter()) {
-            if !a.borrow().equals(&*b.borrow())? {
+            if !a.borrow().equals(&b.borrow())? {
                 return Ok(false);
             }
         }
@@ -978,7 +989,7 @@ impl VectorRef {
         // Borrow the container inside the MemBox.
         let value = &*self.0.borrow();
         check_elem_layout(type_param, value)?;
-        match &*value {
+        match value {
             // For a Vec container, extract the element.
             Value::Vec(vec) => {
                 if index >= vec.len() {
@@ -1699,7 +1710,7 @@ impl Struct {
     pub fn pack<I: IntoIterator<Item = Value>>(input: I) -> Self {
         let values = input
             .into_iter()
-            .map(|v| MemBox::new(v))
+            .map(MemBox::new)
             .collect::<Vec<_>>();
         Self::pack_boxed(values)
     }
@@ -1747,7 +1758,7 @@ impl Variant {
     pub fn pack<I: IntoIterator<Item = Value>>(tag: VariantTag, input: I) -> Self {
         let values = input
             .into_iter()
-            .map(|v| MemBox::new(v))
+            .map(MemBox::new)
             .collect::<Vec<_>>();
         Self::pack_boxed(tag, values)
     }
@@ -1914,7 +1925,7 @@ pub struct VecU8Ref<'a> {
 impl<'a> std::ops::Deref for VecU8Ref<'a> {
     type Target = Vec<u8>;
     fn deref(&self) -> &Self::Target {
-        &*self.inner
+        &self.inner
     }
 }
 
@@ -2380,7 +2391,7 @@ impl GlobalValueImpl {
                 let Value::Struct(struct_) = &*container.borrow() else {
                     unreachable!()
                 };
-                !fingerprint.same_value(&struct_)
+                !fingerprint.same_value(struct_)
             }
         }
     }
@@ -2646,7 +2657,7 @@ pub mod debug {
 
     #[allow(clippy::borrowed_box)]
     fn print_box_value_impl<B: Write>(buf: &mut B, val: &MemBox<Value>) -> PartialVMResult<()> {
-        print_value_impl(buf, &*val.borrow())
+        print_value_impl(buf, &val.borrow())
     }
 
     fn print_list<'a, B, I, X, F>(
@@ -2691,7 +2702,7 @@ pub mod debug {
         // REVIEW: The number of spaces in the indent is currently hard coded.
         for (idx, val) in stack_frame.iter().enumerate() {
             debug_write!(buf, "            [{}] ", idx)?;
-            print_value_impl(buf, &*val.borrow())?;
+            print_value_impl(buf, &val.borrow())?;
             debug_writeln!(buf)?;
         }
         Ok(())
@@ -3153,13 +3164,13 @@ impl PrimVec {
                 visitor.visit_u128(depth, xs[ndx]);
             }
             PrimVec::VecU256(xs) => {
-                visitor.visit_u256(depth, xs[ndx].clone());
+                visitor.visit_u256(depth, xs[ndx]);
             }
             PrimVec::VecBool(xs) => {
                 visitor.visit_bool(depth, xs[ndx]);
             }
             PrimVec::VecAddress(xs) => {
-                visitor.visit_address(depth, xs[ndx].clone());
+                visitor.visit_address(depth, xs[ndx]);
             }
         }
     }
@@ -3174,7 +3185,7 @@ impl Reference {
                     let (vec, ndx) = entry.as_ref();
                     vec.borrow()
                         .prim_vec_ref()
-                        .expect(&format!("Indexed ref that is not a prim vec: {:?}", vec))
+                        .unwrap_or_else(|_| panic!("Indexed ref that is not a prim vec: {:?}", vec))
                         .visit_indexed(*ndx, visitor, depth + 1);
                 }
             }
@@ -3203,14 +3214,14 @@ impl Value {
                 }
             }
             Value::PrimVec(prim_vec) => match prim_vec {
-                PrimVec::VecU8(r) => visitor.visit_vec_u8(depth, &r),
-                PrimVec::VecU16(r) => visitor.visit_vec_u16(depth, &r),
-                PrimVec::VecU32(r) => visitor.visit_vec_u32(depth, &r),
-                PrimVec::VecU64(r) => visitor.visit_vec_u64(depth, &r),
-                PrimVec::VecU128(r) => visitor.visit_vec_u128(depth, &r),
-                PrimVec::VecU256(r) => visitor.visit_vec_u256(depth, &r),
-                PrimVec::VecBool(r) => visitor.visit_vec_bool(depth, &r),
-                PrimVec::VecAddress(r) => visitor.visit_vec_address(depth, &r),
+                PrimVec::VecU8(r) => visitor.visit_vec_u8(depth, r),
+                PrimVec::VecU16(r) => visitor.visit_vec_u16(depth, r),
+                PrimVec::VecU32(r) => visitor.visit_vec_u32(depth, r),
+                PrimVec::VecU64(r) => visitor.visit_vec_u64(depth, r),
+                PrimVec::VecU128(r) => visitor.visit_vec_u128(depth, r),
+                PrimVec::VecU256(r) => visitor.visit_vec_u256(depth, r),
+                PrimVec::VecBool(r) => visitor.visit_vec_bool(depth, r),
+                PrimVec::VecAddress(r) => visitor.visit_vec_address(depth, r),
             },
             Value::Struct(struct_) => {
                 if visitor.visit_struct(depth, struct_.len()) {
@@ -3312,7 +3323,7 @@ impl Vector {
     pub fn elem_len(&self) -> usize {
         self.0
             .vector_ref()
-            .expect(&format!("Expected a vector, got {:?}", self))
+            .unwrap_or_else(|_| panic!("Expected a vector, got {:?}", self))
             .len()
     }
 
@@ -3340,7 +3351,7 @@ impl Vector {
         let container = self
             .0
             .vector_ref()
-            .expect(&format!("Expected a vector, got {:?}", self));
+            .unwrap_or_else(|_| panic!("Expected a vector, got {:?}", self));
         let len = container.len();
         (0..len).map(move |ndx| ElemView {
             container: &self.0,
@@ -3719,7 +3730,7 @@ impl Value {
                 }
                 match &*values[0].borrow() {
                     Value::Address(a) => Some(AV::Signer(**a)),
-                    _ => return None,
+                    _ => None,
                 }
             }
             (layout, Value::Reference(ref_)) => ref_.as_annotated_move_value(layout),
@@ -3767,13 +3778,13 @@ impl Reference {
                                     Some(AV::Vector(xs.iter().map(|u| AV::U128(*u)).collect()))
                                 }
                                 (L::U256, PrimVec::VecU256(xs)) => Some(AV::Vector(
-                                    xs.iter().map(|u| AV::U256(u.clone())).collect(),
+                                    xs.iter().map(|u| AV::U256(*u)).collect(),
                                 )),
                                 (L::Bool, PrimVec::VecBool(xs)) => {
                                     Some(AV::Vector(xs.iter().map(|b| AV::Bool(*b)).collect()))
                                 }
                                 (L::Address, PrimVec::VecAddress(xs)) => Some(AV::Vector(
-                                    xs.iter().map(|a| AV::Address(a.clone())).collect(),
+                                    xs.iter().map(|a| AV::Address(*a)).collect(),
                                 )),
                                 (ty, vec) => {
                                     panic!(
