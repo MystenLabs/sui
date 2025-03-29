@@ -29,6 +29,13 @@
 module sui::event;
 
 use std::type_name;
+use std::bcs;
+use sui::hash;
+use sui::dynamic_field;
+use sui::accumulator;
+use sui::address;
+
+const ENotSystemAddress: u64 = 0;
 
 /// Emit a custom Move event, sending the data offchain.
 ///
@@ -42,6 +49,35 @@ public native fun emit<T: copy + drop>(event: T);
 public use fun destroy_stream as EventStream.destroy;
 public use fun destroy_cap as EventStreamCap.destroy;
 public use fun emit_authenticated as EventStreamCap.emit;
+
+public struct EventStreamHead has store {
+    root: vector<u8>,
+    prev: vector<u8>,
+}
+
+entry fun update_head(stream_id: address, new_root: vector<u8>, ctx: &TxContext) {
+    assert!(ctx.sender() == @0x0, ENotSystemAddress);
+
+    let name = accumulator::get_accumulator_field_name<EventStreamHead>(stream_id);
+    let mut accumulator_root = object::sui_accumulator_root_object_id();
+
+    if (dynamic_field::exists_with_type<accumulator::Key, EventStreamHead>(&accumulator_root, name)) {
+        let head: &mut EventStreamHead = dynamic_field::borrow_mut(&mut accumulator_root, name);
+        let prev_bytes = bcs::to_bytes(head);
+        let prev = hash::blake2b256(&prev_bytes);
+        head.prev = prev;
+        head.root = new_root;
+    } else {
+        let head = EventStreamHead {
+            root: new_root,
+            prev: address::to_bytes(address::from_u256(0)),
+        };
+        dynamic_field::add(&mut accumulator_root, name, head);
+    };
+
+    object::delete(accumulator_root);
+}
+
 
 // TODO: Should EventStream have key?
 public struct EventStream has store {
@@ -81,7 +117,9 @@ public fun default_event_stream_cap<T: copy + drop>(ctx: &mut TxContext): EventS
 }
 
 public fun emit_authenticated<T: copy + drop>(cap: &EventStreamCap, event: T) {
-    emit_authenticated_impl(cap.stream_id, event);
+    let accumulator_addr = accumulator::get_accumulator_field_address<EventStreamHead>(cap.stream_id);
+
+    emit_authenticated_impl<EventStreamHead, T>(accumulator_addr, cap.stream_id, event);
 }
 
 public fun destroy_cap(cap: EventStreamCap) {
@@ -92,7 +130,7 @@ public fun destroy_cap(cap: EventStreamCap) {
 /// TODO: needs verifier rule like `emit` to ensure it is only called in package that defines `T`
 /// Like `emit`, but also adds an on-chain committment to the event to the
 /// stream `stream`.
-native fun emit_authenticated_impl<T: copy + drop>(stream: address, event: T);
+native fun emit_authenticated_impl<StreamHeadT, T: copy + drop>(accumulator_id: address, stream: address, event: T);
 
 #[test_only]
 /// Get the total number of events emitted during execution so far

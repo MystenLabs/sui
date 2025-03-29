@@ -50,22 +50,21 @@ mod checked {
         ObjectRuntime, RuntimeResults,
     };
     use sui_protocol_config::ProtocolConfig;
-    use sui_types::{accumulator_event::AccumulatorEvent, execution::ExecutionResults};
     use sui_types::{
-        accumulator_event::AccumulatorValue,
-        storage::{DenyListResult, PackageObject},
-    };
-    use sui_types::{
+        accumulator_event::AccumulatorEvent,
         balance::Balance,
         base_types::{MoveObjectType, ObjectID, SuiAddress, TxContext},
         coin::Coin,
+        effects::{AccumulatorAddress, AccumulatorValue, AccumulatorWriteV1},
         error::{ExecutionError, ExecutionErrorKind},
         event::Event,
+        execution::ExecutionResults,
         execution::ExecutionResultsV2,
         metrics::LimitsMetrics,
         move_package::MovePackage,
         object::{Data, MoveObject, Object, ObjectInner, Owner},
         storage::BackingPackageStore,
+        storage::{DenyListResult, PackageObject},
         transaction::{Argument, CallArg, ObjectArg},
     };
     use sui_types::{error::command_argument_error, execution_status::CommandArgumentError};
@@ -971,11 +970,23 @@ mod checked {
                 .map(|accum_event| match accum_event.value {
                     MoveAccumulatorValue::EventRef(idx) => {
                         let event = &user_events[idx as usize];
-                        let digest = event.unique_digest(tx_digest, idx as usize);
-                        let value = AccumulatorValue::EventCommitment(digest);
-                        let action = accum_event.action.into_sui_accumulator_action();
 
-                        AccumulatorEvent::new(action, accum_event.target.into(), value)
+                        let digest = event.unique_digest(tx_digest, idx as usize);
+                        let value = AccumulatorValue::EventDigest(digest);
+                        let address = AccumulatorAddress::new(
+                            accum_event.target_addr.into(),
+                            vm.get_runtime()
+                                .get_type_tag(&accum_event.target_ty)
+                                .unwrap(),
+                        );
+
+                        let write = AccumulatorWriteV1 {
+                            address,
+                            operation: accum_event.action.into_sui_accumulator_action(),
+                            value,
+                        };
+
+                        AccumulatorEvent::new(accum_event.accumulator_id, write)
                     }
                     MoveAccumulatorValue::MoveValue(_, _, _) => todo!(),
                 })

@@ -34,7 +34,9 @@ mod effects_v2;
 mod object_change;
 mod test_effects_builder;
 
-pub use object_change::AccumulatorWriteV1;
+pub use object_change::{
+    AccumulatorAddress, AccumulatorOperation, AccumulatorValue, AccumulatorWriteV1,
+};
 
 // Since `std::mem::size_of` may not be stable across platforms, we use rough constants
 // We need these for estimating effects sizes

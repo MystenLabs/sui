@@ -68,7 +68,7 @@ pub enum ObjectIn {
 }
 
 #[derive(Eq, PartialEq, Clone, Debug, Serialize, Deserialize)]
-pub enum AccmulatorOperation {
+pub enum AccumulatorOperation {
     /// Merge the value into the accumulator.
     Merge,
     /// Split the value from the accumulator.
@@ -87,13 +87,22 @@ pub enum AccumulatorValue {
 /// Accumulator objects are named by an address (can be an account address or a UID)
 /// and a type tag.
 #[derive(Eq, PartialEq, Clone, Debug, Serialize, Deserialize)]
-pub struct AccumulatorAddress(SuiAddress, TypeTag);
+pub struct AccumulatorAddress {
+    pub address: SuiAddress,
+    pub ty: TypeTag,
+}
+
+impl AccumulatorAddress {
+    pub fn new(address: SuiAddress, ty: TypeTag) -> Self {
+        Self { address, ty }
+    }
+}
 
 #[derive(Eq, PartialEq, Clone, Debug, Serialize, Deserialize)]
 pub struct AccumulatorWriteV1 {
     pub address: AccumulatorAddress,
     /// The operation to be applied to the accumulator.
-    pub operation: AccmulatorOperation,
+    pub operation: AccumulatorOperation,
     /// The cached deserialized value of the operation.
     /// This is an optimization to avoid deserializing the value multiple times.
     pub value: AccumulatorValue,

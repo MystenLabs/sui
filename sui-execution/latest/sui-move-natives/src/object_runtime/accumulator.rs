@@ -3,7 +3,7 @@
 
 use move_core_types::{account_address::AccountAddress, language_storage::StructTag};
 use move_vm_types::{loaded_data::runtime_types::Type, values::Value};
-use sui_types::accumulator_event::AccumulatorAction;
+use sui_types::{base_types::ObjectID, effects::AccumulatorOperation};
 
 pub enum MoveAccumulatorAction {
     Merge,
@@ -11,10 +11,10 @@ pub enum MoveAccumulatorAction {
 }
 
 impl MoveAccumulatorAction {
-    pub fn into_sui_accumulator_action(self) -> AccumulatorAction {
+    pub fn into_sui_accumulator_action(self) -> AccumulatorOperation {
         match self {
-            MoveAccumulatorAction::Merge => AccumulatorAction::Merge,
-            MoveAccumulatorAction::Split => AccumulatorAction::Split,
+            MoveAccumulatorAction::Merge => AccumulatorOperation::Merge,
+            MoveAccumulatorAction::Split => AccumulatorOperation::Split,
         }
     }
 }
@@ -26,7 +26,11 @@ pub enum MoveAccumulatorValue {
 }
 
 pub struct MoveAccumulatorEvent {
+    // Note: accumulator_id is derived by hashing target and ty, but we include
+    // both for simplicity.
+    pub accumulator_id: ObjectID,
     pub action: MoveAccumulatorAction,
-    pub target: AccountAddress,
+    pub target_addr: AccountAddress,
+    pub target_ty: Type,
     pub value: MoveAccumulatorValue,
 }

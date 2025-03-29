@@ -213,6 +213,9 @@ pub struct AdvanceEpochCommand {
 }
 
 #[derive(Debug, clap::Parser)]
+pub struct UpdateAccumulatorsCommand {}
+
+#[derive(Debug, clap::Parser)]
 pub struct SetRandomStateCommand {
     #[clap(long = "randomness-round")]
     pub randomness_round: u64,
@@ -233,6 +236,7 @@ pub enum SuiSubcommand<ExtraValueArgs: ParsableValue, ExtraRunArgs: Parser> {
     SetAddress(SetAddressCommand),
     CreateCheckpoint(CreateCheckpointCommand),
     AdvanceEpoch(AdvanceEpochCommand),
+    UpdateAccumulators(UpdateAccumulatorsCommand),
     AdvanceClock(AdvanceClockCommand),
     SetRandomState(SetRandomStateCommand),
     ViewCheckpoint,
@@ -273,6 +277,9 @@ impl<ExtraValueArgs: ParsableValue, ExtraRunArgs: Parser> clap::FromArgMatches
             Some(("advance-epoch", matches)) => {
                 SuiSubcommand::AdvanceEpoch(AdvanceEpochCommand::from_arg_matches(matches)?)
             }
+            Some(("update-accumulators", matches)) => SuiSubcommand::UpdateAccumulators(
+                UpdateAccumulatorCommand::from_arg_matches(matches)?,
+            ),
             Some(("advance-clock", matches)) => {
                 SuiSubcommand::AdvanceClock(AdvanceClockCommand::from_arg_matches(matches)?)
             }

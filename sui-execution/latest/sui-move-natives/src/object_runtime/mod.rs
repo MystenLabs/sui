@@ -331,13 +331,17 @@ impl<'a> ObjectRuntime<'a> {
 
     pub fn emit_accumulator_event(
         &mut self,
+        accumulator_id: ObjectID,
         action: MoveAccumulatorAction,
-        target: AccountAddress,
+        target_addr: AccountAddress,
+        target_ty: Type,
         value: MoveAccumulatorValue,
     ) -> PartialVMResult<()> {
         let event = MoveAccumulatorEvent {
+            accumulator_id,
             action,
-            target,
+            target_addr,
+            target_ty,
             value,
         };
         self.state.accumulator_events.push(event);

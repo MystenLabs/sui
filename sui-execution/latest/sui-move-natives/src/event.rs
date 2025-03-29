@@ -17,7 +17,7 @@ use move_vm_types::{
 };
 use smallvec::smallvec;
 use std::collections::VecDeque;
-use sui_types::error::VMMemoryLimitExceededSubStatusCode;
+use sui_types::{base_types::ObjectID, error::VMMemoryLimitExceededSubStatusCode};
 
 #[derive(Clone, Debug)]
 pub struct EventEmitCostParams {
@@ -58,18 +58,41 @@ pub fn emit_authenticated(
     debug_assert!(ty_args.len() == 1);
     debug_assert!(args.len() == 2);
 
-    let ty = ty_args.pop().unwrap();
-    let event_value = args.pop_back().unwrap();
-    let stream_ref = args.pop_back().unwrap();
+    let event_ty = ty_args.pop().unwrap();
+    // This type is always sui::event::EventStreamHead
+    let stream_head_ty = ty_args.pop().unwrap();
 
-    emit_impl(context, ty, event_value, Some(stream_ref))
+    let event_value = args.pop_back().unwrap();
+    let stream_id = args.pop_back().unwrap();
+    let accumulator_id = args.pop_back().unwrap();
+
+    emit_impl(
+        context,
+        event_ty,
+        event_value,
+        Some(StreamRef {
+            accumulator_id,
+            stream_id,
+            stream_head_ty,
+        }),
+    )
+}
+
+struct StreamRef {
+    // The pre-computed id of the accumulator object. This is a hash of
+    // stream_id + ty
+    accumulator_id: Value,
+    // The stream ID (the `stream_id` field of some EventStreamCap)
+    stream_id: Value,
+    // The type of the stream head. Should always be `sui::event::EventStreamHead`
+    stream_head_ty: Type,
 }
 
 fn emit_impl(
     context: &mut NativeContext,
     ty: Type,
     event_value: Value,
-    stream_ref: Option<Value>,
+    stream_ref: Option<StreamRef>,
 ) -> PartialVMResult<NativeResult> {
     let event_emit_cost_params = context
         .extensions_mut()
@@ -148,11 +171,19 @@ fn emit_impl(
 
     let event_idx = obj_runtime.emit_event(ty, *tag, event_value)?;
 
-    if let Some(stream_ref) = stream_ref {
-        let stream_ref_address: AccountAddress = stream_ref.value_as::<AccountAddress>().unwrap();
+    if let Some(StreamRef {
+        accumulator_id,
+        stream_id,
+        stream_head_ty,
+    }) = stream_ref
+    {
+        let stream_id_addr: AccountAddress = stream_id.value_as::<AccountAddress>().unwrap();
+        let accumulator_id: ObjectID = accumulator_id.value_as::<AccountAddress>().unwrap().into();
         obj_runtime.emit_accumulator_event(
+            accumulator_id,
             MoveAccumulatorAction::Merge,
-            stream_ref_address,
+            stream_id_addr,
+            stream_head_ty,
             MoveAccumulatorValue::EventRef(event_idx),
         )?;
     }

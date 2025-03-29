@@ -4,8 +4,8 @@
 use std::str::FromStr;
 
 use anyhow::ensure;
+use fastcrypto::hash::Blake2b256;
 use fastcrypto::hash::HashFunction;
-use fastcrypto::hash::Sha256;
 use move_core_types::account_address::AccountAddress;
 use move_core_types::annotated_value::MoveDatatypeLayout;
 use move_core_types::annotated_value::MoveValue;
@@ -149,7 +149,7 @@ impl Event {
     /// if the same event is emitted multiple times in a transaction, or from one transaction
     /// to another.
     pub fn unique_digest(&self, transaction_digest: TransactionDigest, position: usize) -> Digest {
-        let mut h = Sha256::new();
+        let mut h = Blake2b256::new();
         bcs::serialize_into(&mut h, &(transaction_digest, position, &self)).unwrap();
         let digest = h.finalize();
         Digest::new(digest.digest)
