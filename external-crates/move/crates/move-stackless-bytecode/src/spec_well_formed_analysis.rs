@@ -9,9 +9,9 @@ use crate::{
 
 pub const RESTRICTED_MODULES: [&str; 3] = ["transfer", "event", "emit"];
 
-pub struct ConditionOrderAnalysisProcessor();
+pub struct SpecWellFormedAnalysisProcessor();
 
-impl ConditionOrderAnalysisProcessor {
+impl SpecWellFormedAnalysisProcessor {
 
     pub fn new() -> Box<Self> {
         Box::new(Self())
@@ -207,7 +207,7 @@ impl ConditionOrderAnalysisProcessor {
     }
 }
 
-impl FunctionTargetProcessor for ConditionOrderAnalysisProcessor {
+impl FunctionTargetProcessor for SpecWellFormedAnalysisProcessor {
     fn process(
         &self,
         targets: &mut FunctionTargetsHolder,
