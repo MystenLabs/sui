@@ -11,10 +11,8 @@ use jsonrpsee::RpcModule;
 use metrics::Metrics;
 use metrics::MetricsLayer;
 use prometheus::Registry;
-use sui_core::traffic_controller::metrics::TrafficControllerMetrics;
 use sui_core::traffic_controller::TrafficController;
 use sui_types::traffic_control::PolicyConfig;
-use sui_types::traffic_control::RemoteFirewallConfig;
 use tokio::runtime::Handle;
 use tokio_util::sync::CancellationToken;
 use tower::ServiceBuilder;
@@ -53,8 +51,8 @@ pub struct JsonRpcServerBuilder {
     module: RpcModule<()>,
     rpc_doc: Project,
     registry: Registry,
+    traffic_controller: Option<Arc<TrafficController>>,
     policy_config: Option<PolicyConfig>,
-    firewall_config: Option<RemoteFirewallConfig>,
 }
 
 pub fn sui_rpc_doc(version: &str) -> Project {
@@ -74,15 +72,15 @@ impl JsonRpcServerBuilder {
     pub fn new(
         version: &str,
         prometheus_registry: &Registry,
+        traffic_controller: Option<Arc<TrafficController>>,
         policy_config: Option<PolicyConfig>,
-        firewall_config: Option<RemoteFirewallConfig>,
     ) -> Self {
         Self {
             module: RpcModule::new(()),
             rpc_doc: sui_rpc_doc(version),
             registry: prometheus_registry.clone(),
+            traffic_controller,
             policy_config,
-            firewall_config,
         }
     }
 
@@ -136,14 +134,6 @@ impl JsonRpcServerBuilder {
         let methods_names = module.method_names().collect::<Vec<_>>();
 
         let metrics = Arc::new(Metrics::new(&self.registry, &methods_names));
-        let traffic_controller_metrics = TrafficControllerMetrics::new(&self.registry);
-        let traffic_controller = self.policy_config.clone().map(|policy| {
-            Arc::new(TrafficController::init(
-                policy,
-                traffic_controller_metrics,
-                self.firewall_config.clone(),
-            ))
-        });
         let client_id_source = self
             .policy_config
             .clone()
@@ -163,9 +153,13 @@ impl JsonRpcServerBuilder {
         let (stop_handle, server_handle) = jsonrpsee::server::stop_channel();
         std::mem::forget(server_handle);
 
+        let traffic_controller = self.traffic_controller.clone();
         let rpc_middleware = jsonrpsee::server::middleware::rpc::RpcServiceBuilder::new()
             .layer_fn(move |s| MetricsLayer::new(s, metrics.clone()))
-            .layer_fn(move |s| TrafficControllerService::new(s, traffic_controller.clone()));
+            .layer_fn({
+                let traffic_controller = traffic_controller.clone();
+                move |s| TrafficControllerService::new(s, traffic_controller.clone())
+            });
         let service_builder = jsonrpsee::server::ServerBuilder::new()
             // Since we're not using jsonrpsee's server to actually handle connections this value
             // is instead limiting the number of concurrent requests and has no impact on the
