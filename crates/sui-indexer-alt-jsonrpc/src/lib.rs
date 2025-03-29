@@ -233,6 +233,10 @@ pub struct NodeArgs {
 /// The only exception is the `DelegationCoins` module, which is controlled by `node_args.fullnode_rpc_url`,
 /// which can be omitted to disable reads from this RPC.
 ///
+/// KV queries can optionally be served by a Bigtable instance, if `bigtable_instance` is provided.
+/// Otherwise these requests are served by the database. If a `bigtable_instance` is provided, the
+/// `GOOGLE_APPLICATION_CREDENTIALS` environment variable must point to the credentials JSON file.
+///
 /// Access to writes (executing and dry-running transactions) is controlled by `node_args.fullnode_rpc_url`,
 /// which can be omitted to disable writes from this RPC.
 ///
@@ -240,6 +244,7 @@ pub struct NodeArgs {
 /// and will clean these up on shutdown as well.
 pub async fn start_rpc(
     database_url: Option<Url>,
+    bigtable_instance: Option<String>,
     db_args: DbArgs,
     rpc_args: RpcArgs,
     node_args: NodeArgs,
@@ -254,6 +259,7 @@ pub async fn start_rpc(
 
     let context = Context::new(
         database_url,
+        bigtable_instance,
         db_args,
         rpc_config,
         rpc.metrics(),
