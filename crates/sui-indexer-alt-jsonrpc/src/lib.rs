@@ -81,6 +81,13 @@ pub struct RpcService {
     slow_request_threshold: Duration,
 }
 
+impl RpcArgs {
+    /// Requests that take longer than this should be logged for debugging.
+    fn slow_request_threshold(&self) -> Duration {
+        Duration::from_millis(self.slow_request_threshold_ms)
+    }
+}
+
 impl RpcService {
     /// Create a new instance of the JSON-RPC service, configured by `rpc_args`. The service will
     /// not accept connections until [Self::run] is called.
@@ -241,7 +248,8 @@ pub async fn start_rpc(
     registry: &Registry,
     cancel: CancellationToken,
 ) -> anyhow::Result<JoinHandle<()>> {
-    let mut rpc = RpcService::new(rpc_args.clone(), registry, cancel.child_token())
+    let slow_request_threshold = rpc_args.slow_request_threshold();
+    let mut rpc = RpcService::new(rpc_args, registry, cancel.child_token())
         .context("Failed to create RPC service")?;
 
     let context = Context::new(
@@ -249,9 +257,9 @@ pub async fn start_rpc(
         db_args,
         rpc_config,
         rpc.metrics(),
+        slow_request_threshold,
         registry,
         cancel.child_token(),
-        Duration::from_millis(rpc_args.slow_request_threshold_ms),
     )
     .await?;
 
@@ -271,6 +279,7 @@ pub async fn start_rpc(
     rpc.add_module(QueryObjects(context.clone()))?;
     rpc.add_module(QueryTransactions(context.clone()))?;
     rpc.add_module(Transactions(context.clone()))?;
+
     if let Some(fullnode_rpc_url) = node_args.fullnode_rpc_url {
         rpc.add_module(DelegationCoins::new(
             fullnode_rpc_url.clone(),
