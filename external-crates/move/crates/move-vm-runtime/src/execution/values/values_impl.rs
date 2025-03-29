@@ -1107,18 +1107,26 @@ impl Value {
         Value::Struct(Struct::pack_boxed(fields))
     }
 
-    pub fn struct_<I: IntoIterator<Item = Value>>(values: I) -> Self {
+    pub fn struct_(struct_: Struct) -> Self {
+        Value::Struct(struct_)
+    }
+
+    pub fn make_struct<I: IntoIterator<Item = Value>>(values: I) -> Self {
         Value::Struct(Struct::pack(values))
     }
 
-    pub fn variant_boxed<I: IntoIterator<Item = MemBox<Value>>>(
+    pub fn variant(variant: Variant) -> Self {
+        Value::Variant(variant)
+    }
+
+    pub fn make_variant_boxed<I: IntoIterator<Item = MemBox<Value>>>(
         tag: VariantTag,
         values: I,
     ) -> Self {
         Value::Variant(Variant::pack_boxed(tag, values))
     }
 
-    pub fn variant<I: IntoIterator<Item = Value>>(tag: VariantTag, values: I) -> Self {
+    pub fn make_variant<I: IntoIterator<Item = Value>>(tag: VariantTag, values: I) -> Self {
         Value::Variant(Variant::pack(tag, values))
     }
 
@@ -2967,7 +2975,7 @@ impl<'d> serde::de::DeserializeSeed<'d> for SeedWrapper<&MoveStructLayout> {
     ) -> Result<Self::Value, D::Error> {
         let fields = deserializer
             .deserialize_tuple(self.layout.0.len(), StructFieldVisitor(&self.layout.0))?;
-        Ok(Value::struct_(fields))
+        Ok(Value::make_struct(fields))
     }
 }
 

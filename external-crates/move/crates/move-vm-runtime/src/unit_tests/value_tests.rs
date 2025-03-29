@@ -72,7 +72,7 @@ fn struct_borrow_field() -> PartialVMResult<()> {
     let mut heap = MachineHeap::new();
     let mut locals = heap.allocate_stack_frame(vec![], 1)?;
 
-    locals.store_loc(0, Value::struct_(vec![Value::u8(10), Value::bool(false)]))?;
+    locals.store_loc(0, Value::make_struct(vec![Value::u8(10), Value::bool(false)]))?;
     let r: StructRef = VMValueCast::cast(locals.borrow_loc(0)?)?;
 
     {
@@ -99,10 +99,10 @@ fn struct_borrow_nested() -> PartialVMResult<()> {
     let mut locals = heap.allocate_stack_frame(vec![], 1)?;
 
     fn inner(x: u64) -> Value {
-        Value::struct_(vec![Value::u64(x)])
+        Value::make_struct(vec![Value::u64(x)])
     }
     fn outer(x: u64) -> Value {
-        Value::struct_(vec![Value::u8(10), inner(x)])
+        Value::make_struct(vec![Value::u8(10), inner(x)])
     }
 
     locals.store_loc(0, outer(20))?;
@@ -170,7 +170,7 @@ fn legacy_ref_abstract_memory_size_consistency() -> PartialVMResult<()> {
     let r = r.borrow_elem(0, &Type::U8)?;
     assert_eq!(r.legacy_abstract_memory_size(), r.legacy_size());
 
-    locals.store_loc(2, Value::struct_(vec![]))?;
+    locals.store_loc(2, Value::make_struct(vec![]))?;
     let r: Reference = VMValueCast::cast(locals.borrow_loc(2)?)?;
     assert_eq!(r.legacy_abstract_memory_size(), r.legacy_size());
 
@@ -181,7 +181,7 @@ fn legacy_ref_abstract_memory_size_consistency() -> PartialVMResult<()> {
 fn legacy_struct_abstract_memory_size_consistenty() -> PartialVMResult<()> {
     let structs = [
         Struct::pack([]),
-        Struct::pack([Value::struct_(vec![Value::u8(0), Value::u64(0)])]),
+        Struct::pack([Value::make_struct(vec![Value::u8(0), Value::u64(0)])]),
     ];
 
     for s in &structs {
@@ -208,8 +208,8 @@ fn legacy_val_abstract_memory_size_consistency() -> PartialVMResult<()> {
         Value::vector_u64([]),
         Value::vector_u128([1, 2, 3, 4]),
         Value::vector_u256([1, 2, 3, 4].iter().map(|q| U256::from(*q as u64))),
-        Value::struct_([]),
-        Value::struct_([Value::u8(0), Value::bool(false)]),
+        Value::make_struct([]),
+        Value::make_struct([Value::u8(0), Value::bool(false)]),
         Value::vector_for_testing_only([]),
         Value::vector_for_testing_only([Value::u8(0), Value::u8(1)]),
     ];

@@ -47,9 +47,9 @@ fn native_get(
     );
 
     // make a std::string::String
-    let string_val = Value::struct_(vec![Value::vector_u8(type_name.as_bytes().to_vec())]);
+    let string_val = Value::make_struct(vec![Value::vector_u8(type_name.as_bytes().to_vec())]);
     // make a std::type_name::TypeName
-    let type_name_val = Value::struct_(vec![string_val]);
+    let type_name_val = Value::make_struct(vec![string_val]);
 
     Ok(NativeResult::ok(
         context.gas_used(),

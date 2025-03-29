@@ -520,7 +520,7 @@ fn op_step_impl(
             check_depth_of_type(run_context, &struct_type)?;
             gas_meter.charge_pack(false, state.last_n_operands(field_count as usize)?)?;
             let args = state.pop_n_operands(field_count)?;
-            state.push_operand(Value::struct_(args))?;
+            state.push_operand(Value::make_struct(args))?;
         }
         Bytecode::PackGeneric(struct_inst_ptr) => {
             let field_count = struct_inst_ptr.field_count;
@@ -529,7 +529,7 @@ fn op_step_impl(
             check_depth_of_type(run_context, &ty)?;
             gas_meter.charge_pack(true, state.last_n_operands(field_count as usize)?)?;
             let args = state.pop_n_operands(field_count)?;
-            state.push_operand(Value::struct_(args))?;
+            state.push_operand(Value::make_struct(args))?;
         }
         Bytecode::Unpack(_struct_ptr) => {
             let struct_ = state.pop_operand_as::<Struct>()?;
@@ -776,7 +776,7 @@ fn op_step_impl(
             check_depth_of_type(run_context, &enum_type)?;
             gas_meter.charge_pack(false, state.last_n_operands(field_count)?)?;
             let args = state.pop_n_operands(field_count as u16)?;
-            state.push_operand(Value::variant(variant_def_ptr.variant_tag, args))?;
+            state.push_operand(Value::make_variant(variant_def_ptr.variant_tag, args))?;
         }
         Bytecode::PackVariantGeneric(vinst_ptr) => {
             let variant = &vinst_ptr.variant;
@@ -785,7 +785,7 @@ fn op_step_impl(
             check_depth_of_type(run_context, &ty)?;
             gas_meter.charge_pack(true, state.last_n_operands(field_count)?)?;
             let args = state.pop_n_operands(field_count as u16)?;
-            state.push_operand(Value::variant(variant_tag, args))?;
+            state.push_operand(Value::make_variant(variant_tag, args))?;
         }
         Bytecode::UnpackVariant(variant_ptr) => {
             let variant = state.pop_operand_as::<Variant>()?;
