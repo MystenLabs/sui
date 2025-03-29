@@ -114,16 +114,16 @@ impl Connection<'_> {
     {
         let query = query.limit(1);
         let query_debug = diesel::debug_query(&query).to_string();
-        debug!("{}", query_debug);
-        let timer = self.metrics.db_latency.start_timer();
+        debug!("{query_debug}");
 
+        let timer = self.metrics.db_latency.start_timer();
         let res = query.get_result(&mut self.conn).await;
-        let elapsed_seconds = timer.stop_and_record();
-        let threshold_seconds = self.slow_query_threshold.as_secs() as f64;
-        if elapsed_seconds > threshold_seconds {
+        let elapsed_ms = timer.stop_and_record() * 1000.0;
+        let threshold_ms = self.slow_query_threshold.as_millis() as f64;
+        if elapsed_ms > threshold_ms {
             warn!(
-                elapsed_seconds,
-                threshold_seconds,
+                elapsed_ms,
+                threshold_ms,
                 query = query_debug,
                 "Slow database query detected!",
             );
@@ -147,17 +147,17 @@ impl Connection<'_> {
         ST: 'static,
     {
         let query_debug = diesel::debug_query(&query).to_string();
-        debug!("{}", query_debug);
-        let timer = self.metrics.db_latency.start_timer();
+        debug!("{query_debug}");
 
+        let timer = self.metrics.db_latency.start_timer();
         let res = query.get_results(&mut self.conn).await;
-        let elapsed_seconds = timer.stop_and_record();
-        let threshold_seconds = self.slow_query_threshold.as_secs() as f64;
-        if elapsed_seconds > threshold_seconds {
+        let elapsed_ms = timer.stop_and_record() * 1000.0;
+        let threshold_ms = self.slow_query_threshold.as_millis() as f64;
+        if elapsed_ms > threshold_ms {
             warn!(
-                elapsed_seconds,
+                elapsed_ms,
+                threshold_ms,
                 query = query_debug,
-                threshold_seconds,
                 "Slow database query detected!",
             );
         }

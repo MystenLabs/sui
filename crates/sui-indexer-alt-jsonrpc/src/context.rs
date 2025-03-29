@@ -58,9 +58,9 @@ impl Context {
         db_args: DbArgs,
         config: RpcConfig,
         metrics: Arc<RpcMetrics>,
+        slow_request_threshold: Duration,
         registry: &Registry,
         cancel: CancellationToken,
-        slow_request_threshold: Duration,
     ) -> Result<Self, Error> {
         let pg_reader = PgReader::new(
             database_url,
