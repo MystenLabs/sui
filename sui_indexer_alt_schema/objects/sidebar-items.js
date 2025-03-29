@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["StoredCoinOwnerKind","StoredOwnerKind"],"struct":["StoredCoinBalanceBucket","StoredObjInfo","StoredObjInfoTemp","StoredObjVersion","StoredObjVersionKey","StoredObject"]};

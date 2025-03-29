@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["set_up","set_up_on_mvr_mode","set_up_with_start_and_end_checkpoints","start_indexer_jsonrpc_for_testing","start_indexer_writer_for_testing","start_indexer_writer_for_testing_with_mvr_mode","wait_for_checkpoint","wait_for_objects_snapshot"],"struct":["SuiTransactionBlockResponseBuilder"]};

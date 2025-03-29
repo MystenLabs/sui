@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["CommitterTables","ObjectsSnapshotHandlerTables"],"mod":["checkpoint_handler","committer","objects_snapshot_handler","pruner","tx_processor"],"struct":["CheckpointDataToCommit","CommitterTablesIter","CommitterWatermark","CommonHandler","EpochToCommit","ObjectsSnapshotHandlerTablesIter","TransactionObjectChangesToCommit"],"trait":["Handler"]};
