@@ -134,10 +134,12 @@ impl Event {
         db: &Db,
         page: Page<Cursor>,
         filter: EventFilter,
+        tx_lo: u64,
         checkpoint_viewed_at: u64,
     ) -> Result<Connection<String, Event>, Error> {
         let cursor_viewed_at = page.validate_cursor_consistency()?;
         let checkpoint_viewed_at = cursor_viewed_at.unwrap_or(checkpoint_viewed_at);
+        let tx_lo = tx_lo as i64;
 
         // Construct tx and ev sequence number query with table-relevant filters, if they exist. The
         // resulting query will look something like `SELECT tx_sequence_number,
@@ -159,6 +161,8 @@ impl Event {
         use checkpoints::dsl;
         let (prev, next, results) = db
             .execute(move |conn| async move {
+                // Get the tx_hi per checkpoint_viewed_at, which is either from watermarks or from
+                // the cursor if the latter is provided.
                 let tx_hi: i64 = conn.first(move || {
                     dsl::checkpoints.select(dsl::network_total_transactions)
                         .filter(dsl::sequence_number.eq(checkpoint_viewed_at as i64))
@@ -166,7 +170,7 @@ impl Event {
 
                 let (prev, next, mut events): (bool, bool, Vec<StoredEvent>) =
                     if let Some(filter_query) =  query_constraint {
-                        let query = add_bounds(filter_query, &filter.transaction_digest, &page, tx_hi);
+                        let query = add_bounds(filter_query, &filter.transaction_digest, &page, tx_lo, tx_hi);
 
                         let (prev, next, results) =
                             page.paginate_raw_query::<EvLookup>(conn, checkpoint_viewed_at, query).await?;
@@ -200,7 +204,7 @@ impl Event {
                     } else {
                         // No filter is provided so we add bounds to the basic `SELECT * FROM
                         // events` query and call it a day.
-                        let query = add_bounds(query!("SELECT * FROM events"), &filter.transaction_digest, &page, tx_hi);
+                        let query = add_bounds(query!("SELECT * FROM events"), &filter.transaction_digest, &page, tx_lo, tx_hi);
                         let (prev, next, events_iter) = page.paginate_raw_query::<StoredEvent>(conn, checkpoint_viewed_at, query).await?;
                         let events = events_iter.collect::<Vec<StoredEvent>>();
                         (prev, next, events)
