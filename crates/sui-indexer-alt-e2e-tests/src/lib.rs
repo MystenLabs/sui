@@ -288,6 +288,7 @@ impl OffchainCluster {
 
         let jsonrpc = start_rpc(
             Some(database_url.clone()),
+            None,
             DbArgs::default(),
             rpc_args,
             NodeArgs::default(),
