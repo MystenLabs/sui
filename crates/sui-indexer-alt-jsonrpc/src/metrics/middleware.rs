@@ -47,7 +47,7 @@ pin_project! {
         method: Cow<'a, str>,
         // RPC request params for logging
         params: Option<Cow<'a, RawValue>>,
-        // Threshold in ms for logging slow requests
+        // Threshold for logging slow requests
         slow_request_threshold: Duration,
         #[pin]
         inner: F,
