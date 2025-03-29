@@ -332,7 +332,7 @@ mod tests {
     }
 
     fn page() -> PaginationConfig {
-        PaginationConfig::new(small_page(), Default::default())
+        PaginationConfig::new(10, small_page(), Default::default())
     }
 
     fn small_page() -> PageLimits {
@@ -653,6 +653,9 @@ mod tests {
                   "column": 13
                 }
               ],
+              "path": [
+                "tx"
+              ],
               "extensions": {
                 "code": "GRAPHQL_VALIDATION_FAILED"
               }
@@ -728,7 +731,7 @@ mod tests {
                 max_query_depth: 10,
                 ..config()
             },
-            PaginationConfig::new(big_page(), Default::default()),
+            PaginationConfig::new(10, big_page(), Default::default()),
         );
 
         let response = execute(&schema, "{ p { nodes { a { b { c { z } } } } } }").await;
@@ -749,7 +752,8 @@ mod tests {
                 "p",
                 "nodes",
                 "a",
-                "b"
+                "b",
+                "c"
               ],
               "extensions": {
                 "code": "GRAPHQL_VALIDATION_FAILED"
@@ -770,12 +774,15 @@ mod tests {
           "data": null,
           "errors": [
             {
-              "message": "Query is estimated to produce over 1000 output nodes. Try fetching fewer fields or fetching fewer items per page in paginated or multi-get fields.",
+              "message": "Page size is too large: 9999999999 > 10",
               "locations": [
                 {
                   "line": 1,
                   "column": 3
                 }
+              ],
+              "path": [
+                "p"
               ],
               "extensions": {
                 "code": "GRAPHQL_VALIDATION_FAILED"
@@ -817,6 +824,7 @@ mod tests {
     #[tokio::test]
     async fn test_output_page_default() {
         let pagination = PaginationConfig::new(
+            10,
             small_page(),
             BTreeMap::from_iter([(("Query", "q"), big_page())]),
         );
@@ -829,6 +837,7 @@ mod tests {
     #[tokio::test]
     async fn test_output_page_override() {
         let pagination = PaginationConfig::new(
+            10,
             small_page(),
             BTreeMap::from_iter([(("Query", "q"), big_page())]),
         );
@@ -1039,6 +1048,7 @@ mod tests {
         let schema = schema(
             config(),
             PaginationConfig::new(
+                10,
                 small_page(),
                 BTreeMap::from_iter([(("Query", "p"), big_page())]),
             ),
@@ -1065,6 +1075,9 @@ mod tests {
                   "column": 3
                 }
               ],
+              "path": [
+                "q"
+              ],
               "extensions": {
                 "code": "GRAPHQL_VALIDATION_FAILED"
               }
@@ -1079,6 +1092,7 @@ mod tests {
         let schema = schema(
             config(),
             PaginationConfig::new(
+                10,
                 small_page(),
                 BTreeMap::from_iter([(("Query", "p"), big_page())]),
             ),
@@ -1094,5 +1108,42 @@ mod tests {
         .await;
 
         assert_snapshot!(response.extensions.get("usage").unwrap(), @"{input: {nodes: 3,depth: 3},payload: {query_payload_size: 32,tx_payload_size: 0},output: {nodes: 24}}");
+    }
+
+    #[tokio::test]
+    async fn test_output_max_multi_get_size_exceeded() {
+        let schema = schema(
+            config(),
+            PaginationConfig::new(4, small_page(), Default::default()),
+        );
+
+        let response = execute(
+            &schema,
+            r#"{ multiGetQ(keys: ["a", "b", "c", "d", "e"]) { z } }"#,
+        )
+        .await;
+
+        assert_json_snapshot!(response, @r###"
+        {
+          "data": null,
+          "errors": [
+            {
+              "message": "Too many keys supplied to multi-get: 5 > 4",
+              "locations": [
+                {
+                  "line": 1,
+                  "column": 3
+                }
+              ],
+              "path": [
+                "multiGetQ"
+              ],
+              "extensions": {
+                "code": "GRAPHQL_VALIDATION_FAILED"
+              }
+            }
+          ]
+        }
+        "###);
     }
 }

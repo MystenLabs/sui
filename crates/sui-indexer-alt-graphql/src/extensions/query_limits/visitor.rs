@@ -114,10 +114,7 @@ impl<'r> FieldDriver<'_, 'r> {
     ) -> Result<(), Error> {
         self.driver.visit_selection_set(
             &self.meta_field.ty,
-            Some(Chain::new(
-                self.chain.clone(),
-                self.field.node.name.node.clone(),
-            )),
+            self.chain.clone(),
             &self.field.node.selection_set,
             visitor,
         )
@@ -193,7 +190,7 @@ impl<'r> Driver<'r> {
 
                     visitor.visit_field(&FieldDriver {
                         driver: self,
-                        chain: chain.clone(),
+                        chain: Some(Chain::new(chain.clone(), name.clone())),
                         meta_type,
                         meta_field,
                         field,
