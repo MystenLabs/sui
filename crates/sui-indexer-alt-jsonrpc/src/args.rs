@@ -27,6 +27,11 @@ pub enum Command {
         )]
         database_url: Url,
 
+        /// Bigtable instance ID to make KV store requests to. If this is not provided, KV store
+        /// requests will be made to the database.
+        #[clap(long)]
+        bigtable_instance: Option<String>,
+
         #[command(flatten)]
         db_args: DbArgs,
 
