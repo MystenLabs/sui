@@ -9,7 +9,7 @@ use std::{
 use async_graphql::dataloader::Loader;
 use diesel::{ExpressionMethods, QueryDsl};
 use sui_indexer_alt_schema::{schema::kv_transactions, transactions::StoredTransaction};
-use sui_kvstore::{KeyValueStoreReader, TransactionData as KVTransactionData};
+use sui_kvstore::TransactionData;
 use sui_types::digests::TransactionDigest;
 
 use crate::data::error::Error;
@@ -60,25 +60,21 @@ impl Loader<TransactionKey> for PgReader {
 
 #[async_trait::async_trait]
 impl Loader<TransactionKey> for BigtableReader {
-    type Value = KVTransactionData;
+    type Value = TransactionData;
     type Error = Arc<Error>;
 
     async fn load(
         &self,
         keys: &[TransactionKey],
     ) -> Result<HashMap<TransactionKey, Self::Value>, Self::Error> {
+        if keys.is_empty() {
+            return Ok(HashMap::new());
+        }
+
         let digests: Vec<_> = keys.iter().map(|k| k.0).collect();
-
-        let transactions = self
-            .timed_load(
-                "get_transactions",
-                &digests,
-                self.0.clone().get_transactions(&digests),
-            )
-            .await
-            .map_err(|e| Arc::new(Error::BigtableRead(e)))?;
-
-        Ok(transactions
+        Ok(self
+            .transactions(&digests)
+            .await?
             .into_iter()
             .map(|t| (TransactionKey(*t.transaction.digest()), t))
             .collect())
