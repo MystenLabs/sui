@@ -8,6 +8,9 @@ info:
 error[E04017]: too many arguments
    ┌─ tests/move_check/typing/module_call_wrong_arity.move:27:9
    │
+ 5 │     public fun foo(): u64 { 0 }
+   │                --- Expected 0 argument(s)
+   ·
 27 │         X::foo(1);
    │         ^^^^^^^^^
    │         │     │
@@ -17,6 +20,9 @@ error[E04017]: too many arguments
 error[E04017]: too many arguments
    ┌─ tests/move_check/typing/module_call_wrong_arity.move:28:9
    │
+ 5 │     public fun foo(): u64 { 0 }
+   │                --- Expected 0 argument(s)
+   ·
 28 │         X::foo(1, 2);
    │         ^^^^^^^^^^^^
    │         │     │
@@ -26,6 +32,9 @@ error[E04017]: too many arguments
 error[E04016]: too few arguments
    ┌─ tests/move_check/typing/module_call_wrong_arity.move:29:9
    │
+ 6 │     public fun bar(x: u64): (address, u64) {
+   │                --- Expected 1 argument(s)
+   ·
 29 │         X::bar();
    │         ^^^^^^^^
    │         │     │
@@ -35,6 +44,9 @@ error[E04016]: too few arguments
 error[E04017]: too many arguments
    ┌─ tests/move_check/typing/module_call_wrong_arity.move:30:9
    │
+ 6 │     public fun bar(x: u64): (address, u64) {
+   │                --- Expected 1 argument(s)
+   ·
 30 │         X::bar(1, 2);
    │         ^^^^^^^^^^^^
    │         │     │
@@ -44,6 +56,9 @@ error[E04017]: too many arguments
 error[E04016]: too few arguments
    ┌─ tests/move_check/typing/module_call_wrong_arity.move:31:9
    │
+ 9 │     public fun baz<T1, T2>(a: T1, x: T2): (bool, T1, T2) {
+   │                --- Expected 2 argument(s)
+   ·
 31 │         X::baz<u64, u64>();
    │         ^^^^^^^^^^^^^^^^^^
    │         │               │
@@ -53,6 +68,9 @@ error[E04016]: too few arguments
 error[E04016]: too few arguments
    ┌─ tests/move_check/typing/module_call_wrong_arity.move:32:9
    │
+ 9 │     public fun baz<T1, T2>(a: T1, x: T2): (bool, T1, T2) {
+   │                --- Expected 2 argument(s)
+   ·
 32 │         X::baz<u64, u64>(1);
    │         ^^^^^^^^^^^^^^^^^^^
    │         │               │
@@ -62,6 +80,9 @@ error[E04016]: too few arguments
 error[E04017]: too many arguments
    ┌─ tests/move_check/typing/module_call_wrong_arity.move:33:9
    │
+ 9 │     public fun baz<T1, T2>(a: T1, x: T2): (bool, T1, T2) {
+   │                --- Expected 2 argument(s)
+   ·
 33 │         X::baz(1, 2, 3);
    │         ^^^^^^^^^^^^^^^
    │         │     │
@@ -71,6 +92,9 @@ error[E04017]: too many arguments
 error[E04017]: too many arguments
    ┌─ tests/move_check/typing/module_call_wrong_arity.move:37:9
    │
+18 │     fun foo(): u64 { 0 }
+   │         --- Expected 0 argument(s)
+   ·
 37 │         foo(1);
    │         ^^^^^^
    │         │  │
@@ -80,6 +104,9 @@ error[E04017]: too many arguments
 error[E04017]: too many arguments
    ┌─ tests/move_check/typing/module_call_wrong_arity.move:38:9
    │
+18 │     fun foo(): u64 { 0 }
+   │         --- Expected 0 argument(s)
+   ·
 38 │         foo(1, 2);
    │         ^^^^^^^^^
    │         │  │
@@ -89,6 +116,9 @@ error[E04017]: too many arguments
 error[E04016]: too few arguments
    ┌─ tests/move_check/typing/module_call_wrong_arity.move:39:9
    │
+19 │     fun bar(x: u64): (address, u64) {
+   │         --- Expected 1 argument(s)
+   ·
 39 │         bar();
    │         ^^^^^
    │         │  │
@@ -98,6 +128,9 @@ error[E04016]: too few arguments
 error[E04017]: too many arguments
    ┌─ tests/move_check/typing/module_call_wrong_arity.move:40:9
    │
+19 │     fun bar(x: u64): (address, u64) {
+   │         --- Expected 1 argument(s)
+   ·
 40 │         bar(1, 2);
    │         ^^^^^^^^^
    │         │  │
@@ -107,6 +140,9 @@ error[E04017]: too many arguments
 error[E04016]: too few arguments
    ┌─ tests/move_check/typing/module_call_wrong_arity.move:41:9
    │
+22 │     fun baz<T1, T2>(a: T1, x: T2): (bool, T1, T2) {
+   │         --- Expected 2 argument(s)
+   ·
 41 │         baz<u64, u64>();
    │         ^^^^^^^^^^^^^^^
    │         │            │
@@ -116,6 +152,9 @@ error[E04016]: too few arguments
 error[E04016]: too few arguments
    ┌─ tests/move_check/typing/module_call_wrong_arity.move:42:9
    │
+22 │     fun baz<T1, T2>(a: T1, x: T2): (bool, T1, T2) {
+   │         --- Expected 2 argument(s)
+   ·
 42 │         baz<u64, u64>(1);
    │         ^^^^^^^^^^^^^^^^
    │         │            │
@@ -125,6 +164,9 @@ error[E04016]: too few arguments
 error[E04017]: too many arguments
    ┌─ tests/move_check/typing/module_call_wrong_arity.move:43:9
    │
+22 │     fun baz<T1, T2>(a: T1, x: T2): (bool, T1, T2) {
+   │         --- Expected 2 argument(s)
+   ·
 43 │         baz(1, 2, 3);
    │         ^^^^^^^^^^^^
    │         │  │

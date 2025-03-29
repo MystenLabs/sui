@@ -4027,6 +4027,7 @@ fn module_call_impl(
         context,
         loc,
         || format!("Invalid call of '{}::{}'", &m, &f),
+        Some(declared),
         parameters.len(),
         argloc,
         args,
@@ -4238,6 +4239,7 @@ fn builtin_call(
         context,
         loc,
         || format!("Invalid call of '{}'", &b_),
+        None,
         params_ty.len(),
         argloc,
         args,
@@ -4280,7 +4282,7 @@ fn syntax_call_return_ty(
     let arg_tys = {
         let msg = || format!("Invalid call of '{}::{}'", &m, &f);
         let arity = parameters.len();
-        make_arg_types(context, loc, msg, arity, argloc, tys)
+        make_arg_types(context, loc, msg, Some(declared), arity, argloc, tys)
     };
     assert!(arg_tys.len() == parameters.len());
     let mut valid = true;
@@ -4334,6 +4336,7 @@ fn vector_pack(
         context,
         eloc,
         || -> String { panic!("ICE. could not create vector args") },
+        None,
         arity,
         argloc,
         args_,
@@ -4375,13 +4378,14 @@ fn call_args<S: std::fmt::Display, F: Fn() -> S>(
     context: &mut Context,
     loc: Loc,
     msg: F,
+    arity_loc: Option<Loc>,
     arity: usize,
     argloc: Loc,
     mut args: Vec<T::Exp>,
 ) -> (Box<T::Exp>, Vec<Type>) {
     use T::UnannotatedExp_ as TE;
     let tys = args.iter().map(|e| e.ty.clone()).collect();
-    let tys = make_arg_types(context, loc, msg, arity, argloc, tys);
+    let tys = make_arg_types(context, loc, msg, arity_loc, arity, argloc, tys);
     let arg = match args.len() {
         0 => T::exp(
             sp(argloc, Type_::Unit),
@@ -4401,12 +4405,13 @@ fn make_arg_types<S: std::fmt::Display, F: Fn() -> S>(
     context: &mut Context,
     loc: Loc,
     msg: F,
+    arity_loc: Option<Loc>,
     arity: usize,
     argloc: Loc,
     mut given: Vec<Type>,
 ) -> Vec<Type> {
     let given_len = given.len();
-    core::check_call_arity(context, loc, msg, None, arity, argloc, given_len);
+    core::check_call_arity(context, loc, msg, arity_loc, arity, argloc, given_len);
     while given.len() < arity {
         given.push(context.error_type(argloc))
     }

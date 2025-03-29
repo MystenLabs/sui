@@ -8,6 +8,9 @@ info:
 error[E04017]: too many arguments
    ┌─ tests/move_check/borrows/unused_ref.move:28:5
    │
+19 │ fun borrow<K: copy + drop + store, V: store>(_x: &X, _k: K): &V {
+   │     ------ Expected 2 argument(s)
+   ·
 28 │     borrow<u64, u64>(&mut x, 0, 0);
    │     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
    │     │               │
