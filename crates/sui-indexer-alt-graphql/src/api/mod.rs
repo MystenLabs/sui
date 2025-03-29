@@ -2,4 +2,5 @@
 // SPDX-License-Identifier: Apache-2.0
 
 pub(crate) mod query;
-pub(crate) mod service_config;
+pub(crate) mod scalars;
+pub(crate) mod types;

@@ -2,31 +2,73 @@
 
 
 
+"""
+An Object on Sui is either a typed value (a Move Object) or a Package (modules containing functions and types).
+
+Every object on Sui is identified by a unique address, and has a version number that increases with every modification. Objects also hold metadata detailing their current owner (who can sign for access to the object and whether that access can modify and/or delete the object), and the digest of the last transaction that modified the object.
+"""
+type Object {
+	"""
+	The Object's ID.
+	"""
+	address: SuiAddress!
+	"""
+	The version of this object that this content comes from.
+	"""
+	version: UInt53!
+	"""
+	32-byte hash that identifies the object's contents, encoded in Base58.
+	"""
+	digest: String!
+}
+
+"""
+Identifies a specific version of an object.
+"""
+input ObjectKey {
+	address: SuiAddress!
+	version: UInt53!
+}
+
 type Query {
+	"""
+	Fetch objects by their addresses and versions.
+	
+	Returns a list of objects that is guaranteed to be the same length as `keys`. If an object in `keys` could not be found in the store, its corresponding entry in the result will be `null`. This could be because the object never existed, or because it was pruned.
+	"""
+	multiGetObjects(keys: [ObjectKey!]!): [Object]!
+	"""
+	Fetch transactions by their digests.
+	
+	Returns a list of transactions that is guaranteed to be the same length as `keys`. If a digest in `keys` could not be found in the store, its corresponding entry in the result will be `null`. This could be because the transaction never existed, or because it was pruned.
+	"""
+	multiGetTransactions(keys: [String!]!): [Transaction]!
+	"""
+	Fetch transaction effects by their transactions' digests.
+	
+	Returns a list of transaction effects that is guaranteed to be the same length as `keys`. If a digest in `keys` could not be found in the store, its corresponding entry in the result will be `null`. This could be because the transaction effects never existed, or because it was pruned.
+	"""
+	multiGetTransactionEffects(keys: [String!]!): [TransactionEffects]!
+	"""
+	Fetch an object by its address and version.
+	"""
+	object(address: SuiAddress!, version: UInt53!): Object
 	"""
 	Configuration for this RPC service.
 	"""
 	serviceConfig: ServiceConfig!
 	"""
-	Test query that always succeeds
+	Fetch a transaction by its digest.
+	
+	Returns `null` if the transaction does not exist in the store, either because it never existed or because it was pruned.
 	"""
-	hello: String!
+	transaction(digest: String!): Transaction
 	"""
-	Test query that always fails
+	Fetch transaction effects by its transaction's digest.
+	
+	Returns `null` if the transaction effects do not exist in the store, either because that transaction was not executed, or it was pruned.
 	"""
-	boom: String!
-	"""
-	Test query that fails with an internal error
-	"""
-	uhOh: String!
-	"""
-	Test query that times out
-	"""
-	tickTock: String!
-	"""
-	Test query that can be used to test simulate nesting.
-	"""
-	dot: Query!
+	transactionEffects(digest: String!): TransactionEffects
 }
 
 type ServiceConfig {
@@ -110,6 +152,38 @@ type ServiceConfig {
 	maxPageSize(type: String!, field: String!): Int
 }
 
+
+"""
+String containing 32 byte hex-encoded address, with a leading '0x'. Leading zeroes can be omitted on input but will always appear in outputs (SuiAddress in output is guaranteed to be 66 characters long).
+"""
+scalar SuiAddress
+
+"""
+Description of a transaction, the unit of activity on Sui.
+"""
+type Transaction {
+	"""
+	A 32-byte hash that uniquely identifies the transaction contents, encoded in Base58.
+	"""
+	digest: String!
+}
+
+"""
+The results of executing a transaction.
+"""
+type TransactionEffects {
+	"""
+	A 32-byte hash that uniquely identifies the transaction contents, encoded in Base58.
+	
+	Note that this is different from the execution digest, which is the unique hash of the transaction effects.
+	"""
+	digest: String!
+}
+
+"""
+An unsigned integer that can hold values up to 2^53 - 1. This can be treated similarly to `Int`, but it is guaranteed to be non-negative, and it may be larger than 2^32 - 1.
+"""
+scalar UInt53
 
 directive @include(if: Boolean!) on FIELD | FRAGMENT_SPREAD | INLINE_FRAGMENT
 directive @skip(if: Boolean!) on FIELD | FRAGMENT_SPREAD | INLINE_FRAGMENT

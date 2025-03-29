@@ -1,6 +1,8 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+#![allow(dead_code)] // TODO: Remove once we have a user error.
+
 use std::{convert::Infallible, time::Duration};
 
 use async_graphql::{ErrorExtensionValues, ErrorExtensions, Response, Value};
