@@ -1,13 +1,10 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-pub use crate::pipeline::sequential::Handler as SequentialHandler;
 use async_trait::async_trait;
 use chrono::{DateTime, Utc};
 use scoped_futures::ScopedBoxFuture;
 use std::time::Duration;
-
-pub use scoped_futures;
 
 /// Represents a database connection that can manage watermarks for pipeline operations in the
 /// framework.
@@ -61,7 +58,7 @@ pub trait DbConnection: Send + Sync {
         &mut self,
         pipeline: &'static str,
         delay: Duration,
-    ) -> anyhow::Result<Option<PrunerWatermark>>; // (pruner_hi, reader_lo, wait_for_ms)
+    ) -> anyhow::Result<Option<PrunerWatermark>>;
 
     /// Update the pruner watermark, returns true if the watermark was actually updated
     async fn set_pruner_watermark(
@@ -84,8 +81,6 @@ pub trait Store: Send + Sync + 'static + Clone {
 
     async fn connect<'c>(&'c self) -> Result<Self::Connection<'c>, anyhow::Error>;
 }
-
-pub type HandlerBatch<H> = <H as SequentialHandler>::Batch;
 
 /// Extends the Store trait with transactional capabilities.
 ///
@@ -136,23 +131,22 @@ pub struct PrunerWatermark {
 }
 
 impl CommitterWatermark {
-    pub(crate) fn timestamp(&self) -> DateTime<Utc> {
+    pub fn timestamp(&self) -> DateTime<Utc> {
         DateTime::from_timestamp_millis(self.timestamp_ms_hi_inclusive).unwrap_or_default()
     }
 
-    #[cfg(test)]
-    pub(crate) fn new_for_testing(checkpoint_hi_inclusive: u64) -> Self {
+    /// Convenience function for testing, instantiates a CommitterWatermark with the given
+    /// `checkpoint_hi_inclusive` and sets all other values to 0.
+    pub fn new_for_testing(checkpoint_hi_inclusive: u64) -> Self {
         CommitterWatermark {
-            epoch_hi_inclusive: 0,
             checkpoint_hi_inclusive: checkpoint_hi_inclusive as i64,
-            tx_hi: 0,
-            timestamp_ms_hi_inclusive: 0,
+            ..Default::default()
         }
     }
 }
 
 impl PrunerWatermark {
-    pub(crate) fn wait_for(&self) -> Option<Duration> {
+    pub fn wait_for(&self) -> Option<Duration> {
         (self.wait_for > 0).then(|| Duration::from_millis(self.wait_for as u64))
     }
 
@@ -160,7 +154,7 @@ impl PrunerWatermark {
     /// If no more checkpoints to prune, returns `None`.
     /// Otherwise, returns a tuple (from, to_exclusive) where `from` is inclusive and `to_exclusive` is exclusive.
     /// Advance the watermark as well.
-    pub(crate) fn next_chunk(&mut self, size: u64) -> Option<(u64, u64)> {
+    pub fn next_chunk(&mut self, size: u64) -> Option<(u64, u64)> {
         if self.pruner_hi >= self.reader_lo {
             return None;
         }

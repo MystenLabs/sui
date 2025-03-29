@@ -182,9 +182,9 @@ mod tests {
     use crate::db::Db;
     use crate::pipeline::concurrent::{self, ConcurrentConfig};
     use crate::pipeline::Processor;
-    use crate::store::Store;
     use crate::types::full_checkpoint_content::CheckpointData;
     use crate::FieldCount;
+    use sui_indexer_alt_framework_store::store::Store;
 
     use super::*;
 
