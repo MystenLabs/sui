@@ -33,6 +33,7 @@ pub use sui_indexer_alt_framework_store::store;
 // TODO (wlmyng)
 // #[cfg(feature = "postgres")]
 // pub use sui_indexer_alt_framework_store::pg_store;
+pub use sui_indexer_alt_framework_store::schema;
 pub use sui_pg_db as db;
 pub use sui_sql_macro::sql;
 pub use sui_types as types;
@@ -42,7 +43,6 @@ pub mod cluster;
 pub mod ingestion;
 pub mod metrics;
 pub mod pipeline;
-pub mod schema;
 pub mod task;
 
 // TODO (wlmyng)
