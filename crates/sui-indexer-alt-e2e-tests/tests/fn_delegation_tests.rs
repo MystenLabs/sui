@@ -63,6 +63,7 @@ impl FnDelegationTestCluster {
 
         let rpc_handle = start_rpc(
             None,
+            None,
             DbArgs::default(),
             rpc_args,
             NodeArgs {

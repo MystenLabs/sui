@@ -32,9 +32,6 @@ pub struct RpcConfig {
     /// including transaction execution, dry-running, and delegation coin queries etc.
     pub node: NodeConfig,
 
-    /// Configuration for bigtable kv store, if it is used.
-    pub bigtable: Option<BigtableConfig>,
-
     /// Configuring limits for the package resolver.
     pub package_resolver: sui_package_resolver::Limits,
 }
@@ -56,10 +53,6 @@ pub struct RpcLayer {
 
     /// Configuration for transaction execution, dry-running, and delegation coin queries etc.
     pub node: NodeLayer,
-
-    /// Configuration for bigtable kv store, if it is used.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub bigtable: Option<BigtableConfig>,
 
     /// Configuring limits for the package resolver.
     pub package_resolver: PackageResolverLayer,
@@ -183,13 +176,6 @@ pub struct NodeLayer {
 }
 
 #[DefaultConfig]
-#[derive(Clone, Default, Debug)]
-pub struct BigtableConfig {
-    /// The instance id of the Bigtable instance to connect to.
-    pub instance_id: String,
-}
-
-#[DefaultConfig]
 #[derive(Clone, Debug)]
 pub struct PackageResolverLayer {
     pub max_type_argument_depth: usize,
@@ -210,7 +196,6 @@ impl RpcLayer {
             transactions: TransactionsConfig::default().into(),
             name_service: NameServiceConfig::default().into(),
             coins: CoinsConfig::default().into(),
-            bigtable: None,
             package_resolver: PackageResolverLayer::default(),
             node: NodeConfig::default().into(),
             extra: Default::default(),
@@ -225,7 +210,6 @@ impl RpcLayer {
             name_service: self.name_service.finish(NameServiceConfig::default()),
             coins: self.coins.finish(CoinsConfig::default()),
             node: self.node.finish(NodeConfig::default()),
-            bigtable: self.bigtable,
             package_resolver: self.package_resolver.finish(),
         }
     }
@@ -330,7 +314,6 @@ impl Default for RpcConfig {
             name_service: NameServiceConfig::default(),
             coins: CoinsConfig::default(),
             node: NodeConfig::default(),
-            bigtable: None,
             package_resolver: PackageResolverLayer::default().finish(),
         }
     }
