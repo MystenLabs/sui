@@ -9,11 +9,12 @@ use diesel::{ExpressionMethods, QueryDsl};
 use diesel_async::RunQueryDsl;
 use sui_indexer_alt_framework::{
     db,
-    models::cp_sequence_numbers::tx_interval,
     pipeline::{concurrent::Handler, Processor},
     types::{effects::TransactionEffectsAPI, full_checkpoint_content::CheckpointData},
 };
 use sui_indexer_alt_schema::{schema::tx_affected_objects, transactions::StoredTxAffectedObject};
+
+use crate::handlers::cp_sequence_numbers::tx_interval;
 
 pub(crate) struct TxAffectedObjects;
 
@@ -88,10 +89,11 @@ mod tests {
     use super::*;
     use diesel_async::RunQueryDsl;
     use sui_indexer_alt_framework::{
-        handlers::cp_sequence_numbers::CpSequenceNumbers,
         types::test_checkpoint_data_builder::TestCheckpointDataBuilder, Indexer,
     };
     use sui_indexer_alt_schema::MIGRATIONS;
+
+    use crate::handlers::cp_sequence_numbers::CpSequenceNumbers;
 
     async fn get_all_tx_affected_objects(conn: &mut db::Connection<'_>) -> Result<Vec<i64>> {
         Ok(tx_affected_objects::table

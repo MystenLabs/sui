@@ -8,11 +8,12 @@ use diesel::{ExpressionMethods, QueryDsl};
 use diesel_async::RunQueryDsl;
 use sui_indexer_alt_framework::{
     db,
-    models::cp_sequence_numbers::tx_interval,
     pipeline::{concurrent::Handler, Processor},
     types::full_checkpoint_content::CheckpointData,
 };
 use sui_indexer_alt_schema::{events::StoredEvStructInst, schema::ev_struct_inst};
+
+use crate::handlers::cp_sequence_numbers::tx_interval;
 
 pub(crate) struct EvStructInst;
 
@@ -88,11 +89,12 @@ mod tests {
     use super::*;
     use diesel_async::RunQueryDsl;
     use sui_indexer_alt_framework::{
-        handlers::cp_sequence_numbers::CpSequenceNumbers,
         types::{event::Event, test_checkpoint_data_builder::TestCheckpointDataBuilder},
         Indexer,
     };
     use sui_indexer_alt_schema::MIGRATIONS;
+
+    use crate::handlers::cp_sequence_numbers::CpSequenceNumbers;
 
     async fn get_all_ev_struct_inst(
         conn: &mut db::Connection<'_>,

@@ -9,7 +9,6 @@ use diesel::{ExpressionMethods, QueryDsl};
 use diesel_async::RunQueryDsl;
 use sui_indexer_alt_framework::{
     db,
-    models::cp_sequence_numbers::epoch_interval,
     pipeline::{concurrent::Handler, Processor},
     types::{
         event::SystemEpochInfoEvent,
@@ -18,6 +17,8 @@ use sui_indexer_alt_framework::{
     },
 };
 use sui_indexer_alt_schema::{epochs::StoredEpochEnd, schema::kv_epoch_ends};
+
+use crate::handlers::cp_sequence_numbers::epoch_interval;
 
 pub(crate) struct KvEpochEnds;
 
@@ -156,10 +157,11 @@ mod tests {
     use super::*;
     use anyhow::Result;
     use sui_indexer_alt_framework::{
-        db::Connection, handlers::cp_sequence_numbers::CpSequenceNumbers,
-        types::test_checkpoint_data_builder::TestCheckpointDataBuilder, Indexer,
+        db::Connection, types::test_checkpoint_data_builder::TestCheckpointDataBuilder, Indexer,
     };
     use sui_indexer_alt_schema::MIGRATIONS;
+
+    use crate::handlers::cp_sequence_numbers::CpSequenceNumbers;
 
     async fn get_all_kv_epoch_ends(conn: &mut Connection<'_>) -> Result<Vec<StoredEpochEnd>> {
         let result = kv_epoch_ends::table
