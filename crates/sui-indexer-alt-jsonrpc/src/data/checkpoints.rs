@@ -9,10 +9,9 @@ use std::{
 use async_graphql::dataloader::Loader;
 use diesel::{ExpressionMethods, QueryDsl};
 use sui_indexer_alt_schema::{checkpoints::StoredCheckpoint, schema::kv_checkpoints};
-use sui_kvstore::KeyValueStoreReader;
 use sui_types::{
     crypto::AuthorityQuorumSignInfo,
-    messages_checkpoint::{CheckpointContents, CheckpointSequenceNumber, CheckpointSummary},
+    messages_checkpoint::{CheckpointContents, CheckpointSummary},
 };
 
 use super::{bigtable_reader::BigtableReader, error::Error, pg_reader::PgReader};
@@ -68,18 +67,11 @@ impl Loader<CheckpointKey> for BigtableReader {
             return Ok(HashMap::new());
         }
 
-        let checkpoint_keys: Vec<CheckpointSequenceNumber> = keys.iter().map(|k| k.0).collect();
+        let checkpoint_keys: Vec<_> = keys.iter().map(|k| k.0).collect();
 
-        let checkpoints = self
-            .timed_load(
-                "get_checkpoints",
-                &checkpoint_keys,
-                self.0.clone().get_checkpoints(&checkpoint_keys),
-            )
-            .await
-            .map_err(|e| Arc::new(Error::BigtableRead(e)))?;
-
-        Ok(checkpoints
+        Ok(self
+            .checkpoints(&checkpoint_keys)
+            .await?
             .into_iter()
             .map(|c| {
                 (
