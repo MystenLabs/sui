@@ -1,6 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use anyhow::Context;
 use bootstrap::bootstrap;
 use config::{IndexerConfig, PipelineLayer};
 use handlers::{
@@ -29,7 +30,7 @@ use handlers::{
 };
 use prometheus::Registry;
 use sui_indexer_alt_framework::{
-    db::DbArgs,
+    db::{Db, DbArgs},
     ingestion::{ClientArgs, IngestionConfig},
     pipeline::{
         concurrent::{ConcurrentConfig, PrunerConfig},
@@ -38,6 +39,7 @@ use sui_indexer_alt_framework::{
     },
     Indexer, IndexerArgs,
 };
+use sui_indexer_alt_metrics::db::DbConnectionStatsCollector;
 use sui_indexer_alt_schema::MIGRATIONS;
 use tokio_util::sync::CancellationToken;
 use url::Url;
@@ -63,7 +65,7 @@ pub async fn setup_indexer(
     with_genesis: bool,
     registry: &Registry,
     cancel: CancellationToken,
-) -> anyhow::Result<Indexer> {
+) -> anyhow::Result<Indexer<Db>> {
     let IndexerConfig {
         ingestion,
         consistency,
@@ -107,13 +109,26 @@ pub async fn setup_indexer(
 
     let retry_interval = ingestion.retry_interval();
 
+    // Prepare the store for the indexer
+    let db = Db::for_write(database_url, db_args)
+        .await
+        .context("Failed to connect to database")?;
+
+    // we want to merge &MIGRATIONS with the migrations from the store
+    db.run_migrations(Indexer::<Db>::migrations(Some(&MIGRATIONS)))
+        .await
+        .context("Failed to run pending migrations")?;
+
+    registry.register(Box::new(DbConnectionStatsCollector::new(
+        Some("indexer_db"),
+        db.clone(),
+    )))?;
+
     let mut indexer = Indexer::new(
-        database_url,
-        db_args,
+        db,
         indexer_args,
         client_args,
         ingestion,
-        Some(&MIGRATIONS),
         registry,
         cancel.clone(),
     )
