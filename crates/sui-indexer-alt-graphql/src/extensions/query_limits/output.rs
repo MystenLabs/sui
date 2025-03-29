@@ -86,34 +86,28 @@ impl<'r> OutputNodeRule<'r, '_> {
         let size = match (first, last) {
             (Some(f), Some(l)) => f.max(l),
             (Some(p), _) | (_, Some(p)) => p,
-            (None, None) => limits.default,
+            (None, None) => limits.default as u64,
         };
 
-        if size > limits.max {
+        if size > limits.max as u64 {
             return Err(driver.err(ErrorKind::PageSizeTooLarge {
                 limit: limits.max,
                 actual: size,
             }));
         }
 
-        Ok(Some(size))
+        // SAFETY: `size <= limits.max <= u32::MAX`.
+        Ok(Some(size as u32))
     }
 
     /// Look for an argument on the current field with the name `name`, and assume that it is a
-    /// numeric argument. If the argument is not present, or is not a number, returns `None`. If it
-    /// is a number but it's too large to be a valid page size, returns an error.
-    fn size_arg(&self, driver: &FieldDriver<'_, 'r>, name: &str) -> Result<Option<u32>, Error> {
+    /// numeric argument. If the argument is not present, or is not a number, returns `None`.
+    fn size_arg(&self, driver: &FieldDriver<'_, 'r>, name: &str) -> Result<Option<u64>, Error> {
         let Some(Value::Number(num)) = driver.resolve_arg(name)? else {
             return Ok(None);
         };
 
-        let Some(num) = num.as_u64() else {
-            return Ok(None);
-        };
-
-        Ok(Some(num.try_into().map_err(|_| {
-            driver.err(ErrorKind::OutputNodes(self.budget.max_output_nodes))
-        })?))
+        Ok(num.as_u64())
     }
 
     /// Returns the number of keys that will be fetched by the current field, assuming it is a
@@ -125,9 +119,17 @@ impl<'r> OutputNodeRule<'r, '_> {
         }
 
         if let Ok(Some(Value::List(vs))) = driver.resolve_arg("keys") {
-            Ok(Some(vs.len().try_into().map_err(|_| {
-                driver.err(ErrorKind::OutputNodes(self.budget.max_output_nodes))
-            })?))
+            let keys = vs.len();
+            let limit = self.budget.pagination_config.max_multi_get_size();
+            if keys > limit as usize {
+                return Err(driver.err(ErrorKind::MultiGetTooLarge {
+                    limit,
+                    actual: keys,
+                }));
+            }
+
+            // SAFETY: `keys < limit <= u32::MAX`.
+            Ok(Some(keys as u32))
         } else {
             Ok(None)
         }

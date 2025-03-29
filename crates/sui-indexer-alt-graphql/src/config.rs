@@ -70,6 +70,10 @@ pub struct Limits {
     /// more elements will result in an error. This limit may be superseded when the field being
     /// paginated is limited by the protocol (e.g. object changes for a transaction).
     pub max_page_size: u32,
+
+    /// Maximum number of keys that can be passed to a multi-get query. A request to fetch more
+    /// keys will result in an error.
+    pub max_multi_get_size: u32,
 }
 
 #[DefaultConfig]
@@ -84,6 +88,7 @@ pub struct LimitsLayer {
     pub max_query_payload_size: Option<u32>,
     pub default_page_size: Option<u32>,
     pub max_page_size: Option<u32>,
+    pub max_multi_get_size: Option<u32>,
 
     #[serde(flatten)]
     pub extra: toml::Table,
@@ -132,6 +137,7 @@ impl Limits {
 
     pub(crate) fn pagination(&self) -> PaginationConfig {
         PaginationConfig::new(
+            self.max_multi_get_size,
             PageLimits {
                 default: self.default_page_size,
                 max: self.max_page_size,
@@ -156,6 +162,7 @@ impl LimitsLayer {
                 .unwrap_or(base.max_query_payload_size),
             default_page_size: self.default_page_size.unwrap_or(base.default_page_size),
             max_page_size: self.max_page_size.unwrap_or(base.max_page_size),
+            max_multi_get_size: self.max_multi_get_size.unwrap_or(base.max_multi_get_size),
         }
     }
 }
@@ -172,6 +179,7 @@ impl From<Limits> for LimitsLayer {
             max_query_payload_size: Some(value.max_query_payload_size),
             default_page_size: Some(value.default_page_size),
             max_page_size: Some(value.max_page_size),
+            max_multi_get_size: Some(value.max_multi_get_size),
             extra: Default::default(),
         }
     }
@@ -197,6 +205,7 @@ impl Default for Limits {
             max_query_payload_size: 5_000,
             default_page_size: 20,
             max_page_size: 50,
+            max_multi_get_size: 200,
         }
     }
 }

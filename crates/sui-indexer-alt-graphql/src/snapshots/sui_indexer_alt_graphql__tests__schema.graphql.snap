@@ -75,19 +75,19 @@ type ServiceConfig {
 	"""
 	Maximum time in milliseconds spent waiting for a response from fullnode after issuing a transaction to execute. Note that the transaction may still succeed even in the case of a timeout. Transactions are idempotent, so a transaction that times out should be re-submitted until the network returns a definite response (success or failure, not timeout).
 	"""
-	mutationTimeoutMs: Int!
+	mutationTimeoutMs: Int
 	"""
 	Maximum time in milliseconds that will be spent to serve one query request.
 	"""
-	queryTimeoutMs: Int!
+	queryTimeoutMs: Int
 	"""
 	Maximum depth of a GraphQL query that can be accepted by this service.
 	"""
-	maxQueryDepth: Int!
+	maxQueryDepth: Int
 	"""
 	The maximum number of nodes (field names) the service will accept in a single query.
 	"""
-	maxQueryNodes: Int!
+	maxQueryNodes: Int
 	"""
 	Maximum number of estimated output nodes in a GraphQL response.
 	
@@ -127,29 +127,33 @@ type ServiceConfig {
 	| 30: }
 	```
 	"""
-	maxOutputNodes: Int!
+	maxOutputNodes: Int
 	"""
 	Maximum size in bytes allowed for the `txBytes` and `signatures` parameters of an `executeTransaction` or `simulateTransaction` field, or the `bytes` and `signature` parameters of a `verifyZkLoginSignature` field.
 	
 	This is cumulative across all matching fields in a single GraphQL request.
 	"""
-	maxTransactionPayloadSize: Int!
+	maxTransactionPayloadSize: Int
 	"""
 	Maximum size in bytes of a single GraphQL request, excluding the elements covered by `maxTransactionPayloadSize`.
 	"""
-	maxQueryPayloadSize: Int!
+	maxQueryPayloadSize: Int
 	"""
-	Returns the number of elements a paginated connection will return if a page size is not supplied.
+	Number of elements a paginated connection will return if a page size is not supplied.
 	
 	Accepts `type` and `field` arguments which identify the connection that is being queried. If the field in question is paginated, its default page size is returned. If it does not exist or is not paginated, `null` is returned.
 	"""
 	defaultPageSize(type: String!, field: String!): Int
 	"""
-	Returns the maximum number of elements that can be requested from a paginated connection. A request to fetch more elements will result in an error.
+	Maximum number of elements that can be requested from a paginated connection. A request to fetch more elements will result in an error.
 	
 	Accepts `type` and `field` arguments which identify the connection that is being queried. If the field in question is paginated, its max page size is returned. If it does not exist or is not paginated, `null` is returned.
 	"""
 	maxPageSize(type: String!, field: String!): Int
+	"""
+	Maximum number of elements that can be requested from a multi-get query. A request to fetch more keys will result in an error.
+	"""
+	maxMultiGetSize: Int
 }
 
 

@@ -27,7 +27,6 @@ impl Query {
         &self,
         keys: Vec<ObjectKey>,
     ) -> Result<Vec<Option<Object>>, RpcError> {
-        // TODO: Max multi-get size.
         let objects = keys
             .into_iter()
             .map(|k| Object::fetch(k.address, k.version));
@@ -42,7 +41,6 @@ impl Query {
         &self,
         keys: Vec<Digest>,
     ) -> Result<Vec<Option<Transaction>>, RpcError> {
-        // TODO: Max multi-get size.
         let transactions = keys.into_iter().map(Transaction::fetch);
         try_join_all(transactions).await
     }

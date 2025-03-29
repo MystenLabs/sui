@@ -24,6 +24,9 @@ pub(super) enum ErrorKind {
     #[error(transparent)]
     InternalError(#[from] anyhow::Error),
 
+    #[error("Too many keys supplied to multi-get: {actual} > {limit}")]
+    MultiGetTooLarge { limit: u32, actual: usize },
+
     #[error(
         "Query is estimated to produce over {0} output nodes. Try fetching fewer fields or \
          fetching fewer items per page in paginated or multi-get fields."
@@ -31,7 +34,7 @@ pub(super) enum ErrorKind {
     OutputNodes(u32),
 
     #[error("Page size is too large: {actual} > {limit}")]
-    PageSizeTooLarge { limit: u32, actual: u32 },
+    PageSizeTooLarge { limit: u32, actual: u64 },
 
     #[error("Request too large {actual}B > {limit}B")]
     PayloadSizeOverall { limit: u32, actual: u64 },
