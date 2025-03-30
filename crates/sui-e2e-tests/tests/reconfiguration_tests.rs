@@ -14,7 +14,7 @@ use sui_node::SuiNodeHandle;
 use sui_protocol_config::ProtocolVersion;
 use sui_protocol_config::{Chain, ProtocolConfig};
 use sui_swarm_config::genesis_config::{
-    AccountConfig, ValidatorGenesisConfig, ValidatorGenesisConfigBuilder,
+    AccountConfig, ValidatorGenesisConfig, ValidatorGenesisConfigBuilder, DEFAULT_GAS_AMOUNT,
 };
 use sui_test_transaction_builder::{make_transfer_sui_transaction, TestTransactionBuilder};
 use sui_types::base_types::SuiAddress;
@@ -41,7 +41,6 @@ use sui_types::transaction::Argument;
 use sui_types::transaction::ObjectArg;
 use sui_types::transaction::ProgrammableMoveCall;
 
-const DEFAULT_GAS_AMOUNT: u64 = 30_000_000_000_000_000; // 30M Sui
 const PRE_SIP_39_PROTOCOL_VERSION: u64 = 78;
 
 #[sim_test]
@@ -654,7 +653,7 @@ async fn test_reconfig_with_committee_change_basic() {
 }
 
 #[sim_test]
-async fn test_switch_to_new_protocol_version() {
+async fn test_protocol_upgrade_to_sip_39_enabled_version() {
     let initial_num_validators = 10;
     let new_validator = ValidatorGenesisConfigBuilder::new().build(&mut OsRng);
 
@@ -676,27 +675,21 @@ async fn test_switch_to_new_protocol_version() {
         .build()
         .await;
 
-    // adds a validator candidate which cannot enter the commitee before SIP-39
+    // add a stake which is insufficient for validators to join pre SIP-39
+    // the stake will be smaller than minimum stake required to join the committee.
+    // however, this is enough post SIP-39, since the amount will be .2% of the total stake.
     let stake = (DEFAULT_GAS_AMOUNT * (initial_num_validators as u64)) / 10_000 * 20;
 
     add_validator_candidate(&test_cluster, &new_validator).await;
-    execute_add_stake_transaction(
-        &mut test_cluster,
-        // voting power: ~0.2%
-        vec![(address, stake)],
-    )
-    .await;
+    execute_add_stake_transaction(&mut test_cluster, vec![(address, stake)]).await;
 
     // try adding the validator candidate to the committee
-    // this tx will fail because the protocol version is not high enough
+    // stake is not enough, transaction will abort
     let (effects, _) = try_request_add_validator(&mut test_cluster, &new_validator)
         .await
         .unwrap();
 
     assert!(effects.status().is_err());
-
-    // stake is applied, validator is still a candidate
-    test_cluster.trigger_reconfiguration().await;
 
     // check that the validator candidate is in the system state
     test_cluster.fullnode_handle.sui_node.with(|node| {
@@ -713,8 +706,8 @@ async fn test_switch_to_new_protocol_version() {
         .wait_for_protocol_version(ProtocolVersion::MAX)
         .await;
 
-    // try adding the validator candidate to the committee
-    // this tx will fail because the protocol version is not high enough
+    // try adding the validator candidate to the committee again
+    // this time, the transaction will succeed
     let (effects, _) = try_request_add_validator(&mut test_cluster, &new_validator)
         .await
         .unwrap();
