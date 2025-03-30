@@ -9,7 +9,6 @@ use std::{
 
 use clap::*;
 use move_vm_config::verifier::VerifierConfig;
-use once_cell::sync::Lazy;
 use serde::{Deserialize, Serialize};
 use serde_with::skip_serializing_none;
 use sui_protocol_config_macros::{
@@ -1821,9 +1820,9 @@ impl ProtocolConfig {
     }
 
     pub fn gc_depth(&self) -> u32 {
-        if cfg!(msim) || in_antithesis() {
+        if cfg!(msim) {
             // exercise a very low gc_depth
-            3
+            5
         } else {
             self.consensus_gc_depth.unwrap_or(0)
         }
@@ -3739,18 +3738,6 @@ pub fn is_mysticeti_fpc_enabled_in_env() -> Option<bool> {
         }
     }
     None
-}
-
-#[inline(always)]
-pub fn in_antithesis() -> bool {
-    static IN_ANTITHESIS: Lazy<bool> = Lazy::new(|| {
-        let in_antithesis = std::env::var("ANTITHESIS_OUTPUT_DIR").is_ok();
-        if in_antithesis {
-            warn!("Detected that we are running in antithesis");
-        }
-        in_antithesis
-    });
-    *IN_ANTITHESIS
 }
 
 #[cfg(all(test, not(msim)))]

@@ -14822,7 +14822,6 @@ dependencies = [
  "clap",
  "insta",
  "move-vm-config",
- "once_cell",
  "schemars",
  "serde",
  "serde-env",
