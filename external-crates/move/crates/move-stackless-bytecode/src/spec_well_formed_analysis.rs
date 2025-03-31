@@ -17,19 +17,19 @@ impl SpecWellFormedAnalysisProcessor {
         Box::new(Self())
     }
 
-    pub fn traverse_successors_and_match_operations(&self, block_id: &BlockId, graph: &Graph<BlockId>, cfg: &StacklessControlFlowGraph, code: &[Bytecode],  builder: &FunctionDataBuilder, targets: &[Operation]) -> BTreeSet<Loc> {
+    pub fn traverse_and_match_operations(&self, is_forward: bool, block_id: &BlockId, graph: &Graph<BlockId>, cfg: &StacklessControlFlowGraph, code: &[Bytecode],  builder: &FunctionDataBuilder, targets: &[Operation]) -> BTreeSet<Loc> {
         let mut visited = BTreeSet::new();
         let mut matches = BTreeSet::new();
 
         visited.insert(cfg.entry_block());
         visited.insert(cfg.exit_block());
 
-        self.traverse_successors_and_match_operations_internal(block_id, block_id, &mut visited, graph, cfg, code, builder, targets, &mut matches);
+        self.traverse_and_match_operations_internal(is_forward, block_id, block_id, &mut visited, graph, cfg, code, builder, targets, &mut matches);
 
         matches
     }
 
-    fn traverse_successors_and_match_operations_internal(&self, starting_block_id: &BlockId, block_id: &BlockId, visited: &mut BTreeSet<BlockId>, graph: &Graph<BlockId>, cfg: &StacklessControlFlowGraph, code: &[Bytecode], builder: &FunctionDataBuilder, targets: &[Operation], matches: &mut BTreeSet<Loc>) {
+    fn traverse_and_match_operations_internal(&self, is_forward: bool, starting_block_id: &BlockId, block_id: &BlockId, visited: &mut BTreeSet<BlockId>, graph: &Graph<BlockId>, cfg: &StacklessControlFlowGraph, code: &[Bytecode], builder: &FunctionDataBuilder, targets: &[Operation], matches: &mut BTreeSet<Loc>) {
         // Avoid revisiting nodes
         if !visited.insert(*block_id)  {
             return;
@@ -42,39 +42,10 @@ impl SpecWellFormedAnalysisProcessor {
             }
         }
 
-        for successor in graph.successors[block_id].clone().iter() {
-            self.traverse_successors_and_match_operations_internal(starting_block_id, &successor, visited, graph, cfg, code, builder, targets, matches);
-        }
-    }
+        let nodes = if is_forward { graph.successors[block_id].clone() } else { graph.predecessors[block_id].clone() };
 
-    pub fn traverse_predecessors_and_match_operations(&self, block_id: &BlockId, graph: &Graph<BlockId>, cfg: &StacklessControlFlowGraph, code: &[Bytecode], builder: &FunctionDataBuilder, targets: &[Operation]) -> BTreeSet<Loc> {
-        let mut visited = BTreeSet::new();
-        let mut matches = BTreeSet::new();
-
-        visited.insert(cfg.entry_block());
-        visited.insert(cfg.exit_block());
-
-        self.traverse_predecessors_and_match_operations_internal(block_id, block_id, &mut visited, graph, cfg, code, builder, targets, &mut matches);
-
-        matches
-    }
-
-    fn traverse_predecessors_and_match_operations_internal(&self, starting_block_id: &BlockId, block_id: &BlockId, visited: &mut BTreeSet<BlockId>, graph: &Graph<BlockId>, cfg: &StacklessControlFlowGraph, code: &[Bytecode], builder: &FunctionDataBuilder, targets: &[Operation], matches: &mut BTreeSet<Loc>) {
-        // Avoid revisiting nodes
-        if !visited.insert(*block_id) {
-            return;
-        }
-
-        if starting_block_id != block_id {
-            let loc = self.fing_node_operation(*block_id, cfg, code, targets, builder);
-            if loc.is_some() {
-                matches.insert(loc.unwrap());
-            }
-        }
-
-        // Recursively visit each successor
-        for predecessor in graph.predecessors[block_id].clone().iter() {
-            self.traverse_predecessors_and_match_operations_internal(starting_block_id,&predecessor, visited, graph, cfg, code, builder, targets, matches);
+        for successor in nodes.iter() {
+            self.traverse_and_match_operations_internal(is_forward, starting_block_id, &successor, visited, graph, cfg, code, builder, targets, matches);
         }
     }
 
@@ -223,18 +194,9 @@ impl FunctionTargetProcessor for SpecWellFormedAnalysisProcessor {
         let env = func_env.module_env.env;
         let func_target = FunctionTarget::new(func_env, &data);
 
-        let underlying_func_id = targets
-            .function_specs()
-            .iter()
-            .find_map(|(id, func)| (func_env.get_qualified_id() == *id).then_some(*func));
+        let underlying_func_id = targets.get_fun_by_spec(&func_env.get_qualified_id());
 
         if underlying_func_id.is_none() {
-            env.diag(
-                Severity::Error,
-                &func_env.get_loc(),
-                "Spec underlying func is not found",
-            );
-
             return  data;
         }
 
@@ -345,8 +307,8 @@ impl FunctionTargetProcessor for SpecWellFormedAnalysisProcessor {
             Operation::apply_fun_qid(&func_env.module_env.env.asserts_qid(), vec![]),
         ];
 
-        let mut pre_matches_traversed = self.traverse_successors_and_match_operations(&call_node_id.unwrap(), &graph, &cfg, code, &builder, &preconditions);
-        let mut post_matches_traversed = self.traverse_predecessors_and_match_operations(&call_node_id.unwrap(), &graph, &cfg, code, &builder, &postconditions);
+        let mut pre_matches_traversed = self.traverse_and_match_operations(true, &call_node_id.unwrap(), &graph, &cfg, code, &builder, &preconditions);
+        let mut post_matches_traversed = self.traverse_and_match_operations(false, &call_node_id.unwrap(), &graph, &cfg, code, &builder, &postconditions);
         let (mut pre_matches, mut post_matches) = self.fing_operations_before_after_operation_in_node(&call_node_id.unwrap(), &call_operation.unwrap(), &cfg, code, &builder, &postconditions, &preconditions);
 
         pre_matches.append(&mut pre_matches_traversed);
