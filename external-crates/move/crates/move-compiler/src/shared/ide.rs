@@ -310,10 +310,9 @@ impl From<(Loc, IDEAnnotation)> for Diagnostic {
 
                 let members = members
                     .iter()
-                    .map(|((m, f), names)| {
+                    .flat_map(|((m, f), names)| {
                         names.iter().map(move |name| format!("{name} -> {m}::{f}"))
                     })
-                    .flatten()
                     .collect::<Vec<_>>();
                 let member_names = format_oxford_list!(ITER, "or", "'{}'", members.iter());
                 let modules = modules
