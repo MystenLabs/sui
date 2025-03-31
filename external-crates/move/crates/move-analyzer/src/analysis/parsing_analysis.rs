@@ -13,7 +13,7 @@ use crate::{
 
 use lsp_types::Position;
 
-use std::{collections::BTreeMap, u32};
+use std::collections::BTreeMap;
 
 use move_compiler::{
     parser::ast as P,
@@ -299,7 +299,6 @@ impl<'a> ParsingAnalysisContext<'a> {
                 }
                 MM::Spec(s) => {
                     earliest_member_loc = earliest_loc(earliest_member_loc, s.loc);
-                    ()
                 }
             }
         }

@@ -109,10 +109,8 @@ pub fn name_chain_completions(
     if auto_import {
         import_insertion_info_opt = cursor
             .module
-            .map(|m| mod_defs(symbols, &m.value))
-            .flatten()
-            .map(|m| m.import_insert_info)
-            .flatten();
+            .and_then(|m| mod_defs(symbols, &m.value))
+            .and_then(|m| m.import_insert_info);
     }
 
     if leading_name.loc.contains(&cursor.loc) {
@@ -703,7 +701,7 @@ fn all_single_name_member_completions(
                 cursor,
                 mod_defs,
                 member_alias,
-                &member_name,
+                member_name,
                 chain_kind,
                 None,
             );
@@ -1013,7 +1011,7 @@ fn imports_for_name_chain_entry(
         return;
     };
     if at_colon_colon
-        || (path_entries.len() > 0 && path_entries[path_index].loc.contains(&cursor.loc))
+        || (!path_entries.is_empty() && path_entries[path_index].loc.contains(&cursor.loc))
     {
         let P::LeadingNameAccess_::Name(name) = leading_name.value else {
             return;
@@ -1139,7 +1137,7 @@ fn cursor_at_colon_colon(
             at_colon_colon = true;
         }
     }
-    return (at_colon_colon, false);
+    (at_colon_colon, false)
 }
 
 /// Check if a given address represents a package within the current program.
