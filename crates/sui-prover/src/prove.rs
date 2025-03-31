@@ -6,7 +6,8 @@ use move_core_types::account_address::AccountAddress;
 use move_prover::{run_boogie_gen, run_move_prover_with_model};
 use tracing::log::LevelFilter;
 use std::{collections::BTreeMap, path::{Path,PathBuf}};
-use codespan_reporting::term::termcolor::{Buffer, ColorChoice, StandardStream, WriteColor};
+use codespan_reporting::term::termcolor::{Buffer};
+use crate::llm_explain::explain_err;
 
 impl From<BuildConfig> for MoveBuildConfig {
     fn from(config: BuildConfig) -> Self {
@@ -103,7 +104,7 @@ pub struct BuildConfig {
     pub additional_named_addresses: BTreeMap<String, AccountAddress>,
 }
 
-pub fn execute(
+pub async fn execute(
     path: Option<&Path>,
     general_config: GeneralConfig,
     build_config: BuildConfig,
@@ -133,12 +134,18 @@ pub fn execute(
     
     if general_config.explain {
         let mut error_writer = Buffer::no_color();
-        run_move_prover_with_model(&model, &mut error_writer, options, None)?;
-        // let output = String::from_utf8_lossy(&error_writer.into_inner()).to_string(); /// todo: fetch actual output
-        let output = format!("This is a test output to verify the --explain flag is working.\n");
-        println!("Output: {}", output);
+        match run_move_prover_with_model(&model, &mut error_writer, options, None) {
+            Ok(_) => {
+                let output = String::from_utf8_lossy(&error_writer.into_inner()).to_string();
+                println!("Output: {}", output);
+            }
+            Err(e) => {
+                let output = String::from_utf8_lossy(&error_writer.into_inner()).to_string();
+                explain_err(&output, &e).await;
+            }
+        }
     } else {
-        run_boogie_gen(&model, options)?;
+        let _ = run_boogie_gen(&model, options);
     }
 
     Ok(())

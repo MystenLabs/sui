@@ -1,4 +1,3 @@
-
 use std::path::PathBuf;
 
 use clap::*;
@@ -7,6 +6,7 @@ use prove::{BoogieConfig, GeneralConfig, BuildConfig, execute};
 use tracing::debug;
 
 mod prove;
+mod llm_explain;
 
 bin_version::bin_version!();
 
@@ -46,12 +46,13 @@ async fn main() {
 
     let _guard = telemetry_subscribers::TelemetryConfig::new()
         .with_log_file(&format!("{bin_name}.log"))
+        .with_log_level("debug")
         .with_env()
         .init();
 
     debug!("Sui-Prover CLI version: {VERSION}");
 
-    let result = execute(args.package_path.as_deref(), args.general_config, args.build_config, args.boogie_config);
+    let result = execute(args.package_path.as_deref(), args.general_config, args.build_config, args.boogie_config).await;
 
     match result {
         Ok(_) => (),

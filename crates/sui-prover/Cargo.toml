@@ -34,6 +34,9 @@ sui-types.workspace = true
 better_any = "0.1.1"
 codespan-reporting.workspace = true
 
+regex = "1.10"
+openai_api_rust = "0.1.9"
+
 [target.'cfg(not(target_env = "msvc"))'.dependencies]
 jemalloc-ctl.workspace = true
 
