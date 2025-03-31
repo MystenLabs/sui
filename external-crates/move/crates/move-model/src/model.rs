@@ -62,8 +62,7 @@ use move_disassembler::disassembler::{Disassembler, DisassemblerOptions};
 
 use crate::{
     ast::{
-        Attribute, ConditionKind, Exp, ExpData, GlobalInvariant, ModuleName, PropertyBag,
-        PropertyValue, QualifiedSymbol, Value,
+        Attribute,ModuleName, QualifiedSymbol, Value,
     },
     symbol::{Symbol, SymbolPool},
     ty::{PrimitiveType, Type, TypeDisplayContext, TypeUnificationAdapter, Variance},

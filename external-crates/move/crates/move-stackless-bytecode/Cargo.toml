@@ -23,11 +23,13 @@ codespan-reporting = { workspace = true, features = ["serde", "serialization"] }
 ethnum.workspace = true
 num.workspace = true
 im.workspace = true
+internment.workspace = true
 itertools.workspace = true
 log.workspace = true
-serde.workspace = true
 paste.workspace = true
 petgraph.workspace = true
+once_cell.workspace = true
+serde.workspace = true
 
 [dev-dependencies]
 move-stdlib.workspace = true

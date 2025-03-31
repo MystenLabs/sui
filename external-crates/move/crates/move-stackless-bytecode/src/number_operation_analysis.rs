@@ -7,6 +7,7 @@
 // The result of this analysis will be used when generating the boogie code
 
 use crate::{
+    ast::TempIndex,
     dataflow_analysis::{DataflowAnalysis, TransferFunctions},
     dataflow_domains::{AbstractDomain, JoinResult},
     function_target::FunctionTarget,
@@ -24,7 +25,6 @@ use crate::{
 use itertools::Either;
 use move_binary_format::file_format::CodeOffset;
 use move_model::{
-    ast::TempIndex,
     model::{FunId, GlobalEnv, ModuleId},
 };
 use std::{

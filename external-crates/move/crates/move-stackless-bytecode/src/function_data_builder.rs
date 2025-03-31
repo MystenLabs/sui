@@ -6,6 +6,8 @@
 //! bytecode.
 
 use crate::{
+    ast::{Exp, TempIndex},
+    exp_generator::ExpGenerator,
     function_target::{FunctionData, FunctionTarget},
     function_target_pipeline::FunctionVariant,
     number_operation::GlobalNumberOperationState,
@@ -13,8 +15,6 @@ use crate::{
 };
 use itertools::Itertools;
 use move_model::{
-    ast::{Exp, TempIndex},
-    exp_generator::ExpGenerator,
     model::{FunctionEnv, Loc},
     ty::{Type, BOOL_TYPE},
 };
@@ -310,7 +310,7 @@ impl<'env> FunctionDataBuilder<'env> {
             PropKind::Assume,
             self.mk_call(
                 &BOOL_TYPE,
-                move_model::ast::Operation::WellFormed,
+                crate::ast::Operation::WellFormed,
                 vec![temp_exp],
             ),
         );

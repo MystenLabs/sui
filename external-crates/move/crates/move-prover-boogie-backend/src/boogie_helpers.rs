@@ -11,7 +11,7 @@ use num::BigUint;
 
 use move_binary_format::file_format::TypeParameterIndex;
 use move_model::{
-    ast::{MemoryLabel, TempIndex, Value},
+    ast::Value,
     model::{
         DatatypeId, EnclosingEnv, EnumEnv, FieldEnv, FunctionEnv, GlobalEnv, ModuleEnv,
         QualifiedInstId, StructEnv, StructOrEnumEnv, VariantEnv, SCRIPT_MODULE_NAME,
@@ -20,7 +20,10 @@ use move_model::{
     symbol::Symbol,
     ty::{PrimitiveType, Type},
 };
-use move_stackless_bytecode::{function_target::FunctionTarget, stackless_bytecode::Constant};
+use move_stackless_bytecode::{
+    ast::{MemoryLabel, TempIndex},
+    function_target::FunctionTarget, stackless_bytecode::Constant
+};
 
 use crate::options::BoogieOptions;
 

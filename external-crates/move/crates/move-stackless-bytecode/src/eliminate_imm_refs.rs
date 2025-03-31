@@ -2,9 +2,10 @@
 // Copyright (c) The Move Contributors
 // SPDX-License-Identifier: Apache-2.0
 
-use move_model::{ast::TempIndex, model::FunctionEnv, ty::Type};
+use move_model::{model::FunctionEnv, ty::Type};
 
 use crate::{
+    ast::TempIndex,
     function_data_builder::FunctionDataBuilder,
     function_target::FunctionData,
     function_target_pipeline::{FunctionTargetProcessor, FunctionTargetsHolder},

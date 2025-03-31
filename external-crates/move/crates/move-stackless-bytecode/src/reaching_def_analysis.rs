@@ -12,9 +12,10 @@ use std::collections::{BTreeMap, BTreeSet};
 use itertools::Itertools;
 
 use move_binary_format::file_format::CodeOffset;
-use move_model::{ast::TempIndex, model::FunctionEnv};
+use move_model::model::FunctionEnv;
 
 use crate::{
+    ast::TempIndex,
     dataflow_analysis::{DataflowAnalysis, TransferFunctions},
     dataflow_domains::{AbstractDomain, JoinResult},
     function_target::{FunctionData, FunctionTarget},

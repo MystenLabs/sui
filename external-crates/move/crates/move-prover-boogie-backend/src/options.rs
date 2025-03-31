@@ -7,7 +7,7 @@ use itertools::Itertools;
 use move_command_line_common::env::{read_bool_env_var, read_env_var};
 use regex::Regex;
 use serde::{Deserialize, Serialize};
-use std::{path::PathBuf, process::Command};
+use std::{collections::HashSet, path::PathBuf, process::Command};
 
 /// Default flags passed to boogie. Additional flags will be added to this via the -B option.
 const DEFAULT_BOOGIE_FLAGS: &[&str] = &[
@@ -147,6 +147,8 @@ pub struct BoogieOptions {
     pub borrow_aggregates: Vec<BorrowAggregate>,
     pub prelude_extra: Option<PathBuf>,
     pub path_split: Option<usize>,
+    /// All possible additional options as simle string
+    pub string_options: Option<String>,
 }
 
 impl Default for BoogieOptions {
@@ -186,6 +188,7 @@ impl Default for BoogieOptions {
             borrow_aggregates: vec![],
             prelude_extra: Some(PathBuf::from("prelude_extra.bpl")),
             path_split: Some(10),
+            string_options: None,
         }
     }
 }
@@ -214,7 +217,14 @@ impl BoogieOptions {
             anyhow::bail!("No boogie executable set.  Please set BOOGIE_EXE");
         }
 
-        let mut add = |sl: &[&str]| result.extend(sl.iter().map(|s| (*s).to_string()));
+        // Set to track unique options
+        let mut seen_options = HashSet::new();
+        let mut add = |sl: &[&str]| {
+            for s in sl {
+                seen_options.insert(s.to_string());
+            }
+        };
+
         add(DEFAULT_BOOGIE_FLAGS);
         if self.use_cvc5 {
             add(&[
@@ -281,6 +291,16 @@ impl BoogieOptions {
             ]);
         }
         add(&[boogie_file]);
+
+        let additional_options = self.string_options
+            .as_deref()
+            .map(|s| s.split(' ').map(|opt| format!("-{}", opt)).collect()) 
+            .unwrap_or_else(Vec::new);
+
+        add(&additional_options.iter().map(|s| s.as_str()).collect::<Vec<&str>>());
+
+        result.extend(seen_options.into_iter());
+
         Ok(result)
     }
 

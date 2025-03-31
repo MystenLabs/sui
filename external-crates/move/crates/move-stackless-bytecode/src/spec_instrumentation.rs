@@ -12,17 +12,17 @@ use std::{
 use itertools::Itertools;
 
 use move_model::{
-    ast::{self, Exp, ExpData, TempIndex, Value},
-    exp_generator::ExpGenerator,
+    ast::Value,
     model::{
         DatatypeId, FunId, FunctionEnv, GlobalEnv, Loc, ModuleId, QualifiedId, QualifiedInstId,
     },
     pragmas::{ABORTS_IF_IS_PARTIAL_PRAGMA, EMITS_IS_PARTIAL_PRAGMA, EMITS_IS_STRICT_PRAGMA},
-    spec_translator::{SpecTranslator, TranslatedSpec},
     ty::{Type, TypeDisplayContext, BOOL_TYPE, NUM_TYPE},
 };
 
 use crate::{
+    ast::{Exp, ExpData, TempIndex},
+    exp_generator::ExpGenerator,
     function_data_builder::FunctionDataBuilder,
     function_target::{FunctionData, FunctionTarget},
     function_target_pipeline::{
@@ -35,6 +35,7 @@ use crate::{
         AbortAction, AssignKind, AttrId, BorrowEdge, BorrowNode, Bytecode, HavocKind, Label,
         Operation, PropKind,
     },
+    spec_translator::{SpecTranslator, TranslatedSpec},
     usage_analysis, verification_analysis,
 };
 
@@ -666,7 +667,7 @@ impl<'a> Instrumenter<'a> {
             for idx in mut_srcs.into_iter().chain(dests.iter().cloned()) {
                 let exp = self.builder.mk_call(
                     &BOOL_TYPE,
-                    ast::Operation::WellFormed,
+                    crate::ast::Operation::WellFormed,
                     vec![self.builder.mk_temporary(idx)],
                 );
                 self.builder.emit_with(move |id| Prop(id, Assume, exp));
@@ -760,7 +761,7 @@ impl<'a> Instrumenter<'a> {
             let (rhs_temp, _) = self.builder.emit_let(self.builder.mk_call_with_inst(
                 &ghost_mem_ty,
                 ghost_mem.inst.clone(),
-                ast::Operation::Pack(ghost_mem.module_id, ghost_mem.id),
+                crate::ast::Operation::Pack(ghost_mem.module_id, ghost_mem.id),
                 vec![rhs.clone()],
             ));
 
@@ -1058,7 +1059,7 @@ impl<'a> Instrumenter<'a> {
             let node_id = env.new_node(loc.clone(), BOOL_TYPE.clone());
             env.set_node_instantiation(node_id, vec![resource_type.to_owned()]);
             let can_modify =
-                ExpData::Call(node_id, ast::Operation::CanModify, vec![addr]).into_exp();
+                ExpData::Call(node_id, crate::ast::Operation::CanModify, vec![addr]).into_exp();
             if kind == PropKind::Assert {
                 let (mid, sid, inst) = resource_type.require_datatype();
                 self.builder.set_loc_and_vc_info(

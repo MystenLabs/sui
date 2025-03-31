@@ -24,7 +24,6 @@ use regex::Regex;
 
 use move_binary_format::file_format::FunctionDefinitionIndex;
 use move_model::{
-    ast::TempIndex,
     code_writer::CodeWriter,
     model::{
         EnumEnv, FunId, GlobalEnv, Loc, ModuleId, NodeId, QualifiedId, StructEnv, StructOrEnumEnv,
@@ -32,7 +31,10 @@ use move_model::{
     pragmas::INTRINSIC_TYPE_MAP,
     ty::{PrimitiveType, Type},
 };
-use move_stackless_bytecode::function_target_pipeline::{FunctionTargetsHolder, FunctionVariant};
+use move_stackless_bytecode::{
+    ast::TempIndex,
+    function_target_pipeline::{FunctionTargetsHolder, FunctionVariant},
+};
 
 // DEBUG
 // use backtrace::Backtrace;
