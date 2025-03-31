@@ -248,7 +248,7 @@ fn test_move_type_serde() {
             abilities: vec![SM::SuiMoveAbility::Copy],
         },
         type_parameters: vec![],
-        variants,
+        variants: SM::SuiMoveNormalizedEnumVariants(variants),
     };
 
     acc.push(serde_json::to_string(&e).unwrap());

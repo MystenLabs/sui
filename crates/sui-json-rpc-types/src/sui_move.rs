@@ -12,6 +12,7 @@ use move_core_types::annotated_value::{MoveStruct, MoveValue, MoveVariant};
 use move_core_types::identifier::Identifier;
 use move_core_types::language_storage::StructTag;
 use schemars::JsonSchema;
+use serde::ser::SerializeMap;
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use serde_with::serde_as;
@@ -77,8 +78,11 @@ pub struct SuiMoveNormalizedStruct {
 pub struct SuiMoveNormalizedEnum {
     pub abilities: SuiMoveAbilitySet,
     pub type_parameters: Vec<SuiMoveStructTypeParameter>,
-    pub variants: BTreeMap<String, Vec<SuiMoveNormalizedField>>,
+    pub variants: SuiMoveNormalizedEnumVariants,
 }
+
+#[derive(Debug, JsonSchema, Clone)]
+pub struct SuiMoveNormalizedEnumVariants(pub Vec<(String, Vec<SuiMoveNormalizedField>)>);
 
 #[derive(Serialize, Deserialize, Debug, JsonSchema, Clone)]
 pub enum SuiMoveNormalizedType {
@@ -233,20 +237,22 @@ impl From<NormalizedEnum> for SuiMoveNormalizedEnum {
                 .into_iter()
                 .map(SuiMoveStructTypeParameter::from)
                 .collect::<Vec<SuiMoveStructTypeParameter>>(),
-            variants: value
-                .variants
-                .into_iter()
-                .map(|variant| {
-                    (
-                        variant.name.to_string(),
-                        variant
-                            .fields
-                            .into_iter()
-                            .map(SuiMoveNormalizedField::from)
-                            .collect::<Vec<SuiMoveNormalizedField>>(),
-                    )
-                })
-                .collect::<BTreeMap<String, Vec<SuiMoveNormalizedField>>>(),
+            variants: SuiMoveNormalizedEnumVariants(
+                value
+                    .variants
+                    .into_iter()
+                    .map(|variant| {
+                        (
+                            variant.name.to_string(),
+                            variant
+                                .fields
+                                .into_iter()
+                                .map(SuiMoveNormalizedField::from)
+                                .collect::<Vec<SuiMoveNormalizedField>>(),
+                        )
+                    })
+                    .collect::<Vec<(String, Vec<SuiMoveNormalizedField>)>>(),
+            ),
         }
     }
 }
@@ -651,5 +657,51 @@ impl From<MoveStruct> for SuiMoveStruct {
                 .map(|(id, value)| (id.into_string(), value.into()))
                 .collect(),
         }
+    }
+}
+
+// Custom serialization and deserialization for SuiMoveNormalizedEnumVariants to maintain backwards
+// compatibility in layout.
+impl Serialize for SuiMoveNormalizedEnumVariants {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        let mut map = serializer.serialize_map(Some(self.0.len()))?;
+        for (name, fields) in &self.0 {
+            map.serialize_entry(name, fields)?;
+        }
+        map.end()
+    }
+}
+
+impl<'de> Deserialize<'de> for SuiMoveNormalizedEnumVariants {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        pub struct SuiMoveEnumVariantsVisitor;
+        impl<'de> serde::de::Visitor<'de> for SuiMoveEnumVariantsVisitor {
+            type Value = SuiMoveNormalizedEnumVariants;
+
+            fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
+                formatter.write_str("a map of enum variants")
+            }
+
+            fn visit_map<V>(self, mut map: V) -> Result<Self::Value, V::Error>
+            where
+                V: serde::de::MapAccess<'de>,
+            {
+                let mut variants = Vec::new();
+                while let Some((key, value)) =
+                    map.next_entry::<String, Vec<SuiMoveNormalizedField>>()?
+                {
+                    variants.push((key, value));
+                }
+                Ok(SuiMoveNormalizedEnumVariants(variants))
+            }
+        }
+
+        deserializer.deserialize_map(SuiMoveEnumVariantsVisitor)
     }
 }
