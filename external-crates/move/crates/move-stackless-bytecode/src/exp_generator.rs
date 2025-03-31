@@ -5,8 +5,8 @@
 use itertools::Itertools;
 use num::BigUint;
 
-use crate::{
-    ast::{Exp, ExpData, LocalVarDecl, Operation, QuantKind, TempIndex, Value},
+use move_model::{
+    ast::Value,
     model::{
         DatatypeId, EnclosingEnv, FieldEnv, FunctionEnv, GlobalEnv, Loc, NodeId, QualifiedId,
         QualifiedInstId,
@@ -15,6 +15,7 @@ use crate::{
     ty::{PrimitiveType, Type, BOOL_TYPE, NUM_TYPE},
 };
 
+use crate::ast::{Exp, ExpData, LocalVarDecl, Operation, QuantKind, TempIndex};
 /// A trait that defines a generator for `Exp`.
 pub trait ExpGenerator<'env> {
     /// Get the functional environment

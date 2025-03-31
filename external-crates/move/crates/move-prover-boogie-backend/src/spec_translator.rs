@@ -15,10 +15,7 @@ use itertools::Itertools;
 use log::{debug, info, warn};
 
 use move_model::{
-    ast::{
-        Exp, ExpData, LocalVarDecl, MemoryLabel, Operation, QuantKind,
-        TempIndex, Value,
-    },
+    ast::Value,
     code_writer::CodeWriter,
     emit, emitln,
     model::{
@@ -31,6 +28,10 @@ use move_model::{
 };
 use move_stackless_bytecode::{
     mono_analysis::MonoInfo,
+    ast::{
+        Exp, ExpData, LocalVarDecl, MemoryLabel, Operation, QuantKind,
+        TempIndex,
+    },
     number_operation::{GlobalNumberOperationState, NumOperation::Bitwise},
 };
 

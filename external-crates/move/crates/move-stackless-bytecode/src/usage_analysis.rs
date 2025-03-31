@@ -9,12 +9,12 @@ use paste::paste;
 
 use move_binary_format::file_format::CodeOffset;
 use move_model::{
-    ast::{ConditionKind},
     model::{DatatypeId, FunctionEnv, GlobalEnv, QualifiedId, QualifiedInstId},
     ty::Type,
 };
 
 use crate::{
+    ast::{ConditionKind},
     compositional_analysis::{CompositionalAnalysis, SummaryCache},
     dataflow_analysis::{DataflowAnalysis, TransferFunctions},
     dataflow_domains::{AbstractDomain, JoinResult, SetDomain},

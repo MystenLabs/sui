@@ -46,13 +46,8 @@ pub struct GeneralConfig {
     /// Display detailed verification progress
     #[clap(name = "verbose", long, short = 'v', global = true)]
     pub verbose: bool,
-}
 
-/// Boogie options
-#[derive(Args)]
-#[clap(next_help_heading = "Modeling Options")]
-pub struct BoogieConfig {
-    /// Use the array theory instead of uninterpreted functions to model arrays
+    /// Display detailed verification progress
     #[clap(name = "use_array_theory", long = "use_array_theory", global = true)]
     pub use_array_theory: bool,
 
@@ -102,7 +97,7 @@ pub fn execute(
     path: Option<&Path>,
     general_config: GeneralConfig,
     build_config: BuildConfig,
-    boogie_config: BoogieConfig,
+    boogie_config: Option<String>,
 ) -> anyhow::Result<()> {
     let rerooted_path = base::reroot_path(path)?;
     let move_build_config = resolve_lock_file_path(
@@ -120,11 +115,12 @@ pub fn execute(
     let mut options = move_prover::cli::Options::default();
     // don't spawn async tasks when running Boogie--causes a crash if we do
     options.backend.sequential_task = true;
-    options.backend.use_array_theory = boogie_config.use_array_theory;
+    options.backend.use_array_theory = general_config.use_array_theory;
     options.backend.keep_artifacts = general_config.keep_temp;
     options.backend.vc_timeout = general_config.timeout.unwrap_or(3000);
-    options.backend.path_split = boogie_config.split_paths;
+    options.backend.path_split = general_config.split_paths;
     options.verbosity_level = if general_config.verbose { LevelFilter::Trace } else { LevelFilter::Info };
+    options.backend.string_options = boogie_config;
     
     run_boogie_gen(&model, options)?;
 

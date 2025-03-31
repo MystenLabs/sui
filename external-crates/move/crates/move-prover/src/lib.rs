@@ -4,7 +4,7 @@
 
 #![forbid(unsafe_code)]
 
-use std::cell::RefCell;
+use std::{cell::RefCell, io::empty};
 
 use crate::cli::Options;
 use anyhow::anyhow;
@@ -15,11 +15,11 @@ use codespan_reporting::{
 };
 #[allow(unused_imports)]
 use log::{debug, info, warn};
-use move_compiler::shared::PackagePaths;
+use move_compiler::{shared::PackagePaths, Flags};
 use move_docgen::Docgen;
 use move_model::{
     code_writer::CodeWriter, model::GlobalEnv, parse_addresses_from_options,
-    run_model_builder_with_options, ty::Type,
+    run_model_builder_with_options_and_compilation_flags, ty::Type,
 };
 use move_prover_boogie_backend::{
     add_prelude, boogie_wrapper::BoogieWrapper, bytecode_translator::BoogieTranslator,
@@ -28,6 +28,7 @@ use move_stackless_bytecode::{
     escape_analysis::EscapeAnalysisProcessor,
     function_target_pipeline::{
         FunctionTargetPipeline, FunctionTargetsHolder, FunctionTargetsHolderDisplay,
+        FunctionVariant, VerificationFlavor,
     },
     mono_analysis,
     number_operation::GlobalNumberOperationState,
@@ -56,7 +57,7 @@ pub fn run_move_prover<W: WriteColor>(
     let now = Instant::now();
     // Run the model builder.
     let addrs = parse_addresses_from_options(options.move_named_address_values.clone())?;
-    let env = run_model_builder_with_options(
+    let env = run_model_builder_with_options_and_compilation_flags(
         vec![PackagePaths {
             name: None,
             paths: options.move_sources.clone(),
@@ -68,6 +69,7 @@ pub fn run_move_prover<W: WriteColor>(
             named_address_map: addrs,
         }],
         options.model_builder.clone(),
+        Flags::empty().set_verify(true),
         None,
     )?;
     run_move_prover_with_model(&env, error_writer, options, Some(now))
@@ -179,7 +181,18 @@ pub fn run_move_prover_with_model<W: WriteColor>(
         "exiting with verification errors",
     )?;
 
-    println!("✅ All specs proved!");
+    for spec in targets.specs() {
+        let fun_env = env.get_function(*spec);
+        if targets.is_verified_spec(spec)
+            && targets.has_target(
+                &fun_env,
+                &FunctionVariant::Verification(VerificationFlavor::Regular),
+            )
+        {
+            println!("\x1b[32m✔\x1b[0m {}", fun_env.get_full_name_str());
+        }
+    }
+
     Ok(())
 }
 
@@ -259,14 +272,6 @@ pub fn create_and_process_bytecode(options: &Options, env: &GlobalEnv) -> Functi
             targets.add_target(&func_env)
         }
     }
-
-    // println!(
-    //     "{}",
-    //     FunctionTargetsHolderDisplay {
-    //         targets: &targets,
-    //         env
-    //     }
-    // );
 
     // Create processing pipeline and run it.
     let pipeline = if options.experimental_pipeline {

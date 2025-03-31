@@ -9,13 +9,7 @@ use codespan_reporting::diagnostic::Severity;
 use itertools::Itertools;
 use std::collections::{BTreeMap, BTreeSet};
 
-use crate::{
-    ast::{
-        Condition, ConditionKind, Exp, ExpData, GlobalInvariant, LocalVarDecl, MemoryLabel,
-        Operation, TempIndex, TraceKind,
-    },
-    exp_generator::ExpGenerator,
-    exp_rewriter::ExpRewriterFunctions,
+use move_model::{
     model::{DatatypeId, FunctionEnv, GlobalId, Loc, NodeId, QualifiedInstId},
     pragmas::{
         ABORTS_IF_IS_STRICT_PRAGMA, CONDITION_ABSTRACT_PROP, CONDITION_CONCRETE_PROP,
@@ -23,6 +17,15 @@ use crate::{
     },
     symbol::Symbol,
     ty::{PrimitiveType, Type},
+};
+
+use crate::{
+    ast::{
+        Condition, ConditionKind, Exp, ExpData, GlobalInvariant, LocalVarDecl, MemoryLabel,
+        Operation, TempIndex, TraceKind,
+    },
+    exp_generator::ExpGenerator,
+    exp_rewriter::ExpRewriterFunctions,
 };
 
 /// A helper which reduces specification conditions to assume/assert statements.

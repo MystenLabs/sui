@@ -14,7 +14,6 @@ use std::{
 use itertools::Itertools;
 
 use move_model::{
-    ast::{self, Condition, ConditionKind, ExpData},
     model::{
         DatatypeId, EnumEnv, FunId, GlobalEnv, ModuleId, QualifiedId, QualifiedInstId, StructEnv,
         StructOrEnumEnv,
@@ -28,6 +27,7 @@ use move_model::{
 };
 
 use crate::{
+    ast::ExpData,
     function_target::FunctionTarget,
     function_target_pipeline::{FunctionTargetProcessor, FunctionTargetsHolder, FunctionVariant},
     spec_global_variable_analysis,

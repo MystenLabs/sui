@@ -2,14 +2,16 @@
 // Copyright (c) The Move Contributors
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::function_target::FunctionTarget;
+use crate::{
+    ast::{Exp, ExpData, MemoryLabel, TempIndex, TraceKind},
+    exp_rewriter::{ExpRewriter, ExpRewriterFunctions, RewriteTarget},
+    function_target::FunctionTarget
+};
 use ethnum::U256;
 use itertools::Itertools;
 use move_binary_format::file_format::CodeOffset;
 use move_core_types::u256;
 use move_model::{
-    ast::{Exp, ExpData, MemoryLabel, TempIndex, TraceKind},
-    exp_rewriter::{ExpRewriter, ExpRewriterFunctions, RewriteTarget},
     model::{
         DatatypeId, FunId, GlobalEnv, ModuleId, NodeId, QualifiedId, QualifiedInstId, RefType,
         VariantId,

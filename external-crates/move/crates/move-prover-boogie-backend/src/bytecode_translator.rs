@@ -20,7 +20,7 @@ use log::{debug, info, log, warn, Level};
 use move_compiler::interface_generator::NATIVE_INTERFACE;
 use move_core_types::language_storage::StructTag;
 use move_model::{
-    ast::{Attribute, TempIndex, TraceKind},
+    ast::Attribute,
     code_writer::CodeWriter,
     emit, emitln,
     model::{
@@ -32,6 +32,7 @@ use move_model::{
     well_known::{TYPE_INFO_MOVE, TYPE_NAME_GET_MOVE, TYPE_NAME_MOVE},
 };
 use move_stackless_bytecode::{
+    ast::{TempIndex, TraceKind},
     function_data_builder::FunctionDataBuilder,
     function_target::FunctionTarget,
     function_target_pipeline::{

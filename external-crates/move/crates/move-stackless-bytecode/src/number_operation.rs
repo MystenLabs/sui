@@ -6,9 +6,10 @@
 //! mark the operation (arithmetic or bitwise) that a variable or a field involves,
 //! which will be used later when the correct number type (int or bv<N>) in the boogie program
 
+use crate::ast::{PropertyValue, TempIndex};
 use itertools::Itertools;
 use move_model::{
-    ast::{PropertyValue, TempIndex, Value},
+    ast::Value,
     model::{DatatypeId, FieldId, FunId, FunctionEnv, ModuleId, NodeId, StructEnv},
     pragmas::{BV_PARAM_PROP, BV_RET_PROP},
     ty::Type,
@@ -200,7 +201,6 @@ impl GlobalNumberOperationState {
         // let ret_idx_vec = Self::extract_bv_vars(number_ret_property);
         let para_idx_vec = vec![];
         let ret_idx_vec = vec![];
-
 
         let mid = func_env.module_env.get_id();
         let fid = func_env.get_id();

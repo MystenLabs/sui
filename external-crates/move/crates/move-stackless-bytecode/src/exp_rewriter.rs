@@ -4,13 +4,15 @@
 
 use std::collections::{BTreeSet, VecDeque};
 
-use crate::{
-    ast::{Exp, ExpData, LocalVarDecl, MemoryLabel, Operation, TempIndex, Value},
-    model::{GlobalEnv, ModuleId, NodeId},
+use move_model::{
+    ast::Value,
+    model::{GlobalEnv, NodeId},
     symbol::Symbol,
     ty::Type,
 };
 use itertools::Itertools;
+
+use crate::ast::{Exp, ExpData, LocalVarDecl, Operation, TempIndex};
 
 /// Rewriter for expressions, allowing to substitute locals by expressions as well as instantiate
 /// types.

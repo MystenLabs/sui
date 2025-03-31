@@ -4,9 +4,10 @@
 
 use itertools::Itertools;
 
-use move_model::{ast::TempIndex, model::FunctionEnv};
+use move_model::model::FunctionEnv;
 
 use crate::{
+    ast::TempIndex,
     function_data_builder::FunctionDataBuilder,
     function_target::FunctionData,
     function_target_pipeline::{FunctionTargetProcessor, FunctionTargetsHolder},

@@ -14,9 +14,9 @@ use std::collections::BTreeSet;
 
 use itertools::Itertools;
 
-use move_model::{exp_generator::ExpGenerator, model::FunctionEnv};
+use move_model::{ model::FunctionEnv};
 
-use crate::{
+use crate::{exp_generator::ExpGenerator,
     function_data_builder::FunctionDataBuilder,
     function_target::FunctionData,
     function_target_pipeline::{FunctionTargetProcessor, FunctionTargetsHolder},

@@ -27,10 +27,7 @@ use move_compiler::{
 use move_ir_types::ast::ConstantName;
 
 use crate::{
-    ast::{
-        Attribute, AttributeValue, Condition, ConditionKind, ExpData, GlobalInvariant, ModuleName,
-        Operation, PropertyBag, QualifiedSymbol, Value,
-    },
+    ast::{Attribute, AttributeValue, ModuleName, QualifiedSymbol, Value},
     builder::{
         exp_translator::ExpTranslator,
         model_builder::{ConstEntry, DatatypeData, ModelBuilder},
@@ -622,7 +619,7 @@ impl<'env, 'translator> ModuleBuilder<'env, 'translator> {
             }
             et.enter_scope();
             for (idx, (n, ty)) in params.iter().enumerate() {
-                et.define_local(&loc, *n, ty.clone(), None, Some(idx));
+                et.define_local(&loc, *n, ty.clone(), Some(idx));
             }
             et.finalize_types();
         }
