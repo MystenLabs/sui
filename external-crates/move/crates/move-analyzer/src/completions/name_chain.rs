@@ -9,14 +9,15 @@ use crate::{
         call_completion_item, completion_item, mod_defs, PRIMITIVE_TYPE_COMPLETIONS,
     },
     symbols::{
-        expansion_mod_ident_to_map_key, ChainCompletionKind, ChainInfo, CursorContext, DefInfo,
-        FunType, MemberDef, MemberDefInfo, Symbols, VariantInfo,
+        expansion_mod_ident_to_map_key, AutoImportInsertionInfo, AutoImportInsertionKind,
+        ChainCompletionKind, ChainInfo, CursorContext, DefInfo, FunType, MemberDef, MemberDefInfo,
+        Symbols, VariantInfo,
     },
 };
 use itertools::Itertools;
 use lsp_types::{
-    CompletionItem, CompletionItemKind, CompletionItemLabelDetails, InsertTextFormat, Position,
-    Range, TextEdit,
+    CompletionItem, CompletionItemKind, CompletionItemLabelDetails, InsertTextFormat, Range,
+    TextEdit,
 };
 use move_compiler::{
     expansion::ast::{Address, ModuleIdent, ModuleIdent_, Visibility},
@@ -96,13 +97,13 @@ pub fn name_chain_completions(
     // if we are auto-completing for an access chain, there is no need to include default completions
     completion_finalized = true;
 
-    let mut auto_import_pos_opt = None;
+    let mut import_insertion_info_opt = None;
     if auto_import {
-        auto_import_pos_opt = cursor
+        import_insertion_info_opt = cursor
             .module
             .map(|m| mod_defs(symbols, &m.value))
             .flatten()
-            .map(|m| m.auto_import_pos)
+            .map(|m| m.import_insert_info)
             .flatten();
     }
 
@@ -129,7 +130,7 @@ pub fn name_chain_completions(
                     .map(|n| completion_item(n.as_str(), CompletionItemKind::MODULE)),
             );
             // module auto-imports
-            if let Some(auto_import_pos) = auto_import_pos_opt {
+            if let Some(import_insertion_info) = import_insertion_info_opt {
                 let in_scope_modules = info
                     .modules
                     .values()
@@ -149,7 +150,7 @@ pub fn name_chain_completions(
                     add_auto_import_to_completion_item(
                         &mut item,
                         auto_import_text,
-                        auto_import_pos,
+                        import_insertion_info,
                     );
                     completions.push(item);
                 }
@@ -160,7 +161,7 @@ pub fn name_chain_completions(
                 cursor,
                 &info.members,
                 chain_kind,
-                auto_import_pos_opt,
+                import_insertion_info_opt,
             ));
             if matches!(chain_kind, ChainCompletionKind::Type) {
                 completions.extend(PRIMITIVE_TYPE_COMPLETIONS.clone());
@@ -662,7 +663,7 @@ fn all_single_name_member_completions(
     cursor: &CursorContext,
     members_info: &BTreeMap<(ModuleIdent, Symbol), BTreeSet<Symbol>>,
     chain_kind: ChainCompletionKind,
-    auto_import_pos_opt: Option<Position>,
+    import_insertion_info_opt: Option<AutoImportInsertionInfo>,
 ) -> Vec<CompletionItem> {
     let mut completions = vec![];
     for ((sp!(_, mod_ident), member_name), member_aliases) in members_info {
@@ -680,7 +681,7 @@ fn all_single_name_member_completions(
         }
     }
     // member auto-imports
-    if let Some(auto_import_pos) = auto_import_pos_opt {
+    if let Some(auto_import_pos) = import_insertion_info_opt {
         if let Some(source_mod_ident) = cursor.module {
             // need source module information to filter out auto-imports
             // of non-public module members
@@ -726,34 +727,43 @@ fn all_single_name_member_completions(
 /// Adds additional edit to a completion item at a given position
 fn add_auto_import_to_completion_item(
     item: &mut CompletionItem,
-    auto_import_text: String,
-    auto_import_pos: Position,
+    import_text: String,
+    import_insertion_info: AutoImportInsertionInfo,
 ) {
     if let Some(ref mut d) = item.label_details {
-        d.detail = Some(format!("({})", auto_import_text));
+        d.detail = Some(format!("({})", import_text));
     } else {
         item.label_details = Some(CompletionItemLabelDetails {
-            detail: Some(format!("({})", auto_import_text)),
+            detail: Some(format!("({})", import_text)),
             description: None,
         });
     }
-    item.detail = Some(format!("({})", auto_import_text));
+    item.detail = Some(format!("({})", import_text));
     let r = Range {
-        start: auto_import_pos,
-        end: auto_import_pos,
+        start: import_insertion_info.pos,
+        end: import_insertion_info.pos,
     };
-    if auto_import_pos.character > 0 {
-        // after the last import
-        item.additional_text_edits = Some(vec![TextEdit {
-            range: r,
-            new_text: format!("\n{};", auto_import_text),
-        }]);
-    } else {
-        // before the first member
-        item.additional_text_edits = Some(vec![TextEdit {
-            range: r,
-            new_text: format!("{};\n\n", auto_import_text),
-        }]);
+    match import_insertion_info.kind {
+        AutoImportInsertionKind::AfterLastImport => {
+            item.additional_text_edits = Some(vec![TextEdit {
+                range: r,
+                new_text: format!(
+                    "\n{}{};",
+                    " ".repeat(import_insertion_info.tabulation),
+                    import_text
+                ),
+            }])
+        }
+        AutoImportInsertionKind::BeforeFirstMember => {
+            item.additional_text_edits = Some(vec![TextEdit {
+                range: r,
+                new_text: format!(
+                    "{};\n\n{}",
+                    import_text,
+                    " ".repeat(import_insertion_info.tabulation)
+                ),
+            }])
+        }
     }
 }
 

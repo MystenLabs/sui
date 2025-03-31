@@ -16,4 +16,9 @@ module Import::dep {
 
     fun private_fun() {
     }
+
+    // test insertion without imports
+    fun bar() {
+        d
+    }
 }

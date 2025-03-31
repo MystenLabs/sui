@@ -9,6 +9,12 @@
           "use_line": 6,
           "use_col": 9
         }
+      ],
+      "dep.move": [
+        {
+          "use_line": 22,
+          "use_col": 9
+        }
       ]
     }
   }

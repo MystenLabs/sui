@@ -481,6 +481,30 @@ impl FieldOrderInfo {
 }
 
 /// Module-level definitions and other module-related info
+#[derive(Debug, Clone, Copy, Ord, PartialOrd, PartialEq, Eq)]
+pub enum AutoImportInsertionKind {
+    AfterLastImport,
+    BeforeFirstMember, // when no imports exist
+}
+
+/// Information needed for auto-import insertion. We do our best
+/// to make the insertion fit with what's already in the source file.
+/// In particular, if uses are already preasent, we insert the new import
+/// in the following line keeping the tabulation of the previous import.
+/// If no imports are present, we insert the new import before the first
+/// module member, pushing this member down but keeping its original
+/// tabulation.
+#[derive(Debug, Clone, Copy, Ord, PartialOrd, PartialEq, Eq)]
+pub struct AutoImportInsertionInfo {
+    // Kind of auto-import insertion
+    pub kind: AutoImportInsertionKind,
+    // Position in file where insertion should start
+    pub pos: Position,
+    // Tabulation in number of spaces
+    pub tabulation: usize,
+}
+
+/// Module-level definitions and other module-related info
 #[derive(Debug, Clone, Ord, PartialOrd, PartialEq, Eq)]
 pub struct ModuleDefs {
     /// File where this module is located
@@ -503,7 +527,7 @@ pub struct ModuleDefs {
     /// Information about calls in this module
     pub call_infos: BTreeMap<Loc, CallInfo>,
     /// Position where auto-imports should be inserted
-    pub auto_import_pos: Option<Position>,
+    pub import_insert_info: Option<AutoImportInsertionInfo>,
 }
 
 #[derive(Clone, Debug)]
@@ -3099,7 +3123,7 @@ fn get_mod_outer_defs(
         functions,
         untyped_defs: BTreeSet::new(),
         call_infos: BTreeMap::new(),
-        auto_import_pos: None,
+        import_insert_info: None,
     };
 
     // insert use of the module name in the definition itself
