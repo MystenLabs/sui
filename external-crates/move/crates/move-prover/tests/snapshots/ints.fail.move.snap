@@ -1,6 +1,5 @@
 ---
 source: crates/move-prover/tests/integration.rs
-assertion_line: 52
 expression: output
 snapshot_kind: text
 ---
