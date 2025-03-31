@@ -619,7 +619,11 @@ impl PTBLinkageResolver {
                         &mut self.type_origin_cache,
                         store,
                     )?;
+<<<<<<< HEAD
                 for id in deps {
+=======
+                for id in deps.iter() {
+>>>>>>> b71cb180b6 (clippy fixes)
                     let pkg = Self::get_package(
                         &mut self.package_cache,
                         &mut self.type_origin_cache,
@@ -761,6 +765,7 @@ impl PTBLinkageResolver {
         let resolution = resolution_fn(package);
         let original_pkg_id = package.original_package_id();
 
+<<<<<<< HEAD
         match resolution_table.resolution_table.entry(original_pkg_id) {
             Entry::Vacant(vacant_entry) => {
                 vacant_entry.insert(resolution);
@@ -768,6 +773,17 @@ impl PTBLinkageResolver {
             Entry::Occupied(mut occupied_entry) => {
                 *occupied_entry.get_mut() = occupied_entry.get().unify(&resolution)?;
             }
+=======
+        if let std::collections::btree_map::Entry::Vacant(e) = resolution_table
+            .resolution_table.entry(original_pkg_id) {
+            e.insert(resolution);
+        } else {
+            let existing_unifier = resolution_table
+                .resolution_table
+                .get_mut(&original_pkg_id)
+                .expect("Guaranteed to exist");
+            *existing_unifier = existing_unifier.unify(&resolution)?;
+>>>>>>> b71cb180b6 (clippy fixes)
         }
 
         if !resolution_table
