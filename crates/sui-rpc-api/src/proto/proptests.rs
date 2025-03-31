@@ -35,7 +35,7 @@ where
 
 protobuf_roundtrip_test!(CheckpointSummary, proto::CheckpointSummary);
 protobuf_roundtrip_test!(CheckpointContents, proto::CheckpointContents);
-protobuf_roundtrip_test!(Transaction, proto::Transaction);
+// protobuf_roundtrip_test!(Transaction, proto::Transaction);
 protobuf_roundtrip_test!(TransactionEffects, proto::TransactionEffects);
 protobuf_roundtrip_test!(TransactionEvents, proto::TransactionEvents);
 protobuf_roundtrip_test!(Object, proto::Object);

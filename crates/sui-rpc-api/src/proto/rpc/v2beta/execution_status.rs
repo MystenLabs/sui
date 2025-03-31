@@ -170,7 +170,7 @@ impl From<sui_sdk_types::ExecutionError> for super::ExecutionError {
             SuiMoveVerificationTimedout => ExecutionErrorKind::SuiMoveVerificationTimedout,
             SharedObjectOperationNotAllowed => ExecutionErrorKind::SharedObjectOperationNotAllowed,
             InputObjectDeleted => ExecutionErrorKind::InputObjectDeleted,
-            ExecutionCancelledDueToSharedObjectCongestion { congested_objects } => {
+            ExecutionCanceledDueToSharedObjectCongestion { congested_objects } => {
                 message.congested_objects =
                     congested_objects.iter().map(ToString::to_string).collect();
 
@@ -185,7 +185,7 @@ impl From<sui_sdk_types::ExecutionError> for super::ExecutionError {
                 message.coin_type = Some(coin_type);
                 ExecutionErrorKind::CoinTypeGlobalPause
             }
-            ExecutionCancelledDueToRandomnessUnavailable => {
+            ExecutionCanceledDueToRandomnessUnavailable => {
                 ExecutionErrorKind::ExecutionCanceledDueToRandomnessUnavailable
             }
         };
@@ -340,7 +340,7 @@ impl TryFrom<&super::ExecutionError> for sui_sdk_types::ExecutionError {
             SharedObjectOperationNotAllowed => Self::SharedObjectOperationNotAllowed,
             InputObjectDeleted => Self::InputObjectDeleted,
             ExecutionCanceledDueToSharedObjectCongestion => {
-                Self::ExecutionCancelledDueToSharedObjectCongestion {
+                Self::ExecutionCanceledDueToSharedObjectCongestion {
                     congested_objects: value
                         .congested_objects
                         .iter()
@@ -370,7 +370,7 @@ impl TryFrom<&super::ExecutionError> for sui_sdk_types::ExecutionError {
                     .to_owned(),
             },
             ExecutionCanceledDueToRandomnessUnavailable => {
-                Self::ExecutionCancelledDueToRandomnessUnavailable
+                Self::ExecutionCanceledDueToRandomnessUnavailable
             }
         }
         .pipe(Ok)

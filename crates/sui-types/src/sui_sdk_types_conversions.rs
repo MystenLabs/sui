@@ -430,7 +430,7 @@ impl From<UnchangedSharedKind> for crate::effects::UnchangedSharedKind {
             }
             UnchangedSharedKind::MutateDeleted { version } => Self::MutateDeleted(version.into()),
             UnchangedSharedKind::ReadDeleted { version } => Self::ReadDeleted(version.into()),
-            UnchangedSharedKind::Cancelled { version } => Self::Cancelled(version.into()),
+            UnchangedSharedKind::Canceled { version } => Self::Cancelled(version.into()),
             UnchangedSharedKind::PerEpochConfig => Self::PerEpochConfig,
         }
     }
@@ -451,7 +451,7 @@ impl From<crate::effects::UnchangedSharedKind> for UnchangedSharedKind {
             crate::effects::UnchangedSharedKind::ReadDeleted(version) => Self::ReadDeleted {
                 version: version.into(),
             },
-            crate::effects::UnchangedSharedKind::Cancelled(version) => Self::Cancelled {
+            crate::effects::UnchangedSharedKind::Cancelled(version) => Self::Canceled {
                 version: version.into(),
             },
             crate::effects::UnchangedSharedKind::PerEpochConfig => Self::PerEpochConfig,
