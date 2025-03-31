@@ -14730,6 +14730,10 @@ dependencies = [
 ]
 
 [[package]]
+name = "sui-package-alt"
+version = "1.47.0"
+
+[[package]]
 name = "sui-package-dump"
 version = "1.47.0"
 dependencies = [

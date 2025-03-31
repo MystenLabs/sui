@@ -1,6 +1,12 @@
 [package]
 name = "move-package-alt"
-version = "0.1.0"
-edition = "2024"
+version.workspace = true
+authors = ["Mysten Labs <build@mystenlabs.com>"]
+license = "Apache-2.0"
+publish = false
+edition = "2021"
+
+[lints]
+workspace = true
 
 [dependencies]
