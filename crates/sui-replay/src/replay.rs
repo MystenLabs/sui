@@ -17,9 +17,7 @@ use move_binary_format::CompiledModule;
 use move_bytecode_utils::module_cache::GetModule;
 use move_core_types::resolver::SerializedPackage;
 use move_core_types::{
-    account_address::AccountAddress,
-    language_storage::ModuleId,
-    resolver::ModuleResolver,
+    account_address::AccountAddress, language_storage::ModuleId, resolver::ModuleResolver,
 };
 use prometheus::Registry;
 use serde::{Deserialize, Serialize};
