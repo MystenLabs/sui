@@ -186,10 +186,23 @@ impl FunctionTargetProcessor for SpecWellFormedAnalysisProcessor {
 
         let underlying_func = func_env.module_env.get_function(underlying_func_id.unwrap().id);
 
+        // Signatures Checking
+
         let spec_params = func_env.get_parameters();
         let underlying_params = underlying_func.get_parameters();
 
-        // Signatures Checking
+        let spec_type_params = func_env.get_type_parameters();
+        let underlying_type_params = underlying_func.get_type_parameters();
+
+        if spec_type_params.len() != underlying_type_params.len() {
+            env.diag(
+                Severity::Error,
+                &func_env.get_loc(),
+                "Spec function have differ type params count than underlying func",
+            );
+
+            return data;
+        }
 
         if spec_params.len() != underlying_params.len() {
             env.diag(
@@ -211,6 +224,26 @@ impl FunctionTargetProcessor for SpecWellFormedAnalysisProcessor {
             }
 
             if spec_params[i].1 != underlying_params[i].1 {
+                env.diag(
+                    Severity::Error,
+                    &func_env.get_loc(),
+                    "Spec function have differ params type than underlying func",
+                );
+
+                return data;
+            }
+        }
+
+        for i in 0..spec_type_params.len() {
+            if spec_type_params[i].0 != underlying_type_params[i].0 {
+                env.diag(
+                    Severity::Warning,
+                    &func_env.get_loc(),
+                    "Spec function signature have differ params names than underlying func",
+                );
+            }
+
+            if spec_type_params[i].1 != underlying_type_params[i].1 {
                 env.diag(
                     Severity::Error,
                     &func_env.get_loc(),
