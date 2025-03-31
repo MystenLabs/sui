@@ -1,7 +1,7 @@
 use std::collections::BTreeSet;
 
 use codespan_reporting::diagnostic::Severity;
-use move_model::model::{FunId, FunctionEnv, GlobalEnv, Loc, QualifiedId};
+use move_model::model::{FunId, FunctionEnv, Loc, QualifiedId};
 
 use crate::{
     function_data_builder::FunctionDataBuilder, function_target::{FunctionData, FunctionTarget}, function_target_pipeline::{FunctionTargetProcessor, FunctionTargetsHolder}, graph::{DomRelation, Graph}, stackless_bytecode::{Bytecode, Operation}, stackless_control_flow_graph::{BlockContent, BlockId, StacklessControlFlowGraph}
@@ -135,47 +135,6 @@ impl SpecWellFormedAnalysisProcessor {
     
         return (befores, afters);
     }
-    
-    pub fn find_modifiable_locations_in_graph(&self, graph: &Graph<BlockId>, code: &[Bytecode], cfg: &StacklessControlFlowGraph, builder: &FunctionDataBuilder, env: &GlobalEnv, skip: &Operation) -> BTreeSet<Loc> {
-        let mut results = BTreeSet::new();
-        for node in graph.nodes.clone() {
-            match cfg.content(node) {
-                BlockContent::Dummy => {},
-                BlockContent::Basic { lower, upper } => {
-                    for position in *lower..(*upper + 1) {
-                        match &code[position as usize] {
-                            Bytecode::Call(attr, _, operation, _, _) => {
-                                if skip != operation {
-                                    match operation {
-                                        Operation::Function(mod_id,fun_id, types) => {
-                                            let module = env.get_module(*mod_id); 
-                                            let module_name = env.symbol_pool().string(module.get_name().name());
-
-                                            if RESTRICTED_MODULES.contains(&module_name.as_str()) {
-                                                results.insert(builder.get_loc(*attr)); 
-                                            }
-                                            
-                                            for param_type in types {
-                                                if param_type.is_mutable_reference() {
-                                                    results.insert(builder.get_loc(*attr)); 
-                                                }
-                                            }
-
-                                            println!("{:?} {} names", env.symbol_pool().string(module.get_name().name()), module.get_function(*fun_id).get_name_str());
-                                        },
-                                        _ => {}
-                                    };
-                                }
-                            },
-                            _ => {},
-                        }
-                    }
-                },
-            };                
-        }
-
-        results
-    }
 }
 
 impl FunctionTargetProcessor for SpecWellFormedAnalysisProcessor {
@@ -273,20 +232,6 @@ impl FunctionTargetProcessor for SpecWellFormedAnalysisProcessor {
             return data;
         }
 
-        let modif_locations = self.find_modifiable_locations_in_graph(&graph, code, &cfg, &builder, &env, &call_operation.clone().unwrap());
-
-        for loc in modif_locations.iter() {
-            env.diag(
-                Severity::Error,
-                loc,
-                "Consider removing non-pure calls form spec",
-            );
-        }
-
-        if modif_locations.iter().len() > 0 {
-            return data;
-        }
-
         let dom_relations = DomRelation::new(&graph);
         let is_dominated = dom_relations.is_dominated_by(cfg.exit_block(), call_node_id.unwrap());
 
@@ -333,6 +278,6 @@ impl FunctionTargetProcessor for SpecWellFormedAnalysisProcessor {
     }
 
     fn name(&self) -> String {
-        "conditions_order_analysis".to_string()
+        "spec_well_formed_analysis".to_string()
     }
 }
