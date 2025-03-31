@@ -21,10 +21,12 @@ const STDLIB_PATH = path.join(
   __dirname,
   "../../../../../crates/sui-framework/docs/std",
 );
+/*
+** Deprecated **
 const DEEPBOOK_PATH = path.join(
   __dirname,
   "../../../../../crates/sui-framework/docs/deepbook",
-);
+);*/
 const SUISYS_PATH = path.join(
   __dirname,
   "../../../../../crates/sui-framework/docs/sui_system",
