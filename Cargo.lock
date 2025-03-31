@@ -7832,8 +7832,8 @@ version = "0.1.0"
 dependencies = [
  "serde",
  "serde_spanned",
- "toml 0.7.4",
- "toml_edit 0.19.10",
+ "toml 0.5.11",
+ "toml_edit 0.14.4",
 ]
 
 [[package]]
