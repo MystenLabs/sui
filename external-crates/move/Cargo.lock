@@ -2351,6 +2351,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "move-package-alt"
+version = "0.1.0"
+dependencies = [
+ "serde",
+ "serde_spanned",
+ "toml",
+ "toml_edit 0.14.4",
+]
+
+[[package]]
 name = "move-proc-macros"
 version = "0.1.0"
 dependencies = [
@@ -3631,6 +3641,12 @@ dependencies = [
  "quote",
  "syn 2.0.98",
 ]
+
+[[package]]
+name = "serde_spanned"
+version = "0.6.8"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "87607cb1398ed59d48732e575a4c28a7a8ebf2454b964fe3f224f2afc07909e1"
 
 [[package]]
 name = "serde_with"

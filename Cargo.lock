@@ -7827,6 +7827,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "move-package-alt"
+version = "0.1.0"
+dependencies = [
+ "serde",
+ "serde_spanned",
+ "toml 0.5.11",
+ "toml_edit 0.14.4",
+]
+
+[[package]]
 name = "move-proc-macros"
 version = "0.1.0"
 dependencies = [
@@ -11714,9 +11724,9 @@ dependencies = [
 
 [[package]]
 name = "serde_spanned"
-version = "0.6.7"
+version = "0.6.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "eb5b1b31579f3811bf615c144393417496f152e12ac8b7663bf664f4a815306d"
+checksum = "87607cb1398ed59d48732e575a4c28a7a8ebf2454b964fe3f224f2afc07909e1"
 dependencies = [
  "serde",
 ]
@@ -14727,6 +14737,13 @@ dependencies = [
  "telemetry-subscribers",
  "tokio",
  "tracing",
+]
+
+[[package]]
+name = "sui-package-alt"
+version = "1.47.0"
+dependencies = [
+ "move-package-alt",
 ]
 
 [[package]]

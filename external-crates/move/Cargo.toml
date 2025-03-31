@@ -105,6 +105,7 @@ serde-name = "0.1.1"
 serde-reflection = "0.5"
 serde_bytes = "0.11.5"
 serde_json = "1.0.64"
+serde_spanned = "0.6.8"
 serde_yaml = "0.8.26"
 serde_with = "3.9.0"
 sha2 = "0.9.3"
@@ -166,6 +167,7 @@ move-ir-types = { path = "crates/move-ir-types" }
 move-model = { path = "crates/move-model" }
 move-model-2 = { path = "crates/move-model-2" }
 move-package = { path = "crates/move-package" }
+move-package-alt = { path = "crates/move-package-alt" }
 move-proc-macros = { path = "crates/move-proc-macros"}
 move-stackless-bytecode = { path = "crates/move-stackless-bytecode" }
 move-stdlib = { path = "crates/move-stdlib" }
