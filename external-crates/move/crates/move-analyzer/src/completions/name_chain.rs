@@ -11,7 +11,7 @@ use crate::{
     symbols::{
         expansion_mod_ident_to_map_key, AutoImportInsertionInfo, AutoImportInsertionKind,
         ChainCompletionKind, ChainInfo, CursorContext, DefInfo, FunType, MemberDef, MemberDefInfo,
-        Symbols, VariantInfo,
+        ModuleDefs, Symbols, VariantInfo,
     },
 };
 use itertools::Itertools;
@@ -533,7 +533,8 @@ fn struct_completion(
 /// available in the completion scope as if it was a single-length name chain.
 /// If source module is specified, and it is different from the module of the member,
 /// then only public members are included in the completion, unless modules are
-/// in the same package, in which case package members are also included.
+/// in the same package, in which case package members are also included. No members are included
+/// if a circular dependency is detected.
 fn single_name_member_completion(
     symbols: &Symbols,
     cursor: &CursorContext,
@@ -541,20 +542,30 @@ fn single_name_member_completion(
     member_alias: &Symbol,
     member_name: &Symbol,
     chain_kind: ChainCompletionKind,
-    source_mod_ident: Option<ModuleIdent_>,
+    source_mod_ident_opt: Option<ModuleIdent>,
 ) -> Vec<CompletionItem> {
     use ChainCompletionKind as CT;
 
     fn exclude_member(
-        mod_ident: &ModuleIdent_,
-        source_mod_ident: Option<ModuleIdent_>,
+        mod_defs: &ModuleDefs,
+        source_mod_ident_opt: Option<ModuleIdent>,
         visibility: &Visibility,
     ) -> bool {
-        if let Some(source_mod_ident) = source_mod_ident {
-            if mod_ident != &source_mod_ident {
+        if let Some(source_mod_ident) = source_mod_ident_opt {
+            if mod_defs.neighbors.contains_key(&source_mod_ident) {
+                // circular dependency detected, exclude member
+                // TODO: this only works if there are "true" dependencies
+                // in the source files as the compiler does not populate
+                // the `neighbors` map using `use` statements - should we
+                // fix this at some point?
+                return true;
+            }
+            if mod_defs.ident != source_mod_ident.value {
                 match visibility {
                     Visibility::Internal => true,
-                    Visibility::Package(_) => mod_ident.address != source_mod_ident.address,
+                    Visibility::Package(_) => {
+                        mod_defs.ident.address != source_mod_ident.value.address
+                    }
                     _ => false,
                 }
             } else {
@@ -590,7 +601,7 @@ fn single_name_member_completion(
         else {
             return vec![];
         };
-        if exclude_member(mod_ident, source_mod_ident, visibility) {
+        if exclude_member(mod_defs, source_mod_ident_opt, visibility) {
             return vec![];
         }
         return vec![call_completion_item(
@@ -615,7 +626,7 @@ fn single_name_member_completion(
         else {
             return vec![];
         };
-        if exclude_member(mod_ident, source_mod_ident, visibility) {
+        if exclude_member(mod_defs, source_mod_ident_opt, visibility) {
             return vec![];
         }
         return struct_completion(cursor, &mod_defs.ident, *member_alias, member_def);
@@ -630,7 +641,7 @@ fn single_name_member_completion(
         else {
             return vec![];
         };
-        if exclude_member(mod_ident, source_mod_ident, visibility) {
+        if exclude_member(mod_defs, source_mod_ident_opt, visibility) {
             return vec![];
         }
         return vec![completion_item(
@@ -644,7 +655,7 @@ fn single_name_member_completion(
         if !matches!(chain_kind, CT::All) {
             return vec![];
         }
-        if exclude_member(mod_ident, source_mod_ident, &Visibility::Internal) {
+        if exclude_member(mod_defs, source_mod_ident_opt, &Visibility::Internal) {
             return vec![];
         }
         return vec![completion_item(
@@ -706,7 +717,7 @@ fn all_single_name_member_completions(
                         member_name,
                         member_name,
                         chain_kind,
-                        Some(source_mod_ident.value),
+                        Some(source_mod_ident),
                     );
                     member_completions.iter_mut().for_each(|item| {
                         let auto_import_text = format!(

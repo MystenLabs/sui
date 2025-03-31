@@ -1,5 +1,5 @@
 module Import::another_dep {
 
-    public AnotherDepStruct {
+    public struct AnotherDepStruct {
     }
 }

@@ -6,4 +6,7 @@ module Import::colon_colon {
         d           // dep module should not be on the auto-imports list, and neither should private members
     }
 
+    fun baz() {
+        dep::bar();
+    }
 }

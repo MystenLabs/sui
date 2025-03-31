@@ -18,7 +18,7 @@ module Import::dep {
     }
 
     // test insertion without imports
-    fun bar() {
-        d
+    public fun bar() {
+        d                         // nothing from colon_colon module should be on the auto-imports list
     }
 }

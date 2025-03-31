@@ -98,7 +98,9 @@ use move_compiler::{
         },
     },
     linters::LintLevel,
-    naming::ast::{DatatypeTypeParameter, StructFields, Type, TypeName_, Type_, VariantFields},
+    naming::ast::{
+        DatatypeTypeParameter, Neighbor, StructFields, Type, TypeName_, Type_, VariantFields,
+    },
     parser::ast::{self as P, DocComment},
     shared::{
         files::MappedFiles, unique_map::UniqueMap, Identifier, Name, NamedAddressMap,
@@ -528,6 +530,7 @@ pub struct ModuleDefs {
     pub call_infos: BTreeMap<Loc, CallInfo>,
     /// Position where auto-imports should be inserted
     pub import_insert_info: Option<AutoImportInsertionInfo>,
+    pub neighbors: UniqueMap<ModuleIdent, Neighbor>,
 }
 
 #[derive(Clone, Debug)]
@@ -3113,6 +3116,7 @@ fn get_mod_outer_defs(
 
     let ident = mod_ident.value;
     let doc_string = mod_def.doc.comment().map(|d| d.value.to_owned());
+
     let mod_defs = ModuleDefs {
         fhash,
         ident,
@@ -3124,6 +3128,7 @@ fn get_mod_outer_defs(
         untyped_defs: BTreeSet::new(),
         call_infos: BTreeMap::new(),
         import_insert_info: None,
+        neighbors: mod_def.immediate_neighbors.clone(),
     };
 
     // insert use of the module name in the definition itself
