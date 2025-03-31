@@ -406,12 +406,15 @@ impl ConsensusOutputCache {
             "This version of sui-node can only run after data quarantining has been enabled. Please run version 1.45.0 or later to the end of the current epoch and retry"
         );
 
+        const EXECUTED_IN_EPOCH_CACHE_CAPACITY: u64 = 1_000_000;
         let executed_in_epoch_cache_capacity = if cfg!(msim) {
             // Ensure that we test under conditions of constant, frequent,
             // and rare cache evictions.
-            *[2, 100, 50000].choose(&mut rand::thread_rng()).unwrap()
+            *[2, 100, EXECUTED_IN_EPOCH_CACHE_CAPACITY]
+                .choose(&mut rand::thread_rng())
+                .unwrap()
         } else {
-            50_000
+            EXECUTED_IN_EPOCH_CACHE_CAPACITY
         };
 
         Self {

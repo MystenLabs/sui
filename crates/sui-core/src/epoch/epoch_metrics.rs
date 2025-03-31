@@ -2,8 +2,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use prometheus::{
-    register_int_counter_with_registry, register_int_gauge_with_registry, IntCounter, IntGauge,
-    Registry,
+    register_int_counter_vec_with_registry, register_int_counter_with_registry,
+    register_int_gauge_with_registry, IntCounter, IntCounterVec, IntGauge, Registry,
 };
 use std::sync::Arc;
 
@@ -113,6 +113,12 @@ pub struct EpochMetrics {
 
     /// The number of shared object assignments in the quarantine.
     pub shared_object_assignments_size: IntGauge,
+
+    /// The number of executed in epoch cache lookups, broken down by cache hit or miss.
+    pub executed_in_epoch_cache_lookups: IntCounterVec,
+
+    /// The number of executed in epoch table lookups.
+    pub executed_in_epoch_table_lookups: IntCounterVec,
 }
 
 impl EpochMetrics {
@@ -252,6 +258,20 @@ impl EpochMetrics {
             shared_object_assignments_size: register_int_gauge_with_registry!(
                 "shared_object_assignments_size",
                 "The number of shared object assignments in the quarantine",
+                registry
+            )
+            .unwrap(),
+            executed_in_epoch_cache_lookups: register_int_counter_vec_with_registry!(
+                "executed_in_epoch_cache_lookups",
+                "The number of executed in epoch cache lookups, broken down by cache hit or miss",
+                &["status"],
+                registry
+            )
+            .unwrap(),
+            executed_in_epoch_table_lookups: register_int_counter_vec_with_registry!(
+                "executed_in_epoch_table_lookups",
+                "The number of executed in epoch table lookups, broken down by table hit or miss",
+                &["status"],
                 registry
             )
             .unwrap(),

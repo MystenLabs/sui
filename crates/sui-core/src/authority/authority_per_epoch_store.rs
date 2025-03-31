@@ -1458,16 +1458,35 @@ impl AuthorityPerEpochStore {
                     .consensus_output_cache
                     .executed_in_current_epoch(digest)
                 {
+                    self.metrics
+                        .executed_in_epoch_cache_lookups
+                        .with_label_values(&["hit"])
+                        .inc();
                     CacheResult::Hit(true)
                 } else {
+                    self.metrics
+                        .executed_in_epoch_cache_lookups
+                        .with_label_values(&["miss"])
+                        .inc();
                     CacheResult::Miss
                 }
             },
             |digests| {
-                tables
+                let result = tables
                     .executed_transactions_to_checkpoint
                     .multi_contains_keys(digests)
-                    .expect("db error")
+                    .expect("db error");
+                let num_hits = result.iter().filter(|&&x| x).count();
+                let num_misses = result.len() - num_hits;
+                self.metrics
+                    .executed_in_epoch_table_lookups
+                    .with_label_values(&["hit"])
+                    .inc_by(num_hits as u64);
+                self.metrics
+                    .executed_in_epoch_table_lookups
+                    .with_label_values(&["miss"])
+                    .inc_by(num_misses as u64);
+                result
             },
         ))
     }
