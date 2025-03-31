@@ -530,6 +530,7 @@ pub struct ModuleDefs {
     pub call_infos: BTreeMap<Loc, CallInfo>,
     /// Position where auto-imports should be inserted
     pub import_insert_info: Option<AutoImportInsertionInfo>,
+    /// Dependencies summary
     pub neighbors: UniqueMap<ModuleIdent, Neighbor>,
 }
 
