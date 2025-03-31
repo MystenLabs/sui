@@ -3192,7 +3192,7 @@ pub struct EndOfEpochTransaction {
 pub struct EndOfEpochTransactionKind {
     #[prost(
         oneof = "end_of_epoch_transaction_kind::Kind",
-        tags = "2, 3, 200, 201, 202, 203, 204"
+        tags = "2, 3, 4, 200, 201, 202, 203, 204"
     )]
     pub kind: ::core::option::Option<end_of_epoch_transaction_kind::Kind>,
 }
@@ -3206,6 +3206,9 @@ pub mod end_of_epoch_transaction_kind {
         /// Expire JWKs used for zklogin.
         #[prost(message, tag = "3")]
         AuthenticatorStateExpire(super::AuthenticatorStateExpire),
+        /// Execution time observations from the committee to preserve cross epoch
+        #[prost(message, tag = "4")]
+        ExecutionTimeObservations(super::ExecutionTimeObservations),
         /// Create and initialize the authenticator object used for zklogin.
         #[prost(message, tag = "200")]
         AuthenticatorStateCreate(()),
@@ -3232,6 +3235,95 @@ pub struct AuthenticatorStateExpire {
     /// The initial version of the authenticator object that it was shared at.
     #[prost(uint64, optional, tag = "2")]
     pub authenticator_object_initial_shared_version: ::core::option::Option<u64>,
+}
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct ExecutionTimeObservations {
+    /// Version of this ExecutionTimeObservations
+    #[prost(int32, optional, tag = "1")]
+    pub version: ::core::option::Option<i32>,
+    #[prost(message, repeated, tag = "2")]
+    pub observations: ::prost::alloc::vec::Vec<ExecutionTimeObservation>,
+}
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct ExecutionTimeObservation {
+    #[prost(
+        enumeration = "execution_time_observation::ExecutionTimeObservationKind",
+        optional,
+        tag = "1"
+    )]
+    pub kind: ::core::option::Option<i32>,
+    #[prost(message, optional, tag = "2")]
+    pub move_entry_point: ::core::option::Option<MoveCall>,
+    #[prost(message, repeated, tag = "3")]
+    pub validator_observations: ::prost::alloc::vec::Vec<
+        ValidatorExecutionTimeObservation,
+    >,
+}
+/// Nested message and enum types in `ExecutionTimeObservation`.
+pub mod execution_time_observation {
+    #[derive(
+        Clone,
+        Copy,
+        Debug,
+        PartialEq,
+        Eq,
+        Hash,
+        PartialOrd,
+        Ord,
+        ::prost::Enumeration
+    )]
+    #[repr(i32)]
+    pub enum ExecutionTimeObservationKind {
+        Unknown = 0,
+        MoveEntryPoint = 1,
+        TransferObjects = 2,
+        SplitCoins = 3,
+        MergeCoins = 4,
+        Publish = 5,
+        MakeMoveVector = 6,
+        Upgrade = 7,
+    }
+    impl ExecutionTimeObservationKind {
+        /// String value of the enum field names used in the ProtoBuf definition.
+        ///
+        /// The values are not transformed in any way and thus are considered stable
+        /// (if the ProtoBuf definition does not change) and safe for programmatic use.
+        pub fn as_str_name(&self) -> &'static str {
+            match self {
+                Self::Unknown => "EXECUTION_TIME_OBSERVATION_KIND_UNKNOWN",
+                Self::MoveEntryPoint => "MOVE_ENTRY_POINT",
+                Self::TransferObjects => "TRANSFER_OBJECTS",
+                Self::SplitCoins => "SPLIT_COINS",
+                Self::MergeCoins => "MERGE_COINS",
+                Self::Publish => "PUBLISH",
+                Self::MakeMoveVector => "MAKE_MOVE_VECTOR",
+                Self::Upgrade => "UPGRADE",
+            }
+        }
+        /// Creates an enum from field names used in the ProtoBuf definition.
+        pub fn from_str_name(value: &str) -> ::core::option::Option<Self> {
+            match value {
+                "EXECUTION_TIME_OBSERVATION_KIND_UNKNOWN" => Some(Self::Unknown),
+                "MOVE_ENTRY_POINT" => Some(Self::MoveEntryPoint),
+                "TRANSFER_OBJECTS" => Some(Self::TransferObjects),
+                "SPLIT_COINS" => Some(Self::SplitCoins),
+                "MERGE_COINS" => Some(Self::MergeCoins),
+                "PUBLISH" => Some(Self::Publish),
+                "MAKE_MOVE_VECTOR" => Some(Self::MakeMoveVector),
+                "UPGRADE" => Some(Self::Upgrade),
+                _ => None,
+            }
+        }
+    }
+}
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct ValidatorExecutionTimeObservation {
+    /// Bls12381 public key of the validator
+    #[prost(bytes = "bytes", optional, tag = "1")]
+    pub validator: ::core::option::Option<::prost::bytes::Bytes>,
+    /// Duration of an execution observation
+    #[prost(message, optional, tag = "2")]
+    pub duration: ::core::option::Option<::prost_types::Duration>,
 }
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct ExecuteTransactionRequest {
