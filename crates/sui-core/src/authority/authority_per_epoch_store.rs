@@ -1847,9 +1847,11 @@ impl AuthorityPerEpochStore {
                         } else {
                             // If we can't find a matching start version, treat the object as
                             // if it's absent.
-                            if let Some(obj_start_version) = obj.owner().start_version() {
-                                assert!(*initial_version >= obj_start_version,
-                                        "should be impossible to certify a transaction with a start version that must have only existed in a previous epoch; obj = {obj:?} initial_version = {initial_version:?}, obj_start_version = {obj_start_version:?}");
+                            if self.protocol_config().reshare_at_same_initial_version() {
+                                if let Some(obj_start_version) = obj.owner().start_version() {
+                                    assert!(*initial_version >= obj_start_version,
+                                            "should be impossible to certify a transaction with a start version that must have only existed in a previous epoch; obj = {obj:?} initial_version = {initial_version:?}, obj_start_version = {obj_start_version:?}");
+                                }
                             }
                             ((*id, *initial_version), *initial_version)
                         }
