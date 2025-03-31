@@ -708,7 +708,7 @@ impl CompiledPackage {
 ///
 /// Skips "Deepbook" dependency.
 pub fn implicit_deps(packages: &SystemPackagesVersion) -> Dependencies {
-    let blacklist = vec!["Deepbook".to_string()];
+    let blacklist = ["Deepbook".to_string()];
     packages
         .packages
         .iter()
