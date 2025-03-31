@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::metrics::WatchdogMetrics;
-use crate::pagerduty::{Body, CreateIncident, Incident, Pagerduty, Service};
+use crate::pagerduty::{Body, CreateIncident, Incident, Pagerduty, Service, Urgency};
 use crate::query_runner::{QueryRunner, SnowflakeQueryRunner};
 use crate::SecurityWatchdogConfig;
 use anyhow::anyhow;
@@ -49,6 +49,7 @@ pub struct WalletMonitoringEntry {
     name: String,
     cron_schedule: String,
     sql_query: String,
+    urgency: Option<String>,
 }
 
 pub struct SchedulerService {
@@ -162,7 +163,9 @@ impl SchedulerService {
         query_runner: &Arc<dyn QueryRunner>,
         entry: &WalletMonitoringEntry,
     ) -> anyhow::Result<()> {
-        let WalletMonitoringEntry { sql_query, .. } = entry;
+        let WalletMonitoringEntry {
+            sql_query, urgency, ..
+        } = entry;
         let rows = query_runner.run(sql_query).await?;
         for row in rows {
             let wallet_id = row
@@ -187,6 +190,7 @@ impl SchedulerService {
                 current_balance,
                 lower_bound,
                 service_id,
+                urgency,
             )
             .await?;
         }
@@ -199,6 +203,7 @@ impl SchedulerService {
         current_balance: i128,
         lower_bound: i128,
         service_id: &str,
+        urgency: &Option<String>,
     ) -> anyhow::Result<()> {
         let service = Service {
             id: service_id.to_string(),
@@ -217,6 +222,7 @@ impl SchedulerService {
             service,
             incident_key: wallet_id.to_string(),
             body: incident_body,
+            urgency: urgency.clone().filter(|u| u == "high" || u == "low"),
             ..Default::default()
         };
         let create_incident = CreateIncident { incident };
