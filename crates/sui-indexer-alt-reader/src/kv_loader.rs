@@ -1,24 +1,25 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use async_graphql::dataloader::DataLoader;
 use std::collections::HashMap;
 use std::sync::Arc;
+
+use async_graphql::dataloader::DataLoader;
 use sui_indexer_alt_schema::transactions::StoredTransaction;
 use sui_kvstore::TransactionData as KVTransactionData;
-use sui_types::base_types::ObjectID;
-use sui_types::digests::TransactionDigest;
-use sui_types::effects::TransactionEffects;
-use sui_types::signature::GenericSignature;
-use sui_types::transaction::TransactionData;
 use sui_types::{
+    base_types::ObjectID,
     crypto::AuthorityQuorumSignInfo,
+    digests::TransactionDigest,
+    effects::TransactionEffects,
     event::Event,
     messages_checkpoint::{CheckpointContents, CheckpointSummary},
     object::Object,
+    signature::GenericSignature,
+    transaction::TransactionData,
 };
 
-use super::{
+use crate::{
     bigtable_reader::BigtableReader, checkpoints::CheckpointKey, error::Error,
     objects::VersionedObjectKey, pg_reader::PgReader, transactions::TransactionKey,
 };
@@ -29,27 +30,27 @@ use super::{
 /// - Checkpoints by sequence number
 /// - Transactions by digest
 #[derive(Clone)]
-pub(crate) enum KvLoader {
+pub enum KvLoader {
     Bigtable(Arc<DataLoader<BigtableReader>>),
     Pg(Arc<DataLoader<PgReader>>),
 }
 
 /// A wrapper for the contents of a transaction, either from Bigtable or Postgres.
-pub(crate) enum TransactionContents {
+pub enum TransactionContents {
     Bigtable(KVTransactionData),
     Pg(StoredTransaction),
 }
 
 impl KvLoader {
-    pub(crate) fn new_with_bigtable(bigtable_loader: Arc<DataLoader<BigtableReader>>) -> Self {
+    pub fn new_with_bigtable(bigtable_loader: Arc<DataLoader<BigtableReader>>) -> Self {
         Self::Bigtable(bigtable_loader)
     }
 
-    pub(crate) fn new_with_pg(pg_loader: Arc<DataLoader<PgReader>>) -> Self {
+    pub fn new_with_pg(pg_loader: Arc<DataLoader<PgReader>>) -> Self {
         Self::Pg(pg_loader)
     }
 
-    pub(crate) async fn load_one_object(
+    pub async fn load_one_object(
         &self,
         id: ObjectID,
         version: u64,
@@ -72,7 +73,7 @@ impl KvLoader {
         }
     }
 
-    pub(crate) async fn load_many_objects(
+    pub async fn load_many_objects(
         &self,
         keys: Vec<VersionedObjectKey>,
     ) -> Result<HashMap<VersionedObjectKey, Object>, Arc<Error>> {
@@ -97,7 +98,7 @@ impl KvLoader {
         }
     }
 
-    pub(crate) async fn load_one_checkpoint(
+    pub async fn load_one_checkpoint(
         &self,
         sequence_number: u64,
     ) -> Result<
@@ -131,7 +132,7 @@ impl KvLoader {
         }
     }
 
-    pub(crate) async fn load_one_transaction(
+    pub async fn load_one_transaction(
         &self,
         digest: TransactionDigest,
     ) -> Result<Option<TransactionContents>, Arc<Error>> {
@@ -147,7 +148,7 @@ impl KvLoader {
 }
 
 impl TransactionContents {
-    pub(crate) fn data(&self) -> anyhow::Result<TransactionData> {
+    pub fn data(&self) -> anyhow::Result<TransactionData> {
         match self {
             Self::Pg(stored) => {
                 let data: TransactionData =
@@ -161,7 +162,7 @@ impl TransactionContents {
         }
     }
 
-    pub(crate) fn digest(&self) -> anyhow::Result<TransactionDigest> {
+    pub fn digest(&self) -> anyhow::Result<TransactionDigest> {
         match self {
             Self::Pg(stored) => {
                 let digest =
@@ -175,7 +176,7 @@ impl TransactionContents {
         }
     }
 
-    pub(crate) fn signatures(&self) -> anyhow::Result<Vec<GenericSignature>> {
+    pub fn signatures(&self) -> anyhow::Result<Vec<GenericSignature>> {
         match self {
             Self::Pg(stored) => {
                 let signatures: Vec<GenericSignature> = bcs::from_bytes(&stored.user_signatures)
@@ -187,7 +188,7 @@ impl TransactionContents {
         }
     }
 
-    pub(crate) fn effects(&self) -> anyhow::Result<TransactionEffects> {
+    pub fn effects(&self) -> anyhow::Result<TransactionEffects> {
         match self {
             Self::Pg(stored) => {
                 let effects: TransactionEffects = bcs::from_bytes(&stored.raw_effects)
@@ -199,7 +200,7 @@ impl TransactionContents {
         }
     }
 
-    pub(crate) fn events(&self) -> anyhow::Result<Vec<Event>> {
+    pub fn events(&self) -> anyhow::Result<Vec<Event>> {
         match self {
             Self::Pg(stored) => {
                 let events: Vec<Event> = bcs::from_bytes(&stored.events)
@@ -211,7 +212,7 @@ impl TransactionContents {
         }
     }
 
-    pub(crate) fn raw_transaction(&self) -> anyhow::Result<Vec<u8>> {
+    pub fn raw_transaction(&self) -> anyhow::Result<Vec<u8>> {
         match self {
             Self::Pg(stored) => Ok(stored.raw_transaction.clone()),
             Self::Bigtable(kv) => bcs::to_bytes(kv.transaction.data().transaction_data())
@@ -219,7 +220,7 @@ impl TransactionContents {
         }
     }
 
-    pub(crate) fn raw_effects(&self) -> anyhow::Result<Vec<u8>> {
+    pub fn raw_effects(&self) -> anyhow::Result<Vec<u8>> {
         match self {
             Self::Pg(stored) => Ok(stored.raw_effects.clone()),
             Self::Bigtable(kv) => bcs::to_bytes(&kv.effects)
@@ -227,14 +228,14 @@ impl TransactionContents {
         }
     }
 
-    pub(crate) fn timestamp_ms(&self) -> u64 {
+    pub fn timestamp_ms(&self) -> u64 {
         match self {
             Self::Pg(stored) => stored.timestamp_ms as u64,
             Self::Bigtable(kv) => kv.timestamp,
         }
     }
 
-    pub(crate) fn cp_sequence_number(&self) -> u64 {
+    pub fn cp_sequence_number(&self) -> u64 {
         match self {
             Self::Pg(stored) => stored.cp_sequence_number as u64,
             Self::Bigtable(kv) => kv.checkpoint_number,

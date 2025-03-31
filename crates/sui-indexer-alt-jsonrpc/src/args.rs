@@ -7,7 +7,9 @@ use sui_indexer_alt_metrics::MetricsArgs;
 use sui_pg_db::DbArgs;
 use url::Url;
 
-use crate::{data::system_package_task::SystemPackageTaskArgs, NodeArgs, RpcArgs};
+use crate::{NodeArgs, RpcArgs};
+
+pub use sui_indexer_alt_reader::system_package_task::SystemPackageTaskArgs;
 
 #[derive(clap::Parser, Debug, Clone)]
 pub struct Args {

@@ -15,6 +15,7 @@ use diesel::{
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use serde_with::serde_as;
+use sui_indexer_alt_reader::tx_digests::TxDigestKey;
 use sui_indexer_alt_schema::schema::{
     tx_affected_addresses, tx_affected_objects, tx_calls, tx_digests,
 };
@@ -29,7 +30,6 @@ use sui_types::{
 
 use crate::{
     context::Context,
-    data::tx_digests::TxDigestKey,
     error::{invalid_params, RpcError},
     paginate::{Cursor as _, JsonCursor, Page},
 };

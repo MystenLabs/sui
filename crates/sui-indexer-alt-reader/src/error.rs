@@ -4,7 +4,7 @@
 use diesel::result::Error as DieselError;
 
 #[derive(thiserror::Error, Debug)]
-pub(crate) enum Error {
+pub enum Error {
     #[error(transparent)]
     PgCreate(anyhow::Error),
 

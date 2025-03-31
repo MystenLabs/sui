@@ -16,12 +16,12 @@ use api::rpc_module::RpcModule;
 use api::transactions::{QueryTransactions, Transactions};
 use api::write::Write;
 use config::RpcConfig;
-use data::system_package_task::{SystemPackageTask, SystemPackageTaskArgs};
 use jsonrpsee::server::{BatchRequestConfig, RpcServiceBuilder, ServerBuilder};
 use metrics::middleware::MetricsLayer;
 use metrics::RpcMetrics;
 use prometheus::Registry;
 use serde_json::json;
+use sui_indexer_alt_reader::system_package_task::{SystemPackageTask, SystemPackageTaskArgs};
 use sui_open_rpc::Project;
 use sui_pg_db::DbArgs;
 use tokio::task::JoinHandle;
@@ -270,8 +270,9 @@ pub async fn start_rpc(
     .await?;
 
     let system_package_task = SystemPackageTask::new(
-        context.clone(),
         system_package_task_args,
+        context.pg_reader().clone(),
+        context.package_resolver().clone(),
         cancel.child_token(),
     );
 

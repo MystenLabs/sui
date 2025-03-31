@@ -8,15 +8,15 @@ use diesel::{ExpressionMethods, QueryDsl};
 use move_core_types::language_storage::StructTag;
 use sui_indexer_alt_schema::{displays::StoredDisplay, schema::sum_displays};
 
-use super::{error::Error as ReadError, pg_reader::PgReader};
+use crate::{error::Error as ReadError, pg_reader::PgReader};
 
 /// Key for fetching a Display object by the type it corresponds to.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub(crate) struct DisplayKey(pub StructTag);
+pub struct DisplayKey(pub StructTag);
 
 #[derive(thiserror::Error, Debug, Clone)]
 #[error(transparent)]
-pub(crate) enum Error {
+pub enum Error {
     Bcs(#[from] bcs::Error),
     Read(#[from] Arc<ReadError>),
 }

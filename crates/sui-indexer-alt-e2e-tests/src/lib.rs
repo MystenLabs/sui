@@ -14,8 +14,7 @@ use simulacrum::Simulacrum;
 use sui_indexer_alt::{config::IndexerConfig, setup_indexer};
 use sui_indexer_alt_framework::{ingestion::ClientArgs, schema::watermarks, IndexerArgs};
 use sui_indexer_alt_jsonrpc::{
-    config::RpcConfig, data::system_package_task::SystemPackageTaskArgs, start_rpc, NodeArgs,
-    RpcArgs,
+    args::SystemPackageTaskArgs, config::RpcConfig, start_rpc, NodeArgs, RpcArgs,
 };
 use sui_pg_db::{
     temp::{get_available_port, TempDb},

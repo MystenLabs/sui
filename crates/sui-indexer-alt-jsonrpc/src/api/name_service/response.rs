@@ -11,7 +11,7 @@ use tokio::join;
 
 use crate::{
     context::Context,
-    data::objects::load_live,
+    data::load_live,
     error::{invalid_params, InternalContext, RpcError},
 };
 
