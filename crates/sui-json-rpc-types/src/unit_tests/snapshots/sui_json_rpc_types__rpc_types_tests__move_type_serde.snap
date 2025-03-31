@@ -1,0 +1,22 @@
+---
+source: crates/sui-json-rpc-types/src/unit_tests/rpc_types_tests.rs
+expression: "acc.join(\"\\n\")"
+---
+"Bool"
+"U8"
+"U16"
+"U32"
+"U64"
+"U128"
+"U256"
+"Address"
+"Signer"
+{"Vector":"U8"}
+{"Struct":{"address":"0000000000000000000000000000000000000000000000000000000000000002","module":"coin","name":"Coin","typeArguments":["Address"]}}
+{"Vector":"U16"}
+{"Vector":{"Vector":"U8"}}
+{"TypeParameter":0}
+{"Reference":"U8"}
+{"MutableReference":{"Struct":{"address":"0000000000000000000000000000000000000000000000000000000000000002","module":"coin","name":"Coin","typeArguments":["Address"]}}}
+{"abilities":{"abilities":["Copy"]},"typeParameters":[{"constraints":{"abilities":["Drop"]},"isPhantom":false}],"fields":[{"name":"field1","type":"U8"},{"name":"field2","type":"U16"}]}
+{"abilities":{"abilities":["Copy"]},"typeParameters":[],"variants":{"a":[],"b":[{"name":"field0","type":"U16"}],"c":[{"name":"field0","type":"U32"},{"name":"field1","type":{"Struct":{"address":"0000000000000000000000000000000000000000000000000000000000000002","module":"coin","name":"Coin","typeArguments":["Address"]}}}]}}
