@@ -1,0 +1,77 @@
+buildscript = []
+
+[[platform_fixup.'cfg(all(target_arch = "x86_64", target_os = "linux"))'.buildscript]]
+[platform_fixup.'cfg(all(target_arch = "x86_64", target_os = "linux"))'.buildscript.cxx_library]
+name = "libsecp256k1-sys-x86_64-linux"
+srcs = [
+    "depend/secp256k1/contrib/lax_der_parsing.c",
+    "depend/secp256k1/src/precomputed_ecmult_gen.c",
+    "depend/secp256k1/src/precomputed_ecmult.c",
+    "depend/secp256k1/src/secp256k1.c",
+]
+headers = ["depend/secp256k1/**/*.h"]
+include_paths = [
+    "depend/secp256k1",
+    "depend/secp256k1/include",
+    "depend/secp256k1/src",
+]
+preprocessor_flags = [
+    "-DENABLE_MODULE_ECDG=1",
+    "-DENABLE_MODULE_SCHNORRSIG=1",
+    "-DENABLE_MODULE_EXTRAKEYS=1",
+    "-DECMULT_GEN_PREC_BITS=4",
+    "-DECMULT_WINDOW_SIZE=15",
+    "-DUSE_EXTERNAL_DEFAULT_CALLBACKS=1",
+    "-DENABLE_MODULE_RECOVERY=1",
+]
+compiler_flags = ["-Wno-unused-function","-Wno-error"]
+[[platform_fixup.'cfg(all(target_arch = "aarch64", target_os = "linux"))'.buildscript]]
+[platform_fixup.'cfg(all(target_arch = "aarch64", target_os = "linux"))'.buildscript.cxx_library]
+name = "libsecp256k1-sys-aarch64-linux"
+srcs = [
+    "depend/secp256k1/contrib/lax_der_parsing.c",
+    "depend/secp256k1/src/precomputed_ecmult_gen.c",
+    "depend/secp256k1/src/precomputed_ecmult.c",
+    "depend/secp256k1/src/secp256k1.c",
+]
+headers = ["depend/secp256k1/**/*.h"]
+include_paths = [
+    "depend/secp256k1",
+    "depend/secp256k1/include",
+    "depend/secp256k1/src",
+]
+preprocessor_flags = [
+    "-DENABLE_MODULE_ECDG=1",
+    "-DENABLE_MODULE_SCHNORRSIG=1",
+    "-DENABLE_MODULE_EXTRAKEYS=1",
+    "-DECMULT_GEN_PREC_BITS=4",
+    "-DECMULT_WINDOW_SIZE=15",
+    "-DUSE_EXTERNAL_DEFAULT_CALLBACKS=1",
+    "-DENABLE_MODULE_RECOVERY=1",
+]
+compiler_flags = ["-Wno-unused-function","-Wno-error"]
+[[platform_fixup.'cfg(all(target_arch = "aarch64", target_os = "macos"))'.buildscript]]
+[platform_fixup.'cfg(all(target_arch = "aarch64", target_os = "macos"))'.buildscript.cxx_library]
+name = "libsecp256k1-sys-aarch64-macos"
+srcs = [
+    "depend/secp256k1/contrib/lax_der_parsing.c",
+    "depend/secp256k1/src/precomputed_ecmult_gen.c",
+    "depend/secp256k1/src/precomputed_ecmult.c",
+    "depend/secp256k1/src/secp256k1.c",
+]
+headers = ["depend/secp256k1/**/*.h"]
+include_paths = [
+    "depend/secp256k1",
+    "depend/secp256k1/include",
+    "depend/secp256k1/src",
+]
+preprocessor_flags = [
+    "-DENABLE_MODULE_ECDG=1",
+    "-DENABLE_MODULE_SCHNORRSIG=1",
+    "-DENABLE_MODULE_EXTRAKEYS=1",
+    "-DECMULT_GEN_PREC_BITS=4",
+    "-DECMULT_WINDOW_SIZE=15",
+    "-DUSE_EXTERNAL_DEFAULT_CALLBACKS=1",
+    "-DENABLE_MODULE_RECOVERY=1",
+]
+compiler_flags = ["-Wno-unused-function","-Wno-error"]
