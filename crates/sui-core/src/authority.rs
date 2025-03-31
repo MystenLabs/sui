@@ -5830,8 +5830,8 @@ impl NodeStateDump {
                         shared_objects.push(ObjDumpFormat::new(w))
                     }
                 }
-                InputSharedObject::ReadDeleted(..)
-                | InputSharedObject::MutateDeleted(..)
+                InputSharedObject::ReadConsensusStreamEnded(..)
+                | InputSharedObject::MutateConsensusStreamEnded(..)
                 | InputSharedObject::Cancelled(..) => (), // TODO: consider record congested objects.
             }
         }

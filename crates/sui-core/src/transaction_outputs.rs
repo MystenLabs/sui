@@ -32,7 +32,7 @@ impl TransactionOutputs {
     ) -> TransactionOutputs {
         let InnerTemporaryStore {
             input_objects,
-            deleted_consensus_objects,
+            stream_ended_consensus_objects,
             mutable_inputs,
             written,
             events,
@@ -67,12 +67,12 @@ impl TransactionOutputs {
             });
 
             let deleted = deleted.into_iter().map(|(object_id, version)| {
-                let shared_key = input_objects
+                let consensus_key = input_objects
                     .get(&object_id)
                     .filter(|o| o.is_consensus())
                     .map(|o| FullObjectKey::new(o.full_id(), version));
-                if let Some(shared_key) = shared_key {
-                    (shared_key, MarkerValue::SharedDeleted(tx_digest))
+                if let Some(consensus_key) = consensus_key {
+                    (consensus_key, MarkerValue::ConsensusStreamEnded(tx_digest))
                 } else {
                     (
                         FullObjectKey::new(FullObjectID::new(object_id, None), version),
@@ -81,27 +81,29 @@ impl TransactionOutputs {
                 }
             });
 
-            // We "smear" shared deleted objects in the marker table to allow for proper sequencing
-            // of transactions that are submitted after the deletion of the shared object.
-            // NB: that we do _not_ smear shared objects that were taken immutably in the
-            // transaction.
-            let smeared_objects = effects.deleted_mutably_accessed_shared_objects();
-            let shared_smears = smeared_objects.into_iter().map(|object_id| {
+            // We "smear" removed consensus objects in the marker table to allow for proper
+            // sequencing of transactions that are submitted after the consensus stream ends.
+            // This means writing duplicate copies of the `ConsensusStreamEnded` marker for
+            // every output version that was scheduled to be created.
+            // NB: that we do _not_ smear objects that were taken immutably in the transaction
+            // (because these are not assigned output versions).
+            let smeared_objects = effects.stream_ended_mutably_accessed_consensus_objects();
+            let consensus_smears = smeared_objects.into_iter().map(|object_id| {
                 let id = input_objects
                     .get(&object_id)
                     .map(|obj| obj.full_id())
                     .unwrap_or_else(|| {
-                        let start_version = deleted_consensus_objects.get(&object_id)
-                            .expect("deleted object must be in either input_objects or deleted_consensus_objects");
+                        let start_version = stream_ended_consensus_objects.get(&object_id)
+                            .expect("stream-ended object must be in either input_objects or stream_ended_consensus_objects");
                         FullObjectID::new(object_id, Some(*start_version))
                     });
                 (
                     FullObjectKey::new(id, lamport_version),
-                    MarkerValue::SharedDeleted(tx_digest),
+                    MarkerValue::ConsensusStreamEnded(tx_digest),
                 )
             });
 
-            received.chain(deleted).chain(shared_smears).collect()
+            received.chain(deleted).chain(consensus_smears).collect()
         };
 
         let locks_to_delete: Vec<_> = mutable_inputs
