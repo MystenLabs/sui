@@ -601,7 +601,7 @@ impl CheckpointExecutor {
         let checkpoint_data = load_checkpoint_data(
             ckpt_data,
             tx_data,
-            &*self.object_cache_reader,
+            self.state.get_object_store(),
             &*self.transaction_cache_reader,
         )
         .expect("failed to load checkpoint data");
