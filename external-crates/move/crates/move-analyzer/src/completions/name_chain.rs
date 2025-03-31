@@ -951,26 +951,15 @@ fn completions_for_name_chain_entry(
         kind: prev_kind,
     } = prev_info;
 
-    let mut at_colon_colon = false;
-    if path_index == path_entries.len() {
-        // the only reason we would not return here is if we were at `::` which is past the location
-        // of the last path component
-        if colon_colon_triggered && cursor.loc.start() > prev_loc.end() {
-            at_colon_colon = true;
-        } else {
-            return;
-        }
-    }
-
-    if !at_colon_colon {
-        // we are not at the last `::` but we may be at an intermediate one
-        if colon_colon_triggered
-            && path_index < path_entries.len()
-            && cursor.loc.start() > prev_loc.end()
-            && cursor.loc.end() <= path_entries[path_index].loc.start()
-        {
-            at_colon_colon = true;
-        }
+    let (at_colon_colon, past_chain_end) = cursor_at_colon_colon(
+        prev_loc,
+        cursor,
+        path_entries,
+        path_index,
+        colon_colon_triggered,
+    );
+    if past_chain_end {
+        return;
     }
 
     // we are at `::`, or at some component's identifier
@@ -1003,6 +992,41 @@ fn completions_for_name_chain_entry(
             );
         }
     }
+}
+
+/// Checks if the cursor is at `::` in a path entry and returns this
+/// result in the first position. Returns `true` in the second position
+/// if the cursor is passed the last `::` in the path entry this completion
+/// was not `::`-triggered (it was triggered on a path entry identifier).
+fn cursor_at_colon_colon(
+    prev_loc: Loc,
+    cursor: &CursorContext,
+    path_entries: &[Name],
+    path_index: usize,
+    colon_colon_triggered: bool,
+) -> (bool, bool) {
+    let mut at_colon_colon = false;
+    if path_index == path_entries.len() {
+        // the only reason we would not return here is if we were at `::` which is past the location
+        // of the last path component
+        if colon_colon_triggered && cursor.loc.start() > prev_loc.end() {
+            at_colon_colon = true;
+        } else {
+            return (false, true);
+        }
+    }
+
+    if !at_colon_colon {
+        // we are not at the last `::` but we may be at an intermediate one
+        if colon_colon_triggered
+            && path_index < path_entries.len()
+            && cursor.loc.start() > prev_loc.end()
+            && cursor.loc.end() <= path_entries[path_index].loc.start()
+        {
+            at_colon_colon = true;
+        }
+    }
+    return (at_colon_colon, false);
 }
 
 /// Check if a given address represents a package within the current program.
