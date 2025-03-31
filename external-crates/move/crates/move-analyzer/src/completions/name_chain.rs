@@ -3,6 +3,14 @@
 
 // Auto-completions for name chains, such as `mod::struct::field` or `mod::function`,
 // both in the code (e.g., types) and in `use` statements.
+//
+// Auto-imports for name chains, but only for the first or second component where it
+// makes the most sense. In other words:
+// - if someone starts typing a new identifier, auto-imports for both modules
+//   and module members will be provided.
+// - if someone starts typing the second chain component (after `::`),
+//   auto-imports for module members will be provided.
+// No other auto-import completions will be provided
 
 use crate::{
     completions::utils::{
@@ -172,7 +180,9 @@ pub fn name_chain_completions(
                 );
             }
         }
-    } else if let Some(next_kind) = first_name_chain_component_kind(symbols, &info, leading_name) {
+    } else if let Some(next_kind) =
+        first_in_scope_name_chain_component_kind(symbols, &info, leading_name)
+    {
         completions_for_name_chain_entry(
             symbols,
             cursor,
@@ -183,6 +193,18 @@ pub fn name_chain_completions(
             /* path_index */ 0,
             colon_colon_triggered,
             inside_use,
+            &mut completions,
+        );
+    } else {
+        imports_for_name_chain_entry(
+            symbols,
+            cursor,
+            leading_name.loc,
+            chain_kind,
+            &path_entries,
+            leading_name,
+            colon_colon_triggered,
+            import_insertion_info_opt,
             &mut completions,
         );
     }
@@ -538,21 +560,21 @@ fn struct_completion(
 fn single_name_member_completion(
     symbols: &Symbols,
     cursor: &CursorContext,
-    mod_ident: &ModuleIdent_,
+    mod_defs: &ModuleDefs,
     member_alias: &Symbol,
     member_name: &Symbol,
     chain_kind: ChainCompletionKind,
-    source_mod_ident_opt: Option<ModuleIdent>,
+    src_mod_ident_opt: Option<ModuleIdent>,
 ) -> Vec<CompletionItem> {
     use ChainCompletionKind as CT;
 
     fn exclude_member(
         mod_defs: &ModuleDefs,
-        source_mod_ident_opt: Option<ModuleIdent>,
+        src_mod_ident_opt: Option<ModuleIdent>,
         visibility: &Visibility,
     ) -> bool {
-        if let Some(source_mod_ident) = source_mod_ident_opt {
-            if mod_defs.neighbors.contains_key(&source_mod_ident) {
+        if let Some(src_mod_ident) = src_mod_ident_opt {
+            if mod_defs.neighbors.contains_key(&src_mod_ident) {
                 // circular dependency detected, exclude member
                 // TODO: this only works if there are "true" dependencies
                 // in the source files as the compiler does not populate
@@ -560,12 +582,10 @@ fn single_name_member_completion(
                 // fix this at some point?
                 return true;
             }
-            if mod_defs.ident != source_mod_ident.value {
+            if mod_defs.ident != src_mod_ident.value {
                 match visibility {
                     Visibility::Internal => true,
-                    Visibility::Package(_) => {
-                        mod_defs.ident.address != source_mod_ident.value.address
-                    }
+                    Visibility::Package(_) => mod_defs.ident.address != src_mod_ident.value.address,
                     _ => false,
                 }
             } else {
@@ -577,10 +597,6 @@ fn single_name_member_completion(
             false
         }
     }
-
-    let Some(mod_defs) = mod_defs(symbols, mod_ident) else {
-        return vec![];
-    };
 
     // is it a function?
     if let Some(fdef) = mod_defs.functions.get(member_name) {
@@ -601,11 +617,11 @@ fn single_name_member_completion(
         else {
             return vec![];
         };
-        if exclude_member(mod_defs, source_mod_ident_opt, visibility) {
+        if exclude_member(mod_defs, src_mod_ident_opt, visibility) {
             return vec![];
         }
         return vec![call_completion_item(
-            mod_ident,
+            &mod_defs.ident,
             matches!(fun_type, FunType::Macro),
             None,
             member_alias,
@@ -626,7 +642,7 @@ fn single_name_member_completion(
         else {
             return vec![];
         };
-        if exclude_member(mod_defs, source_mod_ident_opt, visibility) {
+        if exclude_member(mod_defs, src_mod_ident_opt, visibility) {
             return vec![];
         }
         return struct_completion(cursor, &mod_defs.ident, *member_alias, member_def);
@@ -641,7 +657,7 @@ fn single_name_member_completion(
         else {
             return vec![];
         };
-        if exclude_member(mod_defs, source_mod_ident_opt, visibility) {
+        if exclude_member(mod_defs, src_mod_ident_opt, visibility) {
             return vec![];
         }
         return vec![completion_item(
@@ -655,7 +671,7 @@ fn single_name_member_completion(
         if !matches!(chain_kind, CT::All) {
             return vec![];
         }
-        if exclude_member(mod_defs, source_mod_ident_opt, &Visibility::Internal) {
+        if exclude_member(mod_defs, src_mod_ident_opt, &Visibility::Internal) {
             return vec![];
         }
         return vec![completion_item(
@@ -678,11 +694,14 @@ fn all_single_name_member_completions(
 ) -> Vec<CompletionItem> {
     let mut completions = vec![];
     for ((sp!(_, mod_ident), member_name), member_aliases) in members_info {
+        let Some(mod_defs) = mod_defs(symbols, mod_ident) else {
+            return completions;
+        };
         for member_alias in member_aliases {
             let member_completions = single_name_member_completion(
                 symbols,
                 cursor,
-                mod_ident,
+                mod_defs,
                 member_alias,
                 &member_name,
                 chain_kind,
@@ -693,46 +712,76 @@ fn all_single_name_member_completions(
     }
     // member auto-imports
     if let Some(auto_import_pos) = import_insertion_info_opt {
-        if let Some(source_mod_ident) = cursor.module {
+        if let Some(src_mod_ident) = cursor.module {
             // need source module information to filter out auto-imports
             // of non-public module members
-            let mod_members = symbols.file_mods.values().flatten().map(|mdef| {
+            let all_mod_members = symbols.file_mods.values().flatten().map(|mod_defs| {
                 (
-                    sp(mdef.name_loc, mdef.ident),
-                    mdef.functions
-                        .keys()
-                        .chain(mdef.structs.keys().chain(mdef.enums.keys())),
+                    sp(mod_defs.name_loc, mod_defs.ident),
+                    mod_defs.functions.keys().chain(
+                        mod_defs
+                            .structs
+                            .keys()
+                            .chain(mod_defs.enums.keys().chain(mod_defs.constants.keys())),
+                    ),
                 )
             });
-            for (mod_ident, import_members) in mod_members {
+            for (mod_ident, import_members) in all_mod_members {
+                let Some(mod_defs) = mod_defs(symbols, &mod_ident.value) else {
+                    continue;
+                };
                 for member_name in import_members {
                     // exclude members that are already imported
                     if members_info.contains_key(&(mod_ident, *member_name)) {
                         continue;
                     }
-                    let mut member_completions = single_name_member_completion(
+                    let member_imports = member_auto_imports(
                         symbols,
                         cursor,
-                        &mod_ident.value,
-                        member_name,
+                        mod_defs,
                         member_name,
                         chain_kind,
-                        Some(source_mod_ident),
+                        src_mod_ident,
+                        auto_import_pos,
                     );
-                    member_completions.iter_mut().for_each(|item| {
-                        let auto_import_text = format!(
-                            "use {}::{}::{}",
-                            mod_ident.value.address, mod_ident.value.module, member_name,
-                        );
-                        add_auto_import_to_completion_item(item, auto_import_text, auto_import_pos);
-                    });
-                    completions.extend(member_completions);
+                    completions.extend(member_imports);
                 }
             }
         }
     }
 
     completions
+}
+
+/// Returns list of completion items that represent module members
+/// auto-imports.
+fn member_auto_imports(
+    symbols: &Symbols,
+    cursor: &CursorContext,
+    mod_defs: &ModuleDefs,
+    member_name: &Symbol,
+    chain_kind: ChainCompletionKind,
+    src_mod_ident: ModuleIdent,
+    auto_import_pos: AutoImportInsertionInfo,
+) -> Vec<CompletionItem> {
+    let mut member_completions = single_name_member_completion(
+        symbols,
+        cursor,
+        mod_defs,
+        member_name,
+        member_name,
+        chain_kind,
+        Some(src_mod_ident),
+    );
+    let mod_ident = mod_defs.ident;
+    member_completions.iter_mut().for_each(|item| {
+        let auto_import_text = format!(
+            "use {}::{}::{}",
+            mod_ident.address, mod_ident.module, member_name,
+        );
+        add_auto_import_to_completion_item(item, auto_import_text, auto_import_pos);
+    });
+    member_completions
 }
 
 /// Adds additional edit to a completion item at a given position
@@ -932,6 +981,70 @@ fn next_name_chain_component_kind(
     }
 }
 
+fn imports_for_name_chain_entry(
+    symbols: &Symbols,
+    cursor: &CursorContext,
+    prev_loc: Loc,
+    chain_kind: ChainCompletionKind,
+    path_entries: &[Name],
+    leading_name: P::LeadingNameAccess,
+    colon_colon_triggered: bool,
+    import_insertion_info_opt: Option<AutoImportInsertionInfo>,
+    completions: &mut Vec<CompletionItem>,
+) {
+    // We are only providing auto-imports for the second chain
+    // component. Check if we are at the appropriate `::` or at
+    // the identifier of the second chain component.
+    let path_index = 0;
+    let (at_colon_colon, past_chain_end) = cursor_at_colon_colon(
+        cursor,
+        prev_loc,
+        path_entries,
+        path_index,
+        colon_colon_triggered,
+    );
+    if past_chain_end {
+        return;
+    }
+    let Some(auto_import_pos) = import_insertion_info_opt else {
+        return;
+    };
+    let Some(src_mod_ident) = cursor.module else {
+        return;
+    };
+    if at_colon_colon
+        || (path_entries.len() > 0 && path_entries[path_index].loc.contains(&cursor.loc))
+    {
+        let P::LeadingNameAccess_::Name(name) = leading_name.value else {
+            return;
+        };
+        for mod_defs in symbols.file_mods.values().flatten() {
+            if mod_defs.ident.module.value() == name.value {
+                mod_defs
+                    .functions
+                    .keys()
+                    .chain(
+                        mod_defs
+                            .structs
+                            .keys()
+                            .chain(mod_defs.enums.keys().chain(mod_defs.constants.keys())),
+                    )
+                    .for_each(|member_name| {
+                        completions.extend(member_auto_imports(
+                            symbols,
+                            cursor,
+                            mod_defs,
+                            member_name,
+                            chain_kind,
+                            src_mod_ident,
+                            auto_import_pos,
+                        ))
+                    });
+            }
+        }
+    }
+}
+
 /// Walks down a name chain, looking for the relevant portion that contains the cursor. When it
 /// finds, it calls to `name_chain_entry_completions` to compute and return the completions.
 fn completions_for_name_chain_entry(
@@ -952,8 +1065,8 @@ fn completions_for_name_chain_entry(
     } = prev_info;
 
     let (at_colon_colon, past_chain_end) = cursor_at_colon_colon(
-        prev_loc,
         cursor,
+        prev_loc,
         path_entries,
         path_index,
         colon_colon_triggered,
@@ -999,8 +1112,8 @@ fn completions_for_name_chain_entry(
 /// if the cursor is passed the last `::` in the path entry this completion
 /// was not `::`-triggered (it was triggered on a path entry identifier).
 fn cursor_at_colon_colon(
-    prev_loc: Loc,
     cursor: &CursorContext,
+    prev_loc: Loc,
     path_entries: &[Name],
     path_index: usize,
     colon_colon_triggered: bool,
@@ -1094,8 +1207,9 @@ fn all_packages(symbols: &Symbols, info: &AliasAutocompleteInfo) -> BTreeSet<Str
     addresses
 }
 
-/// Computes the kind of the fist chain component.
-fn first_name_chain_component_kind(
+/// Computes the kind of the fist chain component that is already
+/// in scope (was already imported).
+fn first_in_scope_name_chain_component_kind(
     symbols: &Symbols,
     info: &AliasAutocompleteInfo,
     leading_name: P::LeadingNameAccess,

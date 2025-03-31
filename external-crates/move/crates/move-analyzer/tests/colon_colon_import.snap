@@ -3,7 +3,7 @@ source: crates/move-analyzer/tests/ide_testsuite.rs
 ---
 == colon_colon.move ========================================================
 -- test 0 -------------------
-use line: 6, use_col: 9
+use line: 7, use_col: 9
 Unit '0xCAFE'
 Unit 'Import'
 Module 'Self'
@@ -12,6 +12,14 @@ Module 'another_dep'
     TARGET     : '(use Import::another_dep)'
     ADDITIONAL EDIT: '
     use Import::another_dep;'
+Method 'bak()'
+    INSERT TEXT: 'bak()'
+    TARGET     : '(Import::colon_colon::bak)'
+    TYPE       : 'fun ()'
+Method 'bam()'
+    INSERT TEXT: 'bam()'
+    TARGET     : '(Import::colon_colon::bam)'
+    TYPE       : 'fun ()'
 Method 'baz()'
     INSERT TEXT: 'baz()'
     TARGET     : '(Import::colon_colon::baz)'
@@ -50,6 +58,20 @@ Enum 'PubEnum'
     TARGET     : '(use Import::dep::PubEnum)'
     ADDITIONAL EDIT: '
     use Import::dep::PubEnum;'
+
+-- test 1 -------------------
+use line: 15, use_col: 21
+Struct 'AnotherDepStruct'
+    TARGET     : '(use Import::another_dep::AnotherDepStruct)'
+    ADDITIONAL EDIT: '
+    use Import::another_dep::AnotherDepStruct;'
+
+-- test 2 -------------------
+use line: 19, use_col: 22
+Struct 'AnotherDepStruct'
+    TARGET     : '(use Import::another_dep::AnotherDepStruct)'
+    ADDITIONAL EDIT: '
+    use Import::another_dep::AnotherDepStruct;'
 
 == dep.move ========================================================
 -- test 0 -------------------
