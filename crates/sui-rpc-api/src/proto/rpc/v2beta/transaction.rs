@@ -560,10 +560,10 @@ impl From<sui_sdk_types::ConsensusDeterminedVersionAssignments>
         use sui_sdk_types::ConsensusDeterminedVersionAssignments::*;
 
         let kind = match value {
-            CancelledTransactions {
-                cancelled_transactions,
+            CanceledTransactions {
+                canceled_transactions,
             } => Kind::CanceledTransactions(super::CanceledTransactions {
-                canceled_transactions: cancelled_transactions.into_iter().map(Into::into).collect(),
+                canceled_transactions: canceled_transactions.into_iter().map(Into::into).collect(),
             }),
         };
 
@@ -586,8 +586,8 @@ impl TryFrom<&super::ConsensusDeterminedVersionAssignments>
         {
             Kind::CanceledTransactions(super::CanceledTransactions {
                 canceled_transactions,
-            }) => Self::CancelledTransactions {
-                cancelled_transactions: canceled_transactions
+            }) => Self::CanceledTransactions {
+                canceled_transactions: canceled_transactions
                     .iter()
                     .map(TryInto::try_into)
                     .collect::<Result<_, _>>()?,
@@ -601,8 +601,8 @@ impl TryFrom<&super::ConsensusDeterminedVersionAssignments>
 // CanceledTransaction
 //
 
-impl From<sui_sdk_types::CancelledTransaction> for super::CanceledTransaction {
-    fn from(value: sui_sdk_types::CancelledTransaction) -> Self {
+impl From<sui_sdk_types::CanceledTransaction> for super::CanceledTransaction {
+    fn from(value: sui_sdk_types::CanceledTransaction) -> Self {
         Self {
             digest: Some(value.digest.to_string()),
             version_assignments: value
@@ -614,7 +614,7 @@ impl From<sui_sdk_types::CancelledTransaction> for super::CanceledTransaction {
     }
 }
 
-impl TryFrom<&super::CanceledTransaction> for sui_sdk_types::CancelledTransaction {
+impl TryFrom<&super::CanceledTransaction> for sui_sdk_types::CanceledTransaction {
     type Error = TryFromProtoError;
 
     fn try_from(value: &super::CanceledTransaction) -> Result<Self, Self::Error> {
@@ -1014,6 +1014,9 @@ impl From<sui_sdk_types::EndOfEpochTransactionKind> for super::EndOfEpochTransac
             BridgeCommitteeInit {
                 bridge_object_version,
             } => Kind::BridgeCommitteeInit(bridge_object_version),
+            StoreExecutionTimeObservations(observations) => {
+                Kind::ExecutionTimeObservations(observations.into())
+            }
         };
 
         Self { kind: Some(kind) }
@@ -1044,6 +1047,9 @@ impl TryFrom<&super::EndOfEpochTransactionKind> for sui_sdk_types::EndOfEpochTra
             Kind::BridgeCommitteeInit(version) => Self::BridgeCommitteeInit {
                 bridge_object_version: *version,
             },
+            Kind::ExecutionTimeObservations(execution_time_observations) => {
+                Self::StoreExecutionTimeObservations(execution_time_observations.try_into()?)
+            }
         }
         .pipe(Ok)
     }
@@ -1081,6 +1087,176 @@ impl TryFrom<&super::AuthenticatorStateExpire> for sui_sdk_types::AuthenticatorS
         Ok(Self {
             min_epoch,
             authenticator_object_initial_shared_version,
+        })
+    }
+}
+
+// ExecutionTimeObservations
+
+impl From<sui_sdk_types::ExecutionTimeObservations> for super::ExecutionTimeObservations {
+    fn from(value: sui_sdk_types::ExecutionTimeObservations) -> Self {
+        match value {
+            sui_sdk_types::ExecutionTimeObservations::V1(vec) => Self {
+                version: Some(1),
+                observations: vec.into_iter().map(Into::into).collect(),
+            },
+        }
+    }
+}
+
+impl TryFrom<&super::ExecutionTimeObservations> for sui_sdk_types::ExecutionTimeObservations {
+    type Error = TryFromProtoError;
+
+    fn try_from(value: &super::ExecutionTimeObservations) -> Result<Self, Self::Error> {
+        Ok(Self::V1(
+            value
+                .observations
+                .iter()
+                .map(|observation| observation.try_into())
+                .collect::<Result<_, _>>()?,
+        ))
+    }
+}
+
+impl
+    From<(
+        sui_sdk_types::ExecutionTimeObservationKey,
+        Vec<sui_sdk_types::ValidatorExecutionTimeObservation>,
+    )> for super::ExecutionTimeObservation
+{
+    fn from(
+        value: (
+            sui_sdk_types::ExecutionTimeObservationKey,
+            Vec<sui_sdk_types::ValidatorExecutionTimeObservation>,
+        ),
+    ) -> Self {
+        use super::execution_time_observation::ExecutionTimeObservationKind;
+        use sui_sdk_types::ExecutionTimeObservationKey;
+
+        let mut message = Self::default();
+
+        let kind = match value.0 {
+            ExecutionTimeObservationKey::MoveEntryPoint {
+                package,
+                module,
+                function,
+                type_arguments,
+            } => {
+                message.move_entry_point = Some(super::MoveCall {
+                    package: Some(package.to_string()),
+                    module: Some(module),
+                    function: Some(function),
+                    type_arguments: type_arguments
+                        .into_iter()
+                        .map(|ty| ty.to_string())
+                        .collect(),
+                    arguments: Vec::new(),
+                });
+                ExecutionTimeObservationKind::MoveEntryPoint
+            }
+            ExecutionTimeObservationKey::TransferObjects => {
+                ExecutionTimeObservationKind::TransferObjects
+            }
+            ExecutionTimeObservationKey::SplitCoins => ExecutionTimeObservationKind::SplitCoins,
+            ExecutionTimeObservationKey::MergeCoins => ExecutionTimeObservationKind::MergeCoins,
+            ExecutionTimeObservationKey::Publish => ExecutionTimeObservationKind::Publish,
+            ExecutionTimeObservationKey::MakeMoveVec => {
+                ExecutionTimeObservationKind::MakeMoveVector
+            }
+            ExecutionTimeObservationKey::Upgrade => ExecutionTimeObservationKind::Upgrade,
+        };
+
+        message.validator_observations = value.1.into_iter().map(Into::into).collect();
+        message.set_kind(kind);
+        message
+    }
+}
+
+impl TryFrom<&super::ExecutionTimeObservation>
+    for (
+        sui_sdk_types::ExecutionTimeObservationKey,
+        Vec<sui_sdk_types::ValidatorExecutionTimeObservation>,
+    )
+{
+    type Error = TryFromProtoError;
+
+    fn try_from(value: &super::ExecutionTimeObservation) -> Result<Self, Self::Error> {
+        use super::execution_time_observation::ExecutionTimeObservationKind;
+        use sui_sdk_types::ExecutionTimeObservationKey;
+
+        let key = match value.kind() {
+            ExecutionTimeObservationKind::Unknown => {
+                return Err(TryFromProtoError::from_error(
+                    "unknown ExecutionTimeObservationKind",
+                ))
+            }
+            ExecutionTimeObservationKind::MoveEntryPoint => {
+                let move_call = value
+                    .move_entry_point
+                    .as_ref()
+                    .ok_or_else(|| TryFromProtoError::missing("move_entry_point"))?
+                    .pipe(sui_sdk_types::MoveCall::try_from)?;
+                ExecutionTimeObservationKey::MoveEntryPoint {
+                    package: move_call.package,
+                    module: move_call.module.to_string(),
+                    function: move_call.function.to_string(),
+                    type_arguments: move_call.type_arguments,
+                }
+            }
+            ExecutionTimeObservationKind::TransferObjects => {
+                ExecutionTimeObservationKey::TransferObjects
+            }
+            ExecutionTimeObservationKind::SplitCoins => ExecutionTimeObservationKey::SplitCoins,
+            ExecutionTimeObservationKind::MergeCoins => ExecutionTimeObservationKey::MergeCoins,
+            ExecutionTimeObservationKind::Publish => ExecutionTimeObservationKey::Publish,
+            ExecutionTimeObservationKind::MakeMoveVector => {
+                ExecutionTimeObservationKey::MakeMoveVec
+            }
+            ExecutionTimeObservationKind::Upgrade => ExecutionTimeObservationKey::Upgrade,
+        };
+
+        let observations = value
+            .validator_observations
+            .iter()
+            .map(sui_sdk_types::ValidatorExecutionTimeObservation::try_from)
+            .collect::<Result<_, _>>()?;
+
+        Ok((key, observations))
+    }
+}
+
+// ValidatorExecutionTimeObservation
+
+impl From<sui_sdk_types::ValidatorExecutionTimeObservation>
+    for super::ValidatorExecutionTimeObservation
+{
+    fn from(value: sui_sdk_types::ValidatorExecutionTimeObservation) -> Self {
+        Self {
+            validator: Some(value.validator.as_bytes().to_vec().into()),
+            duration: Some(value.duration.try_into().unwrap()),
+        }
+    }
+}
+
+impl TryFrom<&super::ValidatorExecutionTimeObservation>
+    for sui_sdk_types::ValidatorExecutionTimeObservation
+{
+    type Error = TryFromProtoError;
+
+    fn try_from(value: &super::ValidatorExecutionTimeObservation) -> Result<Self, Self::Error> {
+        Ok(Self {
+            validator: value
+                .validator
+                .as_ref()
+                .ok_or_else(|| TryFromProtoError::missing("validator"))?
+                .as_ref()
+                .pipe(sui_sdk_types::Bls12381PublicKey::from_bytes)
+                .map_err(TryFromProtoError::from_error)?,
+            duration: value
+                .duration
+                .ok_or_else(|| TryFromProtoError::missing("duration"))?
+                .try_into()
+                .map_err(TryFromProtoError::from_error)?,
         })
     }
 }
