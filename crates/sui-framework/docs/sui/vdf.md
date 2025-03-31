@@ -94,6 +94,8 @@ The discriminant for the class group is pre-computed and fixed. See how this was
 crate. The final selection of the discriminant for Mainnet will be computed and announced under a nothing-up-my-sleeve
 process.
 
+This function is currently only enabled on Devnet.
+
 
 <pre><code><b>public</b> <b>fun</b> <a href="../sui/vdf.md#sui_vdf_vdf_verify">vdf_verify</a>(input: &vector&lt;u8&gt;, output: &vector&lt;u8&gt;, proof: &vector&lt;u8&gt;, iterations: u64): bool
 </code></pre>
