@@ -21,7 +21,7 @@ pub struct NaturalLoop<T: Ord + Copy + Debug> {
 
 pub struct Graph<T: Ord + Copy + Debug> {
     entry: T,
-    nodes: Vec<T>,
+    pub nodes: Vec<T>,
     edges: Vec<(T, T)>,
     predecessors: BTreeMap<T, BTreeSet<T>>,
     successors: BTreeMap<T, BTreeSet<T>>,
