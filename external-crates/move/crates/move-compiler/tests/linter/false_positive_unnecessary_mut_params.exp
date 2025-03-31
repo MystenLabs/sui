@@ -1,0 +1,35 @@
+warning[Lint W04013]: unnecessary mutable parameters
+   ┌─ tests/linter/false_positive_unnecessary_mut_params.move:10:35
+   │
+10 │     public fun dead_code_mutation(person: &mut Person): u64 {
+   │                                   ^^^^^^ Parameter 'person' is marked as mutable but never modified
+   │
+   = This warning can be suppressed with '#[allow(lint(unnecessary_mut_params))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+error[E04007]: incompatible types
+   ┌─ tests/linter/false_positive_unnecessary_mut_params.move:11:28
+   │
+10 │     public fun dead_code_mutation(person: &mut Person): u64 {
+   │                                                         --- Expected: 'u64'
+11 │         return person.count;
+   │                            ^
+   │                            │
+   │                            Invalid return expression
+   │                            Given: '()'
+
+warning[Lint W04013]: unnecessary mutable parameters
+   ┌─ tests/linter/false_positive_unnecessary_mut_params.move:15:37
+   │
+15 │     public fun conditional_mutation(person: &mut Person) {
+   │                                     ^^^^^^ Parameter 'person' is marked as mutable but never modified
+   │
+   = This warning can be suppressed with '#[allow(lint(unnecessary_mut_params))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[Lint W04013]: unnecessary mutable parameters
+   ┌─ tests/linter/false_positive_unnecessary_mut_params.move:22:38
+   │
+22 │     public fun complex_flow_mutation(person: &mut Person, flag: bool) {
+   │                                      ^^^^^^ Parameter 'person' is marked as mutable but never modified
+   │
+   = This warning can be suppressed with '#[allow(lint(unnecessary_mut_params))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
