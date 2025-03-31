@@ -6,7 +6,8 @@ license = "Apache-2.0"
 publish = false
 edition = "2021"
 
-[lints]
-workspace = true
-
 [dependencies]
+serde.workspace = true
+toml_edit.workspace = true
+serde_spanned.workspace = true
+toml.workspace = true

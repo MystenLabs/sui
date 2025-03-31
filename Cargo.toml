@@ -486,6 +486,7 @@ serde-name = "0.2.1"
 serde-reflection = "0.5"
 serde_json = { version = "1.0.95", features = ["preserve_order"] }
 serde_repr = "0.1"
+serde_spanned = "0.6.8"
 serde_test = "1.0.147"
 serde_with = "3.8"
 # serde_yaml = "0.9.21"
