@@ -70,13 +70,13 @@ const frameworkPlugin = (context, options) => {
       const bridgeFiles = recurseFiles(BRIDGE_PATH);
       const frameworkFiles = recurseFiles(FRAMEWORK_PATH);
       const stdlibFiles = recurseFiles(STDLIB_PATH);
-      const deepbookFiles = recurseFiles(DEEPBOOK_PATH);
+      //const deepbookFiles = recurseFiles(DEEPBOOK_PATH);
       const suisysFiles = recurseFiles(SUISYS_PATH);
       const allFiles = [
         bridgeFiles,
         frameworkFiles,
         stdlibFiles,
-        deepbookFiles,
+        //deepbookFiles,
         suisysFiles,
       ];
       allFiles.forEach((theseFiles) => {
