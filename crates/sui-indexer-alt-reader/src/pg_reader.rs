@@ -20,31 +20,30 @@ use tokio_util::sync::CancellationToken;
 use tracing::{debug, warn};
 use url::Url;
 
-use crate::{data::error::Error, metrics::RpcMetrics};
+use crate::{error::Error, metrics::ReaderMetrics};
 
 /// This wrapper type exists to perform error conversion between the data fetching layer and the
 /// RPC layer, metrics collection, and debug logging of database queries.
 #[derive(Clone)]
-pub(crate) struct PgReader {
+pub struct PgReader {
     db: Option<db::Db>,
-    metrics: Arc<RpcMetrics>,
+    metrics: Arc<ReaderMetrics>,
     cancel: CancellationToken,
     slow_query_threshold: Duration,
 }
 
-pub(crate) struct Connection<'p> {
+pub struct Connection<'p> {
     conn: db::Connection<'p>,
-    metrics: Arc<RpcMetrics>,
+    metrics: Arc<ReaderMetrics>,
     slow_query_threshold: Duration,
 }
 
 impl PgReader {
     /// Create a new database reader. If `database_url` is `None`, the reader will not accept any
     /// connection requests (they will all fail).
-    pub(crate) async fn new(
+    pub async fn new(
         database_url: Option<Url>,
         db_args: db::DbArgs,
-        metrics: Arc<RpcMetrics>,
         registry: &Registry,
         cancel: CancellationToken,
         slow_query_threshold: Duration,
@@ -66,6 +65,8 @@ impl PgReader {
             None
         };
 
+        let metrics = ReaderMetrics::new(registry);
+
         Ok(Self {
             db,
             metrics,
@@ -75,13 +76,13 @@ impl PgReader {
     }
 
     /// Create a data loader backed by this reader.
-    pub(crate) fn as_data_loader(&self) -> DataLoader<Self> {
+    pub fn as_data_loader(&self) -> DataLoader<Self> {
         DataLoader::new(self.clone(), tokio::spawn)
     }
 
     /// Acquire a connection to the database. This can potentially fail if the service is cancelled
     /// while the connection is being acquired.
-    pub(crate) async fn connect(&self) -> Result<Connection<'_>, Error> {
+    pub async fn connect(&self) -> Result<Connection<'_>, Error> {
         let Some(db) = &self.db else {
             return Err(Error::PgConnect(anyhow!("No database to connect to")));
         };
@@ -103,7 +104,7 @@ impl PgReader {
 }
 
 impl Connection<'_> {
-    pub(crate) async fn first<'q, Q, ST, U>(&mut self, query: Q) -> Result<U, Error>
+    pub async fn first<'q, Q, ST, U>(&mut self, query: Q) -> Result<U, Error>
     where
         Q: LimitDsl,
         Q::Output: Query + QueryFragment<Pg> + QueryId + Send + 'q,
@@ -117,7 +118,6 @@ impl Connection<'_> {
         debug!("{query_debug}");
 
         self.metrics.db_requests_received.inc();
-
         let timer = self.metrics.db_latency.start_timer();
         let res = query.get_result(&mut self.conn).await;
         let elapsed_ms = timer.stop_and_record() * 1000.0;
@@ -140,7 +140,7 @@ impl Connection<'_> {
         Ok(res?)
     }
 
-    pub(crate) async fn results<'q, Q, ST, U>(&mut self, query: Q) -> Result<Vec<U>, Error>
+    pub async fn results<'q, Q, ST, U>(&mut self, query: Q) -> Result<Vec<U>, Error>
     where
         Q: Query + QueryFragment<Pg> + QueryId + Send + 'q,
         Q::SqlType: CompatibleType<U, Pg, SqlType = ST>,
@@ -152,7 +152,6 @@ impl Connection<'_> {
         debug!("{query_debug}");
 
         self.metrics.db_requests_received.inc();
-
         let timer = self.metrics.db_latency.start_timer();
         let res = query.get_results(&mut self.conn).await;
         let elapsed_ms = timer.stop_and_record() * 1000.0;

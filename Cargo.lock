@@ -14109,10 +14109,10 @@ dependencies = [
  "sui-default-config",
  "sui-display",
  "sui-indexer-alt-metrics",
+ "sui-indexer-alt-reader",
  "sui-indexer-alt-schema",
  "sui-json",
  "sui-json-rpc-types",
- "sui-kvstore",
  "sui-name-service",
  "sui-open-rpc",
  "sui-open-rpc-macros",
@@ -14145,6 +14145,32 @@ dependencies = [
  "tokio",
  "tokio-util 0.7.13 (registry+https://github.com/rust-lang/crates.io-index)",
  "tracing",
+]
+
+[[package]]
+name = "sui-indexer-alt-reader"
+version = "1.48.0"
+dependencies = [
+ "anyhow",
+ "async-graphql",
+ "async-trait",
+ "bcs",
+ "clap",
+ "diesel",
+ "diesel-async",
+ "move-core-types",
+ "prometheus",
+ "sui-indexer-alt-metrics",
+ "sui-indexer-alt-schema",
+ "sui-kvstore",
+ "sui-package-resolver",
+ "sui-pg-db",
+ "sui-types",
+ "thiserror 1.0.69",
+ "tokio",
+ "tokio-util 0.7.13 (registry+https://github.com/rust-lang/crates.io-index)",
+ "tracing",
+ "url",
 ]
 
 [[package]]

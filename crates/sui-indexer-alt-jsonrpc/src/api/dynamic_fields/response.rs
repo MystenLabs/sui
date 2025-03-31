@@ -18,9 +18,9 @@ use tokio::try_join;
 
 use crate::{
     api::objects,
-    data::objects::{load_latest, load_live},
+    context::Context,
+    data::load_live,
     error::{invalid_params, rpc_bail, RpcError},
-    Context,
 };
 
 use super::error::Error;
@@ -67,7 +67,7 @@ pub(super) async fn dynamic_field_info(
     ctx: &Context,
     object_id: ObjectID,
 ) -> Result<DynamicFieldInfoResponse, RpcError<Error>> {
-    let object = load_latest(ctx, object_id)
+    let object = load_live(ctx, object_id)
         .await
         .context("Failed to load dynamic field")?
         .context("Could not find latest content for dynamic field")?;
@@ -112,7 +112,7 @@ pub(super) async fn dynamic_field_info(
         },
 
         DFV::ValueMetadata::DynamicObjectField(object_id) => {
-            let object = load_latest(ctx, object_id)
+            let object = load_live(ctx, object_id)
                 .await
                 .context("Failed to load dynamic object field value")?
                 .context("Could not find latest content for dynamic object field value")?;

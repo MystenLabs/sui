@@ -18,9 +18,7 @@ use serde_json::{json, Value};
 use sui_indexer_alt::config::{IndexerConfig, Merge, PrunerLayer};
 use sui_indexer_alt_e2e_tests::OffchainCluster;
 use sui_indexer_alt_framework::{ingestion::ClientArgs, IndexerArgs};
-use sui_indexer_alt_jsonrpc::{
-    config::RpcConfig, data::system_package_task::SystemPackageTaskArgs,
-};
+use sui_indexer_alt_jsonrpc::{args::SystemPackageTaskArgs, config::RpcConfig};
 use sui_transactional_test_runner::{
     create_adapter,
     offchain_state::{OffchainStateReader, TestResponse},

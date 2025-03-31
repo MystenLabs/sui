@@ -14,11 +14,11 @@ use sui_types::{
     messages_checkpoint::{CheckpointContents, CheckpointSummary},
 };
 
-use super::{bigtable_reader::BigtableReader, error::Error, pg_reader::PgReader};
+use crate::{bigtable_reader::BigtableReader, error::Error, pg_reader::PgReader};
 
 /// Key for fetching a checkpoint's content by its sequence number.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub(crate) struct CheckpointKey(pub u64);
+pub struct CheckpointKey(pub u64);
 
 #[async_trait::async_trait]
 impl Loader<CheckpointKey> for PgReader {

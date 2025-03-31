@@ -9,6 +9,7 @@ use diesel::sql_types::Bool;
 use jsonrpsee::{core::RpcResult, http_client::HttpClient, proc_macros::rpc};
 use move_core_types::language_storage::{StructTag, TypeTag};
 use serde::{Deserialize, Serialize};
+use sui_indexer_alt_reader::coin_metadata::CoinMetadataKey;
 use sui_indexer_alt_schema::objects::StoredCoinOwnerKind;
 use sui_indexer_alt_schema::schema::coin_balance_buckets;
 use sui_json_rpc_types::{Balance, Coin, Page as PageResponse, SuiCoinMetadata};
@@ -21,7 +22,7 @@ use sui_types::object::Object;
 use crate::{
     config::NodeConfig,
     context::Context,
-    data::{coin_metadata::CoinMetadataKey, objects::load_live},
+    data::load_live,
     error::{client_error_to_error_object, invalid_params, InternalContext, RpcError},
     paginate::{BcsCursor, Cursor as _, Page},
 };

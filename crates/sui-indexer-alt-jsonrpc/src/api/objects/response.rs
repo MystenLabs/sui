@@ -7,6 +7,7 @@ use anyhow::{bail, Context as _};
 use futures::future::OptionFuture;
 use move_core_types::{annotated_value::MoveTypeLayout, language_storage::StructTag};
 use sui_display::v1::Format;
+use sui_indexer_alt_reader::displays::DisplayKey;
 use sui_json_rpc_types::{
     DisplayFieldsResponse, SuiData, SuiObjectData, SuiObjectDataOptions, SuiObjectResponse,
     SuiParsedData, SuiPastObjectResponse, SuiRawData,
@@ -22,7 +23,7 @@ use tokio::join;
 
 use crate::{
     context::Context,
-    data::{displays::DisplayKey, objects::load_live},
+    data::load_live,
     error::{rpc_bail, InternalContext, RpcError},
 };
 
