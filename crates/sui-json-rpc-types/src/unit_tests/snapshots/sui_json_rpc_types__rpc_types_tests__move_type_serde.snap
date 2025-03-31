@@ -19,4 +19,4 @@ expression: "acc.join(\"\\n\")"
 {"Reference":"U8"}
 {"MutableReference":{"Struct":{"address":"0000000000000000000000000000000000000000000000000000000000000002","module":"coin","name":"Coin","typeArguments":["Address"]}}}
 {"abilities":{"abilities":["Copy"]},"typeParameters":[{"constraints":{"abilities":["Drop"]},"isPhantom":false}],"fields":[{"name":"field1","type":"U8"},{"name":"field2","type":"U16"}]}
-{"abilities":{"abilities":["Copy"]},"typeParameters":[],"variants":{"a":[],"b":[{"name":"field0","type":"U16"}],"c":[{"name":"field0","type":"U32"},{"name":"field1","type":{"Struct":{"address":"0000000000000000000000000000000000000000000000000000000000000002","module":"coin","name":"Coin","typeArguments":["Address"]}}}]}}
+{"abilities":{"abilities":["Copy"]},"typeParameters":[],"variants":{"a":[],"b":[{"name":"field0","type":"U16"}],"c":[{"name":"field0","type":"U32"},{"name":"field1","type":{"Struct":{"address":"0000000000000000000000000000000000000000000000000000000000000002","module":"coin","name":"Coin","typeArguments":["Address"]}}}]},"variantDeclarationOrder":["b","a","c"]}

@@ -232,7 +232,12 @@ fn test_move_type_serde() {
                 },
             ],
         ),
-    ]
+    ];
+    let variant_declaration_order = variants
+        .iter()
+        .map(|(name, _)| name.to_string())
+        .collect::<Vec<_>>();
+    let variants = variants
     .into_iter()
     .map(|(name, type_)| {
         (
@@ -255,6 +260,7 @@ fn test_move_type_serde() {
         },
         type_parameters: vec![],
         variants,
+        variant_declaration_order: Some(variant_declaration_order),
     };
 
     acc.push(serde_json::to_string(&e).unwrap());
