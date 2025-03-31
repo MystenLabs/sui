@@ -158,6 +158,7 @@ fn global_value_non_struct() -> PartialVMResult<()> {
 
 #[test]
 fn legacy_ref_abstract_memory_size_consistency() -> PartialVMResult<()> {
+    #![allow(deprecated)]
     let mut heap = MachineHeap::new();
     let mut locals = heap.allocate_stack_frame(vec![], 10)?;
 
@@ -224,6 +225,7 @@ fn legacy_val_abstract_memory_size_consistency() -> PartialVMResult<()> {
         locals.store_loc(idx, val.copy_value())?;
 
         let val_size_new = val.legacy_abstract_memory_size();
+        #[allow(deprecated)]
         let val_size_old = val.legacy_size();
 
         assert_eq!(val_size_new, val_size_old);
