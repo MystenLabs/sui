@@ -166,6 +166,7 @@ move-ir-types = { path = "crates/move-ir-types" }
 move-model = { path = "crates/move-model" }
 move-model-2 = { path = "crates/move-model-2" }
 move-package = { path = "crates/move-package" }
+move-package-alt = { path = "crates/move-package-alt" }
 move-proc-macros = { path = "crates/move-proc-macros"}
 move-stackless-bytecode = { path = "crates/move-stackless-bytecode" }
 move-stdlib = { path = "crates/move-stdlib" }
