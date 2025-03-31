@@ -28,13 +28,14 @@ use sui_types::messages_checkpoint::VerifiedCheckpointContents;
 use sui_types::object::Object;
 use sui_types::storage::error::Error as StorageError;
 use sui_types::storage::error::Result;
-use sui_types::storage::AccountOwnedObjectInfo;
 use sui_types::storage::CoinInfo;
 use sui_types::storage::DynamicFieldIndexInfo;
 use sui_types::storage::DynamicFieldKey;
 use sui_types::storage::ObjectStore;
+use sui_types::storage::OwnedObjectInfo;
 use sui_types::storage::RpcIndexes;
 use sui_types::storage::RpcStateReader;
+use sui_types::storage::TransactionInfo;
 use sui_types::storage::WriteStore;
 use sui_types::storage::{ObjectKey, ReadStore};
 use sui_types::transaction::VerifiedTransaction;
@@ -117,15 +118,14 @@ impl ReadStore for RocksDbStore {
     }
 
     fn get_lowest_available_checkpoint(&self) -> Result<CheckpointSequenceNumber, StorageError> {
-        let highest_pruned_cp = self
+        if let Some(highest_pruned_cp) = self
             .checkpoint_store
             .get_highest_pruned_checkpoint_seq_number()
-            .map_err(Into::<StorageError>::into)?;
-
-        if highest_pruned_cp == 0 {
-            Ok(0)
-        } else {
+            .map_err(Into::<StorageError>::into)?
+        {
             Ok(highest_pruned_cp + 1)
+        } else {
+            Ok(0)
         }
     }
 
@@ -449,16 +449,12 @@ impl RpcStateReader for RestReadStore {
     fn get_lowest_available_checkpoint_objects(
         &self,
     ) -> sui_types::storage::error::Result<CheckpointSequenceNumber> {
-        let highest_pruned_cp = self
+        Ok(self
             .state
             .get_object_cache_reader()
-            .get_highest_pruned_checkpoint();
-
-        if highest_pruned_cp == 0 {
-            Ok(0)
-        } else {
-            Ok(highest_pruned_cp + 1)
-        }
+            .get_highest_pruned_checkpoint()
+            .map(|cp| cp + 1)
+            .unwrap_or(0))
     }
 
     fn get_chain_identifier(&self) -> Result<sui_types::digests::ChainIdentifier> {
@@ -471,29 +467,49 @@ impl RpcStateReader for RestReadStore {
 }
 
 impl RpcIndexes for RpcIndexStore {
-    fn get_transaction_checkpoint(
+    fn get_epoch_info(&self, epoch: EpochId) -> Result<Option<sui_types::storage::EpochInfo>> {
+        self.get_epoch_info(epoch).map_err(StorageError::custom)
+    }
+
+    fn get_transaction_info(
         &self,
         digest: &TransactionDigest,
-    ) -> sui_types::storage::error::Result<Option<CheckpointSequenceNumber>> {
+    ) -> sui_types::storage::error::Result<Option<TransactionInfo>> {
         self.get_transaction_info(digest)
-            .map(|maybe_info| maybe_info.map(|info| info.checkpoint))
             .map_err(StorageError::custom)
     }
 
-    fn account_owned_objects_info_iter(
+    fn owned_objects_iter(
         &self,
         owner: SuiAddress,
-        cursor: Option<ObjectID>,
-    ) -> Result<Box<dyn Iterator<Item = Result<AccountOwnedObjectInfo, TypedStoreError>> + '_>>
-    {
-        let iter = self.owner_iter(owner, cursor)?.map(|result| {
+        object_type: Option<StructTag>,
+        cursor: Option<OwnedObjectInfo>,
+    ) -> Result<Box<dyn Iterator<Item = Result<OwnedObjectInfo, TypedStoreError>> + '_>> {
+        let cursor = cursor.map(|cursor| OwnerIndexKey {
+            owner: cursor.owner,
+            object_type: cursor.object_type,
+            inverted_balance: cursor.balance.map(std::ops::Not::not),
+            object_id: cursor.object_id,
+        });
+
+        let iter = self.owner_iter(owner, object_type, cursor)?.map(|result| {
             result.map(
-                |(OwnerIndexKey { owner, object_id }, OwnerIndexInfo { version, type_ })| {
-                    AccountOwnedObjectInfo {
+                |(
+                    OwnerIndexKey {
                         owner,
                         object_id,
+                        object_type,
+                        inverted_balance,
+                    },
+                    OwnerIndexInfo { version, digest },
+                )| {
+                    OwnedObjectInfo {
+                        owner,
+                        object_type,
+                        balance: inverted_balance.map(std::ops::Not::not),
+                        object_id,
                         version,
-                        type_,
+                        digest,
                     }
                 },
             )
@@ -525,9 +541,11 @@ impl RpcIndexes for RpcIndexStore {
                 |CoinIndexInfo {
                      coin_metadata_object_id,
                      treasury_object_id,
+                     regulated_coin_metadata_object_id,
                  }| CoinInfo {
                     coin_metadata_object_id,
                     treasury_object_id,
+                    regulated_coin_metadata_object_id,
                 },
             )
             .pipe(Ok)
