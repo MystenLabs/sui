@@ -194,6 +194,21 @@ impl FunctionTargetProcessor for SpecWellFormedAnalysisProcessor {
             }
         }
 
+        let spec_returns = func_env.get_return_types();
+        let underlying_returns = underlying_func.get_return_types();
+
+        for i in 0..spec_returns.len() {
+            if spec_returns[i] != underlying_returns[i] {
+                env.diag(
+                    Severity::Error,
+                    &func_env.get_loc(),
+                    "Spec function have differ return types than underlying func",
+                );
+
+                return data;
+            }
+        }
+
         let code = func_target.get_bytecode();
         let cfg: StacklessControlFlowGraph = StacklessControlFlowGraph::new_forward(code);
         let entry = cfg.entry_block();
