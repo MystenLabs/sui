@@ -530,6 +530,9 @@ fn struct_completion(
 
 /// Returns completion item if a given name/alias identifies a valid member of a given module
 /// available in the completion scope as if it was a single-length name chain.
+/// If source module is specified, and it is different from the module of the member,
+/// then only public members are included in the completion, unless modules are
+/// in the same package, in which case package members are also included.
 fn single_name_member_completion(
     symbols: &Symbols,
     cursor: &CursorContext,
@@ -541,6 +544,28 @@ fn single_name_member_completion(
 ) -> Vec<CompletionItem> {
     use ChainCompletionKind as CT;
 
+    fn exclude_member(
+        mod_ident: &ModuleIdent_,
+        source_mod_ident: Option<ModuleIdent_>,
+        visibility: &Visibility,
+    ) -> bool {
+        if let Some(source_mod_ident) = source_mod_ident {
+            if mod_ident != &source_mod_ident {
+                match visibility {
+                    Visibility::Internal => true,
+                    Visibility::Package(_) => mod_ident.address != source_mod_ident.address,
+                    _ => false,
+                }
+            } else {
+                // same module, include member regardless of visibility
+                false
+            }
+        } else {
+            // no source module, include member regardless of visibility
+            false
+        }
+    }
+
     let Some(mod_defs) = mod_defs(symbols, mod_ident) else {
         return vec![];
     };
@@ -550,11 +575,23 @@ fn single_name_member_completion(
         if !(matches!(chain_kind, CT::Function) || matches!(chain_kind, CT::All)) {
             return vec![];
         }
-        let Some(DefInfo::Function(.., fun_type, _, type_args, arg_names, arg_types, ret_type, _)) =
-            symbols.def_info(&fdef.name_loc)
+        let Some(DefInfo::Function(
+            _,
+            visibility,
+            fun_type,
+            _,
+            type_args,
+            arg_names,
+            arg_types,
+            ret_type,
+            _,
+        )) = symbols.def_info(&fdef.name_loc)
         else {
             return vec![];
         };
+        if exclude_member(mod_ident, source_mod_ident, visibility) {
+            return vec![];
+        }
         return vec![call_completion_item(
             mod_ident,
             matches!(fun_type, FunType::Macro),
@@ -573,12 +610,26 @@ fn single_name_member_completion(
         if !(matches!(chain_kind, CT::Type) || matches!(chain_kind, CT::All)) {
             return vec![];
         }
+        let Some(DefInfo::Struct(_, _, visibility, ..)) = symbols.def_info(&member_def.name_loc)
+        else {
+            return vec![];
+        };
+        if exclude_member(mod_ident, source_mod_ident, visibility) {
+            return vec![];
+        }
         return struct_completion(cursor, &mod_defs.ident, *member_alias, member_def);
     }
 
     // is it an enum?
-    if mod_defs.enums.get(member_name).is_some() {
+    if let Some(member_def) = mod_defs.enums.get(member_name) {
         if !(matches!(chain_kind, CT::Type) || matches!(chain_kind, CT::All)) {
+            return vec![];
+        }
+        let Some(DefInfo::Enum(_, _, visibility, ..)) = symbols.def_info(&member_def.name_loc)
+        else {
+            return vec![];
+        };
+        if exclude_member(mod_ident, source_mod_ident, visibility) {
             return vec![];
         }
         return vec![completion_item(
@@ -590,6 +641,9 @@ fn single_name_member_completion(
     // is it a const?
     if mod_defs.constants.get(member_name).is_some() {
         if !matches!(chain_kind, CT::All) {
+            return vec![];
+        }
+        if exclude_member(mod_ident, source_mod_ident, &Visibility::Internal) {
             return vec![];
         }
         return vec![completion_item(
