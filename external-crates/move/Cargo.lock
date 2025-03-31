@@ -2351,6 +2351,10 @@ dependencies = [
 ]
 
 [[package]]
+name = "move-package-alt"
+version = "0.1.0"
+
+[[package]]
 name = "move-proc-macros"
 version = "0.1.0"
 dependencies = [
