@@ -27,7 +27,7 @@ native fun hash_to_input_internal(message: &vector<u8>): vector<u8>;
 /// crate. The final selection of the discriminant for Mainnet will be computed and announced under a nothing-up-my-sleeve
 /// process.
 ///
-/// This functions is currently only enabled on Devnet.
+/// This function is currently only enabled on Devnet.
 public fun vdf_verify(
     input: &vector<u8>,
     output: &vector<u8>,
