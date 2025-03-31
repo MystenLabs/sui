@@ -1500,14 +1500,14 @@ impl ModelValue {
                             && struct_env.get_full_name_str() == "integer::Integer"
                         {
                             Some(PrettyDoc::text(format!(
-                                "integer::Integer {{ {} }}",
+                                "{}",
                                 self.extract_integer()?
                             )))
                         } else if struct_env.is_native()
                             && struct_env.get_full_name_str() == "real::Real"
                         {
                             Some(PrettyDoc::text(format!(
-                                "real::Real {{ {} }}",
+                                "{}",
                                 self.extract_real()?
                             )))
                         } else {
