@@ -35,6 +35,8 @@ title: Module `sui::vdf`
 
 Hash an arbitrary binary <code>message</code> to a class group element to be used as input for <code><a href="../sui/vdf.md#sui_vdf_vdf_verify">vdf_verify</a></code>.
 
+This function is currently only enabled on Devnet.
+
 
 <pre><code><b>public</b> <b>fun</b> <a href="../sui/vdf.md#sui_vdf_hash_to_input">hash_to_input</a>(message: &vector&lt;u8&gt;): vector&lt;u8&gt;
 </code></pre>
