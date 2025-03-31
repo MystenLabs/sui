@@ -1,7 +1,7 @@
-use std::collections::BTreeSet;
+use std::{collections::BTreeSet, vec};
 
 use codespan_reporting::diagnostic::Severity;
-use move_model::model::{FunId, FunctionEnv, Loc, QualifiedId};
+use move_model::{model::{FunId, FunctionEnv, Loc, QualifiedId}, symbol::Symbol};
 
 use crate::{
     function_data_builder::FunctionDataBuilder, function_target::{FunctionData, FunctionTarget}, function_target_pipeline::{FunctionTargetProcessor, FunctionTargetsHolder}, graph::{DomRelation, Graph}, stackless_bytecode::{Bytecode, Operation}, stackless_control_flow_graph::{BlockContent, BlockId, StacklessControlFlowGraph}
@@ -49,26 +49,26 @@ impl SpecWellFormedAnalysisProcessor {
         }
     }
 
-    pub fn find_node_by_func_id(&self, target_id: QualifiedId<FunId>, graph: &Graph<BlockId>, code: &[Bytecode], cfg: &StacklessControlFlowGraph) -> (Option<BlockId>, Option<Operation>, bool) {
-        let mut call_node_id: Option<BlockId> = None;
-        let mut call_operation: Option<Operation> = None;
+    pub fn find_node_by_func_id(&self, target_id: QualifiedId<FunId>, graph: &Graph<BlockId>, code: &[Bytecode], cfg: &StacklessControlFlowGraph) -> (Option<(BlockId, Operation, Vec<usize>, Vec<usize>)>, bool) {
         let mut multiple = false;
+        let mut result: Option<(BlockId, Operation, Vec<usize>, Vec<usize>)> = None;
+
         for node in graph.nodes.clone() {
             match cfg.content(node) {
                 BlockContent::Dummy => {},
                 BlockContent::Basic { lower, upper } => {
                     for position in *lower..*upper {
                         match &code[position as usize] {
-                            Bytecode::Call(_, _, operation, _, _) => {
+                            Bytecode::Call(_, dsts, operation, srcs, _) => {
                                 match operation {
                                     Operation::Function(mod_id,fun_id, _) => {
                                         let callee_id = mod_id.qualified(*fun_id);
                                         if callee_id == target_id {
-                                            if call_node_id.is_some() {
+                                            if result.is_some() {
                                                 multiple = true;
                                             }
-                                            call_node_id = Some(node);
-                                            call_operation = Some(operation.clone());
+
+                                            result = Some((node, operation.clone(), dsts.clone(), srcs.clone()));
                                         }
                                     },
                                     _ => {}
@@ -81,7 +81,7 @@ impl SpecWellFormedAnalysisProcessor {
             };                
         }
 
-        (call_node_id, call_operation, multiple)
+        (result, multiple)
     }
 
     pub fn fing_node_operation(&self, block_id: BlockId, cfg: &StacklessControlFlowGraph, code: &[Bytecode], targets: &[Operation], builder: &FunctionDataBuilder) -> Option<Loc> {
@@ -135,6 +135,27 @@ impl SpecWellFormedAnalysisProcessor {
     
         return (befores, afters);
     }
+
+    pub fn get_return_variables(&self, func_env: &FunctionEnv, code: &[Bytecode]) -> Vec<Vec<Symbol>> {
+        // using matrix to cover all possible returns with params
+        let mut results = vec!();
+        for cp in code.iter() {
+            match cp {
+                Bytecode::Ret(_, srcs) => {
+                    let mut result: Vec<Symbol> = vec!();
+                    for idx in srcs.clone() {
+                        let lc = func_env.get_local_name(idx);
+                        result.push(lc);
+                    }
+                    
+                    results.push(result);
+                } 
+                _ => {}
+            }
+        }
+
+        results
+    }
 }
 
 impl FunctionTargetProcessor for SpecWellFormedAnalysisProcessor {
@@ -147,6 +168,10 @@ impl FunctionTargetProcessor for SpecWellFormedAnalysisProcessor {
     ) -> FunctionData {
         if !targets.is_spec(&func_env.get_qualified_id()) {
             // only need to do this for spec functions
+            return data;
+        }
+
+        if func_env.get_name_str() != "sqrt_spec" {
             return data;
         }
 
@@ -164,6 +189,8 @@ impl FunctionTargetProcessor for SpecWellFormedAnalysisProcessor {
         let spec_params = func_env.get_parameters();
         let underlying_params = underlying_func.get_parameters();
 
+        // Signatures Checking
+
         if spec_params.len() != underlying_params.len() {
             env.diag(
                 Severity::Error,
@@ -179,7 +206,7 @@ impl FunctionTargetProcessor for SpecWellFormedAnalysisProcessor {
                 env.diag(
                     Severity::Warning,
                     &func_env.get_loc(),
-                    "Spec function have differ params names than underlying func",
+                    "Spec function signature have differ params names than underlying func",
                 );
             }
 
@@ -194,11 +221,11 @@ impl FunctionTargetProcessor for SpecWellFormedAnalysisProcessor {
             }
         }
 
-        let spec_returns = func_env.get_return_types();
-        let underlying_returns = underlying_func.get_return_types();
+        let spec_return_types = func_env.get_return_types();
+        let underlying_return_types = underlying_func.get_return_types();
 
-        for i in 0..spec_returns.len() {
-            if spec_returns[i] != underlying_returns[i] {
+        for i in 0..spec_return_types.len() {
+            if spec_return_types[i] != underlying_return_types[i] {
                 env.diag(
                     Severity::Error,
                     &func_env.get_loc(),
@@ -225,9 +252,9 @@ impl FunctionTargetProcessor for SpecWellFormedAnalysisProcessor {
         let graph: Graph<u16> = Graph::new(entry, nodes, edges);
         let builder = FunctionDataBuilder::new(&func_env, data.clone());
 
-        let (call_node_id, call_operation, multiple_calls) = self.find_node_by_func_id(underlying_func.get_qualified_id(), &graph, code, &cfg);
+        let (call_data, multiple_calls) = self.find_node_by_func_id(underlying_func.get_qualified_id(), &graph, code, &cfg);
 
-        if !call_node_id.is_some() {
+        if !call_data.is_some() {
             env.diag(
                 Severity::Error,
                 &func_env.get_loc(),
@@ -247,8 +274,42 @@ impl FunctionTargetProcessor for SpecWellFormedAnalysisProcessor {
             return data;
         }
 
+        let (call_node_id, call_operation, outputs, inputs) = call_data.unwrap();
+
+        // Arguments Checking
+
+        let spec_params_symbols: Vec<Symbol> = spec_params.iter().map(|sd| sd.0).collect(); 
+        for src in inputs {
+            let lc = func_target.get_local_name(src);
+
+            if !spec_params_symbols.contains(&lc) { // => if input variable for underlying function is not spec parameter
+                env.diag(
+                    Severity::Error,
+                    &func_env.get_loc(),
+                    "Underlying func input var is not a function parameter",
+                );
+            }
+        }
+
+        let return_symbols_matrix = self.get_return_variables(func_env, code);
+        let output_symbols: Vec<Symbol> = outputs.iter()
+            .map(|idx| func_target.get_local_name(*idx))
+            .collect(); 
+
+        for return_symbols in return_symbols_matrix {
+            for rs in return_symbols {
+                if !output_symbols.contains(&rs) { // => if return variable of spec is not result of underlying func call
+                    env.diag(
+                        Severity::Error,
+                        &func_env.get_loc(),
+                        "Underlying func result var is not returned from spec",
+                    );
+                }
+            }
+        }
+
         let dom_relations = DomRelation::new(&graph);
-        let is_dominated = dom_relations.is_dominated_by(cfg.exit_block(), call_node_id.unwrap());
+        let is_dominated = dom_relations.is_dominated_by(cfg.exit_block(), call_node_id);
 
         if !is_dominated {
             env.diag(
@@ -267,9 +328,9 @@ impl FunctionTargetProcessor for SpecWellFormedAnalysisProcessor {
             Operation::apply_fun_qid(&func_env.module_env.env.asserts_qid(), vec![]),
         ];
 
-        let mut pre_matches_traversed = self.traverse_and_match_operations(true, &call_node_id.unwrap(), &graph, &cfg, code, &builder, &preconditions);
-        let mut post_matches_traversed = self.traverse_and_match_operations(false, &call_node_id.unwrap(), &graph, &cfg, code, &builder, &postconditions);
-        let (mut pre_matches, mut post_matches) = self.fing_operations_before_after_operation_in_node(&call_node_id.unwrap(), &call_operation.unwrap(), &cfg, code, &builder, &postconditions, &preconditions);
+        let mut pre_matches_traversed = self.traverse_and_match_operations(true, &call_node_id, &graph, &cfg, code, &builder, &preconditions);
+        let mut post_matches_traversed = self.traverse_and_match_operations(false, &call_node_id, &graph, &cfg, code, &builder, &postconditions);
+        let (mut pre_matches, mut post_matches) = self.fing_operations_before_after_operation_in_node(&call_node_id, &call_operation, &cfg, code, &builder, &postconditions, &preconditions);
 
         pre_matches.append(&mut pre_matches_traversed);
         post_matches.append(&mut post_matches_traversed);
