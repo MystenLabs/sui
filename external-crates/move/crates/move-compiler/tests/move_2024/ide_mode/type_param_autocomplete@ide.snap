@@ -17,7 +17,7 @@ note[I15006]: IDE path autocomplete
 7 │ │ }
   │ ╰─^ Possible in-scope names
   │  
-  = members: 'Action -> 0x42::m::Action', 'Option -> std::option::Option', or 'make_action_ref -> 0x42::m::make_action_ref'
+  = members: 'Option -> std::option::Option', 'Action -> 0x42::m::Action', or 'make_action_ref -> 0x42::m::make_action_ref'
   = modules: 'Self -> 0x42::m', 'option -> std::option', or 'vector -> std::vector'
   = addresses: 'A -> 0x41', 'B -> 0x42', 'K -> 0x19', 'M -> 0x40', 'a -> 0x44', 'b -> 0x45', 'k -> 0x19', 'std -> 0x1', or 'sui -> 0x2'
   = type params: 
@@ -28,7 +28,7 @@ note[I15006]: IDE path autocomplete
 3 │ public struct Action<T> { inner: T }
   │                                  ^ Possible in-scope names
   │
-  = members: 'Action -> 0x42::m::Action', 'Option -> std::option::Option', or 'make_action_ref -> 0x42::m::make_action_ref'
+  = members: 'Option -> std::option::Option', 'Action -> 0x42::m::Action', or 'make_action_ref -> 0x42::m::make_action_ref'
   = modules: 'Self -> 0x42::m', 'option -> std::option', or 'vector -> std::vector'
   = addresses: 'A -> 0x41', 'B -> 0x42', 'K -> 0x19', 'M -> 0x40', 'a -> 0x44', 'b -> 0x45', 'k -> 0x19', 'std -> 0x1', or 'sui -> 0x2'
   = type params: 'T'
@@ -39,7 +39,7 @@ note[I15006]: IDE path autocomplete
 5 │ public fun make_action_ref<T>(action: &mut Action<T>): &mut T {
   │                                            ^^^^^^ Possible in-scope names
   │
-  = members: 'Action -> 0x42::m::Action', 'Option -> std::option::Option', or 'make_action_ref -> 0x42::m::make_action_ref'
+  = members: 'Option -> std::option::Option', 'Action -> 0x42::m::Action', or 'make_action_ref -> 0x42::m::make_action_ref'
   = modules: 'Self -> 0x42::m', 'option -> std::option', or 'vector -> std::vector'
   = addresses: 'A -> 0x41', 'B -> 0x42', 'K -> 0x19', 'M -> 0x40', 'a -> 0x44', 'b -> 0x45', 'k -> 0x19', 'std -> 0x1', or 'sui -> 0x2'
   = type params: 'T'
@@ -50,7 +50,7 @@ note[I15006]: IDE path autocomplete
 5 │ public fun make_action_ref<T>(action: &mut Action<T>): &mut T {
   │                                                   ^ Possible in-scope names
   │
-  = members: 'Action -> 0x42::m::Action', 'Option -> std::option::Option', or 'make_action_ref -> 0x42::m::make_action_ref'
+  = members: 'Option -> std::option::Option', 'Action -> 0x42::m::Action', or 'make_action_ref -> 0x42::m::make_action_ref'
   = modules: 'Self -> 0x42::m', 'option -> std::option', or 'vector -> std::vector'
   = addresses: 'A -> 0x41', 'B -> 0x42', 'K -> 0x19', 'M -> 0x40', 'a -> 0x44', 'b -> 0x45', 'k -> 0x19', 'std -> 0x1', or 'sui -> 0x2'
   = type params: 'T'
@@ -61,7 +61,7 @@ note[I15006]: IDE path autocomplete
 5 │ public fun make_action_ref<T>(action: &mut Action<T>): &mut T {
   │                                                             ^ Possible in-scope names
   │
-  = members: 'Action -> 0x42::m::Action', 'Option -> std::option::Option', or 'make_action_ref -> 0x42::m::make_action_ref'
+  = members: 'Option -> std::option::Option', 'Action -> 0x42::m::Action', or 'make_action_ref -> 0x42::m::make_action_ref'
   = modules: 'Self -> 0x42::m', 'option -> std::option', or 'vector -> std::vector'
   = addresses: 'A -> 0x41', 'B -> 0x42', 'K -> 0x19', 'M -> 0x40', 'a -> 0x44', 'b -> 0x45', 'k -> 0x19', 'std -> 0x1', or 'sui -> 0x2'
   = type params: 'T'
@@ -72,7 +72,7 @@ note[I15006]: IDE path autocomplete
 6 │     &mut action.inner.bar
   │          ^^^^^^ Possible in-scope names
   │
-  = members: 'Action -> 0x42::m::Action', 'Option -> std::option::Option', or 'make_action_ref -> 0x42::m::make_action_ref'
+  = members: 'Option -> std::option::Option', 'Action -> 0x42::m::Action', or 'make_action_ref -> 0x42::m::make_action_ref'
   = modules: 'Self -> 0x42::m', 'option -> std::option', or 'vector -> std::vector'
   = addresses: 'A -> 0x41', 'B -> 0x42', 'K -> 0x19', 'M -> 0x40', 'a -> 0x44', 'b -> 0x45', 'k -> 0x19', 'std -> 0x1', or 'sui -> 0x2'
   = type params: 'T'
