@@ -1759,7 +1759,7 @@ impl ObjectCacheRead for WritebackCache {
         Ok(())
     }
 
-    fn get_highest_pruned_checkpoint(&self) -> CheckpointSequenceNumber {
+    fn get_highest_pruned_checkpoint(&self) -> Option<CheckpointSequenceNumber> {
         self.store
             .perpetual_tables
             .get_highest_pruned_checkpoint()

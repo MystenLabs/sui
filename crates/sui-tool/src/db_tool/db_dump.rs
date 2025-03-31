@@ -198,7 +198,9 @@ pub async fn prune_objects(db_path: PathBuf) -> anyhow::Result<()> {
     let perpetual_db = Arc::new(AuthorityPerpetualTables::open(&db_path.join("store"), None));
     let checkpoint_store = CheckpointStore::new(&db_path.join("checkpoints"));
     let rpc_index = RpcIndexStore::new_without_init(&db_path);
-    let highest_pruned_checkpoint = checkpoint_store.get_highest_pruned_checkpoint_seq_number()?;
+    let highest_pruned_checkpoint = checkpoint_store
+        .get_highest_pruned_checkpoint_seq_number()?
+        .unwrap_or(0);
     let latest_checkpoint = checkpoint_store.get_highest_executed_checkpoint()?;
     info!(
         "Latest executed checkpoint sequence num: {}",

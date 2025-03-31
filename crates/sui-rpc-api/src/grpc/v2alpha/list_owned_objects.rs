@@ -9,9 +9,7 @@ use crate::RpcError;
 use crate::RpcService;
 use bytes::Bytes;
 use sui_sdk_types::Address;
-use sui_sdk_types::Version;
-use sui_sdk_types::{ObjectId, StructTag};
-use sui_types::sui_sdk_types_conversions::struct_tag_core_to_sdk;
+use sui_types::storage::OwnedObjectInfo;
 use tap::Pipe;
 
 #[tracing::instrument(skip(service))]
@@ -42,29 +40,16 @@ pub fn list_owned_objects(
         .transpose()?;
 
     let mut object_info = indexes
-        .account_owned_objects_info_iter(owner.into(), page_token.map(Into::into))?
+        .owned_objects_iter(owner.into(), None, page_token)?
         .take(page_size + 1)
-        .map(|result| {
-            result
-                .map_err(|err| RpcError::new(tonic::Code::Internal, err.to_string()))
-                .and_then(|info| {
-                    OwnedOwnedObjectInfo {
-                        owner: info.owner.into(),
-                        object_id: info.object_id.into(),
-                        version: info.version.into(),
-                        type_: struct_tag_core_to_sdk(info.type_.into())?,
-                    }
-                    .pipe(Ok)
-                })
-        })
-        .collect::<Result<Vec<_>, _>>()?;
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(|err| RpcError::new(tonic::Code::Internal, err.to_string()))?;
     let next_page_token = if object_info.len() > page_size {
         // SAFETY: We've already verified that object_info is greater than limit, which is
         // gaurenteed to be >= 1.
         object_info
             .pop()
             .unwrap()
-            .object_id
             .pipe(encode_page_token)
             .pipe(Some)
     } else {
@@ -72,36 +57,25 @@ pub fn list_owned_objects(
     };
 
     Ok(ListOwnedObjectsResponse {
-        objects: object_info
-            .into_iter()
-            .map(OwnedOwnedObjectInfo::into_proto)
-            .collect(),
+        objects: object_info.into_iter().map(owned_object_to_proto).collect(),
         next_page_token,
     })
 }
 
-fn decode_page_token(page_token: &[u8]) -> Result<ObjectId> {
-    Ok(ObjectId::new(page_token.try_into().unwrap()))
+fn decode_page_token(page_token: &[u8]) -> Result<OwnedObjectInfo> {
+    bcs::from_bytes(page_token).map_err(Into::into)
 }
 
-fn encode_page_token(page_token: ObjectId) -> Bytes {
-    page_token.as_bytes().to_vec().into()
+fn encode_page_token(page_token: OwnedObjectInfo) -> Bytes {
+    bcs::to_bytes(&page_token).unwrap().into()
 }
 
-pub struct OwnedOwnedObjectInfo {
-    pub owner: Address,
-    pub object_id: ObjectId,
-    pub version: Version,
-    pub type_: StructTag,
-}
-
-impl OwnedOwnedObjectInfo {
-    fn into_proto(self) -> OwnedObject {
-        OwnedObject {
-            owner: Some(self.owner.to_string()),
-            object_id: Some(self.object_id.to_string()),
-            version: Some(self.version),
-            object_type: Some(self.type_.to_string()),
-        }
+fn owned_object_to_proto(info: OwnedObjectInfo) -> OwnedObject {
+    OwnedObject {
+        object_id: Some(info.object_id.to_string()),
+        version: Some(info.version.value()),
+        digest: Some(info.digest.to_string()),
+        owner: Some(sui_sdk_types::Owner::Address(info.owner.into()).into()),
+        object_type: Some(info.object_type.to_canonical_string(true)),
     }
 }

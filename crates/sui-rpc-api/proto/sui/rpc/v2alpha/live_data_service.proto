@@ -7,6 +7,7 @@ package sui.rpc.v2alpha;
 
 import "google/protobuf/field_mask.proto";
 import "sui/rpc/v2beta/executed_transaction.proto";
+import "sui/rpc/v2beta/owner.proto";
 import "sui/rpc/v2beta/transaction.proto";
 
 service LiveDataService {
@@ -39,11 +40,10 @@ message GetCoinInfoResponse {
   // type's `0x2::coin::TreasuryCap` if it exists and has not been wrapped.
   optional CoinTreasury treasury = 3;
 
-  // TODO add support for tracking RegulatedCoinMetadata
   // If this coin type is a regulated coin, this field will be
   // populated with information about its `0x2::coin::RegulatedCoinMetadata`
   // object.
-  // optional RegulatedCoinMetadata regulated_metadata = 4;
+  optional RegulatedCoinMetadata regulated_metadata = 4;
 }
 
 // Metadata for a coin type
@@ -109,26 +109,39 @@ message ListDynamicFieldsResponse {
 }
 
 message DynamicField {
-  // Required. ObjectId of this dynamic field's parent.
-  optional string parent = 1;
+  enum DynamicFieldKind {
+    DYNAMIC_FIELD_KIND_UNKNOWN = 0;
+    FIELD = 1;
+    OBJECT = 2;
+  }
 
-  // Required. ObjectId of this dynamic field.
-  optional string field_id = 2;
+  optional DynamicFieldKind kind = 1;
 
-  // Required. The type of the dynamic field "name"
-  optional string name_type = 3;
+  // ObjectId of this dynamic field's parent.
+  optional string parent = 2;
 
-  // Required. The serialized move value of "name"
-  optional bytes name_value = 4;
+  // ObjectId of this dynamic field.
+  optional string field_id = 3;
+
+  // The type of the dynamic field "name"
+  optional string name_type = 4;
+
+  // The serialized move value of "name"
+  optional bytes name_value = 5;
+
+  // The type of the dynamic field "value".
+  //
+  // If this is a dynamic object field then this is the type of the object
+  // itself (which is a child of this field), otherwise this is the type of the
+  // value of this field.
+  optional string value_type = 6;
 
   // The ObjectId of the child object when a child is a dynamic
   // object field.
   //
   // The presence or absence of this field can be used to determine if a child
   // is a dynamic field or a dynamic child object
-  optional string dynamic_object_id = 5;
-
-  //TODO we should have type information on the object
+  optional string dynamic_object_id = 7;
 }
 
 message SimulateTransactionRequest {
@@ -180,8 +193,11 @@ message ListOwnedObjectsResponse {
 }
 
 message OwnedObject {
-  optional string owner = 1;
   optional string object_id = 2;
   optional uint64 version = 3;
-  optional string object_type = 4;
+  optional string digest = 4;
+  optional sui.rpc.v2beta.Owner owner = 5;
+  optional string object_type = 6;
+
+  // Note field numbers match sui.rpc.v2beta.Object in case we want to just use that message
 }
