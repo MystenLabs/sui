@@ -724,10 +724,11 @@ indicate that the JWK has been validated in the current epoch and should not be 
             *prev_issuer.borrow_mut() = *cur_iss;
             j = j + 1;
         };
-        <b>let</b> max_epoch_for_iss = &issuer_max_epochs[j];
-        // TODO: <b>if</b> the iss <b>for</b> this jwk <b>has</b> *no* jwks that meet the minimum epoch,
-        // then expire nothing.
-        <b>if</b> (*max_epoch_for_iss &lt; min_epoch || jwk.epoch &gt;= min_epoch) {
+        let max_epoch_for_iss = &issuer_max_epochs[j];
+        // If the issuer for this jwk has no jwks that meet the minimum epoch,
+        // then we keep all JWKs from that issuer. Otherwise, we only keep JWKs
+        // that meet or exceed the minimum epoch.
+        if (*max_epoch_for_iss < min_epoch || jwk.epoch >= min_epoch) {
             new_active_jwks.push_back(*jwk);
         };
         i = i + 1;
