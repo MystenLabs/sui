@@ -26,6 +26,8 @@ native fun hash_to_input_internal(message: &vector<u8>): vector<u8>;
 /// The discriminant for the class group is pre-computed and fixed. See how this was generated in the fastcrypto-vdf
 /// crate. The final selection of the discriminant for Mainnet will be computed and announced under a nothing-up-my-sleeve
 /// process.
+///
+/// This functions is currently only enabled on Devnet.
 public fun vdf_verify(
     input: &vector<u8>,
     output: &vector<u8>,
