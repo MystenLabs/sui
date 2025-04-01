@@ -1,7 +1,7 @@
 use std::{collections::BTreeSet, vec};
 
 use codespan_reporting::diagnostic::Severity;
-use move_model::{model::{FunId, FunctionEnv, Loc, QualifiedId}, symbol::Symbol};
+use move_model::{model::{FunId, FunctionEnv, Loc, QualifiedId}, symbol::Symbol, ty::Type};
 
 use crate::{
     function_data_builder::FunctionDataBuilder, function_target::{FunctionData, FunctionTarget}, function_target_pipeline::{FunctionTargetProcessor, FunctionTargetsHolder}, graph::{DomRelation, Graph}, stackless_bytecode::{Bytecode, Operation}, stackless_control_flow_graph::{BlockContent, BlockId, StacklessControlFlowGraph}
@@ -49,9 +49,9 @@ impl SpecWellFormedAnalysisProcessor {
         }
     }
 
-    pub fn find_node_by_func_id(&self, target_id: QualifiedId<FunId>, graph: &Graph<BlockId>, code: &[Bytecode], cfg: &StacklessControlFlowGraph) -> (Option<(BlockId, Operation, Vec<usize>, Vec<usize>)>, bool) {
+    pub fn find_node_by_func_id(&self, target_id: QualifiedId<FunId>, graph: &Graph<BlockId>, code: &[Bytecode], cfg: &StacklessControlFlowGraph) -> (Option<(BlockId, Operation, Vec<usize>, Vec<usize>, Vec<Type>)>, bool) {
         let mut multiple = false;
-        let mut result: Option<(BlockId, Operation, Vec<usize>, Vec<usize>)> = None;
+        let mut result = None;
 
         for node in graph.nodes.clone() {
             match cfg.content(node) {
@@ -61,14 +61,14 @@ impl SpecWellFormedAnalysisProcessor {
                         match &code[position as usize] {
                             Bytecode::Call(_, dsts, operation, srcs, _) => {
                                 match operation {
-                                    Operation::Function(mod_id,fun_id, _) => {
+                                    Operation::Function(mod_id,fun_id, type_params) => {
                                         let callee_id = mod_id.qualified(*fun_id);
                                         if callee_id == target_id {
                                             if result.is_some() {
                                                 multiple = true;
                                             }
 
-                                            result = Some((node, operation.clone(), dsts.clone(), srcs.clone()));
+                                            result = Some((node, operation.clone(), dsts.clone(), srcs.clone(), type_params.clone()));
                                         }
                                     },
                                     _ => {}
@@ -171,10 +171,6 @@ impl FunctionTargetProcessor for SpecWellFormedAnalysisProcessor {
             return data;
         }
 
-        if func_env.get_name_str() != "sqrt_spec" {
-            return data;
-        }
-
         let env = func_env.module_env.env;
         let func_target = FunctionTarget::new(func_env, &data);
 
@@ -219,7 +215,7 @@ impl FunctionTargetProcessor for SpecWellFormedAnalysisProcessor {
                 env.diag(
                     Severity::Warning,
                     &func_env.get_loc(),
-                    "Spec function signature have differ params names than underlying func",
+                    "Spec function signature have differ type params names than underlying func",
                 );
             }
 
@@ -247,7 +243,7 @@ impl FunctionTargetProcessor for SpecWellFormedAnalysisProcessor {
                 env.diag(
                     Severity::Error,
                     &func_env.get_loc(),
-                    "Spec function have differ params type than underlying func",
+                    "Spec function have differ type params abilities than underlying func",
                 );
 
                 return data;
@@ -307,9 +303,19 @@ impl FunctionTargetProcessor for SpecWellFormedAnalysisProcessor {
             return data;
         }
 
-        let (call_node_id, call_operation, outputs, inputs) = call_data.unwrap();
+        let (call_node_id, call_operation, outputs, inputs, type_param_args) = call_data.unwrap();
 
         // Arguments Checking
+
+        for idx in 0..type_param_args.len() {
+            if !type_param_args[idx].is_type_parameter() {
+                env.diag(
+                    Severity::Error,
+                    &func_env.get_loc(),
+                    "Underlying func not accepting type param from spec",
+                );
+            }
+        }
 
         let spec_params_symbols: Vec<Symbol> = spec_params.iter().map(|sd| sd.0).collect(); 
         for src in inputs {
