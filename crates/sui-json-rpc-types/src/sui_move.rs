@@ -78,6 +78,8 @@ pub struct SuiMoveNormalizedEnum {
     pub abilities: SuiMoveAbilitySet,
     pub type_parameters: Vec<SuiMoveStructTypeParameter>,
     pub variants: BTreeMap<String, Vec<SuiMoveNormalizedField>>,
+    #[serde(default)]
+    pub variant_declaration_order: Option<Vec<String>>,
 }
 
 #[derive(Serialize, Deserialize, Debug, JsonSchema, Clone)]
@@ -226,6 +228,28 @@ impl From<NormalizedStruct> for SuiMoveNormalizedStruct {
 
 impl From<NormalizedEnum> for SuiMoveNormalizedEnum {
     fn from(value: NormalizedEnum) -> Self {
+        let variants = value
+            .variants
+            .into_iter()
+            .map(|variant| {
+                (
+                    variant.name.to_string(),
+                    variant
+                        .fields
+                        .into_iter()
+                        .map(SuiMoveNormalizedField::from)
+                        .collect::<Vec<SuiMoveNormalizedField>>(),
+                )
+            })
+            .collect::<Vec<(String, Vec<SuiMoveNormalizedField>)>>();
+        let variant_declaration_order = variants
+            .iter()
+            .map(|(name, _)| name.clone())
+            .collect::<Vec<String>>();
+        let variants = variants
+            .into_iter()
+            .map(|(name, fields)| (name, fields))
+            .collect();
         Self {
             abilities: value.abilities.into(),
             type_parameters: value
@@ -233,20 +257,8 @@ impl From<NormalizedEnum> for SuiMoveNormalizedEnum {
                 .into_iter()
                 .map(SuiMoveStructTypeParameter::from)
                 .collect::<Vec<SuiMoveStructTypeParameter>>(),
-            variants: value
-                .variants
-                .into_iter()
-                .map(|variant| {
-                    (
-                        variant.name.to_string(),
-                        variant
-                            .fields
-                            .into_iter()
-                            .map(SuiMoveNormalizedField::from)
-                            .collect::<Vec<SuiMoveNormalizedField>>(),
-                    )
-                })
-                .collect::<BTreeMap<String, Vec<SuiMoveNormalizedField>>>(),
+            variants,
+            variant_declaration_order: Some(variant_declaration_order),
         }
     }
 }

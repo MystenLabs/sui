@@ -9037,6 +9037,16 @@
               "$ref": "#/components/schemas/SuiMoveStructTypeParameter"
             }
           },
+          "variantDeclarationOrder": {
+            "default": null,
+            "type": [
+              "array",
+              "null"
+            ],
+            "items": {
+              "type": "string"
+            }
+          },
           "variants": {
             "type": "object",
             "additionalProperties": {
