@@ -926,7 +926,7 @@ async fn test_reconfig_with_voting_power_decrease_immediate_removal() {
         .await;
 
     // Get total stake of validators in the system, their addresses and the grace period.
-    let (total_stake, initial_validators) =
+    let (total_stake, mut initial_validators) =
         test_cluster.fullnode_handle.sui_node.with(|node| {
             let system_state = node
                 .state()
@@ -981,14 +981,20 @@ async fn test_reconfig_with_voting_power_decrease_immediate_removal() {
 
     // Check that the validator has been kicked out.
     test_cluster.fullnode_handle.sui_node.with(|node| {
-        let active_validators = node
+        let mut active_validators = node
             .state()
             .get_sui_system_state_object_for_testing()
             .unwrap()
             .into_sui_system_state_summary()
-            .active_validators;
+            .active_validators
+            .iter()
+            .map(|v| v.sui_address)
+            .collect::<Vec<_>>();
 
-        assert_eq!(active_validators.len(), initial_num_validators)
+        assert_eq!(active_validators.len(), initial_num_validators);
+        active_validators.sort_by(|a, b| a.cmp(b));
+        initial_validators.sort_by(|a, b| a.cmp(b));
+        assert_eq!(active_validators, initial_validators);
     });
 }
 
