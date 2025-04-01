@@ -297,9 +297,6 @@ impl<'a> ParsingAnalysisContext<'a> {
                     self.type_symbols(&c.signature);
                     self.exp_symbols(&c.value);
                 }
-                MM::Spec(s) => {
-                    earliest_member_loc = earliest_loc(earliest_member_loc, s.loc);
-                }
             }
         }
         self.add_import_insert_info(latest_use_loc, earliest_member_loc);
@@ -551,12 +548,7 @@ impl<'a> ParsingAnalysisContext<'a> {
                 self.type_symbols(t);
             }
             E::DotUnresolved(_, e) => self.exp_symbols(e),
-            E::Value(_)
-            | E::Quant(..)
-            | E::Unit
-            | E::Continue(_)
-            | E::Spec(_)
-            | E::UnresolvedError => (),
+            E::Value(_) | E::Unit | E::Continue(_) | E::UnresolvedError => (),
         }
     }
 

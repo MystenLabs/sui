@@ -219,7 +219,6 @@ pub struct ModuleDefinition {
     pub loc: Loc,
     pub address: Option<LeadingNameAccess>,
     pub name: ModuleName,
-    pub is_spec_module: bool,
     pub definition_mode: ModuleDefinitionMode,
     pub members: Vec<ModuleMember>,
 }
@@ -232,7 +231,6 @@ pub enum ModuleMember {
     Use(UseDecl),
     Friend(FriendDecl),
     Constant(Constant),
-    Spec(Spanned<String>),
 }
 
 //**************************************************************************************************
@@ -608,14 +606,6 @@ pub enum Exp_ {
     // |lv1, ..., lvn| e
     // |lv1, ..., lvn| -> { e }
     Lambda(LambdaBindings, Option<Type>, Box<Exp>),
-    // forall/exists x1 : e1, ..., xn [{ t1, .., tk } *] [where cond]: en.
-    Quant(
-        QuantKind,
-        BindWithRangeList,
-        Vec<Vec<Exp>>,
-        Option<Box<Exp>>,
-        Box<Exp>,
-    ), // spec only
     // (e1, ..., en)
     ExpList(Vec<Exp>),
     // ()
@@ -658,15 +648,12 @@ pub enum Exp_ {
         Spanned<Vec<Exp>>,
     ),
     // e[e']
-    Index(Box<Exp>, Spanned<Vec<Exp>>), // spec only
+    Index(Box<Exp>, Spanned<Vec<Exp>>),
 
     // (e as t)
     Cast(Box<Exp>, Type),
     // (e: t)
     Annotate(Box<Exp>, Type),
-
-    // spec { ... }
-    Spec(Spanned<String>),
 
     // Internal node marking an error was added to the error list
     // This is here so the pass can continue even when an error is hit
@@ -1524,18 +1511,13 @@ impl AstDebug for ModuleDefinition {
             loc: _loc,
             address,
             name,
-            is_spec_module,
             members,
             definition_mode: _,
         } = self;
         doc.ast_debug(w);
         attributes.ast_debug(w);
         match address {
-            None => w.write(format!(
-                "module {}{}",
-                if *is_spec_module { "spec " } else { "" },
-                name
-            )),
+            None => w.write(format!("module {}", name)),
             Some(addr) => w.write(format!("module {}::{}", addr, name)),
         };
         w.block(|w| {
@@ -1555,7 +1537,6 @@ impl AstDebug for ModuleMember {
             ModuleMember::Use(u) => u.ast_debug(w),
             ModuleMember::Friend(f) => f.ast_debug(w),
             ModuleMember::Constant(c) => c.ast_debug(w),
-            ModuleMember::Spec(s) => w.write(&s.value),
         }
     }
 }
@@ -2148,18 +2129,6 @@ impl AstDebug for Exp_ {
                 }
                 e.ast_debug(w);
             }
-            E::Quant(kind, sp!(_, rs), trs, c_opt, e) => {
-                kind.ast_debug(w);
-                w.write(" ");
-                rs.ast_debug(w);
-                trs.ast_debug(w);
-                if let Some(c) = c_opt {
-                    w.write(" where ");
-                    c.ast_debug(w);
-                }
-                w.write(" : ");
-                e.ast_debug(w);
-            }
             E::ExpList(es) => {
                 w.write("(");
                 w.comma(es, |w, e| e.ast_debug(w));
@@ -2258,9 +2227,6 @@ impl AstDebug for Exp_ {
                 w.write(": ");
                 ty.ast_debug(w);
                 w.write(")");
-            }
-            E::Spec(s) => {
-                w.write(&s.value);
             }
             E::UnresolvedError => w.write("_|_"),
             E::DotUnresolved(_, e) => {
