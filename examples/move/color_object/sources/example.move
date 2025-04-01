@@ -57,7 +57,7 @@ fun test_create() {
     // Create a ColorObject and transfer it to its owner.
     {
         ts.next_tx(alice);
-        let color = new(255, 0, 255,ts.ctx());
+        let color = new(255, 0, 255, ts.ctx());
         transfer::public_transfer(color, alice);
     };
 
@@ -70,7 +70,7 @@ fun test_create() {
     // Check that owner indeed owns the just-created ColorObject.
     // Also checks the value fields of the object.
     {
-        ts.next_tx( alice);
+        ts.next_tx(alice);
         let object: ColorObject = ts.take_from_sender();
         let (red, green, blue) = object.get_color();
         assert!(red == 255 && green == 0 && blue == 255, 0);
@@ -94,15 +94,11 @@ fun test_copy_into() {
 
         let c = new(255, 255, 255, ctx);
         transfer::public_transfer(c, owner);
-        let id1 = object::id_from_address(
-            ctx.last_created_object_id()
-        );
+        let id1 = object::id_from_address(ctx.last_created_object_id());
 
         let c = new(0, 0, 0, ctx);
         transfer::public_transfer(c, owner);
-        let id2 = object::id_from_address(
-            ctx.last_created_object_id()
-        );
+        let id2 = object::id_from_address(ctx.last_created_object_id());
 
         (id1, id2)
     };
@@ -110,13 +106,13 @@ fun test_copy_into() {
     {
         ts.next_tx(owner);
         let mut obj1: ColorObject = ts.take_from_sender_by_id(id1);
-        let obj2: ColorObject = ts.take_from_sender_by_id( id2);
+        let obj2: ColorObject = ts.take_from_sender_by_id(id2);
         let (red, green, blue) = obj1.get_color();
         assert!(red == 255 && green == 255 && blue == 255, 0);
 
         obj2.copy_into(&mut obj1);
-        ts.return_to_sender( obj1);
-        ts.return_to_sender( obj2);
+        ts.return_to_sender(obj1);
+        ts.return_to_sender(obj2);
     };
 
     {
@@ -124,7 +120,7 @@ fun test_copy_into() {
         let obj1: ColorObject = ts.take_from_sender_by_id(id1);
         let (red, green, blue) = obj1.get_color();
         assert!(red == 0 && green == 0 && blue == 0, 0);
-        ts.return_to_sender( obj1);
+        ts.return_to_sender(obj1);
     };
 
     ts.end();
@@ -202,7 +198,7 @@ fun test_immutable() {
     let bob = @0xB;
 
     {
-        ts.next_tx( alice);
+        ts.next_tx(alice);
         let c = new(255, 0, 255, ts.ctx());
         transfer::public_freeze_object(c);
     };
