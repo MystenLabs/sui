@@ -406,8 +406,6 @@ mod remove_stake {
                     )))
                     .unwrap();
 
-                // builder.pure(self.staked_with).unwrap();
-                // let coin = StressTestRunner::split_off(&mut builder, self.stake_amount);
                 move_call! {
                     builder,
                     (SUI_SYSTEM_PACKAGE_ID)::sui_system::request_withdraw_stake(Argument::Input(0), staked_sui)

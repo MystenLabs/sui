@@ -992,8 +992,8 @@ async fn test_reconfig_with_voting_power_decrease_immediate_removal() {
             .collect::<Vec<_>>();
 
         assert_eq!(active_validators.len(), initial_num_validators);
-        active_validators.sort_by(|a, b| a.cmp(b));
-        initial_validators.sort_by(|a, b| a.cmp(b));
+        active_validators.sort();
+        initial_validators.sort();
         assert_eq!(active_validators, initial_validators);
     });
 }
