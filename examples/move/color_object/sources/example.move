@@ -63,7 +63,7 @@ fun test_create() {
 
     // Check that @not_owner does not own the just-created ColorObject.
     {
-        ts.next_tx( bob);
+        ts.next_tx(bob);
         assert!(!ts.has_most_recent_for_sender<ColorObject>(), 0);
     };
 
