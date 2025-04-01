@@ -56,7 +56,7 @@ fun test_create() {
 
     // Create a ColorObject and transfer it to its owner.
     {
-        ts.next_tx( alice);
+        ts.next_tx(alice);
         let color = new(255, 0, 255,ts.ctx());
         transfer::public_transfer(color, alice);
     };
