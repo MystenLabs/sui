@@ -898,6 +898,101 @@ async fn test_reconfig_with_voting_power_decrease() {
 }
 
 #[sim_test]
+async fn test_reconfig_with_voting_power_decrease_immediate_removal() {
+    // This test exercise the full flow of a validator joining the network, catch up and then leave.
+    // Validator starts with .12% of the total voting power and then decreases to below the threshold.
+    let initial_num_validators = 10;
+    let initial_validators = (0..10)
+        .map(|_| {
+            ValidatorGenesisConfigBuilder::new()
+                .with_stake(VALIDATOR_STARTING_STAKE)
+                .build(&mut OsRng)
+        })
+        .collect::<Vec<_>>();
+    let new_validator = ValidatorGenesisConfigBuilder::new()
+        .with_stake(0)
+        .build(&mut OsRng);
+
+    let address = (&new_validator.account_key_pair.public()).into();
+    let mut test_cluster = TestClusterBuilder::new()
+        .with_validators(initial_validators)
+        .with_accounts(vec![AccountConfig {
+            gas_amounts: vec![DEFAULT_GAS_AMOUNT * initial_num_validators as u64 * 4],
+            address: None,
+        }])
+        .with_num_validators(initial_num_validators)
+        .with_validator_candidates([address])
+        .build()
+        .await;
+
+    // Get total stake of validators in the system, their addresses and the grace period.
+    let (total_stake, initial_validators) =
+        test_cluster.fullnode_handle.sui_node.with(|node| {
+            let system_state = node
+                .state()
+                .get_sui_system_state_object_for_testing()
+                .unwrap()
+                .into_sui_system_state_summary();
+
+            (
+                system_state.total_stake,
+                system_state
+                    .active_validators
+                    .iter()
+                    .map(|v| v.sui_address)
+                    .collect::<Vec<_>>(),
+            )
+        });
+
+    // Setting voting power to roughly ~ .15% of the total voting power.
+    // If stake of other validators increases 4x, the new validator's
+    // voting power will decrease to below the very low threshold.
+    let min_join_stake = total_stake * 15 / 10_000;
+
+    execute_add_validator_transactions(&mut test_cluster, &new_validator, Some(min_join_stake))
+        .await;
+
+    test_cluster.trigger_reconfiguration().await;
+
+    // Check that a new validator has joined the committee.
+    test_cluster.fullnode_handle.sui_node.with(|node| {
+        assert_eq!(
+            node.state()
+                .epoch_store_for_testing()
+                .committee()
+                .num_members(),
+            initial_num_validators + 1
+        );
+    });
+
+    // x4 the stake of every other validator, lowering the new validator's
+    // voting power below the very low threshold, resulting in immediate removal
+    // from the committee at the next reconfiguration.
+    execute_add_stake_transaction(
+        &mut test_cluster,
+        initial_validators
+            .iter()
+            .map(|address| (*address, VALIDATOR_STARTING_STAKE * 3))
+            .collect::<Vec<_>>(),
+    )
+    .await;
+
+    test_cluster.trigger_reconfiguration().await;
+
+    // Check that the validator has been kicked out.
+    test_cluster.fullnode_handle.sui_node.with(|node| {
+        let active_validators = node
+            .state()
+            .get_sui_system_state_object_for_testing()
+            .unwrap()
+            .into_sui_system_state_summary()
+            .active_validators;
+
+        assert_eq!(active_validators.len(), initial_num_validators)
+    });
+}
+
+#[sim_test]
 async fn test_reconfig_with_committee_change_stress() {
     do_test_reconfig_with_committee_change_stress().await;
 }
