@@ -708,11 +708,11 @@ impl CompiledPackage {
 ///
 /// Skips "Deepbook" dependency.
 pub fn implicit_deps(packages: &SystemPackagesVersion) -> Dependencies {
-    let blacklist = ["Deepbook".to_string()];
+    let deps_to_skip = ["DeepBook".to_string()];
     packages
         .packages
         .iter()
-        .filter(|package| !blacklist.contains(&package.package_name))
+        .filter(|package| !deps_to_skip.contains(&package.package_name))
         .map(|package| {
             (
                 package.package_name.clone().into(),
