@@ -134,6 +134,19 @@ fn struct_borrow_nested() -> PartialVMResult<()> {
 }
 
 #[test]
+fn vec_and_ref_eq() -> PartialVMResult<()> {
+    let v = MemBox::new(Value::PrimVec(PrimVec::VecU8(vec![10, 12])));
+    let x = MemBox::new(Value::u8(12));
+    let v_ref: VectorRef = VMValueCast::cast(v.as_ref_value())?;
+    let v_1_ref = v_ref.borrow_elem(1, &Type::U8)?;
+    let x_ref = x.as_ref_value();
+    assert!(v_1_ref.equals(&x_ref)?);
+    let v_0_ref = v_ref.borrow_elem(0, &Type::U8)?;
+    assert!(!v_0_ref.equals(&x_ref)?);
+    Ok(())
+}
+
+#[test]
 fn global_value_non_struct() -> PartialVMResult<()> {
     assert!(
         GlobalValue::cached(Value::u64(100)).is_err(),

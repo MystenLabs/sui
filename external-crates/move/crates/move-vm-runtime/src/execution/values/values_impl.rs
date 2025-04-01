@@ -804,8 +804,27 @@ impl Reference {
                         .with_message(format!("cannot compare values: {:?}, {:?}", self, other))
                 )
             }
-            _ => Err(PartialVMError::new(StatusCode::INTERNAL_TYPE_ERROR)
-                .with_message(format!("cannot compare values: {:?}, {:?}", self, other))),
+            (Reference::Value(mem_box), Reference::Indexed(entry))
+            | (Reference::Indexed(entry), Reference::Value(mem_box)) => {
+                let box_value = &*mem_box.borrow();
+                let (vec, ndx) = entry.as_ref();
+                let Value::PrimVec(vec) = &*vec.borrow() else {
+                    return Err(PartialVMError::new(StatusCode::INTERNAL_TYPE_ERROR)
+                        .with_message(format!("invalid indexed reference: {:?}", vec)));
+                };
+                match (vec, box_value) {
+                    (PrimVec::VecU8(lhs), Value::U8(rhs)) => Ok(lhs[*ndx] == *rhs),
+                    (PrimVec::VecU16(lhs), Value::U16(rhs)) => Ok(lhs[*ndx] == *rhs),
+                    (PrimVec::VecU32(lhs), Value::U32(rhs)) => Ok(lhs[*ndx] == *rhs),
+                    (PrimVec::VecU64(lhs), Value::U64(rhs)) => Ok(lhs[*ndx] == *rhs),
+                    (PrimVec::VecU128(lhs), Value::U128(rhs)) => Ok(lhs[*ndx] == **rhs),
+                    (PrimVec::VecU256(lhs), Value::U256(rhs)) => Ok(lhs[*ndx] == **rhs),
+                    (PrimVec::VecBool(lhs), Value::Bool(rhs)) => Ok(lhs[*ndx] == *rhs),
+                    (PrimVec::VecAddress(lhs), Value::Address(rhs)) => Ok(lhs[*ndx] == **rhs),
+                    _ => Err(PartialVMError::new(StatusCode::INTERNAL_TYPE_ERROR)
+                        .with_message(format!("cannot compare values: {:?}, {:?}", self, other))),
+                }
+            }
         }
     }
 }
