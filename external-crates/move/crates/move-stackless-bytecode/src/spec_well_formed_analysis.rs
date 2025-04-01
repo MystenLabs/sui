@@ -7,8 +7,6 @@ use crate::{
     function_data_builder::FunctionDataBuilder, function_target::{FunctionData, FunctionTarget}, function_target_pipeline::{FunctionTargetProcessor, FunctionTargetsHolder}, graph::{DomRelation, Graph}, stackless_bytecode::{Bytecode, Operation}, stackless_control_flow_graph::{BlockContent, BlockId, StacklessControlFlowGraph}
 };
 
-pub const RESTRICTED_MODULES: [&str; 3] = ["transfer", "event", "emit"];
-
 pub struct SpecWellFormedAnalysisProcessor();
 
 impl SpecWellFormedAnalysisProcessor {
