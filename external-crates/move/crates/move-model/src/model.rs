@@ -1479,7 +1479,7 @@ impl GlobalEnv {
             .qualified(FunId::new(self.symbol_pool().make(fun_name)))
     }
 
-    const PROVER_MODULE_NAME: &'static str = "prover";
+    pub const PROVER_MODULE_NAME: &'static str = "prover";
     const SPEC_MODULE_NAME: &'static str = "ghost";
     const LOG_MODULE_NAME: &'static str = "log";
     const REQUIRES_FUNCTION_NAME: &'static str = "requires";
