@@ -18,9 +18,7 @@ pub type Commands = Vec<(Command, ResultType)>;
 pub type Type = move_vm_types::loaded_data::runtime_types::Type;
 
 pub enum InputType {
-    BCSBytes(/* all types that this must satisfy */ BTreeSet<Type>),
-    // receiving is essentially `forall a. Receiving<a>`
-    Receiving,
+    Bytes(/* all types that this must satisfy */ BTreeSet<Type>),
     Fixed(Type),
 }
 pub type ArgumentTypes = Vec<Type>;
@@ -29,21 +27,27 @@ pub type ResultType = Vec<Type>;
 pub enum Command {
     MoveCall(Box<MoveCall>),
     TransferObjects(Vec<Argument>, Argument),
-    SplitCoins(Type, Argument, Vec<Argument>),
-    MergeCoins(Type, Argument, Vec<Argument>),
-    MakeMoveVec(Type, Vec<Argument>),
+    SplitCoins(/* Coin<T> */ Type, Argument, Vec<Argument>),
+    MergeCoins(/* Coin<T> */ Type, Argument, Vec<Argument>),
+    MakeMoveVec(/* T for vector<T> */ Type, Vec<Argument>),
     Publish(Vec<Vec<u8>>, Vec<ObjectID>),
     Upgrade(Vec<Vec<u8>>, Vec<ObjectID>, ObjectID, Argument),
 }
 
-pub struct MoveCall {
-    pub module: ModuleId,
-    pub function: Identifier,
+pub struct LoadedFunction {
+    pub storage_id: ModuleId,
+    pub runtime_id: ModuleId,
+    pub name: Identifier,
     pub type_arguments: Vec<Type>,
-    pub arguments: Vec<Argument>,
     pub signature: LoadedFunctionInstantiation,
 }
 
+pub struct MoveCall {
+    pub function: LoadedFunction,
+    pub arguments: Vec<Argument>,
+}
+
+#[derive(Copy, Clone)]
 pub enum Location {
     GasCoin,
     Input(u16),
