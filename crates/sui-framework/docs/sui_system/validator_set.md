@@ -843,7 +843,7 @@ Return <code><b>true</b></code> if a  candidate validator with <code>stake</code
 <pre><code><b>fun</b> <a href="../sui_system/validator_set.md#sui_system_validator_set_can_join">can_join</a>(self: &<a href="../sui_system/validator_set.md#sui_system_validator_set_ValidatorSet">ValidatorSet</a>, stake: u64, ctx: &TxContext): bool {
     <b>let</b> (min_joining_voting_power, _, _) = self.<a href="../sui_system/validator_set.md#sui_system_validator_set_get_voting_power_thresholds">get_voting_power_thresholds</a>(ctx);
     // <b>if</b> the <a href="../sui_system/validator.md#sui_system_validator">validator</a> will have at least `min_joining_voting_power` after joining, they can join.
-    // this formula comes from SIP-39 TODO link once landed
+    // this formula comes from SIP-39: https://github.com/sui-foundation/sips/blob/main/sips/sip-39.md
     <b>let</b> future_total_stake = self.<a href="../sui_system/validator_set.md#sui_system_validator_set_total_stake">total_stake</a> + stake;
     <b>let</b> future_validator_voting_power = <a href="../sui_system/voting_power.md#sui_system_voting_power_derive_raw_voting_power">voting_power::derive_raw_voting_power</a>(stake, future_total_stake);
     future_validator_voting_power &gt;= min_joining_voting_power
@@ -876,7 +876,7 @@ return (min, low, very low voting power) thresholds
         <b>if</b> (self.extra_fields.contains(key)) self.extra_fields[key]
         <b>else</b> ctx.epoch() + 1 // will give us the phase 1 values
     };
-    // these numbers come from SIP-39 TODO link once landed
+    // these numbers come from SIP-39: https://github.com/sui-foundation/sips/blob/main/sips/sip-39.md
     <b>let</b> curr_epoch = ctx.epoch();
     <b>if</b> (curr_epoch &lt; start_epoch + <a href="../sui_system/validator_set.md#sui_system_validator_set_PHASE_LENGTH">PHASE_LENGTH</a>) (12, 8, 4) // phase 1
     <b>else</b> <b>if</b> (curr_epoch &lt; start_epoch + (2 * <a href="../sui_system/validator_set.md#sui_system_validator_set_PHASE_LENGTH">PHASE_LENGTH</a>)) (6, 4, 2) // phase 2
