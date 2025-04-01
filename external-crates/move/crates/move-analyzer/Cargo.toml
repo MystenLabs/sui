@@ -7,6 +7,10 @@ repository = "https://github.com/move-language/move"
 license = "Apache-2.0"
 publish = false
 edition = "2021"
+# `move-analyzer` binary built directly out of this crate
+# should not be used "as is", as it's sits somewhere
+# in the middle between supporting Sui and not supporting it (fully)
+autobins = false
 
 [dependencies]
 anyhow.workspace = true
