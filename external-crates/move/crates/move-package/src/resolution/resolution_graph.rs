@@ -134,7 +134,7 @@ impl ResolvedGraph {
                                 &internal.kind,
                                 progress_output,
                             )
-                            .with_context(|| format!("Fetching '{pkg_id}'"))?;
+                            .with_context(|| format!("Fetching '{dep_name}'"))?;
 
                         let dep_path = &resolved_pkg.package_path.join(local_path(&internal.kind));
                         let dep_manifest = parse_move_manifest_from_file(dep_path)?;
