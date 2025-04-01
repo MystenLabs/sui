@@ -92,10 +92,15 @@ use move_compiler::{
     editions::{Edition, FeatureGate, Flavor},
     expansion::{
         ast::{self as E, AbilitySet, ModuleIdent, ModuleIdent_, Value, Value_, Visibility},
-        name_validation::{IMPLICIT_STD_MEMBERS, IMPLICIT_STD_MODULES},
+        name_validation::{
+            ModuleMemberKind, IMPLICIT_STD_MEMBERS, IMPLICIT_STD_MODULES, IMPLICIT_SUI_MEMBERS,
+            IMPLICIT_SUI_MODULES,
+        },
     },
     linters::LintLevel,
-    naming::ast::{DatatypeTypeParameter, StructFields, Type, TypeName_, Type_, VariantFields},
+    naming::ast::{
+        DatatypeTypeParameter, Neighbor, StructFields, Type, TypeName_, Type_, VariantFields,
+    },
     parser::ast::{self as P, DocComment},
     shared::{
         files::MappedFiles, unique_map::UniqueMap, Identifier, Name, NamedAddressMap,
@@ -108,7 +113,7 @@ use move_compiler::{
     unit_test::filter_test_members::UNIT_TEST_POISON_FUN_NAME,
     PASS_CFGIR, PASS_PARSER, PASS_TYPING,
 };
-use move_core_types::account_address::AccountAddress;
+use move_core_types::{account_address::AccountAddress, parsing::address::NumericalAddress};
 use move_ir_types::location::*;
 use move_package::{
     compilation::{build_plan::BuildPlan, compiled_package::ModuleFormat},
@@ -119,6 +124,7 @@ use move_symbol_pool::Symbol;
 
 const MANIFEST_FILE_NAME: &str = "Move.toml";
 const STD_LIB_PKG_ADDRESS: &str = "0x1";
+const SUI_LIB_PKG_ADDRESS: &str = "0x2";
 
 /// Information about compiled program (ASTs at different levels)
 #[derive(Clone)]
@@ -477,6 +483,30 @@ impl FieldOrderInfo {
 }
 
 /// Module-level definitions and other module-related info
+#[derive(Debug, Clone, Copy, Ord, PartialOrd, PartialEq, Eq)]
+pub enum AutoImportInsertionKind {
+    AfterLastImport,
+    BeforeFirstMember, // when no imports exist
+}
+
+/// Information needed for auto-import insertion. We do our best
+/// to make the insertion fit with what's already in the source file.
+/// In particular, if uses are already preasent, we insert the new import
+/// in the following line keeping the tabulation of the previous import.
+/// If no imports are present, we insert the new import before the first
+/// module member, pushing this member down but keeping its original
+/// tabulation.
+#[derive(Debug, Clone, Copy, Ord, PartialOrd, PartialEq, Eq)]
+pub struct AutoImportInsertionInfo {
+    // Kind of auto-import insertion
+    pub kind: AutoImportInsertionKind,
+    // Position in file where insertion should start
+    pub pos: Position,
+    // Tabulation in number of spaces
+    pub tabulation: usize,
+}
+
+/// Module-level definitions and other module-related info
 #[derive(Debug, Clone, Ord, PartialOrd, PartialEq, Eq)]
 pub struct ModuleDefs {
     /// File where this module is located
@@ -498,6 +528,10 @@ pub struct ModuleDefs {
     pub untyped_defs: BTreeSet<Loc>,
     /// Information about calls in this module
     pub call_infos: BTreeMap<Loc, CallInfo>,
+    /// Position where auto-imports should be inserted
+    pub import_insert_info: Option<AutoImportInsertionInfo>,
+    /// Dependencies summary
+    pub neighbors: UniqueMap<ModuleIdent, Neighbor>,
 }
 
 #[derive(Clone, Debug)]
@@ -1280,44 +1314,82 @@ pub fn mod_ident_to_ide_string(
     let suffix = if is_access_chain_prefix { "::" } else { "" };
     match mod_ident.address {
         A::Numerical { name, value, .. } => {
-            let pkg_name = match name {
-                Some(n) => n.to_string(),
-                None => value.to_string(),
-            };
+            fn strip_prefix(
+                addr_name: Option<Name>,
+                addr_value: Spanned<NumericalAddress>,
+                mod_ident: &ModuleIdent_,
+                datatype_name_opt: Option<&Symbol>,
+                suffix: &str,
+                pkg_addr: &str,
+                implicit_modules: &[Symbol],
+                implicit_members: &[(Symbol, Symbol, ModuleMemberKind)],
+            ) -> (bool, String) {
+                let pkg_name = match addr_name {
+                    Some(n) => n.to_string(),
+                    None => addr_value.to_string(),
+                };
 
-            let Ok(std_lib_pkg_address) = AccountAddress::from_hex_literal(STD_LIB_PKG_ADDRESS)
-            else {
-                // getting stdlib address did not work - use the whole thing
-                return format!("{pkg_name}::{}{}", mod_ident.module, suffix);
-            };
-            if value.value.into_inner() != std_lib_pkg_address {
-                // it's not a stdlib package - use the whole thing
-                return format!("{pkg_name}::{}{}", mod_ident.module, suffix);
-            }
-            // try stripping both package and module if this conversion
-            // is for a datatype, oherwise try only stripping package
-            if let Some(datatype_name) = datatype_name_opt {
-                if IMPLICIT_STD_MEMBERS.iter().any(
-                    |(implicit_mod_name, implicit_datatype_name, _)| {
-                        mod_ident.module.value() == *implicit_mod_name
-                            && datatype_name == implicit_datatype_name
-                    },
-                ) {
-                    // strip both package and module (whether its meant to be
-                    // part of access chain or not, if there is not module,
-                    // there should be no `::` at the end)
-                    return "".to_string();
+                let Ok(std_lib_pkg_address) = AccountAddress::from_hex_literal(pkg_addr) else {
+                    // getting stdlib address did not work - use the whole thing
+                    return (false, format!("{pkg_name}::{}{}", mod_ident.module, suffix));
+                };
+                if addr_value.value.into_inner() != std_lib_pkg_address {
+                    // it's not a stdlib package - use the whole thing
+                    return (false, format!("{pkg_name}::{}{}", mod_ident.module, suffix));
                 }
+                // try stripping both package and module if this conversion
+                // is for a datatype, oherwise try only stripping package
+                if let Some(datatype_name) = datatype_name_opt {
+                    if implicit_members.iter().any(
+                        |(implicit_mod_name, implicit_datatype_name, _)| {
+                            mod_ident.module.value() == *implicit_mod_name
+                                && datatype_name == implicit_datatype_name
+                        },
+                    ) {
+                        // strip both package and module (whether its meant to be
+                        // part of access chain or not, if there is not module,
+                        // there should be no `::` at the end)
+                        return (true, "".to_string());
+                    }
+                }
+                if implicit_modules
+                    .iter()
+                    .any(|implicit_mod_name| mod_ident.module.value() == *implicit_mod_name)
+                {
+                    // strip package
+                    return (true, format!("{}{}", mod_ident.module.value(), suffix));
+                }
+                // stripping prefix didn't work - use the whole thing
+                (true, format!("{pkg_name}::{}{}", mod_ident.module, suffix))
             }
-            if IMPLICIT_STD_MODULES
-                .iter()
-                .any(|implicit_mod_name| mod_ident.module.value() == *implicit_mod_name)
-            {
-                // strip package
-                return format!("{}{}", mod_ident.module.value(), suffix);
+
+            let (strippable, mut res) = strip_prefix(
+                name,
+                value,
+                mod_ident,
+                datatype_name_opt,
+                suffix,
+                STD_LIB_PKG_ADDRESS,
+                IMPLICIT_STD_MODULES,
+                IMPLICIT_STD_MEMBERS,
+            );
+
+            // check for Sui implicits only if the previous call determined
+            // that the prefix was not strippable with respect to implicits
+            // passed as its arguments
+            if !strippable {
+                (_, res) = strip_prefix(
+                    name,
+                    value,
+                    mod_ident,
+                    datatype_name_opt,
+                    suffix,
+                    SUI_LIB_PKG_ADDRESS,
+                    IMPLICIT_SUI_MODULES,
+                    IMPLICIT_SUI_MEMBERS,
+                );
             }
-            // stripping prefix didn't work - use the whole thing
-            format!("{pkg_name}::{}{}", mod_ident.module, suffix)
+            res
         }
         A::NamedUnassigned(n) => format!("{n}::{}", mod_ident.module).to_string(),
     }
@@ -3045,6 +3117,7 @@ fn get_mod_outer_defs(
 
     let ident = mod_ident.value;
     let doc_string = mod_def.doc.comment().map(|d| d.value.to_owned());
+
     let mod_defs = ModuleDefs {
         fhash,
         ident,
@@ -3055,6 +3128,8 @@ fn get_mod_outer_defs(
         functions,
         untyped_defs: BTreeSet::new(),
         call_infos: BTreeMap::new(),
+        import_insert_info: None,
+        neighbors: mod_def.immediate_neighbors.clone(),
     };
 
     // insert use of the module name in the definition itself

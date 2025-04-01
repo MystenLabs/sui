@@ -1,0 +1,115 @@
+---
+source: crates/move-analyzer/tests/ide_testsuite.rs
+---
+== colon_colon.move ========================================================
+-- test 0 -------------------
+use line: 7, use_col: 9
+Unit '0xCAFE'
+Unit 'Import'
+Module 'Self'
+Module 'dep'
+Module 'another_dep'
+    TARGET     : '(use Import::another_dep)'
+    ADDITIONAL EDIT: '
+    use Import::another_dep;'
+Method 'bak()'
+    INSERT TEXT: 'bak()'
+    TARGET     : '(Import::colon_colon::bak)'
+    TYPE       : 'fun ()'
+Method 'bam()'
+    INSERT TEXT: 'bam()'
+    TARGET     : '(Import::colon_colon::bam)'
+    TYPE       : 'fun ()'
+Method 'baz()'
+    INSERT TEXT: 'baz()'
+    TARGET     : '(Import::colon_colon::baz)'
+    TYPE       : 'fun ()'
+Method 'foo()'
+    INSERT TEXT: 'foo()'
+    TARGET     : '(Import::colon_colon::foo)'
+    TYPE       : 'fun ()'
+Struct 'AnotherDepStruct'
+    TARGET     : '(use Import::another_dep::AnotherDepStruct)'
+    ADDITIONAL EDIT: '
+    use Import::another_dep::AnotherDepStruct;'
+Method 'bar()'
+    INSERT TEXT: 'bar()'
+    TARGET     : '(use Import::dep::bar)'
+    TYPE       : 'fun ()'
+    ADDITIONAL EDIT: '
+    use Import::dep::bar;'
+Method 'pkg_fun()'
+    INSERT TEXT: 'pkg_fun()'
+    TARGET     : '(use Import::dep::pkg_fun)'
+    TYPE       : 'fun ()'
+    ADDITIONAL EDIT: '
+    use Import::dep::pkg_fun;'
+Method 'pub_fun()'
+    INSERT TEXT: 'pub_fun()'
+    TARGET     : '(use Import::dep::pub_fun)'
+    TYPE       : 'fun ()'
+    ADDITIONAL EDIT: '
+    use Import::dep::pub_fun;'
+Struct 'PubStruct'
+    TARGET     : '(use Import::dep::PubStruct)'
+    ADDITIONAL EDIT: '
+    use Import::dep::PubStruct;'
+Enum 'PubEnum'
+    TARGET     : '(use Import::dep::PubEnum)'
+    ADDITIONAL EDIT: '
+    use Import::dep::PubEnum;'
+
+-- test 1 -------------------
+use line: 15, use_col: 21
+Struct 'AnotherDepStruct'
+    TARGET     : '(use Import::another_dep::AnotherDepStruct)'
+    ADDITIONAL EDIT: '
+    use Import::another_dep::AnotherDepStruct;'
+
+-- test 2 -------------------
+use line: 19, use_col: 22
+Struct 'AnotherDepStruct'
+    TARGET     : '(use Import::another_dep::AnotherDepStruct)'
+    ADDITIONAL EDIT: '
+    use Import::another_dep::AnotherDepStruct;'
+
+== dep.move ========================================================
+-- test 0 -------------------
+use line: 22, use_col: 9
+Unit '0xCAFE'
+Unit 'Import'
+Module 'Self'
+Module 'another_dep'
+    TARGET     : '(use Import::another_dep)'
+    ADDITIONAL EDIT: 'use Import::another_dep;
+
+    '
+Module 'colon_colon'
+    TARGET     : '(use Import::colon_colon)'
+    ADDITIONAL EDIT: 'use Import::colon_colon;
+
+    '
+Constant 'DEP_CONST'
+Enum 'PubEnum'
+Struct 'PubStruct'
+Method 'bar()'
+    INSERT TEXT: 'bar()'
+    TARGET     : '(Import::dep::bar)'
+    TYPE       : 'fun ()'
+Method 'pkg_fun()'
+    INSERT TEXT: 'pkg_fun()'
+    TARGET     : '(Import::dep::pkg_fun)'
+    TYPE       : 'fun ()'
+Method 'private_fun()'
+    INSERT TEXT: 'private_fun()'
+    TARGET     : '(Import::dep::private_fun)'
+    TYPE       : 'fun ()'
+Method 'pub_fun()'
+    INSERT TEXT: 'pub_fun()'
+    TARGET     : '(Import::dep::pub_fun)'
+    TYPE       : 'fun ()'
+Struct 'AnotherDepStruct'
+    TARGET     : '(use Import::another_dep::AnotherDepStruct)'
+    ADDITIONAL EDIT: 'use Import::another_dep::AnotherDepStruct;
+
+    '

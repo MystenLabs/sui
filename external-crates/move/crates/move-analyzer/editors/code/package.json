@@ -5,7 +5,7 @@
   "publisher": "mysten",
   "icon": "images/move.png",
   "license": "Apache-2.0",
-  "version": "1.0.20",
+  "version": "1.0.21",
   "preview": true,
   "repository": {
     "url": "https://github.com/MystenLabs/sui.git",
