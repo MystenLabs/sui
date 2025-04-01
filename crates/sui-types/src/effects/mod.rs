@@ -335,6 +335,7 @@ pub trait TransactionEffectsAPI {
     fn deleted(&self) -> Vec<ObjectRef>;
     fn unwrapped_then_deleted(&self) -> Vec<ObjectRef>;
     fn wrapped(&self) -> Vec<ObjectRef>;
+    fn transferred_from_consensus(&self) -> Vec<ObjectRef>;
 
     fn object_changes(&self) -> Vec<ObjectChange>;
 

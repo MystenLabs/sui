@@ -256,6 +256,29 @@ impl TransactionEffectsAPI for TransactionEffectsV2 {
             .collect()
     }
 
+    fn transferred_from_consensus(&self) -> Vec<ObjectRef> {
+        self.changed_objects
+            .iter()
+            .filter_map(|(id, change)| {
+                match (
+                    &change.input_state,
+                    &change.output_state,
+                    &change.id_operation,
+                ) {
+                    (
+                        ObjectIn::Exist((_, Owner::ConsensusV2 { .. })),
+                        ObjectOut::ObjectWrite((
+                            object_digest,
+                            Owner::AddressOwner(_) | Owner::ObjectOwner(_) | Owner::Immutable,
+                        )),
+                        IDOperation::None,
+                    ) => Some((*id, self.lamport_version, *object_digest)),
+                    _ => None,
+                }
+            })
+            .collect()
+    }
+
     fn object_changes(&self) -> Vec<ObjectChange> {
         self.changed_objects
             .iter()
