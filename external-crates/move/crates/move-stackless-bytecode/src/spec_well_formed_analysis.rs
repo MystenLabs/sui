@@ -308,12 +308,27 @@ impl FunctionTargetProcessor for SpecWellFormedAnalysisProcessor {
         // Arguments Checking
 
         for idx in 0..type_param_args.len() {
-            if !type_param_args[idx].is_type_parameter() {
-                env.diag(
-                    Severity::Error,
-                    &func_env.get_loc(),
-                    "Underlying func not accepting type param from spec",
-                );
+            match type_param_args[idx] {
+                Type::TypeParameter(id) => {
+                    if idx as u16 != id {
+                        env.diag(
+                            Severity::Error,
+                            &func_env.get_loc(),
+                            "Underlying func accepting type param from spec in wrong order",
+                        );
+
+                        return data;
+                    }
+                },
+                _ => {
+                    env.diag(
+                        Severity::Error,
+                        &func_env.get_loc(),
+                        "Underlying func not accepting type param from spec",
+                    );
+
+                    return data;
+                },
             }
         }
 
@@ -327,6 +342,8 @@ impl FunctionTargetProcessor for SpecWellFormedAnalysisProcessor {
                     &func_env.get_loc(),
                     "Underlying func input var is not a function parameter",
                 );
+
+                return data;
             }
         }
 
@@ -343,6 +360,8 @@ impl FunctionTargetProcessor for SpecWellFormedAnalysisProcessor {
                         &func_env.get_loc(),
                         "Underlying func result var is not returned from spec",
                     );
+
+                    return data;
                 }
             }
         }
