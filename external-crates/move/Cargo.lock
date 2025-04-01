@@ -2354,6 +2354,7 @@ dependencies = [
 name = "move-package-alt"
 version = "0.1.0"
 dependencies = [
+ "anyhow",
  "serde",
  "serde_spanned",
  "toml",
