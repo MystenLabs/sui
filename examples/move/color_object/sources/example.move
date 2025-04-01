@@ -114,7 +114,7 @@ fun test_copy_into() {
         let (red, green, blue) = obj1.get_color();
         assert!(red == 255 && green == 255 && blue == 255, 0);
 
-        obj2.copy_into( &mut obj1);
+        obj2.copy_into(&mut obj1);
         ts.return_to_sender( obj1);
         ts.return_to_sender( obj2);
     };
