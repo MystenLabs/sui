@@ -186,7 +186,7 @@ fun test_transfer() {
 
     // Check that recipient now owns the object.
     {
-        ts.next_tx( recipient);
+        ts.next_tx(recipient);
         assert!(ts.has_most_recent_for_sender<ColorObject>(), 0);
     };
 
