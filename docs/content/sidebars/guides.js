@@ -89,6 +89,15 @@ const guides = [
 			'guides/developer/stablecoins',
 			{
 				type: 'category',
+				label: 'Cross Chain',
+				// link: {
+				// 	type: 'doc',
+				// 	id: 'guides/developer/cross-chain',
+				// },
+				items: ['guides/developer/cross-chain/gmp', 'guides/developer/cross-chain/cross-chain-tokens'],
+			},
+			{
+				type: 'category',
 				label: 'NFTs',
 				link: {
 					type: 'doc',
@@ -96,6 +105,7 @@ const guides = [
 				},
 				items: ['guides/developer/nft/nft-rental', 'guides/developer/nft/asset-tokenization'],
 			},
+
 			{
 				type: 'category',
 				label: 'Cryptography',
