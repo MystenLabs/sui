@@ -52,7 +52,6 @@ pub struct GeneralConfig {
     /// Explain the proving outputs via LLM 
     #[clap(name = "explain", long, global = true)]
     pub explain: bool,
-}
 
     /// Display detailed verification progress
     #[clap(name = "use_array_theory", long = "use_array_theory", global = true)]
