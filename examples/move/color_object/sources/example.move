@@ -209,7 +209,7 @@ fun test_immutable() {
 
     // take_owned does not work for immutable objects.
     {
-        ts.next_tx( alice);
+        ts.next_tx(alice);
         assert!(!ts.has_most_recent_for_sender<ColorObject>(), 0);
     };
 
