@@ -686,7 +686,7 @@ impl From<sui_sdk_types::UnchangedSharedObject> for super::UnchangedSharedObject
                 message.version = Some(version);
                 UnchangedSharedObjectKind::ReadDeleted
             }
-            Cancelled { version } => {
+            Canceled { version } => {
                 message.version = Some(version);
                 UnchangedSharedObjectKind::Canceled
             }
@@ -739,7 +739,7 @@ impl TryFrom<&super::UnchangedSharedObject> for sui_sdk_types::UnchangedSharedOb
                     .version
                     .ok_or_else(|| TryFromProtoError::missing("version"))?,
             },
-            UnchangedSharedObjectKind::Canceled => UnchangedSharedKind::Cancelled {
+            UnchangedSharedObjectKind::Canceled => UnchangedSharedKind::Canceled {
                 version: value
                     .version
                     .ok_or_else(|| TryFromProtoError::missing("version"))?,

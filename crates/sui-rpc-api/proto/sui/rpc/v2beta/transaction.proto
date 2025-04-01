@@ -5,6 +5,7 @@ syntax = "proto3";
 
 package sui.rpc.v2beta;
 
+import "google/protobuf/duration.proto";
 import "google/protobuf/empty.proto";
 import "google/protobuf/timestamp.proto";
 import "sui/rpc/v2beta/argument.proto";
@@ -422,8 +423,12 @@ message EndOfEpochTransactionKind {
   oneof kind {
     // End the epoch and start the next one.
     ChangeEpoch change_epoch = 2;
+
     // Expire JWKs used for zklogin.
     AuthenticatorStateExpire authenticator_state_expire = 3;
+
+    // Execution time observations from the committee to preserve cross epoch
+    ExecutionTimeObservations execution_time_observations = 4;
 
     // Use higher field numbers for kinds which happen infrequently.
 
@@ -446,4 +451,39 @@ message AuthenticatorStateExpire {
   optional uint64 min_epoch = 1;
   // The initial version of the authenticator object that it was shared at.
   optional uint64 authenticator_object_initial_shared_version = 2;
+}
+
+message ExecutionTimeObservations {
+  // Version of this ExecutionTimeObservations
+  optional int32 version = 1;
+
+  repeated ExecutionTimeObservation observations = 2;
+}
+
+message ExecutionTimeObservation {
+  enum ExecutionTimeObservationKind {
+    EXECUTION_TIME_OBSERVATION_KIND_UNKNOWN = 0;
+
+    MOVE_ENTRY_POINT = 1;
+    TRANSFER_OBJECTS = 2;
+    SPLIT_COINS = 3;
+    MERGE_COINS = 4;
+    PUBLISH = 5;
+    MAKE_MOVE_VECTOR = 6;
+    UPGRADE = 7;
+  }
+
+  optional ExecutionTimeObservationKind kind = 1;
+
+  optional MoveCall move_entry_point = 2;
+
+  repeated ValidatorExecutionTimeObservation validator_observations = 3;
+}
+
+message ValidatorExecutionTimeObservation {
+  // Bls12381 public key of the validator
+  optional bytes validator = 1;
+
+  // Duration of an execution observation
+  optional google.protobuf.Duration duration = 2;
 }

@@ -7827,6 +7827,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "move-package-alt"
+version = "0.1.0"
+dependencies = [
+ "serde",
+ "serde_spanned",
+ "toml 0.5.11",
+ "toml_edit 0.14.4",
+]
+
+[[package]]
 name = "move-proc-macros"
 version = "0.1.0"
 dependencies = [
@@ -11714,9 +11724,9 @@ dependencies = [
 
 [[package]]
 name = "serde_spanned"
-version = "0.6.7"
+version = "0.6.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "eb5b1b31579f3811bf615c144393417496f152e12ac8b7663bf664f4a815306d"
+checksum = "87607cb1398ed59d48732e575a4c28a7a8ebf2454b964fe3f224f2afc07909e1"
 dependencies = [
  "serde",
 ]
@@ -13333,7 +13343,7 @@ dependencies = [
  "sui-swarm-config",
  "sui-test-transaction-builder",
  "sui-tool",
- "sui-transaction-builder 0.1.0",
+ "sui-transaction-builder 0.0.4",
  "sui-types",
  "telemetry-subscribers",
  "tempfile",
@@ -14730,6 +14740,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "sui-package-alt"
+version = "1.47.0"
+dependencies = [
+ "move-package-alt",
+]
+
+[[package]]
 name = "sui-package-dump"
 version = "1.47.0"
 dependencies = [
@@ -14822,7 +14839,6 @@ dependencies = [
  "clap",
  "insta",
  "move-vm-config",
- "once_cell",
  "schemars",
  "serde",
  "serde-env",
@@ -15007,7 +15023,7 @@ dependencies = [
  "serde_with",
  "sui-protocol-config",
  "sui-sdk-types",
- "sui-transaction-builder 0.1.0",
+ "sui-transaction-builder 0.0.4",
  "sui-types",
  "tap",
  "test-strategy",
@@ -15118,8 +15134,8 @@ dependencies = [
 
 [[package]]
 name = "sui-sdk-types"
-version = "0.0.2"
-source = "git+https://github.com/MystenLabs/sui-rust-sdk.git?rev=5e11579031793f086178332219f5847ec94da0c4#5e11579031793f086178332219f5847ec94da0c4"
+version = "0.0.4"
+source = "git+https://github.com/MystenLabs/sui-rust-sdk.git?rev=83ff809bc11cbabda21b60130e1f5420170548bf#83ff809bc11cbabda21b60130e1f5420170548bf"
 dependencies = [
  "base64ct",
  "bcs",
@@ -15593,8 +15609,8 @@ dependencies = [
 
 [[package]]
 name = "sui-transaction-builder"
-version = "0.1.0"
-source = "git+https://github.com/MystenLabs/sui-rust-sdk.git?rev=5e11579031793f086178332219f5847ec94da0c4#5e11579031793f086178332219f5847ec94da0c4"
+version = "0.0.4"
+source = "git+https://github.com/MystenLabs/sui-rust-sdk.git?rev=83ff809bc11cbabda21b60130e1f5420170548bf#83ff809bc11cbabda21b60130e1f5420170548bf"
 dependencies = [
  "base64ct",
  "bcs",
