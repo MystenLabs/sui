@@ -12,8 +12,8 @@ use sui_indexer_alt::config::{IndexerConfig, PipelineLayer};
 use sui_indexer_alt_e2e_tests::{find_address_owned, find_immutable, FullCluster};
 use sui_indexer_alt_framework::IndexerArgs;
 use sui_indexer_alt_jsonrpc::{
+    args::SystemPackageTaskArgs,
     config::{PackageResolverLayer, RpcConfig},
-    data::system_package_task::SystemPackageTaskArgs,
 };
 use sui_move_build::BuildConfig;
 use sui_types::{

@@ -9,7 +9,7 @@ use tokio::{task::JoinHandle, time};
 use tokio_util::sync::CancellationToken;
 use tracing::{error, info};
 
-use crate::context::Context;
+use crate::{package_resolver::PackageResolver, pg_reader::PgReader};
 
 #[derive(clap::Args, Debug, Clone)]
 pub struct SystemPackageTaskArgs {
@@ -20,11 +20,16 @@ pub struct SystemPackageTaskArgs {
 
 /// Background task responsible for evicting system package from the package resolver's cache after
 /// detecting an epoch boundary.
-pub(crate) struct SystemPackageTask {
-    /// Access to the database and package resolver.
-    context: Context,
+pub struct SystemPackageTask {
+    /// Access to the database
+    pg_reader: PgReader,
+
+    /// Access to the package resolver
+    package_resolver: PackageResolver,
+
     /// How long to wait between checks.
     interval: Duration,
+
     /// Signal to cancel the task.
     cancel: CancellationToken,
 }
@@ -36,13 +41,15 @@ impl SystemPackageTaskArgs {
 }
 
 impl SystemPackageTask {
-    pub(crate) fn new(
-        context: Context,
+    pub fn new(
         args: SystemPackageTaskArgs,
+        pg_reader: PgReader,
+        package_resolver: PackageResolver,
         cancel: CancellationToken,
     ) -> Self {
         Self {
-            context,
+            pg_reader,
+            package_resolver,
             interval: args.epoch_polling_interval(),
             cancel,
         }
@@ -54,10 +61,11 @@ impl SystemPackageTask {
     ///
     /// This operation consumes the `self` and returns a handle to the spawned tokio task. The task
     /// will continue to run until its cancellation token is triggered.
-    pub(crate) fn run(self) -> JoinHandle<()> {
+    pub fn run(self) -> JoinHandle<()> {
         tokio::spawn(async move {
             let Self {
-                context,
+                pg_reader,
+                package_resolver,
                 interval,
                 cancel,
             } = self;
@@ -73,7 +81,7 @@ impl SystemPackageTask {
                     }
 
                     _ = interval.tick() => {
-                        let mut conn = match context.pg_reader().connect().await {
+                        let mut conn = match pg_reader.connect().await {
                             Ok(conn) => conn,
                             Err(e) => {
                                 error!("Failed to connect to database: {:?}", e);
@@ -117,7 +125,7 @@ impl SystemPackageTask {
                         if next_epoch > last_epoch {
                             info!(last_epoch, next_epoch, "Detected epoch boundary, evicting system packages from cache");
                             last_epoch = next_epoch;
-                            context.package_resolver().package_store().evict(SYSTEM_PACKAGE_ADDRESSES.iter().copied())
+                            package_resolver.package_store().evict(SYSTEM_PACKAGE_ADDRESSES.iter().copied())
                         }
                     }
                 }

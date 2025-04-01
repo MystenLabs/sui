@@ -3,23 +3,16 @@
 
 use std::{collections::HashMap, sync::Arc};
 
-use anyhow::Context as _;
 use async_graphql::dataloader::Loader;
 use diesel::{BoolExpressionMethods, ExpressionMethods, QueryDsl};
-use serde::de::DeserializeOwned;
 use sui_indexer_alt_schema::{objects::StoredObject, schema::kv_objects};
 use sui_types::{base_types::ObjectID, object::Object, storage::ObjectKey};
 
-use crate::context::Context;
-
-use super::{
-    bigtable_reader::BigtableReader, error::Error, object_versions::LatestObjectVersionKey,
-    pg_reader::PgReader,
-};
+use crate::{bigtable_reader::BigtableReader, error::Error, pg_reader::PgReader};
 
 /// Key for fetching the contents a particular version of an object.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub(crate) struct VersionedObjectKey(pub ObjectID, pub u64);
+pub struct VersionedObjectKey(pub ObjectID, pub u64);
 
 #[async_trait::async_trait]
 impl Loader<VersionedObjectKey> for PgReader {
@@ -95,44 +88,4 @@ impl Loader<VersionedObjectKey> for BigtableReader {
             .map(|o| (VersionedObjectKey(o.id(), o.version().into()), o))
             .collect())
     }
-}
-
-/// Load the contents of the live version of an object from the store and deserialize it as an
-/// `Object`. Returns `None` if the object is deleted, wrapped, or never existed.
-pub(crate) async fn load_live(
-    ctx: &Context,
-    object_id: ObjectID,
-) -> Result<Option<Object>, anyhow::Error> {
-    let Some(latest_version) = ctx
-        .pg_loader()
-        .load_one(LatestObjectVersionKey(object_id))
-        .await
-        .context("Failed to load latest version")?
-    else {
-        return Ok(None);
-    };
-
-    if latest_version.object_digest.is_none() {
-        return Ok(None);
-    }
-
-    let object = ctx
-        .kv_loader()
-        .load_one_object(object_id, latest_version.object_version as u64)
-        .await
-        .context("Failed to load latest object")?;
-
-    Ok(object)
-}
-
-/// Fetch the latest version of the object at ID `object_id`, and deserialize its contents as a
-/// Rust type `T`, assuming that it exists and is a Move object (not a package).
-pub(crate) async fn load_live_deserialized<T: DeserializeOwned>(
-    ctx: &Context,
-    object_id: ObjectID,
-) -> Result<T, anyhow::Error> {
-    let object = load_live(ctx, object_id).await?.context("No data found")?;
-
-    let move_object = object.data.try_as_move().context("Not a Move object")?;
-    bcs::from_bytes(move_object.contents()).context("Failed to deserialize Move value")
 }

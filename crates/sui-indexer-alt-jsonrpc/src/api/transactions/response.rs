@@ -6,6 +6,10 @@ use std::str::FromStr;
 use anyhow::Context as _;
 use futures::future::OptionFuture;
 use move_core_types::annotated_value::{MoveDatatypeLayout, MoveTypeLayout};
+use sui_indexer_alt_reader::{
+    kv_loader::TransactionContents, objects::VersionedObjectKey,
+    tx_balance_changes::TxBalanceChangeKey,
+};
 use sui_indexer_alt_schema::transactions::{BalanceChange, StoredTxBalanceChange};
 use sui_json_rpc_types::{
     BalanceChange as SuiBalanceChange, ObjectChange as SuiObjectChange, SuiEvent,
@@ -26,10 +30,6 @@ use tokio::join;
 
 use crate::{
     context::Context,
-    data::{
-        kv_loader::TransactionContents, objects::VersionedObjectKey,
-        tx_balance_changes::TxBalanceChangeKey,
-    },
     error::{invalid_params, rpc_bail, RpcError},
 };
 

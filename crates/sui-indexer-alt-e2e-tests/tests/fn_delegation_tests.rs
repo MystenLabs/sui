@@ -8,8 +8,7 @@ use prometheus::Registry;
 use reqwest::Client;
 use serde_json::{json, Value};
 use sui_indexer_alt_jsonrpc::{
-    config::RpcConfig, data::system_package_task::SystemPackageTaskArgs, start_rpc, NodeArgs,
-    RpcArgs,
+    args::SystemPackageTaskArgs, config::RpcConfig, start_rpc, NodeArgs, RpcArgs,
 };
 use sui_macros::sim_test;
 use sui_pg_db::{temp::get_available_port, DbArgs};

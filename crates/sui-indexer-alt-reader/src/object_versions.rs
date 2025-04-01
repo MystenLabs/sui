@@ -8,14 +8,12 @@ use diesel::sql_types::{Array, Bytea};
 use sui_indexer_alt_schema::objects::StoredObjVersion;
 use sui_types::base_types::ObjectID;
 
-use crate::data::error::Error;
-
-use super::pg_reader::PgReader;
+use crate::{error::Error, pg_reader::PgReader};
 
 /// Key for fetching the latest version of an object. If the object has been deleted or wrapped,
 /// the latest version will return the version it was deleted/wrapped at.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub(crate) struct LatestObjectVersionKey(pub ObjectID);
+pub struct LatestObjectVersionKey(pub ObjectID);
 
 #[async_trait::async_trait]
 impl Loader<LatestObjectVersionKey> for PgReader {

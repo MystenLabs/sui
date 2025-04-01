@@ -14,13 +14,13 @@ use sui_package_resolver::{
     error::Error, Package, PackageStore, PackageStoreWithLruCache, Resolver, Result,
 };
 
-use super::pg_reader::PgReader;
+use crate::pg_reader::PgReader;
 
 const STORE: &str = "PostgreSQL";
 
-pub(crate) type PackageCache = PackageStoreWithLruCache<DbPackageStore>;
-pub(crate) type PackageResolver = Arc<Resolver<PackageCache>>;
-pub(crate) struct DbPackageStore(Arc<DataLoader<PgReader>>);
+pub type PackageCache = PackageStoreWithLruCache<DbPackageStore>;
+pub type PackageResolver = Arc<Resolver<PackageCache>>;
+pub struct DbPackageStore(Arc<DataLoader<PgReader>>);
 
 #[derive(Copy, Clone, Hash, Eq, PartialEq, Debug)]
 struct PackageKey(AccountAddress);

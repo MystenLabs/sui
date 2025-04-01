@@ -12,13 +12,11 @@ use sui_indexer_alt_schema::{schema::kv_transactions, transactions::StoredTransa
 use sui_kvstore::TransactionData;
 use sui_types::digests::TransactionDigest;
 
-use crate::data::error::Error;
-
-use super::{bigtable_reader::BigtableReader, pg_reader::PgReader};
+use crate::{bigtable_reader::BigtableReader, error::Error, pg_reader::PgReader};
 
 /// Key for fetching transaction contents (TransactionData, Effects, and Events) by digest.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub(crate) struct TransactionKey(pub TransactionDigest);
+pub struct TransactionKey(pub TransactionDigest);
 
 #[async_trait::async_trait]
 impl Loader<TransactionKey> for PgReader {

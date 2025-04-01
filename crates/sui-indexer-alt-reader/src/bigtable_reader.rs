@@ -15,7 +15,7 @@ use sui_types::object::Object;
 use sui_types::storage::ObjectKey;
 use tracing::warn;
 
-use crate::data::error::Error;
+use crate::error::Error;
 
 /// A reader backed by BigTable KV store.
 ///
@@ -30,8 +30,18 @@ pub struct BigtableReader {
 }
 
 impl BigtableReader {
-    pub(crate) async fn new(
+    /// Create a new reader, talking to the Bigtable instance with ID `instance_id`. The
+    /// constructor assumes that the `GOOGLE_APPLICATION_CREDENTIALS` environment variable is set
+    /// and points to a valid JSON credentials file.
+    ///
+    /// `client_name` is used as a label for metrics coming from ths underlying Bigtable client,
+    /// which will be registered with the supplied prometheus `registry`.
+    ///
+    /// If a request to Bigtable exceeds `slow_request_threshold`, detail of that request will be
+    /// logged as a `warn!`-ing.
+    pub async fn new(
         instance_id: String,
+        client_name: String,
         registry: &Registry,
         slow_request_threshold: Duration,
     ) -> Result<Self, Error> {
@@ -41,15 +51,10 @@ impl BigtableReader {
             )));
         }
 
-        let client = BigTableClient::new_remote(
-            instance_id,
-            true,
-            None,
-            "indexer-alt-jsonrpc".to_string(),
-            Some(registry),
-        )
-        .await
-        .map_err(Error::BigtableCreate)?;
+        let client =
+            BigTableClient::new_remote(instance_id, true, None, client_name, Some(registry))
+                .await
+                .map_err(Error::BigtableCreate)?;
 
         Ok(Self {
             client,
@@ -58,7 +63,7 @@ impl BigtableReader {
     }
 
     /// Create a data loader backed by this reader.
-    pub(crate) fn as_data_loader(&self) -> DataLoader<Self> {
+    pub fn as_data_loader(&self) -> DataLoader<Self> {
         DataLoader::new(self.clone(), tokio::spawn)
     }
 

@@ -12,8 +12,8 @@ use sui_indexer_alt::config::IndexerConfig;
 use sui_indexer_alt_e2e_tests::{find_address_owned, FullCluster};
 use sui_indexer_alt_framework::IndexerArgs;
 use sui_indexer_alt_jsonrpc::{
+    args::SystemPackageTaskArgs,
     config::{ObjectsConfig, RpcConfig},
-    data::system_package_task::SystemPackageTaskArgs,
 };
 use sui_json_rpc_types::Page;
 use sui_types::{
