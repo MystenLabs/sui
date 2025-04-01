@@ -130,7 +130,7 @@ public fun update_randomness_state_for_testing(
 /// Unique randomness generator, derived from the global randomness.
 public struct RandomGenerator has drop {
     seed: vector<u8>,
-    counter: u16,
+    counter: u32,
     buffer: vector<u8>,
 }
 
@@ -296,7 +296,7 @@ public fun generator_seed(r: &RandomGenerator): &vector<u8> {
 }
 
 #[test_only]
-public fun generator_counter(r: &RandomGenerator): u16 {
+public fun generator_counter(r: &RandomGenerator): u32 {
     r.counter
 }
 
