@@ -9,11 +9,12 @@ use diesel::{ExpressionMethods, QueryDsl};
 use diesel_async::RunQueryDsl;
 use sui_indexer_alt_framework::{
     db,
-    models::cp_sequence_numbers::tx_interval,
     pipeline::{concurrent::Handler, Processor},
     types::full_checkpoint_content::CheckpointData,
 };
 use sui_indexer_alt_schema::{events::StoredEvEmitMod, schema::ev_emit_mod};
+
+use crate::handlers::cp_sequence_numbers::tx_interval;
 
 pub(crate) struct EvEmitMod;
 
@@ -86,11 +87,12 @@ mod tests {
     use super::*;
     use diesel_async::RunQueryDsl;
     use sui_indexer_alt_framework::{
-        handlers::cp_sequence_numbers::CpSequenceNumbers,
         types::{event::Event, test_checkpoint_data_builder::TestCheckpointDataBuilder},
         Indexer,
     };
     use sui_indexer_alt_schema::MIGRATIONS;
+
+    use crate::handlers::cp_sequence_numbers::CpSequenceNumbers;
 
     // A helper function to return all entries in the ev_emit_mod table sorted by package, module,
     // tx_sequence_number, and sender.
