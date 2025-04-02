@@ -61,9 +61,7 @@ use move_core_types::{
 use move_disassembler::disassembler::{Disassembler, DisassemblerOptions};
 
 use crate::{
-    ast::{
-        Attribute,ModuleName, QualifiedSymbol, Value,
-    },
+    ast::{Attribute, ModuleName, QualifiedSymbol, Value},
     symbol::{Symbol, SymbolPool},
     ty::{PrimitiveType, Type, TypeDisplayContext, TypeUnificationAdapter, Variance},
 };
@@ -3923,6 +3921,20 @@ impl<'env> FunctionEnv<'env> {
     pub fn get_type_display_ctx(&self) -> TypeDisplayContext {
         let type_param_names = self
             .get_type_parameters()
+            .iter()
+            .map(|param| param.0)
+            .collect();
+        TypeDisplayContext::WithEnv {
+            env: self.module_env.env,
+            type_param_names: Some(type_param_names),
+        }
+    }
+
+    /// Produce a TypeDisplayContext to print types within the scope of this env,
+    /// with source names for type parameters
+    pub fn get_named_type_display_ctx(&self) -> TypeDisplayContext {
+        let type_param_names = self
+            .get_named_type_parameters()
             .iter()
             .map(|param| param.0)
             .collect();

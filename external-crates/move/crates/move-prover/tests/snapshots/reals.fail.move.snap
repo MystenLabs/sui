@@ -1,36 +1,35 @@
 ---
 source: crates/move-prover/tests/integration.rs
-assertion_line: 52
 expression: output
 snapshot_kind: text
 ---
 Verification failed: exiting with verification errors
 error: prover::ensures assertion does not hold
-   ┌─ tests/inputs/reals.fail.move:16:3
+   ┌─ tests/inputs/reals.fail.move:20:3
    │
-16 │   ensures(res_real != x_real.add(1u64.to_real()));
-   │   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+20 │   ensures(y_real  != y_real);
+   │   ^^^^^^^^^^^^^^^^^^^^^^^^^^
    │
-   =     at tests/inputs/reals.fail.move:11: foo_spec
-   =         x = 19169u64
+   =     at tests/inputs/reals.fail.move:16: foo_spec
+   =         x = 0u64
    =     at ../../../../crates/sui-framework/packages/move-stdlib/sources/u64.move:90
-   =         x = 19169u64
+   =         x = 0u64
    =     at tests/inputs/reals.fail.move:7: foo
-   =         result = 19170u64
+   =         result = 1u64
    =     at tests/inputs/reals.fail.move:8: foo
-   =         res#1#0 = 19170u64
-   =     at tests/inputs/reals.fail.move:14: foo_spec
-   =         x = 19169u64
-   =     at ../../../../crates/sui-framework/packages/move-stdlib/sources/real.move:28: from_u64
-   =         result = real.Real{19169.0}
-   =     at ../../../../crates/sui-framework/packages/move-stdlib/sources/real.move:29: from_u64
-   =         x_real#1#0 = real.Real{19169.0}
-   =     at tests/inputs/reals.fail.move:15: foo_spec
-   =         x = 19170u64
-   =     at ../../../../crates/sui-framework/packages/move-stdlib/sources/real.move:28: from_u64
-   =         result = real.Real{19170.0}
-   =     at ../../../../crates/sui-framework/packages/move-stdlib/sources/real.move:29: from_u64
+   =         res#1#0 = 1u64
+   =     at tests/inputs/reals.fail.move:19: foo_spec
    =         x = 1u64
    =     at ../../../../crates/sui-framework/packages/move-stdlib/sources/real.move:28: from_u64
-   =         result = real.Real{1.0}
+   =         result = 1.0
    =     at ../../../../crates/sui-framework/packages/move-stdlib/sources/real.move:29: from_u64
+   =         x = 7u64
+   =     at ../../../../crates/sui-framework/packages/move-stdlib/sources/real.move:28: from_u64
+   =         result = 7.0
+   =     at ../../../../crates/sui-framework/packages/move-stdlib/sources/real.move:29: from_u64
+   =         the_real = 1.0/7.0
+   =     at tests/inputs/reals.fail.move:12: show_real
+   =         result = 1.0/7.0
+   =     at tests/inputs/reals.fail.move:13: show_real
+   =         y_real#1#0 = 1.0/7.0
+   =     at tests/inputs/reals.fail.move:20: foo_spec
