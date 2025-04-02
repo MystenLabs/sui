@@ -213,7 +213,6 @@ impl StacklessControlFlowGraph {
         for label in bytecode.branch_dests() {
             block_ids.insert(*label_offsets.get(&label).unwrap());
         }
-
         if bytecode.is_branch() && pc + 1 < (code.len() as CodeOffset) {
             block_ids.insert(pc + 1);
         }
