@@ -10,11 +10,11 @@ use serde_spanned::Spanned;
 
 use crate::errors::Located;
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Clone)]
 pub struct LocalDependency {
     /// The path on the filesystem, relative to the location of the containing file (which is
     /// stored in the `Located` wrapper)
-    path: Located<PathBuf>,
+    local: PathBuf,
 }
 
 impl TryFrom<(&Path, toml_edit::Value)> for LocalDependency {

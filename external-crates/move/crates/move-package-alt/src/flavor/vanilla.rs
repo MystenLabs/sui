@@ -20,17 +20,15 @@ use crate::{
 
 use super::MoveFlavor;
 
-/// The [Vanilla] implementation of the [MoveFlavor] trait. This implementation supports git,
-/// local, and externally resolved dependencies, and stores no additional metadata in the lockfile.
+/// The [Vanilla] implementation of the [MoveFlavor] trait. This implementation supports no
+/// flavor-specific resolvers and stores no additional metadata in the lockfile.
 pub struct Vanilla;
 
 impl MoveFlavor for Vanilla {
-    // TODO
     type PublishedMetadata = ();
-
     type EnvironmentID = String;
 
-    fn implicit_dependencies(&self, id: Self::EnvironmentID) -> Vec<PinnedDependency<Self>> {
+    fn implicit_deps(&self, environment: Self::EnvironmentID) -> Vec<PinnedDependency<Self>> {
         vec![]
     }
 
@@ -43,6 +41,7 @@ impl MoveFlavor for Vanilla {
         &self,
         deps: BTreeMap<PackageName, Self::FlavorDependency<Unpinned>>,
     ) -> PackageResult<BTreeMap<PackageName, Self::FlavorDependency<Pinned>>> {
+        // always an error
         todo!()
     }
 
@@ -50,6 +49,7 @@ impl MoveFlavor for Vanilla {
         &self,
         deps: BTreeMap<PackageName, Self::FlavorDependency<Pinned>>,
     ) -> PackageResult<BTreeMap<PackageName, PathBuf>> {
+        // always an error
         todo!()
     }
 }

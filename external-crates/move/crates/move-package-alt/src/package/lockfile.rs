@@ -1,3 +1,4 @@
+use derivative::Derivative;
 use lazy_regex::regex_captures;
 use serde_spanned::Spanned;
 use std::{
@@ -14,59 +15,59 @@ use toml_edit::{
     Document, InlineTable, Item, KeyMut, Table, Value,
 };
 
-use crate::flavor::MoveFlavor;
+use crate::{
+    dependency::{ManifestDependency, PinnedDependency},
+    flavor::MoveFlavor,
+};
 
 use super::{EnvironmentName, PackageName};
 
-#[derive(Serialize, Deserialize)]
-#[serde(bound = "F: Sized")]
-pub struct Lockfiles<F: MoveFlavor> {
-    unpublished: UnpublishedTable,
+#[derive(Serialize, Deserialize, Derivative)]
+#[derivative(Default(bound = ""), Clone(bound = ""))]
+#[serde(bound = "")]
+pub struct Lockfile<F: MoveFlavor> {
+    unpublished: UnpublishedTable<F>,
 
     #[serde(default)]
     published: BTreeMap<EnvironmentName, Publication<F>>,
 }
 
-#[derive(Serialize, Deserialize, Default, Clone)]
+#[derive(Serialize, Deserialize, Derivative)]
+#[derivative(Default(bound = ""), Clone(bound = ""))]
 #[serde(rename_all = "kebab-case")]
-struct UnpublishedTable {
-    dependencies: UnpublishedDependencies,
+#[serde(bound = "")]
+struct UnpublishedTable<F: MoveFlavor> {
+    dependencies: UnpublishedDependencies<F>,
 
     #[serde(default)]
-    dep_overrides: BTreeMap<EnvironmentName, UnpublishedDependencies>,
+    dep_overrides: BTreeMap<EnvironmentName, UnpublishedDependencies<F>>,
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Derivative)]
+#[derivative(Clone(bound = ""))]
+#[serde(bound = "")]
 pub struct Publication<F: MoveFlavor> {
     #[serde(flatten)]
     metadata: F::PublishedMetadata,
-    dependencies: BTreeMap<PackageName, PinnedDependencySpec>,
+    dependencies: BTreeMap<PackageName, PinnedDependency<F>>,
 }
 
-#[derive(Serialize, Deserialize, Default, Clone)]
-struct UnpublishedDependencies {
-    pinned: BTreeMap<PackageName, String /* TODO */>,
-    unpinned: BTreeMap<PackageName, String /* TODO */>,
+#[derive(Serialize, Deserialize, Derivative)]
+#[derivative(Default(bound = ""), Clone(bound = ""))]
+#[serde(bound = "")]
+struct UnpublishedDependencies<F: MoveFlavor> {
+    pinned: BTreeMap<PackageName, PinnedDependency<F>>,
+    unpinned: BTreeMap<PackageName, ManifestDependency<F>>,
 }
 
-#[derive(Serialize, Deserialize, Clone)]
-struct PinnedDependencySpec(DependencySpec);
-
-#[derive(Serialize, Deserialize, Clone)]
-struct DependencySpec {}
-
-impl<F: MoveFlavor> Lockfiles<F> {
-    /*
-    /// Read `Move.lock` and `Move.<env>.lock` from `path`
+impl<F: MoveFlavor> Lockfile<F> {
+    /// Read `Move.lock` and all `Move.<env>.lock` files from the directory at `path`.
+    /// Returns a new empty [Lockfile] if `path` doesn't contain a `Move.lock`.
     pub fn read_from(path: impl AsRef<Path>) -> anyhow::Result<Self> {
-        // TODO: return empty
         // Parse `Move.lock`
         let lockfile_name = path.as_ref().join("Move.lock");
         let Ok(lockfile_str) = read_to_string(&lockfile_name) else {
-            return Ok(Self {
-                unpublished: UnpublishedTable::default(),
-                published: BTreeMap::default(),
-            });
+            return Ok(Self::default());
         };
         let mut lockfiles = toml_edit::de::from_str::<Self>(&lockfile_str)?;
 
@@ -80,21 +81,18 @@ impl<F: MoveFlavor> Lockfiles<F> {
             };
 
             let metadata_contents = std::fs::read_to_string(file.path())?;
-            let metadata: F::PublishedMetadata = toml_edit::de::from_str(&metadata_contents)
+            let metadata: Publication<F> = toml_edit::de::from_str(&metadata_contents)
                 .or_else(|_| bail!(format!("Couldn't parse {file:?}")))?;
 
             let old_entry = lockfiles.published.insert(env_name.clone(), metadata);
             if let Some(_) = old_entry {
-                // TODO: could probably check to see if they are equivalent first?
                 bail!("Move.lock and Move.{env_name}.lock both contain publication information for {env_name}; TODO.");
             }
         }
 
         Ok(lockfiles)
     }
-    */
 
-    /* TODO
     /// Serialize [self] into `Move.lock` and `Move.<env>.lock`.
     ///
     /// The [PublishedMetadata] in `self.published.<env>` are partitioned: if `env` is in [envs]
@@ -105,7 +103,7 @@ impl<F: MoveFlavor> Lockfiles<F> {
         path: impl AsRef<Path>,
         envs: BTreeMap<EnvironmentName, F::EnvironmentID>,
     ) -> anyhow::Result<()> {
-        let mut output = self.clone();
+        let mut output: Lockfile<F> = self.clone();
         let (pubs, locals): (BTreeMap<_, _>, BTreeMap<_, _>) = output
             .published
             .into_iter()
@@ -157,7 +155,6 @@ impl<F: MoveFlavor> Lockfiles<F> {
 
         toml.to_string()
     }
-    */
 }
 
 impl<F: MoveFlavor> Publication<F> {

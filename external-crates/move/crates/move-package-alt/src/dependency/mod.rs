@@ -7,6 +7,7 @@ mod local;
 
 use std::collections::BTreeMap;
 
+use derivative::Derivative;
 pub use external::ExternalDependency;
 pub use git::GitDependency;
 pub use local::LocalDependency;
@@ -21,7 +22,8 @@ pub struct Pinned;
 pub struct Unpinned;
 
 /// Manifest dependencies are the things that users write in their Move.toml files
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Derivative)]
+#[derivative(Clone(bound = ""))]
 pub enum ManifestDependency<F: MoveFlavor> {
     Git(GitDependency<Unpinned>),
     External(ExternalDependency),
@@ -33,7 +35,8 @@ pub enum ManifestDependency<F: MoveFlavor> {
 /// a git dependendency with a branch or tag revision may change over time (and is thus not
 /// pinned), whereas a git dependency with a sha revision is always guaranteed to produce the same
 /// files.
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Derivative)]
+#[derivative(Clone(bound = ""))]
 pub enum PinnedDependency<F: MoveFlavor + ?Sized> {
     Git(GitDependency<Pinned>),
     Local(LocalDependency),

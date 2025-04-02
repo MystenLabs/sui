@@ -18,7 +18,7 @@ use super::PinnedDependency;
 /// An external dependency has the form `{ r.<res> = "<data>" }`; it is resolved by invoking the
 /// binary `<res>` (from the `PATH`), and passing `<data>` on the command line. The binary is
 /// expected to output a single resolved dependency on the command line.
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Clone)]
 pub struct ExternalDependency {
     /// Should be a table with a single entry; the name of the entry is the resolver binary to run
     /// and the value should be the argument passed to the resolver

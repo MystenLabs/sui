@@ -19,13 +19,15 @@
 
 use std::{marker::PhantomData, path::PathBuf};
 
+use derivative::Derivative;
 use serde::{Deserialize, Serialize};
 
 use crate::errors::PackageResult;
 
 use super::{Pinned, Unpinned};
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Derivative)]
+#[derivative(Clone(bound = ""))]
 pub struct GitDependency<P = Unpinned> {
     /// The repository holding the dep
     repo: String,
