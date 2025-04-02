@@ -181,7 +181,13 @@ impl<R, S: store::SimulatorStore> Simulacrum<R, S> {
     ) -> anyhow::Result<(TransactionEffects, Option<ExecutionError>)> {
         let transaction = transaction
             .try_into_verified_for_testing(self.epoch_state.epoch(), &VerifyParams::default())?;
+        self.execute_transaction_impl(transaction)
+    }
 
+    fn execute_transaction_impl(
+        &mut self,
+        transaction: VerifiedTransaction,
+    ) -> anyhow::Result<(TransactionEffects, Option<ExecutionError>)> {
         let (inner_temporary_store, _, effects, execution_error_opt) =
             self.epoch_state.execute_transaction(
                 &self.store,
@@ -207,9 +213,24 @@ impl<R, S: store::SimulatorStore> Simulacrum<R, S> {
         Ok((effects, execution_error_opt.err()))
     }
 
+    fn execute_system_transaction(
+        &mut self,
+        transaction: Transaction,
+    ) -> anyhow::Result<(TransactionEffects, Option<ExecutionError>)> {
+        let transaction = VerifiedTransaction::new_unchecked(transaction);
+        self.execute_transaction_impl(transaction)
+    }
+
     /// Creates the next Checkpoint using the Transactions enqueued since the last checkpoint was
     /// created.
     pub fn create_checkpoint(&mut self) -> VerifiedCheckpoint {
+        let settlement_txns = self.checkpoint_builder.get_settlement_txns();
+
+        for txn in settlement_txns {
+            self.execute_system_transaction(txn)
+                .expect("settlement txn cannot fail");
+        }
+
         let committee = CommitteeWithKeys::new(&self.keystore, self.epoch_state.committee());
         let (checkpoint, contents, _) = self
             .checkpoint_builder

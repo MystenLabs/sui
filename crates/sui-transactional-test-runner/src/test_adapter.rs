@@ -208,6 +208,7 @@ struct TxnSummary {
     wrapped: Vec<ObjectID>,
     unchanged_shared: Vec<ObjectID>,
     events: Vec<Event>,
+    accumulators_written: Vec<ObjectID>,
     gas_summary: GasCostSummary,
 }
 
@@ -1664,12 +1665,20 @@ impl SuiTestAdapter {
             .map(|(id, _, _)| *id)
             .collect();
         let mut wrapped_ids: Vec<_> = effects.wrapped().iter().map(|(id, _, _)| *id).collect();
+
+        let mut accumulators_written: Vec<_> = effects
+            .accumulator_events()
+            .iter()
+            .map(|event| event.accumulator_obj)
+            .collect();
+
         let gas_summary = effects.gas_cost_summary();
 
         // make sure objects that have previously not been in storage get assigned a fake id.
         let mut might_need_fake_id: Vec<_> = created_ids
             .iter()
             .chain(unwrapped_ids.iter())
+            .chain(accumulators_written.iter())
             .copied()
             .collect();
 
@@ -1696,6 +1705,7 @@ impl SuiTestAdapter {
         unwrapped_then_deleted_ids.sort_by_key(|id| self.real_to_fake_object_id(id));
         wrapped_ids.sort_by_key(|id| self.real_to_fake_object_id(id));
         unchanged_shared_ids.sort_by_key(|id| self.real_to_fake_object_id(id));
+        accumulators_written.sort_by_key(|id| self.real_to_fake_object_id(id));
 
         match effects.status() {
             ExecutionStatus::Success { .. } => {
@@ -1705,6 +1715,7 @@ impl SuiTestAdapter {
                     .await?;
                 Ok(TxnSummary {
                     events,
+                    accumulators_written,
                     gas_summary: gas_summary.clone(),
                     created: created_ids,
                     mutated: mutated_ids,
@@ -1779,12 +1790,18 @@ impl SuiTestAdapter {
             .map(|o| o.object_id)
             .collect();
         let mut wrapped_ids: Vec<_> = effects.wrapped().iter().map(|o| o.object_id).collect();
+        let mut accumulators_written: Vec<_> = effects
+            .accumulator_events()
+            .iter()
+            .map(|event| event.accumulator_obj)
+            .collect();
         let gas_summary = effects.gas_cost_summary();
 
         // make sure objects that have previously not been in storage get assigned a fake id.
         let mut might_need_fake_id: Vec<_> = created_ids
             .iter()
             .chain(unwrapped_ids.iter())
+            .chain(accumulators_written.iter())
             .copied()
             .collect();
 
@@ -1804,6 +1821,7 @@ impl SuiTestAdapter {
         deleted_ids.sort_by_key(|id| self.real_to_fake_object_id(id));
         unwrapped_then_deleted_ids.sort_by_key(|id| self.real_to_fake_object_id(id));
         wrapped_ids.sort_by_key(|id| self.real_to_fake_object_id(id));
+        accumulators_written.sort_by_key(|id| self.real_to_fake_object_id(id));
 
         let events = events
             .data
@@ -1822,6 +1840,7 @@ impl SuiTestAdapter {
             wrapped: wrapped_ids,
             // TODO: Properly propagate unchanged shared objects in dev_inspect.
             unchanged_shared: vec![],
+            accumulators_written,
         })
     }
 
@@ -1883,6 +1902,7 @@ impl SuiTestAdapter {
             unwrapped_then_deleted,
             wrapped,
             unchanged_shared,
+            accumulators_written,
         }: &TxnSummary,
         summarize: bool,
     ) -> Option<String> {
@@ -1942,6 +1962,17 @@ impl SuiTestAdapter {
             )
             .unwrap();
         }
+        if !accumulators_written.is_empty() {
+            if !out.is_empty() {
+                out.push('\n')
+            }
+            write!(
+                out,
+                "accumulators_written: {}",
+                self.list_accumulator_events(accumulators_written, summarize)
+            )
+            .unwrap();
+        }
         out.push('\n');
         write!(out, "gas summary: {}", gas_summary).unwrap();
 
@@ -1978,6 +2009,17 @@ impl SuiTestAdapter {
                                          Some(fake) => format!("object({})", fake),
                                      },
             )
+            .collect::<Vec<_>>()
+            .join(", ")
+    }
+
+    fn list_accumulator_events(&self, accumulator_ids: &[ObjectID], summarize: bool) -> String {
+        if summarize {
+            return format!("{}", accumulator_ids.len());
+        }
+        accumulator_ids
+            .iter()
+            .map(|id| self.stabilize_str(format!("{:?}", id)))
             .collect::<Vec<_>>()
             .join(", ")
     }

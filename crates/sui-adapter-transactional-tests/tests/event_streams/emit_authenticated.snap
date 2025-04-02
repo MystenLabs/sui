@@ -1,0 +1,239 @@
+---
+source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
+---
+processed 8 tasks
+
+init:
+A: object(0,0), B: object(0,1)
+
+task 1, lines 8-49:
+//# publish
+created: object(1,0)
+mutated: object(0,2)
+gas summary: computation_cost: 1000000, storage_cost: 8420800,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 2, line 51:
+//# run test::event_streams::create --sender A --args @A
+created: object(2,0)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 3055200,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 3, lines 53-57:
+//# view-object 2,0
+Owner: Account Address ( A )
+Version: 2
+Contents: test::event_streams::Object {
+    id: sui::object::UID {
+        id: sui::object::ID {
+            bytes: fake(2,0),
+        },
+    },
+    event_stream: sui::event::EventStream {
+        name: sui::object::UID {
+            id: sui::object::ID {
+                bytes: _,
+            },
+        },
+    },
+    event_stream_cap: sui::event::EventStreamCap {
+        id: sui::object::UID {
+            id: sui::object::ID {
+                bytes: _,
+            },
+        },
+        stream_id: _,
+    },
+}
+
+task 4, line 59:
+//# run test::event_streams::emit_event --sender A --args object(2,0) 10
+events: Event { package_id: test, transaction_module: Identifier("event_streams"), sender: A, type_: StructTag { address: test, module: Identifier("event_streams"), name: Identifier("AuthEvent"), type_params: [] }, contents: [10, 0, 0, 0, 0, 0, 0, 0] }
+mutated: object(0,0), object(2,0)
+accumulators_written: fake(4,0)
+gas summary: computation_cost: 1000000, storage_cost: 3055200,  storage_rebate: 3024648, non_refundable_storage_fee: 30552
+
+task 5, line 61:
+//# create-checkpoint
+Checkpoint created: 1
+
+task 6, line 63:
+//# view-object 4,0
+Owner: Object ID: ( _ )
+Version: 1
+Contents: sui::dynamic_field::Field<sui::accumulator::Key, sui::event::EventStreamHead> {
+    id: sui::object::UID {
+        id: sui::object::ID {
+            bytes: fake(4,0),
+        },
+    },
+    name: sui::accumulator::Key {
+        address: _,
+        ty: vector[
+            48u8,
+            48u8,
+            48u8,
+            48u8,
+            48u8,
+            48u8,
+            48u8,
+            48u8,
+            48u8,
+            48u8,
+            48u8,
+            48u8,
+            48u8,
+            48u8,
+            48u8,
+            48u8,
+            48u8,
+            48u8,
+            48u8,
+            48u8,
+            48u8,
+            48u8,
+            48u8,
+            48u8,
+            48u8,
+            48u8,
+            48u8,
+            48u8,
+            48u8,
+            48u8,
+            48u8,
+            48u8,
+            48u8,
+            48u8,
+            48u8,
+            48u8,
+            48u8,
+            48u8,
+            48u8,
+            48u8,
+            48u8,
+            48u8,
+            48u8,
+            48u8,
+            48u8,
+            48u8,
+            48u8,
+            48u8,
+            48u8,
+            48u8,
+            48u8,
+            48u8,
+            48u8,
+            48u8,
+            48u8,
+            48u8,
+            48u8,
+            48u8,
+            48u8,
+            48u8,
+            48u8,
+            48u8,
+            48u8,
+            50u8,
+            58u8,
+            58u8,
+            101u8,
+            118u8,
+            101u8,
+            110u8,
+            116u8,
+            58u8,
+            58u8,
+            69u8,
+            118u8,
+            101u8,
+            110u8,
+            116u8,
+            83u8,
+            116u8,
+            114u8,
+            101u8,
+            97u8,
+            109u8,
+            72u8,
+            101u8,
+            97u8,
+            100u8,
+        ],
+    },
+    value: sui::event::EventStreamHead {
+        root: vector[
+            248u8,
+            151u8,
+            166u8,
+            247u8,
+            255u8,
+            3u8,
+            232u8,
+            162u8,
+            193u8,
+            4u8,
+            123u8,
+            10u8,
+            23u8,
+            105u8,
+            48u8,
+            249u8,
+            102u8,
+            79u8,
+            43u8,
+            231u8,
+            157u8,
+            253u8,
+            176u8,
+            96u8,
+            4u8,
+            83u8,
+            199u8,
+            173u8,
+            175u8,
+            74u8,
+            252u8,
+            124u8,
+        ],
+        prev: vector[
+            0u8,
+            0u8,
+            0u8,
+            0u8,
+            0u8,
+            0u8,
+            0u8,
+            0u8,
+            0u8,
+            0u8,
+            0u8,
+            0u8,
+            0u8,
+            0u8,
+            0u8,
+            0u8,
+            0u8,
+            0u8,
+            0u8,
+            0u8,
+            0u8,
+            0u8,
+            0u8,
+            0u8,
+            0u8,
+            0u8,
+            0u8,
+            0u8,
+            0u8,
+            0u8,
+            0u8,
+            0u8,
+        ],
+    },
+}
+
+task 7, line 65:
+//# run test::event_streams::delete --sender A --args object(2,0)
+mutated: object(0,0)
+deleted: object(2,0)
+unwrapped_then_deleted: object(_), object(_)
+gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 3024648, non_refundable_storage_fee: 30552

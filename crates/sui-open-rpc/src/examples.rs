@@ -742,6 +742,7 @@ impl RpcExampleProvider {
                     deleted: vec![],
                     unwrapped_then_deleted: vec![],
                     wrapped: vec![],
+                    accumulator_events: vec![],
                     gas_object: OwnedObjectRef {
                         owner: Owner::ObjectOwner(signer),
                         reference: SuiObjectRef::from(gas_ref),
