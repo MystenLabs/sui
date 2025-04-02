@@ -3,7 +3,7 @@
 
 use crate::{
     base_types::{SuiAddress, VersionDigest},
-    digests::ObjectDigest,
+    digests::{Digest, ObjectDigest},
     object::{Object, Owner},
 };
 use move_core_types::language_storage::TypeTag;
@@ -55,6 +55,14 @@ impl EffectsObjectChange {
             },
         }
     }
+
+    pub fn new_from_accumulator_write(write: AccumulatorWriteV1) -> Self {
+        Self {
+            input_state: ObjectIn::NotExist,
+            output_state: ObjectOut::AccumulatorWriteV1(write),
+            id_operation: IDOperation::None,
+        }
+    }
 }
 
 /// If an object exists (at root-level) in the store prior to this transaction,
@@ -68,7 +76,7 @@ pub enum ObjectIn {
 }
 
 #[derive(Eq, PartialEq, Clone, Debug, Serialize, Deserialize)]
-pub enum AccmulatorOperation {
+pub enum AccumulatorOperation {
     /// Merge the value into the accumulator.
     Merge,
     /// Split the value from the accumulator.
@@ -77,19 +85,32 @@ pub enum AccmulatorOperation {
 
 #[derive(Eq, PartialEq, Clone, Debug, Serialize, Deserialize)]
 pub enum AccumulatorValue {
+    Integer(u128),
     IntegerTuple(u128, u128),
+    EventDigest(Digest),
     // New accumulator types can be added here.
     // For custom or complex types, we can use a `Vec<u8>` to store the raw value.
 }
 
+/// Accumulator objects are named by an address (can be an account address or a UID)
+/// and a type tag.
+#[derive(Eq, PartialEq, Clone, Debug, Serialize, Deserialize)]
+pub struct AccumulatorAddress {
+    pub address: SuiAddress,
+    pub ty: TypeTag,
+}
+
+impl AccumulatorAddress {
+    pub fn new(address: SuiAddress, ty: TypeTag) -> Self {
+        Self { address, ty }
+    }
+}
+
 #[derive(Eq, PartialEq, Clone, Debug, Serialize, Deserialize)]
 pub struct AccumulatorWriteV1 {
-    /// The recipient of the accumulator.
-    pub recipient: SuiAddress,
-    /// The type of the accumulator.
-    pub accumulator_type: TypeTag,
+    pub address: AccumulatorAddress,
     /// The operation to be applied to the accumulator.
-    pub operation: AccmulatorOperation,
+    pub operation: AccumulatorOperation,
     /// The cached deserialized value of the operation.
     /// This is an optimization to avoid deserializing the value multiple times.
     pub value: AccumulatorValue,

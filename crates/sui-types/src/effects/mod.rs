@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use self::effects_v2::TransactionEffectsV2;
+use crate::accumulator_event::AccumulatorEvent;
 use crate::base_types::{ExecutionDigests, ObjectID, ObjectRef, SequenceNumber};
 use crate::committee::{Committee, EpochId};
 use crate::crypto::{
@@ -32,6 +33,10 @@ mod effects_v1;
 mod effects_v2;
 mod object_change;
 mod test_effects_builder;
+
+pub use object_change::{
+    AccumulatorAddress, AccumulatorOperation, AccumulatorValue, AccumulatorWriteV1,
+};
 
 // Since `std::mem::size_of` may not be stable across platforms, we use rough constants
 // We need these for estimating effects sizes
@@ -330,6 +335,8 @@ pub trait TransactionEffectsAPI {
     fn wrapped(&self) -> Vec<ObjectRef>;
 
     fn object_changes(&self) -> Vec<ObjectChange>;
+
+    fn accumulator_events(&self) -> Vec<AccumulatorEvent>;
 
     // TODO: We should consider having this function to return Option.
     // When the gas object is not available (i.e. system transaction), we currently return
