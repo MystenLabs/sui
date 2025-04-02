@@ -35,7 +35,7 @@ use sui_types::sui_system_state::epoch_start_sui_system_state::EpochStartSystemS
 use sui_types::transaction::EndOfEpochTransactionKind;
 use sui_types::{
     base_types::SuiAddress,
-    committee::Committee,
+    committee::{Committee, ValidatorKeypairProvider},
     effects::TransactionEffects,
     error::ExecutionError,
     gas_coin::MIST_PER_SUI,
@@ -49,8 +49,8 @@ use self::epoch_state::EpochState;
 pub use self::store::in_mem_store::InMemoryStore;
 use self::store::in_mem_store::KeyStore;
 pub use self::store::SimulatorStore;
+use sui_core::checkpoints::mock_checkpoint_builder::MockCheckpointBuilder;
 use sui_types::messages_checkpoint::{CheckpointContents, CheckpointSequenceNumber};
-use sui_types::mock_checkpoint_builder::{MockCheckpointBuilder, ValidatorKeypairProvider};
 use sui_types::{
     gas_coin::GasCoin,
     programmable_transaction_builder::ProgrammableTransactionBuilder,

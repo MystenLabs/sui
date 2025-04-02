@@ -1,24 +1,20 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::base_types::{AuthorityName, VerifiedExecutionData};
-use crate::committee::Committee;
-use crate::crypto::{AuthoritySignInfo, AuthoritySignature, SuiAuthoritySignature};
-use crate::effects::{TransactionEffects, TransactionEffectsAPI};
-use crate::gas::GasCostSummary;
-use crate::messages_checkpoint::{
+use std::mem;
+use sui_types::base_types::VerifiedExecutionData;
+use sui_types::committee::ValidatorKeypairProvider;
+use sui_types::crypto::{AuthoritySignInfo, AuthoritySignature, SuiAuthoritySignature};
+use sui_types::effects::{TransactionEffects, TransactionEffectsAPI};
+use sui_types::gas::GasCostSummary;
+use sui_types::messages_checkpoint::{
     CertifiedCheckpointSummary, CheckpointContents, CheckpointSummary,
     CheckpointVersionSpecificData, EndOfEpochData, FullCheckpointContents, VerifiedCheckpoint,
     VerifiedCheckpointContents,
 };
-use crate::transaction::VerifiedTransaction;
-use fastcrypto::traits::Signer;
-use std::mem;
+use sui_types::transaction::{Transaction, VerifiedTransaction};
 
-pub trait ValidatorKeypairProvider {
-    fn get_validator_key(&self, name: &AuthorityName) -> &dyn Signer<AuthoritySignature>;
-    fn get_committee(&self) -> &Committee;
-}
+use crate::accumulators::create_accumulator_update_transactions;
 
 /// A utility to build consecutive checkpoints by adding transactions to the checkpoint builder.
 /// It's mostly used by simulations, tests and benchmarks.
@@ -109,6 +105,18 @@ impl MockCheckpointBuilder {
             timestamp_ms,
             Some((new_epoch, end_of_epoch_data)),
         )
+    }
+
+    pub fn get_settlement_txns(&self) -> Vec<Transaction> {
+        let effects: Vec<_> = self
+            .transactions
+            .iter()
+            .map(|e| e.effects.clone())
+            .collect();
+        create_accumulator_update_transactions(None, &effects)
+            .into_iter()
+            .map(|tx| VerifiedTransaction::new_system_transaction(tx).into_inner())
+            .collect()
     }
 
     fn build_internal(
