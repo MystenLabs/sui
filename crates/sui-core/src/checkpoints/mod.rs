@@ -5,7 +5,9 @@ mod causal_order;
 pub mod checkpoint_executor;
 mod checkpoint_output;
 mod metrics;
+pub mod mock_checkpoint_builder;
 
+use crate::accumulators::create_accumulator_update_transactions;
 use crate::authority::AuthorityState;
 use crate::authority_client::{make_network_authority_clients_with_network_config, AuthorityAPI};
 use crate::checkpoints::causal_order::CausalOrder;
@@ -64,7 +66,9 @@ use sui_types::messages_checkpoint::{CheckpointRequestV2, SignedCheckpointSummar
 use sui_types::messages_consensus::ConsensusTransactionKey;
 use sui_types::signature::GenericSignature;
 use sui_types::sui_system_state::{SuiSystemState, SuiSystemStateTrait};
-use sui_types::transaction::{TransactionDataAPI, TransactionKey, TransactionKind};
+use sui_types::transaction::{
+    TransactionDataAPI, TransactionKey, TransactionKind, VerifiedTransaction,
+};
 use tokio::{sync::Notify, task::JoinSet, time::timeout};
 use tracing::{debug, error, info, instrument, trace, warn};
 use typed_store::traits::{TableSummary, TypedStoreDebug};
@@ -1247,6 +1251,31 @@ impl CheckpointBuilder {
                 .await?;
             sorted_tx_effects_included_in_checkpoint.extend(txn_in_checkpoint);
         }
+
+        let epoch = self.epoch_store.epoch();
+        let settlement_txns: Vec<_> = create_accumulator_update_transactions(
+            Some(self.effects_store.as_ref()),
+            &sorted_tx_effects_included_in_checkpoint,
+        )
+        .into_iter()
+        .map(|tx| {
+            let tx = VerifiedTransaction::new_system_transaction(tx);
+            VerifiedExecutableTransaction::new_system(tx, epoch)
+        })
+        .collect();
+
+        let settlement_digests: Vec<_> = settlement_txns.iter().map(|tx| *tx.digest()).collect();
+
+        self.state
+            .enqueue_transactions_for_execution(settlement_txns, &self.epoch_store);
+
+        let settlement_effects = self
+            .effects_store
+            .notify_read_executed_effects(&settlement_digests)
+            .await;
+
+        sorted_tx_effects_included_in_checkpoint.extend(settlement_effects);
+
         let new_checkpoints = self
             .create_checkpoints(sorted_tx_effects_included_in_checkpoint, &last_details)
             .await?;
@@ -2770,6 +2799,7 @@ mod tests {
     use std::ops::Deref;
     use sui_macros::sim_test;
     use sui_protocol_config::{Chain, ProtocolConfig};
+    use sui_types::accumulator_event::AccumulatorEvent;
     use sui_types::base_types::{ObjectID, SequenceNumber, TransactionEffectsDigest};
     use sui_types::crypto::Signature;
     use sui_types::effects::{TransactionEffects, TransactionEvents};
@@ -3069,6 +3099,10 @@ mod tests {
         }
 
         fn multi_get_events(&self, _: &[TransactionDigest]) -> Vec<Option<TransactionEvents>> {
+            unimplemented!()
+        }
+
+        fn take_accumulator_events(&self, _: &TransactionDigest) -> Option<Vec<AccumulatorEvent>> {
             unimplemented!()
         }
     }
