@@ -33,6 +33,15 @@ pub struct Lockfile<F: MoveFlavor> {
 }
 
 #[derive(Serialize, Deserialize, Derivative)]
+#[derivative(Clone(bound = ""))]
+#[serde(bound = "")]
+pub struct Publication<F: MoveFlavor> {
+    #[serde(flatten)]
+    metadata: F::PublishedMetadata,
+    dependencies: BTreeMap<PackageName, PinnedDependency<F>>,
+}
+
+#[derive(Serialize, Deserialize, Derivative)]
 #[derivative(Default(bound = ""), Clone(bound = ""))]
 #[serde(rename_all = "kebab-case")]
 #[serde(bound = "")]
@@ -41,15 +50,6 @@ struct UnpublishedTable<F: MoveFlavor> {
 
     #[serde(default)]
     dep_overrides: BTreeMap<EnvironmentName, UnpublishedDependencies<F>>,
-}
-
-#[derive(Serialize, Deserialize, Derivative)]
-#[derivative(Clone(bound = ""))]
-#[serde(bound = "")]
-pub struct Publication<F: MoveFlavor> {
-    #[serde(flatten)]
-    metadata: F::PublishedMetadata,
-    dependencies: BTreeMap<PackageName, PinnedDependency<F>>,
 }
 
 #[derive(Serialize, Deserialize, Derivative)]

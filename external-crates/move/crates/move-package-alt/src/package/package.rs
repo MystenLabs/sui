@@ -1,13 +1,12 @@
-use std::marker::PhantomData;
+use std::{
+    marker::PhantomData,
+    path::{Path, PathBuf},
+};
 
-use crate::flavor::MoveFlavor;
-
-pub struct Package<F: MoveFlavor> {
-    flavor_phantom: PhantomData<F>,
-}
-
-/*
-use lockfile::Publication;
+use super::{
+    lockfile::{Lockfile, Publication},
+    EnvironmentName,
+};
 use serde::{Deserialize, Serialize};
 
 use crate::flavor::MoveFlavor;
@@ -16,7 +15,8 @@ pub struct Package<F: MoveFlavor> {
     // TODO: maybe hold a lock on the lock file? Maybe not if move-analyzer wants to hold on to a
     // Package long term?
     // TODO: manifest: manifest::Manifest,
-    lockfiles: lockfile::Lockfiles<F>,
+    lockfiles: Lockfile<F>,
+    path: PathBuf,
 }
 
 impl<F: MoveFlavor> Package<F> {
@@ -34,18 +34,18 @@ impl<F: MoveFlavor> Package<F> {
         todo!()
     }
 
-    /// Save the package into the lockfiles in the given path
-    pub fn save(&self) -> anyhow::Result<Self> {
-        todo!()
-    }
-
     /// Return the metadata for the most recent published version in the given environemtn
-    pub fn published_on(&self, id: EnvironmentName) -> Option<Publication<F>> {
+    pub fn publication_for(&self, env: EnvironmentName) -> Option<Publication<F>> {
         todo!()
     }
 
-    /// Register a published package on the given chain
-    pub fn add_published(&mut self, metadata: Publication<F>) -> anyhow::Result<()> {
+    /// Register a published package on the given chain in the saved lockfiles
+    pub fn add_publication_for(
+        &mut self,
+        env: EnvironmentName,
+        metadata: Publication<F>,
+    ) -> anyhow::Result<()> {
+        // TODO: we'll have to update the local dependencies here
         todo!()
     }
 
@@ -54,4 +54,3 @@ impl<F: MoveFlavor> Package<F> {
         todo!()
     }
 }
-*/
