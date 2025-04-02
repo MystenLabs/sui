@@ -1250,22 +1250,6 @@ impl TransactionKind {
         TransactionKind::ProgrammableTransaction(pt)
     }
 
-    pub fn is_system_tx(&self) -> bool {
-        // Keep this as an exhaustive match so that we can't forget to update it.
-        match self {
-            TransactionKind::ChangeEpoch(_)
-            | TransactionKind::Genesis(_)
-            | TransactionKind::ConsensusCommitPrologue(_)
-            | TransactionKind::ConsensusCommitPrologueV2(_)
-            | TransactionKind::ConsensusCommitPrologueV3(_)
-            | TransactionKind::ConsensusCommitPrologueV4(_)
-            | TransactionKind::AuthenticatorStateUpdate(_)
-            | TransactionKind::RandomnessStateUpdate(_)
-            | TransactionKind::EndOfEpochTransaction(_) => true,
-            TransactionKind::ProgrammableTransaction(_) => false,
-        }
-    }
-
     pub fn is_end_of_epoch_tx(&self) -> bool {
         matches!(
             self,
@@ -1632,8 +1616,6 @@ pub struct TransactionDataV1 {
 
 impl TransactionData {
     fn new_system_transaction(kind: TransactionKind) -> Self {
-        // assert transaction kind if a system transaction
-        assert!(kind.is_system_tx());
         let sender = SuiAddress::default();
         TransactionData::V1(TransactionDataV1 {
             kind,
@@ -2054,6 +2036,22 @@ impl TransactionData {
     }
 }
 
+pub fn is_system_tx(kind: &TransactionKind, sender: SuiAddress) -> bool {
+    // Keep this as an exhaustive match so that we can't forget to update it.
+    match kind {
+        TransactionKind::ChangeEpoch(_)
+        | TransactionKind::Genesis(_)
+        | TransactionKind::ConsensusCommitPrologue(_)
+        | TransactionKind::ConsensusCommitPrologueV2(_)
+        | TransactionKind::ConsensusCommitPrologueV3(_)
+        | TransactionKind::ConsensusCommitPrologueV4(_)
+        | TransactionKind::AuthenticatorStateUpdate(_)
+        | TransactionKind::RandomnessStateUpdate(_)
+        | TransactionKind::EndOfEpochTransaction(_) => true,
+        TransactionKind::ProgrammableTransaction(_) => sender == SuiAddress::default(),
+    }
+}
+
 #[enum_dispatch]
 pub trait TransactionDataAPI {
     fn sender(&self) -> SuiAddress;
@@ -2185,7 +2183,7 @@ impl TransactionDataAPI for TransactionDataV1 {
     fn input_objects(&self) -> UserInputResult<Vec<InputObjectKind>> {
         let mut inputs = self.kind.input_objects()?;
 
-        if !self.kind.is_system_tx() {
+        if !self.is_system_tx() {
             inputs.extend(
                 self.gas()
                     .iter()
@@ -2259,7 +2257,7 @@ impl TransactionDataAPI for TransactionDataV1 {
     }
 
     fn is_system_tx(&self) -> bool {
-        self.kind.is_system_tx()
+        is_system_tx(&self.kind, self.sender)
     }
 
     fn is_genesis_tx(&self) -> bool {
@@ -2801,7 +2799,7 @@ impl VerifiedTransaction {
         TransactionKind::EndOfEpochTransaction(txns).pipe(Self::new_system_transaction)
     }
 
-    fn new_system_transaction(system_transaction: TransactionKind) -> Self {
+    pub fn new_system_transaction(system_transaction: TransactionKind) -> Self {
         system_transaction
             .pipe(TransactionData::new_system_transaction)
             .pipe(|data| {
