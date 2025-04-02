@@ -1,16 +1,23 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::{legacy_test_cost, object_runtime::ObjectRuntime, NativesCostTable};
+use crate::{
+    legacy_test_cost,
+    object_runtime::{MoveAccumulatorAction, MoveAccumulatorValue, ObjectRuntime},
+    NativesCostTable,
+};
 use move_binary_format::errors::{PartialVMError, PartialVMResult};
-use move_core_types::{gas_algebra::InternalGas, language_storage::TypeTag, vm_status::StatusCode};
+use move_core_types::{
+    account_address::AccountAddress, gas_algebra::InternalGas, language_storage::TypeTag,
+    vm_status::StatusCode,
+};
 use move_vm_runtime::{native_charge_gas_early_exit, native_functions::NativeContext};
 use move_vm_types::{
     loaded_data::runtime_types::Type, natives::function::NativeResult, values::Value,
 };
 use smallvec::smallvec;
 use std::collections::VecDeque;
-use sui_types::error::VMMemoryLimitExceededSubStatusCode;
+use sui_types::{base_types::ObjectID, error::VMMemoryLimitExceededSubStatusCode};
 
 #[derive(Clone, Debug)]
 pub struct EventEmitCostParams {
@@ -18,6 +25,7 @@ pub struct EventEmitCostParams {
     pub event_emit_value_size_derivation_cost_per_byte: InternalGas,
     pub event_emit_tag_size_derivation_cost_per_byte: InternalGas,
     pub event_emit_output_cost_per_byte: InternalGas,
+    pub event_emit_auth_stream_cost: InternalGas,
 }
 /***************************************************************************************************
  * native fun emit
@@ -36,6 +44,55 @@ pub fn emit(
     debug_assert!(ty_args.len() == 1);
     debug_assert!(args.len() == 1);
 
+    let ty = ty_args.pop().unwrap();
+    let event_value = args.pop_back().unwrap();
+    emit_impl(context, ty, event_value, None)
+}
+
+pub fn emit_authenticated(
+    context: &mut NativeContext,
+    mut ty_args: Vec<Type>,
+    mut args: VecDeque<Value>,
+) -> PartialVMResult<NativeResult> {
+    debug_assert!(ty_args.len() == 2);
+    debug_assert!(args.len() == 3);
+
+    let event_ty = ty_args.pop().unwrap();
+    // This type is always sui::event::EventStreamHead
+    let stream_head_ty = ty_args.pop().unwrap();
+
+    let event_value = args.pop_back().unwrap();
+    let stream_id = args.pop_back().unwrap();
+    let accumulator_id = args.pop_back().unwrap();
+
+    emit_impl(
+        context,
+        event_ty,
+        event_value,
+        Some(StreamRef {
+            accumulator_id,
+            stream_id,
+            stream_head_ty,
+        }),
+    )
+}
+
+struct StreamRef {
+    // The pre-computed id of the accumulator object. This is a hash of
+    // stream_id + ty
+    accumulator_id: Value,
+    // The stream ID (the `stream_id` field of some EventStreamCap)
+    stream_id: Value,
+    // The type of the stream head. Should always be `sui::event::EventStreamHead`
+    stream_head_ty: Type,
+}
+
+fn emit_impl(
+    context: &mut NativeContext,
+    ty: Type,
+    event_value: Value,
+    stream_ref: Option<StreamRef>,
+) -> PartialVMResult<NativeResult> {
     let event_emit_cost_params = context
         .extensions_mut()
         .get::<NativesCostTable>()?
@@ -43,9 +100,6 @@ pub fn emit(
         .clone();
 
     native_charge_gas_early_exit!(context, event_emit_cost_params.event_emit_cost_base);
-
-    let ty = ty_args.pop().unwrap();
-    let event_value = args.pop_back().unwrap();
 
     let event_value_size = event_value.legacy_size();
 
@@ -114,7 +168,25 @@ pub fn emit(
 
     let obj_runtime: &mut ObjectRuntime = context.extensions_mut().get_mut()?;
 
-    obj_runtime.emit_event(ty, *tag, event_value)?;
+    let event_idx = obj_runtime.emit_event(ty, *tag, event_value)?;
+
+    if let Some(StreamRef {
+        accumulator_id,
+        stream_id,
+        stream_head_ty,
+    }) = stream_ref
+    {
+        let stream_id_addr: AccountAddress = stream_id.value_as::<AccountAddress>().unwrap();
+        let accumulator_id: ObjectID = accumulator_id.value_as::<AccountAddress>().unwrap().into();
+        obj_runtime.emit_accumulator_event(
+            accumulator_id,
+            MoveAccumulatorAction::Merge,
+            stream_id_addr,
+            stream_head_ty,
+            MoveAccumulatorValue::EventRef(event_idx),
+        )?;
+    }
+
     Ok(NativeResult::ok(context.gas_used(), smallvec![]))
 }
 

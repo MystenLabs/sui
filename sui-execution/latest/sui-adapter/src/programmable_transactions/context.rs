@@ -47,25 +47,27 @@ mod checked {
     use move_vm_types::loaded_data::runtime_types::Type;
     use mysten_common::debug_fatal;
     use sui_move_natives::object_runtime::{
-        self, get_all_uids, max_event_error, LoadedRuntimeObject, ObjectRuntime, RuntimeResults,
+        self, get_all_uids, max_event_error, LoadedRuntimeObject, MoveAccumulatorValue,
+        ObjectRuntime, RuntimeResults,
     };
     use sui_protocol_config::ProtocolConfig;
-    use sui_types::storage::{DenyListResult, PackageObject};
     use sui_types::{
+        accumulator_event::AccumulatorEvent,
         balance::Balance,
         base_types::{MoveObjectType, ObjectID, SuiAddress, TxContext},
         coin::Coin,
-        error::{ExecutionError, ExecutionErrorKind},
+        effects::{AccumulatorAddress, AccumulatorValue, AccumulatorWriteV1},
+        error::{command_argument_error, ExecutionError, ExecutionErrorKind},
         event::Event,
+        execution::ExecutionResults,
         execution::ExecutionResultsV2,
+        execution_status::CommandArgumentError,
         metrics::LimitsMetrics,
         move_package::MovePackage,
-        object::{Data, MoveObject, Object, ObjectInner, Owner},
-        storage::BackingPackageStore,
+        object::{Authenticator, Data, MoveObject, Object, ObjectInner, Owner},
+        storage::{BackingPackageStore, DenyListResult, PackageObject},
         transaction::{Argument, CallArg, ObjectArg},
     };
-    use sui_types::{error::command_argument_error, execution_status::CommandArgumentError};
-    use sui_types::{execution::ExecutionResults, object::Authenticator};
     use tracing::instrument;
 
     /// Maintains all runtime state specific to programmable transactions
@@ -824,6 +826,7 @@ mod checked {
             let RuntimeResults {
                 writes,
                 user_events: remaining_events,
+                accumulator_events,
                 loaded_child_objects,
                 mut created_object_ids,
                 deleted_object_ids,
@@ -981,7 +984,7 @@ mod checked {
                 result?;
             }
 
-            let user_events = user_events
+            let user_events: Vec<_> = user_events
                 .into_iter()
                 .map(|(module_id, tag, contents)| {
                     Event::new(
@@ -994,6 +997,33 @@ mod checked {
                 })
                 .collect();
 
+            let accumulator_events = accumulator_events
+                .into_iter()
+                .map(|accum_event| match accum_event.value {
+                    MoveAccumulatorValue::EventRef(idx) => {
+                        let event = &user_events[idx as usize];
+
+                        let digest = event.unique_digest(tx_digest, idx as usize);
+                        let value = AccumulatorValue::EventDigest(digest);
+                        let address = AccumulatorAddress::new(
+                            accum_event.target_addr.into(),
+                            vm.get_runtime()
+                                .get_type_tag(&accum_event.target_ty)
+                                .unwrap(),
+                        );
+
+                        let write = AccumulatorWriteV1 {
+                            address,
+                            operation: accum_event.action.into_sui_accumulator_action(),
+                            value,
+                        };
+
+                        AccumulatorEvent::new(accum_event.accumulator_id, write)
+                    }
+                    MoveAccumulatorValue::MoveValue(_, _, _) => todo!(),
+                })
+                .collect();
+
             Ok(ExecutionResults::V2(ExecutionResultsV2 {
                 written_objects,
                 modified_objects: loaded_runtime_objects
@@ -1003,6 +1033,7 @@ mod checked {
                 created_object_ids: created_object_ids.into_iter().collect(),
                 deleted_object_ids: deleted_object_ids.into_iter().collect(),
                 user_events,
+                accumulator_events,
             }))
         }
 

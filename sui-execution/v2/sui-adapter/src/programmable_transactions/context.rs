@@ -841,6 +841,7 @@ mod checked {
                 created_object_ids: created_object_ids.into_iter().collect(),
                 deleted_object_ids: deleted_object_ids.into_iter().collect(),
                 user_events,
+                accumulator_events: vec![],
             }))
         }
 
