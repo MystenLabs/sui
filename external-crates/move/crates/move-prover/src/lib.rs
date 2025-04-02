@@ -4,7 +4,7 @@
 
 #![forbid(unsafe_code)]
 
-use std::{cell::RefCell, io::empty};
+use std::cell::RefCell;
 
 use crate::cli::Options;
 use anyhow::anyhow;
@@ -15,7 +15,7 @@ use codespan_reporting::{
 };
 #[allow(unused_imports)]
 use log::{debug, info, warn};
-use move_compiler::{shared::PackagePaths, Flags};
+use move_compiler::{diagnostics::warning_filters::{WarningFilter, WarningFiltersBuilder}, shared::PackagePaths, Flags};
 use move_docgen::Docgen;
 use move_model::{
     code_writer::CodeWriter, model::GlobalEnv, parse_addresses_from_options,
@@ -27,10 +27,9 @@ use move_prover_boogie_backend::{
 use move_stackless_bytecode::{
     escape_analysis::EscapeAnalysisProcessor,
     function_target_pipeline::{
-        FunctionTargetPipeline, FunctionTargetsHolder, FunctionTargetsHolderDisplay,
+        FunctionTargetPipeline, FunctionTargetsHolder,
         FunctionVariant, VerificationFlavor,
     },
-    mono_analysis,
     number_operation::GlobalNumberOperationState,
     pipeline_factory,
 };
@@ -57,6 +56,14 @@ pub fn run_move_prover<W: WriteColor>(
     let now = Instant::now();
     // Run the model builder.
     let addrs = parse_addresses_from_options(options.move_named_address_values.clone())?;
+
+    let mut filter = None;
+    if options.prover.stable_test_output {
+        let mut f = WarningFiltersBuilder::new_for_source();
+        f.add(WarningFilter::All(None));
+        filter = Some(f);
+    }
+
     let env = run_model_builder_with_options_and_compilation_flags(
         vec![PackagePaths {
             name: None,
@@ -70,7 +77,7 @@ pub fn run_move_prover<W: WriteColor>(
         }],
         options.model_builder.clone(),
         Flags::empty().set_verify(true),
-        None,
+        filter,
     )?;
     run_move_prover_with_model(&env, error_writer, options, Some(now))
 }
