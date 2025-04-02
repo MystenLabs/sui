@@ -1,0 +1,17 @@
+---
+source: crates/move-prover/tests/integration.rs
+assertion_line: 57
+expression: output
+snapshot_kind: text
+---
+Verification failed: exiting with bytecode transformation errors
+error: Spec function have differ return types count than underlying func
+   ┌─ tests/inputs/spec_well_formed/spec_well_formed_return_types_count.move:11:1
+   │  
+11 │ ╭ public fun foo_spec(x: u128): u128 {
+12 │ │   foo(x);
+13 │ │   ensures(true);
+14 │ │ 
+15 │ │   x
+16 │ │ }
+   │ ╰─^

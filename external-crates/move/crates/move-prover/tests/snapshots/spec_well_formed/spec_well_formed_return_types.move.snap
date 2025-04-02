@@ -1,0 +1,17 @@
+---
+source: crates/move-prover/tests/integration.rs
+assertion_line: 57
+expression: output
+snapshot_kind: text
+---
+Verification failed: exiting with bytecode transformation errors
+error: Spec function have differ return types than underlying func
+   ┌─ tests/inputs/spec_well_formed/spec_well_formed_return_types.move:12:1
+   │  
+12 │ ╭ public fun foo_spec(x: u128): u64 {
+13 │ │   foo(x);
+14 │ │   ensures(true);
+15 │ │ 
+16 │ │   5u64
+17 │ │ }
+   │ ╰─^

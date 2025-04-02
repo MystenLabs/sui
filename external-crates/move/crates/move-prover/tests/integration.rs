@@ -9,7 +9,7 @@ fn run_prover(file_path: &PathBuf) -> String {
     let mut options = Options::default();
     options.move_sources = vec![file_path.to_string_lossy().to_string()];
     options.prover.stable_test_output = true; // For consistent snapshot testing
-    options.prover.report_severity = codespan_reporting::diagnostic::Severity::Error; // Only show errors, suppress warnings
+    options.prover.report_severity = codespan_reporting::diagnostic::Severity::Warning; // Show errors and warnings
 
     // Always add standard Sui dependencies for all tests
     let sui_packages_base = "../../../../crates/sui-framework/packages";
@@ -41,13 +41,18 @@ fn run_prover(file_path: &PathBuf) -> String {
 
 #[test]
 fn run_move_tests() {
-    for entry in glob::glob("tests/inputs/*.move").expect("Invalid glob pattern") {
+    for entry in glob::glob("tests/inputs/**/*.move").expect("Invalid glob pattern") {
         let move_path = entry.expect("Failed to read file path");
         let output = run_prover(&move_path);
         let filename = move_path.file_name().unwrap().to_string_lossy().to_string();
 
+        let cp = move_path.parent().unwrap().components().skip(2).collect::<Vec<_>>();
+        let cp_str = cp.iter().map(|comp| comp.as_os_str().to_string_lossy().into_owned()).collect::<Vec<String>>();
+        let snapshot_path = format!("snapshots/{}", cp_str.join("/"));
+
         insta::with_settings!({
-            prepend_module_to_snapshot => false
+            prepend_module_to_snapshot => false,
+            snapshot_path => snapshot_path,
         }, {
             insta::assert_snapshot!(filename, output);
         });

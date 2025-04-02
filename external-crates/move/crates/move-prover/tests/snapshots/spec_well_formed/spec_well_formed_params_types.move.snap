@@ -1,0 +1,15 @@
+---
+source: crates/move-prover/tests/integration.rs
+assertion_line: 57
+expression: output
+snapshot_kind: text
+---
+Verification failed: exiting with bytecode transformation errors
+error: Spec function have differ params type than underlying func
+   ┌─ tests/inputs/spec_well_formed/spec_well_formed_params_types.move:11:1
+   │  
+11 │ ╭ public fun foo_spec(x: u64) {
+12 │ │   foo(x as u128);
+13 │ │   ensures(true);
+14 │ │ }
+   │ ╰─^
