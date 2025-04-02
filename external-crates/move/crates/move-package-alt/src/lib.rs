@@ -6,6 +6,7 @@
 //! TODO: major modules, etc
 
 #![allow(unused)]
-mod dependency;
-mod errors;
-mod flavor;
+pub mod dependency;
+pub mod errors;
+pub mod flavor;
+pub mod package;
