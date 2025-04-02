@@ -8,7 +8,7 @@ use tokio::{task::JoinHandle, time::interval};
 use tokio_util::sync::CancellationToken;
 use tracing::{debug, info, warn};
 
-use crate::{metrics::IndexerMetrics, store::DbConnection};
+use crate::{metrics::IndexerMetrics, store::Connection};
 
 use super::{Handler, PrunerConfig};
 

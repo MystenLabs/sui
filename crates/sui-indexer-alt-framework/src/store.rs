@@ -16,7 +16,7 @@ pub use scoped_futures;
 /// pruner components of a data pipeline, allowing for tracking progress and coordination between
 /// different pipeline stages.
 #[async_trait]
-pub trait DbConnection: Send + Sync {
+pub trait Connection: Send + Sync {
     /// Given a pipeline, return the committer watermark from the database. This is used on indexer
     /// startup to determine which checkpoint to start or continue processing from.
     async fn committer_watermark(
@@ -50,13 +50,19 @@ pub trait DbConnection: Send + Sync {
     ) -> anyhow::Result<bool>;
 
     /// Get the bounds for the region that the pruner still has to prune for the given `pipeline`,
-    /// along with a duration to wait before acting on this information, based on the time at which
-    /// the pruner last updated the bounds, and the configured `delay`. More specifically, this is
-    /// the result of delay + (pruner_timestamp - current_database_time)
+    /// as determined by `[pruner_hi, reader_lo)`. The pruner must wait for a configured delay
+    /// period (e.g. 30 seconds) after the `pruner_timestamp` before it can begin pruning. This
+    /// ensures that data is only pruned after it has been stable for the configured delay period.
+    /// Because some period of time has likely elapsed since the `pruner_timestamp` was written, the
+    /// `PrunerWatermark` contains a `wait_for` value that represents the elapsed time between
+    /// `pruner_timestamp` and `now` from the database's perspective. The remaining difference
+    /// between the configured delay and this difference is the amount of time the pruner must wait
+    /// before it can begin pruning.
     ///
     /// The pruner is allowed to prune the region between the returned `pruner_hi` (inclusive) and
     /// `reader_lo` (exclusive) after `wait_for` milliseconds have passed since this response was
-    /// returned.
+    /// returned. The `wait_for` value represents the remaining time needed to satisfy the delay
+    /// requirement: `delay - (NOW() - pruner_timestamp)`.
     async fn pruner_watermark(
         &mut self,
         pipeline: &'static str,
@@ -78,7 +84,7 @@ pub trait DbConnection: Send + Sync {
 /// storage technology being used.
 #[async_trait]
 pub trait Store: Send + Sync + 'static + Clone {
-    type Connection<'c>: DbConnection
+    type Connection<'c>: Connection
     where
         Self: 'c;
 

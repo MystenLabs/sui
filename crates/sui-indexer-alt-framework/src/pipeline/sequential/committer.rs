@@ -15,7 +15,7 @@ use tracing::{debug, info, warn};
 use crate::{
     metrics::IndexerMetrics,
     pipeline::{logging::WatermarkLogger, IndexedCheckpoint, WARN_PENDING_WATERMARKS},
-    store::{CommitterWatermark, DbConnection, TransactionalStore},
+    store::{CommitterWatermark, Connection, TransactionalStore},
 };
 
 use super::{Handler, SequentialConfig};

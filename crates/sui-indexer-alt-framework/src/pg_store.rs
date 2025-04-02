@@ -17,11 +17,11 @@ use crate::db::{Connection as PgConnection, Db as PgDb};
 use crate::models::watermarks::StoredWatermark;
 use crate::schema::watermarks;
 use crate::store::{
-    CommitterWatermark, DbConnection, PrunerWatermark, ReaderWatermark, Store, TransactionalStore,
+    CommitterWatermark, Connection, PrunerWatermark, ReaderWatermark, Store, TransactionalStore,
 };
 
 #[async_trait]
-impl DbConnection for PgConnection<'_> {
+impl Connection for PgConnection<'_> {
     async fn committer_watermark(
         &mut self,
         pipeline: &'static str,

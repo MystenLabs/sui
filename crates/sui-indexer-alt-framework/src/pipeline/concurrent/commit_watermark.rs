@@ -19,7 +19,7 @@ use crate::{
     db::Db,
     metrics::{CheckpointLagMetricReporter, IndexerMetrics},
     pipeline::{logging::WatermarkLogger, CommitterConfig, WatermarkPart, WARN_PENDING_WATERMARKS},
-    store::{CommitterWatermark, DbConnection},
+    store::{CommitterWatermark, Connection},
 };
 
 use super::Handler;

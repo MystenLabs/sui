@@ -18,8 +18,8 @@ use pipeline::{
     Processor,
 };
 use prometheus::Registry;
-use store::{CommitterWatermark, DbConnection};
-use sui_indexer_alt_metrics::db::DbConnectionStatsCollector;
+use store::{CommitterWatermark, Connection};
+use sui_indexer_alt_metrics::db::ConnectionStatsCollector;
 use sui_pg_db::{temp::TempDb, Db, DbArgs};
 use tempfile::tempdir;
 use tokio::task::JoinHandle;
@@ -160,7 +160,7 @@ impl Indexer {
         let metrics = IndexerMetrics::new(registry);
 
         // TODO (wlmyng): Defer additional, db-specific metrics as an input arg
-        registry.register(Box::new(DbConnectionStatsCollector::new(
+        registry.register(Box::new(ConnectionStatsCollector::new(
             Some("indexer_db"),
             db.clone(),
         )))?;

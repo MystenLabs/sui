@@ -17,7 +17,7 @@ use crate::{
     db::Db,
     metrics::IndexerMetrics,
     pipeline::logging::{LoggerWatermark, WatermarkLogger},
-    store::DbConnection,
+    store::Connection,
 };
 
 use super::{Handler, PrunerConfig};
