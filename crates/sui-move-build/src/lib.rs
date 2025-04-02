@@ -705,10 +705,14 @@ impl CompiledPackage {
 
 /// Create a set of [Dependencies] from a [SystemPackagesVersion]; the dependencies are override git
 /// dependencies to the specific revision given by the [SystemPackagesVersion]
+///
+/// Skips "Deepbook" dependency.
 pub fn implicit_deps(packages: &SystemPackagesVersion) -> Dependencies {
+    let deps_to_skip = ["DeepBook".to_string()];
     packages
         .packages
         .iter()
+        .filter(|package| !deps_to_skip.contains(&package.package_name))
         .map(|package| {
             (
                 package.package_name.clone().into(),

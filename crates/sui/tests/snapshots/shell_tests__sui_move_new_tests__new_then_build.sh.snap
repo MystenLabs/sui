@@ -1,6 +1,6 @@
 ---
 source: crates/sui/tests/shell_tests.rs
-description: tests/shell_tests/new_tests/new_then_build.sh
+description: tests/shell_tests/sui_move_new_tests/new_then_build.sh
 ---
 ----- script -----
 # Copyright (c) Mysten Labs, Inc.
@@ -18,7 +18,6 @@ exit_code: 0
 
 ----- stderr -----
 INCLUDING DEPENDENCY Bridge
-INCLUDING DEPENDENCY DeepBook
 INCLUDING DEPENDENCY SuiSystem
 INCLUDING DEPENDENCY Sui
 INCLUDING DEPENDENCY MoveStdlib
