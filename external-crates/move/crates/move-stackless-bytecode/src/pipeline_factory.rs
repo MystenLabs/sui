@@ -28,6 +28,7 @@ use crate::{
     usage_analysis::UsageProcessor,
     verification_analysis::VerificationAnalysisProcessor,
     well_formed_instrumentation::WellFormedInstrumentationProcessor,
+    spec_well_formed_analysis::SpecWellFormedAnalysisProcessor,
     spec_purity_analysis::SpecPurityAnalysis,
 };
 
@@ -49,6 +50,7 @@ pub fn default_pipeline_with_options(options: &ProverOptions) -> FunctionTargetP
         TypeInvariantAnalysisProcessor::new(),
         VerificationAnalysisProcessor::new(),
         SpecPurityAnalysis::new(),
+        SpecWellFormedAnalysisProcessor::new(),
     ];
 
     if !options.skip_loop_analysis {
