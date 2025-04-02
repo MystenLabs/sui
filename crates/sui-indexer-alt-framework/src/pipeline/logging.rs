@@ -88,16 +88,16 @@ impl WatermarkLogger {
 impl From<&CommitterWatermark> for LoggerWatermark {
     fn from(watermark: &CommitterWatermark) -> Self {
         Self {
-            checkpoint: watermark.checkpoint_hi_inclusive,
-            transaction: Some(watermark.tx_hi),
+            checkpoint: watermark.checkpoint_hi_inclusive as i64,
+            transaction: Some(watermark.tx_hi as i64),
         }
     }
 }
 
 impl LoggerWatermark {
-    pub fn checkpoint(checkpoint: i64) -> Self {
+    pub fn checkpoint(checkpoint: u64) -> Self {
         Self {
-            checkpoint,
+            checkpoint: checkpoint as i64,
             transaction: None,
         }
     }

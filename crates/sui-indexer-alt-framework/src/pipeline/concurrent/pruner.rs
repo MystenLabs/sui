@@ -237,7 +237,7 @@ pub(super) fn pruner<H: Handler + Send + Sync + 'static>(
                 match result {
                     Ok(()) => {
                         pending_prune_ranges.remove(&from);
-                        let pruner_hi = pending_prune_ranges.get_pruner_hi() as i64;
+                        let pruner_hi = pending_prune_ranges.get_pruner_hi();
                         highest_pruned = highest_pruned.max(pruner_hi);
                     }
                     Err(e) => {
@@ -252,7 +252,7 @@ pub(super) fn pruner<H: Handler + Send + Sync + 'static>(
                     metrics
                         .watermark_pruner_hi
                         .with_label_values(&[H::NAME])
-                        .set(highest_pruned);
+                        .set(highest_pruned as i64);
 
                     let guard = metrics
                         .watermark_pruner_write_latency
@@ -287,7 +287,7 @@ pub(super) fn pruner<H: Handler + Send + Sync + 'static>(
                             metrics
                                 .watermark_pruner_hi_in_db
                                 .with_label_values(&[H::NAME])
-                                .set(highest_watermarked);
+                                .set(highest_watermarked as i64);
                         }
                         Ok(false) => {}
                     }

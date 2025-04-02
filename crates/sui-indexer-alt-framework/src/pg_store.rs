@@ -30,10 +30,10 @@ impl Connection for PgConnection<'_> {
 
         if let Some(watermark) = watermark {
             Ok(Some(CommitterWatermark {
-                epoch_hi_inclusive: watermark.epoch_hi_inclusive,
-                checkpoint_hi_inclusive: watermark.checkpoint_hi_inclusive,
-                tx_hi: watermark.tx_hi,
-                timestamp_ms_hi_inclusive: watermark.timestamp_ms_hi_inclusive,
+                epoch_hi_inclusive: watermark.epoch_hi_inclusive as u64,
+                checkpoint_hi_inclusive: watermark.checkpoint_hi_inclusive as u64,
+                tx_hi: watermark.tx_hi as u64,
+                timestamp_ms_hi_inclusive: watermark.timestamp_ms_hi_inclusive as u64,
             }))
         } else {
             Ok(None)
@@ -50,8 +50,8 @@ impl Connection for PgConnection<'_> {
 
         if let Some(watermark) = watermark {
             Ok(Some(ReaderWatermark {
-                checkpoint_hi_inclusive: watermark.checkpoint_hi_inclusive,
-                reader_lo: watermark.reader_lo,
+                checkpoint_hi_inclusive: watermark.checkpoint_hi_inclusive as u64,
+                reader_lo: watermark.reader_lo as u64,
             }))
         } else {
             Ok(None)
@@ -66,10 +66,10 @@ impl Connection for PgConnection<'_> {
         // Create a StoredWatermark directly from CommitterWatermark
         let stored_watermark = StoredWatermark {
             pipeline: pipeline.to_string(),
-            epoch_hi_inclusive: watermark.epoch_hi_inclusive,
-            checkpoint_hi_inclusive: watermark.checkpoint_hi_inclusive,
-            tx_hi: watermark.tx_hi,
-            timestamp_ms_hi_inclusive: watermark.timestamp_ms_hi_inclusive,
+            epoch_hi_inclusive: watermark.epoch_hi_inclusive as i64,
+            checkpoint_hi_inclusive: watermark.checkpoint_hi_inclusive as i64,
+            tx_hi: watermark.tx_hi as i64,
+            timestamp_ms_hi_inclusive: watermark.timestamp_ms_hi_inclusive as i64,
             reader_lo: 0,
             pruner_timestamp: NaiveDateTime::UNIX_EPOCH,
             pruner_hi: 0,
@@ -82,12 +82,15 @@ impl Connection for PgConnection<'_> {
             .on_conflict(watermarks::pipeline)
             .do_update()
             .set((
-                watermarks::epoch_hi_inclusive.eq(watermark.epoch_hi_inclusive),
-                watermarks::checkpoint_hi_inclusive.eq(watermark.checkpoint_hi_inclusive),
-                watermarks::tx_hi.eq(watermark.tx_hi),
-                watermarks::timestamp_ms_hi_inclusive.eq(watermark.timestamp_ms_hi_inclusive),
+                watermarks::epoch_hi_inclusive.eq(stored_watermark.epoch_hi_inclusive),
+                watermarks::checkpoint_hi_inclusive.eq(stored_watermark.checkpoint_hi_inclusive),
+                watermarks::tx_hi.eq(stored_watermark.tx_hi),
+                watermarks::timestamp_ms_hi_inclusive
+                    .eq(stored_watermark.timestamp_ms_hi_inclusive),
             ))
-            .filter(watermarks::checkpoint_hi_inclusive.lt(watermark.checkpoint_hi_inclusive))
+            .filter(
+                watermarks::checkpoint_hi_inclusive.lt(stored_watermark.checkpoint_hi_inclusive),
+            )
             .execute(self)
             .await
             .map_err(anyhow::Error::from)?
@@ -97,15 +100,15 @@ impl Connection for PgConnection<'_> {
     async fn set_reader_watermark(
         &mut self,
         pipeline: &'static str,
-        reader_lo: i64,
+        reader_lo: u64,
     ) -> anyhow::Result<bool> {
         Ok(diesel::update(watermarks::table)
             .set((
-                watermarks::reader_lo.eq(reader_lo),
+                watermarks::reader_lo.eq(reader_lo as i64),
                 watermarks::pruner_timestamp.eq(diesel::dsl::now),
             ))
             .filter(watermarks::pipeline.eq(pipeline))
-            .filter(watermarks::reader_lo.lt(reader_lo))
+            .filter(watermarks::reader_lo.lt(reader_lo as i64))
             .execute(self)
             .await
             .map_err(anyhow::Error::from)?
@@ -137,9 +140,9 @@ impl Connection for PgConnection<'_> {
 
         if let Some(watermark) = watermark {
             Ok(Some(PrunerWatermark {
-                wait_for_ms: watermark.0,
-                pruner_hi: watermark.1,
-                reader_lo: watermark.2,
+                wait_for_ms: watermark.0 as u64,
+                pruner_hi: watermark.1 as u64,
+                reader_lo: watermark.2 as u64,
             }))
         } else {
             Ok(None)
@@ -149,10 +152,10 @@ impl Connection for PgConnection<'_> {
     async fn set_pruner_watermark(
         &mut self,
         pipeline: &'static str,
-        pruner_hi: i64,
+        pruner_hi: u64,
     ) -> anyhow::Result<bool> {
         Ok(diesel::update(watermarks::table)
-            .set(watermarks::pruner_hi.eq(pruner_hi))
+            .set(watermarks::pruner_hi.eq(pruner_hi as i64))
             .filter(watermarks::pipeline.eq(pipeline))
             .execute(self)
             .await

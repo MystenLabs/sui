@@ -198,22 +198,22 @@ where
                     metrics
                         .watermark_epoch
                         .with_label_values(&[H::NAME])
-                        .set(watermark.epoch_hi_inclusive);
+                        .set(watermark.epoch_hi_inclusive as i64);
 
                     metrics
                         .watermark_checkpoint
                         .with_label_values(&[H::NAME])
-                        .set(watermark.checkpoint_hi_inclusive);
+                        .set(watermark.checkpoint_hi_inclusive as i64);
 
                     metrics
                         .watermark_transaction
                         .with_label_values(&[H::NAME])
-                        .set(watermark.tx_hi);
+                        .set(watermark.tx_hi as i64);
 
                     metrics
                         .watermark_timestamp_ms
                         .with_label_values(&[H::NAME])
-                        .set(watermark.timestamp_ms_hi_inclusive);
+                        .set(watermark.timestamp_ms_hi_inclusive as i64);
 
                     let guard = metrics
                         .committer_commit_latency
@@ -287,22 +287,22 @@ where
                     metrics
                         .watermark_epoch_in_db
                         .with_label_values(&[H::NAME])
-                        .set(watermark.epoch_hi_inclusive);
+                        .set(watermark.epoch_hi_inclusive as i64);
 
                     metrics
                         .watermark_checkpoint_in_db
                         .with_label_values(&[H::NAME])
-                        .set(watermark.checkpoint_hi_inclusive);
+                        .set(watermark.checkpoint_hi_inclusive as i64);
 
                     metrics
                         .watermark_transaction_in_db
                         .with_label_values(&[H::NAME])
-                        .set(watermark.tx_hi);
+                        .set(watermark.tx_hi as i64);
 
                     metrics
                         .watermark_timestamp_in_db_ms
                         .with_label_values(&[H::NAME])
-                        .set(watermark.timestamp_ms_hi_inclusive);
+                        .set(watermark.timestamp_ms_hi_inclusive as i64);
 
                     // Ignore the result -- the ingestion service will close this channel
                     // once it is done, but there may still be checkpoints buffered that need

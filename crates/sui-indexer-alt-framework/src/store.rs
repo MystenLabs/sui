@@ -51,7 +51,7 @@ pub trait Connection: Send + Sync {
     async fn set_reader_watermark(
         &mut self,
         pipeline: &'static str,
-        reader_lo: i64,
+        reader_lo: u64,
     ) -> anyhow::Result<bool>;
 
     /// Get the bounds for the region that the pruner is allowed to prune, and the time in
@@ -70,7 +70,7 @@ pub trait Connection: Send + Sync {
     async fn set_pruner_watermark(
         &mut self,
         pipeline: &'static str,
-        pruner_hi: i64,
+        pruner_hi: u64,
     ) -> anyhow::Result<bool>;
 }
 
@@ -107,20 +107,20 @@ pub trait TransactionalStore: Store {
 /// data that has been written to the Store for a pipeline.
 #[derive(Default, Debug, Clone, Copy)]
 pub struct CommitterWatermark {
-    pub epoch_hi_inclusive: i64,
-    pub checkpoint_hi_inclusive: i64,
-    pub tx_hi: i64,
-    pub timestamp_ms_hi_inclusive: i64,
+    pub epoch_hi_inclusive: u64,
+    pub checkpoint_hi_inclusive: u64,
+    pub tx_hi: u64,
+    pub timestamp_ms_hi_inclusive: u64,
 }
 
 /// Represents the inclusive lower bound of available data in the Store for some pipeline.
 #[derive(Default, Debug, Clone, Copy)]
 pub struct ReaderWatermark {
     /// Within the framework, this value is used to determine the new `reader_lo`.
-    pub checkpoint_hi_inclusive: i64,
+    pub checkpoint_hi_inclusive: u64,
     /// Within the framework, this value is used to check whether to actually make an update
     /// transaction to the database.
-    pub reader_lo: i64,
+    pub reader_lo: u64,
 }
 
 /// A watermark that represents the bounds for the region that the pruner is allowed to prune, and
@@ -129,26 +129,26 @@ pub struct ReaderWatermark {
 pub struct PrunerWatermark {
     /// The remaining time in milliseconds that the pruner must wait before it can begin pruning.
     /// This is calculated as the time remaining until `pruner_timestamp + delay` has passed.
-    pub wait_for_ms: i64,
+    pub wait_for_ms: u64,
 
     /// The pruner can delete up to this checkpoint (exclusive).
-    pub reader_lo: i64,
+    pub reader_lo: u64,
 
     /// The pruner has already deleted up to this checkpoint (exclusive), so can continue from this
     /// point.
-    pub pruner_hi: i64,
+    pub pruner_hi: u64,
 }
 
 impl CommitterWatermark {
     pub(crate) fn timestamp(&self) -> DateTime<Utc> {
-        DateTime::from_timestamp_millis(self.timestamp_ms_hi_inclusive).unwrap_or_default()
+        DateTime::from_timestamp_millis(self.timestamp_ms_hi_inclusive as i64).unwrap_or_default()
     }
 
     #[cfg(test)]
     pub(crate) fn new_for_testing(checkpoint_hi_inclusive: u64) -> Self {
         CommitterWatermark {
             epoch_hi_inclusive: 0,
-            checkpoint_hi_inclusive: checkpoint_hi_inclusive as i64,
+            checkpoint_hi_inclusive,
             tx_hi: 0,
             timestamp_ms_hi_inclusive: 0,
         }
@@ -160,18 +160,18 @@ impl PrunerWatermark {
         (self.wait_for_ms > 0).then(|| Duration::from_millis(self.wait_for_ms as u64))
     }
 
-    /// The next chunk of checkpoints that the pruner should work on, to advance the watermark.
-    /// If no more checkpoints to prune, returns `None`.
-    /// Otherwise, returns a tuple (from, to_exclusive) where `from` is inclusive and `to_exclusive` is exclusive.
-    /// Advance the watermark as well.
+    /// The next chunk of checkpoints that the pruner should work on, to advance the watermark. If
+    /// no more checkpoints to prune, returns `None`. Otherwise, returns a tuple (from,
+    /// to_exclusive) where `from` is inclusive and `to_exclusive` is exclusive. Advance the
+    /// watermark as well.
     pub(crate) fn next_chunk(&mut self, size: u64) -> Option<(u64, u64)> {
         if self.pruner_hi >= self.reader_lo {
             return None;
         }
 
-        let from = self.pruner_hi as u64;
-        let to_exclusive = (from + size).min(self.reader_lo as u64);
-        self.pruner_hi = to_exclusive as i64;
+        let from = self.pruner_hi;
+        let to_exclusive = (from + size).min(self.reader_lo);
+        self.pruner_hi = to_exclusive;
         Some((from, to_exclusive))
     }
 }

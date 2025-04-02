@@ -85,7 +85,7 @@ pub(super) fn reader_watermark<H: Handler + 'static>(
                         .with_label_values(&[H::NAME])
                         .set(new_reader_lo as i64);
 
-                    let Ok(updated) = conn.set_reader_watermark(H::NAME, new_reader_lo as i64).await else {
+                    let Ok(updated) = conn.set_reader_watermark(H::NAME, new_reader_lo).await else {
                         warn!(pipeline = H::NAME, "Failed to update reader watermark");
                         continue;
                     };
