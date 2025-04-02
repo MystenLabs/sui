@@ -13,10 +13,12 @@ use crate::{
     flavor::MoveFlavor,
 };
 
+use super::PinnedDependency;
+
 /// An external dependency has the form `{ r.<res> = "<data>" }`; it is resolved by invoking the
 /// binary `<res>` (from the `PATH`), and passing `<data>` on the command line. The binary is
 /// expected to output a single resolved dependency on the command line.
-#[derive(Serialize)]
+#[derive(Serialize, Deserialize)]
 pub struct ExternalDependency {
     /// Should be a table with a single entry; the name of the entry is the resolver binary to run
     /// and the value should be the argument passed to the resolver
@@ -27,16 +29,9 @@ pub struct ExternalDependency {
 }
 
 impl ExternalDependency {
-    /// Invoke the external binary and deserialize its output as a dependency
-    fn resolve<F: MoveFlavor>(&self) -> PackageResult<F::InternalDependency> {
-        todo!()
-    }
-}
-
-impl TryFrom<(&Path, toml_edit::Value)> for ExternalDependency {
-    type Error = PackageError;
-
-    fn try_from(value: (&Path, toml_edit::Value)) -> Result<Self, Self::Error> {
+    /// Invoke the external binary and deserialize its output as a dependency, then pin the
+    /// dependency.
+    fn resolve<F: MoveFlavor>(&self) -> PackageResult<PinnedDependency<F>> {
         todo!()
     }
 }
