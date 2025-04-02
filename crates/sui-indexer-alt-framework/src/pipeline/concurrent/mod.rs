@@ -11,7 +11,7 @@ use tracing::info;
 use crate::{
     db::{self, Db},
     metrics::IndexerMetrics,
-    models::watermarks::CommitterWatermark,
+    store::CommitterWatermark,
     types::full_checkpoint_content::CheckpointData,
     FieldCount,
 };
@@ -195,7 +195,7 @@ impl Default for PrunerConfig {
 /// reports an issue.
 pub(crate) fn pipeline<H: Handler + Send + Sync + 'static>(
     handler: H,
-    initial_commit_watermark: Option<CommitterWatermark<'static>>,
+    initial_commit_watermark: Option<CommitterWatermark>,
     config: ConcurrentConfig,
     skip_watermark: bool,
     db: Db,

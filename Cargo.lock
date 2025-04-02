@@ -13888,6 +13888,7 @@ dependencies = [
  "prometheus",
  "rand 0.8.5",
  "reqwest 0.12.9",
+ "scoped-futures",
  "serde",
  "sui-field-count",
  "sui-indexer-alt-metrics",
