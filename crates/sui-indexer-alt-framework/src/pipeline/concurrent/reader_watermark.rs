@@ -90,7 +90,6 @@ pub(super) fn reader_watermark<H: Handler + 'static>(
                         continue;
                     };
 
-
                     if updated {
                         info!(pipeline = H::NAME, new_reader_lo, "Watermark");
 

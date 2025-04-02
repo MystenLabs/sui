@@ -26,9 +26,7 @@ impl Connection for PgConnection<'_> {
         &mut self,
         pipeline: &'static str,
     ) -> anyhow::Result<Option<CommitterWatermark>> {
-        let watermark = StoredWatermark::get(self, pipeline)
-            .await
-            .map_err(anyhow::Error::from)?;
+        let watermark = StoredWatermark::get(self, pipeline).await?;
 
         if let Some(watermark) = watermark {
             Ok(Some(CommitterWatermark {
@@ -139,7 +137,7 @@ impl Connection for PgConnection<'_> {
 
         if let Some(watermark) = watermark {
             Ok(Some(PrunerWatermark {
-                wait_for: watermark.0,
+                wait_for_ms: watermark.0,
                 pruner_hi: watermark.1,
                 reader_lo: watermark.2,
             }))

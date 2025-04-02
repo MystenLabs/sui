@@ -9,38 +9,43 @@ use std::time::Duration;
 
 pub use scoped_futures;
 
-/// Represents a database connection that can manage watermarks for pipeline operations in the
-/// framework.
-///
-/// This trait provides methods for the necessary reads and updates for the committer, reader, and
-/// pruner components of a data pipeline, allowing for tracking progress and coordination between
-/// different pipeline stages.
+/// Represents a database connection that can be used by the indexer framework to manage watermark
+/// operations, agnostic of the underlying store implementation.
 #[async_trait]
 pub trait Connection: Send + Sync {
-    /// Given a pipeline, return the committer watermark from the database. This is used on indexer
-    /// startup to determine which checkpoint to start or continue processing from.
+    /// Given a pipeline, return the committer watermark from the `Store`. This is used by the
+    /// indexer on startup to determine which checkpoint to resume processing from.
     async fn committer_watermark(
         &mut self,
         pipeline: &'static str,
     ) -> anyhow::Result<Option<CommitterWatermark>>;
 
     /// Given a pipeline, return the reader watermark from the database. This is used by the indexer
-    /// to report progress to the database.
+    /// to determine the new `reader_lo` or inclusive lower bound of available data.
     async fn reader_watermark(
         &mut self,
         pipeline: &'static str,
     ) -> anyhow::Result<Option<ReaderWatermark>>;
 
-    /// Upsert the high watermark as long as it raises the watermark stored in the database.
-    /// Returns a boolean indicating whether the watermark was actually updated or not.
+    /// Upsert the high watermark as long as it raises the watermark stored in the database. Returns
+    /// a boolean indicating whether the watermark was actually updated or not.
     async fn set_committer_watermark(
         &mut self,
         pipeline: &'static str,
         watermark: CommitterWatermark,
     ) -> anyhow::Result<bool>;
 
-    /// Update the reader low watermark for an existing watermark row, as long as this raises the
-    /// watermark, and updates the timestamp this update happened to the database's current time.
+    /// Update the `reader_lo` of an existing watermark entry only if it raises `reader_lo`. Readers
+    /// will reference this as the inclusive lower bound of available data for the corresponding
+    /// pipeline.
+    ///
+    /// If an update is to be made, some timestamp (i.e `pruner_timestamp`) should also be set on
+    /// the watermark entry to the current time. Ideally, this would be from the perspective of the
+    /// store. If this is not possible, then it should come from some other common source of time
+    /// between the indexer and its readers. This timestamp is critical to the indexer's operations,
+    /// as it determines when the pruner can safely begin pruning data. When `pruner_watermark` is
+    /// called by the indexer, it will retrieve this timestamp to determine how much longer to wait
+    /// before beginning to prune.
     ///
     /// Returns a boolean indicating whether the watermark was actually updated or not.
     async fn set_reader_watermark(
@@ -49,25 +54,17 @@ pub trait Connection: Send + Sync {
         reader_lo: i64,
     ) -> anyhow::Result<bool>;
 
-    /// Get the bounds for the region that the pruner still has to prune for the given `pipeline`,
-    /// as determined by `[pruner_hi, reader_lo)`. The pruner must wait for a configured delay
-    /// period (e.g. 30 seconds) after the `pruner_timestamp` before it can begin pruning. This
-    /// ensures that data is only pruned after it has been stable for the configured delay period.
-    /// Because some period of time has likely elapsed since the `pruner_timestamp` was written, the
-    /// `PrunerWatermark` contains a `wait_for` value that represents the elapsed time between
-    /// `pruner_timestamp` and `now` from the database's perspective. The remaining difference
-    /// between the configured delay and this difference is the amount of time the pruner must wait
-    /// before it can begin pruning.
-    ///
+    /// Get the bounds for the region that the pruner is allowed to prune, and the time in
+    /// milliseconds the pruner must wait before it can begin pruning data for the given `pipeline`.
     /// The pruner is allowed to prune the region between the returned `pruner_hi` (inclusive) and
-    /// `reader_lo` (exclusive) after `wait_for` milliseconds have passed since this response was
-    /// returned. The `wait_for` value represents the remaining time needed to satisfy the delay
-    /// requirement: `delay - (NOW() - pruner_timestamp)`.
+    /// `reader_lo` (exclusive) after waiting until `pruner_timestamp + delay` has passed. This
+    /// minimizes the possibility for the pruner to delete data still expected by inflight read
+    /// requests.
     async fn pruner_watermark(
         &mut self,
         pipeline: &'static str,
         delay: Duration,
-    ) -> anyhow::Result<Option<PrunerWatermark>>; // (pruner_hi, reader_lo, wait_for_ms)
+    ) -> anyhow::Result<Option<PrunerWatermark>>;
 
     /// Update the pruner watermark, returns true if the watermark was actually updated
     async fn set_pruner_watermark(
@@ -77,11 +74,10 @@ pub trait Connection: Send + Sync {
     ) -> anyhow::Result<bool>;
 }
 
-/// A storage-agnostic interface for managing pipeline watermarks.
-///
-/// This trait abstracts away the underlying storage implementation, providing
-/// a consistent way to connect to the database regardless of the specific
-/// storage technology being used.
+/// A storage-agnostic interface that provides database connections for both watermark management
+/// and arbitrary writes. The indexer framework accepts this `Store` implementation to manage
+/// watermarks operations through its associated `Connection` type. This store is also passed to the
+/// pipeline handlers to perform arbitrary writes to the store.
 #[async_trait]
 pub trait Store: Send + Sync + 'static + Clone {
     type Connection<'c>: Connection
@@ -93,12 +89,8 @@ pub trait Store: Send + Sync + 'static + Clone {
 
 pub type HandlerBatch<H> = <H as SequentialHandler>::Batch;
 
-/// Extends the Store trait with transactional capabilities.
-///
-/// This trait provides methods to execute operations within a database transaction,
-/// ensuring atomicity when committing handler batches and updating watermarks.
-/// It allows for safely combining multiple database operations that must succeed
-/// or fail together.
+/// Extends the Store trait with transactional capabilities, to be used within the framework for
+/// atomic or transactional writes.
 #[async_trait]
 pub trait TransactionalStore: Store {
     async fn transaction<'a, R, F>(&self, f: F) -> anyhow::Result<R>
@@ -110,6 +102,9 @@ pub trait TransactionalStore: Store {
         ) -> ScopedBoxFuture<'a, 'r, anyhow::Result<R>>;
 }
 
+/// Represents the highest checkpoint for some pipeline that has been processed by the indexer
+/// framework. When read from the `Store`, this represents the inclusive upper bound checkpoint of
+/// data that has been written to the Store for a pipeline.
 #[derive(Default, Debug, Clone, Copy)]
 pub struct CommitterWatermark {
     pub epoch_hi_inclusive: i64,
@@ -127,13 +122,15 @@ pub struct ReaderWatermark {
     pub reader_lo: i64,
 }
 
+/// A watermark that represents the bounds for the region that the pruner is allowed to prune, and
+/// the time in milliseconds the pruner must wait before it can begin pruning data.
 #[derive(Default, Debug, Clone, Copy)]
 pub struct PrunerWatermark {
-    /// How long to wait from when this query ran on the database until this information can be
-    /// used to prune the database. This number could be negative, meaning no waiting is necessary.
-    pub wait_for: i64,
+    /// The remaining time in milliseconds that the pruner must wait before it can begin pruning.
+    /// This is calculated as the time remaining until `pruner_timestamp + delay` has passed.
+    pub wait_for_ms: i64,
 
-    /// The pruner can delete up to this checkpoint, (exclusive).
+    /// The pruner can delete up to this checkpoint (exclusive).
     pub reader_lo: i64,
 
     /// The pruner has already deleted up to this checkpoint (exclusive), so can continue from this
@@ -158,8 +155,8 @@ impl CommitterWatermark {
 }
 
 impl PrunerWatermark {
-    pub(crate) fn wait_for(&self) -> Option<Duration> {
-        (self.wait_for > 0).then(|| Duration::from_millis(self.wait_for as u64))
+    pub(crate) fn wait_for_ms(&self) -> Option<Duration> {
+        (self.wait_for_ms > 0).then(|| Duration::from_millis(self.wait_for_ms as u64))
     }
 
     /// The next chunk of checkpoints that the pruner should work on, to advance the watermark.
