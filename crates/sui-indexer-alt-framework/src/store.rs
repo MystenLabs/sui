@@ -113,6 +113,7 @@ pub struct CommitterWatermark {
     pub timestamp_ms_hi_inclusive: i64,
 }
 
+/// Represents the inclusive lower bound of available data in the Store for some pipeline.
 #[derive(Default, Debug, Clone, Copy)]
 pub struct ReaderWatermark {
     /// Within the framework, this value is used to determine the new `reader_lo`.
