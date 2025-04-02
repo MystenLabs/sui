@@ -1,0 +1,24 @@
+---
+source: crates/move-prover/tests/integration.rs
+assertion_line: 57
+expression: output
+snapshot_kind: text
+---
+Verification successful
+warning: Consider moving pre-condition before function call
+   ┌─ tests/inputs/spec_well_formed/spec_well_formed_func_conditions.move:12:3
+   │
+12 │   ensures(true);
+   │   ^^^^^^^^^^^^^
+
+warning: Consider moving post-condition after target function call
+   ┌─ tests/inputs/spec_well_formed/spec_well_formed_func_conditions.move:16:3
+   │
+16 │   asserts(true);
+   │   ^^^^^^^^^^^^^
+
+warning: Consider moving post-condition after target function call
+   ┌─ tests/inputs/spec_well_formed/spec_well_formed_func_conditions.move:17:3
+   │
+17 │   requires(true);
+   │   ^^^^^^^^^^^^^^

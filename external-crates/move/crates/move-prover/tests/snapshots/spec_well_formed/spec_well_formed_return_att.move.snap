@@ -1,0 +1,18 @@
+---
+source: crates/move-prover/tests/integration.rs
+assertion_line: 57
+expression: output
+snapshot_kind: text
+---
+Verification failed: exiting with bytecode transformation errors
+error: Underlying func result var is not returned from spec
+   ┌─ tests/inputs/spec_well_formed/spec_well_formed_return_att.move:15:1
+   │  
+15 │ ╭ public fun foo_spec(x: u64): u64 {
+16 │ │   let result = foo(x);
+17 │ │   let d = 5u64;
+18 │ │ 
+   · │
+21 │ │   d
+22 │ │ }
+   │ ╰─^
