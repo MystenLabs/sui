@@ -104,7 +104,7 @@ impl<'a, 'b, 'state> Env<'a, 'b, 'state> {
         &self,
         module_id: &ModuleId,
     ) -> Result<Arc<CompiledModule>, ExecutionError> {
-        let data_store = SuiDataStore::new(&self.linkage_view, &[]);
+        let data_store = SuiDataStore::new(self.linkage_view, &[]);
         self.vm
             .get_runtime()
             .load_module(module_id, &data_store)

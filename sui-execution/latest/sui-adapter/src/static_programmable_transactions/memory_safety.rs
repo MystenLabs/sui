@@ -4,6 +4,6 @@
 use super::{ast as T, env::Env};
 use sui_types::error::ExecutionError;
 
-pub fn verify(env: &Env, txn: &T::Transaction) -> Result<(), ExecutionError> {
+pub fn verify(_env: &Env, _txn: &T::Transaction) -> Result<(), ExecutionError> {
     todo!()
 }
