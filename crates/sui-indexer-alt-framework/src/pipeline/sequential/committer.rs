@@ -75,7 +75,7 @@ where
         // and whether that batch needs to be written out. By extension it also knows the next
         // checkpoint to expect and add to the batch.
         let (mut watermark, mut next_checkpoint) = if let Some(watermark) = watermark {
-            let next = watermark.checkpoint_hi_inclusive as u64 + 1;
+            let next = watermark.checkpoint_hi_inclusive + 1;
             (watermark, next)
         } else {
             (CommitterWatermark::default(), 0)
@@ -307,7 +307,7 @@ where
                     // Ignore the result -- the ingestion service will close this channel
                     // once it is done, but there may still be checkpoints buffered that need
                     // processing.
-                    let _ = tx.send((H::NAME, watermark.checkpoint_hi_inclusive as u64));
+                    let _ = tx.send((H::NAME, watermark.checkpoint_hi_inclusive));
 
                     let _ = std::mem::take(&mut batch);
                     pending_rows -= batch_rows;

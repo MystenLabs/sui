@@ -214,8 +214,8 @@ pub(super) fn commit_watermark<H: Handler + 'static>(
                                 logger.log::<H>(&watermark, elapsed);
 
                                 checkpoint_lag_reporter.report_lag(
-                                    watermark.checkpoint_hi_inclusive as u64,
-                                    watermark.timestamp_ms_hi_inclusive as u64,
+                                    watermark.checkpoint_hi_inclusive,
+                                    watermark.timestamp_ms_hi_inclusive
                                 );
 
                                 metrics

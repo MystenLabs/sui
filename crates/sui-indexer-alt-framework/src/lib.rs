@@ -451,12 +451,12 @@ impl Indexer {
             conn.pruner_watermark(P::NAME, Default::default())
                 .await
                 .with_context(|| format!("Failed to get pruner watermark for {}", P::NAME))?
-                .map(|w| w.pruner_hi as u64)
+                .map(|w| w.pruner_hi)
                 .unwrap_or_default()
         } else {
             watermark
                 .as_ref()
-                .map(|w| w.checkpoint_hi_inclusive as u64 + 1)
+                .map(|w| w.checkpoint_hi_inclusive + 1)
                 .unwrap_or_default()
         };
 

@@ -105,17 +105,17 @@ impl<P: Processor> IndexedCheckpoint<P> {
 
     /// The checkpoint sequence number that this data is from
     fn checkpoint(&self) -> u64 {
-        self.watermark.checkpoint_hi_inclusive as u64
+        self.watermark.checkpoint_hi_inclusive
     }
 }
 
 impl WatermarkPart {
     fn checkpoint(&self) -> u64 {
-        self.watermark.checkpoint_hi_inclusive as u64
+        self.watermark.checkpoint_hi_inclusive
     }
 
     fn timestamp_ms(&self) -> u64 {
-        self.watermark.timestamp_ms_hi_inclusive as u64
+        self.watermark.timestamp_ms_hi_inclusive
     }
 
     /// Check if all the rows from this watermark are represented in this part.

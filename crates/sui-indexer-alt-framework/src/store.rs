@@ -157,7 +157,7 @@ impl CommitterWatermark {
 
 impl PrunerWatermark {
     pub(crate) fn wait_for_ms(&self) -> Option<Duration> {
-        (self.wait_for_ms > 0).then(|| Duration::from_millis(self.wait_for_ms as u64))
+        (self.wait_for_ms > 0).then(|| Duration::from_millis(self.wait_for_ms))
     }
 
     /// The next chunk of checkpoints that the pruner should work on, to advance the watermark. If
