@@ -1075,12 +1075,6 @@ ecvrf_verify
 ed25519_verify
 	public fun
 	0x2::ed25519
-blake2b256
-	public fun
-	0x2::hash
-keccak256
-	public fun
-	0x2::hash
 hash_to_input
 	public fun
 	0x2::vdf
@@ -1093,45 +1087,6 @@ vdf_verify
 vdf_verify_internal
 	fun
 	0x2::vdf
-encode
-	public fun
-	0x2::hex
-decode
-	public fun
-	0x2::hex
-decode_byte
-	fun
-	0x2::hex
-to_u256
-	public fun
-	0x2::address
-from_u256
-	public fun
-	0x2::address
-from_bytes
-	public fun
-	0x2::address
-to_bytes
-	public fun
-	0x2::address
-to_ascii_string
-	public fun
-	0x2::address
-to_string
-	public fun
-	0x2::address
-from_ascii_bytes
-	public fun
-	0x2::address
-hex_char_value
-	fun
-	0x2::address
-length
-	public fun
-	0x2::address
-max
-	public fun
-	0x2::address
 TxContext
 	public struct
 	0x2::tx_context
@@ -1186,6 +1141,45 @@ native_sponsor
 derive_id
 	fun
 	0x2::tx_context
+encode
+	public fun
+	0x2::hex
+decode
+	public fun
+	0x2::hex
+decode_byte
+	fun
+	0x2::hex
+to_u256
+	public fun
+	0x2::address
+from_u256
+	public fun
+	0x2::address
+from_bytes
+	public fun
+	0x2::address
+to_bytes
+	public fun
+	0x2::address
+to_ascii_string
+	public fun
+	0x2::address
+to_string
+	public fun
+	0x2::address
+from_ascii_bytes
+	public fun
+	0x2::address
+hex_char_value
+	fun
+	0x2::address
+length
+	public fun
+	0x2::address
+max
+	public fun
+	0x2::address
 ID
 	public struct
 	0x2::object
@@ -1217,6 +1211,12 @@ randomness_state
 	public(package) fun
 	0x2::object
 sui_deny_list_object_id
+	public(package) fun
+	0x2::object
+sui_accumulator_root_object_id
+	public(package) fun
+	0x2::object
+sui_accumulator_root_address
 	public(package) fun
 	0x2::object
 bridge
@@ -1264,48 +1264,6 @@ delete_impl
 record_new_uid
 	fun
 	0x2::object
-Receiving
-	public struct
-	0x2::transfer
-transfer
-	public fun
-	0x2::transfer
-public_transfer
-	public fun
-	0x2::transfer
-freeze_object
-	public fun
-	0x2::transfer
-public_freeze_object
-	public fun
-	0x2::transfer
-share_object
-	public fun
-	0x2::transfer
-public_share_object
-	public fun
-	0x2::transfer
-receive
-	public fun
-	0x2::transfer
-public_receive
-	public fun
-	0x2::transfer
-receiving_object_id
-	public fun
-	0x2::transfer
-freeze_object_impl
-	public(package) fun
-	0x2::transfer
-share_object_impl
-	public(package) fun
-	0x2::transfer
-transfer_impl
-	public(package) fun
-	0x2::transfer
-receive_impl
-	fun
-	0x2::transfer
 Field
 	public struct
 	0x2::dynamic_field
@@ -1357,6 +1315,57 @@ has_child_object
 has_child_object_with_ty
 	public(package) fun
 	0x2::dynamic_field
+Key
+	public struct
+	0x2::accumulator
+get_accumulator_field_name
+	public(package) fun
+	0x2::accumulator
+get_accumulator_field_address
+	public(package) fun
+	0x2::accumulator
+Receiving
+	public struct
+	0x2::transfer
+transfer
+	public fun
+	0x2::transfer
+public_transfer
+	public fun
+	0x2::transfer
+freeze_object
+	public fun
+	0x2::transfer
+public_freeze_object
+	public fun
+	0x2::transfer
+share_object
+	public fun
+	0x2::transfer
+public_share_object
+	public fun
+	0x2::transfer
+receive
+	public fun
+	0x2::transfer
+public_receive
+	public fun
+	0x2::transfer
+receiving_object_id
+	public fun
+	0x2::transfer
+freeze_object_impl
+	public(package) fun
+	0x2::transfer
+share_object_impl
+	public(package) fun
+	0x2::transfer
+transfer_impl
+	public(package) fun
+	0x2::transfer
+receive_impl
+	fun
+	0x2::transfer
 AuthenticatorState
 	public struct
 	0x2::authenticator_state
@@ -1918,8 +1927,47 @@ destroy_empty
 drop
 	public fun
 	0x2::table
+blake2b256
+	public fun
+	0x2::hash
+keccak256
+	public fun
+	0x2::hash
+EventStreamHead
+	public struct
+	0x2::event
+EventStream
+	public struct
+	0x2::event
+EventStreamCap
+	public struct
+	0x2::event
 emit
 	public fun
+	0x2::event
+update_head
+	public fun
+	0x2::event
+destroy_stream
+	public fun
+	0x2::event
+new_event_stream
+	public fun
+	0x2::event
+get_cap
+	public fun
+	0x2::event
+default_event_stream_cap
+	public fun
+	0x2::event
+emit_authenticated
+	public fun
+	0x2::event
+destroy_cap
+	public fun
+	0x2::event
+emit_authenticated_impl
+	fun
 	0x2::event
 Wrapper
 	public struct
@@ -4709,6 +4757,12 @@ get
 	public fun
 	0x1::type_name
 get_with_original_ids
+	public fun
+	0x1::type_name
+get_package_id
+	public fun
+	0x1::type_name
+get_original_package_id
 	public fun
 	0x1::type_name
 is_primitive

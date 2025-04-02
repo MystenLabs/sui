@@ -1,8 +1,12 @@
 // Copyright (c) The Move Contributors
 // SPDX-License-Identifier: Apache-2.0
 
-use move_binary_format::errors::PartialVMResult;
-use move_core_types::gas_algebra::{InternalGas, InternalGasPerByte, NumBytes};
+use move_binary_format::errors::{PartialVMError, PartialVMResult};
+use move_core_types::{
+    gas_algebra::{InternalGas, InternalGasPerByte, NumBytes},
+    language_storage::TypeTag,
+    vm_status::StatusCode,
+};
 use move_vm_runtime::{
     native_charge_gas_early_exit,
     native_functions::{NativeContext, NativeFunction},
@@ -68,6 +72,50 @@ pub fn make_native_get(use_original_id: bool, gas_params: GetGasParameters) -> N
     })
 }
 
+fn native_get_package_id(
+    use_original_id: bool,
+    gas_params: &GetGasParameters,
+    context: &mut NativeContext,
+    ty_args: Vec<Type>,
+    arguments: VecDeque<Value>,
+) -> PartialVMResult<NativeResult> {
+    debug_assert_eq!(ty_args.len(), 1);
+    debug_assert!(arguments.is_empty());
+
+    // Charge base fee
+    native_charge_gas_early_exit!(context, gas_params.base);
+
+    let type_tag = if use_original_id {
+        context.type_to_runtime_type_tag(&ty_args[0])
+    } else {
+        context.type_to_type_tag(&ty_args[0])
+    }?;
+
+    let package_id = match type_tag {
+        TypeTag::Struct(s) => s.address,
+        _ => {
+            return Err(
+                PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR)
+                    .with_message("Sui verifier guarantees this is a struct".to_string()),
+            )
+        }
+    };
+
+    Ok(NativeResult::ok(
+        context.gas_used(),
+        smallvec![Value::address(package_id)],
+    ))
+}
+
+pub fn make_native_get_package_id(
+    use_original_id: bool,
+    gas_params: GetGasParameters,
+) -> NativeFunction {
+    Arc::new(move |context, ty_args, args| {
+        native_get_package_id(use_original_id, &gas_params, context, ty_args, args)
+    })
+}
+
 #[derive(Debug, Clone)]
 pub struct GasParameters {
     pub get: GetGasParameters,
@@ -81,7 +129,15 @@ pub fn make_all(gas_params: GasParameters) -> impl Iterator<Item = (String, Nati
         ),
         (
             "get_with_original_ids",
-            make_native_get(/* use_original_id */ true, gas_params.get),
+            make_native_get(/* use_original_id */ true, gas_params.get.clone()),
+        ),
+        (
+            "get_package_id",
+            make_native_get_package_id(/* use_original_id */ false, gas_params.get.clone()),
+        ),
+        (
+            "get_original_package_id",
+            make_native_get_package_id(/* use_original_id */ true, gas_params.get),
         ),
     ];
 
