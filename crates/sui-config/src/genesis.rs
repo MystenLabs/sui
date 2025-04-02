@@ -447,6 +447,8 @@ impl GenesisCeremonyParameters {
         1000
     }
 
+    #[allow(deprecated)]
+    // TODO: replace deprecated constants with proper values
     pub fn to_genesis_chain_parameters(&self) -> GenesisChainParameters {
         GenesisChainParameters {
             protocol_version: self.protocol_version.as_u64(),
@@ -516,17 +518,9 @@ impl TokenDistributionSchedule {
                     allocation.amount_mist;
             }
         }
-
-        // Check that all validators have sufficient stake allocated to ensure they meet the
-        // minimum stake threshold
-        let minimum_required_stake = sui_types::governance::VALIDATOR_LOW_STAKE_THRESHOLD_MIST;
-        for (validator, stake) in validators {
-            if stake < minimum_required_stake {
-                panic!("validator {validator} has '{stake}' stake and does not meet the minimum required stake threshold of '{minimum_required_stake}'");
-            }
-        }
     }
 
+    #[allow(deprecated)]
     pub fn new_for_validators_with_default_allocation<I: IntoIterator<Item = SuiAddress>>(
         validators: I,
     ) -> Self {
@@ -634,6 +628,7 @@ impl TokenDistributionScheduleBuilder {
         }
     }
 
+    #[allow(deprecated)]
     pub fn default_allocation_for_validators<I: IntoIterator<Item = SuiAddress>>(
         &mut self,
         validators: I,

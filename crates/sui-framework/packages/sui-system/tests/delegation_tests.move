@@ -392,7 +392,7 @@ fun test_add_preactive_remove_pending_failure() {
     let scenario = &mut scenario_val;
 
     add_validator_candidate(NEW_VALIDATOR_ADDR, b"name4", b"/ip4/127.0.0.1/udp/84", NEW_VALIDATOR_PUBKEY, NEW_VALIDATOR_POP, scenario);
-
+    stake_with(STAKER_ADDR_1, NEW_VALIDATOR_ADDR, 100, scenario);
     add_validator(NEW_VALIDATOR_ADDR, scenario);
 
     // Delegate 100 SUI to the pending validator. This should fail because pending active validators don't accept

@@ -145,6 +145,7 @@ A list of system config parameters.
 <code>max_validator_count: u64</code>
 </dt>
 <dd>
+ Deprecated.
  Maximum number of active validators at any moment.
  We do not allow the number of validators in any epoch to go above this.
 </dd>
@@ -152,6 +153,7 @@ A list of system config parameters.
 <code>min_validator_joining_stake: u64</code>
 </dt>
 <dd>
+ Deprecated.
  Lower-bound on the amount of stake required to become a validator.
 </dd>
 <dt>
@@ -166,6 +168,7 @@ A list of system config parameters.
 <code>validator_very_low_stake_threshold: u64</code>
 </dt>
 <dd>
+ Deprecated.
  Validators with stake below <code>validator_very_low_stake_threshold</code> will be removed
  immediately at epoch change, no grace period.
 </dd>
@@ -226,6 +229,7 @@ Added min_validator_count.
 <code>max_validator_count: u64</code>
 </dt>
 <dd>
+ Deprecated.
  Maximum number of active validators at any moment.
  We do not allow the number of validators in any epoch to go above this.
 </dd>
@@ -233,12 +237,14 @@ Added min_validator_count.
 <code>min_validator_joining_stake: u64</code>
 </dt>
 <dd>
+ Deprecated.
  Lower-bound on the amount of stake required to become a validator.
 </dd>
 <dt>
 <code>validator_low_stake_threshold: u64</code>
 </dt>
 <dd>
+ Deprecated.
  Validators with stake amount below <code>validator_low_stake_threshold</code> are considered to
  have low stake and will be escorted out of the validator set after being below this
  threshold for more than <code>validator_low_stake_grace_period</code> number of epochs.
@@ -247,6 +253,7 @@ Added min_validator_count.
 <code>validator_very_low_stake_threshold: u64</code>
 </dt>
 <dd>
+ Deprecated.
  Validators with stake below <code>validator_very_low_stake_threshold</code> will be removed
  immediately at epoch change, no grace period.
 </dd>
@@ -1032,11 +1039,7 @@ epoch has already reached the maximum.
     self: &<b>mut</b> <a href="../sui_system/sui_system_state_inner.md#sui_system_sui_system_state_inner_SuiSystemStateInnerV2">SuiSystemStateInnerV2</a>,
     ctx: &TxContext,
 ) {
-    <b>assert</b>!(
-        self.validators.next_epoch_validator_count() &lt; self.parameters.max_validator_count,
-        <a href="../sui_system/sui_system_state_inner.md#sui_system_sui_system_state_inner_ELimitExceeded">ELimitExceeded</a>,
-    );
-    self.validators.<a href="../sui_system/sui_system_state_inner.md#sui_system_sui_system_state_inner_request_add_validator">request_add_validator</a>(self.parameters.min_validator_joining_stake, ctx);
+    self.validators.<a href="../sui_system/sui_system_state_inner.md#sui_system_sui_system_state_inner_request_add_validator">request_add_validator</a>(ctx);
 }
 </code></pre>
 
@@ -2204,8 +2207,6 @@ gas coins.
         &<b>mut</b> storage_fund_reward,
         &<b>mut</b> self.validator_report_records,
         reward_slashing_rate,
-        self.parameters.validator_low_stake_threshold,
-        self.parameters.validator_very_low_stake_threshold,
         self.parameters.validator_low_stake_grace_period,
         ctx,
     );

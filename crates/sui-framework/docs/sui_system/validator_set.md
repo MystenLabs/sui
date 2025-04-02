@@ -9,11 +9,14 @@ title: Module `sui_system::validator_set`
 -  [Struct `ValidatorEpochInfoEventV2`](#sui_system_validator_set_ValidatorEpochInfoEventV2)
 -  [Struct `ValidatorJoinEvent`](#sui_system_validator_set_ValidatorJoinEvent)
 -  [Struct `ValidatorLeaveEvent`](#sui_system_validator_set_ValidatorLeaveEvent)
+-  [Struct `VotingPowerAdmissionStartEpochKey`](#sui_system_validator_set_VotingPowerAdmissionStartEpochKey)
 -  [Constants](#@Constants_0)
 -  [Function `new`](#sui_system_validator_set_new)
 -  [Function `request_add_validator_candidate`](#sui_system_validator_set_request_add_validator_candidate)
 -  [Function `request_remove_validator_candidate`](#sui_system_validator_set_request_remove_validator_candidate)
 -  [Function `request_add_validator`](#sui_system_validator_set_request_add_validator)
+-  [Function `can_join`](#sui_system_validator_set_can_join)
+-  [Function `get_voting_power_thresholds`](#sui_system_validator_set_get_voting_power_thresholds)
 -  [Function `assert_no_pending_or_active_duplicates`](#sui_system_validator_set_assert_no_pending_or_active_duplicates)
 -  [Function `request_remove_validator`](#sui_system_validator_set_request_remove_validator)
 -  [Function `request_add_stake`](#sui_system_validator_set_request_add_stake)
@@ -22,7 +25,7 @@ title: Module `sui_system::validator_set`
 -  [Function `redeem_fungible_staked_sui`](#sui_system_validator_set_redeem_fungible_staked_sui)
 -  [Function `request_set_commission_rate`](#sui_system_validator_set_request_set_commission_rate)
 -  [Function `advance_epoch`](#sui_system_validator_set_advance_epoch)
--  [Function `update_and_process_low_stake_departures`](#sui_system_validator_set_update_and_process_low_stake_departures)
+-  [Function `update_validator_positions_and_calculate_total_stake`](#sui_system_validator_set_update_validator_positions_and_calculate_total_stake)
 -  [Function `effectuate_staged_metadata`](#sui_system_validator_set_effectuate_staged_metadata)
 -  [Function `derive_reference_gas_price`](#sui_system_validator_set_derive_reference_gas_price)
 -  [Function `total_stake`](#sui_system_validator_set_total_stake)
@@ -57,7 +60,6 @@ title: Module `sui_system::validator_set`
 -  [Function `process_pending_removals`](#sui_system_validator_set_process_pending_removals)
 -  [Function `process_validator_departure`](#sui_system_validator_set_process_validator_departure)
 -  [Function `clean_report_records_leaving_validator`](#sui_system_validator_set_clean_report_records_leaving_validator)
--  [Function `process_pending_validators`](#sui_system_validator_set_process_pending_validators)
 -  [Function `sort_removal_list`](#sui_system_validator_set_sort_removal_list)
 -  [Function `process_pending_stakes_and_withdraws`](#sui_system_validator_set_process_pending_stakes_and_withdraws)
 -  [Function `calculate_total_stakes`](#sui_system_validator_set_calculate_total_stakes)
@@ -71,7 +73,9 @@ title: Module `sui_system::validator_set`
 -  [Function `sum_voting_power_by_addresses`](#sui_system_validator_set_sum_voting_power_by_addresses)
 -  [Function `active_validators`](#sui_system_validator_set_active_validators)
 -  [Function `is_validator_candidate`](#sui_system_validator_set_is_validator_candidate)
+-  [Function `is_active_validator`](#sui_system_validator_set_is_active_validator)
 -  [Function `is_inactive_validator`](#sui_system_validator_set_is_inactive_validator)
+-  [Function `is_at_risk_validator`](#sui_system_validator_set_is_at_risk_validator)
 -  [Function `active_validator_addresses`](#sui_system_validator_set_active_validator_addresses)
 
 
@@ -135,6 +139,7 @@ title: Module `sui_system::validator_set`
 </dt>
 <dd>
  Total amount of stake from all active validators at the beginning of the epoch.
+ Written only once per epoch, in <code><a href="../sui_system/validator_set.md#sui_system_validator_set_advance_epoch">advance_epoch</a></code> function.
 </dd>
 <dt>
 <code><a href="../sui_system/validator_set.md#sui_system_validator_set_active_validators">active_validators</a>: vector&lt;<a href="../sui_system/validator.md#sui_system_validator_Validator">sui_system::validator::Validator</a>&gt;</code>
@@ -428,6 +433,29 @@ The epoch value corresponds to the first epoch this change takes place.
 
 </details>
 
+<a name="sui_system_validator_set_VotingPowerAdmissionStartEpochKey"></a>
+
+## Struct `VotingPowerAdmissionStartEpochKey`
+
+Key for the <code>extra_fields</code> bag to store the start epoch of allowing admission
+of new validators based on a minimum voting power rather than a minimum stake.
+
+
+<pre><code><b>public</b> <b>struct</b> <a href="../sui_system/validator_set.md#sui_system_validator_set_VotingPowerAdmissionStartEpochKey">VotingPowerAdmissionStartEpochKey</a> <b>has</b> <b>copy</b>, drop, store
+</code></pre>
+
+
+
+<details>
+<summary>Fields</summary>
+
+
+<dl>
+</dl>
+
+
+</details>
+
 <a name="@Constants_0"></a>
 
 ## Constants
@@ -474,6 +502,15 @@ The epoch value corresponds to the first epoch this change takes place.
 
 
 <pre><code><b>const</b> <a href="../sui_system/validator_set.md#sui_system_validator_set_MIN_STAKING_THRESHOLD">MIN_STAKING_THRESHOLD</a>: u64 = 1000000000;
+</code></pre>
+
+
+
+<a name="sui_system_validator_set_PHASE_LENGTH"></a>
+
+
+
+<pre><code><b>const</b> <a href="../sui_system/validator_set.md#sui_system_validator_set_PHASE_LENGTH">PHASE_LENGTH</a>: u64 = 14;
 </code></pre>
 
 
@@ -649,7 +686,7 @@ The epoch value corresponds to the first epoch this change takes place.
         at_risk_validators: vec_map::empty(),
         extra_fields: bag::new(ctx),
     };
-    <a href="../sui_system/voting_power.md#sui_system_voting_power_set_voting_power">voting_power::set_voting_power</a>(&<b>mut</b> validators.<a href="../sui_system/validator_set.md#sui_system_validator_set_active_validators">active_validators</a>);
+    <a href="../sui_system/voting_power.md#sui_system_voting_power_set_voting_power">voting_power::set_voting_power</a>(&<b>mut</b> validators.<a href="../sui_system/validator_set.md#sui_system_validator_set_active_validators">active_validators</a>, <a href="../sui_system/validator_set.md#sui_system_validator_set_total_stake">total_stake</a>);
     validators
 }
 </code></pre>
@@ -755,7 +792,7 @@ Called by <code><a href="../sui_system/sui_system.md#sui_system_sui_system">sui_
 processed at the end of epoch.
 
 
-<pre><code><b>public</b>(package) <b>fun</b> <a href="../sui_system/validator_set.md#sui_system_validator_set_request_add_validator">request_add_validator</a>(self: &<b>mut</b> <a href="../sui_system/validator_set.md#sui_system_validator_set_ValidatorSet">sui_system::validator_set::ValidatorSet</a>, min_joining_stake_amount: u64, ctx: &<a href="../sui/tx_context.md#sui_tx_context_TxContext">sui::tx_context::TxContext</a>)
+<pre><code><b>public</b>(package) <b>fun</b> <a href="../sui_system/validator_set.md#sui_system_validator_set_request_add_validator">request_add_validator</a>(self: &<b>mut</b> <a href="../sui_system/validator_set.md#sui_system_validator_set_ValidatorSet">sui_system::validator_set::ValidatorSet</a>, ctx: &<a href="../sui/tx_context.md#sui_tx_context_TxContext">sui::tx_context::TxContext</a>)
 </code></pre>
 
 
@@ -764,7 +801,7 @@ processed at the end of epoch.
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b>(package) <b>fun</b> <a href="../sui_system/validator_set.md#sui_system_validator_set_request_add_validator">request_add_validator</a>(self: &<b>mut</b> <a href="../sui_system/validator_set.md#sui_system_validator_set_ValidatorSet">ValidatorSet</a>, min_joining_stake_amount: u64, ctx: &TxContext) {
+<pre><code><b>public</b>(package) <b>fun</b> <a href="../sui_system/validator_set.md#sui_system_validator_set_request_add_validator">request_add_validator</a>(self: &<b>mut</b> <a href="../sui_system/validator_set.md#sui_system_validator_set_ValidatorSet">ValidatorSet</a>, ctx: &TxContext) {
     <b>let</b> validator_address = ctx.sender();
     <b>assert</b>!(
         self.validator_candidates.contains(validator_address),
@@ -778,8 +815,72 @@ processed at the end of epoch.
         <a href="../sui_system/validator_set.md#sui_system_validator_set_EDuplicateValidator">EDuplicateValidator</a>
     );
     <b>assert</b>!(<a href="../sui_system/validator.md#sui_system_validator">validator</a>.is_preactive(), <a href="../sui_system/validator_set.md#sui_system_validator_set_EValidatorNotCandidate">EValidatorNotCandidate</a>);
-    <b>assert</b>!(<a href="../sui_system/validator.md#sui_system_validator">validator</a>.total_stake_amount() &gt;= min_joining_stake_amount, <a href="../sui_system/validator_set.md#sui_system_validator_set_EMinJoiningStakeNotReached">EMinJoiningStakeNotReached</a>);
+    <b>assert</b>!(self.<a href="../sui_system/validator_set.md#sui_system_validator_set_can_join">can_join</a>(<a href="../sui_system/validator.md#sui_system_validator">validator</a>.total_stake_amount(), ctx), <a href="../sui_system/validator_set.md#sui_system_validator_set_EMinJoiningStakeNotReached">EMinJoiningStakeNotReached</a>);
     self.pending_active_validators.push_back(<a href="../sui_system/validator.md#sui_system_validator">validator</a>);
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="sui_system_validator_set_can_join"></a>
+
+## Function `can_join`
+
+Return <code><b>true</b></code> if a  candidate validator with <code>stake</code> will have sufficeint voting power to join the validator set
+
+
+<pre><code><b>fun</b> <a href="../sui_system/validator_set.md#sui_system_validator_set_can_join">can_join</a>(self: &<a href="../sui_system/validator_set.md#sui_system_validator_set_ValidatorSet">sui_system::validator_set::ValidatorSet</a>, stake: u64, ctx: &<a href="../sui/tx_context.md#sui_tx_context_TxContext">sui::tx_context::TxContext</a>): bool
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>fun</b> <a href="../sui_system/validator_set.md#sui_system_validator_set_can_join">can_join</a>(self: &<a href="../sui_system/validator_set.md#sui_system_validator_set_ValidatorSet">ValidatorSet</a>, stake: u64, ctx: &TxContext): bool {
+    <b>let</b> (min_joining_voting_power, _, _) = self.<a href="../sui_system/validator_set.md#sui_system_validator_set_get_voting_power_thresholds">get_voting_power_thresholds</a>(ctx);
+    // <b>if</b> the <a href="../sui_system/validator.md#sui_system_validator">validator</a> will have at least `min_joining_voting_power` after joining, they can join.
+    // this formula comes from SIP-39: https://github.com/sui-foundation/sips/blob/main/sips/sip-39.md
+    <b>let</b> future_total_stake = self.<a href="../sui_system/validator_set.md#sui_system_validator_set_total_stake">total_stake</a> + stake;
+    <b>let</b> future_validator_voting_power = <a href="../sui_system/voting_power.md#sui_system_voting_power_derive_raw_voting_power">voting_power::derive_raw_voting_power</a>(stake, future_total_stake);
+    future_validator_voting_power &gt;= min_joining_voting_power
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="sui_system_validator_set_get_voting_power_thresholds"></a>
+
+## Function `get_voting_power_thresholds`
+
+return (min, low, very low voting power) thresholds
+
+
+<pre><code><b>fun</b> <a href="../sui_system/validator_set.md#sui_system_validator_set_get_voting_power_thresholds">get_voting_power_thresholds</a>(self: &<a href="../sui_system/validator_set.md#sui_system_validator_set_ValidatorSet">sui_system::validator_set::ValidatorSet</a>, ctx: &<a href="../sui/tx_context.md#sui_tx_context_TxContext">sui::tx_context::TxContext</a>): (u64, u64, u64)
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>fun</b> <a href="../sui_system/validator_set.md#sui_system_validator_set_get_voting_power_thresholds">get_voting_power_thresholds</a>(self: &<a href="../sui_system/validator_set.md#sui_system_validator_set_ValidatorSet">ValidatorSet</a>, ctx: &TxContext): (u64, u64, u64) {
+    <b>let</b> start_epoch = {
+        <b>let</b> key = <a href="../sui_system/validator_set.md#sui_system_validator_set_VotingPowerAdmissionStartEpochKey">VotingPowerAdmissionStartEpochKey</a>();
+        <b>if</b> (self.extra_fields.contains(key)) self.extra_fields[key]
+        <b>else</b> ctx.epoch() + 1 // will give us the phase 1 values
+    };
+    // these numbers come from SIP-39: https://github.com/sui-foundation/sips/blob/main/sips/sip-39.md
+    <b>let</b> curr_epoch = ctx.epoch();
+    <b>if</b> (curr_epoch &lt; start_epoch + <a href="../sui_system/validator_set.md#sui_system_validator_set_PHASE_LENGTH">PHASE_LENGTH</a>) (12, 8, 4) // phase 1
+    <b>else</b> <b>if</b> (curr_epoch &lt; start_epoch + (2 * <a href="../sui_system/validator_set.md#sui_system_validator_set_PHASE_LENGTH">PHASE_LENGTH</a>)) (6, 4, 2) // phase 2
+    <b>else</b> (3, 2, 1) // phase 3
 }
 </code></pre>
 
@@ -1054,7 +1155,7 @@ It does the following things:
 5. At the end, we calculate the total stake for the new epoch.
 
 
-<pre><code><b>public</b>(package) <b>fun</b> <a href="../sui_system/validator_set.md#sui_system_validator_set_advance_epoch">advance_epoch</a>(self: &<b>mut</b> <a href="../sui_system/validator_set.md#sui_system_validator_set_ValidatorSet">sui_system::validator_set::ValidatorSet</a>, computation_reward: &<b>mut</b> <a href="../sui/balance.md#sui_balance_Balance">sui::balance::Balance</a>&lt;<a href="../sui/sui.md#sui_sui_SUI">sui::sui::SUI</a>&gt;, storage_fund_reward: &<b>mut</b> <a href="../sui/balance.md#sui_balance_Balance">sui::balance::Balance</a>&lt;<a href="../sui/sui.md#sui_sui_SUI">sui::sui::SUI</a>&gt;, validator_report_records: &<b>mut</b> <a href="../sui/vec_map.md#sui_vec_map_VecMap">sui::vec_map::VecMap</a>&lt;<b>address</b>, <a href="../sui/vec_set.md#sui_vec_set_VecSet">sui::vec_set::VecSet</a>&lt;<b>address</b>&gt;&gt;, reward_slashing_rate: u64, low_stake_threshold: u64, very_low_stake_threshold: u64, low_stake_grace_period: u64, ctx: &<b>mut</b> <a href="../sui/tx_context.md#sui_tx_context_TxContext">sui::tx_context::TxContext</a>)
+<pre><code><b>public</b>(package) <b>fun</b> <a href="../sui_system/validator_set.md#sui_system_validator_set_advance_epoch">advance_epoch</a>(self: &<b>mut</b> <a href="../sui_system/validator_set.md#sui_system_validator_set_ValidatorSet">sui_system::validator_set::ValidatorSet</a>, computation_reward: &<b>mut</b> <a href="../sui/balance.md#sui_balance_Balance">sui::balance::Balance</a>&lt;<a href="../sui/sui.md#sui_sui_SUI">sui::sui::SUI</a>&gt;, storage_fund_reward: &<b>mut</b> <a href="../sui/balance.md#sui_balance_Balance">sui::balance::Balance</a>&lt;<a href="../sui/sui.md#sui_sui_SUI">sui::sui::SUI</a>&gt;, validator_report_records: &<b>mut</b> <a href="../sui/vec_map.md#sui_vec_map_VecMap">sui::vec_map::VecMap</a>&lt;<b>address</b>, <a href="../sui/vec_set.md#sui_vec_set_VecSet">sui::vec_set::VecSet</a>&lt;<b>address</b>&gt;&gt;, reward_slashing_rate: u64, low_stake_grace_period: u64, ctx: &<b>mut</b> <a href="../sui/tx_context.md#sui_tx_context_TxContext">sui::tx_context::TxContext</a>)
 </code></pre>
 
 
@@ -1069,13 +1170,14 @@ It does the following things:
     storage_fund_reward: &<b>mut</b> Balance&lt;SUI&gt;,
     validator_report_records: &<b>mut</b> VecMap&lt;<b>address</b>, VecSet&lt;<b>address</b>&gt;&gt;,
     reward_slashing_rate: u64,
-    low_stake_threshold: u64,
-    very_low_stake_threshold: u64,
     low_stake_grace_period: u64,
     ctx: &<b>mut</b> TxContext,
 ) {
     <b>let</b> new_epoch = ctx.epoch() + 1;
     <b>let</b> total_voting_power = <a href="../sui_system/voting_power.md#sui_system_voting_power_total_voting_power">voting_power::total_voting_power</a>();
+    // switch to using voting power based admission, <b>if</b> we are not already using it
+    <b>let</b> key = <a href="../sui_system/validator_set.md#sui_system_validator_set_VotingPowerAdmissionStartEpochKey">VotingPowerAdmissionStartEpochKey</a>();
+    <b>if</b> (!self.extra_fields.contains(key)) self.extra_fields.add(key, ctx.epoch());
     // Compute the reward distribution without taking into account the tallying rule slashing.
     <b>let</b> (unadjusted_staking_reward_amounts, unadjusted_storage_fund_reward_amounts) = <a href="../sui_system/validator_set.md#sui_system_validator_set_compute_unadjusted_reward_distribution">compute_unadjusted_reward_distribution</a>(
         &self.<a href="../sui_system/validator_set.md#sui_system_validator_set_active_validators">active_validators</a>,
@@ -1128,20 +1230,16 @@ It does the following things:
     // Emit events after we have processed all the rewards distribution and pending stakes.
     <a href="../sui_system/validator_set.md#sui_system_validator_set_emit_validator_epoch_events">emit_validator_epoch_events</a>(new_epoch, &self.<a href="../sui_system/validator_set.md#sui_system_validator_set_active_validators">active_validators</a>, &adjusted_staking_reward_amounts,
         &adjusted_storage_fund_reward_amounts, validator_report_records, &slashed_validators);
-    // Note that all their staged next epoch metadata will be effectuated below.
-    <a href="../sui_system/validator_set.md#sui_system_validator_set_process_pending_validators">process_pending_validators</a>(self, new_epoch);
     <a href="../sui_system/validator_set.md#sui_system_validator_set_process_pending_removals">process_pending_removals</a>(self, validator_report_records, ctx);
     // kick low stake validators out.
-    <a href="../sui_system/validator_set.md#sui_system_validator_set_update_and_process_low_stake_departures">update_and_process_low_stake_departures</a>(
+    <b>let</b> new_total_stake = <a href="../sui_system/validator_set.md#sui_system_validator_set_update_validator_positions_and_calculate_total_stake">update_validator_positions_and_calculate_total_stake</a>(
         self,
-        low_stake_threshold,
-        very_low_stake_threshold,
         low_stake_grace_period,
         validator_report_records,
         ctx
     );
-    self.<a href="../sui_system/validator_set.md#sui_system_validator_set_total_stake">total_stake</a> = <a href="../sui_system/validator_set.md#sui_system_validator_set_calculate_total_stakes">calculate_total_stakes</a>(&self.<a href="../sui_system/validator_set.md#sui_system_validator_set_active_validators">active_validators</a>);
-    <a href="../sui_system/voting_power.md#sui_system_voting_power_set_voting_power">voting_power::set_voting_power</a>(&<b>mut</b> self.<a href="../sui_system/validator_set.md#sui_system_validator_set_active_validators">active_validators</a>);
+    self.<a href="../sui_system/validator_set.md#sui_system_validator_set_total_stake">total_stake</a> = new_total_stake;
+    <a href="../sui_system/voting_power.md#sui_system_voting_power_set_voting_power">voting_power::set_voting_power</a>(&<b>mut</b> self.<a href="../sui_system/validator_set.md#sui_system_validator_set_active_validators">active_validators</a>, new_total_stake);
     // At this point, self.<a href="../sui_system/validator_set.md#sui_system_validator_set_active_validators">active_validators</a> are updated <b>for</b> next epoch.
     // Now we process the staged <a href="../sui_system/validator.md#sui_system_validator">validator</a> metadata.
     <a href="../sui_system/validator_set.md#sui_system_validator_set_effectuate_staged_metadata">effectuate_staged_metadata</a>(self);
@@ -1152,13 +1250,21 @@ It does the following things:
 
 </details>
 
-<a name="sui_system_validator_set_update_and_process_low_stake_departures"></a>
+<a name="sui_system_validator_set_update_validator_positions_and_calculate_total_stake"></a>
 
-## Function `update_and_process_low_stake_departures`
+## Function `update_validator_positions_and_calculate_total_stake`
+
+This function does the following:
+- removes validators from <code>at_risk</code> group if their voting power is above the LOW threshold
+- increments the number of epochs a validator has been below the LOW threshold but above the
+VERY LOW threshold
+- removes validators from the active set if they have been below the LOW threshold for more than
+<code>low_stake_grace_period</code> epochs
+- removes validators from the active set immediately if they are below the VERY LOW threshold
+- activates pending validators if they have sufficient voting power
 
 
-
-<pre><code><b>fun</b> <a href="../sui_system/validator_set.md#sui_system_validator_set_update_and_process_low_stake_departures">update_and_process_low_stake_departures</a>(self: &<b>mut</b> <a href="../sui_system/validator_set.md#sui_system_validator_set_ValidatorSet">sui_system::validator_set::ValidatorSet</a>, low_stake_threshold: u64, very_low_stake_threshold: u64, low_stake_grace_period: u64, validator_report_records: &<b>mut</b> <a href="../sui/vec_map.md#sui_vec_map_VecMap">sui::vec_map::VecMap</a>&lt;<b>address</b>, <a href="../sui/vec_set.md#sui_vec_set_VecSet">sui::vec_set::VecSet</a>&lt;<b>address</b>&gt;&gt;, ctx: &<b>mut</b> <a href="../sui/tx_context.md#sui_tx_context_TxContext">sui::tx_context::TxContext</a>)
+<pre><code><b>fun</b> <a href="../sui_system/validator_set.md#sui_system_validator_set_update_validator_positions_and_calculate_total_stake">update_validator_positions_and_calculate_total_stake</a>(self: &<b>mut</b> <a href="../sui_system/validator_set.md#sui_system_validator_set_ValidatorSet">sui_system::validator_set::ValidatorSet</a>, low_stake_grace_period: u64, validator_report_records: &<b>mut</b> <a href="../sui/vec_map.md#sui_vec_map_VecMap">sui::vec_map::VecMap</a>&lt;<b>address</b>, <a href="../sui/vec_set.md#sui_vec_set_VecSet">sui::vec_set::VecSet</a>&lt;<b>address</b>&gt;&gt;, ctx: &<b>mut</b> <a href="../sui/tx_context.md#sui_tx_context_TxContext">sui::tx_context::TxContext</a>): u64
 </code></pre>
 
 
@@ -1167,27 +1273,41 @@ It does the following things:
 <summary>Implementation</summary>
 
 
-<pre><code><b>fun</b> <a href="../sui_system/validator_set.md#sui_system_validator_set_update_and_process_low_stake_departures">update_and_process_low_stake_departures</a>(
+<pre><code><b>fun</b> <a href="../sui_system/validator_set.md#sui_system_validator_set_update_validator_positions_and_calculate_total_stake">update_validator_positions_and_calculate_total_stake</a>(
     self: &<b>mut</b> <a href="../sui_system/validator_set.md#sui_system_validator_set_ValidatorSet">ValidatorSet</a>,
-    low_stake_threshold: u64,
-    very_low_stake_threshold: u64,
     low_stake_grace_period: u64,
     validator_report_records: &<b>mut</b> VecMap&lt;<b>address</b>, VecSet&lt;<b>address</b>&gt;&gt;,
     ctx: &<b>mut</b> TxContext
-) {
+): u64 {
+    // take all pending validators out of the tablevec and put them in a local vector
+    <b>let</b> pending_active_validators = vector::tabulate!(
+        self.pending_active_validators.length(),
+        |_| self.pending_active_validators.pop_back()
+    );
+    // Note: we count the total stake of pending validators <b>as</b> well!
+    <b>let</b> pending_total_stake = <a href="../sui_system/validator_set.md#sui_system_validator_set_calculate_total_stakes">calculate_total_stakes</a>(&pending_active_validators);
+    <b>let</b> initial_total_stake = <a href="../sui_system/validator_set.md#sui_system_validator_set_calculate_total_stakes">calculate_total_stakes</a>(&self.<a href="../sui_system/validator_set.md#sui_system_validator_set_active_validators">active_validators</a>) + pending_total_stake;
+    <b>let</b> (min_joining_voting_power_threshold, low_voting_power_threshold, very_low_voting_power_threshold) = self.<a href="../sui_system/validator_set.md#sui_system_validator_set_get_voting_power_thresholds">get_voting_power_thresholds</a>(ctx);
     // Iterate through all the active validators, record their low stake status, and kick them out <b>if</b> the condition is met.
+    <b>let</b> <b>mut</b> total_removed_stake = 0; // amount of stake to remove due to departed_validators
     <b>let</b> <b>mut</b> i = self.<a href="../sui_system/validator_set.md#sui_system_validator_set_active_validators">active_validators</a>.length();
     <b>while</b> (i &gt; 0) {
         i = i - 1;
         <b>let</b> validator_ref = &self.<a href="../sui_system/validator_set.md#sui_system_validator_set_active_validators">active_validators</a>[i];
         <b>let</b> validator_address = validator_ref.sui_address();
-        <b>let</b> stake = validator_ref.total_stake_amount();
-        <b>if</b> (stake &gt;= low_stake_threshold) {
+        <b>let</b> validator_stake = validator_ref.total_stake_amount();
+        // calculate the voting power <b>for</b> this <a href="../sui_system/validator.md#sui_system_validator">validator</a> in the next epoch <b>if</b> no validators are removed
+        // <b>if</b> one of more low stake validators are removed, it's possible this <a href="../sui_system/validator.md#sui_system_validator">validator</a> will have higher voting power--that's ok.
+        <b>let</b> <a href="../sui_system/voting_power.md#sui_system_voting_power">voting_power</a> = <a href="../sui_system/voting_power.md#sui_system_voting_power_derive_raw_voting_power">voting_power::derive_raw_voting_power</a>(validator_stake, initial_total_stake);
+        // SIP-39: a <a href="../sui_system/validator.md#sui_system_validator">validator</a> can remain indefinitely with a voting power ≥ LOW_VOTING_POWER_THRESHOLD
+        <b>if</b> (<a href="../sui_system/voting_power.md#sui_system_voting_power">voting_power</a> &gt;= low_voting_power_threshold) {
             // The <a href="../sui_system/validator.md#sui_system_validator">validator</a> is safe. We remove their <b>entry</b> from the at_risk map <b>if</b> there exists one.
             <b>if</b> (self.at_risk_validators.contains(&validator_address)) {
                 self.at_risk_validators.remove(&validator_address);
             }
-        } <b>else</b> <b>if</b> (stake &gt;= very_low_stake_threshold) {
+        // SIP-39: <b>as</b> soon <b>as</b> the <a href="../sui_system/validator.md#sui_system_validator">validator</a>’s voting power falls to VERY_LOW_VOTING_POWER_THRESHOLD,
+        //      they are on probation and must acquire sufficient stake to recover to voting power
+        } <b>else</b> <b>if</b> (<a href="../sui_system/voting_power.md#sui_system_voting_power">voting_power</a> &gt;= very_low_voting_power_threshold) {
             // The stake is a bit below the threshold so we increment the <b>entry</b> of the <a href="../sui_system/validator.md#sui_system_validator">validator</a> in the map.
             <b>let</b> new_low_stake_period =
                 <b>if</b> (self.at_risk_validators.contains(&validator_address)) {
@@ -1201,14 +1321,60 @@ It does the following things:
             // If the grace period <b>has</b> passed, the <a href="../sui_system/validator.md#sui_system_validator">validator</a> <b>has</b> to leave us.
             <b>if</b> (new_low_stake_period &gt; low_stake_grace_period) {
                 <b>let</b> <a href="../sui_system/validator.md#sui_system_validator">validator</a> = self.<a href="../sui_system/validator_set.md#sui_system_validator_set_active_validators">active_validators</a>.remove(i);
-                <a href="../sui_system/validator_set.md#sui_system_validator_set_process_validator_departure">process_validator_departure</a>(self, <a href="../sui_system/validator.md#sui_system_validator">validator</a>, validator_report_records, <b>false</b> /* the <a href="../sui_system/validator.md#sui_system_validator">validator</a> is kicked out involuntarily */, ctx);
+                <b>let</b> removed_stake = self.<a href="../sui_system/validator_set.md#sui_system_validator_set_process_validator_departure">process_validator_departure</a>(
+                    <a href="../sui_system/validator.md#sui_system_validator">validator</a>,
+                    validator_report_records,
+                    <b>false</b> /* the <a href="../sui_system/validator.md#sui_system_validator">validator</a> is kicked out involuntarily */,
+                    ctx
+                );
+                total_removed_stake = total_removed_stake + removed_stake;
             }
+        // SIP-39: at the end of an epoch when <a href="../sui_system/validator_set.md#sui_system_validator_set_new">new</a> voting powers are computed based on stake changes,
+        //      any <a href="../sui_system/validator.md#sui_system_validator">validator</a> with VOTING_POWER &lt; VERY_LOW_VOTING_POWER_THRESHOLD will be removed
         } <b>else</b> {
             // The <a href="../sui_system/validator.md#sui_system_validator">validator</a>'s stake is lower than the very low threshold so we kick them out immediately.
             <b>let</b> <a href="../sui_system/validator.md#sui_system_validator">validator</a> = self.<a href="../sui_system/validator_set.md#sui_system_validator_set_active_validators">active_validators</a>.remove(i);
-            <a href="../sui_system/validator_set.md#sui_system_validator_set_process_validator_departure">process_validator_departure</a>(self, <a href="../sui_system/validator.md#sui_system_validator">validator</a>, validator_report_records, <b>false</b> /* the <a href="../sui_system/validator.md#sui_system_validator">validator</a> is kicked out involuntarily */, ctx);
+            <b>let</b> removed_stake = self.<a href="../sui_system/validator_set.md#sui_system_validator_set_process_validator_departure">process_validator_departure</a>(
+                <a href="../sui_system/validator.md#sui_system_validator">validator</a>,
+                validator_report_records,
+                <b>false</b> /* the <a href="../sui_system/validator.md#sui_system_validator">validator</a> is kicked out involuntarily */,
+                ctx
+            );
+            total_removed_stake = total_removed_stake + removed_stake;
         }
-    }
+    };
+    // check that pending validators still have sufficient stake to be added. this was checked at
+    // the time of <a href="../sui_system/validator_set.md#sui_system_validator_set_request_add_validator">request_add_validator</a>, but stake may have been withdrawn, or stakes of other
+    // validators may have increased significantly
+    pending_active_validators.do!(|<b>mut</b> <a href="../sui_system/validator.md#sui_system_validator">validator</a>| {
+        <b>let</b> validator_stake = <a href="../sui_system/validator.md#sui_system_validator">validator</a>.total_stake_amount();
+        <b>let</b> <a href="../sui_system/voting_power.md#sui_system_voting_power">voting_power</a> = <a href="../sui_system/voting_power.md#sui_system_voting_power_derive_raw_voting_power">voting_power::derive_raw_voting_power</a>(
+            validator_stake,
+            initial_total_stake
+        );
+        <b>if</b> (<a href="../sui_system/voting_power.md#sui_system_voting_power">voting_power</a> &gt;= min_joining_voting_power_threshold) {
+            <a href="../sui_system/validator.md#sui_system_validator">validator</a>.activate(ctx.epoch());
+            event::emit(
+                <a href="../sui_system/validator_set.md#sui_system_validator_set_ValidatorJoinEvent">ValidatorJoinEvent</a> {
+                    epoch: ctx.epoch(),
+                    validator_address: <a href="../sui_system/validator.md#sui_system_validator">validator</a>.sui_address(),
+                    staking_pool_id: staking_pool_id(&<a href="../sui_system/validator.md#sui_system_validator">validator</a>),
+                }
+            );
+            self.<a href="../sui_system/validator_set.md#sui_system_validator_set_active_validators">active_validators</a>.push_back(<a href="../sui_system/validator.md#sui_system_validator">validator</a>);
+        } <b>else</b> {
+            // <b>return</b> <a href="../sui_system/validator.md#sui_system_validator">validator</a> object to the candidate pool. want to do this directly instead of
+            // calling <a href="../sui_system/validator_set.md#sui_system_validator_set_request_add_validator_candidate">request_add_validator_candidate</a> because <a href="../sui_system/validator_set.md#sui_system_validator_set_staking_pool_mappings">staking_pool_mappings</a> already <b>has</b> an
+            // <b>entry</b> <b>for</b> this <a href="../sui_system/validator.md#sui_system_validator">validator</a>, and the duplicate checks are redundant
+            self.validator_candidates.add(
+                <a href="../sui_system/validator.md#sui_system_validator">validator</a>.sui_address(),
+                <a href="../sui_system/validator_wrapper.md#sui_system_validator_wrapper_create_v1">validator_wrapper::create_v1</a>(<a href="../sui_system/validator.md#sui_system_validator">validator</a>, ctx)
+            );
+            total_removed_stake = total_removed_stake + validator_stake;
+        }
+    });
+    // <a href="../sui_system/validator_set.md#sui_system_validator_set_new">new</a> total stake is the initial total minus the amount removed via validators we kicked out
+    initial_total_stake - total_removed_stake
 }
 </code></pre>
 
@@ -1232,9 +1398,7 @@ Effectutate pending next epoch metadata if they are staged.
 <summary>Implementation</summary>
 
 
-<pre><code><b>fun</b> <a href="../sui_system/validator_set.md#sui_system_validator_set_effectuate_staged_metadata">effectuate_staged_metadata</a>(
-    self: &<b>mut</b> <a href="../sui_system/validator_set.md#sui_system_validator_set_ValidatorSet">ValidatorSet</a>,
-) {
+<pre><code><b>fun</b> <a href="../sui_system/validator_set.md#sui_system_validator_set_effectuate_staged_metadata">effectuate_staged_metadata</a>(self: &<b>mut</b> <a href="../sui_system/validator_set.md#sui_system_validator_set_ValidatorSet">ValidatorSet</a>) {
     <b>let</b> num_validators = self.<a href="../sui_system/validator_set.md#sui_system_validator_set_active_validators">active_validators</a>.length();
     <b>let</b> <b>mut</b> i = 0;
     <b>while</b> (i &lt; num_validators) {
@@ -1504,7 +1668,7 @@ gas price, weighted by stake.
             <b>let</b> wrapper = &<b>mut</b> self.inactive_validators[*pool_id];
             wrapper.load_validator_maybe_upgrade()
         };
-<a href="../sui_system/validator.md#sui_system_validator">validator</a>.get_staking_pool_ref().exchange_rates()
+    <a href="../sui_system/validator.md#sui_system_validator">validator</a>.get_staking_pool_ref().exchange_rates()
 }
 </code></pre>
 
@@ -2210,9 +2374,10 @@ is removed from <code>validators</code> and its staking pool is put into the <co
 
 ## Function `process_validator_departure`
 
+Remove <code><a href="../sui_system/validator.md#sui_system_validator">validator</a></code> from <code>self</code> and return the amount of stake that was removed
 
 
-<pre><code><b>fun</b> <a href="../sui_system/validator_set.md#sui_system_validator_set_process_validator_departure">process_validator_departure</a>(self: &<b>mut</b> <a href="../sui_system/validator_set.md#sui_system_validator_set_ValidatorSet">sui_system::validator_set::ValidatorSet</a>, <a href="../sui_system/validator.md#sui_system_validator">validator</a>: <a href="../sui_system/validator.md#sui_system_validator_Validator">sui_system::validator::Validator</a>, validator_report_records: &<b>mut</b> <a href="../sui/vec_map.md#sui_vec_map_VecMap">sui::vec_map::VecMap</a>&lt;<b>address</b>, <a href="../sui/vec_set.md#sui_vec_set_VecSet">sui::vec_set::VecSet</a>&lt;<b>address</b>&gt;&gt;, is_voluntary: bool, ctx: &<b>mut</b> <a href="../sui/tx_context.md#sui_tx_context_TxContext">sui::tx_context::TxContext</a>)
+<pre><code><b>fun</b> <a href="../sui_system/validator_set.md#sui_system_validator_set_process_validator_departure">process_validator_departure</a>(self: &<b>mut</b> <a href="../sui_system/validator_set.md#sui_system_validator_set_ValidatorSet">sui_system::validator_set::ValidatorSet</a>, <a href="../sui_system/validator.md#sui_system_validator">validator</a>: <a href="../sui_system/validator.md#sui_system_validator_Validator">sui_system::validator::Validator</a>, validator_report_records: &<b>mut</b> <a href="../sui/vec_map.md#sui_vec_map_VecMap">sui::vec_map::VecMap</a>&lt;<b>address</b>, <a href="../sui/vec_set.md#sui_vec_set_VecSet">sui::vec_set::VecSet</a>&lt;<b>address</b>&gt;&gt;, is_voluntary: bool, ctx: &<b>mut</b> <a href="../sui/tx_context.md#sui_tx_context_TxContext">sui::tx_context::TxContext</a>): u64
 </code></pre>
 
 
@@ -2227,7 +2392,7 @@ is removed from <code>validators</code> and its staking pool is put into the <co
     validator_report_records: &<b>mut</b> VecMap&lt;<b>address</b>, VecSet&lt;<b>address</b>&gt;&gt;,
     is_voluntary: bool,
     ctx: &<b>mut</b> TxContext,
-) {
+): u64 {
     <b>let</b> new_epoch = ctx.epoch() + 1;
     <b>let</b> validator_address = <a href="../sui_system/validator.md#sui_system_validator">validator</a>.sui_address();
     <b>let</b> validator_pool_id = staking_pool_id(&<a href="../sui_system/validator.md#sui_system_validator">validator</a>);
@@ -2236,7 +2401,6 @@ is removed from <code>validators</code> and its staking pool is put into the <co
     <b>if</b> (self.at_risk_validators.contains(&validator_address)) {
         self.at_risk_validators.remove(&validator_address);
     };
-    self.<a href="../sui_system/validator_set.md#sui_system_validator_set_total_stake">total_stake</a> = self.<a href="../sui_system/validator_set.md#sui_system_validator_set_total_stake">total_stake</a> - <a href="../sui_system/validator.md#sui_system_validator">validator</a>.total_stake_amount();
     <a href="../sui_system/validator_set.md#sui_system_validator_set_clean_report_records_leaving_validator">clean_report_records_leaving_validator</a>(validator_report_records, validator_address);
     event::emit(
         <a href="../sui_system/validator_set.md#sui_system_validator_set_ValidatorLeaveEvent">ValidatorLeaveEvent</a> {
@@ -2247,11 +2411,13 @@ is removed from <code>validators</code> and its staking pool is put into the <co
         }
     );
     // Deactivate the <a href="../sui_system/validator.md#sui_system_validator">validator</a> and its staking pool
+    <b>let</b> removed_stake = <a href="../sui_system/validator.md#sui_system_validator">validator</a>.total_stake_amount();
     <a href="../sui_system/validator.md#sui_system_validator">validator</a>.deactivate(new_epoch);
     self.inactive_validators.add(
         validator_pool_id,
         <a href="../sui_system/validator_wrapper.md#sui_system_validator_wrapper_create_v1">validator_wrapper::create_v1</a>(<a href="../sui_system/validator.md#sui_system_validator">validator</a>, ctx),
     );
+    removed_stake
 }
 </code></pre>
 
@@ -2296,44 +2462,6 @@ is removed from <code>validators</code> and its staking pool is put into the <co
             };
         };
         i = i + 1;
-    }
-}
-</code></pre>
-
-
-
-</details>
-
-<a name="sui_system_validator_set_process_pending_validators"></a>
-
-## Function `process_pending_validators`
-
-Process the pending new validators. They are activated and inserted into <code>validators</code>.
-
-
-<pre><code><b>fun</b> <a href="../sui_system/validator_set.md#sui_system_validator_set_process_pending_validators">process_pending_validators</a>(self: &<b>mut</b> <a href="../sui_system/validator_set.md#sui_system_validator_set_ValidatorSet">sui_system::validator_set::ValidatorSet</a>, new_epoch: u64)
-</code></pre>
-
-
-
-<details>
-<summary>Implementation</summary>
-
-
-<pre><code><b>fun</b> <a href="../sui_system/validator_set.md#sui_system_validator_set_process_pending_validators">process_pending_validators</a>(
-    self: &<b>mut</b> <a href="../sui_system/validator_set.md#sui_system_validator_set_ValidatorSet">ValidatorSet</a>, new_epoch: u64,
-) {
-    <b>while</b> (!self.pending_active_validators.is_empty()) {
-        <b>let</b> <b>mut</b> <a href="../sui_system/validator.md#sui_system_validator">validator</a> = self.pending_active_validators.pop_back();
-        <a href="../sui_system/validator.md#sui_system_validator">validator</a>.activate(new_epoch);
-        event::emit(
-            <a href="../sui_system/validator_set.md#sui_system_validator_set_ValidatorJoinEvent">ValidatorJoinEvent</a> {
-                epoch: new_epoch,
-                validator_address: <a href="../sui_system/validator.md#sui_system_validator">validator</a>.sui_address(),
-                staking_pool_id: staking_pool_id(&<a href="../sui_system/validator.md#sui_system_validator">validator</a>),
-            }
-        );
-        self.<a href="../sui_system/validator_set.md#sui_system_validator_set_active_validators">active_validators</a>.push_back(<a href="../sui_system/validator.md#sui_system_validator">validator</a>);
     }
 }
 </code></pre>
@@ -2421,7 +2549,7 @@ Process all active validators' pending stake deposits and withdraws.
 Calculate the total active validator stake.
 
 
-<pre><code><b>fun</b> <a href="../sui_system/validator_set.md#sui_system_validator_set_calculate_total_stakes">calculate_total_stakes</a>(validators: &vector&lt;<a href="../sui_system/validator.md#sui_system_validator_Validator">sui_system::validator::Validator</a>&gt;): u64
+<pre><code><b>public</b>(package) <b>fun</b> <a href="../sui_system/validator_set.md#sui_system_validator_set_calculate_total_stakes">calculate_total_stakes</a>(validators: &vector&lt;<a href="../sui_system/validator.md#sui_system_validator_Validator">sui_system::validator::Validator</a>&gt;): u64
 </code></pre>
 
 
@@ -2430,7 +2558,7 @@ Calculate the total active validator stake.
 <summary>Implementation</summary>
 
 
-<pre><code><b>fun</b> <a href="../sui_system/validator_set.md#sui_system_validator_set_calculate_total_stakes">calculate_total_stakes</a>(validators: &vector&lt;Validator&gt;): u64 {
+<pre><code><b>public</b>(package) <b>fun</b> <a href="../sui_system/validator_set.md#sui_system_validator_set_calculate_total_stakes">calculate_total_stakes</a>(validators: &vector&lt;Validator&gt;): u64 {
     <b>let</b> <b>mut</b> stake = 0;
     <b>let</b> length = validators.length();
     <b>let</b> <b>mut</b> i = 0;
@@ -2914,6 +3042,31 @@ Returns true if the <code>addr</code> is a validator candidate.
 
 </details>
 
+<a name="sui_system_validator_set_is_active_validator"></a>
+
+## Function `is_active_validator`
+
+Returns true if <code>addr</code> is an active validator
+
+
+<pre><code><b>public</b>(package) <b>fun</b> <a href="../sui_system/validator_set.md#sui_system_validator_set_is_active_validator">is_active_validator</a>(self: &<a href="../sui_system/validator_set.md#sui_system_validator_set_ValidatorSet">sui_system::validator_set::ValidatorSet</a>, addr: <b>address</b>): bool
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b>(package) <b>fun</b> <a href="../sui_system/validator_set.md#sui_system_validator_set_is_active_validator">is_active_validator</a>(self: &<a href="../sui_system/validator_set.md#sui_system_validator_set_ValidatorSet">ValidatorSet</a>, addr: <b>address</b>): bool {
+    self.<a href="../sui_system/validator_set.md#sui_system_validator_set_active_validators">active_validators</a>.any!(|v| v.sui_address() == addr)
+}
+</code></pre>
+
+
+
+</details>
+
 <a name="sui_system_validator_set_is_inactive_validator"></a>
 
 ## Function `is_inactive_validator`
@@ -2932,6 +3085,31 @@ Returns true if the staking pool identified by <code>staking_pool_id</code> is o
 
 <pre><code><b>public</b> <b>fun</b> <a href="../sui_system/validator_set.md#sui_system_validator_set_is_inactive_validator">is_inactive_validator</a>(self: &<a href="../sui_system/validator_set.md#sui_system_validator_set_ValidatorSet">ValidatorSet</a>, staking_pool_id: ID): bool {
     self.inactive_validators.contains(staking_pool_id)
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="sui_system_validator_set_is_at_risk_validator"></a>
+
+## Function `is_at_risk_validator`
+
+Return true if <code>addr</code> is currently an at-risk validator below the minimum stake for removal
+
+
+<pre><code><b>public</b>(package) <b>fun</b> <a href="../sui_system/validator_set.md#sui_system_validator_set_is_at_risk_validator">is_at_risk_validator</a>(self: &<a href="../sui_system/validator_set.md#sui_system_validator_set_ValidatorSet">sui_system::validator_set::ValidatorSet</a>, addr: <b>address</b>): bool
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b>(package) <b>fun</b> <a href="../sui_system/validator_set.md#sui_system_validator_set_is_at_risk_validator">is_at_risk_validator</a>(self: &<a href="../sui_system/validator_set.md#sui_system_validator_set_ValidatorSet">ValidatorSet</a>, addr: <b>address</b>): bool {
+    self.at_risk_validators.contains(&addr)
 }
 </code></pre>
 

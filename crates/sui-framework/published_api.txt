@@ -421,8 +421,8 @@ set_voting_power
 init_voting_power_info
 	fun
 	0x3::voting_power
-total_stake
-	fun
+derive_raw_voting_power
+	public(package) fun
 	0x3::voting_power
 insert
 	fun
@@ -475,6 +475,9 @@ ValidatorJoinEvent
 ValidatorLeaveEvent
 	public struct
 	0x3::validator_set
+VotingPowerAdmissionStartEpochKey
+	public struct
+	0x3::validator_set
 new
 	public(package) fun
 	0x3::validator_set
@@ -486,6 +489,12 @@ request_remove_validator_candidate
 	0x3::validator_set
 request_add_validator
 	public(package) fun
+	0x3::validator_set
+can_join
+	fun
+	0x3::validator_set
+get_voting_power_thresholds
+	fun
 	0x3::validator_set
 assert_no_pending_or_active_duplicates
 	public(package) fun
@@ -511,7 +520,7 @@ request_set_commission_rate
 advance_epoch
 	public(package) fun
 	0x3::validator_set
-update_and_process_low_stake_departures
+update_validator_positions_and_calculate_total_stake
 	fun
 	0x3::validator_set
 effectuate_staged_metadata
@@ -616,9 +625,6 @@ process_validator_departure
 clean_report_records_leaving_validator
 	fun
 	0x3::validator_set
-process_pending_validators
-	fun
-	0x3::validator_set
 sort_removal_list
 	fun
 	0x3::validator_set
@@ -626,7 +632,7 @@ process_pending_stakes_and_withdraws
 	fun
 	0x3::validator_set
 calculate_total_stakes
-	fun
+	public(package) fun
 	0x3::validator_set
 adjust_stake_and_gas_price
 	fun
@@ -658,8 +664,14 @@ active_validators
 is_validator_candidate
 	public fun
 	0x3::validator_set
+is_active_validator
+	public(package) fun
+	0x3::validator_set
 is_inactive_validator
 	public fun
+	0x3::validator_set
+is_at_risk_validator
+	public(package) fun
 	0x3::validator_set
 active_validator_addresses
 	public(package) fun
