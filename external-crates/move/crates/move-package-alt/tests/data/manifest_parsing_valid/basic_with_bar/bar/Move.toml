@@ -1,0 +1,13 @@
+[package]
+name = "bar"
+edition = "2024.beta"
+authors = ["Move Team"]
+license = "Apache-2.0"
+implicit-deps = true
+
+[environments]
+mainnet = "35834a8a"
+
+[dependencies]
+Sui = { local = "../../../../../../../../../crates/sui-framework/packages/sui-framework"}
+
