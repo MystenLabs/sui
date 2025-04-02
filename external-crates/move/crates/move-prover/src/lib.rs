@@ -59,6 +59,9 @@ pub fn run_move_prover<W: WriteColor>(
 
     let mut filter = None;
     if options.prover.stable_test_output {
+        // NOTE: This initializes a warning filter that suppresses all warnings.
+        // `WarningFilter::All(None)` means filtering out *all* warnings, 
+        // related to Move compiling regardless of their category or origin.
         let mut f = WarningFiltersBuilder::new_for_source();
         f.add(WarningFilter::All(None));
         filter = Some(f);
