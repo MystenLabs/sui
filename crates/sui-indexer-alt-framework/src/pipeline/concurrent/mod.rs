@@ -4,6 +4,7 @@
 use std::{sync::Arc, time::Duration};
 
 use serde::{Deserialize, Serialize};
+use sui_field_count::FieldCount;
 use tokio::{sync::mpsc, task::JoinHandle};
 use tokio_util::sync::CancellationToken;
 use tracing::info;
@@ -12,7 +13,6 @@ use crate::{
     metrics::IndexerMetrics,
     store::{CommitterWatermark, Store},
     types::full_checkpoint_content::CheckpointData,
-    FieldCount,
 };
 
 use super::{processor::processor, CommitterConfig, Processor, WatermarkPart, PIPELINE_BUFFER};

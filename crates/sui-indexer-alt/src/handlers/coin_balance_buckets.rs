@@ -8,15 +8,14 @@ use diesel::sql_query;
 use diesel_async::RunQueryDsl;
 use sui_indexer_alt_framework::{
     pipeline::{concurrent::Handler, Processor},
+    postgres::{FieldCount, PgStore},
     store::Store,
-    sui_indexer_alt_framework_store_pg::pg_store::PgStore,
     types::{
         base_types::{ObjectID, SuiAddress},
         full_checkpoint_content::CheckpointData,
         object::{Object, Owner},
         TypeTag,
     },
-    FieldCount,
 };
 use sui_indexer_alt_schema::{
     objects::{StoredCoinBalanceBucket, StoredCoinOwnerKind},
@@ -315,7 +314,7 @@ mod tests {
             object::{Authenticator, MoveObject, Object},
             test_checkpoint_data_builder::TestCheckpointDataBuilder,
         },
-        Indexer,
+        Indexer, IndexerPostgresExt,
     };
     use sui_indexer_alt_schema::MIGRATIONS;
     use sui_protocol_config::ProtocolConfig;

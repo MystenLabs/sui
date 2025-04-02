@@ -9,8 +9,8 @@ use diesel::{ExpressionMethods, QueryDsl};
 use diesel_async::RunQueryDsl;
 use sui_indexer_alt_framework::{
     pipeline::{concurrent::Handler, Processor},
+    postgres::PgStore,
     store::Store,
-    sui_indexer_alt_framework_store_pg::pg_store::PgStore,
     types::full_checkpoint_content::CheckpointData,
 };
 use sui_indexer_alt_schema::{events::StoredEvEmitMod, schema::ev_emit_mod};
@@ -93,7 +93,7 @@ mod tests {
     use diesel_async::RunQueryDsl;
     use sui_indexer_alt_framework::{
         types::{event::Event, test_checkpoint_data_builder::TestCheckpointDataBuilder},
-        Indexer,
+        Indexer, IndexerPostgresExt,
     };
     use sui_indexer_alt_schema::MIGRATIONS;
 

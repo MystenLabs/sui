@@ -8,10 +8,9 @@ use diesel::sql_query;
 use diesel_async::RunQueryDsl;
 use sui_indexer_alt_framework::{
     pipeline::{concurrent::Handler, Processor},
+    postgres::{FieldCount, PgStore},
     store::Store,
-    sui_indexer_alt_framework_store_pg::pg_store::PgStore,
     types::{base_types::ObjectID, full_checkpoint_content::CheckpointData, object::Object},
-    FieldCount,
 };
 use sui_indexer_alt_schema::{objects::StoredObjInfoTemp, schema::obj_info_temp};
 
@@ -205,7 +204,7 @@ mod tests {
             object::{Authenticator, Owner},
             test_checkpoint_data_builder::TestCheckpointDataBuilder,
         },
-        Indexer,
+        Indexer, IndexerPostgresExt,
     };
     use sui_indexer_alt_schema::{objects::StoredOwnerKind, MIGRATIONS};
 

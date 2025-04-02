@@ -194,14 +194,15 @@ pub(super) fn collector<H: Handler + 'static>(
 }
 
 #[cfg(test)]
+#[cfg(feature = "postgres")]
 mod tests {
+    use sui_field_count::FieldCount;
 
     use crate::{
         metrics::tests::test_metrics,
         pipeline::{concurrent::max_chunk_rows, Processor},
         store::Store,
         types::full_checkpoint_content::CheckpointData,
-        FieldCount,
     };
 
     use super::*;
@@ -214,8 +215,8 @@ mod tests {
         const FIELD_COUNT: usize = 32;
     }
 
+    use crate::postgres::PgStore;
     use std::time::Duration;
-    use sui_indexer_alt_framework_store_pg::pg_store::PgStore;
     use tokio::sync::mpsc;
 
     struct TestHandler;

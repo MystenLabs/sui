@@ -9,10 +9,9 @@ use diesel_async::RunQueryDsl;
 use futures::future::try_join_all;
 use sui_indexer_alt_framework::{
     pipeline::{sequential::Handler, Processor},
+    postgres::{FieldCount, PgStore},
     store::Store,
-    sui_indexer_alt_framework_store_pg::pg_store::PgStore,
     types::full_checkpoint_content::CheckpointData,
-    FieldCount,
 };
 use sui_indexer_alt_schema::{packages::StoredPackage, schema::sum_packages};
 

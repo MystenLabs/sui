@@ -8,10 +8,9 @@ use diesel::sql_query;
 use diesel_async::RunQueryDsl;
 use sui_indexer_alt_framework::{
     pipeline::{concurrent::Handler, Processor},
+    postgres::{FieldCount, PgStore},
     store::Store,
-    sui_indexer_alt_framework_store_pg::pg_store::PgStore,
     types::{base_types::ObjectID, full_checkpoint_content::CheckpointData, object::Object},
-    FieldCount,
 };
 use sui_indexer_alt_schema::{objects::StoredObjInfo, schema::obj_info};
 
@@ -199,13 +198,12 @@ impl TryInto<StoredObjInfo> for &ProcessedObjInfo {
 #[cfg(test)]
 mod tests {
     use sui_indexer_alt_framework::{
-        db,
         types::{
             base_types::{dbg_addr, SequenceNumber},
             object::{Authenticator, Owner},
             test_checkpoint_data_builder::TestCheckpointDataBuilder,
         },
-        Indexer,
+        Indexer, IndexerPostgresExt,
     };
     use sui_indexer_alt_schema::{objects::StoredOwnerKind, MIGRATIONS};
 
@@ -213,7 +211,9 @@ mod tests {
 
     // A helper function to return all entries in the obj_info table sorted by object_id and
     // cp_sequence_number.
-    async fn get_all_obj_info(conn: &mut db::Connection<'_>) -> Result<Vec<StoredObjInfo>> {
+    async fn get_all_obj_info(
+        conn: &mut <PgStore as Store>::Connection<'_>,
+    ) -> Result<Vec<StoredObjInfo>> {
         let query = obj_info::table.load(conn).await?;
         Ok(query)
     }

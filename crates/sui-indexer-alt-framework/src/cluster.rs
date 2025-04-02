@@ -49,7 +49,6 @@ pub struct IndexerCluster<S: Store> {
 }
 
 impl<S: Store> IndexerCluster<S> {
-    // TODO (wlmyng): probably want to feature gate this to postgres
     /// Create a new cluster with most of the configuration set to its default value. Use
     /// [Self::new_with_configs] to construct a cluster with full customization.
     pub async fn new(store: S, args: Args) -> Result<Self> {
@@ -150,7 +149,10 @@ impl<S: Store> DerefMut for IndexerCluster<S> {
 }
 
 #[cfg(test)]
+#[cfg(feature = "postgres")]
 mod tests {
+    use crate::postgres::IndexerPostgresExt;
+
     use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 
     use diesel::{Insertable, QueryDsl, Queryable};
@@ -160,12 +162,12 @@ mod tests {
     use sui_synthetic_ingestion::synthetic_ingestion;
     use tempfile::tempdir;
 
-    use crate::db::temp::{get_available_port, TempDb};
-    use crate::db::Db;
     use crate::pipeline::concurrent::{self, ConcurrentConfig};
     use crate::pipeline::Processor;
+    use crate::postgres::temp::{get_available_port, TempDb};
+    use crate::postgres::Db;
     use crate::types::full_checkpoint_content::CheckpointData;
-    use crate::FieldCount;
+    use sui_field_count::FieldCount;
     use sui_indexer_alt_framework_store_traits::Store;
 
     use super::*;

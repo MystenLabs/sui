@@ -30,15 +30,14 @@ use handlers::{
 };
 use prometheus::Registry;
 use sui_indexer_alt_framework::{
-    db::{Db, DbArgs},
     ingestion::{ClientArgs, IngestionConfig},
     pipeline::{
         concurrent::{ConcurrentConfig, PrunerConfig},
         sequential::SequentialConfig,
         CommitterConfig,
     },
-    sui_indexer_alt_framework_store_pg::pg_store::PgStore,
-    Indexer, IndexerArgs,
+    postgres::{Db, DbArgs, PgStore},
+    Indexer, IndexerArgs, IndexerPostgresExt,
 };
 use sui_indexer_alt_metrics::db::DbConnectionStatsCollector;
 use sui_indexer_alt_schema::MIGRATIONS;
