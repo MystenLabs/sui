@@ -149,6 +149,8 @@ impl Event {
         _transaction_digest: TransactionDigest,
         _position: usize,
     ) -> Digest {
+        // TODO(deepak): Is digest format sufficient? Or do we need to commit to tx_digest and position?
+        // I don't think so, but let me know.
         let mut h = Blake2b256::new();
         bcs::serialize_into(&mut h, &self).unwrap();
         let digest = h.finalize();

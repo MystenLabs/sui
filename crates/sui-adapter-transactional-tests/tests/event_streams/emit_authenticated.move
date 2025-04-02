@@ -52,6 +52,10 @@ module test::event_streams {
 
 //# view-object 2,0
 
+// TODO(deepak): you can add more event emits here for testing
+// Run the test with:
+// $ cargo nextest run -p sui-adapter-transactional-tests emit_authenticated
+
 //# run test::event_streams::emit_event --sender A --args object(2,0) 10
 
 //# create-checkpoint

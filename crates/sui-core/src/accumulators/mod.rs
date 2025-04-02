@@ -62,7 +62,7 @@ impl From<MergedValueIntermediate> for MergedValue {
             MergedValueIntermediate::Sum(v) => MergedValue::Sum(v),
             MergedValueIntermediate::SumTuple(v1, v2) => MergedValue::SumTuple(v1, v2),
             MergedValueIntermediate::Events(events) => {
-                // TODO: merkle tree
+                // TODO(deepak): merkle tree?
                 let mut h = Blake2b256::new();
                 bcs::serialize_into(&mut h, &events).unwrap();
                 MergedValue::EventDigest(Digest::new(h.finalize().digest))
