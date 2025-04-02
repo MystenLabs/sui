@@ -6,10 +6,11 @@ use anyhow::Result;
 use crossbeam::channel::{bounded, select};
 use lsp_server::{Connection, Message, Notification, Request, Response};
 use lsp_types::{
-    notification::Notification as _, request::Request as _, CompletionOptions, Diagnostic,
-    HoverProviderCapability, InlayHintOptions, InlayHintServerCapabilities, OneOf, SaveOptions,
-    TextDocumentSyncCapability, TextDocumentSyncKind, TextDocumentSyncOptions,
-    TypeDefinitionProviderCapability, WorkDoneProgressOptions,
+    notification::Notification as _, request::Request as _, CodeActionKind, CodeActionOptions,
+    CodeActionProviderCapability, CompletionOptions, Diagnostic, HoverProviderCapability,
+    InlayHintOptions, InlayHintServerCapabilities, OneOf, SaveOptions, TextDocumentSyncCapability,
+    TextDocumentSyncKind, TextDocumentSyncOptions, TypeDefinitionProviderCapability,
+    WorkDoneProgressOptions,
 };
 use move_compiler::linters::LintLevel;
 use move_package::source_package::parsed_manifest::Dependencies;
@@ -20,7 +21,7 @@ use std::{
 };
 
 use crate::{
-    completions::on_completion_request, context::Context, inlay_hints, symbols,
+    code_action, completions::on_completion_request, context::Context, inlay_hints, symbols,
     vfs::on_text_document_sync_notification,
 };
 use url::Url;
@@ -108,6 +109,13 @@ pub fn run(implicit_deps: Dependencies) {
                 resolve_provider: None,
             },
         ))),
+        code_action_provider: Some(CodeActionProviderCapability::Options(CodeActionOptions {
+            code_action_kinds: Some(vec![CodeActionKind::QUICKFIX]),
+            work_done_progress_options: WorkDoneProgressOptions {
+                work_done_progress: None,
+            },
+            resolve_provider: None,
+        })),
         ..Default::default()
     })
     .expect("could not serialize server capabilities");
@@ -327,6 +335,15 @@ fn on_request(
         }
         lsp_types::request::InlayHintRequest::METHOD => {
             inlay_hints::on_inlay_hint_request(context, request);
+        }
+        lsp_types::request::CodeActionRequest::METHOD => {
+            code_action::on_code_action_request(
+                context,
+                request,
+                ide_files_root.clone(),
+                pkg_dependencies,
+                implicit_deps,
+            );
         }
         lsp_types::request::Shutdown::METHOD => {
             eprintln!("Shutdown request received");
