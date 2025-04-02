@@ -8,10 +8,9 @@ use diesel::sql_query;
 use diesel_async::RunQueryDsl;
 use sui_indexer_alt_framework::{
     pipeline::{concurrent::Handler, Processor},
+    postgres::{FieldCount, PgStore},
     store::Store,
-    sui_indexer_alt_framework_store_pg::pg_store::PgStore,
     types::{base_types::ObjectID, full_checkpoint_content::CheckpointData, object::Object},
-    FieldCount,
 };
 use sui_indexer_alt_schema::{objects::StoredObjInfoTemp, schema::obj_info_temp};
 
@@ -205,7 +204,7 @@ mod tests {
             object::{Authenticator, Owner},
             test_checkpoint_data_builder::TestCheckpointDataBuilder,
         },
-        Indexer,
+        Indexer, IndexerPostgresExt,
     };
     use sui_indexer_alt_schema::{objects::StoredOwnerKind, MIGRATIONS};
 
@@ -222,8 +221,8 @@ mod tests {
 
     #[tokio::test]
     async fn test_process_basics() {
-        let (indexer, _db) = Indexer::new_for_testing(&MIGRATIONS).await;
-        let mut conn = indexer.db().connect().await.unwrap();
+        let (indexer, _db) = Indexer::<PgStore>::new_for_testing(&MIGRATIONS).await;
+        let mut conn = indexer.store().connect().await.unwrap();
         let obj_info_temp = ObjInfoTemp::default();
         let mut builder = TestCheckpointDataBuilder::new(0);
         builder = builder
@@ -337,8 +336,8 @@ mod tests {
 
     #[tokio::test]
     async fn test_process_noop() {
-        let (indexer, _db) = Indexer::new_for_testing(&MIGRATIONS).await;
-        let mut conn = indexer.db().connect().await.unwrap();
+        let (indexer, _db) = Indexer::<PgStore>::new_for_testing(&MIGRATIONS).await;
+        let mut conn = indexer.store().connect().await.unwrap();
         let obj_info_temp = ObjInfoTemp::default();
         // In this checkpoint, an object is created and deleted in the same checkpoint.
         // We expect that no updates are made to the table.
@@ -364,8 +363,8 @@ mod tests {
 
     #[tokio::test]
     async fn test_process_wrap() {
-        let (indexer, _db) = Indexer::new_for_testing(&MIGRATIONS).await;
-        let mut conn = indexer.db().connect().await.unwrap();
+        let (indexer, _db) = Indexer::<PgStore>::new_for_testing(&MIGRATIONS).await;
+        let mut conn = indexer.store().connect().await.unwrap();
         let obj_info_temp = ObjInfoTemp::default();
         let mut builder = TestCheckpointDataBuilder::new(0)
             .start_transaction(0)
@@ -435,8 +434,8 @@ mod tests {
 
     #[tokio::test]
     async fn test_process_shared_object() {
-        let (indexer, _db) = Indexer::new_for_testing(&MIGRATIONS).await;
-        let mut conn = indexer.db().connect().await.unwrap();
+        let (indexer, _db) = Indexer::<PgStore>::new_for_testing(&MIGRATIONS).await;
+        let mut conn = indexer.store().connect().await.unwrap();
         let obj_info_temp = ObjInfoTemp::default();
         let mut builder = TestCheckpointDataBuilder::new(0)
             .start_transaction(0)
@@ -469,8 +468,8 @@ mod tests {
 
     #[tokio::test]
     async fn test_process_immutable_object() {
-        let (indexer, _db) = Indexer::new_for_testing(&MIGRATIONS).await;
-        let mut conn = indexer.db().connect().await.unwrap();
+        let (indexer, _db) = Indexer::<PgStore>::new_for_testing(&MIGRATIONS).await;
+        let mut conn = indexer.store().connect().await.unwrap();
         let obj_info_temp = ObjInfoTemp::default();
         let mut builder = TestCheckpointDataBuilder::new(0)
             .start_transaction(0)
@@ -511,8 +510,8 @@ mod tests {
 
     #[tokio::test]
     async fn test_process_object_owned_object() {
-        let (indexer, _db) = Indexer::new_for_testing(&MIGRATIONS).await;
-        let mut conn = indexer.db().connect().await.unwrap();
+        let (indexer, _db) = Indexer::<PgStore>::new_for_testing(&MIGRATIONS).await;
+        let mut conn = indexer.store().connect().await.unwrap();
         let obj_info_temp = ObjInfoTemp::default();
         let mut builder = TestCheckpointDataBuilder::new(0)
             .start_transaction(0)
@@ -556,8 +555,8 @@ mod tests {
 
     #[tokio::test]
     async fn test_process_consensus_v2_object() {
-        let (indexer, _db) = Indexer::new_for_testing(&MIGRATIONS).await;
-        let mut conn = indexer.db().connect().await.unwrap();
+        let (indexer, _db) = Indexer::<PgStore>::new_for_testing(&MIGRATIONS).await;
+        let mut conn = indexer.store().connect().await.unwrap();
         let obj_info_temp = ObjInfoTemp::default();
         let mut builder = TestCheckpointDataBuilder::new(0)
             .start_transaction(0)
@@ -611,8 +610,8 @@ mod tests {
 
     #[tokio::test]
     async fn test_obj_info_temp_batch_prune() {
-        let (indexer, _db) = Indexer::new_for_testing(&MIGRATIONS).await;
-        let mut conn = indexer.db().connect().await.unwrap();
+        let (indexer, _db) = Indexer::<PgStore>::new_for_testing(&MIGRATIONS).await;
+        let mut conn = indexer.store().connect().await.unwrap();
         let obj_info_temp = ObjInfoTemp::default();
         let mut builder = TestCheckpointDataBuilder::new(0);
         builder = builder
@@ -648,8 +647,8 @@ mod tests {
 
     #[tokio::test]
     async fn test_obj_info_temp_prune_with_missing_data() {
-        let (indexer, _db) = Indexer::new_for_testing(&MIGRATIONS).await;
-        let mut conn = indexer.db().connect().await.unwrap();
+        let (indexer, _db) = Indexer::<PgStore>::new_for_testing(&MIGRATIONS).await;
+        let mut conn = indexer.store().connect().await.unwrap();
         let obj_info_temp = ObjInfoTemp::default();
         let mut builder = TestCheckpointDataBuilder::new(0);
         builder = builder

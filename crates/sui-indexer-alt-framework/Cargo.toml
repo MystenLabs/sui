@@ -30,17 +30,18 @@ tokio-util.workspace = true
 tracing.workspace = true
 tracing-subscriber = { workspace = true, optional = true }
 url.workspace = true
-
-sui-field-count.workspace = true
 sui-indexer-alt-metrics.workspace = true
-sui-pg-db.workspace = true
-sui-sql-macro.workspace = true
 sui-storage.workspace = true
 sui-types.workspace = true
 sui-rpc-api.workspace = true
-sui-indexer-alt-framework-store-pg.workspace = true
 sui-indexer-alt-framework-store-traits.workspace = true
 tonic.workspace = true
+sui-field-count.workspace = true
+
+sui-indexer-alt-framework-store-pg = { workspace = true, optional = true }
+sui-pg-db = { workspace = true, optional = true }
+sui-sql-macro = { workspace = true, optional = true }
+
 
 [dev-dependencies]
 rand.workspace = true
@@ -52,3 +53,8 @@ sui-synthetic-ingestion.workspace = true
 [features]
 default = ["cluster"]
 cluster = ["dep:tracing-subscriber"]
+postgres = [
+    "dep:sui-indexer-alt-framework-store-pg",
+    "dep:sui-pg-db",
+    "dep:sui-sql-macro",
+]

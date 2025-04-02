@@ -4,6 +4,7 @@
 use std::{sync::Arc, time::Duration};
 
 use serde::{Deserialize, Serialize};
+use sui_field_count::FieldCount;
 use tokio::{sync::mpsc, task::JoinHandle};
 use tokio_util::sync::CancellationToken;
 use tracing::info;
@@ -12,7 +13,6 @@ use crate::{
     metrics::IndexerMetrics,
     store::{CommitterWatermark, Store},
     types::full_checkpoint_content::CheckpointData,
-    FieldCount,
 };
 
 use super::{processor::processor, CommitterConfig, Processor, WatermarkPart, PIPELINE_BUFFER};
@@ -201,7 +201,7 @@ pub(crate) fn pipeline<H: Handler + Send + Sync + 'static>(
     initial_commit_watermark: Option<CommitterWatermark>,
     config: ConcurrentConfig,
     skip_watermark: bool,
-    db: H::Store,
+    store: H::Store,
     checkpoint_rx: mpsc::Receiver<Arc<CheckpointData>>,
     metrics: Arc<IndexerMetrics>,
     cancel: CancellationToken,
@@ -249,7 +249,7 @@ pub(crate) fn pipeline<H: Handler + Send + Sync + 'static>(
         skip_watermark,
         committer_rx,
         committer_tx,
-        db.clone(),
+        store.clone(),
         metrics.clone(),
         cancel.clone(),
     );
@@ -259,19 +259,25 @@ pub(crate) fn pipeline<H: Handler + Send + Sync + 'static>(
         committer_config,
         skip_watermark,
         watermark_rx,
-        db.clone(),
+        store.clone(),
         metrics.clone(),
         cancel,
     );
 
     let reader_watermark = reader_watermark::<H>(
         pruner_config.clone(),
-        db.clone(),
+        store.clone(),
         metrics.clone(),
         pruner_cancel.clone(),
     );
 
-    let pruner = pruner(handler, pruner_config, db, metrics, pruner_cancel.clone());
+    let pruner = pruner(
+        handler,
+        pruner_config,
+        store,
+        metrics,
+        pruner_cancel.clone(),
+    );
 
     tokio::spawn(async move {
         let (_, _, _, _) = futures::join!(processor, collector, committer, commit_watermark);

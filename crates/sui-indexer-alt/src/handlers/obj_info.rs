@@ -8,10 +8,9 @@ use diesel::sql_query;
 use diesel_async::RunQueryDsl;
 use sui_indexer_alt_framework::{
     pipeline::{concurrent::Handler, Processor},
+    postgres::{FieldCount, PgStore},
     store::Store,
-    sui_indexer_alt_framework_store_pg::pg_store::PgStore,
     types::{base_types::ObjectID, full_checkpoint_content::CheckpointData, object::Object},
-    FieldCount,
 };
 use sui_indexer_alt_schema::{objects::StoredObjInfo, schema::obj_info};
 
@@ -199,13 +198,12 @@ impl TryInto<StoredObjInfo> for &ProcessedObjInfo {
 #[cfg(test)]
 mod tests {
     use sui_indexer_alt_framework::{
-        db,
         types::{
             base_types::{dbg_addr, SequenceNumber},
             object::{Authenticator, Owner},
             test_checkpoint_data_builder::TestCheckpointDataBuilder,
         },
-        Indexer,
+        Indexer, IndexerPostgresExt,
     };
     use sui_indexer_alt_schema::{objects::StoredOwnerKind, MIGRATIONS};
 
@@ -213,15 +211,17 @@ mod tests {
 
     // A helper function to return all entries in the obj_info table sorted by object_id and
     // cp_sequence_number.
-    async fn get_all_obj_info(conn: &mut db::Connection<'_>) -> Result<Vec<StoredObjInfo>> {
+    async fn get_all_obj_info(
+        conn: &mut <PgStore as Store>::Connection<'_>,
+    ) -> Result<Vec<StoredObjInfo>> {
         let query = obj_info::table.load(conn).await?;
         Ok(query)
     }
 
     #[tokio::test]
     async fn test_process_basics() {
-        let (indexer, _db) = Indexer::new_for_testing(&MIGRATIONS).await;
-        let mut conn = indexer.db().connect().await.unwrap();
+        let (indexer, _db) = Indexer::<PgStore>::new_for_testing(&MIGRATIONS).await;
+        let mut conn = indexer.store().connect().await.unwrap();
         let obj_info = ObjInfo::default();
         let mut builder = TestCheckpointDataBuilder::new(0);
         builder = builder
@@ -329,8 +329,8 @@ mod tests {
 
     #[tokio::test]
     async fn test_process_noop() {
-        let (indexer, _db) = Indexer::new_for_testing(&MIGRATIONS).await;
-        let mut conn = indexer.db().connect().await.unwrap();
+        let (indexer, _db) = Indexer::<PgStore>::new_for_testing(&MIGRATIONS).await;
+        let mut conn = indexer.store().connect().await.unwrap();
         let obj_info = ObjInfo::default();
         // In this checkpoint, an object is created and deleted in the same checkpoint.
         // We expect that no updates are made to the table.
@@ -356,8 +356,8 @@ mod tests {
 
     #[tokio::test]
     async fn test_process_wrap() {
-        let (indexer, _db) = Indexer::new_for_testing(&MIGRATIONS).await;
-        let mut conn = indexer.db().connect().await.unwrap();
+        let (indexer, _db) = Indexer::<PgStore>::new_for_testing(&MIGRATIONS).await;
+        let mut conn = indexer.store().connect().await.unwrap();
         let obj_info = ObjInfo::default();
         let mut builder = TestCheckpointDataBuilder::new(0)
             .start_transaction(0)
@@ -427,8 +427,8 @@ mod tests {
 
     #[tokio::test]
     async fn test_process_shared_object() {
-        let (indexer, _db) = Indexer::new_for_testing(&MIGRATIONS).await;
-        let mut conn = indexer.db().connect().await.unwrap();
+        let (indexer, _db) = Indexer::<PgStore>::new_for_testing(&MIGRATIONS).await;
+        let mut conn = indexer.store().connect().await.unwrap();
         let obj_info = ObjInfo::default();
         let mut builder = TestCheckpointDataBuilder::new(0)
             .start_transaction(0)
@@ -458,8 +458,8 @@ mod tests {
 
     #[tokio::test]
     async fn test_process_immutable_object() {
-        let (indexer, _db) = Indexer::new_for_testing(&MIGRATIONS).await;
-        let mut conn = indexer.db().connect().await.unwrap();
+        let (indexer, _db) = Indexer::<PgStore>::new_for_testing(&MIGRATIONS).await;
+        let mut conn = indexer.store().connect().await.unwrap();
         let obj_info = ObjInfo::default();
         let mut builder = TestCheckpointDataBuilder::new(0)
             .start_transaction(0)
@@ -497,8 +497,8 @@ mod tests {
 
     #[tokio::test]
     async fn test_process_object_owned_object() {
-        let (indexer, _db) = Indexer::new_for_testing(&MIGRATIONS).await;
-        let mut conn = indexer.db().connect().await.unwrap();
+        let (indexer, _db) = Indexer::<PgStore>::new_for_testing(&MIGRATIONS).await;
+        let mut conn = indexer.store().connect().await.unwrap();
         let obj_info = ObjInfo::default();
         let mut builder = TestCheckpointDataBuilder::new(0)
             .start_transaction(0)
@@ -539,8 +539,8 @@ mod tests {
 
     #[tokio::test]
     async fn test_process_consensus_v2_object() {
-        let (indexer, _db) = Indexer::new_for_testing(&MIGRATIONS).await;
-        let mut conn = indexer.db().connect().await.unwrap();
+        let (indexer, _db) = Indexer::<PgStore>::new_for_testing(&MIGRATIONS).await;
+        let mut conn = indexer.store().connect().await.unwrap();
         let obj_info = ObjInfo::default();
         let mut builder = TestCheckpointDataBuilder::new(0)
             .start_transaction(0)
@@ -591,8 +591,8 @@ mod tests {
 
     #[tokio::test]
     async fn test_obj_info_batch_prune() {
-        let (indexer, _db) = Indexer::new_for_testing(&MIGRATIONS).await;
-        let mut conn = indexer.db().connect().await.unwrap();
+        let (indexer, _db) = Indexer::<PgStore>::new_for_testing(&MIGRATIONS).await;
+        let mut conn = indexer.store().connect().await.unwrap();
         let obj_info = ObjInfo::default();
         let mut builder = TestCheckpointDataBuilder::new(0);
         builder = builder
@@ -628,8 +628,8 @@ mod tests {
 
     #[tokio::test]
     async fn test_obj_info_prune_with_missing_data() {
-        let (indexer, _db) = Indexer::new_for_testing(&MIGRATIONS).await;
-        let mut conn = indexer.db().connect().await.unwrap();
+        let (indexer, _db) = Indexer::<PgStore>::new_for_testing(&MIGRATIONS).await;
+        let mut conn = indexer.store().connect().await.unwrap();
         let obj_info = ObjInfo::default();
         let mut builder = TestCheckpointDataBuilder::new(0);
         builder = builder
