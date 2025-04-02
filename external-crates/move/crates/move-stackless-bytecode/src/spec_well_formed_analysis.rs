@@ -209,14 +209,6 @@ impl FunctionTargetProcessor for SpecWellFormedAnalysisProcessor {
         }
 
         for i in 0..spec_params.len() {
-            if spec_params[i].0 != underlying_params[i].0 {
-                env.diag(
-                    Severity::Warning,
-                    &func_env.get_loc(),
-                    "Spec function signature have differ type params names than underlying func",
-                );
-            }
-
             if spec_params[i].1 != underlying_params[i].1 {
                 env.diag(
                     Severity::Error,
@@ -226,17 +218,17 @@ impl FunctionTargetProcessor for SpecWellFormedAnalysisProcessor {
 
                 return data;
             }
-        }
 
-        for i in 0..spec_type_params.len() {
-            if spec_type_params[i].0 != underlying_type_params[i].0 {
+            if spec_params[i].0 != underlying_params[i].0 {
                 env.diag(
                     Severity::Warning,
                     &func_env.get_loc(),
-                    "Spec function signature have differ params names than underlying func",
+                    "Spec function signature have differ params name than underlying func",
                 );
             }
+        }
 
+        for i in 0..spec_type_params.len() {
             if spec_type_params[i].1 != underlying_type_params[i].1 {
                 env.diag(
                     Severity::Error,
@@ -246,10 +238,28 @@ impl FunctionTargetProcessor for SpecWellFormedAnalysisProcessor {
 
                 return data;
             }
+
+            if spec_type_params[i].0 != underlying_type_params[i].0 {
+                env.diag(
+                    Severity::Warning,
+                    &func_env.get_loc(),
+                    "Spec function signature have differ type params name than underlying func",
+                );
+            }
         }
 
         let spec_return_types = func_env.get_return_types();
         let underlying_return_types = underlying_func.get_return_types();
+
+        if spec_return_types.len() != underlying_return_types.len() {
+            env.diag(
+                Severity::Error,
+                &func_env.get_loc(),
+                "Spec function have differ return types count than underlying func",
+            );
+
+            return data;
+        }
 
         for i in 0..spec_return_types.len() {
             if spec_return_types[i] != underlying_return_types[i] {
