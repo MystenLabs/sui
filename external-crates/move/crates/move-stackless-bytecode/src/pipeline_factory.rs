@@ -3,7 +3,33 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
-    borrow_analysis::BorrowAnalysisProcessor, clean_and_optimize::CleanAndOptimizeProcessor, spec_well_formed_analysis::SpecWellFormedAnalysisProcessor, debug_instrumentation::DebugInstrumenter, eliminate_imm_refs::EliminateImmRefsProcessor, function_target_pipeline::{FunctionTargetPipeline, FunctionTargetProcessor}, inconsistency_check::InconsistencyCheckInstrumenter, livevar_analysis::LiveVarAnalysisProcessor, loop_analysis::LoopAnalysisProcessor, memory_instrumentation::MemoryInstrumentationProcessor, mono_analysis::MonoAnalysisProcessor, move_loop_invariants::MoveLoopInvariantsProcessor, mut_ref_instrumentation::MutRefInstrumenter, mutation_tester::MutationTester, number_operation_analysis::NumberOperationProcessor, options::ProverOptions, reaching_def_analysis::ReachingDefProcessor, spec_global_variable_analysis::SpecGlobalVariableAnalysisProcessor, spec_instrumentation::SpecInstrumentationProcessor, type_invariant_analysis::TypeInvariantAnalysisProcessor, usage_analysis::UsageProcessor, verification_analysis::VerificationAnalysisProcessor, well_formed_instrumentation::WellFormedInstrumentationProcessor
+    borrow_analysis::BorrowAnalysisProcessor,
+    clean_and_optimize::CleanAndOptimizeProcessor,
+    // data_invariant_instrumentation::DataInvariantInstrumentationProcessor,
+    debug_instrumentation::DebugInstrumenter,
+    eliminate_imm_refs::EliminateImmRefsProcessor,
+    function_target_pipeline::{FunctionTargetPipeline, FunctionTargetProcessor},
+    // global_invariant_analysis::GlobalInvariantAnalysisProcessor,
+    // global_invariant_instrumentation::GlobalInvariantInstrumentationProcessor,
+    inconsistency_check::InconsistencyCheckInstrumenter,
+    livevar_analysis::LiveVarAnalysisProcessor,
+    loop_analysis::LoopAnalysisProcessor,
+    memory_instrumentation::MemoryInstrumentationProcessor,
+    mono_analysis::MonoAnalysisProcessor,
+    move_loop_invariants::MoveLoopInvariantsProcessor,
+    mut_ref_instrumentation::MutRefInstrumenter,
+    mutation_tester::MutationTester,
+    number_operation_analysis::NumberOperationProcessor,
+    options::ProverOptions,
+    reaching_def_analysis::ReachingDefProcessor,
+    spec_global_variable_analysis::SpecGlobalVariableAnalysisProcessor,
+    spec_instrumentation::SpecInstrumentationProcessor,
+    type_invariant_analysis::TypeInvariantAnalysisProcessor,
+    usage_analysis::UsageProcessor,
+    verification_analysis::VerificationAnalysisProcessor,
+    well_formed_instrumentation::WellFormedInstrumentationProcessor,
+    spec_well_formed_analysis::SpecWellFormedAnalysisProcessor,
+    spec_purity_analysis::SpecPurityAnalysis,
 };
 
 pub fn default_pipeline_with_options(options: &ProverOptions) -> FunctionTargetPipeline {
@@ -23,6 +49,7 @@ pub fn default_pipeline_with_options(options: &ProverOptions) -> FunctionTargetP
         UsageProcessor::new(),
         TypeInvariantAnalysisProcessor::new(),
         VerificationAnalysisProcessor::new(),
+        SpecPurityAnalysis::new(),
         SpecWellFormedAnalysisProcessor::new(),
     ];
 
