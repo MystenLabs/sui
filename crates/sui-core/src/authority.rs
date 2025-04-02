@@ -1828,7 +1828,7 @@ impl AuthorityState {
             });
         }
 
-        if transaction.kind().is_system_tx() {
+        if transaction.is_system_tx() {
             return Err(SuiError::UnsupportedFeatureError {
                 error: "dry-exec does not support system transactions".to_string(),
             });
@@ -2041,7 +2041,7 @@ impl AuthorityState {
         &self,
         transaction: TransactionData,
     ) -> SuiResult<SimulateTransactionResult> {
-        if transaction.kind().is_system_tx() {
+        if transaction.is_system_tx() {
             return Err(SuiError::UnsupportedFeatureError {
                 error: "simulate does not support system transactions".to_string(),
             });
@@ -2189,12 +2189,6 @@ impl AuthorityState {
             });
         }
 
-        if transaction_kind.is_system_tx() {
-            return Err(SuiError::UnsupportedFeatureError {
-                error: "system transactions are not supported".to_string(),
-            });
-        }
-
         let show_raw_txn_data_and_effects = show_raw_txn_data_and_effects.unwrap_or(false);
         let skip_checks = skip_checks.unwrap_or(true);
         let reference_gas_price = epoch_store.reference_gas_price();
@@ -2217,6 +2211,12 @@ impl AuthorityState {
             },
             expiration: TransactionExpiration::None,
         });
+
+        if transaction.is_system_tx() {
+            return Err(SuiError::UnsupportedFeatureError {
+                error: "system transactions are not supported".to_string(),
+            });
+        }
 
         let raw_txn_data = if show_raw_txn_data_and_effects {
             bcs::to_bytes(&transaction).map_err(|_| SuiError::TransactionSerializationError {

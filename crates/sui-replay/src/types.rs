@@ -16,7 +16,7 @@ use sui_types::base_types::{ObjectID, ObjectRef, SequenceNumber, SuiAddress, Ver
 use sui_types::digests::{ObjectDigest, TransactionDigest};
 use sui_types::error::{SuiError, SuiObjectResponseError, SuiResult, UserInputError};
 use sui_types::object::Object;
-use sui_types::transaction::{InputObjectKind, SenderSignedData, TransactionKind};
+use sui_types::transaction::{is_system_tx, InputObjectKind, SenderSignedData, TransactionKind};
 use thiserror::Error;
 use tokio::time::Duration;
 use tracing::{error, warn};
@@ -66,6 +66,12 @@ pub struct OnChainTransactionInfo {
     pub reference_gas_price: u64,
     #[serde(default = "unspecified_chain")]
     pub chain: Chain,
+}
+
+impl OnChainTransactionInfo {
+    pub fn is_system_tx(&self) -> bool {
+        is_system_tx(&self.kind, self.sender)
+    }
 }
 
 fn unspecified_chain() -> Chain {

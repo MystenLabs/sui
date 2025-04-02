@@ -76,7 +76,7 @@ pub fn execute_transaction_to_effects(
     let protocol_config = &executor.protocol_config;
     let epoch = expected_effects.executed_epoch();
     let epoch_start_timestamp = env.epoch_timestamp(epoch)?;
-    let gas_status = if txn_data.kind().is_system_tx() {
+    let gas_status = if txn_data.is_system_tx() {
         SuiGasStatus::new_unmetered()
     } else {
         let reference_gas_price = env.rgp(epoch)?;
