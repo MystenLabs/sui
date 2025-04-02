@@ -2,20 +2,24 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use super::{ast as T, env::Env};
-use crate::programmable_transactions::context::EitherError;
+use crate::{
+    programmable_transactions::context::EitherError,
+    static_programmable_transactions::env::datatype_qualified_ident,
+};
 use move_core_types::language_storage::StructTag;
 use move_vm_types::loaded_data::runtime_types::{CachedDatatype, Type};
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::BTreeMap;
 use sui_types::{
-    coin::{COIN_MODULE_NAME, COIN_STRUCT_NAME},
+    base_types::TxContextKind,
+    coin::RESOLVED_COIN_STRUCT,
     error::{command_argument_error, ExecutionError},
     execution_status::CommandArgumentError,
     transaction::{self as P, CallArg, ObjectArg},
-    SUI_FRAMEWORK_ADDRESS,
 };
 
 struct Context {
-    gathered_input_types: BTreeMap<u16, BTreeSet<Type>>,
+    current_command: u16,
+    gathered_input_types: BTreeMap<u16, BTreeMap<Type, (u16, u16)>>,
     inputs: Vec<(CallArg, InputType)>,
     results: Vec<T::ResultType>,
 }
@@ -26,13 +30,17 @@ enum InputType {
 }
 
 enum LocationType<'env, 'context: 'env> {
-    Bytes(&'context mut InputType, &'context mut BTreeSet<Type>),
+    Bytes(
+        &'context mut InputType,
+        &'context mut BTreeMap<Type, (u16, u16)>,
+    ),
     Fixed(&'env Type),
 }
 
 impl Context {
     fn new(env: &Env, input_args: Vec<CallArg>) -> Result<Self, ExecutionError> {
         let mut context = Context {
+            current_command: 0,
             gathered_input_types: BTreeMap::new(),
             inputs: vec![],
             results: vec![],
@@ -44,14 +52,14 @@ impl Context {
                 let idx = i as u16;
                 let ty = match &arg {
                     CallArg::Pure(_) | CallArg::Object(ObjectArg::Receiving(_)) => {
-                        context.gathered_input_types.insert(idx, BTreeSet::new());
+                        context.gathered_input_types.insert(idx, BTreeMap::new());
                         InputType::Bytes
                     }
                     CallArg::Object(
                         ObjectArg::ImmOrOwnedObject((id, _, _))
                         | ObjectArg::SharedObject { id, .. },
                     ) => {
-                        let obj = env.read_object(&id)?;
+                        let obj = env.read_object(id)?;
                         let Some(ty) = obj.type_() else {
                             invariant_violation!("Object {:?} has does not have a Move type", id);
                         };
@@ -115,7 +123,10 @@ pub fn translate(
     let commands = commands
         .into_iter()
         .enumerate()
-        .map(|(i, c)| command(env, &mut context, c).map_err(|e| e.with_command_index(i)))
+        .map(|(i, c)| {
+            context.current_command = i as u16;
+            command(env, &mut context, c).map_err(|e| e.with_command_index(i))
+        })
         .collect::<Result<Vec<_>, _>>()?;
     let inputs = context.finish();
     Ok(T::Transaction { inputs, commands })
@@ -137,11 +148,19 @@ fn command(
             } = *pmc;
             let type_arguments = ptype_arguments
                 .into_iter()
-                .map(|ty| env.load_type_input(ty))
+                .enumerate()
+                .map(|(idx, ty)| env.load_type_input(idx, ty))
                 .collect::<Result<Vec<_>, _>>()?;
             let function = env.load_function(package, module, name, type_arguments)?;
             let arg_locs = locations(context, 0, pargs)?;
-            let args = arguments(env, context, 0, arg_locs, &function.signature.parameters)?;
+            let parameter_tys = match function.tx_context {
+                TxContextKind::None => &function.signature.parameters,
+                TxContextKind::Mutable | TxContextKind::Immutable => {
+                    let n = function.signature.parameters.len();
+                    &function.signature.parameters[0..n - 1]
+                }
+            };
+            let args = arguments(env, context, 0, arg_locs, parameter_tys)?;
             let result = function.signature.return_.clone();
             (
                 T::Command::MoveCall(Box::new(T::MoveCall {
@@ -154,7 +173,10 @@ fn command(
         P::Command::TransferObjects(pobjects, paddress) => {
             let object_locs = locations(context, 0, pobjects)?;
             let address_loc = one_location(context, object_locs.len(), paddress)?;
-            let objects = object_arguments(env, context, 0, object_locs)?;
+            let objects = constrained_arguments(env, context, 0, object_locs, |ty| {
+                let abilities = env.abilities(ty)?;
+                Ok(abilities.has_copy() && abilities.has_key())
+            })?;
             let address = argument(env, context, objects.len(), address_loc, &Type::Address)?;
             (T::Command::TransferObjects(objects, address), vec![])
         }
@@ -177,7 +199,7 @@ fn command(
             (T::Command::MergeCoins(coin_type, target, coins), vec![])
         }
         P::Command::MakeMoveVec(Some(pty), pelems) => {
-            let ty = env.load_type_input(pty)?;
+            let ty = env.load_type_input(0, pty)?;
             let elem_locs = locations(context, 0, pelems)?;
             let elems = arguments(env, context, 0, elem_locs, std::iter::repeat(&ty))?;
             (
@@ -194,7 +216,10 @@ fn command(
                 );
             };
             let first_loc = one_location(context, 0, pfirst)?;
-            let Some(first_ty) = object_type(env, context, first_loc)?.cloned() else {
+            let Some(first_ty) = constrained_type(env, context, first_loc, |ty| {
+                Ok(env.abilities(ty)?.has_key())
+            })?
+            .cloned() else {
                 // TODO need a new error here
                 return Err(command_argument_error(
                     CommandArgumentError::TypeMismatch,
@@ -323,35 +348,48 @@ fn argument(
     location: T::Location,
     expected_ty: &Type,
 ) -> Result<T::Argument, ExecutionError> {
-    argument_(env, context, location, expected_ty)
+    argument_(env, context, command_arg_idx, location, expected_ty)
         .map_err(|e| e.into_execution_error(command_arg_idx))
 }
 
 fn argument_(
     env: &Env,
     context: &mut Context,
+    command_arg_idx: usize,
     location: T::Location,
     expected_ty: &Type,
 ) -> Result<T::Argument, EitherError> {
+    let command_and_arg_idx = (context.current_command, command_arg_idx as u16);
     let actual_ty = context.location_type(env, location)?;
-
     Ok(match (&actual_ty, expected_ty) {
+        // Reference location types
         (LocationType::Fixed(Type::Reference(a)), Type::Reference(b))
         | (LocationType::Fixed(Type::MutableReference(a)), Type::Reference(b))
         | (LocationType::Fixed(Type::MutableReference(a)), Type::MutableReference(b)) => {
-            check_type(LocationType::Fixed(a), b)?;
+            check_type(command_and_arg_idx, LocationType::Fixed(a), b)?;
             T::Argument::Copy(location)
         }
+        (LocationType::Fixed(Type::Reference(a)), b)
+        | (LocationType::Fixed(Type::MutableReference(a)), b) => {
+            check_type(command_and_arg_idx, LocationType::Fixed(a), b)?;
+            if !env.abilities(b)?.has_copy() {
+                // TODO this should be a different error for missing copy
+                return Err(CommandArgumentError::TypeMismatch.into());
+            }
+            T::Argument::Read(location)
+        }
+
+        // Non reference location types
         (_, Type::Reference(inner)) => {
-            check_type(actual_ty, inner)?;
+            check_type(command_and_arg_idx, actual_ty, inner)?;
             T::Argument::Borrow(/* mut */ false, location)
         }
         (_, Type::MutableReference(inner)) => {
-            fix_type(actual_ty, inner)?;
+            fix_type(command_and_arg_idx, actual_ty, inner)?;
             T::Argument::Borrow(/* mut */ true, location)
         }
         _ => {
-            check_type(actual_ty, expected_ty)?;
+            check_type(command_and_arg_idx, actual_ty, expected_ty)?;
             if env.abilities(expected_ty)?.has_copy() {
                 T::Argument::Copy(location)
             } else {
@@ -361,22 +399,43 @@ fn argument_(
     })
 }
 
-fn fix_type(actual_ty: LocationType, expected_ty: &Type) -> Result<(), CommandArgumentError> {
-    check_type_impl(/* fix */ true, actual_ty, expected_ty)
+fn fix_type(
+    command_and_arg_idx: (u16, u16),
+    actual_ty: LocationType,
+    expected_ty: &Type,
+) -> Result<(), CommandArgumentError> {
+    check_type_impl(
+        command_and_arg_idx,
+        /* fix */ true,
+        actual_ty,
+        expected_ty,
+    )
 }
 
-fn check_type(actual_ty: LocationType, expected_ty: &Type) -> Result<(), CommandArgumentError> {
-    check_type_impl(/* fix */ false, actual_ty, expected_ty)
+fn check_type(
+    command_and_arg_idx: (u16, u16),
+    actual_ty: LocationType,
+    expected_ty: &Type,
+) -> Result<(), CommandArgumentError> {
+    check_type_impl(
+        command_and_arg_idx,
+        /* fix */ false,
+        actual_ty,
+        expected_ty,
+    )
 }
 
 fn check_type_impl(
+    command_and_arg_idx: (u16, u16),
     fix: bool,
     actual_ty: LocationType,
     expected_ty: &Type,
 ) -> Result<(), CommandArgumentError> {
     match actual_ty {
         LocationType::Bytes(ty, types) => {
-            types.insert(expected_ty.clone());
+            types
+                .entry(expected_ty.clone())
+                .or_insert(command_and_arg_idx);
             if fix {
                 *ty = InputType::Fixed(expected_ty.clone());
             }
@@ -393,50 +452,55 @@ fn check_type_impl(
     }
 }
 
-fn object_arguments(
+fn constrained_arguments<P: FnMut(&Type) -> Result<bool, ExecutionError>>(
     env: &Env,
     context: &mut Context,
     start_idx: usize,
     locations: Vec<T::Location>,
+    mut is_valid: P,
 ) -> Result<Vec<T::Argument>, ExecutionError> {
+    let is_valid = &mut is_valid;
     locations
         .into_iter()
         .enumerate()
-        .map(|(i, location)| object_argument(env, context, start_idx + i, location))
+        .map(|(i, location)| constrained_argument(env, context, start_idx + i, location, is_valid))
         .collect()
 }
 
-fn object_argument(
+fn constrained_argument<P: FnMut(&Type) -> Result<bool, ExecutionError>>(
     env: &Env,
     context: &mut Context,
     command_arg_idx: usize,
     location: T::Location,
+    is_valid: &mut P,
 ) -> Result<T::Argument, ExecutionError> {
-    object_argument_(env, context, location).map_err(|e| e.into_execution_error(command_arg_idx))
+    constrained_argument_(env, context, location, is_valid)
+        .map_err(|e| e.into_execution_error(command_arg_idx))
 }
 
-fn object_argument_(
+fn constrained_argument_<P: FnMut(&Type) -> Result<bool, ExecutionError>>(
     env: &Env,
     context: &mut Context,
     location: T::Location,
+    is_valid: &mut P,
 ) -> Result<T::Argument, EitherError> {
-    if object_type(env, context, location)?.is_some() {
+    if constrained_type(env, context, location, is_valid)?.is_some() {
         Ok(T::Argument::Move(location))
     } else {
         Err(CommandArgumentError::TypeMismatch.into())
     }
 }
 
-fn object_type<'a>(
+fn constrained_type<'a, P: FnMut(&Type) -> Result<bool, ExecutionError>>(
     env: &'a Env,
     context: &'a mut Context,
     location: T::Location,
+    mut is_valid: P,
 ) -> Result<Option<&'a Type>, ExecutionError> {
     let LocationType::Fixed(ty) = context.location_type(env, location)? else {
         return Ok(None);
     };
-    let abilities = env.abilities(ty)?;
-    Ok(if abilities.has_key() { Some(ty) } else { None })
+    Ok(if is_valid(ty)? { Some(ty) } else { None })
 }
 
 fn coin_mut_ref_argument(
@@ -480,9 +544,8 @@ fn check_coin_type(env: &Env, ty: &Type) -> Result<Type, EitherError> {
     let (inst, _tys) = &**inst_tys;
     let datatype = env.datatype(*inst)?;
     let datatype: &CachedDatatype = datatype.as_ref();
-    let is_coin = datatype.defining_id.address() == &SUI_FRAMEWORK_ADDRESS
-        && datatype.defining_id.name() == COIN_MODULE_NAME
-        && datatype.name.as_ident_str() == COIN_STRUCT_NAME;
+    let resolved = datatype_qualified_ident(datatype);
+    let is_coin = resolved == RESOLVED_COIN_STRUCT;
     // is_coin ==> ty.defining_id == ty.runtime_id
     debug_assert!(!is_coin || datatype.defining_id == datatype.runtime_id);
     if is_coin {

@@ -6,9 +6,14 @@ use crate::{
     execution_value::ExecutionState,
     programmable_transactions::context::{load_type, load_type_from_struct, SuiDataStore},
 };
-use move_binary_format::{errors::VMError, file_format::AbilitySet};
+use move_binary_format::{
+    errors::VMError,
+    file_format::{AbilitySet, TypeParameterIndex},
+    CompiledModule,
+};
 use move_core_types::{
     account_address::AccountAddress,
+    identifier::IdentStr,
     language_storage::{ModuleId, StructTag},
 };
 use move_vm_runtime::move_vm::MoveVM;
@@ -16,13 +21,13 @@ use move_vm_types::loaded_data::runtime_types::{CachedDatatype, CachedTypeIndex,
 use std::{cell::OnceCell, sync::Arc};
 use sui_protocol_config::ProtocolConfig;
 use sui_types::{
-    base_types::ObjectID,
+    base_types::{ObjectID, TxContextKind, RESOLVED_TX_CONTEXT},
     error::{ExecutionError, ExecutionErrorKind},
     gas_coin::GasCoin,
     move_package::{UpgradeReceipt, UpgradeTicket},
     object::Object,
     type_input::TypeInput,
-    Identifier, TypeTag,
+    Identifier,
 };
 
 pub struct Env<'a, 'b, 'state> {
@@ -74,6 +79,38 @@ impl<'a, 'b, 'state> Env<'a, 'b, 'state> {
         )
     }
 
+    pub fn convert_type_argument_error(&self, idx: usize, e: VMError) -> ExecutionError {
+        use move_core_types::vm_status::StatusCode;
+        use sui_types::execution_status::TypeArgumentError;
+        match e.major_status() {
+            StatusCode::NUMBER_OF_TYPE_ARGUMENTS_MISMATCH => {
+                ExecutionErrorKind::TypeArityMismatch.into()
+            }
+            StatusCode::TYPE_RESOLUTION_FAILURE => ExecutionErrorKind::TypeArgumentError {
+                argument_idx: idx as TypeParameterIndex,
+                kind: TypeArgumentError::TypeNotFound,
+            }
+            .into(),
+            StatusCode::CONSTRAINT_NOT_SATISFIED => ExecutionErrorKind::TypeArgumentError {
+                argument_idx: idx as TypeParameterIndex,
+                kind: TypeArgumentError::ConstraintNotSatisfied,
+            }
+            .into(),
+            _ => self.convert_vm_error(e),
+        }
+    }
+
+    pub fn module_definition(
+        &self,
+        module_id: &ModuleId,
+    ) -> Result<Arc<CompiledModule>, ExecutionError> {
+        let data_store = SuiDataStore::new(&self.linkage_view, &[]);
+        self.vm
+            .get_runtime()
+            .load_module(module_id, &data_store)
+            .map_err(|e| self.convert_vm_error(e))
+    }
+
     pub fn load_function(
         &self,
         package: ObjectID,
@@ -82,7 +119,7 @@ impl<'a, 'b, 'state> Env<'a, 'b, 'state> {
         type_arguments: Vec<Type>,
     ) -> Result<ast::LoadedFunction, ExecutionError> {
         assert_invariant!(
-            self.linkage_view.has_linkage(package),
+            self.linkage_view.has_linkage(package)?,
             "packages need to be linked before typing"
         );
         let package_address: AccountAddress = package.into();
@@ -94,7 +131,7 @@ impl<'a, 'b, 'state> Env<'a, 'b, 'state> {
         let name = to_identifier(function)?;
         let storage_id = ModuleId::new(package_address, module.clone());
         let runtime_id = ModuleId::new(original_address, module);
-        let mut data_store = SuiDataStore::new(&self.linkage_view, &[]);
+        let mut data_store = SuiDataStore::new(self.linkage_view, &[]);
         let signature = self
             .vm
             .get_runtime()
@@ -105,24 +142,26 @@ impl<'a, 'b, 'state> Env<'a, 'b, 'state> {
                 &mut data_store,
             )
             .map_err(|e| self.convert_vm_error(e))?;
+        let tx_context = match signature.parameters.last() {
+            Some(t) => is_tx_context(self, t)?,
+            None => TxContextKind::None,
+        };
         Ok(ast::LoadedFunction {
             storage_id,
             runtime_id,
             name,
             type_arguments,
             signature,
+            tx_context,
         })
     }
 
-    pub fn load_type_input(&self, ty: TypeInput) -> Result<Type, ExecutionError> {
+    pub fn load_type_input(&self, idx: usize, ty: TypeInput) -> Result<Type, ExecutionError> {
         let tag = ty
             .into_type_tag()
             .map_err(|e| make_invariant_violation!("{}", e.to_string()))?;
-        self.load_type_tag(&tag)
-    }
-
-    pub fn load_type_tag(&self, tag: &TypeTag) -> Result<Type, ExecutionError> {
-        load_type(self.vm, self.linkage_view, &[], tag).map_err(|e| self.convert_vm_error(e))
+        load_type(self.vm, self.linkage_view, &[], &tag)
+            .map_err(|e| self.convert_type_argument_error(idx, e))
     }
 
     pub fn load_type_from_struct(&self, tag: &StructTag) -> Result<Type, ExecutionError> {
@@ -163,6 +202,41 @@ impl<'a, 'b, 'state> Env<'a, 'b, 'state> {
         };
         Ok(obj)
     }
+}
+
+pub fn datatype_qualified_ident(s: &CachedDatatype) -> (&AccountAddress, &IdentStr, &IdentStr) {
+    let module_id = &s.defining_id;
+    let struct_name = &s.name;
+    (
+        module_id.address(),
+        module_id.name(),
+        struct_name.as_ident_str(),
+    )
+}
+
+fn is_tx_context(env: &Env, ty: &Type) -> Result<TxContextKind, ExecutionError> {
+    let (is_mut, inner) = match ty {
+        Type::MutableReference(inner) => (true, inner),
+        Type::Reference(inner) => (false, inner),
+        _ => return Ok(TxContextKind::None),
+    };
+    let Type::DatatypeInstantiation(inst_tys) = &**inner else {
+        return Ok(TxContextKind::None);
+    };
+    let (inst, _tys) = &**inst_tys;
+    let datatype = env.datatype(*inst)?;
+    let datatype: &CachedDatatype = datatype.as_ref();
+    let resolved = datatype_qualified_ident(datatype);
+    let is_tx_context_type = resolved == RESOLVED_TX_CONTEXT;
+    Ok(if is_tx_context_type {
+        if is_mut {
+            TxContextKind::Mutable
+        } else {
+            TxContextKind::Immutable
+        }
+    } else {
+        TxContextKind::None
+    })
 }
 
 fn to_identifier(name: String) -> Result<Identifier, ExecutionError> {

@@ -204,13 +204,13 @@ impl<'state> LinkageView<'state> {
         Ok(())
     }
 
-    pub(crate) fn link_context(&self) -> AccountAddress {
+    pub(crate) fn link_context(&self) -> Result<AccountAddress, ExecutionError> {
         let Ok(linkage_info) = self.linkage_info.try_borrow() else {
             invariant_violation!("Unable to borrow linkage info")
         };
-        linkage_info
+        Ok(linkage_info
             .as_ref()
-            .map_or(AccountAddress::ZERO, |l| l.storage_id)
+            .map_or(AccountAddress::ZERO, |l| l.storage_id))
     }
 
     pub(crate) fn relocate(&self, module_id: &ModuleId) -> Result<ModuleId, SuiError> {
@@ -301,7 +301,8 @@ impl LinkageResolver for LinkageView<'_> {
     type Error = SuiError;
 
     fn link_context(&self) -> AccountAddress {
-        LinkageView::link_context(self)
+        // TODO should we propagate the error
+        LinkageView::link_context(self).unwrap()
     }
 
     fn relocate(&self, module_id: &ModuleId) -> Result<ModuleId, Self::Error> {

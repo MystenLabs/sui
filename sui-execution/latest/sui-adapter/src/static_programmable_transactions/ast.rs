@@ -3,8 +3,11 @@
 
 use move_core_types::{identifier::Identifier, language_storage::ModuleId};
 use move_vm_runtime::session::LoadedFunctionInstantiation;
-use std::collections::BTreeSet;
-use sui_types::{base_types::ObjectID, transaction::CallArg};
+use std::collections::BTreeMap;
+use sui_types::{
+    base_types::{ObjectID, TxContextKind},
+    transaction::CallArg,
+};
 
 pub struct Transaction {
     pub inputs: Inputs,
@@ -18,7 +21,10 @@ pub type Commands = Vec<(Command, ResultType)>;
 pub type Type = move_vm_types::loaded_data::runtime_types::Type;
 
 pub enum InputType {
-    Bytes(/* all types that this must satisfy */ BTreeSet<Type>),
+    Bytes(
+        /* all types that this must satisfy */
+        BTreeMap<Type, /* command, arg idx */ (u16, u16)>,
+    ),
     Fixed(Type),
 }
 pub type ArgumentTypes = Vec<Type>;
@@ -40,6 +46,7 @@ pub struct LoadedFunction {
     pub name: Identifier,
     pub type_arguments: Vec<Type>,
     pub signature: LoadedFunctionInstantiation,
+    pub tx_context: TxContextKind,
 }
 
 pub struct MoveCall {
@@ -58,4 +65,5 @@ pub enum Argument {
     Move(Location),
     Copy(Location),
     Borrow(/* mut */ bool, Location),
+    Read(Location),
 }

@@ -297,22 +297,12 @@ mod checked {
 
         /// Load a type using the context's current session.
         pub fn load_type(&mut self, type_tag: &TypeTag) -> VMResult<Type> {
-            load_type(
-                self.vm,
-                &mut self.linkage_view,
-                &self.new_packages,
-                type_tag,
-            )
+            load_type(self.vm, &self.linkage_view, &self.new_packages, type_tag)
         }
 
         /// Load a type using the context's current session.
         pub fn load_type_from_struct(&mut self, struct_tag: &StructTag) -> VMResult<Type> {
-            load_type_from_struct(
-                self.vm,
-                &mut self.linkage_view,
-                &self.new_packages,
-                struct_tag,
-            )
+            load_type_from_struct(self.vm, &self.linkage_view, &self.new_packages, struct_tag)
         }
 
         /// Takes the user events from the runtime and tags them with the Move module of the function
@@ -1317,7 +1307,11 @@ mod checked {
         let runtime_id = ModuleId::new(original_address, module.clone());
         let data_store = SuiDataStore::new(linkage_view, new_packages);
         let res = vm.get_runtime().load_type(&runtime_id, name, &data_store);
-        linkage_view.reset_linkage();
+        linkage_view.reset_linkage().map_err(|e| {
+            PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR)
+                .with_message(e.to_string())
+                .finish(Location::Undefined)
+        })?;
         let (idx, struct_type) = res?;
 
         // Recursively load type parameters, if necessary
@@ -1721,7 +1715,8 @@ mod checked {
     //       Leaving this comment around until then as testament to better days to come...
     impl DataStore for SuiDataStore<'_, '_> {
         fn link_context(&self) -> AccountAddress {
-            self.linkage_view.link_context()
+            // TODO should we propagate the error
+            self.linkage_view.link_context().unwrap()
         }
 
         fn relocate(&self, module_id: &ModuleId) -> PartialVMResult<ModuleId> {
