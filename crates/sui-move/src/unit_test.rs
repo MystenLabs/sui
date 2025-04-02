@@ -43,9 +43,10 @@ impl Test {
         build_config: BuildConfig,
     ) -> anyhow::Result<UnitTestResult> {
         let compute_coverage = self.test.compute_coverage;
-        if !cfg!(debug_assertions) && compute_coverage {
+        if !cfg!(feature = "tracing") && compute_coverage {
             return Err(anyhow::anyhow!(
-                "The --coverage flag is currently supported only in debug builds. Please build the Sui CLI from source in debug mode."
+                "The --coverage flag is currently supported only in builds built with the `tracing` feature enabled. \
+                Please build the Sui CLI from source with `--features tracing` to use this flag."
             ));
         }
         // save disassembly if trace execution is enabled

@@ -2,7 +2,8 @@ Command `build`:
 BUILDING Test
 Command `disassemble --package Test --name m --bytecode-map`:
 {
-  "version": 1,
+  "version": 2,
+  "from_file_path": null,
   "definition_location": {
     "file_hash": [
       163,

@@ -47,13 +47,13 @@ macro_rules! native_charge_gas_early_exit_option {
     }};
 }
 
-fn is_supported(context: &NativeContext) -> bool {
-    context
+fn is_supported(context: &NativeContext) -> PartialVMResult<bool> {
+    Ok(context
         .extensions()
-        .get::<NativeContextMut<ObjectRuntime>>()
+        .get::<NativeContextMut<ObjectRuntime>>()?
         .borrow()
         .protocol_config
-        .enable_nitro_attestation()
+        .enable_nitro_attestation())
 }
 
 pub fn load_nitro_attestation_internal(
@@ -65,7 +65,7 @@ pub fn load_nitro_attestation_internal(
     debug_assert!(args.len() == 2);
 
     let cost = context.gas_used();
-    if !is_supported(context) {
+    if !is_supported(context)? {
         return Ok(NativeResult::err(cost, NOT_SUPPORTED_ERROR));
     }
 
@@ -75,7 +75,7 @@ pub fn load_nitro_attestation_internal(
 
     let cost_params = &context
         .extensions()
-        .get::<NativesCostTable>()
+        .get::<NativesCostTable>()?
         .nitro_attestation_cost_params
         .clone();
 

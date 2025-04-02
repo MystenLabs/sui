@@ -242,6 +242,8 @@ CommandArgumentError:
       InvalidObjectByMutRef: UNIT
     11:
       SharedObjectOperationNotAllowed: UNIT
+    12:
+      InvalidArgumentArity: UNIT
 CompressedSignature:
   ENUM:
     0:

@@ -4,8 +4,8 @@
 use std::collections::BTreeMap;
 use std::collections::HashMap;
 
+use crate::error::ObjectNotFoundError;
 use crate::reader::StateReader;
-use crate::service::objects::ObjectNotFoundError;
 use crate::types::ResolveTransactionQueryParameters;
 use crate::types::ResolveTransactionResponse;
 use crate::Result;
@@ -728,6 +728,7 @@ fn select_gas(
         .indexes()
         .ok_or_else(RpcError::not_found)?
         .account_owned_objects_info_iter(owner, None)?
+        .filter_map(|result| result.ok())
         .filter(|info| info.type_.is_gas_coin())
         .filter(|info| !input_objects.contains(&info.object_id))
         .filter_map(|info| reader.inner().get_object(&info.object_id))

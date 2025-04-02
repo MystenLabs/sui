@@ -80,6 +80,7 @@ pub struct ConsensusAdapterMetrics {
     pub sequencing_in_flight_submissions: IntGauge,
     pub sequencing_estimated_latency: IntGauge,
     pub sequencing_resubmission_interval_ms: IntGauge,
+    pub sequencing_best_effort_timeout: IntCounterVec,
 }
 
 impl ConsensusAdapterMetrics {
@@ -188,6 +189,12 @@ impl ConsensusAdapterMetrics {
                     SEQUENCING_CERTIFICATE_POSITION_BUCKETS.to_vec(),
                     registry,
                 ).unwrap(),
+            sequencing_best_effort_timeout: register_int_counter_vec_with_registry!(
+                "sequencing_best_effort_timeout",
+                "The number of times the best effort submission has timed out.",
+                &["tx_type"],
+                registry,
+            ).unwrap(),
         }
     }
 
@@ -209,6 +216,13 @@ pub trait SubmitToConsensus: Sync + Send + 'static {
         &self,
         transactions: &[ConsensusTransaction],
         epoch_store: &Arc<AuthorityPerEpochStore>,
+    ) -> SuiResult;
+
+    fn submit_best_effort(
+        &self,
+        transaction: &ConsensusTransaction,
+        epoch_store: &Arc<AuthorityPerEpochStore>,
+        timeout: Duration,
     ) -> SuiResult;
 }
 
@@ -249,7 +263,7 @@ pub struct ConsensusAdapter {
     /// A structure to register metrics
     metrics: ConsensusAdapterMetrics,
     /// Semaphore limiting parallel submissions to consensus
-    submit_semaphore: Semaphore,
+    submit_semaphore: Arc<Semaphore>,
     latency_observer: LatencyObserver,
     protocol_config: ProtocolConfig,
 }
@@ -300,7 +314,7 @@ impl ConsensusAdapter {
             connection_monitor_status,
             low_scoring_authorities,
             metrics,
-            submit_semaphore: Semaphore::new(max_pending_local_submissions),
+            submit_semaphore: Arc::new(Semaphore::new(max_pending_local_submissions)),
             latency_observer: LatencyObserver::new(),
             consensus_throughput_profiler: ArcSwapOption::empty(),
             protocol_config,
@@ -1286,6 +1300,55 @@ impl SubmitToConsensus for Arc<ConsensusAdapter> {
     ) -> SuiResult {
         self.submit_batch(transactions, None, epoch_store)
             .map(|_| ())
+    }
+
+    fn submit_best_effort(
+        &self,
+        transaction: &ConsensusTransaction,
+        epoch_store: &Arc<AuthorityPerEpochStore>,
+        // timeout is required, or the spawned task can run forever
+        timeout: Duration,
+    ) -> SuiResult {
+        let permit = match self.submit_semaphore.clone().try_acquire_owned() {
+            Ok(permit) => permit,
+            Err(_) => {
+                return Err(SuiError::TooManyTransactionsPendingConsensus);
+            }
+        };
+
+        let _in_flight_submission_guard =
+            GaugeGuard::acquire(&self.metrics.sequencing_in_flight_submissions);
+
+        let key = SequencedConsensusTransactionKey::External(transaction.key());
+        let tx_type = classify(transaction);
+
+        let async_stage = {
+            let transaction = transaction.clone();
+            let epoch_store = epoch_store.clone();
+            let this = self.clone();
+
+            async move {
+                let _permit = permit; // Hold permit for lifetime of task
+
+                let result = tokio::time::timeout(
+                    timeout,
+                    this.submit_inner(&[transaction], &epoch_store, &[key], tx_type, false),
+                )
+                .await;
+
+                if let Err(e) = result {
+                    warn!("Consensus submission timed out: {e:?}");
+                    this.metrics
+                        .sequencing_best_effort_timeout
+                        .with_label_values(&[tx_type])
+                        .inc();
+                }
+            }
+        };
+
+        let epoch_store = epoch_store.clone();
+        spawn_monitored_task!(epoch_store.within_alive_epoch(async_stage));
+        Ok(())
     }
 }
 

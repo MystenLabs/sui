@@ -1,0 +1,74 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: 2024.alpha
+  lint: false
+---
+warning[W09009]: unused struct field
+   ┌─ tests/move_2024/ide_mode/macro_types.move:10:9
+   │
+10 │         cost: u64,
+   │         ^^^^ The 'cost' field of the 'Collection' type is unused
+   │
+   = This warning can be suppressed with '#[allow(unused_field)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+note[I15002]: IDE macro call info
+   ┌─ tests/move_2024/ide_mode/macro_types.move:17:9
+   │  
+17 │ ╭         std::u64::do!(count, |_| {
+18 │ │             let content = new_empty_content();
+19 │ │             collection.items.push_back(content);
+20 │ │         });
+   │ ╰──────────^ macro call info
+   │  
+   = Called std::u64::do
+   = Type arguments: ()
+
+note[I15001]: IDE dot autocomplete
+   ┌─ tests/move_2024/ide_mode/macro_types.move:19:23
+   │
+19 │             collection.items.push_back(content);
+   │                       ^ Possible dot names: 'a::collection::do_stuff', 'cost', or 'items'
+
+note[I15001]: IDE dot autocomplete
+   ┌─ tests/move_2024/ide_mode/macro_types.move:19:24
+   │
+19 │             collection.items.push_back(content);
+   │                        ^^^^^ Possible dot names: 'a::collection::do_stuff', 'cost', or 'items'
+
+note[I15001]: IDE dot autocomplete
+   ┌─ tests/move_2024/ide_mode/macro_types.move:19:29
+   │
+19 │             collection.items.push_back(content);
+   │                             ^ Possible dot names: 'std::vector::all', 'std::vector::any', 'std::vector::append', 'std::vector::borrow', 'std::vector::borrow_mut', 'std::vector::contains', 'std::vector::count', 'std::vector::destroy', 'std::vector::destroy_empty', 'std::vector::do', 'std::vector::do_mut', 'std::vector::do_ref', 'std::vector::filter', 'std::vector::find_index', 'std::vector::flatten', 'std::vector::fold', 'std::vector::index_of', 'std::vector::insert', 'std::vector::is_empty', 'std::vector::length', 'std::vector::map', 'std::vector::map_ref', 'std::vector::partition', 'std::vector::pop_back', 'std::vector::push_back', 'std::vector::remove', 'std::vector::reverse', 'std::vector::swap', 'std::vector::swap_remove', 'std::ascii::to_ascii_string', 'std::string::to_string', 'std::ascii::try_to_ascii_string', 'std::string::try_to_string', 'std::vector::zip_do', 'std::vector::zip_do_mut', 'std::vector::zip_do_ref', 'std::vector::zip_do_reverse', 'std::vector::zip_map', or 'std::vector::zip_map_ref'
+
+note[I15001]: IDE dot autocomplete
+   ┌─ tests/move_2024/ide_mode/macro_types.move:19:30
+   │
+19 │             collection.items.push_back(content);
+   │                              ^^^^^^^^^ Possible dot names: 'std::vector::all', 'std::vector::any', 'std::vector::append', 'std::vector::borrow', 'std::vector::borrow_mut', 'std::vector::contains', 'std::vector::count', 'std::vector::destroy', 'std::vector::destroy_empty', 'std::vector::do', 'std::vector::do_mut', 'std::vector::do_ref', 'std::vector::filter', 'std::vector::find_index', 'std::vector::flatten', 'std::vector::fold', 'std::vector::index_of', 'std::vector::insert', 'std::vector::is_empty', 'std::vector::length', 'std::vector::map', 'std::vector::map_ref', 'std::vector::partition', 'std::vector::pop_back', 'std::vector::push_back', 'std::vector::remove', 'std::vector::reverse', 'std::vector::swap', 'std::vector::swap_remove', 'std::ascii::to_ascii_string', 'std::string::to_string', 'std::ascii::try_to_ascii_string', 'std::string::try_to_string', 'std::vector::zip_do', 'std::vector::zip_do_mut', 'std::vector::zip_do_ref', 'std::vector::zip_do_reverse', 'std::vector::zip_map', or 'std::vector::zip_map_ref'
+
+note[I15003]: IDE expanded lambda
+   ┌─ tests/move_2024/ide_mode/macro_types.move:37:13
+   │
+37 │             $f(i);
+   │             ^^^^^ expanded lambda
+
+note[I15002]: IDE macro call info
+   ┌─ tests/move_2024/ide_mode/macro_types.move:43:9
+   │
+43 │         range_do!(0, $stop, $f)
+   │         ^^^^^^^^^^^^^^^^^^^^^^^ macro call info
+   │
+   = Called std::my_macros::range_do
+   = Type arguments: u64, ()
+
+note[I15002]: IDE macro call info
+   ┌─ tests/move_2024/ide_mode/macro_types.move:50:9
+   │
+50 │         std::my_macros::do!($stop, $f)
+   │         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ macro call info
+   │
+   = Called std::my_macros::do
+   = Type arguments: u64, ()

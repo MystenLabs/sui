@@ -16,7 +16,7 @@ use move_core_types::{
     vm_status::StatusCode,
 };
 use move_vm_runtime::natives::{
-    extensions::NativeContextMut,
+    extensions::{NativeContextMut, NativeExtensionMarker},
     functions::{NativeContext, NativeResult},
 };
 use move_vm_runtime::{
@@ -60,6 +60,7 @@ type Set<K> = IndexSet<K>;
 /// writing) while hiding mutability.
 #[derive(Tid)]
 pub struct InMemoryTestStore(pub &'static LocalKey<RefCell<InMemoryStorage>>);
+impl<'a> NativeExtensionMarker<'a> for &'a InMemoryTestStore {}
 
 impl ChildObjectResolver for InMemoryTestStore {
     fn read_child_object(
@@ -78,8 +79,6 @@ impl ChildObjectResolver for InMemoryTestStore {
         receiving_object_id: &ObjectID,
         receive_object_at_version: SequenceNumber,
         epoch_id: sui_types::committee::EpochId,
-        // TODO: Delete this parameter once table migration is complete.
-        use_object_per_epoch_marker_table_v2: bool,
     ) -> sui_types::error::SuiResult<Option<Object>> {
         self.0.with_borrow(|store| {
             store.get_object_received_at_version(
@@ -87,7 +86,6 @@ impl ChildObjectResolver for InMemoryTestStore {
                 receiving_object_id,
                 receive_object_at_version,
                 epoch_id,
-                use_object_per_epoch_marker_table_v2,
             )
         })
     }
@@ -105,7 +103,7 @@ pub fn end_transaction(
     assert!(args.is_empty());
     let object_runtime_ref: &mut ObjectRuntime = &mut context
         .extensions()
-        .get::<NativeContextMut<ObjectRuntime>>()
+        .get::<NativeContextMut<ObjectRuntime>>()?
         .borrow_mut();
     let taken_shared_or_imm: BTreeMap<_, _> = object_runtime_ref
         .test_inventories
@@ -253,7 +251,7 @@ pub fn end_transaction(
     }
 
     // For any unused allocated tickets, remove them from the store.
-    let store: &&InMemoryTestStore = context.extensions().get();
+    let store: &&InMemoryTestStore = context.extensions().get()?;
     for id in unreceived {
         if store
             .0
@@ -390,7 +388,7 @@ pub fn take_from_address_by_id(
     // TODO(tzakian): double check this
     let object_runtime: &mut ObjectRuntime = &mut context
         .extensions()
-        .get::<NativeContextMut<ObjectRuntime>>()
+        .get::<NativeContextMut<ObjectRuntime>>()?
         .borrow_mut();
     let inventories = &mut object_runtime.test_inventories;
     let res = take_from_inventory(
@@ -426,7 +424,7 @@ pub fn ids_for_address(
     let specified_obj_ty = context.type_to_type_tag(&specified_ty)?;
     let object_runtime: &mut ObjectRuntime = &mut context
         .extensions()
-        .get::<NativeContextMut<ObjectRuntime>>()
+        .get::<NativeContextMut<ObjectRuntime>>()?
         .borrow_mut();
     let inventories = &mut object_runtime.test_inventories;
     let ids = inventories
@@ -451,7 +449,7 @@ pub fn most_recent_id_for_address(
     let specified_obj_ty = context.type_to_type_tag(&specified_ty)?;
     let object_runtime: &mut ObjectRuntime = &mut context
         .extensions()
-        .get::<NativeContextMut<ObjectRuntime>>()
+        .get::<NativeContextMut<ObjectRuntime>>()?
         .borrow_mut();
     let inventories = &mut object_runtime.test_inventories;
     let most_recent_id = match inventories.address_inventories.get(&account) {
@@ -476,7 +474,7 @@ pub fn was_taken_from_address(
     assert!(args.is_empty());
     let object_runtime: &mut ObjectRuntime = &mut context
         .extensions()
-        .get::<NativeContextMut<ObjectRuntime>>()
+        .get::<NativeContextMut<ObjectRuntime>>()?
         .borrow_mut();
     let inventories = &mut object_runtime.test_inventories;
     let was_taken = inventories
@@ -503,7 +501,7 @@ pub fn take_immutable_by_id(
     let specified_obj_ty = context.type_to_type_tag(&specified_ty)?;
     let object_runtime: &mut ObjectRuntime = &mut context
         .extensions()
-        .get::<NativeContextMut<ObjectRuntime>>()
+        .get::<NativeContextMut<ObjectRuntime>>()?
         .borrow_mut();
     let inventories = &mut object_runtime.test_inventories;
     let res = take_from_inventory(
@@ -544,7 +542,7 @@ pub fn most_recent_immutable_id(
     let specified_obj_ty = context.type_to_type_tag(&specified_ty)?;
     let object_runtime: &mut ObjectRuntime = &mut context
         .extensions()
-        .get::<NativeContextMut<ObjectRuntime>>()
+        .get::<NativeContextMut<ObjectRuntime>>()?
         .borrow_mut();
     let inventories = &mut object_runtime.test_inventories;
     let most_recent_id = most_recent_at_ty(
@@ -569,7 +567,7 @@ pub fn was_taken_immutable(
     assert!(args.is_empty());
     let object_runtime: &mut ObjectRuntime = &mut context
         .extensions()
-        .get::<NativeContextMut<ObjectRuntime>>()
+        .get::<NativeContextMut<ObjectRuntime>>()?
         .borrow_mut();
     let inventories = &mut object_runtime.test_inventories;
     let was_taken = inventories
@@ -596,7 +594,7 @@ pub fn take_shared_by_id(
     let specified_obj_ty = context.type_to_type_tag(&specified_ty)?;
     let object_runtime: &mut ObjectRuntime = &mut context
         .extensions()
-        .get::<NativeContextMut<ObjectRuntime>>()
+        .get::<NativeContextMut<ObjectRuntime>>()?
         .borrow_mut();
     let inventories = &mut object_runtime.test_inventories;
     let res = take_from_inventory(
@@ -630,7 +628,7 @@ pub fn most_recent_id_shared(
     let specified_obj_ty = context.type_to_type_tag(&specified_ty)?;
     let object_runtime: &mut ObjectRuntime = &mut context
         .extensions()
-        .get::<NativeContextMut<ObjectRuntime>>()
+        .get::<NativeContextMut<ObjectRuntime>>()?
         .borrow_mut();
     let inventories = &mut object_runtime.test_inventories;
     let most_recent_id = most_recent_at_ty(
@@ -655,7 +653,7 @@ pub fn was_taken_shared(
     assert!(args.is_empty());
     let object_runtime: &mut ObjectRuntime = &mut context
         .extensions()
-        .get::<NativeContextMut<ObjectRuntime>>()
+        .get::<NativeContextMut<ObjectRuntime>>()?
         .borrow_mut();
     let inventories = &mut object_runtime.test_inventories;
     let was_taken = inventories
@@ -686,7 +684,7 @@ pub fn allocate_receiving_ticket_for_object(
     };
     let object_runtime: &mut ObjectRuntime = &mut context
         .extensions()
-        .get::<NativeContextMut<ObjectRuntime>>()
+        .get::<NativeContextMut<ObjectRuntime>>()?
         .borrow_mut();
     let object_version = SequenceNumber::new();
     let inventories = &mut object_runtime.test_inventories;
@@ -748,7 +746,7 @@ pub fn allocate_receiving_ticket_for_object(
     );
 
     // NB: Must be a `&&` reference since the extension stores a static ref to the object storage.
-    let store: &&InMemoryTestStore = context.extensions().get();
+    let store: &&InMemoryTestStore = context.extensions().get()?;
     store.0.with_borrow_mut(|store| store.insert_object(object));
 
     Ok(NativeResult::ok(
@@ -766,7 +764,7 @@ pub fn deallocate_receiving_ticket_for_object(
 
     let object_runtime: &mut ObjectRuntime = &mut context
         .extensions()
-        .get::<NativeContextMut<ObjectRuntime>>()
+        .get::<NativeContextMut<ObjectRuntime>>()?
         .borrow_mut();
     let inventories = &mut object_runtime.test_inventories;
     // Deallocate the ticket -- we should never hit this scenario
@@ -782,7 +780,7 @@ pub fn deallocate_receiving_ticket_for_object(
     inventories.objects.insert(id, value);
 
     // Remove the object from storage. We should never hit this scenario either.
-    let store: &&InMemoryTestStore = context.extensions().get();
+    let store: &&InMemoryTestStore = context.extensions().get()?;
     if store
         .0
         .with_borrow_mut(|store| store.remove_object(id).is_none())

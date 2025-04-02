@@ -45,21 +45,27 @@ mod universal_committer;
 #[path = "tests/randomized_tests.rs"]
 mod randomized_tests;
 
+mod proposed_block_handler;
 mod round_prober;
+mod round_tracker;
 #[cfg(test)]
 mod test_dag;
 #[cfg(test)]
 mod test_dag_builder;
 #[cfg(test)]
 mod test_dag_parser;
+mod transaction_certifier;
 
 /// Exported consensus API.
 pub use authority_node::ConsensusAuthority;
-pub use block::{BlockAPI, BlockRef, Round, TransactionIndex};
+pub use block::{
+    BlockAPI, BlockRef, CertifiedBlock, CertifiedBlocksOutput, Round, TransactionIndex,
+};
 /// Exported API for testing.
-pub use block::{TestBlock, Transaction, VerifiedBlock};
+pub use block::{BlockTimestampMs, TestBlock, Transaction, VerifiedBlock};
 pub use commit::{CommitDigest, CommitIndex, CommitRef, CommittedSubDag};
 pub use commit_consumer::{CommitConsumer, CommitConsumerMonitor};
+pub use context::Clock;
 pub use network::{
     connection_monitor::{AnemoConnectionMonitor, ConnectionMonitorHandle, ConnectionStatus},
     metrics::{MetricsMakeCallbackHandler, NetworkRouteMetrics, QuinnConnectionMetrics},

@@ -110,15 +110,17 @@ impl BenchmarkContext {
             .execute_raw_transactions(root_object_create_transactions)
             .await;
         let mut new_gas_objects = HashMap::new();
+        let cache_commit = self.validator().get_validator().get_cache_commit().clone();
         for effects in results {
-            self.validator()
-                .get_validator()
-                .get_cache_commit()
-                .commit_transaction_outputs(
-                    effects.executed_epoch(),
-                    &[*effects.transaction_digest()],
-                    true,
-                );
+            let batch = cache_commit
+                .build_db_batch(effects.executed_epoch(), &[*effects.transaction_digest()]);
+
+            cache_commit.commit_transaction_outputs(
+                effects.executed_epoch(),
+                batch,
+                &[*effects.transaction_digest()],
+            );
+
             let (owner, root_object) = effects
                 .created()
                 .into_iter()
@@ -163,7 +165,6 @@ impl BenchmarkContext {
             .execute_raw_transactions(shared_object_create_transactions)
             .await;
         let mut new_gas_objects = HashMap::new();
-        let epoch_id = self.validator.get_epoch_store().epoch();
         let cache_commit = self.validator.get_validator().get_cache_commit();
         for effects in results {
             let shared_object = effects
@@ -186,10 +187,12 @@ impl BenchmarkContext {
             // live objects to construct the in memory object store, hence requiring these objects committed to DB.
             // For checkpoint executor, in order to commit a checkpoint it is required previous versions
             // of objects are already committed.
+            let batch = cache_commit
+                .build_db_batch(effects.executed_epoch(), &[*effects.transaction_digest()]);
             cache_commit.commit_transaction_outputs(
-                epoch_id,
+                effects.executed_epoch(),
+                batch,
                 &[*effects.transaction_digest()],
-                true,
             );
         }
         self.refresh_gas_objects(new_gas_objects);

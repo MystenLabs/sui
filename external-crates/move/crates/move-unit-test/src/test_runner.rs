@@ -333,7 +333,6 @@ impl SharedTestingConfig {
         let mut gas_meter = GasStatus::new(&self.cost_table, Gas::new(self.execution_bound));
         move_vm_profiler::tracing_feature_enabled! {
             use move_vm_profiler::GasProfiler;
-            use move_vm_runtime::shared::gas::GasMeter;
             gas_meter.set_profiler(GasProfiler::init_default_cfg(
                 function_name.to_owned(),
                 self.execution_bound,

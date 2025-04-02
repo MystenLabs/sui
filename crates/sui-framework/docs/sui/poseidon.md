@@ -2,7 +2,7 @@
 title: Module `sui::poseidon`
 ---
 
-Module which defines instances of the poseidon hash functions.
+Module which defines instances of the poseidon hash functions. Available in Devnet only.
 
 
 -  [Constants](#@Constants_0)
@@ -27,12 +27,12 @@ Module which defines instances of the poseidon hash functions.
 ## Constants
 
 
-<a name="sui_poseidon_BN254_MAX"></a>
+<a name="sui_poseidon_ENonCanonicalInput"></a>
 
-The field size for BN254 curve.
+Error if any of the inputs are larger than or equal to the BN254 field size.
 
 
-<pre><code><b>const</b> <a href="../sui/poseidon.md#sui_poseidon_BN254_MAX">BN254_MAX</a>: u256 = 21888242871839275222246405745257275088548364400416034343698204186575808495617;
+<pre><code><b>const</b> <a href="../sui/poseidon.md#sui_poseidon_ENonCanonicalInput">ENonCanonicalInput</a>: u64 = 0;
 </code></pre>
 
 
@@ -47,12 +47,12 @@ Error if an empty vector is passed as input.
 
 
 
-<a name="sui_poseidon_ENonCanonicalInput"></a>
+<a name="sui_poseidon_BN254_MAX"></a>
 
-Error if any of the inputs are larger than or equal to the BN254 field size.
+The field size for BN254 curve.
 
 
-<pre><code><b>const</b> <a href="../sui/poseidon.md#sui_poseidon_ENonCanonicalInput">ENonCanonicalInput</a>: u64 = 0;
+<pre><code><b>const</b> <a href="../sui/poseidon.md#sui_poseidon_BN254_MAX">BN254_MAX</a>: u256 = 21888242871839275222246405745257275088548364400416034343698204186575808495617;
 </code></pre>
 
 
@@ -67,6 +67,8 @@ Hash the inputs using poseidon_bn254 and returns a BN254 field element.
 
 Each element has to be a BN254 field element in canonical representation so it must be smaller than the BN254
 scalar field size which is 21888242871839275222246405745257275088548364400416034343698204186575808495617.
+
+This function is currently only enabled on Devnet.
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="../sui/poseidon.md#sui_poseidon_poseidon_bn254">poseidon_bn254</a>(data: &vector&lt;u256&gt;): u256

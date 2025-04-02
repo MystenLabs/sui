@@ -45,6 +45,8 @@ pub enum Token {
     At,
     /// .
     Dot,
+    /// /
+    ForwardSlash,
 
     /// End of input.
     Eof,
@@ -101,6 +103,7 @@ impl fmt::Display for Lexeme<'_> {
             T::RAngle => write!(f, "'>'"),
             T::At => write!(f, "'@'"),
             T::Dot => write!(f, "'.'"),
+            T::ForwardSlash => write!(f, "'/'"),
             T::Unexpected => write!(f, "input {:?}", self.1),
             T::UnfinishedString => write!(f, "unfinished string {:?}", format!("{}...", self.1)),
             T::EarlyEof | T::Eof => write!(f, "end of input"),
@@ -130,6 +133,7 @@ impl fmt::Display for Token {
             T::RAngle => write!(f, "'>'"),
             T::At => write!(f, "'@'"),
             T::Dot => write!(f, "'.'"),
+            T::ForwardSlash => write!(f, "'/'"),
             T::Eof => write!(f, "end of input"),
             T::Unexpected => write!(f, "unexpected input"),
             T::UnfinishedString => write!(f, "an unfinished string"),

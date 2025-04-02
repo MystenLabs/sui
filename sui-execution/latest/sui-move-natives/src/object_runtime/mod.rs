@@ -21,7 +21,11 @@ use move_core_types::{
     runtime_value as R,
     vm_status::StatusCode,
 };
-use move_vm_runtime::execution::values::{GlobalValue, Value};
+use move_vm_runtime::natives::extensions::NativeExtensionMarker;
+use move_vm_runtime::{
+    execution::values::{GlobalValue, Value},
+    natives::extensions::NativeContextMut,
+};
 use object_store::{ActiveChildObject, ChildObjectStore};
 use std::{
     collections::{BTreeMap, BTreeSet},
@@ -109,6 +113,8 @@ pub struct ObjectRuntime<'a> {
     pub(crate) protocol_config: &'a ProtocolConfig,
     pub(crate) metrics: Arc<LimitsMetrics>,
 }
+
+impl<'a> NativeExtensionMarker<'a> for NativeContextMut<'a, ObjectRuntime<'a>> {}
 
 pub enum TransferResult {
     New,
@@ -269,8 +275,18 @@ impl<'a> ObjectRuntime<'a> {
             TransferResult::New
         } else if let Some(prev_owner) = self.state.input_objects.get(&id) {
             match (&owner, prev_owner) {
-                // don't use == for dummy values in Shared owner
+                // don't use == for dummy values in Shared or ConsensusV2 owner
                 (Owner::Shared { .. }, Owner::Shared { .. }) => TransferResult::SameOwner,
+                (
+                    Owner::ConsensusV2 {
+                        authenticator: new_authenticator,
+                        ..
+                    },
+                    Owner::ConsensusV2 {
+                        authenticator: old_authenticator,
+                        ..
+                    },
+                ) if new_authenticator == old_authenticator => TransferResult::SameOwner,
                 (new, old) if new == old => TransferResult::SameOwner,
                 _ => TransferResult::OwnerChanged,
             }

@@ -118,8 +118,9 @@ pub enum MarkerValue {
     /// An owned object was deleted (or wrapped) at the given version, and is no longer able to be
     /// accessed or used in subsequent transactions.
     OwnedDeleted,
-    /// A shared object was deleted by the transaction and is no longer able to be accessed or
-    /// used in subsequent transactions.
+    /// A shared object was deleted or removed from consensus by the transaction and is no longer
+    /// able to be accessed or used in subsequent transactions.
+    // TODO: Rename this to something more accurate, like "ConsensusUnavailable".
     SharedDeleted(TransactionDigest),
 }
 
@@ -190,8 +191,6 @@ pub trait ChildObjectResolver {
         receiving_object_id: &ObjectID,
         receive_object_at_version: SequenceNumber,
         epoch_id: EpochId,
-        // TODO: Delete this parameter once table migration is complete.
-        use_object_per_epoch_marker_table_v2: bool,
     ) -> SuiResult<Option<Object>>;
 }
 
@@ -440,8 +439,6 @@ impl<S: ChildObjectResolver> ChildObjectResolver for std::sync::Arc<S> {
         receiving_object_id: &ObjectID,
         receive_object_at_version: SequenceNumber,
         epoch_id: EpochId,
-        // TODO: Delete this parameter once table migration is complete.
-        use_object_per_epoch_marker_table_v2: bool,
     ) -> SuiResult<Option<Object>> {
         ChildObjectResolver::get_object_received_at_version(
             self.as_ref(),
@@ -449,7 +446,6 @@ impl<S: ChildObjectResolver> ChildObjectResolver for std::sync::Arc<S> {
             receiving_object_id,
             receive_object_at_version,
             epoch_id,
-            use_object_per_epoch_marker_table_v2,
         )
     }
 }
@@ -469,8 +465,6 @@ impl<S: ChildObjectResolver> ChildObjectResolver for &S {
         receiving_object_id: &ObjectID,
         receive_object_at_version: SequenceNumber,
         epoch_id: EpochId,
-        // TODO: Delete this parameter once table migration is complete.
-        use_object_per_epoch_marker_table_v2: bool,
     ) -> SuiResult<Option<Object>> {
         ChildObjectResolver::get_object_received_at_version(
             *self,
@@ -478,7 +472,6 @@ impl<S: ChildObjectResolver> ChildObjectResolver for &S {
             receiving_object_id,
             receive_object_at_version,
             epoch_id,
-            use_object_per_epoch_marker_table_v2,
         )
     }
 }
@@ -498,8 +491,6 @@ impl<S: ChildObjectResolver> ChildObjectResolver for &mut S {
         receiving_object_id: &ObjectID,
         receive_object_at_version: SequenceNumber,
         epoch_id: EpochId,
-        // TODO: Delete this parameter once table migration is complete.
-        use_object_per_epoch_marker_table_v2: bool,
     ) -> SuiResult<Option<Object>> {
         ChildObjectResolver::get_object_received_at_version(
             *self,
@@ -507,7 +498,6 @@ impl<S: ChildObjectResolver> ChildObjectResolver for &mut S {
             receiving_object_id,
             receive_object_at_version,
             epoch_id,
-            use_object_per_epoch_marker_table_v2,
         )
     }
 }
@@ -595,18 +585,6 @@ impl FullObjectKey {
         match self {
             FullObjectKey::Fastpath(object_key) => object_key.1,
             FullObjectKey::Consensus(consensus_object_key) => consensus_object_key.1,
-        }
-    }
-
-    // Returns the equivalent ObjectKey for this FullObjectKey, discarding any initial
-    // shared version information, if present.
-    // TODO: Delete this function once marker table migration is complete.
-    pub fn into_object_key(self) -> ObjectKey {
-        match self {
-            FullObjectKey::Fastpath(object_key) => object_key,
-            FullObjectKey::Consensus(consensus_object_key) => {
-                ObjectKey(consensus_object_key.0 .0, consensus_object_key.1)
-            }
         }
     }
 }

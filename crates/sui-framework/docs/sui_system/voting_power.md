@@ -9,7 +9,7 @@ title: Module `sui_system::voting_power`
 -  [Constants](#@Constants_0)
 -  [Function `set_voting_power`](#sui_system_voting_power_set_voting_power)
 -  [Function `init_voting_power_info`](#sui_system_voting_power_init_voting_power_info)
--  [Function `total_stake`](#sui_system_voting_power_total_stake)
+-  [Function `derive_raw_voting_power`](#sui_system_voting_power_derive_raw_voting_power)
 -  [Function `insert`](#sui_system_voting_power_insert)
 -  [Function `adjust_voting_power`](#sui_system_voting_power_adjust_voting_power)
 -  [Function `update_voting_power`](#sui_system_voting_power_update_voting_power)
@@ -124,47 +124,16 @@ Deprecated. Use VotingPowerInfoV2 instead.
 ## Constants
 
 
-<a name="sui_system_voting_power_EInvalidVotingPower"></a>
+<a name="sui_system_voting_power_TOTAL_VOTING_POWER"></a>
+
+Set total_voting_power as 10_000 by convention. Individual voting powers can be interpreted
+as easily understandable basis points (e.g., voting_power: 100 = 1%, voting_power: 1 = 0.01%) rather than
+opaque quantities whose meaning changes from epoch to epoch as the total amount staked shifts.
+Fixing the total voting power allows clients to hardcode the quorum threshold and total_voting power rather
+than recomputing these.
 
 
-
-<pre><code><b>const</b> <a href="../sui_system/voting_power.md#sui_system_voting_power_EInvalidVotingPower">EInvalidVotingPower</a>: u64 = 4;
-</code></pre>
-
-
-
-<a name="sui_system_voting_power_ERelativePowerMismatch"></a>
-
-
-
-<pre><code><b>const</b> <a href="../sui_system/voting_power.md#sui_system_voting_power_ERelativePowerMismatch">ERelativePowerMismatch</a>: u64 = 2;
-</code></pre>
-
-
-
-<a name="sui_system_voting_power_ETotalPowerMismatch"></a>
-
-
-
-<pre><code><b>const</b> <a href="../sui_system/voting_power.md#sui_system_voting_power_ETotalPowerMismatch">ETotalPowerMismatch</a>: u64 = 1;
-</code></pre>
-
-
-
-<a name="sui_system_voting_power_EVotingPowerOverThreshold"></a>
-
-
-
-<pre><code><b>const</b> <a href="../sui_system/voting_power.md#sui_system_voting_power_EVotingPowerOverThreshold">EVotingPowerOverThreshold</a>: u64 = 3;
-</code></pre>
-
-
-
-<a name="sui_system_voting_power_MAX_VOTING_POWER"></a>
-
-
-
-<pre><code><b>const</b> <a href="../sui_system/voting_power.md#sui_system_voting_power_MAX_VOTING_POWER">MAX_VOTING_POWER</a>: u64 = 1000;
+<pre><code><b>const</b> <a href="../sui_system/voting_power.md#sui_system_voting_power_TOTAL_VOTING_POWER">TOTAL_VOTING_POWER</a>: u64 = 10000;
 </code></pre>
 
 
@@ -180,16 +149,47 @@ up to BFT assumptions
 
 
 
-<a name="sui_system_voting_power_TOTAL_VOTING_POWER"></a>
-
-Set total_voting_power as 10_000 by convention. Individual voting powers can be interpreted
-as easily understandable basis points (e.g., voting_power: 100 = 1%, voting_power: 1 = 0.01%) rather than
-opaque quantities whose meaning changes from epoch to epoch as the total amount staked shifts.
-Fixing the total voting power allows clients to hardcode the quorum threshold and total_voting power rather
-than recomputing these.
+<a name="sui_system_voting_power_MAX_VOTING_POWER"></a>
 
 
-<pre><code><b>const</b> <a href="../sui_system/voting_power.md#sui_system_voting_power_TOTAL_VOTING_POWER">TOTAL_VOTING_POWER</a>: u64 = 10000;
+
+<pre><code><b>const</b> <a href="../sui_system/voting_power.md#sui_system_voting_power_MAX_VOTING_POWER">MAX_VOTING_POWER</a>: u64 = 1000;
+</code></pre>
+
+
+
+<a name="sui_system_voting_power_ETotalPowerMismatch"></a>
+
+
+
+<pre><code><b>const</b> <a href="../sui_system/voting_power.md#sui_system_voting_power_ETotalPowerMismatch">ETotalPowerMismatch</a>: u64 = 1;
+</code></pre>
+
+
+
+<a name="sui_system_voting_power_ERelativePowerMismatch"></a>
+
+
+
+<pre><code><b>const</b> <a href="../sui_system/voting_power.md#sui_system_voting_power_ERelativePowerMismatch">ERelativePowerMismatch</a>: u64 = 2;
+</code></pre>
+
+
+
+<a name="sui_system_voting_power_EVotingPowerOverThreshold"></a>
+
+
+
+<pre><code><b>const</b> <a href="../sui_system/voting_power.md#sui_system_voting_power_EVotingPowerOverThreshold">EVotingPowerOverThreshold</a>: u64 = 3;
+</code></pre>
+
+
+
+<a name="sui_system_voting_power_EInvalidVotingPower"></a>
+
+
+
+<pre><code><b>const</b> <a href="../sui_system/voting_power.md#sui_system_voting_power_EInvalidVotingPower">EInvalidVotingPower</a>: u64 = 4;
 </code></pre>
 
 
@@ -203,7 +203,7 @@ Each validator's voting power is initialized using their stake. We then attempt 
 at <code><a href="../sui_system/voting_power.md#sui_system_voting_power_MAX_VOTING_POWER">MAX_VOTING_POWER</a></code>. If <code><a href="../sui_system/voting_power.md#sui_system_voting_power_MAX_VOTING_POWER">MAX_VOTING_POWER</a></code> is not a feasible cap, we pick the lowest possible cap.
 
 
-<pre><code><b>public</b>(package) <b>fun</b> <a href="../sui_system/voting_power.md#sui_system_voting_power_set_voting_power">set_voting_power</a>(validators: &<b>mut</b> vector&lt;<a href="../sui_system/validator.md#sui_system_validator_Validator">sui_system::validator::Validator</a>&gt;)
+<pre><code><b>public</b>(package) <b>fun</b> <a href="../sui_system/voting_power.md#sui_system_voting_power_set_voting_power">set_voting_power</a>(validators: &<b>mut</b> vector&lt;<a href="../sui_system/validator.md#sui_system_validator_Validator">sui_system::validator::Validator</a>&gt;, total_stake: u64)
 </code></pre>
 
 
@@ -212,13 +212,13 @@ at <code><a href="../sui_system/voting_power.md#sui_system_voting_power_MAX_VOTI
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b>(package) <b>fun</b> <a href="../sui_system/voting_power.md#sui_system_voting_power_set_voting_power">set_voting_power</a>(validators: &<b>mut</b> vector&lt;Validator&gt;) {
+<pre><code><b>public</b>(package) <b>fun</b> <a href="../sui_system/voting_power.md#sui_system_voting_power_set_voting_power">set_voting_power</a>(validators: &<b>mut</b> vector&lt;Validator&gt;, total_stake: u64) {
     // If threshold_pct is too small, it's possible that even when all validators reach the threshold we still don't
     // have 100%. So we bound the threshold_pct to be always enough to find a solution.
     <b>let</b> threshold = <a href="../sui_system/voting_power.md#sui_system_voting_power_TOTAL_VOTING_POWER">TOTAL_VOTING_POWER</a>.min(
         <a href="../sui_system/voting_power.md#sui_system_voting_power_MAX_VOTING_POWER">MAX_VOTING_POWER</a>.max(<a href="../sui_system/voting_power.md#sui_system_voting_power_TOTAL_VOTING_POWER">TOTAL_VOTING_POWER</a>.divide_and_round_up(validators.length())),
     );
-    <b>let</b> (<b>mut</b> info_list, remaining_power) = <a href="../sui_system/voting_power.md#sui_system_voting_power_init_voting_power_info">init_voting_power_info</a>(validators, threshold);
+    <b>let</b> (<b>mut</b> info_list, remaining_power) = <a href="../sui_system/voting_power.md#sui_system_voting_power_init_voting_power_info">init_voting_power_info</a>(validators, threshold, total_stake);
     <a href="../sui_system/voting_power.md#sui_system_voting_power_adjust_voting_power">adjust_voting_power</a>(&<b>mut</b> info_list, threshold, remaining_power);
     <a href="../sui_system/voting_power.md#sui_system_voting_power_update_voting_power">update_voting_power</a>(validators, info_list);
     <a href="../sui_system/voting_power.md#sui_system_voting_power_check_invariants">check_invariants</a>(validators);
@@ -239,7 +239,7 @@ descending order using voting power.
 Anything beyond the threshold is added to the remaining_power, which is also returned.
 
 
-<pre><code><b>fun</b> <a href="../sui_system/voting_power.md#sui_system_voting_power_init_voting_power_info">init_voting_power_info</a>(validators: &vector&lt;<a href="../sui_system/validator.md#sui_system_validator_Validator">sui_system::validator::Validator</a>&gt;, threshold: u64): (vector&lt;<a href="../sui_system/voting_power.md#sui_system_voting_power_VotingPowerInfoV2">sui_system::voting_power::VotingPowerInfoV2</a>&gt;, u64)
+<pre><code><b>fun</b> <a href="../sui_system/voting_power.md#sui_system_voting_power_init_voting_power_info">init_voting_power_info</a>(validators: &vector&lt;<a href="../sui_system/validator.md#sui_system_validator_Validator">sui_system::validator::Validator</a>&gt;, threshold: u64, total_stake: u64): (vector&lt;<a href="../sui_system/voting_power.md#sui_system_voting_power_VotingPowerInfoV2">sui_system::voting_power::VotingPowerInfoV2</a>&gt;, u64)
 </code></pre>
 
 
@@ -251,17 +251,16 @@ Anything beyond the threshold is added to the remaining_power, which is also ret
 <pre><code><b>fun</b> <a href="../sui_system/voting_power.md#sui_system_voting_power_init_voting_power_info">init_voting_power_info</a>(
     validators: &vector&lt;Validator&gt;,
     threshold: u64,
+    total_stake: u64,
 ): (vector&lt;<a href="../sui_system/voting_power.md#sui_system_voting_power_VotingPowerInfoV2">VotingPowerInfoV2</a>&gt;, u64) {
-    <b>let</b> <a href="../sui_system/voting_power.md#sui_system_voting_power_total_stake">total_stake</a> = <a href="../sui_system/voting_power.md#sui_system_voting_power_total_stake">total_stake</a>(validators);
     <b>let</b> <b>mut</b> i = 0;
     <b>let</b> len = validators.length();
     <b>let</b> <b>mut</b> total_power = 0;
     <b>let</b> <b>mut</b> result = vector[];
     <b>while</b> (i &lt; len) {
         <b>let</b> <a href="../sui_system/validator.md#sui_system_validator">validator</a> = &validators[i];
-        <b>let</b> stake = <a href="../sui_system/validator.md#sui_system_validator">validator</a>.<a href="../sui_system/voting_power.md#sui_system_voting_power_total_stake">total_stake</a>();
-        <b>let</b> adjusted_stake = stake <b>as</b> u128 * (<a href="../sui_system/voting_power.md#sui_system_voting_power_TOTAL_VOTING_POWER">TOTAL_VOTING_POWER</a> <b>as</b> u128) / (<a href="../sui_system/voting_power.md#sui_system_voting_power_total_stake">total_stake</a> <b>as</b> u128);
-        <b>let</b> <a href="../sui_system/voting_power.md#sui_system_voting_power">voting_power</a> = (adjusted_stake <b>as</b> u64).min(threshold);
+        <b>let</b> stake = <a href="../sui_system/validator.md#sui_system_validator">validator</a>.total_stake();
+        <b>let</b> <a href="../sui_system/voting_power.md#sui_system_voting_power">voting_power</a> = <a href="../sui_system/voting_power.md#sui_system_voting_power_derive_raw_voting_power">derive_raw_voting_power</a>(stake, total_stake).min(threshold);
         <b>let</b> info = <a href="../sui_system/voting_power.md#sui_system_voting_power_VotingPowerInfoV2">VotingPowerInfoV2</a> {
             validator_index: i,
             <a href="../sui_system/voting_power.md#sui_system_voting_power">voting_power</a>,
@@ -279,14 +278,13 @@ Anything beyond the threshold is added to the remaining_power, which is also ret
 
 </details>
 
-<a name="sui_system_voting_power_total_stake"></a>
+<a name="sui_system_voting_power_derive_raw_voting_power"></a>
 
-## Function `total_stake`
-
-Sum up the total stake of all validators.
+## Function `derive_raw_voting_power`
 
 
-<pre><code><b>fun</b> <a href="../sui_system/voting_power.md#sui_system_voting_power_total_stake">total_stake</a>(validators: &vector&lt;<a href="../sui_system/validator.md#sui_system_validator_Validator">sui_system::validator::Validator</a>&gt;): u64
+
+<pre><code><b>public</b>(package) <b>fun</b> <a href="../sui_system/voting_power.md#sui_system_voting_power_derive_raw_voting_power">derive_raw_voting_power</a>(stake: u64, total_stake: u64): u64
 </code></pre>
 
 
@@ -295,15 +293,8 @@ Sum up the total stake of all validators.
 <summary>Implementation</summary>
 
 
-<pre><code><b>fun</b> <a href="../sui_system/voting_power.md#sui_system_voting_power_total_stake">total_stake</a>(validators: &vector&lt;Validator&gt;): u64 {
-    <b>let</b> <b>mut</b> i = 0;
-    <b>let</b> len = validators.length();
-    <b>let</b> <b>mut</b> <a href="../sui_system/voting_power.md#sui_system_voting_power_total_stake">total_stake</a> =0 ;
-    <b>while</b> (i &lt; len) {
-        <a href="../sui_system/voting_power.md#sui_system_voting_power_total_stake">total_stake</a> = <a href="../sui_system/voting_power.md#sui_system_voting_power_total_stake">total_stake</a> + validators[i].<a href="../sui_system/voting_power.md#sui_system_voting_power_total_stake">total_stake</a>();
-        i = i + 1;
-    };
-    <a href="../sui_system/voting_power.md#sui_system_voting_power_total_stake">total_stake</a>
+<pre><code><b>public</b>(package) <b>fun</b> <a href="../sui_system/voting_power.md#sui_system_voting_power_derive_raw_voting_power">derive_raw_voting_power</a>(stake: u64, total_stake: u64): u64 {
+    ((stake <b>as</b> u128 * (<a href="../sui_system/voting_power.md#sui_system_voting_power_TOTAL_VOTING_POWER">TOTAL_VOTING_POWER</a> <b>as</b> u128) / (total_stake <b>as</b> u128)) <b>as</b> u64)
 }
 </code></pre>
 
@@ -453,8 +444,8 @@ Check a few invariants that must hold after setting the voting power.
         <b>while</b> (b &lt; len) {
             <b>let</b> validator_a = &v[a];
             <b>let</b> validator_b = &v[b];
-            <b>let</b> stake_a = validator_a.<a href="../sui_system/voting_power.md#sui_system_voting_power_total_stake">total_stake</a>();
-            <b>let</b> stake_b = validator_b.<a href="../sui_system/voting_power.md#sui_system_voting_power_total_stake">total_stake</a>();
+            <b>let</b> stake_a = validator_a.total_stake();
+            <b>let</b> stake_b = validator_b.total_stake();
             <b>let</b> power_a = validator_a.<a href="../sui_system/voting_power.md#sui_system_voting_power">voting_power</a>();
             <b>let</b> power_b = validator_b.<a href="../sui_system/voting_power.md#sui_system_voting_power">voting_power</a>();
             <b>if</b> (stake_a &gt; stake_b) {

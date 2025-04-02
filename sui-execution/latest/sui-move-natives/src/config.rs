@@ -45,7 +45,7 @@ pub fn read_setting_impl(
         config_read_setting_impl_cost_per_byte,
     } = context
         .extensions_mut()
-        .get::<NativesCostTable>()
+        .get::<NativesCostTable>()?
         .config_read_setting_impl_cost_params
         .clone();
 
@@ -90,7 +90,7 @@ pub fn read_setting_impl(
     let read_value_opt = {
         let object_runtime: &mut ObjectRuntime = &mut context
             .extensions_mut()
-            .get::<NativeContextMut<ObjectRuntime>>()
+            .get::<NativeContextMut<ObjectRuntime>>()?
             .borrow_mut();
 
         consistent_value_before_current_epoch(

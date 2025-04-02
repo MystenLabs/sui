@@ -158,9 +158,9 @@ impl TransferFunctions for EscapeAnalysis<'_> {
                 BorrowGlobal(_mid, _sid, _types) => {
                     state.insert(rets[0], AbsValue::InternalRef);
                 }
-                ReadRef | MoveFrom(..) | Exists(..) | Pack(..) | Eq | Neq | CastU8 | CastU64
-                | CastU128 | Not | Add | Sub | Mul | Div | Mod | BitOr | BitAnd | Xor | Shl
-                | Shr | Lt | Gt | Le | Ge | Or | And => {
+                ReadRef | MoveFrom(..) | Exists(..) | Pack(..) | Eq | Neq | CastU8 | CastU16
+                | CastU32 | CastU64 | CastU128 | CastU256 | Not | Add | Sub | Mul | Div | Mod
+                | BitOr | BitAnd | Xor | Shl | Shr | Lt | Gt | Le | Ge | Or | And => {
                     // These operations all produce a non-reference value
                     state.insert(rets[0], AbsValue::NonRef);
                 }

@@ -581,7 +581,7 @@ fn op_step_impl(
             state.push_operand(Value::u16(integer_value.cast_u16()?))?;
         }
         Bytecode::CastU32 => {
-            gas_meter.charge_simple_instr(S::CastU16)?;
+            gas_meter.charge_simple_instr(S::CastU32)?;
             let integer_value = state.pop_operand_as::<IntegerValue>()?;
             state.push_operand(Value::u32(integer_value.cast_u32()?))?;
         }
@@ -596,7 +596,7 @@ fn op_step_impl(
             state.push_operand(Value::u128(integer_value.cast_u128()?))?;
         }
         Bytecode::CastU256 => {
-            gas_meter.charge_simple_instr(S::CastU16)?;
+            gas_meter.charge_simple_instr(S::CastU256)?;
             let integer_value = state.pop_operand_as::<IntegerValue>()?;
             state.push_operand(Value::u256(integer_value.cast_u256()?))?;
         }

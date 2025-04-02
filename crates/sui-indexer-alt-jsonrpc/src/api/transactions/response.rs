@@ -69,6 +69,9 @@ pub(super) async fn transaction(
 
     let mut response = SuiTransactionBlockResponse::new(digest);
 
+    response.timestamp_ms = Some(tx.timestamp_ms());
+    response.checkpoint = Some(tx.cp_sequence_number());
+
     if options.show_input {
         response.transaction = Some(input(ctx, &tx).await?);
     }

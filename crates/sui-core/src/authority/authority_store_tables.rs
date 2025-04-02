@@ -8,7 +8,7 @@ use std::path::Path;
 use sui_types::accumulator::Accumulator;
 use sui_types::base_types::SequenceNumber;
 use sui_types::digests::TransactionEventsDigest;
-use sui_types::effects::TransactionEffects;
+use sui_types::effects::{TransactionEffects, TransactionEvents};
 use sui_types::storage::{FullObjectKey, MarkerValue};
 use tracing::error;
 use typed_store::metrics::SamplingInterval;
@@ -99,6 +99,9 @@ pub struct AuthorityPerpetualTables {
     // TODO: Figure out what to do with this table in the long run.
     // Also we need a pruning policy for this table. We can prune this table along with tx/effects.
     pub(crate) events: DBMap<(TransactionEventsDigest, usize), Event>,
+
+    // Events keyed by the digest of the transaction that produced them.
+    pub(crate) events_2: DBMap<TransactionDigest, TransactionEvents>,
 
     /// DEPRECATED in favor of the table of the same name in authority_per_epoch_store.
     /// Please do not add new accessors/callsites.
@@ -454,6 +457,7 @@ impl AuthorityPerpetualTables {
         self.objects.unsafe_clear()?;
         self.live_owned_object_markers.unsafe_clear()?;
         self.executed_effects.unsafe_clear()?;
+        self.events_2.unsafe_clear()?;
         self.events.unsafe_clear()?;
         self.executed_transactions_to_checkpoint.unsafe_clear()?;
         self.root_state_hash_by_epoch.unsafe_clear()?;
@@ -463,7 +467,7 @@ impl AuthorityPerpetualTables {
         self.expected_storage_fund_imbalance.unsafe_clear()?;
         self.object_per_epoch_marker_table.unsafe_clear()?;
         self.object_per_epoch_marker_table_v2.unsafe_clear()?;
-        self.objects.rocksdb.flush()?;
+        self.objects.db.flush()?;
         Ok(())
     }
 

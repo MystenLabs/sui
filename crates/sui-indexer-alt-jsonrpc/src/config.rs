@@ -3,12 +3,16 @@
 
 use std::mem;
 
+use anyhow::Context as _;
+use jsonrpsee::http_client::{HeaderMap, HeaderValue, HttpClient, HttpClientBuilder};
 use sui_default_config::DefaultConfig;
 use sui_protocol_config::ProtocolConfig;
 use sui_types::base_types::{ObjectID, SuiAddress};
 use tracing::warn;
 
 pub use sui_name_service::NameServiceConfig;
+
+pub const CLIENT_SDK_TYPE_HEADER: &str = "client-sdk-type";
 
 #[derive(Debug)]
 pub struct RpcConfig {
@@ -24,11 +28,9 @@ pub struct RpcConfig {
     /// Configuration for coin-related RPC methods.
     pub coins: CoinsConfig,
 
-    /// Configuration for transaction execution RPC methods.
-    pub write: WriteConfig,
-
-    /// Configuration for bigtable kv store, if it is used.
-    pub bigtable: Option<BigtableConfig>,
+    /// Configuration for methods that require a fullnode RPC connection,
+    /// including transaction execution, dry-running, and delegation coin queries etc.
+    pub node: NodeConfig,
 
     /// Configuring limits for the package resolver.
     pub package_resolver: sui_package_resolver::Limits,
@@ -49,12 +51,8 @@ pub struct RpcLayer {
     /// Configuration for coin-related RPC methods.
     pub coins: CoinsLayer,
 
-    /// Configuration for transaction execution RPC methods.
-    pub write: WriteLayer,
-
-    /// Configuration for bigtable kv store, if it is used.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub bigtable: Option<BigtableConfig>,
+    /// Configuration for transaction execution, dry-running, and delegation coin queries etc.
+    pub node: NodeLayer,
 
     /// Configuring limits for the package resolver.
     pub package_resolver: PackageResolverLayer,
@@ -160,7 +158,7 @@ pub struct CoinsLayer {
 }
 
 #[derive(Clone, Debug)]
-pub struct WriteConfig {
+pub struct NodeConfig {
     /// The value of the header to be sent to the fullnode RPC, used to distinguish between different instances.
     pub header_value: String,
     /// The maximum size of the request body allowed.
@@ -169,19 +167,12 @@ pub struct WriteConfig {
 
 #[DefaultConfig]
 #[derive(Clone, Default, Debug)]
-pub struct WriteLayer {
+pub struct NodeLayer {
     pub header_value: Option<String>,
     pub max_request_size: Option<u32>,
 
     #[serde(flatten)]
     pub extra: toml::Table,
-}
-
-#[DefaultConfig]
-#[derive(Clone, Default, Debug)]
-pub struct BigtableConfig {
-    /// The instance id of the Bigtable instance to connect to.
-    pub instance_id: String,
 }
 
 #[DefaultConfig]
@@ -205,9 +196,8 @@ impl RpcLayer {
             transactions: TransactionsConfig::default().into(),
             name_service: NameServiceConfig::default().into(),
             coins: CoinsConfig::default().into(),
-            bigtable: None,
             package_resolver: PackageResolverLayer::default(),
-            write: WriteConfig::default().into(),
+            node: NodeConfig::default().into(),
             extra: Default::default(),
         }
     }
@@ -219,8 +209,7 @@ impl RpcLayer {
             transactions: self.transactions.finish(TransactionsConfig::default()),
             name_service: self.name_service.finish(NameServiceConfig::default()),
             coins: self.coins.finish(CoinsConfig::default()),
-            write: self.write.finish(WriteConfig::default()),
-            bigtable: self.bigtable,
+            node: self.node.finish(NodeConfig::default()),
             package_resolver: self.package_resolver.finish(),
         }
     }
@@ -279,10 +268,26 @@ impl CoinsLayer {
     }
 }
 
-impl WriteLayer {
-    pub fn finish(self, base: WriteConfig) -> WriteConfig {
-        check_extra("write", self.extra);
-        WriteConfig {
+impl NodeConfig {
+    pub fn client(&self, fullnode_rpc_url: url::Url) -> anyhow::Result<HttpClient> {
+        let mut headers = HeaderMap::new();
+        headers.insert(
+            CLIENT_SDK_TYPE_HEADER,
+            HeaderValue::from_str(&self.header_value)?,
+        );
+
+        HttpClientBuilder::default()
+            .max_request_size(self.max_request_size)
+            .set_headers(headers.clone())
+            .build(&fullnode_rpc_url)
+            .context("Failed to initialize fullnode RPC client")
+    }
+}
+
+impl NodeLayer {
+    pub fn finish(self, base: NodeConfig) -> NodeConfig {
+        check_extra("node", self.extra);
+        NodeConfig {
             header_value: self.header_value.unwrap_or(base.header_value),
             max_request_size: self.max_request_size.unwrap_or(base.max_request_size),
         }
@@ -308,8 +313,7 @@ impl Default for RpcConfig {
             transactions: TransactionsConfig::default(),
             name_service: NameServiceConfig::default(),
             coins: CoinsConfig::default(),
-            write: WriteConfig::default(),
-            bigtable: None,
+            node: NodeConfig::default(),
             package_resolver: PackageResolverLayer::default().finish(),
         }
     }
@@ -348,7 +352,7 @@ impl Default for CoinsConfig {
     }
 }
 
-impl Default for WriteConfig {
+impl Default for NodeConfig {
     fn default() -> Self {
         Self {
             header_value: "sui-indexer-alt-jsonrpc".to_string(),
@@ -422,8 +426,8 @@ impl From<CoinsConfig> for CoinsLayer {
     }
 }
 
-impl From<WriteConfig> for WriteLayer {
-    fn from(config: WriteConfig) -> Self {
+impl From<NodeConfig> for NodeLayer {
+    fn from(config: NodeConfig) -> Self {
         Self {
             header_value: Some(config.header_value),
             max_request_size: Some(config.max_request_size),

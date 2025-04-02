@@ -37,7 +37,6 @@ macro_rules! fp_ensure {
         }
     };
 }
-use crate::digests::TransactionEventsDigest;
 use crate::execution_status::{CommandIndex, ExecutionFailureStatus};
 pub(crate) use fp_ensure;
 
@@ -497,7 +496,7 @@ pub enum SuiError {
     #[error("{TRANSACTIONS_NOT_FOUND_MSG_PREFIX} [{:?}].", digests)]
     TransactionsNotFound { digests: Vec<TransactionDigest> },
     #[error("Could not find the referenced transaction events [{digest:?}].")]
-    TransactionEventsNotFound { digest: TransactionEventsDigest },
+    TransactionEventsNotFound { digest: TransactionDigest },
     #[error(
         "Attempt to move to `Executed` state an transaction that has already been executed: {:?}.",
         digest
@@ -676,8 +675,8 @@ pub enum SuiError {
     #[error("The request did not contain a certificate")]
     NoCertificateProvidedError,
 
-    #[error("Enclave attestation failed: {0}")]
-    AttestationFailedToVerify(String),
+    #[error("Nitro attestation verify failed: {0}")]
+    NitroAttestationFailedToVerify(String),
 }
 
 #[repr(u64)]

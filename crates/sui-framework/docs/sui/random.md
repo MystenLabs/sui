@@ -15,9 +15,8 @@ This module provides functionality for generating secure randomness.
 -  [Function `update_randomness_state`](#sui_random_update_randomness_state)
 -  [Function `new_generator`](#sui_random_new_generator)
 -  [Function `derive_next_block`](#sui_random_derive_next_block)
--  [Function `fill_buffer`](#sui_random_fill_buffer)
 -  [Function `generate_bytes`](#sui_random_generate_bytes)
--  [Function `u256_from_bytes`](#sui_random_u256_from_bytes)
+-  [Macro function `uint_from_bytes`](#sui_random_uint_from_bytes)
 -  [Function `generate_u256`](#sui_random_generate_u256)
 -  [Function `generate_u128`](#sui_random_generate_u128)
 -  [Function `generate_u64`](#sui_random_generate_u64)
@@ -25,7 +24,7 @@ This module provides functionality for generating secure randomness.
 -  [Function `generate_u16`](#sui_random_generate_u16)
 -  [Function `generate_u8`](#sui_random_generate_u8)
 -  [Function `generate_bool`](#sui_random_generate_bool)
--  [Function `u128_in_range`](#sui_random_u128_in_range)
+-  [Macro function `uint_in_range`](#sui_random_uint_in_range)
 -  [Function `generate_u128_in_range`](#sui_random_generate_u128_in_range)
 -  [Function `generate_u64_in_range`](#sui_random_generate_u64_in_range)
 -  [Function `generate_u32_in_range`](#sui_random_generate_u32_in_range)
@@ -167,20 +166,20 @@ Unique randomness generator, derived from the global randomness.
 ## Constants
 
 
-<a name="sui_random_CURRENT_VERSION"></a>
+<a name="sui_random_ENotSystemAddress"></a>
 
 
 
-<pre><code><b>const</b> <a href="../sui/random.md#sui_random_CURRENT_VERSION">CURRENT_VERSION</a>: u64 = 1;
+<pre><code><b>const</b> <a href="../sui/random.md#sui_random_ENotSystemAddress">ENotSystemAddress</a>: u64 = 0;
 </code></pre>
 
 
 
-<a name="sui_random_EInvalidLength"></a>
+<a name="sui_random_EWrongInnerVersion"></a>
 
 
 
-<pre><code><b>const</b> <a href="../sui/random.md#sui_random_EInvalidLength">EInvalidLength</a>: u64 = 4;
+<pre><code><b>const</b> <a href="../sui/random.md#sui_random_EWrongInnerVersion">EWrongInnerVersion</a>: u64 = 1;
 </code></pre>
 
 
@@ -203,20 +202,20 @@ Unique randomness generator, derived from the global randomness.
 
 
 
-<a name="sui_random_ENotSystemAddress"></a>
+<a name="sui_random_EInvalidLength"></a>
 
 
 
-<pre><code><b>const</b> <a href="../sui/random.md#sui_random_ENotSystemAddress">ENotSystemAddress</a>: u64 = 0;
+<pre><code><b>const</b> <a href="../sui/random.md#sui_random_EInvalidLength">EInvalidLength</a>: u64 = 4;
 </code></pre>
 
 
 
-<a name="sui_random_EWrongInnerVersion"></a>
+<a name="sui_random_CURRENT_VERSION"></a>
 
 
 
-<pre><code><b>const</b> <a href="../sui/random.md#sui_random_EWrongInnerVersion">EWrongInnerVersion</a>: u64 = 1;
+<pre><code><b>const</b> <a href="../sui/random.md#sui_random_CURRENT_VERSION">CURRENT_VERSION</a>: u64 = 1;
 </code></pre>
 
 
@@ -297,7 +296,7 @@ Can only be called by genesis or change_epoch transactions.
     <b>let</b> version = <a href="../sui/versioned.md#sui_versioned_version">versioned::version</a>(&self.inner);
     // Replace this with a lazy update function when we add a new version of the inner <a href="../sui/object.md#sui_object">object</a>.
     <b>assert</b>!(version == <a href="../sui/random.md#sui_random_CURRENT_VERSION">CURRENT_VERSION</a>, <a href="../sui/random.md#sui_random_EWrongInnerVersion">EWrongInnerVersion</a>);
-    <b>let</b> inner: &<b>mut</b> <a href="../sui/random.md#sui_random_RandomInner">RandomInner</a> = <a href="../sui/versioned.md#sui_versioned_load_value_mut">versioned::load_value_mut</a>(&<b>mut</b> self.inner);
+    <b>let</b> inner: &<b>mut</b> <a href="../sui/random.md#sui_random_RandomInner">RandomInner</a> = self.inner.load_value_mut();
     <b>assert</b>!(inner.version == version, <a href="../sui/random.md#sui_random_EWrongInnerVersion">EWrongInnerVersion</a>);
     inner
 }
@@ -323,10 +322,10 @@ Can only be called by genesis or change_epoch transactions.
 
 
 <pre><code><b>fun</b> <a href="../sui/random.md#sui_random_load_inner">load_inner</a>(self: &<a href="../sui/random.md#sui_random_Random">Random</a>): &<a href="../sui/random.md#sui_random_RandomInner">RandomInner</a> {
-    <b>let</b> version = <a href="../sui/versioned.md#sui_versioned_version">versioned::version</a>(&self.inner);
+    <b>let</b> version = self.inner.version();
     // Replace this with a lazy update function when we add a new version of the inner <a href="../sui/object.md#sui_object">object</a>.
     <b>assert</b>!(version == <a href="../sui/random.md#sui_random_CURRENT_VERSION">CURRENT_VERSION</a>, <a href="../sui/random.md#sui_random_EWrongInnerVersion">EWrongInnerVersion</a>);
-    <b>let</b> inner: &<a href="../sui/random.md#sui_random_RandomInner">RandomInner</a> = <a href="../sui/versioned.md#sui_versioned_load_value">versioned::load_value</a>(&self.inner);
+    <b>let</b> inner: &<a href="../sui/random.md#sui_random_RandomInner">RandomInner</a> = self.inner.load_value();
     <b>assert</b>!(inner.version == version, <a href="../sui/random.md#sui_random_EWrongInnerVersion">EWrongInnerVersion</a>);
     inner
 }
@@ -409,7 +408,7 @@ https://docs.sui.io/guides/developer/advanced/randomness-onchain
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="../sui/random.md#sui_random_new_generator">new_generator</a>(r: &<a href="../sui/random.md#sui_random_Random">Random</a>, ctx: &<b>mut</b> TxContext): <a href="../sui/random.md#sui_random_RandomGenerator">RandomGenerator</a> {
-    <b>let</b> inner = <a href="../sui/random.md#sui_random_load_inner">load_inner</a>(r);
+    <b>let</b> inner = r.<a href="../sui/random.md#sui_random_load_inner">load_inner</a>();
     <b>let</b> seed = hmac_sha3_256(
         &inner.random_bytes,
         &ctx.fresh_object_address().to_bytes(),
@@ -426,6 +425,7 @@ https://docs.sui.io/guides/developer/advanced/randomness-onchain
 
 ## Function `derive_next_block`
 
+Get the next block of 32 random bytes.
 
 
 <pre><code><b>fun</b> <a href="../sui/random.md#sui_random_derive_next_block">derive_next_block</a>(g: &<b>mut</b> <a href="../sui/random.md#sui_random_RandomGenerator">sui::random::RandomGenerator</a>): vector&lt;u8&gt;
@@ -440,31 +440,6 @@ https://docs.sui.io/guides/developer/advanced/randomness-onchain
 <pre><code><b>fun</b> <a href="../sui/random.md#sui_random_derive_next_block">derive_next_block</a>(g: &<b>mut</b> <a href="../sui/random.md#sui_random_RandomGenerator">RandomGenerator</a>): vector&lt;u8&gt; {
     g.counter = g.counter + 1;
     hmac_sha3_256(&g.seed, &<a href="../sui/bcs.md#sui_bcs_to_bytes">bcs::to_bytes</a>(&g.counter))
-}
-</code></pre>
-
-
-
-</details>
-
-<a name="sui_random_fill_buffer"></a>
-
-## Function `fill_buffer`
-
-
-
-<pre><code><b>fun</b> <a href="../sui/random.md#sui_random_fill_buffer">fill_buffer</a>(g: &<b>mut</b> <a href="../sui/random.md#sui_random_RandomGenerator">sui::random::RandomGenerator</a>)
-</code></pre>
-
-
-
-<details>
-<summary>Implementation</summary>
-
-
-<pre><code><b>fun</b> <a href="../sui/random.md#sui_random_fill_buffer">fill_buffer</a>(g: &<b>mut</b> <a href="../sui/random.md#sui_random_RandomGenerator">RandomGenerator</a>) {
-    <b>let</b> next_block = <a href="../sui/random.md#sui_random_derive_next_block">derive_next_block</a>(g);
-    vector::append(&<b>mut</b> g.buffer, next_block);
 }
 </code></pre>
 
@@ -491,20 +466,17 @@ Generate n random bytes.
 <pre><code><b>public</b> <b>fun</b> <a href="../sui/random.md#sui_random_generate_bytes">generate_bytes</a>(g: &<b>mut</b> <a href="../sui/random.md#sui_random_RandomGenerator">RandomGenerator</a>, num_of_bytes: u16): vector&lt;u8&gt; {
     <b>let</b> <b>mut</b> result = vector[];
     // Append <a href="../sui/random.md#sui_random_RAND_OUTPUT_LEN">RAND_OUTPUT_LEN</a> size buffers directly without going through the generator's buffer.
-    <b>let</b> <b>mut</b> num_of_blocks = num_of_bytes / <a href="../sui/random.md#sui_random_RAND_OUTPUT_LEN">RAND_OUTPUT_LEN</a>;
-    <b>while</b> (num_of_blocks &gt; 0) {
-        vector::append(&<b>mut</b> result, <a href="../sui/random.md#sui_random_derive_next_block">derive_next_block</a>(g));
-        num_of_blocks = num_of_blocks - 1;
-    };
+    <b>let</b> num_of_blocks = num_of_bytes / <a href="../sui/random.md#sui_random_RAND_OUTPUT_LEN">RAND_OUTPUT_LEN</a>;
+    num_of_blocks.do!(|_| result.append(g.<a href="../sui/random.md#sui_random_derive_next_block">derive_next_block</a>()));
     // Fill the generator's buffer <b>if</b> needed.
     <b>let</b> num_of_bytes = num_of_bytes <b>as</b> u64;
-    <b>if</b> (vector::length(&g.buffer) &lt; (num_of_bytes - vector::length(&result))) {
-        <a href="../sui/random.md#sui_random_fill_buffer">fill_buffer</a>(g);
+    <b>let</b> remaining = num_of_bytes - result.length();
+    <b>if</b> (g.buffer.length() &lt; remaining) {
+        <b>let</b> next_block = g.<a href="../sui/random.md#sui_random_derive_next_block">derive_next_block</a>();
+        g.buffer.append(next_block);
     };
     // Take remaining bytes from the generator's buffer.
-    <b>while</b> (vector::length(&result) &lt; num_of_bytes) {
-        vector::push_back(&<b>mut</b> result, vector::pop_back(&<b>mut</b> g.buffer));
-    };
+    remaining.do!(|_| result.push_back(g.buffer.pop_back()));
     result
 }
 </code></pre>
@@ -513,13 +485,13 @@ Generate n random bytes.
 
 </details>
 
-<a name="sui_random_u256_from_bytes"></a>
+<a name="sui_random_uint_from_bytes"></a>
 
-## Function `u256_from_bytes`
+## Macro function `uint_from_bytes`
 
 
 
-<pre><code><b>fun</b> <a href="../sui/random.md#sui_random_u256_from_bytes">u256_from_bytes</a>(g: &<b>mut</b> <a href="../sui/random.md#sui_random_RandomGenerator">sui::random::RandomGenerator</a>, num_of_bytes: u8): u256
+<pre><code><b>macro</b> <b>fun</b> <a href="../sui/random.md#sui_random_uint_from_bytes">uint_from_bytes</a>&lt;$T: drop&gt;($g: &<b>mut</b> <a href="../sui/random.md#sui_random_RandomGenerator">sui::random::RandomGenerator</a>, $num_of_bytes: u8): $T
 </code></pre>
 
 
@@ -528,18 +500,20 @@ Generate n random bytes.
 <summary>Implementation</summary>
 
 
-<pre><code><b>fun</b> <a href="../sui/random.md#sui_random_u256_from_bytes">u256_from_bytes</a>(g: &<b>mut</b> <a href="../sui/random.md#sui_random_RandomGenerator">RandomGenerator</a>, num_of_bytes: u8): u256 {
-    <b>if</b> (vector::length(&g.buffer) &lt; num_of_bytes <b>as</b> u64) {
-        <a href="../sui/random.md#sui_random_fill_buffer">fill_buffer</a>(g);
+<pre><code><b>macro</b> <b>fun</b> <a href="../sui/random.md#sui_random_uint_from_bytes">uint_from_bytes</a>&lt;$T: drop&gt;($g: &<b>mut</b> <a href="../sui/random.md#sui_random_RandomGenerator">RandomGenerator</a>, $num_of_bytes: u8): $T {
+    <b>let</b> g = $g;
+    <b>let</b> num_of_bytes = $num_of_bytes;
+    <b>if</b> (g.buffer.length() &lt; num_of_bytes <b>as</b> u64) {
+        <b>let</b> next_block = g.<a href="../sui/random.md#sui_random_derive_next_block">derive_next_block</a>();
+        g.buffer.append(next_block);
     };
+    // TODO: why regression test fails <b>if</b> we <b>use</b> $T instead of u256
     <b>let</b> <b>mut</b> result: u256 = 0;
-    <b>let</b> <b>mut</b> i = 0;
-    <b>while</b> (i &lt; num_of_bytes) {
-        <b>let</b> byte = vector::pop_back(&<b>mut</b> g.buffer);
-        result = (result &lt;&lt; 8) + (byte <b>as</b> u256);
-        i = i + 1;
-    };
-    result
+    num_of_bytes.do!(|_| {
+        <b>let</b> byte = g.buffer.pop_back() <b>as</b> u256;
+        result = (result &lt;&lt; 8) + byte;
+    });
+    result <b>as</b> $T
 }
 </code></pre>
 
@@ -564,7 +538,7 @@ Generate a u256.
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="../sui/random.md#sui_random_generate_u256">generate_u256</a>(g: &<b>mut</b> <a href="../sui/random.md#sui_random_RandomGenerator">RandomGenerator</a>): u256 {
-    <a href="../sui/random.md#sui_random_u256_from_bytes">u256_from_bytes</a>(g, 32)
+    <a href="../sui/random.md#sui_random_uint_from_bytes">uint_from_bytes</a>!(g, 32)
 }
 </code></pre>
 
@@ -589,7 +563,7 @@ Generate a u128.
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="../sui/random.md#sui_random_generate_u128">generate_u128</a>(g: &<b>mut</b> <a href="../sui/random.md#sui_random_RandomGenerator">RandomGenerator</a>): u128 {
-    <a href="../sui/random.md#sui_random_u256_from_bytes">u256_from_bytes</a>(g, 16) <b>as</b> u128
+    <a href="../sui/random.md#sui_random_uint_from_bytes">uint_from_bytes</a>!(g, 16)
 }
 </code></pre>
 
@@ -614,7 +588,7 @@ Generate a u64.
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="../sui/random.md#sui_random_generate_u64">generate_u64</a>(g: &<b>mut</b> <a href="../sui/random.md#sui_random_RandomGenerator">RandomGenerator</a>): u64 {
-    <a href="../sui/random.md#sui_random_u256_from_bytes">u256_from_bytes</a>(g, 8) <b>as</b> u64
+    <a href="../sui/random.md#sui_random_uint_from_bytes">uint_from_bytes</a>!(g, 8)
 }
 </code></pre>
 
@@ -639,7 +613,7 @@ Generate a u32.
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="../sui/random.md#sui_random_generate_u32">generate_u32</a>(g: &<b>mut</b> <a href="../sui/random.md#sui_random_RandomGenerator">RandomGenerator</a>): u32 {
-    <a href="../sui/random.md#sui_random_u256_from_bytes">u256_from_bytes</a>(g, 4) <b>as</b> u32
+    <a href="../sui/random.md#sui_random_uint_from_bytes">uint_from_bytes</a>!(g, 4)
 }
 </code></pre>
 
@@ -664,7 +638,7 @@ Generate a u16.
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="../sui/random.md#sui_random_generate_u16">generate_u16</a>(g: &<b>mut</b> <a href="../sui/random.md#sui_random_RandomGenerator">RandomGenerator</a>): u16 {
-    <a href="../sui/random.md#sui_random_u256_from_bytes">u256_from_bytes</a>(g, 2) <b>as</b> u16
+    <a href="../sui/random.md#sui_random_uint_from_bytes">uint_from_bytes</a>!(g, 2)
 }
 </code></pre>
 
@@ -689,7 +663,7 @@ Generate a u8.
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="../sui/random.md#sui_random_generate_u8">generate_u8</a>(g: &<b>mut</b> <a href="../sui/random.md#sui_random_RandomGenerator">RandomGenerator</a>): u8 {
-    <a href="../sui/random.md#sui_random_u256_from_bytes">u256_from_bytes</a>(g, 1) <b>as</b> u8
+    <a href="../sui/random.md#sui_random_uint_from_bytes">uint_from_bytes</a>!(g, 1)
 }
 </code></pre>
 
@@ -714,7 +688,7 @@ Generate a boolean.
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="../sui/random.md#sui_random_generate_bool">generate_bool</a>(g: &<b>mut</b> <a href="../sui/random.md#sui_random_RandomGenerator">RandomGenerator</a>): bool {
-    (<a href="../sui/random.md#sui_random_u256_from_bytes">u256_from_bytes</a>(g, 1) & 1) == 1
+    (<a href="../sui/random.md#sui_random_uint_from_bytes">uint_from_bytes</a>!(g, 1) & 1) == 1
 }
 </code></pre>
 
@@ -722,13 +696,16 @@ Generate a boolean.
 
 </details>
 
-<a name="sui_random_u128_in_range"></a>
+<a name="sui_random_uint_in_range"></a>
 
-## Function `u128_in_range`
+## Macro function `uint_in_range`
+
+Helper macro to generate a random uint in [min, max] using a random number with num_of_bytes bytes.
+Assumes that the caller verified the inputs, and uses num_of_bytes to control the bias (e.g., 8 bytes larger
+than the actual type used by the caller function to limit the bias by 2^{-64}).
 
 
-
-<pre><code><b>fun</b> <a href="../sui/random.md#sui_random_u128_in_range">u128_in_range</a>(g: &<b>mut</b> <a href="../sui/random.md#sui_random_RandomGenerator">sui::random::RandomGenerator</a>, min: u128, max: u128, num_of_bytes: u8): u128
+<pre><code><b>macro</b> <b>fun</b> <a href="../sui/random.md#sui_random_uint_in_range">uint_in_range</a>&lt;$T: drop&gt;($g: &<b>mut</b> <a href="../sui/random.md#sui_random_RandomGenerator">sui::random::RandomGenerator</a>, $min: $T, $max: $T, $num_of_bytes: u8): $T
 </code></pre>
 
 
@@ -737,17 +714,22 @@ Generate a boolean.
 <summary>Implementation</summary>
 
 
-<pre><code><b>fun</b> <a href="../sui/random.md#sui_random_u128_in_range">u128_in_range</a>(g: &<b>mut</b> <a href="../sui/random.md#sui_random_RandomGenerator">RandomGenerator</a>, min: u128, max: u128, num_of_bytes: u8): u128 {
+<pre><code><b>macro</b> <b>fun</b> <a href="../sui/random.md#sui_random_uint_in_range">uint_in_range</a>&lt;$T: drop&gt;(
+    $g: &<b>mut</b> <a href="../sui/random.md#sui_random_RandomGenerator">RandomGenerator</a>,
+    $min: $T,
+    $max: $T,
+    $num_of_bytes: u8,
+): $T {
+    <b>let</b> min = $min;
+    <b>let</b> max = $max;
     <b>assert</b>!(min &lt;= max, <a href="../sui/random.md#sui_random_EInvalidRange">EInvalidRange</a>);
-    <b>if</b> (min == max) {
-        <b>return</b> min
-    };
+    <b>if</b> (min == max) <b>return</b> min;
     // Pick a <a href="../sui/random.md#sui_random">random</a> number in [0, max - min] by generating a <a href="../sui/random.md#sui_random">random</a> number that is larger than max-min, and taking
     // the modulo of the <a href="../sui/random.md#sui_random">random</a> number by the range size. Then add the min to the result to get a number in
     // [min, max].
     <b>let</b> range_size = (max - min) <b>as</b> u256 + 1;
-    <b>let</b> rand = <a href="../sui/random.md#sui_random_u256_from_bytes">u256_from_bytes</a>(g, num_of_bytes);
-    min + (rand % range_size <b>as</b> u128)
+    <b>let</b> rand = <a href="../sui/random.md#sui_random_uint_from_bytes">uint_from_bytes</a>!($g, $num_of_bytes);
+    min + (rand % range_size <b>as</b> $T)
 }
 </code></pre>
 
@@ -772,7 +754,7 @@ Generate a random u128 in [min, max] (with a bias of 2^{-64}).
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="../sui/random.md#sui_random_generate_u128_in_range">generate_u128_in_range</a>(g: &<b>mut</b> <a href="../sui/random.md#sui_random_RandomGenerator">RandomGenerator</a>, min: u128, max: u128): u128 {
-    <a href="../sui/random.md#sui_random_u128_in_range">u128_in_range</a>(g, min, max, 24)
+    <a href="../sui/random.md#sui_random_uint_in_range">uint_in_range</a>!(g, min, max, 24)
 }
 </code></pre>
 
@@ -796,7 +778,7 @@ Generate a random u128 in [min, max] (with a bias of 2^{-64}).
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="../sui/random.md#sui_random_generate_u64_in_range">generate_u64_in_range</a>(g: &<b>mut</b> <a href="../sui/random.md#sui_random_RandomGenerator">RandomGenerator</a>, min: u64, max: u64): u64 {
-    <a href="../sui/random.md#sui_random_u128_in_range">u128_in_range</a>(g, min <b>as</b> u128, max <b>as</b> u128, 16) <b>as</b> u64
+    <a href="../sui/random.md#sui_random_uint_in_range">uint_in_range</a>!(g, min, max, 16)
 }
 </code></pre>
 
@@ -821,7 +803,7 @@ Generate a random u32 in [min, max] (with a bias of 2^{-64}).
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="../sui/random.md#sui_random_generate_u32_in_range">generate_u32_in_range</a>(g: &<b>mut</b> <a href="../sui/random.md#sui_random_RandomGenerator">RandomGenerator</a>, min: u32, max: u32): u32 {
-    <a href="../sui/random.md#sui_random_u128_in_range">u128_in_range</a>(g, min <b>as</b> u128, max <b>as</b> u128, 12) <b>as</b> u32
+    <a href="../sui/random.md#sui_random_uint_in_range">uint_in_range</a>!(g, min, max, 12)
 }
 </code></pre>
 
@@ -846,7 +828,7 @@ Generate a random u16 in [min, max] (with a bias of 2^{-64}).
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="../sui/random.md#sui_random_generate_u16_in_range">generate_u16_in_range</a>(g: &<b>mut</b> <a href="../sui/random.md#sui_random_RandomGenerator">RandomGenerator</a>, min: u16, max: u16): u16 {
-    <a href="../sui/random.md#sui_random_u128_in_range">u128_in_range</a>(g, min <b>as</b> u128, max <b>as</b> u128, 10) <b>as</b> u16
+    <a href="../sui/random.md#sui_random_uint_in_range">uint_in_range</a>!(g, min, max, 10)
 }
 </code></pre>
 
@@ -871,7 +853,7 @@ Generate a random u8 in [min, max] (with a bias of 2^{-64}).
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="../sui/random.md#sui_random_generate_u8_in_range">generate_u8_in_range</a>(g: &<b>mut</b> <a href="../sui/random.md#sui_random_RandomGenerator">RandomGenerator</a>, min: u8, max: u8): u8 {
-    <a href="../sui/random.md#sui_random_u128_in_range">u128_in_range</a>(g, min <b>as</b> u128, max <b>as</b> u128, 9) <b>as</b> u8
+    <a href="../sui/random.md#sui_random_uint_in_range">uint_in_range</a>!(g, min, max, 9)
 }
 </code></pre>
 
@@ -896,19 +878,15 @@ Shuffle a vector using the random generator (Fisher–Yates/Knuth shuffle).
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="../sui/random.md#sui_random_shuffle">shuffle</a>&lt;T&gt;(g: &<b>mut</b> <a href="../sui/random.md#sui_random_RandomGenerator">RandomGenerator</a>, v: &<b>mut</b> vector&lt;T&gt;) {
-    <b>let</b> n = vector::length(v);
-    <b>if</b> (n == 0) {
-        <b>return</b>
-    };
+    <b>let</b> n = v.length();
+    <b>if</b> (n == 0) <b>return</b>;
     <b>assert</b>!(n &lt;= <a href="../sui/random.md#sui_random_U16_MAX">U16_MAX</a>, <a href="../sui/random.md#sui_random_EInvalidLength">EInvalidLength</a>);
     <b>let</b> n = n <b>as</b> u16;
-    <b>let</b> <b>mut</b> i: u16 = 0;
     <b>let</b> end = n - 1;
-    <b>while</b> (i &lt; end) {
-        <b>let</b> j = <a href="../sui/random.md#sui_random_generate_u16_in_range">generate_u16_in_range</a>(g, i, end);
-        vector::swap(v, i <b>as</b> u64, j <b>as</b> u64);
-        i = i + 1;
-    };
+    end.do!(|i| {
+        <b>let</b> j = g.<a href="../sui/random.md#sui_random_generate_u16_in_range">generate_u16_in_range</a>(i, end);
+        v.swap(i <b>as</b> u64, j <b>as</b> u64);
+    });
 }
 </code></pre>
 

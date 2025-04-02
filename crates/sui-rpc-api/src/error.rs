@@ -298,3 +298,94 @@ impl ErrorDetails {
         details
     }
 }
+
+#[derive(Debug)]
+pub struct ObjectNotFoundError {
+    object_id: sui_sdk_types::ObjectId,
+    version: Option<sui_sdk_types::Version>,
+}
+
+impl ObjectNotFoundError {
+    pub fn new(object_id: sui_sdk_types::ObjectId) -> Self {
+        Self {
+            object_id,
+            version: None,
+        }
+    }
+
+    pub fn new_with_version(
+        object_id: sui_sdk_types::ObjectId,
+        version: sui_sdk_types::Version,
+    ) -> Self {
+        Self {
+            object_id,
+            version: Some(version),
+        }
+    }
+}
+
+impl std::fmt::Display for ObjectNotFoundError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "Object {}", self.object_id)?;
+
+        if let Some(version) = self.version {
+            write!(f, " with version {version}")?;
+        }
+
+        write!(f, " not found")
+    }
+}
+
+impl std::error::Error for ObjectNotFoundError {}
+
+impl From<ObjectNotFoundError> for crate::RpcError {
+    fn from(value: ObjectNotFoundError) -> Self {
+        Self::new(tonic::Code::NotFound, value.to_string())
+    }
+}
+
+#[derive(Debug)]
+pub struct CheckpointNotFoundError {
+    sequence_number: Option<u64>,
+    digest: Option<sui_sdk_types::CheckpointDigest>,
+}
+
+impl CheckpointNotFoundError {
+    pub fn sequence_number(sequence_number: u64) -> Self {
+        Self {
+            sequence_number: Some(sequence_number),
+            digest: None,
+        }
+    }
+
+    pub fn digest(digest: sui_sdk_types::CheckpointDigest) -> Self {
+        Self {
+            sequence_number: None,
+            digest: Some(digest),
+        }
+    }
+}
+
+impl std::fmt::Display for CheckpointNotFoundError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "Checkpoint ")?;
+
+        if let Some(s) = self.sequence_number {
+            write!(f, "{s} ")?;
+        }
+
+        if let Some(d) = &self.digest {
+            write!(f, "{d} ")?;
+        }
+
+        write!(f, "not found")
+    }
+}
+
+impl std::error::Error for CheckpointNotFoundError {}
+
+impl From<CheckpointNotFoundError> for crate::RpcError {
+    fn from(value: CheckpointNotFoundError) -> Self {
+        Self::new(tonic::Code::NotFound, value.to_string())
+    }
+}

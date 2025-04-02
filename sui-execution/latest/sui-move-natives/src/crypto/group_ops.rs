@@ -29,45 +29,47 @@ pub const NOT_SUPPORTED_ERROR: u64 = 0;
 pub const INVALID_INPUT_ERROR: u64 = 1;
 pub const INPUT_TOO_LONG_ERROR: u64 = 2;
 
-fn is_supported(context: &NativeContext) -> bool {
-    context
+fn is_supported(context: &NativeContext) -> PartialVMResult<bool> {
+    Ok(context
         .extensions()
-        .get::<NativeContextMut<ObjectRuntime>>()
+        .get::<NativeContextMut<ObjectRuntime>>()?
         .borrow()
         .protocol_config
-        .enable_group_ops_native_functions()
+        .enable_group_ops_native_functions())
 }
 
-fn is_msm_supported(context: &NativeContext) -> bool {
-    context
+fn is_msm_supported(context: &NativeContext) -> PartialVMResult<bool> {
+    Ok(context
         .extensions()
-        .get::<NativeContextMut<ObjectRuntime>>()
+        .get::<NativeContextMut<ObjectRuntime>>()?
         .borrow()
         .protocol_config
-        .enable_group_ops_native_function_msm()
+        .enable_group_ops_native_function_msm())
 }
 
-fn is_uncompressed_g1_supported(context: &NativeContext) -> bool {
-    context
+fn is_uncompressed_g1_supported(context: &NativeContext) -> PartialVMResult<bool> {
+    Ok(context
         .extensions()
-        .get::<NativeContextMut<ObjectRuntime>>()
+        .get::<NativeContextMut<ObjectRuntime>>()?
         .borrow()
         .protocol_config
-        .uncompressed_g1_group_elements()
+        .uncompressed_g1_group_elements())
 }
 
-fn v2_native_charge(context: &NativeContext, cost: InternalGas) -> InternalGas {
-    if context
-        .extensions()
-        .get::<NativeContextMut<ObjectRuntime>>()
-        .borrow()
-        .protocol_config
-        .native_charging_v2()
-    {
-        context.gas_used()
-    } else {
-        cost
-    }
+fn v2_native_charge(context: &NativeContext, cost: InternalGas) -> PartialVMResult<InternalGas> {
+    Ok(
+        if context
+            .extensions()
+            .get::<NativeContextMut<ObjectRuntime>>()?
+            .borrow()
+            .protocol_config
+            .native_charging_v2()
+        {
+            context.gas_used()
+        } else {
+            cost
+        },
+    )
 }
 
 fn map_op_result(
@@ -77,12 +79,12 @@ fn map_op_result(
 ) -> PartialVMResult<NativeResult> {
     match result {
         Ok(bytes) => Ok(NativeResult::ok(
-            v2_native_charge(context, cost),
+            v2_native_charge(context, cost)?,
             smallvec![Value::vector_u8(bytes)],
         )),
         // Since all Element<G> are validated on construction, this error should never happen unless the requested type is wrong or inputs are invalid.
         Err(_) => Ok(NativeResult::err(
-            v2_native_charge(context, cost),
+            v2_native_charge(context, cost)?,
             INVALID_INPUT_ERROR,
         )),
     }
@@ -236,7 +238,7 @@ pub fn internal_validate(
     debug_assert!(args.len() == 2);
 
     let cost = context.gas_used();
-    if !is_supported(context) {
+    if !is_supported(context)? {
         return Ok(NativeResult::err(cost, NOT_SUPPORTED_ERROR));
     }
 
@@ -246,7 +248,7 @@ pub fn internal_validate(
 
     let cost_params = &context
         .extensions()
-        .get::<NativesCostTable>()
+        .get::<NativesCostTable>()?
         .group_ops_cost_params
         .clone();
 
@@ -267,7 +269,7 @@ pub fn internal_validate(
     };
 
     Ok(NativeResult::ok(
-        v2_native_charge(context, cost),
+        v2_native_charge(context, cost)?,
         smallvec![Value::bool(result)],
     ))
 }
@@ -286,7 +288,7 @@ pub fn internal_add(
     debug_assert!(args.len() == 3);
 
     let cost = context.gas_used();
-    if !is_supported(context) {
+    if !is_supported(context)? {
         return Ok(NativeResult::err(cost, NOT_SUPPORTED_ERROR));
     }
 
@@ -298,7 +300,7 @@ pub fn internal_add(
 
     let cost_params = &context
         .extensions()
-        .get::<NativesCostTable>()
+        .get::<NativesCostTable>()?
         .group_ops_cost_params
         .clone();
 
@@ -339,7 +341,7 @@ pub fn internal_sub(
     debug_assert!(args.len() == 3);
 
     let cost = context.gas_used();
-    if !is_supported(context) {
+    if !is_supported(context)? {
         return Ok(NativeResult::err(cost, NOT_SUPPORTED_ERROR));
     }
 
@@ -351,7 +353,7 @@ pub fn internal_sub(
 
     let cost_params = &context
         .extensions()
-        .get::<NativesCostTable>()
+        .get::<NativesCostTable>()?
         .group_ops_cost_params
         .clone();
 
@@ -392,7 +394,7 @@ pub fn internal_mul(
     debug_assert!(args.len() == 3);
 
     let cost = context.gas_used();
-    if !is_supported(context) {
+    if !is_supported(context)? {
         return Ok(NativeResult::err(cost, NOT_SUPPORTED_ERROR));
     }
 
@@ -404,7 +406,7 @@ pub fn internal_mul(
 
     let cost_params = &context
         .extensions()
-        .get::<NativesCostTable>()
+        .get::<NativesCostTable>()?
         .group_ops_cost_params
         .clone();
 
@@ -460,7 +462,7 @@ pub fn internal_div(
     debug_assert!(args.len() == 3);
 
     let cost = context.gas_used();
-    if !is_supported(context) {
+    if !is_supported(context)? {
         return Ok(NativeResult::err(cost, NOT_SUPPORTED_ERROR));
     }
 
@@ -472,7 +474,7 @@ pub fn internal_div(
 
     let cost_params = &context
         .extensions()
-        .get::<NativesCostTable>()
+        .get::<NativesCostTable>()?
         .group_ops_cost_params
         .clone();
 
@@ -529,7 +531,7 @@ pub fn internal_hash_to(
     debug_assert!(args.len() == 2);
 
     let cost = context.gas_used();
-    if !is_supported(context) {
+    if !is_supported(context)? {
         return Ok(NativeResult::err(cost, NOT_SUPPORTED_ERROR));
     }
 
@@ -543,7 +545,7 @@ pub fn internal_hash_to(
 
     let cost_params = &context
         .extensions()
-        .get::<NativesCostTable>()
+        .get::<NativesCostTable>()?
         .group_ops_cost_params
         .clone();
 
@@ -686,7 +688,7 @@ pub fn internal_multi_scalar_mul(
     debug_assert!(args.len() == 3);
 
     let cost = context.gas_used();
-    if !is_msm_supported(context) {
+    if !is_msm_supported(context)? {
         return Ok(NativeResult::err(cost, NOT_SUPPORTED_ERROR));
     }
 
@@ -698,7 +700,7 @@ pub fn internal_multi_scalar_mul(
 
     let cost_params = &context
         .extensions()
-        .get::<NativesCostTable>()
+        .get::<NativesCostTable>()?
         .group_ops_cost_params
         .clone();
 
@@ -738,7 +740,7 @@ pub fn internal_multi_scalar_mul(
             elements.as_ref(),
         ),
         _ => Ok(NativeResult::err(
-            v2_native_charge(context, cost),
+            v2_native_charge(context, cost)?,
             INVALID_INPUT_ERROR,
         )),
     }
@@ -758,7 +760,7 @@ pub fn internal_pairing(
     debug_assert!(args.len() == 3);
 
     let cost = context.gas_used();
-    if !is_supported(context) {
+    if !is_supported(context)? {
         return Ok(NativeResult::err(cost, NOT_SUPPORTED_ERROR));
     }
 
@@ -770,7 +772,7 @@ pub fn internal_pairing(
 
     let cost_params = &context
         .extensions()
-        .get::<NativesCostTable>()
+        .get::<NativesCostTable>()?
         .group_ops_cost_params
         .clone();
 
@@ -805,7 +807,7 @@ pub fn internal_convert(
 
     let cost = context.gas_used();
 
-    if !(is_uncompressed_g1_supported(context)) {
+    if !(is_uncompressed_g1_supported(context))? {
         return Ok(NativeResult::err(cost, NOT_SUPPORTED_ERROR));
     }
 
@@ -816,7 +818,7 @@ pub fn internal_convert(
 
     let cost_params = &context
         .extensions()
-        .get::<NativesCostTable>()
+        .get::<NativesCostTable>()?
         .group_ops_cost_params
         .clone();
 
@@ -863,13 +865,13 @@ pub fn internal_sum(
 
     let cost = context.gas_used();
 
-    if !(is_uncompressed_g1_supported(context)) {
+    if !(is_uncompressed_g1_supported(context))? {
         return Ok(NativeResult::err(cost, NOT_SUPPORTED_ERROR));
     }
 
     let cost_params = &context
         .extensions()
-        .get::<NativesCostTable>()
+        .get::<NativesCostTable>()?
         .group_ops_cost_params
         .clone();
 

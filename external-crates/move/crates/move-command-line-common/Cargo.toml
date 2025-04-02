@@ -16,6 +16,7 @@ walkdir.workspace = true
 sha2.workspace = true
 hex.workspace = true
 once_cell.workspace = true
+packed_struct.workspace = true
 serde.workspace = true
 dirs-next.workspace = true
 vfs.workspace = true

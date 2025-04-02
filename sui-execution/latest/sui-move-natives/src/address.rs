@@ -34,7 +34,7 @@ pub fn from_bytes(
 
     let address_from_bytes_cost_params = context
         .extensions_mut()
-        .get::<NativesCostTable>()
+        .get::<NativesCostTable>()?
         .address_from_bytes_cost_params
         .clone();
 
@@ -73,7 +73,7 @@ pub fn to_u256(
 
     let address_to_u256_cost_params = context
         .extensions_mut()
-        .get::<NativesCostTable>()
+        .get::<NativesCostTable>()?
         .address_to_u256_cost_params
         .clone();
 
@@ -112,7 +112,7 @@ pub fn from_u256(
 
     let address_from_u256_cost_params = context
         .extensions_mut()
-        .get::<NativesCostTable>()
+        .get::<NativesCostTable>()?
         .address_from_u256_cost_params
         .clone();
 

@@ -12,6 +12,7 @@ const TEST_DIR: &str = "tests";
 #[cfg(not(msim))]
 #[tokio::main]
 async fn test_ptb_files(path: &Path) -> datatest_stable::Result<()> {
+    use std::collections::BTreeMap;
     use sui::client_ptb::ptb::{to_source_string, PTB};
     use sui::client_ptb::{error::build_error_reports, ptb::PTBPreview};
     use test_cluster::TestClusterBuilder;
@@ -63,7 +64,7 @@ async fn test_ptb_files(path: &Path) -> datatest_stable::Result<()> {
     let context = &test_cluster.wallet;
     let client = context.get_client().await?;
 
-    let (built_ptb, warnings) = PTB::build_ptb(program, context, client).await;
+    let (built_ptb, warnings) = PTB::build_ptb(program, BTreeMap::new(), client).await;
 
     if !warnings.is_empty() {
         let rendered = build_error_reports(&file_contents, warnings);

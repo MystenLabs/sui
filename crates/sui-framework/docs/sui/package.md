@@ -238,34 +238,23 @@ the end of the transaction that performed the upgrade.
 ## Constants
 
 
-<a name="sui_package_ADDITIVE"></a>
+<a name="sui_package_ENotOneTimeWitness"></a>
 
-Add new functions or types, or change dependencies, existing
-functions can't change.
+Tried to create a <code><a href="../sui/package.md#sui_package_Publisher">Publisher</a></code> using a type that isn't a
+one-time witness.
 
 
-<pre><code><b>const</b> <a href="../sui/package.md#sui_package_ADDITIVE">ADDITIVE</a>: u8 = 128;
+<pre><code><b>const</b> <a href="../sui/package.md#sui_package_ENotOneTimeWitness">ENotOneTimeWitness</a>: u64 = 0;
 </code></pre>
 
 
 
-<a name="sui_package_COMPATIBLE"></a>
+<a name="sui_package_ETooPermissive"></a>
 
-Update any part of the package (function implementations, add new
-functions or types, change dependencies)
-
-
-<pre><code><b>const</b> <a href="../sui/package.md#sui_package_COMPATIBLE">COMPATIBLE</a>: u8 = 0;
-</code></pre>
+Tried to set a less restrictive policy than currently in place.
 
 
-
-<a name="sui_package_DEP_ONLY"></a>
-
-Only be able to change dependencies.
-
-
-<pre><code><b>const</b> <a href="../sui/package.md#sui_package_DEP_ONLY">DEP_ONLY</a>: u8 = 192;
+<pre><code><b>const</b> <a href="../sui/package.md#sui_package_ETooPermissive">ETooPermissive</a>: u64 = 1;
 </code></pre>
 
 
@@ -290,33 +279,44 @@ This <code><a href="../sui/package.md#sui_package_UpgradeCap">UpgradeCap</a></co
 
 
 
-<a name="sui_package_ENotOneTimeWitness"></a>
-
-Tried to create a <code><a href="../sui/package.md#sui_package_Publisher">Publisher</a></code> using a type that isn't a
-one-time witness.
-
-
-<pre><code><b>const</b> <a href="../sui/package.md#sui_package_ENotOneTimeWitness">ENotOneTimeWitness</a>: u64 = 0;
-</code></pre>
-
-
-
-<a name="sui_package_ETooPermissive"></a>
-
-Tried to set a less restrictive policy than currently in place.
-
-
-<pre><code><b>const</b> <a href="../sui/package.md#sui_package_ETooPermissive">ETooPermissive</a>: u64 = 1;
-</code></pre>
-
-
-
 <a name="sui_package_EWrongUpgradeCap"></a>
 
 Trying to commit an upgrade to the wrong <code><a href="../sui/package.md#sui_package_UpgradeCap">UpgradeCap</a></code>.
 
 
 <pre><code><b>const</b> <a href="../sui/package.md#sui_package_EWrongUpgradeCap">EWrongUpgradeCap</a>: u64 = 4;
+</code></pre>
+
+
+
+<a name="sui_package_COMPATIBLE"></a>
+
+Update any part of the package (function implementations, add new
+functions or types, change dependencies)
+
+
+<pre><code><b>const</b> <a href="../sui/package.md#sui_package_COMPATIBLE">COMPATIBLE</a>: u8 = 0;
+</code></pre>
+
+
+
+<a name="sui_package_ADDITIVE"></a>
+
+Add new functions or types, or change dependencies, existing
+functions can't change.
+
+
+<pre><code><b>const</b> <a href="../sui/package.md#sui_package_ADDITIVE">ADDITIVE</a>: u8 = 128;
+</code></pre>
+
+
+
+<a name="sui_package_DEP_ONLY"></a>
+
+Only be able to change dependencies.
+
+
+<pre><code><b>const</b> <a href="../sui/package.md#sui_package_DEP_ONLY">DEP_ONLY</a>: u8 = 192;
 </code></pre>
 
 

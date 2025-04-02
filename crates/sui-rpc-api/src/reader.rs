@@ -26,6 +26,7 @@ impl StateReader {
         &self.inner
     }
 
+    #[tracing::instrument(skip(self))]
     pub fn get_object(&self, object_id: ObjectId) -> crate::Result<Option<Object>> {
         self.inner
             .get_object(&object_id.into())
@@ -34,6 +35,7 @@ impl StateReader {
             .map_err(Into::into)
     }
 
+    #[tracing::instrument(skip(self))]
     pub fn get_object_with_version(
         &self,
         object_id: ObjectId,
@@ -46,12 +48,14 @@ impl StateReader {
             .map_err(Into::into)
     }
 
+    #[tracing::instrument(skip(self))]
     pub fn get_committee(&self, epoch: EpochId) -> Option<ValidatorCommittee> {
         self.inner
             .get_committee(epoch)
             .map(|committee| (*committee).clone().into())
     }
 
+    #[tracing::instrument(skip(self))]
     pub fn get_system_state_summary(
         &self,
     ) -> Result<sui_types::sui_system_state::sui_system_state_summary::SuiSystemStateSummary> {
@@ -64,6 +68,7 @@ impl StateReader {
         Ok(summary)
     }
 
+    #[tracing::instrument(skip(self))]
     pub fn get_transaction(
         &self,
         digest: sui_sdk_types::TransactionDigest,
@@ -86,9 +91,9 @@ impl StateReader {
             .inner()
             .get_transaction_effects(&transaction_digest)
             .ok_or(TransactionNotFoundError(digest))?;
-        let events = if let Some(event_digest) = effects.events_digest() {
+        let events = if effects.events_digest().is_some() {
             self.inner()
-                .get_events(event_digest)
+                .get_events(effects.transaction_digest())
                 .ok_or(TransactionNotFoundError(digest))?
                 .pipe(Some)
         } else {
@@ -102,6 +107,7 @@ impl StateReader {
         ))
     }
 
+    #[tracing::instrument(skip(self))]
     pub fn get_transaction_checkpoint(
         &self,
         digest: &sui_types::digests::TransactionDigest,
@@ -112,6 +118,7 @@ impl StateReader {
             .ok()?
     }
 
+    #[tracing::instrument(skip(self))]
     pub fn get_transaction_read(
         &self,
         digest: sui_sdk_types::TransactionDigest,

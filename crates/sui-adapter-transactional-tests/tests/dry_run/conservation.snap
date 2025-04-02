@@ -1,0 +1,19 @@
+---
+source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
+---
+processed 3 tasks
+
+init:
+A: object(0,0), B: object(0,1)
+
+task 1, lines 8-17:
+//# publish
+created: object(1,0)
+mutated: object(0,2)
+gas summary: computation_cost: 1000000, storage_cost: 4818400,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 2, lines 19-20:
+//# programmable --sender A --inputs struct(@empty,1) --dry-run
+//> 0: test::m::transfer_back(Input(0));
+Error: Transaction Effects Status: CommandArgumentError { arg_idx: 0, kind: InvalidUsageOfPureArg } in command 0
+Execution Error: CommandArgumentError { arg_idx: 0, kind: InvalidUsageOfPureArg } in command 0

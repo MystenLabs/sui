@@ -1,0 +1,31 @@
+// tests that function calls treat the return references as disjoint
+
+//# publish
+
+module 0x1.Tester {
+    struct T has copy { f: u64, g: u64, h: u64 }
+
+    borrow(s1: &mut Self.T): &mut u64 * &mut u64 * &u64 * &u64 {
+    label b0:
+        return (&mut copy(s1).T::f, &mut copy(s1).T::g, &copy(s1).T::h, &copy(s1).T::h);
+    }
+
+    t(s: &mut Self.T): &mut u64 * &mut u64 * &u64 * &u64 {
+        let m1: &mut u64;
+        let m2: &mut u64;
+        let i3: &u64;
+        let i4: &u64;
+    label b0:
+        m1, m2, i3, i4 = Self.borrow(copy(s));
+        // all are readable
+        _ = *copy(m1);
+        _ = *copy(m2);
+        _ = *copy(i3);
+        _ = *copy(i4);
+        // mutable ones are writable
+        *copy(m1) = 0;
+        *copy(m2) = 0;
+        // all returnable
+        return (move(m1), move(m2), move(i3), move(i4));
+    }
+}

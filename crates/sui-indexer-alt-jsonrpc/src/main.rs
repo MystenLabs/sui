@@ -26,11 +26,12 @@ async fn main() -> anyhow::Result<()> {
     match args.command {
         Command::Rpc {
             database_url,
+            bigtable_instance,
             db_args,
             rpc_args,
             system_package_task_args,
             metrics_args,
-            write_args,
+            node_args,
             config,
         } => {
             let rpc_config = if let Some(path) = config {
@@ -66,9 +67,10 @@ async fn main() -> anyhow::Result<()> {
 
             let h_rpc = start_rpc(
                 Some(database_url),
+                bigtable_instance,
                 db_args,
                 rpc_args,
-                write_args,
+                node_args,
                 system_package_task_args,
                 rpc_config,
                 metrics.registry(),

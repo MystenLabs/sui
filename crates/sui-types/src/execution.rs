@@ -167,6 +167,25 @@ impl ExecutionResultsV2 {
                 }
             }
 
+            // Record start version for ConsensusV2 objects.
+            if let Owner::ConsensusV2 { start_version, .. } = &mut obj.owner {
+                debug_assert!(!self.deleted_object_ids.contains(id));
+
+                if let Some(Owner::ConsensusV2 {
+                    start_version: previous_start_version,
+                    ..
+                }) = input_objects.get(id).map(|obj| &obj.owner)
+                {
+                    // Assign existing start_version in case a ConsensusV2 object was
+                    // transferred to the same Owner type.
+                    *start_version = *previous_start_version;
+                } else {
+                    // ConsensusV2 object was created, transferred from another Owner type,
+                    // or unwrapped, so we begin a new stream.
+                    *start_version = lamport_version;
+                }
+            }
+
             obj.previous_transaction = prev_tx;
         }
     }

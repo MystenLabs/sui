@@ -39,7 +39,7 @@ pub fn emit(
 
     let event_emit_cost_params = context
         .extensions_mut()
-        .get::<NativesCostTable>()
+        .get::<NativesCostTable>()?
         .event_emit_cost_params
         .clone();
 
@@ -77,7 +77,7 @@ pub fn emit(
 
     let obj_runtime: &mut ObjectRuntime = &mut context
         .extensions()
-        .get::<NativeContextMut<ObjectRuntime>>()
+        .get::<NativeContextMut<ObjectRuntime>>()?
         .borrow_mut();
     let max_event_emit_size = obj_runtime.protocol_config.max_event_emit_size();
     let ev_size = u64::from(tag_size + event_value_size);
@@ -130,7 +130,7 @@ pub fn num_events(
     assert!(args.is_empty());
     let object_runtime_ref: &ObjectRuntime = &context
         .extensions()
-        .get::<NativeContextMut<ObjectRuntime>>()
+        .get::<NativeContextMut<ObjectRuntime>>()?
         .borrow();
     let num_events = object_runtime_ref.state.events().len();
     Ok(NativeResult::ok(
@@ -150,7 +150,7 @@ pub fn get_events_by_type(
     assert!(args.is_empty());
     let object_runtime_ref: &ObjectRuntime = &context
         .extensions()
-        .get::<NativeContextMut<ObjectRuntime>>()
+        .get::<NativeContextMut<ObjectRuntime>>()?
         .borrow();
     let specified_type_tag = match context.type_to_type_tag(&specified_ty)? {
         TypeTag::Struct(s) => *s,

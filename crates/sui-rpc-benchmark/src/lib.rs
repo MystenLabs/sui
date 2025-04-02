@@ -5,6 +5,7 @@ pub mod config;
 pub mod direct;
 pub mod json_rpc;
 
+use std::collections::HashSet;
 use std::time::Duration;
 
 use anyhow::Result;
@@ -50,10 +51,12 @@ pub enum Command {
         endpoint: String,
         #[clap(long, default_value = "50")]
         concurrency: usize,
-        #[clap(long, default_value = "30")]
-        duration_secs: u64,
+        #[clap(long)]
+        duration_secs: Option<u64>,
         #[clap(long, default_value = "requests.jsonl")]
         requests_file: String,
+        #[clap(long, value_delimiter = ',')]
+        methods_to_skip: Vec<String>,
     },
     /// Benchmark GraphQL queries
     #[clap(name = "graphql")]
@@ -87,8 +90,9 @@ pub async fn run_benchmarks() -> Result<(), anyhow::Error> {
 
             let config = BenchmarkConfig {
                 concurrency,
-                duration: Duration::from_secs(duration_secs),
+                duration: Some(Duration::from_secs(duration_secs)),
                 json_rpc_file_path: None,
+                json_rpc_methods_to_skip: HashSet::new(),
             };
             let query_executor = QueryExecutor::new(&db_url, enriched_queries, config).await?;
             let result = query_executor.run().await?;
@@ -110,9 +114,18 @@ pub async fn run_benchmarks() -> Result<(), anyhow::Error> {
             concurrency,
             duration_secs,
             requests_file,
+            methods_to_skip,
         } => {
-            info!("Running JSON RPC benchmark against {endpoint} with concurrency={concurrency} duration_secs={duration_secs} requests_file={requests_file}");
-            json_rpc::run_benchmark(&endpoint, &requests_file, concurrency, duration_secs).await?;
+            info!("Running JSON RPC benchmark against {endpoint} with concurrency={concurrency} duration_secs={:?} requests_file={requests_file}", 
+                duration_secs);
+            json_rpc::run_benchmark(
+                &endpoint,
+                &requests_file,
+                concurrency,
+                duration_secs,
+                methods_to_skip.into_iter().collect(),
+            )
+            .await?;
             Ok(())
         }
         Command::GraphQL { endpoint } => {

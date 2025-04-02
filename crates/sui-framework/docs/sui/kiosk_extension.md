@@ -193,6 +193,16 @@ to identify the extension witness.
 ## Constants
 
 
+<a name="sui_kiosk_extension_ENotOwner"></a>
+
+Trying to add an extension while not being the owner of the Kiosk.
+
+
+<pre><code><b>const</b> <a href="../sui/kiosk_extension.md#sui_kiosk_extension_ENotOwner">ENotOwner</a>: u64 = 0;
+</code></pre>
+
+
+
 <a name="sui_kiosk_extension_EExtensionNotAllowed"></a>
 
 Extension is trying to access a permissioned action while not having
@@ -214,12 +224,12 @@ Extension is not installed in the Kiosk.
 
 
 
-<a name="sui_kiosk_extension_ENotOwner"></a>
+<a name="sui_kiosk_extension_PLACE"></a>
 
-Trying to add an extension while not being the owner of the Kiosk.
+Value that represents the <code><a href="../sui/kiosk_extension.md#sui_kiosk_extension_place">place</a></code> permission in the permissions bitmap.
 
 
-<pre><code><b>const</b> <a href="../sui/kiosk_extension.md#sui_kiosk_extension_ENotOwner">ENotOwner</a>: u64 = 0;
+<pre><code><b>const</b> <a href="../sui/kiosk_extension.md#sui_kiosk_extension_PLACE">PLACE</a>: u128 = 1;
 </code></pre>
 
 
@@ -231,16 +241,6 @@ permissions bitmap.
 
 
 <pre><code><b>const</b> <a href="../sui/kiosk_extension.md#sui_kiosk_extension_LOCK">LOCK</a>: u128 = 2;
-</code></pre>
-
-
-
-<a name="sui_kiosk_extension_PLACE"></a>
-
-Value that represents the <code><a href="../sui/kiosk_extension.md#sui_kiosk_extension_place">place</a></code> permission in the permissions bitmap.
-
-
-<pre><code><b>const</b> <a href="../sui/kiosk_extension.md#sui_kiosk_extension_PLACE">PLACE</a>: u128 = 1;
 </code></pre>
 
 

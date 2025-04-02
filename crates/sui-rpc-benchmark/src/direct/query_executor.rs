@@ -4,9 +4,9 @@
 /// This module executes enriched benchmark queries against the database.
 /// Each query's execution is timed and recorded via MetricsCollector.
 /// And the results are aggregated and reported via BenchmarkResult.
-use std::time::Instant;
+use std::time::{Duration, Instant};
 
-use anyhow::Result;
+use anyhow::{Context, Result};
 use bb8::Pool;
 use bb8_postgres::PostgresConnectionManager;
 use rand::seq::SliceRandom;
@@ -55,7 +55,7 @@ impl QueryExecutor {
         while Instant::now() < deadline {
             let enriched = enriched_queries
                 .choose(&mut rng)
-                .ok_or_else(|| anyhow::anyhow!("No queries available"))?;
+                .context("No queries available")?;
             let Some(row) = enriched.rows.choose(&mut rng) else {
                 // skip when the table is empty and thus no values to sample.
                 continue;
@@ -95,7 +95,10 @@ impl QueryExecutor {
         );
 
         let start = Instant::now();
-        let deadline = start + self.config.duration;
+        let deadline = match self.config.duration {
+            Some(duration) => start + duration,
+            None => Instant::now() + Duration::from_secs(3600 * 24 * 365), // Effectively no timeout (1 year)
+        };
         let (concurrency, metrics, pool, queries) = (
             self.config.concurrency,
             self.metrics.clone(),
