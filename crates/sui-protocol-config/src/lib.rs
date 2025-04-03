@@ -673,6 +673,11 @@ struct FeatureFlags {
     // If true, enforces checkpoint timestamps are non-decreasing.
     #[serde(skip_serializing_if = "is_false")]
     enforce_checkpoint_timestamp_monotonicity: bool,
+
+    // If true, enable Accumulators in Move. This allows the validators to track mergeble updates
+    // to a new type of state in parallel that will be settled later.
+    #[serde(skip_serializing_if = "is_false")]
+    move_accumulators: bool,
 }
 
 fn is_false(b: &bool) -> bool {
@@ -1935,6 +1940,10 @@ impl ProtocolConfig {
 
     pub fn enforce_checkpoint_timestamp_monotonicity(&self) -> bool {
         self.feature_flags.enforce_checkpoint_timestamp_monotonicity
+    }
+
+    pub fn move_accumulators(&self) -> bool {
+        self.feature_flags.move_accumulators
     }
 }
 
@@ -3654,6 +3663,10 @@ impl ProtocolConfig {
 
     pub fn set_consensus_batched_block_sync_for_testing(&mut self, val: bool) {
         self.feature_flags.consensus_batched_block_sync = val;
+    }
+
+    pub fn set_move_accumulators_for_testing(&mut self, val: bool) {
+        self.feature_flags.move_accumulators = val;
     }
 }
 
