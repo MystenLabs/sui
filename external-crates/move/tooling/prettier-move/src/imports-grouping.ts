@@ -17,11 +17,7 @@ const { join, softline, indent, line, group } = doc.builders;
 /**
  * A simple type to represent grouped imports.
  */
-export type GroupedImports = {
-    [package_: string]: {
-        [module_: string]: Member[];
-    };
-};
+export type GroupedImports = Map<string, Map<string, Member[]>>;
 
 type Member = {
     name: string | 'Self';
@@ -38,32 +34,32 @@ type Member = {
  * printed before.
  */
 export function printImports(imports: GroupedImports, option: 'module' | 'package'): Doc {
-    const pkgs = Object.keys(imports).sort();
+    const pkgs = [...imports.keys()].sort();
     const result = [] as Doc[];
 
     for (const pkg of pkgs) {
-        const modules = imports[pkg];
+        const modules = imports.get(pkg);
 
         // typescript wants this
         if (modules == undefined) {
             continue;
         }
 
-        const keys = Object.keys(modules).sort();
+        const keys = [...modules.keys()].sort();
 
         // if grouped by module
         if (option === 'module') {
             for (const mod of keys) {
-                if (modules[mod] == undefined) continue;
-                result.push(['use ', pkg, '::', printModule(mod, modules[mod]), ';']);
+                if (!modules.get(mod)) continue;
+                result.push(['use ', pkg, '::', printModule(mod, modules.get(mod)!), ';']);
             }
         } else {
             // if grouped by package
             const modulesDoc = [] as Doc[];
 
             for (const mod of keys) {
-                if (modules[mod] == undefined) continue;
-                modulesDoc.push(printModule(mod, modules[mod]));
+                if (!modules.has(mod)) continue;
+                modulesDoc.push(printModule(mod, modules.get(mod)!));
             }
 
             modulesDoc.length === 1
@@ -150,7 +146,7 @@ function printMember({ name, alias }: Member): Doc {
  * @returns
  */
 export function collectImports(node: Node): GroupedImports {
-    const grouped: GroupedImports = {};
+    const grouped: GroupedImports = new Map();
     const imports = node.nonFormattingChildren
         .filter((n) => n.isGroupedImport)
         .map((n) => n.nonFormattingChildren[0]!);
@@ -167,10 +163,12 @@ export function collectImports(node: Node): GroupedImports {
                 const rec = { name: 'Self', alias: alias?.text };
 
                 // if there hasn't been a registered package yet, add it
-                if (!grouped[pkg]) grouped[pkg] = {};
-                if (!grouped[pkg][mod]) grouped[pkg][mod] = [];
-
-                grouped[pkg][mod].push(rec);
+                if (!grouped.has(pkg)) grouped.set(pkg, new Map());
+                const pkgMap = grouped.get(pkg)!;
+                // if there hasn't been a registered module yet, add it
+                if (!pkgMap.has(mod)) pkgMap.set(mod, []);
+                pkgMap.set(mod, pkgMap.get(mod)!);
+                pkgMap.get(mod)!.push(rec);
 
                 break;
             }
@@ -181,10 +179,13 @@ export function collectImports(node: Node): GroupedImports {
                 const useMember = import_.nonFormattingChildren[1]!;
                 const [name, alias] = parseUseMember(useMember);
 
-                if (!grouped[pkg]) grouped[pkg] = {};
-                if (!grouped[pkg][mod]) grouped[pkg][mod] = [];
-
-                grouped[pkg][mod].push({ name, alias });
+                // if (!grouped[pkg]) grouped[pkg] = new Map();
+                // if (!grouped[pkg][mod]) grouped[pkg][mod] = [];
+                if (!grouped.has(pkg)) grouped.set(pkg, new Map());
+                const pkgMap = grouped.get(pkg)!;
+                if (!pkgMap.has(mod)) pkgMap.set(mod, []);
+                const modMap = pkgMap.get(mod)!;
+                modMap.push({ name, alias });
 
                 break;
             }
@@ -205,10 +206,14 @@ export function collectImports(node: Node): GroupedImports {
                     const [pkg, mod] = parseModuleIdentity(moduleIdentity);
                     const members = children.slice(1).map((n) => parseUseMember(n));
 
-                    if (!grouped[pkg]) grouped[pkg] = {};
-                    if (!grouped[pkg][mod]) grouped[pkg][mod] = [];
+                    // if (!grouped[pkg]) grouped[pkg] = {};
+                    // if (!grouped[pkg][mod]) grouped[pkg][mod] = [];
+                    if (!grouped.has(pkg)) grouped.set(pkg, new Map());
+                    const pkgMap = grouped.get(pkg)!;
+                    if (!pkgMap.has(mod)) pkgMap.set(mod, []);
+                    const modMap = pkgMap.get(mod)!;
 
-                    grouped[pkg][mod].push(...members.map(([name, alias]) => ({ name, alias })));
+                    modMap.push(...members.map(([name, alias]) => ({ name, alias })));
 
                     break;
                 }
@@ -216,7 +221,9 @@ export function collectImports(node: Node): GroupedImports {
                 // complex scenario: the first node is `module_identifier`
                 // `use_member` can be recursive in this scenario with 1 level of nesting
                 const pkg = children[0]!.text;
-                if (!grouped[pkg]) grouped[pkg] = {};
+                if (!grouped.has(pkg)) grouped.set(pkg, new Map());
+                const pkgMap = grouped.get(pkg)!;
+
 
                 children.slice(1).forEach((node) => {
                     if (!node) return;
@@ -229,20 +236,20 @@ export function collectImports(node: Node): GroupedImports {
                         throw new Error('Expected `identifier` node in `use_module_members`');
 
                     const mod = first.text;
-                    if (!grouped[pkg]![mod]) grouped[pkg]![mod] = [];
+                    if (!pkgMap.has(mod)) pkgMap.set(mod, []);
 
                     // if there's only one member and it's the module.
                     if (!rest.length) {
-                        grouped[pkg]![mod].push({ name: 'Self', alias: undefined });
+                        pkgMap.get(mod)!.push({ name: 'Self', alias: undefined });
                         return;
                     }
 
                     // ident + ident is an alias
                     if (rest.length == 1 && rest[0]?.type === 'identifier') {
                         if (rest[0].previousSibling?.type !== 'as') {
-                            grouped[pkg]![mod].push({ name: rest[0].text, alias: undefined });
+                            pkgMap.get(mod)!.push({ name: rest[0].text, alias: undefined });
                         } else {
-                            grouped[pkg]![mod].push({ name: 'Self', alias: rest[0].text });
+                            pkgMap.get(mod)!.push({ name: 'Self', alias: rest[0].text });
                         }
 
                         return;
@@ -258,13 +265,13 @@ export function collectImports(node: Node): GroupedImports {
                             throw new Error('Expected `as` keyword after module name');
                         }
 
-                        grouped[pkg]![mod].push({ name: rest[0].text, alias: rest[1].text });
+                        pkgMap.get(mod)!.push({ name: rest[0].text, alias: rest[1].text });
                         return;
                     }
 
                     // the rest are `use_member` nodes
                     const members = rest.map(parseUseMember);
-                    grouped[pkg]![mod].push(...members.map(([name, alias]) => ({ name, alias })));
+                    pkgMap.get(mod)!.push(...members.map(([name, alias]) => ({ name, alias })));
                 });
             }
         }

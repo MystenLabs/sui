@@ -117,7 +117,7 @@ function printModuleBody(path: AstPath<Node>, options: MoveOptions, print: print
     const nodes = path.node.namedAndEmptyLineChildren;
     const importsDoc = [] as Doc[];
     const imports = collectImports(path.node);
-    if (Object.keys(imports).length > 0) {
+    if (imports.size > 0) {
         importsDoc.push(
             ...(printImports(imports, options.autoGroupImports as 'package' | 'module') as Doc[]),
         );
