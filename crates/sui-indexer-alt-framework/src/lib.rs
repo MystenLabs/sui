@@ -19,7 +19,7 @@ use pipeline::{
 };
 use prometheus::Registry;
 use sui_indexer_alt_framework_store_pg::pg_store::PgStore;
-use sui_indexer_alt_framework_store_traits::{CommitterWatermark, DbConnection, Store};
+use sui_indexer_alt_framework_store_traits::{CommitterWatermark, Connection, Store};
 use sui_indexer_alt_metrics::db::DbConnectionStatsCollector;
 use sui_pg_db::{temp::TempDb, Db, DbArgs};
 use tempfile::tempdir;
@@ -511,11 +511,7 @@ mod tests {
 
             #[async_trait]
             impl concurrent::Handler for $name {
-<<<<<<< HEAD
-                type Store = Db;
-=======
                 type Store = PgStore;
->>>>>>> 5eafb90eb4 (move framework trait into its own sui-indexer-alt-framework-store that provides the generic store traits, and people can opt-in using features)
 
                 const PRUNING_REQUIRES_PROCESSED_VALUES: bool = $pruning_requires_processed_values;
                 async fn commit<'a>(

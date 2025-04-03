@@ -14,7 +14,7 @@ use diesel_async::{AsyncConnection, RunQueryDsl};
 use scoped_futures::ScopedBoxFuture;
 use sui_field_count::FieldCount;
 use sui_indexer_alt_framework_store_traits::{
-    CommitterWatermark, DbConnection, PrunerWatermark, ReaderWatermark, Store, TransactionalStore,
+    CommitterWatermark, Connection, PrunerWatermark, ReaderWatermark, Store, TransactionalStore,
 };
 use sui_pg_db::{Connection as PgConnection, Db as PgDb};
 use sui_sql_macro::sql;
@@ -54,18 +54,11 @@ impl DerefMut for PgStoreConnection<'_> {
 }
 
 #[async_trait]
-<<<<<<< HEAD:crates/sui-indexer-alt-framework/src/pg_store.rs
-impl Connection for PgConnection<'_> {
-=======
-impl DbConnection for PgStoreConnection<'_> {
->>>>>>> 5eafb90eb4 (move framework trait into its own sui-indexer-alt-framework-store that provides the generic store traits, and people can opt-in using features):crates/sui-indexer-alt-framework-store-pg/src/pg_store.rs
+impl Connection for PgStoreConnection<'_> {
     async fn committer_watermark(
         &mut self,
         pipeline: &'static str,
     ) -> anyhow::Result<Option<CommitterWatermark>> {
-<<<<<<< HEAD:crates/sui-indexer-alt-framework/src/pg_store.rs
-        let watermark = StoredWatermark::get(self, pipeline).await?;
-=======
         let watermark: Option<StoredWatermark> = watermarks::table
             .select(StoredWatermark::as_select())
             .filter(watermarks::pipeline.eq(pipeline))
@@ -73,7 +66,6 @@ impl DbConnection for PgStoreConnection<'_> {
             .await
             .optional()
             .map_err(anyhow::Error::from)?;
->>>>>>> 5eafb90eb4 (move framework trait into its own sui-indexer-alt-framework-store that provides the generic store traits, and people can opt-in using features):crates/sui-indexer-alt-framework-store-pg/src/pg_store.rs
 
         if let Some(watermark) = watermark {
             Ok(Some(CommitterWatermark {
