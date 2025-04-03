@@ -748,6 +748,7 @@ impl RpcExampleProvider {
                     },
                     events_digest: Some(TransactionEventsDigest::new(self.rng.gen())),
                     dependencies: vec![],
+                    abort_error: None,
                 },
             )),
             events: None,

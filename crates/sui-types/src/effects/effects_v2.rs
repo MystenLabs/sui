@@ -10,11 +10,12 @@ use crate::base_types::{
 use crate::digests::{EffectsAuxDataDigest, TransactionEventsDigest};
 use crate::effects::{InputSharedObject, TransactionEffectsAPI};
 use crate::execution::SharedInput;
-use crate::execution_status::ExecutionStatus;
+use crate::execution_status::{ExecutionFailureStatus, ExecutionStatus};
 use crate::gas::GasCostSummary;
 #[cfg(debug_assertions)]
 use crate::is_system_package;
 use crate::object::{Owner, OBJECT_START_VERSION};
+use move_command_line_common::error_bitset::ErrorBitset;
 use serde::{Deserialize, Serialize};
 #[cfg(debug_assertions)]
 use std::collections::HashSet;
@@ -350,6 +351,28 @@ impl TransactionEffectsAPI for TransactionEffectsV2 {
                 (ObjectID::ZERO, SequenceNumber::default(), ObjectDigest::MIN),
                 Owner::AddressOwner(SuiAddress::default()),
             )
+        }
+    }
+
+    fn move_abort(&self) -> Option<Abort> {
+        match self.status() {
+            ExecutionStatus::Failure {
+                error: ExecutionFailureStatus::MoveAbort(move_location, code),
+                ..
+            } => {
+                let module = move_location.module.to_canonical_string(true);
+                let (error_code, line) = match ErrorBitset::from_u64(*code) {
+                    Some(c) => (c.error_code().map(|c| c as u64), c.line_number()),
+                    None => (Some(*code), None),
+                };
+                Some(Abort {
+                    module_id: Some(module),
+                    function: move_location.function_name.clone(),
+                    line,
+                    error_code,
+                })
+            }
+            _ => None,
         }
     }
 

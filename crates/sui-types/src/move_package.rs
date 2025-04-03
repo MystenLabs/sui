@@ -185,6 +185,18 @@ pub struct UpgradeReceipt {
     pub package: ID,
 }
 
+#[derive(Eq, PartialEq, Clone, Debug, Serialize, Deserialize, JsonSchema)]
+pub struct Abort {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub module_id: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub function: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub line: Option<u16>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub error_code: Option<u64>,
+}
+
 impl MovePackage {
     /// Create a package with all required data (including serialized modules, type origin and
     /// linkage tables) already supplied.
