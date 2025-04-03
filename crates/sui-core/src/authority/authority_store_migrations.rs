@@ -12,19 +12,10 @@ pub async fn migrate_events(store: Arc<AuthorityStore>) {
     tracing::info!("Starting events table migration");
 
     let result = tokio::task::spawn_blocking(move || {
-        let span = tracing::info_span!(
-            "migrate_events",
-            transaction = tracing::field::Empty,
-            effects = tracing::field::Empty,
-        );
-        let _entered = span.enter();
-
         let mut batch = store.perpetual_tables.events_2.batch();
 
         for entry in store.perpetual_tables.executed_effects.safe_iter() {
             let (txn_digest, effects_digest) = entry?;
-            span.record("transaction", tracing::field::debug(&txn_digest));
-            span.record("effects", tracing::field::debug(&effects_digest));
 
             // If there's already an entry for this transaction in the new table we can skip it
             if store.perpetual_tables.events_2.contains_key(&txn_digest)? {
