@@ -1478,7 +1478,7 @@ impl GlobalEnv {
     }
 
     pub const PROVER_MODULE_NAME: &'static str = "prover";
-    const SPEC_MODULE_NAME: &'static str = "ghost";
+    pub const SPEC_MODULE_NAME: &'static str = "ghost";
     const LOG_MODULE_NAME: &'static str = "log";
     const REQUIRES_FUNCTION_NAME: &'static str = "requires";
     const ENSURES_FUNCTION_NAME: &'static str = "ensures";
