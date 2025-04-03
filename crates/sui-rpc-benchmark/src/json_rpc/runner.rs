@@ -317,8 +317,13 @@ pub async fn run_queries(
                                     }
                                     is_error = false;
                                 } else {
-                                    warn!("Response received but JSON parsing failed for method: {}, body: {:?}, error: {:?}, response: {}", 
-                                        request_line.method, request_line.body_json, parse_result.err(), resp_text);
+                                    warn!(
+                                        method = request_line.method,
+                                        body = ?request_line.body_json,
+                                        error = ?parse_result.err(),
+                                        response = resp_text,
+                                        "Response received but JSON parsing failed"
+                                    );
                                 }
                             } else {
                                 is_error = false;
@@ -334,12 +339,21 @@ pub async fn run_queries(
                                     )));
                                 }
                             };
-                            warn!("Response received but status is not success for method: {}, status:{}, body: {:?}, response: {}", 
-                                request_line.method, status, request_line.body_json, resp_text);
+                            warn!(
+                                method = request_line.method,
+                                status = ?status,
+                                body = ?request_line.body_json,
+                                response = resp_text,
+                                "Response received but status is not success"
+                            );
                         }
                     } else {
-                        warn!("Failed to get response for method: {}, body: {:?}, error: {:?}", 
-                            request_line.method, request_line.body_json, res);
+                        warn!(
+                            method = request_line.method,
+                            body = ?request_line.body_json,
+                            error = ?res,
+                            "Failed to get response"
+                        );
                     }
 
                     let mut stats = task_stats
