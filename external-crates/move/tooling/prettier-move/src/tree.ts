@@ -94,7 +94,7 @@ export class Tree {
     }
 
     /**
-     * Special case for lists, where we want to print the trailing comma.
+     * Disable the trailing comment for the current node.
      */
     disableTrailingComment() {
         this.enableTrailingComment = false;

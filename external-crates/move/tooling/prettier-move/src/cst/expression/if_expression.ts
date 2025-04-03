@@ -4,8 +4,17 @@
 import { Node } from '../..';
 import { MoveOptions, printFn, treeFn } from '../../printer';
 import { AstPath, Doc, doc } from 'prettier';
-const { group, softline, line, ifBreak, indent, indentIfBreak, hardlineWithoutBreakParent } =
-    doc.builders;
+import { printTrailingComment } from '../../utilities';
+const {
+    group,
+    softline,
+    line,
+    ifBreak,
+    indent,
+    lineSuffix,
+    breakParent,
+    hardlineWithoutBreakParent,
+} = doc.builders;
 
 /** The type of the node implemented in this file */
 export const NODE_TYPE = 'if_expression';
@@ -60,29 +69,58 @@ function printIfExpression(path: AstPath<Node>, options: MoveOptions, print: pri
     const groupId = Symbol('if_expression_true');
     const result: Doc[] = [];
 
+    const conditionPrinted = path.call(
+        (path) => {
+            let trailingComment: Doc = '';
+            if (path.node.trailingComment?.type == 'line_comment') {
+                trailingComment = lineSuffix(printTrailingComment(path));
+                path.node.disableTrailingComment();
+            }
+
+            return [print(path), trailingComment ? [trailingComment, breakParent] : ''];
+        },
+        'nonFormattingChildren',
+        0,
+    );
+
     const conditionGroup = group([
         'if (',
         condition?.isList
-            ? [indent(softline), path.call(print, 'nonFormattingChildren', 0), softline]
-            : [indent(softline), indent(path.call(print, 'nonFormattingChildren', 0)), softline],
+            ? [indent(softline), conditionPrinted, softline]
+            : [indent(softline), indent(conditionPrinted), softline],
         ')',
     ]);
 
     result.push(conditionGroup);
 
     const isTrueList = trueBranch?.isList || false;
-    const truePrinted = path.call(print, 'nonFormattingChildren', 1);
-    let trueHasComment = false;
+    const trueHasComment =
+        trueBranch.leadingComment.some((e) => e.type == 'line_comment') ||
+        trueBranch.trailingComment?.type == 'line_comment';
 
     // true branch group
     if (isTrueList) {
-        trueHasComment =
-            trueBranch.leadingComment.some((e) => e.type == 'line_comment') ||
-            trueBranch.trailingComment?.type == 'line_comment';
-
+        const truePrinted = path.call(print, 'nonFormattingChildren', 1);
         result.push(group([' ', truePrinted], { shouldBreak: false }));
     } else {
-        result.push(group([indent(line), indent(truePrinted)], { id: groupId }));
+        const truePrinted =
+            trueBranch.trailingComment?.type !== 'line_comment'
+                ? path.call(print, 'nonFormattingChildren', 1)
+                : path.call(
+                      (path) => {
+                          const comment = lineSuffix(printTrailingComment(path));
+                          path.node.disableTrailingComment();
+                          return [print(path), comment];
+                      },
+                      'nonFormattingChildren',
+                      1,
+                  );
+
+        result.push(
+            group([indent(line), indent(truePrinted)], {
+                id: groupId,
+            }),
+        );
     }
 
     // early return if there's no else block
@@ -95,7 +133,8 @@ function printIfExpression(path: AstPath<Node>, options: MoveOptions, print: pri
     // modify the break condition for the else block
     const elseShouldBreak =
         elseNode.leadingComment.some((e) => e.type == 'line_comment') ||
-        elseNode.trailingComment?.type == 'line_comment';
+        elseNode.trailingComment?.type == 'line_comment' ||
+        trueHasComment;
 
     // if true branch is a list, and there's no line comment, we add a space,
     // if there's a line comment, we add a line break

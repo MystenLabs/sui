@@ -280,3 +280,18 @@ fun if_comments() {
     else // comment
         expression; // comment
 }
+
+fun misc_tests() {
+    if (condition) doesnt_break; // trailing
+    if (condition) doesnt_break // trailing
+    else doesnt_break; // another trailing
+
+    if (48 <= b && b < 58) b - 48 // 0 .. 9
+    else if (b == 1 || b == 80) 10 // p or P
+    else if (b == 1 || b == 79) 11 // o or O
+    else if (b == 1 || b == 84) 12 // t or T
+    else if (b == 1 || b == 65) 13 // a or A
+    else if (b == 1 || b == 69) 14 // e or E
+    else if (b == 1 || b == 83) 15 // s or S
+    else abort 1
+}
