@@ -46,7 +46,7 @@ fun breakable_expressions() {
         that: vector[],
         packs: 1000,
         itself: false,
-    };
+    }; // trailing comment
 
     let item = chain
         .that_does()
@@ -139,8 +139,8 @@ fun break_long_value() {
 
     let to_remain_locked =
         (
-        self.final_unlock_ts_sec - math::min(self.final_unlock_ts_sec, now)
-    ) * self.unlock_per_second;
+            self.final_unlock_ts_sec - math::min(self.final_unlock_ts_sec, now)
+        ) * self.unlock_per_second;
 
     let locked_amount_round =
         balance::value(&self.locked_balance) / self.unlock_per_second * self.unlock_per_second;
@@ -170,12 +170,6 @@ fun let_control_flow() {
     let assign = if (cond)
         long_expression
     else another_long_expression;
-
-    let assign = if (cond) {
-        long_expression
-    } else {
-        another_long_expression
-    };
 
     let assign = if (
         long_condition
