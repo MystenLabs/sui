@@ -2,10 +2,12 @@ module sui::coin_metadata_registry;
 
 use std::string::String;
 use sui::balance::Supply;
-use sui::dynamic_field;
+use sui::dynamic_object_field;
 use sui::package::Publisher;
 use sui::transfer::Receiving;
+use sui::vec_map::{Self, VecMap};
 
+const EMetadataAlreadyExists: u64 = 1;
 const EMetadataNotFound: u64 = 2;
 const EAlreadyClaimed: u64 = 3;
 const ENotSystemAddress: u64 = 4;
@@ -33,14 +35,15 @@ public struct Metadata<phantom T> has key, store {
     treasury_cap_id: Option<ID>,
     metadata_cap_id: Option<ID>,
     deny_cap_id: Option<ID>,
+    fields: VecMap<String, String>,
 }
 
-// hot potato pattern to enforce registration after "new_currency" metadata creation
+// hot potato pattern to enforce registration after "create_currency" metadata creation
 public struct InitMetadata<phantom T> {
     metadata: Metadata<T>,
 }
 
-// call this after create_currency to register the metadata
+// call this after create_currency_v2 to register the metadata
 public fun transfer<T>(init: InitMetadata<T>) {
     let InitMetadata { metadata } = init;
 
@@ -50,13 +53,13 @@ public fun transfer<T>(init: InitMetadata<T>) {
     );
 }
 
-/// This is for TTO registration flow.
+/// For TTO registration flow.
 public fun migrate_receiving<T>(
     registry: &mut CoinMetadataRegistry,
     metadata: Receiving<Metadata<T>>,
 ) {
     let received_metadata = transfer::public_receive(&mut registry.id, metadata);
-    registry.attach_metadata(received_metadata);
+    registry.register_metadata(received_metadata);
 }
 
 public fun create_cap_for_supply<T>(
@@ -72,7 +75,7 @@ public fun create_cap_for_supply<T>(
     MetadataCap { id: object::new(ctx) }
 }
 
-/// === Setters ===
+/// === Entry Setters ===
 
 public fun set_name<T>(_: &MetadataCap<T>, registry: &mut CoinMetadataRegistry, name: String) {
     registry.metadata_mut<T>().name = name;
@@ -98,23 +101,35 @@ public fun set_icon_url<T>(
     registry.metadata_mut<T>().icon_url = icon_url;
 }
 
-public(package) fun freeze_supply<T>(registry: &mut CoinMetadataRegistry, supply: Supply<T>) {
+/// === Internal Setters ===
+
+public(package) fun register_supply<T>(registry: &mut CoinMetadataRegistry, supply: Supply<T>) {
+    assert!(registry.exists<T>(), EMetadataNotFound);
     registry.metadata_mut<T>().supply.fill(supply);
 }
 
-public(package) fun set_decimals<T>(registry: &mut CoinMetadataRegistry, decimals: u8) {
-    registry.metadata_mut<T>().decimals = decimals;
+public(package) fun register_deny_cap<T>(registry: &mut CoinMetadataRegistry, deny_cap_id: ID) {
+    assert!(registry.exists<T>(), EMetadataNotFound);
+    registry.metadata_mut<T>().deny_cap_id.fill(deny_cap_id);
 }
 
-public(package) fun set_deny_cap<T>(metadata: &mut Metadata<T>, deny_cap_id: Option<ID>) {
-    metadata.deny_cap_id = deny_cap_id;
+public(package) fun set_decimals<T>(metadata: &mut Metadata<T>, decimals: u8) {
+    metadata.decimals = decimals;
+}
+
+public(package) fun set_supply<T>(metadata: &mut Metadata<T>, supply: Supply<T>) {
+    metadata.supply.fill(supply);
+}
+
+public(package) fun set_deny_cap<T>(metadata: &mut Metadata<T>, deny_cap_id: ID) {
+    metadata.deny_cap_id.fill(deny_cap_id);
 }
 
 /// === Getters ===
 
 public fun metadata<T>(registry: &CoinMetadataRegistry): &Metadata<T> {
     assert!(registry.exists<T>(), EMetadataNotFound);
-    dynamic_field::borrow(
+    dynamic_object_field::borrow(
         &registry.id,
         CoinMetadataKey<T>(),
     )
@@ -135,51 +150,49 @@ public fun total_fixed_supply<T>(metadata: &Metadata<T>): u64 {
     metadata.supply.borrow().supply_value()
 }
 
-public fun is_regulated<T>(metadata: &Metadata<T>): bool { metadata.deny_cap_id.is_some() }
-
 public fun cap_claimed<T>(metadata: &Metadata<T>): bool { metadata.metadata_cap_id.is_some() }
 
+// TODO: need a decision on the assumptions here. maybe we get rid of these functions and
+// let the caller interpret the metadata themselves
+
 /// TODO: Assumptions are painful here :( (no way to verify supply is fixed outside of registry)
-/// It is safer to mark a supply as not frozen when it is actually frozen than to incorrectly
+/// It is safer to mark a coin as not frozen when it is actually frozen than to incorrectly
 /// mark it as frozen when it is not. This method supports the happy path so I think the trade
 /// off is worth it.
 public fun is_fixed_supply<T>(metadata: &Metadata<T>): bool { metadata.supply.is_some() }
 
-public(package) fun metadata_mut<T>(registry: &mut CoinMetadataRegistry): &mut Metadata<T> {
-    assert!(registry.exists<T>(), EMetadataNotFound);
-    dynamic_field::borrow_mut(&mut registry.id, CoinMetadataKey<T>())
+/// TODO: Assumptions are also painful here :( (no way to verify supply is fixed outside of registry)
+public fun is_regulated<T>(metadata: &Metadata<T>): bool { metadata.deny_cap_id.is_some() }
+
+public fun exists<T>(registry: &CoinMetadataRegistry): bool {
+    dynamic_object_field::exists_(&registry.id, CoinMetadataKey<T>())
 }
 
-public(package) fun exists<T>(registry: &CoinMetadataRegistry): bool {
-    dynamic_field::exists_(&registry.id, CoinMetadataKey<T>())
-}
-
-public(package) fun to_inner_mut<T>(init: &mut InitMetadata<T>): &mut Metadata<T> {
+public fun to_inner_mut<T>(init: &mut InitMetadata<T>): &mut Metadata<T> {
     &mut init.metadata
 }
 
-public(package) fun attach_metadata<T>(registry: &mut CoinMetadataRegistry, metadata: Metadata<T>) {
-    dynamic_field::add(&mut registry.id, CoinMetadataKey<T>(), metadata);
+public fun to_inner<T>(init: &InitMetadata<T>): &Metadata<T> {
+    &init.metadata
 }
 
-public(package) fun overwrite_metadata<T>(
+public(package) fun metadata_mut<T>(registry: &mut CoinMetadataRegistry): &mut Metadata<T> {
+    assert!(registry.exists<T>(), EMetadataNotFound);
+    dynamic_object_field::borrow_mut(&mut registry.id, CoinMetadataKey<T>())
+}
+
+public(package) fun register_metadata<T>(
     registry: &mut CoinMetadataRegistry,
-    mut metadata: Metadata<T>,
+    metadata: Metadata<T>,
 ) {
-    // if metadata exists, remove it
-    if (dynamic_field::exists_(&registry.id, CoinMetadataKey<T>())) {
-        let old_metadata: Metadata<T> = dynamic_field::remove(
-            &mut registry.id,
-            CoinMetadataKey<T>(),
-        );
-        let Metadata<T> { id, mut supply, .. } = old_metadata;
-        id.delete();
-        if (supply.is_some()) {
-            metadata.supply.fill(supply.extract());
-        };
-        supply.destroy_none();
-    };
-    dynamic_field::add(&mut registry.id, CoinMetadataKey<T>(), metadata);
+    // assert!(!registry.exists<T>(), EMetadataAlreadyExists);
+    // skip metadata if it already exists, to account for accidental migration by reference?
+    if (registry.exists<T>()) {
+        // destroy metadata (and supply?)
+        abort
+    } else {
+        dynamic_object_field::add(&mut registry.id, CoinMetadataKey<T>(), metadata);
+    }
 }
 
 public(package) fun create_metadata_init<T>(
@@ -233,6 +246,7 @@ public(package) fun create_metadata<T>(
         treasury_cap_id,
         metadata_cap_id,
         deny_cap_id,
+        fields: vec_map::empty(),
     }
 }
 
@@ -248,6 +262,7 @@ public(package) fun empty<T>(ctx: &mut TxContext): Metadata<T> {
         treasury_cap_id: option::none(),
         metadata_cap_id: option::none(),
         deny_cap_id: option::none(),
+        fields: vec_map::empty(),
     }
 }
 
