@@ -7,9 +7,9 @@ use anyhow::{anyhow, bail, Result};
 use diesel::sql_query;
 use diesel_async::RunQueryDsl;
 use sui_indexer_alt_framework::{
-    db::Db,
     pipeline::{concurrent::Handler, Processor},
     store::Store,
+    sui_indexer_alt_framework_store_pg::pg_store::PgStore,
     types::{
         base_types::{ObjectID, SuiAddress},
         full_checkpoint_content::CheckpointData,
@@ -160,7 +160,7 @@ impl Processor for CoinBalanceBuckets {
 
 #[async_trait::async_trait]
 impl Handler for CoinBalanceBuckets {
-    type Store = Db;
+    type Store = PgStore;
 
     const PRUNING_REQUIRES_PROCESSED_VALUES: bool = true;
 
@@ -322,7 +322,7 @@ mod tests {
 
     // Get all balance buckets from the database, sorted by object_id and cp_sequence_number.
     async fn get_all_balance_buckets(
-        conn: &mut <Db as Store>::Connection<'_>,
+        conn: &mut <PgStore as Store>::Connection<'_>,
     ) -> Vec<StoredCoinBalanceBucket> {
         coin_balance_buckets::table
             .order_by((

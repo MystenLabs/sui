@@ -8,9 +8,9 @@ use anyhow::{Context, Result};
 use diesel::{ExpressionMethods, QueryDsl};
 use diesel_async::RunQueryDsl;
 use sui_indexer_alt_framework::{
-    db::Db,
     pipeline::{concurrent::Handler, Processor},
     store::Store,
+    sui_indexer_alt_framework_store_pg::pg_store::PgStore,
     types::{
         coin::Coin,
         effects::TransactionEffectsAPI,
@@ -62,7 +62,7 @@ impl Processor for TxBalanceChanges {
 
 #[async_trait::async_trait]
 impl Handler for TxBalanceChanges {
-    type Store = Db;
+    type Store = PgStore;
 
     const MIN_EAGER_ROWS: usize = 100;
     const MAX_PENDING_ROWS: usize = 10000;
@@ -142,7 +142,7 @@ mod tests {
     use crate::handlers::cp_sequence_numbers::CpSequenceNumbers;
 
     async fn get_all_tx_balance_changes(
-        conn: &mut <Db as Store>::Connection<'_>,
+        conn: &mut <PgStore as Store>::Connection<'_>,
     ) -> Result<Vec<i64>> {
         Ok(tx_balance_changes::table
             .select(tx_balance_changes::tx_sequence_number)

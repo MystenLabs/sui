@@ -7,9 +7,9 @@ use anyhow::{Context, Result};
 use diesel::{ExpressionMethods, QueryDsl};
 use diesel_async::RunQueryDsl;
 use sui_indexer_alt_framework::{
-    db::Db,
     pipeline::{concurrent::Handler, Processor},
     store::Store,
+    sui_indexer_alt_framework_store_pg::pg_store::PgStore,
     types::full_checkpoint_content::CheckpointData,
 };
 use sui_indexer_alt_schema::{schema::kv_transactions, transactions::StoredTransaction};
@@ -64,7 +64,7 @@ impl Processor for KvTransactions {
 
 #[async_trait::async_trait]
 impl Handler for KvTransactions {
-    type Store = Db;
+    type Store = PgStore;
     const MIN_EAGER_ROWS: usize = 100;
     const MAX_PENDING_ROWS: usize = 10000;
 
@@ -103,7 +103,7 @@ mod tests {
     use sui_indexer_alt_schema::MIGRATIONS;
 
     async fn get_all_kv_transactions(
-        conn: &mut <Db as Store>::Connection<'_>,
+        conn: &mut <PgStore as Store>::Connection<'_>,
     ) -> Result<Vec<StoredTransaction>> {
         Ok(kv_transactions::table.load(conn).await?)
     }

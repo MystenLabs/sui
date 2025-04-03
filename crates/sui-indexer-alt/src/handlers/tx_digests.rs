@@ -8,9 +8,9 @@ use anyhow::Result;
 use diesel::{ExpressionMethods, QueryDsl};
 use diesel_async::RunQueryDsl;
 use sui_indexer_alt_framework::{
-    db::Db,
     pipeline::{concurrent::Handler, Processor},
     store::Store,
+    sui_indexer_alt_framework_store_pg::pg_store::PgStore,
     types::full_checkpoint_content::CheckpointData,
 };
 use sui_indexer_alt_schema::{schema::tx_digests, transactions::StoredTxDigest};
@@ -46,7 +46,7 @@ impl Processor for TxDigests {
 
 #[async_trait::async_trait]
 impl Handler for TxDigests {
-    type Store = Db;
+    type Store = PgStore;
 
     const MIN_EAGER_ROWS: usize = 100;
     const MAX_PENDING_ROWS: usize = 10000;
@@ -90,7 +90,7 @@ mod tests {
 
     use crate::handlers::cp_sequence_numbers::CpSequenceNumbers;
 
-    async fn get_all_tx_digests(conn: &mut <Db as Store>::Connection<'_>) -> Result<Vec<i64>> {
+    async fn get_all_tx_digests(conn: &mut <PgStore as Store>::Connection<'_>) -> Result<Vec<i64>> {
         Ok(tx_digests::table
             .select(tx_digests::tx_sequence_number)
             .load(conn)

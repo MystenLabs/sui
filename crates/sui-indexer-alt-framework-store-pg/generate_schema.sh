@@ -64,14 +64,18 @@ while ! pg_isready -p "$PORT" --host "localhost" --username "postgres"; do
   RETRIES=$((RETRIES + 1))
 done
 
-# Run all migrations on the new database
+# Run all migrations on the new database, for the framework and the indexer
 diesel migration run                                                          \
   --database-url "postgres://postgres:postgrespw@localhost:$PORT"             \
-  --migration-dir "$REPO/crates/sui-indexer-alt-framework/migrations"
+  --migration-dir "$REPO/crates/sui-indexer-alt-framework-store-pg/migrations"
 
-# Generate the schema.rs file, excluding partition tables and including the
+diesel migration run                                                          \
+  --database-url "postgres://postgres:postgrespw@localhost:$PORT"             \
+  --migration-dir "$REPO/crates/sui-indexer-alt-schema/migrations"
+
+# Generate the schema.rs file, excluding framework tables and including the
 # copyright notice.
 diesel print-schema                                                           \
   --database-url "postgres://postgres:postgrespw@localhost:$PORT"             \
-  --patch-file "$REPO/crates/sui-indexer-alt-framework/schema.patch"          \
-  > "$REPO/crates/sui-indexer-alt-framework/src/schema.rs"
+  --patch-file "$REPO/crates/sui-indexer-alt-schema/schema.patch"             \
+  > "$REPO/crates/sui-indexer-alt-schema/src/schema.rs"
