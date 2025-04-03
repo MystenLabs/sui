@@ -19,6 +19,7 @@ bumpalo.workspace = true
 fail.workspace = true
 hex.workspace = true
 lasso.workspace = true
+lru.workspace = true
 once_cell.workspace = true
 parking_lot.workspace = true
 serde.workspace = true

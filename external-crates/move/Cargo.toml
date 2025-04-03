@@ -75,6 +75,7 @@ leb128 = "0.2.5"
 lasso = { version = "0.7.3", features = ["multi-threaded", "inline-more"] }
 libfuzzer-sys = "0.4"
 log = { version = "0.4.14", features = ["serde"] }
+lru = "0.13.0"
 lsp-server = "0.7.6"
 lsp-types = "0.95.1"
 memory-stats = "1.0.0"

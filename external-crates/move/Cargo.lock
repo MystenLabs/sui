@@ -1738,6 +1738,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "lru"
+version = "0.13.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "227748d55f2f0ab4735d87fd623798cb6b664512fe979705f829c9f81c934465"
+dependencies = [
+ "hashbrown 0.15.2",
+]
+
+[[package]]
 name = "lsp-server"
 version = "0.7.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2590,6 +2599,7 @@ dependencies = [
  "fail",
  "hex",
  "lasso",
+ "lru 0.13.0",
  "memory-stats",
  "move-abstract-interpreter",
  "move-binary-format",
@@ -3333,7 +3343,7 @@ dependencies = [
  "indoc",
  "instability",
  "itertools 0.13.0",
- "lru",
+ "lru 0.12.5",
  "paste",
  "strum",
  "unicode-segmentation",

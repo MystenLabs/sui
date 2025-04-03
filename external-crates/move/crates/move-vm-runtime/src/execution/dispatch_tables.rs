@@ -35,8 +35,11 @@ use move_core_types::{
 
 use move_vm_config::runtime::VMConfig;
 
+use lru::LruCache;
+
 use std::{
     collections::{BTreeMap, BTreeSet, HashMap},
+    num::NonZeroUsize,
     sync::Arc,
 };
 
@@ -62,7 +65,7 @@ pub struct VMDispatchTables {
     /// avoid grabbing write-locks and toward the possibility these may change based on linkage
     /// (e.g., type ugrades or similar).
     /// [SAFETY] Ordering of inner maps is not guaranteed
-    pub(crate) type_depths: BTreeMap<OriginalId, DefinitionMap<DepthFormula>>,
+    pub(crate) type_depths: LruCache<VirtualTableKey, DepthFormula>,
     /// Defining ID Set -- a set of all defining IDs on any types mentioned in the package.
     /// [SAFETY] Ordering is not guaranteed
     #[allow(dead_code)]
@@ -120,6 +123,10 @@ pub struct DepthFormula {
     pub constant: Option<u64>,
 }
 
+/// Size of the type depth LRU
+/// TODO(vm-rewrite): find a good bound for this
+const TYPE_DEPTH_LRU_SIZE: usize = 16_384;
+
 // -------------------------------------------------------------------------------------------------
 // Impls
 // -------------------------------------------------------------------------------------------------
@@ -157,7 +164,7 @@ impl VMDispatchTables {
             vm_config,
             loaded_packages,
             defining_id_origins,
-            type_depths: BTreeMap::new(),
+            type_depths: LruCache::new(NonZeroUsize::new(TYPE_DEPTH_LRU_SIZE).unwrap()),
         })
     }
 
@@ -385,37 +392,24 @@ impl VMDispatchTables {
     // These functions compute the depth of the specified type, plus cache the depth formula of any
     // uncached subtypes they find along the way.
 
-    fn cached_type_depth(&self, datatype: &VirtualTableKey) -> Option<&DepthFormula> {
-        let package = self.type_depths.get(&datatype.package_key)?;
-        package.get(&datatype.inner_pkg_key)
+    fn cached_type_depth(&mut self, datatype: &VirtualTableKey) -> Option<&DepthFormula> {
+        self.type_depths.get(datatype)
     }
 
     pub fn calculate_depth_of_type(
         &mut self,
         datatype_name: &VirtualTableKey,
     ) -> PartialVMResult<DepthFormula> {
-        let mut depth_cache = HashMap::new();
-        let depth_formula =
-            self.calculate_depth_of_datatype_and_cache(datatype_name, &mut depth_cache)?;
-        for (datatype_key, depth) in depth_cache {
-            self.type_depths
-                .entry(datatype_key.package_key)
-                .or_default()
-                .insert(datatype_key.inner_pkg_key, depth)?;
-        }
+        let depth_formula = self.calculate_depth_of_datatype_and_cache(datatype_name)?;
         Ok(depth_formula)
     }
 
     fn calculate_depth_of_datatype_and_cache(
-        &self,
+        &mut self,
         datatype_name: &VirtualTableKey,
-        depth_cache: &mut HashMap<VirtualTableKey, DepthFormula>,
     ) -> PartialVMResult<DepthFormula> {
         // If we've already computed this datatypes depth, no more work remains to be done.
         if let Some(form) = self.cached_type_depth(datatype_name) {
-            return Ok(form.clone());
-        }
-        if let Some(form) = depth_cache.get(datatype_name) {
             return Ok(form.clone());
         }
 
@@ -426,18 +420,18 @@ impl VMDispatchTables {
                 .variants
                 .iter()
                 .flat_map(|variant_type| variant_type.fields.iter())
-                .map(|field_type| self.calculate_depth_of_type_and_cache(field_type, depth_cache))
+                .map(|field_type| self.calculate_depth_of_type_and_cache(field_type))
                 .collect::<PartialVMResult<Vec<_>>>()?,
             Datatype::Struct(struct_type) => struct_type
                 .fields
                 .iter()
-                .map(|field_type| self.calculate_depth_of_type_and_cache(field_type, depth_cache))
+                .map(|field_type| self.calculate_depth_of_type_and_cache(field_type))
                 .collect::<PartialVMResult<Vec<_>>>()?,
         };
         let mut formula = DepthFormula::normalize(formulas);
         // add 1 for the struct/variant itself
         formula.add(1);
-        let prev = depth_cache.insert(datatype_name.clone(), formula.clone());
+        let prev = self.type_depths.put(datatype_name.clone(), formula.clone());
         if prev.is_some() {
             return Err(
                 PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR)
@@ -448,9 +442,8 @@ impl VMDispatchTables {
     }
 
     fn calculate_depth_of_type_and_cache(
-        &self,
+        &mut self,
         ty: &ArenaType,
-        depth_cache: &mut HashMap<VirtualTableKey, DepthFormula>,
     ) -> PartialVMResult<DepthFormula> {
         Ok(match ty {
             ArenaType::Bool
@@ -464,15 +457,14 @@ impl VMDispatchTables {
             | ArenaType::U256 => DepthFormula::constant(1),
             // we should not see the reference here, we could instead give an invariant violation
             ArenaType::Vector(ty) | ArenaType::Reference(ty) | ArenaType::MutableReference(ty) => {
-                let mut inner = self.calculate_depth_of_type_and_cache(ty, depth_cache)?;
+                let mut inner = self.calculate_depth_of_type_and_cache(ty)?;
                 // add 1 for the vector itself
                 inner.add(1);
                 inner
             }
             ArenaType::TyParam(ty_idx) => DepthFormula::type_parameter(*ty_idx),
-            ArenaType::Datatype(cache_idx) => {
-                let datatype_formula =
-                    self.calculate_depth_of_datatype_and_cache(cache_idx, depth_cache)?;
+            ArenaType::Datatype(datatype_key) => {
+                let datatype_formula = self.calculate_depth_of_datatype_and_cache(datatype_key)?;
                 debug_assert!(datatype_formula.terms.is_empty());
                 datatype_formula
             }
@@ -483,14 +475,10 @@ impl VMDispatchTables {
                     .enumerate()
                     .map(|(idx, ty)| {
                         let var = idx as TypeParameterIndex;
-                        Ok((
-                            var,
-                            self.calculate_depth_of_type_and_cache(ty, depth_cache)?,
-                        ))
+                        Ok((var, self.calculate_depth_of_type_and_cache(ty)?))
                     })
                     .collect::<PartialVMResult<BTreeMap<_, _>>>()?;
-                let datatype_formula =
-                    self.calculate_depth_of_datatype_and_cache(cache_idx, depth_cache)?;
+                let datatype_formula = self.calculate_depth_of_datatype_and_cache(cache_idx)?;
 
                 datatype_formula.subst(ty_arg_map)?
             }
@@ -1024,17 +1012,6 @@ impl<T> DefinitionMap<T> {
     /// Retrieve a key from the definition map.
     pub fn get(&self, key: &IntraPackageKey) -> Option<&T> {
         self.0.get(key)
-    }
-
-    /// Private to this module, as it is only used in depth formula calculations.
-    fn insert(&mut self, key: IntraPackageKey, value: T) -> PartialVMResult<()> {
-        if self.0.insert(key, value).is_some() {
-            return Err(
-                PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR)
-                    .with_message(format!("Duplicate key {}", key.to_string()?)),
-            );
-        }
-        Ok(())
     }
 }
 
