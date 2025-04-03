@@ -3,6 +3,7 @@
 
 use std::collections::BTreeMap;
 use std::collections::HashMap;
+use std::rc::Rc;
 
 use crate::error::ObjectNotFoundError;
 use crate::reader::StateReader;
@@ -12,7 +13,7 @@ use crate::Result;
 use crate::RpcError;
 use crate::RpcService;
 use itertools::Itertools;
-use move_binary_format::normalized_deprecated;
+use move_binary_format::normalized;
 use sui_protocol_config::ProtocolConfig;
 use sui_sdk_transaction_builder::unresolved;
 use sui_sdk_types::Argument;
@@ -138,7 +139,8 @@ impl RpcService {
 struct NormalizedPackage {
     #[allow(unused)]
     package: MovePackage,
-    normalized_modules: BTreeMap<String, normalized_deprecated::Module>,
+    pool: normalized::RCPool,
+    normalized_modules: BTreeMap<String, normalized::Module<normalized::RCIdentifier>>,
 }
 
 fn called_packages(
@@ -181,7 +183,8 @@ fn called_packages(
         //
         // Despite the above this is safe given we are only using the signature information (and in
         // particular the reference kind) from the normalized package.
-        let normalized_modules = package.normalize(&binary_config).map_err(|e| {
+        let mut pool = normalized::RCPool::new();
+        let normalized_modules = package.normalize(&mut pool, &binary_config).map_err(|e| {
             RpcError::new(
                 tonic::Code::Internal,
                 format!("unable to normalize package {}: {e}", move_call.package),
@@ -189,6 +192,7 @@ fn called_packages(
         })?;
         let package = NormalizedPackage {
             package,
+            pool,
             normalized_modules,
         };
 
@@ -519,16 +523,10 @@ fn is_input_argument_receiving(
         if let (Command::MoveCall(move_call), Some(idx)) = (command, idx) {
             let arg_type = arg_type_of_move_call_input(called_packages, move_call, idx)?;
 
-            if let move_binary_format::normalized_deprecated::Type::Struct {
-                address,
-                module,
-                name,
-                ..
-            } = arg_type
-            {
-                if receiving_package == address
-                    && receiving_module == module.as_ref()
-                    && receiving_struct == name.as_ref()
+            if let normalized::Type::Datatype(dt) = &*arg_type {
+                if receiving_package == &dt.address
+                    && receiving_module == dt.module.as_ref()
+                    && receiving_struct == dt.name.as_ref()
                 {
                     receiving = true;
                 }
@@ -550,7 +548,7 @@ fn arg_type_of_move_call_input<'a>(
     called_packages: &'a HashMap<ObjectId, NormalizedPackage>,
     move_call: &sui_sdk_types::MoveCall,
     idx: usize,
-) -> Result<&'a move_binary_format::normalized_deprecated::Type> {
+) -> Result<Rc<normalized::Type<normalized::RCIdentifier>>> {
     let function = called_packages
         // Find the package
         .get(&move_call.package)
@@ -569,10 +567,13 @@ fn arg_type_of_move_call_input<'a>(
                 ),
             )
         })?;
-    function
-        .parameters
-        .get(idx)
-        .ok_or_else(|| RpcError::new(tonic::Code::InvalidArgument, "invalid input parameter"))
+    let Some(ty) = function.parameters.get(idx) else {
+        return Err(RpcError::new(
+            tonic::Code::InvalidArgument,
+            "invalid input parameter",
+        ));
+    };
+    Ok(ty.clone())
 }
 
 fn resolve_shared_input_with_object(
@@ -603,9 +604,8 @@ fn resolve_shared_input_with_object(
             (Command::MoveCall(move_call), Some(idx)) => {
                 let arg_type = arg_type_of_move_call_input(called_packages, move_call, idx)?;
                 if matches!(
-                    arg_type,
-                    move_binary_format::normalized_deprecated::Type::MutableReference(_)
-                        | move_binary_format::normalized_deprecated::Type::Struct { .. }
+                    &*arg_type,
+                    normalized::Type::Reference(/* mut */ true, _) | normalized::Type::Datatype(_)
                 ) {
                     mutable = true;
                 }

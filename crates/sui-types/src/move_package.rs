@@ -14,7 +14,7 @@ use fastcrypto::hash::HashFunction;
 use move_binary_format::binary_config::BinaryConfig;
 use move_binary_format::file_format::CompiledModule;
 use move_binary_format::file_format_common::VERSION_6;
-use move_binary_format::normalized_deprecated;
+use move_binary_format::{normalized, normalized_deprecated};
 use move_core_types::language_storage::ModuleId;
 use move_core_types::{
     account_address::AccountAddress,
@@ -524,11 +524,19 @@ impl MovePackage {
         })
     }
 
-    pub fn normalize(
+    pub fn normalize<S: Ord + Clone + ToString, Pool: normalized::StringPool<String = S>>(
+        &self,
+        pool: &mut Pool,
+        binary_config: &BinaryConfig,
+    ) -> SuiResult<BTreeMap<String, normalized::Module<S>>> {
+        normalize_modules(pool, self.module_map.values(), binary_config)
+    }
+
+    pub fn normalize_deprecated(
         &self,
         binary_config: &BinaryConfig,
     ) -> SuiResult<BTreeMap<String, normalized_deprecated::Module>> {
-        normalize_modules(self.module_map.values(), binary_config)
+        normalize_modules_deprecated(self.module_map.values(), binary_config)
     }
 }
 
@@ -597,7 +605,54 @@ pub fn is_test_fun(name: &IdentStr, module: &CompiledModule, fn_info_map: &FnInf
     }
 }
 
-pub fn normalize_modules<'a, I>(
+pub fn normalize_modules<
+    'a,
+    S: Ord + Clone + ToString,
+    Pool: normalized::StringPool<String = S>,
+    I,
+>(
+    pool: &mut Pool,
+    modules: I,
+    binary_config: &BinaryConfig,
+) -> SuiResult<BTreeMap<String, normalized::Module<S>>>
+where
+    I: Iterator<Item = &'a Vec<u8>>,
+{
+    let mut normalized_modules = BTreeMap::new();
+    for bytecode in modules {
+        let module =
+            CompiledModule::deserialize_with_config(bytecode, binary_config).map_err(|error| {
+                SuiError::ModuleDeserializationFailure {
+                    error: error.to_string(),
+                }
+            })?;
+        let normalized_module = normalized::Module::new(pool, &module);
+        normalized_modules.insert(normalized_module.name().to_string(), normalized_module);
+    }
+    Ok(normalized_modules)
+}
+
+pub fn normalize_deserialized_modules<
+    'a,
+    S: Ord + Clone + ToString,
+    Pool: normalized::StringPool<String = S>,
+    I,
+>(
+    pool: &mut Pool,
+    modules: I,
+) -> BTreeMap<String, normalized::Module<S>>
+where
+    I: Iterator<Item = &'a CompiledModule>,
+{
+    let mut normalized_modules = BTreeMap::new();
+    for module in modules {
+        let normalized_module = normalized::Module::new(pool, module);
+        normalized_modules.insert(normalized_module.name().to_string(), normalized_module);
+    }
+    normalized_modules
+}
+
+pub fn normalize_modules_deprecated<'a, I>(
     modules: I,
     binary_config: &BinaryConfig,
 ) -> SuiResult<BTreeMap<String, normalized_deprecated::Module>>
@@ -618,7 +673,7 @@ where
     Ok(normalized_modules)
 }
 
-pub fn normalize_deserialized_modules<'a, I>(
+pub fn normalize_deserialized_modules_deprecated<'a, I>(
     modules: I,
 ) -> BTreeMap<String, normalized_deprecated::Module>
 where

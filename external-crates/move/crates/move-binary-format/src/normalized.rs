@@ -47,6 +47,12 @@ impl StringPool for NoInterning {
 #[derive(Clone, PartialEq, Eq, PartialOrd, Ord, Debug)]
 pub struct RCIdentifier(Rc<Identifier>);
 
+impl Borrow<str> for RCIdentifier {
+    fn borrow(&self) -> &str {
+        self.0.as_str()
+    }
+}
+
 impl Borrow<IdentStr> for RCIdentifier {
     fn borrow(&self) -> &IdentStr {
         self.0.as_ident_str()
@@ -146,10 +152,10 @@ pub enum Type<S> {
 
 #[derive(Clone, Debug, Ord, PartialOrd, Eq, PartialEq, Serialize, Deserialize)]
 pub struct Datatype<S> {
-    address: AccountAddress,
-    module: S,
-    name: S,
-    type_arguments: Vec<Type<S>>,
+    pub address: AccountAddress,
+    pub module: S,
+    pub name: S,
+    pub type_arguments: Vec<Type<S>>,
 }
 
 pub type Signature<S> = Rc<Vec<Rc<Type<S>>>>;
