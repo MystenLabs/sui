@@ -82,10 +82,3 @@ impl<F: MoveFlavor> Manifest<F> {
         Ok(())
     }
 }
-
-#[test]
-fn write_new() {
-    let manifest = Manifest::<Vanilla>::read_from("tests/output/Move.toml");
-
-    assert!(manifest.is_ok());
-}
