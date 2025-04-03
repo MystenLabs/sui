@@ -9,7 +9,7 @@ use crate::{
     },
     natives::functions::NativeFunctions,
     runtime::{data_cache::TransactionDataCache, package_resolution::resolve_packages},
-    shared::{linkage_context::LinkageContext, types::PackageStorageId},
+    shared::{linkage_context::LinkageContext, types::VersionId},
 };
 use move_binary_format::errors::VMResult;
 use move_core_types::{account_address::AccountAddress, resolver::ModuleResolver};
@@ -20,7 +20,7 @@ use std::sync::Arc;
 fn load_linkage_packages_into_runtime<DataSource: ModuleResolver + Send + Sync>(
     adapter: &mut impl VMTestAdapter<DataSource>,
     linkage: &LinkageContext,
-) -> VMResult<BTreeMap<PackageStorageId, Arc<Package>>> {
+) -> VMResult<BTreeMap<VersionId, Arc<Package>>> {
     let cache = adapter.runtime().cache();
     let natives = adapter.runtime().natives();
     let all_packages = linkage.all_packages()?;
@@ -43,7 +43,7 @@ fn cache_package_internal_package_calls_only_no_types() {
     let result = result.unwrap();
     let l_pkg = result.first_key_value().unwrap().1;
     assert_eq!(l_pkg.runtime.loaded_modules.len(), 3);
-    assert_eq!(l_pkg.runtime.storage_id, package_address);
+    assert_eq!(l_pkg.runtime.version_id, package_address);
     assert_eq!(l_pkg.runtime.vtable.functions.len(), 3);
 }
 
@@ -62,7 +62,7 @@ fn cache_package_internal_package_calls_only_with_types() {
     let result = result.unwrap();
     let l_pkg = result.first_key_value().unwrap().1;
     assert_eq!(l_pkg.runtime.loaded_modules.len(), 3);
-    assert_eq!(l_pkg.runtime.storage_id, package_address);
+    assert_eq!(l_pkg.runtime.version_id, package_address);
     assert_eq!(l_pkg.runtime.vtable.functions.len(), 3);
 }
 
@@ -82,12 +82,12 @@ fn cache_package_external_package_calls_no_types() {
     let results = result.unwrap();
     let l_pkg = results.get(&package1_address).unwrap();
     assert_eq!(l_pkg.runtime.loaded_modules.len(), 2);
-    assert_eq!(l_pkg.runtime.storage_id, package1_address);
+    assert_eq!(l_pkg.runtime.version_id, package1_address);
     assert_eq!(l_pkg.runtime.vtable.functions.len(), 2);
 
     let l_pkg = results.get(&package2_address).unwrap();
     assert_eq!(l_pkg.runtime.loaded_modules.len(), 1);
-    assert_eq!(l_pkg.runtime.storage_id, package2_address);
+    assert_eq!(l_pkg.runtime.version_id, package2_address);
     assert_eq!(l_pkg.runtime.vtable.functions.len(), 1);
 }
 
@@ -115,7 +115,7 @@ fn load_package_internal_package_calls_only_no_types() {
     assert_eq!(l_pkg.len(), 1);
     let l_pkg = l_pkg.get(&package_address).unwrap();
     assert_eq!(l_pkg.runtime.loaded_modules.len(), 3);
-    assert_eq!(l_pkg.runtime.storage_id, package_address);
+    assert_eq!(l_pkg.runtime.version_id, package_address);
     assert_eq!(l_pkg.runtime.vtable.functions.len(), 3);
 }
 
@@ -135,7 +135,7 @@ fn load_package_internal_package_calls_only_with_types() {
     assert_eq!(l_pkg.len(), 1);
     let l_pkg = l_pkg.get(&package_address).unwrap();
     assert_eq!(l_pkg.runtime.loaded_modules.len(), 3);
-    assert_eq!(l_pkg.runtime.storage_id, package_address);
+    assert_eq!(l_pkg.runtime.version_id, package_address);
     assert_eq!(l_pkg.runtime.vtable.functions.len(), 3);
     assert_eq!(l_pkg.runtime.vtable.types.len(), 0);
 }
@@ -156,7 +156,7 @@ fn load_package_external_package_calls_no_types() {
     assert_eq!(l_pkg.len(), 2);
     let l_pkg = l_pkg.get(&package2_address).unwrap();
     assert_eq!(l_pkg.runtime.loaded_modules.len(), 1);
-    assert_eq!(l_pkg.runtime.storage_id, package2_address);
+    assert_eq!(l_pkg.runtime.version_id, package2_address);
     assert_eq!(l_pkg.runtime.vtable.functions.len(), 1);
 }
 

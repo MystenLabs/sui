@@ -5,7 +5,7 @@ pub mod deserialization;
 pub mod verification;
 
 use crate::{
-    dbg_println, natives::functions::NativeFunctions, shared::types::RuntimePackageId,
+    dbg_println, natives::functions::NativeFunctions, shared::types::OriginalId,
     validation::verification::linkage::verify_linkage_and_cyclic_checks_for_publication,
 };
 
@@ -29,9 +29,9 @@ use self::verification::linkage::verify_linkage_and_cyclic_checks;
 pub fn validate_for_publish(
     natives: &NativeFunctions,
     vm_config: &VMConfig,
-    runtime_package_id: RuntimePackageId,
+    original_id: OriginalId,
     package: SerializedPackage,
-    dependencies: BTreeMap<RuntimePackageId, &verification::ast::Package>,
+    dependencies: BTreeMap<OriginalId, &verification::ast::Package>,
 ) -> VMResult<verification::ast::Package> {
     dbg_println!(
         "doing verification with linkage context {:#?}\nand type origins {:#?}",
@@ -43,7 +43,7 @@ pub fn validate_for_publish(
 
     // Make sure all modules' self addresses match the `runtime_package_id`.
     for module in validated_package.as_modules().into_iter() {
-        if module.value.address() != &runtime_package_id {
+        if module.value.address() != &original_id {
             return Err(verification_error(
                 StatusCode::MISMATCHED_MODULE_IDS_IN_PACKAGE,
                 IndexKind::AddressIdentifier,
@@ -62,14 +62,14 @@ pub fn validate_for_publish(
 pub fn validate_for_upgrade(
     _previous: verification::ast::Package,
     _package: SerializedPackage,
-    _dependencies: BTreeMap<RuntimePackageId, verification::ast::Package>,
+    _dependencies: BTreeMap<OriginalId, verification::ast::Package>,
 ) -> VMResult<verification::ast::Package> {
     todo!()
 }
 
 /// Verify a set of packages for VM execution, ensuring linkage is correct and there are no cycles.
 pub fn validate_for_vm_execution(
-    packages: BTreeMap<RuntimePackageId, &verification::ast::Package>,
+    packages: BTreeMap<OriginalId, &verification::ast::Package>,
 ) -> VMResult<()> {
     // TODO: Nothing else to do, right?
     verify_linkage_and_cyclic_checks(&packages)
