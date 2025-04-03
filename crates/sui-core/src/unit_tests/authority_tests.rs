@@ -1080,11 +1080,15 @@ async fn test_dry_run_dev_inspect_dynamic_field_too_new() {
     let digest = *transaction.digest();
     let DryRunTransactionBlockResponse {
         effects,
-        execution_error_source,
+        additional_error_info,
         ..
     } = fullnode.dry_exec_transaction(data, digest).await.unwrap().0;
+
+    println!("effects: {:#?}", effects);
     assert_eq!(effects.deleted().len(), 0);
-    assert_eq!(execution_error_source, Some("VMError with status ABORTED with sub status 1 at location Module ModuleId { address: 0000000000000000000000000000000000000000000000000000000000000002, name: Identifier(\"dynamic_field\") } at code offset 0 in function definition 13".to_string()));
+    assert_eq!(additional_error_info.execution_error_source, Some("VMError with status ABORTED with sub status 1 at location Module ModuleId { address: 0000000000000000000000000000000000000000000000000000000000000002, name: Identifier(\"dynamic_field\") } at code offset 0 in function definition 13".to_string()));
+    // no clever error
+    // assert_eq!(abort_error_code, Some(1));
 }
 
 // tests using a gas coin with version MAX - 1
@@ -4016,6 +4020,220 @@ async fn test_iter_live_object_set() {
     );
 }
 
+#[tokio::test]
+async fn test_clever_abort_error() {
+    let (sender, sender_key): (_, AccountKeyPair) = get_key_pair();
+    let gas_object_id = ObjectID::random();
+    let (validator, fullnode) = init_state_validator_with_fullnode().await;
+    let (validator, aborts) = publish_aborts(validator).await;
+    let (fullnode, _aborts) = publish_aborts(fullnode).await;
+    let gas_object = Object::with_id_owner_version_for_testing(
+        gas_object_id,
+        SequenceNumber::from_u64(SequenceNumber::MAX.value() - 1),
+        Owner::AddressOwner(sender),
+    );
+    validator.insert_genesis_object(gas_object.clone()).await;
+    fullnode.insert_genesis_object(gas_object).await;
+
+    let rgp = fullnode.reference_gas_price_for_testing().unwrap();
+
+    // only_abort
+    let mut builder = ProgrammableTransactionBuilder::new();
+    builder
+        .move_call(
+            aborts.0,
+            ident_str!("aborts").to_owned(),
+            ident_str!("only_abort").to_owned(),
+            vec![],
+            vec![],
+        )
+        .expect("failed to build move call");
+    let kind = TransactionKind::programmable(builder.finish());
+    let txn_data = TransactionData::new_with_gas_coins(
+        kind,
+        sender,
+        vec![],
+        TEST_ONLY_GAS_UNIT_FOR_GENERIC * rgp,
+        rgp,
+    );
+
+    let transaction = to_sender_signed_transaction(txn_data.clone(), &sender_key);
+    let digest = *transaction.digest();
+    let DryRunTransactionBlockResponse {
+        effects,
+        additional_error_info,
+        ..
+    } = fullnode
+        .dry_exec_transaction(txn_data, digest)
+        .await
+        .unwrap()
+        .0;
+
+    assert!(matches!(
+        effects.status(),
+        SuiExecutionStatus::Failure { .. }
+    ));
+    assert_eq!(
+        additional_error_info,
+        AdditionalErrorInfo {
+            execution_error_source: Some("VMError with status ABORTED with sub status 13906834204408152063 at location Module ModuleId { address: 0000000000000000000000000000000000000000000000000000000000000000, name: Identifier(\"aborts\") } and message 0x0000000000000000000000000000000000000000000000000000000000000000::aborts::only_abort at offset 1 at code offset 1 in function definition 0".to_string()),
+            abort_error: Some(Abort {
+                module_id: Some("0x0000000000000000000000000000000000000000000000000000000000000000::aborts".to_string()),
+                function: Some("only_abort".to_string()),
+                line: Some(6),
+                error_code: None,
+            }),
+        }
+    );
+
+    // abort_with_code
+    let mut builder = ProgrammableTransactionBuilder::new();
+    builder
+        .move_call(
+            aborts.0,
+            ident_str!("aborts").to_owned(),
+            ident_str!("abort_with_code").to_owned(),
+            vec![],
+            vec![],
+        )
+        .expect("failed to build move call");
+    let kind = TransactionKind::programmable(builder.finish());
+    let txn_data = TransactionData::new_with_gas_coins(
+        kind,
+        sender,
+        vec![],
+        TEST_ONLY_GAS_UNIT_FOR_GENERIC * rgp,
+        rgp,
+    );
+
+    let transaction = to_sender_signed_transaction(txn_data.clone(), &sender_key);
+    let digest = *transaction.digest();
+    let DryRunTransactionBlockResponse {
+        effects,
+        additional_error_info,
+        ..
+    } = fullnode
+        .dry_exec_transaction(txn_data, digest)
+        .await
+        .unwrap()
+        .0;
+
+    assert!(matches!(
+        effects.status(),
+        SuiExecutionStatus::Failure { .. }
+    ));
+    assert_eq!(
+        additional_error_info,
+        AdditionalErrorInfo {
+            execution_error_source: Some("VMError with status ABORTED with sub status 5 at location Module ModuleId { address: 0000000000000000000000000000000000000000000000000000000000000000, name: Identifier(\"aborts\") } and message 0x0000000000000000000000000000000000000000000000000000000000000000::aborts::abort_with_code at offset 1 at code offset 1 in function definition 1".to_string()),
+            abort_error: Some(Abort {
+                module_id: Some("0x0000000000000000000000000000000000000000000000000000000000000000::aborts".to_string()),
+                function: Some("abort_with_code".to_string()),
+                line: None,
+                error_code: Some(5),
+            }),
+        }
+    );
+
+    // abort with const
+    let mut builder = ProgrammableTransactionBuilder::new();
+    builder
+        .move_call(
+            aborts.0,
+            ident_str!("aborts").to_owned(),
+            ident_str!("abort_with_const").to_owned(),
+            vec![],
+            vec![],
+        )
+        .expect("failed to build move call");
+    let kind = TransactionKind::programmable(builder.finish());
+    let txn_data = TransactionData::new_with_gas_coins(
+        kind,
+        sender,
+        vec![],
+        TEST_ONLY_GAS_UNIT_FOR_GENERIC * rgp,
+        rgp,
+    );
+
+    let transaction = to_sender_signed_transaction(txn_data.clone(), &sender_key);
+    let digest = *transaction.digest();
+    let DryRunTransactionBlockResponse {
+        effects,
+        additional_error_info,
+        ..
+    } = fullnode
+        .dry_exec_transaction(txn_data, digest)
+        .await
+        .unwrap()
+        .0;
+
+    assert!(matches!(
+        effects.status(),
+        SuiExecutionStatus::Failure { .. }
+    ));
+    assert_eq!(
+        additional_error_info,
+        AdditionalErrorInfo {
+            execution_error_source: Some("VMError with status ABORTED with sub status 13906834243062857729 at location Module ModuleId { address: 0000000000000000000000000000000000000000000000000000000000000000, name: Identifier(\"aborts\") } and message 0x0000000000000000000000000000000000000000000000000000000000000000::aborts::abort_with_const at offset 1 at code offset 1 in function definition 2".to_string()),
+            abort_error: Some(Abort {
+                module_id: Some("0x0000000000000000000000000000000000000000000000000000000000000000::aborts".to_string()),
+                function: Some("abort_with_const".to_string()),
+                line: Some(16),
+                error_code: None,
+            }),
+        }
+    );
+
+    // abort with const and code
+    let mut builder = ProgrammableTransactionBuilder::new();
+    builder
+        .move_call(
+            aborts.0,
+            ident_str!("aborts").to_owned(),
+            ident_str!("abort_with_const_and_code").to_owned(),
+            vec![],
+            vec![],
+        )
+        .expect("failed to build move call");
+    let kind = TransactionKind::programmable(builder.finish());
+    let txn_data = TransactionData::new_with_gas_coins(
+        kind,
+        sender,
+        vec![],
+        TEST_ONLY_GAS_UNIT_FOR_GENERIC * rgp,
+        rgp,
+    );
+
+    let transaction = to_sender_signed_transaction(txn_data.clone(), &sender_key);
+    let digest = *transaction.digest();
+    let DryRunTransactionBlockResponse {
+        effects,
+        additional_error_info,
+        ..
+    } = fullnode
+        .dry_exec_transaction(txn_data, digest)
+        .await
+        .unwrap()
+        .0;
+
+    assert!(matches!(
+        effects.status(),
+        SuiExecutionStatus::Failure { .. }
+    ));
+    assert_eq!(
+        additional_error_info,
+        AdditionalErrorInfo {
+            execution_error_source: Some("VMError with status ABORTED with sub status 13836465524655128579 at location Module ModuleId { address: 0000000000000000000000000000000000000000000000000000000000000000, name: Identifier(\"aborts\") } and message 0x0000000000000000000000000000000000000000000000000000000000000000::aborts::abort_with_const_and_code at offset 1 at code offset 1 in function definition 3".to_string()),
+            abort_error: Some(Abort {
+                module_id: Some("0x0000000000000000000000000000000000000000000000000000000000000000::aborts".to_string()),
+                function: Some("abort_with_const_and_code".to_string()),
+                line: Some(22),
+                error_code: Some(5),
+            }),
+        }
+    );
+}
+
 // helpers
 
 #[cfg(test)]
@@ -4076,6 +4294,27 @@ pub async fn publish_object_basics(state: Arc<AuthorityState>) -> (Arc<Authority
     // add object_basics package object to genesis, since lots of test use it
     let mut path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     path.push("src/unit_tests/data/object_basics");
+    let modules: Vec<_> = BuildConfig::new_for_testing()
+        .build(&path)
+        .unwrap()
+        .get_modules()
+        .cloned()
+        .collect();
+    let digest = TransactionDigest::genesis_marker();
+    let pkg = Object::new_package_for_testing(
+        &modules,
+        digest,
+        BuiltInFramework::genesis_move_packages(),
+    )
+    .unwrap();
+    let pkg_ref = pkg.compute_object_reference();
+    state.insert_genesis_object(pkg).await;
+    (state, pkg_ref)
+}
+
+pub async fn publish_aborts(state: Arc<AuthorityState>) -> (Arc<AuthorityState>, ObjectRef) {
+    let mut path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    path.push("src/unit_tests/data/aborts");
     let modules: Vec<_> = BuildConfig::new_for_testing()
         .build(&path)
         .unwrap()
@@ -5396,7 +5635,7 @@ async fn test_function_not_found() {
     let (
         DryRunTransactionBlockResponse {
             effects,
-            execution_error_source,
+            additional_error_info,
             ..
         },
         _,
@@ -5416,7 +5655,7 @@ async fn test_function_not_found() {
         }
     );
 
-    assert_eq!(execution_error_source, Some("Could not resolve function 'bad_function' in module 0000000000000000000000000000000000000000000000000000000000000001::option".to_string()),)
+    assert_eq!(additional_error_info.execution_error_source, Some("Could not resolve function 'bad_function' in module 0000000000000000000000000000000000000000000000000000000000000001::option".to_string()),)
 }
 
 #[tokio::test]
@@ -5453,7 +5692,7 @@ async fn test_arity_mismatch() {
     let (
         DryRunTransactionBlockResponse {
             effects,
-            execution_error_source,
+            additional_error_info,
             ..
         },
         _,
@@ -5474,7 +5713,7 @@ async fn test_arity_mismatch() {
     );
 
     assert_eq!(
-        execution_error_source,
+        additional_error_info.execution_error_source,
         Some("Expected 1 argument calling function 'is_none', but found 0".to_string()),
     )
 }

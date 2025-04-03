@@ -5342,8 +5342,62 @@
   ],
   "components": {
     "schemas": {
+      "Abort": {
+        "type": "object",
+        "properties": {
+          "errorCode": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "uint64",
+            "minimum": 0.0
+          },
+          "function": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "line": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "uint16",
+            "minimum": 0.0
+          },
+          "moduleId": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        }
+      },
       "AdditionalConsensusStateDigest": {
         "$ref": "#/components/schemas/Digest"
+      },
+      "AdditionalErrorInfo": {
+        "type": "object",
+        "properties": {
+          "abortError": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Abort"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "executionErrorSource": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        }
       },
       "Authenticator": {
         "oneOf": [
@@ -6070,6 +6124,7 @@
       "DryRunTransactionBlockResponse": {
         "type": "object",
         "required": [
+          "additionalErrorInfo",
           "balanceChanges",
           "effects",
           "events",
@@ -6077,6 +6132,9 @@
           "objectChanges"
         ],
         "properties": {
+          "additionalErrorInfo": {
+            "$ref": "#/components/schemas/AdditionalErrorInfo"
+          },
           "balanceChanges": {
             "type": "array",
             "items": {
@@ -6091,12 +6149,6 @@
             "items": {
               "$ref": "#/components/schemas/Event"
             }
-          },
-          "executionErrorSource": {
-            "type": [
-              "string",
-              "null"
-            ]
           },
           "input": {
             "$ref": "#/components/schemas/TransactionBlockData"

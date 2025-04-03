@@ -13613,6 +13613,7 @@ dependencies = [
  "more-asserts",
  "move-binary-format",
  "move-bytecode-utils",
+ "move-command-line-common",
  "move-core-types",
  "move-package",
  "move-symbol-pool",

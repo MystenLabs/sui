@@ -1072,12 +1072,36 @@ pub struct DryRunTransactionBlockResponse {
     pub object_changes: Vec<ObjectChange>,
     pub balance_changes: Vec<BalanceChange>,
     pub input: SuiTransactionBlockData,
-    pub execution_error_source: Option<String>,
+    pub additional_error_info: AdditionalErrorInfo,
     // If an input object is congested, suggest a gas price to use.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[schemars(with = "Option<BigInt<u64>>")]
     #[serde_as(as = "Option<BigInt<u64>>")]
     pub suggested_gas_price: Option<u64>,
+}
+
+#[serde_as]
+#[derive(Eq, PartialEq, Clone, Debug, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct AdditionalErrorInfo {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub execution_error_source: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub abort_error: Option<Abort>,
+}
+
+#[serde_as]
+#[derive(Eq, PartialEq, Clone, Debug, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct Abort {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub module_id: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub function: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub line: Option<u16>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub error_code: Option<u64>,
 }
 
 #[derive(Eq, PartialEq, Clone, Debug, Default, Serialize, Deserialize, JsonSchema)]
