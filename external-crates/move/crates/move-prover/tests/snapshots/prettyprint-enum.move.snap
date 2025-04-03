@@ -1,0 +1,22 @@
+---
+source: crates/move-prover/tests/integration.rs
+assertion_line: 52
+expression: output
+snapshot_kind: text
+---
+Verification failed: exiting with verification errors
+error: prover::ensures assertion does not hold
+   ┌─ tests/inputs/prettyprint-enum.move:22:5
+   │
+22 │     ensures(res == MyEnum::A(x));
+   │     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   │
+   =     at tests/inputs/prettyprint-enum.move:20: foo_spec
+   =         x = 9655u64
+   =     at tests/inputs/prettyprint-enum.move:21: foo_spec
+   =         x = 9655u64
+   =     at tests/inputs/prettyprint-enum.move:12: foo
+   =         result = foo::MyEnum::B{pos0 = 13u64}
+   =     at tests/inputs/prettyprint-enum.move:17: foo
+   =         res#1#0 = foo::MyEnum::B{pos0 = 13u64}
+   =     at tests/inputs/prettyprint-enum.move:22: foo_spec
