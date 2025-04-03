@@ -134,13 +134,13 @@ fun break_long_value() {
 
     let to_remain_locked = (
         self.final_unlock_ts_sec -
-                math::min(self.final_unlock_ts_sec, now),
+            math::min(self.final_unlock_ts_sec, now),
     );
 
     let to_remain_locked =
         (
-            self.final_unlock_ts_sec - math::min(self.final_unlock_ts_sec, now)
-        ) * self.unlock_per_second;
+        self.final_unlock_ts_sec - math::min(self.final_unlock_ts_sec, now)
+    ) * self.unlock_per_second;
 
     let locked_amount_round =
         balance::value(&self.locked_balance) / self.unlock_per_second * self.unlock_per_second;
@@ -149,8 +149,8 @@ fun break_long_value() {
 fun misc() {
     let a =
         very_very_long_if_condition > very_very_long_if_condition &&
-        very_very_long_if_condition > very_very_long_if_condition &&
-        very_very_long_if_condition > very_very_long_if_condition;
+    very_very_long_if_condition > very_very_long_if_condition &&
+    very_very_long_if_condition > very_very_long_if_condition;
 }
 
 fun let_match() {
@@ -162,49 +162,69 @@ fun let_match() {
 
 fun let_control_flow() {
     // let assign with if_expression
-    a = if (true) { b } else { c };
+    let a = if (a) { b } else {
+        c
+    };
 
     // let assign with if + break
-    assign = if (long_condition)
+    let assign = if (cond)
         long_expression
     else another_long_expression;
 
-    assign = if (true) { a } else {
+    let assign = if (cond) {
+        long_expression
+    } else {
+        another_long_expression
+    };
+
+    let assign = if (
+        long_condition
+    ) long_expression
+    else another_long_expression;
+
+    let assign = if (true) { a }
+    else {
         b
     };
 
     // let assign with if + block
-    assign = if (true) {
+    let assign = if (true) {
         long_true_expression
     } else {
         long_false_expression
     };
 
     // let assign + control flow
-    assign = 'ret: if (true) {
+    let assign = 'ret: if (true) {
         long_true_expression
     } else {
         long_false_expression
     };
 
-    assign = 'loop: loop {
+    let assign = 'loop: loop {
         break 'loop a;
     };
 
-    assign = 'ret: 10u8.do!(|x| {
+    let assign = 'ret: 1u8.do!(
+        |x| {
+            return 'ret x;
+        },
+    );
+
+    let a = 'ret: 1u8.do!(|x| {
         return 'ret x;
     });
 
     // Block
 
-    assign = {
+    let assign = {
         // comment
         a = b;
         a
     };
 
-    assign = vector[100, 200];
-    assign = vector[
+    let assign = vector[100, 200];
+    let assign = vector[
         100000,
         200000,
         30000,
