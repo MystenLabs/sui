@@ -13,6 +13,7 @@ clap.workspace = true
 diesel.workspace = true
 diesel-async = { workspace = true, features = ["bb8", "postgres", "async-connection-wrapper"] }
 diesel_migrations.workspace = true
+futures.workspace = true
 tempfile.workspace = true
 tokio = { workspace = true, features = ["full"] }
 tracing.workspace = true

@@ -1,10 +1,15 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use std::time::Duration;
+
 use anyhow::anyhow;
 use diesel::migration::{MigrationSource, MigrationVersion};
 use diesel::pg::Pg;
+use diesel::ConnectionError;
 use diesel_async::async_connection_wrapper::AsyncConnectionWrapper;
+use diesel_async::pooled_connection::ManagerConfig;
+use diesel_async::AsyncConnection;
 use diesel_async::{
     pooled_connection::{
         bb8::{Pool, PooledConnection},
@@ -12,7 +17,7 @@ use diesel_async::{
     },
     AsyncPgConnection, RunQueryDsl,
 };
-use std::time::Duration;
+use futures::FutureExt;
 use tracing::info;
 use url::Url;
 
@@ -27,13 +32,14 @@ pub struct DbArgs {
     /// Time spent waiting for a connection from the pool to become available, in milliseconds.
     #[arg(long, default_value_t = Self::default().connection_timeout_ms)]
     pub connection_timeout_ms: u64,
+
+    #[arg(long)]
+    /// Time spent waiting for statements to complete, in milliseconds.
+    pub statement_timeout_ms: Option<u64>,
 }
 
 #[derive(Clone)]
-pub struct Db {
-    read_only: bool,
-    pool: Pool<AsyncPgConnection>,
-}
+pub struct Db(Pool<AsyncPgConnection>);
 
 pub type Connection<'p> = PooledConnection<'p, AsyncPgConnection>;
 
@@ -41,44 +47,35 @@ impl DbArgs {
     pub fn connection_timeout(&self) -> Duration {
         Duration::from_millis(self.connection_timeout_ms)
     }
+
+    pub fn statement_timeout(&self) -> Option<Duration> {
+        self.statement_timeout_ms.map(Duration::from_millis)
+    }
 }
 
 impl Db {
     /// Construct a new DB connection pool talking to the database at `database_url` that supports
     /// write and reads. Instances of [Db] can be cloned to share access to the same pool.
     pub async fn for_write(database_url: Url, config: DbArgs) -> anyhow::Result<Self> {
-        Ok(Self {
-            read_only: false,
-            pool: pool(database_url, config).await?,
-        })
+        Ok(Self(pool(database_url, config, false).await?))
     }
 
     /// Construct a new DB connection pool talking to the database at `database_url` that defaults
     /// to read-only transactions. Instances of [Db] can be cloned to share access to the same
     /// pool.
     pub async fn for_read(database_url: Url, config: DbArgs) -> anyhow::Result<Self> {
-        Ok(Self {
-            read_only: true,
-            pool: pool(database_url, config).await?,
-        })
+        Ok(Self(pool(database_url, config, true).await?))
     }
 
     /// Retrieves a connection from the pool. Can fail with a timeout if a connection cannot be
     /// established before the [DbArgs::connection_timeout] has elapsed.
     pub async fn connect(&self) -> anyhow::Result<Connection<'_>> {
-        let mut conn = self.pool.get().await?;
-        if self.read_only {
-            diesel::sql_query("SET default_transaction_read_only = 'on'")
-                .execute(&mut conn)
-                .await?;
-        }
-
-        Ok(conn)
+        Ok(self.0.get().await?)
     }
 
     /// Statistics about the connection pool
     pub fn state(&self) -> bb8::State {
-        self.pool.state()
+        self.0.state()
     }
 
     async fn clear_database(&self) -> anyhow::Result<()> {
@@ -141,7 +138,7 @@ impl Db {
         use diesel_migrations::MigrationHarness;
 
         info!("Running migrations ...");
-        let conn = self.pool.dedicated_connection().await?;
+        let conn = self.0.dedicated_connection().await?;
         let mut wrapper: AsyncConnectionWrapper<AsyncPgConnection> =
             diesel_async::async_connection_wrapper::AsyncConnectionWrapper::from(conn);
 
@@ -163,6 +160,7 @@ impl Default for DbArgs {
         Self {
             db_connection_pool_size: 100,
             connection_timeout_ms: 60_000,
+            statement_timeout_ms: None,
         }
     }
 }
@@ -182,8 +180,38 @@ pub async fn reset_database<S: MigrationSource<Pg> + Send + Sync + 'static>(
     Ok(())
 }
 
-async fn pool(database_url: Url, args: DbArgs) -> anyhow::Result<Pool<AsyncPgConnection>> {
-    let manager = AsyncDieselConnectionManager::new(database_url.as_str());
+async fn pool(
+    database_url: Url,
+    args: DbArgs,
+    read_only: bool,
+) -> anyhow::Result<Pool<AsyncPgConnection>> {
+    let statement_timeout = args.statement_timeout();
+
+    let mut config = ManagerConfig::default();
+    config.custom_setup = Box::new(move |url| {
+        async move {
+            let mut conn = AsyncPgConnection::establish(url).await?;
+
+            if let Some(timeout) = statement_timeout {
+                diesel::sql_query(format!("SET statement_timeout = {}", timeout.as_millis()))
+                    .execute(&mut conn)
+                    .await
+                    .map_err(ConnectionError::CouldntSetupConfiguration)?;
+            }
+
+            if read_only {
+                diesel::sql_query("SET default_transaction_read_only = 'on'")
+                    .execute(&mut conn)
+                    .await
+                    .map_err(ConnectionError::CouldntSetupConfiguration)?;
+            }
+
+            Ok(conn)
+        }
+        .boxed()
+    });
+
+    let manager = AsyncDieselConnectionManager::new_with_config(database_url.as_str(), config);
 
     Ok(Pool::builder()
         .max_size(args.db_connection_pool_size)
@@ -218,7 +246,7 @@ mod tests {
         info!(?resp);
     }
 
-    #[derive(QueryableByName)]
+    #[derive(Debug, QueryableByName)]
     struct CountResult {
         #[diesel(sql_type = diesel::sql_types::BigInt)]
         cnt: i64,
@@ -312,6 +340,42 @@ mod tests {
                 .await
                 .unwrap();
             assert_eq!(cnt.cnt, 1);
+        }
+    }
+
+    #[tokio::test]
+    async fn test_statement_timeout() {
+        let temp_db = temp::TempDb::new().unwrap();
+        let url = temp_db.database().url();
+
+        let reader = Db::for_read(
+            url.clone(),
+            DbArgs {
+                statement_timeout_ms: Some(200),
+                ..DbArgs::default()
+            },
+        )
+        .await
+        .unwrap();
+
+        {
+            // A simple query should not timeout
+            let mut conn = reader.connect().await.unwrap();
+            let cnt: CountResult = diesel::sql_query("SELECT 1::BIGINT AS cnt")
+                .get_result(&mut conn)
+                .await
+                .unwrap();
+
+            assert_eq!(cnt.cnt, 1);
+        }
+
+        {
+            // A query that waits a bit, which should cause a timeout
+            let mut conn = reader.connect().await.unwrap();
+            diesel::sql_query("SELECT PG_SLEEP(2), 1::BIGINT AS cnt")
+                .get_result::<CountResult>(&mut conn)
+                .await
+                .expect_err("This request should fail because of a timeout");
         }
     }
 }
