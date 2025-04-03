@@ -56,6 +56,7 @@ pub(super) async fn dynamic_field_object(
             .await
             .map_err(|e| match e {
                 E::InvalidParams(e) => match e {},
+                E::Timeout(e) => E::Timeout(e),
                 E::InternalError(e) => E::InternalError(e),
             })?,
     ))

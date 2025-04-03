@@ -25,6 +25,7 @@ use sui_indexer_alt_reader::bigtable_reader::BigtableArgs;
 use sui_indexer_alt_reader::system_package_task::{SystemPackageTask, SystemPackageTaskArgs};
 use sui_open_rpc::Project;
 use sui_pg_db::DbArgs;
+use timeout::TimeoutLayer;
 use tokio::task::JoinHandle;
 use tokio_util::sync::CancellationToken;
 use tower_layer::Identity;
@@ -42,6 +43,7 @@ pub mod data;
 mod error;
 mod metrics;
 mod paginate;
+mod timeout;
 
 #[derive(clap::Args, Debug, Clone)]
 pub struct RpcArgs {
@@ -54,9 +56,10 @@ pub struct RpcArgs {
     #[clap(long, default_value_t = Self::default().max_in_flight_requests)]
     pub max_in_flight_requests: u32,
 
-    /// Threshold in ms for logging slow requests. Requests that take longer than this will be logged as warnings.
-    #[clap(long, default_value_t = Self::default().slow_request_threshold_ms)]
-    pub slow_request_threshold_ms: u64,
+    /// Requests that take longer than this (in milliseconds) to respond to will be terminated, and
+    /// the query itself will be logged as a warning.
+    #[clap(long, default_value_t = Self::default().request_timeout_ms)]
+    pub request_timeout_ms: u64,
 }
 
 pub struct RpcService {
@@ -69,6 +72,9 @@ pub struct RpcService {
     /// Metrics for the RPC service.
     metrics: Arc<RpcMetrics>,
 
+    /// Maximum time a request can take to complete.
+    request_timeout: Duration,
+
     /// All the methods added to the server so far.
     modules: jsonrpsee::RpcModule<()>,
 
@@ -77,15 +83,12 @@ pub struct RpcService {
 
     /// Cancellation token controlling all services.
     cancel: CancellationToken,
-
-    /// Threshold for logging slow requests.
-    slow_request_threshold: Duration,
 }
 
 impl RpcArgs {
     /// Requests that take longer than this should be logged for debugging.
-    fn slow_request_threshold(&self) -> Duration {
-        Duration::from_millis(self.slow_request_threshold_ms)
+    fn request_timeout(&self) -> Duration {
+        Duration::from_millis(self.request_timeout_ms)
     }
 }
 
@@ -122,11 +125,10 @@ impl RpcService {
             rpc_listen_address: rpc_args.rpc_listen_address,
             server,
             metrics,
+            request_timeout: rpc_args.request_timeout(),
             modules: jsonrpsee::RpcModule::new(()),
             schema,
             cancel,
-            // TODO: Make this a request timeout
-            slow_request_threshold: rpc_args.slow_request_threshold(),
         })
     }
 
@@ -151,10 +153,10 @@ impl RpcService {
             rpc_listen_address,
             server,
             metrics,
+            request_timeout,
             mut modules,
             schema,
             cancel,
-            slow_request_threshold,
         } = self;
 
         info!("Starting JSON-RPC service on {rpc_listen_address}",);
@@ -165,11 +167,12 @@ impl RpcService {
             .register_method("rpc.discover", move |_, _, _| json!(schema.clone()))
             .context("Failed to add schema discovery method")?;
 
-        let middleware = RpcServiceBuilder::new().layer(MetricsLayer::new(
-            metrics,
-            modules.method_names().map(|n| n.to_owned()).collect(),
-            slow_request_threshold,
-        ));
+        let middleware = RpcServiceBuilder::new()
+            .layer(TimeoutLayer::new(request_timeout))
+            .layer(MetricsLayer::new(
+                metrics,
+                modules.method_names().map(|n| n.to_owned()).collect(),
+            ));
 
         let handle = server
             .set_rpc_middleware(middleware)
@@ -208,7 +211,7 @@ impl Default for RpcArgs {
         Self {
             rpc_listen_address: "0.0.0.0:6000".parse().unwrap(),
             max_in_flight_requests: 2000,
-            slow_request_threshold_ms: 60_000,
+            request_timeout_ms: 60_000,
         }
     }
 }
