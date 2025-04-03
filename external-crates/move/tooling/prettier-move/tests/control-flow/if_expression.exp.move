@@ -300,5 +300,10 @@ fun misc_tests() {
     else if (b == 1 || b == 65) 13 // a or A
     else if (b == 1 || b == 69) 14 // e or E
     else if (b == 1 || b == 83) 15 // s or S
-    else abort 1
+    else abort 1;
+
+    let value = bcs.peel_u8();
+    if (value == 0) false
+    else if (value == 1) true
+    else abort ENotBool
 }
