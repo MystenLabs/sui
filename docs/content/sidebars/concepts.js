@@ -67,6 +67,15 @@ const concepts = [
 							'concepts/sui-move-concepts/packages/automated-address-management',
 						],
 					},
+					{
+						type: 'category',
+						label: 'Dynamic Fields',
+						link: {
+							type: 'doc',
+							id: 'concepts/dynamic-fields',
+						},
+						items: ['concepts/dynamic-fields/tables-bags'],
+					},
 					'concepts/sui-move-concepts/conventions',
 				],
 			},
