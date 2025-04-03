@@ -4,7 +4,7 @@
 use colored::Colorize;
 use itertools::Itertools;
 use move_binary_format::file_format::{Ability, AbilitySet, DatatypeTyParameter, Visibility};
-use move_binary_format::normalized::{
+use move_binary_format::normalized_deprecated::{
     Enum as NormalizedEnum, Field as NormalizedField, Function as SuiNormalizedFunction,
     Module as NormalizedModule, Struct as NormalizedStruct, Type as NormalizedType,
 };

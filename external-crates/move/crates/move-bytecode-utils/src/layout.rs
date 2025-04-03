@@ -9,7 +9,7 @@ use move_binary_format::{
         DatatypeHandleIndex, DatatypeTyParameter, EnumDefinition, SignatureToken, StructDefinition,
         StructFieldInformation,
     },
-    normalized::{Enum, Struct, Type},
+    normalized_deprecated::{Enum, Struct, Type},
     CompiledModule,
 };
 use move_core_types::{

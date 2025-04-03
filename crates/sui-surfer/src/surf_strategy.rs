@@ -3,7 +3,7 @@
 
 use std::time::Duration;
 
-use move_binary_format::normalized::Type;
+use move_binary_format::normalized_deprecated::Type;
 use move_core_types::language_storage::StructTag;
 use rand::{seq::SliceRandom, Rng};
 use sui_types::{

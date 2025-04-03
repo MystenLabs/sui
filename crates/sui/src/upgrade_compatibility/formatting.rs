@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use anyhow::{Context, Error};
-use move_binary_format::normalized::{Field, Type};
+use move_binary_format::normalized_deprecated::{Field, Type};
 use move_bytecode_source_map::source_map::SourceName;
 use move_core_types::identifier::Identifier;
 use move_ir_types::location::Loc;

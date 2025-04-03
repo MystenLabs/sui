@@ -14,7 +14,7 @@ use fastcrypto::hash::HashFunction;
 use move_binary_format::binary_config::BinaryConfig;
 use move_binary_format::file_format::CompiledModule;
 use move_binary_format::file_format_common::VERSION_6;
-use move_binary_format::normalized;
+use move_binary_format::normalized_deprecated;
 use move_core_types::language_storage::ModuleId;
 use move_core_types::{
     account_address::AccountAddress,
@@ -527,7 +527,7 @@ impl MovePackage {
     pub fn normalize(
         &self,
         binary_config: &BinaryConfig,
-    ) -> SuiResult<BTreeMap<String, normalized::Module>> {
+    ) -> SuiResult<BTreeMap<String, normalized_deprecated::Module>> {
         normalize_modules(self.module_map.values(), binary_config)
     }
 }
@@ -600,7 +600,7 @@ pub fn is_test_fun(name: &IdentStr, module: &CompiledModule, fn_info_map: &FnInf
 pub fn normalize_modules<'a, I>(
     modules: I,
     binary_config: &BinaryConfig,
-) -> SuiResult<BTreeMap<String, normalized::Module>>
+) -> SuiResult<BTreeMap<String, normalized_deprecated::Module>>
 where
     I: Iterator<Item = &'a Vec<u8>>,
 {
@@ -612,19 +612,21 @@ where
                     error: error.to_string(),
                 }
             })?;
-        let normalized_module = normalized::Module::new(&module);
+        let normalized_module = normalized_deprecated::Module::new(&module);
         normalized_modules.insert(normalized_module.name.to_string(), normalized_module);
     }
     Ok(normalized_modules)
 }
 
-pub fn normalize_deserialized_modules<'a, I>(modules: I) -> BTreeMap<String, normalized::Module>
+pub fn normalize_deserialized_modules<'a, I>(
+    modules: I,
+) -> BTreeMap<String, normalized_deprecated::Module>
 where
     I: Iterator<Item = &'a CompiledModule>,
 {
     let mut normalized_modules = BTreeMap::new();
     for module in modules {
-        let normalized_module = normalized::Module::new(module);
+        let normalized_module = normalized_deprecated::Module::new(module);
         normalized_modules.insert(normalized_module.name.to_string(), normalized_module);
     }
     normalized_modules

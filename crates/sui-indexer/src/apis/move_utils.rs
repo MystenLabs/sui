@@ -6,7 +6,7 @@ use std::collections::BTreeMap;
 use async_trait::async_trait;
 use jsonrpsee::core::RpcResult;
 use jsonrpsee::RpcModule;
-use move_binary_format::normalized::Module as NormalizedModule;
+use move_binary_format::normalized_deprecated::Module as NormalizedModule;
 
 use sui_json_rpc::error::SuiRpcInputError;
 use sui_json_rpc::SuiRpcModule;

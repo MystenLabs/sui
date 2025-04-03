@@ -13,7 +13,7 @@ use std::{
 use anyhow::bail;
 use fastcrypto::encoding::Base64;
 use move_binary_format::{
-    normalized::{self, Type},
+    normalized_deprecated::{self, Type},
     CompiledModule,
 };
 use move_bytecode_utils::{layout::SerdeLayoutBuilder, module_cache::GetModule, Modules};
@@ -512,7 +512,7 @@ impl CompiledPackage {
     pub fn generate_struct_layouts(&self) -> Registry {
         let mut package_types = BTreeSet::new();
         for m in self.get_modules() {
-            let normalized_m = normalized::Module::new(m);
+            let normalized_m = normalized_deprecated::Module::new(m);
             // 1. generate struct layouts for all declared types
             'structs: for (name, s) in normalized_m.structs {
                 let mut dummy_type_parameters = Vec::new();

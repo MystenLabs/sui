@@ -12,7 +12,7 @@ use crate::Result;
 use crate::RpcError;
 use crate::RpcService;
 use itertools::Itertools;
-use move_binary_format::normalized;
+use move_binary_format::normalized_deprecated;
 use sui_protocol_config::ProtocolConfig;
 use sui_sdk_transaction_builder::unresolved;
 use sui_sdk_types::Argument;
@@ -138,7 +138,7 @@ impl RpcService {
 struct NormalizedPackage {
     #[allow(unused)]
     package: MovePackage,
-    normalized_modules: BTreeMap<String, normalized::Module>,
+    normalized_modules: BTreeMap<String, normalized_deprecated::Module>,
 }
 
 fn called_packages(
@@ -519,7 +519,7 @@ fn is_input_argument_receiving(
         if let (Command::MoveCall(move_call), Some(idx)) = (command, idx) {
             let arg_type = arg_type_of_move_call_input(called_packages, move_call, idx)?;
 
-            if let move_binary_format::normalized::Type::Struct {
+            if let move_binary_format::normalized_deprecated::Type::Struct {
                 address,
                 module,
                 name,
@@ -550,7 +550,7 @@ fn arg_type_of_move_call_input<'a>(
     called_packages: &'a HashMap<ObjectId, NormalizedPackage>,
     move_call: &sui_sdk_types::MoveCall,
     idx: usize,
-) -> Result<&'a move_binary_format::normalized::Type> {
+) -> Result<&'a move_binary_format::normalized_deprecated::Type> {
     let function = called_packages
         // Find the package
         .get(&move_call.package)
@@ -604,8 +604,8 @@ fn resolve_shared_input_with_object(
                 let arg_type = arg_type_of_move_call_input(called_packages, move_call, idx)?;
                 if matches!(
                     arg_type,
-                    move_binary_format::normalized::Type::MutableReference(_)
-                        | move_binary_format::normalized::Type::Struct { .. }
+                    move_binary_format::normalized_deprecated::Type::MutableReference(_)
+                        | move_binary_format::normalized_deprecated::Type::Struct { .. }
                 ) {
                     mutable = true;
                 }

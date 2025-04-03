@@ -11,7 +11,7 @@ use jsonrpsee::RpcModule;
 use mockall::automock;
 use move_binary_format::{
     binary_config::BinaryConfig,
-    normalized::{Module as NormalizedModule, Type},
+    normalized_deprecated::{Module as NormalizedModule, Type},
 };
 use move_core_types::identifier::Identifier;
 use std::collections::BTreeMap;

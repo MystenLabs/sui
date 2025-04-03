@@ -5,7 +5,7 @@ use std::path::{Path, PathBuf};
 
 use move_binary_format::{
     compatibility::{Compatibility, InclusionCheck},
-    normalized, CompiledModule,
+    normalized_deprecated, CompiledModule,
 };
 use sui_move_build::{BuildConfig, SuiPackageHooks};
 
@@ -39,13 +39,13 @@ fn compile(path: &Path) -> anyhow::Result<Vec<CompiledModule>> {
         .into_modules())
 }
 
-fn normalize(modules: &[CompiledModule]) -> Vec<normalized::Module> {
-    modules.iter().map(normalized::Module::new).collect()
+fn normalize(modules: &[CompiledModule]) -> Vec<normalized_deprecated::Module> {
+    modules.iter().map(normalized_deprecated::Module::new).collect()
 }
 
 fn check_all_compatibilities(
-    base: Vec<normalized::Module>,
-    upgraded: Vec<normalized::Module>,
+    base: Vec<normalized_deprecated::Module>,
+    upgraded: Vec<normalized_deprecated::Module>,
     name: String,
 ) -> datatest_stable::Result<()> {
     assert_eq!(base.len(), upgraded.len());

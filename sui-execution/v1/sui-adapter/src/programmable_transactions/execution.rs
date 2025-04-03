@@ -15,7 +15,7 @@ mod checked {
         errors::{Location, PartialVMResult, VMResult},
         file_format::{AbilitySet, CodeOffset, FunctionDefinitionIndex, LocalIndex, Visibility},
         file_format_common::VERSION_6,
-        normalized, CompiledModule,
+        normalized_deprecated, CompiledModule,
     };
     use move_core_types::{
         account_address::AccountAddress,
@@ -675,8 +675,8 @@ mod checked {
 
     fn check_module_compatibility(
         policy: &UpgradePolicy,
-        cur_module: &normalized::Module,
-        new_module: &normalized::Module,
+        cur_module: &normalized_deprecated::Module,
+        new_module: &normalized_deprecated::Module,
     ) -> Result<(), ExecutionError> {
         match policy {
             UpgradePolicy::Additive => InclusionCheck::Subset.check(cur_module, new_module),

@@ -6,7 +6,7 @@ use std::collections::HashMap;
 use super::NormalizedPackage;
 use crate::Result;
 use crate::RpcError;
-use move_binary_format::normalized::Type;
+use move_binary_format::normalized_deprecated::Type;
 use sui_sdk_transaction_builder::unresolved::Value;
 use sui_sdk_types::Command;
 use sui_sdk_types::ObjectId;
@@ -327,7 +327,7 @@ fn resolve_as_vector(buf: &mut Vec<u8>, type_: &Type, value: &Value) -> Result<(
 #[cfg(test)]
 mod test {
     use super::*;
-    use move_binary_format::normalized::Type;
+    use move_binary_format::normalized_deprecated::Type;
     use move_core_types::{account_address::AccountAddress, u256::U256};
 
     fn test_resolve_literal(ty: Type, value: Value, expected: Option<Vec<u8>>) {

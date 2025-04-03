@@ -8,7 +8,7 @@ use std::sync::Arc;
 
 use crate::upgrade_compatibility::{compare_packages, missing_module_diag, FormattedField};
 
-use move_binary_format::normalized::{Field, Type};
+use move_binary_format::normalized_deprecated::{Field, Type};
 use move_binary_format::CompiledModule;
 use move_command_line_common::files::FileHash;
 use move_compiler::diagnostics::report_diagnostics_to_buffer;

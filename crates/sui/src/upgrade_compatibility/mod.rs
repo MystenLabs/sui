@@ -23,7 +23,7 @@ use move_binary_format::{
     compatibility_mode::CompatibilityMode,
     file_format::Visibility,
     inclusion_mode::InclusionCheckMode,
-    normalized::{Enum, Field, Function, Module, Struct, Type, Variant},
+    normalized_deprecated::{Enum, Field, Function, Module, Struct, Type, Variant},
     CompiledModule,
 };
 use move_bytecode_source_map::source_map::SourceName;

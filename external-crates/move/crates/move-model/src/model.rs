@@ -43,7 +43,7 @@ use move_binary_format::{
         FunctionHandleIndex, FunctionInstantiation, SignatureIndex, SignatureToken,
         StructDefinitionIndex, StructFieldInformation, VariantJumpTable, Visibility,
     },
-    normalized::{FunctionRef, Type as MType},
+    normalized_deprecated::{FunctionRef, Type as MType},
     CompiledModule,
 };
 use move_bytecode_source_map::{mapping::SourceMapping, source_map::SourceMap};

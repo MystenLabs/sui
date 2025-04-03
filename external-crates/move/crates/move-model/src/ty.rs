@@ -10,7 +10,7 @@ use std::{
     fmt::Formatter,
 };
 
-use move_binary_format::{file_format::TypeParameterIndex, normalized::Type as MType};
+use move_binary_format::{file_format::TypeParameterIndex, normalized_deprecated::Type as MType};
 use move_core_types::language_storage::{StructTag, TypeTag};
 
 use crate::{

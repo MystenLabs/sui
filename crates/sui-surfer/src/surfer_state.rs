@@ -3,7 +3,7 @@
 
 use indexmap::IndexSet;
 use move_binary_format::file_format::Visibility;
-use move_binary_format::normalized::Type;
+use move_binary_format::normalized_deprecated::Type;
 use move_core_types::language_storage::StructTag;
 use rand::rngs::StdRng;
 use std::collections::{HashMap, HashSet};
