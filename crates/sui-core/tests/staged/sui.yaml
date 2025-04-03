@@ -242,6 +242,8 @@ CommandArgumentError:
       InvalidObjectByMutRef: UNIT
     11:
       SharedObjectOperationNotAllowed: UNIT
+    12:
+      InvalidArgumentArity: UNIT
 CompressedSignature:
   ENUM:
     0:
@@ -1267,11 +1269,11 @@ UnchangedSharedKind:
             - TYPENAME: SequenceNumber
             - TYPENAME: ObjectDigest
     1:
-      MutateDeleted:
+      MutateConsensusStreamEnded:
         NEWTYPE:
           TYPENAME: SequenceNumber
     2:
-      ReadDeleted:
+      ReadConsensusStreamEnded:
         NEWTYPE:
           TYPENAME: SequenceNumber
     3:

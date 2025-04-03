@@ -59,6 +59,8 @@ public(package) fun hash_to<G>(type_: u8, m: &vector<u8>): Element<G> {
 }
 
 /// Aborts with `EInputTooLong` if the vectors are too long.
+///
+/// This function is currently only enabled on Devnet.
 public(package) fun multi_scalar_multiplication<S, G>(
     type_: u8,
     scalars: &vector<Element<S>>,

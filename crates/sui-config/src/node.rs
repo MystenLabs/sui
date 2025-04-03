@@ -218,7 +218,7 @@ pub struct NodeConfig {
 pub struct ExecutionTimeObserverConfig {
     /// Size of the channel used for buffering local execution time observations.
     ///
-    /// If unspecified, this will default to `128`.
+    /// If unspecified, this will default to `1_024`.
     pub observation_channel_capacity: Option<NonZeroUsize>,
 
     /// Size of the LRU cache used for storing local execution time observations.
@@ -235,6 +235,12 @@ pub struct ExecutionTimeObserverConfig {
     ///
     /// If unspecified, this will default to `50_000`.
     pub object_utilization_cache_size: Option<NonZeroUsize>,
+
+    /// If true, the execution time observer will report per-object utilization metrics.
+    /// Warning: This metric may have very large cardinality.
+    ///
+    /// If unspecified, this will default to `false`.
+    pub report_object_utilization_metric: Option<bool>,
 
     /// Unless target object utilization is exceeded by at least this amount, no observation
     /// will be shared with consensus.
@@ -268,7 +274,7 @@ pub struct ExecutionTimeObserverConfig {
 impl ExecutionTimeObserverConfig {
     pub fn observation_channel_capacity(&self) -> NonZeroUsize {
         self.observation_channel_capacity
-            .unwrap_or(nonzero!(128usize))
+            .unwrap_or(nonzero!(1_024usize))
     }
 
     pub fn observation_cache_size(&self) -> NonZeroUsize {
@@ -283,6 +289,10 @@ impl ExecutionTimeObserverConfig {
     pub fn object_utilization_cache_size(&self) -> NonZeroUsize {
         self.object_utilization_cache_size
             .unwrap_or(nonzero!(50_000usize))
+    }
+
+    pub fn report_object_utilization_metric(&self) -> bool {
+        self.report_object_utilization_metric.unwrap_or(false)
     }
 
     pub fn observation_sharing_object_utilization_threshold(&self) -> Duration {
@@ -917,7 +927,7 @@ impl ExpensiveSafetyCheckConfig {
 }
 
 fn default_checkpoint_execution_max_concurrency() -> usize {
-    40
+    4
 }
 
 fn default_local_execution_timeout_sec() -> u64 {

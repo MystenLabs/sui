@@ -9,6 +9,7 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Duration;
 use tokio::task::JoinSet;
+use tokio_rustls::rustls;
 use tokio_rustls::TlsAcceptor;
 use tower::{Service, ServiceBuilder, ServiceExt};
 use tracing::trace;
@@ -44,7 +45,7 @@ const ALPN_H1: &[u8] = b"http/1.1";
 #[derive(Default)]
 pub struct Builder {
     config: Config,
-    tls_config: Option<tokio_rustls::rustls::ServerConfig>,
+    tls_config: Option<rustls::ServerConfig>,
 }
 
 impl Builder {
@@ -57,7 +58,28 @@ impl Builder {
         self
     }
 
-    pub fn tls_config(mut self, tls_config: tokio_rustls::rustls::ServerConfig) -> Self {
+    // Convenience method for configuring TLS with a single server cert
+    //
+    // Attempts to load PEM formatted files for the certificate chain and private key material from
+    // the provided file system paths.
+    pub fn tls_single_cert(
+        self,
+        cert_file: impl AsRef<std::path::Path>,
+        private_key_file: impl AsRef<std::path::Path>,
+    ) -> Result<Self, BoxError> {
+        use rustls::pki_types::pem::PemObject;
+        use rustls::pki_types::{CertificateDer, PrivateKeyDer};
+
+        let certs = CertificateDer::pem_file_iter(cert_file)?.collect::<Result<_, _>>()?;
+        let private_key = PrivateKeyDer::from_pem_file(private_key_file)?;
+        let tls_config = rustls::ServerConfig::builder()
+            .with_no_client_auth()
+            .with_single_cert(certs, private_key)?;
+
+        Ok(self.tls_config(tls_config))
+    }
+
+    pub fn tls_config(mut self, tls_config: rustls::ServerConfig) -> Self {
         self.tls_config = Some(tls_config);
         self
     }
@@ -207,7 +229,7 @@ type ConnectingOutput<Io, Addr> = Result<(ServerIo<Io>, Addr), crate::BoxError>;
 
 struct Server<L: Listener> {
     config: Config,
-    tls_config: Option<Arc<tokio_rustls::rustls::ServerConfig>>,
+    tls_config: Option<Arc<rustls::ServerConfig>>,
 
     listener: L,
     local_addr: L::Addr,

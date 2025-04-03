@@ -352,7 +352,6 @@ async fn test_package_denied() {
     let batch = state.get_cache_commit().build_db_batch(
         state.epoch_store_for_testing().epoch(),
         &[tx_c, tx_b, tx_a, tx_c_prime, tx_b_prime],
-        true,
     );
 
     state.get_cache_commit().commit_transaction_outputs(

@@ -15,12 +15,12 @@ pub async fn run_benchmark(
     endpoint: &str,
     file_path: &str,
     concurrency: usize,
-    duration_secs: u64,
+    duration_secs: Option<u64>,
     json_rpc_methods_to_skip: HashSet<String>,
 ) -> Result<()> {
     let config = BenchmarkConfig {
         concurrency,
-        duration: Duration::from_secs(duration_secs),
+        duration: duration_secs.map(Duration::from_secs),
         json_rpc_file_path: Some(file_path.to_string()),
         json_rpc_methods_to_skip,
     };

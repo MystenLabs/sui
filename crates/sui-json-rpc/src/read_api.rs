@@ -26,7 +26,7 @@ use sui_types::base_types::SuiAddress;
 use sui_types::signature::{GenericSignature, VerifyParams};
 use sui_types::signature_verification::VerifiedDigestCache;
 use tap::TapFallible;
-use tracing::{debug, error, info, instrument, trace, warn};
+use tracing::{debug, error, instrument, trace, warn};
 
 use mysten_metrics::add_server_timing;
 use mysten_metrics::spawn_monitored_task;

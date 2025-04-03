@@ -1785,6 +1785,25 @@ impl TransactionData {
         Self::new_programmable(sender, vec![gas_payment], pt, gas_budget, gas_price)
     }
 
+    // TODO: Merge with `new_transfer` above and update existing callers.
+    pub fn new_transfer_full(
+        recipient: SuiAddress,
+        full_object_ref: FullObjectRef,
+        sender: SuiAddress,
+        gas_payment: ObjectRef,
+        gas_budget: u64,
+        gas_price: u64,
+    ) -> Self {
+        let pt = {
+            let mut builder = ProgrammableTransactionBuilder::new();
+            builder
+                .transfer_object_full(recipient, full_object_ref)
+                .unwrap();
+            builder.finish()
+        };
+        Self::new_programmable(sender, vec![gas_payment], pt, gas_budget, gas_price)
+    }
+
     pub fn new_transfer_sui(
         recipient: SuiAddress,
         sender: SuiAddress,
@@ -2959,10 +2978,18 @@ pub enum InputObjectKind {
 
 impl InputObjectKind {
     pub fn object_id(&self) -> ObjectID {
+        self.full_object_id().id()
+    }
+
+    pub fn full_object_id(&self) -> FullObjectID {
         match self {
-            Self::MovePackage(id) => *id,
-            Self::ImmOrOwnedMoveObject((id, _, _)) => *id,
-            Self::SharedMoveObject { id, .. } => *id,
+            Self::MovePackage(id) => FullObjectID::Fastpath(*id),
+            Self::ImmOrOwnedMoveObject((id, _, _)) => FullObjectID::Fastpath(*id),
+            Self::SharedMoveObject {
+                id,
+                initial_shared_version,
+                ..
+            } => FullObjectID::Consensus((*id, *initial_shared_version)),
         }
     }
 
@@ -3015,8 +3042,8 @@ pub struct ObjectReadResult {
 pub enum ObjectReadResultKind {
     Object(Object),
     // The version of the object that the transaction intended to read, and the digest of the tx
-    // that deleted it.
-    DeletedSharedObject(SequenceNumber, TransactionDigest),
+    // that removed it from consensus.
+    ObjectConsensusStreamEnded(SequenceNumber, TransactionDigest),
     // A shared object in a cancelled transaction. The sequence number embeds cancellation reason.
     CancelledTransactionSharedObject(SequenceNumber),
 }
@@ -3027,8 +3054,8 @@ impl std::fmt::Debug for ObjectReadResultKind {
             ObjectReadResultKind::Object(obj) => {
                 write!(f, "Object({:?})", obj.compute_object_reference())
             }
-            ObjectReadResultKind::DeletedSharedObject(seq, digest) => {
-                write!(f, "DeletedSharedObject({}, {:?})", seq, digest)
+            ObjectReadResultKind::ObjectConsensusStreamEnded(seq, digest) => {
+                write!(f, "ObjectConsensusStreamEnded({}, {:?})", seq, digest)
             }
             ObjectReadResultKind::CancelledTransactionSharedObject(seq) => {
                 write!(f, "CancelledTransactionSharedObject({})", seq)
@@ -3047,10 +3074,10 @@ impl ObjectReadResult {
     pub fn new(input_object_kind: InputObjectKind, object: ObjectReadResultKind) -> Self {
         if let (
             InputObjectKind::ImmOrOwnedMoveObject(_),
-            ObjectReadResultKind::DeletedSharedObject(_, _),
+            ObjectReadResultKind::ObjectConsensusStreamEnded(_, _),
         ) = (&input_object_kind, &object)
         {
-            panic!("only shared objects can be DeletedSharedObject");
+            panic!("only consensus objects can be ObjectConsensusStreamEnded");
         }
 
         if let (
@@ -3058,7 +3085,7 @@ impl ObjectReadResult {
             ObjectReadResultKind::CancelledTransactionSharedObject(_),
         ) = (&input_object_kind, &object)
         {
-            panic!("only shared objects can be CancelledTransactionSharedObject");
+            panic!("only consensus objects can be CancelledTransactionSharedObject");
         }
 
         Self {
@@ -3074,7 +3101,7 @@ impl ObjectReadResult {
     pub fn as_object(&self) -> Option<&Object> {
         match &self.object {
             ObjectReadResultKind::Object(object) => Some(object),
-            ObjectReadResultKind::DeletedSharedObject(_, _) => None,
+            ObjectReadResultKind::ObjectConsensusStreamEnded(_, _) => None,
             ObjectReadResultKind::CancelledTransactionSharedObject(_) => None,
         }
     }
@@ -3095,7 +3122,7 @@ impl ObjectReadResult {
             }
             (
                 InputObjectKind::ImmOrOwnedMoveObject(_),
-                ObjectReadResultKind::DeletedSharedObject(_, _),
+                ObjectReadResultKind::ObjectConsensusStreamEnded(_, _),
             ) => unreachable!(),
             (
                 InputObjectKind::ImmOrOwnedMoveObject(_),
@@ -3109,13 +3136,13 @@ impl ObjectReadResult {
         self.input_object_kind.is_shared_object()
     }
 
-    pub fn is_deleted_shared_object(&self) -> bool {
-        self.deletion_info().is_some()
+    pub fn is_consensus_stream_ended(&self) -> bool {
+        self.consensus_stream_end_info().is_some()
     }
 
-    pub fn deletion_info(&self) -> Option<(SequenceNumber, TransactionDigest)> {
+    pub fn consensus_stream_end_info(&self) -> Option<(SequenceNumber, TransactionDigest)> {
         match &self.object {
-            ObjectReadResultKind::DeletedSharedObject(v, tx) => Some((*v, *tx)),
+            ObjectReadResultKind::ObjectConsensusStreamEnded(v, tx) => Some((*v, *tx)),
             _ => None,
         }
     }
@@ -3136,7 +3163,7 @@ impl ObjectReadResult {
             }
             (
                 InputObjectKind::ImmOrOwnedMoveObject(_),
-                ObjectReadResultKind::DeletedSharedObject(_, _),
+                ObjectReadResultKind::ObjectConsensusStreamEnded(_, _),
             ) => unreachable!(),
             (
                 InputObjectKind::ImmOrOwnedMoveObject(_),
@@ -3158,8 +3185,8 @@ impl ObjectReadResult {
                 ObjectReadResultKind::Object(obj) => {
                     SharedInput::Existing(obj.compute_object_reference())
                 }
-                ObjectReadResultKind::DeletedSharedObject(seq, digest) => {
-                    SharedInput::Deleted((id, *seq, mutable, *digest))
+                ObjectReadResultKind::ObjectConsensusStreamEnded(seq, digest) => {
+                    SharedInput::ConsensusStreamEnded((id, *seq, mutable, *digest))
                 }
                 ObjectReadResultKind::CancelledTransactionSharedObject(seq) => {
                     SharedInput::Cancelled((id, *seq))
@@ -3171,7 +3198,7 @@ impl ObjectReadResult {
     pub fn get_previous_transaction(&self) -> Option<TransactionDigest> {
         match &self.object {
             ObjectReadResultKind::Object(obj) => Some(obj.previous_transaction),
-            ObjectReadResultKind::DeletedSharedObject(_, digest) => Some(*digest),
+            ObjectReadResultKind::ObjectConsensusStreamEnded(_, digest) => Some(*digest),
             ObjectReadResultKind::CancelledTransactionSharedObject(_) => None,
         }
     }
@@ -3241,10 +3268,10 @@ impl InputObjects {
         self.objects.is_empty()
     }
 
-    pub fn contains_deleted_objects(&self) -> bool {
+    pub fn contains_consensus_stream_ended_objects(&self) -> bool {
         self.objects
             .iter()
-            .any(|obj| obj.is_deleted_shared_object())
+            .any(|obj| obj.is_consensus_stream_ended())
     }
 
     // Returns IDs of objects responsible for a tranaction being cancelled, and the corresponding
@@ -3336,13 +3363,13 @@ impl InputObjects {
                     }
                     (
                         InputObjectKind::ImmOrOwnedMoveObject(_),
-                        ObjectReadResultKind::DeletedSharedObject(_, _),
+                        ObjectReadResultKind::ObjectConsensusStreamEnded(_, _),
                     ) => {
                         unreachable!()
                     }
                     (
                         InputObjectKind::SharedMoveObject { .. },
-                        ObjectReadResultKind::DeletedSharedObject(_, _),
+                        ObjectReadResultKind::ObjectConsensusStreamEnded(_, _),
                     ) => None,
                     (
                         InputObjectKind::SharedMoveObject { mutable, .. },
@@ -3381,7 +3408,7 @@ impl InputObjects {
                 ObjectReadResultKind::Object(object) => {
                     object.data.try_as_move().map(MoveObject::version)
                 }
-                ObjectReadResultKind::DeletedSharedObject(v, _) => Some(*v),
+                ObjectReadResultKind::ObjectConsensusStreamEnded(v, _) => Some(*v),
                 ObjectReadResultKind::CancelledTransactionSharedObject(_) => None,
             })
             .chain(receiving_objects.iter().map(|object_ref| object_ref.1));
@@ -3397,7 +3424,7 @@ impl InputObjects {
         )
     }
 
-    pub fn deleted_consensus_objects(&self) -> BTreeMap<ObjectID, SequenceNumber> {
+    pub fn consensus_stream_ended_objects(&self) -> BTreeMap<ObjectID, SequenceNumber> {
         self.objects
             .iter()
             .filter_map(|obj| {
@@ -3407,7 +3434,7 @@ impl InputObjects {
                     ..
                 } = obj.input_object_kind
                 {
-                    obj.is_deleted_shared_object()
+                    obj.is_consensus_stream_ended()
                         .then_some((id, initial_shared_version))
                 } else {
                     None

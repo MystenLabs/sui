@@ -900,20 +900,20 @@ do not have this capability:
 
 
 
-<a name="deepbook_clob_v2_EInvalidExpireTimestamp"></a>
-
-
-
-<pre><code><b>const</b> <a href="../deepbook/clob_v2.md#deepbook_clob_v2_EInvalidExpireTimestamp">EInvalidExpireTimestamp</a>: u64 = 19;
-</code></pre>
-
-
-
 <a name="deepbook_clob_v2_EInvalidOrderId"></a>
 
 
 
 <pre><code><b>const</b> <a href="../deepbook/clob_v2.md#deepbook_clob_v2_EInvalidOrderId">EInvalidOrderId</a>: u64 = 3;
+</code></pre>
+
+
+
+<a name="deepbook_clob_v2_EUnauthorizedCancel"></a>
+
+
+
+<pre><code><b>const</b> <a href="../deepbook/clob_v2.md#deepbook_clob_v2_EUnauthorizedCancel">EUnauthorizedCancel</a>: u64 = 4;
 </code></pre>
 
 
@@ -954,11 +954,11 @@ do not have this capability:
 
 
 
-<a name="deepbook_clob_v2_EUnauthorizedCancel"></a>
+<a name="deepbook_clob_v2_EInvalidExpireTimestamp"></a>
 
 
 
-<pre><code><b>const</b> <a href="../deepbook/clob_v2.md#deepbook_clob_v2_EUnauthorizedCancel">EUnauthorizedCancel</a>: u64 = 4;
+<pre><code><b>const</b> <a href="../deepbook/clob_v2.md#deepbook_clob_v2_EInvalidExpireTimestamp">EInvalidExpireTimestamp</a>: u64 = 19;
 </code></pre>
 
 

@@ -278,22 +278,12 @@ Stores the addresses that are denied for a given core type.
 ## Constants
 
 
-<a name="sui_deny_list_COIN_INDEX"></a>
+<a name="sui_deny_list_ENotSystemAddress"></a>
 
-The index into the deny list vector for the <code><a href="../sui/coin.md#sui_coin_Coin">sui::coin::Coin</a></code> type.
-
-
-<pre><code><b>const</b> <a href="../sui/deny_list.md#sui_deny_list_COIN_INDEX">COIN_INDEX</a>: u64 = 0;
-</code></pre>
+Trying to create a deny list object when not called by the system address.
 
 
-
-<a name="sui_deny_list_EInvalidAddress"></a>
-
-The specified address cannot be added to the deny list.
-
-
-<pre><code><b>const</b> <a href="../sui/deny_list.md#sui_deny_list_EInvalidAddress">EInvalidAddress</a>: u64 = 1;
+<pre><code><b>const</b> <a href="../sui/deny_list.md#sui_deny_list_ENotSystemAddress">ENotSystemAddress</a>: u64 = 0;
 </code></pre>
 
 
@@ -308,12 +298,22 @@ The specified address to be removed is not already in the deny list.
 
 
 
-<a name="sui_deny_list_ENotSystemAddress"></a>
+<a name="sui_deny_list_EInvalidAddress"></a>
 
-Trying to create a deny list object when not called by the system address.
+The specified address cannot be added to the deny list.
 
 
-<pre><code><b>const</b> <a href="../sui/deny_list.md#sui_deny_list_ENotSystemAddress">ENotSystemAddress</a>: u64 = 0;
+<pre><code><b>const</b> <a href="../sui/deny_list.md#sui_deny_list_EInvalidAddress">EInvalidAddress</a>: u64 = 1;
+</code></pre>
+
+
+
+<a name="sui_deny_list_COIN_INDEX"></a>
+
+The index into the deny list vector for the <code><a href="../sui/coin.md#sui_coin_Coin">sui::coin::Coin</a></code> type.
+
+
+<pre><code><b>const</b> <a href="../sui/deny_list.md#sui_deny_list_COIN_INDEX">COIN_INDEX</a>: u64 = 0;
 </code></pre>
 
 

@@ -47,6 +47,7 @@ mod randomized_tests;
 
 mod proposed_block_handler;
 mod round_prober;
+mod round_tracker;
 #[cfg(test)]
 mod test_dag;
 #[cfg(test)]

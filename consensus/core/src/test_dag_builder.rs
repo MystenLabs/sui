@@ -156,11 +156,15 @@ impl DagBuilder {
             gc_round: Round,
             context: Arc<Context>,
             blocks: BTreeMap<BlockRef, (VerifiedBlock, bool)>, // the tuple represends the block and whether it is committed
+            genesis: BTreeMap<BlockRef, VerifiedBlock>,
         }
         impl BlockStoreAPI for BlockStorage {
             fn get_blocks(&self, refs: &[BlockRef]) -> Vec<Option<VerifiedBlock>> {
                 refs.iter()
                     .map(|block_ref| {
+                        if block_ref.round == 0 {
+                            return self.genesis.get(block_ref).cloned();
+                        }
                         self.blocks
                             .get(block_ref)
                             .map(|(block, _committed)| block.clone())
@@ -202,6 +206,7 @@ impl DagBuilder {
                 .into_iter()
                 .map(|(k, v)| (k, (v, false)))
                 .collect(),
+            genesis: self.genesis.clone(),
             gc_round: 0,
         };
 
@@ -442,6 +447,8 @@ pub struct LayerBuilder<'a> {
     skip_ancestor_links: Option<Vec<AuthorityIndex>>,
     // Skip leader link for specified authorities
     no_leader_link: bool,
+    // Use to override last ancestors in dag builder
+    override_last_ancestors: bool,
 
     // Skip leader block proposal
     no_leader_block: bool,
@@ -462,6 +469,8 @@ pub struct LayerBuilder<'a> {
 
     // Ancestors to link to the current layer
     ancestors: Vec<BlockRef>,
+    // override last ancestors in dag_builder
+    specified_ancestors: Vec<BlockRef>,
 
     // The block timestamps for the layer for each specified authority. This will work as base timestamp and the round will be added to make sure that timestamps do offset.
     timestamps: Vec<BlockTimestampMs>,
@@ -484,6 +493,7 @@ impl<'a> LayerBuilder<'a> {
             equivocations: 0,
             skip_block: false,
             skip_ancestor_links: None,
+            override_last_ancestors: false,
             no_leader_link: false,
             no_leader_block: false,
             specified_leader_link_offsets: None,
@@ -495,12 +505,22 @@ impl<'a> LayerBuilder<'a> {
             random_weak_links: false,
             random_weak_links_random_seed: None,
             ancestors,
+            specified_ancestors: vec![],
             timestamps: vec![],
             blocks: vec![],
         }
     }
 
     // Configuration methods
+
+    // If you try to add blocks to the same layer you will end up with the last
+    // ancestors replaced with blocks from the current layer. Use this method
+    // to override the last ancestors with the references you manually have kept.
+    pub fn override_last_ancestors(mut self, ancestors: Vec<BlockRef>) -> Self {
+        self.specified_ancestors = ancestors;
+        self.override_last_ancestors = true;
+        self.build()
+    }
 
     // Only link 2f+1 random ancestors to the current layer round using a seed,
     // if provided. Also provide a flag to guarantee the leader is included.
@@ -619,10 +639,12 @@ impl<'a> LayerBuilder<'a> {
 
             // TODO: investigate if these configurations can be called in combination
             // for the same layer
-            let mut connections = if self.fully_linked_ancestors {
-                self.configure_fully_linked_ancestors()
+            let mut connections = if self.override_last_ancestors {
+                self.configure_specifed_ancestors()
+            } else if self.fully_linked_ancestors {
+                self.configure_fully_linked_ancestors(round)
             } else if self.min_ancestor_links {
-                self.configure_min_parent_links()
+                self.configure_min_parent_links(round)
             } else if self.no_leader_link {
                 self.configure_no_leader_links(authorities.clone(), round)
             } else if self.skip_ancestor_links.is_some() {
@@ -651,7 +673,10 @@ impl<'a> LayerBuilder<'a> {
     }
 
     // Layer round is minimally and randomly connected with ancestors.
-    pub fn configure_min_parent_links(&mut self) -> Vec<(AuthorityIndex, Vec<BlockRef>)> {
+    pub fn configure_min_parent_links(
+        &mut self,
+        round: Round,
+    ) -> Vec<(AuthorityIndex, Vec<BlockRef>)> {
         let quorum_threshold = self.dag_builder.context.committee.quorum_threshold() as usize;
         let mut authorities: Vec<AuthorityIndex> = self
             .dag_builder
@@ -698,7 +723,9 @@ impl<'a> LayerBuilder<'a> {
                     self.ancestors
                         .iter()
                         .filter(|a| {
-                            leaders.contains(&a.author) || min_ancestors.contains(&a.author)
+                            leaders.contains(&a.author)
+                                || min_ancestors.contains(&a.author)
+                                || a.round != round
                         })
                         .cloned()
                         .collect::<Vec<BlockRef>>(),
@@ -742,12 +769,34 @@ impl<'a> LayerBuilder<'a> {
         self.configure_skipped_ancestor_links(authorities, missing_leaders)
     }
 
-    fn configure_fully_linked_ancestors(&mut self) -> Vec<(AuthorityIndex, Vec<BlockRef>)> {
+    fn configure_specifed_ancestors(&mut self) -> Vec<(AuthorityIndex, Vec<BlockRef>)> {
         self.dag_builder
             .context
             .committee
             .authorities()
-            .map(|authority| (authority.0, self.ancestors.clone()))
+            .map(|authority| (authority.0, self.specified_ancestors.clone()))
+            .collect::<Vec<_>>()
+    }
+
+    fn configure_fully_linked_ancestors(
+        &mut self,
+        round: Round,
+    ) -> Vec<(AuthorityIndex, Vec<BlockRef>)> {
+        self.dag_builder
+            .context
+            .committee
+            .authorities()
+            .map(|authority| {
+                (
+                    authority.0,
+                    // don't connect to ancestors of this round
+                    self.ancestors
+                        .clone()
+                        .into_iter()
+                        .filter(|a| a.round != round)
+                        .collect::<Vec<_>>(),
+                )
+            })
             .collect::<Vec<_>>()
     }
 

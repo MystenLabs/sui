@@ -30,7 +30,6 @@ use sui_types::base_types::SuiAddress;
 use sui_types::base_types::VersionNumber;
 use sui_types::committee::EpochId;
 use sui_types::digests::TransactionDigest;
-use sui_types::digests::TransactionEventsDigest;
 use sui_types::effects::TransactionEffects;
 use sui_types::effects::TransactionEvents;
 use sui_types::error::ExecutionError;
@@ -363,10 +362,10 @@ impl ReadStore for ValidatorWithFullnode {
             .get_executed_effects(tx_digest)
     }
 
-    fn get_events(&self, event_digest: &TransactionEventsDigest) -> Option<TransactionEvents> {
+    fn get_events(&self, digest: &TransactionDigest) -> Option<TransactionEvents> {
         self.validator
             .get_transaction_cache_reader()
-            .get_events(event_digest)
+            .get_events(digest)
     }
 
     fn get_full_checkpoint_contents_by_sequence_number(
@@ -441,7 +440,7 @@ impl TransactionalAdapter for Simulacrum<StdRng, PersistedStore> {
     ) -> SuiResult<Vec<Event>> {
         Ok(self
             .store()
-            .get_transaction_events_by_tx_digest(tx_digest)
+            .get_transaction_events(tx_digest)
             .map(|x| x.data)
             .unwrap_or_default())
     }

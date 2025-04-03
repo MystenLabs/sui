@@ -159,7 +159,7 @@ impl DagState {
         scoring_subdag.add_subdags(std::mem::take(&mut unscored_committed_subdags));
 
         let mut state = Self {
-            context,
+            context: context.clone(),
             genesis,
             recent_blocks: BTreeMap::new(),
             recent_refs_by_authority: vec![BTreeSet::new(); num_authorities],
@@ -219,7 +219,7 @@ impl DagState {
                 state.update_block_metadata(block);
             }
 
-            info!(
+            debug!(
                 "Recovered blocks {}: {:?}",
                 authority_index,
                 blocks
@@ -271,6 +271,14 @@ impl DagState {
                         break;
                     }
                 }
+            }
+
+            // Recover hard linked statuses for blocks within GC round.
+            let proposed_blocks = store
+                .scan_blocks_by_author(context.own_index, state.gc_round() + 1)
+                .expect("Database error");
+            for block in proposed_blocks {
+                state.link_causal_history(block.reference());
             }
         }
 
@@ -436,30 +444,6 @@ impl DagState {
         blocks
     }
 
-    // Sets the block as committed in the cache. If the block is set as committed for first time, then true is returned, otherwise false is returned instead.
-    // Method will panic if the block is not found in the cache.
-    pub(crate) fn set_committed(&mut self, block_ref: &BlockRef) -> bool {
-        if let Some(block_info) = self.recent_blocks.get_mut(block_ref) {
-            if !block_info.committed {
-                block_info.committed = true;
-                return true;
-            }
-            false
-        } else {
-            panic!(
-                "Block {:?} not found in cache to set as committed.",
-                block_ref
-            );
-        }
-    }
-
-    pub(crate) fn is_committed(&self, block_ref: &BlockRef) -> bool {
-        self.recent_blocks
-            .get(block_ref)
-            .unwrap_or_else(|| panic!("Attempted to query for commit status for a block not in cached data {block_ref}"))
-            .committed
-    }
-
     /// Gets all uncommitted blocks in a slot.
     /// Uncommitted blocks must exist in memory, so only in-memory blocks are checked.
     pub(crate) fn get_uncommitted_blocks_at_slot(&self, slot: Slot) -> Vec<VerifiedBlock> {
@@ -565,38 +549,58 @@ impl DagState {
     /// Blocks returned are limited to round >= `start`, and cached.
     /// NOTE: caller should not assume returned blocks are always chained.
     /// "Disconnected" blocks can be returned when there are byzantine blocks,
-    /// or when received blocks are not deduped.
+    /// or a previously evicted block is accepted again.
     pub(crate) fn get_cached_blocks(
         &self,
         authority: AuthorityIndex,
         start: Round,
     ) -> Vec<VerifiedBlock> {
+        self.get_cached_blocks_in_range(authority, start, Round::MAX, usize::MAX)
+    }
+
+    // Retrieves the cached block within the range [start_round, end_round) from a given authority,
+    // limited in total number of blocks.
+    pub(crate) fn get_cached_blocks_in_range(
+        &self,
+        authority: AuthorityIndex,
+        start_round: Round,
+        end_round: Round,
+        limit: usize,
+    ) -> Vec<VerifiedBlock> {
+        if start_round >= end_round || limit == 0 {
+            return vec![];
+        }
+
         let mut blocks = vec![];
         for block_ref in self.recent_refs_by_authority[authority].range((
-            Included(BlockRef::new(start, authority, BlockDigest::MIN)),
-            Unbounded,
+            Included(BlockRef::new(start_round, authority, BlockDigest::MIN)),
+            Excluded(BlockRef::new(
+                end_round,
+                AuthorityIndex::MIN,
+                BlockDigest::MIN,
+            )),
         )) {
             let block_info = self
                 .recent_blocks
                 .get(block_ref)
                 .expect("Block should exist in recent blocks");
             blocks.push(block_info.block.clone());
+            if blocks.len() >= limit {
+                break;
+            }
         }
         blocks
     }
 
-    // Retrieves the cached block within the range [start_round, end_round) from a given authority.
-    // NOTE: end_round must be greater than GENESIS_ROUND.
+    // Retrieves the last cached block within the range [start_round, end_round) from a given authority.
     pub(crate) fn get_last_cached_block_in_range(
         &self,
         authority: AuthorityIndex,
         start_round: Round,
         end_round: Round,
     ) -> Option<VerifiedBlock> {
-        if end_round == GENESIS_ROUND {
-            panic!(
-                "Attempted to retrieve blocks earlier than the genesis round which is impossible"
-            );
+        if start_round >= end_round {
+            return None;
         }
 
         let block_ref = self.recent_refs_by_authority[authority]
@@ -753,6 +757,67 @@ impl DagState {
     pub(crate) fn contains_block(&self, block_ref: &BlockRef) -> bool {
         let blocks = self.contains_blocks(vec![*block_ref]);
         blocks.first().cloned().unwrap()
+    }
+
+    // Sets the block as committed in the cache. If the block is set as committed for first time, then true is returned, otherwise false is returned instead.
+    // Method will panic if the block is not found in the cache.
+    pub(crate) fn set_committed(&mut self, block_ref: &BlockRef) -> bool {
+        if let Some(block_info) = self.recent_blocks.get_mut(block_ref) {
+            if !block_info.committed {
+                block_info.committed = true;
+                return true;
+            }
+            false
+        } else {
+            panic!(
+                "Block {:?} not found in cache to set as committed.",
+                block_ref
+            );
+        }
+    }
+
+    /// Returns true if the block is committed. Only valid for blocks above the GC round.
+    pub(crate) fn is_committed(&self, block_ref: &BlockRef) -> bool {
+        self.recent_blocks
+            .get(block_ref)
+            .unwrap_or_else(|| panic!("Attempted to query for commit status for a block not in cached data {block_ref}"))
+            .committed
+    }
+
+    /// Recursively sets blocks in the causal history of the root block as hard linked, including the root block itself.
+    /// Returns the list of blocks that are newly linked.
+    /// The returned blocks are guaranteed to be above the GC round.
+    pub(crate) fn link_causal_history(&mut self, root_block: BlockRef) -> Vec<BlockRef> {
+        assert!(self.gc_enabled());
+        let gc_round = self.gc_round();
+        let mut linked_blocks = vec![];
+        let mut targets = VecDeque::new();
+        targets.push_back(root_block);
+        while let Some(block_ref) = targets.pop_front() {
+            // This is only correct with GC enabled.
+            if block_ref.round <= gc_round {
+                continue;
+            }
+            let block_info = self
+                .recent_blocks
+                .get_mut(&block_ref)
+                .unwrap_or_else(|| panic!("Block {:?} is not in DAG state", block_ref));
+            if block_info.hard_linked {
+                continue;
+            }
+            linked_blocks.push(block_ref);
+            block_info.hard_linked = true;
+            targets.extend(block_info.block.ancestors().iter());
+        }
+        linked_blocks
+    }
+
+    /// Returns true if the block is hard linked by a proposed block.
+    pub(crate) fn is_hard_linked(&self, block_ref: &BlockRef) -> bool {
+        self.recent_blocks
+            .get(block_ref)
+            .unwrap_or_else(|| panic!("Attempted to query for hard link status for a block not in cached data {block_ref}"))
+            .hard_linked
     }
 
     pub(crate) fn threshold_clock_round(&self) -> Round {
@@ -1111,6 +1176,8 @@ struct BlockInfo {
     block: VerifiedBlock,
     // Whether the block has been committed
     committed: bool,
+    // Whether the block has been hard linked by a proposed block.
+    hard_linked: bool,
 }
 
 impl BlockInfo {
@@ -1118,6 +1185,7 @@ impl BlockInfo {
         Self {
             block,
             committed: false,
+            hard_linked: false,
         }
     }
 }
@@ -1398,6 +1466,116 @@ mod test {
             "Expected round 11 ancestors: {:?}. Got: {:?}",
             expected_refs, ancestors_refs
         );
+    }
+
+    #[tokio::test]
+    async fn test_link_causal_history() {
+        let (mut context, _) = Context::new_for_test(4);
+        context.parameters.dag_state_cached_rounds = 10;
+        context
+            .protocol_config
+            .set_consensus_gc_depth_for_testing(3);
+        let context = Arc::new(context);
+
+        let store = Arc::new(MemStore::new());
+        let mut dag_state = DagState::new(context.clone(), store.clone());
+
+        // Create for rounds 1..=6. Skip creating blocks for authority 0 for rounds 4 - 6.
+        let mut dag_builder = DagBuilder::new(context.clone());
+        dag_builder.layers(1..=3).build();
+        dag_builder
+            .layers(4..=6)
+            .authorities(vec![AuthorityIndex::new_for_test(0)])
+            .skip_block()
+            .build();
+
+        // Accept all blocks
+        let all_blocks = dag_builder.all_blocks();
+        dag_state.accept_blocks(all_blocks.clone());
+
+        // No block is linked yet.
+        for block in &all_blocks {
+            assert!(!dag_state.is_hard_linked(&block.reference()));
+        }
+
+        // Link causal history from a round 1 block.
+        let round_1_block = &all_blocks[1];
+        assert_eq!(round_1_block.round(), 1);
+        let linked_blocks = dag_state.link_causal_history(round_1_block.reference());
+
+        // Check that the block is linked.
+        assert_eq!(linked_blocks.len(), 1);
+        assert_eq!(linked_blocks[0], round_1_block.reference());
+        for block_ref in linked_blocks {
+            assert!(dag_state.is_hard_linked(&block_ref));
+        }
+
+        // Link causal history from a round 2 block.
+        let round_2_block = &all_blocks[4];
+        assert_eq!(round_2_block.round(), 2);
+        let linked_blocks = dag_state.link_causal_history(round_2_block.reference());
+
+        // Check the linked blocks.
+        assert_eq!(linked_blocks.len(), 4);
+        for block_ref in linked_blocks {
+            assert!(block_ref == round_2_block.reference() || block_ref.round == 1);
+        }
+
+        // Check linked status in dag state.
+        for block in &all_blocks {
+            if block.round() == 1 || block.reference() == round_2_block.reference() {
+                assert!(dag_state.is_hard_linked(&block.reference()));
+            } else {
+                assert!(!dag_state.is_hard_linked(&block.reference()));
+            }
+        }
+
+        // Select round 6 block.
+        let round_6_block = all_blocks.last().unwrap();
+        assert_eq!(round_6_block.round(), 6);
+
+        // Get GC round to 3.
+        let last_commit = TrustedCommit::new_for_test(
+            6,
+            CommitDigest::MIN,
+            context.clock.timestamp_utc_ms(),
+            round_6_block.reference(),
+            vec![],
+        );
+        dag_state.set_last_commit(last_commit);
+        assert_eq!(
+            dag_state.gc_round(),
+            3,
+            "GC round should have moved to round 3"
+        );
+
+        // Link causal history from a round 6 block.
+        let linked_blocks = dag_state.link_causal_history(round_6_block.reference());
+
+        // Check the linked blocks. They should not include GC'ed blocks.
+        assert_eq!(linked_blocks.len(), 7, "Linked blocks: {:?}", linked_blocks);
+        for block_ref in linked_blocks {
+            assert!(
+                block_ref.round == 4
+                    || block_ref.round == 5
+                    || block_ref == round_6_block.reference()
+            );
+        }
+
+        // Check linked status in dag state.
+        for block in &all_blocks {
+            let block_ref = block.reference();
+            if block.round() == 1
+                || block_ref == round_2_block.reference()
+                || block_ref.round == 4
+                || block_ref.round == 5
+                || block_ref == round_6_block.reference()
+            {
+                assert!(dag_state.is_hard_linked(&block.reference()));
+            } else {
+                assert!(!dag_state.is_hard_linked(&block.reference()));
+            }
+        }
     }
 
     #[tokio::test]
@@ -2023,6 +2201,8 @@ mod test {
             }
         }
 
+        // Test get_cached_blocks()
+
         let cached_blocks =
             dag_state.get_cached_blocks(context.committee.to_authority_index(0).unwrap(), 0);
         assert!(cached_blocks.is_empty());
@@ -2054,6 +2234,77 @@ mod test {
             dag_state.get_cached_blocks(context.committee.to_authority_index(3).unwrap(), 12);
         assert_eq!(cached_blocks.len(), 1);
         assert_eq!(cached_blocks[0].round(), 12);
+
+        // Test get_cached_blocks_in_range()
+
+        // Start == end
+        let cached_blocks = dag_state.get_cached_blocks_in_range(
+            context.committee.to_authority_index(3).unwrap(),
+            10,
+            10,
+            1,
+        );
+        assert!(cached_blocks.is_empty());
+
+        // Start > end
+        let cached_blocks = dag_state.get_cached_blocks_in_range(
+            context.committee.to_authority_index(3).unwrap(),
+            11,
+            10,
+            1,
+        );
+        assert!(cached_blocks.is_empty());
+
+        // Empty result.
+        let cached_blocks = dag_state.get_cached_blocks_in_range(
+            context.committee.to_authority_index(0).unwrap(),
+            9,
+            10,
+            1,
+        );
+        assert!(cached_blocks.is_empty());
+
+        // Single block, one round before the end.
+        let cached_blocks = dag_state.get_cached_blocks_in_range(
+            context.committee.to_authority_index(1).unwrap(),
+            9,
+            11,
+            1,
+        );
+        assert_eq!(cached_blocks.len(), 1);
+        assert_eq!(cached_blocks[0].round(), 10);
+
+        // Respect end round.
+        let cached_blocks = dag_state.get_cached_blocks_in_range(
+            context.committee.to_authority_index(2).unwrap(),
+            9,
+            12,
+            5,
+        );
+        assert_eq!(cached_blocks.len(), 2);
+        assert_eq!(cached_blocks[0].round(), 10);
+        assert_eq!(cached_blocks[1].round(), 11);
+
+        // Respect start round.
+        let cached_blocks = dag_state.get_cached_blocks_in_range(
+            context.committee.to_authority_index(3).unwrap(),
+            11,
+            20,
+            5,
+        );
+        assert_eq!(cached_blocks.len(), 2);
+        assert_eq!(cached_blocks[0].round(), 11);
+        assert_eq!(cached_blocks[1].round(), 12);
+
+        // Respect limit
+        let cached_blocks = dag_state.get_cached_blocks_in_range(
+            context.committee.to_authority_index(3).unwrap(),
+            10,
+            20,
+            1,
+        );
+        assert_eq!(cached_blocks.len(), 1);
+        assert_eq!(cached_blocks[0].round(), 10);
     }
 
     #[rstest]

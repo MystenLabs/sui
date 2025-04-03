@@ -8,6 +8,8 @@ info:
 error[E04016]: too few arguments
   ┌─ tests/move_2024/typing/mismatched_lambda_arity.move:3:9
   │
+2 │     macro fun foo($f: |u64, u64| -> u64) {
+  │                       ----------------- Expected 2 argument(s)
 3 │         $f();
   │         ^^^^
   │         │ │
@@ -17,6 +19,9 @@ error[E04016]: too few arguments
 error[E04016]: too few arguments
   ┌─ tests/move_2024/typing/mismatched_lambda_arity.move:4:9
   │
+2 │     macro fun foo($f: |u64, u64| -> u64) {
+  │                       ----------------- Expected 2 argument(s)
+3 │         $f();
 4 │         $f(0);
   │         ^^^^^
   │         │ │
@@ -26,6 +31,9 @@ error[E04016]: too few arguments
 error[E04017]: too many arguments
   ┌─ tests/move_2024/typing/mismatched_lambda_arity.move:5:9
   │
+2 │     macro fun foo($f: |u64, u64| -> u64) {
+  │                       ----------------- Expected 2 argument(s)
+  ·
 5 │         $f(0, 1, 2);
   │         ^^^^^^^^^^^
   │         │ │

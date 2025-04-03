@@ -20,7 +20,7 @@ use std::sync::Arc;
 use sui_config::ExecutionCacheConfig;
 use sui_protocol_config::ProtocolVersion;
 use sui_types::base_types::{FullObjectID, VerifiedExecutionData};
-use sui_types::digests::{TransactionDigest, TransactionEffectsDigest, TransactionEventsDigest};
+use sui_types::digests::{TransactionDigest, TransactionEffectsDigest};
 use sui_types::effects::{TransactionEffects, TransactionEvents};
 use sui_types::error::{SuiError, SuiResult, UserInputError};
 use sui_types::executable_transaction::VerifiedExecutableTransaction;
@@ -145,13 +145,7 @@ pub type Batch = (Vec<Arc<TransactionOutputs>>, DBBatch);
 
 pub trait ExecutionCacheCommit: Send + Sync {
     /// Build a DBBatch containing the given transaction outputs.
-    fn build_db_batch(
-        &self,
-        epoch: EpochId,
-        digests: &[TransactionDigest],
-        // TODO: Delete this parameter once table migration is complete.
-        use_object_per_epoch_marker_table_v2: bool,
-    ) -> Batch;
+    fn build_db_batch(&self, epoch: EpochId, digests: &[TransactionDigest]) -> Batch;
 
     /// Durably commit the outputs of the given transactions to the database.
     /// Will be called by CheckpointExecutor to ensure that transaction outputs are
@@ -249,8 +243,6 @@ pub trait ObjectCacheRead: Send + Sync {
         keys: &[InputKey],
         receiving_objects: HashSet<InputKey>,
         epoch: EpochId,
-        // TODO: Delete this parameter once table migration is complete.
-        use_object_per_epoch_marker_table_v2: bool,
     ) -> Vec<bool> {
         let (keys_with_version, keys_without_version): (Vec<_>, Vec<_>) = keys
             .iter()
@@ -291,19 +283,17 @@ pub trait ObjectCacheRead: Send + Sync {
                         input_key.id().id(),
                         input_key.version().unwrap(),
                         epoch,
-                        use_object_per_epoch_marker_table_v2,
                     );
                 versioned_results.push((*idx, is_available));
             } else if self
-                .get_deleted_shared_object_previous_tx_digest(
+                .get_consensus_stream_end_tx_digest(
                     FullObjectKey::new(input_key.id(), input_key.version().unwrap()),
                     epoch,
-                    use_object_per_epoch_marker_table_v2,
                 )
                 .is_some()
             {
-                // If the object is an already deleted shared object, mark it as available if the
-                // version for that object is in the shared deleted marker table.
+                // If the object is an already-removed consensus object, mark it as available if the
+                // version for that object is in the marker table.
                 versioned_results.push((*idx, true));
             } else {
                 versioned_results.push((*idx, false));
@@ -354,47 +344,38 @@ pub trait ObjectCacheRead: Send + Sync {
     // Marker methods
 
     /// Get the marker at a specific version
-    fn get_marker_value(
-        &self,
-        object_key: FullObjectKey,
-        epoch_id: EpochId,
-        // TODO: Delete this parameter once table migration is complete.
-        use_object_per_epoch_marker_table_v2: bool,
-    ) -> Option<MarkerValue>;
+    fn get_marker_value(&self, object_key: FullObjectKey, epoch_id: EpochId)
+        -> Option<MarkerValue>;
 
     /// Get the latest marker for a given object.
     fn get_latest_marker(
         &self,
         object_id: FullObjectID,
         epoch_id: EpochId,
-        // TODO: Delete this parameter once table migration is complete.
-        use_object_per_epoch_marker_table_v2: bool,
     ) -> Option<(SequenceNumber, MarkerValue)>;
 
-    /// If the shared object was deleted, return deletion info for the current live version
-    fn get_last_shared_object_deletion_info(
+    /// If the given consensus object stream was ended, return related
+    /// version and transaction digest.
+    fn get_last_consensus_stream_end_info(
         &self,
         object_id: FullObjectID,
         epoch_id: EpochId,
-        // TODO: Delete this parameter once table migration is complete.
-        use_object_per_epoch_marker_table_v2: bool,
     ) -> Option<(SequenceNumber, TransactionDigest)> {
-        match self.get_latest_marker(object_id, epoch_id, use_object_per_epoch_marker_table_v2) {
-            Some((version, MarkerValue::SharedDeleted(digest))) => Some((version, digest)),
+        match self.get_latest_marker(object_id, epoch_id) {
+            Some((version, MarkerValue::ConsensusStreamEnded(digest))) => Some((version, digest)),
             _ => None,
         }
     }
 
-    /// If the shared object was deleted, return deletion info for the specified version.
-    fn get_deleted_shared_object_previous_tx_digest(
+    /// If the given consensus object stream was ended at the specified version,
+    /// return related transaction digest.
+    fn get_consensus_stream_end_tx_digest(
         &self,
         object_key: FullObjectKey,
         epoch_id: EpochId,
-        // TODO: Delete this parameter once table migration is complete.
-        use_object_per_epoch_marker_table_v2: bool,
     ) -> Option<TransactionDigest> {
-        match self.get_marker_value(object_key, epoch_id, use_object_per_epoch_marker_table_v2) {
-            Some(MarkerValue::SharedDeleted(digest)) => Some(digest),
+        match self.get_marker_value(object_key, epoch_id) {
+            Some(MarkerValue::ConsensusStreamEnded(digest)) => Some(digest),
             _ => None,
         }
     }
@@ -403,11 +384,9 @@ pub trait ObjectCacheRead: Send + Sync {
         &self,
         object_key: FullObjectKey,
         epoch_id: EpochId,
-        // TODO: Delete this parameter once table migration is complete.
-        use_object_per_epoch_marker_table_v2: bool,
     ) -> bool {
         matches!(
-            self.get_marker_value(object_key, epoch_id, use_object_per_epoch_marker_table_v2),
+            self.get_marker_value(object_key, epoch_id),
             Some(MarkerValue::Received)
         )
     }
@@ -417,12 +396,10 @@ pub trait ObjectCacheRead: Send + Sync {
         object_id: ObjectID,
         version: SequenceNumber,
         epoch_id: EpochId,
-        // TODO: Delete this parameter once table migration is complete.
-        use_object_per_epoch_marker_table_v2: bool,
     ) -> bool {
         let full_id = FullObjectID::Fastpath(object_id); // function explicilty assumes "fastpath"
         matches!(
-            self.get_latest_marker(full_id, epoch_id, use_object_per_epoch_marker_table_v2),
+            self.get_latest_marker(full_id, epoch_id),
             Some((marker_version, MarkerValue::OwnedDeleted)) if marker_version >= version
         )
     }
@@ -524,12 +501,9 @@ pub trait TransactionCacheRead: Send + Sync {
             .expect("multi-get must return correct number of items")
     }
 
-    fn multi_get_events(
-        &self,
-        event_digests: &[TransactionEventsDigest],
-    ) -> Vec<Option<TransactionEvents>>;
+    fn multi_get_events(&self, digests: &[TransactionDigest]) -> Vec<Option<TransactionEvents>>;
 
-    fn get_events(&self, digest: &TransactionEventsDigest) -> Option<TransactionEvents> {
+    fn get_events(&self, digest: &TransactionDigest) -> Option<TransactionEvents> {
         self.multi_get_events(&[*digest])
             .pop()
             .expect("multi-get must return correct number of items")
@@ -581,13 +555,7 @@ pub trait ExecutionCacheWrite: Send + Sync {
     /// Any write performed by this method immediately notifies any waiter that has previously
     /// called notify_read_objects_for_execution or notify_read_objects_for_signing for the object
     /// in question.
-    fn write_transaction_outputs(
-        &self,
-        epoch_id: EpochId,
-        tx_outputs: Arc<TransactionOutputs>,
-        // TODO: Delete this parameter once table migration is complete.
-        use_object_per_epoch_marker_table_v2: bool,
-    );
+    fn write_transaction_outputs(&self, epoch_id: EpochId, tx_outputs: Arc<TransactionOutputs>);
 
     /// Attempt to acquire object locks for all of the owned input locks.
     fn acquire_transaction_locks(
@@ -723,8 +691,6 @@ macro_rules! implement_storage_traits {
                 receiving_object_id: &ObjectID,
                 receive_object_at_version: SequenceNumber,
                 epoch_id: EpochId,
-                // TODO: Delete this parameter once table migration is complete.
-                use_object_per_epoch_marker_table_v2: bool,
             ) -> SuiResult<Option<Object>> {
                 let Some(recv_object) = ObjectCacheRead::get_object_by_key(
                     self,
@@ -747,7 +713,6 @@ macro_rules! implement_storage_traits {
                             receive_object_at_version,
                         ),
                         epoch_id,
-                        use_object_per_epoch_marker_table_v2,
                     )
                 {
                     return Ok(None);

@@ -75,21 +75,21 @@ An invalid length of bitvector was given
 
 
 
+<a name="std_bit_vector_WORD_SIZE"></a>
+
+
+
+<pre><code><b>const</b> <a href="../std/bit_vector.md#std_bit_vector_WORD_SIZE">WORD_SIZE</a>: <a href="../std/u64.md#std_u64">u64</a> = 1;
+</code></pre>
+
+
+
 <a name="std_bit_vector_MAX_SIZE"></a>
 
 The maximum allowed bitvector size
 
 
 <pre><code><b>const</b> <a href="../std/bit_vector.md#std_bit_vector_MAX_SIZE">MAX_SIZE</a>: <a href="../std/u64.md#std_u64">u64</a> = 1024;
-</code></pre>
-
-
-
-<a name="std_bit_vector_WORD_SIZE"></a>
-
-
-
-<pre><code><b>const</b> <a href="../std/bit_vector.md#std_bit_vector_WORD_SIZE">WORD_SIZE</a>: <a href="../std/u64.md#std_u64">u64</a> = 1;
 </code></pre>
 
 

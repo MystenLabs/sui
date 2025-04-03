@@ -53,10 +53,11 @@ use dashmap::mapref::entry::Entry as DashMapEntry;
 use dashmap::DashMap;
 use futures::{future::BoxFuture, FutureExt};
 use moka::sync::SegmentedCache as MokaCache;
+use mysten_common::random_util::randomize_cache_capacity_in_tests;
 use mysten_common::sync::notify_read::NotifyRead;
 use parking_lot::Mutex;
 use prometheus::Registry;
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::BTreeMap;
 use std::hash::Hash;
 use std::sync::atomic::AtomicU64;
 use std::sync::Arc;
@@ -68,9 +69,7 @@ use sui_types::base_types::{
     EpochId, FullObjectID, ObjectID, ObjectRef, SequenceNumber, VerifiedExecutionData,
 };
 use sui_types::bridge::{get_bridge, Bridge};
-use sui_types::digests::{
-    ObjectDigest, TransactionDigest, TransactionEffectsDigest, TransactionEventsDigest,
-};
+use sui_types::digests::{ObjectDigest, TransactionDigest, TransactionEffectsDigest};
 use sui_types::effects::{TransactionEffects, TransactionEvents};
 use sui_types::error::{SuiError, SuiResult, UserInputError};
 use sui_types::executable_transaction::VerifiedExecutableTransaction;
@@ -172,6 +171,13 @@ impl LatestObjectCacheEntry {
             LatestObjectCacheEntry::NonExistent => None,
         }
     }
+
+    fn is_alive(&self) -> bool {
+        match self {
+            LatestObjectCacheEntry::Object(_, entry) => !entry.is_tombstone(),
+            LatestObjectCacheEntry::NonExistent => false,
+        }
+    }
 }
 
 impl IsNewer for LatestObjectCacheEntry {
@@ -213,12 +219,7 @@ struct UncommittedData {
 
     transaction_effects: DashMap<TransactionEffectsDigest, TransactionEffects>,
 
-    // Because TransactionEvents are not unique to the transaction that created them, we must
-    // reference count them in order to know when we can remove them from the cache. For now
-    // we track all referers explicitly, but we can use a ref count when we are confident in
-    // the correctness of the code.
-    transaction_events:
-        DashMap<TransactionEventsDigest, (BTreeSet<TransactionDigest>, TransactionEvents)>,
+    transaction_events: DashMap<TransactionDigest, TransactionEvents>,
 
     executed_effects_digests: DashMap<TransactionDigest, TransactionEffectsDigest>,
 
@@ -319,8 +320,7 @@ struct CachedCommittedData {
     transaction_effects:
         MonotonicCache<TransactionEffectsDigest, PointCacheItem<Arc<TransactionEffects>>>,
 
-    transaction_events:
-        MonotonicCache<TransactionEventsDigest, PointCacheItem<Arc<TransactionEvents>>>,
+    transaction_events: MonotonicCache<TransactionDigest, PointCacheItem<Arc<TransactionEvents>>>,
 
     executed_effects_digests:
         MonotonicCache<TransactionDigest, PointCacheItem<TransactionEffectsDigest>>,
@@ -333,24 +333,40 @@ struct CachedCommittedData {
 impl CachedCommittedData {
     fn new(config: &ExecutionCacheConfig) -> Self {
         let object_cache = MokaCache::builder(8)
-            .max_capacity(config.object_cache_size())
+            .max_capacity(randomize_cache_capacity_in_tests(
+                config.object_cache_size(),
+            ))
             .build();
         let marker_cache = MokaCache::builder(8)
-            .max_capacity(config.marker_cache_size())
+            .max_capacity(randomize_cache_capacity_in_tests(
+                config.marker_cache_size(),
+            ))
             .build();
 
-        let transactions = MonotonicCache::new(config.transaction_cache_size());
-        let transaction_effects = MonotonicCache::new(config.effect_cache_size());
-        let transaction_events = MonotonicCache::new(config.events_cache_size());
-        let executed_effects_digests = MonotonicCache::new(config.executed_effect_cache_size());
+        let transactions = MonotonicCache::new(randomize_cache_capacity_in_tests(
+            config.transaction_cache_size(),
+        ));
+        let transaction_effects = MonotonicCache::new(randomize_cache_capacity_in_tests(
+            config.effect_cache_size(),
+        ));
+        let transaction_events = MonotonicCache::new(randomize_cache_capacity_in_tests(
+            config.events_cache_size(),
+        ));
+        let executed_effects_digests = MonotonicCache::new(randomize_cache_capacity_in_tests(
+            config.executed_effect_cache_size(),
+        ));
 
         let transaction_objects = MokaCache::builder(8)
-            .max_capacity(config.transaction_objects_cache_size())
+            .max_capacity(randomize_cache_capacity_in_tests(
+                config.transaction_objects_cache_size(),
+            ))
             .build();
 
         Self {
             object_cache,
-            object_by_id_cache: MonotonicCache::new(config.object_by_id_cache_size()),
+            object_by_id_cache: MonotonicCache::new(randomize_cache_capacity_in_tests(
+                config.object_by_id_cache_size(),
+            )),
             marker_cache,
             transactions,
             transaction_effects,
@@ -461,7 +477,9 @@ impl WritebackCache {
         backpressure_manager: Arc<BackpressureManager>,
     ) -> Self {
         let packages = MokaCache::builder(8)
-            .max_capacity(config.package_cache_size())
+            .max_capacity(randomize_cache_capacity_in_tests(
+                config.package_cache_size(),
+            ))
             .build();
         Self {
             dirty: UncommittedData::new(),
@@ -771,21 +789,34 @@ impl WritebackCache {
 
     fn get_object_impl(&self, request_type: &'static str, id: &ObjectID) -> Option<Object> {
         let ticket = self.cached.object_by_id_cache.get_ticket_for_read(id);
-        match self.get_object_by_id_cache_only(request_type, id) {
-            CacheResult::Hit((_, object)) => Some(object),
+        match self.get_object_entry_by_id_cache_only(request_type, id) {
+            CacheResult::Hit((_, entry)) => match entry {
+                ObjectEntry::Object(object) => Some(object),
+                ObjectEntry::Deleted | ObjectEntry::Wrapped => None,
+            },
             CacheResult::NegativeHit => None,
             CacheResult::Miss => {
-                let obj = self.store.get_object(id);
-                if let Some(obj) = &obj {
-                    self.cache_latest_object_by_id(
-                        id,
-                        LatestObjectCacheEntry::Object(obj.version(), obj.clone().into()),
-                        ticket,
-                    );
-                } else {
-                    self.cache_object_not_found(id, ticket);
+                let obj = self
+                    .store
+                    .get_latest_object_or_tombstone(*id)
+                    .expect("db error");
+                match obj {
+                    Some((key, obj)) => {
+                        self.cache_latest_object_by_id(
+                            id,
+                            LatestObjectCacheEntry::Object(key.1, obj.clone().into()),
+                            ticket,
+                        );
+                        match obj {
+                            ObjectOrTombstone::Object(object) => Some(object),
+                            ObjectOrTombstone::Tombstone(_) => None,
+                        }
+                    }
+                    None => {
+                        self.cache_object_not_found(id, ticket);
+                        None
+                    }
                 }
-                obj
             }
         }
     }
@@ -870,16 +901,9 @@ impl WritebackCache {
         // store it anyway to avoid special cases in commint_transaction_outputs, and translate
         // an empty events structure to None when reading.
         self.metrics.record_cache_write("transaction_events");
-        match self.dirty.transaction_events.entry(events.digest()) {
-            DashMapEntry::Occupied(mut occupied) => {
-                occupied.get_mut().0.insert(tx_digest);
-            }
-            DashMapEntry::Vacant(entry) => {
-                let mut txns = BTreeSet::new();
-                txns.insert(tx_digest);
-                entry.insert((txns, events.clone()));
-            }
-        }
+        self.dirty
+            .transaction_events
+            .insert(tx_digest, events.clone());
 
         self.metrics.record_cache_write("executed_effects_digests");
         self.dirty
@@ -907,12 +931,7 @@ impl WritebackCache {
         self.set_backpressure(pending_count);
     }
 
-    fn build_db_batch(
-        &self,
-        epoch: EpochId,
-        digests: &[TransactionDigest],
-        use_object_per_epoch_marker_table_v2: bool,
-    ) -> Batch {
+    fn build_db_batch(&self, epoch: EpochId, digests: &[TransactionDigest]) -> Batch {
         let _metrics_guard = mysten_metrics::monitored_scope("WritebackCache::build_db_batch");
         let mut all_outputs = Vec::with_capacity(digests.len());
         for tx in digests {
@@ -935,7 +954,7 @@ impl WritebackCache {
 
         let batch = self
             .store
-            .build_db_batch(epoch, &all_outputs, use_object_per_epoch_marker_table_v2)
+            .build_db_batch(epoch, &all_outputs)
             .expect("db error");
         (all_outputs, batch)
     }
@@ -1029,7 +1048,6 @@ impl WritebackCache {
         } = outputs;
 
         let effects_digest = effects.digest();
-        let events_digest = events.digest();
 
         // Update cache before removing from self.dirty to avoid
         // unnecessary cache misses
@@ -1060,7 +1078,7 @@ impl WritebackCache {
         self.cached
             .transaction_events
             .insert(
-                &events_digest,
+                &tx_digest,
                 PointCacheItem::Some(events.clone().into()),
                 Ticket::Write,
             )
@@ -1071,18 +1089,10 @@ impl WritebackCache {
             .remove(&effects_digest)
             .expect("effects must exist");
 
-        match self.dirty.transaction_events.entry(events.digest()) {
-            DashMapEntry::Occupied(mut occupied) => {
-                let txns = &mut occupied.get_mut().0;
-                assert!(txns.remove(&tx_digest), "transaction must exist");
-                if txns.is_empty() {
-                    occupied.remove();
-                }
-            }
-            DashMapEntry::Vacant(_) => {
-                panic!("events must exist");
-            }
-        }
+        self.dirty
+            .transaction_events
+            .remove(&tx_digest)
+            .expect("events must exist");
 
         self.dirty
             .executed_effects_digests
@@ -1267,14 +1277,8 @@ impl WritebackCache {
 impl ExecutionCacheAPI for WritebackCache {}
 
 impl ExecutionCacheCommit for WritebackCache {
-    fn build_db_batch(
-        &self,
-        epoch: EpochId,
-        digests: &[TransactionDigest],
-        // TODO: Delete this parameter once table migration is complete.
-        use_object_per_epoch_marker_table_v2: bool,
-    ) -> Batch {
-        self.build_db_batch(epoch, digests, use_object_per_epoch_marker_table_v2)
+    fn build_db_batch(&self, epoch: EpochId, digests: &[TransactionDigest]) -> Batch {
+        self.build_db_batch(epoch, digests)
     }
 
     fn commit_transaction_outputs(
@@ -1501,7 +1505,8 @@ impl ObjectCacheRead for WritebackCache {
         // if we have the latest version cached, and it is within the bound, we are done
         self.metrics
             .record_cache_request("object_lt_or_eq_version", "object_by_id");
-        if let Some(latest) = self.cached.object_by_id_cache.get(&object_id) {
+        let latest_cache_entry = self.cached.object_by_id_cache.get(&object_id);
+        if let Some(latest) = &latest_cache_entry {
             let latest = latest.lock();
             match &*latest {
                 LatestObjectCacheEntry::Object(latest_version, object) => {
@@ -1607,12 +1612,18 @@ impl ObjectCacheRead for WritebackCache {
                             .find_object_lt_or_eq_version(object_id, version_bound)
                             .expect("db error")
                     }
+
+                // no object found in dirty set or db, object does not exist
+                // When this is called from a read api (i.e. not the execution path) it is
+                // possible that the object has been deleted and pruned. In this case,
+                // there would be no entry at all on disk, but we may have a tombstone in the
+                // cache
+                } else if let Some(latest_cache_entry) = latest_cache_entry {
+                    // If there is a latest cache entry, it had better not be a live object!
+                    assert!(!latest_cache_entry.lock().is_alive());
+                    None
                 } else {
-                    // no object found in dirty set or db, object does not exist
-                    // When this is called from a read api (i.e. not the execution path) it is
-                    // possible that the object has been deleted and pruned. In this case,
-                    // there would be no entry at all on disk, but we may have a tombstone in the
-                    // cache
+                    // If there is no latest cache entry, we can insert one.
                     let highest = cached_entry.and_then(|c| c.get_highest());
                     assert!(highest.is_none() || highest.unwrap().1.is_tombstone());
                     self.cache_object_not_found(
@@ -1640,15 +1651,13 @@ impl ObjectCacheRead for WritebackCache {
         &self,
         object_key: FullObjectKey,
         epoch_id: EpochId,
-        // TODO: Delete this parameter once table migration is complete.
-        use_object_per_epoch_marker_table_v2: bool,
     ) -> Option<MarkerValue> {
         match self.get_marker_value_cache_only(object_key, epoch_id) {
             CacheResult::Hit(marker) => Some(marker),
             CacheResult::NegativeHit => None,
             CacheResult::Miss => self
                 .record_db_get("marker_by_version")
-                .get_marker_value(object_key, epoch_id, use_object_per_epoch_marker_table_v2)
+                .get_marker_value(object_key, epoch_id)
                 .expect("db error"),
         }
     }
@@ -1657,8 +1666,6 @@ impl ObjectCacheRead for WritebackCache {
         &self,
         object_id: FullObjectID,
         epoch_id: EpochId,
-        // TODO: Delete this parameter once table migration is complete.
-        use_object_per_epoch_marker_table_v2: bool,
     ) -> Option<(SequenceNumber, MarkerValue)> {
         match self.get_latest_marker_value_cache_only(object_id, epoch_id) {
             CacheResult::Hit((v, marker)) => Some((v, marker)),
@@ -1667,7 +1674,7 @@ impl ObjectCacheRead for WritebackCache {
             }
             CacheResult::Miss => self
                 .record_db_get("marker_latest")
-                .get_latest_marker(object_id, epoch_id, use_object_per_epoch_marker_table_v2)
+                .get_latest_marker(object_id, epoch_id)
                 .expect("db error"),
         }
     }
@@ -1964,7 +1971,7 @@ impl TransactionCacheRead for WritebackCache {
 
     fn multi_get_events(
         &self,
-        event_digests: &[TransactionEventsDigest],
+        event_digests: &[TransactionDigest],
     ) -> Vec<Option<TransactionEvents>> {
         fn map_events(events: TransactionEvents) -> Option<TransactionEvents> {
             if events.data.is_empty() {
@@ -1983,12 +1990,7 @@ impl TransactionCacheRead for WritebackCache {
             |(digest, _)| {
                 self.metrics
                     .record_cache_request("transaction_events", "uncommitted");
-                if let Some(events) = self
-                    .dirty
-                    .transaction_events
-                    .get(digest)
-                    .map(|e| e.1.clone())
-                {
+                if let Some(events) = self.dirty.transaction_events.get(digest).map(|e| e.clone()) {
                     self.metrics
                         .record_cache_hit("transaction_events", "uncommitted");
 
@@ -2056,13 +2058,7 @@ impl ExecutionCacheWrite for WritebackCache {
         )
     }
 
-    fn write_transaction_outputs(
-        &self,
-        epoch_id: EpochId,
-        tx_outputs: Arc<TransactionOutputs>,
-        // TODO: Delete this parameter once table migration is complete.
-        _use_object_per_epoch_marker_table_v2: bool,
-    ) {
+    fn write_transaction_outputs(&self, epoch_id: EpochId, tx_outputs: Arc<TransactionOutputs>) {
         WritebackCache::write_transaction_outputs(self, epoch_id, tx_outputs);
     }
 }

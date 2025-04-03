@@ -1,0 +1,32 @@
+// Copyright (c) Mysten Labs, Inc.
+// SPDX-License-Identifier: Apache-2.0
+
+syntax = "proto3";
+
+package sui.rpc.v2beta;
+
+import "sui/rpc/v2beta/checkpoint_contents.proto";
+import "sui/rpc/v2beta/checkpoint_summary.proto";
+import "sui/rpc/v2beta/executed_transaction.proto";
+import "sui/rpc/v2beta/signature.proto";
+
+message Checkpoint {
+  // The height of this checkpoint.
+  optional uint64 sequence_number = 1;
+
+  // The digest of this Checkpoint's CheckpointSummary.
+  optional string digest = 2;
+
+  // The `CheckpointSummary` for this checkpoint.
+  optional CheckpointSummary summary = 3;
+
+  // An aggregated quorum signature from the validator committee that
+  // certified this checkpoint.
+  optional ValidatorAggregatedSignature signature = 4;
+
+  // The `CheckpointContents` for this checkpoint.
+  optional CheckpointContents contents = 5;
+
+  // List of transactions included in this checkpoint.
+  repeated ExecutedTransaction transactions = 6;
+}

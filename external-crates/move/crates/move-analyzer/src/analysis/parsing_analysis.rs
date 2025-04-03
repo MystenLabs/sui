@@ -4,11 +4,11 @@
 use crate::{
     symbols::{
         add_member_use_def, ignored_function, parsed_address,
-        parsing_leading_and_mod_names_to_map_key, parsing_mod_def_to_map_key, CallInfo,
-        CursorContext, CursorDefinition, CursorPosition, DefMap, ModuleDefs, References, UseDef,
-        UseDefMap,
+        parsing_leading_and_mod_names_to_map_key, parsing_mod_def_to_map_key,
+        AutoImportInsertionInfo, AutoImportInsertionKind, CallInfo, CursorContext,
+        CursorDefinition, CursorPosition, DefMap, ModuleDefs, References, UseDef, UseDefMap,
     },
-    utils::loc_start_to_lsp_position_opt,
+    utils::{loc_end_to_lsp_position_opt, loc_start_to_lsp_position_opt},
 };
 
 use lsp_types::Position;
@@ -128,6 +128,20 @@ impl<'a> ParsingAnalysisContext<'a> {
         mod_use_defs: &mut BTreeMap<String, UseDefMap>,
         mod_to_alias_lengths: &mut BTreeMap<String, BTreeMap<Position, usize>>,
     ) {
+        fn latest_loc(latest_loc: Loc, new_loc: Loc) -> Loc {
+            if new_loc.end() > latest_loc.end() {
+                new_loc
+            } else {
+                latest_loc
+            }
+        }
+        fn earliest_loc(earliest_loc: Loc, new_loc: Loc) -> Loc {
+            if new_loc.start() < earliest_loc.start() {
+                new_loc
+            } else {
+                earliest_loc
+            }
+        }
         // parsing symbolicator is currently only responsible for processing use declarations
         let Some(mod_ident_str) = parsing_mod_def_to_map_key(self.pkg_addresses, mod_def) else {
             return;
@@ -145,6 +159,10 @@ impl<'a> ParsingAnalysisContext<'a> {
             .iter()
             .for_each(|sp!(_, attrs)| attrs.iter().for_each(|a| self.attr_symbols(a.clone())));
 
+        // location of the latest use declaration (if any)
+        let mut latest_use_loc = Loc::new(mod_def.loc.file_hash(), 0, 0);
+        // location of the earliest member (if any)
+        let mut earliest_member_loc = Loc::new(mod_def.loc.file_hash(), u32::MAX, u32::MAX);
         for m in &mod_def.members {
             use P::ModuleMember as MM;
             match m {
@@ -152,7 +170,7 @@ impl<'a> ParsingAnalysisContext<'a> {
                     if ignored_function(fun.name.value()) {
                         continue;
                     }
-
+                    earliest_member_loc = earliest_loc(earliest_member_loc, fun.loc);
                     // Unit returns span the entire function signature, so we process them first
                     // for cursor ordering.
                     self.type_symbols(&fun.signature.return_type);
@@ -189,6 +207,7 @@ impl<'a> ParsingAnalysisContext<'a> {
                     };
                 }
                 MM::Struct(sdef) => {
+                    earliest_member_loc = earliest_loc(earliest_member_loc, sdef.loc);
                     // If the cursor is in this item, mark that down.
                     // This may be overridden by the recursion below.
                     if let Some(cursor) = &mut self.cursor {
@@ -217,6 +236,7 @@ impl<'a> ParsingAnalysisContext<'a> {
                     }
                 }
                 MM::Enum(edef) => {
+                    earliest_member_loc = earliest_loc(earliest_member_loc, edef.loc);
                     // If the cursor is in this item, mark that down.
                     // This may be overridden by the recursion below.
                     if let Some(cursor) = &mut self.cursor {
@@ -248,9 +268,16 @@ impl<'a> ParsingAnalysisContext<'a> {
                         }
                     }
                 }
-                MM::Use(use_decl) => self.use_decl_symbols(use_decl),
-                MM::Friend(fdecl) => self.chain_symbols(&fdecl.friend),
+                MM::Use(use_decl) => {
+                    latest_use_loc = latest_loc(latest_use_loc, use_decl.loc);
+                    self.use_decl_symbols(use_decl)
+                }
+                MM::Friend(fdecl) => {
+                    earliest_member_loc = earliest_loc(earliest_member_loc, fdecl.loc);
+                    self.chain_symbols(&fdecl.friend)
+                }
                 MM::Constant(c) => {
+                    earliest_member_loc = earliest_loc(earliest_member_loc, c.loc);
                     // If the cursor is in this item, mark that down.
                     // This may be overridden by the recursion below.
                     if let Some(cursor) = &mut self.cursor {
@@ -270,14 +297,62 @@ impl<'a> ParsingAnalysisContext<'a> {
                     self.type_symbols(&c.signature);
                     self.exp_symbols(&c.value);
                 }
-                MM::Spec(_) => (),
+                MM::Spec(s) => {
+                    earliest_member_loc = earliest_loc(earliest_member_loc, s.loc);
+                }
             }
         }
+        self.add_import_insert_info(latest_use_loc, earliest_member_loc);
+
         self.current_mod_ident_str = None;
         let processed_defs = std::mem::replace(&mut self.use_defs, old_defs);
         mod_use_defs.insert(mod_ident_str.clone(), processed_defs);
         let processed_alias_lengths = std::mem::replace(&mut self.alias_lengths, old_alias_lengths);
         mod_to_alias_lengths.insert(mod_ident_str, processed_alias_lengths);
+    }
+
+    fn add_import_insert_info(&mut self, latest_use_loc: Loc, earliest_member_loc: Loc) {
+        let Some(mod_defs) = self
+            .mod_outer_defs
+            .get_mut(&self.current_mod_ident_str.clone().unwrap())
+        else {
+            return;
+        };
+        mod_defs.import_insert_info = if latest_use_loc.end() > 0 {
+            // imports exist, auto-imports position is at the end of the last
+            // auto import
+            if let Some(use_start) = loc_start_to_lsp_position_opt(self.files, &latest_use_loc) {
+                loc_end_to_lsp_position_opt(self.files, &latest_use_loc).map(|pos| {
+                    AutoImportInsertionInfo {
+                        kind: AutoImportInsertionKind::AfterLastImport,
+                        pos,
+                        tabulation: use_start.character as usize,
+                    }
+                })
+            } else {
+                None
+            }
+        } else if earliest_member_loc.start() < u32::MAX {
+            // Imports don't exist, but some members do, and auto-imports position
+            // is at the beginning of the line where the first member starts, with
+            // the intention to insert auto-imports on the same line pushing
+            // the member down. The reason why we don't insert auto-imports
+            // on the previous line is that if we are unlucky, we may
+            // hit a curly starting module or module declaration itself.
+            loc_start_to_lsp_position_opt(self.files, &earliest_member_loc).map(|pos| {
+                AutoImportInsertionInfo {
+                    kind: AutoImportInsertionKind::BeforeFirstMember,
+                    pos,
+                    tabulation: pos.character as usize,
+                }
+            })
+        } else {
+            // Otherwise it's unclear where to insert auto-imports.
+            // We could speculate here but this should not really happen
+            // since for auto-import to make sense we need some code
+            // in the module.
+            None
+        }
     }
 
     /// Get symbols for a sequence item

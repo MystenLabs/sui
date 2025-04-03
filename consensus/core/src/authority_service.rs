@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{pin::Pin, sync::Arc, time::Duration};
+use std::{collections::BTreeMap, pin::Pin, sync::Arc, time::Duration};
 
 use async_trait::async_trait;
 use bytes::Bytes;
@@ -24,6 +24,7 @@ use crate::{
     dag_state::DagState,
     error::{ConsensusError, ConsensusResult},
     network::{BlockStream, ExtendedSerializedBlock, NetworkService},
+    round_tracker::PeerRoundTracker,
     stake_aggregator::{QuorumThreshold, StakeAggregator},
     storage::Store,
     synchronizer::SynchronizerHandle,
@@ -45,6 +46,7 @@ pub(crate) struct AuthorityService<C: CoreThreadDispatcher> {
     transaction_certifier: TransactionCertifier,
     dag_state: Arc<RwLock<DagState>>,
     store: Arc<dyn Store>,
+    round_tracker: Arc<RwLock<PeerRoundTracker>>,
 }
 
 impl<C: CoreThreadDispatcher> AuthorityService<C> {
@@ -52,6 +54,7 @@ impl<C: CoreThreadDispatcher> AuthorityService<C> {
         context: Arc<Context>,
         block_verifier: Arc<dyn BlockVerifier>,
         commit_vote_monitor: Arc<CommitVoteMonitor>,
+        round_tracker: Arc<RwLock<PeerRoundTracker>>,
         synchronizer: Arc<SynchronizerHandle>,
         core_dispatcher: Arc<C>,
         rx_block_broadcast: broadcast::Receiver<ExtendedBlock>,
@@ -74,7 +77,70 @@ impl<C: CoreThreadDispatcher> AuthorityService<C> {
             transaction_certifier,
             dag_state,
             store,
+            round_tracker,
         }
+    }
+
+    async fn handle_fetch_blocks_old(
+        &self,
+        _peer: AuthorityIndex,
+        mut block_refs: Vec<BlockRef>,
+        highest_accepted_rounds: Vec<Round>,
+    ) -> ConsensusResult<Vec<Bytes>> {
+        const MAX_ADDITIONAL_BLOCKS: usize = 10;
+        block_refs.truncate(self.context.parameters.max_blocks_per_fetch);
+
+        if !highest_accepted_rounds.is_empty()
+            && highest_accepted_rounds.len() != self.context.committee.size()
+        {
+            return Err(ConsensusError::InvalidSizeOfHighestAcceptedRounds(
+                highest_accepted_rounds.len(),
+                self.context.committee.size(),
+            ));
+        }
+
+        // Some quick validation of the requested block refs
+        for block in &block_refs {
+            if !self.context.committee.is_valid_index(block.author) {
+                return Err(ConsensusError::InvalidAuthorityIndex {
+                    index: block.author,
+                    max: self.context.committee.size(),
+                });
+            }
+            if block.round == GENESIS_ROUND {
+                return Err(ConsensusError::UnexpectedGenesisBlockRequested);
+            }
+        }
+
+        // For now ask dag state directly
+        let blocks = self.dag_state.read().get_blocks(&block_refs);
+
+        // Now check if an ancestor's round is higher than the one that the peer has. If yes, then serve
+        // that ancestor blocks up to `MAX_ADDITIONAL_BLOCKS`.
+        let mut ancestor_blocks = vec![];
+        if !highest_accepted_rounds.is_empty() {
+            let all_ancestors = blocks
+                .iter()
+                .flatten()
+                .flat_map(|block| block.ancestors().to_vec())
+                .filter(|block_ref| highest_accepted_rounds[block_ref.author] < block_ref.round)
+                .take(MAX_ADDITIONAL_BLOCKS)
+                .collect::<Vec<_>>();
+
+            if !all_ancestors.is_empty() {
+                ancestor_blocks = self.dag_state.read().get_blocks(&all_ancestors);
+            }
+        }
+
+        // Return the serialised blocks & the ancestor blocks
+        let result = blocks
+            .into_iter()
+            .chain(ancestor_blocks)
+            .flatten()
+            .map(|block| block.serialized().clone())
+            .collect::<Vec<_>>();
+
+        Ok(result)
     }
 }
 
@@ -240,7 +306,7 @@ impl<C: CoreThreadDispatcher> NetworkService for AuthorityService<C> {
         // Try to accept the block into the DAG.
         let missing_ancestors = self
             .core_dispatcher
-            .add_blocks(vec![verified_block])
+            .add_blocks(vec![verified_block.clone()])
             .await
             .map_err(|_| ConsensusError::Shutdown)?;
         if !missing_ancestors.is_empty() {
@@ -273,6 +339,13 @@ impl<C: CoreThreadDispatcher> NetworkService for AuthorityService<C> {
             );
             excluded_ancestors.truncate(excluded_ancestors_limit);
         }
+
+        self.round_tracker
+            .write()
+            .update_from_accepted_block(&ExtendedBlock {
+                block: verified_block,
+                excluded_ancestors: excluded_ancestors.clone(),
+            });
 
         self.context
             .metrics
@@ -359,17 +432,25 @@ impl<C: CoreThreadDispatcher> NetworkService for AuthorityService<C> {
         )))
     }
 
+    // Handles two types of requests:
+    // 1. Missing block for block sync:
+    //    - uses highest_accepted_rounds.
+    //    - max_blocks_per_sync blocks should be returned.
+    // 2. Committed block for commit sync:
+    //    - does not use highest_accepted_rounds.
+    //    - max_blocks_per_fetch blocks should be returned.
     async fn handle_fetch_blocks(
         &self,
         peer: AuthorityIndex,
-        block_refs: Vec<BlockRef>,
+        mut block_refs: Vec<BlockRef>,
         highest_accepted_rounds: Vec<Round>,
     ) -> ConsensusResult<Vec<Bytes>> {
         fail_point_async!("consensus-rpc-response");
 
-        const MAX_ADDITIONAL_BLOCKS: usize = 10;
-        if block_refs.len() > self.context.parameters.max_blocks_per_fetch {
-            return Err(ConsensusError::TooManyFetchBlocksRequested(peer));
+        if !self.context.protocol_config.consensus_batched_block_sync() {
+            return self
+                .handle_fetch_blocks_old(peer, block_refs, highest_accepted_rounds)
+                .await;
         }
 
         if !highest_accepted_rounds.is_empty()
@@ -382,6 +463,11 @@ impl<C: CoreThreadDispatcher> NetworkService for AuthorityService<C> {
         }
 
         // Some quick validation of the requested block refs
+        if !highest_accepted_rounds.is_empty() {
+            block_refs.truncate(self.context.parameters.max_blocks_per_sync);
+        } else {
+            block_refs.truncate(self.context.parameters.max_blocks_per_fetch);
+        }
         for block in &block_refs {
             if !self.context.committee.is_valid_index(block.author) {
                 return Err(ConsensusError::InvalidAuthorityIndex {
@@ -394,35 +480,69 @@ impl<C: CoreThreadDispatcher> NetworkService for AuthorityService<C> {
             }
         }
 
-        // For now ask dag state directly
-        let blocks = self.dag_state.read().get_blocks(&block_refs);
-
-        // Now check if an ancestor's round is higher than the one that the peer has. If yes, then serve
-        // that ancestor blocks up to `MAX_ADDITIONAL_BLOCKS`.
-        let mut ancestor_blocks = vec![];
-        if !highest_accepted_rounds.is_empty() {
-            let all_ancestors = blocks
-                .iter()
+        // Get requested blocks from store.
+        let blocks = if !highest_accepted_rounds.is_empty() {
+            block_refs.sort();
+            block_refs.dedup();
+            let dag_state = self.dag_state.read();
+            let mut blocks = dag_state
+                .get_blocks(&block_refs)
+                .into_iter()
                 .flatten()
-                .flat_map(|block| block.ancestors().to_vec())
-                .filter(|block_ref| highest_accepted_rounds[block_ref.author] < block_ref.round)
-                .take(MAX_ADDITIONAL_BLOCKS)
                 .collect::<Vec<_>>();
 
-            if !all_ancestors.is_empty() {
-                ancestor_blocks = self.dag_state.read().get_blocks(&all_ancestors);
+            // Get additional blocks for authorities with missing block, if they are available in cache.
+            // Compute the lowest missing round per requested authority.
+            let mut lowest_missing_rounds = BTreeMap::<AuthorityIndex, Round>::new();
+            for block_ref in blocks.iter().map(|b| b.reference()) {
+                let entry = lowest_missing_rounds
+                    .entry(block_ref.author)
+                    .or_insert(block_ref.round);
+                *entry = (*entry).min(block_ref.round);
             }
-        }
 
-        // Return the serialised blocks & the ancestor blocks
-        let result = blocks
+            // Retrieve additional blocks per authority, from peer's highest accepted round + 1 to
+            // lowest missing round (exclusive) per requested authority.
+            // No block from other authorities are retrieved. It is possible that the requestor is not
+            // seeing missing block from another authority, and serving a block would just lead to unnecessary
+            // data transfer. Or missing blocks from other authorities are requested from other peers.
+            for (authority, lowest_missing_round) in lowest_missing_rounds {
+                let highest_accepted_round = highest_accepted_rounds[authority];
+                if highest_accepted_round >= lowest_missing_round {
+                    continue;
+                }
+                let missing_blocks = dag_state.get_cached_blocks_in_range(
+                    authority,
+                    highest_accepted_round + 1,
+                    lowest_missing_round,
+                    self.context
+                        .parameters
+                        .max_blocks_per_sync
+                        .saturating_sub(blocks.len()),
+                );
+                blocks.extend(missing_blocks);
+                if blocks.len() >= self.context.parameters.max_blocks_per_sync {
+                    blocks.truncate(self.context.parameters.max_blocks_per_sync);
+                    break;
+                }
+            }
+
+            blocks
+        } else {
+            self.dag_state
+                .read()
+                .get_blocks(&block_refs)
+                .into_iter()
+                .flatten()
+                .collect()
+        };
+
+        // Return the serialized blocks
+        let bytes = blocks
             .into_iter()
-            .chain(ancestor_blocks)
-            .flatten()
             .map(|block| block.serialized().clone())
             .collect::<Vec<_>>();
-
-        Ok(result)
+        Ok(bytes)
     }
 
     async fn handle_fetch_commits(
@@ -722,6 +842,16 @@ async fn make_recv_future<T: Clone>(
 
 #[cfg(test)]
 mod tests {
+    use std::{collections::BTreeSet, sync::Arc, time::Duration};
+
+    use async_trait::async_trait;
+    use bytes::Bytes;
+    use consensus_config::AuthorityIndex;
+    use mysten_metrics::monitored_mpsc;
+    use parking_lot::{Mutex, RwLock};
+    use rstest::rstest;
+    use tokio::{sync::broadcast, time::sleep};
+
     use crate::{
         authority_service::AuthorityService,
         block::{BlockAPI, BlockRef, SignedBlock, TestBlock, VerifiedBlock},
@@ -732,25 +862,13 @@ mod tests {
         dag_state::DagState,
         error::ConsensusResult,
         network::{BlockStream, ExtendedSerializedBlock, NetworkClient, NetworkService},
-        round_prober::QuorumRound,
+        round_tracker::PeerRoundTracker,
         storage::mem_store::MemStore,
         synchronizer::Synchronizer,
         test_dag_builder::DagBuilder,
         transaction_certifier::TransactionCertifier,
         Round,
     };
-    use async_trait::async_trait;
-    use bytes::Bytes;
-    use consensus_config::AuthorityIndex;
-    use mysten_metrics::monitored_mpsc;
-    use parking_lot::{Mutex, RwLock};
-    use rstest::rstest;
-    use std::collections::BTreeSet;
-    use std::sync::Arc;
-    use std::time::Duration;
-    use tokio::sync::broadcast;
-    use tokio::time::sleep;
-
     struct FakeCoreThreadDispatcher {
         blocks: Mutex<Vec<VerifiedBlock>>,
     }
@@ -800,16 +918,11 @@ mod tests {
             Ok(Default::default())
         }
 
-        fn set_subscriber_exists(&self, _exists: bool) -> Result<(), CoreError> {
+        fn set_propagation_delay(&self, _propagation_delay: Round) -> Result<(), CoreError> {
             todo!()
         }
 
-        fn set_propagation_delay_and_quorum_rounds(
-            &self,
-            _delay: Round,
-            _received_quorum_rounds: Vec<QuorumRound>,
-            _accepted_quorum_rounds: Vec<QuorumRound>,
-        ) -> Result<(), CoreError> {
+        fn set_subscriber_exists(&self, _exists: bool) -> Result<(), CoreError> {
             todo!()
         }
 
@@ -913,10 +1026,12 @@ mod tests {
             dag_state.clone(),
             false,
         );
+        let round_tracker = Arc::new(RwLock::new(PeerRoundTracker::new(context.clone())));
         let authority_service = Arc::new(AuthorityService::new(
             context.clone(),
             block_verifier,
             commit_vote_monitor,
+            round_tracker,
             synchronizer,
             core_dispatcher.clone(),
             rx_block_broadcast,
@@ -985,10 +1100,12 @@ mod tests {
             dag_state.clone(),
             true,
         );
+        let round_tracker = Arc::new(RwLock::new(PeerRoundTracker::new(context.clone())));
         let authority_service = Arc::new(AuthorityService::new(
             context.clone(),
             block_verifier,
             commit_vote_monitor,
+            round_tracker,
             synchronizer,
             core_dispatcher.clone(),
             rx_block_broadcast,

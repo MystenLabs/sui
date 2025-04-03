@@ -150,8 +150,6 @@ impl ChildObjectResolver for InMemoryObjectStore {
         _receiving_object_id: &ObjectID,
         _receive_object_at_version: SequenceNumber,
         _epoch_id: EpochId,
-        // TODO: Delete this parameter once table migration is complete.
-        _use_object_per_epoch_marker_table_v2: bool,
     ) -> SuiResult<Option<Object>> {
         unimplemented!()
     }

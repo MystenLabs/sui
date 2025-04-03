@@ -16,7 +16,6 @@
         "sui-proxy",
         "sui-metric-checker",
         "sui-analytics-indexer",
-        "sui-security-watchdog",
-		"suiop"
+        "sui-security-watchdog"
 	]
 }

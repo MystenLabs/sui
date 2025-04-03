@@ -116,6 +116,7 @@ pub struct PipelineLayer {
     // Consistent pipelines
     pub coin_balance_buckets: Option<CommitterLayer>,
     pub obj_info: Option<CommitterLayer>,
+    pub obj_info_temp: Option<CommitterLayer>,
 
     // Sequential pipelines
     pub sum_displays: Option<SequentialLayer>,
@@ -133,6 +134,7 @@ pub struct PipelineLayer {
     pub kv_protocol_configs: Option<ConcurrentLayer>,
     pub kv_transactions: Option<ConcurrentLayer>,
     pub obj_versions: Option<ConcurrentLayer>,
+    pub obj_versions_sentinel_backfill: Option<ConcurrentLayer>,
     pub tx_affected_addresses: Option<ConcurrentLayer>,
     pub tx_affected_objects: Option<ConcurrentLayer>,
     pub tx_balance_changes: Option<ConcurrentLayer>,
@@ -278,6 +280,7 @@ impl PipelineLayer {
         PipelineLayer {
             coin_balance_buckets: Some(Default::default()),
             obj_info: Some(Default::default()),
+            obj_info_temp: None,
             sum_displays: Some(Default::default()),
             sum_packages: Some(Default::default()),
             cp_sequence_numbers: Some(Default::default()),
@@ -291,6 +294,7 @@ impl PipelineLayer {
             kv_protocol_configs: Some(Default::default()),
             kv_transactions: Some(Default::default()),
             obj_versions: Some(Default::default()),
+            obj_versions_sentinel_backfill: None,
             tx_affected_addresses: Some(Default::default()),
             tx_affected_objects: Some(Default::default()),
             tx_balance_changes: Some(Default::default()),
@@ -400,6 +404,7 @@ impl Merge for PipelineLayer {
         PipelineLayer {
             coin_balance_buckets: self.coin_balance_buckets.merge(other.coin_balance_buckets),
             obj_info: self.obj_info.merge(other.obj_info),
+            obj_info_temp: self.obj_info_temp.merge(other.obj_info_temp),
             sum_displays: self.sum_displays.merge(other.sum_displays),
             sum_packages: self.sum_packages.merge(other.sum_packages),
             cp_sequence_numbers: self.cp_sequence_numbers.merge(other.cp_sequence_numbers),
@@ -413,6 +418,9 @@ impl Merge for PipelineLayer {
             kv_protocol_configs: self.kv_protocol_configs.merge(other.kv_protocol_configs),
             kv_transactions: self.kv_transactions.merge(other.kv_transactions),
             obj_versions: self.obj_versions.merge(other.obj_versions),
+            obj_versions_sentinel_backfill: self
+                .obj_versions_sentinel_backfill
+                .merge(other.obj_versions_sentinel_backfill),
             tx_affected_addresses: self
                 .tx_affected_addresses
                 .merge(other.tx_affected_addresses),

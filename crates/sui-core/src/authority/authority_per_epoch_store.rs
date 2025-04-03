@@ -19,6 +19,7 @@ use futures::future::{join_all, select, Either};
 use futures::FutureExt;
 use itertools::{izip, Itertools};
 use move_bytecode_utils::module_cache::SyncModuleCache;
+use mysten_common::assert_reachable;
 use mysten_common::sync::notify_once::NotifyOnce;
 use mysten_common::sync::notify_read::NotifyRead;
 use mysten_common::{debug_fatal, fatal};
@@ -824,6 +825,10 @@ impl AuthorityPerEpochStore {
                 "cannot override chain on production networks!"
             );
         }
+        info!(
+            "initializing epoch store from chain id {:?} to chain id {:?}",
+            chain_from_id, chain.1
+        );
 
         let protocol_config = ProtocolConfig::get_for_version(protocol_version, chain.1);
 
@@ -1303,10 +1308,12 @@ impl AuthorityPerEpochStore {
             bcs::from_bytes(&stored_observations_bytes)
                 .expect("failed to deserialize stored execution time estimates");
         let stored_observations = stored_observations.unwrap_v1();
+
         info!(
             "loaded stored execution time observations for {} keys",
             stored_observations.len()
         );
+        assert_reachable!("successfully loads stored execution time observations");
 
         // Make a single flattened iterator with every stored observation, for consumption
         // by the `ExecutionTimeEstimator` constructor.
@@ -1410,6 +1417,8 @@ impl AuthorityPerEpochStore {
         tx_key: &TransactionKey,
         tx_digest: &TransactionDigest,
     ) -> SuiResult {
+        let _metrics_scope =
+            mysten_metrics::monitored_scope("AuthorityPerEpochStore::insert_tx_key");
         let tables = self.tables()?;
 
         self.consensus_output_cache
@@ -1710,6 +1719,10 @@ impl AuthorityPerEpochStore {
         digests: &[TransactionDigest],
         sequence: CheckpointSequenceNumber,
     ) -> SuiResult {
+        let _metrics_scope = mysten_metrics::monitored_scope(
+            "AuthorityPerEpochStore::insert_finalized_transactions",
+        );
+
         let mut batch = self.tables()?.executed_transactions_to_checkpoint.batch();
         batch.insert_batch(
             &self.tables()?.executed_transactions_to_checkpoint,
@@ -1834,9 +1847,11 @@ impl AuthorityPerEpochStore {
                         } else {
                             // If we can't find a matching start version, treat the object as
                             // if it's absent.
-                            if let Some(obj_start_version) = obj.owner().start_version() {
-                                assert!(*initial_version >= obj_start_version,
-                                        "should be impossible to certify a transaction with a start version that must have only existed in a previous epoch; obj = {obj:?} initial_version = {initial_version:?}, obj_start_version = {obj_start_version:?}");
+                            if self.protocol_config().reshare_at_same_initial_version() {
+                                if let Some(obj_start_version) = obj.owner().start_version() {
+                                    assert!(*initial_version >= obj_start_version,
+                                            "should be impossible to certify a transaction with a start version that must have only existed in a previous epoch; obj = {obj:?} initial_version = {initial_version:?}, obj_start_version = {obj_start_version:?}");
+                                }
                             }
                             ((*id, *initial_version), *initial_version)
                         }
@@ -3248,6 +3263,7 @@ impl AuthorityPerEpochStore {
             match cancelled_txns.get(txn.digest()) {
                 Some(CancelConsensusCertificateReason::CongestionOnObjects(_))
                 | Some(CancelConsensusCertificateReason::DkgFailed) => {
+                    assert_reachable!("cancelled transactions");
                     let assigned_versions = SharedObjVerManager::assign_versions_for_certificate(
                         txn,
                         &mut shared_input_next_version,

@@ -1,9 +1,0 @@
-[package]
-name = "G_unpublished"
-edition = "2024.beta"
-
-[dependencies]
-
-[addresses]
-g_unpublished = "0x0"
-

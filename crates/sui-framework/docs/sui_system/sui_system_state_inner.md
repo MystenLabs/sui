@@ -145,6 +145,7 @@ A list of system config parameters.
 <code>max_validator_count: u64</code>
 </dt>
 <dd>
+ Deprecated.
  Maximum number of active validators at any moment.
  We do not allow the number of validators in any epoch to go above this.
 </dd>
@@ -152,6 +153,7 @@ A list of system config parameters.
 <code>min_validator_joining_stake: u64</code>
 </dt>
 <dd>
+ Deprecated.
  Lower-bound on the amount of stake required to become a validator.
 </dd>
 <dt>
@@ -166,6 +168,7 @@ A list of system config parameters.
 <code>validator_very_low_stake_threshold: u64</code>
 </dt>
 <dd>
+ Deprecated.
  Validators with stake below <code>validator_very_low_stake_threshold</code> will be removed
  immediately at epoch change, no grace period.
 </dd>
@@ -226,6 +229,7 @@ Added min_validator_count.
 <code>max_validator_count: u64</code>
 </dt>
 <dd>
+ Deprecated.
  Maximum number of active validators at any moment.
  We do not allow the number of validators in any epoch to go above this.
 </dd>
@@ -233,12 +237,14 @@ Added min_validator_count.
 <code>min_validator_joining_stake: u64</code>
 </dt>
 <dd>
+ Deprecated.
  Lower-bound on the amount of stake required to become a validator.
 </dd>
 <dt>
 <code>validator_low_stake_threshold: u64</code>
 </dt>
 <dd>
+ Deprecated.
  Validators with stake amount below <code>validator_low_stake_threshold</code> are considered to
  have low stake and will be escorted out of the validator set after being below this
  threshold for more than <code>validator_low_stake_grace_period</code> number of epochs.
@@ -247,6 +253,7 @@ Added min_validator_count.
 <code>validator_very_low_stake_threshold: u64</code>
 </dt>
 <dd>
+ Deprecated.
  Validators with stake below <code>validator_very_low_stake_threshold</code> will be removed
  immediately at epoch change, no grace period.
 </dd>
@@ -612,20 +619,20 @@ the epoch advancement transaction.
 ## Constants
 
 
-<a name="sui_system_sui_system_state_inner_ACTIVE_OR_PENDING_VALIDATOR"></a>
-
-
-
-<pre><code><b>const</b> <a href="../sui_system/sui_system_state_inner.md#sui_system_sui_system_state_inner_ACTIVE_OR_PENDING_VALIDATOR">ACTIVE_OR_PENDING_VALIDATOR</a>: u8 = 2;
-</code></pre>
-
-
-
 <a name="sui_system_sui_system_state_inner_ACTIVE_VALIDATOR_ONLY"></a>
 
 
 
 <pre><code><b>const</b> <a href="../sui_system/sui_system_state_inner.md#sui_system_sui_system_state_inner_ACTIVE_VALIDATOR_ONLY">ACTIVE_VALIDATOR_ONLY</a>: u8 = 1;
+</code></pre>
+
+
+
+<a name="sui_system_sui_system_state_inner_ACTIVE_OR_PENDING_VALIDATOR"></a>
+
+
+
+<pre><code><b>const</b> <a href="../sui_system/sui_system_state_inner.md#sui_system_sui_system_state_inner_ACTIVE_OR_PENDING_VALIDATOR">ACTIVE_OR_PENDING_VALIDATOR</a>: u8 = 2;
 </code></pre>
 
 
@@ -639,38 +646,29 @@ the epoch advancement transaction.
 
 
 
-<a name="sui_system_sui_system_state_inner_BASIS_POINT_DENOMINATOR"></a>
+<a name="sui_system_sui_system_state_inner_SYSTEM_STATE_VERSION_V1"></a>
 
 
 
-<pre><code><b>const</b> <a href="../sui_system/sui_system_state_inner.md#sui_system_sui_system_state_inner_BASIS_POINT_DENOMINATOR">BASIS_POINT_DENOMINATOR</a>: u128 = 10000;
+<pre><code><b>const</b> <a href="../sui_system/sui_system_state_inner.md#sui_system_sui_system_state_inner_SYSTEM_STATE_VERSION_V1">SYSTEM_STATE_VERSION_V1</a>: u64 = 1;
 </code></pre>
 
 
 
-<a name="sui_system_sui_system_state_inner_EAdvancedToWrongEpoch"></a>
+<a name="sui_system_sui_system_state_inner_EXTRA_FIELD_EXECUTION_TIME_ESTIMATES_KEY"></a>
 
 
 
-<pre><code><b>const</b> <a href="../sui_system/sui_system_state_inner.md#sui_system_sui_system_state_inner_EAdvancedToWrongEpoch">EAdvancedToWrongEpoch</a>: u64 = 8;
+<pre><code><b>const</b> <a href="../sui_system/sui_system_state_inner.md#sui_system_sui_system_state_inner_EXTRA_FIELD_EXECUTION_TIME_ESTIMATES_KEY">EXTRA_FIELD_EXECUTION_TIME_ESTIMATES_KEY</a>: u64 = 0;
 </code></pre>
 
 
 
-<a name="sui_system_sui_system_state_inner_EBpsTooLarge"></a>
+<a name="sui_system_sui_system_state_inner_ENotValidator"></a>
 
 
 
-<pre><code><b>const</b> <a href="../sui_system/sui_system_state_inner.md#sui_system_sui_system_state_inner_EBpsTooLarge">EBpsTooLarge</a>: u64 = 5;
-</code></pre>
-
-
-
-<a name="sui_system_sui_system_state_inner_ECannotReportOneself"></a>
-
-
-
-<pre><code><b>const</b> <a href="../sui_system/sui_system_state_inner.md#sui_system_sui_system_state_inner_ECannotReportOneself">ECannotReportOneself</a>: u64 = 3;
+<pre><code><b>const</b> <a href="../sui_system/sui_system_state_inner.md#sui_system_sui_system_state_inner_ENotValidator">ENotValidator</a>: u64 = 0;
 </code></pre>
 
 
@@ -693,11 +691,11 @@ the epoch advancement transaction.
 
 
 
-<a name="sui_system_sui_system_state_inner_ENotValidator"></a>
+<a name="sui_system_sui_system_state_inner_ECannotReportOneself"></a>
 
 
 
-<pre><code><b>const</b> <a href="../sui_system/sui_system_state_inner.md#sui_system_sui_system_state_inner_ENotValidator">ENotValidator</a>: u64 = 0;
+<pre><code><b>const</b> <a href="../sui_system/sui_system_state_inner.md#sui_system_sui_system_state_inner_ECannotReportOneself">ECannotReportOneself</a>: u64 = 3;
 </code></pre>
 
 
@@ -711,6 +709,15 @@ the epoch advancement transaction.
 
 
 
+<a name="sui_system_sui_system_state_inner_EBpsTooLarge"></a>
+
+
+
+<pre><code><b>const</b> <a href="../sui_system/sui_system_state_inner.md#sui_system_sui_system_state_inner_EBpsTooLarge">EBpsTooLarge</a>: u64 = 5;
+</code></pre>
+
+
+
 <a name="sui_system_sui_system_state_inner_ESafeModeGasNotProcessed"></a>
 
 
@@ -720,20 +727,20 @@ the epoch advancement transaction.
 
 
 
-<a name="sui_system_sui_system_state_inner_EXTRA_FIELD_EXECUTION_TIME_ESTIMATES_KEY"></a>
+<a name="sui_system_sui_system_state_inner_EAdvancedToWrongEpoch"></a>
 
 
 
-<pre><code><b>const</b> <a href="../sui_system/sui_system_state_inner.md#sui_system_sui_system_state_inner_EXTRA_FIELD_EXECUTION_TIME_ESTIMATES_KEY">EXTRA_FIELD_EXECUTION_TIME_ESTIMATES_KEY</a>: u64 = 0;
+<pre><code><b>const</b> <a href="../sui_system/sui_system_state_inner.md#sui_system_sui_system_state_inner_EAdvancedToWrongEpoch">EAdvancedToWrongEpoch</a>: u64 = 8;
 </code></pre>
 
 
 
-<a name="sui_system_sui_system_state_inner_SYSTEM_STATE_VERSION_V1"></a>
+<a name="sui_system_sui_system_state_inner_BASIS_POINT_DENOMINATOR"></a>
 
 
 
-<pre><code><b>const</b> <a href="../sui_system/sui_system_state_inner.md#sui_system_sui_system_state_inner_SYSTEM_STATE_VERSION_V1">SYSTEM_STATE_VERSION_V1</a>: u64 = 1;
+<pre><code><b>const</b> <a href="../sui_system/sui_system_state_inner.md#sui_system_sui_system_state_inner_BASIS_POINT_DENOMINATOR">BASIS_POINT_DENOMINATOR</a>: u128 = 10000;
 </code></pre>
 
 
@@ -1032,11 +1039,7 @@ epoch has already reached the maximum.
     self: &<b>mut</b> <a href="../sui_system/sui_system_state_inner.md#sui_system_sui_system_state_inner_SuiSystemStateInnerV2">SuiSystemStateInnerV2</a>,
     ctx: &TxContext,
 ) {
-    <b>assert</b>!(
-        self.validators.next_epoch_validator_count() &lt; self.parameters.max_validator_count,
-        <a href="../sui_system/sui_system_state_inner.md#sui_system_sui_system_state_inner_ELimitExceeded">ELimitExceeded</a>,
-    );
-    self.validators.<a href="../sui_system/sui_system_state_inner.md#sui_system_sui_system_state_inner_request_add_validator">request_add_validator</a>(self.parameters.min_validator_joining_stake, ctx);
+    self.validators.<a href="../sui_system/sui_system_state_inner.md#sui_system_sui_system_state_inner_request_add_validator">request_add_validator</a>(ctx);
 }
 </code></pre>
 
@@ -2204,8 +2207,6 @@ gas coins.
         &<b>mut</b> storage_fund_reward,
         &<b>mut</b> self.validator_report_records,
         reward_slashing_rate,
-        self.parameters.validator_low_stake_threshold,
-        self.parameters.validator_very_low_stake_threshold,
         self.parameters.validator_low_stake_grace_period,
         ctx,
     );

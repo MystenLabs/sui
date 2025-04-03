@@ -1016,7 +1016,10 @@ impl TryFrom<TransactionEffects> for SuiTransactionBlockEffects {
                     effect
                         .input_shared_objects()
                         .into_iter()
-                        .map(|kind| kind.object_ref())
+                        .map(|kind| {
+                            #[allow(deprecated)]
+                            kind.object_ref()
+                        })
                         .collect(),
                 ),
                 transaction_digest: *effect.transaction_digest(),
@@ -1145,6 +1148,7 @@ impl Display for SuiTransactionBlockEffects {
     }
 }
 
+#[serde_as]
 #[derive(Eq, PartialEq, Clone, Debug, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct DryRunTransactionBlockResponse {
@@ -1154,6 +1158,11 @@ pub struct DryRunTransactionBlockResponse {
     pub balance_changes: Vec<BalanceChange>,
     pub input: SuiTransactionBlockData,
     pub execution_error_source: Option<String>,
+    // If an input object is congested, suggest a gas price to use.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[schemars(with = "Option<BigInt<u64>>")]
+    #[serde_as(as = "Option<BigInt<u64>>")]
+    pub suggested_gas_price: Option<u64>,
 }
 
 #[derive(Eq, PartialEq, Clone, Debug, Default, Serialize, Deserialize, JsonSchema)]

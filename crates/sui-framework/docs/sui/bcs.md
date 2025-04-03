@@ -117,12 +117,12 @@ enables use of <code>vector::pop_back</code>.
 ## Constants
 
 
-<a name="sui_bcs_ELenOutOfRange"></a>
+<a name="sui_bcs_EOutOfRange"></a>
 
-For when ULEB byte is out of range (or not found).
+For when bytes length is less than required for deserialization.
 
 
-<pre><code><b>const</b> <a href="../sui/bcs.md#sui_bcs_ELenOutOfRange">ELenOutOfRange</a>: u64 = 2;
+<pre><code><b>const</b> <a href="../sui/bcs.md#sui_bcs_EOutOfRange">EOutOfRange</a>: u64 = 0;
 </code></pre>
 
 
@@ -137,12 +137,12 @@ For when the boolean value different than <code>0</code> or <code>1</code>.
 
 
 
-<a name="sui_bcs_EOutOfRange"></a>
+<a name="sui_bcs_ELenOutOfRange"></a>
 
-For when bytes length is less than required for deserialization.
+For when ULEB byte is out of range (or not found).
 
 
-<pre><code><b>const</b> <a href="../sui/bcs.md#sui_bcs_EOutOfRange">EOutOfRange</a>: u64 = 0;
+<pre><code><b>const</b> <a href="../sui/bcs.md#sui_bcs_ELenOutOfRange">ELenOutOfRange</a>: u64 = 2;
 </code></pre>
 
 

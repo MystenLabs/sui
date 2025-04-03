@@ -4,8 +4,8 @@
 use std::collections::BTreeMap;
 use std::collections::HashMap;
 
+use crate::error::ObjectNotFoundError;
 use crate::reader::StateReader;
-use crate::service::objects::ObjectNotFoundError;
 use crate::types::ResolveTransactionQueryParameters;
 use crate::types::ResolveTransactionResponse;
 use crate::Result;

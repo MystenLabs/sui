@@ -2,8 +2,9 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use prometheus::{
-    register_int_counter_vec_with_registry, register_int_counter_with_registry,
-    register_int_gauge_with_registry, IntCounter, IntCounterVec, IntGauge, Registry,
+    register_counter_vec_with_registry, register_int_counter_vec_with_registry,
+    register_int_counter_with_registry, register_int_gauge_with_registry, CounterVec, IntCounter,
+    IntCounterVec, IntGauge, Registry,
 };
 use std::sync::Arc;
 
@@ -121,6 +122,11 @@ pub struct EpochMetrics {
     /// Note: this may overcount if objects are evicted from the cache before being computed
     /// as not-overutilized.
     pub epoch_execution_time_observer_overutilized_objects: IntGauge,
+
+    /// Per-object utilization for objects that were overutilized at least once at some
+    /// point in their lifetime.
+    /// Note: This metric is disabled by default as it may have very large cardinality.
+    pub epoch_execution_time_observer_object_utilization: CounterVec,
 
     /// The number of consensus output items in the quarantine.
     pub consensus_quarantine_queue_size: IntGauge,
@@ -279,6 +285,13 @@ impl EpochMetrics {
             epoch_execution_time_observer_overutilized_objects: register_int_gauge_with_registry!(
                 "epoch_execution_time_observer_overutilized_objects",
                 "The number of objects determined by the execution time observer to be overutilized. Note: this may overcount if objects are evicted from the cache before being computed as not-overutilized.",
+                registry
+            )
+            .unwrap(),
+            epoch_execution_time_observer_object_utilization: register_counter_vec_with_registry!(
+                "epoch_execution_time_observer_object_utilization",
+                "Per-object utilization for objects that were overutilized at least once at some point in their lifetime",
+                &["object_id"],
                 registry
             )
             .unwrap(),

@@ -12,6 +12,7 @@ workspace = true
 [dependencies]
 anemo.workspace = true
 anemo-tower.workspace = true
+antithesis_sdk.workspace = true
 arc-swap.workspace = true
 axum.workspace = true
 anyhow.workspace = true

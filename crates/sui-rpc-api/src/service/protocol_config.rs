@@ -1,20 +1,16 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::proto::node::v2alpha::GetProtocolConfigRequest;
-use crate::proto::node::v2alpha::GetProtocolConfigResponse;
+use crate::proto::rpc::v2beta as proto;
 use crate::Result;
 use crate::RpcService;
 use sui_protocol_config::ProtocolConfig;
 use sui_protocol_config::ProtocolConfigValue;
-use sui_protocol_config::ProtocolVersion;
 
 impl RpcService {
-    pub fn get_protocol_config(
-        &self,
-        request: GetProtocolConfigRequest,
-    ) -> Result<GetProtocolConfigResponse> {
-        let version = if let Some(version) = request.version {
+    #[tracing::instrument(skip(self))]
+    pub fn get_protocol_config(&self, version: Option<u64>) -> Result<proto::ProtocolConfig> {
+        let version = if let Some(version) = version {
             version
         } else {
             self.reader.get_system_state_summary()?.protocol_version
@@ -55,7 +51,7 @@ impl From<ProtocolNotFoundError> for crate::RpcError {
     }
 }
 
-fn config_to_proto(config: ProtocolConfig) -> GetProtocolConfigResponse {
+fn config_to_proto(config: ProtocolConfig) -> proto::ProtocolConfig {
     let protocol_version = config.version.as_u64();
     let attributes = config
         .attr_map()
@@ -72,13 +68,11 @@ fn config_to_proto(config: ProtocolConfig) -> GetProtocolConfigResponse {
             })
         })
         .collect();
-    let feature_flags = config.feature_map();
+    let feature_flags = config.feature_map().into_iter().collect();
 
-    GetProtocolConfigResponse {
+    proto::ProtocolConfig {
         protocol_version: Some(protocol_version),
         feature_flags,
         attributes,
-        max_suppported_protocol_version: Some(ProtocolVersion::MAX.as_u64()),
-        min_suppported_protocol_version: Some(ProtocolVersion::MIN.as_u64()),
     }
 }

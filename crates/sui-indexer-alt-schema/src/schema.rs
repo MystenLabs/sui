@@ -138,10 +138,23 @@ diesel::table! {
 }
 
 diesel::table! {
+    obj_info_temp (object_id, cp_sequence_number) {
+        object_id -> Bytea,
+        cp_sequence_number -> Int8,
+        owner_kind -> Nullable<Int2>,
+        owner_id -> Nullable<Bytea>,
+        package -> Nullable<Bytea>,
+        module -> Nullable<Text>,
+        name -> Nullable<Text>,
+        instantiation -> Nullable<Bytea>,
+    }
+}
+
+diesel::table! {
     obj_versions (object_id, object_version) {
         object_id -> Bytea,
         object_version -> Int8,
-        object_digest -> Bytea,
+        object_digest -> Nullable<Bytea>,
         cp_sequence_number -> Int8,
     }
 }
@@ -239,6 +252,7 @@ diesel::allow_tables_to_appear_in_same_query!(
     kv_protocol_configs,
     kv_transactions,
     obj_info,
+    obj_info_temp,
     obj_versions,
     sum_displays,
     sum_packages,

@@ -50,7 +50,7 @@ pub fn ecvrf_verify(
     // Load the cost parameters from the protocol config
     let ecvrf_ecvrf_verify_cost_params = &context
         .extensions()
-        .get::<NativesCostTable>()
+        .get::<NativesCostTable>()?
         .ecvrf_ecvrf_verify_cost_params
         .clone();
     // Charge the base cost for this oper

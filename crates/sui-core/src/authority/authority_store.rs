@@ -262,6 +262,13 @@ impl AuthorityStore {
             // We don't insert the effects to executed_effects yet because the genesis tx hasn't but will be executed.
             // This is important for fullnodes to be able to generate indexing data right now.
 
+            if genesis.effects().events_digest().is_some() {
+                store
+                    .perpetual_tables
+                    .events_2
+                    .insert(transaction.digest(), genesis.events())
+                    .unwrap();
+            }
             let event_digests = genesis.events().digest();
             let events = genesis
                 .events()
@@ -315,6 +322,23 @@ impl AuthorityStore {
 
     pub fn get_events(
         &self,
+        digest: &TransactionDigest,
+    ) -> Result<Option<TransactionEvents>, TypedStoreError> {
+        // For now, during this transition period, if we don't find events for a particular
+        // Transaction we need to fallback to try and read from the older table. Once the migration
+        // has finished and we've removed the older events table we can stop doing the fallback
+        if let Some(events) = self.perpetual_tables.events_2.get(digest)? {
+            return Ok(Some(events));
+        }
+
+        self.get_executed_effects(digest)?
+            .and_then(|effects| effects.events_digest().copied())
+            .and_then(|events_digest| self.get_events_by_events_digest(&events_digest).transpose())
+            .transpose()
+    }
+
+    pub fn get_events_by_events_digest(
+        &self,
         event_digest: &TransactionEventsDigest,
     ) -> Result<Option<TransactionEvents>, TypedStoreError> {
         let data = self
@@ -328,7 +352,7 @@ impl AuthorityStore {
 
     pub fn multi_get_events(
         &self,
-        event_digests: &[TransactionEventsDigest],
+        event_digests: &[TransactionDigest],
     ) -> SuiResult<Vec<Option<TransactionEvents>>> {
         Ok(event_digests
             .iter()
@@ -346,7 +370,7 @@ impl AuthorityStore {
     pub fn get_executed_effects(
         &self,
         tx_digest: &TransactionDigest,
-    ) -> SuiResult<Option<TransactionEffects>> {
+    ) -> Result<Option<TransactionEffects>, TypedStoreError> {
         let effects_digest = self.perpetual_tables.executed_effects.get(tx_digest)?;
         match effects_digest {
             Some(digest) => Ok(self.perpetual_tables.effects.get(&digest)?),
@@ -393,66 +417,35 @@ impl AuthorityStore {
         &self,
         object_key: FullObjectKey,
         epoch_id: EpochId,
-        // TODO: Delete this parameter once table migration is complete.
-        use_object_per_epoch_marker_table_v2: bool,
     ) -> SuiResult<Option<MarkerValue>> {
-        if use_object_per_epoch_marker_table_v2 {
-            Ok(self
-                .perpetual_tables
-                .object_per_epoch_marker_table_v2
-                .get(&(epoch_id, object_key))?)
-        } else {
-            Ok(self
-                .perpetual_tables
-                .object_per_epoch_marker_table
-                .get(&(epoch_id, object_key.into_object_key()))?)
-        }
+        Ok(self
+            .perpetual_tables
+            .object_per_epoch_marker_table_v2
+            .get(&(epoch_id, object_key))?)
     }
 
     pub fn get_latest_marker(
         &self,
         object_id: FullObjectID,
         epoch_id: EpochId,
-        use_object_per_epoch_marker_table_v2: bool,
     ) -> SuiResult<Option<(SequenceNumber, MarkerValue)>> {
-        if use_object_per_epoch_marker_table_v2 {
-            let min_key = (epoch_id, FullObjectKey::min_for_id(&object_id));
-            let max_key = (epoch_id, FullObjectKey::max_for_id(&object_id));
+        let min_key = (epoch_id, FullObjectKey::min_for_id(&object_id));
+        let max_key = (epoch_id, FullObjectKey::max_for_id(&object_id));
 
-            let marker_entry = self
-                .perpetual_tables
-                .object_per_epoch_marker_table_v2
-                .reversed_safe_iter_with_bounds(Some(min_key), Some(max_key))?
-                .next();
-            match marker_entry {
-                Some(Ok(((epoch, key), marker))) => {
-                    // because of the iterator bounds these cannot fail
-                    assert_eq!(epoch, epoch_id);
-                    assert_eq!(key.id(), object_id);
-                    Ok(Some((key.version(), marker)))
-                }
-                Some(Err(e)) => Err(e.into()),
-                None => Ok(None),
+        let marker_entry = self
+            .perpetual_tables
+            .object_per_epoch_marker_table_v2
+            .reversed_safe_iter_with_bounds(Some(min_key), Some(max_key))?
+            .next();
+        match marker_entry {
+            Some(Ok(((epoch, key), marker))) => {
+                // because of the iterator bounds these cannot fail
+                assert_eq!(epoch, epoch_id);
+                assert_eq!(key.id(), object_id);
+                Ok(Some((key.version(), marker)))
             }
-        } else {
-            let min_key = (epoch_id, ObjectKey::min_for_id(&object_id.id()));
-            let max_key = (epoch_id, ObjectKey::max_for_id(&object_id.id()));
-
-            let marker_entry = self
-                .perpetual_tables
-                .object_per_epoch_marker_table
-                .reversed_safe_iter_with_bounds(Some(min_key), Some(max_key))?
-                .next();
-            match marker_entry {
-                Some(Ok(((epoch, key), marker))) => {
-                    // because of the iterator bounds these cannot fail
-                    assert_eq!(epoch, epoch_id);
-                    assert_eq!(key.0, object_id.id());
-                    Ok(Some((key.1, marker)))
-                }
-                Some(Err(e)) => Err(e.into()),
-                None => Ok(None),
-            }
+            Some(Err(e)) => Err(e.into()),
+            None => Ok(None),
         }
     }
 
@@ -779,8 +772,6 @@ impl AuthorityStore {
         &self,
         epoch_id: EpochId,
         tx_outputs: &[Arc<TransactionOutputs>],
-        // TODO: Delete this parameter once table migration is complete.
-        use_object_per_epoch_marker_table_v2: bool,
     ) -> SuiResult<DBBatch> {
         let mut written = Vec::with_capacity(tx_outputs.len());
         for outputs in tx_outputs {
@@ -789,12 +780,7 @@ impl AuthorityStore {
 
         let mut write_batch = self.perpetual_tables.transactions.batch();
         for outputs in tx_outputs {
-            self.write_one_transaction_outputs(
-                &mut write_batch,
-                epoch_id,
-                outputs,
-                use_object_per_epoch_marker_table_v2,
-            )?;
+            self.write_one_transaction_outputs(&mut write_batch, epoch_id, outputs)?;
         }
         // test crashing before writing the batch
         fail_point!("crash");
@@ -818,8 +804,6 @@ impl AuthorityStore {
         write_batch: &mut DBBatch,
         epoch_id: EpochId,
         tx_outputs: &TransactionOutputs,
-        // TODO: Delete this parameter once table migration is complete.
-        use_object_per_epoch_marker_table_v2: bool,
     ) -> SuiResult {
         let TransactionOutputs {
             transaction,
@@ -842,24 +826,12 @@ impl AuthorityStore {
         )?;
 
         // Add batched writes for objects and locks.
-        let effects_digest = effects.digest();
-
-        if use_object_per_epoch_marker_table_v2 {
-            write_batch.insert_batch(
-                &self.perpetual_tables.object_per_epoch_marker_table_v2,
-                markers
-                    .iter()
-                    .map(|(key, marker_value)| ((epoch_id, *key), *marker_value)),
-            )?;
-        } else {
-            write_batch.insert_batch(
-                &self.perpetual_tables.object_per_epoch_marker_table,
-                markers
-                    .iter()
-                    .map(|(key, marker_value)| ((epoch_id, key.into_object_key()), *marker_value)),
-            )?;
-        }
-
+        write_batch.insert_batch(
+            &self.perpetual_tables.object_per_epoch_marker_table_v2,
+            markers
+                .iter()
+                .map(|(key, marker_value)| ((epoch_id, *key), *marker_value)),
+        )?;
         write_batch.insert_batch(
             &self.perpetual_tables.objects,
             deleted
@@ -879,6 +851,15 @@ impl AuthorityStore {
 
         write_batch.insert_batch(&self.perpetual_tables.objects, new_objects)?;
 
+        // Write events into the new table keyed off of transaction_digest
+        if effects.events_digest().is_some() {
+            write_batch.insert_batch(
+                &self.perpetual_tables.events_2,
+                [(transaction_digest, events)],
+            )?;
+        }
+
+        // Continue writting events into the old table for now keyed off of events digest
         let event_digest = events.digest();
         let events = events
             .data
@@ -894,6 +875,7 @@ impl AuthorityStore {
         // `Receiving` arguments which were not received)
         self.delete_live_object_markers(write_batch, locks_to_delete)?;
 
+        let effects_digest = effects.digest();
         write_batch
             .insert_batch(
                 &self.perpetual_tables.effects,
@@ -1217,6 +1199,7 @@ impl AuthorityStore {
             iter::once(tx_digest),
         )?;
         if let Some(events_digest) = effects.events_digest() {
+            write_batch.delete_batch(&self.perpetual_tables.events_2, [tx_digest])?;
             write_batch.schedule_delete_range(
                 &self.perpetual_tables.events,
                 &(*events_digest, usize::MIN),

@@ -13,6 +13,7 @@ use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 use std::ops::Deref;
 use sui_types::crypto::{PublicKey, SuiSignature, ToFromBytes, ZkLoginPublicIdentifier};
 use sui_types::messages_grpc::HandleSoftBundleCertificatesRequestV3;
+use sui_types::object::Authenticator;
 use sui_types::utils::get_one_zklogin_inputs;
 use sui_types::{
     authenticator_state::ActiveJwk,
@@ -71,7 +72,6 @@ pub use crate::authority::authority_test_utils::init_state_with_ids;
 #[sim_test]
 async fn test_handle_transfer_transaction_bad_signature() {
     do_transaction_test(
-        1,
         |_| {},
         |mut_tx| {
             let (_unknown_address, unknown_key): (_, AccountKeyPair) = get_key_pair();
@@ -89,7 +89,6 @@ async fn test_handle_transfer_transaction_bad_signature() {
 #[sim_test]
 async fn test_handle_transfer_transaction_no_signature() {
     do_transaction_test(
-        1,
         |_| {},
         |tx| {
             *tx.data_mut_for_testing().tx_signatures_mut_for_testing() = vec![];
@@ -110,7 +109,6 @@ async fn test_handle_transfer_transaction_no_signature() {
 #[sim_test]
 async fn test_handle_transfer_transaction_extra_signature() {
     do_transaction_test(
-        1,
         |_| {},
         |tx| {
             let sigs = tx.data_mut_for_testing().tx_signatures_mut_for_testing();
@@ -132,7 +130,6 @@ async fn test_handle_transfer_transaction_extra_signature() {
 #[sim_test]
 async fn test_empty_gas_data() {
     do_transaction_test_skip_cert_checks(
-        0,
         |tx| {
             tx.gas_data_mut().payment = vec![];
         },
@@ -152,7 +149,6 @@ async fn test_empty_gas_data() {
 #[sim_test]
 async fn test_duplicate_gas_data() {
     do_transaction_test_skip_cert_checks(
-        0,
         |tx| {
             let gas_data = tx.gas_data_mut();
             let new_gas = gas_data.payment[0];
@@ -174,7 +170,6 @@ async fn test_duplicate_gas_data() {
 #[sim_test]
 async fn test_gas_wrong_owner_matches_sender() {
     do_transaction_test(
-        1,
         |tx| {
             let gas_data = tx.gas_data_mut();
             let (new_addr, _): (_, AccountKeyPair) = get_key_pair();
@@ -192,7 +187,6 @@ async fn test_gas_wrong_owner_matches_sender() {
 #[sim_test]
 async fn test_gas_wrong_owner() {
     do_transaction_test(
-        1,
         |tx| {
             let gas_data = tx.gas_data_mut();
             let (new_addr, _): (_, AccountKeyPair) = get_key_pair();
@@ -283,7 +277,6 @@ async fn test_user_sends_end_of_epoch_transaction() {
 
 async fn test_user_sends_system_transaction_impl(transaction_kind: TransactionKind) {
     do_transaction_test_skip_cert_checks(
-        0,
         |tx| {
             *tx.kind_mut() = transaction_kind.clone();
         },
@@ -300,19 +293,54 @@ async fn test_user_sends_system_transaction_impl(transaction_kind: TransactionKi
     .await;
 }
 
+#[tokio::test]
+async fn test_sender_is_not_consensus_v2_owner() {
+    telemetry_subscribers::init_for_testing();
+
+    let (sender1, sender_key1): (_, AccountKeyPair) = get_key_pair();
+    let (sender2, sender_key2): (_, AccountKeyPair) = get_key_pair();
+    let start_version = SequenceNumber::new();
+    let err_check = |err: &SuiError| {
+        assert_matches!(
+            err,
+            SuiError::UserInputError {
+                error: UserInputError::IncorrectUserSignature { .. }
+            }
+        );
+    };
+    do_transaction_test_impl(
+        false,
+        &[(sender1, sender_key1), (sender2, sender_key2)],
+        Object::with_id_owner_version_for_testing(
+            ObjectID::random(),
+            start_version.next(),
+            Owner::ConsensusV2 {
+                start_version,
+                authenticator: Box::new(Authenticator::SingleOwner(sender1)),
+            },
+        ),
+        |_| {},
+        |_| {},
+        1,
+        1,
+        err_check,
+    )
+    .await
+}
+
 pub fn init_transfer_transaction(
     pre_sign_mutations: impl Fn(&mut TransactionData),
     sender: SuiAddress,
     secret: &AccountKeyPair,
     recipient: SuiAddress,
-    object_ref: ObjectRef,
+    full_object_ref: FullObjectRef,
     gas_object_ref: ObjectRef,
     gas_budget: u64,
     gas_price: u64,
 ) -> Transaction {
-    let mut data = TransactionData::new_transfer(
+    let mut data = TransactionData::new_transfer_full(
         recipient,
-        object_ref,
+        full_object_ref,
         sender,
         gas_object_ref,
         gas_budget,
@@ -326,10 +354,23 @@ pub fn init_move_call_transaction(
     pre_sign_mutations: impl Fn(&mut TransactionData),
     sender: SuiAddress,
     secret: &AccountKeyPair,
+    full_object_ref: FullObjectRef,
     gas_object_ref: ObjectRef,
     gas_budget: u64,
     gas_price: u64,
 ) -> Transaction {
+    let call_arg = CallArg::Object(match full_object_ref.0 {
+        FullObjectID::Fastpath(_) => ObjectArg::ImmOrOwnedObject((
+            full_object_ref.0.id(),
+            full_object_ref.1,
+            full_object_ref.2,
+        )),
+        FullObjectID::Consensus((id, initial_shared_version)) => ObjectArg::SharedObject {
+            id,
+            initial_shared_version,
+            mutable: true,
+        },
+    });
     let mut data = TransactionData::new_move_call(
         sender,
         SUI_SYSTEM_PACKAGE_ID,
@@ -337,7 +378,7 @@ pub fn init_move_call_transaction(
         ident_str!("request_add_validator").to_owned(),
         vec![],
         gas_object_ref,
-        vec![CallArg::SUI_SYSTEM_MUT],
+        vec![CallArg::SUI_SYSTEM_MUT, call_arg],
         gas_budget,
         gas_price,
     )
@@ -347,81 +388,97 @@ pub fn init_move_call_transaction(
 }
 
 async fn do_transaction_test_skip_cert_checks(
-    expected_sig_errors: u64,
     pre_sign_mutations: impl Fn(&mut TransactionData),
     post_sign_mutations: impl Fn(&mut Transaction),
     err_check: impl Fn(&SuiError),
 ) {
+    let (sender1, sender_key1): (_, AccountKeyPair) = get_key_pair();
+    let (sender2, sender_key2): (_, AccountKeyPair) = get_key_pair();
     do_transaction_test_impl(
-        expected_sig_errors,
         false,
+        &[(sender1, sender_key1), (sender2, sender_key2)],
+        Object::with_id_owner_for_testing(ObjectID::random(), sender1),
         pre_sign_mutations,
         post_sign_mutations,
+        0,
+        1,
         err_check,
     )
     .await
 }
 
 async fn do_transaction_test(
-    expected_sig_errors: u64,
     pre_sign_mutations: impl Fn(&mut TransactionData),
     post_sign_mutations: impl Fn(&mut Transaction),
     err_check: impl Fn(&SuiError),
 ) {
+    let (sender1, sender_key1): (_, AccountKeyPair) = get_key_pair();
+    let (sender2, sender_key2): (_, AccountKeyPair) = get_key_pair();
     do_transaction_test_impl(
-        expected_sig_errors,
         true,
+        &[(sender1, sender_key1), (sender2, sender_key2)],
+        Object::with_id_owner_for_testing(ObjectID::random(), sender1),
         pre_sign_mutations,
         post_sign_mutations,
+        0,
+        1,
         err_check,
     )
     .await
 }
 
 async fn do_transaction_test_impl(
-    _expected_sig_errors: u64,
     check_forged_cert: bool,
+    senders: &[(SuiAddress, AccountKeyPair)],
+    input_object: Object,
     pre_sign_mutations: impl Fn(&mut TransactionData),
     post_sign_mutations: impl Fn(&mut Transaction),
+    transfer_sender: usize,
+    move_call_sender: usize,
     err_check: impl Fn(&SuiError),
 ) {
     telemetry_subscribers::init_for_testing();
-    let (sender1, sender_key1): (_, AccountKeyPair) = get_key_pair();
-    let (sender2, sender_key2): (_, AccountKeyPair) = get_key_pair();
+
     let recipient = dbg_addr(2);
-    let object_id = ObjectID::random();
-    let gas_object_id1 = ObjectID::random();
-    let gas_object_id2 = ObjectID::random();
-    let authority_state = init_state_with_ids(vec![
-        (sender1, object_id),
-        (sender1, gas_object_id1),
-        (sender2, gas_object_id2),
-    ])
-    .await;
+    let input_object_id = input_object.id();
+    let mut gas_object_ids = Vec::new();
+    let init_state_input: Vec<_> = senders
+        .iter()
+        .map(|(sender, _)| {
+            let object_id = ObjectID::random();
+            gas_object_ids.push(object_id);
+            (*sender, object_id)
+        })
+        .collect();
+    let authority_state = init_state_with_ids(init_state_input).await;
+    authority_state.insert_genesis_object(input_object).await;
     let rgp = authority_state.reference_gas_price_for_testing().unwrap();
-    let object = authority_state.get_object(&object_id).await.unwrap();
-    let gas_object1 = authority_state.get_object(&gas_object_id1).await.unwrap();
-    let gas_object2 = authority_state.get_object(&gas_object_id2).await.unwrap();
+    let object = authority_state.get_object(&input_object_id).await.unwrap();
+    let mut gas_objects = Vec::new();
+    for id in gas_object_ids {
+        gas_objects.push(authority_state.get_object(&id).await.unwrap());
+    }
 
     // Execute the test with two transactions, one transfer and one move call.
     // The move call contains access to a shared object.
     // We test both txs and expect the same error.
     let mut transfer_transaction = init_transfer_transaction(
         &pre_sign_mutations,
-        sender1,
-        &sender_key1,
+        senders[transfer_sender].0,
+        &senders[transfer_sender].1,
         recipient,
-        object.compute_object_reference(),
-        gas_object1.compute_object_reference(),
+        object.compute_full_object_reference(),
+        gas_objects[transfer_sender].compute_object_reference(),
         rgp * TEST_ONLY_GAS_UNIT_FOR_TRANSFER,
         rgp,
     );
 
     let mut move_call_transaction = init_move_call_transaction(
         &pre_sign_mutations,
-        sender2,
-        &sender_key2,
-        gas_object2.compute_object_reference(),
+        senders[move_call_sender].0,
+        &senders[move_call_sender].1,
+        object.compute_full_object_reference(),
+        gas_objects[move_call_sender].compute_object_reference(),
         rgp * TEST_ONLY_GAS_UNIT_FOR_TRANSFER,
         rgp,
     );
@@ -456,7 +513,7 @@ async fn do_transaction_test_impl(
         err_check(&err);
     }
 
-    check_locks(authority_state.clone(), vec![object_id]).await;
+    check_locks(authority_state.clone(), vec![input_object_id]).await;
 
     // now verify that the same transactions are rejected if false certificates are somehow formed and sent
     if check_forged_cert {
@@ -1405,7 +1462,7 @@ async fn test_very_large_certificate() {
         sender,
         &sender_key,
         recipient,
-        object.compute_object_reference(),
+        object.compute_full_object_reference(),
         gas_object.compute_object_reference(),
         rgp * TEST_ONLY_GAS_UNIT_FOR_TRANSFER,
         rgp,
@@ -1488,7 +1545,7 @@ async fn test_handle_certificate_errors() {
         sender,
         &sender_key,
         recipient,
-        object.compute_object_reference(),
+        object.compute_full_object_reference(),
         gas_object.compute_object_reference(),
         rgp * TEST_ONLY_GAS_UNIT_FOR_TRANSFER,
         rgp,

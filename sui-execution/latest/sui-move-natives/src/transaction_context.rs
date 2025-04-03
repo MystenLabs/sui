@@ -4,6 +4,7 @@
 use better_any::{Tid, TidAble};
 use move_binary_format::errors::{PartialVMError, PartialVMResult};
 use move_core_types::{account_address::AccountAddress, vm_status::StatusCode};
+use move_vm_runtime::native_extensions::NativeExtensionMarker;
 use std::{cell::RefCell, rc::Rc};
 use sui_types::{
     base_types::{ObjectID, SuiAddress, TxContext},
@@ -19,6 +20,8 @@ pub struct TransactionContext {
     pub(crate) tx_context: Rc<RefCell<TxContext>>,
     test_only: bool,
 }
+
+impl NativeExtensionMarker<'_> for TransactionContext {}
 
 impl TransactionContext {
     pub fn new(tx_context: Rc<RefCell<TxContext>>) -> Self {

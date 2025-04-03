@@ -65,7 +65,7 @@ hex = "0.4.3"
 hex-literal = "0.3.4"
 hkdf = "0.10.0"
 im = "15.1.0"
-indexmap = "2.1.0"
+indexmap = "2.8.0"
 internment = { version = "0.5.0", features = [ "arc"] }
 itertools = "0.10.0"
 json_comments = "0.2.2"
@@ -83,6 +83,7 @@ once_cell = "1.7.2"
 ouroboros = "0.17.2"
 parking_lot = "0.11.1"
 paste = "1.0.5"
+packed_struct = "0.10.1"
 petgraph = "0.5.1"
 phf = { version = "0.11", features = ["macros"] }
 plotters = { version = "0.3.0", default-features = false, features = ["evcxr", "line_series", "histogram"]}
@@ -104,6 +105,7 @@ serde-name = "0.1.1"
 serde-reflection = "0.5"
 serde_bytes = "0.11.5"
 serde_json = "1.0.64"
+serde_spanned = "0.6.8"
 serde_yaml = "0.8.26"
 serde_with = "3.9.0"
 sha2 = "0.9.3"
@@ -165,6 +167,7 @@ move-ir-types = { path = "crates/move-ir-types" }
 move-model = { path = "crates/move-model" }
 move-model-2 = { path = "crates/move-model-2" }
 move-package = { path = "crates/move-package" }
+move-package-alt = { path = "crates/move-package-alt" }
 move-proc-macros = { path = "crates/move-proc-macros"}
 move-stackless-bytecode = { path = "crates/move-stackless-bytecode" }
 move-stdlib = { path = "crates/move-stdlib" }

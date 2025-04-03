@@ -541,46 +541,6 @@ Event emitted when a fungible staked SUI is redeemed.
 ## Constants
 
 
-<a name="sui_system_validator_ECalledDuringNonGenesis"></a>
-
-Function called during non-genesis times.
-
-
-<pre><code><b>const</b> <a href="../sui_system/validator.md#sui_system_validator_ECalledDuringNonGenesis">ECalledDuringNonGenesis</a>: u64 = 12;
-</code></pre>
-
-
-
-<a name="sui_system_validator_ECommissionRateTooHigh"></a>
-
-Commission rate set by the validator is higher than the threshold
-
-
-<pre><code><b>const</b> <a href="../sui_system/validator.md#sui_system_validator_ECommissionRateTooHigh">ECommissionRateTooHigh</a>: u64 = 8;
-</code></pre>
-
-
-
-<a name="sui_system_validator_EGasPriceHigherThanThreshold"></a>
-
-Validator trying to set gas price higher than threshold.
-
-
-<pre><code><b>const</b> <a href="../sui_system/validator.md#sui_system_validator_EGasPriceHigherThanThreshold">EGasPriceHigherThanThreshold</a>: u64 = 102;
-</code></pre>
-
-
-
-<a name="sui_system_validator_EInvalidCap"></a>
-
-Capability code is not valid
-
-
-<pre><code><b>const</b> <a href="../sui_system/validator.md#sui_system_validator_EInvalidCap">EInvalidCap</a>: u64 = 101;
-</code></pre>
-
-
-
 <a name="sui_system_validator_EInvalidProofOfPossession"></a>
 
 Invalid proof_of_possession field in ValidatorMetadata
@@ -591,22 +551,12 @@ Invalid proof_of_possession field in ValidatorMetadata
 
 
 
-<a name="sui_system_validator_EInvalidStakeAmount"></a>
+<a name="sui_system_validator_EMetadataInvalidPubkey"></a>
 
-Stake amount is invalid or wrong.
-
-
-<pre><code><b>const</b> <a href="../sui_system/validator.md#sui_system_validator_EInvalidStakeAmount">EInvalidStakeAmount</a>: u64 = 11;
-</code></pre>
+Invalid pubkey_bytes field in ValidatorMetadata
 
 
-
-<a name="sui_system_validator_EMetadataInvalidNetAddr"></a>
-
-Invalid net_address field in ValidatorMetadata
-
-
-<pre><code><b>const</b> <a href="../sui_system/validator.md#sui_system_validator_EMetadataInvalidNetAddr">EMetadataInvalidNetAddr</a>: u64 = 4;
+<pre><code><b>const</b> <a href="../sui_system/validator.md#sui_system_validator_EMetadataInvalidPubkey">EMetadataInvalidPubkey</a>: u64 = 1;
 </code></pre>
 
 
@@ -617,6 +567,26 @@ Invalid network_pubkey_bytes field in ValidatorMetadata
 
 
 <pre><code><b>const</b> <a href="../sui_system/validator.md#sui_system_validator_EMetadataInvalidNetPubkey">EMetadataInvalidNetPubkey</a>: u64 = 2;
+</code></pre>
+
+
+
+<a name="sui_system_validator_EMetadataInvalidWorkerPubkey"></a>
+
+Invalid worker_pubkey_bytes field in ValidatorMetadata
+
+
+<pre><code><b>const</b> <a href="../sui_system/validator.md#sui_system_validator_EMetadataInvalidWorkerPubkey">EMetadataInvalidWorkerPubkey</a>: u64 = 3;
+</code></pre>
+
+
+
+<a name="sui_system_validator_EMetadataInvalidNetAddr"></a>
+
+Invalid net_address field in ValidatorMetadata
+
+
+<pre><code><b>const</b> <a href="../sui_system/validator.md#sui_system_validator_EMetadataInvalidNetAddr">EMetadataInvalidNetAddr</a>: u64 = 4;
 </code></pre>
 
 
@@ -641,16 +611,6 @@ Invalid primary_address field in ValidatorMetadata
 
 
 
-<a name="sui_system_validator_EMetadataInvalidPubkey"></a>
-
-Invalid pubkey_bytes field in ValidatorMetadata
-
-
-<pre><code><b>const</b> <a href="../sui_system/validator.md#sui_system_validator_EMetadataInvalidPubkey">EMetadataInvalidPubkey</a>: u64 = 1;
-</code></pre>
-
-
-
 <a name="sui_system_validator_EMetadataInvalidWorkerAddr"></a>
 
 Invalidworker_address field in ValidatorMetadata
@@ -661,32 +621,12 @@ Invalidworker_address field in ValidatorMetadata
 
 
 
-<a name="sui_system_validator_EMetadataInvalidWorkerPubkey"></a>
+<a name="sui_system_validator_ECommissionRateTooHigh"></a>
 
-Invalid worker_pubkey_bytes field in ValidatorMetadata
-
-
-<pre><code><b>const</b> <a href="../sui_system/validator.md#sui_system_validator_EMetadataInvalidWorkerPubkey">EMetadataInvalidWorkerPubkey</a>: u64 = 3;
-</code></pre>
+Commission rate set by the validator is higher than the threshold
 
 
-
-<a name="sui_system_validator_ENewCapNotCreatedByValidatorItself"></a>
-
-New Capability is not created by the validator itself
-
-
-<pre><code><b>const</b> <a href="../sui_system/validator.md#sui_system_validator_ENewCapNotCreatedByValidatorItself">ENewCapNotCreatedByValidatorItself</a>: u64 = 100;
-</code></pre>
-
-
-
-<a name="sui_system_validator_ENotValidatorCandidate"></a>
-
-Intended validator is not a candidate one.
-
-
-<pre><code><b>const</b> <a href="../sui_system/validator.md#sui_system_validator_ENotValidatorCandidate">ENotValidatorCandidate</a>: u64 = 10;
+<pre><code><b>const</b> <a href="../sui_system/validator.md#sui_system_validator_ECommissionRateTooHigh">ECommissionRateTooHigh</a>: u64 = 8;
 </code></pre>
 
 
@@ -701,11 +641,80 @@ Validator Metadata is too long
 
 
 
+<a name="sui_system_validator_ENotValidatorCandidate"></a>
+
+Intended validator is not a candidate one.
+
+
+<pre><code><b>const</b> <a href="../sui_system/validator.md#sui_system_validator_ENotValidatorCandidate">ENotValidatorCandidate</a>: u64 = 10;
+</code></pre>
+
+
+
+<a name="sui_system_validator_EInvalidStakeAmount"></a>
+
+Stake amount is invalid or wrong.
+
+
+<pre><code><b>const</b> <a href="../sui_system/validator.md#sui_system_validator_EInvalidStakeAmount">EInvalidStakeAmount</a>: u64 = 11;
+</code></pre>
+
+
+
+<a name="sui_system_validator_ECalledDuringNonGenesis"></a>
+
+Function called during non-genesis times.
+
+
+<pre><code><b>const</b> <a href="../sui_system/validator.md#sui_system_validator_ECalledDuringNonGenesis">ECalledDuringNonGenesis</a>: u64 = 12;
+</code></pre>
+
+
+
+<a name="sui_system_validator_ENewCapNotCreatedByValidatorItself"></a>
+
+New Capability is not created by the validator itself
+
+
+<pre><code><b>const</b> <a href="../sui_system/validator.md#sui_system_validator_ENewCapNotCreatedByValidatorItself">ENewCapNotCreatedByValidatorItself</a>: u64 = 100;
+</code></pre>
+
+
+
+<a name="sui_system_validator_EInvalidCap"></a>
+
+Capability code is not valid
+
+
+<pre><code><b>const</b> <a href="../sui_system/validator.md#sui_system_validator_EInvalidCap">EInvalidCap</a>: u64 = 101;
+</code></pre>
+
+
+
+<a name="sui_system_validator_EGasPriceHigherThanThreshold"></a>
+
+Validator trying to set gas price higher than threshold.
+
+
+<pre><code><b>const</b> <a href="../sui_system/validator.md#sui_system_validator_EGasPriceHigherThanThreshold">EGasPriceHigherThanThreshold</a>: u64 = 102;
+</code></pre>
+
+
+
 <a name="sui_system_validator_MAX_COMMISSION_RATE"></a>
 
 
 
 <pre><code><b>const</b> <a href="../sui_system/validator.md#sui_system_validator_MAX_COMMISSION_RATE">MAX_COMMISSION_RATE</a>: u64 = 2000;
+</code></pre>
+
+
+
+<a name="sui_system_validator_MAX_VALIDATOR_METADATA_LENGTH"></a>
+
+
+
+<pre><code><b>const</b> <a href="../sui_system/validator.md#sui_system_validator_MAX_VALIDATOR_METADATA_LENGTH">MAX_VALIDATOR_METADATA_LENGTH</a>: u64 = 256;
 </code></pre>
 
 
@@ -716,15 +725,6 @@ Max gas price a validator can set is 100K MIST.
 
 
 <pre><code><b>const</b> <a href="../sui_system/validator.md#sui_system_validator_MAX_VALIDATOR_GAS_PRICE">MAX_VALIDATOR_GAS_PRICE</a>: u64 = 100000;
-</code></pre>
-
-
-
-<a name="sui_system_validator_MAX_VALIDATOR_METADATA_LENGTH"></a>
-
-
-
-<pre><code><b>const</b> <a href="../sui_system/validator.md#sui_system_validator_MAX_VALIDATOR_METADATA_LENGTH">MAX_VALIDATOR_METADATA_LENGTH</a>: u64 = 256;
 </code></pre>
 
 

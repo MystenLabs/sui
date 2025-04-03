@@ -48,7 +48,7 @@ pub fn ed25519_verify(
     // Load the cost parameters from the protocol config
     let ed25519_verify_cost_params = &context
         .extensions()
-        .get::<NativesCostTable>()
+        .get::<NativesCostTable>()?
         .ed25519_verify_cost_params
         .clone();
     // Charge the base cost for this oper

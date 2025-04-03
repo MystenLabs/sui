@@ -297,6 +297,16 @@ Key to store "Rule" configuration for a specific <code><a href="../sui/transfer_
 ## Constants
 
 
+<a name="sui_transfer_policy_EPolicyNotSatisfied"></a>
+
+The number of receipts does not match the <code><a href="../sui/transfer_policy.md#sui_transfer_policy_TransferPolicy">TransferPolicy</a></code> requirement.
+
+
+<pre><code><b>const</b> <a href="../sui/transfer_policy.md#sui_transfer_policy_EPolicyNotSatisfied">EPolicyNotSatisfied</a>: u64 = 0;
+</code></pre>
+
+
+
 <a name="sui_transfer_policy_EIllegalRule"></a>
 
 A completed rule is not set in the <code><a href="../sui/transfer_policy.md#sui_transfer_policy_TransferPolicy">TransferPolicy</a></code>.
@@ -307,32 +317,12 @@ A completed rule is not set in the <code><a href="../sui/transfer_policy.md#sui_
 
 
 
-<a name="sui_transfer_policy_ENotEnough"></a>
+<a name="sui_transfer_policy_EUnknownRequirement"></a>
 
-Trying to <code><a href="../sui/transfer_policy.md#sui_transfer_policy_withdraw">withdraw</a></code> more than there is.
-
-
-<pre><code><b>const</b> <a href="../sui/transfer_policy.md#sui_transfer_policy_ENotEnough">ENotEnough</a>: u64 = 5;
-</code></pre>
+A Rule is not set.
 
 
-
-<a name="sui_transfer_policy_ENotOwner"></a>
-
-Trying to <code><a href="../sui/transfer_policy.md#sui_transfer_policy_withdraw">withdraw</a></code> or <code>close_and_withdraw</code> with a wrong Cap.
-
-
-<pre><code><b>const</b> <a href="../sui/transfer_policy.md#sui_transfer_policy_ENotOwner">ENotOwner</a>: u64 = 4;
-</code></pre>
-
-
-
-<a name="sui_transfer_policy_EPolicyNotSatisfied"></a>
-
-The number of receipts does not match the <code><a href="../sui/transfer_policy.md#sui_transfer_policy_TransferPolicy">TransferPolicy</a></code> requirement.
-
-
-<pre><code><b>const</b> <a href="../sui/transfer_policy.md#sui_transfer_policy_EPolicyNotSatisfied">EPolicyNotSatisfied</a>: u64 = 0;
+<pre><code><b>const</b> <a href="../sui/transfer_policy.md#sui_transfer_policy_EUnknownRequirement">EUnknownRequirement</a>: u64 = 2;
 </code></pre>
 
 
@@ -347,12 +337,22 @@ Attempting to create a Rule that is already set.
 
 
 
-<a name="sui_transfer_policy_EUnknownRequirement"></a>
+<a name="sui_transfer_policy_ENotOwner"></a>
 
-A Rule is not set.
+Trying to <code><a href="../sui/transfer_policy.md#sui_transfer_policy_withdraw">withdraw</a></code> or <code>close_and_withdraw</code> with a wrong Cap.
 
 
-<pre><code><b>const</b> <a href="../sui/transfer_policy.md#sui_transfer_policy_EUnknownRequirement">EUnknownRequirement</a>: u64 = 2;
+<pre><code><b>const</b> <a href="../sui/transfer_policy.md#sui_transfer_policy_ENotOwner">ENotOwner</a>: u64 = 4;
+</code></pre>
+
+
+
+<a name="sui_transfer_policy_ENotEnough"></a>
+
+Trying to <code><a href="../sui/transfer_policy.md#sui_transfer_policy_withdraw">withdraw</a></code> more than there is.
+
+
+<pre><code><b>const</b> <a href="../sui/transfer_policy.md#sui_transfer_policy_ENotEnough">ENotEnough</a>: u64 = 5;
 </code></pre>
 
 
