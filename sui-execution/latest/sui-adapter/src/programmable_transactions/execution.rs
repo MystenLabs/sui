@@ -64,7 +64,9 @@ mod checked {
         SUI_FRAMEWORK_ADDRESS,
     };
     use sui_verifier::{
-        private_generics::{EVENT_MODULE, PRIVATE_TRANSFER_FUNCTIONS, TRANSFER_MODULE},
+        private_generics::{
+            EVENT_MODULE, PRIVATE_EVENT_FUNCTIONS, PRIVATE_TRANSFER_FUNCTIONS, TRANSFER_MODULE,
+        },
         INIT_FN_NAME,
     };
     use tracing::instrument;
@@ -1235,7 +1237,9 @@ mod checked {
         _type_arguments: &[Type],
     ) -> Result<(), ExecutionError> {
         let module_ident = (module_id.address(), module_id.name());
-        if module_ident == (&SUI_FRAMEWORK_ADDRESS, EVENT_MODULE) {
+        if module_ident == (&SUI_FRAMEWORK_ADDRESS, EVENT_MODULE)
+            && PRIVATE_EVENT_FUNCTIONS.contains(&function)
+        {
             return Err(ExecutionError::new_with_source(
                 ExecutionErrorKind::NonEntryFunctionInvoked,
                 format!("Cannot directly call functions in sui::{}", EVENT_MODULE),

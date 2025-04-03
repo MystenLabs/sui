@@ -4,11 +4,12 @@
 
 use super::base_types::*;
 use crate::crypto::{
-    random_committee_key_pairs_of_size, AuthorityKeyPair, AuthorityPublicKey, NetworkPublicKey,
+    random_committee_key_pairs_of_size, AuthorityKeyPair, AuthorityPublicKey, AuthoritySignature,
+    NetworkPublicKey,
 };
 use crate::error::{SuiError, SuiResult};
 use crate::multiaddr::Multiaddr;
-use fastcrypto::traits::KeyPair;
+use fastcrypto::traits::{KeyPair, Signer};
 use itertools::Itertools;
 use once_cell::sync::OnceCell;
 use rand::rngs::{StdRng, ThreadRng};
@@ -45,6 +46,11 @@ pub const QUORUM_THRESHOLD: StakeUnit = 6_667;
 
 /// Validity threshold defined by f+1
 pub const VALIDITY_THRESHOLD: StakeUnit = 3_334;
+
+pub trait ValidatorKeypairProvider {
+    fn get_validator_key(&self, name: &AuthorityName) -> &dyn Signer<AuthoritySignature>;
+    fn get_committee(&self) -> &Committee;
+}
 
 #[derive(Clone, Debug, Serialize, Deserialize, Eq)]
 pub struct Committee {

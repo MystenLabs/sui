@@ -27,6 +27,7 @@ use crate::{base_types::RESOLVED_STD_OPTION, id::RESOLVED_SUI_ID};
 pub mod error;
 
 pub mod accumulator;
+pub mod accumulator_event;
 pub mod authenticator_state;
 pub mod balance;
 pub mod base_types;
@@ -64,7 +65,6 @@ pub mod messages_consensus;
 pub mod messages_grpc;
 pub mod messages_safe_client;
 pub mod metrics;
-pub mod mock_checkpoint_builder;
 pub mod move_package;
 pub mod multisig;
 pub mod multisig_legacy;

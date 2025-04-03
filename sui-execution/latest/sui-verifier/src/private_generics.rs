@@ -18,6 +18,18 @@ use crate::{verification_failure, TEST_SCENARIO_MODULE_NAME};
 pub const TRANSFER_MODULE: &IdentStr = ident_str!("transfer");
 pub const EVENT_MODULE: &IdentStr = ident_str!("event");
 pub const EVENT_FUNCTION: &IdentStr = ident_str!("emit");
+
+pub const EMIT_AUTHENTICATED_IMPL_FUNCTION: &IdentStr = ident_str!("emit_authenticated_impl");
+pub const PRIVATE_EVENT_FUNCTIONS: &[&IdentStr] =
+    &[ident_str!("emit"), ident_str!("emit_authenticated")];
+pub const PUBLIC_EVENT_FUNCTIONS: &[&IdentStr] = &[
+    ident_str!("update_head"),
+    ident_str!("new_event_stream"),
+    ident_str!("destroy_stream"),
+    ident_str!("get_cap"),
+    ident_str!("default_event_stream_cap"),
+    ident_str!("destroy_cap"),
+];
 pub const GET_EVENTS_TEST_FUNCTION: &IdentStr = ident_str!("events_by_type");
 pub const PUBLIC_TRANSFER_FUNCTIONS: &[&IdentStr] = &[
     ident_str!("public_transfer"),
@@ -165,7 +177,17 @@ fn verify_private_event_emit(
         // test-only function witn no params--no need to verify
         return Ok(());
     }
-    if fident != EVENT_FUNCTION {
+
+    if PUBLIC_EVENT_FUNCTIONS.contains(&fident) {
+        return Ok(());
+    }
+
+    if fident == EMIT_AUTHENTICATED_IMPL_FUNCTION {
+        // private function, cannot be called directly from outside the module
+        return Ok(());
+    }
+
+    if !PRIVATE_EVENT_FUNCTIONS.contains(&fident) {
         debug_assert!(false, "unknown event function {}", fident);
         return Err(format!("Calling unknown event function, {}", fident));
     };

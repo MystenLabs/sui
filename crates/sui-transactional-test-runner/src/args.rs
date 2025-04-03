@@ -213,6 +213,9 @@ pub struct AdvanceEpochCommand {
 }
 
 #[derive(Debug, clap::Parser)]
+pub struct UpdateAccumulatorsCommand {}
+
+#[derive(Debug, clap::Parser)]
 pub struct SetRandomStateCommand {
     #[clap(long = "randomness-round")]
     pub randomness_round: u64,
