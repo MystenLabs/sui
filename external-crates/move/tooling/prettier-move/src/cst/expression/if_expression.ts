@@ -63,6 +63,7 @@ function printIfExpression(path: AstPath<Node>, options: MoveOptions, print: pri
         throw new Error('Invalid if_expression node');
     }
 
+    const isChain = path.parent?.type == 'if_expression';
     const hasElse = path.node.children.some((e) => e.type == 'else');
     const condition = path.node.nonFormattingChildren[0]!;
     const trueBranch = path.node.nonFormattingChildren[1]!;
@@ -141,7 +142,7 @@ function printIfExpression(path: AstPath<Node>, options: MoveOptions, print: pri
     //
     // also, if the else block is another `if_expression` we follow the same
     // logic as above
-    if (isTrueList || elseNode.type == 'if_expression') {
+    if (isTrueList) {
         result.push(group([line, 'else'], { shouldBreak: trueHasComment }));
         result.push([' ', path.call(print, 'nonFormattingChildren', 2)]);
         return result;
@@ -150,8 +151,8 @@ function printIfExpression(path: AstPath<Node>, options: MoveOptions, print: pri
     const elseBranchPrinted = path.call(print, 'nonFormattingChildren', 2);
 
     // if true branch is not a list, and else is a list, we newline
-    if (elseNode.isList && !isTrueList) {
-        result.push([hardlineWithoutBreakParent, 'else ', elseBranchPrinted]);
+    if ((elseNode.isList && !isTrueList) || elseNode.type == 'if_expression' || isChain) {
+        result.push([hardlineWithoutBreakParent, 'else ', group(elseBranchPrinted)]);
         return result;
     }
 

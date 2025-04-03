@@ -281,6 +281,13 @@ fun if_comments() {
         expression; // comment
 }
 
+fun if_chaining() {
+    if (true) 1
+    else if (false) 2
+    else if (true) 3
+    else 4;
+}
+
 fun misc_tests() {
     if (condition) doesnt_break; // trailing
     if (condition) doesnt_break // trailing
