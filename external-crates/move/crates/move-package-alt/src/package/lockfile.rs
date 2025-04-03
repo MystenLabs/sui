@@ -85,7 +85,7 @@ impl<F: MoveFlavor> Lockfile<F> {
                 .or_else(|_| bail!(format!("Couldn't parse {file:?}")))?;
 
             let old_entry = lockfiles.published.insert(env_name.clone(), metadata);
-            if let Some(_) = old_entry {
+            if old_entry.is_some() {
                 bail!("Move.lock and Move.{env_name}.lock both contain publication information for {env_name}; TODO.");
             }
         }
@@ -227,9 +227,6 @@ fn lockname_to_env_name(filename: OsString) -> Option<String> {
         return None;
     };
 
-    let Some((_, env_name)) = regex_captures!(r"Move\.(.*)\.lock", &filename) else {
-        return None;
-    };
-
+    let (_, env_name) = regex_captures!(r"Move\.(.*)\.lock", &filename)?;
     Some(env_name.to_string())
 }

@@ -18,8 +18,9 @@ use super::*;
 pub struct Manifest<F: MoveFlavor> {
     package: PackageMetadata<F>,
     environments: BTreeMap<EnvironmentName, F::EnvironmentID>,
-    dependencies: BTreeMap<PackageName, ManifestDependency<F>>,
-    dep_overrides: BTreeMap<EnvironmentName, BTreeMap<PackageName, ManifestDependencyOverride<F>>>,
+    dependencies: Option<BTreeMap<PackageName, ManifestDependency<F>>>,
+    dep_overrides:
+        Option<BTreeMap<EnvironmentName, BTreeMap<PackageName, ManifestDependencyOverride<F>>>>,
 }
 
 #[derive(Deserialize)]
@@ -79,5 +80,7 @@ impl<F: MoveFlavor> Manifest<F> {
 
 #[test]
 fn write_new() {
-    let manifest = Manifest::<Vanilla>::read_from("tests/output/Move.toml".to_string());
+    let manifest = Manifest::<Vanilla>::read_from("tests/output/Move.toml");
+
+    assert!(manifest.is_ok());
 }
