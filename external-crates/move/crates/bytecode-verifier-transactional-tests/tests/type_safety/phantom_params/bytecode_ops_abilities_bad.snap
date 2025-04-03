@@ -1,6 +1,5 @@
 ---
 source: crates/move-transactional-test-runner/src/framework.rs
-input_file: crates/bytecode-verifier-transactional-tests/tests/type_safety/phantom_params/bytecode_ops_abilities_bad.mvir
 ---
 processed 12 tasks
 
@@ -52,6 +51,7 @@ Error: Unable to publish module '00000000000000000000000000000000000000000000000
     location: 0x1::M9,
     indices: [(Signature, 0), (FunctionHandle, 0)],
     offsets: [],
+    message: "expected type with abilities [Store, ] got type actual StructInstantiation(DatatypeHandleIndex(0), [Struct(DatatypeHandleIndex(2)), Struct(DatatypeHandleIndex(2))]) with incompatible abilities []",
 }
 
 task 7, lines 82-94:
@@ -102,4 +102,5 @@ Error: Unable to publish module '00000000000000000000000000000000000000000000000
     location: 0x2::M9,
     indices: [(Signature, 0), (FunctionHandle, 0)],
     offsets: [],
+    message: "expected type with abilities [Store, ] got type actual StructInstantiation(DatatypeHandleIndex(0), [Struct(DatatypeHandleIndex(2)), Struct(DatatypeHandleIndex(2))]) with incompatible abilities []",
 }

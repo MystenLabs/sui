@@ -1,6 +1,5 @@
 ---
 source: crates/move-transactional-test-runner/src/framework.rs
-input_file: crates/bytecode-verifier-transactional-tests/tests/signature/check_constraints_script.mvir
 ---
 processed 9 tasks
 
@@ -12,6 +11,7 @@ Error: Function execution failed with VMError: {
     location: 0x2::m,
     indices: [],
     offsets: [(FunctionDefinitionIndex(0), 1)],
+    message: "0000000000000000000000000000000000000000000000000000000000000002::m::foo at offset 1",
 }
 
 task 2, lines 28-35:
@@ -22,6 +22,7 @@ Error: Function execution failed with VMError: {
     location: 0x3::m,
     indices: [],
     offsets: [(FunctionDefinitionIndex(0), 1)],
+    message: "0000000000000000000000000000000000000000000000000000000000000003::m::foo at offset 1",
 }
 
 task 3, lines 37-44:
@@ -32,6 +33,7 @@ Error: Function execution failed with VMError: {
     location: 0x4::m,
     indices: [],
     offsets: [(FunctionDefinitionIndex(0), 1)],
+    message: "0000000000000000000000000000000000000000000000000000000000000004::m::foo at offset 1",
 }
 
 task 4, lines 46-53:
@@ -42,6 +44,7 @@ Error: Function execution failed with VMError: {
     location: 0x5::m,
     indices: [],
     offsets: [(FunctionDefinitionIndex(0), 1)],
+    message: "0000000000000000000000000000000000000000000000000000000000000005::m::foo at offset 1",
 }
 
 task 5, lines 55-62:
@@ -52,6 +55,7 @@ Error: Function execution failed with VMError: {
     location: 0x6::m,
     indices: [],
     offsets: [(FunctionDefinitionIndex(0), 1)],
+    message: "0000000000000000000000000000000000000000000000000000000000000006::m::foo at offset 1",
 }
 
 task 6, lines 64-71:
@@ -62,6 +66,7 @@ Error: Function execution failed with VMError: {
     location: 0x7::m,
     indices: [],
     offsets: [(FunctionDefinitionIndex(0), 1)],
+    message: "0000000000000000000000000000000000000000000000000000000000000007::m::foo at offset 1",
 }
 
 task 7, lines 73-80:
@@ -72,6 +77,7 @@ Error: Function execution failed with VMError: {
     location: 0x8::m,
     indices: [],
     offsets: [(FunctionDefinitionIndex(0), 1)],
+    message: "0000000000000000000000000000000000000000000000000000000000000008::m::foo at offset 1",
 }
 
 task 8, lines 82-89:
@@ -82,4 +88,5 @@ Error: Function execution failed with VMError: {
     location: 0x9::m,
     indices: [],
     offsets: [(FunctionDefinitionIndex(0), 1)],
+    message: "0000000000000000000000000000000000000000000000000000000000000009::m::foo at offset 1",
 }

@@ -1,6 +1,5 @@
 ---
 source: crates/move-transactional-test-runner/src/framework.rs
-input_file: crates/bytecode-verifier-transactional-tests/tests/instantiation_loops/mutually_recursive_three_args_type_con_shifting.mvir
 ---
 processed 1 task
 
@@ -12,4 +11,5 @@ Error: Unable to publish module '00000000000000000000000000000000000000000000000
     location: 0x6::M,
     indices: [],
     offsets: [],
+    message: "edges with constructors: [f1#2 --StructInstantiation(DatatypeHandleIndex(0), [TypeParameter(2)])--> f2#2], nodes: [f2#1, f1#1, f0#2, f2#2, f1#2, f0#0, f2#0, f1#0, f0#1]",
 }

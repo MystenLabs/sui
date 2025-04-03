@@ -1,6 +1,5 @@
 ---
 source: crates/move-transactional-test-runner/src/framework.rs
-input_file: crates/bytecode-verifier-transactional-tests/tests/control_flow/if_branch_diverges_5.mvir
 ---
 processed 1 task
 
@@ -12,4 +11,5 @@ Error: Unable to publish module '00000000000000000000000000000000000000000000000
     location: undefined,
     indices: [],
     offsets: [(FunctionDefinitionIndex(0), 10)],
+    message: "Index 12 out of bounds for 12 at bytecode offset 10 in function 0 while indexing code definition pool",
 }

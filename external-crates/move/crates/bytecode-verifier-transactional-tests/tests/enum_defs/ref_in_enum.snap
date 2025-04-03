@@ -1,6 +1,5 @@
 ---
 source: crates/move-transactional-test-runner/src/framework.rs
-input_file: crates/bytecode-verifier-transactional-tests/tests/enum_defs/ref_in_enum.mvir
 ---
 processed 4 tasks
 
@@ -12,6 +11,7 @@ Error: Unable to publish module '00000000000000000000000000000000000000000000000
     location: 0x42::M1,
     indices: [(FieldDefinition, 0), (VariantTag, 0), (EnumDefinition, 0)],
     offsets: [],
+    message: "reference not allowed",
 }
 
 task 1, lines 6-9:
@@ -22,6 +22,7 @@ Error: Unable to publish module '00000000000000000000000000000000000000000000000
     location: 0x42::M2,
     indices: [(FieldDefinition, 0), (VariantTag, 0), (EnumDefinition, 0)],
     offsets: [],
+    message: "reference not allowed",
 }
 
 task 2, lines 11-14:
@@ -32,6 +33,7 @@ Error: Unable to publish module '00000000000000000000000000000000000000000000000
     location: 0x42::M3,
     indices: [(FieldDefinition, 0), (VariantTag, 0), (EnumDefinition, 0)],
     offsets: [],
+    message: "reference not allowed",
 }
 
 task 3, lines 16-19:
@@ -42,4 +44,5 @@ Error: Unable to publish module '00000000000000000000000000000000000000000000000
     location: 0x42::M4,
     indices: [(FieldDefinition, 0), (VariantTag, 0), (EnumDefinition, 0)],
     offsets: [],
+    message: "reference not allowed",
 }

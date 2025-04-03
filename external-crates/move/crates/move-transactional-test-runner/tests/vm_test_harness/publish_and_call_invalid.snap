@@ -11,4 +11,5 @@ Error: Function execution failed with VMError: {
     location: undefined,
     indices: [],
     offsets: [],
+    message: "Could not find function 0000000000000000000000000000000000000000000000000000000000000042::m::d",
 }

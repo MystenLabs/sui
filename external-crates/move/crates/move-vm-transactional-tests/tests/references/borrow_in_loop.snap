@@ -21,6 +21,7 @@ Error: Function execution failed with VMError: {
     location: undefined,
     indices: [],
     offsets: [],
+    message: "Cannot find package 0000000000000000000000000000000000000000000000000000000000000042 in data cache",
 }
 
 task 2, lines 27-45:
