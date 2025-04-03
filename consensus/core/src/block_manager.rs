@@ -17,6 +17,7 @@ use crate::{
     block_verifier::BlockVerifier,
     context::Context,
     dag_state::DagState,
+    round_tracker::PeerRoundTracker,
     Round,
 };
 
@@ -45,6 +46,7 @@ pub(crate) struct BlockManager {
     context: Arc<Context>,
     dag_state: Arc<RwLock<DagState>>,
     block_verifier: Arc<dyn BlockVerifier>,
+    round_tracker: Arc<RwLock<PeerRoundTracker>>,
 
     /// Keeps all the suspended blocks. A suspended block is a block that is missing part of its causal history and thus
     /// can't be immediately processed. A block will remain in this map until all its causal history has been successfully
@@ -67,12 +69,14 @@ impl BlockManager {
         context: Arc<Context>,
         dag_state: Arc<RwLock<DagState>>,
         block_verifier: Arc<dyn BlockVerifier>,
+        round_tracker: Arc<RwLock<PeerRoundTracker>>,
     ) -> Self {
         let committee_size = context.committee.size();
         Self {
             context,
             dag_state,
             block_verifier,
+            round_tracker,
             suspended_blocks: BTreeMap::new(),
             missing_ancestors: BTreeMap::new(),
             missing_blocks: BTreeSet::new(),
@@ -181,6 +185,10 @@ impl BlockManager {
         }
 
         self.update_stats(missing_blocks.len() as u64);
+
+        self.round_tracker
+            .write()
+            .update_from_accepted_blocks(&accepted_blocks);
 
         // Figure out the new missing blocks
         (accepted_blocks, missing_blocks)
@@ -756,6 +764,7 @@ mod tests {
         context::Context,
         dag_state::DagState,
         error::{ConsensusError, ConsensusResult},
+        round_tracker::PeerRoundTracker,
         storage::mem_store::MemStore,
         test_dag_builder::DagBuilder,
         test_dag_parser::parse_dag,
@@ -770,9 +779,14 @@ mod tests {
         let context = Arc::new(context);
         let store = Arc::new(MemStore::new());
         let dag_state = Arc::new(RwLock::new(DagState::new(context.clone(), store.clone())));
+        let round_tracker = Arc::new(RwLock::new(PeerRoundTracker::new(context.clone())));
 
-        let mut block_manager =
-            BlockManager::new(context.clone(), dag_state, Arc::new(NoopBlockVerifier));
+        let mut block_manager = BlockManager::new(
+            context.clone(),
+            dag_state,
+            Arc::new(NoopBlockVerifier),
+            round_tracker,
+        );
 
         // create a DAG
         let mut dag_builder = DagBuilder::new(context.clone());
@@ -823,9 +837,14 @@ mod tests {
         let context = Arc::new(context);
         let store = Arc::new(MemStore::new());
         let dag_state = Arc::new(RwLock::new(DagState::new(context.clone(), store.clone())));
+        let round_tracker = Arc::new(RwLock::new(PeerRoundTracker::new(context.clone())));
 
-        let mut block_manager =
-            BlockManager::new(context.clone(), dag_state, Arc::new(NoopBlockVerifier));
+        let mut block_manager = BlockManager::new(
+            context.clone(),
+            dag_state,
+            Arc::new(NoopBlockVerifier),
+            round_tracker,
+        );
 
         // create a DAG
         let mut dag_builder = DagBuilder::new(context.clone());
@@ -864,9 +883,14 @@ mod tests {
         let context = Arc::new(context);
         let store = Arc::new(MemStore::new());
         let dag_state = Arc::new(RwLock::new(DagState::new(context.clone(), store.clone())));
+        let round_tracker = Arc::new(RwLock::new(PeerRoundTracker::new(context.clone())));
 
-        let mut block_manager =
-            BlockManager::new(context.clone(), dag_state, Arc::new(NoopBlockVerifier));
+        let mut block_manager = BlockManager::new(
+            context.clone(),
+            dag_state,
+            Arc::new(NoopBlockVerifier),
+            round_tracker,
+        );
 
         // create a DAG of 2 rounds
         let mut dag_builder = DagBuilder::new(context.clone());
@@ -924,8 +948,14 @@ mod tests {
             "GC round should have moved to round 6"
         );
 
-        let mut block_manager =
-            BlockManager::new(context.clone(), dag_state, Arc::new(NoopBlockVerifier));
+        let round_tracker = Arc::new(RwLock::new(PeerRoundTracker::new(context.clone())));
+
+        let mut block_manager = BlockManager::new(
+            context.clone(),
+            dag_state,
+            Arc::new(NoopBlockVerifier),
+            round_tracker,
+        );
 
         // create a DAG of 10 rounds with some weak links for the blocks of round 9
         let dag_str = "DAG {
@@ -1014,8 +1044,14 @@ mod tests {
             "GC round should have moved to round 6"
         );
 
-        let mut block_manager =
-            BlockManager::new(context.clone(), dag_state, Arc::new(NoopBlockVerifier));
+        let round_tracker = Arc::new(RwLock::new(PeerRoundTracker::new(context.clone())));
+
+        let mut block_manager = BlockManager::new(
+            context.clone(),
+            dag_state,
+            Arc::new(NoopBlockVerifier),
+            round_tracker,
+        );
 
         // create a DAG of 6 rounds
         let mut dag_builder = DagBuilder::new(context.clone());
@@ -1062,9 +1098,14 @@ mod tests {
 
             let store = Arc::new(MemStore::new());
             let dag_state = Arc::new(RwLock::new(DagState::new(context.clone(), store.clone())));
+            let round_tracker = Arc::new(RwLock::new(PeerRoundTracker::new(context.clone())));
 
-            let mut block_manager =
-                BlockManager::new(context.clone(), dag_state, Arc::new(NoopBlockVerifier));
+            let mut block_manager = BlockManager::new(
+                context.clone(),
+                dag_state,
+                Arc::new(NoopBlockVerifier),
+                round_tracker,
+            );
 
             // WHEN
             let mut all_accepted_blocks = vec![];
@@ -1121,11 +1162,13 @@ mod tests {
 
             let store = Arc::new(MemStore::new());
             let dag_state = Arc::new(RwLock::new(DagState::new(context.clone(), store.clone())));
+            let round_tracker = Arc::new(RwLock::new(PeerRoundTracker::new(context.clone())));
 
             let mut block_manager = BlockManager::new(
                 context.clone(),
                 dag_state.clone(),
                 Arc::new(NoopBlockVerifier),
+                round_tracker,
             );
 
             // WHEN
@@ -1199,8 +1242,14 @@ mod tests {
             "GC round should have moved to round 2"
         );
 
-        let mut block_manager =
-            BlockManager::new(context.clone(), dag_state, Arc::new(NoopBlockVerifier));
+        let round_tracker = Arc::new(RwLock::new(PeerRoundTracker::new(context.clone())));
+
+        let mut block_manager = BlockManager::new(
+            context.clone(),
+            dag_state,
+            Arc::new(NoopBlockVerifier),
+            round_tracker,
+        );
 
         // create a DAG of 12 rounds
         let mut dag_builder = DagBuilder::new(context.clone());
@@ -1288,8 +1337,14 @@ mod tests {
         // Create BlockManager.
         let store = Arc::new(MemStore::new());
         let dag_state = Arc::new(RwLock::new(DagState::new(context.clone(), store.clone())));
-        let mut block_manager =
-            BlockManager::new(context.clone(), dag_state, Arc::new(test_verifier));
+        let round_tracker = Arc::new(RwLock::new(PeerRoundTracker::new(context.clone())));
+
+        let mut block_manager = BlockManager::new(
+            context.clone(),
+            dag_state,
+            Arc::new(test_verifier),
+            round_tracker,
+        );
 
         // Try to accept blocks from round 2 ~ 5 into block manager. All of them should be suspended.
         let (accepted_blocks, missing_refs) = block_manager.try_accept_blocks(
@@ -1334,9 +1389,14 @@ mod tests {
         let context = Arc::new(context);
         let store = Arc::new(MemStore::new());
         let dag_state = Arc::new(RwLock::new(DagState::new(context.clone(), store.clone())));
+        let round_tracker = Arc::new(RwLock::new(PeerRoundTracker::new(context.clone())));
 
-        let mut block_manager =
-            BlockManager::new(context.clone(), dag_state, Arc::new(NoopBlockVerifier));
+        let mut block_manager = BlockManager::new(
+            context.clone(),
+            dag_state,
+            Arc::new(NoopBlockVerifier),
+            round_tracker,
+        );
 
         // create a DAG
         let mut dag_builder = DagBuilder::new(context.clone());
@@ -1425,6 +1485,7 @@ mod tests {
         let context = Arc::new(context);
         let store = Arc::new(MemStore::new());
         let dag_state = Arc::new(RwLock::new(DagState::new(context.clone(), store.clone())));
+        let round_tracker = Arc::new(RwLock::new(PeerRoundTracker::new(context.clone())));
 
         let mut block_manager = BlockManager::new(
             context.clone(),
@@ -1433,6 +1494,7 @@ mod tests {
                 context.clone(),
                 Arc::new(NoopTransactionVerifier {}),
             )),
+            round_tracker,
         );
 
         // create a DAG where authority 0 timestamp is always higher than the others.
