@@ -139,8 +139,8 @@ impl RpcService {
 struct NormalizedPackage {
     #[allow(unused)]
     package: MovePackage,
-    pool: normalized::RCPool,
-    normalized_modules: BTreeMap<String, normalized::Module<normalized::RCIdentifier>>,
+    pool: normalized::RcPool,
+    normalized_modules: BTreeMap<String, normalized::Module<normalized::RcIdentifier>>,
 }
 
 fn called_packages(
@@ -183,7 +183,7 @@ fn called_packages(
         //
         // Despite the above this is safe given we are only using the signature information (and in
         // particular the reference kind) from the normalized package.
-        let mut pool = normalized::RCPool::new();
+        let mut pool = normalized::RcPool::new();
         let normalized_modules = package.normalize(&mut pool, &binary_config).map_err(|e| {
             RpcError::new(
                 tonic::Code::Internal,
@@ -548,7 +548,7 @@ fn arg_type_of_move_call_input<'a>(
     called_packages: &'a HashMap<ObjectId, NormalizedPackage>,
     move_call: &sui_sdk_types::MoveCall,
     idx: usize,
-) -> Result<Rc<normalized::Type<normalized::RCIdentifier>>> {
+) -> Result<Rc<normalized::Type<normalized::RcIdentifier>>> {
     let function = called_packages
         // Find the package
         .get(&move_call.package)

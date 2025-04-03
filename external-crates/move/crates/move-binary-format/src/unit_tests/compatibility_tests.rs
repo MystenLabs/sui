@@ -4,7 +4,7 @@
 use crate::{
     compatibility::{compare_ord_iters, Compatibility, InclusionCheck, Mark},
     file_format::*,
-    normalized::{self, RCIdentifier, RCPool, Type},
+    normalized::{self, RcIdentifier, RcPool, Type},
 };
 use move_core_types::{account_address::AccountAddress, ident_str, identifier::Identifier};
 use proptest::prelude::*;
@@ -14,7 +14,7 @@ use std::{
     rc::Rc,
 };
 
-type NormalizedModule = normalized::Module<RCIdentifier>;
+type NormalizedModule = normalized::Module<RcIdentifier>;
 
 // A way to permute pools, and index into them still.
 pub struct Permutation {
@@ -45,7 +45,7 @@ impl Permutation {
     }
 }
 
-fn mk_module(pool: &mut RCPool, vis: u8) -> NormalizedModule {
+fn mk_module(pool: &mut RcPool, vis: u8) -> NormalizedModule {
     mk_module_entry(pool, vis, false)
 }
 
@@ -54,7 +54,7 @@ fn max_version(mut module: NormalizedModule) -> NormalizedModule {
     module
 }
 
-fn mk_module_entry(pool: &mut RCPool, vis: u8, is_entry: bool) -> NormalizedModule {
+fn mk_module_entry(pool: &mut RcPool, vis: u8, is_entry: bool) -> NormalizedModule {
     let (visibility, is_entry) = if vis == Visibility::DEPRECATED_SCRIPT {
         (Visibility::Public, true)
     } else {
@@ -140,12 +140,12 @@ fn mk_module_entry(pool: &mut RCPool, vis: u8, is_entry: bool) -> NormalizedModu
     NormalizedModule::new(pool, &m)
 }
 
-fn mk_module_plus_code(pool: &mut RCPool, vis: u8, code: Vec<Bytecode>) -> NormalizedModule {
+fn mk_module_plus_code(pool: &mut RcPool, vis: u8, code: Vec<Bytecode>) -> NormalizedModule {
     mk_module_plus_code_perm(pool, vis, code, Permutation::new(vec![]))
 }
 
 fn mk_module_plus_code_perm(
-    pool: &mut RCPool,
+    pool: &mut RcPool,
     vis: u8,
     code: Vec<Bytecode>,
     p: Permutation,
@@ -255,15 +255,15 @@ fn mk_module_plus_code_perm(
     NormalizedModule::new(pool, &m)
 }
 
-fn mk_module_plus(pool: &mut RCPool, vis: u8) -> NormalizedModule {
+fn mk_module_plus(pool: &mut RcPool, vis: u8) -> NormalizedModule {
     mk_module_plus_code(pool, vis, vec![Bytecode::Ret])
 }
 
-fn mk_module_plus_perm(pool: &mut RCPool, vis: u8, permutation: Permutation) -> NormalizedModule {
+fn mk_module_plus_perm(pool: &mut RcPool, vis: u8, permutation: Permutation) -> NormalizedModule {
     mk_module_plus_code_perm(pool, vis, vec![Bytecode::Ret], permutation)
 }
 
-fn make_complex_module_perm(pool: &mut RCPool, p: Permutation) -> NormalizedModule {
+fn make_complex_module_perm(pool: &mut RcPool, p: Permutation) -> NormalizedModule {
     let m = CompiledModule {
         version: crate::file_format_common::VERSION_MAX,
         module_handles: vec![
@@ -547,7 +547,7 @@ fn make_complex_module_perm(pool: &mut RCPool, p: Permutation) -> NormalizedModu
 }
 
 fn mk_module_with_defs(
-    pool: &mut RCPool,
+    pool: &mut RcPool,
     struct_defs: Vec<(Identifier, StructDefinition)>,
     enum_defs: Vec<(Identifier, EnumDefinition)>,
     function_defs: Vec<(Identifier, FunctionDefinition)>,
@@ -677,7 +677,7 @@ fn mk_module_with_defs(
 
 #[test]
 fn deprecated_unchanged_script_visibility() {
-    let pool = &mut RCPool::new();
+    let pool = &mut RcPool::new();
     let script_module = mk_module(pool, Visibility::DEPRECATED_SCRIPT);
     assert!(Compatibility::full_check()
         .check(&script_module, &script_module)
@@ -686,7 +686,7 @@ fn deprecated_unchanged_script_visibility() {
 
 #[test]
 fn deprecated_remove_script_visibility() {
-    let pool = &mut RCPool::new();
+    let pool = &mut RcPool::new();
     let script_module = mk_module(pool, Visibility::DEPRECATED_SCRIPT);
     // script -> private, not allowed
     let private_module = mk_module(pool, Visibility::Private as u8);
@@ -707,7 +707,7 @@ fn deprecated_remove_script_visibility() {
 
 #[test]
 fn deprecated_add_script_visibility() {
-    let pool = &mut RCPool::new();
+    let pool = &mut RcPool::new();
     let script_module = mk_module(pool, Visibility::DEPRECATED_SCRIPT);
     // private -> script, allowed
     let private_module = mk_module(pool, Visibility::Private as u8);
@@ -728,7 +728,7 @@ fn deprecated_add_script_visibility() {
 
 #[test]
 fn private_entry_to_public_entry_allowed() {
-    let pool = &mut RCPool::new();
+    let pool = &mut RcPool::new();
     let private_module = max_version(mk_module_entry(pool, Visibility::Private as u8, true));
     let public_module = max_version(mk_module_entry(pool, Visibility::Public as u8, true));
     assert!(Compatibility::full_check()
@@ -742,7 +742,7 @@ fn private_entry_to_public_entry_allowed() {
 
 #[test]
 fn public_loses_entry() {
-    let pool = &mut RCPool::new();
+    let pool = &mut RcPool::new();
     let public_entry = max_version(mk_module_entry(pool, Visibility::Public as u8, true));
     let public = max_version(mk_module_entry(pool, Visibility::Public as u8, false));
     assert!(Compatibility::full_check()
@@ -756,7 +756,7 @@ fn public_loses_entry() {
 
 #[test]
 fn private_entry_signature_change_allowed() {
-    let pool = &mut RCPool::new();
+    let pool = &mut RcPool::new();
     // Create a private entry function
     let module = max_version(mk_module_entry(pool, Visibility::Private as u8, true));
     let mut updated_module = module.clone();
@@ -795,7 +795,7 @@ fn private_entry_signature_change_allowed() {
 
 #[test]
 fn entry_fun_compat_tests() {
-    let pool = &mut RCPool::new();
+    let pool = &mut RcPool::new();
     // fun
     let private_fun = max_version(mk_module_entry(pool, Visibility::Private as u8, false));
     // entry fun
@@ -900,7 +900,7 @@ fn entry_fun_compat_tests() {
 
 #[test]
 fn public_entry_signature_change_disallowed() {
-    let pool = &mut RCPool::new();
+    let pool = &mut RcPool::new();
     // Create a public entry function
     let module = max_version(mk_module_entry(pool, Visibility::Public as u8, true));
     let mut updated_module = module.clone();
@@ -940,7 +940,7 @@ fn public_entry_signature_change_disallowed() {
 
 #[test]
 fn friend_entry_signature_change_allowed() {
-    let pool = &mut RCPool::new();
+    let pool = &mut RcPool::new();
     let module = max_version(mk_module_entry(pool, Visibility::Friend as u8, true));
     let mut updated_module = module.clone();
     // Update the signature of the entry fun to now take a u64 argument.
@@ -971,7 +971,7 @@ fn friend_entry_signature_change_allowed() {
 
 #[test]
 fn check_exact_and_unchange_same_module() {
-    let pool = &mut RCPool::new();
+    let pool = &mut RcPool::new();
     let m1 = max_version(mk_module(pool, Visibility::Private as u8));
     assert!(InclusionCheck::Subset.check(&m1, &m1).is_ok());
     assert!(InclusionCheck::Equal.check(&m1, &m1).is_ok());
@@ -1000,7 +1000,7 @@ fn check_exact_and_unchange_same_module() {
 
 #[test]
 fn check_exact_and_unchange_same_module_permutations() {
-    let pool = &mut RCPool::new();
+    let pool = &mut RcPool::new();
     let m1 = max_version(mk_module(pool, Visibility::Private as u8));
     let m2 = max_version(mk_module_plus(pool, Visibility::Private as u8));
     let m3 = max_version(mk_module_plus_perm(
@@ -1023,7 +1023,7 @@ fn check_exact_and_unchange_same_module_permutations() {
 
 #[test]
 fn check_exact_and_unchange_same_complex_module_permutations() {
-    let pool = &mut RCPool::new();
+    let pool = &mut RcPool::new();
     let perms = vec![
         vec![0, 1, 2],
         vec![0, 2, 1],
@@ -1054,7 +1054,7 @@ fn check_exact_and_unchange_same_complex_module_permutations() {
 
 #[test]
 fn check_new_changed_missing_declarations() {
-    let pool = &mut RCPool::new();
+    let pool = &mut RcPool::new();
     let empty = mk_module_with_defs(pool, vec![], vec![], vec![], vec![]);
     // struct
     let m1 = mk_module_with_defs(
@@ -1272,7 +1272,7 @@ fn check_new_changed_missing_declarations() {
 
 #[test]
 fn test_friend_linking() {
-    let pool = &mut RCPool::new();
+    let pool = &mut RcPool::new();
     let friend_modules = [
         (Identifier::new("M1").unwrap(), AccountAddress::random()),
         (Identifier::new("M2").unwrap(), AccountAddress::random()),

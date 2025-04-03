@@ -249,7 +249,7 @@ pub async fn compare_system_package<S: ObjectStore>(
         .try_as_package_mut()
         .expect("Created as package");
 
-    let pool = &mut normalized::RCPool::new();
+    let pool = &mut normalized::RcPool::new();
     let cur_normalized = match cur_pkg.normalize(pool, binary_config) {
         Ok(v) => v,
         Err(e) => {

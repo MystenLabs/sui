@@ -43,10 +43,10 @@ pub struct Compatibility {
     pub disallowed_new_abilities: AbilitySet,
 }
 
-pub type Module = normalized::Module<normalized::RCIdentifier>;
-pub type Struct = normalized::Struct<normalized::RCIdentifier>;
-pub type Enum = normalized::Enum<normalized::RCIdentifier>;
-pub type Function = normalized::Function<normalized::RCIdentifier>;
+pub type Module = normalized::Module<normalized::RcIdentifier>;
+pub type Struct = normalized::Struct<normalized::RcIdentifier>;
+pub type Enum = normalized::Enum<normalized::RcIdentifier>;
+pub type Function = normalized::Function<normalized::RcIdentifier>;
 
 impl Default for Compatibility {
     fn default() -> Self {

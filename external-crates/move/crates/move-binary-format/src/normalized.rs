@@ -45,27 +45,27 @@ impl StringPool for NoInterning {
 }
 
 #[derive(Clone, PartialEq, Eq, PartialOrd, Ord, Debug)]
-pub struct RCIdentifier(Rc<Identifier>);
+pub struct RcIdentifier(Rc<Identifier>);
 
-impl Borrow<str> for RCIdentifier {
+impl Borrow<str> for RcIdentifier {
     fn borrow(&self) -> &str {
         self.0.as_str()
     }
 }
 
-impl Borrow<IdentStr> for RCIdentifier {
+impl Borrow<IdentStr> for RcIdentifier {
     fn borrow(&self) -> &IdentStr {
         self.0.as_ident_str()
     }
 }
 
-impl Borrow<Identifier> for RCIdentifier {
+impl Borrow<Identifier> for RcIdentifier {
     fn borrow(&self) -> &Identifier {
         self.0.as_ref()
     }
 }
 
-impl Deref for RCIdentifier {
+impl Deref for RcIdentifier {
     type Target = Identifier;
 
     fn deref(&self) -> &Self::Target {
@@ -73,28 +73,28 @@ impl Deref for RCIdentifier {
     }
 }
 
-impl std::fmt::Display for RCIdentifier {
+impl std::fmt::Display for RcIdentifier {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         std::fmt::Display::fmt(self.0.as_ident_str(), f)
     }
 }
 
-pub struct RCPool(BTreeSet<RCIdentifier>);
+pub struct RcPool(BTreeSet<RcIdentifier>);
 
-impl RCPool {
+impl RcPool {
     pub fn new() -> Self {
         Self(BTreeSet::new())
     }
 }
 
-impl StringPool for RCPool {
-    type String = RCIdentifier;
+impl StringPool for RcPool {
+    type String = RcIdentifier;
 
     fn intern(&mut self, s: &IdentStr) -> Self::String {
         match self.0.get(s) {
             Some(id) => id.clone(),
             None => {
-                let id = RCIdentifier(Rc::new(s.to_owned()));
+                let id = RcIdentifier(Rc::new(s.to_owned()));
                 self.0.insert(id.clone());
                 id
             }

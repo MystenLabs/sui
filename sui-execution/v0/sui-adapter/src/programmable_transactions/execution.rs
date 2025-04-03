@@ -705,6 +705,7 @@ mod checked {
         };
 
         let binary_config = to_binary_config(context.protocol_config);
+        let mut pool = move_binary_format::normalized::RcPool::new();
         let Ok(current_normalized) = existing_package.normalize(&binary_config) else {
             invariant_violation!("Tried to normalize modules in existing package but failed")
         };
