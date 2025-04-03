@@ -37,6 +37,7 @@ use sui_types::gas::GasCostSummary;
 use sui_types::layout_resolver::{get_layout_from_struct_tag, LayoutResolver};
 use sui_types::messages_checkpoint::CheckpointSequenceNumber;
 use sui_types::messages_consensus::ConsensusDeterminedVersionAssignments;
+use sui_types::move_package::Abort;
 use sui_types::object::Owner;
 use sui_types::parse_sui_type_tag;
 use sui_types::quorum_driver_types::ExecuteTransactionRequestType;
@@ -782,7 +783,11 @@ pub struct SuiTransactionBlockEffectsV1 {
     /// The set of transaction digests this transaction depends on.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub dependencies: Vec<TransactionDigest>,
+    /// th
+    pub abort_error: Option<Abort>,
 }
+
+// TODO move additional error info here
 
 impl SuiTransactionBlockEffectsAPI for SuiTransactionBlockEffectsV1 {
     fn status(&self) -> &SuiExecutionStatus {
@@ -904,6 +909,7 @@ impl SuiTransactionBlockEffects {
             wrapped: vec![],
             events_digest: None,
             dependencies: vec![],
+            abort_error: None,
         })
     }
 }
@@ -950,6 +956,7 @@ impl TryFrom<TransactionEffects> for SuiTransactionBlockEffects {
                 },
                 events_digest: effect.events_digest().copied(),
                 dependencies: effect.dependencies().to_vec(),
+                abort_error: effect.move_abort(),
             },
         ))
     }
