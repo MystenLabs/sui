@@ -1,3 +1,7 @@
+// Copyright (c) The Diem Core Contributors
+// Copyright (c) The Move Contributors
+// SPDX-License-Identifier: Apache-2.0
+
 use std::collections::BTreeMap;
 
 use serde::{Deserialize, Serialize};
@@ -18,9 +22,10 @@ use super::*;
 pub struct Manifest<F: MoveFlavor> {
     package: PackageMetadata<F>,
     environments: BTreeMap<EnvironmentName, F::EnvironmentID>,
-    dependencies: Option<BTreeMap<PackageName, ManifestDependency<F>>>,
-    dep_overrides:
-        Option<BTreeMap<EnvironmentName, BTreeMap<PackageName, ManifestDependencyOverride<F>>>>,
+    #[serde(default)]
+    dependencies: BTreeMap<PackageName, ManifestDependency<F>>,
+    #[serde(default)]
+    dep_overrides: BTreeMap<EnvironmentName, BTreeMap<PackageName, ManifestDependencyOverride<F>>>,
 }
 
 #[derive(Deserialize)]

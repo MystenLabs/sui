@@ -1,3 +1,7 @@
+// Copyright (c) The Diem Core Contributors
+// Copyright (c) The Move Contributors
+// SPDX-License-Identifier: Apache-2.0
+
 use std::{ops::Range, path::PathBuf};
 
 use serde::{Deserialize, Serialize};

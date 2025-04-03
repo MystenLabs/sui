@@ -1,3 +1,7 @@
+// Copyright (c) The Diem Core Contributors
+// Copyright (c) The Move Contributors
+// SPDX-License-Identifier: Apache-2.0
+
 pub mod lockfile;
 pub mod manifest;
 
@@ -6,10 +10,6 @@ use std::{
     path::{Path, PathBuf},
 };
 
-// use super::{
-//     lockfile::{Lockfile, Publication},
-//     EnvironmentName,
-// };
 use serde::{Deserialize, Serialize};
 
 use crate::flavor::MoveFlavor;

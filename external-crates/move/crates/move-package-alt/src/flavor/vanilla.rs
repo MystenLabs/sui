@@ -1,4 +1,5 @@
-// Copyright (c) Mysten Labs, Inc.
+// Copyright (c) The Diem Core Contributors
+// Copyright (c) The Move Contributors
 // SPDX-License-Identifier: Apache-2.0
 
 //! Defines the [Vanilla] implementation of the [MoveFlavor] trait. This implementation supports no
