@@ -854,10 +854,6 @@ fn module(
     module_def: P::ModuleDefinition,
 ) {
     assert!(context.address.is_none());
-    if module_def.is_spec_module {
-        context.spec_deprecated(module_def.name.0.loc, /* is_error */ false);
-        return;
-    }
     let (mident, mod_) = module_(context, package_name, module_address, module_def);
     if let Err((mident, old_loc)) = module_map.add(mident, mod_) {
         duplicate_module(context, module_map, mident, old_loc)
@@ -897,7 +893,6 @@ fn module_(
         attributes,
         loc,
         address,
-        is_spec_module: _,
         name,
         members,
         definition_mode: _,
@@ -965,7 +960,6 @@ fn module_(
             P::ModuleMember::Constant(c) => constant(context, &mut constants, c),
             P::ModuleMember::Struct(s) => struct_def(context, &mut structs, s),
             P::ModuleMember::Enum(e) => enum_def(context, &mut enums, e),
-            P::ModuleMember::Spec(s) => context.spec_deprecated(s.loc, /* is_error */ false),
         }
     }
     let mut use_funs = use_funs(context, use_funs_builder);
@@ -1484,7 +1478,7 @@ fn module_members(
             P::ModuleMember::Enum(e) => {
                 cur_members.insert(e.name.0, ModuleMemberKind::Enum);
             }
-            P::ModuleMember::Spec(_) | P::ModuleMember::Use(_) | P::ModuleMember::Friend(_) => (),
+            P::ModuleMember::Use(_) | P::ModuleMember::Friend(_) => (),
         };
     }
     members.add(mident, cur_members).unwrap();
@@ -1557,7 +1551,6 @@ fn aliases_from_member(
             check_name_and_add_implicit_alias!(ModuleMemberKind::Struct, n);
             Some(P::ModuleMember::Struct(s))
         }
-        P::ModuleMember::Spec(s) => Some(P::ModuleMember::Spec(s)),
         P::ModuleMember::Enum(e) => {
             let n = e.name.0;
             check_name_and_add_implicit_alias!(ModuleMemberKind::Enum, n);
@@ -2676,10 +2669,6 @@ fn exp(context: &mut Context, pe: Box<P::Exp>) -> Box<E::Exp> {
                 }
             }
         }
-        PE::Quant(..) => {
-            context.spec_deprecated(loc, /* is_error */ true);
-            EE::UnresolvedError
-        }
         PE::ExpList(pes) => {
             assert!(pes.len() > 1);
             EE::ExpList(exps(context, pes))
@@ -2809,10 +2798,6 @@ fn exp(context: &mut Context, pe: Box<P::Exp>) -> Box<E::Exp> {
         }
         PE::Cast(e, ty) => exp_cast(context, /* in_parens */ false, e, ty),
         PE::Annotate(e, ty) => EE::Annotate(exp(context, e), type_(context, ty)),
-        PE::Spec(_) => {
-            context.spec_deprecated(loc, /* is_error */ false);
-            EE::Unit { trailing: false }
-        }
         PE::UnresolvedError => EE::UnresolvedError,
     };
     Box::new(sp(loc, e_))
@@ -2842,7 +2827,6 @@ fn exp_cast(context: &mut Context, in_parens: bool, plhs: Box<P::Exp>, pty: P::T
             | PE::Loop(_)
             | PE::Labeled(_, _)
             | PE::Lambda(_, _, _)
-            | PE::Quant(_, _, _, _, _)
             | PE::Assign(_, _)
             | PE::Abort(_)
             | PE::Return(_, _)
@@ -2851,8 +2835,7 @@ fn exp_cast(context: &mut Context, in_parens: bool, plhs: Box<P::Exp>, pty: P::T
             | PE::UnaryExp(_, _)
             | PE::BinopExp(_, _, _)
             | PE::Cast(_, _)
-            | PE::Match(_, _)
-            | PE::Spec(_) => true,
+            | PE::Match(_, _) => true,
 
             PE::DotCall(lhs, _, _, _, _, _)
             | PE::Dot(lhs, _, _)
