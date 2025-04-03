@@ -50,72 +50,88 @@ export default function (path: AstPath<Node>): treeFn | null {
  * ```
  */
 function printIfExpression(path: AstPath<Node>, options: MoveOptions, print: printFn): Doc {
+    if (path.node.nonFormattingChildren.length < 2) {
+        throw new Error('Invalid if_expression node');
+    }
+
     const hasElse = path.node.children.some((e) => e.type == 'else');
-    const condition = path.node.nonFormattingChildren[0];
-    const trueBranch = path.node.nonFormattingChildren[1];
+    const condition = path.node.nonFormattingChildren[0]!;
+    const trueBranch = path.node.nonFormattingChildren[1]!;
     const groupId = Symbol('if_expression_true');
     const result: Doc[] = [];
 
-    // condition group
-    result.push(
-        group([
-            'if (',
-            condition?.isList
-                ? [indent(softline), path.call(print, 'nonFormattingChildren', 0), softline]
-                : [
-                      indent(softline),
-                      indent(path.call(print, 'nonFormattingChildren', 0)),
-                      softline,
-                  ],
-            ')',
-        ]),
-    );
+    const conditionGroup = group([
+        'if (',
+        condition?.isList
+            ? [indent(softline), path.call(print, 'nonFormattingChildren', 0), softline]
+            : [indent(softline), indent(path.call(print, 'nonFormattingChildren', 0)), softline],
+        ')',
+    ]);
+
+    result.push(conditionGroup);
+
+    const isTrueList = trueBranch?.isList || false;
+    const truePrinted = path.call(print, 'nonFormattingChildren', 1);
+    let trueHasComment = false;
 
     // true branch group
-    if (trueBranch?.isList) {
-        const shouldBreak =
+    if (isTrueList) {
+        trueHasComment =
             trueBranch.leadingComment.some((e) => e.type == 'line_comment') ||
             trueBranch.trailingComment?.type == 'line_comment';
 
-        result.push(
-            group([' ', path.call(print, 'nonFormattingChildren', 1)], { shouldBreak: false }),
-        );
-        hasElse && result.push(group([line, 'else'], { shouldBreak }));
+        result.push(group([' ', truePrinted], { shouldBreak: false }));
     } else {
-        result.push(
-            group([indent(line), indent(path.call(print, 'nonFormattingChildren', 1))], {
-                id: groupId,
-            }),
-        );
-
-        // link group breaking to the true branch, add `else` either with a
-        // newline or without - depends on whether true branch is converted into
-        // a block
-        hasElse &&
-            result.push([
-                ifBreak([hardlineWithoutBreakParent, 'else'], [line, 'else'], { groupId }),
-            ]);
+        result.push(group([indent(line), indent(truePrinted)], { id: groupId }));
     }
 
-    // else block
-    if (hasElse) {
-        const elseNode = path.node.nonFormattingChildren[2]!;
-        const shouldBreak =
-            elseNode.leadingComment.some((e) => e.type == 'line_comment') ||
-            elseNode.trailingComment?.type == 'line_comment';
-
-        // special casing chained `if_expression` with the expectation that the
-        // expression can handle breaking / nesting itself.
-        if (elseNode.isList || elseNode.type == 'if_expression') {
-            result.push([' ', path.call(print, 'nonFormattingChildren', 2)]);
-        } else {
-            result.push(
-                group([indent(line), indent(path.call(print, 'nonFormattingChildren', 2))], {
-                    shouldBreak,
-                }),
-            );
-        }
+    // early return if there's no else block
+    if (!hasElse) {
+        return result;
     }
+
+    const elseNode = path.node.nonFormattingChildren[2]!;
+
+    // modify the break condition for the else block
+    const elseShouldBreak =
+        elseNode.leadingComment.some((e) => e.type == 'line_comment') ||
+        elseNode.trailingComment?.type == 'line_comment';
+
+    // if true branch is a list, and there's no line comment, we add a space,
+    // if there's a line comment, we add a line break
+    //
+    // also, if the else block is another `if_expression` we follow the same
+    // logic as above
+    if (isTrueList || elseNode.type == 'if_expression') {
+        result.push(group([line, 'else'], { shouldBreak: trueHasComment }));
+        result.push([' ', path.call(print, 'nonFormattingChildren', 2)]);
+        return result;
+    }
+
+    const elseBranchPrinted = path.call(print, 'nonFormattingChildren', 2);
+
+    // if true branch is not a list, and else is a list, we newline
+    if (elseNode.isList && !isTrueList) {
+        result.push([hardlineWithoutBreakParent, 'else ', elseBranchPrinted]);
+        return result;
+    }
+
+    result.push(
+        group([
+            ifBreak(
+                [
+                    hardlineWithoutBreakParent,
+                    'else',
+                    group([indent(line), indent(elseBranchPrinted)]),
+                ],
+                [
+                    line,
+                    'else',
+                    group([indent(line), elseBranchPrinted], { shouldBreak: elseShouldBreak }),
+                ],
+            ),
+        ]),
+    );
 
     return result;
 }

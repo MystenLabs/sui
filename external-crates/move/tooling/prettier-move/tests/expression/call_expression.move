@@ -20,6 +20,13 @@ fun call_expression() {
     call(
         /* a */ 10, // trailing line
     );
+
+    call(if (cond) {
+        b"1"
+    } else {
+        b"0"
+    }.to_string());
+
 }
 
 fun misc() {

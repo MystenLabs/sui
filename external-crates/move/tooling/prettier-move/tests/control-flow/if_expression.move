@@ -228,4 +228,8 @@ fun if_comments() {
         expression
     else // comment
         expression;
+
+    if (cond) expression
+    // comment
+    else expression; // comment
 }

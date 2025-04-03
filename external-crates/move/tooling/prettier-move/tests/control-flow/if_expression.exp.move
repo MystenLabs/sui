@@ -9,7 +9,8 @@ fun basic() {
     if (false)
         call_some_long_func();
 
-    if (cond) do_this() else {
+    if (cond) do_this()
+    else {
         do_that();
         do_this();
     };
@@ -272,7 +273,10 @@ fun if_comments() {
     if (
         /* expr */ expression // comment
     ) expression
-    else
-        // comment
+    else // comment
         expression;
+
+    if (cond) expression
+    else // comment
+        expression; // comment
 }
