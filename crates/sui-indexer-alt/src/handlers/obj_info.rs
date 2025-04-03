@@ -700,7 +700,8 @@ mod tests {
             .find(|obj| obj.id() == TestCheckpointDataBuilder::derive_object_id(0))
             .unwrap();
 
-        // Create a new transaction that will use the shared object
+        // Create a new transaction that will "read" the shared object. This emulates a shared
+        // object appearing as an input object, but missing from `tx.effects`.
         let mut builder = builder.start_transaction(0).finish_transaction();
         if let Some(tx) = builder.transactions_mut().last_mut() {
             tx.input_objects.push(shared_obj);
