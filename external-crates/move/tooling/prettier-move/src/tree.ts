@@ -198,6 +198,7 @@ export class Tree {
      */
     get isControlFlow(): boolean {
         return [
+            'identified_expression',
             'if_expression',
             'while_expression',
             'loop_expression',

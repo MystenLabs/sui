@@ -13,20 +13,50 @@ fun assign_expression() {
     a = if (true) { b } else { c };
 
     // assignment with if + break
-    a =
-        if (long_condition)
-            long_expression
-        else
-            another_long_expression;
+    assign = if (long_condition)
+        long_expression
+    else another_long_expression;
 
-    a = if (true) { a } else { b };
+    assign = if (true) { a } else {
+        b
+    };
 
     // assignment with if + block
-    a = if (true) {
-            long_true_expression
-        } else {
-            long_false_expression
-        };
+    assign = if (true) {
+        long_true_expression
+    } else {
+        long_false_expression
+    };
+
+    // assignment + control flow
+    assign = 'ret: if (true) {
+        long_true_expression
+    } else {
+        long_false_expression
+    };
+
+    assign = 'loop: loop {
+        break 'loop a;
+    };
+
+    assign = 'ret: 10u8.do!(|x| {
+        return 'ret x;
+    });
+
+    // Block
+
+    assign = {
+        // comment
+        a = b;
+        a
+    };
+
+    assign = vector[100, 200];
+    assign = vector[
+        100000,
+        200000,
+        30000,
+    ];
 }
 
 fun assign_comment() {

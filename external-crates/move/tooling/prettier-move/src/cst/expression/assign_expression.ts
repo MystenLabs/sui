@@ -49,13 +49,23 @@ function printAssignExpression(path: AstPath<Node>, options: MoveOptions, print:
         ),
     );
 
-    // then print the rhs
-    result.push(
-        group([
-            shouldBreak ? '' : indent(line),
-            indent(path.call(print, 'nonFormattingChildren', 1)),
-        ]),
-    );
+    const rhs = path.node.nonFormattingChildren[1]!;
+    if ((rhs.isControlFlow || rhs.isList) && !shouldBreak) {
+        result.push(
+            group([
+                ' ',
+                path.call(print, 'nonFormattingChildren', 1),
+            ]),
+        );
+    } else {
+        // then print the rhs
+        result.push(
+            group([
+                shouldBreak ? '' : indent(line),
+                indent(path.call(print, 'nonFormattingChildren', 1)),
+            ]),
+        );
+    }
 
     return result;
 }

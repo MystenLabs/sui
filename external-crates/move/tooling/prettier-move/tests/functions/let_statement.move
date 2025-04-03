@@ -1,5 +1,6 @@
 // options:
-// printWidth: 60
+// printWidth: 35
+// useModuleLabel: true
 
 // Testing strategy for let statement:
 //
@@ -130,5 +131,56 @@ module prettier::let_statement {
             true => shape::use_(b"#b".to_string()),
             false => shape::use_(b"#w".to_string()),
         };
+    }
+
+    fun let_control_flow() {
+        // let assign with if_expression
+        a = if (true) { b } else { c };
+
+        // let assign with if + break
+        assign = if (long_condition)
+            long_expression
+        else another_long_expression;
+
+        assign = if (true) { a } else {
+            b
+        };
+
+        // let assign with if + block
+        assign = if (true) {
+            long_true_expression
+        } else {
+            long_false_expression
+        };
+
+        // let assign + control flow
+        assign = 'ret: if (true) {
+            long_true_expression
+        } else {
+            long_false_expression
+        };
+
+        assign = 'loop: loop {
+            break 'loop a;
+        };
+
+        assign = 'ret: 10u8.do!(|x| {
+            return 'ret x;
+        });
+
+        // Block
+
+        assign = {
+            // comment
+            a = b;
+            a
+        };
+
+        assign = vector[100, 200];
+        assign = vector[
+            100000,
+            200000,
+            30000,
+        ];
     }
 }
