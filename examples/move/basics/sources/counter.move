@@ -26,7 +26,7 @@ module basics::counter {
     public fun create(ctx: &mut TxContext) {
         transfer::share_object(Counter {
             id: object::new(ctx),
-            owner: tx_context::sender(ctx),
+            owner: ctx.sender(),
             value: 0,
         })
     }
