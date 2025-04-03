@@ -51,12 +51,7 @@ function printAssignExpression(path: AstPath<Node>, options: MoveOptions, print:
 
     const rhs = path.node.nonFormattingChildren[1]!;
     if ((rhs.isControlFlow || rhs.isList) && !shouldBreak) {
-        result.push(
-            group([
-                ' ',
-                path.call(print, 'nonFormattingChildren', 1),
-            ]),
-        );
+        result.push(group([' ', path.call(print, 'nonFormattingChildren', 1)]));
     } else {
         // then print the rhs
         result.push(
