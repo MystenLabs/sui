@@ -13,7 +13,7 @@ use crate::{
     flavor::MoveFlavor,
 };
 
-use super::PinnedDependency;
+use super::PinnedDependencyInfo;
 
 /// An external dependency has the form `{ r.<res> = "<data>" }`; it is resolved by invoking the
 /// binary `<res>` (from the `PATH`), and passing `<data>` on the command line. The binary is
@@ -31,7 +31,7 @@ pub struct ExternalDependency {
 impl ExternalDependency {
     /// Invoke the external binary and deserialize its output as a dependency, then pin the
     /// dependency.
-    fn resolve<F: MoveFlavor>(&self) -> PackageResult<PinnedDependency<F>> {
+    fn resolve<F: MoveFlavor>(&self) -> PackageResult<PinnedDependencyInfo<F>> {
         todo!()
     }
 }

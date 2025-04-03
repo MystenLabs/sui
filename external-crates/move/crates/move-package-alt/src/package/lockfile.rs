@@ -16,7 +16,7 @@ use toml_edit::{
 };
 
 use crate::{
-    dependency::{ManifestDependency, PinnedDependency},
+    dependency::{ManifestDependencyInfo, PinnedDependencyInfo},
     flavor::MoveFlavor,
 };
 
@@ -38,7 +38,7 @@ pub struct Lockfile<F: MoveFlavor> {
 pub struct Publication<F: MoveFlavor> {
     #[serde(flatten)]
     metadata: F::PublishedMetadata,
-    dependencies: BTreeMap<PackageName, PinnedDependency<F>>,
+    dependencies: BTreeMap<PackageName, PinnedDependencyInfo<F>>,
 }
 
 #[derive(Serialize, Deserialize, Derivative)]
@@ -56,8 +56,8 @@ struct UnpublishedTable<F: MoveFlavor> {
 #[derivative(Default(bound = ""), Clone(bound = ""))]
 #[serde(bound = "")]
 struct UnpublishedDependencies<F: MoveFlavor> {
-    pinned: BTreeMap<PackageName, PinnedDependency<F>>,
-    unpinned: BTreeMap<PackageName, ManifestDependency<F>>,
+    pinned: BTreeMap<PackageName, PinnedDependencyInfo<F>>,
+    unpinned: BTreeMap<PackageName, ManifestDependencyInfo<F>>,
 }
 
 impl<F: MoveFlavor> Lockfile<F> {

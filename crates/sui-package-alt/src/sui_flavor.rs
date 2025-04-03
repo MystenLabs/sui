@@ -1,7 +1,7 @@
 use std::collections::BTreeMap;
 
 use move_package_alt::{
-    dependency::{self, Pinned, Unpinned},
+    dependency::{self, Pinned, PinnedDependencyInfo, Unpinned},
     errors::PackageResult,
     flavor::MoveFlavor,
     package::PackageName,
@@ -37,7 +37,11 @@ impl MoveFlavor for SuiFlavor {
 
     type EnvironmentID = (); // TODO
 
-    fn implicit_deps(&self, id: Self::EnvironmentID) -> Vec<dependency::PinnedDependency<Self>> {
+    type AddressInfo = (); // TODO
+
+    type PackageMetadata = (); // TODO
+
+    fn implicit_deps(&self, id: Self::EnvironmentID) -> Vec<PinnedDependencyInfo<Self>> {
         todo!()
     }
 }

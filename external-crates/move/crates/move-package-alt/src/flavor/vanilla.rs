@@ -12,8 +12,9 @@ use std::{
 
 use serde::{Deserialize, Serialize};
 
+use crate::dependency::PinnedDependencyInfo;
 use crate::{
-    dependency::{Pinned, PinnedDependency, Unpinned},
+    dependency::{Pinned, Unpinned},
     errors::PackageResult,
     package::PackageName,
 };
@@ -26,9 +27,11 @@ pub struct Vanilla;
 
 impl MoveFlavor for Vanilla {
     type PublishedMetadata = ();
+    type PackageMetadata = ();
     type EnvironmentID = String;
+    type AddressInfo = ();
 
-    fn implicit_deps(&self, environment: Self::EnvironmentID) -> Vec<PinnedDependency<Self>> {
+    fn implicit_deps(&self, environment: Self::EnvironmentID) -> Vec<PinnedDependencyInfo<Self>> {
         vec![]
     }
 

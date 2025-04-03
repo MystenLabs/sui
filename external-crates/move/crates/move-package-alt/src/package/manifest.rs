@@ -1,52 +1,66 @@
-/*
 use std::collections::BTreeMap;
 
 use serde::{Deserialize, Serialize};
 
+use crate::{
+    dependency::ManifestDependencyInfo,
+    flavor::{MoveFlavor, Vanilla},
+};
+
 use super::*;
 
+// Note: [Manifest] objects are immutable and should not implement [serde::Serialize]; any tool
+// writing these files should use [toml_edit] to set / preserve the formatting, since these are
+// user-editable files
 #[derive(Deserialize)]
 #[serde(rename = "kebab-case")]
-pub struct Manifest {
-    package: PackageMetadata,
-    environments: BTreeMap<EnvironmentName, ChainID>,
-    dependencies: BTreeMap<PackageName, ManifestDependency>,
-    dep_overrides: BTreeMap<EnvironmentName, BTreeMap<PackageName, ManifestDependencyOverride>>,
+#[serde(bound = "")]
+pub struct Manifest<F: MoveFlavor> {
+    package: PackageMetadata<F>,
+    environments: BTreeMap<EnvironmentName, F::EnvironmentID>,
+    dependencies: BTreeMap<PackageName, ManifestDependency<F>>,
+    dep_overrides: BTreeMap<EnvironmentName, BTreeMap<PackageName, ManifestDependencyOverride<F>>>,
 }
 
 #[derive(Deserialize)]
-struct PackageMetadata {
+#[serde(bound = "")]
+struct PackageMetadata<F: MoveFlavor> {
     name: PackageName,
-    // TODO
+    edition: String,
+
+    #[serde(flatten)]
+    metadata: F::PackageMetadata,
 }
 
 #[derive(Deserialize)]
+#[serde(bound = "")]
 #[serde(rename_all = "kebab-case")]
-struct ManifestDependency {
-    resolver: String,
+struct ManifestDependency<F: MoveFlavor> {
+    #[serde(flatten)]
+    dependency_info: ManifestDependencyInfo<F>,
 
     #[serde(rename = "override", default)]
     is_override: bool,
 
+    #[serde(default)]
     rename_from: Option<PackageName>,
-
-    #[serde(flatten)]
-    fields: BTreeMap<String, String>,
 }
 
 #[derive(Deserialize)]
+#[serde(bound = "")]
 #[serde(rename_all = "kebab-case")]
-struct ManifestDependencyOverride {
-    #[serde(flatten)]
-    dependency: Option<ManifestDependency>,
+struct ManifestDependencyOverride<F: MoveFlavor> {
+    #[serde(flatten, default)]
+    dependency: Option<ManifestDependency<F>>,
 
-    #[serde(flatten)]
-    address_info: Option<AddressInfo>,
+    #[serde(flatten, default)]
+    address_info: Option<F::AddressInfo>,
 
+    #[serde(default)]
     use_environment: Option<EnvironmentName>,
 }
 
-impl Manifest {
+impl<F: MoveFlavor> Manifest<F> {
     fn read_from(path: impl AsRef<Path>) -> anyhow::Result<Self> {
         let contents = std::fs::read_to_string(path)?;
         Ok(toml_edit::de::from_str(&contents)?)
@@ -65,6 +79,5 @@ impl Manifest {
 
 #[test]
 fn write_new() {
-    let manifest = Manifest::read_from("tests/output/Move.toml".to_string());
+    let manifest = Manifest::<Vanilla>::read_from("tests/output/Move.toml".to_string());
 }
-*/

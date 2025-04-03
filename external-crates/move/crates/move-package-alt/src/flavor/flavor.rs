@@ -9,7 +9,7 @@ use std::{
 use serde::{de::DeserializeOwned, Serialize};
 
 use crate::{
-    dependency::{Pinned, PinnedDependency, Unpinned},
+    dependency::{Pinned, PinnedDependencyInfo, Unpinned},
     errors::PackageResult,
     package::PackageName,
 };
@@ -46,6 +46,13 @@ pub trait MoveFlavor {
     // TODO: should this include object IDs, or is that generic for Move? What about build config?
     type PublishedMetadata: Serialize + DeserializeOwned + Clone;
 
+    /// A [PackageMetadata] encapsulates the additional package information that can be stored in
+    /// the `package` section of the manifest
+    type PackageMetadata: Serialize + DeserializeOwned + Clone;
+
+    /// An [AddressInfo] should give a unique identifier for a compiled package
+    type AddressInfo: Serialize + DeserializeOwned + Clone;
+
     /// An [EnvironmentID] uniquely identifies a place that a package can be published. For
     /// example, an environment ID might be a chain identifier
     //
@@ -53,5 +60,5 @@ pub trait MoveFlavor {
     type EnvironmentID: Serialize + DeserializeOwned + Clone + Eq;
 
     /// Return the implicit dependencies for a given environment
-    fn implicit_deps(&self, environment: Self::EnvironmentID) -> Vec<PinnedDependency<Self>>;
+    fn implicit_deps(&self, environment: Self::EnvironmentID) -> Vec<PinnedDependencyInfo<Self>>;
 }
