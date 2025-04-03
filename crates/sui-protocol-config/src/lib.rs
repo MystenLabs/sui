@@ -231,7 +231,7 @@ const MAX_PROTOCOL_VERSION: u64 = 80;
 //             Enable load_nitro_attestation move function in sui framework in testnet.
 //             Enable consensus garbage collection for mainnet
 //             Enable the new consensus commit rule for mainnet.
-// Version 80:
+// Version 80: Enable median based commit timestamp in consensus on mainnet.
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
@@ -3449,7 +3449,9 @@ impl ProtocolConfig {
                     cfg.consensus_gc_depth = Some(60);
                     cfg.feature_flags.consensus_linearize_subdag_v2 = true;
                 }
-                80 => {}
+                80 => {
+                    cfg.feature_flags.consensus_median_based_commit_timestamp = true;
+                }
                 // Use this template when making changes:
                 //
                 //     // modify an existing constant.
