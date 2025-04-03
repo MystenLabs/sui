@@ -10,53 +10,53 @@ const { group, indent, line } = doc.builders;
 const NODE_TYPE = 'let_statement';
 
 export default function (path: AstPath<Node>): treeFn | null {
-	if (path.node.type === NODE_TYPE) {
-		return printLetStatement;
-	}
+    if (path.node.type === NODE_TYPE) {
+        return printLetStatement;
+    }
 
-	return null;
+    return null;
 }
 
 /**
  * Print `let_statement` node.
  */
 function printLetStatement(path: AstPath<Node>, options: MoveOptions, print: printFn): Doc {
-	const nodes = path.node.nonFormattingChildren;
+    const nodes = path.node.nonFormattingChildren;
 
-	if (nodes.length === 1) {
-		return group(['let', ' ', path.call(print, 'nonFormattingChildren', 0)]);
-	}
+    if (nodes.length === 1) {
+        return group(['let', ' ', path.call(print, 'nonFormattingChildren', 0)]);
+    }
 
-	const printed = path.map(print, 'nonFormattingChildren');
-	const rhsNode = path.node.nonFormattingChildren.slice(-1)[0]!;
+    const printed = path.map(print, 'nonFormattingChildren');
+    const rhsNode = path.node.nonFormattingChildren.slice(-1)[0]!;
 
-	if (nodes.length === 2 && nodes[1]!.isTypeParam) {
-		const [bind, type] = printed;
-		return group(['let ', bind!, ': ', type!]);
-	}
+    if (nodes.length === 2 && nodes[1]!.isTypeParam) {
+        const [bind, type] = printed;
+        return group(['let ', bind!, ': ', type!]);
+    }
 
-	if (nodes.length === 2) {
-		const [bind, expr] = printed;
-		const result =
-			rhsNode.isBreakableExpression || rhsNode.isFunctionCall
-				? ['let ', bind!, ' = ', expr!]
-				: ['let ', bind!, ' =', indent(group([line, expr!], { shouldBreak: false }))];
+    if (nodes.length === 2) {
+        const [bind, expr] = printed;
+        const result =
+            rhsNode.isBreakableExpression || rhsNode.isFunctionCall
+                ? ['let ', bind!, ' = ', expr!]
+                : ['let ', bind!, ' =', indent(group([line, expr!], { shouldBreak: false }))];
 
-		return group(result, { shouldBreak: false });
-	}
+        return group(result, { shouldBreak: false });
+    }
 
-	const [bind, type, expr] = printed;
-	const result =
-		rhsNode.isBreakableExpression || rhsNode.isFunctionCall
-			? ['let ', bind!, ': ', type!, ' = ', expr!]
-			: [
-					'let ',
-					bind!,
-					': ',
-					type!,
-					' =',
-					indent(group([line, expr!], { shouldBreak: false })),
-				];
+    const [bind, type, expr] = printed;
+    const result =
+        rhsNode.isBreakableExpression || rhsNode.isFunctionCall
+            ? ['let ', bind!, ': ', type!, ' = ', expr!]
+            : [
+                  'let ',
+                  bind!,
+                  ': ',
+                  type!,
+                  ' =',
+                  indent(group([line, expr!], { shouldBreak: false })),
+              ];
 
-	return result;
+    return result;
 }

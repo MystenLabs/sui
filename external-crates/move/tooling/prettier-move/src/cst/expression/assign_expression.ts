@@ -11,40 +11,51 @@ const { group, indent, line } = doc.builders;
 export const NODE_TYPE = 'assign_expression';
 
 export default function (path: AstPath<Node>): treeFn | null {
-	if (path.node.type === NODE_TYPE) {
-		return printAssignExpression;
-	}
+    if (path.node.type === NODE_TYPE) {
+        return printAssignExpression;
+    }
 
-	return null;
+    return null;
 }
 
 /**
  * Print `assign_expression` node.
  */
 function printAssignExpression(path: AstPath<Node>, options: MoveOptions, print: printFn): Doc {
-	if (path.node.nonFormattingChildren.length !== 2) {
-		throw new Error('`assign_expression` must have 2 children');
-	}
+    if (path.node.nonFormattingChildren.length !== 2) {
+        throw new Error('`assign_expression` must have 2 children');
+    }
 
-	const result: Doc[] = [];
-	let shouldBreak = false;
+    const result: Doc[] = [];
+    let shouldBreak = false;
 
-	// together with the LHS we print trailing comment if there is one
-	result.push(path.call((lhs) => {
-		const hasComment = !!lhs.node.trailingComment;
+    // together with the LHS we print trailing comment if there is one
+    result.push(
+        path.call(
+            (lhs) => {
+                const hasComment = !!lhs.node.trailingComment;
 
-		if (lhs.node.trailingComment?.type == 'line_comment') {
-			shouldBreak = true;
-			const trailingLineComment = printTrailingComment(lhs, true);
-			lhs.node.disableTrailingComment();
-			return [print(lhs), ' =', indent(trailingLineComment)];
-		}
+                if (lhs.node.trailingComment?.type == 'line_comment') {
+                    shouldBreak = true;
+                    const trailingLineComment = printTrailingComment(lhs, true);
+                    lhs.node.disableTrailingComment();
+                    return [print(lhs), ' =', indent(trailingLineComment)];
+                }
 
-		return [print(lhs), hasComment ? '=' : ' ='];
-	}, 'nonFormattingChildren', 0));
+                return [print(lhs), hasComment ? '=' : ' ='];
+            },
+            'nonFormattingChildren',
+            0,
+        ),
+    );
 
-	// then print the rhs
-	result.push(group([shouldBreak ? '' : indent(line), indent(path.call(print, 'nonFormattingChildren', 1))]));
+    // then print the rhs
+    result.push(
+        group([
+            shouldBreak ? '' : indent(line),
+            indent(path.call(print, 'nonFormattingChildren', 1)),
+        ]),
+    );
 
-	return result;
+    return result;
 }

@@ -54,15 +54,17 @@ fun dot_expression() {
     if (true) a.dot().expression()
     else b.dot().expression();
 
-    if (true) staking
-        .pools[pool]
-        .borrow_mut()
-        .unwrap()
-        .stake(amount)
-    else staking
-        .pools[pool]
-        .borrow_mut()
-        .stake(0)
+    if (true)
+        staking
+            .pools[pool]
+            .borrow_mut()
+            .unwrap()
+            .stake(amount)
+    else
+        staking
+            .pools[pool]
+            .borrow_mut()
+            .stake(0)
 }
 
 fun lists() {
