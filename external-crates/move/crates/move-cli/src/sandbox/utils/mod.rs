@@ -9,7 +9,7 @@ use move_binary_format::{
     compatibility::Compatibility,
     errors::{Location, VMError},
     file_format::{AbilitySet, CompiledModule, FunctionDefinitionIndex, SignatureToken},
-    normalized, IndexKind,
+    normalized_2 as normalized, IndexKind,
 };
 use move_bytecode_utils::Modules;
 use move_command_line_common::files::{FileHash, MOVE_COMPILED_EXTENSION};
@@ -159,8 +159,9 @@ pub(crate) fn explain_publish_error(
             println!("Breaking change detected--publishing aborted. Re-run with --ignore-breaking-changes to publish anyway.");
 
             let old_module = state.get_module_by_id(&module_id)?.unwrap();
-            let old_api = normalized::Module::new(&old_module);
-            let new_api = normalized::Module::new(module);
+            let pool = &mut normalized::RCPool::new();
+            let old_api = normalized::Module::new(pool, &old_module);
+            let new_api = normalized::Module::new(pool, module);
 
             if (Compatibility {
                 check_datatype_layout: true,

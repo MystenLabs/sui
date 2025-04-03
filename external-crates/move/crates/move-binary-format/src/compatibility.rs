@@ -117,10 +117,10 @@ impl Compatibility {
         // module's name and address are unchanged
         if old_module.address() != new_module.address() || old_module.name() != new_module.name() {
             context.module_id_mismatch(
-                &old_module.address(),
-                &old_module.name(),
-                &new_module.address(),
-                &new_module.name(),
+                old_module.address(),
+                old_module.name(),
+                new_module.address(),
+                new_module.name(),
             );
         }
 
@@ -384,10 +384,10 @@ impl InclusionCheck {
         // module's name and address are unchanged
         if old_module.address() != new_module.address() || old_module.name() != new_module.name() {
             context.module_id_mismatch(
-                &old_module.address(),
-                &old_module.name(),
-                &new_module.address(),
-                &new_module.name(),
+                old_module.address(),
+                old_module.name(),
+                new_module.address(),
+                new_module.name(),
             );
         }
 

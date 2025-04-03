@@ -5,14 +5,14 @@
 use move_binary_format::{
     compatibility::{Compatibility, InclusionCheck},
     file_format::AbilitySet,
-    normalized,
+    normalized_2 as normalized,
 };
 use move_ir_to_bytecode::{compiler::compile_module, parser::parse_module};
 
-fn compile(prog: &str) -> normalized::Module {
+fn compile(prog: &str) -> normalized::Module<normalized::RCIdentifier> {
     let prog = parse_module(prog).unwrap();
     let (compiled_module, _) = compile_module(prog, vec![]).unwrap();
-    normalized::Module::new(&compiled_module)
+    normalized::Module::new(&mut normalized::RCPool::new(), &compiled_module)
 }
 
 // Things to test for enum upgrades

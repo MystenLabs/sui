@@ -763,7 +763,7 @@ fn private_entry_signature_change_allowed() {
     // Update the signature of the entry fun to now take a u64 argument.
     let function_ref = updated_module.functions.get_mut(ident_str!("fn")).unwrap();
     let new_function = {
-        let mut f: normalized::Function<_> = (&**function_ref).clone();
+        let mut f: normalized::Function<_> = (**function_ref).clone();
         f.parameters = Rc::new(vec![Rc::new(Type::U64)]);
         Rc::new(f)
     };
@@ -906,7 +906,7 @@ fn public_entry_signature_change_disallowed() {
     let mut updated_module = module.clone();
     let function_ref = updated_module.functions.get_mut(ident_str!("fn")).unwrap();
     let new_function = {
-        let mut f: normalized::Function<_> = (&**function_ref).clone();
+        let mut f: normalized::Function<_> = (**function_ref).clone();
         f.parameters = Rc::new(vec![Rc::new(Type::U64)]);
         Rc::new(f)
     };
@@ -946,7 +946,7 @@ fn friend_entry_signature_change_allowed() {
     // Update the signature of the entry fun to now take a u64 argument.
     let function_ref = updated_module.functions.get_mut(ident_str!("fn")).unwrap();
     let new_function = {
-        let mut f: normalized::Function<_> = (&**function_ref).clone();
+        let mut f: normalized::Function<_> = (**function_ref).clone();
         f.parameters = Rc::new(vec![Rc::new(Type::U64)]);
         Rc::new(f)
     };
