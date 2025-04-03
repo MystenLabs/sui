@@ -311,99 +311,6 @@ pub enum Bytecode<S> {
     MoveToDeprecated(Box<StructRef<S>>),
 }
 
-impl<S> Tables<S> {
-    fn new<Pool: StringPool<String = S>>(pool: &mut Pool, m: &CompiledModule) -> Self {
-        let mut tables = Tables {
-            empty_signature: Rc::new(vec![]),
-            signatures: Vec::new(),
-            constants: Vec::new(),
-            struct_defs: Vec::new(),
-            function_defs: Vec::new(),
-            enum_defs: Vec::new(),
-        };
-        tables.signatures = m
-            .signatures
-            .iter()
-            .map(|s| Type::signature(pool, m, s))
-            .collect();
-        tables.constants = m
-            .constant_pool
-            .iter()
-            .map(|c| Rc::new(Constant::new(pool, m, c)))
-            .collect();
-        tables.struct_defs = m
-            .struct_defs
-            .iter()
-            .map(|s| Rc::new(Struct::new(pool, m, s)))
-            .collect();
-        tables.enum_defs = m
-            .enum_defs
-            .iter()
-            .map(|e| Rc::new(Enum::new(pool, m, e)))
-            .collect();
-        tables.function_defs = m
-            .function_defs
-            .iter()
-            .map(|f| Rc::new(Function::new(&tables, pool, m, f)))
-            .collect();
-        tables
-    }
-}
-
-impl<S: Clone + Ord> Module<S> {
-    /// Extract a normalized module from a `CompiledModule`. The module `m` should be verified.
-    /// Nothing will break here if that is not the case, but there is little point in computing a
-    /// normalized representation of a module that won't verify (since it can't be published).
-    pub fn new<Pool: StringPool<String = S>>(pool: &mut Pool, m: &CompiledModule) -> Self {
-        let tables = Tables::new(pool, m);
-        let id = ModuleId::new(pool, &m.self_id());
-        let friends = m
-            .immediate_friends()
-            .into_iter()
-            .map(|f| ModuleId::new(pool, &f))
-            .collect();
-        let dependencies = m
-            .immediate_dependencies()
-            .into_iter()
-            .map(|d| ModuleId::new(pool, &d))
-            .collect();
-        let constants = (0..m.constant_pool.len())
-            .map(|idx| tables.constants[idx].clone())
-            .collect();
-        let structs = (0..m.struct_defs.len())
-            .map(|idx| {
-                let def = tables.struct_defs[idx].clone();
-                (def.name.clone(), def)
-            })
-            .collect();
-        let enums = (0..m.enum_defs.len())
-            .map(|idx| {
-                let def = tables.enum_defs[idx].clone();
-                (def.name.clone(), def)
-            })
-            .collect();
-        let functions = (0..m.function_defs.len())
-            .map(|idx| {
-                let def = tables.function_defs[idx].clone();
-                (def.name.clone(), def)
-            })
-            .collect();
-        Self {
-            tables,
-            id,
-            file_format_version: m.version(),
-            address: *m.address(),
-            name: pool.intern(m.name()),
-            friends,
-            structs,
-            enums,
-            functions,
-            dependencies,
-            constants,
-        }
-    }
-}
-
 impl<S> ModuleId<S> {
     pub fn new<Pool: StringPool<String = S>>(
         pool: &mut Pool,
@@ -653,16 +560,95 @@ impl<S> Datatype<S> {
     }
 }
 
-impl<S> Field<S> {
-    /// Create a `Field` for `FieldDefinition` `f` in module `m`.
-    pub fn new<Pool: StringPool<String = S>>(
-        pool: &mut Pool,
-        m: &CompiledModule,
-        f: &FieldDefinition,
-    ) -> Self {
-        Field {
-            name: pool.intern(m.identifier_at(f.name)),
-            type_: Type::new(pool, m, &f.signature.0),
+impl<S> Tables<S> {
+    fn new<Pool: StringPool<String = S>>(pool: &mut Pool, m: &CompiledModule) -> Self {
+        let mut tables = Tables {
+            empty_signature: Rc::new(vec![]),
+            signatures: Vec::new(),
+            constants: Vec::new(),
+            struct_defs: Vec::new(),
+            function_defs: Vec::new(),
+            enum_defs: Vec::new(),
+        };
+        tables.signatures = m
+            .signatures
+            .iter()
+            .map(|s| Type::signature(pool, m, s))
+            .collect();
+        tables.constants = m
+            .constant_pool
+            .iter()
+            .map(|c| Rc::new(Constant::new(pool, m, c)))
+            .collect();
+        tables.struct_defs = m
+            .struct_defs
+            .iter()
+            .map(|s| Rc::new(Struct::new(pool, m, s)))
+            .collect();
+        tables.enum_defs = m
+            .enum_defs
+            .iter()
+            .map(|e| Rc::new(Enum::new(pool, m, e)))
+            .collect();
+        tables.function_defs = m
+            .function_defs
+            .iter()
+            .map(|f| Rc::new(Function::new(&tables, pool, m, f)))
+            .collect();
+        tables
+    }
+}
+
+impl<S: Clone + Ord> Module<S> {
+    /// Extract a normalized module from a `CompiledModule`. The module `m` should be verified.
+    /// Nothing will break here if that is not the case, but there is little point in computing a
+    /// normalized representation of a module that won't verify (since it can't be published).
+    pub fn new<Pool: StringPool<String = S>>(pool: &mut Pool, m: &CompiledModule) -> Self {
+        let tables = Tables::new(pool, m);
+        let id = ModuleId::new(pool, &m.self_id());
+        let friends = m
+            .immediate_friends()
+            .into_iter()
+            .map(|f| ModuleId::new(pool, &f))
+            .collect();
+        let dependencies = m
+            .immediate_dependencies()
+            .into_iter()
+            .map(|d| ModuleId::new(pool, &d))
+            .collect();
+        let constants = (0..m.constant_pool.len())
+            .map(|idx| tables.constants[idx].clone())
+            .collect();
+        let structs = (0..m.struct_defs.len())
+            .map(|idx| {
+                let def = tables.struct_defs[idx].clone();
+                (def.name.clone(), def)
+            })
+            .collect();
+        let enums = (0..m.enum_defs.len())
+            .map(|idx| {
+                let def = tables.enum_defs[idx].clone();
+                (def.name.clone(), def)
+            })
+            .collect();
+        let functions = (0..m.function_defs.len())
+            .map(|idx| {
+                let def = tables.function_defs[idx].clone();
+                (def.name.clone(), def)
+            })
+            .collect();
+        Self {
+            tables,
+            id,
+            file_format_version: m.version(),
+            address: *m.address(),
+            name: pool.intern(m.name()),
+            friends,
+            structs,
+            enums,
+            functions,
+            dependencies,
+            constants,
         }
     }
 }
@@ -713,6 +699,20 @@ impl<S> Struct<S> {
     }
 }
 
+impl<S> Field<S> {
+    /// Create a `Field` for `FieldDefinition` `f` in module `m`.
+    pub fn new<Pool: StringPool<String = S>>(
+        pool: &mut Pool,
+        m: &CompiledModule,
+        f: &FieldDefinition,
+    ) -> Self {
+        Field {
+            name: pool.intern(m.identifier_at(f.name)),
+            type_: Type::new(pool, m, &f.signature.0),
+        }
+    }
+}
+
 impl<S> Function<S> {
     /// Create a `FunctionSignature` for `FunctionHandle` `f` in module `m`.
     fn new<Pool: StringPool<String = S>>(
@@ -748,6 +748,52 @@ impl<S> Function<S> {
             return_: tables.signatures[fhandle.return_.0 as usize].clone(),
             jump_tables,
             code,
+        }
+    }
+}
+
+impl<S> Enum<S> {
+    pub fn new<Pool: StringPool<String = S>>(
+        pool: &mut Pool,
+        m: &CompiledModule,
+        def: &EnumDefinition,
+    ) -> Self {
+        let handle = m.datatype_handle_at(def.enum_handle);
+        let name = pool.intern(m.identifier_at(handle.name));
+        let variants = def
+            .variants
+            .iter()
+            .map(|v| Rc::new(Variant::new(pool, m, v)))
+            .collect::<Vec<_>>();
+        let e = Enum {
+            name,
+            abilities: handle.abilities,
+            type_parameters: handle.type_parameters.clone(),
+            variants,
+        };
+        e
+    }
+}
+
+impl<S> Variant<S> {
+    pub fn new<Pool: StringPool<String = S>>(
+        pool: &mut Pool,
+        m: &CompiledModule,
+        v: &VariantDefinition,
+    ) -> Self {
+        Self {
+            name: pool.intern(m.identifier_at(v.variant_name)),
+            fields: v.fields.iter().map(|f| Field::new(pool, m, f)).collect(),
+        }
+    }
+}
+
+impl<S> VariantJumpTable<S> {
+    fn new(tables: &Tables<S>, jt: &file_format::VariantJumpTable) -> Self {
+        let enum_ = tables.enum_defs[jt.head_enum.0 as usize].clone();
+        Self {
+            enum_,
+            jump_table: jt.jump_table.clone(),
         }
     }
 }
@@ -1061,52 +1107,6 @@ impl<S> Bytecode<S> {
 
 fn signature_to_single_type<S>(tables: &Tables<S>, sig_idx: SignatureIndex) -> Rc<Type<S>> {
     tables.signatures[sig_idx.0 as usize][0].clone()
-}
-
-impl<S> VariantJumpTable<S> {
-    fn new(tables: &Tables<S>, jt: &file_format::VariantJumpTable) -> Self {
-        let enum_ = tables.enum_defs[jt.head_enum.0 as usize].clone();
-        Self {
-            enum_,
-            jump_table: jt.jump_table.clone(),
-        }
-    }
-}
-
-impl<S> Enum<S> {
-    pub fn new<Pool: StringPool<String = S>>(
-        pool: &mut Pool,
-        m: &CompiledModule,
-        def: &EnumDefinition,
-    ) -> Self {
-        let handle = m.datatype_handle_at(def.enum_handle);
-        let name = pool.intern(m.identifier_at(handle.name));
-        let variants = def
-            .variants
-            .iter()
-            .map(|v| Rc::new(Variant::new(pool, m, v)))
-            .collect::<Vec<_>>();
-        let e = Enum {
-            name,
-            abilities: handle.abilities,
-            type_parameters: handle.type_parameters.clone(),
-            variants,
-        };
-        e
-    }
-}
-
-impl<S> Variant<S> {
-    pub fn new<Pool: StringPool<String = S>>(
-        pool: &mut Pool,
-        m: &CompiledModule,
-        v: &VariantDefinition,
-    ) -> Self {
-        Self {
-            name: pool.intern(m.identifier_at(v.variant_name)),
-            fields: v.fields.iter().map(|f| Field::new(pool, m, f)).collect(),
-        }
-    }
 }
 
 impl<S: std::fmt::Display> std::fmt::Display for Type<S> {
