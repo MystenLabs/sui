@@ -21,6 +21,7 @@ use metrics::middleware::MetricsLayer;
 use metrics::RpcMetrics;
 use prometheus::Registry;
 use serde_json::json;
+use sui_indexer_alt_reader::bigtable_reader::BigtableArgs;
 use sui_indexer_alt_reader::system_package_task::{SystemPackageTask, SystemPackageTaskArgs};
 use sui_open_rpc::Project;
 use sui_pg_db::DbArgs;
@@ -96,19 +97,13 @@ impl RpcService {
         registry: &Registry,
         cancel: CancellationToken,
     ) -> anyhow::Result<Self> {
-        let RpcArgs {
-            rpc_listen_address,
-            max_in_flight_requests,
-            slow_request_threshold_ms,
-        } = rpc_args;
-
         let metrics = RpcMetrics::new(registry);
 
         let server = ServerBuilder::new()
             .http_only()
             // `jsonrpsee` calls this a limit on connections, but it is implemented as a limit on
             // requests.
-            .max_connections(max_in_flight_requests)
+            .max_connections(rpc_args.max_in_flight_requests)
             .max_response_body_size(u32::MAX)
             .set_batch_request_config(BatchRequestConfig::Disabled);
 
@@ -124,13 +119,14 @@ impl RpcService {
         );
 
         Ok(Self {
-            rpc_listen_address,
+            rpc_listen_address: rpc_args.rpc_listen_address,
             server,
             metrics,
             modules: jsonrpsee::RpcModule::new(()),
             schema,
             cancel,
-            slow_request_threshold: Duration::from_millis(slow_request_threshold_ms),
+            // TODO: Make this a request timeout
+            slow_request_threshold: rpc_args.slow_request_threshold(),
         })
     }
 
@@ -246,6 +242,7 @@ pub async fn start_rpc(
     database_url: Option<Url>,
     bigtable_instance: Option<String>,
     db_args: DbArgs,
+    bigtable_args: BigtableArgs,
     rpc_args: RpcArgs,
     node_args: NodeArgs,
     system_package_task_args: SystemPackageTaskArgs,
@@ -253,7 +250,6 @@ pub async fn start_rpc(
     registry: &Registry,
     cancel: CancellationToken,
 ) -> anyhow::Result<JoinHandle<()>> {
-    let slow_request_threshold = rpc_args.slow_request_threshold();
     let mut rpc = RpcService::new(rpc_args, registry, cancel.child_token())
         .context("Failed to create RPC service")?;
 
@@ -261,9 +257,9 @@ pub async fn start_rpc(
         database_url,
         bigtable_instance,
         db_args,
+        bigtable_args,
         rpc_config,
         rpc.metrics(),
-        slow_request_threshold,
         registry,
         cancel.child_token(),
     )

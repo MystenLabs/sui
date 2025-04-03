@@ -30,12 +30,12 @@ pub struct DbArgs {
     pub db_connection_pool_size: u32,
 
     /// Time spent waiting for a connection from the pool to become available, in milliseconds.
-    #[arg(long, default_value_t = Self::default().connection_timeout_ms)]
-    pub connection_timeout_ms: u64,
+    #[arg(long, default_value_t = Self::default().db_connection_timeout_ms)]
+    pub db_connection_timeout_ms: u64,
 
     #[arg(long)]
     /// Time spent waiting for statements to complete, in milliseconds.
-    pub statement_timeout_ms: Option<u64>,
+    pub db_statement_timeout_ms: Option<u64>,
 }
 
 #[derive(Clone)]
@@ -45,11 +45,11 @@ pub type Connection<'p> = PooledConnection<'p, AsyncPgConnection>;
 
 impl DbArgs {
     pub fn connection_timeout(&self) -> Duration {
-        Duration::from_millis(self.connection_timeout_ms)
+        Duration::from_millis(self.db_connection_timeout_ms)
     }
 
     pub fn statement_timeout(&self) -> Option<Duration> {
-        self.statement_timeout_ms.map(Duration::from_millis)
+        self.db_statement_timeout_ms.map(Duration::from_millis)
     }
 }
 
@@ -159,8 +159,8 @@ impl Default for DbArgs {
     fn default() -> Self {
         Self {
             db_connection_pool_size: 100,
-            connection_timeout_ms: 60_000,
-            statement_timeout_ms: None,
+            db_connection_timeout_ms: 60_000,
+            db_statement_timeout_ms: None,
         }
     }
 }
@@ -351,7 +351,7 @@ mod tests {
         let reader = Db::for_read(
             url.clone(),
             DbArgs {
-                statement_timeout_ms: Some(200),
+                db_statement_timeout_ms: Some(200),
                 ..DbArgs::default()
             },
         )

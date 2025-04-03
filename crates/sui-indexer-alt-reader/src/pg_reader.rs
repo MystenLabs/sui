@@ -2,7 +2,6 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::sync::Arc;
-use std::time::Duration;
 
 use anyhow::anyhow;
 use async_graphql::dataloader::DataLoader;
@@ -29,13 +28,11 @@ pub struct PgReader {
     db: Option<db::Db>,
     metrics: Arc<ReaderMetrics>,
     cancel: CancellationToken,
-    slow_query_threshold: Duration,
 }
 
 pub struct Connection<'p> {
     conn: db::Connection<'p>,
     metrics: Arc<ReaderMetrics>,
-    slow_query_threshold: Duration,
 }
 
 impl PgReader {
@@ -46,7 +43,6 @@ impl PgReader {
         db_args: db::DbArgs,
         registry: &Registry,
         cancel: CancellationToken,
-        slow_query_threshold: Duration,
     ) -> Result<Self, Error> {
         let db = if let Some(database_url) = database_url {
             let db = db::Db::for_read(database_url, db_args)
@@ -71,7 +67,6 @@ impl PgReader {
             db,
             metrics,
             cancel,
-            slow_query_threshold,
         })
     }
 
@@ -96,7 +91,6 @@ impl PgReader {
                 Ok(Connection {
                     conn: conn.map_err(Error::PgConnect)?,
                     metrics: self.metrics.clone(),
-                    slow_query_threshold: self.slow_query_threshold,
                 })
             }
         }
@@ -118,17 +112,11 @@ impl Connection<'_> {
         debug!("{query_debug}");
 
         self.metrics.db_requests_received.inc();
-        let timer = self.metrics.db_latency.start_timer();
+        let _guard = self.metrics.db_latency.start_timer();
+
         let res = query.get_result(&mut self.conn).await;
-        let elapsed_ms = timer.stop_and_record() * 1000.0;
-        let threshold_ms = self.slow_query_threshold.as_millis() as f64;
-        if elapsed_ms > threshold_ms {
-            warn!(
-                elapsed_ms,
-                threshold_ms,
-                query = query_debug,
-                "Slow database query detected!",
-            );
+        if res.as_ref().is_err_and(is_timeout) {
+            warn!(query = query_debug, "Query timed out");
         }
 
         if res.is_ok() {
@@ -152,17 +140,11 @@ impl Connection<'_> {
         debug!("{query_debug}");
 
         self.metrics.db_requests_received.inc();
-        let timer = self.metrics.db_latency.start_timer();
+        let _guard = self.metrics.db_latency.start_timer();
+
         let res = query.get_results(&mut self.conn).await;
-        let elapsed_ms = timer.stop_and_record() * 1000.0;
-        let threshold_ms = self.slow_query_threshold.as_millis() as f64;
-        if elapsed_ms > threshold_ms {
-            warn!(
-                elapsed_ms,
-                threshold_ms,
-                query = query_debug,
-                "Slow database query detected!",
-            );
+        if res.as_ref().is_err_and(is_timeout) {
+            warn!(query = query_debug, "Query timed out");
         }
 
         if res.is_ok() {
@@ -173,4 +155,13 @@ impl Connection<'_> {
 
         Ok(res?)
     }
+}
+
+/// Detect whether the error is due to a timeout.
+fn is_timeout(err: &diesel::result::Error) -> bool {
+    let diesel::result::Error::DatabaseError(_, info) = err else {
+        return false;
+    };
+
+    info.message() == "canceling statement due to statement timeout"
 }
