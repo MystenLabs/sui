@@ -8,14 +8,16 @@ use move_cli::base::{
 };
 use move_package::BuildConfig;
 use move_unit_test::{extensions::set_extension_hook, UnitTestingConfig};
-use move_vm_runtime::natives::extensions::{NativeContextExtensions, NativeContextMut};
+use move_vm_runtime::natives::extensions::NativeContextExtensions;
 use once_cell::sync::Lazy;
 use std::{cell::RefCell, collections::BTreeMap, path::Path, rc::Rc, sync::Arc};
 use sui_adapter::gas_meter::initial_cost_schedule_for_unit_tests;
 use sui_move_build::{decorate_warnings, implicit_deps};
 use sui_move_natives::{
-    object_runtime::ObjectRuntime, test_scenario::InMemoryTestStore,
-    transaction_context::TransactionContext, NativesCostTable,
+    object_runtime::{ObjectRuntime, ObjectRuntimeExtension},
+    test_scenario::InMemoryTestStore,
+    transaction_context::TransactionContext,
+    NativesCostTable,
 };
 use sui_package_management::system_package_versions::latest_system_packages;
 use sui_protocol_config::ProtocolConfig;
@@ -123,7 +125,7 @@ fn new_testing_object_and_natives_cost_runtime(ext: &mut NativeContextExtensions
     let store = Lazy::force(&TEST_STORE);
     let protocol_config = ProtocolConfig::get_for_max_version_UNSAFE();
 
-    ext.add(NativeContextMut::new(ObjectRuntime::new(
+    ext.add(ObjectRuntimeExtension::new(ObjectRuntime::new(
         store,
         BTreeMap::new(),
         false,

@@ -3,7 +3,6 @@
 
 use move_binary_format::errors::{PartialVMError, PartialVMResult};
 use move_core_types::{gas_algebra::InternalGas, vm_status::StatusCode};
-use move_vm_runtime::natives::extensions::NativeContextMut;
 use move_vm_runtime::natives::functions::NativeContext;
 use move_vm_runtime::{
     execution::{
@@ -16,7 +15,7 @@ use move_vm_runtime::{
 use std::collections::VecDeque;
 use sui_types::nitro_attestation::{parse_nitro_attestation, verify_nitro_attestation};
 
-use crate::{object_runtime::ObjectRuntime, NativesCostTable};
+use crate::{object_runtime::ObjectRuntimeExtension, NativesCostTable};
 use move_vm_runtime::native_charge_gas_early_exit;
 
 pub const NOT_SUPPORTED_ERROR: u64 = 0;
@@ -50,7 +49,7 @@ macro_rules! native_charge_gas_early_exit_option {
 fn is_supported(context: &NativeContext) -> PartialVMResult<bool> {
     Ok(context
         .extensions()
-        .get::<NativeContextMut<ObjectRuntime>>()?
+        .get::<ObjectRuntimeExtension>()?
         .borrow()
         .protocol_config
         .enable_nitro_attestation())

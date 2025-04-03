@@ -40,17 +40,17 @@ mod checked {
     use move_trace_format::format::MoveTraceBuilder;
     use move_vm_runtime::execution::vm::{LoadedFunctionInformation, MoveVM};
     use move_vm_runtime::execution::Type;
-    use move_vm_runtime::natives::extensions::{NativeContextExtensions, NativeContextMut};
+    use move_vm_runtime::natives::extensions::NativeContextExtensions;
     use move_vm_runtime::runtime::MoveRuntime;
     use move_vm_runtime::shared::serialization::SerializedReturnValues;
     use mysten_common::debug_fatal;
     use sui_move_natives::object_runtime::{
-        self, get_all_uids, max_event_error, LoadedRuntimeObject, ObjectRuntime, RuntimeResults,
+        self, get_all_uids, max_event_error, LoadedRuntimeObject, ObjectRuntime,
+        ObjectRuntimeExtension, RuntimeResults,
     };
     use sui_protocol_config::ProtocolConfig;
     use sui_types::error::SuiResult;
-    use sui_types::execution::ExecutionResults;
-    use sui_types::storage::{DenyListResult, PackageObject};
+    use sui_types::storage::DenyListResult;
     use sui_types::{
         balance::Balance,
         base_types::{MoveObjectType, ObjectID, SuiAddress, TxContext},
@@ -299,7 +299,7 @@ mod checked {
             let mut object_runtime: RefMut<ObjectRuntime> = self
                 .vm_instance
                 .extensions()
-                .get::<NativeContextMut<ObjectRuntime>>()
+                .get::<ObjectRuntimeExtension>()
                 .map_err(|e| self.convert_vm_error(e.finish(Location::Undefined)))?
                 .borrow_mut();
             let events = object_runtime.take_user_events();
@@ -343,7 +343,7 @@ mod checked {
         where
             Items::IntoIter: ExactSizeIterator,
         {
-            if !self.protocol_config.normalize_ptb_arguments() {
+            if !self.ctx.protocol_config.normalize_ptb_arguments() {
                 Ok(args.into_iter().map(|arg| Arg(Arg_::V1(arg))).collect())
             } else {
                 let args = args.into_iter();
@@ -362,13 +362,13 @@ mod checked {
             match arg {
                 Argument::GasCoin => res.push(Arg(Arg_::V2(NormalizedArg::GasCoin))),
                 Argument::Input(i) => {
-                    if i as usize >= self.inputs.len() {
+                    if i as usize >= self.ctx.inputs.len() {
                         return Err(CommandArgumentError::IndexOutOfBounds { idx: i }.into());
                     }
                     res.push(Arg(Arg_::V2(NormalizedArg::Input(i))))
                 }
                 Argument::NestedResult(i, j) => {
-                    let Some(command_result) = self.results.get(i as usize) else {
+                    let Some(command_result) = self.ctx.results.get(i as usize) else {
                         return Err(CommandArgumentError::IndexOutOfBounds { idx: i }.into());
                     };
                     if j as usize >= command_result.len() {
@@ -381,7 +381,7 @@ mod checked {
                     res.push(Arg(Arg_::V2(NormalizedArg::Result(i, j))))
                 }
                 Argument::Result(i) => {
-                    let Some(result) = self.results.get(i as usize) else {
+                    let Some(result) = self.ctx.results.get(i as usize) else {
                         return Err(CommandArgumentError::IndexOutOfBounds { idx: i }.into());
                     };
                     let Ok(len): Result<u16, _> = result.len().try_into() else {
@@ -431,7 +431,7 @@ mod checked {
             &mut self,
             command_kind: CommandKind<'_>,
             arg: Arg,
-        ) -> Result<V, CommandArgumentError> {
+        ) -> Result<V, EitherError> {
             let shared_obj_deletion_enabled = self.ctx.protocol_config.shared_object_deletion();
             let is_borrowed = self.arg_is_borrowed(&arg);
             let (input_metadata_opt, val_opt) = self.borrow_mut(arg, UsageKind::ByValue)?;
@@ -588,7 +588,7 @@ mod checked {
             arg: Arg,
             value: Value,
         ) -> Result<(), ExecutionError> {
-            Mode::add_argument_update(self, updates, arg.into(), &value)?;
+            Mode::add_argument_update(updates, arg.into(), &value)?;
             let was_mut_opt = self.ctx.borrowed.remove(&arg);
             assert_invariant!(
                 was_mut_opt.is_some() && was_mut_opt.unwrap(),
@@ -612,12 +612,12 @@ mod checked {
 
         /// Returns true if the value at the argument's location is borrowed, mutably or immutably
         fn arg_is_borrowed(&self, arg: &Arg) -> bool {
-            self.borrowed.contains_key(arg)
+            self.ctx.borrowed.contains_key(arg)
         }
 
         /// Returns true if the value at the argument's location is mutably borrowed
         fn arg_is_mut_borrowed(&self, arg: &Arg) -> bool {
-            matches!(self.borrowed.get(arg), Some(/* mut */ true))
+            matches!(self.ctx.borrowed.get(arg), Some(/* mut */ true))
         }
 
         /// Internal helper to borrow the value for an argument and update the most recent usage
@@ -626,51 +626,51 @@ mod checked {
             arg: Arg,
             usage: UsageKind,
         ) -> Result<(Option<&InputObjectMetadata>, &mut Option<Value>), EitherError> {
-            self.borrow_mut_impl(arg, Some(usage))
+            Self::borrow_mut_impl(&mut self.ctx, arg, Some(usage))
         }
 
         /// Internal helper to borrow the value for an argument
         /// Updates the most recent usage if specified
-        fn borrow_mut_impl(
-            &mut self,
+        fn borrow_mut_impl<'c>(
+            ctx: &'c mut ExecutionContext,
             arg: Arg,
             update_last_usage: Option<UsageKind>,
-        ) -> Result<(Option<&InputObjectMetadata>, &mut Option<Value>), EitherError> {
+        ) -> Result<(Option<&'c InputObjectMetadata>, &'c mut Option<Value>), EitherError> {
             match arg.0 {
                 Arg_::V1(arg) => {
                     assert_invariant!(
-                        !self.protocol_config.normalize_ptb_arguments(),
+                        !ctx.protocol_config.normalize_ptb_arguments(),
                         "Should not be using v1 args with normalized args"
                     );
-                    Ok(self.borrow_mut_impl_v1(arg, update_last_usage)?)
+                    Ok(Self::borrow_mut_impl_v1(ctx, arg, update_last_usage)?)
                 }
                 Arg_::V2(arg) => {
                     assert_invariant!(
-                        self.protocol_config.normalize_ptb_arguments(),
+                        ctx.protocol_config.normalize_ptb_arguments(),
                         "Should be using only v2 args with normalized args"
                     );
-                    Ok(self.borrow_mut_impl_v2(arg, update_last_usage)?)
+                    Ok(Self::borrow_mut_impl_v2(ctx, arg, update_last_usage)?)
                 }
             }
         }
 
         // v1 of borrow_mut_impl
-        fn borrow_mut_impl_v1(
-            &mut self,
+        fn borrow_mut_impl_v1<'c>(
+            ctx: &'c mut ExecutionContext,
             arg: Argument,
             update_last_usage: Option<UsageKind>,
-        ) -> Result<(Option<&InputObjectMetadata>, &mut Option<Value>), CommandArgumentError>
+        ) -> Result<(Option<&'c InputObjectMetadata>, &'c mut Option<Value>), CommandArgumentError>
         {
             let (metadata, result_value) = match arg {
-                Argument::GasCoin => (self.gas.object_metadata.as_ref(), &mut self.gas.inner),
+                Argument::GasCoin => (ctx.gas.object_metadata.as_ref(), &mut ctx.gas.inner),
                 Argument::Input(i) => {
-                    let Some(input_value) = self.inputs.get_mut(i as usize) else {
+                    let Some(input_value) = ctx.inputs.get_mut(i as usize) else {
                         return Err(CommandArgumentError::IndexOutOfBounds { idx: i });
                     };
                     (input_value.object_metadata.as_ref(), &mut input_value.inner)
                 }
                 Argument::Result(i) => {
-                    let Some(command_result) = self.results.get_mut(i as usize) else {
+                    let Some(command_result) = ctx.results.get_mut(i as usize) else {
                         return Err(CommandArgumentError::IndexOutOfBounds { idx: i });
                     };
                     if command_result.len() != 1 {
@@ -679,7 +679,7 @@ mod checked {
                     (None, &mut command_result[0])
                 }
                 Argument::NestedResult(i, j) => {
-                    let Some(command_result) = self.results.get_mut(i as usize) else {
+                    let Some(command_result) = ctx.results.get_mut(i as usize) else {
                         return Err(CommandArgumentError::IndexOutOfBounds { idx: i });
                     };
                     let Some(result_value) = command_result.get_mut(j as usize) else {
@@ -698,22 +698,23 @@ mod checked {
         }
 
         // v2 of borrow_mut_impl
-        fn borrow_mut_impl_v2(
-            &mut self,
+        fn borrow_mut_impl_v2<'c>(
+            ctx: &'c mut ExecutionContext,
             arg: NormalizedArg,
             update_last_usage: Option<UsageKind>,
-        ) -> Result<(Option<&InputObjectMetadata>, &mut Option<Value>), ExecutionError> {
+        ) -> Result<(Option<&'c InputObjectMetadata>, &'c mut Option<Value>), ExecutionError>
+        {
             let (metadata, result_value) = match arg {
-                NormalizedArg::GasCoin => (self.gas.object_metadata.as_ref(), &mut self.gas.inner),
+                NormalizedArg::GasCoin => (ctx.gas.object_metadata.as_ref(), &mut ctx.gas.inner),
                 NormalizedArg::Input(i) => {
-                    let input_value = self
+                    let input_value = ctx
                         .inputs
                         .get_mut(i as usize)
                         .ok_or_else(|| make_invariant_violation!("bounds already checked"))?;
                     (input_value.object_metadata.as_ref(), &mut input_value.inner)
                 }
                 NormalizedArg::Result(i, j) => {
-                    let result_value = self
+                    let result_value = ctx
                         .results
                         .get_mut(i as usize)
                         .ok_or_else(|| make_invariant_violation!("bounds already checked"))?
@@ -890,7 +891,8 @@ mod checked {
             let mut object_runtime: RefMut<ObjectRuntime> = self
                 .vm_instance
                 .extensions()
-                .get::<NativeContextMut<ObjectRuntime>>()
+                .get::<ObjectRuntimeExtension>()
+                .map_err(|e| self.convert_vm_error(e.finish(Location::Undefined)))?
                 .borrow_mut();
             object_runtime
                 .new_id(object_id)
@@ -903,7 +905,8 @@ mod checked {
             let mut object_runtime: RefMut<ObjectRuntime> = self
                 .vm_instance
                 .extensions()
-                .get::<NativeContextMut<ObjectRuntime>>()
+                .get::<ObjectRuntimeExtension>()
+                .map_err(|e| self.convert_vm_error(e.finish(Location::Undefined)))?
                 .borrow_mut();
             object_runtime
                 .delete_id(object_id)
@@ -1147,14 +1150,12 @@ mod checked {
                 refund_max_gas_budget(&mut additional_writes, gas_charger, gas_id)?;
             }
 
-            let object_runtime: Rc<NativeContextMut<ObjectRuntime>> = native_extensions
-                .remove::<NativeContextMut<ObjectRuntime>>()
+            let object_runtime: Rc<ObjectRuntimeExtension> = native_extensions
+                .remove::<ObjectRuntimeExtension>()
                 .map_err(|e| {
-                    convert_vm_error(
-                        e.finish(Location::Undefined),
-                        vm,
-                        &linkage_view,
-                        protocol_config.resolve_abort_locations_to_package_id(),
+                    make_invariant_violation!(
+                        "Unable to remove object runtime at end of execution {}",
+                        e.finish(Location::Undefined)
                     )
                 })?;
             let Some(object_runtime) = Rc::into_inner(object_runtime) else {
@@ -1739,6 +1740,29 @@ mod checked {
             match self {
                 EitherError::CommandArgument(e) => command_argument_error(e, command_index),
                 EitherError::Execution(e) => e,
+            }
+        }
+    }
+
+    impl Arg {
+        fn is_gas_coin(&self) -> bool {
+            // kept as two separate matches for exhaustiveness
+            match self {
+                Arg(Arg_::V1(a)) => matches!(a, Argument::GasCoin),
+                Arg(Arg_::V2(n)) => matches!(n, NormalizedArg::GasCoin),
+            }
+        }
+    }
+
+    impl From<Arg> for Argument {
+        fn from(arg: Arg) -> Self {
+            match arg.0 {
+                Arg_::V1(a) => a,
+                Arg_::V2(normalized) => match normalized {
+                    NormalizedArg::GasCoin => Argument::GasCoin,
+                    NormalizedArg::Input(i) => Argument::Input(i),
+                    NormalizedArg::Result(i, j) => Argument::NestedResult(i, j),
+                },
             }
         }
     }

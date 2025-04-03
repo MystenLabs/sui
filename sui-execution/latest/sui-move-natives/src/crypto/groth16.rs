@@ -1,6 +1,6 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
-use crate::{object_runtime::ObjectRuntime, NativesCostTable};
+use crate::{object_runtime::ObjectRuntimeExtension, NativesCostTable};
 use move_binary_format::errors::PartialVMResult;
 use move_core_types::gas_algebra::InternalGas;
 use move_vm_runtime::{
@@ -8,7 +8,7 @@ use move_vm_runtime::{
         values::{self, Value, VectorRef},
         Type,
     },
-    natives::{extensions::NativeContextMut, functions::NativeResult},
+    natives::functions::NativeResult,
     pop_arg,
 };
 use move_vm_runtime::{native_charge_gas_early_exit, natives::functions::NativeContext};
@@ -189,7 +189,7 @@ pub fn verify_groth16_proof_internal(
             context.charge_gas(crypto_invalid_arguments_cost);
             let cost = if context
                 .extensions()
-                .get::<NativeContextMut<ObjectRuntime>>()?
+                .get::<ObjectRuntimeExtension>()?
                 .borrow()
                 .protocol_config
                 .native_charging_v2()

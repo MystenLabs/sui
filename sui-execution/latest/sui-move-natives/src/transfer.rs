@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use super::object_runtime::{ObjectRuntime, TransferResult};
+use super::object_runtime::{ObjectRuntime, ObjectRuntimeExtension, TransferResult};
 use crate::{
     get_receiver_object_id, get_tag_and_layouts, object_runtime::object_store::ObjectResult,
     NativesCostTable,
@@ -11,7 +11,6 @@ use move_core_types::{
     account_address::AccountAddress, gas_algebra::InternalGas, language_storage::TypeTag,
     vm_status::StatusCode,
 };
-use move_vm_runtime::natives::extensions::NativeContextMut;
 use move_vm_runtime::{
     execution::values::Value, execution::Type, natives::functions::NativeResult, pop_arg,
 };
@@ -77,7 +76,7 @@ pub fn receive_object_internal(
 
     let object_runtime: &mut ObjectRuntime = &mut context
         .extensions()
-        .get::<NativeContextMut<ObjectRuntime>>()?
+        .get::<ObjectRuntimeExtension>()?
         .borrow_mut();
     let child = match object_runtime.receive_object(
         parent,
@@ -249,7 +248,7 @@ fn object_runtime_transfer(
 
     let obj_runtime: &mut ObjectRuntime = &mut context
         .extensions()
-        .get::<NativeContextMut<ObjectRuntime>>()?
+        .get::<ObjectRuntimeExtension>()?
         .borrow_mut();
     obj_runtime.transfer(owner, object_type, obj)
 }

@@ -3,7 +3,7 @@
 
 use crate::{
     get_nested_struct_field, get_object_id,
-    object_runtime::{object_store::ObjectResult, ObjectRuntime},
+    object_runtime::{object_store::ObjectResult, ObjectRuntime, ObjectRuntimeExtension},
     NativesCostTable,
 };
 use move_binary_format::errors::{PartialVMError, PartialVMResult};
@@ -13,6 +13,7 @@ use move_core_types::{
     language_storage::{StructTag, TypeTag},
     vm_status::StatusCode,
 };
+use move_vm_runtime::native_charge_gas_early_exit;
 use move_vm_runtime::natives::functions::NativeContext;
 use move_vm_runtime::{
     execution::{
@@ -22,7 +23,6 @@ use move_vm_runtime::{
     natives::functions::NativeResult,
     pop_arg,
 };
-use move_vm_runtime::{native_charge_gas_early_exit, natives::extensions::NativeContextMut};
 use smallvec::smallvec;
 use std::collections::VecDeque;
 use sui_types::{base_types::MoveObjectType, dynamic_field::derive_dynamic_field_id};
@@ -231,7 +231,7 @@ pub fn add_child_object(
     {
         let object_runtime: &mut ObjectRuntime = &mut context
             .extensions_mut()
-            .get::<NativeContextMut<ObjectRuntime>>()?
+            .get::<ObjectRuntimeExtension>()?
             .borrow_mut();
         object_runtime.add_child_object(parent, child_id, MoveObjectType::from(tag), child)?;
     };
@@ -289,7 +289,7 @@ pub fn borrow_child_object(
     // the runtime reference we are creating here and the borrow checker will be happy with us.
     let object_runtime: &mut ObjectRuntime = &mut context
         .extensions()
-        .get::<NativeContextMut<ObjectRuntime>>()
+        .get::<ObjectRuntimeExtension>()?
         .borrow_mut();
     let global_value_result = get_or_fetch_object!(
         context,
@@ -365,7 +365,7 @@ pub fn remove_child_object(
     // the runtime reference we are creating here and the borrow checker will be happy with us.
     let object_runtime: &mut ObjectRuntime = &mut context
         .extensions()
-        .get::<NativeContextMut<ObjectRuntime>>()
+        .get::<ObjectRuntimeExtension>()?
         .borrow_mut();
     let global_value_result = get_or_fetch_object!(
         context,
@@ -433,7 +433,7 @@ pub fn has_child_object(
     let has_child = {
         let object_runtime: &mut ObjectRuntime = &mut context
             .extensions()
-            .get::<NativeContextMut<ObjectRuntime>>()?
+            .get::<ObjectRuntimeExtension>()?
             .borrow_mut();
         object_runtime.child_object_exists(parent, child_id)?
     };
@@ -509,7 +509,7 @@ pub fn has_child_object_with_ty(
     let has_child = {
         let object_runtime: &mut ObjectRuntime = &mut context
             .extensions()
-            .get::<NativeContextMut<ObjectRuntime>>()?
+            .get::<ObjectRuntimeExtension>()?
             .borrow_mut();
         object_runtime.child_object_exists_and_has_type(
             parent,

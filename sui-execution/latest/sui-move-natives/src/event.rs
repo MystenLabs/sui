@@ -1,12 +1,16 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::{legacy_test_cost, object_runtime::ObjectRuntime, NativesCostTable};
+use crate::{
+    legacy_test_cost,
+    object_runtime::{ObjectRuntime, ObjectRuntimeExtension},
+    NativesCostTable,
+};
 use move_binary_format::errors::{PartialVMError, PartialVMResult};
 use move_core_types::{gas_algebra::InternalGas, language_storage::TypeTag, vm_status::StatusCode};
 use move_vm_runtime::{
     execution::{values::Value, Type},
-    natives::{extensions::NativeContextMut, functions::NativeResult},
+    natives::functions::NativeResult,
 };
 use move_vm_runtime::{native_charge_gas_early_exit, natives::functions::NativeContext};
 use smallvec::smallvec;
@@ -77,7 +81,7 @@ pub fn emit(
 
     let obj_runtime: &mut ObjectRuntime = &mut context
         .extensions()
-        .get::<NativeContextMut<ObjectRuntime>>()?
+        .get::<ObjectRuntimeExtension>()?
         .borrow_mut();
     let max_event_emit_size = obj_runtime.protocol_config.max_event_emit_size();
     let ev_size = u64::from(tag_size + event_value_size);
@@ -130,7 +134,7 @@ pub fn num_events(
     assert!(args.is_empty());
     let object_runtime_ref: &ObjectRuntime = &context
         .extensions()
-        .get::<NativeContextMut<ObjectRuntime>>()?
+        .get::<ObjectRuntimeExtension>()?
         .borrow();
     let num_events = object_runtime_ref.state.events().len();
     Ok(NativeResult::ok(
@@ -150,7 +154,7 @@ pub fn get_events_by_type(
     assert!(args.is_empty());
     let object_runtime_ref: &ObjectRuntime = &context
         .extensions()
-        .get::<NativeContextMut<ObjectRuntime>>()?
+        .get::<ObjectRuntimeExtension>()?
         .borrow();
     let specified_type_tag = match context.type_to_type_tag(&specified_ty)? {
         TypeTag::Struct(s) => *s,

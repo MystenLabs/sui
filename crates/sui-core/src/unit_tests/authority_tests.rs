@@ -5412,7 +5412,7 @@ async fn test_function_not_found() {
         }
     );
 
-    assert_eq!(execution_error_source, Some("Could not resolve function 'bad_function' in module 0000000000000000000000000000000000000000000000000000000000000001::option".to_string()),)
+    assert_eq!(execution_error_source, Some("Could not resolve function 'bad_function' in module '0x0000000000000000000000000000000000000000000000000000000000000001::option'".to_string()),)
 }
 
 #[tokio::test]

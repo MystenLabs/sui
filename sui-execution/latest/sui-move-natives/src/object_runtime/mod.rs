@@ -21,10 +21,9 @@ use move_core_types::{
     runtime_value as R,
     vm_status::StatusCode,
 };
-use move_vm_runtime::natives::extensions::NativeExtensionMarker;
+use move_vm_runtime::execution::values::{GlobalValue, Value};
 use move_vm_runtime::{
-    execution::values::{GlobalValue, Value},
-    natives::extensions::NativeContextMut,
+    derive_mutable_native_extension, natives::extensions::NativeExtensionMarker,
 };
 use object_store::{ActiveChildObject, ChildObjectStore};
 use std::{
@@ -114,7 +113,9 @@ pub struct ObjectRuntime<'a> {
     pub(crate) metrics: Arc<LimitsMetrics>,
 }
 
-impl<'a> NativeExtensionMarker<'a> for NativeContextMut<'a, ObjectRuntime<'a>> {}
+derive_mutable_native_extension!(ObjectRuntime, ObjectRuntimeExtension);
+
+impl<'a> NativeExtensionMarker<'a> for ObjectRuntimeExtension<'a> {}
 
 pub enum TransferResult {
     New,

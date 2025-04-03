@@ -1,6 +1,6 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
-use crate::object_runtime::ObjectRuntime;
+use crate::object_runtime::ObjectRuntimeExtension;
 use crate::NativesCostTable;
 use fastcrypto::error::{FastCryptoError, FastCryptoResult};
 use fastcrypto::groups::{
@@ -12,7 +12,6 @@ use move_binary_format::errors::{PartialVMError, PartialVMResult};
 use move_core_types::gas_algebra::InternalGas;
 use move_core_types::vm_status::StatusCode;
 use move_vm_runtime::native_charge_gas_early_exit;
-use move_vm_runtime::natives::extensions::NativeContextMut;
 use move_vm_runtime::natives::functions::NativeContext;
 use move_vm_runtime::{
     execution::{
@@ -32,7 +31,7 @@ pub const INPUT_TOO_LONG_ERROR: u64 = 2;
 fn is_supported(context: &NativeContext) -> PartialVMResult<bool> {
     Ok(context
         .extensions()
-        .get::<NativeContextMut<ObjectRuntime>>()?
+        .get::<ObjectRuntimeExtension>()?
         .borrow()
         .protocol_config
         .enable_group_ops_native_functions())
@@ -41,7 +40,7 @@ fn is_supported(context: &NativeContext) -> PartialVMResult<bool> {
 fn is_msm_supported(context: &NativeContext) -> PartialVMResult<bool> {
     Ok(context
         .extensions()
-        .get::<NativeContextMut<ObjectRuntime>>()?
+        .get::<ObjectRuntimeExtension>()?
         .borrow()
         .protocol_config
         .enable_group_ops_native_function_msm())
@@ -50,7 +49,7 @@ fn is_msm_supported(context: &NativeContext) -> PartialVMResult<bool> {
 fn is_uncompressed_g1_supported(context: &NativeContext) -> PartialVMResult<bool> {
     Ok(context
         .extensions()
-        .get::<NativeContextMut<ObjectRuntime>>()?
+        .get::<ObjectRuntimeExtension>()?
         .borrow()
         .protocol_config
         .uncompressed_g1_group_elements())
@@ -60,7 +59,7 @@ fn v2_native_charge(context: &NativeContext, cost: InternalGas) -> PartialVMResu
     Ok(
         if context
             .extensions()
-            .get::<NativeContextMut<ObjectRuntime>>()?
+            .get::<ObjectRuntimeExtension>()?
             .borrow()
             .protocol_config
             .native_charging_v2()

@@ -6,7 +6,7 @@ pub use checked::*;
 mod checked {
     #[cfg(feature = "tracing")]
     use move_vm_config::runtime::VMProfilerConfig;
-    use move_vm_runtime::natives::extensions::{NativeContextExtensions, NativeContextMut};
+    use move_vm_runtime::natives::extensions::NativeContextExtensions;
     use move_vm_runtime::natives::functions::{NativeFunctionTable, NativeFunctions};
     use move_vm_runtime::runtime::MoveRuntime;
     use std::cell::RefCell;
@@ -28,7 +28,10 @@ mod checked {
     use sui_verifier::check_for_verifier_timeout;
     use tracing::instrument;
 
-    use sui_move_natives::{object_runtime::ObjectRuntime, NativesCostTable};
+    use sui_move_natives::{
+        object_runtime::{ObjectRuntime, ObjectRuntimeExtension},
+        NativesCostTable,
+    };
     use sui_protocol_config::ProtocolConfig;
     use sui_types::{
         base_types::*,
@@ -92,7 +95,7 @@ mod checked {
     ) -> NativeContextExtensions<'r> {
         let current_epoch_id: EpochId = tx_context.borrow().epoch();
         let mut extensions = NativeContextExtensions::default();
-        extensions.add(NativeContextMut::new(ObjectRuntime::new(
+        extensions.add(ObjectRuntimeExtension::new(ObjectRuntime::new(
             child_resolver,
             input_objects,
             is_metered,

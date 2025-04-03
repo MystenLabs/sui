@@ -1,14 +1,16 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::{object_runtime::ObjectRuntime, NativesCostTable};
+use crate::{
+    object_runtime::{ObjectRuntime, ObjectRuntimeExtension},
+    NativesCostTable,
+};
 use move_binary_format::errors::{PartialVMError, PartialVMResult};
 use move_core_types::{
     account_address::AccountAddress, gas_algebra::InternalGas, language_storage::StructTag,
     runtime_value as R, vm_status::StatusCode,
 };
 use move_vm_runtime::native_charge_gas_early_exit;
-use move_vm_runtime::natives::extensions::NativeContextMut;
 use move_vm_runtime::natives::functions::NativeContext;
 use move_vm_runtime::{
     execution::{
@@ -90,7 +92,7 @@ pub fn read_setting_impl(
     let read_value_opt = {
         let object_runtime: &mut ObjectRuntime = &mut context
             .extensions_mut()
-            .get::<NativeContextMut<ObjectRuntime>>()?
+            .get::<ObjectRuntimeExtension>()?
             .borrow_mut();
 
         consistent_value_before_current_epoch(

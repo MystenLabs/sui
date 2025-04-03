@@ -28,7 +28,6 @@ mod checked {
     use move_trace_format::format::MoveTraceBuilder;
     use move_vm_runtime::execution::vm::LoadedFunctionInformation;
     use move_vm_runtime::execution::{Type, TypeSubst};
-    use move_vm_runtime::natives::extensions::NativeContextMut;
     use move_vm_runtime::runtime::MoveRuntime;
     use move_vm_runtime::shared::serialization::SerializedReturnValues;
     use serde::{de::DeserializeSeed, Deserialize};
@@ -40,7 +39,7 @@ mod checked {
         sync::Arc,
         time::Instant,
     };
-    use sui_move_natives::object_runtime::ObjectRuntime;
+    use sui_move_natives::object_runtime::ObjectRuntimeExtension;
     use sui_protocol_config::ProtocolConfig;
     use sui_types::execution::{ExecutionTiming, ResultWithTimings};
     use sui_types::execution_config_utils::to_binary_config;
@@ -74,7 +73,7 @@ mod checked {
     use tracing::instrument;
 
     use crate::adapter::substitute_package_id;
-    use crate::programmable_transactions::context::{ExecutionContext, LinkedContext};
+    use crate::programmable_transactions::context::{Arg, ExecutionContext, LinkedContext};
 
     pub fn execute<Mode: ExecutionMode>(
         protocol_config: &ProtocolConfig,
@@ -159,10 +158,15 @@ mod checked {
                 trace_builder_opt,
             ) {
                 drop(linked_context);
-                let object_runtime: &NativeContextMut<ObjectRuntime> = context
+                let object_runtime: &ObjectRuntimeExtension = context
                     .native_extensions
-                    .get::<NativeContextMut<ObjectRuntime>>()
-                    .map_err(|e| context.convert_vm_error(e.finish(Location::Undefined)))?;
+                    .get::<ObjectRuntimeExtension>()
+                    .map_err(|e| {
+                        make_invariant_violation!(
+                            "Unable to get object runtime extensions {}",
+                            e.finish(Location::Undefined)
+                        )
+                    })?;
                 // We still need to record the loaded child objects for replay
                 let loaded_runtime_objects = object_runtime.borrow().loaded_runtime_objects();
                 // we do not save the wrapped objects since on error, they should not be modified
@@ -175,10 +179,15 @@ mod checked {
         }
 
         // Save loaded objects table in case we fail in post execution
-        let object_runtime: &NativeContextMut<ObjectRuntime> = context
+        let object_runtime: &ObjectRuntimeExtension = context
             .native_extensions
-            .get::<NativeContextMut<ObjectRuntime>>()
-            .map_err(|e| context.convert_vm_error(e.finish(Location::Undefined)))?;
+            .get::<ObjectRuntimeExtension>()
+            .map_err(|e| {
+                make_invariant_violation!(
+                    "Unable to get object runtime extensions {}",
+                    e.finish(Location::Undefined)
+                )
+            })?;
         // We still need to record the loaded child objects for replay
         // Record the objects loaded at runtime (dynamic fields + received) for
         // storage rebate calculation.
@@ -229,7 +238,7 @@ mod checked {
                 )]
             }
             Command::MakeMoveVec(tag_opt, args) => {
-                let args = context.splat_args(0, args)?;
+                let args = linked_context.splat_args(0, args)?;
                 let mut res = vec![];
                 leb128::write::unsigned(&mut res, args.len() as u64).unwrap();
                 let mut arg_iter = args.into_iter().enumerate();
@@ -267,8 +276,8 @@ mod checked {
             }
             Command::TransferObjects(objs, addr_arg) => {
                 let unsplat_objs_len = objs.len();
-                let objs = context.splat_args(0, objs)?;
-                let addr_arg = context.one_arg(unsplat_objs_len, addr_arg)?;
+                let objs = linked_context.splat_args(0, objs)?;
+                let addr_arg = linked_context.one_arg(unsplat_objs_len, addr_arg)?;
                 let objs: Vec<ObjectValue> = objs
                     .into_iter()
                     .enumerate()
@@ -378,7 +387,7 @@ mod checked {
                 trace_builder_opt,
             )?,
             Command::Upgrade(modules, dep_ids, current_package_id, upgrade_ticket) => {
-                let upgrade_ticket = context.one_arg(0, upgrade_ticket)?;
+                let upgrade_ticket = linked_context.one_arg(0, upgrade_ticket)?;
                 execute_move_upgrade::<Mode>(
                     linked_context,
                     modules,

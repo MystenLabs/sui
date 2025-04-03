@@ -1,7 +1,10 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::{object_runtime::ObjectRuntime, NativesCostTable};
+use crate::{
+    object_runtime::{ObjectRuntime, ObjectRuntimeExtension},
+    NativesCostTable,
+};
 use move_binary_format::errors::PartialVMResult;
 use move_core_types::{account_address::AccountAddress, gas_algebra::InternalGas};
 use move_vm_runtime::{
@@ -9,7 +12,7 @@ use move_vm_runtime::{
         values::{StructRef, Value},
         Type,
     },
-    natives::{extensions::NativeContextMut, functions::NativeResult},
+    natives::functions::NativeResult,
     pop_arg,
 };
 use move_vm_runtime::{native_charge_gas_early_exit, natives::functions::NativeContext};
@@ -82,7 +85,7 @@ pub fn delete_impl(
 
     let obj_runtime: &mut ObjectRuntime = &mut context
         .extensions()
-        .get::<NativeContextMut<ObjectRuntime>>()?
+        .get::<ObjectRuntimeExtension>()?
         .borrow_mut();
     obj_runtime.delete_id(uid_bytes.into())?;
     Ok(NativeResult::ok(context.gas_used(), smallvec![]))
@@ -122,7 +125,7 @@ pub fn record_new_uid(
 
     let obj_runtime: &mut ObjectRuntime = &mut context
         .extensions()
-        .get::<NativeContextMut<ObjectRuntime>>()?
+        .get::<ObjectRuntimeExtension>()?
         .borrow_mut();
     obj_runtime.new_id(uid_bytes.into())?;
     Ok(NativeResult::ok(context.gas_used(), smallvec![]))

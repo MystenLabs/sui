@@ -5,7 +5,7 @@ use move_binary_format::errors::PartialVMResult;
 use move_core_types::{account_address::AccountAddress, gas_algebra::InternalGas};
 use move_vm_runtime::{
     execution::{values::Value, Type},
-    natives::{extensions::NativeContextMut, functions::NativeResult},
+    natives::functions::NativeResult,
     pop_arg,
 };
 use move_vm_runtime::{native_charge_gas_early_exit, natives::functions::NativeContext};
@@ -14,7 +14,9 @@ use std::collections::VecDeque;
 use sui_types::{base_types::ObjectID, digests::TransactionDigest};
 
 use crate::{
-    object_runtime::ObjectRuntime, transaction_context::TransactionContext, NativesCostTable,
+    object_runtime::{ObjectRuntime, ObjectRuntimeExtension},
+    transaction_context::TransactionContext,
+    NativesCostTable,
 };
 
 #[derive(Clone)]
@@ -52,7 +54,7 @@ pub fn derive_id(
     let address = AccountAddress::from(ObjectID::derive_id(digest, ids_created));
     let obj_runtime: &mut ObjectRuntime = &mut context
         .extensions()
-        .get::<NativeContextMut<ObjectRuntime>>()?
+        .get::<ObjectRuntimeExtension>()?
         .borrow_mut();
     obj_runtime.new_id(address.into())?;
 
@@ -92,7 +94,7 @@ pub fn fresh_id(
     let fresh_id = transaction_context.fresh_id();
     let object_runtime: &mut ObjectRuntime = &mut context
         .extensions()
-        .get::<NativeContextMut<ObjectRuntime>>()?
+        .get::<ObjectRuntimeExtension>()?
         .borrow_mut();
     object_runtime.new_id(fresh_id)?;
 
@@ -454,7 +456,7 @@ pub fn last_created_id(
     let address = AccountAddress::from(ObjectID::derive_id(digest, ids_created));
     let obj_runtime: &mut ObjectRuntime = &mut context
         .extensions()
-        .get::<NativeContextMut<ObjectRuntime>>()?
+        .get::<ObjectRuntimeExtension>()?
         .borrow_mut();
     obj_runtime.new_id(address.into())?;
 

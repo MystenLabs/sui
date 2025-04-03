@@ -1,6 +1,6 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
-use crate::object_runtime::ObjectRuntime;
+use crate::object_runtime::ObjectRuntimeExtension;
 use crate::NativesCostTable;
 use fastcrypto_vdf::class_group::discriminant::DISCRIMINANT_3072;
 use fastcrypto_vdf::class_group::QuadraticForm;
@@ -14,10 +14,7 @@ use move_vm_runtime::{
         values::{Value, VectorRef},
         Type,
     },
-    natives::{
-        extensions::NativeContextMut,
-        functions::{NativeResult, PartialVMError},
-    },
+    natives::functions::{NativeResult, PartialVMError},
     pop_arg,
 };
 use move_vm_runtime::{native_charge_gas_early_exit, natives::functions::NativeContext};
@@ -30,7 +27,7 @@ pub const NOT_SUPPORTED_ERROR: u64 = 1;
 fn is_supported(context: &NativeContext) -> PartialVMResult<bool> {
     Ok(context
         .extensions()
-        .get::<NativeContextMut<ObjectRuntime>>()?
+        .get::<ObjectRuntimeExtension>()?
         .borrow()
         .protocol_config
         .enable_vdf())

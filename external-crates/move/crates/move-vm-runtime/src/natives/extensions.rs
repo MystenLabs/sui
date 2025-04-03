@@ -2,36 +2,45 @@
 // Copyright (c) The Move Contributors
 // SPDX-License-Identifier: Apache-2.0
 
-use better_any::{Tid, TidAble, TidExt};
+use better_any::{Tid, TidExt};
 use move_binary_format::errors::{PartialVMError, PartialVMResult};
 use move_core_types::vm_status::StatusCode;
-use std::{any::TypeId, cell::RefCell, collections::HashMap, ops::Deref, rc::Rc};
+use std::{any::TypeId, collections::HashMap, rc::Rc};
 
-/// A helper wrapper around a `Tid`able type that encapsulates interior mutability in a single-threaded
+/// A helper macro around a `Tid`able type that encapsulates interior mutability in a single-threaded
 /// manner.
 ///
 /// Note that this is _not_ threadsafe. If you need threadsafe access to the `T` you will need to
 /// handle that within `T'`s type (just like in the previous implementation of the
 /// `NativeContextExtensions`).
-#[derive(Tid)]
-pub struct NativeContextMut<'a, T: Tid<'a>>(pub RefCell<T>, std::marker::PhantomData<&'a ()>);
+///
+/// This is a macro as opposed to a generic struct type due to Rust restricions that don't allow
+/// trait implementations on foreign types, coupled with the requirement that elements in the
+/// `NativeContextExtensions` must have `NativeExtensionMarker` implemented on them.
+#[macro_export]
+macro_rules! derive_mutable_native_extension {
+    ($name:ident, $mutable_name:ident) => {
+        #[derive(Tid)]
+        pub struct $mutable_name<'a>(pub std::cell::RefCell<$name<'a>>);
 
-impl<'a, T: Tid<'a>> NativeContextMut<'a, T> {
-    /// Create a new `NativeContextMut` value with the given value.
-    pub fn new(t: T) -> Self {
-        NativeContextMut(RefCell::new(t), std::marker::PhantomData)
-    }
+        impl<'a> $mutable_name<'a> {
+            /// Create a new `NativeContextMut` value with the given value.
+            pub fn new(t: $name<'a>) -> Self {
+                $mutable_name(std::cell::RefCell::new(t))
+            }
 
-    pub fn into_inner(self) -> T {
-        self.0.into_inner()
-    }
-}
+            pub fn into_inner(self) -> $name<'a> {
+                self.0.into_inner()
+            }
+        }
 
-impl<'a, T: Tid<'a>> Deref for NativeContextMut<'a, T> {
-    type Target = RefCell<T>;
-    fn deref(&self) -> &Self::Target {
-        &self.0
-    }
+        impl<'a> std::ops::Deref for $mutable_name<'a> {
+            type Target = std::cell::RefCell<$name<'a>>;
+            fn deref(&self) -> &Self::Target {
+                &self.0
+            }
+        }
+    };
 }
 
 /// A data type to represent a heterogeneous collection of extensions which are available to
