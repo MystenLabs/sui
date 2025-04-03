@@ -1,14 +1,7 @@
 ---
 title: Table and Bag
 description: Sui provides `Table` and `Bag` collections built using dynamic fields, but with additional support to count the number of entries they contain to protect against accidental deletion when non-empty.
-draft: true
 ---
-
-:::warning
-
-This topic is now covered in [The Move Book](https://move-book.com/programmability/dynamic-fields.html). Update your bookmarks to the new location as this page will be deleted soon and without further notice.
-
-:::
 
 You can extend existing objects using [dynamic fields](../dynamic-fields.mdx). Note that it's possible to delete an object that still has (potentially non-drop) dynamic fields. This might not be a concern when adding a small number of statically known additional fields to an object, but is particularly undesirable for on-chain collection types that could be holding unboundedly many key-value pairs as dynamic fields.
 
@@ -195,3 +188,7 @@ assert!(&t1 != &t2, 1);
 ```
 
 This is unlikely to be the definition of equality that you want.
+
+## Related links
+
+- [Dynamic Collections](https://move-book.com/programmability/dynamic-collections.html) in The Move Book: The Move Book is a comprehensive guide to the Move programming language and the Sui blockchain. This page explores using dynamic collections, including tables and bags, in your Move development.
