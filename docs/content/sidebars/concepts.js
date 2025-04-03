@@ -83,6 +83,7 @@ const concepts = [
 					'concepts/transactions/gas-smashing',
 				],
 			},
+			'concepts/grpc-overview',
 			'concepts/graphql-rpc',
 			'concepts/gaming'
 		],
