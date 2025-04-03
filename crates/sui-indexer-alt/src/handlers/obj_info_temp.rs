@@ -16,6 +16,8 @@ use sui_indexer_alt_schema::{objects::StoredObjInfoTemp, schema::obj_info_temp};
 
 use crate::consistent_pruning::{PruningInfo, PruningLookupTable};
 
+use super::checkpoint_input_objects;
+
 #[derive(Default)]
 pub(crate) struct ObjInfoTemp {
     pruning_lookup_table: Arc<PruningLookupTable>,
@@ -38,7 +40,8 @@ impl Processor for ObjInfoTemp {
     // TODO: Add tests for this function and the pruner.
     fn process(&self, checkpoint: &Arc<CheckpointData>) -> Result<Vec<Self::Value>> {
         let cp_sequence_number = checkpoint.checkpoint_summary.sequence_number;
-        let checkpoint_input_objects = checkpoint.checkpoint_input_objects();
+        let checkpoint_input_objects: BTreeMap<ObjectID, &Object> =
+            checkpoint_input_objects(checkpoint);
         let latest_live_output_objects = checkpoint
             .latest_live_output_objects()
             .into_iter()
