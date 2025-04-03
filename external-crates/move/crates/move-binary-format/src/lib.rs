@@ -17,7 +17,7 @@ pub mod deserializer;
 pub mod file_format;
 pub mod file_format_common;
 pub mod internals;
-pub mod normalized_2;
+pub mod normalized;
 pub mod normalized_deprecated;
 #[cfg(any(test, feature = "fuzzing"))]
 pub mod proptest_types;

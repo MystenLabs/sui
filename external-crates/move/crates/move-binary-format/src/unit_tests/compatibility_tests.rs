@@ -4,7 +4,7 @@
 use crate::{
     compatibility::{compare_ord_iters, Compatibility, InclusionCheck, Mark},
     file_format::*,
-    normalized_2::{self as normalized, RCIdentifier, RCPool, Type},
+    normalized::{self, RCIdentifier, RCPool, Type},
 };
 use move_core_types::{account_address::AccountAddress, ident_str, identifier::Identifier};
 use proptest::prelude::*;

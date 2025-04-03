@@ -8,7 +8,7 @@ use crate::{
     errors::{PartialVMError, PartialVMResult},
     file_format::{Ability, AbilitySet, DatatypeTyParameter, Visibility},
     file_format_common::VERSION_5,
-    normalized_2,
+    normalized,
 };
 use move_core_types::vm_status::StatusCode;
 // ***************************************************************************
@@ -43,10 +43,10 @@ pub struct Compatibility {
     pub disallowed_new_abilities: AbilitySet,
 }
 
-pub type Module = normalized_2::Module<normalized_2::RCIdentifier>;
-pub type Struct = normalized_2::Struct<normalized_2::RCIdentifier>;
-pub type Enum = normalized_2::Enum<normalized_2::RCIdentifier>;
-pub type Function = normalized_2::Function<normalized_2::RCIdentifier>;
+pub type Module = normalized::Module<normalized::RCIdentifier>;
+pub type Struct = normalized::Struct<normalized::RCIdentifier>;
+pub type Enum = normalized::Enum<normalized::RCIdentifier>;
+pub type Function = normalized::Function<normalized::RCIdentifier>;
 
 impl Default for Compatibility {
     fn default() -> Self {
