@@ -9,7 +9,13 @@ use diesel_async::RunQueryDsl;
 use sui_indexer_alt_framework::{
     db,
     pipeline::{concurrent::Handler, Processor},
-    types::{base_types::ObjectID, full_checkpoint_content::CheckpointData, object::Object},
+    types::{
+        base_types::ObjectID,
+        full_checkpoint_content::{
+            CheckpointData, CheckpointObjectInputState, CheckpointObjectOutputState,
+        },
+        object::Object,
+    },
     FieldCount,
 };
 use sui_indexer_alt_schema::{objects::StoredObjInfo, schema::obj_info};
@@ -35,58 +41,69 @@ impl Processor for ObjInfo {
     const NAME: &'static str = "obj_info";
     type Value = ProcessedObjInfo;
 
-    // TODO: Add tests for this function and the pruner.
     fn process(&self, checkpoint: &Arc<CheckpointData>) -> Result<Vec<Self::Value>> {
         let cp_sequence_number = checkpoint.checkpoint_summary.sequence_number;
-        let checkpoint_input_objects = checkpoint.checkpoint_input_objects();
-        let latest_live_output_objects = checkpoint
-            .latest_live_output_objects()
-            .into_iter()
-            .map(|o| (o.id(), o))
-            .collect::<BTreeMap<_, _>>();
+        let checkpoint_objects = checkpoint.checkpoint_objects();
         let mut values: BTreeMap<ObjectID, Self::Value> = BTreeMap::new();
         let mut prune_info = PruningInfo::new();
-        for object_id in checkpoint_input_objects.keys() {
-            if !latest_live_output_objects.contains_key(object_id) {
-                // If an input object is not in the latest live output objects, it must have been deleted
-                // or wrapped in this checkpoint. We keep an entry for it in the table.
-                // This is necessary when we query objects and iterating over them, so that we don't
-                // include the object in the result if it was deleted.
-                values.insert(
-                    *object_id,
-                    ProcessedObjInfo {
-                        cp_sequence_number,
-                        update: ProcessedObjInfoUpdate::Delete(*object_id),
-                    },
-                );
-                prune_info.add_deleted_object(*object_id);
-            }
-        }
-        for (object_id, object) in latest_live_output_objects.iter() {
-            // If an object is newly created/unwrapped in this checkpoint, or if the owner changed,
-            // we need to insert an entry for it in the table.
-            let should_insert = match checkpoint_input_objects.get(object_id) {
-                Some(input_object) => input_object.owner() != object.owner(),
-                None => true,
-            };
-            if should_insert {
-                values.insert(
-                    *object_id,
-                    ProcessedObjInfo {
-                        cp_sequence_number,
-                        update: ProcessedObjInfoUpdate::Insert((*object).clone()),
-                    },
-                );
-                // We do not need to prune if the object was created in this checkpoint,
-                // because this object would not have been in the table prior to this checkpoint.
-                if checkpoint_input_objects.contains_key(object_id) {
-                    prune_info.add_mutated_object(*object_id);
+
+        for obj in checkpoint_objects {
+            match (obj.input_state, obj.output_state) {
+                // Ignore ephemeral objects
+                (
+                    CheckpointObjectInputState::CreatedInCheckpoint,
+                    CheckpointObjectOutputState::WrappedOrDeleted,
+                ) => {}
+                // Created or Unwrapped in checkpoint
+                (
+                    CheckpointObjectInputState::CreatedInCheckpoint,
+                    CheckpointObjectOutputState::Mutated(output_obj),
+                ) => {
+                    values.insert(
+                        obj.object_id,
+                        ProcessedObjInfo {
+                            cp_sequence_number,
+                            update: ProcessedObjInfoUpdate::Insert(output_obj.clone()),
+                        },
+                    );
+                    // No pruning needed for new/unwrapped objects
+                }
+                // Existed before and was modified
+                (
+                    CheckpointObjectInputState::BeforeCheckpoint(input_obj),
+                    CheckpointObjectOutputState::Mutated(output_obj),
+                ) => {
+                    // Only track if owner changed
+                    if input_obj.owner() != output_obj.owner() {
+                        values.insert(
+                            obj.object_id,
+                            ProcessedObjInfo {
+                                cp_sequence_number,
+                                update: ProcessedObjInfoUpdate::Insert(output_obj.clone()),
+                            },
+                        );
+                        prune_info.add_mutated_object(obj.object_id);
+                    }
+                }
+                // Wrapped or Deleted (regardless of input state)
+                (
+                    CheckpointObjectInputState::BeforeCheckpoint(_),
+                    CheckpointObjectOutputState::WrappedOrDeleted,
+                ) => {
+                    values.insert(
+                        obj.object_id,
+                        ProcessedObjInfo {
+                            cp_sequence_number,
+                            update: ProcessedObjInfoUpdate::Delete(obj.object_id),
+                        },
+                    );
+                    prune_info.add_deleted_object(obj.object_id);
                 }
             }
         }
+
         self.pruning_lookup_table
             .insert(cp_sequence_number, prune_info);
-
         Ok(values.into_values().collect())
     }
 }

@@ -3,7 +3,7 @@
 
 use std::collections::{BTreeMap, HashSet};
 
-use crate::base_types::{ObjectID, ObjectRef};
+use crate::base_types::{ObjectID, ObjectRef, SequenceNumber};
 use crate::effects::{TransactionEffects, TransactionEffectsAPI, TransactionEvents};
 use crate::messages_checkpoint::{CertifiedCheckpointSummary, CheckpointContents};
 use crate::object::Object;
@@ -17,6 +17,26 @@ pub struct CheckpointData {
     pub checkpoint_summary: CertifiedCheckpointSummary,
     pub checkpoint_contents: CheckpointContents,
     pub transactions: Vec<CheckpointTransaction>,
+}
+
+pub struct CheckpointObject<'input, 'output> {
+    pub object_id: ObjectID,
+    pub input_state: CheckpointObjectInputState<'input>,
+    pub output_state: CheckpointObjectOutputState<'output>,
+}
+
+pub enum CheckpointObjectInputState<'a> {
+    /// The object existed before the current checkpoint, and has object contents.
+    BeforeCheckpoint(&'a Object),
+    /// The object was created or unwrapped at some transaction in the checkpoint.
+    CreatedInCheckpoint,
+}
+
+pub enum CheckpointObjectOutputState<'a> {
+    /// The object was created, mutated, or unwrapped at the end of the checkpoint.
+    Mutated(&'a Object),
+    /// The object was wrapped or deleted at the end of the checkpoint.
+    WrappedOrDeleted,
 }
 
 impl CheckpointData {
@@ -73,6 +93,90 @@ impl CheckpointData {
             .iter()
             .flat_map(|tx| &tx.input_objects)
             .chain(self.transactions.iter().flat_map(|tx| &tx.output_objects))
+            .collect()
+    }
+
+    /// For a checkpoint, aggregate the object changes of its transactions and returns the initial
+    /// and final state of each object at the end of the checkpoint as if a single transaction was
+    /// executed.
+    ///
+    /// Uses `object_changes()` from each transaction's effects as the source of truth to:
+    /// 1. Track input objects at their first appearance, ignoring unwrapped objects
+    /// 2. Track all changes (creations, modifications, wraps, deletes) with their final state at
+    ///    checkpoint end. Note that later changes will overwrite existing entries. If an object has
+    ///    an output `ObjectRef`, it must have a corresponding entry in `tx.output_objects`.
+    pub fn checkpoint_objects(&self) -> Vec<CheckpointObject<'_, '_>> {
+        // Tracks only the first appearance of objects named as an input to some transaction in the
+        // checkpoint
+        let mut checkpoint_input_objects = BTreeMap::new();
+        // Tracks all objects and its final state in the checkpoint
+        let mut checkpoint_object_changes = BTreeMap::new();
+
+        for tx in self.transactions.iter() {
+            // Construct maps of input and output objects for efficient lookup
+            let input_objects_map: BTreeMap<(ObjectID, SequenceNumber), &Object> = tx
+                .input_objects
+                .iter()
+                .map(|obj| ((obj.id(), obj.version()), obj))
+                .collect();
+            let output_objects_map: BTreeMap<ObjectID, &Object> = tx
+                .output_objects
+                .iter()
+                .map(|obj| (obj.id(), obj))
+                .collect();
+
+            for change in tx.effects.object_changes() {
+                let obj_id = change.id;
+                // Handle input objects - only track first appearance
+                if let Some((id, version, _)) = change.input_ref() {
+                    // If the object appears in `checkpoint_object_changes`, it was an input object that
+                    // was previously modified or unwrapped. In both cases, we'd ignore this newer
+                    // entry
+                    if !checkpoint_object_changes.contains_key(&id)
+                        && !checkpoint_input_objects.contains_key(&id)
+                    {
+                        let input_obj = input_objects_map
+                            .get(&(id, version))
+                            .copied()
+                            .unwrap_or_else(|| panic!(
+                                "Object {id} at version {version} referenced in tx.effects.object_changes() not found in tx.input_objects"
+                            ));
+                        checkpoint_input_objects.insert(id, input_obj);
+                    }
+                }
+
+                let output_obj = if change.output_ref().is_none() {
+                    None
+                } else {
+                    Some(output_objects_map
+                        .get(&obj_id)
+                        .copied()
+                        .unwrap_or_else(|| panic!(
+                            "Output object {obj_id} referenced in tx.effects.object_changes() not found in tx.output_objects. Data inconsistency in CheckpointData's CheckpointTransaction"
+                        )))
+                };
+                checkpoint_object_changes.insert(obj_id, (change, output_obj));
+            }
+        }
+
+        checkpoint_object_changes
+            .into_iter()
+            .map(|(id, (_, output_obj))| {
+                CheckpointObject {
+                    object_id: id,
+                    // If in checkpoint_input_objects, it existed before checkpoint
+                    // Otherwise it was created/unwrapped during checkpoint
+                    input_state: match checkpoint_input_objects.get(&id) {
+                        Some(obj) => CheckpointObjectInputState::BeforeCheckpoint(obj),
+                        None => CheckpointObjectInputState::CreatedInCheckpoint,
+                    },
+                    // Final state from the change
+                    output_state: match output_obj {
+                        Some(obj) => CheckpointObjectOutputState::Mutated(obj),
+                        None => CheckpointObjectOutputState::WrappedOrDeleted,
+                    },
+                }
+            })
             .collect()
     }
 }

@@ -443,3 +443,21 @@ impl CertifiedTransactionEffects {
         Ok(VerifiedCertifiedTransactionEffects::new_from_verified(self))
     }
 }
+
+impl ObjectChange {
+    /// If an object was an input to a transaction, this function returns the input object ref.
+    pub fn input_ref(&self) -> Option<ObjectRef> {
+        match (self.input_version, self.input_digest) {
+            (Some(v), Some(d)) => Some((self.id, v, d)),
+            _ => None,
+        }
+    }
+
+    /// If an object was an output of a transaction, this function returns the output object ref.
+    pub fn output_ref(&self) -> Option<ObjectRef> {
+        match (self.output_version, self.output_digest) {
+            (Some(v), Some(d)) => Some((self.id, v, d)),
+            _ => None,
+        }
+    }
+}
