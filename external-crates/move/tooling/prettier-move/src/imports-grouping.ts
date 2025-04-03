@@ -179,8 +179,6 @@ export function collectImports(node: Node): GroupedImports {
                 const useMember = import_.nonFormattingChildren[1]!;
                 const [name, alias] = parseUseMember(useMember);
 
-                // if (!grouped[pkg]) grouped[pkg] = new Map();
-                // if (!grouped[pkg][mod]) grouped[pkg][mod] = [];
                 if (!grouped.has(pkg)) grouped.set(pkg, new Map());
                 const pkgMap = grouped.get(pkg)!;
                 if (!pkgMap.has(mod)) pkgMap.set(mod, []);
@@ -206,8 +204,6 @@ export function collectImports(node: Node): GroupedImports {
                     const [pkg, mod] = parseModuleIdentity(moduleIdentity);
                     const members = children.slice(1).map((n) => parseUseMember(n));
 
-                    // if (!grouped[pkg]) grouped[pkg] = {};
-                    // if (!grouped[pkg][mod]) grouped[pkg][mod] = [];
                     if (!grouped.has(pkg)) grouped.set(pkg, new Map());
                     const pkgMap = grouped.get(pkg)!;
                     if (!pkgMap.has(mod)) pkgMap.set(mod, []);
@@ -223,7 +219,6 @@ export function collectImports(node: Node): GroupedImports {
                 const pkg = children[0]!.text;
                 if (!grouped.has(pkg)) grouped.set(pkg, new Map());
                 const pkgMap = grouped.get(pkg)!;
-
 
                 children.slice(1).forEach((node) => {
                     if (!node) return;
