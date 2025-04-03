@@ -38,7 +38,7 @@ use vfs::VfsPath;
 mod dot;
 mod name_chain;
 mod snippets;
-mod utils;
+pub mod utils;
 
 /// List of completion items corresponding to each one of Move's keywords.
 ///

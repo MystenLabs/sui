@@ -14,19 +14,17 @@
 
 use crate::{
     completions::utils::{
-        call_completion_item, completion_item, mod_defs, PRIMITIVE_TYPE_COMPLETIONS,
+        call_completion_item, completion_item, exclude_member_from_import, import_insertion_info,
+        mod_defs, PRIMITIVE_TYPE_COMPLETIONS,
     },
     symbols::{
-        expansion_mod_ident_to_map_key, AutoImportInsertionInfo, AutoImportInsertionKind,
-        ChainCompletionKind, ChainInfo, CursorContext, DefInfo, FunType, MemberDef, MemberDefInfo,
-        ModuleDefs, Symbols, VariantInfo,
+        expansion_mod_ident_to_map_key, AutoImportInsertionInfo, ChainCompletionKind, ChainInfo,
+        CursorContext, DefInfo, FunType, MemberDef, MemberDefInfo, ModuleDefs, Symbols,
+        VariantInfo,
     },
 };
 use itertools::Itertools;
-use lsp_types::{
-    CompletionItem, CompletionItemKind, CompletionItemLabelDetails, InsertTextFormat, Range,
-    TextEdit,
-};
+use lsp_types::{CompletionItem, CompletionItemKind, CompletionItemLabelDetails, InsertTextFormat};
 use move_compiler::{
     expansion::ast::{Address, ModuleIdent, ModuleIdent_, Visibility},
     parser::ast as P,
@@ -35,6 +33,8 @@ use move_compiler::{
 use move_ir_types::location::{sp, Loc};
 use move_symbol_pool::Symbol;
 use std::collections::{BTreeMap, BTreeSet};
+
+use super::utils::auto_import_text_edit;
 
 /// Describes kind of the name access chain component.
 enum ChainComponentKind {
@@ -107,10 +107,7 @@ pub fn name_chain_completions(
 
     let mut import_insertion_info_opt = None;
     if auto_import {
-        import_insertion_info_opt = cursor
-            .module
-            .and_then(|m| mod_defs(symbols, &m.value))
-            .and_then(|m| m.import_insert_info);
+        import_insertion_info_opt = import_insertion_info(symbols, cursor);
     }
 
     if leading_name.loc.contains(&cursor.loc) {
@@ -554,7 +551,8 @@ fn struct_completion(
 /// If source module is specified, and it is different from the module of the member,
 /// then only public members are included in the completion, unless modules are
 /// in the same package, in which case package members are also included. No members are included
-/// if a circular dependency is detected.
+/// if a circular dependency is detected. This exclusion is needed to generate
+/// correct copletions for auto-imports.
 fn single_name_member_completion(
     symbols: &Symbols,
     cursor: &CursorContext,
@@ -565,36 +563,6 @@ fn single_name_member_completion(
     src_mod_ident_opt: Option<ModuleIdent>,
 ) -> Vec<CompletionItem> {
     use ChainCompletionKind as CT;
-
-    fn exclude_member(
-        mod_defs: &ModuleDefs,
-        src_mod_ident_opt: Option<ModuleIdent>,
-        visibility: &Visibility,
-    ) -> bool {
-        if let Some(src_mod_ident) = src_mod_ident_opt {
-            if mod_defs.neighbors.contains_key(&src_mod_ident) {
-                // circular dependency detected, exclude member
-                // TODO: this only works if there are "true" dependencies
-                // in the source files as the compiler does not populate
-                // the `neighbors` map using `use` statements - should we
-                // fix this at some point?
-                return true;
-            }
-            if mod_defs.ident != src_mod_ident.value {
-                match visibility {
-                    Visibility::Internal => true,
-                    Visibility::Package(_) => mod_defs.ident.address != src_mod_ident.value.address,
-                    _ => false,
-                }
-            } else {
-                // same module, include member regardless of visibility
-                false
-            }
-        } else {
-            // no source module, include member regardless of visibility
-            false
-        }
-    }
 
     // is it a function?
     if let Some(fdef) = mod_defs.functions.get(member_name) {
@@ -615,7 +583,7 @@ fn single_name_member_completion(
         else {
             return vec![];
         };
-        if exclude_member(mod_defs, src_mod_ident_opt, visibility) {
+        if exclude_member_from_import(mod_defs, src_mod_ident_opt, visibility) {
             return vec![];
         }
         return vec![call_completion_item(
@@ -640,7 +608,7 @@ fn single_name_member_completion(
         else {
             return vec![];
         };
-        if exclude_member(mod_defs, src_mod_ident_opt, visibility) {
+        if exclude_member_from_import(mod_defs, src_mod_ident_opt, visibility) {
             return vec![];
         }
         return struct_completion(cursor, &mod_defs.ident, *member_alias, member_def);
@@ -655,7 +623,7 @@ fn single_name_member_completion(
         else {
             return vec![];
         };
-        if exclude_member(mod_defs, src_mod_ident_opt, visibility) {
+        if exclude_member_from_import(mod_defs, src_mod_ident_opt, visibility) {
             return vec![];
         }
         return vec![completion_item(
@@ -669,7 +637,7 @@ fn single_name_member_completion(
         if !matches!(chain_kind, CT::All) {
             return vec![];
         }
-        if exclude_member(mod_defs, src_mod_ident_opt, &Visibility::Internal) {
+        if exclude_member_from_import(mod_defs, src_mod_ident_opt, &Visibility::Internal) {
             return vec![];
         }
         return vec![completion_item(
@@ -797,32 +765,10 @@ fn add_auto_import_to_completion_item(
         });
     }
     item.detail = Some(format!("({})", import_text));
-    let r = Range {
-        start: import_insertion_info.pos,
-        end: import_insertion_info.pos,
-    };
-    match import_insertion_info.kind {
-        AutoImportInsertionKind::AfterLastImport => {
-            item.additional_text_edits = Some(vec![TextEdit {
-                range: r,
-                new_text: format!(
-                    "\n{}{};",
-                    " ".repeat(import_insertion_info.tabulation),
-                    import_text
-                ),
-            }])
-        }
-        AutoImportInsertionKind::BeforeFirstMember => {
-            item.additional_text_edits = Some(vec![TextEdit {
-                range: r,
-                new_text: format!(
-                    "{};\n\n{}",
-                    import_text,
-                    " ".repeat(import_insertion_info.tabulation)
-                ),
-            }])
-        }
-    }
+    item.additional_text_edits = Some(vec![auto_import_text_edit(
+        import_text,
+        import_insertion_info,
+    )]);
 }
 
 /// Checks if a given module identifier represents a module in a package identifier by

@@ -3,11 +3,14 @@
 
 use crate::symbols::{
     mod_ident_to_ide_string, ret_type_to_ide_str, type_args_to_ide_string, type_list_to_ide_string,
-    ModuleDefs, Symbols,
+    AutoImportInsertionInfo, AutoImportInsertionKind, CursorContext, ModuleDefs, Symbols,
 };
-use lsp_types::{CompletionItem, CompletionItemKind, CompletionItemLabelDetails, InsertTextFormat};
+use lsp_types::{
+    CompletionItem, CompletionItemKind, CompletionItemLabelDetails, InsertTextFormat, Range,
+    TextEdit,
+};
 use move_compiler::{
-    expansion::ast::ModuleIdent_,
+    expansion::ast::{ModuleIdent, ModuleIdent_, Visibility},
     naming::ast::{Type, Type_},
     parser::keywords::PRIMITIVE_TYPES,
     shared::Name,
@@ -25,6 +28,17 @@ pub static PRIMITIVE_TYPE_COMPLETIONS: Lazy<Vec<CompletionItem>> = Lazy::new(|| 
     primitive_types
 });
 
+/// Get import imsertion info for the cursor's module.
+pub fn import_insertion_info(
+    symbols: &Symbols,
+    cursor: &CursorContext,
+) -> Option<AutoImportInsertionInfo> {
+    cursor
+        .module
+        .and_then(|m| mod_defs(symbols, &m.value))
+        .and_then(|m| m.import_insert_info)
+}
+
 /// Get definitions for a given module.
 pub fn mod_defs<'a>(symbols: &'a Symbols, mod_ident: &ModuleIdent_) -> Option<&'a ModuleDefs> {
     symbols
@@ -32,6 +46,68 @@ pub fn mod_defs<'a>(symbols: &'a Symbols, mod_ident: &ModuleIdent_) -> Option<&'
         .values()
         .flatten()
         .find(|mdef| mdef.ident == *mod_ident)
+}
+
+/// Create text edit for auto-import insertion.
+pub fn auto_import_text_edit(
+    import_text: String,
+    import_insertion_info: AutoImportInsertionInfo,
+) -> TextEdit {
+    let r = Range {
+        start: import_insertion_info.pos,
+        end: import_insertion_info.pos,
+    };
+    match import_insertion_info.kind {
+        AutoImportInsertionKind::AfterLastImport => TextEdit {
+            range: r,
+            new_text: format!(
+                "\n{}{};",
+                " ".repeat(import_insertion_info.tabulation),
+                import_text
+            ),
+        },
+        AutoImportInsertionKind::BeforeFirstMember => TextEdit {
+            range: r,
+            new_text: format!(
+                "{};\n\n{}",
+                import_text,
+                " ".repeat(import_insertion_info.tabulation)
+            ),
+        },
+    }
+}
+
+/// Given source module, and another module definition, checks if a member
+/// of this other module can be imported to the source module. If source
+/// module is None, the member can be imported regardless of visibility.
+pub fn exclude_member_from_import(
+    mod_defs: &ModuleDefs,
+    src_mod_ident_opt: Option<ModuleIdent>,
+    visibility: &Visibility,
+) -> bool {
+    if let Some(src_mod_ident) = src_mod_ident_opt {
+        if mod_defs.neighbors.contains_key(&src_mod_ident) {
+            // circular dependency detected, exclude member
+            // TODO: this only works if there are "true" dependencies
+            // in the source files as the compiler does not populate
+            // the `neighbors` map using `use` statements - should we
+            // fix this at some point?
+            return true;
+        }
+        if mod_defs.ident != src_mod_ident.value {
+            match visibility {
+                Visibility::Internal => true,
+                Visibility::Package(_) => mod_defs.ident.address != src_mod_ident.value.address,
+                _ => false,
+            }
+        } else {
+            // same module, include member regardless of visibility
+            false
+        }
+    } else {
+        // no source module, include member regardless of visibility
+        false
+    }
 }
 
 /// Constructs an `lsp_types::CompletionItem` with the given `label` and `kind`.
