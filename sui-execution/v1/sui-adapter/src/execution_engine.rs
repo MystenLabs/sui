@@ -687,6 +687,9 @@ mod checked {
             TransactionKind::RandomnessStateUpdate(_) => {
                 panic!("RandomnessStateUpdate should not exist in v1");
             }
+            TransactionKind::AccumulatorStateUpdate(_) => {
+                panic!("AccumulatorStateUpdate should not exist in v1");
+            }
         }?;
         temporary_store.check_execution_results_consistency()?;
         Ok(result)

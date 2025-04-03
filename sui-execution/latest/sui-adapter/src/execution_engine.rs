@@ -788,6 +788,7 @@ mod checked {
                 .map_err(|e| (e, vec![]))?;
                 Ok((Mode::empty_results(), vec![]))
             }
+            TransactionKind::AccumulatorStateUpdate(_) => Ok((Mode::empty_results(), vec![])),
         }?;
         temporary_store
             .check_execution_results_consistency()

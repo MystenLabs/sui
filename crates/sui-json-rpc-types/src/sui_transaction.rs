@@ -420,6 +420,7 @@ pub enum SuiTransactionBlockKind {
     ConsensusCommitPrologueV2(SuiConsensusCommitPrologueV2),
     ConsensusCommitPrologueV3(SuiConsensusCommitPrologueV3),
     ConsensusCommitPrologueV4(SuiConsensusCommitPrologueV4),
+    AccumulatorStateUpdate(SuiAccumulatorStateUpdate),
     // .. more transaction types go here
 }
 
@@ -482,6 +483,11 @@ impl Display for SuiTransactionBlockKind {
             }
             Self::EndOfEpochTransaction(_) => {
                 writeln!(writer, "Transaction Kind: End of Epoch Transaction")?;
+            }
+            Self::AccumulatorStateUpdate(update) => {
+                write!(f, "Transaction Kind: Accumulator State Update")?;
+                write!(f, ", Epoch: {}", update.epoch)?;
+                write!(f, ", Checkpoint Height: {}", update.checkpoint_height)?;
             }
         }
         write!(f, "{}", writer)
@@ -596,6 +602,12 @@ impl SuiTransactionBlockKind {
                         .collect(),
                 })
             }
+            TransactionKind::AccumulatorStateUpdate(update) => {
+                Self::AccumulatorStateUpdate(SuiAccumulatorStateUpdate {
+                    epoch: update.epoch,
+                    checkpoint_height: update.checkpoint_height,
+                })
+            }
         })
     }
 
@@ -646,6 +658,7 @@ impl SuiTransactionBlockKind {
             Self::AuthenticatorStateUpdate(_) => "AuthenticatorStateUpdate",
             Self::RandomnessStateUpdate(_) => "RandomnessStateUpdate",
             Self::EndOfEpochTransaction(_) => "EndOfEpochTransaction",
+            Self::AccumulatorStateUpdate(_) => "AccumulatorStateUpdate",
         }
     }
 }
@@ -1662,6 +1675,18 @@ pub struct SuiAuthenticatorStateExpire {
     #[schemars(with = "BigInt<u64>")]
     #[serde_as(as = "BigInt<u64>")]
     pub min_epoch: u64,
+}
+
+#[serde_as]
+#[derive(Debug, Serialize, Deserialize, JsonSchema, Clone, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct SuiAccumulatorStateUpdate {
+    #[schemars(with = "BigInt<u64>")]
+    #[serde_as(as = "BigInt<u64>")]
+    pub epoch: u64,
+    #[schemars(with = "BigInt<u64>")]
+    #[serde_as(as = "BigInt<u64>")]
+    pub checkpoint_height: u64,
 }
 
 #[serde_as]

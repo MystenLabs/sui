@@ -76,6 +76,10 @@ impl TransactionBlockKind {
                 native: rsu,
                 checkpoint_viewed_at,
             }),
+            K::AccumulatorStateUpdate(_update) => {
+                // FIXME: Implement AccumulatorStateUpdate.
+                unimplemented!("AccumulatorStateUpdate is not supported yet");
+            }
         }
     }
 }
