@@ -18,6 +18,7 @@ pub mod file_format;
 pub mod file_format_common;
 pub mod internals;
 pub mod normalized;
+pub mod normalized_2;
 #[cfg(any(test, feature = "fuzzing"))]
 pub mod proptest_types;
 pub mod serializer;
