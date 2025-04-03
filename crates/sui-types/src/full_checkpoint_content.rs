@@ -74,13 +74,35 @@ impl CheckpointData {
         let mut output_objects_seen = HashSet::new();
         let mut checkpoint_input_objects = BTreeMap::new();
         for tx in self.transactions.iter() {
-            for obj in tx.input_objects.iter() {
-                let id = obj.id();
-                if output_objects_seen.contains(&id) || checkpoint_input_objects.contains_key(&id) {
-                    continue;
+            // Construct maps of input and output objects for efficient lookup
+            let input_objects_map: BTreeMap<(ObjectID, SequenceNumber), &Object> = tx
+                .input_objects
+                .iter()
+                .map(|obj| ((obj.id(), obj.version()), obj))
+                .collect();
+
+            for change in tx.effects.object_changes() {
+                // Handle input objects - only track first appearance
+                if let Some((id, version, _)) = change.input_ref() {
+                    // If the object appears in `checkpoint_object_changes`, it was an input object that
+                    // was previously modified or unwrapped. In both cases, we'd ignore this newer
+                    // entry
+                    if output_objects_seen.contains(&id)
+                        || checkpoint_input_objects.contains_key(&id)
+                    {
+                        continue;
+                    }
+
+                    let input_obj = input_objects_map
+                                .get(&(id, version))
+                                .copied()
+                                .unwrap_or_else(|| panic!(
+                                    "Object {id} at version {version} referenced in tx.effects.object_changes() not found in tx.input_objects"
+                                ));
+                    checkpoint_input_objects.insert(id, input_obj);
                 }
-                checkpoint_input_objects.insert(id, obj);
             }
+
             for obj in tx.output_objects.iter() {
                 output_objects_seen.insert(obj.id());
             }
