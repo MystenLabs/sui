@@ -1789,7 +1789,7 @@ impl LocalExec {
                     let (digest, version) = deleted_shared_info_map.get(id).unwrap();
                     Some(ObjectReadResult::new(
                         *kind,
-                        ObjectReadResultKind::DeletedSharedObject(*version, *digest),
+                        ObjectReadResultKind::ObjectConsensusStreamEnded(*version, *digest),
                     ))
                 }
             })

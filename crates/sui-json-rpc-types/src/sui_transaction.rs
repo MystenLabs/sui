@@ -1016,7 +1016,10 @@ impl TryFrom<TransactionEffects> for SuiTransactionBlockEffects {
                     effect
                         .input_shared_objects()
                         .into_iter()
-                        .map(|kind| kind.object_ref())
+                        .map(|kind| {
+                            #[allow(deprecated)]
+                            kind.object_ref()
+                        })
                         .collect(),
                 ),
                 transaction_digest: *effect.transaction_digest(),

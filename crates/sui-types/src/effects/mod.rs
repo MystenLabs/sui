@@ -275,22 +275,29 @@ impl TransactionEffects {
 pub enum InputSharedObject {
     Mutate(ObjectRef),
     ReadOnly(ObjectRef),
-    ReadDeleted(ObjectID, SequenceNumber),
-    MutateDeleted(ObjectID, SequenceNumber),
+    ReadConsensusStreamEnded(ObjectID, SequenceNumber),
+    MutateConsensusStreamEnded(ObjectID, SequenceNumber),
     Cancelled(ObjectID, SequenceNumber),
 }
 
 impl InputSharedObject {
     pub fn id_and_version(&self) -> (ObjectID, SequenceNumber) {
-        let oref = self.object_ref();
-        (oref.0, oref.1)
+        match self {
+            InputSharedObject::Mutate(oref) | InputSharedObject::ReadOnly(oref) => (oref.0, oref.1),
+            InputSharedObject::ReadConsensusStreamEnded(id, version)
+            | InputSharedObject::MutateConsensusStreamEnded(id, version) => (*id, *version),
+            InputSharedObject::Cancelled(id, version) => (*id, *version),
+        }
     }
 
+    // NOTE: When `ObjectDigest::OBJECT_DIGEST_DELETED` is returned, the object's consensus stream
+    // has ended, but it may not be deleted.
+    #[deprecated]
     pub fn object_ref(&self) -> ObjectRef {
         match self {
             InputSharedObject::Mutate(oref) | InputSharedObject::ReadOnly(oref) => *oref,
-            InputSharedObject::ReadDeleted(id, version)
-            | InputSharedObject::MutateDeleted(id, version) => {
+            InputSharedObject::ReadConsensusStreamEnded(id, version)
+            | InputSharedObject::MutateConsensusStreamEnded(id, version) => {
                 (*id, *version, ObjectDigest::OBJECT_DIGEST_DELETED)
             }
             InputSharedObject::Cancelled(id, version) => {
@@ -343,14 +350,14 @@ pub trait TransactionEffectsAPI {
 
     fn gas_cost_summary(&self) -> &GasCostSummary;
 
-    fn deleted_mutably_accessed_shared_objects(&self) -> Vec<ObjectID> {
+    fn stream_ended_mutably_accessed_consensus_objects(&self) -> Vec<ObjectID> {
         self.input_shared_objects()
             .into_iter()
             .filter_map(|kind| match kind {
-                InputSharedObject::MutateDeleted(id, _) => Some(id),
+                InputSharedObject::MutateConsensusStreamEnded(id, _) => Some(id),
                 InputSharedObject::Mutate(..)
                 | InputSharedObject::ReadOnly(..)
-                | InputSharedObject::ReadDeleted(..)
+                | InputSharedObject::ReadConsensusStreamEnded(..)
                 | InputSharedObject::Cancelled(..) => None,
             })
             .collect()

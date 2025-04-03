@@ -407,8 +407,8 @@ mod checked {
                         system_transaction,
                     )?;
                 }
-                // We skip checking a deleted shared object because it no longer exists
-                ObjectReadResultKind::DeletedSharedObject(_, _) => (),
+                // We skip checking a removed consensus object because it no longer exists.
+                ObjectReadResultKind::ObjectConsensusStreamEnded(_, _) => (),
                 // We skip checking shared objects from cancelled transactions since we are not reading it.
                 ObjectReadResultKind::CancelledTransactionSharedObject(_) => (),
             }

@@ -26,7 +26,7 @@ pub type TxCoins = (ObjectMap, WrittenObjects);
 #[derive(Debug, Clone)]
 pub struct InnerTemporaryStore {
     pub input_objects: ObjectMap,
-    pub deleted_consensus_objects: BTreeMap<ObjectID, SequenceNumber /* start_version */>,
+    pub stream_ended_consensus_objects: BTreeMap<ObjectID, SequenceNumber /* start_version */>,
     pub mutable_inputs: BTreeMap<ObjectID, (VersionDigest, Owner)>,
     // All the written objects' sequence number should have been updated to the lamport version.
     pub written: WrittenObjects,
@@ -77,15 +77,15 @@ impl InnerTemporaryStore {
         // For any previously deleted shared objects that appeared mutably in the transaction,
         // synthesize a notification for the next version of the object.
         let smeared_version = self.lamport_version;
-        let deleted_accessed_objects = effects.deleted_mutably_accessed_shared_objects();
+        let deleted_accessed_objects = effects.stream_ended_mutably_accessed_consensus_objects();
         for object_id in deleted_accessed_objects.into_iter() {
             let id = self
                 .input_objects
                 .get(&object_id)
                 .map(|obj| obj.full_id())
                 .unwrap_or_else(|| {
-                    let start_version = self.deleted_consensus_objects.get(&object_id)
-                        .expect("deleted object must be in either input_objects or deleted_consensus_objects");
+                    let start_version = self.stream_ended_consensus_objects.get(&object_id)
+                        .expect("stream-ended object must be in either input_objects or stream_ended_consensus_objects");
                     FullObjectID::new(object_id, Some(*start_version))
                 });
             let key = InputKey::VersionedObject {

@@ -17,22 +17,23 @@ use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, BTreeSet, HashSet};
 use std::time::Duration;
 
-/// A type containing all of the information needed to work with a deleted shared object in
-/// execution and when committing the execution effects of the transaction. This holds:
-/// 0. The object ID of the deleted shared object.
-/// 1. The version of the shared object.
-/// 2. Whether the object appeared as mutable (or owned) in the transaction, or as a read-only shared object.
-/// 3. The transaction digest of the previous transaction that used this shared object mutably or
+/// A type containing all of the information needed to work in execution with an object whose
+/// consensus stream is ended, and when committing the execution effects of the transaction.
+/// This holds:
+/// 0. The object ID.
+/// 1. The version.
+/// 2. Whether the object appeared as mutable (or owned) in the transaction, or as read-only.
+/// 3. The transaction digest of the previous transaction that used this object mutably or
 ///    took it by value.
-pub type DeletedSharedObjectInfo = (ObjectID, SequenceNumber, bool, TransactionDigest);
+pub type ConsensusStreamEndedInfo = (ObjectID, SequenceNumber, bool, TransactionDigest);
 
-/// A sequence of information about deleted shared objects in the transaction's inputs.
-pub type DeletedSharedObjects = Vec<DeletedSharedObjectInfo>;
+/// A sequence of information about removed consensus objects in the transaction's inputs.
+pub type ConsensusStreamEndedObjects = Vec<ConsensusStreamEndedInfo>;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum SharedInput {
     Existing(ObjectRef),
-    Deleted(DeletedSharedObjectInfo),
+    ConsensusStreamEnded(ConsensusStreamEndedInfo),
     Cancelled((ObjectID, SequenceNumber)),
 }
 

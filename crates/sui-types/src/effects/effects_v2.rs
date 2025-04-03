@@ -116,11 +116,11 @@ impl TransactionEffectsAPI for TransactionEffectsV2 {
                         UnchangedSharedKind::ReadOnlyRoot((version, digest)) => {
                             Some(InputSharedObject::ReadOnly((*id, *version, *digest)))
                         }
-                        UnchangedSharedKind::MutateDeleted(seqno) => {
-                            Some(InputSharedObject::MutateDeleted(*id, *seqno))
+                        UnchangedSharedKind::MutateConsensusStreamEnded(seqno) => {
+                            Some(InputSharedObject::MutateConsensusStreamEnded(*id, *seqno))
                         }
-                        UnchangedSharedKind::ReadDeleted(seqno) => {
-                            Some(InputSharedObject::ReadDeleted(*id, *seqno))
+                        UnchangedSharedKind::ReadConsensusStreamEnded(seqno) => {
+                            Some(InputSharedObject::ReadConsensusStreamEnded(*id, *seqno))
                         }
                         UnchangedSharedKind::Cancelled(seqno) => {
                             Some(InputSharedObject::Cancelled(*id, *seqno))
@@ -363,12 +363,15 @@ impl TransactionEffectsAPI for TransactionEffectsV2 {
                 obj_ref.0,
                 UnchangedSharedKind::ReadOnlyRoot((obj_ref.1, obj_ref.2)),
             )),
-            InputSharedObject::ReadDeleted(obj_id, seqno) => self
+            InputSharedObject::ReadConsensusStreamEnded(obj_id, seqno) => self
                 .unchanged_shared_objects
-                .push((obj_id, UnchangedSharedKind::ReadDeleted(seqno))),
-            InputSharedObject::MutateDeleted(obj_id, seqno) => self
-                .unchanged_shared_objects
-                .push((obj_id, UnchangedSharedKind::MutateDeleted(seqno))),
+                .push((obj_id, UnchangedSharedKind::ReadConsensusStreamEnded(seqno))),
+            InputSharedObject::MutateConsensusStreamEnded(obj_id, seqno) => {
+                self.unchanged_shared_objects.push((
+                    obj_id,
+                    UnchangedSharedKind::MutateConsensusStreamEnded(seqno),
+                ))
+            }
             InputSharedObject::Cancelled(obj_id, seqno) => self
                 .unchanged_shared_objects
                 .push((obj_id, UnchangedSharedKind::Cancelled(seqno))),
@@ -431,12 +434,12 @@ impl TransactionEffectsV2 {
                         Some((id, UnchangedSharedKind::ReadOnlyRoot((version, digest))))
                     }
                 }
-                SharedInput::Deleted((id, version, mutable, _)) => {
+                SharedInput::ConsensusStreamEnded((id, version, mutable, _)) => {
                     debug_assert!(!changed_objects.contains_key(&id));
                     if mutable {
-                        Some((id, UnchangedSharedKind::MutateDeleted(version)))
+                        Some((id, UnchangedSharedKind::MutateConsensusStreamEnded(version)))
                     } else {
-                        Some((id, UnchangedSharedKind::ReadDeleted(version)))
+                        Some((id, UnchangedSharedKind::ReadConsensusStreamEnded(version)))
                     }
                 }
                 SharedInput::Cancelled((id, version)) => {
@@ -599,10 +602,10 @@ pub enum UnchangedSharedKind {
     /// Read-only shared objects from the input. We don't really need ObjectDigest
     /// for protocol correctness, but it will make it easier to verify untrusted read.
     ReadOnlyRoot(VersionDigest),
-    /// Deleted shared objects that appear mutably/owned in the input.
-    MutateDeleted(SequenceNumber),
-    /// Deleted shared objects that appear as read-only in the input.
-    ReadDeleted(SequenceNumber),
+    /// Objects with ended consensus streams that appear mutably/owned in the input.
+    MutateConsensusStreamEnded(SequenceNumber),
+    /// Objects with ended consensus streams objects that appear as read-only in the input.
+    ReadConsensusStreamEnded(SequenceNumber),
     /// Shared objects in cancelled transaction. The sequence number embed cancellation reason.
     Cancelled(SequenceNumber),
     /// Read of a per-epoch config object that should remain the same during an epoch.
