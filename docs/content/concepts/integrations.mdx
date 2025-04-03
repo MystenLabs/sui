@@ -1,0 +1,77 @@
+---
+title: Sui Integrations
+description: Third-party integrations on the Sui blockchain.
+---
+
+The integrations listed here are a curated collection of integrations available within the Sui ecosystem. 
+
+## Axelar
+
+The [Axelar Network](https://axelar.network/) is a decentralized interoperability network designed to enable seamless cross-chain communication, kind of a blockchain for blockchains. Axelar connects a number of different EVM and non-EVM [blockchains](https://axelarscan.io/resources/chains), including Sui.
+
+Axelar's [Interchain Token Service](https://www.axelar.network/its) (ITS) enables the integration of coins on Sui to be sent to or from other ecosystems connected to the Axelar Network. ITS enables your team to deploy fresh new fungible interchain tokens as well as integrate custom tokens that want to go cross-chain. ITS is already live on many different EVM and non-evm chains so you can now send your Sui coins to and from those chains.
+
+The quickest way to get started using ITS is through Axelar's ITS Portal, which supports Sui.
+
+- [Testnet portal](https://testnet.interchain.axelar.dev/)
+- [Mainnet portal](https://interchain.axelar.dev/)
+
+<details>
+<summary>
+Interchange token smart contract
+</summary>
+{@inject: github:axelarnetwork/axelar-cgp-sui/move/interchain_token/sources/interchain_token.move}
+</details>
+
+[General Message Passing (GMP)](https://www.axelar.network/blog/general-message-passing-and-how-can-it-change-web3) is another feature Axelar provides. With GMP, you can send arbitrary data between blockchains, providing the means for you to build sophisticated cross-chain applications.
+
+Axelar provides an example of a GMP integration on Sui in the [axelar-cgp-sui repository](https://github.com/axelarnetwork/axelar-cgp-sui/tree/main/move/example) on GitHub. Axelar also provides a script using the Sui TypeScript SDK to demonstrate how to interact with the example.
+
+<details>
+<summary>
+GMP script
+</summary>
+{@inject: github:axelarnetwork/axelar-contract-deployments/sui/gmp.js}
+</details>
+
+To learn more about Axelar, see the [official Axelar docs](https://docs.axelar.dev/).
+
+## Enoki
+
+Enoki enables builders on Sui to provide Web3 experiences to Web2 users. Using Enoki, you can provide your users with a Sui address using a Web2 login from authenticators they're already familiar with, like Apple or Google. With Enoki, you can have your users focus on the experience your app provides, using an authentication method they already know and trust, while you let Enoki handle the Web3 details.
+
+Enoki uses zkLogin to generate self-custodial Sui addresses, with a web credential login. Using the OAuth2 OpenID Connect standard, users can sign in with Google, Apple, Twitch, and more. The user's on-chain address is linked to an active JSON Web Token (JWT) from their web credential. Enoki generates a salt and address, using zkLogin proofs that allow a user to sign transactions just by logging into their web credential.
+
+Enoki enables sponsored transactions to remove additional barriers for users new to Web3 to engage with your apps. Using these, you can pay for transactions on the Sui network on behalf of your users. Users don't need to understand gas fees or even know what a SUI token is, or that they are conducting transactions on a blockchain.
+
+To learn more about Enoki, see the official [Enoki docs](https://docs.enoki.mystenlabs.com/).
+
+## Walrus
+
+Walrus is a decentralized storage and data availability protocol designed specifically for large binary files (blobs). Walrus focuses on providing a robust but affordable solution for storing unstructured content on decentralized storage nodes while ensuring high availability and reliability even in the presence of Byzantine faults.
+
+Walrus's architecture ensures that content remains accessible and retrievable, even if many of the storage nodes are unavailable or malicious. Walrus uses modern error correction techniques based on fast linear fountain codes, augmented to ensure resilience against Byzantine faults, and a dynamically changing set of storage nodes. The core of Walrus remains simple, and storage node management and blob certification leverages Sui smart contracts.
+
+Benefits of using Walrus as a storage solution include: 
+
+- Cost efficient, decentralized storage
+- Integrated with the Sui blockchain
+- High availability, even against Byzantine faults
+
+To learn more about Walrus, see the official [Walrus docs](https://docs.wal.app/).
+
+## Walrus Sites
+
+Walrus Sites use Sui and [Walrus](#walrus) as their underlying technology. Using Walrus Sites, you can store assets that make up your site as blobs on the Walrus storage platform. Like any other public web property, the final render is available to anyone with internet access.
+
+Walrus Sites provides the following benefits:
+
+- Server configurations are not necessary.
+- You can link sites to or from ordinary Sui objects. 
+- Address owned. You can trade, sell, share, or update like any other object on the blockchain.
+- Decentralized, so your content is secure from data wipes.
+- Publish to Walrus and your site becomes available. No more DNS headaches.
+
+Walrus Sites are particularly well-suited for staticly generated sites. If you need backend services, however, you can integrate with Sui-compatible wallets and harness Sui's programmability to add them.
+
+To learn more about Walrus Sites, see the [Walrus Sites section](https://docs.wal.app/walrus-sites/intro.html) of the official Walrus docs.
