@@ -75,6 +75,12 @@ impl std::fmt::Display for RCIdentifier {
 
 pub struct RCPool(BTreeSet<RCIdentifier>);
 
+impl RCPool {
+    pub fn new() -> Self {
+        Self(BTreeSet::new())
+    }
+}
+
 impl StringPool for RCPool {
     type String = RCIdentifier;
 
@@ -710,6 +716,32 @@ impl<S: Clone + Ord> Module<S> {
     }
 }
 
+impl<S: PartialEq> PartialEq for Module<S> {
+    fn eq(&self, other: &Self) -> bool {
+        let Self {
+            tables: _,
+            id,
+            file_format_version,
+            dependencies,
+            friends,
+            structs,
+            enums,
+            functions,
+            constants,
+        } = self;
+        id == &other.id
+            && file_format_version == &other.file_format_version
+            && dependencies == &other.dependencies
+            && friends == &other.friends
+            && structs == &other.structs
+            && enums == &other.enums
+            && functions == &other.functions
+            && constants == &other.constants
+    }
+}
+
+impl<S: Eq> Eq for Module<S> {}
+
 impl<S> Constant<S> {
     pub fn new<Pool: StringPool<String = S>>(
         pool: &mut Pool,
@@ -822,13 +854,12 @@ impl<S> Enum<S> {
             .iter()
             .map(|v| Rc::new(Variant::new(pool, m, v)))
             .collect::<Vec<_>>();
-        let e = Enum {
+        Enum {
             name,
             abilities: handle.abilities,
             type_parameters: handle.type_parameters.clone(),
             variants,
-        };
-        e
+        }
     }
 }
 
