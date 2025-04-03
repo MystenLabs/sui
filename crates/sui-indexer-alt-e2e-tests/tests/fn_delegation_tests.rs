@@ -10,6 +10,7 @@ use serde_json::{json, Value};
 use sui_indexer_alt_jsonrpc::{
     args::SystemPackageTaskArgs, config::RpcConfig, start_rpc, NodeArgs, RpcArgs,
 };
+use sui_indexer_alt_reader::bigtable_reader::BigtableArgs;
 use sui_macros::sim_test;
 use sui_pg_db::{temp::get_available_port, DbArgs};
 use sui_swarm_config::genesis_config::AccountConfig;
@@ -64,6 +65,7 @@ impl FnDelegationTestCluster {
             None,
             None,
             DbArgs::default(),
+            BigtableArgs::default(),
             rpc_args,
             NodeArgs {
                 fullnode_rpc_url: Some(fullnode_rpc_url),

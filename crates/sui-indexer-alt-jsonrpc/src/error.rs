@@ -9,6 +9,9 @@ use jsonrpsee::types::{
     ErrorObject,
 };
 
+/// Request timed out.
+pub const TIMEOUT_ERROR_CODE: i32 = -32604;
+
 /// Like anyhow's `bail!`, but for returning an internal error.
 macro_rules! rpc_bail {
     ($($arg:tt)*) => {
@@ -38,9 +41,10 @@ pub(crate) trait InternalContext<T, E: std::error::Error> {
         F: FnOnce() -> C;
 }
 
-/// This type represents two kinds of errors: Invalid Params (the user's fault), and Internal
-/// Errors (the service's fault). Each RpcModule is responsible for defining its own structured
-/// user errors, while internal errors are represented with anyhow everywhere.
+/// This type represents three kinds of errors: Invalid Params (the user's fault), Timeouts, and
+/// Internal Errors (the service's fault). Each RpcModule is responsible for defining its own
+/// structured user errors, while timeouts and internal errors are represented with anyhow
+/// everywhere.
 ///
 /// The internal error type defaults to `Infallible`, meaning there are no reasons the response
 /// might fail because of user input.
@@ -58,6 +62,9 @@ pub(crate) enum RpcError<E: std::error::Error = Infallible> {
     #[error("Invalid Params: {0}")]
     InvalidParams(E),
 
+    #[error("Timed out: {0}")]
+    Timeout(anyhow::Error),
+
     #[error("Internal Error: {0:#}")]
     InternalError(#[from] anyhow::Error),
 }
@@ -69,10 +76,10 @@ impl<T, E: std::error::Error> InternalContext<T, E> for Result<T, RpcError<E>> {
         C: Display + Send + Sync + 'static,
     {
         use RpcError as E;
-        if let Err(E::InternalError(e)) = self {
-            Err(E::InternalError(e.context(ctx)))
-        } else {
-            self
+        match self {
+            Err(E::InternalError(e)) => Err(E::InternalError(e.context(ctx))),
+            Err(E::Timeout(e)) => Err(E::Timeout(e.context(ctx))),
+            _ => self,
         }
     }
 
@@ -84,10 +91,10 @@ impl<T, E: std::error::Error> InternalContext<T, E> for Result<T, RpcError<E>> {
         F: FnOnce() -> C,
     {
         use RpcError as E;
-        if let Err(E::InternalError(e)) = self {
-            Err(E::InternalError(e.context(f())))
-        } else {
-            self
+        match self {
+            Err(E::InternalError(e)) => Err(E::InternalError(e.context(f()))),
+            Err(E::Timeout(e)) => Err(E::Timeout(e.context(f()))),
+            _ => self,
         }
     }
 }
@@ -99,6 +106,8 @@ impl<E: std::error::Error> From<RpcError<E>> for ErrorObject<'static> {
             E::InvalidParams(_) => {
                 ErrorObject::owned(INVALID_PARAMS_CODE, err.to_string(), None::<()>)
             }
+
+            E::Timeout(_) => ErrorObject::owned(TIMEOUT_ERROR_CODE, err.to_string(), None::<()>),
 
             E::InternalError(_) => {
                 ErrorObject::owned(INTERNAL_ERROR_CODE, err.to_string(), None::<()>)

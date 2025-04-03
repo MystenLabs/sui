@@ -3,7 +3,7 @@
 
 use std::fmt::Debug;
 use std::future::Future;
-use std::time::{Duration, Instant};
+use std::time::Duration;
 
 use anyhow::anyhow;
 use async_graphql::dataloader::DataLoader;
@@ -17,16 +17,25 @@ use tracing::warn;
 
 use crate::error::Error;
 
+#[derive(clap::Args, Debug, Clone, Default)]
+pub struct BigtableArgs {
+    /// Time spent waiting for a request to Bigtable to complete, in milliseconds.
+    #[arg(long)]
+    pub bigtable_statement_timeout_ms: Option<u64>,
+}
+
 /// A reader backed by BigTable KV store.
 ///
 /// In order to use this reader, the environment variable `GOOGLE_APPLICATION_CREDENTIALS` must be
 /// set to the path of the credentials file.
 #[derive(Clone)]
-pub struct BigtableReader {
-    client: BigTableClient,
+pub struct BigtableReader(BigTableClient);
 
-    /// Requests to BigTable that take longer than this threshold will be logged.
-    slow_request_threshold: Duration,
+impl BigtableArgs {
+    pub fn statement_timeout(&self) -> Option<Duration> {
+        self.bigtable_statement_timeout_ms
+            .map(Duration::from_millis)
+    }
 }
 
 impl BigtableReader {
@@ -36,14 +45,11 @@ impl BigtableReader {
     ///
     /// `client_name` is used as a label for metrics coming from ths underlying Bigtable client,
     /// which will be registered with the supplied prometheus `registry`.
-    ///
-    /// If a request to Bigtable exceeds `slow_request_threshold`, detail of that request will be
-    /// logged as a `warn!`-ing.
     pub async fn new(
         instance_id: String,
         client_name: String,
+        bigtable_args: BigtableArgs,
         registry: &Registry,
-        slow_request_threshold: Duration,
     ) -> Result<Self, Error> {
         if std::env::var("GOOGLE_APPLICATION_CREDENTIALS").is_err() {
             return Err(Error::BigtableCreate(anyhow!(
@@ -51,15 +57,17 @@ impl BigtableReader {
             )));
         }
 
-        let client =
-            BigTableClient::new_remote(instance_id, true, None, client_name, Some(registry))
-                .await
-                .map_err(Error::BigtableCreate)?;
-
-        Ok(Self {
-            client,
-            slow_request_threshold,
-        })
+        Ok(Self(
+            BigTableClient::new_remote(
+                instance_id,
+                true,
+                bigtable_args.statement_timeout(),
+                client_name,
+                Some(registry),
+            )
+            .await
+            .map_err(Error::BigtableCreate)?,
+        ))
     }
 
     /// Create a data loader backed by this reader.
@@ -72,13 +80,7 @@ impl BigtableReader {
         &self,
         keys: &[CheckpointSequenceNumber],
     ) -> Result<Vec<Checkpoint>, Error> {
-        measure(
-            self.slow_request_threshold,
-            "checkpoints",
-            &keys,
-            self.client.clone().get_checkpoints(keys),
-        )
-        .await
+        measure("checkpoints", &keys, self.0.clone().get_checkpoints(keys)).await
     }
 
     /// Multi-get transactions by transaction digest.
@@ -86,48 +88,42 @@ impl BigtableReader {
         &self,
         keys: &[TransactionDigest],
     ) -> Result<Vec<TransactionData>, Error> {
-        measure(
-            self.slow_request_threshold,
-            "transactions",
-            &keys,
-            self.client.clone().get_transactions(keys),
-        )
-        .await
+        measure("transactions", &keys, self.0.clone().get_transactions(keys)).await
     }
 
     /// Multi-get objects by object ID and version.
     pub(crate) async fn objects(&self, keys: &[ObjectKey]) -> Result<Vec<Object>, Error> {
-        measure(
-            self.slow_request_threshold,
-            "objects",
-            &keys,
-            self.client.clone().get_objects(keys),
-        )
-        .await
+        measure("objects", &keys, self.0.clone().get_objects(keys)).await
     }
 }
 
-/// Run the `load` future, measuring how long it takes. If it takes longer than
-/// `slow_request_threshold`, log a warning with the details of the request.
+/// Run the `load` future, detecting a timeout, and logging a warning with the details of the
+/// request if that is the case.
 async fn measure<T, A: Debug>(
-    slow_request_threshold: Duration,
     method: &str,
     args: &A,
     load: impl Future<Output = anyhow::Result<T>>,
 ) -> Result<T, Error> {
-    let start = Instant::now();
     let result = load.await;
-    let elapsed = start.elapsed();
 
-    if elapsed > slow_request_threshold {
-        warn!(
-            elapsed_ms = elapsed.as_millis(),
-            threshold_ms = slow_request_threshold.as_millis(),
-            method,
-            ?args,
-            "Slow Bigtable request"
-        );
+    if result.as_ref().is_err_and(is_timeout) {
+        warn!(method, ?args, "Bigtable timeout");
     }
 
     result.map_err(Error::BigtableRead)
+}
+
+/// Detect a tonic timeout error in the source chain.
+fn is_timeout(err: &anyhow::Error) -> bool {
+    let mut source = err.source();
+
+    while let Some(err) = source {
+        if err.downcast_ref::<tonic::TimeoutExpired>().is_some() {
+            return true;
+        } else {
+            source = err.source();
+        }
+    }
+
+    false
 }

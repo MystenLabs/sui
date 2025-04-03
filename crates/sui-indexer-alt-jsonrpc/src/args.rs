@@ -4,6 +4,7 @@
 use std::path::PathBuf;
 
 use sui_indexer_alt_metrics::MetricsArgs;
+use sui_indexer_alt_reader::bigtable_reader::BigtableArgs;
 use sui_pg_db::DbArgs;
 use url::Url;
 
@@ -36,6 +37,9 @@ pub enum Command {
 
         #[command(flatten)]
         db_args: DbArgs,
+
+        #[command(flatten)]
+        bigtable_args: BigtableArgs,
 
         #[command(flatten)]
         rpc_args: RpcArgs,
