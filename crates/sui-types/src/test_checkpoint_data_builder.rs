@@ -46,7 +46,7 @@ use crate::{
 /// If you need to test the validity of the checkpoint data, you should use Simulacrum instead.
 pub struct TestCheckpointDataBuilder {
     /// Map of all live objects in the state.
-    live_objects: HashMap<ObjectID, Object>,
+    pub live_objects: HashMap<ObjectID, Object>,
     /// Map of all wrapped objects in the state.
     wrapped_objects: HashMap<ObjectID, Object>,
     /// A map from sender addresses to gas objects they own.
@@ -593,6 +593,16 @@ impl TestCheckpointDataBuilder {
     /// Derive an address from an index.
     pub fn derive_address(address_idx: u8) -> SuiAddress {
         dbg_addr(address_idx)
+    }
+
+    /// Get mutable access to all transactions in the current checkpoint
+    pub fn transactions_mut(&mut self) -> &mut Vec<CheckpointTransaction> {
+        &mut self.checkpoint_builder.transactions
+    }
+
+    /// Get mutable access to a specific transaction by index
+    pub fn transaction_mut(&mut self, idx: usize) -> Option<&mut CheckpointTransaction> {
+        self.checkpoint_builder.transactions.get_mut(idx)
     }
 }
 

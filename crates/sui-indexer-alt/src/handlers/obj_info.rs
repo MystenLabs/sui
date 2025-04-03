@@ -673,4 +673,41 @@ mod tests {
         // Now we can prune checkpoint 2, as well as 3.
         obj_info.prune(2, 4, &mut conn).await.unwrap();
     }
+
+    /// In our processing logic, we consider objects that appear as input to the checkpoint but not
+    /// in the output as wrapped or deleted. This emits a tombstone row. Meanwhile, the remote store
+    /// containing `CheckpointData` used to include unchanged shared objects in the `input_objects`
+    /// of a `CheckpointTransaction`. Because these read-only shared objects were not modified, they
+    ///were not included in `output_objects`. But that means within our pipeline, these object
+    /// states were incorrectly treated as deleted, and thus every transaction read emitted a
+    /// tombstone row. This test validates that unless an object appears as an input object from
+    /// `tx.effects.object_changes`, we do not consider it within our pipeline.
+    #[tokio::test]
+    async fn test_process_unchanged_shared_object() {
+        let obj_info = ObjInfo::default();
+        let mut builder = TestCheckpointDataBuilder::new(0)
+            .start_transaction(0)
+            .create_shared_object(0)
+            .finish_transaction();
+
+        // Get the shared object from the transaction's output_objects
+        let shared_obj = builder
+            .transactions_mut()
+            .pop() // Remove and get the transaction
+            .unwrap()
+            .output_objects
+            .into_iter()
+            .find(|obj| obj.id() == TestCheckpointDataBuilder::derive_object_id(0))
+            .unwrap();
+
+        // Create a new transaction that will use the shared object
+        let mut builder = builder.start_transaction(0).finish_transaction();
+        if let Some(tx) = builder.transactions_mut().last_mut() {
+            tx.input_objects.push(shared_obj);
+        }
+
+        let checkpoint = builder.build_checkpoint();
+        let result = obj_info.process(&Arc::new(checkpoint)).unwrap();
+        assert_eq!(result.len(), 0);
+    }
 }
