@@ -210,3 +210,20 @@ public fun withdraw<T>(
     );
     new_coin
 }
+
+fun staking() {
+    let unadjusted_staking_reward_amount = unadjusted_staking_reward_amounts[i];
+    let adjusted_staking_reward_amount // If the validator is one of the slashed ones, then subtract the adjustment.
+     = if (individual_staking_reward_adjustments.contains(&i)) {
+        let adjustment = individual_staking_reward_adjustments[&i];
+        unadjusted_staking_reward_amount - adjustment
+    } else {
+        // Otherwise the slashed rewards should be distributed among the unslashed
+        // validators so add the corresponding adjustment.
+        let adjustment =
+            total_staking_reward_adjustment as u128 * voting_power
+                            / (total_unslashed_validator_voting_power as u128);
+        unadjusted_staking_reward_amount + (adjustment as u64)
+    };
+    adjusted_staking_reward_amounts.push_back(adjusted_staking_reward_amount);
+}

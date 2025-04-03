@@ -4,6 +4,7 @@
 import { Node } from '../..';
 import { MoveOptions, printFn, treeFn } from '../../printer';
 import { AstPath, Doc, doc } from 'prettier';
+import { printTrailingComment } from '../../utilities';
 const { group, indent, line, indentIfBreak } = doc.builders;
 
 /** The type of the node implemented in this file */
@@ -27,7 +28,16 @@ function printLetStatement(path: AstPath<Node>, options: MoveOptions, print: pri
         return group(['let', ' ', path.call(print, 'nonFormattingChildren', 0)]);
     }
 
-    const printed = path.map(print, 'nonFormattingChildren');
+    function printWithTrailing(path: AstPath<Node>): Doc {
+        let trailingComment: Doc = '';
+        if (path.node.trailingComment?.type == 'line_comment') {
+            trailingComment = printTrailingComment(path, true);
+            path.node.disableTrailingComment();
+        }
+        return [print(path), trailingComment];
+    }
+
+    const printed = path.map(printWithTrailing, 'nonFormattingChildren');
     const rhsNode = path.node.nonFormattingChildren.slice(-1)[0]!;
 
     if (nodes.length === 2 && nodes[1]!.isTypeParam) {
