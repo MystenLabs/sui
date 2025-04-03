@@ -16,6 +16,7 @@ use sui_indexer_alt_framework::{ingestion::ClientArgs, schema::watermarks, Index
 use sui_indexer_alt_jsonrpc::{
     args::SystemPackageTaskArgs, config::RpcConfig, start_rpc, NodeArgs, RpcArgs,
 };
+use sui_indexer_alt_reader::bigtable_reader::BigtableArgs;
 use sui_pg_db::{
     temp::{get_available_port, TempDb},
     Db, DbArgs,
@@ -289,6 +290,7 @@ impl OffchainCluster {
             Some(database_url.clone()),
             None,
             DbArgs::default(),
+            BigtableArgs::default(),
             rpc_args,
             NodeArgs::default(),
             system_package_task_args,

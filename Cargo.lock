@@ -14022,6 +14022,7 @@ dependencies = [
  "sui-indexer-alt",
  "sui-indexer-alt-framework",
  "sui-indexer-alt-jsonrpc",
+ "sui-indexer-alt-reader",
  "sui-json-rpc-types",
  "sui-macros",
  "sui-move-build",
@@ -14169,6 +14170,7 @@ dependencies = [
  "thiserror 1.0.69",
  "tokio",
  "tokio-util 0.7.13 (registry+https://github.com/rust-lang/crates.io-index)",
+ "tonic 0.12.3",
  "tracing",
  "url",
 ]

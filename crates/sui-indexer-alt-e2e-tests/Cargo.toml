@@ -27,6 +27,7 @@ simulacrum.workspace = true
 sui-indexer-alt.workspace = true
 sui-indexer-alt-framework.workspace = true
 sui-indexer-alt-jsonrpc.workspace = true
+sui-indexer-alt-reader.workspace = true
 sui-pg-db.workspace = true
 sui-types.workspace = true
 

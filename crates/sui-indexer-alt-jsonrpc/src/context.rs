@@ -2,12 +2,11 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::sync::Arc;
-use std::time::Duration;
 
 use async_graphql::dataloader::DataLoader;
 use prometheus::Registry;
 use sui_indexer_alt_reader::{
-    bigtable_reader::BigtableReader,
+    bigtable_reader::{BigtableArgs, BigtableReader},
     error::Error,
     kv_loader::KvLoader,
     package_resolver::{DbPackageStore, PackageCache, PackageResolver},
@@ -55,28 +54,21 @@ impl Context {
         database_url: Option<Url>,
         bigtable_instance: Option<String>,
         db_args: DbArgs,
+        bigtable_args: BigtableArgs,
         config: RpcConfig,
         metrics: Arc<RpcMetrics>,
-        slow_request_threshold: Duration,
         registry: &Registry,
         cancel: CancellationToken,
     ) -> Result<Self, Error> {
-        let pg_reader = PgReader::new(
-            database_url,
-            db_args,
-            registry,
-            cancel,
-            slow_request_threshold,
-        )
-        .await?;
+        let pg_reader = PgReader::new(database_url, db_args, registry, cancel).await?;
         let pg_loader = Arc::new(pg_reader.as_data_loader());
 
         let kv_loader = if let Some(instance_id) = bigtable_instance {
             let bigtable_reader = BigtableReader::new(
                 instance_id,
                 "indexer-alt-jsonrpc".to_owned(),
+                bigtable_args,
                 registry,
-                slow_request_threshold,
             )
             .await?;
 
