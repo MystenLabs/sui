@@ -15,9 +15,12 @@ use move_core_types::{
     language_storage::{StructTag, TypeTag},
 };
 use serde::{Deserialize, Serialize};
-use std::collections::BTreeMap;
-use std::fmt::Debug;
 use std::rc::Rc;
+use std::{
+    borrow::Borrow,
+    collections::{BTreeMap, BTreeSet},
+};
+use std::{fmt::Debug, ops::Deref};
 
 pub trait StringPool {
     type String: Clone + Debug + Ord + PartialOrd + Eq + PartialEq;
@@ -38,6 +41,56 @@ impl StringPool for NoInterning {
 
     fn as_ident_str<'a>(&'a self, s: &'a Identifier) -> &'a IdentStr {
         s.as_ident_str()
+    }
+}
+
+#[derive(Clone, PartialEq, Eq, PartialOrd, Ord, Debug)]
+pub struct RCIdentifier(Rc<Identifier>);
+
+impl Borrow<IdentStr> for RCIdentifier {
+    fn borrow(&self) -> &IdentStr {
+        self.0.as_ident_str()
+    }
+}
+
+impl Borrow<Identifier> for RCIdentifier {
+    fn borrow(&self) -> &Identifier {
+        self.0.as_ref()
+    }
+}
+
+impl Deref for RCIdentifier {
+    type Target = Identifier;
+
+    fn deref(&self) -> &Self::Target {
+        self.0.as_ref()
+    }
+}
+
+impl std::fmt::Display for RCIdentifier {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        std::fmt::Display::fmt(self.0.as_ident_str(), f)
+    }
+}
+
+pub struct RCPool(BTreeSet<RCIdentifier>);
+
+impl StringPool for RCPool {
+    type String = RCIdentifier;
+
+    fn intern(&mut self, s: &IdentStr) -> Self::String {
+        match self.0.get(s) {
+            Some(id) => id.clone(),
+            None => {
+                let id = RCIdentifier(Rc::new(s.to_owned()));
+                self.0.insert(id.clone());
+                id
+            }
+        }
+    }
+
+    fn as_ident_str<'a>(&'a self, s: &'a Self::String) -> &'a IdentStr {
+        s.0.as_ident_str()
     }
 }
 
@@ -113,8 +166,6 @@ pub struct Module<S> {
     tables: Tables<S>,
     pub id: ModuleId<S>,
     pub file_format_version: u32,
-    pub address: AccountAddress,
-    pub name: S,
     pub dependencies: Vec<ModuleId<S>>,
     pub friends: Vec<ModuleId<S>>,
     pub structs: BTreeMap<S, Rc<Struct<S>>>,
@@ -641,8 +692,6 @@ impl<S: Clone + Ord> Module<S> {
             tables,
             id,
             file_format_version: m.version(),
-            address: *m.address(),
-            name: pool.intern(m.name()),
             friends,
             structs,
             enums,
@@ -650,6 +699,14 @@ impl<S: Clone + Ord> Module<S> {
             dependencies,
             constants,
         }
+    }
+
+    pub fn address(&self) -> &AccountAddress {
+        &self.id.address
+    }
+
+    pub fn name(&self) -> &S {
+        &self.id.name
     }
 }
 

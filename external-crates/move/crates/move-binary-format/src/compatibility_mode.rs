@@ -1,6 +1,5 @@
-use crate::compatibility::Compatibility;
+use crate::compatibility::{Compatibility, Enum, Function, Struct};
 use crate::file_format::Visibility;
-use crate::normalized::{Enum, Function, Struct};
 use move_core_types::account_address::AccountAddress;
 use move_core_types::identifier::{IdentStr, Identifier};
 

@@ -8,7 +8,7 @@ use crate::{
     errors::{PartialVMError, PartialVMResult},
     file_format::{Ability, AbilitySet, DatatypeTyParameter, Visibility},
     file_format_common::VERSION_5,
-    normalized::Module,
+    normalized_2,
 };
 use move_core_types::vm_status::StatusCode;
 // ***************************************************************************
@@ -42,6 +42,11 @@ pub struct Compatibility {
     /// The set of abilities that cannot be added to an already exisiting type.
     pub disallowed_new_abilities: AbilitySet,
 }
+
+pub type Module = normalized_2::Module<normalized_2::RCIdentifier>;
+pub type Struct = normalized_2::Struct<normalized_2::RCIdentifier>;
+pub type Enum = normalized_2::Enum<normalized_2::RCIdentifier>;
+pub type Function = normalized_2::Function<normalized_2::RCIdentifier>;
 
 impl Default for Compatibility {
     fn default() -> Self {
@@ -110,12 +115,12 @@ impl Compatibility {
         let mut context = M::default();
 
         // module's name and address are unchanged
-        if old_module.address != new_module.address || old_module.name != new_module.name {
+        if old_module.address() != new_module.address() || old_module.name() != new_module.name() {
             context.module_id_mismatch(
-                &old_module.address,
-                &old_module.name,
-                &new_module.address,
-                &new_module.name,
+                &old_module.address(),
+                &old_module.name(),
+                &new_module.address(),
+                &new_module.name(),
             );
         }
 
@@ -377,12 +382,12 @@ impl InclusionCheck {
         let mut context = M::default();
 
         // module's name and address are unchanged
-        if old_module.address != new_module.address || old_module.name != new_module.name {
+        if old_module.address() != new_module.address() || old_module.name() != new_module.name() {
             context.module_id_mismatch(
-                &old_module.address,
-                &old_module.name,
-                &new_module.address,
-                &new_module.name,
+                &old_module.address(),
+                &old_module.name(),
+                &new_module.address(),
+                &new_module.name(),
             );
         }
 

@@ -1,5 +1,5 @@
-use crate::compatibility::InclusionCheck;
-use crate::normalized::{Enum, Function, Struct};
+use crate::compatibility::{Enum, Function, InclusionCheck, Struct};
+
 use move_core_types::account_address::AccountAddress;
 use move_core_types::identifier::{IdentStr, Identifier};
 
