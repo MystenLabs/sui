@@ -4,7 +4,7 @@
 /// This module executes enriched benchmark queries against the database.
 /// Each query's execution is timed and recorded via MetricsCollector.
 /// And the results are aggregated and reported via BenchmarkResult.
-use std::time::{Duration, Instant};
+use std::time::Instant;
 
 use anyhow::{Context, Result};
 use bb8::Pool;
@@ -48,11 +48,11 @@ impl QueryExecutor {
         pool: Pool<PostgresConnectionManager<NoTls>>,
         enriched_queries: Vec<EnrichedBenchmarkQuery>,
         metrics: MetricsCollector,
-        deadline: Instant,
+        deadline: Option<Instant>,
     ) -> Result<()> {
         let client = pool.get().await?;
         let mut rng = rand::rngs::StdRng::from_entropy();
-        while Instant::now() < deadline {
+        while deadline.is_none_or(|d| Instant::now() < d) {
             let enriched = enriched_queries
                 .choose(&mut rng)
                 .context("No queries available")?;
@@ -95,28 +95,17 @@ impl QueryExecutor {
         );
 
         let start = Instant::now();
-        let deadline = match self.config.duration {
-            Some(duration) => start + duration,
-            None => Instant::now() + Duration::from_secs(3600 * 24 * 365), // Effectively no timeout (1 year)
-        };
-        let (concurrency, metrics, pool, queries) = (
-            self.config.concurrency,
-            self.metrics.clone(),
-            self.pool.clone(),
-            self.enriched_queries.clone(),
-        );
-        futures::stream::iter(
-            queries
-                .into_iter()
-                .map(move |query| (pool.clone(), vec![query], metrics.clone(), deadline)),
-        )
-        .try_for_each_spawned(
-            concurrency,
-            |(pool, queries, metrics, deadline)| async move {
-                QueryExecutor::worker_task(pool, queries, metrics, deadline).await
-            },
-        )
-        .await?;
+        let deadline = self.config.duration.map(|duration| start + duration);
+        futures::stream::iter(self.enriched_queries.clone())
+            .try_for_each_spawned(self.config.concurrency, |query| {
+                QueryExecutor::worker_task(
+                    self.pool.clone(),
+                    vec![query],
+                    self.metrics.clone(),
+                    deadline,
+                )
+            })
+            .await?;
 
         Ok(self.metrics.generate_report())
     }

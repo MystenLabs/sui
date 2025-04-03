@@ -24,7 +24,7 @@ impl Default for BenchmarkConfig {
     fn default() -> Self {
         Self {
             concurrency: 50,
-            duration: Some(Duration::from_secs(30)),
+            duration: None,
             json_rpc_file_path: None,
             json_rpc_methods_to_skip: HashSet::new(),
         }
