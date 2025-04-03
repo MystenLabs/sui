@@ -26,16 +26,12 @@ pub enum ReplayError {
     #[error("Failed to retrieve change epoch events: {}", err)]
     ChangeEpochEventsFailure { err: String },
 
-    #[error("Missing ProtocolConfig for epoch {}", epoch)]
-    MissingProtocolConfigForEpoch { epoch: u64 },
-    #[error("Missing RGP for epoch {}", epoch)]
-    MissingRGPForEpoch { epoch: u64 },
-    #[error("Missing timestamp for epoch {}", epoch)]
-    MissingTimestampForEpoch { epoch: u64 },
-    #[error("Missing digest for epoch {}", epoch)]
-    MissingDigestForEpoch { epoch: u64 },
-    #[error("Missing system package {}", pkg)]
-    MissingSystemPackage { pkg: String },
+    // EpochStore errors
+    #[error("Missing {} for epoch {}", data, epoch)]
+    MissingDataForEpoch { data: String, epoch: u64 },
+
+    #[error("Missing system package {} at version {}", pkg, epoch)]
+    MissingSystemPackage { pkg: String, epoch: u64 },
     #[error("Cannot find epoch for package {} at epoch {}", pkg, epoch)]
     MissingPackageAtEpoch { pkg: String, epoch: u64 },
     #[error("Cannot find package epoch for {}", pkg)]
@@ -112,4 +108,7 @@ pub enum ReplayError {
 
     #[error("Tracing error: {}", err)]
     TracingError { err: String },
+
+    #[error("{}", err)]
+    DynamicFieldError { err: String },
 }

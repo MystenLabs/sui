@@ -8,7 +8,6 @@ use sui_types::{effects::TransactionEffects, supported_protocol_versions::Chain}
 
 pub mod data_store;
 pub mod environment;
-pub mod epoch_store;
 pub mod errors;
 pub mod execution;
 pub mod gql_queries;

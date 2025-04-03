@@ -241,7 +241,10 @@ impl TryFrom<Epoch> for EpochData {
 
         let rgp = epoch
             .reference_gas_price
-            .ok_or(ReplayError::MissingRGPForEpoch { epoch: epoch_id })?
+            .ok_or(ReplayError::MissingDataForEpoch {
+                data: "RGP".to_string(),
+                epoch: epoch_id,
+            })?
             .0
             .parse::<u64>()
             .map_err(ReplayError::from)?;

@@ -4,9 +4,10 @@
 use clap::*;
 use core::panic;
 use sui_replay_2::{
-    data_store::DataStore, diff_effects, environment::ReplayEnvironment, epoch_store::EpochStore,
+    data_store::DataStore, diff_effects, environment::ReplayEnvironment,
     execution::execute_transaction_to_effects, replay_txn_data::ReplayTransaction, ReplayConfig,
 };
+use sui_types::{effects::TransactionEffects, gas::SuiGasStatus};
 use tracing::debug;
 
 #[tokio::main]
@@ -28,45 +29,48 @@ async fn main() {
     //
     // create DataStore and EpochStore
     let data_store =
-        DataStore::new(node).unwrap_or_else(|e| panic!("Failed to create data store: {:?}", e));
-    let epoch_store = EpochStore::new(&data_store)
-        .await
-        .unwrap_or_else(|e| panic!("Failed to create epoch store: {:?}", e));
+        // DataStore::new(node).unwrap_or_else(|e| panic!("Failed to create data store: {:?}", e));
+        DataStore::new_eager(node).await.unwrap_or_else(|e| panic!("Failed to create data store: {:?}", e));
 
     //
     // create ReplayEnvironment
-    let mut env = ReplayEnvironment::new(data_store, epoch_store)
+    let mut env = ReplayEnvironment::new(data_store)
         .await
         .unwrap_or_else(|e| panic!("Failed to create replay environment: {:?}", e));
-    debug!("Environment After Creation: {:#?}", env);
 
     //
-    // load transaction data
+    // load transaction input
     let replay_txn = ReplayTransaction::load(&mut env, &tx_digest)
         .await
         .unwrap_or_else(|e: sui_replay_2::errors::ReplayError| {
             panic!("Failed to get transaction data: {:?}", e)
         });
-    debug!("Environment After Transaction Load: {:#?}", env);
 
     //
     // replay transaction
     debug!("Start execute_transaction_to_effects");
-    let (result, effects, gas_status) =
-        execute_transaction_to_effects(&replay_txn, &env, trace_execution)
+    let (result, effects, gas_status, expected_effects) =
+        execute_transaction_to_effects(replay_txn, &env, trace_execution)
             .unwrap_or_else(|e| panic!("Error running a transaction: {:?}", e));
     debug!("End execute_transaction_to_effects");
-    debug!("Environment After Execution: {:#?}", env);
 
     println!("\n** TRANSACTION RESULT -> {:?}", result);
     if show_effects {
-        println!("\n** TRANSACTION EFFECTS -> {:?}", effects);
-        println!("\n** TRANSACTION GAS STATUS -> {:?}", gas_status);
+        print_txn_effects(&effects, &gas_status);
     }
     if verify {
-        if effects != replay_txn.effects {
-            println!("\n** FORKING: TRANSACTION EFFECTS DO NOT MATCH");
-            println!("{}", diff_effects(&replay_txn.effects, &effects));
-        }
+        verify_txn(&expected_effects, &effects);
+    }
+}
+
+fn print_txn_effects(effects: &TransactionEffects, gas_status: &SuiGasStatus) {
+    println!("\n** TRANSACTION EFFECTS -> {:?}", effects);
+    println!("\n** TRANSACTION GAS STATUS -> {:?}", gas_status);
+}
+
+fn verify_txn(expected_effects: &TransactionEffects, effects: &TransactionEffects) {
+    if effects != expected_effects {
+        println!("\n** FORKING: TRANSACTION EFFECTS DO NOT MATCH");
+        println!("{}", diff_effects(expected_effects, effects));
     }
 }

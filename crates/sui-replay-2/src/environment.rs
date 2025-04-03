@@ -3,17 +3,21 @@
 
 use crate::{
     data_store::{DataStore, InputObject},
-    epoch_store::EpochStore,
     errors::ReplayError,
     replay_txn_data::packages_from_type_tag,
 };
 use std::{
     collections::{BTreeMap, BTreeSet},
-    fmt::Debug,
     ops::Bound,
 };
-use sui_types::{base_types::ObjectID, object::Object};
-use tracing::debug;
+use sui_types::{
+    base_types::{ObjectID, SequenceNumber},
+    effects::TransactionEffects,
+    object::Object,
+    supported_protocol_versions::{Chain, ProtocolConfig},
+    transaction::TransactionData,
+};
+use tracing::trace;
 
 // True if the package is a system package
 pub fn is_framework_package(pkg_id: &ObjectID) -> bool {
@@ -22,9 +26,7 @@ pub fn is_framework_package(pkg_id: &ObjectID) -> bool {
 
 pub struct ReplayEnvironment {
     // data store access
-    pub data_store: DataStore,
-    // responsible for epoch information (protocol configs, rgps, timestamps)
-    pub epoch_store: EpochStore,
+    data_store: DataStore,
 
     //
     // caches
@@ -33,44 +35,41 @@ pub struct ReplayEnvironment {
     // system packages as pkg_id -> epoch -> MovePackage (as Object)
     system_packages: BTreeMap<ObjectID, BTreeMap<u64, Object>>,
     // all package objects as pkg_id -> Object
-    pub(crate) package_objects: BTreeMap<ObjectID, Object>,
+    package_objects: BTreeMap<ObjectID, Object>,
     // objects as object_id -> version -> Object
-    pub(crate) objects: BTreeMap<ObjectID, BTreeMap<u64, Object>>,
+    objects: BTreeMap<ObjectID, BTreeMap<u64, Object>>,
 }
 
 impl ReplayEnvironment {
-    pub async fn new(data_store: DataStore, epoch_store: EpochStore) -> Result<Self, ReplayError> {
+    pub async fn new(data_store: DataStore) -> Result<Self, ReplayError> {
         // load system packages
-        let system_packages = data_store.get_system_packages().await?;
+        let system_packages = data_store.load_system_packages().await?;
         Ok(Self {
             data_store,
-            epoch_store,
             system_packages,
             package_objects: BTreeMap::new(),
             objects: BTreeMap::new(),
         })
     }
 
-    // Load and add objects to the environment
-    pub async fn load_objects(
-        &mut self,
-        object_ids: &BTreeSet<InputObject>,
-    ) -> Result<BTreeSet<ObjectID>, ReplayError> {
-        let mut packages = BTreeSet::new();
-        let objects = self.data_store.load_objects(object_ids).await?;
-        for (object_id, version, object) in objects {
-            if let Some(tag) = object.as_inner().struct_tag() {
-                packages_from_type_tag(&tag.into(), &mut packages);
-            }
-            let version = version.unwrap();
-            self.objects
-                .entry(object_id)
-                .or_default()
-                .insert(version, object);
-        }
-        Ok(packages)
+    // Get the chain the environment is running on (mainnet, testnet, etc.)
+    pub fn chain(&self) -> Chain {
+        self.data_store.chain()
     }
 
+    pub fn protocol_config(&self, epoch: u64, chain: Chain) -> Result<ProtocolConfig, ReplayError> {
+        self.data_store.protocol_config(epoch, chain)
+    }
+
+    pub fn epoch_timestamp(&self, epoch: u64) -> Result<u64, ReplayError> {
+        self.data_store.epoch_timestamp(epoch)
+    }
+
+    pub fn rgp(&self, epoch: u64) -> Result<u64, ReplayError> {
+        self.data_store.rgp(epoch)
+    }
+
+    // Get an object at the latest version known to the environment
     pub fn get_object(&self, object_id: &ObjectID) -> Option<Object> {
         self.objects
             .get(object_id)
@@ -78,55 +77,15 @@ impl ReplayEnvironment {
             .map(|(_, v)| v.clone())
     }
 
-    pub fn get_object_by_version(&self, object_id: &ObjectID, version: u64) -> Option<Object> {
+    // Get an object at a specific version
+    pub fn get_object_at_version(&self, object_id: &ObjectID, version: u64) -> Option<Object> {
         self.objects
             .get(object_id)
             .and_then(|versions| versions.get(&version))
             .cloned()
     }
 
-    // Load packages and their dependencies
-    pub async fn load_packages(
-        &mut self,
-        packages: &BTreeSet<ObjectID>,
-    ) -> Result<(), ReplayError> {
-        let pkg_ids = packages
-            .iter()
-            .map(|id| InputObject {
-                object_id: *id,
-                version: None,
-            })
-            .collect::<BTreeSet<_>>();
-        let package_objects = self
-            .data_store
-            .load_objects(&pkg_ids)
-            .await?
-            .into_iter()
-            .map(|(id, _version, obj)| (id, obj))
-            .collect::<BTreeMap<_, _>>();
-        debug!("package_objects: {:#?}", package_objects);
-        let deps = get_packages_deps(&package_objects)
-            .into_iter()
-            .map(|object_id| InputObject {
-                object_id,
-                version: None,
-            })
-            .collect();
-        debug!("deps: {:#?}", deps);
-        self.package_objects.extend(package_objects);
-        let package_objects = self
-            .data_store
-            .load_objects(&deps)
-            .await?
-            .into_iter()
-            .map(|(id, _version, obj)| (id, obj))
-            .collect::<BTreeMap<_, _>>();
-        debug!("deps: {:#?}", package_objects);
-        self.package_objects.extend(package_objects);
-
-        Ok(())
-    }
-
+    // Load a system package for the given epoch
     pub fn get_system_package_at_epoch(
         &self,
         pkg_id: &ObjectID,
@@ -149,95 +108,126 @@ impl ReplayEnvironment {
             }
             None => Err(ReplayError::MissingSystemPackage {
                 pkg: pkg_id.to_string(),
+                epoch,
             }),
         }
     }
+
+    // Get a package by its ID
+    pub fn get_package_object(&self, package_id: &ObjectID) -> Result<Object, ReplayError> {
+        self.package_objects
+            .get(package_id)
+            .map(|obj| obj.clone())
+            .ok_or(ReplayError::PackageNotFound {
+                pkg: package_id.to_string(),
+            })
+    }
+
+    // Load transaction data and effects
+    pub async fn load_txn_data(
+        &self,
+        tx_digest: &str,
+    ) -> Result<(TransactionData, TransactionEffects), ReplayError> {
+        Ok((
+            self.data_store.transaction_data(tx_digest).await?,
+            self.data_store.transaction_effects(tx_digest).await?,
+        ))
+    }
+
+    // Load and add objects to the environment
+    pub async fn load_objects(
+        &mut self,
+        object_ids: &BTreeSet<InputObject>,
+    ) -> Result<BTreeSet<ObjectID>, ReplayError> {
+        let mut packages = BTreeSet::new();
+        let objects = self.data_store.load_objects(object_ids).await?;
+        for (object_id, version, object) in objects {
+            if let Some(tag) = object.as_inner().struct_tag() {
+                packages_from_type_tag(&tag.into(), &mut packages);
+            }
+            let version = version.unwrap();
+            self.objects
+                .entry(object_id)
+                .or_default()
+                .insert(version, object);
+        }
+        Ok(packages)
+    }
+
+    // Load packages and their dependencies
+    pub async fn load_packages(
+        &mut self,
+        packages: &BTreeSet<ObjectID>,
+    ) -> Result<(), ReplayError> {
+        let pkg_ids = packages
+            .iter()
+            .map(|id| InputObject {
+                object_id: *id,
+                version: None,
+            })
+            .collect::<BTreeSet<_>>();
+        let package_objects = self
+            .data_store
+            .load_objects(&pkg_ids)
+            .await?
+            .into_iter()
+            .map(|(id, _version, obj)| (id, obj))
+            .collect::<BTreeMap<_, _>>();
+        trace!("package_objects: {:#?}", package_objects);
+        let deps = get_packages_deps(&package_objects)
+            .into_iter()
+            .map(|object_id| InputObject {
+                object_id,
+                version: None,
+            })
+            .collect();
+        trace!("deps: {:#?}", deps);
+        self.package_objects.extend(package_objects);
+        let package_objects = self
+            .data_store
+            .load_objects(&deps)
+            .await?
+            .into_iter()
+            .map(|(id, _version, obj)| (id, obj))
+            .collect::<BTreeMap<_, _>>();
+        trace!("deps: {:#?}", package_objects);
+        self.package_objects.extend(package_objects);
+
+        Ok(())
+    }
+
+    pub fn load_child_object(
+        &self,
+        parent: &ObjectID,
+        child: &ObjectID,
+        child_version_upper_bound: SequenceNumber,
+    ) -> Result<Option<Object>, ReplayError> {
+        self.data_store
+            .read_child_object(parent, child, child_version_upper_bound)
+    }
+
+    //
+    // Tracing API: revisit...
+    //
+    pub fn package_objects(&self) -> &BTreeMap<ObjectID, Object> {
+        &self.package_objects
+    }
 }
 
+// Get all dependencies of `packages`.
+// Collect all values() of the linkage_table map of each package.
 fn get_packages_deps(packages: &BTreeMap<ObjectID, Object>) -> BTreeSet<ObjectID> {
-    let mut deps = BTreeSet::new();
-    for package in packages.values() {
-        if let Some(package) = package.data.try_as_package() {
-            for upgrade_info in package.linkage_table().values() {
-                deps.insert(upgrade_info.upgraded_id);
-            }
-        } else {
-            unreachable!("Not a package in package tables");
-        }
-    }
-    packages.values().any(|pkg| deps.remove(&pkg.id()));
-    deps
-}
-
-//
-// Friendly Debug implementation for ReplayEnvironment. To remove when convenient
-//
-
-impl Debug for ReplayEnvironment {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let ReplayEnvironment {
-            data_store: _,
-            epoch_store: epoch_info,
-            system_packages,
-            package_objects,
-            objects,
-        } = self;
-        writeln!(f, "ReplayEnvironment({:?})", self.data_store.node())?;
-        writeln!(f, ">>>> Epoch Info: {:?}", epoch_info)?;
-        print_system_packages(f, system_packages)?;
-        print_packages(f, package_objects)?;
-        print_objects(f, objects)
-    }
-}
-
-#[allow(dead_code)]
-fn print_system_packages(
-    f: &mut std::fmt::Formatter<'_>,
-    system_packages: &BTreeMap<ObjectID, BTreeMap<u64, Object>>,
-) -> std::fmt::Result {
-    writeln!(f, ">>>> System packages:")?;
-    for (pkg_id, versions) in system_packages {
-        for (epoch, pkg) in versions {
-            writeln!(f, "{}[{}] - {:?}", pkg_id, pkg.version(), epoch)?;
-        }
-    }
-    Ok(())
-}
-
-#[allow(dead_code)]
-fn print_packages(
-    f: &mut std::fmt::Formatter<'_>,
-    packages: &BTreeMap<ObjectID, Object>,
-) -> std::fmt::Result {
-    writeln!(f, ">>>> Packages:")?;
-    for (pkg_id, pkg) in packages {
-        if let Some(package) = pkg.data.try_as_package() {
-            writeln!(f, "{}[{}]", pkg_id, package.version())?
-        } else {
-            writeln!(f, "NOT A PACKAGE {}", pkg_id)?
-        }
-    }
-    Ok(())
-}
-
-#[allow(dead_code)]
-fn print_objects(
-    f: &mut std::fmt::Formatter<'_>,
-    objects: &BTreeMap<ObjectID, BTreeMap<u64, Object>>,
-) -> std::fmt::Result {
-    writeln!(f, ">>>> Objects:")?;
-    for (obj_id, version_map) in objects {
-        for (version, obj) in version_map {
-            if let Some(struct_tag) = obj.struct_tag() {
-                writeln!(f, "{}[{}]: {}", obj_id, version, struct_tag)?;
+    packages
+        .values()
+        .flat_map(|pkg| {
+            if let Some(package) = pkg.data.try_as_package() {
+                package
+                    .linkage_table()
+                    .values()
+                    .map(|upgrade_info| upgrade_info.upgraded_id)
             } else {
-                writeln!(
-                    f,
-                    "Package: {}[{}] (should not reach here)",
-                    obj_id, version,
-                )?;
+                unreachable!("Not a package in package tables")
             }
-        }
-    }
-    Ok(())
+        })
+        .collect::<BTreeSet<_>>()
 }

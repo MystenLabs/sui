@@ -16,7 +16,7 @@ use sui_types::{
     },
     TypeTag,
 };
-use tracing::debug;
+use tracing::trace;
 
 // #[derive(Debug)]
 pub struct ReplayTransaction {
@@ -30,48 +30,17 @@ pub struct ReplayTransaction {
 impl ReplayTransaction {
     pub async fn load(env: &mut ReplayEnvironment, tx_digest: &str) -> Result<Self, ReplayError> {
         // load transaction data and effects
-        debug!("Start transaction_data");
-        let txn_data = env.data_store.transaction_data(tx_digest).await?;
-        debug!("End transaction_data");
-        debug!("Transaction data: {:#?}", txn_data);
-        debug!("Start transaction_effects");
-        let effects = env.data_store.transaction_effects(tx_digest).await?;
-        debug!("End transaction_effects");
-        debug!("Transaction effects: {:#?}", effects);
+        let (txn_data, effects) = env.load_txn_data(tx_digest).await?;
+        // get the ids and versions of the objects to load
+        let input_objects = get_input_objects(&txn_data, &effects)?;
 
         let mut packages = get_packages(&txn_data)?;
-        let input_object_ids = get_input_ids(&txn_data)?;
-        debug!("Input Object IDs: {:#?}", input_object_ids);
-        let effects_object_ids = get_effects_ids(&effects)?;
-        debug!("Effects Object IDs: {:#?}", effects_object_ids);
-        let mut input_versions = effects_object_ids
-            .into_iter()
-            .map(|input| (input.object_id, input.version.unwrap()))
-            .collect::<BTreeMap<_, _>>();
-        for input_object in input_object_ids.iter() {
-            input_versions
-                .entry(input_object.object_id)
-                .or_insert(input_object.version.unwrap());
-        }
-        let object_versions = input_versions
-            .into_iter()
-            .map(|(object_id, version)| InputObject {
-                object_id,
-                version: Some(version),
-            })
-            .collect::<BTreeSet<InputObject>>();
-
-        debug!("Start transaction load_objects");
-        let obj_pkgs = env.load_objects(&object_versions).await?;
-        debug!("End transaction load_objects");
+        let obj_pkgs = env.load_objects(&input_objects).await?;
         packages.extend(&obj_pkgs);
-        debug!("Start transaction load_packages");
         env.load_packages(&packages).await?;
-        debug!("End transaction load_packages");
 
-        debug!("Object Versions: {:#?}", object_versions);
         let input_objects =
-            get_input_objects_for_replay(env, &txn_data, tx_digest, &object_versions)?;
+            get_input_objects_for_replay(env, &txn_data, tx_digest, &input_objects)?;
 
         let digest = tx_digest.parse().map_err(|e| {
             let err = format!("{:?}", e);
@@ -81,8 +50,7 @@ impl ReplayTransaction {
 
         let epoch = effects.executed_epoch();
         let protocol_config = env
-            .epoch_store
-            .protocol_config(epoch, env.data_store.chain())
+            .protocol_config(epoch, env.chain())
             .unwrap_or_else(|e| panic!("Failed to get protocl config: {:?}", e));
         let executor =
             ReplayExecutor::new(protocol_config, None).unwrap_or_else(|e| panic!("{:?}", e));
@@ -111,6 +79,35 @@ impl ReplayTransaction {
     pub fn epoch(&self) -> u64 {
         self.effects.executed_epoch()
     }
+}
+
+// Return the list of objects to load in terms of object id and version.
+// Package objects are not included in the list and retrieved later.
+fn get_input_objects(
+    txn_data: &TransactionData,
+    effects: &TransactionEffects,
+) -> Result<BTreeSet<InputObject>, ReplayError> {
+    let input_object_ids = get_input_ids(&txn_data)?;
+    trace!("Input Object IDs: {:#?}", input_object_ids);
+    let effects_object_ids = get_effects_ids(&effects)?;
+    trace!("Effects Object IDs: {:#?}", effects_object_ids);
+    let mut effect_ids = effects_object_ids
+        .into_iter()
+        .map(|input| (input.object_id, input.version.unwrap()))
+        .collect::<BTreeMap<_, _>>();
+    // merge input and effects object ids; add the input ids to the effects ids if not present
+    for input_object in input_object_ids.into_iter() {
+        effect_ids
+            .entry(input_object.object_id)
+            .or_insert(input_object.version.unwrap());
+    }
+    Ok(effect_ids
+        .into_iter()
+        .map(|(object_id, version)| InputObject {
+            object_id,
+            version: Some(version),
+        })
+        .collect::<BTreeSet<InputObject>>())
 }
 
 fn get_packages(txn_data: &TransactionData) -> Result<BTreeSet<ObjectID>, ReplayError> {
@@ -173,8 +170,10 @@ pub fn packages_from_type_tag(typ: &TypeTag, packages: &mut BTreeSet<ObjectID>) 
     }
 }
 
+// Find all the object ids and versions that are defined in the transaction data
 fn get_input_ids(txn_data: &TransactionData) -> Result<BTreeSet<InputObject>, ReplayError> {
-    let mut all_objects = txn_data
+    // grab all coins
+    let mut object_ids = txn_data
         .gas_data()
         .payment
         .iter()
@@ -183,8 +182,9 @@ fn get_input_ids(txn_data: &TransactionData) -> Result<BTreeSet<InputObject>, Re
             version: Some(seq_num.value()),
         })
         .collect::<BTreeSet<_>>();
+    // grab all input objects whose version is defined in transaction data (e.g. owned, not shared)
     if let TransactionKind::ProgrammableTransaction(ptb) = txn_data.kind() {
-        let input_objects = ptb
+        let input_object_ids = ptb
             .inputs
             .iter()
             .filter_map(|input| {
@@ -199,8 +199,7 @@ fn get_input_ids(txn_data: &TransactionData) -> Result<BTreeSet<InputObject>, Re
                             initial_shared_version: _,
                             mutable: _,
                         } => {
-                            // Some(InputObject { object_id: *id, version: Some(initial_shared_version.value()) })
-                            None
+                            None // will be in transaction effects
                         }
                         ObjectArg::Receiving((id, seq_num, _digest)) => Some(InputObject {
                             object_id: *id,
@@ -212,19 +211,20 @@ fn get_input_ids(txn_data: &TransactionData) -> Result<BTreeSet<InputObject>, Re
                 }
             })
             .collect::<Vec<_>>();
-        all_objects.extend(input_objects);
-        Ok(all_objects)
+        object_ids.extend(input_object_ids);
+        Ok(object_ids)
     } else {
-        Ok(all_objects)
+        Ok(object_ids)
     }
 }
 
+// Get the modified objects and unchanged shared objects from the transaction effects
 fn get_effects_ids(effects: &TransactionEffects) -> Result<BTreeSet<InputObject>, ReplayError> {
     let mut object_ids = effects
         .modified_at_versions()
         .iter()
         .map(|(obj_id, seq_num)| {
-            debug!("Modified at version: {:?}[{}]", obj_id, seq_num.value());
+            trace!("Modified at version: {:?}[{}]", obj_id, seq_num.value());
             InputObject {
                 object_id: *obj_id,
                 version: Some(seq_num.value()),
@@ -245,7 +245,7 @@ fn get_effects_ids(effects: &TransactionEffects) -> Result<BTreeSet<InputObject>
             | sui_types::effects::UnchangedSharedKind::ReadDeleted(_)
             | sui_types::effects::UnchangedSharedKind::Cancelled(_)
             | sui_types::effects::UnchangedSharedKind::PerEpochConfig => {
-                debug!("Unchanged shared kind: {:?}", kind);
+                trace!("Ignored `UnchangedSharedKind`: {:?}", kind);
             }
         });
     Ok(object_ids)
@@ -273,18 +273,12 @@ fn get_input_objects_for_replay(
     for kind in input_objects_kind.iter() {
         match kind {
             InputObjectKind::MovePackage(pkg_id) => {
-                env.package_objects
-                    .get(pkg_id)
-                    .ok_or_else(|| ReplayError::PackageNotFound {
-                        pkg: pkg_id.to_string(),
+                env.get_package_object(pkg_id).map(|pkg| {
+                    resolved_input_objs.push(ObjectReadResult {
+                        input_object_kind: *kind,
+                        object: ObjectReadResultKind::Object(pkg),
                     })
-                    .and_then(|pkg| {
-                        resolved_input_objs.push(ObjectReadResult {
-                            input_object_kind: *kind,
-                            object: ObjectReadResultKind::Object(pkg.clone()),
-                        });
-                        Ok(())
-                    })?;
+                })?;
             }
             InputObjectKind::ImmOrOwnedMoveObject((obj_id, _version, _digest)) => {
                 let version = *object_versions.get(obj_id).ok_or_else(|| {
@@ -293,22 +287,12 @@ fn get_input_objects_for_replay(
                         version: None,
                     }
                 })?;
-                // let version = version.value();
-                let object =
-                    env.objects
-                        .get(obj_id)
-                        .ok_or_else(|| ReplayError::ObjectNotFound {
-                            address: obj_id.to_string(),
-                            version: Some(version),
-                        })
-                        .and_then(|versions| {
-                            versions.get(&version).cloned().ok_or_else(|| {
-                                ReplayError::ObjectNotFound {
-                                    address: obj_id.to_string(),
-                                    version: Some(version),
-                                }
-                            })
-                        })?;
+                let object = env.get_object_at_version(obj_id, version).ok_or_else(|| {
+                    ReplayError::ObjectNotFound {
+                        address: obj_id.to_string(),
+                        version: Some(version),
+                    }
+                })?;
                 let input_object_kind =
                     InputObjectKind::ImmOrOwnedMoveObject(object.compute_object_reference());
                 resolved_input_objs.push(ObjectReadResult {
@@ -337,20 +321,12 @@ fn get_input_objects_for_replay(
                 let is_deleted = deleted_shared_info_map.contains_key(id);
                 if !is_deleted {
                     let object = ObjectReadResultKind::Object(
-                        env.objects
-                            .get(id)
-                            .ok_or_else(|| ReplayError::ObjectNotFound {
+                        env.get_object_at_version(id, version).ok_or_else(|| {
+                            ReplayError::ObjectNotFound {
                                 address: id.to_string(),
                                 version: Some(version),
-                            })
-                            .and_then(|versions| {
-                                versions.get(&version).cloned().ok_or_else(|| {
-                                    ReplayError::ObjectNotFound {
-                                        address: id.to_string(),
-                                        version: Some(version),
-                                    }
-                                })
-                            })?,
+                            }
+                        })?,
                     );
                     resolved_input_objs.push(ObjectReadResult {
                         input_object_kind,
@@ -367,6 +343,6 @@ fn get_input_objects_for_replay(
             }
         }
     }
-    debug!("resolved input objects: {:#?}", resolved_input_objs);
+    trace!("resolved input objects: {:#?}", resolved_input_objs);
     Ok(InputObjects::new(resolved_input_objs))
 }

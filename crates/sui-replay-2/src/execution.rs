@@ -4,7 +4,6 @@
 use crate::{
     environment::{is_framework_package, ReplayEnvironment},
     errors::ReplayError,
-    gql_queries::dynamic_field_at_version,
     replay_txn_data::ReplayTransaction,
 };
 use move_binary_format::CompiledModule;
@@ -38,7 +37,6 @@ use sui_types::{
     transaction::CheckedInputObjects,
 };
 use sui_types::{digests::TransactionDigest, error::SuiError};
-use tracing::debug;
 
 const DEFAULT_TRACE_OUTPUT_DIR: &str = "replay";
 
@@ -55,21 +53,29 @@ pub struct ReplayExecutor {
 }
 
 pub fn execute_transaction_to_effects(
-    txn: &ReplayTransaction,
+    txn: ReplayTransaction,
     env: &ReplayEnvironment,
     trace_execution: Option<Option<String>>,
-) -> Result<(Result<(), ExecutionError>, TransactionEffects, SuiGasStatus), ReplayError> {
+) -> Result<
+    (
+        Result<(), ExecutionError>,
+        TransactionEffects,
+        SuiGasStatus,
+        TransactionEffects,
+    ),
+    ReplayError,
+> {
     // TODO: Hook up...
     let certificate_deny_set = HashSet::new();
 
     let protocol_config = &txn.executor.protocol_config;
     let epoch = txn.epoch();
-    let epoch_start_timestamp = env.epoch_store.epoch_timestamp(epoch)?;
+    let epoch_start_timestamp = env.epoch_timestamp(epoch)?;
 
     let gas_status = if txn.kind().is_system_tx() {
         SuiGasStatus::new_unmetered()
     } else {
-        let reference_gas_price = env.epoch_store.rgp(epoch)?;
+        let reference_gas_price = env.rgp(epoch)?;
         SuiGasStatus::new(
             txn.gas_data().budget,
             txn.gas_data().price,
@@ -102,16 +108,14 @@ pub fn execute_transaction_to_effects(
             txn.digest,
             &mut trace_builder_opt,
         );
-    debug!("Transaction executed: {:?}", result);
-    debug!("Effects: {:?}", effects);
-    debug!("Gas status: {:?}", gas_status);
+    let expected_effects = txn.effects;
 
     if let Some(trace_builder) = trace_builder_opt {
         // unwrap is safe if trace_builder_opt.is_some() holds
         let output_path = get_trace_output_path(trace_execution.unwrap())?;
         save_trace_output(&output_path, txn.digest, trace_builder, env)?;
     }
-    Ok((result, effects, gas_status))
+    Ok((result, effects, gas_status, expected_effects))
 }
 
 /// Gets the path to store trace output (either the default one './replay' or user-specified).
@@ -200,7 +204,7 @@ fn save_trace_output(
             bcode_dir, e
         ),
     })?;
-    for (obj_id, obj) in env.package_objects.iter() {
+    for (obj_id, obj) in env.package_objects().iter() {
         if let Data::Package(pkg) = &obj.data {
             let pkg_addr = format!("{:?}", obj_id);
             let bcode_pkg_dir = bcode_dir.join(&pkg_addr);
@@ -309,45 +313,29 @@ struct ReplayStore<'a> {
 
 impl BackingPackageStore for ReplayStore<'_> {
     fn get_package_object(&self, package_id: &ObjectID) -> SuiResult<Option<PackageObject>> {
-        if is_framework_package(package_id) {
-            let pkg = self
-                .env
-                .get_system_package_at_epoch(package_id, self.epoch)
-                .map(|pkg| PackageObject::new(pkg.clone()))
-                .unwrap();
-            Ok(Some(pkg))
+        let pkg_obj = if is_framework_package(package_id) {
+            self.env.get_system_package_at_epoch(package_id, self.epoch)
         } else {
-            Ok(self
-                .env
-                .package_objects
-                .get(package_id)
-                .map(|obj| PackageObject::new(obj.clone())))
-        }
+            self.env.get_package_object(package_id)
+        };
+        let pkg_obj = pkg_obj
+            .map(|pkg| PackageObject::new(pkg.clone()))
+            .map_err(|e| SuiError::Storage(e.to_string()))?;
+
+        Ok(Some(pkg_obj))
     }
 }
 
 impl ChildObjectResolver for ReplayStore<'_> {
     fn read_child_object(
         &self,
-        _parent: &ObjectID,
+        parent: &ObjectID,
         child: &ObjectID,
         child_version_upper_bound: SequenceNumber,
     ) -> SuiResult<Option<Object>> {
-        #[allow(clippy::disallowed_methods)]
-        let obj = futures::executor::block_on(dynamic_field_at_version(
-            self.env.data_store.client(),
-            *child,
-            child_version_upper_bound.value(),
-        ))
-        .map_err(|e| SuiError::DynamicFieldReadError(e.to_string()))?;
-        match obj {
-            None => Ok(None),
-            Some(obj) => {
-                let obj = Object::try_from(obj)
-                    .map_err(|e| SuiError::DynamicFieldReadError(e.to_string()))?;
-                Ok(Some(obj))
-            }
-        }
+        self.env
+            .load_child_object(parent, child, child_version_upper_bound)
+            .map_err(|e| SuiError::DynamicFieldReadError(e.to_string()))
     }
 
     fn get_object_received_at_version(
@@ -402,6 +390,6 @@ impl ObjectStore for ReplayStore<'_> {
     }
 
     fn get_object_by_key(&self, object_id: &ObjectID, version: VersionNumber) -> Option<Object> {
-        self.env.get_object_by_version(object_id, version.value())
+        self.env.get_object_at_version(object_id, version.value())
     }
 }
