@@ -49,7 +49,7 @@ tonic-reflection.workspace = true
 
 [dev-dependencies]
 protox = "0.7"
-tonic-build = "0.12.3"
+tonic-build = "0.13"
 sui-sdk-types = { workspace = true, features = ["proptest"] }
 test-strategy = "0.4.0"
 proptest.workspace = true
