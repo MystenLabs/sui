@@ -18,7 +18,7 @@ use lockfile::{Lockfile, Publication};
 pub type EnvironmentName = String;
 pub type PackageName = String;
 
-pub struct Package<F: MoveFlavor> {
+pub struct Package<F: MoveFlavor + std::fmt::Debug> {
     // TODO: maybe hold a lock on the lock file? Maybe not if move-analyzer wants to hold on to a
     // Package long term?
     // TODO: manifest: manifest::Manifest,
@@ -26,7 +26,7 @@ pub struct Package<F: MoveFlavor> {
     path: PathBuf,
 }
 
-impl<F: MoveFlavor> Package<F> {
+impl<F: MoveFlavor + std::fmt::Debug> Package<F> {
     /// Load a package from the manifest and lock files in directory [path].
     /// Makes a best effort to translate old-style packages into the current format,
     ///

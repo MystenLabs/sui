@@ -1,0 +1,23 @@
+---
+source: crates/move-package-alt/tests/manifest_parsing_test.rs
+expression: manifest
+---
+Err(
+    Error {
+        inner: ErrorInner {
+            message: "invalid type: string \"true\", expected a boolean",
+            reverse_key: [
+                InternalString(
+                    "override",
+                ),
+                InternalString(
+                    "foo",
+                ),
+                InternalString(
+                    "dependencies",
+                ),
+            ],
+            line_col: None,
+        },
+    },
+)

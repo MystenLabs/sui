@@ -14,3 +14,13 @@ toml.workspace = true
 anyhow.workspace = true
 lazy-regex.workspace = true
 derive-where.workspace = true
+
+[dev-dependencies]
+datatest-stable.workspace = true
+insta.workspace = true
+
+[[test]]
+name = "manifest_parsing_test"
+harness = false
+
+

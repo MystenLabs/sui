@@ -18,9 +18,11 @@ use git::GitDependency;
 use local::LocalDependency;
 
 /// Phantom type to represent pinned dependencies (see [PinnedDependency])
+#[derive(Debug)]
 pub struct Pinned;
 
 /// Phantom type to represent unpinned dependencies (see [ManifestDependencyInfo])
+#[derive(Debug)]
 pub struct Unpinned;
 
 /// [ManifestDependencyInfo]s contain the dependency-type-specific things that users write in their
@@ -30,9 +32,9 @@ pub struct Unpinned;
 /// that are not part of the ManifestDependencyInfo. We separate these partly because these things
 /// are not serialized to the Lock file. See [crate::package::manifest] for the full representation
 /// of an entry in the `dependencies` table.
-#[derive(Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize)]
 #[derive_where(Clone)]
-pub enum ManifestDependencyInfo<F: MoveFlavor> {
+pub enum ManifestDependencyInfo<F: MoveFlavor + std::fmt::Debug> {
     Git(GitDependency<Unpinned>),
     External(ExternalDependency),
     Local(LocalDependency),
@@ -48,9 +50,9 @@ pub enum ManifestDependencyInfo<F: MoveFlavor> {
 /// development, because the developer would expect to use the latest code without having to
 /// explicitly repin, but we need to convert them to persistent dependencies when we publish since
 /// we want to retain that information for source verification.
-#[derive(Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize)]
 #[derive_where(Clone)]
-pub enum PinnedDependencyInfo<F: MoveFlavor + ?Sized> {
+pub enum PinnedDependencyInfo<F: MoveFlavor + std::fmt::Debug + ?Sized> {
     Git(GitDependency<Pinned>),
     Local(LocalDependency),
     FlavorSpecific(F::FlavorDependency<Pinned>),
@@ -60,7 +62,7 @@ pub enum PinnedDependencyInfo<F: MoveFlavor + ?Sized> {
 /// same keys as [deps].
 // TODO: this needs to change to support the fact that external resolvers return different results
 // depending on the environment
-fn pin<F: MoveFlavor>(
+fn pin<F: MoveFlavor + std::fmt::Debug>(
     deps: BTreeMap<PackageName, ManifestDependencyInfo<F>>,
 ) -> PackageResult<BTreeMap<PackageName, PinnedDependencyInfo<F>>> {
     todo!()
@@ -68,7 +70,7 @@ fn pin<F: MoveFlavor>(
 
 /// Ensure that all dependencies are stored locally and return the paths to their contents. The
 /// returned map is guaranteed to have the same keys as [deps].
-fn fetch<F: MoveFlavor>(
+fn fetch<F: MoveFlavor + std::fmt::Debug>(
     deps: BTreeMap<PackageName, PinnedDependencyInfo<F>>,
 ) -> PackageResult<BTreeMap<PackageName, PinnedDependencyInfo<F>>> {
     todo!()

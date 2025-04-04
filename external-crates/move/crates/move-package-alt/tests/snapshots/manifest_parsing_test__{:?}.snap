@@ -1,0 +1,16 @@
+---
+source: crates/move-package-alt/tests/manifest_parsing_test.rs
+expression: manifest
+---
+Manifest {
+    package: PackageMetadata {
+        name: "name",
+        edition: "2024",
+        metadata: (),
+    },
+    environments: {
+        "mainnet": "35834a8a",
+    },
+    dependencies: {},
+    dep_overrides: {},
+}

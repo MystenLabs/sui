@@ -2389,7 +2389,9 @@ name = "move-package-alt"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "datatest-stable",
  "derive-where",
+ "insta",
  "lazy-regex",
  "serde",
  "serde_spanned",

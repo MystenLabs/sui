@@ -8,6 +8,7 @@ pub use vanilla::Vanilla;
 
 use std::{
     collections::BTreeMap,
+    fmt::Debug,
     path::{Path, PathBuf},
 };
 
@@ -28,7 +29,7 @@ pub trait MoveFlavor {
     /// Additional flavor-specific dependency types. Currently we only support flavor-specific
     /// dependencies that are already pinned (although in principle you could use an
     /// external resolved to do resolution and pinning for flavor-specific deps)
-    type FlavorDependency<P: ?Sized>: Serialize + DeserializeOwned + Clone;
+    type FlavorDependency<P: ?Sized>: Debug + Serialize + DeserializeOwned + Clone;
 
     /// Pin a batch of [Self::FlavorDependency]s (see TODO). The keys of the returned map should be
     /// the same as the keys of [dep].
@@ -49,21 +50,23 @@ pub trait MoveFlavor {
     /// during publication.
     //
     // TODO: should this include object IDs, or is that generic for Move? What about build config?
-    type PublishedMetadata: Serialize + DeserializeOwned + Clone;
+    type PublishedMetadata: Debug + Serialize + DeserializeOwned + Clone;
 
     /// A [PackageMetadata] encapsulates the additional package information that can be stored in
     /// the `package` section of the manifest
-    type PackageMetadata: Serialize + DeserializeOwned + Clone;
+    type PackageMetadata: Debug + Serialize + DeserializeOwned + Clone;
 
     /// An [AddressInfo] should give a unique identifier for a compiled package
-    type AddressInfo: Serialize + DeserializeOwned + Clone;
+    type AddressInfo: Debug + Serialize + DeserializeOwned + Clone;
 
     /// An [EnvironmentID] uniquely identifies a place that a package can be published. For
     /// example, an environment ID might be a chain identifier
     //
     // TODO: Given an [EnvironmentID] and an [ObjectID], ... should be uniquely determined
-    type EnvironmentID: Serialize + DeserializeOwned + Clone + Eq;
+    type EnvironmentID: Debug + Serialize + DeserializeOwned + Clone + Eq;
 
     /// Return the implicit dependencies for a given environment
-    fn implicit_deps(&self, environment: Self::EnvironmentID) -> Vec<PinnedDependencyInfo<Self>>;
+    fn implicit_deps(&self, environment: Self::EnvironmentID) -> Vec<PinnedDependencyInfo<Self>>
+    where
+        Self: Debug;
 }
