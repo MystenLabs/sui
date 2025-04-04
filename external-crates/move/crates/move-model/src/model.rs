@@ -3836,24 +3836,45 @@ impl<'env> FunctionEnv<'env> {
         let called: BTreeSet<_> = self
             .get_bytecode()
             .iter()
-            .filter_map(|c| {
-                if let Bytecode::Call(i) = c {
-                    Some(self.module_env.get_used_function(*i).get_qualified_id())
-                } else if let Bytecode::CallGeneric(i) = c {
+            .flat_map(|c| match c {
+                Bytecode::Call(i) => vec![self.module_env.get_used_function(*i).get_qualified_id()],
+                Bytecode::CallGeneric(i) => {
                     let handle_idx = self
                         .module_env
                         .data
                         .module
                         .function_instantiation_at(*i)
                         .handle;
-                    Some(
-                        self.module_env
-                            .get_used_function(handle_idx)
-                            .get_qualified_id(),
-                    )
-                } else {
-                    None
+                    vec![self
+                        .module_env
+                        .get_used_function(handle_idx)
+                        .get_qualified_id()]
                 }
+                Bytecode::VecPack { .. } => vec![
+                    self.module_env.env.get_fun_qid("vector", "empty"),
+                    self.module_env.env.get_fun_qid("vector", "push_back"),
+                ],
+                Bytecode::VecLen { .. } => {
+                    vec![self.module_env.env.get_fun_qid("vector", "length")]
+                }
+                Bytecode::VecImmBorrow { .. } => {
+                    vec![self.module_env.env.get_fun_qid("vector", "borrow")]
+                }
+                Bytecode::VecMutBorrow { .. } => {
+                    vec![self.module_env.env.get_fun_qid("vector", "borrow_mut")]
+                }
+                Bytecode::VecPushBack { .. } => {
+                    vec![self.module_env.env.get_fun_qid("vector", "push_back")]
+                }
+                Bytecode::VecPopBack { .. } => {
+                    vec![self.module_env.env.get_fun_qid("vector", "pop_back")]
+                }
+                Bytecode::VecUnpack { .. } => vec![
+                    self.module_env.env.get_fun_qid("vector", "destroy_empty"),
+                    self.module_env.env.get_fun_qid("vector", "pop_back"),
+                ],
+                Bytecode::VecSwap { .. } => vec![self.module_env.env.get_fun_qid("vector", "swap")],
+                _ => vec![],
             })
             .collect();
         *self.data.called_funs.borrow_mut() = Some(called.clone());
