@@ -45,7 +45,6 @@ pub(crate) fn checkpoint_input_objects(
     let mut output_objects_seen = HashSet::new();
     let mut checkpoint_input_objects = BTreeMap::new();
     for tx in checkpoint.transactions.iter() {
-        // Construct maps of input and output objects for efficient lookup
         let input_objects_map: BTreeMap<(ObjectID, SequenceNumber), &Object> = tx
             .input_objects
             .iter()

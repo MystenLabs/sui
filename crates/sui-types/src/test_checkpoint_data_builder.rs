@@ -46,7 +46,7 @@ use crate::{
 /// If you need to test the validity of the checkpoint data, you should use Simulacrum instead.
 pub struct TestCheckpointDataBuilder {
     /// Map of all live objects in the state.
-    pub live_objects: HashMap<ObjectID, Object>,
+    live_objects: HashMap<ObjectID, Object>,
     /// Map of all wrapped objects in the state.
     wrapped_objects: HashMap<ObjectID, Object>,
     /// A map from sender addresses to gas objects they own.

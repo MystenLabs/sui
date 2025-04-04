@@ -682,6 +682,9 @@ mod tests {
     /// states were incorrectly treated as deleted, and thus every transaction read emitted a
     /// tombstone row. This test validates that unless an object appears as an input object from
     /// `tx.effects.object_changes`, we do not consider it within our pipeline.
+    ///
+    /// Use the checkpoint builder to create a shared object. Then, remove this from the checkpoint,
+    /// and replace it with a transaction that takes the shared object as read-only.
     #[tokio::test]
     async fn test_process_unchanged_shared_object() {
         let obj_info = ObjInfo::default();
