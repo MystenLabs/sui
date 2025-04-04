@@ -23,7 +23,7 @@ use std::{fmt::Debug, ops::Deref};
 use std::{rc::Rc, sync::Arc};
 
 pub trait StringPool {
-    type String: Clone + Debug + Ord + PartialOrd + Eq + PartialEq;
+    type String;
 
     fn intern(&mut self, s: &IdentStr) -> Self::String;
 
