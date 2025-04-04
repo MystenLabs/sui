@@ -49,7 +49,7 @@ use typed_store::traits::{TableSummary, TypedStoreDebug};
 use typed_store::DBMapUtils;
 use typed_store::TypedStoreError;
 
-const CURRENT_DB_VERSION: u64 = 0;
+const CURRENT_DB_VERSION: u64 = 1;
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
 struct MetadataInfo {
@@ -205,22 +205,79 @@ impl IndexStoreTables {
         )
     }
 
-    fn needs_to_do_initialization(&self) -> bool {
-        match self.meta.get(&()) {
+    /// Lists all Column Families present in the on-disk database
+    fn list_cfs(&self) -> Vec<String> {
+        let path = self.meta.db.path_for_pruning();
+        typed_store::rocks::list_tables(path.to_path_buf()).unwrap()
+    }
+
+    /// Lists all Column Families that are known about in-code as defined in `IndexStoreTables`
+    fn known_cfs() -> Vec<String> {
+        IndexStoreTables::describe_tables().into_keys().collect()
+    }
+
+    /// Lists all Column Families that are present on-disk but not known by this version of code as
+    /// defined in `IndexStoreTables`
+    fn unknown_cfs(&self) -> Vec<String> {
+        let known_cfs = Self::known_cfs();
+        self.list_cfs()
+            .into_iter()
+            .filter(|cf| !known_cfs.contains(cf))
+            .collect()
+    }
+
+    fn drop_cf(&mut self, cf: &str) -> Result<(), TypedStoreError> {
+        self.meta
+            .db
+            .drop_cf(cf)
+            .map_err(typed_store::rocks::errors::typed_store_err_from_rocks_err)
+    }
+
+    fn create_cf(&mut self, cf: &str) -> Result<(), TypedStoreError> {
+        self.meta
+            .db
+            .create_cf(cf, &typed_store::rocks::default_db_options().options)
+            .map_err(typed_store::rocks::errors::typed_store_err_from_rocks_err)
+    }
+
+    fn reset_cf(&mut self, cf: &str) -> Result<(), TypedStoreError> {
+        self.drop_cf(cf)?;
+        self.create_cf(cf)
+    }
+
+    fn reset_db(&mut self) -> Result<(), TypedStoreError> {
+        // Drop unknown cfs
+        for cf in self.unknown_cfs() {
+            self.drop_cf(&cf)?;
+        }
+
+        // Reset known cfs
+        for cf in Self::known_cfs() {
+            self.reset_cf(&cf)?;
+        }
+
+        Ok(())
+    }
+
+    fn needs_to_do_initialization(&self, checkpoint_store: &CheckpointStore) -> bool {
+        (match self.meta.get(&()) {
             Ok(Some(metadata)) => metadata.version != CURRENT_DB_VERSION,
             Ok(None) => true,
             Err(_) => true,
-        }
+        }) || self.is_indexed_watermark_out_of_date(checkpoint_store)
     }
 
-    fn needs_to_delete_old_db(&self) -> bool {
-        match self.meta.get(&()) {
-            Ok(Some(metadata)) => metadata.version != CURRENT_DB_VERSION,
-            Ok(None) => false,
-            Err(_) => true,
-        }
+    // Check if the index watermark is behind the highets_executed watermark.
+    fn is_indexed_watermark_out_of_date(&self, checkpoint_store: &CheckpointStore) -> bool {
+        let highest_executed_checkpint = checkpoint_store
+            .get_highest_executed_checkpoint_seq_number()
+            .ok()
+            .flatten();
+        let watermark = self.watermark.get(&Watermark::Indexed).ok().flatten();
+        watermark < highest_executed_checkpint
     }
 
+    #[tracing::instrument(skip_all)]
     fn init(
         &mut self,
         authority_store: &AuthorityStore,
@@ -230,10 +287,6 @@ impl IndexStoreTables {
     ) -> Result<(), StorageError> {
         info!("Initializing RPC indexes");
 
-        // Check the latest indexed watermark, if it differs from the highest executed checkpoint
-        // then we'll need to clear and re-index the live object set indexes and index from
-        // watermark..=highest_executed_checkpint for transactions index
-        let watermark = self.watermark.get(&Watermark::Indexed).ok().flatten();
         let highest_executed_checkpint =
             checkpoint_store.get_highest_executed_checkpoint_seq_number()?;
         let lowest_available_checkpoint = checkpoint_store
@@ -245,24 +298,14 @@ impl IndexStoreTables {
             .get_highest_pruned_checkpoint()?
             .map(|c| c.saturating_add(1))
             .unwrap_or(0);
-        // Doing backfill requires processing the objects so we have to restrict our backfill range
+        // Doing backfill requires processing objects so we have to restrict our backfill range
         // to the range of checkpoints that we have objects for.
         let lowest_available_checkpoint =
             lowest_available_checkpoint.max(lowest_available_checkpoint_objects);
-        let checkpoint_range = match (watermark, highest_executed_checkpint) {
-            (Some(watermark), Some(highest_executed_checkpint))
-                if watermark == highest_executed_checkpint =>
-            {
-                None
-            }
-            (Some(watermark), Some(highest_executed_checkpint)) => {
-                Some(watermark.max(lowest_available_checkpoint)..=highest_executed_checkpint)
-            }
-            (None, Some(highest_executed_checkpint)) => {
-                Some(lowest_available_checkpoint..=highest_executed_checkpint)
-            }
-            (None, None) | (Some(_), None) => None,
-        };
+
+        let checkpoint_range = highest_executed_checkpint.map(|highest_executed_checkpint| {
+            lowest_available_checkpoint..=highest_executed_checkpint
+        });
 
         if let Some(checkpoint_range) = checkpoint_range {
             self.index_existing_transactions(authority_store, checkpoint_store, checkpoint_range)?;
@@ -302,6 +345,7 @@ impl IndexStoreTables {
         Ok(())
     }
 
+    #[tracing::instrument(skip(self, authority_store, checkpoint_store))]
     fn index_existing_transactions(
         &mut self,
         authority_store: &AuthorityStore,
@@ -663,19 +707,12 @@ impl RpcIndexStore {
         let path = Self::db_path(dir);
 
         let tables = {
-            let tables = IndexStoreTables::open(&path);
+            let mut tables = IndexStoreTables::open(&path);
 
             // If the index tables are uninitialized or on an older version then we need to
             // populate them
-            if tables.needs_to_do_initialization() {
-                let mut tables = if tables.needs_to_delete_old_db() {
-                    drop(tables);
-                    typed_store::rocks::safe_drop_db(path.clone())
-                        .expect("unable to destroy old rpc-index db");
-                    IndexStoreTables::open(path)
-                } else {
-                    tables
-                };
+            if tables.needs_to_do_initialization(checkpoint_store) {
+                tables.reset_db().expect("unable to reset rpc-index db");
 
                 tables
                     .init(
@@ -720,6 +757,10 @@ impl RpcIndexStore {
     ///
     /// Updates will not be committed to the database until `commit_update_for_checkpoint` is
     /// called.
+    #[tracing::instrument(
+        skip_all,
+        fields(checkpoint = checkpoint.checkpoint_summary.sequence_number)
+    )]
     pub fn index_checkpoint(&self, checkpoint: &CheckpointData, resolver: &mut dyn LayoutResolver) {
         let sequence_number = checkpoint.checkpoint_summary.sequence_number;
         let batch = self
@@ -740,6 +781,7 @@ impl RpcIndexStore {
     /// - Callers of this function must ensure that it is called for each checkpoint in sequential
     ///   order. This will panic if the provided checkpoint does not match the expected next
     ///   checkpoint to commit.
+    #[tracing::instrument(skip(self))]
     pub fn commit_update_for_checkpoint(&self, checkpoint: u64) -> Result<(), StorageError> {
         let next_batch = self.pending_updates.lock().unwrap().pop_first();
 
