@@ -366,7 +366,7 @@ impl<S> Type<S> {
         Rc::new(tys)
     }
 
-    pub fn into_type_tag<Pool: StringPool<String = S>>(self, pool: &Pool) -> Option<TypeTag> {
+    pub fn to_type_tag<Pool: StringPool<String = S>>(&self, pool: &Pool) -> Option<TypeTag> {
         use Type as T;
         if !self.is_closed() {
             return None;
@@ -383,16 +383,16 @@ impl<S> Type<S> {
             T::Address => TypeTag::Address,
             T::Signer => TypeTag::Signer,
             T::Vector(t) => TypeTag::Vector(Box::new(
-                t.into_type_tag(pool)
+                t.to_type_tag(pool)
                     .expect("Invariant violation: vector type argument contains reference"),
             )),
-            T::Datatype(dt) => TypeTag::Struct(Box::new(dt.into_struct_tag(pool))),
+            T::Datatype(dt) => TypeTag::Struct(Box::new(dt.to_struct_tag(pool))),
             T::TypeParameter(_) => unreachable!(),
         })
     }
 
-    pub fn into_struct_tag<Pool: StringPool<String = S>>(self, pool: &Pool) -> Option<StructTag> {
-        match self.into_type_tag(pool)? {
+    pub fn to_struct_tag<Pool: StringPool<String = S>>(&self, pool: &Pool) -> Option<StructTag> {
+        match self.to_type_tag(pool)? {
             TypeTag::Struct(s) => Some(*s),
             _ => None,
         }
@@ -488,7 +488,7 @@ impl<S> Datatype<S> {
         }
     }
 
-    pub fn into_struct_tag<Pool: StringPool<String = S>>(self, pool: &Pool) -> StructTag {
+    pub fn to_struct_tag<Pool: StringPool<String = S>>(&self, pool: &Pool) -> StructTag {
         let Datatype {
             address,
             module,
@@ -496,13 +496,13 @@ impl<S> Datatype<S> {
             type_arguments,
         } = self;
         StructTag {
-            address,
-            module: pool.as_ident_str(&module).to_owned(),
-            name: pool.as_ident_str(&name).to_owned(),
+            address: *address,
+            module: pool.as_ident_str(module).to_owned(),
+            name: pool.as_ident_str(name).to_owned(),
             type_params: type_arguments
-                .into_iter()
+                .iter()
                 .map(|t| {
-                    t.into_type_tag(pool)
+                    t.to_type_tag(pool)
                         .expect("Invariant violation: struct type argument contains reference")
                 })
                 .collect(),

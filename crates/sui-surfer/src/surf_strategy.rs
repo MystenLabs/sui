@@ -145,7 +145,7 @@ impl SurfStrategy {
                 type_params: dt
                     .type_arguments
                     .into_iter()
-                    .map(|t| t.into_type_tag(&*pool).unwrap())
+                    .map(|t| t.to_type_tag(&*pool).unwrap())
                     .collect(),
             },
             _ => {
