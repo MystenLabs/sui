@@ -1199,9 +1199,9 @@ fn sizes() {
     assert_eq!(std::mem::size_of::<Bytecode<Big>>(), 16);
 }
 
-pub struct NoInterning;
+pub struct NoPool;
 
-impl StringPool for NoInterning {
+impl StringPool for NoPool {
     type String = Identifier;
 
     fn intern(&mut self, s: &IdentStr) -> Self::String {
