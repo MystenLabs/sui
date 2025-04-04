@@ -14,15 +14,15 @@ The [Sui Full Node gRPC API](../references/fullnode-protocol.mdx) provides a fas
 
 ## What is gRPC?
 
-gRPC offers a high-performance, efficient communication protocol that uses [Protocol Buffers](https://protobuf.dev/overview/) for fast, compact data serialization. Its strongly typed interfaces reduce runtime errors and simplify client/server development across multiple languages. With built-in support for code generation, you can quickly scaffold clients in Typescript, Go, Rust, and more. This makes it ideal for scalable backend systems like indexers, blockchain explorers, and data-intensive decentralized apps.
+gRPC offers a high-performance, efficient communication protocol that uses [Protocol Buffers](https://protobuf.dev/overview/) for fast, compact data serialization. Its strongly typed interfaces reduce runtime errors and simplify client/server development across multiple languages. With built-in support for code generation, you can scaffold clients in Typescript, Go, Rust, and more. This makes it ideal for scalable backend systems like indexers, blockchain explorers, and data-intensive decentralized apps.
 
-In addition to request-response calls, gRPC supports server-side streaming, enabling real-time data delivery without constant polling. This is especially useful in environments where events and transactions need to be tracked live. gRPC's binary format is significantly faster and lighter than JSON, saving bandwidth and improving latency.
+In addition to request-response calls, gRPC supports server-side streaming, enabling real-time data delivery without constant polling. This is especially useful in environments where you need to track events and transactions live. gRPC's binary format is significantly faster and lighter than JSON, saving bandwidth and improving latency.
 
 Refer to [when to use gRPC vs GraphQL](../guides/developer/getting-started/data-serving#when-to-use-grpc-vs-graphql-with-indexer-20) to access Sui data.
 
-## Sui gRPC API overview
+## gRPC on Sui
 
-The gRPC interface is defined using Protocol Buffers. You can find the relevant beta `.proto` files at [sui-rpc-api on Github](https://github.com/MystenLabs/sui/tree/main/crates/sui-rpc-api/proto), which apart from the gRPC messages (request and response payloads) include the following services and types:
+Protocol buffers define the gRPC interface. You can find the relevant beta `.proto` files at [sui-rpc-api on Github](https://github.com/MystenLabs/sui/tree/main/crates/sui-rpc-api/proto), which apart from the gRPC messages (request and response payloads) include the following services and types:
 
 - `sui/rpc/v2beta/transaction_execution_service.proto`
 - `sui/rpc/v2beta/ledger_service.proto`
@@ -31,51 +31,47 @@ These definitions can be used to generate client libraries in various programmin
 
 :::info
 
-You will find some proto files in the folder `sui/rpc/v2alpha` as well. Those are are in alpha i.e. they are early experimental versions that are subject to change and not recommended for any serious use.
+There are some proto files in the folder `sui/rpc/v2alpha` as well. Those are are in alpha because they are early experimental versions that are subject to change and not recommended for production use.
 
 :::
 
-`TransactionExecutionService` provides a single RPC to begin with, to execute a transaction request - `ExecuteTransaction(ExecuteTransactionRequest)`. Whereas the `LedgerService` includes the core lookup queries for Sui data. Some of the RPCs in that service are:
+The `TransactionExecutionService` currently offers a single RPC method: `ExecuteTransaction(ExecuteTransactionRequest)`, which is used to execute a transaction request. Whereas the `LedgerService` includes the core lookup queries for Sui data. Some of the RPCs in that service include:
 
 - `GetObject(GetObjectRequest)`: Retrieves details of a specific on-chain object.
 - `GetTransaction(GetTransactionRequest)`: Fetches information about a particular transaction.
 - `GetCheckpoint(GetCheckpointRequest)`: Fetches information about a particular checkpoint.
 
-and more.
-
 ### Field masks
 
-A [FieldMask in Protocol Buffers](https://protobuf.dev/reference/protobuf/google.protobuf/#field-mask) is a mechanism used to specify a subset of fields within a message that should be read, updated, or returned. Instead of retrieving the entire object, a client can request only the specific fields they need by providing a list of field paths. This improves performance and reduces unnecessary data transfer.
+A [`FieldMask` in Protocol Buffers](https://protobuf.dev/reference/protobuf/google.protobuf/#field-mask) is a mechanism used to specify a subset of fields within a message that should be read, updated, or returned. Instead of retrieving the entire object, a client can request only the specific fields they need by providing a list of field paths. This improves performance and reduces unnecessary data transfer.
 
-In the Sui gRPC API, FieldMasks are used in requests like `GetTransaction` to control which parts of the transaction (e.g., `effects`, `events`) are included in the response. Field paths must match the structure of the response message. This selective querying is especially useful for building efficient applications and tools.
+In the Sui gRPC API, `FieldMask`s are used in requests like `GetTransaction` to control which parts of the transaction (such as, `effects`, `events`) are included in the response. Field paths must match the structure of the response message. This selective querying is especially useful for building efficient applications and tools.
 
 ### Encoding
 
 In the Sui gRPC API, identifiers with standard human-readable formats are represented as `string`s in the proto schema:
 
-- `Address` and `ObjectId`: Represented as 64 hex characters with a leading `0x`.
+- `Address` and `ObjectId`: Represented as 64 hexadecimal characters with a leading `0x`.
 - `Digest`s: Represented as [Base58](https://learnmeabitcoin.com/technical/keys/base58/).
-- `TypeTag` and `StructTag`: Represented in their canonical string format (e.g. `0x0000000000000000000000000000000000000000000000000000000000000002::coin::Coin<0x0000000000000000000000000000000000000000000000000000000000000002::sui::SUI>`)
+- `TypeTag` and `StructTag`: Represented in their canonical string format (for example, `0x0000000000000000000000000000000000000000000000000000000000000002::coin::Coin<0x0000000000000000000000000000000000000000000000000000000000000002::sui::SUI>`)
 
-## Sample Sui gRPC clients
-
-### Access using grpcurl
+## Access using grpcurl
 
 Simplest way to experiment with gRPC is by using [grpcurl](https://github.com/fullstorydev/grpcurl).
 
 :::note
 
-Your results may be different from the examples shared below, depending on the breadth and maturity of the gRPC APIs available on Sui full nodes.
+Your results might differ from the examples that follow, depending on the breadth and maturity of the gRPC APIs available on Sui Full nodes.
 
 :::
 
-**List available gRPC services**
+### List available gRPC services
 
 ```shell
-grpcurl <full node URL:port> list
+$ grpcurl <full node URL:port> list
 ```
 
-where the port on Sui Foundation managed full nodes is `443`. It should return something like:
+where the port on Sui Foundation managed Full nodes is `443`. It should return something like:
 
 ```shell
 grpc.health.v1.Health
@@ -86,10 +82,10 @@ sui.rpc.v2beta.LedgerService
 sui.rpc.v2beta.TransactionExecutionService
 ```
 
-**List available APIs in the LedgerService**
+### List available APIs in the LedgerService
 
 ```shell
-grpcurl <full node URL:port> list sui.rpc.v2beta.LedgerService
+$ grpcurl <full node URL:port> list sui.rpc.v2beta.LedgerService
 ```
 
 which should return something like:
@@ -104,27 +100,35 @@ sui.rpc.v2beta.LedgerService.GetServiceInfo
 sui.rpc.v2beta.LedgerService.GetTransaction
 ```
 
-**Get the `events` and `effects` details of a particular transaction**
+### Get the `events` and `effects` details of a particular transaction
 
 ```shell
-grpcurl -d '{ "digest": "3ByWphQ5sAVojiTrTrGXGM5FmCVzpzYmhsjbhYESJtxp" }' <full node URL:port> sui.rpc.v2beta.LedgerService/GetTransaction
+$ grpcurl -d '{ "digest": "3ByWphQ5sAVojiTrTrGXGM5FmCVzpzYmhsjbhYESJtxp" }' <full node URL:port> sui.rpc.v2beta.LedgerService/GetTransaction
 ```
 
-**Get the transactions in a particular checkpoint**
+### Get the transactions in a particular checkpoint
 
 ```shell
-grpcurl -d '{ "sequence_number": "180529334", "read_mask": { "paths": ["transactions"]} }' <full node URL:port> sui.rpc.v2beta.LedgerService/GetCheckpoint
+$ grpcurl -d '{ "sequence_number": "180529334", "read_mask": { "paths": ["transactions"]} }' <full node URL:port> sui.rpc.v2beta.LedgerService/GetCheckpoint
 ```
 
-### Access using typescript
+## Sample clients in different programming languages
 
-This is an example to build a typescript client for Sui gRPC API. Feel free to use another set of tools or modules that you’re comfortable with.
+<Tabs groupId="language">
+
+<TabItem value="typescript" label="TypeScript">
+
+This is an example to build a Typescript client for Sui gRPC API. If you want to use a different set of tools or modules that you’re comfortable with, you can adjust the instructions accordingly.
 
 **Install dependencies**
 
 ```shell
 npm init -y
+```
+```shell
 npm install @grpc/grpc-js @grpc/proto-loader
+```
+```shell
 npm i -D tsx
 ```
 
@@ -142,11 +146,11 @@ npm i -D tsx
 ├── package.json
 ```
 
-Download all the sui/rpc/v2beta proto files from [Github v2beta](https://github.com/MystenLabs/sui/tree/main/crates/sui-rpc-api/proto) in the same folder.
+Download all the `sui/rpc/v2beta` proto files from [Github v2beta](https://github.com/MystenLabs/sui/tree/main/crates/sui-rpc-api/proto) in the same folder.
 
 **Sample client.ts to get `events` and `effects` details of a particular transaction**
 
-```typescript
+```ts
 import * as grpc from '@grpc/grpc-js';
 import * as protoLoader from '@grpc/proto-loader';
 import * as path from 'path';
@@ -207,7 +211,9 @@ npx tsx c
 
 :::
 
-### Access using golang
+</TabItem>
+
+<TabItem value="golang" label="Golang">
 
 This is an example to build a golang client for Sui gRPC API. Feel free to use another set of tools or modules that you’re comfortable with.
 
@@ -217,10 +223,12 @@ First make sure you have `go` and `protoc` installed in your environment, and th
 
 ```shell
 go install google.golang.org/protobuf/cmd/protoc-gen-go@latest
+```
+```shell
 go install google.golang.org/grpc/cmd/protoc-gen-go-grpc@latest
 ```
 
-In your `go.mod`, add the following (make sure to change the versions depending on when you may be following this example):
+In your `go.mod`, add the following (make sure to update the version numbers to the latest versions):
 
 ```
 require (
@@ -229,7 +237,7 @@ require (
 )
 ```
 
-**Generate Go code from proto files**
+**Generate Golang code from proto files**
 
 Assuming you have the the proto files from [Github v2beta](https://github.com/MystenLabs/sui/tree/main/crates/sui-rpc-api/proto), run:
 
@@ -312,7 +320,9 @@ You can replace `your_project` with a module name or relative import path depend
 
 :::
 
-### Access using python
+</TabItem>
+
+<TabItem value="python" label="Python">
 
 This is an example to build a python client for Sui gRPC API. Feel free to use another set of tools or modules that you’re comfortable with.
 
@@ -371,8 +381,12 @@ python client.py
 :::info
 
 - The import paths like `sui.rpc.v2beta.ledger_service_pb2` depend on your proto structure.
-- You may need to adjust `__init__.py` files or PYTHONPATH to ensure proper module resolution.
+- You might need to adjust `__init__.py` files or PYTHONPATH to ensure proper module resolution.
 - The example assumes that gRPC is available on port `443` which requires SSL.
 - Digest in the request is directly provided in the `Base58` format, but check if you need to decode from your source format.
 
 :::
+
+</TabItem>
+
+</Tabs>
