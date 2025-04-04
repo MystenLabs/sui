@@ -8,9 +8,8 @@ use anyhow::{Ok, Result};
 use diesel::{ExpressionMethods, QueryDsl};
 use diesel_async::RunQueryDsl;
 use sui_indexer_alt_framework::{
-    db::Db,
+    db::{Connection, Db},
     pipeline::{concurrent::Handler, Processor},
-    store::Store,
     types::{full_checkpoint_content::CheckpointData, transaction::TransactionDataAPI},
 };
 use sui_indexer_alt_schema::{schema::tx_calls, transactions::StoredTxCalls};
@@ -63,10 +62,7 @@ impl Handler for TxCalls {
     const MIN_EAGER_ROWS: usize = 100;
     const MAX_PENDING_ROWS: usize = 10000;
 
-    async fn commit<'a>(
-        values: &[Self::Value],
-        conn: &mut <Self::Store as Store>::Connection<'a>,
-    ) -> Result<usize> {
+    async fn commit<'a>(values: &[Self::Value], conn: &mut Connection<'a>) -> Result<usize> {
         Ok(diesel::insert_into(tx_calls::table)
             .values(values)
             .on_conflict_do_nothing()
@@ -78,7 +74,7 @@ impl Handler for TxCalls {
         &self,
         from: u64,
         to_exclusive: u64,
-        conn: &mut <Self::Store as Store>::Connection<'a>,
+        conn: &mut Connection<'a>,
     ) -> Result<usize> {
         let Range {
             start: from_tx,
@@ -103,9 +99,7 @@ mod tests {
 
     use crate::handlers::cp_sequence_numbers::CpSequenceNumbers;
 
-    async fn get_all_tx_calls(
-        conn: &mut <Db as Store>::Connection<'_>,
-    ) -> Result<Vec<StoredTxCalls>> {
+    async fn get_all_tx_calls(conn: &mut Connection<'_>) -> Result<Vec<StoredTxCalls>> {
         Ok(tx_calls::table
             .order_by((
                 tx_calls::tx_sequence_number,

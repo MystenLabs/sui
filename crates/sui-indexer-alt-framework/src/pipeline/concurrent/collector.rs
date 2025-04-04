@@ -199,7 +199,6 @@ mod tests {
     use crate::{
         metrics::tests::test_metrics,
         pipeline::{concurrent::max_chunk_rows, Processor},
-        store::Store,
         types::full_checkpoint_content::CheckpointData,
         FieldCount,
     };
@@ -215,7 +214,7 @@ mod tests {
     }
 
     use std::time::Duration;
-    use sui_pg_db::Db;
+    use sui_pg_db::{Connection, Db};
     use tokio::sync::mpsc;
 
     struct TestHandler;
@@ -236,7 +235,7 @@ mod tests {
         const MAX_PENDING_ROWS: usize = 10000;
         async fn commit<'a>(
             _values: &[Self::Value],
-            _conn: &mut <Self::Store as Store>::Connection<'a>,
+            _conn: &mut Connection<'a>,
         ) -> anyhow::Result<usize> {
             tokio::time::sleep(Duration::from_millis(1000)).await;
             Ok(0)

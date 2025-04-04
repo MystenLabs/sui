@@ -6,9 +6,8 @@ use std::sync::Arc;
 use anyhow::Result;
 use diesel_async::RunQueryDsl;
 use sui_indexer_alt_framework::{
-    db::Db,
+    db::{Connection, Db},
     pipeline::{concurrent::Handler, Processor},
-    store::Store,
     types::{effects::TransactionEffectsAPI, full_checkpoint_content::CheckpointData},
 };
 use sui_indexer_alt_schema::{objects::StoredObjVersion, schema::obj_versions};
@@ -70,10 +69,7 @@ impl Handler for ObjVersions {
     const MIN_EAGER_ROWS: usize = 100;
     const MAX_PENDING_ROWS: usize = 10000;
 
-    async fn commit<'a>(
-        values: &[Self::Value],
-        conn: &mut <Self::Store as Store>::Connection<'a>,
-    ) -> Result<usize> {
+    async fn commit<'a>(values: &[Self::Value], conn: &mut Connection<'a>) -> Result<usize> {
         Ok(diesel::insert_into(obj_versions::table)
             .values(values)
             .on_conflict_do_nothing()
@@ -89,10 +85,7 @@ impl Handler for ObjVersionsSentinelBackfill {
     const MIN_EAGER_ROWS: usize = 100;
     const MAX_PENDING_ROWS: usize = 10000;
 
-    async fn commit<'a>(
-        values: &[Self::Value],
-        conn: &mut <Self::Store as Store>::Connection<'a>,
-    ) -> Result<usize> {
+    async fn commit<'a>(values: &[Self::Value], conn: &mut Connection<'a>) -> Result<usize> {
         ObjVersions::commit(values, conn).await
     }
 }

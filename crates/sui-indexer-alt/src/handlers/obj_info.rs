@@ -7,9 +7,8 @@ use anyhow::Result;
 use diesel::sql_query;
 use diesel_async::RunQueryDsl;
 use sui_indexer_alt_framework::{
-    db::Db,
+    db::{Connection, Db},
     pipeline::{concurrent::Handler, Processor},
-    store::Store,
     types::{base_types::ObjectID, full_checkpoint_content::CheckpointData, object::Object},
     FieldCount,
 };
@@ -99,10 +98,7 @@ impl Handler for ObjInfo {
     type Store = Db;
     const PRUNING_REQUIRES_PROCESSED_VALUES: bool = true;
 
-    async fn commit<'a>(
-        values: &[Self::Value],
-        conn: &mut <Self::Store as Store>::Connection<'a>,
-    ) -> Result<usize> {
+    async fn commit<'a>(values: &[Self::Value], conn: &mut Connection<'a>) -> Result<usize> {
         let stored = values
             .iter()
             .map(|v| v.try_into())
@@ -119,7 +115,7 @@ impl Handler for ObjInfo {
         &self,
         from: u64,
         to_exclusive: u64,
-        conn: &mut <Self::Store as Store>::Connection<'a>,
+        conn: &mut Connection<'a>,
     ) -> Result<usize> {
         use sui_indexer_alt_schema::schema::obj_info::dsl;
 

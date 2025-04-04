@@ -6,9 +6,8 @@ use std::sync::Arc;
 use anyhow::{Context, Result};
 use diesel_async::RunQueryDsl;
 use sui_indexer_alt_framework::{
-    db::Db,
+    db::{Connection, Db},
     pipeline::{concurrent::Handler, Processor},
-    store::Store,
     types::full_checkpoint_content::CheckpointData,
 };
 use sui_indexer_alt_schema::{
@@ -59,10 +58,7 @@ impl Handler for KvProtocolConfigs {
     const MIN_EAGER_ROWS: usize = 1;
     const MAX_PENDING_ROWS: usize = 10000;
 
-    async fn commit<'a>(
-        values: &[Self::Value],
-        conn: &mut <Self::Store as Store>::Connection<'a>,
-    ) -> Result<usize> {
+    async fn commit<'a>(values: &[Self::Value], conn: &mut Connection<'a>) -> Result<usize> {
         Ok(diesel::insert_into(kv_protocol_configs::table)
             .values(values)
             .on_conflict_do_nothing()

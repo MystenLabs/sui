@@ -7,9 +7,8 @@ use anyhow::{Context, Result};
 use diesel::{ExpressionMethods, QueryDsl};
 use diesel_async::RunQueryDsl;
 use sui_indexer_alt_framework::{
-    db::Db,
+    db::{Connection, Db},
     pipeline::{concurrent::Handler, Processor},
-    store::Store,
     types::full_checkpoint_content::CheckpointData,
 };
 use sui_indexer_alt_schema::{schema::kv_transactions, transactions::StoredTransaction};
@@ -68,10 +67,7 @@ impl Handler for KvTransactions {
     const MIN_EAGER_ROWS: usize = 100;
     const MAX_PENDING_ROWS: usize = 10000;
 
-    async fn commit<'a>(
-        values: &[Self::Value],
-        conn: &mut <Self::Store as Store>::Connection<'a>,
-    ) -> Result<usize> {
+    async fn commit<'a>(values: &[Self::Value], conn: &mut Connection<'a>) -> Result<usize> {
         Ok(diesel::insert_into(kv_transactions::table)
             .values(values)
             .on_conflict_do_nothing()
@@ -83,7 +79,7 @@ impl Handler for KvTransactions {
         &self,
         from: u64,
         to_exclusive: u64,
-        conn: &mut <Self::Store as Store>::Connection<'a>,
+        conn: &mut Connection<'a>,
     ) -> Result<usize> {
         let filter = kv_transactions::table.filter(
             kv_transactions::cp_sequence_number.between(from as i64, to_exclusive as i64 - 1),
@@ -102,9 +98,7 @@ mod tests {
     };
     use sui_indexer_alt_schema::MIGRATIONS;
 
-    async fn get_all_kv_transactions(
-        conn: &mut <Db as Store>::Connection<'_>,
-    ) -> Result<Vec<StoredTransaction>> {
+    async fn get_all_kv_transactions(conn: &mut Connection<'_>) -> Result<Vec<StoredTransaction>> {
         Ok(kv_transactions::table.load(conn).await?)
     }
 

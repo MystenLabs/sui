@@ -476,7 +476,7 @@ mod tests {
     use async_trait::async_trait;
 
     use crate::types::full_checkpoint_content::CheckpointData;
-    use store::Store;
+    use sui_pg_db::Connection as PgConnection;
 
     use super::*;
 
@@ -509,7 +509,7 @@ mod tests {
                 const PRUNING_REQUIRES_PROCESSED_VALUES: bool = $pruning_requires_processed_values;
                 async fn commit<'a>(
                     _values: &[Self::Value],
-                    _conn: &mut <Self::Store as Store>::Connection<'a>,
+                    _conn: &mut PgConnection<'a>,
                 ) -> anyhow::Result<usize> {
                     todo!()
                 }

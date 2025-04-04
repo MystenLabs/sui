@@ -7,9 +7,8 @@ use anyhow::{anyhow, bail, Result};
 use diesel::sql_query;
 use diesel_async::RunQueryDsl;
 use sui_indexer_alt_framework::{
-    db::Db,
+    db::{Connection, Db},
     pipeline::{concurrent::Handler, Processor},
-    store::Store,
     types::{
         base_types::{ObjectID, SuiAddress},
         full_checkpoint_content::CheckpointData,
@@ -166,10 +165,7 @@ impl Handler for CoinBalanceBuckets {
 
     const PRUNING_REQUIRES_PROCESSED_VALUES: bool = true;
 
-    async fn commit<'a>(
-        values: &[Self::Value],
-        conn: &mut <Self::Store as Store>::Connection<'a>,
-    ) -> Result<usize> {
+    async fn commit<'a>(values: &[Self::Value], conn: &mut Connection<'a>) -> Result<usize> {
         let values = values
             .iter()
             .map(|v| v.try_into())
@@ -186,7 +182,7 @@ impl Handler for CoinBalanceBuckets {
         &self,
         from: u64,
         to_exclusive: u64,
-        conn: &mut <Self::Store as Store>::Connection<'a>,
+        conn: &mut Connection<'a>,
     ) -> anyhow::Result<usize> {
         use sui_indexer_alt_schema::schema::coin_balance_buckets::dsl;
 
@@ -323,9 +319,7 @@ mod tests {
     use sui_protocol_config::ProtocolConfig;
 
     // Get all balance buckets from the database, sorted by object_id and cp_sequence_number.
-    async fn get_all_balance_buckets(
-        conn: &mut <Db as Store>::Connection<'_>,
-    ) -> Vec<StoredCoinBalanceBucket> {
+    async fn get_all_balance_buckets(conn: &mut Connection<'_>) -> Vec<StoredCoinBalanceBucket> {
         coin_balance_buckets::table
             .order_by((
                 coin_balance_buckets::object_id,
