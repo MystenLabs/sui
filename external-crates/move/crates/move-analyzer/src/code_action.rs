@@ -33,13 +33,14 @@ use move_compiler::{
 };
 use move_package::source_package::parsed_manifest::Dependencies;
 
-// The following reflects prefixes of error messages
+// The following reflects prefixes of error messages for
+// problems with a single-id access chain that are
 // subject to auto fixes. The constants representing them
 // cannot be lifted directly from the Move compiler,
 // as they are (at least most of them) dynamically generated
 // (in naming/translate.rs).
 #[derive(Debug, EnumIter)]
-enum DiagErrPrefix {
+enum SingleIdDiagErrPrefix {
     UnboundType,
     UnboundStructOrEnum,
     UnboundStruct,
@@ -47,16 +48,16 @@ enum DiagErrPrefix {
     UnboundFunction,
 }
 
-impl DiagErrPrefix {
+impl SingleIdDiagErrPrefix {
     fn as_str(&self) -> &'static str {
         // we include `'` at the end of the prefix as some of the prefixes
         // are shared with error messages that cannot be auto-fixed
         match self {
-            DiagErrPrefix::UnboundType => "Unbound type '",
-            DiagErrPrefix::UnboundStruct => "Unbound struct '",
-            DiagErrPrefix::UnboundStructOrEnum => "Unbound struct or enum '",
-            DiagErrPrefix::UnboundTypeOrFunction => "Unbound datatype or function '",
-            DiagErrPrefix::UnboundFunction => "Unbound function '",
+            SingleIdDiagErrPrefix::UnboundType => "Unbound type '",
+            SingleIdDiagErrPrefix::UnboundStruct => "Unbound struct '",
+            SingleIdDiagErrPrefix::UnboundStructOrEnum => "Unbound struct or enum '",
+            SingleIdDiagErrPrefix::UnboundTypeOrFunction => "Unbound datatype or function '",
+            SingleIdDiagErrPrefix::UnboundFunction => "Unbound function '",
         }
     }
 }
@@ -98,12 +99,9 @@ fn access_chain_autofix_actions(
         }
     }
 
-    if !params
-        .context
-        .diagnostics
-        .iter()
-        .any(|diag| DiagErrPrefix::iter().any(|prefix| diag.message.starts_with(prefix.as_str())))
-    {
+    if !params.context.diagnostics.iter().any(|diag| {
+        SingleIdDiagErrPrefix::iter().any(|prefix| diag.message.starts_with(prefix.as_str()))
+    }) {
         return code_actions;
     }
 
@@ -113,7 +111,7 @@ fn access_chain_autofix_actions(
     };
 
     for diag in params.context.diagnostics.into_iter() {
-        if !DiagErrPrefix::iter().any(|prefix| diag.message.starts_with(prefix.as_str())) {
+        if !SingleIdDiagErrPrefix::iter().any(|prefix| diag.message.starts_with(prefix.as_str())) {
             continue;
         }
         // compute symbols just to get cursor position
@@ -148,8 +146,8 @@ fn access_chain_autofix_actions(
             continue;
         }
         if let NameAccessChain_::Single(path_entry) = chain.value {
-            DiagErrPrefix::iter().for_each(|prefix| match prefix {
-                DiagErrPrefix::UnboundType | DiagErrPrefix::UnboundStructOrEnum => {
+            SingleIdDiagErrPrefix::iter().for_each(|prefix| match prefix {
+                SingleIdDiagErrPrefix::UnboundType | SingleIdDiagErrPrefix::UnboundStructOrEnum => {
                     if diag.message.starts_with(prefix.as_str()) {
                         single_id_access_chain_autofixes(
                             &mut code_actions,
@@ -163,7 +161,7 @@ fn access_chain_autofix_actions(
                         );
                     }
                 }
-                DiagErrPrefix::UnboundStruct => {
+                SingleIdDiagErrPrefix::UnboundStruct => {
                     if diag.message.starts_with(prefix.as_str()) {
                         single_id_access_chain_autofixes(
                             &mut code_actions,
@@ -176,7 +174,7 @@ fn access_chain_autofix_actions(
                         );
                     }
                 }
-                DiagErrPrefix::UnboundTypeOrFunction => {
+                SingleIdDiagErrPrefix::UnboundTypeOrFunction => {
                     if diag.message.starts_with(prefix.as_str()) {
                         single_id_access_chain_autofixes(
                             &mut code_actions,
@@ -191,7 +189,7 @@ fn access_chain_autofix_actions(
                         );
                     }
                 }
-                DiagErrPrefix::UnboundFunction => {
+                SingleIdDiagErrPrefix::UnboundFunction => {
                     if diag.message.starts_with(prefix.as_str()) {
                         single_id_access_chain_autofixes(
                             &mut code_actions,
