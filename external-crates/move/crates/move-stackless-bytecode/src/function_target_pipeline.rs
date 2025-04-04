@@ -14,11 +14,12 @@ use itertools::{Either, Itertools};
 use log::debug;
 use petgraph::graph::{DiGraph, NodeIndex};
 
-use move_compiler::shared::known_attributes::{
-    KnownAttribute::Verification, VerificationAttribute,
+use move_compiler::{
+    expansion::ast::ModuleAccess_,
+    shared::known_attributes::{KnownAttribute::Verification, VerificationAttribute},
 };
 use move_compiler::{
-    expansion::ast::{AttributeName_, Attribute_},
+    expansion::ast::{AttributeName_, AttributeValue_, Attribute_},
     shared::unique_map::UniqueMap,
 };
 use move_symbol_pool::Symbol;
@@ -288,11 +289,23 @@ impl FunctionTargetsHolder {
                 Attribute_::Parameterized(_, inner_attrs) => inner_attrs,
                 _ => &UniqueMap::new(),
             };
-
             let is_focus_spec =
                 inner_attrs.contains_key_(&AttributeName_::Unknown(Symbol::from("focus")));
             let is_verify_spec =
                 inner_attrs.contains_key_(&AttributeName_::Unknown(Symbol::from("prove")));
+            let is_function_spec: bool =
+                inner_attrs.contains_key_(&AttributeName_::Unknown(Symbol::from("function")));
+
+            if is_verify_spec {
+                println!("\n Processing function: {:?}", func_env.get_name_str());
+                println!("Verify spec: {:?}", func_env.get_name_str());
+                println!("inner_attrs: {:?}", inner_attrs);
+            }
+            if is_function_spec {
+                println!("\n Processing function: {:?}", func_env.get_name_str());
+                println!("Verify spec: {:?}", func_env.get_name_str());
+                println!("inner_attrs: {:?}", inner_attrs);
+            }
 
             if !is_verify_spec && !is_focus_spec {
                 self.no_verify_specs.insert(func_env.get_qualified_id());
@@ -306,24 +319,70 @@ impl FunctionTargetsHolder {
                 self.ignore_aborts.insert(func_env.get_qualified_id());
             }
 
-            let target_func_env_opt =
-                func_env
-                    .get_name_str()
-                    .strip_suffix("_spec")
-                    .and_then(|name| {
-                        func_env
-                            .module_env
-                            .find_function(func_env.symbol_pool().make(name))
-                    });
-            match target_func_env_opt {
-                Some(target_func_env) => {
-                    self.function_specs.insert(
-                        func_env.get_qualified_id(),
-                        target_func_env.get_qualified_id(),
-                    );
+            if is_function_spec {
+                let function_spec = inner_attrs
+                    .get_(&AttributeName_::Unknown(Symbol::from("function")))
+                    .unwrap();
+                println!("function_spec: {:?}", function_spec);
+
+                if let Attribute_::Assigned(_, value) = &function_spec.value {
+                    if let AttributeValue_::ModuleAccess(spanned) = &value.value {
+                        if let ModuleAccess_::ModuleAccess(module_ident, function_name) =
+                            &spanned.value
+                        {
+                            let address = module_ident.value.address;
+                            let module = &module_ident.value.module;
+                            println!("Address: {:?}", address);
+                            println!("Module: {:?}", module);
+                            println!("Function name: {:?}", function_name);
+
+                            //todo: use address if provided
+                            let module_name = format!("{}", module);
+                            // let module_name = format!("{}::{}", address, module);
+                            let target_module = func_env
+                                .module_env
+                                .env
+                                .find_module_by_name(func_env.symbol_pool().make(&module_name));
+
+                            let target_func_env = target_module.and_then(|module_env| {
+                                module_env.find_function(
+                                    func_env.symbol_pool().make(&function_name.value),
+                                )
+                            });
+
+                            if let Some(func_env) = target_func_env {
+                                println!("target_func_env: {:?}", func_env.get_name_str());
+
+                                let target_id = func_env.get_qualified_id();
+                                self.function_specs.insert(
+                                    func_env.get_qualified_id(),
+                                    target_id,
+                                );
+                            }
+                        }
+                    }
                 }
-                None => {
-                    self.scenario_specs.insert(func_env.get_qualified_id());
+            } else {
+                let target_func_env_opt =
+                    func_env
+                        .get_name_str()
+                        .strip_suffix("_spec")
+                        .and_then(|name| {
+                            func_env
+                                .module_env
+                                .find_function(func_env.symbol_pool().make(name))
+                        });
+                match target_func_env_opt {
+                    Some(target_func_env) => {
+                        let target_id = target_func_env.get_qualified_id();
+                        self.function_specs.insert(
+                            func_env.get_qualified_id(),
+                            target_id,
+                        );
+                    }
+                    None => {
+                        self.scenario_specs.insert(func_env.get_qualified_id());
+                    }
                 }
             }
         }
