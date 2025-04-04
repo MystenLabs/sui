@@ -26,8 +26,6 @@ The gRPC interface is defined using Protocol Buffers. You can find the relevant 
 
 - `sui/rpc/v2beta/transaction_execution_service.proto`
 - `sui/rpc/v2beta/ledger_service.proto`
-- `sui/types/signature_scheme.proto`
-- `sui/types/types.proto`
 
 These definitions can be used to generate client libraries in various programming languages.
 
@@ -41,7 +39,7 @@ You will find some proto files in the folder `sui/rpc/v2alpha` as well. Those ar
 
 - `GetObject(GetObjectRequest)`: Retrieves details of a specific on-chain object.
 - `GetTransaction(GetTransactionRequest)`: Fetches information about a particular transaction.
-- `GetFullCheckpoint(GetCheckpointRequest)`: Fetches information about a particular checkpoint.
+- `GetCheckpoint(GetCheckpointRequest)`: Fetches information about a particular checkpoint.
 
 and more.
 
@@ -49,11 +47,15 @@ and more.
 
 A [FieldMask in Protocol Buffers](https://protobuf.dev/reference/protobuf/google.protobuf/#field-mask) is a mechanism used to specify a subset of fields within a message that should be read, updated, or returned. Instead of retrieving the entire object, a client can request only the specific fields they need by providing a list of field paths. This improves performance and reduces unnecessary data transfer.
 
-In the Sui gRPC API, FieldMasks are used in requests like `GetTransaction` to control which parts of the transaction (e.g., `effects`, `events`, `input`) are included in the response. Field paths must match the structure of the response message. This selective querying is especially useful for building efficient applications and tools.
+In the Sui gRPC API, FieldMasks are used in requests like `GetTransaction` to control which parts of the transaction (e.g., `effects`, `events`) are included in the response. Field paths must match the structure of the response message. This selective querying is especially useful for building efficient applications and tools.
 
 ### Encoding
 
-In the Sui gRPC API, identifiers such as digest, object id, address etc. are represented using [Base58](https://learnmeabitcoin.com/technical/keys/base58/) encoding. This format is compact, URL-safe, and avoids visually ambiguous characters, making it ideal for blockchain identifiers. When constructing gRPC requests, clients may need to decode Base58 strings into raw bytes before sending them in fields like `digest` or `object_id`, as the gRPC protocol expects binary data. Similarly, when receiving responses, clients may need to encode byte fields back into Base58 for display or logging. This encoding convention ensures consistency across SDKs, tools, and the broader Sui ecosystem.
+In the Sui gRPC API, identifiers with standard human-readable formats are represented as `string`s in the proto schema:
+
+- `Address` and `ObjectId`: Represented as 64 hex characters with a leading `0x`.
+- `Digest`s: Represented as [Base58](https://learnmeabitcoin.com/technical/keys/base58/).
+- `TypeTag` and `StructTag`: Represented in their canonical string format (e.g. `0x0000000000000000000000000000000000000000000000000000000000000002::coin::Coin<0x0000000000000000000000000000000000000000000000000000000000000002::sui::SUI>`)
 
 ## Sample Sui gRPC clients
 
@@ -78,7 +80,6 @@ where the port on Sui Foundation managed full nodes is `443`. It should return s
 ```shell
 grpc.health.v1.Health
 grpc.reflection.v1.ServerReflection
-sui.node.v2.NodeService
 sui.rpc.v2alpha.LiveDataService
 sui.rpc.v2alpha.SubscriptionService
 sui.rpc.v2beta.LedgerService
