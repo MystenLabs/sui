@@ -10,29 +10,29 @@ const { group, indent, softline } = doc.builders;
 export const NODE_TYPE = 'annotation_expression';
 
 export default function (path: AstPath<Node>): treeFn | null {
-	if (path.node.type === NODE_TYPE) {
-		return printAnnotationExpression;
-	}
+    if (path.node.type === NODE_TYPE) {
+        return printAnnotationExpression;
+    }
 
-	return null;
+    return null;
 }
 
 /**
  * Print `annotation_expression` node.
  */
 function printAnnotationExpression(path: AstPath<Node>, _opt: MoveOptions, print: printFn): Doc {
-	const children = path.map(print, 'nonFormattingChildren');
-	if (children.length !== 2) {
-		throw new Error('`annotation_expression` node should have 2 children');
-	}
+    const children = path.map(print, 'nonFormattingChildren');
+    if (children.length !== 2) {
+        throw new Error('`annotation_expression` node should have 2 children');
+    }
 
-	return group([
-		'(',
-		indent(softline),
-		indent(children[0]!), // expression
-		': ',
-		children[1]!, // type
-		softline,
-		')',
-	]);
+    return group([
+        '(',
+        indent(softline),
+        indent(children[0]!), // expression
+        ': ',
+        children[1]!, // type
+        softline,
+        ')',
+    ]);
 }

@@ -10,9 +10,9 @@ const {} = doc.builders;
 export const NODE_TYPE = 'unit_expression';
 
 export default function (path: AstPath<Node>): treeFn | null {
-	if (path.node.type === NODE_TYPE) {
-		return () => '()'
-	}
+    if (path.node.type === NODE_TYPE) {
+        return () => '()';
+    }
 
-	return null;
+    return null;
 }
