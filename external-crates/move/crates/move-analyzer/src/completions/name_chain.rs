@@ -9,13 +9,13 @@
 // - if someone starts typing a new identifier, auto-imports for both modules
 //   and module members will be provided.
 // - if someone starts typing the second chain component (after `::`),
-//   auto-imports for module members will be provided.
+//   auto-imports for module members will be provided.s
 // No other auto-import completions will be provided
 
 use crate::{
     completions::utils::{
-        call_completion_item, completion_item, exclude_member_from_import, import_insertion_info,
-        mod_defs, PRIMITIVE_TYPE_COMPLETIONS,
+        call_completion_item, completion_item, import_insertion_info, mod_defs,
+        PRIMITIVE_TYPE_COMPLETIONS,
     },
     symbols::{
         expansion_mod_ident_to_map_key, AutoImportInsertionInfo, ChainCompletionKind, ChainInfo,
@@ -34,7 +34,10 @@ use move_ir_types::location::{sp, Loc};
 use move_symbol_pool::Symbol;
 use std::collections::{BTreeMap, BTreeSet};
 
-use super::utils::auto_import_text_edit;
+use super::utils::{
+    all_mod_consts_to_import, all_mod_enums_to_import, all_mod_functions_to_import,
+    all_mod_structs_to_import, auto_import_text_edit,
+};
 
 /// Describes kind of the name access chain component.
 enum ChainComponentKind {
@@ -560,7 +563,6 @@ fn single_name_member_completion(
     member_alias: &Symbol,
     member_name: &Symbol,
     chain_kind: ChainCompletionKind,
-    src_mod_ident_opt: Option<ModuleIdent>,
 ) -> Vec<CompletionItem> {
     use ChainCompletionKind as CT;
 
@@ -571,7 +573,7 @@ fn single_name_member_completion(
         }
         let Some(DefInfo::Function(
             _,
-            visibility,
+            _,
             fun_type,
             _,
             type_args,
@@ -583,9 +585,6 @@ fn single_name_member_completion(
         else {
             return vec![];
         };
-        if exclude_member_from_import(mod_defs, src_mod_ident_opt, visibility) {
-            return vec![];
-        }
         return vec![call_completion_item(
             &mod_defs.ident,
             matches!(fun_type, FunType::Macro),
@@ -604,26 +603,12 @@ fn single_name_member_completion(
         if !(matches!(chain_kind, CT::Type) || matches!(chain_kind, CT::All)) {
             return vec![];
         }
-        let Some(DefInfo::Struct(_, _, visibility, ..)) = symbols.def_info(&member_def.name_loc)
-        else {
-            return vec![];
-        };
-        if exclude_member_from_import(mod_defs, src_mod_ident_opt, visibility) {
-            return vec![];
-        }
         return struct_completion(cursor, &mod_defs.ident, *member_alias, member_def);
     }
 
     // is it an enum?
-    if let Some(member_def) = mod_defs.enums.get(member_name) {
+    if mod_defs.enums.get(member_name).is_some() {
         if !(matches!(chain_kind, CT::Type) || matches!(chain_kind, CT::All)) {
-            return vec![];
-        }
-        let Some(DefInfo::Enum(_, _, visibility, ..)) = symbols.def_info(&member_def.name_loc)
-        else {
-            return vec![];
-        };
-        if exclude_member_from_import(mod_defs, src_mod_ident_opt, visibility) {
             return vec![];
         }
         return vec![completion_item(
@@ -635,9 +620,6 @@ fn single_name_member_completion(
     // is it a const?
     if mod_defs.constants.get(member_name).is_some() {
         if !matches!(chain_kind, CT::All) {
-            return vec![];
-        }
-        if exclude_member_from_import(mod_defs, src_mod_ident_opt, &Visibility::Internal) {
             return vec![];
         }
         return vec![completion_item(
@@ -671,47 +653,34 @@ fn all_single_name_member_completions(
                 member_alias,
                 member_name,
                 chain_kind,
-                None,
             );
             completions.extend(member_completions);
         }
     }
     // member auto-imports
     if let Some(auto_import_pos) = import_insertion_info_opt {
-        if let Some(src_mod_ident) = cursor.module {
-            // need source module information to filter out auto-imports
-            // of non-public module members
-            let all_mod_members = symbols.file_mods.values().flatten().map(|mod_defs| {
-                (
-                    sp(mod_defs.name_loc, mod_defs.ident),
-                    mod_defs.functions.keys().chain(
-                        mod_defs
-                            .structs
-                            .keys()
-                            .chain(mod_defs.enums.keys().chain(mod_defs.constants.keys())),
-                    ),
-                )
-            });
-            for (mod_ident, import_members) in all_mod_members {
-                let Some(mod_defs) = mod_defs(symbols, &mod_ident.value) else {
+        let all_mod_members = all_mod_functions_to_import(symbols, cursor)
+            .chain(all_mod_structs_to_import(symbols, cursor))
+            .chain(all_mod_enums_to_import(symbols, cursor))
+            .chain(all_mod_consts_to_import(symbols, cursor));
+        for (mod_ident, import_members) in all_mod_members {
+            let Some(mod_defs) = mod_defs(symbols, &mod_ident.value) else {
+                continue;
+            };
+            for member_name in import_members {
+                // exclude members that are already imported
+                if members_info.contains_key(&(mod_ident, member_name)) {
                     continue;
-                };
-                for member_name in import_members {
-                    // exclude members that are already imported
-                    if members_info.contains_key(&(mod_ident, *member_name)) {
-                        continue;
-                    }
-                    let member_imports = member_auto_imports(
-                        symbols,
-                        cursor,
-                        mod_defs,
-                        member_name,
-                        chain_kind,
-                        src_mod_ident,
-                        auto_import_pos,
-                    );
-                    completions.extend(member_imports);
                 }
+                let member_imports = member_auto_imports(
+                    symbols,
+                    cursor,
+                    mod_defs,
+                    &member_name,
+                    chain_kind,
+                    auto_import_pos,
+                );
+                completions.extend(member_imports);
             }
         }
     }
@@ -727,7 +696,6 @@ fn member_auto_imports(
     mod_defs: &ModuleDefs,
     member_name: &Symbol,
     chain_kind: ChainCompletionKind,
-    src_mod_ident: ModuleIdent,
     auto_import_pos: AutoImportInsertionInfo,
 ) -> Vec<CompletionItem> {
     let mut member_completions = single_name_member_completion(
@@ -737,7 +705,6 @@ fn member_auto_imports(
         member_name,
         member_name,
         chain_kind,
-        Some(src_mod_ident),
     );
     let mod_ident = mod_defs.ident;
     member_completions.iter_mut().for_each(|item| {
@@ -953,9 +920,6 @@ fn imports_for_name_chain_entry(
     let Some(auto_import_pos) = import_insertion_info_opt else {
         return;
     };
-    let Some(src_mod_ident) = cursor.module else {
-        return;
-    };
     if at_colon_colon
         || (!path_entries.is_empty() && path_entries[path_index].loc.contains(&cursor.loc))
     {
@@ -980,7 +944,6 @@ fn imports_for_name_chain_entry(
                             mod_defs,
                             member_name,
                             chain_kind,
-                            src_mod_ident,
                             auto_import_pos,
                         ))
                     });

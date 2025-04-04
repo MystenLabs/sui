@@ -3,12 +3,12 @@
 
 use crate::{
     completions::utils::{
-        auto_import_text_edit, exclude_member_from_import, import_insertion_info,
+        all_mod_enums_to_import, all_mod_functions_to_import, all_mod_structs_to_import,
+        auto_import_text_edit, import_insertion_info,
     },
     context::Context,
     symbols::{
-        get_symbols, ChainInfo, CursorContext, DefInfo, PrecomputedPkgInfo, SymbolicatorRunner,
-        Symbols,
+        get_symbols, ChainInfo, CursorContext, PrecomputedPkgInfo, SymbolicatorRunner, Symbols,
     },
     utils::loc_start_to_lsp_position_opt,
 };
@@ -29,7 +29,7 @@ use url::Url;
 use vfs::VfsPath;
 
 use move_compiler::{
-    expansion::ast::ModuleIdent_, linters::LintLevel, parser::ast::NameAccessChain_, shared::Name,
+    expansion::ast::ModuleIdent, linters::LintLevel, parser::ast::NameAccessChain_, shared::Name,
 };
 use move_package::source_package::parsed_manifest::Dependencies;
 
@@ -41,8 +41,8 @@ use move_package::source_package::parsed_manifest::Dependencies;
 #[derive(Debug, EnumIter)]
 enum DiagErrPrefix {
     UnboundType,
-    UnboundStruct,
     UnboundStructOrEnum,
+    UnboundStruct,
     UnboundTypeOrFunction,
     UnboundFunction,
 }
@@ -148,45 +148,67 @@ fn access_chain_autofix_actions(
             continue;
         }
         if let NameAccessChain_::Single(path_entry) = chain.value {
-            if diag
-                .message
-                .starts_with(DiagErrPrefix::UnboundFunction.as_str())
-            {
-                single_id_access_chain_autofixes(
-                    &mut code_actions,
-                    &symbols,
-                    cursor,
-                    params.text_document.uri.clone(),
-                    path_entry.name,
-                    all_mod_functions(&symbols, cursor),
-                    diag,
-                );
-            }
+            DiagErrPrefix::iter().for_each(|prefix| match prefix {
+                DiagErrPrefix::UnboundType | DiagErrPrefix::UnboundStructOrEnum => {
+                    if diag.message.starts_with(prefix.as_str()) {
+                        single_id_access_chain_autofixes(
+                            &mut code_actions,
+                            &symbols,
+                            cursor,
+                            params.text_document.uri.clone(),
+                            path_entry.name,
+                            all_mod_structs_to_import(&symbols, cursor)
+                                .chain(all_mod_enums_to_import(&symbols, cursor)),
+                            diag.clone(),
+                        );
+                    }
+                }
+                DiagErrPrefix::UnboundStruct => {
+                    if diag.message.starts_with(prefix.as_str()) {
+                        single_id_access_chain_autofixes(
+                            &mut code_actions,
+                            &symbols,
+                            cursor,
+                            params.text_document.uri.clone(),
+                            path_entry.name,
+                            all_mod_structs_to_import(&symbols, cursor),
+                            diag.clone(),
+                        );
+                    }
+                }
+                DiagErrPrefix::UnboundTypeOrFunction => {
+                    if diag.message.starts_with(prefix.as_str()) {
+                        single_id_access_chain_autofixes(
+                            &mut code_actions,
+                            &symbols,
+                            cursor,
+                            params.text_document.uri.clone(),
+                            path_entry.name,
+                            all_mod_structs_to_import(&symbols, cursor)
+                                .chain(all_mod_enums_to_import(&symbols, cursor))
+                                .chain(all_mod_functions_to_import(&symbols, cursor)),
+                            diag.clone(),
+                        );
+                    }
+                }
+                DiagErrPrefix::UnboundFunction => {
+                    if diag.message.starts_with(prefix.as_str()) {
+                        single_id_access_chain_autofixes(
+                            &mut code_actions,
+                            &symbols,
+                            cursor,
+                            params.text_document.uri.clone(),
+                            path_entry.name,
+                            all_mod_functions_to_import(&symbols, cursor),
+                            diag.clone(),
+                        );
+                    }
+                }
+            });
         }
     }
 
     code_actions
-}
-
-/// Returns an iterator over module identifiers and their function keys.
-fn all_mod_functions<'a>(
-    symbols: &'a Symbols,
-    cursor: &'a CursorContext,
-) -> impl Iterator<Item = (&'a ModuleIdent_, impl Iterator<Item = &'a Symbol> + 'a)> + 'a {
-    symbols.file_mods.values().flatten().map(|mod_defs| {
-        (
-            &mod_defs.ident,
-            mod_defs.functions.iter().filter_map(|(member_name, fdef)| {
-                if let Some(DefInfo::Function(_, visibility, ..)) = symbols.def_info(&fdef.name_loc)
-                {
-                    if exclude_member_from_import(mod_defs, cursor.module, visibility) {
-                        return None;
-                    }
-                }
-                Some(member_name)
-            }),
-        )
-    })
 }
 
 /// Create auto-fixes for a single unbound identifier in an access chain.
@@ -199,8 +221,8 @@ fn single_id_access_chain_autofixes<'a, I, K>(
     mod_members: I,
     diag: Diagnostic,
 ) where
-    I: Iterator<Item = (&'a ModuleIdent_, K)>,
-    K: Iterator<Item = &'a Symbol>,
+    I: Iterator<Item = (ModuleIdent, K)>,
+    K: Iterator<Item = Symbol>,
 {
     let Some(unbound_name_lsp_pos) =
         loc_start_to_lsp_position_opt(&symbols.files, &unbound_name.loc)
@@ -209,8 +231,9 @@ fn single_id_access_chain_autofixes<'a, I, K>(
     };
     for (mod_ident, mod_members) in mod_members {
         for member_name in mod_members {
-            if member_name == &unbound_name.value {
-                let qualified_prefix = format!("{}::{}::", mod_ident.address, mod_ident.module);
+            if member_name == unbound_name.value {
+                let qualified_prefix =
+                    format!("{}::{}::", mod_ident.value.address, mod_ident.value.module);
                 let text_edit = TextEdit {
                     range: Range {
                         start: unbound_name_lsp_pos,

@@ -3,7 +3,7 @@
 
 use crate::symbols::{
     mod_ident_to_ide_string, ret_type_to_ide_str, type_args_to_ide_string, type_list_to_ide_string,
-    AutoImportInsertionInfo, AutoImportInsertionKind, CursorContext, ModuleDefs, Symbols,
+    AutoImportInsertionInfo, AutoImportInsertionKind, CursorContext, DefInfo, ModuleDefs, Symbols,
 };
 use lsp_types::{
     CompletionItem, CompletionItemKind, CompletionItemLabelDetails, InsertTextFormat, Range,
@@ -15,6 +15,7 @@ use move_compiler::{
     parser::keywords::PRIMITIVE_TYPES,
     shared::Name,
 };
+use move_ir_types::location::sp;
 use move_symbol_pool::Symbol;
 use once_cell::sync::Lazy;
 
@@ -77,10 +78,119 @@ pub fn auto_import_text_edit(
     }
 }
 
+/// Returns an iterator over module identifiers and function names defined in these modules.
+/// Filters out all functions that should not be imported.
+pub fn all_mod_functions_to_import<'a>(
+    symbols: &'a Symbols,
+    cursor: &'a CursorContext,
+) -> Box<dyn Iterator<Item = (ModuleIdent, Box<dyn Iterator<Item = Symbol> + 'a>)> + 'a> {
+    Box::new(symbols.file_mods.values().flatten().map(move |mod_defs| {
+        (
+            sp(mod_defs.name_loc, mod_defs.ident),
+            Box::new(
+                mod_defs
+                    .functions
+                    .iter()
+                    .filter_map(move |(member_name, fdef)| {
+                        if let Some(DefInfo::Function(_, visibility, ..)) =
+                            symbols.def_info(&fdef.name_loc)
+                        {
+                            if exclude_member_from_import(mod_defs, cursor.module, visibility) {
+                                return None;
+                            }
+                        }
+                        Some(*member_name)
+                    }),
+            ) as Box<dyn Iterator<Item = Symbol>>,
+        )
+    }))
+}
+
+/// Returns an iterator over module identifiers and struct names defined in these modules.
+/// Filters out all structs that should not be imported.
+pub fn all_mod_structs_to_import<'a>(
+    symbols: &'a Symbols,
+    cursor: &'a CursorContext,
+) -> Box<dyn Iterator<Item = (ModuleIdent, Box<dyn Iterator<Item = Symbol> + 'a>)> + 'a> {
+    Box::new(symbols.file_mods.values().flatten().map(move |mod_defs| {
+        (
+            sp(mod_defs.name_loc, mod_defs.ident),
+            Box::new(
+                mod_defs
+                    .structs
+                    .iter()
+                    .filter_map(move |(member_name, sdef)| {
+                        if let Some(DefInfo::Struct(_, _, visibility, ..)) =
+                            symbols.def_info(&sdef.name_loc)
+                        {
+                            if exclude_member_from_import(mod_defs, cursor.module, visibility) {
+                                return None;
+                            }
+                        }
+                        Some(*member_name)
+                    }),
+            ) as Box<dyn Iterator<Item = Symbol>>,
+        )
+    }))
+}
+
+/// Returns an iterator over module identifiers and enum names defined in these modules.
+/// Filters out all enums that should not be imported.
+pub fn all_mod_enums_to_import<'a>(
+    symbols: &'a Symbols,
+    cursor: &'a CursorContext,
+) -> Box<dyn Iterator<Item = (ModuleIdent, Box<dyn Iterator<Item = Symbol> + 'a>)> + 'a> {
+    Box::new(symbols.file_mods.values().flatten().map(move |mod_defs| {
+        (
+            sp(mod_defs.name_loc, mod_defs.ident),
+            Box::new(
+                mod_defs
+                    .enums
+                    .iter()
+                    .filter_map(move |(member_name, edef)| {
+                        if let Some(DefInfo::Enum(_, _, visibility, ..)) =
+                            symbols.def_info(&edef.name_loc)
+                        {
+                            if exclude_member_from_import(mod_defs, cursor.module, visibility) {
+                                return None;
+                            }
+                        }
+                        Some(*member_name)
+                    }),
+            ) as Box<dyn Iterator<Item = Symbol>>,
+        )
+    }))
+}
+
+/// Returns an iterator over module identifiers and constant names defined in these modules.
+/// Filters out all constants that should not be imported.
+pub fn all_mod_consts_to_import<'a>(
+    symbols: &'a Symbols,
+    cursor: &'a CursorContext,
+) -> Box<dyn Iterator<Item = (ModuleIdent, Box<dyn Iterator<Item = Symbol> + 'a>)> + 'a> {
+    Box::new(symbols.file_mods.values().flatten().map(move |mod_defs| {
+        (
+            sp(mod_defs.name_loc, mod_defs.ident),
+            Box::new(mod_defs.constants.keys().filter_map(move |member_name| {
+                // TODO: if constants stop being private, use their actual visibility
+                // instead of internal
+                if exclude_member_from_import(
+                    mod_defs,
+                    cursor.module,
+                    &move_compiler::expansion::ast::Visibility::Internal,
+                ) {
+                    return None;
+                }
+                Some(*member_name)
+            })) as Box<dyn Iterator<Item = Symbol>>,
+        )
+    }))
+}
+
 /// Given source module, and another module definition, checks if a member
 /// of this other module can be imported to the source module. If source
 /// module is None, the member can be imported regardless of visibility.
-pub fn exclude_member_from_import(
+fn exclude_member_from_import(
     mod_defs: &ModuleDefs,
     src_mod_ident_opt: Option<ModuleIdent>,
     visibility: &Visibility,
