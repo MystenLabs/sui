@@ -4,7 +4,8 @@
 /// A flash loan that works for any Coin type
 module flash_lender::example;
 
-use sui::{balance::{Self, Balance}, coin::{Self, Coin}};
+use sui::balance::{Self, Balance};
+use sui::coin::{Self, Coin};
 
 /// A shared object offering flash loans to any buyer willing to pay `fee`.
 public struct FlashLender<phantom T> has key {
@@ -68,7 +69,7 @@ const EWithdrawTooLarge: u64 = 4;
 /// `fee` by the end of the current transaction.
 public fun new<T>(to_lend: Balance<T>, fee: u64, ctx: &mut TxContext): AdminCap {
     let id = object::new(ctx);
-    let flash_lender_id = object::uid_to_inner(&id);
+    let flash_lender_id = id.uid_to_inner();
     let flash_lender = FlashLender { id, to_lend, fee };
 
     // make the `FlashLender` a shared object so anyone can request loans
@@ -87,7 +88,7 @@ public fun loan<T>(
     amount: u64,
     ctx: &mut TxContext,
 ): (Coin<T>, Receipt<T>) {
-    assert!(balance::value(&self.to_lend) >= amount, ELoanTooLarge);
+    assert!(self.to_lend.value() >= amount, ELoanTooLarge);
 
     let loan = coin::take(&mut self.to_lend, amount, ctx);
     let repay_amount = amount + self.fee;
@@ -104,7 +105,7 @@ public fun repay<T>(self: &mut FlashLender<T>, payment: Coin<T>, receipt: Receip
     let Receipt { flash_lender_id, repay_amount } = receipt;
 
     assert!(object::id(self) == flash_lender_id, ERepayToWrongLender);
-    assert!(coin::value(&payment) == repay_amount, EInvalidRepaymentAmount);
+    assert!(payment.value() == repay_amount, EInvalidRepaymentAmount);
 
     coin::put(&mut self.to_lend, payment)
 }
@@ -178,44 +179,44 @@ fun test_flash_loan() {
 
     // Admin creates a flash lender with 100 coins and a fee of 1 coin.
     {
-        ts::next_tx(&mut ts, ADMIN);
-        let coin = coin::mint_for_testing<SUI>(100, ts::ctx(&mut ts));
-        let bal = coin::into_balance(coin);
-        let cap = new(bal, 1, ts::ctx(&mut ts));
+        ts.next_tx(ADMIN);
+        let coin = coin::mint_for_testing<SUI>(100, ts.ctx());
+        let bal = coin.into_balance();
+        let cap = new(bal, 1, ts.ctx());
         transfer::public_transfer(cap, ADMIN);
     };
 
     // Alice requests and repays a loan of 10 coins and the fee
     {
-        ts::next_tx(&mut ts, ALICE);
+        ts.next_tx(ALICE);
 
-        let mut lender = ts::take_shared(&ts);
-        let (loan, receipt) = loan(&mut lender, 10, ts::ctx(&mut ts));
+        let mut lender: FlashLender<SUI> = ts.take_shared();
+        let (loan, receipt) = lender.loan(10, ts.ctx());
 
         // Simulate Alice making enough profit to repay.
-        let mut profit = coin::mint_for_testing<SUI>(1, ts::ctx(&mut ts));
-        coin::join(&mut profit, loan);
+        let mut profit = coin::mint_for_testing<SUI>(1, ts.ctx());
+        profit.join(loan);
 
-        repay(&mut lender, profit, receipt);
+        lender.repay(profit, receipt);
         ts::return_shared(lender);
     };
 
     // Admin withdraws 1 coin profit
     {
-        ts::next_tx(&mut ts, ADMIN);
-        let cap = ts::take_from_sender(&ts);
-        let mut lender: FlashLender<SUI> = ts::take_shared(&ts);
+        ts.next_tx(ADMIN);
+        let cap = ts.take_from_sender();
+        let mut lender: FlashLender<SUI> = ts.take_shared();
 
         // Max loan increased because of the fee payment
-        assert!(max_loan(&lender) == 101, 0);
+        assert!(lender.max_loan() == 101, 0);
 
         // Withdraw a coin from the pool for lending
-        let coin = withdraw(&mut lender, &cap, 1, ts::ctx(&mut ts));
+        let coin = lender.withdraw( &cap, 1, ts.ctx());
         transfer::public_transfer(coin, ADMIN);
 
         ts::return_shared(lender);
-        ts::return_to_sender(&ts, cap);
+        ts.return_to_sender(cap);
     };
 
-    ts::end(ts);
+    ts.end();
 }

@@ -44,7 +44,7 @@ impl TransactionOutputs {
 
         let tx_digest = *transaction.digest();
 
-        let deleted: HashMap<_, _> = effects.all_tombstones().into_iter().collect();
+        let tombstones: HashMap<_, _> = effects.all_tombstones().into_iter().collect();
 
         // Get the actual set of objects that have been received -- any received
         // object will show up in the modified-at set.
@@ -66,7 +66,7 @@ impl TransactionOutputs {
                 )
             });
 
-            let deleted = deleted.into_iter().map(|(object_id, version)| {
+            let tombstones = tombstones.into_iter().map(|(object_id, version)| {
                 let consensus_key = input_objects
                     .get(&object_id)
                     .filter(|o| o.is_consensus())
@@ -80,6 +80,20 @@ impl TransactionOutputs {
                     )
                 }
             });
+
+            let transferred_from_consensus =
+                effects
+                    .transferred_from_consensus()
+                    .into_iter()
+                    .map(|(object_id, version, _)| {
+                        let object = input_objects
+                            .get(&object_id)
+                            .expect("object transferred from consensus must be in input_objects");
+                        (
+                            FullObjectKey::new(object.full_id(), version),
+                            MarkerValue::ConsensusStreamEnded(tx_digest),
+                        )
+                    });
 
             // We "smear" removed consensus objects in the marker table to allow for proper
             // sequencing of transactions that are submitted after the consensus stream ends.
@@ -103,7 +117,11 @@ impl TransactionOutputs {
                 )
             });
 
-            received.chain(deleted).chain(consensus_smears).collect()
+            received
+                .chain(tombstones)
+                .chain(transferred_from_consensus)
+                .chain(consensus_smears)
+                .collect()
         };
 
         let locks_to_delete: Vec<_> = mutable_inputs

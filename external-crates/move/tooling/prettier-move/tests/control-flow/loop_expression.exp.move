@@ -1,13 +1,21 @@
-module test::loop_expression {
-    public fun test_loop() {
-        loop break;
+// options:
+// printWidth: 35
+// useModuleLabel: true
 
-        loop {
-            break;
-        };
+module test::loop_expression;
 
-        loop {
-            break;
-        };
-    }
+fun test_loop() {
+    loop break;
+
+    loop {
+        break;
+    };
+
+    loop {
+        break;
+    };
+
+    'a: loop {
+        break 'a;
+    };
 }

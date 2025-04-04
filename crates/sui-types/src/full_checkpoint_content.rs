@@ -1,9 +1,9 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::collections::{BTreeMap, HashSet};
+use std::collections::BTreeMap;
 
-use crate::base_types::{ObjectID, ObjectRef};
+use crate::base_types::ObjectRef;
 use crate::effects::{TransactionEffects, TransactionEffectsAPI, TransactionEvents};
 use crate::messages_checkpoint::{CertifiedCheckpointSummary, CheckpointContents};
 use crate::object::Object;
@@ -46,26 +46,6 @@ impl CheckpointData {
             }
         }
         eventually_removed_object_refs.into_values().collect()
-    }
-
-    /// Returns all objects that are used as input to the transactions in the checkpoint,
-    /// and already exist prior to the checkpoint.
-    pub fn checkpoint_input_objects(&self) -> BTreeMap<ObjectID, &Object> {
-        let mut output_objects_seen = HashSet::new();
-        let mut checkpoint_input_objects = BTreeMap::new();
-        for tx in self.transactions.iter() {
-            for obj in tx.input_objects.iter() {
-                let id = obj.id();
-                if output_objects_seen.contains(&id) || checkpoint_input_objects.contains_key(&id) {
-                    continue;
-                }
-                checkpoint_input_objects.insert(id, obj);
-            }
-            for obj in tx.output_objects.iter() {
-                output_objects_seen.insert(obj.id());
-            }
-        }
-        checkpoint_input_objects
     }
 
     pub fn all_objects(&self) -> Vec<&Object> {
