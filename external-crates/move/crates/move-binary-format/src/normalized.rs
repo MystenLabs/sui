@@ -491,6 +491,10 @@ impl<S> Type<S> {
         }
     }
 
+    pub fn from_struct_tag<Pool: StringPool<String = S>>(pool: &mut Pool, tag: StructTag) -> Self {
+        Type::Datatype(Box::new(Datatype::from_struct_tag(pool, tag)))
+    }
+
     /// Return true if `self` is a closed type with no free type variables
     pub fn is_closed(&self) -> bool {
         use Type as T;

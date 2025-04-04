@@ -64,7 +64,7 @@ impl RpcService {
 
             (system_state.reference_gas_price, protocol_config)
         };
-        let called_packages =
+        let mut called_packages =
             called_packages(&self.reader, &protocol_config, &unresolved_transaction)?;
         let user_provided_budget = unresolved_transaction
             .gas_payment
@@ -72,7 +72,7 @@ impl RpcService {
             .and_then(|payment| payment.budget);
         let mut resolved_transaction = resolve_unresolved_transaction(
             &self.reader,
-            &called_packages,
+            &mut called_packages,
             reference_gas_price,
             protocol_config.max_tx_gas(),
             unresolved_transaction,
@@ -136,10 +136,14 @@ impl RpcService {
     }
 }
 
+struct NormalizedPackages {
+    pool: normalized::RcPool,
+    packages: HashMap<ObjectId, NormalizedPackage>,
+}
+
 struct NormalizedPackage {
     #[allow(unused)]
     package: MovePackage,
-    pool: normalized::RcPool,
     normalized_modules: BTreeMap<String, normalized::Module<normalized::RcIdentifier>>,
 }
 
@@ -147,8 +151,9 @@ fn called_packages(
     reader: &StateReader,
     protocol_config: &ProtocolConfig,
     unresolved_transaction: &unresolved::Transaction,
-) -> Result<HashMap<ObjectId, NormalizedPackage>> {
+) -> Result<NormalizedPackages> {
     let binary_config = sui_types::execution_config_utils::to_binary_config(protocol_config);
+    let mut pool = normalized::RcPool::new();
     let mut packages = HashMap::new();
 
     for move_call in unresolved_transaction
@@ -183,7 +188,6 @@ fn called_packages(
         //
         // Despite the above this is safe given we are only using the signature information (and in
         // particular the reference kind) from the normalized package.
-        let mut pool = normalized::RcPool::new();
         let normalized_modules = package.normalize(&mut pool, &binary_config).map_err(|e| {
             RpcError::new(
                 tonic::Code::Internal,
@@ -192,19 +196,18 @@ fn called_packages(
         })?;
         let package = NormalizedPackage {
             package,
-            pool,
             normalized_modules,
         };
 
         packages.insert(move_call.package, package);
     }
 
-    Ok(packages)
+    Ok(NormalizedPackages { pool, packages })
 }
 
 fn resolve_unresolved_transaction(
     reader: &StateReader,
-    called_packages: &HashMap<ObjectId, NormalizedPackage>,
+    called_packages: &mut NormalizedPackages,
     reference_gas_price: u64,
     max_gas_budget: u64,
     unresolved_transaction: unresolved::Transaction,
@@ -309,7 +312,7 @@ fn resolve_object_reference_with_object(
 
 fn resolve_ptb(
     reader: &StateReader,
-    called_packages: &HashMap<ObjectId, NormalizedPackage>,
+    called_packages: &mut NormalizedPackages,
     unresolved_ptb: unresolved::ProgrammableTransaction,
 ) -> Result<ProgrammableTransaction> {
     let inputs = unresolved_ptb
@@ -340,7 +343,7 @@ fn resolve_ptb(
 
 fn resolve_arg(
     reader: &StateReader,
-    called_packages: &HashMap<ObjectId, NormalizedPackage>,
+    called_packages: &mut NormalizedPackages,
     commands: &[Command],
     arg: unresolved::Input,
     arg_idx: usize,
@@ -442,7 +445,7 @@ fn resolve_arg(
 
 fn resolve_object(
     reader: &StateReader,
-    called_packages: &HashMap<ObjectId, NormalizedPackage>,
+    called_packages: &NormalizedPackages,
     commands: &[Command],
     arg_idx: usize,
     object_id: ObjectId,
@@ -496,7 +499,7 @@ fn resolve_object(
 
 fn resolve_shared_input(
     reader: &StateReader,
-    called_packages: &HashMap<ObjectId, NormalizedPackage>,
+    called_packages: &NormalizedPackages,
     commands: &[Command],
     arg_idx: usize,
     object_id: ObjectId,
@@ -511,7 +514,7 @@ fn resolve_shared_input(
 
 // Checks if the provided input argument is used as a receiving object
 fn is_input_argument_receiving(
-    called_packages: &HashMap<ObjectId, NormalizedPackage>,
+    called_packages: &NormalizedPackages,
     commands: &[Command],
     arg_idx: usize,
 ) -> Result<bool> {
@@ -544,12 +547,13 @@ fn is_input_argument_receiving(
 
 // TODO still need to handle the case where a function parameter is a generic parameter and the
 // real type needs to be lookedup from the provided type args in the MoveCall itself
-fn arg_type_of_move_call_input<'a>(
-    called_packages: &'a HashMap<ObjectId, NormalizedPackage>,
+fn arg_type_of_move_call_input(
+    called_packages: &NormalizedPackages,
     move_call: &sui_sdk_types::MoveCall,
     idx: usize,
 ) -> Result<Rc<normalized::Type<normalized::RcIdentifier>>> {
     let function = called_packages
+        .packages
         // Find the package
         .get(&move_call.package)
         // Find the module
@@ -577,7 +581,7 @@ fn arg_type_of_move_call_input<'a>(
 }
 
 fn resolve_shared_input_with_object(
-    called_packages: &HashMap<ObjectId, NormalizedPackage>,
+    called_packages: &NormalizedPackages,
     commands: &[Command],
     arg_idx: usize,
     object: sui_types::object::Object,
