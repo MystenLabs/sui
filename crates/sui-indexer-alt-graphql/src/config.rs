@@ -74,6 +74,20 @@ pub struct Limits {
     /// Maximum number of keys that can be passed to a multi-get query. A request to fetch more
     /// keys will result in an error.
     pub max_multi_get_size: u32,
+
+    /// Maximum amount of nesting among type arguments (type arguments nest when a type argument is
+    /// itself generic and has arguments).
+    pub max_type_argument_depth: usize,
+
+    /// Maximum number of type parameters a type can have.
+    pub max_type_argument_width: usize,
+
+    /// Maximum number of datatypes that need to be processed when calculating the layout of a
+    /// single type.
+    pub max_type_nodes: usize,
+
+    /// Maximum nesting allowed in datatype fields when calculating the layout of a single type.
+    pub max_move_value_depth: usize,
 }
 
 #[DefaultConfig]
@@ -89,6 +103,10 @@ pub struct LimitsLayer {
     pub default_page_size: Option<u32>,
     pub max_page_size: Option<u32>,
     pub max_multi_get_size: Option<u32>,
+    pub max_type_argument_depth: Option<usize>,
+    pub max_type_argument_width: Option<usize>,
+    pub max_type_nodes: Option<usize>,
+    pub max_move_value_depth: Option<usize>,
 
     #[serde(flatten)]
     pub extra: toml::Table,
@@ -163,6 +181,16 @@ impl LimitsLayer {
             default_page_size: self.default_page_size.unwrap_or(base.default_page_size),
             max_page_size: self.max_page_size.unwrap_or(base.max_page_size),
             max_multi_get_size: self.max_multi_get_size.unwrap_or(base.max_multi_get_size),
+            max_type_argument_depth: self
+                .max_type_argument_depth
+                .unwrap_or(base.max_type_argument_depth),
+            max_type_argument_width: self
+                .max_type_argument_width
+                .unwrap_or(base.max_type_argument_width),
+            max_type_nodes: self.max_type_nodes.unwrap_or(base.max_type_nodes),
+            max_move_value_depth: self
+                .max_move_value_depth
+                .unwrap_or(base.max_move_value_depth),
         }
     }
 }
@@ -180,6 +208,10 @@ impl From<Limits> for LimitsLayer {
             default_page_size: Some(value.default_page_size),
             max_page_size: Some(value.max_page_size),
             max_multi_get_size: Some(value.max_multi_get_size),
+            max_type_argument_depth: Some(value.max_type_argument_depth),
+            max_type_argument_width: Some(value.max_type_argument_width),
+            max_type_nodes: Some(value.max_type_nodes),
+            max_move_value_depth: Some(value.max_move_value_depth),
             extra: Default::default(),
         }
     }
@@ -189,6 +221,21 @@ impl Default for Limits {
     fn default() -> Self {
         let max_tx_size_bytes = max_across_protocol(ProtocolConfig::max_tx_size_bytes_as_option)
             .unwrap_or(u32::MAX as u64) as u32;
+
+        let max_type_argument_depth =
+            max_across_protocol(ProtocolConfig::max_type_argument_depth_as_option)
+                .unwrap_or(u32::MAX) as usize;
+
+        let max_type_argument_width =
+            max_across_protocol(ProtocolConfig::max_generic_instantiation_length_as_option)
+                .unwrap_or(u32::MAX as u64) as usize;
+
+        let max_type_nodes = max_across_protocol(ProtocolConfig::max_type_nodes_as_option)
+            .unwrap_or(u32::MAX as u64) as usize;
+
+        let max_move_value_depth =
+            max_across_protocol(ProtocolConfig::max_move_value_depth_as_option)
+                .unwrap_or(u32::MAX as u64) as usize;
 
         Self {
             // This default was picked as the sum of pre- and post- quorum timeouts from
@@ -206,6 +253,10 @@ impl Default for Limits {
             default_page_size: 20,
             max_page_size: 50,
             max_multi_get_size: 200,
+            max_type_argument_depth,
+            max_type_argument_width,
+            max_type_nodes,
+            max_move_value_depth,
         }
     }
 }

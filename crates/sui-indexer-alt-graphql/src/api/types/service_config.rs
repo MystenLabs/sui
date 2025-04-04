@@ -147,4 +147,28 @@ impl ServiceConfig {
         let limits: &Limits = ctx.data()?;
         Ok(Some(limits.max_multi_get_size))
     }
+
+    /// Maximum amount of nesting among type arguments (type arguments nest when a type argument is itself generic and has arguments).
+    async fn max_type_argument_depth(&self, ctx: &Context<'_>) -> Result<Option<usize>, RpcError> {
+        let limits: &Limits = ctx.data()?;
+        Ok(Some(limits.max_type_argument_depth))
+    }
+
+    /// Maximum number of type parameters a type can have.
+    async fn max_type_argument_width(&self, ctx: &Context<'_>) -> Result<Option<usize>, RpcError> {
+        let limits: &Limits = ctx.data()?;
+        Ok(Some(limits.max_type_argument_width))
+    }
+
+    /// Maximum number of datatypes that need to be processed when calculating the layout of a single type.
+    async fn max_type_nodes(&self, ctx: &Context<'_>) -> Result<Option<usize>, RpcError> {
+        let limits: &Limits = ctx.data()?;
+        Ok(Some(limits.max_type_nodes))
+    }
+
+    /// Maximum nesting allowed in datatype fields when calculating the layout of a single type.
+    async fn max_move_value_depth(&self, ctx: &Context<'_>) -> Result<Option<usize>, RpcError> {
+        let limits: &Limits = ctx.data()?;
+        Ok(Some(limits.max_move_value_depth))
+    }
 }
