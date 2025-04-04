@@ -202,8 +202,7 @@ fun staking() {
         // Otherwise the slashed rewards should be distributed among the unslashed
         // validators so add the corresponding adjustment.
         let adjustment =
-            total_staking_reward_adjustment as u128 * voting_power
-                            / (total_unslashed_validator_voting_power as u128);
+            total_staking_reward_adjustment as u128 * voting_power / (total_unslashed_validator_voting_power as u128);
         unadjusted_staking_reward_amount + (adjustment as u64)
     };
     adjusted_staking_reward_amounts.push_back(adjusted_staking_reward_amount);

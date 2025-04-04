@@ -348,27 +348,29 @@ export class Tree {
         if (!nextNamed?.isComment) return this;
         if (nextNamed.isUsedComment) return this;
 
+        const comment = nextNamed;
+
         // if it's a block comment, we need to make sure there's nothing in
         // between the current node and the comment, otherwise block comment is
         // associated with the next node.
-        if (nextNamed.type == 'block_comment') {
+        if (comment.type == 'block_comment') {
             // any non-named node between the current node and the comment
             // breaks the association.
-            if (nextNamed.previousSibling != this && !!nextNamed.nextNamedSibling) return this;
-            const addSpace = !!nextNamed.nextNamedSibling ? ' ' : '';
+            if (comment.previousSibling != this && !!comment.nextNamedSibling) return this;
+            const addSpace = !!comment.nextNamedSibling ? ' ' : '';
 
             this.trailingComment = {
-                type: nextNamed.type as 'line_comment' | 'block_comment',
-                text: nextNamed.text + addSpace,
+                type: comment.type as 'line_comment' | 'block_comment',
+                text: comment.text + addSpace,
                 newline: false,
             };
             this.nextNamedSibling!.isUsedComment = true;
         }
 
-        if (nextNamed.type == 'line_comment') {
+        if (comment.type == 'line_comment') {
             this.trailingComment = {
-                type: nextNamed.type as 'line_comment' | 'block_comment',
-                text: nextNamed.text,
+                type: comment.type as 'line_comment' | 'block_comment',
+                text: comment.text,
                 newline: false,
             };
 
