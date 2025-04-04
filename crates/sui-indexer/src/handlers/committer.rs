@@ -175,21 +175,22 @@ async fn commit_checkpoints<S>(
         .collect::<Vec<StoredRawCheckpoint>>();
 
     {
-        let _step_1_guard = metrics.checkpoint_db_commit_latency_step_1.start_timer();
-        let mut persist_tasks = Vec::new();
-        // In MVR mode, persist only packages and object history
-        persist_tasks.push(state.persist_packages(packages_batch));
-        persist_tasks.push(state.persist_object_history(object_history_changes_batch.clone()));
-        persist_tasks.push(state.persist_transactions(tx_batch));
-        persist_tasks.push(state.persist_tx_indices(tx_indices_batch));
-        persist_tasks.push(state.persist_events(events_batch));
-        persist_tasks.push(state.persist_event_indices(event_indices_batch));
-        persist_tasks.push(state.persist_displays(display_updates_batch));
-        persist_tasks.push(state.persist_objects(object_changes_batch.clone()));
-        persist_tasks
-            .push(state.persist_full_objects_history(object_history_changes_batch.clone()));
-        persist_tasks.push(state.persist_objects_version(object_versions_batch.clone()));
-        persist_tasks.push(state.persist_raw_checkpoints(raw_checkpoints_batch));
+        let _step_1_guard: prometheus::HistogramTimer =
+            metrics.checkpoint_db_commit_latency_step_1.start_timer();
+
+        let mut persist_tasks = vec![
+            state.persist_packages(packages_batch),
+            state.persist_object_history(object_history_changes_batch.clone()),
+            state.persist_transactions(tx_batch),
+            state.persist_tx_indices(tx_indices_batch),
+            state.persist_events(events_batch),
+            state.persist_event_indices(event_indices_batch),
+            state.persist_displays(display_updates_batch),
+            state.persist_objects(object_changes_batch.clone()),
+            state.persist_full_objects_history(object_history_changes_batch.clone()),
+            state.persist_objects_version(object_versions_batch.clone()),
+            state.persist_raw_checkpoints(raw_checkpoints_batch),
+        ];
 
         if let Some(epoch_data) = epoch.clone() {
             persist_tasks.push(state.persist_epoch(epoch_data));
