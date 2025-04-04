@@ -8,13 +8,14 @@ mod local;
 
 use std::collections::BTreeMap;
 
-use derivative::Derivative;
-pub use external::ExternalDependency;
-pub use git::GitDependency;
-pub use local::LocalDependency;
 use serde::{Deserialize, Serialize};
 
 use crate::{errors::PackageResult, flavor::MoveFlavor, package::PackageName};
+
+use derive_where::derive_where;
+use external::ExternalDependency;
+use git::GitDependency;
+use local::LocalDependency;
 
 /// Phantom type to represent pinned dependencies (see [PinnedDependency])
 pub struct Pinned;
@@ -29,8 +30,8 @@ pub struct Unpinned;
 /// that are not part of the ManifestDependencyInfo. We separate these partly because these things
 /// are not serialized to the Lock file. See [crate::package::manifest] for the full representation
 /// of an entry in the `dependencies` table.
-#[derive(Serialize, Deserialize, Derivative)]
-#[derivative(Clone(bound = ""))]
+#[derive(Serialize, Deserialize)]
+#[derive_where(Clone)]
 pub enum ManifestDependencyInfo<F: MoveFlavor> {
     Git(GitDependency<Unpinned>),
     External(ExternalDependency),
@@ -47,8 +48,8 @@ pub enum ManifestDependencyInfo<F: MoveFlavor> {
 /// development, because the developer would expect to use the latest code without having to
 /// explicitly repin, but we need to convert them to persistent dependencies when we publish since
 /// we want to retain that information for source verification.
-#[derive(Serialize, Deserialize, Derivative)]
-#[derivative(Clone(bound = ""))]
+#[derive(Serialize, Deserialize)]
+#[derive_where(Clone)]
 pub enum PinnedDependencyInfo<F: MoveFlavor + ?Sized> {
     Git(GitDependency<Pinned>),
     Local(LocalDependency),

@@ -1,10 +1,6 @@
 // Copyright (c) The Diem Core Contributors
 // Copyright (c) The Move Contributors
 // SPDX-License-Identifier: Apache-2.0
-
-use derivative::Derivative;
-use lazy_regex::regex_captures;
-use serde_spanned::Spanned;
 use std::{
     collections::BTreeMap,
     ffi::OsString,
@@ -13,7 +9,10 @@ use std::{
 };
 
 use anyhow::bail;
+use derive_where::derive_where;
+use lazy_regex::regex_captures;
 use serde::{Deserialize, Serialize};
+use serde_spanned::Spanned;
 use toml_edit::{
     visit_mut::{visit_table_like_kv_mut, visit_table_mut, VisitMut},
     Document, InlineTable, Item, KeyMut, Table, Value,
@@ -26,8 +25,8 @@ use crate::{
 
 use super::{EnvironmentName, PackageName};
 
-#[derive(Serialize, Deserialize, Derivative)]
-#[derivative(Default(bound = ""), Clone(bound = ""))]
+#[derive(Serialize, Deserialize)]
+#[derive_where(Clone, Default)]
 #[serde(bound = "")]
 pub struct Lockfile<F: MoveFlavor> {
     unpublished: UnpublishedTable<F>,
@@ -36,8 +35,8 @@ pub struct Lockfile<F: MoveFlavor> {
     published: BTreeMap<EnvironmentName, Publication<F>>,
 }
 
-#[derive(Serialize, Deserialize, Derivative)]
-#[derivative(Clone(bound = ""))]
+#[derive(Serialize, Deserialize)]
+#[derive_where(Clone)]
 #[serde(bound = "")]
 pub struct Publication<F: MoveFlavor> {
     #[serde(flatten)]
@@ -45,8 +44,8 @@ pub struct Publication<F: MoveFlavor> {
     dependencies: BTreeMap<PackageName, PinnedDependencyInfo<F>>,
 }
 
-#[derive(Serialize, Deserialize, Derivative)]
-#[derivative(Default(bound = ""), Clone(bound = ""))]
+#[derive(Serialize, Deserialize)]
+#[derive_where(Default, Clone)]
 #[serde(rename_all = "kebab-case")]
 #[serde(bound = "")]
 struct UnpublishedTable<F: MoveFlavor> {
@@ -56,8 +55,8 @@ struct UnpublishedTable<F: MoveFlavor> {
     dep_overrides: BTreeMap<EnvironmentName, UnpublishedDependencies<F>>,
 }
 
-#[derive(Serialize, Deserialize, Derivative)]
-#[derivative(Default(bound = ""), Clone(bound = ""))]
+#[derive(Serialize, Deserialize)]
+#[derive_where(Default, Clone)]
 #[serde(bound = "")]
 struct UnpublishedDependencies<F: MoveFlavor> {
     pinned: BTreeMap<PackageName, PinnedDependencyInfo<F>>,

@@ -13,4 +13,4 @@ serde_spanned.workspace = true
 toml.workspace = true
 anyhow.workspace = true
 lazy-regex.workspace = true
-derivative.workspace = true
+derive-where.workspace = true
