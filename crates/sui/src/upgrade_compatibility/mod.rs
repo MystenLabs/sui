@@ -23,8 +23,7 @@ use move_binary_format::{
     compatibility_mode::CompatibilityMode,
     file_format::Visibility,
     inclusion_mode::InclusionCheckMode,
-    normalized_deprecated::{Enum, Field, Function, Module, Struct, Type, Variant},
-    CompiledModule,
+    normalized, CompiledModule,
 };
 use move_bytecode_source_map::source_map::SourceName;
 use move_command_line_common::files::FileHash;
@@ -48,6 +47,14 @@ use sui_protocol_config::ProtocolConfig;
 use sui_sdk::apis::ReadApi;
 use sui_types::move_package::UpgradePolicy;
 use sui_types::{base_types::ObjectID, execution_config_utils::to_binary_config};
+
+type Enum = normalized::Enum<normalized::RcIdentifier>;
+type Field = normalized::Field<normalized::RcIdentifier>;
+type Function = normalized::Function<normalized::RcIdentifier>;
+type Module = normalized::Module<normalized::RcIdentifier>;
+type Struct = normalized::Struct<normalized::RcIdentifier>;
+type Type = normalized::Type<normalized::RcIdentifier>;
+type Variant = normalized::Variant<normalized::RcIdentifier>;
 
 /// Errors that can occur during upgrade compatibility checks,
 /// one-to-one related to the underlying trait functions see: [`CompatibilityMode`].
@@ -782,18 +789,19 @@ fn modules_into_diags(
     lookup: &IdentifierTableLookup,
     policy: UpgradePolicy,
 ) -> Result<Diagnostics, Error> {
+    let pool = &mut normalized::RcPool::new();
     let diags_list = match policy {
         UpgradePolicy::DepOnly => InclusionCheck::Equal.check_with_mode::<CliInclusionCheckMode>(
-            &Module::new(existing_module),
-            &Module::new(new_module),
+            &Module::new(pool, existing_module),
+            &Module::new(pool, new_module),
         ),
         UpgradePolicy::Additive => InclusionCheck::Subset.check_with_mode::<CliInclusionCheckMode>(
-            &Module::new(existing_module),
-            &Module::new(new_module),
+            &Module::new(pool, existing_module),
+            &Module::new(pool, new_module),
         ),
         _ => Compatibility::upgrade_check().check_with_mode::<CliCompatibilityMode>(
-            &Module::new(existing_module),
-            &Module::new(new_module),
+            &Module::new(pool, existing_module),
+            &Module::new(pool, new_module),
         ),
     }
     .err()

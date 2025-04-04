@@ -154,10 +154,13 @@ impl MoveUtilsServer for MoveUtils {
     ) -> RpcResult<BTreeMap<String, SuiMoveNormalizedModule>> {
         with_tracing!(async move {
             let modules = self.internal.get_move_modules_by_package(package).await?;
-            Ok(modules
+            modules
                 .into_iter()
-                .map(|(name, module)| (name, module.into()))
-                .collect::<BTreeMap<String, SuiMoveNormalizedModule>>())
+                .map(|(name, module)| {
+                    let sui_normalized = (&module).try_into().map_err(SuiRpcInputError::Anyhow)?;
+                    Ok((name, sui_normalized))
+                })
+                .collect::<RpcResult<BTreeMap<String, SuiMoveNormalizedModule>>>()
         })
     }
 
@@ -168,8 +171,8 @@ impl MoveUtilsServer for MoveUtils {
         module_name: String,
     ) -> RpcResult<SuiMoveNormalizedModule> {
         with_tracing!(async move {
-            let module = self.internal.get_move_module(package, module_name).await?;
-            Ok(module.into())
+            let module = &self.internal.get_move_module(package, module_name).await?;
+            Ok(module.try_into()?)
         })
     }
 
@@ -186,7 +189,7 @@ impl MoveUtilsServer for MoveUtils {
             let identifier = Identifier::new(struct_name.as_str())
                 .map_err(|e| SuiRpcInputError::GenericInvalid(format!("{e}")))?;
             match structs.get(&identifier) {
-                Some(struct_) => Ok(struct_.clone().into()),
+                Some(struct_) => Ok((&**struct_).into()),
                 None => Err(SuiRpcInputError::GenericNotFound(format!(
                     "No struct was found with struct name {}",
                     struct_name
@@ -208,7 +211,7 @@ impl MoveUtilsServer for MoveUtils {
             let identifier = Identifier::new(function_name.as_str())
                 .map_err(|e| SuiRpcInputError::GenericInvalid(format!("{e}")))?;
             match functions.get(&identifier) {
-                Some(function) => Ok(function.clone().into()),
+                Some(function) => Ok((&**function).clone()),
                 None => Err(SuiRpcInputError::GenericNotFound(format!(
                     "No function was found with function name {}",
                     function_name
@@ -294,13 +297,14 @@ mod tests {
             let mut mock_internal = MockMoveUtilsInternalTrait::new();
 
             let m = basic_test_module();
-            let pool = &mut normalized::RcPool::new();
-            let normalized_module = NormalizedModule::new(pool, &m);
-            let expected_module: SuiMoveNormalizedModule = normalized_module.clone().into();
+            let normalized_module = NormalizedModule::new(&mut normalized::RcPool::new(), &m);
+            let expected_module: SuiMoveNormalizedModule = (&normalized_module).try_into().unwrap();
 
             mock_internal
                 .expect_get_move_module()
-                .return_once(move |_package, _module_name| Ok(normalized_module));
+                .return_once(move |_package, _module_name| {
+                    Ok(NormalizedModule::new(&mut normalized::RcPool::new(), &m))
+                });
 
             let move_utils = MoveUtils {
                 internal: Arc::new(mock_internal),

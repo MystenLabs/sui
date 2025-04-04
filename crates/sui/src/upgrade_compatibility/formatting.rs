@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use anyhow::{Context, Error};
-use move_binary_format::normalized_deprecated::{Field, Type};
+use move_binary_format::normalized::{Field, Type};
 use move_bytecode_source_map::source_map::SourceName;
 use move_core_types::identifier::Identifier;
 use move_ir_types::location::Loc;
@@ -102,24 +102,18 @@ pub(super) fn format_param(
         Type::Vector(t) => {
             format!("vector<{}>", format_param(t, type_params, secondary)?)
         }
-        Type::MutableReference(t) => {
+        Type::Reference(true, t) => {
             format!("&mut {}", format_param(t, type_params, secondary)?)
         }
-        Type::Reference(t) => {
+        Type::Reference(false, t) => {
             format!("&{}", format_param(t, type_params, secondary)?)
         }
-        Type::Struct {
-            address,
-            module,
-            name,
-            type_arguments,
-            ..
-        } if !type_arguments.is_empty() => {
+        Type::Datatype(dt) if !dt.type_arguments.is_empty() => {
             format!(
                 "{}::{}::{}<{}>",
-                address.to_hex_literal(),
-                module,
-                name,
+                dt.address.to_hex_literal(),
+                dt.module,
+                dt.name,
                 type_arguments
                     .iter()
                     .map(|t| format_param(t, type_params.clone(), secondary))

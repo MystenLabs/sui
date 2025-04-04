@@ -666,11 +666,14 @@ impl<S> Tables<S> {
     }
 }
 
-impl<S: Clone + Ord> Module<S> {
+impl<S> Module<S> {
     /// Extract a normalized module from a `CompiledModule`. The module `m` should be verified.
     /// Nothing will break here if that is not the case, but there is little point in computing a
     /// normalized representation of a module that won't verify (since it can't be published).
-    pub fn new<Pool: StringPool<String = S>>(pool: &mut Pool, m: &CompiledModule) -> Self {
+    pub fn new<Pool: StringPool<String = S>>(pool: &mut Pool, m: &CompiledModule) -> Self
+    where
+        S: Clone + Ord,
+    {
         let tables = Tables::new(pool, m);
         let id = ModuleId::new(pool, &m.self_id());
         let friends = m
@@ -723,6 +726,14 @@ impl<S: Clone + Ord> Module<S> {
 
     pub fn name(&self) -> &S {
         &self.id.name
+    }
+
+    /// How often are signatures used in this module?
+    pub fn signature_usage(&self) -> usize {
+        self.tables.signatures.iter().fold(0, |acc, sig_rc| {
+            // subtract one for the reference in the signature table
+            acc.saturating_add(Rc::strong_count(sig_rc).saturating_sub(1))
+        })
     }
 }
 
