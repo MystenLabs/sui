@@ -472,18 +472,19 @@ impl<S> Datatype<S> {
         idx: DatatypeHandleIndex,
         type_arguments: &[SignatureToken],
     ) -> Self {
-        let d_handle = m.datatype_handle_at(idx);
-        let m_handle = m.module_handle_at(d_handle.module);
-        let name = pool.intern(m.identifier_at(d_handle.name));
-        let address = *m.address_identifier_at(m_handle.address);
+        let datatype_handle = m.datatype_handle_at(idx);
+        let defining_module_handle = m.module_handle_at(datatype_handle.module);
+        let datatype_name = pool.intern(m.identifier_at(datatype_handle.name));
+        let defining_module_address = *m.address_identifier_at(defining_module_handle.address);
+        let defining_module_name = pool.intern(m.identifier_at(defining_module_handle.name));
         let type_arguments = type_arguments
             .iter()
             .map(|t| Type::new(pool, m, t))
             .collect();
         Datatype {
-            address,
-            module: pool.intern(m.name()),
-            name,
+            address: defining_module_address,
+            module: defining_module_name,
+            name: datatype_name,
             type_arguments,
         }
     }
