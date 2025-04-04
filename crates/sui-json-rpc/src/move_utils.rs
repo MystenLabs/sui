@@ -9,10 +9,7 @@ use jsonrpsee::core::RpcResult;
 use jsonrpsee::RpcModule;
 #[cfg(test)]
 use mockall::automock;
-use move_binary_format::{
-    binary_config::BinaryConfig,
-    normalized_deprecated::{Module as NormalizedModule, Type},
-};
+use move_binary_format::{binary_config::BinaryConfig, normalized};
 use move_core_types::identifier::Identifier;
 use std::collections::BTreeMap;
 use std::sync::Arc;
@@ -28,6 +25,9 @@ use sui_types::move_package::normalize_modules;
 use sui_types::object::{Data, ObjectRead};
 use tap::TapFallible;
 use tracing::{error, instrument, warn};
+
+type NormalizedModule = normalized::Module<normalized::RcIdentifier>;
+type Type = normalized::Type<normalized::RcIdentifier>;
 
 #[cfg_attr(test, automock)]
 #[async_trait]
@@ -86,7 +86,7 @@ impl MoveUtilsInternalTrait for MoveUtilsInternal {
         let object_read = self.get_state().get_object_read(&package).tap_err(|_| {
             warn!("Failed to call get_move_modules_by_package for package: {package:?}");
         })?;
-
+        let pool = &mut normalized::RcPool::new();
         match object_read {
             ObjectRead::Exists(_obj_ref, object, _layout) => {
                 match object.into_inner().data {
@@ -95,6 +95,7 @@ impl MoveUtilsInternalTrait for MoveUtilsInternal {
                         // binary format
                         let binary_config = BinaryConfig::with_extraneous_bytes_check(false);
                         normalize_modules(
+                            pool,
                             p.serialized_module_map().values(),
                             &binary_config,
                         )
@@ -226,13 +227,14 @@ impl MoveUtilsServer for MoveUtils {
         with_tracing!(async move {
             let object_read = self.internal.get_object_read(package)?;
 
+            let pool = &mut normalized::RcPool::new();
             let normalized = match object_read {
                 ObjectRead::Exists(_obj_ref, object, _layout) => match object.into_inner().data {
                     Data::Package(p) => {
                         // we are on the read path - it's OK to use VERSION_MAX of the supported Move
                         // binary format
                         let binary_config = BinaryConfig::with_extraneous_bytes_check(false);
-                        normalize_modules(p.serialized_module_map().values(), &binary_config)
+                        normalize_modules(pool, p.serialized_module_map().values(), &binary_config)
                             .map_err(Error::from)
                     }
                     _ => Err(SuiRpcInputError::GenericInvalid(format!(
@@ -255,17 +257,12 @@ impl MoveUtilsServer for MoveUtils {
             match parameters {
                 Some(parameters) => Ok(parameters
                     .iter()
-                    .map(|p| match p {
-                        Type::Struct {
-                            address: _,
-                            module: _,
-                            name: _,
-                            type_arguments: _,
-                        } => MoveFunctionArgType::Object(ObjectValueKind::ByValue),
-                        Type::Reference(_) => {
+                    .map(|p| match &**p {
+                        Type::Datatype(_) => MoveFunctionArgType::Object(ObjectValueKind::ByValue),
+                        Type::Reference(/* mut */ false, _) => {
                             MoveFunctionArgType::Object(ObjectValueKind::ByImmutableReference)
                         }
-                        Type::MutableReference(_) => {
+                        Type::Reference(/* mut */ true, _) => {
                             MoveFunctionArgType::Object(ObjectValueKind::ByMutableReference)
                         }
                         _ => MoveFunctionArgType::Pure,
@@ -297,7 +294,8 @@ mod tests {
             let mut mock_internal = MockMoveUtilsInternalTrait::new();
 
             let m = basic_test_module();
-            let normalized_module = NormalizedModule::new(&m);
+            let pool = &mut normalized::RcPool::new();
+            let normalized_module = NormalizedModule::new(pool, &m);
             let expected_module: SuiMoveNormalizedModule = normalized_module.clone().into();
 
             mock_internal
