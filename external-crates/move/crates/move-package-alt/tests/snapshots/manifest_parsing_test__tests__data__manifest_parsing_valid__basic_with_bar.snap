@@ -1,0 +1,18 @@
+---
+source: crates/move-package-alt/tests/manifest_parsing_test.rs
+expression: manifest
+---
+Err(
+    Error {
+        inner: ErrorInner {
+            message: "TOML parse error at line 20, column 1\n   |\n20 | [dep-overrides.mainnet.foo]\n   | ^\nDuplicate key `foo` in table `dep-overrides.mainnet`\n\nWhile parsing a Table Header\n",
+            reverse_key: [],
+            line_col: Some(
+                (
+                    19,
+                    0,
+                ),
+            ),
+        },
+    },
+)

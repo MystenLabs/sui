@@ -1,0 +1,17 @@
+---
+source: crates/move-package-alt/tests/manifest_parsing_test.rs
+expression: manifest
+---
+Err(
+    Error {
+        inner: ErrorInner {
+            message: "missing field `name`",
+            reverse_key: [
+                InternalString(
+                    "package",
+                ),
+            ],
+            line_col: None,
+        },
+    },
+)

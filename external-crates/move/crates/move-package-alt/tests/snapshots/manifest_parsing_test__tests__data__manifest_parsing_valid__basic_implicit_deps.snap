@@ -1,0 +1,20 @@
+---
+source: crates/move-package-alt/tests/manifest_parsing_test.rs
+expression: manifest
+---
+Err(
+    Error {
+        inner: ErrorInner {
+            message: "no variant of enum ManifestDependencyInfo found in flattened data",
+            reverse_key: [
+                InternalString(
+                    "Sui",
+                ),
+                InternalString(
+                    "dependencies",
+                ),
+            ],
+            line_col: None,
+        },
+    },
+)

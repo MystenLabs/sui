@@ -1,0 +1,20 @@
+---
+source: crates/move-package-alt/tests/manifest_parsing_test.rs
+expression: manifest
+---
+Err(
+    Error {
+        inner: ErrorInner {
+            message: "invalid type: integer `1`, expected a string",
+            reverse_key: [
+                InternalString(
+                    "name",
+                ),
+                InternalString(
+                    "package",
+                ),
+            ],
+            line_col: None,
+        },
+    },
+)

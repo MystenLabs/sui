@@ -11,7 +11,7 @@ use serde_spanned::Spanned;
 
 use crate::errors::Located;
 
-#[derive(Serialize, Deserialize, Clone)]
+#[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct LocalDependency {
     /// The path on the filesystem, relative to the location of the containing file (which is
     /// stored in the `Located` wrapper)
