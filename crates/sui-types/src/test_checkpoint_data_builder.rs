@@ -594,6 +594,16 @@ impl TestCheckpointDataBuilder {
     pub fn derive_address(address_idx: u8) -> SuiAddress {
         dbg_addr(address_idx)
     }
+
+    /// Get mutable access to all transactions in the current checkpoint
+    pub fn transactions_mut(&mut self) -> &mut Vec<CheckpointTransaction> {
+        &mut self.checkpoint_builder.transactions
+    }
+
+    /// Get mutable access to a specific transaction by index
+    pub fn transaction_mut(&mut self, idx: usize) -> Option<&mut CheckpointTransaction> {
+        self.checkpoint_builder.transactions.get_mut(idx)
+    }
 }
 
 #[cfg(test)]
