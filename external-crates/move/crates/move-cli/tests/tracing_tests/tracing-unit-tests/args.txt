@@ -1,2 +1,4 @@
-test -t 1 --trace-execution new_traces
-> diff -qr new_traces saved_traces
+test -t 1 --trace-execution
+coverage lcov
+> diff -qr traces saved_traces
+> diff -qr lcov.info saved_lcov.info
