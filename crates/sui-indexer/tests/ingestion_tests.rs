@@ -1,9 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 use std::sync::Arc;
-use std::time::Duration;
 
-use diesel::dsl::count_star;
 use diesel::ExpressionMethods;
 use diesel::QueryDsl;
 use diesel_async::RunQueryDsl;
@@ -14,10 +12,6 @@ use sui_indexer::models::{
     checkpoints::StoredCheckpoint, objects::StoredObject, objects::StoredObjectSnapshot,
     transactions::StoredTransaction,
 };
-use sui_indexer::schema::epochs;
-use sui_indexer::schema::events;
-use sui_indexer::schema::full_objects_history;
-use sui_indexer::schema::objects_history;
 use sui_indexer::schema::{checkpoints, objects, objects_snapshot, transactions};
 use sui_indexer::store::indexer_store::IndexerStore;
 use sui_indexer::test_utils::{
