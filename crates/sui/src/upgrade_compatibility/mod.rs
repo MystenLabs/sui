@@ -12,6 +12,7 @@ use anyhow::{anyhow, Context, Error};
 use std::collections::{BTreeMap, HashMap, HashSet};
 use std::fs;
 use std::path::PathBuf;
+use std::rc::Rc;
 use std::sync::Arc;
 
 use move_binary_format::file_format::{
@@ -1650,21 +1651,19 @@ fn struct_field_mismatch_diag(
 
     let def_loc = struct_sourcemap.definition_location;
 
-    let dummy_field = Field {
-        name: Identifier::new("dummy_field")
-            .context("unexpected error with identifier constructor")?,
-        type_: Type::Bool,
-    };
-    let old_fields: Vec<&Field> = old_struct
+    let is_dummy_field = |f: &Field| f.name.as_str() == "dummy_field" && f.type_ == Type::Bool;
+    let old_fields: Vec<Rc<Field>> = old_struct
         .fields
         .iter()
-        .filter(|f| f != &&dummy_field)
+        .filter(|f| !is_dummy_field(f))
+        .cloned()
         .collect();
 
-    let new_fields: Vec<&Field> = new_struct
+    let new_fields: Vec<Rc<Field>> = new_struct
         .fields
         .iter()
-        .filter(|f| f != &&dummy_field)
+        .filter(|f| !is_dummy_field(f))
+        .cloned()
         .collect();
 
     let reason = if public_visibility_related_error {
@@ -1987,13 +1986,13 @@ fn enum_new_variant_diag(
     let old_enum_map = old_enum
         .variants
         .iter()
-        .map(|v| &v.name)
+        .map(|v| v.name.as_ident_str())
         .collect::<HashSet<_>>();
 
     let def_loc = enum_sourcemap.definition_location;
 
     for (i, new_variant) in new_enum.variants.iter().enumerate() {
-        if !old_enum_map.contains(&new_variant.name) {
+        if !old_enum_map.contains(new_variant.name.as_ident_str()) {
             let variant_loc = enum_sourcemap
                 .variants
                 .get(i)
