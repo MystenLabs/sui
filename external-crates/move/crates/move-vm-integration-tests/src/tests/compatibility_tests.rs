@@ -5,7 +5,7 @@
 use move_binary_format::{
     compatibility::{Compatibility, InclusionCheck},
     file_format::AbilitySet,
-    normalized_2 as normalized,
+    normalized,
 };
 use move_ir_to_bytecode::{compiler::compile_module, parser::parse_module};
 
