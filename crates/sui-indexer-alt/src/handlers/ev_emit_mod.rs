@@ -54,6 +54,7 @@ impl Processor for EvEmitMod {
 #[async_trait::async_trait]
 impl Handler for EvEmitMod {
     type Store = Db;
+
     const MIN_EAGER_ROWS: usize = 100;
     const MAX_PENDING_ROWS: usize = 10000;
 

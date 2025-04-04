@@ -56,6 +56,7 @@ impl Processor for TxAffectedObjects {
 #[async_trait::async_trait]
 impl Handler for TxAffectedObjects {
     type Store = Db;
+
     const MIN_EAGER_ROWS: usize = 100;
     const MAX_PENDING_ROWS: usize = 10000;
 

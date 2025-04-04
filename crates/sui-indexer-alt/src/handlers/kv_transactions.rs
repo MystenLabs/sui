@@ -64,6 +64,7 @@ impl Processor for KvTransactions {
 #[async_trait::async_trait]
 impl Handler for KvTransactions {
     type Store = Db;
+
     const MIN_EAGER_ROWS: usize = 100;
     const MAX_PENDING_ROWS: usize = 10000;
 

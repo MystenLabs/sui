@@ -55,6 +55,7 @@ impl Processor for KvProtocolConfigs {
 #[async_trait::async_trait]
 impl Handler for KvProtocolConfigs {
     type Store = Db;
+
     const MIN_EAGER_ROWS: usize = 1;
     const MAX_PENDING_ROWS: usize = 10000;
 

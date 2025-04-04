@@ -222,6 +222,7 @@ mod tests {
     #[async_trait::async_trait]
     impl concurrent::Handler for TxCounts {
         type Store = Db;
+
         async fn commit<'a>(
             values: &[Self::Value],
             conn: &mut Connection<'a>,
