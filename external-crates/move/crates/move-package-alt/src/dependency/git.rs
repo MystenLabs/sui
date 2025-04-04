@@ -6,7 +6,7 @@
 //!
 //! Git dependencies are cached in `~/.move`, which has the following structure:
 //!
-//! ```
+//! ```ignore
 //! .move/
 //!   git/
 //!     <remote 1>/ # a headless, sparse, and shallow git repository
@@ -17,7 +17,6 @@
 //!       ...
 //!     ...
 //! ```
-
 use std::{marker::PhantomData, path::PathBuf};
 
 use derive_where::derive_where;
@@ -27,7 +26,7 @@ use crate::errors::PackageResult;
 
 use super::{Pinned, Unpinned};
 
-#[derive(Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize)]
 #[derive_where(Clone)]
 pub struct GitDependency<P = Unpinned> {
     /// The repository holding the dep

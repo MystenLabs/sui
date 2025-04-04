@@ -13,3 +13,14 @@ serde_spanned.workspace = true
 toml.workspace = true
 anyhow.workspace = true
 derive-where.workspace = true
+
+[dev-dependencies]
+move-command-line-common.workspace = true
+datatest-stable.workspace = true
+insta.workspace = true
+
+[[test]]
+name = "manifest_parsing_tests"
+harness = false
+
+

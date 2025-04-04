@@ -4,6 +4,7 @@
 use std::{
     collections::BTreeMap,
     ffi::OsString,
+    fmt,
     fs::read_to_string,
     path::{Path, PathBuf},
 };
@@ -24,45 +25,45 @@ use crate::{
 
 use super::{EnvironmentName, PackageName};
 
-#[derive(Serialize, Deserialize)]
+#[derive(fmt::Debug, Serialize, Deserialize)]
 #[derive_where(Clone, Default)]
 #[serde(bound = "")]
-pub struct Lockfile<F: MoveFlavor> {
+pub struct Lockfile<F: MoveFlavor + fmt::Debug> {
     unpublished: UnpublishedTable<F>,
 
     #[serde(default)]
     published: BTreeMap<EnvironmentName, Publication<F>>,
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(fmt::Debug, Serialize, Deserialize)]
 #[derive_where(Clone)]
 #[serde(bound = "")]
-pub struct Publication<F: MoveFlavor> {
+pub struct Publication<F: MoveFlavor + fmt::Debug> {
     #[serde(flatten)]
     metadata: F::PublishedMetadata,
     dependencies: BTreeMap<PackageName, PinnedDependencyInfo<F>>,
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(fmt::Debug, Serialize, Deserialize)]
 #[derive_where(Default, Clone)]
 #[serde(rename_all = "kebab-case")]
 #[serde(bound = "")]
-struct UnpublishedTable<F: MoveFlavor> {
+struct UnpublishedTable<F: MoveFlavor + fmt::Debug> {
     dependencies: UnpublishedDependencies<F>,
 
     #[serde(default)]
     dep_overrides: BTreeMap<EnvironmentName, UnpublishedDependencies<F>>,
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(fmt::Debug, Serialize, Deserialize)]
 #[derive_where(Default, Clone)]
 #[serde(bound = "")]
-struct UnpublishedDependencies<F: MoveFlavor> {
+struct UnpublishedDependencies<F: MoveFlavor + fmt::Debug> {
     pinned: BTreeMap<PackageName, PinnedDependencyInfo<F>>,
     unpinned: BTreeMap<PackageName, ManifestDependencyInfo<F>>,
 }
 
-impl<F: MoveFlavor> Lockfile<F> {
+impl<F: MoveFlavor + fmt::Debug> Lockfile<F> {
     /// Read `Move.lock` and all `Move.<env>.lock` files from the directory at `path`.
     /// Returns a new empty [Lockfile] if `path` doesn't contain a `Move.lock`.
     pub fn read_from(path: impl AsRef<Path>) -> anyhow::Result<Self> {
@@ -159,7 +160,7 @@ impl<F: MoveFlavor> Lockfile<F> {
     }
 }
 
-impl<F: MoveFlavor> Publication<F> {
+impl<F: MoveFlavor + fmt::Debug> Publication<F> {
     /// Pretty-print [self] as TOML
     fn render(&self) -> String {
         let mut toml = toml_edit::ser::to_document(self).expect("toml serialization succeeds");

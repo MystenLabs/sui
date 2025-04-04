@@ -1,0 +1,11 @@
+---
+source: crates/move-package-alt/tests/manifest_parsing_test.rs
+---
+Err(TOML parse error at line 20, column 1
+   |
+20 | [dep-overrides.mainnet.foo]
+   | ^
+Duplicate key `foo` in table `dep-overrides.mainnet`
+
+While parsing a Table Header
+)

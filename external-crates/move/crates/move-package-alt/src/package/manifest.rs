@@ -2,8 +2,12 @@
 // Copyright (c) The Move Contributors
 // SPDX-License-Identifier: Apache-2.0
 
-use std::collections::BTreeMap;
+use std::{
+    collections::BTreeMap,
+    fmt::{Debug, Display, Formatter},
+};
 
+use derive_where::derive_where;
 use serde::{Deserialize, Serialize};
 
 use crate::{
@@ -16,7 +20,7 @@ use super::*;
 // Note: [Manifest] objects are immutable and should not implement [serde::Serialize]; any tool
 // writing these files should use [toml_edit] to set / preserve the formatting, since these are
 // user-editable files
-#[derive(Deserialize)]
+#[derive(Debug, Deserialize)]
 #[serde(rename = "kebab-case")]
 #[serde(bound = "")]
 pub struct Manifest<F: MoveFlavor> {
@@ -28,7 +32,7 @@ pub struct Manifest<F: MoveFlavor> {
     dep_overrides: BTreeMap<EnvironmentName, BTreeMap<PackageName, ManifestDependencyOverride<F>>>,
 }
 
-#[derive(Deserialize)]
+#[derive(Debug, Deserialize)]
 #[serde(bound = "")]
 struct PackageMetadata<F: MoveFlavor> {
     name: PackageName,
@@ -38,7 +42,7 @@ struct PackageMetadata<F: MoveFlavor> {
     metadata: F::PackageMetadata,
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, Debug)]
 #[serde(bound = "")]
 #[serde(rename_all = "kebab-case")]
 struct ManifestDependency<F: MoveFlavor> {
@@ -52,7 +56,7 @@ struct ManifestDependency<F: MoveFlavor> {
     rename_from: Option<PackageName>,
 }
 
-#[derive(Deserialize)]
+#[derive(Debug, Deserialize)]
 #[serde(bound = "")]
 #[serde(rename_all = "kebab-case")]
 struct ManifestDependencyOverride<F: MoveFlavor> {
@@ -67,7 +71,7 @@ struct ManifestDependencyOverride<F: MoveFlavor> {
 }
 
 impl<F: MoveFlavor> Manifest<F> {
-    fn read_from(path: impl AsRef<Path>) -> anyhow::Result<Self> {
+    pub fn read_from(path: impl AsRef<Path>) -> anyhow::Result<Self> {
         let contents = std::fs::read_to_string(path)?;
         Ok(toml_edit::de::from_str(&contents)?)
     }

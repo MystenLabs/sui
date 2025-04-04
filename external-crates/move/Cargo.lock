@@ -2356,7 +2356,10 @@ name = "move-package-alt"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "datatest-stable",
  "derive-where",
+ "insta",
+ "move-command-line-common",
  "serde",
  "serde_spanned",
  "toml",

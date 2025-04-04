@@ -1,0 +1,4 @@
+---
+source: crates/move-package-alt/tests/manifest_parsing_test.rs
+---
+Err(invalid type: integer `9123`, expected a string for key `environments.mainnet`)

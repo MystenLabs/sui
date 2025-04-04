@@ -1,0 +1,11 @@
+---
+source: crates/move-package-alt/tests/manifest_parsing_test.rs
+---
+Err(TOML parse error at line 4, column 1
+  |
+4 | [package]
+  | ^
+Duplicate key `package` in document root
+
+While parsing a Table Header
+)
