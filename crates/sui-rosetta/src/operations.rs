@@ -740,7 +740,7 @@ impl TryFrom<TransactionData> for Operations {
         }
         // Rosetta don't need the call args to be parsed into readable format
         Ok(Operations::try_from_data(
-            SuiTransactionBlockData::try_from(data, &&mut NoOpsModuleResolver)?,
+            SuiTransactionBlockData::try_from_with_module_cache(data, &&mut NoOpsModuleResolver)?,
             None,
         )?)
     }
