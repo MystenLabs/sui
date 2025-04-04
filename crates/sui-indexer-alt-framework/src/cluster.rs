@@ -178,8 +178,10 @@ mod tests {
     use sui_synthetic_ingestion::synthetic_ingestion;
     use tempfile::tempdir;
 
-    use crate::db::temp::{get_available_port, TempDb};
-    use crate::db::{self, Db};
+    use crate::db::{
+        temp::{get_available_port, TempDb},
+        Connection, Db,
+    };
     use crate::pipeline::concurrent::{self, ConcurrentConfig};
     use crate::pipeline::Processor;
     use crate::types::full_checkpoint_content::CheckpointData;
@@ -219,9 +221,11 @@ mod tests {
 
     #[async_trait::async_trait]
     impl concurrent::Handler for TxCounts {
-        async fn commit(
+        type Store = Db;
+
+        async fn commit<'a>(
             values: &[Self::Value],
-            conn: &mut db::Connection<'_>,
+            conn: &mut Connection<'a>,
         ) -> anyhow::Result<usize> {
             Ok(diesel::insert_into(tx_counts::table)
                 .values(values)

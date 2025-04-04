@@ -8,7 +8,7 @@ use anyhow::{Context, Result};
 use diesel::{ExpressionMethods, QueryDsl};
 use diesel_async::RunQueryDsl;
 use sui_indexer_alt_framework::{
-    db,
+    db::{Connection, Db},
     pipeline::{concurrent::Handler, Processor},
     types::{
         coin::Coin,
@@ -61,10 +61,12 @@ impl Processor for TxBalanceChanges {
 
 #[async_trait::async_trait]
 impl Handler for TxBalanceChanges {
+    type Store = Db;
+
     const MIN_EAGER_ROWS: usize = 100;
     const MAX_PENDING_ROWS: usize = 10000;
 
-    async fn commit(values: &[Self::Value], conn: &mut db::Connection<'_>) -> Result<usize> {
+    async fn commit<'a>(values: &[Self::Value], conn: &mut Connection<'a>) -> Result<usize> {
         Ok(diesel::insert_into(tx_balance_changes::table)
             .values(values)
             .on_conflict_do_nothing()
@@ -72,11 +74,11 @@ impl Handler for TxBalanceChanges {
             .await?)
     }
 
-    async fn prune(
+    async fn prune<'a>(
         &self,
         from: u64,
         to_exclusive: u64,
-        conn: &mut db::Connection<'_>,
+        conn: &mut Connection<'a>,
     ) -> Result<usize> {
         let Range {
             start: from_tx,
@@ -135,7 +137,7 @@ mod tests {
 
     use crate::handlers::cp_sequence_numbers::CpSequenceNumbers;
 
-    async fn get_all_tx_balance_changes(conn: &mut db::Connection<'_>) -> Result<Vec<i64>> {
+    async fn get_all_tx_balance_changes(conn: &mut Connection<'_>) -> Result<Vec<i64>> {
         Ok(tx_balance_changes::table
             .select(tx_balance_changes::tx_sequence_number)
             .order_by(tx_balance_changes::tx_sequence_number)
