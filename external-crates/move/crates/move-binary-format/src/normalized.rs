@@ -15,12 +15,12 @@ use move_core_types::{
     language_storage::{StructTag, TypeTag},
 };
 use serde::{Deserialize, Serialize};
-use std::rc::Rc;
 use std::{
     borrow::Borrow,
     collections::{BTreeMap, BTreeSet},
 };
 use std::{fmt::Debug, ops::Deref};
+use std::{rc::Rc, sync::Arc};
 
 pub trait StringPool {
     type String: Clone + Debug + Ord + PartialOrd + Eq + PartialEq;
@@ -28,82 +28,6 @@ pub trait StringPool {
     fn intern(&mut self, s: &IdentStr) -> Self::String;
 
     fn as_ident_str<'a>(&'a self, s: &'a Self::String) -> &'a IdentStr;
-}
-
-pub struct NoInterning;
-
-impl StringPool for NoInterning {
-    type String = Identifier;
-
-    fn intern(&mut self, s: &IdentStr) -> Self::String {
-        s.to_owned()
-    }
-
-    fn as_ident_str<'a>(&'a self, s: &'a Identifier) -> &'a IdentStr {
-        s.as_ident_str()
-    }
-}
-
-#[derive(Clone, PartialEq, Eq, PartialOrd, Ord, Debug)]
-pub struct RcIdentifier(Rc<Identifier>);
-
-impl Borrow<str> for RcIdentifier {
-    fn borrow(&self) -> &str {
-        self.0.as_str()
-    }
-}
-
-impl Borrow<IdentStr> for RcIdentifier {
-    fn borrow(&self) -> &IdentStr {
-        self.0.as_ident_str()
-    }
-}
-
-impl Borrow<Identifier> for RcIdentifier {
-    fn borrow(&self) -> &Identifier {
-        self.0.as_ref()
-    }
-}
-
-impl Deref for RcIdentifier {
-    type Target = Identifier;
-
-    fn deref(&self) -> &Self::Target {
-        self.0.as_ref()
-    }
-}
-
-impl std::fmt::Display for RcIdentifier {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        std::fmt::Display::fmt(self.0.as_ident_str(), f)
-    }
-}
-
-pub struct RcPool(BTreeSet<RcIdentifier>);
-
-impl RcPool {
-    pub fn new() -> Self {
-        Self(BTreeSet::new())
-    }
-}
-
-impl StringPool for RcPool {
-    type String = RcIdentifier;
-
-    fn intern(&mut self, s: &IdentStr) -> Self::String {
-        match self.0.get(s) {
-            Some(id) => id.clone(),
-            None => {
-                let id = RcIdentifier(Rc::new(s.to_owned()));
-                self.0.insert(id.clone());
-                id
-            }
-        }
-    }
-
-    fn as_ident_str<'a>(&'a self, s: &'a Self::String) -> &'a IdentStr {
-        s.0.as_ident_str()
-    }
 }
 
 #[derive(Clone, Debug, Ord, PartialOrd, Eq, PartialEq)]
@@ -1273,4 +1197,142 @@ fn sizes() {
 
     assert_eq!(std::mem::size_of::<Type<Big>>(), 16);
     assert_eq!(std::mem::size_of::<Bytecode<Big>>(), 16);
+}
+
+pub struct NoInterning;
+
+impl StringPool for NoInterning {
+    type String = Identifier;
+
+    fn intern(&mut self, s: &IdentStr) -> Self::String {
+        s.to_owned()
+    }
+
+    fn as_ident_str<'a>(&'a self, s: &'a Identifier) -> &'a IdentStr {
+        s.as_ident_str()
+    }
+}
+
+#[derive(Clone, PartialEq, Eq, PartialOrd, Ord, Debug)]
+pub struct RcIdentifier(Rc<Identifier>);
+
+impl Borrow<str> for RcIdentifier {
+    fn borrow(&self) -> &str {
+        self.0.as_str()
+    }
+}
+
+impl Borrow<IdentStr> for RcIdentifier {
+    fn borrow(&self) -> &IdentStr {
+        self.0.as_ident_str()
+    }
+}
+
+impl Borrow<Identifier> for RcIdentifier {
+    fn borrow(&self) -> &Identifier {
+        self.0.as_ref()
+    }
+}
+
+impl Deref for RcIdentifier {
+    type Target = Identifier;
+
+    fn deref(&self) -> &Self::Target {
+        self.0.as_ref()
+    }
+}
+
+impl std::fmt::Display for RcIdentifier {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        std::fmt::Display::fmt(self.0.as_ident_str(), f)
+    }
+}
+
+pub struct RcPool(BTreeSet<RcIdentifier>);
+
+impl RcPool {
+    pub fn new() -> Self {
+        Self(BTreeSet::new())
+    }
+}
+
+impl StringPool for RcPool {
+    type String = RcIdentifier;
+
+    fn intern(&mut self, s: &IdentStr) -> Self::String {
+        match self.0.get(s) {
+            Some(id) => id.clone(),
+            None => {
+                let id = RcIdentifier(Rc::new(s.to_owned()));
+                self.0.insert(id.clone());
+                id
+            }
+        }
+    }
+
+    fn as_ident_str<'a>(&'a self, s: &'a Self::String) -> &'a IdentStr {
+        s.0.as_ident_str()
+    }
+}
+
+#[derive(Clone, PartialEq, Eq, PartialOrd, Ord, Debug)]
+pub struct ArcIdentifier(Arc<Identifier>);
+
+impl Borrow<str> for ArcIdentifier {
+    fn borrow(&self) -> &str {
+        self.0.as_str()
+    }
+}
+
+impl Borrow<IdentStr> for ArcIdentifier {
+    fn borrow(&self) -> &IdentStr {
+        self.0.as_ident_str()
+    }
+}
+
+impl Borrow<Identifier> for ArcIdentifier {
+    fn borrow(&self) -> &Identifier {
+        self.0.as_ref()
+    }
+}
+
+impl Deref for ArcIdentifier {
+    type Target = Identifier;
+
+    fn deref(&self) -> &Self::Target {
+        self.0.as_ref()
+    }
+}
+
+impl std::fmt::Display for ArcIdentifier {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        std::fmt::Display::fmt(self.0.as_ident_str(), f)
+    }
+}
+
+pub struct ArcPool(BTreeSet<ArcIdentifier>);
+
+impl ArcPool {
+    pub fn new() -> Self {
+        Self(BTreeSet::new())
+    }
+}
+
+impl StringPool for ArcPool {
+    type String = ArcIdentifier;
+
+    fn intern(&mut self, s: &IdentStr) -> Self::String {
+        match self.0.get(s) {
+            Some(id) => id.clone(),
+            None => {
+                let id = ArcIdentifier(Arc::new(s.to_owned()));
+                self.0.insert(id.clone());
+                id
+            }
+        }
+    }
+
+    fn as_ident_str<'a>(&'a self, s: &'a Self::String) -> &'a IdentStr {
+        s.0.as_ident_str()
+    }
 }

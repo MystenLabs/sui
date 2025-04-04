@@ -141,7 +141,7 @@ impl PartialEq for SuiMoveNormalizedModule {
     }
 }
 
-const MAX_SIGNATURE_USAGE: usize = 0; //TODO
+const MAX_SIGNATURE_USAGE: usize = 1; //TODO
 
 impl<S: ToString> TryFrom<&NormalizedModule<S>> for SuiMoveNormalizedModule {
     type Error = anyhow::Error;
@@ -177,14 +177,16 @@ impl<S: ToString> TryFrom<&NormalizedModule<S>> for SuiMoveNormalizedModule {
             exposed_functions: module
                 .functions
                 .iter()
-                .filter_map(|(name, function)| {
+                .filter(|(_name, function)| {
+                    function.is_entry || function.visibility != Visibility::Private
+                })
+                .map(|(name, function)| {
                     // TODO: Do we want to expose the private functions as well?
-                    (function.is_entry || function.visibility != Visibility::Private).then(|| {
-                        (
-                            name.to_string(),
-                            SuiMoveNormalizedFunction::from(&**function),
-                        )
-                    })
+
+                    (
+                        name.to_string(),
+                        SuiMoveNormalizedFunction::from(&**function),
+                    )
                 })
                 .collect::<BTreeMap<String, SuiMoveNormalizedFunction>>(),
         })
@@ -309,7 +311,7 @@ impl<S: ToString> From<&NormalizedType<S>> for SuiMoveNormalizedType {
                     module: module.to_string(),
                     name: name.to_string(),
                     type_arguments: type_arguments
-                        .into_iter()
+                        .iter()
                         .map(SuiMoveNormalizedType::from)
                         .collect::<Vec<SuiMoveNormalizedType>>(),
                 }

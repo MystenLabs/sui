@@ -160,7 +160,7 @@ impl MoveUtilsServer for MoveUtils {
                     let sui_normalized = (&module).try_into().map_err(SuiRpcInputError::Anyhow)?;
                     Ok((name, sui_normalized))
                 })
-                .collect::<RpcResult<BTreeMap<String, SuiMoveNormalizedModule>>>()
+                .collect::<Result<BTreeMap<String, SuiMoveNormalizedModule>, Error>>()
         })
     }
 
@@ -211,7 +211,7 @@ impl MoveUtilsServer for MoveUtils {
             let identifier = Identifier::new(function_name.as_str())
                 .map_err(|e| SuiRpcInputError::GenericInvalid(format!("{e}")))?;
             match functions.get(&identifier) {
-                Some(function) => Ok((&**function).clone()),
+                Some(function) => Ok((&**function).into()),
                 None => Err(SuiRpcInputError::GenericNotFound(format!(
                     "No function was found with function name {}",
                     function_name
