@@ -24,6 +24,8 @@ use sui_indexer_alt_schema::{
 
 use crate::consistent_pruning::{PruningInfo, PruningLookupTable};
 
+use super::checkpoint_input_objects;
+
 /// This handler is used to track the balance buckets of address-owned coins.
 /// The balance bucket is calculated using log10 of the coin balance.
 /// Whenever a coin object's presence, owner or balance bucket changes,
@@ -58,7 +60,7 @@ impl Processor for CoinBalanceBuckets {
 
     fn process(&self, checkpoint: &Arc<CheckpointData>) -> Result<Vec<Self::Value>> {
         let cp_sequence_number = checkpoint.checkpoint_summary.sequence_number;
-        let checkpoint_input_objects = checkpoint.checkpoint_input_objects();
+        let checkpoint_input_objects = checkpoint_input_objects(checkpoint);
         let latest_live_output_objects: BTreeMap<_, _> = checkpoint
             .latest_live_output_objects()
             .into_iter()

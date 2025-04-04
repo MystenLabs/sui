@@ -16,6 +16,8 @@ use sui_indexer_alt_schema::{objects::StoredObjInfo, schema::obj_info};
 
 use crate::consistent_pruning::{PruningInfo, PruningLookupTable};
 
+use super::checkpoint_input_objects;
+
 #[derive(Default)]
 pub(crate) struct ObjInfo {
     pruning_lookup_table: Arc<PruningLookupTable>,
@@ -38,7 +40,7 @@ impl Processor for ObjInfo {
     // TODO: Add tests for this function and the pruner.
     fn process(&self, checkpoint: &Arc<CheckpointData>) -> Result<Vec<Self::Value>> {
         let cp_sequence_number = checkpoint.checkpoint_summary.sequence_number;
-        let checkpoint_input_objects = checkpoint.checkpoint_input_objects();
+        let checkpoint_input_objects = checkpoint_input_objects(checkpoint);
         let latest_live_output_objects = checkpoint
             .latest_live_output_objects()
             .into_iter()
@@ -670,5 +672,46 @@ mod tests {
 
         // Now we can prune checkpoint 2, as well as 3.
         obj_info.prune(2, 4, &mut conn).await.unwrap();
+    }
+
+    /// In our processing logic, we consider objects that appear as input to the checkpoint but not
+    /// in the output as wrapped or deleted. This emits a tombstone row. Meanwhile, the remote store
+    /// containing `CheckpointData` used to include unchanged shared objects in the `input_objects`
+    /// of a `CheckpointTransaction`. Because these read-only shared objects were not modified, they
+    ///were not included in `output_objects`. But that means within our pipeline, these object
+    /// states were incorrectly treated as deleted, and thus every transaction read emitted a
+    /// tombstone row. This test validates that unless an object appears as an input object from
+    /// `tx.effects.object_changes`, we do not consider it within our pipeline.
+    ///
+    /// Use the checkpoint builder to create a shared object. Then, remove this from the checkpoint,
+    /// and replace it with a transaction that takes the shared object as read-only.
+    #[tokio::test]
+    async fn test_process_unchanged_shared_object() {
+        let obj_info = ObjInfo::default();
+        let mut builder = TestCheckpointDataBuilder::new(0)
+            .start_transaction(0)
+            .create_shared_object(0)
+            .finish_transaction();
+
+        // Get the shared object from the transaction's output_objects
+        let shared_obj = builder
+            .transactions_mut()
+            .pop() // Remove and get the transaction
+            .unwrap()
+            .output_objects
+            .into_iter()
+            .find(|obj| obj.id() == TestCheckpointDataBuilder::derive_object_id(0))
+            .unwrap();
+
+        // Create a new transaction that will "read" the shared object. This emulates a shared
+        // object appearing as an input object, but missing from `tx.effects`.
+        let mut builder = builder.start_transaction(0).finish_transaction();
+        if let Some(tx) = builder.transactions_mut().last_mut() {
+            tx.input_objects.push(shared_obj);
+        }
+
+        let checkpoint = builder.build_checkpoint();
+        let result = obj_info.process(&Arc::new(checkpoint)).unwrap();
+        assert_eq!(result.len(), 0);
     }
 }
