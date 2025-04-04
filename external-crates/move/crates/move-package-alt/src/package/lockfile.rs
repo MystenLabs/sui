@@ -10,7 +10,6 @@ use std::{
 
 use anyhow::bail;
 use derive_where::derive_where;
-use lazy_regex::regex_captures;
 use serde::{Deserialize, Serialize};
 use serde_spanned::Spanned;
 use toml_edit::{
@@ -230,6 +229,43 @@ fn lockname_to_env_name(filename: OsString) -> Option<String> {
         return None;
     };
 
-    let (_, env_name) = regex_captures!(r"Move\.(.*)\.lock", &filename)?;
-    Some(env_name.to_string())
+    let prefix = "Move.";
+    let suffix = ".lock";
+
+    if filename.starts_with(prefix) && filename.ends_with(suffix) {
+        let start_index = prefix.len();
+        let end_index = filename.len() - suffix.len();
+
+        if start_index < end_index {
+            return Some(filename[start_index..end_index].to_string());
+        }
+    }
+
+    None
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_lockname_to_env_name() {
+        assert_eq!(
+            lockname_to_env_name(OsString::from("Move.test.lock")),
+            Some("test".to_string())
+        );
+        assert_eq!(
+            lockname_to_env_name(OsString::from("Move.3vcga23.lock")),
+            Some("3vcga23".to_string())
+        );
+        assert_eq!(
+            lockname_to_env_name(OsString::from("Mve.test.lock.lock")),
+            None
+        );
+
+        assert_eq!(lockname_to_env_name(OsString::from("Move.lock")), None);
+        assert_eq!(lockname_to_env_name(OsString::from("Move.test.loc")), None);
+        assert_eq!(lockname_to_env_name(OsString::from("Move.testloc")), None);
+        assert_eq!(lockname_to_env_name(OsString::from("Move.test")), None);
+    }
 }
