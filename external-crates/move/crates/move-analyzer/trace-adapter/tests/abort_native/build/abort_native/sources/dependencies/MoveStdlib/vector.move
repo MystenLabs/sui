@@ -84,10 +84,8 @@ public fun reverse<Element>(v: &mut vector<Element>) {
 }
 
 /// Pushes all of the elements of the `other` vector into the `lhs` vector.
-public fun append<Element>(lhs: &mut vector<Element>, mut other: vector<Element>) {
-    other.reverse();
-    while (!other.is_empty()) lhs.push_back(other.pop_back());
-    other.destroy_empty();
+public fun append<Element>(lhs: &mut vector<Element>, other: vector<Element>) {
+    other.do!(|e| lhs.push_back(e));
 }
 
 /// Return `true` if the vector `v` has no elements and `false` otherwise.
@@ -128,10 +126,9 @@ public fun remove<Element>(v: &mut vector<Element>, mut i: u64): Element {
     if (i >= len) abort EINDEX_OUT_OF_BOUNDS;
 
     len = len - 1;
-    while (i < len) v.swap(i, {
-        i = i + 1;
-        i
-    });
+    while (i < len) {
+        v.swap(i, { i = i + 1; i });
+    };
     v.pop_back()
 }
 
@@ -156,7 +153,7 @@ public fun insert<Element>(v: &mut vector<Element>, e: Element, mut i: u64) {
 /// This is O(1), but does not preserve ordering of elements in the vector.
 /// Aborts if `i` is out of bounds.
 public fun swap_remove<Element>(v: &mut vector<Element>, i: u64): Element {
-    assert!(!v.is_empty(), EINDEX_OUT_OF_BOUNDS);
+    assert!(v.length() != 0, EINDEX_OUT_OF_BOUNDS);
     let last_idx = v.length() - 1;
     v.swap(i, last_idx);
     v.pop_back()
@@ -174,30 +171,30 @@ public macro fun tabulate<$T>($n: u64, $f: |u64| -> $T): vector<$T> {
 
 /// Destroy the vector `v` by calling `f` on each element and then destroying the vector.
 /// Does not preserve the order of elements in the vector (starts from the end of the vector).
-public macro fun destroy<$T>($v: vector<$T>, $f: |$T|) {
+public macro fun destroy<$T, $R: drop>($v: vector<$T>, $f: |$T| -> $R) {
     let mut v = $v;
-    while (!v.is_empty()) $f(v.pop_back());
+    v.length().do!(|_| $f(v.pop_back()));
     v.destroy_empty();
 }
 
 /// Destroy the vector `v` by calling `f` on each element and then destroying the vector.
 /// Preserves the order of elements in the vector.
-public macro fun do<$T>($v: vector<$T>, $f: |$T|) {
+public macro fun do<$T, $R: drop>($v: vector<$T>, $f: |$T| -> $R) {
     let mut v = $v;
     v.reverse();
-    while (!v.is_empty()) $f(v.pop_back());
+    v.length().do!(|_| $f(v.pop_back()));
     v.destroy_empty();
 }
 
 /// Perform an action `f` on each element of the vector `v`. The vector is not modified.
-public macro fun do_ref<$T>($v: &vector<$T>, $f: |&$T|) {
+public macro fun do_ref<$T, $R: drop>($v: &vector<$T>, $f: |&$T| -> $R) {
     let v = $v;
     v.length().do!(|i| $f(&v[i]))
 }
 
 /// Perform an action `f` on each element of the vector `v`.
 /// The function `f` takes a mutable reference to the element.
-public macro fun do_mut<$T>($v: &mut vector<$T>, $f: |&mut $T|) {
+public macro fun do_mut<$T, $R: drop>($v: &mut vector<$T>, $f: |&mut $T| -> $R) {
     let v = $v;
     v.length().do!(|i| $f(&mut v[i]))
 }
@@ -297,19 +294,28 @@ public macro fun all<$T>($v: &vector<$T>, $f: |&$T| -> bool): bool {
 /// Destroys two vectors `v1` and `v2` by calling `f` to each pair of elements.
 /// Aborts if the vectors are not of the same length.
 /// The order of elements in the vectors is preserved.
-public macro fun zip_do<$T1, $T2>($v1: vector<$T1>, $v2: vector<$T2>, $f: |$T1, $T2|) {
+public macro fun zip_do<$T1, $T2, $R: drop>(
+    $v1: vector<$T1>,
+    $v2: vector<$T2>,
+    $f: |$T1, $T2| -> $R,
+) {
     let v1 = $v1;
     let mut v2 = $v2;
     v2.reverse();
     let len = v1.length();
     assert!(len == v2.length());
     v1.do!(|el1| $f(el1, v2.pop_back()));
+    v2.destroy_empty();
 }
 
 /// Destroys two vectors `v1` and `v2` by calling `f` to each pair of elements.
 /// Aborts if the vectors are not of the same length.
 /// Starts from the end of the vectors.
-public macro fun zip_do_reverse<$T1, $T2>($v1: vector<$T1>, $v2: vector<$T2>, $f: |$T1, $T2|) {
+public macro fun zip_do_reverse<$T1, $T2, $R: drop>(
+    $v1: vector<$T1>,
+    $v2: vector<$T2>,
+    $f: |$T1, $T2| -> $R,
+) {
     let v1 = $v1;
     let mut v2 = $v2;
     let len = v1.length();
@@ -321,7 +327,11 @@ public macro fun zip_do_reverse<$T1, $T2>($v1: vector<$T1>, $v2: vector<$T2>, $f
 /// elements. The vectors are not modified.
 /// Aborts if the vectors are not of the same length.
 /// The order of elements in the vectors is preserved.
-public macro fun zip_do_ref<$T1, $T2>($v1: &vector<$T1>, $v2: &vector<$T2>, $f: |&$T1, &$T2|) {
+public macro fun zip_do_ref<$T1, $T2, $R: drop>(
+    $v1: &vector<$T1>,
+    $v2: &vector<$T2>,
+    $f: |&$T1, &$T2| -> $R,
+) {
     let v1 = $v1;
     let v2 = $v2;
     let len = v1.length();
@@ -333,10 +343,10 @@ public macro fun zip_do_ref<$T1, $T2>($v1: &vector<$T1>, $v2: &vector<$T2>, $f: 
 /// of elements. The vectors may be modified.
 /// Aborts if the vectors are not of the same length.
 /// The order of elements in the vectors is preserved.
-public macro fun zip_do_mut<$T1, $T2>(
+public macro fun zip_do_mut<$T1, $T2, $R: drop>(
     $v1: &mut vector<$T1>,
     $v2: &mut vector<$T2>,
-    $f: |&mut $T1, &mut $T2|,
+    $f: |&mut $T1, &mut $T2| -> $R,
 ) {
     let v1 = $v1;
     let v2 = $v2;

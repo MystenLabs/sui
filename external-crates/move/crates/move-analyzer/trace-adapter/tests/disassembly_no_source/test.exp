@@ -1,21 +1,12 @@
 current frame stack:
-  function: test (m.move:9)
+  function: test (m.move:12)
     scope 0 :
 current frame stack:
-  function: test (m.move:9)
+  function: test (m.move:12)
     scope 0 :
-  function: foo (m2.mvb:8)
+  function: foo (m2.move:6)
     scope 0 :
       p : 42
       type: u64
 
 current frame stack:
-  function: test (m.move:9)
-    scope 0 :
-  function: foo (m2.mvb:11)
-    scope 0 :
-  function: bar (m3.move:4)
-    scope 0 :
-      p : 84
-      type: u64
-
