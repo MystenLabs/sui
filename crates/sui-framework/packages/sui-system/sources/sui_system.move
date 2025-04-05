@@ -712,7 +712,7 @@ public fun request_add_validator_for_testing(
     ctx: &TxContext,
 ) {
     let self = load_system_state_mut(wrapper);
-    self.request_add_validator_for_testing(ctx)
+    self.request_add_validator(ctx)
 }
 
 #[test_only]
