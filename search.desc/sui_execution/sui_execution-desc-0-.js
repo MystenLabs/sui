@@ -1,0 +1,1 @@
+searchState.loadedDescShard("sui_execution", 0, "Abstracts over access to the VM across versions of the …\nCreate a new bytecode verifier meter.\nRun the bytecode verifier with a meter limit")

@@ -1,0 +1,1 @@
+searchState.loadedDescShard("sui_sql_macro", 0, "The <code>sql!</code> macro is used to construct a <code>diesel::SqlLiteral&lt;T&gt;</code>…")
