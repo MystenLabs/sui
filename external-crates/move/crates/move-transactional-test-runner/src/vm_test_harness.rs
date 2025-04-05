@@ -78,9 +78,9 @@ pub struct Linkage {
 
 impl Linkage {
     pub fn overlay(&self, mut existing_linkage: LinkageContext) -> VMResult<LinkageContext> {
-        for (runtime_id, storage_id) in self.linkage.iter() {
+        for (original_id, version_id) in self.linkage.iter() {
             existing_linkage
-                .add_entry(*runtime_id, *storage_id)
+                .add_entry(*original_id, *version_id)
                 .map_err(|err| err.finish(Location::Undefined))?;
         }
         Ok(existing_linkage)
@@ -277,10 +277,10 @@ impl MoveTestAdapter<'_> for SimpleRuntimeTestAdapter {
             linkage_context,
             pub_modules.clone(),
         )?;
-        let runtime_id = pkg.runtime_id;
+        let original_id = pkg.original_id;
         let publish_result = self.perform_action(gas_budget, |inner_adapter, _gas_status| {
             let pkg = pkg.into_serialized_package();
-            inner_adapter.publish_package(runtime_id, pkg)?;
+            inner_adapter.publish_package(original_id, pkg)?;
             println!("done");
             Ok(())
         });
@@ -332,11 +332,11 @@ impl MoveTestAdapter<'_> for SimpleRuntimeTestAdapter {
             linkage_context,
             pub_modules.clone(),
         )?;
-        let runtime_id = pkg.runtime_id;
+        let original_id = pkg.original_id;
         let pkg = pkg.into_serialized_package();
         let (verif_pkg, mut publish_vm) = self
             .perform_action_with_gas(&mut gas_meter, |inner_adapter, _gas_status| {
-                inner_adapter.verify_package(runtime_id, pkg)
+                inner_adapter.verify_package(original_id, pkg)
             })?;
         println!("doing calls");
         let signers: Vec<_> = signers
@@ -396,11 +396,11 @@ impl MoveTestAdapter<'_> for SimpleRuntimeTestAdapter {
             .collect();
         let serialized_return_values = self
             .perform_action(gas_budget, |inner_adapter, gas_status| {
-                let runtime_id = *module.address();
+                let original_id = *module.address();
                 // TODO: If there are linkage directives, respect them here.
                 println!("generating linkage");
                 let mut linkage =
-                    extra_args.overlay(inner_adapter.get_linkage_context(runtime_id)?)?;
+                    extra_args.overlay(inner_adapter.get_linkage_context(original_id)?)?;
                 linkage.add_type_arg_addresses_reflexive(&type_arg_tags);
 
                 println!("generating vm instance");

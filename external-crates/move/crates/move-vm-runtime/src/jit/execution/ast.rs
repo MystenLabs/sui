@@ -13,7 +13,7 @@ use crate::{
     natives::functions::{NativeFunction, UnboxedNativeFunction},
     shared::{
         constants::TYPE_DEPTH_MAX,
-        types::{PackageStorageId, RuntimePackageId},
+        types::{OriginalId, VersionId},
         vm_pointer::VMPointer,
     },
 };
@@ -38,8 +38,8 @@ use std::collections::BTreeMap;
 
 /// Representation of a loaded package.
 pub struct Package {
-    pub storage_id: PackageStorageId,
-    pub runtime_id: RuntimePackageId,
+    pub version_id: VersionId,
+    pub original_id: OriginalId,
 
     // NB: this is under the package's context so we don't need to further resolve by
     // address in this table.
@@ -1533,8 +1533,8 @@ impl std::fmt::Debug for CallType {
 impl std::fmt::Debug for Package {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("Package")
-            .field("storage_id", &self.storage_id)
-            .field("runtime_id", &self.runtime_id)
+            .field("version_id", &self.version_id)
+            .field("original_id", &self.original_id)
             .field("loaded_modules", &self.loaded_modules)
             .field("vtable", &self.vtable)
             .finish()

@@ -4,7 +4,7 @@
 
 use crate::shared::{
     data_store::DataStore,
-    types::{PackageStorageId, RuntimePackageId},
+    types::{OriginalId, VersionId},
 };
 use move_binary_format::errors::*;
 use move_core_types::{
@@ -17,14 +17,14 @@ use move_core_types::{
 use std::collections::{btree_map::BTreeMap, BTreeSet};
 
 pub struct AccountDataCache {
-    runtime_id: RuntimePackageId,
+    original_id: OriginalId,
     module_map: BTreeMap<Identifier, Vec<u8>>,
 }
 
 impl AccountDataCache {
-    fn new(runtime_id: RuntimePackageId) -> Self {
+    fn new(original_id: OriginalId) -> Self {
         Self {
-            runtime_id,
+            original_id,
             module_map: BTreeMap::new(),
         }
     }
@@ -67,7 +67,7 @@ impl<S: ModuleResolver> TransactionDataCache<S> {
                 change_set
                     .add_account_changeset(
                         addr,
-                        AccountChangeSet::from_modules(account_data_cache.runtime_id, modules),
+                        AccountChangeSet::from_modules(account_data_cache.original_id, modules),
                     )
                     .expect("accounts should be unique");
             }
@@ -86,14 +86,14 @@ impl<S: ModuleResolver> TransactionDataCache<S> {
 
     pub fn publish_package(
         &mut self,
-        runtime_id: RuntimePackageId,
-        storage_id: PackageStorageId,
+        original_id: OriginalId,
+        version_id: VersionId,
         modules: impl IntoIterator<Item = (Identifier, Vec<u8>)>,
     ) {
         let account_cache = self
             .module_map
-            .entry(storage_id)
-            .or_insert_with(|| AccountDataCache::new(runtime_id));
+            .entry(version_id)
+            .or_insert_with(|| AccountDataCache::new(original_id));
 
         for (module_name, blob) in modules.into_iter() {
             account_cache.module_map.insert(module_name, blob);
@@ -131,7 +131,7 @@ impl<S: ModuleResolver> DataStore for TransactionDataCache<S> {
             };
             // TODO(vm-rewrite): Update this to include linkage info and type origins
             package.modules = account_cache.module_map.clone();
-            package.runtime_id = account_cache.runtime_id;
+            package.runtime_id = account_cache.original_id;
         }
         Ok(packages)
     }
@@ -147,7 +147,7 @@ impl<S: ModuleResolver> DataStore for TransactionDataCache<S> {
                     cached.insert(idx);
                     SerializedPackage::raw_package(
                         account_cache.module_map.clone(),
-                        account_cache.runtime_id,
+                        account_cache.original_id,
                         *package_id,
                     )
                 })

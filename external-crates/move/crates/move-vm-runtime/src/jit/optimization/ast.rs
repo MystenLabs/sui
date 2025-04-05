@@ -1,7 +1,7 @@
 // Copyright (c) The Move Contributors
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::shared::types::{PackageStorageId, RuntimePackageId};
+use crate::shared::types::{OriginalId, VersionId};
 
 use move_binary_format::{
     file_format::{
@@ -23,11 +23,11 @@ use std::collections::BTreeMap;
 #[derive(Debug, Clone)]
 #[allow(dead_code)]
 pub struct Package {
-    pub(crate) runtime_id: RuntimePackageId,
-    pub(crate) storage_id: PackageStorageId,
+    pub(crate) original_id: OriginalId,
+    pub(crate) version_id: VersionId,
     pub(crate) modules: BTreeMap<ModuleId, Module>,
     pub(crate) type_origin_table: Vec<TypeOrigin>,
-    pub(crate) linkage_table: BTreeMap<RuntimePackageId, PackageStorageId>,
+    pub(crate) linkage_table: BTreeMap<OriginalId, VersionId>,
 }
 
 /// An optimized module

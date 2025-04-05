@@ -28,9 +28,9 @@ pub(crate) fn package(
     pkg: Input::Package,
 ) -> VMResult<ast::Package> {
     let Input::Package {
-        runtime_id,
+        original_id,
         modules: in_modules,
-        storage_id,
+        version_id,
         type_origin_table,
         linkage_table,
     } = pkg;
@@ -40,9 +40,9 @@ pub(crate) fn package(
         modules.insert(module_id, module(&context, d_module)?);
     }
     Ok(ast::Package {
-        runtime_id,
+        original_id,
         modules,
-        storage_id,
+        version_id,
         type_origin_table,
         linkage_table,
     })

@@ -12,7 +12,7 @@
 // dependencies fail the linkage checks in this module.
 
 use crate::{
-    shared::types::{PackageStorageId, RuntimePackageId},
+    shared::types::{OriginalId, VersionId},
     validation::verification::ast::{Module, Package},
 };
 use move_binary_format::{
@@ -26,13 +26,13 @@ use std::collections::{BTreeMap, HashMap};
 /// Verifies that all packages in the provided map have valid linkage and no cyclic dependencies
 /// between them.
 pub fn verify_linkage_and_cyclic_checks(
-    cached_packages: &BTreeMap<PackageStorageId, &Package>,
+    cached_packages: &BTreeMap<VersionId, &Package>,
 ) -> VMResult<()> {
-    let relocation_map: HashMap<RuntimePackageId, PackageStorageId> = cached_packages
+    let relocation_map: HashMap<OriginalId, VersionId> = cached_packages
         .iter()
         .map(|(k, v)| {
-            debug_assert!(k == &v.storage_id);
-            (v.runtime_id, v.storage_id)
+            debug_assert!(k == &v.version_id);
+            (v.original_id, v.version_id)
         })
         .collect();
     for package in cached_packages.values() {
@@ -50,17 +50,17 @@ pub fn verify_linkage_and_cyclic_checks(
 /// dependencies).
 pub(crate) fn verify_linkage_and_cyclic_checks_for_publication(
     package_to_publish: &Package,
-    cached_packages: &BTreeMap<PackageStorageId, &Package>,
+    cached_packages: &BTreeMap<VersionId, &Package>,
 ) -> VMResult<()> {
-    let relocation_map: HashMap<RuntimePackageId, PackageStorageId> = cached_packages
+    let relocation_map: HashMap<OriginalId, VersionId> = cached_packages
         .iter()
         .map(|(k, v)| {
-            debug_assert!(k == &v.storage_id);
-            (v.runtime_id, v.storage_id)
+            debug_assert!(k == &v.version_id);
+            (v.original_id, v.version_id)
         })
         .chain(std::iter::once((
-            package_to_publish.runtime_id,
-            package_to_publish.runtime_id,
+            package_to_publish.original_id,
+            package_to_publish.original_id,
         )))
         .collect();
 
@@ -87,8 +87,8 @@ pub(crate) fn verify_linkage_and_cyclic_checks_for_publication(
 /// they are the same for publication).
 fn verify_package_no_cyclic_relationships(
     package: &[&Module],
-    cached_packages: &BTreeMap<PackageStorageId, &Package>,
-    relocation_map: &HashMap<PackageStorageId, RuntimePackageId>,
+    cached_packages: &BTreeMap<VersionId, &Package>,
+    relocation_map: &HashMap<VersionId, OriginalId>,
 ) -> VMResult<()> {
     let (module, bundle_verified) = if package.len() == 1 {
         (&package[0], BTreeMap::new())
@@ -126,8 +126,8 @@ fn verify_package_no_cyclic_relationships(
 // all modules in the provided package have valid linkage to their dependencies.
 fn verify_package_valid_linkage(
     package: &[&Module],
-    cached_packages: &BTreeMap<PackageStorageId, &Package>,
-    relocation_map: &HashMap<PackageStorageId, RuntimePackageId>,
+    cached_packages: &BTreeMap<VersionId, &Package>,
+    relocation_map: &HashMap<VersionId, OriginalId>,
 ) -> VMResult<()> {
     let package_module_map = package
         .iter()

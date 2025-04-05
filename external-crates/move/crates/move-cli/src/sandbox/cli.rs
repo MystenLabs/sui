@@ -14,7 +14,7 @@ use clap::Parser;
 use move_core_types::parsing::values::ParsedValue;
 use move_core_types::{language_storage::TypeTag, transaction_argument::TransactionArgument};
 use move_package::compilation::package_layout::CompiledPackageLayout;
-use move_vm_runtime::{dev_utils::gas_schedule::CostTable, shared::types::PackageStorageId};
+use move_vm_runtime::{dev_utils::gas_schedule::CostTable, shared::types::VersionId};
 use std::{
     fs,
     path::{Path, PathBuf},
@@ -32,7 +32,7 @@ pub enum SandboxCommand {
     Publish {
         /// Publish this package at the specified address.
         #[clap(long = "publish-at")]
-        at: Option<PackageStorageId>,
+        at: Option<VersionId>,
     },
     /// Run a Move script that reads/writes resources stored on disk in `storage-dir`.
     /// The script must be defined in the package.

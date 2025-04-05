@@ -6,8 +6,7 @@
 // and publishing packages to the VM.
 
 use crate::{
-    jit, natives::functions::NativeFunctions, shared::types::PackageStorageId,
-    validation::verification,
+    jit, natives::functions::NativeFunctions, shared::types::VersionId, validation::verification,
 };
 use move_vm_config::runtime::VMConfig;
 use parking_lot::RwLock;
@@ -23,7 +22,7 @@ pub struct Package {
     pub runtime: Arc<jit::execution::ast::Package>,
 }
 
-type PackageCache = HashMap<PackageStorageId, Arc<Package>>;
+type PackageCache = HashMap<VersionId, Arc<Package>>;
 
 /// The loader for the VM. This is the data structure is used to resolve packages and cache them
 /// and their types. This is then used to create the VTables for the VM.
@@ -54,7 +53,7 @@ impl MoveCache {
     // TODO: Make this a VM Result
     pub fn add_to_cache(
         &self,
-        package_key: PackageStorageId,
+        package_key: VersionId,
         verified: verification::ast::Package,
         runtime: jit::execution::ast::Package,
     ) {
@@ -70,7 +69,7 @@ impl MoveCache {
         package_cache.insert(package_key, Arc::new(package));
     }
 
-    pub fn cached_package_at(&self, package_key: PackageStorageId) -> Option<Arc<Package>> {
+    pub fn cached_package_at(&self, package_key: VersionId) -> Option<Arc<Package>> {
         self.package_cache.read().get(&package_key).map(Arc::clone)
     }
 
@@ -88,8 +87,8 @@ impl MoveCache {
 
     /// For use with unit testing: remove a package, returning `true` if it was present.
     #[cfg(test)]
-    pub(crate) fn remove_package(&self, storage_id: &PackageStorageId) -> bool {
-        self.package_cache.write().remove(storage_id).is_some()
+    pub(crate) fn remove_package(&self, version_id: &VersionId) -> bool {
+        self.package_cache.write().remove(version_id).is_some()
     }
 }
 

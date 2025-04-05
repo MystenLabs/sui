@@ -19,7 +19,7 @@ use crate::{
     natives::functions::NativeFunctions,
     shared::{
         linkage_context::LinkageContext,
-        types::{PackageStorageId, RuntimePackageId},
+        types::{DefiningTypeId, OriginalId, VersionId},
         unique_map,
         vm_pointer::VMPointer,
     },
@@ -40,10 +40,10 @@ use std::collections::{BTreeMap, BTreeSet, HashMap};
 
 struct PackageContext<'natives> {
     pub natives: &'natives NativeFunctions,
-    pub type_origin_table: HashMap<IntraPackageKey, PackageStorageId>,
+    pub type_origin_table: HashMap<IntraPackageKey, DefiningTypeId>,
 
-    pub storage_id: PackageStorageId,
-    pub runtime_id: RuntimePackageId,
+    pub version_id: VersionId,
+    pub original_id: OriginalId,
     // NB: this is under the package's context so we don't need to further resolve by
     // address in this table.
     pub loaded_modules: BTreeMap<Identifier, Module>,
@@ -114,7 +114,7 @@ impl PackageContext<'_> {
         vtable_entry: &VirtualTableKey,
     ) -> Option<VMPointer<Function>> {
         // We are calling into a different package so we cannot resolve this to a direct call.
-        if vtable_entry.package_key != self.runtime_id {
+        if vtable_entry.package_key != self.original_id {
             return None;
         }
         // TODO(vm-rewrite): Have this return an error if the function was not found.
@@ -172,8 +172,8 @@ pub fn package(
     link_context: &LinkageContext,
     verified_package: input::Package,
 ) -> PartialVMResult<Package> {
-    let storage_id = verified_package.storage_id;
-    let runtime_id = verified_package.runtime_id;
+    let version_id = verified_package.version_id;
+    let original_id = verified_package.original_id;
     let (module_ids_in_pkg, mut package_modules): (BTreeSet<_>, Vec<_>) =
         verified_package.modules.into_iter().unzip();
 
@@ -193,8 +193,8 @@ pub fn package(
 
     let mut package_context = PackageContext {
         natives,
-        storage_id,
-        runtime_id,
+        version_id,
+        original_id,
         loaded_modules: BTreeMap::new(),
         package_arena: Arena::new(),
         vtable_funs: DefinitionMap::empty(),
@@ -227,7 +227,7 @@ pub fn package(
         let loaded_module = module(
             &mut package_context,
             link_context,
-            storage_id,
+            version_id,
             &mut input_module,
         )?;
 
@@ -238,9 +238,9 @@ pub fn package(
     }
 
     let PackageContext {
-        storage_id,
+        version_id,
         natives: _,
-        runtime_id,
+        original_id,
         loaded_modules,
         package_arena,
         vtable_funs,
@@ -251,8 +251,8 @@ pub fn package(
     let vtable = PackageVirtualTable::new(vtable_funs, vtable_types);
 
     Ok(Package {
-        storage_id,
-        runtime_id,
+        version_id,
+        original_id,
         loaded_modules,
         package_arena,
         vtable,
@@ -265,7 +265,7 @@ pub fn package(
 fn module(
     context: &mut PackageContext<'_>,
     _link_context: &LinkageContext,
-    package_id: PackageStorageId,
+    version_id: VersionId,
     module: &mut input::Module,
 ) -> PartialVMResult<Module> {
     let self_id = module.compiled_module.self_id();
@@ -278,7 +278,7 @@ fn module(
     // Initialize module data
     let type_refs = initialize_type_refs(context, cmodule)?;
 
-    let (structs, enums, datatype_descriptors) = datatypes(context, &package_id, &mkey, cmodule)?;
+    let (structs, enums, datatype_descriptors) = datatypes(context, &version_id, &mkey, cmodule)?;
     let (instantiation_signatures, _signature_map) = cache_signatures(context, cmodule)?;
     dbg_println!("Module types loaded");
 
@@ -373,7 +373,7 @@ fn initialize_type_refs(
 /// Loads strucks and enums, returning them and their datatype descriptors (for vtable entry).
 fn datatypes(
     context: &mut PackageContext,
-    storage_id: &PackageStorageId,
+    version_id: &VersionId,
     module_name: &IdentifierKey,
     module: &CompiledModule,
 ) -> PartialVMResult<(
@@ -389,7 +389,7 @@ fn datatypes(
     // and pass a full and complete representation of it in with the package.
     fn defining_id(
         context: &PackageContext,
-        storage_id: &PackageStorageId,
+        storage_id: &VersionId,
         name: &VirtualTableKey,
     ) -> PartialVMResult<ModuleIdKey> {
         let defining_address = context
@@ -419,7 +419,7 @@ fn datatypes(
         .iter()
         .map(|struct_| {
             let name = resolve_member_name(&struct_.def_vtable_key)?;
-            let defining_id = defining_id(context, storage_id, &struct_.def_vtable_key)?;
+            let defining_id = defining_id(context, version_id, &struct_.def_vtable_key)?;
             let runtime_id = module_runtime_id;
             let datatype_info =
                 context.arena_box(Datatype::Struct(VMPointer::from_ref(struct_)))?;
@@ -433,7 +433,7 @@ fn datatypes(
         .iter()
         .map(|enum_| {
             let name = resolve_member_name(&enum_.def_vtable_key)?;
-            let defining_id = defining_id(context, storage_id, &enum_.def_vtable_key)?;
+            let defining_id = defining_id(context, version_id, &enum_.def_vtable_key)?;
             let runtime_id = module_runtime_id;
             let datatype_info = context.arena_box(Datatype::Enum(VMPointer::from_ref(enum_)))?;
             let name = intern_identifier_with_msg(&name, "enum name")?;
@@ -453,7 +453,7 @@ fn datatypes(
 
 fn structs(
     context: &mut PackageContext<'_>,
-    original_id: &RuntimePackageId,
+    original_id: &OriginalId,
     module_name: &IdentifierKey,
     module: &CompiledModule,
 ) -> PartialVMResult<ArenaVec<StructDef>> {
@@ -514,7 +514,7 @@ fn structs(
 
 fn enums(
     context: &mut PackageContext<'_>,
-    original_id: &RuntimePackageId,
+    original_id: &OriginalId,
     module_name: &IdentifierKey,
     module: &CompiledModule,
 ) -> PartialVMResult<ArenaVec<EnumDef>> {
@@ -849,7 +849,7 @@ fn functions(
         Ok(fn_name) => PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR)
             .with_message(format!(
                 "Duplicate function key {}::{}",
-                package_context.storage_id, fn_name,
+                package_context.version_id, fn_name,
             )),
         Err(err) => err,
     })?;
@@ -870,7 +870,7 @@ fn functions(
                 PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR).with_message(
                     format!(
                         "failed to find function {}::{} in optimized function list",
-                        package_context.storage_id,
+                        package_context.version_id,
                         fun.name.to_short_string().unwrap(),
                     ),
                 ),
@@ -933,7 +933,7 @@ fn alloc_function(
             module_name,
             member_name,
         };
-        let package_key = context.runtime_id;
+        let package_key = context.original_id;
         VirtualTableKey {
             package_key,
             inner_pkg_key,

@@ -10,9 +10,9 @@ use std::collections::BTreeMap;
 
 pub(crate) fn package(pkg: Input::Package) -> ast::Package {
     let Input::Package {
-        runtime_id,
+        original_id,
         modules: in_modules,
-        storage_id,
+        version_id,
         type_origin_table,
         linkage_table,
     } = pkg;
@@ -21,9 +21,9 @@ pub(crate) fn package(pkg: Input::Package) -> ast::Package {
         modules.insert(module_id, module(d_module));
     }
     ast::Package {
-        runtime_id,
+        original_id,
         modules,
-        storage_id,
+        version_id,
         type_origin_table,
         linkage_table,
     }

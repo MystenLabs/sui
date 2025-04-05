@@ -17,7 +17,7 @@ use move_disassembler::disassembler::Disassembler;
 use move_ir_types::location::Spanned;
 use move_vm_runtime::shared::{
     linkage_context::LinkageContext,
-    types::{PackageStorageId, RuntimePackageId},
+    types::{OriginalId, VersionId},
 };
 use serde::{Deserialize, Serialize};
 use std::{
@@ -40,9 +40,9 @@ pub struct OnDiskStateView {
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct PackageInfo {
-    storage_id: PackageStorageId,
-    runtime_id: RuntimePackageId,
-    linkage_table: BTreeMap<RuntimePackageId, PackageStorageId>,
+    version_id: VersionId,
+    original_id: OriginalId,
+    linkage_table: BTreeMap<OriginalId, VersionId>,
     type_origin_table: BTreeMap<Identifier, BTreeMap<Identifier, AccountAddress>>,
 }
 
@@ -91,14 +91,14 @@ impl OnDiskStateView {
         self.is_data_path(p, PACKAGES_DIR)
     }
 
-    fn get_package_path(&self, addr: &PackageStorageId) -> PathBuf {
+    fn get_package_path(&self, addr: &VersionId) -> PathBuf {
         let mut path = self.storage_dir.clone();
         path.push(format!("0x{}", addr));
         path.push(PACKAGES_DIR);
         path
     }
 
-    pub fn storage_id_of_path(&self, p: &Path) -> Option<PackageStorageId> {
+    pub fn storage_id_of_path(&self, p: &Path) -> Option<VersionId> {
         if !p.exists() {
             return None;
         }
@@ -109,13 +109,13 @@ impl OnDiskStateView {
             .and_then(|a| AccountAddress::from_hex_literal(a).ok())
     }
 
-    fn get_module_path(&self, package_id: &PackageStorageId, module_name: &IdentStr) -> PathBuf {
+    fn get_module_path(&self, package_id: &VersionId, module_name: &IdentStr) -> PathBuf {
         let mut path = self.get_package_path(package_id);
         path.push(module_name.as_str());
         path.with_extension(MOVE_COMPILED_EXTENSION)
     }
 
-    fn get_metadata_path(&self, package_id: &PackageStorageId) -> PathBuf {
+    fn get_metadata_path(&self, package_id: &VersionId) -> PathBuf {
         let mut path = self.get_package_path(package_id);
         path.push("package_metadata.yaml");
         path
@@ -167,8 +167,8 @@ impl OnDiskStateView {
         }
         let pkg = SerializedPackage {
             modules,
-            runtime_id: info.runtime_id,
-            storage_id: info.storage_id,
+            runtime_id: info.original_id,
+            storage_id: info.version_id,
             linkage_table: info.linkage_table,
             type_origin_table,
         };
@@ -176,28 +176,24 @@ impl OnDiskStateView {
     }
 
     /// Read the package bytes stored on-disk at `addr`
-    fn get_package(&self, address: &PackageStorageId) -> Result<Option<SerializedPackage>> {
+    fn get_package(&self, address: &VersionId) -> Result<Option<SerializedPackage>> {
         let addr_path = self.get_package_path(address);
         self.get_package_at_path(&addr_path)
     }
 
-    pub fn has_package(&self, package_id: &PackageStorageId) -> bool {
+    pub fn has_package(&self, package_id: &VersionId) -> bool {
         self.get_package_path(package_id).exists()
     }
 
     /// Check if a module at `addr`/`module_id` exists
-    pub fn has_module_in_package(
-        &self,
-        package_id: &PackageStorageId,
-        module_name: &IdentStr,
-    ) -> bool {
+    pub fn has_module_in_package(&self, package_id: &VersionId, module_name: &IdentStr) -> bool {
         self.get_module_path(package_id, module_name).exists()
     }
 
     /// Return the name of the function at `idx` in `module_id`
     pub fn resolve_function(
         &self,
-        package_id: PackageStorageId,
+        package_id: VersionId,
         module_name: &IdentStr,
         idx: u16,
     ) -> Result<Option<Identifier>> {
@@ -285,8 +281,8 @@ impl OnDiskStateView {
             entry.insert(type_name, origin_id);
         }
         let info = PackageInfo {
-            storage_id: pkg_id,
-            runtime_id: package.runtime_id,
+            version_id: pkg_id,
+            original_id: package.runtime_id,
             linkage_table: package.linkage_table,
             type_origin_table,
         };
@@ -314,7 +310,7 @@ impl OnDiskStateView {
 
     /// Build all modules in the self.storage_dir.
     /// Returns an Err if a module does not deserialize.
-    pub fn get_all_packages(&self) -> Result<BTreeMap<PackageStorageId, SerializedPackage>> {
+    pub fn get_all_packages(&self) -> Result<BTreeMap<VersionId, SerializedPackage>> {
         self.package_paths()
             .map(|path| {
                 let package_id = self.storage_id_of_path(&path).unwrap();

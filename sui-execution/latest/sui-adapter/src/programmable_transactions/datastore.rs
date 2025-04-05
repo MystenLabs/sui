@@ -10,7 +10,7 @@ mod checked {
         resolver::{ModuleResolver, SerializedPackage},
         vm_status::StatusCode,
     };
-    use move_vm_runtime::shared::types::PackageStorageId;
+    use move_vm_runtime::shared::types::VersionId;
     use sui_types::{
         base_types::ObjectID, error::SuiResult, move_package::MovePackage,
         storage::BackingPackageStore,
@@ -58,23 +58,23 @@ mod checked {
             }
         }
 
-        fn get_package(&self, package_storage_id: PackageStorageId) -> Option<&MovePackage> {
+        fn get_package(&self, package_version_id: VersionId) -> Option<&MovePackage> {
             self.new_packages
                 .iter()
                 .chain(self.ephemeral_package.iter().cloned())
-                .find(|package| *package.id() == package_storage_id)
+                .find(|package| *package.id() == package_version_id)
         }
 
         fn fetch_package(
             &self,
-            package_storage_id: PackageStorageId,
+            package_version_id: VersionId,
         ) -> PartialVMResult<Option<SerializedPackage>> {
-            Ok(match self.get_package(package_storage_id) {
+            Ok(match self.get_package(package_version_id) {
                 Some(pkg) => Some(pkg.into_serialized_move_package()),
                 None => {
                     match self
                         .resolver
-                        .get_package_object(&ObjectID::from(package_storage_id))
+                        .get_package_object(&ObjectID::from(package_version_id))
                     {
                         Ok(x) => x.map(|pkg| pkg.move_package().into_serialized_move_package()),
                         Err(err) => {

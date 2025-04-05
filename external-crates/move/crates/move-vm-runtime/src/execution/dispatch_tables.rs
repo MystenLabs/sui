@@ -17,7 +17,7 @@ use crate::{
         constants::{
             HISTORICAL_MAX_TYPE_TO_LAYOUT_NODES, MAX_TYPE_INSTANTIATION_NODES, VALUE_DEPTH_MAX,
         },
-        types::{PackageStorageId, RuntimePackageId},
+        types::{DefiningTypeId, OriginalId},
         vm_pointer::VMPointer,
     },
 };
@@ -57,16 +57,16 @@ use std::{
 #[derive(Debug)]
 pub struct VMDispatchTables {
     pub(crate) vm_config: Arc<VMConfig>,
-    pub(crate) loaded_packages: BTreeMap<RuntimePackageId, Arc<Package>>,
+    pub(crate) loaded_packages: BTreeMap<OriginalId, Arc<Package>>,
     /// Representation of runtime type depths. This is separate from the underlying packages to
     /// avoid grabbing write-locks and toward the possibility these may change based on linkage
     /// (e.g., type ugrades or similar).
     /// [SAFETY] Ordering of inner maps is not guaranteed
-    pub(crate) type_depths: BTreeMap<RuntimePackageId, DefinitionMap<DepthFormula>>,
+    pub(crate) type_depths: BTreeMap<OriginalId, DefinitionMap<DepthFormula>>,
     /// Defining ID Set -- a set of all defining IDs on any types mentioned in the package.
     /// [SAFETY] Ordering is not guaranteed
     #[allow(dead_code)]
-    pub(crate) defining_id_origins: BTreeMap<PackageStorageId, RuntimePackageId>,
+    pub(crate) defining_id_origins: BTreeMap<DefiningTypeId, OriginalId>,
 }
 
 /// A `PackageVTable` is a collection of pointers indexed by the module and name
@@ -78,7 +78,7 @@ pub struct PackageVirtualTable {
     /// Representation of runtime types.
     pub types: DefinitionMap<VMPointer<DatatypeDescriptor>>,
     /// Defining ID Set -- a set of all defining IDs on any types mentioned in the package.
-    pub defining_ids: BTreeSet<PackageStorageId>,
+    pub defining_ids: BTreeSet<DefiningTypeId>,
 }
 
 /// This is a lookup-only map for recording information about module members in loaded package
@@ -92,7 +92,7 @@ pub struct DefinitionMap<Value>(HashMap<IntraPackageKey, Value>);
 /// AST will leak memory.
 #[derive(Debug, Clone, Eq, Hash, PartialEq)]
 pub struct VirtualTableKey {
-    pub package_key: RuntimePackageId,
+    pub package_key: OriginalId,
     pub inner_pkg_key: IntraPackageKey,
 }
 
@@ -134,7 +134,7 @@ impl VMDispatchTables {
     /// NOTE: This assumes linkage has already occured.
     pub(crate) fn new(
         vm_config: Arc<VMConfig>,
-        loaded_packages: BTreeMap<RuntimePackageId, Arc<Package>>,
+        loaded_packages: BTreeMap<OriginalId, Arc<Package>>,
     ) -> VMResult<Self> {
         let defining_id_origins = {
             let mut defining_id_map = BTreeMap::new();
@@ -161,7 +161,7 @@ impl VMDispatchTables {
         })
     }
 
-    pub fn get_package(&self, id: &RuntimePackageId) -> PartialVMResult<Arc<Package>> {
+    pub fn get_package(&self, id: &OriginalId) -> PartialVMResult<Arc<Package>> {
         self.loaded_packages.get(id).cloned().ok_or_else(|| {
             PartialVMError::new(StatusCode::VTABLE_KEY_LOOKUP_ERROR)
                 .with_message(format!("Package {} not found", id))
@@ -1039,7 +1039,7 @@ impl<T> DefinitionMap<T> {
 }
 
 impl VirtualTableKey {
-    pub fn new(package_key: RuntimePackageId, inner_pkg_key: IntraPackageKey) -> Self {
+    pub fn new(package_key: OriginalId, inner_pkg_key: IntraPackageKey) -> Self {
         Self {
             package_key,
             inner_pkg_key,
@@ -1047,7 +1047,7 @@ impl VirtualTableKey {
     }
 
     pub fn from_parts(
-        package_key: RuntimePackageId,
+        package_key: OriginalId,
         module_name: IdentifierKey,
         member_name: IdentifierKey,
     ) -> Self {

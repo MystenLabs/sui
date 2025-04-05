@@ -2,7 +2,7 @@
 // Copyright (c) The Move Contributors
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::{dev_utils::storage::StoredPackage, shared::types::RuntimePackageId};
+use crate::{dev_utils::storage::StoredPackage, shared::types::OriginalId};
 use anyhow::Result;
 use move_binary_format::{file_format::CompiledModule, file_format_common::VERSION_MAX};
 use move_compiler::{
@@ -111,9 +111,9 @@ pub fn compile_packages_in_file(filename: &str, dependencies: &[&str]) -> Vec<St
 pub fn compile_packages(
     filename: &str,
     dependencies: &[&str],
-) -> BTreeMap<RuntimePackageId, StoredPackage> {
+) -> BTreeMap<OriginalId, StoredPackage> {
     compile_packages_in_file(filename, dependencies)
         .into_iter()
-        .map(|p| (p.package_id, p))
+        .map(|p| (p.original_id, p))
         .collect()
 }

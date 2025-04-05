@@ -9,7 +9,7 @@ use move_core_types::{
     language_storage::{ModuleId, TypeTag},
 };
 
-use crate::shared::types::{PackageStorageId, RuntimePackageId};
+use crate::shared::types::{OriginalId, VersionId};
 
 /// An execution context that remaps the modules referred to at runtime according to a linkage
 /// table, allowing the same module in storage to be run against different dependencies.
@@ -22,15 +22,15 @@ pub struct LinkageContext {
     // All calls to P in the root package will call 0xCAFE as the Runtime ID, but during loading
     // and JIT compilation we need to rewrite these. The linkage table here will redirect 0xCAFE to
     // 0xDEAD for this purpose.
-    pub linkage_table: BTreeMap<RuntimePackageId, PackageStorageId>,
+    pub linkage_table: BTreeMap<OriginalId, VersionId>,
 }
 
 impl LinkageContext {
-    pub fn new(linkage_table: BTreeMap<RuntimePackageId, PackageStorageId>) -> Self {
+    pub fn new(linkage_table: BTreeMap<OriginalId, VersionId>) -> Self {
         Self { linkage_table }
     }
 
-    pub fn contains_key(&self, address: &RuntimePackageId) -> bool {
+    pub fn contains_key(&self, address: &OriginalId) -> bool {
         self.linkage_table.contains_key(address)
     }
 
@@ -39,18 +39,18 @@ impl LinkageContext {
     /// Runtime ID in the linkage.
     pub fn add_entry(
         &mut self,
-        runtime_id: RuntimePackageId,
-        storage_id: PackageStorageId,
+        original_id: OriginalId,
+        version_id: VersionId,
     ) -> PartialVMResult<()> {
-        if self.linkage_table.contains_key(&storage_id) {
+        if self.linkage_table.contains_key(&version_id) {
             return Err(
                 PartialVMError::new(move_core_types::vm_status::StatusCode::LINKER_ERROR)
                     .with_message(format!(
-                        "Storage ID {storage_id} is a key in the current linkage context"
+                        "Package ID {version_id} is a key in the current linkage context"
                     )),
             );
         };
-        self.linkage_table.insert(runtime_id, storage_id);
+        self.linkage_table.insert(original_id, version_id);
         Ok(())
     }
 
@@ -97,10 +97,10 @@ impl LinkageContext {
         self.relocate(module_id)
     }
 
-    /// Gives the root package plus transitive dependencies (as stored package IDs) of the linking
-    /// context. This is computed as the values of the linkage table, which must necessarily
-    /// include the root package address.
-    pub fn all_packages(&self) -> VMResult<BTreeSet<PackageStorageId>> {
+    /// Gives the root package plus transitive dependencies (as published package IDs) of the
+    /// linking context. This is computed as the values of the linkage table, which must
+    /// necessarily include the root package address.
+    pub fn all_packages(&self) -> VMResult<BTreeSet<VersionId>> {
         Ok(self
             .linkage_table
             .values()
@@ -108,12 +108,12 @@ impl LinkageContext {
             .collect::<BTreeSet<_>>())
     }
 
-    /// Gives the transitive dependencies (as stored package IDs) of the linking context. This is
-    /// computed as the values of the linkage table, minus the root package address.
+    /// Gives the transitive dependencies (as published package IDs) of the linking context. This
+    /// is computed as the values of the linkage table, minus the root package address.
     pub fn all_package_dependencies_except(
         &self,
-        except: PackageStorageId,
-    ) -> VMResult<BTreeSet<PackageStorageId>> {
+        except: VersionId,
+    ) -> VMResult<BTreeSet<VersionId>> {
         Ok(self
             .linkage_table
             .values()

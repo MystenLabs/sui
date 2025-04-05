@@ -12,7 +12,7 @@ use crate::{
     runtime::MoveRuntime,
     shared::{
         linkage_context::LinkageContext,
-        types::{PackageStorageId, RuntimePackageId},
+        types::{DefiningTypeId, OriginalId},
     },
     validation::verification::ast as verif_ast,
 };
@@ -53,12 +53,12 @@ impl InMemoryTestAdapter {
         self.storage.publish_package(pkg);
     }
 
-    pub fn get_package(&self, package_id: &RuntimePackageId) -> VMResult<SerializedPackage> {
-        let Ok([Some(pkg)]) = self.storage.get_packages_static([*package_id]) else {
+    pub fn get_package(&self, original_id: &OriginalId) -> VMResult<SerializedPackage> {
+        let Ok([Some(pkg)]) = self.storage.get_packages_static([*original_id]) else {
             return Err(PartialVMError::new(StatusCode::LINKER_ERROR)
                 .with_message(format!(
                     "Cannot find package {:?} in data cache",
-                    package_id
+                    original_id
                 ))
                 .finish(Location::Undefined));
         };
@@ -116,18 +116,18 @@ impl InMemoryTestAdapter {
 impl VMTestAdapter<InMemoryStorage> for InMemoryTestAdapter {
     fn verify_package<'extensions>(
         &mut self,
-        runtime_id: RuntimePackageId,
+        original_id: OriginalId,
         package: SerializedPackage,
     ) -> VMResult<(verif_ast::Package, MoveVM<'extensions>)> {
-        let Some(storage_id) = package.linkage_table.get(&runtime_id).cloned() else {
+        let Some(version_id) = package.linkage_table.get(&original_id).cloned() else {
             // TODO: VM error instead?
-            panic!("Did not find runtime ID {runtime_id} in linkage context.");
+            panic!("Did not find runtime ID {original_id} in linkage context.");
         };
-        assert_eq!(storage_id, package.storage_id);
+        assert_eq!(version_id, package.storage_id);
         let mut gas_meter = GasStatus::new_unmetered();
         self.runtime.validate_package(
             &self.storage,
-            runtime_id,
+            original_id,
             package.clone(),
             &mut gas_meter,
             NativeContextExtensions::default(),
@@ -136,14 +136,14 @@ impl VMTestAdapter<InMemoryStorage> for InMemoryTestAdapter {
 
     fn publish_verified_package(
         &mut self,
-        runtime_id: RuntimePackageId,
+        original_id: OriginalId,
         package: verif_ast::Package,
     ) -> VMResult<()> {
-        let Some(storage_id) = package.linkage_table.get(&runtime_id).cloned() else {
+        let Some(version_id) = package.linkage_table.get(&original_id).cloned() else {
             // TODO: VM error instead?
-            panic!("Did not find runtime ID {runtime_id} in linkage context.");
+            panic!("Did not find runtime ID {original_id} in linkage context.");
         };
-        assert!(storage_id == package.storage_id);
+        assert!(version_id == package.version_id);
         self.storage
             .publish_package(StoredPackage::from_verified_package(package));
         Ok(())
@@ -174,8 +174,8 @@ impl VMTestAdapter<InMemoryStorage> for InMemoryTestAdapter {
     // TODO: It would be great, longer term, to move this to the trait and reuse it.
     fn generate_linkage_context(
         &self,
-        runtime_package_id: RuntimePackageId,
-        storage_id: PackageStorageId,
+        original_id: OriginalId,
+        version_id: DefiningTypeId,
         modules: &[CompiledModule],
     ) -> VMResult<LinkageContext> {
         let mut all_dependencies: BTreeSet<AccountAddress> = BTreeSet::new();
@@ -184,7 +184,7 @@ impl VMTestAdapter<InMemoryStorage> for InMemoryTestAdapter {
                 .immediate_dependencies()
                 .iter()
                 .map(|dep| dep.address())
-                .filter(|dep| *dep != &runtime_package_id)
+                .filter(|dep| *dep != &original_id)
             {
                 // If this dependency is in here, its transitive dependencies are, too.
                 if all_dependencies.contains(dep) {
@@ -196,25 +196,25 @@ impl VMTestAdapter<InMemoryStorage> for InMemoryTestAdapter {
         }
         // Consider making tehse into VM errors on failure instead.
         assert!(
-            !all_dependencies.remove(&storage_id),
+            !all_dependencies.remove(&version_id),
             "Found circular dependencies during linkage generation."
         );
         assert!(
-            !all_dependencies.contains(&runtime_package_id),
+            !all_dependencies.contains(&original_id),
             "Found circular dependencies during linkage generation."
         );
         let linkage_context = LinkageContext::new(
             all_dependencies
                 .into_iter()
                 .map(|id| (id, id))
-                .chain(vec![(runtime_package_id, storage_id)])
+                .chain(vec![(original_id, version_id)])
                 .collect(),
         );
         Ok(linkage_context)
     }
 
-    fn get_package_from_store(&self, package_id: &PackageStorageId) -> VMResult<SerializedPackage> {
-        self.get_package(package_id)
+    fn get_package_from_store(&self, version_id: &DefiningTypeId) -> VMResult<SerializedPackage> {
+        self.get_package(version_id)
     }
 
     fn runtime(&mut self) -> &mut MoveRuntime {

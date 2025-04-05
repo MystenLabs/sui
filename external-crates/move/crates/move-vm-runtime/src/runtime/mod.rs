@@ -7,7 +7,7 @@ use crate::{
     execution::{dispatch_tables::VMDispatchTables, interpreter::locals::BaseHeap, vm::MoveVM},
     jit,
     natives::{extensions::NativeContextExtensions, functions::NativeFunctions},
-    shared::{gas::GasMeter, linkage_context::LinkageContext, types::RuntimePackageId},
+    shared::{gas::GasMeter, linkage_context::LinkageContext, types::OriginalId},
     validation::{validate_for_publish, validate_for_vm_execution, verification::ast as verif_ast},
 };
 
@@ -116,8 +116,8 @@ impl MoveRuntime {
         validate_for_vm_execution(validation_packages)?;
         let runtime_packages = packages
             .into_values()
-            .map(|pkg| (pkg.runtime.runtime_id, Arc::clone(&pkg.runtime)))
-            .collect::<BTreeMap<RuntimePackageId, Arc<jit::execution::ast::Package>>>();
+            .map(|pkg| (pkg.runtime.original_id, Arc::clone(&pkg.runtime)))
+            .collect::<BTreeMap<OriginalId, Arc<jit::execution::ast::Package>>>();
 
         let virtual_tables = VMDispatchTables::new(self.vm_config.clone(), runtime_packages)?;
 
@@ -152,13 +152,13 @@ impl MoveRuntime {
     pub fn validate_package<'extensions, DataCache: ModuleResolver>(
         &self,
         data_cache: DataCache,
-        pkg_runtime_id: RuntimePackageId,
+        original_id: OriginalId,
         pkg: SerializedPackage,
         _gas_meter: &mut impl GasMeter,
         native_extensions: NativeContextExtensions<'extensions>,
     ) -> VMResult<(verif_ast::Package, MoveVM<'extensions>)> {
-        let storage_id = pkg.storage_id;
-        dbg_println!("\n\nPublishing module at {storage_id} (=> {pkg_runtime_id})\n\n");
+        let version_id = pkg.storage_id;
+        dbg_println!("\n\nPublishing module at {version_id} (=> {original_id})\n\n");
 
         let data_cache = TransactionDataCache::new(data_cache);
         let link_context = LinkageContext::new(pkg.linkage_table.clone());
@@ -180,7 +180,7 @@ impl MoveRuntime {
                 .iter()
                 .map(|(id, pkg)| (*id, &*pkg.verified))
                 .collect();
-            validate_for_publish(&self.natives, &self.vm_config, pkg_runtime_id, pkg, deps)
+            validate_for_publish(&self.natives, &self.vm_config, original_id, pkg, deps)
         }?;
         dbg_println!("\n\nVerified package\n\n");
 
@@ -195,8 +195,8 @@ impl MoveRuntime {
         let runtime_packages = pkg_dependencies
             .into_values()
             .chain([published_package])
-            .map(|pkg| (pkg.runtime.runtime_id, Arc::clone(&pkg.runtime)))
-            .collect::<BTreeMap<RuntimePackageId, Arc<jit::execution::ast::Package>>>();
+            .map(|pkg| (pkg.runtime.original_id, Arc::clone(&pkg.runtime)))
+            .collect::<BTreeMap<OriginalId, Arc<jit::execution::ast::Package>>>();
 
         let virtual_tables = VMDispatchTables::new(self.vm_config.clone(), runtime_packages)?;
 

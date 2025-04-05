@@ -11,7 +11,7 @@ use move_core_types::{
     resolver::ModuleResolver,
     vm_status::{StatusCode, StatusType},
 };
-use move_vm_runtime::shared::types::PackageStorageId;
+use move_vm_runtime::shared::types::VersionId;
 use sui_protocol_config::ProtocolConfig;
 use sui_types::{base_types::ObjectID, error::ExecutionError, Identifier};
 use sui_types::{
@@ -39,13 +39,13 @@ pub(crate) fn convert_vm_error(
             ExecutionFailureStatus::VMInvariantViolation
         }
         (StatusCode::ABORTED, Some(code), Location::Module(id)) => {
-            let storage_id = resolution_linkage
+            let version_id = resolution_linkage
                 .linkage
                 .get(&ObjectID::from(*id.address()))
                 .map(|a| **a);
 
             let abort_location_id = if protocol_config.resolve_abort_locations_to_package_id() {
-                storage_id.unwrap_or_else(|| *id.address())
+                version_id.unwrap_or_else(|| *id.address())
             } else {
                 *id.address()
             };
@@ -54,9 +54,9 @@ pub(crate) fn convert_vm_error(
             let offset = error.offsets().first().copied().map(|(f, i)| (f.0, i));
             debug_assert!(offset.is_some(), "Move should set the location on aborts");
             let (function, instruction) = offset.unwrap_or((0, 0));
-            let function_name = storage_id.and_then(|storage_id| {
+            let function_name = version_id.and_then(|version_id| {
                 load_module_function_name(
-                    storage_id,
+                    version_id,
                     id.name().to_owned(),
                     FunctionDefinitionIndex(function),
                     state_view,
@@ -85,14 +85,14 @@ pub(crate) fn convert_vm_error(
                             "Move should set the location on all execution errors. Error {error}"
                         );
                         let (function, instruction) = offset.unwrap_or((0, 0));
-                        let storage_id = resolution_linkage
+                        let version_id = resolution_linkage
                             .linkage
                             .get(&ObjectID::from(*id.address()))
                             .map(|a| **a);
 
-                        let function_name = storage_id.and_then(|storage_id| {
+                        let function_name = version_id.and_then(|version_id| {
                             load_module_function_name(
-                                storage_id,
+                                version_id,
                                 id.name().to_owned(),
                                 FunctionDefinitionIndex(function),
                                 state_view,
@@ -121,14 +121,14 @@ pub(crate) fn convert_vm_error(
 }
 
 fn load_module_function_name(
-    package_storage_id: PackageStorageId,
+    package_version_id: VersionId,
     module_name: Identifier,
     function_index: FunctionDefinitionIndex,
     state_view: &impl ModuleResolver,
     protocol_config: &ProtocolConfig,
 ) -> Option<String> {
     state_view
-        .get_module(&ModuleId::new(package_storage_id, module_name))
+        .get_module(&ModuleId::new(package_version_id, module_name))
         .ok()
         .flatten()
         .and_then(|m| {

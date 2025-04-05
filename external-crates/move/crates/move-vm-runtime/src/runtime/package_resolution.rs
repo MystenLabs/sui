@@ -13,7 +13,7 @@ use crate::{
     natives::functions::NativeFunctions,
     shared::{
         data_store::DataStore, linkage_context::LinkageContext,
-        logging::expect_no_verification_errors, types::PackageStorageId,
+        logging::expect_no_verification_errors, types::VersionId,
     },
     validation::{validate_package, verification},
 };
@@ -34,8 +34,8 @@ pub fn resolve_packages(
     natives: &NativeFunctions,
     data_store: &impl DataStore,
     link_context: &LinkageContext,
-    packages_to_read: BTreeSet<PackageStorageId>,
-) -> VMResult<BTreeMap<PackageStorageId, Arc<move_cache::Package>>> {
+    packages_to_read: BTreeSet<VersionId>,
+) -> VMResult<BTreeMap<VersionId, Arc<move_cache::Package>>> {
     dbg_println!("loading {packages_to_read:#?} in linkage context {link_context:#?}");
     let allow_loading_failure = true;
 
@@ -63,7 +63,7 @@ pub fn resolve_packages(
         &pkgs_to_cache,
     )? {
         let pkg = jit_and_cache_package(cache, natives, link_context, pkg)?;
-        cached_packages.insert(pkg.verified.storage_id, pkg);
+        cached_packages.insert(pkg.verified.version_id, pkg);
     }
 
     // The number of cached packages should be the same as the number of packages provided to
@@ -82,7 +82,7 @@ pub fn load_and_verify_packages(
     natives: &NativeFunctions,
     data_store: &impl DataStore,
     allow_loading_failure: bool,
-    packages_to_read: &BTreeSet<PackageStorageId>,
+    packages_to_read: &BTreeSet<VersionId>,
 ) -> VMResult<Vec<verification::ast::Package>> {
     let packages = packages_to_read.iter().cloned().collect::<Vec<_>>();
     let packages = match data_store.load_packages(&packages) {
@@ -108,9 +108,9 @@ pub fn jit_package_for_publish(
     link_context: &LinkageContext,
     verified_pkg: verification::ast::Package,
 ) -> VMResult<Arc<move_cache::Package>> {
-    let storage_id = verified_pkg.storage_id;
-    if cache.cached_package_at(storage_id).is_some() {
-        return Ok(cache.cached_package_at(storage_id).unwrap());
+    let version_id = verified_pkg.version_id;
+    if cache.cached_package_at(version_id).is_some() {
+        return Ok(cache.cached_package_at(version_id).unwrap());
     }
 
     let runtime_pkg = jit::translate_package(
@@ -134,12 +134,12 @@ pub fn jit_and_cache_package(
     link_context: &LinkageContext,
     verified_pkg: verification::ast::Package,
 ) -> VMResult<Arc<move_cache::Package>> {
-    let storage_id = verified_pkg.storage_id;
+    let version_id = verified_pkg.version_id;
     // If the package is already in the cache, return it.
     // This is possible since the cache is shared and may be inserted into concurrently by other
     // VMs working over the same cache.
-    if cache.cached_package_at(storage_id).is_some() {
-        return Ok(cache.cached_package_at(storage_id).unwrap());
+    if cache.cached_package_at(version_id).is_some() {
+        return Ok(cache.cached_package_at(version_id).unwrap());
     }
 
     let runtime_pkg = jit::translate_package(
@@ -150,9 +150,9 @@ pub fn jit_and_cache_package(
     )
     .map_err(|err| err.finish(Location::Undefined))?;
 
-    cache.add_to_cache(storage_id, verified_pkg, runtime_pkg);
+    cache.add_to_cache(version_id, verified_pkg, runtime_pkg);
 
-    cache.cached_package_at(storage_id).ok_or_else(|| {
+    cache.cached_package_at(version_id).ok_or_else(|| {
         PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR)
             .with_message("Package not found in cache after loading".to_string())
             .finish(Location::Undefined)

@@ -7,7 +7,7 @@ use crate::{
     runtime::MoveRuntime,
     shared::{
         linkage_context::LinkageContext,
-        types::{PackageStorageId, RuntimePackageId},
+        types::{DefiningTypeId, OriginalId},
     },
     validation::verification::ast as verif_ast,
 };
@@ -23,7 +23,7 @@ pub trait VMTestAdapter<Storage: ModuleResolver + Sync + Send> {
     /// inside of it (such as ).
     fn verify_package<'extensions>(
         &mut self,
-        runtime_id: RuntimePackageId,
+        original_id: OriginalId,
         package: SerializedPackage,
     ) -> VMResult<(verif_ast::Package, MoveVM<'extensions>)>;
 
@@ -31,7 +31,7 @@ pub trait VMTestAdapter<Storage: ModuleResolver + Sync + Send> {
     /// This publishes the package to the adapter so that it is available for subsequent calls.
     fn publish_verified_package(
         &mut self,
-        runtime_id: RuntimePackageId,
+        original_id: OriginalId,
         package: verif_ast::Package,
     ) -> VMResult<()>;
 
@@ -39,11 +39,11 @@ pub trait VMTestAdapter<Storage: ModuleResolver + Sync + Send> {
     /// This publishes the package to the adapter so that it is available for subsequent calls.
     fn publish_package(
         &mut self,
-        runtime_id: RuntimePackageId,
+        original_id: OriginalId,
         package: SerializedPackage,
     ) -> VMResult<()> {
-        let (verif_pkg, _vm) = self.verify_package(runtime_id, package)?;
-        self.publish_verified_package(runtime_id, verif_pkg)
+        let (verif_pkg, _vm) = self.verify_package(original_id, package)?;
+        self.publish_verified_package(original_id, verif_pkg)
     }
 
     /// Generate a VM instance which holds the relevant virtual tables for the provided linkage
@@ -61,24 +61,24 @@ pub trait VMTestAdapter<Storage: ModuleResolver + Sync + Send> {
         native_extensions: NativeContextExtensions<'extensions>,
     ) -> VMResult<MoveVM<'extensions>>;
 
-    /// Generate a linkage context for a given runtime ID, storage ID, and list of compiled modules.
+    /// Generate a linkage context for a given version ID, original ID, and list of compiled modules.
     /// This must include all of the transitive dependencies of the provided modules in the linkage
     /// context. This may produce an error if the adapter cannot find the relevant dependencies in
     /// its storage.
     fn generate_linkage_context(
         &self,
-        runtime_package_id: RuntimePackageId,
-        storage_id: PackageStorageId,
+        original_id: OriginalId,
+        version_id: DefiningTypeId,
         modules: &[CompiledModule],
     ) -> VMResult<LinkageContext>;
 
     /// Retrieve the linkage context for the given package in `Storage`.
-    fn get_linkage_context(&self, package_id: PackageStorageId) -> VMResult<LinkageContext> {
-        let pkg = self.get_package_from_store(&package_id)?;
+    fn get_linkage_context(&self, version_id: DefiningTypeId) -> VMResult<LinkageContext> {
+        let pkg = self.get_package_from_store(&version_id)?;
         Ok(LinkageContext::new(pkg.linkage_table))
     }
 
-    fn get_package_from_store(&self, package_id: &PackageStorageId) -> VMResult<SerializedPackage>;
+    fn get_package_from_store(&self, version_id: &DefiningTypeId) -> VMResult<SerializedPackage>;
 
     /// Get the move runtime associated with the adapter.
     fn runtime(&mut self) -> &mut MoveRuntime;
