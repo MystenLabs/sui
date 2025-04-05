@@ -53,8 +53,15 @@ macro_rules! debug_writeln {
 //  concrete Move concepts and may carry additional information that is not defined by the
 //  language, but required by the implementation.
 
-#[derive(Debug)]
 pub struct MemBox<T: Sized>(std::rc::Rc<std::cell::RefCell<T>>);
+
+impl<T: Debug> std::fmt::Debug for MemBox<T> {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        write!(f, "MemBox[{:p}](", self.0)?;
+        write!(f, "{:?}", self.0)?;
+        write!(f, ")")
+    }
+}
 
 #[derive(Debug)]
 pub enum Value {
@@ -395,11 +402,24 @@ impl<T: Debug> MemBox<T> {
     fn ptr_clone(&self) -> Self {
         MemBox(std::rc::Rc::clone(&self.0))
     }
+
+    #[cfg(test)]
+    #[allow(non_snake_case)]
+    /// This is strictly for testing cycle dropping.
+    /// If you ever mark this not #[cfg(test)] you will have your VM implementor card revoked.
+    pub(crate) fn UNSAFE_ptr_clone(&self) -> Self {
+        MemBox(std::rc::Rc::clone(&self.0))
+    }
 }
 
 impl MemBox<Value> {
     pub fn as_ref_value(&self) -> Value {
         Value::Reference(Reference::Value(self.ptr_clone()))
+    }
+
+    // Returns the underlying pointer
+    fn as_ptr(&self) -> usize {
+        self.0.as_ptr() as usize
     }
 }
 
@@ -788,6 +808,11 @@ impl Value {
 impl Reference {
     pub fn equals(&self, other: &Reference) -> PartialVMResult<bool> {
         match (self, other) {
+            (Reference::Value(mem_box_1), Reference::Value(mem_box_2))
+                if mem_box_1.as_ptr() == mem_box_2.as_ptr() =>
+            {
+                Ok(true)
+            }
             (Reference::Value(mem_box_1), Reference::Value(mem_box_2)) => {
                 mem_box_1.borrow().equals(&mem_box_2.borrow())
             }
@@ -957,6 +982,28 @@ impl StructRef {
             ),
         }
     }
+
+    #[cfg(test)]
+    #[allow(non_snake_case)]
+    /// This is strictly for testing cycle dropping.
+    /// If you ever mark this not #[cfg(test)] you will have your VM implementor card revoked.
+    pub fn UNSAFE_write_field_box(
+        &mut self,
+        index: usize,
+        mem_box: MemBox<Value>,
+    ) -> PartialVMResult<()> {
+        let container = &mut *self.0.borrow_mut();
+        match container {
+            Value::Struct(fixed_vec) => {
+                fixed_vec.0[index] = mem_box;
+                Ok(())
+            }
+            _ => Err(
+                PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR)
+                    .with_message("Container is not a struct".to_string()),
+            ),
+        }
+    }
 }
 
 impl VariantRef {
@@ -968,13 +1015,9 @@ impl VariantRef {
     /// Checks that the variant tag matches the expected tag.
     pub fn check_tag(&self, expected_tag: VariantTag) -> PartialVMResult<()> {
         let tag = *self.0.borrow().variant_ref()?.as_ref().0;
-        println!("borrowed");
         if tag == expected_tag {
-            println!("tag checked");
             Ok(())
         } else {
-            println!("error");
-            println!("formatted");
             Err(
                 PartialVMError::new(StatusCode::VARIANT_TAG_MISMATCH).with_message(format!(
                     "Variant tag mismatch: expected {:?}, found {:?}",
@@ -987,7 +1030,6 @@ impl VariantRef {
     /// Unpacks the variant and returns a Vec of field references (in order).
     /// Each field is returned as a Value::Reference wrapping a cloned pointer.
     pub fn unpack_variant(&self) -> PartialVMResult<Vec<Value>> {
-        println!("Unpacking variant: {:?}", self.0);
         let value_ref = self.0.borrow();
         if let Value::Variant(boxed_variant) = &*value_ref {
             let (_tag, fixed_vec) = boxed_variant.as_ref();
@@ -2372,6 +2414,7 @@ impl GlobalValueImpl {
         }
     }
 
+    #[deprecated(note = "Remove this after fingerprinting is enabled")]
     fn into_effect(self) -> Option<Op<Value>> {
         match self {
             Self::None => None,
@@ -2425,8 +2468,9 @@ impl GlobalValueImpl {
         match self {
             Self::None | Self::Deleted => None,
             Self::Fresh { container } | Self::Cached { container, .. } => {
-                let struct_ @ Value::Struct(_)
-                    = container.take().expect("Could not take global value ") else {
+                let struct_ @ Value::Struct(_) =
+                    container.take().expect("Could not take global value ")
+                else {
                     unreachable!()
                 };
                 Some(struct_)
@@ -2463,6 +2507,7 @@ impl GlobalValue {
     }
 
     pub fn into_effect(self) -> Option<Op<Value>> {
+        #[allow(deprecated)]
         self.0.into_effect()
     }
 

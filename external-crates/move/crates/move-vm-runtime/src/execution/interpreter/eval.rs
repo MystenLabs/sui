@@ -818,8 +818,7 @@ fn op_step_impl(
         | Bytecode::UnpackVariantGenericMutRef(variant_inst_ptr) => {
             let reference = state.pop_operand_as::<VariantRef>()?;
             let variant_tag = variant_inst_ptr.variant.variant_tag;
-            let tag_check = reference.check_tag(variant_tag);
-            tag_check?;
+            reference.check_tag(variant_tag)?;
             let references = reference.unpack_variant()?;
             gas_meter.charge_unpack(true, references.iter())?;
             for reference in references {
