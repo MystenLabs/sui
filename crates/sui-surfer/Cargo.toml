@@ -19,8 +19,11 @@ async-trait.workspace = true
 bcs.workspace = true
 clap.workspace = true
 futures.workspace = true
+scopeguard.workspace = true
 indexmap.workspace = true
 rand.workspace = true
+parking_lot.workspace = true
+mysten-common.workspace = true
 tokio = { workspace = true, features = ["full", "tracing", "test-util"] }
 tracing.workspace = true
 

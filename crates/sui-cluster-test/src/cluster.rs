@@ -18,7 +18,7 @@ use sui_pg_db::temp::TempDb;
 use sui_sdk::sui_client_config::{SuiClientConfig, SuiEnv};
 use sui_sdk::wallet_context::WalletContext;
 use sui_swarm::memory::Swarm;
-use sui_swarm_config::genesis_config::GenesisConfig;
+use sui_swarm_config::genesis_config::{GenesisConfig, DEFAULT_GAS_AMOUNT};
 use sui_swarm_config::network_config::NetworkConfig;
 use sui_types::base_types::SuiAddress;
 use sui_types::crypto::KeypairTraits;
@@ -204,7 +204,7 @@ impl Cluster for LocalNewCluster {
             cluster_builder = cluster_builder.with_config_dir(config_dir);
         } else {
             // Let the faucet account hold 1000 gas objects on genesis
-            let genesis_config = GenesisConfig::custom_genesis(1, 100);
+            let genesis_config = GenesisConfig::custom_genesis(1, 100, DEFAULT_GAS_AMOUNT);
             // Custom genesis should be build here where we add the extra accounts
             cluster_builder = cluster_builder.set_genesis_config(genesis_config);
 
