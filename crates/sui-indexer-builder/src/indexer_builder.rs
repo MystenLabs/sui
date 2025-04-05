@@ -13,7 +13,7 @@ use tokio::task::JoinHandle;
 use crate::metrics::IndexerMetricProvider;
 use crate::{Task, Tasks};
 use mysten_metrics::{metered_channel, spawn_monitored_task};
-use tap::tap::TapFallible;
+use tap::TapFallible;
 
 type CheckpointData<T> = (u64, Vec<T>);
 pub type DataSender<T> = metered_channel::Sender<CheckpointData<T>>;
