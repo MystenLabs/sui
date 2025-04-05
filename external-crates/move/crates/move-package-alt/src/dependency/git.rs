@@ -25,7 +25,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::errors::PackageResult;
 
-use super::{Pinned, Unpinned};
+use super::{DependencySet, Pinned, Unpinned};
 
 #[derive(Serialize, Deserialize)]
 #[derive_where(Clone)]
@@ -43,9 +43,15 @@ pub struct GitDependency<P = Unpinned> {
 }
 
 impl GitDependency<Unpinned> {
+    /// Replace all commit-ishes in [deps] with commits (i.e. SHAs). Requires fetching the git
+    /// repositories
+    pub fn pin(deps: &DependencySet<Self>) -> PackageResult<DependencySet<GitDependency<Pinned>>> {
+        todo!()
+    }
+
     /// Replace the commit-ish [self.rev] with a commit (i.e. a SHA). Requires fetching the git
     /// repository
-    pub fn pin(&self) -> PackageResult<GitDependency<Pinned>> {
+    fn pin_one(&self) -> PackageResult<GitDependency<Pinned>> {
         todo!()
     }
 }
