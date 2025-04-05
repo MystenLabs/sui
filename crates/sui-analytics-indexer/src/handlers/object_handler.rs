@@ -3,7 +3,6 @@
 
 use anyhow::Result;
 use fastcrypto::encoding::{Base64, Encoding};
-use std::path::Path;
 use sui_data_ingestion_core::Worker;
 use sui_types::{TypeTag, SYSTEM_PACKAGE_ADDRESSES};
 use tokio::sync::Mutex;
@@ -89,8 +88,7 @@ impl AnalyticsHandler<ObjectEntry> for ObjectHandler {
 }
 
 impl ObjectHandler {
-    pub fn new(store_path: &Path, rest_uri: &str, package_filter: &Option<String>) -> Self {
-        let package_store = LocalDBPackageStore::new(&store_path.join("object"), rest_uri);
+    pub fn new(package_store: LocalDBPackageStore, package_filter: &Option<String>) -> Self {
         let state = State {
             objects: vec![],
             package_store: package_store.clone(),
@@ -311,11 +309,8 @@ mod tests {
     #[tokio::test]
     async fn test_check_type_hierarchy() {
         let temp_dir = tempfile::tempdir().unwrap();
-        let handler = ObjectHandler::new(
-            temp_dir.path(),
-            "http://localhost:9000",
-            &Some("0xabc".to_string()),
-        );
+        let package_store = LocalDBPackageStore::new(temp_dir.path(), "http://localhost:9000");
+        let handler = ObjectHandler::new(package_store, &Some("0xabc".to_string()));
         let mut state = handler.state.lock().await;
 
         // 1. Direct match

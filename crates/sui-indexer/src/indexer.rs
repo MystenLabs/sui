@@ -1,22 +1,18 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::collections::HashMap;
 use std::env;
 
 use anyhow::Result;
+use futures::future::try_join_all;
+use mysten_metrics::spawn_monitored_task;
 use prometheus::Registry;
+use sui_data_ingestion_core::{
+    DataIngestionMetrics, IndexerExecutor, ReaderOptions, ShimIndexerProgressStore, WorkerPool,
+};
 use tokio::sync::oneshot;
 use tokio_util::sync::CancellationToken;
 use tracing::info;
-
-use async_trait::async_trait;
-use futures::future::try_join_all;
-use mysten_metrics::spawn_monitored_task;
-use sui_data_ingestion_core::{
-    DataIngestionMetrics, IndexerExecutor, ProgressStore, ReaderOptions, WorkerPool,
-};
-use sui_types::messages_checkpoint::CheckpointSequenceNumber;
 
 use crate::build_json_rpc_server;
 use crate::config::{IngestionConfig, JsonRpcConfig, RetentionConfig, SnapshotLagConfig};
@@ -94,10 +90,14 @@ impl Indexer {
         .await?;
         // Ingestion task watermarks are snapshotted once on indexer startup based on the
         // corresponding watermark table before being handed off to the ingestion task.
-        let progress_store = ShimIndexerProgressStore::new(vec![
-            ("primary".to_string(), primary_watermark),
-            ("object_snapshot".to_string(), object_snapshot_watermark),
-        ]);
+        let progress_store = ShimIndexerProgressStore::new(
+            vec![
+                ("primary".to_string(), primary_watermark),
+                ("object_snapshot".to_string(), object_snapshot_watermark),
+            ]
+            .into_iter()
+            .collect(),
+        );
         let mut executor = IndexerExecutor::new(
             progress_store.clone(),
             2,
@@ -182,30 +182,6 @@ impl Indexer {
             .await
             .expect("Rpc server task failed");
 
-        Ok(())
-    }
-}
-
-#[derive(Clone)]
-struct ShimIndexerProgressStore {
-    watermarks: HashMap<String, CheckpointSequenceNumber>,
-}
-
-impl ShimIndexerProgressStore {
-    fn new(watermarks: Vec<(String, CheckpointSequenceNumber)>) -> Self {
-        Self {
-            watermarks: watermarks.into_iter().collect(),
-        }
-    }
-}
-
-#[async_trait]
-impl ProgressStore for ShimIndexerProgressStore {
-    async fn load(&mut self, task_name: String) -> Result<CheckpointSequenceNumber> {
-        Ok(*self.watermarks.get(&task_name).expect("missing watermark"))
-    }
-
-    async fn save(&mut self, _: String, _: CheckpointSequenceNumber) -> Result<()> {
         Ok(())
     }
 }

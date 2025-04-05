@@ -4,7 +4,6 @@
 use anyhow::Result;
 use fastcrypto::encoding::{Base64, Encoding};
 use std::collections::HashMap;
-use std::path::Path;
 use sui_data_ingestion_core::Worker;
 use sui_indexer::errors::IndexerError;
 use sui_types::object::bounded_visitor::BoundedVisitor;
@@ -90,8 +89,7 @@ impl AnalyticsHandler<DynamicFieldEntry> for DynamicFieldHandler {
 }
 
 impl DynamicFieldHandler {
-    pub fn new(store_path: &Path, rest_uri: &str) -> Self {
-        let package_store = LocalDBPackageStore::new(&store_path.join("dynamic_field"), rest_uri);
+    pub fn new(package_store: LocalDBPackageStore) -> Self {
         let state = State {
             dynamic_fields: vec![],
             package_store: package_store.clone(),
