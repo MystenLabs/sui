@@ -42,23 +42,23 @@ pub const PING_PATH: &str = "/ping";
 pub const METRICS_KEY_PATH: &str = "/metrics_pub_key";
 
 // Important: for BridgeActions, the paths need to match the ones in bridge_client.rs
-pub const ETH_TO_SUI_TX_PATH: &str = "/sign/bridge_tx/eth/sui/:tx_hash/:event_index";
-pub const SUI_TO_ETH_TX_PATH: &str = "/sign/bridge_tx/sui/eth/:tx_digest/:event_index";
+pub const ETH_TO_SUI_TX_PATH: &str = "/sign/bridge_tx/eth/sui/{tx_hash}/{event_index}";
+pub const SUI_TO_ETH_TX_PATH: &str = "/sign/bridge_tx/sui/eth/{tx_digest}/{event_index}";
 pub const COMMITTEE_BLOCKLIST_UPDATE_PATH: &str =
-    "/sign/update_committee_blocklist/:chain_id/:nonce/:type/:keys";
-pub const EMERGENCY_BUTTON_PATH: &str = "/sign/emergency_button/:chain_id/:nonce/:type";
+    "/sign/update_committee_blocklist/{chain_id}/{nonce}/{type}/{keys}";
+pub const EMERGENCY_BUTTON_PATH: &str = "/sign/emergency_button/{chain_id}/{nonce}/{type}";
 pub const LIMIT_UPDATE_PATH: &str =
-    "/sign/update_limit/:chain_id/:nonce/:sending_chain_id/:new_usd_limit";
+    "/sign/update_limit/{chain_id}/{nonce}/{sending_chain_id}/{new_usd_limit}";
 pub const ASSET_PRICE_UPDATE_PATH: &str =
-    "/sign/update_asset_price/:chain_id/:nonce/:token_id/:new_usd_price";
+    "/sign/update_asset_price/{chain_id}/{nonce}/{token_id}/{new_usd_price}";
 pub const EVM_CONTRACT_UPGRADE_PATH_WITH_CALLDATA: &str =
-    "/sign/upgrade_evm_contract/:chain_id/:nonce/:proxy_address/:new_impl_address/:calldata";
+    "/sign/upgrade_evm_contract/{chain_id}/{nonce}/{proxy_address}/{new_impl_address}/{calldata}";
 pub const EVM_CONTRACT_UPGRADE_PATH: &str =
-    "/sign/upgrade_evm_contract/:chain_id/:nonce/:proxy_address/:new_impl_address";
+    "/sign/upgrade_evm_contract/{chain_id}/{nonce}/{proxy_address}/{new_impl_address}";
 pub const ADD_TOKENS_ON_SUI_PATH: &str =
-    "/sign/add_tokens_on_sui/:chain_id/:nonce/:native/:token_ids/:token_type_names/:token_prices";
+    "/sign/add_tokens_on_sui/{chain_id}/{nonce}/{native}/{token_ids}/{token_type_names}/{token_prices}";
 pub const ADD_TOKENS_ON_EVM_PATH: &str =
-    "/sign/add_tokens_on_evm/:chain_id/:nonce/:native/:token_ids/:token_addresses/:token_sui_decimals/:token_prices";
+    "/sign/add_tokens_on_evm/{chain_id}/{nonce}/{native}/{token_ids}/{token_addresses}/{token_sui_decimals}/{token_prices}";
 
 // BridgeNode's public metadata that is accessible via the `/ping` endpoint.
 // Be careful with what to put here, as it is public.

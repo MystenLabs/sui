@@ -15,11 +15,11 @@ use std::task::{Context, Poll};
 use tokio_rustls::rustls::ServerConfig;
 use tonic::codegen::http::HeaderValue;
 use tonic::{
-    body::BoxBody,
+    body::Body,
     codegen::http::{Request, Response},
     server::NamedService,
 };
-use tower::{Layer, Service, ServiceBuilder};
+use tower::{Layer, Service, ServiceBuilder, ServiceExt};
 use tower_http::propagate_header::PropagateHeaderLayer;
 use tower_http::set_header::SetRequestHeaderLayer;
 use tower_http::trace::TraceLayer;
@@ -51,10 +51,11 @@ impl<M: MetricsCallbackProvider> ServerBuilder<M> {
     /// Add a new service to this Server.
     pub fn add_service<S>(mut self, svc: S) -> Self
     where
-        S: Service<Request<BoxBody>, Response = Response<BoxBody>, Error = Infallible>
+        S: Service<Request<Body>, Response = Response<Body>, Error = Infallible>
             + NamedService
             + Clone
             + Send
+            + Sync
             + 'static,
         S::Future: Send + 'static,
     {
@@ -126,7 +127,13 @@ impl<M: MetricsCallbackProvider> ServerBuilder<M> {
         let server_handle = builder
             .serve(
                 addr,
-                limiting_layers.service(self.router.into_axum_router().layer(route_layers)),
+                limiting_layers.service(
+                    self.router
+                        .into_axum_router()
+                        .layer(route_layers)
+                        .into_service()
+                        .map_err(tower::BoxError::from),
+                ),
             )
             .map_err(|e| eyre!(e))?;
 

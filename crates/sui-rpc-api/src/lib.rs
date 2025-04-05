@@ -101,7 +101,7 @@ impl RpcService {
             let node_service =
                 crate::proto::node::v2::node_service_server::NodeServiceServer::new(self.clone());
 
-            let (mut health_reporter, health_service) = tonic_health::server::health_reporter();
+            let (health_reporter, health_service) = tonic_health::server::health_reporter();
 
             let reflection_v1 = tonic_reflection::server::Builder::configure()
                 .register_encoded_file_descriptor_set(

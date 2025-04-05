@@ -37,7 +37,8 @@ tokio.workspace = true
 tokio-util.workspace = true
 toml.workspace = true
 tower-layer.workspace = true
-tower.workspace = true
+# tower.workspace = true
+tower = { version = "0.4", features = ["util"] }
 tower-http.workspace = true
 http.workspace = true
 tracing.workspace = true

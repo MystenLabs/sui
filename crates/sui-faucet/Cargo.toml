@@ -10,6 +10,7 @@ publish = false
 anyhow.workspace = true
 async-trait.workspace = true
 axum.workspace = true
+axum-extra.workspace = true
 bin-version.workspace = true
 clap.workspace = true
 dashmap.workspace = true
@@ -32,7 +33,7 @@ parking_lot.workspace = true
 tonic.workspace = true
 reqwest.workspace = true
 once_cell.workspace = true
-tower_governor = "0.4.3"
+tower_governor = "0.7"
 
 sui-json-rpc-types.workspace = true
 sui-types.workspace = true

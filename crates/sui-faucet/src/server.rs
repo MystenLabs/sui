@@ -7,12 +7,13 @@ use crate::{
 };
 use axum::{
     error_handling::HandleErrorLayer,
-    extract::{ConnectInfo, Host, Path},
+    extract::{ConnectInfo, Path},
     http::{header::HeaderMap, StatusCode},
     response::{IntoResponse, Redirect, Response},
     routing::{get, post},
     BoxError, Extension, Json, Router,
 };
+use axum_extra::extract::Host;
 use http::Method;
 use mysten_metrics::spawn_monitored_task;
 use prometheus::Registry;

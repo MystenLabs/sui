@@ -13,8 +13,10 @@ async-graphql = {workspace = true, features = ["dataloader", "apollo_tracing", "
 async-graphql-axum.workspace = true
 async-graphql-value.workspace = true
 async-trait.workspace = true
-axum.workspace = true
-axum-extra.workspace = true
+# axum.workspace = true
+# axum-extra.workspace = true
+axum = { version = "0.7", default-features = false, features = [ "macros", "tokio", "http1", "http2", "json", "matched-path", "original-uri", "form", "query", "ws", ] }
+axum-extra = { version = "0.9", features = ["typed-header"] }
 bin-version.workspace = true
 chrono.workspace = true
 clap.workspace = true
