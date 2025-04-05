@@ -31,13 +31,14 @@ impl Services {
             > + NamedService
             + Clone
             + Send
+            + Sync
             + 'static,
         S::Future: Send + 'static,
         S::Error: Into<BoxError> + Send,
     {
         self.router = self
             .router
-            .route_service(&format!("/{}/*rest", S::NAME), svc);
+            .route_service(&format!("/{}/{{*rest}}", S::NAME), svc);
         self
     }
 

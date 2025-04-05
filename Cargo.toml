@@ -283,7 +283,7 @@ aws-sdk-ec2 = "1.110.0"
 aws-sdk-kms = "1.60.0"
 aws-smithy-http = "0.60.12"
 aws-smithy-runtime-api = "1.7.3"
-axum = { version = "0.7", default-features = false, features = [
+axum = { version = "0.8", default-features = false, features = [
   "macros",
   "tokio",
   "http1",
@@ -295,7 +295,7 @@ axum = { version = "0.7", default-features = false, features = [
   "query",
   "ws",
 ] }
-axum-extra = { version = "0.9", features = ["typed-header"] }
+axum-extra = { version = "0.10", features = ["typed-header"] }
 axum-server = { git = "https://github.com/bmwill/axum-server.git", rev = "f44323e271afdd1365fd0c8b0a4c0bbdf4956cb7", version = "0.6", default-features = false, features = [
   "tls-rustls",
 ] }
@@ -392,7 +392,7 @@ integer-encoding = "3.0.1"
 ipnetwork = "0.20.0"
 itertools = "0.13.0"
 jemalloc-ctl = "^0.5"
-jsonrpsee = { version = "0.24.7", features = [
+jsonrpsee = { version = "0.24.9", features = [
   "server",
   "macros",
   "ws-client",
@@ -411,8 +411,8 @@ moka = { version = "0.12", default-features = false, features = [
   "atomic64",
 ] }
 more-asserts = "0.3.1"
-msim = { git = "https://github.com/MystenLabs/mysten-sim.git", rev = "9f175e3517812929ad6bdd8db443f1bbd8107965", package = "msim" }
-msim-macros = { git = "https://github.com/MystenLabs/mysten-sim.git", rev = "9f175e3517812929ad6bdd8db443f1bbd8107965", package = "msim-macros" }
+msim = { git = "https://github.com/MystenLabs/mysten-sim.git", rev = "283576ee1b05347f0eb30c8ed7b720ea431d9cd1", package = "msim" }
+msim-macros = { git = "https://github.com/MystenLabs/mysten-sim.git", rev = "283576ee1b05347f0eb30c8ed7b720ea431d9cd1", package = "msim-macros" }
 multiaddr = "0.17.0"
 nexlint = { git = "https://github.com/nextest-rs/nexlint.git", rev = "7ce56bd591242a57660ed05f14ca2483c37d895b" }
 nexlint-lints = { git = "https://github.com/nextest-rs/nexlint.git", rev = "7ce56bd591242a57660ed05f14ca2483c37d895b" }
@@ -524,16 +524,17 @@ tokio-stream = { version = "0.1.14", features = ["sync", "net"] }
 tokio-util = "0.7.10"
 toml = { version = "0.7.4", features = ["preserve_order"] }
 toml_edit = { version = "0.19.10" }
-tonic = { version = "0.12", features = [
+tonic = { version = "0.13", features = [
   "zstd",
   "transport",
   "tls-webpki-roots",
 ] }
-tonic-build = { version = "0.12", features = ["prost", "transport"] }
-tonic-health = "0.12"
-tonic-reflection = "0.12"
-tonic-rustls = "0.1.0"
-tower = { version = "0.4.12", features = [
+tonic-build = { version = "0.13", features = ["prost", "transport"] }
+tonic-health = "0.13"
+tonic-reflection = "0.13"
+# tonic-rustls = "0.1.0"
+tonic-rustls = { git = "https://github.com/bmwill/tonic-rustls", rev = "77c3334b8aa00a982fb432d77c768c41aab1b05e" }
+tower = { version = "0.5", features = [
   "full",
   "util",
   "timeout",
