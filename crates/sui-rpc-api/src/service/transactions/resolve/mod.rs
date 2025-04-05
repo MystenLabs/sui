@@ -188,12 +188,14 @@ fn called_packages(
         //
         // Despite the above this is safe given we are only using the signature information (and in
         // particular the reference kind) from the normalized package.
-        let normalized_modules = package.normalize(&mut pool, &binary_config).map_err(|e| {
-            RpcError::new(
-                tonic::Code::Internal,
-                format!("unable to normalize package {}: {e}", move_call.package),
-            )
-        })?;
+        let normalized_modules = package
+            .normalize(&mut pool, &binary_config, /* include code */ true)
+            .map_err(|e| {
+                RpcError::new(
+                    tonic::Code::Internal,
+                    format!("unable to normalize package {}: {e}", move_call.package),
+                )
+            })?;
         let package = NormalizedPackage {
             package,
             normalized_modules,

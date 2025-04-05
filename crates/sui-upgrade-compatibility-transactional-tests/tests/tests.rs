@@ -46,7 +46,7 @@ fn normalize(
 ) -> Vec<compatibility::Module> {
     modules
         .iter()
-        .map(|m| compatibility::Module::new(pool, m))
+        .map(|m| compatibility::Module::new(pool, m, /* include code */ true))
         .collect()
 }
 

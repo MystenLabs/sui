@@ -728,7 +728,9 @@ mod checked {
 
         let pool = &mut normalized::RcPool::new();
         let binary_config = to_binary_config(context.protocol_config);
-        let Ok(current_normalized) = existing_package.normalize(pool, &binary_config) else {
+        let Ok(current_normalized) =
+            existing_package.normalize(pool, &binary_config, /* include code */ true)
+        else {
             invariant_violation!("Tried to normalize modules in existing package but failed")
         };
 
@@ -751,7 +753,11 @@ mod checked {
             ));
         }
 
-        let mut new_normalized = normalize_deserialized_modules(pool, upgrading_modules.iter());
+        let mut new_normalized = normalize_deserialized_modules(
+            pool,
+            upgrading_modules.iter(),
+            /* include code */ true,
+        );
         for (name, cur_module) in current_normalized {
             let Some(new_module) = new_normalized.remove(&name) else {
                 return Err(ExecutionError::new_with_source(

@@ -250,14 +250,16 @@ pub async fn compare_system_package<S: ObjectStore>(
         .expect("Created as package");
 
     let pool = &mut normalized::RcPool::new();
-    let cur_normalized = match cur_pkg.normalize(pool, binary_config) {
+    let cur_normalized = match cur_pkg.normalize(pool, binary_config, /* include code */ false) {
         Ok(v) => v,
         Err(e) => {
             error!("Could not normalize existing package: {e:?}");
             return None;
         }
     };
-    let mut new_normalized = new_pkg.normalize(pool, binary_config).ok()?;
+    let mut new_normalized = new_pkg
+        .normalize(pool, binary_config, /* include code */ false)
+        .ok()?;
 
     for (name, cur_module) in cur_normalized {
         let new_module = new_normalized.remove(&name)?;

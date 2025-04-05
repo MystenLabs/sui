@@ -793,16 +793,16 @@ fn modules_into_diags(
     let pool = &mut normalized::RcPool::new();
     let diags_list = match policy {
         UpgradePolicy::DepOnly => InclusionCheck::Equal.check_with_mode::<CliInclusionCheckMode>(
-            &Module::new(pool, existing_module),
-            &Module::new(pool, new_module),
+            &Module::new(pool, existing_module, /* include code */ true),
+            &Module::new(pool, new_module, /* include code */ true),
         ),
         UpgradePolicy::Additive => InclusionCheck::Subset.check_with_mode::<CliInclusionCheckMode>(
-            &Module::new(pool, existing_module),
-            &Module::new(pool, new_module),
+            &Module::new(pool, existing_module, /* include code */ true),
+            &Module::new(pool, new_module, /* include code */ true),
         ),
         _ => Compatibility::upgrade_check().check_with_mode::<CliCompatibilityMode>(
-            &Module::new(pool, existing_module),
-            &Module::new(pool, new_module),
+            &Module::new(pool, existing_module, /* include code */ true),
+            &Module::new(pool, new_module, /* include code */ true),
         ),
     }
     .err()

@@ -332,7 +332,7 @@ async fn test_upgrade_package_happy_path() {
     let pool = &mut move_binary_format::normalized::RcPool::new();
     let normalized_modules = package
         .move_package()
-        .normalize(pool, &binary_config)
+        .normalize(pool, &binary_config, /* include code */ true)
         .unwrap();
     assert!(normalized_modules.contains_key("new_module"));
     assert!(normalized_modules["new_module"]

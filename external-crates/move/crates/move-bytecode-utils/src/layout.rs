@@ -395,7 +395,7 @@ impl<'a, T: GetModule> SerdeLayoutBuilder<'a, T> {
     fn normalized_module(&mut self, module: &CompiledModule) -> &Module {
         let id = module.self_id();
         if !self.modules.contains_key(&id) {
-            let normalized = Module::new(&mut self.pool, module);
+            let normalized = Module::new(&mut self.pool, module, /* include code */ false);
             self.modules.insert(id.clone(), normalized);
         }
         self.modules.get(&id).unwrap()

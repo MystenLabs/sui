@@ -523,13 +523,15 @@ impl MovePackage {
             }
         })
     }
-
+    /// If `include_code` is set to `false`, the normalized module will skip function bodies
+    /// but still include the signatures.
     pub fn normalize<S: Ord + Clone + ToString, Pool: normalized::StringPool<String = S>>(
         &self,
         pool: &mut Pool,
         binary_config: &BinaryConfig,
+        include_code: bool,
     ) -> SuiResult<BTreeMap<String, normalized::Module<S>>> {
-        normalize_modules(pool, self.module_map.values(), binary_config)
+        normalize_modules(pool, self.module_map.values(), binary_config, include_code)
     }
 }
 
@@ -598,6 +600,8 @@ pub fn is_test_fun(name: &IdentStr, module: &CompiledModule, fn_info_map: &FnInf
     }
 }
 
+/// If `include_code` is set to `false`, the normalized module will skip function bodies but still
+/// include the signatures.
 pub fn normalize_modules<
     'a,
     S: Ord + Clone + ToString,
@@ -607,6 +611,7 @@ pub fn normalize_modules<
     pool: &mut Pool,
     modules: I,
     binary_config: &BinaryConfig,
+    include_code: bool,
 ) -> SuiResult<BTreeMap<String, normalized::Module<S>>>
 where
     I: Iterator<Item = &'a Vec<u8>>,
@@ -619,12 +624,14 @@ where
                     error: error.to_string(),
                 }
             })?;
-        let normalized_module = normalized::Module::new(pool, &module);
+        let normalized_module = normalized::Module::new(pool, &module, include_code);
         normalized_modules.insert(normalized_module.name().to_string(), normalized_module);
     }
     Ok(normalized_modules)
 }
 
+/// If `include_code` is set to `false`, the normalized module will skip function bodies but still
+/// include the signatures.
 pub fn normalize_deserialized_modules<
     'a,
     S: Ord + Clone + ToString,
@@ -633,13 +640,14 @@ pub fn normalize_deserialized_modules<
 >(
     pool: &mut Pool,
     modules: I,
+    include_code: bool,
 ) -> BTreeMap<String, normalized::Module<S>>
 where
     I: Iterator<Item = &'a CompiledModule>,
 {
     let mut normalized_modules = BTreeMap::new();
     for module in modules {
-        let normalized_module = normalized::Module::new(pool, module);
+        let normalized_module = normalized::Module::new(pool, module, include_code);
         normalized_modules.insert(normalized_module.name().to_string(), normalized_module);
     }
     normalized_modules

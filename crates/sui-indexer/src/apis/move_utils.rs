@@ -43,7 +43,7 @@ impl MoveUtilsServer for MoveUtilsApi {
         let sui_normalized_modules = resolver_modules
             .into_iter()
             .map(|(k, v)| {
-                let m = normalized::Module::new(pool, v.bytecode());
+                let m = normalized::Module::new(pool, v.bytecode(), /* include code */ true);
                 Ok((
                     k,
                     SuiMoveNormalizedModule::try_from(&m).map_err(SuiRpcInputError::Anyhow)?,

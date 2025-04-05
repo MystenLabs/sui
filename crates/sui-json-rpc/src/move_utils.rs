@@ -98,6 +98,7 @@ impl MoveUtilsInternalTrait for MoveUtilsInternal {
                             pool,
                             p.serialized_module_map().values(),
                             &binary_config,
+                            /* include code */ false,
                         )
                         .map_err(|e| {
                             error!("Failed to call get_move_modules_by_package for package: {package:?}");
@@ -237,8 +238,13 @@ impl MoveUtilsServer for MoveUtils {
                         // we are on the read path - it's OK to use VERSION_MAX of the supported Move
                         // binary format
                         let binary_config = BinaryConfig::with_extraneous_bytes_check(false);
-                        normalize_modules(pool, p.serialized_module_map().values(), &binary_config)
-                            .map_err(Error::from)
+                        normalize_modules(
+                            pool,
+                            p.serialized_module_map().values(),
+                            &binary_config,
+                            /* include code */ false,
+                        )
+                        .map_err(Error::from)
                     }
                     _ => Err(SuiRpcInputError::GenericInvalid(format!(
                         "Object is not a package with ID {}",
@@ -297,13 +303,21 @@ mod tests {
             let mut mock_internal = MockMoveUtilsInternalTrait::new();
 
             let m = basic_test_module();
-            let normalized_module = NormalizedModule::new(&mut normalized::RcPool::new(), &m);
+            let normalized_module = NormalizedModule::new(
+                &mut normalized::RcPool::new(),
+                &m,
+                /* include code */ false,
+            );
             let expected_module: SuiMoveNormalizedModule = (&normalized_module).try_into().unwrap();
 
             mock_internal
                 .expect_get_move_module()
                 .return_once(move |_package, _module_name| {
-                    Ok(NormalizedModule::new(&mut normalized::RcPool::new(), &m))
+                    Ok(NormalizedModule::new(
+                        &mut normalized::RcPool::new(),
+                        &m,
+                        /* include code */ false,
+                    ))
                 });
 
             let move_utils = MoveUtils {

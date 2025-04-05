@@ -282,7 +282,7 @@ impl SurferState {
         let binary_config = to_binary_config(&config);
         let pool: &mut normalized::ArcPool = &mut *self.pool.write().await;
         let entry_functions: Vec<_> = move_package
-            .normalize(pool, &binary_config)
+            .normalize(pool, &binary_config, /* include code */ false)
             .unwrap()
             .into_iter()
             .flat_map(|(module_name, module)| {

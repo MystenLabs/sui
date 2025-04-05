@@ -137,7 +137,7 @@ fn mk_module_entry(pool: &mut RcPool, vis: u8, is_entry: bool) -> NormalizedModu
         variant_handles: vec![],
         variant_instantiation_handles: vec![],
     };
-    NormalizedModule::new(pool, &m)
+    NormalizedModule::new(pool, &m, /* include code */ true)
 }
 
 fn mk_module_plus_code(pool: &mut RcPool, vis: u8, code: Vec<Bytecode>) -> NormalizedModule {
@@ -252,7 +252,7 @@ fn mk_module_plus_code_perm(
         variant_handles: vec![],
         variant_instantiation_handles: vec![],
     };
-    NormalizedModule::new(pool, &m)
+    NormalizedModule::new(pool, &m, /* include code */ true)
 }
 
 fn mk_module_plus(pool: &mut RcPool, vis: u8) -> NormalizedModule {
@@ -543,7 +543,7 @@ fn make_complex_module_perm(pool: &mut RcPool, p: Permutation) -> NormalizedModu
         ]),
         variant_instantiation_handles: vec![],
     };
-    NormalizedModule::new(pool, &m)
+    NormalizedModule::new(pool, &m, /* include code */ true)
 }
 
 fn mk_module_with_defs(
@@ -672,7 +672,7 @@ fn mk_module_with_defs(
         variant_handles: vec![],
         variant_instantiation_handles: vec![],
     };
-    NormalizedModule::new(pool, &m)
+    NormalizedModule::new(pool, &m, /* include code */ true)
 }
 
 #[test]

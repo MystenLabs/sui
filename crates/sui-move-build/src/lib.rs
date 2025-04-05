@@ -513,7 +513,7 @@ impl CompiledPackage {
         let pool = &mut normalized::RcPool::new();
         let mut package_types = BTreeSet::new();
         for m in self.get_modules() {
-            let normalized_m = normalized::Module::new(pool, m);
+            let normalized_m = normalized::Module::new(pool, m, /* include code */ false);
             // 1. generate struct layouts for all declared types
             'structs: for (name, s) in normalized_m.structs {
                 let mut dummy_type_parameters = Vec::new();

@@ -139,7 +139,7 @@ pub struct Field<S> {
 
 /// Normalized version of a `FunctionDefinition`. Not safe to compare without an associated
 /// `ModuleId` or `Module`.
-#[derive(Clone, Debug, Ord, PartialOrd, Eq, PartialEq)]
+#[derive(Clone, Debug)]
 pub struct Function<S> {
     pub name: S,
     pub visibility: Visibility,
@@ -147,8 +147,9 @@ pub struct Function<S> {
     pub type_parameters: Vec<AbilitySet>,
     pub parameters: Signature<S>,
     pub return_: Signature<S>,
-    pub jump_tables: Vec<Rc<VariantJumpTable<S>>>,
-    pub code: Vec<Bytecode<S>>,
+    code_included: bool,
+    jump_tables: Vec<Rc<VariantJumpTable<S>>>,
+    code: Vec<Bytecode<S>>,
 }
 
 /// Normalized version of a `EnumDefinition`. Not safe to compare without an associated
@@ -553,7 +554,11 @@ impl<S> Datatype<S> {
 }
 
 impl<S> Tables<S> {
-    fn new<Pool: StringPool<String = S>>(pool: &mut Pool, m: &CompiledModule) -> Self {
+    fn new<Pool: StringPool<String = S>>(
+        pool: &mut Pool,
+        m: &CompiledModule,
+        include_code: bool,
+    ) -> Self {
         let mut tables = Tables {
             empty_signature: Rc::new(vec![]),
             signatures: Vec::new(),
@@ -585,21 +590,26 @@ impl<S> Tables<S> {
         tables.function_defs = m
             .function_defs
             .iter()
-            .map(|f| Rc::new(Function::new(&tables, pool, m, f)))
+            .map(|f| Rc::new(Function::new(&tables, pool, m, f, include_code)))
             .collect();
         tables
     }
 }
 
 impl<S> Module<S> {
-    /// Extract a normalized module from a `CompiledModule`. The module `m` should be verified.
-    /// Nothing will break here if that is not the case, but there is little point in computing a
-    /// normalized representation of a module that won't verify (since it can't be published).
-    pub fn new<Pool: StringPool<String = S>>(pool: &mut Pool, m: &CompiledModule) -> Self
+    /// Extract a normalized module from a `CompiledModule`. The module `m` should be verified,
+    /// particularly with regards to correct offsets and bounds.
+    /// If `include_code` is `false`, the bodies of the functions are not included but the
+    /// signatures will still be present.
+    pub fn new<Pool: StringPool<String = S>>(
+        pool: &mut Pool,
+        m: &CompiledModule,
+        include_code: bool,
+    ) -> Self
     where
         S: Clone + Ord,
     {
-        let tables = Tables::new(pool, m);
+        let tables = Tables::new(pool, m, include_code);
         let id = ModuleId::new(pool, &m.self_id());
         let friends = m
             .immediate_friends()
@@ -755,25 +765,31 @@ impl<S> Function<S> {
         pool: &mut Pool,
         m: &CompiledModule,
         def: &FunctionDefinition,
+        include_code: bool,
     ) -> Self {
         let fhandle = m.function_handle_at(def.function);
         let name = pool.intern(m.identifier_at(fhandle.name));
-        let jump_tables = def
-            .code
-            .iter()
-            .flat_map(|code| code.jump_tables.iter())
-            .map(|jt| Rc::new(VariantJumpTable::new(tables, jt)))
-            .collect::<Vec<_>>();
-        let code: Vec<_> = def
-            .code
-            .as_ref()
-            .map(|code| {
-                code.code
-                    .iter()
-                    .map(|bytecode| Bytecode::new(tables, pool, m, bytecode, &jump_tables))
-                    .collect()
-            })
-            .unwrap_or_default();
+        let (jump_tables, code) = if include_code {
+            let jump_tables = def
+                .code
+                .iter()
+                .flat_map(|code| code.jump_tables.iter())
+                .map(|jt| Rc::new(VariantJumpTable::new(tables, jt)))
+                .collect::<Vec<_>>();
+            let code = def
+                .code
+                .as_ref()
+                .map(|code| {
+                    code.code
+                        .iter()
+                        .map(|bytecode| Bytecode::new(tables, pool, m, bytecode, &jump_tables))
+                        .collect()
+                })
+                .unwrap_or_default();
+            (jump_tables, code)
+        } else {
+            (vec![], vec![])
+        };
         Function {
             name,
             visibility: def.visibility,
@@ -781,11 +797,46 @@ impl<S> Function<S> {
             type_parameters: fhandle.type_parameters.clone(),
             parameters: tables.signatures[fhandle.parameters.0 as usize].clone(),
             return_: tables.signatures[fhandle.return_.0 as usize].clone(),
+            code_included: include_code,
             jump_tables,
             code,
         }
     }
+
+    // Panics if `code_included` is `false`.
+    pub fn code(&self) -> &[Bytecode<S>] {
+        assert!(self.code_included);
+        &self.code
+    }
 }
+
+impl<S: PartialEq> PartialEq for Function<S> {
+    fn eq(&self, other: &Self) -> bool {
+        let Self {
+            name,
+            visibility,
+            is_entry,
+            type_parameters,
+            parameters,
+            return_,
+            code_included,
+            jump_tables,
+            code,
+        } = self;
+        assert!(code_included);
+        assert!(other.code_included);
+        name == &other.name
+            && visibility == &other.visibility
+            && is_entry == &other.is_entry
+            && type_parameters == &other.type_parameters
+            && parameters == &other.parameters
+            && return_ == &other.return_
+            && jump_tables == &other.jump_tables
+            && code == &other.code
+    }
+}
+
+impl<S: Eq> Eq for Function<S> {}
 
 impl<S> Enum<S> {
     pub fn new<Pool: StringPool<String = S>>(
