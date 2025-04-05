@@ -442,14 +442,22 @@ pub fn format_vm_error(e: &VMError) -> String {
         Location::Undefined => "undefined".to_owned(),
         Location::Module(id) => format!("0x{}::{}", id.address().short_str_lossless(), id.name()),
     };
-    // message: {message:?},
+    let message = if let Some(msg) = e.message() {
+        format!(
+            "
+    message: {:?},",
+            msg
+        )
+    } else {
+        "".to_string()
+    };
     format!(
         "{{
     major_status: {major_status:?},
     sub_status: {sub_status:?},
     location: {location_string},
     indices: {indices:?},
-    offsets: {offsets:?},
+    offsets: {offsets:?},{message}
 }}",
         major_status = e.major_status(),
         sub_status = e.sub_status(),
@@ -457,7 +465,7 @@ pub fn format_vm_error(e: &VMError) -> String {
         // TODO maybe include source map info?
         indices = e.indices(),
         offsets = e.offsets(),
-        // message = e.message(),
+        message = message,
     )
 }
 

@@ -11,4 +11,5 @@ Error: Function execution failed with VMError: {
     location: 0x2a::m,
     indices: [],
     offsets: [(FunctionDefinitionIndex(0), 24)],
+    message: "000000000000000000000000000000000000000000000000000000000000002a::m::t at offset 24",
 }

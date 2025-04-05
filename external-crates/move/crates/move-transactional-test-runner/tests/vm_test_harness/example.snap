@@ -11,6 +11,7 @@ Error: Function execution failed with VMError: {
     location: 0x42::N,
     indices: [],
     offsets: [(FunctionDefinitionIndex(2), 1)],
+    message: "0000000000000000000000000000000000000000000000000000000000000042::N::ex at offset 1",
 }
 
 task 6, line 53:

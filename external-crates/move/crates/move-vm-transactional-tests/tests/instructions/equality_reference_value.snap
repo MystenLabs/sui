@@ -15,4 +15,5 @@ Error: Function execution failed with VMError: {
     location: 0x6::test,
     indices: [],
     offsets: [(FunctionDefinitionIndex(0), 10)],
+    message: "0000000000000000000000000000000000000000000000000000000000000006::test::test at offset 10",
 }

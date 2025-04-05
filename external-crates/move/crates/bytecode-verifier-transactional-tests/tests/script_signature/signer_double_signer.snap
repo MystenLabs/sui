@@ -1,6 +1,5 @@
 ---
 source: crates/move-transactional-test-runner/src/framework.rs
-input_file: crates/bytecode-verifier-transactional-tests/tests/script_signature/signer_double_signer.mvir
 ---
 processed 3 tasks
 
@@ -12,6 +11,7 @@ Error: Function execution failed with VMError: {
     location: undefined,
     indices: [],
     offsets: [],
+    message: "argument length mismatch: expected 2 got 1",
 }
 
 task 1, lines 10-17:
@@ -22,4 +22,5 @@ Error: Function execution failed with VMError: {
     location: undefined,
     indices: [],
     offsets: [],
+    message: "argument length mismatch: expected 3 got 2",
 }

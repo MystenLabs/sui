@@ -1,6 +1,5 @@
 ---
 source: crates/move-transactional-test-runner/src/framework.rs
-input_file: crates/bytecode-verifier-transactional-tests/tests/type_safety/phantom_params/constraints_abilities_bad.mvir
 ---
 processed 12 tasks
 
@@ -12,6 +11,7 @@ Error: Unable to publish module '00000000000000000000000000000000000000000000000
     location: 0x2::M2,
     indices: [(FieldDefinition, 0), (StructDefinition, 1)],
     offsets: [],
+    message: "expected type with abilities [Copy, Drop, Store, Key, ] got type actual StructInstantiation(DatatypeHandleIndex(2), [Struct(DatatypeHandleIndex(3)), Struct(DatatypeHandleIndex(3))]) with incompatible abilities []",
 }
 
 task 2, lines 17-34:
@@ -22,6 +22,7 @@ Error: Unable to publish module '00000000000000000000000000000000000000000000000
     location: 0x3::M3,
     indices: [(FieldDefinition, 0), (StructDefinition, 5)],
     offsets: [],
+    message: "expected type with abilities [Drop, ] got type actual StructInstantiation(DatatypeHandleIndex(0), [Struct(DatatypeHandleIndex(6)), Struct(DatatypeHandleIndex(6))]) with incompatible abilities []",
 }
 
 task 3, lines 36-46:
@@ -32,6 +33,7 @@ Error: Unable to publish module '00000000000000000000000000000000000000000000000
     location: 0x4::M4,
     indices: [(Signature, 0), (FunctionDefinition, 1)],
     offsets: [],
+    message: "expected type with abilities [Copy, Drop, Store, Key, ] got type actual StructInstantiation(DatatypeHandleIndex(0), [Struct(DatatypeHandleIndex(1)), Struct(DatatypeHandleIndex(1))]) with incompatible abilities [] at offset 0 ",
 }
 
 task 5, lines 60-75:
@@ -42,6 +44,7 @@ Error: Unable to publish module '00000000000000000000000000000000000000000000000
     location: 0x6::M5,
     indices: [(Signature, 0), (FunctionDefinition, 1)],
     offsets: [],
+    message: "expected type with abilities [Drop, ] got type actual StructInstantiation(DatatypeHandleIndex(0), [Struct(DatatypeHandleIndex(1)), Struct(DatatypeHandleIndex(1))]) with incompatible abilities [] at offset 0 ",
 }
 
 task 7, lines 83-91:
@@ -52,6 +55,7 @@ Error: Unable to publish module '00000000000000000000000000000000000000000000000
     location: 0x8::M2,
     indices: [(FieldDefinition, 0), (VariantTag, 0), (EnumDefinition, 1)],
     offsets: [],
+    message: "expected type with abilities [Copy, Drop, Store, Key, ] got type actual StructInstantiation(DatatypeHandleIndex(2), [Struct(DatatypeHandleIndex(3)), Struct(DatatypeHandleIndex(3))]) with incompatible abilities []",
 }
 
 task 8, lines 93-112:
@@ -62,6 +66,7 @@ Error: Unable to publish module '00000000000000000000000000000000000000000000000
     location: 0x9::M3,
     indices: [(FieldDefinition, 0), (VariantTag, 0), (EnumDefinition, 5)],
     offsets: [],
+    message: "expected type with abilities [Drop, ] got type actual StructInstantiation(DatatypeHandleIndex(0), [Struct(DatatypeHandleIndex(6)), Struct(DatatypeHandleIndex(6))]) with incompatible abilities []",
 }
 
 task 9, lines 114-124:
@@ -72,6 +77,7 @@ Error: Unable to publish module '00000000000000000000000000000000000000000000000
     location: 0x10::M4,
     indices: [(Signature, 0), (FunctionDefinition, 1)],
     offsets: [],
+    message: "expected type with abilities [Copy, Drop, Store, Key, ] got type actual StructInstantiation(DatatypeHandleIndex(0), [Struct(DatatypeHandleIndex(1)), Struct(DatatypeHandleIndex(1))]) with incompatible abilities [] at offset 0 ",
 }
 
 task 11, lines 138-153:
@@ -82,4 +88,5 @@ Error: Unable to publish module '00000000000000000000000000000000000000000000000
     location: 0x12::M5,
     indices: [(Signature, 0), (FunctionDefinition, 1)],
     offsets: [],
+    message: "expected type with abilities [Drop, ] got type actual StructInstantiation(DatatypeHandleIndex(0), [Struct(DatatypeHandleIndex(1)), Struct(DatatypeHandleIndex(1))]) with incompatible abilities [] at offset 0 ",
 }
