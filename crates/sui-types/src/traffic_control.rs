@@ -72,6 +72,13 @@ pub enum ClientIdSource {
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
+pub struct TrafficControlReconfigParams {
+    pub error_threshold: Option<u64>,
+    pub spam_threshold: Option<u64>,
+    pub dry_run: Option<bool>,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct Weight(f32);
 
 impl Weight {
