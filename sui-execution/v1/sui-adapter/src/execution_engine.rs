@@ -668,6 +668,9 @@ mod checked {
                         EndOfEpochTransactionKind::StoreExecutionTimeObservations(_) => {
                             panic!("EndOfEpochTransactionKind::StoreExecutionTimeEstimates should not exist in v1");
                         }
+                        EndOfEpochTransactionKind::AccumulatorRootObjectCreate => {
+                            panic!("EndOfEpochTransactionKind::AccumulatorRootObjectCreate should not exist in v1");
+                        }
                     }
                 }
                 unreachable!("EndOfEpochTransactionKind::ChangeEpoch should be the last transaction in the list")

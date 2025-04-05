@@ -598,6 +598,9 @@ impl SuiTransactionBlockKind {
                             EndOfEpochTransactionKind::StoreExecutionTimeObservations(_) => {
                                 SuiEndOfEpochTransactionKind::StoreExecutionTimeObservations
                             }
+                            EndOfEpochTransactionKind::AccumulatorRootObjectCreate => {
+                                SuiEndOfEpochTransactionKind::AccumulatorRootObjectCreate
+                            }
                         })
                         .collect(),
                 })
@@ -1667,6 +1670,7 @@ pub enum SuiEndOfEpochTransactionKind {
     BridgeStateCreate(CheckpointDigest),
     BridgeCommitteeUpdate(SequenceNumber),
     StoreExecutionTimeObservations,
+    AccumulatorRootObjectCreate,
 }
 
 #[serde_as]

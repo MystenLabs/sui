@@ -4982,6 +4982,23 @@ impl AuthorityState {
         Some(tx)
     }
 
+    fn create_accumulator_root_object_tx(
+        &self,
+        epoch_store: &Arc<AuthorityPerEpochStore>,
+    ) -> Option<EndOfEpochTransactionKind> {
+        if !epoch_store.protocol_config().move_accumulators() {
+            return None;
+        }
+
+        if epoch_store.accumulator_root_object_exists() {
+            return None;
+        }
+
+        let tx = EndOfEpochTransactionKind::new_accumulator_root_object_create();
+        info!("Creating AccumulatorRootObjectCreate tx");
+        Some(tx)
+    }
+
     #[instrument(level = "debug", skip_all)]
     fn create_execution_time_observations_tx(
         &self,
@@ -5139,6 +5156,9 @@ impl AuthorityState {
             end_of_epoch_observation_keys,
             last_checkpoint,
         ) {
+            txns.push(tx);
+        }
+        if let Some(tx) = self.create_accumulator_root_object_tx(epoch_store) {
             txns.push(tx);
         }
 

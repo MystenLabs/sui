@@ -4513,6 +4513,16 @@ impl AuthorityPerEpochStore {
             uncheckpointed_transactions
         );
     }
+
+    pub fn accumulator_root_object_exists(&self) -> bool {
+        self.epoch_start_configuration
+            .accumulator_root_obj_initial_shared_version()
+            .is_some()
+    }
+
+    pub fn accumulator_state_enabled(&self) -> bool {
+        self.protocol_config().move_accumulators() && self.accumulator_root_object_exists()
+    }
 }
 
 impl ExecutionComponents {

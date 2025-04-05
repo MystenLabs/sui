@@ -11,6 +11,7 @@ mod checked {
     use move_trace_format::format::MoveTraceBuilder;
     use move_vm_runtime::move_vm::MoveVM;
     use std::{cell::RefCell, collections::HashSet, rc::Rc, sync::Arc};
+    use sui_types::accumulator::{ACCUMULATOR_CREATE_FUNC, ACCUMULATOR_MODULE_NAME};
     use sui_types::balance::{
         BALANCE_CREATE_REWARDS_FUNCTION_NAME, BALANCE_DESTROY_REBATES_FUNCTION_NAME,
         BALANCE_MODULE_NAME,
@@ -740,6 +741,9 @@ mod checked {
                             assert!(protocol_config.enable_coin_deny_list_v1());
                             builder = setup_coin_deny_list_state_create(builder);
                         }
+                        EndOfEpochTransactionKind::AccumulatorRootObjectCreate => {
+                            builder = setup_accumulator_root_object_create(builder);
+                        }
                         EndOfEpochTransactionKind::BridgeStateCreate(chain_id) => {
                             assert!(protocol_config.enable_bridge());
                             builder = setup_bridge_create(builder, chain_id)
@@ -1371,6 +1375,21 @@ mod checked {
                 vec![],
             )
             .expect("Unable to generate coin_deny_list_create transaction!");
+        builder
+    }
+
+    fn setup_accumulator_root_object_create(
+        mut builder: ProgrammableTransactionBuilder,
+    ) -> ProgrammableTransactionBuilder {
+        builder
+            .move_call(
+                SUI_FRAMEWORK_ADDRESS.into(),
+                ACCUMULATOR_MODULE_NAME.to_owned(),
+                ACCUMULATOR_CREATE_FUNC.to_owned(),
+                vec![],
+                vec![],
+            )
+            .expect("Unable to generate accumulator_root_object_create transaction!");
         builder
     }
 
