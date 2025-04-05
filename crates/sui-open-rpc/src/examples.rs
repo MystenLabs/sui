@@ -755,7 +755,11 @@ impl RpcExampleProvider {
             balance_changes: None,
             timestamp_ms: None,
             transaction: Some(SuiTransactionBlock {
-                data: SuiTransactionBlockData::try_from(data1, &&mut NoOpsModuleResolver).unwrap(),
+                data: SuiTransactionBlockData::try_from_with_module_cache(
+                    data1,
+                    &&mut NoOpsModuleResolver,
+                )
+                .unwrap(),
                 tx_signatures: signatures.clone(),
             }),
             raw_transaction,

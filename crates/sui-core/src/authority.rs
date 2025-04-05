@@ -1945,14 +1945,16 @@ impl AuthorityState {
                 suggested_gas_price: self
                     .congestion_tracker
                     .get_suggested_gas_prices(&transaction),
-                input: SuiTransactionBlockData::try_from(transaction, &module_cache).map_err(
-                    |e| SuiError::TransactionSerializationError {
-                        error: format!(
-                            "Failed to convert transaction to SuiTransactionBlockData: {}",
-                            e
-                        ),
-                    },
-                )?, // TODO: replace the underlying try_from to SuiError. This one goes deep
+                input: SuiTransactionBlockData::try_from_with_module_cache(
+                    transaction,
+                    &module_cache,
+                )
+                .map_err(|e| SuiError::TransactionSerializationError {
+                    error: format!(
+                        "Failed to convert transaction to SuiTransactionBlockData: {}",
+                        e
+                    ),
+                })?, // TODO: replace the underlying try_from to SuiError. This one goes deep
                 effects: effects.clone().try_into()?,
                 events: SuiTransactionBlockEvents::try_from(
                     inner_temp_store.events.clone(),
@@ -4431,7 +4433,7 @@ impl AuthorityState {
             })
             .collect::<ObjectMap>();
 
-        // Check for recieving objects that were actually used and modified during execution. Their
+        // Check for receiving objects that were actually used and modified during execution. Their
         // updated version will already showup in "written_coins" but their input isn't included in
         // the set of input objects in a inner_temporary_store.
         for (object_id, version) in effects.modified_at_versions() {
