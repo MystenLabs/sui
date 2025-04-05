@@ -1,0 +1,312 @@
+---
+title: General Message Passing
+description: Sending cross-chain messages from/to Sui using Axelar's GMP
+keywords: [Cross-Chain, Axelar]
+---
+
+Axelar General Message Passing (GMP)
+
+The [Axelar Network](https://axelar.network/) is a decentralized interoperability network designed to enable seamless cross-chain communication, it can be thought of as a blockchain for blockchains. It connects a number of different EVM and non-evms [blockchains](https://axelarscan.io/resources/chains) including Sui.
+
+[General Message Passing (GMP)](https://www.axelar.network/blog/general-message-passing-and-how-can-it-change-web3) is the ability to send arbitrary data between data, allowing for sophisticated cross-chain applications to be built across many blockchains.
+
+
+Sending messages between Sui and other blockchains follows similar patterns as [GMP messages](https://docs.axelar.dev/dev/general-message-passing/overview/) on other chains, such as EVM chains.
+
+The core packages for Axelar's integration with Sui can be found at the [axelar-cgp-sui](https://github.com/axelarnetwork/axelar-cgp-sui) repository.
+
+At the core of there are two main package involved in sending a GMP message, these are the [Gateway Package](https://github.com/axelarnetwork/axelar-cgp-sui/tree/main/move/axelar_gateway) and the [Gas Service](https://github.com/axelarnetwork/axelar-cgp-sui/tree/main/move/gas_service).
+
+For all complete Sui GMP implementation check out this [example](https://github.com/axelarnetwork/axelar-cgp-sui/tree/main/move/example)
+
+To interact with the example and send a GMP message checkout this [script](https://github.com/axelarnetwork/axelar-contract-deployments/blob/main/sui/gmp.js)
+
+## Overview
+
+Sending a message from Sui involves the following steps:
+
+- Register your transaction with the [relayer discovery service](https://github.com/axelarnetwork/axelar-cgp-sui/tree/main/move/relayer_discovery) via the `register_transaction()` function on the relayer discovery service.
+- Prepare the message via the `prepare_message()` function on the [gateway](https://github.com/axelarnetwork/axelar-cgp-sui/tree/main/move/axelar_gateway).
+- Pay gas via the `pay_gas()` function on the [gas service](https://github.com/axelarnetwork/axelar-cgp-sui/tree/main/move/gas_service).
+- Send the message via the send_message function on the [gateway](https://github.com/axelarnetwork/axelar-cgp-sui/tree/main/move/axelar_gateway).
+
+
+## Sui Gateway
+
+The [Gateway](https://docs.axelar.dev/learn/network/flow/#gateways) is the core contract that facilitates the sending and receiving of cross-chain messages to other chains via the Axelar Network.
+
+### Gateway Object
+
+A shared object that anyone can access and user to refer to the Gateway package. 
+
+```move
+public struct Gateway has key {
+    id: UID,
+    inner: Versioned,
+}
+```
+
+
+The Gateway facilitates sending and receiving of cross-chain messages to other chains via the Axelar Network.
+
+For sending a GMP message, the `send_message()` function needs to be triggered.
+
+### Send Message
+
+The send_message function triggers your cross-chain message from Sui to another blockchain via the Axelar Network. The send_message function requires a MessageTicket struct to be passed in. To create the MessageTicket you can trigger the [prepare_message](#prepare-message) function.
+
+
+:::info 
+  The reason this process is in two steps is because the Gateway is an upgrade compatible contract. To ensure minimal roadblocks when upgrading the contract the functionality of the Gateway was broken up so that if the Gateway does get upgraded at some point, applications can always continue to call the logic of the V0 `prepare_message()` function and pass the ticket into the V2 version of the `send_message()`, this will minimize breaking changes when upgrading the contract. 
+:::
+
+```move
+public fun send_message(self: &Gateway, message: MessageTicket) {
+    let value = self.value!(b"send_message");
+    value.send_message(message, VERSION);
+}
+```
+
+
+#### Prepare Message
+
+The `prepare_message()` function is used to create a MessageTicket struct that is required to send a GMP message.
+
+It takes four parameters.
+
+1. `channel`: The [channel](#channel) that the message is being sent from.
+1. `destination_chain`: Name of the chain the message is being sent to.
+1. `destination_address`: Address on the destination chain the message is being sent to.
+1. `payload`: A `vector<u8>` representation of the cross-chain message being sent.
+
+```move
+    public fun prepare_message(
+        channel: &Channel,
+        destination_chain: String,
+        destination_address: String,
+        payload: vector<u8>,
+    ): MessageTicket {
+        message_ticket::new(
+            channel.to_address(),
+            destination_chain,
+            destination_address,
+            payload,
+            VERSION,
+        )
+    }
+```
+
+### Receive Message
+
+Receiving a message involves two steps. The first is *approving* an incoming message as approved and the second involved *executing* the approved message.
+
+#### Approve Message
+
+To approve the message an Axelar relayer triggers the Gateway's `approve_message()` function. Once the message is marked as approved, the approval is stored in the Gateway object. This will indicate that the message has been confirmed the Axelar [Verifier set](https://axelarscan.io/verifiers) on the Axelar network itself.
+
+```move
+entry fun approve_messages(self: &mut Gateway, message_data: vector<u8>, proof_data: vector<u8>) {
+    let value = self.value_mut!(b"approve_messages");
+    value.approve_messages(message_data, proof_data);
+}
+```
+
+A live example of an approval transaction can be found [here](https://suiscan.xyz/mainnet/tx/GURWyTpC2LcAHDvMZFKE2wZWJiDXVPMLD5ev5ERUJFuA).
+
+#### Execute Message
+
+With the message now marked as approved the relayer will attempt to execute the message on your Sui contract. For this the relayer will first trigger the Gateway's take_approved_function(). This function will confirmed that the message has already been [approved](#approve-message) and will then begin the [message consumption process](#consume-approved-message)
+
+```move
+public fun take_approved_message(
+    self: &mut Gateway,
+    source_chain: String,
+    message_id: String,
+    source_address: String,
+    destination_id: address,
+    payload: vector<u8>,
+): ApprovedMessage {
+    let value = self.value_mut!(b"take_approved_message");
+    value.take_approved_message(
+        source_chain,
+        message_id,
+        source_address,
+        destination_id,
+        payload,
+    )
+}
+```
+
+On your own package the [Relayer Discovery](#relayer-discovery) will then look to call the function you specified for it to call in the `register_transaction()` flow. If you registered a function called `execute()` (as was done in this [example](https://github.com/axelarnetwork/axelar-cgp-sui/blob/main/move/example/sources/gmp/gmp.move#L27)) then you can implement the execute() function as follows. 
+
+The executable function will pass in the [ApprovedMessage](#approvedmessage) that was [consumed](#consume-approved-message) by the Package's Channel. 
+
+```move
+public fun execute(call: ApprovedMessage, singleton: &mut Singleton) {
+    let (_, _, _, payload) = singleton.channel.consume_approved_message(call);
+
+    event::emit(Executed { data: payload });
+}
+```
+
+
+A live example of an execution transaction can be found [here](https://suiscan.xyz/mainnet/tx/Dzg5KukKgsywZob892Fvn4NxS6qjA2WWL2PRX9gTnwzb).
+
+## Channel
+
+In Sui there is no ability to check immediate caller of a message (ie there is no msg.sender like in EVM development). What is available is a transaction.origin, which is the root caller of a transaction (similar to `tx.origin` in EVM development). To identify who the caller of a message is you can use Channels. The Channel is an object that an application first creates and this channel is the identifier for who is calling and receiving the message.
+
+
+Channels allow for sending and receiving messages between Sui and other chains. In the context of sending a message the channel acts as a destination for the messages. When the message is sent the destination_id is compared against the id of the channel.
+
+```move
+public struct Channel has key, store {
+    /// Unique ID of the channel */}
+    id: UID,
+}
+```
+
+The id specifies the address of the application for the purpose of incoming and outgoing external calls. This id has to match the id of a shared object that is passed in the channel creation method. This shared object can easily be querried by the relayer to get call fullfilment information.
+
+### Consume Approved Message
+The `consume_approved_message()` will confirm that the message has been sent to the correct channel.
+
+
+The function takes two parameters.
+
+1. channel: The [channel](#channel) that the message is being sent to.
+1. approved_message: The [ApprovedMessage](#approved-message) struct that is being sent to the destination chain, containing relevant parameters of the cross-chain message.
+
+```move
+public fun consume_approved_message(channel: &Channel, approved_message: ApprovedMessage): (String, String, String, vector<u8>) {
+    let ApprovedMessage {
+        source_chain,
+        message_id,
+        source_address,
+        destination_id,
+        payload,
+    } = approved_message;
+
+    // Check if the message is sent to the correct destination.
+    assert!(destination_id == object::id_address(channel), EInvalidDestination);
+
+    (source_chain, message_id, source_address, payload)
+}
+```
+
+For an example of how to receive an approved message on the destination chain see [here](https://github.com/axelarnetwork/axelar-cgp-sui/blob/main/move/example/sources/gmp/gmp.move#L83)
+
+#### Approved Message
+
+The `ApprovedMessage` struct contains the following parameters
+
+1. `source_chain`: The name of chain where the cross-chain message originated.
+1. `message_id`: The unique ID of the message
+1. `source_address`: The address on the source chain where the message originated.
+1. `destination_id`: The id of the channel that the message is being sent to.
+1. `payload`: A `vector<u8>` representation of the cross-chain message being sent.
+
+```move
+public struct ApprovedMessage {
+    source_chain: String,
+    message_id: String,
+    source_address: String,
+    destination_id: address,
+    payload: vector<u8>,
+}
+
+```
+
+## Sui Gas Service
+
+The Gas Service handles cross-chain gas payment when making a GMP request.
+
+When sending a GMP message before triggering the `send_message()` function on the Gateway, the `pay_gas()` must be triggered first to pay for the cross-chain transaction.
+
+### PayGas()
+
+The `pay_gas()` allows users to pay for the entirety of the cross-chain transaction in a given token, it is triggered by either the channel or the user. If it is called by the user the sender will be set as the channel_id.
+
+The `pay_gas()` takes five parameters.
+
+1. `gas_service`: The contract who's storage is set to be updated.
+1. `message_ticket`: The [ticket](#message-ticket) for the message being sent.
+1. `coin`: The [coin](https://docs.sui.io/standards/coin) being used to pay for the transaction.
+1. `refund_address`: The address to be refunded if too much gas is paid.
+1. `params`: Should be passed in as an empty value.
+
+
+:::info 
+  The params argument exists to allow for future extensibility of the function. It is not currently used in the implementation.
+:::
+
+```move
+public fun pay_gas<T>(
+    self: &mut GasService,
+    message_ticket: &MessageTicket,
+    coin: Coin<T>,
+    refund_address: address,
+    params: vector<u8>,
+) {
+    self
+        .value_mut!(b"pay_gas")
+        .pay_gas<T>(
+            message_ticket,
+            coin,
+            refund_address,
+            params,
+        );
+}
+```
+
+
+## Relayer Discovery
+
+In Sui there is no arbitrary execution like in EVM chains, therefore unlike in other ecosystem there is no [Executable](https://docs.axelar.dev/dev/send-tokens/interchain-tokens/interchain-token-executable/) Package to inherit from. To resolve this issue the [Relayer Discovery](https://github.com/axelarnetwork/axelar-cgp-sui/tree/main/move/relayer_discovery) Package is deployed to serve as a registry of Packages that can be invoked given a message. 
+
+To get added to this *registry* a deployed application on Sui will need to trigger the `register_transaction()` function on the Discovery Package.
+
+```move
+public fun register_transaction(self: &mut RelayerDiscovery, channel: &Channel, tx: Transaction) {
+    // Get the mutable value associated with the "register_transaction" key.
+    let value = self.value_mut!(b"register_transaction");
+    // Retrieve the unique channel ID from the provided channel.
+    let channel_id = channel.id();
+    // Set the transaction for this channel in the registry.
+    value.set_transaction(channel_id, tx);
+}
+```
+
+The following arguments are required to register a Package:
+
+1. `channel`: The [channel](#channel) that the Package is being registered to.
+1. `tx`: The details of the function to be executed when the Package is called from an Axelar relayer.
+
+By registering the transaction with the discovery system under a specific channel, the relayer later knows exactly which transaction to run when it receives an approved message on that channel.
+
+See [here](https://github.com/axelarnetwork/axelar-cgp-sui/blob/main/move/example/sources/gmp/gmp.move#L27) for an example of how to register a transaction with the Discovery Package.
+
+
+## Types
+
+### Message Ticket
+
+The `MessageTicket` struct is a “hot potato” object designed to encapsulate all the necessary information for a remote contract call. It is meant to be created by a module and then returned to the frontend, which will submit it to the gateway. This design ensures that when the gateway package is upgraded, the application code (modules) does not require any changes, thereby promoting forward compatibility.
+
+It contains the following fields:
+
+1. `source_id`: Purpose: Represents the address that created the ticket.
+1. `destination_chain`: Specifies the destination chain where the message is intended to be delivered.
+1. `destination_address`: Indicates the address of the destination contract on the destination chain.
+1. `payload`: Contains the serialized data for the remote contract call.
+1. `version`: Captures the version of the `MessageTicket` structure. By embedding a version number, the system can restrict which messages are sent or processed by future packages. This helps ensure that outdated or incompatible messages from earlier versions are not inadvertently processed after an upgrade.
+
+```move
+public struct MessageTicket {
+    source_id: address,
+    destination_chain: String,
+    destination_address: String,
+    payload: vector<u8>,
+    version: u64,
+}
+```
