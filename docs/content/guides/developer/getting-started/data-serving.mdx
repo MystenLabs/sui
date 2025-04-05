@@ -7,8 +7,8 @@ You can access Sui network data like [Transactions](/concepts/transactions.mdx),
 
 This document outlines the interfaces that are currently available to access the Sui network data, along with an overview of how that's gradually evolving. Refer to the following definitions for release stages mentioned in this document:
 
-- **Alpha** - Experimental release that is subject to change and is not recommended for production use. You can use it for validation in non-production environments.
-- **Beta** - Somewhat stable release that is subject to change based on user feedback. Use it in production only after verifying the desired functional, performance, and other relevant characteristics in a non-production environment.
+- **Alpha** - Experimental release that is subject to change and is not recommended for production use. You can use it for exploration in non-production environments.
+- **Beta** - Somewhat stable release that is subject to change based on user feedback. You can use it for testing and production readiness in non-production environments. If you use it in production, do so at your own risk. Only entertain using after verifying the desired functional, performance, and other relevant characteristics in a non-production environment, and if you are comfortable keeping your application regularly updated for any changes.
 - **Generally available (GA)** - Fully stable release that you can use in production. Notifications for any breaking changes are made in advance. 
 
 ## Current data access interfaces
@@ -21,7 +21,7 @@ Currently, you can use any of the following mechanisms to access Sui network dat
 
 :::info
 
-You can also use one of the [future-oriented interfaces](#future-state-data-interfaces) that are available in alpha, but those are not recommended for production use.
+You can also use one of the [future-oriented interfaces](#future-data-access-interfaces) that are available in alpha or beta, but those are not recommended for production use.
 
 :::
 
@@ -49,24 +49,24 @@ If you set up your own indexer, you are responsible for its ongoing maintenance 
 
 Primary interfaces to access Sui access data in the future include:
 
-- Full node gRPC API will replace JSON-RPC on Full nodes, and is currently available in alpha. If you already use the JSON-RPC or are starting to utilize it as a dependency for your use case, you would need to migrate to gRPC or GraphQL (see below) within a reasonable duration. Refer to the [high-level timeline for gRPC availability](#grpc-api).
+- [gRPC API](../../../concepts/grpc-overview.mdx) will replace JSON-RPC on Full nodes, and is currently available in beta. If you already use the JSON-RPC or are starting to utilize it as a dependency for your use case, you would need to migrate to gRPC or GraphQL (see below) within a reasonable duration. Refer to the [high-level timeline for gRPC availability](#grpc-api).
 - Indexer 2.0 will include a performant and scalable implementation of the Sui indexer framework and is currently available in alpha. You can use it to load data at scale from Full nodes into a Postgres relational database.
-- [GraphQL RPC](/references/sui-graphql.mdx) will include a lightweight GraphQL RPC Server that you can use to read data from the Indexer 2.0's relational database. It is currently available in alpha. You can use it as an alternative to gRPC, including for migration from JSON-RPC for an existing application. Refer to the [high-level timeline for GraphQL availability](#graphql-rpc-with-indexer-20).
+- [GraphQL RPC](/references/sui-graphql.mdx) will include a lightweight GraphQL RPC Server that you can use to read data from the Indexer 2.0's relational database. It is currently available in alpha. You can use it as an alternative to gRPC, including for migration from JSON-RPC for an existing application. Refer to the [high-level timeline for GraphQL availability](#graphql-rpc).
 
 You could still utilize an [RPC provider](https://sui.io/developers#dev-tools) (filter by `RPC`) or a [Data indexer operator](https://github.com/sui-foundation/awesome-sui?tab=readme-ov-file#indexers--data-services) with these options, assuming some or all of those providers choose to operate the Indexer 2.0 and the GraphQL RPC Server.
 
 ### gRPC API
 
-As mentioned previously, gRPC API will replace the JSON-RPC on Full nodes, such that JSON-RPC will be deprecated when gRPC API is generally available. Apart from the message and request format changes between the two, the gRPC API comes with a couple of key functional differences:
+As mentioned previously, [gRPC API](../../../concepts/grpc-overview.mdx) will replace the JSON-RPC on Full nodes, such that JSON-RPC will be deprecated when gRPC API is generally available. Apart from the message and request format changes between the two, the gRPC API comes with a couple of key functional differences:
 
-- It has streaming or subscription API endpoints to consume real-time streaming data in your application without having to poll for those records. This support is a proper replacement of the deprecated WebSocket support in JSON-RPC.
-- It doesn't have implicit fallback on the previously mentioned [Sui Foundation-managed key-value store for historical transaction data](/guides/operator/data-management.mdx#sui-full-node-key-value-store-backup). Full node operators, RPC providers, and data indexer operators are encouraged to run their own instance of a similar archival store, which you can explicitly define a dependency on to get the relevant historical data.
+- It will have streaming or subscription API endpoints to consume real-time streaming data in your application without having to poll for those records. This support will be a proper replacement of the deprecated WebSocket support in JSON-RPC.
+- It will not have implicit fallback on the previously mentioned [Sui Foundation-managed key-value store for historical transaction data](/guides/operator/data-management.mdx#sui-full-node-key-value-store-backup). Full node operators, RPC providers, and data indexer operators are encouraged to run their own instance of a similar archival store, which you can explicitly define a dependency on to get the relevant historical data.
 
 See [When to use gRPC vs GraphQL with Indexer 2.0](#when-to-use-grpc-vs-graphql-with-indexer-20) for a comparison with GraphQL RPC.
 
 :::info
 
-The gRPC API is in alpha and not recommended for production use. Its public documentation is coming soon. Until then, you can refer to [this technical proto spec](https://github.com/MystenLabs/sui/blob/main/crates/sui-rpc-api/proto/sui.node.v2.proto).
+The [gRPC API](../../../concepts/grpc-overview.mdx) is in beta, which is a somewhat stable release that is subject to change based on user feedback. You can use it for testing and production readiness in non-production environments.
 
 :::
 
@@ -76,10 +76,10 @@ The target times indicated below are tentative and subject to updates based on p
 
 | Tentative time | Milestone | Description |
 | -------- | ------- | ------- |
-| March 2025 | Beta release of initial set of polling-based APIs. | You can start validating the initial gRPC integration from your application and share feedback on the improvements you want to see. |
-| May 2025 | Beta release of streaming APIs and the remaining set of polling-based APIs. | If your use case requires streaming low-latency data, this is an apt time to start validating that integration. Also, the functionality of the API coverage will be complete at this point, so you can start migrating your application in non-production environments. |
-| July 2025 | GA release of polling-based APIs with appropriate SDK support. | You can start migration and cutover of your application in the production environment, with the support for streaming APIs still in beta. |
-| September 2025 | GA release of scalable streaming APIs. | If your use case requires streaming low-latency data, you can now use those APIs at scale. **JSON-RPC will be deprecated at this point and migration notice period will start.** |
+| :heavy_check_mark: April 2025 | Beta release of initial set of polling-based APIs. | You can start validating the initial gRPC integration from your application and share feedback on the improvements you want to see. |
+| June 2025 | Beta release of streaming APIs and the remaining set of polling-based APIs. | If your use case requires streaming low-latency data, this is an apt time to start validating that integration. Also, the functionality of the API coverage will be complete at this point, so you can start migrating your application in non-production environments. |
+| August 2025 | GA release of polling-based APIs with appropriate SDK support. | You can start migration and cutover of your application in the production environment, with the support for streaming APIs still in beta. |
+| October 2025 | GA release of scalable streaming APIs. | If your use case requires streaming low-latency data, you can now use those APIs at scale. **JSON-RPC will be deprecated at this point and migration notice period will start.** |
 | June 2026 | End of migration timeline. | **JSON-RPC will be fully deactivated at this point.** This timeline assumes about 9 months of migration notice period. |
 
 ### Indexer 2.0
@@ -117,7 +117,7 @@ The target times indicated in this table are tentative and subject to updates ba
 | Tentative time | Milestone | Description |
 | -------- | ------- | ------- |
 | July 2025 | Beta release of GraphQL RPC Server and Indexer 2.0. | You can start validating the setup of Indexer 2.0, along with testing the GraphQL RPC Server to access the indexed Sui data. You can also start migrating your application in the non-production environments, and share feedback on the improvements you want to see. |
-| September 2025 | Deprecation of JSON-RPC. | **JSON-RPC will be deprecated at this point and migration notice period will start.** |
+| October 2025 | Deprecation of JSON-RPC. | **JSON-RPC will be deprecated at this point and migration notice period will start.** |
 | December 2025 | GA release of GraphQL RPC Server and Indexer 2.0. | You can start migration and cutover of your application in the production environment. |
 | June 2026 | End of migration timeline. | **JSON-RPC will be fully deactivated at this point.** This timeline assumes about 9 months of migration notice period. |
 
@@ -135,7 +135,7 @@ You can use the high-level criteria mentioned in the following table to determin
 
 :::info
 
-This table only mentions the default retention period for both options. The expectation is that it's reasonable for you, a Full node operator, RPC provider, or data indexer operator to configure that to a few times higher without significantly impacting the performance. Also by default, GraphQL RPC Server can directly connect to a archival key-value store for historical data beyond the retention period configured for the underlying Postgres database. Whereas in comparison, gRPC API will not have such direct connectivity to an archival key-value store.
+This table only mentions the default retention period for both options. The expectation is that it's reasonable for a Full node operator, RPC provider, or data indexer operator to configure that to a few times higher without significantly impacting the performance. Also by default, GraphQL RPC Server can directly connect to a archival key-value store for historical data beyond the retention period configured for the underlying Postgres database. Whereas in comparison, gRPC API will not have such direct connectivity to an archival key-value store.
 
 Relevant guidelines will be provided before each option's respective GA release. Those will include recommendations for how to access historical data beyond the configured retention period for your interface of choice.
 
