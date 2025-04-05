@@ -255,7 +255,7 @@ macro_rules! debug_writeln {
     };
 }
 
-impl<'a, 'b, 'c> NativeContext<'a, 'b, 'c> {
+impl<'b> NativeContext<'_, 'b, '_> {
     pub fn type_to_type_tag(&self, ty: &Type) -> PartialVMResult<TypeTag> {
         self.vtables.type_to_type_tag(ty)
     }

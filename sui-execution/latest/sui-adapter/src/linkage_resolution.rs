@@ -761,13 +761,16 @@ impl PTBLinkageResolver {
         let resolution = resolution_fn(package);
         let original_pkg_id = package.original_package_id();
 
-        match resolution_table.resolution_table.entry(original_pkg_id) {
-            Entry::Vacant(vacant_entry) => {
-                vacant_entry.insert(resolution);
-            }
-            Entry::Occupied(mut occupied_entry) => {
-                *occupied_entry.get_mut() = occupied_entry.get().unify(&resolution)?;
-            }
+        if let std::collections::btree_map::Entry::Vacant(e) =
+            resolution_table.resolution_table.entry(original_pkg_id)
+        {
+            e.insert(resolution);
+        } else {
+            let existing_unifier = resolution_table
+                .resolution_table
+                .get_mut(&original_pkg_id)
+                .expect("Guaranteed to exist");
+            *existing_unifier = existing_unifier.unify(&resolution)?;
         }
 
         if !resolution_table

@@ -507,6 +507,7 @@ mod checked {
         // write back mutable inputs. We also update if they were used in non entry Move calls
         // though we do not care for immutable usages of objects or other values
         let used_in_non_entry_move_call = kind == FunctionKind::NonEntry;
+
         write_back_results::<Mode>(
             context,
             argument_updates,

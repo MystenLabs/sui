@@ -283,7 +283,7 @@ impl ModuleResolver for BlankStorage {
     }
 }
 
-impl<'a, 'b, S: ModuleResolver> ModuleResolver for DeltaStorage<'a, 'b, S> {
+impl<S: ModuleResolver> ModuleResolver for DeltaStorage<'_, '_, S> {
     type Error = S::Error;
     fn get_packages_static<const N: usize>(
         &self,

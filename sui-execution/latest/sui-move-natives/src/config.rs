@@ -32,6 +32,7 @@ pub struct ConfigReadSettingImplCostParams {
 }
 
 #[instrument(level = "trace", skip_all)]
+#[allow(deprecated)]
 pub fn read_setting_impl(
     context: &mut NativeContext,
     mut ty_args: Vec<Type>,

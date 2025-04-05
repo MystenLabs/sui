@@ -447,7 +447,7 @@ impl<'extensions> MoveVM<'extensions> {
     }
 }
 
-impl<'extensions> std::fmt::Debug for MoveVM<'extensions> {
+impl std::fmt::Debug for MoveVM<'_> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("MoveVM")
             .field("virtual_tables", &self.virtual_tables)

@@ -49,7 +49,7 @@ fn struct_pack_and_unpack() -> PartialVMResult<()> {
         Value::u128(30),
         Value::u256(U256::max_value()),
     ];
-    let s = Struct::pack(vec![
+    let s = Struct::pack([
         Value::u8(10),
         Value::u16(12),
         Value::u32(15),
@@ -74,7 +74,7 @@ fn struct_borrow_field() -> PartialVMResult<()> {
 
     locals.store_loc(
         0,
-        Value::struct_(Struct::pack(vec![Value::u8(10), Value::bool(false)])),
+        Value::make_struct(vec![Value::u8(10), Value::bool(false)]),
     )?;
     let r: StructRef = VMValueCast::cast(locals.borrow_loc(0)?)?;
 
@@ -102,10 +102,10 @@ fn struct_borrow_nested() -> PartialVMResult<()> {
     let mut locals = heap.allocate_stack_frame(vec![], 1)?;
 
     fn inner(x: u64) -> Value {
-        Value::struct_(Struct::pack(vec![Value::u64(x)]))
+        Value::make_struct(vec![Value::u64(x)])
     }
     fn outer(x: u64) -> Value {
-        Value::struct_(Struct::pack(vec![Value::u8(10), inner(x)]))
+        Value::make_struct(vec![Value::u8(10), inner(x)])
     }
 
     locals.store_loc(0, outer(20))?;
@@ -134,6 +134,19 @@ fn struct_borrow_nested() -> PartialVMResult<()> {
 }
 
 #[test]
+fn vec_and_ref_eq() -> PartialVMResult<()> {
+    let v = MemBox::new(Value::PrimVec(PrimVec::VecU8(vec![10, 12])));
+    let x = MemBox::new(Value::u8(12));
+    let v_ref: VectorRef = VMValueCast::cast(v.as_ref_value())?;
+    let v_1_ref = v_ref.borrow_elem(1, &Type::U8)?;
+    let x_ref = x.as_ref_value();
+    assert!(v_1_ref.equals(&x_ref)?);
+    let v_0_ref = v_ref.borrow_elem(0, &Type::U8)?;
+    assert!(!v_0_ref.equals(&x_ref)?);
+    Ok(())
+}
+
+#[test]
 fn global_value_non_struct() -> PartialVMResult<()> {
     assert!(
         GlobalValue::cached(Value::u64(100)).is_err(),
@@ -158,6 +171,7 @@ fn global_value_non_struct() -> PartialVMResult<()> {
 
 #[test]
 fn legacy_ref_abstract_memory_size_consistency() -> PartialVMResult<()> {
+    #![allow(deprecated)]
     let mut heap = MachineHeap::new();
     let mut locals = heap.allocate_stack_frame(vec![], 10)?;
 
@@ -173,7 +187,7 @@ fn legacy_ref_abstract_memory_size_consistency() -> PartialVMResult<()> {
     let r = r.borrow_elem(0, &Type::U8)?;
     assert_eq!(r.legacy_abstract_memory_size(), r.legacy_size());
 
-    locals.store_loc(2, Value::struct_(Struct::pack([])))?;
+    locals.store_loc(2, Value::make_struct(vec![]))?;
     let r: Reference = VMValueCast::cast(locals.borrow_loc(2)?)?;
     assert_eq!(r.legacy_abstract_memory_size(), r.legacy_size());
 
@@ -184,7 +198,7 @@ fn legacy_ref_abstract_memory_size_consistency() -> PartialVMResult<()> {
 fn legacy_struct_abstract_memory_size_consistenty() -> PartialVMResult<()> {
     let structs = [
         Struct::pack([]),
-        Struct::pack([Value::struct_(Struct::pack([Value::u8(0), Value::u64(0)]))]),
+        Struct::pack([Value::make_struct(vec![Value::u8(0), Value::u64(0)])]),
     ];
 
     for s in &structs {
@@ -211,8 +225,8 @@ fn legacy_val_abstract_memory_size_consistency() -> PartialVMResult<()> {
         Value::vector_u64([]),
         Value::vector_u128([1, 2, 3, 4]),
         Value::vector_u256([1, 2, 3, 4].iter().map(|q| U256::from(*q as u64))),
-        Value::struct_(Struct::pack([])),
-        Value::struct_(Struct::pack([Value::u8(0), Value::bool(false)])),
+        Value::make_struct([]),
+        Value::make_struct([Value::u8(0), Value::bool(false)]),
         Value::vector_for_testing_only([]),
         Value::vector_for_testing_only([Value::u8(0), Value::u8(1)]),
     ];
@@ -224,6 +238,7 @@ fn legacy_val_abstract_memory_size_consistency() -> PartialVMResult<()> {
         locals.store_loc(idx, val.copy_value())?;
 
         let val_size_new = val.legacy_abstract_memory_size();
+        #[allow(deprecated)]
         let val_size_old = val.legacy_size();
 
         assert_eq!(val_size_new, val_size_old);
@@ -231,7 +246,11 @@ fn legacy_val_abstract_memory_size_consistency() -> PartialVMResult<()> {
         let ref_: Reference = VMValueCast::cast(locals.borrow_loc(idx)?)?;
         let val_size_through_ref = ref_.value_view().legacy_abstract_memory_size();
 
-        assert_eq!(val_size_through_ref, val_size_old)
+        assert_eq!(
+            val_size_through_ref, val_size_old,
+            "{:?} (ref size {} != old size {})",
+            val, val_size_through_ref, val_size_old
+        );
     }
 
     Ok(())

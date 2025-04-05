@@ -25,18 +25,6 @@ pub struct Package {
 
 type PackageCache = HashMap<PackageStorageId, Arc<Package>>;
 
-/// A Loaded Function for driving VM Calls
-// #[allow(dead_code)]
-// pub struct LoadedFunction {
-//     compiled_module: Arc<CompiledModule>,
-//     loaded_module: Arc<Module>,
-//     function: ArenaPointer<Function>,
-//     /// Parameters for the function call
-//     pub parameters: Vec<Type>,
-//     /// Function return type
-//     pub return_: Vec<Type>,
-// }
-
 /// The loader for the VM. This is the data structure is used to resolve packages and cache them
 /// and their types. This is then used to create the VTables for the VM.
 #[derive(Debug)]

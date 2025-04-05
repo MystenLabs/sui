@@ -1109,7 +1109,7 @@ impl<T> Default for DefinitionMap<T> {
 // Return an instantiated type given a generic and an instantiation.
 // Stopgap to avoid a recursion that is either taking too long or using too
 // much memory
-pub fn checked_subst(ty: &ArenaType, ty_args: &[Type]) -> PartialVMResult<Type> {
+pub(crate) fn checked_subst(ty: &ArenaType, ty_args: &[Type]) -> PartialVMResult<Type> {
     // Before instantiating the type, count the # of nodes of all type arguments plus
     // existing type instantiation.
     // If that number is larger than MAX_TYPE_INSTANTIATION_NODES, refuse to construct this type.
