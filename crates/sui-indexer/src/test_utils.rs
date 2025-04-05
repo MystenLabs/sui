@@ -81,36 +81,6 @@ pub async fn start_indexer_writer_for_testing(
     JoinHandle<Result<(), IndexerError>>,
     CancellationToken,
 ) {
-    start_indexer_writer_for_testing_with_mvr_mode(
-        db_url,
-        snapshot_config,
-        retention_config,
-        data_ingestion_path,
-        cancel,
-        start_checkpoint,
-        end_checkpoint,
-        false,
-    )
-    .await
-}
-
-/// Separate entrypoint for instantiating an indexer with or without MVR mode enabled. Relevant only
-/// for MVR, the production indexer available through start_indexer_writer_for_testing should be
-/// generally used.
-pub async fn start_indexer_writer_for_testing_with_mvr_mode(
-    db_url: String,
-    snapshot_config: Option<SnapshotLagConfig>,
-    retention_config: Option<RetentionConfig>,
-    data_ingestion_path: Option<PathBuf>,
-    cancel: Option<CancellationToken>,
-    start_checkpoint: Option<u64>,
-    end_checkpoint: Option<u64>,
-    mvr_mode: bool,
-) -> (
-    PgIndexerStore,
-    JoinHandle<Result<(), IndexerError>>,
-    CancellationToken,
-) {
     let token = cancel.unwrap_or_default();
     let snapshot_config = snapshot_config.unwrap_or(SnapshotLagConfig {
         snapshot_min_lag: 5,
@@ -164,7 +134,6 @@ pub async fn start_indexer_writer_for_testing_with_mvr_mode(
                 snapshot_config,
                 retention_config,
                 token_clone,
-                mvr_mode,
             )
             .await
         })
@@ -269,22 +238,6 @@ pub async fn set_up(
     JoinHandle<Result<(), IndexerError>>,
     TempDb,
 ) {
-    set_up_on_mvr_mode(sim, data_ingestion_path, false).await
-}
-
-/// Set up a test indexer fetching from a REST endpoint served by the given Simulacrum. With MVR
-/// mode enabled, this indexer writes only to a subset of tables - `objects_snapshot`,
-/// `objects_history`, `checkpoints`, `epochs`, and `packages`.
-pub async fn set_up_on_mvr_mode(
-    sim: Arc<Simulacrum>,
-    data_ingestion_path: PathBuf,
-    mvr_mode: bool,
-) -> (
-    JoinHandle<()>,
-    PgIndexerStore,
-    JoinHandle<Result<(), IndexerError>>,
-    TempDb,
-) {
     let database = TempDb::new().unwrap();
     let server_url: SocketAddr = format!("127.0.0.1:{}", get_available_port())
         .parse()
@@ -296,15 +249,14 @@ pub async fn set_up_on_mvr_mode(
             .await;
     });
     // Starts indexer
-    let (pg_store, pg_handle, _) = start_indexer_writer_for_testing_with_mvr_mode(
+    let (pg_store, pg_handle, _) = start_indexer_writer_for_testing(
         database.database().url().as_str().to_owned(),
         None,
         None,
         Some(data_ingestion_path),
-        None,     /* cancel */
-        None,     /* start_checkpoint */
-        None,     /* end_checkpoint */
-        mvr_mode, /* mvr_mode */
+        None, /* cancel */
+        None, /* start_checkpoint */
+        None, /* end_checkpoint */
     )
     .await;
     (server_handle, pg_store, pg_handle, database)
