@@ -32,7 +32,7 @@ use sui_config::{
     SUI_CLIENT_CONFIG, SUI_FULLNODE_CONFIG, SUI_NETWORK_CONFIG,
 };
 use sui_config::{
-    SUI_BENCHMARK_GENESIS_GAS_KEYSTORE_FILENAME, SUI_GENESIS_FILENAME, SUI_KEYSTORE_FILENAME,
+    SUI_BENCHMARK_GENESIS_GAS_KEYSTORE_FILENAME, SUI_GENESIS_FILENAME, SUI_KEYSTORE_FILENAME, SUI_ENCRYPTED_KEYSTORE_FILENAME
 };
 use sui_faucet::{create_wallet_context, start_faucet, AppState, FaucetConfig, SimpleFaucet};
 use sui_indexer::test_utils::{
@@ -47,6 +47,7 @@ use sui_graphql_rpc::{
 use serde_json::json;
 use sui_keys::keypair_file::read_key;
 use sui_keys::keystore::{AccountKeystore, FileBasedKeystore, Keystore};
+use sui_keys::encrypted_keystore::{EncryptedFileBasedKeystore, EncryptedKeystore};
 use sui_move::manage_package::resolve_lock_file_path;
 use sui_move::{self, execute_move_command};
 use sui_move_build::{
@@ -432,8 +433,11 @@ impl SuiCommand {
             } => {
                 let keystore_path =
                     keystore_path.unwrap_or(sui_config_dir()?.join(SUI_KEYSTORE_FILENAME));
+                let encrypted_keystore_path =
+                    keystore_path.with_file_name(SUI_ENCRYPTED_KEYSTORE_FILENAME);
                 let mut keystore = Keystore::from(FileBasedKeystore::new(&keystore_path)?);
-                cmd.execute(&mut keystore).await?.print(!json);
+                let mut encrypted_keystore = EncryptedKeystore::from(EncryptedFileBasedKeystore::new(&encrypted_keystore_path)?);
+                cmd.execute(&mut keystore, &mut encrypted_keystore).await?.print(!json);
                 Ok(())
             }
             SuiCommand::Client {
@@ -923,11 +927,14 @@ async fn start(
         if force_regenesis {
             let kp = swarm.config_mut().account_keys.swap_remove(0);
             let keystore_path = config_dir.join(SUI_KEYSTORE_FILENAME);
+            let encrypted_keystore_path = keystore_path.with_file_name(SUI_ENCRYPTED_KEYSTORE_FILENAME);
             let mut keystore = Keystore::from(FileBasedKeystore::new(&keystore_path).unwrap());
+            let encrypted_keystore = EncryptedKeystore::from(EncryptedFileBasedKeystore::new(&encrypted_keystore_path).unwrap());
             let address: SuiAddress = kp.public().into();
             keystore.add_key(None, SuiKeyPair::Ed25519(kp)).unwrap();
             SuiClientConfig {
                 keystore,
+                encrypted_keystore: Some(encrypted_keystore),
                 envs: vec![SuiEnv {
                     alias: "localnet".to_string(),
                     rpc: fullnode_url,
@@ -1015,6 +1022,7 @@ async fn genesis(
 
     let client_path = sui_config_dir.join(SUI_CLIENT_CONFIG);
     let keystore_path = sui_config_dir.join(SUI_KEYSTORE_FILENAME);
+    let encrypted_keystore_path = sui_config_dir.join(SUI_ENCRYPTED_KEYSTORE_FILENAME);
 
     if write_config.is_none() && !files.is_empty() {
         if force {
@@ -1115,10 +1123,12 @@ async fn genesis(
     };
 
     let mut keystore = FileBasedKeystore::new(&keystore_path)?;
+    let encrypted_keystore = EncryptedFileBasedKeystore::new(&encrypted_keystore_path)?;
+
     for key in &network_config.account_keys {
         keystore.add_key(None, SuiKeyPair::Ed25519(key.copy()))?;
     }
-    let active_address = keystore.addresses().pop();
+    let active_address_opt = keystore.addresses().first().copied();
 
     network_config.genesis.save(&genesis_path)?;
     for validator in &mut network_config.validator_configs {
@@ -1200,32 +1210,27 @@ async fn genesis(
     let mut client_config = if client_path.exists() {
         PersistedConfig::read(&client_path)?
     } else {
-        SuiClientConfig::new(keystore.into())
+        SuiClientConfig {
+            keystore: keystore.into(),
+            encrypted_keystore: Some(encrypted_keystore.into()),
+            envs: vec![SuiEnv {
+                alias: "localnet".to_string(),
+                rpc: format!(
+                    "http://{}:{}",
+                    if fullnode_config.json_rpc_address.ip() == IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)) {
+                        "127.0.0.1".to_string()
+                    } else {
+                        fullnode_config.json_rpc_address.ip().to_string()
+                    },
+                    fullnode_config.json_rpc_address.port()
+                ),
+                ws: None,
+                basic_auth: None,
+            }],
+            active_address: active_address_opt,
+            active_env: Some("localnet".to_string()),
+        }
     };
-
-    if client_config.active_address.is_none() {
-        client_config.active_address = active_address;
-    }
-
-    // On windows, using 0.0.0.0 will usually yield in an networking error. This localnet ip
-    // address must bind to 127.0.0.1 if the default 0.0.0.0 is used.
-    let localnet_ip =
-        if fullnode_config.json_rpc_address.ip() == IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)) {
-            "127.0.0.1".to_string()
-        } else {
-            fullnode_config.json_rpc_address.ip().to_string()
-        };
-    client_config.add_env(SuiEnv {
-        alias: "localnet".to_string(),
-        rpc: format!(
-            "http://{}:{}",
-            localnet_ip,
-            fullnode_config.json_rpc_address.port()
-        ),
-        ws: None,
-        basic_auth: None,
-    });
-    client_config.add_env(SuiEnv::devnet());
 
     if client_config.active_env.is_none() {
         client_config.active_env = client_config.envs.first().map(|env| env.alias.clone());
@@ -1294,7 +1299,7 @@ async fn prompt_if_no_config(
         };
 
         if let Some(env) = env {
-            let keystore_path = match wallet_conf_path.parent() {
+            let keystore_dir = match wallet_conf_path.parent() {
                 // Wallet config was created in the current directory as a relative path.
                 Some(parent) if parent.as_os_str().is_empty() => {
                     std::env::current_dir().context("Couldn't find current directory")?
@@ -1311,10 +1316,14 @@ async fn prompt_if_no_config(
 
                 // Wallet config was requested at the root of the file system ...for some reason.
                 None => wallet_conf_path.to_owned(),
-            }
-            .join(SUI_KEYSTORE_FILENAME);
+            };
+
+            let keystore_path = keystore_dir.join(SUI_KEYSTORE_FILENAME);
+            let encrypted_keystore_path = keystore_dir.join(SUI_ENCRYPTED_KEYSTORE_FILENAME);
 
             let mut keystore = Keystore::from(FileBasedKeystore::new(&keystore_path)?);
+            let encrypted_keystore = EncryptedKeystore::from(EncryptedFileBasedKeystore::new(&encrypted_keystore_path)?);
+
             let key_scheme = if accept_defaults {
                 SignatureScheme::ED25519
             } else {
@@ -1335,6 +1344,7 @@ async fn prompt_if_no_config(
             let alias = env.alias.clone();
             SuiClientConfig {
                 keystore,
+                encrypted_keystore: Some(encrypted_keystore),
                 envs: vec![env],
                 active_address: Some(new_address),
                 active_env: Some(alias),

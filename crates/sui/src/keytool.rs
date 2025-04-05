@@ -34,6 +34,7 @@ use serde_json::json;
 use shared_crypto::intent::{Intent, IntentMessage, IntentScope, PersonalMessage};
 use std::fmt::{Debug, Display, Formatter};
 use std::fs;
+use std::io::{self, Write};
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use sui_keys::key_derive::generate_new_key;
@@ -42,6 +43,7 @@ use sui_keys::keypair_file::{
     write_keypair_to_file,
 };
 use sui_keys::keystore::{AccountKeystore, Keystore};
+use sui_keys::encrypted_keystore::{AccountEncryptedKeystore, EncryptedKeystore, create_encrypted_key, decrypt_key_pair};
 use sui_types::base_types::SuiAddress;
 use sui_types::committee::EpochId;
 use sui_types::crypto::{
@@ -60,6 +62,7 @@ use tabled::builder::Builder;
 use tabled::settings::Rotate;
 use tabled::settings::{object::Rows, Modify, Width};
 use tracing::info;
+
 #[cfg(test)]
 #[path = "unit_tests/keytool_tests.rs"]
 mod keytool_tests;
@@ -118,6 +121,20 @@ pub enum KeyToolCommand {
         word_length: Option<String>,
     },
 
+
+    /// Generate a new encrypted key file with the specified key scheme {ed25519 | secp256k1 | secp256r1}.
+    /// Creates a standalone .encrypted file containing the key without creating a full keystore.
+    /// The file will be named with the address of the generated key and stored in the specified output directory.
+    GenerateEncrypted {
+        /// Password for encrypting the key
+        #[clap(long)]
+        password: Option<String>,
+        
+        /// Key scheme to use (ed25519, secp256k1, secp256r1)
+        #[clap(long, default_value_t = SignatureScheme::ED25519)]
+        key_scheme: SignatureScheme,
+    },
+    
     /// Add a new key to Sui CLI Keystore using either the input mnemonic phrase or a Bech32 encoded 33-byte
     /// `flag || privkey` starting with "suiprivkey", the key scheme flag {ed25519 | secp256k1 | secp256r1}
     /// and an optional derivation path, default to m/44'/784'/0'/0'/0' for ed25519 or m/54'/784'/0'/0/0
@@ -132,12 +149,39 @@ pub enum KeyToolCommand {
         key_scheme: SignatureScheme,
         derivation_path: Option<DerivationPath>,
     },
+    
+    /// Import a key (Bech32 encoded private key) into the encrypted keystore.
+    /// Supports Bech32 encoded private keys starting with "suiprivkey". 
+    ImportEncrypted {
+        /// Password for the encrypted keystore
+        #[clap(long)]
+        password: Option<String>,
+        
+        /// Private key to import
+        #[clap(long)]
+        private_key: String,
+    },
+    
     /// Output the private key of the given key identity in Sui CLI Keystore as Bech32
     /// encoded string starting with `suiprivkey`.
     Export {
         #[clap(long)]
         key_identity: KeyIdentity,
     },
+    
+    /// Export a private key from the encrypted keystore as a Bech32 encoded string
+    /// starting with "suiprivkey". Requires the key identity (address or alias) and
+    /// the password for the encrypted keystore.
+    ExportEncrypted {
+        /// Sui address of the key
+        #[clap(long)]
+        key_identity: KeyIdentity,
+        
+        /// Password for the encrypted keystore
+        #[clap(long)]
+        password: Option<String>,
+    },
+    
     /// List all keys by its Sui address, Base64 encoded public key, key scheme name in
     /// sui.keystore.
     List {
@@ -222,6 +266,7 @@ pub enum KeyToolCommand {
         #[clap(long)]
         base64pk: String,
     },
+    
     /// This takes [enum SuiKeyPair] of Base64 encoded of 33-byte `flag || privkey`). It
     /// outputs the keypair into a file at the current directory where the address is the filename,
     /// and prints out its Sui address, Base64 encoded public key, the key scheme, and the key scheme flag.
@@ -477,16 +522,17 @@ pub enum CommandOutput {
     ZkLoginSignAndExecuteTx(ZkLoginSignAndExecuteTx),
     ZkLoginInsecureSignPersonalMessage(ZkLoginInsecureSignPersonalMessage),
     ZkLoginSigVerify(ZkLoginSigVerifyResponse),
+    Success(String),
 }
 
 impl KeyToolCommand {
-    pub async fn execute(self, keystore: &mut Keystore) -> Result<CommandOutput, anyhow::Error> {
+    pub async fn execute(self, keystore: &mut Keystore, encrypted_keystore: &mut EncryptedKeystore) -> Result<CommandOutput, anyhow::Error> {
         let cmd_result = Ok(match self {
             KeyToolCommand::Alias {
                 old_alias,
                 new_alias,
             } => {
-                let new_alias = keystore.update_alias(&old_alias, new_alias.as_deref())?;
+                let new_alias: String = keystore.update_alias(&old_alias, new_alias.as_deref())?;
                 CommandOutput::Alias(AliasUpdate {
                     old_alias,
                     new_alias,
@@ -615,8 +661,44 @@ impl KeyToolCommand {
                     key.mnemonic = Some(phrase);
                     CommandOutput::Generate(key)
                 }
-            },
-
+            }
+            KeyToolCommand::GenerateEncrypted {
+                password,
+                key_scheme,
+            } => {
+                // Password confirmation
+                let password = match password {
+                    Some(pwd) => pwd,
+                    None => {
+                        print!("Enter password: ");
+                        io::stdout().flush()?;
+                        let pwd = rpassword::read_password()?;
+                        print!("Confirm password: ");
+                        io::stdout().flush()?;
+                        let confirm_pwd = rpassword::read_password()?;
+                        if pwd != confirm_pwd {
+                            return Err(anyhow!("Passwords do not match"));
+                        }
+                        pwd
+                    }
+                };
+                
+                // Generate a new keypair with the specified key scheme
+                let (sui_address, keypair, scheme, _) = generate_new_key(key_scheme, None, None)?;
+                
+                println!("Generated address: {}", sui_address);
+                println!("Key type: {}", scheme);
+                
+                // Create encrypted key file
+                create_encrypted_key(&password, &keypair)?;
+                
+                let key = Key::from(&keypair);
+                
+                // Display file information
+                println!("Encrypted key file created");
+                
+                CommandOutput::Generate(key)
+            }
             KeyToolCommand::Import {
                 alias,
                 input_string,
@@ -667,14 +749,87 @@ impl KeyToolCommand {
                     }
                 }
             }
+            KeyToolCommand::ImportEncrypted {
+                password,
+                private_key,
+            } => {
+                 // Password confirmation
+                 let password = match password {
+                    Some(pwd) => pwd,
+                    None => {
+                        print!("Enter password: ");
+                        io::stdout().flush()?;
+                        let pwd = rpassword::read_password()?;
+                        print!("Confirm password: ");
+                        io::stdout().flush()?;
+                        let confirm_pwd = rpassword::read_password()?;
+                        if pwd != confirm_pwd {
+                            return Err(anyhow!("Passwords do not match"));
+                        }
+                        pwd
+                    }
+                };
+
+                if Hex::decode(&private_key).is_ok() {
+                    return Err(anyhow!(
+                        "Sui Keystore and Sui Wallet no longer support importing 
+                    private key as Hex, if you are sure your private key is encoded in Hex, use 
+                    `sui keytool convert $HEX` to convert first then import the Bech32 encoded 
+                    private key starting with `suiprivkey`."
+                    ));
+                }
+
+                match SuiKeyPair::decode(&private_key) {
+                    Ok(skp) => {
+                        info!("Importing Bech32 encoded private key to keystore");
+                        let key = Key::from(&skp);
+
+                        create_encrypted_key(&password, &skp)?;
+                        println!("Encrypted key file created");
+
+                        CommandOutput::Import(key)
+                    }
+                    Err(_) => {
+                        return Err(anyhow!(
+                        "Only invalid suiprivkey encoded private key to encrypted key file is provided."
+                    ));
+                    }
+                }
+            }
             KeyToolCommand::Export { key_identity } => {
-                let address = get_identity_address_from_keystore(key_identity, keystore)?;
+                let address = get_identity_address_from_keystore(key_identity, keystore, Some(encrypted_keystore))?;
                 let skp = keystore.get_key(&address)?;
                 let key = ExportedKey {
                     exported_private_key: skp
                         .encode()
                         .map_err(|_| anyhow!("Cannot decode keypair"))?,
                     key: Key::from(skp),
+                };
+                CommandOutput::Export(key)
+            }
+            KeyToolCommand::ExportEncrypted {
+                key_identity,
+                password,
+            } => {                
+                // Handle password
+                let password = match password {
+                    Some(pwd) => pwd,
+                    None => {
+                        print!("Enter password: ");
+                        io::stdout().flush()?;
+                        rpassword::read_password()?
+                    }
+                };
+
+                let address = get_identity_address_from_keystore(key_identity, keystore, Some(encrypted_keystore))?;
+                let encrypted_key = encrypted_keystore.get_key(&address)?;
+                
+                let skp: SuiKeyPair = decrypt_key_pair(&encrypted_key, &password)?;
+                let key = ExportedKey {
+                    exported_private_key: skp
+                        .encode()
+                        .map_err(|_| anyhow!("Cannot decode keypair"))?,
+                    key: Key::from(&skp),
                 };
                 CommandOutput::Export(key)
             }
@@ -688,6 +843,14 @@ impl KeyToolCommand {
                         key
                     })
                     .collect::<Vec<Key>>();
+
+                for enc_pk in encrypted_keystore.keys() {
+                    let mut encrypted_key_info = Key::from(enc_pk);
+                    let address = encrypted_key_info.sui_address;
+                    encrypted_key_info.alias = encrypted_keystore.get_alias_by_address(&address).ok();
+                    keys.push(encrypted_key_info);
+                }
+
                 if sort_by_alias {
                     keys.sort_unstable();
                 }
@@ -828,7 +991,7 @@ impl KeyToolCommand {
                 data,
                 intent,
             } => {
-                let address = get_identity_address_from_keystore(address, keystore)?;
+                let address = get_identity_address_from_keystore(address, keystore, Some(encrypted_keystore))?;
                 let intent = intent.unwrap_or_else(Intent::sui_transaction);
                 let intent_clone = intent.clone();
                 let msg: TransactionData =
@@ -840,8 +1003,21 @@ impl KeyToolCommand {
                 let mut hasher = DefaultHash::default();
                 hasher.update(bcs::to_bytes(&intent_msg)?);
                 let digest = hasher.finalize().digest;
-                let sui_signature =
-                    keystore.sign_secure(&address, &intent_msg.value, intent_msg.intent)?;
+
+                let sui_signature = if keystore.addresses().contains(&address) {
+                    keystore.sign_secure(
+                        &address,
+                        &intent_msg.value,
+                        intent_msg.intent,
+                    )?
+                } else {
+                    encrypted_keystore.sign_secure(
+                        &address,
+                        &intent_msg.value,
+                        intent_msg.intent,
+                    )?
+                };
+
                 CommandOutput::Sign(SignData {
                     sui_address: address,
                     raw_tx_data: data,
@@ -910,7 +1086,6 @@ impl KeyToolCommand {
                     serialized_sig_base64: serialized_sig,
                 })
             }
-
             KeyToolCommand::Unpack { keypair } => {
                 let keypair = SuiKeyPair::decode_base64(&keypair)
                     .map_err(|_| anyhow!("Invalid Base64 encode keypair"))?;
@@ -1362,6 +1537,9 @@ impl Display for CommandOutput {
                 table.with(Modify::new(Rows::new(0..)).with(Width::wrap(160).keep_words()));
                 write!(formatter, "{}", table)
             }
+            CommandOutput::Success(message) => {
+                write!(formatter, "{}", message)
+            }
             _ => {
                 let json_obj = json![self];
                 let mut table = json_to_table(&json_obj);
@@ -1376,16 +1554,34 @@ impl Display for CommandOutput {
 
 impl CommandOutput {
     pub fn print(&self, pretty: bool) {
-        let line = if pretty {
-            format!("{self}")
-        } else {
-            format!("{:?}", self)
-        };
-        // Log line by line
-        for line in line.lines() {
-            // Logs write to a file on the side.  Print to stdout and also log to file, for tests to pass.
-            println!("{line}");
-            info!("{line}")
+        match self {
+            CommandOutput::Alias(update) => {
+                println!(
+                    "Old alias {} was updated to {}",
+                    update.old_alias, update.new_alias
+                );
+            }
+            CommandOutput::Success(message) => {
+                println!("{}", message);
+            }
+            CommandOutput::ZkLoginInsecureSignPersonalMessage(_) => {
+                println!("{}", self);
+            }
+            CommandOutput::ZkLoginSigVerify(_) => {
+                println!("{}", self);
+            }
+            _ => {
+                let line = if pretty {
+                    format!("{self}")
+                } else {
+                    format!("{:?}", self)
+                };
+                
+                // Log line by line
+                for line_str in line.lines() {
+                    println!("{}", line_str);
+                }
+            }
         }
     }
 }
@@ -1393,9 +1589,45 @@ impl CommandOutput {
 // when --json flag is used, any output result is transformed into a JSON pretty string and sent to std output
 impl Debug for CommandOutput {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        match serde_json::to_string_pretty(self) {
-            Ok(json) => write!(f, "{json}"),
-            Err(err) => write!(f, "Error serializing JSON: {err}"),
+        match self {
+            CommandOutput::Alias(update) => {
+                writeln!(f, "Old alias {} was updated to {}", update.old_alias, update.new_alias)
+            }
+            CommandOutput::Sign(data) => {
+                let intent_table = json_to_table(&json!(&data.intent))
+                    .with(tabled::settings::Style::rounded().horizontals([]))
+                    .to_string();
+
+                let mut builder = Builder::default();
+                builder
+                    .set_header([
+                        "suiSignature",
+                        "digest",
+                        "rawIntentMsg",
+                        "intent",
+                        "rawTxData",
+                        "suiAddress",
+                    ])
+                    .push_record([
+                        &data.sui_signature,
+                        &data.digest,
+                        &data.raw_intent_msg,
+                        &intent_table,
+                        &data.raw_tx_data,
+                        &data.sui_address.to_string(),
+                    ]);
+                let mut table = builder.build();
+                table.with(Rotate::Left);
+                table.with(tabled::settings::Style::rounded().horizontals([]));
+                writeln!(f, "{}", table)
+            }
+            CommandOutput::Success(message) => {
+                writeln!(f, "{}", message)
+            }
+            _ => {
+                let json_obj = json![self];
+                write!(f, "{}", serde_json::to_string_pretty(&json_obj).unwrap_or_else(|_| format!("{:?}", json_obj)))
+            }
         }
     }
 }

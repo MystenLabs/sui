@@ -14,7 +14,7 @@ use std::time::Duration;
 use sui_config::genesis::Genesis;
 use sui_config::node::{AuthorityOverloadConfig, DBCheckpointConfig, RunWithRange};
 use sui_config::{Config, ExecutionCacheConfig, SUI_CLIENT_CONFIG, SUI_NETWORK_CONFIG};
-use sui_config::{NodeConfig, PersistedConfig, SUI_KEYSTORE_FILENAME};
+use sui_config::{NodeConfig, PersistedConfig, SUI_KEYSTORE_FILENAME, SUI_ENCRYPTED_KEYSTORE_FILENAME};
 use sui_core::authority_aggregator::AuthorityAggregator;
 use sui_core::authority_client::NetworkAuthorityClient;
 use sui_json_rpc_types::{
@@ -22,6 +22,7 @@ use sui_json_rpc_types::{
     TransactionFilter,
 };
 use sui_keys::keystore::{AccountKeystore, FileBasedKeystore, Keystore};
+use sui_keys::encrypted_keystore::{EncryptedFileBasedKeystore, EncryptedKeystore};
 use sui_node::SuiNodeHandle;
 use sui_protocol_config::{Chain, ProtocolVersion};
 use sui_sdk::apis::QuorumDriverApi;
@@ -1291,6 +1292,7 @@ impl TestClusterBuilder {
         let network_path = dir.join(SUI_NETWORK_CONFIG);
         let wallet_path = dir.join(SUI_CLIENT_CONFIG);
         let keystore_path = dir.join(SUI_KEYSTORE_FILENAME);
+        let encrypted_keystore_path = dir.join(SUI_ENCRYPTED_KEYSTORE_FILENAME);
 
         swarm.config().save(network_path)?;
         let mut keystore = Keystore::from(FileBasedKeystore::new(&keystore_path)?);
@@ -1303,6 +1305,7 @@ impl TestClusterBuilder {
         // Create wallet config with stated authorities port
         SuiClientConfig {
             keystore: Keystore::from(FileBasedKeystore::new(&keystore_path)?),
+            encrypted_keystore: Some(EncryptedKeystore::File(EncryptedFileBasedKeystore::new(&encrypted_keystore_path)?)),
             envs: Default::default(),
             active_address,
             active_env: Default::default(),

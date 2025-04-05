@@ -7,13 +7,14 @@ use std::net::SocketAddr;
 use std::path::Path;
 use sui_config::local_ip_utils::get_available_port;
 use sui_config::Config;
-use sui_config::{PersistedConfig, SUI_KEYSTORE_FILENAME, SUI_NETWORK_CONFIG};
+use sui_config::{PersistedConfig, SUI_KEYSTORE_FILENAME, SUI_NETWORK_CONFIG, SUI_ENCRYPTED_KEYSTORE_FILENAME};
 use sui_graphql_rpc::config::{ConnectionConfig, ServiceConfig};
 use sui_graphql_rpc::test_infra::cluster::start_graphql_server_with_fn_rpc;
 use sui_indexer::test_utils::{
     start_indexer_jsonrpc_for_testing, start_indexer_writer_for_testing,
 };
 use sui_keys::keystore::{AccountKeystore, FileBasedKeystore, Keystore};
+use sui_keys::encrypted_keystore::{EncryptedKeystore, EncryptedFileBasedKeystore};
 use sui_pg_db::temp::TempDb;
 use sui_sdk::sui_client_config::{SuiClientConfig, SuiEnv};
 use sui_sdk::wallet_context::WalletContext;
@@ -363,13 +364,16 @@ pub fn new_wallet_context_from_cluster(
     let fullnode_url = cluster.fullnode_url();
     info!("Use RPC: {}", &fullnode_url);
     let keystore_path = config_dir.join(SUI_KEYSTORE_FILENAME);
+    let encrypted_keystore_path = config_dir.join(SUI_ENCRYPTED_KEYSTORE_FILENAME);
     let mut keystore = Keystore::from(FileBasedKeystore::new(&keystore_path).unwrap());
+    let encrypted_keystore = EncryptedKeystore::from(EncryptedFileBasedKeystore::new(&encrypted_keystore_path).unwrap());
     let address: SuiAddress = key_pair.public().into();
     keystore
         .add_key(None, SuiKeyPair::Ed25519(key_pair))
         .unwrap();
     SuiClientConfig {
         keystore,
+        encrypted_keystore: Some(encrypted_keystore),
         envs: vec![SuiEnv {
             alias: "localnet".to_string(),
             rpc: fullnode_url.into(),

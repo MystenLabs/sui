@@ -25,6 +25,8 @@ clap.workspace = true
 codespan-reporting.workspace = true
 datatest-stable.workspace = true
 futures.workspace = true
+base64 = "0.21.4"
+hex = "0.4.3"
 http.workspace = true
 im.workspace = true
 inquire.workspace = true
@@ -101,6 +103,7 @@ move-ir-types.workspace = true
 move-command-line-common.workspace = true
 move-cli.workspace = true
 move-symbol-pool.workspace = true
+rpassword.workspace = true
 
 [target.'cfg(not(target_env = "msvc"))'.dependencies]
 jemalloc-ctl.workspace = true

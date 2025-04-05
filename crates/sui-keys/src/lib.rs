@@ -5,3 +5,4 @@ pub mod key_derive;
 pub mod keypair_file;
 pub mod keystore;
 pub mod random_names;
+pub mod encrypted_keystore;

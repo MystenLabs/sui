@@ -14,6 +14,7 @@ use sui_json_rpc_types::{
     SuiObjectResponseQuery, SuiTransactionBlockResponse, SuiTransactionBlockResponseOptions,
 };
 use sui_keys::keystore::AccountKeystore;
+use sui_keys::encrypted_keystore::{AccountEncryptedKeystore, EncryptedFileBasedKeystore, EncryptedKeystore};
 use sui_types::base_types::{ObjectID, ObjectRef, SuiAddress};
 use sui_types::crypto::SuiKeyPair;
 use sui_types::gas_coin::GasCoin;
@@ -33,12 +34,29 @@ impl WalletContext {
         request_timeout: Option<std::time::Duration>,
         max_concurrent_requests: Option<u64>,
     ) -> Result<Self, anyhow::Error> {
-        let config: SuiClientConfig = PersistedConfig::read(config_path).map_err(|err| {
+        let mut config: SuiClientConfig = PersistedConfig::read(config_path).map_err(|err| {
             anyhow!(
                 "Cannot open wallet config file at {:?}. Err: {err}",
                 config_path
             )
         })?;
+
+        // Check if encrypted_keystore exists, if not, create and save it
+        if config.encrypted_keystore.is_none() {
+            let keystore_path = config_path.parent().ok_or_else(|| anyhow!("Invalid config path"))?;
+            let encrypted_keystore_path = keystore_path.join(sui_config::SUI_ENCRYPTED_KEYSTORE_FILENAME);
+            
+            // Create a new empty encrypted keystore
+            let new_encrypted_keystore = EncryptedFileBasedKeystore::new(&encrypted_keystore_path)?;
+            new_encrypted_keystore.save()?; // Save the empty keystore file
+            
+            // Update the config
+            config.encrypted_keystore = Some(EncryptedKeystore::File(new_encrypted_keystore));
+            
+            // Save the updated config
+            config.save(config_path)?;
+            println!("Encrypted keystore migrated and created at {:?}", encrypted_keystore_path);
+        }
 
         let config = config.persisted(config_path);
         let context = Self {
@@ -51,7 +69,14 @@ impl WalletContext {
     }
 
     pub fn get_addresses(&self) -> Vec<SuiAddress> {
-        self.config.keystore.addresses()
+        let mut addresses = self.config.keystore.addresses();
+        
+        // Also include addresses from encrypted_keystore if available
+        if let Some(encrypted_ks) = &self.config.encrypted_keystore {
+            addresses.extend(encrypted_ks.addresses());
+        }
+        
+        addresses
     }
 
     pub async fn get_client(&self) -> Result<SuiClient, anyhow::Error> {
@@ -72,18 +97,23 @@ impl WalletContext {
 
     // TODO: Ger rid of mut
     pub fn active_address(&mut self) -> Result<SuiAddress, anyhow::Error> {
-        if self.config.keystore.addresses().is_empty() {
+        let keystore_addresses = self.config.keystore.addresses();
+        let encrypted_addresses = self.config.encrypted_keystore.as_ref().map_or(Vec::new(), |ks| ks.addresses());
+        
+        let all_addresses: Vec<_> = keystore_addresses.into_iter().chain(encrypted_addresses.into_iter()).collect();
+        
+        if all_addresses.is_empty() {
             return Err(anyhow!(
                 "No managed addresses. Create new address with `new-address` command."
             ));
         }
-
-        // Ok to unwrap because we checked that config addresses not empty
+        
+        // Ok to unwrap because we checked that addresses not empty
         // Set it if not exists
         self.config.active_address = Some(
             self.config
                 .active_address
-                .unwrap_or(*self.config.keystore.addresses().first().unwrap()),
+                .unwrap_or(*all_addresses.first().unwrap()),
         );
 
         Ok(self.config.active_address.unwrap())
@@ -280,11 +310,22 @@ impl WalletContext {
 
     /// Sign a transaction with a key currently managed by the WalletContext
     pub fn sign_transaction(&self, data: &TransactionData) -> Transaction {
-        let sig = self
-            .config
-            .keystore
-            .sign_secure(&data.sender(), data, Intent::sui_transaction())
-            .unwrap();
+        // Try to sign with keystore first
+        let sig = match self.config.keystore.sign_secure(&data.sender(), data, Intent::sui_transaction()) {
+            Ok(sig) => sig,
+            Err(_) => {
+                // If not found in keystore, try encrypted_keystore
+                if let Some(encrypted_ks) = &self.config.encrypted_keystore {
+                    match encrypted_ks.sign_secure(&data.sender(), data, Intent::sui_transaction()) {
+                        Ok(sig) => sig,
+                        Err(_) => panic!("Key not found for address: {}", data.sender()),
+                    }
+                } else {
+                    panic!("Key not found for address: {}", data.sender());
+                }
+            }
+        };
+        
         // TODO: To support sponsored transaction, we should also look at the gas owner.
         Transaction::from_data(data.clone(), vec![sig])
     }

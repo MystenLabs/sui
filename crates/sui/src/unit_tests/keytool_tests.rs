@@ -21,6 +21,7 @@ use rand::SeedableRng;
 use shared_crypto::intent::Intent;
 use shared_crypto::intent::IntentScope;
 use sui_keys::keystore::{AccountKeystore, FileBasedKeystore, InMemKeystore, Keystore};
+use sui_keys::encrypted_keystore::{EncryptedFileBasedKeystore, EncryptedKeystore};
 use sui_types::base_types::ObjectDigest;
 use sui_types::base_types::ObjectID;
 use sui_types::base_types::SequenceNumber;
@@ -47,7 +48,7 @@ const TEST_MNEMONIC: &str = "result crisp session latin must fruit genuine quest
 async fn test_addresses_command() -> Result<(), anyhow::Error> {
     // Add 3 Ed25519 KeyPairs as default
     let mut keystore = Keystore::from(InMemKeystore::new_insecure_for_tests(3));
-
+    let mut encrypted_keystore = EncryptedKeystore::from(EncryptedFileBasedKeystore::new_insecure_for_tests(3));
     // Add another 3 Secp256k1 KeyPairs
     for _ in 0..3 {
         keystore.add_key(None, SuiKeyPair::Secp256k1(get_key_pair().1))?;
@@ -57,7 +58,7 @@ async fn test_addresses_command() -> Result<(), anyhow::Error> {
     KeyToolCommand::List {
         sort_by_alias: true,
     }
-    .execute(&mut keystore)
+    .execute(&mut keystore, &mut encrypted_keystore)
     .await
     .unwrap();
     Ok(())
@@ -232,13 +233,15 @@ async fn test_private_keys_import_export() -> Result<(), anyhow::Error> {
     // assert correctness
     for (private_key, private_key_hex, private_key_base64, address) in TEST_CASES {
         let mut keystore = Keystore::from(InMemKeystore::new_insecure_for_tests(0));
+        let mut encrypted_keystore = EncryptedKeystore::from(EncryptedFileBasedKeystore::new_insecure_for_tests(0));
+
         KeyToolCommand::Import {
             alias: None,
             input_string: private_key.to_string(),
             key_scheme: SignatureScheme::ED25519,
             derivation_path: None,
         }
-        .execute(&mut keystore)
+        .execute(&mut keystore, &mut encrypted_keystore)
         .await?;
         let kp = SuiKeyPair::decode(private_key).unwrap();
         let kp_from_hex = SuiKeyPair::Ed25519(
@@ -257,7 +260,7 @@ async fn test_private_keys_import_export() -> Result<(), anyhow::Error> {
         let output = KeyToolCommand::Export {
             key_identity: KeyIdentity::Address(addr),
         }
-        .execute(&mut keystore)
+        .execute(&mut keystore, &mut encrypted_keystore)
         .await?;
         match output {
             CommandOutput::Export(exported) => {
@@ -269,6 +272,8 @@ async fn test_private_keys_import_export() -> Result<(), anyhow::Error> {
 
     for (private_key, _, _, addr) in TEST_CASES {
         let mut keystore = Keystore::from(InMemKeystore::new_insecure_for_tests(0));
+        let mut encrypted_keystore = EncryptedKeystore::from(EncryptedFileBasedKeystore::new_insecure_for_tests(0));
+
         // assert failure when private key is malformed
         let output = KeyToolCommand::Import {
             alias: None,
@@ -276,7 +281,7 @@ async fn test_private_keys_import_export() -> Result<(), anyhow::Error> {
             key_scheme: SignatureScheme::ED25519,
             derivation_path: None,
         }
-        .execute(&mut keystore)
+        .execute(&mut keystore, &mut encrypted_keystore)
         .await;
         assert!(output.is_err());
 
@@ -287,7 +292,7 @@ async fn test_private_keys_import_export() -> Result<(), anyhow::Error> {
             key_scheme: SignatureScheme::ED25519,
             derivation_path: None,
         }
-        .execute(&mut keystore)
+        .execute(&mut keystore, &mut encrypted_keystore)
         .await;
         assert!(output.is_err());
     }
@@ -304,13 +309,15 @@ async fn test_mnemonics_ed25519() -> Result<(), anyhow::Error> {
 
     for t in TEST_CASES {
         let mut keystore = Keystore::from(InMemKeystore::new_insecure_for_tests(0));
+        let mut encrypted_keystore = EncryptedKeystore::from(EncryptedFileBasedKeystore::new_insecure_for_tests(0));
+        
         KeyToolCommand::Import {
             alias: None,
             input_string: t[0].to_string(),
             key_scheme: SignatureScheme::ED25519,
             derivation_path: None,
         }
-        .execute(&mut keystore)
+        .execute(&mut keystore, &mut encrypted_keystore)
         .await?;
         let kp = SuiKeyPair::decode(t[1]).unwrap();
         let addr = SuiAddress::from_str(t[2]).unwrap();
@@ -329,13 +336,15 @@ async fn test_mnemonics_secp256k1() -> Result<(), anyhow::Error> {
 
     for t in TEST_CASES {
         let mut keystore = Keystore::from(InMemKeystore::new_insecure_for_tests(0));
+        let mut encrypted_keystore = EncryptedKeystore::from(EncryptedFileBasedKeystore::new_insecure_for_tests(0));
+
         KeyToolCommand::Import {
             alias: None,
             input_string: t[0].to_string(),
             key_scheme: SignatureScheme::Secp256k1,
             derivation_path: None,
         }
-        .execute(&mut keystore)
+        .execute(&mut keystore, &mut encrypted_keystore)
         .await?;
         let kp = SuiKeyPair::decode(t[1]).unwrap();
         let addr = SuiAddress::from_str(t[2]).unwrap();
@@ -368,13 +377,14 @@ async fn test_mnemonics_secp256r1() -> Result<(), anyhow::Error> {
 
     for [mnemonics, sk, address] in TEST_CASES {
         let mut keystore = Keystore::from(InMemKeystore::new_insecure_for_tests(0));
+        let mut encrypted_keystore = EncryptedKeystore::from(EncryptedFileBasedKeystore::new_insecure_for_tests(0));
         KeyToolCommand::Import {
             alias: None,
             input_string: mnemonics.to_string(),
             key_scheme: SignatureScheme::Secp256r1,
             derivation_path: None,
         }
-        .execute(&mut keystore)
+        .execute(&mut keystore, &mut encrypted_keystore)
         .await?;
 
         let kp = SuiKeyPair::decode(sk).unwrap();
@@ -389,13 +399,14 @@ async fn test_mnemonics_secp256r1() -> Result<(), anyhow::Error> {
 #[test]
 async fn test_invalid_derivation_path() -> Result<(), anyhow::Error> {
     let mut keystore = Keystore::from(InMemKeystore::new_insecure_for_tests(0));
+    let mut encrypted_keystore = EncryptedKeystore::from(EncryptedFileBasedKeystore::new_insecure_for_tests(0));
     assert!(KeyToolCommand::Import {
         alias: None,
         input_string: TEST_MNEMONIC.to_string(),
         key_scheme: SignatureScheme::ED25519,
         derivation_path: Some("m/44'/1'/0'/0/0".parse().unwrap()),
     }
-    .execute(&mut keystore)
+    .execute(&mut keystore, &mut encrypted_keystore)
     .await
     .is_err());
 
@@ -405,7 +416,7 @@ async fn test_invalid_derivation_path() -> Result<(), anyhow::Error> {
         key_scheme: SignatureScheme::ED25519,
         derivation_path: Some("m/0'/784'/0'/0/0".parse().unwrap()),
     }
-    .execute(&mut keystore)
+    .execute(&mut keystore, &mut encrypted_keystore)
     .await
     .is_err());
 
@@ -415,7 +426,7 @@ async fn test_invalid_derivation_path() -> Result<(), anyhow::Error> {
         key_scheme: SignatureScheme::ED25519,
         derivation_path: Some("m/54'/784'/0'/0/0".parse().unwrap()),
     }
-    .execute(&mut keystore)
+    .execute(&mut keystore, &mut encrypted_keystore)
     .await
     .is_err());
 
@@ -425,7 +436,7 @@ async fn test_invalid_derivation_path() -> Result<(), anyhow::Error> {
         key_scheme: SignatureScheme::Secp256k1,
         derivation_path: Some("m/54'/784'/0'/0'/0'".parse().unwrap()),
     }
-    .execute(&mut keystore)
+    .execute(&mut keystore, &mut encrypted_keystore)
     .await
     .is_err());
 
@@ -435,7 +446,7 @@ async fn test_invalid_derivation_path() -> Result<(), anyhow::Error> {
         key_scheme: SignatureScheme::Secp256k1,
         derivation_path: Some("m/44'/784'/0'/0/0".parse().unwrap()),
     }
-    .execute(&mut keystore)
+    .execute(&mut keystore, &mut encrypted_keystore)
     .await
     .is_err());
 
@@ -445,13 +456,14 @@ async fn test_invalid_derivation_path() -> Result<(), anyhow::Error> {
 #[test]
 async fn test_valid_derivation_path() -> Result<(), anyhow::Error> {
     let mut keystore = Keystore::from(InMemKeystore::new_insecure_for_tests(0));
+    let mut encrypted_keystore = EncryptedKeystore::from(EncryptedFileBasedKeystore::new_insecure_for_tests(0));
     assert!(KeyToolCommand::Import {
         alias: None,
         input_string: TEST_MNEMONIC.to_string(),
         key_scheme: SignatureScheme::ED25519,
         derivation_path: Some("m/44'/784'/0'/0'/0'".parse().unwrap()),
     }
-    .execute(&mut keystore)
+    .execute(&mut keystore, &mut encrypted_keystore)
     .await
     .is_ok());
 
@@ -461,7 +473,7 @@ async fn test_valid_derivation_path() -> Result<(), anyhow::Error> {
         key_scheme: SignatureScheme::ED25519,
         derivation_path: Some("m/44'/784'/0'/0'/1'".parse().unwrap()),
     }
-    .execute(&mut keystore)
+    .execute(&mut keystore, &mut encrypted_keystore)
     .await
     .is_ok());
 
@@ -471,7 +483,7 @@ async fn test_valid_derivation_path() -> Result<(), anyhow::Error> {
         key_scheme: SignatureScheme::ED25519,
         derivation_path: Some("m/44'/784'/1'/0'/1'".parse().unwrap()),
     }
-    .execute(&mut keystore)
+    .execute(&mut keystore, &mut encrypted_keystore)
     .await
     .is_ok());
 
@@ -481,7 +493,7 @@ async fn test_valid_derivation_path() -> Result<(), anyhow::Error> {
         key_scheme: SignatureScheme::Secp256k1,
         derivation_path: Some("m/54'/784'/0'/0/1".parse().unwrap()),
     }
-    .execute(&mut keystore)
+    .execute(&mut keystore, &mut encrypted_keystore)
     .await
     .is_ok());
 
@@ -491,7 +503,7 @@ async fn test_valid_derivation_path() -> Result<(), anyhow::Error> {
         key_scheme: SignatureScheme::Secp256k1,
         derivation_path: Some("m/54'/784'/1'/0/1".parse().unwrap()),
     }
-    .execute(&mut keystore)
+    .execute(&mut keystore, &mut encrypted_keystore)
     .await
     .is_ok());
     Ok(())
@@ -500,12 +512,13 @@ async fn test_valid_derivation_path() -> Result<(), anyhow::Error> {
 #[test]
 async fn test_keytool_bls12381() -> Result<(), anyhow::Error> {
     let mut keystore = Keystore::from(InMemKeystore::new_insecure_for_tests(0));
+    let mut encrypted_keystore = EncryptedKeystore::from(EncryptedFileBasedKeystore::new_insecure_for_tests(0));
     KeyToolCommand::Generate {
         key_scheme: SignatureScheme::BLS12381,
         derivation_path: None,
         word_length: None,
     }
-    .execute(&mut keystore)
+    .execute(&mut keystore, &mut encrypted_keystore)
     .await?;
     Ok(())
 }
@@ -514,6 +527,7 @@ async fn test_keytool_bls12381() -> Result<(), anyhow::Error> {
 async fn test_sign_command() -> Result<(), anyhow::Error> {
     // Add a keypair
     let mut keystore = Keystore::from(InMemKeystore::new_insecure_for_tests(1));
+    let mut encrypted_keystore = EncryptedKeystore::from(EncryptedFileBasedKeystore::new_insecure_for_tests(1));
     let binding = keystore.addresses();
     let sender = binding.first().unwrap();
     let alias = keystore.get_alias_by_address(sender).unwrap();
@@ -542,7 +556,7 @@ async fn test_sign_command() -> Result<(), anyhow::Error> {
         data: Base64::encode(bcs::to_bytes(&tx_data)?),
         intent: Some(Intent::sui_app(IntentScope::PersonalMessage)),
     }
-    .execute(&mut keystore)
+    .execute(&mut keystore, &mut encrypted_keystore)
     .await?;
 
     // Sign an intent message for the transaction data without intent passed in, so default is used.
@@ -551,7 +565,7 @@ async fn test_sign_command() -> Result<(), anyhow::Error> {
         data: Base64::encode(bcs::to_bytes(&tx_data)?),
         intent: None,
     }
-    .execute(&mut keystore)
+    .execute(&mut keystore, &mut encrypted_keystore)
     .await?;
 
     // Sign an intent message for the transaction data without intent passed in, so default is used.
@@ -561,7 +575,7 @@ async fn test_sign_command() -> Result<(), anyhow::Error> {
         data: Base64::encode(bcs::to_bytes(&tx_data)?),
         intent: None,
     }
-    .execute(&mut keystore)
+    .execute(&mut keystore, &mut encrypted_keystore)
     .await?;
     Ok(())
 }

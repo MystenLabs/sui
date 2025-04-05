@@ -28,6 +28,7 @@ pub const SUI_NETWORK_CONFIG: &str = "network.yaml";
 pub const SUI_FULLNODE_CONFIG: &str = "fullnode.yaml";
 pub const SUI_CLIENT_CONFIG: &str = "client.yaml";
 pub const SUI_KEYSTORE_FILENAME: &str = "sui.keystore";
+pub const SUI_ENCRYPTED_KEYSTORE_FILENAME: &str = "sui.encrypted.keystore";
 pub const SUI_KEYSTORE_ALIASES_FILENAME: &str = "sui.aliases";
 pub const SUI_BENCHMARK_GENESIS_GAS_KEYSTORE_FILENAME: &str = "benchmark.keystore";
 pub const SUI_GENESIS_FILENAME: &str = "genesis.blob";

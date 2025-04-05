@@ -6,10 +6,11 @@ use std::{str::FromStr, time::Duration};
 use anyhow::bail;
 use futures::{future, stream::StreamExt};
 use sui_config::{
-    sui_config_dir, Config, PersistedConfig, SUI_CLIENT_CONFIG, SUI_KEYSTORE_FILENAME,
+    sui_config_dir, Config, PersistedConfig, SUI_CLIENT_CONFIG, SUI_KEYSTORE_FILENAME, SUI_ENCRYPTED_KEYSTORE_FILENAME
 };
 use sui_json_rpc_types::{Coin, SuiObjectDataOptions};
 use sui_keys::keystore::{AccountKeystore, FileBasedKeystore};
+use sui_keys::encrypted_keystore::{EncryptedKeystore, EncryptedFileBasedKeystore};
 use sui_sdk::{
     sui_client_config::{SuiClientConfig, SuiEnv},
     wallet_context::WalletContext,
@@ -269,16 +270,20 @@ pub async fn split_coin_digest(
 pub fn retrieve_wallet() -> Result<WalletContext, anyhow::Error> {
     let wallet_conf = sui_config_dir()?.join(SUI_CLIENT_CONFIG);
     let keystore_path = sui_config_dir()?.join(SUI_KEYSTORE_FILENAME);
+    let encrypted_keystore_path = sui_config_dir()?.join(SUI_ENCRYPTED_KEYSTORE_FILENAME);
 
     // check if a wallet exists and if not, create a wallet and a sui client config
     if !keystore_path.exists() {
         let keystore = FileBasedKeystore::new(&keystore_path)?;
+        let encrypted_keystore = EncryptedFileBasedKeystore::new(&encrypted_keystore_path)?;
         keystore.save()?;
+        encrypted_keystore.save()?;
     }
 
     if !wallet_conf.exists() {
         let keystore = FileBasedKeystore::new(&keystore_path)?;
-        let mut client_config = SuiClientConfig::new(keystore.into());
+        let encrypted_keystore = EncryptedFileBasedKeystore::new(&encrypted_keystore_path)?;
+        let mut client_config = SuiClientConfig::new(keystore.into(), encrypted_keystore.into());
 
         client_config.add_env(SuiEnv::testnet());
         client_config.add_env(SuiEnv::devnet());

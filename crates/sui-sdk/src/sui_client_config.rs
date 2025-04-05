@@ -10,21 +10,35 @@ use serde_with::serde_as;
 use crate::{SuiClient, SuiClientBuilder, SUI_DEVNET_URL, SUI_LOCAL_NETWORK_URL, SUI_TESTNET_URL};
 use sui_config::Config;
 use sui_keys::keystore::{AccountKeystore, Keystore};
+use sui_keys::encrypted_keystore::{AccountEncryptedKeystore, EncryptedKeystore};
 use sui_types::base_types::*;
 
 #[serde_as]
 #[derive(Serialize, Deserialize)]
 pub struct SuiClientConfig {
     pub keystore: Keystore,
+    #[serde(default)]
+    pub encrypted_keystore: Option<EncryptedKeystore>,
     pub envs: Vec<SuiEnv>,
     pub active_env: Option<String>,
     pub active_address: Option<SuiAddress>,
 }
 
 impl SuiClientConfig {
-    pub fn new(keystore: Keystore) -> Self {
+    pub fn new(keystore: Keystore, encrypted_keystore: EncryptedKeystore) -> Self {
         SuiClientConfig {
             keystore,
+            encrypted_keystore: Some(encrypted_keystore),
+            envs: vec![],
+            active_env: None,
+            active_address: None,
+        }
+    }
+
+    pub fn new_without_encrypted_keystore(keystore: Keystore) -> Self {
+        SuiClientConfig {
+            keystore,
+            encrypted_keystore: None,
             envs: vec![],
             active_env: None,
             active_address: None,
@@ -152,12 +166,20 @@ impl Display for SuiClientConfig {
             "Managed addresses : {}",
             self.keystore.addresses().len()
         )?;
+        writeln!(
+            writer,
+            "Managed encrypted addresses : {}",
+            self.encrypted_keystore.as_ref().map_or(0, |ks| ks.addresses().len())
+        )?;
         write!(writer, "Active address: ")?;
         match self.active_address {
             Some(r) => writeln!(writer, "{}", r)?,
             None => writeln!(writer, "None")?,
         };
         writeln!(writer, "{}", self.keystore)?;
+        if let Some(ref ks) = self.encrypted_keystore {
+            writeln!(writer, "{}", ks)?;
+        }
         if let Ok(env) = self.get_active_env() {
             write!(writer, "{}", env)?;
         }

@@ -6,6 +6,7 @@ use std::{fmt::Display, str::FromStr};
 use anyhow::Error;
 use serde::Serialize;
 use sui_keys::keystore::{AccountKeystore, Keystore};
+use sui_keys::encrypted_keystore::{EncryptedKeystore, AccountEncryptedKeystore};
 use sui_sdk::wallet_context::WalletContext;
 use sui_types::base_types::SuiAddress;
 
@@ -46,7 +47,7 @@ pub fn get_identity_address(
     ctx: &mut WalletContext,
 ) -> Result<SuiAddress, Error> {
     if let Some(addr) = input {
-        get_identity_address_from_keystore(addr, &ctx.config.keystore)
+        get_identity_address_from_keystore(addr, &ctx.config.keystore, ctx.config.encrypted_keystore.as_ref())
     } else {
         Ok(ctx.active_address()?)
     }
@@ -55,9 +56,21 @@ pub fn get_identity_address(
 pub fn get_identity_address_from_keystore(
     input: KeyIdentity,
     keystore: &Keystore,
+    encrypted_keystore: Option<&EncryptedKeystore>,
 ) -> Result<SuiAddress, Error> {
     match input {
         KeyIdentity::Address(x) => Ok(x),
-        KeyIdentity::Alias(x) => Ok(*keystore.get_address_by_alias(x)?),
+        KeyIdentity::Alias(x) => {
+            match keystore.get_address_by_alias(x.clone()) {
+                Ok(address) => Ok(*address),
+                Err(_) => {
+                    if let Some(encrypted_keystore) = encrypted_keystore {
+                        Ok(*encrypted_keystore.get_address_by_alias(x)?)
+                    } else {
+                        Err(anyhow::anyhow!("Alias {} not found in keystore", x))
+                    }
+                }
+            }
+        }
     }
 }

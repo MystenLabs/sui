@@ -50,6 +50,7 @@ use sui_json_rpc_types::{
     SuiTransactionBlockResponse, SuiTransactionBlockResponseOptions,
 };
 use sui_keys::keystore::AccountKeystore;
+use sui_keys::encrypted_keystore::AccountEncryptedKeystore;
 use sui_move_build::{
     build_from_resolution_graph, check_invalid_dependencies, check_unpublished_dependencies,
     gather_published_ids, implicit_deps, BuildConfig, CompiledPackage,
@@ -255,6 +256,9 @@ pub enum SuiClientCommands {
         alias: Option<String>,
         word_length: Option<String>,
         derivation_path: Option<DerivationPath>,
+        /// Create an encrypted key
+        #[clap(long)]
+        is_encrypt: bool,
     },
 
     /// Add new Sui environment.
@@ -447,7 +451,7 @@ pub enum SuiClientCommands {
         /// The amount to transfer, if not specified, the entire coin object will be transferred.
         #[clap(long)]
         amount: Option<u64>,
-
+            
         #[clap(flatten)]
         opts: Opts,
     },
@@ -650,7 +654,7 @@ impl Opts {
             dry_run: false,
             dev_inspect: false,
             serialize_unsigned_transaction: false,
-            serialize_signed_transaction: false,
+            serialize_signed_transaction: false
         }
     }
     /// Uses the passed gas_budget for the gas budget variable, sets dry run to true,
@@ -661,7 +665,7 @@ impl Opts {
             dry_run: true,
             dev_inspect: false,
             serialize_unsigned_transaction: false,
-            serialize_signed_transaction: false,
+            serialize_signed_transaction: false
         }
     }
 }
@@ -787,6 +791,15 @@ impl SuiClientCommands {
                     .into_iter()
                     .map(|(address, alias)| (alias.alias.to_string(), *address))
                     .collect();
+                if let Some(encrypted_keystore) = &context.config.encrypted_keystore {
+                    let encrypted_addresses = encrypted_keystore
+                        .addresses_with_alias()
+                        .into_iter()
+                        .map(|(address, alias)| (format!("{} (encrypted)", alias.alias), *address));
+                    
+                    addresses.extend(encrypted_addresses);
+                }
+
                 if sort_by_alias {
                     addresses.sort();
                 }
@@ -1475,17 +1488,31 @@ impl SuiClientCommands {
                 alias,
                 derivation_path,
                 word_length,
+                is_encrypt,
             } => {
-                let (address, phrase, scheme) = context.config.keystore.generate_and_add_new_key(
-                    key_scheme,
-                    alias.clone(),
-                    derivation_path,
-                    word_length,
-                )?;
+                let (address, phrase, scheme) = if is_encrypt {
+                    context.config.encrypted_keystore.as_mut().ok_or_else(|| anyhow!("Encrypted keystore is not available"))?.generate_and_add_new_key(
+                        key_scheme,
+                        alias.clone(),
+                        derivation_path,
+                        word_length,
+                    )?
+                } else {
+                    context.config.keystore.generate_and_add_new_key(
+                        key_scheme,
+                        alias.clone(),
+                        derivation_path,
+                        word_length,
+                    )?
+                };
 
                 let alias = match alias {
                     Some(x) => x,
-                    None => context.config.keystore.get_alias_by_address(&address)?,
+                    None => if is_encrypt {
+                        context.config.encrypted_keystore.as_ref().ok_or_else(|| anyhow!("Encrypted keystore is not available"))?.get_alias_by_address(&address)?
+                    } else {
+                        context.config.keystore.get_alias_by_address(&address)?
+                    },
                 };
 
                 SuiClientCommandResult::NewAddress(NewAddressOutput {
@@ -1594,7 +1621,7 @@ impl SuiClientCommands {
 
                 if let Some(address) = address {
                     let address = get_identity_address(Some(address), context)?;
-                    if !context.config.keystore.addresses().contains(&address) {
+                    if !context.config.keystore.addresses().contains(&address) && !context.config.encrypted_keystore.as_ref().map_or(false, |ks| ks.addresses().contains(&address)) {
                         return Err(anyhow!("Address {} not managed by wallet", address));
                     }
                     context.config.active_address = Some(address);
@@ -3041,11 +3068,22 @@ pub(crate) async fn dry_run_or_execute_or_serialize(
             tx_data,
         ))
     } else {
-        let signature = context.config.keystore.sign_secure(
-            &tx_data.sender(),
-            &tx_data,
-            Intent::sui_transaction(),
-        )?;
+        let signature = if context.config.keystore.addresses().contains(&tx_data.sender()) {
+            context.config.keystore.sign_secure(
+                &tx_data.sender(),
+                &tx_data,
+                Intent::sui_transaction(),
+            )?
+        } else if let Some(encrypted_store) = &context.config.encrypted_keystore {
+            encrypted_store.sign_secure(
+                &tx_data.sender(),
+                &tx_data,
+                Intent::sui_transaction(),
+            )?
+        } else{
+            return Err(anyhow!("No keystore found"))
+        };
+
         let sender_signed_data = SenderSignedData::new_from_sender_signature(tx_data, signature);
         if serialize_signed_transaction {
             Ok(SuiClientCommandResult::SerializedSignedTransaction(
