@@ -1,6 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use crate::proto::rpc::v2alpha::dynamic_field::DynamicFieldKind;
 use crate::proto::rpc::v2alpha::DynamicField;
 use crate::proto::rpc::v2alpha::ListDynamicFieldsRequest;
 use crate::proto::rpc::v2alpha::ListDynamicFieldsResponse;
@@ -9,12 +10,7 @@ use crate::RpcError;
 use crate::RpcService;
 use bytes::Bytes;
 use sui_sdk_types::ObjectId;
-use sui_sdk_types::TypeTag;
-use sui_types::sui_sdk_types_conversions::type_tag_core_to_sdk;
-use sui_types::{
-    storage::{DynamicFieldIndexInfo, DynamicFieldKey},
-    sui_sdk_types_conversions::SdkTypeConversionError,
-};
+use sui_types::storage::{DynamicFieldIndexInfo, DynamicFieldKey};
 use tap::Pipe;
 
 #[tracing::instrument(skip(service))]
@@ -49,8 +45,8 @@ pub fn list_dynamic_fields(
         .take(page_size + 1)
         .map(|result| {
             result
+                .map(|(key, value)| convert_into_proto(key, value))
                 .map_err(|err| RpcError::new(tonic::Code::Internal, err.to_string()))
-                .and_then(|x| DynamicFieldInfo::try_from(x)?.pipe(Ok))
         })
         .collect::<Result<Vec<_>, _>>()?;
 
@@ -61,7 +57,9 @@ pub fn list_dynamic_fields(
             .pop()
             .unwrap()
             .field_id
-            .pipe(ObjectId::from)
+            .unwrap()
+            .parse::<ObjectId>()
+            .unwrap()
             .pipe(encode_page_token)
             .pipe(Some)
     } else {
@@ -69,10 +67,7 @@ pub fn list_dynamic_fields(
     };
 
     Ok(ListDynamicFieldsResponse {
-        dynamic_fields: dynamic_fields
-            .into_iter()
-            .map(DynamicFieldInfo::into_proto)
-            .collect(),
+        dynamic_fields,
         next_page_token,
     })
 }
@@ -85,45 +80,28 @@ fn encode_page_token(page_token: ObjectId) -> Bytes {
     page_token.as_bytes().to_vec().into()
 }
 
-pub struct DynamicFieldInfo {
-    pub parent: ObjectId,
-    pub field_id: ObjectId,
-    pub name_type: TypeTag,
-    pub name_value: Vec<u8>,
-    pub dynamic_object_id: Option<ObjectId>,
-}
+fn convert_into_proto(
+    DynamicFieldKey { parent, field_id }: DynamicFieldKey,
+    DynamicFieldIndexInfo {
+        dynamic_field_kind,
+        name_type,
+        name_value,
+        value_type,
+        dynamic_object_id,
+    }: DynamicFieldIndexInfo,
+) -> DynamicField {
+    let kind = match dynamic_field_kind {
+        sui_types::dynamic_field::DynamicFieldType::DynamicField => DynamicFieldKind::Field,
+        sui_types::dynamic_field::DynamicFieldType::DynamicObject => DynamicFieldKind::Object,
+    };
 
-impl TryFrom<(DynamicFieldKey, DynamicFieldIndexInfo)> for DynamicFieldInfo {
-    type Error = SdkTypeConversionError;
-
-    fn try_from(value: (DynamicFieldKey, DynamicFieldIndexInfo)) -> Result<Self, Self::Error> {
-        let DynamicFieldKey { parent, field_id } = value.0;
-        let DynamicFieldIndexInfo {
-            dynamic_field_type: _,
-            name_type,
-            name_value,
-            dynamic_object_id,
-        } = value.1;
-
-        Self {
-            parent: parent.into(),
-            field_id: field_id.into(),
-            name_type: type_tag_core_to_sdk(name_type)?,
-            name_value,
-            dynamic_object_id: dynamic_object_id.map(Into::into),
-        }
-        .pipe(Ok)
-    }
-}
-
-impl DynamicFieldInfo {
-    fn into_proto(self) -> DynamicField {
-        DynamicField {
-            parent: Some(self.parent.to_string()),
-            field_id: Some(self.field_id.to_string()),
-            name_type: Some(self.name_type.to_string()),
-            name_value: Some(self.name_value.into()),
-            dynamic_object_id: self.dynamic_object_id.map(|id| id.to_string()),
-        }
+    DynamicField {
+        kind: Some(kind as i32),
+        parent: Some(parent.to_canonical_string(true)),
+        field_id: Some(field_id.to_canonical_string(true)),
+        name_type: Some(name_type.to_canonical_string(true)),
+        name_value: Some(name_value.into()),
+        value_type: Some(value_type.to_canonical_string(true)),
+        dynamic_object_id: dynamic_object_id.map(|id| id.to_canonical_string(true)),
     }
 }

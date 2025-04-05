@@ -418,6 +418,7 @@ jobs:
         uses: bufbuild/buf-setup-action@v1.24.0
         with:
           version: 1.47.2
+          github_token: ${{ secrets.GITHUB_TOKEN }}
       - name: lint protos
         run: cd crates/sui-rpc-api && buf lint
       - name: format protos

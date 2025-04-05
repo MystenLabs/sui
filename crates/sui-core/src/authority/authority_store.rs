@@ -363,8 +363,8 @@ impl AuthorityStore {
     pub fn multi_get_effects<'a>(
         &self,
         effects_digests: impl Iterator<Item = &'a TransactionEffectsDigest>,
-    ) -> SuiResult<Vec<Option<TransactionEffects>>> {
-        Ok(self.perpetual_tables.effects.multi_get(effects_digests)?)
+    ) -> Result<Vec<Option<TransactionEffects>>, TypedStoreError> {
+        self.perpetual_tables.effects.multi_get(effects_digests)
     }
 
     pub fn get_executed_effects(
@@ -383,8 +383,8 @@ impl AuthorityStore {
     pub fn multi_get_executed_effects_digests(
         &self,
         digests: &[TransactionDigest],
-    ) -> SuiResult<Vec<Option<TransactionEffectsDigest>>> {
-        Ok(self.perpetual_tables.executed_effects.multi_get(digests)?)
+    ) -> Result<Vec<Option<TransactionEffectsDigest>>, TypedStoreError> {
+        self.perpetual_tables.executed_effects.multi_get(digests)
     }
 
     /// Given a list of transaction digests, returns a list of the corresponding effects only if they have been
@@ -392,7 +392,7 @@ impl AuthorityStore {
     pub fn multi_get_executed_effects(
         &self,
         digests: &[TransactionDigest],
-    ) -> SuiResult<Vec<Option<TransactionEffects>>> {
+    ) -> Result<Vec<Option<TransactionEffects>>, TypedStoreError> {
         let executed_effects_digests = self.perpetual_tables.executed_effects.multi_get(digests)?;
         let effects = self.multi_get_effects(executed_effects_digests.iter().flatten())?;
         let mut tx_to_effects_map = effects
@@ -1386,12 +1386,11 @@ impl AuthorityStore {
     pub fn multi_get_transaction_blocks(
         &self,
         tx_digests: &[TransactionDigest],
-    ) -> SuiResult<Vec<Option<VerifiedTransaction>>> {
-        Ok(self
-            .perpetual_tables
+    ) -> Result<Vec<Option<VerifiedTransaction>>, TypedStoreError> {
+        self.perpetual_tables
             .transactions
             .multi_get(tx_digests)
-            .map(|v| v.into_iter().map(|v| v.map(|v| v.into())).collect())?)
+            .map(|v| v.into_iter().map(|v| v.map(|v| v.into())).collect())
     }
 
     pub fn get_transaction_block(

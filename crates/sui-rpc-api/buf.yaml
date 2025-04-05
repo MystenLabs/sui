@@ -14,6 +14,7 @@ modules:
         PACKAGE_VERSION_SUFFIX:
           - proto/sui/types
         ENUM_VALUE_PREFIX:
+          - proto/sui/rpc/v2alpha/live_data_service.proto
           - proto/sui/rpc/v2beta/argument.proto
           - proto/sui/rpc/v2beta/checkpoint_summary.proto
           - proto/sui/rpc/v2beta/effects.proto

@@ -29,6 +29,7 @@ pub mod error;
 pub mod accumulator;
 pub mod authenticator_state;
 pub mod balance;
+pub mod balance_change;
 pub mod base_types;
 pub mod bridge;
 pub mod clock;
