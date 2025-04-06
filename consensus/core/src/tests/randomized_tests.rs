@@ -15,6 +15,7 @@ use crate::{
     context::Context,
     dag_state::DagState,
     leader_schedule::{LeaderSchedule, LeaderSwapTable},
+    round_tracker::PeerRoundTracker,
     storage::mem_store::MemStore,
     test_dag::create_random_dag,
     universal_committer::{
@@ -197,10 +198,13 @@ fn authority_setup(num_authorities: usize, authority_index: u32) -> AuthorityTes
             .with_pipeline(true)
             .build();
 
+    let round_tracker = Arc::new(RwLock::new(PeerRoundTracker::new(context.clone())));
+
     let block_manager = BlockManager::new(
         context.clone(),
         dag_state.clone(),
         Arc::new(NoopBlockVerifier),
+        round_tracker,
     );
 
     AuthorityTestFixture {

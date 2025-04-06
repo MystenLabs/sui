@@ -762,10 +762,12 @@ impl Core {
             excluded_ancestors,
         };
 
-        // Update round tracker with our own highest accepted blocks
-        self.round_tracker
-            .write()
-            .update_from_accepted_block(&extended_block);
+        // Update round tracker with our own highest accepted blocks from excluded ancestors only.
+        // The block itself was updated in round tracker from block manager.
+        self.round_tracker.write().update_from_excluded_ancestors(
+            extended_block.block.author(),
+            &extended_block.excluded_ancestors,
+        );
 
         Some(extended_block)
     }
@@ -1436,11 +1438,13 @@ impl CoreTextFixture {
         let context = Arc::new(context);
         let store = Arc::new(MemStore::new());
         let dag_state = Arc::new(RwLock::new(DagState::new(context.clone(), store.clone())));
+        let round_tracker = Arc::new(RwLock::new(PeerRoundTracker::new(context.clone())));
 
         let block_manager = BlockManager::new(
             context.clone(),
             dag_state.clone(),
             Arc::new(NoopBlockVerifier),
+            round_tracker.clone(),
         );
         let leader_schedule = Arc::new(
             LeaderSchedule::from_store(context.clone(), dag_state.clone())
@@ -1469,7 +1473,6 @@ impl CoreTextFixture {
 
         let block_signer = signers.remove(own_index.value()).1;
 
-        let round_tracker = Arc::new(RwLock::new(PeerRoundTracker::new(context.clone())));
         let core = Core::new(
             context,
             leader_schedule,
@@ -1573,10 +1576,12 @@ mod test {
 
         // create dag state after all blocks have been written to store
         let dag_state = Arc::new(RwLock::new(DagState::new(context.clone(), store.clone())));
+        let round_tracker = Arc::new(RwLock::new(PeerRoundTracker::new(context.clone())));
         let block_manager = BlockManager::new(
             context.clone(),
             dag_state.clone(),
             Arc::new(NoopBlockVerifier),
+            round_tracker.clone(),
         );
         let leader_schedule = Arc::new(LeaderSchedule::from_store(
             context.clone(),
@@ -1606,7 +1611,6 @@ mod test {
         transaction_certifier.recover(&NoopBlockVerifier);
         // Need at least one subscriber to the block broadcast channel.
         let mut block_receiver = signal_receivers.block_broadcast_receiver();
-        let round_tracker = Arc::new(RwLock::new(PeerRoundTracker::new(context.clone())));
         let _core = Core::new(
             context.clone(),
             leader_schedule,
@@ -1703,10 +1707,12 @@ mod test {
 
         // create dag state after all blocks have been written to store
         let dag_state = Arc::new(RwLock::new(DagState::new(context.clone(), store.clone())));
+        let round_tracker = Arc::new(RwLock::new(PeerRoundTracker::new(context.clone())));
         let block_manager = BlockManager::new(
             context.clone(),
             dag_state.clone(),
             Arc::new(NoopBlockVerifier),
+            round_tracker.clone(),
         );
         let leader_schedule = Arc::new(LeaderSchedule::from_store(
             context.clone(),
@@ -1736,7 +1742,6 @@ mod test {
         transaction_certifier.recover(&NoopBlockVerifier);
         // Need at least one subscriber to the block broadcast channel.
         let mut block_receiver = signal_receivers.block_broadcast_receiver();
-        let round_tracker = Arc::new(RwLock::new(PeerRoundTracker::new(context.clone())));
         let mut core = Core::new(
             context.clone(),
             leader_schedule,
@@ -1804,10 +1809,12 @@ mod test {
         let store = Arc::new(MemStore::new());
         let dag_state = Arc::new(RwLock::new(DagState::new(context.clone(), store.clone())));
 
+        let round_tracker = Arc::new(RwLock::new(PeerRoundTracker::new(context.clone())));
         let block_manager = BlockManager::new(
             context.clone(),
             dag_state.clone(),
             Arc::new(NoopBlockVerifier),
+            round_tracker.clone(),
         );
         let (transaction_client, tx_receiver) = TransactionClient::new(context.clone());
         let transaction_consumer = TransactionConsumer::new(tx_receiver, context.clone());
@@ -1832,7 +1839,6 @@ mod test {
             leader_schedule.clone(),
         );
 
-        let round_tracker = Arc::new(RwLock::new(PeerRoundTracker::new(context.clone())));
         let mut core = Core::new(
             context.clone(),
             leader_schedule,
@@ -2032,10 +2038,12 @@ mod test {
 
         // create dag state after all blocks have been written to store
         let dag_state = Arc::new(RwLock::new(DagState::new(context.clone(), store.clone())));
+        let round_tracker = Arc::new(RwLock::new(PeerRoundTracker::new(context.clone())));
         let block_manager = BlockManager::new(
             context.clone(),
             dag_state.clone(),
             Arc::new(NoopBlockVerifier),
+            round_tracker.clone(),
         );
         let leader_schedule = Arc::new(LeaderSchedule::from_store(
             context.clone(),
@@ -2065,7 +2073,6 @@ mod test {
         transaction_certifier.recover(&NoopBlockVerifier);
         // Need at least one subscriber to the block broadcast channel.
         let _block_receiver = signal_receivers.block_broadcast_receiver();
-        let round_tracker = Arc::new(RwLock::new(PeerRoundTracker::new(context.clone())));
         let _core = Core::new(
             context.clone(),
             leader_schedule,
@@ -2191,10 +2198,12 @@ mod test {
 
         // create dag state after all blocks have been written to store
         let dag_state = Arc::new(RwLock::new(DagState::new(context.clone(), store.clone())));
+        let round_tracker = Arc::new(RwLock::new(PeerRoundTracker::new(context.clone())));
         let block_manager = BlockManager::new(
             context.clone(),
             dag_state.clone(),
             Arc::new(NoopBlockVerifier),
+            round_tracker.clone(),
         );
         let leader_schedule = Arc::new(LeaderSchedule::from_store(
             context.clone(),
@@ -2223,7 +2232,6 @@ mod test {
             TransactionCertifier::new(context.clone(), dag_state.clone(), blocks_sender);
         // Need at least one subscriber to the block broadcast channel.
         let _block_receiver = signal_receivers.block_broadcast_receiver();
-        let round_tracker = Arc::new(RwLock::new(PeerRoundTracker::new(context.clone())));
         let mut core = Core::new(
             context.clone(),
             leader_schedule,
@@ -2273,10 +2281,12 @@ mod test {
         let store = Arc::new(MemStore::new());
         let dag_state = Arc::new(RwLock::new(DagState::new(context.clone(), store.clone())));
 
+        let round_tracker = Arc::new(RwLock::new(PeerRoundTracker::new(context.clone())));
         let block_manager = BlockManager::new(
             context.clone(),
             dag_state.clone(),
             Arc::new(NoopBlockVerifier),
+            round_tracker.clone(),
         );
         let leader_schedule = Arc::new(LeaderSchedule::from_store(
             context.clone(),
@@ -2302,7 +2312,6 @@ mod test {
             leader_schedule.clone(),
         );
 
-        let round_tracker = Arc::new(RwLock::new(PeerRoundTracker::new(context.clone())));
         let mut core = Core::new(
             context.clone(),
             leader_schedule,
@@ -2627,10 +2636,12 @@ mod test {
         let store = Arc::new(MemStore::new());
         let dag_state = Arc::new(RwLock::new(DagState::new(context.clone(), store.clone())));
 
+        let round_tracker = Arc::new(RwLock::new(PeerRoundTracker::new(context.clone())));
         let block_manager = BlockManager::new(
             context.clone(),
             dag_state.clone(),
             Arc::new(NoopBlockVerifier),
+            round_tracker.clone(),
         );
         let leader_schedule = Arc::new(
             LeaderSchedule::from_store(context.clone(), dag_state.clone())
@@ -2656,7 +2667,6 @@ mod test {
             leader_schedule.clone(),
         );
 
-        let round_tracker = Arc::new(RwLock::new(PeerRoundTracker::new(context.clone())));
         let mut core = Core::new(
             context.clone(),
             leader_schedule,
@@ -2728,6 +2738,11 @@ mod test {
             .skip_block()
             .build();
         let blocks = builder.blocks(13..=14);
+        let excluded_author_1_r14_block = blocks
+            .iter()
+            .find(|b| b.round() == 14 && b.author().value() == 1)
+            .unwrap()
+            .clone();
         transaction_certifier
             .add_voted_blocks(blocks.iter().map(|b| (b.clone(), vec![])).collect());
         assert!(core.add_blocks(blocks).unwrap().is_empty());
@@ -2736,7 +2751,13 @@ mod test {
         // one EXCLUDE authority (1) when we go to select ancestors for the next proposal
         let block = core.try_propose(true).expect("No error").unwrap();
         assert_eq!(block.round(), 15);
-        assert_eq!(block.ancestors().len(), 6);
+        // We will have 7 ancestors as weak links to the excluded authority (1) will be included.
+        assert_eq!(block.ancestors().len(), 7);
+        // Ensure that the parent block at round 14 for authority (1) is not part of the ancestors.
+        assert!(!block
+            .ancestors()
+            .iter()
+            .any(|b| b.round == 14 && b.author.value() == 1));
 
         // Build blocks for a quorum of the network including the EXCLUDE authority (1)
         // which will trigger smart select and we will not propose a block
@@ -2786,6 +2807,8 @@ mod test {
             .chain(blocks.iter())
             .filter(|block| block.author() != AuthorityIndex::new_for_test(1))
             .map(|block| block.reference())
+            // This is the weak link of the excluded authority (1)
+            .chain(iter::once(excluded_author_1_r14_block.reference()))
             .collect::<Vec<_>>();
 
         // Have enough ancestor blocks to propose now.
@@ -2807,7 +2830,13 @@ mod test {
         };
         assert_eq!(extended_block.block.round(), 16);
         assert_eq!(extended_block.block.author(), core.context.own_index);
-        assert_eq!(extended_block.block.ancestors().len(), 6);
+        // We will have 7 ancestors as weak links to the excluded authority (1) will be included.
+        assert_eq!(block.ancestors().len(), 7);
+        // Ensure that the parent block at round 15 for authority (1) is not part of the ancestors.
+        assert!(!block
+            .ancestors()
+            .iter()
+            .any(|b| b.round == 15 && b.author.value() == 1));
         assert_eq!(extended_block.block.ancestors(), included_block_references);
         assert_eq!(extended_block.excluded_ancestors.len(), 1);
         assert_eq!(
@@ -2926,10 +2955,12 @@ mod test {
         let store = Arc::new(MemStore::new());
         let dag_state = Arc::new(RwLock::new(DagState::new(context.clone(), store.clone())));
 
+        let round_tracker = Arc::new(RwLock::new(PeerRoundTracker::new(context.clone())));
         let block_manager = BlockManager::new(
             context.clone(),
             dag_state.clone(),
             Arc::new(NoopBlockVerifier),
+            round_tracker.clone(),
         );
         let leader_schedule = Arc::new(
             LeaderSchedule::from_store(context.clone(), dag_state.clone())
@@ -2955,7 +2986,6 @@ mod test {
             leader_schedule.clone(),
         );
 
-        let round_tracker = Arc::new(RwLock::new(PeerRoundTracker::new(context.clone())));
         let mut core = Core::new(
             context.clone(),
             leader_schedule,
@@ -3021,10 +3051,12 @@ mod test {
         let store = Arc::new(MemStore::new());
         let dag_state = Arc::new(RwLock::new(DagState::new(context.clone(), store.clone())));
 
+        let round_tracker = Arc::new(RwLock::new(PeerRoundTracker::new(context.clone())));
         let block_manager = BlockManager::new(
             context.clone(),
             dag_state.clone(),
             Arc::new(NoopBlockVerifier),
+            round_tracker.clone(),
         );
         let leader_schedule = Arc::new(LeaderSchedule::from_store(
             context.clone(),
@@ -3050,7 +3082,6 @@ mod test {
             leader_schedule.clone(),
         );
 
-        let round_tracker = Arc::new(RwLock::new(PeerRoundTracker::new(context.clone())));
         let mut core = Core::new(
             context.clone(),
             leader_schedule,
@@ -3093,10 +3124,12 @@ mod test {
         let store = Arc::new(MemStore::new());
         let dag_state = Arc::new(RwLock::new(DagState::new(context.clone(), store.clone())));
 
+        let round_tracker = Arc::new(RwLock::new(PeerRoundTracker::new(context.clone())));
         let block_manager = BlockManager::new(
             context.clone(),
             dag_state.clone(),
             Arc::new(NoopBlockVerifier),
+            round_tracker.clone(),
         );
         let leader_schedule = Arc::new(LeaderSchedule::from_store(
             context.clone(),
@@ -3122,7 +3155,6 @@ mod test {
             leader_schedule.clone(),
         );
 
-        let round_tracker = Arc::new(RwLock::new(PeerRoundTracker::new(context.clone())));
         let mut core = Core::new(
             context.clone(),
             leader_schedule,
@@ -3548,10 +3580,12 @@ mod test {
         let store = Arc::new(MemStore::new());
         let dag_state = Arc::new(RwLock::new(DagState::new(context.clone(), store.clone())));
 
+        let round_tracker = Arc::new(RwLock::new(PeerRoundTracker::new(context.clone())));
         let block_manager = BlockManager::new(
             context.clone(),
             dag_state.clone(),
             Arc::new(NoopBlockVerifier),
+            round_tracker.clone(),
         );
         let leader_schedule = Arc::new(
             LeaderSchedule::from_store(context.clone(), dag_state.clone())
@@ -3577,7 +3611,6 @@ mod test {
             leader_schedule.clone(),
         );
 
-        let round_tracker = Arc::new(RwLock::new(PeerRoundTracker::new(context.clone())));
         let mut core = Core::new(
             context.clone(),
             leader_schedule,
