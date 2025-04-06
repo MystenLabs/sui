@@ -270,7 +270,7 @@ pub async fn start_faucet(
         .route("/", get(redirect))
         .route("/health", get(health))
         .route("/v1/faucet_discord", post(batch_faucet_discord))
-        .route("/v1/status/:task_id", get(request_status));
+        .route("/v1/status/{task_id}", get(request_status));
 
     // Combine all routes
     let app = Router::new()
