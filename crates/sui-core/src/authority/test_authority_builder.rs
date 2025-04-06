@@ -346,6 +346,8 @@ impl<'a> TestAuthorityBuilder<'a> {
         config.authority_store_pruning_config = pruning_config;
 
         let chain_identifier = ChainIdentifier::from(*genesis.checkpoint().digest());
+        let policy_config = config.policy_config.clone();
+        let firewall_config = config.firewall_config.clone();
 
         let state = AuthorityState::new(
             name,
@@ -366,6 +368,8 @@ impl<'a> TestAuthorityBuilder<'a> {
             None,
             chain_identifier,
             pruner_db,
+            policy_config,
+            firewall_config,
         )
         .await;
 
