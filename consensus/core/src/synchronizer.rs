@@ -7,7 +7,7 @@ use std::{
 };
 
 use bytes::Bytes;
-use consensus_config::AuthorityIndex;
+use consensus_config::{AuthorityIndex, Stake};
 use futures::{stream::FuturesUnordered, StreamExt as _};
 use itertools::Itertools as _;
 use mysten_metrics::{
@@ -230,7 +230,7 @@ impl SynchronizerHandle {
 pub(crate) struct Synchronizer<C: NetworkClient, V: BlockVerifier, D: CoreThreadDispatcher> {
     context: Arc<Context>,
     commands_receiver: Receiver<Command>,
-    fetch_block_senders: BTreeMap<AuthorityIndex, Sender<BlocksGuard>>,
+    fetch_block_senders: BTreeMap<AuthorityIndex, Sender<(BlocksGuard, Instant)>>,
     core_dispatcher: Arc<D>,
     commit_vote_monitor: Arc<CommitVoteMonitor>,
     dag_state: Arc<RwLock<DagState>>,
@@ -355,7 +355,7 @@ impl<C: NetworkClient, V: BlockVerifier, D: CoreThreadDispatcher> Synchronizer<C
                                 .fetch_block_senders
                                 .get(&peer_index)
                                 .expect("Fatal error, sender should be present")
-                                .try_send(blocks_guard)
+                                .try_send((blocks_guard, Instant::now()))
                                 .map_err(|err| {
                                     match err {
                                         TrySendError::Full(_) => ConsensusError::SynchronizerSaturated(peer_index),
@@ -438,18 +438,31 @@ impl<C: NetworkClient, V: BlockVerifier, D: CoreThreadDispatcher> Synchronizer<C
         context: Arc<Context>,
         core_dispatcher: Arc<D>,
         dag_state: Arc<RwLock<DagState>>,
-        mut receiver: Receiver<BlocksGuard>,
+        mut receiver: Receiver<(BlocksGuard, Instant)>,
         commands_sender: Sender<Command>,
     ) {
-        const MAX_RETRIES: u32 = 5;
+        const MAX_RETRIES: u32 = 3;
+
         let peer_hostname = &context.committee.authority(peer_index).hostname;
         let mut requests = FuturesUnordered::new();
 
         loop {
             tokio::select! {
-                Some(blocks_guard) = receiver.recv(), if requests.len() < FETCH_BLOCKS_CONCURRENCY => {
-                    // get the highest accepted rounds
-                    let highest_rounds = Self::get_highest_accepted_rounds(dag_state.clone(), &context);
+                Some((blocks_guard, sent_time)) = receiver.recv(), if requests.len() < FETCH_BLOCKS_CONCURRENCY => {
+                    let elapsed = Instant::now().duration_since(sent_time);
+                    if elapsed > FETCH_REQUEST_TIMEOUT {
+                        trace!("Fetch request to peer {peer_index} {peer_hostname} took {elapsed:?} to reach loop.");
+                        continue;
+                    }
+
+                    // Get missing ancestor blocks from last accept rounds, if there are not too many missing ancestor stake.
+                    // Otherwise, it means this authority is lagging behind, or the peer sending the block is not well behaving.
+                    let total_missing_stake = blocks_guard.block_refs.iter().map(|b| context.committee.authority(b.author).stake).sum::<Stake>();
+                    let highest_rounds = if total_missing_stake < context.committee.validity_threshold() {
+                        Self::get_highest_accepted_rounds(dag_state.clone(), &context)
+                    } else {
+                        vec![]
+                    };
 
                     requests.push(Self::fetch_blocks_request(network_client.clone(), peer_index, blocks_guard, highest_rounds, FETCH_REQUEST_TIMEOUT, 1))
                 },
