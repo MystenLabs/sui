@@ -452,13 +452,10 @@ impl From<sui_sdk_types::ConsensusDeterminedVersionAssignments>
         use sui_sdk_types::ConsensusDeterminedVersionAssignments::*;
 
         let kind = match value {
-            CancelledTransactions {
-                cancelled_transactions,
+            CanceledTransactions {
+                canceled_transactions,
             } => Kind::CancelledTransactions(super::CancelledTransactions {
-                cancelled_transactions: cancelled_transactions
-                    .into_iter()
-                    .map(Into::into)
-                    .collect(),
+                cancelled_transactions: canceled_transactions.into_iter().map(Into::into).collect(),
             }),
         };
 
@@ -481,8 +478,8 @@ impl TryFrom<&super::ConsensusDeterminedVersionAssignments>
         {
             Kind::CancelledTransactions(super::CancelledTransactions {
                 cancelled_transactions,
-            }) => Self::CancelledTransactions {
-                cancelled_transactions: cancelled_transactions
+            }) => Self::CanceledTransactions {
+                canceled_transactions: cancelled_transactions
                     .iter()
                     .map(TryInto::try_into)
                     .collect::<Result<_, _>>()?,
@@ -496,8 +493,8 @@ impl TryFrom<&super::ConsensusDeterminedVersionAssignments>
 // CancelledTransaction
 //
 
-impl From<sui_sdk_types::CancelledTransaction> for super::CancelledTransaction {
-    fn from(value: sui_sdk_types::CancelledTransaction) -> Self {
+impl From<sui_sdk_types::CanceledTransaction> for super::CancelledTransaction {
+    fn from(value: sui_sdk_types::CanceledTransaction) -> Self {
         Self {
             digest: Some(value.digest.into()),
             version_assignments: value
@@ -509,7 +506,7 @@ impl From<sui_sdk_types::CancelledTransaction> for super::CancelledTransaction {
     }
 }
 
-impl TryFrom<&super::CancelledTransaction> for sui_sdk_types::CancelledTransaction {
+impl TryFrom<&super::CancelledTransaction> for sui_sdk_types::CanceledTransaction {
     type Error = TryFromProtoError;
 
     fn try_from(value: &super::CancelledTransaction) -> Result<Self, Self::Error> {
@@ -903,6 +900,7 @@ impl From<sui_sdk_types::EndOfEpochTransactionKind> for super::EndOfEpochTransac
             BridgeCommitteeInit {
                 bridge_object_version,
             } => Kind::BridgeCommitteeInit(bridge_object_version),
+            _ => return Self { kind: None },
         };
 
         Self { kind: Some(kind) }

@@ -5,6 +5,7 @@ use bootstrap::bootstrap;
 use config::{IndexerConfig, PipelineLayer};
 use handlers::{
     coin_balance_buckets::CoinBalanceBuckets,
+    cp_sequence_numbers::CpSequenceNumbers,
     ev_emit_mod::EvEmitMod,
     ev_struct_inst::EvStructInst,
     kv_checkpoints::KvCheckpoints,
@@ -15,6 +16,7 @@ use handlers::{
     kv_protocol_configs::KvProtocolConfigs,
     kv_transactions::KvTransactions,
     obj_info::ObjInfo,
+    obj_info_temp::ObjInfoTemp,
     obj_versions::{ObjVersions, ObjVersionsSentinelBackfill},
     sum_displays::SumDisplays,
     sum_packages::SumPackages,
@@ -28,7 +30,6 @@ use handlers::{
 use prometheus::Registry;
 use sui_indexer_alt_framework::{
     db::DbArgs,
-    handlers::cp_sequence_numbers::CpSequenceNumbers,
     ingestion::{ClientArgs, IngestionConfig},
     pipeline::{
         concurrent::{ConcurrentConfig, PrunerConfig},
@@ -87,6 +88,7 @@ pub async fn setup_indexer(
         kv_protocol_configs,
         kv_transactions,
         obj_info,
+        obj_info_temp,
         obj_versions,
         obj_versions_sentinel_backfill,
         tx_affected_addresses,
@@ -191,6 +193,8 @@ pub async fn setup_indexer(
     // Consistent pipelines
     add_consistent!(CoinBalanceBuckets::default(), coin_balance_buckets);
     add_consistent!(ObjInfo::default(), obj_info);
+    // TODO: Remove this once the backfill is complete.
+    add_consistent!(ObjInfoTemp::default(), obj_info_temp);
 
     // Summary tables (without write-ahead log)
     add_sequential!(SumDisplays, sum_displays);

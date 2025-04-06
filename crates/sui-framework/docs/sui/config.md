@@ -140,20 +140,20 @@ title: Module `sui::config`
 
 
 
-<a name="sui_config_EBCSSerializationFailure"></a>
-
-
-
-<pre><code><b>const</b> <a href="../sui/config.md#sui_config_EBCSSerializationFailure">EBCSSerializationFailure</a>: u64 = 2;
-</code></pre>
-
-
-
 <a name="sui_config_ENotSetForEpoch"></a>
 
 
 
 <pre><code><b>const</b> <a href="../sui/config.md#sui_config_ENotSetForEpoch">ENotSetForEpoch</a>: u64 = 1;
+</code></pre>
+
+
+
+<a name="sui_config_EBCSSerializationFailure"></a>
+
+
+
+<pre><code><b>const</b> <a href="../sui/config.md#sui_config_EBCSSerializationFailure">EBCSSerializationFailure</a>: u64 = 2;
 </code></pre>
 
 

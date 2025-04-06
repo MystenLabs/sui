@@ -1,0 +1,87 @@
+---
+source: crates/sui/src/client_ptb/parser.rs
+expression: parsed
+---
+[
+    Spanned {
+        span: Span {
+            start: 0,
+            end: 1,
+        },
+        value: Named(
+            "@1/foo",
+        ),
+    },
+    Spanned {
+        span: Span {
+            start: 0,
+            end: 3,
+        },
+        value: Named(
+            "1.sui/foo",
+        ),
+    },
+    Spanned {
+        span: Span {
+            start: 0,
+            end: 3,
+        },
+        value: Named(
+            "1.sui/foo/1",
+        ),
+    },
+    Spanned {
+        span: Span {
+            start: 0,
+            end: 3,
+        },
+        value: Named(
+            "1.sui/3/1",
+        ),
+    },
+    Spanned {
+        span: Span {
+            start: 0,
+            end: 1,
+        },
+        value: Named(
+            "1.sui/3/1",
+        ),
+    },
+    Spanned {
+        span: Span {
+            start: 0,
+            end: 1,
+        },
+        value: Named(
+            "@foo/bar",
+        ),
+    },
+    Spanned {
+        span: Span {
+            start: 0,
+            end: 1,
+        },
+        value: Named(
+            "@foo/bar/1",
+        ),
+    },
+    Spanned {
+        span: Span {
+            start: 0,
+            end: 3,
+        },
+        value: Named(
+            "foo.sui/bar",
+        ),
+    },
+    Spanned {
+        span: Span {
+            start: 0,
+            end: 3,
+        },
+        value: Named(
+            "foo.sui/bar/1",
+        ),
+    },
+]

@@ -77,7 +77,7 @@ impl<'backing> TemporaryStore<'backing> {
     ) -> Self {
         let mutable_input_refs = input_objects.mutable_inputs();
         let lamport_timestamp = input_objects.lamport_timestamp(&[]);
-        let deleted_consensus_objects = input_objects.deleted_consensus_objects();
+        let deleted_consensus_objects = input_objects.consensus_stream_ended_objects();
         let objects = input_objects.into_object_map();
 
         Self {
@@ -148,7 +148,7 @@ impl<'backing> TemporaryStore<'backing> {
     pub fn into_inner(self) -> InnerTemporaryStore {
         InnerTemporaryStore {
             input_objects: self.input_objects,
-            deleted_consensus_objects: self.deleted_consensus_objects,
+            stream_ended_consensus_objects: self.deleted_consensus_objects,
             mutable_inputs: self.mutable_input_refs,
             written: self
                 .written
@@ -267,7 +267,7 @@ impl<'backing> TemporaryStore<'backing> {
             .into_iter()
             .map(|shared_input| match shared_input {
                 SharedInput::Existing(oref) => oref,
-                SharedInput::Deleted(_) => {
+                SharedInput::ConsensusStreamEnded(_) => {
                     unreachable!("Shared object deletion not supported in effects v1")
                 }
                 SharedInput::Cancelled(_) => {

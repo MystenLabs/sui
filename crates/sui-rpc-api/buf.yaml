@@ -14,9 +14,20 @@ modules:
         PACKAGE_VERSION_SUFFIX:
           - proto/sui/types
         ENUM_VALUE_PREFIX:
+          - proto/sui/rpc/v2beta/argument.proto
+          - proto/sui/rpc/v2beta/checkpoint_summary.proto
+          - proto/sui/rpc/v2beta/effects.proto
+          - proto/sui/rpc/v2beta/execution_status.proto
+          - proto/sui/rpc/v2beta/input.proto
+          - proto/sui/rpc/v2beta/owner.proto
+          - proto/sui/rpc/v2beta/signature_scheme.proto
+          - proto/sui/rpc/v2beta/transaction.proto
           - proto/sui/types/signature_scheme.proto
         ENUM_ZERO_VALUE_SUFFIX:
+          - proto/sui/rpc/v2beta/signature_scheme.proto
           - proto/sui/types/signature_scheme.proto
+        RPC_RESPONSE_STANDARD_NAME:
+          - proto/sui/rpc/v2beta/ledger_service.proto
 
       enum_zero_value_suffix: _UNKNOWN
       rpc_allow_same_request_response: false

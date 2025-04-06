@@ -8,9 +8,8 @@ use tokio_util::sync::CancellationToken;
 use tracing::{debug, info, warn};
 
 use crate::{
-    db::Db,
     metrics::IndexerMetrics,
-    models::watermarks::{ReaderWatermark, StoredWatermark},
+    store::{Connection, Store},
 };
 
 use super::{Handler, PrunerConfig};
@@ -28,7 +27,7 @@ use super::{Handler, PrunerConfig};
 /// when the provided cancellation token is triggered.
 pub(super) fn reader_watermark<H: Handler + 'static>(
     config: Option<PrunerConfig>,
-    db: Db,
+    store: H::Store,
     metrics: Arc<IndexerMetrics>,
     cancel: CancellationToken,
 ) -> JoinHandle<()> {
@@ -48,12 +47,12 @@ pub(super) fn reader_watermark<H: Handler + 'static>(
                 }
 
                 _ = poll.tick() => {
-                    let Ok(mut conn) = db.connect().await else {
+                    let Ok(mut conn) = store.connect().await else {
                         warn!(pipeline = H::NAME, "Reader watermark task failed to get connection for DB");
                         continue;
                     };
 
-                    let current = match StoredWatermark::get(&mut conn, H::NAME).await {
+                    let current = match conn.reader_watermark(H::NAME).await {
                         Ok(Some(current)) => current,
 
                         Ok(None) => {
@@ -86,7 +85,7 @@ pub(super) fn reader_watermark<H: Handler + 'static>(
                         .with_label_values(&[H::NAME])
                         .set(new_reader_lo as i64);
 
-                    let Ok(updated) = ReaderWatermark::new(H::NAME, new_reader_lo).update(&mut conn).await else {
+                    let Ok(updated) = conn.set_reader_watermark(H::NAME, new_reader_lo).await else {
                         warn!(pipeline = H::NAME, "Failed to update reader watermark");
                         continue;
                     };

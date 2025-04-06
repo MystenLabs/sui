@@ -308,6 +308,7 @@ fn on_request(
             ide_files_root.clone(),
             pkg_dependencies,
             implicit_deps,
+            true, // auto-imports enabled
         ),
         lsp_types::request::GotoDefinition::METHOD => {
             symbols::on_go_to_def_request(context, request);

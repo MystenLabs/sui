@@ -100,8 +100,8 @@ impl CongestionTracker {
                             InputSharedObject::Mutate((id, _, _)) => Some(id),
                             InputSharedObject::Cancelled(_, _)
                             | InputSharedObject::ReadOnly(_)
-                            | InputSharedObject::ReadDeleted(_, _)
-                            | InputSharedObject::MutateDeleted(_, _) => None,
+                            | InputSharedObject::ReadConsensusStreamEnded(_, _)
+                            | InputSharedObject::MutateConsensusStreamEnded(_, _) => None,
                         })
                         .collect::<Vec<_>>(),
                 ));

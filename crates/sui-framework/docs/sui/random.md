@@ -166,20 +166,20 @@ Unique randomness generator, derived from the global randomness.
 ## Constants
 
 
-<a name="sui_random_CURRENT_VERSION"></a>
+<a name="sui_random_ENotSystemAddress"></a>
 
 
 
-<pre><code><b>const</b> <a href="../sui/random.md#sui_random_CURRENT_VERSION">CURRENT_VERSION</a>: u64 = 1;
+<pre><code><b>const</b> <a href="../sui/random.md#sui_random_ENotSystemAddress">ENotSystemAddress</a>: u64 = 0;
 </code></pre>
 
 
 
-<a name="sui_random_EInvalidLength"></a>
+<a name="sui_random_EWrongInnerVersion"></a>
 
 
 
-<pre><code><b>const</b> <a href="../sui/random.md#sui_random_EInvalidLength">EInvalidLength</a>: u64 = 4;
+<pre><code><b>const</b> <a href="../sui/random.md#sui_random_EWrongInnerVersion">EWrongInnerVersion</a>: u64 = 1;
 </code></pre>
 
 
@@ -202,20 +202,20 @@ Unique randomness generator, derived from the global randomness.
 
 
 
-<a name="sui_random_ENotSystemAddress"></a>
+<a name="sui_random_EInvalidLength"></a>
 
 
 
-<pre><code><b>const</b> <a href="../sui/random.md#sui_random_ENotSystemAddress">ENotSystemAddress</a>: u64 = 0;
+<pre><code><b>const</b> <a href="../sui/random.md#sui_random_EInvalidLength">EInvalidLength</a>: u64 = 4;
 </code></pre>
 
 
 
-<a name="sui_random_EWrongInnerVersion"></a>
+<a name="sui_random_CURRENT_VERSION"></a>
 
 
 
-<pre><code><b>const</b> <a href="../sui/random.md#sui_random_EWrongInnerVersion">EWrongInnerVersion</a>: u64 = 1;
+<pre><code><b>const</b> <a href="../sui/random.md#sui_random_CURRENT_VERSION">CURRENT_VERSION</a>: u64 = 1;
 </code></pre>
 
 

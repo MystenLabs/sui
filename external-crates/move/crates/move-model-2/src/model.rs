@@ -8,6 +8,7 @@ use std::{
 };
 
 use crate::compiled::{self, ModuleId, QualifiedMemberId, TModuleId};
+use indexmap::IndexMap;
 use move_binary_format::{file_format, CompiledModule};
 use move_bytecode_source_map::source_map::SourceMap;
 use move_compiler::{
@@ -198,6 +199,7 @@ impl Model<WITH_SOURCE> {
             compiled,
             packages,
         };
+        model.check_invariants();
         Ok(model)
     }
 
@@ -225,14 +227,16 @@ impl Model<WITHOUT_SOURCE> {
             .iter()
             .map(|(a, n)| (*n, *a))
             .collect();
-        Self {
+        let model = Self {
             files: [],
             root_package_name: None,
             root_named_address_map,
             info: [],
             compiled,
             packages,
-        }
+        };
+        model.check_invariants();
+        model
     }
 }
 
@@ -293,6 +297,60 @@ impl<const HAS_SOURCE: SourceKind> Model<HAS_SOURCE> {
                 std::mem::transmute::<&Self, &Model<WITHOUT_SOURCE>>(self)
             }),
             _ => unreachable!(),
+        }
+    }
+
+    fn check_invariants(&self) {
+        #[cfg(debug_assertions)]
+        {
+            for (p, package) in &self.packages {
+                for (m, module) in &package.modules {
+                    let compiled = &self.compiled.packages[p].modules[m];
+                    for (idx, s) in module.structs.keys().enumerate() {
+                        let map_idx = module.structs.get_index_of(s).unwrap();
+                        let compiled_map_idx = compiled.structs.get_index_of(s).unwrap();
+                        let compiled_idx = compiled.structs[s].def_idx.0 as usize;
+                        debug_assert_eq!(idx, map_idx);
+                        debug_assert_eq!(idx, compiled_map_idx);
+                        debug_assert_eq!(idx, compiled_idx);
+                    }
+                    for (idx, f) in module.functions.keys().enumerate() {
+                        let map_idx = module.functions.get_index_of(f).unwrap();
+                        debug_assert_eq!(idx, map_idx);
+                        if let Some(compiled_map_idx) = compiled.functions.get_index_of(f) {
+                            let compiled_idx = compiled.functions[f].def_idx.0 as usize;
+                            debug_assert!(idx >= compiled_map_idx);
+                            debug_assert!(idx >= compiled_idx);
+                        }
+                        if HAS_SOURCE == WITH_SOURCE {
+                            let declared_idx = self.info[0]
+                                .module(&module.ident[0])
+                                .functions
+                                .get_(f)
+                                .unwrap()
+                                .index;
+                            debug_assert_eq!(idx, declared_idx);
+                        }
+                    }
+                    for (idx, (e, enum_)) in module.enums.iter().enumerate() {
+                        let map_idx = module.enums.get_index_of(e).unwrap();
+                        let compiled_map_idx = compiled.enums.get_index_of(e).unwrap();
+                        let compiled_idx = compiled.enums[e].def_idx.0 as usize;
+                        debug_assert_eq!(idx, map_idx);
+                        debug_assert_eq!(idx, compiled_map_idx);
+                        debug_assert_eq!(idx, compiled_idx);
+                        for (vidx, v) in enum_.variants.keys().enumerate() {
+                            let map_idx = enum_.variants.get_index_of(v).unwrap();
+                            let compiled_map_idx =
+                                compiled.enums[e].variants.get_index_of(v).unwrap();
+                            let compiled_idx = compiled.enums[e].variants[v].tag as usize;
+                            debug_assert_eq!(vidx, map_idx);
+                            debug_assert_eq!(vidx, compiled_map_idx);
+                            debug_assert_eq!(vidx, compiled_idx);
+                        }
+                    }
+                }
+            }
         }
     }
 }
@@ -801,10 +859,10 @@ struct PackageData<const HAS_SOURCE: SourceKind> {
 
 struct ModuleData<const HAS_SOURCE: SourceKind> {
     ident: [E::ModuleIdent; HAS_SOURCE],
-    structs: BTreeMap<Symbol, StructData>,
-    enums: BTreeMap<Symbol, EnumData>,
-    functions: BTreeMap<Symbol, FunctionData>,
-    named_constants: [BTreeMap<Symbol, ConstantData>; HAS_SOURCE],
+    structs: IndexMap<Symbol, StructData>,
+    enums: IndexMap<Symbol, EnumData>,
+    functions: IndexMap<Symbol, FunctionData>,
+    named_constants: [IndexMap<Symbol, ConstantData>; HAS_SOURCE],
     // mapping from file_format::ConstantPoolIndex to source constant name, if any
     constant_names: [Vec<Option<Symbol>>; HAS_SOURCE],
 }
@@ -813,7 +871,7 @@ struct StructData {}
 
 struct EnumData {
     #[allow(unused)]
-    variants: BTreeMap<Symbol, VariantData>,
+    variants: IndexMap<Symbol, VariantData>,
 }
 
 struct VariantData {}
@@ -874,50 +932,28 @@ impl ModuleData<WITH_SOURCE> {
         info: &ModuleInfo,
         unit: &NamedCompiledModule,
     ) -> Self {
-        let structs = info
-            .structs
-            .iter()
-            .map(|(_loc, name, _sinfo)| {
-                let name = *name;
-                let (_idx, _struct_def) =
-                    unit.module.find_struct_def_by_name(name.as_str()).unwrap();
-                let struct_ = StructData::new();
-                (name, struct_)
-            })
-            .collect();
-        let enums = info
-            .enums
-            .iter()
-            .map(|(_loc, name, _einfo)| {
-                let name = *name;
-                let (_idx, enum_def) = unit.module.find_enum_def_by_name(name.as_str()).unwrap();
-                let enum_ = EnumData::new(&unit.module, enum_def);
-                (name, enum_)
-            })
-            .collect();
-        let functions = info
-            .functions
-            .iter()
-            .map(|(_loc, name, _finfo)| {
-                let name = *name;
-                // Note, won't be found for macros
-                // let (_idx, _function_def) = unit
-                //     .module
-                //     .find_function_def_by_name(name.as_str())
-                //     .expect(&format!("cannot find fun {name}"));
-                let function = FunctionData::new();
-                (name, function)
-            })
-            .collect();
-        let named_constants = info
-            .constants
-            .iter()
-            .map(|(_loc, name, _cinfo)| {
-                let name = *name;
-                let constant = ConstantData::from_source(&unit.source_map, name);
-                (name, constant)
-            })
-            .collect();
+        let structs = make_map(info.structs.iter().map(|(_loc, name, _sinfo)| {
+            let name = *name;
+            let (idx, _struct_def) = unit.module.find_struct_def_by_name(name.as_str()).unwrap();
+            let struct_ = StructData::new();
+            (idx, name, struct_)
+        }));
+        let enums = make_map(info.enums.iter().map(|(_loc, name, _einfo)| {
+            let name = *name;
+            let (idx, enum_def) = unit.module.find_enum_def_by_name(name.as_str()).unwrap();
+            let enum_ = EnumData::new(&unit.module, enum_def);
+            (idx, name, enum_)
+        }));
+        let functions = make_map(info.functions.iter().map(|(_loc, name, finfo)| {
+            let name = *name;
+            let function = FunctionData::new();
+            (finfo.index, name, function)
+        }));
+        let named_constants = make_map(info.constants.iter().map(|(_loc, name, cinfo)| {
+            let name = *name;
+            let constant = ConstantData::from_source(&unit.source_map, name);
+            (cinfo.index, name, constant)
+        }));
         let constant_names = {
             let idx_to_name_map = unit
                 .source_map
@@ -983,7 +1019,7 @@ impl StructData {
 
 impl EnumData {
     fn new(module: &file_format::CompiledModule, def: &file_format::EnumDefinition) -> Self {
-        let mut variants = BTreeMap::new();
+        let mut variants = IndexMap::new();
         for variant in &def.variants {
             let name = Symbol::from(module.identifier_at(variant.variant_name).as_str());
             let data = VariantData::new();
@@ -1015,4 +1051,15 @@ impl ConstantData {
             .map(file_format::ConstantPoolIndex);
         Self { compiled_index }
     }
+}
+
+fn make_map<I: Ord + Copy, T>(
+    items: impl IntoIterator<Item = (I, Symbol, T)>,
+) -> IndexMap<Symbol, T> {
+    let mut items = items.into_iter().collect::<Vec<_>>();
+    items.sort_by_key(|(idx, _name, _data)| *idx);
+    items
+        .into_iter()
+        .map(|(_idx, name, data)| (name, data))
+        .collect::<IndexMap<_, _>>()
 }

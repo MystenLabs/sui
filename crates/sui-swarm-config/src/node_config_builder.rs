@@ -148,7 +148,7 @@ impl ValidatorConfigBuilder {
         let key_path = get_key_path(&validator.key_pair);
         let config_directory = self
             .config_directory
-            .unwrap_or_else(|| tempfile::tempdir().unwrap().into_path());
+            .unwrap_or_else(|| mysten_common::tempdir().unwrap().into_path());
         let db_path = config_directory
             .join(AUTHORITIES_DB_NAME)
             .join(key_path.clone());
@@ -432,7 +432,7 @@ impl FullnodeConfigBuilder {
         let key_path = get_key_path(&validator_config.key_pair);
         let config_directory = self
             .config_directory
-            .unwrap_or_else(|| tempfile::tempdir().unwrap().into_path());
+            .unwrap_or_else(|| mysten_common::tempdir().unwrap().into_path());
 
         let p2p_config = {
             let seed_peers = network_config

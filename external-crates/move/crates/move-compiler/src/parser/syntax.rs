@@ -4632,7 +4632,6 @@ fn parse_module_member(context: &mut Context) -> Result<ModuleMember, ErrCase> {
                                     "or",
                                     "'{}'",
                                     [
-                                        Tok::Spec,
                                         Tok::Use,
                                         Tok::Friend,
                                         Tok::Const,

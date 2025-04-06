@@ -1,7 +1,9 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::client_commands::{pkg_tree_shake, SuiClientCommands};
+use crate::client_commands::{
+    implicit_deps_for_protocol_version, pkg_tree_shake, SuiClientCommands,
+};
 use crate::fire_drill::{run_fire_drill, FireDrill};
 use crate::genesis_ceremony::{run, Ceremony};
 use crate::keytool::KeyToolCommand;
@@ -61,7 +63,6 @@ use sui_swarm_config::network_config_builder::ConfigBuilder;
 use sui_swarm_config::node_config_builder::FullnodeConfigBuilder;
 use sui_types::base_types::SuiAddress;
 use sui_types::crypto::{SignatureScheme, SuiKeyPair, ToFromBytes};
-use tempfile::tempdir;
 use tracing;
 use tracing::info;
 
@@ -519,8 +520,12 @@ impl SuiCommand {
                         };
 
                         let rerooted_path = move_cli::base::reroot_path(package_path.as_deref())?;
-                        let build_config =
+                        let mut build_config =
                             resolve_lock_file_path(build_config, Some(&rerooted_path))?;
+                        let protocol_config = read_api.get_protocol_config(None).await?;
+                        build_config.implicit_dependencies =
+                            implicit_deps_for_protocol_version(protocol_config.protocol_version)?;
+
                         let mut pkg = SuiBuildConfig {
                             config: build_config,
                             run_bytecode_verifier: true,
@@ -712,7 +717,7 @@ async fn start(
         swarm_builder = swarm_builder.with_genesis_config(genesis_config);
         let epoch_duration_ms = epoch_duration_ms.unwrap_or(DEFAULT_EPOCH_DURATION_MS);
         swarm_builder = swarm_builder.with_epoch_duration_ms(epoch_duration_ms);
-        tempdir()?.into_path()
+        mysten_common::tempdir()?.into_path()
     } else {
         // If the config path looks like a YAML file, it is treated as if it is the network.yaml
         // overriding the network.yaml found in the sui config directry. Otherwise it is treated as
@@ -820,7 +825,7 @@ async fn start(
     // note that this overrides the default configuration that is set when running the genesis
     // command, which sets data_ingestion_dir to None.
     if with_indexer.is_some() && data_ingestion_dir.is_none() {
-        data_ingestion_dir = Some(tempdir()?.into_path())
+        data_ingestion_dir = Some(mysten_common::tempdir()?.into_path())
     }
 
     if let Some(ref dir) = data_ingestion_dir {

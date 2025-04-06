@@ -434,11 +434,11 @@ title: Module `bridge::message`
 
 
 
-<a name="bridge_message_EEmptyList"></a>
+<a name="bridge_message_ETrailingBytes"></a>
 
 
 
-<pre><code><b>const</b> <a href="../bridge/message.md#bridge_message_EEmptyList">EEmptyList</a>: u64 = 2;
+<pre><code><b>const</b> <a href="../bridge/message.md#bridge_message_ETrailingBytes">ETrailingBytes</a>: u64 = 0;
 </code></pre>
 
 
@@ -452,11 +452,11 @@ title: Module `bridge::message`
 
 
 
-<a name="bridge_message_EInvalidEmergencyOpType"></a>
+<a name="bridge_message_EEmptyList"></a>
 
 
 
-<pre><code><b>const</b> <a href="../bridge/message.md#bridge_message_EInvalidEmergencyOpType">EInvalidEmergencyOpType</a>: u64 = 4;
+<pre><code><b>const</b> <a href="../bridge/message.md#bridge_message_EEmptyList">EEmptyList</a>: u64 = 2;
 </code></pre>
 
 
@@ -466,6 +466,15 @@ title: Module `bridge::message`
 
 
 <pre><code><b>const</b> <a href="../bridge/message.md#bridge_message_EInvalidMessageType">EInvalidMessageType</a>: u64 = 3;
+</code></pre>
+
+
+
+<a name="bridge_message_EInvalidEmergencyOpType"></a>
+
+
+
+<pre><code><b>const</b> <a href="../bridge/message.md#bridge_message_EInvalidEmergencyOpType">EInvalidEmergencyOpType</a>: u64 = 4;
 </code></pre>
 
 
@@ -484,15 +493,6 @@ title: Module `bridge::message`
 
 
 <pre><code><b>const</b> <a href="../bridge/message.md#bridge_message_EMustBeTokenMessage">EMustBeTokenMessage</a>: u64 = 6;
-</code></pre>
-
-
-
-<a name="bridge_message_ETrailingBytes"></a>
-
-
-
-<pre><code><b>const</b> <a href="../bridge/message.md#bridge_message_ETrailingBytes">ETrailingBytes</a>: u64 = 0;
 </code></pre>
 
 

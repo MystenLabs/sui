@@ -1,10 +1,9 @@
 ---
 source: crates/move-transactional-test-runner/src/framework.rs
-input_file: crates/bytecode-verifier-transactional-tests/tests/reference_safety/imm_borrow_on_mut_invalid.mvir
 ---
 processed 2 tasks
 
-task 0, lines 1-47:
+task 0, lines 1-46:
 //# publish
 Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000001::Tester'. Got VMError: {
     major_status: FIELD_EXISTS_MUTABLE_BORROW_ERROR,
@@ -14,7 +13,7 @@ Error: Unable to publish module '00000000000000000000000000000000000000000000000
     offsets: [(FunctionDefinitionIndex(2), 23)],
 }
 
-task 1, lines 49-95:
+task 1, lines 48-93:
 //# publish
 Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000001::Tester2'. Got VMError: {
     major_status: FREEZEREF_EXISTS_MUTABLE_BORROW_ERROR,

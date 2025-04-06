@@ -1,6 +1,6 @@
 // Tests `::` completions
 {
-  "Completion": {
+  "AutoCompletion": {
     "project": "tests/completion",
     "file_tests": {
       "colon_colon.move": [

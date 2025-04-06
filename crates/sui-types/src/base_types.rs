@@ -182,8 +182,21 @@ pub fn update_object_ref_for_testing(object_ref: ObjectRef) -> ObjectRef {
     )
 }
 
-pub type FullObjectRef = (FullObjectID, SequenceNumber, ObjectDigest);
+pub struct FullObjectRef(pub FullObjectID, pub SequenceNumber, pub ObjectDigest);
 
+impl FullObjectRef {
+    pub fn from_fastpath_ref(object_ref: ObjectRef) -> Self {
+        Self(
+            FullObjectID::Fastpath(object_ref.0),
+            object_ref.1,
+            object_ref.2,
+        )
+    }
+
+    pub fn as_object_ref(&self) -> ObjectRef {
+        (self.0.id(), self.1, self.2)
+    }
+}
 /// Represents an distinct stream of object versions for a Shared or ConsensusV2 object,
 /// based on the object ID and start version.
 pub type ConsensusObjectSequenceKey = (ObjectID, SequenceNumber);

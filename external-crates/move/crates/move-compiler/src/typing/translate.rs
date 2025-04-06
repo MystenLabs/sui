@@ -3868,7 +3868,9 @@ fn method_call(
     let (m, f, fty, usage) =
         match method_call_resolve(context, call_loc, &edotted, method, ty_args_opt) {
             ResolvedMethodCall::Resolved(m, f, fty, usage) => (*m, f, fty, usage),
-            ResolvedMethodCall::UnknownName if context.env().ide_mode() => {
+            ResolvedMethodCall::InvalidBaseType | ResolvedMethodCall::UnknownName
+                if context.env().ide_mode() =>
+            {
                 // Even if the method name fails to resolve, we want autocomplete information.
                 edotted.autocomplete_last = Some(method.loc);
                 let err_ty = context.error_type(call_loc);
@@ -4025,6 +4027,7 @@ fn module_call_impl(
         context,
         loc,
         || format!("Invalid call of '{}::{}'", &m, &f),
+        Some(declared),
         parameters.len(),
         argloc,
         args,
@@ -4236,6 +4239,7 @@ fn builtin_call(
         context,
         loc,
         || format!("Invalid call of '{}'", &b_),
+        None,
         params_ty.len(),
         argloc,
         args,
@@ -4278,7 +4282,7 @@ fn syntax_call_return_ty(
     let arg_tys = {
         let msg = || format!("Invalid call of '{}::{}'", &m, &f);
         let arity = parameters.len();
-        make_arg_types(context, loc, msg, arity, argloc, tys)
+        make_arg_types(context, loc, msg, Some(declared), arity, argloc, tys)
     };
     assert!(arg_tys.len() == parameters.len());
     let mut valid = true;
@@ -4332,6 +4336,7 @@ fn vector_pack(
         context,
         eloc,
         || -> String { panic!("ICE. could not create vector args") },
+        None,
         arity,
         argloc,
         args_,
@@ -4373,13 +4378,14 @@ fn call_args<S: std::fmt::Display, F: Fn() -> S>(
     context: &mut Context,
     loc: Loc,
     msg: F,
+    arity_loc: Option<Loc>,
     arity: usize,
     argloc: Loc,
     mut args: Vec<T::Exp>,
 ) -> (Box<T::Exp>, Vec<Type>) {
     use T::UnannotatedExp_ as TE;
     let tys = args.iter().map(|e| e.ty.clone()).collect();
-    let tys = make_arg_types(context, loc, msg, arity, argloc, tys);
+    let tys = make_arg_types(context, loc, msg, arity_loc, arity, argloc, tys);
     let arg = match args.len() {
         0 => T::exp(
             sp(argloc, Type_::Unit),
@@ -4399,12 +4405,13 @@ fn make_arg_types<S: std::fmt::Display, F: Fn() -> S>(
     context: &mut Context,
     loc: Loc,
     msg: F,
+    arity_loc: Option<Loc>,
     arity: usize,
     argloc: Loc,
     mut given: Vec<Type>,
 ) -> Vec<Type> {
     let given_len = given.len();
-    core::check_call_arity(context, loc, msg, arity, argloc, given_len);
+    core::check_call_arity(context, loc, msg, arity_loc, arity, argloc, given_len);
     while given.len() < arity {
         given.push(context.error_type(argloc))
     }
@@ -4564,6 +4571,7 @@ fn macro_call_impl(
         context,
         loc,
         || format!("Invalid call of '{}::{}'", &m, &f),
+        None,
         parameters.len(),
         argloc,
         args.len(),
@@ -4744,9 +4752,58 @@ fn expand_macro(
 /// 1) We can track the use_fun_scope, which is used for resolving method calls correctly
 /// 2) After substitution, we can mark the Block as coming from a macro expansion which is used
 ///    for tracking recursive macro calls
-fn convert_macro_arg_to_block(context: &Context, sp!(loc, ne_): N::Exp) -> N::Exp {
+fn convert_macro_arg_to_block(context: &mut Context, sp!(loc, ne_): N::Exp) -> N::Exp {
+    fn is_lambda(ne_: &N::Exp_) -> bool {
+        match ne_ {
+            N::Exp_::Lambda(_) => true,
+            N::Exp_::Annotate(e, _) => is_lambda(&e.value),
+            _ => false,
+        }
+    }
+
+    fn gather_lambda_annotations(
+        context: &mut Context,
+        loc: Loc,
+        ne_: N::Exp_,
+        mut extra_annotations: Vec<Type>,
+    ) -> N::Exp_ {
+        match ne_ {
+            N::Exp_::Lambda(lambda) if extra_annotations.is_empty() => N::Exp_::Lambda(lambda),
+            N::Exp_::Lambda(mut lambda) => {
+                let param_tys = lambda
+                    .parameters
+                    .value
+                    .iter()
+                    .map(|(sp!(loc, _), _)| core::make_tvar(context, *loc))
+                    .collect::<Vec<_>>();
+                let res_ty = core::make_tvar(context, lambda.body.loc);
+                let tfun = sp(loc, Type_::Fun(param_tys.clone(), Box::new(res_ty.clone())));
+                for annot in extra_annotations {
+                    let annot_loc = annot.loc;
+                    subtype(
+                        context,
+                        annot_loc,
+                        || "Invalid annotation for lambda",
+                        tfun.clone(),
+                        annot,
+                    );
+                }
+                lambda.extra_annotations.push(sp(loc, (param_tys, res_ty)));
+                N::Exp_::Lambda(lambda)
+            }
+
+            N::Exp_::Annotate(e, annot) => {
+                extra_annotations.push(annot);
+                let sp!(eloc, e_) = *e;
+                gather_lambda_annotations(context, eloc, e_, extra_annotations)
+            }
+            _ => unreachable!(),
+        }
+    }
+
     let ne_ = match ne_ {
-        N::Exp_::Block(_) | N::Exp_::Lambda(_) | N::Exp_::UnresolvedError => ne_,
+        _ if is_lambda(&ne_) => gather_lambda_annotations(context, loc, ne_, vec![]),
+        N::Exp_::Block(_) | N::Exp_::UnresolvedError => ne_,
         ne_ => {
             let color = context.current_call_color();
             let seq_ = VecDeque::from([sp(loc, N::SequenceItem_::Seq(Box::new(sp(loc, ne_))))]);

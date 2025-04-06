@@ -523,7 +523,7 @@ async fn test_ptb_publish_and_complex_arg_resolution() -> Result<(), anyhow::Err
         .iter()
         .find(|refe| matches!(refe.owner, Owner::Immutable))
         .unwrap();
-    let package_id_str = package.reference.object_id.to_string();
+    let package_id_str = package.reference.object_id;
 
     let start_call_result = SuiClientCommands::Call {
         package: package.reference.object_id,
@@ -1217,7 +1217,7 @@ async fn test_delete_shared_object() -> Result<(), anyhow::Error> {
 
     // Start and then receive the object
     let start_call_result = SuiClientCommands::Call {
-        package: (*package_id.object_id).into(),
+        package: package_id.object_id,
         module: "sod".to_string(),
         function: "start".to_string(),
         type_args: vec![],
@@ -1237,7 +1237,7 @@ async fn test_delete_shared_object() -> Result<(), anyhow::Error> {
     };
 
     let delete_result = SuiClientCommands::Call {
-        package: (*package_id.object_id).into(),
+        package: package_id.object_id,
         module: "sod".to_string(),
         function: "delete".to_string(),
         type_args: vec![],
@@ -1322,7 +1322,7 @@ async fn test_receive_argument() -> Result<(), anyhow::Error> {
 
     // Start and then receive the object
     let start_call_result = SuiClientCommands::Call {
-        package: (*package_id.object_id).into(),
+        package: package_id.object_id,
         module: "tto".to_string(),
         function: "start".to_string(),
         type_args: vec![],
@@ -1359,7 +1359,7 @@ async fn test_receive_argument() -> Result<(), anyhow::Error> {
         };
 
     let receive_result = SuiClientCommands::Call {
-        package: (*package_id.object_id).into(),
+        package: package_id.object_id,
         module: "tto".to_string(),
         function: "receiver".to_string(),
         type_args: vec![],
@@ -1447,7 +1447,7 @@ async fn test_receive_argument_by_immut_ref() -> Result<(), anyhow::Error> {
 
     // Start and then receive the object
     let start_call_result = SuiClientCommands::Call {
-        package: (*package_id.object_id).into(),
+        package: package_id.object_id,
         module: "tto".to_string(),
         function: "start".to_string(),
         type_args: vec![],
@@ -1484,7 +1484,7 @@ async fn test_receive_argument_by_immut_ref() -> Result<(), anyhow::Error> {
         };
 
     let receive_result = SuiClientCommands::Call {
-        package: (*package_id.object_id).into(),
+        package: package_id.object_id,
         module: "tto".to_string(),
         function: "invalid_call_immut_ref".to_string(),
         type_args: vec![],
@@ -1572,7 +1572,7 @@ async fn test_receive_argument_by_mut_ref() -> Result<(), anyhow::Error> {
 
     // Start and then receive the object
     let start_call_result = SuiClientCommands::Call {
-        package: (*package_id.object_id).into(),
+        package: package_id.object_id,
         module: "tto".to_string(),
         function: "start".to_string(),
         type_args: vec![],
@@ -1609,7 +1609,7 @@ async fn test_receive_argument_by_mut_ref() -> Result<(), anyhow::Error> {
         };
 
     let receive_result = SuiClientCommands::Call {
-        package: (*package_id.object_id).into(),
+        package: package_id.object_id,
         module: "tto".to_string(),
         function: "invalid_call_mut_ref".to_string(),
         type_args: vec![],

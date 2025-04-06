@@ -286,14 +286,14 @@ pub trait ObjectCacheRead: Send + Sync {
                     );
                 versioned_results.push((*idx, is_available));
             } else if self
-                .get_deleted_shared_object_previous_tx_digest(
+                .get_consensus_stream_end_tx_digest(
                     FullObjectKey::new(input_key.id(), input_key.version().unwrap()),
                     epoch,
                 )
                 .is_some()
             {
-                // If the object is an already deleted shared object, mark it as available if the
-                // version for that object is in the shared deleted marker table.
+                // If the object is an already-removed consensus object, mark it as available if the
+                // version for that object is in the marker table.
                 versioned_results.push((*idx, true));
             } else {
                 versioned_results.push((*idx, false));
@@ -354,26 +354,28 @@ pub trait ObjectCacheRead: Send + Sync {
         epoch_id: EpochId,
     ) -> Option<(SequenceNumber, MarkerValue)>;
 
-    /// If the shared object was deleted, return deletion info for the current live version
-    fn get_last_shared_object_deletion_info(
+    /// If the given consensus object stream was ended, return related
+    /// version and transaction digest.
+    fn get_last_consensus_stream_end_info(
         &self,
         object_id: FullObjectID,
         epoch_id: EpochId,
     ) -> Option<(SequenceNumber, TransactionDigest)> {
         match self.get_latest_marker(object_id, epoch_id) {
-            Some((version, MarkerValue::SharedDeleted(digest))) => Some((version, digest)),
+            Some((version, MarkerValue::ConsensusStreamEnded(digest))) => Some((version, digest)),
             _ => None,
         }
     }
 
-    /// If the shared object was deleted, return deletion info for the specified version.
-    fn get_deleted_shared_object_previous_tx_digest(
+    /// If the given consensus object stream was ended at the specified version,
+    /// return related transaction digest.
+    fn get_consensus_stream_end_tx_digest(
         &self,
         object_key: FullObjectKey,
         epoch_id: EpochId,
     ) -> Option<TransactionDigest> {
         match self.get_marker_value(object_key, epoch_id) {
-            Some(MarkerValue::SharedDeleted(digest)) => Some(digest),
+            Some(MarkerValue::ConsensusStreamEnded(digest)) => Some(digest),
             _ => None,
         }
     }

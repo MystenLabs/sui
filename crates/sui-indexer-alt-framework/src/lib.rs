@@ -12,13 +12,13 @@ use diesel_migrations::{embed_migrations, EmbeddedMigrations};
 use futures::future;
 use ingestion::{client::IngestionClient, ClientArgs, IngestionConfig, IngestionService};
 use metrics::IndexerMetrics;
-use models::watermarks::{CommitterWatermark, PrunerWatermark};
 use pipeline::{
     concurrent::{self, ConcurrentConfig},
-    sequential::{self, SequentialConfig},
+    sequential::{self, Handler, SequentialConfig},
     Processor,
 };
 use prometheus::Registry;
+use store::{CommitterWatermark, Connection};
 use sui_indexer_alt_metrics::db::DbConnectionStatsCollector;
 use sui_pg_db::{temp::TempDb, Db, DbArgs};
 use tempfile::tempdir;
@@ -35,12 +35,13 @@ pub use sui_types as types;
 
 #[cfg(feature = "cluster")]
 pub mod cluster;
-pub mod handlers;
 pub mod ingestion;
-pub(crate) mod metrics;
+pub mod metrics;
 pub mod models;
+pub mod pg_store;
 pub mod pipeline;
 pub mod schema;
+pub mod store;
 pub mod task;
 
 const MIGRATIONS: EmbeddedMigrations = embed_migrations!("migrations");
@@ -69,7 +70,9 @@ pub struct IndexerArgs {
     pub skip_watermark: bool,
 }
 
+// TODO (wlmyng): Parameterize over S: Store
 pub struct Indexer {
+    // TODO (wlmyng): rename to `Store`
     /// Connection pool to the database.
     db: Db,
 
@@ -109,6 +112,7 @@ pub struct Indexer {
     handles: Vec<JoinHandle<()>>,
 }
 
+// TODO (wlmyng): non-pg store impl<S: TransactionalStore> Indexer<S> {
 impl Indexer {
     /// Create a new instance of the indexer framework. `database_url`, `db_args`, `indexer_args,`,
     /// `client_args`, and `ingestion_config` contain configurations for the following,
@@ -143,7 +147,8 @@ impl Indexer {
             skip_watermark,
         } = indexer_args;
 
-        let db = Db::for_write(database_url, db_args)
+        // TODO (wlmyng): This will become an arg into `new`
+        let db = Db::for_write(database_url, db_args) // I guess our store needs a constructor fn
             .await
             .context("Failed to connect to database")?;
 
@@ -153,6 +158,9 @@ impl Indexer {
             .context("Failed to run pending migrations")?;
 
         let metrics = IndexerMetrics::new(registry);
+
+        // TODO (wlmyng): Users will be responsible for configuring their registry with db metrics,
+        // if desired
         registry.register(Box::new(DbConnectionStatsCollector::new(
             Some("indexer_db"),
             db.clone(),
@@ -237,11 +245,15 @@ impl Indexer {
     /// Concurrent pipelines commit checkpoint data out-of-order to maximise throughput, and they
     /// keep the watermark table up-to-date with the highest point they can guarantee all data
     /// exists for, for their pipeline.
-    pub async fn concurrent_pipeline<H: concurrent::Handler + Send + Sync + 'static>(
+    pub async fn concurrent_pipeline<H>(
         &mut self,
         handler: H,
         config: ConcurrentConfig,
-    ) -> Result<()> {
+    ) -> Result<()>
+    where
+        // TODO (wlmyng): eventually this will be Handler<Store = S>
+        H: concurrent::Handler<Store = Db> + Send + Sync + 'static,
+    {
         let start_from_pruner_watermark = H::PRUNING_REQUIRES_PROCESSED_VALUES;
         let Some(watermark) = self.add_pipeline::<H>(start_from_pruner_watermark).await? else {
             return Ok(());
@@ -254,7 +266,7 @@ impl Indexer {
             self.check_first_checkpoint_consistency::<H>(&watermark)?;
         }
 
-        self.handles.push(concurrent::pipeline(
+        self.handles.push(concurrent::pipeline::<H>(
             handler,
             watermark,
             config,
@@ -278,11 +290,16 @@ impl Indexer {
     ///
     /// The pipeline can optionally be configured to lag behind the ingestion service by a fixed
     /// number of checkpoints (configured by `checkpoint_lag`).
-    pub async fn sequential_pipeline<H: sequential::Handler + Send + Sync + 'static>(
+    pub async fn sequential_pipeline<H>(
         &mut self,
         handler: H,
         config: SequentialConfig,
-    ) -> Result<()> {
+    ) -> Result<()>
+    where
+        // TODO (wlmyng): eventually this will be Handler<Store = S>
+        // And additionally, S: TransactionalStore
+        H: Handler<Store = Db> + Send + Sync + 'static,
+    {
         let Some(watermark) = self.add_pipeline::<H>(false).await? else {
             return Ok(());
         };
@@ -300,7 +317,7 @@ impl Indexer {
 
         let (checkpoint_rx, watermark_tx) = self.ingestion_service.subscribe();
 
-        self.handles.push(sequential::pipeline(
+        self.handles.push(sequential::pipeline::<H>(
             handler,
             watermark,
             config,
@@ -324,7 +341,7 @@ impl Indexer {
     ) -> Result<()> {
         if let (Some(watermark), Some(first_checkpoint)) = (watermark, self.first_checkpoint) {
             ensure!(
-                first_checkpoint as i64 <= watermark.checkpoint_hi_inclusive + 1,
+                first_checkpoint <= watermark.checkpoint_hi_inclusive + 1,
                 "For pipeline {}, first checkpoint override {} is too far ahead of watermark {}. \
                  This could create gaps in the data.",
                 P::NAME,
@@ -410,7 +427,7 @@ impl Indexer {
     async fn add_pipeline<P: Processor + 'static>(
         &mut self,
         start_from_pruner_watermark: bool,
-    ) -> Result<Option<Option<CommitterWatermark<'static>>>> {
+    ) -> Result<Option<Option<CommitterWatermark>>> {
         ensure!(
             self.added_pipelines.insert(P::NAME),
             "Pipeline {:?} already added",
@@ -426,7 +443,8 @@ impl Indexer {
 
         let mut conn = self.db.connect().await.context("Failed DB connection")?;
 
-        let watermark = CommitterWatermark::get(&mut conn, P::NAME)
+        let watermark = conn
+            .committer_watermark(P::NAME)
             .await
             .with_context(|| format!("Failed to get watermark for {}", P::NAME))?;
 
@@ -434,15 +452,15 @@ impl Indexer {
             // If the pruner of this pipeline requires processed values in order to prune,
             // we must start ingestion from just after the pruner watermark,
             // so that we can process all values needed by the pruner.
-            PrunerWatermark::get(&mut conn, P::NAME, Default::default())
+            conn.pruner_watermark(P::NAME, Default::default())
                 .await
                 .with_context(|| format!("Failed to get pruner watermark for {}", P::NAME))?
-                .map(|w| w.pruner_hi as u64)
+                .map(|w| w.pruner_hi)
                 .unwrap_or_default()
         } else {
             watermark
                 .as_ref()
-                .map(|w| w.checkpoint_hi_inclusive as u64 + 1)
+                .map(|w| w.checkpoint_hi_inclusive + 1)
                 .unwrap_or_default()
         };
 
@@ -458,6 +476,7 @@ mod tests {
     use async_trait::async_trait;
 
     use crate::types::full_checkpoint_content::CheckpointData;
+    use sui_pg_db::Connection as PgConnection;
 
     use super::*;
 
@@ -485,10 +504,12 @@ mod tests {
 
             #[async_trait]
             impl concurrent::Handler for $name {
+                type Store = Db;
+
                 const PRUNING_REQUIRES_PROCESSED_VALUES: bool = $pruning_requires_processed_values;
-                async fn commit(
+                async fn commit<'a>(
                     _values: &[Self::Value],
-                    _conn: &mut db::Connection<'_>,
+                    _conn: &mut PgConnection<'a>,
                 ) -> anyhow::Result<usize> {
                     todo!()
                 }
@@ -513,11 +534,14 @@ mod tests {
     #[tokio::test]
     async fn test_add_existing_pipeline() {
         let (mut indexer, _temp_db) = Indexer::new_for_testing(&MIGRATIONS).await;
-        let watermark = CommitterWatermark::new_for_testing(ConcurrentPipeline1::NAME, 10);
-        watermark
-            .update(&mut indexer.db().connect().await.unwrap())
-            .await
-            .unwrap();
+        {
+            let watermark = CommitterWatermark::new_for_testing(10);
+            let mut conn = indexer.db().connect().await.unwrap();
+            assert!(conn
+                .set_committer_watermark(ConcurrentPipeline1::NAME, watermark)
+                .await
+                .unwrap());
+        }
         indexer
             .concurrent_pipeline(ConcurrentPipeline1, ConcurrentConfig::default())
             .await
@@ -528,16 +552,19 @@ mod tests {
     #[tokio::test]
     async fn test_add_multiple_pipelines() {
         let (mut indexer, _temp_db) = Indexer::new_for_testing(&MIGRATIONS).await;
-        let watermark1 = CommitterWatermark::new_for_testing(ConcurrentPipeline1::NAME, 10);
-        watermark1
-            .update(&mut indexer.db().connect().await.unwrap())
-            .await
-            .unwrap();
-        let watermark2 = CommitterWatermark::new_for_testing(ConcurrentPipeline2::NAME, 20);
-        watermark2
-            .update(&mut indexer.db().connect().await.unwrap())
-            .await
-            .unwrap();
+        {
+            let watermark1 = CommitterWatermark::new_for_testing(10);
+            let mut conn = indexer.db().connect().await.unwrap();
+            assert!(conn
+                .set_committer_watermark(ConcurrentPipeline1::NAME, watermark1)
+                .await
+                .unwrap());
+            let watermark2 = CommitterWatermark::new_for_testing(20);
+            assert!(conn
+                .set_committer_watermark(ConcurrentPipeline2::NAME, watermark2)
+                .await
+                .unwrap());
+        }
 
         indexer
             .concurrent_pipeline(ConcurrentPipeline2, ConcurrentConfig::default())
@@ -554,31 +581,37 @@ mod tests {
     #[tokio::test]
     async fn test_add_multiple_pipelines_pruning_requires_processed_values() {
         let (mut indexer, _temp_db) = Indexer::new_for_testing(&MIGRATIONS).await;
-        let watermark1 = CommitterWatermark::new_for_testing(ConcurrentPipeline1::NAME, 10);
-        watermark1
-            .update(&mut indexer.db().connect().await.unwrap())
-            .await
-            .unwrap();
+        {
+            let watermark1 = CommitterWatermark::new_for_testing(10);
+            let mut conn = indexer.db().connect().await.unwrap();
+            assert!(conn
+                .set_committer_watermark(ConcurrentPipeline1::NAME, watermark1)
+                .await
+                .unwrap());
+        }
         indexer
             .concurrent_pipeline(ConcurrentPipeline1, ConcurrentConfig::default())
             .await
             .unwrap();
         assert_eq!(indexer.first_checkpoint_from_watermark, 11);
 
-        let watermark3 = CommitterWatermark::new_for_testing(ConcurrentPipeline3::NAME, 20);
-        watermark3
-            .update(&mut indexer.db().connect().await.unwrap())
-            .await
-            .unwrap();
-        let pruner_watermark = PrunerWatermark::new_for_testing(ConcurrentPipeline3::NAME, 5);
-        assert!(pruner_watermark
-            .update(&mut indexer.db().connect().await.unwrap())
-            .await
-            .unwrap());
+        {
+            let watermark3 = CommitterWatermark::new_for_testing(20);
+            let mut conn = indexer.db().connect().await.unwrap();
+            assert!(conn
+                .set_committer_watermark(ConcurrentPipeline3::NAME, watermark3)
+                .await
+                .unwrap());
+            assert!(conn
+                .set_pruner_watermark(ConcurrentPipeline3::NAME, 5)
+                .await
+                .unwrap());
+        }
         indexer
             .concurrent_pipeline(ConcurrentPipeline3, ConcurrentConfig::default())
             .await
             .unwrap();
+
         assert_eq!(indexer.first_checkpoint_from_watermark, 5);
     }
 }

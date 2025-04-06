@@ -350,31 +350,12 @@ interacting with the coin as an input to a transaction.
 ## Constants
 
 
-<a name="sui_coin_DENY_LIST_COIN_INDEX"></a>
-
-The index into the deny list vector for the <code><a href="../sui/coin.md#sui_coin_Coin">sui::coin::Coin</a></code> type.
-
-
-<pre><code><b>const</b> <a href="../sui/coin.md#sui_coin_DENY_LIST_COIN_INDEX">DENY_LIST_COIN_INDEX</a>: u64 = 0;
-</code></pre>
-
-
-
 <a name="sui_coin_EBadWitness"></a>
 
 A type passed to create_supply is not a one-time witness.
 
 
 <pre><code><b>const</b> <a href="../sui/coin.md#sui_coin_EBadWitness">EBadWitness</a>: u64 = 0;
-</code></pre>
-
-
-
-<a name="sui_coin_EGlobalPauseNotAllowed"></a>
-
-
-
-<pre><code><b>const</b> <a href="../sui/coin.md#sui_coin_EGlobalPauseNotAllowed">EGlobalPauseNotAllowed</a>: u64 = 3;
 </code></pre>
 
 
@@ -395,6 +376,25 @@ Trying to split a coin more times than its balance allows.
 
 
 <pre><code><b>const</b> <a href="../sui/coin.md#sui_coin_ENotEnough">ENotEnough</a>: u64 = 2;
+</code></pre>
+
+
+
+<a name="sui_coin_EGlobalPauseNotAllowed"></a>
+
+
+
+<pre><code><b>const</b> <a href="../sui/coin.md#sui_coin_EGlobalPauseNotAllowed">EGlobalPauseNotAllowed</a>: u64 = 3;
+</code></pre>
+
+
+
+<a name="sui_coin_DENY_LIST_COIN_INDEX"></a>
+
+The index into the deny list vector for the <code><a href="../sui/coin.md#sui_coin_Coin">sui::coin::Coin</a></code> type.
+
+
+<pre><code><b>const</b> <a href="../sui/coin.md#sui_coin_DENY_LIST_COIN_INDEX">DENY_LIST_COIN_INDEX</a>: u64 = 0;
 </code></pre>
 
 

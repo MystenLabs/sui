@@ -675,8 +675,8 @@ pub enum SuiError {
     #[error("The request did not contain a certificate")]
     NoCertificateProvidedError,
 
-    #[error("Enclave attestation failed: {0}")]
-    AttestationFailedToVerify(String),
+    #[error("Nitro attestation verify failed: {0}")]
+    NitroAttestationFailedToVerify(String),
 }
 
 #[repr(u64)]

@@ -106,22 +106,22 @@ For when trying to destroy a non-zero balance.
 
 
 
+<a name="sui_balance_EOverflow"></a>
+
+For when an overflow is happening on Supply operations.
+
+
+<pre><code><b>const</b> <a href="../sui/balance.md#sui_balance_EOverflow">EOverflow</a>: u64 = 1;
+</code></pre>
+
+
+
 <a name="sui_balance_ENotEnough"></a>
 
 For when trying to withdraw more than there is.
 
 
 <pre><code><b>const</b> <a href="../sui/balance.md#sui_balance_ENotEnough">ENotEnough</a>: u64 = 2;
-</code></pre>
-
-
-
-<a name="sui_balance_ENotSUI"></a>
-
-System operation performed for a coin other than SUI
-
-
-<pre><code><b>const</b> <a href="../sui/balance.md#sui_balance_ENotSUI">ENotSUI</a>: u64 = 4;
 </code></pre>
 
 
@@ -136,12 +136,12 @@ Sender is not @0x0 the system address.
 
 
 
-<a name="sui_balance_EOverflow"></a>
+<a name="sui_balance_ENotSUI"></a>
 
-For when an overflow is happening on Supply operations.
+System operation performed for a coin other than SUI
 
 
-<pre><code><b>const</b> <a href="../sui/balance.md#sui_balance_EOverflow">EOverflow</a>: u64 = 1;
+<pre><code><b>const</b> <a href="../sui/balance.md#sui_balance_ENotSUI">ENotSUI</a>: u64 = 4;
 </code></pre>
 
 

@@ -117,9 +117,9 @@ pub enum MarkerValue {
     /// An owned object was deleted (or wrapped) at the given version, and is no longer able to be
     /// accessed or used in subsequent transactions.
     OwnedDeleted,
-    /// A shared object was deleted by the transaction and is no longer able to be accessed or
-    /// used in subsequent transactions.
-    SharedDeleted(TransactionDigest),
+    /// A consensus object was deleted or removed from consensus by the transaction and is no longer
+    /// able to be accessed or used in subsequent transactions with the same initial shared version.
+    ConsensusStreamEnded(TransactionDigest),
 }
 
 /// DeleteKind together with the old sequence number prior to the deletion, if available.

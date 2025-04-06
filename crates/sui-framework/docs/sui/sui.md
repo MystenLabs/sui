@@ -97,22 +97,22 @@ The amount of Mist per Sui token based on the fact that mist is
 
 
 
-<a name="sui_sui_TOTAL_SUPPLY_MIST"></a>
-
-The total supply of Sui denominated in Mist (10 Billion * 10^9)
-
-
-<pre><code><b>const</b> <a href="../sui/sui.md#sui_sui_TOTAL_SUPPLY_MIST">TOTAL_SUPPLY_MIST</a>: u64 = 10000000000000000000;
-</code></pre>
-
-
-
 <a name="sui_sui_TOTAL_SUPPLY_SUI"></a>
 
 The total supply of Sui denominated in whole Sui tokens (10 Billion)
 
 
 <pre><code><b>const</b> <a href="../sui/sui.md#sui_sui_TOTAL_SUPPLY_SUI">TOTAL_SUPPLY_SUI</a>: u64 = 10000000000;
+</code></pre>
+
+
+
+<a name="sui_sui_TOTAL_SUPPLY_MIST"></a>
+
+The total supply of Sui denominated in Mist (10 Billion * 10^9)
+
+
+<pre><code><b>const</b> <a href="../sui/sui.md#sui_sui_TOTAL_SUPPLY_MIST">TOTAL_SUPPLY_MIST</a>: u64 = 10000000000000000000;
 </code></pre>
 
 

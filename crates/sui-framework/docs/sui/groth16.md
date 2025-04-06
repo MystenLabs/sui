@@ -154,24 +154,6 @@ A <code><a href="../sui/groth16.md#sui_groth16_ProofPoints">ProofPoints</a></cod
 ## Constants
 
 
-<a name="sui_groth16_EInvalidCurve"></a>
-
-
-
-<pre><code><b>const</b> <a href="../sui/groth16.md#sui_groth16_EInvalidCurve">EInvalidCurve</a>: u64 = 1;
-</code></pre>
-
-
-
-<a name="sui_groth16_EInvalidScalar"></a>
-
-
-
-<pre><code><b>const</b> <a href="../sui/groth16.md#sui_groth16_EInvalidScalar">EInvalidScalar</a>: u64 = 3;
-</code></pre>
-
-
-
 <a name="sui_groth16_EInvalidVerifyingKey"></a>
 
 
@@ -181,11 +163,29 @@ A <code><a href="../sui/groth16.md#sui_groth16_ProofPoints">ProofPoints</a></cod
 
 
 
+<a name="sui_groth16_EInvalidCurve"></a>
+
+
+
+<pre><code><b>const</b> <a href="../sui/groth16.md#sui_groth16_EInvalidCurve">EInvalidCurve</a>: u64 = 1;
+</code></pre>
+
+
+
 <a name="sui_groth16_ETooManyPublicInputs"></a>
 
 
 
 <pre><code><b>const</b> <a href="../sui/groth16.md#sui_groth16_ETooManyPublicInputs">ETooManyPublicInputs</a>: u64 = 2;
+</code></pre>
+
+
+
+<a name="sui_groth16_EInvalidScalar"></a>
+
+
+
+<pre><code><b>const</b> <a href="../sui/groth16.md#sui_groth16_EInvalidScalar">EInvalidScalar</a>: u64 = 3;
 </code></pre>
 
 

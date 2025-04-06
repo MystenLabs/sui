@@ -76,21 +76,21 @@ An invalid length of bitvector was given
 
 
 
+<a name="std_bit_vector_WORD_SIZE"></a>
+
+
+
+<pre><code><b>const</b> <a href="../std/bit_vector.md#std_bit_vector_WORD_SIZE">WORD_SIZE</a>: <a href="../std/u64.md#std_u64">u64</a> = 1;
+</code></pre>
+
+
+
 <a name="std_bit_vector_MAX_SIZE"></a>
 
 The maximum allowed bitvector size
 
 
 <pre><code><b>const</b> <a href="../std/bit_vector.md#std_bit_vector_MAX_SIZE">MAX_SIZE</a>: <a href="../std/u64.md#std_u64">u64</a> = 1024;
-</code></pre>
-
-
-
-<a name="std_bit_vector_WORD_SIZE"></a>
-
-
-
-<pre><code><b>const</b> <a href="../std/bit_vector.md#std_bit_vector_WORD_SIZE">WORD_SIZE</a>: <a href="../std/u64.md#std_u64">u64</a> = 1;
 </code></pre>
 
 
@@ -203,13 +203,13 @@ bitvector's length the bitvector will be zeroed out.
 
 <pre><code><b>public</b> <b>fun</b> <a href="../std/bit_vector.md#std_bit_vector_shift_left">shift_left</a>(bitvector: &<b>mut</b> <a href="../std/bit_vector.md#std_bit_vector_BitVector">BitVector</a>, amount: <a href="../std/u64.md#std_u64">u64</a>) {
     <b>if</b> (amount &gt;= bitvector.<a href="../std/bit_vector.md#std_bit_vector_length">length</a>) {
-       <b>let</b> len = bitvector.bit_field.<a href="../std/bit_vector.md#std_bit_vector_length">length</a>();
-       <b>let</b> <b>mut</b> i = 0;
-       <b>while</b> (i &lt; len) {
-           <b>let</b> elem = &<b>mut</b> bitvector.bit_field[i];
-           *elem = <b>false</b>;
-           i = i + 1;
-       };
+        <b>let</b> len = bitvector.bit_field.<a href="../std/bit_vector.md#std_bit_vector_length">length</a>();
+        <b>let</b> <b>mut</b> i = 0;
+        <b>while</b> (i &lt; len) {
+            <b>let</b> elem = &<b>mut</b> bitvector.bit_field[i];
+            *elem = <b>false</b>;
+            i = i + 1;
+        };
     } <b>else</b> {
         <b>let</b> <b>mut</b> i = amount;
         <b>while</b> (i &lt; bitvector.<a href="../std/bit_vector.md#std_bit_vector_length">length</a>) {

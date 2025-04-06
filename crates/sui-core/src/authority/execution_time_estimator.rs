@@ -74,6 +74,7 @@ pub struct LocalObservations {
 pub struct ObjectUtilization {
     excess_execution_time: Duration,
     last_measured: Option<Instant>,
+    was_overutilized: bool, // true if the object has ever had excess_execution_time
 }
 
 impl ObjectUtilization {
@@ -215,6 +216,7 @@ impl ExecutionTimeObserver {
                         .get_or_insert_mut(id, || ObjectUtilization {
                             excess_execution_time: Duration::ZERO,
                             last_measured: None,
+                            was_overutilized: false,
                         });
                 let overutilized_at_start = utilization.overutilized();
                 utilization.excess_execution_time += total_duration;
@@ -229,8 +231,11 @@ impl ExecutionTimeObserver {
                             .unwrap_or(Duration::MAX),
                     );
                 utilization.last_measured = Some(now);
+                if utilization.excess_execution_time > Duration::ZERO {
+                    utilization.was_overutilized = true;
+                }
 
-                // Update overutilized objects metric.
+                // Update overutilized objects metrics.
                 if !overutilized_at_start && utilization.overutilized() {
                     epoch_store
                         .metrics
@@ -241,6 +246,13 @@ impl ExecutionTimeObserver {
                         .metrics
                         .epoch_execution_time_observer_overutilized_objects
                         .dec();
+                }
+                if self.config.report_object_utilization_metric() && utilization.was_overutilized {
+                    epoch_store
+                        .metrics
+                        .epoch_execution_time_observer_object_utilization
+                        .with_label_values(&[id.to_string().as_str()])
+                        .inc_by(total_duration.as_secs_f64());
                 }
 
                 utilization.excess_execution_time

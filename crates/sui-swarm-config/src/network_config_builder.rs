@@ -9,7 +9,6 @@ use rand::rngs::OsRng;
 use sui_config::genesis::{TokenAllocation, TokenDistributionScheduleBuilder};
 use sui_config::node::AuthorityOverloadConfig;
 use sui_config::ExecutionCacheConfig;
-use sui_macros::nondeterministic;
 use sui_protocol_config::Chain;
 use sui_types::base_types::{AuthorityName, SuiAddress};
 use sui_types::committee::{Committee, ProtocolVersion};
@@ -109,7 +108,7 @@ impl ConfigBuilder {
     }
 
     pub fn new_with_temp_dir() -> Self {
-        Self::new(nondeterministic!(tempfile::tempdir().unwrap()).into_path())
+        Self::new(mysten_common::tempdir().unwrap().into_path())
     }
 }
 

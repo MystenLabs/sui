@@ -7,8 +7,10 @@ use tracing::warn;
 pub mod logging;
 pub mod metrics;
 pub mod random;
+pub mod random_util;
 pub mod sync;
-pub mod util;
+
+pub use random_util::tempdir;
 
 #[inline(always)]
 pub fn in_antithesis() -> bool {

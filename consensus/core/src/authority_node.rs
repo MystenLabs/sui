@@ -33,6 +33,7 @@ use crate::{
     },
     proposed_block_handler::ProposedBlockHandler,
     round_prober::{RoundProber, RoundProberHandle},
+    round_tracker::PeerRoundTracker,
     storage::rocksdb_store::RocksDBStore,
     subscriber::Subscriber,
     synchronizer::{Synchronizer, SynchronizerHandle},
@@ -239,13 +240,20 @@ where
         let store = Arc::new(RocksDBStore::new(store_path));
         let dag_state = Arc::new(RwLock::new(DagState::new(context.clone(), store.clone())));
 
+        let block_verifier = Arc::new(SignedBlockVerifier::new(
+            context.clone(),
+            transaction_verifier,
+        ));
+
         let transaction_certifier = TransactionCertifier::new(
             context.clone(),
             dag_state.clone(),
             commit_consumer.block_sender.clone(),
         );
+        transaction_certifier.recover(block_verifier.as_ref());
 
         let mut proposed_block_handler = ProposedBlockHandler::new(
+            context.clone(),
             signals_receivers.block_broadcast_receiver(),
             transaction_certifier.clone(),
         );
@@ -262,11 +270,6 @@ where
                 .sync_last_known_own_block_timeout
                 .is_zero();
         info!("Sync last known own block: {sync_last_known_own_block}");
-
-        let block_verifier = Arc::new(SignedBlockVerifier::new(
-            context.clone(),
-            transaction_verifier,
-        ));
 
         let block_manager =
             BlockManager::new(context.clone(), dag_state.clone(), block_verifier.clone());
@@ -287,10 +290,13 @@ where
             leader_schedule.clone(),
         );
 
+        let round_tracker = Arc::new(RwLock::new(PeerRoundTracker::new(context.clone())));
+
         let core = Core::new(
             context.clone(),
             leader_schedule,
             tx_consumer,
+            transaction_certifier.clone(),
             block_manager,
             // For streaming RPC, Core will be notified when consumer is available.
             // For non-streaming RPC, there is no way to know so default to true.
@@ -301,6 +307,7 @@ where
             protocol_keypair,
             dag_state.clone(),
             sync_last_known_own_block,
+            round_tracker.clone(),
         );
 
         let (core_dispatcher, core_thread_handle) =
@@ -339,6 +346,7 @@ where
                 RoundProber::new(
                     context.clone(),
                     core_dispatcher.clone(),
+                    round_tracker.clone(),
                     dag_state.clone(),
                     network_client.clone(),
                 )
@@ -352,6 +360,7 @@ where
             context.clone(),
             block_verifier,
             commit_vote_monitor,
+            round_tracker.clone(),
             synchronizer.clone(),
             core_dispatcher,
             signals_receivers.block_broadcast_receiver(),
@@ -456,8 +465,11 @@ where
 mod tests {
     #![allow(non_snake_case)]
 
-    use std::collections::BTreeMap;
-    use std::{collections::BTreeSet, sync::Arc, time::Duration};
+    use std::{
+        collections::{BTreeMap, BTreeSet},
+        sync::Arc,
+        time::Duration,
+    };
 
     use consensus_config::{local_committee_and_keys, Parameters};
     use mysten_metrics::monitored_mpsc::UnboundedReceiver;
@@ -469,9 +481,9 @@ mod tests {
     use typed_store::DBMetrics;
 
     use super::*;
-    use crate::block::GENESIS_ROUND;
     use crate::{
-        block::BlockAPI as _, block::CertifiedBlocksOutput, transaction::NoopTransactionVerifier,
+        block::{BlockAPI as _, CertifiedBlocksOutput, GENESIS_ROUND},
+        transaction::NoopTransactionVerifier,
         CommittedSubDag,
     };
 
@@ -526,6 +538,7 @@ mod tests {
         #[values(ConsensusNetwork::Anemo, ConsensusNetwork::Tonic)] network_type: ConsensusNetwork,
         #[values(0, 5, 10)] gc_depth: u32,
     ) {
+        telemetry_subscribers::init_for_testing();
         let db_registry = Registry::new();
         DBMetrics::init(&db_registry);
 
@@ -537,6 +550,7 @@ mod tests {
         if gc_depth == 0 {
             protocol_config.set_consensus_linearize_subdag_v2_for_testing(false);
             protocol_config.set_consensus_median_based_commit_timestamp_for_testing(false);
+            protocol_config.set_mysticeti_fastpath_for_testing(false);
         }
 
         let temp_dirs = (0..NUM_OF_AUTHORITIES)
@@ -635,6 +649,7 @@ mod tests {
         #[values(ConsensusNetwork::Anemo, ConsensusNetwork::Tonic)] network_type: ConsensusNetwork,
         #[values(1, 2, 3)] num_authorities: usize,
     ) {
+        telemetry_subscribers::init_for_testing();
         let db_registry = Registry::new();
         DBMetrics::init(&db_registry);
 
@@ -730,10 +745,7 @@ mod tests {
 
     #[rstest]
     #[tokio::test(flavor = "current_thread")]
-    async fn test_amnesia_recovery_success(
-        #[values(ConsensusNetwork::Anemo, ConsensusNetwork::Tonic)] network_type: ConsensusNetwork,
-        #[values(0, 5, 10)] gc_depth: u32,
-    ) {
+    async fn test_amnesia_recovery_success(#[values(0, 5, 10)] gc_depth: u32) {
         telemetry_subscribers::init_for_testing();
         let db_registry = Registry::new();
         DBMetrics::init(&db_registry);
@@ -752,6 +764,7 @@ mod tests {
         if gc_depth == 0 {
             protocol_config.set_consensus_linearize_subdag_v2_for_testing(false);
             protocol_config.set_consensus_median_based_commit_timestamp_for_testing(false);
+            protocol_config.set_mysticeti_fastpath_for_testing(false);
         }
 
         for (index, _authority_info) in committee.authorities() {
@@ -761,7 +774,7 @@ mod tests {
                 &dir,
                 committee.clone(),
                 keypairs.clone(),
-                network_type,
+                ConsensusNetwork::Tonic,
                 boot_counters[index],
                 protocol_config.clone(),
             )
@@ -811,7 +824,7 @@ mod tests {
             &dir,
             committee.clone(),
             keypairs.clone(),
-            network_type,
+            ConsensusNetwork::Tonic,
             boot_counters[index_1],
             protocol_config.clone(),
         )
@@ -832,7 +845,7 @@ mod tests {
             &temp_dirs[&index_2],
             committee.clone(),
             keypairs,
-            network_type,
+            ConsensusNetwork::Tonic,
             boot_counters[index_2],
             protocol_config.clone(),
         )

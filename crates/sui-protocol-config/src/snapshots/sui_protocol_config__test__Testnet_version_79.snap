@@ -45,6 +45,7 @@ feature_flags:
   allow_receiving_object_id: true
   enable_coin_deny_list: true
   enable_group_ops_native_functions: true
+  enable_nitro_attestation: true
   reject_mutable_random_on_entry_functions: true
   per_object_congestion_control_mode:
     ExecutionTimeEstimate:
@@ -84,6 +85,8 @@ feature_flags:
   record_additional_state_digest_in_prologue: true
   move_native_context: true
   consensus_median_based_commit_timestamp: true
+  normalize_ptb_arguments: true
+  consensus_batched_block_sync: true
 max_tx_size_bytes: 131072
 max_input_objects: 2048
 max_size_written_objects: 5000000

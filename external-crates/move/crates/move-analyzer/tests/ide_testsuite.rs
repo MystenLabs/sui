@@ -35,9 +35,13 @@ enum TestSuite {
         project: String,
         file_tests: BTreeMap<String, Vec<UseDefTest>>,
     },
-    Completion {
+    AutoCompletion {
         project: String,
-        file_tests: BTreeMap<String, Vec<CompletionTest>>,
+        file_tests: BTreeMap<String, Vec<AutoCompletionTest>>,
+    },
+    AutoImport {
+        project: String,
+        file_tests: BTreeMap<String, Vec<AutoImportTest>>,
     },
     Cursor {
         project: String,
@@ -56,7 +60,13 @@ struct UseDefTest {
 }
 
 #[derive(Serialize, Deserialize)]
-struct CompletionTest {
+struct AutoCompletionTest {
+    use_line: u32,
+    use_col: u32,
+}
+
+#[derive(Serialize, Deserialize)]
+struct AutoImportTest {
     use_line: u32,
     use_col: u32,
 }
@@ -172,67 +182,47 @@ impl UseDefTest {
     }
 }
 
-impl CompletionTest {
+impl AutoCompletionTest {
     fn test(
         &self,
         test_idx: usize,
-        mut compiled_pkg_info: CompiledPkgInfo,
+        compiled_pkg_info: CompiledPkgInfo,
         symbols: &mut Symbols,
         output: &mut dyn std::io::Write,
         use_file_path: &Path,
     ) -> anyhow::Result<()> {
-        let lsp_use_line = self.use_line - 1; // 0th-based
-        let lsp_use_col = self.use_col - 1; // 0th-based
-        let use_pos = Position {
-            line: lsp_use_line,
-            character: lsp_use_col,
-        };
-
-        // symbols do not change for each test, so we can reuse the same symbols
-        // but we need to recompute the cursor each time
-        let cursor_path = use_file_path.to_path_buf();
-        let cursor_info = Some((&cursor_path, use_pos));
-        let mut symbols_computation_data = SymbolsComputationData::new();
-        let mut symbols_computation_data_deps = SymbolsComputationData::new();
-        // we only compute cursor context and tag it on the existing symbols to avoid spending time
-        // recomputing all symbols (saves quite a bit of time when running the test suite)
-        let mut cursor_context = compute_symbols_pre_process(
-            &mut symbols_computation_data,
-            &mut symbols_computation_data_deps,
-            &mut compiled_pkg_info,
-            cursor_info,
-        );
-        cursor_context = compute_symbols_parsed_program(
-            &mut symbols_computation_data,
-            &mut symbols_computation_data_deps,
-            &compiled_pkg_info,
-            cursor_context,
-        );
-        symbols.cursor_context = cursor_context;
-
-        let items = compute_completions_with_symbols(symbols, &cursor_path, use_pos);
-        writeln!(output, "-- test {test_idx} -------------------")?;
-        writeln!(
+        completion_test(
+            self.use_line,
+            self.use_col,
+            test_idx,
+            compiled_pkg_info,
+            symbols,
             output,
-            "use line: {}, use_col: {}",
-            self.use_line, self.use_col
-        )?;
-        for i in items {
-            writeln!(output, "{:?} '{}'", i.kind.unwrap(), i.label)?;
-            if let Some(insert_text) = i.insert_text {
-                writeln!(output, "    INSERT TEXT: '{}'", insert_text)?;
-            }
-            if let Some(label_details) = i.label_details {
-                if let Some(detail) = label_details.detail {
-                    writeln!(output, "    TARGET     : '{}'", detail.trim())?;
-                }
-                if let Some(description) = label_details.description {
-                    writeln!(output, "    TYPE       : '{description}'")?;
-                }
-            }
-        }
-        writeln!(output)?;
-        Ok(())
+            use_file_path,
+            false, // not for auto-import
+        )
+    }
+}
+
+impl AutoImportTest {
+    fn test(
+        &self,
+        test_idx: usize,
+        compiled_pkg_info: CompiledPkgInfo,
+        symbols: &mut Symbols,
+        output: &mut dyn std::io::Write,
+        use_file_path: &Path,
+    ) -> anyhow::Result<()> {
+        completion_test(
+            self.use_line,
+            self.use_col,
+            test_idx,
+            compiled_pkg_info,
+            symbols,
+            output,
+            use_file_path,
+            true, // for auto-import
+        )
     }
 }
 
@@ -336,6 +326,73 @@ impl HintTest {
     }
 }
 
+fn completion_test(
+    use_line: u32,
+    use_col: u32,
+    test_idx: usize,
+    mut compiled_pkg_info: CompiledPkgInfo,
+    symbols: &mut Symbols,
+    output: &mut dyn std::io::Write,
+    use_file_path: &Path,
+    auto_import: bool,
+) -> anyhow::Result<()> {
+    let lsp_use_line = use_line - 1; // 0th-based
+    let lsp_use_col = use_col - 1; // 0th-based
+    let use_pos = Position {
+        line: lsp_use_line,
+        character: lsp_use_col,
+    };
+
+    // symbols do not change for each test, so we can reuse the same symbols
+    // but we need to recompute the cursor each time
+    let cursor_path = use_file_path.to_path_buf();
+    let cursor_info = Some((&cursor_path, use_pos));
+    let mut symbols_computation_data = SymbolsComputationData::new();
+    let mut symbols_computation_data_deps = SymbolsComputationData::new();
+    // we only compute cursor context and tag it on the existing symbols to avoid spending time
+    // recomputing all symbols (saves quite a bit of time when running the test suite)
+    let mut cursor_context = compute_symbols_pre_process(
+        &mut symbols_computation_data,
+        &mut symbols_computation_data_deps,
+        &mut compiled_pkg_info,
+        cursor_info,
+    );
+    cursor_context = compute_symbols_parsed_program(
+        &mut symbols_computation_data,
+        &mut symbols_computation_data_deps,
+        &compiled_pkg_info,
+        cursor_context,
+    );
+    symbols.cursor_context = cursor_context;
+
+    let items = compute_completions_with_symbols(symbols, &cursor_path, use_pos, auto_import);
+    writeln!(output, "-- test {test_idx} -------------------")?;
+    writeln!(output, "use line: {}, use_col: {}", use_line, use_col)?;
+    for i in items {
+        writeln!(output, "{:?} '{}'", i.kind.unwrap(), i.label)?;
+        if let Some(insert_text) = i.insert_text {
+            writeln!(output, "    INSERT TEXT: '{}'", insert_text)?;
+        }
+        if let Some(label_details) = i.label_details {
+            if let Some(detail) = label_details.detail {
+                writeln!(output, "    TARGET     : '{}'", detail.trim())?;
+            }
+            if let Some(description) = label_details.description {
+                writeln!(output, "    TYPE       : '{description}'")?;
+            }
+        }
+        if let Some(additional_edit) = i.additional_text_edits {
+            writeln!(
+                output,
+                "    ADDITIONAL EDIT: '{}'",
+                additional_edit[0].new_text
+            )?;
+        }
+    }
+    writeln!(output)?;
+    Ok(())
+}
+
 //**************************************************************************************************
 // Test Suite Runner Code
 //**************************************************************************************************
@@ -412,9 +469,39 @@ fn use_def_test_suite(
     Ok(result)
 }
 
-fn completion_test_suite(
+fn auto_completion_test_suite(
     project: String,
-    file_tests: BTreeMap<String, Vec<CompletionTest>>,
+    file_tests: BTreeMap<String, Vec<AutoCompletionTest>>,
+) -> datatest_stable::Result<String> {
+    let (project_path, compiled_pkg_info, mut symbols) =
+        initial_symbols(project, &file_tests.keys().collect())?;
+
+    let mut output: BufWriter<_> = BufWriter::new(Vec::new());
+    let writer: &mut dyn io::Write = output.get_mut();
+
+    for (file, tests) in file_tests {
+        writeln!(
+            writer,
+            "== {file} ========================================================"
+        )?;
+
+        let mut fpath = project_path.clone();
+
+        fpath.push(format!("sources/{file}"));
+        let cpath = dunce::canonicalize(&fpath).unwrap();
+
+        for (idx, test) in tests.iter().enumerate() {
+            test.test(idx, compiled_pkg_info.clone(), &mut symbols, writer, &cpath)?;
+        }
+    }
+
+    let result: String = String::from_utf8(output.into_inner().unwrap()).unwrap();
+    Ok(result)
+}
+
+fn auto_import_test_suite(
+    project: String,
+    file_tests: BTreeMap<String, Vec<AutoImportTest>>,
 ) -> datatest_stable::Result<String> {
     let (project_path, compiled_pkg_info, mut symbols) =
         initial_symbols(project, &file_tests.keys().collect())?;
@@ -510,10 +597,14 @@ fn move_ide_testsuite(test_path: &Path) -> datatest_stable::Result<()> {
             project,
             file_tests,
         } => use_def_test_suite(project, file_tests),
-        TestSuite::Completion {
+        TestSuite::AutoCompletion {
             project,
             file_tests,
-        } => completion_test_suite(project, file_tests),
+        } => auto_completion_test_suite(project, file_tests),
+        TestSuite::AutoImport {
+            project,
+            file_tests,
+        } => auto_import_test_suite(project, file_tests),
         TestSuite::Cursor {
             project,
             file_tests,

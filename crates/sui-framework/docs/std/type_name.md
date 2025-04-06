@@ -62,16 +62,6 @@ Functionality for converting Move types into values. Use with care!
 ## Constants
 
 
-<a name="std_type_name_ASCII_C"></a>
-
-ASCII Character code for the <code>c</code> (lowercase c) symbol.
-
-
-<pre><code><b>const</b> <a href="../std/type_name.md#std_type_name_ASCII_C">ASCII_C</a>: <a href="../std/u8.md#std_u8">u8</a> = 99;
-</code></pre>
-
-
-
 <a name="std_type_name_ASCII_COLON"></a>
 
 ASCII Character code for the <code>:</code> (colon) symbol.
@@ -82,12 +72,42 @@ ASCII Character code for the <code>:</code> (colon) symbol.
 
 
 
+<a name="std_type_name_ASCII_V"></a>
+
+ASCII Character code for the <code>v</code> (lowercase v) symbol.
+
+
+<pre><code><b>const</b> <a href="../std/type_name.md#std_type_name_ASCII_V">ASCII_V</a>: <a href="../std/u8.md#std_u8">u8</a> = 118;
+</code></pre>
+
+
+
 <a name="std_type_name_ASCII_E"></a>
 
 ASCII Character code for the <code>e</code> (lowercase e) symbol.
 
 
 <pre><code><b>const</b> <a href="../std/type_name.md#std_type_name_ASCII_E">ASCII_E</a>: <a href="../std/u8.md#std_u8">u8</a> = 101;
+</code></pre>
+
+
+
+<a name="std_type_name_ASCII_C"></a>
+
+ASCII Character code for the <code>c</code> (lowercase c) symbol.
+
+
+<pre><code><b>const</b> <a href="../std/type_name.md#std_type_name_ASCII_C">ASCII_C</a>: <a href="../std/u8.md#std_u8">u8</a> = 99;
+</code></pre>
+
+
+
+<a name="std_type_name_ASCII_T"></a>
+
+ASCII Character code for the <code>t</code> (lowercase t) symbol.
+
+
+<pre><code><b>const</b> <a href="../std/type_name.md#std_type_name_ASCII_T">ASCII_T</a>: <a href="../std/u8.md#std_u8">u8</a> = 116;
 </code></pre>
 
 
@@ -108,26 +128,6 @@ ASCII Character code for the <code>r</code> (lowercase r) symbol.
 
 
 <pre><code><b>const</b> <a href="../std/type_name.md#std_type_name_ASCII_R">ASCII_R</a>: <a href="../std/u8.md#std_u8">u8</a> = 114;
-</code></pre>
-
-
-
-<a name="std_type_name_ASCII_T"></a>
-
-ASCII Character code for the <code>t</code> (lowercase t) symbol.
-
-
-<pre><code><b>const</b> <a href="../std/type_name.md#std_type_name_ASCII_T">ASCII_T</a>: <a href="../std/u8.md#std_u8">u8</a> = 116;
-</code></pre>
-
-
-
-<a name="std_type_name_ASCII_V"></a>
-
-ASCII Character code for the <code>v</code> (lowercase v) symbol.
-
-
-<pre><code><b>const</b> <a href="../std/type_name.md#std_type_name_ASCII_V">ASCII_V</a>: <a href="../std/u8.md#std_u8">u8</a> = 118;
 </code></pre>
 
 
