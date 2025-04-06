@@ -34,6 +34,7 @@ pub struct Unpinned;
 /// of an entry in the `dependencies` table.
 #[derive(Debug, Serialize, Deserialize)]
 #[derive_where(Clone)]
+#[serde(untagged)]
 pub enum ManifestDependencyInfo<F: MoveFlavor> {
     Git(GitDependency<Unpinned>),
     External(ExternalDependency),

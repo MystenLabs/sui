@@ -1,9 +1,9 @@
 ---
-source: crates/move-package-alt/tests/manifest_parsing_test.rs
+source: crates/move-package-alt/tests/manifest_parsing_tests.rs
 ---
-Err(TOML parse error at line 4, column 1
+Err(TOML parse error at line 5, column 1
   |
-4 | [package]
+5 | [package]
   | ^
 Duplicate key `package` in document root
 

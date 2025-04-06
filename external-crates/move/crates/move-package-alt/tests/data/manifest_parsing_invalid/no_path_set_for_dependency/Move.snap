@@ -1,4 +1,4 @@
 ---
-source: crates/move-package-alt/tests/manifest_parsing_test.rs
+source: crates/move-package-alt/tests/manifest_parsing_tests.rs
 ---
-Err(missing field `edition` for key `package`)
+Err(data did not match any variant of untagged enum ManifestDependencyInfo for key `dependencies.A`)

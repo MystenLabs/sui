@@ -1,4 +1,0 @@
----
-source: crates/move-package-alt/tests/manifest_parsing_test.rs
----
-Err(no variant of enum ManifestDependencyInfo found in flattened data for key `dependencies.Sui`)

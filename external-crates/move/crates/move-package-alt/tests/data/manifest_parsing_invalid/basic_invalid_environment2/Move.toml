@@ -5,7 +5,5 @@ license = "Apache-2.0"
 authors = ["Move Team"]
 
 [environments]
-mainnet = "35834a8a"
+~124512 = "35834a8a"
 
-[dependencies]
-foo = { rename-from = "Foo", override = true, rev = "releases/v1" }

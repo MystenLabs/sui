@@ -1,5 +1,6 @@
 [package]
 name = "name"
+edition = "2024.beta"
 license = "license"
 authors = ["some author"]
 flavor = "vanilla"

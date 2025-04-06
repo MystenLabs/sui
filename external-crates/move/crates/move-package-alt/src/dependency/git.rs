@@ -29,15 +29,14 @@ use super::{Pinned, Unpinned};
 #[derive(Debug, Serialize, Deserialize)]
 #[derive_where(Clone)]
 pub struct GitDependency<P = Unpinned> {
-    /// The repository holding the dep
-    repo: String,
-
     /// The git commit-ish for the dep; guaranteed to be a commit if [P] is [Pinned].
+    #[serde(rename = "git")]
+    repo: String,
     rev: String,
 
     /// The path within the repository
-    path: PathBuf,
-
+    path: Option<PathBuf>,
+    #[serde(skip)]
     phantom: PhantomData<P>,
 }
 
