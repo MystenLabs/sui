@@ -69,9 +69,9 @@ impl MoveUtilsInternalTrait for MoveUtilsInternal {
         package: ObjectID,
         module_name: String,
     ) -> Result<NormalizedModule, Error> {
-        let normalized = self.get_move_modules_by_package(package).await?;
-        Ok(match normalized.get(&module_name) {
-            Some(module) => Ok(module.clone()),
+        let mut normalized = self.get_move_modules_by_package(package).await?;
+        Ok(match normalized.remove(&module_name) {
+            Some(module) => Ok(module),
             None => Err(SuiRpcInputError::GenericNotFound(format!(
                 "No module found with module name {}",
                 module_name

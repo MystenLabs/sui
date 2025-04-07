@@ -84,7 +84,8 @@ pub struct Datatype<S> {
 
 pub type Signature<S> = Rc<Vec<Rc<Type<S>>>>;
 
-#[derive(Clone, Debug)]
+#[cfg_attr(test, derive(Clone))]
+#[derive(Debug)]
 struct Tables<S> {
     empty_signature: Signature<S>,
     signatures: Vec<Signature<S>>,
@@ -96,7 +97,8 @@ struct Tables<S> {
 
 /// Normalized version of a `CompiledModule`: its address, name, struct declarations, and public
 /// function declarations.
-#[derive(Clone, Debug)]
+#[cfg_attr(test, derive(Clone))]
+#[derive(Debug)]
 pub struct Module<S: Ord> {
     #[allow(unused)]
     tables: Tables<S>,
@@ -111,7 +113,8 @@ pub struct Module<S: Ord> {
 }
 
 /// Normalized version of a `Constant`.
-#[derive(Clone, Debug, Eq, PartialEq, Ord, PartialOrd)]
+#[cfg_attr(test, derive(Clone))]
+#[derive(Debug, Eq, PartialEq, Ord, PartialOrd)]
 pub struct Constant<S> {
     pub type_: Type<S>,
     pub data: Vec<u8>,
@@ -119,7 +122,8 @@ pub struct Constant<S> {
 
 /// Normalized version of a `StructDefinition`. Not safe to compare without an associated
 /// `ModuleId` or `Module`.
-#[derive(Clone, Debug, Eq, PartialEq, Ord, PartialOrd)]
+#[cfg_attr(test, derive(Clone))]
+#[derive(Debug, Eq, PartialEq, Ord, PartialOrd)]
 pub struct Struct<S> {
     pub name: S,
     pub abilities: AbilitySet,
@@ -131,7 +135,8 @@ pub struct Struct<S> {
 /// metadata that it is ignored by the VM. The reason: names are important to clients. We would
 /// want a change from `Account { bal: u64, seq: u64 }` to `Account { seq: u64, bal: u64 }` to be
 /// marked as incompatible. Not safe to compare without an enclosing `Struct`.
-#[derive(Clone, Debug, Eq, PartialEq, Ord, PartialOrd)]
+#[cfg_attr(test, derive(Clone))]
+#[derive(Debug, Eq, PartialEq, Ord, PartialOrd)]
 pub struct Field<S> {
     pub name: S,
     pub type_: Type<S>,
@@ -139,7 +144,8 @@ pub struct Field<S> {
 
 /// Normalized version of a `FunctionDefinition`. Not safe to compare without an associated
 /// `ModuleId` or `Module`.
-#[derive(Clone, Debug)]
+#[cfg_attr(test, derive(Clone))]
+#[derive(Debug)]
 pub struct Function<S> {
     pub name: S,
     pub visibility: Visibility,
@@ -154,7 +160,8 @@ pub struct Function<S> {
 
 /// Normalized version of a `EnumDefinition`. Not safe to compare without an associated
 /// `ModuleId` or `Module`.
-#[derive(Clone, Debug, Eq, PartialEq, Ord, PartialOrd)]
+#[cfg_attr(test, derive(Clone))]
+#[derive(Debug, Eq, PartialEq, Ord, PartialOrd)]
 pub struct Enum<S> {
     pub name: S,
     pub abilities: AbilitySet,
@@ -164,7 +171,8 @@ pub struct Enum<S> {
 
 /// Normalized version of a `VariantDefinition`. Not safe to compare without an associated
 /// `ModuleId` or `Module`.
-#[derive(Clone, Debug, Eq, PartialEq, Ord, PartialOrd)]
+#[cfg_attr(test, derive(Clone))]
+#[derive(Debug, Eq, PartialEq, Ord, PartialOrd)]
 pub struct Variant<S> {
     pub name: S,
     pub fields: Vec<Field<S>>,
@@ -172,7 +180,8 @@ pub struct Variant<S> {
 
 /// Normalized version of a `VariantJumpTable`. Not safe to compare without an associated
 /// `ModuleId` or `Module`.
-#[derive(Clone, Debug, Eq, PartialEq, Ord, PartialOrd)]
+#[cfg_attr(test, derive(Clone))]
+#[derive(Debug, Eq, PartialEq, Ord, PartialOrd)]
 pub struct VariantJumpTable<S> {
     pub enum_: Rc<Enum<S>>,
     pub jump_table: JumpTableInner,
