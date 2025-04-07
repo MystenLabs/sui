@@ -5,7 +5,7 @@ snapshot_kind: text
 ---
 Verification successful
 warning: unused function type parameter
-  ┌─ tests/inputs/ghost_variables_noalias_read_read.move:5:16
+  ┌─ tests/inputs/ghost_variable_compiler_checks/ghost_variables_noalias_read_read.move:5:16
   │
 5 │ public fun foo<U, V>() {}
   │                ^ Unused type parameter 'U'.
@@ -13,7 +13,7 @@ warning: unused function type parameter
   = This warning can be suppressed with '#[allow(unused_type_parameter)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
 
 warning: unused function type parameter
-  ┌─ tests/inputs/ghost_variables_noalias_read_read.move:5:19
+  ┌─ tests/inputs/ghost_variable_compiler_checks/ghost_variables_noalias_read_read.move:5:19
   │
 5 │ public fun foo<U, V>() {}
   │                   ^ Unused type parameter 'V'.
