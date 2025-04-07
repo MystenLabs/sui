@@ -147,7 +147,7 @@ impl PartialEq for SuiMoveNormalizedModule {
     }
 }
 
-impl<S: Ord + ToString> From<&NormalizedModule<S>> for SuiMoveNormalizedModule {
+impl<S: std::hash::Hash + Eq + ToString> From<&NormalizedModule<S>> for SuiMoveNormalizedModule {
     fn from(module: &NormalizedModule<S>) -> Self {
         Self {
             file_format_version: module.file_format_version,

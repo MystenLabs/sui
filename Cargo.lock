@@ -7402,6 +7402,7 @@ version = "0.0.3"
 dependencies = [
  "anyhow",
  "enum-compat-util",
+ "indexmap 2.8.0",
  "move-core-types",
  "move-proc-macros",
  "ref-cast",

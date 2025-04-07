@@ -810,7 +810,7 @@ fn entry_fun_compat_tests() {
     let public_entry_fun = max_version(mk_module_entry(pool, Visibility::Public as u8, true));
     // NO function
     let mut no_fun = private_fun.clone();
-    no_fun.functions = BTreeMap::new();
+    no_fun.functions.clear();
 
     let mut valid_combos = vec![
         // Can transition from a private entry fun to anything

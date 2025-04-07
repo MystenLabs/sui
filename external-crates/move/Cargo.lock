@@ -1866,6 +1866,7 @@ dependencies = [
  "arbitrary",
  "enum-compat-util",
  "getrandom 0.2.15",
+ "indexmap 2.8.0",
  "move-core-types",
  "move-proc-macros",
  "proptest",

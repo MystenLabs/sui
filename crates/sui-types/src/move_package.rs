@@ -28,6 +28,7 @@ use serde::{Deserialize, Serialize};
 use serde_with::serde_as;
 use serde_with::Bytes;
 use std::collections::{BTreeMap, BTreeSet};
+use std::hash::Hash;
 use sui_protocol_config::ProtocolConfig;
 
 // TODO: robust MovePackage tests
@@ -525,7 +526,7 @@ impl MovePackage {
     }
     /// If `include_code` is set to `false`, the normalized module will skip function bodies
     /// but still include the signatures.
-    pub fn normalize<S: Ord + Clone + ToString, Pool: normalized::StringPool<String = S>>(
+    pub fn normalize<S: Hash + Eq + Clone + ToString, Pool: normalized::StringPool<String = S>>(
         &self,
         pool: &mut Pool,
         binary_config: &BinaryConfig,
@@ -604,7 +605,7 @@ pub fn is_test_fun(name: &IdentStr, module: &CompiledModule, fn_info_map: &FnInf
 /// include the signatures.
 pub fn normalize_modules<
     'a,
-    S: Ord + Clone + ToString,
+    S: Hash + Eq + Clone + ToString,
     Pool: normalized::StringPool<String = S>,
     I,
 >(
@@ -634,7 +635,7 @@ where
 /// include the signatures.
 pub fn normalize_deserialized_modules<
     'a,
-    S: Ord + Clone + ToString,
+    S: Hash + Eq + Clone + ToString,
     Pool: normalized::StringPool<String = S>,
     I,
 >(

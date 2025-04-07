@@ -9,6 +9,7 @@ use crate::file_format::{
     StructDefinition, StructDefinitionIndex, StructFieldInformation, TypeParameterIndex,
     VariantDefinition, VariantHandleIndex, VariantInstantiationHandleIndex, VariantTag, Visibility,
 };
+use indexmap::IndexMap;
 use move_core_types::{
     account_address::AccountAddress,
     identifier::{IdentStr, Identifier},
@@ -16,11 +17,8 @@ use move_core_types::{
 };
 use serde::{Deserialize, Serialize};
 use std::{
-    borrow::Borrow,
-    collections::{BTreeMap, BTreeSet},
+    borrow::Borrow, collections::HashSet, fmt::Debug, hash::Hash, ops::Deref, rc::Rc, sync::Arc,
 };
-use std::{fmt::Debug, ops::Deref};
-use std::{rc::Rc, sync::Arc};
 
 pub trait StringPool {
     type String;
@@ -99,16 +97,16 @@ struct Tables<S> {
 /// function declarations.
 #[cfg_attr(test, derive(Clone))]
 #[derive(Debug)]
-pub struct Module<S: Ord> {
+pub struct Module<S: Hash + Eq> {
     #[allow(unused)]
     tables: Tables<S>,
     pub id: ModuleId<S>,
     pub file_format_version: u32,
     pub dependencies: Vec<ModuleId<S>>,
     pub friends: Vec<ModuleId<S>>,
-    pub structs: BTreeMap<S, Rc<Struct<S>>>,
-    pub enums: BTreeMap<S, Rc<Enum<S>>>,
-    pub functions: BTreeMap<S, Rc<Function<S>>>,
+    pub structs: IndexMap<S, Rc<Struct<S>>>,
+    pub enums: IndexMap<S, Rc<Enum<S>>>,
+    pub functions: IndexMap<S, Rc<Function<S>>>,
     pub constants: Vec<Rc<Constant<S>>>,
 }
 
@@ -605,7 +603,7 @@ impl<S> Tables<S> {
     }
 }
 
-impl<S: Ord> Module<S> {
+impl<S: Hash + Eq> Module<S> {
     /// Extract a normalized module from a `CompiledModule`. The module `m` should be verified,
     /// particularly with regards to correct offsets and bounds.
     /// If `include_code` is `false`, the bodies of the functions are not included but the
@@ -682,9 +680,9 @@ impl<S: Ord> Module<S> {
 
     /// Panics if called with `include_code` set to `false`.
     pub fn equals(&self, other: &Self) -> bool {
-        fn function_equals<S: Ord>(
-            functions: &BTreeMap<S, Rc<Function<S>>>,
-            other_functions: &BTreeMap<S, Rc<Function<S>>>,
+        fn function_equals<S: Hash + Eq>(
+            functions: &IndexMap<S, Rc<Function<S>>>,
+            other_functions: &IndexMap<S, Rc<Function<S>>>,
         ) -> bool {
             functions.len() == other_functions.len()
                 && functions
@@ -1281,7 +1279,7 @@ impl StringPool for NoPool {
     }
 }
 
-#[derive(Clone, PartialEq, Eq, PartialOrd, Ord, Debug)]
+#[derive(Clone, PartialEq, Eq, PartialOrd, Ord, Debug, Hash)]
 pub struct RcIdentifier(Rc<Identifier>);
 
 impl Borrow<str> for RcIdentifier {
@@ -1316,11 +1314,11 @@ impl std::fmt::Display for RcIdentifier {
     }
 }
 
-pub struct RcPool(BTreeSet<RcIdentifier>);
+pub struct RcPool(HashSet<RcIdentifier>);
 
 impl RcPool {
     pub fn new() -> Self {
-        Self(BTreeSet::new())
+        Self(HashSet::new())
     }
 }
 
@@ -1343,7 +1341,7 @@ impl StringPool for RcPool {
     }
 }
 
-#[derive(Clone, PartialEq, Eq, PartialOrd, Ord, Debug)]
+#[derive(Clone, PartialEq, Eq, PartialOrd, Ord, Debug, Hash)]
 pub struct ArcIdentifier(Arc<Identifier>);
 
 impl Borrow<str> for ArcIdentifier {
@@ -1378,11 +1376,11 @@ impl std::fmt::Display for ArcIdentifier {
     }
 }
 
-pub struct ArcPool(BTreeSet<ArcIdentifier>);
+pub struct ArcPool(HashSet<ArcIdentifier>);
 
 impl ArcPool {
     pub fn new() -> Self {
-        Self(BTreeSet::new())
+        Self(HashSet::new())
     }
 }
 
