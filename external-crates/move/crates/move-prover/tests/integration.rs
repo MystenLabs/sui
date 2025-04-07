@@ -1,7 +1,6 @@
 use codespan_reporting::term::termcolor::Buffer;
 use codespan_reporting::term::termcolor::{ColorChoice, StandardStream, WriteColor};
 use glob;
-use move_compiler::diagnostics::warning_filters::WarningFiltersBuilder;
 use move_compiler::editions::Flavor;
 use move_package::{BuildConfig as MoveBuildConfig, ModelConfig};
 use move_prover::run_boogie_gen;
@@ -64,7 +63,11 @@ fn run_prover(file_path: &PathBuf) -> String {
 
                 // Run the prover with the buffer to capture all output
                 match run_move_prover_with_model(&model, &mut error_buffer, options, None) {
-                    Ok(_) => "Verification successful".to_string(),
+                    Ok(_) => {
+                        let error_output =
+                            String::from_utf8_lossy(&error_buffer.into_inner()).to_string();
+                        format!("Verification successful\n{}", error_output)
+                    }
                     Err(err) => {
                         // Get the captured error output as string
                         let error_output =
