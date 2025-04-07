@@ -4,7 +4,7 @@
 use std::{
     collections::{BTreeMap, BTreeSet},
     path::PathBuf,
-    sync::{Arc, LazyLock},
+    sync::Arc,
 };
 
 use crate::normalized::{self, ModuleId, QualifiedMemberId, TModuleId};
@@ -198,7 +198,7 @@ impl Model<WITH_SOURCE> {
                 (*addr, data)
             })
             .collect();
-        let model = Self {
+        let mut model = Self {
             files: [files],
             root_package_name,
             root_named_address_map,
@@ -206,6 +206,8 @@ impl Model<WITH_SOURCE> {
             compiled,
             packages,
         };
+        model.compute_dependencies();
+        model.compute_function_dependencies();
         model.check_invariants();
         Ok(model)
     }
@@ -234,7 +236,7 @@ impl Model<WITHOUT_SOURCE> {
             .iter()
             .map(|(a, n)| (*n, *a))
             .collect();
-        let model = Self {
+        let mut model = Self {
             files: [],
             root_package_name: None,
             root_named_address_map,
@@ -242,6 +244,8 @@ impl Model<WITHOUT_SOURCE> {
             compiled,
             packages,
         };
+        model.compute_dependencies();
+        model.compute_function_dependencies();
         model.check_invariants();
         model
     }
@@ -497,11 +501,11 @@ impl<'a, const HAS_SOURCE: SourceKind> Module<'a, HAS_SOURCE> {
     }
 
     pub fn deps(&self) -> &'a BTreeMap<ModuleId, /* is immediate */ bool> {
-        &self.compiled.deps
+        &self.data.deps
     }
 
     pub fn used_by(&self) -> &'a BTreeMap<ModuleId, /* is immediate */ bool> {
-        &self.compiled.used_by
+        &self.data.used_by
     }
 
     pub fn kind(self) -> Kind<Module<'a, WITH_SOURCE>, Module<'a, WITHOUT_SOURCE>> {
@@ -722,8 +726,6 @@ impl<'a> Variant<'a, WITH_SOURCE> {
     }
 }
 
-static MACRO_EMPTY_SET: LazyLock<BTreeSet<QualifiedMemberId>> = LazyLock::new(BTreeSet::new);
-
 impl<'a, const HAS_SOURCE: SourceKind> Function<'a, HAS_SOURCE> {
     pub fn name(&self) -> Symbol {
         self.name
@@ -748,18 +750,12 @@ impl<'a, const HAS_SOURCE: SourceKind> Function<'a, HAS_SOURCE> {
 
     /// Returns an the functions called by this function. This will be empty for `macro`s.
     pub fn calls(&self) -> &'a BTreeSet<QualifiedMemberId> {
-        match self.compiled {
-            Some(f) => &f.calls,
-            None => &MACRO_EMPTY_SET,
-        }
+        &self.data.calls
     }
 
     /// Returns the functions that call this function. This will be empty for `macro`s.
     pub fn called_by(&self) -> &'a BTreeSet<QualifiedMemberId> {
-        match self.compiled {
-            Some(f) => &f.called_by,
-            None => &MACRO_EMPTY_SET,
-        }
+        &self.data.called_by
     }
 
     pub fn kind(self) -> Kind<Function<'a, WITH_SOURCE>, Function<'a, WITHOUT_SOURCE>> {
@@ -821,6 +817,12 @@ impl<'a> NamedConstant<'a> {
 impl TModuleId for ModuleId {
     fn module_id(&self) -> ModuleId {
         *self
+    }
+}
+
+impl TModuleId for &ModuleId {
+    fn module_id(&self) -> ModuleId {
+        **self
     }
 }
 
@@ -893,6 +895,8 @@ struct ModuleData<const HAS_SOURCE: SourceKind> {
     named_constants: [IndexMap<Symbol, ConstantData>; HAS_SOURCE],
     // mapping from file_format::ConstantPoolIndex to source constant name, if any
     constant_names: [Vec<Option<Symbol>>; HAS_SOURCE],
+    deps: BTreeMap<ModuleId, /* is immediate */ bool>,
+    used_by: BTreeMap<ModuleId, /* is immediate */ bool>,
 }
 
 struct StructData {}
@@ -904,7 +908,11 @@ struct EnumData {
 
 struct VariantData {}
 
-struct FunctionData {}
+struct FunctionData {
+    calls: BTreeSet<QualifiedMemberId>,
+    // reverse mapping of function_immediate_deps
+    called_by: BTreeSet<QualifiedMemberId>,
+}
 
 struct ConstantData {
     compiled_index: Option<file_format::ConstantPoolIndex>,
@@ -913,6 +921,123 @@ struct ConstantData {
 //**************************************************************************************************
 // Construction
 //**************************************************************************************************
+
+impl<const WITH_SOURCE: SourceKind> Model<WITH_SOURCE> {
+    fn compute_dependencies(&mut self) {
+        fn visit(
+            packages: &BTreeMap<AccountAddress, normalized::Package>,
+            acc: &mut BTreeMap<ModuleId, BTreeMap<ModuleId, bool>>,
+            id: ModuleId,
+            module: &normalized::Module,
+        ) {
+            if acc.contains_key(&id) {
+                return;
+            }
+
+            for immediate_dep in &module.immediate_dependencies {
+                let unit = &packages[&immediate_dep.address].modules[&immediate_dep.name];
+                visit(packages, acc, *immediate_dep, unit);
+            }
+            let mut deps = BTreeMap::new();
+            for immediate_dep in &module.immediate_dependencies {
+                deps.insert(*immediate_dep, true);
+                for transitive_dep in acc.get(immediate_dep).unwrap().keys() {
+                    if !deps.contains_key(transitive_dep) {
+                        deps.insert(*transitive_dep, false);
+                    }
+                }
+            }
+            acc.insert(id, deps);
+        }
+
+        assert!(self.packages.values().all(|p| p
+            .modules
+            .values()
+            .all(|m| m.deps.is_empty() && m.used_by.is_empty())));
+        let mut module_deps = BTreeMap::new();
+        for (a, package) in &self.compiled.packages {
+            for (m, module) in &package.modules {
+                let id = (a, m).module_id();
+                visit(&self.compiled.packages, &mut module_deps, id, module);
+            }
+        }
+        let mut module_used_by = module_deps
+            .keys()
+            .map(|id| (*id, BTreeMap::new()))
+            .collect::<BTreeMap<_, _>>();
+        for (id, deps) in &module_deps {
+            for (dep, immediate) in deps {
+                let immediate = *immediate;
+                let used_by = module_used_by.get_mut(dep).unwrap();
+                let is_immediate = used_by.entry(*id).or_insert(false);
+                *is_immediate = *is_immediate || immediate;
+            }
+        }
+        for (a, package) in &mut self.packages {
+            for (m, data) in &mut package.modules {
+                let id = (a, m).module_id();
+                data.deps = module_deps.remove(&id).unwrap();
+                data.used_by = module_used_by.remove(&id).unwrap();
+            }
+        }
+    }
+
+    fn compute_function_dependencies(&mut self) {
+        assert!(self.packages.values().all(|p| p.modules.values().all(|m| m
+            .functions
+            .values()
+            .all(|f| f.calls.is_empty() && f.called_by.is_empty()))));
+        let mut function_immediate_deps: BTreeMap<_, BTreeSet<_>> = BTreeMap::new();
+        let modules = self
+            .compiled
+            .packages
+            .iter()
+            .flat_map(|(a, p)| p.modules.iter().map(move |(m, u)| ((a, m).module_id(), u)));
+        for (id, module) in modules {
+            for fdef in module.functions.values() {
+                let fname = fdef.name;
+                let qualified_id = (id, fname);
+                let callees = fdef
+                    .code()
+                    .iter()
+                    .filter_map(|instr| match instr {
+                        normalized::Bytecode::Call(callee) => {
+                            Some((callee.module, callee.function))
+                        }
+                        _ => None,
+                    })
+                    .collect();
+                function_immediate_deps.insert(qualified_id, callees);
+            }
+        }
+
+        // ensure the map is populated for all functions
+        let mut function_called_by = function_immediate_deps
+            .values()
+            .flatten()
+            .map(|callee| (*callee, BTreeSet::new()))
+            .collect::<BTreeMap<_, _>>();
+        for (caller, callees) in &function_immediate_deps {
+            for callee in callees {
+                function_called_by.get_mut(callee).unwrap().insert(*caller);
+            }
+        }
+        for (a, package) in &mut self.packages {
+            for (m, data) in &mut package.modules {
+                let id = (a, m).module_id();
+                for (fname, fdata) in &mut data.functions {
+                    let qualified_id = (id, *fname);
+                    fdata.calls = function_immediate_deps
+                        .remove(&qualified_id)
+                        .unwrap_or(BTreeSet::new());
+                    fdata.called_by = function_called_by
+                        .remove(&qualified_id)
+                        .unwrap_or(BTreeSet::new());
+                }
+            }
+        }
+    }
+}
 
 impl PackageData<WITH_SOURCE> {
     fn from_source(
@@ -1002,6 +1127,9 @@ impl ModuleData<WITH_SOURCE> {
             functions,
             named_constants: [named_constants],
             constant_names: [constant_names],
+            // computed later
+            deps: BTreeMap::new(),
+            used_by: BTreeMap::new(),
         }
     }
 }
@@ -1036,6 +1164,9 @@ impl ModuleData<WITHOUT_SOURCE> {
             functions,
             named_constants: [],
             constant_names: [],
+            // computed later
+            deps: BTreeMap::new(),
+            used_by: BTreeMap::new(),
         }
     }
 }
@@ -1067,7 +1198,11 @@ impl VariantData {
 
 impl FunctionData {
     fn new() -> Self {
-        Self {}
+        Self {
+            // computed later
+            calls: BTreeSet::new(),
+            called_by: BTreeSet::new(),
+        }
     }
 }
 

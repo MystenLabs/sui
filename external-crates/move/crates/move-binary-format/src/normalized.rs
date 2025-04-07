@@ -102,7 +102,7 @@ pub struct Module<S: Hash + Eq> {
     code_included: bool,
     pub id: ModuleId<S>,
     pub file_format_version: u32,
-    pub dependencies: Vec<ModuleId<S>>,
+    pub immediate_dependencies: Vec<ModuleId<S>>,
     pub friends: Vec<ModuleId<S>>,
     pub structs: IndexMap<S, Rc<Struct<S>>>,
     pub enums: IndexMap<S, Rc<Enum<S>>>,
@@ -627,7 +627,7 @@ impl<S: Hash + Eq> Module<S> {
             .into_iter()
             .map(|f| ModuleId::new(pool, &f))
             .collect();
-        let dependencies = m
+        let immediate_dependencies = m
             .immediate_dependencies()
             .into_iter()
             .map(|d| ModuleId::new(pool, &d))
@@ -662,7 +662,7 @@ impl<S: Hash + Eq> Module<S> {
             structs,
             enums,
             functions,
-            dependencies,
+            immediate_dependencies,
             constants,
         }
     }
@@ -693,7 +693,7 @@ impl<S: Hash + Eq> Module<S> {
             code_included,
             id,
             file_format_version,
-            dependencies,
+            immediate_dependencies,
             friends,
             structs,
             enums,
@@ -706,7 +706,7 @@ impl<S: Hash + Eq> Module<S> {
         }
         id == &other.id
             && file_format_version == &other.file_format_version
-            && dependencies == &other.dependencies
+            && immediate_dependencies == &other.immediate_dependencies
             && friends == &other.friends
             && structs == &other.structs
             && enums == &other.enums
