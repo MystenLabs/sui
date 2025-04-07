@@ -40,7 +40,7 @@ jobs:
           git checkout -b "sui-prover"
           git add .
           git commit -m "Automated version update"
-          git push https://x-access-token:${{ secrets.PAT_TOKEN }}@github.com/asymptotic-code/homebrew-sui-prover.git sui-prover
+          git push -f https://x-access-token:${{ secrets.PAT_TOKEN }}@github.com/asymptotic-code/homebrew-sui-prover.git sui-prover
 
       - name: Create Pull Request
         run: |
