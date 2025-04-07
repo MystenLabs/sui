@@ -72,6 +72,6 @@ cd ../../..
 git clone https://github.com/asymptotic-code/sui-prover-workshop.git prover-workshop
 cd prover-workshop
 
-sui-prover
+sui-prover --split-paths=4
 
 echo "All tests passed!"

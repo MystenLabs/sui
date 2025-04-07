@@ -1,0 +1,13 @@
+---
+source: crates/move-prover/tests/integration.rs
+expression: output
+---
+Verification failed: exiting with bytecode transformation errors
+error[E0013]: immutable global variable T used as mutable:
+   ┌─ tests/inputs/ghost_variable_compiler_checks/no_mut.move:9:5
+   │
+ 9 │     ghost::declare_global_mut<T, bool>();
+   │     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   ·
+20 │     ghost::declare_global<T, bool>();
+   │     --------------------------------
