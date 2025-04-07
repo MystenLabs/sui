@@ -1,9 +1,7 @@
 use codespan_reporting::term::termcolor::Buffer;
-use codespan_reporting::term::termcolor::{ColorChoice, StandardStream, WriteColor};
 use glob;
 use move_compiler::editions::Flavor;
 use move_package::{BuildConfig as MoveBuildConfig, ModelConfig};
-use move_prover::run_boogie_gen;
 use move_prover::run_move_prover_with_model;
 use regex::Regex;
 use std::path::{Path, PathBuf};
