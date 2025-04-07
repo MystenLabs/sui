@@ -8,6 +8,7 @@ pub mod compiled;
 pub mod compiled_model;
 pub mod display;
 pub mod model;
+pub mod normalized;
 pub mod source_model;
 
 pub use compiled::ModuleId;

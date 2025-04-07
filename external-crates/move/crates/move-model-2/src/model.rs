@@ -7,9 +7,12 @@ use std::{
     sync::{Arc, LazyLock},
 };
 
-use crate::compiled::{self, ModuleId, QualifiedMemberId, TModuleId};
+use crate::{
+    compiled::{self, ModuleId, QualifiedMemberId, TModuleId},
+    normalized,
+};
 use indexmap::IndexMap;
-use move_binary_format::{file_format, CompiledModule};
+use move_binary_format::{file_format, normalized, CompiledModule};
 use move_bytecode_source_map::source_map::SourceMap;
 use move_compiler::{
     self,
@@ -47,7 +50,7 @@ pub struct Model<const HAS_SOURCE: SourceKind> {
     root_named_address_map: BTreeMap<Symbol, AccountAddress>,
     root_package_name: Option<Symbol>,
     info: [Arc<TypingProgramInfo>; HAS_SOURCE],
-    compiled: compiled::Packages,
+    normalized: normalized::Packages,
     packages: BTreeMap<AccountAddress, PackageData<HAS_SOURCE>>,
 }
 
@@ -187,16 +190,15 @@ impl Model<WITH_SOURCE> {
             })
             .collect();
         let compiled_modules = compiled_units
-            .into_iter()
-            .flat_map(|(_addr, units)| units.into_values().map(|unit| unit.module))
-            .collect();
-        let compiled = compiled::Packages::new(compiled_modules);
+            .iter()
+            .flat_map(|(_addr, units)| units.values().map(|unit| &unit.module));
+        let normalized = normalized::Packages::new(compiled_modules);
         let model = Self {
             files: [files],
             root_package_name,
             root_named_address_map,
             info: [info],
-            compiled,
+            normalized,
             packages,
         };
         model.check_invariants();
@@ -213,8 +215,8 @@ impl Model<WITHOUT_SOURCE> {
         named_address_reverse_map: &BTreeMap<AccountAddress, Symbol>,
         modules: Vec<CompiledModule>,
     ) -> Self {
-        let compiled = compiled::Packages::new(modules);
-        let packages = compiled
+        let normalized = normalized::Packages::new(&modules);
+        let packages = normalized
             .packages
             .values()
             .map(|package| {
@@ -232,7 +234,7 @@ impl Model<WITHOUT_SOURCE> {
             root_package_name: None,
             root_named_address_map,
             info: [],
-            compiled,
+            normalized,
             packages,
         };
         model.check_invariants();
@@ -284,8 +286,8 @@ impl<const HAS_SOURCE: SourceKind> Model<HAS_SOURCE> {
             .flat_map(move |(a, p)| p.modules.keys().map(move |m| self.module((a, m))))
     }
 
-    pub fn compiled_packages(&self) -> &compiled::Packages {
-        &self.compiled
+    pub fn compiled_packages(&self) -> &normalized::Packages {
+        &self.normalized
     }
 
     pub fn kind(&self) -> Kind<&Model<WITH_SOURCE>, &Model<WITHOUT_SOURCE>> {
@@ -305,7 +307,7 @@ impl<const HAS_SOURCE: SourceKind> Model<HAS_SOURCE> {
         {
             for (p, package) in &self.packages {
                 for (m, module) in &package.modules {
-                    let compiled = &self.compiled.packages[p].modules[m];
+                    let compiled = &self.normalized.packages[p].modules[m];
                     for (idx, s) in module.structs.keys().enumerate() {
                         let map_idx = module.structs.get_index_of(s).unwrap();
                         let compiled_map_idx = compiled.structs.get_index_of(s).unwrap();
