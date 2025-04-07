@@ -15,7 +15,11 @@ use codespan_reporting::{
 };
 #[allow(unused_imports)]
 use log::{debug, info, warn};
-use move_compiler::{diagnostics::warning_filters::{WarningFilter, WarningFiltersBuilder}, shared::PackagePaths, Flags};
+use move_compiler::{
+    diagnostics::warning_filters::{WarningFilter, WarningFiltersBuilder},
+    shared::PackagePaths,
+    Flags,
+};
 use move_docgen::Docgen;
 use move_model::{
     code_writer::CodeWriter, model::GlobalEnv, parse_addresses_from_options,
@@ -27,8 +31,7 @@ use move_prover_boogie_backend::{
 use move_stackless_bytecode::{
     escape_analysis::EscapeAnalysisProcessor,
     function_target_pipeline::{
-        FunctionTargetPipeline, FunctionTargetsHolder,
-        FunctionVariant, VerificationFlavor,
+        FunctionTargetPipeline, FunctionTargetsHolder, FunctionVariant, VerificationFlavor,
     },
     number_operation::GlobalNumberOperationState,
     pipeline_factory,
@@ -60,7 +63,7 @@ pub fn run_move_prover<W: WriteColor>(
     let mut filter = None;
     if options.prover.stable_test_output {
         // NOTE: This initializes a warning filter that suppresses all warnings.
-        // `WarningFilter::All(None)` means filtering out *all* warnings, 
+        // `WarningFilter::All(None)` means filtering out *all* warnings,
         // related to Move compiling regardless of their category or origin.
         let mut f = WarningFiltersBuilder::new_for_source();
         f.add(WarningFilter::All(None));

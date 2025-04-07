@@ -39,7 +39,10 @@ use move_stackless_bytecode::{
 // DEBUG
 // use backtrace::Backtrace;
 use crate::{
-    boogie_helpers::{boogie_inst_suffix, boogie_struct_name, boogie_struct_name_prefix},
+    boogie_helpers::{
+        boogie_enum_name, boogie_enum_name_prefix, boogie_inst_suffix, boogie_struct_name,
+        boogie_struct_name_prefix,
+    },
     options::{BoogieOptions, VectorTheory},
     prover_task_runner::{ProverTask, ProverTaskRunner, RunBoogieWithSeeds},
 };
@@ -1499,17 +1502,11 @@ impl ModelValue {
                         if struct_env.is_native()
                             && struct_env.get_full_name_str() == "integer::Integer"
                         {
-                            Some(PrettyDoc::text(format!(
-                                "{}",
-                                self.extract_integer()?
-                            )))
+                            Some(PrettyDoc::text(format!("{}", self.extract_integer()?)))
                         } else if struct_env.is_native()
                             && struct_env.get_full_name_str() == "real::Real"
                         {
-                            Some(PrettyDoc::text(format!(
-                                "{}",
-                                self.extract_real()?
-                            )))
+                            Some(PrettyDoc::text(format!("{}", self.extract_real()?)))
                         } else {
                             self.pretty_struct(wrapper, model, &struct_env, params)
                         }
@@ -1665,10 +1662,45 @@ impl ModelValue {
         &self,
         wrapper: &BoogieWrapper,
         model: &Model,
-        struct_env: &EnumEnv,
+        enum_env: &EnumEnv,
         inst: &[Type],
     ) -> Option<PrettyDoc> {
-        Some(PrettyDoc::text("<unimplemented enum pretty printer>"))
+        let enum_name = &boogie_enum_name(enum_env, inst);
+        let enum_name_prefix = boogie_enum_name_prefix(enum_env);
+        let values = self
+            .extract_list(enum_name)
+            // It appears sometimes keys are represented witout, sometimes with enclosing
+            // bars?
+            .or_else(|| self.extract_list(&format!("|{}|", enum_name)))
+            // if the instantiated type constructor is not an exact match,
+            // check if the type constructor without type parameters is a
+            // prefix. This can happen in a function with type parameters
+            // that are instantiated. The type instances are not recovered,
+            // so the fields of the struct with parametric types are displayed
+            // in debug format.
+            .or_else(|| self.extract_list_ctor_prefix(&enum_name_prefix))
+            // like before, check with '|' as well
+            .or_else(|| self.extract_list_ctor_prefix(&format!("|{}", enum_name_prefix)))?;
+        let variant_index = values.last()?.extract_number()?;
+        let variants = enum_env.get_variants().collect_vec();
+        let variant_env = variants.get(variant_index)?;
+        let entries = variant_env
+            .get_fields()
+            .enumerate()
+            .map(|(i, f)| {
+                let ty = f.get_type().instantiate(inst);
+                let default = ModelValue::error();
+                let v = values.get(i).unwrap_or(&default);
+                let vp = v.pretty_or_raw(wrapper, model, &ty);
+                PrettyDoc::text(format!("{}", f.get_name().display(enum_env.symbol_pool())))
+                    .append(PrettyDoc::text(" ="))
+                    .append(PrettyDoc::line().append(vp).nest(2).group())
+            })
+            .collect_vec();
+        Some(
+            PrettyDoc::text(variant_env.get_full_name_str())
+                .append(Self::pretty_vec_or_struct_body(entries)),
+        )
     }
 
     /// Pretty prints a table.

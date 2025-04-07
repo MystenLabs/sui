@@ -1,9 +1,8 @@
 ---
 source: crates/move-prover/tests/integration.rs
 expression: output
-snapshot_kind: text
 ---
-Verification failed: exiting with verification errors
+exiting with verification errors
 error: prover::ensures assertion does not hold
    ┌─ tests/inputs/reals.fail.move:20:3
    │
@@ -12,7 +11,7 @@ error: prover::ensures assertion does not hold
    │
    =     at tests/inputs/reals.fail.move:16: foo_spec
    =         x = 0u64
-   =     at ../../../../crates/sui-framework/packages/move-stdlib/sources/u64.move:90
+   =     at tests/../../../../../crates/sui-framework/packages/move-stdlib/sources/u64.move:90
    =         x = 0u64
    =     at tests/inputs/reals.fail.move:7: foo
    =         result = 1u64
@@ -20,13 +19,13 @@ error: prover::ensures assertion does not hold
    =         res#1#0 = 1u64
    =     at tests/inputs/reals.fail.move:19: foo_spec
    =         x = 1u64
-   =     at ../../../../crates/sui-framework/packages/move-stdlib/sources/real.move:28: from_u64
+   =     at tests/../../../../../crates/sui-framework/packages/move-stdlib/sources/real.move:28: from_u64
    =         result = 1.0
-   =     at ../../../../crates/sui-framework/packages/move-stdlib/sources/real.move:29: from_u64
+   =     at tests/../../../../../crates/sui-framework/packages/move-stdlib/sources/real.move:29: from_u64
    =         x = 7u64
-   =     at ../../../../crates/sui-framework/packages/move-stdlib/sources/real.move:28: from_u64
+   =     at tests/../../../../../crates/sui-framework/packages/move-stdlib/sources/real.move:28: from_u64
    =         result = 7.0
-   =     at ../../../../crates/sui-framework/packages/move-stdlib/sources/real.move:29: from_u64
+   =     at tests/../../../../../crates/sui-framework/packages/move-stdlib/sources/real.move:29: from_u64
    =         the_real = 1.0/7.0
    =     at tests/inputs/reals.fail.move:12: show_real
    =         result = 1.0/7.0

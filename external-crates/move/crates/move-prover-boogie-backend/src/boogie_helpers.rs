@@ -22,7 +22,8 @@ use move_model::{
 };
 use move_stackless_bytecode::{
     ast::{MemoryLabel, TempIndex},
-    function_target::FunctionTarget, stackless_bytecode::Constant
+    function_target::FunctionTarget,
+    stackless_bytecode::Constant,
 };
 
 use crate::options::BoogieOptions;
@@ -99,10 +100,17 @@ pub fn boogie_field_update(field_env: &FieldEnv<'_>, inst: &[Type]) -> String {
 /// Return boogie name of given enum.
 pub fn boogie_enum_name(enum_env: &EnumEnv<'_>, inst: &[Type]) -> String {
     format!(
-        "${}_{}{}",
+        "{}{}",
+        boogie_enum_name_prefix(enum_env),
+        boogie_inst_suffix(enum_env.module_env.env, inst)
+    )
+}
+
+pub fn boogie_enum_name_prefix(enum_env: &EnumEnv<'_>) -> String {
+    format!(
+        "${}_{}",
         boogie_module_name(&enum_env.module_env),
         enum_env.get_name().display(enum_env.symbol_pool()),
-        boogie_inst_suffix(enum_env.module_env.env, inst)
     )
 }
 

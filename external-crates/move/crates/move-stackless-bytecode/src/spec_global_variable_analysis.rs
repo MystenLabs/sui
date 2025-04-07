@@ -315,18 +315,79 @@ impl FunctionTargetProcessor for SpecGlobalVariableAnalysisProcessor {
 
         if targets.is_spec(&func_env.get_qualified_id()) {
             let spec_info = get_info(&data);
-            let all_vars = spec_info.all_vars().collect();
-            let undeclared_imm_vars = info.imm_vars().difference(&all_vars).collect_vec();
-            let undeclared_mut_vars = info
-                .mut_vars()
-                .difference(&spec_info.mut_vars())
-                .collect_vec();
 
-            for var in undeclared_imm_vars {
-                let primary_labels = info
-                    .imm_vars_locs
-                    .get(var)
-                    .unwrap()
+            let spec_vars = spec_info
+                .all_vars()
+                .map(|var| (var[0].clone(), var[1].clone()))
+                .collect::<BTreeMap<_, _>>();
+            for var in info.all_vars() {
+                let var_name = &var[0];
+                let var_ty = &var[1];
+
+                if spec_info.all_vars().contains(&var) {
+                    // check mutability
+                    if info.mut_vars().contains(&var) && !spec_info.mut_vars().contains(&var) {
+                        // if the variable is declared as immutable in spec but used as mutable
+                        let primary_labels = info
+                            .mut_vars_locs
+                            .get(&var)
+                            .unwrap()
+                            .iter()
+                            .map(|loc| Label::primary(loc.file_id(), loc.span()))
+                            .collect();
+                        let spec_var_loc =
+                            spec_info.imm_vars_locs.get(&var).unwrap().first().unwrap();
+                        let secondary_label =
+                            Label::secondary(spec_var_loc.file_id(), spec_var_loc.span());
+                        let diag = Diagnostic::new(Severity::Error)
+                            .with_code("E0013")
+                            .with_message(&format!(
+                                "immutable global variable {} used as mutable:",
+                                var_name
+                                    .display(&func_env.get_named_type_display_ctx())
+                                    .to_string()
+                            ))
+                            .with_labels(primary_labels)
+                            .with_labels(vec![secondary_label]);
+                        func_env.module_env.env.add_diag(diag);
+                    }
+                    continue;
+                }
+
+                let imm_locs = info.imm_vars_locs.get(&var).into_iter().flatten();
+                let mut_locs = info.mut_vars_locs.get(&var).into_iter().flatten();
+                let all_locs = imm_locs.chain(mut_locs).collect::<BTreeSet<_>>();
+
+                if let Some(spec_var_ty) = spec_vars.get(var_name) {
+                    // type mismatch
+                    let primary_labels = all_locs
+                        .iter()
+                        .map(|loc| Label::primary(loc.file_id(), loc.span()))
+                        .collect();
+                    let spec_var = vec![var_name.clone(), spec_var_ty.clone()];
+                    let spec_var_loc = spec_info
+                        .imm_vars_locs
+                        .get(&spec_var)
+                        .unwrap_or_else(|| spec_info.mut_vars_locs.get(&spec_var).unwrap())
+                        .first()
+                        .unwrap();
+                    let secondary_label =
+                        Label::secondary(spec_var_loc.file_id(), spec_var_loc.span());
+                    let diag = Diagnostic::new(Severity::Error)
+                        .with_code("E0012")
+                        .with_message(&format!(
+                            "type mismatch for global variable {}: expected {}, found {}",
+                            var_name.display(&func_env.get_named_type_display_ctx()),
+                            spec_var_ty.display(&func_env.get_named_type_display_ctx()),
+                            var_ty.display(&func_env.get_named_type_display_ctx())
+                        ))
+                        .with_labels(primary_labels)
+                        .with_labels(vec![secondary_label]);
+                    func_env.module_env.env.add_diag(diag);
+                    continue;
+                }
+
+                let primary_labels = all_locs
                     .iter()
                     .map(|loc| Label::primary(loc.file_id(), loc.span()))
                     .collect();
@@ -335,31 +396,8 @@ impl FunctionTargetProcessor for SpecGlobalVariableAnalysisProcessor {
                 let diag = Diagnostic::new(Severity::Error)
                     .with_code("E0011")
                     .with_message(&format!(
-                        "undeclared immutable global variable {}:",
-                        var[0]
-                            .display(&func_env.get_named_type_display_ctx())
-                            .to_string()
-                    ))
-                    .with_labels(primary_labels)
-                    .with_labels(vec![secondary_label]);
-                func_env.module_env.env.add_diag(diag);
-            }
-
-            for var in undeclared_mut_vars {
-                let primary_labels = info
-                    .mut_vars_locs
-                    .get(var)
-                    .unwrap()
-                    .iter()
-                    .map(|loc| Label::primary(loc.file_id(), loc.span()))
-                    .collect();
-                let secondary_label =
-                    Label::secondary(func_env.get_loc().file_id(), func_env.get_loc().span());
-                let diag = Diagnostic::new(Severity::Error)
-                    .with_code("E0012")
-                    .with_message(&format!(
-                        "undeclared mutable global variable {}:",
-                        var[0]
+                        "undeclared global variable {}:",
+                        var_name
                             .display(&func_env.get_named_type_display_ctx())
                             .to_string()
                     ))
@@ -381,6 +419,26 @@ impl FunctionTargetProcessor for SpecGlobalVariableAnalysisProcessor {
                 })
                 .collect();
         } else {
+            for bc in &data.code {
+                if let Bytecode::Call(attr_id, _, Operation::Function(module_id, fun_id, _), _, _) =
+                    bc
+                {
+                    let callee_id = module_id.qualified(*fun_id);
+                    if callee_id == func_env.module_env.env.declare_global_qid()
+                        || callee_id == func_env.module_env.env.declare_global_mut_qid()
+                    {
+                        let loc = FunctionTarget::new(func_env, &data).get_bytecode_loc(*attr_id);
+                        let diag = Diagnostic::new(Severity::Error)
+                            .with_code("E0014")
+                            .with_message(
+                                "unexpected ghost variable declaration. Declare ghost variables in #[spec] functions.",
+                            )
+                            .with_labels(vec![Label::primary(loc.file_id(), loc.span())]);
+                        func_env.module_env.env.add_diag(diag);
+                    }
+                }
+            }
+
             set_info(func_env, &mut data, info);
         }
 
