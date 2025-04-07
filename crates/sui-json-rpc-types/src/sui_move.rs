@@ -91,17 +91,20 @@ pub enum SuiMoveNormalizedType {
     U256,
     Address,
     Signer,
-    #[serde(rename_all = "camelCase")]
-    Struct {
-        address: String,
-        module: String,
-        name: String,
-        type_arguments: Vec<SuiMoveNormalizedType>,
-    },
+    Struct(Box<SuiMoveNormalizedStructType>),
     Vector(Box<SuiMoveNormalizedType>),
     TypeParameter(SuiMoveTypeParameterIndex),
     Reference(Box<SuiMoveNormalizedType>),
     MutableReference(Box<SuiMoveNormalizedType>),
+}
+
+#[derive(Serialize, Deserialize, Debug, JsonSchema, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct SuiMoveNormalizedStructType {
+    pub address: String,
+    pub module: String,
+    pub name: String,
+    pub type_arguments: Vec<SuiMoveNormalizedType>,
 }
 
 #[derive(Serialize, Deserialize, Debug, JsonSchema, Clone)]
@@ -299,7 +302,7 @@ impl<S: ToString> From<&NormalizedType<S>> for SuiMoveNormalizedType {
                     name,
                     type_arguments,
                 } = &**dt;
-                SuiMoveNormalizedType::Struct {
+                SuiMoveNormalizedType::Struct(Box::new(SuiMoveNormalizedStructType {
                     address: address.to_hex_literal(),
                     module: module.to_string(),
                     name: name.to_string(),
@@ -307,7 +310,7 @@ impl<S: ToString> From<&NormalizedType<S>> for SuiMoveNormalizedType {
                         .iter()
                         .map(SuiMoveNormalizedType::from)
                         .collect::<Vec<SuiMoveNormalizedType>>(),
-                }
+                }))
             }
             NormalizedType::Vector(v) => {
                 SuiMoveNormalizedType::Vector(Box::new(SuiMoveNormalizedType::from(&**v)))
@@ -666,4 +669,9 @@ impl From<MoveStruct> for SuiMoveStruct {
                 .collect(),
         }
     }
+}
+
+#[test]
+fn enum_size() {
+    assert_eq!(std::mem::size_of::<SuiMoveNormalizedType>(), 16);
 }

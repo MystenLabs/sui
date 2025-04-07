@@ -4,8 +4,8 @@
 use anyhow::anyhow;
 use move_binary_format::file_format::{Ability, AbilitySet, Visibility};
 use sui_json_rpc_types::{
-    SuiMoveAbility, SuiMoveAbilitySet, SuiMoveNormalizedFunction, SuiMoveNormalizedType,
-    SuiMoveVisibility,
+    SuiMoveAbility, SuiMoveAbilitySet, SuiMoveNormalizedFunction, SuiMoveNormalizedStructType,
+    SuiMoveNormalizedType, SuiMoveVisibility,
 };
 use sui_package_resolver::{FunctionDef, OpenSignature, OpenSignatureBody, Reference};
 use sui_types::{base_types::ObjectID, Identifier};
@@ -111,12 +111,12 @@ fn normalized_type(sig: &OpenSignatureBody) -> SuiMoveNormalizedType {
         S::U128 => T::U128,
         S::U256 => T::U256,
         S::Vector(sig) => T::Vector(Box::new(normalized_type(sig))),
-        S::Datatype(t, params) => T::Struct {
+        S::Datatype(t, params) => T::Struct(Box::new(SuiMoveNormalizedStructType {
             address: t.package.to_canonical_string(/* with_prefix */ true),
             module: t.module.to_string(),
             name: t.name.to_string(),
             type_arguments: params.iter().map(normalized_type).collect(),
-        },
+        })),
         S::TypeParameter(ix) => T::TypeParameter(*ix),
     }
 }
