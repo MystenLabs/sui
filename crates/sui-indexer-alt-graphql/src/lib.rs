@@ -24,10 +24,20 @@ use extensions::{
 };
 use headers::ContentLength;
 use prometheus::Registry;
+use sui_indexer_alt_reader::pg_reader::db::DbArgs;
+use sui_indexer_alt_reader::system_package_task::{SystemPackageTask, SystemPackageTaskArgs};
+use sui_indexer_alt_reader::{
+    bigtable_reader::{BigtableArgs, BigtableReader},
+    kv_loader::KvLoader,
+    package_resolver::{DbPackageStore, PackageCache},
+    pg_reader::PgReader,
+};
+use sui_package_resolver::Resolver;
 use tokio::{net::TcpListener, task::JoinHandle};
 use tokio_util::sync::CancellationToken;
 use tower_http::cors;
 use tracing::{error, info};
+use url::Url;
 
 use crate::api::query::Query;
 use crate::extensions::logging::{Logging, Session};
@@ -209,13 +219,24 @@ pub fn schema() -> SchemaBuilder<Query, EmptyMutation, EmptySubscription> {
 /// command-line). The service will continue to run until the cancellation token is triggered, and
 /// will signal cancellation on the token when it is shutting down.
 ///
+/// Access to most reads is controlled by the `database_url` -- if it is `None`, those reads will
+/// not work. KV queries can optionally be served by a Bigtable instance, if `bigtable_instance` is
+/// provided, otherwise these requests are served by the database. If a `bigtable_instance` is
+/// provided, the `GOOGLE_APPLICATION_CREDENTIALS` environment variable must point to the
+/// credentials JSON file.
+///
 /// `version` is the version string reported in response headers by the service as part of every
 /// request.
 ///
 /// The service may spin up auxiliary services (such as the system package task) to support itself,
 /// and will clean these up on shutdown as well.
 pub async fn start_rpc(
+    database_url: Option<Url>,
+    bigtable_instance: Option<String>,
+    db_args: DbArgs,
+    bigtable_args: BigtableArgs,
     args: RpcArgs,
+    system_package_task_args: SystemPackageTaskArgs,
     version: &'static str,
     config: RpcConfig,
     registry: &Registry,
@@ -224,6 +245,35 @@ pub async fn start_rpc(
     let rpc = RpcService::new(args, version, schema(), registry, cancel.child_token());
     let metrics = rpc.metrics();
 
+    let pg_reader = PgReader::new(database_url, db_args, registry, cancel.child_token()).await?;
+    let pg_loader = Arc::new(pg_reader.as_data_loader());
+
+    let kv_loader = if let Some(instance_id) = bigtable_instance {
+        let bigtable_reader = BigtableReader::new(
+            instance_id,
+            "indexer-alt-graphql".to_owned(),
+            bigtable_args,
+            registry,
+        )
+        .await?;
+
+        KvLoader::new_with_bigtable(Arc::new(bigtable_reader.as_data_loader()))
+    } else {
+        KvLoader::new_with_pg(pg_loader.clone())
+    };
+
+    let package_resolver = Arc::new(Resolver::new_with_limits(
+        PackageCache::new(DbPackageStore::new(pg_loader.clone())),
+        config.limits.package_resolver(),
+    ));
+
+    let system_package_task = SystemPackageTask::new(
+        system_package_task_args,
+        pg_reader.clone(),
+        package_resolver.clone(),
+        cancel.child_token(),
+    );
+
     let rpc = rpc
         .extension(Timeout::new(config.limits.timeouts()))
         .extension(QueryLimitsChecker::new(
@@ -231,13 +281,19 @@ pub async fn start_rpc(
             metrics,
         ))
         .data(config.limits.pagination())
-        .data(config.limits);
+        .data(config.limits)
+        .data(pg_reader)
+        .data(pg_loader)
+        .data(kv_loader)
+        .data(package_resolver);
 
     let h_rpc = rpc.run().await?;
+    let h_system_package_task = system_package_task.run();
 
     Ok(tokio::spawn(async move {
         let _ = h_rpc.await;
         cancel.cancel();
+        let _ = h_system_package_task.await;
     }))
 }
 

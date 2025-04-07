@@ -13935,6 +13935,8 @@ dependencies = [
  "serde_json",
  "sui-default-config",
  "sui-indexer-alt-metrics",
+ "sui-indexer-alt-reader",
+ "sui-package-resolver",
  "sui-protocol-config",
  "sui-types",
  "telemetry-subscribers",
@@ -13944,6 +13946,7 @@ dependencies = [
  "toml 0.7.4",
  "tower-http",
  "tracing",
+ "url",
  "uuid 1.2.2",
 ]
 

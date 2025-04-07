@@ -154,6 +154,22 @@ type ServiceConfig {
 	Maximum number of elements that can be requested from a multi-get query. A request to fetch more keys will result in an error.
 	"""
 	maxMultiGetSize: Int
+	"""
+	Maximum amount of nesting among type arguments (type arguments nest when a type argument is itself generic and has arguments).
+	"""
+	maxTypeArgumentDepth: Int
+	"""
+	Maximum number of type parameters a type can have.
+	"""
+	maxTypeArgumentWidth: Int
+	"""
+	Maximum number of datatypes that need to be processed when calculating the layout of a single type.
+	"""
+	maxTypeNodes: Int
+	"""
+	Maximum nesting allowed in datatype fields when calculating the layout of a single type.
+	"""
+	maxMoveValueDepth: Int
 }
 
 

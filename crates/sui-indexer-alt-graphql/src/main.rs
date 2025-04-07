@@ -38,7 +38,12 @@ async fn main() -> anyhow::Result<()> {
 
     match args.command {
         Command::Rpc {
+            database_url,
+            bigtable_instance,
+            db_args,
+            bigtable_args,
             rpc_args,
+            system_package_task_args,
             metrics_args,
             config,
         } => {
@@ -74,7 +79,12 @@ async fn main() -> anyhow::Result<()> {
             });
 
             let h_rpc = start_rpc(
+                Some(database_url),
+                bigtable_instance,
+                db_args,
+                bigtable_args,
                 rpc_args,
+                system_package_task_args,
                 VERSION,
                 rpc_config,
                 metrics.registry(),

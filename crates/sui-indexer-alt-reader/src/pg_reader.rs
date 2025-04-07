@@ -14,12 +14,13 @@ use diesel::query_dsl::CompatibleType;
 use diesel_async::RunQueryDsl;
 use prometheus::Registry;
 use sui_indexer_alt_metrics::db::DbConnectionStatsCollector;
-use sui_pg_db as db;
 use tokio_util::sync::CancellationToken;
 use tracing::{debug, warn};
 use url::Url;
 
 use crate::{error::Error, metrics::ReaderMetrics};
+
+pub use sui_pg_db as db;
 
 /// This wrapper type exists to perform error conversion between the data fetching layer and the
 /// RPC layer, metrics collection, and debug logging of database queries.
