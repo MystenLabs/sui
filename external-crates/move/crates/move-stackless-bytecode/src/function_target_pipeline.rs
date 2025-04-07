@@ -280,7 +280,6 @@ impl FunctionTargetsHolder {
             .entry(func_env.get_qualified_id())
             .or_default()
             .insert(FunctionVariant::Baseline, data);
-
         if let Some(spec_attr) = func_env
             .get_toplevel_attributes()
             .get_(&Verification(VerificationAttribute::Spec))
@@ -293,98 +292,68 @@ impl FunctionTargetsHolder {
                 inner_attrs.contains_key_(&AttributeName_::Unknown(Symbol::from("focus")));
             let is_verify_spec =
                 inner_attrs.contains_key_(&AttributeName_::Unknown(Symbol::from("prove")));
-            let is_function_spec: bool =
+            let is_path_spec: bool =
                 inner_attrs.contains_key_(&AttributeName_::Unknown(Symbol::from("function")));
-
-            if is_verify_spec {
-                println!("\n Processing function: {:?}", func_env.get_name_str());
-                println!("Verify spec: {:?}", func_env.get_name_str());
-                println!("inner_attrs: {:?}", inner_attrs);
-            }
-            if is_function_spec {
-                println!("\n Processing function: {:?}", func_env.get_name_str());
-                println!("Verify spec: {:?}", func_env.get_name_str());
-                println!("inner_attrs: {:?}", inner_attrs);
-            }
 
             if !is_verify_spec && !is_focus_spec {
                 self.no_verify_specs.insert(func_env.get_qualified_id());
             }
+
             if is_focus_spec {
                 self.focus_specs.insert(func_env.get_qualified_id());
             } else {
                 self.no_focus_specs.insert(func_env.get_qualified_id());
             }
+
             if inner_attrs.contains_key_(&AttributeName_::Unknown(Symbol::from("ignore_abort"))) {
                 self.ignore_aborts.insert(func_env.get_qualified_id());
             }
 
-            if is_function_spec {
+            if is_path_spec {
                 let function_spec = inner_attrs
                     .get_(&AttributeName_::Unknown(Symbol::from("function")))
                     .unwrap();
-                println!("function_spec: {:?}", function_spec);
-
-                if let Attribute_::Assigned(_, value) = &function_spec.value {
-                    if let AttributeValue_::ModuleAccess(spanned) = &value.value {
-                        if let ModuleAccess_::ModuleAccess(module_ident, function_name) =
-                            &spanned.value
-                        {
+            
+                if let Attribute_::Assigned(_, boxed_value) = &function_spec.value {
+                    if let AttributeValue_::ModuleAccess(spanned) = &boxed_value.value {
+                        if let ModuleAccess_::ModuleAccess(module_ident, function_name) = &spanned.value {
                             let address = module_ident.value.address;
                             let module = &module_ident.value.module;
+            
                             println!("Address: {:?}", address);
                             println!("Module: {:?}", module);
                             println!("Function name: {:?}", function_name);
-
-                            //todo: use address if provided
-                            let module_name = format!("{}", module);
-                            // let module_name = format!("{}::{}", address, module);
-                            let target_module = func_env
-                                .module_env
-                                .env
-                                .find_module_by_name(func_env.symbol_pool().make(&module_name));
-
-                            let target_func_env = target_module.and_then(|module_env| {
-                                module_env.find_function(
-                                    func_env.symbol_pool().make(&function_name.value),
-                                )
-                            });
-
-                            if let Some(func_env) = target_func_env {
-                                println!("target_func_env: {:?}", func_env.get_name_str());
-
-                                let target_id = func_env.get_qualified_id();
-                                self.function_specs.insert(
-                                    func_env.get_qualified_id(),
-                                    target_id,
-                                );
+            
+                            // todo: use address if provided
+                            let module_sym = func_env.symbol_pool().make(&module.to_string());
+                            if let Some(module_env) =
+                                func_env.module_env.env.find_module_by_name(module_sym)
+                            {
+                                let func_sym = func_env.symbol_pool().make(&function_name.value);
+                                if let Some(target_func_env) = module_env.find_function(func_sym) {
+                                    println!("target_func_env: {:?}", target_func_env.get_name_str());
+                                    let target_id = target_func_env.get_qualified_id();
+                                    self.function_specs
+                                        .insert(func_env.get_qualified_id(), target_id);
+                                }
                             }
                         }
                     }
                 }
             } else {
-                let target_func_env_opt =
-                    func_env
-                        .get_name_str()
-                        .strip_suffix("_spec")
-                        .and_then(|name| {
-                            func_env
-                                .module_env
-                                .find_function(func_env.symbol_pool().make(name))
-                        });
-                match target_func_env_opt {
-                    Some(target_func_env) => {
+                let name = func_env.get_name_str();
+                if let Some(base_name) = name.strip_suffix("_spec") {
+                    let func_sym = func_env.symbol_pool().make(base_name);
+                    if let Some(target_func_env) = func_env.module_env.find_function(func_sym) {
                         let target_id = target_func_env.get_qualified_id();
-                        self.function_specs.insert(
-                            func_env.get_qualified_id(),
-                            target_id,
-                        );
-                    }
-                    None => {
-                        self.scenario_specs.insert(func_env.get_qualified_id());
+                        self.function_specs
+                            .insert(func_env.get_qualified_id(), target_id);
+                        return;
                     }
                 }
+                self.scenario_specs.insert(func_env.get_qualified_id());
             }
+            
         }
 
         func_env.get_name_str().strip_suffix("_inv").map(|name| {
