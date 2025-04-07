@@ -66,12 +66,12 @@ pub async fn append_info_headers(
         );
     }
 
-    headers.insert(
-        axum::http::header::SERVER,
-        format!("sui-node/{}", state.software_version())
-            .try_into()
-            .expect("server version is a valid HeaderValue"),
-    );
+    if let Some(server_version) = state
+        .server_version()
+        .and_then(|version| version.to_string().try_into().ok())
+    {
+        headers.insert(axum::http::header::SERVER, server_version);
+    }
 
     (headers, response)
 }

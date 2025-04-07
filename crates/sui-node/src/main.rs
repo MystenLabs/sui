@@ -5,6 +5,7 @@ use clap::{ArgGroup, Parser};
 use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::Duration;
+use sui_rpc_api::ServerVersion;
 use tokio::sync::broadcast;
 use tokio::time::sleep;
 use tracing::{error, info};
@@ -116,8 +117,9 @@ fn main() {
     // let sui-node signal main to shutdown runtimes
     let (runtime_shutdown_tx, runtime_shutdown_rx) = broadcast::channel::<()>(1);
 
+    let server_version = ServerVersion::new(env!("CARGO_BIN_NAME"), VERSION);
     runtimes.sui_node.spawn(async move {
-        match sui_node::SuiNode::start_async(config, registry_service, Some(rpc_runtime), VERSION).await {
+        match sui_node::SuiNode::start_async(config, registry_service, Some(rpc_runtime), server_version).await {
             Ok(sui_node) => node_once_cell_clone
                 .set(sui_node)
                 .expect("Failed to set node in AsyncOnceCell"),
