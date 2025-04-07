@@ -1,6 +1,7 @@
 use codespan_reporting::term::termcolor::Buffer;
 use codespan_reporting::term::termcolor::{ColorChoice, StandardStream, WriteColor};
 use glob;
+use move_compiler::diagnostics::warning_filters::WarningFiltersBuilder;
 use move_compiler::editions::Flavor;
 use move_model::model::GlobalEnv;
 use move_package::{BuildConfig as MoveBuildConfig, ModelConfig};
@@ -42,6 +43,7 @@ fn run_prover(file_path: &PathBuf) -> String {
         let mut config = MoveBuildConfig::default();
         config.default_flavor = Some(Flavor::Sui);
         config.verify_mode = true;
+        config.silence_warnings = true;
 
         // Try to build the model
         let result = match config.move_model_for_package(
