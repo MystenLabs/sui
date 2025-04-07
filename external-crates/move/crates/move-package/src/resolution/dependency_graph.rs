@@ -1464,8 +1464,6 @@ impl DependencyGraph {
 
         // Present the stderr from the resolver, whether the process succeeded or not.
         if !output.stderr.is_empty() {
-            let stderr_label = format!("{resolver} stderr:").red();
-            writeln!(progress_output, "{stderr_label}")?;
             progress_output.write_all(&output.stderr)?;
         }
 
