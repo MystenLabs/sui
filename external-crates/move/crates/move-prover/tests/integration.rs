@@ -1,4 +1,5 @@
 use glob;
+use move_compiler::editions::Flavor;
 use move_package::{BuildConfig as MoveBuildConfig, ModelConfig};
 use move_prover::run_boogie_gen;
 use std::path::{Path, PathBuf};
@@ -22,6 +23,7 @@ fn run_prover(file_path: &PathBuf) -> String {
     let result = std::panic::catch_unwind(|| {
         // Set up the build config
         let mut config = MoveBuildConfig::default();
+        config.default_flavor = Some(Flavor::Sui);
 
         // Try to build the model
         let result = match config.move_model_for_package(
