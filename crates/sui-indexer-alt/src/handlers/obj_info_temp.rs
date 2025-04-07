@@ -693,4 +693,35 @@ mod tests {
         // Now we can prune checkpoint 2, as well as 3.
         obj_info_temp.prune(2, 4, &mut conn).await.unwrap();
     }
+
+    /// In our processing logic, we consider objects that appear as input to the checkpoint but not
+    /// in the output as wrapped or deleted. This emits a tombstone row. Meanwhile, the remote store
+    /// containing `CheckpointData` used to include unchanged shared objects in the `input_objects`
+    /// of a `CheckpointTransaction`. Because these read-only shared objects were not modified, they
+    ///were not included in `output_objects`. But that means within our pipeline, these object
+    /// states were incorrectly treated as deleted, and thus every transaction read emitted a
+    /// tombstone row. This test validates that unless an object appears as an input object from
+    /// `tx.effects.object_changes`, we do not consider it within our pipeline.
+    ///
+    /// Use the checkpoint builder to create a shared object. Then, remove this from the checkpoint,
+    /// and replace it with a transaction that takes the shared object as read-only.
+    #[tokio::test]
+    async fn test_process_unchanged_shared_object() {
+        let obj_info_temp = ObjInfoTemp::default();
+        let mut builder = TestCheckpointDataBuilder::new(0)
+            .start_transaction(0)
+            .create_shared_object(1)
+            .finish_transaction();
+
+        builder.build_checkpoint();
+
+        builder = builder
+            .start_transaction(0)
+            .read_shared_object(1)
+            .finish_transaction();
+
+        let checkpoint = builder.build_checkpoint();
+        let result = obj_info_temp.process(&Arc::new(checkpoint)).unwrap();
+        assert!(result.is_empty());
+    }
 }

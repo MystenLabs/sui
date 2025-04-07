@@ -693,28 +693,18 @@ mod tests {
         let obj_info = ObjInfo::default();
         let mut builder = TestCheckpointDataBuilder::new(0)
             .start_transaction(0)
-            .create_shared_object(0)
+            .create_shared_object(1)
             .finish_transaction();
 
-        // Get the shared object from the transaction's output_objects
-        let shared_obj = builder
-            .transactions_mut()
-            .pop() // Remove and get the transaction
-            .unwrap()
-            .output_objects
-            .into_iter()
-            .find(|obj| obj.id() == TestCheckpointDataBuilder::derive_object_id(0))
-            .unwrap();
+        builder.build_checkpoint();
 
-        // Create a new transaction that will "read" the shared object. This emulates a shared
-        // object appearing as an input object, but missing from `tx.effects`.
-        let mut builder = builder.start_transaction(0).finish_transaction();
-        if let Some(tx) = builder.transactions_mut().last_mut() {
-            tx.input_objects.push(shared_obj);
-        }
+        builder = builder
+            .start_transaction(0)
+            .read_shared_object(1)
+            .finish_transaction();
 
         let checkpoint = builder.build_checkpoint();
         let result = obj_info.process(&Arc::new(checkpoint)).unwrap();
-        assert_eq!(result.len(), 0);
+        assert!(result.is_empty());
     }
 }
