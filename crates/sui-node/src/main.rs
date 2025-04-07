@@ -112,14 +112,13 @@ fn main() {
     // if it deadlocks.
     let node_once_cell = Arc::new(AsyncOnceCell::<Arc<sui_node::SuiNode>>::new());
     let node_once_cell_clone = node_once_cell.clone();
-    let rpc_runtime = runtimes.json_rpc.handle().clone();
 
     // let sui-node signal main to shutdown runtimes
     let (runtime_shutdown_tx, runtime_shutdown_rx) = broadcast::channel::<()>(1);
 
     let server_version = ServerVersion::new(env!("CARGO_BIN_NAME"), VERSION);
     runtimes.sui_node.spawn(async move {
-        match sui_node::SuiNode::start_async(config, registry_service, Some(rpc_runtime), server_version).await {
+        match sui_node::SuiNode::start_async(config, registry_service, server_version).await {
             Ok(sui_node) => node_once_cell_clone
                 .set(sui_node)
                 .expect("Failed to set node in AsyncOnceCell"),
