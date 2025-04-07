@@ -1,11 +1,13 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+mod accumulator_settlement;
 mod causal_order;
 pub mod checkpoint_executor;
 mod checkpoint_output;
 mod metrics;
 
+use crate::authority::epoch_start_configuration::EpochStartConfigTrait;
 use crate::authority::AuthorityState;
 use crate::authority_client::{make_network_authority_clients_with_network_config, AuthorityAPI};
 use crate::checkpoints::causal_order::CausalOrder;
@@ -17,6 +19,7 @@ pub use crate::checkpoints::metrics::CheckpointMetrics;
 use crate::execution_cache::TransactionCacheRead;
 use crate::stake_aggregator::{InsertResult, MultiStakeAggregator};
 use crate::state_accumulator::StateAccumulator;
+use accumulator_settlement::AccumulatorStateUpdateTxBuilder;
 use diffy::create_patch;
 use itertools::Itertools;
 use mysten_common::random::get_rng;
@@ -1243,6 +1246,11 @@ impl CheckpointBuilder {
                 .resolve_checkpoint_transactions(pending.roots, &mut effects_in_current_checkpoint)
                 .await?;
             sorted_tx_effects_included_in_checkpoint.extend(txn_in_checkpoint);
+            self.execute_accumulator_update(
+                &mut sorted_tx_effects_included_in_checkpoint,
+                pending.details.checkpoint_height,
+            )
+            .await?;
         }
         let new_checkpoints = self
             .create_checkpoints(sorted_tx_effects_included_in_checkpoint, &last_details)
@@ -1251,6 +1259,49 @@ impl CheckpointBuilder {
         self.write_checkpoints(last_details.checkpoint_height, new_checkpoints)
             .await?;
         Ok(highest_sequence)
+    }
+
+    #[instrument(level = "debug", skip_all)]
+    async fn execute_accumulator_update(
+        &self,
+        txn_in_commit: &mut Vec<TransactionEffects>,
+        consensus_round: u64,
+    ) -> SuiResult<()> {
+        if !self.epoch_store.accumulator_state_enabled() {
+            return Ok(());
+        }
+        let mut builder = AccumulatorStateUpdateTxBuilder::new();
+        for effects in txn_in_commit.iter() {
+            for (id, write) in effects.accumulator_updates() {
+                builder.add_accumulator_update(id, write);
+            }
+        }
+        let settlement_tx = builder.build(
+            self.epoch_store.epoch(),
+            consensus_round,
+            self.epoch_store
+                .epoch_start_config()
+                .accumulator_root_obj_initial_shared_version()
+                .unwrap(),
+        );
+        let tx_key = settlement_tx.key();
+        self.state
+            .transaction_manager()
+            .enqueue(vec![settlement_tx], &self.epoch_store);
+        let root_digests = self
+            .epoch_store
+            .notify_read_executed_digests(&[tx_key])
+            .in_monitored_scope("CheckpointNotifyDigestsForAccumulator")
+            .await?;
+        let mut root_effects = self
+            .effects_store
+            .notify_read_executed_effects(&root_digests)
+            .in_monitored_scope("CheckpointNotifyReadForAccumulator")
+            .await;
+        assert_eq!(root_effects.len(), 1);
+        txn_in_commit.push(root_effects.pop().unwrap());
+
+        Ok(())
     }
 
     // Given the root transactions of a pending checkpoint, resolve the transactions should be included in
