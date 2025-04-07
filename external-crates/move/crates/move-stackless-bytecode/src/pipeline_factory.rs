@@ -36,6 +36,7 @@ pub fn default_pipeline_with_options(options: &ProverOptions) -> FunctionTargetP
     // NOTE: the order of these processors is import!
     let mut processors: Vec<Box<dyn FunctionTargetProcessor>> = vec![
         SpecGlobalVariableAnalysisProcessor::new(),
+        SpecPurityAnalysis::new(),
         DebugInstrumenter::new(),
         // transformation and analysis
         EliminateImmRefsProcessor::new(),
@@ -49,7 +50,6 @@ pub fn default_pipeline_with_options(options: &ProverOptions) -> FunctionTargetP
         UsageProcessor::new(),
         TypeInvariantAnalysisProcessor::new(),
         VerificationAnalysisProcessor::new(),
-        SpecPurityAnalysis::new(),
         SpecWellFormedAnalysisProcessor::new(),
     ];
 
