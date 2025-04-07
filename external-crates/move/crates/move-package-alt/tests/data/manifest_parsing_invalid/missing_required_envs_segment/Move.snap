@@ -1,9 +1,8 @@
 ---
 source: crates/move-package-alt/tests/manifest_parsing_tests.rs
 ---
-Err(TOML parse error at line 1, column 1
+TOML parse error at line 1, column 1
   |
 1 | [package]
   | ^
 missing field `environments`
-)

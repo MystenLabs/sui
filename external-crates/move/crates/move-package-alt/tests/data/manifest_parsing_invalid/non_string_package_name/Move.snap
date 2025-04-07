@@ -1,9 +1,8 @@
 ---
 source: crates/move-package-alt/tests/manifest_parsing_tests.rs
 ---
-Err(TOML parse error at line 2, column 8
+TOML parse error at line 2, column 8
   |
 2 | name = 1
   |        ^
 invalid type: integer `1`, expected a string
-)

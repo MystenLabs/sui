@@ -1,4 +1,4 @@
 ---
-source: crates/move-package-alt/tests/manifest_parsing_test.rs
+source: crates/move-package-alt/tests/manifest_parsing_tests.rs
 ---
-Ok(Manifest { package: PackageMetadata { name: "name", edition: "foobar", metadata: () }, environments: {"mainnet": "35834a8a"}, dependencies: {}, dep_overrides: {} })
+Manifest { package: PackageMetadata { name: "name", edition: "foobar", metadata: () }, environments: {"mainnet": "35834a8a"}, dependencies: {}, dep_overrides: {} }

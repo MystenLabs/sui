@@ -9,9 +9,15 @@ use std::path::Path;
 fn run_manifest_parsing_tests(input_path: &Path) -> datatest_stable::Result<()> {
     let manifest = Manifest::<Vanilla>::read_from(input_path);
 
+    let contents = if let Ok(manifest) = manifest {
+        format!("{:?}", manifest)
+    } else {
+        format!("{}", manifest.unwrap_err())
+    };
+
     insta_assert! {
         input_path: input_path,
-        contents: format!("{:?}", manifest),
+        contents: contents,
     }
 
     Ok(())
