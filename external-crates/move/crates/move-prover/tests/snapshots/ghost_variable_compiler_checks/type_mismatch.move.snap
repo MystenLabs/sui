@@ -1,0 +1,22 @@
+---
+source: crates/move-prover/tests/integration.rs
+expression: output
+---
+Verification failed: exiting with bytecode transformation errors
+error[E0012]: type mismatch for global variable u64: expected u8, found bool
+   ┌─ tests/inputs/ghost_variable_compiler_checks/type_mismatch.move:10:5
+   │
+10 │     ghost::declare_global_mut<u64, bool>();
+   │     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   ·
+21 │     ghost::declare_global_mut<u64, u8>();
+   │     ------------------------------------
+
+error[E0012]: type mismatch for global variable T: expected bool, found u8
+   ┌─ tests/inputs/ghost_variable_compiler_checks/type_mismatch.move:9:5
+   │
+ 9 │     ghost::declare_global<T, u8>();
+   │     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   ·
+20 │     ghost::declare_global<T, bool>();
+   │     --------------------------------

@@ -1,0 +1,18 @@
+---
+source: crates/move-prover/tests/integration.rs
+assertion_line: 57
+expression: output
+snapshot_kind: text
+---
+Verification failed: exiting with bytecode transformation errors
+error: Underlying func is not calling in all execution ways
+   ┌─ tests/inputs/spec_well_formed/spec_well_formed_func_execution.move:11:1
+   │  
+11 │ ╭ public fun foo_spec(a: u8) {
+12 │ │   if (a > 3) {
+13 │ │     return;
+14 │ │   };
+   · │
+18 │ │   ensures(true);
+19 │ │ }
+   │ ╰─^

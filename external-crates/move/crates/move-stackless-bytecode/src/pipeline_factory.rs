@@ -28,12 +28,15 @@ use crate::{
     usage_analysis::UsageProcessor,
     verification_analysis::VerificationAnalysisProcessor,
     well_formed_instrumentation::WellFormedInstrumentationProcessor,
+    spec_well_formed_analysis::SpecWellFormedAnalysisProcessor,
+    spec_purity_analysis::SpecPurityAnalysis,
 };
 
 pub fn default_pipeline_with_options(options: &ProverOptions) -> FunctionTargetPipeline {
     // NOTE: the order of these processors is import!
     let mut processors: Vec<Box<dyn FunctionTargetProcessor>> = vec![
         SpecGlobalVariableAnalysisProcessor::new(),
+        SpecPurityAnalysis::new(),
         DebugInstrumenter::new(),
         // transformation and analysis
         EliminateImmRefsProcessor::new(),
@@ -47,6 +50,7 @@ pub fn default_pipeline_with_options(options: &ProverOptions) -> FunctionTargetP
         UsageProcessor::new(),
         TypeInvariantAnalysisProcessor::new(),
         VerificationAnalysisProcessor::new(),
+        SpecWellFormedAnalysisProcessor::new(),
     ];
 
     if !options.skip_loop_analysis {

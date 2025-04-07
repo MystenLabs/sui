@@ -1,0 +1,12 @@
+---
+source: crates/move-prover/tests/integration.rs
+assertion_line: 57
+expression: output
+snapshot_kind: text
+---
+Verification failed: exiting with bytecode transformation errors
+error: Consider removing non-pure calls form spec
+   ┌─ tests/inputs/spec_purity/spec_purity_mut_ref.move:21:3
+   │
+21 │   sub_foo(&mut a);
+   │   ^^^^^^^^^^^^^^^

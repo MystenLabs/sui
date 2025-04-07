@@ -61,9 +61,7 @@ use move_core_types::{
 use move_disassembler::disassembler::{Disassembler, DisassemblerOptions};
 
 use crate::{
-    ast::{
-        Attribute,ModuleName, QualifiedSymbol, Value,
-    },
+    ast::{Attribute, ModuleName, QualifiedSymbol, Value},
     symbol::{Symbol, SymbolPool},
     ty::{PrimitiveType, Type, TypeDisplayContext, TypeUnificationAdapter, Variance},
 };
@@ -1479,7 +1477,7 @@ impl GlobalEnv {
             .qualified(FunId::new(self.symbol_pool().make(fun_name)))
     }
 
-    const PROVER_MODULE_NAME: &'static str = "prover";
+    pub const PROVER_MODULE_NAME: &'static str = "prover";
     const SPEC_MODULE_NAME: &'static str = "ghost";
     const LOG_MODULE_NAME: &'static str = "log";
     const REQUIRES_FUNCTION_NAME: &'static str = "requires";
@@ -3838,24 +3836,45 @@ impl<'env> FunctionEnv<'env> {
         let called: BTreeSet<_> = self
             .get_bytecode()
             .iter()
-            .filter_map(|c| {
-                if let Bytecode::Call(i) = c {
-                    Some(self.module_env.get_used_function(*i).get_qualified_id())
-                } else if let Bytecode::CallGeneric(i) = c {
+            .flat_map(|c| match c {
+                Bytecode::Call(i) => vec![self.module_env.get_used_function(*i).get_qualified_id()],
+                Bytecode::CallGeneric(i) => {
                     let handle_idx = self
                         .module_env
                         .data
                         .module
                         .function_instantiation_at(*i)
                         .handle;
-                    Some(
-                        self.module_env
-                            .get_used_function(handle_idx)
-                            .get_qualified_id(),
-                    )
-                } else {
-                    None
+                    vec![self
+                        .module_env
+                        .get_used_function(handle_idx)
+                        .get_qualified_id()]
                 }
+                Bytecode::VecPack { .. } => vec![
+                    self.module_env.env.get_fun_qid("vector", "empty"),
+                    self.module_env.env.get_fun_qid("vector", "push_back"),
+                ],
+                Bytecode::VecLen { .. } => {
+                    vec![self.module_env.env.get_fun_qid("vector", "length")]
+                }
+                Bytecode::VecImmBorrow { .. } => {
+                    vec![self.module_env.env.get_fun_qid("vector", "borrow")]
+                }
+                Bytecode::VecMutBorrow { .. } => {
+                    vec![self.module_env.env.get_fun_qid("vector", "borrow_mut")]
+                }
+                Bytecode::VecPushBack { .. } => {
+                    vec![self.module_env.env.get_fun_qid("vector", "push_back")]
+                }
+                Bytecode::VecPopBack { .. } => {
+                    vec![self.module_env.env.get_fun_qid("vector", "pop_back")]
+                }
+                Bytecode::VecUnpack { .. } => vec![
+                    self.module_env.env.get_fun_qid("vector", "destroy_empty"),
+                    self.module_env.env.get_fun_qid("vector", "pop_back"),
+                ],
+                Bytecode::VecSwap { .. } => vec![self.module_env.env.get_fun_qid("vector", "swap")],
+                _ => vec![],
             })
             .collect();
         *self.data.called_funs.borrow_mut() = Some(called.clone());
@@ -3923,6 +3942,20 @@ impl<'env> FunctionEnv<'env> {
     pub fn get_type_display_ctx(&self) -> TypeDisplayContext {
         let type_param_names = self
             .get_type_parameters()
+            .iter()
+            .map(|param| param.0)
+            .collect();
+        TypeDisplayContext::WithEnv {
+            env: self.module_env.env,
+            type_param_names: Some(type_param_names),
+        }
+    }
+
+    /// Produce a TypeDisplayContext to print types within the scope of this env,
+    /// with source names for type parameters
+    pub fn get_named_type_display_ctx(&self) -> TypeDisplayContext {
+        let type_param_names = self
+            .get_named_type_parameters()
             .iter()
             .map(|param| param.0)
             .collect();

@@ -12,7 +12,7 @@ use std::{
 
 use itertools::{Either, Itertools};
 use log::debug;
-use petgraph::graph::{DiGraph, NodeIndex};
+use petgraph::graph::DiGraph;
 
 use move_compiler::{
     expansion::ast::ModuleAccess_,
@@ -564,10 +564,7 @@ impl FunctionTargetPipeline {
     fn build_call_graph(
         env: &GlobalEnv,
         targets: &FunctionTargetsHolder,
-    ) -> (
-        DiGraph<QualifiedId<FunId>, ()>,
-        BTreeMap<QualifiedId<FunId>, NodeIndex>,
-    ) {
+    ) -> DiGraph<QualifiedId<FunId>, ()> {
         let mut graph = DiGraph::new();
         let mut nodes = BTreeMap::new();
         for fun_id in targets.get_funs() {
@@ -584,47 +581,7 @@ impl FunctionTargetPipeline {
                 graph.add_edge(*src_idx, *dst_idx, ());
             }
         }
-        (graph, nodes)
-    }
-
-    /// Collect strongly connected components (SCCs) from the call graph.
-    /// Returns a list of node SCCs in reverse topological order, and a map from function id
-    /// to other functions in the same SCC.
-    fn derive_call_graph_sccs(
-        env: &GlobalEnv,
-        graph: &DiGraph<QualifiedId<FunId>, ()>,
-    ) -> (
-        Vec<Vec<NodeIndex>>,
-        BTreeMap<QualifiedId<FunId>, Option<BTreeSet<QualifiedId<FunId>>>>,
-    ) {
-        let mut sccs = BTreeMap::new();
-        // Returned SCCs are in reverse topological order.
-        let scc_nodes = petgraph::algo::tarjan_scc(graph);
-        for scc in scc_nodes.clone() {
-            let mut part = BTreeSet::new();
-            let mut is_cyclic = scc.len() > 1;
-            for node_idx in scc {
-                let fun_id = *graph.node_weight(node_idx).unwrap();
-                let fun_env = env.get_function(fun_id);
-                if !is_cyclic && fun_env.get_called_functions().contains(&fun_id) {
-                    is_cyclic = true;
-                }
-                let inserted = part.insert(fun_id);
-                assert!(inserted);
-            }
-
-            if is_cyclic {
-                for fun_id in &part {
-                    let existing = sccs.insert(*fun_id, Some(part.clone()));
-                    assert!(existing.is_none());
-                }
-            } else {
-                let fun_id = part.into_iter().next().unwrap();
-                let existing = sccs.insert(fun_id, None);
-                assert!(existing.is_none());
-            }
-        }
-        (scc_nodes, sccs)
+        graph
     }
 
     /// Sort the call graph in topological order with strongly connected components (SCCs)
@@ -633,75 +590,20 @@ impl FunctionTargetPipeline {
         env: &GlobalEnv,
         targets: &FunctionTargetsHolder,
     ) -> Vec<Either<QualifiedId<FunId>, Vec<QualifiedId<FunId>>>> {
-        // collect sccs
-        let (graph, _nodes) = Self::build_call_graph(env, targets);
-        let (scc_nodes, scc_map) = Self::derive_call_graph_sccs(env, &graph);
-
-        let mut scc_staging = BTreeMap::new();
-        for scc_opt in scc_map.values() {
-            match scc_opt.as_ref() {
-                None => (),
-                Some(scc) => {
-                    scc_staging.insert(scc, vec![]);
+        let graph = Self::build_call_graph(env, targets);
+        let sccs = petgraph::algo::kosaraju_scc(&graph);
+        sccs.iter()
+            .map(|scc| scc.iter().map(|node_idx| graph[*node_idx]).collect_vec())
+            .map(|scc| {
+                if scc.len() == 1 {
+                    // single node, no cycle
+                    Either::Left(scc[0])
+                } else {
+                    // multiple nodes, a strongly connected component
+                    Either::Right(scc)
                 }
-            }
-        }
-
-        // Construct the work list from a deterministic topological ordering.
-        let mut worklist = vec![];
-        for scc in scc_nodes.into_iter().rev() {
-            for node_idx in scc {
-                let fun_id = *graph.node_weight(node_idx).unwrap();
-                let fun_env = env.get_function(fun_id);
-                worklist.push((
-                    fun_id,
-                    fun_env.get_called_functions().into_iter().collect_vec(),
-                ));
-            }
-        }
-
-        // analyze bottom-up from the leaves of the call graph
-        // NOTE: this algorithm produces a deterministic ordering of functions to be analyzed
-        let mut dep_ordered = vec![];
-        while let Some((call_id, callees)) = worklist.pop() {
-            // At this point, one of two things is true:
-            // 1. callees is empty (common case)
-            // 2. callees is nonempty and call_id is part of a recursive or mutually recursive function group
-
-            match scc_map.get(&call_id).unwrap().as_ref() {
-                None => {
-                    // case 1: non-recursive call
-                    assert!(callees.is_empty());
-                    dep_ordered.push(Either::Left(call_id));
-                }
-                Some(scc) => {
-                    // case 2: recursive call group
-                    match scc_staging.entry(scc) {
-                        MapEntry::Vacant(_) => {
-                            panic!("all scc groups should be in staging")
-                        }
-                        MapEntry::Occupied(mut entry) => {
-                            let scc_vec = entry.get_mut();
-                            scc_vec.push(call_id);
-                            if scc_vec.len() == scc.len() {
-                                dep_ordered.push(Either::Right(entry.remove()));
-                            }
-                        }
-                    }
-                }
-            }
-
-            // update the worklist
-            for (_, callees) in worklist.iter_mut() {
-                callees.retain(|e| e != &call_id);
-            }
-        }
-
-        // ensure that everything is cleared
-        assert!(scc_staging.is_empty());
-
-        // return the ordered dep list
-        dep_ordered
+            })
+            .collect_vec()
     }
 
     /// Runs the pipeline on all functions in the targets holder. Processors are run on each

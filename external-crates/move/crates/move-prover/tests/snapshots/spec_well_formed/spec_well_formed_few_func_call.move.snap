@@ -1,0 +1,16 @@
+---
+source: crates/move-prover/tests/integration.rs
+assertion_line: 57
+expression: output
+snapshot_kind: text
+---
+Verification failed: exiting with bytecode transformation errors
+error: Underlying func is calling few times
+   ┌─ tests/inputs/spec_well_formed/spec_well_formed_few_func_call.move:11:1
+   │  
+11 │ ╭ public fun foo_spec<T>() {
+12 │ │   foo<u8>();
+13 │ │   foo<u8>();
+14 │ │   ensures(true);
+15 │ │ }
+   │ ╰─^
