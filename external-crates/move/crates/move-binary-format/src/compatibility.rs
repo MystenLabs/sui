@@ -2,6 +2,8 @@
 // Copyright (c) The Move Contributors
 // SPDX-License-Identifier: Apache-2.0
 
+use std::collections::BTreeMap;
+
 use crate::inclusion_mode::{InclusionCheckExecutionMode, InclusionCheckMode};
 use crate::{
     compatibility_mode::{CompatibilityMode, ExecutionCompatibilityMode},
@@ -467,9 +469,10 @@ where
     I: Iterator<Item = (&'a K, &'a V)> + 'a,
     J: Iterator<Item = (&'a K, &'a V)> + 'a,
 {
-    // Peeks are needed to prevent advancing the iterators when we don't need to
-    let mut old = old.peekable();
-    let mut new = new.peekable();
+    let old = old.collect::<BTreeMap<_, _>>();
+    let new = new.collect::<BTreeMap<_, _>>();
+    let mut old = old.into_iter().peekable();
+    let mut new = new.into_iter().peekable();
     std::iter::from_fn(move || match (old.peek(), new.peek()) {
         (Some((old_key, _old_value)), Some((new_key, _new_value))) => match old_key.cmp(new_key) {
             std::cmp::Ordering::Equal => {
