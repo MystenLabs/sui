@@ -20,9 +20,6 @@ fn run_prover(file_path: &PathBuf) -> String {
 
     // Setup cleanup that will execute even in case of panic or early return
     let result = std::panic::catch_unwind(|| {
-        // Capture output
-        let mut buffer: Vec<u8> = Vec::new();
-
         // Set up the build config
         let mut config = MoveBuildConfig::default();
 
