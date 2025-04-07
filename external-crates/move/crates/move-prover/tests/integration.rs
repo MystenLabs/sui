@@ -6,6 +6,7 @@ use move_model::model::GlobalEnv;
 use move_package::{BuildConfig as MoveBuildConfig, ModelConfig};
 use move_prover::run_boogie_gen;
 use move_prover::run_move_prover_with_model;
+use regex::Regex;
 use std::path::{Path, PathBuf};
 
 /// Runs the prover on the given file path and returns the output as a string
@@ -18,8 +19,19 @@ fn run_prover(file_path: &PathBuf) -> String {
         std::fs::create_dir_all(sources_dir.clone()).unwrap();
     }
 
-    // move the file_path to the sources_dir
-    let new_file_path = sources_dir.join(file_path.file_name().unwrap());
+    // Extract the relative path from tests/inputs/
+    let relative_path = file_path
+        .strip_prefix(Path::new("tests/inputs"))
+        .unwrap_or_else(|_| Path::new(file_path.file_name().unwrap()));
+
+    // Join it to the sources directory
+    let new_file_path = sources_dir.join(relative_path);
+
+    // Create parent directories if needed
+    if let Some(parent_dir) = new_file_path.parent() {
+        std::fs::create_dir_all(parent_dir).unwrap();
+    }
+
     std::fs::rename(file_path, &new_file_path).unwrap();
 
     let new_file_path_clone = new_file_path.clone();
@@ -66,7 +78,7 @@ fn run_prover(file_path: &PathBuf) -> String {
             }
         };
 
-        result
+        post_process_output(result)
     });
 
     // rename the file_path to the original name
@@ -79,9 +91,18 @@ fn run_prover(file_path: &PathBuf) -> String {
     }
 }
 
+fn post_process_output(output: String) -> String {
+    // replace numbers such as 52571u64 with ELIDEDu64 to avoid snapshot diffs
+    let output = output.replace("tests/sources/", "tests/inputs/");
+
+    // Use regex to replace numbers with more than one digit followed by u64 with ELIDEDu64
+    let re = Regex::new(r"\d{2,}u64").unwrap();
+    re.replace_all(&output, "ELIDEDu64").to_string()
+}
+
 #[test]
 fn run_move_tests() {
-    for entry in glob::glob("tests/inputs/**/*ints.fail.move").expect("Invalid glob pattern") {
+    for entry in glob::glob("tests/inputs/**/*.move").expect("Invalid glob pattern") {
         let move_path = entry.expect("Failed to read file path");
         let output = run_prover(&move_path);
         let filename = move_path.file_name().unwrap().to_string_lossy().to_string();

@@ -2388,10 +2388,12 @@ dependencies = [
  "move-prover-test-utils",
  "move-stackless-bytecode",
  "once_cell",
+ "regex",
  "serde",
  "shell-words",
  "simplelog",
  "tempfile",
+ "termcolor",
  "toml",
  "walkdir",
 ]

@@ -1,9 +1,8 @@
 ---
 source: crates/move-prover/tests/integration.rs
 expression: output
-snapshot_kind: text
 ---
-Verification failed: exiting with verification errors
+exiting with verification errors
 error: prover::ensures assertion does not hold
    ┌─ tests/inputs/one-assert.fail.move:13:3
    │
