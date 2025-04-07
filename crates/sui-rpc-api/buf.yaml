@@ -11,8 +11,6 @@ modules:
         # cannot properly handle client side streaming requests.
         - RPC_NO_CLIENT_STREAMING
       ignore_only:
-        PACKAGE_VERSION_SUFFIX:
-          - proto/sui/types
         ENUM_VALUE_PREFIX:
           - proto/sui/rpc/v2alpha/live_data_service.proto
           - proto/sui/rpc/v2beta/argument.proto
@@ -23,10 +21,8 @@ modules:
           - proto/sui/rpc/v2beta/owner.proto
           - proto/sui/rpc/v2beta/signature_scheme.proto
           - proto/sui/rpc/v2beta/transaction.proto
-          - proto/sui/types/signature_scheme.proto
         ENUM_ZERO_VALUE_SUFFIX:
           - proto/sui/rpc/v2beta/signature_scheme.proto
-          - proto/sui/types/signature_scheme.proto
         RPC_RESPONSE_STANDARD_NAME:
           - proto/sui/rpc/v2beta/ledger_service.proto
 

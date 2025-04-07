@@ -14,7 +14,7 @@ use crate::proto::rpc::v2beta::Transaction;
 use crate::proto::rpc::v2beta::TransactionEffects;
 use crate::proto::rpc::v2beta::TransactionEvents;
 use crate::proto::rpc::v2beta::UserSignature;
-use crate::proto::types::timestamp_ms_to_proto;
+use crate::proto::timestamp_ms_to_proto;
 use crate::ErrorReason;
 use crate::RpcError;
 use crate::RpcService;
