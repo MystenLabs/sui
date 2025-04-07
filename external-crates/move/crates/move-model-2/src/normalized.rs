@@ -17,6 +17,9 @@ pub struct Package {
     pub modules: BTreeMap<Symbol, Module>,
 }
 
+pub type ModuleId = normalized::ModuleId<Symbol>;
+pub type QualifiedMemberId = (ModuleId, Symbol);
+
 pub type Signature = normalized::Signature<Symbol>;
 pub type Type = normalized::Type<Symbol>;
 pub type Datatype = normalized::Datatype<Symbol>;
@@ -88,4 +91,8 @@ impl normalized::StringPool for SymbolPool {
     ) -> &'a move_core_types::identifier::IdentStr {
         IdentStr::new(s.as_str()).unwrap()
     }
+}
+
+pub trait TModuleId {
+    fn module_id(&self) -> ModuleId;
 }

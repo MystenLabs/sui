@@ -7,12 +7,9 @@ use std::{
     sync::{Arc, LazyLock},
 };
 
-use crate::{
-    compiled::{self, ModuleId, QualifiedMemberId, TModuleId},
-    normalized,
-};
+use crate::normalized::{self, ModuleId, QualifiedMemberId, TModuleId};
 use indexmap::IndexMap;
-use move_binary_format::{file_format, normalized, CompiledModule};
+use move_binary_format::{file_format, CompiledModule};
 use move_bytecode_source_map::source_map::SourceMap;
 use move_compiler::{
     self,
@@ -50,7 +47,7 @@ pub struct Model<const HAS_SOURCE: SourceKind> {
     root_named_address_map: BTreeMap<Symbol, AccountAddress>,
     root_package_name: Option<Symbol>,
     info: [Arc<TypingProgramInfo>; HAS_SOURCE],
-    normalized: normalized::Packages,
+    compiled: normalized::Packages,
     packages: BTreeMap<AccountAddress, PackageData<HAS_SOURCE>>,
 }
 
@@ -59,7 +56,7 @@ pub struct Package<'a, const HAS_SOURCE: SourceKind> {
     addr: AccountAddress,
     // TODO name. We likely want the package name from the root package's named address map
     model: &'a Model<HAS_SOURCE>,
-    compiled: &'a compiled::Package,
+    compiled: &'a normalized::Package,
     data: &'a PackageData<HAS_SOURCE>,
 }
 
@@ -67,7 +64,7 @@ pub struct Package<'a, const HAS_SOURCE: SourceKind> {
 pub struct Module<'a, const HAS_SOURCE: SourceKind> {
     id: ModuleId,
     package: Package<'a, HAS_SOURCE>,
-    compiled: &'a compiled::Module,
+    compiled: &'a normalized::Module,
     data: &'a ModuleData<HAS_SOURCE>,
 }
 
@@ -89,7 +86,7 @@ pub enum Datatype<'a, const HAS_SOURCE: SourceKind> {
 pub struct Struct<'a, const HAS_SOURCE: SourceKind> {
     name: Symbol,
     module: Module<'a, HAS_SOURCE>,
-    compiled: &'a compiled::Struct,
+    compiled: &'a normalized::Struct,
     #[allow(unused)]
     data: &'a StructData,
 }
@@ -98,7 +95,7 @@ pub struct Struct<'a, const HAS_SOURCE: SourceKind> {
 pub struct Enum<'a, const HAS_SOURCE: SourceKind> {
     name: Symbol,
     module: Module<'a, HAS_SOURCE>,
-    compiled: &'a compiled::Enum,
+    compiled: &'a normalized::Enum,
     #[allow(unused)]
     data: &'a EnumData,
 }
@@ -107,7 +104,7 @@ pub struct Enum<'a, const HAS_SOURCE: SourceKind> {
 pub struct Variant<'a, const HAS_SOURCE: SourceKind> {
     name: Symbol,
     enum_: Enum<'a, HAS_SOURCE>,
-    compiled: &'a compiled::Variant,
+    compiled: &'a normalized::Variant,
 }
 
 #[derive(Clone, Copy)]
@@ -115,7 +112,7 @@ pub struct Function<'a, const HAS_SOURCE: SourceKind> {
     name: Symbol,
     module: Module<'a, HAS_SOURCE>,
     // might be none for macros
-    compiled: Option<&'a compiled::Function>,
+    compiled: Option<&'a normalized::Function>,
     #[allow(unused)]
     data: &'a FunctionData,
 }
@@ -125,7 +122,7 @@ pub struct NamedConstant<'a> {
     name: Symbol,
     module: Module<'a, WITH_SOURCE>,
     // There is no guarantee a source constant will have a compiled representation
-    compiled: Option<&'a compiled::Constant>,
+    compiled: Option<&'a normalized::Constant>,
     #[allow(unused)]
     data: &'a ConstantData,
 }
@@ -171,7 +168,7 @@ impl Model<WITH_SOURCE> {
         let compiled_units = compiled_units
             .into_iter()
             .map(|(addr, units)| (addr, units.into_iter().map(|(n, (_f, u))| (n, u)).collect()))
-            .collect::<BTreeMap<_, _>>();
+            .collect::<BTreeMap<_, BTreeMap<_, _>>>();
         let root_named_address_reverse_map = root_named_address_map
             .iter()
             .map(|(n, a)| (*a, *n))
@@ -181,24 +178,32 @@ impl Model<WITH_SOURCE> {
             .key_cloned_iter()
             .map(|(ident, _)| (ident.module_id(), ident))
             .collect::<BTreeMap<_, _>>();
-        let packages = compiled_units
-            .iter()
-            .map(|(addr, units)| {
-                let name = root_named_address_reverse_map.get(addr).copied();
-                let data = PackageData::from_source(name, *addr, &ident_map, &info, units);
-                (*addr, data)
-            })
-            .collect();
         let compiled_modules = compiled_units
             .iter()
             .flat_map(|(_addr, units)| units.values().map(|unit| &unit.module));
-        let normalized = normalized::Packages::new(compiled_modules);
+        let compiled = normalized::Packages::new(compiled_modules);
+        let packages = compiled
+            .packages
+            .iter()
+            .map(|(addr, units)| {
+                let name = root_named_address_reverse_map.get(addr).copied();
+                let data = PackageData::from_source(
+                    name,
+                    *addr,
+                    &ident_map,
+                    &info,
+                    &compiled_units[addr],
+                    units,
+                );
+                (*addr, data)
+            })
+            .collect();
         let model = Self {
             files: [files],
             root_package_name,
             root_named_address_map,
             info: [info],
-            normalized,
+            compiled,
             packages,
         };
         model.check_invariants();
@@ -215,8 +220,8 @@ impl Model<WITHOUT_SOURCE> {
         named_address_reverse_map: &BTreeMap<AccountAddress, Symbol>,
         modules: Vec<CompiledModule>,
     ) -> Self {
-        let normalized = normalized::Packages::new(&modules);
-        let packages = normalized
+        let compiled = normalized::Packages::new(&modules);
+        let packages = compiled
             .packages
             .values()
             .map(|package| {
@@ -234,7 +239,7 @@ impl Model<WITHOUT_SOURCE> {
             root_package_name: None,
             root_named_address_map,
             info: [],
-            normalized,
+            compiled,
             packages,
         };
         model.check_invariants();
@@ -268,8 +273,8 @@ impl<const HAS_SOURCE: SourceKind> Model<HAS_SOURCE> {
     }
 
     pub fn maybe_module(&self, module: impl TModuleId) -> Option<Module<'_, HAS_SOURCE>> {
-        let (addr, name) = module.module_id();
-        let package = self.maybe_package(&addr)?;
+        let ModuleId { address, name } = module.module_id();
+        let package = self.maybe_package(&address)?;
         package.maybe_module(name)
     }
     pub fn module(&self, module: impl TModuleId) -> Module<HAS_SOURCE> {
@@ -287,7 +292,7 @@ impl<const HAS_SOURCE: SourceKind> Model<HAS_SOURCE> {
     }
 
     pub fn compiled_packages(&self) -> &normalized::Packages {
-        &self.normalized
+        &self.compiled
     }
 
     pub fn kind(&self) -> Kind<&Model<WITH_SOURCE>, &Model<WITHOUT_SOURCE>> {
@@ -307,22 +312,18 @@ impl<const HAS_SOURCE: SourceKind> Model<HAS_SOURCE> {
         {
             for (p, package) in &self.packages {
                 for (m, module) in &package.modules {
-                    let compiled = &self.normalized.packages[p].modules[m];
+                    let compiled = &self.compiled.packages[p].modules[m];
                     for (idx, s) in module.structs.keys().enumerate() {
                         let map_idx = module.structs.get_index_of(s).unwrap();
                         let compiled_map_idx = compiled.structs.get_index_of(s).unwrap();
-                        let compiled_idx = compiled.structs[s].def_idx.0 as usize;
                         debug_assert_eq!(idx, map_idx);
                         debug_assert_eq!(idx, compiled_map_idx);
-                        debug_assert_eq!(idx, compiled_idx);
                     }
                     for (idx, f) in module.functions.keys().enumerate() {
                         let map_idx = module.functions.get_index_of(f).unwrap();
                         debug_assert_eq!(idx, map_idx);
                         if let Some(compiled_map_idx) = compiled.functions.get_index_of(f) {
-                            let compiled_idx = compiled.functions[f].def_idx.0 as usize;
                             debug_assert!(idx >= compiled_map_idx);
-                            debug_assert!(idx >= compiled_idx);
                         }
                         if HAS_SOURCE == WITH_SOURCE {
                             let declared_idx = self.info[0]
@@ -337,18 +338,14 @@ impl<const HAS_SOURCE: SourceKind> Model<HAS_SOURCE> {
                     for (idx, (e, enum_)) in module.enums.iter().enumerate() {
                         let map_idx = module.enums.get_index_of(e).unwrap();
                         let compiled_map_idx = compiled.enums.get_index_of(e).unwrap();
-                        let compiled_idx = compiled.enums[e].def_idx.0 as usize;
                         debug_assert_eq!(idx, map_idx);
                         debug_assert_eq!(idx, compiled_map_idx);
-                        debug_assert_eq!(idx, compiled_idx);
                         for (vidx, v) in enum_.variants.keys().enumerate() {
                             let map_idx = enum_.variants.get_index_of(v).unwrap();
                             let compiled_map_idx =
                                 compiled.enums[e].variants.get_index_of(v).unwrap();
-                            let compiled_idx = compiled.enums[e].variants[v].tag as usize;
                             debug_assert_eq!(vidx, map_idx);
                             debug_assert_eq!(vidx, compiled_map_idx);
-                            debug_assert_eq!(vidx, compiled_idx);
                         }
                     }
                 }
@@ -376,7 +373,7 @@ impl<'a, const HAS_SOURCE: SourceKind> Package<'a, HAS_SOURCE> {
         let name = name.into();
         let data = self.data.modules.get(&name)?;
         Some(Module {
-            id: (self.addr, name),
+            id: (self.addr, name).module_id(),
             package: *self,
             compiled: &self.compiled.modules[&name],
             data,
@@ -390,7 +387,7 @@ impl<'a, const HAS_SOURCE: SourceKind> Package<'a, HAS_SOURCE> {
         self.data.modules.keys().map(move |name| self.module(*name))
     }
 
-    pub fn compiled(&self) -> &'a compiled::Package {
+    pub fn compiled(&self) -> &'a normalized::Package {
         self.compiled
     }
 
@@ -450,7 +447,7 @@ impl<'a, const HAS_SOURCE: SourceKind> Module<'a, HAS_SOURCE> {
         Some(Function {
             name,
             module: *self,
-            compiled: self.compiled.functions.get(&name),
+            compiled: self.compiled.functions.get(&name).map(|f| &**f),
             data,
         })
     }
@@ -487,12 +484,12 @@ impl<'a, const HAS_SOURCE: SourceKind> Module<'a, HAS_SOURCE> {
             .chain(self.enums().map(Datatype::Enum))
     }
 
-    pub fn compiled(&self) -> &'a compiled::Module {
+    pub fn compiled(&self) -> &'a normalized::Module {
         &self.model().compiled.packages[&self.package.addr].modules[&self.name()]
     }
 
     pub fn name(&self) -> Symbol {
-        self.compiled.name
+        *self.compiled.name()
     }
 
     pub fn id(&self) -> ModuleId {
@@ -554,7 +551,7 @@ impl<'a> Module<'a, WITH_SOURCE> {
             module: *self,
             compiled: data
                 .compiled_index
-                .map(|idx| &self.compiled.constants[idx.0 as usize]),
+                .map(|idx| &*self.compiled.constants[idx.0 as usize]),
             data,
         })
     }
@@ -572,11 +569,10 @@ impl<'a> Module<'a, WITH_SOURCE> {
 
     pub fn constants(
         &self,
-    ) -> impl Iterator<Item = (&compiled::Constant, Option<NamedConstant<'a>>)> + '_ {
-        self.compiled.constants.iter().map(|c| {
-            let source_opt =
-                self.data.constant_names[0][c.def_idx.0 as usize].map(|n| self.named_constant(n));
-            (c, source_opt)
+    ) -> impl Iterator<Item = (&normalized::Constant, Option<NamedConstant<'a>>)> + '_ {
+        self.compiled.constants.iter().enumerate().map(|(idx, c)| {
+            let source_opt = self.data.constant_names[0][idx].map(|n| self.named_constant(n));
+            (&**c, source_opt)
         })
     }
 }
@@ -594,8 +590,8 @@ impl<'a> Module<'a, WITHOUT_SOURCE> {
         self.maybe_member(name).unwrap()
     }
 
-    pub fn constants(&self) -> impl Iterator<Item = &compiled::Constant> + '_ {
-        self.compiled.constants.iter()
+    pub fn constants(&self) -> impl Iterator<Item = &normalized::Constant> + '_ {
+        self.compiled.constants.iter().map(|c| &**c)
     }
 }
 
@@ -616,7 +612,7 @@ impl<'a, const HAS_SOURCE: SourceKind> Struct<'a, HAS_SOURCE> {
         self.module
     }
 
-    pub fn compiled(&self) -> &'a compiled::Struct {
+    pub fn compiled(&self) -> &'a normalized::Struct {
         self.compiled
     }
 
@@ -656,7 +652,7 @@ impl<'a, const HAS_SOURCE: SourceKind> Enum<'a, HAS_SOURCE> {
         self.module
     }
 
-    pub fn compiled(&self) -> &'a compiled::Enum {
+    pub fn compiled(&self) -> &'a normalized::Enum {
         self.compiled
     }
 
@@ -703,7 +699,7 @@ impl<'a, const HAS_SOURCE: SourceKind> Variant<'a, HAS_SOURCE> {
         self.enum_
     }
 
-    pub fn compiled(&self) -> &'a compiled::Variant {
+    pub fn compiled(&self) -> &'a normalized::Variant {
         self.compiled
     }
 
@@ -746,7 +742,7 @@ impl<'a, const HAS_SOURCE: SourceKind> Function<'a, HAS_SOURCE> {
     }
 
     /// Returns the compiled function if it exists. This will be `None` for `macro`s.
-    pub fn maybe_compiled(&self) -> Option<&'a compiled::Function> {
+    pub fn maybe_compiled(&self) -> Option<&'a normalized::Function> {
         self.compiled
     }
 
@@ -786,7 +782,7 @@ impl<'a> Function<'a, WITH_SOURCE> {
 }
 
 impl<'a> Function<'a, WITHOUT_SOURCE> {
-    pub fn compiled(&self) -> &'a compiled::Function {
+    pub fn compiled(&self) -> &'a normalized::Function {
         self.compiled.unwrap()
     }
 }
@@ -813,7 +809,7 @@ impl<'a> NamedConstant<'a> {
     }
 
     /// Not all source constants have a compiled representation
-    pub fn compiled(&self) -> Option<&'a compiled::Constant> {
+    pub fn compiled(&self) -> Option<&'a normalized::Constant> {
         self.compiled
     }
 }
@@ -822,22 +818,52 @@ impl<'a> NamedConstant<'a> {
 // Traits
 //**************************************************************************************************
 
+impl TModuleId for ModuleId {
+    fn module_id(&self) -> ModuleId {
+        *self
+    }
+}
+
+impl TModuleId for (AccountAddress, Symbol) {
+    fn module_id(&self) -> ModuleId {
+        ModuleId {
+            address: self.0,
+            name: self.1,
+        }
+    }
+}
+
+impl TModuleId for (&AccountAddress, &Symbol) {
+    fn module_id(&self) -> ModuleId {
+        ModuleId {
+            address: *self.0,
+            name: *self.1,
+        }
+    }
+}
+
 impl TModuleId for (NumericalAddress, Symbol) {
     fn module_id(&self) -> ModuleId {
-        (self.0.into_inner(), self.1)
+        ModuleId {
+            address: self.0.into_inner(),
+            name: self.1,
+        }
     }
 }
 
 impl TModuleId for (&NumericalAddress, &Symbol) {
     fn module_id(&self) -> ModuleId {
-        (self.0.into_inner(), *self.1)
+        ModuleId {
+            address: self.0.into_inner(),
+            name: *self.1,
+        }
     }
 }
 impl TModuleId for ModuleIdent_ {
     fn module_id(&self) -> ModuleId {
         let address = self.address.into_addr_bytes().into_inner();
-        let module = self.module.0.value;
-        (address, module)
+        let name = self.module.0.value;
+        ModuleId { address, name }
     }
 }
 
@@ -894,15 +920,18 @@ impl PackageData<WITH_SOURCE> {
         addr: AccountAddress,
         ident_map: &BTreeMap<ModuleId, E::ModuleIdent>,
         info: &TypingProgramInfo,
-        units: &BTreeMap<Symbol, CompiledUnit>,
+        named_units: &BTreeMap<Symbol, NamedCompiledModule>,
+        units: &normalized::Package,
     ) -> Self {
         let modules = units
+            .modules
             .iter()
             .map(|(name, unit)| {
-                let id = (addr, *name);
+                let id = (addr, *name).module_id();
                 let ident = ident_map.get(&id).unwrap();
                 let info = info.module(ident);
-                let data = ModuleData::from_source(id, *ident, info, unit);
+                let data =
+                    ModuleData::from_source(id, *ident, info, unit, named_units[name].source_map());
                 (*name, data)
             })
             .collect();
@@ -913,7 +942,7 @@ impl PackageData<WITH_SOURCE> {
 impl PackageData<WITHOUT_SOURCE> {
     fn from_compiled(
         named_address_reverse_map: &BTreeMap<AccountAddress, Symbol>,
-        compiled: &compiled::Package,
+        compiled: &normalized::Package,
     ) -> Self {
         let modules = compiled
             .modules
@@ -932,19 +961,18 @@ impl ModuleData<WITH_SOURCE> {
         _id: ModuleId,
         ident: E::ModuleIdent,
         info: &ModuleInfo,
-        unit: &NamedCompiledModule,
+        unit: &normalized::Module,
+        source_map: &SourceMap,
     ) -> Self {
         let structs = make_map(info.structs.iter().map(|(_loc, name, _sinfo)| {
-            let name = *name;
-            let (idx, _struct_def) = unit.module.find_struct_def_by_name(name.as_str()).unwrap();
+            let idx = unit.structs.get_index_of(name).unwrap();
             let struct_ = StructData::new();
-            (idx, name, struct_)
+            (idx, *name, struct_)
         }));
         let enums = make_map(info.enums.iter().map(|(_loc, name, _einfo)| {
-            let name = *name;
-            let (idx, enum_def) = unit.module.find_enum_def_by_name(name.as_str()).unwrap();
-            let enum_ = EnumData::new(&unit.module, enum_def);
-            (idx, name, enum_)
+            let idx = unit.enums.get_index_of(name).unwrap();
+            let enum_ = EnumData::new(unit, &unit.enums[name]);
+            (idx, *name, enum_)
         }));
         let functions = make_map(info.functions.iter().map(|(_loc, name, finfo)| {
             let name = *name;
@@ -953,17 +981,16 @@ impl ModuleData<WITH_SOURCE> {
         }));
         let named_constants = make_map(info.constants.iter().map(|(_loc, name, cinfo)| {
             let name = *name;
-            let constant = ConstantData::from_source(&unit.source_map, name);
+            let constant = ConstantData::from_source(source_map, name);
             (cinfo.index, name, constant)
         }));
         let constant_names = {
-            let idx_to_name_map = unit
-                .source_map
+            let idx_to_name_map = source_map
                 .constant_map
                 .iter()
                 .map(|(name, idx)| (*idx, name.0))
                 .collect::<BTreeMap<_, _>>();
-            let n = unit.module.constant_pool.len();
+            let n = unit.constants.len();
             (0..n)
                 .map(|i| idx_to_name_map.get(&(i as u16)).copied())
                 .collect()
@@ -980,7 +1007,7 @@ impl ModuleData<WITH_SOURCE> {
 }
 
 impl ModuleData<WITHOUT_SOURCE> {
-    fn from_compiled(unit: &compiled::Module) -> Self {
+    fn from_compiled(unit: &normalized::Module) -> Self {
         let structs = unit
             .structs
             .keys()
@@ -992,8 +1019,8 @@ impl ModuleData<WITHOUT_SOURCE> {
             .keys()
             .copied()
             .map(|name| {
-                let (_idx, enum_def) = unit.module.find_enum_def_by_name(name.as_str()).unwrap();
-                (name, EnumData::new(&unit.module, enum_def))
+                let enum_def = &unit.enums[&name];
+                (name, EnumData::new(unit, enum_def))
             })
             .collect();
         let functions = unit
@@ -1020,10 +1047,10 @@ impl StructData {
 }
 
 impl EnumData {
-    fn new(module: &file_format::CompiledModule, def: &file_format::EnumDefinition) -> Self {
+    fn new(_module: &normalized::Module, def: &normalized::Enum) -> Self {
         let mut variants = IndexMap::new();
-        for variant in &def.variants {
-            let name = Symbol::from(module.identifier_at(variant.variant_name).as_str());
+        for (name, _variant) in &def.variants {
+            let name = *name;
             let data = VariantData::new();
             let prev = variants.insert(name, data);
             assert!(prev.is_none());

@@ -193,10 +193,10 @@ impl Compatibility {
                 context.enum_new_variant(name, old_enum, new_enum);
             }
 
-            for (tag, old_variant) in old_enum.variants.iter().enumerate() {
+            for (tag, (_name, old_variant)) in old_enum.variants.iter().enumerate() {
                 // If the new enum has fewer variants than the old one, datatype_layout is false
                 // and we don't need to check the rest of the variants.
-                let Some(new_variant) = new_enum.variants.get(tag) else {
+                let Some((_name, new_variant)) = new_enum.variants.get_index(tag) else {
                     context.enum_variant_missing(name, old_enum, tag);
                     continue;
                 };
