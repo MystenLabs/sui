@@ -26,6 +26,8 @@ fn run_prover(file_path: &PathBuf) -> String {
         }
     }
 
+    println!("renamed_files: {:?}", renamed_files);
+
     // Setup cleanup that will execute even in case of panic or early return
     let result = std::panic::catch_unwind(|| {
         // Capture output
@@ -86,6 +88,10 @@ fn run_prover(file_path: &PathBuf) -> String {
 
 #[test]
 fn run_move_tests() {
+    // rename Move.toml.bak to Move.toml
+    let move_toml_path = Path::new("tests/Move.toml.bak");
+    std::fs::rename(move_toml_path, Path::new("tests/Move.toml")).unwrap();
+
     for entry in glob::glob("tests/sources/**/*.move").expect("Invalid glob pattern") {
         let move_path = entry.expect("Failed to read file path");
         let output = run_prover(&move_path);
@@ -112,4 +118,8 @@ fn run_move_tests() {
             insta::assert_snapshot!(filename, output);
         });
     }
+
+    // rename Move.toml.bak to Move.toml
+    let move_toml_path = Path::new("tests/Move.toml");
+    std::fs::rename(move_toml_path, Path::new("tests/Move.toml.bak")).unwrap();
 }
