@@ -56,10 +56,10 @@ Every epoch, users with non zero stake can submit a proposal to change these par
 
 | min_value (bps) | max_value (bps) | Pool type | Taker or maker |
 | --- | --- | --- | --- |
-| 5 | 10 | Volatile | Taker |
-| 2 | 5 | Volatile | Maker |
-| 0.5 | 1 | Stable | Taker |
-| 0.2 | 0.5 | Stable | Maker |
+| 1 | 10 | Volatile | Taker |
+| 0 | 5 | Volatile | Maker |
+| 0.1 | 1 | Stable | Taker |
+| 0 | 0.5 | Stable | Maker |
 | 0 | 0 | Whitelisted | Taker and maker |
 
 Users can also vote on live proposals. When a proposal exceeds the quorum, the new trade parameters are queued to go live from the following epoch and onwards.  Proposals and votes are reset every epoch. Users can start submitting and voting on proposals the epoch following their stake. Quorum is equivalent to half of the total voting power. A user's voting power is calculated with the following formula where ${V}$ is the voting power, ${S}$ is the amount staked, and ${V_c}$ is the voting power cutoff. ${V_c}$ is currently set to 100,000 DEEP.
