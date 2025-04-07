@@ -3,7 +3,7 @@
 use crate::TypedStoreError;
 use serde::{de::DeserializeOwned, Serialize};
 use std::ops::RangeBounds;
-use std::{borrow::Borrow, collections::BTreeMap, error::Error};
+use std::{borrow::Borrow, error::Error};
 
 pub type DbIterator<'a, T> = Box<dyn Iterator<Item = Result<T, TypedStoreError>> + 'a>;
 
@@ -102,26 +102,4 @@ pub struct TableSummary {
     pub value_bytes_total: usize,
     pub key_hist: hdrhistogram::Histogram<u64>,
     pub value_hist: hdrhistogram::Histogram<u64>,
-}
-
-pub trait TypedStoreDebug {
-    /// Dump a DB table with pagination
-    fn dump_table(
-        &self,
-        table_name: String,
-        page_size: u16,
-        page_number: usize,
-    ) -> eyre::Result<BTreeMap<String, String>>;
-
-    /// Get the name of the DB. This is simply the name of the struct
-    fn primary_db_name(&self) -> String;
-
-    /// Get a map of table names to key-value types
-    fn describe_all_tables(&self) -> BTreeMap<String, (String, String)>;
-
-    /// Count the entries in the table
-    fn count_table_keys(&self, table_name: String) -> eyre::Result<usize>;
-
-    /// Return table summary of the input table
-    fn table_summary(&self, table_name: String) -> eyre::Result<TableSummary>;
 }
