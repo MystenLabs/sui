@@ -3,7 +3,10 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use move_command_line_common::insta_assert;
-use move_package_alt::{flavor::Vanilla, package::manifest::Manifest};
+use move_package_alt::{
+    flavor::Vanilla,
+    package::{lockfile::Lockfile, manifest::Manifest},
+};
 use std::path::Path;
 
 fn run_manifest_parsing_tests(input_path: &Path) -> datatest_stable::Result<()> {
@@ -23,8 +26,28 @@ fn run_manifest_parsing_tests(input_path: &Path) -> datatest_stable::Result<()> 
     Ok(())
 }
 
+fn run_lockfile_parsing_tests(input_path: &Path) -> datatest_stable::Result<()> {
+    let lockfile = Lockfile::<Vanilla>::read_from(input_path.parent().unwrap());
+
+    let contents = if let Ok(lockfile) = lockfile {
+        format!("{:?}", lockfile)
+    } else {
+        format!("{}", lockfile.unwrap_err())
+    };
+
+    insta_assert! {
+        input_path: input_path,
+        contents: contents,
+    }
+
+    Ok(())
+}
+
 datatest_stable::harness!(
     run_manifest_parsing_tests,
     "tests/data",
     r"manifest_parsing.*\.toml$",
+    run_lockfile_parsing_tests,
+    "tests/data/lockfile_parsing_valid",
+    r".*",
 );
