@@ -1,12 +1,10 @@
 ---
 source: crates/move-prover/tests/integration.rs
-assertion_line: 57
 expression: output
-snapshot_kind: text
 ---
 Verification failed: exiting with bytecode transformation errors
 error[E0015]: global variable instantiation conflict T:
-   ┌─ tests/inputs/ghost_variables_noalias_write_read.move:15:5
+   ┌─ tests/inputs/ghost_variable_compiler_checks/ghost_variables_noalias_write_read.move:15:5
    │
  9 │     ghost::declare_global_mut<U, bool>();
    │     ------------------------------------
@@ -17,7 +15,7 @@ error[E0015]: global variable instantiation conflict T:
    │     ^^^^^^^^^^^
 
 error[E0015]: global variable instantiation conflict u64:
-   ┌─ tests/inputs/ghost_variables_noalias_write_read.move:16:5
+   ┌─ tests/inputs/ghost_variable_compiler_checks/ghost_variables_noalias_write_read.move:16:5
    │
  9 │     ghost::declare_global_mut<U, bool>();
    │     ------------------------------------
