@@ -7,6 +7,7 @@ use tracing::debug;
 
 mod prove;
 mod llm_explain;
+mod prompts;
 
 bin_version::bin_version!();
 

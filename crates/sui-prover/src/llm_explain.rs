@@ -1,8 +1,11 @@
 use anyhow::Error;
+use openai_api_rust::chat::*;
+use openai_api_rust::*;
 use regex::Regex;
 use std::fs;
-use openai_api_rust::*;
-use openai_api_rust::chat::*;
+use std::path::PathBuf;
+
+use crate::prompts::ERROR_ANALYSIS_PROMPT;
 
 async fn make_openai_request(prompt: &str) -> Result<String, Error> {
     let auth = Auth::from_env().unwrap();
@@ -35,35 +38,26 @@ async fn make_openai_request(prompt: &str) -> Result<String, Error> {
 
 pub fn parse_error_file_path(output: &str) -> Option<String> {
     let re = Regex::new(r".?\/([^:]+)").unwrap();
-    re.captures(output).map(|caps| caps.get(1).unwrap().as_str().to_string())
+    re.captures(output)
+        .map(|caps| caps.get(1).unwrap().as_str().to_string())
 }
 
 pub async fn explain_err(output: &str, err: &Error) {
-    println!("Error output: {}", output);
-    eprintln!("Error itself: {}", err);
+    let error_file = PathBuf::from("error_output.txt");
 
     if let Some(file_path) = parse_error_file_path(output) {
-        println!("Error location: {}", file_path);
+        fs::write(
+            &error_file,
+            format!("Error location: {}\n {}\n {}\n", file_path, output, err),
+        )
+        .unwrap();
 
         match fs::read_to_string(&file_path) {
             Ok(contents) => {
-                let prompt = format!(
-                    "I got a Move compiler error in the following file:\n\n\
-                    File path: {}\n\
-                    Error output:\n\
-                    {}\n\n\
-                    The relevant file content is below:\n\n\
-                    {}\n\n\
-                    Please analyze this specific error only.\n\n\
-                    1. Explain clearly what caused this specific compiler error.\n\
-                    2. Point to the exact line(s) or construct in the Move code that triggered it.\n\
-                    3. Suggest a corrected version of the code.\n\
-                    4. Don't make assumptions beyond this file.\n\
-                    5. Do NOT explain unrelated or general issues in the file.",
-                    file_path,
-                    output,
-                    contents
-                );
+                let prompt = ERROR_ANALYSIS_PROMPT
+                    .replace("{file_path}", &file_path)
+                    .replace("{error_output}", output)
+                    .replace("{file_contents}", &contents);
 
                 match make_openai_request(&prompt).await {
                     Ok(explanation) => println!("AI Explanation:\n{}", explanation),
