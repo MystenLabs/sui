@@ -4,7 +4,7 @@
 
 use base::{
     build::Build, coverage::Coverage, disassemble::Disassemble, docgen::Docgen, info::Info,
-    migrate::Migrate, new::New, prove::Prove, test::Test,
+    migrate::Migrate, new::New, test::Test,
 };
 use move_package::BuildConfig;
 
@@ -63,7 +63,6 @@ pub enum Command {
     Info(Info),
     Migrate(Migrate),
     New(New),
-    Prove(Prove),
     Test(Test),
     /// Execute a sandbox command.
     #[clap(name = "sandbox")]
@@ -98,7 +97,6 @@ pub fn run_cli(
         Command::Info(c) => c.execute(move_args.package_path.as_deref(), move_args.build_config),
         Command::Migrate(c) => c.execute(move_args.package_path.as_deref(), move_args.build_config),
         Command::New(c) => c.execute_with_defaults(move_args.package_path.as_deref()),
-        Command::Prove(c) => c.execute(move_args.package_path.as_deref(), move_args.build_config),
         Command::Test(c) => c.execute(
             move_args.package_path.as_deref(),
             move_args.build_config,
