@@ -291,6 +291,36 @@ fn single_element_access_chain_autofixes<'a, I, K>(
         return;
     };
     for (mod_ident, mod_members) in mod_members {
+        // add pkg::module if module name matches unbound name
+        if mod_ident.value.module.value() == unbound_name.value {
+            let qualified_prefix = format!("{}::", mod_ident.value.address);
+            let text_edit = TextEdit {
+                range: Range {
+                    start: unbound_name_lsp_pos,
+                    end: unbound_name_lsp_pos,
+                },
+                new_text: qualified_prefix.clone(),
+            };
+            let title = format!("Qualify as `{}{}`", qualified_prefix, unbound_name);
+            code_actions.push(access_chain_code_action(
+                title,
+                text_edit,
+                diag.clone(),
+                file_url.clone(),
+            ));
+            if let Some(import_insertion_info) = import_insertion_info(symbols, cursor) {
+                let title = format!("Import as `{}{}`", qualified_prefix, unbound_name);
+                let import_text = format!("use {}{}", qualified_prefix, unbound_name);
+                let text_edit = auto_import_text_edit(import_text, import_insertion_info);
+                code_actions.push(access_chain_code_action(
+                    title,
+                    text_edit,
+                    diag.clone(),
+                    file_url.clone(),
+                ));
+            }
+        }
+        // add pkg::module::member if member name matches unbound name
         for member_name in mod_members {
             if member_name == unbound_name.value {
                 let qualified_prefix =
