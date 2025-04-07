@@ -25,8 +25,6 @@ fn run_prover(file_path: &PathBuf) -> String {
 
         // Set up the build config
         let mut config = MoveBuildConfig::default();
-        config.verify_mode = true;
-        config.dev_mode = true;
 
         // Try to build the model
         let result = match config.move_model_for_package(
@@ -51,10 +49,7 @@ fn run_prover(file_path: &PathBuf) -> String {
             }
             Err(err) => {
                 // For model-building errors, we need to reformat the error to match the expected format
-                format!(
-                    "Verification failed: exiting with model building errors\n{}",
-                    err
-                )
+                format!("We hit an error: \n{}", err)
             }
         };
 

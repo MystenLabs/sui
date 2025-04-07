@@ -7,6 +7,7 @@ edition = "2024.beta"
 [dependencies]
 MoveStdlib = { local = "../../../../../crates/sui-framework/packages/move-stdlib", override = true }
 Prover = { local = "../../../../../crates/sui-framework/packages/prover", override = true }
+Sui = { local = "../../../../../crates/sui-framework/packages/sui-framework", override = true }
 
 [addresses]
 integration-test = "0x9"
