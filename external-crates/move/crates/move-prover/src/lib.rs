@@ -195,7 +195,6 @@ pub fn run_move_prover_with_model<W: WriteColor>(
     )?;
 
     for spec in targets.specs() {
-        println!("spec {:?}", spec);
         let fun_env = env.get_function(*spec);
         if targets.is_verified_spec(spec)
             && targets.has_target(
