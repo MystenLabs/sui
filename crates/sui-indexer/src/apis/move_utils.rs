@@ -43,13 +43,10 @@ impl MoveUtilsServer for MoveUtilsApi {
         let sui_normalized_modules = resolver_modules
             .into_iter()
             .map(|(k, v)| {
-                let m = normalized::Module::new(pool, v.bytecode(), /* include code */ true);
-                Ok((
-                    k,
-                    SuiMoveNormalizedModule::try_from(&m).map_err(SuiRpcInputError::Anyhow)?,
-                ))
+                let m = &normalized::Module::new(pool, v.bytecode(), /* include code */ false);
+                (k, m.into())
             })
-            .collect::<Result<BTreeMap<String, SuiMoveNormalizedModule>, SuiRpcInputError>>()?;
+            .collect::<BTreeMap<String, SuiMoveNormalizedModule>>();
         Ok(sui_normalized_modules)
     }
 

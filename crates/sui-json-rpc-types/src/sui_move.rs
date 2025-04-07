@@ -141,16 +141,9 @@ impl PartialEq for SuiMoveNormalizedModule {
     }
 }
 
-const MAX_SIGNATURE_USAGE: usize = 1; //TODO
-
-impl<S: Ord + ToString> TryFrom<&NormalizedModule<S>> for SuiMoveNormalizedModule {
-    type Error = anyhow::Error;
-    fn try_from(module: &NormalizedModule<S>) -> Result<Self, Self::Error> {
-        anyhow::ensure!(
-            module.signature_usage() <= MAX_SIGNATURE_USAGE,
-            "Module potentiall too large for SuiMoveNormalizedModule"
-        );
-        Ok(Self {
+impl<S: Ord + ToString> From<&NormalizedModule<S>> for SuiMoveNormalizedModule {
+    fn from(module: &NormalizedModule<S>) -> Self {
+        Self {
             file_format_version: module.file_format_version,
             address: module.address().to_hex_literal(),
             name: module.name().to_string(),
@@ -189,7 +182,7 @@ impl<S: Ord + ToString> TryFrom<&NormalizedModule<S>> for SuiMoveNormalizedModul
                     )
                 })
                 .collect::<BTreeMap<String, SuiMoveNormalizedFunction>>(),
-        })
+        }
     }
 }
 

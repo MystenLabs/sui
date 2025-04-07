@@ -155,13 +155,10 @@ impl MoveUtilsServer for MoveUtils {
     ) -> RpcResult<BTreeMap<String, SuiMoveNormalizedModule>> {
         with_tracing!(async move {
             let modules = self.internal.get_move_modules_by_package(package).await?;
-            modules
+            Ok(modules
                 .into_iter()
-                .map(|(name, module)| {
-                    let sui_normalized = (&module).try_into().map_err(SuiRpcInputError::Anyhow)?;
-                    Ok((name, sui_normalized))
-                })
-                .collect::<Result<BTreeMap<String, SuiMoveNormalizedModule>, Error>>()
+                .map(|(name, module)| (name, (&module).into()))
+                .collect::<BTreeMap<String, SuiMoveNormalizedModule>>())
         })
     }
 
@@ -173,7 +170,7 @@ impl MoveUtilsServer for MoveUtils {
     ) -> RpcResult<SuiMoveNormalizedModule> {
         with_tracing!(async move {
             let module = &self.internal.get_move_module(package, module_name).await?;
-            Ok(module.try_into()?)
+            Ok(module.into())
         })
     }
 
@@ -303,12 +300,12 @@ mod tests {
             let mut mock_internal = MockMoveUtilsInternalTrait::new();
 
             let m = basic_test_module();
-            let normalized_module = NormalizedModule::new(
+            let normalized_module = &NormalizedModule::new(
                 &mut normalized::RcPool::new(),
                 &m,
                 /* include code */ false,
             );
-            let expected_module: SuiMoveNormalizedModule = (&normalized_module).try_into().unwrap();
+            let expected_module: SuiMoveNormalizedModule = normalized_module.into();
 
             mock_internal
                 .expect_get_move_module()
