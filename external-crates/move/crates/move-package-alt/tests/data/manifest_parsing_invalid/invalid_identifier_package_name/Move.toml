@@ -1,2 +1,7 @@
 [package]
 name = "®´∑œ"
+edition = "2024.beta"
+
+[environments]
+mainnet = "35834a8a"
+

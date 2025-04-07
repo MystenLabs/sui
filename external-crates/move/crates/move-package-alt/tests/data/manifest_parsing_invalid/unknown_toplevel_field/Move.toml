@@ -4,6 +4,9 @@ edition = "2024.beta"
 license = "license"
 authors = ["some author"]
 
+[environments]
+mainnet = "35834a8a"
+
 [unknown_field]
 
 [dependencies]

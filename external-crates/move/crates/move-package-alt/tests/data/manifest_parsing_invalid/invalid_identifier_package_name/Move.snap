@@ -1,4 +1,4 @@
 ---
-source: crates/move-package-alt/tests/manifest_parsing_test.rs
+source: crates/move-package-alt/tests/manifest_parsing_tests.rs
 ---
-Err(missing field `edition` for key `package`)
+Ok(Manifest { package: PackageMetadata { name: "®´∑œ", edition: "2024.beta", metadata: () }, environments: {"mainnet": "35834a8a"}, dependencies: {}, dep_overrides: {} })

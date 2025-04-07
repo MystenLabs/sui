@@ -1,4 +1,4 @@
 ---
 source: crates/move-package-alt/tests/manifest_parsing_tests.rs
 ---
-Err(missing field `environments`)
+Err(unknown field `unknown_field`, expected one of `package`, `environments`, `dependencies`, `dep-overrides`)

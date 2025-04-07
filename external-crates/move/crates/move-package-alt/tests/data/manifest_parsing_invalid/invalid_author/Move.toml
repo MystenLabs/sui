@@ -3,5 +3,5 @@ name = "name"
 edition = "2024.beta"
 authors = [1]
 
-[enviroments]
+[environments]
 mainnet = "35834a8a"

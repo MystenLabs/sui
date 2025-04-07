@@ -21,7 +21,8 @@ use super::*;
 // writing these files should use [toml_edit] to set / preserve the formatting, since these are
 // user-editable files
 #[derive(Debug, Deserialize)]
-#[serde(rename = "kebab-case")]
+#[serde(rename_all = "kebab-case")]
+#[serde(deny_unknown_fields)]
 #[serde(bound = "")]
 pub struct Manifest<F: MoveFlavor> {
     package: PackageMetadata<F>,
