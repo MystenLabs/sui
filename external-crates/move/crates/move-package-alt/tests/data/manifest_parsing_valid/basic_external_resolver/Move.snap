@@ -1,0 +1,4 @@
+---
+source: crates/move-package-alt/tests/manifest_parsing_tests.rs
+---
+Manifest { package: PackageMetadata { name: "example", edition: "2024.beta", metadata: () }, environments: {"mainnet": "35834a8a"}, dependencies: {"qwer": ManifestDependency { dependency_info: External(ExternalDependency { r: Table({"mvr": String("@pkg/qwer")}), fields: {} }), is_override: false, rename_from: None }}, dep_overrides: {} }

@@ -24,6 +24,7 @@ use super::MoveFlavor;
 
 /// The [Vanilla] implementation of the [MoveFlavor] trait. This implementation supports no
 /// flavor-specific resolvers and stores no additional metadata in the lockfile.
+#[derive(Debug)]
 pub struct Vanilla;
 
 impl MoveFlavor for Vanilla {

@@ -1,0 +1,9 @@
+[package]
+name = "example"
+edition = "2024.beta"
+license = "Apache-2.0"
+authors = ["Move Team"]
+
+[environments]
+~124512 = "35834a8a"
+
