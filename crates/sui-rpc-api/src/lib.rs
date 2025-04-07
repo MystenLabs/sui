@@ -29,32 +29,53 @@ pub use error::{ErrorDetails, ErrorReason, Result, RpcError};
 pub use metrics::RpcMetrics;
 
 #[derive(Clone)]
+pub struct ServerVersion {
+    pub bin: &'static str,
+    pub version: &'static str,
+}
+
+impl ServerVersion {
+    pub fn new(bin: &'static str, version: &'static str) -> Self {
+        Self { bin, version }
+    }
+}
+
+impl std::fmt::Display for ServerVersion {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(self.bin)?;
+        f.write_str("/")?;
+        f.write_str(self.version)
+    }
+}
+
+#[derive(Clone)]
 pub struct RpcService {
     reader: StateReader,
     executor: Option<Arc<dyn TransactionExecutor>>,
     subscription_service_handle: Option<SubscriptionServiceHandle>,
     chain_id: sui_types::digests::ChainIdentifier,
-    software_version: &'static str,
+    server_version: Option<ServerVersion>,
     metrics: Option<Arc<RpcMetrics>>,
     config: Config,
 }
 
 impl RpcService {
-    pub fn new(reader: Arc<dyn RpcStateReader>, software_version: &'static str) -> Self {
+    pub fn new(reader: Arc<dyn RpcStateReader>) -> Self {
         let chain_id = reader.get_chain_identifier().unwrap();
         Self {
             reader: StateReader::new(reader),
             executor: None,
             subscription_service_handle: None,
             chain_id,
-            software_version,
+            server_version: None,
             metrics: None,
             config: Config::default(),
         }
     }
 
-    pub fn new_without_version(reader: Arc<dyn RpcStateReader>) -> Self {
-        Self::new(reader, "unknown")
+    pub fn with_server_version(&mut self, server_version: ServerVersion) -> &mut Self {
+        self.server_version = Some(server_version);
+        self
     }
 
     pub fn with_config(&mut self, config: Config) {
@@ -80,8 +101,8 @@ impl RpcService {
         self.chain_id
     }
 
-    pub fn software_version(&self) -> &'static str {
-        self.software_version
+    pub fn server_version(&self) -> Option<&ServerVersion> {
+        self.server_version.as_ref()
     }
 
     pub async fn into_router(self) -> axum::Router {
