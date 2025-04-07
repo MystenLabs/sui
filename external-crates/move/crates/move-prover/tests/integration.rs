@@ -7,13 +7,14 @@ use std::path::{Path, PathBuf};
 fn run_prover(file_path: &PathBuf) -> String {
     // the file_dir path is `tests`, make it as a Path
     let file_dir = Path::new("tests");
+    let sources_dir = file_dir.join("sources");
 
     // Keep track of files we renamed
     let mut renamed_files = Vec::new();
 
     // rename all .move files in the directory to .move.bak
     // skip the file_path
-    for entry in std::fs::read_dir(file_dir).unwrap() {
+    for entry in std::fs::read_dir(sources_dir).unwrap() {
         let entry = entry.unwrap();
         let path = entry.path();
         if path.is_file()
