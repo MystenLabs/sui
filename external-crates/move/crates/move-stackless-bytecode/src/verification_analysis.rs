@@ -16,7 +16,7 @@ use codespan_reporting::diagnostic::Severity;
 use itertools::Itertools;
 
 use move_model::{
-    model::{FunId, FunctionEnv, GlobalEnv, GlobalId, QualifiedId, VerificationScope},
+    model::{FunctionEnv, GlobalEnv, Loc, VerificationScope},
     pragmas::{
         CONDITION_SUSPENDABLE_PROP, DELEGATE_INVARIANTS_TO_CALLER_PRAGMA,
         DISABLE_INVARIANTS_IN_BODY_PRAGMA, VERIFY_PRAGMA,
@@ -25,10 +25,7 @@ use move_model::{
 };
 
 use crate::{
-    function_target::{FunctionData, FunctionTarget},
-    function_target_pipeline::{FunctionTargetProcessor, FunctionTargetsHolder, FunctionVariant},
-    options::ProverOptions,
-    usage_analysis,
+  function_target::{FunctionData, FunctionTarget}, function_target_pipeline::{FunctionTargetProcessor, FunctionTargetsHolder, FunctionVariant}, options::ProverOptions, stackless_bytecode::{Bytecode, Operation}
 };
 
 /// The annotation for information about verification.
@@ -123,6 +120,14 @@ impl FunctionTargetProcessor for VerificationAnalysisProcessor {
                 && Self::is_within_verification_scope(fun_env)
             {
                 Self::mark_verified(fun_env, &mut data, targets);
+                let dynamic_loc = Self::find_dynamics_in_function(&self, fun_env, &data);
+                if dynamic_loc.is_some() {
+                    env.diag(
+                        Severity::Error,
+                        &dynamic_loc.unwrap(),
+                        "Function uses unsupported dynamic fields",
+                    );
+                }
             }
             return data;
         }
@@ -448,6 +453,41 @@ impl VerificationAnalysisProcessor {
             }
             Self::mark_inlined(&callee_env, targets);
         }
+    }
+
+    pub fn find_dynamics_in_function(
+        &self, 
+        func_env: &FunctionEnv,
+        data: &FunctionData,
+    ) -> Option<Loc> {
+        let env = func_env.module_env.env;
+        let target = FunctionTarget::new(func_env, data);
+
+        for cp in target.get_bytecode() {
+            match cp {
+                Bytecode::Call(attr, _, operation, _, _) => {
+                    match operation {
+                        Operation::Function(mod_id, _, _) => {
+                            let module_name = env
+                                .symbol_pool()
+                                .string(env
+                                    .get_module(*mod_id)
+                                    .get_name()
+                                    .name()
+                                );
+
+                            if ["dynamic_field", "dynamic_object_field"].contains(&module_name.as_str()) {
+                                return Some(target.get_bytecode_loc(*attr)); 
+                            }
+                        },
+                        _ => {}
+                    };
+                },
+                _ => {},
+            }
+        }
+
+        None
     }
 }
 
