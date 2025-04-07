@@ -1,4 +1,9 @@
 ---
-source: crates/move-package-alt/tests/manifest_parsing_test.rs
+source: crates/move-package-alt/tests/manifest_parsing_tests.rs
 ---
-Err(invalid type: integer `9123`, expected a string for key `environments.mainnet`)
+Err(TOML parse error at line 8, column 11
+  |
+8 | mainnet = 9123
+  |           ^^^^
+invalid type: integer `9123`, expected a string
+)

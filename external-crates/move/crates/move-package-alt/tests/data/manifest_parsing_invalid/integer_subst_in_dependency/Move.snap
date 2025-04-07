@@ -1,4 +1,9 @@
 ---
 source: crates/move-package-alt/tests/manifest_parsing_tests.rs
 ---
-Err(invalid type: map, expected a string for key `dependencies.A.rename-from`)
+Err(TOML parse error at line 9, column 34
+  |
+9 | A = { local = "a", rename-from = { "A" = 1 } }
+  |                                  ^^^^^^^^^^^
+invalid type: map, expected a string
+)

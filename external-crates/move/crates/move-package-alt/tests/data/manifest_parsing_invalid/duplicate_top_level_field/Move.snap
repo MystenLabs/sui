@@ -5,7 +5,6 @@ Err(TOML parse error at line 5, column 1
   |
 5 | [package]
   | ^
-Duplicate key `package` in document root
-
-While parsing a Table Header
+invalid table header
+duplicate key `package` in document root
 )
