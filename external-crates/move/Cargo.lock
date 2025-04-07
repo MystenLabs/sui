@@ -2383,6 +2383,7 @@ dependencies = [
  "move-compiler",
  "move-docgen",
  "move-model",
+ "move-package",
  "move-prover-boogie-backend",
  "move-prover-test-utils",
  "move-stackless-bytecode",
