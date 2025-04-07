@@ -2357,12 +2357,14 @@ name = "move-package-alt"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "codespan-reporting",
  "datatest-stable",
  "derive-where",
  "insta",
  "move-command-line-common",
  "serde",
  "serde_spanned",
+ "thiserror",
  "toml",
  "toml_edit 0.22.24",
 ]

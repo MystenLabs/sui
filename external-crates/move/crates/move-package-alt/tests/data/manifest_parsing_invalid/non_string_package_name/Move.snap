@@ -1,7 +1,7 @@
 ---
-source: crates/move-package-alt/tests/manifest_parsing_tests.rs
+source: crates/move-package-alt/tests/parsing_tests.rs
 ---
-TOML parse error at line 2, column 8
+error: TOML parse error at line 2, column 8
   |
 2 | name = 1
   |        ^

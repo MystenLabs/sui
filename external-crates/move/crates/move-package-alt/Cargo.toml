@@ -13,6 +13,8 @@ serde_spanned.workspace = true
 toml.workspace = true
 anyhow.workspace = true
 derive-where.workspace = true
+thiserror.workspace = true
+codespan-reporting.workspace = true
 
 [dev-dependencies]
 move-command-line-common.workspace = true
