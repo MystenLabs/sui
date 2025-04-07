@@ -8,6 +8,10 @@ jobs:
     env: 
       BRANCH_NAME: ${{ github.head_ref || github.ref_name }}
 
+    concurrency:
+      group: ${{ github.head_ref || github.ref_name }}
+      cancel-in-progress: true
+
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
