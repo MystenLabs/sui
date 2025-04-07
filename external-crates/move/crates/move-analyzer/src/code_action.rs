@@ -29,7 +29,10 @@ use url::Url;
 use vfs::VfsPath;
 
 use move_compiler::{
-    expansion::ast::ModuleIdent, linters::LintLevel, parser::ast::NameAccessChain_, shared::Name,
+    expansion::ast::ModuleIdent,
+    linters::LintLevel,
+    parser::ast::{LeadingNameAccess_, NameAccessChain_},
+    shared::{Identifier, Name},
 };
 use move_package::source_package::parsed_manifest::Dependencies;
 
@@ -40,7 +43,7 @@ use move_package::source_package::parsed_manifest::Dependencies;
 // as they are (at least most of them) dynamically generated
 // (in naming/translate.rs).
 #[derive(Debug, EnumIter)]
-enum SingleElementDiagErrPrefix {
+enum SingleElementChainDiagPrefix {
     UnboundType,
     UnboundStructOrEnum,
     UnboundStruct,
@@ -48,16 +51,32 @@ enum SingleElementDiagErrPrefix {
     UnboundFunction,
 }
 
-impl SingleElementDiagErrPrefix {
+impl SingleElementChainDiagPrefix {
     fn as_str(&self) -> &'static str {
         // we include `'` at the end of the prefix as some of the prefixes
         // are shared with error messages that cannot be auto-fixed
         match self {
-            SingleElementDiagErrPrefix::UnboundType => "Unbound type '",
-            SingleElementDiagErrPrefix::UnboundStruct => "Unbound struct '",
-            SingleElementDiagErrPrefix::UnboundStructOrEnum => "Unbound struct or enum '",
-            SingleElementDiagErrPrefix::UnboundTypeOrFunction => "Unbound datatype or function '",
-            SingleElementDiagErrPrefix::UnboundFunction => "Unbound function '",
+            SingleElementChainDiagPrefix::UnboundType => "Unbound type '",
+            SingleElementChainDiagPrefix::UnboundStruct => "Unbound struct '",
+            SingleElementChainDiagPrefix::UnboundStructOrEnum => "Unbound struct or enum '",
+            SingleElementChainDiagPrefix::UnboundTypeOrFunction => "Unbound datatype or function '",
+            SingleElementChainDiagPrefix::UnboundFunction => "Unbound function '",
+        }
+    }
+}
+
+/// The following reflects prefixes of error messages for
+/// problems with a two-element access chain that are subject
+/// to auto fixes.
+#[derive(Debug, EnumIter)]
+enum TwoElementChainDiagPrefix {
+    UnresolvedName,
+}
+
+impl TwoElementChainDiagPrefix {
+    fn as_str(&self) -> &'static str {
+        match self {
+            TwoElementChainDiagPrefix::UnresolvedName => "Could not resolve the name '",
         }
     }
 }
@@ -100,7 +119,9 @@ fn access_chain_autofix_actions(
     }
 
     if !params.context.diagnostics.iter().any(|diag| {
-        SingleElementDiagErrPrefix::iter().any(|prefix| diag.message.starts_with(prefix.as_str()))
+        SingleElementChainDiagPrefix::iter().any(|prefix| diag.message.starts_with(prefix.as_str()))
+            || TwoElementChainDiagPrefix::iter()
+                .any(|prefix| diag.message.starts_with(prefix.as_str()))
     }) {
         return code_actions;
     }
@@ -111,8 +132,10 @@ fn access_chain_autofix_actions(
     };
 
     for diag in params.context.diagnostics.into_iter() {
-        if !SingleElementDiagErrPrefix::iter()
+        if !SingleElementChainDiagPrefix::iter()
             .any(|prefix| diag.message.starts_with(prefix.as_str()))
+            && !TwoElementChainDiagPrefix::iter()
+                .any(|prefix| diag.message.starts_with(prefix.as_str()))
         {
             continue;
         }
@@ -147,65 +170,102 @@ fn access_chain_autofix_actions(
             // no auto-fixes in imports
             continue;
         }
-        if let NameAccessChain_::Single(path_entry) = chain.value {
-            SingleElementDiagErrPrefix::iter().for_each(|prefix| match prefix {
-                SingleElementDiagErrPrefix::UnboundType
-                | SingleElementDiagErrPrefix::UnboundStructOrEnum => {
-                    if diag.message.starts_with(prefix.as_str()) {
-                        single_element_access_chain_autofixes(
-                            &mut code_actions,
-                            &symbols,
-                            cursor,
-                            params.text_document.uri.clone(),
-                            path_entry.name,
-                            all_mod_structs_to_import(&symbols, cursor)
-                                .chain(all_mod_enums_to_import(&symbols, cursor)),
-                            diag.clone(),
-                        );
+        eprintln!("chain: {:?}", chain);
+        match chain.value {
+            NameAccessChain_::Single(path_entry) => {
+                SingleElementChainDiagPrefix::iter().for_each(|prefix| match prefix {
+                    SingleElementChainDiagPrefix::UnboundType
+                    | SingleElementChainDiagPrefix::UnboundStructOrEnum => {
+                        if diag.message.starts_with(prefix.as_str()) {
+                            single_element_access_chain_autofixes(
+                                &mut code_actions,
+                                &symbols,
+                                cursor,
+                                params.text_document.uri.clone(),
+                                path_entry.name,
+                                all_mod_structs_to_import(&symbols, cursor)
+                                    .chain(all_mod_enums_to_import(&symbols, cursor)),
+                                diag.clone(),
+                            );
+                        }
+                    }
+                    SingleElementChainDiagPrefix::UnboundStruct => {
+                        if diag.message.starts_with(prefix.as_str()) {
+                            single_element_access_chain_autofixes(
+                                &mut code_actions,
+                                &symbols,
+                                cursor,
+                                params.text_document.uri.clone(),
+                                path_entry.name,
+                                all_mod_structs_to_import(&symbols, cursor),
+                                diag.clone(),
+                            );
+                        }
+                    }
+                    SingleElementChainDiagPrefix::UnboundTypeOrFunction => {
+                        if diag.message.starts_with(prefix.as_str()) {
+                            single_element_access_chain_autofixes(
+                                &mut code_actions,
+                                &symbols,
+                                cursor,
+                                params.text_document.uri.clone(),
+                                path_entry.name,
+                                all_mod_structs_to_import(&symbols, cursor)
+                                    .chain(all_mod_enums_to_import(&symbols, cursor))
+                                    .chain(all_mod_functions_to_import(&symbols, cursor)),
+                                diag.clone(),
+                            );
+                        }
+                    }
+                    SingleElementChainDiagPrefix::UnboundFunction => {
+                        if diag.message.starts_with(prefix.as_str()) {
+                            single_element_access_chain_autofixes(
+                                &mut code_actions,
+                                &symbols,
+                                cursor,
+                                params.text_document.uri.clone(),
+                                path_entry.name,
+                                all_mod_functions_to_import(&symbols, cursor),
+                                diag.clone(),
+                            );
+                        }
+                    }
+                });
+            }
+            NameAccessChain_::Path(name_path) => {
+                eprintln!("name_path: {:?}", name_path);
+                if let LeadingNameAccess_::Name(unbound_name) = name_path.root.name.value {
+                    eprintln!("unbound_name: {:?}", unbound_name);
+                    if name_path.entries.len() == 1 {
+                        eprintln!("two element chain");
+                        // we assume that diagnostic reporting unbound chain component
+                        // is on the first element of the chain
+                        if unbound_name.loc.contains(&cursor.loc) {
+                            eprintln!("contains cursor");
+                            TwoElementChainDiagPrefix::iter().for_each(|prefix| match prefix {
+                                TwoElementChainDiagPrefix::UnresolvedName => {
+                                    if diag.message.starts_with(prefix.as_str()) {
+                                        two_element_access_chain_autofixes(
+                                            &mut code_actions,
+                                            &symbols,
+                                            cursor,
+                                            params.text_document.uri.clone(),
+                                            unbound_name,
+                                            name_path.entries[0].name,
+                                            all_mod_structs_to_import(&symbols, cursor)
+                                                .chain(all_mod_enums_to_import(&symbols, cursor))
+                                                .chain(all_mod_functions_to_import(
+                                                    &symbols, cursor,
+                                                )),
+                                            diag.clone(),
+                                        );
+                                    }
+                                }
+                            });
+                        }
                     }
                 }
-                SingleElementDiagErrPrefix::UnboundStruct => {
-                    if diag.message.starts_with(prefix.as_str()) {
-                        single_element_access_chain_autofixes(
-                            &mut code_actions,
-                            &symbols,
-                            cursor,
-                            params.text_document.uri.clone(),
-                            path_entry.name,
-                            all_mod_structs_to_import(&symbols, cursor),
-                            diag.clone(),
-                        );
-                    }
-                }
-                SingleElementDiagErrPrefix::UnboundTypeOrFunction => {
-                    if diag.message.starts_with(prefix.as_str()) {
-                        single_element_access_chain_autofixes(
-                            &mut code_actions,
-                            &symbols,
-                            cursor,
-                            params.text_document.uri.clone(),
-                            path_entry.name,
-                            all_mod_structs_to_import(&symbols, cursor)
-                                .chain(all_mod_enums_to_import(&symbols, cursor))
-                                .chain(all_mod_functions_to_import(&symbols, cursor)),
-                            diag.clone(),
-                        );
-                    }
-                }
-                SingleElementDiagErrPrefix::UnboundFunction => {
-                    if diag.message.starts_with(prefix.as_str()) {
-                        single_element_access_chain_autofixes(
-                            &mut code_actions,
-                            &symbols,
-                            cursor,
-                            params.text_document.uri.clone(),
-                            path_entry.name,
-                            all_mod_functions_to_import(&symbols, cursor),
-                            diag.clone(),
-                        );
-                    }
-                }
-            });
+            }
         }
     }
 
@@ -252,6 +312,71 @@ fn single_element_access_chain_autofixes<'a, I, K>(
                 if let Some(import_insertion_info) = import_insertion_info(symbols, cursor) {
                     let title = format!("Import as `{}{}`", qualified_prefix, unbound_name);
                     let import_text = format!("use {}{}", qualified_prefix, unbound_name);
+                    let text_edit = auto_import_text_edit(import_text, import_insertion_info);
+                    code_actions.push(access_chain_code_action(
+                        title,
+                        text_edit,
+                        diag.clone(),
+                        file_url.clone(),
+                    ));
+                }
+            }
+        }
+    }
+}
+
+/// Create auto-fixes for a two-element access chain where
+/// the first element is unbound.
+fn two_element_access_chain_autofixes<'a, I, K>(
+    code_actions: &mut Vec<CodeAction>,
+    symbols: &Symbols,
+    cursor: &CursorContext,
+    file_url: Url,
+    unbound_first_name: Name,
+    second_name: Name,
+    mod_members: I,
+    diag: Diagnostic,
+) where
+    I: Iterator<Item = (ModuleIdent, K)>,
+    K: Iterator<Item = Symbol>,
+{
+    let Some(unbound_name_lsp_pos) =
+        loc_start_to_lsp_position_opt(&symbols.files, &unbound_first_name.loc)
+    else {
+        return;
+    };
+    for (mod_ident, mod_members) in mod_members {
+        for member_name in mod_members {
+            if mod_ident.value.module.value() == unbound_first_name.value
+                && member_name == second_name.value
+            {
+                let qualified_prefix = format!("{}::", mod_ident.value.address);
+                let text_edit = TextEdit {
+                    range: Range {
+                        start: unbound_name_lsp_pos,
+                        end: unbound_name_lsp_pos,
+                    },
+                    new_text: qualified_prefix.clone(),
+                };
+                let title = format!(
+                    "Qualify as `{}{}::{}`",
+                    qualified_prefix, unbound_first_name, second_name
+                );
+                code_actions.push(access_chain_code_action(
+                    title,
+                    text_edit,
+                    diag.clone(),
+                    file_url.clone(),
+                ));
+                if let Some(import_insertion_info) = import_insertion_info(symbols, cursor) {
+                    let title = format!(
+                        "Import as `{}{}::{}`",
+                        qualified_prefix, unbound_first_name, second_name
+                    );
+                    let import_text = format!(
+                        "use {}{}::{}",
+                        qualified_prefix, unbound_first_name, second_name
+                    );
                     let text_edit = auto_import_text_edit(import_text, import_insertion_info);
                     code_actions.push(access_chain_code_action(
                         title,
