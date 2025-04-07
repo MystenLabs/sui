@@ -3,7 +3,6 @@ use codespan_reporting::term::termcolor::{ColorChoice, StandardStream, WriteColo
 use glob;
 use move_compiler::diagnostics::warning_filters::WarningFiltersBuilder;
 use move_compiler::editions::Flavor;
-use move_model::model::GlobalEnv;
 use move_package::{BuildConfig as MoveBuildConfig, ModelConfig};
 use move_prover::run_boogie_gen;
 use move_prover::run_move_prover_with_model;
@@ -43,7 +42,7 @@ fn run_prover(file_path: &PathBuf) -> String {
         let mut config = MoveBuildConfig::default();
         config.default_flavor = Some(Flavor::Sui);
         config.verify_mode = true;
-        config.silence_warnings = true;
+        config.silence_warnings = false; // Disable warning suppression
 
         // Try to build the model
         let result = match config.move_model_for_package(

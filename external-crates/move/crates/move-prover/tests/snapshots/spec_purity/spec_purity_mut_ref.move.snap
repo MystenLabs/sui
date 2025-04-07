@@ -1,6 +1,7 @@
 ---
 source: crates/move-prover/tests/integration.rs
 expression: output
+snapshot_kind: text
 ---
 exiting with bytecode transformation errors
 warning: unused variable
