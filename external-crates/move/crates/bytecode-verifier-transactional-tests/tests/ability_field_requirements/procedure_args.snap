@@ -1,6 +1,5 @@
 ---
 source: crates/move-transactional-test-runner/src/framework.rs
-input_file: crates/bytecode-verifier-transactional-tests/tests/ability_field_requirements/procedure_args.mvir
 ---
 processed 2 tasks
 

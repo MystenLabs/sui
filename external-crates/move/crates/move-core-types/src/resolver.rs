@@ -76,7 +76,7 @@ impl SerializedPackage {
 }
 
 /// # Traits for resolving Move modules and resources from persistent storage
-
+///
 /// A persistent storage backend that can resolve modules by address + name.
 /// Storage backends should return
 ///   - Ok(Some(..)) if the data exists

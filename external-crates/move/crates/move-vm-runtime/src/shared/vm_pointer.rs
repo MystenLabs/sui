@@ -108,7 +108,7 @@ unsafe impl<T> Sync for VMPointer<T> {}
 
 impl<T: ::std::fmt::Debug> ::std::fmt::Debug for VMPointer<T> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "ptr->{:?}", to_ref(self.0))
+        write!(f, "ptr->{:p}", to_ref(self.0))
     }
 }
 

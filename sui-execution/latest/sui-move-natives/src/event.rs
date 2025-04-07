@@ -29,6 +29,7 @@ pub struct EventEmitCostParams {
  *              + event_emit_tag_size_derivation_cost_per_byte * tag_size         | converting type
  *              + event_emit_output_cost_per_byte * (tag_size + event_size)       | emitting the actual event
  **************************************************************************************************/
+#[allow(deprecated)]
 pub fn emit(
     context: &mut NativeContext,
     mut ty_args: Vec<Type>,

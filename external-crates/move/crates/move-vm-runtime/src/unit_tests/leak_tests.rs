@@ -1,9 +1,15 @@
 // Copyright (c) The Move Contributors
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::dev_utils::{
-    gas_schedule::GasStatus, in_memory_test_adapter::InMemoryTestAdapter, storage::StoredPackage,
-    vm_test_adapter::VMTestAdapter as _,
+use crate::{
+    dev_utils::{
+        gas_schedule::GasStatus, in_memory_test_adapter::InMemoryTestAdapter,
+        storage::StoredPackage, vm_test_adapter::VMTestAdapter as _,
+    },
+    execution::{
+        interpreter::locals::MachineHeap,
+        values::{StructRef, VMValueCast, Value},
+    },
 };
 use move_binary_format::file_format::{
     empty_module, Bytecode::*, CodeUnit, FunctionDefinition, FunctionHandle, FunctionHandleIndex,
@@ -76,4 +82,44 @@ fn leak_with_abort() {
 
     let mem_stats = memory_stats::memory_stats().unwrap();
     assert!(mem_stats.physical_mem < 200000000);
+}
+
+/// Check if an intentional cycle in locals causes an infinite-depth Drop
+#[test]
+#[allow(clippy::drop_non_drop)]
+fn leak_with_local_cycle() {
+    let mut heap = MachineHeap::new();
+    let mut frame = heap.allocate_stack_frame(vec![], 1).unwrap();
+
+    let v0 = Value::make_struct(vec![Value::u8(0)]);
+    let _ = frame.store_loc(0, v0);
+
+    {
+        let v0_ref = frame.borrow_loc(0).unwrap();
+        let v0_box = frame.UNSAFE_copy_local_box(0);
+        println!("v0 ref: {:?}", v0_ref);
+        println!("box: {:?}", v0_box);
+
+        let mut struct_ref: StructRef = VMValueCast::cast(v0_ref).unwrap();
+        println!("struct ref: {:?}", struct_ref);
+
+        struct_ref.UNSAFE_write_field_box(0, v0_box).unwrap();
+
+        // Printing causes a Stack Overflow
+        // let v0_ref = frame.borrow_loc(0).unwrap();
+        // println!("v0 ref: {:?}", v0_ref);
+    }
+
+    let v0_ref = frame.borrow_loc(0).unwrap();
+    let field_ref = VMValueCast::<StructRef>::cast(v0_ref)
+        .unwrap()
+        .borrow_field(0)
+        .unwrap();
+    let v0_ref = frame.borrow_loc(0).unwrap();
+    // This does not stack overflow due to pointer equality checking of references.
+    assert!(v0_ref.equals(&field_ref).unwrap());
+
+    // This ensures dropping a cycle does not cause an infinite loop
+    drop(frame);
+    drop(heap);
 }

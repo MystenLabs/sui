@@ -506,7 +506,7 @@ impl CallFrame {
 // Other impls
 // -------------------------------------------------------------------------------------------------
 
-impl<'a, 'b> TypeView for ResolvableType<'a, 'b> {
+impl TypeView for ResolvableType<'_, '_> {
     fn to_type_tag(&self) -> TypeTag {
         self.vtables.type_to_type_tag(self.ty).unwrap()
     }

@@ -64,10 +64,10 @@ gas summary: computation_cost: 1000000, storage_cost: 6429600,  storage_rebate: 
 
 task 9, line 83:
 //# run test::m1::write_back --sender A --args object(2,4)
-mutated: object(0,0), object(2,1), object(2,3), object(2,4)
-gas summary: computation_cost: 1000000, storage_cost: 6429600,  storage_rebate: 6365304, non_refundable_storage_fee: 64296
+mutated: object(0,0), object(2,4)
+gas summary: computation_cost: 1000000, storage_cost: 2242000,  storage_rebate: 2219580, non_refundable_storage_fee: 22420
 
 task 10, line 85:
 //# run test::m1::write_back --sender A --args object(2,5)
-mutated: object(0,0), object(2,0), object(2,2), object(2,5)
-gas summary: computation_cost: 1000000, storage_cost: 6429600,  storage_rebate: 6365304, non_refundable_storage_fee: 64296
+mutated: object(0,0), object(2,5)
+gas summary: computation_cost: 1000000, storage_cost: 2242000,  storage_rebate: 2219580, non_refundable_storage_fee: 22420
