@@ -41,24 +41,10 @@ fn run_prover(file_path: &PathBuf) -> String {
         }
         Err(err) => {
             // For model-building errors, we need to reformat the error to match the expected format
-            // Check if the error contains a compiler error
-            let err_str = format!("{}", err);
-            if err_str.contains("unexpected token") {
-                "Verification failed: exiting with model building errors
-error: unexpected token
-  ┌─ tests/inputs/compile-error.fail.move:5:1
-  │
-4 │   assert!(true
-  │          - To match this '('
-5 │ 
-  │ ^ Expected ')'"
-                    .to_string()
-            } else {
-                format!(
-                    "Verification failed: exiting with model building errors\n{}",
-                    err
-                )
-            }
+            format!(
+                "Verification failed: exiting with model building errors\n{}",
+                err
+            )
         }
     }
 }
