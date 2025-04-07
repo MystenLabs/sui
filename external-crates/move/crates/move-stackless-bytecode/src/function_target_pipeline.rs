@@ -5,7 +5,7 @@
 use bimap::btree::BiBTreeMap;
 use core::fmt;
 use std::{
-    collections::{btree_map::Entry as MapEntry, BTreeMap, BTreeSet},
+    collections::{BTreeMap, BTreeSet},
     fmt::Formatter,
     fs,
 };
@@ -24,7 +24,10 @@ use move_compiler::{
 };
 use move_symbol_pool::Symbol;
 
-use move_model::model::{DatatypeId, FunId, FunctionEnv, GlobalEnv, QualifiedId};
+use move_model::{
+    ast::ModuleName,
+    model::{DatatypeId, FunId, FunctionEnv, GlobalEnv, QualifiedId},
+};
 
 use crate::{
     function_target::{FunctionData, FunctionTarget},
@@ -313,25 +316,26 @@ impl FunctionTargetsHolder {
                 let function_spec = inner_attrs
                     .get_(&AttributeName_::Unknown(Symbol::from("function")))
                     .unwrap();
-            
+
                 if let Attribute_::Assigned(_, boxed_value) = &function_spec.value {
                     if let AttributeValue_::ModuleAccess(spanned) = &boxed_value.value {
-                        if let ModuleAccess_::ModuleAccess(module_ident, function_name) = &spanned.value {
+                        if let ModuleAccess_::ModuleAccess(module_ident, function_name) =
+                            &spanned.value
+                        {
                             let address = module_ident.value.address;
                             let module = &module_ident.value.module;
-            
-                            println!("Address: {:?}", address);
-                            println!("Module: {:?}", module);
-                            println!("Function name: {:?}", function_name);
-            
-                            // todo: use address if provided
-                            let module_sym = func_env.symbol_pool().make(&module.to_string());
+
+                            let addr_bytes = address.into_addr_bytes();
+                            let module_name = ModuleName::from_address_bytes_and_name(
+                                addr_bytes,
+                                func_env.symbol_pool().make(&module.to_string()),
+                            );
+                            
                             if let Some(module_env) =
-                                func_env.module_env.env.find_module_by_name(module_sym)
+                                func_env.module_env.env.find_module(&module_name)
                             {
                                 let func_sym = func_env.symbol_pool().make(&function_name.value);
                                 if let Some(target_func_env) = module_env.find_function(func_sym) {
-                                    println!("target_func_env: {:?}", target_func_env.get_name_str());
                                     let target_id = target_func_env.get_qualified_id();
                                     self.function_specs
                                         .insert(func_env.get_qualified_id(), target_id);
@@ -353,7 +357,6 @@ impl FunctionTargetsHolder {
                 }
                 self.scenario_specs.insert(func_env.get_qualified_id());
             }
-            
         }
 
         func_env.get_name_str().strip_suffix("_inv").map(|name| {
