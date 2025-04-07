@@ -19,7 +19,7 @@ use lsp_types::{
 };
 use move_symbol_pool::Symbol;
 use std::{
-    collections::{BTreeMap, HashMap},
+    collections::{BTreeMap, BTreeSet, HashMap},
     path::PathBuf,
     sync::{Arc, Mutex},
 };
@@ -290,9 +290,13 @@ fn single_element_access_chain_autofixes<'a, I, K>(
     else {
         return;
     };
+    let mut added_modules = BTreeSet::new();
     for (mod_ident, mod_members) in mod_members {
         // add pkg::module if module name matches unbound name
-        if mod_ident.value.module.value() == unbound_name.value {
+        if mod_ident.value.module.value() == unbound_name.value
+            && !added_modules.contains(&mod_ident)
+        {
+            added_modules.insert(mod_ident.clone());
             let qualified_prefix = format!("{}::", mod_ident.value.address);
             let text_edit = TextEdit {
                 range: Range {
