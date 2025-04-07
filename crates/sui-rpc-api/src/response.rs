@@ -40,7 +40,7 @@ pub async fn append_info_headers(
 
         headers.insert(
             X_SUI_TIMESTAMP,
-            crate::proto::types::timestamp_ms_to_proto(latest_checkpoint.timestamp_ms)
+            crate::proto::timestamp_ms_to_proto(latest_checkpoint.timestamp_ms)
                 .to_string()
                 .try_into()
                 .expect("timestamp is a valid HeaderValue"),

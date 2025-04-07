@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::proto::rpc::v2beta::GetServiceInfoResponse;
-use crate::proto::types::timestamp_ms_to_proto;
+use crate::proto::timestamp_ms_to_proto;
 use crate::RpcError;
 use crate::RpcService;
 use sui_sdk_types::CheckpointDigest;

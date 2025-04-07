@@ -8,7 +8,7 @@ use crate::proto::google::rpc::bad_request::FieldViolation;
 use crate::proto::rpc::v2beta::Epoch;
 use crate::proto::rpc::v2beta::GetEpochRequest;
 use crate::proto::rpc::v2beta::ProtocolConfig;
-use crate::proto::types::timestamp_ms_to_proto;
+use crate::proto::timestamp_ms_to_proto;
 use crate::ErrorReason;
 use crate::Result;
 use crate::RpcService;
