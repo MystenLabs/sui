@@ -91,7 +91,10 @@ pub enum SuiMoveNormalizedType {
     U256,
     Address,
     Signer,
-    Struct(Box<SuiMoveNormalizedStructType>),
+    Struct {
+        #[serde(flatten)]
+        inner: Box<SuiMoveNormalizedStructType>,
+    },
     Vector(Box<SuiMoveNormalizedType>),
     TypeParameter(SuiMoveTypeParameterIndex),
     Reference(Box<SuiMoveNormalizedType>),
@@ -302,15 +305,15 @@ impl<S: ToString> From<&NormalizedType<S>> for SuiMoveNormalizedType {
                     name,
                     type_arguments,
                 } = &**dt;
-                SuiMoveNormalizedType::Struct(Box::new(SuiMoveNormalizedStructType {
-                    address: address.to_hex_literal(),
-                    module: module.to_string(),
-                    name: name.to_string(),
-                    type_arguments: type_arguments
+                SuiMoveNormalizedType::new_struct(
+                    address.to_hex_literal(),
+                    module.to_string(),
+                    name.to_string(),
+                    type_arguments
                         .iter()
                         .map(SuiMoveNormalizedType::from)
                         .collect::<Vec<SuiMoveNormalizedType>>(),
-                }))
+                )
             }
             NormalizedType::Vector(v) => {
                 SuiMoveNormalizedType::Vector(Box::new(SuiMoveNormalizedType::from(&**v)))
@@ -338,6 +341,24 @@ impl From<AbilitySet> for SuiMoveAbilitySet {
                     Ability::Store => SuiMoveAbility::Store,
                 })
                 .collect::<Vec<SuiMoveAbility>>(),
+        }
+    }
+}
+
+impl SuiMoveNormalizedType {
+    pub fn new_struct(
+        address: String,
+        module: String,
+        name: String,
+        type_arguments: Vec<SuiMoveNormalizedType>,
+    ) -> Self {
+        SuiMoveNormalizedType::Struct {
+            inner: Box::new(SuiMoveNormalizedStructType {
+                address,
+                module,
+                name,
+                type_arguments,
+            }),
         }
     }
 }
