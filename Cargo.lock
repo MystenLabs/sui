@@ -15169,6 +15169,7 @@ dependencies = [
  "tonic-build 0.13.0",
  "tonic-health",
  "tonic-reflection",
+ "tonic-web",
  "tower 0.5.2",
  "tracing",
  "url",
@@ -17072,6 +17073,23 @@ dependencies = [
  "tokio-stream",
  "tonic 0.13.0",
  "tower 0.5.2",
+ "tower-layer",
+ "tower-service",
+ "tracing",
+]
+
+[[package]]
+name = "tonic-web"
+version = "0.13.0"
+source = "git+https://github.com/hyperium/tonic.git?rev=fee9c130c86a365b039f3e70a72a94ea28a9aaa9#fee9c130c86a365b039f3e70a72a94ea28a9aaa9"
+dependencies = [
+ "base64 0.22.1",
+ "bytes",
+ "http 1.1.0",
+ "http-body 1.0.1",
+ "pin-project",
+ "tokio-stream",
+ "tonic 0.13.0",
  "tower-layer",
  "tower-service",
  "tracing",

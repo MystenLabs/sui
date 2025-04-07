@@ -46,6 +46,7 @@ bytes.workspace = true
 
 tonic-health.workspace = true
 tonic-reflection.workspace = true
+tonic-web.workspace = true
 
 [dev-dependencies]
 protox = "0.7"
