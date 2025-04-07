@@ -27,4 +27,4 @@ For more information, refer to the documentation:
 -  [Move Specification Language](./doc/user/spec-lang.md)
 -  [Installation](./doc/user/install.md)
 -  [Testing](./tests/README.md)
--  [To be done] Move Prover Developer Guide
+-  Move Prover Developer Guide
