@@ -40,6 +40,12 @@ error: Consider removing non-pure calls form spec
    │                         ^^^^^^^^^^^^^^^^
 
 error: Consider removing non-pure calls form spec
+   ┌─ tests/inputs/spec_dynamic_field/spec_dynamic_object_check.move:33:28
+   │
+33 │         let dof_child_id = object::new(ctx);
+   │                            ^^^^^^^^^^^^^^^^
+
+error: Consider removing non-pure calls form spec
    ┌─ tests/inputs/spec_dynamic_field/spec_dynamic_object_check.move:37:9
    │
 37 │         ofield::add(&mut parent_ref.id, dfo_name, dfo_child);
