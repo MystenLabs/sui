@@ -40,8 +40,7 @@ impl Processor for ObjInfoTemp {
     // TODO: Add tests for this function and the pruner.
     fn process(&self, checkpoint: &Arc<CheckpointData>) -> Result<Vec<Self::Value>> {
         let cp_sequence_number = checkpoint.checkpoint_summary.sequence_number;
-        let checkpoint_input_objects: BTreeMap<ObjectID, &Object> =
-            checkpoint_input_objects(checkpoint);
+        let checkpoint_input_objects = checkpoint_input_objects(checkpoint)?;
         let latest_live_output_objects = checkpoint
             .latest_live_output_objects()
             .into_iter()
