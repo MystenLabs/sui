@@ -532,6 +532,7 @@ tonic = { version = "0.13", features = [
 tonic-build = { version = "0.13", features = ["prost", "transport"] }
 tonic-health = "0.13"
 tonic-reflection = "0.13"
+tonic-web = { git = "https://github.com/hyperium/tonic.git", rev = "fee9c130c86a365b039f3e70a72a94ea28a9aaa9" }
 # tonic-rustls = "0.1.0"
 tonic-rustls = { git = "https://github.com/bmwill/tonic-rustls", rev = "77c3334b8aa00a982fb432d77c768c41aab1b05e" }
 tower = { version = "0.5", features = [
@@ -755,5 +756,8 @@ sui-execution = { path = "sui-execution" }
 # move-stdlib = { path = "external-crates/move/move-stdlib" }
 # move-vm-runtime = { path = "external-crates/move/move-vm/runtime" }
 # move-bytecode-verifier = { path = "external-crates/move/move-bytecode-verifier" }
+
+[patch.'https://github.com/hyperium/tonic.git']
+tonic = "0.13"
 
 [patch.crates-io]

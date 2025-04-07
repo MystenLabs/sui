@@ -43,7 +43,7 @@ impl Services {
     }
 
     pub fn into_router(self) -> axum::Router {
-        self.router
+        self.router.layer(tonic_web::GrpcWebLayer::new())
     }
 }
 
