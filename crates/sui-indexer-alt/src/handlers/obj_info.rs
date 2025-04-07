@@ -253,7 +253,7 @@ mod tests {
 
         builder = builder
             .start_transaction(0)
-            .mutate_object(0)
+            .mutate_owned_object(0)
             .finish_transaction();
         let checkpoint2 = builder.build_checkpoint();
         let result = obj_info.process(&Arc::new(checkpoint2)).unwrap();
