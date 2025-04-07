@@ -1306,7 +1306,7 @@ impl DependencyGraph {
         let mut dev_dependencies = None;
         let mut packages = None;
         if !writer.is_empty() {
-            let toml = writer.parse::<toml_edit::Document>()?;
+            let toml = writer.parse::<toml_edit::DocumentMut>()?;
             if let Some(value) = toml.get("dependencies").and_then(|v| v.as_value()) {
                 dependencies = Some(value.clone());
             }

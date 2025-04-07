@@ -14,7 +14,7 @@ use serde::{Deserialize, Serialize};
 use serde_spanned::Spanned;
 use toml_edit::{
     visit_mut::{visit_table_like_kv_mut, visit_table_mut, VisitMut},
-    Document, InlineTable, Item, KeyMut, Table, Value,
+    DocumentMut, InlineTable, Item, KeyMut, Table, Value,
 };
 
 use crate::{
@@ -175,7 +175,7 @@ impl<F: MoveFlavor> Publication<F> {
 
 /// Replace every inline table in [toml] with an implicit standard table (implicit tables are not
 /// included if they have no keys directly inside them)
-fn expand_toml(toml: &mut Document) {
+fn expand_toml(toml: &mut DocumentMut) {
     struct Expander;
 
     impl VisitMut for Expander {
