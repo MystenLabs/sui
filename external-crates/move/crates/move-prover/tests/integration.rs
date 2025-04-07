@@ -91,6 +91,8 @@ fn run_move_tests() {
         let output = run_prover(&move_path);
         let filename = move_path.file_name().unwrap().to_string_lossy().to_string();
 
+        println!("{}", filename);
+
         let cp = move_path
             .parent()
             .unwrap()
