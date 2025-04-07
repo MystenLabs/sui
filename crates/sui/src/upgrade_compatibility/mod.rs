@@ -2262,7 +2262,7 @@ fn function_changed_diag(
 ) -> Result<Diagnostics, Error> {
     let mut diags = Diagnostics::new();
 
-    if old_function != new_function {
+    if !old_function.equals(new_function) {
         diags.extend(function_signature_mismatch_diag(
             function_name,
             old_function,

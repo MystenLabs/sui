@@ -97,7 +97,7 @@ struct Tables<S> {
 /// Normalized version of a `CompiledModule`: its address, name, struct declarations, and public
 /// function declarations.
 #[derive(Clone, Debug)]
-pub struct Module<S> {
+pub struct Module<S: Ord> {
     #[allow(unused)]
     tables: Tables<S>,
     pub id: ModuleId<S>,
@@ -596,7 +596,7 @@ impl<S> Tables<S> {
     }
 }
 
-impl<S> Module<S> {
+impl<S: Ord> Module<S> {
     /// Extract a normalized module from a `CompiledModule`. The module `m` should be verified,
     /// particularly with regards to correct offsets and bounds.
     /// If `include_code` is `false`, the bodies of the functions are not included but the
@@ -607,7 +607,7 @@ impl<S> Module<S> {
         include_code: bool,
     ) -> Self
     where
-        S: Clone + Ord,
+        S: Clone,
     {
         let tables = Tables::new(pool, m, include_code);
         let id = ModuleId::new(pool, &m.self_id());
@@ -670,10 +670,19 @@ impl<S> Module<S> {
             acc.saturating_add(Rc::strong_count(sig_rc).saturating_sub(1))
         })
     }
-}
 
-impl<S: PartialEq> PartialEq for Module<S> {
-    fn eq(&self, other: &Self) -> bool {
+    /// Panics if called with `include_code` set to `false`.
+    pub fn equals(&self, other: &Self) -> bool {
+        fn function_equals<S: Ord>(
+            functions: &BTreeMap<S, Rc<Function<S>>>,
+            other_functions: &BTreeMap<S, Rc<Function<S>>>,
+        ) -> bool {
+            functions.len() == other_functions.len()
+                && functions
+                    .iter()
+                    .zip(other_functions)
+                    .all(|((n1, f1), (n2, f2))| n1 == n2 && f1.equals(f2))
+        }
         let Self {
             tables: _,
             id,
@@ -691,12 +700,10 @@ impl<S: PartialEq> PartialEq for Module<S> {
             && friends == &other.friends
             && structs == &other.structs
             && enums == &other.enums
-            && functions == &other.functions
+            && function_equals(functions, &other.functions)
             && constants == &other.constants
     }
 }
-
-impl<S: Eq> Eq for Module<S> {}
 
 impl<S> Constant<S> {
     pub fn new<Pool: StringPool<String = S>>(
@@ -808,10 +815,12 @@ impl<S> Function<S> {
         assert!(self.code_included);
         &self.code
     }
-}
 
-impl<S: PartialEq> PartialEq for Function<S> {
-    fn eq(&self, other: &Self) -> bool {
+    /// Aborts if `code_included` is `false`.
+    pub fn equals(&self, other: &Self) -> bool
+    where
+        S: Eq,
+    {
         let Self {
             name,
             visibility,
@@ -835,8 +844,6 @@ impl<S: PartialEq> PartialEq for Function<S> {
             && code == &other.code
     }
 }
-
-impl<S: Eq> Eq for Function<S> {}
 
 impl<S> Enum<S> {
     pub fn new<Pool: StringPool<String = S>>(

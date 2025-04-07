@@ -143,7 +143,7 @@ impl PartialEq for SuiMoveNormalizedModule {
 
 const MAX_SIGNATURE_USAGE: usize = 1; //TODO
 
-impl<S: ToString> TryFrom<&NormalizedModule<S>> for SuiMoveNormalizedModule {
+impl<S: Ord + ToString> TryFrom<&NormalizedModule<S>> for SuiMoveNormalizedModule {
     type Error = anyhow::Error;
     fn try_from(module: &NormalizedModule<S>) -> Result<Self, Self::Error> {
         anyhow::ensure!(
