@@ -8,25 +8,15 @@ fn run_prover(file_path: &PathBuf) -> String {
     // the file_dir path is `tests`, make it as a Path
     let file_dir = Path::new("tests");
     let sources_dir = file_dir.join("sources");
-
-    // Keep track of files we renamed
-    let mut renamed_files = Vec::new();
-
-    // rename all .move files in the directory to .move.bak
-    // skip the file_path
-    for entry in std::fs::read_dir(sources_dir).unwrap() {
-        let entry = entry.unwrap();
-        let path = entry.path();
-        if path.is_file()
-            && path.extension().map_or(false, |ext| ext == "move")
-            && path != *file_path
-        {
-            std::fs::rename(&path, path.with_extension("move.bak")).unwrap();
-            renamed_files.push(path.clone());
-        }
+    // create the sources_dir if it doesn't exist
+    if !sources_dir.clone().exists() {
+        std::fs::create_dir_all(sources_dir.clone()).unwrap();
     }
+    // move the file_path to the sources_dir
+    let new_file_path = sources_dir.join(file_path.file_name().unwrap());
+    std::fs::rename(file_path, &new_file_path).unwrap();
 
-    println!("renamed_files: {:?}", renamed_files);
+    let new_file_path_clone = new_file_path.clone();
 
     // Setup cleanup that will execute even in case of panic or early return
     let result = std::panic::catch_unwind(|| {
@@ -71,13 +61,8 @@ fn run_prover(file_path: &PathBuf) -> String {
         result
     });
 
-    // ALWAYS perform cleanup regardless of success or failure
-    for path in renamed_files {
-        let backup_path = path.with_extension("move.bak");
-        if backup_path.exists() {
-            let _ = std::fs::rename(&backup_path, &path);
-        }
-    }
+    // rename the file_path to the original name
+    std::fs::rename(new_file_path_clone, file_path).unwrap();
 
     // Now handle the result of our operation
     match result {
@@ -88,11 +73,7 @@ fn run_prover(file_path: &PathBuf) -> String {
 
 #[test]
 fn run_move_tests() {
-    // rename Move.toml.bak to Move.toml
-    let move_toml_path = Path::new("tests/Move.toml.bak");
-    std::fs::rename(move_toml_path, Path::new("tests/Move.toml")).unwrap();
-
-    for entry in glob::glob("tests/sources/**/*.move").expect("Invalid glob pattern") {
+    for entry in glob::glob("tests/inputs/**/*.move").expect("Invalid glob pattern") {
         let move_path = entry.expect("Failed to read file path");
         let output = run_prover(&move_path);
         let filename = move_path.file_name().unwrap().to_string_lossy().to_string();
@@ -118,8 +99,4 @@ fn run_move_tests() {
             insta::assert_snapshot!(filename, output);
         });
     }
-
-    // rename Move.toml.bak to Move.toml
-    let move_toml_path = Path::new("tests/Move.toml");
-    std::fs::rename(move_toml_path, Path::new("tests/Move.toml.bak")).unwrap();
 }
