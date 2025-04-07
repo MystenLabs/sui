@@ -1,5 +1,6 @@
 module prover::ghost;
 
+#[spec_only]
 use prover::prover;
 
 #[spec_only]
@@ -10,9 +11,9 @@ public native fun set<T, U>(x: &U);
 
 #[spec]
 public fun set_spec<T, U>(x: &U) {
-    declare_global_mut<T, U>();
-    set<T, U>(x);
-    prover::ensures(global<T, U>() == x);
+  declare_global_mut<T, U>();
+  set<T, U>(x);
+  prover::ensures(global<T, U>() == x);
 }
 
 #[spec_only]
