@@ -354,8 +354,9 @@ impl FunctionTargetsHolder {
                             .insert(func_env.get_qualified_id(), target_id);
                         return;
                     }
+                } else {
+                    self.scenario_specs.insert(func_env.get_qualified_id());
                 }
-                self.scenario_specs.insert(func_env.get_qualified_id());
             }
         }
 
