@@ -7645,7 +7645,6 @@ dependencies = [
  "move-docgen",
  "move-ir-types",
  "move-package",
- "move-prover",
  "move-stdlib",
  "move-stdlib-natives",
  "move-unit-test",
