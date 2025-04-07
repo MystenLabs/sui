@@ -1,9 +1,8 @@
 ---
 source: crates/move-prover/tests/integration.rs
 expression: output
-snapshot_kind: text
 ---
-Verification failed: exiting with model building errors
+exiting with model building errors
 error: unexpected token
   ┌─ tests/inputs/compile-error.fail.move:5:1
   │
