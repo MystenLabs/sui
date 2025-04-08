@@ -296,7 +296,7 @@ impl FunctionTargetsHolder {
             let is_verify_spec =
                 inner_attrs.contains_key_(&AttributeName_::Unknown(Symbol::from("prove")));
             let is_path_spec: bool =
-                inner_attrs.contains_key_(&AttributeName_::Unknown(Symbol::from("function")));
+                inner_attrs.contains_key_(&AttributeName_::Unknown(Symbol::from("target")));
 
             if !is_verify_spec && !is_focus_spec {
                 self.no_verify_specs.insert(func_env.get_qualified_id());
@@ -314,7 +314,7 @@ impl FunctionTargetsHolder {
 
             if is_path_spec {
                 let function_spec = inner_attrs
-                    .get_(&AttributeName_::Unknown(Symbol::from("function")))
+                    .get_(&AttributeName_::Unknown(Symbol::from("target")))
                     .unwrap();
 
                 if let Attribute_::Assigned(_, boxed_value) = &function_spec.value {

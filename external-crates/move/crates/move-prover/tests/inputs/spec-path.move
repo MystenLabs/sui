@@ -15,7 +15,7 @@ module 0x43::foo_spec_0 {
     use prover::prover::{ensures, requires};
     use 0x42::foo;
 
-    #[spec(function = foo::inc)]
+    #[spec(target = foo::inc)]
     public fun foo_spec_mod_fun(x: u64): u64 {
         requires(x < std::u64::max_value!());
         let res = foo::inc(x);
@@ -25,7 +25,7 @@ module 0x43::foo_spec_0 {
         res
     }
 
-    #[spec(prove, function = foo::inc)]
+    #[spec(prove, target = foo::inc)]
     public fun foo_spec_mod_fun_prove(x: u64): u64 {
         requires(x < std::u64::max_value!());
         let res = foo::inc(x);
@@ -41,7 +41,7 @@ module 0x44::foo_spec_1 {
     use prover::prover::{ensures, requires};
     use 0x42::foo::inc;
 
-    #[spec(function = 0x42::foo::inc)]
+    #[spec(target = 0x42::foo::inc)]
     public fun foo_spec_pkg_mod_fun(x: u64): u64 {
         requires(x < std::u64::max_value!());
         let res = inc(x);
@@ -51,7 +51,7 @@ module 0x44::foo_spec_1 {
         res
     }
 
-    #[spec(prove, function = 0x42::foo::inc)]
+    #[spec(prove, target = 0x42::foo::inc)]
     public fun foo_spec_pkg_mod_fun_prove(x: u64): u64 {
         requires(x < std::u64::max_value!());
         let res = inc(x);
