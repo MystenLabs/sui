@@ -28,7 +28,7 @@ pub trait StringPool {
     fn as_ident_str<'a>(&'a self, s: &'a Self::String) -> &'a IdentStr;
 }
 
-#[derive(Clone, Copy, Debug, Ord, PartialOrd, Eq, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Copy, Debug, Ord, PartialOrd, Eq, PartialEq, Hash, Serialize, Deserialize)]
 pub struct ModuleId<S> {
     pub address: AccountAddress,
     pub name: S,
