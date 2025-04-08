@@ -9,7 +9,7 @@
 // - if someone starts typing a new identifier, auto-imports for both modules
 //   and module members will be provided.
 // - if someone starts typing the second chain component (after `::`),
-//   auto-imports for module members will be provided.s
+//   auto-imports for module members will be provided.
 // No other auto-import completions will be provided
 
 use crate::{
