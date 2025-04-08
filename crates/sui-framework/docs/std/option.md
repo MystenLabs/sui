@@ -155,7 +155,7 @@ Return an <code><a href="../std/option.md#std_option_Option">Option</a></code> c
 Return true if <code>t</code> does not hold a value
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="../std/option.md#std_option_is_none">is_none</a>&lt;Element&gt;(t: &<a href="../std/option.md#std_option_Option">std::option::Option</a>&lt;Element&gt;): bool
+<pre><code><b>public</b> <b>fun</b> <a href="../std/option.md#std_option_is_none">is_none</a>&lt;Element&gt;(t: &<a href="../std/option.md#std_option_Option">std::option::Option</a>&lt;Element&gt;): <a href="../std/bool.md#std_bool">bool</a>
 </code></pre>
 
 
@@ -164,7 +164,7 @@ Return true if <code>t</code> does not hold a value
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="../std/option.md#std_option_is_none">is_none</a>&lt;Element&gt;(t: &<a href="../std/option.md#std_option_Option">Option</a>&lt;Element&gt;): bool {
+<pre><code><b>public</b> <b>fun</b> <a href="../std/option.md#std_option_is_none">is_none</a>&lt;Element&gt;(t: &<a href="../std/option.md#std_option_Option">Option</a>&lt;Element&gt;): <a href="../std/bool.md#std_bool">bool</a> {
     t.vec.is_empty()
 }
 </code></pre>
@@ -180,7 +180,7 @@ Return true if <code>t</code> does not hold a value
 Return true if <code>t</code> holds a value
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="../std/option.md#std_option_is_some">is_some</a>&lt;Element&gt;(t: &<a href="../std/option.md#std_option_Option">std::option::Option</a>&lt;Element&gt;): bool
+<pre><code><b>public</b> <b>fun</b> <a href="../std/option.md#std_option_is_some">is_some</a>&lt;Element&gt;(t: &<a href="../std/option.md#std_option_Option">std::option::Option</a>&lt;Element&gt;): <a href="../std/bool.md#std_bool">bool</a>
 </code></pre>
 
 
@@ -189,7 +189,7 @@ Return true if <code>t</code> holds a value
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="../std/option.md#std_option_is_some">is_some</a>&lt;Element&gt;(t: &<a href="../std/option.md#std_option_Option">Option</a>&lt;Element&gt;): bool {
+<pre><code><b>public</b> <b>fun</b> <a href="../std/option.md#std_option_is_some">is_some</a>&lt;Element&gt;(t: &<a href="../std/option.md#std_option_Option">Option</a>&lt;Element&gt;): <a href="../std/bool.md#std_bool">bool</a> {
     !t.vec.is_empty()
 }
 </code></pre>
@@ -206,7 +206,7 @@ Return true if the value in <code>t</code> is equal to <code>e_ref</code>
 Always returns <code><b>false</b></code> if <code>t</code> does not hold a value
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="../std/option.md#std_option_contains">contains</a>&lt;Element&gt;(t: &<a href="../std/option.md#std_option_Option">std::option::Option</a>&lt;Element&gt;, e_ref: &Element): bool
+<pre><code><b>public</b> <b>fun</b> <a href="../std/option.md#std_option_contains">contains</a>&lt;Element&gt;(t: &<a href="../std/option.md#std_option_Option">std::option::Option</a>&lt;Element&gt;, e_ref: &Element): <a href="../std/bool.md#std_bool">bool</a>
 </code></pre>
 
 
@@ -215,7 +215,7 @@ Always returns <code><b>false</b></code> if <code>t</code> does not hold a value
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="../std/option.md#std_option_contains">contains</a>&lt;Element&gt;(t: &<a href="../std/option.md#std_option_Option">Option</a>&lt;Element&gt;, e_ref: &Element): bool {
+<pre><code><b>public</b> <b>fun</b> <a href="../std/option.md#std_option_contains">contains</a>&lt;Element&gt;(t: &<a href="../std/option.md#std_option_Option">Option</a>&lt;Element&gt;, e_ref: &Element): <a href="../std/bool.md#std_bool">bool</a> {
     t.vec.<a href="../std/option.md#std_option_contains">contains</a>(e_ref)
 }
 </code></pre>
@@ -827,7 +827,7 @@ Equivalent to Rust's <code>t.<a href="../std/option.md#std_option_map">map</a>(f
 Return <code>None</code> if the value is <code>None</code>, otherwise return <code><a href="../std/option.md#std_option_Option">Option</a>&lt;T&gt;</code> if the predicate <code>f</code> returns true.
 
 
-<pre><code><b>public</b> <b>macro</b> <b>fun</b> <a href="../std/option.md#std_option_filter">filter</a>&lt;$T: drop&gt;($o: <a href="../std/option.md#std_option_Option">std::option::Option</a>&lt;$T&gt;, $f: |&$T| -&gt; bool): <a href="../std/option.md#std_option_Option">std::option::Option</a>&lt;$T&gt;
+<pre><code><b>public</b> <b>macro</b> <b>fun</b> <a href="../std/option.md#std_option_filter">filter</a>&lt;$T: drop&gt;($o: <a href="../std/option.md#std_option_Option">std::option::Option</a>&lt;$T&gt;, $f: |&$T| -&gt; <a href="../std/bool.md#std_bool">bool</a>): <a href="../std/option.md#std_option_Option">std::option::Option</a>&lt;$T&gt;
 </code></pre>
 
 
@@ -836,7 +836,7 @@ Return <code>None</code> if the value is <code>None</code>, otherwise return <co
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>macro</b> <b>fun</b> <a href="../std/option.md#std_option_filter">filter</a>&lt;$T: drop&gt;($o: <a href="../std/option.md#std_option_Option">Option</a>&lt;$T&gt;, $f: |&$T| -&gt; bool): <a href="../std/option.md#std_option_Option">Option</a>&lt;$T&gt; {
+<pre><code><b>public</b> <b>macro</b> <b>fun</b> <a href="../std/option.md#std_option_filter">filter</a>&lt;$T: drop&gt;($o: <a href="../std/option.md#std_option_Option">Option</a>&lt;$T&gt;, $f: |&$T| -&gt; <a href="../std/bool.md#std_bool">bool</a>): <a href="../std/option.md#std_option_Option">Option</a>&lt;$T&gt; {
     <b>let</b> o = $o;
     <b>if</b> (o.<a href="../std/option.md#std_option_is_some">is_some</a>() && $f(o.<a href="../std/option.md#std_option_borrow">borrow</a>())) o
     <b>else</b> <a href="../std/option.md#std_option_none">none</a>()
@@ -854,7 +854,7 @@ Return <code>None</code> if the value is <code>None</code>, otherwise return <co
 Return <code><b>false</b></code> if the value is <code>None</code>, otherwise return the result of the predicate <code>f</code>.
 
 
-<pre><code><b>public</b> <b>macro</b> <b>fun</b> <a href="../std/option.md#std_option_is_some_and">is_some_and</a>&lt;$T&gt;($o: &<a href="../std/option.md#std_option_Option">std::option::Option</a>&lt;$T&gt;, $f: |&$T| -&gt; bool): bool
+<pre><code><b>public</b> <b>macro</b> <b>fun</b> <a href="../std/option.md#std_option_is_some_and">is_some_and</a>&lt;$T&gt;($o: &<a href="../std/option.md#std_option_Option">std::option::Option</a>&lt;$T&gt;, $f: |&$T| -&gt; <a href="../std/bool.md#std_bool">bool</a>): <a href="../std/bool.md#std_bool">bool</a>
 </code></pre>
 
 
@@ -863,7 +863,7 @@ Return <code><b>false</b></code> if the value is <code>None</code>, otherwise re
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>macro</b> <b>fun</b> <a href="../std/option.md#std_option_is_some_and">is_some_and</a>&lt;$T&gt;($o: &<a href="../std/option.md#std_option_Option">Option</a>&lt;$T&gt;, $f: |&$T| -&gt; bool): bool {
+<pre><code><b>public</b> <b>macro</b> <b>fun</b> <a href="../std/option.md#std_option_is_some_and">is_some_and</a>&lt;$T&gt;($o: &<a href="../std/option.md#std_option_Option">Option</a>&lt;$T&gt;, $f: |&$T| -&gt; <a href="../std/bool.md#std_bool">bool</a>): <a href="../std/bool.md#std_bool">bool</a> {
     <b>let</b> o = $o;
     o.<a href="../std/option.md#std_option_is_some">is_some</a>() && $f(o.<a href="../std/option.md#std_option_borrow">borrow</a>())
 }

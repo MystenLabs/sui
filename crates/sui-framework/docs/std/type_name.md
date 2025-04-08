@@ -203,7 +203,7 @@ Returns true iff the TypeName represents a primitive type, i.e. one of
 u8, u16, u32, u64, u128, u256, bool, address, vector.
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="../std/type_name.md#std_type_name_is_primitive">is_primitive</a>(self: &<a href="../std/type_name.md#std_type_name_TypeName">std::type_name::TypeName</a>): bool
+<pre><code><b>public</b> <b>fun</b> <a href="../std/type_name.md#std_type_name_is_primitive">is_primitive</a>(self: &<a href="../std/type_name.md#std_type_name_TypeName">std::type_name::TypeName</a>): <a href="../std/bool.md#std_bool">bool</a>
 </code></pre>
 
 
@@ -212,9 +212,9 @@ u8, u16, u32, u64, u128, u256, bool, address, vector.
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="../std/type_name.md#std_type_name_is_primitive">is_primitive</a>(self: &<a href="../std/type_name.md#std_type_name_TypeName">TypeName</a>): bool {
+<pre><code><b>public</b> <b>fun</b> <a href="../std/type_name.md#std_type_name_is_primitive">is_primitive</a>(self: &<a href="../std/type_name.md#std_type_name_TypeName">TypeName</a>): <a href="../std/bool.md#std_bool">bool</a> {
     <b>let</b> bytes = self.name.as_bytes();
-    bytes == &b"bool" ||
+    bytes == &b"<a href="../std/bool.md#std_bool">bool</a>" ||
         bytes == &b"<a href="../std/u8.md#std_u8">u8</a>" ||
         bytes == &b"<a href="../std/u16.md#std_u16">u16</a>" ||
         bytes == &b"<a href="../std/u32.md#std_u32">u32</a>" ||
