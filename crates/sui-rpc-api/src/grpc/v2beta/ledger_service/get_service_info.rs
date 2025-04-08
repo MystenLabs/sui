@@ -30,7 +30,7 @@ pub fn get_service_info(service: &RpcService) -> Result<GetServiceInfoResponse, 
         timestamp: Some(timestamp_ms_to_proto(latest_checkpoint.timestamp_ms)),
         lowest_available_checkpoint,
         lowest_available_checkpoint_objects,
-        server_version: Some(service.software_version().into()),
+        server_version: service.server_version().map(ToString::to_string),
     }
     .pipe(Ok)
 }

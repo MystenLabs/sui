@@ -7,12 +7,13 @@ use crate::{
 };
 use axum::{
     error_handling::HandleErrorLayer,
-    extract::{ConnectInfo, Host, Path},
+    extract::{ConnectInfo, Path},
     http::{header::HeaderMap, StatusCode},
     response::{IntoResponse, Redirect, Response},
     routing::{get, post},
     BoxError, Extension, Json, Router,
 };
+use axum_extra::extract::Host;
 use http::Method;
 use mysten_metrics::spawn_monitored_task;
 use prometheus::Registry;
@@ -269,7 +270,7 @@ pub async fn start_faucet(
         .route("/", get(redirect))
         .route("/health", get(health))
         .route("/v1/faucet_discord", post(batch_faucet_discord))
-        .route("/v1/status/:task_id", get(request_status));
+        .route("/v1/status/{task_id}", get(request_status));
 
     // Combine all routes
     let app = Router::new()

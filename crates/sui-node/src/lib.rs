@@ -45,6 +45,7 @@ use sui_json_rpc_api::JsonRpcMetrics;
 use sui_network::randomness;
 use sui_rpc_api::subscription::SubscriptionService;
 use sui_rpc_api::RpcMetrics;
+use sui_rpc_api::ServerVersion;
 use sui_types::base_types::ConciseableName;
 use sui_types::crypto::RandomnessRound;
 use sui_types::digests::ChainIdentifier;
@@ -55,7 +56,6 @@ use sui_types::messages_consensus::ConsensusTransactionKind;
 use sui_types::sui_system_state::SuiSystemState;
 use sui_types::transaction::VerifiedCertificate;
 use tap::tap::TapFallible;
-use tokio::runtime::Handle;
 use tokio::sync::oneshot;
 use tokio::sync::{broadcast, mpsc, watch, Mutex};
 use tokio::task::{JoinHandle, JoinSet};
@@ -299,9 +299,13 @@ impl SuiNode {
     pub async fn start(
         config: NodeConfig,
         registry_service: RegistryService,
-        custom_rpc_runtime: Option<Handle>,
     ) -> Result<Arc<SuiNode>> {
-        Self::start_async(config, registry_service, custom_rpc_runtime, "unknown").await
+        Self::start_async(
+            config,
+            registry_service,
+            ServerVersion::new("sui-node", "unknown"),
+        )
+        .await
     }
 
     fn start_jwk_updater(
@@ -442,8 +446,7 @@ impl SuiNode {
     pub async fn start_async(
         config: NodeConfig,
         registry_service: RegistryService,
-        custom_rpc_runtime: Option<Handle>,
-        software_version: &'static str,
+        server_version: ServerVersion,
     ) -> Result<Arc<SuiNode>> {
         NodeConfigMetrics::new(&registry_service.default_registry()).record_metrics(&config);
         let mut config = config.clone();
@@ -810,8 +813,7 @@ impl SuiNode {
             &transaction_orchestrator.clone(),
             &config,
             &prometheus_registry,
-            custom_rpc_runtime,
-            software_version,
+            server_version,
         )
         .await?;
 
@@ -2197,8 +2199,7 @@ async fn build_http_servers(
     transaction_orchestrator: &Option<Arc<TransactiondOrchestrator<NetworkAuthorityClient>>>,
     config: &NodeConfig,
     prometheus_registry: &Registry,
-    _custom_runtime: Option<Handle>,
-    software_version: &'static str,
+    server_version: ServerVersion,
 ) -> Result<(
     HttpServers,
     Option<tokio::sync::mpsc::Sender<CheckpointData>>,
@@ -2287,10 +2288,9 @@ async fn build_http_servers(
     let (subscription_service_checkpoint_sender, subscription_service_handle) =
         SubscriptionService::build(prometheus_registry);
     let rpc_router = {
-        let mut rpc_service = sui_rpc_api::RpcService::new(
-            Arc::new(RestReadStore::new(state.clone(), store)),
-            software_version,
-        );
+        let mut rpc_service =
+            sui_rpc_api::RpcService::new(Arc::new(RestReadStore::new(state.clone(), store)));
+        rpc_service.with_server_version(server_version);
 
         if let Some(config) = config.rpc.clone() {
             rpc_service.with_config(config);

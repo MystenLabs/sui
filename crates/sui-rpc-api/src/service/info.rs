@@ -30,7 +30,7 @@ impl RpcService {
             timestamp: Some(timestamp_ms_to_proto(latest_checkpoint.timestamp_ms)),
             lowest_available_checkpoint,
             lowest_available_checkpoint_objects,
-            software_version: Some(self.software_version().into()),
+            software_version: self.server_version().map(ToString::to_string),
         }
         .pipe(Ok)
     }

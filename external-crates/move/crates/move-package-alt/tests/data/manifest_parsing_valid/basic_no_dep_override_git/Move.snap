@@ -1,0 +1,4 @@
+---
+source: crates/move-package-alt/tests/manifest_parsing_tests.rs
+---
+Manifest { package: PackageMetadata { name: "example", edition: "2024.beta", metadata: () }, environments: {"mainnet": "35834a8a", "testnet": "4c78adac"}, dependencies: {"foo": ManifestDependency { dependency_info: Git(GitDependency { repo: "https://example.com/foo.git", rev: "releases/v1", path: None, phantom: PhantomData<move_package_alt::dependency::Unpinned> }), is_override: true, rename_from: Some("Foo") }}, dep_overrides: {"mainnet": {"foo": ManifestDependencyOverride { dependency: None, address_info: Some(()), use_environment: Some("mainnet_alpha") }}} }

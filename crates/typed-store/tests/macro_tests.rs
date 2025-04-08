@@ -13,11 +13,11 @@ use std::time::Duration;
 use typed_store::metrics::SamplingInterval;
 use typed_store::rocks::list_tables;
 use typed_store::rocks::DBMap;
-use typed_store::rocks::{be_fix_int_ser, MetricConf};
+use typed_store::rocks::MetricConf;
 use typed_store::traits::Map;
 use typed_store::traits::TableSummary;
 use typed_store::traits::TypedStoreDebug;
-use typed_store::DBMapUtils;
+use typed_store::{be_fix_int_ser, DBMapUtils};
 
 fn temp_dir() -> std::path::PathBuf {
     tempfile::tempdir()
@@ -80,7 +80,7 @@ async fn macro_test() {
     for i in kv_range.clone() {
         let key = i.to_string();
         let value = i.to_string();
-        let k_buf = be_fix_int_ser::<String>(&key).unwrap();
+        let k_buf = be_fix_int_ser::<String>(&key);
         let value_buf = bcs::to_bytes::<String>(&value).unwrap();
         raw_key_bytes1 += k_buf.len();
         raw_value_bytes1 += value_buf.len();
@@ -97,7 +97,7 @@ async fn macro_test() {
     for i in kv_range.clone() {
         let key = i;
         let value = i.to_string();
-        let k_buf = be_fix_int_ser(key.borrow()).unwrap();
+        let k_buf = be_fix_int_ser(key.borrow());
         let value_buf = bcs::to_bytes::<String>(&value).unwrap();
         raw_key_bytes2 += k_buf.len();
         raw_value_bytes2 += value_buf.len();
