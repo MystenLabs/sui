@@ -854,7 +854,7 @@ Max gas price a validator can set is 100K MIST.
     );
     // Checks that the keys & addresses & PoP are valid.
     <a href="../sui_system/validator.md#sui_system_validator_metadata">metadata</a>.<a href="../sui_system/validator.md#sui_system_validator_validate_metadata">validate_metadata</a>();
-    <a href="../sui_system/validator.md#sui_system_validator_new_from_metadata">new_from_metadata</a>(<a href="../sui_system/validator.md#sui_system_validator_metadata">metadata</a>, <a href="../sui_system/validator.md#sui_system_validator_gas_price">gas_price</a>, <a href="../sui_system/validator.md#sui_system_validator_commission_rate">commission_rate</a>, ctx)
+    <a href="../sui_system/validator.md#sui_system_validator_metadata">metadata</a>.<a href="../sui_system/validator.md#sui_system_validator_new_from_metadata">new_from_metadata</a>(<a href="../sui_system/validator.md#sui_system_validator_gas_price">gas_price</a>, <a href="../sui_system/validator.md#sui_system_validator_commission_rate">commission_rate</a>, ctx)
 }
 </code></pre>
 
