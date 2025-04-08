@@ -39,6 +39,8 @@ pub const DRY_RUN: &str = "dry-run";
 pub const DEV_INSPECT: &str = "dev-inspect";
 pub const SERIALIZE_UNSIGNED: &str = "serialize-unsigned-transaction";
 pub const SERIALIZE_SIGNED: &str = "serialize-signed-transaction";
+pub const WITH_UNPUBLISHED_DEPENDENCIES: &str = "with-unpublished-dependencies";
+pub const SKIP_DEPENDENCY_VERIFICATION: &str = "skip-dependency-verification";
 
 // Types
 pub const U8: &str = "u8";
@@ -79,6 +81,8 @@ pub const COMMANDS: &[&str] = &[
     DEV_INSPECT,
     SERIALIZE_UNSIGNED,
     SERIALIZE_SIGNED,
+    WITH_UNPUBLISHED_DEPENDENCIES,
+    SKIP_DEPENDENCY_VERIFICATION,
 ];
 
 pub fn is_keyword(s: &str) -> bool {
@@ -116,6 +120,26 @@ pub struct ProgramMetadata {
     pub dry_run_set: bool,
     pub dev_inspect_set: bool,
     pub gas_budget: Option<Spanned<u64>>,
+    pub with_unpublished_dependencies_set: bool,
+    pub skip_dependency_verification_set: bool,
+}
+
+impl Default for ProgramMetadata {
+    fn default() -> Self {
+        Self {
+            preview_set: false,
+            summary_set: false,
+            serialize_unsigned_set: false,
+            serialize_signed_set: false,
+            gas_object_id: None,
+            json_set: false,
+            dry_run_set: false,
+            dev_inspect_set: false,
+            gas_budget: None,
+            with_unpublished_dependencies_set: false,
+            skip_dependency_verification_set: false,
+        }
+    }
 }
 
 /// A parsed module access consisting of the address, module name, and function name.

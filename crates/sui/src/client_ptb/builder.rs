@@ -3,11 +3,15 @@
 
 use crate::{
     client_commands::{compile_package, upgrade_package},
-    client_ptb::{
-        ast::{Argument as PTBArg, ASSIGN, GAS_BUDGET},
-        error::{PTBError, PTBResult, Span, Spanned},
-    },
     err, error, sp,
+};
+
+use super::{
+    ast::{
+        Argument as PTBArg, ModuleAccess as PTBModuleAccess, ParsedPTBCommand, Program,
+        ProgramMetadata, ASSIGN, GAS_BUDGET,
+    },
+    error::{PTBError, PTBResult, Span, Spanned},
 };
 use anyhow::Result;
 use async_recursion::async_recursion;
@@ -28,9 +32,10 @@ use std::{collections::BTreeMap, path::Path};
 use sui_json::{is_receiving_argument, primitive_type};
 use sui_json_rpc_types::{SuiObjectData, SuiObjectDataOptions, SuiRawData};
 use sui_move::manage_package::resolve_lock_file_path;
+use sui_move_build::CompiledPackage;
 use sui_sdk::apis::ReadApi;
 use sui_types::{
-    base_types::{is_primitive_type_tag, ObjectID, TxContext, TxContextKind},
+    base_types::{is_primitive_type_tag, ObjectID, SequenceNumber, TxContext, TxContextKind},
     move_package::MovePackage,
     object::Owner,
     programmable_transaction_builder::ProgrammableTransactionBuilder,
@@ -38,8 +43,6 @@ use sui_types::{
     transaction::{self as Tx, ObjectArg},
     Identifier, TypeTag, SUI_FRAMEWORK_PACKAGE_ID,
 };
-
-use super::ast::{ModuleAccess as PTBModuleAccess, ParsedPTBCommand, Program};
 
 // ===========================================================================
 // Object Resolution
@@ -231,6 +234,10 @@ pub struct PTBBuilder<'a> {
     /// The list of errors that we have built up while processing commands. We do not report errors
     /// eagerly but instead wait until we have processed all commands to report any errors.
     errors: Vec<PTBError>,
+    /// Last compiled package from publish or upgrade command.
+    last_compiled_package: Option<CompiledPackage>,
+    /// Metadata for the program being built
+    program_metadata: ProgramMetadata,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -285,6 +292,8 @@ impl<'a> PTBBuilder<'a> {
             reader,
             last_command: None,
             errors: Vec::new(),
+            last_compiled_package: None,
+            program_metadata: ProgramMetadata::default(),
         }
     }
 
@@ -341,10 +350,12 @@ impl<'a> PTBBuilder<'a> {
     pub async fn build(
         mut self,
         program: Program,
+        program_metadata: &ProgramMetadata,
     ) -> (
         Result<Tx::ProgrammableTransaction, Vec<PTBError>>,
         Vec<PTBError>,
     ) {
+        self.program_metadata = program_metadata.clone();
         for command in program.commands.into_iter() {
             self.handle_command(command).await;
         }
@@ -411,6 +422,33 @@ impl<'a> PTBBuilder<'a> {
         package_id: ObjectID,
         loc: Span,
     ) -> PTBResult<MovePackage> {
+        if package_id == ObjectID::ZERO {
+            if let Some(compiled_package) = &self.last_compiled_package {
+                let module_map = compiled_package
+                    .get_dependency_sorted_modules(false)
+                    .iter()
+                    .map(|m| {
+                        let mut bytes = Vec::new();
+                        m.serialize_with_version(m.version, &mut bytes).unwrap(); // safe because package built successfully
+                        (m.name().to_string(), bytes)
+                    })
+                    .collect();
+
+                // Process arguments directly
+                let move_package: MovePackage = MovePackage::new(
+                    package_id,
+                    SequenceNumber::new(),
+                    module_map,
+                    u64::MAX,
+                    vec![],
+                    BTreeMap::new(),
+                )
+                .unwrap();
+
+                return Ok(move_package);
+            }
+        }
+
         let object = self
             .reader
             .get_object_with_options(package_id, SuiObjectDataOptions::bcs_lossless())
@@ -961,8 +999,8 @@ impl<'a> PTBBuilder<'a> {
                     self.reader,
                     build_config.clone(),
                     package_path,
-                    false, /* with_unpublished_dependencies */
-                    false, /* skip_dependency_verification */
+                    self.program_metadata.with_unpublished_dependencies_set, /* with_unpublished_dependencies */
+                    self.program_metadata.skip_dependency_verification_set, /* skip_dependency_verification */
                 )
                 .await
                 .map_err(|e| err!(pkg_loc, "{e}"))?;
@@ -974,6 +1012,7 @@ impl<'a> PTBBuilder<'a> {
                     compiled_package.get_published_dependencies_ids(),
                 );
                 self.last_command = Some(res);
+                self.last_compiled_package = Some(compiled_package);
             }
             // Update this command to not do as many things. It should result in a single command.
             ParsedPTBCommand::Upgrade(sp!(path_loc, package_path), mut arg) => {
@@ -1031,8 +1070,8 @@ impl<'a> PTBBuilder<'a> {
                     build_config.clone(),
                     package_path,
                     ObjectID::from_address(upgrade_cap_id.into_inner()),
-                    false, /* with_unpublished_dependencies */
-                    false, /* skip_dependency_verification */
+                    self.program_metadata.with_unpublished_dependencies_set, /* with_unpublished_dependencies */
+                    self.program_metadata.skip_dependency_verification_set, /* skip_dependency_verification */
                     None,
                 )
                 .await
@@ -1069,6 +1108,7 @@ impl<'a> PTBBuilder<'a> {
                     compiled_package
                         .dependency_ids
                         .published
+                        .clone()
                         .into_values()
                         .collect(),
                     compiled_modules,
@@ -1081,6 +1121,7 @@ impl<'a> PTBBuilder<'a> {
                     vec![upgrade_cap_arg, upgrade_receipt],
                 ));
                 self.last_command = Some(res);
+                self.last_compiled_package = Some(compiled_package);
             }
             ParsedPTBCommand::WarnShadows => {}
             ParsedPTBCommand::Preview => {}

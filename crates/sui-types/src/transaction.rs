@@ -785,7 +785,11 @@ impl ProgrammableMoveCall {
             type_arguments,
             ..
         } = self;
-        let mut packages = BTreeSet::from([*package]);
+        let mut packages = if cfg!(feature = "testing") && *package == ObjectID::ZERO {
+            BTreeSet::new()
+        } else {
+            BTreeSet::from([*package])
+        };
         for type_argument in type_arguments {
             add_type_input_packages(&mut packages, type_argument)
         }
