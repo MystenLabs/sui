@@ -115,6 +115,16 @@ async fn test_contains_key() {
 }
 
 #[tokio::test]
+async fn test_safe_drop_db() {
+    let path = temp_dir();
+    {
+        let db: DBMap<i32, String> = open_map(path.clone(), Some("table"));
+        db.insert(&777, &"123".to_string()).unwrap();
+    }
+    assert!(safe_drop_db(path).is_ok());
+}
+
+#[tokio::test]
 async fn test_multi_contain() {
     let db = open_map(temp_dir(), None);
 

@@ -595,7 +595,7 @@ impl<K, V> DBMap<K, V> {
         column_family: ColumnFamily,
         is_deprecated: bool,
     ) -> Self {
-        let db_cloned = db.clone();
+        let db_cloned = Arc::downgrade(&db.clone());
         let db_metrics = DBMetrics::get();
         let db_metrics_cloned = db_metrics.clone();
         let cf = opt_cf.to_string();
@@ -608,13 +608,14 @@ impl<K, V> DBMap<K, V> {
                 loop {
                     tokio::select! {
                         _ = interval.tick() => {
-                            let db = db_cloned.clone();
-                            let cf = cf.clone();
-                            let db_metrics = db_metrics.clone();
-                            if let Err(e) = tokio::task::spawn_blocking(move || {
-                                Self::report_rocksdb_metrics(&db, &cf, &db_metrics);
-                            }).await {
-                                error!("Failed to log metrics with error: {}", e);
+                            if let Some(db) = db_cloned.upgrade() {
+                                let cf = cf.clone();
+                                let db_metrics = db_metrics.clone();
+                                if let Err(e) = tokio::task::spawn_blocking(move || {
+                                    Self::report_rocksdb_metrics(&db, &cf, &db_metrics);
+                                }).await {
+                                    error!("Failed to log metrics with error: {}", e);
+                                }
                             }
                         }
                         _ = &mut recv => break,
