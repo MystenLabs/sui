@@ -240,7 +240,7 @@ public(package) fun request_add_validator(self: &mut ValidatorSet, ctx: &TxConte
         EDuplicateValidator
     );
     assert!(validator.is_preactive(), EValidatorNotCandidate);
-    assert!(self.can_join(validator.total_stake_amount(), ctx), EMinJoiningStakeNotReached);
+    assert!(self.can_join(validator.total_stake(), ctx), EMinJoiningStakeNotReached);
 
     self.pending_active_validators.push_back(validator);
 }
@@ -528,7 +528,7 @@ fun update_validator_positions_and_calculate_total_stake(
         i = i - 1;
         let validator_ref = &self.active_validators[i];
         let validator_address = validator_ref.sui_address();
-        let validator_stake = validator_ref.total_stake_amount();
+        let validator_stake = validator_ref.total_stake();
 
         // calculate the voting power for this validator in the next epoch if no validators are removed
         // if one of more low stake validators are removed, it's possible this validator will have higher voting power--that's ok.
@@ -583,7 +583,7 @@ fun update_validator_positions_and_calculate_total_stake(
     // the time of request_add_validator, but stake may have been withdrawn, or stakes of other
     // validators may have increased significantly
     pending_active_validators.do!(|mut validator| {
-        let validator_stake = validator.total_stake_amount();
+        let validator_stake = validator.total_stake();
         let voting_power = voting_power::derive_raw_voting_power(
             validator_stake,
             initial_total_stake
@@ -662,12 +662,12 @@ public fun total_stake(self: &ValidatorSet): u64 {
 
 public fun validator_total_stake_amount(self: &ValidatorSet, validator_address: address): u64 {
     let validator = get_validator_ref(&self.active_validators, validator_address);
-    validator.total_stake_amount()
+    validator.total_stake()
 }
 
 public fun validator_stake_amount(self: &ValidatorSet, validator_address: address): u64 {
     let validator = get_validator_ref(&self.active_validators, validator_address);
-    validator.stake_amount()
+    validator.total_stake()
 }
 
 public fun validator_voting_power(self: &ValidatorSet, validator_address: address): u64 {
@@ -1017,7 +1017,7 @@ fun process_validator_departure(
     );
 
     // Deactivate the validator and its staking pool
-    let removed_stake = validator.total_stake_amount();
+    let removed_stake = validator.total_stake();
     validator.deactivate(new_epoch);
     self.inactive_validators.add(
         validator_pool_id,
@@ -1091,7 +1091,7 @@ public(package) fun calculate_total_stakes(validators: &vector<Validator>): u64 
     let mut i = 0;
     while (i < length) {
         let v = &validators[i];
-        stake = stake + v.total_stake_amount();
+        stake = stake + v.total_stake();
         i = i + 1;
     };
     stake
@@ -1343,7 +1343,7 @@ fun emit_validator_epoch_events(
                 epoch: new_epoch,
                 validator_address,
                 reference_gas_survey_quote: v.gas_price(),
-                stake: v.total_stake_amount(),
+                stake: v.total_stake(),
                 voting_power: v.voting_power(),
                 commission_rate: v.commission_rate(),
                 pool_staking_reward: pool_staking_reward_amounts[i],

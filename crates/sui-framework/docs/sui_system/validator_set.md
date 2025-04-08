@@ -815,7 +815,7 @@ processed at the end of epoch.
         <a href="../sui_system/validator_set.md#sui_system_validator_set_EDuplicateValidator">EDuplicateValidator</a>
     );
     <b>assert</b>!(<a href="../sui_system/validator.md#sui_system_validator">validator</a>.is_preactive(), <a href="../sui_system/validator_set.md#sui_system_validator_set_EValidatorNotCandidate">EValidatorNotCandidate</a>);
-    <b>assert</b>!(self.<a href="../sui_system/validator_set.md#sui_system_validator_set_can_join">can_join</a>(<a href="../sui_system/validator.md#sui_system_validator">validator</a>.total_stake_amount(), ctx), <a href="../sui_system/validator_set.md#sui_system_validator_set_EMinJoiningStakeNotReached">EMinJoiningStakeNotReached</a>);
+    <b>assert</b>!(self.<a href="../sui_system/validator_set.md#sui_system_validator_set_can_join">can_join</a>(<a href="../sui_system/validator.md#sui_system_validator">validator</a>.<a href="../sui_system/validator_set.md#sui_system_validator_set_total_stake">total_stake</a>(), ctx), <a href="../sui_system/validator_set.md#sui_system_validator_set_EMinJoiningStakeNotReached">EMinJoiningStakeNotReached</a>);
     self.pending_active_validators.push_back(<a href="../sui_system/validator.md#sui_system_validator">validator</a>);
 }
 </code></pre>
@@ -1295,7 +1295,7 @@ VERY LOW threshold
         i = i - 1;
         <b>let</b> validator_ref = &self.<a href="../sui_system/validator_set.md#sui_system_validator_set_active_validators">active_validators</a>[i];
         <b>let</b> validator_address = validator_ref.sui_address();
-        <b>let</b> validator_stake = validator_ref.total_stake_amount();
+        <b>let</b> validator_stake = validator_ref.<a href="../sui_system/validator_set.md#sui_system_validator_set_total_stake">total_stake</a>();
         // calculate the voting power <b>for</b> this <a href="../sui_system/validator.md#sui_system_validator">validator</a> in the next epoch <b>if</b> no validators are removed
         // <b>if</b> one of more low stake validators are removed, it's possible this <a href="../sui_system/validator.md#sui_system_validator">validator</a> will have higher voting power--that's ok.
         <b>let</b> <a href="../sui_system/voting_power.md#sui_system_voting_power">voting_power</a> = <a href="../sui_system/voting_power.md#sui_system_voting_power_derive_raw_voting_power">voting_power::derive_raw_voting_power</a>(validator_stake, initial_total_stake);
@@ -1347,7 +1347,7 @@ VERY LOW threshold
     // the time of <a href="../sui_system/validator_set.md#sui_system_validator_set_request_add_validator">request_add_validator</a>, but stake may have been withdrawn, or stakes of other
     // validators may have increased significantly
     pending_active_validators.do!(|<b>mut</b> <a href="../sui_system/validator.md#sui_system_validator">validator</a>| {
-        <b>let</b> validator_stake = <a href="../sui_system/validator.md#sui_system_validator">validator</a>.total_stake_amount();
+        <b>let</b> validator_stake = <a href="../sui_system/validator.md#sui_system_validator">validator</a>.<a href="../sui_system/validator_set.md#sui_system_validator_set_total_stake">total_stake</a>();
         <b>let</b> <a href="../sui_system/voting_power.md#sui_system_voting_power">voting_power</a> = <a href="../sui_system/voting_power.md#sui_system_voting_power_derive_raw_voting_power">voting_power::derive_raw_voting_power</a>(
             validator_stake,
             initial_total_stake
@@ -1503,7 +1503,7 @@ gas price, weighted by stake.
 
 <pre><code><b>public</b> <b>fun</b> <a href="../sui_system/validator_set.md#sui_system_validator_set_validator_total_stake_amount">validator_total_stake_amount</a>(self: &<a href="../sui_system/validator_set.md#sui_system_validator_set_ValidatorSet">ValidatorSet</a>, validator_address: <b>address</b>): u64 {
     <b>let</b> <a href="../sui_system/validator.md#sui_system_validator">validator</a> = <a href="../sui_system/validator_set.md#sui_system_validator_set_get_validator_ref">get_validator_ref</a>(&self.<a href="../sui_system/validator_set.md#sui_system_validator_set_active_validators">active_validators</a>, validator_address);
-    <a href="../sui_system/validator.md#sui_system_validator">validator</a>.total_stake_amount()
+    <a href="../sui_system/validator.md#sui_system_validator">validator</a>.<a href="../sui_system/validator_set.md#sui_system_validator_set_total_stake">total_stake</a>()
 }
 </code></pre>
 
@@ -1528,7 +1528,7 @@ gas price, weighted by stake.
 
 <pre><code><b>public</b> <b>fun</b> <a href="../sui_system/validator_set.md#sui_system_validator_set_validator_stake_amount">validator_stake_amount</a>(self: &<a href="../sui_system/validator_set.md#sui_system_validator_set_ValidatorSet">ValidatorSet</a>, validator_address: <b>address</b>): u64 {
     <b>let</b> <a href="../sui_system/validator.md#sui_system_validator">validator</a> = <a href="../sui_system/validator_set.md#sui_system_validator_set_get_validator_ref">get_validator_ref</a>(&self.<a href="../sui_system/validator_set.md#sui_system_validator_set_active_validators">active_validators</a>, validator_address);
-    <a href="../sui_system/validator.md#sui_system_validator">validator</a>.stake_amount()
+    <a href="../sui_system/validator.md#sui_system_validator">validator</a>.<a href="../sui_system/validator_set.md#sui_system_validator_set_total_stake">total_stake</a>()
 }
 </code></pre>
 
@@ -2411,7 +2411,7 @@ Remove <code><a href="../sui_system/validator.md#sui_system_validator">validator
         }
     );
     // Deactivate the <a href="../sui_system/validator.md#sui_system_validator">validator</a> and its staking pool
-    <b>let</b> removed_stake = <a href="../sui_system/validator.md#sui_system_validator">validator</a>.total_stake_amount();
+    <b>let</b> removed_stake = <a href="../sui_system/validator.md#sui_system_validator">validator</a>.<a href="../sui_system/validator_set.md#sui_system_validator_set_total_stake">total_stake</a>();
     <a href="../sui_system/validator.md#sui_system_validator">validator</a>.deactivate(new_epoch);
     self.inactive_validators.add(
         validator_pool_id,
@@ -2564,7 +2564,7 @@ Calculate the total active validator stake.
     <b>let</b> <b>mut</b> i = 0;
     <b>while</b> (i &lt; length) {
         <b>let</b> v = &validators[i];
-        stake = stake + v.total_stake_amount();
+        stake = stake + v.<a href="../sui_system/validator_set.md#sui_system_validator_set_total_stake">total_stake</a>();
         i = i + 1;
     };
     stake
@@ -2940,7 +2940,7 @@ including stakes, rewards, performance, etc.
                 epoch: new_epoch,
                 validator_address,
                 reference_gas_survey_quote: v.gas_price(),
-                stake: v.total_stake_amount(),
+                stake: v.<a href="../sui_system/validator_set.md#sui_system_validator_set_total_stake">total_stake</a>(),
                 <a href="../sui_system/voting_power.md#sui_system_voting_power">voting_power</a>: v.<a href="../sui_system/voting_power.md#sui_system_voting_power">voting_power</a>(),
                 commission_rate: v.commission_rate(),
                 pool_staking_reward: pool_staking_reward_amounts[i],
