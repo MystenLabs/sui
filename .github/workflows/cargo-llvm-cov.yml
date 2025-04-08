@@ -37,7 +37,7 @@ env:
 jobs:
   cargo-llvm-cov:
     name: Generate code coverage
-    runs-on: [ubuntu-ghcloud-2]
+    runs-on: [ubuntu-ghcloud]
     timeout-minutes: 120
     env:
       CARGO_TERM_COLOR: always
