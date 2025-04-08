@@ -578,7 +578,7 @@ impl ValidatorService {
                 tonic::Response::new(RawSubmitTxResponse::into_raw(
                     effects,
                     include_events,
-                    events,
+                    Some(events),
                     input_objects,
                     output_objects,
                 )?),
@@ -611,41 +611,14 @@ impl ValidatorService {
                 )
                 .remove(0);
 
-            let submit_transaction_response = RawSubmitTxResponse {
-                effects: bcs::to_bytes(&transaction_response.effects)
-                    .map_err(|e| SuiError::TransactionEffectsSerializationError {
-                        error: e.to_string(),
-                    })?
-                    .into(),
-                events: include_events.then_some(
-                    bcs::to_bytes(&transaction_response.events)
-                        .map_err(|e| SuiError::TransactionEventsSerializationError {
-                            error: e.to_string(),
-                        })?
-                        .into(),
-                ),
-                input_objects: transaction_response
-                    .input_objects
-                    .unwrap_or_default()
-                    .into_iter()
-                    .map(|obj| {
-                        bcs::to_bytes(&obj).map_err(|e| SuiError::ObjectSerializationError {
-                            error: e.to_string(),
-                        })
-                    })
-                    .collect::<Result<_, _>>()?,
-                output_objects: transaction_response
-                    .output_objects
-                    .unwrap_or_default()
-                    .into_iter()
-                    .map(|obj| {
-                        bcs::to_bytes(&obj).map_err(|e| SuiError::ObjectSerializationError {
-                            error: e.to_string(),
-                        })
-                    })
-                    .collect::<Result<_, _>>()?,
-                auxiliary_data: None, // We don't have any aux data generated presently
-            };
+            let submit_transaction_response = RawSubmitTxResponse::into_raw(
+                transaction_response.effects,
+                include_events,
+                transaction_response.events,
+                transaction_response.input_objects,
+                transaction_response.output_objects,
+            )?;
+
             Ok((
                 tonic::Response::new(submit_transaction_response),
                 spam_weight,

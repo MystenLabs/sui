@@ -273,7 +273,7 @@ impl RawSubmitTxResponse {
     pub fn into_raw(
         effects: TransactionEffects,
         include_events: bool,
-        events: TransactionEvents,
+        events: Option<TransactionEvents>,
         input_objects: Option<Vec<Object>>,
         output_objects: Option<Vec<Object>>,
     ) -> Result<Self, SuiError> {
@@ -283,13 +283,19 @@ impl RawSubmitTxResponse {
                     error: e.to_string(),
                 })?
                 .into(),
-            events: (include_events && !events.data.is_empty()).then_some(
-                bcs::to_bytes(&events)
-                    .map_err(|e| SuiError::TransactionEventsSerializationError {
-                        error: e.to_string(),
-                    })?
-                    .into(),
-            ),
+            events: if include_events {
+                events
+                    .map(|e| {
+                        bcs::to_bytes(&e)
+                            .map_err(|e| SuiError::TransactionEventsSerializationError {
+                                error: e.to_string(),
+                            })
+                            .map(Bytes::from)
+                    })
+                    .transpose()?
+            } else {
+                None
+            },
             input_objects: input_objects
                 .unwrap_or_default()
                 .into_iter()
