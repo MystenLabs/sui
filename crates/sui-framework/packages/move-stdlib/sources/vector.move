@@ -382,3 +382,14 @@ public macro fun zip_map_ref<$T1, $T2, $U>(
     zip_do_ref!($v1, $v2, |el1, el2| r.push_back($f(el1, el2)));
     r
 }
+
+/// Check if the vector `v` is sorted in non-decreasing order according to the comparison
+/// function `le`. Returns `true` if the vector is sorted, `false` otherwise.
+public macro fun is_sorted_by<$T>($v: &vector<$T>, $le: |&$T, &$T| -> bool): bool {
+    let v = $v;
+    let n_minus_1 = v.length().max(1) - 1;
+    'is_sorted_by: {
+        n_minus_1.do!(|i| if (!$le(&v[i], &v[i + 1])) return 'is_sorted_by false);
+        true
+    }
+}
