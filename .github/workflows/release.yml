@@ -46,7 +46,7 @@ jobs:
       matrix:
         os:
           [
-            ubuntu-ghcloud-2, # ubuntu-x86_64
+            ubuntu-ghcloud, # ubuntu-x86_64
             ubuntu-arm64, # ubuntu-arm64
             windows-ghcloud, # windows-x86_64
             macos-latest-large, # macos-x86_64
