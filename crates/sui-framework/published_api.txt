@@ -331,12 +331,6 @@ staking_pool_id
 is_duplicate
 	public fun
 	0x3::validator
-is_equal_some_and_value
-	fun
-	0x3::validator
-is_equal_some
-	fun
-	0x3::validator
 new_unverified_validator_operation_cap_and_transfer
 	public(package) fun
 	0x3::validator

@@ -73,7 +73,7 @@ fun test_validator_owner_flow() {
         let ctx = scenario.ctx();
 
         let validator = get_test_validator(ctx);
-        assert!(validator.total_stake_amount() == 10_000_000_000);
+        assert!(validator.total_stake() == 10_000_000_000);
         assert!(validator.sui_address() == sender);
 
         test_utils::destroy(validator);
