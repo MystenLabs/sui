@@ -273,55 +273,46 @@ where
 
 #[cfg(test)]
 mod tests {
-    use std::{
-        cmp::min,
-        collections::BTreeMap,
-        iter,
-        net::SocketAddr,
-        num::NonZeroUsize,
-        sync::{
-            atomic::{AtomicBool, Ordering::Relaxed},
-            Arc,
-        },
-    };
-
+    use crate::authority::test_authority_builder::TestAuthorityBuilder;
+    use crate::authority::AuthorityState;
+    use crate::authority_aggregator::{AuthorityAggregator, AuthorityAggregatorBuilder};
+    use crate::authority_client::AuthorityAPI;
+    use crate::validator_tx_finalizer::ValidatorTxFinalizer;
     use arc_swap::ArcSwap;
     use async_trait::async_trait;
+    use std::cmp::min;
+    use std::collections::BTreeMap;
+    use std::iter;
+    use std::net::SocketAddr;
+    use std::num::NonZeroUsize;
+    use std::sync::atomic::AtomicBool;
+    use std::sync::atomic::Ordering::Relaxed;
+    use std::sync::Arc;
     use sui_macros::sim_test;
     use sui_swarm_config::network_config_builder::ConfigBuilder;
     use sui_test_transaction_builder::TestTransactionBuilder;
-    use sui_types::{
-        base_types::{AuthorityName, ObjectID, SuiAddress, TransactionDigest},
-        committee::{CommitteeTrait, StakeUnit},
-        crypto::{get_account_key_pair, AccountKeyPair},
-        effects::{TransactionEffectsAPI, TransactionEvents},
-        error::SuiError,
-        executable_transaction::VerifiedExecutableTransaction,
-        messages_checkpoint::{
-            CheckpointRequest, CheckpointRequestV2, CheckpointResponse, CheckpointResponseV2,
-        },
-        messages_grpc::{
-            HandleCertificateRequestV3, HandleCertificateResponseV2, HandleCertificateResponseV3,
-            HandleSoftBundleCertificatesRequestV3, HandleSoftBundleCertificatesResponseV3,
-            HandleTransactionResponse, ObjectInfoRequest, ObjectInfoResponse, RawSubmitTxRequest,
-            RawSubmitTxResponse, SystemStateRequest, TransactionInfoRequest,
-            TransactionInfoResponse,
-        },
-        object::Object,
-        sui_system_state::SuiSystemState,
-        transaction::{
-            CertifiedTransaction, SignedTransaction, Transaction, VerifiedCertificate,
-            VerifiedSignedTransaction, VerifiedTransaction,
-        },
-        utils::to_sender_signed_transaction,
+    use sui_types::base_types::{AuthorityName, ObjectID, SuiAddress, TransactionDigest};
+    use sui_types::committee::{CommitteeTrait, StakeUnit};
+    use sui_types::crypto::{get_account_key_pair, AccountKeyPair};
+    use sui_types::effects::{TransactionEffectsAPI, TransactionEvents};
+    use sui_types::error::SuiError;
+    use sui_types::executable_transaction::VerifiedExecutableTransaction;
+    use sui_types::messages_checkpoint::{
+        CheckpointRequest, CheckpointRequestV2, CheckpointResponse, CheckpointResponseV2,
     };
-
-    use crate::{
-        authority::{test_authority_builder::TestAuthorityBuilder, AuthorityState},
-        authority_aggregator::{AuthorityAggregator, AuthorityAggregatorBuilder},
-        authority_client::AuthorityAPI,
-        validator_tx_finalizer::ValidatorTxFinalizer,
+    use sui_types::messages_grpc::{
+        HandleCertificateRequestV3, HandleCertificateResponseV2, HandleCertificateResponseV3,
+        HandleSoftBundleCertificatesRequestV3, HandleSoftBundleCertificatesResponseV3,
+        HandleTransactionResponse, ObjectInfoRequest, ObjectInfoResponse, RawSubmitTxRequest,
+        RawSubmitTxResponse, SystemStateRequest, TransactionInfoRequest, TransactionInfoResponse,
     };
+    use sui_types::object::Object;
+    use sui_types::sui_system_state::SuiSystemState;
+    use sui_types::transaction::{
+        CertifiedTransaction, SignedTransaction, Transaction, VerifiedCertificate,
+        VerifiedSignedTransaction, VerifiedTransaction,
+    };
+    use sui_types::utils::to_sender_signed_transaction;
 
     #[derive(Clone)]
     struct MockAuthorityClient {

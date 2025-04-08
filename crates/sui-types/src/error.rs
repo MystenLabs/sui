@@ -2,15 +2,6 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{collections::BTreeMap, fmt::Debug};
-
-use schemars::JsonSchema;
-use serde::{Deserialize, Serialize};
-use strum_macros::{AsRefStr, IntoStaticStr};
-use thiserror::Error;
-use tonic::Status;
-use typed_store_error::TypedStoreError;
-
 use crate::{
     base_types::*,
     committee::{Committee, EpochId, StakeUnit},
@@ -19,6 +10,14 @@ use crate::{
     messages_checkpoint::CheckpointSequenceNumber,
     object::Owner,
 };
+
+use schemars::JsonSchema;
+use serde::{Deserialize, Serialize};
+use std::{collections::BTreeMap, fmt::Debug};
+use strum_macros::{AsRefStr, IntoStaticStr};
+use thiserror::Error;
+use tonic::Status;
+use typed_store_error::TypedStoreError;
 
 pub const TRANSACTION_NOT_FOUND_MSG_PREFIX: &str = "Could not find the referenced transaction";
 pub const TRANSACTIONS_NOT_FOUND_MSG_PREFIX: &str = "Could not find the referenced transactions";

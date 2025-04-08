@@ -1,21 +1,18 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use crate::base_types::{ObjectID, SequenceNumber, TransactionDigest};
+use crate::crypto::{AuthoritySignInfo, AuthorityStrongQuorumSignInfo};
+use crate::effects::{
+    SignedTransactionEffects, TransactionEffects, TransactionEvents,
+    VerifiedSignedTransactionEffects,
+};
+use crate::error::SuiError;
+use crate::object::Object;
+use crate::transaction::{CertifiedTransaction, SenderSignedData, SignedTransaction};
 use bytes::Bytes;
 use move_core_types::annotated_value::MoveStructLayout;
 use serde::{Deserialize, Serialize};
-
-use crate::{
-    base_types::{ObjectID, SequenceNumber, TransactionDigest},
-    crypto::{AuthoritySignInfo, AuthorityStrongQuorumSignInfo},
-    effects::{
-        SignedTransactionEffects, TransactionEffects, TransactionEvents,
-        VerifiedSignedTransactionEffects,
-    },
-    error::SuiError,
-    object::Object,
-    transaction::{CertifiedTransaction, SenderSignedData, SignedTransaction},
-};
 
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
 pub enum ObjectInfoRequestKind {
@@ -270,6 +267,50 @@ pub struct RawSubmitTxResponse {
     pub output_objects: Vec<Vec<u8>>,
     #[prost(bytes = "bytes", optional, tag = "5")]
     pub auxiliary_data: Option<Bytes>,
+}
+
+impl RawSubmitTxResponse {
+    pub fn into_raw(
+        effects: TransactionEffects,
+        include_events: bool,
+        events: TransactionEvents,
+        input_objects: Option<Vec<Object>>,
+        output_objects: Option<Vec<Object>>,
+    ) -> Result<Self, SuiError> {
+        Ok(Self {
+            effects: bcs::to_bytes(&effects)
+                .map_err(|e| SuiError::TransactionEffectsSerializationError {
+                    error: e.to_string(),
+                })?
+                .into(),
+            events: (include_events && !events.data.is_empty()).then_some(
+                bcs::to_bytes(&events)
+                    .map_err(|e| SuiError::TransactionEventsSerializationError {
+                        error: e.to_string(),
+                    })?
+                    .into(),
+            ),
+            input_objects: input_objects
+                .unwrap_or_default()
+                .into_iter()
+                .map(|obj| {
+                    bcs::to_bytes(&obj).map_err(|e| SuiError::ObjectSerializationError {
+                        error: e.to_string(),
+                    })
+                })
+                .collect::<Result<_, _>>()?,
+            output_objects: output_objects
+                .unwrap_or_default()
+                .into_iter()
+                .map(|obj| {
+                    bcs::to_bytes(&obj).map_err(|e| SuiError::ObjectSerializationError {
+                        error: e.to_string(),
+                    })
+                })
+                .collect::<Result<_, _>>()?,
+            auxiliary_data: None, // We don't have any aux data generated presently
+        })
+    }
 }
 
 #[derive(Clone, Debug)]

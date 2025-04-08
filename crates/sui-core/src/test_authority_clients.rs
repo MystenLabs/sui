@@ -8,31 +8,35 @@ use std::{
     time::Duration,
 };
 
+use crate::authority::test_authority_builder::TestAuthorityBuilder;
+use crate::{authority::AuthorityState, authority_client::AuthorityAPI};
 use async_trait::async_trait;
 use mysten_metrics::spawn_monitored_task;
 use sui_config::genesis::Genesis;
 use sui_types::{
     crypto::AuthorityKeyPair,
-    effects::TransactionEffectsAPI,
-    error::{SuiError, SuiResult},
-    messages_checkpoint::{
-        CheckpointRequest, CheckpointRequestV2, CheckpointResponse, CheckpointResponseV2,
-    },
-    messages_consensus::{ConsensusTransaction, ConsensusTransactionKind},
-    messages_grpc::{
-        HandleCertificateRequestV3, HandleCertificateResponseV2, HandleCertificateResponseV3,
-        HandleSoftBundleCertificatesRequestV3, HandleSoftBundleCertificatesResponseV3,
-        HandleTransactionResponse, ObjectInfoRequest, ObjectInfoResponse, RawSubmitTxRequest,
-        RawSubmitTxResponse, SystemStateRequest, TransactionInfoRequest, TransactionInfoResponse,
-    },
-    sui_system_state::SuiSystemState,
+    error::SuiError,
+    messages_checkpoint::{CheckpointRequest, CheckpointResponse},
     transaction::{CertifiedTransaction, Transaction, VerifiedCertificate, VerifiedTransaction},
 };
-
-use crate::{
-    authority::{test_authority_builder::TestAuthorityBuilder, AuthorityState},
-    authority_client::AuthorityAPI,
+use sui_types::{
+    effects::TransactionEffectsAPI,
+    messages_checkpoint::{CheckpointRequestV2, CheckpointResponseV2},
 };
+use sui_types::{
+    error::SuiResult,
+    messages_grpc::{HandleCertificateRequestV3, HandleCertificateResponseV3},
+};
+use sui_types::{
+    messages_consensus::ConsensusTransaction,
+    messages_grpc::{
+        HandleCertificateResponseV2, HandleSoftBundleCertificatesRequestV3,
+        HandleSoftBundleCertificatesResponseV3, HandleTransactionResponse, ObjectInfoRequest,
+        ObjectInfoResponse, RawSubmitTxRequest, RawSubmitTxResponse, SystemStateRequest,
+        TransactionInfoRequest, TransactionInfoResponse,
+    },
+};
+use sui_types::{messages_consensus::ConsensusTransactionKind, sui_system_state::SuiSystemState};
 
 #[derive(Clone, Copy, Default)]
 pub struct LocalAuthorityClientFaultConfig {

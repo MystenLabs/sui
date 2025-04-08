@@ -1,13 +1,12 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
-use std::{collections::BTreeMap, sync::Arc, time::Duration};
-
 use anyhow::bail;
 use async_trait::async_trait;
 use embedded_reconfig_observer::EmbeddedReconfigObserver;
 use fullnode_reconfig_observer::FullNodeReconfigObserver;
 use prometheus::Registry;
 use rand::Rng;
+use std::{collections::BTreeMap, sync::Arc, time::Duration};
 use sui_config::genesis::Genesis;
 use sui_core::{
     authority_aggregator::{AuthorityAggregator, AuthorityAggregatorBuilder},
@@ -25,18 +24,26 @@ use sui_json_rpc_types::{
     SuiTransactionBlockEffectsAPI, SuiTransactionBlockResponseOptions,
 };
 use sui_sdk::{SuiClient, SuiClientBuilder};
+use sui_types::effects::{TransactionEffectsAPI, TransactionEvents};
+use sui_types::gas::GasCostSummary;
+use sui_types::programmable_transaction_builder::ProgrammableTransactionBuilder;
+use sui_types::quorum_driver_types::EffectsFinalityInfo;
+use sui_types::quorum_driver_types::FinalizedEffects;
+use sui_types::sui_system_state::sui_system_state_summary::SuiSystemStateSummary;
+use sui_types::transaction::Argument;
+use sui_types::transaction::CallArg;
+use sui_types::transaction::ObjectArg;
 use sui_types::{
-    base_types::{AuthorityName, ObjectID, ObjectRef, SequenceNumber, SuiAddress},
+    base_types::ObjectID,
     committee::{Committee, EpochId},
-    crypto::AuthorityStrongQuorumSignInfo,
-    effects::{TransactionEffectsAPI, TransactionEvents},
-    gas::GasCostSummary,
-    gas_coin::GasCoin,
-    object::{Object, Owner},
-    programmable_transaction_builder::ProgrammableTransactionBuilder,
-    quorum_driver_types::{EffectsFinalityInfo, FinalizedEffects},
-    sui_system_state::{sui_system_state_summary::SuiSystemStateSummary, SuiSystemStateTrait},
-    transaction::{Argument, CallArg, ObjectArg, Transaction},
+    object::Object,
+    transaction::Transaction,
+};
+use sui_types::{base_types::ObjectRef, crypto::AuthorityStrongQuorumSignInfo, object::Owner};
+use sui_types::{base_types::SequenceNumber, gas_coin::GasCoin};
+use sui_types::{
+    base_types::{AuthorityName, SuiAddress},
+    sui_system_state::SuiSystemStateTrait,
 };
 use tokio::time::sleep;
 use tracing::{info, warn};

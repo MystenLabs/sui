@@ -2,68 +2,72 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use anyhow::Result;
+use async_trait::async_trait;
+use fastcrypto::traits::KeyPair;
+use mysten_metrics::spawn_monitored_task;
+use mysten_network::server::SUI_TLS_SERVER_NAME;
+use prometheus::{
+    register_histogram_with_registry, register_int_counter_vec_with_registry,
+    register_int_counter_with_registry, Histogram, IntCounter, IntCounterVec, Registry,
+};
 use std::{
     io,
     net::{IpAddr, SocketAddr},
     sync::Arc,
     time::SystemTime,
 };
-
-use anyhow::Result;
-use async_trait::async_trait;
-use fastcrypto::traits::KeyPair;
-use mysten_metrics::spawn_monitored_task;
-use mysten_network::server::SUI_TLS_SERVER_NAME;
-use nonempty::{nonempty, NonEmpty};
-use prometheus::{
-    register_histogram_with_registry, register_int_counter_vec_with_registry,
-    register_int_counter_with_registry, Histogram, IntCounter, IntCounterVec, Registry,
-};
-use serde::{Deserialize, Serialize};
-use sui_config::local_ip_utils::new_local_tcp_address_for_testing;
 use sui_network::{
     api::{Validator, ValidatorServer},
     tonic,
 };
+use sui_types::messages_grpc::{
+    HandleCertificateRequestV3, HandleCertificateResponseV3, RawSubmitTxResponse,
+};
+use sui_types::messages_grpc::{
+    HandleCertificateResponseV2, HandleTransactionResponse, ObjectInfoRequest, ObjectInfoResponse,
+    SubmitCertificateResponse, SystemStateRequest, TransactionInfoRequest, TransactionInfoResponse,
+};
+use sui_types::messages_grpc::{
+    HandleSoftBundleCertificatesRequestV3, HandleSoftBundleCertificatesResponseV3,
+};
+use sui_types::multiaddr::Multiaddr;
+use sui_types::sui_system_state::SuiSystemState;
+use sui_types::traffic_control::{ClientIdSource, PolicyConfig, RemoteFirewallConfig, Weight};
+use sui_types::{effects::TransactionEffectsAPI, messages_grpc::SubmitTxResponse};
+use sui_types::{error::*, transaction::*};
 use sui_types::{
-    effects::{TransactionEffects, TransactionEffectsAPI, TransactionEvents},
-    error::*,
     fp_ensure,
     messages_checkpoint::{
         CheckpointRequest, CheckpointRequestV2, CheckpointResponse, CheckpointResponseV2,
     },
+};
+use sui_types::{
     messages_consensus::{ConsensusTransaction, ConsensusTransactionKind},
-    messages_grpc::{
-        HandleCertificateRequestV3, HandleCertificateResponseV2, HandleCertificateResponseV3,
-        HandleSoftBundleCertificatesRequestV3, HandleSoftBundleCertificatesResponseV3,
-        HandleTransactionResponse, ObjectInfoRequest, ObjectInfoResponse, RawSubmitTxRequest,
-        RawSubmitTxResponse, SubmitCertificateResponse, SystemStateRequest, TransactionInfoRequest,
-        TransactionInfoResponse,
-    },
-    multiaddr::Multiaddr,
-    object::Object,
-    sui_system_state::SuiSystemState,
-    traffic_control::{ClientIdSource, PolicyConfig, RemoteFirewallConfig, Weight},
-    transaction::*,
+    messages_grpc::RawSubmitTxRequest,
 };
 use tap::TapFallible;
-use tonic::{
-    metadata::{Ascii, MetadataValue},
-    transport::server::TcpConnectInfo,
-};
+use tonic::metadata::{Ascii, MetadataValue};
 use tracing::{error, error_span, info, Instrument};
 
 use crate::{
-    authority::{authority_per_epoch_store::AuthorityPerEpochStore, AuthorityState},
-    checkpoints::CheckpointStore,
-    consensus_adapter::{
-        ConnectionMonitorStatusForTests, ConsensusAdapter, ConsensusAdapterMetrics,
-    },
+    authority::authority_per_epoch_store::AuthorityPerEpochStore, checkpoints::CheckpointStore,
     mysticeti_adapter::LazyMysticetiClient,
-    traffic_controller::{
-        metrics::TrafficControllerMetrics, parse_ip, policies::TrafficTally, TrafficController,
-    },
 };
+use crate::{
+    authority::AuthorityState,
+    consensus_adapter::{ConsensusAdapter, ConsensusAdapterMetrics},
+    traffic_controller::parse_ip,
+    traffic_controller::policies::TrafficTally,
+    traffic_controller::TrafficController,
+};
+use crate::{
+    consensus_adapter::ConnectionMonitorStatusForTests,
+    traffic_controller::metrics::TrafficControllerMetrics,
+};
+use nonempty::{nonempty, NonEmpty};
+use sui_config::local_ip_utils::new_local_tcp_address_for_testing;
+use tonic::transport::server::TcpConnectInfo;
 
 #[cfg(test)]
 #[path = "unit_tests/server_tests.rs"]
@@ -352,15 +356,6 @@ impl ValidatorServiceMetrics {
     }
 }
 
-#[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct TransactionResponse {
-    pub effects: TransactionEffects,
-    pub events: Option<TransactionEvents>,
-    pub input_objects: Option<Vec<Object>>,
-    pub output_objects: Option<Vec<Object>>,
-    pub auxiliary_data: Option<Vec<u8>>,
-}
-
 #[derive(Clone)]
 pub struct ValidatorService {
     state: Arc<AuthorityState>,
@@ -580,39 +575,13 @@ impl ValidatorService {
                 .and_then(Result::ok);
 
             return Ok((
-                tonic::Response::new(RawSubmitTxResponse {
-                    effects: bcs::to_bytes(&effects)
-                        .map_err(|e| SuiError::TransactionEffectsSerializationError {
-                            error: e.to_string(),
-                        })?
-                        .into(),
-                    events: (include_events && !events.data.is_empty()).then_some(
-                        bcs::to_bytes(&events)
-                            .map_err(|e| SuiError::TransactionEventsSerializationError {
-                                error: e.to_string(),
-                            })?
-                            .into(),
-                    ),
-                    input_objects: input_objects
-                        .unwrap_or_default()
-                        .into_iter()
-                        .map(|obj| {
-                            bcs::to_bytes(&obj).map_err(|e| SuiError::ObjectSerializationError {
-                                error: e.to_string(),
-                            })
-                        })
-                        .collect::<Result<_, _>>()?,
-                    output_objects: output_objects
-                        .unwrap_or_default()
-                        .into_iter()
-                        .map(|obj| {
-                            bcs::to_bytes(&obj).map_err(|e| SuiError::ObjectSerializationError {
-                                error: e.to_string(),
-                            })
-                        })
-                        .collect::<Result<_, _>>()?,
-                    auxiliary_data: None, // We don't have any aux data generated presently
-                }),
+                tonic::Response::new(RawSubmitTxResponse::into_raw(
+                    effects,
+                    include_events,
+                    events,
+                    input_objects,
+                    output_objects,
+                )?),
                 Weight::zero(),
             ));
         }
@@ -845,7 +814,7 @@ impl ValidatorService {
         _include_auxiliary_data: bool,
         epoch_store: &Arc<AuthorityPerEpochStore>,
         wait_for_effects: bool,
-    ) -> Result<(Option<Vec<TransactionResponse>>, Weight), tonic::Status> {
+    ) -> Result<(Option<Vec<SubmitTxResponse>>, Weight), tonic::Status> {
         let consensus_transactions: Vec<_> = consensus_transactions.into();
         {
             // code block within reconfiguration lock
@@ -938,7 +907,7 @@ impl ValidatorService {
                     // TODO(fastpath): Make sure consensus handler does this for a UserTransaction.
                 }
 
-                Ok::<_, SuiError>(TransactionResponse {
+                Ok::<_, SuiError>(SubmitTxResponse {
                     effects,
                     events,
                     input_objects,
