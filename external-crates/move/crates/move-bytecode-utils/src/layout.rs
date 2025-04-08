@@ -148,7 +148,7 @@ impl<'a, T: GetModule> SerdeLayoutBuilder<'a, T> {
     }
 
     /// Add layouts for all types used in `t` to the registry
-    pub fn build_type_layout(&mut self, t: TypeTag) -> Result<Format> {
+    pub fn build_type_layout(&mut self, t: &TypeTag) -> Result<Format> {
         let ty = Type::from_type_tag(&mut self.pool, t);
         self.build_normalized_type_layout(&ty, &Vec::new(), 0)
     }
@@ -158,7 +158,7 @@ impl<'a, T: GetModule> SerdeLayoutBuilder<'a, T> {
         let serde_type_args = s
             .type_params
             .iter()
-            .map(|t| self.build_type_layout(t.clone()))
+            .map(|t| self.build_type_layout(t))
             .collect::<Result<Vec<Format>>>()?;
         self.build_data_layout_(&s.module_id(), &s.name, &serde_type_args, 0)
     }
@@ -183,7 +183,6 @@ impl<'a, T: GetModule> SerdeLayoutBuilder<'a, T> {
             T::Signer => Format::TypeName(SIGNER.to_string()),
             T::Datatype(dt) => {
                 let Datatype {
-                    address,
                     module,
                     name,
                     type_arguments,
@@ -192,7 +191,7 @@ impl<'a, T: GetModule> SerdeLayoutBuilder<'a, T> {
                     .iter()
                     .map(|t| self.build_normalized_type_layout(t, input_type_args, depth + 1))
                     .collect::<Result<Vec<Format>>>()?;
-                let declaring_module = ModuleId::new(*address, module.as_ident_str().to_owned());
+                let declaring_module = module.to_core_module_id(&self.pool);
                 self.build_data_layout_(&declaring_module, name, &serde_type_args, depth + 1)?
             }
             T::Vector(inner_t) => {

@@ -1,5 +1,5 @@
 // Copyright (c) The Move Contributors
-// SPDX-License-S: Apache-2.0
+// SPDX-License-Identifier: Apache-2.0
 
 use crate::file_format::{
     self, AbilitySet, Bytecode as FBytecode, CodeOffset, CompiledModule, DatatypeHandleIndex,
@@ -28,7 +28,7 @@ pub trait StringPool {
     fn as_ident_str<'a>(&'a self, s: &'a Self::String) -> &'a IdentStr;
 }
 
-#[derive(Clone, Debug, Ord, PartialOrd, Eq, PartialEq)]
+#[derive(Clone, Debug, Ord, PartialOrd, Eq, PartialEq, Serialize, Deserialize)]
 pub struct ModuleId<S> {
     pub address: AccountAddress,
     pub name: S,
@@ -74,8 +74,7 @@ pub enum Type<S> {
 
 #[derive(Clone, Debug, Ord, PartialOrd, Eq, PartialEq, Serialize, Deserialize)]
 pub struct Datatype<S> {
-    pub address: AccountAddress,
-    pub module: S,
+    pub module: ModuleId<S>,
     pub name: S,
     pub type_arguments: Vec<Type<S>>,
 }
@@ -100,6 +99,7 @@ struct Tables<S> {
 pub struct Module<S: Hash + Eq> {
     #[allow(unused)]
     tables: Tables<S>,
+    code_included: bool,
     pub id: ModuleId<S>,
     pub file_format_version: u32,
     pub dependencies: Vec<ModuleId<S>>,
@@ -316,8 +316,8 @@ impl<S> ModuleId<S> {
         ModuleId { address, name }
     }
 
-    pub fn into_core_module_id<Pool: StringPool<String = S>>(
-        self,
+    pub fn to_core_module_id<Pool: StringPool<String = S>>(
+        &self,
         pool: &Pool,
     ) -> move_core_types::language_storage::ModuleId {
         move_core_types::language_storage::ModuleId::new(
@@ -406,7 +406,7 @@ impl<S> Type<S> {
         }
     }
 
-    pub fn from_type_tag<Pool: StringPool<String = S>>(pool: &mut Pool, ty: TypeTag) -> Self {
+    pub fn from_type_tag<Pool: StringPool<String = S>>(pool: &mut Pool, ty: &TypeTag) -> Self {
         use Type as T;
         match ty {
             TypeTag::Bool => T::Bool,
@@ -418,12 +418,12 @@ impl<S> Type<S> {
             TypeTag::U256 => T::U256,
             TypeTag::Address => T::Address,
             TypeTag::Signer => T::Signer,
-            TypeTag::Vector(ty) => T::Vector(Box::new(T::from_type_tag(pool, *ty))),
-            TypeTag::Struct(s) => T::Datatype(Box::new(Datatype::from_struct_tag(pool, *s))),
+            TypeTag::Vector(ty) => T::Vector(Box::new(T::from_type_tag(pool, ty))),
+            TypeTag::Struct(s) => T::Datatype(Box::new(Datatype::from_struct_tag(pool, s))),
         }
     }
 
-    pub fn from_struct_tag<Pool: StringPool<String = S>>(pool: &mut Pool, tag: StructTag) -> Self {
+    pub fn from_struct_tag<Pool: StringPool<String = S>>(pool: &mut Pool, tag: &StructTag) -> Self {
         Type::Datatype(Box::new(Datatype::from_struct_tag(pool, tag)))
     }
 
@@ -490,8 +490,10 @@ impl<S> Datatype<S> {
             .map(|t| Type::new(pool, m, t))
             .collect();
         Datatype {
-            address: defining_module_address,
-            module: defining_module_name,
+            module: ModuleId {
+                address: defining_module_address,
+                name: defining_module_name,
+            },
             name: datatype_name,
             type_arguments,
         }
@@ -499,14 +501,13 @@ impl<S> Datatype<S> {
 
     pub fn to_struct_tag<Pool: StringPool<String = S>>(&self, pool: &Pool) -> StructTag {
         let Datatype {
-            address,
             module,
             name,
             type_arguments,
         } = self;
         StructTag {
-            address: *address,
-            module: pool.as_ident_str(module).to_owned(),
+            address: module.address,
+            module: pool.as_ident_str(&module.name).to_owned(),
             name: pool.as_ident_str(name).to_owned(),
             type_params: type_arguments
                 .iter()
@@ -518,7 +519,7 @@ impl<S> Datatype<S> {
         }
     }
 
-    pub fn from_struct_tag<Pool: StringPool<String = S>>(pool: &mut Pool, tag: StructTag) -> Self {
+    pub fn from_struct_tag<Pool: StringPool<String = S>>(pool: &mut Pool, tag: &StructTag) -> Self {
         let StructTag {
             address,
             module,
@@ -526,11 +527,13 @@ impl<S> Datatype<S> {
             type_params,
         } = tag;
         Datatype {
-            address,
-            module: pool.intern(module.as_ident_str()),
+            module: ModuleId {
+                address: *address,
+                name: pool.intern(module.as_ident_str()),
+            },
             name: pool.intern(name.as_ident_str()),
             type_arguments: type_params
-                .into_iter()
+                .iter()
                 .map(|t| Type::from_type_tag(pool, t))
                 .collect(),
         }
@@ -545,14 +548,12 @@ impl<S> Datatype<S> {
         S: Clone,
     {
         let Self {
-            address,
             module,
             name,
             type_arguments,
         } = self;
         let type_arguments = type_arguments.iter().map(|t| t.subst(type_args)).collect();
         Self {
-            address: *address,
             module: module.clone(),
             name: name.clone(),
             type_arguments,
@@ -651,6 +652,7 @@ impl<S: Hash + Eq> Module<S> {
             .collect();
         Self {
             tables,
+            code_included: include_code,
             id,
             file_format_version: m.version(),
             friends,
@@ -670,15 +672,8 @@ impl<S: Hash + Eq> Module<S> {
         &self.id.name
     }
 
-    /// How often are signatures used in this module?
-    pub fn signature_usage(&self) -> usize {
-        self.tables.signatures.iter().fold(0, |acc, sig_rc| {
-            // subtract one for the reference in the signature table
-            acc.saturating_add(Rc::strong_count(sig_rc).saturating_sub(1))
-        })
-    }
-
     /// Panics if called with `include_code` set to `false`.
+    /// Note this checks the order of functions, structs, and enums in the module.
     pub fn equals(&self, other: &Self) -> bool {
         fn function_equals<S: Hash + Eq>(
             functions: &IndexMap<S, Rc<Function<S>>>,
@@ -692,6 +687,7 @@ impl<S: Hash + Eq> Module<S> {
         }
         let Self {
             tables: _,
+            code_included,
             id,
             file_format_version,
             dependencies,
@@ -701,6 +697,10 @@ impl<S: Hash + Eq> Module<S> {
             functions,
             constants,
         } = self;
+        if !code_included || !other.code_included {
+            debug_assert!(false, "code_included is false when calling equals");
+            return false;
+        }
         id == &other.id
             && file_format_version == &other.file_format_version
             && dependencies == &other.dependencies
@@ -823,7 +823,7 @@ impl<S> Function<S> {
         &self.code
     }
 
-    /// Aborts if `code_included` is `false`.
+    /// Should not be called if `code_included` is `false`--will panic in debug builds.
     pub fn equals(&self, other: &Self) -> bool
     where
         S: Eq,
@@ -839,8 +839,10 @@ impl<S> Function<S> {
             jump_tables,
             code,
         } = self;
-        assert!(code_included);
-        assert!(other.code_included);
+        if !code_included || !other.code_included {
+            debug_assert!(false, "code_included is false when calling equals");
+            return false;
+        }
         name == &other.name
             && visibility == &other.visibility
             && is_entry == &other.is_entry
@@ -1232,8 +1234,10 @@ impl<S: std::fmt::Display> std::fmt::Display for Type<S> {
 impl<S: std::fmt::Display> std::fmt::Display for Datatype<S> {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         let Datatype {
-            address,
-            module,
+            module: ModuleId {
+                address,
+                name: module,
+            },
             name,
             type_arguments,
         } = self;
