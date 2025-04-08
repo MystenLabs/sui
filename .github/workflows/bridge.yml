@@ -76,7 +76,7 @@ jobs:
     strategy:
       matrix:
         os:
-          - [ ubuntu-ghcloud ]
+          - [ ubuntu-ghcloud-2 ]
       fail-fast: false
     steps:
       - uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # Pin v4.1.1
@@ -106,7 +106,7 @@ jobs:
     name: bridge-evm-tests
     needs: diff
     if: needs.diff.outputs.isSolidity == 'true'
-    runs-on: [ ubuntu-ghcloud ]
+    runs-on: [ ubuntu-ghcloud-2 ]
     steps:
       - uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # Pin v4.1.1
       - name: Install Foundry

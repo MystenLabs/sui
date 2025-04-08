@@ -3,7 +3,7 @@ on:
   pull_request:
 jobs:
   validate-mainnet:
-    runs-on: ubuntu-ghcloud
+    runs-on: ubuntu-ghcloud-2
     steps:
       - name: checkout code repository
         uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11  # Pin v4.1.1
@@ -16,7 +16,7 @@ jobs:
             scripts/compatibility/split-cluster-check.sh origin/mainnet ${{ github.sha }}
 
   validate-testnet:
-    runs-on: ubuntu-ghcloud
+    runs-on: ubuntu-ghcloud-2
     steps:
       - name: checkout code repository
         uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11  # Pin v4.1.1
