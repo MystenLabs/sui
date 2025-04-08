@@ -1,27 +1,27 @@
 ---
-title: Deploying a Walrus Site using Sui
+title: Publishing a Decentralized Website
+description: Publishing a decentralized website is possible on the Sui network using services available in the ecosystem.
 ---
 
-Walrus is a blob storage 
+Publishing a decentralized website is possible on the Sui network using ecosystem services. This guide uses Walrus Sites to publish and retrieve website assets from blob storage on the Walrus protocol. The guide then uses SuiNS to provide a human-readable URL to browse the site with a web browser.
 
-## Integrations
+You can find out more about each integration from their respective websites.
 
-The focus of this example is to use Walrus Sites, but it also uses elements of the Sui SDK and SuiNS to produce an example. You can find out more about each integration from their respective websites.
-- Walrus
-- SuiNS
-- Sui SDK
+- [Walrus](https://docs.wal.app/)
+- [Walrus Sites](https://docs.wal.app/walrus-sites/intro.html)
+- [SuiNS](https://docs.suins.io/)
+- [Sui SDK dApp Kit](https://sdk.mystenlabs.com/dapp-kit)
 
 ## What you need
 
-You need the latest version of Sui installed. 
+To complete this guide, you need the following:
 
-You need a JavaScript package manager installed globally. The instructions use pnpm but you can use a different package manager, if you prefer.
-
-It's helpful but not required to have some familiarity with the Move language and the Sui SDK dApp Kit. This example does not include code, but having this familiarity helps in understanding the process.
-
-You need both the CLI and site building tools that Walrus provides on your system. The instructions walk you through their installation and provides links to resolve any issues that might arise beyond the scope of this example.
-
-If you want to browse your site on your local machine, you need to clone the [walrus-sites repo](https://github.com/MystenLabs/walrus-sites/tree/main) on GitHub. You also need to have the [`bun` package manager](https://bun.sh/) on your system. 
+- The latest version of Sui installed on your system. See [Install Sui](../getting-started/sui-install.mdx), if necessary.
+- A JavaScript package manager installed globally. The instructions use [pnpm](https://pnpm.io/) but you can use a different package manager, if you prefer.
+- It's helpful but not required to have some familiarity with the [Move language](https://move-book.com/) and the Sui SDK dApp Kit. This guide does not examine code in detail, but having this familiarity helps in understanding the process.
+- Both the CLI and site building tools that Walrus provides installed on your system. The instructions walk you through their installation, but you must refer to their documentation to resolve any issues.
+- If you want to browse your site on your local machine, you need to clone the [walrus-sites repo](https://github.com/MystenLabs/walrus-sites/tree/main) on GitHub. You also need to have Docker Desktop on your system. 
+- The example uses [curl](https://curl.se/) for data retrieval. You can use a different method but need to adjust the instructions accordingly.
 
 ## Creating a website
 
@@ -60,26 +60,26 @@ Next, run the following command in the same directory as the binary to make sure
 $ chmod +x walrus
 ```
 
-If you don't receive the help text in your console when you type `walrus --help`, then you do not have the Walrus CLI set up correctly. See [Walrus Setup](https://docs.walrus.site/usage/setup.html#installation) for complete details and the most up-to-date instruction on installing the Walrus CLI.
+If you don't receive the help text in your console when you type `walrus --help`, then you do not have the Walrus CLI set up correctly. See the Walrus documentation for complete details and the most up-to-date instruction on installing the Walrus CLI.
 
 ### Configure client
 
 Walrus depends on packages published to the Sui blockchain. Your client gains access to this information through a yaml configuration file stored on your local system. For MacOS, the default location is in `~/.config/walrus/client_config.yaml`. 
 
-If the directory doesn't already exist on your system, create it then use the following command to get the most up-to-date configuration. 
+If the directory doesn't already exist on your system, create it before using the following command to get the most up-to-date configuration. 
 
 ```sh
-$ curl https://raw.githubusercontent.com/MystenLabs/walrus-docs/refs/heads/main/docs/client_config.yaml -o ~/.config/walrus/client_config.yaml
+$ curl https://raw.githubusercontent.com/MystenLabs/walrus-docs/refs/heads/main/docs/client_config.historical.yaml -o ~/.config/walrus/client_config.yaml
 ```
 
 <details>
 <summary>
 `client-config.yaml`
 </summary>
-{@inject: github:MystenLabs/walrus-docs/docs/client_config.yaml}
+{@inject: github:MystenLabs/walrus-docs/docs/client_config.historical.yaml}
 </details>
 
-For more details on setting up your Walrus client, including on other operating systems, consult the [Walrus documentation](https://docs.walrus.site/usage/setup.html).
+For more details on setting up your Walrus client, including on other operating systems, consult the Walrus documentation.
 
 ## Install Walrus site builder
 
@@ -89,13 +89,13 @@ As with the CLI, use `curl` to grab the latest package for your specific OS arch
 $ curl https://storage.googleapis.com/mysten-walrus-binaries/site-builder-testnet-latest-macos-arm64 -o site-builder
 ```
 
-As with the CLI binary, place the sui-builder binary in a location already on your `PATH` variable or update it to include the binary location. Update the file permissions to make it executable.
+As with the CLI binary, place the `site-builder` binary in a location already on your `PATH` variable or update it to include the binary location. Update the file permissions to make the file executable.
 
 ```sh
 $ chmod +x site-builder
 ```
 
-Run `site-builder --help` to make sure the `site-builder` command is accessible. If needed, consult [Installing the site builder](https://docs.walrus.site/walrus-sites/tutorial-install.html) in the Walrus documentation for more information or to troubleshoot issues.
+Run `site-builder --help` to make sure the `site-builder` command is accessible. If needed, consult the Walrus documentation for more information or to troubleshoot issues.
 
 ### Configure site builder
 
@@ -113,15 +113,15 @@ $ curl https://raw.githubusercontent.com/MystenLabs/walrus-sites/refs/heads/test
 
 :::checkpoint
 
-At this point you should be able to type `sui --version`, `walrus --version`, and `site-builder --version` into your console or terminal that respond with the currently installed version number for the respective command.
+At this point you should be able to type `sui --version`, `walrus --version`, and `site-builder --version` into your console or terminal and receive a response with the currently installed version number for the respective command.
 
 This example is meant for Testnet, so type `sui client active-env` to make sure you're on Testnet. If not, use `sui client switch --env testnet` to activate Testnet. Depending on your configuration, the environment might have a different alias. 
 
-Make sure the active address has both SUI and WAL using the `sui client balance` command. If there are no coins, [use the faucet](../getting-started/get-coins.mdx) to get some Testnet SUI. If there are no WAL, use `walrus get-wal` to trade some of your SUI for Testnet WAL.
+Make sure the active address has both SUI and WAL using the `sui client balance` command. If there are no coins, [use the faucet](../getting-started/get-coins.mdx) to get some Testnet SUI. If there are no WAL, use `walrus get-wal` to trade some of your Testnet SUI for Testnet WAL.
 
 You should have a `~/.config/walrus` directory with two files in it: `client_config.yaml` and `sites-config.yaml`.
 
-You should also have a site built. If using the dApp Kit project skeleton, there should be a `dist` folder with your built site assets.
+You should also have a site built. If using the dApp Kit project skeleton, there should be a `dist` folder with your site assets.
 
 If you don't have all these things, check the relevant documentation to fix the issue before continuing.
 
@@ -143,10 +143,29 @@ The other piece of information the response provides is the site's object ID on 
 
 ## Browse site
 
-You can view your site locally by cloning the [walrus-sites](https://github.com/MystenLabs/walrus-sites) repo then following the instructions in the [Walrus docs](https://docs.walrus.site/walrus-sites/portal.html#running-the-portal-locally).
+You can view your site locally by cloning the [walrus-sites](https://github.com/MystenLabs/walrus-sites) repo then using Docker to browse your site.
+
+To clone the repo, use the following command:
+
+```sh
+$ git clone https://github.com/MystenLabs/walrus-sites.git
+```
+
+Then make the repo the current working directory:
+
+```sh
+$ cd walrus-sites
+```
+
+And `git switch` to the `testnet` branch:
+
+```sh
+$ git switch testnet
+```
+
 
 You can also use a service like SuiNS. SuiNS enables you to assign a name to your site to view it on the @walrus.domain.testnet@ domain. If you don't already have a Testnet SuiNS name, you can get one at https://testnet.suins.io/. You need some Testnet SUI to complete the transaction.
 
-Upon purchase, you can set your SuiNS name to point to the object ID for your site (provided in the Walrus publish response). If you already have a Testnet SuiNS name, you can access the dashboard for the name and set the object ID using the Link to Walrus Site menu option. See the [SuiNS documentation](https://docs.suins.io) for more information on configuring your SuiNS name.
+Upon purchase, you can set your SuiNS name to point to the object ID for your site (provided in the Walrus publish response). If you already have a Testnet SuiNS name, you can access the dashboard for the name and set the object ID using the Link to Walrus Site menu option. See the SuiNS documentation for more information on configuring your SuiNS name.
 
-After configuring your name, you can visit `https://<YOUR_SUINS_NAME>.@walrus.domain.testnet@`.
+After configuring your name, you can visit `https://<YOUR_SUINS_NAME>.@walrus.domain.testnet@` to see your site served by Walrus Sites.
