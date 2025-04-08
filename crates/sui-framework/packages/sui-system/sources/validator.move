@@ -270,8 +270,7 @@ public(package) fun new(
 
     // Checks that the keys & addresses & PoP are valid.
     metadata.validate_metadata();
-
-    new_from_metadata(metadata, gas_price, commission_rate, ctx)
+    metadata.new_from_metadata(gas_price, commission_rate, ctx)
 }
 
 /// Deactivate this validator's staking pool
