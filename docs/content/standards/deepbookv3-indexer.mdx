@@ -523,6 +523,61 @@ produces a response similar to
 ]
 ```
 
+### Get order updates
+
+```http
+/order_updates/:pool_name?limit=<INTEGER>&start_time=<UNIX_TIMESTAMP_SECONDS>&end_time=<UNIX_TIMESTAMP_SECONDS>&status=<"Placed" or "Canceled">&balance_manager_id=<ID>
+```
+
+Returns the orders that were recently placed or canceled in the pool
+
+#### Response
+
+```json
+[
+    {
+		"order_id": "string",
+		"balance_manager_id": "string",
+		"timestamp": integer,
+        "original_quantity": integer,
+        "remaining_quantity": integer,
+		"filled_quantity": integer,
+		"price": integer,
+        "status": "string",
+        "type": "string"
+    }
+]
+```
+
+The `timestamp` value is in Unix milliseconds.
+
+#### Example
+
+A successful request to 
+
+```http
+/order_updates/DEEP_USDC?start_time=1738703053&end_time=1738704080&limit=2&status=Placed&balance_manager_id=0xd335e8aa19d6dc04273d77e364c936bad69db4905a4ab3b2733d644dd2b31e0a
+```
+
+produces a response similar to
+
+```json
+[
+    {
+        "order_id": "170141183464610341308794360958165054983",
+        "balance_manager_id": "0xd335e8aa19d6dc04273d77e364c936bad69db4905a4ab3b2733d644dd2b31e0a",
+        "timestamp": 1738704071994,
+        "original_quantity": 8910,
+        "remaining_quantity": 8910,
+        "filled_quantity": 0,
+        "price": 22449,
+        "status": "Placed",
+        "type": "sell"
+    },
+	...
+]
+```
+
 ### Get order book information
 
 ```http
