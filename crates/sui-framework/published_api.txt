@@ -1051,9 +1051,6 @@ create
 allocate_tokens
 	fun
 	0x3::genesis
-activate_validators
-	fun
-	0x3::genesis
 secp256k1_ecrecover
 	public fun
 	0x2::ecdsa_k1
