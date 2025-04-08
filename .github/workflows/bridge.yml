@@ -93,6 +93,8 @@ jobs:
         working-directory: bridge/evm
         run: |
           forge soldeer update
+      - name: Install PostgreSQL
+        run: sudo apt-get update && sudo apt-get install -y postgresql
       - name: Add postgres to PATH
         run: echo "/usr/lib/postgresql/14/bin" >> $GITHUB_PATH
       - name: cargo test
