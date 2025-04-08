@@ -45,6 +45,7 @@ vectors are growable. This module has many native functions.
 -  [Macro function `zip_do_mut`](#std_vector_zip_do_mut)
 -  [Macro function `zip_map`](#std_vector_zip_map)
 -  [Macro function `zip_map_ref`](#std_vector_zip_map_ref)
+-  [Macro function `is_sorted_by`](#std_vector_is_sorted_by)
 
 
 <pre><code></code></pre>
@@ -1164,6 +1165,37 @@ The order of elements in the vectors is preserved.
     <b>let</b> <b>mut</b> r = <a href="../std/vector.md#std_vector">vector</a>[];
     <a href="../std/vector.md#std_vector_zip_do_ref">zip_do_ref</a>!($v1, $v2, |el1, el2| r.<a href="../std/vector.md#std_vector_push_back">push_back</a>($f(el1, el2)));
     r
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="std_vector_is_sorted_by"></a>
+
+## Macro function `is_sorted_by`
+
+Check if the vector <code>v</code> is sorted in non-decreasing order according to the comparison
+function <code>le</code>. Returns <code><b>true</b></code> if the vector is sorted, <code><b>false</b></code> otherwise.
+
+
+<pre><code><b>public</b> <b>macro</b> <b>fun</b> <a href="../std/vector.md#std_vector_is_sorted_by">is_sorted_by</a>&lt;$T&gt;($v: &<a href="../std/vector.md#std_vector">vector</a>&lt;$T&gt;, $le: |&$T, &$T| -&gt; bool): bool
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b> <b>macro</b> <b>fun</b> <a href="../std/vector.md#std_vector_is_sorted_by">is_sorted_by</a>&lt;$T&gt;($v: &<a href="../std/vector.md#std_vector">vector</a>&lt;$T&gt;, $le: |&$T, &$T| -&gt; bool): bool {
+    <b>let</b> v = $v;
+    <b>let</b> n_minus_1 = v.<a href="../std/vector.md#std_vector_length">length</a>().max(1) - 1;
+    '<a href="../std/vector.md#std_vector_is_sorted_by">is_sorted_by</a>: {
+        n_minus_1.<a href="../std/vector.md#std_vector_do">do</a>!(|i| <b>if</b> (!$le(&v[i], &v[i + 1])) <b>return</b> '<a href="../std/vector.md#std_vector_is_sorted_by">is_sorted_by</a> <b>false</b>);
+        <b>true</b>
+    }
 }
 </code></pre>
 
