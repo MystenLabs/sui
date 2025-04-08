@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use super::{CallbackLayer, MakeCallbackHandler, ResponseFuture};
+use super::{CallbackLayer, MakeCallbackHandler, ResponseBody, ResponseFuture};
 use http::{Request, Response};
 use std::task::{Context, Poll};
 use tower::Service;
@@ -52,12 +52,18 @@ impl<S, M> Callback<S, M> {
     }
 }
 
-impl<S, M, RequestBody, ResponseBody> Service<Request<RequestBody>> for Callback<S, M>
+impl<S, M, RequestBody, ResponseBodyT> Service<Request<RequestBody>> for Callback<S, M>
 where
-    S: Service<Request<RequestBody>, Response = Response<ResponseBody>>,
+    S: Service<
+        Request<RequestBody>,
+        Response = Response<ResponseBodyT>,
+        Error: std::fmt::Display + 'static,
+    >,
     M: MakeCallbackHandler,
+    RequestBody: http_body::Body<Error: std::fmt::Display + 'static>,
+    ResponseBodyT: http_body::Body<Error: std::fmt::Display + 'static>,
 {
-    type Response = Response<ResponseBody>;
+    type Response = Response<ResponseBody<ResponseBodyT, M::Handler>>;
     type Error = S::Error;
     type Future = ResponseFuture<S::Future, M::Handler>;
 

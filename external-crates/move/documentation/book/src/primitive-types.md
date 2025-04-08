@@ -2,7 +2,7 @@
 
 The primitive types are the basic building blocks of the language.
 
-These primitive types can be used on their own or can be used be used to build more complex,
+These primitive types can be used on their own or can be used to build more complex,
 user-defined types, e.g. in a [`struct`](./structs.md).
 
 - [Integers](./primitive-types/integers.md)

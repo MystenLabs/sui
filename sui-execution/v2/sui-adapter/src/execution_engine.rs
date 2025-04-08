@@ -48,7 +48,7 @@ mod checked {
     use sui_types::inner_temporary_store::InnerTemporaryStore;
     use sui_types::storage::BackingStore;
     #[cfg(msim)]
-    use sui_types::sui_system_state::advance_epoch_result_injection::maybe_modify_result;
+    use sui_types::sui_system_state::advance_epoch_result_injection::maybe_modify_result_legacy;
     use sui_types::sui_system_state::{AdvanceEpochParams, ADVANCE_EPOCH_SAFE_MODE_FUNCTION_NAME};
     use sui_types::transaction::{
         Argument, AuthenticatorStateExpire, AuthenticatorStateUpdate, CallArg, ChangeEpoch,
@@ -95,7 +95,7 @@ mod checked {
         let shared_object_refs = input_objects.filter_shared_objects();
         let receiving_objects = transaction_kind.receiving_objects();
         let mut transaction_dependencies = input_objects.transaction_dependencies();
-        let contains_deleted_input = input_objects.contains_deleted_objects();
+        let contains_deleted_input = input_objects.contains_consensus_stream_ended_objects();
         let cancelled_objects = input_objects.get_cancelled_objects();
 
         let mut temporary_store = TemporaryStore::new(
@@ -114,6 +114,11 @@ mod checked {
             &transaction_digest,
             epoch_id,
             epoch_timestamp_ms,
+            // Those values are unused in execution versions before 3 (or latest)
+            1,
+            1_000_000,
+            None,
+            protocol_config,
         );
 
         let is_epoch_change = transaction_kind.is_end_of_epoch_tx();
@@ -611,6 +616,19 @@ mod checked {
                 .expect("ConsensusCommitPrologueV3 cannot fail");
                 Ok(Mode::empty_results())
             }
+            TransactionKind::ConsensusCommitPrologueV4(prologue) => {
+                setup_consensus_commit(
+                    prologue.commit_timestamp_ms,
+                    temporary_store,
+                    tx_ctx,
+                    move_vm,
+                    gas_charger,
+                    protocol_config,
+                    metrics,
+                )
+                .expect("ConsensusCommitPrologue cannot fail");
+                Ok(Mode::empty_results())
+            }
             TransactionKind::ProgrammableTransaction(pt) => {
                 programmable_transactions::execution::execute::<Mode>(
                     protocol_config,
@@ -667,6 +685,9 @@ mod checked {
                         }
                         EndOfEpochTransactionKind::BridgeCommitteeInit(_) => {
                             panic!("EndOfEpochTransactionKind::BridgeCommitteeInit should not exist in v2");
+                        }
+                        EndOfEpochTransactionKind::StoreExecutionTimeObservations(_) => {
+                            panic!("EndOfEpochTransactionKind::StoreExecutionTimeEstimates should not exist in v2");
                         }
                     }
                 }
@@ -869,7 +890,7 @@ mod checked {
         );
 
         #[cfg(msim)]
-        let result = maybe_modify_result(result, change_epoch.epoch);
+        let result = maybe_modify_result_legacy(result, change_epoch.epoch);
 
         if result.is_err() {
             tracing::error!(

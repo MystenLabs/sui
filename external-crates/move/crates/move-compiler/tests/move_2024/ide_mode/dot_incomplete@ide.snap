@@ -1,0 +1,105 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: 2024.alpha
+  lint: false
+---
+note[I15001]: IDE dot autocomplete
+   ┌─ tests/move_2024/ide_mode/dot_incomplete.move:14:23
+   │
+14 │         let _tmp1 = _s.;                // incomplete with `;` (next line should parse)
+   │                       ^ Possible dot names: 'a'
+
+error[E01002]: unexpected token
+   ┌─ tests/move_2024/ide_mode/dot_incomplete.move:14:24
+   │
+14 │         let _tmp1 = _s.;                // incomplete with `;` (next line should parse)
+   │                        ^
+   │                        │
+   │                        Unexpected ';'
+   │                        Expected an identifier or a decimal number
+
+note[I15001]: IDE dot autocomplete
+   ┌─ tests/move_2024/ide_mode/dot_incomplete.move:15:23
+   │
+15 │         let _tmp2 = _s.a.;  // incomplete with `;` (next line should parse)
+   │                       ^ Possible dot names: 'a'
+
+note[I15001]: IDE dot autocomplete
+   ┌─ tests/move_2024/ide_mode/dot_incomplete.move:15:24
+   │
+15 │         let _tmp2 = _s.a.;  // incomplete with `;` (next line should parse)
+   │                        ^ Possible dot names: 'a'
+
+note[I15001]: IDE dot autocomplete
+   ┌─ tests/move_2024/ide_mode/dot_incomplete.move:15:25
+   │
+15 │         let _tmp2 = _s.a.;  // incomplete with `;` (next line should parse)
+   │                         ^ Possible dot names: 'x'
+
+error[E01002]: unexpected token
+   ┌─ tests/move_2024/ide_mode/dot_incomplete.move:15:26
+   │
+15 │         let _tmp2 = _s.a.;  // incomplete with `;` (next line should parse)
+   │                          ^
+   │                          │
+   │                          Unexpected ';'
+   │                          Expected an identifier or a decimal number
+
+note[I15001]: IDE dot autocomplete
+   ┌─ tests/move_2024/ide_mode/dot_incomplete.move:16:23
+   │
+16 │         let _tmp3 = _s.a.   // incomplete without `;` (unexpected `let`)
+   │                       ^ Possible dot names: 'a'
+
+note[I15001]: IDE dot autocomplete
+   ┌─ tests/move_2024/ide_mode/dot_incomplete.move:16:24
+   │
+16 │         let _tmp3 = _s.a.   // incomplete without `;` (unexpected `let`)
+   │                        ^ Possible dot names: 'a'
+
+note[I15001]: IDE dot autocomplete
+   ┌─ tests/move_2024/ide_mode/dot_incomplete.move:16:25
+   │
+16 │         let _tmp3 = _s.a.   // incomplete without `;` (unexpected `let`)
+   │                         ^ Possible dot names: 'x'
+
+error[E01002]: unexpected token
+   ┌─ tests/move_2024/ide_mode/dot_incomplete.move:17:9
+   │
+17 │         let _tmp4 = _s.
+   │         ^^^
+   │         │
+   │         Unexpected 'let'
+   │         Expected an identifier or a decimal number
+
+note[I15001]: IDE dot autocomplete
+   ┌─ tests/move_2024/ide_mode/dot_incomplete.move:17:23
+   │
+17 │         let _tmp4 = _s.
+   │                       ^ Possible dot names: 'a'
+
+error[E01002]: unexpected token
+   ┌─ tests/move_2024/ide_mode/dot_incomplete.move:18:9
+   │
+18 │         let _tmp5 = _s.                  // incomplete without `;` (unexpected `}`)
+   │         ^^^
+   │         │
+   │         Unexpected 'let'
+   │         Expected an identifier or a decimal number
+
+note[I15001]: IDE dot autocomplete
+   ┌─ tests/move_2024/ide_mode/dot_incomplete.move:18:23
+   │
+18 │         let _tmp5 = _s.                  // incomplete without `;` (unexpected `}`)
+   │                       ^ Possible dot names: 'a'
+
+error[E01002]: unexpected token
+   ┌─ tests/move_2024/ide_mode/dot_incomplete.move:19:5
+   │
+19 │     }
+   │     ^
+   │     │
+   │     Unexpected '}'
+   │     Expected an identifier or a decimal number

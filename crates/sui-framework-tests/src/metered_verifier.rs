@@ -250,7 +250,7 @@ fn test_meter_system_packages() {
         .unwrap_or_else(|_| {
             panic!(
                 "Verification of all system packages should succeed, but failed on {}",
-                system_package.id(),
+                system_package.id,
             )
         });
     }

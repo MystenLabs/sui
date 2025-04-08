@@ -1,0 +1,26 @@
+{
+	"compilerOptions": {
+		"module": "CommonJS",
+		"target": "es2021",
+		"outDir": "out",
+		"lib": ["es2021"],
+		"sourceMap": true,
+		"rootDir": "src",
+		"newLine": "LF",
+		"strict": true,
+		"allowUnreachableCode": false,
+		"allowUnusedLabels": false,
+		"exactOptionalPropertyTypes": true,
+		"noFallthroughCasesInSwitch": true,
+		"noImplicitAny": true,
+		"noImplicitOverride": true,
+		"noImplicitReturns": true,
+		"noImplicitThis": true,
+		"noPropertyAccessFromIndexSignature": true,
+		"noUncheckedIndexedAccess": true,
+		"noUnusedLocals": false,
+		"noUnusedParameters": false
+	},
+	"exclude": ["node_modules", "out"],
+	"include": ["src"]
+}

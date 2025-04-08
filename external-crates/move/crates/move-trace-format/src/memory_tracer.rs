@@ -138,6 +138,12 @@ impl TraceState {
     }
 }
 
+impl Default for TraceState {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl Tracer for TraceState {
     fn notify(&mut self, event: &TraceEvent, mut write: Writer<'_>) {
         self.apply_event(event);

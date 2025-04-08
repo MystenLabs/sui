@@ -1,0 +1,21 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: legacy
+  lint: false
+---
+error[E04007]: incompatible types
+   ┌─ tests/move_check/translated_ir_tests/move/commands/pop_weird.move:13:9
+   │
+13 │         (_, _) = ();
+   │         ^^^^^^   -- Given: '()'
+   │         │         
+   │         Invalid value for assignment
+   │         Expected: '(_, _)'
+
+error[E01009]: invalid assignment
+   ┌─ tests/move_check/translated_ir_tests/move/commands/pop_weird.move:14:9
+   │
+14 │         (_) = ();
+   │         ^^^ Invalid assignment syntax. Expected: a local, a field write, or a deconstructing assignment

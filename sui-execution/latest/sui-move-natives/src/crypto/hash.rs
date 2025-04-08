@@ -42,7 +42,7 @@ fn hash<H: HashFunction<DIGEST_SIZE>, const DIGEST_SIZE: usize>(
         msg_cost_per_byte.mul((msg_ref.len() as u64).into())
             // Round up the blocks
             + msg_cost_per_block
-                .mul((((msg_ref.len() + block_size - 1) / block_size) as u64).into())
+                .mul((msg_ref.len().div_ceil(block_size) as u64).into())
     );
 
     Ok(NativeResult::ok(
@@ -78,7 +78,7 @@ pub fn keccak256(
     // Load the cost parameters from the protocol config
     let hash_keccak256_cost_params = &context
         .extensions()
-        .get::<NativesCostTable>()
+        .get::<NativesCostTable>()?
         .hash_keccak256_cost_params
         .clone();
     // Charge the base cost for this oper
@@ -118,7 +118,7 @@ pub fn blake2b256(
     // Load the cost parameters from the protocol config
     let hash_blake2b256_cost_params = &context
         .extensions()
-        .get::<NativesCostTable>()
+        .get::<NativesCostTable>()?
         .hash_blake2b256_cost_params
         .clone();
     // Charge the base cost for this oper

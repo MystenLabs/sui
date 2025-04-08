@@ -1,0 +1,43 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: 2024.alpha
+  lint: false
+---
+error[E04005]: expected a single type
+   ┌─ tests/move_2024/parser/labeled_control_exp_associativity_else_after_if_block.move:13:9
+   │
+13 │         if (cond) 'a: { s1 }.f else s2.f
+   │         ^^^^^^^^^^^^^^^^^^^^
+   │         │
+   │         Invalid dot access
+   │         Expected a single type, but found expression list type: '()'
+
+error[E04007]: incompatible types
+   ┌─ tests/move_2024/parser/labeled_control_exp_associativity_else_after_if_block.move:13:9
+   │
+13 │         if (cond) 'a: { s1 }.f else s2.f
+   │         ^^^^^^^^^^^^^^^^^^^^
+   │         │         │
+   │         │         Given: '0x42::M::S'
+   │         Invalid 'if'. The body of an 'if' without an 'else' must have type '()'
+   │         Expected: '()'
+
+error[E04009]: expected specific type
+   ┌─ tests/move_2024/parser/labeled_control_exp_associativity_else_after_if_block.move:13:9
+   │
+13 │         if (cond) 'a: { s1 }.f else s2.f
+   │         ^^^^^^^^^^^^^^^^^^^^^^
+   │         │
+   │         Unbound field 'f'
+   │         Expected a struct type in the current module but got: '()'
+
+error[E01002]: unexpected token
+   ┌─ tests/move_2024/parser/labeled_control_exp_associativity_else_after_if_block.move:13:32
+   │
+13 │         if (cond) 'a: { s1 }.f else s2.f
+   │                                ^^^^
+   │                                │
+   │                                Unexpected 'else'
+   │                                Expected ';'

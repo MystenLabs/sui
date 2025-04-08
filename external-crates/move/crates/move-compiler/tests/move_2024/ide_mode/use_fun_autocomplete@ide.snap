@@ -1,0 +1,30 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: 2024.alpha
+  lint: false
+---
+note[I15001]: IDE dot autocomplete
+   ┌─ tests/move_2024/ide_mode/use_fun_autocomplete.move:12:10
+   │
+12 │         s.bak(); // autocompletion to `bak` and `foo`
+   │          ^ Possible dot names: '0x42::m1::bak', '0x42::m1::foo', '0x42::m1::test1', or '0x42::m1::test2'
+
+note[I15001]: IDE dot autocomplete
+   ┌─ tests/move_2024/ide_mode/use_fun_autocomplete.move:12:11
+   │
+12 │         s.bak(); // autocompletion to `bak` and `foo`
+   │           ^^^ Possible dot names: '0x42::m1::bak', '0x42::m1::foo', '0x42::m1::test1', or '0x42::m1::test2'
+
+note[I15001]: IDE dot autocomplete
+   ┌─ tests/move_2024/ide_mode/use_fun_autocomplete.move:17:10
+   │
+17 │         s.bar(); // auto-completion to only one (shadowed) `bar`
+   │          ^ Possible dot names: '0x42::m1::bar', '0x42::m1::test1', or '0x42::m1::test2'
+
+note[I15001]: IDE dot autocomplete
+   ┌─ tests/move_2024/ide_mode/use_fun_autocomplete.move:17:11
+   │
+17 │         s.bar(); // auto-completion to only one (shadowed) `bar`
+   │           ^^^ Possible dot names: '0x42::m1::bar', '0x42::m1::test1', or '0x42::m1::test2'

@@ -1,6 +1,0 @@
-error[E03006]: unexpected name in this position
-  ┌─ tests/move_2024/expansion/module_alias_as_type.move:5:16
-  │
-5 │     fun foo(x: X) { x; }
-  │                ^ Expected a type, function, or constant in this position, not a module
-

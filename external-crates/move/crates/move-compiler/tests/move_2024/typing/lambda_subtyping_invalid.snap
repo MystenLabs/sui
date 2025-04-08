@@ -1,0 +1,30 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: 2024.alpha
+  lint: false
+---
+error[E04006]: invalid subtype
+   ┌─ tests/move_2024/typing/lambda_subtyping_invalid.move:12:9
+   │
+ 2 │     macro fun imm_arg($f: |&u64| -> u64) {
+   │                            ---- Given: '&u64'
+   ·
+12 │         imm_arg!(|x: &mut u64| *x = 1);
+   │         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   │         │            │
+   │         │            Expected: '&mut u64'
+   │         Invalid call of 'a::m::imm_arg'. Invalid argument for parameter '$f'
+
+error[E04006]: invalid subtype
+   ┌─ tests/move_2024/typing/lambda_subtyping_invalid.move:13:9
+   │
+ 7 │     macro fun mut_ret($f: || -> &mut u64) {
+   │                                 -------- Expected: '&mut u64'
+   ·
+13 │         mut_ret!(|| -> &u64 { &0 });
+   │         ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   │         │              │
+   │         │              Given: '&u64'
+   │         Invalid call of 'a::m::mut_ret'. Invalid argument for parameter '$f'

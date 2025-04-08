@@ -1,0 +1,35 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: legacy
+  lint: false
+---
+error[E03013]: positional call mismatch
+  ┌─ tests/move_check/parser/positional_struct_unpack.move:7:9
+  │
+4 │     struct Foo { f: u64 }
+  │            --- 'Foo' is declared here
+  ·
+7 │         Foo(_) = x;
+  │         ^^^^^^ Invalid struct deconstruction. Named struct declarations require named deconstructions
+
+error[E13001]: feature is not supported in specified edition
+  ┌─ tests/move_check/parser/positional_struct_unpack.move:7:9
+  │
+7 │         Foo(_) = x;
+  │         ^^^^^^ Positional fields are not supported by current edition 'legacy'; the '2024' edition supports this feature
+  │
+  = You can update the edition in the 'Move.toml', or via command line flag if invoking the compiler directly.
+
+error[E03010]: unbound field
+  ┌─ tests/move_check/parser/positional_struct_unpack.move:7:9
+  │
+7 │         Foo(_) = x;
+  │         ^^^^^^ Unbound field '0' in '0x42::M::Foo'
+
+error[E04016]: too few arguments
+  ┌─ tests/move_check/parser/positional_struct_unpack.move:7:9
+  │
+7 │         Foo(_) = x;
+  │         ^^^^^^ Missing assignment for field 'f' in '0x42::M::Foo'

@@ -1,0 +1,41 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: legacy
+  lint: false
+---
+error[E01002]: unexpected token
+  ┌─ tests/move_check/parser/use_with_modifiers_exp.move:3:9
+  │
+3 │         public use fun bar as X.baz;
+  │         ^^^^^^
+  │         │
+  │         Unexpected 'public'
+  │         Expected an expression term
+
+error[E13001]: feature is not supported in specified edition
+  ┌─ tests/move_check/parser/use_with_modifiers_exp.move:3:9
+  │
+3 │         public use fun bar as X.baz;
+  │         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^ Method syntax is not supported by current edition 'legacy'; the '2024' edition supports this feature
+  │
+  = You can update the edition in the 'Move.toml', or via command line flag if invoking the compiler directly.
+
+error[E03005]: unbound unscoped name
+  ┌─ tests/move_check/parser/use_with_modifiers_exp.move:3:24
+  │
+3 │         public use fun bar as X.baz;
+  │                        ^^^ Unbound function 'bar' in current scope
+
+error[E03004]: unbound type
+  ┌─ tests/move_check/parser/use_with_modifiers_exp.move:3:31
+  │
+3 │         public use fun bar as X.baz;
+  │                               ^ Unbound type 'X' in current scope
+
+error[E01002]: unexpected token
+  ┌─ tests/move_check/parser/use_with_modifiers_exp.move:5:1
+  │
+5 │ }
+  │ ^ Invalid code unit. Expected 'address' or 'module'. Got '}'

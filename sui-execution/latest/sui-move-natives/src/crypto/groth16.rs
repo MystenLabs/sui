@@ -1,6 +1,6 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
-use crate::NativesCostTable;
+use crate::{object_runtime::ObjectRuntime, NativesCostTable};
 use move_binary_format::errors::PartialVMResult;
 use move_core_types::gas_algebra::InternalGas;
 use move_vm_runtime::{native_charge_gas_early_exit, native_functions::NativeContext};
@@ -47,7 +47,7 @@ pub fn prepare_verifying_key_internal(
 
     // Load the cost parameters from the protocol config
     let (groth16_prepare_verifying_key_cost_params, crypto_invalid_arguments_cost) = {
-        let cost_table = &context.extensions().get::<NativesCostTable>();
+        let cost_table = &context.extensions().get::<NativesCostTable>()?;
         (
             cost_table.groth16_prepare_verifying_key_cost_params.clone(),
             cost_table.crypto_invalid_arguments_cost,
@@ -135,7 +135,7 @@ pub fn verify_groth16_proof_internal(
 
     // Load the cost parameters from the protocol config
     let (groth16_verify_groth16_proof_internal_cost_params, crypto_invalid_arguments_cost) = {
-        let cost_table = &context.extensions().get::<NativesCostTable>();
+        let cost_table = &context.extensions().get::<NativesCostTable>()?;
         (
             cost_table
                 .groth16_verify_groth16_proof_internal_cost_params
@@ -169,21 +169,33 @@ pub fn verify_groth16_proof_internal(
                 .groth16_verify_groth16_proof_internal_bls12381_cost_base,
             groth16_verify_groth16_proof_internal_cost_params
                 .groth16_verify_groth16_proof_internal_bls12381_cost_per_public_input,
-            (public_proof_inputs.len() + fastcrypto::groups::bls12381::SCALAR_LENGTH - 1)
-                / fastcrypto::groups::bls12381::SCALAR_LENGTH,
+            public_proof_inputs
+                .len()
+                .div_ceil(fastcrypto::groups::bls12381::SCALAR_LENGTH),
         ),
         BN254 => (
             groth16_verify_groth16_proof_internal_cost_params
                 .groth16_verify_groth16_proof_internal_bn254_cost_base,
             groth16_verify_groth16_proof_internal_cost_params
                 .groth16_verify_groth16_proof_internal_bn254_cost_per_public_input,
-            (public_proof_inputs.len() + fastcrypto_zkp::bn254::api::SCALAR_SIZE - 1)
-                / fastcrypto_zkp::bn254::api::SCALAR_SIZE,
+            public_proof_inputs
+                .len()
+                .div_ceil(fastcrypto_zkp::bn254::api::SCALAR_SIZE),
         ),
         _ => {
             // Charge for failure but dont fail if we run out of gas otherwise the actual error is masked by OUT_OF_GAS error
             context.charge_gas(crypto_invalid_arguments_cost);
-            return Ok(NativeResult::err(context.gas_budget(), INVALID_CURVE));
+            let cost = if context
+                .extensions()
+                .get::<ObjectRuntime>()?
+                .protocol_config
+                .native_charging_v2()
+            {
+                context.gas_used()
+            } else {
+                context.gas_budget()
+            };
+            return Ok(NativeResult::err(cost, INVALID_CURVE));
         }
     };
     // Charge the base cost for this oper

@@ -590,7 +590,7 @@ fn peek_field_test() {
         fields: &'f [&'f str],
     }
 
-    impl<'b, 'l, 'f> Visitor<'b, 'l> for PeekU64Visitor<'f> {
+    impl<'b, 'l> Visitor<'b, 'l> for PeekU64Visitor<'_> {
         type Value = Option<u64>;
         type Error = annotated_visitor::Error;
 
@@ -1073,10 +1073,7 @@ pub(crate) fn struct_layout_(rep: &str, fields: Vec<(&str, MoveTypeLayout)>) -> 
         .map(|(name, layout)| MoveFieldLayout::new(Identifier::new(name).unwrap(), layout))
         .collect();
 
-    MoveTypeLayout::Struct(Box::new(MoveStructLayout {
-        type_,
-        fields: Box::new(fields),
-    }))
+    MoveTypeLayout::Struct(Box::new(MoveStructLayout { type_, fields }))
 }
 
 /// Create a variant value for test purposes.

@@ -1,0 +1,24 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: 2024.alpha
+  lint: false
+---
+error[E04024]: invalid usage of immutable variable
+   ┌─ tests/move_2024/typing/mut_patterns.move:27:17
+   │
+26 │             X::A(x, _) | X::B { x } => {
+   │                  - To use the variable mutably, it must be declared 'mut', e.g. 'mut x'
+27 │                 x = x + 1;
+   │                 ^ Invalid assignment of immutable variable 'x'
+
+error[E04024]: invalid usage of immutable variable
+   ┌─ tests/move_2024/typing/mut_patterns.move:27:17
+   │
+26 │             X::A(x, _) | X::B { x } => {
+   │                  -              - The variable was initially assigned here
+   │                  │               
+   │                  To use the variable mutably, it must be declared 'mut', e.g. 'mut x'
+27 │                 x = x + 1;
+   │                 ^ Invalid assignment of immutable variable 'x'

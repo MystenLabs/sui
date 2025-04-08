@@ -1,0 +1,28 @@
+---
+source: crates/move-transactional-test-runner/src/framework.rs
+---
+processed 28 tasks
+
+task 22, line 249:
+//# run 42::m::t20
+return values: 0
+
+task 23, line 251:
+//# run 42::m::t21
+return values: 0
+
+task 24, line 253:
+//# run 42::m::t22
+return values: 0
+
+task 25, line 255:
+//# run 42::m::t23
+return values: 0
+
+task 26, line 257:
+//# run 42::m::t24
+return values: 0
+
+task 27, line 259:
+//# run 42::m::t25
+return values: 0

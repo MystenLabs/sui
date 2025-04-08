@@ -107,7 +107,10 @@ impl BridgeOrchestratorTables {
     }
 
     pub fn get_all_pending_actions(&self) -> HashMap<BridgeActionDigest, BridgeAction> {
-        self.pending_actions.unbounded_iter().collect()
+        self.pending_actions
+            .safe_iter()
+            .collect::<Result<HashMap<_, _>, _>>()
+            .expect("failed to get all pending actions")
     }
 
     pub fn get_sui_event_cursors(

@@ -71,7 +71,7 @@ pub fn ecrecover(
 
     // Load the cost parameters from the protocol config
     let (ecdsa_r1_ecrecover_cost_params, crypto_invalid_arguments_cost) = {
-        let cost_table = &context.extensions().get::<NativesCostTable>();
+        let cost_table = &context.extensions().get::<NativesCostTable>()?;
         (
             cost_table.ecdsa_r1_ecrecover_cost_params.clone(),
             cost_table.crypto_invalid_arguments_cost,
@@ -115,7 +115,7 @@ pub fn ecrecover(
     native_charge_gas_early_exit!(
         context,
         cost_per_byte * (msg_ref.len() as u64).into()
-            + cost_per_block * (((msg_ref.len() + block_size - 1) / block_size) as u64).into()
+            + cost_per_block * (msg_ref.len().div_ceil(block_size) as u64).into()
     );
 
     let cost = context.gas_used();
@@ -175,7 +175,7 @@ pub fn secp256r1_verify(
     debug_assert!(args.len() == 4);
     // Load the cost parameters from the protocol config
     let (ecdsa_r1_secp256_r1_verify_cost_params, crypto_invalid_arguments_cost) = {
-        let cost_table = &context.extensions().get::<NativesCostTable>();
+        let cost_table = &context.extensions().get::<NativesCostTable>()?;
         (
             cost_table.ecdsa_r1_secp256_r1_verify_cost_params.clone(),
             cost_table.crypto_invalid_arguments_cost,
@@ -224,7 +224,7 @@ pub fn secp256r1_verify(
     native_charge_gas_early_exit!(
         context,
         cost_per_byte * (msg_ref.len() as u64).into()
-            + cost_per_block * (((msg_ref.len() + block_size - 1) / block_size) as u64).into()
+            + cost_per_block * (msg_ref.len().div_ceil(block_size) as u64).into()
     );
 
     let cost = context.gas_used();

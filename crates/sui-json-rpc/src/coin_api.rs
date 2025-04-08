@@ -12,7 +12,7 @@ use jsonrpsee::RpcModule;
 use move_core_types::language_storage::{StructTag, TypeTag};
 use sui_core::jsonrpc_index::TotalBalance;
 use tap::TapFallible;
-use tracing::{debug, info, instrument};
+use tracing::{debug, instrument};
 
 use mysten_metrics::spawn_monitored_task;
 use sui_core::authority::AuthorityState;
@@ -79,6 +79,40 @@ impl SuiRpcModule for CoinReadApi {
     }
 }
 
+#[derive(serde::Serialize, serde::Deserialize)]
+struct CoinCursor {
+    coin_type: String,
+    inverted_balance: u64,
+    object_id: ObjectID,
+}
+
+impl CoinCursor {
+    fn new(coin_type: String, balance: u64, object_id: ObjectID) -> Self {
+        Self {
+            coin_type,
+            inverted_balance: !balance,
+            object_id,
+        }
+    }
+
+    fn encode(&self) -> String {
+        use base64::prelude::BASE64_STANDARD;
+        use base64::Engine;
+
+        let json = serde_json::to_string(self).unwrap();
+
+        BASE64_STANDARD.encode(json.as_bytes())
+    }
+
+    fn decode(cursor: &str) -> Option<Self> {
+        use base64::prelude::BASE64_STANDARD;
+        use base64::Engine;
+
+        let bytes = BASE64_STANDARD.decode(cursor).ok()?;
+        serde_json::from_slice(&bytes).ok()
+    }
+}
+
 #[async_trait]
 impl CoinReadApiServer for CoinReadApi {
     #[instrument(skip(self))]
@@ -87,7 +121,7 @@ impl CoinReadApiServer for CoinReadApi {
         owner: SuiAddress,
         coin_type: Option<String>,
         // exclusive cursor if `Some`, otherwise start from the beginning
-        cursor: Option<ObjectID>,
+        cursor: Option<String>,
         limit: Option<usize>,
     ) -> RpcResult<CoinPage> {
         with_tracing!(async move {
@@ -95,13 +129,20 @@ impl CoinReadApiServer for CoinReadApi {
 
             let cursor = match cursor {
                 Some(c) => {
-                    let obj = self.internal.get_object(&c).await?.ok_or_else(|| {
-                        SuiRpcInputError::GenericInvalid("cursor not found".to_string())
+                    let decoded = CoinCursor::decode(&c).ok_or_else(|| {
+                        SuiRpcInputError::GenericInvalid("invalid cursor".to_string())
                     })?;
-                    let coin = obj.as_coin_maybe().ok_or_else(|| {
-                        SuiRpcInputError::GenericInvalid("cursor is not a coin".to_string())
-                    })?;
-                    (coin_type_tag.to_string(), !coin.balance.value(), c)
+
+                    if coin_type_tag.to_string() != decoded.coin_type {
+                        return Err(
+                            SuiRpcInputError::GenericInvalid("invalid cursor".to_string()).into(),
+                        );
+                    }
+                    (
+                        decoded.coin_type,
+                        decoded.inverted_balance,
+                        decoded.object_id,
+                    )
                 }
                 // If cursor is not specified, we need to start from the beginning of the coin type, which is the minimal possible ObjectID.
                 None => (coin_type_tag.to_string(), 0, ObjectID::ZERO),
@@ -120,47 +161,30 @@ impl CoinReadApiServer for CoinReadApi {
         &self,
         owner: SuiAddress,
         // exclusive cursor if `Some`, otherwise start from the beginning
-        cursor: Option<ObjectID>,
+        cursor: Option<String>,
         limit: Option<usize>,
     ) -> RpcResult<CoinPage> {
         with_tracing!(async move {
             let cursor = match cursor {
-                Some(object_id) => {
-                    let obj = self.internal.get_object(&object_id).await?;
-                    match obj {
-                        Some(obj) => {
-                            let coin_type = obj.coin_type_maybe();
-                            if coin_type.is_none() {
-                                Err(SuiRpcInputError::GenericInvalid(
-                                    "cursor is not a coin".to_string(),
-                                ))
-                            } else {
-                                let coin = obj.as_coin_maybe().ok_or_else(|| {
-                                    SuiRpcInputError::GenericInvalid(
-                                        "cursor is not a coin".to_string(),
-                                    )
-                                })?;
-                                Ok((
-                                    coin_type.unwrap().to_string(),
-                                    !coin.balance.value(),
-                                    object_id,
-                                ))
-                            }
-                        }
-                        None => Err(SuiRpcInputError::GenericInvalid(
-                            "cursor not found".to_string(),
-                        )),
-                    }
+                Some(c) => {
+                    let decoded = CoinCursor::decode(&c).ok_or_else(|| {
+                        SuiRpcInputError::GenericInvalid("invalid cursor".to_string())
+                    })?;
+                    (
+                        decoded.coin_type,
+                        decoded.inverted_balance,
+                        decoded.object_id,
+                    )
                 }
                 None => {
                     // If cursor is None, start from the beginning
-                    Ok((
+                    (
                         String::from_utf8([0u8].to_vec()).unwrap(),
                         0,
                         ObjectID::ZERO,
-                    ))
+                    )
                 }
-            }?;
+            };
 
             let coins = self
                 .internal
@@ -408,7 +432,14 @@ impl CoinReadInternal for CoinReadInternalImpl {
         self.metrics
             .get_coins_result_size_total
             .inc_by(data.len() as u64);
-        let next_cursor = data.last().map(|coin| coin.coin_object_id);
+        let next_cursor = has_next_page
+            .then(|| {
+                data.last().map(|coin| {
+                    CoinCursor::new(coin.coin_type.clone(), coin.balance, coin.coin_object_id)
+                        .encode()
+                })
+            })
+            .flatten();
         Ok(CoinPage {
             data,
             next_cursor,
@@ -422,7 +453,6 @@ mod tests {
     use super::*;
     use crate::authority_state::{MockStateRead, StateReadError};
     use expect_test::expect;
-    use jsonrpsee::types::ErrorObjectOwned;
     use mockall::mock;
     use mockall::predicate;
     use move_core_types::account_address::AccountAddress;
@@ -435,14 +465,12 @@ mod tests {
     use sui_types::balance::Supply;
     use sui_types::base_types::{ObjectID, SequenceNumber, SuiAddress};
     use sui_types::coin::TreasuryCap;
-    use sui_types::digests::{ObjectDigest, TransactionDigest, TransactionEventsDigest};
-    use sui_types::effects::TransactionEffects;
+    use sui_types::digests::{ObjectDigest, TransactionDigest};
+    use sui_types::effects::{TransactionEffects, TransactionEvents};
     use sui_types::error::{SuiError, SuiResult};
     use sui_types::gas_coin::GAS;
     use sui_types::id::UID;
-    use sui_types::messages_checkpoint::{
-        CheckpointContentsDigest, CheckpointDigest, CheckpointSequenceNumber,
-    };
+    use sui_types::messages_checkpoint::{CheckpointDigest, CheckpointSequenceNumber};
     use sui_types::object::MoveObject;
     use sui_types::object::Object;
     use sui_types::object::Owner;
@@ -457,7 +485,6 @@ mod tests {
                 &self,
                 transactions: &[TransactionDigest],
                 effects: &[TransactionDigest],
-                events: &[TransactionEventsDigest],
             ) -> SuiResult<KVStoreTransactionData>;
 
             async fn multi_get_checkpoints(
@@ -465,7 +492,6 @@ mod tests {
                 checkpoint_summaries: &[CheckpointSequenceNumber],
                 checkpoint_contents: &[CheckpointSequenceNumber],
                 checkpoint_summaries_by_digest: &[CheckpointDigest],
-                checkpoint_contents_by_digest: &[CheckpointContentsDigest],
             ) -> SuiResult<KVStoreCheckpointData>;
 
             async fn deprecated_get_transaction_checkpoint(
@@ -479,6 +505,8 @@ mod tests {
                 &self,
                 digests: &[TransactionDigest],
             ) -> SuiResult<Vec<Option<CheckpointSequenceNumber>>>;
+
+            async fn multi_get_events_by_tx_digests(&self,digests: &[TransactionDigest]) -> SuiResult<Vec<Option<TransactionEvents>>>;
         }
     }
 
@@ -552,7 +580,7 @@ mod tests {
         let previous_transaction = TransactionDigest::from(arr);
         let object = Object::new_move(
             MoveObject::new_coin(
-                coin_type_string.parse::<StructTag>().unwrap().into(),
+                coin_type_string.parse::<TypeTag>().unwrap(),
                 1.into(),
                 object_id,
                 balance,
@@ -597,7 +625,6 @@ mod tests {
     mod get_coins_tests {
         use super::super::*;
         use super::*;
-        use jsonrpsee::types::ErrorObjectOwned;
 
         // Success scenarios
         #[tokio::test]
@@ -624,7 +651,7 @@ mod tests {
                 result,
                 CoinPage {
                     data: vec![gas_coin.clone()],
-                    next_cursor: Some(gas_coin.coin_object_id),
+                    next_cursor: None,
                     has_next_page: false,
                 }
             );
@@ -660,16 +687,29 @@ mod tests {
                 .return_once(|_| Ok(Some(get_test_coin(Some("0xA"), CoinType::Gas).0)));
 
             let coin_read_api = CoinReadApi::new_for_tests(Arc::new(mock_state), None);
+            let cursor = CoinCursor::new(
+                coins[0].coin_type.clone(),
+                coins[0].balance,
+                coins[0].coin_object_id,
+            )
+            .encode();
             let response = coin_read_api
-                .get_coins(owner, None, Some(coins[0].coin_object_id), Some(limit))
+                .get_coins(owner, None, Some(cursor), Some(limit))
                 .await;
             assert!(response.is_ok());
             let result = response.unwrap();
+
+            let expected_cursor = CoinCursor::new(
+                coins[limit - 1].coin_type.clone(),
+                coins[limit - 1].balance,
+                coins[limit - 1].coin_object_id,
+            )
+            .encode();
             assert_eq!(
                 result,
                 CoinPage {
                     data: coins[..limit].to_vec(),
-                    next_cursor: Some(coins[limit - 1].coin_object_id),
+                    next_cursor: Some(expected_cursor),
                     has_next_page: true,
                 }
             );
@@ -707,7 +747,7 @@ mod tests {
                 result,
                 CoinPage {
                     data: vec![coin.clone()],
-                    next_cursor: Some(coin.coin_object_id),
+                    next_cursor: None,
                     has_next_page: false,
                 }
             );
@@ -724,7 +764,12 @@ mod tests {
             // Build request params
             let owner = get_test_owner();
             let coin_type = coins[0].coin_type.clone();
-            let cursor = coins[0].coin_object_id;
+            let cursor = CoinCursor::new(
+                coins[0].coin_type.clone(),
+                coins[0].balance,
+                coins[0].coin_object_id,
+            )
+            .encode();
             let limit = 2;
 
             let coin_type_tag =
@@ -755,11 +800,17 @@ mod tests {
 
             assert!(response.is_ok());
             let result = response.unwrap();
+            let expected_cursor = CoinCursor::new(
+                coins[limit - 1].coin_type.clone(),
+                coins[limit - 1].balance,
+                coins[limit - 1].coin_object_id,
+            )
+            .encode();
             assert_eq!(
                 result,
                 CoinPage {
                     data: coins[..limit].to_vec(),
-                    next_cursor: Some(coins[limit - 1].coin_object_id),
+                    next_cursor: Some(expected_cursor),
                     has_next_page: true,
                 }
             );
@@ -777,8 +828,7 @@ mod tests {
                 .await;
 
             assert!(response.is_err());
-            let error_result = response.unwrap_err();
-            let error_object: ErrorObjectOwned = error_result.into();
+            let error_object = response.unwrap_err();
             let expected = expect!["-32602"];
             expected.assert_eq(&error_object.code().to_string());
             let expected = expect!["Invalid struct type: 0x2::invalid::struct::tag. Got error: Expected end of token stream. Got: ::"];
@@ -796,8 +846,7 @@ mod tests {
                 .await;
 
             assert!(response.is_err());
-            let error_result = response.unwrap_err();
-            let error_object: ErrorObjectOwned = error_result.into();
+            let error_object = response.unwrap_err();
             let expected = expect!["-32602"];
             expected.assert_eq(&error_object.code().to_string());
             let expected =
@@ -824,8 +873,7 @@ mod tests {
                 .await;
 
             assert!(response.is_err());
-            let error_result = response.unwrap_err();
-            let error_object: ErrorObjectOwned = error_result.into();
+            let error_object = response.unwrap_err();
             assert_eq!(
                 error_object.code(),
                 jsonrpsee::types::error::INVALID_PARAMS_CODE
@@ -850,8 +898,7 @@ mod tests {
                 .await;
 
             assert!(response.is_err());
-            let error_result = response.unwrap_err();
-            let error_object: ErrorObjectOwned = error_result.into();
+            let error_object = response.unwrap_err();
             assert_eq!(
                 error_object.code(),
                 jsonrpsee::types::error::INTERNAL_ERROR_CODE
@@ -934,8 +981,14 @@ mod tests {
                 )
                 .return_once(move |_, _, _, _| Ok(coins_clone));
             let coin_read_api = CoinReadApi::new_for_tests(Arc::new(mock_state), None);
+            let cursor = CoinCursor::new(
+                coins[0].coin_type.clone(),
+                coins[0].balance,
+                coins[0].coin_object_id,
+            )
+            .encode();
             let response = coin_read_api
-                .get_all_coins(owner, Some(coins[0].coin_object_id), Some(limit))
+                .get_all_coins(owner, Some(cursor), Some(limit))
                 .await
                 .unwrap();
             assert_eq!(response.data.len(), limit);
@@ -958,16 +1011,15 @@ mod tests {
             });
             let coin_read_api = CoinReadApi::new_for_tests(Arc::new(mock_state), None);
             let response = coin_read_api
-                .get_all_coins(owner, Some(object_id), None)
+                .get_all_coins(owner, Some(object_id.to_string()), None)
                 .await;
 
             assert!(response.is_err());
-            let error_result = response.unwrap_err();
-            let error_object: ErrorObjectOwned = error_result.into();
+            let error_object = response.unwrap_err();
             assert_eq!(error_object.code(), -32602);
             let expected = expect!["-32602"];
             expected.assert_eq(&error_object.code().to_string());
-            let expected = expect!["cursor is not a coin"];
+            let expected = expect!["invalid cursor"];
             expected.assert_eq(error_object.message());
         }
 
@@ -980,15 +1032,14 @@ mod tests {
 
             let coin_read_api = CoinReadApi::new_for_tests(Arc::new(mock_state), None);
             let response = coin_read_api
-                .get_all_coins(owner, Some(object_id), None)
+                .get_all_coins(owner, Some(object_id.to_string()), None)
                 .await;
 
             assert!(response.is_err());
-            let error_result = response.unwrap_err();
-            let error_object: ErrorObjectOwned = error_result.into();
+            let error_object = response.unwrap_err();
             let expected = expect!["-32602"];
             expected.assert_eq(&error_object.code().to_string());
-            let expected = expect!["cursor not found"];
+            let expected = expect!["invalid cursor"];
             expected.assert_eq(error_object.message());
         }
     }
@@ -996,7 +1047,6 @@ mod tests {
     mod get_balance_tests {
         use super::super::*;
         use super::*;
-        use jsonrpsee::types::ErrorObjectOwned;
         // Success scenarios
         #[tokio::test]
         async fn test_gas_coin() {
@@ -1080,8 +1130,7 @@ mod tests {
                 .await;
 
             assert!(response.is_err());
-            let error_result = response.unwrap_err();
-            let error_object: ErrorObjectOwned = error_result.into();
+            let error_object = response.unwrap_err();
             let expected = expect!["-32602"];
             expected.assert_eq(&error_object.code().to_string());
             let expected = expect!["Invalid struct type: 0x2::invalid::struct::tag. Got error: Expected end of token stream. Got: ::"];
@@ -1105,8 +1154,7 @@ mod tests {
                 .await;
 
             assert!(response.is_err());
-            let error_result = response.unwrap_err();
-            let error_object: ErrorObjectOwned = error_result.into();
+            let error_object = response.unwrap_err();
             assert_eq!(
                 error_object.code(),
                 jsonrpsee::types::error::INVALID_PARAMS_CODE
@@ -1130,8 +1178,7 @@ mod tests {
                 .await;
 
             assert!(response.is_err());
-            let error_result = response.unwrap_err();
-            let error_object: ErrorObjectOwned = error_result.into();
+            let error_object = response.unwrap_err();
 
             assert_eq!(
                 error_object.code(),
@@ -1145,7 +1192,6 @@ mod tests {
     mod get_all_balances_tests {
         use super::super::*;
         use super::*;
-        use jsonrpsee::types::ErrorObjectOwned;
 
         // Success scenarios
         #[tokio::test]
@@ -1221,8 +1267,7 @@ mod tests {
             let response = coin_read_api.get_all_balances(owner).await;
 
             assert!(response.is_err());
-            let error_result = response.unwrap_err();
-            let error_object: ErrorObjectOwned = error_result.into();
+            let error_object = response.unwrap_err();
             assert_eq!(
                 error_object.code(),
                 jsonrpsee::types::error::INVALID_PARAMS_CODE
@@ -1400,17 +1445,18 @@ mod tests {
                 .return_once(move |_| Ok(transaction_digest));
             mock_state
                 .expect_multi_get()
-                .return_once(move |_, _, _| Ok((vec![], vec![Some(transaction_effects)], vec![])));
+                .return_once(move |_, _| Ok((vec![], vec![Some(transaction_effects)])));
 
             let coin_read_api = CoinReadApi::new_for_tests(Arc::new(mock_state), None);
             let response = coin_read_api.get_total_supply(coin_name.clone()).await;
 
             assert!(response.is_err());
-            let error_result = response.unwrap_err();
-            let error_object: ErrorObjectOwned = error_result.into();
+            let error_object = response.unwrap_err();
             let expected = expect!["-32000"];
             expected.assert_eq(&error_object.code().to_string());
-            let expected = expect!["task 1 panicked"];
+            let expected = expect![[
+                r#"task 1 panicked with message "MockKeyValueStore::multi_get(?, ?): No matching expectation found""#
+            ]];
             expected.assert_eq(error_object.message());
         }
 
@@ -1446,8 +1492,7 @@ mod tests {
             };
 
             let response = coin_read_api.get_total_supply(coin_name.clone()).await;
-            let error_result = response.unwrap_err();
-            let error_object: ErrorObjectOwned = error_result.into();
+            let error_object = response.unwrap_err();
             assert_eq!(
                 error_object.code(),
                 jsonrpsee::types::error::CALL_EXECUTION_FAILED_CODE

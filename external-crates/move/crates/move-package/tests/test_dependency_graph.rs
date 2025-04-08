@@ -5,9 +5,10 @@ use std::{
     collections::{BTreeMap, BTreeSet},
     fs::{self, File},
     io::Write,
-    path::PathBuf,
+    path::{Path, PathBuf},
 };
 
+use move_command_line_common::testing::read_insta_snapshot;
 use move_package::{
     lock_file::LockFile,
     resolution::dependency_graph::{
@@ -15,7 +16,7 @@ use move_package::{
     },
     source_package::{
         layout::SourcePackageLayout,
-        parsed_manifest::{Dependency, DependencyKind, InternalDependency},
+        parsed_manifest::{Dependencies, Dependency, DependencyKind, InternalDependency},
     },
 };
 use move_symbol_pool::Symbol;
@@ -28,6 +29,10 @@ macro_rules! assert_error_contains {
     };
 }
 
+fn snapshot_path(pkg: &Path, kind: &str) -> PathBuf {
+    pkg.join(format!("Move@{kind}.snap"))
+}
+
 #[test]
 fn no_dep_graph() {
     let pkg = no_dep_test_package();
@@ -38,6 +43,7 @@ fn no_dep_graph() {
         /* skip_fetch_latest_git_deps */ true,
         std::io::sink(),
         tempfile::tempdir().unwrap().path().to_path_buf(),
+        Dependencies::default(), /* implicit deps */
     );
     let (graph, _) = dep_graph_builder
         .get_graph(
@@ -60,12 +66,13 @@ fn no_dep_graph() {
 fn no_dep_graph_from_lock() {
     let pkg = no_dep_test_package();
 
-    let snapshot = pkg.join("Move.locked");
+    let snapshot = snapshot_path(&pkg, "locked");
+    let contents = read_insta_snapshot(snapshot).unwrap();
     let graph = DependencyGraph::read_from_lock(
         pkg,
         Symbol::from("Root"),
         Symbol::from("Root"),
-        &mut File::open(snapshot).expect("Opening snapshot"),
+        &mut contents.as_bytes(),
         None,
     )
     .expect("Reading DependencyGraph");
@@ -83,14 +90,15 @@ fn lock_file_roundtrip() {
     let tmp = tempfile::tempdir().unwrap();
     let pkg = one_dep_test_package();
 
-    let snapshot = pkg.join("Move.locked");
+    let snapshot = snapshot_path(&pkg, "locked");
+    let contents = read_insta_snapshot(snapshot).unwrap();
     let commit = tmp.path().join("Move.lock");
 
     let graph = DependencyGraph::read_from_lock(
         pkg,
         Symbol::from("Root"),
         Symbol::from("Root"),
-        &mut File::open(&snapshot).expect("Opening snapshot"),
+        &mut contents.as_bytes(),
         None,
     )
     .expect("Reading DependencyGraph");
@@ -101,11 +109,11 @@ fn lock_file_roundtrip() {
 
     lock.commit(&commit).expect("Committing lock file");
 
-    let expect = fs::read_to_string(&snapshot).expect("Reading snapshot");
     let actual = fs::read_to_string(commit).expect("Reading committed lock");
 
     assert_eq!(
-        expect, actual,
+        contents,
+        actual.trim(),
         "LockFile -> DependencyGraph -> LockFile roundtrip"
     );
 }
@@ -158,6 +166,7 @@ fn always_deps() {
         /* skip_fetch_latest_git_deps */ true,
         std::io::sink(),
         tempfile::tempdir().unwrap().path().to_path_buf(),
+        /* implicit_deps */ Dependencies::default(),
     );
     let (graph, _) = dep_graph_builder
         .get_graph(
@@ -182,13 +191,14 @@ fn always_deps() {
 #[test]
 fn always_deps_from_lock() {
     let pkg = dev_dep_test_package();
-    let snapshot = pkg.join("Move.locked");
+    let snapshot = snapshot_path(&pkg, "locked");
+    let contents = read_insta_snapshot(snapshot).unwrap();
 
     let graph = DependencyGraph::read_from_lock(
         pkg,
         Symbol::from("Root"),
         Symbol::from("Root"),
-        &mut File::open(snapshot).expect("Opening snapshot"),
+        &mut contents.as_bytes(),
         None,
     )
     .expect("Creating DependencyGraph");
@@ -567,6 +577,7 @@ fn immediate_dependencies() {
         /* skip_fetch_latest_git_deps */ true,
         std::io::sink(),
         tempfile::tempdir().unwrap().path().to_path_buf(),
+        /* implicit_deps */ Dependencies::default(),
     );
     let (graph, _) = dep_graph_builder
         .get_graph(

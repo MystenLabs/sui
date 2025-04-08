@@ -1,0 +1,54 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: legacy
+  lint: false
+---
+warning[W09002]: unused variable
+  ┌─ tests/move_check/typing/declare_duplicate_binding.move:5:14
+  │
+5 │         let (x, x);
+  │              ^ Unused local variable 'x'. Consider removing or prefixing with an underscore: '_x'
+  │
+  = This warning can be suppressed with '#[allow(unused_variable)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+error[E02001]: duplicate declaration, item, or annotation
+  ┌─ tests/move_check/typing/declare_duplicate_binding.move:5:17
+  │
+5 │         let (x, x);
+  │              -  ^ Duplicate declaration for local 'x' in a given 'let'
+  │              │   
+  │              Previously declared here
+
+warning[W09002]: unused variable
+  ┌─ tests/move_check/typing/declare_duplicate_binding.move:6:14
+  │
+6 │         let (f, R{f}, f);
+  │              ^ Unused local variable 'f'. Consider removing or prefixing with an underscore: '_f'
+  │
+  = This warning can be suppressed with '#[allow(unused_variable)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[W09002]: unused variable
+  ┌─ tests/move_check/typing/declare_duplicate_binding.move:6:19
+  │
+6 │         let (f, R{f}, f);
+  │                   ^ Unused local variable 'f'. Consider removing or prefixing with an underscore: '_f'
+  │
+  = This warning can be suppressed with '#[allow(unused_variable)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+error[E02001]: duplicate declaration, item, or annotation
+  ┌─ tests/move_check/typing/declare_duplicate_binding.move:6:19
+  │
+6 │         let (f, R{f}, f);
+  │              -    ^ Duplicate declaration for local 'f' in a given 'let'
+  │              │     
+  │              Previously declared here
+
+error[E02001]: duplicate declaration, item, or annotation
+  ┌─ tests/move_check/typing/declare_duplicate_binding.move:6:23
+  │
+6 │         let (f, R{f}, f);
+  │              -        ^ Duplicate declaration for local 'f' in a given 'let'
+  │              │         
+  │              Previously declared here

@@ -96,7 +96,10 @@ impl ObjectLocks {
         };
 
         if prev_lock != new_lock {
-            debug!("lock conflict detected: {:?} != {:?}", prev_lock, new_lock);
+            debug!(
+                "lock conflict detected for {:?}: {:?} != {:?}",
+                obj_ref, prev_lock, new_lock
+            );
             Err(SuiError::ObjectLockConflict {
                 obj_ref: *obj_ref,
                 pending_transaction: prev_lock,
@@ -188,7 +191,7 @@ impl ObjectLocks {
     }
 
     #[instrument(level = "debug", skip_all)]
-    pub(crate) async fn acquire_transaction_locks(
+    pub(crate) fn acquire_transaction_locks(
         &self,
         cache: &WritebackCache,
         epoch_store: &AuthorityPerEpochStore,
@@ -257,7 +260,6 @@ mod tests {
     use crate::execution_cache::{
         writeback_cache::writeback_cache_tests::Scenario, ExecutionCacheWrite,
     };
-    use futures::FutureExt;
 
     #[tokio::test]
     async fn test_transaction_locks_are_exclusive() {
@@ -280,7 +282,6 @@ mod tests {
 
             s.cache
                 .acquire_transaction_locks(&s.epoch_store, &[new1, new2], *tx1.digest(), Some(tx1))
-                .await
                 .expect("locks should be available");
 
             // this tx doesn't use the actual objects in question, but we just need something
@@ -297,7 +298,6 @@ mod tests {
                     *tx2.digest(),
                     Some(tx2.clone()),
                 )
-                .await
                 .unwrap_err();
 
             // new3 is lockable, but new2 is not, so this should fail
@@ -308,7 +308,6 @@ mod tests {
                     *tx2.digest(),
                     Some(tx2.clone()),
                 )
-                .await
                 .unwrap_err();
 
             // new3 is unlocked
@@ -319,7 +318,6 @@ mod tests {
                     *tx2.digest(),
                     Some(tx2.clone()),
                 )
-                .await
                 .expect("new3 should be unlocked");
         })
         .await;
@@ -353,7 +351,6 @@ mod tests {
                     *tx.digest(),
                     Some(tx.clone()),
                 )
-                .await
                 .unwrap_err();
 
             // succeeds because the above call releases the lock on new1 after failing
@@ -365,7 +362,6 @@ mod tests {
                     *tx.digest(),
                     Some(tx.clone()),
                 )
-                .await
                 .expect("new1 should be unlocked after revert");
         })
         .await;
@@ -399,7 +395,6 @@ mod tests {
                     *tx.digest(),
                     Some(tx.clone()),
                 )
-                .await
                 .unwrap_err();
 
             // this tx doesn't use the actual objects in question, but we just need something
@@ -412,7 +407,6 @@ mod tests {
             // to get the lock on old2
             s.cache
                 .acquire_transaction_locks(&s.epoch_store, &[new1, new2], *tx2.digest(), Some(tx2))
-                .await
                 .expect("new1 should be unlocked after revert");
         })
         .await;
@@ -443,8 +437,6 @@ mod tests {
                     *tx2.digest(),
                     Some(tx2.clone()),
                 )
-                .now_or_never()
-                .unwrap()
                 .unwrap();
         })
         .await;

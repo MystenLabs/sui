@@ -1,6 +1,0 @@
-{
-	"private": true,
-	"import": "../dist/esm/transactions/index.js",
-	"main": "../dist/cjs/transactions/index.js",
-	"sideEffects": false
-}

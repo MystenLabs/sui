@@ -244,6 +244,7 @@ impl Adapter {
                             vec![],
                             Vec::<Vec<u8>>::new(),
                             &mut UnmeteredGasMeter,
+                            None,
                         )
                         .unwrap_or_else(|_| {
                             panic!("Failure executing {:?}::{:?}", module_id, name)
@@ -276,6 +277,7 @@ impl Adapter {
                 vec![],
                 Vec::<Vec<u8>>::new(),
                 &mut UnmeteredGasMeter,
+                None,
             )
             .expect_err("calling function must fail");
     }
@@ -289,6 +291,7 @@ impl Adapter {
                 vec![],
                 Vec::<Vec<u8>>::new(),
                 &mut UnmeteredGasMeter,
+                None,
             )
             .unwrap_or_else(|e| panic!("Failure executing {module:?}::{name:?}: {e:#?}"))
     }

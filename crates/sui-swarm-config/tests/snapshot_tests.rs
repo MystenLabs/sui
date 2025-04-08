@@ -127,24 +127,8 @@ fn network_config_snapshot_matches() {
         validator_config.p2p_config.listen_address = fake_socket;
         validator_config.p2p_config.external_address = None;
         validator_config.admin_interface_port = 8888;
-        let metrics_addr: Multiaddr = "/ip4/127.0.0.1/tcp/1234".parse().unwrap();
-        let primary_network_admin_server_port = 5678;
-        let worker_network_admin_server_base_port = 8765;
         if let Some(consensus_config) = validator_config.consensus_config.as_mut() {
-            consensus_config.address = Multiaddr::empty();
             consensus_config.db_path = PathBuf::from("/tmp/foo/");
-            consensus_config
-                .narwhal_config
-                .prometheus_metrics
-                .socket_addr = metrics_addr;
-            consensus_config
-                .narwhal_config
-                .network_admin_server
-                .primary_network_admin_server_port = primary_network_admin_server_port;
-            consensus_config
-                .narwhal_config
-                .network_admin_server
-                .worker_network_admin_server_base_port = worker_network_admin_server_base_port;
         }
     }
     assert_yaml_snapshot!(network_config, {

@@ -404,7 +404,7 @@ pub fn compile_module<'a>(
 
     for ir_constant in module.constants {
         // If the constant is an error constant in the source, then add the error constant's name
-        // look up the constant's name, as a constant valeu -- this may be present already,
+        // look up the constant's name, as a constant value -- this may be present already,
         // e.g., in the case of something like `const Foo: vector<u8> = b"Foo"` in which case the
         // new index will not be added and the previous index will be used.
         if ir_constant.is_error_constant {
@@ -1991,6 +1991,7 @@ fn compile_bytecode(
             Bytecode::VecSwap(context.signature_index(sig)?)
         }
         IRBytecode_::ErrorConstant {
+            error_code,
             line_number,
             constant,
         } => {
@@ -2009,7 +2010,11 @@ fn compile_bytecode(
                 bitset_builder.with_identifier_index(constant_name_value_index.0);
             }
 
-            Bytecode::LdU64(bitset_builder.build().bits)
+            if let Some(error_code) = error_code {
+                bitset_builder.with_error_code(error_code);
+            }
+
+            Bytecode::LdU64(bitset_builder.build().bits())
         }
         IRBytecode_::PackVariant(name, variant_name, tys) => {
             let tokens = Signature(compile_types(

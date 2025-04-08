@@ -188,7 +188,7 @@ impl MultiSigLegacy {
             )?);
             if !inserted {
                 return Err(SuiError::InvalidSignature {
-                    error: "Duplicate sigature".to_string(),
+                    error: "Duplicate signature".to_string(),
                 });
             }
             sigs.push(s.to_compressed()?);

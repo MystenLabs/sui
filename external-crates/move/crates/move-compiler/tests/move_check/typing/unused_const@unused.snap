@@ -1,0 +1,14 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: legacy
+  lint: false
+---
+warning[W09011]: unused constant
+  ┌─ tests/move_check/typing/unused_const.move:2:11
+  │
+2 │     const UNUSED: u64 = 42;
+  │           ^^^^^^ The constant 'UNUSED' is never used. Consider removing it.
+  │
+  = This warning can be suppressed with '#[allow(unused_const)]' applied to the 'module' or module member ('const', 'fun', or 'struct')

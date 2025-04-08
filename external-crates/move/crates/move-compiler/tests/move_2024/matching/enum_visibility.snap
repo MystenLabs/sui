@@ -1,0 +1,15 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: 2024.alpha
+  lint: false
+---
+error[E04001]: restricted visibility
+   ┌─ tests/move_2024/matching/enum_visibility.move:15:13
+   │
+ 3 │     public enum E {
+   │                 - Enum defined in module '0x42::m'
+   ·
+15 │             m::E::A(t) => t,
+   │             ^^^^^^^^^^ Enum variant '0x42::m::E::A' can only be matched within its defining module '0x42::m'

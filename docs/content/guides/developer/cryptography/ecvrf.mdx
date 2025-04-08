@@ -18,26 +18,26 @@ The [fastcrypto](https://github.com/MystenLabs/fastcrypto) library provides a CL
 
 From the root of the `fastcrypto` repository, run the following command to generate a key pair:
 
-```shell
-cargo run --bin ecvrf-cli keygen
+```sh
+$ cargo run --bin ecvrf-cli keygen
 ```
 This outputs a secret key and a public key in hex format. Both the secret and public keys are 32-byte strings:
 
-````shell
+```sh
 Secret key: c0cbc5bf0b2f992fe14fee0327463c7b03d14cbbcb38ce2584d95ee0c112b40b
 Public key: 928744da5ffa614d65dd1d5659a8e9dd558e68f8565946ef3d54215d90cba015
-````
+```
 
 ### Compute VRF output and proof
 
 To compute the VRF output and proof for the input string `Hello, world!`, which is `48656c6c6f2c20776f726c6421` in hexadecimal, with the key pair generated previously, run the following command:
 
-```shell
-cargo run --bin ecvrf-cli prove --input 48656c6c6f2c20776f726c6421 --secret-key c0cbc5bf0b2f992fe14fee0327463c7b03d14cbbcb38ce2584d95ee0c112b40b
+```sh
+$ cargo run --bin ecvrf-cli prove --input 48656c6c6f2c20776f726c6421 --secret-key c0cbc5bf0b2f992fe14fee0327463c7b03d14cbbcb38ce2584d95ee0c112b40b
 ```
 
 This should the 80-byte proof and VRF 64-byte output, both in hex format:
-```shell
+```sh
 Proof:  18ccf8bf316f00b387fc6e7b26f2d3ddadbf5e9c66d3a30986f12b208108551f9c6da87793a857d79261338a50430074b1dbc7f8f05e492149c51313381248b4229ebdda367146dbbbf95809c7fb330d
 Output: 2b7e45821d80567761e8bb3fc519efe5ad80cdb4423227289f960319bbcf6eea1aef30c023617d73f589f98272b87563c6669f82b51dafbeb5b9cf3b17c73437
 ```
@@ -64,12 +64,12 @@ module math::ecvrf_test {
 
 You can also use the CLI tool for verification:
 
-```shell
-cargo run --bin ecvrf-cli verify --output 2b7e45821d80567761e8bb3fc519efe5ad80cdb4423227289f960319bbcf6eea1aef30c023617d73f589f98272b87563c6669f82b51dafbeb5b9cf3b17c73437 --proof 18ccf8bf316f00b387fc6e7b26f2d3ddadbf5e9c66d3a30986f12b208108551f9c6da87793a857d79261338a50430074b1dbc7f8f05e492149c51313381248b4229ebdda367146dbbbf95809c7fb330d --input 48656c6c6f2c20776f726c6421 --public-key 928744da5ffa614d65dd1d5659a8e9dd558e68f8565946ef3d54215d90cba015
+```sh
+$ cargo run --bin ecvrf-cli verify --output 2b7e45821d80567761e8bb3fc519efe5ad80cdb4423227289f960319bbcf6eea1aef30c023617d73f589f98272b87563c6669f82b51dafbeb5b9cf3b17c73437 --proof 18ccf8bf316f00b387fc6e7b26f2d3ddadbf5e9c66d3a30986f12b208108551f9c6da87793a857d79261338a50430074b1dbc7f8f05e492149c51313381248b4229ebdda367146dbbbf95809c7fb330d --input 48656c6c6f2c20776f726c6421 --public-key 928744da5ffa614d65dd1d5659a8e9dd558e68f8565946ef3d54215d90cba015
 ```
 
 The preceding command returns the verification:
 
-```shell
+```sh
 Proof verified correctly!
 ```

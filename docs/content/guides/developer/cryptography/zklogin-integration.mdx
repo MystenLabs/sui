@@ -18,13 +18,13 @@ Let's dive into the specific implementation details.
 To use the zkLogin TypeScript SDK in your project, run the following command in your project root:
 
 ```sh npm2yarn
-npm install @mysten/zklogin
+npm install @mysten/sui
 ```
 
 If you want to use the latest experimental version:
 
 ```sh npm2yarn
-npm install @mysten/zklogin@experimental
+npm install @mysten/sui@experimental
 ```
 
 ## Get JWT
@@ -36,7 +36,7 @@ npm install @mysten/zklogin@experimental
 1. Assemble the OAuth URL with configured client ID, redirect URL, ephemeral public key and nonce: This is what the application sends the user to complete the login flow with a computed [nonce](#notations).
 
 ```typescript
-import { generateNonce, generateRandomness } from '@mysten/zklogin';
+import { generateNonce, generateRandomness } from '@mysten/sui/zklogin';
 
 const FULLNODE_URL = 'https://fullnode.devnet.sui.io'; // replace with the RPC URL you want to use
 const suiClient = new SuiClient({ url: FULLNODE_URL });
@@ -54,15 +54,15 @@ For some providers ("Yes" for "Auth Flow Only"), the JWT can be found immediatel
 
 For other providers ("No" for "Auth Flow Only"), the auth flow only returns a code (`$AUTH_CODE`) in redirect URL. To retrieve the JWT, an additional POST call is required with "Token Exchange URL".
 
-| Provider | Auth Flow URL                                                                                                                                                                        | Token Exchange URL                                                                                                                   | Auth Flow Only |
-| -------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------ | -------------- |
-| Google    | `https://accounts.google.com/o/oauth2/v2/auth?client_id=$CLIENT_ID&response_type=id_token&redirect_uri=$REDIRECT_URL&scope=openid&nonce=$NONCE`                                      | N/A                                                                                                                                 | Yes            |
-| Facebook  | `https://www.facebook.com/v17.0/dialog/oauth?client_id=$CLIENT_ID&redirect_uri=$REDIRECT_URL&scope=openid&nonce=$NONCE&response_type=id_token`                                       | N/A                                                                                                                                 | Yes            |
+| Provider  | Auth Flow URL                                                                                                                                                                       | Token Exchange URL                                                                                                                  | Auth Flow Only |
+| --------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------- | -------------- |
+| Google    | `https://accounts.google.com/o/oauth2/v2/auth?client_id=$CLIENT_ID&response_type=id_token&redirect_uri=$REDIRECT_URL&scope=openid&nonce=$NONCE`                                     | N/A                                                                                                                                 | Yes            |
+| Facebook  | `https://www.facebook.com/v17.0/dialog/oauth?client_id=$CLIENT_ID&redirect_uri=$REDIRECT_URL&scope=openid&nonce=$NONCE&response_type=id_token`                                      | N/A                                                                                                                                 | Yes            |
 | Twitch    | `https://id.twitch.tv/oauth2/authorize?client_id=$CLIENT_ID&force_verify=true&lang=en&login_type=login&redirect_uri=$REDIRECT_URL&response_type=id_token&scope=openid&nonce=$NONCE` | N/A                                                                                                                                 | Yes            |
-| Kakao     | `https://kauth.kakao.com/oauth/authorize?response_type=code&client_id=$CLIENT_ID&redirect_uri=$REDIRECT_URL&nonce=$NONCE`                                                            | `https://kauth.kakao.com/oauth/token?grant_type=authorization_code&client_id=$CLIENT_ID&redirect_uri=$REDIRECT_URL&code=$AUTH_CODE` | No             |
-| Apple     | `https://appleid.apple.com/auth/authorize?client_id=$CLIENT_ID&redirect_uri=$REDIRECT_URL&scope=email&response_mode=form_post&response_type=code%20id_token&nonce=$NONCE`            | N/A                                                                                                                                 | Yes            |
-| Slack     | `https://slack.com/openid/connect/authorize?response_type=code&client_id=$CLIENT_ID&redirect_uri=$REDIRECT_URL&nonce=$NONCE&scope=openid`                                            | `https://slack.com/api/openid.connect.token?code=$AUTH_CODE&client_id=$CLIENT_ID&client_secret=$CLIENT_SECRET`                      | Yes            |
-| Microsoft | `https://login.microsoftonline.com/common/oauth2/v2.0/authorize?client_id=$CLIENT_ID&scope=openid&response_type=id_token&nonce=$NONCE&redirect_uri=$REDIRECT_URL`                                                                                                      | Yes            |
+| Kakao     | `https://kauth.kakao.com/oauth/authorize?response_type=code&client_id=$CLIENT_ID&redirect_uri=$REDIRECT_URL&nonce=$NONCE`                                                           | `https://kauth.kakao.com/oauth/token?grant_type=authorization_code&client_id=$CLIENT_ID&redirect_uri=$REDIRECT_URL&code=$AUTH_CODE` | No             |
+| Apple     | `https://appleid.apple.com/auth/authorize?client_id=$CLIENT_ID&redirect_uri=$REDIRECT_URL&scope=email&response_mode=form_post&response_type=code%20id_token&nonce=$NONCE`           | N/A                                                                                                                                 | Yes            |
+| Slack     | `https://slack.com/openid/connect/authorize?response_type=code&client_id=$CLIENT_ID&redirect_uri=$REDIRECT_URL&nonce=$NONCE&scope=openid`                                           | `https://slack.com/api/openid.connect.token?code=$AUTH_CODE&client_id=$CLIENT_ID&client_secret=$CLIENT_SECRET`                      | Yes            |
+| Microsoft | `https://login.microsoftonline.com/common/oauth2/v2.0/authorize?client_id=$CLIENT_ID&scope=openid&response_type=id_token&nonce=$NONCE&redirect_uri=$REDIRECT_URL`                   | Yes                                                                                                                                 |
 
 ## Decoding JWT
 
@@ -92,7 +92,7 @@ export interface JwtPayload {
 
 ## User salt management
 
-zkLogin uses the user salt to compute the zkLogin Sui address (see [definition](#address-definition)). The salt must be a 16-byte value or a integer smaller than `2n**128n`. There are several options for the application to maintain the user salt:
+zkLogin uses the user salt to compute the zkLogin Sui address (see [definition](../../../concepts/cryptography/zklogin.mdx#address-definition)). The salt must be a 16-byte value or a integer smaller than `2n**128n`. There are several options for the application to maintain the user salt:
 
 1. Client side:
    - Option 1: Request user input for the salt during wallet access, transferring the responsibility to the user, who must then remember it.
@@ -103,9 +103,11 @@ zkLogin uses the user salt to compute the zkLogin Sui address (see [definition](
 
 Here's an example request and response for the Mysten Labs-maintained salt server (using option 4). If you want to use the Mysten Labs salt server, please refer to [Enoki docs](https://docs.enoki.mystenlabs.com/) and contact us. Only valid JWT authenticated with whitelisted client IDs are accepted.
 
-```bash
-curl -X POST https://salt.api.mystenlabs.com/get_salt -H 'Content-Type: application/json' -d '{"token": "$JWT_TOKEN"}'
+```sh
+$ curl -X POST https://salt.api.mystenlabs.com/get_salt -H 'Content-Type: application/json' -d '{"token": "$JWT_TOKEN"}'
+```
 
+```sh
 Response: {"salt":"129390038577185583942388216820280642146"}
 ```
 
@@ -116,7 +118,7 @@ User salt is used to disconnect the OAuth identifier (sub) from the on-chain Sui
 Once the OAuth flow completes, the JWT can be found in the redirect URL. Along with the user salt, the zkLogin address can be derived as follows:
 
 ```typescript
-import { jwtToAddress } from '@mysten/zklogin';
+import { jwtToAddress } from '@mysten/sui/zklogin';
 
 const zkLoginUserAddress = jwtToAddress(jwt, userSalt);
 ```
@@ -128,7 +130,7 @@ The next step is to fetch the ZK proof. This is an attestation (proof) over the 
 First, generate the extended ephemeral public key to use as an input to the ZKP.
 
 ```typescript
-import { getExtendedEphemeralPublicKey } from '@mysten/zklogin';
+import { getExtendedEphemeralPublicKey } from '@mysten/sui/zklogin';
 
 const extendedEphemeralPublicKey = getExtendedEphemeralPublicKey(ephemeralKeyPair.getPublicKey());
 ```
@@ -150,8 +152,8 @@ Use the `prover-dev` endpoint (https://prover-dev.mystenlabs.com/v1) freely for 
 
 You can use BigInt or Base64 encoding for `extendedEphemeralPublicKey`, `jwtRandomness`, and `salt`. The following examples show two sample requests with the first using BigInt encoding and the second using Base64.
 
-```bash
-curl -X POST $PROVER_URL -H 'Content-Type: application/json' \
+```sh
+$ curl -X POST $PROVER_URL -H 'Content-Type: application/json' \
 -d '{"jwt":"$JWT_TOKEN", \
 "extendedEphemeralPublicKey":"84029355920633174015103288781128426107680789454168570548782290541079926444544", \
 "maxEpoch":"10", \
@@ -159,8 +161,10 @@ curl -X POST $PROVER_URL -H 'Content-Type: application/json' \
 "salt":"248191903847969014646285995941615069143", \
 "keyClaimName":"sub" \
 }'
+```
 
-curl -X POST $PROVER_URL -H 'Content-Type: application/json' \
+```sh
+$ curl -X POST $PROVER_URL -H 'Content-Type: application/json' \
 -d '{"jwt":"$JWT_TOKEN", \
 "extendedEphemeralPublicKey":"ucbuFjDvPnERRKZI2wa7sihPcnTPvuU//O5QPMGkkgA=", \
 "maxEpoch":"10", \
@@ -229,13 +233,13 @@ const partialZkLoginSignature = proofResponse as PartialZkLoginSignature;
 1. Download the [Groth16 proving key zkey file](https://docs.circom.io/getting-started/proving-circuits/). There are zkeys available for all Sui networks. See [the Ceremony section](#ceremony) for more details on how the main proving key is generated.
 
    - Main zkey (for Mainnet and Testnet)
-     ```bash
-     wget -O - https://raw.githubusercontent.com/sui-foundation/zklogin-ceremony-contributions/main/download-main-zkey.sh | bash
+     ```sh
+     $ wget -O - https://raw.githubusercontent.com/sui-foundation/zklogin-ceremony-contributions/main/download-main-zkey.sh | bash
      ```
    - Test zkey (for Devnet)
 
-     ```bash
-     wget -O - https://raw.githubusercontent.com/sui-foundation/zklogin-ceremony-contributions/main/download-test-zkey.sh | bash
+     ```sh
+     $ wget -O - https://raw.githubusercontent.com/sui-foundation/zklogin-ceremony-contributions/main/download-test-zkey.sh | bash
      ```
 
    - To verify the download contains the correct zkey file, you can run the following command to check the Blake2b hash: `b2sum ${file_name}.zkey`.
@@ -315,16 +319,16 @@ You can now serialize the zkLogin signature by combining the ZK proof (`inputs`)
 the `maxEpoch`, and the ephemeral signature (`userSignature`).
 
 ```typescript
-import { genAddressSeed, getZkLoginSignature } from '@mysten/zklogin';
+import { genAddressSeed, getZkLoginSignature } from '@mysten/sui/zklogin';
 
-const addressSeed: string = genAddressSeed(
+const addressSeed = genAddressSeed(
 	BigInt(userSalt!),
 	'sub',
 	decodedJwt.sub,
 	decodedJwt.aud,
 ).toString();
 
-const zkLoginSignature: SerializedSignature = getZkLoginSignature({
+const zkLoginSignature = getZkLoginSignature({
 	inputs: {
 		...partialZkLoginSignature,
 		addressSeed,
@@ -351,7 +355,7 @@ You might want to cache the ephemeral key pair along with the ZKP for future use
 
 However, the ephemeral key pair needs to be treated as a secret akin to a key pair in a traditional wallet. This is because if both the ephemeral private key and ZK proof are revealed to an attacker, then they can typically sign any transaction on behalf of the user (using the same process described previously).
 
-Consequently, you should not store them persistently in an unsecure storage location, on any platform. For example, on browsers, use session storage instead of local storage to store the ephemeral key pair and the ZK proof. This is because session storage automatically clears its data when the browser session ends, while data in local storage persists indefinitely.
+Consequently, you should not store them persistently in a storage location that is not secure, on any platform. For example, on browsers, use session storage instead of local storage to store the ephemeral key pair and the ZK proof. This is because session storage automatically clears its data when the browser session ends, while data in local storage persists indefinitely.
 
 ## Efficiency considerations
 

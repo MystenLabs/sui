@@ -1,0 +1,21 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: 2024.alpha
+  lint: false
+---
+error[E01002]: unexpected token
+  ┌─ tests/move_2024/parser/enum_invalid_2.move:3:13
+  │
+3 │        Done(x: u64),
+  │             ^ Cannot use named fields in a positional definition
+
+error[E01002]: unexpected token
+  ┌─ tests/move_2024/parser/enum_invalid_2.move:4:18
+  │
+4 │        Add { u64 },
+  │                  ^
+  │                  │
+  │                  Unexpected '}'
+  │                  Expected ':'

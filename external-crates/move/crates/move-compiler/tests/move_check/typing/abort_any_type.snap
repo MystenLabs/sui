@@ -1,0 +1,22 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: legacy
+  lint: false
+---
+warning[W09005]: dead or unreachable code
+  ┌─ tests/move_check/typing/abort_any_type.move:5:14
+  │
+5 │         0 + (abort 0);
+  │              ^^^^^^^ Expected a value. Any code surrounding or after this expression will not be reached
+  │
+  = This warning can be suppressed with '#[allow(dead_code)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[W09005]: dead or unreachable code
+  ┌─ tests/move_check/typing/abort_any_type.move:9:13
+  │
+9 │         foo(abort 0);
+  │             ^^^^^^^ Expected a value. Any code surrounding or after this expression will not be reached
+  │
+  = This warning can be suppressed with '#[allow(dead_code)]' applied to the 'module' or module member ('const', 'fun', or 'struct')

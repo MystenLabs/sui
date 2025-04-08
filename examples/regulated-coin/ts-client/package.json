@@ -1,0 +1,21 @@
+{
+  "name": "regulated-coin-utility",
+  "version": "0.0.1",
+  "description": "CLI tool to manage your Regulated Coin.",
+  "main": "main.ts",
+  "scripts": {
+    "coin-manager": "env-cmd -f ./.env ts-node src/main"
+  },
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "@mysten/sui": "^1.18.0",
+    "commander": "^11.1.0",
+    "dotenv": "^16.0.3",
+    "typescript": "^5.5.3"
+  },
+  "devDependencies": {
+    "env-cmd": "^10.1.0",
+    "ts-node": "^10.9.2"
+  }
+}

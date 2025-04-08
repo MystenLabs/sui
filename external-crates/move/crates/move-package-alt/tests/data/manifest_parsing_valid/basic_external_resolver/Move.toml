@@ -1,0 +1,11 @@
+[package]
+name = "example"
+edition = "2024.beta"
+license = "Apache-2.0"
+authors = ["Move Team"]
+
+[environments]
+mainnet = "35834a8a"
+
+[dependencies]
+mvr = { r.mvr = "@pkg/qwer" }

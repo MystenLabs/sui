@@ -3,6 +3,7 @@
 
 use crate::authority::authority_per_epoch_store::AuthorityPerEpochStore;
 use crate::authority::authority_store::{ExecutionLockWriteGuard, SuiLockResult};
+use crate::authority::backpressure::BackpressureManager;
 use crate::authority::epoch_start_configuration::EpochFlag;
 use crate::authority::epoch_start_configuration::EpochStartConfiguration;
 use crate::authority::AuthorityStore;
@@ -18,14 +19,15 @@ use std::path::Path;
 use std::sync::Arc;
 use sui_config::ExecutionCacheConfig;
 use sui_protocol_config::ProtocolVersion;
-use sui_types::base_types::VerifiedExecutionData;
-use sui_types::digests::{TransactionDigest, TransactionEffectsDigest, TransactionEventsDigest};
+use sui_types::base_types::{FullObjectID, VerifiedExecutionData};
+use sui_types::digests::{TransactionDigest, TransactionEffectsDigest};
 use sui_types::effects::{TransactionEffects, TransactionEvents};
 use sui_types::error::{SuiError, SuiResult, UserInputError};
+use sui_types::executable_transaction::VerifiedExecutableTransaction;
 use sui_types::messages_checkpoint::CheckpointSequenceNumber;
 use sui_types::object::Object;
 use sui_types::storage::{
-    BackingPackageStore, BackingStore, ChildObjectResolver, MarkerValue, ObjectKey,
+    BackingPackageStore, BackingStore, ChildObjectResolver, FullObjectKey, MarkerValue, ObjectKey,
     ObjectOrTombstone, ObjectStore, PackageObject, ParentSync,
 };
 use sui_types::sui_system_state::SuiSystemState;
@@ -36,16 +38,13 @@ use sui_types::{
     storage::InputKey,
 };
 use tracing::instrument;
+use typed_store::rocks::DBBatch;
 
 pub(crate) mod cache_types;
 pub mod metrics;
 mod object_locks;
-pub mod passthrough_cache;
-pub mod proxy_cache;
 pub mod writeback_cache;
 
-pub use passthrough_cache::PassthroughCache;
-pub use proxy_cache::ProxyCache;
 pub use writeback_cache::WritebackCache;
 
 use metrics::ExecutionCacheMetrics;
@@ -104,49 +103,22 @@ impl ExecutionCacheTraitPointers {
     }
 }
 
-static DISABLE_WRITEBACK_CACHE_ENV_VAR: &str = "DISABLE_WRITEBACK_CACHE";
-
-#[derive(Debug)]
-pub enum ExecutionCacheConfigType {
-    WritebackCache,
-    PassthroughCache,
-}
-
-pub fn choose_execution_cache(config: &ExecutionCacheConfig) -> ExecutionCacheConfigType {
-    #[cfg(msim)]
-    {
-        let mut use_random_cache = None;
-        sui_macros::fail_point_if!("select-random-cache", || {
-            let random = rand::random::<bool>();
-            tracing::info!("Randomly selecting cache: {}", random);
-            use_random_cache = Some(random);
-        });
-        if let Some(random) = use_random_cache {
-            if random {
-                return ExecutionCacheConfigType::PassthroughCache;
-            } else {
-                return ExecutionCacheConfigType::WritebackCache;
-            }
-        }
-    }
-
-    if std::env::var(DISABLE_WRITEBACK_CACHE_ENV_VAR).is_ok()
-        || matches!(config, ExecutionCacheConfig::PassthroughCache)
-    {
-        ExecutionCacheConfigType::PassthroughCache
-    } else {
-        ExecutionCacheConfigType::WritebackCache
-    }
-}
-
 pub fn build_execution_cache(
-    epoch_start_config: &EpochStartConfiguration,
+    cache_config: &ExecutionCacheConfig,
     prometheus_registry: &Registry,
     store: &Arc<AuthorityStore>,
+    backpressure_manager: Arc<BackpressureManager>,
 ) -> ExecutionCacheTraitPointers {
     let execution_cache_metrics = Arc::new(ExecutionCacheMetrics::new(prometheus_registry));
+
     ExecutionCacheTraitPointers::new(
-        ProxyCache::new(epoch_start_config, store.clone(), execution_cache_metrics).into(),
+        WritebackCache::new(
+            cache_config,
+            store.clone(),
+            execution_cache_metrics,
+            backpressure_manager,
+        )
+        .into(),
     )
 }
 
@@ -158,38 +130,40 @@ pub fn build_execution_cache_from_env(
 ) -> ExecutionCacheTraitPointers {
     let execution_cache_metrics = Arc::new(ExecutionCacheMetrics::new(prometheus_registry));
 
-    if std::env::var(DISABLE_WRITEBACK_CACHE_ENV_VAR).is_ok() {
-        ExecutionCacheTraitPointers::new(
-            PassthroughCache::new(store.clone(), execution_cache_metrics).into(),
+    ExecutionCacheTraitPointers::new(
+        WritebackCache::new(
+            &Default::default(),
+            store.clone(),
+            execution_cache_metrics,
+            BackpressureManager::new_for_tests(),
         )
-    } else {
-        ExecutionCacheTraitPointers::new(
-            WritebackCache::new(store.clone(), execution_cache_metrics).into(),
-        )
-    }
+        .into(),
+    )
 }
 
+pub type Batch = (Vec<Arc<TransactionOutputs>>, DBBatch);
+
 pub trait ExecutionCacheCommit: Send + Sync {
+    /// Build a DBBatch containing the given transaction outputs.
+    fn build_db_batch(&self, epoch: EpochId, digests: &[TransactionDigest]) -> Batch;
+
     /// Durably commit the outputs of the given transactions to the database.
     /// Will be called by CheckpointExecutor to ensure that transaction outputs are
     /// written durably before marking a checkpoint as finalized.
-    fn commit_transaction_outputs<'a>(
-        &'a self,
+    fn commit_transaction_outputs(
+        &self,
         epoch: EpochId,
-        digests: &'a [TransactionDigest],
-    ) -> BoxFuture<'a, ()>;
+        batch: Batch,
+        digests: &[TransactionDigest],
+    );
 
-    /// Durably commit transactions (but not their outputs) to the database.
-    /// Called before writing a locally built checkpoint to the CheckpointStore, so that
-    /// the inputs of the checkpoint cannot be lost.
-    /// These transactions are guaranteed to be final unless this validator
-    /// forks (i.e. constructs a checkpoint which will never be certified). In this case
-    /// some non-final transactions could be left in the database.
-    ///
-    /// This is an intermediate solution until we delay commits to the epoch db. After
-    /// we have done that, crash recovery will be done by re-processing consensus commits
-    /// and pending_consensus_transactions, and this method can be removed.
-    fn persist_transactions<'a>(&'a self, digests: &'a [TransactionDigest]) -> BoxFuture<'a, ()>;
+    /// Durably commit a transaction to the database. Used to store any transactions
+    /// that cannot be reconstructed at start-up by consensus replay. Currently the only
+    /// case of this is RandomnessStateUpdate.
+    fn persist_transaction(&self, transaction: &VerifiedExecutableTransaction);
+
+    // Number of pending uncommitted transactions
+    fn approximate_pending_transaction_count(&self) -> u64;
 }
 
 pub trait ObjectCacheRead: Send + Sync {
@@ -280,7 +254,7 @@ pub trait ObjectCacheRead: Send + Sync {
             self.multi_object_exists_by_key(
                 &keys_with_version
                     .iter()
-                    .map(|(_, k)| ObjectKey(k.id(), k.version().unwrap()))
+                    .map(|(_, k)| ObjectKey(k.id().id(), k.version().unwrap()))
                     .collect::<Vec<_>>(),
             )
             .into_iter(),
@@ -302,25 +276,24 @@ pub trait ObjectCacheRead: Send + Sync {
                 // specified version exists or was deleted. We will then let mark it as available
                 // to let the transaction through so it can fail at execution.
                 let is_available = self
-                    .get_object(&input_key.id())
+                    .get_object(&input_key.id().id())
                     .map(|obj| obj.version() >= input_key.version().unwrap())
                     .unwrap_or(false)
-                    || self.have_deleted_owned_object_at_version_or_after(
-                        &input_key.id(),
+                    || self.have_deleted_fastpath_object_at_version_or_after(
+                        input_key.id().id(),
                         input_key.version().unwrap(),
                         epoch,
                     );
                 versioned_results.push((*idx, is_available));
             } else if self
-                .get_deleted_shared_object_previous_tx_digest(
-                    &input_key.id(),
-                    input_key.version().unwrap(),
+                .get_consensus_stream_end_tx_digest(
+                    FullObjectKey::new(input_key.id(), input_key.version().unwrap()),
                     epoch,
                 )
                 .is_some()
             {
-                // If the object is an already deleted shared object, mark it as available if the
-                // version for that object is in the shared deleted marker table.
+                // If the object is an already-removed consensus object, mark it as available if the
+                // version for that object is in the marker table.
                 versioned_results.push((*idx, true));
             } else {
                 versioned_results.push((*idx, false));
@@ -330,7 +303,7 @@ pub trait ObjectCacheRead: Send + Sync {
         let unversioned_results = keys_without_version.into_iter().map(|(idx, key)| {
             (
                 idx,
-                match self.get_latest_object_ref_or_tombstone(key.id()) {
+                match self.get_latest_object_ref_or_tombstone(key.id().id()) {
                     None => false,
                     Some(entry) => entry.2.is_alive(),
                 },
@@ -371,65 +344,62 @@ pub trait ObjectCacheRead: Send + Sync {
     // Marker methods
 
     /// Get the marker at a specific version
-    fn get_marker_value(
-        &self,
-        object_id: &ObjectID,
-        version: SequenceNumber,
-        epoch_id: EpochId,
-    ) -> Option<MarkerValue>;
+    fn get_marker_value(&self, object_key: FullObjectKey, epoch_id: EpochId)
+        -> Option<MarkerValue>;
 
     /// Get the latest marker for a given object.
     fn get_latest_marker(
         &self,
-        object_id: &ObjectID,
+        object_id: FullObjectID,
         epoch_id: EpochId,
     ) -> Option<(SequenceNumber, MarkerValue)>;
 
-    /// If the shared object was deleted, return deletion info for the current live version
-    fn get_last_shared_object_deletion_info(
+    /// If the given consensus object stream was ended, return related
+    /// version and transaction digest.
+    fn get_last_consensus_stream_end_info(
         &self,
-        object_id: &ObjectID,
+        object_id: FullObjectID,
         epoch_id: EpochId,
     ) -> Option<(SequenceNumber, TransactionDigest)> {
         match self.get_latest_marker(object_id, epoch_id) {
-            Some((version, MarkerValue::SharedDeleted(digest))) => Some((version, digest)),
+            Some((version, MarkerValue::ConsensusStreamEnded(digest))) => Some((version, digest)),
             _ => None,
         }
     }
 
-    /// If the shared object was deleted, return deletion info for the specified version.
-    fn get_deleted_shared_object_previous_tx_digest(
+    /// If the given consensus object stream was ended at the specified version,
+    /// return related transaction digest.
+    fn get_consensus_stream_end_tx_digest(
         &self,
-        object_id: &ObjectID,
-        version: SequenceNumber,
+        object_key: FullObjectKey,
         epoch_id: EpochId,
     ) -> Option<TransactionDigest> {
-        match self.get_marker_value(object_id, version, epoch_id) {
-            Some(MarkerValue::SharedDeleted(digest)) => Some(digest),
+        match self.get_marker_value(object_key, epoch_id) {
+            Some(MarkerValue::ConsensusStreamEnded(digest)) => Some(digest),
             _ => None,
         }
     }
 
     fn have_received_object_at_version(
         &self,
-        object_id: &ObjectID,
-        version: SequenceNumber,
+        object_key: FullObjectKey,
         epoch_id: EpochId,
     ) -> bool {
         matches!(
-            self.get_marker_value(object_id, version, epoch_id),
+            self.get_marker_value(object_key, epoch_id),
             Some(MarkerValue::Received)
         )
     }
 
-    fn have_deleted_owned_object_at_version_or_after(
+    fn have_deleted_fastpath_object_at_version_or_after(
         &self,
-        object_id: &ObjectID,
+        object_id: ObjectID,
         version: SequenceNumber,
         epoch_id: EpochId,
     ) -> bool {
+        let full_id = FullObjectID::Fastpath(object_id); // function explicilty assumes "fastpath"
         matches!(
-            self.get_latest_marker(object_id, epoch_id),
+            self.get_latest_marker(full_id, epoch_id),
             Some((marker_version, MarkerValue::OwnedDeleted)) if marker_version >= version
         )
     }
@@ -531,12 +501,9 @@ pub trait TransactionCacheRead: Send + Sync {
             .expect("multi-get must return correct number of items")
     }
 
-    fn multi_get_events(
-        &self,
-        event_digests: &[TransactionEventsDigest],
-    ) -> Vec<Option<TransactionEvents>>;
+    fn multi_get_events(&self, digests: &[TransactionDigest]) -> Vec<Option<TransactionEvents>>;
 
-    fn get_events(&self, digest: &TransactionEventsDigest) -> Option<TransactionEvents> {
+    fn get_events(&self, digest: &TransactionDigest) -> Option<TransactionEvents> {
         self.multi_get_events(&[*digest])
             .pop()
             .expect("multi-get must return correct number of items")
@@ -588,20 +555,16 @@ pub trait ExecutionCacheWrite: Send + Sync {
     /// Any write performed by this method immediately notifies any waiter that has previously
     /// called notify_read_objects_for_execution or notify_read_objects_for_signing for the object
     /// in question.
-    fn write_transaction_outputs(
-        &self,
-        epoch_id: EpochId,
-        tx_outputs: Arc<TransactionOutputs>,
-    ) -> BoxFuture<'_, ()>;
+    fn write_transaction_outputs(&self, epoch_id: EpochId, tx_outputs: Arc<TransactionOutputs>);
 
     /// Attempt to acquire object locks for all of the owned input locks.
-    fn acquire_transaction_locks<'a>(
-        &'a self,
-        epoch_store: &'a AuthorityPerEpochStore,
-        owned_input_objects: &'a [ObjectRef],
+    fn acquire_transaction_locks(
+        &self,
+        epoch_store: &AuthorityPerEpochStore,
+        owned_input_objects: &[ObjectRef],
         tx_digest: TransactionDigest,
         signed_transaction: Option<VerifiedSignedTransaction>,
-    ) -> BoxFuture<'a, SuiResult>;
+    ) -> SuiResult;
 }
 
 pub trait CheckpointCache: Send + Sync {
@@ -716,7 +679,7 @@ macro_rules! implement_storage_traits {
                     return Err(SuiError::InvalidChildObjectAccess {
                         object: *child,
                         given_parent: parent,
-                        actual_owner: child_object.owner,
+                        actual_owner: child_object.owner.clone(),
                     });
                 }
                 Ok(Some(child_object))
@@ -744,8 +707,11 @@ macro_rules! implement_storage_traits {
                 // transaction replay due to possible reordering of transactions during replay.
                 if recv_object.owner != Owner::AddressOwner((*owner).into())
                     || self.have_received_object_at_version(
-                        receiving_object_id,
-                        receive_object_at_version,
+                        // TODO: Add support for receiving ConsensusV2 objects. For now this assumes fastpath.
+                        FullObjectKey::new(
+                            FullObjectID::new(*receiving_object_id, None),
+                            receive_object_at_version,
+                        ),
                         epoch_id,
                     )
                 {
@@ -862,35 +828,10 @@ macro_rules! implement_passthrough_traits {
                 &'a self,
                 _: &'a EpochStartConfiguration,
             ) -> BoxFuture<'a, ()> {
-                // If we call this method instead of ProxyCache::reconfigure_cache, it's a bug.
-                // Such a bug would almost certainly cause other test failures before reaching this
-                // point, but if it somehow slipped through it is better to crash than risk forking
-                // because ProxyCache::reconfigure_cache was not called.
-                panic!(
-                    "reconfigure_cache should not be called on a {}",
-                    stringify!($implementor)
-                );
-            }
-        }
-
-        impl StateSyncAPI for $implementor {
-            fn insert_transaction_and_effects(
-                &self,
-                transaction: &VerifiedTransaction,
-                transaction_effects: &TransactionEffects,
-            ) {
-                self.store
-                    .insert_transaction_and_effects(transaction, transaction_effects)
-                    .expect("db error");
-            }
-
-            fn multi_insert_transaction_and_effects(
-                &self,
-                transactions_and_effects: &[VerifiedExecutionData],
-            ) {
-                self.store
-                    .multi_insert_transaction_and_effects(transactions_and_effects.iter())
-                    .expect("db error");
+                // Since we now use WritebackCache directly at startup (if the epoch flag is set),
+                // this can be called at reconfiguration time. It is a no-op.
+                // TODO: remove this once we completely remove ProxyCache.
+                std::future::ready(()).boxed()
             }
         }
 
@@ -904,9 +845,7 @@ macro_rules! implement_passthrough_traits {
 
 use implement_passthrough_traits;
 
-implement_storage_traits!(PassthroughCache);
 implement_storage_traits!(WritebackCache);
-implement_storage_traits!(ProxyCache);
 
 pub trait ExecutionCacheAPI:
     ObjectCacheRead

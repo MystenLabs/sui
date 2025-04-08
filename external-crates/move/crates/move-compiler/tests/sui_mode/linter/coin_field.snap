@@ -1,0 +1,22 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: sui
+  edition: legacy
+  lint: true
+---
+warning[Lint W99003]: sub-optimal 'sui::coin::Coin' field type
+   ┌─ tests/sui_mode/linter/coin_field.move:13:12
+   │
+13 │         c: Coin<S1>,
+   │            ^^^^^^^^ Sub-optimal 'sui::coin::Coin' field type. Using 'sui::balance::Balance' instead will be more space efficient
+   │
+   = This warning can be suppressed with '#[allow(lint(coin_field))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[Lint W99003]: sub-optimal 'sui::coin::Coin' field type
+   ┌─ tests/sui_mode/linter/coin_field.move:27:12
+   │
+27 │         c: Balance<S1>,
+   │            ^^^^^^^^^^^ Sub-optimal 'sui::coin::Coin' field type. Using 'sui::balance::Balance' instead will be more space efficient
+   │
+   = This warning can be suppressed with '#[allow(lint(coin_field))]' applied to the 'module' or module member ('const', 'fun', or 'struct')

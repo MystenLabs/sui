@@ -165,7 +165,7 @@ take a look at the `Move.lock` file and what it contains.
 
 ## Move.lock
 
-The `Move.lock` file is generated at the root of the Move pacakge when the
+The `Move.lock` file is generated at the root of the Move package when the
 package is built. The `Move.lock` file contains information about your package
 and its build configuration, and acts as a communication layer between the Move
 compiler and other tools, like chain-specific command line interfaces and
@@ -188,7 +188,7 @@ The `Move.lock` file is a TOML file that currently contains the following
 fields. 
 
 **Note**: other fields may be added to the lock file either in the future, or
-by third-party package package managers as well.
+by third-party package managers as well.
 
 ### The `[move]` Section
 
@@ -196,7 +196,7 @@ This section contains the core information needed in the lockfile:
 * The version of the lockfile (needed for backwards compatibility checking, and
   versioning lockfile changes in the future).
 * The hash of the `Move.toml` file that was used to generate this lock file.
-* The hash of the `Move.lock` file of all dependencies. If no depencies are
+* The hash of the `Move.lock` file of all dependencies. If no dependencies are
   present, this will be an empty string.
 * The list of dependencies.
 
@@ -316,7 +316,7 @@ A named address `N` in a package `P` is in scope if:
 
 1. `P` declares a named address `N`; or
 2. A package in one of `P`'s transitive dependencies declares the named address `N` and there is a
-   dependency path in the package graph between between `P` and the declaring package of `N` with no
+   dependency path in the package graph between `P` and the declaring package of `N` with no
    renaming of `N`.
 
 Additionally, every named address in a package is exported. Because of this and the above scoping
@@ -352,7 +352,7 @@ module N::A {
 It is important to note that _renaming is not local_: once a named address `N` has been renamed to
 `N2` in a package `P` all packages that import `P` will not see `N` but only `N2` unless `N` is
 reintroduced from outside of `P`. This is why rule (2) in the scoping rules at the start of this
-section specifies a "dependency path in the package graph between between `P` and the declaring
+section specifies a "dependency path in the package graph between `P` and the declaring
 package of `N` with no renaming of `N`."
 
 ### Instantiating Named Addresses

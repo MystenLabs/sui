@@ -379,7 +379,7 @@ pub fn parse_dependency(mut tval: TV) -> Result<PM::Dependency> {
         .remove("override")
         .map(parse_dep_override)
         .transpose()?
-        .map_or(false, |o| o);
+        .is_some_and(|o| o);
 
     let kind = match (
         table.remove("local"),

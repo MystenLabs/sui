@@ -1,6 +1,0 @@
-{
-	"private": true,
-	"import": "../dist/esm/cryptography/index.js",
-	"main": "../dist/cjs/cryptography/index.js",
-	"sideEffects": false
-}

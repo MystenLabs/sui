@@ -6,7 +6,3 @@
 crates/sui-core/tests/staged/sui.yaml text eol=lf
 crates/sui-open-rpc/spec/openrpc.json text eol=lf
 sui_core/tests/staged/sui.yaml text eol=lf
-
-# These files are auto generated
-sdk/graphql-transport/src/queries/generated.ts linguist-generated=true
-sdk/typescript/src/graphql/generated/** linguist-generated=true

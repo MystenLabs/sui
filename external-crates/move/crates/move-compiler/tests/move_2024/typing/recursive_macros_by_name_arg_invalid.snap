@@ -1,0 +1,48 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: 2024.alpha
+  lint: false
+---
+error[E04032]: unable to expand macro function
+   ┌─ tests/move_2024/typing/recursive_macros_by_name_arg_invalid.move:8:9
+   │
+ 4 │         bar!(foo!($f))
+   │         -------------- From this macro expansion
+   ·
+ 8 │         foo!(bar!($f))
+   │         ^^^^^^^^^^^^^^ Recursive macro expansion. 'a::m::foo' cannot recursively expand itself
+   ·
+28 │         foo!(0);
+   │         ------- 'a::m::foo' previously expanded here
+
+error[E04032]: unable to expand macro function
+   ┌─ tests/move_2024/typing/recursive_macros_by_name_arg_invalid.move:12:14
+   │
+12 │         $f + arg!($f)
+   │              ^^^^^^^^ Recursive macro expansion. 'a::m::arg' cannot recursively expand itself
+   ·
+29 │         arg!({ let x = 0; x });
+   │         ---------------------- 'a::m::arg' previously expanded here
+
+error[E04032]: unable to expand macro function
+   ┌─ tests/move_2024/typing/recursive_macros_by_name_arg_invalid.move:16:14
+   │
+16 │         $f + arg_eta!({ $f })
+   │              ^^^^^^^^^^^^^^^^ Recursive macro expansion. 'a::m::arg_eta' cannot recursively expand itself
+   ·
+30 │         arg_eta!({ let x = 0; x });
+   │         -------------------------- 'a::m::arg_eta' previously expanded here
+
+error[E04032]: unable to expand macro function
+   ┌─ tests/move_2024/typing/recursive_macros_by_name_arg_invalid.move:20:23
+   │
+20 │         $f + apply!({ arg_apply!($f) })
+   │              ---------^^^^^^^^^^^^^^---
+   │              │        │
+   │              │        Recursive macro expansion. 'a::m::arg_apply' cannot recursively expand itself
+   │              From this macro expansion
+   ·
+31 │         arg_apply!({ let x = 0; x });
+   │         ---------------------------- 'a::m::arg_apply' previously expanded here

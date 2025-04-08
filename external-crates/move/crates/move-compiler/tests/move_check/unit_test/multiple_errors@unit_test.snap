@@ -1,0 +1,94 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: legacy
+  lint: false
+---
+error[E10005]: unable to generate test
+   ┌─ tests/move_check/unit_test/multiple_errors.move:19:7
+   │
+19 │     #[test(_a=Foo)]
+   │       ^^^^^^^^^^^^ Missing test parameter assignment in test. Expected a parameter to be assigned in this attribute
+20 │     public fun b(_a: signer) { }
+   │                - -- Corresponding to this parameter
+   │                │  
+   │                Error found in this test
+
+error[E10003]: invalid attribute value
+   ┌─ tests/move_check/unit_test/multiple_errors.move:19:15
+   │
+19 │     #[test(_a=Foo)]
+   │            ---^^^
+   │            │  │
+   │            │  Unsupported attribute value
+   │            Assigned in this attribute
+
+error[E10005]: unable to generate test
+   ┌─ tests/move_check/unit_test/multiple_errors.move:26:7
+   │
+26 │     #[test(_a=@0x1)]
+   │       ^^^^^^^^^^^^^ Missing test parameter assignment in test. Expected a parameter to be assigned in this attribute
+27 │     #[test(_b=@0x2)]
+28 │     public fun d(_a: signer, _b: signer) { }
+   │                -             -- Corresponding to this parameter
+   │                │              
+   │                Error found in this test
+
+error[E02001]: duplicate declaration, item, or annotation
+   ┌─ tests/move_check/unit_test/multiple_errors.move:27:7
+   │
+26 │     #[test(_a=@0x1)]
+   │       ---- Attribute previously given here
+27 │     #[test(_b=@0x2)]
+   │       ^^^^^^^^^^^^^ Duplicate attribute 'test' attached to the same item
+
+error[E10005]: unable to generate test
+   ┌─ tests/move_check/unit_test/multiple_errors.move:31:7
+   │
+31 │     #[test(_a=@0x1)]
+   │       ^^^^^^^^^^^^^ Missing test parameter assignment in test. Expected a parameter to be assigned in this attribute
+32 │     #[test_only]
+33 │     public fun e(_a: signer, _b: signer) { }
+   │                -             -- Corresponding to this parameter
+   │                │              
+   │                Error found in this test
+
+error[E10004]: invalid usage of known attribute
+   ┌─ tests/move_check/unit_test/multiple_errors.move:32:7
+   │
+31 │     #[test(_a=@0x1)]
+   │       ------------- Previously annotated here
+32 │     #[test_only]
+   │       ^^^^^^^^^ Function annotated as both #[test] and #[test_only]. You need to declare it as either one or the other
+33 │     public fun e(_a: signer, _b: signer) { }
+   │                - Error found in this test
+
+error[E10005]: unable to generate test
+   ┌─ tests/move_check/unit_test/multiple_errors.move:36:7
+   │
+36 │     #[test(_a=@0x1)]
+   │       ^^^^^^^^^^^^^ Missing test parameter assignment in test. Expected a parameter to be assigned in this attribute
+37 │     public fun f(_a: signer, _b: signer) { }
+   │                -             -- Corresponding to this parameter
+   │                │              
+   │                Error found in this test
+
+error[E10005]: unable to generate test
+   ┌─ tests/move_check/unit_test/multiple_errors.move:40:7
+   │
+40 │     #[test(_a=@0x1)]
+   │       ^^^^^^^^^^^^^ Missing test parameter assignment in test. Expected a parameter to be assigned in this attribute
+   ·
+43 │     public fun g(_a: signer, _b: signer) { }
+   │                -             -- Corresponding to this parameter
+   │                │              
+   │                Error found in this test
+
+error[E02001]: duplicate declaration, item, or annotation
+   ┌─ tests/move_check/unit_test/multiple_errors.move:42:7
+   │
+41 │     #[expected_failure]
+   │       ---------------- Attribute previously given here
+42 │     #[expected_failure]
+   │       ^^^^^^^^^^^^^^^^ Duplicate attribute 'expected_failure' attached to the same item

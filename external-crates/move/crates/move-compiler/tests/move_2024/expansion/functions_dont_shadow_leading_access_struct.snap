@@ -1,0 +1,24 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: 2024.alpha
+  lint: false
+---
+error[E02010]: invalid name
+  ┌─ tests/move_2024/expansion/functions_dont_shadow_leading_access_struct.move:3:19
+  │
+3 │     public struct f() has copy, drop;
+  │                   ^ Invalid struct name 'f'. Struct names must start with 'A'..'Z'
+
+error[E02010]: invalid name
+   ┌─ tests/move_2024/expansion/functions_dont_shadow_leading_access_struct.move:12:19
+   │
+12 │         use a::f::f;
+   │                   ^ Invalid struct alias name 'f'. Struct alias names must start with 'A'..'Z'
+
+error[E03006]: unexpected name in this position
+   ┌─ tests/move_2024/expansion/functions_dont_shadow_leading_access_struct.move:15:13
+   │
+15 │             f::foo(); // resolves to struct
+   │             ^ Expected an address or module in this position, not a module member

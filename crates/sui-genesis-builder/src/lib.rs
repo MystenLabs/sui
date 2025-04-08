@@ -19,9 +19,7 @@ use sui_config::genesis::{
 use sui_execution::{self, Executor};
 use sui_framework::{BuiltInFramework, SystemPackage};
 use sui_protocol_config::{Chain, ProtocolConfig, ProtocolVersion};
-use sui_types::base_types::{
-    ExecutionDigests, ObjectID, SequenceNumber, SuiAddress, TransactionDigest, TxContext,
-};
+use sui_types::base_types::{ExecutionDigests, ObjectID, SequenceNumber, TransactionDigest};
 use sui_types::bridge::{BridgeChainId, BRIDGE_CREATE_FUNCTION_NAME, BRIDGE_MODULE_NAME};
 use sui_types::committee::Committee;
 use sui_types::crypto::{
@@ -681,33 +679,26 @@ impl Builder {
     }
 }
 
-// Create a Genesis Txn Context to be used when generating genesis objects by hashing all of the
+// Create a Genesis Txn Digest to be used when generating genesis objects by hashing all of the
 // inputs into genesis ans using that as our "Txn Digest". This is done to ensure that coin objects
 // created between chains are unique
-fn create_genesis_context(
-    epoch_data: &EpochData,
+fn create_genesis_digest(
     genesis_chain_parameters: &GenesisChainParameters,
     genesis_validators: &[GenesisValidatorMetadata],
     token_distribution_schedule: &TokenDistributionSchedule,
     system_packages: &[SystemPackage],
-) -> TxContext {
+) -> TransactionDigest {
     let mut hasher = DefaultHash::default();
     hasher.update(b"sui-genesis");
     hasher.update(bcs::to_bytes(genesis_chain_parameters).unwrap());
     hasher.update(bcs::to_bytes(genesis_validators).unwrap());
     hasher.update(bcs::to_bytes(token_distribution_schedule).unwrap());
     for system_package in system_packages {
-        hasher.update(bcs::to_bytes(system_package.bytes()).unwrap());
+        hasher.update(bcs::to_bytes(&system_package.bytes).unwrap());
     }
 
     let hash = hasher.finalize();
-    let genesis_transaction_digest = TransactionDigest::new(hash.into());
-
-    TxContext::new(
-        &SuiAddress::default(),
-        &genesis_transaction_digest,
-        epoch_data,
-    )
+    TransactionDigest::new(hash.into())
 }
 
 fn get_genesis_protocol_config(version: ProtocolVersion) -> ProtocolConfig {
@@ -755,8 +746,7 @@ fn build_unsigned_genesis_data(
     // This is a no-op under normal conditions and only an issue with certain tests.
     update_system_packages_from_objects(&mut system_packages, objects);
 
-    let mut genesis_ctx = create_genesis_context(
-        &epoch_data,
+    let genesis_digest = create_genesis_digest(
         &genesis_chain_parameters,
         &genesis_validators,
         token_distribution_schedule,
@@ -768,7 +758,8 @@ fn build_unsigned_genesis_data(
     let metrics = Arc::new(LimitsMetrics::new(&registry));
 
     let objects = create_genesis_objects(
-        &mut genesis_ctx,
+        &epoch_data,
+        &genesis_digest,
         objects,
         &genesis_validators,
         &genesis_chain_parameters,
@@ -923,9 +914,10 @@ fn create_genesis_transaction(
         let expensive_checks = false;
         let certificate_deny_set = HashSet::new();
         let transaction_data = &genesis_transaction.data().intent_message().value;
-        let (kind, signer, _) = transaction_data.execution_parts();
+        let (kind, signer, mut gas_data) = transaction_data.execution_parts();
+        gas_data.payment = vec![];
         let input_objects = CheckedInputObjects::new_for_genesis(vec![]);
-        let (inner_temp_store, _, effects, _execution_error) = executor
+        let (inner_temp_store, _, effects, _timings, _execution_error) = executor
             .execute_transaction_to_effects(
                 &InMemoryStorage::new(Vec::new()),
                 protocol_config,
@@ -935,11 +927,12 @@ fn create_genesis_transaction(
                 &epoch_data.epoch_id(),
                 epoch_data.epoch_start_timestamp(),
                 input_objects,
-                vec![],
+                gas_data,
                 SuiGasStatus::new_unmetered(),
                 kind,
                 signer,
                 genesis_digest,
+                &mut None,
             );
         assert!(inner_temp_store.input_objects.is_empty());
         assert!(inner_temp_store.mutable_inputs.is_empty());
@@ -957,7 +950,8 @@ fn create_genesis_transaction(
 }
 
 fn create_genesis_objects(
-    genesis_ctx: &mut TxContext,
+    epoch_data: &EpochData,
+    genesis_digest: &TransactionDigest,
     input_objects: &[Object],
     validators: &[GenesisValidatorMetadata],
     parameters: &GenesisChainParameters,
@@ -982,9 +976,10 @@ fn create_genesis_objects(
         process_package(
             &mut store,
             executor.as_ref(),
-            genesis_ctx,
+            epoch_data,
+            genesis_digest,
             &system_package.modules(),
-            system_package.dependencies().to_vec(),
+            system_package.dependencies,
             &protocol_config,
             metrics.clone(),
         )
@@ -1001,7 +996,8 @@ fn create_genesis_objects(
         &mut store,
         executor.as_ref(),
         validators,
-        genesis_ctx,
+        epoch_data,
+        genesis_digest,
         parameters,
         token_distribution_schedule,
         metrics,
@@ -1014,7 +1010,8 @@ fn create_genesis_objects(
 fn process_package(
     store: &mut InMemoryStorage,
     executor: &dyn Executor,
-    ctx: &mut TxContext,
+    epoch_data: &EpochData,
+    genesis_digest: &TransactionDigest,
     modules: &[CompiledModule],
     dependencies: Vec<ObjectID>,
     protocol_config: &ProtocolConfig,
@@ -1070,7 +1067,9 @@ fn process_package(
         &*store,
         protocol_config,
         metrics,
-        ctx,
+        epoch_data.epoch_id(),
+        epoch_data.epoch_start_timestamp(),
+        genesis_digest,
         CheckedInputObjects::new_for_genesis(loaded_dependencies),
         pt,
     )?;
@@ -1084,7 +1083,8 @@ pub fn generate_genesis_system_object(
     store: &mut InMemoryStorage,
     executor: &dyn Executor,
     genesis_validators: &[GenesisValidatorMetadata],
-    genesis_ctx: &mut TxContext,
+    epoch_data: &EpochData,
+    genesis_digest: &TransactionDigest,
     genesis_chain_parameters: &GenesisChainParameters,
     token_distribution_schedule: &TokenDistributionSchedule,
     metrics: Arc<LimitsMetrics>,
@@ -1196,7 +1196,9 @@ pub fn generate_genesis_system_object(
         &*store,
         &protocol_config,
         metrics,
-        genesis_ctx,
+        epoch_data.epoch_id(),
+        epoch_data.epoch_start_timestamp(),
+        genesis_digest,
         CheckedInputObjects::new_for_genesis(vec![]),
         pt,
     )?;

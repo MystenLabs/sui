@@ -1,0 +1,212 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: 2024.alpha
+  lint: false
+---
+error[E05001]: ability constraint not satisfied
+   ┌─ tests/move_2024/typing/macro_subst_tparams_invalid.move:10:31
+   │
+ 2 │     public struct None() has drop;
+   │                   ---- To satisfy the constraint, the 'copy' ability would need to be added here
+ 3 │     public struct X<phantom T: copy>() has copy, drop, store;
+   │                                ---- 'copy' constraint declared here
+   ·
+10 │     macro fun useless<$U>($x: X<$U>): X<$U> {
+   │                               ^^^^^ 'copy' constraint not satisifed
+   ·
+27 │         useless!<None>(X());
+   │                  ---- The type 'a::m::None' does not have the ability 'copy'
+
+error[E05001]: ability constraint not satisfied
+   ┌─ tests/move_2024/typing/macro_subst_tparams_invalid.move:10:39
+   │
+ 2 │     public struct None() has drop;
+   │                   ---- To satisfy the constraint, the 'copy' ability would need to be added here
+ 3 │     public struct X<phantom T: copy>() has copy, drop, store;
+   │                                ---- 'copy' constraint declared here
+   ·
+10 │     macro fun useless<$U>($x: X<$U>): X<$U> {
+   │                                       ^^^^^ 'copy' constraint not satisifed
+   ·
+27 │         useless!<None>(X());
+   │                  ---- The type 'a::m::None' does not have the ability 'copy'
+
+error[E05001]: ability constraint not satisfied
+   ┌─ tests/move_2024/typing/macro_subst_tparams_invalid.move:12:16
+   │
+ 2 │     public struct None() has drop;
+   │                   ---- To satisfy the constraint, the 'copy' ability would need to be added here
+ 3 │     public struct X<phantom T: copy>() has copy, drop, store;
+   │                                ---- 'copy' constraint declared here
+   ·
+12 │         freeze<X<$U>>(&mut X());
+   │                ^^^^^ 'copy' constraint not satisifed
+   ·
+27 │         useless!<None>(X());
+   │                  ---- The type 'a::m::None' does not have the ability 'copy'
+
+error[E05001]: ability constraint not satisfied
+   ┌─ tests/move_2024/typing/macro_subst_tparams_invalid.move:12:28
+   │
+ 2 │     public struct None() has drop;
+   │                   ---- To satisfy the constraint, the 'copy' ability would need to be added here
+ 3 │     public struct X<phantom T: copy>() has copy, drop, store;
+   │                                ---- 'copy' constraint declared here
+   ·
+12 │         freeze<X<$U>>(&mut X());
+   │                            ^^^ 'copy' constraint not satisifed
+   ·
+27 │         useless!<None>(X());
+   │                  ---- The type 'a::m::None' does not have the ability 'copy'
+
+error[E05001]: ability constraint not satisfied
+   ┌─ tests/move_2024/typing/macro_subst_tparams_invalid.move:13:9
+   │
+ 2 │     public struct None() has drop;
+   │                   ---- To satisfy the constraint, the 'copy' ability would need to be added here
+ 3 │     public struct X<phantom T: copy>() has copy, drop, store;
+ 4 │     public fun f<T: copy>(_: X<T>) {}
+   │                     ---- 'copy' constraint declared here
+   ·
+13 │         f<$U>(X());
+   │         ^^^^^^^^^^ 'copy' constraint not satisifed
+   ·
+27 │         useless!<None>(X());
+   │                  ---- The type 'a::m::None' does not have the ability 'copy'
+
+error[E05001]: ability constraint not satisfied
+   ┌─ tests/move_2024/typing/macro_subst_tparams_invalid.move:13:15
+   │
+ 2 │     public struct None() has drop;
+   │                   ---- To satisfy the constraint, the 'copy' ability would need to be added here
+ 3 │     public struct X<phantom T: copy>() has copy, drop, store;
+   │                                ---- 'copy' constraint declared here
+   ·
+13 │         f<$U>(X());
+   │               ^^^ 'copy' constraint not satisifed
+   ·
+27 │         useless!<None>(X());
+   │                  ---- The type 'a::m::None' does not have the ability 'copy'
+
+error[E05001]: ability constraint not satisfied
+   ┌─ tests/move_2024/typing/macro_subst_tparams_invalid.move:14:9
+   │
+ 2 │     public struct None() has drop;
+   │                   ---- To satisfy the constraint, the 'copy' ability would need to be added here
+ 3 │     public struct X<phantom T: copy>() has copy, drop, store;
+   │                                ---- 'copy' constraint declared here
+   ·
+14 │         X<$U>();
+   │         ^^^^^^^ 'copy' constraint not satisifed
+   ·
+27 │         useless!<None>(X());
+   │                  ---- The type 'a::m::None' does not have the ability 'copy'
+
+error[E05001]: ability constraint not satisfied
+   ┌─ tests/move_2024/typing/macro_subst_tparams_invalid.move:15:9
+   │
+ 2 │     public struct None() has drop;
+   │                   ---- To satisfy the constraint, the 'copy' ability would need to be added here
+ 3 │     public struct X<phantom T: copy>() has copy, drop, store;
+ 4 │     public fun f<T: copy>(_: X<T>) {}
+   │                     ---- 'copy' constraint declared here
+   ·
+15 │         x.f<$U>();
+   │         ^^^^^^^^^ 'copy' constraint not satisifed
+   ·
+27 │         useless!<None>(X());
+   │                  ---- The type 'a::m::None' does not have the ability 'copy'
+
+error[E05001]: ability constraint not satisfied
+   ┌─ tests/move_2024/typing/macro_subst_tparams_invalid.move:16:23
+   │
+ 2 │     public struct None() has drop;
+   │                   ---- To satisfy the constraint, the 'copy' ability would need to be added here
+ 3 │     public struct X<phantom T: copy>() has copy, drop, store;
+   │                                ---- 'copy' constraint declared here
+   ·
+16 │         apply!(x, |_: X<$U>| ());
+   │                       ^^^^^ 'copy' constraint not satisifed
+   ·
+27 │         useless!<None>(X());
+   │                  ---- The type 'a::m::None' does not have the ability 'copy'
+
+error[E05001]: ability constraint not satisfied
+   ┌─ tests/move_2024/typing/macro_subst_tparams_invalid.move:17:9
+   │
+ 2 │     public struct None() has drop;
+   │                   ---- To satisfy the constraint, the 'copy' ability would need to be added here
+ 3 │     public struct X<phantom T: copy>() has copy, drop, store;
+   │                                ---- 'copy' constraint declared here
+   ·
+17 │         X<$U>() = x;
+   │         ^^^^^^^ 'copy' constraint not satisifed
+   ·
+27 │         useless!<None>(X());
+   │                  ---- The type 'a::m::None' does not have the ability 'copy'
+
+error[E05001]: ability constraint not satisfied
+   ┌─ tests/move_2024/typing/macro_subst_tparams_invalid.move:18:16
+   │
+ 2 │     public struct None() has drop;
+   │                   ---- To satisfy the constraint, the 'copy' ability would need to be added here
+ 3 │     public struct X<phantom T: copy>() has copy, drop, store;
+   │                                ---- 'copy' constraint declared here
+   ·
+18 │         let _: X<$U> = x;
+   │                ^^^^^ 'copy' constraint not satisifed
+   ·
+27 │         useless!<None>(X());
+   │                  ---- The type 'a::m::None' does not have the ability 'copy'
+
+error[E05001]: ability constraint not satisfied
+   ┌─ tests/move_2024/typing/macro_subst_tparams_invalid.move:19:13
+   │
+ 2 │     public struct None() has drop;
+   │                   ---- To satisfy the constraint, the 'copy' ability would need to be added here
+ 3 │     public struct X<phantom T: copy>() has copy, drop, store;
+   │                                ---- 'copy' constraint declared here
+   ·
+19 │         let X<$U>() = x;
+   │             ^^^^^^^ 'copy' constraint not satisifed
+   ·
+27 │         useless!<None>(X());
+   │                  ---- The type 'a::m::None' does not have the ability 'copy'
+
+error[E04003]: built-in operation not supported
+   ┌─ tests/move_2024/typing/macro_subst_tparams_invalid.move:20:10
+   │
+20 │         (0 as $U);
+   │          ^ Invalid argument to 'as'
+   ·
+27 │         useless!<None>(X());
+   │                  ---- Found: 'a::m::None'. But expected: 'u8', 'u16', 'u32', 'u64', 'u128', 'u256'
+
+error[E05001]: ability constraint not satisfied
+   ┌─ tests/move_2024/typing/macro_subst_tparams_invalid.move:21:13
+   │
+ 2 │     public struct None() has drop;
+   │                   ---- To satisfy the constraint, the 'copy' ability would need to be added here
+ 3 │     public struct X<phantom T: copy>() has copy, drop, store;
+   │                                ---- 'copy' constraint declared here
+   ·
+21 │         (x: X<$U>);
+   │             ^^^^^ 'copy' constraint not satisifed
+   ·
+27 │         useless!<None>(X());
+   │                  ---- The type 'a::m::None' does not have the ability 'copy'
+
+error[E05001]: ability constraint not satisfied
+   ┌─ tests/move_2024/typing/macro_subst_tparams_invalid.move:27:24
+   │
+ 2 │     public struct None() has drop;
+   │                   ---- To satisfy the constraint, the 'copy' ability would need to be added here
+ 3 │     public struct X<phantom T: copy>() has copy, drop, store;
+   │                                ---- 'copy' constraint declared here
+   ·
+27 │         useless!<None>(X());
+   │                  ----  ^^^ 'copy' constraint not satisifed
+   │                  │      
+   │                  The type 'a::m::None' does not have the ability 'copy'

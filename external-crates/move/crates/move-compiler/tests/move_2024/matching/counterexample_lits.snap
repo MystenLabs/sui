@@ -1,0 +1,50 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: 2024.alpha
+  lint: false
+---
+error[E04036]: non-exhaustive pattern
+  ┌─ tests/move_2024/matching/counterexample_lits.move:8:16
+  │
+8 │         match (Tuple2::Ctor(0, 1)) {
+  │                ^^^^^^^^^^^^^^^^^^ Pattern 'Tuple2::Ctor(_0, _)' not covered
+  │
+  = When '_0' is not 0
+
+error[E04036]: non-exhaustive pattern
+   ┌─ tests/move_2024/matching/counterexample_lits.move:20:16
+   │
+20 │         match (tup) {
+   │                ^^^ Pattern 'Tuple2::Ctor(Tuple2::Ctor(_0, _), _)' not covered
+   │
+   = When '_0' is not 1
+
+error[E04036]: non-exhaustive pattern
+   ┌─ tests/move_2024/matching/counterexample_lits.move:26:16
+   │
+26 │         match (tup) {
+   │                ^^^ Pattern 'Tuple2::Ctor(false, _)' not covered
+
+error[E04036]: non-exhaustive pattern
+   ┌─ tests/move_2024/matching/counterexample_lits.move:32:16
+   │
+32 │         match (tup) {
+   │                ^^^ Pattern 'Tuple2::Ctor(false, false)' not covered
+
+error[E04036]: non-exhaustive pattern
+   ┌─ tests/move_2024/matching/counterexample_lits.move:48:16
+   │
+48 │         match (Tuple2::Ctor(0, 1)) {
+   │                ^^^^^^^^^^^^^^^^^^ Pattern 'Tuple2::Ctor(_0, _)' not covered
+   │
+   = When '_0' is not 0 or 3
+
+error[E04036]: non-exhaustive pattern
+   ┌─ tests/move_2024/matching/counterexample_lits.move:55:16
+   │
+55 │         match (Tuple2::Ctor(0, 1)) {
+   │                ^^^^^^^^^^^^^^^^^^ Pattern 'Tuple2::Ctor(_0, _)' not covered
+   │
+   = When '_0' is not 0, 3, 4, or 7

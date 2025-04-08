@@ -1,0 +1,67 @@
+---
+source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
+---
+processed 6 tasks
+
+init:
+A: object(0,0)
+
+task 1, lines 10-19:
+//# publish
+created: object(1,0)
+mutated: object(0,1)
+gas summary: computation_cost: 1000000, storage_cost: 4620800,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 2, lines 21-23:
+//# programmable --sender A --inputs @A
+//> 0: test::mod::new();
+//> 1: TransferObjects([Result(0)], Input(0))
+created: object(2,0)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 2226800,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 3, line 25:
+//# create-checkpoint
+Checkpoint created: 1
+
+task 4, lines 27-31:
+//# run-jsonrpc
+Response: {
+  "jsonrpc": "2.0",
+  "id": 0,
+  "result": {
+    "data": {
+      "objectId": "0xb1d114770bfc9968a2ad3da9c6d5bcbf32e4bcf3d0bf3eba674df5d907a83e73",
+      "version": "1",
+      "digest": "Sgp59rDKZRKoSZ2ZJKKcc5YQ7MrhEHDxbZLqqFjywcq",
+      "display": {
+        "data": null,
+        "error": {
+          "code": "displayError",
+          "error": "Display is only supported for Move objects"
+        }
+      }
+    }
+  }
+}
+
+task 5, lines 33-37:
+//# run-jsonrpc
+Response: {
+  "jsonrpc": "2.0",
+  "id": 1,
+  "result": {
+    "data": {
+      "objectId": "0x5736caa914301b5f6bc2734fdd6ef4c0097ebf6f0b346ec0ce1119f3a86c8c37",
+      "version": "2",
+      "digest": "6pd5G7cgCu3ShFTxpyo7xJTsq5EwzbAnrmfNeR55roUH",
+      "display": {
+        "data": null,
+        "error": {
+          "code": "displayError",
+          "error": "Display format not found for 0xb1d114770bfc9968a2ad3da9c6d5bcbf32e4bcf3d0bf3eba674df5d907a83e73::mod::Foo"
+        }
+      }
+    }
+  }
+}

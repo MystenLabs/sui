@@ -14,9 +14,7 @@ validator_configs:
     db-path: /tmp/foo/
     network-address: ""
     json-rpc-address: "0.0.0.0:1"
-    enable-experimental-rest-api: true
-    rest:
-      enable-unstable-apis: true
+    rpc: {}
     metrics-address: "0.0.0.0:1"
     admin-interface-port: 8888
     consensus-config:
@@ -26,27 +24,6 @@ validator_configs:
       max-pending-transactions: ~
       max-submit-position: ~
       submit-delay-step-override-millis: ~
-      address: ""
-      narwhal-config:
-        header_num_of_batches_threshold: 32
-        max_header_num_of_batches: 1000
-        max_header_delay: 1000ms
-        min_header_delay: 500ms
-        gc_depth: 50
-        sync_retry_delay: 5000ms
-        sync_retry_nodes: 3
-        batch_size: 5000000
-        max_batch_delay: 100ms
-        max_concurrent_requests: 500000
-        prometheus_metrics:
-          socket_addr: /ip4/127.0.0.1/tcp/1234
-        network_admin_server:
-          primary_network_admin_server_port: 5678
-          worker_network_admin_server_base_port: 8765
-        anemo:
-          send_certificate_rate_limit: ~
-          report_batch_rate_limit: ~
-          request_batches_rate_limit: ~
       parameters: ~
     enable-index-processing: true
     jsonrpc-server-type: ~
@@ -66,11 +43,10 @@ validator_configs:
       max-transactions-in-batch: 1000
     end-of-epoch-broadcast-channel-capacity: 128
     checkpoint-executor-config:
-      checkpoint-execution-max-concurrency: 200
+      checkpoint-execution-max-concurrency: 4
       local-execution-timeout-sec: 30
     db-checkpoint-config:
       perform-db-checkpoints-at-epoch-end: false
-    indirect-objects-threshold: 18446744073709551615
     expensive-safety-check-config:
       enable-epoch-sui-conservation-check: false
       enable-deep-per-tx-sui-conservation-check: false
@@ -107,6 +83,7 @@ validator_configs:
         - "AwsTenant-region:us-east-1-tenant_id:us-east-1_qPsZxYqd8"
         - Credenza3
         - Facebook
+        - FanTV
         - Google
         - KarrierOne
         - Onefc
@@ -120,6 +97,7 @@ validator_configs:
         - "AwsTenant-region:us-east-1-tenant_id:us-east-1_qPsZxYqd8"
         - Credenza3
         - Facebook
+        - FanTV
         - Google
         - KarrierOne
         - Onefc
@@ -130,7 +108,6 @@ validator_configs:
         - Apple
         - Arden
         - "AwsTenant-region:eu-west-3-tenant_id:eu-west-3_gGVCx53Es"
-        - "AwsTenant-region:us-east-1-tenant_id:us-east-1_LPSLCkC3A"
         - "AwsTenant-region:us-east-1-tenant_id:us-east-1_qPsZxYqd8"
         - Credenza3
         - Facebook
@@ -167,6 +144,17 @@ validator_configs:
     execution-cache:
       writeback-cache:
         max_cache_size: ~
+        package_cache_size: ~
+        object_cache_size: ~
+        marker_cache_size: ~
+        object_by_id_cache_size: ~
+        transaction_cache_size: ~
+        executed_effect_cache_size: ~
+        effect_cache_size: ~
+        events_cache_size: ~
+        transaction_objects_cache_size: ~
+        backpressure_threshold: ~
+        backpressure_threshold_for_rpc: ~
     enable-soft-bundle: true
     enable-validator-tx-finalizer: true
     verifier-signing-config:
@@ -186,9 +174,7 @@ validator_configs:
     db-path: /tmp/foo/
     network-address: ""
     json-rpc-address: "0.0.0.0:1"
-    enable-experimental-rest-api: true
-    rest:
-      enable-unstable-apis: true
+    rpc: {}
     metrics-address: "0.0.0.0:1"
     admin-interface-port: 8888
     consensus-config:
@@ -198,27 +184,6 @@ validator_configs:
       max-pending-transactions: ~
       max-submit-position: ~
       submit-delay-step-override-millis: ~
-      address: ""
-      narwhal-config:
-        header_num_of_batches_threshold: 32
-        max_header_num_of_batches: 1000
-        max_header_delay: 1000ms
-        min_header_delay: 500ms
-        gc_depth: 50
-        sync_retry_delay: 5000ms
-        sync_retry_nodes: 3
-        batch_size: 5000000
-        max_batch_delay: 100ms
-        max_concurrent_requests: 500000
-        prometheus_metrics:
-          socket_addr: /ip4/127.0.0.1/tcp/1234
-        network_admin_server:
-          primary_network_admin_server_port: 5678
-          worker_network_admin_server_base_port: 8765
-        anemo:
-          send_certificate_rate_limit: ~
-          report_batch_rate_limit: ~
-          request_batches_rate_limit: ~
       parameters: ~
     enable-index-processing: true
     jsonrpc-server-type: ~
@@ -238,11 +203,10 @@ validator_configs:
       max-transactions-in-batch: 1000
     end-of-epoch-broadcast-channel-capacity: 128
     checkpoint-executor-config:
-      checkpoint-execution-max-concurrency: 200
+      checkpoint-execution-max-concurrency: 4
       local-execution-timeout-sec: 30
     db-checkpoint-config:
       perform-db-checkpoints-at-epoch-end: false
-    indirect-objects-threshold: 18446744073709551615
     expensive-safety-check-config:
       enable-epoch-sui-conservation-check: false
       enable-deep-per-tx-sui-conservation-check: false
@@ -279,6 +243,7 @@ validator_configs:
         - "AwsTenant-region:us-east-1-tenant_id:us-east-1_qPsZxYqd8"
         - Credenza3
         - Facebook
+        - FanTV
         - Google
         - KarrierOne
         - Onefc
@@ -292,6 +257,7 @@ validator_configs:
         - "AwsTenant-region:us-east-1-tenant_id:us-east-1_qPsZxYqd8"
         - Credenza3
         - Facebook
+        - FanTV
         - Google
         - KarrierOne
         - Onefc
@@ -302,7 +268,6 @@ validator_configs:
         - Apple
         - Arden
         - "AwsTenant-region:eu-west-3-tenant_id:eu-west-3_gGVCx53Es"
-        - "AwsTenant-region:us-east-1-tenant_id:us-east-1_LPSLCkC3A"
         - "AwsTenant-region:us-east-1-tenant_id:us-east-1_qPsZxYqd8"
         - Credenza3
         - Facebook
@@ -339,6 +304,17 @@ validator_configs:
     execution-cache:
       writeback-cache:
         max_cache_size: ~
+        package_cache_size: ~
+        object_cache_size: ~
+        marker_cache_size: ~
+        object_by_id_cache_size: ~
+        transaction_cache_size: ~
+        executed_effect_cache_size: ~
+        effect_cache_size: ~
+        events_cache_size: ~
+        transaction_objects_cache_size: ~
+        backpressure_threshold: ~
+        backpressure_threshold_for_rpc: ~
     enable-soft-bundle: true
     enable-validator-tx-finalizer: true
     verifier-signing-config:
@@ -358,9 +334,7 @@ validator_configs:
     db-path: /tmp/foo/
     network-address: ""
     json-rpc-address: "0.0.0.0:1"
-    enable-experimental-rest-api: true
-    rest:
-      enable-unstable-apis: true
+    rpc: {}
     metrics-address: "0.0.0.0:1"
     admin-interface-port: 8888
     consensus-config:
@@ -370,27 +344,6 @@ validator_configs:
       max-pending-transactions: ~
       max-submit-position: ~
       submit-delay-step-override-millis: ~
-      address: ""
-      narwhal-config:
-        header_num_of_batches_threshold: 32
-        max_header_num_of_batches: 1000
-        max_header_delay: 1000ms
-        min_header_delay: 500ms
-        gc_depth: 50
-        sync_retry_delay: 5000ms
-        sync_retry_nodes: 3
-        batch_size: 5000000
-        max_batch_delay: 100ms
-        max_concurrent_requests: 500000
-        prometheus_metrics:
-          socket_addr: /ip4/127.0.0.1/tcp/1234
-        network_admin_server:
-          primary_network_admin_server_port: 5678
-          worker_network_admin_server_base_port: 8765
-        anemo:
-          send_certificate_rate_limit: ~
-          report_batch_rate_limit: ~
-          request_batches_rate_limit: ~
       parameters: ~
     enable-index-processing: true
     jsonrpc-server-type: ~
@@ -410,11 +363,10 @@ validator_configs:
       max-transactions-in-batch: 1000
     end-of-epoch-broadcast-channel-capacity: 128
     checkpoint-executor-config:
-      checkpoint-execution-max-concurrency: 200
+      checkpoint-execution-max-concurrency: 4
       local-execution-timeout-sec: 30
     db-checkpoint-config:
       perform-db-checkpoints-at-epoch-end: false
-    indirect-objects-threshold: 18446744073709551615
     expensive-safety-check-config:
       enable-epoch-sui-conservation-check: false
       enable-deep-per-tx-sui-conservation-check: false
@@ -451,6 +403,7 @@ validator_configs:
         - "AwsTenant-region:us-east-1-tenant_id:us-east-1_qPsZxYqd8"
         - Credenza3
         - Facebook
+        - FanTV
         - Google
         - KarrierOne
         - Onefc
@@ -464,6 +417,7 @@ validator_configs:
         - "AwsTenant-region:us-east-1-tenant_id:us-east-1_qPsZxYqd8"
         - Credenza3
         - Facebook
+        - FanTV
         - Google
         - KarrierOne
         - Onefc
@@ -474,7 +428,6 @@ validator_configs:
         - Apple
         - Arden
         - "AwsTenant-region:eu-west-3-tenant_id:eu-west-3_gGVCx53Es"
-        - "AwsTenant-region:us-east-1-tenant_id:us-east-1_LPSLCkC3A"
         - "AwsTenant-region:us-east-1-tenant_id:us-east-1_qPsZxYqd8"
         - Credenza3
         - Facebook
@@ -511,6 +464,17 @@ validator_configs:
     execution-cache:
       writeback-cache:
         max_cache_size: ~
+        package_cache_size: ~
+        object_cache_size: ~
+        marker_cache_size: ~
+        object_by_id_cache_size: ~
+        transaction_cache_size: ~
+        executed_effect_cache_size: ~
+        effect_cache_size: ~
+        events_cache_size: ~
+        transaction_objects_cache_size: ~
+        backpressure_threshold: ~
+        backpressure_threshold_for_rpc: ~
     enable-soft-bundle: true
     enable-validator-tx-finalizer: true
     verifier-signing-config:
@@ -530,9 +494,7 @@ validator_configs:
     db-path: /tmp/foo/
     network-address: ""
     json-rpc-address: "0.0.0.0:1"
-    enable-experimental-rest-api: true
-    rest:
-      enable-unstable-apis: true
+    rpc: {}
     metrics-address: "0.0.0.0:1"
     admin-interface-port: 8888
     consensus-config:
@@ -542,27 +504,6 @@ validator_configs:
       max-pending-transactions: ~
       max-submit-position: ~
       submit-delay-step-override-millis: ~
-      address: ""
-      narwhal-config:
-        header_num_of_batches_threshold: 32
-        max_header_num_of_batches: 1000
-        max_header_delay: 1000ms
-        min_header_delay: 500ms
-        gc_depth: 50
-        sync_retry_delay: 5000ms
-        sync_retry_nodes: 3
-        batch_size: 5000000
-        max_batch_delay: 100ms
-        max_concurrent_requests: 500000
-        prometheus_metrics:
-          socket_addr: /ip4/127.0.0.1/tcp/1234
-        network_admin_server:
-          primary_network_admin_server_port: 5678
-          worker_network_admin_server_base_port: 8765
-        anemo:
-          send_certificate_rate_limit: ~
-          report_batch_rate_limit: ~
-          request_batches_rate_limit: ~
       parameters: ~
     enable-index-processing: true
     jsonrpc-server-type: ~
@@ -582,11 +523,10 @@ validator_configs:
       max-transactions-in-batch: 1000
     end-of-epoch-broadcast-channel-capacity: 128
     checkpoint-executor-config:
-      checkpoint-execution-max-concurrency: 200
+      checkpoint-execution-max-concurrency: 4
       local-execution-timeout-sec: 30
     db-checkpoint-config:
       perform-db-checkpoints-at-epoch-end: false
-    indirect-objects-threshold: 18446744073709551615
     expensive-safety-check-config:
       enable-epoch-sui-conservation-check: false
       enable-deep-per-tx-sui-conservation-check: false
@@ -623,6 +563,7 @@ validator_configs:
         - "AwsTenant-region:us-east-1-tenant_id:us-east-1_qPsZxYqd8"
         - Credenza3
         - Facebook
+        - FanTV
         - Google
         - KarrierOne
         - Onefc
@@ -636,6 +577,7 @@ validator_configs:
         - "AwsTenant-region:us-east-1-tenant_id:us-east-1_qPsZxYqd8"
         - Credenza3
         - Facebook
+        - FanTV
         - Google
         - KarrierOne
         - Onefc
@@ -646,7 +588,6 @@ validator_configs:
         - Apple
         - Arden
         - "AwsTenant-region:eu-west-3-tenant_id:eu-west-3_gGVCx53Es"
-        - "AwsTenant-region:us-east-1-tenant_id:us-east-1_LPSLCkC3A"
         - "AwsTenant-region:us-east-1-tenant_id:us-east-1_qPsZxYqd8"
         - Credenza3
         - Facebook
@@ -683,6 +624,17 @@ validator_configs:
     execution-cache:
       writeback-cache:
         max_cache_size: ~
+        package_cache_size: ~
+        object_cache_size: ~
+        marker_cache_size: ~
+        object_by_id_cache_size: ~
+        transaction_cache_size: ~
+        executed_effect_cache_size: ~
+        effect_cache_size: ~
+        events_cache_size: ~
+        transaction_objects_cache_size: ~
+        backpressure_threshold: ~
+        backpressure_threshold_for_rpc: ~
     enable-soft-bundle: true
     enable-validator-tx-finalizer: true
     verifier-signing-config:
@@ -702,9 +654,7 @@ validator_configs:
     db-path: /tmp/foo/
     network-address: ""
     json-rpc-address: "0.0.0.0:1"
-    enable-experimental-rest-api: true
-    rest:
-      enable-unstable-apis: true
+    rpc: {}
     metrics-address: "0.0.0.0:1"
     admin-interface-port: 8888
     consensus-config:
@@ -714,27 +664,6 @@ validator_configs:
       max-pending-transactions: ~
       max-submit-position: ~
       submit-delay-step-override-millis: ~
-      address: ""
-      narwhal-config:
-        header_num_of_batches_threshold: 32
-        max_header_num_of_batches: 1000
-        max_header_delay: 1000ms
-        min_header_delay: 500ms
-        gc_depth: 50
-        sync_retry_delay: 5000ms
-        sync_retry_nodes: 3
-        batch_size: 5000000
-        max_batch_delay: 100ms
-        max_concurrent_requests: 500000
-        prometheus_metrics:
-          socket_addr: /ip4/127.0.0.1/tcp/1234
-        network_admin_server:
-          primary_network_admin_server_port: 5678
-          worker_network_admin_server_base_port: 8765
-        anemo:
-          send_certificate_rate_limit: ~
-          report_batch_rate_limit: ~
-          request_batches_rate_limit: ~
       parameters: ~
     enable-index-processing: true
     jsonrpc-server-type: ~
@@ -754,11 +683,10 @@ validator_configs:
       max-transactions-in-batch: 1000
     end-of-epoch-broadcast-channel-capacity: 128
     checkpoint-executor-config:
-      checkpoint-execution-max-concurrency: 200
+      checkpoint-execution-max-concurrency: 4
       local-execution-timeout-sec: 30
     db-checkpoint-config:
       perform-db-checkpoints-at-epoch-end: false
-    indirect-objects-threshold: 18446744073709551615
     expensive-safety-check-config:
       enable-epoch-sui-conservation-check: false
       enable-deep-per-tx-sui-conservation-check: false
@@ -795,6 +723,7 @@ validator_configs:
         - "AwsTenant-region:us-east-1-tenant_id:us-east-1_qPsZxYqd8"
         - Credenza3
         - Facebook
+        - FanTV
         - Google
         - KarrierOne
         - Onefc
@@ -808,6 +737,7 @@ validator_configs:
         - "AwsTenant-region:us-east-1-tenant_id:us-east-1_qPsZxYqd8"
         - Credenza3
         - Facebook
+        - FanTV
         - Google
         - KarrierOne
         - Onefc
@@ -818,7 +748,6 @@ validator_configs:
         - Apple
         - Arden
         - "AwsTenant-region:eu-west-3-tenant_id:eu-west-3_gGVCx53Es"
-        - "AwsTenant-region:us-east-1-tenant_id:us-east-1_LPSLCkC3A"
         - "AwsTenant-region:us-east-1-tenant_id:us-east-1_qPsZxYqd8"
         - Credenza3
         - Facebook
@@ -855,6 +784,17 @@ validator_configs:
     execution-cache:
       writeback-cache:
         max_cache_size: ~
+        package_cache_size: ~
+        object_cache_size: ~
+        marker_cache_size: ~
+        object_by_id_cache_size: ~
+        transaction_cache_size: ~
+        executed_effect_cache_size: ~
+        effect_cache_size: ~
+        events_cache_size: ~
+        transaction_objects_cache_size: ~
+        backpressure_threshold: ~
+        backpressure_threshold_for_rpc: ~
     enable-soft-bundle: true
     enable-validator-tx-finalizer: true
     verifier-signing-config:
@@ -874,9 +814,7 @@ validator_configs:
     db-path: /tmp/foo/
     network-address: ""
     json-rpc-address: "0.0.0.0:1"
-    enable-experimental-rest-api: true
-    rest:
-      enable-unstable-apis: true
+    rpc: {}
     metrics-address: "0.0.0.0:1"
     admin-interface-port: 8888
     consensus-config:
@@ -886,27 +824,6 @@ validator_configs:
       max-pending-transactions: ~
       max-submit-position: ~
       submit-delay-step-override-millis: ~
-      address: ""
-      narwhal-config:
-        header_num_of_batches_threshold: 32
-        max_header_num_of_batches: 1000
-        max_header_delay: 1000ms
-        min_header_delay: 500ms
-        gc_depth: 50
-        sync_retry_delay: 5000ms
-        sync_retry_nodes: 3
-        batch_size: 5000000
-        max_batch_delay: 100ms
-        max_concurrent_requests: 500000
-        prometheus_metrics:
-          socket_addr: /ip4/127.0.0.1/tcp/1234
-        network_admin_server:
-          primary_network_admin_server_port: 5678
-          worker_network_admin_server_base_port: 8765
-        anemo:
-          send_certificate_rate_limit: ~
-          report_batch_rate_limit: ~
-          request_batches_rate_limit: ~
       parameters: ~
     enable-index-processing: true
     jsonrpc-server-type: ~
@@ -926,11 +843,10 @@ validator_configs:
       max-transactions-in-batch: 1000
     end-of-epoch-broadcast-channel-capacity: 128
     checkpoint-executor-config:
-      checkpoint-execution-max-concurrency: 200
+      checkpoint-execution-max-concurrency: 4
       local-execution-timeout-sec: 30
     db-checkpoint-config:
       perform-db-checkpoints-at-epoch-end: false
-    indirect-objects-threshold: 18446744073709551615
     expensive-safety-check-config:
       enable-epoch-sui-conservation-check: false
       enable-deep-per-tx-sui-conservation-check: false
@@ -967,6 +883,7 @@ validator_configs:
         - "AwsTenant-region:us-east-1-tenant_id:us-east-1_qPsZxYqd8"
         - Credenza3
         - Facebook
+        - FanTV
         - Google
         - KarrierOne
         - Onefc
@@ -980,6 +897,7 @@ validator_configs:
         - "AwsTenant-region:us-east-1-tenant_id:us-east-1_qPsZxYqd8"
         - Credenza3
         - Facebook
+        - FanTV
         - Google
         - KarrierOne
         - Onefc
@@ -990,7 +908,6 @@ validator_configs:
         - Apple
         - Arden
         - "AwsTenant-region:eu-west-3-tenant_id:eu-west-3_gGVCx53Es"
-        - "AwsTenant-region:us-east-1-tenant_id:us-east-1_LPSLCkC3A"
         - "AwsTenant-region:us-east-1-tenant_id:us-east-1_qPsZxYqd8"
         - Credenza3
         - Facebook
@@ -1027,6 +944,17 @@ validator_configs:
     execution-cache:
       writeback-cache:
         max_cache_size: ~
+        package_cache_size: ~
+        object_cache_size: ~
+        marker_cache_size: ~
+        object_by_id_cache_size: ~
+        transaction_cache_size: ~
+        executed_effect_cache_size: ~
+        effect_cache_size: ~
+        events_cache_size: ~
+        transaction_objects_cache_size: ~
+        backpressure_threshold: ~
+        backpressure_threshold_for_rpc: ~
     enable-soft-bundle: true
     enable-validator-tx-finalizer: true
     verifier-signing-config:
@@ -1046,9 +974,7 @@ validator_configs:
     db-path: /tmp/foo/
     network-address: ""
     json-rpc-address: "0.0.0.0:1"
-    enable-experimental-rest-api: true
-    rest:
-      enable-unstable-apis: true
+    rpc: {}
     metrics-address: "0.0.0.0:1"
     admin-interface-port: 8888
     consensus-config:
@@ -1058,27 +984,6 @@ validator_configs:
       max-pending-transactions: ~
       max-submit-position: ~
       submit-delay-step-override-millis: ~
-      address: ""
-      narwhal-config:
-        header_num_of_batches_threshold: 32
-        max_header_num_of_batches: 1000
-        max_header_delay: 1000ms
-        min_header_delay: 500ms
-        gc_depth: 50
-        sync_retry_delay: 5000ms
-        sync_retry_nodes: 3
-        batch_size: 5000000
-        max_batch_delay: 100ms
-        max_concurrent_requests: 500000
-        prometheus_metrics:
-          socket_addr: /ip4/127.0.0.1/tcp/1234
-        network_admin_server:
-          primary_network_admin_server_port: 5678
-          worker_network_admin_server_base_port: 8765
-        anemo:
-          send_certificate_rate_limit: ~
-          report_batch_rate_limit: ~
-          request_batches_rate_limit: ~
       parameters: ~
     enable-index-processing: true
     jsonrpc-server-type: ~
@@ -1098,11 +1003,10 @@ validator_configs:
       max-transactions-in-batch: 1000
     end-of-epoch-broadcast-channel-capacity: 128
     checkpoint-executor-config:
-      checkpoint-execution-max-concurrency: 200
+      checkpoint-execution-max-concurrency: 4
       local-execution-timeout-sec: 30
     db-checkpoint-config:
       perform-db-checkpoints-at-epoch-end: false
-    indirect-objects-threshold: 18446744073709551615
     expensive-safety-check-config:
       enable-epoch-sui-conservation-check: false
       enable-deep-per-tx-sui-conservation-check: false
@@ -1139,6 +1043,7 @@ validator_configs:
         - "AwsTenant-region:us-east-1-tenant_id:us-east-1_qPsZxYqd8"
         - Credenza3
         - Facebook
+        - FanTV
         - Google
         - KarrierOne
         - Onefc
@@ -1152,6 +1057,7 @@ validator_configs:
         - "AwsTenant-region:us-east-1-tenant_id:us-east-1_qPsZxYqd8"
         - Credenza3
         - Facebook
+        - FanTV
         - Google
         - KarrierOne
         - Onefc
@@ -1162,7 +1068,6 @@ validator_configs:
         - Apple
         - Arden
         - "AwsTenant-region:eu-west-3-tenant_id:eu-west-3_gGVCx53Es"
-        - "AwsTenant-region:us-east-1-tenant_id:us-east-1_LPSLCkC3A"
         - "AwsTenant-region:us-east-1-tenant_id:us-east-1_qPsZxYqd8"
         - Credenza3
         - Facebook
@@ -1199,6 +1104,17 @@ validator_configs:
     execution-cache:
       writeback-cache:
         max_cache_size: ~
+        package_cache_size: ~
+        object_cache_size: ~
+        marker_cache_size: ~
+        object_by_id_cache_size: ~
+        transaction_cache_size: ~
+        executed_effect_cache_size: ~
+        effect_cache_size: ~
+        events_cache_size: ~
+        transaction_objects_cache_size: ~
+        backpressure_threshold: ~
+        backpressure_threshold_for_rpc: ~
     enable-soft-bundle: true
     enable-validator-tx-finalizer: true
     verifier-signing-config:

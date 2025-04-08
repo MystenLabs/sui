@@ -1,0 +1,38 @@
+---
+source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
+---
+processed 7 tasks
+
+init:
+A: object(0,0)
+
+task 1, lines 6-14:
+//# publish --upgradeable --sender A
+created: object(1,0), object(1,1)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 5882400,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 2, lines 16-24:
+//# upgrade --package Test_V0 --upgrade-capability 1,1 --sender A
+Error: Transaction Effects Status: Invalid package upgrade. New package is incompatible with previous version
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: PackageUpgradeError { upgrade_error: IncompatibleUpgrade }, source: None, command: Some(1) } }
+
+task 3, lines 26-29:
+//# upgrade --package Test_V0 --upgrade-capability 1,1 --sender A
+Error: Transaction Effects Status: Invalid package upgrade. New package is incompatible with previous version
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: PackageUpgradeError { upgrade_error: IncompatibleUpgrade }, source: None, command: Some(1) } }
+
+task 4, lines 31-39:
+//# upgrade --package Test_V0 --upgrade-capability 1,1 --sender A
+Error: Transaction Effects Status: Invalid package upgrade. New package is incompatible with previous version
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: PackageUpgradeError { upgrade_error: IncompatibleUpgrade }, source: Some(PartialVMError { major_status: BACKWARD_INCOMPATIBLE_MODULE_UPDATE, sub_status: None, message: None, exec_state: None, indices: [], offsets: [] }), command: Some(1) } }
+
+task 5, lines 41-49:
+//# upgrade --package Test_V0 --upgrade-capability 1,1 --sender A
+Error: Transaction Effects Status: Invalid package upgrade. New package is incompatible with previous version
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: PackageUpgradeError { upgrade_error: IncompatibleUpgrade }, source: Some(PartialVMError { major_status: BACKWARD_INCOMPATIBLE_MODULE_UPDATE, sub_status: None, message: None, exec_state: None, indices: [], offsets: [] }), command: Some(1) } }
+
+task 6, lines 51-60:
+//# upgrade --package Test_V0 --upgrade-capability 1,1 --sender A
+Error: Transaction Effects Status: Invalid package upgrade. New package is incompatible with previous version
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: PackageUpgradeError { upgrade_error: IncompatibleUpgrade }, source: Some(PartialVMError { major_status: BACKWARD_INCOMPATIBLE_MODULE_UPDATE, sub_status: None, message: None, exec_state: None, indices: [], offsets: [] }), command: Some(1) } }

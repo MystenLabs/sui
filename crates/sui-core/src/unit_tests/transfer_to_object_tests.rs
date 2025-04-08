@@ -3,6 +3,7 @@
 
 use std::{collections::HashSet, sync::Arc};
 
+use sui_protocol_config::{Chain, PerObjectCongestionControlMode, ProtocolConfig, ProtocolVersion};
 use sui_types::{
     base_types::{ObjectID, ObjectRef, SequenceNumber, SuiAddress},
     crypto::{get_key_pair, AccountKeyPair},
@@ -79,7 +80,16 @@ impl TestRunner {
         telemetry_subscribers::init_for_testing();
         let (sender, sender_key): (_, AccountKeyPair) = get_key_pair();
 
-        let authority_state = TestAuthorityBuilder::new().build().await;
+        let mut protocol_config =
+            ProtocolConfig::get_for_version(ProtocolVersion::max(), Chain::Unknown);
+        protocol_config.set_per_object_congestion_control_mode_for_testing(
+            PerObjectCongestionControlMode::None,
+        );
+        let authority_state = TestAuthorityBuilder::new()
+            .with_protocol_config(protocol_config)
+            .build()
+            .await;
+
         let rgp = authority_state.reference_gas_price_for_testing().unwrap();
         let mut gas_object_ids = vec![];
         for _ in 0..num {
@@ -265,11 +275,12 @@ fn get_parent_and_child(
             _ => None,
         })
         .unwrap();
-    let parent = *created
+    let parent = created
         .iter()
         .find(|((id, _, _), _)| *id == parent_id)
+        .cloned()
         .unwrap();
-    (parent, *child)
+    (parent, child.clone())
 }
 
 #[tokio::test]
@@ -404,20 +415,23 @@ async fn test_tto_invalid_receiving_arguments() {
 
         let (parent, child) = get_parent_and_child(effects.created());
         let package_object_ref = runner.package;
-        let shared = *effects
+        let shared = effects
             .created()
             .iter()
             .find(|(_, owner)| matches!(owner, Owner::Shared { .. }))
+            .cloned()
             .unwrap();
-        let immutable = *effects
+        let immutable = effects
             .created()
             .iter()
             .find(|(_, owner)| matches!(owner, Owner::Immutable))
+            .cloned()
             .unwrap();
-        let object_owned = *effects
+        let object_owned = effects
             .created()
             .iter()
             .find(|(_, owner)| matches!(owner, Owner::ObjectOwner(_)))
+            .cloned()
             .unwrap();
 
         #[allow(clippy::type_complexity)]
@@ -926,10 +940,11 @@ async fn verify_tto_not_locked(
         .await;
 
     let (parent, child) = get_parent_and_child(effects.created());
-    let fake_parent = *effects
+    let fake_parent = effects
         .created()
         .iter()
         .find(|(obj_ref, _)| obj_ref.0 != parent.0 .0 && obj_ref.0 != child.0 .0)
+        .cloned()
         .unwrap();
 
     // Now get a certificate for fake_parent/child1. This will lock input objects.
@@ -1056,7 +1071,7 @@ async fn test_tto_valid_dependencies() {
                 builder.finish()
             })
             .await;
-        let parent = effects.created()[0];
+        let parent = effects.created()[0].clone();
 
         let effects = runner
             .run({
@@ -1068,7 +1083,7 @@ async fn test_tto_valid_dependencies() {
                 builder.finish()
             })
             .await;
-        let child = effects.created()[0];
+        let child = effects.created()[0].clone();
 
         // Use a different gas coin than for all the other transactions. This serves two purposes:
         // 1. Makes sure that we are registering the dependency on the transaction that transferred the
@@ -1088,10 +1103,11 @@ async fn test_tto_valid_dependencies() {
             )
             .await;
 
-        let child = *effects
+        let child = effects
             .mutated()
             .iter()
             .find(|(o, _)| o.0 == child.0 .0)
+            .cloned()
             .unwrap();
         let transfer_digest = effects.transaction_digest();
 
@@ -1155,7 +1171,7 @@ async fn test_tto_valid_dependencies_delete_on_receive() {
                 builder.finish()
             })
             .await;
-        let parent = effects.created()[0];
+        let parent = effects.created()[0].clone();
 
         let effects = runner
             .run({
@@ -1167,7 +1183,7 @@ async fn test_tto_valid_dependencies_delete_on_receive() {
                 builder.finish()
             })
             .await;
-        let child = effects.created()[0];
+        let child = effects.created()[0].clone();
 
         // Use a different gas coin than for all the other transactions. This serves two purposes:
         // 1. Makes sure that we are registering the dependency on the transaction that transferred the
@@ -1187,10 +1203,11 @@ async fn test_tto_valid_dependencies_delete_on_receive() {
             )
             .await;
 
-        let child = *effects
+        let child = effects
             .mutated()
             .iter()
             .find(|(o, _)| o.0 == child.0 .0)
+            .cloned()
             .unwrap();
         let transfer_digest = effects.transaction_digest();
 
@@ -1250,7 +1267,7 @@ async fn test_tto_dependencies_dont_receive() {
                 builder.finish()
             })
             .await;
-        let parent = effects.created()[0];
+        let parent = effects.created()[0].clone();
 
         let effects = runner
             .run({
@@ -1262,7 +1279,7 @@ async fn test_tto_dependencies_dont_receive() {
                 builder.finish()
             })
             .await;
-        let old_child = effects.created()[0];
+        let old_child = effects.created()[0].clone();
 
         // Use a different gas coin than for all the other transactions. This:
         // 1. Makes sure that we are registering the dependency on the transaction that transferred the
@@ -1282,10 +1299,11 @@ async fn test_tto_dependencies_dont_receive() {
             )
             .await;
 
-        let child = *effects
+        let child = effects
             .mutated()
             .iter()
             .find(|(o, _)| o.0 == old_child.0 .0)
+            .cloned()
             .unwrap();
         let transfer_digest = effects.transaction_digest();
 
@@ -1347,7 +1365,7 @@ async fn test_tto_dependencies_dont_receive_but_abort() {
                 builder.finish()
             })
             .await;
-        let parent = effects.created()[0];
+        let parent = effects.created()[0].clone();
 
         let effects = runner
             .run({
@@ -1359,7 +1377,7 @@ async fn test_tto_dependencies_dont_receive_but_abort() {
                 builder.finish()
             })
             .await;
-        let old_child = effects.created()[0];
+        let old_child = effects.created()[0].clone();
 
         // Use a different gas coin than for all the other transactions. This:
         // 1. Makes sure that we are registering the dependency on the transaction that transferred the
@@ -1379,10 +1397,11 @@ async fn test_tto_dependencies_dont_receive_but_abort() {
             )
             .await;
 
-        let child = *effects
+        let child = effects
             .mutated()
             .iter()
             .find(|(o, _)| o.0 == old_child.0 .0)
+            .cloned()
             .unwrap();
         let transfer_digest = effects.transaction_digest();
 
@@ -1442,7 +1461,7 @@ async fn test_tto_dependencies_receive_and_abort() {
                 builder.finish()
             })
             .await;
-        let parent = effects.created()[0];
+        let parent = effects.created()[0].clone();
 
         let effects = runner
             .run({
@@ -1454,7 +1473,7 @@ async fn test_tto_dependencies_receive_and_abort() {
                 builder.finish()
             })
             .await;
-        let old_child = effects.created()[0];
+        let old_child = effects.created()[0].clone();
 
         // Use a different gas coin than for all the other transactions. This:
         // 1. Makes sure that we are registering the dependency on the transaction that transferred the
@@ -1474,10 +1493,11 @@ async fn test_tto_dependencies_receive_and_abort() {
             )
             .await;
 
-        let child = *effects
+        let child = effects
             .mutated()
             .iter()
             .find(|(o, _)| o.0 == old_child.0 .0)
+            .cloned()
             .unwrap();
         let transfer_digest = effects.transaction_digest();
 
@@ -1536,7 +1556,7 @@ async fn test_tto_dependencies_receive_and_type_mismatch() {
                 builder.finish()
             })
             .await;
-        let parent = effects.created()[0];
+        let parent = effects.created()[0].clone();
 
         let effects = runner
             .run({
@@ -1548,7 +1568,7 @@ async fn test_tto_dependencies_receive_and_type_mismatch() {
                 builder.finish()
             })
             .await;
-        let old_child = effects.created()[0];
+        let old_child = effects.created()[0].clone();
 
         // Use a different gas coin than for all the other transactions. This:
         // 1. Makes sure that we are registering the dependency on the transaction that transferred the
@@ -1568,10 +1588,11 @@ async fn test_tto_dependencies_receive_and_type_mismatch() {
             )
             .await;
 
-        let child = *effects
+        let child = effects
             .mutated()
             .iter()
             .find(|(o, _)| o.0 == old_child.0 .0)
+            .cloned()
             .unwrap();
         let transfer_digest = effects.transaction_digest();
 
@@ -1642,17 +1663,19 @@ async fn receive_and_dof_interleave() {
             )
             .await;
 
-        let shared = *effects
+        let shared = effects
             .created()
             .iter()
             .find(|(_, owner)| matches!(owner, Owner::Shared { .. }))
+            .cloned()
             .unwrap();
-        let owned = *effects
+        let owned = effects
             .created()
             .iter()
             .find(|(_, owner)| matches!(owner, Owner::AddressOwner(_)))
+            .cloned()
             .unwrap();
-        let Owner::Shared { initial_shared_version }= shared.1 else { unreachable!() };
+        let Owner::Shared { initial_shared_version } = shared.1 else { unreachable!() };
 
         let init_digest = effects.transaction_digest();
 
@@ -1746,8 +1769,8 @@ async fn test_have_deleted_owned_object() {
 
         assert!(cache.get_object(&new_child.0.0).is_some());
         // Should not show as deleted for either versions
-        assert!(!cache.have_deleted_owned_object_at_version_or_after(&new_child.0.0, new_child.0.1, 0));
-        assert!(!cache.have_deleted_owned_object_at_version_or_after(&new_child.0.0, child.0.1, 0));
+        assert!(!cache.have_deleted_fastpath_object_at_version_or_after(new_child.0.0, new_child.0.1, 0));
+        assert!(!cache.have_deleted_fastpath_object_at_version_or_after(new_child.0.0, child.0.1, 0));
 
         let effects = runner
             .run({
@@ -1764,13 +1787,13 @@ async fn test_have_deleted_owned_object() {
 
         let deleted_child = effects.deleted().into_iter().find(|(id, _, _)| *id == new_child.0 .0).unwrap();
         assert!(cache.get_object(&deleted_child.0).is_none());
-        assert!(cache.have_deleted_owned_object_at_version_or_after(&deleted_child.0, deleted_child.1, 0));
-        assert!(cache.have_deleted_owned_object_at_version_or_after(&deleted_child.0, new_child.0.1, 0));
-        assert!(cache.have_deleted_owned_object_at_version_or_after(&deleted_child.0, child.0.1, 0));
+        assert!(cache.have_deleted_fastpath_object_at_version_or_after(deleted_child.0, deleted_child.1, 0));
+        assert!(cache.have_deleted_fastpath_object_at_version_or_after(deleted_child.0, new_child.0.1, 0));
+        assert!(cache.have_deleted_fastpath_object_at_version_or_after(deleted_child.0, child.0.1, 0));
         // Should not show as deleted for versions after this though
-        assert!(!cache.have_deleted_owned_object_at_version_or_after(&deleted_child.0, deleted_child.1.next(), 0));
+        assert!(!cache.have_deleted_fastpath_object_at_version_or_after(deleted_child.0, deleted_child.1.next(), 0));
         // Should not show as deleted for other epochs outside of our current epoch too
-        assert!(!cache.have_deleted_owned_object_at_version_or_after(&deleted_child.0, deleted_child.1, 1));
+        assert!(!cache.have_deleted_fastpath_object_at_version_or_after(deleted_child.0, deleted_child.1, 1));
     }
     }
 }

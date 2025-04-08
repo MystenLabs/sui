@@ -1,0 +1,15 @@
+---
+source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
+---
+processed 3 tasks
+
+task 1, lines 3-18:
+//# publish
+Error: Transaction Effects Status: Move Bytecode Verification Error. Please run the Bytecode Verifier for more information.
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: VMVerificationOrDeserializationError, source: Some(VMError { major_status: CONSTRAINT_NOT_SATISFIED, sub_status: None, message: Some("expected type with abilities [Key, ] got type actual TypeParameter(0) with incompatible abilities []"), exec_state: None, location: Module(ModuleId { address: _, name: Identifier("m2") }), indices: [(Signature, 0), (FunctionHandle, 0)], offsets: [] }), command: Some(0) } }
+
+task 2, lines 19-30:
+//# publish
+created: object(2,0)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 4377600,  storage_rebate: 978120, non_refundable_storage_fee: 9880

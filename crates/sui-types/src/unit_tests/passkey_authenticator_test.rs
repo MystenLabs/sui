@@ -19,10 +19,10 @@ use fastcrypto::hash::HashFunction;
 use fastcrypto::rsa::{Base64UrlUnpadded, Encoding as _};
 use fastcrypto::traits::ToFromBytes;
 use p256::pkcs8::DecodePublicKey;
-use passkey_authenticator::{Authenticator, UserValidationMethod};
+use passkey_authenticator::{Authenticator, UserCheck, UserValidationMethod};
 use passkey_client::Client;
 use passkey_types::{
-    ctap2::Aaguid,
+    ctap2::{Aaguid, Ctap2Error},
     rand::random_vec,
     webauthn::{
         AttestationConveyancePreference, CredentialCreationOptions, CredentialRequestOptions,
@@ -39,12 +39,18 @@ use url::Url;
 pub struct MyUserValidationMethod {}
 #[async_trait::async_trait]
 impl UserValidationMethod for MyUserValidationMethod {
-    async fn check_user_presence(&self) -> bool {
-        true
-    }
+    type PasskeyItem = Passkey;
 
-    async fn check_user_verification(&self) -> bool {
-        true
+    async fn check_user<'a>(
+        &self,
+        _credential: Option<&'a Passkey>,
+        presence: bool,
+        verification: bool,
+    ) -> Result<UserCheck, Ctap2Error> {
+        Ok(UserCheck {
+            presence,
+            verification,
+        })
     }
 
     fn is_verification_enabled(&self) -> Option<bool> {

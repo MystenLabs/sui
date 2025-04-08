@@ -106,7 +106,7 @@ impl Connection<'static> {
     }
 }
 
-impl<'a> std::ops::Deref for Connection<'a> {
+impl std::ops::Deref for Connection<'_> {
     type Target = AsyncPgConnection;
 
     fn deref(&self) -> &Self::Target {
@@ -117,7 +117,7 @@ impl<'a> std::ops::Deref for Connection<'a> {
     }
 }
 
-impl<'a> std::ops::DerefMut for Connection<'a> {
+impl std::ops::DerefMut for Connection<'_> {
     fn deref_mut(&mut self) -> &mut AsyncPgConnection {
         match self {
             Connection::PooledConnection(pooled) => pooled.deref_mut(),

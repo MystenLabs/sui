@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use jsonrpsee::core::Error as JsonRpseeError;
+use jsonrpsee::core::ClientError as JsonRpseeError;
 use move_binary_format::CompiledModule;
 use move_core_types::account_address::AccountAddress;
 use move_core_types::language_storage::{ModuleId, StructTag};
@@ -44,6 +44,8 @@ pub struct OnChainTransactionInfo {
     pub modified_at_versions: Vec<(ObjectID, SequenceNumber)>,
     pub shared_object_refs: Vec<ObjectRef>,
     pub gas: Vec<(ObjectID, SequenceNumber, ObjectDigest)>,
+    #[serde(default)]
+    pub gas_owner: Option<SuiAddress>,
     pub gas_budget: u64,
     pub gas_price: u64,
     pub executed_epoch: u64,

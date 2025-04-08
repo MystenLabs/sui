@@ -2147,17 +2147,16 @@ impl IndexerStore for PgIndexerStore {
         min_cp = std::cmp::max(min_cp, min_prunable_cp);
         for cp in min_cp..=max_cp {
             // NOTE: the order of pruning tables is crucial:
-            // 1. prune checkpoints table, checkpoints table is the source table of available range,
-            // we prune it first to make sure that we always have full data for checkpoints within the available range;
-            // 2. then prune tx_* tables;
+            // 1. prune tx_* tables;
+            // 2. prune event_* tables;
             // 3. then prune pruner_cp_watermark table, which is the checkpoint pruning watermark table and also tx seq source
             // of a checkpoint to prune tx_* tables;
-            // 4. lastly we prune epochs table when all checkpoints of the epoch have been pruned.
+            // 4. lastly prune checkpoints table, because wait_for_graphql_checkpoint_pruned
+            // uses this table as the pruning watermark table.
             info!(
                 "Pruning checkpoint {} of epoch {} (min_prunable_cp: {})",
                 cp, epoch, min_prunable_cp
             );
-            self.prune_checkpoints_table(cp).await?;
 
             let (min_tx, max_tx) = self.get_transaction_range_for_checkpoint(cp).await?;
             self.prune_tx_indices_table(min_tx, max_tx).await?;
@@ -2173,6 +2172,10 @@ impl IndexerStore for PgIndexerStore {
             self.metrics.last_pruned_transaction.set(max_tx as i64);
 
             self.prune_cp_tx_table(cp).await?;
+            // NOTE: prune checkpoints table last b/c wait_for_graphql_checkpoint_pruned
+            // uses this table as the watermark table.
+            self.prune_checkpoints_table(cp).await?;
+
             info!("Pruned checkpoint {} of epoch {}", cp, epoch);
             self.metrics.last_pruned_checkpoint.set(cp as i64);
         }

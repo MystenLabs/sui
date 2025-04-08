@@ -1,5 +1,0 @@
-{
-	"private": true,
-	"import": "../dist/esm/react.js",
-	"main": "../dist/cjs/react.js"
-}

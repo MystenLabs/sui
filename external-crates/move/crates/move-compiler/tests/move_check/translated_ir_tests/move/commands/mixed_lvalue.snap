@@ -1,0 +1,34 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: legacy
+  lint: false
+---
+warning[W09002]: unused variable
+   ┌─ tests/move_check/translated_ir_tests/move/commands/mixed_lvalue.move:11:13
+   │
+11 │         let r_ref = &mut r;
+   │             ^^^^^ Unused local variable 'r_ref'. Consider removing or prefixing with an underscore: '_r_ref'
+   │
+   = This warning can be suppressed with '#[allow(unused_variable)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[W09002]: unused variable
+   ┌─ tests/move_check/translated_ir_tests/move/commands/mixed_lvalue.move:12:13
+   │
+12 │         let s = S { f: 0 };
+   │             ^ Unused local variable 's'. Consider removing or prefixing with an underscore: '_s'
+   │
+   = This warning can be suppressed with '#[allow(unused_variable)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+error[E01009]: invalid assignment
+   ┌─ tests/move_check/translated_ir_tests/move/commands/mixed_lvalue.move:14:19
+   │
+14 │         (_, _, _, s.f) = four();
+   │                   ^^^ Invalid assignment syntax. Expected: a local, a field write, or a deconstructing assignment
+
+error[E01009]: invalid assignment
+   ┌─ tests/move_check/translated_ir_tests/move/commands/mixed_lvalue.move:15:19
+   │
+15 │         (_, _, _, *r_ref) = four();
+   │                   ^^^^^^ Invalid assignment syntax. Expected: a local, a field write, or a deconstructing assignment

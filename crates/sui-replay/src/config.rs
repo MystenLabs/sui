@@ -35,6 +35,7 @@ pub struct ReplayableNetworkBaseConfig {
 }
 
 impl ReplayableNetworkConfigSet {
+    #[allow(clippy::result_large_err)]
     pub fn load_config(path: String) -> Result<Self, ReplayEngineError> {
         let path = shellexpand::tilde(&path).to_string();
         let path = PathBuf::from_str(&path).unwrap();
@@ -46,6 +47,7 @@ impl ReplayableNetworkConfigSet {
         })
     }
 
+    #[allow(clippy::result_large_err)]
     pub fn save_config(&self, override_path: Option<String>) -> Result<PathBuf, ReplayEngineError> {
         let path = override_path.unwrap_or_else(|| DEFAULT_CONFIG_PATH.to_string());
         let path = shellexpand::tilde(&path).to_string();
@@ -58,6 +60,7 @@ impl ReplayableNetworkConfigSet {
         Ok(path)
     }
 
+    #[allow(clippy::result_large_err)]
     pub fn from_file(path: PathBuf) -> Result<Self, ReplayEngineError> {
         let file =
             File::open(path.clone()).map_err(|err| ReplayEngineError::UnableToOpenYamlFile {
@@ -76,6 +79,7 @@ impl ReplayableNetworkConfigSet {
         Ok(config)
     }
 
+    #[allow(clippy::result_large_err)]
     pub fn to_file(&self, path: PathBuf) -> Result<(), ReplayEngineError> {
         let prefix = path.parent().unwrap();
         std::fs::create_dir_all(prefix).unwrap();
@@ -137,6 +141,7 @@ pub fn default_full_node_address() -> String {
     "0.0.0.0:9000".to_string()
 }
 
+#[allow(clippy::result_large_err)]
 pub fn url_from_str(s: &str) -> Result<Uri, ReplayEngineError> {
     Uri::from_str(s).map_err(|e| ReplayEngineError::InvalidUrl {
         err: e.to_string(),

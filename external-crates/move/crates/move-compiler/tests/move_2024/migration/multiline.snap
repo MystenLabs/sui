@@ -1,0 +1,21 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: 2024.alpha
+  lint: false
+---
+error[E13002]: feature is deprecated in specified edition
+  ┌─ tests/move_2024/migration/multiline.move:3:5
+  │  
+3 │ ╭     friend // why
+4 │ │     a::n;
+  │ ╰─────────^ 'friend's are deprecated. Remove and replace 'public(friend)' with 'public(package)'
+
+error[E13002]: feature is deprecated in specified edition
+  ┌─ tests/move_2024/migration/multiline.move:5:5
+  │  
+5 │ ╭     public( // why folks, why
+6 │ │         friend
+7 │ │     ) fun t() {}
+  │ ╰─────^ 'public(friend)' is deprecated. Replace with 'public(package)'

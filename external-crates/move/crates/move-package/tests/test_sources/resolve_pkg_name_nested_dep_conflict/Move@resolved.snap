@@ -1,0 +1,8 @@
+---
+source: crates/move-package/tests/test_runner.rs
+---
+When resolving dependencies for package Root-rename, conflicting dependencies found:
+At B -> A
+	ADep-rename = { local = "deps_only/ADep", addr_subst = { "A" = "0000000000000000000000000000000000000000000000000000000000000007" } }
+At C -> A
+	ADep-rename = { local = "deps_only/ADep", addr_subst = { "A" = "0000000000000000000000000000000000000000000000000000000000000042" } }

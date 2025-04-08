@@ -186,7 +186,7 @@ Use the `can_place<Ext>(kiosk: &Kiosk): bool` function to check if the app has t
 
 ## App storage
 
-Every app gets its isolated storage as a [bag type](../concepts/dynamic-fields/tables-bags.mdx) that only the app module can access (providing the app witness). After you install an app, it can use the storage to store its data. Ideally, the storage should be managed in a way that allows the app to be removed from the kiosk if there are no active trades or other activities happening at the moment.
+Every app gets its isolated storage as a bag type that only the app module can access (providing the app witness). See [The Move Book](https://move-book.com/programmability/dynamic-collections.html) to learn more about dynamic collections, like bags, available in Move. After you install an app, it can use the storage to store its data. Ideally, the storage should be managed in a way that allows the app to be removed from the kiosk if there are no active trades or other activities happening at the moment.
 
 The storage is always available to the app if it is installed. The owner of a kiosk can't access the storage of the app if the logic for it is not implemented.
 

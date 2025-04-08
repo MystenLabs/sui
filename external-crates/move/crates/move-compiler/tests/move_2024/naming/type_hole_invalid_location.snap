@@ -1,0 +1,52 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: 2024.alpha
+  lint: false
+---
+error[E03021]: invalid type annotation
+  ┌─ tests/move_2024/naming/type_hole_invalid_location.move:2:21
+  │
+2 │     public struct P(_)
+  │                     ^ Invalid usage of a placeholder for type inference '_'. Struct fields require fully specified types. Replace '_' with a specific type or consider adding a new type parameter
+
+error[E03021]: invalid type annotation
+  ┌─ tests/move_2024/naming/type_hole_invalid_location.move:3:26
+  │
+3 │     public struct S { f: _ }
+  │                          ^ Invalid usage of a placeholder for type inference '_'. Struct fields require fully specified types. Replace '_' with a specific type or consider adding a new type parameter
+
+error[E03021]: invalid type annotation
+  ┌─ tests/move_2024/naming/type_hole_invalid_location.move:4:23
+  │
+4 │     public enum E { P(_), S { f: _ } }
+  │                       ^ Invalid usage of a placeholder for type inference '_'. Enum variant fields require fully specified types. Replace '_' with a specific type or consider adding a new type parameter
+
+error[E03021]: invalid type annotation
+  ┌─ tests/move_2024/naming/type_hole_invalid_location.move:4:34
+  │
+4 │     public enum E { P(_), S { f: _ } }
+  │                                  ^ Invalid usage of a placeholder for type inference '_'. Enum variant fields require fully specified types. Replace '_' with a specific type or consider adding a new type parameter
+
+error[E03021]: invalid type annotation
+  ┌─ tests/move_2024/naming/type_hole_invalid_location.move:5:14
+  │
+5 │     const C: _ = 0;
+  │              ^ Invalid usage of a placeholder for type inference '_'. Constants require fully specified types. Replace '_' with a specific type
+
+error[E03021]: invalid type annotation
+  ┌─ tests/move_2024/naming/type_hole_invalid_location.move:6:16
+  │
+6 │     fun foo(_: _) {}
+  │                ^ Invalid usage of a placeholder for type inference '_'. Functions require fully specified types. Replace '_' with a specific type or consider adding a new type parameter
+  │
+  = Only 'macro' functions can use '_' in their signatures
+
+error[E03021]: invalid type annotation
+  ┌─ tests/move_2024/naming/type_hole_invalid_location.move:7:16
+  │
+7 │     fun bar(): _ { 0 }
+  │                ^ Invalid usage of a placeholder for type inference '_'. Functions require fully specified types. Replace '_' with a specific type or consider adding a new type parameter
+  │
+  = Only 'macro' functions can use '_' in their signatures

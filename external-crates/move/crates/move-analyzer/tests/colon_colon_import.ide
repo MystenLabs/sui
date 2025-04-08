@@ -1,0 +1,29 @@
+// Tests completions of various code snippets
+{
+  "AutoImport": {
+    "project": "tests/import",
+    "file_tests": {
+      // tests completion of the object snippet
+      "colon_colon.move": [
+        {
+          "use_line": 7,
+          "use_col": 9
+        },
+        {
+          "use_line": 15,
+          "use_col": 21
+        },
+        {
+          "use_line": 19,
+          "use_col": 22
+        }
+      ],
+      "dep.move": [
+        {
+          "use_line": 22,
+          "use_col": 9
+        }
+      ]
+    }
+  }
+}

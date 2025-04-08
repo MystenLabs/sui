@@ -1,0 +1,50 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: 2024.alpha
+  lint: false
+---
+error[E04036]: non-exhaustive pattern
+  ┌─ tests/move_2024/matching/counterexample_struct_named.move:6:16
+  │
+6 │         match (NTuple2 { fst: 0, snd: 1 }) {
+  │                ^^^^^^^^^^^^^^^^^^^^^^^^^^ Pattern 'NTuple2 { fst: _0, snd: _ }' not covered
+  │
+  = When '_0' is not 0
+
+error[E04036]: non-exhaustive pattern
+   ┌─ tests/move_2024/matching/counterexample_struct_named.move:12:16
+   │
+12 │         match (NTuple2 { fst: 0, snd: 1 }) {
+   │                ^^^^^^^^^^^^^^^^^^^^^^^^^^ Pattern 'NTuple2 { fst: _0, snd: _ }' not covered
+   │
+   = When '_0' is not 0 or 3
+
+error[E04036]: non-exhaustive pattern
+   ┌─ tests/move_2024/matching/counterexample_struct_named.move:19:16
+   │
+19 │         match (tup) {
+   │                ^^^ Pattern 'NTuple2 { fst: NTuple2 { fst: _0, snd: _ }, snd: _ }' not covered
+   │
+   = When '_0' is not 1
+
+error[E04036]: non-exhaustive pattern
+   ┌─ tests/move_2024/matching/counterexample_struct_named.move:25:16
+   │
+25 │         match (tup) {
+   │                ^^^ Pattern 'NTuple2 { fst: false, snd: _ }' not covered
+
+error[E04036]: non-exhaustive pattern
+   ┌─ tests/move_2024/matching/counterexample_struct_named.move:31:16
+   │
+31 │         match (tup) {
+   │                ^^^ Pattern 'NTuple2 { fst: false, snd: false }' not covered
+
+error[E04036]: non-exhaustive pattern
+   ┌─ tests/move_2024/matching/counterexample_struct_named.move:38:16
+   │
+38 │         match (NTuple2 { fst: 0, snd: 1 }) {
+   │                ^^^^^^^^^^^^^^^^^^^^^^^^^^ Pattern 'NTuple2 { fst: _0, snd: _ }' not covered
+   │
+   = When '_0' is not 0, 3, 4, or 7

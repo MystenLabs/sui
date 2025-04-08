@@ -29,6 +29,8 @@ impl BalanceChange {
             }),
 
             O::Shared { .. } | O::Immutable => None,
+            // TODO: Implement support for ConsensusV2 objects.
+            O::ConsensusV2 { .. } => todo!(),
         }
     }
 

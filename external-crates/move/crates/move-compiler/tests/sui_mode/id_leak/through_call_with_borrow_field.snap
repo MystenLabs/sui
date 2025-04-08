@@ -1,0 +1,15 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: sui
+  edition: legacy
+  lint: false
+---
+error[Sui E01001]: invalid object construction
+   ┌─ tests/sui_mode/id_leak/through_call_with_borrow_field.move:11:9
+   │
+11 │         Object { id }
+   │         ^^^^^^^^^^^^^
+   │         │        │
+   │         │        The UID must come directly from sui::object::new. Or for tests, it can come from sui::test_scenario::new_object
+   │         Invalid object creation without a newly created UID.

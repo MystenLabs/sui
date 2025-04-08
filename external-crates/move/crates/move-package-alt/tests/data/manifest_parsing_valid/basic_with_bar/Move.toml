@@ -1,0 +1,25 @@
+[package]
+name = "example"
+edition = "2024.beta"
+license = "Apache-2.0"
+authors = ["Move Team"]
+
+[environments]
+mainnet = "35834a8a"
+testnet = "4c78adac"
+
+[dependencies]
+foo = { git = "https://example.com/foo.git", rev = "releases/v1", rename-from = "Foo", override = "true"}
+qwer = { r.mvr = "@pkg/qwer" }
+bar = { local = "./bar" }
+
+[dep-overrides]
+# used to override dependencies for specific environments
+mainnet.foo = { git = "https://example.com/foo.git", original-id = "0x6ba0cc1a418ff3bebce0ff9ec3961e6cc794af9bc3a4114fb138d00a4c9274bb", published-at = "0x6ba0cc1a418ff3bebce0ff9ec3961e6cc794af9bc3a4114fb138d00a4c9274bb", use-environment = "mainnet_alpha" }
+
+[dep-overrides.mainnet.foo]
+git = "https://example.com/foo.git"
+original-id = "0x6ba0cc1a418ff3bebce0ff9ec3961e6cc794af9bc3a4114fb138d00a4c9274bb"
+published-at = "0x6ba0cc1a418ff3bebce0ff9ec3961e6cc794af9bc3a4114fb138d00a4c9274bb"
+use-environment = "mainnet_alpha"
+

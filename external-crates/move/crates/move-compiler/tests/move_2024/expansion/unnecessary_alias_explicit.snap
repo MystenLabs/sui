@@ -1,0 +1,63 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: 2024.alpha
+  lint: false
+---
+warning[W02021]: duplicate alias
+   ┌─ tests/move_2024/expansion/unnecessary_alias_explicit.move:12:16
+   │
+ 7 │     use a::m; // unused silenced
+   │            - The same alias was previously declared here
+   ·
+12 │         use a::m; // unused and duplicate
+   │                ^ Unnecessary alias 'm' for module 'a::m'. It was already in scope
+   │
+   = This warning can be suppressed with '#[allow(duplicate_alias)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[W09001]: unused alias
+   ┌─ tests/move_2024/expansion/unnecessary_alias_explicit.move:12:16
+   │
+12 │         use a::m; // unused and duplicate
+   │                ^ Unused 'use' of alias 'm'. Consider removing it
+   │
+   = This warning can be suppressed with '#[allow(unused_use)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[W02021]: duplicate alias
+   ┌─ tests/move_2024/expansion/unnecessary_alias_explicit.move:13:19
+   │
+ 8 │     use a::m::S; // unused silenced
+   │               - The same alias was previously declared here
+   ·
+13 │         use a::m::S; // unused and duplicate
+   │                   ^ Unnecessary alias 'S' for module member 'a::m::S'. It was already in scope
+   │
+   = This warning can be suppressed with '#[allow(duplicate_alias)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[W09001]: unused alias
+   ┌─ tests/move_2024/expansion/unnecessary_alias_explicit.move:13:19
+   │
+13 │         use a::m::S; // unused and duplicate
+   │                   ^ Unused 'use' of alias 'S'. Consider removing it
+   │
+   = This warning can be suppressed with '#[allow(unused_use)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[W02021]: duplicate alias
+   ┌─ tests/move_2024/expansion/unnecessary_alias_explicit.move:14:19
+   │
+ 9 │     use a::m::foo; // unused silenced
+   │               --- The same alias was previously declared here
+   ·
+14 │         use a::m::foo; // unused and duplicate
+   │                   ^^^ Unnecessary alias 'foo' for module member 'a::m::foo'. It was already in scope
+   │
+   = This warning can be suppressed with '#[allow(duplicate_alias)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[W09001]: unused alias
+   ┌─ tests/move_2024/expansion/unnecessary_alias_explicit.move:14:19
+   │
+14 │         use a::m::foo; // unused and duplicate
+   │                   ^^^ Unused 'use' of alias 'foo'. Consider removing it
+   │
+   = This warning can be suppressed with '#[allow(unused_use)]' applied to the 'module' or module member ('const', 'fun', or 'struct')

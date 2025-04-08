@@ -1,0 +1,339 @@
+---
+source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
+---
+processed 15 tasks
+
+init:
+A: object(0,0), B: object(0,1)
+
+task 1, lines 12-39:
+//# publish --sender A
+created: object(1,0), object(1,1), object(1,2), object(1,3), object(1,4), object(1,5)
+mutated: object(0,0)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000403
+gas summary: computation_cost: 1000000, storage_cost: 15663600,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 2, line 41:
+//# create-checkpoint
+Checkpoint created: 1
+
+task 3, lines 43-67:
+//# run-graphql
+Response: {
+  "data": {
+    "availableRange": {
+      "first": {
+        "sequenceNumber": 0
+      },
+      "last": {
+        "sequenceNumber": 1
+      }
+    },
+    "coins": {
+      "nodes": [
+        {
+          "owner": {
+            "owner": {
+              "address": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
+            }
+          },
+          "contents": {
+            "json": {
+              "id": "0x89ce3b6e5bece2ebcc7537fe9da2438bea55195cb86afb7ddf5a94b89f6dcef6",
+              "balance": {
+                "value": "300"
+              }
+            }
+          }
+        },
+        {
+          "owner": {
+            "owner": {
+              "address": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
+            }
+          },
+          "contents": {
+            "json": {
+              "id": "0xdb388452cd9ea7e5aaee5e196f0c3b350211f6221a8ab1616364b3475a8eaa72",
+              "balance": {
+                "value": "200"
+              }
+            }
+          }
+        },
+        {
+          "owner": {
+            "owner": {
+              "address": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
+            }
+          },
+          "contents": {
+            "json": {
+              "id": "0xdbd580b55fbbae6e9227d0877d01368b75f79804e39fa3c0a41e90b8b6f975f9",
+              "balance": {
+                "value": "100"
+              }
+            }
+          }
+        }
+      ]
+    }
+  }
+}
+
+task 4, line 69:
+//# transfer-object 1,1 --sender A --recipient B
+mutated: object(0,0), object(1,1)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000403
+gas summary: computation_cost: 1000000, storage_cost: 2310400,  storage_rebate: 2287296, non_refundable_storage_fee: 23104
+
+task 5, lines 71-73:
+//# transfer-object 1,1 --sender B --recipient A
+mutated: object(0,1), object(1,1)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000403
+gas summary: computation_cost: 1000000, storage_cost: 2310400,  storage_rebate: 1309176, non_refundable_storage_fee: 13224
+
+task 6, line 75:
+//# create-checkpoint
+Checkpoint created: 2
+
+task 7, lines 77-101:
+//# run-graphql
+Response: {
+  "data": {
+    "availableRange": {
+      "first": {
+        "sequenceNumber": 1
+      },
+      "last": {
+        "sequenceNumber": 2
+      }
+    },
+    "coins": {
+      "nodes": [
+        {
+          "owner": {
+            "owner": {
+              "address": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
+            }
+          },
+          "contents": {
+            "json": {
+              "id": "0x89ce3b6e5bece2ebcc7537fe9da2438bea55195cb86afb7ddf5a94b89f6dcef6",
+              "balance": {
+                "value": "300"
+              }
+            }
+          }
+        },
+        {
+          "owner": {
+            "owner": {
+              "address": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
+            }
+          },
+          "contents": {
+            "json": {
+              "id": "0xdb388452cd9ea7e5aaee5e196f0c3b350211f6221a8ab1616364b3475a8eaa72",
+              "balance": {
+                "value": "200"
+              }
+            }
+          }
+        },
+        {
+          "owner": {
+            "owner": {
+              "address": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
+            }
+          },
+          "contents": {
+            "json": {
+              "id": "0xdbd580b55fbbae6e9227d0877d01368b75f79804e39fa3c0a41e90b8b6f975f9",
+              "balance": {
+                "value": "100"
+              }
+            }
+          }
+        }
+      ]
+    }
+  }
+}
+
+task 8, line 103:
+//# transfer-object 1,2 --sender A --recipient B
+mutated: object(0,0), object(1,2)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000403
+gas summary: computation_cost: 1000000, storage_cost: 2310400,  storage_rebate: 2287296, non_refundable_storage_fee: 23104
+
+task 9, line 105:
+//# transfer-object 1,3 --sender A --recipient B
+mutated: object(0,0), object(1,3)
+unchanged_shared: 0x0000000000000000000000000000000000000000000000000000000000000403
+gas summary: computation_cost: 1000000, storage_cost: 2310400,  storage_rebate: 2287296, non_refundable_storage_fee: 23104
+
+task 10, line 107:
+//# create-checkpoint
+Checkpoint created: 3
+
+task 11, lines 109-135:
+//# run-graphql
+Response: {
+  "data": {
+    "availableRange": {
+      "first": {
+        "sequenceNumber": 2
+      },
+      "last": {
+        "sequenceNumber": 3
+      }
+    },
+    "coins": {
+      "nodes": [
+        {
+          "owner": {
+            "owner": {
+              "address": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
+            }
+          },
+          "contents": {
+            "json": {
+              "id": "0x89ce3b6e5bece2ebcc7537fe9da2438bea55195cb86afb7ddf5a94b89f6dcef6",
+              "balance": {
+                "value": "300"
+              }
+            }
+          }
+        },
+        {
+          "owner": {
+            "owner": {
+              "address": "0xa7b032703878aa74c3126935789fd1d4d7e111d5911b09247d6963061c312b5a"
+            }
+          },
+          "contents": {
+            "json": {
+              "id": "0xdb388452cd9ea7e5aaee5e196f0c3b350211f6221a8ab1616364b3475a8eaa72",
+              "balance": {
+                "value": "200"
+              }
+            }
+          }
+        },
+        {
+          "owner": {
+            "owner": {
+              "address": "0xa7b032703878aa74c3126935789fd1d4d7e111d5911b09247d6963061c312b5a"
+            }
+          },
+          "contents": {
+            "json": {
+              "id": "0xdbd580b55fbbae6e9227d0877d01368b75f79804e39fa3c0a41e90b8b6f975f9",
+              "balance": {
+                "value": "100"
+              }
+            }
+          }
+        }
+      ]
+    }
+  }
+}
+
+task 12, lines 137-163:
+//# run-graphql --cursors bcs(@{obj_1_1},2)
+Response: {
+  "data": {
+    "availableRange": {
+      "first": {
+        "sequenceNumber": 2
+      },
+      "last": {
+        "sequenceNumber": 3
+      }
+    },
+    "coins": {
+      "nodes": [
+        {
+          "owner": {
+            "owner": {
+              "address": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
+            }
+          },
+          "address": "0xdb388452cd9ea7e5aaee5e196f0c3b350211f6221a8ab1616364b3475a8eaa72",
+          "contents": {
+            "json": {
+              "id": "0xdb388452cd9ea7e5aaee5e196f0c3b350211f6221a8ab1616364b3475a8eaa72",
+              "balance": {
+                "value": "200"
+              }
+            }
+          }
+        },
+        {
+          "owner": {
+            "owner": {
+              "address": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
+            }
+          },
+          "address": "0xdbd580b55fbbae6e9227d0877d01368b75f79804e39fa3c0a41e90b8b6f975f9",
+          "contents": {
+            "json": {
+              "id": "0xdbd580b55fbbae6e9227d0877d01368b75f79804e39fa3c0a41e90b8b6f975f9",
+              "balance": {
+                "value": "100"
+              }
+            }
+          }
+        }
+      ]
+    }
+  }
+}
+
+task 13, lines 165-191:
+//# run-graphql --cursors bcs(@{obj_1_1},1)
+Response: {
+  "data": null,
+  "errors": [
+    {
+      "message": "Requested data is outside the available range",
+      "locations": [
+        {
+          "line": 11,
+          "column": 3
+        }
+      ],
+      "path": [
+        "coins"
+      ],
+      "extensions": {
+        "code": "BAD_USER_INPUT"
+      }
+    }
+  ]
+}
+
+task 14, lines 193-219:
+//# run-graphql --cursors bcs(@{obj_1_1},0)
+Response: {
+  "data": null,
+  "errors": [
+    {
+      "message": "Requested data is outside the available range",
+      "locations": [
+        {
+          "line": 11,
+          "column": 3
+        }
+      ],
+      "path": [
+        "coins"
+      ],
+      "extensions": {
+        "code": "BAD_USER_INPUT"
+      }
+    }
+  ]
+}

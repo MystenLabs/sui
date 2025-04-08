@@ -1,0 +1,70 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: legacy
+  lint: false
+---
+warning[W09003]: unused assignment
+  ┌─ tests/move_check/typing/assign_duplicate_assigning.move:6:10
+  │
+6 │         (x, x) = (0, 0);
+  │          ^ Unused assignment for variable 'x'. Consider removing, replacing with '_', or prefixing with '_' (e.g., '_x')
+  │
+  = This warning can be suppressed with '#[allow(unused_assignment)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[W09003]: unused assignment
+  ┌─ tests/move_check/typing/assign_duplicate_assigning.move:6:13
+  │
+6 │         (x, x) = (0, 0);
+  │             ^ Unused assignment for variable 'x'. Consider removing, replacing with '_', or prefixing with '_' (e.g., '_x')
+  │
+  = This warning can be suppressed with '#[allow(unused_assignment)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+error[E02001]: duplicate declaration, item, or annotation
+  ┌─ tests/move_check/typing/assign_duplicate_assigning.move:6:13
+  │
+6 │         (x, x) = (0, 0);
+  │          -  ^ Duplicate usage of local 'x' in a given assignment
+  │          │   
+  │          Previously assigned here
+
+warning[W09003]: unused assignment
+  ┌─ tests/move_check/typing/assign_duplicate_assigning.move:8:10
+  │
+8 │         (f, R{f}, f) = (0, R { f: 0 }, 0);
+  │          ^ Unused assignment for variable 'f'. Consider removing, replacing with '_', or prefixing with '_' (e.g., '_f')
+  │
+  = This warning can be suppressed with '#[allow(unused_assignment)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[W09003]: unused assignment
+  ┌─ tests/move_check/typing/assign_duplicate_assigning.move:8:15
+  │
+8 │         (f, R{f}, f) = (0, R { f: 0 }, 0);
+  │               ^ Unused assignment for variable 'f'. Consider removing, replacing with '_', or prefixing with '_' (e.g., '_f')
+  │
+  = This warning can be suppressed with '#[allow(unused_assignment)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+error[E02001]: duplicate declaration, item, or annotation
+  ┌─ tests/move_check/typing/assign_duplicate_assigning.move:8:15
+  │
+8 │         (f, R{f}, f) = (0, R { f: 0 }, 0);
+  │          -    ^ Duplicate usage of local 'f' in a given assignment
+  │          │     
+  │          Previously assigned here
+
+warning[W09003]: unused assignment
+  ┌─ tests/move_check/typing/assign_duplicate_assigning.move:8:19
+  │
+8 │         (f, R{f}, f) = (0, R { f: 0 }, 0);
+  │                   ^ Unused assignment for variable 'f'. Consider removing, replacing with '_', or prefixing with '_' (e.g., '_f')
+  │
+  = This warning can be suppressed with '#[allow(unused_assignment)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+error[E02001]: duplicate declaration, item, or annotation
+  ┌─ tests/move_check/typing/assign_duplicate_assigning.move:8:19
+  │
+8 │         (f, R{f}, f) = (0, R { f: 0 }, 0);
+  │          -        ^ Duplicate usage of local 'f' in a given assignment
+  │          │         
+  │          Previously assigned here

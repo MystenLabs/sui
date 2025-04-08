@@ -1,0 +1,24 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: 2024.alpha
+  lint: false
+---
+error[E04023]: invalid method call
+   ┌─ tests/move_2024/typing/dot_call_wrong_type_in_module.move:10:5
+   │
+ 7 │ fun g(_self: Z) {}
+   │              - The function '0x42::t::g' exists, but it has a different type for its first argument, '0x42::t::Z'
+   ·
+10 │     x.g();
+   │     ^^^^^ Invalid method call. No known method 'g' on type '0x42::t::X'
+
+error[E04023]: invalid method call
+   ┌─ tests/move_2024/typing/dot_call_wrong_type_in_module.move:14:5
+   │
+ 7 │ fun g(_self: Z) {}
+   │              - The function '0x42::t::g' exists, but it has a different type for its first argument, '0x42::t::Z'
+   ·
+14 │     y.x.g();
+   │     ^^^^^^^ Invalid method call. No known method 'g' on type '0x42::t::X'

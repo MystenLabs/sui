@@ -6,12 +6,11 @@ use crate::{
     diagnostics::warning_filters::{WarningFilters, WarningFiltersTable},
     expansion::ast::{
         ability_modifiers_ast_debug, AbilitySet, Attributes, Friend, ModuleIdent, Mutability,
-        TargetKind,
     },
     naming::ast::{BuiltinTypeName, BuiltinTypeName_, DatatypeTypeParameter, TParam},
     parser::ast::{
-        self as P, BinOp, ConstantName, DatatypeName, Field, FunctionName, UnaryOp, VariantName,
-        ENTRY_MODIFIER,
+        self as P, BinOp, ConstantName, DatatypeName, Field, FunctionName, TargetKind, UnaryOp,
+        VariantName, ENTRY_MODIFIER,
     },
     shared::{
         ast_debug::*, program_info::TypingProgramInfo, unique_map::UniqueMap, Name,
@@ -395,6 +394,7 @@ pub enum UnannotatedExp_ {
     ErrorConstant {
         line_number_loc: Loc,
         error_constant: Option<ConstantName>,
+        error_code: Option<u8>,
     },
 
     ModuleCall(Box<ModuleCall>),
@@ -442,6 +442,20 @@ impl FunctionSignature {
         self.parameters
             .iter()
             .any(|(_, parameter_name, _)| parameter_name == v)
+    }
+}
+
+impl Value_ {
+    pub fn is_zero(&self) -> bool {
+        match self {
+            Self::U8(v) => *v == 0,
+            Self::U16(v) => *v == 0,
+            Self::U32(v) => *v == 0,
+            Self::U64(v) => *v == 0,
+            Self::U128(v) => *v == 0,
+            Self::U256(v) => *v == move_core_types::u256::U256::zero(),
+            Self::Address(_) | Self::Bool(_) | Self::Vector(_, _) => false,
+        }
     }
 }
 
@@ -570,6 +584,10 @@ impl Exp {
     pub fn is_unreachable(&self) -> bool {
         self.exp.value.is_unreachable()
     }
+
+    pub fn as_value(&self) -> Option<&Value> {
+        self.exp.value.as_value()
+    }
 }
 
 impl UnannotatedExp_ {
@@ -579,6 +597,13 @@ impl UnannotatedExp_ {
 
     pub fn is_unreachable(&self) -> bool {
         matches!(self, UnannotatedExp_::Unreachable)
+    }
+
+    pub fn as_value(&self) -> Option<&Value> {
+        match self {
+            UnannotatedExp_::Value(v) => Some(v),
+            _ => None,
+        }
     }
 }
 
@@ -958,15 +983,7 @@ impl AstDebug for ModuleDefinition {
             w.writeln(format!("{}", n))
         }
         attributes.ast_debug(w);
-        w.writeln(match target_kind {
-            TargetKind::Source {
-                is_root_package: true,
-            } => "root module",
-            TargetKind::Source {
-                is_root_package: false,
-            } => "dependency module",
-            TargetKind::External => "external module",
-        });
+        target_kind.ast_debug(w);
         w.writeln(format!("dependency order #{}", dependency_order));
         for (mident, _loc) in friends.key_cloned_iter() {
             w.write(format!("friend {};", mident));
@@ -1604,11 +1621,16 @@ impl AstDebug for UnannotatedExp_ {
             E::ErrorConstant {
                 line_number_loc: _,
                 error_constant,
+                error_code,
             } => {
-                w.write("ErrorConstant");
-                if let Some(c) = error_constant {
-                    w.write(format!("({})", c))
+                w.write("ErrorConstant(");
+                if let Some(c) = error_code {
+                    w.write(format!("code={},", c))
                 }
+                if let Some(c) = error_constant {
+                    w.write(format!("{}", c))
+                }
+                w.write(")");
             }
         }
     }

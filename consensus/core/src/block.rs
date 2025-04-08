@@ -19,7 +19,10 @@ use serde::{Deserialize, Serialize};
 use shared_crypto::intent::{Intent, IntentMessage, IntentScope};
 
 use crate::{
-    commit::CommitVote, context::Context, ensure, error::ConsensusError, error::ConsensusResult,
+    commit::CommitVote,
+    context::Context,
+    ensure,
+    error::{ConsensusError, ConsensusResult},
 };
 
 /// Round number of a block.
@@ -84,6 +87,7 @@ pub trait BlockAPI {
     fn timestamp_ms(&self) -> BlockTimestampMs;
     fn ancestors(&self) -> &[BlockRef];
     fn transactions(&self) -> &[Transaction];
+    fn transactions_data(&self) -> Vec<&[u8]>;
     fn commit_votes(&self) -> &[CommitVote];
     fn transaction_votes(&self) -> &[BlockTransactionVotes];
     fn misbehavior_reports(&self) -> &[MisbehaviorReport];
@@ -165,6 +169,10 @@ impl BlockAPI for BlockV1 {
 
     fn transactions(&self) -> &[Transaction] {
         &self.transactions
+    }
+
+    fn transactions_data(&self) -> Vec<&[u8]> {
+        self.transactions.iter().map(|t| t.data()).collect()
     }
 
     fn commit_votes(&self) -> &[CommitVote] {
@@ -261,6 +269,10 @@ impl BlockAPI for BlockV2 {
 
     fn transactions(&self) -> &[Transaction] {
         &self.transactions
+    }
+
+    fn transactions_data(&self) -> Vec<&[u8]> {
+        self.transactions.iter().map(|t| t.data()).collect()
     }
 
     fn transaction_votes(&self) -> &[BlockTransactionVotes] {
@@ -411,7 +423,7 @@ impl From<BlockRef> for Slot {
 // TODO: re-evaluate formats for production debugging.
 impl fmt::Display for Slot {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{}{}", self.authority, self.round,)
+        write!(f, "{}{}", self.authority, self.round)
     }
 }
 
@@ -499,7 +511,7 @@ fn to_consensus_block_intent(digest: InnerBlockDigest) -> IntentMessage<InnerBlo
     IntentMessage::new(Intent::consensus_app(IntentScope::ConsensusBlock), digest)
 }
 
-/// Process for signing & verying a block signature:
+/// Process for signing a block & verifying a block signature:
 /// 1. Compute the digest of `Block`.
 /// 2. Wrap the digest in `IntentMessage`.
 /// 3. Sign the serialized `IntentMessage`, or verify signature against it.
@@ -512,6 +524,7 @@ fn compute_block_signature(
         .map_err(ConsensusError::SerializationFailure)?;
     Ok(protocol_keypair.sign(&message))
 }
+
 fn verify_block_signature(
     block: &Block,
     signature: &[u8],
@@ -589,6 +602,10 @@ impl VerifiedBlock {
         self.digest
     }
 
+    pub(crate) fn signed_block(&self) -> &SignedBlock {
+        &self.block
+    }
+
     /// Returns the serialized block with signature.
     pub(crate) fn serialized(&self) -> &Bytes {
         &self.serialized
@@ -638,6 +655,15 @@ impl fmt::Debug for VerifiedBlock {
     }
 }
 
+/// Block with extended additional information, such as
+/// local blocks that are excluded from the block's ancestors.
+/// The extended information do not need to be certified or forwarded to other authorities.
+#[derive(Clone, Debug)]
+pub(crate) struct ExtendedBlock {
+    pub block: VerifiedBlock,
+    pub excluded_ancestors: Vec<BlockRef>,
+}
+
 /// Generates the genesis blocks for the current Committee.
 /// The blocks are returned in authority index order.
 pub(crate) fn genesis_blocks(context: Arc<Context>) -> Vec<VerifiedBlock> {
@@ -658,17 +684,37 @@ pub(crate) fn genesis_blocks(context: Arc<Context>) -> Vec<VerifiedBlock> {
         .collect::<Vec<VerifiedBlock>>()
 }
 
+/// A block certified by consensus for fast path execution.
+#[derive(Clone)]
+pub struct CertifiedBlock {
+    /// All transactions in the block have a quorum of accept or reject votes.
+    pub block: VerifiedBlock,
+    /// Sorted transaction indices that indicate the transactions rejected by a quorum.
+    pub rejected: Vec<TransactionIndex>,
+}
+
+impl CertifiedBlock {
+    pub fn new(block: VerifiedBlock, rejected: Vec<TransactionIndex>) -> Self {
+        Self { block, rejected }
+    }
+}
+
+/// A batch of certified blocks output by consensus for processing.
+pub struct CertifiedBlocksOutput {
+    pub blocks: Vec<CertifiedBlock>,
+}
+
 /// Creates fake blocks for testing.
 /// This struct is public for testing in other crates.
 #[derive(Clone)]
 pub struct TestBlock {
-    block: BlockV1,
+    block: BlockV2,
 }
 
 impl TestBlock {
     pub fn new(round: Round, author: u32) -> Self {
         Self {
-            block: BlockV1 {
+            block: BlockV2 {
                 round,
                 author: AuthorityIndex::new_for_test(author),
                 ..Default::default()
@@ -706,13 +752,20 @@ impl TestBlock {
         self
     }
 
-    pub fn set_commit_votes(mut self, commit_votes: Vec<CommitVote>) -> Self {
+    #[cfg(test)]
+    pub(crate) fn set_transaction_votes(mut self, votes: Vec<BlockTransactionVotes>) -> Self {
+        self.block.transaction_votes = votes;
+        self
+    }
+
+    #[cfg(test)]
+    pub(crate) fn set_commit_votes(mut self, commit_votes: Vec<CommitVote>) -> Self {
         self.block.commit_votes = commit_votes;
         self
     }
 
     pub fn build(self) -> Block {
-        Block::V1(self.block)
+        Block::V2(self.block)
     }
 }
 

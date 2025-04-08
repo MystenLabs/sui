@@ -352,9 +352,7 @@ macro_rules! profile_dump_file {
 #[macro_export]
 macro_rules! tracing_feature_enabled {
     ($($tt:tt)*) => {
-        if cfg!(feature = "tracing") {
-            $($tt)*
-        }
+        $($tt)*
     };
 }
 
@@ -378,4 +376,13 @@ macro_rules! tracing_feature_disabled {
 #[macro_export]
 macro_rules! tracing_feature_disabled {
     ( $( $tt:tt )* ) => {};
+}
+
+/// Call this function to ensure Move VM tracing is disabled.
+/// Note: calling panic in the tracing_feature_enabled macro elsewhere
+/// may result in complaints of unreachable code.
+pub fn ensure_move_vm_profiler_disabled() {
+    tracing_feature_enabled! {
+        panic!("Cannot run with Move VM tracing feature enabled");
+    }
 }

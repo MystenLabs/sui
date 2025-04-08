@@ -1,0 +1,89 @@
+---
+source: crates/move-analyzer/tests/ide_testsuite.rs
+---
+== param_hints.move ========================================================
+-- test 0 -------------------
+INLAY PARAM HINT: first_param
+ON HOVER:
+```rust
+first_param: u64
+```
+-- test 1 -------------------
+INLAY PARAM HINT: second_param
+ON HOVER:
+```rust
+second_param: InlayHints::param_hints::SomeStruct
+```
+-- test 2 -------------------
+INLAY PARAM HINT: first_param
+ON HOVER:
+```rust
+first_param: u64
+```
+-- test 3 -------------------
+INLAY PARAM HINT: second_param
+ON HOVER:
+```rust
+second_param: InlayHints::param_hints::SomeStruct
+```
+== type_hints.move ========================================================
+-- test 0 -------------------
+INLAY TYPE HINT : u64
+-- test 1 -------------------
+INLAY TYPE HINT : SomeStruct
+ON HOVER:
+```rust
+public struct InlayHints::type_hints::SomeStruct has copy, drop {
+	some_field: u64
+}
+```
+-- test 2 -------------------
+INLAY TYPE HINT : u64
+-- test 3 -------------------
+INLAY TYPE HINT : SomeStruct
+ON HOVER:
+```rust
+public struct InlayHints::type_hints::SomeStruct has copy, drop {
+	some_field: u64
+}
+```
+-- test 4 -------------------
+INLAY TYPE HINT : u64
+-- test 5 -------------------
+INLAY TYPE HINT : SomeStruct
+ON HOVER:
+```rust
+public struct InlayHints::type_hints::SomeStruct has copy, drop {
+	some_field: u64
+}
+```
+-- test 6 -------------------
+INLAY TYPE HINT : u64
+-- test 7 -------------------
+INLAY TYPE HINT : u64
+-- test 8 -------------------
+INLAY TYPE HINT : u64
+-- test 9 -------------------
+INLAY TYPE HINT : AnotherStruct
+ON HOVER:
+```rust
+public struct InlayHints::type_hints::AnotherStruct<T> has copy, drop {
+	some_field: T
+}
+```
+-- test 10 -------------------
+INLAY TYPE HINT : u64
+-- test 11 -------------------
+INLAY TYPE HINT : AnotherStruct
+ON HOVER:
+```rust
+public struct InlayHints::type_hints::AnotherStruct<T> has copy, drop {
+	some_field: T
+}
+```
+-- test 12 -------------------
+INLAY TYPE HINT : u64
+-- test 13 -------------------
+INLAY TYPE HINT : u64
+-- test 14 -------------------
+INLAY TYPE HINT : u64

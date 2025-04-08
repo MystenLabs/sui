@@ -7,6 +7,7 @@ use std::{collections::HashMap, str::FromStr, sync::Arc};
 use async_graphql::dataloader::{DataLoader, Loader};
 use serde::{Deserialize, Serialize};
 
+use crate::metrics::Metrics;
 use crate::{
     config::MoveRegistryConfig,
     error::Error,
@@ -26,6 +27,7 @@ const QUERY_FRAGMENT: &str =
 pub(crate) struct ExternalNamesLoader {
     client: reqwest::Client,
     config: MoveRegistryConfig,
+    metrics: Metrics,
 }
 
 /// Helper types for accessing a shared `DataLoader` instance.
@@ -33,10 +35,11 @@ pub(crate) struct ExternalNamesLoader {
 pub(crate) struct MoveRegistryDataLoader(pub Arc<DataLoader<ExternalNamesLoader>>);
 
 impl ExternalNamesLoader {
-    pub(crate) fn new(config: MoveRegistryConfig) -> Self {
+    pub(crate) fn new(config: MoveRegistryConfig, metrics: Metrics) -> Self {
         Self {
             client: reqwest::Client::new(),
             config,
+            metrics,
         }
     }
 
@@ -71,9 +74,9 @@ impl ExternalNamesLoader {
 }
 
 impl MoveRegistryDataLoader {
-    pub(crate) fn new(config: MoveRegistryConfig) -> Self {
+    pub(crate) fn new(config: MoveRegistryConfig, metrics: Metrics) -> Self {
         let batch_size = config.page_limit as usize;
-        let data_loader = DataLoader::new(ExternalNamesLoader::new(config), tokio::spawn)
+        let data_loader = DataLoader::new(ExternalNamesLoader::new(config, metrics), tokio::spawn)
             .max_batch_size(batch_size);
         Self(Arc::new(data_loader))
     }
@@ -102,15 +105,24 @@ impl Loader<Name> for ExternalNamesLoader {
             variables: serde_json::Value::Null,
         };
 
-        let res = self
-            .client
-            .post(api_url)
-            .json(&request_body)
-            .send()
-            .await
-            .map_err(|e| {
-                Error::MoveNameRegistry(MoveRegistryError::FailedToQueryExternalApi(e.to_string()))
-            })?;
+        let res = {
+            let _timer_guard = self
+                .metrics
+                .app_metrics
+                .external_mvr_resolution_latency
+                .start_timer();
+
+            self.client
+                .post(api_url)
+                .json(&request_body)
+                .send()
+                .await
+                .map_err(|e| {
+                    Error::MoveNameRegistry(MoveRegistryError::FailedToQueryExternalApi(
+                        e.to_string(),
+                    ))
+                })?
+        };
 
         if !res.status().is_success() {
             return Err(Error::MoveNameRegistry(

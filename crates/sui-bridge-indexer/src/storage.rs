@@ -4,18 +4,18 @@
 use anyhow::{anyhow, Error};
 use async_trait::async_trait;
 use diesel::dsl::now;
-use diesel::query_dsl::methods::FilterDsl;
 use diesel::upsert::excluded;
-use diesel::{ExpressionMethods, TextExpressionMethods};
-use diesel::{OptionalExtension, QueryDsl, SelectableHelper};
+use diesel::{ExpressionMethods, QueryDsl, TextExpressionMethods};
+use diesel::{OptionalExtension, SelectableHelper};
 use diesel_async::scoped_futures::ScopedFutureExt;
 use diesel_async::AsyncConnection;
 use diesel_async::RunQueryDsl;
 
+use crate::models::ProgressStore;
 use crate::postgres_manager::PgPool;
 use crate::schema::progress_store::{columns, dsl};
 use crate::schema::{sui_error_transactions, token_transfer, token_transfer_data};
-use crate::{models, schema, ProcessedTxnData};
+use crate::{schema, ProcessedTxnData};
 use sui_indexer_builder::indexer_builder::{IndexerProgressStore, Persistent};
 use sui_indexer_builder::{
     progress::ProgressSavingPolicy, Task, Tasks, LIVE_TASK_TARGET_CHECKPOINT,
@@ -35,11 +35,30 @@ impl PgBridgePersistent {
             save_progress_policy,
         }
     }
+
+    async fn get_largest_backfill_task_target_checkpoint(
+        &self,
+        prefix: &str,
+    ) -> Result<Option<u64>, Error> {
+        use schema::progress_store::dsl::*;
+        let mut conn = self.pool.get().await?;
+        let cp = progress_store
+            // TODO: using like could be error prone, change the progress store schema to store the task name properly.
+            .filter(task_name.like(format!("{prefix} - %")))
+            .filter(target_checkpoint.ne(i64::MAX))
+            .select(target_checkpoint)
+            .order_by(target_checkpoint.desc())
+            .first::<i64>(&mut conn)
+            .await
+            .optional()?;
+        Ok(cp.map(|c| c as u64))
+    }
 }
 
 #[async_trait]
 impl Persistent<ProcessedTxnData> for PgBridgePersistent {
     async fn write(&self, data: Vec<ProcessedTxnData>) -> Result<(), Error> {
+        use diesel::query_dsl::methods::FilterDsl;
         if data.is_empty() {
             return Ok(());
         }
@@ -149,9 +168,9 @@ impl Persistent<ProcessedTxnData> for PgBridgePersistent {
 impl IndexerProgressStore for PgBridgePersistent {
     async fn load_progress(&self, task_name: String) -> anyhow::Result<u64> {
         let mut conn = self.pool.get().await?;
-        let cp: Option<models::ProgressStore> = dsl::progress_store
+        let cp = dsl::progress_store
             .find(&task_name)
-            .select(models::ProgressStore::as_select())
+            .select(ProgressStore::as_select())
             .first(&mut conn)
             .await
             .optional()?;
@@ -175,7 +194,7 @@ impl IndexerProgressStore for PgBridgePersistent {
         {
             let mut conn = self.pool.get().await?;
             diesel::insert_into(schema::progress_store::table)
-                .values(&models::ProgressStore {
+                .values(&ProgressStore {
                     task_name: task_name.clone(),
                     checkpoint: checkpoint_to_save as i64,
                     // Target checkpoint and timestamp will only be written for new entries
@@ -196,36 +215,40 @@ impl IndexerProgressStore for PgBridgePersistent {
         Ok(None)
     }
 
-    async fn get_ongoing_tasks(&self, prefix: &str) -> Result<Tasks, anyhow::Error> {
+    async fn get_ongoing_tasks(&self, prefix: &str) -> Result<Tasks, Error> {
+        use schema::progress_store::dsl::*;
         let mut conn = self.pool.get().await?;
         // get all unfinished tasks
-        let cp: Vec<models::ProgressStore> =
+        let cp = progress_store
             // TODO: using like could be error prone, change the progress store schema to stare the task name properly.
-            QueryDsl::filter(
-                QueryDsl::filter(dsl::progress_store, columns::task_name.like(format!("{prefix} - %"))),
-                columns::checkpoint.lt(columns::target_checkpoint))
-            .order_by(columns::target_checkpoint.desc())
-            .load(&mut conn)
+            .filter(task_name.like(format!("{prefix} - %")))
+            .filter(checkpoint.lt(target_checkpoint))
+            .order_by(target_checkpoint.desc())
+            .load::<ProgressStore>(&mut conn)
             .await?;
         let tasks = cp.into_iter().map(|d| d.into()).collect();
         Ok(Tasks::new(tasks)?)
     }
 
-    async fn get_largest_backfill_task_target_checkpoint(
-        &self,
-        prefix: &str,
-    ) -> Result<Option<u64>, Error> {
+    async fn get_largest_indexed_checkpoint(&self, prefix: &str) -> Result<Option<u64>, Error> {
+        use schema::progress_store::dsl::*;
         let mut conn = self.pool.get().await?;
-        let cp: Option<i64> =
+        let cp = progress_store
             // TODO: using like could be error prone, change the progress store schema to stare the task name properly.
-            QueryDsl::filter(QueryDsl::filter(dsl::progress_store
-                .select(columns::target_checkpoint), columns::task_name.like(format!("{prefix} - %"))),
-                columns::target_checkpoint.ne(i64::MAX))
-            .order_by(columns::target_checkpoint.desc())
+            .filter(task_name.like(format!("{prefix} - %")))
+            .filter(target_checkpoint.eq(i64::MAX))
+            .select(checkpoint)
             .first::<i64>(&mut conn)
             .await
             .optional()?;
-        Ok(cp.map(|c| c as u64))
+
+        if let Some(cp) = cp {
+            Ok(Some(cp as u64))
+        } else {
+            // Use the largest backfill target checkpoint as a fallback
+            self.get_largest_backfill_task_target_checkpoint(prefix)
+                .await
+        }
     }
 
     /// Register a new task to progress store with a start checkpoint and target checkpoint.
@@ -235,10 +258,10 @@ impl IndexerProgressStore for PgBridgePersistent {
         task_name: String,
         checkpoint: u64,
         target_checkpoint: u64,
-    ) -> Result<(), anyhow::Error> {
+    ) -> Result<(), Error> {
         let mut conn = self.pool.get().await?;
         diesel::insert_into(schema::progress_store::table)
-            .values(models::ProgressStore {
+            .values(ProgressStore {
                 task_name,
                 checkpoint: checkpoint as i64,
                 target_checkpoint: target_checkpoint as i64,
@@ -255,10 +278,10 @@ impl IndexerProgressStore for PgBridgePersistent {
         &mut self,
         task_name: String,
         start_checkpoint: u64,
-    ) -> Result<(), anyhow::Error> {
+    ) -> Result<(), Error> {
         let mut conn = self.pool.get().await?;
         diesel::insert_into(schema::progress_store::table)
-            .values(models::ProgressStore {
+            .values(ProgressStore {
                 task_name,
                 checkpoint: start_checkpoint as i64,
                 target_checkpoint: LIVE_TASK_TARGET_CHECKPOINT,

@@ -1,0 +1,721 @@
+---
+source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
+---
+processed 11 tasks
+
+init:
+A: object(0,0)
+
+task 1, lines 6-50:
+//# run-graphql
+Response: {
+  "data": {
+    "object": {
+      "asMovePackage": {
+        "coin": {
+          "struct": {
+            "name": "Coin",
+            "abilities": [
+              "STORE",
+              "KEY"
+            ],
+            "typeParameters": [
+              {
+                "constraints": [],
+                "isPhantom": true
+              }
+            ],
+            "fields": [
+              {
+                "name": "id",
+                "type": {
+                  "repr": "0x0000000000000000000000000000000000000000000000000000000000000002::object::UID",
+                  "signature": {
+                    "ref": null,
+                    "body": {
+                      "datatype": {
+                        "package": "0x0000000000000000000000000000000000000000000000000000000000000002",
+                        "module": "object",
+                        "type": "UID",
+                        "typeParameters": []
+                      }
+                    }
+                  }
+                }
+              },
+              {
+                "name": "balance",
+                "type": {
+                  "repr": "0x0000000000000000000000000000000000000000000000000000000000000002::balance::Balance<$0>",
+                  "signature": {
+                    "ref": null,
+                    "body": {
+                      "datatype": {
+                        "package": "0x0000000000000000000000000000000000000000000000000000000000000002",
+                        "module": "balance",
+                        "type": "Balance",
+                        "typeParameters": [
+                          {
+                            "typeParameter": 0
+                          }
+                        ]
+                      }
+                    }
+                  }
+                }
+              }
+            ]
+          }
+        },
+        "tx_context": {
+          "struct": {
+            "name": "TxContext",
+            "abilities": [
+              "DROP"
+            ],
+            "typeParameters": [],
+            "fields": [
+              {
+                "name": "sender",
+                "type": {
+                  "repr": "address",
+                  "signature": {
+                    "ref": null,
+                    "body": "address"
+                  }
+                }
+              },
+              {
+                "name": "tx_hash",
+                "type": {
+                  "repr": "vector<u8>",
+                  "signature": {
+                    "ref": null,
+                    "body": {
+                      "vector": "u8"
+                    }
+                  }
+                }
+              },
+              {
+                "name": "epoch",
+                "type": {
+                  "repr": "u64",
+                  "signature": {
+                    "ref": null,
+                    "body": "u64"
+                  }
+                }
+              },
+              {
+                "name": "epoch_timestamp_ms",
+                "type": {
+                  "repr": "u64",
+                  "signature": {
+                    "ref": null,
+                    "body": "u64"
+                  }
+                }
+              },
+              {
+                "name": "ids_created",
+                "type": {
+                  "repr": "u64",
+                  "signature": {
+                    "ref": null,
+                    "body": "u64"
+                  }
+                }
+              }
+            ]
+          }
+        }
+      }
+    }
+  }
+}
+
+task 2, lines 52-56:
+//# publish --upgradeable --sender A
+created: object(2,0), object(2,1)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 5213600,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 3, line 58:
+//# create-checkpoint
+Checkpoint created: 1
+
+task 4, lines 60-91:
+//# run-graphql
+Response: {
+  "data": {
+    "object": {
+      "address": "0x0516a97c38ac8f8e7ec1fec2e1aa8a64a416adc4fc47815ab3fb51f0fa5d7301",
+      "asMovePackage": {
+        "module": {
+          "struct": {
+            "name": "S",
+            "abilities": [
+              "COPY",
+              "DROP"
+            ],
+            "typeParameters": [],
+            "fields": [
+              {
+                "name": "x",
+                "type": {
+                  "repr": "u64",
+                  "signature": {
+                    "ref": null,
+                    "body": "u64"
+                  }
+                }
+              }
+            ]
+          }
+        }
+      }
+    }
+  }
+}
+
+task 5, lines 93-99:
+//# upgrade --package P0 --upgrade-capability 2,1 --sender A
+created: object(5,0)
+mutated: object(0,0), object(2,1)
+gas summary: computation_cost: 1000000, storage_cost: 6049600,  storage_rebate: 2595780, non_refundable_storage_fee: 26220
+
+task 6, line 101:
+//# create-checkpoint
+Checkpoint created: 2
+
+task 7, lines 103-150:
+//# run-graphql
+Response: {
+  "data": {
+    "object": {
+      "address": "0x8f225fe07ab4384f0078020cc6a83a00bf6fb186745fda4dcee2091e470a8fe0",
+      "asMovePackage": {
+        "module": {
+          "s": {
+            "module": {
+              "package": {
+                "address": "0x0516a97c38ac8f8e7ec1fec2e1aa8a64a416adc4fc47815ab3fb51f0fa5d7301"
+              }
+            },
+            "name": "S",
+            "abilities": [
+              "COPY",
+              "DROP"
+            ],
+            "typeParameters": [],
+            "fields": [
+              {
+                "name": "x",
+                "type": {
+                  "repr": "u64",
+                  "signature": {
+                    "ref": null,
+                    "body": "u64"
+                  }
+                }
+              }
+            ]
+          },
+          "t": {
+            "module": {
+              "package": {
+                "address": "0x8f225fe07ab4384f0078020cc6a83a00bf6fb186745fda4dcee2091e470a8fe0"
+              }
+            },
+            "name": "T",
+            "abilities": [],
+            "typeParameters": [
+              {
+                "constraints": [
+                  "DROP"
+                ],
+                "isPhantom": false
+              }
+            ],
+            "fields": [
+              {
+                "name": "y",
+                "type": {
+                  "repr": "u64",
+                  "signature": {
+                    "ref": null,
+                    "body": "u64"
+                  }
+                }
+              },
+              {
+                "name": "s",
+                "type": {
+                  "repr": "0x0516a97c38ac8f8e7ec1fec2e1aa8a64a416adc4fc47815ab3fb51f0fa5d7301::m::S",
+                  "signature": {
+                    "ref": null,
+                    "body": {
+                      "datatype": {
+                        "package": "0x0516a97c38ac8f8e7ec1fec2e1aa8a64a416adc4fc47815ab3fb51f0fa5d7301",
+                        "module": "m",
+                        "type": "S",
+                        "typeParameters": []
+                      }
+                    }
+                  }
+                }
+              },
+              {
+                "name": "u",
+                "type": {
+                  "repr": "$0",
+                  "signature": {
+                    "ref": null,
+                    "body": {
+                      "typeParameter": 0
+                    }
+                  }
+                }
+              }
+            ]
+          },
+          "v": {
+            "name": "V",
+            "fields": [
+              {
+                "name": "t",
+                "type": {
+                  "repr": "0x0516a97c38ac8f8e7ec1fec2e1aa8a64a416adc4fc47815ab3fb51f0fa5d7301::m::T<0x0516a97c38ac8f8e7ec1fec2e1aa8a64a416adc4fc47815ab3fb51f0fa5d7301::m::S>"
+                }
+              }
+            ]
+          }
+        }
+      }
+    }
+  }
+}
+
+task 8, lines 152-177:
+//# run-graphql
+Response: {
+  "data": {
+    "object": {
+      "asMovePackage": {
+        "module": {
+          "s": {
+            "module": {
+              "struct": null
+            }
+          },
+          "t": {
+            "module": {
+              "struct": {
+                "name": "T"
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}
+
+task 9, lines 180-220:
+//# run-graphql --cursors {"n":"Coin","c":2} {"n":"TreasuryCap","c":2}
+Response: {
+  "data": {
+    "object": {
+      "asMovePackage": {
+        "module": {
+          "all": {
+            "nodes": [
+              {
+                "name": "Coin",
+                "fields": [
+                  {
+                    "name": "id",
+                    "type": {
+                      "repr": "0x0000000000000000000000000000000000000000000000000000000000000002::object::UID"
+                    }
+                  },
+                  {
+                    "name": "balance",
+                    "type": {
+                      "repr": "0x0000000000000000000000000000000000000000000000000000000000000002::balance::Balance<$0>"
+                    }
+                  }
+                ]
+              },
+              {
+                "name": "CoinMetadata",
+                "fields": [
+                  {
+                    "name": "id",
+                    "type": {
+                      "repr": "0x0000000000000000000000000000000000000000000000000000000000000002::object::UID"
+                    }
+                  },
+                  {
+                    "name": "decimals",
+                    "type": {
+                      "repr": "u8"
+                    }
+                  },
+                  {
+                    "name": "name",
+                    "type": {
+                      "repr": "0x0000000000000000000000000000000000000000000000000000000000000001::string::String"
+                    }
+                  },
+                  {
+                    "name": "symbol",
+                    "type": {
+                      "repr": "0x0000000000000000000000000000000000000000000000000000000000000001::ascii::String"
+                    }
+                  },
+                  {
+                    "name": "description",
+                    "type": {
+                      "repr": "0x0000000000000000000000000000000000000000000000000000000000000001::string::String"
+                    }
+                  },
+                  {
+                    "name": "icon_url",
+                    "type": {
+                      "repr": "0x0000000000000000000000000000000000000000000000000000000000000001::option::Option<0x0000000000000000000000000000000000000000000000000000000000000002::url::Url>"
+                    }
+                  }
+                ]
+              },
+              {
+                "name": "CurrencyCreated",
+                "fields": [
+                  {
+                    "name": "decimals",
+                    "type": {
+                      "repr": "u8"
+                    }
+                  }
+                ]
+              },
+              {
+                "name": "DenyCap",
+                "fields": [
+                  {
+                    "name": "id",
+                    "type": {
+                      "repr": "0x0000000000000000000000000000000000000000000000000000000000000002::object::UID"
+                    }
+                  }
+                ]
+              },
+              {
+                "name": "RegulatedCoinMetadata",
+                "fields": [
+                  {
+                    "name": "id",
+                    "type": {
+                      "repr": "0x0000000000000000000000000000000000000000000000000000000000000002::object::UID"
+                    }
+                  },
+                  {
+                    "name": "coin_metadata_object",
+                    "type": {
+                      "repr": "0x0000000000000000000000000000000000000000000000000000000000000002::object::ID"
+                    }
+                  },
+                  {
+                    "name": "deny_cap_object",
+                    "type": {
+                      "repr": "0x0000000000000000000000000000000000000000000000000000000000000002::object::ID"
+                    }
+                  }
+                ]
+              },
+              {
+                "name": "TreasuryCap",
+                "fields": [
+                  {
+                    "name": "id",
+                    "type": {
+                      "repr": "0x0000000000000000000000000000000000000000000000000000000000000002::object::UID"
+                    }
+                  },
+                  {
+                    "name": "total_supply",
+                    "type": {
+                      "repr": "0x0000000000000000000000000000000000000000000000000000000000000002::balance::Supply<$0>"
+                    }
+                  }
+                ]
+              }
+            ],
+            "pageInfo": {
+              "hasNextPage": false,
+              "hasPreviousPage": false
+            }
+          },
+          "after": {
+            "edges": [
+              {
+                "cursor": "eyJuIjoiQ29pbk1ldGFkYXRhIiwiYyI6Mn0",
+                "node": {
+                  "name": "CoinMetadata"
+                }
+              },
+              {
+                "cursor": "eyJuIjoiQ3VycmVuY3lDcmVhdGVkIiwiYyI6Mn0",
+                "node": {
+                  "name": "CurrencyCreated"
+                }
+              },
+              {
+                "cursor": "eyJuIjoiRGVueUNhcCIsImMiOjJ9",
+                "node": {
+                  "name": "DenyCap"
+                }
+              },
+              {
+                "cursor": "eyJuIjoiUmVndWxhdGVkQ29pbk1ldGFkYXRhIiwiYyI6Mn0",
+                "node": {
+                  "name": "RegulatedCoinMetadata"
+                }
+              },
+              {
+                "cursor": "eyJuIjoiVHJlYXN1cnlDYXAiLCJjIjoyfQ",
+                "node": {
+                  "name": "TreasuryCap"
+                }
+              }
+            ],
+            "pageInfo": {
+              "hasNextPage": false,
+              "hasPreviousPage": true
+            }
+          },
+          "before": {
+            "edges": [
+              {
+                "cursor": "eyJuIjoiQ29pbiIsImMiOjJ9",
+                "node": {
+                  "name": "Coin"
+                }
+              },
+              {
+                "cursor": "eyJuIjoiQ29pbk1ldGFkYXRhIiwiYyI6Mn0",
+                "node": {
+                  "name": "CoinMetadata"
+                }
+              },
+              {
+                "cursor": "eyJuIjoiQ3VycmVuY3lDcmVhdGVkIiwiYyI6Mn0",
+                "node": {
+                  "name": "CurrencyCreated"
+                }
+              },
+              {
+                "cursor": "eyJuIjoiRGVueUNhcCIsImMiOjJ9",
+                "node": {
+                  "name": "DenyCap"
+                }
+              },
+              {
+                "cursor": "eyJuIjoiUmVndWxhdGVkQ29pbk1ldGFkYXRhIiwiYyI6Mn0",
+                "node": {
+                  "name": "RegulatedCoinMetadata"
+                }
+              }
+            ],
+            "pageInfo": {
+              "hasNextPage": true,
+              "hasPreviousPage": false
+            }
+          }
+        }
+      }
+    }
+  }
+}
+
+task 10, lines 222-269:
+//# run-graphql --cursors {"n":"Coin","c":2} {"n":"TreasuryCap","c":2}
+Response: {
+  "data": {
+    "object": {
+      "asMovePackage": {
+        "module": {
+          "prefix": {
+            "edges": [
+              {
+                "cursor": "eyJuIjoiQ29pbk1ldGFkYXRhIiwiYyI6Mn0",
+                "node": {
+                  "name": "CoinMetadata"
+                }
+              },
+              {
+                "cursor": "eyJuIjoiQ3VycmVuY3lDcmVhdGVkIiwiYyI6Mn0",
+                "node": {
+                  "name": "CurrencyCreated"
+                }
+              }
+            ],
+            "pageInfo": {
+              "hasNextPage": true,
+              "hasPreviousPage": true
+            }
+          },
+          "prefixAll": {
+            "edges": [
+              {
+                "cursor": "eyJuIjoiQ29pbk1ldGFkYXRhIiwiYyI6Mn0",
+                "node": {
+                  "name": "CoinMetadata"
+                }
+              },
+              {
+                "cursor": "eyJuIjoiQ3VycmVuY3lDcmVhdGVkIiwiYyI6Mn0",
+                "node": {
+                  "name": "CurrencyCreated"
+                }
+              },
+              {
+                "cursor": "eyJuIjoiRGVueUNhcCIsImMiOjJ9",
+                "node": {
+                  "name": "DenyCap"
+                }
+              }
+            ],
+            "pageInfo": {
+              "hasNextPage": true,
+              "hasPreviousPage": true
+            }
+          },
+          "prefixExcess": {
+            "edges": [
+              {
+                "cursor": "eyJuIjoiQ29pbk1ldGFkYXRhIiwiYyI6Mn0",
+                "node": {
+                  "name": "CoinMetadata"
+                }
+              },
+              {
+                "cursor": "eyJuIjoiQ3VycmVuY3lDcmVhdGVkIiwiYyI6Mn0",
+                "node": {
+                  "name": "CurrencyCreated"
+                }
+              },
+              {
+                "cursor": "eyJuIjoiRGVueUNhcCIsImMiOjJ9",
+                "node": {
+                  "name": "DenyCap"
+                }
+              },
+              {
+                "cursor": "eyJuIjoiUmVndWxhdGVkQ29pbk1ldGFkYXRhIiwiYyI6Mn0",
+                "node": {
+                  "name": "RegulatedCoinMetadata"
+                }
+              },
+              {
+                "cursor": "eyJuIjoiVHJlYXN1cnlDYXAiLCJjIjoyfQ",
+                "node": {
+                  "name": "TreasuryCap"
+                }
+              }
+            ],
+            "pageInfo": {
+              "hasNextPage": false,
+              "hasPreviousPage": true
+            }
+          },
+          "suffix": {
+            "edges": [
+              {
+                "cursor": "eyJuIjoiRGVueUNhcCIsImMiOjJ9",
+                "node": {
+                  "name": "DenyCap"
+                }
+              },
+              {
+                "cursor": "eyJuIjoiUmVndWxhdGVkQ29pbk1ldGFkYXRhIiwiYyI6Mn0",
+                "node": {
+                  "name": "RegulatedCoinMetadata"
+                }
+              }
+            ],
+            "pageInfo": {
+              "hasNextPage": true,
+              "hasPreviousPage": true
+            }
+          },
+          "suffixAll": {
+            "edges": [
+              {
+                "cursor": "eyJuIjoiQ3VycmVuY3lDcmVhdGVkIiwiYyI6Mn0",
+                "node": {
+                  "name": "CurrencyCreated"
+                }
+              },
+              {
+                "cursor": "eyJuIjoiRGVueUNhcCIsImMiOjJ9",
+                "node": {
+                  "name": "DenyCap"
+                }
+              },
+              {
+                "cursor": "eyJuIjoiUmVndWxhdGVkQ29pbk1ldGFkYXRhIiwiYyI6Mn0",
+                "node": {
+                  "name": "RegulatedCoinMetadata"
+                }
+              }
+            ],
+            "pageInfo": {
+              "hasNextPage": true,
+              "hasPreviousPage": true
+            }
+          },
+          "suffixExcess": {
+            "edges": [
+              {
+                "cursor": "eyJuIjoiQ29pbiIsImMiOjJ9",
+                "node": {
+                  "name": "Coin"
+                }
+              },
+              {
+                "cursor": "eyJuIjoiQ29pbk1ldGFkYXRhIiwiYyI6Mn0",
+                "node": {
+                  "name": "CoinMetadata"
+                }
+              },
+              {
+                "cursor": "eyJuIjoiQ3VycmVuY3lDcmVhdGVkIiwiYyI6Mn0",
+                "node": {
+                  "name": "CurrencyCreated"
+                }
+              },
+              {
+                "cursor": "eyJuIjoiRGVueUNhcCIsImMiOjJ9",
+                "node": {
+                  "name": "DenyCap"
+                }
+              },
+              {
+                "cursor": "eyJuIjoiUmVndWxhdGVkQ29pbk1ldGFkYXRhIiwiYyI6Mn0",
+                "node": {
+                  "name": "RegulatedCoinMetadata"
+                }
+              }
+            ],
+            "pageInfo": {
+              "hasNextPage": true,
+              "hasPreviousPage": false
+            }
+          }
+        }
+      }
+    }
+  }
+}

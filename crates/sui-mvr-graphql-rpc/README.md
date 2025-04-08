@@ -1,5 +1,15 @@
 # sui-mvr-graphql-rpc
 
+## Maintaining parity with sui-graphql-rpc crate
+Generates a series of patch files from the named commit to the current HEAD, and rewrites the paths to the destination crate.
+```
+# Create patch with stripped paths
+git format-patch <commit-hash>..HEAD --stdout -- ./crates/sui-mvr-graphql-rpc | sed 's|crates/sui-mvr-graphql-rpc/|crates/sui-graphql-rpc/|g' > patches.diff
+
+# Apply the patch
+git apply patches.diff
+```
+
 ## Dev setup
 Note that we use compilation flags to determine the backend for Diesel. If you're using VS Code, make sure to update settings.json with the appropriate features - there should at least be a "pg_backend" (or other backend.)
 ```

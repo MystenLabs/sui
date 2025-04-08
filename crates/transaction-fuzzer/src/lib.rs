@@ -54,12 +54,12 @@ fn generate_random_gas_data(
             Owner::ObjectOwner(_) | Owner::AddressOwner(_) if owned_by_sender => {
                 Owner::AddressOwner(sender)
             }
-            _ => *o,
+            _ => o.clone(),
         })
         .collect::<Vec<_>>();
     for owner in gas_coin_owners.iter().take(num_gas_objects - 1) {
         let gas_balance = rng.gen_range(0..=remaining_gas_balance);
-        let gas_object = new_gas_coin_with_balance_and_owner(gas_balance, *owner);
+        let gas_object = new_gas_coin_with_balance_and_owner(gas_balance, owner.clone());
         remaining_gas_balance -= gas_balance;
         object_refs.push(gas_object.compute_object_reference());
         gas_objects.push(gas_object);
@@ -67,7 +67,7 @@ fn generate_random_gas_data(
     // Put the remaining balance in the last gas object.
     let last_gas_object = new_gas_coin_with_balance_and_owner(
         remaining_gas_balance,
-        gas_coin_owners[num_gas_objects - 1],
+        gas_coin_owners[num_gas_objects - 1].clone(),
     );
     object_refs.push(last_gas_object.compute_object_reference());
     gas_objects.push(last_gas_object);

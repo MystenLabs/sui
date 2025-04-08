@@ -13,6 +13,9 @@ use crate::gas_model::tables::{
 use crate::gas_model::units_types::CostTable;
 use sui_protocol_config::ProtocolConfig;
 
+// Threshold after which native functions contribute to virtual instruction count.
+const V2_NATIVE_FUNCTION_CALL_THRESHOLD: u64 = 700;
+
 /// If true, do not charge the entire budget on storage OOG
 pub fn dont_charge_budget_on_storage_oog(gas_model_version: u64) -> bool {
     gas_model_version >= 4
@@ -57,5 +60,14 @@ pub fn cost_table_for_version(gas_model: u64) -> CostTable {
         initial_cost_schedule_v4()
     } else {
         initial_cost_schedule_v5()
+    }
+}
+
+// Return if the native function call threshold is exceeded
+pub fn native_function_threshold_exceeded(gas_model_version: u64, num_native_calls: u64) -> bool {
+    if gas_model_version > 8 {
+        num_native_calls > V2_NATIVE_FUNCTION_CALL_THRESHOLD
+    } else {
+        false
     }
 }

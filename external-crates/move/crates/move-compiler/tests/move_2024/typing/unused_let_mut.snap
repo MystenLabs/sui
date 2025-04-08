@@ -1,0 +1,36 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: 2024.alpha
+  lint: false
+---
+warning[W09012]: unused 'mut' modifiers
+  ┌─ tests/move_2024/typing/unused_let_mut.move:4:24
+  │
+4 │     public fun foo(mut x: u64, s: S): u64 {
+  │                    --- ^ The variable 'x' is never used mutably
+  │                    │    
+  │                    Consider removing the 'mut' declaration here
+  │
+  = This warning can be suppressed with '#[allow(unused_let_mut)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[W09012]: unused 'mut' modifiers
+  ┌─ tests/move_2024/typing/unused_let_mut.move:5:17
+  │
+5 │         let mut y = 0;
+  │             --- ^ The variable 'y' is never used mutably
+  │             │    
+  │             Consider removing the 'mut' declaration here
+  │
+  = This warning can be suppressed with '#[allow(unused_let_mut)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[W09012]: unused 'mut' modifiers
+  ┌─ tests/move_2024/typing/unused_let_mut.move:6:21
+  │
+6 │         let S { mut f } = s;
+  │                 --- ^ The variable 'f' is never used mutably
+  │                 │    
+  │                 Consider removing the 'mut' declaration here
+  │
+  = This warning can be suppressed with '#[allow(unused_let_mut)]' applied to the 'module' or module member ('const', 'fun', or 'struct')

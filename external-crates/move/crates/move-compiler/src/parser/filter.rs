@@ -111,12 +111,14 @@ pub fn filter_program<T: FilterContext>(context: &mut T, prog: P::Program) -> P:
                  package,
                  named_address_map,
                  def,
+                 target_kind: pkg_def_kind,
              }| {
                 context.set_current_package(package);
                 Some(P::PackageDefinition {
                     package,
                     named_address_map,
                     def: filter_definition(context, def)?,
+                    target_kind: pkg_def_kind,
                 })
             },
         )
@@ -130,12 +132,14 @@ pub fn filter_program<T: FilterContext>(context: &mut T, prog: P::Program) -> P:
                  package,
                  named_address_map,
                  def,
+                 target_kind: pkg_def_kind,
              }| {
                 context.set_current_package(package);
                 Some(P::PackageDefinition {
                     package,
                     named_address_map,
                     def: filter_definition(context, def)?,
+                    target_kind: pkg_def_kind,
                 })
             },
         )
@@ -191,6 +195,7 @@ fn filter_module<T: FilterContext>(
     let module_def = context.filter_map_module(module_def)?;
 
     let P::ModuleDefinition {
+        doc,
         attributes,
         loc,
         address,
@@ -205,6 +210,7 @@ fn filter_module<T: FilterContext>(
         .collect();
 
     Some(P::ModuleDefinition {
+        doc,
         attributes,
         loc,
         address,
@@ -229,6 +235,7 @@ fn filter_module_member<T: FilterContext>(
         PM::Use(use_decl) => context.filter_map_use(use_decl).map(PM::Use),
         PM::Friend(friend_decl) => context.filter_map_friend(friend_decl).map(PM::Friend),
         PM::Constant(constant) => context.filter_map_constant(constant).map(PM::Constant),
+        x @ PM::Spec(_) => Some(x),
     }
 }
 
@@ -245,6 +252,7 @@ fn filter_through_function_body<T: FilterContext>(
         signature,
         name,
         body,
+        doc
     } = function_def;
 
     // let new_body = filter_function_body(context, body);
@@ -267,6 +275,7 @@ fn filter_through_function_body<T: FilterContext>(
         signature,
         name,
         body: new_body,
+        doc
     }
 }
 

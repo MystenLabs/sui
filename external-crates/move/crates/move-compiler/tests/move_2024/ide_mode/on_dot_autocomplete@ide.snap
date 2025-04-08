@@ -1,0 +1,111 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: 2024.alpha
+  lint: false
+---
+note[I15001]: IDE dot autocomplete
+   ┌─ tests/move_2024/ide_mode/on_dot_autocomplete.move:21:10
+   │
+21 │         c.b.a;            // two dots that should trigger auto-completion
+   │          ^ Possible dot names: 'b'
+
+note[I15001]: IDE dot autocomplete
+   ┌─ tests/move_2024/ide_mode/on_dot_autocomplete.move:21:11
+   │
+21 │         c.b.a;            // two dots that should trigger auto-completion
+   │           ^ Possible dot names: 'b'
+
+note[I15001]: IDE dot autocomplete
+   ┌─ tests/move_2024/ide_mode/on_dot_autocomplete.move:21:12
+   │
+21 │         c.b.a;            // two dots that should trigger auto-completion
+   │            ^ Possible dot names: 'a'
+
+note[I15001]: IDE dot autocomplete
+   ┌─ tests/move_2024/ide_mode/on_dot_autocomplete.move:21:13
+   │
+21 │         c.b.a;            // two dots that should trigger auto-completion
+   │             ^ Possible dot names: 'a'
+
+note[I15001]: IDE dot autocomplete
+   ┌─ tests/move_2024/ide_mode/on_dot_autocomplete.move:22:10
+   │
+22 │         c.b.a.bar();      // resolved method name
+   │          ^ Possible dot names: 'b'
+
+note[I15001]: IDE dot autocomplete
+   ┌─ tests/move_2024/ide_mode/on_dot_autocomplete.move:22:11
+   │
+22 │         c.b.a.bar();      // resolved method name
+   │           ^ Possible dot names: 'b'
+
+note[I15001]: IDE dot autocomplete
+   ┌─ tests/move_2024/ide_mode/on_dot_autocomplete.move:22:12
+   │
+22 │         c.b.a.bar();      // resolved method name
+   │            ^ Possible dot names: 'a'
+
+note[I15001]: IDE dot autocomplete
+   ┌─ tests/move_2024/ide_mode/on_dot_autocomplete.move:22:13
+   │
+22 │         c.b.a.bar();      // resolved method name
+   │             ^ Possible dot names: 'a'
+
+note[I15001]: IDE dot autocomplete
+   ┌─ tests/move_2024/ide_mode/on_dot_autocomplete.move:22:14
+   │
+22 │         c.b.a.bar();      // resolved method name
+   │              ^ Possible dot names: 'a::m::bar' or 'x'
+
+note[I15001]: IDE dot autocomplete
+   ┌─ tests/move_2024/ide_mode/on_dot_autocomplete.move:22:15
+   │
+22 │         c.b.a.bar();      // resolved method name
+   │               ^^^ Possible dot names: 'a::m::bar' or 'x'
+
+error[E04023]: invalid method call
+   ┌─ tests/move_2024/ide_mode/on_dot_autocomplete.move:23:9
+   │
+23 │         c.b.a.b();        // unresolved method name
+   │         ^^^^^^^^^
+   │         │     │
+   │         │     No local 'use fun' alias was found for 'a::m::A.b', and no function 'b' was found in the defining module 'a::m'
+   │         Invalid method call. No known method 'b' on type 'a::m::A'
+
+note[I15001]: IDE dot autocomplete
+   ┌─ tests/move_2024/ide_mode/on_dot_autocomplete.move:23:10
+   │
+23 │         c.b.a.b();        // unresolved method name
+   │          ^ Possible dot names: 'b'
+
+note[I15001]: IDE dot autocomplete
+   ┌─ tests/move_2024/ide_mode/on_dot_autocomplete.move:23:11
+   │
+23 │         c.b.a.b();        // unresolved method name
+   │           ^ Possible dot names: 'b'
+
+note[I15001]: IDE dot autocomplete
+   ┌─ tests/move_2024/ide_mode/on_dot_autocomplete.move:23:12
+   │
+23 │         c.b.a.b();        // unresolved method name
+   │            ^ Possible dot names: 'a'
+
+note[I15001]: IDE dot autocomplete
+   ┌─ tests/move_2024/ide_mode/on_dot_autocomplete.move:23:13
+   │
+23 │         c.b.a.b();        // unresolved method name
+   │             ^ Possible dot names: 'a'
+
+note[I15001]: IDE dot autocomplete
+   ┌─ tests/move_2024/ide_mode/on_dot_autocomplete.move:23:14
+   │
+23 │         c.b.a.b();        // unresolved method name
+   │              ^ Possible dot names: 'a::m::bar' or 'x'
+
+note[I15001]: IDE dot autocomplete
+   ┌─ tests/move_2024/ide_mode/on_dot_autocomplete.move:23:15
+   │
+23 │         c.b.a.b();        // unresolved method name
+   │               ^ Possible dot names: 'a::m::bar' or 'x'

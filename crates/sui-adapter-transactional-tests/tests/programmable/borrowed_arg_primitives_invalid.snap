@@ -1,0 +1,31 @@
+---
+source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
+---
+processed 5 tasks
+
+init:
+A: object(0,0), B: object(0,1)
+
+task 1, lines 8-9:
+//# programmable --sender A
+//> MergeCoins(Gas, [Gas])
+Error: Transaction Effects Status: Invalid command argument at 1. Invalid usage of value. Mutably borrowed values require unique usage. Immutably borrowed values cannot be taken or borrowed mutably. Taken values cannot be used again.
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: CommandArgumentError { arg_idx: 1, kind: InvalidValueUsage }, source: None, command: Some(0) } }
+
+task 2, lines 11-12:
+//# programmable --sender B --inputs @A
+//> TransferObjects([Gas], Input(0))
+mutated: object(0,1)
+gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 3, lines 14-15:
+//# programmable --sender A --inputs object(0,1)
+//> MergeCoins(Input(0), [Input(0)])
+Error: Transaction Effects Status: Invalid command argument at 1. Invalid usage of value. Mutably borrowed values require unique usage. Immutably borrowed values cannot be taken or borrowed mutably. Taken values cannot be used again.
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: CommandArgumentError { arg_idx: 1, kind: InvalidValueUsage }, source: None, command: Some(0) } }
+
+task 4, lines 17-18:
+//# programmable --sender A --inputs object(0,1)
+//> MakeMoveVec([Input(0), Input(0), Input(0)])
+Error: Transaction Effects Status: Invalid command argument at 1. Invalid usage of value. Mutably borrowed values require unique usage. Immutably borrowed values cannot be taken or borrowed mutably. Taken values cannot be used again.
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: CommandArgumentError { arg_idx: 1, kind: InvalidValueUsage }, source: None, command: Some(0) } }

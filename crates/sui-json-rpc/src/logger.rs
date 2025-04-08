@@ -4,9 +4,9 @@
 #[macro_export]
 macro_rules! with_tracing {
     ($time_spent_threshold:expr, $future:expr) => {{
-        use tracing::{info, error, Instrument, Span};
-        use jsonrpsee::core::{RpcResult, Error as RpcError};
-        use jsonrpsee::types::error::{CallError};
+        use tracing::{debug, Instrument, Span};
+        use jsonrpsee::core::{RpcResult};
+        use jsonrpsee::types::error::ErrorObjectOwned;
         use $crate::error::RpcInterimResult;
         use anyhow::anyhow;
 
@@ -17,15 +17,14 @@ macro_rules! with_tracing {
             let result: RpcResult<_> = interim_result.map_err(|e: Error| {
                 let anyhow_error = anyhow!("{:?}", e);
 
-                let rpc_error: RpcError = e.into();
-                if !matches!(rpc_error, RpcError::Call(CallError::InvalidParams(_))) {
-                    error!(error=?anyhow_error);
-                }
+                let rpc_error: ErrorObjectOwned = e.into();
+
+                debug!(error=%anyhow_error);
                 rpc_error
             });
 
             if elapsed > $time_spent_threshold {
-                info!(?elapsed, "RPC took longer than threshold to complete.");
+                debug!(?elapsed, "RPC took longer than threshold to complete.");
             }
             result
         }

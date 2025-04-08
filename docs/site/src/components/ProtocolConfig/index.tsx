@@ -6,7 +6,7 @@ import Tabs from "@theme/Tabs";
 import TabItem from "@theme/TabItem";
 import axios from "axios";
 
-export default function ProtocolConfig() {
+export default function ProtocolConfig(props) {
   const data = {
     jsonrpc: "2.0",
     id: 1,
@@ -25,6 +25,7 @@ export default function ProtocolConfig() {
   });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const { fields } = props;
 
   const parseResult = (data) => {
     let items = Object.entries(data);
@@ -44,7 +45,7 @@ export default function ProtocolConfig() {
   const DisplayResults = (props) => {
     const { results } = props;
     return (
-      <table>
+      <table className="table w-full">
         <thead>
           <tr>
             <th>Parameter</th>
@@ -54,11 +55,15 @@ export default function ProtocolConfig() {
         </thead>
         <tbody>
           {results.map((item, index) => (
-            <tr key={index}>
-              <td>{item[0]}</td>
-              <td>{item[1]}</td>
-              <td>{item[2] ? item[2] : "null"}</td>
-            </tr>
+            <>
+              {(!fields || fields.includes(item[0])) && (
+                <tr key={index}>
+                  <td>{item[0]}</td>
+                  <td>{item[1]}</td>
+                  <td>{item[2] ? item[2] : "null"}</td>
+                </tr>
+              )}
+            </>
           ))}
         </tbody>
       </table>

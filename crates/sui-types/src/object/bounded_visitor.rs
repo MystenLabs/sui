@@ -512,10 +512,7 @@ pub(crate) mod tests {
             .map(|(name, layout)| A::MoveFieldLayout::new(ident_(name), layout))
             .collect();
 
-        A::MoveTypeLayout::Struct(Box::new(A::MoveStructLayout {
-            type_,
-            fields: Box::new(fields),
-        }))
+        A::MoveTypeLayout::Struct(Box::new(A::MoveStructLayout { type_, fields }))
     }
 
     /// Create a variant value for test purposes.

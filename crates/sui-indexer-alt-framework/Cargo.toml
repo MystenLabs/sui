@@ -1,0 +1,52 @@
+[package]
+name = "sui-indexer-alt-framework"
+version.workspace = true
+authors = ["Mysten Labs <build@mystenlabs.com>"]
+license = "Apache-2.0"
+publish = false
+edition = "2021"
+
+[dependencies]
+anyhow.workspace = true
+async-trait.workspace = true
+axum.workspace = true
+backoff.workspace = true
+bb8 = "0.8.5"
+chrono.workspace = true
+clap = { workspace = true, features = ["env"] }
+diesel = { workspace = true, features = ["chrono"] }
+diesel-async = { workspace = true, features = ["bb8", "postgres", "async-connection-wrapper"] }
+diesel_migrations.workspace = true
+futures.workspace = true
+prometheus.workspace = true
+reqwest.workspace = true
+scoped-futures.workspace = true
+serde.workspace = true
+tempfile.workspace = true
+thiserror.workspace = true
+tokio.workspace = true
+tokio-stream.workspace = true
+tokio-util.workspace = true
+tracing.workspace = true
+tracing-subscriber = { workspace = true, optional = true }
+url.workspace = true
+
+sui-field-count.workspace = true
+sui-indexer-alt-metrics.workspace = true
+sui-pg-db.workspace = true
+sui-sql-macro.workspace = true
+sui-storage.workspace = true
+sui-types.workspace = true
+sui-rpc-api.workspace = true
+tonic.workspace = true
+
+[dev-dependencies]
+rand.workspace = true
+telemetry-subscribers.workspace = true
+wiremock.workspace = true
+
+sui-synthetic-ingestion.workspace = true
+
+[features]
+default = ["cluster"]
+cluster = ["dep:tracing-subscriber"]

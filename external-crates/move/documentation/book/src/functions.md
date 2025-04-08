@@ -105,7 +105,7 @@ In addition to `public` functions, you might have some functions in your modules
 use as the entry point to execution. The `entry` modifier is designed to allow module functions to
 initiate execution, without having to expose the functionality to other modules.
 
-Essentially, the combination of `pbulic` and `entry` functions define the "main" functions of a
+Essentially, the combination of `public` and `entry` functions define the "main" functions of a
 module, and they specify where Move programs can start executing.
 
 Keep in mind though, an `entry` function _can_ still be called by other Move functions. So while
@@ -316,7 +316,7 @@ fun add(x: u64, y: u64): u64 {
 The return value here is the result of `x + y`.
 
 [As mentioned above](#function-body), the function's body is an [expression block](./variables.md).
-The expression block can sequence various statements, and the final expression in the block will be
+The expression block can sequence various statements, and the final expression in the block will
 be the value of that block
 
 ```move

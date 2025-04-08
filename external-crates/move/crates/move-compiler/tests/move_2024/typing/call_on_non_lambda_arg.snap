@@ -1,0 +1,33 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: 2024.alpha
+  lint: false
+---
+error[E04032]: unable to expand macro function
+   ┌─ tests/move_2024/typing/call_on_non_lambda_arg.move:4:9
+   │
+ 4 │         $x(0);
+   │         ^^^^^ Cannot call non-lambda argument
+   ·
+11 │         foo!(|x| x, 0);
+   │                     - Expected a lambda argument
+
+error[E04007]: incompatible types
+  ┌─ tests/move_2024/typing/call_on_non_lambda_arg.move:9:9
+  │
+2 │     macro fun foo($f: |u64| -> u64, $x: u64) {
+  │                                         --- Expected: 'u64'
+  ·
+9 │         foo!(0, |x| x);
+  │         ^^^^^^^^^^^^^^
+  │         │       │
+  │         │       Given: '|_| -> _'
+  │         Invalid call of 'a::m::foo'. Invalid argument for parameter '$x'
+
+error[E04032]: unable to expand macro function
+  ┌─ tests/move_2024/typing/call_on_non_lambda_arg.move:9:14
+  │
+9 │         foo!(0, |x| x);
+  │              ^ Unable to bind lambda to parameter '$f'. The lambda must be passed directly

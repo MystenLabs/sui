@@ -1,0 +1,34 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: 2024.alpha
+  lint: false
+---
+warning[W09003]: unused assignment
+   ┌─ tests/move_2024/parsing/move_copy_precedence.move:11:13
+   │
+11 │         let s1 = s;
+   │             ^^ Unused assignment for variable 's1'. Consider removing, replacing with '_', or prefixing with '_' (e.g., '_s1')
+   │
+   = This warning can be suppressed with '#[allow(unused_assignment)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[W09003]: unused assignment
+   ┌─ tests/move_2024/parsing/move_copy_precedence.move:12:13
+   │
+12 │         let s2 = s;
+   │             ^^ Unused assignment for variable 's2'. Consider removing, replacing with '_', or prefixing with '_' (e.g., '_s2')
+   │
+   = This warning can be suppressed with '#[allow(unused_assignment)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+error[E04027]: invalid 'move' usage
+   ┌─ tests/move_2024/parsing/move_copy_precedence.move:14:9
+   │
+14 │         move s1.f + 1;
+   │         ^^^^ Invalid 'move'. 'move' works only with variables, e.g. 'move x'. 'move' on a path access is not supported
+
+error[E04027]: invalid 'move' usage
+   ┌─ tests/move_2024/parsing/move_copy_precedence.move:16:10
+   │
+16 │         &move s2.f;
+   │          ^^^^ Invalid 'move'. 'move' works only with variables, e.g. 'move x'. 'move' on a path access is not supported

@@ -11,6 +11,9 @@ ActiveJwk:
     - jwk:
         TYPENAME: JWK
     - epoch: U64
+AdditionalConsensusStateDigest:
+  NEWTYPESTRUCT:
+    TYPENAME: Digest
 Argument:
   ENUM:
     0:
@@ -26,6 +29,12 @@ Argument:
         TUPLE:
           - U16
           - U16
+Authenticator:
+  ENUM:
+    0:
+      SingleOwner:
+        NEWTYPE:
+          TYPENAME: SuiAddress
 AuthenticatorStateExpire:
   STRUCT:
     - min_epoch: U64
@@ -233,6 +242,8 @@ CommandArgumentError:
       InvalidObjectByMutRef: UNIT
     11:
       SharedObjectOperationNotAllowed: UNIT
+    12:
+      InvalidArgumentArity: UNIT
 CompressedSignature:
   ENUM:
     0:
@@ -287,6 +298,19 @@ ConsensusCommitPrologueV3:
         TYPENAME: ConsensusCommitDigest
     - consensus_determined_version_assignments:
         TYPENAME: ConsensusDeterminedVersionAssignments
+ConsensusCommitPrologueV4:
+  STRUCT:
+    - epoch: U64
+    - round: U64
+    - sub_dag_index:
+        OPTION: U64
+    - commit_timestamp_ms: U64
+    - consensus_commit_digest:
+        TYPENAME: ConsensusCommitDigest
+    - consensus_determined_version_assignments:
+        TYPENAME: ConsensusDeterminedVersionAssignments
+    - additional_state_digest:
+        TYPENAME: AdditionalConsensusStateDigest
 ConsensusDeterminedVersionAssignments:
   ENUM:
     0:
@@ -298,6 +322,18 @@ ConsensusDeterminedVersionAssignments:
               - SEQ:
                   TUPLE:
                     - TYPENAME: ObjectID
+                    - TYPENAME: SequenceNumber
+    1:
+      CancelledTransactionsV2:
+        NEWTYPE:
+          SEQ:
+            TUPLE:
+              - TYPENAME: TransactionDigest
+              - SEQ:
+                  TUPLE:
+                    - TUPLE:
+                        - TYPENAME: ObjectID
+                        - TYPENAME: SequenceNumber
                     - TYPENAME: SequenceNumber
 Data:
   ENUM:
@@ -319,6 +355,10 @@ DeleteKind:
       Wrap: UNIT
 Digest:
   NEWTYPESTRUCT: BYTES
+Duration:
+  STRUCT:
+    - secs: U64
+    - nanos: U32
 ECMHLiveObjectSetDigest:
   STRUCT:
     - digest:
@@ -372,6 +412,10 @@ EndOfEpochTransactionKind:
       BridgeCommitteeInit:
         NEWTYPE:
           TYPENAME: SequenceNumber
+    7:
+      StoreExecutionTimeObservations:
+        NEWTYPE:
+          TYPENAME: StoredExecutionTimeObservations
 Event:
   STRUCT:
     - package_id:
@@ -526,6 +570,30 @@ ExecutionStatus:
               TYPENAME: ExecutionFailureStatus
           - command:
               OPTION: U64
+ExecutionTimeObservationKey:
+  ENUM:
+    0:
+      MoveEntryPoint:
+        STRUCT:
+          - package:
+              TYPENAME: ObjectID
+          - module: STR
+          - function: STR
+          - type_arguments:
+              SEQ:
+                TYPENAME: TypeInput
+    1:
+      TransferObjects: UNIT
+    2:
+      SplitCoins: UNIT
+    3:
+      MergeCoins: UNIT
+    4:
+      Publish: UNIT
+    5:
+      MakeMoveVec: UNIT
+    6:
+      Upgrade: UNIT
 FullCheckpointContents:
   STRUCT:
     - transactions:
@@ -768,6 +836,13 @@ Owner:
               TYPENAME: SequenceNumber
     3:
       Immutable: UNIT
+    4:
+      ConsensusV2:
+        STRUCT:
+          - start_version:
+              TYPENAME: SequenceNumber
+          - authenticator:
+              TYPENAME: Authenticator
 PackageUpgradeError:
   ENUM:
     0:
@@ -868,6 +943,18 @@ SenderSignedTransaction:
           TYPENAME: GenericSignature
 SequenceNumber:
   NEWTYPESTRUCT: U64
+StoredExecutionTimeObservations:
+  ENUM:
+    0:
+      V1:
+        NEWTYPE:
+          SEQ:
+            TUPLE:
+              - TYPENAME: ExecutionTimeObservationKey
+              - SEQ:
+                  TUPLE:
+                    - TYPENAME: AuthorityPublicKeyBytes
+                    - TYPENAME: Duration
 StructInput:
   STRUCT:
     - address:
@@ -1084,6 +1171,10 @@ TransactionKind:
       ConsensusCommitPrologueV3:
         NEWTYPE:
           TYPENAME: ConsensusCommitPrologueV3
+    9:
+      ConsensusCommitPrologueV4:
+        NEWTYPE:
+          TYPENAME: ConsensusCommitPrologueV4
 TypeArgumentError:
   ENUM:
     0:
@@ -1095,29 +1186,29 @@ TypeInput:
     0:
       bool: UNIT
     1:
-      u8: UNIT
+      U8: UNIT
     2:
-      u64: UNIT
+      U64: UNIT
     3:
-      u128: UNIT
+      U128: UNIT
     4:
-      address: UNIT
+      Address: UNIT
     5:
-      signer: UNIT
+      Signer: UNIT
     6:
-      vector:
+      Vector:
         NEWTYPE:
           TYPENAME: TypeInput
     7:
-      struct:
+      Struct:
         NEWTYPE:
           TYPENAME: StructInput
     8:
-      u16: UNIT
+      U16: UNIT
     9:
-      u32: UNIT
+      U32: UNIT
     10:
-      u256: UNIT
+      U256: UNIT
 TypeOrigin:
   STRUCT:
     - module_name: STR
@@ -1127,19 +1218,19 @@ TypeOrigin:
 TypeTag:
   ENUM:
     0:
-      bool: UNIT
+      Bool: UNIT
     1:
-      u8: UNIT
+      U8: UNIT
     2:
-      u64: UNIT
+      U64: UNIT
     3:
-      u128: UNIT
+      U128: UNIT
     4:
-      address: UNIT
+      Address: UNIT
     5:
-      signer: UNIT
+      Signer: UNIT
     6:
-      vector:
+      Vector:
         NEWTYPE:
           TYPENAME: TypeTag
     7:
@@ -1147,11 +1238,11 @@ TypeTag:
         NEWTYPE:
           TYPENAME: StructTag
     8:
-      u16: UNIT
+      U16: UNIT
     9:
-      u32: UNIT
+      U32: UNIT
     10:
-      u256: UNIT
+      U256: UNIT
 TypedStoreError:
   ENUM:
     0:
@@ -1178,11 +1269,11 @@ UnchangedSharedKind:
             - TYPENAME: SequenceNumber
             - TYPENAME: ObjectDigest
     1:
-      MutateDeleted:
+      MutateConsensusStreamEnded:
         NEWTYPE:
           TYPENAME: SequenceNumber
     2:
-      ReadDeleted:
+      ReadConsensusStreamEnded:
         NEWTYPE:
           TYPENAME: SequenceNumber
     3:

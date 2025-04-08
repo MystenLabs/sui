@@ -1,0 +1,6 @@
+[package]
+name = "D"
+edition = "2024.beta"
+
+[dependencies]
+I2 = { local = "../i2a", override = true }

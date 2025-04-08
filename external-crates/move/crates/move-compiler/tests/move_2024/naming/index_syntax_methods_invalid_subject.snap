@@ -1,0 +1,62 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: 2024.alpha
+  lint: false
+---
+error[E02015]: invalid attribute
+  ┌─ tests/move_2024/naming/index_syntax_methods_invalid_subject.move:5:14
+  │
+5 │     #[syntax(index)]
+  │              ^^^^^ 'index' is only valid if the first parameter's type is a reference as '&' or '&mut'
+6 │     public fun index_s(_s: S, i: &u64): &u64 { i }
+  │                            - This type is not a reference
+
+error[E02019]: invalid 'syntax' method type
+  ┌─ tests/move_2024/naming/index_syntax_methods_invalid_subject.move:8:7
+  │
+8 │     #[syntax(index)]
+  │       ^^^^^^^^^^^^^ Invalid syntax annotation. Cannot associate a syntax method with a type parameter
+9 │     public fun index_t<T: drop>(_s: T, i: &u64): &u64 { i }
+  │                                     - But 'T' was declared as a type parameter here
+
+error[E02019]: invalid 'syntax' method type
+   ┌─ tests/move_2024/naming/index_syntax_methods_invalid_subject.move:12:40
+   │
+12 │     public fun index_multi_s(_mutli_s: (S,S), i: &u64): &u64 { i }
+   │                                        ^^^^^ Invalid type for syntax method definition
+   │
+   = Syntax methods may only be defined for single base types
+
+error[E04005]: expected a single type
+   ┌─ tests/move_2024/naming/index_syntax_methods_invalid_subject.move:12:40
+   │
+12 │     public fun index_multi_s(_mutli_s: (S,S), i: &u64): &u64 { i }
+   │                                        ^^^^^
+   │                                        │
+   │                                        Invalid parameter type
+   │                                        Expected a single type, but found expression list type: '(0x42::a::S, 0x42::a::S)'
+
+error[E02019]: invalid 'syntax' method type
+   ┌─ tests/move_2024/naming/index_syntax_methods_invalid_subject.move:15:34
+   │
+15 │     public fun index_unit(_unit: (), i: &u64): &u64 { i }
+   │                                  ^^ Invalid type for syntax method definition
+   │
+   = Syntax methods may only be defined for single base types
+
+error[E04005]: expected a single type
+   ┌─ tests/move_2024/naming/index_syntax_methods_invalid_subject.move:15:34
+   │
+15 │     public fun index_unit(_unit: (), i: &u64): &u64 { i }
+   │                                  ^^
+   │                                  │
+   │                                  Invalid parameter type
+   │                                  Expected a single type, but found expression list type: '()'
+
+error[E02015]: invalid attribute
+   ┌─ tests/move_2024/naming/index_syntax_methods_invalid_subject.move:17:7
+   │
+17 │     #[syntax(index)]
+   │       ^^^^^^^^^^^^^ Invalid attribute. syntax is only valid if the function takes at least one parameter

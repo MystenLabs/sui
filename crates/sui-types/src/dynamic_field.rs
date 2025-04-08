@@ -10,7 +10,7 @@ use crate::storage::ObjectStore;
 use crate::sui_serde::Readable;
 use crate::sui_serde::SuiTypeTag;
 use crate::{MoveTypeTagTrait, ObjectID, SequenceNumber, SUI_FRAMEWORK_ADDRESS};
-use fastcrypto::encoding::Base58;
+use fastcrypto::encoding::Base64;
 use fastcrypto::hash::HashFunction;
 use move_core_types::annotated_value::{MoveStruct, MoveValue};
 use move_core_types::ident_str;
@@ -61,12 +61,11 @@ where
 }
 
 #[serde_as]
-#[derive(Clone, Serialize, Deserialize, JsonSchema, Debug)]
+#[derive(Clone, Serialize, Deserialize, Debug)]
 #[serde(rename_all = "camelCase")]
 pub struct DynamicFieldInfo {
     pub name: DynamicFieldName,
-    #[schemars(with = "Base58")]
-    #[serde_as(as = "Readable<Base58, _>")]
+    #[serde_as(as = "Readable<Base64, _>")]
     pub bcs_name: Vec<u8>,
     pub type_: DynamicFieldType,
     pub object_type: String,

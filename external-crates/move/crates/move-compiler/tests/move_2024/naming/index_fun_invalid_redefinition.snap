@@ -1,0 +1,24 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: 2024.alpha
+  lint: false
+---
+error[E02015]: invalid attribute
+  ┌─ tests/move_2024/naming/index_fun_invalid_redefinition.move:8:14
+  │
+6 │     public fun index_s(s: &S): &S { s }
+  │                ------- This syntax method was previously defined here.
+7 │ 
+8 │     #[syntax(index)]
+  │              ^^^^^ Redefined 'index' 'syntax' method for '0x42::m::S'
+
+error[E02015]: invalid attribute
+   ┌─ tests/move_2024/naming/index_fun_invalid_redefinition.move:14:14
+   │
+12 │     public fun index_mut_s(s: &mut S): &mut S { s }
+   │                ----------- This syntax method was previously defined here.
+13 │ 
+14 │     #[syntax(index)]
+   │              ^^^^^ Redefined mutable 'index' 'syntax' method for '0x42::m::S'

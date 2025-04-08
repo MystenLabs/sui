@@ -1,0 +1,312 @@
+---
+source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
+---
+processed 22 tasks
+
+init:
+A: object(0,0), B: object(0,1)
+
+task 1, lines 8-29:
+//# publish
+created: object(1,0)
+mutated: object(0,2)
+gas summary: computation_cost: 1000000, storage_cost: 5798800,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 2, line 31:
+//# create-checkpoint
+Checkpoint created: 1
+
+task 3, line 33:
+//# run Test::M1::create --args 0 @B --sender A
+created: object(3,0)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 2302800,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 4, line 35:
+//# run Test::M1::create --args 1 @B --sender A
+created: object(4,0)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 2302800,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 5, line 37:
+//# run Test::M1::create --args 2 @A --sender A
+created: object(5,0)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 2302800,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 6, line 39:
+//# run Test::M1::create --args 3 @A --sender A
+created: object(6,0)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 2302800,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 7, line 41:
+//# run Test::M1::create --args 4 @A --sender A
+created: object(7,0)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 2302800,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 8, line 43:
+//# create-checkpoint
+Checkpoint created: 2
+
+task 9, line 45:
+//# run Test::M1::create --args 100 @B --sender A
+created: object(9,0)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 2302800,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 10, line 47:
+//# run Test::M1::create --args 101 @A --sender A
+created: object(10,0)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 2302800,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 11, line 49:
+//# run Test::M1::create --args 102 @B --sender A
+created: object(11,0)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 2302800,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 12, line 51:
+//# run Test::M1::create --args 103 @A --sender A
+created: object(12,0)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 2302800,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 13, line 53:
+//# run Test::M1::create --args 104 @B --sender A
+created: object(13,0)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 2302800,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 14, line 55:
+//# create-checkpoint
+Checkpoint created: 3
+
+task 15, lines 57-79:
+//# run-graphql
+Response: {
+  "data": {
+    "transactionBlocks": {
+      "pageInfo": {
+        "hasPreviousPage": false,
+        "hasNextPage": false,
+        "startCursor": "eyJjIjozLCJ0IjoyLCJpIjpmYWxzZX0",
+        "endCursor": "eyJjIjozLCJ0IjoxMSwiaSI6ZmFsc2V9"
+      },
+      "edges": [
+        {
+          "cursor": "eyJjIjozLCJ0IjoyLCJpIjpmYWxzZX0",
+          "node": {
+            "digest": "6xLEAWZ7yZ4LPYkMYJ4KMegSfAovuuL86hhMdoE4aqbH",
+            "effects": {
+              "checkpoint": {
+                "sequenceNumber": 2
+              }
+            }
+          }
+        },
+        {
+          "cursor": "eyJjIjozLCJ0IjozLCJpIjpmYWxzZX0",
+          "node": {
+            "digest": "2a2uYFbVZ7A4tYCF1Uc4XqgR4qTpttyn28bTfzCaRzFK",
+            "effects": {
+              "checkpoint": {
+                "sequenceNumber": 2
+              }
+            }
+          }
+        },
+        {
+          "cursor": "eyJjIjozLCJ0Ijo3LCJpIjpmYWxzZX0",
+          "node": {
+            "digest": "J1m6m73jbeeThGM5qiXLo2EHcuypYCDbET4XXzZYPJLb",
+            "effects": {
+              "checkpoint": {
+                "sequenceNumber": 3
+              }
+            }
+          }
+        },
+        {
+          "cursor": "eyJjIjozLCJ0Ijo5LCJpIjpmYWxzZX0",
+          "node": {
+            "digest": "2S2HvtQqyNMBL41HrEGLM8bwM96phPYCnjujFsr1YiUu",
+            "effects": {
+              "checkpoint": {
+                "sequenceNumber": 3
+              }
+            }
+          }
+        },
+        {
+          "cursor": "eyJjIjozLCJ0IjoxMSwiaSI6ZmFsc2V9",
+          "node": {
+            "digest": "UUNCfyvA7e3QWrmUx5ULvPfqBN3wGf6KbNfBZsyxK2Y",
+            "effects": {
+              "checkpoint": {
+                "sequenceNumber": 3
+              }
+            }
+          }
+        }
+      ]
+    }
+  }
+}
+
+task 16, lines 82-106:
+//# run-graphql
+Response: {
+  "data": {
+    "transactionBlocks": {
+      "pageInfo": {
+        "hasPreviousPage": true,
+        "hasNextPage": false,
+        "startCursor": "eyJjIjozLCJ0IjoxMCwiaSI6dHJ1ZX0",
+        "endCursor": "eyJjIjozLCJ0IjoxMSwiaSI6dHJ1ZX0"
+      },
+      "edges": [
+        {
+          "cursor": "eyJjIjozLCJ0IjoxMSwiaSI6ZmFsc2V9",
+          "node": {
+            "digest": "UUNCfyvA7e3QWrmUx5ULvPfqBN3wGf6KbNfBZsyxK2Y",
+            "effects": {
+              "checkpoint": {
+                "sequenceNumber": 3
+              }
+            }
+          }
+        }
+      ]
+    }
+  }
+}
+
+task 17, lines 108-132:
+//# run-graphql --cursors {"c":4,"t":10,"i":true}
+Response: {
+  "data": {
+    "transactionBlocks": {
+      "pageInfo": {
+        "hasPreviousPage": true,
+        "hasNextPage": true,
+        "startCursor": "eyJjIjo0LCJ0Ijo5LCJpIjp0cnVlfQ",
+        "endCursor": "eyJjIjo0LCJ0Ijo5LCJpIjp0cnVlfQ"
+      },
+      "edges": [
+        {
+          "cursor": "eyJjIjo0LCJ0Ijo5LCJpIjpmYWxzZX0",
+          "node": {
+            "digest": "2S2HvtQqyNMBL41HrEGLM8bwM96phPYCnjujFsr1YiUu",
+            "effects": {
+              "checkpoint": {
+                "sequenceNumber": 3
+              }
+            }
+          }
+        }
+      ]
+    }
+  }
+}
+
+task 18, lines 134-158:
+//# run-graphql --cursors {"c":4,"t":9,"i":true}
+Response: {
+  "data": {
+    "transactionBlocks": {
+      "pageInfo": {
+        "hasPreviousPage": true,
+        "hasNextPage": true,
+        "startCursor": "eyJjIjo0LCJ0Ijo2LCJpIjp0cnVlfQ",
+        "endCursor": "eyJjIjo0LCJ0Ijo4LCJpIjp0cnVlfQ"
+      },
+      "edges": [
+        {
+          "cursor": "eyJjIjo0LCJ0Ijo3LCJpIjpmYWxzZX0",
+          "node": {
+            "digest": "J1m6m73jbeeThGM5qiXLo2EHcuypYCDbET4XXzZYPJLb",
+            "effects": {
+              "checkpoint": {
+                "sequenceNumber": 3
+              }
+            }
+          }
+        }
+      ]
+    }
+  }
+}
+
+task 19, lines 160-184:
+//# run-graphql --cursors {"c":4,"t":6,"i":true}
+Response: {
+  "data": {
+    "transactionBlocks": {
+      "pageInfo": {
+        "hasPreviousPage": true,
+        "hasNextPage": true,
+        "startCursor": "eyJjIjo0LCJ0Ijo0LCJpIjp0cnVlfQ",
+        "endCursor": "eyJjIjo0LCJ0Ijo1LCJpIjp0cnVlfQ"
+      },
+      "edges": []
+    }
+  }
+}
+
+task 20, lines 186-209:
+//# run-graphql --cursors {"c":4,"t":4,"i":true}
+Response: {
+  "data": {
+    "transactionBlocks": {
+      "pageInfo": {
+        "hasPreviousPage": false,
+        "hasNextPage": true,
+        "startCursor": "eyJjIjo0LCJ0IjoyLCJpIjp0cnVlfQ",
+        "endCursor": "eyJjIjo0LCJ0IjozLCJpIjp0cnVlfQ"
+      },
+      "edges": [
+        {
+          "cursor": "eyJjIjo0LCJ0IjoyLCJpIjpmYWxzZX0",
+          "node": {
+            "digest": "6xLEAWZ7yZ4LPYkMYJ4KMegSfAovuuL86hhMdoE4aqbH",
+            "effects": {
+              "checkpoint": {
+                "sequenceNumber": 2
+              }
+            }
+          }
+        },
+        {
+          "cursor": "eyJjIjo0LCJ0IjozLCJpIjpmYWxzZX0",
+          "node": {
+            "digest": "2a2uYFbVZ7A4tYCF1Uc4XqgR4qTpttyn28bTfzCaRzFK",
+            "effects": {
+              "checkpoint": {
+                "sequenceNumber": 2
+              }
+            }
+          }
+        }
+      ]
+    }
+  }
+}
+
+task 21, lines 212-235:
+//# run-graphql --cursors {"c":4,"t":2,"i":true}
+Response: {
+  "data": {
+    "transactionBlocks": {
+      "pageInfo": {
+        "hasPreviousPage": false,
+        "hasNextPage": false,
+        "startCursor": null,
+        "endCursor": null
+      },
+      "edges": []
+    }
+  }
+}

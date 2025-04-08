@@ -1,0 +1,50 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: 2024.alpha
+  lint: false
+---
+error[E02010]: invalid name
+  ┌─ tests/move_2024/naming/macro_parameter_assignment.move:2:20
+  │
+2 │     macro fun call(f: |u64| -> u64, x: u64): u64 {
+  │     -----          ^ Invalid parameter name 'f'. 'macro' parameter names must start with '$' (or must be '_')
+  │     │               
+  │     Declared 'macro' here
+  │
+  = 'macro' parameters start with '$' to indicate that their arguments are not evaluated before the macro is expanded, meaning the entire expression is substituted. This is different from regular function parameters that are evaluated before the function is called.
+
+error[E02010]: invalid name
+  ┌─ tests/move_2024/naming/macro_parameter_assignment.move:2:37
+  │
+2 │     macro fun call(f: |u64| -> u64, x: u64): u64 {
+  │     -----                           ^ Invalid parameter name 'x'. 'macro' parameter names must start with '$' (or must be '_')
+  │     │                                
+  │     Declared 'macro' here
+  │
+  = 'macro' parameters start with '$' to indicate that their arguments are not evaluated before the macro is expanded, meaning the entire expression is substituted. This is different from regular function parameters that are evaluated before the function is called.
+
+error[E04029]: invalid function call
+  ┌─ tests/move_2024/naming/macro_parameter_assignment.move:5:9
+  │
+5 │         f(x)
+  │         ^ Unexpected invocation of parameter or local 'f'. Non-syntax variables cannot be invoked as functions
+  │
+  = Only macro syntax variables, e.g. '$f', may be invoked as functions.
+
+warning[W09005]: dead or unreachable code
+   ┌─ tests/move_2024/naming/macro_parameter_assignment.move:10:15
+   │
+10 │         call!(|_| 1, 0) + 1;
+   │               ^^^^^ Unused macro argument. Its expression will not be type checked and it will not evaluated
+   │
+   = This warning can be suppressed with '#[allow(dead_code)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[W09005]: dead or unreachable code
+   ┌─ tests/move_2024/naming/macro_parameter_assignment.move:10:22
+   │
+10 │         call!(|_| 1, 0) + 1;
+   │                      ^ Unused macro argument. Its expression will not be type checked and it will not evaluated
+   │
+   = This warning can be suppressed with '#[allow(dead_code)]' applied to the 'module' or module member ('const', 'fun', or 'struct')

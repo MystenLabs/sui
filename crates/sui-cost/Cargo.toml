@@ -22,6 +22,5 @@ sui-config.workspace = true
 sui-swarm-config.workspace = true
 sui-test-transaction-builder.workspace = true
 sui-move-build.workspace = true
-move-cli.workspace = true
 move-disassembler.workspace = true
 sui-json-rpc-types.workspace = true

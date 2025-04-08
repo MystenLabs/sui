@@ -1,0 +1,12 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: 2024.alpha
+  lint: false
+---
+error[E01002]: unexpected token
+  ┌─ tests/move_2024/parser/positional_with_named_struct_field.move:3:23
+  │
+3 │     public struct Foo(f: u64) has copy, drop;
+  │                       ^ Cannot use named fields in a positional definition

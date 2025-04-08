@@ -157,7 +157,7 @@ impl BridgeMessageEncoding for BlocklistCommitteeAction {
         bytes.push(u8::try_from(self.members_to_update.len()).unwrap());
 
         // Add list of updated members
-        // Members are represented as pubkey dervied evm addresses (20 bytes)
+        // Members are represented as pubkey derived evm addresses (20 bytes)
         let members_bytes = self
             .members_to_update
             .iter()

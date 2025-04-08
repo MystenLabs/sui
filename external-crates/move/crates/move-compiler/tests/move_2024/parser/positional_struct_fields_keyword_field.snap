@@ -1,0 +1,21 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: 2024.alpha
+  lint: false
+---
+error[E01002]: unexpected token
+  ┌─ tests/move_2024/parser/positional_struct_fields_keyword_field.move:3:23
+  │
+3 │     public struct Foo(fun)
+  │                       ^ Unexpected 'fun'. Expected a type
+
+error[E01002]: unexpected token
+  ┌─ tests/move_2024/parser/positional_struct_fields_keyword_field.move:3:26
+  │
+3 │     public struct Foo(fun)
+  │                          ^
+  │                          │
+  │                          Unexpected ')'
+  │                          Expected an identifier

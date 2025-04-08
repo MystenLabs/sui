@@ -1,0 +1,32 @@
+---
+source: crates/move-transactional-test-runner/src/framework.rs
+---
+processed 8 tasks
+
+task 1, line 33:
+//# run 0x42::M::empty_struct_vec
+return values: []
+
+task 2, line 35:
+//# run 0x42::M::empty_struct_vec
+return values: []
+
+task 3, line 37:
+//# run 0x42::M::empty_signer_vec
+return values: []
+
+task 4, line 39:
+//# run 0x42::M::empty_generic_vec --type-args 0x42::M::S
+return values: []
+
+task 5, line 41:
+//# run 0x42::M::empty_struct_vec_vec
+return values: []
+
+task 6, line 43:
+//# run 0x42::M::empty_signer_vec_vec
+return values: []
+
+task 7, line 45:
+//# run 0x42::M::empty_generic_vec_vec --type-args 0x42::M::S
+return values: []

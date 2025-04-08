@@ -1,0 +1,45 @@
+---
+source: crates/move-transactional-test-runner/src/framework.rs
+input_file: crates/bytecode-verifier-transactional-tests/tests/stack_usage_verifier/pack_invalid_number_arguments_enum.mvir
+---
+processed 4 tasks
+
+task 0, lines 1-11:
+//# publish
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000006::MonoTooMany'. Got VMError: {
+    major_status: POSITIVE_STACK_SIZE_AT_BLOCK_END,
+    sub_status: None,
+    location: 0x6::MonoTooMany,
+    indices: [(FunctionDefinition, 0)],
+    offsets: [(FunctionDefinitionIndex(0), 0)],
+}
+
+task 1, lines 13-23:
+//# publish
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000007::MonoTooFew'. Got VMError: {
+    major_status: NEGATIVE_STACK_SIZE_WITHIN_BLOCK,
+    sub_status: None,
+    location: 0x7::MonoTooFew,
+    indices: [(FunctionDefinition, 0)],
+    offsets: [(FunctionDefinitionIndex(0), 0)],
+}
+
+task 2, lines 25-35:
+//# publish
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000008::PolyTooMany'. Got VMError: {
+    major_status: POSITIVE_STACK_SIZE_AT_BLOCK_END,
+    sub_status: None,
+    location: 0x8::PolyTooMany,
+    indices: [(FunctionDefinition, 0)],
+    offsets: [(FunctionDefinitionIndex(0), 0)],
+}
+
+task 3, lines 37-47:
+//# publish
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000009::PolyTooFew'. Got VMError: {
+    major_status: NEGATIVE_STACK_SIZE_WITHIN_BLOCK,
+    sub_status: None,
+    location: 0x9::PolyTooFew,
+    indices: [(FunctionDefinition, 0)],
+    offsets: [(FunctionDefinitionIndex(0), 0)],
+}

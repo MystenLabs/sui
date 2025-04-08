@@ -1,0 +1,15 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: legacy
+  lint: false
+---
+error[E01002]: unexpected token
+  ┌─ tests/move_check/parser/global_access.move:6:24
+  │
+6 │         let _ : bool = ::exists<Self::R>(0x0);
+  │                        ^^
+  │                        │
+  │                        Unexpected '::'
+  │                        Expected an expression term

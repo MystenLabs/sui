@@ -1,0 +1,30 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: legacy
+  lint: false
+---
+error[E04007]: incompatible types
+   ┌─ tests/move_check/unit_test/entry_is_public_in_test_contexts.move:11:9
+   │
+ 4 │     entry fun internal(_ :u64) {}
+   │                           --- Expected: 'u64'
+   ·
+11 │         a::m::internal(0u8)
+   │         ^^^^^^^^^^^^^^^^^^^
+   │         │              │
+   │         │              Given: 'u8'
+   │         Invalid call of 'a::m::internal'. Invalid argument for parameter '_'
+
+error[E04007]: incompatible types
+   ┌─ tests/move_check/unit_test/entry_is_public_in_test_contexts.move:19:9
+   │
+ 4 │     entry fun internal(_ :u64) {}
+   │                           --- Expected: 'u64'
+   ·
+19 │         a::m::internal(0u8)
+   │         ^^^^^^^^^^^^^^^^^^^
+   │         │              │
+   │         │              Given: 'u8'
+   │         Invalid call of 'a::m::internal'. Invalid argument for parameter '_'

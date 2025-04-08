@@ -13,7 +13,7 @@ use sui_json_rpc_types::{
     SuiTransactionBlockResponse, SuiTransactionBlockResponseOptions,
 };
 use sui_keys::keystore::{AccountKeystore, Keystore};
-use sui_move_build::BuildConfig as MoveBuildConfig;
+use sui_move_build::BuildConfig;
 
 use sui_sdk::SuiClient;
 use sui_types::base_types::{ObjectID, ObjectRef, SuiAddress};
@@ -135,7 +135,7 @@ pub async fn init_package(
 ) -> Result<InitRet> {
     let path_buf = base::reroot_path(Some(path))?;
 
-    let move_build_config = MoveBuildConfig::default();
+    let move_build_config = BuildConfig::new_for_testing();
     let compiled_modules = move_build_config.build(path_buf.as_path())?;
     let modules_bytes = compiled_modules.get_package_bytes(false);
 
@@ -297,8 +297,14 @@ async fn test_mint() {
             }
         })
         .collect::<Vec<_>>();
-    let coin1 = coins.iter().find(|coin| coin.1 == address1).unwrap();
-    let coin2 = coins.iter().find(|coin| coin.1 == address2).unwrap();
+    let coin1 = coins
+        .iter()
+        .find(|coin| coin.1.get_address_owner_address().unwrap() == address1)
+        .unwrap();
+    let coin2 = coins
+        .iter()
+        .find(|coin| coin.1.get_address_owner_address().unwrap() == address2)
+        .unwrap();
     assert!(coin1.0.to_string().contains("::test_coin::TEST_COIN"));
     assert!(coin2.0.to_string().contains("::test_coin::TEST_COIN"));
 }

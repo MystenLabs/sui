@@ -61,7 +61,6 @@ use crate::{
 
 use anyhow::{anyhow, Result};
 use crossbeam::channel::Sender;
-use derivative::*;
 use im::ordmap::OrdMap;
 use lsp_server::{Request, RequestId};
 use lsp_types::{
@@ -69,7 +68,6 @@ use lsp_types::{
     GotoDefinitionParams, Hover, HoverContents, HoverParams, Location, MarkupContent, MarkupKind,
     Position, Range, ReferenceParams, SymbolKind,
 };
-
 use sha2::{Digest, Sha256};
 use std::{
     cmp,
@@ -79,6 +77,7 @@ use std::{
     sync::{Arc, Condvar, Mutex},
     thread,
     time::Instant,
+    vec,
 };
 use tempfile::tempdir;
 use url::Url;
@@ -93,55 +92,58 @@ use move_compiler::{
     editions::{Edition, FeatureGate, Flavor},
     expansion::{
         ast::{self as E, AbilitySet, ModuleIdent, ModuleIdent_, Value, Value_, Visibility},
-        name_validation::{IMPLICIT_STD_MEMBERS, IMPLICIT_STD_MODULES},
+        name_validation::{
+            ModuleMemberKind, IMPLICIT_STD_MEMBERS, IMPLICIT_STD_MODULES, IMPLICIT_SUI_MEMBERS,
+            IMPLICIT_SUI_MODULES,
+        },
     },
     linters::LintLevel,
-    naming::ast::{DatatypeTypeParameter, StructFields, Type, TypeName_, Type_, VariantFields},
-    parser::{
-        ast::{self as P},
-        comments::CommentMap,
+    naming::ast::{
+        DatatypeTypeParameter, Neighbor, StructFields, Type, TypeName_, Type_, VariantFields,
     },
+    parser::ast::{self as P, DocComment},
     shared::{
         files::MappedFiles, unique_map::UniqueMap, Identifier, Name, NamedAddressMap,
         NamedAddressMaps,
     },
     typing::{
-        ast::{
-            self as T, Exp, ExpListItem, ModuleDefinition, SequenceItem, SequenceItem_,
-            UnannotatedExp_,
-        },
+        ast::{Exp, ExpListItem, ModuleDefinition, SequenceItem, SequenceItem_, UnannotatedExp_},
         visitor::TypingVisitorContext,
     },
     unit_test::filter_test_members::UNIT_TEST_POISON_FUN_NAME,
     PASS_CFGIR, PASS_PARSER, PASS_TYPING,
 };
-use move_core_types::account_address::AccountAddress;
+use move_core_types::{account_address::AccountAddress, parsing::address::NumericalAddress};
 use move_ir_types::location::*;
 use move_package::{
     compilation::{build_plan::BuildPlan, compiled_package::ModuleFormat},
     resolution::resolution_graph::ResolvedGraph,
-    source_package::parsed_manifest::FileName,
+    source_package::parsed_manifest::Dependencies,
 };
 use move_symbol_pool::Symbol;
 
 const MANIFEST_FILE_NAME: &str = "Move.toml";
 const STD_LIB_PKG_ADDRESS: &str = "0x1";
-type SourceFiles = BTreeMap<FileHash, (FileName, String, bool)>;
+const SUI_LIB_PKG_ADDRESS: &str = "0x2";
 
 /// Information about compiled program (ASTs at different levels)
 #[derive(Clone)]
-struct CompiledProgram {
-    parsed: P::Program,
-    typed: T::Program,
+pub struct CompiledProgram {
+    pub parsed: P::Program,
+    pub typed_modules: UniqueMap<ModuleIdent, ModuleDefinition>,
 }
 
-/// Information about cached dependencies used during compilation and analysis
+/// Package data used during compilation and analysis
 #[derive(Clone)]
-struct CachedDeps {
+struct AnalyzedPkgInfo {
     /// Cached fully compiled program representing dependencies
-    compiled_program: Arc<FullyCompiledProgram>,
+    program_deps: Arc<FullyCompiledProgram>,
     /// Cached symbols computation data for dependencies
     symbols_data: Option<Arc<SymbolsComputationData>>,
+    /// Compiled user program
+    program: Option<Arc<CompiledProgram>>,
+    /// Mapping from file paths to file hashes
+    file_hashes: Arc<BTreeMap<PathBuf, FileHash>>,
 }
 
 /// Information about the compiled package and data structures
@@ -155,19 +157,15 @@ pub struct CompiledPkgInfo {
     /// A combined hash for manifest files of the dependencies
     deps_hash: String,
     /// Information about cached dependencies
-    cached_deps: Option<CachedDeps>,
+    cached_deps: Option<AnalyzedPkgInfo>,
     /// Compiled user program
     program: CompiledProgram,
-    /// Source files
-    source_files: SourceFiles,
     /// Maped files
     mapped_files: MappedFiles,
     /// Edition of the compiler
     edition: Option<Edition>,
     /// Compiler info
     compiler_info: Option<CompilerInfo>,
-    /// Comments for both user code and the dependencies
-    all_comments: CommentMap,
 }
 
 /// Data used during symbols computation
@@ -188,6 +186,12 @@ pub struct SymbolsComputationData {
     mod_to_alias_lengths: BTreeMap<String, BTreeMap<Position, usize>>,
 }
 
+impl Default for SymbolsComputationData {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl SymbolsComputationData {
     pub fn new() -> Self {
         Self {
@@ -200,9 +204,10 @@ impl SymbolsComputationData {
     }
 }
 
-/// Precomputed information about package dependencies.
+/// Precomputed information about the package and its dependencies
+/// cached with the purpose of being re-used during the analysis.
 #[derive(Clone)]
-pub struct PrecomputedPkgDepsInfo {
+pub struct PrecomputedPkgInfo {
     /// Hash of the manifest file for a given package
     manifest_hash: Option<FileHash>,
     /// Hash of dependency source files
@@ -211,6 +216,10 @@ pub struct PrecomputedPkgDepsInfo {
     deps: Arc<FullyCompiledProgram>,
     /// Symbols computation data
     deps_symbols_data: Arc<SymbolsComputationData>,
+    /// Compiled user program
+    program: Arc<CompiledProgram>,
+    /// Mapping from file paths to file hashes
+    file_hashes: Arc<BTreeMap<PathBuf, FileHash>>,
 }
 
 /// Location of a use's identifier
@@ -404,16 +413,23 @@ pub struct MemberDef {
 }
 
 /// Definition of a local (or parameter)
-#[allow(clippy::non_canonical_partial_ord_impl)]
-#[derive(Derivative, Debug, Clone, Eq, PartialEq)]
-#[derivative(PartialOrd, Ord)]
+#[derive(Debug, Clone, Eq, PartialEq)]
 pub struct LocalDef {
     /// Location of the definition
     pub def_loc: Loc,
     /// Type of definition
-    #[derivative(PartialOrd = "ignore")]
-    #[derivative(Ord = "ignore")]
     pub def_type: Type,
+}
+
+impl PartialOrd for LocalDef {
+    fn partial_cmp(&self, other: &Self) -> Option<cmp::Ordering> {
+        Some(self.cmp(other))
+    }
+}
+impl Ord for LocalDef {
+    fn cmp(&self, other: &Self) -> cmp::Ordering {
+        self.def_loc.cmp(&other.def_loc)
+    }
 }
 
 /// Information about call sites relevant to the IDE
@@ -451,6 +467,12 @@ pub struct FieldOrderInfo {
     variants: BTreeMap<String, VariantFieldOrderInfo>,
 }
 
+impl Default for FieldOrderInfo {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl FieldOrderInfo {
     pub fn new() -> Self {
         Self {
@@ -458,6 +480,30 @@ impl FieldOrderInfo {
             variants: BTreeMap::new(),
         }
     }
+}
+
+/// Module-level definitions and other module-related info
+#[derive(Debug, Clone, Copy, Ord, PartialOrd, PartialEq, Eq)]
+pub enum AutoImportInsertionKind {
+    AfterLastImport,
+    BeforeFirstMember, // when no imports exist
+}
+
+/// Information needed for auto-import insertion. We do our best
+/// to make the insertion fit with what's already in the source file.
+/// In particular, if uses are already preasent, we insert the new import
+/// in the following line keeping the tabulation of the previous import.
+/// If no imports are present, we insert the new import before the first
+/// module member, pushing this member down but keeping its original
+/// tabulation.
+#[derive(Debug, Clone, Copy, Ord, PartialOrd, PartialEq, Eq)]
+pub struct AutoImportInsertionInfo {
+    // Kind of auto-import insertion
+    pub kind: AutoImportInsertionKind,
+    // Position in file where insertion should start
+    pub pos: Position,
+    // Tabulation in number of spaces
+    pub tabulation: usize,
 }
 
 /// Module-level definitions and other module-related info
@@ -482,6 +528,10 @@ pub struct ModuleDefs {
     pub untyped_defs: BTreeSet<Loc>,
     /// Information about calls in this module
     pub call_infos: BTreeMap<Loc, CallInfo>,
+    /// Position where auto-imports should be inserted
+    pub import_insert_info: Option<AutoImportInsertionInfo>,
+    /// Dependencies summary
+    pub neighbors: UniqueMap<ModuleIdent, Neighbor>,
 }
 
 #[derive(Clone, Debug)]
@@ -663,7 +713,7 @@ pub struct Symbols {
 
 #[derive(Debug, Clone, Eq, PartialEq, Ord, PartialOrd)]
 enum RunnerState {
-    Run(PathBuf),
+    Run(BTreeSet<PathBuf>),
     Wait,
     Quit,
 }
@@ -1264,44 +1314,82 @@ pub fn mod_ident_to_ide_string(
     let suffix = if is_access_chain_prefix { "::" } else { "" };
     match mod_ident.address {
         A::Numerical { name, value, .. } => {
-            let pkg_name = match name {
-                Some(n) => n.to_string(),
-                None => value.to_string(),
-            };
+            fn strip_prefix(
+                addr_name: Option<Name>,
+                addr_value: Spanned<NumericalAddress>,
+                mod_ident: &ModuleIdent_,
+                datatype_name_opt: Option<&Symbol>,
+                suffix: &str,
+                pkg_addr: &str,
+                implicit_modules: &[Symbol],
+                implicit_members: &[(Symbol, Symbol, ModuleMemberKind)],
+            ) -> (bool, String) {
+                let pkg_name = match addr_name {
+                    Some(n) => n.to_string(),
+                    None => addr_value.to_string(),
+                };
 
-            let Ok(std_lib_pkg_address) = AccountAddress::from_hex_literal(STD_LIB_PKG_ADDRESS)
-            else {
-                // getting stdlib address did not work - use the whole thing
-                return format!("{pkg_name}::{}{}", mod_ident.module, suffix);
-            };
-            if value.value.into_inner() != std_lib_pkg_address {
-                // it's not a stdlib package - use the whole thing
-                return format!("{pkg_name}::{}{}", mod_ident.module, suffix);
-            }
-            // try stripping both package and module if this conversion
-            // is for a datatype, oherwise try only stripping package
-            if let Some(datatype_name) = datatype_name_opt {
-                if IMPLICIT_STD_MEMBERS.iter().any(
-                    |(implicit_mod_name, implicit_datatype_name, _)| {
-                        mod_ident.module.value() == *implicit_mod_name
-                            && datatype_name == implicit_datatype_name
-                    },
-                ) {
-                    // strip both package and module (whether its meant to be
-                    // part of access chain or not, if there is not module,
-                    // there should be no `::` at the end)
-                    return "".to_string();
+                let Ok(std_lib_pkg_address) = AccountAddress::from_hex_literal(pkg_addr) else {
+                    // getting stdlib address did not work - use the whole thing
+                    return (false, format!("{pkg_name}::{}{}", mod_ident.module, suffix));
+                };
+                if addr_value.value.into_inner() != std_lib_pkg_address {
+                    // it's not a stdlib package - use the whole thing
+                    return (false, format!("{pkg_name}::{}{}", mod_ident.module, suffix));
                 }
+                // try stripping both package and module if this conversion
+                // is for a datatype, oherwise try only stripping package
+                if let Some(datatype_name) = datatype_name_opt {
+                    if implicit_members.iter().any(
+                        |(implicit_mod_name, implicit_datatype_name, _)| {
+                            mod_ident.module.value() == *implicit_mod_name
+                                && datatype_name == implicit_datatype_name
+                        },
+                    ) {
+                        // strip both package and module (whether its meant to be
+                        // part of access chain or not, if there is not module,
+                        // there should be no `::` at the end)
+                        return (true, "".to_string());
+                    }
+                }
+                if implicit_modules
+                    .iter()
+                    .any(|implicit_mod_name| mod_ident.module.value() == *implicit_mod_name)
+                {
+                    // strip package
+                    return (true, format!("{}{}", mod_ident.module.value(), suffix));
+                }
+                // stripping prefix didn't work - use the whole thing
+                (true, format!("{pkg_name}::{}{}", mod_ident.module, suffix))
             }
-            if IMPLICIT_STD_MODULES
-                .iter()
-                .any(|implicit_mod_name| mod_ident.module.value() == *implicit_mod_name)
-            {
-                // strip package
-                return format!("{}{}", mod_ident.module.value(), suffix);
+
+            let (strippable, mut res) = strip_prefix(
+                name,
+                value,
+                mod_ident,
+                datatype_name_opt,
+                suffix,
+                STD_LIB_PKG_ADDRESS,
+                IMPLICIT_STD_MODULES,
+                IMPLICIT_STD_MEMBERS,
+            );
+
+            // check for Sui implicits only if the previous call determined
+            // that the prefix was not strippable with respect to implicits
+            // passed as its arguments
+            if !strippable {
+                (_, res) = strip_prefix(
+                    name,
+                    value,
+                    mod_ident,
+                    datatype_name_opt,
+                    suffix,
+                    SUI_LIB_PKG_ADDRESS,
+                    IMPLICIT_SUI_MODULES,
+                    IMPLICIT_SUI_MEMBERS,
+                );
             }
-            // stripping prefix didn't work - use the whole thing
-            format!("{pkg_name}::{}{}", mod_ident.module, suffix)
+            res
         }
         A::NamedUnassigned(n) => format!("{n}::{}", mod_ident.module).to_string(),
     }
@@ -1365,9 +1453,10 @@ impl SymbolicatorRunner {
     pub fn new(
         ide_files_root: VfsPath,
         symbols_map: Arc<Mutex<BTreeMap<PathBuf, Symbols>>>,
-        pkg_deps: Arc<Mutex<BTreeMap<PathBuf, PrecomputedPkgDepsInfo>>>,
+        packages_info: Arc<Mutex<BTreeMap<PathBuf, PrecomputedPkgInfo>>>,
         sender: Sender<Result<BTreeMap<PathBuf, Vec<Diagnostic>>>>,
         lint: LintLevel,
+        implicit_deps: Dependencies,
     ) -> Self {
         let mtx_cvar = Arc::new((Mutex::new(RunnerState::Wait), Condvar::new()));
         let thread_mtx_cvar = mtx_cvar.clone();
@@ -1381,78 +1470,70 @@ impl SymbolicatorRunner {
                 // infinite loop to wait for symbolication requests
                 eprintln!("starting symbolicator runner loop");
                 loop {
-                    let starting_path_opt = {
+                    let starting_paths_opt = {
                         // hold the lock only as long as it takes to get the data, rather than through
                         // the whole symbolication process (hence a separate scope here)
                         let mut symbolicate = mtx.lock().unwrap();
                         match symbolicate.clone() {
                             RunnerState::Quit => break,
-                            RunnerState::Run(root_dir) => {
+                            RunnerState::Run(starting_paths) => {
                                 *symbolicate = RunnerState::Wait;
-                                Some(root_dir)
+                                Some(starting_paths)
                             }
                             RunnerState::Wait => {
                                 // wait for next request
                                 symbolicate = cvar.wait(symbolicate).unwrap();
                                 match symbolicate.clone() {
                                     RunnerState::Quit => break,
-                                    RunnerState::Run(root_dir) => {
+                                    RunnerState::Run(starting_paths) => {
                                         *symbolicate = RunnerState::Wait;
-                                        Some(root_dir)
+                                        Some(starting_paths)
                                     }
                                     RunnerState::Wait => None,
                                 }
                             }
                         }
                     };
-                    if let Some(starting_path) = starting_path_opt {
-                        let root_dir = Self::root_dir(&starting_path);
-                        if root_dir.is_none() && !missing_manifests.contains(&starting_path) {
-                            eprintln!("reporting missing manifest");
-
-                            // report missing manifest file only once to avoid cluttering IDE's UI in
-                            // cases when developer indeed intended to open a standalone file that was
-                            // not meant to compile
-                            missing_manifests.insert(starting_path);
-                            if let Err(err) = sender.send(Err(anyhow!(
-                                "Unable to find package manifest. Make sure that
-                            the source files are located in a sub-directory of a package containing
-                            a Move.toml file. "
-                            ))) {
-                                eprintln!("could not pass missing manifest error: {:?}", err);
-                            }
-                            continue;
-                        }
-                        eprintln!("symbolication started");
-                        let pkg_path = root_dir.unwrap();
-                        match get_symbols(
-                            pkg_deps.clone(),
-                            ide_files_root.clone(),
-                            pkg_path.as_path(),
-                            lint,
-                            None,
-                        ) {
-                            Ok((symbols_opt, lsp_diagnostics)) => {
-                                eprintln!("symbolication finished");
-                                if let Some(new_symbols) = symbols_opt {
-                                    // replace symbolication info for a given package
-                                    //
-                                    // TODO: we may consider "unloading" symbolication information when
-                                    // files/directories are being closed but as with other performance
-                                    // optimizations (e.g. incrementalizatino of the vfs), let's wait
-                                    // until we know we actually need it
-                                    let mut old_symbols_map = symbols_map.lock().unwrap();
-                                    old_symbols_map.insert(pkg_path, new_symbols);
+                    if let Some(starting_paths) = starting_paths_opt {
+                        // aggregate all starting paths by package
+                        let pkgs_to_analyze = Self::pkgs_to_analyze(
+                            starting_paths,
+                            &mut missing_manifests,
+                            sender.clone(),
+                        );
+                        for (pkg_path, modified_files) in pkgs_to_analyze.into_iter() {
+                            eprintln!("symbolication started");
+                            match get_symbols(
+                                packages_info.clone(),
+                                ide_files_root.clone(),
+                                pkg_path.as_path(),
+                                Some(modified_files.into_iter().collect()),
+                                lint,
+                                None,
+                                implicit_deps.clone(),
+                            ) {
+                                Ok((symbols_opt, lsp_diagnostics)) => {
+                                    eprintln!("symbolication finished");
+                                    if let Some(new_symbols) = symbols_opt {
+                                        // replace symbolication info for a given package
+                                        //
+                                        // TODO: we may consider "unloading" symbolication information when
+                                        // files/directories are being closed but as with other performance
+                                        // optimizations (e.g. incrementalizatino of the vfs), let's wait
+                                        // until we know we actually need it
+                                        let mut old_symbols_map = symbols_map.lock().unwrap();
+                                        old_symbols_map.insert(pkg_path.clone(), new_symbols);
+                                    }
+                                    // set/reset (previous) diagnostics
+                                    if let Err(err) = sender.send(Ok(lsp_diagnostics)) {
+                                        eprintln!("could not pass diagnostics: {:?}", err);
+                                    }
                                 }
-                                // set/reset (previous) diagnostics
-                                if let Err(err) = sender.send(Ok(lsp_diagnostics)) {
-                                    eprintln!("could not pass diagnostics: {:?}", err);
-                                }
-                            }
-                            Err(err) => {
-                                eprintln!("symbolication failed: {:?}", err);
-                                if let Err(err) = sender.send(Err(err)) {
-                                    eprintln!("could not pass compiler error: {:?}", err);
+                                Err(err) => {
+                                    eprintln!("symbolication failed: {:?}", err);
+                                    if let Err(err) = sender.send(Err(err)) {
+                                        eprintln!("could not pass compiler error: {:?}", err);
+                                    }
                                 }
                             }
                         }
@@ -1464,11 +1545,56 @@ impl SymbolicatorRunner {
         runner
     }
 
+    /// Aggregates all starting paths by package
+    fn pkgs_to_analyze(
+        starting_paths: BTreeSet<PathBuf>,
+        missing_manifests: &mut BTreeSet<PathBuf>,
+        sender: Sender<Result<BTreeMap<PathBuf, Vec<Diagnostic>>>>,
+    ) -> BTreeMap<PathBuf, BTreeSet<PathBuf>> {
+        let mut pkgs_to_analyze: BTreeMap<PathBuf, BTreeSet<PathBuf>> = BTreeMap::new();
+        for starting_path in &starting_paths {
+            let Some(root_dir) = Self::root_dir(starting_path) else {
+                if !missing_manifests.contains(starting_path) {
+                    eprintln!("reporting missing manifest");
+                    // report missing manifest file only once to avoid cluttering IDE's UI in
+                    // cases when developer indeed intended to open a standalone file that was
+                    // not meant to compile
+                    missing_manifests.insert(starting_path.clone());
+                    if let Err(err) = sender.send(Err(anyhow!(
+                        "Unable to find package manifest. Make sure that
+                    the source files are located in a sub-directory of a package containing
+                    a Move.toml file. "
+                    ))) {
+                        eprintln!("could not pass missing manifest error: {:?}", err);
+                    }
+                }
+                continue;
+            };
+            // The mutext value is only set by the `on_text_document_sync_notification` handler
+            // and can only contain a valid Move file path, so we simply collect a set of Move
+            // file paths here to pass them to the symbolicator.
+            let modfied_files = pkgs_to_analyze.entry(root_dir.clone()).or_default();
+            modfied_files.insert(starting_path.clone());
+        }
+        pkgs_to_analyze
+    }
+
     pub fn run(&self, starting_path: PathBuf) {
         eprintln!("scheduling run for {:?}", starting_path);
         let (mtx, cvar) = &*self.mtx_cvar;
         let mut symbolicate = mtx.lock().unwrap();
-        *symbolicate = RunnerState::Run(starting_path);
+        match symbolicate.clone() {
+            RunnerState::Quit => (), // do nothing as we are quitting
+            RunnerState::Run(mut all_starting_paths) => {
+                all_starting_paths.insert(starting_path);
+                *symbolicate = RunnerState::Run(all_starting_paths);
+            }
+            RunnerState::Wait => {
+                let mut all_starting_paths = BTreeSet::new();
+                all_starting_paths.insert(starting_path);
+                *symbolicate = RunnerState::Run(all_starting_paths);
+            }
+        }
         cvar.notify_one();
         eprintln!("scheduled run");
     }
@@ -1742,19 +1868,134 @@ impl Symbols {
 
 fn has_precompiled_deps(
     pkg_path: &Path,
-    pkg_dependencies: Arc<Mutex<BTreeMap<PathBuf, PrecomputedPkgDepsInfo>>>,
+    pkg_dependencies: Arc<Mutex<BTreeMap<PathBuf, PrecomputedPkgInfo>>>,
 ) -> bool {
     let pkg_deps = pkg_dependencies.lock().unwrap();
     pkg_deps.contains_key(pkg_path)
 }
 
+/// Checks if a hash is included in the file hashes list.
+/// We only consider file hashes from files.
+fn hash_included_in_file_hashes(
+    hash: FileHash,
+    modified_files: &BTreeSet<PathBuf>,
+    file_hashes: Arc<BTreeMap<PathBuf, FileHash>>,
+) -> bool {
+    modified_files.iter().any(|fpath| {
+        file_hashes.get(fpath).map_or_else(
+            || {
+                debug_assert!(false);
+                false
+            },
+            |fhash| hash == *fhash,
+        )
+    })
+}
+
+/// Checks if a parsed module has been modified by comparing
+/// file hash in the module with the file hashes provided
+/// as an argument to see if module hash is included in the
+/// hashes provided. We only consider file hashes from modified
+/// files.
+fn is_parsed_mod_modified(
+    mdef: &P::ModuleDefinition,
+    modified_files: &BTreeSet<PathBuf>,
+    file_hashes: Arc<BTreeMap<PathBuf, FileHash>>,
+) -> bool {
+    !hash_included_in_file_hashes(mdef.loc.file_hash(), modified_files, file_hashes)
+}
+
+/// Checks if a typed module has been modified by comparing
+/// file hash in the module with the file hashes provided
+/// as an argument to see if module hash is included in the
+/// hashes provided. We only consider file hashes from modified
+/// files.
+fn is_typed_mod_modified(
+    mdef: &ModuleDefinition,
+    modified_files: &BTreeSet<PathBuf>,
+    file_hashes: Arc<BTreeMap<PathBuf, FileHash>>,
+) -> bool {
+    !hash_included_in_file_hashes(mdef.loc.file_hash(), modified_files, file_hashes)
+}
+
+/// Checks if a parsed package has been modified by comparing
+/// file hash in the package's modules with the file hashes provided
+/// as an argument to see if all module hashes are included
+/// in the hashes provided. We only consider file hashes from modified
+/// files.
+fn is_parsed_pkg_modified(
+    pkg_def: &P::PackageDefinition,
+    modified_files: &BTreeSet<PathBuf>,
+    file_hashes: Arc<BTreeMap<PathBuf, FileHash>>,
+) -> bool {
+    match &pkg_def.def {
+        P::Definition::Module(mdef) => is_parsed_mod_modified(mdef, modified_files, file_hashes),
+        P::Definition::Address(adef) => adef
+            .modules
+            .iter()
+            .any(|mdef| is_parsed_mod_modified(mdef, modified_files, file_hashes.clone())),
+    }
+}
+
+/// Merges a cached compiled program with newly computed compiled program
+/// In the newly computed program, only modified files are fully compiled
+/// and these files are merged with the cached compiled program.
+fn merge_user_programs(
+    cached_info_opt: Option<AnalyzedPkgInfo>,
+    parsed_program_new: P::Program,
+    typed_program_modules_new: UniqueMap<ModuleIdent, ModuleDefinition>,
+    file_hashes_new: Arc<BTreeMap<PathBuf, FileHash>>,
+    files_to_compile: BTreeSet<PathBuf>,
+) -> (P::Program, UniqueMap<ModuleIdent, ModuleDefinition>) {
+    // unraps are safe as this function only called when cached compiled program exists
+    let cached_info = cached_info_opt.unwrap();
+    let compiled_program = cached_info.program.unwrap();
+    let file_hashes_cached = cached_info.file_hashes;
+    let mut parsed_program_cached = compiled_program.parsed.clone();
+    let mut typed_modules_cached = compiled_program.typed_modules.clone();
+    // address maps might have changed but all would be computed in full during
+    // incremental compilation as only function bodies are omitted
+    parsed_program_cached.named_address_maps = parsed_program_new.named_address_maps;
+    // remove modules from user code that belong to modified files (use new
+    // file hashes - if cached module's hash is on the list of new file hashes, it means
+    // that nothing changed)
+    parsed_program_cached.source_definitions.retain(|pkg_def| {
+        !is_parsed_pkg_modified(pkg_def, &files_to_compile, file_hashes_new.clone())
+    });
+    let mut typed_modules_cached_filtered = UniqueMap::new();
+    for (mident, mdef) in typed_modules_cached.into_iter() {
+        if !is_typed_mod_modified(&mdef, &files_to_compile, file_hashes_new.clone()) {
+            _ = typed_modules_cached_filtered.add(mident, mdef);
+        }
+    }
+    typed_modules_cached = typed_modules_cached_filtered;
+    // add new modules from user code (use cached file hashes - if new module's hash is on the list of
+    // cached file hashes, it means that nothing' changed)
+    for pkg_def in parsed_program_new.source_definitions {
+        if is_parsed_pkg_modified(&pkg_def, &files_to_compile, file_hashes_cached.clone()) {
+            parsed_program_cached.source_definitions.push(pkg_def);
+        }
+    }
+    for (mident, mdef) in typed_program_modules_new.into_iter() {
+        if is_typed_mod_modified(&mdef, &files_to_compile, file_hashes_cached.clone()) {
+            typed_modules_cached.remove(&mident); // in case new file has new definition of the module
+            _ = typed_modules_cached.add(mident, mdef);
+        }
+    }
+
+    (parsed_program_cached, typed_modules_cached)
+}
+
 /// Builds a package at a given path and, if successful, returns parsed AST
 /// and typed AST as well as (regardless of success) diagnostics.
+/// See `get_symbols` for explanation of what `modified_files` parameter is.
 pub fn get_compiled_pkg(
-    pkg_dependencies: Arc<Mutex<BTreeMap<PathBuf, PrecomputedPkgDepsInfo>>>,
+    packages_info: Arc<Mutex<BTreeMap<PathBuf, PrecomputedPkgInfo>>>,
     ide_files_root: VfsPath,
     pkg_path: &Path,
+    modified_files: Option<Vec<PathBuf>>,
     lint: LintLevel,
+    implicit_deps: Dependencies,
 ) -> Result<(Option<CompiledPkgInfo>, BTreeMap<PathBuf, Vec<Diagnostic>>)> {
     let build_config = move_package::BuildConfig {
         test_mode: true,
@@ -1762,7 +2003,8 @@ pub fn get_compiled_pkg(
         install_dir: Some(tempdir().unwrap().path().to_path_buf()),
         default_flavor: Some(Flavor::Sui),
         lint_flag: lint.into(),
-        skip_fetch_latest_git_deps: has_precompiled_deps(pkg_path, pkg_dependencies.clone()),
+        skip_fetch_latest_git_deps: has_precompiled_deps(pkg_path, packages_info.clone()),
+        implicit_dependencies: implicit_deps,
         ..Default::default()
     };
 
@@ -1793,27 +2035,26 @@ pub fn get_compiled_pkg(
         None
     };
 
-    let mut mapped_files: MappedFiles = MappedFiles::empty();
-
     // Hash dependencies so we can check if something has changed.
-    let source_files = file_sources(&resolution_graph, overlay_fs_root.clone());
-    let mut hasher = Sha256::new();
-    source_files
-        .iter()
-        .filter(|(_, (_, _, is_dep))| *is_dep)
-        .for_each(|(fhash, _)| hasher.update(fhash.0));
-    let deps_hash = format!("{:X}", hasher.finalize());
-
+    let (mapped_files, deps_hash) =
+        compute_mapped_files(&resolution_graph, overlay_fs_root.clone());
+    let file_hashes: Arc<BTreeMap<PathBuf, FileHash>> = Arc::new(
+        mapped_files
+            .file_name_mapping()
+            .iter()
+            .map(|(fhash, fpath)| (fpath.clone(), *fhash))
+            .collect(),
+    );
     let compiler_flags = resolution_graph.build_options.compiler_flags().clone();
     let build_plan =
-        BuildPlan::create(resolution_graph)?.set_compiler_vfs_root(overlay_fs_root.clone());
+        BuildPlan::create(&resolution_graph)?.set_compiler_vfs_root(overlay_fs_root.clone());
     let mut parsed_ast = None;
     let mut typed_ast = None;
     let mut compiler_info = None;
     let mut diagnostics = None;
 
     let mut dependencies = build_plan.compute_dependencies();
-    let cached_deps = if let Ok(deps_package_paths) = dependencies.make_deps_for_compiler() {
+    let cached_info_opt = if let Ok(deps_package_paths) = dependencies.make_deps_for_compiler() {
         // Partition deps_package according whether src is available
         let src_deps = deps_package_paths
             .iter()
@@ -1831,18 +2072,19 @@ pub fn get_compiled_pkg(
             .filter_map(|p| p.name.as_ref().map(|(n, _)| *n))
             .collect::<BTreeSet<_>>();
 
-        let pkg_deps = pkg_dependencies.lock().unwrap();
-        let pkg_cached_deps = match pkg_deps.get(pkg_path) {
+        let pkg_info = packages_info.lock().unwrap();
+        let pkg_cached_deps = match pkg_info.get(pkg_path) {
             Some(d)
                 if manifest_hash.is_some()
                     && manifest_hash == d.manifest_hash
                     && deps_hash == d.deps_hash =>
             {
                 eprintln!("found cached deps for {:?}", pkg_path);
-                mapped_files.extend_with_duplicates(d.deps.files.clone());
-                Some(CachedDeps {
-                    compiled_program: d.deps.clone(),
+                Some(AnalyzedPkgInfo {
+                    program_deps: d.deps.clone(),
                     symbols_data: Some(d.deps_symbols_data.clone()),
+                    program: Some(d.program.clone()),
+                    file_hashes: d.file_hashes.clone(),
                 })
             }
             _ => construct_pre_compiled_lib(
@@ -1855,10 +2097,11 @@ pub fn get_compiled_pkg(
             .and_then(|pprog_and_comments_res| pprog_and_comments_res.ok())
             .map(|libs| {
                 eprintln!("created pre-compiled libs for {:?}", pkg_path);
-                mapped_files.extend_with_duplicates(libs.files.clone());
-                CachedDeps {
-                    compiled_program: Arc::new(libs),
+                AnalyzedPkgInfo {
+                    program_deps: Arc::new(libs),
                     symbols_data: None,
+                    program: None,
+                    file_hashes: file_hashes.clone(),
                 }
             }),
         };
@@ -1872,18 +2115,36 @@ pub fn get_compiled_pkg(
         None
     };
 
+    let (full_compilation, files_to_compile) = if let Some(chached_info) = &cached_info_opt {
+        if chached_info.program.is_some() {
+            // we already have cached user program, consider incremental compilation
+            match modified_files {
+                Some(files) => (false, BTreeSet::from_iter(files)),
+                None => (true, BTreeSet::new()),
+            }
+        } else {
+            (true, BTreeSet::new())
+        }
+    } else {
+        (true, BTreeSet::new())
+    };
+
     let mut edition = None;
-    let mut comments = None;
-    let compiled_libs = cached_deps
+    let compiled_libs = cached_info_opt
         .clone()
-        .map(|deps| deps.compiled_program.clone());
+        .map(|deps| deps.program_deps.clone());
     build_plan.compile_with_driver_and_deps(dependencies, &mut std::io::sink(), |compiler| {
         let compiler = compiler.set_ide_mode();
         // extract expansion AST
         let (files, compilation_result) = compiler
             .set_pre_compiled_lib_opt(compiled_libs.clone())
+            .set_files_to_compile(if full_compilation {
+                None
+            } else {
+                Some(files_to_compile.clone())
+            })
             .run::<PASS_PARSER>()?;
-        let (comments_map, compiler) = match compilation_result {
+        let compiler = match compilation_result {
             Ok(v) => v,
             Err((_pass, diags)) => {
                 let failure = true;
@@ -1892,11 +2153,9 @@ pub fn get_compiled_pkg(
                 return Ok((files, vec![]));
             }
         };
-        comments = Some(comments_map);
         eprintln!("compiled to parsed AST");
         let (compiler, parsed_program) = compiler.into_ast();
         parsed_ast = Some(parsed_program.clone());
-        mapped_files.extend_with_duplicates(compiler.compilation_env().mapped_files().clone());
 
         // extract typed AST
         let compilation_result = compiler.at_parser(parsed_program).run::<PASS_TYPING>();
@@ -1954,26 +2213,29 @@ pub fn get_compiled_pkg(
 
     // uwrap's are safe - this function returns earlier (during diagnostics processing)
     // when failing to produce the ASTs
-    let parsed_program = parsed_ast.unwrap();
-    let typed_program = typed_ast.clone().unwrap();
-    let mut all_comments = comments.unwrap();
-    if let Some(libs) = &compiled_libs {
-        all_comments.extend(libs.comments.clone());
-    }
+    let (parsed_program, typed_program_modules) = if full_compilation {
+        (parsed_ast.unwrap(), typed_ast.unwrap().modules)
+    } else {
+        merge_user_programs(
+            cached_info_opt.clone(),
+            parsed_ast.unwrap(),
+            typed_ast.unwrap().modules,
+            file_hashes,
+            files_to_compile,
+        )
+    };
     let compiled_pkg_info = CompiledPkgInfo {
         path: pkg_path.into(),
         manifest_hash,
         deps_hash,
-        cached_deps,
+        cached_deps: cached_info_opt,
         program: CompiledProgram {
             parsed: parsed_program,
-            typed: typed_program,
+            typed_modules: typed_program_modules,
         },
-        source_files,
         mapped_files,
         edition,
         compiler_info,
-        all_comments,
     };
     Ok((Some(compiled_pkg_info), ide_diagnostics))
 }
@@ -1987,12 +2249,12 @@ pub fn compute_symbols_pre_process(
 ) -> Option<CursorContext> {
     let mut fields_order_info = FieldOrderInfo::new();
     let parsed_program = &compiled_pkg_info.program.parsed;
-    let typed_program = &compiled_pkg_info.program.typed;
+    let typed_program_modules = &compiled_pkg_info.program.typed_modules;
     pre_process_parsed_program(parsed_program, &mut fields_order_info);
 
     let mut cursor_context = compute_cursor_context(&compiled_pkg_info.mapped_files, cursor_info);
     pre_process_typed_modules(
-        &typed_program.modules,
+        typed_program_modules,
         &fields_order_info,
         &compiled_pkg_info.mapped_files,
         &mut computation_data.mod_outer_defs,
@@ -2001,7 +2263,6 @@ pub fn compute_symbols_pre_process(
         &mut computation_data.def_info,
         &compiled_pkg_info.edition,
         cursor_context.as_mut(),
-        &compiled_pkg_info.all_comments,
     );
 
     if let Some(cached_deps) = compiled_pkg_info.cached_deps.clone() {
@@ -2017,7 +2278,7 @@ pub fn compute_symbols_pre_process(
                 // No cached dependency symbols data but we still have cached compilation results.
                 // Fill out dependency symbols from compiled package info to cache them at the end of analysis
                 pre_process_typed_modules(
-                    &cached_deps.compiled_program.typing.modules,
+                    &cached_deps.program_deps.typing.modules,
                     &FieldOrderInfo::new(),
                     &compiled_pkg_info.mapped_files,
                     &mut computation_data_deps.mod_outer_defs,
@@ -2026,7 +2287,6 @@ pub fn compute_symbols_pre_process(
                     &mut computation_data_deps.def_info,
                     &compiled_pkg_info.edition,
                     None, // Cursor can never be in a compiled library(?)
-                    &compiled_pkg_info.all_comments,
                 );
                 (
                     computation_data_deps.mod_outer_defs.clone(),
@@ -2090,7 +2350,7 @@ pub fn compute_symbols_parsed_program(
                 computation_data_deps,
                 compiled_pkg_info,
                 None,
-                &cached_deps.compiled_program.parser,
+                &cached_deps.program_deps.parser,
             );
         }
     }
@@ -2102,7 +2362,7 @@ fn run_typing_analysis(
     mut computation_data: SymbolsComputationData,
     mapped_files: &MappedFiles,
     compiler_info: &mut CompilerInfo,
-    typed_program: &T::Program,
+    typed_program_modules: &UniqueMap<ModuleIdent, ModuleDefinition>,
 ) -> SymbolsComputationData {
     let mut typing_symbolicator = typing_analysis::TypingAnalysisContext {
         mod_outer_defs: &mut computation_data.mod_outer_defs,
@@ -2119,7 +2379,7 @@ fn run_typing_analysis(
     };
 
     process_typed_modules(
-        &typed_program.modules,
+        typed_program_modules,
         &computation_data.mod_to_alias_lengths,
         &mut typing_symbolicator,
         &mut computation_data.mod_use_defs,
@@ -2131,7 +2391,7 @@ fn run_typing_analysis(
 // use-def map
 fn update_file_use_defs(
     computation_data: &SymbolsComputationData,
-    source_files: &SourceFiles,
+    mapped_files: &MappedFiles,
     file_use_defs: &mut FileUseDefs,
 ) {
     for (module_ident_str, use_defs) in &computation_data.mod_use_defs {
@@ -2141,13 +2401,13 @@ fn update_file_use_defs(
             .mod_outer_defs
             .get(module_ident_str)
             .unwrap();
-        let fpath = match source_files.get(&module_defs.fhash) {
-            Some((p, _, _)) => p,
+        let fpath = match mapped_files.file_name_mapping().get(&module_defs.fhash) {
+            Some(p) => p.as_path().to_string_lossy().to_string(),
             None => return,
         };
 
         let fpath_buffer =
-            dunce::canonicalize(fpath.as_str()).unwrap_or_else(|_| PathBuf::from(fpath.as_str()));
+            dunce::canonicalize(fpath.clone()).unwrap_or_else(|_| PathBuf::from(fpath.as_str()));
 
         file_use_defs
             .entry(fpath_buffer)
@@ -2156,25 +2416,31 @@ fn update_file_use_defs(
     }
 }
 
-/// Process typed program for symbols computation.
+/// Process typed program for symbols computation. Returns:
+/// - computed symbols
+/// - optional cacheable symbols data (obtained either from cache or recomputed)
+/// - compiled user program
 pub fn compute_symbols_typed_program(
     computation_data: SymbolsComputationData,
     computation_data_deps: SymbolsComputationData,
     mut compiled_pkg_info: CompiledPkgInfo,
     cursor_context: Option<CursorContext>,
-) -> (Symbols, Option<Arc<SymbolsComputationData>>) {
+) -> (
+    Symbols,
+    Option<Arc<SymbolsComputationData>>,
+    CompiledProgram,
+) {
     // run typing analysis for the main user program
     let compiler_info = &mut compiled_pkg_info.compiler_info.as_mut().unwrap();
     let mapped_files = &compiled_pkg_info.mapped_files;
-    let source_files = &compiled_pkg_info.source_files;
     let mut computation_data = run_typing_analysis(
         computation_data,
         mapped_files,
         compiler_info,
-        &compiled_pkg_info.program.typed,
+        &compiled_pkg_info.program.typed_modules,
     );
     let mut file_use_defs = BTreeMap::new();
-    update_file_use_defs(&computation_data, source_files, &mut file_use_defs);
+    update_file_use_defs(&computation_data, mapped_files, &mut file_use_defs);
 
     let cacheable_symbols_data_opt =
         if let Some(cached_deps) = compiled_pkg_info.cached_deps.clone() {
@@ -2189,14 +2455,14 @@ pub fn compute_symbols_typed_program(
                     computation_data_deps,
                     mapped_files,
                     compiler_info,
-                    &cached_deps.compiled_program.typing,
+                    &cached_deps.program_deps.typing.modules,
                 );
                 Arc::new(computation_data_deps)
             };
             // create `file_use_defs` map and merge references to produce complete symbols data
             // (mod_outer_defs and def_info have already been merged to facilitate user program
             // analysis)
-            update_file_use_defs(&deps_symbols_data, source_files, &mut file_use_defs);
+            update_file_use_defs(&deps_symbols_data, mapped_files, &mut file_use_defs);
             for (def_loc, uses) in &deps_symbols_data.references {
                 computation_data
                     .references
@@ -2226,13 +2492,14 @@ pub fn compute_symbols_typed_program(
             cursor_context,
         },
         cacheable_symbols_data_opt,
+        compiled_pkg_info.program,
     )
 }
 
 /// Compute symbols for a given package from the parsed and typed ASTs,
 /// as well as other auxiliary data provided in `compiled_pkg_info`.
 pub fn compute_symbols(
-    pkg_dependencies: Arc<Mutex<BTreeMap<PathBuf, PrecomputedPkgDepsInfo>>>,
+    packages_info: Arc<Mutex<BTreeMap<PathBuf, PrecomputedPkgInfo>>>,
     mut compiled_pkg_info: CompiledPkgInfo,
     cursor_info: Option<(&PathBuf, Position)>,
 ) -> Symbols {
@@ -2240,6 +2507,12 @@ pub fn compute_symbols(
     let manifest_hash = compiled_pkg_info.manifest_hash;
     let cached_dep_opt = compiled_pkg_info.cached_deps.clone();
     let deps_hash = compiled_pkg_info.deps_hash.clone();
+    let file_hashes = compiled_pkg_info
+        .mapped_files
+        .file_name_mapping()
+        .iter()
+        .map(|(fhash, fpath)| (fpath.clone(), *fhash))
+        .collect::<BTreeMap<_, _>>();
     let mut symbols_computation_data = SymbolsComputationData::new();
     let mut symbols_computation_data_deps = SymbolsComputationData::new();
     let cursor_context = compute_symbols_pre_process(
@@ -2255,34 +2528,33 @@ pub fn compute_symbols(
         cursor_context,
     );
 
-    let (symbols, cacheable_symbols_data_opt) = compute_symbols_typed_program(
+    let (symbols, cacheable_symbols_data_opt, program) = compute_symbols_typed_program(
         symbols_computation_data,
         symbols_computation_data_deps,
         compiled_pkg_info,
         cursor_context,
     );
 
-    let mut pkg_deps = pkg_dependencies.lock().unwrap();
+    let mut pkg_deps = packages_info.lock().unwrap();
 
     if let Some(cached_deps) = cached_dep_opt {
         // we have at least compiled program available, either already cached
         // or created for the purpose of this analysis
-        if cached_deps.symbols_data.is_none() {
-            // if no symbols computation data was cached, it means that
-            // compiled program was created for the purpose of this analysis
-            // and we need to cache both
-            if let Some(deps_symbols_data) = cacheable_symbols_data_opt {
-                eprintln!("caching pre-compiled program and pre-computed symbols");
-                pkg_deps.insert(
-                    pkg_path,
-                    PrecomputedPkgDepsInfo {
-                        manifest_hash,
-                        deps_hash,
-                        deps: cached_deps.compiled_program.clone(),
-                        deps_symbols_data,
-                    },
-                );
-            }
+        if let Some(deps_symbols_data) = cacheable_symbols_data_opt {
+            // dependencies may have changed or not, but we still need to update the cache
+            // with new file hashes and user program info
+            eprintln!("caching pre-compiled program and pre-computed symbols");
+            pkg_deps.insert(
+                pkg_path,
+                PrecomputedPkgInfo {
+                    manifest_hash,
+                    deps_hash,
+                    deps: cached_deps.program_deps.clone(),
+                    deps_symbols_data,
+                    program: Arc::new(program),
+                    file_hashes: Arc::new(file_hashes),
+                },
+            );
         }
     }
     symbols
@@ -2292,22 +2564,36 @@ pub fn compute_symbols(
 /// correctly computed symbols should be a replacement for the old set - if symbols are not
 /// actually (re)computed and the diagnostics are returned, the old symbolic information should
 /// be retained even if it's getting out-of-date.
+///
+/// Takes `modified_files` as an argument to indicate if we can retain (portion of) the cached
+/// user code. If `modified_files` is `None`, we can't retain any cached user code (need to recompute)
+/// everything. If `modified_files` is `Some`, we can retain cached user code for all Move files other than
+/// the ones in `modified_files` (if `modified_paths` contains a path not representing
+/// a Move file but rather a directory, then we conservatively do not re-use any cached info).
 pub fn get_symbols(
-    pkg_dependencies: Arc<Mutex<BTreeMap<PathBuf, PrecomputedPkgDepsInfo>>>,
+    packages_info: Arc<Mutex<BTreeMap<PathBuf, PrecomputedPkgInfo>>>,
     ide_files_root: VfsPath,
     pkg_path: &Path,
+    modified_files: Option<Vec<PathBuf>>,
     lint: LintLevel,
     cursor_info: Option<(&PathBuf, Position)>,
+    implicit_deps: Dependencies,
 ) -> Result<(Option<Symbols>, BTreeMap<PathBuf, Vec<Diagnostic>>)> {
     let compilation_start = Instant::now();
-    let (compiled_pkg_info_opt, ide_diagnostics) =
-        get_compiled_pkg(pkg_dependencies.clone(), ide_files_root, pkg_path, lint)?;
+    let (compiled_pkg_info_opt, ide_diagnostics) = get_compiled_pkg(
+        packages_info.clone(),
+        ide_files_root,
+        pkg_path,
+        modified_files,
+        lint,
+        implicit_deps,
+    )?;
     eprintln!("compilation complete in: {:?}", compilation_start.elapsed());
     let Some(compiled_pkg_info) = compiled_pkg_info_opt else {
         return Ok((None, ide_diagnostics));
     };
     let analysis_start = Instant::now();
-    let symbols = compute_symbols(pkg_dependencies, compiled_pkg_info, cursor_info);
+    let symbols = compute_symbols(packages_info, compiled_pkg_info, cursor_info);
     eprintln!("analysis complete in {:?}", analysis_start.elapsed());
     eprintln!("get_symbols load complete");
 
@@ -2352,7 +2638,7 @@ fn pre_process_parsed_pkg(
                     let indexed_fields = fields
                         .iter()
                         .enumerate()
-                        .map(|(i, (f, _))| (f.value(), i))
+                        .map(|(i, (_, f, _))| (f.value(), i))
                         .collect::<BTreeMap<_, _>>();
                     fields_order_info
                         .structs
@@ -2369,7 +2655,7 @@ fn pre_process_parsed_pkg(
                         let indexed_fields = fields
                             .iter()
                             .enumerate()
-                            .map(|(i, (f, _))| (f.value(), i))
+                            .map(|(i, (_, f, _))| (f.value(), i))
                             .collect::<BTreeMap<_, _>>();
                         fields_order_info
                             .variants
@@ -2397,7 +2683,6 @@ fn pre_process_typed_modules(
     def_info: &mut DefMap,
     edition: &Option<Edition>,
     mut cursor_context: Option<&mut CursorContext>,
-    all_comments: &CommentMap,
 ) {
     for (pos, module_ident, module_def) in typed_modules {
         // If the cursor is in this module, mark that down.
@@ -2418,7 +2703,6 @@ fn pre_process_typed_modules(
             references,
             def_info,
             edition,
-            all_comments,
         );
         mod_outer_defs.insert(mod_ident_str.clone(), defs);
         mod_use_defs.insert(mod_ident_str, symbols);
@@ -2442,38 +2726,39 @@ fn process_typed_modules<'a>(
     }
 }
 
-fn file_sources(resolved_graph: &ResolvedGraph, overlay_fs: VfsPath) -> SourceFiles {
-    resolved_graph
-        .package_table
-        .iter()
-        .flat_map(|(_, rpkg)| {
-            rpkg.get_sources(&resolved_graph.build_options)
-                .unwrap()
-                .iter()
-                .map(|f| {
-                    let is_dep = rpkg.package_path != resolved_graph.graph.root_path;
-                    // dunce does a better job of canonicalization on Windows
-                    let fname = dunce::canonicalize(f.as_str())
-                        .map(|p| p.to_string_lossy().to_string())
-                        .unwrap_or_else(|_| f.to_string());
-                    let mut contents = String::new();
-                    // there is a fair number of unwraps here but if we can't read the files
-                    // that by all accounts should be in the file system, then there is not much
-                    // we can do so it's better to fail so that we can investigate
-                    let vfs_file_path = overlay_fs.join(fname.as_str()).unwrap();
-                    let mut vfs_file = vfs_file_path.open_file().unwrap();
-                    let _ = vfs_file.read_to_string(&mut contents);
-                    let fhash = FileHash::new(&contents);
-                    // write to top layer of the overlay file system so that the content
-                    // is immutable for the duration of compilation and symbolication
-                    let _ = vfs_file_path.parent().create_dir_all();
-                    let mut vfs_file = vfs_file_path.create_file().unwrap();
-                    let _ = vfs_file.write_all(contents.as_bytes());
-                    (fhash, (Symbol::from(fname), contents, is_dep))
-                })
-                .collect::<BTreeMap<_, _>>()
-        })
-        .collect()
+fn compute_mapped_files(
+    resolved_graph: &ResolvedGraph,
+    overlay_fs: VfsPath,
+) -> (MappedFiles, String) {
+    let mut mapped_files: MappedFiles = MappedFiles::empty();
+    let mut hasher = Sha256::new();
+    for rpkg in resolved_graph.package_table.values() {
+        for f in rpkg.get_sources(&resolved_graph.build_options).unwrap() {
+            let is_dep = rpkg.package_path != resolved_graph.graph.root_path;
+            // dunce does a better job of canonicalization on Windows
+            let fname = dunce::canonicalize(f.as_str())
+                .map(|p| p.to_string_lossy().to_string())
+                .unwrap_or_else(|_| f.to_string());
+            let mut contents = String::new();
+            // there is a fair number of unwraps here but if we can't read the files
+            // that by all accounts should be in the file system, then there is not much
+            // we can do so it's better to fail so that we can investigate
+            let vfs_file_path = overlay_fs.join(fname.as_str()).unwrap();
+            let mut vfs_file = vfs_file_path.open_file().unwrap();
+            let _ = vfs_file.read_to_string(&mut contents);
+            let fhash = FileHash::new(&contents);
+            if is_dep {
+                hasher.update(fhash.0);
+            }
+            // write to top layer of the overlay file system so that the content
+            // is immutable for the duration of compilation and symbolication
+            let _ = vfs_file_path.parent().create_dir_all();
+            let mut vfs_file = vfs_file_path.create_file().unwrap();
+            let _ = vfs_file.write_all(contents.as_bytes());
+            mapped_files.add(fhash, fname.into(), Arc::from(contents.into_boxed_str()));
+        }
+    }
+    (mapped_files, format!("{:X}", hasher.finalize()))
 }
 
 /// Produces module ident string of the form pkg::module to be used as a map key
@@ -2561,38 +2846,29 @@ pub fn empty_symbols() -> Symbols {
     }
 }
 
-/// Get optional doc comment string at a given location.
-fn get_doc_string(all_comments: &CommentMap, loc: Loc) -> Option<String> {
-    all_comments
-        .get(&loc.file_hash())
-        .and_then(|m| m.get(&loc.start()))
-        .cloned()
-}
-
 fn field_defs_and_types(
     datatype_name: Symbol,
-    fields: &E::Fields<Type>,
+    fields: &E::Fields<(DocComment, Type)>,
     fields_order_opt: Option<&BTreeMap<Symbol, usize>>,
     mod_ident: &ModuleIdent,
     def_info: &mut DefMap,
-    all_comments: &CommentMap,
 ) -> (Vec<FieldDef>, Vec<Type>) {
     let mut field_defs = vec![];
     let mut field_types = vec![];
     let mut ordered_fields = fields
         .iter()
-        .map(|(floc, fname, (_, ftype))| (floc, fname, ftype))
+        .map(|(floc, fname, (_, (fdoc, ftype)))| (floc, fdoc, fname, ftype))
         .collect::<Vec<_>>();
     // sort fields by order if available for correct auto-completion
     if let Some(fields_order) = fields_order_opt {
-        ordered_fields.sort_by_key(|(_, fname, _)| fields_order.get(fname).copied());
+        ordered_fields.sort_by_key(|(_, _, fname, _)| fields_order.get(fname).copied());
     }
-    for (floc, fname, ftype) in ordered_fields {
+    for (floc, fdoc, fname, ftype) in ordered_fields {
         field_defs.push(FieldDef {
             name: *fname,
             loc: floc,
         });
-        let doc_string = get_doc_string(all_comments, floc);
+        let doc_string = fdoc.comment().map(|d| d.value.to_owned());
         def_info.insert(
             floc,
             DefInfo::Field(
@@ -2643,7 +2919,6 @@ fn get_mod_outer_defs(
     references: &mut References,
     def_info: &mut DefMap,
     edition: &Option<Edition>,
-    all_comments: &CommentMap,
 ) -> (ModuleDefs, UseDefMap) {
     let mut structs = BTreeMap::new();
     let mut enums = BTreeMap::new();
@@ -2662,14 +2937,8 @@ fn get_mod_outer_defs(
                 .structs
                 .get(&mod_ident_str)
                 .and_then(|s| s.get(name));
-            (field_defs, field_types) = field_defs_and_types(
-                *name,
-                fields,
-                fields_order_opt,
-                mod_ident,
-                def_info,
-                all_comments,
-            );
+            (field_defs, field_types) =
+                field_defs_and_types(*name, fields, fields_order_opt, mod_ident, def_info);
         };
 
         // process the struct itself
@@ -2693,7 +2962,7 @@ fn get_mod_outer_defs(
         } else {
             Visibility::Internal
         };
-        let doc_string = get_doc_string(all_comments, def.loc);
+        let doc_string = def.doc.comment().map(|d| d.value.to_owned());
         def_info.insert(
             name_loc,
             DefInfo::Struct(
@@ -2721,14 +2990,8 @@ fn get_mod_outer_defs(
                         .get(&mod_ident_str)
                         .and_then(|v| v.get(name))
                         .and_then(|v| v.get(vname));
-                    let (defs, types) = field_defs_and_types(
-                        *name,
-                        fields,
-                        fields_order_opt,
-                        mod_ident,
-                        def_info,
-                        all_comments,
-                    );
+                    let (defs, types) =
+                        field_defs_and_types(*name, fields, fields_order_opt, mod_ident, def_info);
                     (defs, types, *pos_fields)
                 }
                 VariantFields::Empty => (vec![], vec![], false),
@@ -2741,7 +3004,7 @@ fn get_mod_outer_defs(
             });
             variants_info.insert(*vname, (vname_loc, field_defs, positional));
 
-            let vdoc_string = get_doc_string(all_comments, def.loc);
+            let vdoc_string = def.doc.comment().map(|d| d.value.to_owned());
             def_info.insert(
                 vname_loc,
                 DefInfo::Variant(
@@ -2763,7 +3026,7 @@ fn get_mod_outer_defs(
                 info: MemberDefInfo::Enum { variants_info },
             },
         );
-        let enum_doc_string = get_doc_string(all_comments, def.loc);
+        let enum_doc_string = def.doc.comment().map(|d| d.value.to_owned());
         def_info.insert(
             name_loc,
             DefInfo::Enum(
@@ -2786,7 +3049,7 @@ fn get_mod_outer_defs(
                 info: MemberDefInfo::Const,
             },
         );
-        let doc_string = get_doc_string(all_comments, c.loc);
+        let doc_string = c.doc.comment().map(|d| d.value.to_owned());
         def_info.insert(
             name_loc,
             DefInfo::Const(
@@ -2810,7 +3073,7 @@ fn get_mod_outer_defs(
         } else {
             FunType::Regular
         };
-        let doc_string = get_doc_string(all_comments, fun.loc);
+        let doc_string = fun.doc.comment().map(|d| d.value.to_owned());
         let fun_info = DefInfo::Function(
             mod_ident.value,
             fun.visibility,
@@ -2854,7 +3117,8 @@ fn get_mod_outer_defs(
     let mut use_def_map = UseDefMap::new();
 
     let ident = mod_ident.value;
-    let doc_string = get_doc_string(all_comments, mod_def.loc);
+    let doc_string = mod_def.doc.comment().map(|d| d.value.to_owned());
+
     let mod_defs = ModuleDefs {
         fhash,
         ident,
@@ -2865,6 +3129,8 @@ fn get_mod_outer_defs(
         functions,
         untyped_defs: BTreeSet::new(),
         call_infos: BTreeMap::new(),
+        import_insert_info: None,
+        neighbors: mod_def.immediate_neighbors.clone(),
     };
 
     // insert use of the module name in the definition itself

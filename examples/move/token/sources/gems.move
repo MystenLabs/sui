@@ -5,8 +5,8 @@
 /// that sells swords for Gems. Gems are an in-game currency that can be bought
 /// with SUI.
 module examples::sword {
-    use sui::token::{Self, Token, ActionRequest};
     use examples::gem::GEM;
+    use sui::token::{Self, Token, ActionRequest};
 
     /// Trying to purchase a sword with an incorrect amount.
     const EWrongAmount: u64 = 0;
@@ -18,28 +18,23 @@ module examples::sword {
     public struct Sword has key, store { id: UID }
 
     /// Purchase a sword with Gems.
-    public fun buy_sword(
-        gems: Token<GEM>, ctx: &mut TxContext
-    ): (Sword, ActionRequest<GEM>) {
+    public fun buy_sword(gems: Token<GEM>, ctx: &mut TxContext): (Sword, ActionRequest<GEM>) {
         assert!(SWORD_PRICE == token::value(&gems), EWrongAmount);
-        (
-            Sword { id: object::new(ctx) },
-            token::spend(gems, ctx)
-        )
+        (Sword { id: object::new(ctx) }, token::spend(gems, ctx))
     }
 }
 
 /// Module that defines the in-game currency: GEMs which can be purchased with
 /// SUI and used to buy swords (in the `sword` module).
 module examples::gem {
-    use std::option::none;
-    use std::string::{Self, String};
-    use sui::sui::SUI;
-    use sui::balance::{Self, Balance};
-    use sui::tx_context::{sender};
-    use sui::coin::{Self, Coin, TreasuryCap};
-
-    use sui::token::{Self, Token, ActionRequest};
+    use std::{option::none, string::{Self, String}};
+    use sui::{
+        balance::{Self, Balance},
+        coin::{Self, Coin, TreasuryCap},
+        sui::SUI,
+        token::{Self, Token, ActionRequest},
+        tx_context::sender
+    };
 
     /// Trying to purchase Gems with an unexpected amount.
     const EUnknownAmount: u64 = 0;
@@ -74,9 +69,13 @@ module examples::gem {
     // rules for different types of actions.
     fun init(otw: GEM, ctx: &mut TxContext) {
         let (treasury_cap, coin_metadata) = coin::create_currency(
-            otw, 0, b"GEM", b"Capy Gems", // otw, decimal, symbol, name
-            b"In-game currency for Capy Miners", none(), // description, url
-            ctx
+            otw,
+            0,
+            b"GEM",
+            b"Capy Gems", // otw, decimal, symbol, name
+            b"In-game currency for Capy Miners",
+            none(), // description, url
+            ctx,
         );
 
         // create a `TokenPolicy` for GEMs
@@ -89,7 +88,7 @@ module examples::gem {
         transfer::share_object(GemStore {
             id: object::new(ctx),
             gem_treasury: treasury_cap,
-            profits: balance::zero()
+            profits: balance::zero(),
         });
 
         // deal with `TokenPolicy`, `CoinMetadata` and `TokenPolicyCap`
@@ -101,7 +100,9 @@ module examples::gem {
     /// Purchase Gems from the GemStore. Very silly value matching against module
     /// constants...
     public fun buy_gems(
-        self: &mut GemStore, payment: Coin<SUI>, ctx: &mut TxContext
+        self: &mut GemStore,
+        payment: Coin<SUI>,
+        ctx: &mut TxContext,
     ): (Token<GEM>, ActionRequest<GEM>) {
         let amount = coin::value(&payment);
         let purchased = if (amount == SMALL_BUNDLE) {

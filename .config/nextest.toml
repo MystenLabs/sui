@@ -10,19 +10,6 @@ retries = 3
 # Timeout tests after 4 minutes
 slow-timeout = { period = "60s", terminate-after = 5 }
 
-[profile.narwhalnightly]
-# Print out output for failing tests as soon as they fail, and also at the end
-# of the run (for easy scrollability).
-failure-output = "immediate-final"
-# Show skipped tests in the CI output.
-status-level = "skip"
-# Do not cancel the test run on the first failure.
-fail-fast = false
-# Do not retry failing tests
-retries = 0
-# Mark tests as slow after 7 hours, kill them right after
-slow-timeout = { period = "7h", terminate-after = 1 }
-
 [profile.simtestnightly]
 # Print out output for failing tests as soon as they fail, and also at the end
 # of the run (for easy scrollability).

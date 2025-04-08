@@ -1,0 +1,38 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: 2024.alpha
+  lint: false
+---
+warning[W09005]: dead or unreachable code
+   ┌─ tests/move_2024/typing/unused_macro_arg_invalid_constraint.move:16:21
+   │
+16 │         needs_copy!(X<None>(), None(), X<None>(), None());
+   │                     ^^^^^^^^^ Unused macro argument. Its expression will not be type checked and it will not evaluated
+   │
+   = This warning can be suppressed with '#[allow(dead_code)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[W09005]: dead or unreachable code
+   ┌─ tests/move_2024/typing/unused_macro_arg_invalid_constraint.move:16:32
+   │
+16 │         needs_copy!(X<None>(), None(), X<None>(), None());
+   │                                ^^^^^^ Unused macro argument. Its expression will not be type checked and it will not evaluated
+   │
+   = This warning can be suppressed with '#[allow(dead_code)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[W09005]: dead or unreachable code
+   ┌─ tests/move_2024/typing/unused_macro_arg_invalid_constraint.move:16:40
+   │
+16 │         needs_copy!(X<None>(), None(), X<None>(), None());
+   │                                        ^^^^^^^^^ Unused macro argument. Its expression will not be type checked and it will not evaluated
+   │
+   = This warning can be suppressed with '#[allow(dead_code)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[W09005]: dead or unreachable code
+   ┌─ tests/move_2024/typing/unused_macro_arg_invalid_constraint.move:16:51
+   │
+16 │         needs_copy!(X<None>(), None(), X<None>(), None());
+   │                                                   ^^^^^^ Unused macro argument. Its expression will not be type checked and it will not evaluated
+   │
+   = This warning can be suppressed with '#[allow(dead_code)]' applied to the 'module' or module member ('const', 'fun', or 'struct')

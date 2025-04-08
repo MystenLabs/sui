@@ -14,7 +14,7 @@ use crate::{
 use anyhow::Result;
 use move_compiler::{
     compiled_unit::AnnotatedCompiledUnit,
-    diagnostics::{report_diagnostics_to_buffer_with_env_color, report_warnings, Migration},
+    diagnostics::{report_diagnostics_to_buffer_with_env_color, Migration},
     editions::Edition,
     shared::{files::MappedFiles, PackagePaths},
     Compiler,
@@ -34,10 +34,10 @@ use super::{
 };
 
 #[derive(Debug, Clone)]
-pub struct BuildPlan {
+pub struct BuildPlan<'a> {
     root: PackageName,
     sorted_deps: Vec<PackageName>,
-    resolution_graph: ResolvedGraph,
+    resolution_graph: &'a ResolvedGraph,
     compiler_vfs_root: Option<VfsPath>,
 }
 
@@ -47,7 +47,7 @@ pub struct CompilationDependencies<'a> {
     transitive_dependencies: Vec<DependencyInfo<'a>>,
 }
 
-impl<'a> CompilationDependencies<'a> {
+impl CompilationDependencies<'_> {
     pub fn remove_deps(&mut self, names: BTreeSet<Symbol>) {
         self.transitive_dependencies
             .retain(|d| !names.contains(&d.name));
@@ -58,8 +58,8 @@ impl<'a> CompilationDependencies<'a> {
     }
 }
 
-impl BuildPlan {
-    pub fn create(resolution_graph: ResolvedGraph) -> Result<Self> {
+impl<'a> BuildPlan<'a> {
+    pub fn create(resolution_graph: &'a ResolvedGraph) -> Result<Self> {
         let mut sorted_deps = resolution_graph.topological_order();
         sorted_deps.reverse();
 
@@ -86,8 +86,14 @@ impl BuildPlan {
     }
 
     /// Compilation results in the process exit upon warning/failure
-    pub fn compile<W: Write>(&self, writer: &mut W) -> Result<CompiledPackage> {
-        self.compile_with_driver(writer, |compiler| compiler.build_and_report())
+    pub fn compile<W: Write>(
+        &self,
+        writer: &mut W,
+        modify_compiler: impl FnOnce(Compiler) -> Compiler,
+    ) -> Result<CompiledPackage> {
+        self.compile_with_driver(writer, |compiler| {
+            modify_compiler(compiler).build_and_report()
+        })
     }
 
     /// Compilation results in the process exit upon warning/failure
@@ -103,7 +109,7 @@ impl BuildPlan {
             self.compiler_vfs_root.clone(),
             root_package,
             transitive_dependencies,
-            &self.resolution_graph,
+            self.resolution_graph,
             |compiler| compiler.generate_migration_patch(&self.root),
         )?;
         let migration = match res {
@@ -130,25 +136,38 @@ impl BuildPlan {
     }
 
     /// Compilation process does not exit even if warnings/failures are encountered
-    pub fn compile_no_exit<W: Write>(&self, writer: &mut W) -> Result<CompiledPackage> {
-        self.compile_with_driver(writer, |compiler| {
-            let (files, units_res) = compiler.build()?;
+    pub fn compile_no_exit<W: Write>(
+        &self,
+        writer: &mut W,
+        modify_compiler: impl FnOnce(Compiler) -> Compiler,
+    ) -> Result<CompiledPackage> {
+        let mut diags = None;
+        let res = self.compile_with_driver(writer, |compiler| {
+            let (files, units_res) = modify_compiler(compiler).build()?;
             match units_res {
                 Ok((units, warning_diags)) => {
-                    report_warnings(&files, warning_diags);
+                    diags = Some(report_diagnostics_to_buffer_with_env_color(
+                        &files,
+                        warning_diags,
+                    ));
                     Ok((files, units))
                 }
                 Err(error_diags) => {
                     assert!(!error_diags.is_empty());
-                    let diags_buf =
-                        report_diagnostics_to_buffer_with_env_color(&files, error_diags);
-                    if let Err(err) = std::io::stdout().write_all(&diags_buf) {
-                        anyhow::bail!("Cannot output compiler diagnostics: {}", err);
-                    }
+                    diags = Some(report_diagnostics_to_buffer_with_env_color(
+                        &files,
+                        error_diags,
+                    ));
                     anyhow::bail!("Compilation error");
                 }
             }
-        })
+        });
+        if let Some(diags) = diags {
+            if let Err(err) = std::io::stdout().write_all(&diags) {
+                anyhow::bail!("Cannot output compiler diagnostics: {}", err);
+            }
+        }
+        res
     }
 
     pub fn compute_dependencies(&self) -> CompilationDependencies {
@@ -158,7 +177,7 @@ impl BuildPlan {
             None => self.resolution_graph.graph.root_path.clone(),
         };
         let immediate_dependencies_names =
-            root_package.immediate_dependencies(&self.resolution_graph);
+            root_package.immediate_dependencies(self.resolution_graph);
         let transitive_dependencies = self
             .resolution_graph
             .topological_order()
@@ -207,7 +226,7 @@ impl BuildPlan {
     pub fn compile_with_driver<W: Write>(
         &self,
         writer: &mut W,
-        compiler_driver: impl FnMut(
+        compiler_driver: impl FnOnce(
             Compiler,
         )
             -> anyhow::Result<(MappedFiles, Vec<AnnotatedCompiledUnit>)>,
@@ -220,7 +239,7 @@ impl BuildPlan {
         &self,
         dependencies: CompilationDependencies,
         writer: &mut W,
-        mut compiler_driver: impl FnMut(
+        compiler_driver: impl FnOnce(
             Compiler,
         )
             -> anyhow::Result<(MappedFiles, Vec<AnnotatedCompiledUnit>)>,
@@ -237,8 +256,8 @@ impl BuildPlan {
             &project_root,
             root_package,
             transitive_dependencies,
-            &self.resolution_graph,
-            &mut compiler_driver,
+            self.resolution_graph,
+            compiler_driver,
         )?;
 
         Self::clean(

@@ -4,7 +4,7 @@
 pub use sui_field_count_derive::*;
 
 pub trait FieldCount {
-    fn field_count() -> usize;
+    const FIELD_COUNT: usize;
 }
 
 #[cfg(test)]
@@ -22,8 +22,8 @@ mod tests {
             _field3: bool,
         }
 
-        assert_eq!(BasicStruct::field_count(), 3);
-        assert_eq!(EmptyStruct::field_count(), 0);
+        assert_eq!(BasicStruct::FIELD_COUNT, 3);
+        assert_eq!(EmptyStruct::FIELD_COUNT, 0);
     }
 
     #[test]
@@ -35,7 +35,7 @@ mod tests {
             _field3: &'a Vec<String>,
         }
 
-        assert_eq!(LifetimeStruct::field_count(), 3);
+        assert_eq!(LifetimeStruct::FIELD_COUNT, 3);
     }
 
     #[test]
@@ -47,8 +47,8 @@ mod tests {
             _field3: Option<T>,
         }
 
-        assert_eq!(GenericStruct::<String>::field_count(), 3);
-        assert_eq!(GenericStruct::<i32>::field_count(), 3);
+        assert_eq!(GenericStruct::<String>::FIELD_COUNT, 3);
+        assert_eq!(GenericStruct::<i32>::FIELD_COUNT, 3);
     }
 
     #[test]
@@ -62,7 +62,7 @@ mod tests {
             _field2: Vec<T>,
         }
 
-        assert_eq!(WhereStruct::<String>::field_count(), 2);
-        assert_eq!(WhereStruct::<i32>::field_count(), 2);
+        assert_eq!(WhereStruct::<String>::FIELD_COUNT, 2);
+        assert_eq!(WhereStruct::<i32>::FIELD_COUNT, 2);
     }
 }

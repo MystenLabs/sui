@@ -114,13 +114,13 @@ The Operation Cap holder (either the valdiator itself or the delegatee) updates 
 
 To update Gas Price, run
 
-```bash
+```sh
 $ sui validator update-gas-price <gas-price>
 ```
 
 if the account itself is a validator and holds the Operation Cap. Or 
 
-```bash
+```sh
 $ sui validator update-gas-price --operation-cap-id <operation-cap-id> <gas-price>
 ```
 
@@ -130,7 +130,7 @@ if the account is a delegatee.
 
 To report validators peers, run
 
-```bash
+```sh
 $ sui validator report-validator <reportee-address>
 ```
 
@@ -140,7 +140,7 @@ Similarly, if the account is a delegatee, add `--operation-cap-id <operation-cap
 
 if the account itself is a validator and holds the Operation Cap. Or 
 
-```bash
+```sh
 $ sui validator update-gas-price --operation-cap-id <operation-cap-id> <gas-price>
 ```
 
@@ -151,7 +151,7 @@ if the account is a delegatee.
 
 To become a validator candidate, first run
 
-```bash
+```sh
 $ sui validator make-validator-info <name> <description> <image-url> <project-url> <host-name> <gas_price>
 ```
 
@@ -162,7 +162,7 @@ This will generate a `validator.info` file and key pair files. The output of thi
 
 Then run 
 
-``` bash
+``` sh
 $ sui validator become-candidate {path-to}validator.info
 ```
 
@@ -174,7 +174,7 @@ At this point you are validator candidate and can start to accept self staking a
 
 Once you collect enough staking amount, run
 
-``` bash
+```sh
 $ sui validator join-committee
 ```
 
@@ -185,17 +185,19 @@ to become a pending validator. A pending validator will become active and join t
 
 To leave committee, run
 
-``` bash
+```sh
 $ sui validator leave-committee
 ```
 
-Then you will be removed from committee starting from next epoch.
+You are removed from the committee starting from the next epoch.
 
 ### Generate the payload to create PoP
 
-Serialize the payload that is used to generate Proof of Possession. This is allows the signer to take the payload offline for an Authority protocol BLS keypair to sign.
+Serialize the payload that is used to generate proof of possession. This allows the signer to take the payload offline for an authority protocol BLS keypair to sign.
 
-``` bash
+```sh
 $ sui validator serialize-payload-pop --account-address $ACCOUNT_ADDRESS --protocol-public-key $BLS_PUBKEY
+```
+```sh
 Serialized payload: $PAYLOAD_TO_SIGN
 ```

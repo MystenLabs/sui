@@ -1,0 +1,86 @@
+{
+	"name": "prettier-move",
+	"publisher": "mysten",
+	"displayName": "Move Formatter Developer Preview",
+	"description": "Adds Move code formatting to VSCode using Prettier@v3",
+	"version": "0.2.0",
+	"private": true,
+	"preview": true,
+	"icon": "img/move.png",
+	"license": "Apache-2.0",
+	"browser": "./src/extension.js",
+	"main": "./src/extension.js",
+	"repository": {
+		"type": "git",
+		"url": "https://github.com/MystenLabs/sui.git",
+		"directory": "external-crates/move/tooling/prettier-extension"
+	},
+	"engines": {
+		"vscode": "^1.80.0"
+	},
+	"categories": [
+		"Formatters"
+	],
+	"activationEvents": [
+		"onLanguage:move"
+	],
+	"contributes": {
+		"configuration": {
+			"title": "prettierMove",
+			"properties": {
+				"prettierMove.errorDebugMode": {
+					"type": "boolean",
+					"default": false,
+					"description": "Print failing nodes for debugging"
+				},
+				"prettierMove.printWidth": {
+					"type": "number",
+					"default": 100,
+					"description": "Set `printWidth` in prettier"
+				},
+				"prettierMove.tabWidth": {
+					"type": "number",
+					"default": 4,
+					"description": "Set `tabWidth` in prettier"
+				},
+				"prettierMove.useModuleLabel": {
+					"type": "boolean",
+					"default": true,
+					"description": "Use module label instead of module body"
+				},
+				"prettierMove.wrapComments": {
+					"type": "boolean",
+					"default": false,
+					"description": "Wrap comments if they exceed print width"
+				},
+				"prettierMove.autoGroupImports": {
+					"type": "string",
+					"default": "module",
+					"enum": [
+						"module",
+						"package"
+					],
+					"description": "Group imports in the file by `module` or `package`"
+				}
+			}
+		},
+		"configurationDefaults": {
+			"[move]": {
+				"editor.defaultFormatter": "mysten.prettier-move"
+			}
+		}
+	},
+	"scripts": {
+		"package": "vsce package",
+		"lint": "pnpm run eslint:check && pnpm run prettier:check",
+		"lint:fix": "pnpm run eslint:fix && pnpm run prettier:fix"
+	},
+	"dependencies": {
+		"@mysten/prettier-plugin-move": "^0.2.2",
+		"cosmiconfig": "^9.0.0",
+		"prettier": "^3.3.2"
+	},
+	"devDependencies": {
+		"@vscode/vsce": "^3.2.1"
+	}
+}

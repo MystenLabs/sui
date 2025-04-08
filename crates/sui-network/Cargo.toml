@@ -22,6 +22,8 @@ sui-storage.workspace = true
 sui-types.workspace = true
 sui-config.workspace = true
 sui-swarm-config.workspace = true
+sui-simulator.workspace = true
+sui-protocol-config.workspace = true
 
 arc-swap.workspace = true
 bcs.workspace = true
