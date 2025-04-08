@@ -132,7 +132,6 @@ built_in_ids! {
 
 pub const SUI_SYSTEM_STATE_OBJECT_SHARED_VERSION: SequenceNumber = OBJECT_START_VERSION;
 pub const SUI_CLOCK_OBJECT_SHARED_VERSION: SequenceNumber = OBJECT_START_VERSION;
-pub const SUI_AUTHENTICATOR_STATE_OBJECT_SHARED_VERSION: SequenceNumber = OBJECT_START_VERSION;
 
 pub fn sui_framework_address_concat_string(suffix: &str) -> String {
     format!("{}{suffix}", SUI_FRAMEWORK_ADDRESS.to_hex_literal())
