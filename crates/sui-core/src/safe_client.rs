@@ -19,7 +19,7 @@ use sui_types::messages_checkpoint::{
 };
 use sui_types::messages_grpc::{
     HandleCertificateRequestV3, HandleCertificateResponseV2, HandleCertificateResponseV3,
-    ObjectInfoRequest, ObjectInfoResponse, SubmitTransactionRequest, SubmitTransactionResponse,
+    ObjectInfoRequest, ObjectInfoResponse, RawSubmitTxRequest, SubmitTxResponse,
     SystemStateRequest, TransactionInfoRequest, TransactionStatus, VerifiedObjectInfoResponse,
 };
 use sui_types::messages_safe_client::PlainTransactionInfoResponse;
@@ -313,22 +313,37 @@ where
     /// Submit a transaction for certification and execution.
     pub async fn submit_transaction(
         &self,
-        request: SubmitTransactionRequest,
+        request: RawSubmitTxRequest,
         client_addr: Option<SocketAddr>,
-    ) -> Result<SubmitTransactionResponse, SuiError> {
+    ) -> Result<SubmitTxResponse, SuiError> {
         let _timer = self.metrics.handle_certificate_latency.start_timer();
+        let include_events = request.include_events;
+        let include_input_objects = request.include_input_objects;
+        let include_output_objects = request.include_output_objects;
+        let include_auxiliary_data = request.include_auxiliary_data;
         let response = self
             .authority_client
             .submit_transaction(request, client_addr)
             .await?;
 
-        // TODO(fastpath): verify response.
-        // let verified = check_error!(
-        //     self.address,
-        //     self.verify_certificate_response_v3(&digest, response),
-        //     "Client error in handle_certificate"
-        // )?;
-        Ok(response)
+        let response = SubmitTxResponse::from_bytes(
+            response.effects,
+            include_events,
+            response.events,
+            include_input_objects,
+            response.input_objects,
+            include_output_objects,
+            response.output_objects,
+            include_auxiliary_data,
+            response.auxiliary_data,
+        )?;
+
+        let verified_resp = check_error!(
+            self.address,
+            self.verify_submit_transaction_response(response),
+            "Client error in submit_transaction"
+        )?;
+        Ok(verified_resp)
     }
 
     /// Initiate a new transfer to a Sui or Primary account.
@@ -471,6 +486,92 @@ where
         }
 
         Ok(HandleCertificateResponseV3 {
+            effects,
+            events,
+            input_objects,
+            output_objects,
+            auxiliary_data,
+        })
+    }
+
+    fn verify_submit_transaction_response(
+        &self,
+        SubmitTxResponse {
+            effects,
+            events,
+            input_objects,
+            output_objects,
+            auxiliary_data,
+        }: SubmitTxResponse,
+    ) -> SuiResult<SubmitTxResponse> {
+        // Check Events
+        match (&events, effects.events_digest()) {
+            (None, None) | (None, Some(_)) => {}
+            (Some(events), None) => {
+                if !events.data.is_empty() {
+                    return Err(SuiError::ByzantineAuthoritySuspicion {
+                        authority: self.address,
+                        reason: "Returned events but no event digest present in effects"
+                            .to_string(),
+                    });
+                }
+            }
+            (Some(events), Some(events_digest)) => {
+                fp_ensure!(
+                    &events.digest() == events_digest,
+                    SuiError::ByzantineAuthoritySuspicion {
+                        authority: self.address,
+                        reason: "Returned events don't match events digest in effects".to_string()
+                    }
+                );
+            }
+        }
+
+        // Check Input Objects
+        if let Some(input_objects) = &input_objects {
+            let expected: HashMap<_, _> = effects
+                .old_object_metadata()
+                .into_iter()
+                .map(|(object_ref, _owner)| (object_ref.0, object_ref))
+                .collect();
+
+            for object in input_objects {
+                let object_ref = object.compute_object_reference();
+                if expected
+                    .get(&object_ref.0)
+                    .is_none_or(|expect| &object_ref != expect)
+                {
+                    return Err(SuiError::ByzantineAuthoritySuspicion {
+                        authority: self.address,
+                        reason: "Returned input object that wasn't present in effects".to_string(),
+                    });
+                }
+            }
+        }
+
+        // Check Output Objects
+        if let Some(output_objects) = &output_objects {
+            let expected: HashMap<_, _> = effects
+                .all_changed_objects()
+                .into_iter()
+                .map(|(object_ref, _, _)| (object_ref.0, object_ref))
+                .collect();
+
+            for object in output_objects {
+                let object_ref = object.compute_object_reference();
+                if expected
+                    .get(&object_ref.0)
+                    .is_none_or(|expect| &object_ref != expect)
+                {
+                    return Err(SuiError::ByzantineAuthoritySuspicion {
+                        authority: self.address,
+                        reason: "Returned output object that wasn't present in effects".to_string(),
+                    });
+                }
+            }
+        }
+
+        Ok(SubmitTxResponse {
             effects,
             events,
             input_objects,

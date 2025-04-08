@@ -41,11 +41,6 @@ macro_rules! fp_ensure {
 use crate::execution_status::{CommandIndex, ExecutionFailureStatus};
 pub(crate) use fp_ensure;
 
-use crate::{
-    digests::TransactionEventsDigest,
-    execution_status::{CommandIndex, ExecutionFailureStatus},
-};
-
 #[macro_export]
 macro_rules! exit_main {
     ($result:expr) => {

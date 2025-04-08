@@ -22,9 +22,8 @@ use sui_types::{
     messages_grpc::{
         HandleCertificateRequestV3, HandleCertificateResponseV2, HandleCertificateResponseV3,
         HandleSoftBundleCertificatesRequestV3, HandleSoftBundleCertificatesResponseV3,
-        HandleTransactionResponse, ObjectInfoRequest, ObjectInfoResponse, SubmitTransactionRequest,
-        SubmitTransactionResponse, SystemStateRequest, TransactionInfoRequest,
-        TransactionInfoResponse,
+        HandleTransactionResponse, ObjectInfoRequest, ObjectInfoResponse, RawSubmitTxRequest,
+        RawSubmitTxResponse, SystemStateRequest, TransactionInfoRequest, TransactionInfoResponse,
     },
     sui_system_state::SuiSystemState,
     transaction::{CertifiedTransaction, Transaction, VerifiedCertificate, VerifiedTransaction},
@@ -63,9 +62,9 @@ pub struct LocalAuthorityClient {
 impl AuthorityAPI for LocalAuthorityClient {
     async fn submit_transaction(
         &self,
-        request: SubmitTransactionRequest,
+        request: RawSubmitTxRequest,
         _client_addr: Option<SocketAddr>,
-    ) -> Result<SubmitTransactionResponse, SuiError> {
+    ) -> Result<RawSubmitTxResponse, SuiError> {
         if self.fault_config.fail_before_submit_transaction {
             return Err(SuiError::from("Mock error before submit_transaction"));
         }
@@ -100,7 +99,7 @@ impl AuthorityAPI for LocalAuthorityClient {
                 .then(|| state.get_transaction_output_objects(&effects))
                 .and_then(Result::ok);
 
-            return Ok(SubmitTransactionResponse {
+            return Ok(RawSubmitTxResponse {
                 effects: bcs::to_bytes(&effects)
                     .map_err(|e| SuiError::TransactionEffectsSerializationError {
                         error: e.to_string(),
@@ -152,8 +151,11 @@ impl AuthorityAPI for LocalAuthorityClient {
             _ => panic!("`submit_transaction` received transaction that is not a CertifiedTransaction or UserTransaction"),
         };
         let events = if request.include_events {
-            if let Some(digest) = effects.events_digest() {
-                Some(self.state.get_transaction_events(digest)?)
+            if effects.events_digest().is_some() {
+                Some(
+                    self.state
+                        .get_transaction_events(effects.transaction_digest())?,
+                )
             } else {
                 None
             }
@@ -178,7 +180,7 @@ impl AuthorityAPI for LocalAuthorityClient {
             // TODO(fastpath): Make sure consensus handler does this for a UserTransaction.
         }
 
-        Ok::<_, SuiError>(SubmitTransactionResponse {
+        Ok::<_, SuiError>(RawSubmitTxResponse {
             effects: bcs::to_bytes(&effects)
                 .map_err(|e| SuiError::TransactionEffectsSerializationError {
                     error: e.to_string(),
@@ -445,9 +447,9 @@ impl AuthorityAPI for MockAuthorityApi {
     /// Submit a new transaction to a Sui or Primary account.
     async fn submit_transaction(
         &self,
-        _request: SubmitTransactionRequest,
+        _request: RawSubmitTxRequest,
         _client_addr: Option<SocketAddr>,
-    ) -> Result<SubmitTransactionResponse, SuiError> {
+    ) -> Result<RawSubmitTxResponse, SuiError> {
         unimplemented!();
     }
 
@@ -549,9 +551,9 @@ pub struct HandleTransactionTestAuthorityClient {
 impl AuthorityAPI for HandleTransactionTestAuthorityClient {
     async fn submit_transaction(
         &self,
-        _request: SubmitTransactionRequest,
+        _request: RawSubmitTxRequest,
         _client_addr: Option<SocketAddr>,
-    ) -> Result<SubmitTransactionResponse, SuiError> {
+    ) -> Result<RawSubmitTxResponse, SuiError> {
         unimplemented!()
     }
 

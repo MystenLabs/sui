@@ -28,8 +28,8 @@ fn main() -> Result<()> {
             Method::builder()
                 .name("submit_transaction")
                 .route_name("SubmitTransaction")
-                .input_type("sui_types::messages_grpc::SubmitTransactionRequest")
-                .output_type("sui_types::messages_grpc::SubmitTransactionResponse")
+                .input_type("sui_types::messages_grpc::RawSubmitTxRequest")
+                .output_type("sui_types::messages_grpc::RawSubmitTxResponse")
                 .codec_path(prost_codec_path)
                 .build(),
         )

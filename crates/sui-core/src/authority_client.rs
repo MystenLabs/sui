@@ -2,45 +2,43 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{collections::BTreeMap, net::SocketAddr, time::Duration};
-
 use anyhow::anyhow;
 use async_trait::async_trait;
 use mysten_network::config::Config;
-use sui_network::{
-    api::ValidatorClient,
-    tonic,
-    tonic::{metadata::KeyAndValueRef, transport::Channel},
+use std::collections::BTreeMap;
+use std::net::SocketAddr;
+use std::time::Duration;
+use sui_network::{api::ValidatorClient, tonic};
+use sui_types::base_types::AuthorityName;
+use sui_types::committee::CommitteeWithNetworkMetadata;
+use sui_types::crypto::NetworkPublicKey;
+use sui_types::messages_checkpoint::{
+    CheckpointRequest, CheckpointRequestV2, CheckpointResponse, CheckpointResponseV2,
 };
+use sui_types::multiaddr::Multiaddr;
+use sui_types::sui_system_state::SuiSystemState;
 use sui_types::{
-    base_types::AuthorityName,
-    committee::CommitteeWithNetworkMetadata,
-    crypto::NetworkPublicKey,
     error::{SuiError, SuiResult},
-    messages_checkpoint::{
-        CheckpointRequest, CheckpointRequestV2, CheckpointResponse, CheckpointResponseV2,
-    },
-    messages_grpc::{
-        HandleCertificateRequestV3, HandleCertificateResponseV2, HandleCertificateResponseV3,
-        HandleSoftBundleCertificatesRequestV3, HandleSoftBundleCertificatesResponseV3,
-        HandleTransactionResponse, ObjectInfoRequest, ObjectInfoResponse, SubmitTransactionRequest,
-        SubmitTransactionResponse, SystemStateRequest, TransactionInfoRequest,
-        TransactionInfoResponse,
-    },
-    multiaddr::Multiaddr,
-    sui_system_state::SuiSystemState,
     transaction::*,
 };
 
 use crate::authority_client::tonic::IntoRequest;
+use sui_network::tonic::metadata::KeyAndValueRef;
+use sui_network::tonic::transport::Channel;
+use sui_types::messages_grpc::{
+    HandleCertificateRequestV3, HandleCertificateResponseV2, HandleCertificateResponseV3,
+    HandleSoftBundleCertificatesRequestV3, HandleSoftBundleCertificatesResponseV3,
+    HandleTransactionResponse, ObjectInfoRequest, ObjectInfoResponse, RawSubmitTxRequest,
+    RawSubmitTxResponse, SystemStateRequest, TransactionInfoRequest, TransactionInfoResponse,
+};
 
 #[async_trait]
 pub trait AuthorityAPI {
     async fn submit_transaction(
         &self,
-        request: SubmitTransactionRequest,
+        request: RawSubmitTxRequest,
         client_addr: Option<SocketAddr>,
-    ) -> Result<SubmitTransactionResponse, SuiError>;
+    ) -> Result<RawSubmitTxResponse, SuiError>;
 
     /// Initiate a new transaction to a Sui or Primary account.
     async fn handle_transaction(
@@ -159,9 +157,9 @@ impl AuthorityAPI for NetworkAuthorityClient {
     /// Submits a transaction to the Sui network for certification and execution.
     async fn submit_transaction(
         &self,
-        request: SubmitTransactionRequest,
+        request: RawSubmitTxRequest,
         client_addr: Option<SocketAddr>,
-    ) -> Result<SubmitTransactionResponse, SuiError> {
+    ) -> Result<RawSubmitTxResponse, SuiError> {
         let mut request = request.into_request();
         insert_metadata(&mut request, client_addr);
 

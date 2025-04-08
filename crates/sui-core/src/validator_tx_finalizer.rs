@@ -1,28 +1,27 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-#[cfg(any(msim, test))]
-use std::sync::atomic::{AtomicU64, Ordering::Relaxed};
-use std::{cmp::min, ops::Add, sync::Arc, time::Duration};
-
+use crate::authority::authority_per_epoch_store::AuthorityPerEpochStore;
+use crate::authority_aggregator::AuthorityAggregator;
+use crate::authority_client::AuthorityAPI;
+use crate::execution_cache::TransactionCacheRead;
 use arc_swap::ArcSwap;
 use mysten_metrics::LATENCY_SEC_BUCKETS;
 use prometheus::{
     register_histogram_with_registry, register_int_counter_with_registry, Histogram, IntCounter,
     Registry,
 };
-use sui_types::{
-    base_types::{AuthorityName, TransactionDigest},
-    transaction::VerifiedSignedTransaction,
-};
-use tokio::{select, time::Instant};
+use std::cmp::min;
+use std::ops::Add;
+#[cfg(any(msim, test))]
+use std::sync::atomic::{AtomicU64, Ordering::Relaxed};
+use std::sync::Arc;
+use std::time::Duration;
+use sui_types::base_types::{AuthorityName, TransactionDigest};
+use sui_types::transaction::VerifiedSignedTransaction;
+use tokio::select;
+use tokio::time::Instant;
 use tracing::{debug, error, trace};
-
-use crate::{
-    authority::authority_per_epoch_store::AuthorityPerEpochStore,
-    authority_aggregator::AuthorityAggregator, authority_client::AuthorityAPI,
-    execution_cache::TransactionCacheRead,
-};
 
 struct ValidatorTxFinalizerMetrics {
     num_finalization_attempts: IntCounter,
@@ -304,9 +303,9 @@ mod tests {
         messages_grpc::{
             HandleCertificateRequestV3, HandleCertificateResponseV2, HandleCertificateResponseV3,
             HandleSoftBundleCertificatesRequestV3, HandleSoftBundleCertificatesResponseV3,
-            HandleTransactionResponse, ObjectInfoRequest, ObjectInfoResponse,
-            SubmitTransactionRequest, SubmitTransactionResponse, SystemStateRequest,
-            TransactionInfoRequest, TransactionInfoResponse,
+            HandleTransactionResponse, ObjectInfoRequest, ObjectInfoResponse, RawSubmitTxRequest,
+            RawSubmitTxResponse, SystemStateRequest, TransactionInfoRequest,
+            TransactionInfoResponse,
         },
         object::Object,
         sui_system_state::SuiSystemState,
@@ -334,9 +333,9 @@ mod tests {
     impl AuthorityAPI for MockAuthorityClient {
         async fn submit_transaction(
             &self,
-            _request: SubmitTransactionRequest,
+            _request: RawSubmitTxRequest,
             _client_addr: Option<SocketAddr>,
-        ) -> Result<SubmitTransactionResponse, SuiError> {
+        ) -> Result<RawSubmitTxResponse, SuiError> {
             unimplemented!();
         }
 

@@ -16,13 +16,14 @@ use sui_core::{
         reconfig_observer::ReconfigObserver, QuorumDriver, QuorumDriverHandler,
         QuorumDriverHandlerBuilder, QuorumDriverMetrics,
     },
-    transaction_driver::{SubmitTransactionOptions, TransactionDriver, TransactionDriverMetrics},
+    transaction_driver::{
+        SubmitTransactionOptions, SubmitTxRequest, TransactionDriver, TransactionDriverMetrics,
+    },
 };
 use sui_json_rpc_types::{
     SuiObjectDataOptions, SuiObjectResponse, SuiObjectResponseQuery, SuiTransactionBlockEffects,
     SuiTransactionBlockEffectsAPI, SuiTransactionBlockResponseOptions,
 };
-use sui_protocol_config::is_mysticeti_fpc_enabled_in_env;
 use sui_sdk::{SuiClient, SuiClientBuilder};
 use sui_types::{
     base_types::{AuthorityName, ObjectID, ObjectRef, SequenceNumber, SuiAddress},
@@ -300,11 +301,12 @@ impl LocalValidatorAggregatorProxy {
         }
     }
 
+    // Submit transaction block using Transaction Driver
     async fn submit_transaction_block(&self, tx: Transaction) -> anyhow::Result<ExecutionEffects> {
         let response = self
             .td
             .submit_transaction(
-                sui_types::quorum_driver_types::ExecuteTransactionRequestV3 {
+                SubmitTxRequest {
                     transaction: tx.clone(),
                     include_events: true,
                     include_input_objects: false,
@@ -346,8 +348,13 @@ impl ValidatorProxy for LocalValidatorAggregatorProxy {
     }
 
     async fn execute_transaction_block(&self, tx: Transaction) -> anyhow::Result<ExecutionEffects> {
-        if is_mysticeti_fpc_enabled_in_env().unwrap_or(false) {
-            return self.submit_transaction_block(tx).await;
+        if let Ok(v) = std::env::var("TRANSACTION_DRIVER") {
+            if let Ok(tx_driver_percentage) = v.parse::<u8>() {
+                if tx_driver_percentage > 0 && tx_driver_percentage <= 100 {
+                    // TODO(fastpath): Add ability to switch to and from qd based on percentage provided
+                    return self.submit_transaction_block(tx).await;
+                }
+            }
         }
 
         let tx_digest = *tx.digest();

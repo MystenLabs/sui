@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 mod error;
+mod message_types;
 mod metrics;
 
 use std::{
@@ -12,6 +13,7 @@ use std::{
 
 use arc_swap::ArcSwap;
 pub use error::*;
+pub use message_types::*;
 pub use metrics::*;
 use mysten_metrics::{monitored_future, TX_TYPE_SHARED_OBJ_TX, TX_TYPE_SINGLE_WRITER_TX};
 use parking_lot::Mutex;
@@ -19,19 +21,13 @@ use rand::seq::SliceRandom as _;
 use sui_types::{
     base_types::ConciseableName,
     committee::EpochId,
-    effects::{TransactionEffects, TransactionEvents},
-    error::SuiError,
-    messages_grpc::SubmitTransactionRequest,
-    object::Object,
-    quorum_driver_types::{
-        EffectsFinalityInfo, ExecuteTransactionRequestV3, ExecuteTransactionResponseV3,
-        FinalizedEffects,
-    },
+    quorum_driver_types::{EffectsFinalityInfo, FinalizedEffects},
 };
 use tokio::{
     task::JoinSet,
     time::{sleep, timeout},
 };
+use tracing::instrument;
 
 use crate::{
     authority_aggregator::AuthorityAggregator,
@@ -71,12 +67,12 @@ where
         driver
     }
 
+    #[instrument(level = "trace", skip_all, fields(tx_digest = ?request.transaction.digest()))]
     pub async fn submit_transaction(
         &self,
-        // TODO(fastpath): Replace with TD request/response type once hooked up to transaction orchestrator
-        request: ExecuteTransactionRequestV3,
+        request: SubmitTxRequest,
         options: SubmitTransactionOptions,
-    ) -> Result<ExecuteTransactionResponseV3, TransactionDriverError> {
+    ) -> Result<QuorumSubmitTransactionResponse, TransactionDriverError> {
         let tx_digest = request.transaction.digest();
         let is_single_writer_tx = !request.transaction.contains_shared_object();
         let timer = Instant::now();
@@ -102,40 +98,27 @@ where
         }
     }
 
+    #[instrument(level = "trace", skip_all, fields(tx_digest = ?request.transaction.digest()))]
     async fn submit_transaction_once(
         &self,
-        request: &ExecuteTransactionRequestV3,
+        request: &SubmitTxRequest,
         options: &SubmitTransactionOptions,
-    ) -> Result<ExecuteTransactionResponseV3, TransactionDriverError> {
+    ) -> Result<QuorumSubmitTransactionResponse, TransactionDriverError> {
         // Store the epoch number; we read it from the votes and use it later to create the certificate.
         let auth_agg = self.authority_aggregator.load();
         let committee = auth_agg.committee.clone();
         let epoch = committee.epoch();
-        let tx = request.transaction.clone();
+        let raw_request = request
+            .into_raw()
+            .map_err(TransactionDriverError::SerializationError)?;
 
+        // TODO(fastpath): Use validator performance metrics to choose who to submit with
         // Send the transaction to a random validator.
         let clients = auth_agg.authority_clients.iter().collect::<Vec<_>>();
         let (name, client) = clients.choose(&mut rand::thread_rng()).unwrap();
         let response = timeout(
             Duration::from_secs(2),
-            client.submit_transaction(
-                SubmitTransactionRequest {
-                    transaction: bcs::to_bytes(&tx)
-                        .map_err(|e| {
-                            TransactionDriverError::SerializationError(
-                                SuiError::TransactionSerializationError {
-                                    error: e.to_string(),
-                                },
-                            )
-                        })?
-                        .into(),
-                    include_events: request.include_events,
-                    include_input_objects: request.include_input_objects,
-                    include_output_objects: request.include_output_objects,
-                    include_auxiliary_data: request.include_auxiliary_data,
-                },
-                options.forwarded_client_addr,
-            ),
+            client.submit_transaction(raw_request, options.forwarded_client_addr),
         )
         .await
         .map_err(|_| TransactionDriverError::TimeoutBeforeFinality)?
@@ -143,69 +126,17 @@ where
             TransactionDriverError::RpcFailure(name.concise().to_string(), e.to_string())
         })?;
 
-        Ok(ExecuteTransactionResponseV3 {
+        // TODO(fastpath): Aggregate quorum of responses before returning QuorumSubmitTransactionResponse
+        Ok(QuorumSubmitTransactionResponse {
             effects: FinalizedEffects {
-                effects: bcs::from_bytes::<TransactionEffects>(&response.effects).map_err(|e| {
-                    TransactionDriverError::DeserializationError(
-                        SuiError::TransactionEffectsDeserializationError {
-                            error: e.to_string(),
-                        },
-                    )
-                })?,
+                effects: response.effects,
                 // TODO(fastpath): return the epoch in response.
                 finality_info: EffectsFinalityInfo::QuorumExecuted(epoch),
             },
-            events: response
-                .events
-                .map(|events| {
-                    bcs::from_bytes::<TransactionEvents>(&events).map_err(|e| {
-                        TransactionDriverError::DeserializationError(
-                            SuiError::TransactionEventsDeserializationError {
-                                error: e.to_string(),
-                            },
-                        )
-                    })
-                })
-                .transpose()?,
-            input_objects: if request.include_input_objects {
-                Some(
-                    response
-                        .input_objects
-                        .into_iter()
-                        .map(|object| {
-                            bcs::from_bytes::<Object>(&object).map_err(|e| {
-                                TransactionDriverError::DeserializationError(
-                                    SuiError::ObjectSerializationError {
-                                        error: e.to_string(),
-                                    },
-                                )
-                            })
-                        })
-                        .collect::<Result<Vec<_>, _>>()?,
-                )
-            } else {
-                None
-            },
-            output_objects: if request.include_output_objects {
-                Some(
-                    response
-                        .output_objects
-                        .into_iter()
-                        .map(|object| {
-                            bcs::from_bytes::<Object>(&object).map_err(|e| {
-                                TransactionDriverError::DeserializationError(
-                                    SuiError::ObjectSerializationError {
-                                        error: e.to_string(),
-                                    },
-                                )
-                            })
-                        })
-                        .collect::<Result<Vec<_>, _>>()?,
-                )
-            } else {
-                None
-            },
-            auxiliary_data: response.auxiliary_data.map(|bytes| bytes.to_vec()),
+            events: response.events,
+            input_objects: response.input_objects,
+            output_objects: response.output_objects,
+            auxiliary_data: response.auxiliary_data,
         })
     }
 

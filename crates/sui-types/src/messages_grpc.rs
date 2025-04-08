@@ -8,7 +8,11 @@ use serde::{Deserialize, Serialize};
 use crate::{
     base_types::{ObjectID, SequenceNumber, TransactionDigest},
     crypto::{AuthoritySignInfo, AuthorityStrongQuorumSignInfo},
-    effects::{SignedTransactionEffects, TransactionEvents, VerifiedSignedTransactionEffects},
+    effects::{
+        SignedTransactionEffects, TransactionEffects, TransactionEvents,
+        VerifiedSignedTransactionEffects,
+    },
+    error::SuiError,
     object::Object,
     transaction::{CertifiedTransaction, SenderSignedData, SignedTransaction},
 };
@@ -222,7 +226,7 @@ pub struct HandleCertificateRequestV3 {
 }
 
 #[derive(Clone, prost::Message)]
-pub struct SubmitTransactionRequest {
+pub struct RawSubmitTxRequest {
     #[prost(bytes = "bytes", tag = "1")]
     pub transaction: Bytes,
     #[prost(bool, tag = "2")]
@@ -243,7 +247,7 @@ pub struct SubmitTransactionRequest {
 /// the transaction has been executed locally on the validator and will not be returned for
 /// requests to previously executed transactions.
 #[derive(Clone, prost::Message)]
-pub struct SubmitTransactionResponse {
+pub struct RawSubmitTxResponse {
     // Serialized TransactionEffects
     #[prost(bytes = "bytes", tag = "1")]
     pub effects: Bytes,
@@ -266,6 +270,87 @@ pub struct SubmitTransactionResponse {
     pub output_objects: Vec<Vec<u8>>,
     #[prost(bytes = "bytes", optional, tag = "5")]
     pub auxiliary_data: Option<Bytes>,
+}
+
+#[derive(Clone, Debug)]
+pub struct SubmitTxResponse {
+    pub effects: TransactionEffects,
+    pub events: Option<TransactionEvents>,
+    pub input_objects: Option<Vec<Object>>,
+    pub output_objects: Option<Vec<Object>>,
+    pub auxiliary_data: Option<Vec<u8>>,
+}
+
+impl SubmitTxResponse {
+    pub fn from_bytes(
+        effects: Bytes,
+        include_events: bool,
+        events: Option<Bytes>,
+        include_input_objects: bool,
+        input_objects: Vec<Vec<u8>>,
+        include_output_objects: bool,
+        output_objects: Vec<Vec<u8>>,
+        include_auxiliary_data: bool,
+        auxiliary_data: Option<Bytes>,
+    ) -> Result<Self, SuiError> {
+        Ok(Self {
+            effects: bcs::from_bytes(&effects).map_err(|e| {
+                SuiError::TransactionEffectsDeserializationError {
+                    error: e.to_string(),
+                }
+            })?,
+            events: if include_events {
+                events
+                    .map(|events| {
+                        bcs::from_bytes(&events).map_err(|e| {
+                            SuiError::TransactionEventsDeserializationError {
+                                error: e.to_string(),
+                            }
+                        })
+                    })
+                    .transpose()?
+            } else {
+                None
+            },
+            input_objects: if include_input_objects {
+                Some(
+                    input_objects
+                        .into_iter()
+                        .map(|object| {
+                            bcs::from_bytes(&object).map_err(|e| {
+                                SuiError::ObjectSerializationError {
+                                    error: e.to_string(),
+                                }
+                            })
+                        })
+                        .collect::<Result<Vec<_>, _>>()?,
+                )
+            } else {
+                None
+            },
+            output_objects: if include_output_objects {
+                Some(
+                    output_objects
+                        .into_iter()
+                        .map(|object| {
+                            bcs::from_bytes(&object).map_err(|e| {
+                                SuiError::ObjectSerializationError {
+                                    error: e.to_string(),
+                                }
+                            })
+                        })
+                        .collect::<Result<Vec<_>, _>>()?,
+                )
+            } else {
+                None
+            },
+            auxiliary_data: if include_auxiliary_data {
+                auxiliary_data.map(|data| data.to_vec())
+            } else {
+                None
+            },
+        })
+    }
 }
 
 impl From<HandleCertificateResponseV3> for HandleCertificateResponseV2 {

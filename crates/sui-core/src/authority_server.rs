@@ -36,9 +36,9 @@ use sui_types::{
     messages_grpc::{
         HandleCertificateRequestV3, HandleCertificateResponseV2, HandleCertificateResponseV3,
         HandleSoftBundleCertificatesRequestV3, HandleSoftBundleCertificatesResponseV3,
-        HandleTransactionResponse, ObjectInfoRequest, ObjectInfoResponse,
-        SubmitCertificateResponse, SubmitTransactionRequest, SubmitTransactionResponse,
-        SystemStateRequest, TransactionInfoRequest, TransactionInfoResponse,
+        HandleTransactionResponse, ObjectInfoRequest, ObjectInfoResponse, RawSubmitTxRequest,
+        RawSubmitTxResponse, SubmitCertificateResponse, SystemStateRequest, TransactionInfoRequest,
+        TransactionInfoResponse,
     },
     multiaddr::Multiaddr,
     object::Object,
@@ -507,8 +507,8 @@ impl ValidatorService {
 
     async fn handle_submit_transaction(
         &self,
-        request: tonic::Request<SubmitTransactionRequest>,
-    ) -> WrappedServiceResponse<SubmitTransactionResponse> {
+        request: tonic::Request<RawSubmitTxRequest>,
+    ) -> WrappedServiceResponse<RawSubmitTxResponse> {
         let Self {
             state,
             consensus_adapter,
@@ -580,13 +580,13 @@ impl ValidatorService {
                 .and_then(Result::ok);
 
             return Ok((
-                tonic::Response::new(SubmitTransactionResponse {
+                tonic::Response::new(RawSubmitTxResponse {
                     effects: bcs::to_bytes(&effects)
                         .map_err(|e| SuiError::TransactionEffectsSerializationError {
                             error: e.to_string(),
                         })?
                         .into(),
-                    events: include_events.then_some(
+                    events: (include_events && !events.data.is_empty()).then_some(
                         bcs::to_bytes(&events)
                             .map_err(|e| SuiError::TransactionEventsSerializationError {
                                 error: e.to_string(),
@@ -642,7 +642,7 @@ impl ValidatorService {
                 )
                 .remove(0);
 
-            let submit_transaction_response = SubmitTransactionResponse {
+            let submit_transaction_response = RawSubmitTxResponse {
                 effects: bcs::to_bytes(&transaction_response.effects)
                     .map_err(|e| SuiError::TransactionEffectsSerializationError {
                         error: e.to_string(),
@@ -965,8 +965,8 @@ impl ValidatorService {
 
     async fn handle_submit_transaction_impl(
         &self,
-        request: tonic::Request<SubmitTransactionRequest>,
-    ) -> WrappedServiceResponse<SubmitTransactionResponse> {
+        request: tonic::Request<RawSubmitTxRequest>,
+    ) -> WrappedServiceResponse<RawSubmitTxResponse> {
         self.handle_submit_transaction(request).await
     }
 
@@ -1483,8 +1483,8 @@ macro_rules! handle_with_decoration {
 impl Validator for ValidatorService {
     async fn submit_transaction(
         &self,
-        request: tonic::Request<SubmitTransactionRequest>,
-    ) -> Result<tonic::Response<SubmitTransactionResponse>, tonic::Status> {
+        request: tonic::Request<RawSubmitTxRequest>,
+    ) -> Result<tonic::Response<RawSubmitTxResponse>, tonic::Status> {
         let validator_service = self.clone();
 
         // Spawns a task which handles the transaction. The task will unconditionally continue
