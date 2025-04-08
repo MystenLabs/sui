@@ -327,4 +327,24 @@ impl WalletContext {
             )
             .await?)
     }
+
+    pub async fn execute_transaction_may_fail_no_local_execution(
+        &self,
+        tx: Transaction,
+    ) -> anyhow::Result<SuiTransactionBlockResponse> {
+        let client = self.get_client().await?;
+        Ok(client
+            .quorum_driver_api()
+            .execute_transaction_block(
+                tx,
+                SuiTransactionBlockResponseOptions::new()
+                    .with_effects()
+                    .with_input()
+                    .with_events()
+                    .with_object_changes()
+                    .with_balance_changes(),
+                Some(sui_types::quorum_driver_types::ExecuteTransactionRequestType::WaitForEffectsCert),
+            )
+            .await?)
+    }
 }

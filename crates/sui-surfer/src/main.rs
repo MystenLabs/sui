@@ -37,7 +37,8 @@ async fn main() {
     let results = sui_surfer::run(
         Duration::from_secs(args.run_duration.unwrap_or(DEFAULT_RUN_DURATION)),
         Duration::from_secs(args.run_duration.unwrap_or(DEFAULT_EPOCH_DURATION)),
-        args.packages,
+        args.packages.into_iter().map(|p| p.into()).collect(),
+        None,
     )
     .await;
     results.print_stats();

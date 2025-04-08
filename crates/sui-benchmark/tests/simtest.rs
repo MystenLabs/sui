@@ -44,7 +44,7 @@ mod test {
     use sui_simulator::tempfile::TempDir;
     use sui_simulator::{configs::*, SimConfig};
     use sui_storage::blob::Blob;
-    use sui_surfer::surf_strategy::SurfStrategy;
+    use sui_surfer::surf_strategy::{ExitCondition, SurfStrategy};
     use sui_swarm_config::network_config_builder::ConfigBuilder;
     use sui_types::base_types::{ConciseableName, ObjectID, SequenceNumber};
     use sui_types::digests::TransactionDigest;
@@ -1205,11 +1205,12 @@ mod test {
                 .collect();
             info!("using sui_surfer test packages: {test_package_paths:?}");
 
-            let surf_strategy = SurfStrategy::new(Duration::from_millis(400));
+            let mut surf_strategy = SurfStrategy::new(Duration::from_millis(400));
+            surf_strategy.set_exit_condition(ExitCondition::Timeout(test_duration));
             let results = sui_surfer::run_with_test_cluster_and_strategy(
                 surf_strategy,
-                test_duration,
-                test_package_paths,
+                test_package_paths.into_iter().map(|p| p.into()).collect(),
+                None,
                 test_cluster,
                 1, // skip first account for use by bench_task
             )

@@ -983,6 +983,7 @@ impl LocalExec {
         let pre_run_sandbox = self
             .execution_engine_execute_impl(tx_digest, expensive_safety_check_config)
             .await?;
+        tracing::debug!("HAY");
         Self::certificate_execute_with_sandbox_state(&pre_run_sandbox).await
     }
 
