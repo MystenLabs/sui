@@ -331,12 +331,6 @@ staking_pool_id
 is_duplicate
 	public fun
 	0x3::validator
-is_equal_some_and_value
-	fun
-	0x3::validator
-is_equal_some
-	fun
-	0x3::validator
 new_unverified_validator_operation_cap_and_transfer
 	public(package) fun
 	0x3::validator
@@ -565,9 +559,6 @@ is_duplicate_with_active_validator
 is_duplicate_validator
 	public(package) fun
 	0x3::validator_set
-count_duplicates_vec
-	fun
-	0x3::validator_set
 is_duplicate_with_pending_validator
 	fun
 	0x3::validator_set
@@ -633,9 +624,6 @@ process_pending_stakes_and_withdraws
 	0x3::validator_set
 calculate_total_stakes
 	public(package) fun
-	0x3::validator_set
-adjust_stake_and_gas_price
-	fun
 	0x3::validator_set
 compute_reward_adjustments
 	fun

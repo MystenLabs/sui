@@ -103,9 +103,7 @@ title: Module `sui_system::validator_wrapper`
 
 
 <pre><code><b>public</b>(package) <b>fun</b> <a href="../sui_system/validator_wrapper.md#sui_system_validator_wrapper_create_v1">create_v1</a>(<a href="../sui_system/validator.md#sui_system_validator">validator</a>: Validator, ctx: &<b>mut</b> TxContext): <a href="../sui_system/validator_wrapper.md#sui_system_validator_wrapper_ValidatorWrapper">ValidatorWrapper</a> {
-    <a href="../sui_system/validator_wrapper.md#sui_system_validator_wrapper_ValidatorWrapper">ValidatorWrapper</a> {
-        inner: versioned::create(1, <a href="../sui_system/validator.md#sui_system_validator">validator</a>, ctx)
-    }
+    <a href="../sui_system/validator_wrapper.md#sui_system_validator_wrapper_ValidatorWrapper">ValidatorWrapper</a> { inner: versioned::create(1, <a href="../sui_system/validator.md#sui_system_validator">validator</a>, ctx) }
 }
 </code></pre>
 

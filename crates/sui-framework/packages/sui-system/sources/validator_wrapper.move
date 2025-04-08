@@ -3,21 +3,18 @@
 
 module sui_system::validator_wrapper;
 
-use sui::versioned::Versioned;
+use sui::versioned::{Self, Versioned};
 use sui_system::validator::Validator;
-use sui::versioned;
 
 const EInvalidVersion: u64 = 0;
 
 public struct ValidatorWrapper has store {
-    inner: Versioned
+    inner: Versioned,
 }
 
 // Validator corresponds to version 1.
 public(package) fun create_v1(validator: Validator, ctx: &mut TxContext): ValidatorWrapper {
-    ValidatorWrapper {
-        inner: versioned::create(1, validator, ctx)
-    }
+    ValidatorWrapper { inner: versioned::create(1, validator, ctx) }
 }
 
 /// This function should always return the latest supported version.
