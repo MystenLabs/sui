@@ -28,6 +28,8 @@ This module holds shared implementation of macros used in <code>std</code>
 -  [Macro function `uq_to_int`](#std_macros_uq_to_int)
 -  [Macro function `uq_int_mul`](#std_macros_uq_int_mul)
 -  [Macro function `uq_int_div`](#std_macros_uq_int_div)
+-  [Macro function `insertion_sort_by`](#std_macros_insertion_sort_by)
+-  [Macro function `merge_sort_by`](#std_macros_merge_sort_by)
 
 
 <pre><code></code></pre>
@@ -719,6 +721,121 @@ plus fractional).
     // Check whether the value is too large.
     <b>if</b> (quotient &gt; $max_t <b>as</b> $U) $abort_overflow;
     quotient <b>as</b> $T
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="std_macros_insertion_sort_by"></a>
+
+## Macro function `insertion_sort_by`
+
+Performs an in-place insertion sort on the vector <code>v</code> using the comparison function <code>le</code>.
+The sort is stable, meaning that equal elements will maintain their relative order.
+
+Insertion sort is efficient for small vector, and can be faster than merge sort for almost
+sorted vectors (e.g. when the vector is already sorted or nearly sorted).
+
+
+<pre><code><b>public</b> <b>macro</b> <b>fun</b> <a href="../std/macros.md#std_macros_insertion_sort_by">insertion_sort_by</a>&lt;$T&gt;($v: &<b>mut</b> <a href="../std/vector.md#std_vector">vector</a>&lt;$T&gt;, $le: |&$T, &$T| -&gt; bool)
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b> <b>macro</b> <b>fun</b> <a href="../std/macros.md#std_macros_insertion_sort_by">insertion_sort_by</a>&lt;$T&gt;($v: &<b>mut</b> <a href="../std/vector.md#std_vector">vector</a>&lt;$T&gt;, $le: |&$T, &$T| -&gt; bool) {
+    <b>let</b> v = $v;
+    <b>let</b> n = v.length();
+    <b>if</b> (n &lt; 2) <b>return</b> ();
+    // <a href="../std/macros.md#std_macros_do">do</a> insertion sort
+    <b>let</b> <b>mut</b> i = 1;
+    <b>while</b> (i &lt; n) {
+        <b>let</b> <b>mut</b> j = i;
+        <b>while</b> (j &gt; 0 && $le(&v[j], &v[j - 1])) {
+            v.swap(j, j - 1);
+            j = j - 1;
+        };
+        i = i + 1;
+    }
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="std_macros_merge_sort_by"></a>
+
+## Macro function `merge_sort_by`
+
+Performs an in-place merge sort on the vector <code>v</code> using the comparison function <code>le</code>.
+Merge sort is efficient for large vectors, and is a stable sort.
+
+Merge sort performs better than insertion sort for large vectors (~30 elements or more).
+
+
+<pre><code><b>public</b> <b>macro</b> <b>fun</b> <a href="../std/macros.md#std_macros_merge_sort_by">merge_sort_by</a>&lt;$T&gt;($v: &<b>mut</b> <a href="../std/vector.md#std_vector">vector</a>&lt;$T&gt;, $le: |&$T, &$T| -&gt; bool)
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b> <b>macro</b> <b>fun</b> <a href="../std/macros.md#std_macros_merge_sort_by">merge_sort_by</a>&lt;$T&gt;($v: &<b>mut</b> <a href="../std/vector.md#std_vector">vector</a>&lt;$T&gt;, $le: |&$T, &$T| -&gt; bool) {
+    <b>let</b> v = $v;
+    <b>let</b> n = v.length();
+    <b>if</b> (n &lt; 2) <b>return</b> ();
+    <b>let</b> <b>mut</b> flags = <a href="../std/vector.md#std_vector">vector</a>[<b>false</b>];
+    <b>let</b> <b>mut</b> starts = <a href="../std/vector.md#std_vector">vector</a>[0];
+    <b>let</b> <b>mut</b> ends = <a href="../std/vector.md#std_vector">vector</a>[v.length()];
+    <b>while</b> (!flags.is_empty()) {
+        <b>let</b> (halves_sorted, start, end) = (flags.pop_back(), starts.pop_back(), ends.pop_back());
+        <b>let</b> mid = (start + end) / 2;
+        <b>if</b> (halves_sorted) {
+            <b>let</b> <b>mut</b> mid = mid;
+            <b>let</b> <b>mut</b> l = start;
+            <b>let</b> <b>mut</b> r = mid;
+            <b>while</b> (l &lt; mid && r &lt; end) {
+                <b>if</b> ($le(&v[l], &v[r])) {
+                    l = l + 1;
+                } <b>else</b> {
+                    <b>let</b> <b>mut</b> i = r;
+                    <b>while</b> (i &gt; l) {
+                        v.swap(i, i - 1);
+                        i = i - 1;
+                    };
+                    l = l + 1;
+                    mid = mid + 1;
+                    r = r + 1;
+                }
+            }
+        } <b>else</b> {
+            // set up the "merge"
+            flags.push_back(<b>true</b>);
+            starts.push_back(start);
+            ends.push_back(end);
+            // set up the recursive calls
+            // v[start..mid]
+            <b>if</b> (mid - start &gt; 1) {
+                flags.push_back(<b>false</b>);
+                starts.push_back(start);
+                ends.push_back(mid);
+            };
+            // v[mid..end]
+            <b>if</b> (end - mid &gt; 1) {
+                flags.push_back(<b>false</b>);
+                starts.push_back(mid);
+                ends.push_back(end);
+            }
+        }
+    }
 }
 </code></pre>
 
