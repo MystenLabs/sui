@@ -3,7 +3,7 @@
 
 use itertools::Itertools;
 
-use crate::control_flow_graph::{BlockId, ControlFlowGraph, VMControlFlowGraph};
+use move_bytecode_verifier_meter::absint::ControlFlowGraph;
 
 use move_binary_format::file_format::{
     Bytecode, EnumDefinitionIndex, JumpTableInner, VariantJumpTable, VariantJumpTableIndex,
@@ -13,7 +13,7 @@ use move_binary_format::file_format::{
 fn traversal_no_loops() {
     let cfg = {
         use Bytecode::*;
-        VMControlFlowGraph::new(
+        ControlFlowGraph::new(
             &[
                 /* L0 */ LdTrue,
                 /*    */ BrTrue(3),
@@ -33,7 +33,7 @@ fn traversal_no_loops() {
 fn traversal_no_loops_with_switch() {
     let cfg = {
         use Bytecode::*;
-        VMControlFlowGraph::new(
+        ControlFlowGraph::new(
             &[
                 /* L0 */ VariantSwitch(VariantJumpTableIndex::new(0)),
                 /*    */ Nop,
@@ -62,7 +62,7 @@ fn traversal_no_loops_with_switch() {
 fn traversal_loops() {
     let cfg = {
         use Bytecode::*;
-        VMControlFlowGraph::new(
+        ControlFlowGraph::new(
             &[
                 /* L0: Outer head     */ LdTrue,
                 /*     Outer break    */ BrTrue(6),
@@ -85,7 +85,7 @@ fn traversal_loops() {
 fn traversal_loops_with_switch() {
     let cfg = {
         use Bytecode::*;
-        VMControlFlowGraph::new(
+        ControlFlowGraph::new(
             &[
                 /* L0: Outer head     */ LdTrue,
                 /*     Outer break    */ BrTrue(4),
@@ -112,7 +112,7 @@ fn traversal_loops_with_switch() {
 fn traversal_non_loop_back_branch() {
     let cfg = {
         use Bytecode::*;
-        VMControlFlowGraph::new(
+        ControlFlowGraph::new(
             &[
                 /* L0 */ Branch(2),
                 /* L1 */ Ret,
@@ -131,7 +131,7 @@ fn traversal_non_loop_back_branch() {
 fn traversal_non_loop_back_branch_variant_switch() {
     let cfg = {
         use Bytecode::*;
-        VMControlFlowGraph::new(
+        ControlFlowGraph::new(
             &[
                 /* L0 */ VariantSwitch(VariantJumpTableIndex::new(0)),
                 /* L1 */ Ret,
@@ -176,7 +176,7 @@ fn out_of_order_blocks_variant_switch() {
         let mut start_block = vec![Bytecode::VariantSwitch(VariantJumpTableIndex::new(0))];
         start_block.extend(blocks.clone().into_iter().flat_map(|(_, block)| block));
 
-        let cfg = VMControlFlowGraph::new(
+        let cfg = ControlFlowGraph::new(
             &start_block,
             &[VariantJumpTable {
                 // Doesn't matter
@@ -204,7 +204,7 @@ fn out_of_order_blocks_variant_switch() {
 
         let jump_table = JumpTableInner::Full(perm.iter().map(|i| 1 + *i * block_len).collect());
 
-        let cfg = VMControlFlowGraph::new(
+        let cfg = ControlFlowGraph::new(
             &blocks,
             &[VariantJumpTable {
                 // Doesn't matter
