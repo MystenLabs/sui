@@ -212,7 +212,7 @@ Returns <code><b>true</b></code> if all characters in <code><a href="../std/stri
 Returns <code><b>false</b></code> otherwise. Not all <code><a href="../std/ascii.md#std_ascii_String">String</a></code>s are printable strings.
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="../std/ascii.md#std_ascii_all_characters_printable">all_characters_printable</a>(<a href="../std/string.md#std_string">string</a>: &<a href="../std/ascii.md#std_ascii_String">std::ascii::String</a>): bool
+<pre><code><b>public</b> <b>fun</b> <a href="../std/ascii.md#std_ascii_all_characters_printable">all_characters_printable</a>(<a href="../std/string.md#std_string">string</a>: &<a href="../std/ascii.md#std_ascii_String">std::ascii::String</a>): <a href="../std/bool.md#std_bool">bool</a>
 </code></pre>
 
 
@@ -221,7 +221,7 @@ Returns <code><b>false</b></code> otherwise. Not all <code><a href="../std/ascii
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="../std/ascii.md#std_ascii_all_characters_printable">all_characters_printable</a>(<a href="../std/string.md#std_string">string</a>: &<a href="../std/ascii.md#std_ascii_String">String</a>): bool {
+<pre><code><b>public</b> <b>fun</b> <a href="../std/ascii.md#std_ascii_all_characters_printable">all_characters_printable</a>(<a href="../std/string.md#std_string">string</a>: &<a href="../std/ascii.md#std_ascii_String">String</a>): <a href="../std/bool.md#std_bool">bool</a> {
     <a href="../std/string.md#std_string">string</a>.bytes.all!(|<a href="../std/ascii.md#std_ascii_byte">byte</a>| <a href="../std/ascii.md#std_ascii_is_printable_char">is_printable_char</a>(*<a href="../std/ascii.md#std_ascii_byte">byte</a>))
 }
 </code></pre>
@@ -469,7 +469,7 @@ Returns <code><b>true</b></code> if <code>b</code> is a valid ASCII character.
 Returns <code><b>false</b></code> otherwise.
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="../std/ascii.md#std_ascii_is_valid_char">is_valid_char</a>(b: <a href="../std/u8.md#std_u8">u8</a>): bool
+<pre><code><b>public</b> <b>fun</b> <a href="../std/ascii.md#std_ascii_is_valid_char">is_valid_char</a>(b: <a href="../std/u8.md#std_u8">u8</a>): <a href="../std/bool.md#std_bool">bool</a>
 </code></pre>
 
 
@@ -478,7 +478,7 @@ Returns <code><b>false</b></code> otherwise.
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="../std/ascii.md#std_ascii_is_valid_char">is_valid_char</a>(b: <a href="../std/u8.md#std_u8">u8</a>): bool {
+<pre><code><b>public</b> <b>fun</b> <a href="../std/ascii.md#std_ascii_is_valid_char">is_valid_char</a>(b: <a href="../std/u8.md#std_u8">u8</a>): <a href="../std/bool.md#std_bool">bool</a> {
     b &lt;= 0x7F
 }
 </code></pre>
@@ -495,7 +495,7 @@ Returns <code><b>true</b></code> if <code><a href="../std/ascii.md#std_ascii_byt
 Returns <code><b>false</b></code> otherwise.
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="../std/ascii.md#std_ascii_is_printable_char">is_printable_char</a>(<a href="../std/ascii.md#std_ascii_byte">byte</a>: <a href="../std/u8.md#std_u8">u8</a>): bool
+<pre><code><b>public</b> <b>fun</b> <a href="../std/ascii.md#std_ascii_is_printable_char">is_printable_char</a>(<a href="../std/ascii.md#std_ascii_byte">byte</a>: <a href="../std/u8.md#std_u8">u8</a>): <a href="../std/bool.md#std_bool">bool</a>
 </code></pre>
 
 
@@ -504,7 +504,7 @@ Returns <code><b>false</b></code> otherwise.
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="../std/ascii.md#std_ascii_is_printable_char">is_printable_char</a>(<a href="../std/ascii.md#std_ascii_byte">byte</a>: <a href="../std/u8.md#std_u8">u8</a>): bool {
+<pre><code><b>public</b> <b>fun</b> <a href="../std/ascii.md#std_ascii_is_printable_char">is_printable_char</a>(<a href="../std/ascii.md#std_ascii_byte">byte</a>: <a href="../std/u8.md#std_u8">u8</a>): <a href="../std/bool.md#std_bool">bool</a> {
     <a href="../std/ascii.md#std_ascii_byte">byte</a> &gt;= 0x20 && // Disallow metacharacters
         <a href="../std/ascii.md#std_ascii_byte">byte</a> &lt;= 0x7E // Don't allow DEL metacharacter
 }
@@ -521,7 +521,7 @@ Returns <code><b>false</b></code> otherwise.
 Returns <code><b>true</b></code> if <code><a href="../std/string.md#std_string">string</a></code> is empty.
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="../std/ascii.md#std_ascii_is_empty">is_empty</a>(<a href="../std/string.md#std_string">string</a>: &<a href="../std/ascii.md#std_ascii_String">std::ascii::String</a>): bool
+<pre><code><b>public</b> <b>fun</b> <a href="../std/ascii.md#std_ascii_is_empty">is_empty</a>(<a href="../std/string.md#std_string">string</a>: &<a href="../std/ascii.md#std_ascii_String">std::ascii::String</a>): <a href="../std/bool.md#std_bool">bool</a>
 </code></pre>
 
 
@@ -530,7 +530,7 @@ Returns <code><b>true</b></code> if <code><a href="../std/string.md#std_string">
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="../std/ascii.md#std_ascii_is_empty">is_empty</a>(<a href="../std/string.md#std_string">string</a>: &<a href="../std/ascii.md#std_ascii_String">String</a>): bool {
+<pre><code><b>public</b> <b>fun</b> <a href="../std/ascii.md#std_ascii_is_empty">is_empty</a>(<a href="../std/string.md#std_string">string</a>: &<a href="../std/ascii.md#std_ascii_String">String</a>): <a href="../std/bool.md#std_bool">bool</a> {
     <a href="../std/string.md#std_string">string</a>.bytes.<a href="../std/ascii.md#std_ascii_is_empty">is_empty</a>()
 }
 </code></pre>
