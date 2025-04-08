@@ -3,7 +3,6 @@
   "AutoImport": {
     "project": "tests/import",
     "file_tests": {
-      // tests completion of the object snippet
       "colon_colon.move": [
         {
           "use_line": 7,

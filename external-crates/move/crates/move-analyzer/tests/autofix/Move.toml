@@ -1,0 +1,6 @@
+[package]
+name = "Autofix"
+edition = "2024.beta"
+
+[addresses]
+Autofix = "0xCAFE"

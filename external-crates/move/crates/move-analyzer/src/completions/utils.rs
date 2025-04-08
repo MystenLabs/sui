@@ -1,13 +1,17 @@
 // Copyright (c) The Move Contributors
 // SPDX-License-Identifier: Apache-2.0
 
+use std::path::PathBuf;
+
 use crate::symbols::{
-    mod_ident_to_ide_string, ret_type_to_ide_str, type_args_to_ide_string, type_list_to_ide_string,
-    AutoImportInsertionInfo, AutoImportInsertionKind, CursorContext, DefInfo, ModuleDefs, Symbols,
+    compute_symbols_parsed_program, compute_symbols_pre_process, mod_ident_to_ide_string,
+    ret_type_to_ide_str, type_args_to_ide_string, type_list_to_ide_string, AutoImportInsertionInfo,
+    AutoImportInsertionKind, CompiledPkgInfo, CursorContext, DefInfo, ModuleDefs, Symbols,
+    SymbolsComputationData,
 };
 use lsp_types::{
-    CompletionItem, CompletionItemKind, CompletionItemLabelDetails, InsertTextFormat, Range,
-    TextEdit,
+    CompletionItem, CompletionItemKind, CompletionItemLabelDetails, InsertTextFormat, Position,
+    Range, TextEdit,
 };
 use move_compiler::{
     expansion::ast::{ModuleIdent, ModuleIdent_, Visibility},
@@ -297,6 +301,34 @@ pub fn call_completion_item(
         insert_text_format,
         ..Default::default()
     }
+}
+
+// Constructs a cursor context and from existing symbols and
+// updates symbols to reflect this.
+pub fn compute_cursor(
+    symbols: &mut Symbols,
+    compiled_pkg_info: &mut CompiledPkgInfo,
+    cursor_path: &PathBuf,
+    cursor_pos: Position,
+) {
+    let cursor_info = Some((cursor_path, cursor_pos));
+    let mut symbols_computation_data = SymbolsComputationData::new();
+    let mut symbols_computation_data_deps = SymbolsComputationData::new();
+    // we only compute cursor context and tag it on the existing symbols to avoid spending time
+    // recomputing all symbols (saves quite a bit of time when running the test suite)
+    let mut cursor_context = compute_symbols_pre_process(
+        &mut symbols_computation_data,
+        &mut symbols_computation_data_deps,
+        compiled_pkg_info,
+        cursor_info,
+    );
+    cursor_context = compute_symbols_parsed_program(
+        &mut symbols_computation_data,
+        &mut symbols_computation_data_deps,
+        compiled_pkg_info,
+        cursor_context,
+    );
+    symbols.cursor_context = cursor_context;
 }
 
 fn lambda_snippet(sp!(_, ty): &Type, snippet_idx: &mut i32) -> Option<String> {
