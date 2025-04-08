@@ -13,7 +13,7 @@ use axum::{
     extract::{ConnectInfo, MatchedPath},
     http::Method,
     response::Html,
-    routing::{get, post},
+    routing::{get, post, MethodRouter},
     Extension, Router,
 };
 use axum_extra::TypedHeader;
@@ -33,6 +33,7 @@ use sui_indexer_alt_reader::{
     pg_reader::PgReader,
 };
 use sui_package_resolver::Resolver;
+use task::watermark::{WatermarkTask, WatermarksLock};
 use tokio::{net::TcpListener, task::JoinHandle};
 use tokio_util::sync::CancellationToken;
 use tower_http::cors;
@@ -52,6 +53,7 @@ mod extensions;
 mod metrics;
 mod middleware;
 mod pagination;
+mod task;
 
 #[derive(clap::Args, Clone, Debug)]
 pub struct RpcArgs {
@@ -76,6 +78,9 @@ pub struct RpcService<Q, M, S> {
 
     /// The version string to report with each response, as an HTTP header.
     version: &'static str,
+
+    /// The axum router that will handle incoming requests.
+    router: Router,
 
     /// The GraphQL schema this service will serve.
     schema: SchemaBuilder<Q, M, S>,
@@ -106,6 +111,7 @@ where
         } = args;
 
         let metrics = RpcMetrics::new(registry);
+        let router = Router::new();
 
         // The logging extension should be outermost so that it can surround all other extensions.
         let schema = schema.extension(Logging(metrics.clone()));
@@ -114,6 +120,7 @@ where
             rpc_listen_address,
             with_ide: !no_ide,
             version,
+            router,
             schema,
             metrics,
             cancel,
@@ -123,6 +130,21 @@ where
     /// Return a copy of the metrics.
     pub fn metrics(&self) -> Arc<RpcMetrics> {
         self.metrics.clone()
+    }
+
+    /// Add a handler to the axum router.
+    pub fn route(self, path: &str, router: MethodRouter) -> Self {
+        let router = self.router.route(path, router);
+        Self { router, ..self }
+    }
+
+    /// Add an extension as a layer to the axum router.
+    pub fn layer<T>(self, layer: T) -> Self
+    where
+        T: Clone + Send + Sync + 'static,
+    {
+        let router = self.router.layer(Extension(layer));
+        Self { router, ..self }
     }
 
     /// Add an extension to the GraphQL schema.
@@ -149,13 +171,13 @@ where
             rpc_listen_address,
             with_ide,
             version,
+            mut router,
             schema,
             metrics: _,
             cancel,
         } = self;
 
-        let mut router: Router = Router::new()
-            .route("/graphql", post(graphql::<Q, M, S>))
+        router = router
             .layer(Extension(schema.finish()))
             .layer(axum::middleware::from_fn_with_state(
                 Version(version),
@@ -274,7 +296,12 @@ pub async fn start_rpc(
         cancel.child_token(),
     );
 
+    let watermark_task =
+        WatermarkTask::new(config.watermark, pg_reader.clone(), cancel.child_token());
+
     let rpc = rpc
+        .route("/graphql", post(graphql))
+        .layer(watermark_task.watermarks())
         .extension(Timeout::new(config.limits.timeouts()))
         .extension(QueryLimitsChecker::new(
             config.limits.query_limits(),
@@ -289,31 +316,30 @@ pub async fn start_rpc(
 
     let h_rpc = rpc.run().await?;
     let h_system_package_task = system_package_task.run();
+    let h_watermark = watermark_task.run();
 
     Ok(tokio::spawn(async move {
         let _ = h_rpc.await;
         cancel.cancel();
         let _ = h_system_package_task.await;
+        let _ = h_watermark.await;
     }))
 }
 
 /// Handler for RPC requests (POST requests making GraphQL queries).
-async fn graphql<Q, M, S>(
+async fn graphql(
     ConnectInfo(addr): ConnectInfo<SocketAddr>,
-    Extension(schema): Extension<Schema<Q, M, S>>,
+    Extension(schema): Extension<Schema<Query, EmptyMutation, EmptySubscription>>,
+    Extension(watermark): Extension<WatermarksLock>,
     TypedHeader(content_length): TypedHeader<ContentLength>,
     show_usage: Option<TypedHeader<ShowUsage>>,
     request: GraphQLRequest,
-) -> GraphQLResponse
-where
-    Q: ObjectType + 'static,
-    M: ObjectType + 'static,
-    S: SubscriptionType + 'static,
-{
+) -> GraphQLResponse {
     let mut request = request
         .into_inner()
         .data(content_length)
-        .data(Session::new(addr));
+        .data(Session::new(addr))
+        .data(watermark.read().await.clone());
 
     if let Some(TypedHeader(show_usage)) = show_usage {
         request = request.data(show_usage);
