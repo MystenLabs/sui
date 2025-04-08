@@ -8,7 +8,7 @@ public fun foo() {
 }
 
 #[spec(prove)]
-public fun foo_failing_spec() {
+public fun foo_spec_failing() {
   foo();
   ensures(false);
 }
