@@ -101,7 +101,7 @@ impl PTB {
 
         let client = context.get_client().await?;
 
-        let (res, warnings) = Self::build_ptb(program, context, client).await;
+        let (res, warnings) = Self::build_ptb(program, &program_metadata, context, client).await;
 
         // Render warnings
         if !warnings.is_empty() {
@@ -222,6 +222,7 @@ impl PTB {
     /// Exposed for testing
     pub async fn build_ptb(
         program: Program,
+        program_metadata: &ProgramMetadata,
         context: &WalletContext,
         client: SuiClient,
     ) -> (
@@ -236,7 +237,7 @@ impl PTB {
             .map(|(sa, alias)| (alias.alias.clone(), AccountAddress::from(*sa)))
             .collect();
         let builder = PTBBuilder::new(starting_addresses, client.read_api());
-        builder.build(program).await
+        builder.build(program, program_metadata).await
     }
 
     /// Exposed for testing
@@ -415,6 +416,14 @@ pub fn ptb_description() -> clap::Command {
         .arg(arg!(
             --"warn-shadows"
             "Enable shadow warning when the same variable name is declared multiple times. Off by default."
+        ))
+        .arg(arg!(
+            --"with-unpublished-dependencies"
+            "Use unpublished dependencies when publishing or upgrading packages."
+        ))
+        .arg(arg!(
+            --"skip-dependency-verification"
+            "Skip dependency verification when publishing or upgrading packages."
         ))
         .arg(arg!(
             --"json"

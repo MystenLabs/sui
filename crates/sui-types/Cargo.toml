@@ -64,7 +64,12 @@ fastcrypto-zkp.workspace = true
 passkey-types.workspace = true
 
 typed-store-error.workspace = true
-derive_more = { workspace = true, features = ["as_ref", "debug", "display", "from"] }
+derive_more = { workspace = true, features = [
+    "as_ref",
+    "debug",
+    "display",
+    "from",
+] }
 proptest.workspace = true
 proptest-derive.workspace = true
 better_any.workspace = true
@@ -103,8 +108,6 @@ harness = false
 
 [features]
 default = []
-tracing = [
-    "move-vm-profiler/tracing",
-    "move-vm-test-utils/tracing",
-]
+tracing = ["move-vm-profiler/tracing", "move-vm-test-utils/tracing"]
 fuzzing = ["move-core-types/fuzzing"]
+testing = []

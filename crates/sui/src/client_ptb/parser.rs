@@ -44,6 +44,8 @@ struct ProgramParsingState {
     dev_inspect_set: bool,
     gas_object_id: Option<Spanned<ObjectID>>,
     gas_budget: Option<Spanned<u64>>,
+    with_unpublished_dependencies_set: bool,
+    skip_dependency_verification_set: bool,
 }
 
 impl<'a, I: Iterator<Item = &'a str>> ProgramParser<'a, I> {
@@ -67,6 +69,8 @@ impl<'a, I: Iterator<Item = &'a str>> ProgramParser<'a, I> {
                 dev_inspect_set: false,
                 gas_object_id: None,
                 gas_budget: None,
+                with_unpublished_dependencies_set: false,
+                skip_dependency_verification_set: false,
             },
         })
     }
@@ -115,6 +119,12 @@ impl<'a, I: Iterator<Item = &'a str>> ProgramParser<'a, I> {
                 L(T::Command, A::DEV_INSPECT) => flag!(dev_inspect_set),
                 L(T::Command, A::PREVIEW) => flag!(preview_set),
                 L(T::Command, A::WARN_SHADOWS) => flag!(warn_shadows_set),
+                L(T::Command, A::WITH_UNPUBLISHED_DEPENDENCIES) => {
+                    flag!(with_unpublished_dependencies_set)
+                }
+                L(T::Command, A::SKIP_DEPENDENCY_VERIFICATION) => {
+                    flag!(skip_dependency_verification_set)
+                }
                 L(T::Command, A::GAS_COIN) => {
                     let specifier = try_!(self.parse_gas_specifier());
                     self.state.gas_object_id = Some(specifier);
@@ -212,6 +222,8 @@ impl<'a, I: Iterator<Item = &'a str>> ProgramParser<'a, I> {
                     dry_run_set: self.state.dry_run_set,
                     dev_inspect_set: self.state.dev_inspect_set,
                     gas_budget: self.state.gas_budget,
+                    with_unpublished_dependencies_set: self.state.with_unpublished_dependencies_set,
+                    skip_dependency_verification_set: self.state.skip_dependency_verification_set,
                 },
             ))
         } else {

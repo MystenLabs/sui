@@ -88,7 +88,7 @@ mod checked {
         /// Additional transfers not from the Move runtime
         additional_transfers: Vec<(/* new owner */ SuiAddress, ObjectValue)>,
         /// Newly published packages
-        new_packages: Vec<MovePackage>,
+        pub new_packages: Vec<MovePackage>,
         /// User events are claimed after each Move call
         user_events: Vec<(ModuleId, StructTag, Vec<u8>)>,
         // runtime data
