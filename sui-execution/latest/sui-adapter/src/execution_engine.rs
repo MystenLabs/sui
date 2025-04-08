@@ -303,7 +303,7 @@ mod checked {
         metrics: Arc<LimitsMetrics>,
         enable_expensive_checks: bool,
         deny_cert: bool,
-        contains_deleted_input: bool,
+        contains_stream_ended_input: bool,
         cancelled_objects: Option<(Vec<ObjectID>, SequenceNumber)>,
         trace_builder_opt: &mut Option<MoveTraceBuilder>,
     ) -> (
@@ -338,7 +338,7 @@ mod checked {
                             ExecutionError::new(ExecutionErrorKind::CertificateDenied, None),
                             vec![],
                         ))
-                    } else if contains_deleted_input {
+                    } else if contains_stream_ended_input {
                         Err((
                             ExecutionError::new(ExecutionErrorKind::InputObjectDeleted, None),
                             vec![],
