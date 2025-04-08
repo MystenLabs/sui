@@ -28,10 +28,9 @@ fn run_manifest_parsing_tests(input_path: &Path) -> datatest_stable::Result<()> 
 fn run_lockfile_parsing_tests(input_path: &Path) -> datatest_stable::Result<()> {
     let lockfile = Lockfile::<Vanilla>::read_from(input_path.parent().unwrap());
 
-    let contents = if let Ok(lockfile) = lockfile {
-        format!("{:?}", lockfile)
-    } else {
-        format!("{}", lockfile.unwrap_err())
+    let contents = match lockfile {
+        Ok(l) => format!("{:?}", l),
+        Err(e) => e.to_string(),
     };
 
     insta_assert! {
