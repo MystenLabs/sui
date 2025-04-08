@@ -235,7 +235,7 @@ impl Model<WITH_SOURCE> {
         &self.files[0]
     }
 
-    pub fn serializable_signatures_with_source(&self) -> &serializable_signatures::Packages {
+    pub fn serializable_signatures(&self) -> &serializable_signatures::Packages {
         self.serializable_signatures.get_or_init(|| {
             let mut info = serializable_signatures::Packages::from(&self.compiled);
             info.annotate(self);
@@ -278,7 +278,7 @@ impl Model<WITHOUT_SOURCE> {
         model
     }
 
-    pub fn serializable_signatures_without_source(&self) -> &serializable_signatures::Packages {
+    pub fn serializable_signatures(&self) -> &serializable_signatures::Packages {
         self.serializable_signatures
             .get_or_init(|| serializable_signatures::Packages::from(&self.compiled))
     }
@@ -332,10 +332,10 @@ impl<const HAS_SOURCE: SourceKind> Model<HAS_SOURCE> {
         &self.compiled
     }
 
-    pub fn serializable_signatures(&self) -> &serializable_signatures::Packages {
+    pub fn signatures(&self) -> &serializable_signatures::Packages {
         match self.kind() {
-            Kind::WithSource(model) => model.serializable_signatures_with_source(),
-            Kind::WithoutSource(model) => model.serializable_signatures_without_source(),
+            Kind::WithSource(model) => model.serializable_signatures(),
+            Kind::WithoutSource(model) => model.serializable_signatures(),
         }
     }
 
@@ -433,6 +433,10 @@ impl<'a, const HAS_SOURCE: SourceKind> Package<'a, HAS_SOURCE> {
 
     pub fn compiled(&self) -> &'a normalized::Package {
         self.compiled
+    }
+
+    pub fn signatures(&self) -> &'a serializable_signatures::Package {
+        &self.model().signatures().packages[&self.addr]
     }
 
     pub fn kind(self) -> Kind<Package<'a, WITH_SOURCE>, Package<'a, WITHOUT_SOURCE>> {
@@ -562,6 +566,10 @@ impl<'a, const HAS_SOURCE: SourceKind> Module<'a, HAS_SOURCE> {
         &self.data.used_by
     }
 
+    pub fn signatures(&self) -> &serializable_signatures::Module {
+        &self.package.signatures().modules[&self.name()]
+    }
+
     pub fn kind(self) -> Kind<Module<'a, WITH_SOURCE>, Module<'a, WITHOUT_SOURCE>> {
         match HAS_SOURCE {
             WITH_SOURCE => Kind::WithSource(unsafe {
@@ -689,6 +697,10 @@ impl<'a, const HAS_SOURCE: SourceKind> Struct<'a, HAS_SOURCE> {
         self.compiled
     }
 
+    pub fn signature(&self) -> &serializable_signatures::Struct {
+        &self.module.signatures().structs[&self.name]
+    }
+
     pub fn kind(self) -> Kind<Struct<'a, WITH_SOURCE>, Struct<'a, WITHOUT_SOURCE>> {
         match HAS_SOURCE {
             WITH_SOURCE => Kind::WithSource(unsafe {
@@ -743,6 +755,10 @@ impl<'a, const HAS_SOURCE: SourceKind> Enum<'a, HAS_SOURCE> {
             compiled: &self.compiled.variants[&name],
         }
     }
+
+    pub fn signature(&self) -> &serializable_signatures::Enum {
+        &self.module.signatures().enums[&self.name]
+    }
 }
 
 impl<'a> Enum<'a, WITH_SOURCE> {
@@ -774,6 +790,10 @@ impl<'a, const HAS_SOURCE: SourceKind> Variant<'a, HAS_SOURCE> {
 
     pub fn compiled(&self) -> &'a normalized::Variant {
         self.compiled
+    }
+
+    pub fn signature(&self) -> &serializable_signatures::Variant {
+        &self.enum_.signature().variants[&self.name]
     }
 
     pub fn kind(self) -> Kind<Variant<'a, WITH_SOURCE>, Variant<'a, WITHOUT_SOURCE>> {
@@ -825,6 +845,10 @@ impl<'a, const HAS_SOURCE: SourceKind> Function<'a, HAS_SOURCE> {
     /// Returns the functions that call this function. This will be empty for `macro`s.
     pub fn called_by(&self) -> &'a BTreeSet<QualifiedMemberId> {
         &self.data.called_by
+    }
+
+    pub fn signature(&self) -> &serializable_signatures::Function {
+        &self.module.signatures().functions[&self.name]
     }
 
     pub fn kind(self) -> Kind<Function<'a, WITH_SOURCE>, Function<'a, WITHOUT_SOURCE>> {
