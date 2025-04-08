@@ -235,15 +235,11 @@ pub fn access_chain_autofix_actions_for_error(
             });
         }
         NameAccessChain_::Path(name_path) => {
-            eprintln!("name_path: {:?}", name_path);
             if let LeadingNameAccess_::Name(unbound_name) = name_path.root.name.value {
-                eprintln!("unbound_name: {:?}", unbound_name);
                 if name_path.entries.len() == 1 {
-                    eprintln!("two element chain");
                     // we assume that diagnostic reporting unbound chain component
                     // is on the first element of the chain
                     if unbound_name.loc.contains(&cursor.loc) {
-                        eprintln!("contains cursor");
                         TwoElementChainDiagPrefix::iter().for_each(|prefix| match prefix {
                             TwoElementChainDiagPrefix::UnresolvedName => {
                                 if err_msg.starts_with(prefix.as_str()) {
