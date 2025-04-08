@@ -6,9 +6,9 @@ extern crate move_ir_types;
 
 pub mod compiled_model;
 pub mod display;
-pub mod json;
 pub mod model;
 pub mod normalized;
+pub mod serializable_signatures;
 pub mod source_model;
 
 pub use normalized::ModuleId;

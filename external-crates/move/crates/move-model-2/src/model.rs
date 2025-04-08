@@ -8,7 +8,10 @@ use std::{
     sync::Arc,
 };
 
-use crate::normalized::{self, ModuleId, QualifiedMemberId, TModuleId};
+use crate::{
+    normalized::{self, ModuleId, QualifiedMemberId, TModuleId},
+    serializable_signatures,
+};
 use indexmap::IndexMap;
 use move_binary_format::{file_format, CompiledModule};
 use move_bytecode_source_map::source_map::SourceMap;
@@ -50,6 +53,7 @@ pub struct Model<const HAS_SOURCE: SourceKind> {
     info: [Arc<TypingProgramInfo>; HAS_SOURCE],
     compiled: normalized::Packages,
     packages: BTreeMap<AccountAddress, PackageData<HAS_SOURCE>>,
+    serializable_signatures: OnceCell<serializable_signatures::Packages>,
 }
 
 #[derive(Clone, Copy)]
@@ -219,6 +223,7 @@ impl Model<WITH_SOURCE> {
             info: [info],
             compiled,
             packages,
+            serializable_signatures: OnceCell::new(),
         };
         model.compute_dependencies();
         model.compute_function_dependencies();
@@ -228,6 +233,14 @@ impl Model<WITH_SOURCE> {
 
     pub fn files(&self) -> &MappedFiles {
         &self.files[0]
+    }
+
+    pub fn serializable_signatures_with_source(&self) -> &serializable_signatures::Packages {
+        self.serializable_signatures.get_or_init(|| {
+            let mut info = serializable_signatures::Packages::from(&self.compiled);
+            info.annotate(self);
+            info
+        })
     }
 }
 
@@ -257,11 +270,17 @@ impl Model<WITHOUT_SOURCE> {
             info: [],
             compiled,
             packages,
+            serializable_signatures: OnceCell::new(),
         };
         model.compute_dependencies();
         model.compute_function_dependencies();
         model.check_invariants();
         model
+    }
+
+    pub fn serializable_signatures_without_source(&self) -> &serializable_signatures::Packages {
+        self.serializable_signatures
+            .get_or_init(|| serializable_signatures::Packages::from(&self.compiled))
     }
 }
 
@@ -311,6 +330,13 @@ impl<const HAS_SOURCE: SourceKind> Model<HAS_SOURCE> {
 
     pub fn compiled_packages(&self) -> &normalized::Packages {
         &self.compiled
+    }
+
+    pub fn serializable_signatures(&self) -> &serializable_signatures::Packages {
+        match self.kind() {
+            Kind::WithSource(model) => model.serializable_signatures_with_source(),
+            Kind::WithoutSource(model) => model.serializable_signatures_without_source(),
+        }
     }
 
     pub fn kind(&self) -> Kind<&Model<WITH_SOURCE>, &Model<WITHOUT_SOURCE>> {
