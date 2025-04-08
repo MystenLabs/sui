@@ -94,7 +94,7 @@ jobs:
       - uses: taiki-e/install-action@nextest
       - uses: taiki-e/install-action@protoc
       - name: Install PostgreSQL
-        run: sudo apt-get update && sudo apt-get install -y postgresql
+        run: sudo apt-get update && sudo apt-get install -y postgresql-16
       - name: Add postgres to PATH
         run: echo "/usr/lib/postgresql/16/bin" >> $GITHUB_PATH
       - name: Set Swap Space
@@ -130,7 +130,7 @@ jobs:
       - uses: taiki-e/install-action@nextest
       - uses: taiki-e/install-action@protoc
       - name: Install PostgreSQL
-        run: sudo apt-get update && sudo apt-get install -y postgresql
+        run: sudo apt-get update && sudo apt-get install -y postgresql-16
       - name: Add postgres to PATH
         run: echo "/usr/lib/postgresql/16/bin" >> $GITHUB_PATH
       - name: Set Swap Space
@@ -227,7 +227,7 @@ jobs:
       - uses: taiki-e/install-action@nextest
       - uses: taiki-e/install-action@protoc
       - name: Install PostgreSQL
-        run: sudo apt-get update && sudo apt-get install -y postgresql
+        run: sudo apt-get update && sudo apt-get install -y postgresql-16
       - name: Add postgres to PATH
         run: echo "/usr/lib/postgresql/16/bin" >> $GITHUB_PATH
       - name: Set Swap Space
