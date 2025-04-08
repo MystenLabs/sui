@@ -330,7 +330,7 @@ impl FunctionTargetsHolder {
                                 addr_bytes,
                                 func_env.symbol_pool().make(&module.to_string()),
                             );
-                            
+
                             if let Some(module_env) =
                                 func_env.module_env.env.find_module(&module_name)
                             {
@@ -345,30 +345,38 @@ impl FunctionTargetsHolder {
                     }
                 }
             } else {
-                let name = func_env.get_name_str();
-                if let Some(base_name) = name.strip_suffix("_spec") {
-                    let func_sym = func_env.symbol_pool().make(base_name);
-                    if let Some(target_func_env) = func_env.module_env.find_function(func_sym) {
-                        let target_id = target_func_env.get_qualified_id();
-                        self.function_specs
-                            .insert(func_env.get_qualified_id(), target_id);
-                        return;
+                let target_func_env_opt =
+                    func_env
+                        .get_name_str()
+                        .strip_suffix("_spec")
+                        .and_then(|name| {
+                            func_env
+                                .module_env
+                                .find_function(func_env.symbol_pool().make(name))
+                        });
+                match target_func_env_opt {
+                    Some(target_func_env) => {
+                        self.function_specs.insert(
+                            func_env.get_qualified_id(),
+                            target_func_env.get_qualified_id(),
+                        );
                     }
-                } else {
-                    self.scenario_specs.insert(func_env.get_qualified_id());
+                    None => {
+                        self.scenario_specs.insert(func_env.get_qualified_id());
+                    }
                 }
             }
-        }
 
-        func_env.get_name_str().strip_suffix("_inv").map(|name| {
-            if let Some(struct_env) = func_env
-                .module_env
-                .find_struct(func_env.symbol_pool().make(name))
-            {
-                self.datatype_invs
-                    .insert(struct_env.get_qualified_id(), func_env.get_qualified_id());
-            }
-        });
+            func_env.get_name_str().strip_suffix("_inv").map(|name| {
+                if let Some(struct_env) = func_env
+                    .module_env
+                    .find_struct(func_env.symbol_pool().make(name))
+                {
+                    self.datatype_invs
+                        .insert(struct_env.get_qualified_id(), func_env.get_qualified_id());
+                }
+            });
+        }
     }
 
     /// Gets a function target for read-only consumption, for the given variant.
