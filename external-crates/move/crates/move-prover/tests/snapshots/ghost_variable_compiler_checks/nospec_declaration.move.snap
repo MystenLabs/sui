@@ -1,8 +1,9 @@
 ---
 source: crates/move-prover/tests/integration.rs
 expression: output
+snapshot_kind: text
 ---
-Verification failed: exiting with bytecode transformation errors
+exiting with bytecode transformation errors
 error[E0014]: unexpected ghost variable declaration. Declare ghost variables in #[spec] functions.
    ┌─ tests/inputs/ghost_variable_compiler_checks/nospec_declaration.move:12:5
    │

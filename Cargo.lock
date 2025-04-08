@@ -7645,7 +7645,6 @@ dependencies = [
  "move-docgen",
  "move-ir-types",
  "move-package",
- "move-prover",
  "move-stdlib",
  "move-stdlib-natives",
  "move-unit-test",
@@ -7930,6 +7929,7 @@ dependencies = [
  "move-compiler",
  "move-docgen",
  "move-model",
+ "move-package",
  "move-prover-boogie-backend",
  "move-stackless-bytecode",
  "once_cell",
@@ -9385,6 +9385,20 @@ dependencies = [
  "proc-macro2 1.0.87",
  "quote 1.0.35",
  "syn 1.0.107",
+]
+
+[[package]]
+name = "openai_api_rust"
+version = "0.1.9"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ea95675c72f6830941af53fe95f5cf6c037ccb6c28ed736b61d2af2c16feac59"
+dependencies = [
+ "log",
+ "mime",
+ "rand 0.8.5",
+ "serde",
+ "serde_json",
+ "ureq",
 ]
 
 [[package]]
@@ -15135,6 +15149,7 @@ dependencies = [
  "better_any",
  "bin-version",
  "clap",
+ "codespan-reporting",
  "colored",
  "futures",
  "jemalloc-ctl",
@@ -15150,7 +15165,9 @@ dependencies = [
  "move-unit-test",
  "move-vm-runtime",
  "mysten-metrics",
+ "openai_api_rust",
  "rand 0.8.5",
+ "regex",
  "sui-core",
  "sui-macros",
  "sui-move-build",
@@ -17831,6 +17848,8 @@ dependencies = [
  "once_cell",
  "rustls 0.21.12",
  "rustls-webpki 0.101.7",
+ "serde",
+ "serde_json",
  "url",
  "webpki-roots 0.25.2",
 ]

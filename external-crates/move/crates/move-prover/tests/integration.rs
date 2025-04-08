@@ -1,42 +1,105 @@
-use codespan_reporting::term::termcolor::NoColor;
+use codespan_reporting::term::termcolor::Buffer;
 use glob;
-use move_prover::{cli::Options, run_move_prover};
-use std::path::PathBuf;
+use move_compiler::editions::Flavor;
+use move_package::{BuildConfig as MoveBuildConfig, ModelConfig};
+use move_prover::run_move_prover_with_model;
+use regex::Regex;
+use std::path::{Path, PathBuf};
 
 /// Runs the prover on the given file path and returns the output as a string
 fn run_prover(file_path: &PathBuf) -> String {
-    // Create prover options
-    let mut options = Options::default();
-    options.move_sources = vec![file_path.to_string_lossy().to_string()];
-    options.prover.stable_test_output = true; // For consistent snapshot testing
-    options.prover.report_severity = codespan_reporting::diagnostic::Severity::Warning; // Show errors and warnings
-
-    // Always add standard Sui dependencies for all tests
-    let sui_packages_base = "../../../../crates/sui-framework/packages";
-    // Add dependencies in a more concise way
-    options.move_deps = vec![
-        format!("{sui_packages_base}/move-stdlib"),
-        format!("{sui_packages_base}/prover"),
-    ];
-    options.move_named_address_values = vec!["std=0x1".to_string(), "prover=0x0".to_string()];
-
-    // Capture output using a Vec buffer with NoColor writer
-    let mut buffer = Vec::new();
-    let mut writer = NoColor::new(&mut buffer);
-
-    // Run the prover and capture output
-    let result = match run_move_prover(&mut writer, options) {
-        Ok(_) => "Verification successful".to_string(),
-        Err(err) => format!("Verification failed: {}", err),
-    };
-
-    // Combine the prover result with any captured output
-    let captured_output = String::from_utf8_lossy(&buffer).to_string();
-    if captured_output.is_empty() {
-        result
-    } else {
-        format!("{}\n{}", result, captured_output)
+    // the file_dir path is `tests`, make it as a Path
+    let file_dir = Path::new("tests");
+    let sources_dir = file_dir.join("sources");
+    // create the sources_dir if it doesn't exist
+    if !sources_dir.clone().exists() {
+        std::fs::create_dir_all(sources_dir.clone()).unwrap();
     }
+
+    // Extract the relative path from tests/inputs/
+    let relative_path = file_path
+        .strip_prefix(Path::new("tests/inputs"))
+        .unwrap_or_else(|_| Path::new(file_path.file_name().unwrap()));
+
+    // Join it to the sources directory
+    let new_file_path = sources_dir.join(relative_path);
+
+    // Create parent directories if needed
+    if let Some(parent_dir) = new_file_path.parent() {
+        std::fs::create_dir_all(parent_dir).unwrap();
+    }
+
+    std::fs::rename(file_path, &new_file_path).unwrap();
+
+    let new_file_path_clone = new_file_path.clone();
+
+    // Setup cleanup that will execute even in case of panic or early return
+    let result = std::panic::catch_unwind(|| {
+        // Set up the build config
+        let mut config = MoveBuildConfig::default();
+        config.default_flavor = Some(Flavor::Sui);
+        config.verify_mode = true;
+        config.silence_warnings = false; // Disable warning suppression
+
+        // Try to build the model
+        let result = match config.move_model_for_package(
+            file_dir,
+            ModelConfig {
+                all_files_as_targets: false,
+                target_filter: None,
+            },
+        ) {
+            Ok(model) => {
+                // Create prover options
+                let mut options = move_prover::cli::Options::default();
+                options.backend.sequential_task = true;
+                options.backend.use_array_theory = true;
+                options.backend.vc_timeout = 3000;
+
+                // Use a buffer to capture output instead of stderr
+                let mut error_buffer = Buffer::no_color();
+
+                // Run the prover with the buffer to capture all output
+                match run_move_prover_with_model(&model, &mut error_buffer, options, None) {
+                    Ok(_) => {
+                        let error_output =
+                            String::from_utf8_lossy(&error_buffer.into_inner()).to_string();
+                        format!("Verification successful\n{}", error_output)
+                    }
+                    Err(err) => {
+                        // Get the captured error output as string
+                        let error_output =
+                            String::from_utf8_lossy(&error_buffer.into_inner()).to_string();
+                        format!("{}\n{}", err, error_output)
+                    }
+                }
+            }
+            Err(err) => {
+                // For model-building errors, we need to reformat the error to match the expected format
+                format!("We hit an error: \n{}", err)
+            }
+        };
+
+        post_process_output(result)
+    });
+
+    // rename the file_path to the original name
+    std::fs::rename(new_file_path_clone, file_path).unwrap();
+
+    // Now handle the result of our operation
+    match result {
+        Ok(output) => output,
+        Err(_) => "Verification failed: panic during verification".to_string(),
+    }
+}
+
+fn post_process_output(output: String) -> String {
+    // replace numbers such as 52571u64 with ELIDEDu64 to avoid snapshot diffs
+    let output = output.replace("tests/sources/", "tests/inputs/");
+
+    // Use regex to replace numbers with more than one digit followed by u64 with ELIDEDu64
+    let re = Regex::new(r"\d{2,}u64").unwrap();
+    re.replace_all(&output, "ELIDEDu64").to_string()
 }
 
 #[test]
@@ -46,8 +109,16 @@ fn run_move_tests() {
         let output = run_prover(&move_path);
         let filename = move_path.file_name().unwrap().to_string_lossy().to_string();
 
-        let cp = move_path.parent().unwrap().components().skip(2).collect::<Vec<_>>();
-        let cp_str = cp.iter().map(|comp| comp.as_os_str().to_string_lossy().into_owned()).collect::<Vec<String>>();
+        let cp = move_path
+            .parent()
+            .unwrap()
+            .components()
+            .skip(2)
+            .collect::<Vec<_>>();
+        let cp_str = cp
+            .iter()
+            .map(|comp| comp.as_os_str().to_string_lossy().into_owned())
+            .collect::<Vec<String>>();
         let snapshot_path = format!("snapshots/{}", cp_str.join("/"));
 
         insta::with_settings!({

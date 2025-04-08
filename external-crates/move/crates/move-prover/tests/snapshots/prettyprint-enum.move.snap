@@ -1,10 +1,17 @@
 ---
 source: crates/move-prover/tests/integration.rs
-assertion_line: 52
 expression: output
 snapshot_kind: text
 ---
-Verification failed: exiting with verification errors
+exiting with verification errors
+warning: unused alias
+  ┌─ tests/inputs/prettyprint-enum.move:4:31
+  │
+4 │ use prover::prover::{ensures, requires};
+  │                               ^^^^^^^^ Unused 'use' of alias 'requires'. Consider removing it
+  │
+  = This warning can be suppressed with '#[allow(unused_use)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
 error: prover::ensures assertion does not hold
    ┌─ tests/inputs/prettyprint-enum.move:22:5
    │
@@ -12,11 +19,11 @@ error: prover::ensures assertion does not hold
    │     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
    │
    =     at tests/inputs/prettyprint-enum.move:20: foo_spec
-   =         x = 9655u64
+   =         x = ELIDEDu64
    =     at tests/inputs/prettyprint-enum.move:21: foo_spec
-   =         x = 9655u64
+   =         x = ELIDEDu64
    =     at tests/inputs/prettyprint-enum.move:12: foo
-   =         result = foo::MyEnum::B{pos0 = 13u64}
+   =         result = foo::MyEnum::B{pos0 = ELIDEDu64}
    =     at tests/inputs/prettyprint-enum.move:17: foo
-   =         res#1#0 = foo::MyEnum::B{pos0 = 13u64}
+   =         res#1#0 = foo::MyEnum::B{pos0 = ELIDEDu64}
    =     at tests/inputs/prettyprint-enum.move:22: foo_spec

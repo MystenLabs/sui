@@ -1,9 +1,8 @@
 ---
 source: crates/move-prover/tests/integration.rs
 expression: output
-snapshot_kind: text
 ---
-Verification failed: exiting with verification errors
+exiting with verification errors
 error: prover::ensures assertion does not hold
    ┌─ tests/inputs/ints.fail.move:16:3
    │
@@ -11,13 +10,13 @@ error: prover::ensures assertion does not hold
    │   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
    │
    =     at tests/inputs/ints.fail.move:11: foo_spec
-   =         x = 26500u64
-   =     at ../../../../crates/sui-framework/packages/move-stdlib/sources/u64.move:90
-   =         x = 26500u64
+   =         x = ELIDEDu64
+   =     at tests/../../../../../crates/sui-framework/packages/move-stdlib/sources/u64.move:90
+   =         x = ELIDEDu64
    =     at tests/inputs/ints.fail.move:7: foo
-   =         result = 26501u64
+   =         result = ELIDEDu64
    =     at tests/inputs/ints.fail.move:8: foo
-   =         res#1#0 = 26501u64
+   =         res#1#0 = ELIDEDu64
    =     at tests/inputs/ints.fail.move:14: foo_spec
-   =         x_int#1#0 = 26500
+   =         x_int#1#0 = 2437
    =     at tests/inputs/ints.fail.move:15: foo_spec
