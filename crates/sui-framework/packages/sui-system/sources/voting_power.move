@@ -44,10 +44,14 @@ const EInvalidVotingPower: u64 = 4;
 public(package) fun set_voting_power(validators: &mut vector<Validator>, total_stake: u64) {
     // If threshold_pct is too small, it's possible that even when all validators reach the threshold we still don't
     // have 100%. So we bound the threshold_pct to be always enough to find a solution.
-    let threshold = TOTAL_VOTING_POWER.min(
-        MAX_VOTING_POWER.max(TOTAL_VOTING_POWER.divide_and_round_up(validators.length())),
+    let total_voting_power = TOTAL_VOTING_POWER;
+    let average_voting_power = total_voting_power.divide_and_round_up(validators.length());
+    let threshold = total_voting_power.min(MAX_VOTING_POWER.max(average_voting_power));
+    let (mut info_list, remaining_power) = init_voting_power_info(
+        validators,
+        threshold,
+        total_stake,
     );
-    let (mut info_list, remaining_power) = init_voting_power_info(validators, threshold, total_stake);
     adjust_voting_power(&mut info_list, threshold, remaining_power);
     update_voting_power(validators, info_list);
     check_invariants(validators);
@@ -62,23 +66,15 @@ fun init_voting_power_info(
     threshold: u64,
     total_stake: u64,
 ): (vector<VotingPowerInfoV2>, u64) {
-    let mut i = 0;
-    let len = validators.length();
     let mut total_power = 0;
     let mut result = vector[];
-    while (i < len) {
-        let validator = &validators[i];
-        let stake = validator.total_stake();
+    validators.length().do!(|i| {
+        let stake = validators[i].total_stake();
         let voting_power = derive_raw_voting_power(stake, total_stake).min(threshold);
-        let info = VotingPowerInfoV2 {
-            validator_index: i,
-            voting_power,
-            stake,
-        };
-        insert(&mut result, info);
+        insert(&mut result, VotingPowerInfoV2 { validator_index: i, voting_power, stake });
         total_power = total_power + voting_power;
-        i = i + 1;
-    };
+    });
+
     (result, TOTAL_VOTING_POWER - total_power)
 }
 
@@ -89,16 +85,17 @@ public(package) fun derive_raw_voting_power(stake: u64, total_stake: u64): u64 {
 /// Insert `new_info` to `info_list` as part of insertion sort, such that `info_list` is always sorted
 /// using stake, in descending order.
 fun insert(info_list: &mut vector<VotingPowerInfoV2>, new_info: VotingPowerInfoV2) {
-    let mut i = 0;
     let len = info_list.length();
-    while (i < len && info_list[i].stake > new_info.stake) {
-        i = i + 1;
-    };
-    info_list.insert(new_info, i);
+    let idx = info_list.find_index!(|info| new_info.stake >= info.stake);
+    info_list.insert(new_info, idx.destroy_or!(len));
 }
 
 /// Distribute remaining_power to validators that are not capped at threshold.
-fun adjust_voting_power(info_list: &mut vector<VotingPowerInfoV2>, threshold: u64, mut remaining_power: u64) {
+fun adjust_voting_power(
+    info_list: &mut vector<VotingPowerInfoV2>,
+    threshold: u64,
+    mut remaining_power: u64,
+) {
     let mut i = 0;
     let len = info_list.length();
     while (i < len && remaining_power > 0) {
@@ -118,40 +115,30 @@ fun adjust_voting_power(info_list: &mut vector<VotingPowerInfoV2>, threshold: u6
 }
 
 /// Update validators with the decided voting power.
-fun update_voting_power(validators: &mut vector<Validator>, mut info_list: vector<VotingPowerInfoV2>) {
-    while (info_list.length() != 0) {
-        let VotingPowerInfoV2 {
-            validator_index,
-            voting_power,
-            stake: _,
-        } = info_list.pop_back();
-        let v = &mut validators[validator_index];
-        v.set_voting_power(voting_power);
-    };
-    info_list.destroy_empty();
+fun update_voting_power(validators: &mut vector<Validator>, info_list: vector<VotingPowerInfoV2>) {
+    info_list.destroy!(|VotingPowerInfoV2 { validator_index, voting_power, .. }| {
+        validators[validator_index].set_voting_power(voting_power);
+    });
 }
 
 /// Check a few invariants that must hold after setting the voting power.
 fun check_invariants(v: &vector<Validator>) {
-    // First check that the total voting power must be TOTAL_VOTING_POWER.
-    let mut i = 0;
-    let len = v.length();
     let mut total = 0;
-    while (i < len) {
-        let voting_power = v[i].voting_power();
+    v.do_ref!(|v| {
+        let voting_power = v.voting_power();
         assert!(voting_power > 0, EInvalidVotingPower);
         total = total + voting_power;
-        i = i + 1;
-    };
+    });
+
     assert!(total == TOTAL_VOTING_POWER, ETotalPowerMismatch);
 
-    // Second check that if validator A's stake is larger than B's stake, A's voting power must be no less
-    // than B's voting power; similarly, if A's stake is less than B's stake, A's voting power must be no larger
-    // than B's voting power.
-    let mut a = 0;
-    while (a < len) {
-        let mut b = a + 1;
-        while (b < len) {
+    // Second check that if validator A's stake is larger than B's stake, A's
+    // voting power must be no less than B's voting power; similarly, if A's
+    // stake is less than B's stake, A's voting power must be no larger than
+    // B's voting power.
+    let length = v.length();
+    length.do!(|a| {
+        (a + 1).range_do!(length, |b| {
             let validator_a = &v[a];
             let validator_b = &v[b];
             let stake_a = validator_a.total_stake();
@@ -164,10 +151,8 @@ fun check_invariants(v: &vector<Validator>) {
             if (stake_a < stake_b) {
                 assert!(power_a <= power_b, ERelativePowerMismatch);
             };
-            b = b + 1;
-        };
-        a = a + 1;
-    }
+        })
+    });
 }
 
 /// Return the (constant) total voting power
