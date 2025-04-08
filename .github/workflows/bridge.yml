@@ -96,7 +96,7 @@ jobs:
       - name: Install PostgreSQL
         run: sudo apt-get update && sudo apt-get install -y postgresql
       - name: Add postgres to PATH
-        run: echo "/usr/lib/postgresql/14/bin" >> $GITHUB_PATH
+        run: echo "/usr/lib/postgresql/16/bin" >> $GITHUB_PATH
       - name: cargo test
         run: |
           cargo nextest run --profile ci -E 'package(sui-bridge) | package(sui-bridge-indexer)'
