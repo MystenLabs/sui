@@ -347,7 +347,7 @@ Pushes all of the elements of the <code>other</code> vector into the <code>lhs</
 Return <code><b>true</b></code> if the vector <code>v</code> has no elements and <code><b>false</b></code> otherwise.
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="../std/vector.md#std_vector_is_empty">is_empty</a>&lt;Element&gt;(v: &<a href="../std/vector.md#std_vector">vector</a>&lt;Element&gt;): bool
+<pre><code><b>public</b> <b>fun</b> <a href="../std/vector.md#std_vector_is_empty">is_empty</a>&lt;Element&gt;(v: &<a href="../std/vector.md#std_vector">vector</a>&lt;Element&gt;): <a href="../std/bool.md#std_bool">bool</a>
 </code></pre>
 
 
@@ -356,7 +356,7 @@ Return <code><b>true</b></code> if the vector <code>v</code> has no elements and
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="../std/vector.md#std_vector_is_empty">is_empty</a>&lt;Element&gt;(v: &<a href="../std/vector.md#std_vector">vector</a>&lt;Element&gt;): bool {
+<pre><code><b>public</b> <b>fun</b> <a href="../std/vector.md#std_vector_is_empty">is_empty</a>&lt;Element&gt;(v: &<a href="../std/vector.md#std_vector">vector</a>&lt;Element&gt;): <a href="../std/bool.md#std_bool">bool</a> {
     v.<a href="../std/vector.md#std_vector_length">length</a>() == 0
 }
 </code></pre>
@@ -373,7 +373,7 @@ Return true if <code>e</code> is in the vector <code>v</code>.
 Otherwise, returns false.
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="../std/vector.md#std_vector_contains">contains</a>&lt;Element&gt;(v: &<a href="../std/vector.md#std_vector">vector</a>&lt;Element&gt;, e: &Element): bool
+<pre><code><b>public</b> <b>fun</b> <a href="../std/vector.md#std_vector_contains">contains</a>&lt;Element&gt;(v: &<a href="../std/vector.md#std_vector">vector</a>&lt;Element&gt;, e: &Element): <a href="../std/bool.md#std_bool">bool</a>
 </code></pre>
 
 
@@ -382,7 +382,7 @@ Otherwise, returns false.
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="../std/vector.md#std_vector_contains">contains</a>&lt;Element&gt;(v: &<a href="../std/vector.md#std_vector">vector</a>&lt;Element&gt;, e: &Element): bool {
+<pre><code><b>public</b> <b>fun</b> <a href="../std/vector.md#std_vector_contains">contains</a>&lt;Element&gt;(v: &<a href="../std/vector.md#std_vector">vector</a>&lt;Element&gt;, e: &Element): <a href="../std/bool.md#std_bool">bool</a> {
     <b>let</b> <b>mut</b> i = 0;
     <b>let</b> len = v.<a href="../std/vector.md#std_vector_length">length</a>();
     <b>while</b> (i &lt; len) {
@@ -405,7 +405,7 @@ Return <code>(<b>true</b>, i)</code> if <code>e</code> is in the vector <code>v<
 Otherwise, returns <code>(<b>false</b>, 0)</code>.
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="../std/vector.md#std_vector_index_of">index_of</a>&lt;Element&gt;(v: &<a href="../std/vector.md#std_vector">vector</a>&lt;Element&gt;, e: &Element): (bool, <a href="../std/u64.md#std_u64">u64</a>)
+<pre><code><b>public</b> <b>fun</b> <a href="../std/vector.md#std_vector_index_of">index_of</a>&lt;Element&gt;(v: &<a href="../std/vector.md#std_vector">vector</a>&lt;Element&gt;, e: &Element): (<a href="../std/bool.md#std_bool">bool</a>, <a href="../std/u64.md#std_u64">u64</a>)
 </code></pre>
 
 
@@ -414,7 +414,7 @@ Otherwise, returns <code>(<b>false</b>, 0)</code>.
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="../std/vector.md#std_vector_index_of">index_of</a>&lt;Element&gt;(v: &<a href="../std/vector.md#std_vector">vector</a>&lt;Element&gt;, e: &Element): (bool, <a href="../std/u64.md#std_u64">u64</a>) {
+<pre><code><b>public</b> <b>fun</b> <a href="../std/vector.md#std_vector_index_of">index_of</a>&lt;Element&gt;(v: &<a href="../std/vector.md#std_vector">vector</a>&lt;Element&gt;, e: &Element): (<a href="../std/bool.md#std_bool">bool</a>, <a href="../std/u64.md#std_u64">u64</a>) {
     <b>let</b> <b>mut</b> i = 0;
     <b>let</b> len = v.<a href="../std/vector.md#std_vector_length">length</a>();
     <b>while</b> (i &lt; len) {
@@ -733,7 +733,7 @@ Filter the vector <code>v</code> by applying the function <code>f</code> to each
 Return a new vector containing only the elements for which <code>f</code> returns <code><b>true</b></code>.
 
 
-<pre><code><b>public</b> <b>macro</b> <b>fun</b> <a href="../std/vector.md#std_vector_filter">filter</a>&lt;$T: drop&gt;($v: <a href="../std/vector.md#std_vector">vector</a>&lt;$T&gt;, $f: |&$T| -&gt; bool): <a href="../std/vector.md#std_vector">vector</a>&lt;$T&gt;
+<pre><code><b>public</b> <b>macro</b> <b>fun</b> <a href="../std/vector.md#std_vector_filter">filter</a>&lt;$T: drop&gt;($v: <a href="../std/vector.md#std_vector">vector</a>&lt;$T&gt;, $f: |&$T| -&gt; <a href="../std/bool.md#std_bool">bool</a>): <a href="../std/vector.md#std_vector">vector</a>&lt;$T&gt;
 </code></pre>
 
 
@@ -742,7 +742,7 @@ Return a new vector containing only the elements for which <code>f</code> return
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>macro</b> <b>fun</b> <a href="../std/vector.md#std_vector_filter">filter</a>&lt;$T: drop&gt;($v: <a href="../std/vector.md#std_vector">vector</a>&lt;$T&gt;, $f: |&$T| -&gt; bool): <a href="../std/vector.md#std_vector">vector</a>&lt;$T&gt; {
+<pre><code><b>public</b> <b>macro</b> <b>fun</b> <a href="../std/vector.md#std_vector_filter">filter</a>&lt;$T: drop&gt;($v: <a href="../std/vector.md#std_vector">vector</a>&lt;$T&gt;, $f: |&$T| -&gt; <a href="../std/bool.md#std_bool">bool</a>): <a href="../std/vector.md#std_vector">vector</a>&lt;$T&gt; {
     <b>let</b> v = $v;
     <b>let</b> <b>mut</b> r = <a href="../std/vector.md#std_vector">vector</a>[];
     v.<a href="../std/vector.md#std_vector_do">do</a>!(|e| <b>if</b> ($f(&e)) r.<a href="../std/vector.md#std_vector_push_back">push_back</a>(e));
@@ -763,7 +763,7 @@ Return a tuple containing two vectors: the first containing the elements for whi
 and the second containing the elements for which <code>f</code> returns <code><b>false</b></code>.
 
 
-<pre><code><b>public</b> <b>macro</b> <b>fun</b> <a href="../std/vector.md#std_vector_partition">partition</a>&lt;$T&gt;($v: <a href="../std/vector.md#std_vector">vector</a>&lt;$T&gt;, $f: |&$T| -&gt; bool): (<a href="../std/vector.md#std_vector">vector</a>&lt;$T&gt;, <a href="../std/vector.md#std_vector">vector</a>&lt;$T&gt;)
+<pre><code><b>public</b> <b>macro</b> <b>fun</b> <a href="../std/vector.md#std_vector_partition">partition</a>&lt;$T&gt;($v: <a href="../std/vector.md#std_vector">vector</a>&lt;$T&gt;, $f: |&$T| -&gt; <a href="../std/bool.md#std_bool">bool</a>): (<a href="../std/vector.md#std_vector">vector</a>&lt;$T&gt;, <a href="../std/vector.md#std_vector">vector</a>&lt;$T&gt;)
 </code></pre>
 
 
@@ -772,7 +772,7 @@ and the second containing the elements for which <code>f</code> returns <code><b
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>macro</b> <b>fun</b> <a href="../std/vector.md#std_vector_partition">partition</a>&lt;$T&gt;($v: <a href="../std/vector.md#std_vector">vector</a>&lt;$T&gt;, $f: |&$T| -&gt; bool): (<a href="../std/vector.md#std_vector">vector</a>&lt;$T&gt;, <a href="../std/vector.md#std_vector">vector</a>&lt;$T&gt;) {
+<pre><code><b>public</b> <b>macro</b> <b>fun</b> <a href="../std/vector.md#std_vector_partition">partition</a>&lt;$T&gt;($v: <a href="../std/vector.md#std_vector">vector</a>&lt;$T&gt;, $f: |&$T| -&gt; <a href="../std/bool.md#std_bool">bool</a>): (<a href="../std/vector.md#std_vector">vector</a>&lt;$T&gt;, <a href="../std/vector.md#std_vector">vector</a>&lt;$T&gt;) {
     <b>let</b> v = $v;
     <b>let</b> <b>mut</b> r1 = <a href="../std/vector.md#std_vector">vector</a>[];
     <b>let</b> <b>mut</b> r2 = <a href="../std/vector.md#std_vector">vector</a>[];
@@ -793,7 +793,7 @@ Finds the index of first element in the vector <code>v</code> that satisfies the
 Returns <code>some(index)</code> if such an element is found, otherwise <code>none()</code>.
 
 
-<pre><code><b>public</b> <b>macro</b> <b>fun</b> <a href="../std/vector.md#std_vector_find_index">find_index</a>&lt;$T&gt;($v: &<a href="../std/vector.md#std_vector">vector</a>&lt;$T&gt;, $f: |&$T| -&gt; bool): <a href="../std/option.md#std_option_Option">std::option::Option</a>&lt;<a href="../std/u64.md#std_u64">u64</a>&gt;
+<pre><code><b>public</b> <b>macro</b> <b>fun</b> <a href="../std/vector.md#std_vector_find_index">find_index</a>&lt;$T&gt;($v: &<a href="../std/vector.md#std_vector">vector</a>&lt;$T&gt;, $f: |&$T| -&gt; <a href="../std/bool.md#std_bool">bool</a>): <a href="../std/option.md#std_option_Option">std::option::Option</a>&lt;<a href="../std/u64.md#std_u64">u64</a>&gt;
 </code></pre>
 
 
@@ -802,7 +802,7 @@ Returns <code>some(index)</code> if such an element is found, otherwise <code>no
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>macro</b> <b>fun</b> <a href="../std/vector.md#std_vector_find_index">find_index</a>&lt;$T&gt;($v: &<a href="../std/vector.md#std_vector">vector</a>&lt;$T&gt;, $f: |&$T| -&gt; bool): Option&lt;<a href="../std/u64.md#std_u64">u64</a>&gt; {
+<pre><code><b>public</b> <b>macro</b> <b>fun</b> <a href="../std/vector.md#std_vector_find_index">find_index</a>&lt;$T&gt;($v: &<a href="../std/vector.md#std_vector">vector</a>&lt;$T&gt;, $f: |&$T| -&gt; <a href="../std/bool.md#std_bool">bool</a>): Option&lt;<a href="../std/u64.md#std_u64">u64</a>&gt; {
     <b>let</b> v = $v;
     '<a href="../std/vector.md#std_vector_find_index">find_index</a>: {
         v.<a href="../std/vector.md#std_vector_length">length</a>().<a href="../std/vector.md#std_vector_do">do</a>!(|i| <b>if</b> ($f(&v[i])) <b>return</b> '<a href="../std/vector.md#std_vector_find_index">find_index</a> <a href="../std/option.md#std_option_some">option::some</a>(i));
@@ -822,7 +822,7 @@ Returns <code>some(index)</code> if such an element is found, otherwise <code>no
 Count how many elements in the vector <code>v</code> satisfy the predicate <code>f</code>.
 
 
-<pre><code><b>public</b> <b>macro</b> <b>fun</b> <a href="../std/vector.md#std_vector_count">count</a>&lt;$T&gt;($v: &<a href="../std/vector.md#std_vector">vector</a>&lt;$T&gt;, $f: |&$T| -&gt; bool): <a href="../std/u64.md#std_u64">u64</a>
+<pre><code><b>public</b> <b>macro</b> <b>fun</b> <a href="../std/vector.md#std_vector_count">count</a>&lt;$T&gt;($v: &<a href="../std/vector.md#std_vector">vector</a>&lt;$T&gt;, $f: |&$T| -&gt; <a href="../std/bool.md#std_bool">bool</a>): <a href="../std/u64.md#std_u64">u64</a>
 </code></pre>
 
 
@@ -831,7 +831,7 @@ Count how many elements in the vector <code>v</code> satisfy the predicate <code
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>macro</b> <b>fun</b> <a href="../std/vector.md#std_vector_count">count</a>&lt;$T&gt;($v: &<a href="../std/vector.md#std_vector">vector</a>&lt;$T&gt;, $f: |&$T| -&gt; bool): <a href="../std/u64.md#std_u64">u64</a> {
+<pre><code><b>public</b> <b>macro</b> <b>fun</b> <a href="../std/vector.md#std_vector_count">count</a>&lt;$T&gt;($v: &<a href="../std/vector.md#std_vector">vector</a>&lt;$T&gt;, $f: |&$T| -&gt; <a href="../std/bool.md#std_bool">bool</a>): <a href="../std/u64.md#std_u64">u64</a> {
     <b>let</b> v = $v;
     <b>let</b> <b>mut</b> <a href="../std/vector.md#std_vector_count">count</a> = 0;
     v.<a href="../std/vector.md#std_vector_do_ref">do_ref</a>!(|e| <b>if</b> ($f(e)) <a href="../std/vector.md#std_vector_count">count</a> = <a href="../std/vector.md#std_vector_count">count</a> + 1);
@@ -907,7 +907,7 @@ Whether any element in the vector <code>v</code> satisfies the predicate <code>f
 If the vector is empty, returns <code><b>false</b></code>.
 
 
-<pre><code><b>public</b> <b>macro</b> <b>fun</b> <a href="../std/vector.md#std_vector_any">any</a>&lt;$T&gt;($v: &<a href="../std/vector.md#std_vector">vector</a>&lt;$T&gt;, $f: |&$T| -&gt; bool): bool
+<pre><code><b>public</b> <b>macro</b> <b>fun</b> <a href="../std/vector.md#std_vector_any">any</a>&lt;$T&gt;($v: &<a href="../std/vector.md#std_vector">vector</a>&lt;$T&gt;, $f: |&$T| -&gt; <a href="../std/bool.md#std_bool">bool</a>): <a href="../std/bool.md#std_bool">bool</a>
 </code></pre>
 
 
@@ -916,7 +916,7 @@ If the vector is empty, returns <code><b>false</b></code>.
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>macro</b> <b>fun</b> <a href="../std/vector.md#std_vector_any">any</a>&lt;$T&gt;($v: &<a href="../std/vector.md#std_vector">vector</a>&lt;$T&gt;, $f: |&$T| -&gt; bool): bool {
+<pre><code><b>public</b> <b>macro</b> <b>fun</b> <a href="../std/vector.md#std_vector_any">any</a>&lt;$T&gt;($v: &<a href="../std/vector.md#std_vector">vector</a>&lt;$T&gt;, $f: |&$T| -&gt; <a href="../std/bool.md#std_bool">bool</a>): <a href="../std/bool.md#std_bool">bool</a> {
     <b>let</b> v = $v;
     '<a href="../std/vector.md#std_vector_any">any</a>: {
         v.<a href="../std/vector.md#std_vector_do_ref">do_ref</a>!(|e| <b>if</b> ($f(e)) <b>return</b> '<a href="../std/vector.md#std_vector_any">any</a> <b>true</b>);
@@ -937,7 +937,7 @@ Whether all elements in the vector <code>v</code> satisfy the predicate <code>f<
 If the vector is empty, returns <code><b>true</b></code>.
 
 
-<pre><code><b>public</b> <b>macro</b> <b>fun</b> <a href="../std/vector.md#std_vector_all">all</a>&lt;$T&gt;($v: &<a href="../std/vector.md#std_vector">vector</a>&lt;$T&gt;, $f: |&$T| -&gt; bool): bool
+<pre><code><b>public</b> <b>macro</b> <b>fun</b> <a href="../std/vector.md#std_vector_all">all</a>&lt;$T&gt;($v: &<a href="../std/vector.md#std_vector">vector</a>&lt;$T&gt;, $f: |&$T| -&gt; <a href="../std/bool.md#std_bool">bool</a>): <a href="../std/bool.md#std_bool">bool</a>
 </code></pre>
 
 
@@ -946,7 +946,7 @@ If the vector is empty, returns <code><b>true</b></code>.
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>macro</b> <b>fun</b> <a href="../std/vector.md#std_vector_all">all</a>&lt;$T&gt;($v: &<a href="../std/vector.md#std_vector">vector</a>&lt;$T&gt;, $f: |&$T| -&gt; bool): bool {
+<pre><code><b>public</b> <b>macro</b> <b>fun</b> <a href="../std/vector.md#std_vector_all">all</a>&lt;$T&gt;($v: &<a href="../std/vector.md#std_vector">vector</a>&lt;$T&gt;, $f: |&$T| -&gt; <a href="../std/bool.md#std_bool">bool</a>): <a href="../std/bool.md#std_bool">bool</a> {
     <b>let</b> v = $v;
     '<a href="../std/vector.md#std_vector_all">all</a>: {
         v.<a href="../std/vector.md#std_vector_do_ref">do_ref</a>!(|e| <b>if</b> (!$f(e)) <b>return</b> '<a href="../std/vector.md#std_vector_all">all</a> <b>false</b>);

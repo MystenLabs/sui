@@ -252,7 +252,7 @@ Unpack the <code><a href="../std/string.md#std_string">string</a></code> to get 
 Checks whether this string is empty.
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="../std/string.md#std_string_is_empty">is_empty</a>(s: &<a href="../std/string.md#std_string_String">std::string::String</a>): bool
+<pre><code><b>public</b> <b>fun</b> <a href="../std/string.md#std_string_is_empty">is_empty</a>(s: &<a href="../std/string.md#std_string_String">std::string::String</a>): <a href="../std/bool.md#std_bool">bool</a>
 </code></pre>
 
 
@@ -261,7 +261,7 @@ Checks whether this string is empty.
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="../std/string.md#std_string_is_empty">is_empty</a>(s: &<a href="../std/string.md#std_string_String">String</a>): bool {
+<pre><code><b>public</b> <b>fun</b> <a href="../std/string.md#std_string_is_empty">is_empty</a>(s: &<a href="../std/string.md#std_string_String">String</a>): <a href="../std/bool.md#std_bool">bool</a> {
     s.<a href="../std/string.md#std_string_bytes">bytes</a>.<a href="../std/string.md#std_string_is_empty">is_empty</a>()
 }
 </code></pre>
@@ -447,7 +447,7 @@ if no occurrence found.
 
 
 
-<pre><code><b>fun</b> <a href="../std/string.md#std_string_internal_check_utf8">internal_check_utf8</a>(v: &<a href="../std/vector.md#std_vector">vector</a>&lt;<a href="../std/u8.md#std_u8">u8</a>&gt;): bool
+<pre><code><b>fun</b> <a href="../std/string.md#std_string_internal_check_utf8">internal_check_utf8</a>(v: &<a href="../std/vector.md#std_vector">vector</a>&lt;<a href="../std/u8.md#std_u8">u8</a>&gt;): <a href="../std/bool.md#std_bool">bool</a>
 </code></pre>
 
 
@@ -456,7 +456,7 @@ if no occurrence found.
 <summary>Implementation</summary>
 
 
-<pre><code><b>native</b> <b>fun</b> <a href="../std/string.md#std_string_internal_check_utf8">internal_check_utf8</a>(v: &<a href="../std/vector.md#std_vector">vector</a>&lt;<a href="../std/u8.md#std_u8">u8</a>&gt;): bool;
+<pre><code><b>native</b> <b>fun</b> <a href="../std/string.md#std_string_internal_check_utf8">internal_check_utf8</a>(v: &<a href="../std/vector.md#std_vector">vector</a>&lt;<a href="../std/u8.md#std_u8">u8</a>&gt;): <a href="../std/bool.md#std_bool">bool</a>;
 </code></pre>
 
 
@@ -469,7 +469,7 @@ if no occurrence found.
 
 
 
-<pre><code><b>fun</b> <a href="../std/string.md#std_string_internal_is_char_boundary">internal_is_char_boundary</a>(v: &<a href="../std/vector.md#std_vector">vector</a>&lt;<a href="../std/u8.md#std_u8">u8</a>&gt;, i: <a href="../std/u64.md#std_u64">u64</a>): bool
+<pre><code><b>fun</b> <a href="../std/string.md#std_string_internal_is_char_boundary">internal_is_char_boundary</a>(v: &<a href="../std/vector.md#std_vector">vector</a>&lt;<a href="../std/u8.md#std_u8">u8</a>&gt;, i: <a href="../std/u64.md#std_u64">u64</a>): <a href="../std/bool.md#std_bool">bool</a>
 </code></pre>
 
 
@@ -478,7 +478,7 @@ if no occurrence found.
 <summary>Implementation</summary>
 
 
-<pre><code><b>native</b> <b>fun</b> <a href="../std/string.md#std_string_internal_is_char_boundary">internal_is_char_boundary</a>(v: &<a href="../std/vector.md#std_vector">vector</a>&lt;<a href="../std/u8.md#std_u8">u8</a>&gt;, i: <a href="../std/u64.md#std_u64">u64</a>): bool;
+<pre><code><b>native</b> <b>fun</b> <a href="../std/string.md#std_string_internal_is_char_boundary">internal_is_char_boundary</a>(v: &<a href="../std/vector.md#std_vector">vector</a>&lt;<a href="../std/u8.md#std_u8">u8</a>&gt;, i: <a href="../std/u64.md#std_u64">u64</a>): <a href="../std/bool.md#std_bool">bool</a>;
 </code></pre>
 
 
