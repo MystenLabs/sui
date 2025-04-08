@@ -53,7 +53,7 @@ fn call_graph_call_graph_depth() {
 }
 
 #[test]
-fn call_graph_call_call_into_graph_depth() {
+fn call_graph_call_into_graph_depth() {
     let mut call_graph = CallGraph::new(10);
     call_graph.add_call(FunctionHandleIndex(0), FunctionHandleIndex(1));
     call_graph.add_call(FunctionHandleIndex(1), FunctionHandleIndex(2));
