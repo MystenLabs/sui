@@ -73,7 +73,7 @@ fn determine_literal_type(
                 if let Some(ty) = &make_move_vector.type_ {
                     let ty =
                         sui_types::sui_sdk_types_conversions::type_tag_sdk_to_core(ty.clone())?;
-                    let ty = normalized::Type::from_type_tag(&mut called_packages.pool, ty);
+                    let ty = normalized::Type::from_type_tag(&mut called_packages.pool, &ty);
                     set_type(&mut literal_type, ty)?;
                 } else {
                     return Err(RpcError::new(
@@ -129,12 +129,12 @@ fn resolve_literal_to_type(buf: &mut Vec<u8>, type_: &Type, value: &Value) -> Re
 
         // 0x1::ascii::String and 0x1::string::String
         Type::Datatype(dt)
-            if dt.address == MOVE_STDLIB_ADDRESS
+            if dt.module.address == MOVE_STDLIB_ADDRESS
                 // 0x1::ascii::String
-            && ((dt.module.as_ref() == STD_ASCII_MODULE_NAME
+            && ((dt.module.name.as_ref() == STD_ASCII_MODULE_NAME
                 && dt.name.as_ref() == STD_ASCII_STRUCT_NAME)
                 // 0x1::string::String
-                || (dt.module.as_ref() == STD_UTF8_MODULE_NAME
+                || (dt.module.name.as_ref() == STD_UTF8_MODULE_NAME
                     && dt.name.as_ref() == STD_UTF8_STRUCT_NAME))
             && dt.type_arguments.is_empty() =>
         {
@@ -143,8 +143,8 @@ fn resolve_literal_to_type(buf: &mut Vec<u8>, type_: &Type, value: &Value) -> Re
 
         // Option<T>
         Type::Datatype(dt)
-            if dt.address == MOVE_STDLIB_ADDRESS
-                && dt.module.as_ref() == STD_OPTION_MODULE_NAME
+            if dt.module.address == MOVE_STDLIB_ADDRESS
+                && dt.module.name.as_ref() == STD_OPTION_MODULE_NAME
                 && dt.name.as_ref() == STD_OPTION_STRUCT_NAME
                 && dt.type_arguments.len() == 1 =>
         {
@@ -581,7 +581,7 @@ mod test {
         fn utf8() -> Type {
             Type::from_struct_tag(
                 &mut normalized::RcPool::new(),
-                StructTag {
+                &StructTag {
                     address: MOVE_STDLIB_ADDRESS,
                     module: STD_UTF8_MODULE_NAME.to_owned(),
                     name: STD_UTF8_STRUCT_NAME.to_owned(),
@@ -592,7 +592,7 @@ mod test {
         fn ascii() -> Type {
             Type::from_struct_tag(
                 &mut normalized::RcPool::new(),
-                StructTag {
+                &StructTag {
                     address: MOVE_STDLIB_ADDRESS,
                     module: STD_ASCII_MODULE_NAME.to_owned(),
                     name: STD_ASCII_STRUCT_NAME.to_owned(),
@@ -644,8 +644,10 @@ mod test {
         fn option_type(t: Type) -> Type {
             let pool = &mut normalized::RcPool::new();
             Type::Datatype(Box::new(Datatype {
-                address: MOVE_STDLIB_ADDRESS,
-                module: pool.intern(STD_OPTION_MODULE_NAME),
+                module: normalized::ModuleId {
+                    address: MOVE_STDLIB_ADDRESS,
+                    name: pool.intern(STD_OPTION_MODULE_NAME),
+                },
                 name: pool.intern(STD_OPTION_STRUCT_NAME),
                 type_arguments: vec![t],
             }))

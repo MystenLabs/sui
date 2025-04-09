@@ -529,8 +529,8 @@ fn is_input_argument_receiving(
             let arg_type = arg_type_of_move_call_input(called_packages, move_call, idx)?;
 
             if let normalized::Type::Datatype(dt) = &*arg_type {
-                if receiving_package == &dt.address
-                    && receiving_module == dt.module.as_ref()
+                if receiving_package == &dt.module.address
+                    && receiving_module == dt.module.name.as_ref()
                     && receiving_struct == dt.name.as_ref()
                 {
                     receiving = true;

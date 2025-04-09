@@ -300,14 +300,13 @@ impl<S: ToString> From<&NormalizedType<S>> for SuiMoveNormalizedType {
             NormalizedType::Signer => SuiMoveNormalizedType::Signer,
             NormalizedType::Datatype(dt) => {
                 let normalized::Datatype {
-                    address,
                     module,
                     name,
                     type_arguments,
                 } = &**dt;
                 SuiMoveNormalizedType::new_struct(
-                    address.to_hex_literal(),
-                    module.to_string(),
+                    module.address.to_hex_literal(),
+                    module.name.to_string(),
                     name.to_string(),
                     type_arguments
                         .iter()

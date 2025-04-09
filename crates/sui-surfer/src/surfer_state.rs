@@ -413,8 +413,8 @@ fn is_type_tx_context(ty: &Type) -> bool {
     match ty {
         Type::Reference(_, inner) => match inner.as_ref() {
             Type::Datatype(dt) => {
-                dt.address == SUI_FRAMEWORK_ADDRESS
-                    && dt.module.as_ident_str() == IdentStr::new("tx_context").unwrap()
+                dt.module.address == SUI_FRAMEWORK_ADDRESS
+                    && dt.module.name.as_ident_str() == IdentStr::new("tx_context").unwrap()
                     && dt.name.as_ident_str() == IdentStr::new("TxContext").unwrap()
                     && dt.type_arguments.is_empty()
             }

@@ -138,16 +138,7 @@ impl SurfStrategy {
     ) -> Option<CallArg> {
         let pool = state.pool.read().await;
         let type_tag = match arg_type {
-            Type::Datatype(dt) => StructTag {
-                address: dt.address,
-                module: dt.module.as_ident_str().to_owned(),
-                name: dt.name.as_ident_str().to_owned(),
-                type_params: dt
-                    .type_arguments
-                    .into_iter()
-                    .map(|t| t.to_type_tag(&*pool).unwrap())
-                    .collect(),
-            },
+            Type::Datatype(dt) => dt.to_struct_tag(&*pool),
             _ => {
                 return None;
             }

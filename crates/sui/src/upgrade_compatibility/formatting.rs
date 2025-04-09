@@ -111,8 +111,8 @@ pub(super) fn format_param<S: fmt::Display>(
         Type::Datatype(dt) if !dt.type_arguments.is_empty() => {
             format!(
                 "{}::{}::{}<{}>",
-                dt.address.to_hex_literal(),
-                dt.module,
+                dt.module.address.to_hex_literal(),
+                dt.module.name,
                 dt.name,
                 dt.type_arguments
                     .iter()
