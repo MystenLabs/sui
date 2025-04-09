@@ -23,6 +23,7 @@ use extensions::{
     timeout::Timeout,
 };
 use headers::ContentLength;
+use health::DbProbe;
 use prometheus::Registry;
 use sui_indexer_alt_reader::pg_reader::db::DbArgs;
 use sui_indexer_alt_reader::system_package_task::{SystemPackageTask, SystemPackageTaskArgs};
@@ -53,6 +54,7 @@ pub mod args;
 pub mod config;
 mod error;
 mod extensions;
+mod health;
 mod metrics;
 mod middleware;
 mod pagination;
@@ -270,7 +272,14 @@ pub async fn start_rpc(
     let rpc = RpcService::new(args, version, schema(), registry, cancel.child_token());
     let metrics = rpc.metrics();
 
-    let pg_reader = PgReader::new(database_url, db_args, registry, cancel.child_token()).await?;
+    let pg_reader = PgReader::new(
+        database_url.clone(),
+        db_args,
+        registry,
+        cancel.child_token(),
+    )
+    .await?;
+
     let pg_loader = Arc::new(pg_reader.as_data_loader());
 
     let kv_loader = if let Some(instance_id) = bigtable_instance {
@@ -312,7 +321,10 @@ pub async fn start_rpc(
 
     let rpc = rpc
         .route("/graphql", post(graphql))
+        .route("/graphql/health", get(health::check))
         .layer(watermark_task.watermarks())
+        .layer(config.health)
+        .layer(DbProbe(database_url))
         .extension(Timeout::new(config.limits.timeouts()))
         .extension(QueryLimitsChecker::new(
             config.limits.query_limits(),
