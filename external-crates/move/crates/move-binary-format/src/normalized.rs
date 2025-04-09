@@ -112,7 +112,7 @@ pub struct Module<S: Hash + Eq> {
 
 /// Normalized version of a `Constant`.
 #[cfg_attr(test, derive(Clone))]
-#[derive(Debug, Eq, PartialEq)]
+#[derive(Debug)]
 pub struct Constant<S> {
     pub type_: Type<S>,
     pub data: Vec<u8>,
@@ -121,12 +121,12 @@ pub struct Constant<S> {
 /// Normalized version of a `StructDefinition`. Not safe to compare without an associated
 /// `ModuleId` or `Module`.
 #[cfg_attr(test, derive(Clone))]
-#[derive(Debug, Eq, PartialEq)]
-pub struct Struct<S> {
+#[derive(Debug)]
+pub struct Struct<S: Hash + Eq> {
     pub name: S,
     pub abilities: AbilitySet,
     pub type_parameters: Vec<DatatypeTyParameter>,
-    pub fields: Vec<Rc<Field<S>>>,
+    pub fields: IndexMap<S, Rc<Field<S>>>,
 }
 
 /// Normalized version of a `FieldDefinition`. The `name` is included even though it is
@@ -134,7 +134,7 @@ pub struct Struct<S> {
 /// want a change from `Account { bal: u64, seq: u64 }` to `Account { seq: u64, bal: u64 }` to be
 /// marked as incompatible. Not safe to compare without an enclosing `Struct`.
 #[cfg_attr(test, derive(Clone))]
-#[derive(Debug, Eq, PartialEq)]
+#[derive(Debug)]
 pub struct Field<S> {
     pub name: S,
     pub type_: Type<S>,
@@ -159,7 +159,7 @@ pub struct Function<S: Hash + Eq> {
 /// Normalized version of a `EnumDefinition`. Not safe to compare without an associated
 /// `ModuleId` or `Module`.
 #[cfg_attr(test, derive(Clone))]
-#[derive(Debug, Eq, PartialEq)]
+#[derive(Debug)]
 pub struct Enum<S: Hash + Eq> {
     pub name: S,
     pub abilities: AbilitySet,
@@ -170,16 +170,16 @@ pub struct Enum<S: Hash + Eq> {
 /// Normalized version of a `VariantDefinition`. Not safe to compare without an associated
 /// `ModuleId` or `Module`.
 #[cfg_attr(test, derive(Clone))]
-#[derive(Debug, Eq, PartialEq)]
-pub struct Variant<S> {
+#[derive(Debug)]
+pub struct Variant<S: Hash + Eq> {
     pub name: S,
-    pub fields: Vec<Field<S>>,
+    pub fields: IndexMap<S, Rc<Field<S>>>,
 }
 
 /// Normalized version of a `VariantJumpTable`. Not safe to compare without an associated
 /// `ModuleId` or `Module`.
 #[cfg_attr(test, derive(Clone))]
-#[derive(Debug, Eq, PartialEq)]
+#[derive(Debug)]
 pub struct VariantJumpTable<S: Hash + Eq> {
     pub enum_: Rc<Enum<S>>,
     pub jump_table: JumpTableInner,
@@ -187,14 +187,14 @@ pub struct VariantJumpTable<S: Hash + Eq> {
 
 pub type ConstantRef<S> = Rc<Constant<S>>;
 
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub struct StructRef<S> {
+#[derive(Clone, Debug)]
+pub struct StructRef<S: Hash + Eq> {
     pub struct_: Rc<Struct<S>>,
     pub type_arguments: Signature<S>,
 }
 
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub struct FieldRef<S> {
+#[derive(Clone, Debug)]
+pub struct FieldRef<S: Hash + Eq> {
     pub struct_: Rc<Struct<S>>,
     pub field: Rc<Field<S>>,
     /// Type arguments to the struct
@@ -210,7 +210,7 @@ pub struct FieldRef<S> {
 //   - The callee is in the same package as this call, in which case the callee couldn't have changed; or
 //   - The callee was in a different package and therefore public, and therefore the API of that
 //   function must not have changed by compatibility rules.
-#[derive(Clone, Debug, Eq, PartialEq)]
+#[derive(Clone, Debug)]
 pub struct FunctionRef<S> {
     pub module: ModuleId<S>,
     pub function: S,
@@ -218,7 +218,7 @@ pub struct FunctionRef<S> {
 }
 
 /// Normalized version of a `VariantRef` and `VariantInstantiationHandle`.
-#[derive(Clone, Debug, Eq, PartialEq)]
+#[derive(Clone, Debug)]
 pub struct VariantRef<S: Hash + Eq> {
     pub enum_: Rc<Enum<S>>,
     pub variant: Rc<Variant<S>>,
@@ -229,7 +229,7 @@ pub struct VariantRef<S: Hash + Eq> {
 pub type VariantJumpTableRef<S> = Rc<VariantJumpTable<S>>;
 
 /// Normalized representation of bytecode.
-#[derive(Clone, Debug, Eq, PartialEq)]
+#[derive(Clone, Debug)]
 pub enum Bytecode<S: Hash + Eq> {
     Pop,
     Ret,
@@ -561,6 +561,35 @@ impl<S> Datatype<S> {
     }
 }
 
+fn vec_ordered_equivalent<T, P: FnMut(&T, &T) -> bool>(
+    a: &[T],
+    b: &[T],
+    mut equivalent: P,
+) -> bool {
+    a.len() == b.len() && a.iter().zip(b).all(|(a, b)| equivalent(a, b))
+}
+
+fn map_ordered_equivalent<K: Eq, V, P: FnMut(&V, &V) -> bool>(
+    a: &IndexMap<K, V>,
+    b: &IndexMap<K, V>,
+    mut equivalent: P,
+) -> bool {
+    a.len() == b.len()
+        && a.iter()
+            .zip(b)
+            .all(|((k1, v1), (k2, v2))| k1 == k2 && equivalent(v1, v2))
+}
+
+fn map_keyed_equivalent<K: Hash + Eq, V, P: FnMut(&V, &V) -> bool>(
+    a: &IndexMap<K, V>,
+    b: &IndexMap<K, V>,
+    mut equivalent: P,
+) -> bool {
+    a.len() == b.len()
+        && a.iter()
+            .all(|(k, v1)| b.get(k).map_or(false, |v2| equivalent(v1, v2)))
+}
+
 impl<S: Hash + Eq> Tables<S> {
     fn new<Pool: StringPool<String = S>>(
         pool: &mut Pool,
@@ -677,17 +706,7 @@ impl<S: Hash + Eq> Module<S> {
 
     /// Panics if called with `include_code` set to `false`.
     /// Note this checks the order of functions, structs, and enums in the module.
-    pub fn equals(&self, other: &Self) -> bool {
-        fn function_equals<S: Hash + Eq>(
-            functions: &IndexMap<S, Rc<Function<S>>>,
-            other_functions: &IndexMap<S, Rc<Function<S>>>,
-        ) -> bool {
-            functions.len() == other_functions.len()
-                && functions
-                    .iter()
-                    .zip(other_functions)
-                    .all(|((n1, f1), (n2, f2))| n1 == n2 && f1.equals(f2))
-        }
+    pub fn equivalent(&self, other: &Self) -> bool {
         let Self {
             tables: _,
             code_included,
@@ -708,10 +727,10 @@ impl<S: Hash + Eq> Module<S> {
             && file_format_version == &other.file_format_version
             && immediate_dependencies == &other.immediate_dependencies
             && friends == &other.friends
-            && structs == &other.structs
-            && enums == &other.enums
-            && function_equals(functions, &other.functions)
-            && constants == &other.constants
+            && map_keyed_equivalent(structs, &other.structs, |s1, s2| s1.equivalent(s2))
+            && map_keyed_equivalent(enums, &other.enums, |e1, e2| e1.equivalent(e2))
+            && map_keyed_equivalent(functions, &other.functions, |f1, f2| f1.equivalent(f2))
+            && vec_ordered_equivalent(constants, &other.constants, |c1, c2| c1.equivalent(c2))
     }
 }
 
@@ -726,25 +745,39 @@ impl<S> Constant<S> {
             data: constant.data.clone(),
         }
     }
+
+    pub fn equivalent(&self, other: &Self) -> bool
+    where
+        S: Eq,
+    {
+        let Self { type_, data } = self;
+        type_ == &other.type_ && data == &other.data
+    }
 }
 
-impl<S> Struct<S> {
+impl<S: Hash + Eq> Struct<S> {
     /// Create a `Struct` for `StructDefinition` `def` in module `m`. Panics if `def` is a
     /// a native struct definition.
     fn new<Pool: StringPool<String = S>>(
         pool: &mut Pool,
         m: &CompiledModule,
         def: &StructDefinition,
-    ) -> Self {
+    ) -> Self
+    where
+        S: Clone,
+    {
         let handle = m.datatype_handle_at(def.struct_handle);
         let fields = match &def.field_information {
             StructFieldInformation::Native => {
                 // Pretend for compatibility checking no fields
-                vec![]
+                IndexMap::new()
             }
             StructFieldInformation::Declared(fields) => fields
                 .iter()
-                .map(|f| Rc::new(Field::new(pool, m, f)))
+                .map(|f| {
+                    let f = Field::new(pool, m, f);
+                    (f.name.clone(), Rc::new(f))
+                })
                 .collect(),
         };
         let name = pool.intern(m.identifier_at(handle.name));
@@ -759,6 +792,19 @@ impl<S> Struct<S> {
     pub fn type_param_constraints(&self) -> impl ExactSizeIterator<Item = &AbilitySet> {
         self.type_parameters.iter().map(|param| &param.constraints)
     }
+
+    pub fn equivalent(&self, other: &Self) -> bool {
+        let Self {
+            name,
+            abilities,
+            type_parameters,
+            fields,
+        } = self;
+        name == &other.name
+            && abilities == &other.abilities
+            && type_parameters == &other.type_parameters
+            && map_ordered_equivalent(fields, &other.fields, |f1, f2| f1.equivalent(f2))
+    }
 }
 
 impl<S> Field<S> {
@@ -772,6 +818,14 @@ impl<S> Field<S> {
             name: pool.intern(m.identifier_at(f.name)),
             type_: Type::new(pool, m, &f.signature.0),
         }
+    }
+
+    pub fn equivalent(&self, other: &Self) -> bool
+    where
+        S: Eq,
+    {
+        let Self { name, type_ } = self;
+        name == &other.name && type_ == &other.type_
     }
 }
 
@@ -827,7 +881,7 @@ impl<S: Hash + Eq> Function<S> {
     }
 
     /// Should not be called if `code_included` is `false`--will panic in debug builds.
-    pub fn equals(&self, other: &Self) -> bool {
+    pub fn equivalent(&self, other: &Self) -> bool {
         let Self {
             name,
             visibility,
@@ -849,8 +903,8 @@ impl<S: Hash + Eq> Function<S> {
             && type_parameters == &other.type_parameters
             && parameters == &other.parameters
             && return_ == &other.return_
-            && jump_tables == &other.jump_tables
-            && code == &other.code
+            && vec_ordered_equivalent(jump_tables, &other.jump_tables, |j1, j2| j1.equivalent(j2))
+            && vec_ordered_equivalent(code, &other.code, |b1, b2| b1.equivalent(b2))
     }
 }
 
@@ -880,18 +934,47 @@ impl<S: Hash + Eq> Enum<S> {
             variants,
         }
     }
+
+    pub fn equivalent(&self, other: &Self) -> bool {
+        let Self {
+            name,
+            abilities,
+            type_parameters,
+            variants,
+        } = self;
+        name == &other.name
+            && abilities == &other.abilities
+            && type_parameters == &other.type_parameters
+            && map_ordered_equivalent(variants, &other.variants, |v1, v2| v1.equivalent(v2))
+    }
 }
 
-impl<S> Variant<S> {
+impl<S: Hash + Eq> Variant<S> {
     pub fn new<Pool: StringPool<String = S>>(
         pool: &mut Pool,
         m: &CompiledModule,
         v: &VariantDefinition,
-    ) -> Self {
+    ) -> Self
+    where
+        S: Clone,
+    {
         Self {
             name: pool.intern(m.identifier_at(v.variant_name)),
-            fields: v.fields.iter().map(|f| Field::new(pool, m, f)).collect(),
+            fields: v
+                .fields
+                .iter()
+                .map(|f| {
+                    let f = Field::new(pool, m, f);
+                    (f.name.clone(), Rc::new(f))
+                })
+                .collect(),
         }
+    }
+
+    pub fn equivalent(&self, other: &Self) -> bool {
+        let Self { name, fields } = self;
+        name == &other.name
+            && map_ordered_equivalent(fields, &other.fields, |f1, f2| f1.equivalent(f2))
     }
 }
 
@@ -902,6 +985,11 @@ impl<S: Hash + Eq> VariantJumpTable<S> {
             enum_,
             jump_table: jt.jump_table.clone(),
         }
+    }
+
+    pub fn equivalent(&self, other: &Self) -> bool {
+        let Self { enum_, jump_table } = self;
+        enum_.name == other.enum_.name && jump_table == &other.jump_table
     }
 }
 
@@ -933,6 +1021,14 @@ impl<S: Hash + Eq> StructRef<S> {
             Some(struct_instantiation.type_parameters),
         )
     }
+
+    pub fn equivalent(&self, other: &Self) -> bool {
+        let Self {
+            struct_,
+            type_arguments,
+        } = self;
+        struct_.name == other.struct_.name && type_arguments == &other.type_arguments
+    }
 }
 
 impl<S: Hash + Eq> FieldRef<S> {
@@ -963,6 +1059,17 @@ impl<S: Hash + Eq> FieldRef<S> {
             field_instantiation.handle,
             Some(field_instantiation.type_parameters),
         )
+    }
+
+    pub fn equivalent(&self, other: &Self) -> bool {
+        let Self {
+            struct_,
+            field,
+            instantiation,
+        } = self;
+        struct_.name == other.struct_.name
+            && field.name == other.field.name
+            && instantiation == &other.instantiation
     }
 }
 
@@ -1005,6 +1112,17 @@ impl<S: Hash + Eq> FunctionRef<S> {
             function_instantiation.handle,
             Some(function_instantiation.type_parameters),
         )
+    }
+
+    pub fn equivalent(&self, other: &Self) -> bool {
+        let Self {
+            module,
+            function,
+            type_arguments,
+        } = self;
+        module == &other.module
+            && function == &other.function
+            && type_arguments == &other.type_arguments
     }
 }
 
@@ -1054,6 +1172,17 @@ impl<S: Hash + Eq> VariantRef<S> {
             variant_instantiation.variant,
             Some(enum_instantiation.type_parameters),
         )
+    }
+
+    pub fn equivalent(&self, other: &Self) -> bool {
+        let Self {
+            enum_,
+            variant,
+            instantiation,
+        } = self;
+        enum_.name == other.enum_.name
+            && variant.name == other.variant.name
+            && instantiation == &other.instantiation
     }
 }
 
@@ -1208,6 +1337,89 @@ impl<S: Hash + Eq> Bytecode<S> {
                 B::UnpackVariantMutRef(Box::new(VariantRef::instantiated(tables, m, *handle)))
             }
             FB::VariantSwitch(jti) => B::VariantSwitch(jump_tables[jti.0 as usize].clone()),
+        }
+    }
+
+    pub fn equivalent(&self, other: &Self) -> bool {
+        use Bytecode as B;
+        match (self, other) {
+            (B::Pop, B::Pop)
+            | (B::Ret, B::Ret)
+            | (B::CastU8, B::CastU8)
+            | (B::CastU64, B::CastU64)
+            | (B::CastU128, B::CastU128)
+            | (B::LdTrue, B::LdTrue)
+            | (B::LdFalse, B::LdFalse)
+            | (B::ReadRef, B::ReadRef)
+            | (B::WriteRef, B::WriteRef)
+            | (B::FreezeRef, B::FreezeRef)
+            | (B::Add, B::Add)
+            | (B::Sub, B::Sub)
+            | (B::Mul, B::Mul)
+            | (B::Mod, B::Mod)
+            | (B::Div, B::Div)
+            | (B::BitOr, B::BitOr)
+            | (B::BitAnd, B::BitAnd)
+            | (B::Xor, B::Xor)
+            | (B::Or, B::Or)
+            | (B::And, B::And)
+            | (B::Not, B::Not)
+            | (B::Eq, B::Eq)
+            | (B::Neq, B::Neq)
+            | (B::Lt, B::Lt)
+            | (B::Gt, B::Gt)
+            | (B::Le, B::Le)
+            | (B::Ge, B::Ge)
+            | (B::Abort, B::Abort)
+            | (B::Nop, B::Nop)
+            | (B::Shl, B::Shl)
+            | (B::Shr, B::Shr)
+            | (B::CastU16, B::CastU16)
+            | (B::CastU32, B::CastU32)
+            | (B::CastU256, B::CastU256) => true,
+            (B::BrTrue(x), B::BrTrue(y))
+            | (B::BrFalse(x), B::BrFalse(y))
+            | (B::Branch(x), B::Branch(y)) => x == y,
+            (B::LdU8(x), B::LdU8(y)) => x == y,
+            (B::LdU64(x), B::LdU64(y)) => x == y,
+            (B::LdU128(x), B::LdU128(y)) => x == y,
+            (B::LdConst(x), B::LdConst(y)) => x.equivalent(y),
+            (B::CopyLoc(x), B::CopyLoc(y)) => x == y,
+            (B::MoveLoc(x), B::MoveLoc(y)) => x == y,
+            (B::StLoc(x), B::StLoc(y)) => x == y,
+            (B::Call(x), B::Call(y)) => x.equivalent(y),
+            (B::Pack(x), B::Pack(y)) => x.equivalent(y),
+            (B::Unpack(x), B::Unpack(y)) => x.equivalent(y),
+            (B::MutBorrowLoc(x), B::MutBorrowLoc(y)) => x == y,
+            (B::ImmBorrowLoc(x), B::ImmBorrowLoc(y)) => x == y,
+            (B::MutBorrowField(x), B::MutBorrowField(y)) => x.equivalent(y),
+            (B::ImmBorrowField(x), B::ImmBorrowField(y)) => x.equivalent(y),
+            (B::VecPack(x), B::VecPack(y)) => x == y,
+            (B::VecLen(x), B::VecLen(y)) => x == y,
+            (B::VecImmBorrow(x), B::VecImmBorrow(y)) => x == y,
+            (B::VecMutBorrow(x), B::VecMutBorrow(y)) => x == y,
+            (B::VecPushBack(x), B::VecPushBack(y)) => x == y,
+            (B::VecPopBack(x), B::VecPopBack(y)) => x == y,
+            (B::VecUnpack(x), B::VecUnpack(y)) => x == y,
+            (B::VecSwap(x), B::VecSwap(y)) => x == y,
+            (B::LdU16(x), B::LdU16(y)) => x == y,
+            (B::LdU32(x), B::LdU32(y)) => x == y,
+            (B::LdU256(x), B::LdU256(y)) => x == y,
+            (B::PackVariant(x), B::PackVariant(y)) => x.equivalent(y),
+            (B::UnpackVariant(x), B::UnpackVariant(y)) => x.equivalent(y),
+            (B::UnpackVariantImmRef(x), B::UnpackVariantImmRef(y)) => x.equivalent(y),
+            (B::UnpackVariantMutRef(x), B::UnpackVariantMutRef(y)) => x.equivalent(y),
+            (B::VariantSwitch(x), B::VariantSwitch(y)) => x.equivalent(y),
+            (B::MutBorrowGlobalDeprecated(x), B::MutBorrowGlobalDeprecated(y)) => x.equivalent(y),
+            (B::ImmBorrowGlobalDeprecated(x), B::ImmBorrowGlobalDeprecated(y)) => x.equivalent(y),
+            (B::ExistsDeprecated(x), B::ExistsDeprecated(y)) => x.equivalent(y),
+            (B::MoveFromDeprecated(x), B::MoveFromDeprecated(y)) => x.equivalent(y),
+            (B::MoveToDeprecated(x), B::MoveToDeprecated(y)) => x.equivalent(y),
+            (a, b) => {
+                // the variants must be different
+                debug_assert_ne!(std::mem::discriminant(a), std::mem::discriminant(b));
+                false
+            }
         }
     }
 }

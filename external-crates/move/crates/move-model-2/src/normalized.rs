@@ -56,8 +56,6 @@ impl Packages {
                 .or_insert_with(|| Package::new(*module.address()));
             package.insert(module);
         }
-        // model.compute_dependencies();
-        // model.compute_function_dependencies();
         Self { packages }
     }
 }
