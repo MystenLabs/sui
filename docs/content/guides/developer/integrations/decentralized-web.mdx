@@ -20,7 +20,7 @@ To complete this guide, you need the following:
 - A JavaScript package manager installed globally. The instructions use [pnpm](https://pnpm.io/) but you can use a different package manager, if you prefer.
 - It's helpful but not required to have some familiarity with the [Move language](https://move-book.com/) and the Sui SDK dApp Kit. This guide does not examine code in detail, but having this familiarity helps in understanding the process.
 - Both the CLI and site building tools that Walrus provides installed on your system. The instructions walk you through their installation, but you must refer to their documentation to resolve any issues.
-- If you want to browse your site on your local machine, you need to clone the [walrus-sites repo](https://github.com/MystenLabs/walrus-sites/tree/main) on GitHub. You also need to have Docker Desktop on your system. 
+- If you want to browse your site on your local machine, you need to clone the [walrus-sites repo](https://github.com/MystenLabs/walrus-sites/tree/main) on GitHub. You also need to have Docker Desktop or the Bun package manager on your system. 
 - The example uses [curl](https://curl.se/) for data retrieval. You can use a different method but need to adjust the instructions accordingly.
 
 ## Creating a website
@@ -40,7 +40,7 @@ $ pnpm install
 $ pnpm build
 ```
 
-The project builds a scaffold that enables connecting a wallet to the site. If you aren't familiar with the site, you can run a development server to see its output. Run the following command and then open a browser to the localhost server and port that the console displays: http://localhost:5173 by default.
+The project builds a scaffold that enables connecting a wallet to the site. If you aren't familiar with the site, you can run a development server to see its output. Run the following command and then open a browser to the localhost server and port that the console displays: `http://localhost:5173` by default.
 
 ```sh
 $ pnpm dev
@@ -102,7 +102,7 @@ Run `site-builder --help` to make sure the `site-builder` command is accessible.
 As with the Walrus CLI, you need a configuration file to inform the `site-builder` tool of important information. To make sure you have the latest data, use curl again to fetch the current configuration and place it in the same folder as the client configuration file.
 
 ```sh
-$ curl https://raw.githubusercontent.com/MystenLabs/walrus-sites/refs/heads/testnet/sites-config.yaml -o ~/.config/walrus/sites-config.yaml
+$ curl https://raw.githubusercontent.com/MystenLabs/walrus-sites/refs/heads/mainnet/sites-config.yaml -o ~/.config/walrus/sites-config.yaml
 ```
 <details>
 <summary>
@@ -132,7 +132,7 @@ If you don't have all these things, check the relevant documentation to fix the 
 You should now be ready to publish your Walrus Site. In your terminal or console, type the following command and press <kbd>Enter</kbd>.
 
 ```sh
-$ site-builder publish ./dist --site-name "decentralized website test" --epochs 100
+$ site-builder publish ./dist --site-name "decentralized website" --epochs 10
 ```
 
 The `./dist` part of this command points to the location of the built site. In this case, the command is run in the root of the project skeleton, which builds the site to the `dist` folder. Update this path as needed in your environment.
@@ -141,11 +141,11 @@ Upon successful deployment, the console reports some important information about
 
 The other piece of information the response provides is the site's object ID on the Sui network. You can use a Sui network explorer to view that object.
 
-## Browse site
+## Browse site locally
 
-You can view your site locally by cloning the [walrus-sites](https://github.com/MystenLabs/walrus-sites) repo then using Docker to browse your site.
+You can view your site locally by cloning the [walrus-sites](https://github.com/MystenLabs/walrus-sites) repo, then running the portal locally using the Bun package manager or Docker Desktop.
 
-To clone the repo, use the following command:
+To clone the repo, use the following command in the parent directory you want to place the repo:
 
 ```sh
 $ git clone https://github.com/MystenLabs/walrus-sites.git
@@ -157,15 +157,83 @@ Then make the repo the current working directory:
 $ cd walrus-sites
 ```
 
-And `git switch` to the `testnet` branch:
+And `git switch` to the `mainnet` branch:
 
 ```sh
-$ git switch testnet
+$ git switch mainnet
 ```
 
+:::info
 
-You can also use a service like SuiNS. SuiNS enables you to assign a name to your site to view it on the @walrus.domain.testnet@ domain. If you don't already have a Testnet SuiNS name, you can get one at https://testnet.suins.io/. You need some Testnet SUI to complete the transaction.
+The `mainnet` branch is the stable code branch. Don't confuse it with working on Walrus Mainnet, as you also access Walrus Testnet with the branch's code.
 
-Upon purchase, you can set your SuiNS name to point to the object ID for your site (provided in the Walrus publish response). If you already have a Testnet SuiNS name, you can access the dashboard for the name and set the object ID using the Link to Walrus Site menu option. See the SuiNS documentation for more information on configuring your SuiNS name.
+:::
 
-After configuring your name, you can visit `https://<YOUR_SUINS_NAME>.@walrus.domain.testnet@` to see your site served by Walrus Sites.
+To work on Walrus Testnet, copy the `server/.env.testnet.example` environment variable file and rename it as `.env.local` (leave both files in the `server` directory).
+
+Use either Bun or Docker to serve the portal locally.
+
+<Tabs>
+<TabItem label="Docker Desktop" value="docker">
+
+Install and start the [Docker Desktop](https://www.docker.com/products/docker-desktop/) app.
+
+From the `walrus-sites` repo root, use the following command to build the image.
+
+```sh
+$ docker build -f portal/docker/server/Dockerfile -t server-portal . --build-arg ENABLE_SENTRY=false --no-cache
+```
+
+After the image builds, run the container (changing the port, if necessary). 
+
+```sh
+$ docker run -p 3000:3000 --env-file ./portal/server/.env.local server-portal
+```
+</TabItem>
+<TabItem label="Bun package manager" value="bun">
+
+Install [Bun](https://bun.sh/) globally if you don't already have it.
+
+```sh
+$ curl -fsSL https://bun.sh/install | bash
+```
+
+Make `portal` the active directory from the repo root.
+
+```sh
+$ cd portal
+```
+
+Install the package dependencies.
+
+```sh
+$ bun install
+```
+
+Start the server. If the console response shows the RPC target as anything other than `"https://fullnode.testnet.sui.io"`, then point to the environment file you created previously by including the `--env-file=server/.env.local` argument.
+
+```sh
+bun run server
+```
+
+</TabItem>
+<Tabs>
+
+With your portal running locally, you can visit your site on `localhost`, port `3000` by default. The URL to your site is provided in the response you receive from the `site-builder` command. 
+
+## Using SuiNS 
+
+By default, the domain of your site begins with a hash that is difficult for a human to remember, let alone type. You can use a service like SuiNS to point your site's object ID to a more human-friendly name, creating a domain that is much easier to access.
+
+If you don't already have a Testnet SuiNS name, you can get one at https://testnet.suins.io/. You need some Testnet SUI to complete the transaction, so get more from the faucet if your wallet is empty.
+
+Upon purchase, you can set your SuiNS name to point to the object ID for your site (provided in the Walrus `site-builder publish` response). If you already have a Testnet SuiNS name, you can access the dashboard for the name and set the object ID using the **Link to Walrus Site** menu option in the dashboard. See the SuiNS documentation for more information on configuring your SuiNS name.
+
+After configuring your name, you can visit `https://<YOUR_SUINS_NAME>.localhost:3000` to see your site served by your local portal.
+
+## Related links
+
+- [Walrus](https://docs.wal.app/): Documentation for Walrus, a robust but affordable solution for storing unstructured content on decentralized storage nodes while ensuring high availability and reliability even in the presence of Byzantine faults.
+- [Walrus Sites](https://docs.wal.app/walrus-sites/intro.html): Documentation for Walrus Sites, an implementation of Walrus that enables you to leverage decentralized storage for publicly accessible websites.
+- [SuiNS](https://docs.suins.io/): Documentation for SuiNS, which provides naming services on the Sui blockchain.
+- [Sui SDK dApp Kit](https://sdk.mystenlabs.com/dapp-kit): Documentation for the Sui dApp Kit, which is a set of React components, hooks, and utilities to help you build a dApp for the Sui ecosystem.
