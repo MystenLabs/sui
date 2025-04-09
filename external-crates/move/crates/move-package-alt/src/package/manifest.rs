@@ -104,7 +104,7 @@ impl<F: MoveFlavor> Manifest<F> {
             let err = ManifestError {
                 kind: ManifestErrorKind::InvalidEdition {
                     edition: self.package.edition.get_ref().clone(),
-                    valid: format!("{}", ALLOWED_EDITIONS.join(", ")),
+                    valid: ALLOWED_EDITIONS.join(", ").to_string(),
                 },
                 span: Some(self.package.edition.span()),
                 path: path.as_ref().to_path_buf(),
