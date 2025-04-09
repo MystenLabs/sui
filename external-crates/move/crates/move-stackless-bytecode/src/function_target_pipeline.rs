@@ -3,6 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use bimap::btree::BiBTreeMap;
+use codespan_reporting::diagnostic::Severity;
 use core::fmt;
 use std::{
     collections::{BTreeMap, BTreeSet},
@@ -339,15 +340,25 @@ impl FunctionTargetsHolder {
                                     let target_id = target_func_env.get_qualified_id();
 
                                     if self.function_specs.contains_right(&target_id) {
-                                        panic!("Duplicate target function: {}", function_name.value);
+                                        let env = func_env.module_env.env;
+                                        env.diag(
+                                            Severity::Error,
+                                            &func_env.get_loc(),
+                                            &format!("Duplicate target function: {}", function_name.value),
+                                        );
                                     } else {
                                         self.function_specs
                                             .insert(func_env.get_qualified_id(), target_id);
                                     }
                                 } else {
-                                    panic!("Target function '{}' not found in module '{}'", 
-                                        function_name.value,
-                                        module.to_string());
+                                    let env = func_env.module_env.env;
+                                    env.diag(
+                                        Severity::Error,
+                                        &func_env.get_loc(),
+                                        &format!("Target function '{}' not found in module '{}'", 
+                                            function_name.value,
+                                            module.to_string()),
+                                    );
                                 }
                             }
                         }
