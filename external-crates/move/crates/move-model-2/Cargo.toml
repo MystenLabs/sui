@@ -15,7 +15,7 @@ move-core-types.workspace = true
 move-disassembler.workspace = true
 move-command-line-common.workspace = true
 move-symbol-pool.workspace = true
-indexmap.workspace = true
+indexmap = { workspace = true, features = ["serde"] }
 
 bcs.workspace = true
 codespan.workspace = true
