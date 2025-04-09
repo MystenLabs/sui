@@ -13,7 +13,7 @@ use simulacrum::Simulacrum;
 use sui_indexer_alt::config::{ConcurrentLayer, IndexerConfig, PipelineLayer, PrunerLayer};
 use sui_indexer_alt_e2e_tests::{find_address_owned, FullCluster};
 use sui_indexer_alt_framework::IndexerArgs;
-use sui_indexer_alt_jsonrpc::{args::SystemPackageTaskArgs, config::RpcConfig};
+use sui_indexer_alt_jsonrpc::config::RpcConfig;
 use sui_types::{
     base_types::SuiAddress,
     crypto::{get_account_key_pair, Signature, Signer},
@@ -212,7 +212,6 @@ async fn cluster_with_pipelines(pipeline: PipelineLayer) -> FullCluster {
     FullCluster::new_with_configs(
         Simulacrum::new(),
         IndexerArgs::default(),
-        SystemPackageTaskArgs::default(),
         IndexerConfig {
             pipeline,
             ..IndexerConfig::for_test()

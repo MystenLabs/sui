@@ -13,10 +13,10 @@ use diesel_async::RunQueryDsl;
 use simulacrum::Simulacrum;
 use sui_indexer_alt::{config::IndexerConfig, setup_indexer};
 use sui_indexer_alt_framework::{ingestion::ClientArgs, schema::watermarks, IndexerArgs};
-use sui_indexer_alt_jsonrpc::{
-    args::SystemPackageTaskArgs, config::RpcConfig, start_rpc, NodeArgs, RpcArgs,
+use sui_indexer_alt_jsonrpc::{config::RpcConfig, start_rpc, NodeArgs, RpcArgs};
+use sui_indexer_alt_reader::{
+    bigtable_reader::BigtableArgs, system_package_task::SystemPackageTaskArgs,
 };
-use sui_indexer_alt_reader::bigtable_reader::BigtableArgs;
 use sui_pg_db::{
     temp::{get_available_port, TempDb},
     Db, DbArgs,
@@ -91,7 +91,6 @@ impl FullCluster {
         Self::new_with_configs(
             Simulacrum::new(),
             IndexerArgs::default(),
-            SystemPackageTaskArgs::default(),
             IndexerConfig::example(),
             RpcConfig::default(),
             &prometheus::Registry::new(),
@@ -102,11 +101,10 @@ impl FullCluster {
 
     /// Creates a new cluster executing transactions using `executor`. The indexer is configured
     /// using `indexer_args` and `indexer_config, and the JSON-RPC server is configured using
-    /// `system_package_task_args` and `rpc_config`.
+    /// `rpc_config`.
     pub async fn new_with_configs(
         mut executor: Simulacrum,
         indexer_args: IndexerArgs,
-        system_package_task_args: SystemPackageTaskArgs,
         indexer_config: IndexerConfig,
         rpc_config: RpcConfig,
         registry: &prometheus::Registry,
@@ -126,7 +124,6 @@ impl FullCluster {
         let offchain = OffchainCluster::new(
             indexer_args,
             client_args,
-            system_package_task_args,
             indexer_config,
             rpc_config,
             registry,
@@ -243,12 +240,11 @@ impl OffchainCluster {
     ///
     /// - `indexer_args`, `client_args`, and `indexer_config` control the indexer. In particular
     ///   `client_args` is used to configure the client that the indexer uses to fetch checkpoints.
-    /// - `system_package_task_args`, and `rpc_config` control the JSON-RPC server.
+    /// - `rpc_config` control the JSON-RPC server.
     /// - `registry` is used to register metrics for the indexer and JSON-RPC server.
     pub async fn new(
         indexer_args: IndexerArgs,
         client_args: ClientArgs,
-        system_package_task_args: SystemPackageTaskArgs,
         indexer_config: IndexerConfig,
         rpc_config: RpcConfig,
         registry: &prometheus::Registry,
@@ -293,7 +289,7 @@ impl OffchainCluster {
             BigtableArgs::default(),
             rpc_args,
             NodeArgs::default(),
-            system_package_task_args,
+            SystemPackageTaskArgs::default(),
             rpc_config,
             registry,
             cancel.child_token(),

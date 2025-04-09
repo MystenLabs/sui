@@ -18,7 +18,7 @@ use serde_json::{json, Value};
 use sui_indexer_alt::config::{IndexerConfig, Merge, PrunerLayer};
 use sui_indexer_alt_e2e_tests::OffchainCluster;
 use sui_indexer_alt_framework::{ingestion::ClientArgs, IndexerArgs};
-use sui_indexer_alt_jsonrpc::{args::SystemPackageTaskArgs, config::RpcConfig};
+use sui_indexer_alt_jsonrpc::config::RpcConfig;
 use sui_transactional_test_runner::{
     create_adapter,
     offchain_state::{OffchainStateReader, TestResponse},
@@ -109,11 +109,6 @@ async fn cluster(config: &OffChainConfig) -> Arc<OffchainCluster> {
         rpc_password: None,
     };
 
-    // This configuration controls how often the RPC service checks for changes to system packages.
-    // The default polling interval is probably too slow for changes to get picked up, so tests
-    // that rely on this behaviour will always fail, but this is better than flaky behavior.
-    let system_package_task_args = SystemPackageTaskArgs::default();
-
     // The test config includes every pipeline, we configure its consistent range using the
     // off-chain config that was passed in.
     let indexer_config = IndexerConfig::for_test().merge(IndexerConfig {
@@ -130,7 +125,6 @@ async fn cluster(config: &OffChainConfig) -> Arc<OffchainCluster> {
         OffchainCluster::new(
             indexer_args,
             client_args,
-            system_package_task_args,
             indexer_config,
             rpc_config,
             &registry,
