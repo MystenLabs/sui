@@ -47,5 +47,5 @@ datatest_stable::harness!(
     r"manifest_parsing.*\.toml$",
     run_lockfile_parsing_tests,
     "tests/data/lockfile_parsing_valid",
-    r".*",
+    r"lockfile_parsing.*\.lock$",
 );
