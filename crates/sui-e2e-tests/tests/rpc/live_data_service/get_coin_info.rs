@@ -25,6 +25,7 @@ async fn get_coin_info() {
         coin_type,
         metadata,
         treasury,
+        ..
     } = grpc_client
         .get_coin_info(request)
         .await

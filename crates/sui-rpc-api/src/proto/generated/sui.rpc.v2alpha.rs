@@ -20,6 +20,11 @@ pub struct GetCoinInfoResponse {
     /// type's `0x2::coin::TreasuryCap` if it exists and has not been wrapped.
     #[prost(message, optional, tag = "3")]
     pub treasury: ::core::option::Option<CoinTreasury>,
+    /// If this coin type is a regulated coin, this field will be
+    /// populated with information about its `0x2::coin::RegulatedCoinMetadata`
+    /// object.
+    #[prost(message, optional, tag = "4")]
+    pub regulated_metadata: ::core::option::Option<RegulatedCoinMetadata>,
 }
 /// Metadata for a coin type
 #[derive(Clone, PartialEq, ::prost::Message)]
@@ -98,25 +103,76 @@ pub struct ListDynamicFieldsResponse {
 }
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct DynamicField {
-    /// Required. ObjectId of this dynamic field's parent.
-    #[prost(string, optional, tag = "1")]
-    pub parent: ::core::option::Option<::prost::alloc::string::String>,
-    /// Required. ObjectId of this dynamic field.
+    #[prost(enumeration = "dynamic_field::DynamicFieldKind", optional, tag = "1")]
+    pub kind: ::core::option::Option<i32>,
+    /// ObjectId of this dynamic field's parent.
     #[prost(string, optional, tag = "2")]
-    pub field_id: ::core::option::Option<::prost::alloc::string::String>,
-    /// Required. The type of the dynamic field "name"
+    pub parent: ::core::option::Option<::prost::alloc::string::String>,
+    /// ObjectId of this dynamic field.
     #[prost(string, optional, tag = "3")]
+    pub field_id: ::core::option::Option<::prost::alloc::string::String>,
+    /// The type of the dynamic field "name"
+    #[prost(string, optional, tag = "4")]
     pub name_type: ::core::option::Option<::prost::alloc::string::String>,
-    /// Required. The serialized move value of "name"
-    #[prost(bytes = "bytes", optional, tag = "4")]
+    /// The serialized move value of "name"
+    #[prost(bytes = "bytes", optional, tag = "5")]
     pub name_value: ::core::option::Option<::prost::bytes::Bytes>,
+    /// The type of the dynamic field "value".
+    ///
+    /// If this is a dynamic object field then this is the type of the object
+    /// itself (which is a child of this field), otherwise this is the type of the
+    /// value of this field.
+    #[prost(string, optional, tag = "6")]
+    pub value_type: ::core::option::Option<::prost::alloc::string::String>,
     /// The ObjectId of the child object when a child is a dynamic
     /// object field.
     ///
     /// The presence or absence of this field can be used to determine if a child
     /// is a dynamic field or a dynamic child object
-    #[prost(string, optional, tag = "5")]
+    #[prost(string, optional, tag = "7")]
     pub dynamic_object_id: ::core::option::Option<::prost::alloc::string::String>,
+}
+/// Nested message and enum types in `DynamicField`.
+pub mod dynamic_field {
+    #[derive(
+        Clone,
+        Copy,
+        Debug,
+        PartialEq,
+        Eq,
+        Hash,
+        PartialOrd,
+        Ord,
+        ::prost::Enumeration
+    )]
+    #[repr(i32)]
+    pub enum DynamicFieldKind {
+        Unknown = 0,
+        Field = 1,
+        Object = 2,
+    }
+    impl DynamicFieldKind {
+        /// String value of the enum field names used in the ProtoBuf definition.
+        ///
+        /// The values are not transformed in any way and thus are considered stable
+        /// (if the ProtoBuf definition does not change) and safe for programmatic use.
+        pub fn as_str_name(&self) -> &'static str {
+            match self {
+                Self::Unknown => "DYNAMIC_FIELD_KIND_UNKNOWN",
+                Self::Field => "FIELD",
+                Self::Object => "OBJECT",
+            }
+        }
+        /// Creates an enum from field names used in the ProtoBuf definition.
+        pub fn from_str_name(value: &str) -> ::core::option::Option<Self> {
+            match value {
+                "DYNAMIC_FIELD_KIND_UNKNOWN" => Some(Self::Unknown),
+                "FIELD" => Some(Self::Field),
+                "OBJECT" => Some(Self::Object),
+                _ => None,
+            }
+        }
+    }
 }
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct SimulateTransactionRequest {
@@ -177,13 +233,15 @@ pub struct ListOwnedObjectsResponse {
 }
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct OwnedObject {
-    #[prost(string, optional, tag = "1")]
-    pub owner: ::core::option::Option<::prost::alloc::string::String>,
     #[prost(string, optional, tag = "2")]
     pub object_id: ::core::option::Option<::prost::alloc::string::String>,
     #[prost(uint64, optional, tag = "3")]
     pub version: ::core::option::Option<u64>,
     #[prost(string, optional, tag = "4")]
+    pub digest: ::core::option::Option<::prost::alloc::string::String>,
+    #[prost(message, optional, tag = "5")]
+    pub owner: ::core::option::Option<super::v2beta::Owner>,
+    #[prost(string, optional, tag = "6")]
     pub object_type: ::core::option::Option<::prost::alloc::string::String>,
 }
 /// Generated client implementations.

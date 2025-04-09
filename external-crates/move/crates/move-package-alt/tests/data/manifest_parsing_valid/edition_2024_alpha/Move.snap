@@ -1,4 +1,8 @@
 ---
-source: crates/move-package-alt/tests/manifest_parsing_tests.rs
+source: crates/move-package-alt/tests/parsing_tests.rs
 ---
-Manifest { package: PackageMetadata { name: "name", edition: "2024.alpha", metadata: () }, environments: {"mainnet": "35834a8a"}, dependencies: {}, dep_overrides: {} }
+error: unsupported edition '2024.alpha', expected one of '2024, 2024.beta, legacy'
+  ┌─ tests/data/manifest_parsing_valid/edition_2024_alpha/Move.toml:3:11
+  │
+3 │ edition = "2024.alpha"
+  │           ^^^^^^^^^^^^

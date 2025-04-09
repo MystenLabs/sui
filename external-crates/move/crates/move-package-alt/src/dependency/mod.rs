@@ -53,6 +53,7 @@ pub enum ManifestDependencyInfo<F: MoveFlavor> {
 /// we want to retain that information for source verification.
 #[derive(Debug, Serialize, Deserialize)]
 #[derive_where(Clone)]
+#[serde(untagged)]
 pub enum PinnedDependencyInfo<F: MoveFlavor + ?Sized> {
     Git(GitDependency<Pinned>),
     Local(LocalDependency),
