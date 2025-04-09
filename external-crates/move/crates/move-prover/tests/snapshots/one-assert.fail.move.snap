@@ -9,4 +9,4 @@ error: prover::ensures assertion does not hold
 13 │   ensures(false);
    │   ^^^^^^^^^^^^^^
    │
-   =     at tests/inputs/one-assert.fail.move:12: foo_spec_failing
+   =     at tests/inputs/one-assert.fail.move:12: foo_failing_spec
