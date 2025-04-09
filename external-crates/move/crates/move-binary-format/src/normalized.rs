@@ -126,8 +126,13 @@ pub struct Struct<S: Hash + Eq> {
     pub name: S,
     pub abilities: AbilitySet,
     pub type_parameters: Vec<DatatypeTyParameter>,
-    pub fields: IndexMap<S, Rc<Field<S>>>,
+    pub fields: Fields<S>,
 }
+
+/// Normalized version of fields for both structs and variants
+#[cfg_attr(test, derive(Clone))]
+#[derive(Debug)]
+pub struct Fields<S>(pub IndexMap<S, Rc<Field<S>>>);
 
 /// Normalized version of a `FieldDefinition`. The `name` is included even though it is
 /// metadata that it is ignored by the VM. The reason: names are important to clients. We would
@@ -173,7 +178,7 @@ pub struct Enum<S: Hash + Eq> {
 #[derive(Debug)]
 pub struct Variant<S: Hash + Eq> {
     pub name: S,
-    pub fields: IndexMap<S, Rc<Field<S>>>,
+    pub fields: Fields<S>,
 }
 
 /// Normalized version of a `VariantJumpTable`. Not safe to compare without an associated
@@ -587,7 +592,7 @@ fn map_keyed_equivalent<K: Hash + Eq, V, P: FnMut(&V, &V) -> bool>(
 ) -> bool {
     a.len() == b.len()
         && a.iter()
-            .all(|(k, v1)| b.get(k).map_or(false, |v2| equivalent(v1, v2)))
+            .all(|(k, v1)| b.get(k).is_some_and(|v2| equivalent(v1, v2)))
 }
 
 impl<S: Hash + Eq> Tables<S> {
@@ -770,15 +775,9 @@ impl<S: Hash + Eq> Struct<S> {
         let fields = match &def.field_information {
             StructFieldInformation::Native => {
                 // Pretend for compatibility checking no fields
-                IndexMap::new()
+                Fields(IndexMap::new())
             }
-            StructFieldInformation::Declared(fields) => fields
-                .iter()
-                .map(|f| {
-                    let f = Field::new(pool, m, f);
-                    (f.name.clone(), Rc::new(f))
-                })
-                .collect(),
+            StructFieldInformation::Declared(fields) => Fields::new(pool, m, fields),
         };
         let name = pool.intern(m.identifier_at(handle.name));
         Struct {
@@ -803,7 +802,35 @@ impl<S: Hash + Eq> Struct<S> {
         name == &other.name
             && abilities == &other.abilities
             && type_parameters == &other.type_parameters
-            && map_ordered_equivalent(fields, &other.fields, |f1, f2| f1.equivalent(f2))
+            && fields.equivalent(&other.fields)
+    }
+}
+
+impl<S> Fields<S> {
+    pub fn new<Pool: StringPool<String = S>>(
+        pool: &mut Pool,
+        m: &CompiledModule,
+        fields: &[FieldDefinition],
+    ) -> Self
+    where
+        S: Hash + Eq + Clone,
+    {
+        let fields = fields
+            .iter()
+            .map(|f| {
+                let f = Field::new(pool, m, f);
+                (f.name.clone(), Rc::new(f))
+            })
+            .collect();
+        Fields(fields)
+    }
+
+    pub fn equivalent(&self, other: &Self) -> bool
+    where
+        S: Eq,
+    {
+        let Self(fields) = self;
+        map_ordered_equivalent(fields, &other.0, |f1, f2| f1.equivalent(f2))
     }
 }
 
@@ -960,21 +987,13 @@ impl<S: Hash + Eq> Variant<S> {
     {
         Self {
             name: pool.intern(m.identifier_at(v.variant_name)),
-            fields: v
-                .fields
-                .iter()
-                .map(|f| {
-                    let f = Field::new(pool, m, f);
-                    (f.name.clone(), Rc::new(f))
-                })
-                .collect(),
+            fields: Fields::new(pool, m, &v.fields),
         }
     }
 
     pub fn equivalent(&self, other: &Self) -> bool {
         let Self { name, fields } = self;
-        name == &other.name
-            && map_ordered_equivalent(fields, &other.fields, |f1, f2| f1.equivalent(f2))
+        name == &other.name && fields.equivalent(&other.fields)
     }
 }
 
@@ -1040,7 +1059,7 @@ impl<S: Hash + Eq> FieldRef<S> {
     ) -> Self {
         let field_handle = m.field_handle_at(idx);
         let struct_ = tables.struct_defs[field_handle.owner.0 as usize].clone();
-        let field = struct_.fields[field_handle.field as usize].clone();
+        let field = struct_.fields.0[field_handle.field as usize].clone();
         let instantiation = instantiation
             .map(|idx| tables.signatures[idx.0 as usize].clone())
             .unwrap_or_else(|| tables.empty_signature.clone());

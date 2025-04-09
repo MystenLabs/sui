@@ -1008,7 +1008,7 @@ fn check_exact_and_unchange_same_module_permutations() {
         Visibility::Private as u8,
         Permutation::new(vec![1, 0]),
     ));
-    assert!(!m2.equals(&m3));
+    assert!(!m2.equivalent(&m3));
     assert!(InclusionCheck::Equal.check(&m2, &m3).is_ok());
     assert!(InclusionCheck::Equal.check(&m3, &m2).is_ok());
     // double inclusion
