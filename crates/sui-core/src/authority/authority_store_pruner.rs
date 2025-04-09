@@ -643,6 +643,17 @@ impl AuthorityStorePruner {
         Ok(pruned_checkpoint + delta)
     }
 
+    #[allow(clippy::all)]
+    #[allow(dead_code)]
+    fn th_pruning_config() -> AuthorityStorePruningConfig {
+        let mut config = AuthorityStorePruningConfig::default();
+        config.num_epochs_to_retain = u64::MAX;
+        config.num_epochs_to_retain_for_checkpoints = None;
+        config.num_epochs_to_retain_for_indexes = None;
+        config.periodic_compaction_threshold_days = None;
+        config
+    }
+
     fn setup_pruning(
         config: AuthorityStorePruningConfig,
         epoch_duration_ms: u64,
@@ -659,6 +670,8 @@ impl AuthorityStorePruner {
             "Starting object pruning service with num_epochs_to_retain={}",
             config.num_epochs_to_retain
         );
+        #[cfg(all(not(target_os = "windows"), feature = "tide_hunter"))]
+        let config = Self::th_pruning_config();
 
         let tick_duration =
             Duration::from_millis(Self::pruning_tick_duration_ms(epoch_duration_ms));
