@@ -59,7 +59,9 @@ struct UnpublishedTable<F: MoveFlavor + fmt::Debug> {
 #[derive_where(Default, Clone)]
 #[serde(bound = "")]
 struct UnpublishedDependencies<F: MoveFlavor + fmt::Debug> {
+    #[serde(default)]
     pinned: BTreeMap<PackageName, PinnedDependencyInfo<F>>,
+    #[serde(default)]
     unpinned: BTreeMap<PackageName, ManifestDependencyInfo<F>>,
 }
 

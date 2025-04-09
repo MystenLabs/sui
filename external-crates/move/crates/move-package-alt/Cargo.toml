@@ -20,7 +20,7 @@ datatest-stable.workspace = true
 insta.workspace = true
 
 [[test]]
-name = "manifest_parsing_tests"
+name = "parsing_tests"
 harness = false
 
 
