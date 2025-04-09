@@ -3,9 +3,24 @@
 // SPDX-License-Identifier: Apache-2.0
 
 mod manifest_error;
+use append_only_vec::AppendOnlyVec;
+use codespan_reporting::files::SimpleFile;
+use codespan_reporting::files::SimpleFiles;
 pub use manifest_error::ManifestError;
 pub use manifest_error::ManifestErrorKind;
 
+mod located;
+pub use located::{with_file, Located};
+
+mod files;
+pub use files::FileHandle;
+
+mod resolver_error;
+
+use std::fs;
+use std::path::Path;
+use std::sync::LazyLock;
+use std::sync::Mutex;
 use std::{ops::Range, path::PathBuf};
 
 use codespan_reporting::diagnostic::Diagnostic;
@@ -32,6 +47,8 @@ pub enum PackageError {
 
     #[error(transparent)]
     Toml(#[from] toml_edit::de::Error),
+    //    #[error(transparent)]
+    //    ExternalResolver(#[from]
 }
 
 impl PackageError {

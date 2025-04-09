@@ -15,6 +15,7 @@ anyhow.workspace = true
 derive-where.workspace = true
 thiserror.workspace = true
 codespan-reporting.workspace = true
+append-only-vec = "0.1.7"
 
 [dev-dependencies]
 move-command-line-common.workspace = true
@@ -24,5 +25,3 @@ insta.workspace = true
 [[test]]
 name = "parsing_tests"
 harness = false
-
-

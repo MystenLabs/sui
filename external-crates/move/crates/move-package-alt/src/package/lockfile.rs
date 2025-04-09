@@ -20,6 +20,7 @@ use toml_edit::{
 
 use crate::{
     dependency::{ManifestDependencyInfo, PinnedDependencyInfo},
+    errors::{with_file, Located},
     flavor::MoveFlavor,
 };
 
@@ -71,10 +72,11 @@ impl<F: MoveFlavor + fmt::Debug> Lockfile<F> {
     pub fn read_from(path: impl AsRef<Path>) -> anyhow::Result<Self> {
         // Parse `Move.lock`
         let lockfile_name = path.as_ref().join("Move.lock");
-        let Ok(lockfile_str) = read_to_string(&lockfile_name) else {
+        if !lockfile_name.exists() {
             return Ok(Self::default());
         };
-        let mut lockfiles = toml_edit::de::from_str::<Self>(&lockfile_str)?;
+        let mut lockfiles: Self =
+            with_file(lockfile_name, |contents| toml_edit::de::from_str(&contents))??;
 
         // Add in `Move.<env>.lock` files
         let dir = std::fs::read_dir(path)?;
