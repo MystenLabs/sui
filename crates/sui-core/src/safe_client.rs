@@ -320,7 +320,6 @@ where
         let include_events = request.include_events;
         let include_input_objects = request.include_input_objects;
         let include_output_objects = request.include_output_objects;
-        let include_auxiliary_data = request.include_auxiliary_data;
         let response = self
             .authority_client
             .submit_transaction(request, client_addr)
@@ -334,8 +333,8 @@ where
             response.input_objects,
             include_output_objects,
             response.output_objects,
-            include_auxiliary_data,
-            response.auxiliary_data,
+            false,
+            None,
         )?;
 
         let verified_resp = check_error!(

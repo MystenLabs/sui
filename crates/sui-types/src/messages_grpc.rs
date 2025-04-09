@@ -232,8 +232,6 @@ pub struct RawSubmitTxRequest {
     pub include_input_objects: bool,
     #[prost(bool, tag = "4")]
     pub include_output_objects: bool,
-    #[prost(bool, tag = "5")]
-    pub include_auxiliary_data: bool,
 }
 
 /// Serialized response type for submit transaction validator API.

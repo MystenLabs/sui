@@ -528,7 +528,6 @@ impl ValidatorService {
         let include_events = request.include_events;
         let include_input_objects = request.include_input_objects;
         let include_output_objects = request.include_output_objects;
-        let include_auxiliary_data = request.include_auxiliary_data;
         transaction.validity_check(epoch_store.protocol_config(), epoch_store.epoch())?;
 
         // Check system overload
@@ -598,7 +597,7 @@ impl ValidatorService {
             include_events,
             include_input_objects,
             include_output_objects,
-            include_auxiliary_data,
+            false,
             &epoch_store,
             true,
         )

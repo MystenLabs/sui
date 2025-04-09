@@ -29,7 +29,6 @@ impl SubmitTxRequest {
             include_events: self.include_events,
             include_input_objects: self.include_input_objects,
             include_output_objects: self.include_output_objects,
-            include_auxiliary_data: self.include_auxiliary_data,
         })
     }
 }
