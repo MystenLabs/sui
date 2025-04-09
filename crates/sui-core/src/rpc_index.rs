@@ -204,60 +204,6 @@ impl IndexStoreTables {
         )
     }
 
-    /// Lists all Column Families present in the on-disk database
-    fn list_cfs(&self) -> Vec<String> {
-        let path = self.meta.db.path_for_pruning();
-        typed_store::rocks::list_tables(path.to_path_buf()).unwrap()
-    }
-
-    /// Lists all Column Families that are known about in-code as defined in `IndexStoreTables`
-    fn known_cfs() -> Vec<String> {
-        IndexStoreTables::describe_tables().into_keys().collect()
-    }
-
-    /// Lists all Column Families that are present on-disk but not known by this version of code as
-    /// defined in `IndexStoreTables`
-    fn unknown_cfs(&self) -> Vec<String> {
-        let known_cfs = Self::known_cfs();
-        self.list_cfs()
-            .into_iter()
-            .filter(|cf| !known_cfs.contains(cf))
-            .collect()
-    }
-
-    fn drop_cf(&mut self, cf: &str) -> Result<(), TypedStoreError> {
-        self.meta
-            .db
-            .drop_cf(cf)
-            .map_err(typed_store::rocks::errors::typed_store_err_from_rocks_err)
-    }
-
-    fn create_cf(&mut self, cf: &str) -> Result<(), TypedStoreError> {
-        self.meta
-            .db
-            .create_cf(cf, &typed_store::rocks::default_db_options().options)
-            .map_err(typed_store::rocks::errors::typed_store_err_from_rocks_err)
-    }
-
-    fn reset_cf(&mut self, cf: &str) -> Result<(), TypedStoreError> {
-        self.drop_cf(cf)?;
-        self.create_cf(cf)
-    }
-
-    fn reset_db(&mut self) -> Result<(), TypedStoreError> {
-        // Drop unknown cfs
-        for cf in self.unknown_cfs() {
-            self.drop_cf(&cf)?;
-        }
-
-        // Reset known cfs
-        for cf in Self::known_cfs() {
-            self.reset_cf(&cf)?;
-        }
-
-        Ok(())
-    }
-
     fn needs_to_do_initialization(&self, checkpoint_store: &CheckpointStore) -> bool {
         (match self.meta.get(&()) {
             Ok(Some(metadata)) => metadata.version != CURRENT_DB_VERSION,
@@ -706,12 +652,17 @@ impl RpcIndexStore {
         let path = Self::db_path(dir);
 
         let tables = {
-            let mut tables = IndexStoreTables::open(&path);
+            let tables = IndexStoreTables::open(&path);
 
             // If the index tables are uninitialized or on an older version then we need to
             // populate them
             if tables.needs_to_do_initialization(checkpoint_store) {
-                tables.reset_db().expect("unable to reset rpc-index db");
+                let mut tables = {
+                    drop(tables);
+                    typed_store::rocks::safe_drop_db(path.clone())
+                        .expect("unable to destroy old rpc-index db");
+                    IndexStoreTables::open(path)
+                };
 
                 tables
                     .init(
