@@ -178,7 +178,7 @@ impl FunctionTargetProcessor for SpecWellFormedAnalysisProcessor {
             return  data;
         }
 
-        let underlying_func = func_env.module_env.get_function(underlying_func_id.unwrap().id);
+        let underlying_func = env.get_function(underlying_func_id.unwrap().clone());
 
         // Signatures Checking
 
