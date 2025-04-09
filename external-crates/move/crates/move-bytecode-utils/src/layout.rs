@@ -356,7 +356,7 @@ impl<'a, T: GetModule> SerdeLayoutBuilder<'a, T> {
             .variants
             .values()
             .enumerate()
-            .map(|(i, (_, v))| {
+            .map(|(i, v)| {
                 let fields = v
                     .fields
                     .0
