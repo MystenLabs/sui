@@ -26,6 +26,7 @@ url.workspace = true
 simulacrum.workspace = true
 sui-indexer-alt.workspace = true
 sui-indexer-alt-framework.workspace = true
+sui-indexer-alt-graphql.workspace = true
 sui-indexer-alt-jsonrpc.workspace = true
 sui-indexer-alt-reader.workspace = true
 sui-pg-db.workspace = true
@@ -48,7 +49,6 @@ telemetry-subscribers.workspace = true
 
 move-core-types.workspace = true
 
-sui-indexer-alt-reader.workspace = true
 sui-json-rpc-types.workspace = true
 sui-macros.workspace = true
 sui-move-build.workspace = true

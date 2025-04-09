@@ -11,14 +11,15 @@ use std::{
     time::Duration,
 };
 
-use anyhow::{bail, Context};
+use anyhow::Context;
 use prometheus::Registry;
-use reqwest::Client;
+use reqwest::{header::HeaderName, Client};
 use serde_json::{json, Value};
 use sui_indexer_alt::config::{IndexerConfig, Merge, PrunerLayer};
 use sui_indexer_alt_e2e_tests::OffchainCluster;
 use sui_indexer_alt_framework::{ingestion::ClientArgs, IndexerArgs};
-use sui_indexer_alt_jsonrpc::config::RpcConfig;
+use sui_indexer_alt_graphql::config::RpcConfig as GraphQlConfig;
+use sui_indexer_alt_jsonrpc::config::RpcConfig as JsonRpcConfig;
 use sui_transactional_test_runner::{
     create_adapter,
     offchain_state::{OffchainStateReader, TestResponse},
@@ -58,8 +59,41 @@ impl OffchainStateReader for OffchainReader {
         unimplemented!("Waiting for pruned checkpoints is not supported in these tests (add it if you need it)");
     }
 
-    async fn execute_graphql(&self, _: String, _: bool) -> anyhow::Result<TestResponse> {
-        bail!("GraphQL queries are not supported in these tests")
+    async fn execute_graphql(
+        &self,
+        query: String,
+        show_usage: bool,
+    ) -> anyhow::Result<TestResponse> {
+        let query = json!({ "query": query });
+
+        let mut request = self.client.post(self.cluster.graphql_url()).json(&query);
+
+        if show_usage {
+            request = request.header(HeaderName::from_static("x-sui-rpc-show-usage"), "true");
+        }
+
+        let response = request
+            .send()
+            .await
+            .context("Request to GraphQL server failed")?;
+
+        let mut headers = response.headers().clone();
+        headers.remove("date");
+
+        let version = headers
+            .remove("x-sui-rpc-version")
+            .and_then(|v| v.to_str().ok().map(|s| s.to_owned()));
+
+        let body: Value = response
+            .json()
+            .await
+            .context("Failed to parse GraphQL response")?;
+
+        Ok(TestResponse {
+            response_body: serde_json::to_string_pretty(&body)?,
+            http_headers: Some(headers),
+            service_version: version,
+        })
     }
 
     async fn execute_jsonrpc(&self, method: String, params: Value) -> anyhow::Result<TestResponse> {
@@ -72,7 +106,7 @@ impl OffchainStateReader for OffchainReader {
 
         let response = self
             .client
-            .post(self.cluster.rpc_url())
+            .post(self.cluster.jsonrpc_url())
             .json(&query)
             .send()
             .await
@@ -119,14 +153,16 @@ async fn cluster(config: &OffChainConfig) -> Arc<OffchainCluster> {
         ..Default::default()
     });
 
-    let rpc_config = RpcConfig::default();
+    let jsonrpc_config = JsonRpcConfig::default();
+    let graphql_config = GraphQlConfig::default();
 
     Arc::new(
         OffchainCluster::new(
             indexer_args,
             client_args,
             indexer_config,
-            rpc_config,
+            jsonrpc_config,
+            graphql_config,
             &registry,
             cancel,
         )

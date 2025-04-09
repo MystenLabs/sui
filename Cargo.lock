@@ -14021,6 +14021,7 @@ dependencies = [
  "simulacrum",
  "sui-indexer-alt",
  "sui-indexer-alt-framework",
+ "sui-indexer-alt-graphql",
  "sui-indexer-alt-jsonrpc",
  "sui-indexer-alt-reader",
  "sui-json-rpc-types",
