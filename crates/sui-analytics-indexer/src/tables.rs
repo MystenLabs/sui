@@ -97,6 +97,16 @@ pub(crate) struct TransactionEntry {
     pub(crate) transaction_position: u64,
 }
 
+// Raw Transaction bytes (used by security team).
+#[derive(Serialize, Clone, SerializeParquet)]
+pub(crate) struct TransactionBCSEntry {
+    pub(crate) transaction_digest: String,
+    pub(crate) checkpoint: u64,
+    pub(crate) epoch: u64,
+    pub(crate) timestamp_ms: u64,
+    pub(crate) bcs: String,
+}
+
 // Event information.
 // Events identity is via `transaction_digest` and `event_index`.
 #[derive(Serialize, Clone, SerializeParquet)]
