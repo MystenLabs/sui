@@ -3326,6 +3326,7 @@ impl AuthorityPerEpochStore {
         randomness_round: Option<RandomnessRound>,
         cancelled_txns: &BTreeMap<TransactionDigest, CancelConsensusCertificateReason>,
         output: &mut ConsensusCommitOutput,
+        dkg_failed: bool,
     ) -> SuiResult {
         // If randomness_round is set, we know that eventually there will be a randomness state update transaction.
         // We create a placeholder transaction so that the SharedObjVerManager
@@ -3344,12 +3345,50 @@ impl AuthorityPerEpochStore {
                 self.epoch(),
             )
         });
+        let checkpoint_height = self.calculate_pending_checkpoint_height(output.consensus_round());
+        let first_accumulator_update = if self.accumulator_state_enabled() {
+            Some(VerifiedExecutableTransaction::new_system(
+                VerifiedTransaction::new_accumulator_state_update(
+                    self.epoch(),
+                    checkpoint_height,
+                    self.epoch_start_config()
+                        .accumulator_root_obj_initial_shared_version()
+                        .unwrap(),
+                    vec![],
+                    vec![],
+                ),
+                self.epoch(),
+            ))
+        } else {
+            None
+        };
+        let should_write_random_checkpoint =
+            randomness_round.is_some() || (dkg_failed && !randomness_transactions.is_empty());
+        let second_accumulator_update =
+            if self.accumulator_state_enabled() && should_write_random_checkpoint {
+                Some(VerifiedExecutableTransaction::new_system(
+                    VerifiedTransaction::new_accumulator_state_update(
+                        self.epoch(),
+                        checkpoint_height + 1,
+                        self.epoch_start_config()
+                            .accumulator_root_obj_initial_shared_version()
+                            .unwrap(),
+                        vec![],
+                        vec![],
+                    ),
+                    self.epoch(),
+                ))
+            } else {
+                None
+            };
         let all_certs = non_randomness_transactions
             .iter()
+            .chain(first_accumulator_update.iter())
             // randomness_state_update must be before randomness_transactions to make sure the version
             // of the randomness state object is updated before it is used in randomness transactions.
             .chain(randomness_state_update.iter())
-            .chain(randomness_transactions.iter());
+            .chain(randomness_transactions.iter())
+            .chain(second_accumulator_update.iter());
         let ConsensusSharedObjVerAssignment {
             shared_input_next_versions,
             assigned_versions,
@@ -3421,6 +3460,7 @@ impl AuthorityPerEpochStore {
             None,
             &BTreeMap::new(),
             &mut output,
+            false,
         )?;
         let mut batch = self.db_batch()?;
         output.set_default_commit_stats_for_testing();
@@ -3667,6 +3707,7 @@ impl AuthorityPerEpochStore {
             randomness_round,
             &cancelled_txns,
             output,
+            dkg_failed,
         )?;
 
         let (lock, final_round) = self.process_end_of_publish_transactions_and_reconfig(

@@ -109,6 +109,10 @@ impl ConsensusCommitOutput {
         self.deleted_deferred_txns.iter().cloned()
     }
 
+    pub fn consensus_round(&self) -> Round {
+        self.consensus_round
+    }
+
     fn get_randomness_last_round_timestamp(&self) -> Option<TimestampMs> {
         self.next_randomness_round.as_ref().map(|(_, ts)| *ts)
     }
