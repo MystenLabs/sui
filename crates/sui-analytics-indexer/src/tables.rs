@@ -123,11 +123,7 @@ pub(crate) struct EventEntry {
     pub(crate) package: String,
     pub(crate) module: String,
     pub(crate) event_type: String,
-    // raw event bytes
-    // pub(crate) bcs: Vec<u8>,
-    // We represent them in base64 encoding so they work with the csv.
-    // TODO: review and possibly move back to Vec<u8>
-    pub(crate) bcs: String,
+    pub(crate) bcs_length: u64,
     pub(crate) event_json: String,
 }
 
@@ -228,11 +224,7 @@ pub(crate) struct MovePackageEntry {
     pub(crate) checkpoint: u64,
     pub(crate) epoch: u64,
     pub(crate) timestamp_ms: u64,
-    // raw package bytes
-    // pub(crate) bcs: Vec<u8>,
-    // We represent them in base64 encoding so they work with the csv.
-    // TODO: review and possibly move back to Vec<u8>
-    pub(crate) bcs: String,
+    pub(crate) bcs_length: u64,
     // txn publishing the package
     pub(crate) transaction_digest: String,
     pub(crate) package_version: Option<u64>,
