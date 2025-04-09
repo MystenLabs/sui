@@ -1,8 +1,9 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use async_graphql::Object;
+use async_graphql::{Context, Object};
 use futures::future::try_join_all;
+use sui_types::digests::ChainIdentifier;
 
 use crate::error::RpcError;
 
@@ -20,6 +21,12 @@ pub struct Query;
 
 #[Object]
 impl Query {
+    /// First four bytes of the network's genesis checkpoint digest (uniquely identifies the network), hex-encoded.
+    async fn chain_identifier(&self, ctx: &Context<'_>) -> Result<String, RpcError> {
+        let chain_id: ChainIdentifier = *ctx.data()?;
+        Ok(chain_id.to_string())
+    }
+
     /// Fetch objects by their addresses and versions.
     ///
     /// Returns a list of objects that is guaranteed to be the same length as `keys`. If an object in `keys` could not be found in the store, its corresponding entry in the result will be `null`. This could be because the object never existed, or because it was pruned.

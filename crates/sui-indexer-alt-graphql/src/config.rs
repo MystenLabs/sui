@@ -20,18 +20,40 @@ use crate::{
 pub struct RpcConfig {
     /// Constraints that the service will impose on requests.
     pub limits: Limits,
+
+    /// Configuration for health checks.
+    pub health: HealthConfig,
+
+    /// Configuration for the watermark task.
+    pub watermark: WatermarkConfig,
 }
 
 #[DefaultConfig]
 #[derive(Clone, Default, Debug)]
 pub struct RpcLayer {
     pub limits: LimitsLayer,
+    pub health: HealthLayer,
+    pub watermark: WatermarkLayer,
 
     #[serde(flatten)]
     pub extra: toml::Table,
 }
 
+#[derive(Clone)]
+pub struct HealthConfig {
+    /// How long to wait for a health check to complete before timing out.
+    pub max_checkpoint_lag: Duration,
+}
+
 #[DefaultConfig]
+#[derive(Default, Clone, Debug)]
+pub struct HealthLayer {
+    pub max_checkpoint_lag_ms: Option<u64>,
+
+    #[serde(flatten)]
+    pub extra: toml::Table,
+}
+
 pub struct Limits {
     /// Time (in milliseconds) to wait for a transaction to be executed and the results returned
     /// from GraphQL. If the transaction takes longer than this time to execute, the request will
@@ -112,10 +134,30 @@ pub struct LimitsLayer {
     pub extra: toml::Table,
 }
 
+pub struct WatermarkConfig {
+    /// How long to wait between updating the watermark.
+    pub watermark_polling_interval: Duration,
+
+    /// Pipelines from the database that are tracked for watermark purposes.
+    pub pg_pipelines: Vec<String>,
+}
+
+#[DefaultConfig]
+#[derive(Default, Clone, Debug)]
+pub struct WatermarkLayer {
+    pub watermark_polling_interval_ms: Option<u64>,
+    pub pg_pipelines: Option<Vec<String>>,
+
+    #[serde(flatten)]
+    pub extra: toml::Table,
+}
+
 impl RpcLayer {
     pub fn example() -> Self {
         Self {
             limits: Limits::default().into(),
+            health: HealthConfig::default().into(),
+            watermark: WatermarkConfig::default().into(),
             extra: Default::default(),
         }
     }
@@ -124,6 +166,20 @@ impl RpcLayer {
         check_extra("top-level", mem::take(&mut self.extra));
         RpcConfig {
             limits: self.limits.finish(Limits::default()),
+            health: self.health.finish(HealthConfig::default()),
+            watermark: self.watermark.finish(WatermarkConfig::default()),
+        }
+    }
+}
+
+impl HealthLayer {
+    pub(crate) fn finish(mut self, base: HealthConfig) -> HealthConfig {
+        check_extra("health", mem::take(&mut self.extra));
+        HealthConfig {
+            max_checkpoint_lag: self
+                .max_checkpoint_lag_ms
+                .map(Duration::from_millis)
+                .unwrap_or(base.max_checkpoint_lag),
         }
     }
 }
@@ -204,6 +260,28 @@ impl LimitsLayer {
     }
 }
 
+impl WatermarkLayer {
+    pub(crate) fn finish(mut self, base: WatermarkConfig) -> WatermarkConfig {
+        check_extra("watermark", mem::take(&mut self.extra));
+        WatermarkConfig {
+            watermark_polling_interval: self
+                .watermark_polling_interval_ms
+                .map(Duration::from_millis)
+                .unwrap_or(base.watermark_polling_interval),
+            pg_pipelines: self.pg_pipelines.unwrap_or(base.pg_pipelines),
+        }
+    }
+}
+
+impl From<HealthConfig> for HealthLayer {
+    fn from(value: HealthConfig) -> Self {
+        Self {
+            max_checkpoint_lag_ms: Some(value.max_checkpoint_lag.as_millis() as u64),
+            extra: Default::default(),
+        }
+    }
+}
+
 impl From<Limits> for LimitsLayer {
     fn from(value: Limits) -> Self {
         Self {
@@ -222,6 +300,24 @@ impl From<Limits> for LimitsLayer {
             max_type_nodes: Some(value.max_type_nodes),
             max_move_value_depth: Some(value.max_move_value_depth),
             extra: Default::default(),
+        }
+    }
+}
+
+impl From<WatermarkConfig> for WatermarkLayer {
+    fn from(value: WatermarkConfig) -> Self {
+        Self {
+            watermark_polling_interval_ms: Some(value.watermark_polling_interval.as_millis() as u64),
+            pg_pipelines: Some(value.pg_pipelines),
+            extra: Default::default(),
+        }
+    }
+}
+
+impl Default for HealthConfig {
+    fn default() -> Self {
+        Self {
+            max_checkpoint_lag: Duration::from_secs(300),
         }
     }
 }
@@ -266,6 +362,37 @@ impl Default for Limits {
             max_type_argument_width,
             max_type_nodes,
             max_move_value_depth,
+        }
+    }
+}
+
+impl Default for WatermarkConfig {
+    fn default() -> Self {
+        Self {
+            watermark_polling_interval: Duration::from_millis(500),
+            pg_pipelines: vec![
+                "coin_balance_buckets".to_owned(),
+                "cp_sequence_numbers".to_owned(),
+                "ev_emit_mod".to_owned(),
+                "ev_struct_inst".to_owned(),
+                "kv_checkpoints".to_owned(),
+                "kv_epoch_ends".to_owned(),
+                "kv_epoch_starts".to_owned(),
+                "kv_feature_flags".to_owned(),
+                "kv_objects".to_owned(),
+                "kv_protocol_configs".to_owned(),
+                "kv_transactions".to_owned(),
+                "obj_info".to_owned(),
+                "obj_versions".to_owned(),
+                "sum_displays".to_owned(),
+                "sum_packages".to_owned(),
+                "tx_affected_addresses".to_owned(),
+                "tx_affected_objects".to_owned(),
+                "tx_balance_changes".to_owned(),
+                "tx_calls".to_owned(),
+                "tx_digests".to_owned(),
+                "tx_kinds".to_owned(),
+            ],
         }
     }
 }
