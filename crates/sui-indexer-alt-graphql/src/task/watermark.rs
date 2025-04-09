@@ -8,7 +8,7 @@ use std::{
 };
 
 use anyhow::ensure;
-use chrono::DateTime;
+use chrono::{DateTime, Utc};
 use diesel::{
     sql_query,
     sql_types::{Array, BigInt, Text},
@@ -48,11 +48,11 @@ pub(crate) struct WatermarkTask {
 /// lowerbounds are per-pipeline.
 #[derive(Clone, Default)]
 pub(crate) struct Watermarks {
-    /// The upperbound across all pipelines. The epoch and checkpoint bounds are inclusive and
-    /// the transaction bound is exclusive.
+    /// The upperbound across all pipelines (the minimal high watermarks across all pipelines). The
+    /// epoch and checkpoint bounds are inclusive and the transaction bound is exclusive.
     global_hi: Watermark,
 
-    /// Timestamp for the inclusive upperbound checkpoint.
+    /// Timestamp for the inclusive global upperbound checkpoint.
     timestamp_ms_hi_inclusive: i64,
 
     /// Per-pipeline inclusive lowerbound watermarks
@@ -259,5 +259,11 @@ impl Watermarks {
         }
 
         Ok(watermarks)
+    }
+
+    /// Timestamp corresponding to high watermark. Can be `None` if the timestamp is out of range
+    /// (should not happen under normal operation).
+    pub(crate) fn timestamp_hi(&self) -> Option<DateTime<Utc>> {
+        DateTime::from_timestamp_millis(self.timestamp_ms_hi_inclusive)
     }
 }

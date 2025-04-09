@@ -21,6 +21,9 @@ pub struct RpcConfig {
     /// Constraints that the service will impose on requests.
     pub limits: Limits,
 
+    /// Configuration for health checks.
+    pub health: HealthConfig,
+
     /// Configuration for the watermark task.
     pub watermark: WatermarkConfig,
 }
@@ -29,13 +32,28 @@ pub struct RpcConfig {
 #[derive(Clone, Default, Debug)]
 pub struct RpcLayer {
     pub limits: LimitsLayer,
+    pub health: HealthLayer,
     pub watermark: WatermarkLayer,
 
     #[serde(flatten)]
     pub extra: toml::Table,
 }
 
+#[derive(Clone)]
+pub struct HealthConfig {
+    /// How long to wait for a health check to complete before timing out.
+    pub max_checkpoint_lag: Duration,
+}
+
 #[DefaultConfig]
+#[derive(Default, Clone, Debug)]
+pub struct HealthLayer {
+    pub max_checkpoint_lag_ms: Option<u64>,
+
+    #[serde(flatten)]
+    pub extra: toml::Table,
+}
+
 pub struct Limits {
     /// Time (in milliseconds) to wait for a transaction to be executed and the results returned
     /// from GraphQL. If the transaction takes longer than this time to execute, the request will
@@ -138,6 +156,7 @@ impl RpcLayer {
     pub fn example() -> Self {
         Self {
             limits: Limits::default().into(),
+            health: HealthConfig::default().into(),
             watermark: WatermarkConfig::default().into(),
             extra: Default::default(),
         }
@@ -147,7 +166,20 @@ impl RpcLayer {
         check_extra("top-level", mem::take(&mut self.extra));
         RpcConfig {
             limits: self.limits.finish(Limits::default()),
+            health: self.health.finish(HealthConfig::default()),
             watermark: self.watermark.finish(WatermarkConfig::default()),
+        }
+    }
+}
+
+impl HealthLayer {
+    pub(crate) fn finish(mut self, base: HealthConfig) -> HealthConfig {
+        check_extra("health", mem::take(&mut self.extra));
+        HealthConfig {
+            max_checkpoint_lag: self
+                .max_checkpoint_lag_ms
+                .map(Duration::from_millis)
+                .unwrap_or(base.max_checkpoint_lag),
         }
     }
 }
@@ -241,6 +273,15 @@ impl WatermarkLayer {
     }
 }
 
+impl From<HealthConfig> for HealthLayer {
+    fn from(value: HealthConfig) -> Self {
+        Self {
+            max_checkpoint_lag_ms: Some(value.max_checkpoint_lag.as_millis() as u64),
+            extra: Default::default(),
+        }
+    }
+}
+
 impl From<Limits> for LimitsLayer {
     fn from(value: Limits) -> Self {
         Self {
@@ -269,6 +310,14 @@ impl From<WatermarkConfig> for WatermarkLayer {
             watermark_polling_interval_ms: Some(value.watermark_polling_interval.as_millis() as u64),
             pg_pipelines: Some(value.pg_pipelines),
             extra: Default::default(),
+        }
+    }
+}
+
+impl Default for HealthConfig {
+    fn default() -> Self {
+        Self {
+            max_checkpoint_lag: Duration::from_secs(300),
         }
     }
 }
