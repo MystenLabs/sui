@@ -116,6 +116,8 @@ impl Connection<'_> {
         let query_debug = diesel::debug_query(&query).to_string();
         debug!("{query_debug}");
 
+        self.metrics.db_requests_received.inc();
+
         let timer = self.metrics.db_latency.start_timer();
         let res = query.get_result(&mut self.conn).await;
         let elapsed_ms = timer.stop_and_record() * 1000.0;
@@ -148,6 +150,8 @@ impl Connection<'_> {
     {
         let query_debug = diesel::debug_query(&query).to_string();
         debug!("{query_debug}");
+
+        self.metrics.db_requests_received.inc();
 
         let timer = self.metrics.db_latency.start_timer();
         let res = query.get_results(&mut self.conn).await;
