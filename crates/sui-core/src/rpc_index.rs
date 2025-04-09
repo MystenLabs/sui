@@ -36,7 +36,6 @@ use sui_types::storage::DynamicFieldKey;
 use tracing::{debug, info};
 use typed_store::rocks::{DBMap, MetricConf};
 use typed_store::traits::Map;
-use typed_store::traits::{TableSummary, TypedStoreDebug};
 use typed_store::DBMapUtils;
 use typed_store::TypedStoreError;
 

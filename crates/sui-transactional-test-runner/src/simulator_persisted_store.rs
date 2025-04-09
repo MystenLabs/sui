@@ -32,8 +32,6 @@ use sui_types::{
     transaction::VerifiedTransaction,
 };
 use tempfile::tempdir;
-use typed_store::traits::TableSummary;
-use typed_store::traits::TypedStoreDebug;
 use typed_store::DBMapUtils;
 use typed_store::Map;
 use typed_store::{

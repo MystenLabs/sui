@@ -863,7 +863,7 @@ mod tests {
         object::Object,
         storage::ObjectKey,
     };
-    use typed_store::rocks::{DBMap, MetricConf, ReadWriteOptions};
+    use typed_store::rocks::{default_db_options, DBMap, MetricConf, ReadWriteOptions};
     use typed_store::Map;
 
     use super::AuthorityStorePruner;
@@ -871,8 +871,11 @@ mod tests {
     fn get_keys_after_pruning(path: &Path) -> anyhow::Result<HashSet<ObjectKey>> {
         let perpetual_db_path = path.join(Path::new("perpetual"));
         let cf_names = AuthorityPerpetualTables::describe_tables();
-        let cfs: Vec<&str> = cf_names.keys().map(|x| x.as_str()).collect();
-        let perpetual_db = typed_store::rocks::open_cf(
+        let cfs: Vec<_> = cf_names
+            .keys()
+            .map(|x| (x.as_str(), default_db_options().options))
+            .collect();
+        let perpetual_db = typed_store::rocks::open_cf_opts(
             perpetual_db_path,
             None,
             MetricConf::new("perpetual_pruning"),

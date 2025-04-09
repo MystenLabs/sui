@@ -16,7 +16,7 @@ use typed_store::rocks::{
     default_db_options, read_size_from_env, DBBatch, DBMap, DBMapTableConfigMap, DBOptions,
     MetricConf,
 };
-use typed_store::traits::{Map, TableSummary, TypedStoreDebug};
+use typed_store::traits::Map;
 
 use crate::authority::authority_store_pruner::ObjectsCompactionFilter;
 use crate::authority::authority_store_types::{

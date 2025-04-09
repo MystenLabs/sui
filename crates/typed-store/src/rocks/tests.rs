@@ -80,11 +80,14 @@ async fn test_reopen_macro() {
     const FIRST_CF: &str = "First_CF";
     const SECOND_CF: &str = "Second_CF";
 
-    let rocks = open_cf(
+    let rocks = open_cf_opts(
         temp_dir(),
         None,
         MetricConf::default(),
-        &[FIRST_CF, SECOND_CF],
+        &[
+            (FIRST_CF, rocksdb::Options::default()),
+            (SECOND_CF, rocksdb::Options::default()),
+        ],
     )
     .unwrap();
 
@@ -728,5 +731,15 @@ fn open_map<P: AsRef<Path>, K, V>(path: P, opt_cf: Option<&str>) -> DBMap<K, V> 
 }
 
 fn open_rocksdb<P: AsRef<Path>>(path: P, opt_cfs: &[&str]) -> Arc<Database> {
-    open_cf(path, None, MetricConf::default(), opt_cfs).expect("failed to open rocksdb")
+    let opts = rocksdb::Options::default();
+    open_cf_opts(
+        path,
+        None,
+        MetricConf::default(),
+        &opt_cfs
+            .iter()
+            .map(|cf| (*cf, opts.clone()))
+            .collect::<Vec<_>>(),
+    )
+    .expect("failed to open rocksdb")
 }

@@ -43,7 +43,6 @@ use typed_store::rocks::{
     MetricConf,
 };
 use typed_store::traits::Map;
-use typed_store::traits::{TableSummary, TypedStoreDebug};
 use typed_store::DBMapUtils;
 
 use crate::authority::AuthorityStore;
