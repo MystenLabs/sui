@@ -9,13 +9,17 @@ use std::{
 
 use derive_where::derive_where;
 use serde::{Deserialize, Serialize};
+use serde_spanned::Spanned;
 
 use crate::{
     dependency::ManifestDependencyInfo,
+    errors::{ManifestError, ManifestErrorKind, PackageResult},
     flavor::{MoveFlavor, Vanilla},
 };
 
 use super::*;
+
+const ALLOWED_EDITIONS: &[&str] = &["2024", "2024.beta", "legacy"];
 
 // Note: [Manifest] objects are immutable and should not implement [serde::Serialize]; any tool
 // writing these files should use [toml_edit] to set / preserve the formatting, since these are
@@ -36,8 +40,8 @@ pub struct Manifest<F: MoveFlavor> {
 #[derive(Debug, Deserialize)]
 #[serde(bound = "")]
 struct PackageMetadata<F: MoveFlavor> {
-    name: PackageName,
-    edition: String,
+    name: Spanned<PackageName>,
+    edition: Spanned<String>,
 
     #[serde(flatten)]
     metadata: F::PackageMetadata,
@@ -72,9 +76,45 @@ struct ManifestDependencyOverride<F: MoveFlavor> {
 }
 
 impl<F: MoveFlavor> Manifest<F> {
-    pub fn read_from(path: impl AsRef<Path>) -> anyhow::Result<Self> {
-        let contents = std::fs::read_to_string(path)?;
-        Ok(toml_edit::de::from_str(&contents)?)
+    pub fn read_from(path: impl AsRef<Path>) -> PackageResult<Self> {
+        let contents = std::fs::read_to_string(&path)?;
+
+        let manifest: Self = toml_edit::de::from_str(&contents)?;
+        manifest.validate_manifest(&path, &contents)?;
+
+        Ok(manifest)
+    }
+
+    /// Validate the manifest contents, after deserialization.
+    pub fn validate_manifest(&self, path: impl AsRef<Path>, contents: &str) -> PackageResult<()> {
+        // Validate package name
+        if self.package.name.get_ref().is_empty() {
+            let err = ManifestError {
+                kind: ManifestErrorKind::EmptyPackageName,
+                span: Some(self.package.name.span()),
+                path: path.as_ref().to_path_buf(),
+                src: contents.to_string(),
+            };
+            err.emit()?;
+            return Err(err.into());
+        }
+
+        // Validate edition
+        if !ALLOWED_EDITIONS.contains(&self.package.edition.get_ref().as_str()) {
+            let err = ManifestError {
+                kind: ManifestErrorKind::InvalidEdition {
+                    edition: self.package.edition.get_ref().clone(),
+                    valid: ALLOWED_EDITIONS.join(", ").to_string(),
+                },
+                span: Some(self.package.edition.span()),
+                path: path.as_ref().to_path_buf(),
+                src: contents.to_string(),
+            };
+            err.emit()?;
+            return Err(err.into());
+        }
+
+        Ok(())
     }
 
     fn write_template(path: impl AsRef<Path>, name: &PackageName) -> anyhow::Result<()> {
