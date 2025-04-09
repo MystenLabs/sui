@@ -180,6 +180,15 @@ impl From<LintLevel> for LintFlag {
     }
 }
 
+#[derive(Debug, Clone, Eq, PartialEq, PartialOrd)]
+pub struct ModelConfig {
+    /// If set, also files which are in dependent packages are considered as targets.
+    pub all_files_as_targets: bool,
+    /// If set, a string how targets are filtered. A target is included if its file name
+    /// contains this string. This is similar as the `cargo test <string>` idiom.
+    pub target_filter: Option<String>,
+}
+
 impl BuildConfig {
     /// Compile the package at `path` or the containing Move package. Exit process on warning or
     /// failure.
@@ -262,6 +271,7 @@ impl BuildConfig {
     pub fn move_model_for_package_legacy(
         self,
         path: &Path,
+        model_config: ModelConfig,
     ) -> Result<GlobalEnv> {
         let flags = self.compiler_flags();
 
@@ -270,7 +280,7 @@ impl BuildConfig {
         let resolved_graph = self.resolution_graph_for_package(path, None, &mut Vec::new())?;
         let _mutx = PackageLock::lock(); // held until function returns
 
-        ModelBuilderLegacy::create(resolved_graph).build_model(flags)
+        ModelBuilderLegacy::create(resolved_graph, model_config).build_model(flags)
     }
 
     pub fn download_deps_for_package<W: Write>(&self, path: &Path, writer: &mut W) -> Result<()> {
@@ -347,7 +357,6 @@ impl BuildConfig {
             Flags::empty()
         };
         flags
-            .set_verify(self.verify_mode)
             .set_warnings_are_errors(self.warnings_are_errors)
             .set_json_errors(self.json_errors)
             .set_silence_warnings(self.silence_warnings)

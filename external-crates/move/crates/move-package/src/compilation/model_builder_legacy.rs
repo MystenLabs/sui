@@ -4,11 +4,11 @@
 
 use crate::{
     compilation::compiled_package::make_source_and_deps_for_compiler,
-    resolution::resolution_graph::ResolvedGraph,
+    resolution::resolution_graph::ResolvedGraph, ModelConfig,
 };
 use anyhow::Result;
 use itertools::Itertools;
-use move_compiler::Flags;
+use move_compiler::{shared::PackagePaths, Flags};
 use move_model::{
     model::GlobalEnv, options::ModelBuilderOptions,
     run_model_builder_with_options_and_compilation_flags,
@@ -19,12 +19,14 @@ use super::compiled_package::{DependencyInfo, ModuleFormat};
 #[derive(Debug, Clone)]
 pub struct ModelBuilderLegacy {
     resolution_graph: ResolvedGraph,
+    model_config: ModelConfig,
 }
 
 impl ModelBuilderLegacy {
-    pub fn create(resolution_graph: ResolvedGraph) -> Self {
+    pub fn create(resolution_graph: ResolvedGraph, model_config: ModelConfig) -> Self {
         Self {
             resolution_graph,
+            model_config,
         }
     }
 
@@ -88,9 +90,48 @@ impl ModelBuilderLegacy {
             &root_package,
             deps_source_info,
         )?;
+        let (all_targets, all_deps) = if self.model_config.all_files_as_targets {
+            let mut targets = vec![target];
+            targets.extend(deps.into_iter().map(|(p, _)| p).collect_vec());
+            (targets, vec![])
+        } else {
+            (vec![target], deps)
+        };
+        let (all_targets, all_deps) = match &self.model_config.target_filter {
+            Some(filter) => {
+                let mut new_targets = vec![];
+                let mut new_deps = all_deps.into_iter().map(|(p, _)| p).collect_vec();
+                for PackagePaths {
+                    name,
+                    paths,
+                    named_address_map,
+                } in all_targets
+                {
+                    let (true_targets, false_targets): (Vec<_>, Vec<_>) =
+                        paths.into_iter().partition(|t| t.contains(filter));
+                    if !true_targets.is_empty() {
+                        new_targets.push(PackagePaths {
+                            name: name.clone(),
+                            paths: true_targets,
+                            named_address_map: named_address_map.clone(),
+                        })
+                    }
+                    if !false_targets.is_empty() {
+                        new_deps.push(PackagePaths {
+                            name: name.clone(),
+                            paths: false_targets,
+                            named_address_map,
+                        })
+                    }
+                }
+                (new_targets, new_deps)
+            }
+            None => (
+                all_targets,
+                all_deps.into_iter().map(|(p, _)| p).collect_vec(),
+            ),
+        };
 
-        let all_targets = vec![target];
-        let all_deps = deps.into_iter().map(|(p, _)| p).collect_vec();
         run_model_builder_with_options_and_compilation_flags(
             all_targets,
             all_deps,
