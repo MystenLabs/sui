@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::{
+    cell::OnceCell,
     collections::{BTreeMap, BTreeSet},
     path::PathBuf,
     sync::Arc,
@@ -22,7 +23,7 @@ use move_compiler::{
         NumericalAddress,
     },
 };
-use move_core_types::account_address::AccountAddress;
+use move_core_types::{account_address::AccountAddress, runtime_value};
 use move_ir_types::ast as IR;
 use move_ir_types::location::Spanned;
 use move_symbol_pool::Symbol;
@@ -118,13 +119,26 @@ pub struct Function<'a, const HAS_SOURCE: SourceKind> {
 }
 
 #[derive(Clone, Copy)]
+pub enum Constant<'a> {
+    Compiled(CompiledConstant<'a, WITH_SOURCE>),
+    Named(NamedConstant<'a>),
+}
+
+#[derive(Clone, Copy)]
+pub struct CompiledConstant<'a, const HAS_SOURCE: SourceKind> {
+    module: Module<'a, HAS_SOURCE>,
+    compiled: &'a normalized::Constant,
+    data: &'a ConstantData,
+}
+
+#[derive(Clone, Copy)]
 pub struct NamedConstant<'a> {
     name: Symbol,
     module: Module<'a, WITH_SOURCE>,
     // There is no guarantee a source constant will have a compiled representation
     compiled: Option<&'a normalized::Constant>,
     #[allow(unused)]
-    data: &'a ConstantData,
+    data: &'a NamedConstantData,
 }
 
 //**************************************************************************************************
@@ -488,6 +502,20 @@ impl<'a, const HAS_SOURCE: SourceKind> Module<'a, HAS_SOURCE> {
             .chain(self.enums().map(Datatype::Enum))
     }
 
+    pub fn compiled_constants(
+        &self,
+    ) -> impl Iterator<Item = CompiledConstant<'a, HAS_SOURCE>> + '_ {
+        self.compiled
+            .constants
+            .iter()
+            .enumerate()
+            .map(|(idx, compiled)| CompiledConstant {
+                module: *self,
+                compiled,
+                data: &self.data.constants[idx],
+            })
+    }
+
     pub fn compiled(&self) -> &'a normalized::Module {
         &self.model().compiled.packages[&self.package.addr].modules[&self.name()]
     }
@@ -550,12 +578,13 @@ impl<'a> Module<'a, WITH_SOURCE> {
     pub fn maybe_named_constant(&self, name: impl Into<Symbol>) -> Option<NamedConstant<'a>> {
         let name = name.into();
         let data = &self.data.named_constants[0].get(&name)?;
+        let compiled = data
+            .compiled_index
+            .map(|idx| &*self.compiled.constants[idx.0 as usize]);
         Some(NamedConstant {
             name,
             module: *self,
-            compiled: data
-                .compiled_index
-                .map(|idx| &*self.compiled.constants[idx.0 as usize]),
+            compiled,
             data,
         })
     }
@@ -571,13 +600,19 @@ impl<'a> Module<'a, WITH_SOURCE> {
             .map(|name| self.named_constant(name))
     }
 
-    pub fn constants(
-        &self,
-    ) -> impl Iterator<Item = (&normalized::Constant, Option<NamedConstant<'a>>)> + '_ {
-        self.compiled.constants.iter().enumerate().map(|(idx, c)| {
-            let source_opt = self.data.constant_names[0][idx].map(|n| self.named_constant(n));
-            (&**c, source_opt)
-        })
+    pub fn constants(&self) -> impl Iterator<Item = Constant<'a>> + '_ {
+        self.compiled
+            .constants
+            .iter()
+            .enumerate()
+            .map(|(idx, compiled)| match self.data.constant_names[0][idx] {
+                Some(name) => Constant::Named(self.named_constant(name)),
+                None => Constant::Compiled(CompiledConstant {
+                    module: *self,
+                    compiled,
+                    data: &self.data.constants[idx],
+                }),
+            })
     }
 }
 
@@ -594,8 +629,16 @@ impl<'a> Module<'a, WITHOUT_SOURCE> {
         self.maybe_member(name).unwrap()
     }
 
-    pub fn constants(&self) -> impl Iterator<Item = &normalized::Constant> + '_ {
-        self.compiled.constants.iter().map(|c| &**c)
+    pub fn constants(&self) -> impl Iterator<Item = CompiledConstant<'a, WITHOUT_SOURCE>> + '_ {
+        self.compiled
+            .constants
+            .iter()
+            .enumerate()
+            .map(|(idx, compiled)| CompiledConstant {
+                module: *self,
+                compiled,
+                data: &self.data.constants[idx],
+            })
     }
 }
 
@@ -783,6 +826,43 @@ impl<'a> Function<'a, WITHOUT_SOURCE> {
     }
 }
 
+impl<'a> Constant<'a> {
+    pub fn module(&self) -> Module<'a, WITH_SOURCE> {
+        match self {
+            Constant::Compiled(c) => c.module,
+            Constant::Named(c) => c.module,
+        }
+    }
+
+    pub fn compiled(&self) -> Option<&'a normalized::Constant> {
+        match self {
+            Constant::Compiled(c) => Some(c.compiled),
+            Constant::Named(c) => c.compiled,
+        }
+    }
+
+    pub fn value(&self) -> &'a runtime_value::MoveValue {
+        match self {
+            Constant::Compiled(c) => c.value(),
+            Constant::Named(c) => c.value(),
+        }
+    }
+}
+
+impl<'a, const HAS_SOURCE: SourceKind> CompiledConstant<'a, HAS_SOURCE> {
+    pub fn module(&self) -> Module<'a, HAS_SOURCE> {
+        self.module
+    }
+
+    pub fn compiled(&self) -> &'a normalized::Constant {
+        self.compiled
+    }
+
+    pub fn value(&self) -> &'a runtime_value::MoveValue {
+        self.data.value(self.compiled)
+    }
+}
+
 impl<'a> NamedConstant<'a> {
     pub fn name(&self) -> Symbol {
         self.name
@@ -807,6 +887,12 @@ impl<'a> NamedConstant<'a> {
     /// Not all source constants have a compiled representation
     pub fn compiled(&self) -> Option<&'a normalized::Constant> {
         self.compiled
+    }
+
+    pub fn value(&self) -> &'a runtime_value::MoveValue {
+        // we normally don't write delegates into ProgramInfo, but we are doing so here for parity
+        // with CompiledConstant
+        self.info().value.get().unwrap()
     }
 }
 
@@ -892,7 +978,8 @@ struct ModuleData<const HAS_SOURCE: SourceKind> {
     structs: IndexMap<Symbol, StructData>,
     enums: IndexMap<Symbol, EnumData>,
     functions: IndexMap<Symbol, FunctionData>,
-    named_constants: [IndexMap<Symbol, ConstantData>; HAS_SOURCE],
+    constants: Vec<ConstantData>,
+    named_constants: [IndexMap<Symbol, NamedConstantData>; HAS_SOURCE],
     // mapping from file_format::ConstantPoolIndex to source constant name, if any
     constant_names: [Vec<Option<Symbol>>; HAS_SOURCE],
     deps: BTreeMap<ModuleId, /* is immediate */ bool>,
@@ -915,6 +1002,10 @@ struct FunctionData {
 }
 
 struct ConstantData {
+    value: OnceCell<runtime_value::MoveValue>,
+}
+
+struct NamedConstantData {
     compiled_index: Option<file_format::ConstantPoolIndex>,
 }
 
@@ -1104,9 +1195,10 @@ impl ModuleData<WITH_SOURCE> {
             let function = FunctionData::new();
             (finfo.index, name, function)
         }));
+        let constants = unit.constants.iter().map(|_| ConstantData::new()).collect();
         let named_constants = make_map(info.constants.iter().map(|(_loc, name, cinfo)| {
             let name = *name;
-            let constant = ConstantData::from_source(source_map, name);
+            let constant = NamedConstantData::from_source(source_map, name);
             (cinfo.index, name, constant)
         }));
         let constant_names = {
@@ -1125,6 +1217,7 @@ impl ModuleData<WITH_SOURCE> {
             structs,
             enums,
             functions,
+            constants,
             named_constants: [named_constants],
             constant_names: [constant_names],
             // computed later
@@ -1151,6 +1244,7 @@ impl ModuleData<WITHOUT_SOURCE> {
                 (name, EnumData::new(unit, enum_def))
             })
             .collect();
+        let constants = unit.constants.iter().map(|_| ConstantData::new()).collect();
         let functions = unit
             .functions
             .keys()
@@ -1162,6 +1256,7 @@ impl ModuleData<WITHOUT_SOURCE> {
             structs,
             enums,
             functions,
+            constants,
             named_constants: [],
             constant_names: [],
             // computed later
@@ -1207,6 +1302,14 @@ impl FunctionData {
 }
 
 impl ConstantData {
+    fn new() -> Self {
+        Self {
+            value: OnceCell::new(),
+        }
+    }
+}
+
+impl NamedConstantData {
     fn from_source(source_map: &SourceMap, name: Symbol) -> Self {
         let compiled_index = source_map
             .constant_map
@@ -1226,4 +1329,37 @@ fn make_map<I: Ord + Copy, T>(
         .into_iter()
         .map(|(_idx, name, data)| (name, data))
         .collect::<IndexMap<_, _>>()
+}
+
+//**************************************************************************************************
+// Data operations
+//**************************************************************************************************
+
+impl ConstantData {
+    fn value(&self, compiled: &normalized::Constant) -> &runtime_value::MoveValue {
+        self.value.get_or_init(|| {
+            let constant_layout = annotated_constant_layout(&compiled.type_);
+            runtime_value::MoveValue::simple_deserialize(&compiled.data, &constant_layout).unwrap()
+        })
+    }
+}
+
+fn annotated_constant_layout(ty: &normalized::Type) -> runtime_value::MoveTypeLayout {
+    use normalized::Type as T;
+    use runtime_value::MoveTypeLayout as L;
+    match ty {
+        T::Bool => L::Bool,
+        T::U8 => L::U8,
+        T::U16 => L::U16,
+        T::U32 => L::U16,
+        T::U64 => L::U64,
+        T::U128 => L::U128,
+        T::U256 => L::U16,
+        T::Address => L::Address,
+        T::Vector(inner) => L::Vector(Box::new(annotated_constant_layout(inner))),
+
+        T::Datatype(_) | T::Reference(_, _) | T::TypeParameter(_) | T::Signer => {
+            unreachable!("{ty:?} is not supported in constants")
+        }
+    }
 }

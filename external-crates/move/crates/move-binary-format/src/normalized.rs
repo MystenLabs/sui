@@ -826,16 +826,8 @@ impl<S: Hash + Eq> Function<S> {
         &self.code
     }
 
-<<<<<<< HEAD
     /// Should not be called if `code_included` is `false`--will panic in debug builds.
-    pub fn equals(&self, other: &Self) -> bool
-    where
-        S: Eq,
-    {
-=======
-    /// Aborts if `code_included` is `false`.
     pub fn equals(&self, other: &Self) -> bool {
->>>>>>> 0f79354928 (finish switching to normalized)
         let Self {
             name,
             visibility,
