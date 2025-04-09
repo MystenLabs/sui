@@ -23,6 +23,7 @@ mod tests {
 mod balance_change;
 mod checkpoint;
 mod effects;
+mod epoch;
 mod events;
 mod execute_transaction;
 mod executed_transaction;

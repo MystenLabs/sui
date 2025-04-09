@@ -36,4 +36,7 @@ async fn get_epoch() {
 
     // ensure we can convert proto committee type to sdk_types committee
     sui_sdk_types::ValidatorCommittee::try_from(&latest_epoch.committee.unwrap()).unwrap();
+
+    assert_eq!(epoch_0.epoch, Some(0));
+    assert_eq!(epoch_0.first_checkpoint, Some(0));
 }

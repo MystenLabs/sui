@@ -257,6 +257,8 @@ impl IndexStoreTables {
             self.index_existing_transactions(authority_store, checkpoint_store, checkpoint_range)?;
         }
 
+        self.initialize_current_epoch(authority_store, checkpoint_store)?;
+
         let coin_index = Mutex::new(HashMap::new());
 
         let make_live_object_indexer = RpcParLiveObjectSetIndexer {
@@ -388,6 +390,30 @@ impl IndexStoreTables {
             ..
         } = checkpoint;
 
+        // If this is genesis we need to do a little bit of special casing
+        if checkpoint_summary.sequence_number == 0 {
+            let system_state = sui_types::sui_system_state::get_sui_system_state(
+                &transactions[0].output_objects.as_slice(),
+            )
+            .map_err(|e| {
+                StorageError::custom(format!(
+                    "Failed to find system state object output from end of epoch transaction: {e}"
+                ))
+            })?;
+            let next_epoch = EpochInfo {
+                epoch: system_state.epoch(),
+                protocol_version: Some(system_state.protocol_version()),
+                start_timestamp_ms: Some(system_state.epoch_start_timestamp_ms()),
+                end_timestamp_ms: None,
+                start_checkpoint: Some(0),
+                end_checkpoint: None,
+                reference_gas_price: Some(system_state.reference_gas_price()),
+                system_state: Some(system_state),
+            };
+            batch.insert_batch(&self.epochs, [(next_epoch.epoch, next_epoch)])?;
+            return Ok(());
+        }
+
         let Some(_end_of_epoch) = checkpoint_summary.end_of_epoch_data.as_ref() else {
             return Ok(());
         };
@@ -433,6 +459,44 @@ impl IndexStoreTables {
             system_state: Some(system_state),
         };
         batch.insert_batch(&self.epochs, [(next_epoch.epoch, next_epoch)])?;
+
+        Ok(())
+    }
+
+    // After attempting to reindex past epochs, ensure that the current epoch is at least partially
+    // initalized
+    fn initialize_current_epoch(
+        &mut self,
+        authority_store: &AuthorityStore,
+        checkpoint_store: &CheckpointStore,
+    ) -> Result<(), StorageError> {
+        let Some(checkpoint) = checkpoint_store.get_highest_executed_checkpoint()? else {
+            return Ok(());
+        };
+
+        let system_state = sui_types::sui_system_state::get_sui_system_state(authority_store)
+            .map_err(|e| StorageError::custom(format!("Failed to find system state: {e}")))?;
+
+        let mut epoch = self.epochs.get(&checkpoint.epoch)?.unwrap_or_default();
+        epoch.epoch = checkpoint.epoch;
+
+        if epoch.protocol_version.is_none() {
+            epoch.protocol_version = Some(system_state.protocol_version());
+        }
+
+        if epoch.start_timestamp_ms.is_none() {
+            epoch.start_timestamp_ms = Some(system_state.epoch_start_timestamp_ms());
+        }
+
+        if epoch.reference_gas_price.is_none() {
+            epoch.reference_gas_price = Some(system_state.reference_gas_price());
+        }
+
+        if epoch.system_state.is_none() {
+            epoch.system_state = Some(system_state);
+        }
+
+        self.epochs.insert(&epoch.epoch, &epoch)?;
 
         Ok(())
     }
