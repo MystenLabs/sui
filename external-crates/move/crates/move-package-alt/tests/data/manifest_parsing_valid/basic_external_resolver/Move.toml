@@ -8,4 +8,4 @@ authors = ["Move Team"]
 mainnet = "35834a8a"
 
 [dependencies]
-qwer = { r.mvr = "@pkg/qwer" }
+mock = { r.mock-resolver = { resolved = { local = "."} } }

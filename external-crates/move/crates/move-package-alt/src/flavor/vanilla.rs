@@ -7,13 +7,14 @@
 
 use std::{
     collections::{self, BTreeMap},
+    iter::empty,
     marker::PhantomData,
     path::{Path, PathBuf},
 };
 
 use serde::{Deserialize, Serialize};
 
-use crate::dependency::PinnedDependencyInfo;
+use crate::dependency::{DependencySet, PinnedDependencyInfo};
 use crate::{
     dependency::{Pinned, Unpinned},
     errors::PackageResult,
@@ -33,8 +34,11 @@ impl MoveFlavor for Vanilla {
     type EnvironmentID = String;
     type AddressInfo = ();
 
-    fn implicit_deps(&self, environment: Self::EnvironmentID) -> Vec<PinnedDependencyInfo<Self>> {
-        vec![]
+    fn implicit_deps(
+        &self,
+        environments: impl Iterator<Item = Self::EnvironmentID>,
+    ) -> DependencySet<PinnedDependencyInfo<Self>> {
+        empty().collect()
     }
 
     // TODO: should be !, but that's not supported; instead
@@ -44,16 +48,16 @@ impl MoveFlavor for Vanilla {
 
     fn pin(
         &self,
-        deps: BTreeMap<PackageName, Self::FlavorDependency<Unpinned>>,
-    ) -> PackageResult<BTreeMap<PackageName, Self::FlavorDependency<Pinned>>> {
+        deps: DependencySet<Self::FlavorDependency<Unpinned>>,
+    ) -> PackageResult<DependencySet<Self::FlavorDependency<Pinned>>> {
         // always an error
         todo!()
     }
 
     fn fetch(
         &self,
-        deps: BTreeMap<PackageName, Self::FlavorDependency<Pinned>>,
-    ) -> PackageResult<BTreeMap<PackageName, PathBuf>> {
+        deps: DependencySet<Self::FlavorDependency<Pinned>>,
+    ) -> PackageResult<DependencySet<PathBuf>> {
         // always an error
         todo!()
     }

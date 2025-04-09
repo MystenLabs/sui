@@ -2,16 +2,23 @@
 // Copyright (c) The Move Contributors
 // SPDX-License-Identifier: Apache-2.0
 
+mod dependency_set;
 mod external;
 mod git;
 mod local;
 
-use std::{collections::BTreeMap, fmt::Debug};
+pub use dependency_set::DependencySet;
+
+use std::{collections::BTreeMap, fmt::Debug, path::PathBuf};
 
 use derive_where::derive_where;
 use serde::{Deserialize, Serialize};
 
-use crate::{errors::PackageResult, flavor::MoveFlavor, package::PackageName};
+use crate::{
+    errors::PackageResult,
+    flavor::MoveFlavor,
+    package::{EnvironmentName, PackageName},
+};
 
 use external::ExternalDependency;
 use git::GitDependency;
@@ -60,20 +67,103 @@ pub enum PinnedDependencyInfo<F: MoveFlavor + ?Sized> {
     FlavorSpecific(F::FlavorDependency<Pinned>),
 }
 
+/// Split up deps into kinds. The union of the output sets is the same as [deps]
+fn split<F: MoveFlavor>(
+    deps: &DependencySet<ManifestDependencyInfo<F>>,
+) -> (
+    DependencySet<GitDependency<Unpinned>>,
+    DependencySet<ExternalDependency>,
+    DependencySet<LocalDependency>,
+    DependencySet<F::FlavorDependency<Unpinned>>,
+) {
+    let mut gits = DependencySet::new();
+    let mut exts = DependencySet::new();
+    let mut locs = DependencySet::new();
+    let mut flav = DependencySet::new();
+
+    for (env, package_name, dep) in deps.clone().into_iter() {
+        match dep {
+            ManifestDependencyInfo::Git(info) => gits.insert(env, package_name, info),
+            ManifestDependencyInfo::External(info) => exts.insert(env, package_name, info),
+            ManifestDependencyInfo::Local(info) => locs.insert(env, package_name, info),
+            ManifestDependencyInfo::FlavorSpecific(info) => flav.insert(env, package_name, info),
+        }
+    }
+
+    (gits, exts, locs, flav)
+}
+
 /// Replace all dependencies with their pinned versions. The returned map is guaranteed to have the
 /// same keys as [deps].
-// TODO: this needs to change to support the fact that external resolvers return different results
-// depending on the environment
-fn pin<F: MoveFlavor>(
-    deps: BTreeMap<PackageName, ManifestDependencyInfo<F>>,
-) -> PackageResult<BTreeMap<PackageName, PinnedDependencyInfo<F>>> {
+pub fn pin<F: MoveFlavor>(
+    flavor: &F,
+    deps: &DependencySet<ManifestDependencyInfo<F>>, // TODO: maybe take by value?
+    envs: &BTreeMap<EnvironmentName, F::EnvironmentID>,
+) -> PackageResult<DependencySet<PinnedDependencyInfo<F>>> {
+    let (gits, exts, locs, flav) = split(deps);
+
+    let pinned_gits: DependencySet<PinnedDependencyInfo<F>> = GitDependency::pin(&gits)
+        .unwrap() // TODO: error collection!
+        .into_iter()
+        .map(|(env, package, dep)| (env, package, PinnedDependencyInfo::Git::<F>(dep.clone())))
+        .collect();
+
+    // TODO: errors!
+    let resolved = ExternalDependency::resolve::<F>(flavor, exts, envs).unwrap();
+    let pinned_exts = if resolved.is_empty() {
+        DependencySet::new()
+    } else {
+        // ensure that there are no externally resolved deps to avoid recursion
+        for (_, _, dep) in &resolved {
+            if let ManifestDependencyInfo::External(_) = dep {
+                // TODO: error!
+                panic!("External resolver returned external dependency");
+            }
+        }
+
+        pin(flavor, &resolved, envs)?
+    };
+
+    let pinned_locs = locs
+        .into_iter()
+        .map(|(env, package, dep)| (env, package, PinnedDependencyInfo::Local::<F>(dep)))
+        .collect();
+
+    let pinned_flav = flavor
+        .pin(flav)
+        .unwrap() // TODO: Errors!
+        .into_iter()
+        .map(|(env, package, dep)| {
+            (
+                env,
+                package,
+                PinnedDependencyInfo::FlavorSpecific::<F>(dep.clone()),
+            )
+        })
+        .collect();
+
+    Ok(DependencySet::merge([
+        pinned_gits,
+        pinned_exts,
+        pinned_locs,
+        pinned_flav,
+    ]))
+}
+
+/// For each environment, if none of the implicit dependencies are present in [deps] (or the
+/// default environment), then they are all added.
+// TODO: what's the notion of identity used here?
+fn add_implicit_deps<F: MoveFlavor>(
+    flavor: &F,
+    deps: &mut DependencySet<PinnedDependencyInfo<F>>,
+) -> PackageResult<()> {
     todo!()
 }
 
 /// Ensure that all dependencies are stored locally and return the paths to their contents. The
 /// returned map is guaranteed to have the same keys as [deps].
 fn fetch<F: MoveFlavor>(
-    deps: BTreeMap<PackageName, PinnedDependencyInfo<F>>,
-) -> PackageResult<BTreeMap<PackageName, PinnedDependencyInfo<F>>> {
+    deps: DependencySet<PinnedDependencyInfo<F>>,
+) -> PackageResult<DependencySet<PathBuf>> {
     todo!()
 }

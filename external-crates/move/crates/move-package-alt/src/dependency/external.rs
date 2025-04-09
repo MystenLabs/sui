@@ -2,37 +2,186 @@
 // Copyright (c) The Move Contributors
 // SPDX-License-Identifier: Apache-2.0
 
-//! Types and methods for external dependencies (of the form `{ r.<res> = data }`)
+//! Types and methods for external dependencies (of the form `{ r.<res> = data }`).
 
 use std::{collections::BTreeMap, fmt::Debug, path::Path};
 
-use serde::{Deserialize, Serialize};
+use anyhow::bail;
+use external_resolver::{Query, QueryID, QueryResult, Request};
+use serde::{
+    de::{MapAccess, Visitor},
+    Deserialize, Serialize,
+};
 use serde_spanned::Spanned;
 
 use crate::{
     errors::{self, Located, ManifestError, ManifestErrorKind, PackageError, PackageResult},
     flavor::MoveFlavor,
+    package::{EnvironmentName, PackageName},
 };
 
-use super::PinnedDependencyInfo;
+use super::{pin, DependencySet, ManifestDependencyInfo, PinnedDependencyInfo};
 
-/// An external dependency has the form `{ r.<res> = "<data>" }`; it is resolved by invoking the
-/// binary `<res>` (from the `PATH`), and passing `<data>` on the command line. The binary is
-/// expected to output a single resolved dependency on the command line.
-#[derive(Debug, Serialize, Deserialize, Clone)]
+type ResolverName = String;
+
+/// An external dependency has the form `{ r.<res> = <data> }`. External
+/// dependencies are resolved by external resolvers.
+#[derive(Serialize, Deserialize, Clone, Debug)]
+#[serde(try_from = "RField", into = "RField")]
 pub struct ExternalDependency {
-    /// Should be a table with a single entry; the name of the entry is the resolver binary to run
-    /// and the value should be the argument passed to the resolver
-    r: toml::Value,
+    /// The `<res>` in `{ r.<res> = <data> }`
+    resolver: ResolverName,
 
-    #[serde(flatten)]
-    fields: BTreeMap<String, String>,
+    /// the `<data>` in `{ r.<res> = <data> }`
+    data: toml::Value,
+}
+
+/// Convenience type for serializing/deserializing external deps
+#[derive(Serialize, Deserialize)]
+struct RField {
+    r: BTreeMap<String, toml::Value>,
 }
 
 impl ExternalDependency {
-    /// Invoke the external binary and deserialize its output as a dependency, then pin the
-    /// dependency.
-    fn resolve<F: MoveFlavor>(&self) -> PackageResult<PinnedDependencyInfo<F>> {
-        todo!()
+    /// Invoke the external binaries and deserialize their outputs as dependencies
+    pub fn resolve<F: MoveFlavor>(
+        flavor: &F,
+        deps: DependencySet<ExternalDependency>,
+        envs: &BTreeMap<EnvironmentName, F::EnvironmentID>,
+    ) -> PackageResult<DependencySet<ManifestDependencyInfo<F>>> {
+        // split by resolver
+        let mut sorted: BTreeMap<ResolverName, DependencySet<toml::Value>> = BTreeMap::new();
+        for (env, package_name, dep) in deps.into_iter() {
+            sorted
+                .entry(dep.resolver)
+                .or_default()
+                .insert(env, package_name, dep.data);
+        }
+
+        // run the resolvers
+        // TODO: error!
+        let resolved = sorted
+            .into_iter()
+            .map(|(resolver, deps)| resolve_single::<F>(&resolver, deps, envs).unwrap());
+
+        Ok(DependencySet::merge(resolved))
     }
+}
+
+impl TryFrom<RField> for ExternalDependency {
+    type Error = anyhow::Error;
+
+    fn try_from(value: RField) -> Result<Self, Self::Error> {
+        if value.r.len() != 1 {
+            bail!("Externally resolved dependencies must have exactly one resolver field")
+        }
+
+        let (resolver, data) = value
+            .r
+            .into_iter()
+            .next()
+            .expect("iterator of length 1 structure is nonempty");
+
+        Ok(Self { resolver, data })
+    }
+}
+
+impl From<ExternalDependency> for RField {
+    fn from(value: ExternalDependency) -> Self {
+        Self {
+            r: BTreeMap::from([(value.resolver, value.data)]),
+        }
+    }
+}
+
+impl<F: MoveFlavor> TryFrom<QueryResult> for ManifestDependencyInfo<F> {
+    type Error = anyhow::Error;
+
+    fn try_from(value: QueryResult) -> anyhow::Result<Self> {
+        match value {
+            // TODO: errors!
+            QueryResult::Error { errors } => bail!("External resolver failed!"),
+            // TODO: warnings!
+            QueryResult::Success { warnings, resolved } => Ok(Self::deserialize(resolved)?),
+        }
+    }
+}
+
+/// Resolve a set of deps with a single resolver
+fn resolve_single<F: MoveFlavor>(
+    resolver: &ResolverName,
+    dep_data: DependencySet<toml::Value>,
+    envs: &BTreeMap<EnvironmentName, F::EnvironmentID>,
+) -> PackageResult<DependencySet<ManifestDependencyInfo<F>>> {
+    let mut request = Request::new("TODO".to_string());
+
+    // request default resolution
+    let mut default_reqs: BTreeMap<QueryID, Query> = dep_data
+        .default_deps()
+        .into_iter()
+        .map(|(pkg_name, data)| query::<F>(None, pkg_name.clone(), data.clone()))
+        .collect();
+    request.queries.append(&mut default_reqs);
+
+    // request env-specific resolutions
+    for (env_name, env_id) in envs {
+        let mut env_reqs = dep_data
+            .deps_for_env(env_name.to_string())
+            .into_iter()
+            .map(|(pkg_name, data)| {
+                query::<F>(
+                    Some((env_name.clone(), env_id.clone())),
+                    pkg_name,
+                    data.clone(),
+                )
+            })
+            .collect();
+        request.queries.append(&mut env_reqs);
+    }
+
+    // invoke the resolver
+    let mut response = request.execute(resolver)?;
+
+    // build the result
+    let resolved: DependencySet<ManifestDependencyInfo<F>> = dep_data
+        .into_iter()
+        .map(|(env, pkg_name, _)| {
+            let query_id = query_id::<F>(&env, &pkg_name);
+            let result = response.responses.remove(&query_id).unwrap(); // TODO: errors!
+            let resolved = match result {
+                QueryResult::Error { errors } => panic!("Resolver failed!"),
+                // TODO: warnings!
+                QueryResult::Success { warnings, resolved } => resolved,
+            };
+            (
+                env,
+                pkg_name,
+                ManifestDependencyInfo::<F>::deserialize(resolved).unwrap(), // TODO: errors!
+            )
+        })
+        .collect();
+
+    Ok(resolved)
+}
+
+/// Generate a unique identifier corresponding to [env] and [pkg]
+fn query_id<F: MoveFlavor>(env: &Option<EnvironmentName>, pkg: &PackageName) -> String {
+    format!("({env:?}, {pkg})")
+}
+
+/// Output a query for [data] in environment [env]; [pkg] is used to generate the query name
+fn query<F: MoveFlavor>(
+    env: Option<(EnvironmentName, F::EnvironmentID)>,
+    pkg: PackageName,
+    data: toml::Value,
+) -> (QueryID, Query) {
+    let (env_name, env_id) = env.unzip();
+
+    (
+        query_id::<F>(&env_name, &pkg),
+        Query {
+            argument: data,
+            environment_id: env_id.map(|it| it.to_string()),
+        },
+    )
 }
