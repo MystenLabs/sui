@@ -51,6 +51,7 @@ impl RpcService {
             events,
             checkpoint,
             timestamp_ms,
+            ..
         } = self.reader.get_transaction_read(transaction_digest)?;
 
         let transaction_bcs = read_mask
