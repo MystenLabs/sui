@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::collections::HashSet;
+use std::fs;
 use std::ops::Range;
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -134,7 +135,7 @@ pub struct JobConfig {
     pub sf_schema: Option<String>,
     pub sf_username: Option<String>,
     pub sf_role: Option<String>,
-    pub sf_password: Option<String>,
+    pub sf_password_file: Option<String>,
 
     // This is private to enforce using the TaskContext struct
     #[serde(rename = "tasks")]
@@ -396,10 +397,12 @@ impl TaskContext {
                         .sf_role
                         .as_ref()
                         .ok_or(anyhow!("Missing sf role"))?,
-                    self.job_config
-                        .sf_password
-                        .as_ref()
-                        .ok_or(anyhow!("Missing sf password"))?,
+                    &load_password(
+                        self.job_config
+                            .sf_password_file
+                            .as_ref()
+                            .ok_or(anyhow!("Missing sf password"))?,
+                    )?,
                     self.config
                         .sf_table_id
                         .as_ref()
@@ -827,4 +830,9 @@ pub fn join_paths(base: Option<&Path>, child: &Path) -> Path {
         out_path
     })
     .unwrap_or(child.clone())
+}
+
+fn load_password(path: &str) -> anyhow::Result<String> {
+    let contents = fs::read_to_string(std::path::Path::new(path))?;
+    Ok(contents.trim().to_string())
 }
