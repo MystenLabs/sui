@@ -6,8 +6,9 @@
 //! datatypes (structs and enums).
 
 use crate::{
+    TModuleId,
     normalized::{self, ModuleId},
-    source_model, TModuleId,
+    source_model,
 };
 use indexmap::IndexMap;
 use move_binary_format::file_format;
@@ -36,9 +37,9 @@ pub struct Package {
 
 #[derive(Serialize, Deserialize)]
 pub struct Module {
-    pub doc: FromSource<String>,
+    pub doc: FromSource<Option<String>>,
     pub immediate_dependencies: BTreeSet<ModuleId>,
-    pub attributes: Attributes,
+    pub attributes: FromSource<Attributes>,
     pub functions: IndexMap<Symbol, Function>,
     pub structs: IndexMap<Symbol, Struct>,
     pub enums: IndexMap<Symbol, Enum>,
@@ -58,11 +59,11 @@ pub struct Function {
     pub source_index: FromSource<usize>,
     /// Set to usize::max_value if the function is a macro
     pub compiled_index: usize,
-    pub doc: FromSource<String>,
-    pub attributes: Attributes,
+    pub doc: FromSource<Option<String>>,
+    pub attributes: FromSource<Attributes>,
     pub visibility: Visibility,
     pub entry: bool,
-    pub macro_: bool,
+    pub macro_: FromSource<bool>,
     pub type_parameters: Vec<TParam>,
     pub parameters: Vec<(FromSource<Symbol>, Type)>,
     pub return_: Vec<Type>,
@@ -96,8 +97,8 @@ pub enum Ability {
 #[derive(Serialize, Deserialize)]
 pub struct Struct {
     pub index: usize,
-    pub doc: FromSource<String>,
-    pub attributes: Attributes,
+    pub doc: FromSource<Option<String>>,
+    pub attributes: FromSource<Attributes>,
     pub abilities: AbilitySet,
     pub type_parameters: Vec<DatatypeTParam>,
     pub fields: Fields,
@@ -113,8 +114,8 @@ pub struct DatatypeTParam {
 #[derive(Serialize, Deserialize)]
 pub struct Enum {
     pub index: usize,
-    pub doc: FromSource<String>,
-    pub attributes: Attributes,
+    pub doc: FromSource<Option<String>>,
+    pub attributes: FromSource<Attributes>,
     pub abilities: AbilitySet,
     pub type_parameters: Vec<DatatypeTParam>,
     pub variants: IndexMap<Symbol, Variant>,
@@ -123,8 +124,7 @@ pub struct Enum {
 #[derive(Serialize, Deserialize)]
 pub struct Variant {
     pub index: usize,
-    pub doc: FromSource<String>,
-    pub attributes: Attributes,
+    pub doc: FromSource<Option<String>>,
     pub fields: Fields,
 }
 
@@ -138,8 +138,7 @@ pub struct Fields {
 #[derive(Serialize, Deserialize)]
 pub struct Field {
     pub index: usize,
-    pub doc: FromSource<String>,
-    pub attributes: Attributes,
+    pub doc: FromSource<Option<String>>,
     pub type_: Type,
 }
 
@@ -247,8 +246,8 @@ impl From<&normalized::Module> for Module {
             .map(|(index, (name, e))| (*name, (index, &**e).into()))
             .collect();
         Self {
-            doc: None,          // set by ProgramInfo
-            attributes: vec![], // set by ProgramInfo
+            doc: None,        // set by ProgramInfo
+            attributes: None, // set by ProgramInfo
             immediate_dependencies,
             functions,
             structs,
@@ -288,10 +287,10 @@ impl From<(usize, &normalized::Function)> for Function {
             compiled_index: index,
             source_index: None, // set by ProgramInfo
             doc: None,          // set by ProgramInfo
-            attributes: vec![], // set by ProgramInfo
+            attributes: None,   // set by ProgramInfo
             visibility,
             entry: *is_entry,
-            macro_: false,
+            macro_: None, // set by ProgramInfo
             type_parameters,
             parameters,
             return_,
@@ -340,8 +339,8 @@ impl From<(usize, &normalized::Struct)> for Struct {
         };
         Self {
             index,
-            doc: None,          // set by ProgramInfo
-            attributes: vec![], // set by ProgramInfo
+            doc: None,        // set by ProgramInfo
+            attributes: None, // set by ProgramInfo
             abilities,
             type_parameters,
             fields,
@@ -370,8 +369,8 @@ impl From<(usize, &normalized::Enum)> for Enum {
             .collect();
         Self {
             index,
-            doc: None,          // set by ProgramInfo
-            attributes: vec![], // set by ProgramInfo
+            doc: None,        // set by ProgramInfo
+            attributes: None, // set by ProgramInfo
             abilities,
             type_parameters,
             variants,
@@ -393,8 +392,7 @@ impl From<(usize, &normalized::Variant)> for Variant {
         };
         Self {
             index,
-            doc: None,          // set by ProgramInfo
-            attributes: vec![], // set by ProgramInfo
+            doc: None, // set by ProgramInfo
             fields,
         }
     }
@@ -405,8 +403,7 @@ impl From<(usize, &normalized::Field)> for Field {
         let normalized::Field { type_, .. } = f;
         Self {
             index,
-            doc: None,          // set by ProgramInfo
-            attributes: vec![], // set by ProgramInfo
+            doc: None, // set by ProgramInfo
             type_: Type::from(type_),
         }
     }
@@ -479,10 +476,10 @@ impl Package {
 impl Module {
     pub fn annotate(&mut self, module: &source_model::Module) {
         debug_assert!(self.doc.is_none());
-        debug_assert!(self.attributes.is_empty());
+        debug_assert!(self.attributes.is_none());
         let info = module.info();
-        self.doc = doc_comment(&info.doc);
-        self.attributes = attributes(&info.attributes);
+        self.doc = Some(doc_comment(&info.doc));
+        self.attributes = Some(attributes(&info.attributes));
         for (name, f) in &mut self.functions {
             f.annotate(&module.function(*name));
         }
@@ -507,10 +504,12 @@ impl Module {
 impl Function {
     pub fn annotate(&mut self, function: &source_model::Function) {
         debug_assert!(self.doc.is_none());
-        debug_assert!(self.attributes.is_empty());
+        debug_assert!(self.attributes.is_none());
+        debug_assert!(self.source_index.is_none());
+        debug_assert!(self.macro_.is_none());
         let info = function.info();
-        self.doc = doc_comment(&info.doc);
-        self.attributes = attributes(&info.attributes);
+        self.doc = Some(doc_comment(&info.doc));
+        self.attributes = Some(attributes(&info.attributes));
         self.source_index = Some(info.index);
         self.visibility = (&info.visibility).into();
         self.type_parameters
@@ -536,11 +535,11 @@ impl Function {
         Self {
             source_index: Some(finfo.index),
             compiled_index: usize::MAX,
-            doc: doc_comment(&finfo.doc),
-            attributes: attributes(&finfo.attributes),
+            doc: Some(doc_comment(&finfo.doc)),
+            attributes: Some(attributes(&finfo.attributes)),
             visibility: (&finfo.visibility).into(),
             entry: false,
-            macro_: true,
+            macro_: Some(true),
             type_parameters: finfo
                 .signature
                 .type_parameters
@@ -590,10 +589,10 @@ impl From<&E::AbilitySet> for AbilitySet {
 impl Struct {
     pub fn annotate(&mut self, s: &source_model::Struct) {
         debug_assert!(self.doc.is_none());
-        debug_assert!(self.attributes.is_empty());
+        debug_assert!(self.attributes.is_none());
         let info = s.info();
-        self.doc = doc_comment(&info.doc);
-        self.attributes = attributes(&info.attributes);
+        self.doc = Some(doc_comment(&info.doc));
+        self.attributes = Some(attributes(&info.attributes));
         self.type_parameters
             .iter_mut()
             .zip(&info.type_parameters)
@@ -608,10 +607,10 @@ impl Struct {
 impl Enum {
     pub fn annotate(&mut self, e: &source_model::Enum) {
         debug_assert!(self.doc.is_none());
-        debug_assert!(self.attributes.is_empty());
+        debug_assert!(self.attributes.is_none());
         let info = e.info();
-        self.doc = doc_comment(&info.doc);
-        self.attributes = attributes(&info.attributes);
+        self.doc = Some(doc_comment(&info.doc));
+        self.attributes = Some(attributes(&info.attributes));
         self.type_parameters
             .iter_mut()
             .zip(&info.type_parameters)
@@ -628,9 +627,8 @@ impl Enum {
 impl Variant {
     pub fn annotate(&mut self, v: &source_model::Variant) {
         debug_assert!(self.doc.is_none());
-        debug_assert!(self.attributes.is_empty());
         let info = v.info();
-        self.doc = doc_comment(&info.doc);
+        self.doc = Some(doc_comment(&info.doc));
         self.fields.annotate_variant(&info.fields);
     }
 }
@@ -646,8 +644,7 @@ impl Fields {
         for (name, (_, (doc, _))) in fields.key_cloned_iter() {
             let field = self.fields.get_mut(&name.0.value).unwrap();
             debug_assert!(field.doc.is_none());
-            debug_assert!(field.attributes.is_empty());
-            field.doc = doc_comment(doc);
+            field.doc = Some(doc_comment(doc));
         }
     }
 
@@ -661,8 +658,7 @@ impl Fields {
         for (name, (_, (doc, ty))) in fields.key_cloned_iter() {
             let field = self.fields.get_mut(&name.0.value).unwrap();
             debug_assert!(field.doc.is_none());
-            debug_assert!(field.attributes.is_empty());
-            field.doc = doc_comment(doc);
+            field.doc = Some(doc_comment(doc));
             field.type_ = ty.into();
         }
     }
