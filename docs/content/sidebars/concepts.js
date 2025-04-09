@@ -163,7 +163,6 @@ const concepts = [
 			'concepts/tokenomics/vesting-strategies'
 		],
 	},
-	'concepts/integrations',
 	'concepts/research-papers',
 ];
 module.exports = concepts;
