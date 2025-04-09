@@ -14,7 +14,7 @@ use lsp_types::{
     Range, TextEdit,
 };
 use move_compiler::{
-    expansion::ast::{ModuleIdent, ModuleIdent_, Visibility},
+    expansion::ast::{Address, ModuleIdent, ModuleIdent_, Visibility},
     naming::ast::{Type, Type_},
     parser::keywords::PRIMITIVE_TYPES,
     shared::Name,
@@ -329,6 +329,25 @@ pub fn compute_cursor(
         cursor_context,
     );
     symbols.cursor_context = cursor_context;
+}
+
+pub fn addr_to_ide_string(addr: &Address) -> String {
+    match addr {
+        Address::Numerical {
+            name,
+            value,
+            name_conflict: _,
+        } => {
+            if let Some(n) = name {
+                format!("{n}")
+            } else {
+                format!("{value}")
+            }
+        }
+        Address::NamedUnassigned(name) => {
+            format!("{name}")
+        }
+    }
 }
 
 fn lambda_snippet(sp!(_, ty): &Type, snippet_idx: &mut i32) -> Option<String> {

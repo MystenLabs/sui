@@ -14,7 +14,7 @@
 
 use crate::{
     completions::utils::{
-        call_completion_item, completion_item, import_insertion_info, mod_defs,
+        addr_to_ide_string, call_completion_item, completion_item, import_insertion_info, mod_defs,
         PRIMITIVE_TYPE_COMPLETIONS,
     },
     symbols::{
@@ -151,8 +151,11 @@ pub fn name_chain_completions(
                         mod_ident.module.value().as_str(),
                         CompletionItemKind::MODULE,
                     );
-                    let auto_import_text =
-                        format!("use {}::{}", mod_ident.address, mod_ident.module);
+                    let auto_import_text = format!(
+                        "use {}::{}",
+                        addr_to_ide_string(&mod_ident.address),
+                        mod_ident.module
+                    );
                     add_auto_import_to_completion_item(
                         &mut item,
                         auto_import_text,
@@ -710,7 +713,9 @@ fn member_auto_imports(
     member_completions.iter_mut().for_each(|item| {
         let auto_import_text = format!(
             "use {}::{}::{}",
-            mod_ident.address, mod_ident.module, member_name,
+            addr_to_ide_string(&mod_ident.address),
+            mod_ident.module,
+            member_name,
         );
         add_auto_import_to_completion_item(item, auto_import_text, auto_import_pos);
     });

@@ -3,8 +3,8 @@
 
 use crate::{
     completions::utils::{
-        all_mod_enums_to_import, all_mod_functions_to_import, all_mod_structs_to_import,
-        auto_import_text_edit, compute_cursor, import_insertion_info,
+        addr_to_ide_string, all_mod_enums_to_import, all_mod_functions_to_import,
+        all_mod_structs_to_import, auto_import_text_edit, compute_cursor, import_insertion_info,
     },
     context::Context,
     symbols::{
@@ -289,7 +289,7 @@ fn single_element_access_chain_autofixes<'a, I, K>(
             && !added_modules.contains(&mod_ident)
         {
             added_modules.insert(mod_ident.clone());
-            let autofix_prefix = format!("{}::", mod_ident.value.address);
+            let autofix_prefix = format!("{}::", addr_to_ide_string(&mod_ident.value.address));
             let text_edit = TextEdit {
                 range: Range {
                     start: unbound_name_lsp_pos,
@@ -319,8 +319,11 @@ fn single_element_access_chain_autofixes<'a, I, K>(
         // add pkg::module::member if member name matches unbound name
         for member_name in mod_members {
             if member_name == unbound_name.value {
-                let autofix_prefix =
-                    format!("{}::{}::", mod_ident.value.address, mod_ident.value.module);
+                let autofix_prefix = format!(
+                    "{}::{}::",
+                    addr_to_ide_string(&mod_ident.value.address),
+                    mod_ident.value.module
+                );
                 let text_edit = TextEdit {
                     range: Range {
                         start: unbound_name_lsp_pos,
@@ -375,7 +378,8 @@ fn two_element_access_chain_autofixes<'a, I, K>(
             if mod_ident.value.module.value() == unbound_first_name.value
                 && member_name == second_name.value
             {
-                let qualified_prefix = format!("{}::", mod_ident.value.address);
+                let qualified_prefix =
+                    format!("{}::", addr_to_ide_string(&mod_ident.value.address));
                 let text_edit = TextEdit {
                     range: Range {
                         start: unbound_name_lsp_pos,
