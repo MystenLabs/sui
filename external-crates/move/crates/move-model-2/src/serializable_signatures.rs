@@ -9,6 +9,7 @@ use crate::{
     normalized::{self, ModuleId},
     source_model, TModuleId,
 };
+use indexmap::IndexMap;
 use move_binary_format::file_format;
 use move_compiler::{
     expansion::ast as E, naming::ast as N, parser::ast as P, parser::ast::DocComment,
@@ -38,9 +39,9 @@ pub struct Module {
     pub doc: FromSource<String>,
     pub immediate_dependencies: BTreeSet<ModuleId>,
     pub attributes: Attributes,
-    pub functions: BTreeMap<Symbol, Function>,
-    pub structs: BTreeMap<Symbol, Struct>,
-    pub enums: BTreeMap<Symbol, Enum>,
+    pub functions: IndexMap<Symbol, Function>,
+    pub structs: IndexMap<Symbol, Struct>,
+    pub enums: IndexMap<Symbol, Enum>,
 }
 
 pub type Attributes = Vec<Attribute>;
@@ -116,7 +117,7 @@ pub struct Enum {
     pub attributes: Attributes,
     pub abilities: AbilitySet,
     pub type_parameters: Vec<DatatypeTParam>,
-    pub variants: BTreeMap<Symbol, Variant>,
+    pub variants: IndexMap<Symbol, Variant>,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -131,7 +132,7 @@ pub struct Variant {
 pub struct Fields {
     /// True if the variant was known to be defined using positional fields
     pub positional_fields: bool,
-    pub fields: BTreeMap<Symbol, Field>,
+    pub fields: IndexMap<Symbol, Field>,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -331,9 +332,10 @@ impl From<(usize, &normalized::Struct)> for Struct {
         let fields = Fields {
             positional_fields: false, // set by ProgramInfo
             fields: fields
+                .0
                 .iter()
                 .enumerate()
-                .map(|(index, f)| (f.name, (index, &**f).into()))
+                .map(|(index, (n, f))| (*n, (index, &**f).into()))
                 .collect(),
         };
         Self {
@@ -383,9 +385,10 @@ impl From<(usize, &normalized::Variant)> for Variant {
         let fields = Fields {
             positional_fields: false, // set by ProgramInfo
             fields: fields
+                .0
                 .iter()
                 .enumerate()
-                .map(|(index, f)| (f.name, (index, &*f).into()))
+                .map(|(index, (n, f))| (*n, (index, &**f).into()))
                 .collect(),
         };
         Self {
@@ -438,7 +441,7 @@ impl From<&normalized::Type> for Type {
             normalized::Type::Address => Type::Address,
             normalized::Type::Signer => Type::Signer,
             normalized::Type::Datatype(d) => Type::Datatype(Box::new(Datatype {
-                module: (d.address, d.module).module_id(),
+                module: d.module,
                 name: d.name,
                 type_arguments: d.type_arguments.iter().map(Type::from).collect(),
             })),
