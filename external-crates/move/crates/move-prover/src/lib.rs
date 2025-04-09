@@ -135,7 +135,7 @@ pub fn run_move_prover_with_model<W: WriteColor>(
 
     // Until this point, prover and docgen have same code. Here we part ways.
     if options.run_docgen {
-        return run_docgen(env, &options, error_writer, now);
+        //return run_docgen(env, &options, error_writer, now);
     }
     // Same for escape analysis
     if options.run_escape {
@@ -317,7 +317,7 @@ pub fn create_and_process_bytecode(options: &Options, env: &GlobalEnv) -> Functi
 
 // Tools using the Move prover top-level driver
 // ============================================
-
+/* 
 fn run_docgen<W: WriteColor>(
     env: &GlobalEnv,
     options: &Options,
@@ -345,6 +345,7 @@ fn run_docgen<W: WriteColor>(
         Ok(())
     }
 }
+*/
 
 fn run_escape(env: &GlobalEnv, options: &Options, now: Instant) {
     let mut targets = FunctionTargetsHolder::new();
