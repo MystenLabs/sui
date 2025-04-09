@@ -6,12 +6,12 @@ use sui_types::error::SuiError;
 use thiserror::Error;
 
 /// Client facing errors regarding transaction submission via Transaction Driver.
-/// Every invariant needs detailed documents to instruct client handling.
+/// Every invariant needs detailed content to instruct client handling.
 #[derive(Eq, PartialEq, Clone, Debug, Serialize, Deserialize, Error, Hash)]
 pub enum TransactionDriverError {
-    #[error("Serialization error: {0}.")]
+    #[error("Serialization error: {0}")]
     SerializationError(SuiError),
-    #[error("Deserialization error: {0}.")]
+    #[error("Deserialization error: {0}")]
     DeserializationError(SuiError),
     #[error("Transaction timed out before reaching finality")]
     TimeoutBeforeFinality,

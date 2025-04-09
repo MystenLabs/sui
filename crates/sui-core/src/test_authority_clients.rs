@@ -16,8 +16,9 @@ use sui_config::genesis::Genesis;
 use sui_types::{
     crypto::AuthorityKeyPair,
     error::SuiError,
+    executable_transaction::VerifiedExecutableTransaction,
     messages_checkpoint::{CheckpointRequest, CheckpointResponse},
-    transaction::{CertifiedTransaction, Transaction, VerifiedCertificate, VerifiedTransaction},
+    transaction::{CertifiedTransaction, Transaction, VerifiedTransaction},
 };
 use sui_types::{
     effects::TransactionEffectsAPI,
@@ -28,26 +29,25 @@ use sui_types::{
     messages_grpc::{HandleCertificateRequestV3, HandleCertificateResponseV3},
 };
 use sui_types::{
-    messages_consensus::ConsensusTransaction,
     messages_grpc::{
         HandleCertificateResponseV2, HandleSoftBundleCertificatesRequestV3,
         HandleSoftBundleCertificatesResponseV3, HandleTransactionResponse, ObjectInfoRequest,
         ObjectInfoResponse, RawSubmitTxRequest, RawSubmitTxResponse, SystemStateRequest,
         TransactionInfoRequest, TransactionInfoResponse,
     },
+    sui_system_state::SuiSystemState,
 };
-use sui_types::{messages_consensus::ConsensusTransactionKind, sui_system_state::SuiSystemState};
 
 #[derive(Clone, Copy, Default)]
 pub struct LocalAuthorityClientFaultConfig {
     pub fail_before_handle_transaction: bool,
     pub fail_after_handle_transaction: bool,
     pub fail_before_submit_transaction: bool,
-    pub fail_after_submit_transaction: bool,
+    pub fail_after_vote_transaction: bool,
     pub fail_before_handle_confirmation: bool,
     pub fail_after_handle_confirmation: bool,
     pub overload_retry_after_handle_transaction: Option<Duration>,
-    pub overload_retry_after_submit_transaction: Option<Duration>,
+    pub overload_retry_after_vote_transaction: Option<Duration>,
 }
 
 impl LocalAuthorityClientFaultConfig {
@@ -82,12 +82,12 @@ impl AuthorityAPI for LocalAuthorityClient {
             .verify_transaction(deserialized_transaction.clone())
             .map(|_| VerifiedTransaction::new_from_verified(deserialized_transaction))?;
         let tx_output = state.handle_vote_transaction(&epoch_store, transaction.clone())?;
-        if self.fault_config.fail_after_submit_transaction {
+        if self.fault_config.fail_after_vote_transaction {
             return Err(SuiError::GenericAuthorityError {
                 error: "Mock error after submit_transaction".to_owned(),
             });
         }
-        if let Some(duration) = self.fault_config.overload_retry_after_submit_transaction {
+        if let Some(duration) = self.fault_config.overload_retry_after_vote_transaction {
             return Err(SuiError::ValidatorOverloadedRetryAfter {
                 retry_after_secs: duration.as_secs(),
             });
@@ -138,34 +138,22 @@ impl AuthorityAPI for LocalAuthorityClient {
             });
         }
 
-        let consensus_transaction = ConsensusTransaction::new_user_transaction_message(
-            &self.state.name,
-            transaction.into(),
-        );
-        let effects = match &consensus_transaction.kind {
-            ConsensusTransactionKind::CertifiedTransaction(certificate) => {
-                let certificate = VerifiedCertificate::new_unchecked(*(certificate.clone()));
+        let effects = self
+            .state
+            .execute_transaction(
+                &VerifiedExecutableTransaction::new_from_consensus(
+                    transaction.clone(),
+                    epoch_store.epoch(),
+                ),
+                &epoch_store,
+            )
+            .await?;
+        let events = (request.include_events && effects.events_digest().is_some())
+            .then(|| {
                 self.state
-                    .execute_certificate(&certificate, &epoch_store)
-                    .await?
-            }
-            ConsensusTransactionKind::UserTransaction(tx) => {
-                self.state.await_transaction_effects(*tx.digest(), &epoch_store).await?
-            }
-            _ => panic!("`submit_transaction` received transaction that is not a CertifiedTransaction or UserTransaction"),
-        };
-        let events = if request.include_events {
-            if effects.events_digest().is_some() {
-                Some(
-                    self.state
-                        .get_transaction_events(effects.transaction_digest())?,
-                )
-            } else {
-                None
-            }
-        } else {
-            None
-        };
+                    .get_transaction_events(effects.transaction_digest())
+            })
+            .transpose()?;
 
         let input_objects = request
             .include_input_objects
@@ -176,13 +164,6 @@ impl AuthorityAPI for LocalAuthorityClient {
             .include_output_objects
             .then(|| self.state.get_transaction_output_objects(&effects))
             .and_then(Result::ok);
-
-        if let ConsensusTransactionKind::CertifiedTransaction(certificate) =
-            &consensus_transaction.kind
-        {
-            epoch_store.insert_tx_cert_sig(certificate.digest(), certificate.auth_sig())?;
-            // TODO(fastpath): Make sure consensus handler does this for a UserTransaction.
-        }
 
         Ok::<_, SuiError>(RawSubmitTxResponse {
             effects: bcs::to_bytes(&effects)

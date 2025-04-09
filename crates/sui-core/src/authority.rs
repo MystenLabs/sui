@@ -1166,7 +1166,21 @@ impl AuthorityState {
         certificate: &VerifiedCertificate,
         epoch_store: &Arc<AuthorityPerEpochStore>,
     ) -> SuiResult<TransactionEffects> {
-        let _metrics_guard = if certificate.contains_shared_object() {
+        self.execute_transaction(
+            &VerifiedExecutableTransaction::new_from_certificate(certificate.clone()),
+            epoch_store,
+        )
+        .await
+    }
+
+    /// Executes a certificate for its effects.
+    #[instrument(level = "trace", skip_all)]
+    pub async fn execute_transaction(
+        &self,
+        transaction: &VerifiedExecutableTransaction,
+        epoch_store: &Arc<AuthorityPerEpochStore>,
+    ) -> SuiResult<TransactionEffects> {
+        let _metrics_guard = if transaction.contains_shared_object() {
             self.metrics
                 .execute_certificate_latency_shared_object
                 .start_timer()
@@ -1175,22 +1189,22 @@ impl AuthorityState {
                 .execute_certificate_latency_single_writer
                 .start_timer()
         };
-        trace!("execute_certificate");
+        trace!("execute_transaction");
 
         self.metrics.total_cert_attempts.inc();
 
         // TODO(fastpath): use a separate function to check if a transaction should be executed in fastpath.
-        if !certificate.contains_shared_object() {
+        if !transaction.contains_shared_object() {
             // Shared object transactions need to be sequenced by the consensus before enqueueing
             // for execution, done in AuthorityPerEpochStore::handle_consensus_transaction().
             // For owned object transactions, they can be enqueued for execution immediately.
-            self.enqueue_certificates_for_execution(vec![certificate.clone()], epoch_store);
+            self.enqueue_transactions_for_execution(vec![transaction.clone()], epoch_store);
         }
 
         // tx could be reverted when epoch ends, so we must be careful not to return a result
         // here after the epoch ends.
         epoch_store
-            .within_alive_epoch(self.notify_read_effects(*certificate.digest()))
+            .within_alive_epoch(self.notify_read_effects(*transaction.digest()))
             .await
             .map_err(|_| SuiError::EpochEnded(epoch_store.epoch()))
             .and_then(|r| r)
@@ -3861,7 +3875,7 @@ impl AuthorityState {
     pub fn get_transaction_input_objects(
         &self,
         effects: &TransactionEffects,
-    ) -> anyhow::Result<Vec<Object>> {
+    ) -> SuiResult<Vec<Object>> {
         sui_types::storage::get_transaction_input_objects(self.get_object_store(), effects)
             .map_err(Into::into)
     }
@@ -3869,7 +3883,7 @@ impl AuthorityState {
     pub fn get_transaction_output_objects(
         &self,
         effects: &TransactionEffects,
-    ) -> anyhow::Result<Vec<Object>> {
+    ) -> SuiResult<Vec<Object>> {
         sui_types::storage::get_transaction_output_objects(self.get_object_store(), effects)
             .map_err(Into::into)
     }
