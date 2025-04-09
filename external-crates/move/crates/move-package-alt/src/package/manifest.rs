@@ -32,11 +32,11 @@ pub struct Manifest<F: MoveFlavor> {
     package: PackageMetadata<F>,
     environments: BTreeMap<Spanned<EnvironmentName>, Spanned<F::EnvironmentID>>,
     #[serde(default)]
-    dependencies: BTreeMap<Spanned<PackageName>, ManifestDependency<F>>,
+    dependencies: BTreeMap<Spanned<PackageName>, Spanned<ManifestDependency<F>>>,
     #[serde(default)]
     dep_overrides: BTreeMap<
         Spanned<EnvironmentName>,
-        BTreeMap<Spanned<PackageName>, ManifestDependencyOverride<F>>,
+        BTreeMap<Spanned<PackageName>, Spanned<ManifestDependencyOverride<F>>>,
     >,
 }
 
@@ -69,13 +69,13 @@ struct ManifestDependency<F: MoveFlavor> {
 #[serde(rename_all = "kebab-case")]
 struct ManifestDependencyOverride<F: MoveFlavor> {
     #[serde(flatten, default)]
-    dependency: Option<ManifestDependency<F>>,
+    dependency: Option<Spanned<ManifestDependency<F>>>,
 
     #[serde(flatten, default)]
-    address_info: Option<F::AddressInfo>,
+    address_info: Option<Spanned<F::AddressInfo>>,
 
     #[serde(default)]
-    use_environment: Option<EnvironmentName>,
+    use_environment: Option<Spanned<EnvironmentName>>,
 }
 
 impl<F: MoveFlavor> Manifest<F> {

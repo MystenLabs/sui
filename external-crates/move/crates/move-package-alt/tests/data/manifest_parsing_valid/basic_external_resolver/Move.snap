@@ -1,4 +1,4 @@
 ---
 source: crates/move-package-alt/tests/parsing_tests.rs
 ---
-Manifest { package: PackageMetadata { name: Spanned { span: 17..26, value: "example" }, edition: Spanned { span: 37..48, value: "2024.beta" }, metadata: () }, environments: {Spanned { span: 112..119, value: "mainnet" }: Spanned { span: 122..132, value: "35834a8a" }}, dependencies: {Spanned { span: 149..153, value: "qwer" }: ManifestDependency { dependency_info: External(ExternalDependency { r: Table({"mvr": String("@pkg/qwer")}), fields: {} }), is_override: false, rename_from: None }}, dep_overrides: {} }
+Manifest { package: PackageMetadata { name: Spanned { span: 17..26, value: "example" }, edition: Spanned { span: 37..48, value: "2024.beta" }, metadata: () }, environments: {Spanned { span: 112..119, value: "mainnet" }: Spanned { span: 122..132, value: "35834a8a" }}, dependencies: {Spanned { span: 149..153, value: "qwer" }: Spanned { span: 156..179, value: ManifestDependency { dependency_info: External(ExternalDependency { r: Table({"mvr": String("@pkg/qwer")}), fields: {} }), is_override: false, rename_from: None } }}, dep_overrides: {} }

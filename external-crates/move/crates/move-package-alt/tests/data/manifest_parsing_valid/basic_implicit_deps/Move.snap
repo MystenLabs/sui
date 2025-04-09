@@ -1,4 +1,4 @@
 ---
 source: crates/move-package-alt/tests/parsing_tests.rs
 ---
-Manifest { package: PackageMetadata { name: Spanned { span: 17..26, value: "example" }, edition: Spanned { span: 37..48, value: "2024.beta" }, metadata: () }, environments: {Spanned { span: 133..140, value: "mainnet" }: Spanned { span: 143..153, value: "35834a8a" }}, dependencies: {Spanned { span: 170..173, value: "Sui" }: ManifestDependency { dependency_info: Local(LocalDependency { local: "../../../../../../../../../crates/sui-framework/packages/sui-framework" }), is_override: false, rename_from: None }}, dep_overrides: {} }
+Manifest { package: PackageMetadata { name: Spanned { span: 17..26, value: "example" }, edition: Spanned { span: 37..48, value: "2024.beta" }, metadata: () }, environments: {Spanned { span: 133..140, value: "mainnet" }: Spanned { span: 143..153, value: "35834a8a" }}, dependencies: {Spanned { span: 170..173, value: "Sui" }: Spanned { span: 176..260, value: ManifestDependency { dependency_info: Local(LocalDependency { local: "../../../../../../../../../crates/sui-framework/packages/sui-framework" }), is_override: false, rename_from: None } }}, dep_overrides: {} }
