@@ -89,15 +89,12 @@ pub(crate) struct TransactionEntry {
     pub(crate) storage_rebate: u64,
     pub(crate) non_refundable_storage_fee: u64,
     pub(crate) gas_price: u64,
-    // raw transaction bytes
-    // pub(crate) raw_transaction: Vec<u8>,
-    // We represent them in base64 encoding so they work with the csv.
-    // TODO: review and possibly move back to Vec<u8>
-    pub(crate) raw_transaction: String,
+    pub(crate) bcs_length: u64,
     pub(crate) has_zklogin_sig: bool,
     pub(crate) has_upgraded_multisig: bool,
     pub(crate) transaction_json: Option<String>,
     pub(crate) effects_json: Option<String>,
+    pub(crate) transaction_position: u64,
 }
 
 // Event information.
