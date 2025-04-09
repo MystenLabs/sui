@@ -84,7 +84,7 @@ impl AuthorityAPI for LocalAuthorityClient {
         let tx_output = state.handle_vote_transaction(&epoch_store, transaction.clone())?;
         if self.fault_config.fail_after_vote_transaction {
             return Err(SuiError::GenericAuthorityError {
-                error: "Mock error after submit_transaction".to_owned(),
+                error: "Mock error after vote transaction in submit_transaction".to_owned(),
             });
         }
         if let Some(duration) = self.fault_config.overload_retry_after_vote_transaction {
