@@ -168,11 +168,7 @@ pub(crate) struct ObjectEntry {
     pub(crate) previous_transaction: String,
     pub(crate) has_public_transfer: bool,
     pub(crate) storage_rebate: Option<u64>,
-    // raw object bytes
-    // pub(crate) bcs: Vec<u8>,
-    // We represent them in base64 encoding so they work with the csv.
-    // TODO: review and possibly move back to Vec<u8>
-    pub(crate) bcs: Option<String>,
+    pub(crate) bcs_length: u64,
 
     pub(crate) coin_type: Option<String>,
     pub(crate) coin_balance: Option<u64>,

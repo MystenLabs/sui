@@ -216,7 +216,6 @@ fn compute_transaction_positions(
 #[cfg(test)]
 mod tests {
     use crate::handlers::transaction_handler::TransactionHandler;
-    use fastcrypto::encoding::{Base64, Encoding};
     use simulacrum::Simulacrum;
     use sui_data_ingestion_core::Worker;
     use sui_types::base_types::SuiAddress;

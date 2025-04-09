@@ -2,7 +2,6 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use anyhow::Result;
-use fastcrypto::encoding::{Base64, Encoding};
 use sui_data_ingestion_core::Worker;
 use sui_types::{TypeTag, SYSTEM_PACKAGE_ADDRESSES};
 use tokio::sync::Mutex;
@@ -138,7 +137,7 @@ impl ObjectHandler {
                 previous_transaction: checkpoint_transaction.transaction.digest().base58_encode(),
                 has_public_transfer: false,
                 storage_rebate: None,
-                bcs: None,
+                bcs_length: 0,
                 coin_type: None,
                 coin_balance: None,
                 struct_tag: None,
@@ -268,7 +267,7 @@ impl ObjectHandler {
             previous_transaction: object.previous_transaction.base58_encode(),
             has_public_transfer,
             storage_rebate: Some(object.storage_rebate),
-            bcs: Some(Base64::encode(bcs::to_bytes(object).unwrap())),
+            bcs_length: bcs::to_bytes(object).unwrap().len() as u64,
             coin_type: object.coin_type_maybe().map(|t| t.to_string()),
             coin_balance: if object.coin_type_maybe().is_some() {
                 Some(object.get_coin_value_unsafe())
