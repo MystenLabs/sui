@@ -89,7 +89,15 @@ fn run_prover(file_path: &PathBuf) -> String {
     // Now handle the result of our operation
     match result {
         Ok(output) => output,
-        Err(_) => "Verification failed: panic during verification".to_string(),
+        Err(e) => {
+            if let Some(s) = e.downcast_ref::<String>() {
+                format!("Verification failed: {}", s)
+            } else if let Some(s) = e.downcast_ref::<&str>() {
+                format!("Verification failed: {}", s)
+            } else {
+                format!("Verification failed: {:?}", e)
+            }
+        }
     }
 }
 
@@ -104,28 +112,55 @@ fn post_process_output(output: String) -> String {
 
 #[test]
 fn run_move_tests() {
+    let mut failed_tests = Vec::new();
+    
     for entry in glob::glob("tests/inputs/**/*.move").expect("Invalid glob pattern") {
         let move_path = entry.expect("Failed to read file path");
-        let output = run_prover(&move_path);
         let filename = move_path.file_name().unwrap().to_string_lossy().to_string();
+        
+        let result = std::panic::catch_unwind(|| {
+            let output = run_prover(&move_path);
+            
+            let cp = move_path
+                .parent()
+                .unwrap()
+                .components()
+                .skip(2)
+                .collect::<Vec<_>>();
+            let cp_str = cp
+                .iter()
+                .map(|comp| comp.as_os_str().to_string_lossy().into_owned())
+                .collect::<Vec<String>>();
+            let snapshot_path = format!("snapshots/{}", cp_str.join("/"));
 
-        let cp = move_path
-            .parent()
-            .unwrap()
-            .components()
-            .skip(2)
-            .collect::<Vec<_>>();
-        let cp_str = cp
-            .iter()
-            .map(|comp| comp.as_os_str().to_string_lossy().into_owned())
-            .collect::<Vec<String>>();
-        let snapshot_path = format!("snapshots/{}", cp_str.join("/"));
-
-        insta::with_settings!({
-            prepend_module_to_snapshot => false,
-            snapshot_path => snapshot_path,
-        }, {
-            insta::assert_snapshot!(filename, output);
+            insta::with_settings!({
+                prepend_module_to_snapshot => false,
+                snapshot_path => snapshot_path,
+            }, {
+                insta::assert_snapshot!(filename.clone(), output);
+            });
         });
+        
+        if let Err(e) = result {
+            let error_message = if let Some(s) = e.downcast_ref::<String>() {
+                format!("{}", s)
+            } else if let Some(s) = e.downcast_ref::<&str>() {
+                format!("{}", s)
+            } else {
+                format!("{:?}", e)
+            };
+            
+            println!("Test '{}' failed: {}", filename, error_message);
+            failed_tests.push((filename, error_message));
+        }
+    }
+    
+    // Report all failures at the end
+    if !failed_tests.is_empty() {
+        println!("\n{} tests failed:", failed_tests.len());
+        for (filename, error) in failed_tests {
+            println!("- {}: {}", filename, error);
+        }
+        panic!("Some tests failed. See above for details.");
     }
 }
