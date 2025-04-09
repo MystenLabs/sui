@@ -92,4 +92,9 @@ impl IdentifierInterner {
                 .with_message(format!("Failed to intern {string} ident; error: {err:?}."))),
         }
     }
+
+    /// Get the current size of the interner in bytes.
+    pub(crate) fn size(&self) -> usize {
+        self.0.current_memory_usage()
+    }
 }

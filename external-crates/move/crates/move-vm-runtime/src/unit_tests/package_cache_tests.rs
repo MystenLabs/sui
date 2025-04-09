@@ -9,7 +9,7 @@ use crate::{
         in_memory_test_adapter::InMemoryTestAdapter,
         vm_test_adapter::VMTestAdapter,
     },
-    runtime::package_resolution::resolve_packages,
+    runtime::{package_resolution::resolve_packages, telemetry::TransactionTelemetryContext},
     shared::{linkage_context::LinkageContext, types::VersionId},
 };
 use move_binary_format::errors::VMResult;
@@ -22,10 +22,17 @@ fn load_linkage_packages_into_runtime<DataSource: ModuleResolver + Send + Sync>(
     adapter: &mut impl VMTestAdapter<DataSource>,
     linkage: &LinkageContext,
 ) -> VMResult<BTreeMap<VersionId, Arc<Package>>> {
+    let mut dummy_telemetry = TransactionTelemetryContext::new();
     let cache = adapter.runtime().cache();
     let natives = adapter.runtime().natives();
     let all_packages = linkage.all_packages()?;
-    resolve_packages(adapter.storage(), &cache, &natives, all_packages)
+    resolve_packages(
+        adapter.storage(),
+        &mut dummy_telemetry,
+        &cache,
+        &natives,
+        all_packages,
+    )
 }
 
 #[test]

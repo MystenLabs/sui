@@ -10,6 +10,7 @@ use crate::{
     },
     jit::execution::ast::{Function, Type},
     natives::extensions::NativeContextExtensions,
+    runtime::telemetry::TransactionTelemetryContext,
     shared::{gas::GasMeter, vm_pointer::VMPointer},
 };
 use move_binary_format::errors::*;
@@ -25,6 +26,7 @@ pub(crate) mod state;
 /// function.
 pub(crate) fn run(
     vtables: &mut VMDispatchTables,
+    telemetry: &mut TransactionTelemetryContext,
     vm_config: Arc<VMConfig>,
     extensions: &mut NativeContextExtensions,
     tracer: &mut Option<VMTracer<'_>>,
@@ -33,6 +35,7 @@ pub(crate) fn run(
     ty_args: Vec<Type>,
     args: Vec<Value>,
 ) -> VMResult<Vec<Value>> {
+    let interpreter_timer = telemetry.make_timer(crate::runtime::telemetry::TimerKind::Interpreter);
     let fun_ref = function.to_ref();
     trace(tracer, |tracer| {
         tracer.enter_initial_frame(
@@ -44,7 +47,7 @@ pub(crate) fn run(
         )
     });
 
-    if fun_ref.is_native() {
+    let result = if fun_ref.is_native() {
         let return_result = eval::call_native_with_args(
             None,
             vtables,
@@ -74,7 +77,10 @@ pub(crate) fn run(
         })?;
         let state = MachineState::new(Arc::clone(&vtables.interner), call_stack);
         eval::run(state, vtables, vm_config, extensions, tracer, gas_meter)
-    }
+    };
+
+    telemetry.report_time(interpreter_timer);
+    result
 }
 
 macro_rules! set_err_info {
