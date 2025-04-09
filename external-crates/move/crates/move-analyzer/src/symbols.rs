@@ -2532,7 +2532,7 @@ pub fn compute_symbols(
     let manifest_hash = compiled_pkg_info.manifest_hash;
     let cached_dep_opt = compiled_pkg_info.cached_deps.clone();
     let deps_hash = compiled_pkg_info.deps_hash.clone();
-    let edition = compiled_pkg_info.edition.clone();
+    let edition = compiled_pkg_info.edition;
     let compiler_info = compiled_pkg_info.compiler_info.clone();
     let file_hashes = compiled_pkg_info
         .mapped_files

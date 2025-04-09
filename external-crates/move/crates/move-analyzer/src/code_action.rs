@@ -147,7 +147,7 @@ fn access_chain_autofix_actions(
     };
 
     let mut symbol_map = context.symbols.lock().unwrap();
-    let Some(mut symbols) = symbol_map.get_mut(&pkg_path) else {
+    let Some(symbols) = symbol_map.get_mut(&pkg_path) else {
         return code_actions;
     };
 
@@ -156,7 +156,7 @@ fn access_chain_autofix_actions(
         let err_pos = diag.range.start;
         let err_msg = diag.message.clone();
         access_chain_autofix_actions_for_error(
-            &mut symbols,
+            symbols,
             &mut compiled_pkg_info,
             file_url,
             err_pos,
@@ -209,12 +209,12 @@ pub fn access_chain_autofix_actions_for_error(
                     if err_msg.starts_with(prefix.as_str()) {
                         single_element_access_chain_autofixes(
                             code_actions,
-                            &symbols,
+                            symbols,
                             cursor,
                             file_url.clone(),
                             path_entry.name,
-                            all_mod_structs_to_import(&symbols, cursor)
-                                .chain(all_mod_enums_to_import(&symbols, cursor)),
+                            all_mod_structs_to_import(symbols, cursor)
+                                .chain(all_mod_enums_to_import(symbols, cursor)),
                             diag.clone(),
                         );
                     }
@@ -223,11 +223,11 @@ pub fn access_chain_autofix_actions_for_error(
                     if err_msg.starts_with(prefix.as_str()) {
                         single_element_access_chain_autofixes(
                             code_actions,
-                            &symbols,
+                            symbols,
                             cursor,
                             file_url.clone(),
                             path_entry.name,
-                            all_mod_functions_to_import(&symbols, cursor),
+                            all_mod_functions_to_import(symbols, cursor),
                             diag.clone(),
                         );
                     }
@@ -245,13 +245,13 @@ pub fn access_chain_autofix_actions_for_error(
                                 if err_msg.starts_with(prefix.as_str()) {
                                     two_element_access_chain_autofixes(
                                         code_actions,
-                                        &symbols,
+                                        symbols,
                                         file_url.clone(),
                                         unbound_name,
                                         name_path.entries[0].name,
-                                        all_mod_structs_to_import(&symbols, cursor)
-                                            .chain(all_mod_enums_to_import(&symbols, cursor))
-                                            .chain(all_mod_functions_to_import(&symbols, cursor)),
+                                        all_mod_structs_to_import(symbols, cursor)
+                                            .chain(all_mod_enums_to_import(symbols, cursor))
+                                            .chain(all_mod_functions_to_import(symbols, cursor)),
                                         diag.clone(),
                                     );
                                 }
@@ -265,7 +265,7 @@ pub fn access_chain_autofix_actions_for_error(
 }
 
 /// Create auto-fixes for a single unbound element in an access chain.
-fn single_element_access_chain_autofixes<'a, I, K>(
+fn single_element_access_chain_autofixes<I, K>(
     code_actions: &mut Vec<CodeAction>,
     symbols: &Symbols,
     cursor: &CursorContext,
@@ -288,7 +288,7 @@ fn single_element_access_chain_autofixes<'a, I, K>(
         if mod_ident.value.module.value() == unbound_name.value
             && !added_modules.contains(&mod_ident)
         {
-            added_modules.insert(mod_ident.clone());
+            added_modules.insert(mod_ident);
             let autofix_prefix = format!("{}::", addr_to_ide_string(&mod_ident.value.address));
             let text_edit = TextEdit {
                 range: Range {
@@ -356,7 +356,7 @@ fn single_element_access_chain_autofixes<'a, I, K>(
 
 /// Create auto-fixes for a two-element access chain where
 /// the first element is unbound.
-fn two_element_access_chain_autofixes<'a, I, K>(
+fn two_element_access_chain_autofixes<I, K>(
     code_actions: &mut Vec<CodeAction>,
     symbols: &Symbols,
     file_url: Url,
