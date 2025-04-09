@@ -11,7 +11,8 @@ use simulacrum::Simulacrum;
 use sui_indexer_alt::config::{IndexerConfig, PipelineLayer};
 use sui_indexer_alt_e2e_tests::{find_address_owned, find_immutable, FullCluster};
 use sui_indexer_alt_framework::IndexerArgs;
-use sui_indexer_alt_jsonrpc::config::{PackageResolverLayer, RpcConfig};
+use sui_indexer_alt_graphql::config::RpcConfig as GraphQlConfig;
+use sui_indexer_alt_jsonrpc::config::{PackageResolverLayer, RpcConfig as JsonRpcConfig};
 use sui_move_build::BuildConfig;
 use sui_types::{
     base_types::ObjectID,
@@ -159,10 +160,11 @@ impl TypeLimitCluster {
                 },
                 ..IndexerConfig::for_test()
             },
-            RpcConfig {
+            JsonRpcConfig {
                 package_resolver: package_resolver.finish(),
-                ..RpcConfig::default()
+                ..JsonRpcConfig::default()
             },
+            GraphQlConfig::default(),
             &prometheus::Registry::new(),
             CancellationToken::new(),
         )
@@ -313,7 +315,7 @@ impl TypeLimitCluster {
 
         let response = self
             .client
-            .post(self.cluster.rpc_url())
+            .post(self.cluster.jsonrpc_url())
             .json(&query)
             .send()
             .await

@@ -11,7 +11,8 @@ use simulacrum::Simulacrum;
 use sui_indexer_alt::config::IndexerConfig;
 use sui_indexer_alt_e2e_tests::{find_address_owned, FullCluster};
 use sui_indexer_alt_framework::IndexerArgs;
-use sui_indexer_alt_jsonrpc::config::{ObjectsConfig, RpcConfig};
+use sui_indexer_alt_graphql::config::RpcConfig as GraphQlConfig;
+use sui_indexer_alt_jsonrpc::config::{ObjectsConfig, RpcConfig as JsonRpcConfig};
 use sui_json_rpc_types::Page;
 use sui_types::{
     base_types::{ObjectID, SuiAddress},
@@ -325,10 +326,11 @@ async fn setup_cluster(config: ObjectsConfig) -> FullCluster {
         Simulacrum::new(),
         IndexerArgs::default(),
         IndexerConfig::example(),
-        RpcConfig {
+        JsonRpcConfig {
             objects: config,
-            ..RpcConfig::default()
+            ..JsonRpcConfig::default()
         },
+        GraphQlConfig::default(),
         &prometheus::Registry::new(),
         CancellationToken::new(),
     )
@@ -440,7 +442,7 @@ async fn owned_objects(
     });
 
     Client::new()
-        .post(cluster.rpc_url())
+        .post(cluster.jsonrpc_url())
         .json(&query)
         .send()
         .await

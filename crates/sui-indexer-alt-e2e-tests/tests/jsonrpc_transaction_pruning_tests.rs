@@ -13,7 +13,8 @@ use simulacrum::Simulacrum;
 use sui_indexer_alt::config::{ConcurrentLayer, IndexerConfig, PipelineLayer, PrunerLayer};
 use sui_indexer_alt_e2e_tests::{find_address_owned, FullCluster};
 use sui_indexer_alt_framework::IndexerArgs;
-use sui_indexer_alt_jsonrpc::config::RpcConfig;
+use sui_indexer_alt_graphql::config::RpcConfig as GraphQlConfig;
+use sui_indexer_alt_jsonrpc::config::RpcConfig as JsonRpcConfig;
 use sui_types::{
     base_types::SuiAddress,
     crypto::{get_account_key_pair, Signature, Signer},
@@ -216,7 +217,8 @@ async fn cluster_with_pipelines(pipeline: PipelineLayer) -> FullCluster {
             pipeline,
             ..IndexerConfig::for_test()
         },
-        RpcConfig::default(),
+        JsonRpcConfig::default(),
+        GraphQlConfig::default(),
         &prometheus::Registry::new(),
         CancellationToken::new(),
     )
@@ -299,7 +301,7 @@ async fn query_transactions(
 
     let client = Client::new();
     let response = client
-        .post(cluster.rpc_url())
+        .post(cluster.jsonrpc_url())
         .json(&query)
         .send()
         .await
