@@ -2090,7 +2090,7 @@ pub fn get_compiled_pkg(
                             program: Some(d.program.clone()),
                             file_hashes: d.file_hashes.clone(),
                         }),
-                        d.edition.clone(),
+                        d.edition,
                         d.compiler_info.clone(),
                     )
                 }
