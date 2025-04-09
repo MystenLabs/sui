@@ -11,10 +11,7 @@ use simulacrum::Simulacrum;
 use sui_indexer_alt::config::{IndexerConfig, PipelineLayer};
 use sui_indexer_alt_e2e_tests::{find_address_owned, find_immutable, FullCluster};
 use sui_indexer_alt_framework::IndexerArgs;
-use sui_indexer_alt_jsonrpc::{
-    args::SystemPackageTaskArgs,
-    config::{PackageResolverLayer, RpcConfig},
-};
+use sui_indexer_alt_jsonrpc::config::{PackageResolverLayer, RpcConfig};
 use sui_move_build::BuildConfig;
 use sui_types::{
     base_types::ObjectID,
@@ -151,7 +148,6 @@ impl TypeLimitCluster {
         let mut cluster = FullCluster::new_with_configs(
             Simulacrum::new(),
             IndexerArgs::default(),
-            SystemPackageTaskArgs::default(),
             IndexerConfig {
                 pipeline: PipelineLayer {
                     cp_sequence_numbers: Some(Default::default()),

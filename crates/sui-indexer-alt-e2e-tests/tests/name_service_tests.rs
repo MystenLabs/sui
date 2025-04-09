@@ -12,10 +12,7 @@ use simulacrum::Simulacrum;
 use sui_indexer_alt::config::IndexerConfig;
 use sui_indexer_alt_e2e_tests::{find_immutable, find_shared, FullCluster};
 use sui_indexer_alt_framework::IndexerArgs;
-use sui_indexer_alt_jsonrpc::{
-    args::SystemPackageTaskArgs,
-    config::{NameServiceConfig, RpcConfig},
-};
+use sui_indexer_alt_jsonrpc::config::{NameServiceConfig, RpcConfig};
 use sui_move_build::BuildConfig;
 use sui_types::{
     base_types::{ObjectID, SuiAddress},
@@ -438,7 +435,6 @@ impl SuiNSCluster {
         let cluster = FullCluster::new_with_configs(
             sim,
             IndexerArgs::default(),
-            SystemPackageTaskArgs::default(),
             IndexerConfig::for_test(),
             rpc_config,
             &prometheus::Registry::new(),

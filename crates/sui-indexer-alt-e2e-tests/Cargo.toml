@@ -48,6 +48,7 @@ telemetry-subscribers.workspace = true
 
 move-core-types.workspace = true
 
+sui-indexer-alt-reader.workspace = true
 sui-json-rpc-types.workspace = true
 sui-macros.workspace = true
 sui-move-build.workspace = true
