@@ -6,7 +6,7 @@ mod external;
 mod git;
 mod local;
 
-use std::{collections::BTreeMap, fmt::Debug};
+use std::{collections::BTreeMap, fmt::Debug, marker::PhantomData};
 
 use derive_where::derive_where;
 use serde::{Deserialize, Serialize};
@@ -16,6 +16,7 @@ use crate::{errors::PackageResult, flavor::MoveFlavor, package::PackageName};
 use external::ExternalDependency;
 use git::GitDependency;
 use local::LocalDependency;
+use serde_spanned::Spanned;
 
 /// Phantom type to represent pinned dependencies (see [PinnedDependency])
 #[derive(Debug)]
