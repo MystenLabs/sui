@@ -32,6 +32,10 @@ input ObjectKey {
 
 type Query {
 	"""
+	First four bytes of the network's genesis checkpoint digest (uniquely identifies the network), hex-encoded.
+	"""
+	chainIdentifier: String!
+	"""
 	Fetch objects by their addresses and versions.
 	
 	Returns a list of objects that is guaranteed to be the same length as `keys`. If an object in `keys` could not be found in the store, its corresponding entry in the result will be `null`. This could be because the object never existed, or because it was pruned.

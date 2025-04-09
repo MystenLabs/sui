@@ -14110,6 +14110,7 @@ dependencies = [
  "sui-default-config",
  "sui-indexer-alt-metrics",
  "sui-indexer-alt-reader",
+ "sui-indexer-alt-schema",
  "sui-package-resolver",
  "sui-protocol-config",
  "sui-types",

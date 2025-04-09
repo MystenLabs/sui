@@ -33,7 +33,10 @@ use sui_indexer_alt_reader::{
     pg_reader::PgReader,
 };
 use sui_package_resolver::Resolver;
-use task::watermark::{WatermarkTask, WatermarksLock};
+use task::{
+    chain_identifier,
+    watermark::{WatermarkTask, WatermarksLock},
+};
 use tokio::{net::TcpListener, task::JoinHandle};
 use tokio_util::sync::CancellationToken;
 use tower_http::cors;
@@ -296,6 +299,14 @@ pub async fn start_rpc(
         cancel.child_token(),
     );
 
+    // Fetch and cache the chain identifier from the database.
+    let chain_identifier = chain_identifier::task(
+        &pg_reader,
+        config.watermark.watermark_polling_interval,
+        cancel.child_token(),
+    )
+    .await?;
+
     let watermark_task =
         WatermarkTask::new(config.watermark, pg_reader.clone(), cancel.child_token());
 
@@ -309,6 +320,7 @@ pub async fn start_rpc(
         ))
         .data(config.limits.pagination())
         .data(config.limits)
+        .data(chain_identifier)
         .data(pg_reader)
         .data(pg_loader)
         .data(kv_loader)

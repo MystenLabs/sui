@@ -50,6 +50,7 @@ bin-version.workspace = true
 sui-default-config.workspace = true
 sui-indexer-alt-metrics.workspace = true
 sui-indexer-alt-reader.workspace = true
+sui-indexer-alt-schema.workspace = true
 sui-package-resolver.workspace = true
 sui-protocol-config.workspace = true
 sui-types.workspace = true
