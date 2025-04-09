@@ -265,8 +265,6 @@ pub struct RawSubmitTxResponse {
     /// Vec of serialized Object
     #[prost(bytes = "vec", repeated, tag = "4")]
     pub output_objects: Vec<Vec<u8>>,
-    #[prost(bytes = "bytes", optional, tag = "5")]
-    pub auxiliary_data: Option<Bytes>,
 }
 
 impl RawSubmitTxResponse {
@@ -314,7 +312,6 @@ impl RawSubmitTxResponse {
                     })
                 })
                 .collect::<Result<_, _>>()?,
-            auxiliary_data: None, // We don't have any aux data generated presently
         })
     }
 }

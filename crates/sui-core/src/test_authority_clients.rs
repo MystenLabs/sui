@@ -134,7 +134,6 @@ impl AuthorityAPI for LocalAuthorityClient {
                         })
                     })
                     .collect::<Result<_, _>>()?,
-                auxiliary_data: None, // We don't have any aux data generated presently
             });
         }
 
@@ -198,7 +197,6 @@ impl AuthorityAPI for LocalAuthorityClient {
                     })
                 })
                 .collect::<Result<_, _>>()?,
-            auxiliary_data: None, // We don't have any aux data generated presently
         })
     }
 
