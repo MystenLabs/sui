@@ -337,8 +337,17 @@ impl FunctionTargetsHolder {
                                 let func_sym = func_env.symbol_pool().make(&function_name.value);
                                 if let Some(target_func_env) = module_env.find_function(func_sym) {
                                     let target_id = target_func_env.get_qualified_id();
-                                    self.function_specs
-                                        .insert(func_env.get_qualified_id(), target_id);
+
+                                    if self.function_specs.contains_right(&target_id) {
+                                        panic!("Duplicate target function: {}", function_name.value);
+                                    } else {
+                                        self.function_specs
+                                            .insert(func_env.get_qualified_id(), target_id);
+                                    }
+                                } else {
+                                    panic!("Target function '{}' not found in module '{}'", 
+                                        function_name.value,
+                                        module.to_string());
                                 }
                             }
                         }
