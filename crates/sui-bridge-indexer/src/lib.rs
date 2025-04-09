@@ -6,9 +6,6 @@ use crate::eth_bridge_indexer::{
     EthDataMapper, EthFinalizedSyncDatasource, EthSubscriptionDatasource,
 };
 use crate::metrics::BridgeIndexerMetrics;
-use crate::models::GovernanceAction as DBGovernanceAction;
-use crate::models::TokenTransferData as DBTokenTransferData;
-use crate::models::{SuiErrorTransactions, TokenTransfer as DBTokenTransfer};
 use crate::postgres_manager::PgPool;
 use crate::storage::PgBridgePersistent;
 use crate::sui_bridge_indexer::SuiBridgeDataMapper;
@@ -22,6 +19,9 @@ use sui_bridge::eth_client::EthClient;
 use sui_bridge::metered_eth_provider::MeteredEthHttpProvier;
 use sui_bridge::metrics::BridgeMetrics;
 use sui_bridge::utils::get_eth_contract_addresses;
+use sui_bridge_schema::models::GovernanceAction as DBGovernanceAction;
+use sui_bridge_schema::models::TokenTransferData as DBTokenTransferData;
+use sui_bridge_schema::models::{SuiErrorTransactions, TokenTransfer as DBTokenTransfer};
 use sui_data_ingestion_core::DataIngestionMetrics;
 use sui_indexer_builder::indexer_builder::{BackfillStrategy, Datasource, Indexer, IndexerBuilder};
 use sui_indexer_builder::metrics::IndexerMetricProvider;
@@ -34,9 +34,7 @@ use sui_types::base_types::{SuiAddress, TransactionDigest};
 
 pub mod config;
 pub mod metrics;
-pub mod models;
 pub mod postgres_manager;
-pub mod schema;
 pub mod storage;
 pub mod sui_transaction_handler;
 pub mod sui_transaction_queries;
