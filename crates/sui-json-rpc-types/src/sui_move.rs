@@ -5,7 +5,7 @@ use colored::Colorize;
 use itertools::Itertools;
 use move_binary_format::file_format::{Ability, AbilitySet, DatatypeTyParameter, Visibility};
 use move_binary_format::normalized::{
-    Enum as NormalizedEnum, Field as NormalizedField, Function as SuiNormalizedFunction,
+    self, Enum as NormalizedEnum, Field as NormalizedField, Function as NormalizedFunction,
     Module as NormalizedModule, Struct as NormalizedStruct, Type as NormalizedType,
 };
 use move_core_types::annotated_value::{MoveStruct, MoveValue, MoveVariant};
@@ -91,17 +91,23 @@ pub enum SuiMoveNormalizedType {
     U256,
     Address,
     Signer,
-    #[serde(rename_all = "camelCase")]
     Struct {
-        address: String,
-        module: String,
-        name: String,
-        type_arguments: Vec<SuiMoveNormalizedType>,
+        #[serde(flatten)]
+        inner: Box<SuiMoveNormalizedStructType>,
     },
     Vector(Box<SuiMoveNormalizedType>),
     TypeParameter(SuiMoveTypeParameterIndex),
     Reference(Box<SuiMoveNormalizedType>),
     MutableReference(Box<SuiMoveNormalizedType>),
+}
+
+#[derive(Serialize, Deserialize, Debug, JsonSchema, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct SuiMoveNormalizedStructType {
+    pub address: String,
+    pub module: String,
+    pub name: String,
+    pub type_arguments: Vec<SuiMoveNormalizedType>,
 }
 
 #[derive(Serialize, Deserialize, Debug, JsonSchema, Clone)]
@@ -141,45 +147,53 @@ impl PartialEq for SuiMoveNormalizedModule {
     }
 }
 
-impl From<NormalizedModule> for SuiMoveNormalizedModule {
-    fn from(module: NormalizedModule) -> Self {
+impl<S: std::hash::Hash + Eq + ToString> From<&NormalizedModule<S>> for SuiMoveNormalizedModule {
+    fn from(module: &NormalizedModule<S>) -> Self {
         Self {
             file_format_version: module.file_format_version,
-            address: module.address.to_hex_literal(),
-            name: module.name.to_string(),
+            address: module.address().to_hex_literal(),
+            name: module.name().to_string(),
             friends: module
                 .friends
-                .into_iter()
+                .iter()
                 .map(|module_id| SuiMoveModuleId {
-                    address: module_id.address().to_hex_literal(),
-                    name: module_id.name().to_string(),
+                    address: module_id.address.to_hex_literal(),
+                    name: module_id.name.to_string(),
                 })
                 .collect::<Vec<SuiMoveModuleId>>(),
             structs: module
                 .structs
-                .into_iter()
-                .map(|(name, struct_)| (name.to_string(), SuiMoveNormalizedStruct::from(struct_)))
+                .iter()
+                .map(|(name, struct_)| {
+                    (name.to_string(), SuiMoveNormalizedStruct::from(&**struct_))
+                })
                 .collect::<BTreeMap<String, SuiMoveNormalizedStruct>>(),
             enums: module
                 .enums
-                .into_iter()
-                .map(|(name, enum_)| (name.to_string(), SuiMoveNormalizedEnum::from(enum_)))
+                .iter()
+                .map(|(name, enum_)| (name.to_string(), SuiMoveNormalizedEnum::from(&**enum_)))
                 .collect(),
             exposed_functions: module
                 .functions
-                .into_iter()
-                .filter_map(|(name, function)| {
+                .iter()
+                .filter(|(_name, function)| {
+                    function.is_entry || function.visibility != Visibility::Private
+                })
+                .map(|(name, function)| {
                     // TODO: Do we want to expose the private functions as well?
-                    (function.is_entry || function.visibility != Visibility::Private)
-                        .then(|| (name.to_string(), SuiMoveNormalizedFunction::from(function)))
+
+                    (
+                        name.to_string(),
+                        SuiMoveNormalizedFunction::from(&**function),
+                    )
                 })
                 .collect::<BTreeMap<String, SuiMoveNormalizedFunction>>(),
         }
     }
 }
 
-impl From<SuiNormalizedFunction> for SuiMoveNormalizedFunction {
-    fn from(function: SuiNormalizedFunction) -> Self {
+impl<S: ToString> From<&NormalizedFunction<S>> for SuiMoveNormalizedFunction {
+    fn from(function: &NormalizedFunction<S>) -> Self {
         Self {
             visibility: match function.visibility {
                 Visibility::Private => SuiMoveVisibility::Private,
@@ -189,59 +203,62 @@ impl From<SuiNormalizedFunction> for SuiMoveNormalizedFunction {
             is_entry: function.is_entry,
             type_parameters: function
                 .type_parameters
-                .into_iter()
+                .iter()
+                .copied()
                 .map(|a| a.into())
                 .collect::<Vec<SuiMoveAbilitySet>>(),
             parameters: function
                 .parameters
-                .into_iter()
-                .map(SuiMoveNormalizedType::from)
+                .iter()
+                .map(|t| SuiMoveNormalizedType::from(&**t))
                 .collect::<Vec<SuiMoveNormalizedType>>(),
             return_: function
                 .return_
-                .into_iter()
-                .map(SuiMoveNormalizedType::from)
+                .iter()
+                .map(|t| SuiMoveNormalizedType::from(&**t))
                 .collect::<Vec<SuiMoveNormalizedType>>(),
         }
     }
 }
 
-impl From<NormalizedStruct> for SuiMoveNormalizedStruct {
-    fn from(struct_: NormalizedStruct) -> Self {
+impl<S: ToString> From<&NormalizedStruct<S>> for SuiMoveNormalizedStruct {
+    fn from(struct_: &NormalizedStruct<S>) -> Self {
         Self {
             abilities: struct_.abilities.into(),
             type_parameters: struct_
                 .type_parameters
-                .into_iter()
+                .iter()
+                .copied()
                 .map(SuiMoveStructTypeParameter::from)
                 .collect::<Vec<SuiMoveStructTypeParameter>>(),
             fields: struct_
                 .fields
-                .into_iter()
-                .map(SuiMoveNormalizedField::from)
+                .iter()
+                .map(|f| SuiMoveNormalizedField::from(&**f))
                 .collect::<Vec<SuiMoveNormalizedField>>(),
         }
     }
 }
 
-impl From<NormalizedEnum> for SuiMoveNormalizedEnum {
-    fn from(value: NormalizedEnum) -> Self {
+impl<S: ToString> From<&NormalizedEnum<S>> for SuiMoveNormalizedEnum {
+    fn from(value: &NormalizedEnum<S>) -> Self {
         Self {
             abilities: value.abilities.into(),
             type_parameters: value
                 .type_parameters
-                .into_iter()
+                .iter()
+                .copied()
                 .map(SuiMoveStructTypeParameter::from)
                 .collect::<Vec<SuiMoveStructTypeParameter>>(),
             variants: value
                 .variants
-                .into_iter()
+                .iter()
                 .map(|variant| {
                     (
                         variant.name.to_string(),
                         variant
                             .fields
-                            .into_iter()
+                            .iter()
                             .map(SuiMoveNormalizedField::from)
                             .collect::<Vec<SuiMoveNormalizedField>>(),
                     )
@@ -260,17 +277,17 @@ impl From<DatatypeTyParameter> for SuiMoveStructTypeParameter {
     }
 }
 
-impl From<NormalizedField> for SuiMoveNormalizedField {
-    fn from(normalized_field: NormalizedField) -> Self {
+impl<S: ToString> From<&NormalizedField<S>> for SuiMoveNormalizedField {
+    fn from(normalized_field: &NormalizedField<S>) -> Self {
         Self {
             name: normalized_field.name.to_string(),
-            type_: SuiMoveNormalizedType::from(normalized_field.type_),
+            type_: SuiMoveNormalizedType::from(&normalized_field.type_),
         }
     }
 }
 
-impl From<NormalizedType> for SuiMoveNormalizedType {
-    fn from(type_: NormalizedType) -> Self {
+impl<S: ToString> From<&NormalizedType<S>> for SuiMoveNormalizedType {
+    fn from(type_: &NormalizedType<S>) -> Self {
         match type_ {
             NormalizedType::Bool => SuiMoveNormalizedType::Bool,
             NormalizedType::U8 => SuiMoveNormalizedType::U8,
@@ -281,30 +298,32 @@ impl From<NormalizedType> for SuiMoveNormalizedType {
             NormalizedType::U256 => SuiMoveNormalizedType::U256,
             NormalizedType::Address => SuiMoveNormalizedType::Address,
             NormalizedType::Signer => SuiMoveNormalizedType::Signer,
-            NormalizedType::Struct {
-                address,
-                module,
-                name,
-                type_arguments,
-            } => SuiMoveNormalizedType::Struct {
-                address: address.to_hex_literal(),
-                module: module.to_string(),
-                name: name.to_string(),
-                type_arguments: type_arguments
-                    .into_iter()
-                    .map(SuiMoveNormalizedType::from)
-                    .collect::<Vec<SuiMoveNormalizedType>>(),
-            },
+            NormalizedType::Datatype(dt) => {
+                let normalized::Datatype {
+                    module,
+                    name,
+                    type_arguments,
+                } = &**dt;
+                SuiMoveNormalizedType::new_struct(
+                    module.address.to_hex_literal(),
+                    module.name.to_string(),
+                    name.to_string(),
+                    type_arguments
+                        .iter()
+                        .map(SuiMoveNormalizedType::from)
+                        .collect::<Vec<SuiMoveNormalizedType>>(),
+                )
+            }
             NormalizedType::Vector(v) => {
-                SuiMoveNormalizedType::Vector(Box::new(SuiMoveNormalizedType::from(*v)))
+                SuiMoveNormalizedType::Vector(Box::new(SuiMoveNormalizedType::from(&**v)))
             }
-            NormalizedType::TypeParameter(t) => SuiMoveNormalizedType::TypeParameter(t),
-            NormalizedType::Reference(r) => {
-                SuiMoveNormalizedType::Reference(Box::new(SuiMoveNormalizedType::from(*r)))
+            NormalizedType::TypeParameter(t) => SuiMoveNormalizedType::TypeParameter(*t),
+            NormalizedType::Reference(false, r) => {
+                SuiMoveNormalizedType::Reference(Box::new(SuiMoveNormalizedType::from(&**r)))
             }
-            NormalizedType::MutableReference(mr) => {
-                SuiMoveNormalizedType::MutableReference(Box::new(SuiMoveNormalizedType::from(*mr)))
-            }
+            NormalizedType::Reference(true, mr) => SuiMoveNormalizedType::MutableReference(
+                Box::new(SuiMoveNormalizedType::from(&**mr)),
+            ),
         }
     }
 }
@@ -321,6 +340,24 @@ impl From<AbilitySet> for SuiMoveAbilitySet {
                     Ability::Store => SuiMoveAbility::Store,
                 })
                 .collect::<Vec<SuiMoveAbility>>(),
+        }
+    }
+}
+
+impl SuiMoveNormalizedType {
+    pub fn new_struct(
+        address: String,
+        module: String,
+        name: String,
+        type_arguments: Vec<SuiMoveNormalizedType>,
+    ) -> Self {
+        SuiMoveNormalizedType::Struct {
+            inner: Box::new(SuiMoveNormalizedStructType {
+                address,
+                module,
+                name,
+                type_arguments,
+            }),
         }
     }
 }
@@ -652,4 +689,9 @@ impl From<MoveStruct> for SuiMoveStruct {
                 .collect(),
         }
     }
+}
+
+#[test]
+fn enum_size() {
+    assert_eq!(std::mem::size_of::<SuiMoveNormalizedType>(), 16);
 }
