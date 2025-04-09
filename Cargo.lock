@@ -17474,6 +17474,7 @@ name = "typed-store"
 version = "0.4.0"
 dependencies = [
  "async-trait",
+ "backoff",
  "bcs",
  "bincode",
  "collectable",
