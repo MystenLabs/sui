@@ -50,7 +50,7 @@ impl Test {
             ));
         }
         // save disassembly if trace execution is enabled
-        let save_disassembly = self.test.trace_execution.is_some();
+        let save_disassembly = self.test.trace_execution;
         // find manifest file directory from a given path or (if missing) from current dir
         let rerooted_path = base::reroot_path(path)?;
         let unit_test_config = self.test.unit_test_config();
