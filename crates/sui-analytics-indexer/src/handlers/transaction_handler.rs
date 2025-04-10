@@ -15,7 +15,6 @@ use sui_types::effects::TransactionEffects;
 use sui_types::effects::TransactionEffectsAPI;
 use sui_types::full_checkpoint_content::{CheckpointData, CheckpointTransaction};
 use sui_types::transaction::{Command, TransactionDataAPI, TransactionKind};
-use tracing::info;
 
 use crate::handlers::AnalyticsHandler;
 use crate::tables::TransactionEntry;
@@ -269,7 +268,7 @@ mod tests {
         // Check that the transaction was stored correctly.
         assert_eq!(db_txn.transaction_digest, transaction.digest().to_string());
         assert_eq!(
-            db_txn.bcs_length,
+            db_txn.transaction_data_bcs_length,
             bcs::to_bytes(&transaction.transaction_data())
                 .unwrap()
                 .len() as u64
