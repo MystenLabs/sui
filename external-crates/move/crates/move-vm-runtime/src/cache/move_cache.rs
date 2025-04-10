@@ -6,7 +6,8 @@
 // and publishing packages to the VM.
 
 use crate::{
-    jit, natives::functions::NativeFunctions, shared::types::VersionId, validation::verification,
+    jit, natives::functions::NativeFunctions, runtime::telemetry::MoveCacheTelemetry,
+    shared::types::VersionId, validation::verification,
 };
 use move_vm_config::runtime::VMConfig;
 use parking_lot::RwLock;
@@ -89,6 +90,47 @@ impl MoveCache {
     #[cfg(test)]
     pub(crate) fn remove_package(&self, version_id: &VersionId) -> bool {
         self.package_cache.write().remove(version_id).is_some()
+    }
+
+    // -------------------------------------------
+    // Telemetry Reporting
+    // -------------------------------------------
+
+    pub(crate) fn to_cache_telemetry(&self) -> MoveCacheTelemetry {
+        // Lock the package_cache for reading.
+        let package_cache = self.package_cache.read();
+
+        let mut package_cache_count: u64 = 0;
+        let mut total_arena_size: u64 = 0;
+        let mut module_count: u64 = 0;
+        let mut function_count: u64 = 0;
+        let mut type_count: u64 = 0;
+
+        // Iterate over each package.
+        for (_version_id, package_arc) in package_cache.iter() {
+            package_cache_count += 1;
+
+            // Dereference the runtime package.
+            let runtime_pkg = &package_arc.runtime;
+
+            // Sum up the number of modules.
+            module_count += runtime_pkg.loaded_modules.len() as u64;
+
+            // Sum up the number of functions and types.
+            function_count += runtime_pkg.vtable.functions.len() as u64;
+            type_count += runtime_pkg.vtable.types.len() as u64;
+
+            // Sum the memory usage reported by the arena.
+            total_arena_size += runtime_pkg.package_arena.allocated_bytes() as u64;
+        }
+
+        MoveCacheTelemetry {
+            package_cache_count,
+            total_arena_size,
+            module_count,
+            function_count,
+            type_count,
+        }
     }
 }
 

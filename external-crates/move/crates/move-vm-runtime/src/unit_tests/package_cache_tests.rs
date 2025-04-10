@@ -8,7 +8,10 @@ use crate::{
         vm_test_adapter::VMTestAdapter,
     },
     natives::functions::NativeFunctions,
-    runtime::{data_cache::TransactionDataCache, package_resolution::resolve_packages},
+    runtime::{
+        data_cache::TransactionDataCache, package_resolution::resolve_packages,
+        telemetry::TransactionTelemetryContext,
+    },
     shared::{linkage_context::LinkageContext, types::VersionId},
 };
 use move_binary_format::errors::VMResult;
@@ -21,11 +24,19 @@ fn load_linkage_packages_into_runtime<DataSource: ModuleResolver + Send + Sync>(
     adapter: &mut impl VMTestAdapter<DataSource>,
     linkage: &LinkageContext,
 ) -> VMResult<BTreeMap<VersionId, Arc<Package>>> {
+    let mut dummy_telemetry = TransactionTelemetryContext::new();
     let cache = adapter.runtime().cache();
     let natives = adapter.runtime().natives();
     let all_packages = linkage.all_packages()?;
     let storage = TransactionDataCache::new(adapter.storage());
-    resolve_packages(&cache, &natives, &storage, linkage, all_packages)
+    resolve_packages(
+        &mut dummy_telemetry,
+        &cache,
+        &natives,
+        &storage,
+        linkage,
+        all_packages,
+    )
 }
 
 #[test]

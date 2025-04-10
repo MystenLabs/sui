@@ -10,12 +10,15 @@ use crate::{
     },
     jit::execution::ast::{Function, Type, TypeSubst},
     natives::extensions::NativeContextExtensions,
+    record_time,
+    runtime::telemetry::{TelmetryContext, TransactionTelemetryContext},
     shared::{
         gas::GasMeter,
         linkage_context::LinkageContext,
         serialization::{SerializedReturnValues, *},
         vm_pointer::VMPointer,
     },
+    with_transaction_telemetry,
 };
 use move_binary_format::{
     errors::{Location, PartialVMError, PartialVMResult, VMError, VMResult},
@@ -57,6 +60,8 @@ pub struct MoveVM<'extensions> {
     pub(crate) native_extensions: NativeContextExtensions<'extensions>,
     /// The Move VM's configuration.
     pub(crate) vm_config: Arc<VMConfig>,
+    /// The Move Runtime telemetry
+    pub(crate) telemetry: Arc<TelmetryContext>,
     /// Move VM Base Heap, which holds base arguments, including reference return values, etc.
     pub(crate) base_heap: BaseHeap,
 }
@@ -287,29 +292,39 @@ impl<'extensions> MoveVM<'extensions> {
         gas_meter: &mut impl GasMeter,
         bypass_declared_entry_check: bool,
     ) -> VMResult<SerializedReturnValues> {
-        // Find the function definition
-        let MoveVMFunction {
-            function,
-            parameters,
-            return_type,
-        } = self.find_function(runtime_id, function_name, &type_arguments)?;
+        let telemetry = Arc::clone(&self.telemetry);
+        with_transaction_telemetry!(
+            telemetry;
+            txn_telemetry => {
+                record_time!(EXECUTION; txn_telemetry => {
+                        // Find the function definition
+                        let MoveVMFunction {
+                            function,
+                            parameters,
+                            return_type,
+                        } = self.find_function(runtime_id, function_name, &type_arguments)?;
 
-        if !bypass_declared_entry_check && !function.to_ref().is_entry {
-            return Err(PartialVMError::new(
-                StatusCode::EXECUTE_ENTRY_FUNCTION_CALLED_ON_NON_ENTRY_FUNCTION,
-            )
-            .finish(Location::Undefined));
-        }
+                        if !bypass_declared_entry_check && !function.to_ref().is_entry {
+                            return Err(PartialVMError::new(
+                                StatusCode::EXECUTE_ENTRY_FUNCTION_CALLED_ON_NON_ENTRY_FUNCTION,
+                            )
+                            .finish(Location::Undefined));
+                        }
 
-        // execute the function
-        self.execute_function_impl(
-            function,
-            type_arguments,
-            parameters,
-            return_type,
-            serialized_args,
-            &mut tracer.map(VMTracer::new),
-            gas_meter,
+                        // execute the function
+                        self.execute_function_impl(
+                            &mut txn_telemetry,
+                            function,
+                            type_arguments,
+                            parameters,
+                            return_type,
+                            serialized_args,
+                            &mut tracer.map(VMTracer::new),
+                            gas_meter,
+                        )
+                    }
+                )
+            }
         )
     }
 
@@ -363,6 +378,7 @@ impl<'extensions> MoveVM<'extensions> {
     /// interpreter, and serializing the return value(s).
     fn execute_function_impl(
         &mut self,
+        txn_telemetry: &mut TransactionTelemetryContext,
         func: VMPointer<Function>,
         ty_args: Vec<Type>,
         param_types: Vec<Type>,
@@ -402,11 +418,12 @@ impl<'extensions> MoveVM<'extensions> {
             .map_err(|err| err.finish(Location::Undefined))?;
 
         let return_values = interpreter::run(
-            &mut self.virtual_tables,
+            txn_telemetry,
             self.vm_config.clone(),
             &mut self.native_extensions,
             tracer,
             gas_meter,
+            &mut self.virtual_tables,
             func,
             ty_args,
             deserialized_args,

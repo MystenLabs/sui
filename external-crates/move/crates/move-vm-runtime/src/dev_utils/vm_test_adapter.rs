@@ -4,7 +4,7 @@
 use crate::{
     execution::vm::MoveVM,
     natives::extensions::NativeContextExtensions,
-    runtime::MoveRuntime,
+    runtime::{telemetry::MoveRuntimeTelemetry, MoveRuntime},
     shared::{
         linkage_context::LinkageContext,
         types::{DefiningTypeId, OriginalId},
@@ -60,6 +60,9 @@ pub trait VMTestAdapter<Storage: ModuleResolver + Sync + Send> {
         linkage_context: LinkageContext,
         native_extensions: NativeContextExtensions<'extensions>,
     ) -> VMResult<MoveVM<'extensions>>;
+
+    /// Retrieve the telmetry report for the execution runtime
+    fn get_telemetry_report(&self) -> MoveRuntimeTelemetry;
 
     /// Generate a linkage context for a given version ID, original ID, and list of compiled modules.
     /// This must include all of the transitive dependencies of the provided modules in the linkage

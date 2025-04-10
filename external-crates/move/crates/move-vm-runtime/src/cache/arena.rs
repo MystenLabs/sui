@@ -84,6 +84,10 @@ impl Arena {
             Err(PartialVMError::new(StatusCode::PACKAGE_ARENA_LIMIT_REACHED))
         }
     }
+
+    pub fn allocated_bytes(&self) -> usize {
+        self.0.allocated_bytes()
+    }
 }
 
 impl<T> ArenaVec<T> {

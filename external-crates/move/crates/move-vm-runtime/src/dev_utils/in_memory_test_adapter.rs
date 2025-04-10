@@ -9,7 +9,7 @@ use crate::{
     },
     execution::vm::MoveVM,
     natives::{extensions::NativeContextExtensions, functions::NativeFunctions},
-    runtime::MoveRuntime,
+    runtime::{telemetry::MoveRuntimeTelemetry, MoveRuntime},
     shared::{
         linkage_context::LinkageContext,
         types::{DefiningTypeId, OriginalId},
@@ -165,6 +165,10 @@ impl VMTestAdapter<InMemoryStorage> for InMemoryTestAdapter {
     ) -> VMResult<MoveVM<'extensions>> {
         let Self { runtime, storage } = self;
         runtime.make_vm_with_native_extensions(storage, linkage_context, native_extensions)
+    }
+
+    fn get_telemetry_report(&self) -> MoveRuntimeTelemetry {
+        self.runtime.get_telemetry_report()
     }
 
     // Generate a linkage context for a given runtime ID, storage ID, and list of compiled modules.

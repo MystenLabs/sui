@@ -17,6 +17,7 @@ pub mod vm_pointer;
 #[macro_export]
 macro_rules! try_block {
     ($($body:tt)*) => {{
+        #[allow(clippy::redundant_closure_call)]
         (|| {
             $($body)*
         })()

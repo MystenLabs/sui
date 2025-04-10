@@ -74,6 +74,12 @@ pub fn resolve_interned(key: &IdentifierKey, key_type: &str) -> PartialVMResult<
     interner.resolve_ident(key, key_type)
 }
 
+/// Get current memory size of the global interner.
+pub fn get_interner_size() -> usize {
+    let interner = global_interner();
+    interner.0.current_memory_usage()
+}
+
 // -------------------------------------------------------------------------------------------------
 // Types
 // -------------------------------------------------------------------------------------------------
