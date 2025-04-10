@@ -4,24 +4,22 @@
 use diesel::associations::HasTable;
 use diesel::QueryDsl;
 use diesel_async::RunQueryDsl;
-use diesel_migrations::{embed_migrations, EmbeddedMigrations};
 use prometheus::Registry;
 use std::time::Duration;
 use sui_bridge::e2e_tests::test_utils::{
     initiate_bridge_eth_to_sui, BridgeTestCluster, BridgeTestClusterBuilder,
 };
 use sui_bridge_indexer::config::IndexerConfig;
+use sui_bridge_indexer::create_sui_indexer;
 use sui_bridge_indexer::metrics::BridgeIndexerMetrics;
-use sui_bridge_indexer::models::{GovernanceAction, TokenTransfer};
 use sui_bridge_indexer::postgres_manager::get_connection_pool;
 use sui_bridge_indexer::storage::PgBridgePersistent;
-use sui_bridge_indexer::{create_sui_indexer, schema};
+use sui_bridge_schema::models::{GovernanceAction, TokenTransfer};
+use sui_bridge_schema::{schema, MIGRATIONS};
 use sui_data_ingestion_core::DataIngestionMetrics;
 use sui_indexer::database::Connection;
 use sui_indexer_builder::indexer_builder::IndexerProgressStore;
 use sui_pg_db::temp::TempDb;
-
-const MIGRATIONS: EmbeddedMigrations = embed_migrations!("src/migrations");
 
 #[tokio::test]
 async fn test_indexing_transfer() {
