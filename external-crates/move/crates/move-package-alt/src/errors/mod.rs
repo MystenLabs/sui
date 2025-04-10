@@ -47,8 +47,6 @@ pub enum PackageError {
 
     #[error(transparent)]
     Toml(#[from] toml_edit::de::Error),
-    //    #[error(transparent)]
-    //    ExternalResolver(#[from]
 }
 
 impl PackageError {

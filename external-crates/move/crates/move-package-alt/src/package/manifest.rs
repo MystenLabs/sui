@@ -12,7 +12,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::{
     dependency::ManifestDependencyInfo,
-    errors::{with_file, Located, ManifestError, ManifestErrorKind, PackageResult},
+    errors::{with_file, FileHandle, Located, ManifestError, ManifestErrorKind, PackageResult},
     flavor::{MoveFlavor, Vanilla},
 };
 
@@ -79,12 +79,11 @@ impl<F: MoveFlavor> Manifest<F> {
         let contents = std::fs::read_to_string(&path)?;
 
         let manifest: Self = with_file(&path, |contents| toml_edit::de::from_str(&contents))??;
-        // manifest.validate_manifest(&path, &contents)?;
+        manifest.validate_manifest(&path, &contents)?;
 
         Ok(manifest)
     }
 
-    /*
     /// Validate the manifest contents, after deserialization.
     pub fn validate_manifest(&self, path: impl AsRef<Path>, contents: &str) -> PackageResult<()> {
         // Validate package name
@@ -92,8 +91,7 @@ impl<F: MoveFlavor> Manifest<F> {
             let err = ManifestError {
                 kind: ManifestErrorKind::EmptyPackageName,
                 span: Some(self.package.name.span()),
-                path: path.as_ref().to_path_buf(),
-                src: contents.to_string(),
+                handle: FileHandle::new(path.as_ref().to_path_buf())?,
             };
             err.emit()?;
             return Err(err.into());
@@ -107,8 +105,7 @@ impl<F: MoveFlavor> Manifest<F> {
                     valid: ALLOWED_EDITIONS.join(", ").to_string(),
                 },
                 span: Some(self.package.edition.span()),
-                path: path.as_ref().to_path_buf(),
-                src: contents.to_string(),
+                handle: FileHandle::new(path.as_ref().to_path_buf())?,
             };
             err.emit()?;
             return Err(err.into());
@@ -116,7 +113,6 @@ impl<F: MoveFlavor> Manifest<F> {
 
         Ok(())
     }
-    */
 
     fn write_template(path: impl AsRef<Path>, name: &PackageName) -> anyhow::Result<()> {
         std::fs::write(

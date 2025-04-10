@@ -32,6 +32,8 @@ pub struct Located<T> {
     value: Spanned<T>,
 }
 
+struct Guard;
+
 impl<T> Located<T> {
     pub fn new(value: T, file: FileHandle, span: Range<usize>) -> Self {
         Self {
@@ -67,8 +69,6 @@ impl<T> Located<T> {
         self.value.get_mut()
     }
 }
-
-struct Guard;
 
 impl Guard {
     fn new(file: FileHandle) -> Self {

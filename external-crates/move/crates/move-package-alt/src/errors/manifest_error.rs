@@ -32,9 +32,6 @@ pub enum ManifestErrorKind {
     EmptyPackageName,
     #[error("unsupported edition '{edition}', expected one of '{valid}'")]
     InvalidEdition { edition: String, valid: String },
-
-    #[error("multiple external resolvers listed for dependency")]
-    MultipleExternalResolvers,
 }
 
 impl ManifestError {
@@ -48,8 +45,6 @@ impl ManifestError {
 
     /// Get the file ID and span for this error
     fn span_info(&self) -> (usize, Option<Range<usize>>) {
-        // In a real implementation, we'd want to cache the SimpleFiles instance
-        // and reuse it across multiple errors
         let mut files = SimpleFiles::new();
         let file_id = files.add(self.handle.path().to_string_lossy(), self.handle.source());
         (file_id, self.span.clone())

@@ -7,15 +7,15 @@ publish = false
 edition = "2021"
 
 [dependencies]
-serde.workspace = true
-toml_edit.workspace = true
-serde_spanned.workspace = true
-toml.workspace = true
 anyhow.workspace = true
-derive-where.workspace = true
-thiserror.workspace = true
+append-only-vec.workspace = true
 codespan-reporting.workspace = true
-append-only-vec = "0.1.7"
+derive-where.workspace = true
+serde.workspace = true
+serde_spanned.workspace = true
+thiserror.workspace = true
+toml_edit.workspace = true
+toml.workspace = true
 
 [dev-dependencies]
 move-command-line-common.workspace = true
