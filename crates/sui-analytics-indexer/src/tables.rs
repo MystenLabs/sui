@@ -95,7 +95,7 @@ pub(crate) struct TransactionEntry {
     pub(crate) effects_json: Option<String>,
     pub(crate) transaction_position: u64,
     pub(crate) events_digest: Option<String>,
-    pub(crate) data_bcs_length: u64,
+    pub(crate) transaction_data_bcs_length: u64,
     pub(crate) effects_bcs_length: u64,
     pub(crate) events_bcs_length: u64,
     pub(crate) signatures_bcs_length: u64,
