@@ -89,12 +89,16 @@ pub(crate) struct TransactionEntry {
     pub(crate) storage_rebate: u64,
     pub(crate) non_refundable_storage_fee: u64,
     pub(crate) gas_price: u64,
-    pub(crate) bcs_length: u64,
     pub(crate) has_zklogin_sig: bool,
     pub(crate) has_upgraded_multisig: bool,
     pub(crate) transaction_json: Option<String>,
     pub(crate) effects_json: Option<String>,
     pub(crate) transaction_position: u64,
+    pub(crate) events_digest: Option<String>,
+    pub(crate) data_bcs_length: u64,
+    pub(crate) effects_bcs_length: u64,
+    pub(crate) events_bcs_length: u64,
+    pub(crate) signatures_bcs_length: u64,
 }
 
 // Raw Transaction bytes (used by security team).

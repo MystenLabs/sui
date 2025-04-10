@@ -15,6 +15,7 @@ use sui_types::effects::TransactionEffects;
 use sui_types::effects::TransactionEffectsAPI;
 use sui_types::full_checkpoint_content::{CheckpointData, CheckpointTransaction};
 use sui_types::transaction::{Command, TransactionDataAPI, TransactionKind};
+use tracing::info;
 
 use crate::handlers::AnalyticsHandler;
 use crate::tables::TransactionEntry;
@@ -106,6 +107,24 @@ impl TransactionHandler {
             .collect::<Vec<_>>()
             .join("-");
         let transaction_digest = transaction.digest().base58_encode();
+        let events_digest = &checkpoint_transaction
+            .events
+            .map(|events| events.digest().base58_encode());
+
+        let transaction_position = *transaction_positions
+            .get(transaction.digest())
+            .expect("Expect transaction to exist in checkpoint_contents.")
+            as u64;
+
+        let data_bcs_length = bcs::to_bytes(&txn_data).unwrap().len() as u64;
+        let effects_bcs_length = bcs::to_bytes(&checkpoint_transaction.effects)
+            .unwrap()
+            .len() as u64;
+        let events_bcs_length = bcs::to_bytes(&checkpoint_transaction.events).unwrap().len() as u64;
+        let signatures_bcs_length =
+            bcs::to_bytes(&checkpoint_transaction.transaction.data().tx_signatures())
+                .unwrap()
+                .len() as u64;
 
         let mut transfers: u64 = 0;
         let mut split_coins: u64 = 0;
@@ -182,19 +201,17 @@ impl TransactionHandler {
             storage_cost: gas_summary.storage_cost,
             storage_rebate: gas_summary.storage_rebate,
             non_refundable_storage_fee: gas_summary.non_refundable_storage_fee,
-
             gas_price: txn_data.gas_price(),
-
-            bcs_length: bcs::to_bytes(&txn_data).unwrap().len() as u64,
-
             has_zklogin_sig: transaction.has_zklogin_sig(),
             has_upgraded_multisig: transaction.has_upgraded_multisig(),
             transaction_json: Some(transaction_json),
             effects_json: Some(effects_json),
-            transaction_position: *transaction_positions
-                .get(transaction.digest())
-                .expect("Expect transaction to exist in checkpoint_contents.")
-                as u64,
+            transaction_position,
+            events_digest,
+            data_bcs_length,
+            effects_bcs_length,
+            events_bcs_length,
+            signatures_bcs_length,
         };
         state.transactions.push(entry);
         Ok(())
@@ -210,6 +227,7 @@ fn compute_transaction_positions(
         digest_to_position.insert(execution_digest.transaction, position);
     }
 
+    info!("Transaction kind [{kind}] is not programmable transaction and not a system transaction");
     digest_to_position
 }
 

@@ -98,7 +98,7 @@ impl PackageHandler {
                 checkpoint,
                 epoch,
                 timestamp_ms,
-                bcs_length: bcs::to_bytes(p)?.len() as u64,
+                bcs_length: bcs::to_bytes(object).unwrap().len() as u64,
                 transaction_digest: object.previous_transaction.to_string(),
                 original_package_id: Some(original_package_id.to_string()),
             };

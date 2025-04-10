@@ -54,11 +54,11 @@ impl AnalyticsHandler<TransactionBCSEntry> for TransactionBCSHandler {
     }
 
     fn file_type(&self) -> Result<FileType> {
-        Ok(FileType::Transaction)
+        Ok(FileType::TransactionBCS)
     }
 
     fn name(&self) -> &str {
-        "transaction"
+        "transaction_bcs"
     }
 }
 
