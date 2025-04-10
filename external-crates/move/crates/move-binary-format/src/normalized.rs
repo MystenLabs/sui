@@ -28,7 +28,7 @@ pub trait StringPool {
     fn as_ident_str<'a>(&'a self, s: &'a Self::String) -> &'a IdentStr;
 }
 
-#[derive(Clone, Debug, Ord, PartialOrd, Eq, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Copy, Debug, Ord, PartialOrd, Eq, PartialEq, Serialize, Deserialize)]
 pub struct ModuleId<S> {
     pub address: AccountAddress,
     pub name: S,
@@ -83,7 +83,7 @@ pub type Signature<S> = Rc<Vec<Rc<Type<S>>>>;
 
 #[cfg_attr(test, derive(Clone))]
 #[derive(Debug)]
-struct Tables<S> {
+struct Tables<S: Hash + Eq> {
     empty_signature: Signature<S>,
     signatures: Vec<Signature<S>>,
     constants: Vec<Rc<Constant<S>>>,
@@ -102,7 +102,7 @@ pub struct Module<S: Hash + Eq> {
     code_included: bool,
     pub id: ModuleId<S>,
     pub file_format_version: u32,
-    pub dependencies: Vec<ModuleId<S>>,
+    pub immediate_dependencies: Vec<ModuleId<S>>,
     pub friends: Vec<ModuleId<S>>,
     pub structs: IndexMap<S, Rc<Struct<S>>>,
     pub enums: IndexMap<S, Rc<Enum<S>>>,
@@ -112,7 +112,7 @@ pub struct Module<S: Hash + Eq> {
 
 /// Normalized version of a `Constant`.
 #[cfg_attr(test, derive(Clone))]
-#[derive(Debug, Eq, PartialEq, Ord, PartialOrd)]
+#[derive(Debug, Eq, PartialEq)]
 pub struct Constant<S> {
     pub type_: Type<S>,
     pub data: Vec<u8>,
@@ -121,7 +121,7 @@ pub struct Constant<S> {
 /// Normalized version of a `StructDefinition`. Not safe to compare without an associated
 /// `ModuleId` or `Module`.
 #[cfg_attr(test, derive(Clone))]
-#[derive(Debug, Eq, PartialEq, Ord, PartialOrd)]
+#[derive(Debug, Eq, PartialEq)]
 pub struct Struct<S> {
     pub name: S,
     pub abilities: AbilitySet,
@@ -134,7 +134,7 @@ pub struct Struct<S> {
 /// want a change from `Account { bal: u64, seq: u64 }` to `Account { seq: u64, bal: u64 }` to be
 /// marked as incompatible. Not safe to compare without an enclosing `Struct`.
 #[cfg_attr(test, derive(Clone))]
-#[derive(Debug, Eq, PartialEq, Ord, PartialOrd)]
+#[derive(Debug, Eq, PartialEq)]
 pub struct Field<S> {
     pub name: S,
     pub type_: Type<S>,
@@ -144,7 +144,7 @@ pub struct Field<S> {
 /// `ModuleId` or `Module`.
 #[cfg_attr(test, derive(Clone))]
 #[derive(Debug)]
-pub struct Function<S> {
+pub struct Function<S: Hash + Eq> {
     pub name: S,
     pub visibility: Visibility,
     pub is_entry: bool,
@@ -159,18 +159,18 @@ pub struct Function<S> {
 /// Normalized version of a `EnumDefinition`. Not safe to compare without an associated
 /// `ModuleId` or `Module`.
 #[cfg_attr(test, derive(Clone))]
-#[derive(Debug, Eq, PartialEq, Ord, PartialOrd)]
-pub struct Enum<S> {
+#[derive(Debug, Eq, PartialEq)]
+pub struct Enum<S: Hash + Eq> {
     pub name: S,
     pub abilities: AbilitySet,
     pub type_parameters: Vec<DatatypeTyParameter>,
-    pub variants: Vec<Rc<Variant<S>>>,
+    pub variants: IndexMap<S, Rc<Variant<S>>>,
 }
 
 /// Normalized version of a `VariantDefinition`. Not safe to compare without an associated
 /// `ModuleId` or `Module`.
 #[cfg_attr(test, derive(Clone))]
-#[derive(Debug, Eq, PartialEq, Ord, PartialOrd)]
+#[derive(Debug, Eq, PartialEq)]
 pub struct Variant<S> {
     pub name: S,
     pub fields: Vec<Field<S>>,
@@ -179,21 +179,21 @@ pub struct Variant<S> {
 /// Normalized version of a `VariantJumpTable`. Not safe to compare without an associated
 /// `ModuleId` or `Module`.
 #[cfg_attr(test, derive(Clone))]
-#[derive(Debug, Eq, PartialEq, Ord, PartialOrd)]
-pub struct VariantJumpTable<S> {
+#[derive(Debug, Eq, PartialEq)]
+pub struct VariantJumpTable<S: Hash + Eq> {
     pub enum_: Rc<Enum<S>>,
     pub jump_table: JumpTableInner,
 }
 
 pub type ConstantRef<S> = Rc<Constant<S>>;
 
-#[derive(Clone, Debug, Ord, PartialOrd, Eq, PartialEq)]
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct StructRef<S> {
     pub struct_: Rc<Struct<S>>,
     pub type_arguments: Signature<S>,
 }
 
-#[derive(Clone, Debug, Ord, PartialOrd, Eq, PartialEq)]
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct FieldRef<S> {
     pub struct_: Rc<Struct<S>>,
     pub field: Rc<Field<S>>,
@@ -210,7 +210,7 @@ pub struct FieldRef<S> {
 //   - The callee is in the same package as this call, in which case the callee couldn't have changed; or
 //   - The callee was in a different package and therefore public, and therefore the API of that
 //   function must not have changed by compatibility rules.
-#[derive(Clone, Debug, Ord, PartialOrd, Eq, PartialEq)]
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct FunctionRef<S> {
     pub module: ModuleId<S>,
     pub function: S,
@@ -218,8 +218,8 @@ pub struct FunctionRef<S> {
 }
 
 /// Normalized version of a `VariantRef` and `VariantInstantiationHandle`.
-#[derive(Clone, Debug, Eq, PartialEq, Ord, PartialOrd)]
-pub struct VariantRef<S> {
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct VariantRef<S: Hash + Eq> {
     pub enum_: Rc<Enum<S>>,
     pub variant: Rc<Variant<S>>,
     /// The type arguments to the enum
@@ -229,8 +229,8 @@ pub struct VariantRef<S> {
 pub type VariantJumpTableRef<S> = Rc<VariantJumpTable<S>>;
 
 /// Normalized representation of bytecode.
-#[derive(Clone, Debug, Ord, PartialOrd, Eq, PartialEq)]
-pub enum Bytecode<S> {
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub enum Bytecode<S: Hash + Eq> {
     Pop,
     Ret,
     BrTrue(CodeOffset),
@@ -561,12 +561,15 @@ impl<S> Datatype<S> {
     }
 }
 
-impl<S> Tables<S> {
+impl<S: Hash + Eq> Tables<S> {
     fn new<Pool: StringPool<String = S>>(
         pool: &mut Pool,
         m: &CompiledModule,
         include_code: bool,
-    ) -> Self {
+    ) -> Self
+    where
+        S: Clone,
+    {
         let mut tables = Tables {
             empty_signature: Rc::new(vec![]),
             signatures: Vec::new(),
@@ -624,7 +627,7 @@ impl<S: Hash + Eq> Module<S> {
             .into_iter()
             .map(|f| ModuleId::new(pool, &f))
             .collect();
-        let dependencies = m
+        let immediate_dependencies = m
             .immediate_dependencies()
             .into_iter()
             .map(|d| ModuleId::new(pool, &d))
@@ -659,7 +662,7 @@ impl<S: Hash + Eq> Module<S> {
             structs,
             enums,
             functions,
-            dependencies,
+            immediate_dependencies,
             constants,
         }
     }
@@ -690,7 +693,7 @@ impl<S: Hash + Eq> Module<S> {
             code_included,
             id,
             file_format_version,
-            dependencies,
+            immediate_dependencies,
             friends,
             structs,
             enums,
@@ -703,7 +706,7 @@ impl<S: Hash + Eq> Module<S> {
         }
         id == &other.id
             && file_format_version == &other.file_format_version
-            && dependencies == &other.dependencies
+            && immediate_dependencies == &other.immediate_dependencies
             && friends == &other.friends
             && structs == &other.structs
             && enums == &other.enums
@@ -772,7 +775,7 @@ impl<S> Field<S> {
     }
 }
 
-impl<S> Function<S> {
+impl<S: Hash + Eq> Function<S> {
     /// Create a `FunctionSignature` for `FunctionHandle` `f` in module `m`.
     fn new<Pool: StringPool<String = S>>(
         tables: &Tables<S>,
@@ -824,10 +827,7 @@ impl<S> Function<S> {
     }
 
     /// Should not be called if `code_included` is `false`--will panic in debug builds.
-    pub fn equals(&self, other: &Self) -> bool
-    where
-        S: Eq,
-    {
+    pub fn equals(&self, other: &Self) -> bool {
         let Self {
             name,
             visibility,
@@ -854,19 +854,25 @@ impl<S> Function<S> {
     }
 }
 
-impl<S> Enum<S> {
+impl<S: Hash + Eq> Enum<S> {
     pub fn new<Pool: StringPool<String = S>>(
         pool: &mut Pool,
         m: &CompiledModule,
         def: &EnumDefinition,
-    ) -> Self {
+    ) -> Self
+    where
+        S: Clone,
+    {
         let handle = m.datatype_handle_at(def.enum_handle);
         let name = pool.intern(m.identifier_at(handle.name));
         let variants = def
             .variants
             .iter()
-            .map(|v| Rc::new(Variant::new(pool, m, v)))
-            .collect::<Vec<_>>();
+            .map(|v| {
+                let v = Variant::new(pool, m, v);
+                (v.name.clone(), Rc::new(v))
+            })
+            .collect();
         Enum {
             name,
             abilities: handle.abilities,
@@ -889,7 +895,7 @@ impl<S> Variant<S> {
     }
 }
 
-impl<S> VariantJumpTable<S> {
+impl<S: Hash + Eq> VariantJumpTable<S> {
     fn new(tables: &Tables<S>, jt: &file_format::VariantJumpTable) -> Self {
         let enum_ = tables.enum_defs[jt.head_enum.0 as usize].clone();
         Self {
@@ -899,7 +905,7 @@ impl<S> VariantJumpTable<S> {
     }
 }
 
-impl<S> StructRef<S> {
+impl<S: Hash + Eq> StructRef<S> {
     fn new(
         tables: &Tables<S>,
         struct_handle: StructDefinitionIndex,
@@ -929,7 +935,7 @@ impl<S> StructRef<S> {
     }
 }
 
-impl<S> FieldRef<S> {
+impl<S: Hash + Eq> FieldRef<S> {
     fn new(
         tables: &Tables<S>,
         m: &CompiledModule,
@@ -960,7 +966,7 @@ impl<S> FieldRef<S> {
     }
 }
 
-impl<S> FunctionRef<S> {
+impl<S: Hash + Eq> FunctionRef<S> {
     fn new<Pool: StringPool<String = S>>(
         tables: &Tables<S>,
         pool: &mut Pool,
@@ -1002,7 +1008,7 @@ impl<S> FunctionRef<S> {
     }
 }
 
-impl<S> VariantRef<S> {
+impl<S: Hash + Eq> VariantRef<S> {
     fn new(
         tables: &Tables<S>,
         enum_def: EnumDefinitionIndex,
@@ -1051,7 +1057,7 @@ impl<S> VariantRef<S> {
     }
 }
 
-impl<S> Bytecode<S> {
+impl<S: Hash + Eq> Bytecode<S> {
     fn new<Pool: StringPool<String = S>>(
         tables: &Tables<S>,
         pool: &mut Pool,
@@ -1206,7 +1212,10 @@ impl<S> Bytecode<S> {
     }
 }
 
-fn signature_to_single_type<S>(tables: &Tables<S>, sig_idx: SignatureIndex) -> Rc<Type<S>> {
+fn signature_to_single_type<S: Hash + Eq>(
+    tables: &Tables<S>,
+    sig_idx: SignatureIndex,
+) -> Rc<Type<S>> {
     tables.signatures[sig_idx.0 as usize][0].clone()
 }
 
@@ -1262,7 +1271,7 @@ impl<S: std::fmt::Display> std::fmt::Display for Datatype<S> {
 
 #[test]
 fn sizes() {
-    #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+    #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
     struct Big([u8; 1024]);
 
     assert_eq!(std::mem::size_of::<Type<Big>>(), 16);

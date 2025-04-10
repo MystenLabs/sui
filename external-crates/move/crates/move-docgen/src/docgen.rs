@@ -20,7 +20,7 @@ use move_ir_types::location::*;
 use move_model_2::{
     display as model_display,
     source_model::{self, Model},
-    ModuleId, QualifiedMemberId,
+    ModuleId, QualifiedMemberId, TModuleId,
 };
 use move_symbol_pool::Symbol;
 use once_cell::sync::Lazy;
@@ -197,10 +197,7 @@ impl<'env> Docgen<'env> {
         let preferred_modules = env
             .modules()
             .filter(|m| m.info().package.is_some_and(|p| p == root_package))
-            .map(|m| {
-                let (a, n) = m.id();
-                (n, a)
-            })
+            .map(|m| (m.name(), m.id().address))
             .collect();
         Self {
             preferred_modules,
@@ -358,7 +355,7 @@ impl<'env> Docgen<'env> {
                         self.unknown_loc_error(format!("undefined move-include `{name}`"));
                         continue;
                     };
-                    let id = (*addr, name);
+                    let id = (*addr, name).module_id();
                     let info = self.infos.get(&id).expect("module defined");
 
                     assert!(info.is_included);
@@ -409,7 +406,7 @@ impl<'env> Docgen<'env> {
                     };
                     // TODO: currently we only support simple names, we may want to add support for
                     //   address qualification.
-                    let id = (*addr, *name);
+                    let id = (addr, name).module_id();
                     if let Some(module_env) = env.maybe_module(id) {
                         let info = ModuleInfo {
                             target_file: template_out_file.to_string(),
@@ -447,7 +444,7 @@ impl<'env> Docgen<'env> {
         let output_path = PathBuf::from(&self.options.output_directory);
         let package_name = match module_env.package().name() {
             Some(name) => name.to_string(),
-            None => module_env.id().0.to_string(),
+            None => module_env.id().address.to_string(),
         };
         let file_name = PathBuf::from(module_env.source_path().as_str())
             .with_extension("md")
@@ -576,12 +573,12 @@ impl<'env> Docgen<'env> {
             self.end_collapsed();
         }
 
-        for s in module_env.structs().sorted_by_key(|s| s.compiled().def_idx) {
+        for s in module_env.structs() {
             self.gen_struct(s);
         }
 
         if module_env.enums().next().is_some() {
-            for e in module_env.enums().sorted_by_key(|e| e.compiled().def_idx) {
+            for e in module_env.enums() {
                 self.gen_enum(e);
             }
         }
@@ -845,7 +842,7 @@ impl<'env> Docgen<'env> {
         let sorted_infos = self
             .infos
             .keys()
-            .sorted_by_key(|id| env.module(id).id().1)
+            .sorted_by_key(|id| env.module(*id).id().name)
             .copied()
             .collect::<Vec<_>>();
         self.begin_items();
@@ -862,7 +859,7 @@ impl<'env> Docgen<'env> {
                 continue;
             }
             let ref_for_module = self.ref_for_module(module_env);
-            self.item_text(&format!("[`{}`]({})", id.1, ref_for_module))
+            self.item_text(&format!("[`{}`]({})", id.name, ref_for_module))
         }
         self.end_items();
     }
