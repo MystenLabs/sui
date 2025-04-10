@@ -9,6 +9,6 @@ use diesel_migrations::{embed_migrations, EmbeddedMigrations};
 
 // Re-export everything from db
 pub use db::*;
-pub use sui_field_count::FieldCount;
+pub use sui_sql_macro::sql;
 
 pub const MIGRATIONS: EmbeddedMigrations = embed_migrations!("migrations");

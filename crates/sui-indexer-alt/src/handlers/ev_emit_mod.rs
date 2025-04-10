@@ -114,8 +114,8 @@ mod tests {
 
     #[tokio::test]
     async fn test_ev_emit_mod_pruning_complains_if_no_mapping() {
-        let (indexer, _db) = Indexer::new_for_testing(&MIGRATIONS).await;
-        let mut conn = indexer.db().connect().await.unwrap();
+        let (indexer, _db) = Indexer::<Db>::new_for_testing(&MIGRATIONS).await;
+        let mut conn = indexer.store().connect().await.unwrap();
 
         let result = EvEmitMod.prune(0, 2, &mut conn).await;
 
@@ -128,8 +128,8 @@ mod tests {
 
     #[tokio::test]
     async fn test_ev_emit_mod_no_events() {
-        let (indexer, _db) = Indexer::new_for_testing(&MIGRATIONS).await;
-        let mut conn = indexer.db().connect().await.unwrap();
+        let (indexer, _db) = Indexer::<Db>::new_for_testing(&MIGRATIONS).await;
+        let mut conn = indexer.store().connect().await.unwrap();
 
         let checkpoint = Arc::new(
             TestCheckpointDataBuilder::new(0)
@@ -146,8 +146,8 @@ mod tests {
 
     #[tokio::test]
     async fn test_ev_emit_mod_single_event() {
-        let (indexer, _db) = Indexer::new_for_testing(&MIGRATIONS).await;
-        let mut conn = indexer.db().connect().await.unwrap();
+        let (indexer, _db) = Indexer::<Db>::new_for_testing(&MIGRATIONS).await;
+        let mut conn = indexer.store().connect().await.unwrap();
 
         let checkpoint = Arc::new(
             TestCheckpointDataBuilder::new(0)
@@ -167,8 +167,8 @@ mod tests {
 
     #[tokio::test]
     async fn test_ev_emit_mod_prune_events() {
-        let (indexer, _db) = Indexer::new_for_testing(&MIGRATIONS).await;
-        let mut conn = indexer.db().connect().await.unwrap();
+        let (indexer, _db) = Indexer::<Db>::new_for_testing(&MIGRATIONS).await;
+        let mut conn = indexer.store().connect().await.unwrap();
 
         // 0th checkpoint has no events
         let mut builder = TestCheckpointDataBuilder::new(0);

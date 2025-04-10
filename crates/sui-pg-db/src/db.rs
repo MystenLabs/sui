@@ -22,6 +22,7 @@ use diesel_async::{
     AsyncConnection, AsyncPgConnection, RunQueryDsl,
 };
 use scoped_futures::ScopedBoxFuture;
+use sui_field_count::FieldCount;
 use sui_indexer_alt_framework_store_traits::{
     CommitterWatermark, Connection as StoreConnection, PrunerWatermark, ReaderWatermark, Store,
     TransactionalStore,
@@ -31,7 +32,6 @@ use tracing::info;
 use url::Url;
 
 use crate::schema::watermarks;
-use crate::FieldCount;
 
 #[derive(clap::Args, Debug, Clone)]
 pub struct DbArgs {

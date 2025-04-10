@@ -296,7 +296,6 @@ pub(super) fn pruner<H: Handler + Send + Sync + 'static>(
     })
 }
 
-// TODO (wlmyng): non-pg store - requires conn too
 async fn prune_task_impl<H: Handler + Send + Sync + 'static>(
     metrics: Arc<IndexerMetrics>,
     db: H::Store,

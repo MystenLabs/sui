@@ -194,12 +194,14 @@ pub(super) fn collector<H: Handler + 'static>(
 }
 
 #[cfg(test)]
+#[cfg(feature = "postgres")]
 mod tests {
     use crate::{
-        db::{DbConnection, FieldCount},
+        db::DbConnection,
         metrics::tests::test_metrics,
         pipeline::{concurrent::max_chunk_rows, Processor},
         types::full_checkpoint_content::CheckpointData,
+        FieldCount,
     };
 
     use super::*;

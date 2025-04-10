@@ -117,8 +117,8 @@ mod tests {
 
     #[tokio::test]
     async fn test_tx_affected_addresses_pruning_complains_if_no_mapping() {
-        let (indexer, _db) = Indexer::new_for_testing(&MIGRATIONS).await;
-        let mut conn = indexer.db().connect().await.unwrap();
+        let (indexer, _db) = Indexer::<Db>::new_for_testing(&MIGRATIONS).await;
+        let mut conn = indexer.store().connect().await.unwrap();
 
         let result = TxAffectedAddresses.prune(0, 2, &mut conn).await;
 
@@ -131,8 +131,8 @@ mod tests {
 
     #[tokio::test]
     async fn test_tx_affected_addresses_pruning() {
-        let (indexer, _db) = Indexer::new_for_testing(&MIGRATIONS).await;
-        let mut conn = indexer.db().connect().await.unwrap();
+        let (indexer, _db) = Indexer::<Db>::new_for_testing(&MIGRATIONS).await;
+        let mut conn = indexer.store().connect().await.unwrap();
 
         // 0th checkpoint has 1 transaction
         let mut builder = TestCheckpointDataBuilder::new(0);
