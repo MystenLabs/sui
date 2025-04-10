@@ -14,13 +14,16 @@ use codespan_reporting::{
 };
 use thiserror::Error;
 
+use crate::package::PackageName;
+
+use super::FileHandle;
+
 #[derive(Error, Debug)]
 #[error("Invalid manifest: {kind}")]
 pub struct ManifestError {
     pub kind: ManifestErrorKind,
     pub span: Option<Range<usize>>,
-    pub path: PathBuf,
-    pub src: String,
+    pub handle: FileHandle,
 }
 
 #[derive(Error, Debug)]
@@ -29,6 +32,9 @@ pub enum ManifestErrorKind {
     EmptyPackageName,
     #[error("unsupported edition '{edition}', expected one of '{valid}'")]
     InvalidEdition { edition: String, valid: String },
+
+    #[error("multiple external resolvers listed for dependency")]
+    MultipleExternalResolvers,
 }
 
 impl ManifestError {
@@ -45,14 +51,14 @@ impl ManifestError {
         // In a real implementation, we'd want to cache the SimpleFiles instance
         // and reuse it across multiple errors
         let mut files = SimpleFiles::new();
-        let file_id = files.add(self.path.display().to_string(), self.src.clone());
+        let file_id = files.add(self.handle.path().to_string_lossy(), self.handle.source());
         (file_id, self.span.clone())
     }
 
     /// Emit this error to stderr
     pub fn emit(&self) -> Result<(), codespan_reporting::files::Error> {
         let mut files = SimpleFiles::new();
-        let file_id = files.add(self.path.display().to_string(), self.src.clone());
+        let file_id = files.add(self.handle.path().to_string_lossy(), self.handle.source());
 
         let writer = StandardStream::stderr(ColorChoice::Always);
         let config = term::Config {

@@ -9,11 +9,10 @@ use std::{
 
 use derive_where::derive_where;
 use serde::{Deserialize, Serialize};
-use serde_spanned::Spanned;
 
 use crate::{
     dependency::ManifestDependencyInfo,
-    errors::{ManifestError, ManifestErrorKind, PackageResult},
+    errors::{with_file, Located, ManifestError, ManifestErrorKind, PackageResult},
     flavor::{MoveFlavor, Vanilla},
 };
 
@@ -40,8 +39,8 @@ pub struct Manifest<F: MoveFlavor> {
 #[derive(Debug, Deserialize)]
 #[serde(bound = "")]
 struct PackageMetadata<F: MoveFlavor> {
-    name: Spanned<PackageName>,
-    edition: Spanned<String>,
+    name: Located<PackageName>,
+    edition: Located<String>,
 
     #[serde(flatten)]
     metadata: F::PackageMetadata,
@@ -79,12 +78,13 @@ impl<F: MoveFlavor> Manifest<F> {
     pub fn read_from(path: impl AsRef<Path>) -> PackageResult<Self> {
         let contents = std::fs::read_to_string(&path)?;
 
-        let manifest: Self = toml_edit::de::from_str(&contents)?;
-        manifest.validate_manifest(&path, &contents)?;
+        let manifest: Self = with_file(&path, |contents| toml_edit::de::from_str(&contents))??;
+        // manifest.validate_manifest(&path, &contents)?;
 
         Ok(manifest)
     }
 
+    /*
     /// Validate the manifest contents, after deserialization.
     pub fn validate_manifest(&self, path: impl AsRef<Path>, contents: &str) -> PackageResult<()> {
         // Validate package name
@@ -116,6 +116,7 @@ impl<F: MoveFlavor> Manifest<F> {
 
         Ok(())
     }
+    */
 
     fn write_template(path: impl AsRef<Path>, name: &PackageName) -> anyhow::Result<()> {
         std::fs::write(
