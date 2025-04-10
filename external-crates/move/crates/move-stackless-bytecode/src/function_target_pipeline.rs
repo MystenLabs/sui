@@ -3,9 +3,10 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use bimap::btree::BiBTreeMap;
+use codespan_reporting::diagnostic::Severity;
 use core::fmt;
 use std::{
-    collections::{btree_map::Entry as MapEntry, BTreeMap, BTreeSet},
+    collections::{BTreeMap, BTreeSet},
     fmt::Formatter,
     fs,
 };
@@ -14,16 +15,20 @@ use itertools::{Either, Itertools};
 use log::debug;
 use petgraph::graph::DiGraph;
 
-use move_compiler::shared::known_attributes::{
-    KnownAttribute::Verification, VerificationAttribute,
+use move_compiler::{
+    expansion::ast::ModuleAccess_,
+    shared::known_attributes::{KnownAttribute::Verification, VerificationAttribute},
 };
 use move_compiler::{
-    expansion::ast::{AttributeName_, Attribute_},
+    expansion::ast::{AttributeName_, AttributeValue_, Attribute_},
     shared::unique_map::UniqueMap,
 };
 use move_symbol_pool::Symbol;
 
-use move_model::model::{DatatypeId, FunId, FunctionEnv, GlobalEnv, QualifiedId};
+use move_model::{
+    ast::ModuleName,
+    model::{DatatypeId, FunId, FunctionEnv, GlobalEnv, QualifiedId},
+};
 
 use crate::{
     function_target::{FunctionData, FunctionTarget},
@@ -279,7 +284,6 @@ impl FunctionTargetsHolder {
             .entry(func_env.get_qualified_id())
             .or_default()
             .insert(FunctionVariant::Baseline, data);
-
         if let Some(spec_attr) = func_env
             .get_toplevel_attributes()
             .get_(&Verification(VerificationAttribute::Spec))
@@ -288,55 +292,111 @@ impl FunctionTargetsHolder {
                 Attribute_::Parameterized(_, inner_attrs) => inner_attrs,
                 _ => &UniqueMap::new(),
             };
-
             let is_focus_spec =
                 inner_attrs.contains_key_(&AttributeName_::Unknown(Symbol::from("focus")));
             let is_verify_spec =
                 inner_attrs.contains_key_(&AttributeName_::Unknown(Symbol::from("prove")));
+            let is_path_spec: bool =
+                inner_attrs.contains_key_(&AttributeName_::Unknown(Symbol::from("target")));
 
             if !is_verify_spec && !is_focus_spec {
                 self.no_verify_specs.insert(func_env.get_qualified_id());
             }
+
             if is_focus_spec {
                 self.focus_specs.insert(func_env.get_qualified_id());
             } else {
                 self.no_focus_specs.insert(func_env.get_qualified_id());
             }
+
             if inner_attrs.contains_key_(&AttributeName_::Unknown(Symbol::from("ignore_abort"))) {
                 self.ignore_aborts.insert(func_env.get_qualified_id());
             }
 
-            let target_func_env_opt =
-                func_env
-                    .get_name_str()
-                    .strip_suffix("_spec")
-                    .and_then(|name| {
-                        func_env
-                            .module_env
-                            .find_function(func_env.symbol_pool().make(name))
-                    });
-            match target_func_env_opt {
-                Some(target_func_env) => {
-                    self.function_specs.insert(
-                        func_env.get_qualified_id(),
-                        target_func_env.get_qualified_id(),
-                    );
-                }
-                None => {
-                    self.scenario_specs.insert(func_env.get_qualified_id());
-                }
-            }
-        }
+            if is_path_spec {
+                let function_spec = inner_attrs
+                    .get_(&AttributeName_::Unknown(Symbol::from("target")))
+                    .unwrap();
 
-        func_env.get_name_str().strip_suffix("_inv").map(|name| {
-            if let Some(struct_env) = func_env
-                .module_env
-                .find_struct(func_env.symbol_pool().make(name))
-            {
-                self.datatype_invs
-                    .insert(struct_env.get_qualified_id(), func_env.get_qualified_id());
+                if let Attribute_::Assigned(_, boxed_value) = &function_spec.value {
+                    if let AttributeValue_::ModuleAccess(spanned) = &boxed_value.value {
+                        if let ModuleAccess_::ModuleAccess(module_ident, function_name) =
+                            &spanned.value
+                        {
+                            let address = module_ident.value.address;
+                            let module = &module_ident.value.module;
+
+                            let addr_bytes = address.into_addr_bytes();
+                            let module_name = ModuleName::from_address_bytes_and_name(
+                                addr_bytes,
+                                func_env.symbol_pool().make(&module.to_string()),
+                            );
+
+                            if let Some(module_env) =
+                                func_env.module_env.env.find_module(&module_name)
+                            {
+                                let func_sym = func_env.symbol_pool().make(&function_name.value);
+                                if let Some(target_func_env) = module_env.find_function(func_sym) {
+                                    let target_id = target_func_env.get_qualified_id();
+
+                                    if self.function_specs.contains_right(&target_id) {
+                                        let env = func_env.module_env.env;
+                                        env.diag(
+                                            Severity::Error,
+                                            &func_env.get_loc(),
+                                            &format!("Duplicate target function: {}", function_name.value),
+                                        );
+                                    } else {
+                                        self.function_specs
+                                            .insert(func_env.get_qualified_id(), target_id);
+                                    }
+                                } else {
+                                    let env = func_env.module_env.env;
+                                    env.diag(
+                                        Severity::Error,
+                                        &func_env.get_loc(),
+                                        &format!("Target function '{}' not found in module '{}'", 
+                                            function_name.value,
+                                            module.to_string()),
+                                    );
+                                }
+                            }
+                        }
+                    }
+                }
+            } else {
+                let target_func_env_opt =
+                    func_env
+                        .get_name_str()
+                        .strip_suffix("_spec")
+                        .and_then(|name| {
+                            func_env
+                                .module_env
+                                .find_function(func_env.symbol_pool().make(name))
+                        });
+                match target_func_env_opt {
+                    Some(target_func_env) => {
+                        self.function_specs.insert(
+                            func_env.get_qualified_id(),
+                            target_func_env.get_qualified_id(),
+                        );
+                    }
+                    None => {
+                        self.scenario_specs.insert(func_env.get_qualified_id());
+                    }
+                }
             }
-        });
+
+            func_env.get_name_str().strip_suffix("_inv").map(|name| {
+                if let Some(struct_env) = func_env
+                    .module_env
+                    .find_struct(func_env.symbol_pool().make(name))
+                {
+                    self.datatype_invs
+                        .insert(struct_env.get_qualified_id(), func_env.get_qualified_id());
+                }
+            });
+        }
     }
 
     /// Gets a function target for read-only consumption, for the given variant.
