@@ -498,8 +498,8 @@ pub enum AutoImportInsertionKind {
 /// In particular, if uses are already preasent, we insert the new import
 /// in the following line keeping the tabulation of the previous import.
 /// If no imports are present, we insert the new import before the first
-/// module member, pushing this member down but keeping its original
-/// tabulation.
+/// module member (or before its doc comment if it exists), pushing
+/// this member down but keeping its original tabulation.
 #[derive(Debug, Clone, Copy, Ord, PartialOrd, PartialEq, Eq)]
 pub struct AutoImportInsertionInfo {
     // Kind of auto-import insertion
