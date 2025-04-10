@@ -39,7 +39,10 @@ pub struct Connection<'p> {
 impl PgReader {
     /// Create a new database reader. If `database_url` is `None`, the reader will not accept any
     /// connection requests (they will all fail).
+    ///
+    /// `prefix` is used to prefix the metrics collected by this reader.
     pub async fn new(
+        prefix: Option<&str>,
         database_url: Option<Url>,
         db_args: db::DbArgs,
         registry: &Registry,
@@ -52,7 +55,7 @@ impl PgReader {
 
             registry
                 .register(Box::new(DbConnectionStatsCollector::new(
-                    Some("rpc_db"),
+                    prefix,
                     db.clone(),
                 )))
                 .map_err(|e| Error::PgCreate(e.into()))?;
@@ -62,7 +65,7 @@ impl PgReader {
             None
         };
 
-        let metrics = ReaderMetrics::new(registry);
+        let metrics = ReaderMetrics::new(prefix, registry);
 
         Ok(Self {
             db,

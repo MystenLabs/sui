@@ -60,7 +60,8 @@ impl Context {
         registry: &Registry,
         cancel: CancellationToken,
     ) -> Result<Self, Error> {
-        let pg_reader = PgReader::new(database_url, db_args, registry, cancel).await?;
+        let pg_reader =
+            PgReader::new(Some("jsonrpc_db"), database_url, db_args, registry, cancel).await?;
         let pg_loader = Arc::new(pg_reader.as_data_loader());
 
         let kv_loader = if let Some(instance_id) = bigtable_instance {

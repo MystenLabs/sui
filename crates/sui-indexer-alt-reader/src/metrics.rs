@@ -24,10 +24,13 @@ pub(crate) struct ReaderMetrics {
 }
 
 impl ReaderMetrics {
-    pub(crate) fn new(registry: &Registry) -> Arc<Self> {
+    pub(crate) fn new(prefix: Option<&str>, registry: &Registry) -> Arc<Self> {
+        let prefix = prefix.unwrap_or("db");
+        let name = |n| format!("{prefix}_{n}");
+
         Arc::new(Self {
             db_latency: register_histogram_with_registry!(
-                "db_latency",
+                name("latency"),
                 "Time taken by the database to respond to queries",
                 LATENCY_SEC_BUCKETS.to_vec(),
                 registry,
@@ -35,21 +38,21 @@ impl ReaderMetrics {
             .unwrap(),
 
             db_requests_received: register_int_counter_with_registry!(
-                "db_requests_received",
+                name("requests_received"),
                 "Number of database requests sent by the service",
                 registry,
             )
             .unwrap(),
 
             db_requests_succeeded: register_int_counter_with_registry!(
-                "db_requests_succeeded",
+                name("requests_succeeded"),
                 "Number of database requests that completed successfully",
                 registry,
             )
             .unwrap(),
 
             db_requests_failed: register_int_counter_with_registry!(
-                "db_requests_failed",
+                name("requests_failed"),
                 "Number of database requests that completed with an error",
                 registry,
             )

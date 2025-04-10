@@ -64,11 +64,11 @@ mod task;
 pub struct RpcArgs {
     /// Address to accept incoming RPC connections on.
     #[clap(long, default_value_t = Self::default().rpc_listen_address)]
-    rpc_listen_address: SocketAddr,
+    pub rpc_listen_address: SocketAddr,
 
     /// Do not expose the GraphiQL IDE.
     #[clap(long, default_value_t = Self::default().no_ide)]
-    no_ide: bool,
+    pub no_ide: bool,
 }
 
 /// This type is responsible for the set-up and lifecycle of all services related to a GraphQL RPC
@@ -273,6 +273,7 @@ pub async fn start_rpc(
     let metrics = rpc.metrics();
 
     let pg_reader = PgReader::new(
+        Some("graphql_db"),
         database_url.clone(),
         db_args,
         registry,
