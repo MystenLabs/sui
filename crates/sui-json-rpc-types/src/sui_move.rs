@@ -18,6 +18,7 @@ use serde_with::serde_as;
 use std::collections::BTreeMap;
 use std::fmt;
 use std::fmt::{Display, Formatter, Write};
+use std::hash::Hash;
 use sui_macros::EnumVariantOrder;
 use tracing::warn;
 
@@ -192,7 +193,7 @@ impl<S: std::hash::Hash + Eq + ToString> From<&NormalizedModule<S>> for SuiMoveN
     }
 }
 
-impl<S: ToString> From<&NormalizedFunction<S>> for SuiMoveNormalizedFunction {
+impl<S: Hash + Eq + ToString> From<&NormalizedFunction<S>> for SuiMoveNormalizedFunction {
     fn from(function: &NormalizedFunction<S>) -> Self {
         Self {
             visibility: match function.visibility {
@@ -221,7 +222,7 @@ impl<S: ToString> From<&NormalizedFunction<S>> for SuiMoveNormalizedFunction {
     }
 }
 
-impl<S: ToString> From<&NormalizedStruct<S>> for SuiMoveNormalizedStruct {
+impl<S: Hash + Eq + ToString> From<&NormalizedStruct<S>> for SuiMoveNormalizedStruct {
     fn from(struct_: &NormalizedStruct<S>) -> Self {
         Self {
             abilities: struct_.abilities.into(),
@@ -233,14 +234,15 @@ impl<S: ToString> From<&NormalizedStruct<S>> for SuiMoveNormalizedStruct {
                 .collect::<Vec<SuiMoveStructTypeParameter>>(),
             fields: struct_
                 .fields
-                .iter()
+                .0
+                .values()
                 .map(|f| SuiMoveNormalizedField::from(&**f))
                 .collect::<Vec<SuiMoveNormalizedField>>(),
         }
     }
 }
 
-impl<S: ToString> From<&NormalizedEnum<S>> for SuiMoveNormalizedEnum {
+impl<S: Hash + Eq + ToString> From<&NormalizedEnum<S>> for SuiMoveNormalizedEnum {
     fn from(value: &NormalizedEnum<S>) -> Self {
         Self {
             abilities: value.abilities.into(),
@@ -252,14 +254,15 @@ impl<S: ToString> From<&NormalizedEnum<S>> for SuiMoveNormalizedEnum {
                 .collect::<Vec<SuiMoveStructTypeParameter>>(),
             variants: value
                 .variants
-                .iter()
+                .values()
                 .map(|variant| {
                     (
                         variant.name.to_string(),
                         variant
                             .fields
-                            .iter()
-                            .map(SuiMoveNormalizedField::from)
+                            .0
+                            .values()
+                            .map(|f| SuiMoveNormalizedField::from(&**f))
                             .collect::<Vec<SuiMoveNormalizedField>>(),
                     )
                 })

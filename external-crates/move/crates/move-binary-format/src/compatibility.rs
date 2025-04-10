@@ -151,7 +151,7 @@ impl Compatibility {
             ) {
                 context.struct_type_param_mismatch(name, old_struct, new_struct);
             }
-            if new_struct.fields != old_struct.fields {
+            if !new_struct.fields.equivalent(&old_struct.fields) {
                 // Fields changed. Code in this module will fail at runtime if it tries to
                 // read a previously published struct value
                 // TODO: this is a stricter definition than required. We could in principle
@@ -193,22 +193,25 @@ impl Compatibility {
                 context.enum_new_variant(name, old_enum, new_enum);
             }
 
-            for (tag, old_variant) in old_enum.variants.iter().enumerate() {
+            for (tag, (_old_name, old_variant)) in old_enum.variants.iter().enumerate() {
                 // If the new enum has fewer variants than the old one, datatype_layout is false
                 // and we don't need to check the rest of the variants.
-                let Some(new_variant) = new_enum.variants.get(tag) else {
+                let Some((_new_name, new_variant)) = new_enum.variants.get_index(tag) else {
                     context.enum_variant_missing(name, old_enum, tag);
                     continue;
                 };
                 if new_variant.name != old_variant.name {
+                    debug_assert_ne!(_new_name, _old_name);
                     // TODO: Variant renamed. This is a stricter definition than required.
                     // We could in principle choose that changing the name (but not position or
                     // type) of a variant is compatible. The VM does not care about the name of a
                     // variant if it's non-public (it's purely informational), but clients
                     // presumably would.
                     context.enum_variant_mismatch(name, old_enum, new_enum, tag);
+                } else {
+                    debug_assert_eq!(_new_name, _old_name);
                 }
-                if new_variant.fields != old_variant.fields {
+                if !new_variant.fields.equivalent(&old_variant.fields) {
                     // Fields changed. Code in this module will fail at runtime if it tries to
                     // read a previously published enum value
                     // TODO: this is a stricter definition than required. We could in principle
@@ -406,7 +409,7 @@ impl InclusionCheck {
                 Mark::New(name, new) => context.struct_new(name, new),
                 Mark::Missing(name, old) => context.struct_missing(name, old),
                 Mark::Existing(name, old, new) => {
-                    if old != new {
+                    if !old.equivalent(new) {
                         context.struct_change(name, old, new);
                     }
                 }
@@ -419,7 +422,7 @@ impl InclusionCheck {
                 Mark::New(name, new) => context.enum_new(name, new),
                 Mark::Missing(name, old) => context.enum_missing(name, old),
                 Mark::Existing(name, old, new) => {
-                    if old != new {
+                    if !old.equivalent(new) {
                         context.enum_change(name, old);
                     }
                 }
@@ -432,7 +435,7 @@ impl InclusionCheck {
                 Mark::New(name, new) => context.function_new(name, new),
                 Mark::Missing(name, old) => context.function_missing(name, old),
                 Mark::Existing(name, old, new) => {
-                    if !old.equals(new) {
+                    if !old.equivalent(new) {
                         context.function_change(name, old, new);
                     }
                 }
