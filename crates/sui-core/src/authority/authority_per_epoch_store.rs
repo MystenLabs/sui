@@ -3063,8 +3063,8 @@ impl AuthorityPerEpochStore {
             .collect();
 
         let (
-            verified_non_randomness_certificates,
-            mut verified_randomness_certificates,
+            verified_non_randomness_transactions,
+            mut verified_randomness_transactions,
             notifications,
             lock,
             final_round,
@@ -3091,9 +3091,9 @@ impl AuthorityPerEpochStore {
             )
             .await?;
         self.process_user_signatures(
-            verified_non_randomness_certificates
+            verified_non_randomness_transactions
                 .iter()
-                .chain(verified_randomness_certificates.iter()),
+                .chain(verified_randomness_transactions.iter()),
         );
         output.record_consensus_commit_stats(consensus_stats.clone());
 
@@ -3151,7 +3151,7 @@ impl AuthorityPerEpochStore {
                         info!("Randomness update transaction {:?} already exists, scheduling for execution", digest);
                         let tx =
                             VerifiedExecutableTransaction::new_system((*tx).clone(), self.epoch());
-                        verified_randomness_certificates.push(tx);
+                        verified_randomness_transactions.push(tx);
                     }
                 }
 
@@ -3235,9 +3235,11 @@ impl AuthorityPerEpochStore {
             self.record_end_of_message_quorum_time_metric();
         }
 
-        let mut all_verified_transactions = verified_non_randomness_certificates;
-        all_verified_transactions.extend(verified_randomness_certificates);
-        Ok(all_verified_transactions)
+        Ok([
+            verified_non_randomness_transactions,
+            verified_randomness_transactions,
+        ]
+        .concat())
     }
 
     fn calculate_pending_checkpoint_height(&self, consensus_round: u64) -> u64 {
@@ -3480,8 +3482,8 @@ impl AuthorityPerEpochStore {
             assert!(!dkg_failed); // invariant check
         }
 
-        let tx_num = non_randomness_transactions.len() + randomness_transactions.len();
-        let mut notifications = Vec::with_capacity(tx_num);
+        let mut notifications =
+            Vec::with_capacity(non_randomness_transactions.len() + randomness_transactions.len());
 
         let mut deferred_txns: BTreeMap<DeferralKey, Vec<VerifiedSequencedConsensusTransaction>> =
             BTreeMap::new();
