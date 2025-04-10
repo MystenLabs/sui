@@ -2,10 +2,12 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::collections::BTreeSet;
+use std::collections::HashMap;
 
 use anyhow::Result;
-use fastcrypto::encoding::{Base64, Encoding};
 use sui_data_ingestion_core::Worker;
+use sui_types::digests::TransactionDigest;
+use sui_types::messages_checkpoint::CheckpointContents;
 use tokio::sync::Mutex;
 use tracing::error;
 
@@ -34,8 +36,10 @@ impl Worker for TransactionHandler {
         let CheckpointData {
             checkpoint_summary,
             transactions: checkpoint_transactions,
+            checkpoint_contents,
             ..
         } = checkpoint_data;
+        let transaction_positions = compute_transaction_positions(checkpoint_contents);
         let mut state = self.state.lock().await;
         for checkpoint_transaction in checkpoint_transactions {
             self.process_transaction(
@@ -44,6 +48,7 @@ impl Worker for TransactionHandler {
                 checkpoint_summary.timestamp_ms,
                 checkpoint_transaction,
                 &checkpoint_transaction.effects,
+                &transaction_positions,
                 &mut state,
             )?;
         }
@@ -83,6 +88,7 @@ impl TransactionHandler {
         timestamp_ms: u64,
         checkpoint_transaction: &CheckpointTransaction,
         effects: &TransactionEffects,
+        transaction_positions: &HashMap<TransactionDigest, usize>,
         state: &mut State,
     ) -> Result<()> {
         let transaction = &checkpoint_transaction.transaction;
@@ -100,6 +106,29 @@ impl TransactionHandler {
             .collect::<Vec<_>>()
             .join("-");
         let transaction_digest = transaction.digest().base58_encode();
+        let events_digest = checkpoint_transaction
+            .events
+            .as_ref()
+            .map(|events| events.digest().base58_encode());
+
+        let transaction_position = *transaction_positions
+            .get(transaction.digest())
+            .expect("Expect transaction to exist in checkpoint_contents.")
+            as u64;
+
+        let transaction_data_bcs_length = bcs::to_bytes(&txn_data).unwrap().len() as u64;
+        let effects_bcs_length = bcs::to_bytes(&checkpoint_transaction.effects)
+            .unwrap()
+            .len() as u64;
+        let events_bcs_length = checkpoint_transaction
+            .events
+            .as_ref()
+            .map(|events| bcs::to_bytes(events).unwrap().len() as u64)
+            .unwrap_or(0);
+        let signatures_bcs_length =
+            bcs::to_bytes(&checkpoint_transaction.transaction.data().tx_signatures())
+                .unwrap()
+                .len() as u64;
 
         let mut transfers: u64 = 0;
         let mut split_coins: u64 = 0;
@@ -176,25 +205,39 @@ impl TransactionHandler {
             storage_cost: gas_summary.storage_cost,
             storage_rebate: gas_summary.storage_rebate,
             non_refundable_storage_fee: gas_summary.non_refundable_storage_fee,
-
             gas_price: txn_data.gas_price(),
-
-            raw_transaction: Base64::encode(bcs::to_bytes(&txn_data).unwrap()),
-
             has_zklogin_sig: transaction.has_zklogin_sig(),
             has_upgraded_multisig: transaction.has_upgraded_multisig(),
             transaction_json: Some(transaction_json),
             effects_json: Some(effects_json),
+            transaction_position,
+            events_digest,
+            raw_transaction: "".to_string(),
+            transaction_data_bcs_length,
+            effects_bcs_length,
+            events_bcs_length,
+            signatures_bcs_length,
         };
         state.transactions.push(entry);
         Ok(())
     }
 }
 
+fn compute_transaction_positions(
+    checkpoint_contents: &CheckpointContents,
+) -> HashMap<TransactionDigest, usize> {
+    let mut digest_to_position: HashMap<TransactionDigest, usize> = HashMap::new();
+
+    for (position, execution_digest) in checkpoint_contents.iter().enumerate() {
+        digest_to_position.insert(execution_digest.transaction, position);
+    }
+
+    digest_to_position
+}
+
 #[cfg(test)]
 mod tests {
     use crate::handlers::transaction_handler::TransactionHandler;
-    use fastcrypto::encoding::{Base64, Encoding};
     use simulacrum::Simulacrum;
     use sui_data_ingestion_core::Worker;
     use sui_types::base_types::SuiAddress;
@@ -226,12 +269,15 @@ mod tests {
         // Check that the transaction was stored correctly.
         assert_eq!(db_txn.transaction_digest, transaction.digest().to_string());
         assert_eq!(
-            db_txn.raw_transaction,
-            Base64::encode(bcs::to_bytes(&transaction.transaction_data()).unwrap())
+            db_txn.transaction_data_bcs_length,
+            bcs::to_bytes(&transaction.transaction_data())
+                .unwrap()
+                .len() as u64
         );
         assert_eq!(db_txn.epoch, checkpoint.epoch);
         assert_eq!(db_txn.timestamp_ms, checkpoint.timestamp_ms);
         assert_eq!(db_txn.checkpoint, checkpoint.sequence_number);
+        assert_eq!(db_txn.transaction_position, 0);
         Ok(())
     }
 }
