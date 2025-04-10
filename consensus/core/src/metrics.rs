@@ -97,6 +97,8 @@ pub(crate) fn test_metrics() -> Arc<Metrics> {
 }
 
 pub(crate) struct NodeMetrics {
+    pub(crate) authority_index: IntGaugeVec,
+    pub(crate) protocol_version: IntGauge,
     pub(crate) block_commit_latency: Histogram,
     pub(crate) proposed_blocks: IntCounterVec,
     pub(crate) proposed_block_size: Histogram,
@@ -208,6 +210,17 @@ pub(crate) struct NodeMetrics {
 impl NodeMetrics {
     pub(crate) fn new(registry: &Registry) -> Self {
         Self {
+            authority_index: register_int_gauge_vec_with_registry!(
+                "authority_index",
+                "The index of the authority",
+                &["name"],
+                registry,
+            ).unwrap(),
+            protocol_version: register_int_gauge_with_registry!(
+                "protocol_version",
+                "The protocol version used in this epoch",
+                registry,
+            ).unwrap(),
             block_commit_latency: register_histogram_with_registry!(
                 "block_commit_latency",
                 "The time taken between block creation and block commit.",
