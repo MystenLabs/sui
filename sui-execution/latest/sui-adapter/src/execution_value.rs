@@ -193,14 +193,23 @@ impl Value {
         }
     }
 
-    pub fn write_bcs_bytes(&self, buf: &mut Vec<u8>) {
+    pub fn write_bcs_bytes(
+        &self,
+        buf: &mut Vec<u8>,
+        bound: Option<u64>,
+    ) -> Result<(), ExecutionError> {
         match self {
-            Value::Object(obj_value) => obj_value.write_bcs_bytes(buf),
+            Value::Object(obj_value) => obj_value.write_bcs_bytes(buf, bound)?,
             Value::Raw(_, bytes) => buf.extend(bytes),
             Value::Receiving(id, version, _) => {
                 buf.extend(Receiving::new(*id, *version).to_bcs_bytes())
             }
         }
+        if let Some(bound) = bound {
+            ensure_serialized_size(buf.len() as u64, bound)?;
+        }
+
+        Ok(())
     }
 
     pub fn was_used_in_non_entry_move_call(&self) -> bool {
@@ -242,12 +251,32 @@ impl ObjectValue {
         Ok(())
     }
 
-    pub fn write_bcs_bytes(&self, buf: &mut Vec<u8>) {
+    pub fn write_bcs_bytes(
+        &self,
+        buf: &mut Vec<u8>,
+        bound: Option<u64>,
+    ) -> Result<(), ExecutionError> {
         match &self.contents {
             ObjectContents::Raw(bytes) => buf.extend(bytes),
             ObjectContents::Coin(coin) => buf.extend(coin.to_bcs_bytes()),
         }
+        if let Some(bound) = bound {
+            ensure_serialized_size(buf.len() as u64, bound)?;
+        }
+        Ok(())
     }
+}
+
+pub fn ensure_serialized_size(size: u64, bound: u64) -> Result<(), ExecutionError> {
+    if size > bound {
+        let e = ExecutionErrorKind::MoveObjectTooBig {
+            object_size: size,
+            max_object_size: bound,
+        };
+        let msg = "Serialized bytes of value too large".to_owned();
+        return Err(ExecutionError::new_with_source(e, msg));
+    }
+    Ok(())
 }
 
 pub trait TryFromValue: Sized {
