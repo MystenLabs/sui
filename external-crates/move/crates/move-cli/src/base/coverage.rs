@@ -11,7 +11,11 @@ use move_coverage::{
 use move_disassembler::disassembler::Disassembler;
 use move_package::BuildConfig;
 use move_trace_format::format::MoveTraceReader;
-use std::{fs::File, path::Path};
+use move_vm_profiler::trace_profiler::{GasProfiler, GasProfilerConfig};
+use std::{
+    fs::File,
+    path::{Path, PathBuf},
+};
 
 const COVERAGE_FILE_NAME: &str = "lcov.info";
 
@@ -41,6 +45,15 @@ pub enum CoverageSummaryOptions {
     },
     #[clap(name = "lcov")]
     Lcov,
+    #[clap(name = "profile")]
+    Profile {
+        #[clap(long = "input-trace")]
+        input_trace: String,
+        #[clap(long = "output-path")]
+        output_path: String,
+        #[clap(long = "trace-name")]
+        trace_name: Option<String>,
+    },
 }
 
 /// Inspect test coverage for this package. A previous test run with the `--coverage` flag must
@@ -82,6 +95,26 @@ impl Coverage {
             std::fs::write(
                 &path.join(COVERAGE_FILE_NAME),
                 coverage.lcov_record_string(),
+            )?;
+            return Ok(());
+        }
+
+        if let CoverageSummaryOptions::Profile {
+            trace_name,
+            input_trace,
+            output_path,
+        } = self.options
+        {
+            let name = trace_name.unwrap_or_else(|| input_trace.clone());
+            let traces = path.join(input_trace);
+            let move_trace_reader = MoveTraceReader::new(File::open(&traces)?)?;
+            GasProfiler::write_profile_from_trace(
+                GasProfilerConfig {
+                    output_path: PathBuf::from(output_path),
+                    use_long_function_name: false,
+                },
+                name,
+                move_trace_reader,
             )?;
             return Ok(());
         }
@@ -131,7 +164,7 @@ impl Coverage {
                 disassembler.add_coverage_map(coverage_map.to_unified_exec_map());
                 println!("{}", disassembler.disassemble()?);
             }
-            CoverageSummaryOptions::Lcov => {
+            CoverageSummaryOptions::Lcov | CoverageSummaryOptions::Profile { .. } => {
                 unreachable!()
             }
         }
