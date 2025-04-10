@@ -14,6 +14,7 @@ use crate::committee::EpochId;
 use crate::effects::{TransactionEffects, TransactionEffectsAPI};
 use crate::error::{ExecutionError, SuiError};
 use crate::execution::{DynamicallyLoadedObjectMetadata, ExecutionResults};
+use crate::message_envelope::Message;
 use crate::move_package::MovePackage;
 use crate::storage::error::Error as StorageError;
 use crate::transaction::{SenderSignedData, TransactionDataAPI};
@@ -688,9 +689,10 @@ pub fn get_transaction_input_objects(
         .map(|(idx, maybe_object)| {
             maybe_object.ok_or_else(|| {
                 StorageError::custom(format!(
-                    "missing input object key {:?} from tx {}",
+                    "missing input object key {:?} from tx {} effects {}",
                     input_object_keys[idx],
-                    effects.transaction_digest()
+                    effects.transaction_digest(),
+                    effects.digest()
                 ))
             })
         })
@@ -715,9 +717,10 @@ pub fn get_transaction_output_objects(
         .map(|(idx, maybe_object)| {
             maybe_object.ok_or_else(|| {
                 StorageError::custom(format!(
-                    "missing output object key {:?} from tx {}",
+                    "missing output object key {:?} from tx {} effects {}",
                     output_object_keys[idx],
-                    effects.transaction_digest()
+                    effects.transaction_digest(),
+                    effects.digest()
                 ))
             })
         })

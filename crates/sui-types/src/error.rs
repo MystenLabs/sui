@@ -562,6 +562,31 @@ pub enum SuiError {
     // Errors returned by authority and client read API's
     #[error("Failure serializing transaction in the requested format: {:?}", error)]
     TransactionSerializationError { error: String },
+    #[error(
+        "Failure deserializing transaction from the provided format: {:?}",
+        error
+    )]
+    TransactionDeserializationError { error: String },
+    #[error(
+        "Failure serializing transaction effects from the provided format: {:?}",
+        error
+    )]
+    TransactionEffectsSerializationError { error: String },
+    #[error(
+        "Failure deserializing transaction effects from the provided format: {:?}",
+        error
+    )]
+    TransactionEffectsDeserializationError { error: String },
+    #[error(
+        "Failure serializing transaction events from the provided format: {:?}",
+        error
+    )]
+    TransactionEventsSerializationError { error: String },
+    #[error(
+        "Failure deserializing transaction events from the provided format: {:?}",
+        error
+    )]
+    TransactionEventsDeserializationError { error: String },
     #[error("Failure serializing object in the requested format: {:?}", error)]
     ObjectSerializationError { error: String },
     #[error("Failure deserializing object in the requested format: {:?}", error)]
