@@ -232,7 +232,6 @@ fn compute_transaction_positions(
         digest_to_position.insert(execution_digest.transaction, position);
     }
 
-    info!("Transaction kind [{kind}] is not programmable transaction and not a system transaction");
     digest_to_position
 }
 
