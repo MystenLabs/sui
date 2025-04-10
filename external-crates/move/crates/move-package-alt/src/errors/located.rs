@@ -17,7 +17,7 @@ use super::{FileHandle, PackageResult};
 
 thread_local! {
     /// The ID of the file currently being parsed
-    static PARSING_FILE: RefCell<Option<FileHandle>> = RefCell::new(None);
+    static PARSING_FILE: RefCell<Option<FileHandle>> = const { RefCell::new(None) };
 }
 
 /// A located value contains both a file location and a span. Located values (and data structures
@@ -95,7 +95,7 @@ impl Drop for Guard {
 // TODO: better error return types?
 pub fn with_file<R, F: FnOnce(&str) -> R>(file: impl AsRef<Path>, f: F) -> PackageResult<R> {
     let buf = file.as_ref().to_path_buf();
-    let mut file_id = FileHandle::new(buf)?;
+    let file_id = FileHandle::new(buf)?;
 
     let guard = Guard::new(file_id);
     let result: R = f(file_id.source());
@@ -113,9 +113,8 @@ where
     {
         let value: Spanned<T> = Spanned::<T>::deserialize(deserializer)?;
         let file = PARSING_FILE.with_borrow(|f| {
-            f.as_ref()
+            *f.as_ref()
                 .expect("Located<T> should only be deserialized in with_file")
-                .clone()
         });
 
         Ok(Self { file, value })

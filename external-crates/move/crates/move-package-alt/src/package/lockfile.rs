@@ -75,8 +75,7 @@ impl<F: MoveFlavor + fmt::Debug> Lockfile<F> {
         if !lockfile_name.exists() {
             return Ok(Self::default());
         };
-        let mut lockfiles: Self =
-            with_file(lockfile_name, |contents| toml_edit::de::from_str(&contents))??;
+        let mut lockfiles: Self = with_file(lockfile_name, toml_edit::de::from_str)??;
 
         // Add in `Move.<env>.lock` files
         let dir = std::fs::read_dir(path)?;

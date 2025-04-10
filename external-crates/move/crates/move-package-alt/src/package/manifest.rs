@@ -78,14 +78,14 @@ impl<F: MoveFlavor> Manifest<F> {
     pub fn read_from(path: impl AsRef<Path>) -> PackageResult<Self> {
         let contents = std::fs::read_to_string(&path)?;
 
-        let manifest: Self = with_file(&path, |contents| toml_edit::de::from_str(&contents))??;
-        manifest.validate_manifest(&path, &contents)?;
+        let manifest: Self = with_file(&path, toml_edit::de::from_str)??;
+        manifest.validate_manifest(&path)?;
 
         Ok(manifest)
     }
 
     /// Validate the manifest contents, after deserialization.
-    pub fn validate_manifest(&self, path: impl AsRef<Path>, contents: &str) -> PackageResult<()> {
+    pub fn validate_manifest(&self, path: impl AsRef<Path>) -> PackageResult<()> {
         // Validate package name
         if self.package.name.get_ref().is_empty() {
             let err = ManifestError {
