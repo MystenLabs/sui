@@ -452,11 +452,10 @@ impl NodeMetrics {
                 "Number of times this node tried to fetch the last own block from peers",
                 registry,
             ).unwrap(),
-            // TODO: add a short status label.
             invalid_blocks: register_int_counter_vec_with_registry!(
                 "invalid_blocks",
                 "Number of invalid blocks per peer authority",
-                &["authority", "source", "error"],
+                &["authority", "source", "error", "status"],
                 registry,
             ).unwrap(),
             rejected_blocks: register_int_counter_vec_with_registry!(
