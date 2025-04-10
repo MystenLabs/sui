@@ -97,7 +97,7 @@ pub(crate) struct DagBuilder {
 impl DagBuilder {
     pub(crate) fn new(context: Arc<Context>) -> Self {
         let leader_schedule = LeaderSchedule::new(context.clone(), LeaderSwapTable::default());
-        let genesis_blocks = genesis_blocks(context.clone());
+        let genesis_blocks = genesis_blocks(context.as_ref());
         let genesis: BTreeMap<BlockRef, VerifiedBlock> = genesis_blocks
             .into_iter()
             .map(|block| (block.reference(), block))

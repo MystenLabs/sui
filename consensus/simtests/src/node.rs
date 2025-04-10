@@ -276,6 +276,7 @@ pub(crate) async fn make_authority(
 
     let authority = ConsensusAuthority::start(
         network_type,
+        0,
         authority_index,
         committee,
         parameters,
