@@ -20,7 +20,7 @@ use toml_edit::{
 
 use crate::{
     dependency::{ManifestDependencyInfo, PinnedDependencyInfo},
-    errors::{with_file, Located},
+    errors::{with_file, Located, LockfileError, PackageError, PackageResult},
     flavor::MoveFlavor,
 };
 
@@ -69,13 +69,18 @@ struct UnpublishedDependencies<F: MoveFlavor + fmt::Debug> {
 impl<F: MoveFlavor + fmt::Debug> Lockfile<F> {
     /// Read `Move.lock` and all `Move.<env>.lock` files from the directory at `path`.
     /// Returns a new empty [Lockfile] if `path` doesn't contain a `Move.lock`.
-    pub fn read_from(path: impl AsRef<Path>) -> anyhow::Result<Self> {
+    pub fn read_from(path: impl AsRef<Path>) -> PackageResult<Self> {
         // Parse `Move.lock`
         let lockfile_name = path.as_ref().join("Move.lock");
         if !lockfile_name.exists() {
             return Ok(Self::default());
         };
-        let mut lockfiles: Self = with_file(lockfile_name, toml_edit::de::from_str)??;
+
+        let data = with_file(lockfile_name, toml_edit::de::from_str::<Self>)?;
+
+        let Ok(mut lockfiles) = data.0 else {
+            return Err(data.0.unwrap_err().into());
+        };
 
         // Add in `Move.<env>.lock` files
         let dir = std::fs::read_dir(path)?;
@@ -86,13 +91,16 @@ impl<F: MoveFlavor + fmt::Debug> Lockfile<F> {
                 continue;
             };
 
-            let metadata_contents = std::fs::read_to_string(file.path())?;
-            let metadata: Publication<F> = toml_edit::de::from_str(&metadata_contents)
-                .or_else(|_| bail!(format!("Couldn't parse {file:?}")))?;
+            let (metadata, file_id) =
+                with_file(file.path(), toml_edit::de::from_str::<Publication<F>>)?;
+
+            let Ok(metadata) = metadata else {
+                return Err(metadata.unwrap_err().into());
+            };
 
             let old_entry = lockfiles.published.insert(env_name.clone(), metadata);
             if old_entry.is_some() {
-                bail!("Move.lock and Move.{env_name}.lock both contain publication information for {env_name}; TODO.");
+                return Err(PackageError::Generic("Move.lock and Move.{env_name}.lock both contain publication information for {env_name}".to_string()));
             }
         }
 

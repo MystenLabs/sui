@@ -78,20 +78,25 @@ impl<F: MoveFlavor> Manifest<F> {
     pub fn read_from(path: impl AsRef<Path>) -> PackageResult<Self> {
         let contents = std::fs::read_to_string(&path)?;
 
-        let manifest: Self = with_file(&path, toml_edit::de::from_str)??;
-        manifest.validate_manifest(&path)?;
+        let data = with_file(&path, toml_edit::de::from_str::<Self>)?;
 
-        Ok(manifest)
+        match data.0 {
+            Ok(manifest) => {
+                manifest.validate_manifest(data.1)?;
+                Ok(manifest)
+            }
+            Err(err) => return Err(err.into()),
+        }
     }
 
     /// Validate the manifest contents, after deserialization.
-    pub fn validate_manifest(&self, path: impl AsRef<Path>) -> PackageResult<()> {
+    pub fn validate_manifest(&self, handle: FileHandle) -> PackageResult<()> {
         // Validate package name
         if self.package.name.get_ref().is_empty() {
             let err = ManifestError {
                 kind: ManifestErrorKind::EmptyPackageName,
                 span: Some(self.package.name.span()),
-                handle: FileHandle::new(path.as_ref().to_path_buf())?,
+                handle,
             };
             err.emit()?;
             return Err(err.into());
@@ -105,7 +110,7 @@ impl<F: MoveFlavor> Manifest<F> {
                     valid: ALLOWED_EDITIONS.join(", ").to_string(),
                 },
                 span: Some(self.package.edition.span()),
-                handle: FileHandle::new(path.as_ref().to_path_buf())?,
+                handle,
             };
             err.emit()?;
             return Err(err.into());

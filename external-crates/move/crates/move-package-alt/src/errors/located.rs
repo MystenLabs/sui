@@ -93,14 +93,17 @@ impl Drop for Guard {
 
 /// Allows deserialization of [Located] values; sets their [file]s to [file]
 // TODO: better error return types?
-pub fn with_file<R, F: FnOnce(&str) -> R>(file: impl AsRef<Path>, f: F) -> PackageResult<R> {
+pub fn with_file<R, F: FnOnce(&str) -> R>(
+    file: impl AsRef<Path>,
+    f: F,
+) -> PackageResult<(R, FileHandle)> {
     let buf = file.as_ref().to_path_buf();
     let file_id = FileHandle::new(buf)?;
 
     let guard = Guard::new(file_id);
     let result: R = f(file_id.source());
 
-    Ok(result)
+    Ok((result, file_id))
 }
 
 impl<'de, T> Deserialize<'de> for Located<T>

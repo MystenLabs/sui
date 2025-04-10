@@ -2,10 +2,12 @@
 // Copyright (c) The Move Contributors
 // SPDX-License-Identifier: Apache-2.0
 
+mod lockfile_error;
 mod manifest_error;
 use append_only_vec::AppendOnlyVec;
 use codespan_reporting::files::SimpleFile;
 use codespan_reporting::files::SimpleFiles;
+pub use lockfile_error::LockfileError;
 pub use manifest_error::ManifestError;
 pub use manifest_error::ManifestErrorKind;
 
@@ -44,6 +46,9 @@ pub enum PackageError {
 
     #[error(transparent)]
     Other(#[from] anyhow::Error),
+
+    #[error("{0}")]
+    Generic(String),
 
     #[error(transparent)]
     Toml(#[from] toml_edit::de::Error),
