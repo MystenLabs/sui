@@ -357,6 +357,7 @@ impl BuildConfig {
             Flags::empty()
         };
         flags
+            .set_verify(self.verify_mode)
             .set_warnings_are_errors(self.warnings_are_errors)
             .set_json_errors(self.json_errors)
             .set_silence_warnings(self.silence_warnings)
