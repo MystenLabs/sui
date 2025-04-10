@@ -40,28 +40,19 @@ use serde::{Deserialize, Serialize};
 mod private {
     pub trait Sealed {}
 }
-pub trait SourceKind: private::Sealed + Copy {
-    type FromSource<T>;
-    const HAS_SOURCE: bool;
-}
+pub trait SourceKind: private::Sealed + 'static {}
 
 #[derive(Clone, Copy, Serialize, Deserialize)]
 pub struct WithSource;
 
-impl SourceKind for WithSource {
-    type FromSource<T> = [T; 1];
-    const HAS_SOURCE: bool = true;
-}
 impl private::Sealed for WithSource {}
+impl SourceKind for WithSource {}
 
 #[derive(Clone, Copy, Serialize, Deserialize)]
 pub struct WithoutSource;
 
-impl SourceKind for WithoutSource {
-    type FromSource<T> = [T; 0];
-    const HAS_SOURCE: bool = false;
-}
 impl private::Sealed for WithoutSource {}
+impl SourceKind for WithoutSource {}
 
 #[derive(Clone, Copy)]
 pub enum Kind<TWithSource, TWithout> {
@@ -69,18 +60,20 @@ pub enum Kind<TWithSource, TWithout> {
     WithoutSource(TWithout),
 }
 
-pub struct Model<K: SourceKind> {
-    files: K::FromSource<MappedFiles>,
+type FromSource<T> = Option<T>;
+
+pub struct Model<K: SourceKind + ?Sized> {
+    files: FromSource<MappedFiles>,
     root_named_address_map: BTreeMap<Symbol, AccountAddress>,
     root_package_name: Option<Symbol>,
-    info: K::FromSource<Arc<TypingProgramInfo>>,
+    info: FromSource<Arc<TypingProgramInfo>>,
     compiled: normalized::Packages,
     packages: BTreeMap<AccountAddress, PackageData<K>>,
-    serializable_signatures: OnceCell<serializable_signatures::Packages<K>>,
+    serializable_signatures: OnceCell<serializable_signatures::Packages>,
+    _phantom: std::marker::PhantomData<K>,
 }
 
-#[derive(Clone, Copy)]
-pub struct Package<'a, K: SourceKind> {
+pub struct Package<'a, K: SourceKind + ?Sized> {
     addr: AccountAddress,
     // TODO name. We likely want the package name from the root package's named address map
     model: &'a Model<K>,
@@ -88,30 +81,26 @@ pub struct Package<'a, K: SourceKind> {
     data: &'a PackageData<K>,
 }
 
-#[derive(Clone, Copy)]
-pub struct Module<'a, K: SourceKind> {
+pub struct Module<'a, K: SourceKind + ?Sized> {
     id: ModuleId,
     package: Package<'a, K>,
     compiled: &'a normalized::Module,
     data: &'a ModuleData<K>,
 }
 
-#[derive(Clone, Copy)]
-pub enum Member<'a, K: SourceKind> {
+pub enum Member<'a, K: SourceKind + ?Sized> {
     Struct(Struct<'a, K>),
     Enum(Enum<'a, K>),
     Function(Function<'a, K>),
     NamedConstant(NamedConstant<'a>),
 }
 
-#[derive(Clone, Copy)]
-pub enum Datatype<'a, K: SourceKind> {
+pub enum Datatype<'a, K: SourceKind + ?Sized> {
     Struct(Struct<'a, K>),
     Enum(Enum<'a, K>),
 }
 
-#[derive(Clone, Copy)]
-pub struct Struct<'a, K: SourceKind> {
+pub struct Struct<'a, K: SourceKind + ?Sized> {
     name: Symbol,
     module: Module<'a, K>,
     compiled: &'a normalized::Struct,
@@ -119,8 +108,7 @@ pub struct Struct<'a, K: SourceKind> {
     data: &'a StructData,
 }
 
-#[derive(Clone, Copy)]
-pub struct Enum<'a, K: SourceKind> {
+pub struct Enum<'a, K: SourceKind + ?Sized> {
     name: Symbol,
     module: Module<'a, K>,
     compiled: &'a normalized::Enum,
@@ -128,15 +116,13 @@ pub struct Enum<'a, K: SourceKind> {
     data: &'a EnumData,
 }
 
-#[derive(Clone, Copy)]
-pub struct Variant<'a, K: SourceKind> {
+pub struct Variant<'a, K: SourceKind + ?Sized> {
     name: Symbol,
     enum_: Enum<'a, K>,
     compiled: &'a normalized::Variant,
 }
 
-#[derive(Clone, Copy)]
-pub struct Function<'a, K: SourceKind> {
+pub struct Function<'a, K: SourceKind + ?Sized> {
     name: Symbol,
     module: Module<'a, K>,
     // might be none for macros
@@ -145,20 +131,17 @@ pub struct Function<'a, K: SourceKind> {
     data: &'a FunctionData,
 }
 
-#[derive(Clone, Copy)]
 pub enum Constant<'a> {
     Compiled(CompiledConstant<'a, WithSource>),
     Named(NamedConstant<'a>),
 }
 
-#[derive(Clone, Copy)]
-pub struct CompiledConstant<'a, K: SourceKind> {
+pub struct CompiledConstant<'a, K: SourceKind + ?Sized> {
     module: Module<'a, K>,
     compiled: &'a normalized::Constant,
     data: &'a ConstantData,
 }
 
-#[derive(Clone, Copy)]
 pub struct NamedConstant<'a> {
     name: Symbol,
     module: Module<'a, WithSource>,
@@ -240,13 +223,14 @@ impl Model<WithSource> {
             })
             .collect();
         let mut model = Self {
-            files: [files],
+            files: Some(files),
             root_package_name,
             root_named_address_map,
-            info: [info],
+            info: Some(info),
             compiled,
             packages,
             serializable_signatures: OnceCell::new(),
+            _phantom: std::marker::PhantomData,
         };
         model.compute_dependencies();
         model.compute_function_dependencies();
@@ -255,7 +239,7 @@ impl Model<WithSource> {
     }
 
     pub fn files(&self) -> &MappedFiles {
-        &self.files[0]
+        self.files.as_ref().unwrap()
     }
 
     pub fn serializable_signatures(&self) -> &serializable_signatures::Packages {
@@ -287,13 +271,14 @@ impl Model<WithoutSource> {
             .map(|(a, n)| (*n, *a))
             .collect();
         let mut model = Self {
-            files: [],
+            files: None,
             root_package_name: None,
             root_named_address_map,
-            info: [],
+            info: None,
             compiled,
             packages,
             serializable_signatures: OnceCell::new(),
+            _phantom: std::marker::PhantomData,
         };
         model.compute_dependencies();
         model.compute_function_dependencies();
@@ -307,7 +292,7 @@ impl Model<WithoutSource> {
     }
 }
 
-impl<K: SourceKind> Model<K> {
+impl<K: SourceKind + ?Sized> Model<K> {
     pub fn root_package_name(&self) -> Option<Symbol> {
         self.root_package_name
     }
@@ -363,13 +348,23 @@ impl<K: SourceKind> Model<K> {
     }
 
     pub fn kind(&self) -> Kind<&Model<WithSource>, &Model<WithoutSource>> {
-        if K::HAS_SOURCE {
+        if self.has_source() {
             Kind::WithSource(unsafe { std::mem::transmute::<&Self, &Model<WithSource>>(self) })
         } else {
             Kind::WithoutSource(unsafe {
                 std::mem::transmute::<&Self, &Model<WithoutSource>>(self)
             })
         }
+    }
+
+    pub fn as_dyn(&self) -> &Model<dyn SourceKind> {
+        unsafe { std::mem::transmute::<&Self, &Model<dyn SourceKind>>(self) }
+    }
+
+    fn has_source(&self) -> bool {
+        let has_files = self.files.is_some();
+        debug_assert_eq!(has_files, self.info.is_some());
+        has_files
     }
 
     fn check_invariants(&self) {
@@ -396,8 +391,11 @@ impl<K: SourceKind> Model<K> {
                                     module,
                                 )
                             };
-                            let declared_idx = model.info[0]
-                                .module(&module.ident[0])
+                            let declared_idx = model
+                                .info
+                                .as_ref()
+                                .unwrap()
+                                .module(module.ident.as_ref().unwrap())
                                 .functions
                                 .get_(f)
                                 .unwrap()
@@ -424,7 +422,7 @@ impl<K: SourceKind> Model<K> {
     }
 }
 
-impl<'a, K: SourceKind> Package<'a, K> {
+impl<'a, K: SourceKind + ?Sized> Package<'a, K> {
     pub fn address(&self) -> AccountAddress {
         self.addr
     }
@@ -466,7 +464,7 @@ impl<'a, K: SourceKind> Package<'a, K> {
     }
 
     pub fn kind(self) -> Kind<Package<'a, WithSource>, Package<'a, WithoutSource>> {
-        if K::HAS_SOURCE {
+        if self.model().has_source() {
             Kind::WithSource(unsafe { std::mem::transmute::<Self, Package<'a, WithSource>>(self) })
         } else {
             Kind::WithoutSource(unsafe {
@@ -474,9 +472,13 @@ impl<'a, K: SourceKind> Package<'a, K> {
             })
         }
     }
+
+    pub fn to_dyn(self) -> Package<'a, dyn SourceKind> {
+        unsafe { std::mem::transmute::<Self, Package<'a, dyn SourceKind>>(self) }
+    }
 }
 
-impl<'a, K: SourceKind> Module<'a, K> {
+impl<'a, K: SourceKind + ?Sized> Module<'a, K> {
     pub fn model(&self) -> &'a Model<K> {
         self.package.model()
     }
@@ -593,7 +595,7 @@ impl<'a, K: SourceKind> Module<'a, K> {
     }
 
     pub fn kind(self) -> Kind<Module<'a, WithSource>, Module<'a, WithoutSource>> {
-        if K::HAS_SOURCE {
+        if self.model().has_source() {
             Kind::WithSource(unsafe { std::mem::transmute::<Self, Module<'a, WithSource>>(self) })
         } else {
             Kind::WithoutSource(unsafe {
@@ -601,19 +603,33 @@ impl<'a, K: SourceKind> Module<'a, K> {
             })
         }
     }
+
+    pub fn to_dyn(self) -> Module<'a, dyn SourceKind> {
+        unsafe { std::mem::transmute::<Self, Module<'a, dyn SourceKind>>(self) }
+    }
 }
 
 impl<'a> Module<'a, WithSource> {
     pub fn ident(&self) -> &'a E::ModuleIdent {
-        &self.data.ident[0]
+        self.data.ident.as_ref().unwrap()
     }
 
     pub fn info(&self) -> &'a ModuleInfo {
-        self.model().info[0].modules.get(self.ident()).unwrap()
+        self.model()
+            .info
+            .as_ref()
+            .unwrap()
+            .modules
+            .get(self.ident())
+            .unwrap()
     }
 
     pub fn source_path(&self) -> Symbol {
-        self.model().files[0].filename(&self.info().defined_loc.file_hash())
+        self.model()
+            .files
+            .as_ref()
+            .unwrap()
+            .filename(&self.info().defined_loc.file_hash())
     }
 
     pub fn maybe_member(&self, name: impl Into<Symbol>) -> Option<Member<'a, WithSource>> {
@@ -631,7 +647,7 @@ impl<'a> Module<'a, WithSource> {
 
     pub fn maybe_named_constant(&self, name: impl Into<Symbol>) -> Option<NamedConstant<'a>> {
         let name = name.into();
-        let data = &self.data.named_constants[0].get(&name)?;
+        let data = &self.data.named_constants.as_ref().unwrap().get(&name)?;
         let compiled = data
             .compiled_index
             .map(|idx| &*self.compiled.constants[idx.0 as usize]);
@@ -648,7 +664,10 @@ impl<'a> Module<'a, WithSource> {
     }
 
     pub fn named_constants(&self) -> impl Iterator<Item = NamedConstant<'a>> + '_ {
-        self.data.named_constants[0]
+        self.data
+            .named_constants
+            .as_ref()
+            .unwrap()
             .keys()
             .copied()
             .map(|name| self.named_constant(name))
@@ -659,14 +678,16 @@ impl<'a> Module<'a, WithSource> {
             .constants
             .iter()
             .enumerate()
-            .map(|(idx, compiled)| match self.data.constant_names[0][idx] {
-                Some(name) => Constant::Named(self.named_constant(name)),
-                None => Constant::Compiled(CompiledConstant {
-                    module: *self,
-                    compiled,
-                    data: &self.data.constants[idx],
-                }),
-            })
+            .map(
+                |(idx, compiled)| match self.data.constant_names.as_ref().unwrap()[idx] {
+                    Some(name) => Constant::Named(self.named_constant(name)),
+                    None => Constant::Compiled(CompiledConstant {
+                        module: *self,
+                        compiled,
+                        data: &self.data.constants[idx],
+                    }),
+                },
+            )
     }
 }
 
@@ -696,7 +717,7 @@ impl<'a> Module<'a, WithoutSource> {
     }
 }
 
-impl<'a, K: SourceKind> Struct<'a, K> {
+impl<'a, K: SourceKind + ?Sized> Struct<'a, K> {
     pub fn name(&self) -> Symbol {
         self.name
     }
@@ -722,13 +743,17 @@ impl<'a, K: SourceKind> Struct<'a, K> {
     }
 
     pub fn kind(self) -> Kind<Struct<'a, WithSource>, Struct<'a, WithoutSource>> {
-        if K::HAS_SOURCE {
+        if self.model().has_source() {
             Kind::WithSource(unsafe { std::mem::transmute::<Self, Struct<'a, WithSource>>(self) })
         } else {
             Kind::WithoutSource(unsafe {
                 std::mem::transmute::<Self, Struct<'a, WithoutSource>>(self)
             })
         }
+    }
+
+    pub fn to_dyn(self) -> Struct<'a, dyn SourceKind> {
+        unsafe { std::mem::transmute::<Self, Struct<'a, dyn SourceKind>>(self) }
     }
 }
 
@@ -738,7 +763,7 @@ impl<'a> Struct<'a, WithSource> {
     }
 }
 
-impl<'a, K: SourceKind> Enum<'a, K> {
+impl<'a, K: SourceKind + ?Sized> Enum<'a, K> {
     pub fn name(&self) -> Symbol {
         self.name
     }
@@ -785,7 +810,7 @@ impl<'a> Enum<'a, WithSource> {
     }
 }
 
-impl<'a, K: SourceKind> Variant<'a, K> {
+impl<'a, K: SourceKind + ?Sized> Variant<'a, K> {
     pub fn name(&self) -> Symbol {
         self.name
     }
@@ -815,13 +840,17 @@ impl<'a, K: SourceKind> Variant<'a, K> {
     }
 
     pub fn kind(self) -> Kind<Variant<'a, WithSource>, Variant<'a, WithoutSource>> {
-        if K::HAS_SOURCE {
+        if self.model().has_source() {
             Kind::WithSource(unsafe { std::mem::transmute::<Self, Variant<'a, WithSource>>(self) })
         } else {
             Kind::WithoutSource(unsafe {
                 std::mem::transmute::<Self, Variant<'a, WithoutSource>>(self)
             })
         }
+    }
+
+    pub fn to_dyn(self) -> Variant<'a, dyn SourceKind> {
+        unsafe { std::mem::transmute::<Self, Variant<'a, dyn SourceKind>>(self) }
     }
 }
 
@@ -831,7 +860,7 @@ impl<'a> Variant<'a, WithSource> {
     }
 }
 
-impl<'a, K: SourceKind> Function<'a, K> {
+impl<'a, K: SourceKind + ?Sized> Function<'a, K> {
     pub fn name(&self) -> Symbol {
         self.name
     }
@@ -868,13 +897,17 @@ impl<'a, K: SourceKind> Function<'a, K> {
     }
 
     pub fn kind(self) -> Kind<Function<'a, WithSource>, Function<'a, WithoutSource>> {
-        if K::HAS_SOURCE {
+        if self.model().has_source() {
             Kind::WithSource(unsafe { std::mem::transmute::<Self, Function<'a, WithSource>>(self) })
         } else {
             Kind::WithoutSource(unsafe {
                 std::mem::transmute::<Self, Function<'a, WithoutSource>>(self)
             })
         }
+    }
+
+    pub fn to_dyn(self) -> Function<'a, dyn SourceKind> {
+        unsafe { std::mem::transmute::<Self, Function<'a, dyn SourceKind>>(self) }
     }
 }
 
@@ -913,7 +946,7 @@ impl<'a> Constant<'a> {
     }
 }
 
-impl<'a, K: SourceKind> CompiledConstant<'a, K> {
+impl<'a, K: SourceKind + ?Sized> CompiledConstant<'a, K> {
     pub fn module(&self) -> Module<'a, K> {
         self.module
     }
@@ -1031,23 +1064,24 @@ impl<T: TModuleId> TModuleId for Spanned<T> {
 
 // The *Data structs are not used currently, but if we need extra source information these provide
 // a place to store it.
-struct PackageData<K: SourceKind> {
+struct PackageData<K: SourceKind + ?Sized> {
     // Based on the root packages named address map
     name: Option<Symbol>,
     modules: BTreeMap<Symbol, ModuleData<K>>,
 }
 
-struct ModuleData<K: SourceKind> {
-    ident: K::FromSource<E::ModuleIdent>,
+struct ModuleData<K: SourceKind + ?Sized> {
+    ident: FromSource<E::ModuleIdent>,
     structs: IndexMap<Symbol, StructData>,
     enums: IndexMap<Symbol, EnumData>,
     functions: IndexMap<Symbol, FunctionData>,
     constants: Vec<ConstantData>,
-    named_constants: K::FromSource<IndexMap<Symbol, NamedConstantData>>,
+    named_constants: FromSource<IndexMap<Symbol, NamedConstantData>>,
     // mapping from file_format::ConstantPoolIndex to source constant name, if any
-    constant_names: K::FromSource<Vec<Option<Symbol>>>,
+    constant_names: FromSource<Vec<Option<Symbol>>>,
     deps: BTreeMap<ModuleId, /* is immediate */ bool>,
     used_by: BTreeMap<ModuleId, /* is immediate */ bool>,
+    _phantom: std::marker::PhantomData<K>,
 }
 
 struct StructData {}
@@ -1077,7 +1111,7 @@ struct NamedConstantData {
 // Construction
 //**************************************************************************************************
 
-impl<K: SourceKind> Model<K> {
+impl<K: SourceKind + ?Sized> Model<K> {
     fn compute_dependencies(&mut self) {
         fn visit(
             packages: &BTreeMap<AccountAddress, normalized::Package>,
@@ -1279,16 +1313,17 @@ impl ModuleData<WithSource> {
                 .collect()
         };
         Self {
-            ident: [ident],
+            ident: Some(ident),
             structs,
             enums,
             functions,
             constants,
-            named_constants: [named_constants],
-            constant_names: [constant_names],
+            named_constants: Some(named_constants),
+            constant_names: Some(constant_names),
             // computed later
             deps: BTreeMap::new(),
             used_by: BTreeMap::new(),
+            _phantom: std::marker::PhantomData,
         }
     }
 }
@@ -1318,16 +1353,17 @@ impl ModuleData<WithoutSource> {
             .map(|name| (name, FunctionData::new()))
             .collect();
         Self {
-            ident: [],
+            ident: None,
             structs,
             enums,
             functions,
             constants,
-            named_constants: [],
-            constant_names: [],
+            named_constants: None,
+            constant_names: None,
             // computed later
             deps: BTreeMap::new(),
             used_by: BTreeMap::new(),
+            _phantom: std::marker::PhantomData,
         }
     }
 }
@@ -1429,3 +1465,84 @@ fn annotated_constant_layout(ty: &normalized::Type) -> runtime_value::MoveTypeLa
         }
     }
 }
+
+//**************************************************************************************************
+// Derive
+//**************************************************************************************************
+
+impl<K: SourceKind + ?Sized> Clone for Package<'_, K> {
+    fn clone(&self) -> Self {
+        *self
+    }
+}
+impl<K: SourceKind + ?Sized> Copy for Package<'_, K> {}
+
+impl<K: SourceKind + ?Sized> Clone for Module<'_, K> {
+    fn clone(&self) -> Self {
+        *self
+    }
+}
+impl<K: SourceKind + ?Sized> Copy for Module<'_, K> {}
+
+impl<K: SourceKind + ?Sized> Clone for Member<'_, K> {
+    fn clone(&self) -> Self {
+        *self
+    }
+}
+impl<K: SourceKind + ?Sized> Copy for Member<'_, K> {}
+
+impl<K: SourceKind + ?Sized> Clone for Datatype<'_, K> {
+    fn clone(&self) -> Self {
+        *self
+    }
+}
+impl<K: SourceKind + ?Sized> Copy for Datatype<'_, K> {}
+
+impl<K: SourceKind + ?Sized> Clone for Struct<'_, K> {
+    fn clone(&self) -> Self {
+        *self
+    }
+}
+impl<K: SourceKind + ?Sized> Copy for Struct<'_, K> {}
+
+impl<K: SourceKind + ?Sized> Clone for Enum<'_, K> {
+    fn clone(&self) -> Self {
+        *self
+    }
+}
+impl<K: SourceKind + ?Sized> Copy for Enum<'_, K> {}
+
+impl<K: SourceKind + ?Sized> Clone for Variant<'_, K> {
+    fn clone(&self) -> Self {
+        *self
+    }
+}
+impl<K: SourceKind + ?Sized> Copy for Variant<'_, K> {}
+
+impl<K: SourceKind + ?Sized> Clone for Function<'_, K> {
+    fn clone(&self) -> Self {
+        *self
+    }
+}
+impl<K: SourceKind + ?Sized> Copy for Function<'_, K> {}
+
+impl Clone for Constant<'_> {
+    fn clone(&self) -> Self {
+        *self
+    }
+}
+impl Copy for Constant<'_> {}
+
+impl Clone for CompiledConstant<'_, WithSource> {
+    fn clone(&self) -> Self {
+        *self
+    }
+}
+impl Copy for CompiledConstant<'_, WithSource> {}
+
+impl Clone for NamedConstant<'_> {
+    fn clone(&self) -> Self {
+        *self
+    }
+}
+impl Copy for NamedConstant<'_> {}
