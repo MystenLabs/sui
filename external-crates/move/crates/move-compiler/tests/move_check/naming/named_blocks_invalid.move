@@ -22,7 +22,7 @@ module 0x42::m {
         }
     }
 
-    fun t3(_cond: bool) {
+    fun t3(cond: bool) {
         while (cond) 'outer: {
             while (cond) 'inner: {
                 if (cond) { return 'outer };
@@ -31,7 +31,7 @@ module 0x42::m {
         }
     }
 
-    fun t4(_cond: bool) {
+    fun t4(cond: bool) {
         while (cond) 'outer: {
             let _x = 'inner: {
                 if (cond) { return 'outer };
@@ -72,7 +72,7 @@ module 0x42::m {
         }
     }
 
-    fun t9(_cond: bool) {
+    fun t9(cond: bool) {
         while (cond) 'outer: {
             while (cond) 'inner: {
                 if (cond) { continue 'outer2 };

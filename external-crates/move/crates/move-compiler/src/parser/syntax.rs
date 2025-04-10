@@ -1920,39 +1920,61 @@ fn parse_control_exp(context: &mut Context) -> Result<(Exp, bool), Box<Diagnosti
             context.tokens.advance()?;
             consume_token(context.tokens, Tok::LParen)?;
             let eb = Box::new(parse_exp(context)?);
-            consume_token(context.tokens, Tok::RParen)?;
-            let (et, ends_in_block) = parse_exp_or_sequence(context)?;
-            let (ef, ends_in_block) = if match_token(context.tokens, Tok::Else)? {
-                let (ef, ends_in_block) = parse_exp_or_sequence(context)?;
-                (Some(Box::new(ef)), ends_in_block)
+            if let Err(diag) = consume_token(context.tokens, Tok::RParen) {
+                context.add_diag(*diag);
+                (
+                    Exp_::IfElse(
+                        eb,
+                        Box::new(sp(Loc::invalid(), Exp_::UnresolvedError)),
+                        None,
+                    ),
+                    false,
+                )
             } else {
-                (None, ends_in_block)
-            };
-            (Exp_::IfElse(eb, Box::new(et), ef), ends_in_block)
+                let (et, ends_in_block) = parse_exp_or_sequence(context)?;
+                let (ef, ends_in_block) = if match_token(context.tokens, Tok::Else)? {
+                    let (ef, ends_in_block) = parse_exp_or_sequence(context)?;
+                    (Some(Box::new(ef)), ends_in_block)
+                } else {
+                    (None, ends_in_block)
+                };
+                (Exp_::IfElse(eb, Box::new(et), ef), ends_in_block)
+            }
         }
         Tok::While => {
             context.tokens.advance()?;
             consume_token(context.tokens, Tok::LParen)?;
             let econd = parse_exp(context)?;
-            consume_token(context.tokens, Tok::RParen)?;
-            let (eloop, ends_in_block) = parse_exp_or_sequence(context)?;
-            let (econd, ends_in_block) = if context.tokens.peek() == Tok::Spec {
-                let start_loc = context.tokens.start_loc();
-                let spec = consume_spec_string(context)?;
-                let loc = make_loc(
-                    context.tokens.file_hash(),
-                    start_loc,
-                    context.tokens.previous_end_loc(),
-                );
-
-                let spec_seq = sp(loc, SequenceItem_::Seq(Box::new(sp(loc, Exp_::Spec(spec)))));
-                let loc = econd.loc;
-                let spec_block = Exp_::Block((vec![], vec![spec_seq], None, Box::new(Some(econd))));
-                (sp(loc, spec_block), true)
+            if let Err(diag) = consume_token(context.tokens, Tok::RParen) {
+                context.add_diag(*diag);
+                (
+                    Exp_::While(
+                        Box::new(econd),
+                        Box::new(sp(Loc::invalid(), Exp_::UnresolvedError)),
+                    ),
+                    false,
+                )
             } else {
-                (econd, ends_in_block)
-            };
-            (Exp_::While(Box::new(econd), Box::new(eloop)), ends_in_block)
+                let (eloop, ends_in_block) = parse_exp_or_sequence(context)?;
+                let (econd, ends_in_block) = if context.tokens.peek() == Tok::Spec {
+                    let start_loc = context.tokens.start_loc();
+                    let spec = consume_spec_string(context)?;
+                    let loc = make_loc(
+                        context.tokens.file_hash(),
+                        start_loc,
+                        context.tokens.previous_end_loc(),
+                    );
+
+                    let spec_seq = sp(loc, SequenceItem_::Seq(Box::new(sp(loc, Exp_::Spec(spec)))));
+                    let loc = econd.loc;
+                    let spec_block =
+                        Exp_::Block((vec![], vec![spec_seq], None, Box::new(Some(econd))));
+                    (sp(loc, spec_block), true)
+                } else {
+                    (econd, ends_in_block)
+                };
+                (Exp_::While(Box::new(econd), Box::new(eloop)), ends_in_block)
+            }
         }
         Tok::Loop => {
             context.tokens.advance()?;
@@ -2019,10 +2041,14 @@ fn parse_control_exp(context: &mut Context) -> Result<(Exp, bool), Box<Diagnosti
             context.tokens.advance()?;
             consume_token(context.tokens, Tok::LParen)?;
             let subject_exp = Box::new(parse_exp(context)?);
-            consume_token(context.tokens, Tok::RParen)?;
-            let arms = parse_match_arms(context)?;
-            let result = Exp_::Match(subject_exp, arms);
-            (result, true)
+            if let Err(diag) = consume_token(context.tokens, Tok::RParen) {
+                context.add_diag(*diag);
+                (Exp_::Match(subject_exp, sp(Loc::invalid(), vec![])), false)
+            } else {
+                let arms = parse_match_arms(context)?;
+                let result = Exp_::Match(subject_exp, arms);
+                (result, true)
+            }
         }
         _ => unreachable!(),
     };
