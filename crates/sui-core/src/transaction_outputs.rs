@@ -54,9 +54,9 @@ impl TransactionOutputs {
             .into_iter()
             .filter(|obj_ref| modified_at.contains(&(obj_ref.0, obj_ref.1)));
 
-        // We record any received or deleted objects since they could be pruned, and smear shared
-        // object deletions in the marker table. For deleted entries in the marker table we need to
-        // make sure we don't accidentally overwrite entries.
+        // We record any received or deleted objects since they could be pruned, and smear object
+        // removals from consensus in the marker table. For deleted entries in the marker table we
+        // need to make sure we don't accidentally overwrite entries.
         let markers: Vec<_> = {
             let received = received_objects.clone().map(|objref| {
                 (
@@ -76,10 +76,28 @@ impl TransactionOutputs {
                 } else {
                     (
                         FullObjectKey::new(FullObjectID::new(object_id, None), version),
-                        MarkerValue::OwnedDeleted,
+                        MarkerValue::FastpathStreamEnded,
                     )
                 }
             });
+
+            let transferred_to_consensus =
+                effects
+                    .transferred_to_consensus()
+                    .into_iter()
+                    .map(|(object_id, version, _)| {
+                        // Note: it's a bit of a misnomer to mark an object as `FastpathStreamEnded`
+                        // when it could have been transferred to consensus from `ObjectOwner`, as
+                        // its root owner may not have been a fastpath object. However, whether or
+                        // not it was technically in the fastpath at the version the marker is
+                        // written, it cetainly is not in the fastpath *anymore*. This is needed
+                        // to produce the required behavior in `ObjectCacheRead::multi_input_objects_available`
+                        // when checking whether receiving objects are available.
+                        (
+                            FullObjectKey::new(FullObjectID::new(object_id, None), version),
+                            MarkerValue::FastpathStreamEnded,
+                        )
+                    });
 
             let transferred_from_consensus =
                 effects
@@ -119,6 +137,7 @@ impl TransactionOutputs {
 
             received
                 .chain(tombstones)
+                .chain(transferred_to_consensus)
                 .chain(transferred_from_consensus)
                 .chain(consensus_smears)
                 .collect()

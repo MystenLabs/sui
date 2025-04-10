@@ -599,36 +599,6 @@ impl AuthorityStore {
         Ok(result)
     }
 
-    pub fn have_deleted_owned_object_at_version_or_after(
-        &self,
-        object_id: &ObjectID,
-        version: VersionNumber,
-        epoch_id: EpochId,
-    ) -> Result<bool, SuiError> {
-        let object_key = ObjectKey::max_for_id(object_id);
-        let marker_key = (epoch_id, object_key);
-
-        // Find the most recent version of the object that was deleted or wrapped.
-        // Return true if the version is >= `version`. Otherwise return false.
-        let marker_entry = self
-            .perpetual_tables
-            .object_per_epoch_marker_table
-            .reversed_safe_iter_with_bounds(None, Some(marker_key))?
-            .next();
-        match marker_entry.transpose()? {
-            Some(((epoch, key), marker)) => {
-                // Make sure object id matches and version is >= `version`
-                let object_data_ok = key.0 == *object_id && key.1 >= version;
-                // Make sure we don't have a stale epoch for some reason (e.g., a revert)
-                let epoch_data_ok = epoch == epoch_id;
-                // Make sure the object was deleted or wrapped.
-                let mark_data_ok = marker == MarkerValue::OwnedDeleted;
-                Ok(object_data_ok && epoch_data_ok && mark_data_ok)
-            }
-            None => Ok(false),
-        }
-    }
-
     // Methods to mutate the store
 
     /// Insert a genesis object.
