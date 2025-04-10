@@ -1330,6 +1330,7 @@
                 "enable_poseidon": false,
                 "enable_vdf": false,
                 "end_of_epoch_transaction_supported": false,
+                "enforce_checkpoint_timestamp_monotonicity": false,
                 "fresh_vm_on_framework_upgrade": false,
                 "hardened_otw_check": false,
                 "include_consensus_digest_in_prologue": false,
