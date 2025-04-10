@@ -233,6 +233,8 @@ const MAX_PROTOCOL_VERSION: u64 = 80;
 //             Enable the new consensus commit rule for mainnet.
 // Version 80: Enable median based commit timestamp in consensus on mainnet.
 //             Enforce checkpoint timestamps are non-decreasing for testnet and mainnet.
+//             Increase threshold for bad nodes that won't be considered leaders in consensus in mainnet
+
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
 
@@ -3460,6 +3462,7 @@ impl ProtocolConfig {
                 80 => {
                     cfg.feature_flags.consensus_median_based_commit_timestamp = true;
                     cfg.feature_flags.enforce_checkpoint_timestamp_monotonicity = true;
+                    cfg.consensus_bad_nodes_stake_threshold = Some(30)
                 }
                 // Use this template when making changes:
                 //
