@@ -67,19 +67,7 @@ public fun fresh_object_address(_ctx: &mut TxContext): address {
 }
 native fun fresh_id(): address;
 
-#[spec_only]
-use prover::prover::{ensures, old};
 
-#[spec]
-fun fresh_object_address_spec(ctx: &mut TxContext): address {
-    let old_ctx = old!(ctx);
-    let result = fresh_object_address(ctx);
-    ensures(ctx.sender == old_ctx.sender);
-    ensures(ctx.tx_hash == old_ctx.tx_hash);
-    ensures(ctx.epoch == old_ctx.epoch);
-    ensures(ctx.epoch_timestamp_ms == old_ctx.epoch_timestamp_ms);
-    result
-}
 
 #[allow(unused_function)]
 /// Return the number of id's created by the current transaction.
@@ -96,11 +84,6 @@ native fun native_gas_price(): u64;
 #[allow(unused_function)]
 // native function to retrieve gas budget, currently not exposed
 native fun native_gas_budget(): u64;
-
-#[spec]
-fun derive_id_spec(tx_hash: vector<u8>, ids_created: u64): address {
-    derive_id(tx_hash, ids_created)
-}
 
 // ==== test-only functions ====
 
