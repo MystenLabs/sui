@@ -63,29 +63,29 @@ pub enum Kind<TWithSource, TWithout> {
 type FromSource<T> = Option<T>;
 
 pub struct Model<K: SourceKind + ?Sized> {
-    files: FromSource<MappedFiles>,
-    root_named_address_map: BTreeMap<Symbol, AccountAddress>,
-    root_package_name: Option<Symbol>,
-    info: FromSource<Arc<TypingProgramInfo>>,
-    compiled: normalized::Packages,
-    packages: BTreeMap<AccountAddress, PackageData<K>>,
-    serializable_signatures: OnceCell<serializable_signatures::Packages>,
-    _phantom: std::marker::PhantomData<K>,
+    pub(crate) files: FromSource<MappedFiles>,
+    pub(crate) root_named_address_map: BTreeMap<Symbol, AccountAddress>,
+    pub(crate) root_package_name: Option<Symbol>,
+    pub(crate) info: FromSource<Arc<TypingProgramInfo>>,
+    pub(crate) compiled: normalized::Packages,
+    pub(crate) packages: BTreeMap<AccountAddress, PackageData<K>>,
+    pub(crate) serializable_signatures: OnceCell<serializable_signatures::Packages>,
+    pub(crate) _phantom: std::marker::PhantomData<K>,
 }
 
 pub struct Package<'a, K: SourceKind + ?Sized> {
-    addr: AccountAddress,
+    pub(crate) addr: AccountAddress,
     // TODO name. We likely want the package name from the root package's named address map
-    model: &'a Model<K>,
-    compiled: &'a normalized::Package,
-    data: &'a PackageData<K>,
+    pub(crate) model: &'a Model<K>,
+    pub(crate) compiled: &'a normalized::Package,
+    pub(crate) data: &'a PackageData<K>,
 }
 
 pub struct Module<'a, K: SourceKind + ?Sized> {
-    id: ModuleId,
-    package: Package<'a, K>,
-    compiled: &'a normalized::Module,
-    data: &'a ModuleData<K>,
+    pub(crate) id: ModuleId,
+    pub(crate) package: Package<'a, K>,
+    pub(crate) compiled: &'a normalized::Module,
+    pub(crate) data: &'a ModuleData<K>,
 }
 
 pub enum Member<'a, K: SourceKind + ?Sized> {
@@ -101,34 +101,34 @@ pub enum Datatype<'a, K: SourceKind + ?Sized> {
 }
 
 pub struct Struct<'a, K: SourceKind + ?Sized> {
-    name: Symbol,
-    module: Module<'a, K>,
-    compiled: &'a normalized::Struct,
+    pub(crate) name: Symbol,
+    pub(crate) module: Module<'a, K>,
+    pub(crate) compiled: &'a normalized::Struct,
     #[allow(unused)]
-    data: &'a StructData,
+    pub(crate) data: &'a StructData,
 }
 
 pub struct Enum<'a, K: SourceKind + ?Sized> {
-    name: Symbol,
-    module: Module<'a, K>,
-    compiled: &'a normalized::Enum,
+    pub(crate) name: Symbol,
+    pub(crate) module: Module<'a, K>,
+    pub(crate) compiled: &'a normalized::Enum,
     #[allow(unused)]
-    data: &'a EnumData,
+    pub(crate) data: &'a EnumData,
 }
 
 pub struct Variant<'a, K: SourceKind + ?Sized> {
-    name: Symbol,
-    enum_: Enum<'a, K>,
-    compiled: &'a normalized::Variant,
+    pub(crate) name: Symbol,
+    pub(crate) enum_: Enum<'a, K>,
+    pub(crate) compiled: &'a normalized::Variant,
 }
 
 pub struct Function<'a, K: SourceKind + ?Sized> {
-    name: Symbol,
-    module: Module<'a, K>,
+    pub(crate) name: Symbol,
+    pub(crate) module: Module<'a, K>,
     // might be none for macros
-    compiled: Option<&'a normalized::Function>,
+    pub(crate) compiled: Option<&'a normalized::Function>,
     #[allow(unused)]
-    data: &'a FunctionData,
+    pub(crate) data: &'a FunctionData,
 }
 
 pub enum Constant<'a> {
@@ -137,119 +137,23 @@ pub enum Constant<'a> {
 }
 
 pub struct CompiledConstant<'a, K: SourceKind + ?Sized> {
-    module: Module<'a, K>,
-    compiled: &'a normalized::Constant,
-    data: &'a ConstantData,
+    pub(crate) module: Module<'a, K>,
+    pub(crate) compiled: &'a normalized::Constant,
+    pub(crate) data: &'a ConstantData,
 }
 
 pub struct NamedConstant<'a> {
-    name: Symbol,
-    module: Module<'a, WithSource>,
+    pub(crate) name: Symbol,
+    pub(crate) module: Module<'a, WithSource>,
     // There is no guarantee a source constant will have a compiled representation
-    compiled: Option<&'a normalized::Constant>,
+    pub(crate) compiled: Option<&'a normalized::Constant>,
     #[allow(unused)]
-    data: &'a NamedConstantData,
+    pub(crate) data: &'a NamedConstantData,
 }
 
 //**************************************************************************************************
 // API
 //**************************************************************************************************
-
-impl Model<WithSource> {
-    pub fn from_source(
-        files: MappedFiles,
-        root_package_name: Option<Symbol>,
-        root_named_address_map: BTreeMap<Symbol, AccountAddress>,
-        info: Arc<TypingProgramInfo>,
-        compiled_units_vec: Vec<(/* file */ PathBuf, CompiledUnit)>,
-    ) -> anyhow::Result<Self> {
-        let mut compiled_units = BTreeMap::new();
-        for (fname, unit) in compiled_units_vec {
-            let package_name = unit.package_name();
-            let addr = unit.address.into_inner();
-            let name = unit.name;
-            let package = compiled_units.entry(addr).or_insert_with(BTreeMap::new);
-            if let Some((prev_f, prev)) = package.insert(name, (fname.clone(), unit)) {
-                anyhow::bail!(
-                    "Duplicate module {}::{}. \n\
-                    One in package {} in file {}. \n\
-                    And one in package {} in file {}",
-                    prev.address,
-                    prev.name,
-                    prev.package_name()
-                        .as_ref()
-                        .map(|s| s.as_str())
-                        .unwrap_or("UNKNOWN"),
-                    prev_f.display(),
-                    package_name
-                        .as_ref()
-                        .map(|s| s.as_str())
-                        .unwrap_or("UNKNOWN"),
-                    fname.display(),
-                );
-            }
-        }
-        let compiled_units = compiled_units
-            .into_iter()
-            .map(|(addr, units)| (addr, units.into_iter().map(|(n, (_f, u))| (n, u)).collect()))
-            .collect::<BTreeMap<_, BTreeMap<_, _>>>();
-        let root_named_address_reverse_map = root_named_address_map
-            .iter()
-            .map(|(n, a)| (*a, *n))
-            .collect::<BTreeMap<_, _>>();
-        let ident_map = info
-            .modules
-            .key_cloned_iter()
-            .map(|(ident, _)| (ident.module_id(), ident))
-            .collect::<BTreeMap<_, _>>();
-        let compiled_modules = compiled_units
-            .iter()
-            .flat_map(|(_addr, units)| units.values().map(|unit| &unit.module));
-        let compiled = normalized::Packages::new(compiled_modules);
-        let packages = compiled
-            .packages
-            .iter()
-            .map(|(addr, units)| {
-                let name = root_named_address_reverse_map.get(addr).copied();
-                let data = PackageData::from_source(
-                    name,
-                    *addr,
-                    &ident_map,
-                    &info,
-                    &compiled_units[addr],
-                    units,
-                );
-                (*addr, data)
-            })
-            .collect();
-        let mut model = Self {
-            files: Some(files),
-            root_package_name,
-            root_named_address_map,
-            info: Some(info),
-            compiled,
-            packages,
-            serializable_signatures: OnceCell::new(),
-            _phantom: std::marker::PhantomData,
-        };
-        model.compute_dependencies();
-        model.compute_function_dependencies();
-        model.check_invariants();
-        Ok(model)
-    }
-
-    pub fn files(&self) -> &MappedFiles {
-        self.files.as_ref().unwrap()
-    }
-
-    pub fn serializable_signatures(&self) -> &serializable_signatures::Packages {
-        self.serializable_signatures.get_or_init(|| {
-            let mut info = serializable_signatures::Packages::from(&self.compiled);
-            info.annotate(self);
-            info
-        })
-    }
-}
 
 impl Model<WithoutSource> {
     pub fn from_compiled(
@@ -367,7 +271,7 @@ impl<K: SourceKind + ?Sized> Model<K> {
         has_files
     }
 
-    fn check_invariants(&self) {
+    pub(crate) fn check_invariants(&self) {
         #[cfg(debug_assertions)]
         {
             for (p, package) in &self.packages {
@@ -609,88 +513,6 @@ impl<'a, K: SourceKind + ?Sized> Module<'a, K> {
     }
 }
 
-impl<'a> Module<'a, WithSource> {
-    pub fn ident(&self) -> &'a E::ModuleIdent {
-        self.data.ident.as_ref().unwrap()
-    }
-
-    pub fn info(&self) -> &'a ModuleInfo {
-        self.model()
-            .info
-            .as_ref()
-            .unwrap()
-            .modules
-            .get(self.ident())
-            .unwrap()
-    }
-
-    pub fn source_path(&self) -> Symbol {
-        self.model()
-            .files
-            .as_ref()
-            .unwrap()
-            .filename(&self.info().defined_loc.file_hash())
-    }
-
-    pub fn maybe_member(&self, name: impl Into<Symbol>) -> Option<Member<'a, WithSource>> {
-        let name = name.into();
-        self.maybe_struct(name)
-            .map(Member::Struct)
-            .or_else(|| self.maybe_enum(name).map(Member::Enum))
-            .or_else(|| self.maybe_function(name).map(Member::Function))
-            .or_else(|| self.maybe_named_constant(name).map(Member::NamedConstant))
-    }
-
-    pub fn member(&self, name: impl Into<Symbol>) -> Member<'a, WithSource> {
-        self.maybe_member(name).unwrap()
-    }
-
-    pub fn maybe_named_constant(&self, name: impl Into<Symbol>) -> Option<NamedConstant<'a>> {
-        let name = name.into();
-        let data = &self.data.named_constants.as_ref().unwrap().get(&name)?;
-        let compiled = data
-            .compiled_index
-            .map(|idx| &*self.compiled.constants[idx.0 as usize]);
-        Some(NamedConstant {
-            name,
-            module: *self,
-            compiled,
-            data,
-        })
-    }
-
-    pub fn named_constant(&self, name: impl Into<Symbol>) -> NamedConstant<'a> {
-        self.maybe_named_constant(name).unwrap()
-    }
-
-    pub fn named_constants(&self) -> impl Iterator<Item = NamedConstant<'a>> + '_ {
-        self.data
-            .named_constants
-            .as_ref()
-            .unwrap()
-            .keys()
-            .copied()
-            .map(|name| self.named_constant(name))
-    }
-
-    pub fn constants(&self) -> impl Iterator<Item = Constant<'a>> + '_ {
-        self.compiled
-            .constants
-            .iter()
-            .enumerate()
-            .map(
-                |(idx, compiled)| match self.data.constant_names.as_ref().unwrap()[idx] {
-                    Some(name) => Constant::Named(self.named_constant(name)),
-                    None => Constant::Compiled(CompiledConstant {
-                        module: *self,
-                        compiled,
-                        data: &self.data.constants[idx],
-                    }),
-                },
-            )
-    }
-}
-
 impl<'a> Module<'a, WithoutSource> {
     pub fn maybe_member(&self, name: impl Into<Symbol>) -> Option<Member<'a, WithoutSource>> {
         let name = name.into();
@@ -757,12 +579,6 @@ impl<'a, K: SourceKind + ?Sized> Struct<'a, K> {
     }
 }
 
-impl<'a> Struct<'a, WithSource> {
-    pub fn info(&self) -> &'a N::StructDefinition {
-        self.module.info().structs.get_(&self.name).unwrap()
-    }
-}
-
 impl<'a, K: SourceKind + ?Sized> Enum<'a, K> {
     pub fn name(&self) -> Symbol {
         self.name
@@ -801,12 +617,6 @@ impl<'a, K: SourceKind + ?Sized> Enum<'a, K> {
 
     pub fn signature(&self) -> &serializable_signatures::Enum {
         &self.module.signatures().enums[&self.name]
-    }
-}
-
-impl<'a> Enum<'a, WithSource> {
-    pub fn info(&self) -> &'a N::EnumDefinition {
-        self.module.info().enums.get_(&self.name).unwrap()
     }
 }
 
@@ -851,12 +661,6 @@ impl<'a, K: SourceKind + ?Sized> Variant<'a, K> {
 
     pub fn to_dyn(self) -> Variant<'a, dyn SourceKind> {
         unsafe { std::mem::transmute::<Self, Variant<'a, dyn SourceKind>>(self) }
-    }
-}
-
-impl<'a> Variant<'a, WithSource> {
-    pub fn info(&self) -> &'a N::VariantDefinition {
-        self.enum_.info().variants.get_(&self.name).unwrap()
     }
 }
 
@@ -911,38 +715,9 @@ impl<'a, K: SourceKind + ?Sized> Function<'a, K> {
     }
 }
 
-impl<'a> Function<'a, WithSource> {
-    pub fn info(&self) -> &'a FunctionInfo {
-        self.module.info().functions.get_(&self.name).unwrap()
-    }
-}
-
 impl<'a> Function<'a, WithoutSource> {
     pub fn compiled(&self) -> &'a normalized::Function {
         self.compiled.unwrap()
-    }
-}
-
-impl<'a> Constant<'a> {
-    pub fn module(&self) -> Module<'a, WithSource> {
-        match self {
-            Constant::Compiled(c) => c.module,
-            Constant::Named(c) => c.module,
-        }
-    }
-
-    pub fn compiled(&self) -> Option<&'a normalized::Constant> {
-        match self {
-            Constant::Compiled(c) => Some(c.compiled),
-            Constant::Named(c) => c.compiled,
-        }
-    }
-
-    pub fn value(&self) -> &'a runtime_value::MoveValue {
-        match self {
-            Constant::Compiled(c) => c.value(),
-            Constant::Named(c) => c.value(),
-        }
     }
 }
 
@@ -957,39 +732,6 @@ impl<'a, K: SourceKind + ?Sized> CompiledConstant<'a, K> {
 
     pub fn value(&self) -> &'a runtime_value::MoveValue {
         self.data.value(self.compiled)
-    }
-}
-
-impl<'a> NamedConstant<'a> {
-    pub fn name(&self) -> Symbol {
-        self.name
-    }
-
-    pub fn package(&self) -> Package<'a, WithSource> {
-        self.module.package()
-    }
-
-    pub fn model(&self) -> &'a Model<WithSource> {
-        self.module.model()
-    }
-
-    pub fn module(&self) -> Module<'a, WithSource> {
-        self.module
-    }
-
-    pub fn info(&self) -> &'a ConstantInfo {
-        self.module.info().constants.get_(&self.name).unwrap()
-    }
-
-    /// Not all source constants have a compiled representation
-    pub fn compiled(&self) -> Option<&'a normalized::Constant> {
-        self.compiled
-    }
-
-    pub fn value(&self) -> &'a runtime_value::MoveValue {
-        // we normally don't write delegates into ProgramInfo, but we are doing so here for parity
-        // with CompiledConstant
-        self.info().value.get().unwrap()
     }
 }
 
@@ -1064,47 +806,47 @@ impl<T: TModuleId> TModuleId for Spanned<T> {
 
 // The *Data structs are not used currently, but if we need extra source information these provide
 // a place to store it.
-struct PackageData<K: SourceKind + ?Sized> {
+pub(crate) struct PackageData<K: SourceKind + ?Sized> {
     // Based on the root packages named address map
-    name: Option<Symbol>,
-    modules: BTreeMap<Symbol, ModuleData<K>>,
+    pub(crate) name: Option<Symbol>,
+    pub(crate) modules: BTreeMap<Symbol, ModuleData<K>>,
 }
 
-struct ModuleData<K: SourceKind + ?Sized> {
-    ident: FromSource<E::ModuleIdent>,
-    structs: IndexMap<Symbol, StructData>,
-    enums: IndexMap<Symbol, EnumData>,
-    functions: IndexMap<Symbol, FunctionData>,
-    constants: Vec<ConstantData>,
-    named_constants: FromSource<IndexMap<Symbol, NamedConstantData>>,
+pub(crate) struct ModuleData<K: SourceKind + ?Sized> {
+    pub(crate) ident: FromSource<E::ModuleIdent>,
+    pub(crate) structs: IndexMap<Symbol, StructData>,
+    pub(crate) enums: IndexMap<Symbol, EnumData>,
+    pub(crate) functions: IndexMap<Symbol, FunctionData>,
+    pub(crate) constants: Vec<ConstantData>,
+    pub(crate) named_constants: FromSource<IndexMap<Symbol, NamedConstantData>>,
     // mapping from file_format::ConstantPoolIndex to source constant name, if any
-    constant_names: FromSource<Vec<Option<Symbol>>>,
-    deps: BTreeMap<ModuleId, /* is immediate */ bool>,
-    used_by: BTreeMap<ModuleId, /* is immediate */ bool>,
-    _phantom: std::marker::PhantomData<K>,
+    pub(crate) constant_names: FromSource<Vec<Option<Symbol>>>,
+    pub(crate) deps: BTreeMap<ModuleId, /* is immediate */ bool>,
+    pub(crate) used_by: BTreeMap<ModuleId, /* is immediate */ bool>,
+    pub(crate) _phantom: std::marker::PhantomData<K>,
 }
 
-struct StructData {}
+pub(crate) struct StructData {}
 
-struct EnumData {
+pub(crate) struct EnumData {
     #[allow(unused)]
-    variants: IndexMap<Symbol, VariantData>,
+    pub(crate) variants: IndexMap<Symbol, VariantData>,
 }
 
-struct VariantData {}
+pub(crate) struct VariantData {}
 
-struct FunctionData {
-    calls: BTreeSet<QualifiedMemberId>,
+pub(crate) struct FunctionData {
+    pub(crate) calls: BTreeSet<QualifiedMemberId>,
     // reverse mapping of function_immediate_deps
-    called_by: BTreeSet<QualifiedMemberId>,
+    pub(crate) called_by: BTreeSet<QualifiedMemberId>,
 }
 
-struct ConstantData {
-    value: OnceCell<runtime_value::MoveValue>,
+pub(crate) struct ConstantData {
+    pub(crate) value: OnceCell<runtime_value::MoveValue>,
 }
 
-struct NamedConstantData {
-    compiled_index: Option<file_format::ConstantPoolIndex>,
+pub(crate) struct NamedConstantData {
+    pub(crate) compiled_index: Option<file_format::ConstantPoolIndex>,
 }
 
 //**************************************************************************************************
@@ -1112,7 +854,7 @@ struct NamedConstantData {
 //**************************************************************************************************
 
 impl<K: SourceKind + ?Sized> Model<K> {
-    fn compute_dependencies(&mut self) {
+    pub(crate) fn compute_dependencies(&mut self) {
         fn visit(
             packages: &BTreeMap<AccountAddress, normalized::Package>,
             acc: &mut BTreeMap<ModuleId, BTreeMap<ModuleId, bool>>,
@@ -1172,7 +914,7 @@ impl<K: SourceKind + ?Sized> Model<K> {
         }
     }
 
-    fn compute_function_dependencies(&mut self) {
+    pub(crate) fn compute_function_dependencies(&mut self) {
         assert!(self.packages.values().all(|p| p.modules.values().all(|m| {
             m.functions
                 .values()
@@ -1231,7 +973,7 @@ impl<K: SourceKind + ?Sized> Model<K> {
 }
 
 impl PackageData<WithSource> {
-    fn from_source(
+    pub(crate) fn from_source(
         name: Option<Symbol>,
         addr: AccountAddress,
         ident_map: &BTreeMap<ModuleId, E::ModuleIdent>,
