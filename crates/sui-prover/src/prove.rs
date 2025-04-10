@@ -143,7 +143,7 @@ pub async fn execute(
             }
         }
     } else {
-        let _ = run_boogie_gen(&model, options);
+       run_boogie_gen(&model, options)?;
     }
 
     Ok(())
