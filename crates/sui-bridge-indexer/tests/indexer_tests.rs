@@ -14,7 +14,7 @@ use sui_bridge_indexer::create_sui_indexer;
 use sui_bridge_indexer::metrics::BridgeIndexerMetrics;
 use sui_bridge_indexer::postgres_manager::get_connection_pool;
 use sui_bridge_indexer::storage::PgBridgePersistent;
-use sui_bridge_schema::models::{GovernanceAction, TokenTransfer};
+use sui_bridge_schema::models::{GovernanceAction, TokenTransfer, TokenTransferStatus};
 use sui_bridge_schema::{schema, MIGRATIONS};
 use sui_data_ingestion_core::DataIngestionMetrics;
 use sui_indexer::database::Connection;
@@ -92,8 +92,8 @@ async fn test_indexing_transfer() {
     assert_eq!(2, data.len());
     assert_eq!(
         vec![
-            (12, 0, "Approved".to_string()),
-            (12, 0, "Claimed".to_string())
+            (12, 0, TokenTransferStatus::Approved),
+            (12, 0, TokenTransferStatus::Claimed)
         ],
         data
     );
