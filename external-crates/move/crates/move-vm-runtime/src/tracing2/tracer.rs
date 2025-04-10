@@ -502,9 +502,8 @@ impl VMTracer<'_> {
         let function_type_info = FunctionTypeInfo::new(function, loader, ty_args, link_context)?;
 
         assert!(function_type_info.local_types.len() == function.local_count());
-        let start_trace_index = self.trace.current_trace_offset();
 
-        let call_args: Vec<_> = args
+        let call_args: Vec<(_, _)> = args
             .iter()
             .zip(function_type_info.local_types.iter().cloned())
             .map(|(value, tag_with_layout_info_opt)| {
@@ -514,9 +513,9 @@ impl VMTracer<'_> {
                     Some(ref_type) => {
                         let (id, trace_value) = self.emit_data_load(move_value, &ref_type);
                         self.loaded_data.insert(id, trace_value.clone());
-                        Some(trace_value)
+                        Some((trace_value, Some(id)))
                     }
-                    None => Some(TraceValue::RuntimeValue { value: move_value }),
+                    None => Some((TraceValue::RuntimeValue { value: move_value }, None)),
                 }
             })
             .collect::<Option<_>>()?;
@@ -532,9 +531,8 @@ impl VMTracer<'_> {
                     layout,
                     ref_type: ref_type
                         .map(|r_type| {
-                            let possible_location = start_trace_index + i;
-                            if self.loaded_data.contains_key(&possible_location) {
-                                let location = RuntimeLocation::Global(possible_location);
+                            if let Some(location) = call_args.get(i).and_then(|(_, id)| *id) {
+                                let location = RuntimeLocation::Global(location);
                                 ReferenceType::Filled {
                                     ref_type: r_type,
                                     location,
@@ -564,7 +562,10 @@ impl VMTracer<'_> {
             function.index(),
             function.name().to_string(),
             function.module_id().clone(),
-            call_args,
+            call_args
+                .into_iter()
+                .map(|(trace_value, _)| trace_value)
+                .collect(),
             function_type_info.ty_args,
             function_type_info
                 .return_types
