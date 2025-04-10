@@ -155,47 +155,6 @@ pub struct NamedConstant<'a> {
 // API
 //**************************************************************************************************
 
-impl Model<WithoutSource> {
-    pub fn from_compiled(
-        named_address_reverse_map: &BTreeMap<AccountAddress, Symbol>,
-        modules: Vec<CompiledModule>,
-    ) -> Self {
-        let compiled = normalized::Packages::new(&modules);
-        let packages = compiled
-            .packages
-            .values()
-            .map(|package| {
-                let addr = package.package;
-                let data = PackageData::from_compiled(named_address_reverse_map, package);
-                (addr, data)
-            })
-            .collect();
-        let root_named_address_map = named_address_reverse_map
-            .iter()
-            .map(|(a, n)| (*n, *a))
-            .collect();
-        let mut model = Self {
-            files: None,
-            root_package_name: None,
-            root_named_address_map,
-            info: None,
-            compiled,
-            packages,
-            serializable_signatures: OnceCell::new(),
-            _phantom: std::marker::PhantomData,
-        };
-        model.compute_dependencies();
-        model.compute_function_dependencies();
-        model.check_invariants();
-        model
-    }
-
-    pub fn serializable_signatures(&self) -> &serializable_signatures::Packages {
-        self.serializable_signatures
-            .get_or_init(|| serializable_signatures::Packages::from(&self.compiled))
-    }
-}
-
 impl<K: SourceKind + ?Sized> Model<K> {
     pub fn root_package_name(&self) -> Option<Symbol> {
         self.root_package_name
@@ -513,32 +472,6 @@ impl<'a, K: SourceKind + ?Sized> Module<'a, K> {
     }
 }
 
-impl<'a> Module<'a, WithoutSource> {
-    pub fn maybe_member(&self, name: impl Into<Symbol>) -> Option<Member<'a, WithoutSource>> {
-        let name = name.into();
-        self.maybe_struct(name)
-            .map(Member::Struct)
-            .or_else(|| self.maybe_enum(name).map(Member::Enum))
-            .or_else(|| self.maybe_function(name).map(Member::Function))
-    }
-
-    pub fn member(&self, name: impl Into<Symbol>) -> Member<'a, WithoutSource> {
-        self.maybe_member(name).unwrap()
-    }
-
-    pub fn constants(&self) -> impl Iterator<Item = CompiledConstant<'a, WithoutSource>> + '_ {
-        self.compiled
-            .constants
-            .iter()
-            .enumerate()
-            .map(|(idx, compiled)| CompiledConstant {
-                module: *self,
-                compiled,
-                data: &self.data.constants[idx],
-            })
-    }
-}
-
 impl<'a, K: SourceKind + ?Sized> Struct<'a, K> {
     pub fn name(&self) -> Symbol {
         self.name
@@ -712,12 +645,6 @@ impl<'a, K: SourceKind + ?Sized> Function<'a, K> {
 
     pub fn to_dyn(self) -> Function<'a, dyn SourceKind> {
         unsafe { std::mem::transmute::<Self, Function<'a, dyn SourceKind>>(self) }
-    }
-}
-
-impl<'a> Function<'a, WithoutSource> {
-    pub fn compiled(&self) -> &'a normalized::Function {
-        self.compiled.unwrap()
     }
 }
 
@@ -998,7 +925,7 @@ impl PackageData<WithSource> {
 }
 
 impl PackageData<WithoutSource> {
-    fn from_compiled(
+    pub(crate) fn from_compiled(
         named_address_reverse_map: &BTreeMap<AccountAddress, Symbol>,
         compiled: &normalized::Package,
     ) -> Self {
