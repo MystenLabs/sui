@@ -232,6 +232,7 @@ const MAX_PROTOCOL_VERSION: u64 = 80;
 //             Enable consensus garbage collection for mainnet
 //             Enable the new consensus commit rule for mainnet.
 // Version 80: Enable median based commit timestamp in consensus on mainnet.
+//             Enforce checkpoint timestamps are non-decreasing for testnet and mainnet.
 //             Increase threshold for bad nodes that won't be considered leaders in consensus in mainnet
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
@@ -668,6 +669,10 @@ struct FeatureFlags {
     // If true, enabled batched block sync in consensus.
     #[serde(skip_serializing_if = "is_false")]
     consensus_batched_block_sync: bool,
+
+    // If true, enforces checkpoint timestamps are non-decreasing.
+    #[serde(skip_serializing_if = "is_false")]
+    enforce_checkpoint_timestamp_monotonicity: bool,
 }
 
 fn is_false(b: &bool) -> bool {
@@ -1926,6 +1931,10 @@ impl ProtocolConfig {
 
     pub fn normalize_ptb_arguments(&self) -> bool {
         self.feature_flags.normalize_ptb_arguments
+    }
+
+    pub fn enforce_checkpoint_timestamp_monotonicity(&self) -> bool {
+        self.feature_flags.enforce_checkpoint_timestamp_monotonicity
     }
 }
 
@@ -3452,6 +3461,7 @@ impl ProtocolConfig {
                 }
                 80 => {
                     cfg.feature_flags.consensus_median_based_commit_timestamp = true;
+                    cfg.feature_flags.enforce_checkpoint_timestamp_monotonicity = true;
                     cfg.consensus_bad_nodes_stake_threshold = Some(30)
                 }
                 // Use this template when making changes:
