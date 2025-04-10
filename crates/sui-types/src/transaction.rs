@@ -35,6 +35,7 @@ use crate::{
 use enum_dispatch::enum_dispatch;
 use fastcrypto::{encoding::Base64, hash::HashFunction};
 use itertools::{Either, Itertools};
+use move_core_types::language_storage::StructTag;
 use move_core_types::{ident_str, identifier};
 use move_core_types::{identifier::Identifier, language_storage::TypeTag};
 use nonempty::{nonempty, NonEmpty};
@@ -78,11 +79,24 @@ const BLOCKED_MOVE_FUNCTIONS: [(ObjectID, &str, &str); 0] = [];
 mod messages_tests;
 
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
+pub enum WithdrawBalanceArg {
+    /// Represents a reservation to withdraw at most `max_amount` from the sender address's balance
+    /// of coin type `coin_type`.
+    SenderAddress {
+        max_amount: u64,
+        coin_type: StructTag,
+        accumulator_init_shared_version: SequenceNumber,
+    },
+}
+
+#[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
 pub enum CallArg {
     // contains no structs or objects
     Pure(Vec<u8>),
     // an object
     Object(ObjectArg),
+    // Reservation to withdraw from an address balance.
+    WithdrawBalance(WithdrawBalanceArg),
 }
 
 impl CallArg {
@@ -592,6 +606,16 @@ impl CallArg {
             }
             // Receiving objects are not part of the input objects.
             CallArg::Object(ObjectArg::Receiving(_)) => vec![],
+            CallArg::WithdrawBalance(WithdrawBalanceArg::SenderAddress {
+                accumulator_init_shared_version,
+                ..
+            }) => {
+                vec![InputObjectKind::SharedMoveObject {
+                    id: SUI_ACCUMULATOR_ROOT_OBJECT_ID,
+                    initial_shared_version: *accumulator_init_shared_version,
+                    mutable: false,
+                }]
+            }
         }
     }
 
@@ -603,6 +627,7 @@ impl CallArg {
                 ObjectArg::SharedObject { .. } => vec![],
                 ObjectArg::Receiving(obj_ref) => vec![*obj_ref],
             },
+            CallArg::WithdrawBalance(_) => vec![],
         }
     }
 
@@ -628,6 +653,13 @@ impl CallArg {
                     }
                 }
             },
+            CallArg::WithdrawBalance(_) => {
+                if !config.move_accumulators() {
+                    return Err(UserInputError::Unsupported(
+                        "address balances not enabled".to_string(),
+                    ));
+                }
+            }
         }
         Ok(())
     }
@@ -1133,6 +1165,14 @@ impl ProgrammableTransaction {
                 id: *id,
                 initial_shared_version: *initial_shared_version,
                 mutable: *mutable,
+            }),
+            CallArg::WithdrawBalance(WithdrawBalanceArg::SenderAddress {
+                accumulator_init_shared_version,
+                ..
+            }) => Some(SharedInputObject {
+                id: SUI_ACCUMULATOR_ROOT_OBJECT_ID,
+                initial_shared_version: *accumulator_init_shared_version,
+                mutable: false,
             }),
         })
     }

@@ -21,6 +21,7 @@ enum BuilderArg {
     Object(ObjectID),
     Pure(Vec<u8>),
     ForcedNonUniquePure(usize),
+    WithdrawBalance(usize),
 }
 
 #[derive(Default)]
@@ -71,6 +72,9 @@ impl ProgrammableTransactionBuilder {
             let old_obj_arg = match old_value {
                 CallArg::Pure(_) => anyhow::bail!("invariant violation! object has pure argument"),
                 CallArg::Object(arg) => arg,
+                CallArg::WithdrawBalance(_) => {
+                    anyhow::bail!("invariant violation! object has withdraw balance argument")
+                }
             };
             match (old_obj_arg, obj_arg) {
                 (
@@ -110,6 +114,14 @@ impl ProgrammableTransactionBuilder {
         let (i, _) = self
             .inputs
             .insert_full(BuilderArg::Object(id), CallArg::Object(obj_arg));
+        Ok(Argument::Input(i as u16))
+    }
+
+    pub fn withdraw_balance(&mut self, arg: WithdrawBalanceArg) -> anyhow::Result<Argument> {
+        let (i, _) = self.inputs.insert_full(
+            BuilderArg::WithdrawBalance(arg),
+            CallArg::WithdrawBalance(arg),
+        );
         Ok(Argument::Input(i as u16))
     }
 
