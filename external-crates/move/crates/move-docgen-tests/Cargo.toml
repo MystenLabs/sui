@@ -29,7 +29,6 @@ itertools.workspace = true
 log.workspace = true
 num.workspace = true
 regex.workspace = true
-anyhow.workspace = true
 serde.workspace = true
 once_cell.workspace = true
 tempfile.workspace = true
@@ -37,7 +36,6 @@ insta.workspace = true
 
 [dev-dependencies]
 datatest-stable.workspace = true
-move-prover-test-utils.workspace = true
 shell-words.workspace = true
 walkdir.workspace = true
 tempfile.workspace = true

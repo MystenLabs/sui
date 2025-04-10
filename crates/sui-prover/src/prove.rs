@@ -14,6 +14,7 @@ impl From<BuildConfig> for MoveBuildConfig {
         Self {
             dev_mode: true,
             test_mode: false,
+            verify_mode: true,
             json_errors: false,
             generate_docs: false,
             silence_warnings: true,

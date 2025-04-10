@@ -9,7 +9,6 @@
 use std::{
     collections::BTreeMap,
     io::IsTerminal,
-    str::FromStr,
     sync::atomic::{AtomicBool, Ordering},
 };
 

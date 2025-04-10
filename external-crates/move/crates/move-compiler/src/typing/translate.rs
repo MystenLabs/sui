@@ -21,7 +21,7 @@ use crate::{
     },
     shared::{
         ide::{DotAutocompleteInfo, IDEAnnotation, MacroCallInfo},
-        known_attributes::{ErrorAttribute, SyntaxAttribute, TestingAttribute},
+        known_attributes::{ErrorAttribute, SyntaxAttribute, TestingAttribute, VerificationAttribute},
         process_binops,
         program_info::{ConstantInfo, DatatypeKind, NamingProgramInfo, TypingProgramInfo},
         string_utils::{debug_print, make_ascii_titlecase},
@@ -4900,9 +4900,9 @@ fn unused_module_members(
 
     for (loc, name, fun) in &mdef.functions {
         if fun.attributes.contains_key_(&TestingAttribute::Test.into())
-            || fun
-                .attributes
-                .contains_key_(&TestingAttribute::RandTest.into())
+            || fun.attributes.contains_key_(&TestingAttribute::RandTest.into())
+            || fun.attributes.contains_key_(&VerificationAttribute::Spec.into())
+            || fun.attributes.contains_key_(&VerificationAttribute::SpecOnly.into())
         {
             // functions with #[test] or R[random_test] attribute are implicitly used
             continue;

@@ -220,11 +220,14 @@ impl FunctionTargetProcessor for SpecWellFormedAnalysisProcessor {
             }
 
             if spec_params[i].0 != underlying_params[i].0 {
-                env.diag(
-                    Severity::Warning,
-                    &func_env.get_loc(),
-                    "Spec function signature have differ params name than underlying func",
-                );
+                let underlying_param_name = env.symbol_pool().string( underlying_params[i].0);
+                if !underlying_param_name.starts_with('_') {
+                    env.diag(
+                        Severity::Warning,
+                        &func_env.get_loc(),
+                        "Spec function signature have differ params name than underlying func",
+                    );
+                }
             }
         }
 
@@ -292,11 +295,13 @@ impl FunctionTargetProcessor for SpecWellFormedAnalysisProcessor {
         let (call_data, multiple_calls) = self.find_node_by_func_id(underlying_func.get_qualified_id(), &graph, code, &cfg);
 
         if !call_data.is_some() {
-            env.diag(
-                Severity::Error,
-                &func_env.get_loc(),
-                "Consider add function call to spec",
-            );
+            if !underlying_func.is_native() {
+                env.diag(
+                    Severity::Error,
+                    &func_env.get_loc(),
+                    "Consider add function call to spec",
+                );
+            }
 
             return data;
         }

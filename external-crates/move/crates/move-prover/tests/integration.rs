@@ -42,7 +42,7 @@ fn run_prover(file_path: &PathBuf) -> String {
         config.silence_warnings = false; // Disable warning suppression
 
         // Try to build the model
-        let result = match config.move_model_for_package(
+        let result = match config.move_model_for_package_legacy(
             file_dir,
             ModelConfig {
                 all_files_as_targets: false,
