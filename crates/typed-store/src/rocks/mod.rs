@@ -22,6 +22,7 @@ use crate::{
     traits::{Map, TableSummary},
 };
 use crate::{DbIterator, TypedStoreError};
+use backoff::backoff::Backoff;
 use prometheus::{Histogram, HistogramTimer};
 use rocksdb::properties::num_files_at_level;
 use rocksdb::{checkpoint::Checkpoint, DBPinnableSlice, LiveFile};
@@ -1768,7 +1769,19 @@ pub fn open_cf_opts_secondary<P: AsRef<Path>>(
 }
 
 pub fn safe_drop_db(path: PathBuf) -> Result<(), rocksdb::Error> {
-    rocksdb::DB::destroy(&rocksdb::Options::default(), path)
+    let mut backoff = backoff::ExponentialBackoff {
+        max_elapsed_time: Some(Duration::from_secs(30)),
+        ..Default::default()
+    };
+    loop {
+        match rocksdb::DB::destroy(&rocksdb::Options::default(), path.clone()) {
+            Ok(()) => return Ok(()),
+            Err(err) => match backoff.next_backoff() {
+                Some(duration) => std::thread::sleep(duration),
+                None => return Err(err),
+            },
+        }
+    }
 }
 
 fn populate_missing_cfs(
