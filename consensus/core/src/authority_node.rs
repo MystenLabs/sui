@@ -192,7 +192,7 @@ where
             "Invalid own index {}",
             own_index
         );
-        let own_hostname = &committee.authority(own_index).hostname;
+        let own_hostname = committee.authority(own_index).hostname.clone();
         info!(
             "Starting consensus authority {} {}, {:?}, boot counter {}",
             own_index, own_hostname, protocol_config.version, boot_counter
@@ -215,6 +215,18 @@ where
             clock,
         ));
         let start_time = Instant::now();
+
+        context
+            .metrics
+            .node_metrics
+            .authority_index
+            .with_label_values(&[&own_hostname])
+            .set(context.own_index.value() as i64);
+        context
+            .metrics
+            .node_metrics
+            .protocol_version
+            .set(context.protocol_config.version.as_u64() as i64);
 
         let (tx_client, tx_receiver) = TransactionClient::new(context.clone());
         let tx_consumer = TransactionConsumer::new(tx_receiver, context.clone());
