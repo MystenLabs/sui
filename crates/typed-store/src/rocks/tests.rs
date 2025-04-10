@@ -119,12 +119,16 @@ async fn test_contains_key() {
 
 #[tokio::test]
 async fn test_safe_drop_db() {
-    let path = temp_dir();
+    let root_path = temp_dir();
+
+    let tmp_path = root_path.join("test-0");
     {
-        let db: DBMap<i32, String> = open_map(path.clone(), Some("table"));
+        let db: DBMap<i32, String> = open_map(tmp_path.clone(), Some("table-0"));
         db.insert(&777, &"123".to_string()).unwrap();
     }
-    assert!(safe_drop_db(path).is_ok());
+    safe_drop_db(tmp_path, Duration::from_secs(30))
+        .await
+        .unwrap();
 }
 
 #[tokio::test]

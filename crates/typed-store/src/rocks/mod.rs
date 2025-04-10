@@ -1768,16 +1768,17 @@ pub fn open_cf_opts_secondary<P: AsRef<Path>>(
     })
 }
 
-pub fn safe_drop_db(path: PathBuf) -> Result<(), rocksdb::Error> {
+// Drops a database if there is no other handle to it, with retries and timeout.
+pub async fn safe_drop_db(path: PathBuf, timeout: Duration) -> Result<(), rocksdb::Error> {
     let mut backoff = backoff::ExponentialBackoff {
-        max_elapsed_time: Some(Duration::from_secs(30)),
+        max_elapsed_time: Some(timeout),
         ..Default::default()
     };
     loop {
         match rocksdb::DB::destroy(&rocksdb::Options::default(), path.clone()) {
             Ok(()) => return Ok(()),
             Err(err) => match backoff.next_backoff() {
-                Some(duration) => std::thread::sleep(duration),
+                Some(duration) => tokio::time::sleep(duration).await,
                 None => return Err(err),
             },
         }
