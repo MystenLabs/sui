@@ -1,14 +1,12 @@
 [package]
-name = "Completion"
+name = "Autofix"
 edition = "2024.beta"
 
 [dependencies]
-MoveStdlib = { local = "../../../move-stdlib/" }
 # dependency on a package with the same address as this one
 # for testing that package name is printed correctly in presence
 # of multiple packages with the same address
 SamePkgAddr = { local = "../same-pkg-addr/" }
 
 [addresses]
-Completion = "0xCAFE"
-std = "0x1"
+Autofix = "0xCAFE"

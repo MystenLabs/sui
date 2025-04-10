@@ -116,6 +116,8 @@ similar = "2.4.0"
 smallvec = "1.6.1"
 stacker = "0.1.15"
 static_assertions = "1.1.0"
+strum = { version = "0.27.1", features = ["derive"] }
+strum_macros = "0.27.1"
 syn = { version = "1.0.64", features = ["derive"] }
 tempfile = "3.2.0"
 tera = "1.16.0"

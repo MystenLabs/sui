@@ -12,7 +12,7 @@ use crate::{
     context::Context,
     symbols::{self, CursorContext, PrecomputedPkgInfo, SymbolicatorRunner, Symbols},
 };
-use lsp_server::Request;
+use lsp_server::{Message, Request, Response};
 use lsp_types::{CompletionItem, CompletionItemKind, CompletionParams, Position};
 use move_command_line_common::files::FileHash;
 use move_compiler::{
@@ -38,7 +38,7 @@ use vfs::VfsPath;
 mod dot;
 mod name_chain;
 mod snippets;
-mod utils;
+pub mod utils;
 
 /// List of completion items corresponding to each one of Move's keywords.
 ///
@@ -115,12 +115,8 @@ pub fn on_completion_request(
     let result =
         serde_json::to_value(completions).expect("could not serialize completion response");
     eprintln!("about to send completion response with {completions_len} items");
-    let response = lsp_server::Response::new_ok(request.id.clone(), result);
-    if let Err(err) = context
-        .connection
-        .sender
-        .send(lsp_server::Message::Response(response))
-    {
+    let response = Response::new_ok(request.id.clone(), result);
+    if let Err(err) = context.connection.sender.send(Message::Response(response)) {
         eprintln!("could not send completion response: {:?}", err);
     }
 }
@@ -192,7 +188,7 @@ fn compute_completions_new_symbols(
     };
     let cursor_path = path.to_path_buf();
     let cursor_info = Some((&cursor_path, cursor_position));
-    let (symbols, _diags) = symbols::get_symbols(
+    let (symbols, _) = symbols::get_symbols(
         pkg_dependencies,
         ide_files_root,
         &pkg_path,
