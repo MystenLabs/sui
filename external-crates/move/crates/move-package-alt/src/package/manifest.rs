@@ -30,11 +30,14 @@ const ALLOWED_EDITIONS: &[&str] = &["2024", "2024.beta", "legacy"];
 #[serde(bound = "")]
 pub struct Manifest<F: MoveFlavor> {
     package: PackageMetadata<F>,
-    environments: BTreeMap<EnvironmentName, F::EnvironmentID>,
+    environments: BTreeMap<Spanned<EnvironmentName>, Spanned<F::EnvironmentID>>,
     #[serde(default)]
-    dependencies: BTreeMap<PackageName, ManifestDependency<F>>,
+    dependencies: BTreeMap<Spanned<PackageName>, Spanned<ManifestDependency<F>>>,
     #[serde(default)]
-    dep_overrides: BTreeMap<EnvironmentName, BTreeMap<PackageName, ManifestDependencyOverride<F>>>,
+    dep_overrides: BTreeMap<
+        Spanned<EnvironmentName>,
+        BTreeMap<Spanned<PackageName>, Spanned<ManifestDependencyOverride<F>>>,
+    >,
 }
 
 #[derive(Debug, Deserialize)]
@@ -58,7 +61,7 @@ struct ManifestDependency<F: MoveFlavor> {
     is_override: bool,
 
     #[serde(default)]
-    rename_from: Option<PackageName>,
+    rename_from: Option<Spanned<PackageName>>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -66,13 +69,13 @@ struct ManifestDependency<F: MoveFlavor> {
 #[serde(rename_all = "kebab-case")]
 struct ManifestDependencyOverride<F: MoveFlavor> {
     #[serde(flatten, default)]
-    dependency: Option<ManifestDependency<F>>,
+    dependency: Option<Spanned<ManifestDependency<F>>>,
 
     #[serde(flatten, default)]
-    address_info: Option<F::AddressInfo>,
+    address_info: Option<Spanned<F::AddressInfo>>,
 
     #[serde(default)]
-    use_environment: Option<EnvironmentName>,
+    use_environment: Option<Spanned<EnvironmentName>>,
 }
 
 impl<F: MoveFlavor> Manifest<F> {

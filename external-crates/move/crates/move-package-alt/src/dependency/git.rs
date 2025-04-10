@@ -21,6 +21,7 @@ use std::{marker::PhantomData, path::PathBuf};
 
 use derive_where::derive_where;
 use serde::{Deserialize, Serialize};
+use serde_spanned::Spanned;
 
 use crate::errors::PackageResult;
 

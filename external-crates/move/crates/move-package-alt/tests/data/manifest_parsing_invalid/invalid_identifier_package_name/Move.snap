@@ -1,4 +1,4 @@
 ---
 source: crates/move-package-alt/tests/parsing_tests.rs
 ---
-Manifest { package: PackageMetadata { name: Spanned { span: 17..28, value: "®´∑œ" }, edition: Spanned { span: 39..50, value: "2024.beta" }, metadata: () }, environments: {"mainnet": "35834a8a"}, dependencies: {}, dep_overrides: {} }
+Manifest { package: PackageMetadata { name: Spanned { span: 17..28, value: "®´∑œ" }, edition: Spanned { span: 39..50, value: "2024.beta" }, metadata: () }, environments: {Spanned { span: 67..74, value: "mainnet" }: Spanned { span: 77..87, value: "35834a8a" }}, dependencies: {}, dep_overrides: {} }

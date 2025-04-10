@@ -41,7 +41,7 @@ pub struct Lockfile<F: MoveFlavor + fmt::Debug> {
 pub struct Publication<F: MoveFlavor + fmt::Debug> {
     #[serde(flatten)]
     metadata: F::PublishedMetadata,
-    dependencies: BTreeMap<PackageName, PinnedDependencyInfo<F>>,
+    dependencies: BTreeMap<Spanned<PackageName>, PinnedDependencyInfo<F>>,
 }
 
 #[derive(fmt::Debug, Serialize, Deserialize)]
@@ -60,9 +60,9 @@ struct UnpublishedTable<F: MoveFlavor + fmt::Debug> {
 #[serde(bound = "")]
 struct UnpublishedDependencies<F: MoveFlavor + fmt::Debug> {
     #[serde(default)]
-    pinned: BTreeMap<PackageName, PinnedDependencyInfo<F>>,
+    pinned: BTreeMap<Spanned<PackageName>, PinnedDependencyInfo<F>>,
     #[serde(default)]
-    unpinned: BTreeMap<PackageName, ManifestDependencyInfo<F>>,
+    unpinned: BTreeMap<Spanned<PackageName>, ManifestDependencyInfo<F>>,
 }
 
 impl<F: MoveFlavor + fmt::Debug> Lockfile<F> {
