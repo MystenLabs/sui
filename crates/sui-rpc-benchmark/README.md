@@ -28,7 +28,7 @@ cargo run --bin sui-rpc-benchmark graphql --endpoint http://127.0.0.1:9000/graph
 ### JSON RPC Benchmark
 - `--endpoint`: JSON RPC endpoint URL (default: http://127.0.0.1:9000)
 - `--concurrency`: Number of concurrent requests (default: 50)
-- `--requests-file`: File containing requests in JSONL format
+- `--requests-file`: File containing requests in JSONL (JSON Lines) format
 - `--duration-secs`: Optional duration limit in seconds
 - `--methods-to-skip`: Optional comma-separated list of methods to skip
 
