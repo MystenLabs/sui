@@ -115,7 +115,7 @@ pub enum MarkerValue {
     /// to be received at that version in subequent transactions.
     Received,
     /// A fastpath object was deleted, wrapped, or transferred to consensus at the given
-    /// vesrion, and is no longer able to be accessed or used in subsequent transactions via
+    /// version, and is no longer able to be accessed or used in subsequent transactions via
     /// fastpath unless/until it is returned to fastpath.
     FastpathStreamEnded,
     /// A consensus object was deleted or removed from consensus by the transaction and is no longer
