@@ -1,4 +1,4 @@
-Command `test -t 1 --trace-execution new_traces`:
+Command `test -t 1 --trace-execution`:
 INCLUDING DEPENDENCY MoveStdlib
 BUILDING tracing_unit_tests
 Running Move unit tests
@@ -26,4 +26,4 @@ Running Move unit tests
 [ PASS    ] 0x1::references::test_vector_mut_borrow
 [ PASS    ] 0x1::references::test_vector_mut_borrow_pop
 Test result: OK. Total tests: 23; passed: 23; failed: 0
-External Command `diff -qr new_traces saved_traces`:
+External Command `diff -qr traces saved_traces`:
