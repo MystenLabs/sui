@@ -111,7 +111,7 @@ impl MessageMerge<sui_sdk_types::CheckpointSummary> for CheckpointSummary {
         }
 
         if mask.contains(Self::TIMESTAMP_FIELD.name) {
-            self.timestamp = Some(crate::proto::types::timestamp_ms_to_proto(timestamp_ms));
+            self.timestamp = Some(crate::proto::timestamp_ms_to_proto(timestamp_ms));
         }
 
         if mask.contains(Self::COMMITMENTS_FIELD.name) {
@@ -235,7 +235,7 @@ impl TryFrom<&CheckpointSummary> for sui_sdk_types::CheckpointSummary {
 
         let timestamp_ms = timestamp
             .ok_or_else(|| TryFromProtoError::missing("timestamp_ms"))?
-            .pipe(crate::proto::types::proto_to_timestamp_ms)?;
+            .pipe(crate::proto::proto_to_timestamp_ms)?;
 
         let checkpoint_commitments = commitments
             .iter()

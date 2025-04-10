@@ -1,16 +1,11 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-mod checkpoints;
-mod committee;
-mod execute;
+mod client;
 mod ledger_service;
 mod live_data_service;
-mod node_info;
-mod objects;
 mod subscription_service;
 mod transaction_execution_service;
-mod transactions;
 
 async fn transfer_coin(
     context: &sui_sdk::wallet_context::WalletContext,

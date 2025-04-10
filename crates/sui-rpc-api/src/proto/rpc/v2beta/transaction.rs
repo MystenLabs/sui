@@ -335,7 +335,7 @@ impl From<sui_sdk_types::ConsensusCommitPrologue> for super::ConsensusCommitProl
         Self {
             epoch: Some(value.epoch),
             round: Some(value.round),
-            commit_timestamp: Some(crate::proto::types::timestamp_ms_to_proto(
+            commit_timestamp: Some(crate::proto::timestamp_ms_to_proto(
                 value.commit_timestamp_ms,
             )),
             consensus_commit_digest: None,
@@ -359,7 +359,7 @@ impl TryFrom<&super::ConsensusCommitPrologue> for sui_sdk_types::ConsensusCommit
         let commit_timestamp_ms = value
             .commit_timestamp
             .ok_or_else(|| TryFromProtoError::missing("commit_timestamp"))?
-            .pipe(crate::proto::types::proto_to_timestamp_ms)?;
+            .pipe(crate::proto::proto_to_timestamp_ms)?;
 
         Ok(Self {
             epoch,
@@ -374,7 +374,7 @@ impl From<sui_sdk_types::ConsensusCommitPrologueV2> for super::ConsensusCommitPr
         Self {
             epoch: Some(value.epoch),
             round: Some(value.round),
-            commit_timestamp: Some(crate::proto::types::timestamp_ms_to_proto(
+            commit_timestamp: Some(crate::proto::timestamp_ms_to_proto(
                 value.commit_timestamp_ms,
             )),
             consensus_commit_digest: Some(value.consensus_commit_digest.to_string()),
@@ -398,7 +398,7 @@ impl TryFrom<&super::ConsensusCommitPrologue> for sui_sdk_types::ConsensusCommit
         let commit_timestamp_ms = value
             .commit_timestamp
             .ok_or_else(|| TryFromProtoError::missing("commit_timestamp"))?
-            .pipe(crate::proto::types::proto_to_timestamp_ms)?;
+            .pipe(crate::proto::proto_to_timestamp_ms)?;
 
         let consensus_commit_digest = value
             .consensus_commit_digest
@@ -421,7 +421,7 @@ impl From<sui_sdk_types::ConsensusCommitPrologueV3> for super::ConsensusCommitPr
         Self {
             epoch: Some(value.epoch),
             round: Some(value.round),
-            commit_timestamp: Some(crate::proto::types::timestamp_ms_to_proto(
+            commit_timestamp: Some(crate::proto::timestamp_ms_to_proto(
                 value.commit_timestamp_ms,
             )),
             consensus_commit_digest: Some(value.consensus_commit_digest.to_string()),
@@ -447,7 +447,7 @@ impl TryFrom<&super::ConsensusCommitPrologue> for sui_sdk_types::ConsensusCommit
         let commit_timestamp_ms = value
             .commit_timestamp
             .ok_or_else(|| TryFromProtoError::missing("commit_timestamp"))?
-            .pipe(crate::proto::types::proto_to_timestamp_ms)?;
+            .pipe(crate::proto::proto_to_timestamp_ms)?;
 
         let consensus_commit_digest = value
             .consensus_commit_digest
@@ -488,9 +488,7 @@ impl From<sui_sdk_types::ConsensusCommitPrologueV4> for super::ConsensusCommitPr
         Self {
             epoch: Some(epoch),
             round: Some(round),
-            commit_timestamp: Some(crate::proto::types::timestamp_ms_to_proto(
-                commit_timestamp_ms,
-            )),
+            commit_timestamp: Some(crate::proto::timestamp_ms_to_proto(commit_timestamp_ms)),
             consensus_commit_digest: Some(consensus_commit_digest.to_string()),
             sub_dag_index,
             consensus_determined_version_assignments: Some(
@@ -514,7 +512,7 @@ impl TryFrom<&super::ConsensusCommitPrologue> for sui_sdk_types::ConsensusCommit
         let commit_timestamp_ms = value
             .commit_timestamp
             .ok_or_else(|| TryFromProtoError::missing("commit_timestamp"))?
-            .pipe(crate::proto::types::proto_to_timestamp_ms)?;
+            .pipe(crate::proto::proto_to_timestamp_ms)?;
 
         let consensus_commit_digest = value
             .consensus_commit_digest
@@ -908,7 +906,7 @@ impl From<sui_sdk_types::ChangeEpoch> for super::ChangeEpoch {
             computation_charge: Some(value.computation_charge),
             storage_rebate: Some(value.storage_rebate),
             non_refundable_storage_fee: Some(value.non_refundable_storage_fee),
-            epoch_start_timestamp: Some(crate::proto::types::timestamp_ms_to_proto(
+            epoch_start_timestamp: Some(crate::proto::timestamp_ms_to_proto(
                 value.epoch_start_timestamp_ms,
             )),
             system_packages: value.system_packages.into_iter().map(Into::into).collect(),
@@ -944,7 +942,7 @@ impl TryFrom<&super::ChangeEpoch> for sui_sdk_types::ChangeEpoch {
             .ok_or_else(|| TryFromProtoError::missing("non_refundable_storage_fee"))?;
         let epoch_start_timestamp_ms = epoch_start_timestamp
             .ok_or_else(|| TryFromProtoError::missing("epoch_start_timestamp_ms"))?
-            .pipe(crate::proto::types::proto_to_timestamp_ms)?;
+            .pipe(crate::proto::proto_to_timestamp_ms)?;
 
         Ok(Self {
             epoch,
