@@ -1676,7 +1676,13 @@ impl CheckpointBuilder {
                         "Decrease of checkpoint timestamp, possibly due to epoch change. Sequence: {}, previous: {}, current: {}",
                         sequence_number,  last_checkpoint.timestamp_ms, timestamp_ms,
                     );
-                    timestamp_ms = last_checkpoint.timestamp_ms;
+                    if self
+                        .epoch_store
+                        .protocol_config()
+                        .enforce_checkpoint_timestamp_monotonicity()
+                    {
+                        timestamp_ms = last_checkpoint.timestamp_ms;
+                    }
                 }
             }
 
