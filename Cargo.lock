@@ -15112,6 +15112,7 @@ dependencies = [
  "move-ir-types",
  "move-package",
  "move-prover",
+ "move-symbol-pool",
  "move-unit-test",
  "move-vm-runtime",
  "mysten-metrics",

@@ -35,7 +35,7 @@ impl ModelBuilderLegacy {
     // across all packages and build the Move model from that.
     // TODO: In the future we will need a better way to do this to support renaming in packages
     // where we want to support building a Move model.
-    pub fn build_model(&self, flags: Flags) -> Result<GlobalEnv> {
+    pub fn build_model(&self, flags: Flags, additional_path: Option<PackagePaths>) -> Result<GlobalEnv> {
         // Make sure no renamings have been performed
         if let Some(pkg_name) = self.resolution_graph.contains_renaming() {
             anyhow::bail!(
@@ -97,7 +97,7 @@ impl ModelBuilderLegacy {
         } else {
             (vec![target], deps)
         };
-        let (all_targets, all_deps) = match &self.model_config.target_filter {
+        let (mut all_targets, mut all_deps) = match &self.model_config.target_filter {
             Some(filter) => {
                 let mut new_targets = vec![];
                 let mut new_deps = all_deps.into_iter().map(|(p, _)| p).collect_vec();
@@ -131,6 +131,11 @@ impl ModelBuilderLegacy {
                 all_deps.into_iter().map(|(p, _)| p).collect_vec(),
             ),
         };
+        // HERE
+
+        if additional_path.is_some() {
+            all_targets.push(additional_path.unwrap());
+        }
 
         run_model_builder_with_options_and_compilation_flags(
             all_targets,

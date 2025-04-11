@@ -48,6 +48,7 @@ fn run_prover(file_path: &PathBuf) -> String {
                 all_files_as_targets: false,
                 target_filter: None,
             },
+            None
         ) {
             Ok(model) => {
                 // Create prover options
