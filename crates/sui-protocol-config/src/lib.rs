@@ -18,7 +18,7 @@ use tracing::{info, warn};
 
 /// The minimum and maximum protocol versions supported by this build.
 const MIN_PROTOCOL_VERSION: u64 = 1;
-const MAX_PROTOCOL_VERSION: u64 = 80;
+const MAX_PROTOCOL_VERSION: u64 = 81;
 
 // Record history of protocol version allocations here:
 //
@@ -231,7 +231,8 @@ const MAX_PROTOCOL_VERSION: u64 = 80;
 //             Enable load_nitro_attestation move function in sui framework in testnet.
 //             Enable consensus garbage collection for mainnet
 //             Enable the new consensus commit rule for mainnet.
-// Version 80: Enable median based commit timestamp in consensus on mainnet.
+// Version 80: Bound size of values created in the adapter.
+// Version 81: Enable median based commit timestamp in consensus on mainnet.
 //             Enforce checkpoint timestamps are non-decreasing for testnet and mainnet.
 //             Increase threshold for bad nodes that won't be considered leaders in consensus in mainnet
 
@@ -1031,6 +1032,9 @@ pub struct ProtocolConfig {
 
     // Maximal nodes which are allowed when converting to a type layout.
     max_type_to_layout_nodes: Option<u64>,
+
+    // Maximal size in bytes that a PTB value can be
+    max_ptb_value_size: Option<u64>,
 
     // === Gas version. gas model ===
     /// Gas model version, what code we are using to charge gas
@@ -2128,6 +2132,7 @@ impl ProtocolConfig {
             max_event_emit_size: Some(250 * 1024),
             max_move_vector_len: Some(256 * 1024),
             max_type_to_layout_nodes: None,
+            max_ptb_value_size: None,
 
             max_back_edges_per_function: Some(10_000),
             max_back_edges_per_module: Some(10_000),
@@ -3460,6 +3465,9 @@ impl ProtocolConfig {
                     cfg.feature_flags.consensus_linearize_subdag_v2 = true;
                 }
                 80 => {
+                    cfg.max_ptb_value_size = Some(1024 * 1024);
+                }
+                81 => {
                     cfg.feature_flags.consensus_median_based_commit_timestamp = true;
                     cfg.feature_flags.enforce_checkpoint_timestamp_monotonicity = true;
                     cfg.consensus_bad_nodes_stake_threshold = Some(30)

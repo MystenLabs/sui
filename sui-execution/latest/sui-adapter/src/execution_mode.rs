@@ -260,7 +260,7 @@ fn value_to_bytes_and_tag(
         Value::Object(obj) => {
             let tag = resolver.get_type_tag(&obj.type_)?;
             let mut bytes = vec![];
-            obj.write_bcs_bytes(&mut bytes);
+            obj.write_bcs_bytes(&mut bytes, None)?;
             (tag, bytes)
         }
         Value::Raw(RawValueType::Any, bytes) => {
