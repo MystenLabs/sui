@@ -3111,6 +3111,16 @@ fn parse_type_(
 //    OptionalTypeArgs = '<' Comma<Type> ">" | <empty>
 fn parse_optional_type_args(context: &mut Context) -> Option<Vec<Type>> {
     if context.tokens.peek() == Tok::Less {
+        if context
+            .tokens
+            .lookahead()
+            .is_ok_and(|tok| tok == Tok::Greater)
+        {
+            // recognize empty type args list to differentiate it from missparsed type args list
+            context.advance();
+            context.advance();
+            return Some(vec![]);
+        }
         context.stop_set.union(&TYPE_STOP_SET);
         let list = parse_comma_list(
             context,
