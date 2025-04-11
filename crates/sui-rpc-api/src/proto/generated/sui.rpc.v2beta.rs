@@ -572,6 +572,14 @@ pub struct Epoch {
     /// The committee governing this epoch.
     #[prost(message, optional, tag = "2")]
     pub committee: ::core::option::Option<ValidatorCommittee>,
+    #[prost(uint64, optional, tag = "4")]
+    pub first_checkpoint: ::core::option::Option<u64>,
+    #[prost(uint64, optional, tag = "5")]
+    pub last_checkpoint: ::core::option::Option<u64>,
+    #[prost(message, optional, tag = "6")]
+    pub start: ::core::option::Option<::prost_types::Timestamp>,
+    #[prost(message, optional, tag = "7")]
+    pub end: ::core::option::Option<::prost_types::Timestamp>,
     /// Reference gas price denominated in MIST
     #[prost(uint64, optional, tag = "8")]
     pub reference_gas_price: ::core::option::Option<u64>,

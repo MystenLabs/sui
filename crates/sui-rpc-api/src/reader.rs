@@ -1,13 +1,16 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use std::collections::HashMap;
 use std::sync::Arc;
 
 use sui_sdk_types::{CheckpointSequenceNumber, EpochId, SignedTransaction, ValidatorCommittee};
 use sui_sdk_types::{Object, ObjectId, Version};
+use sui_types::balance_change::BalanceChange;
+use sui_types::base_types::{ObjectID, ObjectType};
 use sui_types::storage::error::{Error as StorageError, Result};
-use sui_types::storage::ObjectStore;
 use sui_types::storage::RpcStateReader;
+use sui_types::storage::{ObjectStore, TransactionInfo};
 use tap::Pipe;
 
 use crate::Direction;
@@ -108,15 +111,15 @@ impl StateReader {
     }
 
     #[tracing::instrument(skip(self))]
-    pub fn get_transaction_checkpoint(
+    pub fn get_transaction_info(
         &self,
         digest: &sui_types::digests::TransactionDigest,
-    ) -> Option<CheckpointSequenceNumber> {
+    ) -> Option<TransactionInfo> {
         self.inner()
             .indexes()?
             .get_transaction_info(digest)
-            .ok()?
-            .map(|info| info.checkpoint)
+            .ok()
+            .flatten()
     }
 
     #[tracing::instrument(skip(self))]
@@ -133,7 +136,16 @@ impl StateReader {
             events,
         ) = self.get_transaction(digest)?;
 
-        let checkpoint = self.get_transaction_checkpoint(&(digest.into()));
+        let (checkpoint, balance_changes, object_types) =
+            if let Some(info) = self.get_transaction_info(&(digest.into())) {
+                (
+                    Some(info.checkpoint),
+                    Some(info.balance_changes),
+                    Some(info.object_types),
+                )
+            } else {
+                (None, None, None)
+            };
         let timestamp_ms = if let Some(checkpoint) = checkpoint {
             self.inner()
                 .get_checkpoint_by_sequence_number(checkpoint)
@@ -150,6 +162,8 @@ impl StateReader {
             events,
             checkpoint,
             timestamp_ms,
+            balance_changes,
+            object_types,
         })
     }
 
@@ -181,6 +195,8 @@ pub struct TransactionRead {
     pub events: Option<sui_sdk_types::TransactionEvents>,
     pub checkpoint: Option<u64>,
     pub timestamp_ms: Option<u64>,
+    pub balance_changes: Option<Vec<BalanceChange>>,
+    pub object_types: Option<HashMap<ObjectID, ObjectType>>,
 }
 
 pub struct CheckpointTransactionsIter {

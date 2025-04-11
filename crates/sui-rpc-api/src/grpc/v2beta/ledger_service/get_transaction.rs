@@ -20,6 +20,7 @@ use crate::RpcError;
 use crate::RpcService;
 use prost_types::FieldMask;
 use sui_sdk_types::TransactionDigest;
+use sui_types::base_types::ObjectID;
 
 #[tracing::instrument(skip(service))]
 pub fn get_transaction(
@@ -125,7 +126,46 @@ impl MessageMerge<crate::reader::TransactionRead> for ExecutedTransaction {
         }
 
         if let Some(submask) = mask.subtree(Self::EFFECTS_FIELD.name) {
-            self.effects = Some(TransactionEffects::merge_from(&source.effects, &submask));
+            let mut effects = TransactionEffects::merge_from(&source.effects, &submask);
+
+            if let Some(object_types) = source.object_types {
+                if submask.contains(TransactionEffects::CHANGED_OBJECTS_FIELD.name) {
+                    for changed_object in effects.changed_objects.iter_mut() {
+                        let Ok(object_id) = changed_object.object_id().parse::<ObjectID>() else {
+                            continue;
+                        };
+
+                        if let Some(ty) = object_types.get(&object_id) {
+                            changed_object.object_type = Some(match ty {
+                                sui_types::base_types::ObjectType::Package => "package".to_owned(),
+                                sui_types::base_types::ObjectType::Struct(struct_tag) => {
+                                    struct_tag.to_canonical_string(true)
+                                }
+                            });
+                        }
+                    }
+                }
+
+                if submask.contains(TransactionEffects::UNCHANGED_SHARED_OBJECTS_FIELD.name) {
+                    for unchanged_shared_object in effects.unchanged_shared_objects.iter_mut() {
+                        let Ok(object_id) = unchanged_shared_object.object_id().parse::<ObjectID>()
+                        else {
+                            continue;
+                        };
+
+                        if let Some(ty) = object_types.get(&object_id) {
+                            unchanged_shared_object.object_type = Some(match ty {
+                                sui_types::base_types::ObjectType::Package => "package".to_owned(),
+                                sui_types::base_types::ObjectType::Struct(struct_tag) => {
+                                    struct_tag.to_canonical_string(true)
+                                }
+                            });
+                        }
+                    }
+                }
+            }
+
+            self.effects = Some(effects);
         }
 
         if let Some(submask) = mask.subtree(Self::EVENTS_FIELD.name) {
@@ -140,6 +180,23 @@ impl MessageMerge<crate::reader::TransactionRead> for ExecutedTransaction {
 
         if mask.contains(Self::TIMESTAMP_FIELD.name) {
             self.timestamp = source.timestamp_ms.map(timestamp_ms_to_proto);
+        }
+
+        if mask.contains(Self::BALANCE_CHANGES_FIELD.name) {
+            self.balance_changes = source
+                .balance_changes
+                .map(|balance_changes| balance_changes.into_iter().map(Into::into).collect())
+                .unwrap_or_default();
+        }
+    }
+}
+
+impl From<sui_types::balance_change::BalanceChange> for crate::proto::rpc::v2beta::BalanceChange {
+    fn from(value: sui_types::balance_change::BalanceChange) -> Self {
+        Self {
+            address: Some(value.address.to_string()),
+            coin_type: Some(value.coin_type.to_canonical_string(true)),
+            amount: Some(value.amount.to_string()),
         }
     }
 }
