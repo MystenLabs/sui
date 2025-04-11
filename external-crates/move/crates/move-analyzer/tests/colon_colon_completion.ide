@@ -157,6 +157,10 @@
         {
           "use_line": 87,
           "use_col": 22
+        },
+        {
+          "use_line": 96,
+          "use_col": 27
         }
       ],
       "uses.move": [
