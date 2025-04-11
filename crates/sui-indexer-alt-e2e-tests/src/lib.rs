@@ -12,7 +12,7 @@ use diesel::{ExpressionMethods, OptionalExtension, QueryDsl};
 use diesel_async::RunQueryDsl;
 use simulacrum::Simulacrum;
 use sui_indexer_alt::{config::IndexerConfig, setup_indexer};
-use sui_indexer_alt_framework::{ingestion::ClientArgs, schema::watermarks, IndexerArgs};
+use sui_indexer_alt_framework::{db::schema::watermarks, ingestion::ClientArgs, IndexerArgs};
 use sui_indexer_alt_jsonrpc::{
     config::RpcConfig, data::system_package_task::SystemPackageTaskArgs, start_rpc, NodeArgs,
     RpcArgs,
@@ -329,7 +329,7 @@ impl OffchainCluster {
 
         let mut conn = self
             .db
-            .connect()
+            .connection()
             .await
             .context("Failed to connect to database")?;
 
@@ -355,7 +355,7 @@ impl OffchainCluster {
 
         let mut conn = self
             .db
-            .connect()
+            .connection()
             .await
             .context("Failed to connect to database")?;
 

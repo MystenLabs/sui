@@ -7,10 +7,9 @@ use anyhow::Result;
 use diesel::sql_query;
 use diesel_async::RunQueryDsl;
 use sui_indexer_alt_framework::{
-    db::{Connection, Db},
+    db::{Db, DbConnection, FieldCount},
     pipeline::{concurrent::Handler, Processor},
     types::{base_types::ObjectID, full_checkpoint_content::CheckpointData, object::Object},
-    FieldCount,
 };
 use sui_indexer_alt_schema::{objects::StoredObjInfoTemp, schema::obj_info_temp};
 
@@ -99,7 +98,7 @@ impl Handler for ObjInfoTemp {
 
     const PRUNING_REQUIRES_PROCESSED_VALUES: bool = true;
 
-    async fn commit<'a>(values: &[Self::Value], conn: &mut Connection<'a>) -> Result<usize> {
+    async fn commit<'a>(values: &[Self::Value], conn: &mut DbConnection<'a>) -> Result<usize> {
         let stored = values
             .iter()
             .map(|v| v.try_into())
@@ -116,7 +115,7 @@ impl Handler for ObjInfoTemp {
         &self,
         from: u64,
         to_exclusive: u64,
-        conn: &mut Connection<'a>,
+        conn: &mut DbConnection<'a>,
     ) -> Result<usize> {
         use sui_indexer_alt_schema::schema::obj_info_temp::dsl;
 
@@ -198,6 +197,7 @@ impl TryInto<StoredObjInfoTemp> for &ProcessedObjInfo {
 #[cfg(test)]
 mod tests {
     use sui_indexer_alt_framework::{
+        store::Store,
         types::{
             base_types::{dbg_addr, SequenceNumber},
             object::{Authenticator, Owner},
@@ -211,7 +211,7 @@ mod tests {
 
     // A helper function to return all entries in the obj_info_temp table sorted by object_id and
     // cp_sequence_number.
-    async fn get_all_obj_info_temp(conn: &mut Connection<'_>) -> Result<Vec<StoredObjInfoTemp>> {
+    async fn get_all_obj_info_temp(conn: &mut DbConnection<'_>) -> Result<Vec<StoredObjInfoTemp>> {
         let query = obj_info_temp::table.load(conn).await?;
         Ok(query)
     }

@@ -171,8 +171,8 @@ jobs:
           ./crates/sui-indexer-alt-schema/generate_schema.sh
       - name: Indexer Alt Framework schema
         run: |
-          ./crates/sui-indexer-alt-framework/generate_schema.sh
-          cargo fmt -- crates/sui-indexer-alt-framework/src/schema.rs
+          ./crates/sui-pg-db/generate_schema.sh
+          cargo fmt -- crates/sui-pg-db/src/schema.rs
       # Ensure there are no uncommitted changes in the repo after running tests
       - run: scripts/changed-files.sh
         shell: bash

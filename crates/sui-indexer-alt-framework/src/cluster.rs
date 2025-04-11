@@ -171,21 +171,20 @@ impl DerefMut for IndexerCluster {
 
 #[cfg(test)]
 mod tests {
-    use std::net::{IpAddr, Ipv4Addr, SocketAddr};
-
     use diesel::{Insertable, QueryDsl, Queryable};
     use diesel_async::RunQueryDsl;
+    use std::net::{IpAddr, Ipv4Addr, SocketAddr};
     use sui_synthetic_ingestion::synthetic_ingestion;
     use tempfile::tempdir;
 
     use crate::db::{
         temp::{get_available_port, TempDb},
-        Connection, Db,
+        Db, DbConnection, FieldCount,
     };
     use crate::pipeline::concurrent::{self, ConcurrentConfig};
     use crate::pipeline::Processor;
     use crate::types::full_checkpoint_content::CheckpointData;
-    use crate::FieldCount;
+    use crate::Store;
 
     use super::*;
 
@@ -225,7 +224,7 @@ mod tests {
 
         async fn commit<'a>(
             values: &[Self::Value],
-            conn: &mut Connection<'a>,
+            conn: &mut DbConnection<'a>,
         ) -> anyhow::Result<usize> {
             Ok(diesel::insert_into(tx_counts::table)
                 .values(values)

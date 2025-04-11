@@ -8,7 +8,7 @@ use diesel::{
     migration::{self, Migration, MigrationSource},
     pg::Pg,
 };
-use diesel_migrations::{embed_migrations, EmbeddedMigrations};
+use diesel_migrations::EmbeddedMigrations;
 use futures::future;
 use ingestion::{client::IngestionClient, ClientArgs, IngestionConfig, IngestionService};
 use metrics::IndexerMetrics;
@@ -18,7 +18,7 @@ use pipeline::{
     Processor,
 };
 use prometheus::Registry;
-use store::{CommitterWatermark, Connection};
+use sui_indexer_alt_framework_store_traits::{CommitterWatermark, Connection, Store};
 use sui_indexer_alt_metrics::db::DbConnectionStatsCollector;
 use sui_pg_db::{temp::TempDb, Db, DbArgs};
 use tempfile::tempdir;
@@ -28,7 +28,12 @@ use tracing::{info, warn};
 use url::Url;
 
 pub use anyhow::Result;
-pub use sui_field_count::FieldCount;
+/// External users access the store trait through framework::store
+pub use sui_indexer_alt_framework_store_traits as store;
+// TODO (wlmyng)
+// #[cfg(feature = "postgres")]
+// pub use sui_indexer_alt_framework_store_pg::pg_store;
+/// External users can opt in to a specific implementation through framework::db
 pub use sui_pg_db as db;
 pub use sui_sql_macro::sql;
 pub use sui_types as types;
@@ -37,14 +42,12 @@ pub use sui_types as types;
 pub mod cluster;
 pub mod ingestion;
 pub mod metrics;
-pub mod models;
-pub mod pg_store;
 pub mod pipeline;
-pub mod schema;
-pub mod store;
 pub mod task;
 
-const MIGRATIONS: EmbeddedMigrations = embed_migrations!("migrations");
+// TODO (wlmyng)
+// #[cfg(feature = "postgres")]
+const MIGRATIONS: EmbeddedMigrations = sui_pg_db::MIGRATIONS;
 
 /// Command-line arguments for the indexer
 #[derive(clap::Args, Default, Debug, Clone)]
@@ -441,7 +444,9 @@ impl Indexer {
             }
         }
 
-        let mut conn = self.db.connect().await.context("Failed DB connection")?;
+        let mut conn = Store::connect(&self.db)
+            .await
+            .context("Failed DB connection")?;
 
         let watermark = conn
             .committer_watermark(P::NAME)
@@ -475,8 +480,11 @@ impl Indexer {
 mod tests {
     use async_trait::async_trait;
 
-    use crate::types::full_checkpoint_content::CheckpointData;
-    use sui_pg_db::Connection as PgConnection;
+    use crate::{
+        db::{DbConnection, FieldCount},
+        store::{CommitterWatermark, Store},
+        types::full_checkpoint_content::CheckpointData,
+    };
 
     use super::*;
 
@@ -509,7 +517,7 @@ mod tests {
                 const PRUNING_REQUIRES_PROCESSED_VALUES: bool = $pruning_requires_processed_values;
                 async fn commit<'a>(
                     _values: &[Self::Value],
-                    _conn: &mut PgConnection<'a>,
+                    _conn: &mut DbConnection<'a>,
                 ) -> anyhow::Result<usize> {
                     todo!()
                 }
@@ -536,7 +544,7 @@ mod tests {
         let (mut indexer, _temp_db) = Indexer::new_for_testing(&MIGRATIONS).await;
         {
             let watermark = CommitterWatermark::new_for_testing(10);
-            let mut conn = indexer.db().connect().await.unwrap();
+            let mut conn = Store::connect(indexer.db()).await.unwrap();
             assert!(conn
                 .set_committer_watermark(ConcurrentPipeline1::NAME, watermark)
                 .await
@@ -554,7 +562,7 @@ mod tests {
         let (mut indexer, _temp_db) = Indexer::new_for_testing(&MIGRATIONS).await;
         {
             let watermark1 = CommitterWatermark::new_for_testing(10);
-            let mut conn = indexer.db().connect().await.unwrap();
+            let mut conn = Store::connect(indexer.db()).await.unwrap();
             assert!(conn
                 .set_committer_watermark(ConcurrentPipeline1::NAME, watermark1)
                 .await
@@ -583,7 +591,7 @@ mod tests {
         let (mut indexer, _temp_db) = Indexer::new_for_testing(&MIGRATIONS).await;
         {
             let watermark1 = CommitterWatermark::new_for_testing(10);
-            let mut conn = indexer.db().connect().await.unwrap();
+            let mut conn = Store::connect(indexer.db()).await.unwrap();
             assert!(conn
                 .set_committer_watermark(ConcurrentPipeline1::NAME, watermark1)
                 .await
@@ -597,7 +605,7 @@ mod tests {
 
         {
             let watermark3 = CommitterWatermark::new_for_testing(20);
-            let mut conn = indexer.db().connect().await.unwrap();
+            let mut conn = Store::connect(indexer.db()).await.unwrap();
             assert!(conn
                 .set_committer_watermark(ConcurrentPipeline3::NAME, watermark3)
                 .await

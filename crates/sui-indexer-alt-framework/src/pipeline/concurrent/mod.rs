@@ -9,10 +9,10 @@ use tokio_util::sync::CancellationToken;
 use tracing::info;
 
 use crate::{
+    db::FieldCount,
     metrics::IndexerMetrics,
     store::{CommitterWatermark, Store},
     types::full_checkpoint_content::CheckpointData,
-    FieldCount,
 };
 
 use super::{processor::processor, CommitterConfig, Processor, WatermarkPart, PIPELINE_BUFFER};

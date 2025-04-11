@@ -138,7 +138,7 @@ impl SnapshotRestorer {
                             part_num = part_num,
                             "Start downloading move object file"
                         );
-                        let mut conn = db.connect().await?;
+                        let mut conn = db.connection().await?;
                         let (bytes, _) = download_bytes(
                             remote_object_store,
                             &file_metadata,
