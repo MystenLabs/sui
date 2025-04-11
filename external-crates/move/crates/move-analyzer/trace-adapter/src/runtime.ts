@@ -19,7 +19,7 @@ import {
     TraceInstructionKind,
     readTrace,
 } from './trace_utils';
-import { JSON_FILE_EXT } from './utils';
+import { JSON_FILE_EXT, COMPRESSED_FILE_EXT } from './utils';
 
 /**
  * File extension for Move source files.
@@ -296,12 +296,12 @@ export class Runtime extends EventEmitter {
      */
     public async start(openedFilePath: string, traceInfo: string, stopOnEntry: boolean): Promise<void> {
         const openedFileExt = path.extname(openedFilePath);
-        const openedFileBaseName = path.basename(openedFilePath, openedFileExt);
+        const openedFileBaseName = path.basename(openedFilePath, JSON_FILE_EXT + COMPRESSED_FILE_EXT);
         let srcDebugInfo = new Map<string, IDebugInfo>();
         let bcodeDebugInfo = new Map<string, IDebugInfo>();
         let disassemblyView = false;
         let traceFilePath = ''; // updated in both conditional branches
-        if (openedFileExt === JSON_FILE_EXT && openedFileBaseName === REPLAY_TRACE_FILE_NAME) {
+        if (openedFileExt === COMPRESSED_FILE_EXT && openedFileBaseName === REPLAY_TRACE_FILE_NAME) {
             // replay tool trace
             const replayRoot = path.dirname(openedFilePath);
             const bytecodeDir = path.join(replayRoot, 'bytecode');
@@ -345,7 +345,7 @@ export class Runtime extends EventEmitter {
 
             if (openedFileExt !== MOVE_FILE_EXT
                 && openedFileExt !== BCODE_FILE_EXT
-                && openedFileExt !== JSON_FILE_EXT) {
+                && openedFileExt !== COMPRESSED_FILE_EXT) {
                 throw new Error(`File extension: ${openedFileExt} is not supported by trace debugger`);
             }
             disassemblyView = openedFileExt === BCODE_FILE_EXT;
@@ -364,7 +364,7 @@ export class Runtime extends EventEmitter {
             srcDebugInfo = readAllDebugInfos(srcDbgInfoDir, this.filesMap, true);
 
             // reconstruct trace file path from trace info
-            traceFilePath = path.join(pkgRoot, 'traces', traceInfo.replace(/:/g, '_') + JSON_FILE_EXT);
+            traceFilePath = path.join(pkgRoot, 'traces', traceInfo.replace(/:/g, '_') + JSON_FILE_EXT + COMPRESSED_FILE_EXT);
 
             const disassemblyDir = path.join(pkgRoot, 'build', pkg_name, 'disassembly');
             if (fs.existsSync(disassemblyDir)) {
@@ -393,7 +393,7 @@ export class Runtime extends EventEmitter {
             }
         });
 
-        this.trace = readTrace(traceFilePath, srcDebugInfosHashMap, srcDebugInfo, bcodeDebugInfo, this.filesMap);
+        this.trace = await readTrace(traceFilePath, srcDebugInfosHashMap, srcDebugInfo, bcodeDebugInfo, this.filesMap);
 
         // start trace viewing session with the first trace event
         this.eventIndex = 0;
