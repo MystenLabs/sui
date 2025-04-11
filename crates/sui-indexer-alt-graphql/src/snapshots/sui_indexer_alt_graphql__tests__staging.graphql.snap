@@ -203,6 +203,10 @@ type Transaction {
 	A 32-byte hash that uniquely identifies the transaction contents, encoded in Base58.
 	"""
 	digest: String!
+	"""
+	The Base64-encoded BCS serialization of this transaction, as a `TransactionData`.
+	"""
+	transactionBcs: Base64
 }
 
 """

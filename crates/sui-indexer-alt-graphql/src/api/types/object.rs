@@ -22,12 +22,12 @@ pub(crate) struct Object {
     address: NativeSuiAddress,
     version: SequenceNumber,
     digest: ObjectDigest,
-    content: Content,
+    contents: ObjectContents,
 }
 
 /// The lazily loaded contents of an object.
 #[derive(Clone)]
-pub(crate) struct Content(Option<Arc<NativeObject>>);
+pub(crate) struct ObjectContents(Option<Arc<NativeObject>>);
 
 /// Identifies a specific version of an object.
 #[derive(InputObject, Debug, Clone, Eq, PartialEq)]
@@ -57,17 +57,17 @@ impl Object {
     }
 
     #[graphql(flatten)]
-    async fn content(&self, ctx: &Context<'_>) -> Result<Content, RpcError> {
-        Ok(if self.content.0.is_some() {
-            self.content.clone()
+    async fn contents(&self, ctx: &Context<'_>) -> Result<ObjectContents, RpcError> {
+        Ok(if self.contents.0.is_some() {
+            self.contents.clone()
         } else {
-            Content::fetch(ctx, self.address.into(), self.version.into()).await?
+            ObjectContents::fetch(ctx, self.address.into(), self.version.into()).await?
         })
     }
 }
 
 #[Object]
-impl Content {
+impl ObjectContents {
     /// The Base64-encoded BCS serialization of this object, as an `Object`.
     async fn object_bcs(&self) -> Result<Option<Base64>, RpcError> {
         let Some(object) = &self.0 else {
@@ -93,7 +93,7 @@ impl Object {
             address,
             version,
             digest,
-            content: Content(None),
+            contents: ObjectContents(None),
         }
     }
 
@@ -105,8 +105,8 @@ impl Object {
         address: SuiAddress,
         version: UInt53,
     ) -> Result<Option<Self>, RpcError> {
-        let content = Content::fetch(ctx, address, version).await?;
-        let Some(object) = &content.0 else {
+        let contents = ObjectContents::fetch(ctx, address, version).await?;
+        let Some(object) = &contents.0 else {
             return Ok(None);
         };
 
@@ -114,12 +114,12 @@ impl Object {
             address: object.id().into(),
             version: object.version(),
             digest: object.digest(),
-            content,
+            contents,
         }))
     }
 }
 
-impl Content {
+impl ObjectContents {
     pub(crate) async fn fetch(
         ctx: &Context<'_>,
         address: SuiAddress,
@@ -132,6 +132,6 @@ impl Content {
             .await
             .context("Failed to fetch object contents")?;
 
-        Ok(Content(object.map(Arc::new)))
+        Ok(Self(object.map(Arc::new)))
     }
 }
