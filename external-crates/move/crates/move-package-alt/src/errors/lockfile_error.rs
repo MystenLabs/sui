@@ -19,22 +19,22 @@ use crate::package::PackageName;
 use super::FileHandle;
 
 #[derive(Error, Debug)]
-#[error("Invalid manifest: {kind}")]
-pub struct ManifestError {
-    pub kind: ManifestErrorKind,
+#[error("Invalid lockfile: {kind}")]
+pub struct LockfileError {
+    pub kind: LockfileErrorKind,
     pub span: Option<Range<usize>>,
     pub handle: FileHandle,
 }
 
 #[derive(Error, Debug)]
-pub enum ManifestErrorKind {
-    #[error("package name cannot be empty")]
-    EmptyPackageName,
-    #[error("unsupported edition '{edition}', expected one of '{valid}'")]
-    InvalidEdition { edition: String, valid: String },
+pub enum LockfileErrorKind {
+    #[error(
+        "Move.lock and Move.{env_name}.lock both contain publication information for {env_name}"
+    )]
+    SamePublicationInfo { env_name: String },
 }
 
-impl ManifestError {
+impl LockfileError {
     /// Convert this error into a codespan Diagnostic
     pub fn to_diagnostic(&self) -> Diagnostic<usize> {
         let (file_id, span) = self.span_info();
