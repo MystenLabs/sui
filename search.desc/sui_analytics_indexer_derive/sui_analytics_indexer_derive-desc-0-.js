@@ -1,0 +1,1 @@
+searchState.loadedDescShard("sui_analytics_indexer_derive", 0, "")

@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"constant":["MAX_CHECKPOINTS_IN_PROGRESS"],"fn":["create_remote_store_client","setup_single_workflow"],"struct":["DataIngestionMetrics","FileProgressStore","IndexerExecutor","ReaderOptions","ShimIndexerProgressStore","ShimProgressStore","WorkerPool"],"trait":["ProgressStore","Reducer","Worker"],"type":["ExecutorProgress"]};

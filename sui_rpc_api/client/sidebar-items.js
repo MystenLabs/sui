@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"struct":["AuthInterceptor","Client","TransactionExecutionResponse"],"trait":["ResponseExt"],"type":["BoxError","Result"]};
