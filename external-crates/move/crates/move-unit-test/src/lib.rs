@@ -124,8 +124,8 @@ pub struct UnitTestingConfig {
     pub deterministic_generation: bool,
 
     // Enable tracing for tests
-    #[clap(long = TRACE_FLAG, value_name = "PATH")]
-    pub trace_execution: Option<Option<String>>,
+    #[clap(long = TRACE_FLAG)]
+    pub trace_execution: bool,
 }
 
 fn format_module_id(
@@ -157,7 +157,7 @@ impl UnitTestingConfig {
             rand_num_iters: Some(DEFAULT_RAND_ITERS),
             seed: None,
             deterministic_generation: false,
-            trace_execution: None,
+            trace_execution: false,
         }
     }
 
@@ -269,10 +269,10 @@ impl UnitTestingConfig {
         }
 
         writeln!(shared_writer.lock().unwrap(), "Running Move unit tests")?;
-        let trace_location = match &self.trace_execution {
-            Some(None) => Some("traces".to_string()),
-            Some(Some(path)) => Some(path.clone()),
-            None => None,
+        let trace_location = if self.trace_execution {
+            Some("traces".to_string())
+        } else {
+            None
         };
         let mut test_runner = TestRunner::new(
             self.gas_limit.unwrap_or(DEFAULT_EXECUTION_BOUND),
