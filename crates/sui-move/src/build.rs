@@ -3,7 +3,6 @@
 
 use crate::manage_package::resolve_lock_file_path;
 use clap::Parser;
-use move_cli::base;
 use move_package::BuildConfig as MoveBuildConfig;
 use std::{fs, path::Path};
 use sui_move_build::{implicit_deps, BuildConfig};
@@ -47,7 +46,8 @@ impl Build {
         path: Option<&Path>,
         build_config: MoveBuildConfig,
     ) -> anyhow::Result<()> {
-        let rerooted_path = base::reroot_path(path)?;
+        // let rerooted_path = base::reroot_path(path)?; // ???
+        let rerooted_path = path.unwrap_or(Path::new(".")).to_path_buf();
         let build_config = resolve_lock_file_path(build_config, Some(&rerooted_path))?;
         Self::execute_internal(
             &rerooted_path,
