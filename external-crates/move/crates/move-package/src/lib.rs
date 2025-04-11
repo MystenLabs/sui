@@ -16,7 +16,7 @@ use clap::*;
 use compilation::model_builder_legacy::ModelBuilderLegacy;
 use lock_file::LockFile;
 use move_compiler::{
-    editions::{Edition, Flavor}, Flags
+    editions::{Edition, Flavor}, shared::PackagePaths, Flags
 };
 use move_core_types::account_address::AccountAddress;
 use move_model_2::source_model;
@@ -272,6 +272,7 @@ impl BuildConfig {
         self,
         path: &Path,
         model_config: ModelConfig,
+        additional_path: Option<PackagePaths>,
     ) -> Result<GlobalEnv> {
         let flags = self.compiler_flags();
 
@@ -280,7 +281,7 @@ impl BuildConfig {
         let resolved_graph = self.resolution_graph_for_package(path, None, &mut Vec::new())?;
         let _mutx = PackageLock::lock(); // held until function returns
 
-        ModelBuilderLegacy::create(resolved_graph, model_config).build_model(flags)
+        ModelBuilderLegacy::create(resolved_graph, model_config).build_model(flags, additional_path)
     }
 
     pub fn download_deps_for_package<W: Write>(&self, path: &Path, writer: &mut W) -> Result<()> {

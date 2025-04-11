@@ -27,6 +27,7 @@ tokio = { workspace = true, features = ["full"] }
 move-vm-runtime = { path = "../../external-crates/move/crates/move-vm-runtime" }
 sui-move-natives = { path = "../../sui-execution/latest/sui-move-natives", package = "sui-move-natives-latest" }
 move-core-types = { path = "../../external-crates/move/crates/move-core-types" }
+move-symbol-pool = { path = "../../external-crates/move/crates/move-symbol-pool" }
 
 sui-move-build.workspace = true
 sui-protocol-config.workspace = true
