@@ -78,14 +78,14 @@ impl<F: MoveFlavor> Manifest<F> {
     pub fn read_from(path: impl AsRef<Path>) -> PackageResult<Self> {
         let contents = std::fs::read_to_string(&path)?;
 
-        let data = with_file(&path, toml_edit::de::from_str::<Self>)?;
+        let (manifest, file_id) = with_file(&path, toml_edit::de::from_str::<Self>)?;
 
-        match data.0 {
+        match manifest {
             Ok(manifest) => {
-                manifest.validate_manifest(data.1)?;
+                manifest.validate_manifest(file_id)?;
                 Ok(manifest)
             }
-            Err(err) => return Err(err.into()),
+            Err(err) => Err(err.into()),
         }
     }
 

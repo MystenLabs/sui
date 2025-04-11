@@ -76,10 +76,10 @@ impl<F: MoveFlavor + fmt::Debug> Lockfile<F> {
             return Ok(Self::default());
         };
 
-        let data = with_file(lockfile_name, toml_edit::de::from_str::<Self>)?;
+        let (result, file_id) = with_file(lockfile_name, toml_edit::de::from_str::<Self>)?;
 
-        let Ok(mut lockfiles) = data.0 else {
-            return Err(data.0.unwrap_err().into());
+        let Ok(mut lockfiles) = result else {
+            return Err(result.unwrap_err().into());
         };
 
         // Add in `Move.<env>.lock` files
