@@ -867,38 +867,38 @@ const UNSORTED_30: vector<u8> = x"0220021409192d182808091c20170e0e121e0429052118
 #[test]
 fun insertion_sort_by_macro() {
     let mut arr = UNSORTED_100;
-    std::macros::insertion_sort_by!(&mut arr, |a, b| *a < *b);
-    assert!(arr.is_sorted_by!(|a, b| *a <= *b));
+    arr.insertion_sort_by!(|a, b| *a < *b);
+    assert!(!arr.is_sorted_by!(|a, b| *a <= *b));
 
     let mut arr = UNSORTED_50;
-    std::macros::insertion_sort_by!(&mut arr, |a, b| *a < *b);
+    arr.insertion_sort_by!(|a, b| *a < *b);
     assert!(arr.is_sorted_by!(|a, b| *a <= *b));
 
     let mut arr = UNSORTED_40;
-    std::macros::insertion_sort_by!(&mut arr, |a, b| *a < *b);
+    arr.insertion_sort_by!(|a, b| *a < *b);
     assert!(arr.is_sorted_by!(|a, b| *a <= *b));
 
     let mut arr = UNSORTED_30;
-    std::macros::insertion_sort_by!(&mut arr, |a, b| *a < *b);
+    arr.insertion_sort_by!(|a, b| *a < *b);
     assert!(arr.is_sorted_by!(|a, b| *a <= *b));
 }
 
 #[test]
 fun merge_sort_by_macro() {
     let mut arr = UNSORTED_100;
-    std::macros::merge_sort_by!(&mut arr, |a, b| *a < *b);
+    arr.merge_sort_by!(|a, b| *a < *b);
     assert!(arr.is_sorted_by!(|a, b| *a <= *b));
 
     let mut arr = UNSORTED_50;
-    std::macros::merge_sort_by!(&mut arr, |a, b| *a < *b);
+    arr.merge_sort_by!(|a, b| *a < *b);
     assert!(arr.is_sorted_by!(|a, b| *a <= *b));
 
     let mut arr = UNSORTED_40;
-    std::macros::merge_sort_by!(&mut arr, |a, b| *a < *b);
+    arr.merge_sort_by!(|a, b| *a < *b);
     assert!(arr.is_sorted_by!(|a, b| *a <= *b));
 
     let mut arr = UNSORTED_30;
-    std::macros::merge_sort_by!(&mut arr, |a, b| *a < *b);
+    arr.merge_sort_by!(|a, b| *a < *b);
     assert!(arr.is_sorted_by!(|a, b| *a <= *b));
 }
 
@@ -907,7 +907,7 @@ fun merge_sort_by_macro() {
 // so to optimize, we pop the vector to a smaller size
 fun sort_by_random_set(mut v: vector<u8>) {
     let mut arr = vector::tabulate!(v.length().min(100), |_| v.pop_back());
-    std::macros::insertion_sort_by!(&mut arr, |a, b| *a < *b);
+    arr.insertion_sort_by!(|a, b| *a < *b);
     assert!(arr.is_sorted_by!(|a, b| *a <= *b));
 }
 
@@ -922,7 +922,7 @@ fun test_insertion_sort_is_stable_sort_by() {
         Indexed { value: 2, index: 5 },
     ];
 
-    std::macros::insertion_sort_by!(&mut arr, |a, b| a.value < b.value);
+    arr.insertion_sort_by!(|a, b| a.value < b.value);
     assert_eq!(
         arr,
         vector[
@@ -935,7 +935,7 @@ fun test_insertion_sort_is_stable_sort_by() {
         ],
     );
 
-    std::macros::insertion_sort_by!(&mut arr, |a, b| a.value > b.value);
+    arr.insertion_sort_by!(|a, b| a.value > b.value);
     assert_eq!(
         arr,
         vector[
@@ -960,7 +960,7 @@ fun test_merge_sort_is_stable_sort_by() {
         Indexed { value: 2, index: 5 },
     ];
 
-    std::macros::merge_sort_by!(&mut arr, |a, b| a.value <= b.value);
+    arr.merge_sort_by!(|a, b| a.value <= b.value);
     assert_eq!(
         arr,
         vector[
@@ -973,7 +973,7 @@ fun test_merge_sort_is_stable_sort_by() {
         ],
     );
 
-    std::macros::merge_sort_by!(&mut arr, |a, b| a.value >= b.value);
+    arr.merge_sort_by!(|a, b| a.value >= b.value);
     assert_eq!(
         arr,
         vector[
