@@ -32,11 +32,12 @@ impl Query {
     /// Returns a list of objects that is guaranteed to be the same length as `keys`. If an object in `keys` could not be found in the store, its corresponding entry in the result will be `null`. This could be because the object never existed, or because it was pruned.
     async fn multi_get_objects(
         &self,
+        ctx: &Context<'_>,
         keys: Vec<ObjectKey>,
     ) -> Result<Vec<Option<Object>>, RpcError> {
         let objects = keys
             .into_iter()
-            .map(|k| Object::fetch(k.address, k.version));
+            .map(|k| Object::fetch(ctx, k.address, k.version));
 
         try_join_all(objects).await
     }
@@ -67,11 +68,12 @@ impl Query {
     /// Fetch an object by its address and version.
     async fn object(
         &self,
+        ctx: &Context<'_>,
         address: SuiAddress,
         version: UInt53,
     ) -> Result<Option<Object>, RpcError> {
         // TODO: latest version support
-        Object::fetch(address, version).await
+        Object::fetch(ctx, address, version).await
     }
 
     /// Configuration for this RPC service.
