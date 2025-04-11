@@ -7,7 +7,7 @@ use move_core_types::{
     ident_str,
     language_storage::{StructTag, TypeTag},
 };
-use sui_protocol_config::ProtocolConfig;
+use sui_protocol_config::{ProtocolConfig, ProtocolVersion};
 use tap::Pipe;
 
 use crate::{
@@ -594,15 +594,25 @@ impl TestCheckpointDataBuilder {
         }
     }
 
+    /// Like `advance_epoch_and_protocol_upgrade`, but default the protocol version to the maximum.
+    pub fn advance_epoch(&mut self, safe_mode: bool) -> CheckpointData {
+        self.advance_epoch_and_protocol_upgrade(safe_mode, ProtocolVersion::MAX)
+    }
+
     /// Creates a transaction that advances the epoch, adds it to the checkpoint, and then builds
     /// the checkpoint. This increments the stored checkpoint sequence number and epoch. If
     /// `safe_mode` is true, the epoch end transaction will not include the `SystemEpochInfoEvent`.
-    pub fn advance_epoch(&mut self, safe_mode: bool) -> CheckpointData {
+    /// The `protocol_version` is used to set the protocol that we are going to follow in the
+    /// subsequent epoch.
+    pub fn advance_epoch_and_protocol_upgrade(
+        &mut self,
+        safe_mode: bool,
+        protocol_version: ProtocolVersion,
+    ) -> CheckpointData {
         let (committee, _) = Committee::new_simple_test_committee();
-        let protocol_config = ProtocolConfig::get_for_max_version_UNSAFE();
         let tx_kind = EndOfEpochTransactionKind::new_change_epoch(
             self.checkpoint_builder.epoch + 1,
-            protocol_config.version,
+            protocol_version,
             Default::default(),
             Default::default(),
             Default::default(),
@@ -626,7 +636,7 @@ impl TestCheckpointDataBuilder {
         let events = if !safe_mode {
             let system_epoch_info_event = SystemEpochInfoEvent {
                 epoch: self.checkpoint_builder.epoch,
-                protocol_version: protocol_config.version.as_u64(),
+                protocol_version: protocol_version.as_u64(),
                 ..Default::default()
             };
             let struct_tag = StructTag {
@@ -664,7 +674,7 @@ impl TestCheckpointDataBuilder {
         let mut checkpoint = self.build_checkpoint();
         let end_of_epoch_data = EndOfEpochData {
             next_epoch_committee: committee.voting_rights.clone(),
-            next_epoch_protocol_version: protocol_config.version,
+            next_epoch_protocol_version: protocol_version,
             epoch_commitments: vec![],
         };
         checkpoint.checkpoint_summary.end_of_epoch_data = Some(end_of_epoch_data);

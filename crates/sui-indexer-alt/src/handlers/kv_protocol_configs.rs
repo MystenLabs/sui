@@ -3,7 +3,7 @@
 
 use std::sync::Arc;
 
-use anyhow::{Context, Result};
+use anyhow::{bail, Context, Result};
 use diesel_async::RunQueryDsl;
 use sui_indexer_alt_framework::{
     db::{Connection, Db},
@@ -34,10 +34,15 @@ impl Processor for KvProtocolConfigs {
             return Ok(vec![]);
         };
 
-        let protocol_config = ProtocolConfig::get_for_version(
+        let Some(protocol_config) = ProtocolConfig::get_for_version_if_supported(
             protocol_version,
             self.0.chain().context("Failed to identify chain")?,
-        );
+        ) else {
+            bail!(
+                "Protocol version {} is not supported",
+                protocol_version.as_u64()
+            );
+        };
 
         let protocol_version = protocol_version.as_u64() as i64;
         Ok(protocol_config
@@ -65,5 +70,57 @@ impl Handler for KvProtocolConfigs {
             .on_conflict_do_nothing()
             .execute(conn)
             .await?)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use sui_indexer_alt_framework::types::test_checkpoint_data_builder::TestCheckpointDataBuilder;
+    use sui_protocol_config::ProtocolVersion;
+
+    use super::*;
+
+    #[tokio::test]
+    async fn test_protocol_version_processing() {
+        let mut builder = TestCheckpointDataBuilder::new(0);
+        let genesis = Arc::new(builder.build_checkpoint());
+        let checkpoint =
+            Arc::new(builder.advance_epoch_and_protocol_upgrade(false, ProtocolVersion::MIN));
+
+        let stored_genesis = StoredGenesis {
+            genesis_digest: genesis.checkpoint_summary.digest().inner().to_vec(),
+            initial_protocol_version: ProtocolVersion::MIN.as_u64() as i64,
+        };
+
+        let protocol_configs = KvProtocolConfigs(stored_genesis)
+            .process(&checkpoint)
+            .unwrap();
+
+        assert!(!protocol_configs.is_empty());
+        for config in protocol_configs {
+            assert_eq!(
+                config.protocol_version,
+                ProtocolVersion::MIN.as_u64() as i64
+            );
+        }
+    }
+
+    /// When the protocol version is too high, the pipeline should fail to process the checkpoint,
+    /// but not panic.
+    #[tokio::test]
+    async fn test_protocol_version_too_high() {
+        let mut builder = TestCheckpointDataBuilder::new(0);
+        let genesis = Arc::new(builder.build_checkpoint());
+        let checkpoint =
+            Arc::new(builder.advance_epoch_and_protocol_upgrade(false, ProtocolVersion::MAX + 1));
+
+        let stored_genesis = StoredGenesis {
+            genesis_digest: genesis.checkpoint_summary.digest().inner().to_vec(),
+            initial_protocol_version: ProtocolVersion::MIN.as_u64() as i64,
+        };
+
+        KvProtocolConfigs(stored_genesis)
+            .process(&checkpoint)
+            .unwrap_err();
     }
 }
