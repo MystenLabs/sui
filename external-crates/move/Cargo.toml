@@ -140,6 +140,7 @@ x25519-dalek = { version = "0.1.0", package = "x25519-dalek-fiat", default-featu
 z3tracer = "0.8.0"
 inline_colorization = "0.1.6"
 insta = "1.42.0"
+zstd = "0.13.2"
 
 bytecode-interpreter-crypto = { path = "crates/bytecode-interpreter-crypto" }
 enum-compat-util = { path = "crates/enum-compat-util"}

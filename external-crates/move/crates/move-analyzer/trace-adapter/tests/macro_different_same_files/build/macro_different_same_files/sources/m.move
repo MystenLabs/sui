@@ -1,5 +1,8 @@
-// Test stepping through two macros, one defined in a different file,
-// and one defined in the same file.
+// Test calling into another macro inside a macro (first macro
+// defined in the same file than where it's called, the second
+// macro defined in the same file where it is are called).
+// The second macro is called right at the beginning of the first macro
+// (stepping into the inner macro and braking in the inner macro).
 module macro_different_same_files::m;
 
 use macro_different_same_files::m_dep::bar;
