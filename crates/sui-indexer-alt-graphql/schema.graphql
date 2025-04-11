@@ -1,3 +1,8 @@
+"""
+String containing Base64-encoded binary data.
+"""
+scalar Base64
+
 
 
 

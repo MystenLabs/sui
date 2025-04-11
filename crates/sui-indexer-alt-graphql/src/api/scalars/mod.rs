@@ -1,6 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+pub(crate) mod base64;
 pub(crate) mod digest;
 pub(crate) mod sui_address;
 pub(crate) mod uint53;
