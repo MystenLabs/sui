@@ -4726,6 +4726,8 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "serde",
+ "thiserror 1.0.69",
+ "tokio",
  "toml 0.5.11",
 ]
 
@@ -8017,6 +8019,7 @@ dependencies = [
  "codespan-reporting",
  "derive-where",
  "external-resolver",
+ "futures",
  "serde",
  "serde_spanned",
  "thiserror 1.0.69",

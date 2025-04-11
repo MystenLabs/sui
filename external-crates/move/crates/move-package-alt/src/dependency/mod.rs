@@ -95,34 +95,35 @@ fn split<F: MoveFlavor>(
 
 /// Replace all dependencies with their pinned versions. The returned map is guaranteed to have the
 /// same keys as [deps].
-pub fn pin<F: MoveFlavor>(
+pub async fn pin<F: MoveFlavor>(
     flavor: &F,
     deps: &DependencySet<ManifestDependencyInfo<F>>, // TODO: maybe take by value?
     envs: &BTreeMap<EnvironmentName, F::EnvironmentID>,
 ) -> PackageResult<DependencySet<PinnedDependencyInfo<F>>> {
-    let (gits, exts, locs, flav) = split(deps);
+    let (mut gits, mut exts, mut locs, mut flav) = split(deps);
+
+    // TODO: errors!
+    let resolved = ExternalDependency::resolve::<F>(flavor, exts, envs)
+        .await
+        .unwrap();
+
+    let (resolved_gits, resolved_exts, resolved_locs, resolved_flav) = split(&resolved);
+
+    // ensure that there are no more externally resolved deps
+    if !resolved_exts.is_empty() {
+        // TODO: error!
+        panic!("External resolver returned external dependency");
+    }
+
+    gits.extend(resolved_gits);
+    locs.extend(resolved_locs);
+    flav.extend(resolved_flav);
 
     let pinned_gits: DependencySet<PinnedDependencyInfo<F>> = GitDependency::pin(&gits)
         .unwrap() // TODO: error collection!
         .into_iter()
         .map(|(env, package, dep)| (env, package, PinnedDependencyInfo::Git::<F>(dep.clone())))
         .collect();
-
-    // TODO: errors!
-    let resolved = ExternalDependency::resolve::<F>(flavor, exts, envs).unwrap();
-    let pinned_exts = if resolved.is_empty() {
-        DependencySet::new()
-    } else {
-        // ensure that there are no externally resolved deps to avoid recursion
-        for (_, _, dep) in &resolved {
-            if let ManifestDependencyInfo::External(_) = dep {
-                // TODO: error!
-                panic!("External resolver returned external dependency");
-            }
-        }
-
-        pin(flavor, &resolved, envs)?
-    };
 
     let pinned_locs = locs
         .into_iter()
@@ -144,7 +145,6 @@ pub fn pin<F: MoveFlavor>(
 
     Ok(DependencySet::merge([
         pinned_gits,
-        pinned_exts,
         pinned_locs,
         pinned_flav,
     ]))

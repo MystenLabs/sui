@@ -191,3 +191,14 @@ impl<T> Default for DependencySet<T> {
         Self::new()
     }
 }
+
+impl<T> Extend<(Option<EnvironmentName>, PackageName, T)> for DependencySet<T> {
+    fn extend<I: IntoIterator<Item = (Option<EnvironmentName>, PackageName, T)>>(
+        &mut self,
+        iter: I,
+    ) {
+        for (env, pack, value) in iter {
+            self.insert(env, pack, value);
+        }
+    }
+}

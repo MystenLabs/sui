@@ -1,3 +1,5 @@
+#![allow(unused)]
+
 //! Types and methods for communication between the package system and external resolvers.
 //!
 //! External dependencies are resolved in each environment as follows. First, all dependencies are
@@ -47,13 +49,11 @@
 //!
 //! Anything the resolver prints on stderr will be passed through to this process's standard error
 
-use std::{
-    collections::BTreeMap,
-    io::{Read, Write},
-    process::{Command, Stdio},
-};
+use std::{collections::BTreeMap, io::BufRead, process::Stdio};
 
 use serde::{Deserialize, Serialize};
+use thiserror::Error;
+use tokio::{io::AsyncWriteExt, process::Command};
 
 /// A name of a binary to invoke for for resolution
 pub type ResolverName = String;
@@ -113,6 +113,51 @@ pub enum QueryResult {
     },
 }
 
+#[derive(Error, Debug)]
+pub enum ResolutionError {
+    #[error("I/O Error when running external resolver {resolver}")]
+    IoError {
+        resolver: ResolverName,
+
+        #[source]
+        source: std::io::Error,
+    },
+
+    /// This indicates that the resolver was faulty
+    #[error("Resolver {resolver} returned an incorrectly-formatted response: {message}")]
+    BadResolver {
+        resolver: ResolverName,
+        message: String,
+    },
+
+    /// This indicates that the resolver was functioning properly but couldn't resolve a dependency
+    #[error(
+        "Resolver failed to resolve dependency {query_id}. It reported the following errors: TODO"
+    )]
+    ResolverFailure {
+        resolver: ResolverName,
+        query_id: QueryID,
+        query: Query,
+        errors: Vec<String>,
+    },
+}
+
+impl ResolutionError {
+    fn io_error(resolver: &ResolverName, source: std::io::Error) -> Self {
+        Self::IoError {
+            resolver: resolver.clone(),
+            source,
+        }
+    }
+
+    fn bad_resolver(resolver: &ResolverName, source: String, message: impl AsRef<str>) -> Self {
+        Self::BadResolver {
+            resolver: resolver.clone(),
+            message: message.as_ref().to_string(),
+        }
+    }
+}
+
 impl Request {
     pub fn new(flavor: String) -> Self {
         Self {
@@ -122,34 +167,66 @@ impl Request {
     }
 
     /// Run the external resolver [resolver] and return its response. The response is guaranteed to
-    /// contain the same keys as [self]
-    pub fn execute(&self, resolver: &ResolverName) -> anyhow::Result<Response> {
-        let mut cmd = Command::new(resolver)
+    /// contain the same keys as [self]. This method also forwards the standard error from the
+    /// resolver to this process's standard error
+    pub async fn execute(&self, resolver: &ResolverName) -> anyhow::Result<Response> {
+        // TODO: method too long
+        let mut child = Command::new(resolver)
             .arg(RESOLVE_ARG)
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
-            .spawn()?;
+            .stderr(Stdio::piped())
+            .spawn()
+            .map_err(|e| ResolutionError::io_error(resolver, e))?;
 
-        let request = toml::to_string(self).unwrap();
-        cmd.stdin.as_mut().unwrap().write_all(request.as_bytes())?;
+        let request = toml::to_string(self).expect("Request serialization should not fail");
+        let mut stdin = child.stdin.take();
+        tokio::spawn(async move {
+            // SAFETY: we don't really care if there's a write error as long as we get a
+            // well-formed output
+            let _ = stdin
+                .take()
+                .expect("Child should have a handle to stdin")
+                .write_all(request.as_bytes());
+        });
 
-        let mut response = String::new();
-        cmd.stdout.as_mut().unwrap().read_to_string(&mut response)?;
+        let output = child
+            .wait_with_output()
+            .await
+            .map_err(|e| ResolutionError::io_error(resolver, e))?;
 
-        let result = toml::from_str::<Response>(&response)?;
+        if !output.stderr.is_empty() {
+            eprintln!("Output from external resolver {resolver}:");
+            for line in output.stderr.lines() {
+                eprintln!("  │ {}", line.expect("reading from byte array can't fail"));
+            }
+        }
+
+        // TODO: failure here indicates a bad response from the resolver
+        // TODO: start using debug! for tracing output here
+        let response = String::from_utf8(output.stdout)?;
+
+        // TODO: failure here indicates a bad response from the resolver
+        let result: Response = toml::from_str(&response)?;
 
         for key in self.queries.keys() {
             if !result.responses.contains_key(key) {
+                // TODO: failure here is a bad response from the resolver
                 anyhow::bail!("External resolver didn't resolve {key}");
             }
         }
 
+        // TODO: check exit code of resolver?
+
         for (key, result) in result.responses.iter() {
             if !self.queries.contains_key(key) {
+                // TODO: failure here is a bad response from the resolver
                 anyhow::bail!("External resolver returned extra result {key}");
             }
 
             let QueryResult::Success { .. } = result else {
+                // TODO: failure here is an appropriate response from the resolver but indicates a
+                // resolution failure
                 anyhow::bail!("External resolver failed for {key}");
             };
         }

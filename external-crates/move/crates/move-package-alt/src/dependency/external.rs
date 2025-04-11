@@ -7,7 +7,7 @@
 use std::{collections::BTreeMap, fmt::Debug, path::Path};
 
 use anyhow::bail;
-use external_resolver::{Query, QueryID, QueryResult, Request};
+use futures::future::try_join_all;
 use serde::{
     de::{MapAccess, Visitor},
     Deserialize, Serialize,
@@ -19,6 +19,8 @@ use crate::{
     flavor::MoveFlavor,
     package::{EnvironmentName, PackageName},
 };
+
+use external_resolver::{Query, QueryID, QueryResult, Request};
 
 use super::{pin, DependencySet, ManifestDependencyInfo, PinnedDependencyInfo};
 
@@ -44,7 +46,7 @@ struct RField {
 
 impl ExternalDependency {
     /// Invoke the external binaries and deserialize their outputs as dependencies
-    pub fn resolve<F: MoveFlavor>(
+    pub async fn resolve<F: MoveFlavor>(
         flavor: &F,
         deps: DependencySet<ExternalDependency>,
         envs: &BTreeMap<EnvironmentName, F::EnvironmentID>,
@@ -59,12 +61,14 @@ impl ExternalDependency {
         }
 
         // run the resolvers
-        // TODO: error!
         let resolved = sorted
             .into_iter()
-            .map(|(resolver, deps)| resolve_single::<F>(&resolver, deps, envs).unwrap());
+            .map(move |(resolver, deps)| resolve_single::<F>(resolver, deps, envs));
 
-        Ok(DependencySet::merge(resolved))
+        // TODO: error!
+        let resolved_all = try_join_all(resolved).await.unwrap();
+
+        Ok(DependencySet::merge(resolved_all))
     }
 }
 
@@ -108,8 +112,8 @@ impl<F: MoveFlavor> TryFrom<QueryResult> for ManifestDependencyInfo<F> {
 }
 
 /// Resolve a set of deps with a single resolver
-fn resolve_single<F: MoveFlavor>(
-    resolver: &ResolverName,
+async fn resolve_single<F: MoveFlavor>(
+    resolver: ResolverName,
     dep_data: DependencySet<toml::Value>,
     envs: &BTreeMap<EnvironmentName, F::EnvironmentID>,
 ) -> PackageResult<DependencySet<ManifestDependencyInfo<F>>> {
@@ -140,7 +144,7 @@ fn resolve_single<F: MoveFlavor>(
     }
 
     // invoke the resolver
-    let mut response = request.execute(resolver)?;
+    let mut response = request.execute(&resolver).await?;
 
     // build the result
     let resolved: DependencySet<ManifestDependencyInfo<F>> = dep_data
