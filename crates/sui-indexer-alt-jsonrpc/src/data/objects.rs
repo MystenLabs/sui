@@ -13,8 +13,8 @@ use sui_types::{base_types::ObjectID, object::Object, storage::ObjectKey};
 use crate::context::Context;
 
 use super::{
-    bigtable_reader::BigtableReader, error::Error, object_info::LatestObjectInfoKey,
-    object_versions::LatestObjectVersionKey, pg_reader::PgReader,
+    bigtable_reader::BigtableReader, error::Error, object_versions::LatestObjectVersionKey,
+    pg_reader::PgReader,
 };
 
 /// Key for fetching the contents a particular version of an object.
@@ -97,11 +97,9 @@ impl Loader<VersionedObjectKey> for BigtableReader {
     }
 }
 
-/// Load the contents of an object from the store and deserialize it as an `Object`. This function
-/// does not respect deletion and wrapping. If an object is deleted or wrapped, it may return the
-/// contents of the object before the deletion or wrapping, or it may return `None` if the object
-/// has been fully pruned from the versions table.
-pub(crate) async fn load_latest(
+/// Load the contents of the live version of an object from the store and deserialize it as an
+/// `Object`. Returns `None` if the object is deleted, wrapped, or never existed.
+pub(crate) async fn load_live(
     ctx: &Context,
     object_id: ObjectID,
 ) -> Result<Option<Object>, anyhow::Error> {
@@ -114,6 +112,10 @@ pub(crate) async fn load_latest(
         return Ok(None);
     };
 
+    if latest_version.object_digest.is_none() {
+        return Ok(None);
+    }
+
     let object = ctx
         .kv_loader()
         .load_one_object(object_id, latest_version.object_version as u64)
@@ -124,42 +126,13 @@ pub(crate) async fn load_latest(
 }
 
 /// Fetch the latest version of the object at ID `object_id`, and deserialize its contents as a
-/// Rust type `T`, assuming that it is a Move object (not a package). This function does not
-/// respect deletion and wrapping, see [load_latest] for more information.
-pub(crate) async fn load_latest_deserialized<T: DeserializeOwned>(
+/// Rust type `T`, assuming that it exists and is a Move object (not a package).
+pub(crate) async fn load_live_deserialized<T: DeserializeOwned>(
     ctx: &Context,
     object_id: ObjectID,
 ) -> Result<T, anyhow::Error> {
-    let object = load_latest(ctx, object_id)
-        .await?
-        .context("No data found")?;
+    let object = load_live(ctx, object_id).await?.context("No data found")?;
 
     let move_object = object.data.try_as_move().context("Not a Move object")?;
     bcs::from_bytes(move_object.contents()).context("Failed to deserialize Move value")
-}
-
-/// Load the latest contents of an object from the store as long as the object is live (not deleted
-/// or wrapped) and deserialize it as an `Object`.
-pub(crate) async fn load_live(
-    ctx: &Context,
-    object_id: ObjectID,
-) -> Result<Option<Object>, anyhow::Error> {
-    let Some(obj_info) = ctx
-        .pg_loader()
-        .load_one(LatestObjectInfoKey(object_id))
-        .await
-        .context("Failed to fetch object info")?
-    else {
-        return Ok(None);
-    };
-
-    // If the latest object info record has no owner, the object is not live (it is wrapped or
-    // deleted).
-    if obj_info.owner_kind.is_none() {
-        return Ok(None);
-    }
-
-    Ok(Some(load_latest(ctx, object_id).await?.context(
-        "Failed to find content for latest version of live object",
-    )?))
 }
