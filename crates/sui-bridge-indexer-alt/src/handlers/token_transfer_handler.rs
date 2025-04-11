@@ -1,5 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
+use crate::handlers::BRIDGE;
+use crate::struct_tag;
 use async_trait::async_trait;
 use diesel::query_dsl::methods::FilterDsl;
 use diesel::upsert::excluded;
@@ -28,10 +30,10 @@ use sui_indexer_alt_framework::types::full_checkpoint_content::{
 use sui_indexer_alt_framework::types::BRIDGE_ADDRESS;
 use sui_indexer_alt_framework::FieldCount;
 use tracing::info;
+
 const TOKEN_DEPOSITED_EVENT: &IdentStr = ident_str!("TokenDepositedEvent");
 const TOKEN_TRANSFER_APPROVED: &IdentStr = ident_str!("TokenTransferApproved");
 const TOKEN_TRANSFER_CLAIMED: &IdentStr = ident_str!("TokenTransferClaimed");
-const BRIDGE_MODULE: &IdentStr = ident_str!("bridge");
 
 pub struct TokenTransferHandler {
     deposited_event_type: StructTag,
@@ -42,30 +44,15 @@ pub struct TokenTransferHandler {
 impl TokenTransferHandler {
     pub fn new() -> Self {
         Self {
-            deposited_event_type: StructTag {
-                address: BRIDGE_ADDRESS,
-                module: BRIDGE_MODULE.into(),
-                name: TOKEN_DEPOSITED_EVENT.into(),
-                type_params: vec![],
-            },
-            approved_event_type: StructTag {
-                address: BRIDGE_ADDRESS,
-                module: BRIDGE_MODULE.into(),
-                name: TOKEN_TRANSFER_APPROVED.into(),
-                type_params: vec![],
-            },
-            claimed_event_type: StructTag {
-                address: BRIDGE_ADDRESS,
-                module: BRIDGE_MODULE.into(),
-                name: TOKEN_TRANSFER_CLAIMED.into(),
-                type_params: vec![],
-            },
+            deposited_event_type: struct_tag!(BRIDGE_ADDRESS, BRIDGE, TOKEN_DEPOSITED_EVENT),
+            approved_event_type: struct_tag!(BRIDGE_ADDRESS, BRIDGE, TOKEN_TRANSFER_APPROVED),
+            claimed_event_type: struct_tag!(BRIDGE_ADDRESS, BRIDGE, TOKEN_TRANSFER_CLAIMED),
         }
     }
 }
 
 impl Processor for TokenTransferHandler {
-    const NAME: &'static str = "";
+    const NAME: &'static str = "TokenTransfer";
     type Value = TokenTransferDataWrapper;
 
     fn process(&self, checkpoint: &Arc<CheckpointData>) -> Result<Vec<Self::Value>, anyhow::Error> {

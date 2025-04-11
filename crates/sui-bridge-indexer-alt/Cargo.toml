@@ -25,6 +25,7 @@ url.workspace = true
 mysten-metrics.workspace = true
 telemetry-subscribers.workspace = true
 prometheus.workspace = true
+serde_json.workspace = true
 
 [[bin]]
 name = "bridge-indexer-alt"
