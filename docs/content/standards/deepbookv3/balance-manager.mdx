@@ -17,6 +17,12 @@ The `new()` function creates a `BalanceManager` hot potato (a struct with no abi
 
 {@inject: github:MystenLabs/deepbookv3/packages/deepbook/sources/balance_manager.move#fun=new noComments}
 
+### Create a `BalanceManager` with custom owner
+
+The `new_with_owner()` function creates a `BalanceManager` hot potato (a struct with no abilities) with a custom owner. Combine it with `share`, or else the transaction fails. You can combine the transaction with deposit calls, allowing you to create, deposit, then share the balance manager in one transaction.
+
+{@inject: github:MystenLabs/deepbookv3/packages/deepbook/sources/balance_manager.move#fun=new_with_owner noComments}
+
 ### Mint a `TradeCap`
 
 The owner of a `BalanceManager` can mint a `TradeCap` and send it to another address. Upon receipt, that address will have the capability to place orders with this `BalanceManager`. The address owner cannot deposit or withdraw funds, however. The maximum total number of `TradeCap`, `WithdrawCap`, and `DepositCap` that can be assigned for a `BalanceManager` is `1000`. If this limit is reached, one or more existing caps must be revoked before minting new ones. You can also use `revoke_trade_cap` to revoke `DepositCap` and `WithdrawCap`.
