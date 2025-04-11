@@ -2631,9 +2631,12 @@ impl CheckpointService {
 
         // If this times out, the validator may still start up. The worst that can
         // happen is that we will crash later on (due to missing transactions).
-        if tokio::time::timeout(Duration::from_secs(60), self.wait_for_rebuilt_checkpoints())
-            .await
-            .is_err()
+        if tokio::time::timeout(
+            Duration::from_secs(120),
+            self.wait_for_rebuilt_checkpoints(),
+        )
+        .await
+        .is_err()
         {
             debug_fatal!("Timed out waiting for checkpoints to be rebuilt");
         }
