@@ -10,7 +10,7 @@ use aws_sdk_kms::{
 };
 use bip32::DerivationPath;
 use clap::*;
-use fastcrypto::ed25519::Ed25519KeyPair;
+use fastcrypto::ed25519::{Ed25519KeyPair, Ed25519PublicKey};
 use fastcrypto::encoding::{Base64, Encoding, Hex};
 use fastcrypto::hash::HashFunction;
 use fastcrypto::jwt_utils::parse_and_validate_jwt;
@@ -32,6 +32,7 @@ use rand::SeedableRng;
 use serde::Serialize;
 use serde_json::json;
 use shared_crypto::intent::{Intent, IntentMessage, IntentScope, PersonalMessage};
+use russh_keys;
 use std::fmt::{Debug, Display, Formatter};
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -131,6 +132,25 @@ pub enum KeyToolCommand {
         input_string: String,
         key_scheme: SignatureScheme,
         derivation_path: Option<DerivationPath>,
+    },
+    /// Import an Ed25519 private key from an OpenSSH-formatted file (e.g., id_ed25519).
+    ImportSsh {
+        /// Path to the OpenSSH private key file.
+        #[clap(long)]
+        key_path: PathBuf,
+        /// Optional passphrase for encrypted SSH keys. If the key is encrypted
+        /// and no passphrase is provided, the import will fail.
+        #[clap(long)]
+        passphrase: Option<String>,
+        /// Optional alias for the imported key. If no alias is provided, the tool will
+        /// use the ssh keys comment field
+        #[clap(long)]
+        alias: Option<String>,
+    },
+    /// Convert ssh pubkey to sui address
+    SshAddress {
+        /// Key to convert
+        address: String,
     },
     /// Output the private key of the given key identity in Sui CLI Keystore as Bech32
     /// encoded string starting with `suiprivkey`.
@@ -472,6 +492,7 @@ pub enum CommandOutput {
     MultiSigCombinePartialSigLegacy(MultiSigCombinePartialSigLegacyOutput),
     PrivateKeyBase64(PrivateKeyBase64),
     Show(Key),
+    ShowAddress(SuiAddress),
     Sign(SignData),
     SignKMS(SerializedSig),
     ZkLoginSignAndExecuteTx(ZkLoginSignAndExecuteTx),
@@ -625,9 +646,9 @@ impl KeyToolCommand {
             } => {
                 if Hex::decode(&input_string).is_ok() {
                     return Err(anyhow!(
-                        "Sui Keystore and Sui Wallet no longer support importing 
-                    private key as Hex, if you are sure your private key is encoded in Hex, use 
-                    `sui keytool convert $HEX` to convert first then import the Bech32 encoded 
+                        "Sui Keystore and Sui Wallet no longer support importing
+                    private key as Hex, if you are sure your private key is encoded in Hex, use
+                    `sui keytool convert $HEX` to convert first then import the Bech32 encoded
                     private key starting with `suiprivkey`."
                     ));
                 }
@@ -666,6 +687,25 @@ impl KeyToolCommand {
                         CommandOutput::Import(key)
                     }
                 }
+            }
+            KeyToolCommand::ImportSsh {
+                key_path,
+                passphrase,
+                alias,
+            } => {
+                let key = import_ssh_ed25519(&key_path, passphrase.as_deref(), alias.as_deref(), keystore)?;
+                info!(
+                    "Successfully imported Ed25519 key from SSH file {} for address: [{}]",
+                    key_path.display(),
+                    key.sui_address
+                );
+                CommandOutput::Show(key)
+            }
+            KeyToolCommand::SshAddress {
+                address,
+            } => {
+                let ca = convert_ssh_pubkey(&address)?;
+                CommandOutput::ShowAddress(ca)
             }
             KeyToolCommand::Export { key_identity } => {
                 let address = get_identity_address_from_keystore(key_identity, keystore)?;
@@ -1436,6 +1476,115 @@ fn convert_private_key_to_bech32(value: String) -> Result<ConvertOutput, anyhow:
         scheme: skp.public().scheme().to_string(),
     })
 }
+
+/// Imports an Ed25519 private key from an OpenSSH formatted file.
+fn import_ssh_ed25519(
+    key_path: &Path,
+    passphrase: Option<&str>,
+    alias: Option<&str>,
+    keystore: &mut Keystore,
+) -> Result<Key, anyhow::Error> {
+    // Read the SSH key file content
+    let key_content = std::fs::read_to_string(key_path).map_err(|e| {
+        anyhow!(
+            "Failed to read SSH key file {}: {}",
+            key_path.display(),
+            e
+        )
+    })?;
+
+    // Parse the SSH private key
+    let mut ssh_private_key = russh_keys::PrivateKey::from_openssh(&key_content).map_err(|e| {
+        anyhow!("Failed to parse SSH key file {}: {}", key_path.display(), e)
+    })?;
+
+    if ssh_private_key.is_encrypted() {
+        // Decrypt the key with the provided passphrase
+        let password = if passphrase.is_none() {
+             rpassword::prompt_password("SSH password: ").map_err(|e| {
+                anyhow!("Failed to read password: {}", e)
+            })?
+        } else {
+            passphrase.unwrap().to_owned()
+        };
+        ssh_private_key = ssh_private_key.decrypt(&password).map_err(|e| {
+            anyhow!("Failed to decrypt SSH key file {}: {}", key_path.display(), e)
+        })?;
+    }
+
+    // Ensure it's an Ed25519 key
+    if ssh_private_key.algorithm() != russh_keys::Algorithm::Ed25519 {
+        return Err(anyhow!(
+            "SSH key file {} does not contain an Ed25519 key. Found algorithm: {}",
+            key_path.display(),
+            ssh_private_key.algorithm()
+        ));
+    }
+
+    // Extract the Ed25519 key data
+    let ed25519_key_data = ssh_private_key.key_data().ed25519().ok_or_else(|| {
+        // This should theoretically not happen if algorithm check passed, but good for robustness
+        anyhow!(
+            "Internal error: Failed to extract Ed25519 key data from parsed key in file {}",
+            key_path.display()
+        )
+    })?;
+
+    let key_alias = if let Some(a) = alias {
+        Some(a.to_string())
+    } else {
+        let mut pub_path = key_path.to_owned();
+        pub_path.set_extension("pub");
+        let pub_key_content = std::fs::read_to_string(&pub_path).map_err(|e| {
+            anyhow!(
+                "Failed to read SSH pub key file {}: {}",
+                pub_path.display(),
+                e
+            )
+        })?;
+        let ssh_public_key = russh_keys::PublicKey::from_openssh(&pub_key_content).map_err(|e| {
+            anyhow!("Failed to parse SSH pub key file {}: {}", key_path.display(), e)
+        })?;
+        let c = ssh_public_key.comment();
+        if c.is_empty() {
+            None
+        } else {
+            Some(c.to_string())
+        }
+    };
+
+    let privkey = ed25519_key_data.private.to_bytes();
+    let skp = SuiKeyPair::Ed25519(Ed25519KeyPair::from_bytes(&privkey)?);
+    let key = Key::from(&skp);
+    keystore.add_key(key_alias, skp)?;
+
+    Ok(key)
+}
+
+/// Imports an Ed25519 private key from an OpenSSH formatted file.
+fn convert_ssh_pubkey(
+    address: &str,
+) -> Result<SuiAddress, anyhow::Error> {
+    let ssh_public_key = russh_keys::PublicKey::from_openssh(address).map_err(|e| {
+        anyhow!("Failed to parse SSH pub key: {}", e)
+    })?;
+    if ssh_public_key.algorithm() == russh_keys::Algorithm::Ed25519 {
+        let ed25519_key_data = ssh_public_key.key_data().ed25519().ok_or_else(|| {
+            // This should theoretically not happen if algorithm check passed, but good for robustness
+            anyhow!(
+                "Internal error: Failed to extract Ed25519 key data from parsed key"
+            )
+        })?;
+        let pk = Ed25519PublicKey::from_bytes(&ed25519_key_data.0)?;
+        Ok(SuiAddress::from(&pk))
+    } else {
+        Err(anyhow!(
+            "SSH pubkey algorithm is not supported. Found algorithm: {}",
+            ssh_public_key.algorithm(),
+        ))
+    }
+}
+
 
 fn anemo_styling(pk: &PublicKey) -> Option<String> {
     if let PublicKey::Ed25519(public_key) = pk {
