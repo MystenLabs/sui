@@ -59,10 +59,10 @@ impl Query {
     /// Returns a list of transaction effects that is guaranteed to be the same length as `keys`. If a digest in `keys` could not be found in the store, its corresponding entry in the result will be `null`. This could be because the transaction effects never existed, or because it was pruned.
     async fn multi_get_transaction_effects(
         &self,
+        ctx: &Context<'_>,
         keys: Vec<Digest>,
     ) -> Result<Vec<Option<TransactionEffects>>, RpcError> {
-        // TODO: Max multi-get size.
-        let effects = keys.into_iter().map(TransactionEffects::fetch);
+        let effects = keys.into_iter().map(|d| TransactionEffects::fetch(ctx, d));
         try_join_all(effects).await
     }
 
@@ -98,8 +98,9 @@ impl Query {
     /// Returns `null` if the transaction effects do not exist in the store, either because that transaction was not executed, or it was pruned.
     async fn transaction_effects(
         &self,
+        ctx: &Context<'_>,
         digest: Digest,
     ) -> Result<Option<TransactionEffects>, RpcError> {
-        TransactionEffects::fetch(digest).await
+        TransactionEffects::fetch(ctx, digest).await
     }
 }

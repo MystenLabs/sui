@@ -54,15 +54,48 @@ module test::counter {
 //# create-checkpoint
 
 //# run-graphql
-{ # "Not found" case
+{ # "Not found" cases
   transaction(digest: "11111111111111111111111111111111") {
     transactionBcs
+  }
+
+  transactionEffects(digest: "11111111111111111111111111111111") {
+    effectsBcs
   }
 }
 
 //# run-graphql
-{ # Fetching a raw transaction
-  transaction(digest: "@{digest_2}") {
+{ # Fetching raw transactions and their effects, separately
+  transactionA: transaction(digest: "@{digest_2}") {
     transactionBcs
+  }
+
+  transactionB: transaction(digest: "@{digest_3}") {
+    transactionBcs
+  }
+
+  effectsA: transactionEffects(digest: "@{digest_2}") {
+    effectsBcs
+  }
+
+  effectsB: transactionEffects(digest: "@{digest_3}") {
+    effectsBcs
+  }
+}
+
+//# run-graphql
+{ # Fetch raw transactions and their effects, using multi-get
+  multiGetTransactions(keys: [
+    "@{digest_2}",
+    "@{digest_3}"
+  ]) {
+    transactionBcs
+  }
+
+  multiGetTransactionEffects(keys: [
+    "@{digest_2}",
+    "@{digest_3}"
+  ]) {
+    effectsBcs
   }
 }

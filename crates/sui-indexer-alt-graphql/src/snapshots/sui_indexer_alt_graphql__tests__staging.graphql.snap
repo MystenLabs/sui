@@ -219,6 +219,10 @@ type TransactionEffects {
 	Note that this is different from the execution digest, which is the unique hash of the transaction effects.
 	"""
 	digest: String!
+	"""
+	The Base64-encoded BCS serialization of these effects, as `TransactionEffects`.
+	"""
+	effectsBcs: Base64
 }
 
 """
