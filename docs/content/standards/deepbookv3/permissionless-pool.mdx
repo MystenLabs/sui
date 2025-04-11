@@ -5,9 +5,7 @@ description: Learn how to create a pool permissionlessly.
 
 {@include: ../../snippets/deepbook.mdx}
 
-The `BalanceManager` shared object holds all balances for different assets. To perform trades, pass a combination of `BalanceManager` and `TradeProof` into a [pool](./design.mdx#pool). `TradeProof`s are generated in one of two ways, either by the `BalanceManager` owner directly, or by any `TradeCap` owner. The owner can generate a `TradeProof` without the risk of equivocation. The `TradeCap` owner, because it's an owned object, risks equivocation when generating a `TradeProof`. Generally, a high frequency trading engine trades as the default owner.
-
-With exception to swaps, all interactions with DeepBook require a `BalanceManager` as one of its inputs. When orders are matched, funds are transferred to or from the `BalanceManager`. You can use a single `BalanceManager` between all pools.
+The `Pool` shared object represents a market, such as a SUI/USDC market. That `Pool` is the only one representing that unique pairing (SUI/USDC) and the pairing is the only member of that particular `Pool`. See [DeepBook Design](./design.mdx#pool) to learn more about the structure of pools.
 
 ## API
 
