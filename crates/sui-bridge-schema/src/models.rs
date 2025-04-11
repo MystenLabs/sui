@@ -127,7 +127,7 @@ pub struct SuiErrorTransactions {
     pub cmd_idx: Option<i64>,
 }
 
-#[derive(Queryable, Selectable, Insertable, Identifiable, Debug)]
+#[derive(Queryable, Selectable, Insertable, Identifiable, Debug, FieldCount)]
 #[diesel(table_name = governance_actions, primary_key(txn_digest))]
 pub struct GovernanceAction {
     pub nonce: Option<i64>,
@@ -135,6 +135,31 @@ pub struct GovernanceAction {
     pub txn_digest: Vec<u8>,
     pub sender_address: Vec<u8>,
     pub timestamp_ms: i64,
-    pub action: String,
+    pub action: GovernanceActionType,
     pub data: serde_json::Value,
+}
+
+#[derive(Copy, Clone, Debug, AsExpression, FromSqlRow, EnumString, AsRefStr)]
+#[diesel(sql_type = Text)]
+pub enum GovernanceActionType {
+    UpdateCommitteeBlocklist,
+    EmergencyOperation,
+    UpdateBridgeLimit,
+    UpdateTokenPrices,
+    UpgradeEVMContract,
+    AddSuiTokens,
+    AddEVMTokens,
+}
+
+impl FromSql<Text, Pg> for GovernanceActionType {
+    fn from_sql(bytes: PgValue<'_>) -> diesel::deserialize::Result<Self> {
+        let s = std::str::from_utf8(bytes.as_bytes())?;
+        Ok(GovernanceActionType::from_str(s)?)
+    }
+}
+
+impl ToSql<Text, Pg> for GovernanceActionType {
+    fn to_sql<'b>(&'b self, out: &mut Output<'b, '_, Pg>) -> diesel::serialize::Result {
+        <str as ToSql<Text, Pg>>::to_sql(self.as_ref(), out)
+    }
 }
