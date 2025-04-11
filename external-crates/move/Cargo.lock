@@ -1034,6 +1034,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "external-resolver"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "serde",
+ "toml",
+]
+
+[[package]]
 name = "fail"
 version = "0.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2369,6 +2378,7 @@ dependencies = [
  "codespan-reporting",
  "datatest-stable",
  "derive-where",
+ "external-resolver",
  "insta",
  "move-command-line-common",
  "serde",

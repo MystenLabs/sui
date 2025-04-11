@@ -1,0 +1,13 @@
+[package]
+name = "external-resolver"
+version = "0.1.0"
+edition = "2024"
+
+[[bin]]
+name = "mock-resolver"
+path = "src/mock-resolver.rs"
+
+[dependencies]
+anyhow.workspace = true
+toml.workspace = true
+serde.workspace = true

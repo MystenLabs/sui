@@ -15,7 +15,7 @@ use std::{
 use serde::{de::DeserializeOwned, Serialize};
 
 use crate::{
-    dependency::{Pinned, PinnedDependencyInfo, Unpinned},
+    dependency::{DependencySet, Pinned, PinnedDependencyInfo, Unpinned},
     errors::PackageResult,
     package::PackageName,
 };
@@ -37,14 +37,14 @@ pub trait MoveFlavor: Debug {
     // TODO: this interface means we can't batch dep-overrides together
     fn pin(
         &self,
-        deps: BTreeMap<PackageName, Self::FlavorDependency<Unpinned>>,
-    ) -> PackageResult<BTreeMap<PackageName, Self::FlavorDependency<Pinned>>>;
+        deps: DependencySet<Self::FlavorDependency<Unpinned>>,
+    ) -> PackageResult<DependencySet<Self::FlavorDependency<Pinned>>>;
 
     /// Fetch a batch [Self::FlavorDependency] (see TODO)
     fn fetch(
         &self,
-        deps: BTreeMap<PackageName, Self::FlavorDependency<Pinned>>,
-    ) -> PackageResult<BTreeMap<PackageName, PathBuf>>;
+        deps: DependencySet<Self::FlavorDependency<Pinned>>,
+    ) -> PackageResult<DependencySet<PathBuf>>;
 
     /// A [PublishedMetadata] should contain all of the information that is generated
     /// during publication.
@@ -63,8 +63,11 @@ pub trait MoveFlavor: Debug {
     /// example, an environment ID might be a chain identifier
     //
     // TODO: Given an [EnvironmentID] and an [ObjectID], ... should be uniquely determined
-    type EnvironmentID: Debug + Serialize + DeserializeOwned + Clone + Eq;
+    type EnvironmentID: Serialize + DeserializeOwned + Clone + Eq + Ord + Debug + ToString;
 
     /// Return the implicit dependencies for a given environment
-    fn implicit_deps(&self, environment: Self::EnvironmentID) -> Vec<PinnedDependencyInfo<Self>>;
+    fn implicit_deps(
+        &self,
+        environments: impl Iterator<Item = Self::EnvironmentID>,
+    ) -> DependencySet<PinnedDependencyInfo<Self>>;
 }
