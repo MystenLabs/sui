@@ -17,6 +17,7 @@ use std::path::Path;
 use std::path::PathBuf;
 use std::sync::Arc;
 use std::sync::Mutex;
+use std::time::Duration;
 use std::time::Instant;
 use sui_types::base_types::MoveObjectType;
 use sui_types::base_types::ObjectID;
@@ -642,7 +643,7 @@ impl RpcIndexStore {
         dir.join("rpc-index")
     }
 
-    pub fn new(
+    pub async fn new(
         dir: &Path,
         authority_store: &AuthorityStore,
         checkpoint_store: &CheckpointStore,
@@ -659,7 +660,8 @@ impl RpcIndexStore {
             if tables.needs_to_do_initialization(checkpoint_store) {
                 let mut tables = {
                     drop(tables);
-                    typed_store::rocks::safe_drop_db(path.clone())
+                    typed_store::rocks::safe_drop_db(path.clone(), Duration::from_secs(30))
+                        .await
                         .expect("unable to destroy old rpc-index db");
                     IndexStoreTables::open(path)
                 };
