@@ -3,8 +3,6 @@ title: BalanceManager
 description: Learn about the balance manager and how it works
 ---
 
-{@include: ../../snippets/deepbook.mdx}
-
 The `BalanceManager` shared object holds all balances for different assets. To perform trades, pass a combination of `BalanceManager` and `TradeProof` into a [pool](./design.mdx#pool). `TradeProof`s are generated in one of two ways, either by the `BalanceManager` owner directly, or by any `TradeCap` owner. The owner can generate a `TradeProof` without the risk of equivocation. The `TradeCap` owner, because it's an owned object, risks equivocation when generating a `TradeProof`. Generally, a high frequency trading engine trades as the default owner.
 
 With exception to swaps, all interactions with DeepBook require a `BalanceManager` as one of its inputs. When orders are matched, funds are transferred to or from the `BalanceManager`. You can use a single `BalanceManager` between all pools.
@@ -19,11 +17,23 @@ The `new()` function creates a `BalanceManager` hot potato (a struct with no abi
 
 {@inject: github:MystenLabs/deepbookv3/packages/deepbook/sources/balance_manager.move#fun=new noComments}
 
+### Create a `BalanceManager` with custom owner
+
+The `new_with_owner()` function creates a `BalanceManager` hot potato (a struct with no abilities) with a custom owner. Combine it with `share`, or else the transaction fails. You can combine the transaction with deposit calls, allowing you to create, deposit, then share the balance manager in one transaction.
+
+{@inject: github:MystenLabs/deepbookv3/packages/deepbook/sources/balance_manager.move#fun=new_with_owner noComments}
+
 ### Mint a `TradeCap`
 
-The owner of a `BalanceManager` can mint a `TradeCap` and send it to another address. Upon receipt, that address will have the capability to place orders with this `BalanceManager`. The address owner cannot deposit or withdraw funds, however. The maximum number of `TradeCap` that can be assigned for a `BalanceManager` is `1000`. If this limit is reached, one or more existing `TradeCap` must be revoked before minting new ones.
+The owner of a `BalanceManager` can mint a `TradeCap` and send it to another address. Upon receipt, that address will have the capability to place orders with this `BalanceManager`. The address owner cannot deposit or withdraw funds, however. The maximum total number of `TradeCap`, `WithdrawCap`, and `DepositCap` that can be assigned for a `BalanceManager` is `1000`. If this limit is reached, one or more existing caps must be revoked before minting new ones. You can also use `revoke_trade_cap` to revoke `DepositCap` and `WithdrawCap`.
 
 {@inject: github:MystenLabs/deepbookv3/packages/deepbook/sources/balance_manager.move#fun=mint_trade_cap,revoke_trade_cap}
+
+### Mint a `DepositCap` or `WithdrawCap`
+
+The owner of a `BalanceManager` can mint a `DepositCap` or `WithdrawCap` and send it to another address. Upon receipt, that address will have the capability to deposit in or withdraw from `BalanceManager`. The address owner cannot execute trades, however. The maximum total number of `TradeCap`, `WithdrawCap`, and `DepositCap` that can be assigned for a `BalanceManager` is `1000`. If this limit is reached, one or more existing caps must be revoked before minting new ones.
+
+{@inject: github:MystenLabs/deepbookv3/packages/deepbook/sources/balance_manager.move#fun=mint_deposit_cap,mint_withdraw_cap}
 
 ### Generate a `TradeProof`
 
@@ -33,15 +43,27 @@ To call any function that requires a balance check or transfer, the user must pr
 
 ### Deposit funds
 
-Only the owner can deposit funds into the `BalanceManager`.
+Only the owner can call this function to deposit funds into the `BalanceManager`.
 
 {@inject: github:MystenLabs/deepbookv3/packages/deepbook/sources/balance_manager.move#fun=deposit}
 
 ### Withdraw funds
 
-Only the owner can withdraw funds from the `BalanceManager`.
+Only the owner can call this function to withdraw funds from the `BalanceManager`.
 
 {@inject: github:MystenLabs/deepbookv3/packages/deepbook/sources/balance_manager.move#fun=withdraw,withdraw_all}
+
+### Deposit funds using `DepositCap`
+
+Only holders of a `DepositCap` for the `BalanceManager` can call this function to deposit funds into the `BalanceManager`.
+
+{@inject: github:MystenLabs/deepbookv3/packages/deepbook/sources/balance_manager.move#fun=deposit_with_cap}
+
+### Withdraw funds using `WithdrawCap`
+
+Only holders of a `WithdrawCap` for the `BalanceManager` can call this function to withdraw funds from the `BalanceManager`.
+
+{@inject: github:MystenLabs/deepbookv3/packages/deepbook/sources/balance_manager.move#fun=withdraw_with_cap}
 
 ### Read endpoints
 

@@ -3,8 +3,6 @@ title: Flash Loans
 description: Use DeepBook to perform flash loans, uncollaterized loans that are borrowed and repaid within the same programmable transaction block.
 ---
 
-{@include: ../../snippets/deepbook.mdx}
-
 Flash loans by definition are uncollaterized loans that are borrowed and repaid within the same programmable transaction block. Users can borrow flash loans in the base or quote asset from any DeepBook pool. Flash loans return a `FlashLoan` hot potato (struct with no abilities), which must be returned back to the pool by the end of the call. The transaction is atomic, so the entire transaction fails if the loan is not returned. 
 
 The quantity borrowed can be the maximum amount that the pool owns. Borrowing from a pool and trading in the same pool can result in failures because trading requires the movement of funds. If the funds are borrowed, then there are no funds to move.

@@ -3,8 +3,6 @@ title: DeepBook Orders
 sidebar_label: Orders
 ---
 
-{@include: ../../snippets/deepbook.mdx}
-
 Users can create limit or market orders, modify orders, and cancel orders. The `BalanceManager` must have the necessary funds to process orders. DeepBook has four order options and three self matching options. Initially, all trading fees are paid with the DEEP token. Consequently, if you set the `pay_with_deep` flag to `false`, orders automatically fail until the following upgrade.
 
 Users can modify their existing order, reducing the size, lowering the expiration time, or both. Users cannot modify their order to increase their size or increase their expiration time. To do that, they must cancel the original order and place a new order.
