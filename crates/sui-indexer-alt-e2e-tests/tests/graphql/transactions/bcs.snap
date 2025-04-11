@@ -1,0 +1,56 @@
+---
+source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
+---
+processed 7 tasks
+
+init:
+A: object(0,0), B: object(0,1)
+
+task 1, lines 6-40:
+//# publish
+created: object(1,0), object(1,1)
+mutated: object(0,2)
+gas summary: computation_cost: 1000000, storage_cost: 9211200,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 2, lines 42-48:
+//# programmable --sender A --inputs object(1,0) 42 @A
+//> 0: test::counter::inc(Input(0));
+//> 1: test::counter::inc_by(Input(0), Input(1));
+//> 2: sui::coin::value<sui::sui::SUI>(Gas);
+//> 3: test::counter::inc_by(Input(0), Result(2));
+//> 4: test::counter::take(Input(0), Input(1));
+//> 5: TransferObjects([Result(4)], Input(2))
+events: Event { package_id: test, transaction_module: Identifier("counter"), sender: A, type_: StructTag { address: test, module: Identifier("counter"), name: Identifier("NFTMinted"), type_params: [] }, contents: [241, 10, 203, 179, 247, 203, 173, 188, 51, 108, 23, 253, 212, 8, 182, 82, 183, 49, 153, 79, 197, 229, 167, 187, 111, 198, 0, 59, 126, 172, 93, 85] }
+created: object(2,0)
+mutated: object(0,0), object(1,0)
+gas summary: computation_cost: 1000000, storage_cost: 3678400,  storage_rebate: 1346796, non_refundable_storage_fee: 13604
+
+task 3, lines 50-52:
+//# programmable --sender A --inputs 42 @B
+//> 0: SplitCoins(Gas, [Input(0)]);
+//> 1: TransferObjects([Result(0)], Input(1))
+created: object(3,0)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 1976000,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 4, line 54:
+//# create-checkpoint
+Checkpoint created: 1
+
+task 5, lines 56-61:
+//# run-graphql
+Response: {
+  "data": {
+    "transaction": null
+  }
+}
+
+task 6, lines 63-68:
+//# run-graphql
+Response: {
+  "data": {
+    "transaction": {
+      "transactionBcs": "AAADAQHXD/D2tNM7aqHbWnJo4PSDEaK0ZtgTl+/yPNU4Y4PGtgIAAAAAAAAAAQAIKgAAAAAAAAAAIPzMmkIbuxPBpmoaqY8K11Ap7elIV3ecaRW0T5QGi5IeBgC9aVy43+nWFT9T4FNxQ0z3w8OkrlyPCGCtyD2ldkBDlwdjb3VudGVyA2luYwABAQAAAL1pXLjf6dYVP1PgU3FDTPfDw6SuXI8IYK3IPaV2QEOXB2NvdW50ZXIGaW5jX2J5AAIBAAABAQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAIEY29pbgV2YWx1ZQEHAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAIDc3VpA1NVSQABAAC9aVy43+nWFT9T4FNxQ0z3w8OkrlyPCGCtyD2ldkBDlwdjb3VudGVyBmluY19ieQACAQAAAgIAAL1pXLjf6dYVP1PgU3FDTPfDw6SuXI8IYK3IPaV2QEOXB2NvdW50ZXIEdGFrZQACAQAAAQEAAQECBAABAgD8zJpCG7sTwaZqGqmPCtdQKe3pSFd3nGkVtE+UBouSHgEoNNhdv+/c1m8EgRIxuoGIk3k+g6iV1TQC/ZnhMuNlYgEAAAAAAAAAIAxTyQqgv33v1e2KKeTKCujrlS8ekEWqYA2s3/WsyFOJ/MyaQhu7E8GmahqpjwrXUCnt6UhXd5xpFbRPlAaLkh7oAwAAAAAAAADyBSoBAAAAAA=="
+    }
+  }
+}

@@ -47,9 +47,10 @@ impl Query {
     /// Returns a list of transactions that is guaranteed to be the same length as `keys`. If a digest in `keys` could not be found in the store, its corresponding entry in the result will be `null`. This could be because the transaction never existed, or because it was pruned.
     async fn multi_get_transactions(
         &self,
+        ctx: &Context<'_>,
         keys: Vec<Digest>,
     ) -> Result<Vec<Option<Transaction>>, RpcError> {
-        let transactions = keys.into_iter().map(Transaction::fetch);
+        let transactions = keys.into_iter().map(|d| Transaction::fetch(ctx, d));
         try_join_all(transactions).await
     }
 
@@ -84,8 +85,12 @@ impl Query {
     /// Fetch a transaction by its digest.
     ///
     /// Returns `null` if the transaction does not exist in the store, either because it never existed or because it was pruned.
-    async fn transaction(&self, digest: Digest) -> Result<Option<Transaction>, RpcError> {
-        Transaction::fetch(digest).await
+    async fn transaction(
+        &self,
+        ctx: &Context<'_>,
+        digest: Digest,
+    ) -> Result<Option<Transaction>, RpcError> {
+        Transaction::fetch(ctx, digest).await
     }
 
     /// Fetch transaction effects by its transaction's digest.
