@@ -25,6 +25,10 @@ type Object {
 	32-byte hash that identifies the object's contents, encoded in Base58.
 	"""
 	digest: String!
+	"""
+	The Base64-encoded BCS serialization of this object, as an `Object`.
+	"""
+	objectBcs: Base64
 }
 
 """

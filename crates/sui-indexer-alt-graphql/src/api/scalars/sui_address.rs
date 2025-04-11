@@ -5,7 +5,7 @@ use std::{fmt, str::FromStr};
 
 use async_graphql::{InputValueError, InputValueResult, Scalar, ScalarType, Value};
 use move_core_types::account_address::AccountAddress;
-use sui_types::base_types::SuiAddress as NativeSuiAddress;
+use sui_types::base_types::{ObjectID, SuiAddress as NativeSuiAddress};
 
 const SUI_ADDRESS_LENGTH: usize = 32;
 
@@ -104,6 +104,12 @@ impl From<SuiAddress> for AccountAddress {
 impl From<SuiAddress> for NativeSuiAddress {
     fn from(value: SuiAddress) -> Self {
         AccountAddress::from(value).into()
+    }
+}
+
+impl From<SuiAddress> for ObjectID {
+    fn from(value: SuiAddress) -> Self {
+        ObjectID::new(value.0)
     }
 }
 

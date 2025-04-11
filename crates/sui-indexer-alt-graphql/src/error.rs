@@ -3,7 +3,7 @@
 
 #![allow(dead_code)] // TODO: Remove once we have a user error.
 
-use std::{convert::Infallible, time::Duration};
+use std::{convert::Infallible, sync::Arc, time::Duration};
 
 use async_graphql::{ErrorExtensionValues, ErrorExtensions, Response, Value};
 
@@ -19,17 +19,17 @@ pub(crate) mod code {
     pub const REQUEST_TIMEOUT: &str = "REQUEST_TIMEOUT";
 }
 
-#[derive(thiserror::Error, Debug)]
+#[derive(thiserror::Error, Debug, Clone)]
 pub(crate) enum RpcError<E: std::error::Error = Infallible> {
     /// An error that is the user's fault.
-    BadUserInput(E),
+    BadUserInput(Arc<E>),
 
     /// An error that is produced by the framework, it gets wrapped so that we can add an error
     /// extension to it.
     GraphQlError(async_graphql::Error),
 
     /// An error produced by the internal workings of the service (our fault).
-    InternalError(#[from] anyhow::Error),
+    InternalError(Arc<anyhow::Error>),
 
     /// The request took too long to process.
     RequestTimeout { kind: &'static str, limit: Duration },
@@ -81,6 +81,12 @@ impl From<async_graphql::Error> for RpcError {
     }
 }
 
+impl From<anyhow::Error> for RpcError {
+    fn from(err: anyhow::Error) -> Self {
+        RpcError::InternalError(Arc::new(err))
+    }
+}
+
 impl<E: std::error::Error> From<RpcError<E>> for async_graphql::ServerError {
     fn from(err: RpcError<E>) -> Self {
         let async_graphql::Error {
@@ -101,7 +107,7 @@ impl<E: std::error::Error> From<RpcError<E>> for async_graphql::ServerError {
 
 /// Signal an error that is the user's fault.
 pub(crate) fn bad_user_input<E: std::error::Error>(err: E) -> RpcError<E> {
-    RpcError::BadUserInput(err)
+    RpcError::BadUserInput(Arc::new(err))
 }
 
 /// Signal a timeout. `kind` specifies what operation timed out and is included in the error

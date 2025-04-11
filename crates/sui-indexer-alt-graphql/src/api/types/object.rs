@@ -1,15 +1,20 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use async_graphql::{InputObject, Object};
+use std::sync::Arc;
+
+use anyhow::Context as _;
+use async_graphql::{Context, InputObject, Object};
 use fastcrypto::encoding::{Base58, Encoding};
+use sui_indexer_alt_reader::kv_loader::KvLoader;
 use sui_types::{
     base_types::{SequenceNumber, SuiAddress as NativeSuiAddress},
     digests::ObjectDigest,
+    object::Object as NativeObject,
 };
 
 use crate::{
-    api::scalars::{sui_address::SuiAddress, uint53::UInt53},
+    api::scalars::{base64::Base64, sui_address::SuiAddress, uint53::UInt53},
     error::RpcError,
 };
 
@@ -17,7 +22,12 @@ pub(crate) struct Object {
     address: NativeSuiAddress,
     version: SequenceNumber,
     digest: ObjectDigest,
+    content: Content,
 }
+
+/// The lazily loaded contents of an object.
+#[derive(Clone)]
+pub(crate) struct Content(Option<Arc<NativeObject>>);
 
 /// Identifies a specific version of an object.
 #[derive(InputObject, Debug, Clone, Eq, PartialEq)]
@@ -45,12 +55,35 @@ impl Object {
     async fn digest(&self) -> String {
         Base58::encode(self.digest.inner())
     }
+
+    #[graphql(flatten)]
+    async fn content(&self, ctx: &Context<'_>) -> Result<Content, RpcError> {
+        Ok(if self.content.0.is_some() {
+            self.content.clone()
+        } else {
+            Content::fetch(ctx, self.address.into(), self.version.into()).await?
+        })
+    }
+}
+
+#[Object]
+impl Content {
+    /// The Base64-encoded BCS serialization of this object, as an `Object`.
+    async fn object_bcs(&self) -> Result<Option<Base64>, RpcError> {
+        let Some(object) = &self.0 else {
+            return Ok(None);
+        };
+
+        let bytes = bcs::to_bytes(object.as_ref()).context("Failed to serialize object")?;
+        Ok(Some(Base64(bytes)))
+    }
 }
 
 impl Object {
     /// Construct an object that is represented by just its identifier (its object reference). This
     /// does not check whether the object exists, so should not be used to "fetch" an object based
     /// on an address and/or version provided as user input.
+    #[allow(dead_code)] // TODO: Remove once this is used in object changes
     pub(crate) fn with_ref(
         address: NativeSuiAddress,
         version: SequenceNumber,
@@ -60,6 +93,7 @@ impl Object {
             address,
             version,
             digest,
+            content: Content(None),
         }
     }
 
@@ -67,14 +101,37 @@ impl Object {
     /// (with contents already fetched). Returns `None` if the object does not exist (either never
     /// existed or was pruned from the store).
     pub(crate) async fn fetch(
+        ctx: &Context<'_>,
         address: SuiAddress,
         version: UInt53,
     ) -> Result<Option<Self>, RpcError> {
-        // TODO: Actually fetch the transaction to check whether it exists.
-        Ok(Some(Object::with_ref(
-            address.into(),
-            version.into(),
-            ObjectDigest::random(),
-        )))
+        let content = Content::fetch(ctx, address, version).await?;
+        let Some(object) = &content.0 else {
+            return Ok(None);
+        };
+
+        Ok(Some(Object {
+            address: object.id().into(),
+            version: object.version(),
+            digest: object.digest(),
+            content,
+        }))
+    }
+}
+
+impl Content {
+    pub(crate) async fn fetch(
+        ctx: &Context<'_>,
+        address: SuiAddress,
+        version: UInt53,
+    ) -> Result<Self, RpcError> {
+        let kv_loader: &KvLoader = ctx.data()?;
+
+        let object = kv_loader
+            .load_one_object(address.into(), version.into())
+            .await
+            .context("Failed to fetch object contents")?;
+
+        Ok(Content(object.map(Arc::new)))
     }
 }
