@@ -3,11 +3,8 @@
 
 use std::pin::Pin;
 
-use tap::Pipe;
-
 use crate::field_mask::FieldMaskTree;
 use crate::message::MessageMergeFrom;
-use crate::proto::google::rpc::bad_request::FieldViolation;
 use crate::proto::rpc::v2alpha::live_data_service_server::LiveDataService;
 use crate::proto::rpc::v2alpha::subscription_service_server::SubscriptionService;
 use crate::proto::rpc::v2alpha::GetCoinInfoRequest;
@@ -28,8 +25,6 @@ use crate::proto::rpc::v2beta::Transaction;
 use crate::proto::rpc::v2beta::TransactionEffects;
 use crate::proto::rpc::v2beta::TransactionEvents;
 use crate::subscription::SubscriptionServiceHandle;
-use crate::ErrorReason;
-use crate::RpcError;
 use crate::RpcService;
 
 #[tonic::async_trait]
@@ -79,6 +74,7 @@ impl SubscriptionService for SubscriptionServiceHandle {
 mod get_coin_info;
 mod list_dynamic_fields;
 mod list_owned_objects;
+mod simulate_transaction;
 
 #[tonic::async_trait]
 impl LiveDataService for RpcService {
@@ -113,49 +109,9 @@ impl LiveDataService for RpcService {
         &self,
         request: tonic::Request<SimulateTransactionRequest>,
     ) -> Result<tonic::Response<SimulateTransactionResponse>, tonic::Status> {
-        let request = request.into_inner();
-        let read_mask = FieldMaskTree::new_wildcard();
-        //TODO use provided read_mask
-        let parameters = crate::types::SimulateTransactionQueryParameters {
-            balance_changes: false,
-            input_objects: false,
-            output_objects: false,
-        };
-        let transaction = request
-            .transaction
-            .as_ref()
-            .ok_or_else(|| {
-                FieldViolation::new("transaction").with_reason(ErrorReason::FieldMissing)
-            })
-            .map_err(RpcError::from)?
-            .pipe(sui_sdk_types::Transaction::try_from)
-            .map_err(|e| {
-                FieldViolation::new("transaction")
-                    .with_description(format!("invalid transaction: {e}"))
-                    .with_reason(ErrorReason::FieldInvalid)
-            })
-            .map_err(RpcError::from)?;
-
-        let response = self.simulate_transaction(&parameters, transaction)?;
-
-        let balance_changes = response
-            .balance_changes
-            .map(|balance_changes| balance_changes.into_iter().map(Into::into).collect())
-            .unwrap_or_default();
-        let response = crate::proto::rpc::v2alpha::SimulateTransactionResponse {
-            transaction: Some(ExecutedTransaction {
-                effects: Some(TransactionEffects::merge_from(
-                    &response.effects,
-                    &read_mask,
-                )),
-                events: response
-                    .events
-                    .map(|events| TransactionEvents::merge_from(events, &read_mask)),
-                balance_changes,
-                ..Default::default()
-            }),
-        };
-        Ok(tonic::Response::new(response))
+        simulate_transaction::simulate_transaction(self, request.into_inner())
+            .map(tonic::Response::new)
+            .map_err(Into::into)
     }
 
     async fn resolve_transaction(
