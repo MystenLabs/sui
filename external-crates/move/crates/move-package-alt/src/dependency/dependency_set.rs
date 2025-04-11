@@ -134,7 +134,7 @@ impl<'a, T> Iterator for Iter<'a, T> {
     fn next(&mut self) -> Option<Self::Item> {
         loop {
             if let Some((name, value)) = self.inner.next() {
-                return Some((self.environment_name.clone(), name, value));
+                return Some((self.environment_name, name, value));
             }
 
             let Some((env, table)) = self.outer.next() else {
@@ -142,7 +142,7 @@ impl<'a, T> Iterator for Iter<'a, T> {
             };
 
             self.environment_name = Some(env);
-            self.inner = table.into_iter();
+            self.inner = table.iter();
         }
     }
 }

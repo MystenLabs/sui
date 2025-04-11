@@ -65,7 +65,7 @@ pub type QueryID = String;
 pub type EnvironmentID = String;
 
 /// The argument that is passed to an external resolver to request dependency resolution
-pub const RESOLVE_ARG: &'static str = "--resolve-deps";
+pub const RESOLVE_ARG: &str = "--resolve-deps";
 
 /// The type of resolution requests that are passed to external resolvers
 #[derive(Serialize, Deserialize)]
@@ -184,10 +184,12 @@ impl Request {
         tokio::spawn(async move {
             // SAFETY: we don't really care if there's a write error as long as we get a
             // well-formed output
-            let _ = stdin
-                .take()
-                .expect("Child should have a handle to stdin")
-                .write_all(request.as_bytes());
+            drop(
+                stdin
+                    .take()
+                    .expect("Child should have a handle to stdin")
+                    .write_all(request.as_bytes()),
+            );
         });
 
         let output = child

@@ -122,7 +122,7 @@ async fn resolve_single<F: MoveFlavor>(
     // request default resolution
     let mut default_reqs: BTreeMap<QueryID, Query> = dep_data
         .default_deps()
-        .into_iter()
+        .iter()
         .map(|(pkg_name, data)| query::<F>(None, pkg_name.clone(), data.clone()))
         .collect();
     request.queries.append(&mut default_reqs);
@@ -150,7 +150,7 @@ async fn resolve_single<F: MoveFlavor>(
     let resolved: DependencySet<ManifestDependencyInfo<F>> = dep_data
         .into_iter()
         .map(|(env, pkg_name, _)| {
-            let query_id = query_id::<F>(&env, &pkg_name);
+            let query_id = query_id(&env, &pkg_name);
             let result = response.responses.remove(&query_id).unwrap(); // TODO: errors!
             let resolved = match result {
                 QueryResult::Error { errors } => panic!("Resolver failed!"),
@@ -169,7 +169,7 @@ async fn resolve_single<F: MoveFlavor>(
 }
 
 /// Generate a unique identifier corresponding to [env] and [pkg]
-fn query_id<F: MoveFlavor>(env: &Option<EnvironmentName>, pkg: &PackageName) -> String {
+fn query_id(env: &Option<EnvironmentName>, pkg: &PackageName) -> String {
     format!("({env:?}, {pkg})")
 }
 
@@ -182,7 +182,7 @@ fn query<F: MoveFlavor>(
     let (env_name, env_id) = env.unzip();
 
     (
-        query_id::<F>(&env_name, &pkg),
+        query_id(&env_name, &pkg),
         Query {
             argument: data,
             environment_id: env_id.map(|it| it.to_string()),
