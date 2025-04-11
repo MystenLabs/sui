@@ -19,7 +19,7 @@ build-load-docker target: (build-docker target)
 
 # build a cargo target or all
 build *ARG:
-   mold -run cargo build {{ARG}}
+   cargo build {{ARG}}
 
 # build nix package
 build-nix target:

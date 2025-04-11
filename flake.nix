@@ -59,12 +59,12 @@
         ];
         pkgs = nixpkgs.legacyPackages.${system};
         suiVersion = (builtins.fromTOML (builtins.readFile ./Cargo.toml)).workspace.package.version;
-        llvmVersion = pkgs.llvmPackages_14;
+        llvmVersion = pkgs.llvmPackages_19;
       in
       let
         lib = pkgs.lib;
         # we use the llvm toolchain
-        stdenv = llvmVersion.stdenv;
+        stdenv = pkgs.stdenvAdapters.useMoldLinker llvmVersion.libcxxStdenv;
         platform = pkgs.makeRustPlatform {
           cargo = toolchain;
           rustc = toolchain;
@@ -74,7 +74,6 @@
           pkg-config
           llvmVersion.clang
           platform.bindgenHook
-          bintools
           llvmVersion.bintools
         ];
         basePkgs = with pkgs; [
