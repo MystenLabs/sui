@@ -27,5 +27,9 @@ move-bytecode-source-map.workspace = true
 move-abstract-interpreter.workspace = true
 indexmap.workspace = true
 
+lcov.workspace = true
+move-trace-format.workspace = true
+move-compiler.workspace = true
+
 [features]
 default = []

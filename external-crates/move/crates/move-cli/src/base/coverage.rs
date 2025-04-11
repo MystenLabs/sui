@@ -5,12 +5,15 @@ use super::reroot_path;
 use clap::*;
 use move_compiler::compiled_unit::NamedCompiledModule;
 use move_coverage::{
-    coverage_map::CoverageMap, format_csv_summary, format_human_summary,
+    coverage_map::CoverageMap, format_csv_summary, format_human_summary, lcov,
     source_coverage::SourceCoverageBuilder, summary::summarize_inst_cov,
 };
 use move_disassembler::disassembler::Disassembler;
 use move_package::BuildConfig;
-use std::path::Path;
+use move_trace_format::format::MoveTraceReader;
+use std::{fs::File, path::Path};
+
+const COVERAGE_FILE_NAME: &str = "lcov.info";
 
 #[derive(Parser)]
 pub enum CoverageSummaryOptions {
@@ -36,6 +39,8 @@ pub enum CoverageSummaryOptions {
         #[clap(long = "module")]
         module_name: String,
     },
+    #[clap(name = "lcov")]
+    Lcov,
 }
 
 /// Inspect test coverage for this package. A previous test run with the `--coverage` flag must
@@ -48,11 +53,42 @@ pub struct Coverage {
 }
 
 impl Coverage {
-    pub fn execute(self, path: Option<&Path>, config: BuildConfig) -> anyhow::Result<()> {
+    pub fn execute(self, path: Option<&Path>, mut config: BuildConfig) -> anyhow::Result<()> {
         let path = reroot_path(path)?;
-        let coverage_map = CoverageMap::from_binary_file(path.join(".coverage_map.mvcov"))?;
+
+        // We treat lcov-format coverage differently because it requires traces to be present, and
+        // we don't use the old trace format for it.
+        if let CoverageSummaryOptions::Lcov = self.options {
+            // Make sure we always compile the package in test mode so we get correct source maps.
+            config.test_mode = true;
+            let package = config.compile_package(&path, &mut Vec::new())?;
+            let units: Vec<_> = package
+                .all_modules()
+                .cloned()
+                .map(|unit| (unit.unit, unit.source_path))
+                .collect();
+            let traces = path.join("traces");
+            let mut coverage = lcov::PackageRecordKeeper::new(units, package.file_map.clone());
+            for entry in std::fs::read_dir(traces)? {
+                let entry = entry?;
+                let path = entry.path();
+                if path.is_file() {
+                    let file = File::open(&path)?;
+                    let move_trace_reader = MoveTraceReader::new(file)?;
+                    coverage.calculate_coverage(move_trace_reader);
+                }
+            }
+
+            std::fs::write(
+                &path.join(COVERAGE_FILE_NAME),
+                coverage.lcov_record_string(),
+            )?;
+            return Ok(());
+        }
+
         let package = config.compile_package(&path, &mut Vec::new())?;
         let modules = package.root_modules().map(|unit| &unit.unit.module);
+        let coverage_map = CoverageMap::from_binary_file(path.join(".coverage_map.mvcov"))?;
         match self.options {
             CoverageSummaryOptions::Source { module_name } => {
                 let unit = package.get_module_by_name_from_root(&module_name)?;
@@ -94,6 +130,9 @@ impl Coverage {
                 let mut disassembler = Disassembler::from_unit(&unit.unit);
                 disassembler.add_coverage_map(coverage_map.to_unified_exec_map());
                 println!("{}", disassembler.disassemble()?);
+            }
+            CoverageSummaryOptions::Lcov => {
+                unreachable!()
             }
         }
         Ok(())
