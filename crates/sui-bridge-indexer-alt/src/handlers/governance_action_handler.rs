@@ -1,3 +1,5 @@
+// Copyright (c) Mysten Labs, Inc.
+// SPDX-License-Identifier: Apache-2.0
 use crate::handlers::{BRIDGE, COMMITTEE, LIMITER, TREASURY};
 use crate::struct_tag;
 use async_trait::async_trait;
