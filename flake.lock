@@ -42,11 +42,11 @@
     "genesisgit": {
       "flake": false,
       "locked": {
-        "lastModified": 1742833285,
-        "narHash": "sha256-RkRqAcPH7xNvWgwlMyqnr0swujFXaAhNjYpnc2183Wk=",
+        "lastModified": 1744047193,
+        "narHash": "sha256-WhYU+Rx1JY+7tu54ulJOejkqykG10Qy/0ywdz/+VSRI=",
         "owner": "MystenLabs",
         "repo": "sui-genesis",
-        "rev": "cd4409f009d4f5578c6816cd11995d0921449665",
+        "rev": "afff5de86ca0ed5623b9639f743c424289ebcdad",
         "type": "github"
       },
       "original": {
