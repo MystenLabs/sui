@@ -12,6 +12,7 @@ use crate::crypto::{
 };
 use crate::digests::{AdditionalConsensusStateDigest, CertificateDigest, SenderSignedDataDigest};
 use crate::digests::{ChainIdentifier, ConsensusCommitDigest, ZKLoginInputsDigest};
+use crate::effects::AccumulatorUpdateValue;
 use crate::execution::{ExecutionTimeObservationKey, SharedInput};
 use crate::message_envelope::{Envelope, Message, TrustedEnvelope, VerifiedEnvelope};
 use crate::messages_checkpoint::CheckpointTimestamp;
@@ -27,13 +28,14 @@ use crate::signature_verification::{
 };
 use crate::type_input::TypeInput;
 use crate::{
-    SUI_AUTHENTICATOR_STATE_OBJECT_ID, SUI_CLOCK_OBJECT_ID, SUI_CLOCK_OBJECT_SHARED_VERSION,
-    SUI_FRAMEWORK_PACKAGE_ID, SUI_RANDOMNESS_STATE_OBJECT_ID, SUI_SYSTEM_STATE_OBJECT_ID,
-    SUI_SYSTEM_STATE_OBJECT_SHARED_VERSION,
+    SUI_ACCUMULATOR_ROOT_OBJECT_ID, SUI_AUTHENTICATOR_STATE_OBJECT_ID, SUI_CLOCK_OBJECT_ID,
+    SUI_CLOCK_OBJECT_SHARED_VERSION, SUI_FRAMEWORK_PACKAGE_ID, SUI_RANDOMNESS_STATE_OBJECT_ID,
+    SUI_SYSTEM_STATE_OBJECT_ID, SUI_SYSTEM_STATE_OBJECT_SHARED_VERSION,
 };
 use enum_dispatch::enum_dispatch;
 use fastcrypto::{encoding::Base64, hash::HashFunction};
 use itertools::{Either, Itertools};
+use move_core_types::language_storage::StructTag;
 use move_core_types::{ident_str, identifier};
 use move_core_types::{identifier::Identifier, language_storage::TypeTag};
 use nonempty::{nonempty, NonEmpty};
@@ -77,11 +79,24 @@ const BLOCKED_MOVE_FUNCTIONS: [(ObjectID, &str, &str); 0] = [];
 mod messages_tests;
 
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
+pub enum WithdrawBalanceArg {
+    /// Represents a reservation to withdraw at most `max_amount` from the sender address's balance
+    /// of coin type `coin_type`.
+    SenderAddress {
+        max_amount: u64,
+        coin_type: StructTag,
+        accumulator_init_shared_version: SequenceNumber,
+    },
+}
+
+#[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
 pub enum CallArg {
     // contains no structs or objects
     Pure(Vec<u8>),
     // an object
     Object(ObjectArg),
+    // Reservation to withdraw from an address balance.
+    WithdrawBalance(WithdrawBalanceArg),
 }
 
 impl CallArg {
@@ -299,6 +314,19 @@ impl RandomnessStateUpdate {
     }
 }
 
+#[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
+pub struct AccumulatorStateUpdate {
+    pub epoch: u64,
+    /// This is the checkpoint_height computed within PerEpochStore.
+    /// It is different from the consensus round or checkpoint number.
+    /// It is an internal number that is used to track pending commits that are
+    /// to be included in the next checkpoints.
+    pub checkpoint_height: u64,
+    pub initial_shared_version: SequenceNumber,
+    pub merges: Vec<(ObjectID, AccumulatorUpdateValue)>,
+    pub splits: Vec<(ObjectID, AccumulatorUpdateValue)>,
+}
+
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize, IntoStaticStr)]
 pub enum TransactionKind {
     /// A transaction that allows the interleaving of native commands and Move calls
@@ -329,6 +357,9 @@ pub enum TransactionKind {
 
     ConsensusCommitPrologueV3(ConsensusCommitPrologueV3),
     ConsensusCommitPrologueV4(ConsensusCommitPrologueV4),
+
+    /// Update the accumulator state and settle all pending accumulator changes.
+    AccumulatorStateUpdate(AccumulatorStateUpdate),
     // .. more transaction types go here
 }
 
@@ -343,6 +374,7 @@ pub enum EndOfEpochTransactionKind {
     BridgeStateCreate(ChainIdentifier),
     BridgeCommitteeInit(SequenceNumber),
     StoreExecutionTimeObservations(StoredExecutionTimeObservations),
+    AccumulatorRootObjectCreate,
 }
 
 impl EndOfEpochTransactionKind {
@@ -404,6 +436,10 @@ impl EndOfEpochTransactionKind {
         Self::StoreExecutionTimeObservations(estimates)
     }
 
+    pub fn new_accumulator_root_object_create() -> Self {
+        Self::AccumulatorRootObjectCreate
+    }
+
     fn input_objects(&self) -> Vec<InputObjectKind> {
         match self {
             Self::ChangeEpoch(_) => {
@@ -443,6 +479,7 @@ impl EndOfEpochTransactionKind {
                     mutable: true,
                 }]
             }
+            Self::AccumulatorRootObjectCreate => vec![],
         }
     }
 
@@ -477,6 +514,7 @@ impl EndOfEpochTransactionKind {
             Self::StoreExecutionTimeObservations(_) => {
                 Either::Left(vec![SharedInputObject::SUI_SYSTEM_OBJ].into_iter())
             }
+            Self::AccumulatorRootObjectCreate => Either::Right(iter::empty()),
         }
     }
 
@@ -533,6 +571,13 @@ impl EndOfEpochTransactionKind {
                     ));
                 }
             }
+            Self::AccumulatorRootObjectCreate => {
+                if !config.move_accumulators() {
+                    return Err(UserInputError::Unsupported(
+                        "Accumulators not enabled".to_string(),
+                    ));
+                }
+            }
         }
         Ok(())
     }
@@ -561,6 +606,16 @@ impl CallArg {
             }
             // Receiving objects are not part of the input objects.
             CallArg::Object(ObjectArg::Receiving(_)) => vec![],
+            CallArg::WithdrawBalance(WithdrawBalanceArg::SenderAddress {
+                accumulator_init_shared_version,
+                ..
+            }) => {
+                vec![InputObjectKind::SharedMoveObject {
+                    id: SUI_ACCUMULATOR_ROOT_OBJECT_ID,
+                    initial_shared_version: *accumulator_init_shared_version,
+                    mutable: false,
+                }]
+            }
         }
     }
 
@@ -572,6 +627,7 @@ impl CallArg {
                 ObjectArg::SharedObject { .. } => vec![],
                 ObjectArg::Receiving(obj_ref) => vec![*obj_ref],
             },
+            CallArg::WithdrawBalance(_) => vec![],
         }
     }
 
@@ -597,6 +653,13 @@ impl CallArg {
                     }
                 }
             },
+            CallArg::WithdrawBalance(_) => {
+                if !config.move_accumulators() {
+                    return Err(UserInputError::Unsupported(
+                        "address balances not enabled".to_string(),
+                    ));
+                }
+            }
         }
         Ok(())
     }
@@ -1103,6 +1166,14 @@ impl ProgrammableTransaction {
                 initial_shared_version: *initial_shared_version,
                 mutable: *mutable,
             }),
+            CallArg::WithdrawBalance(WithdrawBalanceArg::SenderAddress {
+                accumulator_init_shared_version,
+                ..
+            }) => Some(SharedInputObject {
+                id: SUI_ACCUMULATOR_ROOT_OBJECT_ID,
+                initial_shared_version: *accumulator_init_shared_version,
+                mutable: false,
+            }),
         })
     }
 
@@ -1260,7 +1331,8 @@ impl TransactionKind {
             | TransactionKind::ConsensusCommitPrologueV4(_)
             | TransactionKind::AuthenticatorStateUpdate(_)
             | TransactionKind::RandomnessStateUpdate(_)
-            | TransactionKind::EndOfEpochTransaction(_) => true,
+            | TransactionKind::EndOfEpochTransaction(_)
+            | TransactionKind::AccumulatorStateUpdate(_) => true,
             TransactionKind::ProgrammableTransaction(_) => false,
         }
     }
@@ -1329,6 +1401,13 @@ impl TransactionKind {
                     mutable: true,
                 })))
             }
+            Self::AccumulatorStateUpdate(update) => {
+                Either::Left(Either::Left(iter::once(SharedInputObject {
+                    id: SUI_ACCUMULATOR_ROOT_OBJECT_ID,
+                    initial_shared_version: update.initial_shared_version,
+                    mutable: true,
+                })))
+            }
             Self::EndOfEpochTransaction(txns) => Either::Left(Either::Right(
                 txns.iter().flat_map(|txn| txn.shared_input_objects()),
             )),
@@ -1356,7 +1435,8 @@ impl TransactionKind {
             | TransactionKind::ConsensusCommitPrologueV4(_)
             | TransactionKind::AuthenticatorStateUpdate(_)
             | TransactionKind::RandomnessStateUpdate(_)
-            | TransactionKind::EndOfEpochTransaction(_) => vec![],
+            | TransactionKind::EndOfEpochTransaction(_)
+            | TransactionKind::AccumulatorStateUpdate(_) => vec![],
             TransactionKind::ProgrammableTransaction(pt) => pt.receiving_objects(),
         }
     }
@@ -1414,6 +1494,13 @@ impl TransactionKind {
                     }
                 }
                 after_dedup
+            }
+            Self::AccumulatorStateUpdate(update) => {
+                vec![InputObjectKind::SharedMoveObject {
+                    id: SUI_ACCUMULATOR_ROOT_OBJECT_ID,
+                    initial_shared_version: update.initial_shared_version,
+                    mutable: true,
+                }]
             }
             Self::ProgrammableTransaction(p) => return p.input_objects(),
         };
@@ -1486,6 +1573,13 @@ impl TransactionKind {
                     ));
                 }
             }
+            TransactionKind::AccumulatorStateUpdate(_) => {
+                if !config.move_accumulators() {
+                    return Err(UserInputError::Unsupported(
+                        "Accumulators not enabled".to_string(),
+                    ));
+                }
+            }
         };
         Ok(())
     }
@@ -1525,6 +1619,7 @@ impl TransactionKind {
             Self::AuthenticatorStateUpdate(_) => "AuthenticatorStateUpdate",
             Self::RandomnessStateUpdate(_) => "RandomnessStateUpdate",
             Self::EndOfEpochTransaction(_) => "EndOfEpochTransaction",
+            Self::AccumulatorStateUpdate(_) => "AccumulatorStateUpdate",
         }
     }
 }
@@ -1590,6 +1685,11 @@ impl Display for TransactionKind {
             }
             Self::EndOfEpochTransaction(_) => {
                 writeln!(writer, "Transaction Kind : End of Epoch Transaction")?;
+            }
+            Self::AccumulatorStateUpdate(update) => {
+                writeln!(writer, "Transaction Kind : Accumulator State Update")?;
+                writeln!(writer, "Epoch : {}", update.epoch)?;
+                writeln!(writer, "Checkpoint Height : {}", update.checkpoint_height)?;
             }
         }
         write!(f, "{}", writer)
@@ -2253,7 +2353,8 @@ impl TransactionDataAPI for TransactionDataV1 {
             | TransactionKind::Genesis(_)
             | TransactionKind::AuthenticatorStateUpdate(_)
             | TransactionKind::EndOfEpochTransaction(_)
-            | TransactionKind::RandomnessStateUpdate(_) => false,
+            | TransactionKind::RandomnessStateUpdate(_)
+            | TransactionKind::AccumulatorStateUpdate(_) => false,
         }
     }
 
@@ -2793,6 +2894,24 @@ impl VerifiedTransaction {
             randomness_obj_initial_shared_version,
         }
         .pipe(TransactionKind::RandomnessStateUpdate)
+        .pipe(Self::new_system_transaction)
+    }
+
+    pub fn new_accumulator_state_update(
+        epoch: u64,
+        checkpoint_height: u64,
+        initial_shared_version: SequenceNumber,
+        merges: Vec<(ObjectID, AccumulatorUpdateValue)>,
+        splits: Vec<(ObjectID, AccumulatorUpdateValue)>,
+    ) -> Self {
+        AccumulatorStateUpdate {
+            epoch,
+            checkpoint_height,
+            initial_shared_version,
+            merges,
+            splits,
+        }
+        .pipe(TransactionKind::AccumulatorStateUpdate)
         .pipe(Self::new_system_transaction)
     }
 

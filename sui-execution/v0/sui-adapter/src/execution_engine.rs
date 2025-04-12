@@ -505,6 +505,9 @@ mod checked {
             TransactionKind::EndOfEpochTransaction(_) => {
                 panic!("EndOfEpochTransaction should not exist in execution layer v0");
             }
+            TransactionKind::AccumulatorStateUpdate(_) => {
+                panic!("AccumulatorStateUpdate should not exist in execution layer v0");
+            }
         }
     }
 
