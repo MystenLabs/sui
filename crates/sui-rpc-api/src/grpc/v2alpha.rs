@@ -20,10 +20,6 @@ use crate::proto::rpc::v2alpha::SimulateTransactionResponse;
 use crate::proto::rpc::v2alpha::SubscribeCheckpointsRequest;
 use crate::proto::rpc::v2alpha::SubscribeCheckpointsResponse;
 use crate::proto::rpc::v2beta::Checkpoint;
-use crate::proto::rpc::v2beta::ExecutedTransaction;
-use crate::proto::rpc::v2beta::Transaction;
-use crate::proto::rpc::v2beta::TransactionEffects;
-use crate::proto::rpc::v2beta::TransactionEvents;
 use crate::subscription::SubscriptionServiceHandle;
 use crate::RpcService;
 
@@ -74,6 +70,7 @@ impl SubscriptionService for SubscriptionServiceHandle {
 mod get_coin_info;
 mod list_dynamic_fields;
 mod list_owned_objects;
+mod resolve;
 mod simulate_transaction;
 
 #[tonic::async_trait]
@@ -118,59 +115,8 @@ impl LiveDataService for RpcService {
         &self,
         request: tonic::Request<ResolveTransactionRequest>,
     ) -> Result<tonic::Response<ResolveTransactionResponse>, tonic::Status> {
-        let request = request.into_inner();
-        let read_mask = request.read_mask.unwrap_or_default();
-        //TODO use provided read_mask
-        let simulate_parameters = crate::types::SimulateTransactionQueryParameters {
-            balance_changes: false,
-            input_objects: false,
-            output_objects: false,
-        };
-        let parameters = crate::types::ResolveTransactionQueryParameters {
-            simulate: read_mask
-                .paths
-                .iter()
-                .any(|path| path.starts_with("simulation")),
-            simulate_transaction_parameters: simulate_parameters,
-        };
-        let unresolved_transaction = serde_json::from_str(
-            &request.unresolved_transaction.unwrap_or_default(),
-        )
-        .map_err(|_| {
-            tonic::Status::new(
-                tonic::Code::InvalidArgument,
-                "invalid unresolved_transaction",
-            )
-        })?;
-
-        let response = self.resolve_transaction(parameters, unresolved_transaction)?;
-
-        let read_mask = FieldMaskTree::new_wildcard();
-        let simulation = response.simulation.map(|simulation| {
-            let balance_changes = simulation
-                .balance_changes
-                .map(|balance_changes| balance_changes.into_iter().map(Into::into).collect())
-                .unwrap_or_default();
-            crate::proto::rpc::v2alpha::SimulateTransactionResponse {
-                transaction: Some(ExecutedTransaction {
-                    effects: Some(TransactionEffects::merge_from(
-                        &simulation.effects,
-                        &read_mask,
-                    )),
-                    events: simulation
-                        .events
-                        .map(|events| TransactionEvents::merge_from(events, &read_mask)),
-                    balance_changes,
-                    ..Default::default()
-                }),
-            }
-        });
-
-        let response = crate::proto::rpc::v2alpha::ResolveTransactionResponse {
-            transaction: Some(Transaction::merge_from(response.transaction, &read_mask)),
-            simulation,
-        };
-
-        Ok(tonic::Response::new(response))
+        resolve::resolve_transaction(self, request.into_inner())
+            .map(tonic::Response::new)
+            .map_err(Into::into)
     }
 }

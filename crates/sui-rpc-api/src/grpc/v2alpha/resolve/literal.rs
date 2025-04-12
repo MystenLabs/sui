@@ -5,7 +5,8 @@ use super::NormalizedPackages;
 use crate::Result;
 use crate::RpcError;
 use move_binary_format::normalized;
-use sui_sdk_transaction_builder::unresolved::Value;
+use prost_types::value::Kind;
+use prost_types::Value;
 use sui_sdk_types::Command;
 use sui_types::base_types::ObjectID;
 use sui_types::base_types::STD_ASCII_MODULE_NAME;
@@ -22,13 +23,13 @@ pub(super) fn resolve_literal(
     called_packages: &mut NormalizedPackages,
     commands: &[Command],
     arg_idx: usize,
-    value: Value,
+    value: &Value,
 ) -> Result<Vec<u8>> {
     let literal_type = determine_literal_type(called_packages, commands, arg_idx)?;
 
     let mut buf = Vec::new();
 
-    resolve_literal_to_type(&mut buf, &literal_type, &value)?;
+    resolve_literal_to_type(&mut buf, &literal_type, value)?;
 
     Ok(buf)
 }
@@ -169,15 +170,15 @@ fn resolve_literal_to_type(buf: &mut Vec<u8>, type_: &Type, value: &Value) -> Re
 }
 
 fn resolve_as_bool(buf: &mut Vec<u8>, value: &Value) -> Result<()> {
-    let b: bool = match value {
-        Value::Bool(b) => *b,
-        Value::String(s) => s.parse().map_err(|e| {
+    let b: bool = match &value.kind {
+        Some(Kind::BoolValue(b)) => *b,
+        Some(Kind::StringValue(s)) => s.parse().map_err(|e| {
             RpcError::new(
                 tonic::Code::InvalidArgument,
                 format!("literal cannot be resolved as bool: {e}"),
             )
         })?,
-        Value::Null | Value::Number(_) | Value::Array(_) => {
+        _ => {
             return Err(RpcError::new(
                 tonic::Code::InvalidArgument,
                 "literal cannot be resolved into type bool",
@@ -196,8 +197,8 @@ where
     <T as std::str::FromStr>::Err: std::fmt::Display,
     <T as TryFrom<u64>>::Error: std::fmt::Display,
 {
-    let n: T = match value {
-        Value::Number(n) => T::try_from(*n).map_err(|e| {
+    let n: T = match &value.kind {
+        Some(Kind::NumberValue(n)) => T::try_from((*n) as u64).map_err(|e| {
             RpcError::new(
                 tonic::Code::InvalidArgument,
                 format!(
@@ -207,7 +208,7 @@ where
             )
         })?,
 
-        Value::String(s) => s.parse().map_err(|e| {
+        Some(Kind::StringValue(s)) => s.parse().map_err(|e| {
             RpcError::new(
                 tonic::Code::InvalidArgument,
                 format!(
@@ -217,7 +218,7 @@ where
             )
         })?,
 
-        Value::Null | Value::Bool(_) | Value::Array(_) => {
+        _ => {
             return Err(RpcError::new(
                 tonic::Code::InvalidArgument,
                 format!(
@@ -234,15 +235,15 @@ where
 }
 
 fn resolve_as_address(buf: &mut Vec<u8>, value: &Value) -> Result<()> {
-    let address = match value {
+    let address = match &value.kind {
         // parse as ObjectID to handle the case where 0x is present or missing
-        Value::String(s) => s.parse::<ObjectID>().map_err(|e| {
+        Some(Kind::StringValue(s)) => s.parse::<ObjectID>().map_err(|e| {
             RpcError::new(
                 tonic::Code::InvalidArgument,
                 format!("literal cannot be resolved as bool: {e}"),
             )
         })?,
-        Value::Null | Value::Bool(_) | Value::Number(_) | Value::Array(_) => {
+        _ => {
             return Err(RpcError::new(
                 tonic::Code::InvalidArgument,
                 "literal cannot be resolved into type address",
@@ -256,11 +257,11 @@ fn resolve_as_address(buf: &mut Vec<u8>, value: &Value) -> Result<()> {
 }
 
 fn resolve_as_string(buf: &mut Vec<u8>, value: &Value) -> Result<()> {
-    match value {
-        Value::String(s) => {
+    match &value.kind {
+        Some(Kind::StringValue(s)) => {
             bcs::serialize_into(buf, s)?;
         }
-        Value::Bool(_) | Value::Null | Value::Number(_) | Value::Array(_) => {
+        _ => {
             return Err(RpcError::new(
                 tonic::Code::InvalidArgument,
                 "literal cannot be resolved into string",
@@ -272,13 +273,22 @@ fn resolve_as_string(buf: &mut Vec<u8>, value: &Value) -> Result<()> {
 }
 
 fn resolve_as_option(buf: &mut Vec<u8>, type_: &Type, value: &Value) -> Result<()> {
-    match value {
-        Value::Null => {
+    match &value.kind {
+        Some(Kind::NullValue(_)) => {
             buf.push(0);
         }
-        Value::Bool(_) | Value::Number(_) | Value::String(_) | Value::Array(_) => {
+        Some(Kind::BoolValue(_))
+        | Some(Kind::NumberValue(_))
+        | Some(Kind::StringValue(_))
+        | Some(Kind::ListValue(_)) => {
             buf.push(1);
             resolve_literal_to_type(buf, type_, value)?;
+        }
+        _ => {
+            return Err(RpcError::new(
+                tonic::Code::InvalidArgument,
+                "literal cannot be resolved into Option",
+            ))
         }
     }
 
@@ -297,14 +307,14 @@ fn resolve_as_vector(buf: &mut Vec<u8>, type_: &Type, value: &Value) -> Result<(
         buf.push(value as u8);
     }
 
-    match value {
-        Value::Array(array) => {
-            write_u32_as_uleb128(buf, array.len() as u32);
-            for value in array {
+    match &value.kind {
+        Some(Kind::ListValue(prost_types::ListValue { values })) => {
+            write_u32_as_uleb128(buf, values.len() as u32);
+            for value in values {
                 resolve_literal_to_type(buf, type_, value)?;
             }
         }
-        Value::Bool(_) | Value::Number(_) | Value::String(_) | Value::Null => {
+        _ => {
             return Err(RpcError::new(
                 tonic::Code::InvalidArgument,
                 format!("literal cannot be resolved into type Vector<{type_}>"),
@@ -325,8 +335,9 @@ mod test {
 
     type Type = normalized::Type<normalized::RcIdentifier>;
 
-    fn test_resolve_literal(ty: Type, value: Value, expected: Option<Vec<u8>>) {
+    fn test_resolve_literal<V: Into<Value>>(ty: Type, value: V, expected: Option<Vec<u8>>) {
         let mut buf = Vec::new();
+        let value = value.into();
         match (resolve_literal_to_type(&mut buf, &ty, &value), expected) {
             (Ok(_), None) => {
                 panic!("resolving literal succeeded but failure was expected: {ty} {value:?}")
@@ -342,18 +353,22 @@ mod test {
     #[test]
     fn resolve_bool() {
         let test_cases = [
-            (Type::Bool, Value::Bool(true), Some(vec![1])),
-            (Type::Bool, Value::Bool(false), Some(vec![0])),
-            (Type::Bool, Value::String("true".into()), Some(vec![1])),
-            (Type::Bool, Value::String("false".into()), Some(vec![0])),
-            (Type::Bool, Value::Null, None),
-            (Type::Bool, Value::Number(0), None),
-            (Type::Bool, Value::Array(vec![]), None),
-            (Type::Bool, Value::String("foo".into()), None),
+            (Type::Bool, Kind::BoolValue(true), Some(vec![1])),
+            (Type::Bool, Kind::BoolValue(false), Some(vec![0])),
+            (Type::Bool, Kind::StringValue("true".into()), Some(vec![1])),
+            (Type::Bool, Kind::StringValue("false".into()), Some(vec![0])),
+            (Type::Bool, Kind::NullValue(0), None),
+            (Type::Bool, Kind::NumberValue(0.into()), None),
+            (
+                Type::Bool,
+                Kind::ListValue(prost_types::ListValue { values: vec![] }),
+                None,
+            ),
+            (Type::Bool, Kind::StringValue("foo".into()), None),
         ];
 
-        for (ty, value, expected) in test_cases {
-            test_resolve_literal(ty, value, expected);
+        for (ty, kind, expected) in test_cases {
+            test_resolve_literal(ty, kind, expected);
         }
     }
 
@@ -363,175 +378,199 @@ mod test {
             // U8 Successful cases
             (
                 Type::U8,
-                Value::Number(u8::MAX.into()),
+                Kind::NumberValue(u8::MAX.into()),
                 Some(bcs::to_bytes(&u8::MAX).unwrap()),
             ),
             (
                 Type::U8,
-                Value::Number(u8::MIN.into()),
+                Kind::NumberValue(u8::MIN.into()),
                 Some(bcs::to_bytes(&u8::MIN).unwrap()),
             ),
             (
                 Type::U8,
-                Value::String(u8::MAX.to_string()),
+                Kind::StringValue(u8::MAX.to_string()),
                 Some(bcs::to_bytes(&u8::MAX).unwrap()),
             ),
             (
                 Type::U8,
-                Value::String(u8::MIN.to_string()),
+                Kind::StringValue(u8::MIN.to_string()),
                 Some(bcs::to_bytes(&u8::MIN).unwrap()),
             ),
             // U8 failure cases
-            (Type::U8, Value::Bool(true), None),
-            (Type::U8, Value::Array(vec![]), None),
-            (Type::U8, Value::Null, None),
-            (Type::U8, Value::String("foo".into()), None),
-            (Type::U8, Value::String(u64::MAX.to_string()), None),
-            (Type::U8, Value::Number(u64::MAX), None),
+            (Type::U8, Kind::BoolValue(true), None),
+            (
+                Type::U8,
+                Kind::ListValue(prost_types::ListValue { values: vec![] }),
+                None,
+            ),
+            (Type::U8, Kind::NullValue(0), None),
+            (Type::U8, Kind::StringValue("foo".into()), None),
+            (Type::U8, Kind::StringValue(u64::MAX.to_string()), None),
+            (Type::U8, Kind::NumberValue(u64::MAX as _), None),
             // U16 Successful cases
             (
                 Type::U16,
-                Value::Number(u16::MAX.into()),
+                Kind::NumberValue(u16::MAX.into()),
                 Some(bcs::to_bytes(&u16::MAX).unwrap()),
             ),
             (
                 Type::U16,
-                Value::Number(u16::MIN.into()),
+                Kind::NumberValue(u16::MIN.into()),
                 Some(bcs::to_bytes(&u16::MIN).unwrap()),
             ),
             (
                 Type::U16,
-                Value::String(u16::MAX.to_string()),
+                Kind::StringValue(u16::MAX.to_string()),
                 Some(bcs::to_bytes(&u16::MAX).unwrap()),
             ),
             (
                 Type::U16,
-                Value::String(u16::MIN.to_string()),
+                Kind::StringValue(u16::MIN.to_string()),
                 Some(bcs::to_bytes(&u16::MIN).unwrap()),
             ),
             // U16 failure cases
-            (Type::U16, Value::Bool(true), None),
-            (Type::U16, Value::Array(vec![]), None),
-            (Type::U16, Value::Null, None),
-            (Type::U16, Value::String("foo".into()), None),
-            (Type::U16, Value::String(u64::MAX.to_string()), None),
-            (Type::U16, Value::Number(u64::MAX), None),
+            (Type::U16, Kind::BoolValue(true), None),
+            (
+                Type::U16,
+                Kind::ListValue(prost_types::ListValue { values: vec![] }),
+                None,
+            ),
+            (Type::U16, Kind::NullValue(0), None),
+            (Type::U16, Kind::StringValue("foo".into()), None),
+            (Type::U16, Kind::StringValue(u64::MAX.to_string()), None),
+            (Type::U16, Kind::NumberValue(u64::MAX as _), None),
             // U32 Successful cases
             (
                 Type::U32,
-                Value::Number(u32::MAX.into()),
+                Kind::NumberValue(u32::MAX.into()),
                 Some(bcs::to_bytes(&u32::MAX).unwrap()),
             ),
             (
                 Type::U32,
-                Value::Number(u32::MIN.into()),
+                Kind::NumberValue(u32::MIN.into()),
                 Some(bcs::to_bytes(&u32::MIN).unwrap()),
             ),
             (
                 Type::U32,
-                Value::String(u32::MAX.to_string()),
+                Kind::StringValue(u32::MAX.to_string()),
                 Some(bcs::to_bytes(&u32::MAX).unwrap()),
             ),
             (
                 Type::U32,
-                Value::String(u32::MIN.to_string()),
+                Kind::StringValue(u32::MIN.to_string()),
                 Some(bcs::to_bytes(&u32::MIN).unwrap()),
             ),
             // U32 failure cases
-            (Type::U32, Value::Bool(true), None),
-            (Type::U32, Value::Array(vec![]), None),
-            (Type::U32, Value::Null, None),
-            (Type::U32, Value::String("foo".into()), None),
-            (Type::U32, Value::String(u64::MAX.to_string()), None),
-            (Type::U32, Value::Number(u64::MAX), None),
+            (Type::U32, Kind::BoolValue(true), None),
+            (
+                Type::U32,
+                Kind::ListValue(prost_types::ListValue { values: vec![] }),
+                None,
+            ),
+            (Type::U32, Kind::NullValue(0), None),
+            (Type::U32, Kind::StringValue("foo".into()), None),
+            (Type::U32, Kind::StringValue(u64::MAX.to_string()), None),
+            (Type::U32, Kind::NumberValue(u64::MAX as _), None),
             // U64 Successful cases
             (
                 Type::U64,
-                Value::Number(u64::MAX),
+                Kind::NumberValue(u64::MAX as _),
                 Some(bcs::to_bytes(&u64::MAX).unwrap()),
             ),
             (
                 Type::U64,
-                Value::Number(u64::MIN),
+                Kind::NumberValue(u64::MIN as _),
                 Some(bcs::to_bytes(&u64::MIN).unwrap()),
             ),
             (
                 Type::U64,
-                Value::String(u64::MAX.to_string()),
+                Kind::StringValue(u64::MAX.to_string()),
                 Some(bcs::to_bytes(&u64::MAX).unwrap()),
             ),
             (
                 Type::U64,
-                Value::String(u64::MIN.to_string()),
+                Kind::StringValue(u64::MIN.to_string()),
                 Some(bcs::to_bytes(&u64::MIN).unwrap()),
             ),
             // U64 failure cases
-            (Type::U64, Value::Bool(true), None),
-            (Type::U64, Value::Array(vec![]), None),
-            (Type::U64, Value::Null, None),
-            (Type::U64, Value::String("foo".into()), None),
-            (Type::U64, Value::String(u128::MAX.to_string()), None),
+            (Type::U64, Kind::BoolValue(true), None),
+            (
+                Type::U64,
+                Kind::ListValue(prost_types::ListValue { values: vec![] }),
+                None,
+            ),
+            (Type::U64, Kind::NullValue(0), None),
+            (Type::U64, Kind::StringValue("foo".into()), None),
+            (Type::U64, Kind::StringValue(u128::MAX.to_string()), None),
             // U128 Successful cases
             (
                 Type::U128,
-                Value::Number(u64::MAX),
+                Kind::NumberValue(u64::MAX as _),
                 Some(bcs::to_bytes(&u128::from(u64::MAX)).unwrap()),
             ),
             (
                 Type::U128,
-                Value::Number(u64::MIN),
+                Kind::NumberValue(u64::MIN as _),
                 Some(bcs::to_bytes(&u128::MIN).unwrap()),
             ),
             (
                 Type::U128,
-                Value::String(u128::MAX.to_string()),
+                Kind::StringValue(u128::MAX.to_string()),
                 Some(bcs::to_bytes(&u128::MAX).unwrap()),
             ),
             (
                 Type::U128,
-                Value::String(u128::MIN.to_string()),
+                Kind::StringValue(u128::MIN.to_string()),
                 Some(bcs::to_bytes(&u128::MIN).unwrap()),
             ),
             // U128 failure cases
-            (Type::U128, Value::Bool(true), None),
-            (Type::U128, Value::Array(vec![]), None),
-            (Type::U128, Value::Null, None),
-            (Type::U128, Value::String("foo".into()), None),
+            (Type::U128, Kind::BoolValue(true), None),
             (
                 Type::U128,
-                Value::String(U256::max_value().to_string()),
+                Kind::ListValue(prost_types::ListValue { values: vec![] }),
+                None,
+            ),
+            (Type::U128, Kind::NullValue(0), None),
+            (Type::U128, Kind::StringValue("foo".into()), None),
+            (
+                Type::U128,
+                Kind::StringValue(U256::max_value().to_string()),
                 None,
             ),
             // U256 Successful cases
             (
                 Type::U256,
-                Value::Number(u64::MAX),
+                Kind::NumberValue(u64::MAX as _),
                 Some(bcs::to_bytes(&U256::from(u64::MAX)).unwrap()),
             ),
             (
                 Type::U256,
-                Value::Number(u64::MIN),
+                Kind::NumberValue(u64::MIN as _),
                 Some(bcs::to_bytes(&U256::zero()).unwrap()),
             ),
             (
                 Type::U256,
-                Value::String(U256::max_value().to_string()),
+                Kind::StringValue(U256::max_value().to_string()),
                 Some(bcs::to_bytes(&U256::max_value()).unwrap()),
             ),
             (
                 Type::U256,
-                Value::String(U256::zero().to_string()),
+                Kind::StringValue(U256::zero().to_string()),
                 Some(bcs::to_bytes(&U256::zero()).unwrap()),
             ),
             // U256 failure cases
-            (Type::U256, Value::Bool(true), None),
-            (Type::U256, Value::Array(vec![]), None),
-            (Type::U256, Value::Null, None),
-            (Type::U256, Value::String("foo".into()), None),
+            (Type::U256, Kind::BoolValue(true), None),
+            (
+                Type::U256,
+                Kind::ListValue(prost_types::ListValue { values: vec![] }),
+                None,
+            ),
+            (Type::U256, Kind::NullValue(0), None),
+            (Type::U256, Kind::StringValue("foo".into()), None),
         ];
 
-        for (ty, value, expected) in test_cases {
-            test_resolve_literal(ty, value, expected);
+        for (ty, kind, expected) in test_cases {
+            test_resolve_literal(ty, kind, expected);
         }
     }
 
@@ -542,37 +581,41 @@ mod test {
             (
                 Type::Address,
                 // with 0x prefix
-                Value::String(AccountAddress::TWO.to_canonical_string(true)),
+                Kind::StringValue(AccountAddress::TWO.to_canonical_string(true)),
                 Some(bcs::to_bytes(&AccountAddress::TWO).unwrap()),
             ),
             (
                 Type::Address,
                 // without 0x prefix
-                Value::String(AccountAddress::TWO.to_canonical_string(false)),
+                Kind::StringValue(AccountAddress::TWO.to_canonical_string(false)),
                 Some(bcs::to_bytes(&AccountAddress::TWO).unwrap()),
             ),
             (
                 Type::Address,
                 // with 0x prefix and trimmed 0s
-                Value::String(AccountAddress::TWO.to_hex_literal()),
+                Kind::StringValue(AccountAddress::TWO.to_hex_literal()),
                 Some(bcs::to_bytes(&AccountAddress::TWO).unwrap()),
             ),
             // Address failure cases
-            (Type::Address, Value::Bool(true), None),
-            (Type::Address, Value::Array(vec![]), None),
-            (Type::Address, Value::Null, None),
-            (Type::Address, Value::String("foo".into()), None),
-            (Type::Address, Value::Number(0), None),
+            (Type::Address, Kind::BoolValue(true), None),
+            (
+                Type::Address,
+                Kind::ListValue(prost_types::ListValue { values: vec![] }),
+                None,
+            ),
+            (Type::Address, Kind::NullValue(0), None),
+            (Type::Address, Kind::StringValue("foo".into()), None),
+            (Type::Address, Kind::NumberValue(0 as _), None),
             (
                 Type::Address,
                 // without 0x prefix and with trimmed 0s
-                Value::String(AccountAddress::TWO.short_str_lossless()),
+                Kind::StringValue(AccountAddress::TWO.short_str_lossless()),
                 None,
             ),
         ];
 
-        for (ty, value, expected) in test_cases {
-            test_resolve_literal(ty, value, expected);
+        for (ty, kind, expected) in test_cases {
+            test_resolve_literal(ty, kind, expected);
         }
     }
 
@@ -605,37 +648,45 @@ mod test {
             // string Successful cases
             (
                 utf8(),
-                Value::String("foo".into()),
+                Kind::StringValue("foo".into()),
                 Some(bcs::to_bytes(&"foo").unwrap()),
             ),
             (
                 ascii(),
-                Value::String("foo".into()),
+                Kind::StringValue("foo".into()),
                 Some(bcs::to_bytes(&"foo").unwrap()),
             ),
             (
                 utf8(),
-                Value::String("".into()),
+                Kind::StringValue("".into()),
                 Some(bcs::to_bytes(&"").unwrap()),
             ),
             (
                 ascii(),
-                Value::String("".into()),
+                Kind::StringValue("".into()),
                 Some(bcs::to_bytes(&"").unwrap()),
             ),
             // String failure cases
-            (utf8(), Value::Bool(true), None),
-            (utf8(), Value::Array(vec![]), None),
-            (utf8(), Value::Null, None),
-            (utf8(), Value::Number(0), None),
-            (ascii(), Value::Bool(true), None),
-            (ascii(), Value::Array(vec![]), None),
-            (ascii(), Value::Null, None),
-            (ascii(), Value::Number(0), None),
+            (utf8(), Kind::BoolValue(true), None),
+            (
+                utf8(),
+                Kind::ListValue(prost_types::ListValue { values: vec![] }),
+                None,
+            ),
+            (utf8(), Kind::NullValue(0), None),
+            (utf8(), Kind::NumberValue(0 as _), None),
+            (ascii(), Kind::BoolValue(true), None),
+            (
+                ascii(),
+                Kind::ListValue(prost_types::ListValue { values: vec![] }),
+                None,
+            ),
+            (ascii(), Kind::NullValue(0), None),
+            (ascii(), Kind::NumberValue(0 as _), None),
         ];
 
-        for (ty, value, expected) in test_cases {
-            test_resolve_literal(ty, value, expected);
+        for (ty, kind, expected) in test_cases {
+            test_resolve_literal(ty, kind, expected);
         }
     }
 
@@ -657,32 +708,36 @@ mod test {
             // Option Successful cases
             (
                 option_type(Type::Address),
-                Value::String(AccountAddress::TWO.to_canonical_string(true)),
+                Kind::StringValue(AccountAddress::TWO.to_canonical_string(true)),
                 Some(bcs::to_bytes(&Some(AccountAddress::TWO)).unwrap()),
             ),
-            (option_type(Type::Address), Value::Null, Some(vec![0])),
+            (
+                option_type(Type::Address),
+                Kind::NullValue(0),
+                Some(vec![0]),
+            ),
             (
                 option_type(Type::U64),
-                Value::Number(u64::MIN),
+                Kind::NumberValue(u64::MIN as _),
                 Some(bcs::to_bytes(&Some(u64::MIN)).unwrap()),
             ),
             (
                 option_type(Type::U64),
-                Value::String(u64::MAX.to_string()),
+                Kind::StringValue(u64::MAX.to_string()),
                 Some(bcs::to_bytes(&Some(u64::MAX)).unwrap()),
             ),
             (
                 option_type(Type::Bool),
-                Value::Bool(true),
+                Kind::BoolValue(true),
                 Some(bcs::to_bytes(&Some(true)).unwrap()),
             ),
-            (option_type(Type::Bool), Value::Null, Some(vec![0])),
+            (option_type(Type::Bool), Kind::NullValue(0), Some(vec![0])),
             // Option failure cases
-            (option_type(Type::Bool), Value::Number(0), None),
+            (option_type(Type::Bool), Kind::NumberValue(0 as _), None),
         ];
 
-        for (ty, value, expected) in test_cases {
-            test_resolve_literal(ty, value, expected);
+        for (ty, kind, expected) in test_cases {
+            test_resolve_literal(ty, kind, expected);
         }
     }
 
@@ -696,46 +751,63 @@ mod test {
             // Vector Successful cases
             (
                 vector_type(Type::Address),
-                Value::Array(vec![
-                    Value::String(AccountAddress::TWO.to_canonical_string(true)),
-                    Value::String(AccountAddress::ONE.to_canonical_string(true)),
-                ]),
+                Kind::ListValue(prost_types::ListValue {
+                    values: vec![
+                        Kind::StringValue(AccountAddress::TWO.to_canonical_string(true)).into(),
+                        Kind::StringValue(AccountAddress::ONE.to_canonical_string(true)).into(),
+                    ],
+                }),
                 Some(bcs::to_bytes(&vec![AccountAddress::TWO, AccountAddress::ONE]).unwrap()),
             ),
             (
                 vector_type(Type::U8),
-                Value::Array(vec![Value::Number(9)]),
+                Kind::ListValue(prost_types::ListValue {
+                    values: vec![Kind::NumberValue(9 as _).into()],
+                }),
                 Some(vec![1, 9]),
             ),
-            (vector_type(Type::U8), Value::Array(vec![]), Some(vec![0])),
+            (
+                vector_type(Type::U8),
+                Kind::ListValue(prost_types::ListValue { values: vec![] }),
+                Some(vec![0]),
+            ),
             (
                 vector_type(vector_type(Type::U8)),
-                Value::Array(vec![Value::Array(vec![Value::Number(9)])]),
+                Kind::ListValue(prost_types::ListValue {
+                    values: vec![Kind::ListValue(prost_types::ListValue {
+                        values: vec![Kind::NumberValue(9 as _).into()],
+                    })
+                    .into()],
+                }),
                 Some(bcs::to_bytes(&vec![vec![9u8]]).unwrap()),
             ),
             (
                 vector_type(Type::Bool),
                 // verify we handle uleb128 encoding of length properly
-                Value::Array(vec![Value::Bool(true); 256]),
+                Kind::ListValue(prost_types::ListValue {
+                    values: vec![Kind::BoolValue(true).into(); 256],
+                }),
                 Some(bcs::to_bytes(&vec![true; 256]).unwrap()),
             ),
             // Vector failure cases
-            (vector_type(Type::U64), Value::Bool(true), None),
-            (vector_type(Type::U64), Value::Number(0), None),
-            (vector_type(Type::U64), Value::Null, None),
-            (vector_type(Type::U64), Value::Number(0), None),
+            (vector_type(Type::U64), Kind::BoolValue(true), None),
+            (vector_type(Type::U64), Kind::NumberValue(0 as _), None),
+            (vector_type(Type::U64), Kind::NullValue(0), None),
+            (vector_type(Type::U64), Kind::NumberValue(0 as _), None),
             (
                 vector_type(Type::Address),
-                Value::Array(vec![
-                    Value::String(AccountAddress::TWO.to_canonical_string(true)),
-                    Value::Number(5),
-                ]),
+                Kind::ListValue(prost_types::ListValue {
+                    values: vec![
+                        Kind::StringValue(AccountAddress::TWO.to_canonical_string(true)).into(),
+                        Kind::NumberValue(5 as _).into(),
+                    ],
+                }),
                 None,
             ),
         ];
 
-        for (ty, value, expected) in test_cases {
-            test_resolve_literal(ty, value, expected);
+        for (ty, kind, expected) in test_cases {
+            test_resolve_literal(ty, kind, expected);
         }
     }
 }

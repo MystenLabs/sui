@@ -12788,7 +12788,7 @@ dependencies = [
  "sui-swarm",
  "sui-swarm-config",
  "sui-test-transaction-builder",
- "sui-transaction-builder 0.0.0",
+ "sui-transaction-builder",
  "sui-types",
  "tabled",
  "tap",
@@ -13585,7 +13585,6 @@ dependencies = [
  "sui-swarm-config",
  "sui-test-transaction-builder",
  "sui-tool",
- "sui-transaction-builder 0.0.4",
  "sui-types",
  "telemetry-subscribers",
  "tempfile",
@@ -14057,7 +14056,7 @@ dependencies = [
  "sui-storage",
  "sui-swarm-config",
  "sui-test-transaction-builder",
- "sui-transaction-builder 0.0.0",
+ "sui-transaction-builder",
  "sui-types",
  "tap",
  "telemetry-subscribers",
@@ -14379,7 +14378,7 @@ dependencies = [
  "sui-open-rpc-macros",
  "sui-protocol-config",
  "sui-storage",
- "sui-transaction-builder 0.0.0",
+ "sui-transaction-builder",
  "sui-types",
  "tap",
  "telemetry-subscribers",
@@ -15235,7 +15234,6 @@ dependencies = [
  "serde_with",
  "sui-protocol-config",
  "sui-sdk-types",
- "sui-transaction-builder 0.0.4",
  "sui-types",
  "tap",
  "test-strategy",
@@ -15336,7 +15334,7 @@ dependencies = [
  "sui-macros",
  "sui-protocol-config",
  "sui-simulator",
- "sui-transaction-builder 0.0.0",
+ "sui-transaction-builder",
  "sui-types",
  "tempfile",
  "test-cluster",
@@ -15818,20 +15816,6 @@ dependencies = [
  "sui-json-rpc-types",
  "sui-protocol-config",
  "sui-types",
-]
-
-[[package]]
-name = "sui-transaction-builder"
-version = "0.0.4"
-source = "git+https://github.com/MystenLabs/sui-rust-sdk.git?rev=83ff809bc11cbabda21b60130e1f5420170548bf#83ff809bc11cbabda21b60130e1f5420170548bf"
-dependencies = [
- "base64ct",
- "bcs",
- "serde",
- "serde_json",
- "serde_with",
- "sui-sdk-types",
- "thiserror 2.0.9",
 ]
 
 [[package]]

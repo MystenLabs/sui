@@ -640,7 +640,6 @@ sui-sdk-types = { git = "https://github.com/MystenLabs/sui-rust-sdk.git", rev = 
   "hash",
   "serde",
 ] }
-sui-sdk-transaction-builder = { git = "https://github.com/MystenLabs/sui-rust-sdk.git", rev = "83ff809bc11cbabda21b60130e1f5420170548bf", package = "sui-transaction-builder" }
 sui-graphql-client = { git = "https://github.com/MystenLabs/sui-rust-sdk.git", rev = "83ff809bc11cbabda21b60130e1f5420170548bf", package = "sui-graphql-client" }
 
 ### Workspace Members ###

@@ -154,10 +154,7 @@ message SimulateTransactionResponse {
 }
 
 message ResolveTransactionRequest {
-  // optional sui.rpc.v2beta.Transaction unresolved_transaction = 1;
-  // TODO FIX TYPE
-  // Json unresolved transaction type
-  optional string unresolved_transaction = 1;
+  optional sui.rpc.v2beta.Transaction unresolved_transaction = 1;
   optional google.protobuf.FieldMask read_mask = 2;
 }
 
