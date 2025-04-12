@@ -177,6 +177,12 @@ pub fn run(implicit_deps: Dependencies) {
     let context = Context {
         connection,
         symbols: symbols_map.clone(),
+        auto_imports: initialize_params
+            .initialization_options
+            .as_ref()
+            .and_then(|init_options| init_options.get("autoImports"))
+            .and_then(serde_json::Value::as_bool)
+            .unwrap_or_default(),
         inlay_type_hints: initialize_params
             .initialization_options
             .as_ref()
@@ -191,6 +197,10 @@ pub fn run(implicit_deps: Dependencies) {
             .unwrap_or_default(),
     };
 
+    eprintln!(
+        "auto imports during auto-completion enabled: {}",
+        context.auto_imports
+    );
     eprintln!("inlay type hints enabled: {}", context.inlay_type_hints);
     eprintln!("inlay param hints enabled: {}", context.inlay_param_hints);
 
@@ -316,7 +326,6 @@ fn on_request(
             ide_files_root.clone(),
             pkg_dependencies,
             implicit_deps,
-            true, // auto-imports enabled
         ),
         lsp_types::request::GotoDefinition::METHOD => {
             symbols::on_go_to_def_request(context, request);

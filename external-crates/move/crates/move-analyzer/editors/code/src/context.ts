@@ -4,7 +4,8 @@
 
 import {
     MOVE_CONF_NAME, LINT_OPT, TYPE_HINTS_OPT, PARAM_HINTS_OPT,
-    SUI_PATH_OPT, SERVER_PATH_OPT, FORCE_BUNDLED, Configuration,
+    SUI_PATH_OPT, SERVER_PATH_OPT, FORCE_BUNDLED_OPT, Configuration,
+    AUTO_IMPORTS_OPT,
 } from './configuration';
 import * as childProcess from 'child_process';
 import * as vscode from 'vscode';
@@ -76,6 +77,8 @@ export class Context {
 
     private lintLevel: string;
 
+    private autoImports: boolean;
+
     private inlayHintsType: boolean;
 
     private inlayHintsParam: boolean;
@@ -100,6 +103,7 @@ export class Context {
         this.configuration = new Configuration();
         log.info(`configuration: ${this.configuration.toString()}`);
         this.lintLevel = this.configuration.lint;
+        this.autoImports = this.configuration.autoImports;
         this.inlayHintsType = this.configuration.inlayHintsForType;
         this.inlayHintsParam = this.configuration.inlayHintsForParam;
         // Default to configuration.serverPath but may change during server installation
@@ -193,6 +197,7 @@ export class Context {
             traceOutputChannel: this.traceOutputChannel,
             initializationOptions: {
                 lintLevel: this.lintLevel,
+                autoImports: this.autoImports,
                 inlayHintsType: this.inlayHintsType,
                 inlayHintsParam: this.inlayHintsParam,
             },
@@ -242,11 +247,13 @@ export class Context {
             const server_path_conf = MOVE_CONF_NAME.concat('.').concat(SERVER_PATH_OPT);
             const sui_path_conf = MOVE_CONF_NAME.concat('.').concat(SUI_PATH_OPT);
             const lint_conf = MOVE_CONF_NAME.concat('.').concat(LINT_OPT);
-            const force_bundled_conf = MOVE_CONF_NAME.concat('.').concat(FORCE_BUNDLED);
+            const auto_imports_conf = MOVE_CONF_NAME.concat('.').concat(AUTO_IMPORTS_OPT);
+            const force_bundled_conf = MOVE_CONF_NAME.concat('.').concat(FORCE_BUNDLED_OPT);
             const type_hints_conf = MOVE_CONF_NAME.concat('.').concat(TYPE_HINTS_OPT);
             const param_hints_conf = MOVE_CONF_NAME.concat('.').concat(PARAM_HINTS_OPT);
 
             const optionsChanged = event.affectsConfiguration(lint_conf) ||
+                event.affectsConfiguration(auto_imports_conf) ||
                 event.affectsConfiguration(type_hints_conf) ||
                 event.affectsConfiguration(param_hints_conf);
             const pathsChanged = event.affectsConfiguration(server_path_conf) ||
@@ -258,6 +265,7 @@ export class Context {
                 log.info(`configuration: ${this.configuration.toString()}`);
 
                 this.lintLevel = this.configuration.lint;
+                this.autoImports = this.configuration.autoImports;
                 this.inlayHintsType = this.configuration.inlayHintsForType;
                 this.inlayHintsParam = this.configuration.inlayHintsForParam;
                 try {
