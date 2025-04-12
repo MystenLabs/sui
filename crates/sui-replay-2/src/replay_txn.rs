@@ -187,8 +187,8 @@ fn get_effects_ids(effects: &TransactionEffects) -> Result<BTreeSet<InputObject>
                     version: Some(ver.value()),
                 });
             }
-            sui_types::effects::UnchangedSharedKind::MutateDeleted(_)
-            | sui_types::effects::UnchangedSharedKind::ReadDeleted(_)
+            sui_types::effects::UnchangedSharedKind::MutateConsensusStreamEnded(_)
+            | sui_types::effects::UnchangedSharedKind::ReadConsensusStreamEnded(_)
             | sui_types::effects::UnchangedSharedKind::Cancelled(_)
             | sui_types::effects::UnchangedSharedKind::PerEpochConfig => {
                 trace!("Ignored `UnchangedSharedKind`: {:?}", kind);
@@ -351,7 +351,8 @@ fn get_input_objects_for_replay(
                     });
                 } else {
                     let (digest, version) = deleted_shared_info_map.get(id).unwrap();
-                    let object = ObjectReadResultKind::DeletedSharedObject(*version, *digest);
+                    let object =
+                        ObjectReadResultKind::ObjectConsensusStreamEnded(*version, *digest);
                     resolved_input_objs.push(ObjectReadResult {
                         input_object_kind,
                         object,

@@ -193,15 +193,13 @@ fn save_trace_output(
         ),
     })?;
     let trace = trace_builder.into_trace();
-    let json = trace.to_json();
+    let json = trace.into_compressed_json_bytes();
     let trace_file_path = txn_output_path.join(TRACE_FILE_NAME);
-    fs::write(&trace_file_path, json.to_string().as_bytes()).map_err(|e| {
-        ReplayError::TracingError {
-            err: format!(
-                "Failed to write trace output to {:?}: {:?}",
-                trace_file_path, e
-            ),
-        }
+    fs::write(&trace_file_path, json).map_err(|e| ReplayError::TracingError {
+        err: format!(
+            "Failed to write trace output to {:?}: {:?}",
+            trace_file_path, e
+        ),
     })?;
     let bcode_dir = txn_output_path.join(BCODE_DIR);
     fs::create_dir(&bcode_dir).map_err(|e| ReplayError::TracingError {
