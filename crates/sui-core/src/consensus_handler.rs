@@ -905,8 +905,8 @@ impl MysticetiConsensusHandler {
                     consensus_handler
                         .handle_consensus_commit(consensus_commit)
                         .await;
-                    commit_consumer_monitor.set_highest_handled_commit(commit_index);
                 }
+                commit_consumer_monitor.set_highest_handled_commit(commit_index);
             }
         }));
         if consensus_block_handler.enabled() {
