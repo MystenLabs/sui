@@ -188,11 +188,8 @@ pub struct SimulateTransactionResponse {
 }
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct ResolveTransactionRequest {
-    /// optional sui.rpc.v2beta.Transaction unresolved_transaction = 1;
-    /// TODO FIX TYPE
-    /// Json unresolved transaction type
-    #[prost(string, optional, tag = "1")]
-    pub unresolved_transaction: ::core::option::Option<::prost::alloc::string::String>,
+    #[prost(message, optional, tag = "1")]
+    pub unresolved_transaction: ::core::option::Option<super::v2beta::Transaction>,
     #[prost(message, optional, tag = "2")]
     pub read_mask: ::core::option::Option<::prost_types::FieldMask>,
 }

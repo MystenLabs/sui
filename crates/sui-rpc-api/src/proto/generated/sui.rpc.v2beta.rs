@@ -1270,6 +1270,13 @@ pub struct Input {
     /// object.
     #[prost(bool, optional, tag = "6")]
     pub mutable: ::core::option::Option<bool>,
+    /// A literal value
+    ///
+    /// INPUT ONLY
+    #[prost(message, optional, boxed, tag = "1000")]
+    pub literal: ::core::option::Option<
+        ::prost::alloc::boxed::Box<::prost_types::Value>,
+    >,
 }
 /// Nested message and enum types in `Input`.
 pub mod input {

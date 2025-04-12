@@ -1,6 +1,8 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use std::sync::Arc;
+
 use crate::field_mask::FieldMaskTree;
 use crate::message::MessageMergeFrom;
 use crate::proto::google::rpc::bad_request::FieldViolation;
@@ -16,6 +18,7 @@ use crate::RpcError;
 use crate::RpcService;
 use sui_types::balance_change::derive_balance_changes;
 use sui_types::transaction_executor::SimulateTransactionResult;
+use sui_types::transaction_executor::TransactionExecutor;
 use tap::Pipe;
 
 pub fn simulate_transaction(
@@ -25,7 +28,7 @@ pub fn simulate_transaction(
     let executor = service
         .executor
         .as_ref()
-        .ok_or_else(|| anyhow::anyhow!("No Transaction Executor"))?;
+        .ok_or_else(|| RpcError::new(tonic::Code::Unimplemented, "no transaction executor"))?;
 
     let read_mask = request
         .read_mask
@@ -45,6 +48,14 @@ pub fn simulate_transaction(
         })
         .map_err(RpcError::from)?;
 
+    simulate_transaction_impl(executor, transaction, &read_mask)
+}
+
+pub fn simulate_transaction_impl(
+    executor: &Arc<dyn TransactionExecutor>,
+    transaction: sui_sdk_types::Transaction,
+    read_mask: &FieldMaskTree,
+) -> Result<SimulateTransactionResponse> {
     if transaction.gas_payment.objects.is_empty() {
         return Err(RpcError::new(
             tonic::Code::InvalidArgument,
