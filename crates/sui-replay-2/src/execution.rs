@@ -332,7 +332,6 @@ impl BackingPackageStore for ReplayStore<'_> {
 
 impl ObjectStore for ReplayStore<'_> {
     fn get_object(&self, object_id: &ObjectID) -> Option<Object> {
-        println!("**** get_object({})", object_id);
         self.env.get_object(object_id)
     }
 
