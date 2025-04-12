@@ -11,7 +11,7 @@ pub mod environment;
 pub mod errors;
 pub mod execution;
 pub mod gql_queries;
-pub mod replay_txn_data;
+pub mod replay_txn;
 
 #[derive(Parser, Clone, Debug)]
 #[clap(

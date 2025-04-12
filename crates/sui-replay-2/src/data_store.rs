@@ -223,10 +223,20 @@ impl DataStore {
     }
 
     //
-    // Transaction operations
+    // Transaction data and effects
     //
 
-    pub async fn transaction_data(&self, tx_digest: &str) -> Result<TransactionData, ReplayError> {
+    // get transaction data and effects
+    pub async fn transaction_data_and_effects(
+        &self,
+        tx_digest: &str,
+    ) -> Result<(TransactionData, TransactionEffects), ReplayError> {
+        let txn_data = self.transaction_data(tx_digest).await?;
+        let txn_effects = self.transaction_effects(tx_digest).await?;
+        Ok((txn_data, txn_effects))
+    }
+
+    async fn transaction_data(&self, tx_digest: &str) -> Result<TransactionData, ReplayError> {
         debug!("Start transaction data");
         let digest = tx_digest.parse().map_err(|e| {
             let err = format!("{:?}", e);
@@ -256,7 +266,7 @@ impl DataStore {
         Ok(txn_data)
     }
 
-    pub async fn transaction_effects(
+    async fn transaction_effects(
         &self,
         tx_digest: &str,
     ) -> Result<TransactionEffects, ReplayError> {
@@ -289,7 +299,9 @@ impl DataStore {
         Ok(effects)
     }
 
+    //
     // Epoch table eager load
+    //
     async fn epochs_gql_table(client: &Client) -> Result<BTreeMap<u64, EpochData>, ReplayError> {
         debug!("Start load epoch table");
         let mut pag_filter = PaginationFilter {
@@ -366,18 +378,18 @@ pub struct EpochStore {
 }
 
 impl EpochStore {
-    pub fn eager(data: BTreeMap<EpochId, EpochData>) -> Self {
+    fn eager(data: BTreeMap<EpochId, EpochData>) -> Self {
         Self { data }
     }
 
-    pub fn lazy() -> Self {
+    fn lazy() -> Self {
         Self {
             data: BTreeMap::new(),
         }
     }
 
     // Get the protocol config for an epoch
-    pub fn protocol_config(&self, epoch: u64, chain: Chain) -> Result<ProtocolConfig, ReplayError> {
+    fn protocol_config(&self, epoch: u64, chain: Chain) -> Result<ProtocolConfig, ReplayError> {
         let epoch = self
             .data
             .get(&epoch)
@@ -392,7 +404,7 @@ impl EpochStore {
     }
 
     // Get the RGP for an epoch
-    pub fn rgp(&self, epoch: u64) -> Result<u64, ReplayError> {
+    fn rgp(&self, epoch: u64) -> Result<u64, ReplayError> {
         let epoch = self
             .data
             .get(&epoch)
@@ -404,7 +416,7 @@ impl EpochStore {
     }
 
     // Get the start timestamp for an epoch
-    pub fn epoch_timestamp(&self, epoch: u64) -> Result<u64, ReplayError> {
+    fn epoch_timestamp(&self, epoch: u64) -> Result<u64, ReplayError> {
         let epoch = self
             .data
             .get(&epoch)

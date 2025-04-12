@@ -5,7 +5,7 @@ use clap::*;
 use core::panic;
 use sui_replay_2::{
     data_store::DataStore, diff_effects, environment::ReplayEnvironment,
-    execution::execute_transaction_to_effects, replay_txn_data::ReplayTransaction, ReplayConfig,
+    execution::execute_transaction_to_effects, replay_txn::ReplayTransaction, ReplayConfig,
 };
 use sui_types::{effects::TransactionEffects, gas::SuiGasStatus};
 use tracing::debug;
@@ -29,6 +29,7 @@ async fn main() {
     //
     // create DataStore and EpochStore
     let data_store =
+        // TODO: use `new` instead of `new_eager` once we have the indexer new schema available
         // DataStore::new(node).unwrap_or_else(|e| panic!("Failed to create data store: {:?}", e));
         DataStore::new_eager(node).await.unwrap_or_else(|e| panic!("Failed to create data store: {:?}", e));
 

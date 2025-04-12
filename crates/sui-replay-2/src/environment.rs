@@ -4,7 +4,7 @@
 use crate::{
     data_store::{DataStore, InputObject},
     errors::ReplayError,
-    replay_txn_data::packages_from_type_tag,
+    replay_txn::packages_from_type_tag,
 };
 use std::{
     collections::{BTreeMap, BTreeSet},
@@ -57,6 +57,10 @@ impl ReplayEnvironment {
         self.data_store.chain()
     }
 
+    //
+    // EpochStore API
+    //
+
     pub fn protocol_config(&self, epoch: u64, chain: Chain) -> Result<ProtocolConfig, ReplayError> {
         self.data_store.protocol_config(epoch, chain)
     }
@@ -67,6 +71,82 @@ impl ReplayEnvironment {
 
     pub fn rgp(&self, epoch: u64) -> Result<u64, ReplayError> {
         self.data_store.rgp(epoch)
+    }
+
+    // Load and add objects to the environment.
+    // Return the packages of the type parameters instantiated
+    // (e.g. `SUI` in `Coin<SUI>`).
+    pub async fn load_objects(
+        &mut self,
+        object_ids: &BTreeSet<InputObject>,
+    ) -> Result<BTreeSet<ObjectID>, ReplayError> {
+        let mut packages = BTreeSet::new();
+        let objects = self.data_store.load_objects(object_ids).await?;
+        for (object_id, version, object) in objects {
+            if let Some(tag) = object.as_inner().struct_tag() {
+                packages_from_type_tag(&tag.into(), &mut packages);
+            }
+            let version = version.unwrap();
+            self.objects
+                .entry(object_id)
+                .or_default()
+                .insert(version, object);
+        }
+        Ok(packages)
+    }
+
+    pub fn load_child_object(
+        &self,
+        parent: &ObjectID,
+        child: &ObjectID,
+        child_version_upper_bound: SequenceNumber,
+    ) -> Result<Option<Object>, ReplayError> {
+        self.data_store
+            .read_child_object(parent, child, child_version_upper_bound)
+    }
+
+    // Load packages and their dependencies.
+    // It's a 2 step process: first loads all packages in `packages`,
+    // then collects all dependencies and loads all of them
+    pub async fn load_packages(
+        &mut self,
+        packages: &BTreeSet<ObjectID>,
+    ) -> Result<(), ReplayError> {
+        let pkg_ids = packages
+            .iter()
+            .map(|id| InputObject {
+                object_id: *id,
+                version: None,
+            })
+            .collect::<BTreeSet<_>>();
+        let package_objects = self
+            .data_store
+            .load_objects(&pkg_ids)
+            .await?
+            .into_iter()
+            .map(|(id, _version, obj)| (id, obj))
+            .collect::<BTreeMap<_, _>>();
+        trace!("package_objects: {:#?}", package_objects);
+        let deps = get_packages_deps(&package_objects)
+            .into_iter()
+            .map(|object_id| InputObject {
+                object_id,
+                version: None,
+            })
+            .collect();
+        trace!("deps: {:#?}", deps);
+        self.package_objects.extend(package_objects);
+        let package_objects = self
+            .data_store
+            .load_objects(&deps)
+            .await?
+            .into_iter()
+            .map(|(id, _version, obj)| (id, obj))
+            .collect::<BTreeMap<_, _>>();
+        trace!("deps: {:#?}", package_objects);
+        self.package_objects.extend(package_objects);
+
+        Ok(())
     }
 
     // Get an object at the latest version known to the environment
@@ -128,82 +208,9 @@ impl ReplayEnvironment {
         &self,
         tx_digest: &str,
     ) -> Result<(TransactionData, TransactionEffects), ReplayError> {
-        Ok((
-            self.data_store.transaction_data(tx_digest).await?,
-            self.data_store.transaction_effects(tx_digest).await?,
-        ))
-    }
-
-    // Load and add objects to the environment
-    pub async fn load_objects(
-        &mut self,
-        object_ids: &BTreeSet<InputObject>,
-    ) -> Result<BTreeSet<ObjectID>, ReplayError> {
-        let mut packages = BTreeSet::new();
-        let objects = self.data_store.load_objects(object_ids).await?;
-        for (object_id, version, object) in objects {
-            if let Some(tag) = object.as_inner().struct_tag() {
-                packages_from_type_tag(&tag.into(), &mut packages);
-            }
-            let version = version.unwrap();
-            self.objects
-                .entry(object_id)
-                .or_default()
-                .insert(version, object);
-        }
-        Ok(packages)
-    }
-
-    // Load packages and their dependencies
-    pub async fn load_packages(
-        &mut self,
-        packages: &BTreeSet<ObjectID>,
-    ) -> Result<(), ReplayError> {
-        let pkg_ids = packages
-            .iter()
-            .map(|id| InputObject {
-                object_id: *id,
-                version: None,
-            })
-            .collect::<BTreeSet<_>>();
-        let package_objects = self
-            .data_store
-            .load_objects(&pkg_ids)
-            .await?
-            .into_iter()
-            .map(|(id, _version, obj)| (id, obj))
-            .collect::<BTreeMap<_, _>>();
-        trace!("package_objects: {:#?}", package_objects);
-        let deps = get_packages_deps(&package_objects)
-            .into_iter()
-            .map(|object_id| InputObject {
-                object_id,
-                version: None,
-            })
-            .collect();
-        trace!("deps: {:#?}", deps);
-        self.package_objects.extend(package_objects);
-        let package_objects = self
-            .data_store
-            .load_objects(&deps)
-            .await?
-            .into_iter()
-            .map(|(id, _version, obj)| (id, obj))
-            .collect::<BTreeMap<_, _>>();
-        trace!("deps: {:#?}", package_objects);
-        self.package_objects.extend(package_objects);
-
-        Ok(())
-    }
-
-    pub fn load_child_object(
-        &self,
-        parent: &ObjectID,
-        child: &ObjectID,
-        child_version_upper_bound: SequenceNumber,
-    ) -> Result<Option<Object>, ReplayError> {
         self.data_store
-            .read_child_object(parent, child, child_version_upper_bound)
+            .transaction_data_and_effects(tx_digest)
+            .await
     }
 
     //

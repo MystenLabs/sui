@@ -4,7 +4,7 @@
 use crate::{
     environment::{is_framework_package, ReplayEnvironment},
     errors::ReplayError,
-    replay_txn_data::ReplayTransaction,
+    replay_txn::ReplayTransaction,
 };
 use move_binary_format::CompiledModule;
 use move_bytecode_source_map::utils::serialize_to_json_string;
@@ -27,14 +27,14 @@ use sui_execution::Executor;
 use sui_types::{
     base_types::{ObjectID, ObjectRef, SequenceNumber, VersionNumber},
     committee::EpochId,
-    effects::TransactionEffects,
+    effects::{TransactionEffects, TransactionEffectsAPI},
     error::{ExecutionError, SuiResult},
     gas::SuiGasStatus,
     metrics::LimitsMetrics,
     object::{Data, Object},
     storage::{BackingPackageStore, ChildObjectResolver, ObjectStore, PackageObject, ParentSync},
     supported_protocol_versions::ProtocolConfig,
-    transaction::CheckedInputObjects,
+    transaction::{CheckedInputObjects, TransactionDataAPI},
 };
 use sui_types::{digests::TransactionDigest, error::SuiError};
 
@@ -46,6 +46,7 @@ const BCODE_DIR: &str = "bytecode";
 
 const SOURCE_DIR: &str = "source";
 
+// Executor for the replay. Created and used by `ReplayTransaction`.
 pub struct ReplayExecutor {
     protocol_config: ProtocolConfig,
     executor: Arc<dyn Executor + Send + Sync>,
@@ -68,23 +69,29 @@ pub fn execute_transaction_to_effects(
     // TODO: Hook up...
     let certificate_deny_set = HashSet::new();
 
-    let protocol_config = &txn.executor.protocol_config;
-    let epoch = txn.epoch();
-    let epoch_start_timestamp = env.epoch_timestamp(epoch)?;
+    let ReplayTransaction {
+        digest,
+        txn_data,
+        effects: expected_effects,
+        executor,
+        input_objects,
+    } = txn;
 
-    let gas_status = if txn.kind().is_system_tx() {
+    let protocol_config = &executor.protocol_config;
+    let epoch = expected_effects.executed_epoch();
+    let epoch_start_timestamp = env.epoch_timestamp(epoch)?;
+    let gas_status = if txn_data.kind().is_system_tx() {
         SuiGasStatus::new_unmetered()
     } else {
         let reference_gas_price = env.rgp(epoch)?;
         SuiGasStatus::new(
-            txn.gas_data().budget,
-            txn.gas_data().price,
+            txn_data.gas_data().budget,
+            txn_data.gas_data().price,
             reference_gas_price,
             protocol_config,
         )
         .expect("Failed to create gas status")
     };
-
     let store: ReplayStore<'_> = ReplayStore { env, epoch };
     let mut trace_builder_opt = if trace_execution.is_some() {
         Some(MoveTraceBuilder::new())
@@ -92,28 +99,27 @@ pub fn execute_transaction_to_effects(
         None
     };
     let (_inner_store, gas_status, effects, _execution_timing, result) =
-        txn.executor.executor.execute_transaction_to_effects(
+        executor.executor.execute_transaction_to_effects(
             &store,
             protocol_config,
-            txn.executor.metrics.clone(),
+            executor.metrics.clone(),
             false, // expensive checks
             &certificate_deny_set,
-            &txn.epoch(),
+            &epoch,
             epoch_start_timestamp,
-            CheckedInputObjects::new_for_replay(txn.input_objects.clone()),
-            txn.gas_data().clone(),
+            CheckedInputObjects::new_for_replay(input_objects),
+            txn_data.gas_data().clone(),
             gas_status,
-            txn.kind().clone(),
-            txn.sender(),
-            txn.digest,
+            txn_data.kind().clone(),
+            txn_data.sender(),
+            digest,
             &mut trace_builder_opt,
         );
-    let expected_effects = txn.effects;
 
     if let Some(trace_builder) = trace_builder_opt {
         // unwrap is safe if trace_builder_opt.is_some() holds
         let output_path = get_trace_output_path(trace_execution.unwrap())?;
-        save_trace_output(&output_path, txn.digest, trace_builder, env)?;
+        save_trace_output(&output_path, digest, trace_builder, env)?;
     }
     Ok((result, effects, gas_status, expected_effects))
 }
@@ -326,6 +332,17 @@ impl BackingPackageStore for ReplayStore<'_> {
     }
 }
 
+impl ObjectStore for ReplayStore<'_> {
+    fn get_object(&self, object_id: &ObjectID) -> Option<Object> {
+        println!("**** get_object({})", object_id);
+        self.env.get_object(object_id)
+    }
+
+    fn get_object_by_key(&self, object_id: &ObjectID, version: VersionNumber) -> Option<Object> {
+        self.env.get_object_at_version(object_id, version.value())
+    }
+}
+
 impl ChildObjectResolver for ReplayStore<'_> {
     fn read_child_object(
         &self,
@@ -340,25 +357,21 @@ impl ChildObjectResolver for ReplayStore<'_> {
 
     fn get_object_received_at_version(
         &self,
-        owner: &ObjectID,
+        _owner: &ObjectID,
         receiving_object_id: &ObjectID,
         receive_object_at_version: SequenceNumber,
-        epoch_id: EpochId,
+        _epoch_id: EpochId,
     ) -> SuiResult<Option<Object>> {
-        todo!(
-            "ChildObjectResolver::get_object_received_at_version owner: {:?}, receiving_object_id: {:?}, receive_object_at_version: {:?}, epoch_id: {:?}",
-            owner,
-            receiving_object_id,
-            receive_object_at_version,
-            epoch_id,
-        )
+        Ok(self
+            .env
+            .get_object_at_version(receiving_object_id, receive_object_at_version.value()))
     }
 }
 
 impl ParentSync for ReplayStore<'_> {
     fn get_latest_parent_entry_ref_deprecated(&self, object_id: ObjectID) -> Option<ObjectRef> {
-        todo!(
-            "ParentSync::get_latest_parent_entry_ref_deprecated for {:?}",
+        unreachable!(
+            "unexpected ParentSync::get_latest_parent_entry_ref_deprecated({})",
             object_id,
         )
     }
@@ -369,10 +382,13 @@ impl ResourceResolver for ReplayStore<'_> {
 
     fn get_resource(
         &self,
-        _address: &AccountAddress,
-        _typ: &StructTag,
+        address: &AccountAddress,
+        typ: &StructTag,
     ) -> Result<Option<Vec<u8>>, Self::Error> {
-        todo!("ResourceResolver::get_resource")
+        unreachable!(
+            "unexpected ResourceResolver::get_resource({}, {})",
+            address, typ
+        )
     }
 }
 
@@ -380,16 +396,6 @@ impl ModuleResolver for ReplayStore<'_> {
     type Error = ReplayError;
 
     fn get_module(&self, id: &ModuleId) -> Result<Option<Vec<u8>>, Self::Error> {
-        todo!("ModuleResolver::get_module {:?}", id)
-    }
-}
-
-impl ObjectStore for ReplayStore<'_> {
-    fn get_object(&self, object_id: &ObjectID) -> Option<Object> {
-        self.env.get_object(object_id)
-    }
-
-    fn get_object_by_key(&self, object_id: &ObjectID, version: VersionNumber) -> Option<Object> {
-        self.env.get_object_at_version(object_id, version.value())
+        unreachable!("unexpected ModuleResolver::get_module({})", id)
     }
 }
