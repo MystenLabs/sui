@@ -306,6 +306,7 @@ pub fn make_network_authority_clients_with_network_config(
     for (name, (_state, network_metadata)) in committee.validators() {
         let address = network_metadata.network_address.clone();
         let address = address.rewrite_udp_to_tcp();
+        let address = address.rewrite_http_to_https();
         let tls_config = network_metadata
             .network_public_key
             .as_ref()
