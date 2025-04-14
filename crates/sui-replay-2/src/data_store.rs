@@ -101,8 +101,7 @@ impl DataStore {
             .map_err(|_err| todo!("hook epoch table lookup"))
     }
 
-    /// Load all versions of the packages with the given id.
-    /// The id can be any package at any version.
+    /// Load all versions of a system package with the given id.
     pub async fn load_system_package(
         &self,
         pkg_id: ObjectID,

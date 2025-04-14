@@ -27,11 +27,7 @@ pub fn is_framework_package(pkg_id: &ObjectID) -> bool {
 pub struct ReplayEnvironment {
     // data store access
     data_store: DataStore,
-
-    //
     // caches
-    //
-
     // system packages as pkg_id -> epoch -> MovePackage (as Object)
     system_packages: BTreeMap<ObjectID, BTreeMap<u64, Object>>,
     // all package objects as pkg_id -> Object

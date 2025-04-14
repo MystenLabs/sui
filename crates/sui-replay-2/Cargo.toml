@@ -9,7 +9,7 @@ edition = "2021"
 [dependencies]
 base64ct = "1.6.0"
 bcs.workspace = true
-clap = { version = "4.1.4", features = ["derive"] }
+clap.workspace = true
 chrono.workspace = true
 cynic.workspace = true
 cynic-codegen.workspace = true

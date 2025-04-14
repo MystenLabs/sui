@@ -40,7 +40,7 @@ use sui_types::{digests::TransactionDigest, error::SuiError};
 
 const DEFAULT_TRACE_OUTPUT_DIR: &str = "replay";
 
-const TRACE_FILE_NAME: &str = "trace.json";
+const TRACE_FILE_NAME: &str = "trace.json.zst";
 
 const BCODE_DIR: &str = "bytecode";
 
