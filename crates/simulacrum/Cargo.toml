@@ -7,7 +7,7 @@ publish = false
 edition = "2021"
 
 [dependencies]
-async-trait.workspace = true   
+async-trait.workspace = true
 anyhow.workspace = true
 bcs.workspace = true
 fastcrypto.workspace = true
@@ -32,3 +32,4 @@ sui-genesis-builder.workspace = true
 sui-execution.workspace = true
 sui-swarm-config.workspace = true
 sui-transaction-checks.workspace = true
+typed-store-error.workspace = true

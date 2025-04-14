@@ -17,6 +17,7 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use tap::Pipe;
 use tracing::error;
+use typed_store_error::TypedStoreError;
 
 #[derive(Clone, Debug, Default)]
 pub struct SharedInMemoryStore(Arc<std::sync::RwLock<InMemoryStore>>);
@@ -68,30 +69,34 @@ impl ReadStore for SharedInMemoryStore {
     fn get_full_checkpoint_contents_by_sequence_number(
         &self,
         sequence_number: CheckpointSequenceNumber,
-    ) -> Option<FullCheckpointContents> {
+    ) -> Result<Option<FullCheckpointContents>, TypedStoreError> {
         self.inner()
             .full_checkpoint_contents
             .get(&sequence_number)
             .cloned()
+            .pipe(Ok)
     }
 
     fn get_full_checkpoint_contents(
         &self,
         digest: &CheckpointContentsDigest,
-    ) -> Option<FullCheckpointContents> {
+    ) -> Result<Option<FullCheckpointContents>, TypedStoreError> {
         // First look to see if we saved the complete contents already.
         let inner = self.inner();
         let contents = inner
             .get_sequence_number_by_contents_digest(digest)
             .and_then(|seq_num| inner.full_checkpoint_contents.get(&seq_num).cloned());
         if contents.is_some() {
-            return contents;
+            return Ok(contents);
         }
 
         // Otherwise gather it from the individual components.
-        inner.get_checkpoint_contents(digest).and_then(|contents| {
-            FullCheckpointContents::from_checkpoint_contents(self, contents.to_owned())
-        })
+        inner
+            .get_checkpoint_contents(digest)
+            .and_then(|contents| {
+                FullCheckpointContents::from_checkpoint_contents(self, contents.to_owned())
+            })
+            .pipe(Ok)
     }
 
     fn get_committee(&self, epoch: EpochId) -> Option<Arc<Committee>> {
@@ -485,7 +490,7 @@ impl ReadStore for SingleCheckpointSharedInMemoryStore {
     fn get_full_checkpoint_contents_by_sequence_number(
         &self,
         sequence_number: CheckpointSequenceNumber,
-    ) -> Option<FullCheckpointContents> {
+    ) -> Result<Option<FullCheckpointContents>, TypedStoreError> {
         self.0
             .get_full_checkpoint_contents_by_sequence_number(sequence_number)
     }
@@ -493,7 +498,7 @@ impl ReadStore for SingleCheckpointSharedInMemoryStore {
     fn get_full_checkpoint_contents(
         &self,
         digest: &CheckpointContentsDigest,
-    ) -> Option<FullCheckpointContents> {
+    ) -> Result<Option<FullCheckpointContents>, TypedStoreError> {
         self.0.get_full_checkpoint_contents(digest)
     }
 

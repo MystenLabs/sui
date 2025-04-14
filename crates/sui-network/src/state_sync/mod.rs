@@ -49,6 +49,7 @@
 
 use anemo::{types::PeerEvent, PeerId, Request, Response, Result};
 use futures::{stream::FuturesOrdered, FutureExt, StreamExt};
+use mysten_common::debug_fatal;
 use rand::Rng;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::{
@@ -560,6 +561,7 @@ where
                         .unwrap_or_else(|| panic!("store should contain checkpoint {n}"));
                     self.store
                         .get_full_checkpoint_contents(&checkpoint.content_digest)
+                        .unwrap()
                         .unwrap_or_else(|| {
                             panic!(
                                 "store should contain checkpoint contents for {:?}",
@@ -1358,7 +1360,16 @@ where
     let digest = checkpoint.content_digest;
     if let Some(contents) = store
         .get_full_checkpoint_contents_by_sequence_number(*checkpoint.sequence_number())
-        .or_else(|| store.get_full_checkpoint_contents(&digest))
+        .tap_err(|e| debug_fatal!("Failed to get checkpoint contents by sequence number: {e}"))
+        .ok()
+        .flatten()
+        .or_else(|| {
+            store
+                .get_full_checkpoint_contents(&digest)
+                .tap_err(|e| debug_fatal!("Failed to get checkpoint contents by digest: {e}"))
+                .ok()
+                .flatten()
+        })
     {
         debug!("store already contains checkpoint contents");
         return Some(contents);

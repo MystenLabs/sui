@@ -32,12 +32,12 @@ use sui_types::{
     transaction::VerifiedTransaction,
 };
 use tempfile::tempdir;
-use typed_store::DBMapUtils;
 use typed_store::Map;
 use typed_store::{
     metrics::SamplingInterval,
     rocks::{DBMap, MetricConf},
 };
+use typed_store::{DBMapUtils, TypedStoreError};
 
 use super::SimulatorStore;
 
@@ -621,14 +621,16 @@ impl ReadStore for PersistedStoreInnerReadOnlyWrapper {
     fn get_full_checkpoint_contents_by_sequence_number(
         &self,
         _sequence_number: CheckpointSequenceNumber,
-    ) -> Option<sui_types::messages_checkpoint::FullCheckpointContents> {
+    ) -> Result<Option<sui_types::messages_checkpoint::FullCheckpointContents>, TypedStoreError>
+    {
         todo!()
     }
 
     fn get_full_checkpoint_contents(
         &self,
         _digest: &CheckpointContentsDigest,
-    ) -> Option<sui_types::messages_checkpoint::FullCheckpointContents> {
+    ) -> Result<Option<sui_types::messages_checkpoint::FullCheckpointContents>, TypedStoreError>
+    {
         todo!()
     }
 }

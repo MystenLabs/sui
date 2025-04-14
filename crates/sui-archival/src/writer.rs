@@ -411,7 +411,7 @@ impl ArchiveWriter {
             if let Some(checkpoint_summary) =
                 store.get_checkpoint_by_sequence_number(checkpoint_sequence_number)
             {
-                if let Some(checkpoint_contents) =
+                if let Ok(Some(checkpoint_contents)) =
                     store.get_full_checkpoint_contents(&checkpoint_summary.content_digest)
                 {
                     checkpoint_writer

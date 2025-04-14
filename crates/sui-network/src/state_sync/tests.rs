@@ -720,8 +720,14 @@ async fn sync_with_checkpoints_watermark() {
             let content_digest = contents.into_checkpoint_contents_digest();
             store_1
                 .get_full_checkpoint_contents(&content_digest)
+                .unwrap()
                 .unwrap();
-            assert_eq!(store_2.get_full_checkpoint_contents(&content_digest), None);
+            assert_eq!(
+                store_2
+                    .get_full_checkpoint_contents(&content_digest)
+                    .unwrap(),
+                None
+            );
         }
     })
     .await
@@ -772,7 +778,7 @@ async fn sync_with_checkpoints_watermark() {
     );
     tokio::spawn(event_loop_3.start());
 
-    // Peer 3 is able to sync checkpoint 1 with teh help from Peer 2
+    // Peer 3 is able to sync checkpoint 1 with the help from Peer 2
     timeout(Duration::from_secs(1), async {
         assert_eq!(
             subscriber_3.recv().await.unwrap().data(),
@@ -816,8 +822,14 @@ async fn sync_with_checkpoints_watermark() {
             assert_eq!(subscriber_2.recv().await.unwrap().data(), checkpoint.data());
             assert_eq!(subscriber_3.recv().await.unwrap().data(), checkpoint.data());
             let content_digest = contents.into_checkpoint_contents_digest();
-            store_2.get_full_checkpoint_contents(&content_digest);
-            store_3.get_full_checkpoint_contents(&content_digest);
+            store_2
+                .get_full_checkpoint_contents(&content_digest)
+                .unwrap()
+                .unwrap();
+            store_3
+                .get_full_checkpoint_contents(&content_digest)
+                .unwrap()
+                .unwrap();
         }
     })
     .await

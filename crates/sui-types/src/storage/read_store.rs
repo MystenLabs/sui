@@ -142,14 +142,14 @@ pub trait ReadStore: ObjectStore {
     fn get_full_checkpoint_contents_by_sequence_number(
         &self,
         sequence_number: CheckpointSequenceNumber,
-    ) -> Option<FullCheckpointContents>;
+    ) -> Result<Option<FullCheckpointContents>, TypedStoreError>;
 
     /// Get a "full" checkpoint for purposes of state-sync
     /// "full" checkpoints include: header, contents, transactions, effects
     fn get_full_checkpoint_contents(
         &self,
         digest: &CheckpointContentsDigest,
-    ) -> Option<FullCheckpointContents>;
+    ) -> Result<Option<FullCheckpointContents>, TypedStoreError>;
 
     // Fetch all checkpoint data
     // TODO fix return type to not be anyhow
@@ -319,14 +319,14 @@ impl<T: ReadStore + ?Sized> ReadStore for &T {
     fn get_full_checkpoint_contents_by_sequence_number(
         &self,
         sequence_number: CheckpointSequenceNumber,
-    ) -> Option<FullCheckpointContents> {
+    ) -> Result<Option<FullCheckpointContents>, TypedStoreError> {
         (*self).get_full_checkpoint_contents_by_sequence_number(sequence_number)
     }
 
     fn get_full_checkpoint_contents(
         &self,
         digest: &CheckpointContentsDigest,
-    ) -> Option<FullCheckpointContents> {
+    ) -> Result<Option<FullCheckpointContents>, TypedStoreError> {
         (*self).get_full_checkpoint_contents(digest)
     }
 
@@ -429,14 +429,14 @@ impl<T: ReadStore + ?Sized> ReadStore for Box<T> {
     fn get_full_checkpoint_contents_by_sequence_number(
         &self,
         sequence_number: CheckpointSequenceNumber,
-    ) -> Option<FullCheckpointContents> {
+    ) -> Result<Option<FullCheckpointContents>, TypedStoreError> {
         (**self).get_full_checkpoint_contents_by_sequence_number(sequence_number)
     }
 
     fn get_full_checkpoint_contents(
         &self,
         digest: &CheckpointContentsDigest,
-    ) -> Option<FullCheckpointContents> {
+    ) -> Result<Option<FullCheckpointContents>, TypedStoreError> {
         (**self).get_full_checkpoint_contents(digest)
     }
 
@@ -539,14 +539,14 @@ impl<T: ReadStore + ?Sized> ReadStore for Arc<T> {
     fn get_full_checkpoint_contents_by_sequence_number(
         &self,
         sequence_number: CheckpointSequenceNumber,
-    ) -> Option<FullCheckpointContents> {
+    ) -> Result<Option<FullCheckpointContents>, TypedStoreError> {
         (**self).get_full_checkpoint_contents_by_sequence_number(sequence_number)
     }
 
     fn get_full_checkpoint_contents(
         &self,
         digest: &CheckpointContentsDigest,
-    ) -> Option<FullCheckpointContents> {
+    ) -> Result<Option<FullCheckpointContents>, TypedStoreError> {
         (**self).get_full_checkpoint_contents(digest)
     }
 

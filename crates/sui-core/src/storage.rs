@@ -132,16 +132,15 @@ impl ReadStore for RocksDbStore {
     fn get_full_checkpoint_contents_by_sequence_number(
         &self,
         sequence_number: CheckpointSequenceNumber,
-    ) -> Option<FullCheckpointContents> {
+    ) -> Result<Option<FullCheckpointContents>, TypedStoreError> {
         self.checkpoint_store
             .get_full_checkpoint_contents_by_sequence_number(sequence_number)
-            .expect("db error")
     }
 
     fn get_full_checkpoint_contents(
         &self,
         digest: &CheckpointContentsDigest,
-    ) -> Option<FullCheckpointContents> {
+    ) -> Result<Option<FullCheckpointContents>, TypedStoreError> {
         // First look to see if we saved the complete contents already.
         if let Some(seq_num) = self
             .checkpoint_store
@@ -150,10 +149,9 @@ impl ReadStore for RocksDbStore {
         {
             let contents = self
                 .checkpoint_store
-                .get_full_checkpoint_contents_by_sequence_number(seq_num)
-                .expect("db error");
+                .get_full_checkpoint_contents_by_sequence_number(seq_num)?;
             if contents.is_some() {
-                return contents;
+                return Ok(contents);
             }
         }
 
@@ -187,6 +185,7 @@ impl ReadStore for RocksDbStore {
                     transactions.into_iter(),
                 ))
             })
+            .pipe(Ok)
     }
 
     fn get_committee(&self, epoch: EpochId) -> Option<Arc<Committee>> {
@@ -432,7 +431,7 @@ impl ReadStore for RestReadStore {
     fn get_full_checkpoint_contents_by_sequence_number(
         &self,
         sequence_number: CheckpointSequenceNumber,
-    ) -> Option<FullCheckpointContents> {
+    ) -> Result<Option<FullCheckpointContents>, TypedStoreError> {
         self.rocks
             .get_full_checkpoint_contents_by_sequence_number(sequence_number)
     }
@@ -440,7 +439,7 @@ impl ReadStore for RestReadStore {
     fn get_full_checkpoint_contents(
         &self,
         digest: &CheckpointContentsDigest,
-    ) -> Option<FullCheckpointContents> {
+    ) -> Result<Option<FullCheckpointContents>, TypedStoreError> {
         self.rocks.get_full_checkpoint_contents(digest)
     }
 }
