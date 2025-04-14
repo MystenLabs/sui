@@ -156,6 +156,7 @@ members = [
   "crates/sui-protocol-config-macros",
   "crates/sui-proxy",
   "crates/sui-replay",
+  "crates/sui-replay-2",
   "crates/sui-rosetta",
   "crates/sui-rpc-api",
   "crates/sui-rpc-benchmark",
@@ -640,6 +641,7 @@ sui-sdk-types = { git = "https://github.com/MystenLabs/sui-rust-sdk.git", rev = 
   "serde",
 ] }
 sui-sdk-transaction-builder = { git = "https://github.com/MystenLabs/sui-rust-sdk.git", rev = "83ff809bc11cbabda21b60130e1f5420170548bf", package = "sui-transaction-builder" }
+sui-graphql-client = { git = "https://github.com/MystenLabs/sui-rust-sdk.git", rev = "83ff809bc11cbabda21b60130e1f5420170548bf", package = "sui-graphql-client" }
 
 ### Workspace Members ###
 anemo-benchmark = { path = "crates/anemo-benchmark" }
@@ -713,6 +715,7 @@ sui-protocol-config = { path = "crates/sui-protocol-config" }
 sui-protocol-config-macros = { path = "crates/sui-protocol-config-macros" }
 sui-proxy = { path = "crates/sui-proxy" }
 sui-replay = { path = "crates/sui-replay" }
+sui-replay-2 = { path = "crates/sui-replay-2" }
 sui-rosetta = { path = "crates/sui-rosetta" }
 sui-rpc-loadgen = { path = "crates/sui-rpc-loadgen" }
 sui-sdk = { path = "crates/sui-sdk" }
