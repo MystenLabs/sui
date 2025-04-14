@@ -106,9 +106,19 @@ pub fn run_model_builder_with_options_and_compilation_flags<
     let mut env = GlobalEnv::new();
     env.set_extension(options);
 
+    let sources_symbols: Vec<MoveSymbol> = move_sources
+        .clone()
+        .iter()
+        .map(|s| s.name.clone().unwrap().0)
+        .collect();
+
+    let mut all_deps = vec![];
+    all_deps.extend(move_sources);
+    all_deps.extend(deps);
+
     // Step 1: parse the program to get comments and a separation of targets and dependencies.
     let (files, comments_and_compiler_res) =
-        Compiler::from_package_paths(None, move_sources, deps)?
+        Compiler::from_package_paths(None, all_deps, vec![])?
             .set_flags(flags)
             .set_warning_filter(warning_filter)
             .run::<PASS_PARSER>()?;
@@ -146,7 +156,7 @@ pub fn run_model_builder_with_options_and_compilation_flags<
     {
         let fhash = member.def.file_hash();
         let (fname, fsrc) = files.get(&fhash).unwrap();
-        let is_dep = dep_files.contains(&fhash);
+        let is_dep = !sources_symbols.contains(&member.package.unwrap());
         let aliases = parsed_prog
             .named_address_maps
             .get(member.named_address_map)

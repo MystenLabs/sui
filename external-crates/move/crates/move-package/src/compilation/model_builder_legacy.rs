@@ -8,7 +8,7 @@ use crate::{
 };
 use anyhow::Result;
 use itertools::Itertools;
-use move_compiler::{shared::PackagePaths, Flags};
+use move_compiler::Flags;
 use move_model::{
     model::GlobalEnv, options::ModelBuilderOptions,
     run_model_builder_with_options_and_compilation_flags,
@@ -35,7 +35,7 @@ impl ModelBuilderLegacy {
     // across all packages and build the Move model from that.
     // TODO: In the future we will need a better way to do this to support renaming in packages
     // where we want to support building a Move model.
-    pub fn build_model(&self, flags: Flags, additional_path: Option<PackagePaths>) -> Result<GlobalEnv> {
+    pub fn build_model(&self, flags: Flags) -> Result<GlobalEnv> {
         // Make sure no renamings have been performed
         if let Some(pkg_name) = self.resolution_graph.contains_renaming() {
             anyhow::bail!(
@@ -90,56 +90,9 @@ impl ModelBuilderLegacy {
             &root_package,
             deps_source_info,
         )?;
-        // let (all_targets, all_deps) = if self.model_config.all_files_as_targets {
-        //     let mut targets = vec![target];
-        //     targets.extend(deps.into_iter().map(|(p, _)| p).collect_vec());
-        //     (targets, vec![])
-        // } else {
-        //     (vec![target], deps)
-        // };
-        // let (mut all_targets, mut all_deps) = match &self.model_config.target_filter {
-        //     Some(filter) => {
-        //         let mut new_targets = vec![];
-        //         let mut new_deps = all_deps.into_iter().map(|(p, _)| p).collect_vec();
-        //         for PackagePaths {
-        //             name,
-        //             paths,
-        //             named_address_map,
-        //         } in all_targets
-        //         {
-        //             let (true_targets, false_targets): (Vec<_>, Vec<_>) =
-        //                 paths.into_iter().partition(|t| t.contains(filter));
-        //             if !true_targets.is_empty() {
-        //                 new_targets.push(PackagePaths {
-        //                     name: name.clone(),
-        //                     paths: true_targets,
-        //                     named_address_map: named_address_map.clone(),
-        //                 })
-        //             }
-        //             if !false_targets.is_empty() {
-        //                 new_deps.push(PackagePaths {
-        //                     name: name.clone(),
-        //                     paths: false_targets,
-        //                     named_address_map,
-        //                 })
-        //             }
-        //         }
-        //         (new_targets, new_deps)
-        //     }
-        //     None => (
-        //         all_targets,
-        //         all_deps.into_iter().map(|(p, _)| p).collect_vec(),
-        //     ),
-        // };
-        // // HERE
 
-        // if additional_path.is_some() {
-        //     all_targets.push(additional_path.unwrap());
-        // }
-
-        let mut all_targets = vec![target];
-        all_targets.extend(deps.into_iter().map(|(p, _)| p).collect_vec());
-        let all_deps = vec![];
+        let all_targets = vec![target];
+        let all_deps = deps.into_iter().map(|(p, _)| p).collect_vec();
         run_model_builder_with_options_and_compilation_flags(
             all_targets,
             all_deps,
