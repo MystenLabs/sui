@@ -1,14 +1,13 @@
 use clap::Args;
 use move_cli::base;
-use move_compiler::{editions::{Edition, Flavor}, shared::{NumericalAddress, PackageConfig, PackagePaths}};
+use move_compiler::editions::{Edition, Flavor};
 use move_package::{source_package::layout::SourcePackageLayout, BuildConfig as MoveBuildConfig, LintFlag, ModelConfig};
 use move_core_types::account_address::AccountAddress;
 use move_prover::{run_boogie_gen, run_move_prover_with_model};
 use tracing::log::LevelFilter;
-use std::{collections::BTreeMap, path::{Path,PathBuf}};
+use std::{collections::{BTreeMap, BTreeSet}, path::{Path,PathBuf}};
 use codespan_reporting::term::termcolor::Buffer;
 use crate::llm_explain::explain_err;
-use move_symbol_pool::Symbol;
 
 impl From<BuildConfig> for MoveBuildConfig {
     fn from(config: BuildConfig) -> Self {
@@ -102,13 +101,6 @@ pub struct BuildConfig {
     pub additional_named_addresses: BTreeMap<String, AccountAddress>,
 }
 
-
-static MOVE_STDLIB_ADDRESS: AccountAddress = AccountAddress::from_suffix(0x1);
-static SUI_FRAMEWORK_ADDRESS: AccountAddress  = AccountAddress::from_suffix(0x2);
-static SUI_SYSTEM_ADDRESS: AccountAddress = AccountAddress::from_suffix(0x3);
-static BRIDGE_ADDRESS: AccountAddress = AccountAddress::from_suffix(0xb);
-static DEEPBOOK_ADDRESS: AccountAddress = AccountAddress::from_suffix(0xdee9);
-
 pub async fn execute(
     path: Option<&Path>,
     general_config: GeneralConfig,
@@ -121,95 +113,12 @@ pub async fn execute(
         Some(&rerooted_path),
     )?;
 
-    let named_addresses: BTreeMap<Symbol, NumericalAddress>  = {
-        let mapping = [(Symbol::from("std"), Symbol::from("0x1"))];
-        let mut map: BTreeMap<Symbol, NumericalAddress> = mapping
-            .iter()
-            .map(|(name, addr)| (Symbol::from(name.to_string()), NumericalAddress::parse_str(addr).unwrap()))
-            .collect();
-        map.insert(
-            "sui".into(),
-            NumericalAddress::new(
-                SUI_FRAMEWORK_ADDRESS.into_bytes(),
-                move_compiler::shared::NumberFormat::Hex,
-            ),
-        );
-        map.insert(
-            "sui_system".into(),
-            NumericalAddress::new(
-                SUI_SYSTEM_ADDRESS.into_bytes(),
-                move_compiler::shared::NumberFormat::Hex,
-            ),
-        );
-        map.insert(
-            "deepbook".into(),
-            NumericalAddress::new(
-                DEEPBOOK_ADDRESS.into_bytes(),
-                move_compiler::shared::NumberFormat::Hex,
-            ),
-        );
-        map.insert(
-            "bridge".into(),
-            NumericalAddress::new(
-                BRIDGE_ADDRESS.into_bytes(),
-                move_compiler::shared::NumberFormat::Hex,
-            ),
-        );
-        map
-    };
-
-    let sui_files: &Path = Path::new("/home/andrei/smart-contracts-v2/sui/crates/sui-framework");
-    let sui_system_sources = {
-        let mut buf = sui_files.to_path_buf();
-        buf.extend(["packages", "sui-system", "sources"]);
-        buf.to_string_lossy().to_string()
-    };
-    let sui_sources = {
-        let mut buf = sui_files.to_path_buf();
-        buf.extend(["packages", "sui-framework", "sources"]);
-        buf.to_string_lossy().to_string()
-    };
-    let sui_deps = {
-        let mut buf = sui_files.to_path_buf();
-        buf.extend(["packages", "move-stdlib", "sources"]);
-        buf.to_string_lossy().to_string()
-    };
-    let deepbook_sources = {
-        let mut buf = sui_files.to_path_buf();
-        buf.extend(["packages", "deepbook", "sources"]);
-        buf.to_string_lossy().to_string()
-    };
-    let config = PackageConfig {
-        edition: Edition::E2024_BETA,
-        flavor: Flavor::Sui,
-        ..Default::default()
-    };
-    let bridge_sources = {
-        let mut buf = sui_files.to_path_buf();
-        buf.extend(["packages", "bridge", "sources"]);
-        buf.to_string_lossy().to_string()
-    };
-
-    let precompiles: PackagePaths<Symbol, Symbol> = PackagePaths {
-        name: Some(("sui-framework".into(), config)),
-        paths: vec![
-            sui_system_sources.into(),
-            sui_sources.into(),
-            sui_deps.into(),
-            deepbook_sources.into(),
-            bridge_sources.into(),
-        ],
-        named_address_map: named_addresses.clone(),
-    };
-
     let model = move_build_config.move_model_for_package_legacy(
         &rerooted_path,
         ModelConfig {
             all_files_as_targets: false,
             target_filter: None,
         },
-        // Some(precompiles),
-        None,
     )?;
     let mut options = move_prover::cli::Options::default();
     // don't spawn async tasks when running Boogie--causes a crash if we do
