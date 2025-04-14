@@ -1,0 +1,74 @@
+2025-03-26T15:16:31.133040Z DEBUG sui_replay_2::epoch_store: Start load epoch table
+2025-03-26T15:16:31.133077Z DEBUG sui_replay_2::data_store: Start load epoch table
+2025-03-26T15:16:31.133104Z DEBUG sui_replay_2::data_store: Start load epoch table pagination
+2025-03-26T15:16:31.486642Z DEBUG sui_replay_2::data_store: Start load epoch table pagination
+2025-03-26T15:16:31.640889Z DEBUG sui_replay_2::data_store: Start load epoch table pagination
+2025-03-26T15:16:31.765123Z DEBUG sui_replay_2::data_store: Start load epoch table pagination
+2025-03-26T15:16:31.892645Z DEBUG sui_replay_2::data_store: Start load epoch table pagination
+2025-03-26T15:16:32.022978Z DEBUG sui_replay_2::data_store: Start load epoch table pagination
+2025-03-26T15:16:32.159926Z DEBUG sui_replay_2::data_store: Start load epoch table pagination
+2025-03-26T15:16:32.289534Z DEBUG sui_replay_2::data_store: Start load epoch table pagination
+2025-03-26T15:16:32.423390Z DEBUG sui_replay_2::data_store: Start load epoch table pagination
+2025-03-26T15:16:32.553081Z DEBUG sui_replay_2::data_store: Start load epoch table pagination
+2025-03-26T15:16:32.694009Z DEBUG sui_replay_2::data_store: Start load epoch table pagination
+2025-03-26T15:16:32.834678Z DEBUG sui_replay_2::data_store: Start load epoch table pagination
+2025-03-26T15:16:32.962497Z DEBUG sui_replay_2::data_store: Start load epoch table pagination
+2025-03-26T15:16:33.097125Z DEBUG sui_replay_2::data_store: Start load epoch table pagination
+2025-03-26T15:16:33.606509Z DEBUG sui_replay_2::data_store: Start load epoch table pagination
+2025-03-26T15:16:33.728621Z DEBUG sui_replay_2::data_store: End load epoch table
+2025-03-26T15:16:33.728675Z DEBUG sui_replay_2::epoch_store: End load epoch table
+
+2025-03-26T15:16:33.728890Z DEBUG sui_replay_2::data_store: Start load system packages
+2025-03-26T15:16:33.744432Z DEBUG sui_replay_2::data_store: Start load system package: 0x0000000000000000000000000000000000000000000000000000000000000001
+2025-03-26T15:16:33.744640Z DEBUG sui_replay_2::data_store: Start load system package pagination
+2025-03-26T15:16:34.010495Z DEBUG sui_replay_2::data_store: End load system package
+2025-03-26T15:16:34.010830Z DEBUG sui_replay_2::data_store: Start load system package: 0x0000000000000000000000000000000000000000000000000000000000000002
+2025-03-26T15:16:34.010853Z DEBUG sui_replay_2::data_store: Start load system package pagination
+2025-03-26T15:16:34.592651Z DEBUG sui_replay_2::data_store: End load system package
+2025-03-26T15:16:34.592935Z DEBUG sui_replay_2::data_store: Start load system package: 0x0000000000000000000000000000000000000000000000000000000000000003
+2025-03-26T15:16:34.592945Z DEBUG sui_replay_2::data_store: Start load system package pagination
+2025-03-26T15:16:34.932157Z DEBUG sui_replay_2::data_store: End load system package
+2025-03-26T15:16:34.932329Z DEBUG sui_replay_2::data_store: Start load system package: 0x000000000000000000000000000000000000000000000000000000000000dee9
+2025-03-26T15:16:34.932348Z DEBUG sui_replay_2::data_store: Start load system package pagination
+2025-03-26T15:16:35.379960Z DEBUG sui_replay_2::data_store: End load system package
+2025-03-26T15:16:35.380128Z DEBUG sui_replay_2::data_store: Start load system package: 0x000000000000000000000000000000000000000000000000000000000000000b
+2025-03-26T15:16:35.380149Z DEBUG sui_replay_2::data_store: Start load system package pagination
+2025-03-26T15:16:35.509548Z DEBUG sui_replay_2::data_store: End load system package
+2025-03-26T15:16:35.509723Z DEBUG sui_replay_2::data_store: End load system packages
+
+2025-03-26T15:16:35.509745Z DEBUG sui_replay_2::data_store: Start transaction data
+2025-03-26T15:16:35.606353Z DEBUG sui_replay_2::data_store: End transaction data
+
+2025-03-26T15:16:35.606376Z DEBUG sui_replay_2::data_store: Start transaction effects
+2025-03-26T15:16:35.707522Z DEBUG sui_replay_2::data_store: End transaction effects
+
+2025-03-26T15:16:35.708123Z DEBUG sui_replay_2::data_store: Start load objects
+2025-03-26T15:16:35.708148Z DEBUG sui_replay_2::data_store: Start load object: 0x0000000000000000000000000000000000000000000000000000000000000006
+2025-03-26T15:16:35.813109Z DEBUG sui_replay_2::data_store: Start load object: 0x1f9310238ee9298fb703c3419030b35b22bb1cc37113e3bb5007c99aec79e5b8
+2025-03-26T15:16:35.919390Z DEBUG sui_replay_2::data_store: Start load object: 0x3d779b34b1125b3d102890445f012bd9a96c6e234b4957dd1f913e644ffc1665
+2025-03-26T15:16:36.026484Z DEBUG sui_replay_2::data_store: Start load object: 0x5dec622733a204ca27f5a90d8c2fad453cc6665186fd5dff13a83d0b6c9027ab
+2025-03-26T15:16:36.131863Z DEBUG sui_replay_2::data_store: Start load object: 0x801dbc2f0053d34734814b2d6df491ce7807a725fe9a01ad74a07e9c51396c37
+2025-03-26T15:16:36.239860Z DEBUG sui_replay_2::data_store: Start load object: 0x870ab7edc228fe1a548149c58f2242b0bb0d18a36e936a03587fd98d8b49516b
+2025-03-26T15:16:36.339633Z DEBUG sui_replay_2::data_store: Start load object: 0x87bb1632d6d4f938ff0b3a29b160cab543ee7e10fd3d7df4dbc2394e761307c5
+2025-03-26T15:16:36.457605Z DEBUG sui_replay_2::data_store: Start load object: 0xa505ec403557a903e40102c23094ca30363f0d962c5ae23e42036b0908b959db
+2025-03-26T15:16:36.561674Z DEBUG sui_replay_2::data_store: Start load object: 0xd8c0ba598973b30e3e74e48548397bc4899d41125996ed4080752bbdf34af1e9
+2025-03-26T15:16:36.670845Z DEBUG sui_replay_2::data_store: End load objects
+
+2025-03-26T15:16:36.671384Z DEBUG sui_replay_2::data_store: Start load objects
+2025-03-26T15:16:36.671408Z DEBUG sui_replay_2::data_store: Start load object: 0x0000000000000000000000000000000000000000000000000000000000000002
+2025-03-26T15:16:36.815270Z DEBUG sui_replay_2::data_store: Start load object: 0x8d97f1cd6ac663735be08d1d2b6d02a159e711586461306ce60a2b7a6a565a9e
+2025-03-26T15:16:36.917655Z DEBUG sui_replay_2::data_store: Start load object: 0xb84e63d22ea4822a0a333c250e790f69bf5c2ef0c63f4e120e05a6415991368f
+2025-03-26T15:16:37.017354Z DEBUG sui_replay_2::data_store: Start load object: 0xdba34672e30cb065b1f93e3ab55318768fd6fef66c15942c9f7cb846e2f900e7
+2025-03-26T15:16:37.119624Z DEBUG sui_replay_2::data_store: Start load object: 0xe016516cae4c27eb871870e3b1dd63d45ae180c412677784915b437a7ec930f0
+2025-03-26T15:16:37.219751Z DEBUG sui_replay_2::data_store: End load objects
+
+2025-03-26T15:16:37.220300Z DEBUG sui_replay_2::data_store: Start load objects
+2025-03-26T15:16:37.220331Z DEBUG sui_replay_2::data_store: Start load object: 0x0000000000000000000000000000000000000000000000000000000000000001
+2025-03-26T15:16:37.326263Z DEBUG sui_replay_2::data_store: Start load object: 0x04e20ddf36af412a4096f9014f4a565af9e812db9a05cc40254846cf6ed0ad91
+2025-03-26T15:16:37.449465Z DEBUG sui_replay_2::data_store: Start load object: 0x5306f64e312b581766351c07af79c72fcb1cd25147157fdc2f8ad76de9a3fb6a
+2025-03-26T15:16:37.558699Z DEBUG sui_replay_2::data_store: Start load object: 0xe0917b74a5912e4ad186ac634e29c922ab83903f71af7500969f9411706f9b9a
+2025-03-26T15:16:37.656263Z DEBUG sui_replay_2::data_store: Start load object: 0xecf47609d7da919ea98e7fd04f6e0648a0a79b337aaad373fa37aac8febf19c8
+2025-03-26T15:16:37.763837Z DEBUG sui_replay_2::data_store: End load objects
+
+2025-03-26T15:16:37.766459Z DEBUG sui_replay_2: Start execute_transaction_to_effects
+2025-03-26T15:16:37.930741Z DEBUG sui_replay_2: End execute_transaction_to_effects

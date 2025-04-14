@@ -13829,6 +13829,37 @@ dependencies = [
 ]
 
 [[package]]
+name = "sui-graphql-client"
+version = "0.0.4"
+source = "git+https://github.com/MystenLabs/sui-rust-sdk.git?rev=83ff809bc11cbabda21b60130e1f5420170548bf#83ff809bc11cbabda21b60130e1f5420170548bf"
+dependencies = [
+ "anyhow",
+ "async-stream",
+ "async-trait",
+ "base64ct",
+ "bcs",
+ "chrono",
+ "cynic",
+ "futures",
+ "reqwest 0.12.9",
+ "serde",
+ "serde_json",
+ "sui-graphql-client-build",
+ "sui-sdk-types",
+ "tokio",
+ "tracing",
+ "url",
+]
+
+[[package]]
+name = "sui-graphql-client-build"
+version = "0.0.4"
+source = "git+https://github.com/MystenLabs/sui-rust-sdk.git?rev=83ff809bc11cbabda21b60130e1f5420170548bf#83ff809bc11cbabda21b60130e1f5420170548bf"
+dependencies = [
+ "cynic-codegen",
+]
+
+[[package]]
 name = "sui-graphql-e2e-tests"
 version = "0.1.0"
 dependencies = [
@@ -15093,6 +15124,38 @@ dependencies = [
  "thiserror 1.0.69",
  "tokio",
  "tokio-util 0.7.13 (registry+https://github.com/rust-lang/crates.io-index)",
+ "tracing",
+]
+
+[[package]]
+name = "sui-replay-2"
+version = "0.1.0"
+dependencies = [
+ "base64ct",
+ "bcs",
+ "chrono",
+ "clap",
+ "cynic",
+ "cynic-codegen",
+ "futures",
+ "move-binary-format",
+ "move-bytecode-source-map",
+ "move-command-line-common",
+ "move-core-types",
+ "move-disassembler",
+ "move-ir-types",
+ "move-trace-format",
+ "prometheus",
+ "similar",
+ "sui-execution",
+ "sui-framework",
+ "sui-graphql-client",
+ "sui-graphql-client-build",
+ "sui-sdk-types",
+ "sui-types",
+ "telemetry-subscribers",
+ "thiserror 1.0.69",
+ "tokio",
  "tracing",
 ]
 
@@ -17480,7 +17543,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "97fee6b57c6a41524a810daee9286c02d7752c4253064d0b05472833a438f675"
 dependencies = [
  "cfg-if",
- "rand 0.8.5",
+ "rand 0.7.3",
  "static_assertions",
 ]
 
