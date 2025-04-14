@@ -6,13 +6,13 @@ use std::{
     ffi::OsString,
     fmt,
     fs::read_to_string,
+    ops::Range,
     path::{Path, PathBuf},
 };
 
 use anyhow::bail;
 use derive_where::derive_where;
 use serde::{Deserialize, Serialize};
-use serde_spanned::Spanned;
 use toml_edit::{
     visit_mut::{visit_table_like_kv_mut, visit_table_mut, VisitMut},
     DocumentMut, InlineTable, Item, KeyMut, Table, Value,
@@ -20,7 +20,7 @@ use toml_edit::{
 
 use crate::{
     dependency::{ManifestDependencyInfo, PinnedDependencyInfo},
-    errors::{with_file, Located, LockfileError, PackageError, PackageResult},
+    errors::{with_file, FileHandle, Located, LockfileError, PackageError, PackageResult},
     flavor::MoveFlavor,
 };
 
@@ -33,7 +33,7 @@ pub struct Lockfile<F: MoveFlavor + fmt::Debug> {
     unpublished: UnpublishedTable<F>,
 
     #[serde(default)]
-    published: BTreeMap<EnvironmentName, Publication<F>>,
+    published: BTreeMap<Located<EnvironmentName>, Publication<F>>,
 }
 
 #[derive(fmt::Debug, Serialize, Deserialize)]
@@ -42,7 +42,7 @@ pub struct Lockfile<F: MoveFlavor + fmt::Debug> {
 pub struct Publication<F: MoveFlavor + fmt::Debug> {
     #[serde(flatten)]
     metadata: F::PublishedMetadata,
-    dependencies: BTreeMap<PackageName, PinnedDependencyInfo<F>>,
+    dependencies: BTreeMap<Located<PackageName>, PinnedDependencyInfo<F>>,
 }
 
 #[derive(fmt::Debug, Serialize, Deserialize)]
@@ -53,7 +53,7 @@ struct UnpublishedTable<F: MoveFlavor + fmt::Debug> {
     dependencies: UnpublishedDependencies<F>,
 
     #[serde(default)]
-    dep_overrides: BTreeMap<EnvironmentName, UnpublishedDependencies<F>>,
+    dep_overrides: BTreeMap<Located<EnvironmentName>, UnpublishedDependencies<F>>,
 }
 
 #[derive(fmt::Debug, Serialize, Deserialize)]
@@ -61,9 +61,9 @@ struct UnpublishedTable<F: MoveFlavor + fmt::Debug> {
 #[serde(bound = "")]
 struct UnpublishedDependencies<F: MoveFlavor + fmt::Debug> {
     #[serde(default)]
-    pinned: BTreeMap<PackageName, PinnedDependencyInfo<F>>,
+    pinned: BTreeMap<Located<PackageName>, Located<PinnedDependencyInfo<F>>>,
     #[serde(default)]
-    unpinned: BTreeMap<PackageName, ManifestDependencyInfo<F>>,
+    unpinned: BTreeMap<Located<PackageName>, Located<ManifestDependencyInfo<F>>>,
 }
 
 impl<F: MoveFlavor + fmt::Debug> Lockfile<F> {
@@ -98,7 +98,9 @@ impl<F: MoveFlavor + fmt::Debug> Lockfile<F> {
                 return Err(metadata.unwrap_err().into());
             };
 
-            let old_entry = lockfiles.published.insert(env_name.clone(), metadata);
+            let old_entry = lockfiles
+                .published
+                .insert(Located::new(env_name, file_id, Range::default()), metadata);
             if old_entry.is_some() {
                 return Err(PackageError::Generic("Move.lock and Move.{env_name}.lock both contain publication information for {env_name}".to_string()));
             }
@@ -121,20 +123,21 @@ impl<F: MoveFlavor + fmt::Debug> Lockfile<F> {
         let (pubs, locals): (BTreeMap<_, _>, BTreeMap<_, _>) = output
             .published
             .into_iter()
-            .partition(|(env_name, metadata)| envs.contains_key(env_name));
+            .partition(|(env_name, metadata)| envs.contains_key(env_name.get_ref()));
         output.published = pubs;
 
         std::fs::write(path.as_ref().join("Move.lock"), output.render())?;
 
         for (chain, metadata) in locals {
             std::fs::write(
-                path.as_ref().join(format!("Move.{}.lock", chain)),
+                path.as_ref().join(format!("Move.{}.lock", chain.get_ref())),
                 metadata.render(),
             )?;
         }
 
         for chain in output.published.keys() {
-            let _ = std::fs::remove_file(path.as_ref().join(format!("Move.{}.lock", chain)));
+            let _ =
+                std::fs::remove_file(path.as_ref().join(format!("Move.{}.lock", chain.get_ref())));
         }
 
         Ok(())

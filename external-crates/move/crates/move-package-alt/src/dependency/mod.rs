@@ -11,7 +11,11 @@ use std::{collections::BTreeMap, fmt::Debug};
 use derive_where::derive_where;
 use serde::{Deserialize, Serialize};
 
-use crate::{errors::PackageResult, flavor::MoveFlavor, package::PackageName};
+use crate::{
+    errors::{Located, PackageResult},
+    flavor::MoveFlavor,
+    package::PackageName,
+};
 
 use external::ExternalDependency;
 use git::GitDependency;

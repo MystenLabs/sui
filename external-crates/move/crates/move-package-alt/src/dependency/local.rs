@@ -7,7 +7,6 @@
 use std::path::{Path, PathBuf};
 
 use serde::{Deserialize, Serialize};
-use serde_spanned::Spanned;
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct LocalDependency {

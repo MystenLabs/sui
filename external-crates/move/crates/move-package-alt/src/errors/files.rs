@@ -16,7 +16,7 @@ static FILES: AppendOnlyVec<(PathBuf, String)> = AppendOnlyVec::new();
 #[derive(Copy, Clone)]
 pub struct FileHandle {
     /// Invariant: guaranteed to be in FILES
-    id: usize,
+    pub id: usize,
 }
 
 impl FileHandle {

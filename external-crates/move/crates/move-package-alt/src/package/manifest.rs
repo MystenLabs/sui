@@ -29,11 +29,14 @@ const ALLOWED_EDITIONS: &[&str] = &["2024", "2024.beta", "legacy"];
 #[serde(bound = "")]
 pub struct Manifest<F: MoveFlavor> {
     package: PackageMetadata<F>,
-    environments: BTreeMap<EnvironmentName, F::EnvironmentID>,
+    environments: BTreeMap<Located<EnvironmentName>, F::EnvironmentID>,
     #[serde(default)]
-    dependencies: BTreeMap<PackageName, ManifestDependency<F>>,
+    dependencies: BTreeMap<Located<PackageName>, Located<ManifestDependency<F>>>,
     #[serde(default)]
-    dep_overrides: BTreeMap<EnvironmentName, BTreeMap<PackageName, ManifestDependencyOverride<F>>>,
+    dep_overrides: BTreeMap<
+        Located<EnvironmentName>,
+        BTreeMap<Located<PackageName>, Located<ManifestDependencyOverride<F>>>,
+    >,
 }
 
 #[derive(Debug, Deserialize)]
@@ -57,7 +60,7 @@ struct ManifestDependency<F: MoveFlavor> {
     is_override: bool,
 
     #[serde(default)]
-    rename_from: Option<PackageName>,
+    rename_from: Option<Located<PackageName>>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -98,7 +101,6 @@ impl<F: MoveFlavor> Manifest<F> {
                 span: Some(self.package.name.span()),
                 handle,
             };
-            err.emit()?;
             return Err(err.into());
         }
 
@@ -112,7 +114,6 @@ impl<F: MoveFlavor> Manifest<F> {
                 span: Some(self.package.edition.span()),
                 handle,
             };
-            err.emit()?;
             return Err(err.into());
         }
 
