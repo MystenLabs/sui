@@ -135,7 +135,7 @@ impl ReadStore for RocksDbStore {
     ) -> Option<FullCheckpointContents> {
         self.checkpoint_store
             .get_full_checkpoint_contents_by_sequence_number(sequence_number)
-            .expect("db error")
+            .unwrap_or_else(|_| panic!("db error while reading {}", sequence_number))
     }
 
     fn get_full_checkpoint_contents(
