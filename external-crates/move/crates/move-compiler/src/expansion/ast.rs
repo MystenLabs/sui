@@ -96,7 +96,7 @@ pub enum AttributeName_ {
 pub type AttributeName = Spanned<AttributeName_>;
 
 pub type InnerAttributes = UniqueMap<AttributeName, Attribute>;
-pub type Attributes = UniqueMap<Spanned<KnownAttribute>, Attribute>;
+pub type Attributes = UniqueMap<String, Spanned<KnownAttribute>>;
 
 //**************************************************************************************************
 // Modules
@@ -275,7 +275,7 @@ pub struct Constant {
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct AbilitySet(UniqueSet<Ability>);
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 #[allow(clippy::large_enum_variant)]
 pub enum ModuleAccess_ {
     Name(Name),

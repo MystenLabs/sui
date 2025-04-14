@@ -894,7 +894,7 @@ fn module_(
 ) -> (ModuleIdent, E::ModuleDefinition) {
     let P::ModuleDefinition {
         doc,
-        attributes,
+        attributes: attrs,
         loc,
         address,
         is_spec_module: _,
@@ -902,7 +902,7 @@ fn module_(
         members,
         definition_mode: _,
     } = mdef;
-    let attributes = flatten_attributes(context, AttributePosition::Module, attributes);
+    let attributes = attributes(context, AttributePosition::Module, attrs);
     let warning_filter = module_warning_filter(context, package_name, &attributes);
     context.push_warning_filter_scope(warning_filter);
     assert!(context.address.is_none());
@@ -1148,18 +1148,18 @@ fn known_attributes(
 
 fn gate_known_attribute(context: &mut Context, loc: Loc, known: &KnownAttribute) {
     match known {
-        KnownAttribute::Testing(_)
-        | KnownAttribute::Verification(_)
-        | KnownAttribute::Native(_)
-        | KnownAttribute::Diagnostic(_)
-        | KnownAttribute::DefinesPrimitive(_)
-        | KnownAttribute::External(_)
-        | KnownAttribute::Syntax(_)
-        | KnownAttribute::Deprecation(_) => (),
+            KnownAttribute::BytecodeInstruction(_)
+            | KnownAttribute::DefinesPrimitive(_)
+            | KnownAttribute::Deprecation(_)
+            | KnownAttribute::Diagnostic(_)
+            | KnownAttribute::External(_)
+            | KnownAttribute::Syntax(_)
+            | KnownAttribute::Testing(_)
+            | KnownAttribute::Verification(_) => (),
         KnownAttribute::Error(_) => {
-            let pkg = context.current_package();
-            context.check_feature(pkg, FeatureGate::CleverAssertions, loc);
-        }
+                let pkg = context.current_package();
+                context.check_feature(pkg, FeatureGate::CleverAssertions, loc);
+            }
     }
 }
 

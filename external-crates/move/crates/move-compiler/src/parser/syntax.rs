@@ -19,7 +19,9 @@ use move_ir_types::location::*;
 use move_proc_macros::growing_stack;
 use move_symbol_pool::{symbol, Symbol};
 
-struct Context<'env, 'lexer, 'input> {
+use super::format_one_of;
+
+pub(crate) struct Context<'env, 'lexer, 'input> {
     current_package: Option<Symbol>,
     env: &'env CompilationEnv,
     reporter: DiagnosticReporter<'env>,
@@ -73,7 +75,7 @@ impl<'env, 'lexer, 'input> Context<'env, 'lexer, 'input> {
         }
     }
 
-    fn add_diag(&self, diag: Diagnostic) {
+    pub fn add_diag(&self, diag: Diagnostic) {
         self.reporter.add_diag(diag);
     }
 
@@ -3163,8 +3165,9 @@ fn parse_ability(context: &mut Context) -> Result<Ability, Box<Diagnostic>> {
         }
         None => {
             let msg = format!(
-                "Unexpected {}. Expected a type ability, one of: 'copy', 'drop', 'store', or 'key'",
-                current_token_error_string(context.tokens)
+                "Unexpected {}. Expected a type ability, {}",
+                current_token_error_string(context.tokens),
+                format_one_of(["copy", "drop", "store", "key"]),
             );
             Err(Box::new(diag!(Syntax::UnexpectedToken, (loc, msg))))
         }
@@ -3195,12 +3198,7 @@ fn parse_type_parameter(context: &mut Context) -> Result<(Name, Vec<Ability>), B
                 Tok::Greater | Tok::Comma => Ok(false),
                 _ => Err(unexpected_token_error(
                     context.tokens,
-                    &format!(
-                        "one of: '{}', '{}', or '{}'",
-                        Tok::Plus,
-                        Tok::Greater,
-                        Tok::Comma
-                    ),
+                    &format_one_of([Tok::Plus, Tok::Greater, Tok::Comma]),
                 )),
             },
             parse_ability,
@@ -3515,13 +3513,7 @@ fn parse_enum_decl(
                 Tok::LBrace | Tok::Semicolon | Tok::LParen => Ok(false),
                 _ => Err(unexpected_token_error(
                     context.tokens,
-                    &format!(
-                        "one of: '{}', '{}', '{}', or '{}'",
-                        Tok::Comma,
-                        Tok::LBrace,
-                        Tok::LParen,
-                        Tok::Semicolon
-                    ),
+                    &format_one_of([Tok::Comma, Tok::LBrace, Tok::LParen, Tok::Semicolon]),
                 )),
             },
             parse_ability,
@@ -3844,13 +3836,7 @@ fn parse_infix_ability_declarations(
             Tok::LBrace | Tok::Semicolon | Tok::LParen => Ok(false),
             _ => Err(unexpected_token_error(
                 context.tokens,
-                &format!(
-                    "one of: '{}', '{}', '{}', or '{}'",
-                    Tok::Comma,
-                    Tok::LBrace,
-                    Tok::LParen,
-                    Tok::Semicolon
-                ),
+                &format_one_of([Tok::Comma, Tok::LBrace, Tok::LParen, Tok::Semicolon]),
             )),
         },
         parse_ability,
@@ -3904,7 +3890,7 @@ fn parse_postfix_ability_declarations(
                 Tok::Semicolon => Ok(false),
                 _ => Err(unexpected_token_error(
                     context.tokens,
-                    &format!("one of: '{}' or '{}'", Tok::Comma, Tok::Semicolon),
+                    &format_one_of([Tok::Comma, Tok::Semicolon]),
                 )),
             },
             parse_ability,

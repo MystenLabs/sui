@@ -14,7 +14,7 @@ use crate::{
 use move_command_line_common::files::FileHash;
 use move_ir_types::location::*;
 use move_symbol_pool::Symbol;
-use std::{fmt, hash::Hash};
+use std::{collections::BTreeSet, fmt, hash::Hash};
 
 macro_rules! new_name {
     ($n:ident) => {
@@ -164,19 +164,58 @@ pub struct UseDecl {
 // Attributes
 //**************************************************************************************************
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub enum AttributeValue_ {
     Value(Value),
     ModuleAccess(NameAccessChain),
 }
 pub type AttributeValue = Spanned<AttributeValue_>;
 
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum Attribute_ {
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
+pub enum ParsedAttribute_ {
     Name(Name),
     Assigned(Name, Box<AttributeValue>),
-    Parameterized(Name, Attributes),
+    Parameterized(Name, Spanned<Vec<ParsedAttribute>>),
 }
+
+pub type ParsedAttribute = Spanned<ParsedAttribute_>;
+
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
+pub enum Attribute_ {
+    BytecodeInstruction,
+    DefinesPrimtive(Name),
+    Deprecation {
+        note: Option<Value>,
+    },
+    Diagnostic {
+        /// Optional prefix, such as `lint(freeze_wrapped)` or top-level `unused-assigment`.
+        allow_set: BTreeSet<(Option<Name>, Name)>,
+        /// Indicates this was from a `#[lint_allow(...)]` form.
+        lint_allow: bool,
+    },
+    Error {
+        code: Option<Value>,
+    },
+    External {
+        attrs: Spanned<Vec<ParsedAttribute>>,
+    },
+    Syntax {
+        kind: Name,
+    },
+    VerifyOnly,
+    // -- testing attributes  --------------------
+    Test,
+    TestOnly,
+    ExpectedFailure {
+        failure_kind: Option<Name>,
+        abort_code: Option<AttributeValue>,
+        major_status: Option<Value>,
+        minor_status: Option<Value>,
+        location: Option<NameAccessChain>,
+    },
+    RandomTest,
+}
+
 pub type Attribute = Spanned<Attribute_>;
 
 pub type Attributes = Spanned<Vec<Attribute>>;
@@ -378,7 +417,7 @@ pub struct Constant {
 //**************************************************************************************************
 
 // A single name with optional type arguments that may be a macro call.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub struct PathEntry {
     pub name: Name,
     pub tyargs: Option<Spanned<Vec<Type>>>,
@@ -388,7 +427,7 @@ pub struct PathEntry {
 // A path root.
 // For now these should never have tyargs or macro call set (though the type arguments will be
 // used for enums).
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub struct RootPathEntry {
     pub name: LeadingNameAccess,
     pub tyargs: Option<Spanned<Vec<Type>>>,
@@ -396,7 +435,7 @@ pub struct RootPathEntry {
 }
 
 // INVARIANT: entries should be non-zero, or this should be converted to a `SingleName`.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub struct NamePath {
     pub root: RootPathEntry,
     pub entries: Vec<PathEntry>,
@@ -406,7 +445,7 @@ pub struct NamePath {
 
 // See the NameAccess trait below for usage.
 // INVARIANT: never push onto a Single. A Single is a final form, demoted from a Path.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub enum NameAccessChain_ {
     Single(PathEntry),
     Path(NamePath),
@@ -426,7 +465,7 @@ pub enum Ability_ {
 }
 pub type Ability = Spanned<Ability_>;
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub enum Type_ {
     // N
     // N<t1, ... , tn>
@@ -481,7 +520,7 @@ pub type BindWithRangeList = Spanned<Vec<BindWithRange>>;
 pub type LambdaBindings_ = Vec<(BindList, Option<Type>)>;
 pub type LambdaBindings = Spanned<LambdaBindings_>;
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub enum Value_ {
     // @<num>
     Address(LeadingNameAccess),
@@ -1358,6 +1397,18 @@ impl fmt::Display for Type_ {
                 write!(f, ")")
             }
             UnresolvedError => write!(f, "_|_"),
+        }
+    }
+}
+
+impl fmt::Display for Value_ {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Value_::Address(sp!(_, addr)) => write!(f, "{addr}"),
+            Value_::Num(symbol) => write!(f, "{}", symbol.as_ref()),
+            Value_::Bool(value) => write!(f, "{value}"),
+            Value_::HexString(symbol) => write!(f, "{}", symbol.as_ref()),
+            Value_::ByteString(symbol) => write!(f, "{}", symbol.as_ref()),
         }
     }
 }
