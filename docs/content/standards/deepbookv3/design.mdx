@@ -3,8 +3,6 @@ title: DeepBook Design
 sidebar_label: Design
 ---
 
-{@include: ../../snippets/deepbook.mdx}
-
 At a high level, the DeepBook design follows the following flow, which revolves around three shared objects:
   - `Pool`: A shared object that represents one market and is responsible for managing its order book, users, stakes, and so on. See the [Pool shared object](#pool) section to learn more.
   - `PoolRegistry`: Used only during pool creation, it makes sure that duplicate pools are not created and maintains package versioning.
