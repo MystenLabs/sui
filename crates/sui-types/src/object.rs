@@ -545,6 +545,14 @@ impl Owner {
         }
     }
 
+    pub fn full_object_id(&self, object_id: ObjectID) -> FullObjectID {
+        if let Some(start_version) = self.start_version() {
+            FullObjectID::Consensus((object_id, start_version))
+        } else {
+            FullObjectID::Fastpath(object_id)
+        }
+    }
+
     // Returns the object's Authenticator, if it has one.
     pub fn authenticator(&self) -> Option<&Authenticator> {
         match self {
@@ -862,12 +870,7 @@ impl ObjectInner {
     }
 
     pub fn full_id(&self) -> FullObjectID {
-        let id = self.id();
-        if let Some(start_version) = self.owner.start_version() {
-            FullObjectID::Consensus((id, start_version))
-        } else {
-            FullObjectID::Fastpath(id)
-        }
+        self.owner.full_object_id(self.id())
     }
 
     pub fn version(&self) -> SequenceNumber {

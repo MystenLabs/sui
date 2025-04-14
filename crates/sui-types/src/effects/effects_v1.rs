@@ -9,6 +9,7 @@ use crate::effects::{InputSharedObject, TransactionEffectsAPI, UnchangedSharedKi
 use crate::execution_status::ExecutionStatus;
 use crate::gas::GasCostSummary;
 use crate::object::Owner;
+use crate::storage::InputKey;
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, HashSet};
 use std::fmt::{Display, Formatter, Write};
@@ -301,6 +302,18 @@ impl TransactionEffectsAPI for TransactionEffectsV1 {
                     Some((oref.0, UnchangedSharedKind::ReadOnlyRoot((oref.1, oref.2))))
                 }
                 _ => None,
+            })
+            .collect()
+    }
+
+    fn get_output_keys(&self) -> Vec<InputKey> {
+        self.created
+            .iter()
+            .chain(self.mutated.iter())
+            .chain(self.unwrapped.iter())
+            .map(|(oref, owner)| InputKey::VersionedObject {
+                id: owner.full_object_id(oref.0),
+                version: oref.1,
             })
             .collect()
     }

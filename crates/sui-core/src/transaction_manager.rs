@@ -452,6 +452,7 @@ impl TransactionManager {
                             fatal!("Failed to get input object keys: {:?}", e);
                         }
                     };
+                info!("input_object_keys: {:?}", input_object_keys);
 
                 if input_object_kinds.len() != input_object_keys.len() {
                     error!("Duplicated input objects: {:?}", input_object_kinds);

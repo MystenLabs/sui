@@ -4,8 +4,8 @@
 use super::object_change::{ObjectIn, ObjectOut};
 use super::{EffectsObjectChange, IDOperation, ObjectChange};
 use crate::base_types::{
-    EpochId, ObjectDigest, ObjectID, ObjectRef, SequenceNumber, SuiAddress, TransactionDigest,
-    VersionDigest,
+    EpochId, FullObjectID, ObjectDigest, ObjectID, ObjectRef, SequenceNumber, SuiAddress,
+    TransactionDigest, VersionDigest,
 };
 use crate::digests::{EffectsAuxDataDigest, TransactionEventsDigest};
 use crate::effects::{InputSharedObject, TransactionEffectsAPI};
@@ -15,6 +15,7 @@ use crate::gas::GasCostSummary;
 #[cfg(debug_assertions)]
 use crate::is_system_package;
 use crate::object::{Owner, OBJECT_START_VERSION};
+use crate::storage::InputKey;
 use serde::{Deserialize, Serialize};
 #[cfg(debug_assertions)]
 use std::collections::HashSet;
@@ -364,6 +365,45 @@ impl TransactionEffectsAPI for TransactionEffectsV2 {
 
     fn unchanged_shared_objects(&self) -> Vec<(ObjectID, UnchangedSharedKind)> {
         self.unchanged_shared_objects.clone()
+    }
+
+    fn get_output_keys(&self) -> Vec<InputKey> {
+        self.changed_objects
+            .iter()
+            .filter_map(
+                |(id, change)| match (&change.input_state, &change.output_state) {
+                    (_, ObjectOut::ObjectWrite((_, owner))) => Some(InputKey::VersionedObject {
+                        id: owner.full_object_id(*id),
+                        version: self.lamport_version,
+                    }),
+                    (_, ObjectOut::PackageWrite(..)) => Some(InputKey::Package { id: *id }),
+                    (ObjectIn::Exist((_, old_owner)), ObjectOut::NotExist) => {
+                        // For deleted consensus/shared objects, we also need to include them
+                        // as output keys so that potentially dependent transactions are notified.
+                        old_owner
+                            .start_version()
+                            .map(|start_version| InputKey::VersionedObject {
+                                id: FullObjectID::Consensus((*id, start_version)),
+                                version: self.lamport_version,
+                            })
+                    }
+                    _ => None,
+                },
+            )
+            .chain(
+                self.unchanged_shared_objects
+                    .iter()
+                    .filter_map(|(id, change_kind)| match change_kind {
+                        UnchangedSharedKind::MutateConsensusStreamEnded(start_version) => {
+                            Some(InputKey::VersionedObject {
+                                id: FullObjectID::Consensus((*id, *start_version)),
+                                version: self.lamport_version,
+                            })
+                        }
+                        _ => None,
+                    }),
+            )
+            .collect()
     }
 
     fn status_mut_for_testing(&mut self) -> &mut ExecutionStatus {

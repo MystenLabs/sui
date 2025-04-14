@@ -1561,7 +1561,8 @@ impl AuthorityState {
         let input_object_count = inner_temporary_store.input_objects.len();
         let shared_object_count = effects.input_shared_objects().len();
 
-        let output_keys = inner_temporary_store.get_output_keys(effects);
+        let output_keys = effects.get_output_keys();
+        info!("output_keys: {:?}", output_keys);
 
         // index certificate
         let _ = self
