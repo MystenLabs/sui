@@ -381,6 +381,7 @@ impl EpochStore {
         Self { data }
     }
 
+    // TODO: implement `lazy` once the data is available in the indexer
     fn lazy() -> Self {
         Self {
             data: BTreeMap::new(),

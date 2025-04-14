@@ -153,10 +153,10 @@ fn get_trace_output_path(trace_execution: Option<String>) -> Result<PathBuf, Rep
                 err: format!("Failed to get current directory: {:?}", e),
             })?;
             let path = current_dir.join(DEFAULT_TRACE_OUTPUT_DIR);
-            if path.exists() {
+            if path.exists() && path.is_file() {
                 return Err(ReplayError::TracingError {
                     err: format!(
-                        "Default path to store trace output already exists: {:?}",
+                        "Default path to store trace output already exists and is a file, not a directory: {:?}",
                         path
                     ),
                 });
