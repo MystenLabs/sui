@@ -1,7 +1,7 @@
 use codespan_reporting::term::termcolor::Buffer;
 use glob;
 use move_compiler::editions::Flavor;
-use move_package::{BuildConfig as MoveBuildConfig, ModelConfig};
+use move_package::BuildConfig as MoveBuildConfig;
 use move_prover::run_move_prover_with_model;
 use regex::Regex;
 use std::path::{Path, PathBuf};
@@ -44,11 +44,6 @@ fn run_prover(file_path: &PathBuf) -> String {
         // Try to build the model
         let result = match config.move_model_for_package_legacy(
             file_dir,
-            ModelConfig {
-                all_files_as_targets: false,
-                target_filter: None,
-            },
-            None
         ) {
             Ok(model) => {
                 // Create prover options
