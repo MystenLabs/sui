@@ -134,16 +134,12 @@ pub trait ReadStore: ObjectStore {
     //
 
     /// Get a "full" checkpoint for purposes of state-sync
-    /// "full" checkpoints include: header, contents, transactions, effects
-    fn get_full_checkpoint_contents_by_sequence_number(
-        &self,
-        sequence_number: CheckpointSequenceNumber,
-    ) -> Option<FullCheckpointContents>;
-
-    /// Get a "full" checkpoint for purposes of state-sync
-    /// "full" checkpoints include: header, contents, transactions, effects
+    /// "full" checkpoints include: header, contents, transactions, effects.
+    /// sequence_number is optional since we can always query it using the digest.
+    /// However if it is provided, we can avoid an extra db lookup.
     fn get_full_checkpoint_contents(
         &self,
+        sequence_number: Option<CheckpointSequenceNumber>,
         digest: &CheckpointContentsDigest,
     ) -> Option<FullCheckpointContents>;
 
@@ -352,18 +348,12 @@ impl<T: ReadStore + ?Sized> ReadStore for &T {
         (*self).multi_get_events(event_digests)
     }
 
-    fn get_full_checkpoint_contents_by_sequence_number(
-        &self,
-        sequence_number: CheckpointSequenceNumber,
-    ) -> Option<FullCheckpointContents> {
-        (*self).get_full_checkpoint_contents_by_sequence_number(sequence_number)
-    }
-
     fn get_full_checkpoint_contents(
         &self,
+        sequence_number: Option<CheckpointSequenceNumber>,
         digest: &CheckpointContentsDigest,
     ) -> Option<FullCheckpointContents> {
-        (*self).get_full_checkpoint_contents(digest)
+        (*self).get_full_checkpoint_contents(sequence_number, digest)
     }
 
     fn get_checkpoint_data(
@@ -462,18 +452,12 @@ impl<T: ReadStore + ?Sized> ReadStore for Box<T> {
         (**self).multi_get_events(event_digests)
     }
 
-    fn get_full_checkpoint_contents_by_sequence_number(
-        &self,
-        sequence_number: CheckpointSequenceNumber,
-    ) -> Option<FullCheckpointContents> {
-        (**self).get_full_checkpoint_contents_by_sequence_number(sequence_number)
-    }
-
     fn get_full_checkpoint_contents(
         &self,
+        sequence_number: Option<CheckpointSequenceNumber>,
         digest: &CheckpointContentsDigest,
     ) -> Option<FullCheckpointContents> {
-        (**self).get_full_checkpoint_contents(digest)
+        (**self).get_full_checkpoint_contents(sequence_number, digest)
     }
 
     fn get_checkpoint_data(
@@ -572,18 +556,12 @@ impl<T: ReadStore + ?Sized> ReadStore for Arc<T> {
         (**self).multi_get_events(event_digests)
     }
 
-    fn get_full_checkpoint_contents_by_sequence_number(
-        &self,
-        sequence_number: CheckpointSequenceNumber,
-    ) -> Option<FullCheckpointContents> {
-        (**self).get_full_checkpoint_contents_by_sequence_number(sequence_number)
-    }
-
     fn get_full_checkpoint_contents(
         &self,
+        sequence_number: Option<CheckpointSequenceNumber>,
         digest: &CheckpointContentsDigest,
     ) -> Option<FullCheckpointContents> {
-        (**self).get_full_checkpoint_contents(digest)
+        (**self).get_full_checkpoint_contents(sequence_number, digest)
     }
 
     fn get_checkpoint_data(
