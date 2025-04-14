@@ -126,12 +126,13 @@ impl MyEndpoint {
 
         if disable_caching_resolver {
             if let Some(tls_config) = self.tls_config {
-                self.endpoint.connect_with_connector_lazy(
+                Channel::new(
                     hyper_rustls::HttpsConnectorBuilder::new()
                         .with_tls_config(tls_config)
                         .https_only()
                         .enable_http2()
                         .build(),
+                    self.endpoint,
                 )
             } else {
                 self.endpoint.connect_lazy()
@@ -147,9 +148,9 @@ impl MyEndpoint {
                 let https = hyper_rustls::HttpsConnectorBuilder::new()
                     .with_tls_config(tls_config)
                     .https_only()
-                    .enable_http1()
+                    .enable_http2()
                     .wrap_connector(http);
-                self.endpoint.connect_with_connector_lazy(https)
+                Channel::new(https, self.endpoint)
             } else {
                 self.endpoint.connect_with_connector_lazy(http)
             }
@@ -163,8 +164,7 @@ impl MyEndpoint {
                 .https_only()
                 .enable_http2()
                 .build();
-            self.endpoint
-                .connect_with_connector(https_connector)
+            Channel::connect(https_connector, self.endpoint)
                 .await
                 .map_err(Into::into)
         } else {
