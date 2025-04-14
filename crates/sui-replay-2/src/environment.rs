@@ -73,6 +73,20 @@ impl ReplayEnvironment {
         self.data_store.rgp(epoch)
     }
 
+    //
+    // Transaction load API
+    //
+
+    // Load transaction data and effects
+    pub async fn load_txn_data(
+        &self,
+        tx_digest: &str,
+    ) -> Result<(TransactionData, TransactionEffects), ReplayError> {
+        self.data_store
+            .transaction_data_and_effects(tx_digest)
+            .await
+    }
+    
     // Load and add objects to the environment.
     // Return the packages of the type parameters instantiated
     // (e.g. `SUI` in `Coin<SUI>`).
@@ -95,19 +109,9 @@ impl ReplayEnvironment {
         Ok(packages)
     }
 
-    pub fn load_child_object(
-        &self,
-        parent: &ObjectID,
-        child: &ObjectID,
-        child_version_upper_bound: SequenceNumber,
-    ) -> Result<Option<Object>, ReplayError> {
-        self.data_store
-            .read_child_object(parent, child, child_version_upper_bound)
-    }
-
     // Load packages and their dependencies.
     // It's a 2 step process: first loads all packages in `packages`,
-    // then collects all dependencies and loads all of them
+    // then collects all dependencies and load them
     pub async fn load_packages(
         &mut self,
         packages: &BTreeSet<ObjectID>,
@@ -149,6 +153,10 @@ impl ReplayEnvironment {
         Ok(())
     }
 
+    //
+    // Execution API
+    //
+
     // Get an object at the latest version known to the environment
     pub fn get_object(&self, object_id: &ObjectID) -> Option<Object> {
         self.objects
@@ -165,8 +173,10 @@ impl ReplayEnvironment {
             .cloned()
     }
 
-    // Load a system package for the given epoch
-    pub fn get_system_package_at_epoch(
+    // Load a system package for the given epoch.
+    // System package ids are stable and the version is only
+    // known via the epoch.
+    pub fn get_system_package_object(
         &self,
         pkg_id: &ObjectID,
         epoch: u64,
@@ -193,7 +203,8 @@ impl ReplayEnvironment {
         }
     }
 
-    // Get a package by its ID
+    // Get a package by its ID.
+    // The package must exist in the environment, no loading at runtime.
     pub fn get_package_object(&self, package_id: &ObjectID) -> Result<Object, ReplayError> {
         self.package_objects
             .get(package_id)
@@ -203,14 +214,15 @@ impl ReplayEnvironment {
             })
     }
 
-    // Load transaction data and effects
-    pub async fn load_txn_data(
+    // Dynamic field access
+    pub fn read_child_object(
         &self,
-        tx_digest: &str,
-    ) -> Result<(TransactionData, TransactionEffects), ReplayError> {
+        parent: &ObjectID,
+        child: &ObjectID,
+        child_version_upper_bound: SequenceNumber,
+    ) -> Result<Option<Object>, ReplayError> {
         self.data_store
-            .transaction_data_and_effects(tx_digest)
-            .await
+            .read_child_object(parent, child, child_version_upper_bound)
     }
 
     //

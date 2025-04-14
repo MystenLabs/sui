@@ -29,27 +29,28 @@ pub struct ReplayTransaction {
 
 impl ReplayTransaction {
     pub async fn load(env: &mut ReplayEnvironment, tx_digest: &str) -> Result<Self, ReplayError> {
-        // load transaction data and effects
-        let (txn_data, effects) = env.load_txn_data(tx_digest).await?;
-        // get the ids and versions of the objects to load
-        let input_objects = get_input_objects(&txn_data, &effects)?;
-        let type_param_pkgs = env.load_objects(&input_objects).await?;
-
-        // load all packages required by the transaction
-        let mut packages = get_packages(&txn_data)?;
-        packages.extend(&type_param_pkgs);
-        env.load_packages(&packages).await?;
-
-        // load the `InputObjects` for `execute_transaction_to_effects`
-        let input_objects =
-            get_input_objects_for_replay(env, &txn_data, tx_digest, &input_objects)?;
-
         let digest = tx_digest.parse().map_err(|e| {
             let err = format!("{:?}", e);
             let digest = tx_digest.to_string();
             ReplayError::FailedToParseDigest { digest, err }
         })?;
 
+        // load transaction data and effects
+        let (txn_data, effects) = env.load_txn_data(tx_digest).await?;
+        // load objects and packages used by the transaction
+        // get the ids and versions of the input objects to load
+        let input_objects = get_input_objects(&txn_data, &effects)?;
+        // load the objects and collect the package ids of the type parameters
+        let type_param_pkgs = env.load_objects(&input_objects).await?;
+        // collect all package ids required by the transaction
+        let mut packages = get_packages(&txn_data)?;
+        packages.extend(&type_param_pkgs);
+        // load the packages
+        env.load_packages(&packages).await?;
+
+        // make the `InputObjects` for `execute_transaction_to_effects`
+        let input_objects =
+            get_input_objects_for_replay(env, &txn_data, tx_digest, &input_objects)?;
         let epoch = effects.executed_epoch();
         let protocol_config = env
             .protocol_config(epoch, env.chain())

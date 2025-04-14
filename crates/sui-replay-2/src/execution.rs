@@ -318,7 +318,7 @@ struct ReplayStore<'a> {
 impl BackingPackageStore for ReplayStore<'_> {
     fn get_package_object(&self, package_id: &ObjectID) -> SuiResult<Option<PackageObject>> {
         let pkg_obj = if is_framework_package(package_id) {
-            self.env.get_system_package_at_epoch(package_id, self.epoch)
+            self.env.get_system_package_object(package_id, self.epoch)
         } else {
             self.env.get_package_object(package_id)
         };
@@ -348,7 +348,7 @@ impl ChildObjectResolver for ReplayStore<'_> {
         child_version_upper_bound: SequenceNumber,
     ) -> SuiResult<Option<Object>> {
         self.env
-            .load_child_object(parent, child, child_version_upper_bound)
+            .read_child_object(parent, child, child_version_upper_bound)
             .map_err(|e| SuiError::DynamicFieldReadError(e.to_string()))
     }
 
