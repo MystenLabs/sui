@@ -86,7 +86,7 @@ impl ReplayEnvironment {
             .transaction_data_and_effects(tx_digest)
             .await
     }
-    
+
     // Load and add objects to the environment.
     // Return the packages of the type parameters instantiated
     // (e.g. `SUI` in `Coin<SUI>`).
