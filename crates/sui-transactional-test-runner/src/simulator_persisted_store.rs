@@ -628,9 +628,9 @@ impl ReadStore for PersistedStoreInnerReadOnlyWrapper {
 
     fn get_full_checkpoint_contents(
         &self,
+        _sequence_number: Option<CheckpointSequenceNumber>,
         _digest: &CheckpointContentsDigest,
-    ) -> Result<Option<sui_types::messages_checkpoint::FullCheckpointContents>, TypedStoreError>
-    {
+    ) -> Option<sui_types::messages_checkpoint::FullCheckpointContents> {
         todo!()
     }
 }

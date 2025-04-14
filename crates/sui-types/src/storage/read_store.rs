@@ -145,11 +145,14 @@ pub trait ReadStore: ObjectStore {
     ) -> Result<Option<FullCheckpointContents>, TypedStoreError>;
 
     /// Get a "full" checkpoint for purposes of state-sync
-    /// "full" checkpoints include: header, contents, transactions, effects
+    /// "full" checkpoints include: header, contents, transactions, effects.
+    /// sequence_number is optional since we can always query it using the digest.
+    /// However if it is provided, we can avoid an extra db lookup.
     fn get_full_checkpoint_contents(
         &self,
+        sequence_number: Option<CheckpointSequenceNumber>,
         digest: &CheckpointContentsDigest,
-    ) -> Result<Option<FullCheckpointContents>, TypedStoreError>;
+    ) -> Option<FullCheckpointContents>;
 
     // Fetch all checkpoint data
     // TODO fix return type to not be anyhow
@@ -325,9 +328,10 @@ impl<T: ReadStore + ?Sized> ReadStore for &T {
 
     fn get_full_checkpoint_contents(
         &self,
+        sequence_number: Option<CheckpointSequenceNumber>,
         digest: &CheckpointContentsDigest,
-    ) -> Result<Option<FullCheckpointContents>, TypedStoreError> {
-        (*self).get_full_checkpoint_contents(digest)
+    ) -> Option<FullCheckpointContents> {
+        (*self).get_full_checkpoint_contents(sequence_number, digest)
     }
 
     fn get_checkpoint_data(
@@ -435,9 +439,10 @@ impl<T: ReadStore + ?Sized> ReadStore for Box<T> {
 
     fn get_full_checkpoint_contents(
         &self,
+        sequence_number: Option<CheckpointSequenceNumber>,
         digest: &CheckpointContentsDigest,
-    ) -> Result<Option<FullCheckpointContents>, TypedStoreError> {
-        (**self).get_full_checkpoint_contents(digest)
+    ) -> Option<FullCheckpointContents> {
+        (**self).get_full_checkpoint_contents(sequence_number, digest)
     }
 
     fn get_checkpoint_data(
@@ -545,9 +550,10 @@ impl<T: ReadStore + ?Sized> ReadStore for Arc<T> {
 
     fn get_full_checkpoint_contents(
         &self,
+        sequence_number: Option<CheckpointSequenceNumber>,
         digest: &CheckpointContentsDigest,
-    ) -> Result<Option<FullCheckpointContents>, TypedStoreError> {
-        (**self).get_full_checkpoint_contents(digest)
+    ) -> Option<FullCheckpointContents> {
+        (**self).get_full_checkpoint_contents(sequence_number, digest)
     }
 
     fn get_checkpoint_data(

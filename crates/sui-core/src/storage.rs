@@ -10,6 +10,7 @@ use crate::rpc_index::OwnerIndexInfo;
 use crate::rpc_index::OwnerIndexKey;
 use crate::rpc_index::RpcIndexStore;
 use move_core_types::language_storage::StructTag;
+use mysten_common::debug_fatal;
 use parking_lot::Mutex;
 use std::sync::Arc;
 use sui_types::base_types::ObjectID;
@@ -40,6 +41,7 @@ use sui_types::storage::WriteStore;
 use sui_types::storage::{ObjectKey, ReadStore};
 use sui_types::transaction::VerifiedTransaction;
 use tap::Pipe;
+use tap::TapFallible;
 use typed_store::TypedStoreError;
 
 #[derive(Clone)]
@@ -139,19 +141,40 @@ impl ReadStore for RocksDbStore {
 
     fn get_full_checkpoint_contents(
         &self,
+        sequence_number: Option<CheckpointSequenceNumber>,
         digest: &CheckpointContentsDigest,
-    ) -> Result<Option<FullCheckpointContents>, TypedStoreError> {
-        // First look to see if we saved the complete contents already.
-        if let Some(seq_num) = self
-            .checkpoint_store
-            .get_sequence_number_by_contents_digest(digest)
-            .expect("db error")
-        {
-            let contents = self
+    ) -> Option<FullCheckpointContents> {
+        #[cfg(debug_assertions)]
+        if let Some(sequence_number) = sequence_number {
+            // When sequence_number is provided as an optimization, we want to ensure that
+            // the sequence number we get from the db matches the one we provided.
+            // Only check this in debug mode though.
+            if let Some(loaded_sequence_number) = self
                 .checkpoint_store
-                .get_full_checkpoint_contents_by_sequence_number(seq_num)?;
-            if contents.is_some() {
-                return Ok(contents);
+                .get_sequence_number_by_contents_digest(digest)
+                .expect("db error")
+            {
+                assert_eq!(loaded_sequence_number, sequence_number);
+            }
+        }
+
+        let sequence_number = sequence_number.or_else(|| {
+            self.checkpoint_store
+                .get_sequence_number_by_contents_digest(digest)
+                .expect("db error")
+        });
+        if let Some(sequence_number) = sequence_number {
+            // Note: We don't use `?` here because we want to tolerate
+            // potential db errors due to data corruption.
+            // In that case, we will fallback and construct the contents
+            // from the individual components as if we could not find the
+            // cached full contents.
+            if let Ok(Some(contents)) = self
+                .checkpoint_store
+                .get_full_checkpoint_contents_by_sequence_number(sequence_number)
+                .tap_err(|e| debug_fatal!("error getting full checkpoint contents: {:?}", e))
+            {
+                return Some(contents);
             }
         }
 
@@ -185,7 +208,6 @@ impl ReadStore for RocksDbStore {
                     transactions.into_iter(),
                 ))
             })
-            .pipe(Ok)
     }
 
     fn get_committee(&self, epoch: EpochId) -> Option<Arc<Committee>> {
@@ -438,9 +460,11 @@ impl ReadStore for RestReadStore {
 
     fn get_full_checkpoint_contents(
         &self,
+        sequence_number: Option<CheckpointSequenceNumber>,
         digest: &CheckpointContentsDigest,
-    ) -> Result<Option<FullCheckpointContents>, TypedStoreError> {
-        self.rocks.get_full_checkpoint_contents(digest)
+    ) -> Option<FullCheckpointContents> {
+        self.rocks
+            .get_full_checkpoint_contents(sequence_number, digest)
     }
 }
 

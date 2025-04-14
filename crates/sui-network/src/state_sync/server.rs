@@ -126,8 +126,7 @@ where
     ) -> Result<Response<Option<FullCheckpointContents>>, Status> {
         let contents = self
             .store
-            .get_full_checkpoint_contents(request.inner())
-            .map_err(|e| Status::internal(e.to_string()))?;
+            .get_full_checkpoint_contents(None, request.inner());
         Ok(Response::new(contents))
     }
 }

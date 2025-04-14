@@ -2600,9 +2600,10 @@ impl ReadStore for SuiTestAdapter {
 
     fn get_full_checkpoint_contents(
         &self,
+        sequence_number: Option<CheckpointSequenceNumber>,
         digest: &CheckpointContentsDigest,
-    ) -> Result<Option<sui_types::messages_checkpoint::FullCheckpointContents>, TypedStoreError>
-    {
-        self.executor.get_full_checkpoint_contents(digest)
+    ) -> Option<sui_types::messages_checkpoint::FullCheckpointContents> {
+        self.executor
+            .get_full_checkpoint_contents(sequence_number, digest)
     }
 }

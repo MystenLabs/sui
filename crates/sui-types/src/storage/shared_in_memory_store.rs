@@ -79,24 +79,22 @@ impl ReadStore for SharedInMemoryStore {
 
     fn get_full_checkpoint_contents(
         &self,
+        sequence_number: Option<CheckpointSequenceNumber>,
         digest: &CheckpointContentsDigest,
-    ) -> Result<Option<FullCheckpointContents>, TypedStoreError> {
+    ) -> Option<FullCheckpointContents> {
         // First look to see if we saved the complete contents already.
         let inner = self.inner();
-        let contents = inner
-            .get_sequence_number_by_contents_digest(digest)
+        let contents = sequence_number
+            .or_else(|| inner.get_sequence_number_by_contents_digest(digest))
             .and_then(|seq_num| inner.full_checkpoint_contents.get(&seq_num).cloned());
         if contents.is_some() {
-            return Ok(contents);
+            return contents;
         }
 
         // Otherwise gather it from the individual components.
-        inner
-            .get_checkpoint_contents(digest)
-            .and_then(|contents| {
-                FullCheckpointContents::from_checkpoint_contents(self, contents.to_owned())
-            })
-            .pipe(Ok)
+        inner.get_checkpoint_contents(digest).and_then(|contents| {
+            FullCheckpointContents::from_checkpoint_contents(self, contents.to_owned())
+        })
     }
 
     fn get_committee(&self, epoch: EpochId) -> Option<Arc<Committee>> {
@@ -497,9 +495,10 @@ impl ReadStore for SingleCheckpointSharedInMemoryStore {
 
     fn get_full_checkpoint_contents(
         &self,
+        sequence_number: Option<CheckpointSequenceNumber>,
         digest: &CheckpointContentsDigest,
-    ) -> Result<Option<FullCheckpointContents>, TypedStoreError> {
-        self.0.get_full_checkpoint_contents(digest)
+    ) -> Option<FullCheckpointContents> {
+        self.0.get_full_checkpoint_contents(sequence_number, digest)
     }
 
     fn get_committee(&self, epoch: EpochId) -> Option<Arc<Committee>> {
