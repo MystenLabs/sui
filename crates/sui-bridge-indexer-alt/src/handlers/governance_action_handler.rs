@@ -1,6 +1,6 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
-use crate::handlers::{BRIDGE, COMMITTEE, LIMITER, TREASURY};
+use crate::handlers::{is_bridge_txn, BRIDGE, COMMITTEE, LIMITER, TREASURY};
 use crate::struct_tag;
 use async_trait::async_trait;
 use diesel_async::RunQueryDsl;
@@ -65,6 +65,9 @@ impl Processor for GovernanceActionHandler {
             .transactions
             .iter()
             .try_fold(vec![], |results, tx| {
+                if !is_bridge_txn(tx) {
+                    return Ok(results);
+                }
                 let txn_digest = tx.transaction.digest().inner();
                 let sender_address = tx.transaction.sender_address();
                 tx.events.iter().flat_map(|events| &events.data).try_fold(
