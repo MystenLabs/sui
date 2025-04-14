@@ -867,44 +867,36 @@ public(package) fun update_candidate_worker_pubkey(
 /// NOTE: this function SHOULD ONLY be called by validator_set when
 /// advancing an epoch.
 public(package) fun effectuate_staged_metadata(self: &mut Validator) {
-    if (self.next_epoch_network_address().is_some()) {
-        self.metadata.net_address = self.metadata.next_epoch_net_address.extract();
-        self.metadata.next_epoch_net_address = option::none();
-    };
-
-    if (self.next_epoch_p2p_address().is_some()) {
-        self.metadata.p2p_address = self.metadata.next_epoch_p2p_address.extract();
-        self.metadata.next_epoch_p2p_address = option::none();
-    };
-
-    if (self.next_epoch_primary_address().is_some()) {
-        self.metadata.primary_address = self.metadata.next_epoch_primary_address.extract();
-        self.metadata.next_epoch_primary_address = option::none();
-    };
-
-    if (self.next_epoch_worker_address().is_some()) {
-        self.metadata.worker_address = self.metadata.next_epoch_worker_address.extract();
-        self.metadata.next_epoch_worker_address = option::none();
-    };
-
-    if (self.next_epoch_protocol_pubkey_bytes().is_some()) {
-        self.metadata.protocol_pubkey_bytes =
-            self.metadata.next_epoch_protocol_pubkey_bytes.extract();
-        self.metadata.next_epoch_protocol_pubkey_bytes = option::none();
+    do_extract!(&mut self.metadata.next_epoch_net_address, |v| {
+        self.metadata.net_address = v
+    });
+    do_extract!(&mut self.metadata.next_epoch_p2p_address, |v| {
+        self.metadata.p2p_address = v
+    });
+    do_extract!(&mut self.metadata.next_epoch_primary_address, |v| {
+        self.metadata.primary_address = v
+    });
+    do_extract!(&mut self.metadata.next_epoch_worker_address, |v| {
+        self.metadata.worker_address = v
+    });
+    do_extract!(&mut self.metadata.next_epoch_protocol_pubkey_bytes, |v| {
+        self.metadata.protocol_pubkey_bytes = v;
         self.metadata.proof_of_possession = self.metadata.next_epoch_proof_of_possession.extract();
-        self.metadata.next_epoch_proof_of_possession = option::none();
-    };
+    });
+    do_extract!(&mut self.metadata.next_epoch_network_pubkey_bytes, |v| {
+        self.metadata.network_pubkey_bytes = v
+    });
+    do_extract!(&mut self.metadata.next_epoch_worker_pubkey_bytes, |v| {
+        self.metadata.worker_pubkey_bytes = v
+    });
+}
 
-    if (self.next_epoch_network_pubkey_bytes().is_some()) {
-        self.metadata.network_pubkey_bytes =
-            self.metadata.next_epoch_network_pubkey_bytes.extract();
-        self.metadata.next_epoch_network_pubkey_bytes = option::none();
-    };
-
-    if (self.next_epoch_worker_pubkey_bytes().is_some()) {
-        self.metadata.worker_pubkey_bytes = self.metadata.next_epoch_worker_pubkey_bytes.extract();
-        self.metadata.next_epoch_worker_pubkey_bytes = option::none();
-    };
+/// Helper macro which extracts the value from `Some` and applies `$f` to it.
+macro fun do_extract<$T>($o: &mut Option<$T>, $f: |$T|) {
+    let o = $o;
+    if (o.is_some()) {
+        $f(o.extract());
+    }
 }
 
 /// Aborts if validator metadata is valid

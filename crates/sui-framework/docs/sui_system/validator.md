@@ -85,6 +85,7 @@ title: Module `sui_system::validator`
 -  [Function `update_next_epoch_worker_pubkey`](#sui_system_validator_update_next_epoch_worker_pubkey)
 -  [Function `update_candidate_worker_pubkey`](#sui_system_validator_update_candidate_worker_pubkey)
 -  [Function `effectuate_staged_metadata`](#sui_system_validator_effectuate_staged_metadata)
+-  [Macro function `do_extract`](#sui_system_validator_do_extract)
 -  [Function `validate_metadata`](#sui_system_validator_validate_metadata)
 -  [Function `validate_metadata_bcs`](#sui_system_validator_validate_metadata_bcs)
 -  [Function `get_staking_pool_ref`](#sui_system_validator_get_staking_pool_ref)
@@ -2877,38 +2878,56 @@ advancing an epoch.
 
 
 <pre><code><b>public</b>(package) <b>fun</b> <a href="../sui_system/validator.md#sui_system_validator_effectuate_staged_metadata">effectuate_staged_metadata</a>(self: &<b>mut</b> <a href="../sui_system/validator.md#sui_system_validator_Validator">Validator</a>) {
-    <b>if</b> (self.<a href="../sui_system/validator.md#sui_system_validator_next_epoch_network_address">next_epoch_network_address</a>().is_some()) {
-        self.<a href="../sui_system/validator.md#sui_system_validator_metadata">metadata</a>.net_address = self.<a href="../sui_system/validator.md#sui_system_validator_metadata">metadata</a>.next_epoch_net_address.extract();
-        self.<a href="../sui_system/validator.md#sui_system_validator_metadata">metadata</a>.next_epoch_net_address = option::none();
-    };
-    <b>if</b> (self.<a href="../sui_system/validator.md#sui_system_validator_next_epoch_p2p_address">next_epoch_p2p_address</a>().is_some()) {
-        self.<a href="../sui_system/validator.md#sui_system_validator_metadata">metadata</a>.<a href="../sui_system/validator.md#sui_system_validator_p2p_address">p2p_address</a> = self.<a href="../sui_system/validator.md#sui_system_validator_metadata">metadata</a>.<a href="../sui_system/validator.md#sui_system_validator_next_epoch_p2p_address">next_epoch_p2p_address</a>.extract();
-        self.<a href="../sui_system/validator.md#sui_system_validator_metadata">metadata</a>.<a href="../sui_system/validator.md#sui_system_validator_next_epoch_p2p_address">next_epoch_p2p_address</a> = option::none();
-    };
-    <b>if</b> (self.<a href="../sui_system/validator.md#sui_system_validator_next_epoch_primary_address">next_epoch_primary_address</a>().is_some()) {
-        self.<a href="../sui_system/validator.md#sui_system_validator_metadata">metadata</a>.<a href="../sui_system/validator.md#sui_system_validator_primary_address">primary_address</a> = self.<a href="../sui_system/validator.md#sui_system_validator_metadata">metadata</a>.<a href="../sui_system/validator.md#sui_system_validator_next_epoch_primary_address">next_epoch_primary_address</a>.extract();
-        self.<a href="../sui_system/validator.md#sui_system_validator_metadata">metadata</a>.<a href="../sui_system/validator.md#sui_system_validator_next_epoch_primary_address">next_epoch_primary_address</a> = option::none();
-    };
-    <b>if</b> (self.<a href="../sui_system/validator.md#sui_system_validator_next_epoch_worker_address">next_epoch_worker_address</a>().is_some()) {
-        self.<a href="../sui_system/validator.md#sui_system_validator_metadata">metadata</a>.<a href="../sui_system/validator.md#sui_system_validator_worker_address">worker_address</a> = self.<a href="../sui_system/validator.md#sui_system_validator_metadata">metadata</a>.<a href="../sui_system/validator.md#sui_system_validator_next_epoch_worker_address">next_epoch_worker_address</a>.extract();
-        self.<a href="../sui_system/validator.md#sui_system_validator_metadata">metadata</a>.<a href="../sui_system/validator.md#sui_system_validator_next_epoch_worker_address">next_epoch_worker_address</a> = option::none();
-    };
-    <b>if</b> (self.<a href="../sui_system/validator.md#sui_system_validator_next_epoch_protocol_pubkey_bytes">next_epoch_protocol_pubkey_bytes</a>().is_some()) {
-        self.<a href="../sui_system/validator.md#sui_system_validator_metadata">metadata</a>.<a href="../sui_system/validator.md#sui_system_validator_protocol_pubkey_bytes">protocol_pubkey_bytes</a> =
-            self.<a href="../sui_system/validator.md#sui_system_validator_metadata">metadata</a>.<a href="../sui_system/validator.md#sui_system_validator_next_epoch_protocol_pubkey_bytes">next_epoch_protocol_pubkey_bytes</a>.extract();
-        self.<a href="../sui_system/validator.md#sui_system_validator_metadata">metadata</a>.<a href="../sui_system/validator.md#sui_system_validator_next_epoch_protocol_pubkey_bytes">next_epoch_protocol_pubkey_bytes</a> = option::none();
+    <a href="../sui_system/validator.md#sui_system_validator_do_extract">do_extract</a>!(&<b>mut</b> self.<a href="../sui_system/validator.md#sui_system_validator_metadata">metadata</a>.next_epoch_net_address, |v| {
+        self.<a href="../sui_system/validator.md#sui_system_validator_metadata">metadata</a>.net_address = v
+    });
+    <a href="../sui_system/validator.md#sui_system_validator_do_extract">do_extract</a>!(&<b>mut</b> self.<a href="../sui_system/validator.md#sui_system_validator_metadata">metadata</a>.<a href="../sui_system/validator.md#sui_system_validator_next_epoch_p2p_address">next_epoch_p2p_address</a>, |v| {
+        self.<a href="../sui_system/validator.md#sui_system_validator_metadata">metadata</a>.<a href="../sui_system/validator.md#sui_system_validator_p2p_address">p2p_address</a> = v
+    });
+    <a href="../sui_system/validator.md#sui_system_validator_do_extract">do_extract</a>!(&<b>mut</b> self.<a href="../sui_system/validator.md#sui_system_validator_metadata">metadata</a>.<a href="../sui_system/validator.md#sui_system_validator_next_epoch_primary_address">next_epoch_primary_address</a>, |v| {
+        self.<a href="../sui_system/validator.md#sui_system_validator_metadata">metadata</a>.<a href="../sui_system/validator.md#sui_system_validator_primary_address">primary_address</a> = v
+    });
+    <a href="../sui_system/validator.md#sui_system_validator_do_extract">do_extract</a>!(&<b>mut</b> self.<a href="../sui_system/validator.md#sui_system_validator_metadata">metadata</a>.<a href="../sui_system/validator.md#sui_system_validator_next_epoch_worker_address">next_epoch_worker_address</a>, |v| {
+        self.<a href="../sui_system/validator.md#sui_system_validator_metadata">metadata</a>.<a href="../sui_system/validator.md#sui_system_validator_worker_address">worker_address</a> = v
+    });
+    <a href="../sui_system/validator.md#sui_system_validator_do_extract">do_extract</a>!(&<b>mut</b> self.<a href="../sui_system/validator.md#sui_system_validator_metadata">metadata</a>.<a href="../sui_system/validator.md#sui_system_validator_next_epoch_protocol_pubkey_bytes">next_epoch_protocol_pubkey_bytes</a>, |v| {
+        self.<a href="../sui_system/validator.md#sui_system_validator_metadata">metadata</a>.<a href="../sui_system/validator.md#sui_system_validator_protocol_pubkey_bytes">protocol_pubkey_bytes</a> = v;
         self.<a href="../sui_system/validator.md#sui_system_validator_metadata">metadata</a>.<a href="../sui_system/validator.md#sui_system_validator_proof_of_possession">proof_of_possession</a> = self.<a href="../sui_system/validator.md#sui_system_validator_metadata">metadata</a>.<a href="../sui_system/validator.md#sui_system_validator_next_epoch_proof_of_possession">next_epoch_proof_of_possession</a>.extract();
-        self.<a href="../sui_system/validator.md#sui_system_validator_metadata">metadata</a>.<a href="../sui_system/validator.md#sui_system_validator_next_epoch_proof_of_possession">next_epoch_proof_of_possession</a> = option::none();
-    };
-    <b>if</b> (self.<a href="../sui_system/validator.md#sui_system_validator_next_epoch_network_pubkey_bytes">next_epoch_network_pubkey_bytes</a>().is_some()) {
-        self.<a href="../sui_system/validator.md#sui_system_validator_metadata">metadata</a>.<a href="../sui_system/validator.md#sui_system_validator_network_pubkey_bytes">network_pubkey_bytes</a> =
-            self.<a href="../sui_system/validator.md#sui_system_validator_metadata">metadata</a>.<a href="../sui_system/validator.md#sui_system_validator_next_epoch_network_pubkey_bytes">next_epoch_network_pubkey_bytes</a>.extract();
-        self.<a href="../sui_system/validator.md#sui_system_validator_metadata">metadata</a>.<a href="../sui_system/validator.md#sui_system_validator_next_epoch_network_pubkey_bytes">next_epoch_network_pubkey_bytes</a> = option::none();
-    };
-    <b>if</b> (self.<a href="../sui_system/validator.md#sui_system_validator_next_epoch_worker_pubkey_bytes">next_epoch_worker_pubkey_bytes</a>().is_some()) {
-        self.<a href="../sui_system/validator.md#sui_system_validator_metadata">metadata</a>.<a href="../sui_system/validator.md#sui_system_validator_worker_pubkey_bytes">worker_pubkey_bytes</a> = self.<a href="../sui_system/validator.md#sui_system_validator_metadata">metadata</a>.<a href="../sui_system/validator.md#sui_system_validator_next_epoch_worker_pubkey_bytes">next_epoch_worker_pubkey_bytes</a>.extract();
-        self.<a href="../sui_system/validator.md#sui_system_validator_metadata">metadata</a>.<a href="../sui_system/validator.md#sui_system_validator_next_epoch_worker_pubkey_bytes">next_epoch_worker_pubkey_bytes</a> = option::none();
-    };
+    });
+    <a href="../sui_system/validator.md#sui_system_validator_do_extract">do_extract</a>!(&<b>mut</b> self.<a href="../sui_system/validator.md#sui_system_validator_metadata">metadata</a>.<a href="../sui_system/validator.md#sui_system_validator_next_epoch_network_pubkey_bytes">next_epoch_network_pubkey_bytes</a>, |v| {
+        self.<a href="../sui_system/validator.md#sui_system_validator_metadata">metadata</a>.<a href="../sui_system/validator.md#sui_system_validator_network_pubkey_bytes">network_pubkey_bytes</a> = v
+    });
+    <a href="../sui_system/validator.md#sui_system_validator_do_extract">do_extract</a>!(&<b>mut</b> self.<a href="../sui_system/validator.md#sui_system_validator_metadata">metadata</a>.<a href="../sui_system/validator.md#sui_system_validator_next_epoch_worker_pubkey_bytes">next_epoch_worker_pubkey_bytes</a>, |v| {
+        self.<a href="../sui_system/validator.md#sui_system_validator_metadata">metadata</a>.<a href="../sui_system/validator.md#sui_system_validator_worker_pubkey_bytes">worker_pubkey_bytes</a> = v
+    });
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="sui_system_validator_do_extract"></a>
+
+## Macro function `do_extract`
+
+Helper macro which extracts the value from <code>Some</code> and applies <code>$f</code> to it.
+
+
+<pre><code><b>macro</b> <b>fun</b> <a href="../sui_system/validator.md#sui_system_validator_do_extract">do_extract</a>&lt;$T&gt;($o: &<b>mut</b> <a href="../std/option.md#std_option_Option">std::option::Option</a>&lt;$T&gt;, $f: |$T| -&gt; ())
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>macro</b> <b>fun</b> <a href="../sui_system/validator.md#sui_system_validator_do_extract">do_extract</a>&lt;$T&gt;($o: &<b>mut</b> Option&lt;$T&gt;, $f: |$T|) {
+    <b>let</b> o = $o;
+    <b>if</b> (o.is_some()) {
+        $f(o.extract());
+    }
 }
 </code></pre>
 
