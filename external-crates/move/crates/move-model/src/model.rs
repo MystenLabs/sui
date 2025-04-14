@@ -1142,7 +1142,7 @@ impl GlobalEnv {
     ///    different addresses in one verification session.
     pub fn find_module_by_name(&self, simple_name: Symbol) -> Option<ModuleEnv<'_>> {
         self.get_modules()
-            .find(|m| m.get_name().name() == simple_name)
+            .find(|m| m.get_name().name() == simple_name && m.get_function_count() > 0)
     }
 
     /// Find a module by its bytecode format ID

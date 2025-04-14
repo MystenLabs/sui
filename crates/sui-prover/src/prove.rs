@@ -158,7 +158,7 @@ pub async fn execute(
         map
     };
 
-    let sui_files: &Path = Path::new("/Users/mandriiss/work/sui/crates/sui-framework");
+    let sui_files: &Path = Path::new("/home/andrei/smart-contracts-v2/sui/crates/sui-framework");
     let sui_system_sources = {
         let mut buf = sui_files.to_path_buf();
         buf.extend(["packages", "sui-system", "sources"]);
@@ -208,7 +208,8 @@ pub async fn execute(
             all_files_as_targets: false,
             target_filter: None,
         },
-        Some(precompiles),
+        // Some(precompiles),
+        None,
     )?;
     let mut options = move_prover::cli::Options::default();
     // don't spawn async tasks when running Boogie--causes a crash if we do

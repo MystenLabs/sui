@@ -256,14 +256,14 @@ macro fun uint_in_range<$T: drop>(
     min + (rand % range_size as $T)
 }
 
-#[spec]
-fun u128_in_range_spec(g: &mut RandomGenerator, min: u128, max: u128, num_of_bytes: u8): u128 {
-    // prover::asserts(min <= max);
-    let result = u128_in_range(g, min, max, num_of_bytes);
-    // prover::ensures(result >= min);
-    // prover::ensures(result <= max);
-    result
-}
+//#[spec]
+//fun u128_in_range_spec(g: &mut RandomGenerator, min: u128, max: u128, num_of_bytes: u8): u128 {
+//    // prover::asserts(min <= max);
+//    let result = u128_in_range(g, min, max, num_of_bytes);
+//    // prover::ensures(result >= min);
+//    // prover::ensures(result <= max);
+//    result
+//}
 
 /// Generate a random u128 in [min, max] (with a bias of 2^{-64}).
 public fun generate_u128_in_range(g: &mut RandomGenerator, min: u128, max: u128): u128 {

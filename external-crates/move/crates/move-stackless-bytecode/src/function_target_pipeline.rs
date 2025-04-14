@@ -386,17 +386,17 @@ impl FunctionTargetsHolder {
                     }
                 }
             }
-
-            func_env.get_name_str().strip_suffix("_inv").map(|name| {
-                if let Some(struct_env) = func_env
-                    .module_env
-                    .find_struct(func_env.symbol_pool().make(name))
-                {
-                    self.datatype_invs
-                        .insert(struct_env.get_qualified_id(), func_env.get_qualified_id());
-                }
-            });
         }
+
+        func_env.get_name_str().strip_suffix("_inv").map(|name| {
+            if let Some(struct_env) = func_env
+                .module_env
+                .find_struct(func_env.symbol_pool().make(name))
+            {
+                self.datatype_invs
+                    .insert(struct_env.get_qualified_id(), func_env.get_qualified_id());
+            }
+        });
     }
 
     /// Gets a function target for read-only consumption, for the given variant.
