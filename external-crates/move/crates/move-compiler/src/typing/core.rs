@@ -22,7 +22,7 @@ use crate::{
     },
     shared::{
         ide::{AutocompleteMethod, IDEAnnotation, IDEInfo},
-        known_attributes::TestingAttribute,
+        known_attributes::{TestingAttribute, VerificationAttribute},
         matching::{new_match_var_name, MatchContext},
         program_info::*,
         string_utils::{debug_print, format_oxford_list},
@@ -676,6 +676,18 @@ impl<'env> Context<'env> {
                 || self.current_function.as_ref().is_some_and(|f| {
                     let finfo = minfo.functions.get(f).unwrap();
                     finfo.attributes.is_test_or_test_only()
+                })
+        })
+    }
+
+    fn is_spec_context(&self) -> bool {
+        self.current_module.as_ref().is_some_and(|m| {
+            let minfo = self.module_info(m);
+            let is_spec_only = minfo.attributes.is_spec_or_spec_only();
+            is_spec_only
+                || self.current_function.as_ref().is_some_and(|f| {
+                    let finfo = minfo.functions.get(f).unwrap();
+                    finfo.attributes.is_spec_or_spec_only()
                 })
         })
     }
@@ -1617,11 +1629,14 @@ fn check_function_visibility(
     let public_for_testing =
         public_testing_visibility(context.env, context.current_package, f, entry_opt);
     let is_testing_context = context.is_testing_context();
+    let is_spec_context = context.is_spec_context();
+
     let supports_public_package = context
         .env
         .supports_feature(context.current_package, FeatureGate::PublicPackage);
     match visibility {
         _ if is_testing_context && public_for_testing.is_some() => (),
+        _ if is_spec_context => (),
         Visibility::Internal if in_current_module => (),
         Visibility::Internal => {
             let friend_or_package = if supports_public_package {
