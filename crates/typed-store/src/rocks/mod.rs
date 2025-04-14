@@ -1384,9 +1384,12 @@ where
                 .report_metrics(&self.cf);
         }
         match res {
-            Some(data) => Ok(Some(
-                bcs::from_bytes(&data).map_err(typed_store_err_from_bcs_err)?,
-            )),
+            Some(data) => Ok(Some(bcs::from_bytes(&data).map_err(|err| {
+                TypedStoreError::SerializationError(format!(
+                    "data: {}, error: {err}",
+                    base64::Engine::encode(&base64::engine::general_purpose::STANDARD, &data),
+                ))
+            })?)),
             None => Ok(None),
         }
     }
@@ -1572,9 +1575,12 @@ where
         let values_parsed: Result<Vec<_>, TypedStoreError> = results
             .into_iter()
             .map(|value_byte| match value_byte {
-                Some(data) => Ok(Some(
-                    bcs::from_bytes(&data).map_err(typed_store_err_from_bcs_err)?,
-                )),
+                Some(data) => Ok(Some(bcs::from_bytes(&data).map_err(|err| {
+                    TypedStoreError::SerializationError(format!(
+                        "data: {}, error: {err}",
+                        base64::Engine::encode(&base64::engine::general_purpose::STANDARD, &data),
+                    ))
+                })?)),
                 None => Ok(None),
             })
             .collect();
