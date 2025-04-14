@@ -1,11 +1,11 @@
 use clap::Args;
 use move_cli::base;
 use move_compiler::editions::{Edition, Flavor};
-use move_package::{source_package::layout::SourcePackageLayout, BuildConfig as MoveBuildConfig, LintFlag, ModelConfig};
+use move_package::{source_package::layout::SourcePackageLayout, BuildConfig as MoveBuildConfig, LintFlag};
 use move_core_types::account_address::AccountAddress;
 use move_prover::{run_boogie_gen, run_move_prover_with_model};
 use tracing::log::LevelFilter;
-use std::{collections::{BTreeMap, BTreeSet}, path::{Path,PathBuf}};
+use std::{collections::BTreeMap, path::{Path,PathBuf}};
 use codespan_reporting::term::termcolor::Buffer;
 use crate::llm_explain::explain_err;
 
@@ -115,10 +115,6 @@ pub async fn execute(
 
     let model = move_build_config.move_model_for_package_legacy(
         &rerooted_path,
-        ModelConfig {
-            all_files_as_targets: false,
-            target_filter: None,
-        },
     )?;
     let mut options = move_prover::cli::Options::default();
     // don't spawn async tasks when running Boogie--causes a crash if we do

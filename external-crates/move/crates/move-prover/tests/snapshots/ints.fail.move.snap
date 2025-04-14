@@ -1,5 +1,6 @@
 ---
 source: crates/move-prover/tests/integration.rs
+assertion_line: 124
 expression: output
 ---
 exiting with verification errors

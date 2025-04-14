@@ -285,6 +285,10 @@ impl FunctionTargetsHolder {
             .or_default()
             .insert(FunctionVariant::Baseline, data);
 
+        if !func_env.module_env.is_target() {
+            return;
+        }
+
         if let Some(spec_attr) = func_env
             .get_toplevel_attributes()
             .get_(&Verification(VerificationAttribute::Spec))

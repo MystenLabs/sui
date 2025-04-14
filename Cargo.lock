@@ -14887,49 +14887,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "sui-prover"
-version = "1.47.0"
-dependencies = [
- "anyhow",
- "assert_cmd",
- "better_any",
- "bin-version",
- "clap",
- "codespan-reporting",
- "colored",
- "futures",
- "jemalloc-ctl",
- "jsonrpsee",
- "move-binary-format",
- "move-cli",
- "move-compiler",
- "move-core-types",
- "move-disassembler",
- "move-ir-types",
- "move-package",
- "move-prover",
- "move-symbol-pool",
- "move-unit-test",
- "move-vm-runtime",
- "mysten-metrics",
- "openai_api_rust",
- "rand 0.8.5",
- "regex",
- "sui-core",
- "sui-macros",
- "sui-move-build",
- "sui-move-natives-latest",
- "sui-node",
- "sui-protocol-config",
- "sui-simulator",
- "sui-types",
- "telemetry-subscribers",
- "tempfile",
- "tokio",
- "tracing",
-]
-
-[[package]]
 name = "sui-proxy"
 version = "0.0.2"
 dependencies = [

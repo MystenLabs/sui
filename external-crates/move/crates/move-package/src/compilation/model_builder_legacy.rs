@@ -4,7 +4,7 @@
 
 use crate::{
     compilation::compiled_package::make_source_and_deps_for_compiler,
-    resolution::resolution_graph::ResolvedGraph, ModelConfig,
+    resolution::resolution_graph::ResolvedGraph,
 };
 use anyhow::Result;
 use itertools::Itertools;
@@ -19,14 +19,12 @@ use super::compiled_package::{DependencyInfo, ModuleFormat};
 #[derive(Debug, Clone)]
 pub struct ModelBuilderLegacy {
     resolution_graph: ResolvedGraph,
-    model_config: ModelConfig,
 }
 
 impl ModelBuilderLegacy {
-    pub fn create(resolution_graph: ResolvedGraph, model_config: ModelConfig) -> Self {
+    pub fn create(resolution_graph: ResolvedGraph) -> Self {
         Self {
             resolution_graph,
-            model_config,
         }
     }
 

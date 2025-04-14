@@ -44,11 +44,6 @@ fn run_prover(file_path: &PathBuf) -> String {
         // Try to build the model
         let result = match config.move_model_for_package_legacy(
             file_dir,
-            ModelConfig {
-                all_files_as_targets: false,
-                target_filter: None,
-            },
-            None
         ) {
             Ok(model) => {
                 // Create prover options
