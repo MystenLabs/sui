@@ -45,9 +45,6 @@ use typed_store::rocks::{
 use typed_store::traits::Map;
 use typed_store::DBMapUtils;
 
-use crate::authority::AuthorityStore;
-use crate::par_index_live_object_set::{LiveObjectIndexer, ParMakeLiveObjectIndexer};
-
 type OwnedMutexGuard<T> = ArcMutexGuard<parking_lot::RawMutex, T>;
 
 type OwnerIndexKey = (SuiAddress, ObjectID);
@@ -92,7 +89,7 @@ impl CoinIndexKey2 {
 }
 
 const CURRENT_DB_VERSION: u64 = 0;
-const CURRENT_COIN_INDEX_VERSION: u64 = 1;
+const _CURRENT_COIN_INDEX_VERSION: u64 = 1;
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
 struct MetadataInfo {
@@ -269,8 +266,8 @@ impl IndexStoreTables {
     }
 
     #[allow(deprecated)]
-    fn init(&mut self, authority_store: &AuthorityStore) -> Result<(), StorageError> {
-        let mut metadata = {
+    fn init(&mut self) -> Result<(), StorageError> {
+        let metadata = {
             match self.meta.get(&()) {
                 Ok(Some(metadata)) => metadata,
                 Ok(None) | Err(_) => MetadataInfo {
@@ -279,37 +276,6 @@ impl IndexStoreTables {
                 },
             }
         };
-
-        // If the new coin index hasn't already been initialized, populate it
-        if metadata
-            .column_families
-            .get(self.coin_index_2.cf_name())
-            .is_none_or(|cf_info| cf_info.version != CURRENT_COIN_INDEX_VERSION)
-            || self.coin_index_2.is_empty()
-        {
-            info!("Initializing JSON-RPC coin index");
-
-            // clear the index so we're starting with a fresh table
-            self.coin_index_2.unsafe_clear()?;
-
-            let make_live_object_indexer = CoinParLiveObjectSetIndexer { tables: self };
-
-            crate::par_index_live_object_set::par_index_live_object_set(
-                authority_store,
-                &make_live_object_indexer,
-            )?;
-
-            info!("Finished initializing JSON-RPC coin index");
-
-            // Once the coin_index_2 table has been finished, update the metadata indicating that
-            // its been initialized
-            metadata.column_families.insert(
-                self.coin_index_2.cf_name().to_owned(),
-                ColumnFamilyInfo {
-                    version: CURRENT_COIN_INDEX_VERSION,
-                },
-            );
-        }
 
         // Commit to the DB that the indexes have been initialized
         self.meta.insert(&(), &metadata)?;
@@ -581,11 +547,10 @@ impl IndexStore {
         registry: &Registry,
         max_type_length: Option<u64>,
         remove_deprecated_tables: bool,
-        authority_store: &AuthorityStore,
     ) -> Self {
         let mut store =
             Self::new_without_init(path, registry, max_type_length, remove_deprecated_tables);
-        store.tables.init(authority_store).unwrap();
+        store.tables.init().unwrap();
         store
     }
 
@@ -1897,71 +1862,6 @@ impl IndexStore {
         } else {
             old_balance.clone()
         }
-    }
-}
-
-struct CoinParLiveObjectSetIndexer<'a> {
-    tables: &'a IndexStoreTables,
-}
-
-struct CoinLiveObjectIndexer<'a> {
-    tables: &'a IndexStoreTables,
-    batch: typed_store::rocks::DBBatch,
-}
-
-impl<'a> ParMakeLiveObjectIndexer for CoinParLiveObjectSetIndexer<'a> {
-    type ObjectIndexer = CoinLiveObjectIndexer<'a>;
-
-    fn make_live_object_indexer(&self) -> Self::ObjectIndexer {
-        CoinLiveObjectIndexer {
-            tables: self.tables,
-            batch: self.tables.coin_index_2.batch(),
-        }
-    }
-}
-
-impl LiveObjectIndexer for CoinLiveObjectIndexer<'_> {
-    fn index_object(&mut self, object: Object) -> Result<(), StorageError> {
-        let Owner::AddressOwner(owner) = object.owner() else {
-            return Ok(());
-        };
-
-        // only process coin types
-        let Some((coin_type, coin)) = object
-            .coin_type_maybe()
-            .and_then(|coin_type| object.as_coin_maybe().map(|coin| (coin_type, coin)))
-        else {
-            return Ok(());
-        };
-
-        let key = CoinIndexKey2::new(
-            *owner,
-            coin_type.to_string(),
-            coin.balance.value(),
-            object.id(),
-        );
-        let value = CoinInfo {
-            version: object.version(),
-            digest: object.digest(),
-            balance: coin.balance.value(),
-            previous_transaction: object.previous_transaction,
-        };
-
-        self.batch
-            .insert_batch(&self.tables.coin_index_2, [(key, value)])?;
-
-        // If the batch size grows to greater that 128MB then write out to the DB so that the
-        // data we need to hold in memory doesn't grown unbounded.
-        if self.batch.size_in_bytes() >= 1 << 27 {
-            std::mem::replace(&mut self.batch, self.tables.coin_index_2.batch()).write()?;
-        }
-
-        Ok(())
-    }
-
-    fn finish(self) -> Result<(), StorageError> {
-        self.batch.write()?;
-        Ok(())
     }
 }
 
