@@ -18,7 +18,7 @@ use tracing::{info, warn};
 
 /// The minimum and maximum protocol versions supported by this build.
 const MIN_PROTOCOL_VERSION: u64 = 1;
-const MAX_PROTOCOL_VERSION: u64 = 81;
+const MAX_PROTOCOL_VERSION: u64 = 82;
 
 // Record history of protocol version allocations here:
 //
@@ -235,6 +235,7 @@ const MAX_PROTOCOL_VERSION: u64 = 81;
 // Version 81: Enable median based commit timestamp in consensus on mainnet.
 //             Enforce checkpoint timestamps are non-decreasing for testnet and mainnet.
 //             Increase threshold for bad nodes that won't be considered leaders in consensus in mainnet
+// Version 82:
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
@@ -3472,6 +3473,7 @@ impl ProtocolConfig {
                     cfg.feature_flags.enforce_checkpoint_timestamp_monotonicity = true;
                     cfg.consensus_bad_nodes_stake_threshold = Some(30)
                 }
+                82 => {}
                 // Use this template when making changes:
                 //
                 //     // modify an existing constant.
