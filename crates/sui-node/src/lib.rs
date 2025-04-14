@@ -13,7 +13,6 @@ use arc_swap::ArcSwap;
 use fastcrypto_zkp::bn254::zk_login::JwkId;
 use fastcrypto_zkp::bn254::zk_login::OIDCProvider;
 use futures::future::BoxFuture;
-use futures::TryFutureExt;
 use mysten_common::debug_fatal;
 use mysten_network::server::SUI_TLS_SERVER_NAME;
 use prometheus::Registry;
@@ -1585,15 +1584,14 @@ impl SuiNode {
             let server = server_builder
                 .bind(&network_address, Some(tls_config))
                 .await
-                .map_err(|err| anyhow!(err.to_string()))?;
+                .unwrap_or_else(|err| panic!("Failed to bind to {network_address}: {err}"));
             let local_addr = server.local_addr();
             info!("Listening to traffic on {local_addr}");
             ready_tx.send(()).unwrap();
-            server
-                .serve()
-                .map_err(|err| anyhow!(err.to_string()))
-                .await?;
-            Ok(())
+            if let Err(err) = server.serve().await {
+                info!("Server stopped: {err}");
+            }
+            info!("Server stopped");
         }))
     }
 
@@ -2119,15 +2117,15 @@ impl SuiNode {
 
 enum SpawnOnce {
     // Mutex is only needed to make SpawnOnce Send
-    Unstarted(oneshot::Receiver<()>, Mutex<BoxFuture<'static, Result<()>>>),
+    Unstarted(oneshot::Receiver<()>, Mutex<BoxFuture<'static, ()>>),
     #[allow(unused)]
-    Started(JoinHandle<Result<()>>),
+    Started(JoinHandle<()>),
 }
 
 impl SpawnOnce {
     pub fn new(
         ready_rx: oneshot::Receiver<()>,
-        future: impl Future<Output = Result<()>> + Send + 'static,
+        future: impl Future<Output = ()> + Send + 'static,
     ) -> Self {
         Self::Unstarted(ready_rx, Mutex::new(Box::pin(future)))
     }
