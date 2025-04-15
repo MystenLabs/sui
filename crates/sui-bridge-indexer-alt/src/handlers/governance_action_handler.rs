@@ -38,8 +38,8 @@ pub struct GovernanceActionHandler {
     new_token_event_type: StructTag,
 }
 
-impl GovernanceActionHandler {
-    pub fn new() -> Self {
+impl Default for GovernanceActionHandler {
+    fn default() -> Self {
         Self {
             update_limit_event_type: struct_tag!(BRIDGE_ADDRESS, LIMITER, UPDATE_ROUTE_LIMIT_EVENT),
             emergency_op_event_type: struct_tag!(BRIDGE_ADDRESS, BRIDGE, EMERGENCY_OP_EVENT),
