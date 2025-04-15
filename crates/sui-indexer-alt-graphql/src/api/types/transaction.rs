@@ -66,7 +66,6 @@ impl Transaction {
     /// Construct a transaction that is represented by just its identifier (its transaction
     /// digest). This does not check whether the transaction exists, so should not be used to
     /// "fetch" a transaction based on a digest provided as user input.
-    #[allow(dead_code)] // TODO: Remove once this is used in Object.previousTransaction
     pub(crate) fn with_id(digest: TransactionDigest) -> Self {
         Self {
             digest,

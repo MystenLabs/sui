@@ -29,6 +29,10 @@ type Object {
 	The Base64-encoded BCS serialization of this object, as an `Object`.
 	"""
 	objectBcs: Base64
+	"""
+	The transaction that created this version of the object.
+	"""
+	previousTransaction: Transaction
 }
 
 """
