@@ -1,7 +1,6 @@
 [package]
 name = "SuiSpecs"
 version = "0.0.1"
-published-at = "0x2"
 edition = "2024.beta"
 
 [dependencies]
@@ -9,5 +8,4 @@ Sui = { local = "../sui-framework", override = true }
 Prover = { local = "../prover", override = true }
 
 [addresses]
-sui = "0x2"
 specs = "0x42"
