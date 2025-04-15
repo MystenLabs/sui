@@ -3393,7 +3393,7 @@ impl<'env> FunctionTranslator<'env> {
                     Some(AbortAction::Check) => {
                         emitln!(
                             self.writer(),
-                            "assert {{:msg \"assert_failed{}: code should not abort\"}} !$abort_flag;",
+                            "assert {{:msg \"assert_failed{}: spec code itself should not abort\"}} !$abort_flag;",
                             self.loc_str(&self.writer().get_loc()),
                         );
                     }
