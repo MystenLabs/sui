@@ -217,7 +217,7 @@ async fn test_archive_reader_e2e() -> Result<(), anyhow::Error> {
         .get_checkpoint_by_sequence_number(0)
         .context("Missing genesis checkpoint")?;
     let genesis_checkpoint_content = test_store
-        .get_full_checkpoint_contents_by_sequence_number(0)
+        .get_full_checkpoint_contents(Some(0), &genesis_checkpoint.content_digest)
         .context("Missing genesis checkpoint")?;
     let read_store = SharedInMemoryStore::default();
     read_store.inner_mut().insert_genesis_state(
@@ -276,7 +276,7 @@ async fn test_verify_archive_with_oneshot_store() -> Result<(), anyhow::Error> {
         .get_checkpoint_by_sequence_number(0)
         .context("Missing genesis checkpoint")?;
     let genesis_checkpoint_content = test_store
-        .get_full_checkpoint_contents_by_sequence_number(0)
+        .get_full_checkpoint_contents(Some(0), &genesis_checkpoint.content_digest)
         .context("Missing genesis checkpoint")?;
     let mut read_store = SingleCheckpointSharedInMemoryStore::default();
     read_store.insert_genesis_state(
@@ -350,7 +350,7 @@ async fn test_verify_archive_with_oneshot_store_bad_data() -> Result<(), anyhow:
         .get_checkpoint_by_sequence_number(0)
         .context("Missing genesis checkpoint")?;
     let genesis_checkpoint_content = test_store
-        .get_full_checkpoint_contents_by_sequence_number(0)
+        .get_full_checkpoint_contents(Some(0), &genesis_checkpoint.content_digest)
         .context("Missing genesis checkpoint")?;
     let mut read_store = SingleCheckpointSharedInMemoryStore::default();
     read_store.insert_genesis_state(

@@ -1151,7 +1151,7 @@ pub async fn dump_checkpoints_from_archive(
     {
         let mut content = serde_json::to_string(
             &store
-                .get_full_checkpoint_contents_by_sequence_number(key.sequence_number)
+                .get_full_checkpoint_contents(Some(key.sequence_number), &key.content_digest)
                 .unwrap(),
         )?;
         content.truncate(max_content_length);
