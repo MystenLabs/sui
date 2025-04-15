@@ -113,12 +113,8 @@ async fn make_clients(
             None,
         );
         let channel = net_config
-            .connect(&net_addr, Some(tls_config))
-            .await
-            .map_err(|err| {
-                tracing::error!("error connecting: {err:?}");
-                anyhow!(err.to_string())
-            })?;
+            .connect_lazy(&net_addr, Some(tls_config))
+            .map_err(|err| anyhow!(err.to_string()))?;
         let client = NetworkAuthorityClient::new(channel);
         let public_key_bytes =
             AuthorityPublicKeyBytes::from_bytes(&validator.protocol_pubkey_bytes)?;
