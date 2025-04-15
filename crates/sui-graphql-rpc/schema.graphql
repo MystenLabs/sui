@@ -4447,7 +4447,7 @@ type TransactionInputEdge {
 
 """
 The optional extra data a user can provide to a transaction dry run.
-`sender` defaults to `0x0`. If gasObjects` is not present, or is an empty list,
+`sender` defaults to `0x0`. If `gasObjects` is not present, or is an empty list,
 it is substituted with a mock Coin object, `gasPrice` defaults to the reference
 gas price, `gasBudget` defaults to the max gas budget and `gasSponsor` defaults
 to the sender.

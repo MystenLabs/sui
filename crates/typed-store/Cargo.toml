@@ -9,6 +9,7 @@ edition = "2021"
 publish = false
 
 [dependencies]
+backoff.workspace = true
 bcs.workspace = true
 bincode.workspace = true
 collectable.workspace = true

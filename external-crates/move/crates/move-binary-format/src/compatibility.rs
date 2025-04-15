@@ -208,8 +208,9 @@ impl Compatibility {
                     // variant if it's non-public (it's purely informational), but clients
                     // presumably would.
                     context.enum_variant_mismatch(name, old_enum, new_enum, tag);
+                } else {
+                    debug_assert_eq!(_new_name, _old_name);
                 }
-                debug_assert_eq!(_new_name, _old_name);
                 if !new_variant.fields.equivalent(&old_variant.fields) {
                     // Fields changed. Code in this module will fail at runtime if it tries to
                     // read a previously published enum value

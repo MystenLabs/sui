@@ -1,4 +1,4 @@
 ---
 source: crates/move-package-alt/tests/parsing_tests.rs
 ---
-Manifest { package: PackageMetadata { name: Spanned { span: 17..28, value: "®´∑œ" }, edition: Spanned { span: 39..50, value: "2024.beta" }, metadata: () }, environments: {"mainnet": "35834a8a"}, dependencies: {}, dep_overrides: {} }
+Manifest { package: PackageMetadata { name: Located { file: "tests/data/manifest_parsing_invalid/invalid_identifier_package_name/Move.toml", value: Spanned { span: 17..28, value: "®´∑œ" } }, edition: Located { file: "tests/data/manifest_parsing_invalid/invalid_identifier_package_name/Move.toml", value: Spanned { span: 39..50, value: "2024.beta" } }, metadata: () }, environments: {"mainnet": "35834a8a"}, dependencies: {}, dep_overrides: {} }

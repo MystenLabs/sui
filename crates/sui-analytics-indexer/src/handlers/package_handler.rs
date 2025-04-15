@@ -2,7 +2,6 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use anyhow::Result;
-use fastcrypto::encoding::{Base64, Encoding};
 use sui_data_ingestion_core::Worker;
 use sui_types::full_checkpoint_content::CheckpointData;
 use sui_types::full_checkpoint_content::CheckpointTransaction;
@@ -99,7 +98,8 @@ impl PackageHandler {
                 checkpoint,
                 epoch,
                 timestamp_ms,
-                bcs: Base64::encode(bcs::to_bytes(p).unwrap()),
+                bcs: "".to_string(),
+                bcs_length: bcs::to_bytes(object).unwrap().len() as u64,
                 transaction_digest: object.previous_transaction.to_string(),
                 original_package_id: Some(original_package_id.to_string()),
             };

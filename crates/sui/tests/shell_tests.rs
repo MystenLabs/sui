@@ -16,6 +16,7 @@ use test_cluster::TestClusterBuilder;
 // insta test --review` to update the snapshots.
 
 const TEST_DIR: &str = "tests/shell_tests";
+// Temporarily disabled by deleting the folder
 const TEST_NET_DIR: &str = "tests/shell_tests/with_network";
 const TEST_PATTERN: &str = r"\.sh$";
 

@@ -119,9 +119,6 @@ impl RpcService {
                     self.clone(),
                 );
 
-            let node_service =
-                crate::proto::node::v2::node_service_server::NodeServiceServer::new(self.clone());
-
             let (health_reporter, health_service) = tonic_health::server::health_reporter();
 
             let reflection_v1 = tonic_reflection::server::Builder::configure()
@@ -134,8 +131,6 @@ impl RpcService {
                 .register_encoded_file_descriptor_set(
                     crate::proto::rpc::v2beta::FILE_DESCRIPTOR_SET,
                 )
-                .register_encoded_file_descriptor_set(crate::proto::types::FILE_DESCRIPTOR_SET)
-                .register_encoded_file_descriptor_set(crate::proto::node::v2::FILE_DESCRIPTOR_SET)
                 .register_encoded_file_descriptor_set(
                     crate::proto::rpc::v2alpha::FILE_DESCRIPTOR_SET,
                 )
@@ -153,8 +148,6 @@ impl RpcService {
                 .register_encoded_file_descriptor_set(
                     crate::proto::rpc::v2beta::FILE_DESCRIPTOR_SET,
                 )
-                .register_encoded_file_descriptor_set(crate::proto::types::FILE_DESCRIPTOR_SET)
-                .register_encoded_file_descriptor_set(crate::proto::node::v2::FILE_DESCRIPTOR_SET)
                 .register_encoded_file_descriptor_set(
                     crate::proto::rpc::v2alpha::FILE_DESCRIPTOR_SET,
                 )
@@ -170,7 +163,6 @@ impl RpcService {
                 service_name(&ledger_service),
                 service_name(&transaction_execution_service),
                 service_name(&live_data_service),
-                service_name(&node_service),
                 service_name(&reflection_v1),
                 service_name(&reflection_v1alpha),
             ] {
@@ -184,8 +176,7 @@ impl RpcService {
                 .add_service(reflection_v1alpha)
                 .add_service(ledger_service)
                 .add_service(transaction_execution_service)
-                .add_service(live_data_service)
-                .add_service(node_service);
+                .add_service(live_data_service);
 
             if let Some(subscription_service_handle) = self.subscription_service_handle.clone() {
                 let subscription_service =

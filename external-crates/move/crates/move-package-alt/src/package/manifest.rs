@@ -9,11 +9,10 @@ use std::{
 
 use derive_where::derive_where;
 use serde::{Deserialize, Serialize};
-use serde_spanned::Spanned;
 
 use crate::{
     dependency::ManifestDependencyInfo,
-    errors::{ManifestError, ManifestErrorKind, PackageResult},
+    errors::{with_file, FileHandle, Located, ManifestError, ManifestErrorKind, PackageResult},
     flavor::{MoveFlavor, Vanilla},
 };
 
@@ -40,8 +39,8 @@ pub struct Manifest<F: MoveFlavor> {
 #[derive(Debug, Deserialize)]
 #[serde(bound = "")]
 struct PackageMetadata<F: MoveFlavor> {
-    name: Spanned<PackageName>,
-    edition: Spanned<String>,
+    name: Located<PackageName>,
+    edition: Located<String>,
 
     #[serde(flatten)]
     metadata: F::PackageMetadata,
@@ -79,21 +78,25 @@ impl<F: MoveFlavor> Manifest<F> {
     pub fn read_from(path: impl AsRef<Path>) -> PackageResult<Self> {
         let contents = std::fs::read_to_string(&path)?;
 
-        let manifest: Self = toml_edit::de::from_str(&contents)?;
-        manifest.validate_manifest(&path, &contents)?;
+        let (manifest, file_id) = with_file(&path, toml_edit::de::from_str::<Self>)?;
 
-        Ok(manifest)
+        match manifest {
+            Ok(manifest) => {
+                manifest.validate_manifest(file_id)?;
+                Ok(manifest)
+            }
+            Err(err) => Err(err.into()),
+        }
     }
 
     /// Validate the manifest contents, after deserialization.
-    pub fn validate_manifest(&self, path: impl AsRef<Path>, contents: &str) -> PackageResult<()> {
+    pub fn validate_manifest(&self, handle: FileHandle) -> PackageResult<()> {
         // Validate package name
         if self.package.name.get_ref().is_empty() {
             let err = ManifestError {
                 kind: ManifestErrorKind::EmptyPackageName,
                 span: Some(self.package.name.span()),
-                path: path.as_ref().to_path_buf(),
-                src: contents.to_string(),
+                handle,
             };
             err.emit()?;
             return Err(err.into());
@@ -107,8 +110,7 @@ impl<F: MoveFlavor> Manifest<F> {
                     valid: ALLOWED_EDITIONS.join(", ").to_string(),
                 },
                 span: Some(self.package.edition.span()),
-                path: path.as_ref().to_path_buf(),
-                src: contents.to_string(),
+                handle,
             };
             err.emit()?;
             return Err(err.into());

@@ -70,8 +70,8 @@ pub struct Test {
     pub rand_num_iters: Option<u64>,
 
     // Enable tracing for tests
-    #[clap(long = "trace-execution", value_name = "PATH")]
-    pub trace_execution: Option<Option<String>>,
+    #[clap(long = "trace-execution")]
+    pub trace_execution: bool,
 }
 
 impl Test {
@@ -85,7 +85,7 @@ impl Test {
         let rerooted_path = reroot_path(path)?;
         let compute_coverage = self.compute_coverage;
         // save disassembly if trace execution is enabled
-        let save_disassembly = self.trace_execution.is_some();
+        let save_disassembly = self.trace_execution;
         let result = run_move_unit_tests(
             &rerooted_path,
             config,

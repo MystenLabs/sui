@@ -39,9 +39,6 @@ where
     /// Removes the entry for the given key from the map.
     fn remove(&self, key: &K) -> Result<(), Self::Error>;
 
-    /// Removes every key-value pair from the map.
-    fn unsafe_clear(&self) -> Result<(), Self::Error>;
-
     /// Uses delete range on the entire key range
     fn schedule_delete_all(&self) -> Result<(), TypedStoreError>;
 

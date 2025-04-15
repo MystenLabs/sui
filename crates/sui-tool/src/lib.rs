@@ -104,15 +104,16 @@ async fn make_clients(
         .active_validators;
 
     for validator in active_validators {
-        let net_addr = Multiaddr::try_from(validator.net_address).unwrap();
-        // TODO: Enable TLS on this interface with below config, once support is rolled out to validators.
-        // let tls_config = sui_tls::create_rustls_client_config(
-        //     sui_types::crypto::NetworkPublicKey::from_bytes(&validator.network_pubkey_bytes)?,
-        //     sui_tls::SUI_VALIDATOR_SERVER_NAME.to_string(),
-        //     None,
-        // );
+        let net_addr = Multiaddr::try_from(validator.net_address)
+            .unwrap()
+            .rewrite_http_to_https();
+        let tls_config = sui_tls::create_rustls_client_config(
+            sui_types::crypto::NetworkPublicKey::from_bytes(&validator.network_pubkey_bytes)?,
+            sui_tls::SUI_VALIDATOR_SERVER_NAME.to_string(),
+            None,
+        );
         let channel = net_config
-            .connect_lazy(&net_addr, None)
+            .connect_lazy(&net_addr, Some(tls_config))
             .map_err(|err| anyhow!(err.to_string()))?;
         let client = NetworkAuthorityClient::new(channel);
         let public_key_bytes =
@@ -1151,7 +1152,7 @@ pub async fn dump_checkpoints_from_archive(
     {
         let mut content = serde_json::to_string(
             &store
-                .get_full_checkpoint_contents_by_sequence_number(key.sequence_number)
+                .get_full_checkpoint_contents(Some(key.sequence_number), &key.content_digest)
                 .unwrap(),
         )?;
         content.truncate(max_content_length);

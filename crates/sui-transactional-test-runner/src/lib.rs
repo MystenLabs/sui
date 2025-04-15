@@ -368,15 +368,9 @@ impl ReadStore for ValidatorWithFullnode {
             .get_events(digest)
     }
 
-    fn get_full_checkpoint_contents_by_sequence_number(
-        &self,
-        _sequence_number: sui_types::messages_checkpoint::CheckpointSequenceNumber,
-    ) -> Option<sui_types::messages_checkpoint::FullCheckpointContents> {
-        todo!()
-    }
-
     fn get_full_checkpoint_contents(
         &self,
+        _sequence_number: Option<sui_types::messages_checkpoint::CheckpointSequenceNumber>,
         _digest: &CheckpointContentsDigest,
     ) -> Option<sui_types::messages_checkpoint::FullCheckpointContents> {
         todo!()

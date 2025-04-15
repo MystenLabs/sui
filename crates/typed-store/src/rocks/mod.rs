@@ -22,6 +22,7 @@ use crate::{
     traits::{Map, TableSummary},
 };
 use crate::{DbIterator, TypedStoreError};
+use backoff::backoff::Backoff;
 use prometheus::{Histogram, HistogramTimer};
 use rocksdb::properties::num_files_at_level;
 use rocksdb::{checkpoint::Checkpoint, DBPinnableSlice, LiveFile};
@@ -237,21 +238,6 @@ impl Database {
         }
     }
 
-    pub fn create_cf<N: AsRef<str>>(
-        &self,
-        name: N,
-        opts: &rocksdb::Options,
-    ) -> Result<(), rocksdb::Error> {
-        match &self.storage {
-            Storage::Rocks(db) => db.underlying.create_cf(name, opts),
-            Storage::InMemory(_) => Ok(()),
-            #[cfg(all(not(target_os = "windows"), feature = "tide_hunter"))]
-            Storage::TideHunter(_) => {
-                unimplemented!("TideHunter: recreation of column family on a fly not implemented")
-            }
-        }
-    }
-
     pub fn drop_cf(&self, name: &str) -> Result<(), rocksdb::Error> {
         match &self.storage {
             Storage::Rocks(db) => db.underlying.drop_cf(name),
@@ -390,20 +376,6 @@ impl Database {
             rocksdb
                 .underlying
                 .compact_range_cf(&rocks_cf(rocksdb, cf_name), start, end);
-        }
-    }
-
-    pub fn flush(&self) -> Result<(), TypedStoreError> {
-        match &self.storage {
-            Storage::Rocks(db) => db
-                .underlying
-                .flush()
-                .map_err(typed_store_err_from_rocks_err),
-            Storage::InMemory(_) => Ok(()),
-            #[cfg(all(not(target_os = "windows"), feature = "tide_hunter"))]
-            Storage::TideHunter(_) => {
-                unimplemented!("TideHunter: flush database is not implemented")
-            }
         }
     }
 
@@ -1463,19 +1435,6 @@ where
         Ok(())
     }
 
-    /// This method first drops the existing column family and then creates a new one
-    /// with the same name. The two operations are not atomic and hence it is possible
-    /// to get into a race condition where the column family has been dropped but new
-    /// one is not created yet
-    #[instrument(level = "trace", skip_all, err)]
-    fn unsafe_clear(&self) -> Result<(), TypedStoreError> {
-        let _ = self.db.drop_cf(&self.cf);
-        self.db
-            .create_cf(self.cf.clone(), &default_db_options().options)
-            .map_err(typed_store_err_from_rocks_err)?;
-        Ok(())
-    }
-
     /// Writes a range delete tombstone to delete all entries in the db map
     /// If the DBMap is configured with ignore_range_deletions set to false,
     /// the effect of this write will be visible immediately i.e. you won't
@@ -1767,8 +1726,21 @@ pub fn open_cf_opts_secondary<P: AsRef<Path>>(
     })
 }
 
-pub fn safe_drop_db(path: PathBuf) -> Result<(), rocksdb::Error> {
-    rocksdb::DB::destroy(&rocksdb::Options::default(), path)
+// Drops a database if there is no other handle to it, with retries and timeout.
+pub async fn safe_drop_db(path: PathBuf, timeout: Duration) -> Result<(), rocksdb::Error> {
+    let mut backoff = backoff::ExponentialBackoff {
+        max_elapsed_time: Some(timeout),
+        ..Default::default()
+    };
+    loop {
+        match rocksdb::DB::destroy(&rocksdb::Options::default(), path.clone()) {
+            Ok(()) => return Ok(()),
+            Err(err) => match backoff.next_backoff() {
+                Some(duration) => tokio::time::sleep(duration).await,
+                None => return Err(err),
+            },
+        }
+    }
 }
 
 fn populate_missing_cfs(

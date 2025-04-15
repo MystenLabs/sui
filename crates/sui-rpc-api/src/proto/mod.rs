@@ -2,12 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 pub mod google;
-pub mod node;
 pub mod rpc;
-pub mod types;
-
-#[cfg(test)]
-mod proptests;
 
 type BoxError = Box<dyn std::error::Error + Send + Sync + 'static>;
 
@@ -67,4 +62,23 @@ impl From<std::convert::Infallible> for TryFromProtoError {
     fn from(_value: std::convert::Infallible) -> Self {
         unreachable!()
     }
+}
+
+//
+// TimeStamp
+//
+
+pub fn timestamp_ms_to_proto(timestamp_ms: u64) -> prost_types::Timestamp {
+    let timestamp = std::time::Duration::from_millis(timestamp_ms);
+    prost_types::Timestamp {
+        seconds: timestamp.as_secs() as i64,
+        nanos: timestamp.subsec_nanos() as i32,
+    }
+}
+
+pub fn proto_to_timestamp_ms(timestamp: prost_types::Timestamp) -> Result<u64, TryFromProtoError> {
+    let seconds = std::time::Duration::from_secs(timestamp.seconds.try_into()?);
+    let nanos = std::time::Duration::from_nanos(timestamp.nanos.try_into()?);
+
+    Ok((seconds + nanos).as_millis().try_into()?)
 }

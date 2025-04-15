@@ -31,6 +31,7 @@ members = [
 [workspace.dependencies]
 aes-gcm = "0.8.0"
 anyhow = "1.0.52"
+append-only-vec = "0.1.7"
 arbitrary = { version = "1.1.7", features = ["derive", "derive_arbitrary"] }
 async-trait = "0.1.42"
 bcs = "0.1.4"
@@ -116,6 +117,8 @@ similar = "2.4.0"
 smallvec = "1.6.1"
 stacker = "0.1.15"
 static_assertions = "1.1.0"
+strum = { version = "0.27.1", features = ["derive"] }
+strum_macros = "0.27.1"
 syn = { version = "1.0.64", features = ["derive"] }
 tempfile = "3.2.0"
 tera = "1.16.0"
@@ -137,6 +140,7 @@ x25519-dalek = { version = "0.1.0", package = "x25519-dalek-fiat", default-featu
 z3tracer = "0.8.0"
 inline_colorization = "0.1.6"
 insta = "1.42.0"
+zstd = "0.13.2"
 
 bytecode-interpreter-crypto = { path = "crates/bytecode-interpreter-crypto" }
 enum-compat-util = { path = "crates/enum-compat-util"}

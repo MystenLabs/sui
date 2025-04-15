@@ -8,7 +8,7 @@
 
 use crate::{
     diag,
-    diagnostics::{Diagnostic, DiagnosticReporter, Diagnostics},
+    diagnostics::{codes::Category, Diagnostic, DiagnosticReporter, Diagnostics},
     editions::{Edition, FeatureGate, UPGRADE_NOTE},
     parser::{ast::*, lexer::*, token_set::*},
     shared::{string_utils::*, *},
@@ -1920,7 +1920,26 @@ fn parse_control_exp(context: &mut Context) -> Result<(Exp, bool), Box<Diagnosti
             context.tokens.advance()?;
             consume_token(context.tokens, Tok::LParen)?;
             let eb = Box::new(parse_exp(context)?);
-            consume_token(context.tokens, Tok::RParen)?;
+            if let Err(diag) = consume_token(context.tokens, Tok::RParen) {
+                // do not try to recover from edition-related errors
+                if diag.info().category() == Category::Editions as u8 {
+                    return Err(diag);
+                }
+                context.advance_until_stop_set(Some(*diag));
+                return Ok((
+                    spanned(
+                        context.tokens.file_hash(),
+                        start_loc,
+                        context.tokens.previous_end_loc(),
+                        Exp_::IfElse(
+                            eb,
+                            Box::new(sp(Loc::invalid(), Exp_::UnresolvedError)),
+                            None,
+                        ),
+                    ),
+                    false,
+                ));
+            }
             let (et, ends_in_block) = parse_exp_or_sequence(context)?;
             let (ef, ends_in_block) = if match_token(context.tokens, Tok::Else)? {
                 let (ef, ends_in_block) = parse_exp_or_sequence(context)?;
@@ -1934,7 +1953,25 @@ fn parse_control_exp(context: &mut Context) -> Result<(Exp, bool), Box<Diagnosti
             context.tokens.advance()?;
             consume_token(context.tokens, Tok::LParen)?;
             let econd = parse_exp(context)?;
-            consume_token(context.tokens, Tok::RParen)?;
+            if let Err(diag) = consume_token(context.tokens, Tok::RParen) {
+                // do not try to recover from edition-related errors
+                if diag.info().category() == Category::Editions as u8 {
+                    return Err(diag);
+                }
+                context.advance_until_stop_set(Some(*diag));
+                return Ok((
+                    spanned(
+                        context.tokens.file_hash(),
+                        start_loc,
+                        context.tokens.previous_end_loc(),
+                        Exp_::While(
+                            Box::new(econd),
+                            Box::new(sp(Loc::invalid(), Exp_::UnresolvedError)),
+                        ),
+                    ),
+                    false,
+                ));
+            }
             let (eloop, ends_in_block) = parse_exp_or_sequence(context)?;
             let (econd, ends_in_block) = if context.tokens.peek() == Tok::Spec {
                 let start_loc = context.tokens.start_loc();
@@ -2019,7 +2056,22 @@ fn parse_control_exp(context: &mut Context) -> Result<(Exp, bool), Box<Diagnosti
             context.tokens.advance()?;
             consume_token(context.tokens, Tok::LParen)?;
             let subject_exp = Box::new(parse_exp(context)?);
-            consume_token(context.tokens, Tok::RParen)?;
+            if let Err(diag) = consume_token(context.tokens, Tok::RParen) {
+                // do not try to recover from edition-related errors
+                if diag.info().category() == Category::Editions as u8 {
+                    return Err(diag);
+                }
+                context.advance_until_stop_set(Some(*diag));
+                return Ok((
+                    spanned(
+                        context.tokens.file_hash(),
+                        start_loc,
+                        context.tokens.previous_end_loc(),
+                        Exp_::Match(subject_exp, sp(Loc::invalid(), vec![])),
+                    ),
+                    false,
+                ));
+            }
             let arms = parse_match_arms(context)?;
             let result = Exp_::Match(subject_exp, arms);
             (result, true)
@@ -3059,20 +3111,31 @@ fn parse_type_(
 //    OptionalTypeArgs = '<' Comma<Type> ">" | <empty>
 fn parse_optional_type_args(context: &mut Context) -> Option<Vec<Type>> {
     if context.tokens.peek() == Tok::Less {
+        if context
+            .tokens
+            .lookahead()
+            .is_ok_and(|tok| tok == Tok::Greater)
+        {
+            // recognize empty type args list to differentiate it from missparsed type args list
+            context.advance();
+            context.advance();
+            return Some(vec![]);
+        }
         context.stop_set.union(&TYPE_STOP_SET);
-        let list = Some(parse_comma_list(
+        let list = parse_comma_list(
             context,
             Tok::Less,
             Tok::Greater,
             &TYPE_START_SET,
             parse_type,
             "a type",
-        ));
+        );
         context.stop_set.difference(&TYPE_STOP_SET);
-        list
-    } else {
-        None
+        if !list.is_empty() {
+            return Some(list);
+        }
     }
+    None
 }
 
 fn token_to_ability(token: Tok, content: &str) -> Option<Ability_> {

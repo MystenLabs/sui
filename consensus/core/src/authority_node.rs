@@ -53,6 +53,7 @@ pub enum ConsensusAuthority {
 impl ConsensusAuthority {
     pub async fn start(
         network_type: ConsensusNetwork,
+        epoch_start_timestamp_ms: u64,
         own_index: AuthorityIndex,
         committee: Committee,
         parameters: Parameters,
@@ -72,6 +73,7 @@ impl ConsensusAuthority {
         match network_type {
             ConsensusNetwork::Anemo => {
                 let authority = AuthorityNode::start(
+                    epoch_start_timestamp_ms,
                     own_index,
                     committee,
                     parameters,
@@ -89,6 +91,7 @@ impl ConsensusAuthority {
             }
             ConsensusNetwork::Tonic => {
                 let authority = AuthorityNode::start(
+                    epoch_start_timestamp_ms,
                     own_index,
                     committee,
                     parameters,
@@ -173,6 +176,7 @@ where
     N: NetworkManager<AuthorityService<ChannelCoreThreadDispatcher>>,
 {
     pub(crate) async fn start(
+        epoch_start_timestamp_ms: u64,
         own_index: AuthorityIndex,
         committee: Committee,
         parameters: Parameters,
@@ -192,10 +196,14 @@ where
             "Invalid own index {}",
             own_index
         );
-        let own_hostname = &committee.authority(own_index).hostname;
+        let own_hostname = committee.authority(own_index).hostname.clone();
         info!(
-            "Starting consensus authority {} {}, {:?}, boot counter {}",
-            own_index, own_hostname, protocol_config.version, boot_counter
+            "Starting consensus authority {} {}, {:?}, epoch start timestamp {}, boot counter {}",
+            own_index,
+            own_hostname,
+            protocol_config.version,
+            epoch_start_timestamp_ms,
+            boot_counter
         );
         info!(
             "Consensus authorities: {}",
@@ -207,6 +215,7 @@ where
         info!("Consensus parameters: {:?}", parameters);
         info!("Consensus committee: {:?}", committee);
         let context = Arc::new(Context::new(
+            epoch_start_timestamp_ms,
             own_index,
             committee,
             parameters,
@@ -215,6 +224,18 @@ where
             clock,
         ));
         let start_time = Instant::now();
+
+        context
+            .metrics
+            .node_metrics
+            .authority_index
+            .with_label_values(&[&own_hostname])
+            .set(context.own_index.value() as i64);
+        context
+            .metrics
+            .node_metrics
+            .protocol_version
+            .set(context.protocol_config.version.as_u64() as i64);
 
         let (tx_client, tx_receiver) = TransactionClient::new(context.clone());
         let tx_consumer = TransactionConsumer::new(tx_receiver, context.clone());
@@ -510,6 +531,7 @@ mod tests {
 
         let authority = ConsensusAuthority::start(
             network_type,
+            0,
             own_index,
             committee,
             parameters,
@@ -907,6 +929,7 @@ mod tests {
 
         let authority = ConsensusAuthority::start(
             network_type,
+            0,
             index,
             committee,
             parameters,

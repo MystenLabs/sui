@@ -119,12 +119,16 @@ async fn test_contains_key() {
 
 #[tokio::test]
 async fn test_safe_drop_db() {
-    let path = temp_dir();
+    let root_path = temp_dir();
+
+    let tmp_path = root_path.join("test-0");
     {
-        let db: DBMap<i32, String> = open_map(path.clone(), Some("table"));
+        let db: DBMap<i32, String> = open_map(tmp_path.clone(), Some("table-0"));
         db.insert(&777, &"123".to_string()).unwrap();
     }
-    assert!(safe_drop_db(path).is_ok());
+    safe_drop_db(tmp_path, Duration::from_secs(30))
+        .await
+        .unwrap();
 }
 
 #[tokio::test]
@@ -431,34 +435,6 @@ async fn test_delete_range() {
 }
 
 #[tokio::test]
-async fn test_clear() {
-    let db: DBMap<i32, String> = open_map(temp_dir(), Some("table"));
-    // Test clear of empty map
-    let _ = db.unsafe_clear();
-
-    let keys_vals = (0..101).map(|i| (i, i.to_string()));
-    let mut insert_batch = db.batch();
-    insert_batch
-        .insert_batch(&db, keys_vals)
-        .expect("Failed to batch insert");
-
-    insert_batch.write().expect("Failed to execute batch");
-
-    // Check we have multiple entries
-    assert!(db.safe_iter().count() > 1);
-    let _ = db.unsafe_clear();
-    assert_eq!(db.safe_iter().count(), 0);
-    // Clear again to ensure safety when clearing empty map
-    let _ = db.unsafe_clear();
-    assert_eq!(db.safe_iter().count(), 0);
-    // Clear with one item
-    let _ = db.insert(&1, &"e".to_string());
-    assert_eq!(db.safe_iter().count(), 1);
-    let _ = db.unsafe_clear();
-    assert_eq!(db.safe_iter().count(), 0);
-}
-
-#[tokio::test]
 async fn test_iter_with_bounds() {
     let db = open_map(temp_dir(), None);
 
@@ -565,10 +541,7 @@ async fn test_range_iter() {
 #[tokio::test]
 async fn test_is_empty() {
     let db: DBMap<i32, String> = open_map(temp_dir(), Some("table"));
-
     // Test empty map is truly empty
-    assert!(db.is_empty());
-    let _ = db.unsafe_clear();
     assert!(db.is_empty());
 
     let keys_vals = (0..101).map(|i| (i, i.to_string()));
@@ -582,11 +555,6 @@ async fn test_is_empty() {
     // Check we have multiple entries and not empty
     assert!(db.safe_iter().count() > 1);
     assert!(!db.is_empty());
-
-    // Clear again to ensure empty works after clearing
-    let _ = db.unsafe_clear();
-    assert_eq!(db.safe_iter().count(), 0);
-    assert!(db.is_empty());
 }
 
 #[tokio::test]

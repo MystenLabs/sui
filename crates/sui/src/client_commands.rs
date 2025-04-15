@@ -2683,7 +2683,7 @@ pub async fn request_tokens_from_faucet(
         .await?;
 
     match resp.status() {
-        StatusCode::ACCEPTED | StatusCode::CREATED => {
+        StatusCode::ACCEPTED | StatusCode::CREATED | StatusCode::OK => {
             let faucet_resp: FaucetResponse = resp.json().await?;
 
             if let Some(err) = faucet_resp.error {
