@@ -21,7 +21,7 @@ use super::rpc_module::RpcModule;
 use self::error::Error;
 
 mod error;
-mod filter;
+pub(crate) mod filter;
 pub(crate) mod response;
 
 #[open_rpc(namespace = "sui", tag = "Objects API")]
