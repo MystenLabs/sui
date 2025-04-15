@@ -21,6 +21,7 @@ use sui_types::{
     error::{SuiError, SuiResult},
     transaction::*,
 };
+use tap::TapFallible;
 
 use crate::authority_client::tonic::IntoRequest;
 use sui_network::tonic::metadata::KeyAndValueRef;
@@ -303,25 +304,35 @@ pub fn make_network_authority_clients_with_network_config(
 ) -> BTreeMap<AuthorityName, NetworkAuthorityClient> {
     let mut authority_clients = BTreeMap::new();
     for (name, (_state, network_metadata)) in committee.validators() {
-        let address = network_metadata.network_address.clone();
-        let address = address.rewrite_udp_to_tcp();
-        // TODO: Enable TLS on this interface with below config, once support is rolled out to validators.
-        // let tls_config = network_metadata.network_public_key.as_ref().map(|key| {
-        //     sui_tls::create_rustls_client_config(
-        //         key.clone(),
-        //         sui_tls::SUI_VALIDATOR_SERVER_NAME.to_string(),
-        //         None,
-        //     )
-        // });
-        // TODO: Change below code to generate a SuiError if no valid TLS config is available.
-        let maybe_channel = network_config.connect_lazy(&address, None).map_err(|e| {
-            tracing::error!(
-                address = %address,
-                name = %name,
-                "unable to create authority client: {e}"
-            );
-            e.to_string().into()
-        });
+        let address = network_metadata
+            .network_address
+            .clone()
+            .rewrite_udp_to_tcp()
+            .rewrite_http_to_https();
+        let tls_config = network_metadata
+            .network_public_key
+            .as_ref()
+            .map(|key| {
+                sui_tls::create_rustls_client_config(
+                    key.clone(),
+                    sui_tls::SUI_VALIDATOR_SERVER_NAME.to_string(),
+                    None,
+                )
+            })
+            .ok_or(SuiError::from("network public key is not available"));
+        let maybe_channel = tls_config
+            .and_then(|tls_config| {
+                network_config
+                    .connect_lazy(&address, Some(tls_config))
+                    .map_err(|e| e.to_string().into())
+            })
+            .tap_err(|e| {
+                tracing::error!(
+                    address = %address,
+                    name = %name,
+                    "unable to create authority client: {e}"
+                )
+            });
         let client = NetworkAuthorityClient::new_lazy(maybe_channel);
         authority_clients.insert(*name, client);
     }
