@@ -112,9 +112,6 @@ async fn make_clients(
             sui_tls::SUI_VALIDATOR_SERVER_NAME.to_string(),
             None,
         );
-        tracing::info!(
-            "connecting to validator at address {net_addr:?} with config {tls_config:?}"
-        );
         let channel = net_config
             .connect(&net_addr, Some(tls_config))
             .await
