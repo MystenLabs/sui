@@ -2497,7 +2497,6 @@ dependencies = [
  "move-model",
  "move-model-2",
  "move-package",
- "move-prover-boogie-backend",
  "move-stackless-bytecode",
  "move-symbol-pool",
  "num",
@@ -2681,65 +2680,6 @@ dependencies = [
  "enum-compat-util",
  "quote",
  "syn 2.0.100",
-]
-
-[[package]]
-name = "move-prover"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "bimap",
- "clap 4.5.35",
- "codespan-reporting",
- "datatest-stable",
- "glob",
- "insta",
- "itertools 0.10.5",
- "log",
- "move-command-line-common",
- "move-compiler",
- "move-docgen",
- "move-model",
- "move-package",
- "move-prover-boogie-backend",
- "move-stackless-bytecode",
- "once_cell",
- "regex",
- "serde",
- "shell-words",
- "simplelog",
- "tempfile",
- "termcolor",
- "toml",
- "walkdir",
-]
-
-[[package]]
-name = "move-prover-boogie-backend"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "async-trait",
- "bimap",
- "codespan",
- "codespan-reporting",
- "futures",
- "itertools 0.10.5",
- "log",
- "move-binary-format",
- "move-command-line-common",
- "move-compiler",
- "move-core-types",
- "move-model",
- "move-stackless-bytecode",
- "num",
- "once_cell",
- "pretty",
- "rand 0.8.5",
- "regex",
- "serde",
- "tera",
- "tokio",
 ]
 
 [[package]]

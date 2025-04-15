@@ -1,0 +1,29 @@
+---
+source: crates/sui-prover/tests/integration.rs
+expression: output
+snapshot_kind: text
+---
+exiting with verification errors
+warning: unused alias
+  ┌─ tests/inputs/prettyprint-enum.move:4:31
+  │
+4 │ use prover::prover::{ensures, requires};
+  │                               ^^^^^^^^ Unused 'use' of alias 'requires'. Consider removing it
+  │
+  = This warning can be suppressed with '#[allow(unused_use)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+error: prover::ensures assertion does not hold
+   ┌─ tests/inputs/prettyprint-enum.move:22:5
+   │
+22 │     ensures(res == MyEnum::A(x));
+   │     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   │
+   =     at tests/inputs/prettyprint-enum.move:20: foo_spec
+   =         x = ELIDEDu64
+   =     at tests/inputs/prettyprint-enum.move:21: foo_spec
+   =         x = ELIDEDu64
+   =     at tests/inputs/prettyprint-enum.move:12: foo
+   =         result = foo::MyEnum::B{pos0 = ELIDEDu64}
+   =     at tests/inputs/prettyprint-enum.move:17: foo
+   =         res#1#0 = foo::MyEnum::B{pos0 = ELIDEDu64}
+   =     at tests/inputs/prettyprint-enum.move:22: foo_spec

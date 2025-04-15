@@ -1,0 +1,43 @@
+---
+source: crates/sui-prover/tests/integration.rs
+expression: output
+snapshot_kind: text
+---
+exiting with bytecode transformation errors
+warning: unused function type parameter
+  ┌─ tests/inputs/ghost_variable_compiler_checks/ghost_variables_noalias_write_write.move:5:16
+  │
+5 │ public fun foo<U, V>() {}
+  │                ^ Unused type parameter 'U'.
+  │
+  = This warning can be suppressed with '#[allow(unused_type_parameter)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning: unused function type parameter
+  ┌─ tests/inputs/ghost_variable_compiler_checks/ghost_variables_noalias_write_write.move:5:19
+  │
+5 │ public fun foo<U, V>() {}
+  │                   ^ Unused type parameter 'V'.
+  │
+  = This warning can be suppressed with '#[allow(unused_type_parameter)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+error[E0015]: global variable instantiation conflict T:
+   ┌─ tests/inputs/ghost_variable_compiler_checks/ghost_variables_noalias_write_write.move:15:5
+   │
+ 9 │     ghost::declare_global_mut<U, bool>();
+   │     ------------------------------------
+10 │     ghost::declare_global_mut<V, bool>();
+   │     ------------------------------------
+   ·
+15 │     foo<T, T>();
+   │     ^^^^^^^^^^^
+
+error[E0015]: global variable instantiation conflict u64:
+   ┌─ tests/inputs/ghost_variable_compiler_checks/ghost_variables_noalias_write_write.move:16:5
+   │
+ 9 │     ghost::declare_global_mut<U, bool>();
+   │     ------------------------------------
+10 │     ghost::declare_global_mut<V, bool>();
+   │     ------------------------------------
+   ·
+16 │     foo<u64, u64>();
+   │     ^^^^^^^^^^^^^^^

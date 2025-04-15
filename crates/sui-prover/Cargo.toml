@@ -12,48 +12,50 @@ clap.workspace = true
 colored.workspace = true
 tracing.workspace = true
 bin-version.workspace = true
+bimap.workspace = true
+serde.workspace = true
+once_cell.workspace = true
+toml.workspace = true
+async-trait.workspace = true
+itertools.workspace = true
+rand.workspace = true
+futures.workspace = true
+regex.workspace = true
 
-move-binary-format.workspace = true
 move-cli.workspace = true
-move-compiler.workspace = true
-move-disassembler.workspace = true
-move-ir-types.workspace = true
 move-package.workspace = true
-move-prover.workspace = true
-move-unit-test.workspace = true
+move-compiler.workspace = true
+move-binary-format.workspace = true
+move-command-line-common.workspace = true
 telemetry-subscribers.workspace = true
+
 tokio = { workspace = true, features = ["full"] }
 
-move-vm-runtime = { path = "../../external-crates/move/crates/move-vm-runtime" }
-sui-move-natives = { path = "../../sui-execution/latest/sui-move-natives", package = "sui-move-natives-latest" }
 move-core-types = { path = "../../external-crates/move/crates/move-core-types" }
+move-model = { path = "../../external-crates/move/crates/move-model" }
+move-stackless-bytecode = { path = "../../external-crates/move/crates/move-stackless-bytecode" }
+move-docgen = { path = "../../external-crates/move/crates/move-docgen" }
 
-sui-move-build.workspace = true
-sui-protocol-config.workspace = true
-sui-types.workspace = true
-better_any = "0.1.1"
-codespan-reporting.workspace = true
-
-regex = "1.10"
 openai_api_rust = "0.1.9"
+log = { version = "0.4.14", features = ["serde"] }
+num = "0.4.0"
+tera = "1.16.0"
+pretty = "0.10.0"
+simplelog = "0.9.0"
+codespan = "0.11.1"
+codespan-reporting = "0.11.1"
 
 [target.'cfg(not(target_env = "msvc"))'.dependencies]
 jemalloc-ctl.workspace = true
 
 [dev-dependencies]
+insta = "1.34"
+glob = "0.3"
+termcolor = "1.1.3"
+
 assert_cmd.workspace = true
-futures.workspace = true
 jsonrpsee.workspace = true
-rand.workspace = true
 tempfile.workspace = true
-
-move-package.workspace = true
-
-mysten-metrics.workspace = true
-sui-core.workspace = true
-sui-macros.workspace = true
-sui-node.workspace = true
-sui-simulator.workspace = true
 
 [package.metadata.cargo-udeps.ignore]
 normal = ["jemalloc-ctl"]

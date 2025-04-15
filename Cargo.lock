@@ -7874,6 +7874,31 @@ dependencies = [
 ]
 
 [[package]]
+name = "move-stackless-bytecode"
+version = "0.1.0"
+dependencies = [
+ "bimap",
+ "codespan",
+ "codespan-reporting",
+ "ethnum",
+ "im",
+ "internment",
+ "itertools 0.10.5",
+ "log",
+ "move-binary-format",
+ "move-command-line-common",
+ "move-compiler",
+ "move-core-types",
+ "move-model",
+ "move-symbol-pool",
+ "num",
+ "once_cell",
+ "paste",
+ "petgraph 0.5.1",
+ "serde",
+]
+
+[[package]]
 name = "move-stdlib"
 version = "0.1.1"
 dependencies = [
@@ -14884,6 +14909,52 @@ dependencies = [
  "proc-macro2",
  "quote",
  "syn 1.0.107",
+]
+
+[[package]]
+name = "sui-prover"
+version = "1.47.0"
+dependencies = [
+ "anyhow",
+ "assert_cmd",
+ "async-trait",
+ "bimap",
+ "bin-version",
+ "clap",
+ "codespan",
+ "codespan-reporting",
+ "colored",
+ "futures",
+ "glob",
+ "insta",
+ "itertools 0.13.0",
+ "jemalloc-ctl",
+ "jsonrpsee",
+ "log",
+ "move-binary-format",
+ "move-cli",
+ "move-command-line-common",
+ "move-compiler",
+ "move-core-types",
+ "move-docgen",
+ "move-model",
+ "move-package",
+ "move-stackless-bytecode",
+ "num",
+ "once_cell",
+ "openai_api_rust",
+ "pretty",
+ "rand 0.8.5",
+ "regex",
+ "serde",
+ "simplelog",
+ "telemetry-subscribers",
+ "tempfile",
+ "tera",
+ "termcolor",
+ "tokio",
+ "toml 0.7.4",
+ "tracing",
 ]
 
 [[package]]

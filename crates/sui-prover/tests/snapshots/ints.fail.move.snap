@@ -1,0 +1,23 @@
+---
+source: crates/sui-prover/tests/integration.rs
+assertion_line: 124
+expression: output
+---
+exiting with verification errors
+error: prover::ensures assertion does not hold
+   ┌─ tests/inputs/ints.fail.move:16:3
+   │
+16 │   ensures(res_int != x_int.add(1u64.to_int()));
+   │   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   │
+   =     at tests/inputs/ints.fail.move:11: foo_spec
+   =         x = ELIDEDu64
+   =     at tests/../../sui-framework/packages/move-stdlib/sources/u64.move:90
+   =         x = ELIDEDu64
+   =     at tests/inputs/ints.fail.move:7: foo
+   =         result = ELIDEDu64
+   =     at tests/inputs/ints.fail.move:8: foo
+   =         res#1#0 = ELIDEDu64
+   =     at tests/inputs/ints.fail.move:14: foo_spec
+   =         x_int#1#0 = 8855
+   =     at tests/inputs/ints.fail.move:15: foo_spec
