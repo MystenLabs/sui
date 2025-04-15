@@ -4,6 +4,7 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
+use anyhow::Context;
 use async_graphql::dataloader::DataLoader;
 use sui_indexer_alt_schema::transactions::StoredTransaction;
 use sui_kvstore::TransactionData as KVTransactionData;
@@ -151,28 +152,16 @@ impl KvLoader {
 impl TransactionContents {
     pub fn data(&self) -> anyhow::Result<TransactionData> {
         match self {
-            Self::Pg(stored) => {
-                let data: TransactionData =
-                    bcs::from_bytes(&stored.raw_transaction).map_err(|e| {
-                        anyhow::anyhow!("Failed to deserialize transaction data: {}", e)
-                    })?;
-
-                Ok(data)
-            }
+            Self::Pg(stored) => bcs::from_bytes(&stored.raw_transaction)
+                .context("Failed to deserialize transaction data"),
             Self::Bigtable(kv) => Ok(kv.transaction.data().transaction_data().clone()),
         }
     }
 
     pub fn digest(&self) -> anyhow::Result<TransactionDigest> {
         match self {
-            Self::Pg(stored) => {
-                let digest =
-                    TransactionDigest::try_from(stored.tx_digest.clone()).map_err(|e| {
-                        anyhow::anyhow!("Failed to deserialize transaction digest: {}", e)
-                    })?;
-
-                Ok(digest)
-            }
+            Self::Pg(stored) => TransactionDigest::try_from(stored.tx_digest.clone())
+                .context("Failed to deserialize transaction digest"),
             Self::Bigtable(kv) => Ok(*kv.transaction.digest()),
         }
     }
@@ -181,7 +170,7 @@ impl TransactionContents {
         match self {
             Self::Pg(stored) => {
                 let effects: TransactionEffects = bcs::from_bytes(&stored.raw_effects)
-                    .map_err(|e| anyhow::anyhow!("Failed to deserialize effects: {}", e))?;
+                    .context("Failed to deserialize effects")?;
 
                 Ok(effects.digest())
             }
@@ -192,10 +181,7 @@ impl TransactionContents {
     pub fn signatures(&self) -> anyhow::Result<Vec<GenericSignature>> {
         match self {
             Self::Pg(stored) => {
-                let signatures: Vec<GenericSignature> = bcs::from_bytes(&stored.user_signatures)
-                    .map_err(|e| anyhow::anyhow!("Failed to deserialize signatures: {}", e))?;
-
-                Ok(signatures)
+                bcs::from_bytes(&stored.user_signatures).context("Failed to deserialize signatures")
             }
             Self::Bigtable(kv) => Ok(kv.transaction.tx_signatures().to_vec()),
         }
@@ -204,10 +190,7 @@ impl TransactionContents {
     pub fn effects(&self) -> anyhow::Result<TransactionEffects> {
         match self {
             Self::Pg(stored) => {
-                let effects: TransactionEffects = bcs::from_bytes(&stored.raw_effects)
-                    .map_err(|e| anyhow::anyhow!("Failed to deserialize effects: {}", e))?;
-
-                Ok(effects)
+                bcs::from_bytes(&stored.raw_effects).context("Failed to deserialize effects")
             }
             Self::Bigtable(kv) => Ok(kv.effects.clone()),
         }
@@ -216,10 +199,7 @@ impl TransactionContents {
     pub fn events(&self) -> anyhow::Result<Vec<Event>> {
         match self {
             Self::Pg(stored) => {
-                let events: Vec<Event> = bcs::from_bytes(&stored.events)
-                    .map_err(|e| anyhow::anyhow!("Failed to deserialize events: {}", e))?;
-
-                Ok(events)
+                bcs::from_bytes(&stored.events).context("Failed to deserialize events")
             }
             Self::Bigtable(kv) => Ok(kv.events.clone().unwrap_or_default().data),
         }
@@ -229,15 +209,14 @@ impl TransactionContents {
         match self {
             Self::Pg(stored) => Ok(stored.raw_transaction.clone()),
             Self::Bigtable(kv) => bcs::to_bytes(kv.transaction.data().transaction_data())
-                .map_err(|e| anyhow::anyhow!("Failed to serialize transaction: {}", e)),
+                .context("Failed to serialize transaction"),
         }
     }
 
     pub fn raw_effects(&self) -> anyhow::Result<Vec<u8>> {
         match self {
             Self::Pg(stored) => Ok(stored.raw_effects.clone()),
-            Self::Bigtable(kv) => bcs::to_bytes(&kv.effects)
-                .map_err(|e| anyhow::anyhow!("Failed to serialize effects: {}", e)),
+            Self::Bigtable(kv) => bcs::to_bytes(&kv.effects).context("Failed to serialize effects"),
         }
     }
 
