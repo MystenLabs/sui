@@ -3,7 +3,7 @@
 
 use crate::{
     TModuleId,
-    model::{self, NamedConstantData, PackageData, WithSource},
+    model::{self, NamedConstantData, PackageData, SourceKind, WithSource},
     normalized, serializable_signatures,
 };
 use move_compiler::{
@@ -17,7 +17,7 @@ use move_compiler::{
 };
 use move_core_types::{account_address::AccountAddress, runtime_value};
 use move_symbol_pool::Symbol;
-use std::{cell::OnceCell, collections::BTreeMap, path::PathBuf, sync::Arc};
+use std::{cell::OnceCell, collections::BTreeMap, ops::Deref, path::PathBuf, sync::Arc};
 
 pub type Model = model::Model<WithSource>;
 pub type Package<'a> = model::Package<'a, WithSource>;
@@ -310,6 +310,14 @@ impl<'a> NamedConstant<'a> {
 //**************************************************************************************************
 // Derive
 //**************************************************************************************************
+
+impl Deref for Model {
+    type Target = model::Model<dyn SourceKind>;
+
+    fn deref(&self) -> &Self::Target {
+        unsafe { std::mem::transmute::<&Self, &model::Model<dyn SourceKind>>(self) }
+    }
+}
 
 impl Clone for Constant<'_> {
     fn clone(&self) -> Self {

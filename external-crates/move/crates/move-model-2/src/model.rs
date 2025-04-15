@@ -70,6 +70,13 @@ pub struct Model<K: SourceKind + ?Sized> {
     pub(crate) _phantom: std::marker::PhantomData<K>,
 }
 
+/// Represents the model data for a package.
+/// Extra functionality is provided in the case that  the `Model` had source information
+/// (`WithSource`) or did not (`WithoutSource`). If you need to "forget" which case you are in,
+/// `to_dyn` and `as_dyn` effectively "drop" the source information annotation. This can let values
+/// with different source information to be used together.
+/// Conversely, if you need to "remember" which case you are in, you can use `kind` to to case on the presence source information. This can let you access the extra functionality provided by
+/// the `source_model` or `compiled_model`.
 pub struct Package<'a, K: SourceKind + ?Sized> {
     pub(crate) addr: AccountAddress,
     // TODO name. We likely want the package name from the root package's named address map
@@ -78,6 +85,13 @@ pub struct Package<'a, K: SourceKind + ?Sized> {
     pub(crate) data: &'a PackageData<K>,
 }
 
+/// Represents the model data for a module.
+/// Extra functionality is provided in the case that  the `Model` had source information
+/// (`WithSource`) or did not (`WithoutSource`). If you need to "forget" which case you are in,
+/// `to_dyn` and `as_dyn` effectively "drop" the source information annotation. This can let values
+/// with different source information to be used together.
+/// Conversely, if you need to "remember" which case you are in, you can use `kind` to to case on the presence source information. This can let you access the extra functionality provided by
+/// the `source_model` or `compiled_model`.
 pub struct Module<'a, K: SourceKind + ?Sized> {
     pub(crate) id: ModuleId,
     pub(crate) package: Package<'a, K>,
@@ -85,6 +99,13 @@ pub struct Module<'a, K: SourceKind + ?Sized> {
     pub(crate) data: &'a ModuleData<K>,
 }
 
+/// Represents the model data for a module member.
+/// Extra functionality is provided in the case that  the `Model` had source information
+/// (`WithSource`) or did not (`WithoutSource`). If you need to "forget" which case you are in,
+/// `to_dyn` and `as_dyn` effectively "drop" the source information annotation. This can let values
+/// with different source information to be used together.
+/// Conversely, if you need to "remember" which case you are in, you can use `kind` to to case on the presence source information. This can let you access the extra functionality provided by
+/// the `source_model` or `compiled_model`.
 pub enum Member<'a, K: SourceKind + ?Sized> {
     Struct(Struct<'a, K>),
     Enum(Enum<'a, K>),
@@ -92,11 +113,25 @@ pub enum Member<'a, K: SourceKind + ?Sized> {
     NamedConstant(source_model::NamedConstant<'a>),
 }
 
+/// Represents the model data for a module type declaration (struct or enum).
+/// Extra functionality is provided in the case that  the `Model` had source information
+/// (`WithSource`) or did not (`WithoutSource`). If you need to "forget" which case you are in,
+/// `to_dyn` and `as_dyn` effectively "drop" the source information annotation. This can let values
+/// with different source information to be used together.
+/// Conversely, if you need to "remember" which case you are in, you can use `kind` to to case on the presence source information. This can let you access the extra functionality provided by
+/// the `source_model` or `compiled_model`.
 pub enum Datatype<'a, K: SourceKind + ?Sized> {
     Struct(Struct<'a, K>),
     Enum(Enum<'a, K>),
 }
 
+/// Represents the model data for a struct declaration.
+/// Extra functionality is provided in the case that  the `Model` had source information
+/// (`WithSource`) or did not (`WithoutSource`). If you need to "forget" which case you are in,
+/// `to_dyn` and `as_dyn` effectively "drop" the source information annotation. This can let values
+/// with different source information to be used together.
+/// Conversely, if you need to "remember" which case you are in, you can use `kind` to to case on the presence source information. This can let you access the extra functionality provided by
+/// the `source_model` or `compiled_model`.
 pub struct Struct<'a, K: SourceKind + ?Sized> {
     pub(crate) name: Symbol,
     pub(crate) module: Module<'a, K>,
@@ -105,6 +140,13 @@ pub struct Struct<'a, K: SourceKind + ?Sized> {
     pub(crate) data: &'a StructData,
 }
 
+/// Represents the model data for an enum declaration.
+/// Extra functionality is provided in the case that  the `Model` had source information
+/// (`WithSource`) or did not (`WithoutSource`). If you need to "forget" which case you are in,
+/// `to_dyn` and `as_dyn` effectively "drop" the source information annotation. This can let values
+/// with different source information to be used together.
+/// Conversely, if you need to "remember" which case you are in, you can use `kind` to to case on the presence source information. This can let you access the extra functionality provided by
+/// the `source_model` or `compiled_model`.
 pub struct Enum<'a, K: SourceKind + ?Sized> {
     pub(crate) name: Symbol,
     pub(crate) module: Module<'a, K>,
@@ -113,12 +155,26 @@ pub struct Enum<'a, K: SourceKind + ?Sized> {
     pub(crate) data: &'a EnumData,
 }
 
+/// Represents the model data for an enum's variant declaration.
+/// Extra functionality is provided in the case that  the `Model` had source information
+/// (`WithSource`) or did not (`WithoutSource`). If you need to "forget" which case you are in,
+/// `to_dyn` and `as_dyn` effectively "drop" the source information annotation. This can let values
+/// with different source information to be used together.
+/// Conversely, if you need to "remember" which case you are in, you can use `kind` to to case on the presence source information. This can let you access the extra functionality provided by
+/// the `source_model` or `compiled_model`.
 pub struct Variant<'a, K: SourceKind + ?Sized> {
     pub(crate) name: Symbol,
     pub(crate) enum_: Enum<'a, K>,
     pub(crate) compiled: &'a normalized::Variant,
 }
 
+/// Represents the model data for a function declaration.
+/// Extra functionality is provided in the case that  the `Model` had source information
+/// (`WithSource`) or did not (`WithoutSource`). If you need to "forget" which case you are in,
+/// `to_dyn` and `as_dyn` effectively "drop" the source information annotation. This can let values
+/// with different source information to be used together.
+/// Conversely, if you need to "remember" which case you are in, you can use `kind` to to case on the presence source information. This can let you access the extra functionality provided by
+/// the `source_model` or `compiled_model`.
 pub struct Function<'a, K: SourceKind + ?Sized> {
     pub(crate) name: Symbol,
     pub(crate) module: Module<'a, K>,
@@ -128,6 +184,15 @@ pub struct Function<'a, K: SourceKind + ?Sized> {
     pub(crate) data: &'a FunctionData,
 }
 
+/// Represents the model data for a module's constant present in the `CompiledModule`. Not all
+/// constants at the source level are present in the `CompiledModule` depending on optimizations.
+/// For source level constants, see `source_model::NamedConstant` and `source_model::Constant`.
+/// Extra functionality is provided in the case that  the `Model` had source information
+/// (`WithSource`) or did not (`WithoutSource`). If you need to "forget" which case you are in,
+/// `to_dyn` and `as_dyn` effectively "drop" the source information annotation. This can let values
+/// with different source information to be used together.
+/// Conversely, if you need to "remember" which case you are in, you can use `kind` to to case on the presence source information. This can let you access the extra functionality provided by
+/// the `source_model` or `compiled_model`.
 pub struct CompiledConstant<'a, K: SourceKind + ?Sized> {
     pub(crate) module: Module<'a, K>,
     pub(crate) compiled: &'a normalized::Constant,
@@ -318,10 +383,6 @@ impl<'a, K: SourceKind + ?Sized> Package<'a, K> {
             })
         }
     }
-
-    pub fn to_dyn(self) -> Package<'a, dyn SourceKind> {
-        unsafe { std::mem::transmute::<Self, Package<'a, dyn SourceKind>>(self) }
-    }
 }
 
 impl<'a, K: SourceKind + ?Sized> Module<'a, K> {
@@ -449,10 +510,6 @@ impl<'a, K: SourceKind + ?Sized> Module<'a, K> {
             })
         }
     }
-
-    pub fn to_dyn(self) -> Module<'a, dyn SourceKind> {
-        unsafe { std::mem::transmute::<Self, Module<'a, dyn SourceKind>>(self) }
-    }
 }
 
 impl<'a, K: SourceKind + ?Sized> Struct<'a, K> {
@@ -488,10 +545,6 @@ impl<'a, K: SourceKind + ?Sized> Struct<'a, K> {
                 std::mem::transmute::<Self, Struct<'a, WithoutSource>>(self)
             })
         }
-    }
-
-    pub fn to_dyn(self) -> Struct<'a, dyn SourceKind> {
-        unsafe { std::mem::transmute::<Self, Struct<'a, dyn SourceKind>>(self) }
     }
 }
 
@@ -574,10 +627,6 @@ impl<'a, K: SourceKind + ?Sized> Variant<'a, K> {
             })
         }
     }
-
-    pub fn to_dyn(self) -> Variant<'a, dyn SourceKind> {
-        unsafe { std::mem::transmute::<Self, Variant<'a, dyn SourceKind>>(self) }
-    }
 }
 
 impl<'a, K: SourceKind + ?Sized> Function<'a, K> {
@@ -624,10 +673,6 @@ impl<'a, K: SourceKind + ?Sized> Function<'a, K> {
                 std::mem::transmute::<Self, Function<'a, WithoutSource>>(self)
             })
         }
-    }
-
-    pub fn to_dyn(self) -> Function<'a, dyn SourceKind> {
-        unsafe { std::mem::transmute::<Self, Function<'a, dyn SourceKind>>(self) }
     }
 }
 
@@ -1122,65 +1167,33 @@ fn annotated_constant_layout(ty: &normalized::Type) -> runtime_value::MoveTypeLa
 // Derive
 //**************************************************************************************************
 
-impl<K: SourceKind + ?Sized> Clone for Package<'_, K> {
-    fn clone(&self) -> Self {
-        *self
-    }
-}
-impl<K: SourceKind + ?Sized> Copy for Package<'_, K> {}
+macro_rules! derive_all {
+    ($item:ident) => {
+        impl<K: SourceKind + ?Sized> Clone for $item<'_, K> {
+            fn clone(&self) -> Self {
+                *self
+            }
+        }
+        impl<K: SourceKind + ?Sized> Copy for $item<'_, K> {}
 
-impl<K: SourceKind + ?Sized> Clone for Module<'_, K> {
-    fn clone(&self) -> Self {
-        *self
-    }
-}
-impl<K: SourceKind + ?Sized> Copy for Module<'_, K> {}
+        impl<'a, K: SourceKind + ?Sized> $item<'a, K> {
+            pub fn as_dyn(&self) -> &$item<'a, dyn SourceKind> {
+                unsafe { std::mem::transmute::<&$item<'a, K>, &$item<'a, dyn SourceKind>>(self) }
+            }
 
-impl<K: SourceKind + ?Sized> Clone for Member<'_, K> {
-    fn clone(&self) -> Self {
-        *self
-    }
+            pub fn to_dyn(self) -> $item<'a, dyn SourceKind> {
+                unsafe { std::mem::transmute::<$item<'a, K>, $item<'a, dyn SourceKind>>(self) }
+            }
+        }
+    };
 }
-impl<K: SourceKind + ?Sized> Copy for Member<'_, K> {}
 
-impl<K: SourceKind + ?Sized> Clone for Datatype<'_, K> {
-    fn clone(&self) -> Self {
-        *self
-    }
-}
-impl<K: SourceKind + ?Sized> Copy for Datatype<'_, K> {}
-
-impl<K: SourceKind + ?Sized> Clone for Struct<'_, K> {
-    fn clone(&self) -> Self {
-        *self
-    }
-}
-impl<K: SourceKind + ?Sized> Copy for Struct<'_, K> {}
-
-impl<K: SourceKind + ?Sized> Clone for Enum<'_, K> {
-    fn clone(&self) -> Self {
-        *self
-    }
-}
-impl<K: SourceKind + ?Sized> Copy for Enum<'_, K> {}
-
-impl<K: SourceKind + ?Sized> Clone for Variant<'_, K> {
-    fn clone(&self) -> Self {
-        *self
-    }
-}
-impl<K: SourceKind + ?Sized> Copy for Variant<'_, K> {}
-
-impl<K: SourceKind + ?Sized> Clone for Function<'_, K> {
-    fn clone(&self) -> Self {
-        *self
-    }
-}
-impl<K: SourceKind + ?Sized> Copy for Function<'_, K> {}
-
-impl Clone for CompiledConstant<'_, WithSource> {
-    fn clone(&self) -> Self {
-        *self
-    }
-}
-impl Copy for CompiledConstant<'_, WithSource> {}
+derive_all!(Package);
+derive_all!(Module);
+derive_all!(Member);
+derive_all!(Datatype);
+derive_all!(Struct);
+derive_all!(Enum);
+derive_all!(Variant);
+derive_all!(Function);
+derive_all!(CompiledConstant);
