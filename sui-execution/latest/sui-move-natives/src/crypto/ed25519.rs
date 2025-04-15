@@ -60,11 +60,11 @@ pub fn ed25519_verify(
     );
 
     let msg = pop_arg!(args, VectorRef);
-    let msg_ref = msg.as_bytes_ref();
+    let msg_ref = &*msg.as_bytes_ref();
     let public_key_bytes = pop_arg!(args, VectorRef);
-    let public_key_bytes_ref = public_key_bytes.as_bytes_ref();
+    let public_key_bytes_ref = &*public_key_bytes.as_bytes_ref();
     let signature_bytes = pop_arg!(args, VectorRef);
-    let signature_bytes_ref = signature_bytes.as_bytes_ref();
+    let signature_bytes_ref = &*signature_bytes.as_bytes_ref();
 
     // Charge the arg size dependent costs
     native_charge_gas_early_exit!(

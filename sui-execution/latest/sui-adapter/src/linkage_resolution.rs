@@ -761,9 +761,7 @@ impl PTBLinkageResolver {
         let resolution = resolution_fn(package);
         let original_pkg_id = package.original_package_id();
 
-        if let std::collections::btree_map::Entry::Vacant(e) =
-            resolution_table.resolution_table.entry(original_pkg_id)
-        {
+        if let Entry::Vacant(e) = resolution_table.resolution_table.entry(original_pkg_id) {
             e.insert(resolution);
         } else {
             let existing_unifier = resolution_table

@@ -117,8 +117,8 @@ pub fn ecrecover(
     let msg = pop_arg!(args, VectorRef);
     let signature = pop_arg!(args, VectorRef);
 
-    let msg_ref = msg.as_bytes_ref();
-    let signature_ref = signature.as_bytes_ref();
+    let msg_ref = &*msg.as_bytes_ref();
+    let signature_ref = &*signature.as_bytes_ref();
 
     // Charge the arg size dependent costs
     native_charge_gas_early_exit!(
@@ -173,7 +173,7 @@ pub fn decompress_pubkey(
     );
 
     let pubkey = pop_arg!(args, VectorRef);
-    let pubkey_ref = pubkey.as_bytes_ref();
+    let pubkey_ref = &*pubkey.as_bytes_ref();
 
     let cost = context.gas_used();
 
@@ -269,9 +269,9 @@ pub fn secp256k1_verify(
     let public_key_bytes = pop_arg!(args, VectorRef);
     let signature_bytes = pop_arg!(args, VectorRef);
 
-    let msg_ref = msg.as_bytes_ref();
-    let public_key_bytes_ref = public_key_bytes.as_bytes_ref();
-    let signature_bytes_ref = signature_bytes.as_bytes_ref();
+    let msg_ref = &*msg.as_bytes_ref();
+    let public_key_bytes_ref = &*public_key_bytes.as_bytes_ref();
+    let signature_bytes_ref = &*signature_bytes.as_bytes_ref();
 
     // Charge the arg size dependent costs
     native_charge_gas_early_exit!(
@@ -323,8 +323,8 @@ pub fn secp256k1_sign(
     let msg = pop_arg!(args, VectorRef);
     let private_key_bytes = pop_arg!(args, VectorRef);
 
-    let msg_ref = msg.as_bytes_ref();
-    let private_key_bytes_ref = private_key_bytes.as_bytes_ref();
+    let msg_ref = &*msg.as_bytes_ref();
+    let private_key_bytes_ref = &*private_key_bytes.as_bytes_ref();
 
     let sk = match <Secp256k1PrivateKey as ToFromBytes>::from_bytes(private_key_bytes_ref) {
         Ok(sk) => sk,
@@ -372,7 +372,7 @@ pub fn secp256k1_keypair_from_seed(
     let cost = 0.into();
 
     let seed = pop_arg!(args, VectorRef);
-    let seed_ref = seed.as_bytes_ref();
+    let seed_ref = &*seed.as_bytes_ref();
 
     if seed_ref.len() != SEED_LENGTH {
         return Ok(NativeResult::err(cost, INVALID_SEED));
