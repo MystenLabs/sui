@@ -60,6 +60,15 @@ impl EffectsContents {
 
         Ok(Some(Base64(content.raw_effects()?)))
     }
+
+    /// A 32-byte hash that uniquely identifies the effects contents, encoded in Base58.
+    async fn effects_digest(&self) -> Result<Option<String>, RpcError> {
+        let Some(content) = &self.0 else {
+            return Ok(None);
+        };
+
+        Ok(Some(Base58::encode(content.effects_digest()?)))
+    }
 }
 
 impl TransactionEffects {
