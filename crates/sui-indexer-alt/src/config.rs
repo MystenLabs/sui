@@ -116,6 +116,7 @@ pub struct PipelineLayer {
     // Consistent pipelines
     pub coin_balance_buckets: Option<CommitterLayer>,
     pub obj_info: Option<CommitterLayer>,
+    pub obj_info_temp: Option<CommitterLayer>,
 
     // Sequential pipelines
     pub sum_displays: Option<SequentialLayer>,
@@ -279,6 +280,7 @@ impl PipelineLayer {
         PipelineLayer {
             coin_balance_buckets: Some(Default::default()),
             obj_info: Some(Default::default()),
+            obj_info_temp: None,
             sum_displays: Some(Default::default()),
             sum_packages: Some(Default::default()),
             cp_sequence_numbers: Some(Default::default()),
@@ -402,6 +404,7 @@ impl Merge for PipelineLayer {
         PipelineLayer {
             coin_balance_buckets: self.coin_balance_buckets.merge(other.coin_balance_buckets),
             obj_info: self.obj_info.merge(other.obj_info),
+            obj_info_temp: self.obj_info_temp.merge(other.obj_info_temp),
             sum_displays: self.sum_displays.merge(other.sum_displays),
             sum_packages: self.sum_packages.merge(other.sum_packages),
             cp_sequence_numbers: self.cp_sequence_numbers.merge(other.cp_sequence_numbers),

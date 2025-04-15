@@ -54,7 +54,7 @@ pub struct TestFailure {
 pub struct TestRunInfo {
     pub elapsed_time: Duration,
     pub instructions_executed: u64,
-    pub trace: Option<MoveTrace>,
+    pub trace: Option<Vec<u8>>,
 }
 
 type TestRuns<T> = BTreeMap<String, Vec<T>>;
@@ -71,13 +71,13 @@ pub struct TestResults {
     test_plan: TestPlan,
 }
 
-fn write_string_to_file(filepath: &str, content: &str) -> std::io::Result<()> {
+fn write_bytes_to_file(filepath: &str, content: &[u8]) -> std::io::Result<()> {
     let path = Path::new(filepath);
     if let Some(parent) = path.parent() {
         std::fs::create_dir_all(parent)?;
     }
     let mut file = std::fs::File::create(path)?;
-    file.write_all(content.as_bytes())?;
+    file.write_all(content)?;
     Ok(())
 }
 
@@ -90,13 +90,13 @@ impl TestRunInfo {
         Self {
             elapsed_time,
             instructions_executed,
-            trace,
+            trace: trace.map(|t| t.into_compressed_json_bytes()),
         }
     }
 
     pub fn save_trace(&self, path: &str) -> Result<()> {
         if let Some(trace) = &self.trace {
-            write_string_to_file(path, &format!("{}", trace.to_json()))
+            write_bytes_to_file(path, trace)
         } else {
             Ok(())
         }

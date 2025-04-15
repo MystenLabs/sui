@@ -199,7 +199,7 @@ pub enum ExecutionFailureStatus {
     #[error("The shared object operation is not allowed.")]
     SharedObjectOperationNotAllowed,
 
-    #[error("Certificate cannot be executed due to a dependency on a deleted shared object")]
+    #[error("Certificate cannot be executed due to a dependency on a deleted shared object or an object that was transferred out of consensus")]
     InputObjectDeleted,
 
     #[error("Certificate is cancelled due to congestion on shared objects: {congested_objects}")]

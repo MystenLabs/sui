@@ -1,0 +1,114 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: 2024.alpha
+  lint: false
+---
+note[I15004]: IDE missing match arms
+ = Compiler Error -- no location information for error:
+     Missing arms: '_'
+
+error[E04010]: cannot infer type
+ = Compiler Error -- no location information for error:
+     Could not infer this type. Try adding an annotation
+
+error[E04007]: incompatible types
+   ┌─ tests/move_2024/ide_mode/control_exp_autocomplete.move:15:13
+   │
+14 │     public fun test_if(a: A) {
+   │                           - Given: 'a::m::A'
+15 │         if (a.
+   │             ^^
+   │             │
+   │             Invalid if condition
+   │             Expected: 'bool'
+
+note[I15001]: IDE dot autocomplete
+   ┌─ tests/move_2024/ide_mode/control_exp_autocomplete.move:15:14
+   │
+15 │         if (a.
+   │              ^ Possible dot names: 'a::m::test_if' or 'x'
+
+error[E01002]: unexpected token
+   ┌─ tests/move_2024/ide_mode/control_exp_autocomplete.move:16:5
+   │
+16 │     }
+   │     ^
+   │     │
+   │     Unexpected '}'
+   │     Expected an identifier or a decimal number
+
+error[E01002]: unexpected token
+   ┌─ tests/move_2024/ide_mode/control_exp_autocomplete.move:18:5
+   │
+18 │     public fun test_while() {
+   │     ^^^^^^
+   │     │
+   │     Unexpected 'public'
+   │     Expected ';'
+
+error[E04007]: incompatible types
+   ┌─ tests/move_2024/ide_mode/control_exp_autocomplete.move:20:16
+   │
+19 │         let n = (42 as u32);
+   │                        --- Given: 'u32'
+20 │         while (n.
+   │                ^^
+   │                │
+   │                Invalid while condition
+   │                Expected: 'bool'
+
+note[I15001]: IDE dot autocomplete
+   ┌─ tests/move_2024/ide_mode/control_exp_autocomplete.move:20:17
+   │
+20 │         while (n.
+   │                 ^ Possible dot names: 'std::u32::bitwise_not', 'std::u32::diff', 'std::u32::divide_and_round_up', 'std::u32::do', 'std::u32::do_eq', 'std::u32::max', 'std::u32::min', 'std::u32::pow', 'std::u32::range_do', 'std::u32::range_do_eq', 'std::u32::sqrt', 'std::u32::to_string', 'std::u32::try_as_u16', or 'std::u32::try_as_u8'
+
+error[E01002]: unexpected token
+   ┌─ tests/move_2024/ide_mode/control_exp_autocomplete.move:21:5
+   │
+21 │     }
+   │     ^
+   │     │
+   │     Unexpected '}'
+   │     Expected an identifier or a decimal number
+
+error[E01002]: unexpected token
+   ┌─ tests/move_2024/ide_mode/control_exp_autocomplete.move:23:5
+   │
+23 │     public fun test_match(n: u64) {
+   │     ^^^^^^
+   │     │
+   │     Unexpected 'public'
+   │     Expected ';'
+
+error[E04036]: non-exhaustive pattern
+   ┌─ tests/move_2024/ide_mode/control_exp_autocomplete.move:24:16
+   │
+24 │         match (n.
+   │                ^^ Pattern '_' not covered
+
+note[I15001]: IDE dot autocomplete
+   ┌─ tests/move_2024/ide_mode/control_exp_autocomplete.move:24:17
+   │
+24 │         match (n.
+   │                 ^ Possible dot names: 'std::u64::bitwise_not', 'std::u64::diff', 'std::u64::divide_and_round_up', 'std::u64::do', 'std::u64::do_eq', 'std::u64::max', 'std::u64::min', 'std::u64::pow', 'std::u64::range_do', 'std::u64::range_do_eq', 'std::u64::sqrt', 'std::u64::to_string', 'std::u64::try_as_u16', 'std::u64::try_as_u32', or 'std::u64::try_as_u8'
+
+error[E01002]: unexpected token
+   ┌─ tests/move_2024/ide_mode/control_exp_autocomplete.move:25:5
+   │
+25 │     }
+   │     ^
+   │     │
+   │     Unexpected '}'
+   │     Expected an identifier or a decimal number
+
+error[E01002]: unexpected token
+   ┌─ tests/move_2024/ide_mode/control_exp_autocomplete.move:28:1
+   │
+28 │ 
+   │ ^
+   │ 
+   │ Unexpected end-of-file
+   │ Expected ';'

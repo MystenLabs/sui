@@ -128,12 +128,20 @@ impl BlockV1 {
         }
     }
 
-    fn genesis_block(epoch: Epoch, author: AuthorityIndex) -> Self {
+    fn genesis_block(context: &Context, author: AuthorityIndex) -> Self {
+        let timestamp_ms = if context
+            .protocol_config
+            .enforce_checkpoint_timestamp_monotonicity()
+        {
+            context.epoch_start_timestamp_ms
+        } else {
+            0
+        };
         Self {
-            epoch,
+            epoch: context.committee.epoch(),
             round: GENESIS_ROUND,
             author,
-            timestamp_ms: 0,
+            timestamp_ms,
             ancestors: vec![],
             transactions: vec![],
             commit_votes: vec![],
@@ -227,12 +235,20 @@ impl BlockV2 {
         }
     }
 
-    fn genesis_block(epoch: Epoch, author: AuthorityIndex) -> Self {
+    fn genesis_block(context: &Context, author: AuthorityIndex) -> Self {
+        let timestamp_ms = if context
+            .protocol_config
+            .enforce_checkpoint_timestamp_monotonicity()
+        {
+            context.epoch_start_timestamp_ms
+        } else {
+            0
+        };
         Self {
-            epoch,
+            epoch: context.committee.epoch(),
             round: GENESIS_ROUND,
             author,
-            timestamp_ms: 0,
+            timestamp_ms,
             ancestors: vec![],
             transactions: vec![],
             commit_votes: vec![],
@@ -666,15 +682,17 @@ pub(crate) struct ExtendedBlock {
 
 /// Generates the genesis blocks for the current Committee.
 /// The blocks are returned in authority index order.
-pub(crate) fn genesis_blocks(context: Arc<Context>) -> Vec<VerifiedBlock> {
+pub(crate) fn genesis_blocks(context: &Context) -> Vec<VerifiedBlock> {
     context
         .committee
         .authorities()
         .map(|(authority_index, _)| {
-            let signed_block = SignedBlock::new_genesis(Block::V1(BlockV1::genesis_block(
-                context.committee.epoch(),
-                authority_index,
-            )));
+            let block = if context.protocol_config.mysticeti_fastpath() {
+                Block::V2(BlockV2::genesis_block(context, authority_index))
+            } else {
+                Block::V1(BlockV1::genesis_block(context, authority_index))
+            };
+            let signed_block = SignedBlock::new_genesis(block);
             let serialized = signed_block
                 .serialize()
                 .expect("Genesis block serialization failed.");
@@ -792,9 +810,10 @@ mod tests {
     use fastcrypto::error::FastCryptoError;
 
     use crate::{
-        block::{SignedBlock, TestBlock},
+        block::{genesis_blocks, SignedBlock, TestBlock},
         context::Context,
         error::ConsensusError,
+        BlockAPI,
     };
 
     #[tokio::test]
@@ -825,6 +844,19 @@ mod tests {
                 assert_eq!(err, FastCryptoError::InvalidSignature);
             }
             err => panic!("Unexpected error: {err:?}"),
+        }
+    }
+
+    #[tokio::test]
+    async fn test_genesis_blocks() {
+        let (context, _) = Context::new_for_test(4);
+        const TIMESTAMP_MS: u64 = 1000;
+        let context = Arc::new(context.with_epoch_start_timestamp_ms(TIMESTAMP_MS));
+        let blocks = genesis_blocks(&context);
+        for (i, block) in blocks.into_iter().enumerate() {
+            assert_eq!(block.author().value(), i);
+            assert_eq!(block.round(), 0);
+            assert_eq!(block.timestamp_ms(), TIMESTAMP_MS);
         }
     }
 }

@@ -1,13 +1,16 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use std::collections::HashMap;
 use std::sync::Arc;
 
 use sui_sdk_types::{CheckpointSequenceNumber, EpochId, SignedTransaction, ValidatorCommittee};
 use sui_sdk_types::{Object, ObjectId, Version};
+use sui_types::balance_change::BalanceChange;
+use sui_types::base_types::{ObjectID, ObjectType};
 use sui_types::storage::error::{Error as StorageError, Result};
-use sui_types::storage::ObjectStore;
 use sui_types::storage::RpcStateReader;
+use sui_types::storage::{ObjectStore, TransactionInfo};
 use tap::Pipe;
 
 use crate::Direction;
@@ -26,6 +29,7 @@ impl StateReader {
         &self.inner
     }
 
+    #[tracing::instrument(skip(self))]
     pub fn get_object(&self, object_id: ObjectId) -> crate::Result<Option<Object>> {
         self.inner
             .get_object(&object_id.into())
@@ -34,6 +38,7 @@ impl StateReader {
             .map_err(Into::into)
     }
 
+    #[tracing::instrument(skip(self))]
     pub fn get_object_with_version(
         &self,
         object_id: ObjectId,
@@ -46,12 +51,14 @@ impl StateReader {
             .map_err(Into::into)
     }
 
+    #[tracing::instrument(skip(self))]
     pub fn get_committee(&self, epoch: EpochId) -> Option<ValidatorCommittee> {
         self.inner
             .get_committee(epoch)
             .map(|committee| (*committee).clone().into())
     }
 
+    #[tracing::instrument(skip(self))]
     pub fn get_system_state_summary(
         &self,
     ) -> Result<sui_types::sui_system_state::sui_system_state_summary::SuiSystemStateSummary> {
@@ -64,6 +71,7 @@ impl StateReader {
         Ok(summary)
     }
 
+    #[tracing::instrument(skip(self))]
     pub fn get_transaction(
         &self,
         digest: sui_sdk_types::TransactionDigest,
@@ -102,16 +110,19 @@ impl StateReader {
         ))
     }
 
-    pub fn get_transaction_checkpoint(
+    #[tracing::instrument(skip(self))]
+    pub fn get_transaction_info(
         &self,
         digest: &sui_types::digests::TransactionDigest,
-    ) -> Option<CheckpointSequenceNumber> {
+    ) -> Option<TransactionInfo> {
         self.inner()
             .indexes()?
-            .get_transaction_checkpoint(digest)
-            .ok()?
+            .get_transaction_info(digest)
+            .ok()
+            .flatten()
     }
 
+    #[tracing::instrument(skip(self))]
     pub fn get_transaction_read(
         &self,
         digest: sui_sdk_types::TransactionDigest,
@@ -125,7 +136,16 @@ impl StateReader {
             events,
         ) = self.get_transaction(digest)?;
 
-        let checkpoint = self.get_transaction_checkpoint(&(digest.into()));
+        let (checkpoint, balance_changes, object_types) =
+            if let Some(info) = self.get_transaction_info(&(digest.into())) {
+                (
+                    Some(info.checkpoint),
+                    Some(info.balance_changes),
+                    Some(info.object_types),
+                )
+            } else {
+                (None, None, None)
+            };
         let timestamp_ms = if let Some(checkpoint) = checkpoint {
             self.inner()
                 .get_checkpoint_by_sequence_number(checkpoint)
@@ -142,6 +162,8 @@ impl StateReader {
             events,
             checkpoint,
             timestamp_ms,
+            balance_changes,
+            object_types,
         })
     }
 
@@ -173,6 +195,8 @@ pub struct TransactionRead {
     pub events: Option<sui_sdk_types::TransactionEvents>,
     pub checkpoint: Option<u64>,
     pub timestamp_ms: Option<u64>,
+    pub balance_changes: Option<Vec<BalanceChange>>,
+    pub object_types: Option<HashMap<ObjectID, ObjectType>>,
 }
 
 pub struct CheckpointTransactionsIter {

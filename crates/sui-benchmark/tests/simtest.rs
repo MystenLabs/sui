@@ -671,6 +671,16 @@ mod test {
     }
 
     #[sim_test(config = "test_config()")]
+    async fn test_simulated_load_mysticeti_fastpath() {
+        unsafe {
+            std::env::set_var("TRANSACTION_DRIVER", "100");
+        }
+
+        let test_cluster = build_test_cluster(4, 30_000, 1).await;
+        test_simulated_load(test_cluster, 120).await;
+    }
+
+    #[sim_test(config = "test_config()")]
     async fn test_data_ingestion_pipeline() {
         let path = nondeterministic!(TempDir::new().unwrap()).into_path();
         let test_cluster = Arc::new(

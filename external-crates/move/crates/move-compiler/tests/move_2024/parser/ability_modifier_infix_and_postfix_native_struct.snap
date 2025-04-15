@@ -12,4 +12,4 @@ error[E01002]: unexpected token
   │                                              ^^^
   │                                              │
   │                                              Unexpected 'has'
-  │                                              Expected a module member: 'spec', 'use', 'friend', 'const', 'fun', 'struct', or 'enum'
+  │                                              Expected a module member: 'use', 'friend', 'const', 'fun', 'struct', or 'enum'

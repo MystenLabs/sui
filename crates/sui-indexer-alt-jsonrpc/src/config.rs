@@ -19,6 +19,9 @@ pub struct RpcConfig {
     /// Configuration for object-related RPC methods.
     pub objects: ObjectsConfig,
 
+    /// Configuration for dynamic-field-related RPC methods.
+    pub dynamic_fields: DynamicFieldsConfig,
+
     /// Configuration for transaction-related RPC methods.
     pub transactions: TransactionsConfig,
 
@@ -32,9 +35,6 @@ pub struct RpcConfig {
     /// including transaction execution, dry-running, and delegation coin queries etc.
     pub node: NodeConfig,
 
-    /// Configuration for bigtable kv store, if it is used.
-    pub bigtable: Option<BigtableConfig>,
-
     /// Configuring limits for the package resolver.
     pub package_resolver: sui_package_resolver::Limits,
 }
@@ -42,26 +42,12 @@ pub struct RpcConfig {
 #[DefaultConfig]
 #[derive(Clone, Default, Debug)]
 pub struct RpcLayer {
-    /// Configuration for object-related RPC methods.
     pub objects: ObjectsLayer,
-
-    /// Configuration for transaction-related RPC methods.
+    pub dynamic_fields: DynamicFieldsLayer,
     pub transactions: TransactionsLayer,
-
-    /// Configuration for SuiNS related RPC methods.
     pub name_service: NameServiceLayer,
-
-    /// Configuration for coin-related RPC methods.
     pub coins: CoinsLayer,
-
-    /// Configuration for transaction execution, dry-running, and delegation coin queries etc.
     pub node: NodeLayer,
-
-    /// Configuration for bigtable kv store, if it is used.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub bigtable: Option<BigtableConfig>,
-
-    /// Configuring limits for the package resolver.
     pub package_resolver: PackageResolverLayer,
 
     #[serde(flatten)]
@@ -76,7 +62,7 @@ pub struct ObjectsConfig {
     /// The default page size limit when querying objects, if none is provided.
     pub default_page_size: usize,
 
-    /// The largest acceptable page size when querying transactions. Requesting a page larger than
+    /// The largest acceptable page size when querying objects. Requesting a page larger than
     /// this is a user error.
     pub max_page_size: usize,
 
@@ -108,6 +94,26 @@ pub struct ObjectsLayer {
     pub max_filter_depth: Option<usize>,
     pub max_type_filters: Option<usize>,
     pub filter_scan_size: Option<usize>,
+
+    #[serde(flatten)]
+    pub extra: toml::Table,
+}
+
+#[derive(Debug, Clone)]
+pub struct DynamicFieldsConfig {
+    /// The default page size limit when querying dynamic fields, if none is provided.
+    pub default_page_size: usize,
+
+    /// The largest acceptable page size when querying dynamic fields. Requesting a page larger
+    /// than this is a user error.
+    pub max_page_size: usize,
+}
+
+#[DefaultConfig]
+#[derive(Clone, Default, Debug)]
+pub struct DynamicFieldsLayer {
+    pub default_page_size: Option<usize>,
+    pub max_page_size: Option<usize>,
 
     #[serde(flatten)]
     pub extra: toml::Table,
@@ -183,13 +189,6 @@ pub struct NodeLayer {
 }
 
 #[DefaultConfig]
-#[derive(Clone, Default, Debug)]
-pub struct BigtableConfig {
-    /// The instance id of the Bigtable instance to connect to.
-    pub instance_id: String,
-}
-
-#[DefaultConfig]
 #[derive(Clone, Debug)]
 pub struct PackageResolverLayer {
     pub max_type_argument_depth: usize,
@@ -207,10 +206,10 @@ impl RpcLayer {
     pub fn example() -> Self {
         Self {
             objects: ObjectsConfig::default().into(),
+            dynamic_fields: DynamicFieldsConfig::default().into(),
             transactions: TransactionsConfig::default().into(),
             name_service: NameServiceConfig::default().into(),
             coins: CoinsConfig::default().into(),
-            bigtable: None,
             package_resolver: PackageResolverLayer::default(),
             node: NodeConfig::default().into(),
             extra: Default::default(),
@@ -221,11 +220,11 @@ impl RpcLayer {
         check_extra("top-level", mem::take(&mut self.extra));
         RpcConfig {
             objects: self.objects.finish(ObjectsConfig::default()),
+            dynamic_fields: self.dynamic_fields.finish(DynamicFieldsConfig::default()),
             transactions: self.transactions.finish(TransactionsConfig::default()),
             name_service: self.name_service.finish(NameServiceConfig::default()),
             coins: self.coins.finish(CoinsConfig::default()),
             node: self.node.finish(NodeConfig::default()),
-            bigtable: self.bigtable,
             package_resolver: self.package_resolver.finish(),
         }
     }
@@ -249,6 +248,16 @@ impl ObjectsLayer {
             max_filter_depth: self.max_filter_depth.unwrap_or(base.max_filter_depth),
             max_type_filters: self.max_type_filters.unwrap_or(base.max_type_filters),
             filter_scan_size: self.filter_scan_size.unwrap_or(base.filter_scan_size),
+        }
+    }
+}
+
+impl DynamicFieldsLayer {
+    pub fn finish(self, base: DynamicFieldsConfig) -> DynamicFieldsConfig {
+        check_extra("dynamic fields", self.extra);
+        DynamicFieldsConfig {
+            default_page_size: self.default_page_size.unwrap_or(base.default_page_size),
+            max_page_size: self.max_page_size.unwrap_or(base.max_page_size),
         }
     }
 }
@@ -326,11 +335,11 @@ impl Default for RpcConfig {
     fn default() -> Self {
         Self {
             objects: ObjectsConfig::default(),
+            dynamic_fields: DynamicFieldsConfig::default(),
             transactions: TransactionsConfig::default(),
             name_service: NameServiceConfig::default(),
             coins: CoinsConfig::default(),
             node: NodeConfig::default(),
-            bigtable: None,
             package_resolver: PackageResolverLayer::default().finish(),
         }
     }
@@ -347,6 +356,15 @@ impl Default for ObjectsConfig {
             max_filter_depth: 3,
             max_type_filters: 10,
             filter_scan_size: 200,
+        }
+    }
+}
+
+impl Default for DynamicFieldsConfig {
+    fn default() -> Self {
+        Self {
+            default_page_size: 50,
+            max_page_size: 100,
         }
     }
 }
@@ -407,6 +425,16 @@ impl From<ObjectsConfig> for ObjectsLayer {
             max_filter_depth: Some(config.max_filter_depth),
             max_type_filters: Some(config.max_type_filters),
             filter_scan_size: Some(config.filter_scan_size),
+            extra: Default::default(),
+        }
+    }
+}
+
+impl From<DynamicFieldsConfig> for DynamicFieldsLayer {
+    fn from(config: DynamicFieldsConfig) -> Self {
+        Self {
+            default_page_size: Some(config.default_page_size),
+            max_page_size: Some(config.max_page_size),
             extra: Default::default(),
         }
     }

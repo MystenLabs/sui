@@ -32,8 +32,6 @@ use sui_types::{
     transaction::VerifiedTransaction,
 };
 use tempfile::tempdir;
-use typed_store::traits::TableSummary;
-use typed_store::traits::TypedStoreDebug;
 use typed_store::DBMapUtils;
 use typed_store::Map;
 use typed_store::{
@@ -620,15 +618,9 @@ impl ReadStore for PersistedStoreInnerReadOnlyWrapper {
             .expect("Fatal: DB read failed")
     }
 
-    fn get_full_checkpoint_contents_by_sequence_number(
-        &self,
-        _sequence_number: CheckpointSequenceNumber,
-    ) -> Option<sui_types::messages_checkpoint::FullCheckpointContents> {
-        todo!()
-    }
-
     fn get_full_checkpoint_contents(
         &self,
+        _sequence_number: Option<CheckpointSequenceNumber>,
         _digest: &CheckpointContentsDigest,
     ) -> Option<sui_types::messages_checkpoint::FullCheckpointContents> {
         todo!()

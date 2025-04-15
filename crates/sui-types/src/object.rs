@@ -545,6 +545,17 @@ impl Owner {
         }
     }
 
+    // Returns the object's Authenticator, if it has one.
+    pub fn authenticator(&self) -> Option<&Authenticator> {
+        match self {
+            Self::ConsensusV2 { authenticator, .. } => Some(authenticator.as_ref()),
+            Self::Immutable
+            | Self::AddressOwner(_)
+            | Self::ObjectOwner(_)
+            | Self::Shared { .. } => None,
+        }
+    }
+
     pub fn is_immutable(&self) -> bool {
         matches!(self, Owner::Immutable)
     }
@@ -834,7 +845,7 @@ impl ObjectInner {
     }
 
     pub fn compute_full_object_reference(&self) -> FullObjectRef {
-        (self.full_id(), self.version(), self.digest())
+        FullObjectRef(self.full_id(), self.version(), self.digest())
     }
 
     pub fn digest(&self) -> ObjectDigest {

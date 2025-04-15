@@ -58,7 +58,7 @@ impl EffectsObjectChange {
 
 /// If an object exists (at root-level) in the store prior to this transaction,
 /// it should be Exist, otherwise it's NonExist, e.g. wrapped objects should be
-/// NonExist.
+/// NotExist.
 #[derive(Eq, PartialEq, Clone, Debug, Serialize, Deserialize)]
 pub enum ObjectIn {
     NotExist,

@@ -1,0 +1,47 @@
+[move]
+version = 4
+
+[unpublished.dependencies.pinned]
+# pinned transitive dependencies from most recent `sui move upgrade-deps`
+# note: local deps are pinned as locals - the latest are always used
+# see Pinning section
+foo = { local = "../foo", rev = "alivebee01234" }
+bar = { git = "", rev = "sha" }
+
+[unpublished.dependencies.unpinned]
+# these are the dependencies as written in Move.toml, used to detect changes
+foo = { local = "../foo", rev = "releases/v3" }
+bar = { r.mvr = "@protocol/bar" }
+
+[published.mainnet] # metadata from most recent publish to mainnet
+chain-id = "35834a8a"
+published-at = "0x6ba0cc1a418ff3bebce0ff9ec3961e6cc794af9bc3a4114fb138d00a4c9274bb"
+original-id  = "0x6ba0cc1a418ff3bebce0ff9ec3961e6cc794af9bc3a4114fb138d00a4c9274bb"
+upgrade-cap = "0x6ba0cc1a418ff3bebce0ff9ec3961e6cc794af9bc3a4114fb138d00a4c9274bb"
+
+toolchain-version = "1.45"
+build-config = "..."
+
+[published.mainnet.dependencies]
+# pinned transitive dependencies from most recent publish to mainnet
+# these are only used for source verification
+std = { git = "", rev = "mainnet_sha" }
+
+[published.testnet] # metadata from most recent publish to testnet
+chain-id = "4c78adac"
+published-at = "0x6ba0cc1a418ff3bebce0ff9ec3961e6cc794af9bc3a4114fb138d00a4c9274bb"
+original-id = "0x6ba0cc1a418ff3bebce0ff9ec3961e6cc794af9bc3a4114fb138d00a4c9274bb"
+upgrade-cap = "0x6ba0cc1a418ff3bebce0ff9ec3961e6cc794af9bc3a4114fb138d00a4c9274bb"
+toolchain-version = "1.45"
+build-config = "..."
+
+[published.testnet.dependencies]
+std = { git = "", rev = "testnet_sha" }
+sui = { git = "", rev = "testnet_sha" }
+
+[unpublished.dep-overrides.mainnet.pinned]
+foo = { git = "", rev = "sha" } # pinned versions of the dep-overrides
+std = { git = "", rev = "sha" } # system deps are chain-dependent so would be pinned here
+
+[unpublished.dep-overrides.mainnet.unpinned]
+foo = { git = "", rev = "rev" } # unpinned versions of the dep-overrides from Move.toml

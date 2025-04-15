@@ -8,8 +8,7 @@ use anyhow::Result;
 use diesel::{ExpressionMethods, QueryDsl};
 use diesel_async::RunQueryDsl;
 use sui_indexer_alt_framework::{
-    db,
-    models::cp_sequence_numbers::tx_interval,
+    db::{Connection, Db},
     pipeline::{concurrent::Handler, Processor},
     types::full_checkpoint_content::CheckpointData,
 };
@@ -17,6 +16,8 @@ use sui_indexer_alt_schema::{
     schema::tx_kinds,
     transactions::{StoredKind, StoredTxKind},
 };
+
+use crate::handlers::cp_sequence_numbers::tx_interval;
 
 pub(crate) struct TxKinds;
 
@@ -55,10 +56,12 @@ impl Processor for TxKinds {
 
 #[async_trait::async_trait]
 impl Handler for TxKinds {
+    type Store = Db;
+
     const MIN_EAGER_ROWS: usize = 100;
     const MAX_PENDING_ROWS: usize = 10000;
 
-    async fn commit(values: &[Self::Value], conn: &mut db::Connection<'_>) -> Result<usize> {
+    async fn commit<'a>(values: &[Self::Value], conn: &mut Connection<'a>) -> Result<usize> {
         Ok(diesel::insert_into(tx_kinds::table)
             .values(values)
             .on_conflict_do_nothing()
@@ -66,11 +69,11 @@ impl Handler for TxKinds {
             .await?)
     }
 
-    async fn prune(
+    async fn prune<'a>(
         &self,
         from: u64,
         to_exclusive: u64,
-        conn: &mut db::Connection<'_>,
+        conn: &mut Connection<'a>,
     ) -> Result<usize> {
         let Range {
             start: from_tx,
@@ -88,12 +91,13 @@ mod tests {
     use super::*;
     use diesel_async::RunQueryDsl;
     use sui_indexer_alt_framework::{
-        handlers::cp_sequence_numbers::CpSequenceNumbers,
         types::test_checkpoint_data_builder::TestCheckpointDataBuilder, Indexer,
     };
     use sui_indexer_alt_schema::MIGRATIONS;
 
-    async fn get_all_tx_kinds(conn: &mut db::Connection<'_>) -> Result<Vec<i64>> {
+    use crate::handlers::cp_sequence_numbers::CpSequenceNumbers;
+
+    async fn get_all_tx_kinds(conn: &mut Connection<'_>) -> Result<Vec<i64>> {
         Ok(tx_kinds::table
             .select(tx_kinds::tx_sequence_number)
             .load(conn)

@@ -10,7 +10,7 @@ use move_core_types::{ident_str, identifier::Identifier, language_storage::TypeT
 use serde::Serialize;
 
 use crate::{
-    base_types::{ObjectID, ObjectRef, SuiAddress},
+    base_types::{FullObjectID, FullObjectRef, ObjectID, ObjectRef, SuiAddress},
     move_package::PACKAGE_MODULE_NAME,
     transaction::{Argument, CallArg, Command, ObjectArg, ProgrammableTransaction},
     SUI_FRAMEWORK_PACKAGE_ID,
@@ -227,6 +227,28 @@ impl ProgrammableTransactionBuilder {
     ) -> anyhow::Result<()> {
         let rec_arg = self.pure(recipient).unwrap();
         let obj_arg = self.obj(ObjectArg::ImmOrOwnedObject(object_ref));
+        self.commands
+            .push(Command::TransferObjects(vec![obj_arg?], rec_arg));
+        Ok(())
+    }
+
+    // TODO: Merge with `transfer_object` above and update existing callers.
+    pub fn transfer_object_full(
+        &mut self,
+        recipient: SuiAddress,
+        full_object_ref: FullObjectRef,
+    ) -> anyhow::Result<()> {
+        let rec_arg = self.pure(recipient).unwrap();
+        let obj_arg = self.obj(match full_object_ref.0 {
+            FullObjectID::Fastpath(_) => {
+                ObjectArg::ImmOrOwnedObject(full_object_ref.as_object_ref())
+            }
+            FullObjectID::Consensus((id, initial_shared_version)) => ObjectArg::SharedObject {
+                id,
+                initial_shared_version,
+                mutable: true,
+            },
+        });
         self.commands
             .push(Command::TransferObjects(vec![obj_arg?], rec_arg));
         Ok(())

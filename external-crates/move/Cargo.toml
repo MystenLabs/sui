@@ -31,6 +31,7 @@ members = [
 [workspace.dependencies]
 aes-gcm = "0.8.0"
 anyhow = "1.0.52"
+append-only-vec = "0.1.7"
 arbitrary = { version = "1.1.7", features = ["derive", "derive_arbitrary"] }
 async-trait = "0.1.42"
 bcs = "0.1.4"
@@ -49,7 +50,7 @@ crossbeam-channel = "0.5.0"
 crossterm = "0.25.0"
 curve25519-dalek = { version = "0.1.0", package = "curve25519-dalek-fiat", default-features = false, features = ["std", "u64_backend"] }
 datatest-stable = "0.1.1"
-derivative = "2.2.0"
+derive-where = "1.2.7"
 digest = "0.9.0"
 dir-diff = "0.3.2"
 dirs-next = "2.0.0"
@@ -105,6 +106,7 @@ serde-name = "0.1.1"
 serde-reflection = "0.5"
 serde_bytes = "0.11.5"
 serde_json = "1.0.64"
+serde_spanned = { version = "0.6.8", features = ["serde"] }
 serde_yaml = "0.8.26"
 serde_with = "3.9.0"
 sha2 = "0.9.3"
@@ -115,14 +117,16 @@ similar = "2.4.0"
 smallvec = "1.6.1"
 stacker = "0.1.15"
 static_assertions = "1.1.0"
+strum = { version = "0.27.1", features = ["derive"] }
+strum_macros = "0.27.1"
 syn = { version = "1.0.64", features = ["derive"] }
 tempfile = "3.2.0"
 tera = "1.16.0"
 thiserror = "1.0.24"
 tiny-keccak = { version = "2.0.2", features = ["sha3"] }
-tokio = { version = "1.18.2", features = ["full"] }
+tokio = { version = "1.44.2", features = ["full"] }
 toml = "0.5.8"
-toml_edit =  { version = "0.14.3", features = ["easy"] }
+toml_edit =  { version = "0.22.24", features = ["serde", "default"] }
 tracing = "0.1.26"
 tracing-subscriber = { version = "0.3.15", features = ["env-filter"] }
 treeline = "0.1.0"
@@ -136,6 +140,7 @@ x25519-dalek = { version = "0.1.0", package = "x25519-dalek-fiat", default-featu
 z3tracer = "0.8.0"
 inline_colorization = "0.1.6"
 insta = "1.42.0"
+zstd = "0.13.2"
 
 bytecode-interpreter-crypto = { path = "crates/bytecode-interpreter-crypto" }
 enum-compat-util = { path = "crates/enum-compat-util"}
@@ -166,6 +171,7 @@ move-ir-types = { path = "crates/move-ir-types" }
 move-model = { path = "crates/move-model" }
 move-model-2 = { path = "crates/move-model-2" }
 move-package = { path = "crates/move-package" }
+move-package-alt = { path = "crates/move-package-alt" }
 move-proc-macros = { path = "crates/move-proc-macros"}
 move-stackless-bytecode = { path = "crates/move-stackless-bytecode" }
 move-stdlib = { path = "crates/move-stdlib" }

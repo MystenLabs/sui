@@ -69,13 +69,13 @@ The limit applies globally and varies per direction. For example, the amount mig
 
 The limit also impacts the maximal amount of single transfer. In one bridge transfer, you cannot move assets worth more than the limit. The bridge frontend might apply stricter restrictions to protect user assets.
 
-The limit per route is governed by the validator committee through voting.
+The limit per route is governed by the validator committee through voting. The limit value is captured in the `approved-governance-actions` attribute of Bridge node configurations, which is announced in the [mn-validator-announcements channel](https://discord.com/channels/916379725201563759/1093852827627040768) on Discord when it updates.
 
-The global limit is currently $8 million from Ethereum to Sui and $5 million from Sui to Etheruem every 24 hours.
+The global limit is currently &dollar;16 million from Ethereum to Sui and &dollar;7 million from Sui to Etheruem every 24 hours.
 
 ### Asset price
 
-Sui Bridge v1 uses static pricing to calculate limits. The price for ETH is configured at $2,600.00. Namely, bridging one ETH consumes $2,600 USD in limit calculation.
+Sui Bridge v1 uses static pricing to calculate limits. The price for ETH is configured at &dollar;2,600.00. Namely, bridging one ETH consumes &dollar;2,600 USD in limit calculation.
 
 The validator committee governs the pricing through voting. It works together with the global limiter to protect user funds.
 

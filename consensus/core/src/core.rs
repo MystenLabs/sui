@@ -662,7 +662,7 @@ impl Core {
                 let mut dag_state = self.dag_state.write();
                 ancestors
                     .iter()
-                    .flat_map(|ancestor| dag_state.recursive_hard_link(ancestor.reference()))
+                    .flat_map(|ancestor| dag_state.link_causal_history(ancestor.reference()))
                     .collect()
             };
             self.transaction_certifier
@@ -739,7 +739,7 @@ impl Core {
                 .add_voted_blocks(vec![(verified_block.clone(), vec![])]);
             self.dag_state
                 .write()
-                .recursive_hard_link(verified_block.reference());
+                .link_causal_history(verified_block.reference());
         }
 
         // Ensure the new block and its ancestors are persisted, before broadcasting it.
@@ -1259,7 +1259,7 @@ impl Core {
 
         assert!(parent_round_quorum.reached_threshold(&self.context.committee), "Fatal error, quorum not reached for parent round when proposing for round {clock_round}. Possible mismatch between DagState and Core.");
 
-        info!(
+        debug!(
             "Included {} ancestors & excluded {} low performing or equivocating ancestors for proposal in round {clock_round}",
             ancestors_to_propose.len(),
             excluded_and_equivocating_ancestors.len()
@@ -1543,7 +1543,7 @@ mod test {
         let mut block_status_subscriptions = FuturesUnordered::new();
 
         // Create test blocks for all the authorities for 4 rounds and populate them in store
-        let mut last_round_blocks = genesis_blocks(context.clone());
+        let mut last_round_blocks = genesis_blocks(&context);
         let mut all_blocks: Vec<VerifiedBlock> = last_round_blocks.clone();
         for round in 1..=4 {
             let mut this_round_blocks = Vec::new();
@@ -1673,7 +1673,7 @@ mod test {
         let transaction_consumer = TransactionConsumer::new(tx_receiver, context.clone());
 
         // Create test blocks for all authorities except our's (index = 0).
-        let mut last_round_blocks = genesis_blocks(context.clone());
+        let mut last_round_blocks = genesis_blocks(&context);
         let mut all_blocks = last_round_blocks.clone();
         for round in 1..=4 {
             let mut this_round_blocks = Vec::new();
@@ -1887,7 +1887,7 @@ mod test {
         assert!(total <= context.protocol_config.max_transactions_in_block_bytes());
 
         // genesis blocks should be referenced
-        let all_genesis = genesis_blocks(context);
+        let all_genesis = genesis_blocks(&context);
 
         for ancestor in extended_block.block.ancestors() {
             all_genesis

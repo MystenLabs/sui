@@ -10,11 +10,11 @@ const { join } = doc.builders;
 export const NODE_TYPE = 'cast_expression';
 
 export default function (path: AstPath<Node>): treeFn | null {
-	if (path.node.type === NODE_TYPE) {
-		return printCastExpression;
-	}
+    if (path.node.type === NODE_TYPE) {
+        return printCastExpression;
+    }
 
-	return null;
+    return null;
 }
 
 /**
@@ -24,12 +24,12 @@ export default function (path: AstPath<Node>): treeFn | null {
  * - `type`
  */
 function printCastExpression(path: AstPath<Node>, options: MoveOptions, print: printFn): Doc {
-	const parens = path.node.child(0)?.text == '(';
-	const children = path.map(print, 'nonFormattingChildren');
+    const parens = path.node.child(0)?.text == '(';
+    const children = path.map(print, 'nonFormattingChildren');
 
-	if (parens) {
-		return ['(', join(' as ', children), ')'];
-	}
+    if (parens) {
+        return ['(', join(' as ', children), ')'];
+    }
 
-	return join(' as ', children);
+    return join(' as ', children);
 }

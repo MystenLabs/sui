@@ -5,6 +5,7 @@ use std::sync::{Arc, RwLock};
 use tokio::sync::watch;
 
 use mysten_metrics::monitored_mpsc::{unbounded_channel, UnboundedReceiver, UnboundedSender};
+use tracing::{debug, info};
 
 use crate::{block::CertifiedBlocksOutput, CommitIndex, CommittedSubDag};
 
@@ -74,6 +75,7 @@ impl CommitConsumerMonitor {
     }
 
     pub fn set_highest_handled_commit(&self, highest_handled_commit: CommitIndex) {
+        debug!("Highest handled commit set to {}", highest_handled_commit);
         self.highest_handled_commit
             .send_replace(highest_handled_commit);
     }
@@ -101,6 +103,11 @@ impl CommitConsumerMonitor {
             "highest_known_commit_at_startup can only be set once"
         );
         *commit = highest_observed_commit_at_startup;
+
+        info!(
+            "Highest observed commit at startup set to {}",
+            highest_observed_commit_at_startup
+        );
     }
 
     pub(crate) async fn replay_complete(&self) {

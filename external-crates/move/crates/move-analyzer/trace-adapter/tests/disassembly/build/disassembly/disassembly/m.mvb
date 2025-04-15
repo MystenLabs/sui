@@ -62,10 +62,8 @@ B0:
 
 entry public unit_test_poison() {
 B0:
-	0: LdU64(0)
-	1: Call unit_test::create_signers_for_testing(u64): vector<signer>
-	2: Pop
-	3: Ret
+	0: Call unit_test::poison()
+	1: Ret
 }
 
 }

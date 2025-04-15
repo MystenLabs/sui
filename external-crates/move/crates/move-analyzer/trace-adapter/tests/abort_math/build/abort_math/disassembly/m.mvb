@@ -1,0 +1,27 @@
+// Move bytecode v6
+module 0.m {
+use 0000000000000000000000000000000000000000000000000000000000000001::unit_test;
+
+foo(p#0#0: u64): u64 {
+B0:
+	0: MoveLoc[0](p#0#0: u64)
+	1: LdU64(43)
+	2: Sub
+	3: Ret
+}
+
+test() {
+B0:
+	0: LdU64(42)
+	1: Call foo(u64): u64
+	2: Pop
+	3: Ret
+}
+
+entry public unit_test_poison() {
+B0:
+	0: Call unit_test::poison()
+	1: Ret
+}
+
+}

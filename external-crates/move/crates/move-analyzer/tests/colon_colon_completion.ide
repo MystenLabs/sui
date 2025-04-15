@@ -1,6 +1,6 @@
 // Tests `::` completions
 {
-  "Completion": {
+  "AutoCompletion": {
     "project": "tests/completion",
     "file_tests": {
       "colon_colon.move": [
@@ -157,6 +157,10 @@
         {
           "use_line": 87,
           "use_col": 22
+        },
+        {
+          "use_line": 96,
+          "use_col": 27
         }
       ],
       "uses.move": [

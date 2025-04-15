@@ -1,0 +1,54 @@
+// Move bytecode v6
+module 0.m {
+use 0000000000000000000000000000000000000000000000000000000000000001::string;
+use 0000000000000000000000000000000000000000000000000000000000000001::unit_test;
+
+foo(s#0#0: String, sub#0#0: vector<u8>, p#0#0: u64): u64 {
+L3:	%#1: String
+L4:	%#2: &String
+B0:
+	0: ImmBorrowLoc[0](s#0#0: String)
+	1: StLoc[4](%#2: &String)
+	2: MoveLoc[1](sub#0#0: vector<u8>)
+	3: Call string::utf8(vector<u8>): String
+	4: StLoc[3](%#1: String)
+	5: MoveLoc[4](%#2: &String)
+	6: ImmBorrowLoc[3](%#1: String)
+	7: Call string::index_of(&String, &String): u64
+	8: MoveLoc[2](p#0#0: u64)
+	9: Add
+	10: Ret
+}
+
+test() {
+L0:	_res#1#0: u64
+B0:
+	0: LdConst[0](vector<u8>: "hel..)
+	1: Call string::utf8(vector<u8>): String
+	2: LdConst[1](vector<u8>: "e" ..)
+	3: LdU64(42)
+	4: Call foo(String, vector<u8>, u64): u64
+	5: StLoc[0](_res#1#0: u64)
+	6: CopyLoc[0](_res#1#0: u64)
+	7: LdConst[0](vector<u8>: "hel..)
+	8: Call string::utf8(vector<u8>): String
+	9: LdConst[2](vector<u8>: "l" ..)
+	10: MoveLoc[0](_res#1#0: u64)
+	11: Call foo(String, vector<u8>, u64): u64
+	12: Add
+	13: Pop
+	14: Ret
+}
+
+entry public unit_test_poison() {
+B0:
+	0: Call unit_test::poison()
+	1: Ret
+}
+
+Constants [
+	0 => vector<u8>: "hello" // interpreted as UTF8 string
+	1 => vector<u8>: "e" // interpreted as UTF8 string
+	2 => vector<u8>: "l" // interpreted as UTF8 string
+]
+}

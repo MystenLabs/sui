@@ -112,7 +112,7 @@ mod checked {
         let shared_object_refs = input_objects.filter_shared_objects();
         let receiving_objects = transaction_kind.receiving_objects();
         let mut transaction_dependencies = input_objects.transaction_dependencies();
-        let contains_deleted_input = input_objects.contains_deleted_objects();
+        let contains_stream_ended_input = input_objects.contains_consensus_stream_ended_objects();
         let cancelled_objects = input_objects.get_cancelled_objects();
 
         let mut temporary_store = TemporaryStore::new(
@@ -165,7 +165,7 @@ mod checked {
             metrics,
             enable_expensive_checks,
             deny_cert,
-            contains_deleted_input,
+            contains_stream_ended_input,
             cancelled_objects,
             trace_builder_opt,
         );
@@ -303,7 +303,7 @@ mod checked {
         metrics: Arc<LimitsMetrics>,
         enable_expensive_checks: bool,
         deny_cert: bool,
-        contains_deleted_input: bool,
+        contains_stream_ended_input: bool,
         cancelled_objects: Option<(Vec<ObjectID>, SequenceNumber)>,
         trace_builder_opt: &mut Option<MoveTraceBuilder>,
     ) -> (
@@ -338,7 +338,7 @@ mod checked {
                             ExecutionError::new(ExecutionErrorKind::CertificateDenied, None),
                             vec![],
                         ))
-                    } else if contains_deleted_input {
+                    } else if contains_stream_ended_input {
                         Err((
                             ExecutionError::new(ExecutionErrorKind::InputObjectDeleted, None),
                             vec![],

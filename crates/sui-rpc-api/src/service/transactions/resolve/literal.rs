@@ -1,15 +1,12 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::collections::HashMap;
-
-use super::NormalizedPackage;
+use super::NormalizedPackages;
 use crate::Result;
 use crate::RpcError;
-use move_binary_format::normalized::Type;
+use move_binary_format::normalized;
 use sui_sdk_transaction_builder::unresolved::Value;
 use sui_sdk_types::Command;
-use sui_sdk_types::ObjectId;
 use sui_types::base_types::ObjectID;
 use sui_types::base_types::STD_ASCII_MODULE_NAME;
 use sui_types::base_types::STD_ASCII_STRUCT_NAME;
@@ -19,8 +16,10 @@ use sui_types::base_types::STD_UTF8_MODULE_NAME;
 use sui_types::base_types::STD_UTF8_STRUCT_NAME;
 use sui_types::MOVE_STDLIB_ADDRESS;
 
+type Type = normalized::Type<normalized::RcIdentifier>;
+
 pub(super) fn resolve_literal(
-    called_packages: &HashMap<ObjectId, NormalizedPackage>,
+    called_packages: &mut NormalizedPackages,
     commands: &[Command],
     arg_idx: usize,
     value: Value,
@@ -35,7 +34,7 @@ pub(super) fn resolve_literal(
 }
 
 fn determine_literal_type(
-    called_packages: &HashMap<ObjectId, NormalizedPackage>,
+    called_packages: &mut NormalizedPackages,
     commands: &[Command],
     arg_idx: usize,
 ) -> Result<Type> {
@@ -61,7 +60,7 @@ fn determine_literal_type(
         match (command, idx) {
             (Command::MoveCall(move_call), Some(idx)) => {
                 let arg_type = super::arg_type_of_move_call_input(called_packages, move_call, idx)?;
-                set_type(&mut literal_type, arg_type.to_owned())?;
+                set_type(&mut literal_type, (*arg_type).clone())?;
             }
             (Command::TransferObjects(_), None) => {
                 set_type(&mut literal_type, Type::Address)?;
@@ -74,7 +73,8 @@ fn determine_literal_type(
                 if let Some(ty) = &make_move_vector.type_ {
                     let ty =
                         sui_types::sui_sdk_types_conversions::type_tag_sdk_to_core(ty.clone())?;
-                    set_type(&mut literal_type, ty.into())?;
+                    let ty = normalized::Type::from_type_tag(&mut called_packages.pool, &ty);
+                    set_type(&mut literal_type, ty)?;
                 } else {
                     return Err(RpcError::new(
                         tonic::Code::InvalidArgument,
@@ -128,35 +128,28 @@ fn resolve_literal_to_type(buf: &mut Vec<u8>, type_: &Type, value: &Value) -> Re
         Type::Address => resolve_as_address(buf, value),
 
         // 0x1::ascii::String and 0x1::string::String
-        Type::Struct {
-            address,
-            module,
-            name,
-            type_arguments,
-        } if address == &MOVE_STDLIB_ADDRESS
+        Type::Datatype(dt)
+            if dt.module.address == MOVE_STDLIB_ADDRESS
                 // 0x1::ascii::String
-            && ((module.as_ref() == STD_ASCII_MODULE_NAME
-                && name.as_ref() == STD_ASCII_STRUCT_NAME)
+            && ((dt.module.name.as_ref() == STD_ASCII_MODULE_NAME
+                && dt.name.as_ref() == STD_ASCII_STRUCT_NAME)
                 // 0x1::string::String
-                || (module.as_ref() == STD_UTF8_MODULE_NAME
-                    && name.as_ref() == STD_UTF8_STRUCT_NAME))
-            && type_arguments.is_empty() =>
+                || (dt.module.name.as_ref() == STD_UTF8_MODULE_NAME
+                    && dt.name.as_ref() == STD_UTF8_STRUCT_NAME))
+            && dt.type_arguments.is_empty() =>
         {
             resolve_as_string(buf, value)
         }
 
         // Option<T>
-        Type::Struct {
-            address,
-            module,
-            name,
-            type_arguments,
-        } if address == &MOVE_STDLIB_ADDRESS
-            && module.as_ref() == STD_OPTION_MODULE_NAME
-            && name.as_ref() == STD_OPTION_STRUCT_NAME
-            && type_arguments.len() == 1 =>
+        Type::Datatype(dt)
+            if dt.module.address == MOVE_STDLIB_ADDRESS
+                && dt.module.name.as_ref() == STD_OPTION_MODULE_NAME
+                && dt.name.as_ref() == STD_OPTION_STRUCT_NAME
+                && dt.type_arguments.len() == 1 =>
         {
-            let ty = type_arguments
+            let ty = dt
+                .type_arguments
                 .first()
                 .expect("length of type_arguments is 1");
 
@@ -166,14 +159,12 @@ fn resolve_literal_to_type(buf: &mut Vec<u8>, type_: &Type, value: &Value) -> Re
         // Vec<T>
         Type::Vector(ty) => resolve_as_vector(buf, ty, value),
 
-        Type::Signer
-        | Type::Struct { .. }
-        | Type::TypeParameter(_)
-        | Type::Reference(_)
-        | Type::MutableReference(_) => Err(RpcError::new(
-            tonic::Code::InvalidArgument,
-            format!("literal cannot be resolved into type {type_}"),
-        )),
+        Type::Signer | Type::Datatype(_) | Type::TypeParameter(_) | Type::Reference(_, _) => {
+            Err(RpcError::new(
+                tonic::Code::InvalidArgument,
+                format!("literal cannot be resolved into type {type_}"),
+            ))
+        }
     }
 }
 
@@ -327,8 +318,12 @@ fn resolve_as_vector(buf: &mut Vec<u8>, type_: &Type, value: &Value) -> Result<(
 #[cfg(test)]
 mod test {
     use super::*;
-    use move_binary_format::normalized::Type;
-    use move_core_types::{account_address::AccountAddress, u256::U256};
+    use move_binary_format::normalized::{self, Datatype, StringPool};
+    use move_core_types::{
+        account_address::AccountAddress, language_storage::StructTag, u256::U256,
+    };
+
+    type Type = normalized::Type<normalized::RcIdentifier>;
 
     fn test_resolve_literal(ty: Type, value: Value, expected: Option<Vec<u8>>) {
         let mut buf = Vec::new();
@@ -584,20 +579,26 @@ mod test {
     #[test]
     fn resolve_string() {
         fn utf8() -> Type {
-            Type::Struct {
-                address: MOVE_STDLIB_ADDRESS,
-                module: STD_UTF8_MODULE_NAME.to_owned(),
-                name: STD_UTF8_STRUCT_NAME.to_owned(),
-                type_arguments: vec![],
-            }
+            Type::from_struct_tag(
+                &mut normalized::RcPool::new(),
+                &StructTag {
+                    address: MOVE_STDLIB_ADDRESS,
+                    module: STD_UTF8_MODULE_NAME.to_owned(),
+                    name: STD_UTF8_STRUCT_NAME.to_owned(),
+                    type_params: vec![],
+                },
+            )
         }
         fn ascii() -> Type {
-            Type::Struct {
-                address: MOVE_STDLIB_ADDRESS,
-                module: STD_ASCII_MODULE_NAME.to_owned(),
-                name: STD_ASCII_STRUCT_NAME.to_owned(),
-                type_arguments: vec![],
-            }
+            Type::from_struct_tag(
+                &mut normalized::RcPool::new(),
+                &StructTag {
+                    address: MOVE_STDLIB_ADDRESS,
+                    module: STD_ASCII_MODULE_NAME.to_owned(),
+                    name: STD_ASCII_STRUCT_NAME.to_owned(),
+                    type_params: vec![],
+                },
+            )
         }
 
         let test_cases = [
@@ -641,12 +642,15 @@ mod test {
     #[test]
     fn resolve_option() {
         fn option_type(t: Type) -> Type {
-            Type::Struct {
-                address: MOVE_STDLIB_ADDRESS,
-                module: STD_OPTION_MODULE_NAME.to_owned(),
-                name: STD_OPTION_STRUCT_NAME.to_owned(),
+            let pool = &mut normalized::RcPool::new();
+            Type::Datatype(Box::new(Datatype {
+                module: normalized::ModuleId {
+                    address: MOVE_STDLIB_ADDRESS,
+                    name: pool.intern(STD_OPTION_MODULE_NAME),
+                },
+                name: pool.intern(STD_OPTION_STRUCT_NAME),
                 type_arguments: vec![t],
-            }
+            }))
         }
 
         let test_cases = [

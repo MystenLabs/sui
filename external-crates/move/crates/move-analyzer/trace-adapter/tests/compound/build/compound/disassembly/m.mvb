@@ -1,0 +1,101 @@
+// Move bytecode v7
+module 0.m {
+use 0000000000000000000000000000000000000000000000000000000000000001::unit_test;
+use 0000000000000000000000000000000000000000000000000000000000000001::vector;
+
+struct SomeStruct has drop {
+	simple_field: u64,
+	enum_field: SomeEnum,
+	another_enum_field: SomeEnum,
+	vec_simple_field: vector<u64>,
+	vec_struct_field: vector<SimpleStruct>
+}
+
+struct SimpleStruct has copy, drop {
+	field: u64
+}
+
+enum SomeEnum has drop {
+	PositionalVariant { pos0: u64, pos1: u64 },
+	NamedVariant { field1: u64, field2: u64 }
+}
+
+foo(some_struct#0#0: SomeStruct, p#0#0: u64): SomeStruct {
+L2:	named_variant#1#0: SomeEnum
+L3:	pos_variant#1#0: SomeEnum
+L4:	v#1#0: vector<u64>
+L5:	v_struct#1#0: vector<SimpleStruct>
+B0:
+	0: CopyLoc[1](p#0#0: u64)
+	1: CopyLoc[1](p#0#0: u64)
+	2: PackVariant(VariantHandleIndex(0))
+	3: StLoc[3](pos_variant#1#0: SomeEnum)
+	4: CopyLoc[1](p#0#0: u64)
+	5: CopyLoc[1](p#0#0: u64)
+	6: PackVariant(VariantHandleIndex(1))
+	7: StLoc[2](named_variant#1#0: SomeEnum)
+	8: CopyLoc[1](p#0#0: u64)
+	9: Call vector::singleton<u64>(u64): vector<u64>
+	10: StLoc[4](v#1#0: vector<u64>)
+	11: CopyLoc[1](p#0#0: u64)
+	12: Pack[1](SimpleStruct)
+	13: Call vector::singleton<SimpleStruct>(SimpleStruct): vector<SimpleStruct>
+	14: StLoc[5](v_struct#1#0: vector<SimpleStruct>)
+	15: MoveLoc[1](p#0#0: u64)
+	16: MutBorrowLoc[0](some_struct#0#0: SomeStruct)
+	17: MutBorrowField[0](SomeStruct.simple_field: u64)
+	18: WriteRef
+	19: MoveLoc[3](pos_variant#1#0: SomeEnum)
+	20: MutBorrowLoc[0](some_struct#0#0: SomeStruct)
+	21: MutBorrowField[1](SomeStruct.enum_field: SomeEnum)
+	22: WriteRef
+	23: MoveLoc[2](named_variant#1#0: SomeEnum)
+	24: MutBorrowLoc[0](some_struct#0#0: SomeStruct)
+	25: MutBorrowField[2](SomeStruct.another_enum_field: SomeEnum)
+	26: WriteRef
+	27: MoveLoc[4](v#1#0: vector<u64>)
+	28: MutBorrowLoc[0](some_struct#0#0: SomeStruct)
+	29: MutBorrowField[3](SomeStruct.vec_simple_field: vector<u64>)
+	30: WriteRef
+	31: MoveLoc[5](v_struct#1#0: vector<SimpleStruct>)
+	32: MutBorrowLoc[0](some_struct#0#0: SomeStruct)
+	33: MutBorrowField[4](SomeStruct.vec_struct_field: vector<SimpleStruct>)
+	34: WriteRef
+	35: MoveLoc[0](some_struct#0#0: SomeStruct)
+	36: Ret
+}
+
+some_struct(): SomeStruct {
+B0:
+	0: LdU64(0)
+	1: LdU64(0)
+	2: LdU64(0)
+	3: PackVariant(VariantHandleIndex(0))
+	4: LdU64(0)
+	5: LdU64(0)
+	6: PackVariant(VariantHandleIndex(0))
+	7: LdU64(0)
+	8: Call vector::singleton<u64>(u64): vector<u64>
+	9: LdU64(0)
+	10: Pack[1](SimpleStruct)
+	11: Call vector::singleton<SimpleStruct>(SimpleStruct): vector<SimpleStruct>
+	12: Pack[0](SomeStruct)
+	13: Ret
+}
+
+test() {
+B0:
+	0: Call some_struct(): SomeStruct
+	1: LdU64(42)
+	2: Call foo(SomeStruct, u64): SomeStruct
+	3: Pop
+	4: Ret
+}
+
+entry public unit_test_poison() {
+B0:
+	0: Call unit_test::poison()
+	1: Ret
+}
+
+}

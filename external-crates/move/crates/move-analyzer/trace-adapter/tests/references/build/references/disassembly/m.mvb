@@ -1,0 +1,100 @@
+// Move bytecode v6
+module 0.m {
+use 0000000000000000000000000000000000000000000000000000000000000001::unit_test;
+use 0000000000000000000000000000000000000000000000000000000000000001::vector;
+
+struct SomeStruct has drop {
+	struct_field: SimpleStruct,
+	simple_field: u64,
+	vec_simple_field: vector<u64>
+}
+
+struct SimpleStruct has copy, drop {
+	field: u64
+}
+
+foo(some_struct_ref#0#0: &mut SomeStruct, vec_ref#0#0: &mut vector<u64>, num_ref#0#0: &u64): u64 {
+L3:	e1#1#0: &mut u64
+L4:	e2#1#0: &mut u64
+B0:
+	0: LdU64(42)
+	1: CopyLoc[0](some_struct_ref#0#0: &mut SomeStruct)
+	2: MutBorrowField[0](SomeStruct.struct_field: SimpleStruct)
+	3: MutBorrowField[1](SimpleStruct.field: u64)
+	4: WriteRef
+	5: CopyLoc[2](num_ref#0#0: &u64)
+	6: ReadRef
+	7: CopyLoc[0](some_struct_ref#0#0: &mut SomeStruct)
+	8: MutBorrowField[2](SomeStruct.simple_field: u64)
+	9: WriteRef
+	10: CopyLoc[0](some_struct_ref#0#0: &mut SomeStruct)
+	11: MutBorrowField[3](SomeStruct.vec_simple_field: vector<u64>)
+	12: LdU64(0)
+	13: VecMutBorrow(1)
+	14: StLoc[3](e1#1#0: &mut u64)
+	15: LdU64(42)
+	16: MoveLoc[3](e1#1#0: &mut u64)
+	17: WriteRef
+	18: CopyLoc[1](vec_ref#0#0: &mut vector<u64>)
+	19: LdU64(0)
+	20: VecMutBorrow(1)
+	21: StLoc[4](e2#1#0: &mut u64)
+	22: LdU64(42)
+	23: MoveLoc[4](e2#1#0: &mut u64)
+	24: WriteRef
+	25: MoveLoc[2](num_ref#0#0: &u64)
+	26: ReadRef
+	27: MoveLoc[0](some_struct_ref#0#0: &mut SomeStruct)
+	28: ImmBorrowField[2](SomeStruct.simple_field: u64)
+	29: ReadRef
+	30: Add
+	31: MoveLoc[1](vec_ref#0#0: &mut vector<u64>)
+	32: FreezeRef
+	33: LdU64(0)
+	34: VecImmBorrow(1)
+	35: ReadRef
+	36: Add
+	37: Ret
+}
+
+some_struct(): SomeStruct {
+B0:
+	0: LdU64(0)
+	1: Pack[1](SimpleStruct)
+	2: LdU64(0)
+	3: LdU64(0)
+	4: Call vector::singleton<u64>(u64): vector<u64>
+	5: Pack[0](SomeStruct)
+	6: Ret
+}
+
+test() {
+L0:	num#1#0: u64
+L1:	some_struct#1#0: SomeStruct
+L2:	vec#1#0: vector<u64>
+B0:
+	0: Call some_struct(): SomeStruct
+	1: StLoc[1](some_struct#1#0: SomeStruct)
+	2: LdU64(0)
+	3: Call vector::singleton<u64>(u64): vector<u64>
+	4: StLoc[2](vec#1#0: vector<u64>)
+	5: MutBorrowLoc[2](vec#1#0: vector<u64>)
+	6: LdU64(7)
+	7: VecPushBack(1)
+	8: LdU64(42)
+	9: StLoc[0](num#1#0: u64)
+	10: MutBorrowLoc[1](some_struct#1#0: SomeStruct)
+	11: MutBorrowLoc[2](vec#1#0: vector<u64>)
+	12: ImmBorrowLoc[0](num#1#0: u64)
+	13: Call foo(&mut SomeStruct, &mut vector<u64>, &u64): u64
+	14: Pop
+	15: Ret
+}
+
+entry public unit_test_poison() {
+B0:
+	0: Call unit_test::poison()
+	1: Ret
+}
+
+}

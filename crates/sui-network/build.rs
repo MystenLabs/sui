@@ -5,6 +5,7 @@ use std::{
     env,
     path::{Path, PathBuf},
 };
+
 use tonic_build::manual::{Builder, Method, Service};
 
 type Result<T> = ::std::result::Result<T, Box<dyn std::error::Error + Send + Sync>>;
@@ -17,6 +18,7 @@ fn main() -> Result<()> {
     };
 
     let codec_path = "mysten_network::codec::BcsCodec";
+    let prost_codec_path = "tonic::codec::ProstCodec";
 
     let validator_service = Service::builder()
         .name("Validator")
@@ -24,19 +26,19 @@ fn main() -> Result<()> {
         .comment("The Validator interface")
         .method(
             Method::builder()
-                .name("transaction")
-                .route_name("Transaction")
-                .input_type("sui_types::transaction::Transaction")
-                .output_type("sui_types::messages_grpc::HandleTransactionResponse")
-                .codec_path(codec_path)
+                .name("submit_transaction")
+                .route_name("SubmitTransaction")
+                .input_type("sui_types::messages_grpc::RawSubmitTxRequest")
+                .output_type("sui_types::messages_grpc::RawSubmitTxResponse")
+                .codec_path(prost_codec_path)
                 .build(),
         )
         .method(
             Method::builder()
-                .name("transaction_v2")
-                .route_name("TransactionV2")
-                .input_type("sui_types::messages_grpc::HandleTransactionRequestV2")
-                .output_type("sui_types::messages_grpc::HandleTransactionResponseV2")
+                .name("transaction")
+                .route_name("Transaction")
+                .input_type("sui_types::transaction::Transaction")
+                .output_type("sui_types::messages_grpc::HandleTransactionResponse")
                 .codec_path(codec_path)
                 .build(),
         )

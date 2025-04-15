@@ -1269,11 +1269,11 @@ UnchangedSharedKind:
             - TYPENAME: SequenceNumber
             - TYPENAME: ObjectDigest
     1:
-      MutateDeleted:
+      MutateConsensusStreamEnded:
         NEWTYPE:
           TYPENAME: SequenceNumber
     2:
-      ReadDeleted:
+      ReadConsensusStreamEnded:
         NEWTYPE:
           TYPENAME: SequenceNumber
     3:

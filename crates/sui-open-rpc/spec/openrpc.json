@@ -12,7 +12,7 @@
       "name": "Apache-2.0",
       "url": "https://raw.githubusercontent.com/MystenLabs/sui/main/LICENSE"
     },
-    "version": "1.46.0"
+    "version": "1.48.0"
   },
   "methods": [
     {
@@ -1294,7 +1294,7 @@
             "name": "Result",
             "value": {
               "minSupportedProtocolVersion": "1",
-              "maxSupportedProtocolVersion": "79",
+              "maxSupportedProtocolVersion": "82",
               "protocolVersion": "6",
               "featureFlags": {
                 "accept_passkey_in_multisig": false,
@@ -1306,6 +1306,7 @@
                 "ban_entry_init": false,
                 "bridge": false,
                 "commit_root_state_digest": false,
+                "consensus_batched_block_sync": false,
                 "consensus_distributed_vote_scoring_strategy": false,
                 "consensus_linearize_subdag_v2": false,
                 "consensus_median_based_commit_timestamp": false,
@@ -1330,6 +1331,7 @@
                 "enable_poseidon": false,
                 "enable_vdf": false,
                 "end_of_epoch_transaction_supported": false,
+                "enforce_checkpoint_timestamp_monotonicity": false,
                 "fresh_vm_on_framework_upgrade": false,
                 "hardened_otw_check": false,
                 "include_consensus_digest_in_prologue": false,
@@ -1808,6 +1810,7 @@
                 "max_programmable_tx_commands": {
                   "u32": "1024"
                 },
+                "max_ptb_value_size": null,
                 "max_publish_or_upgrade_per_ptb": null,
                 "max_pure_argument_size": {
                   "u32": "16384"

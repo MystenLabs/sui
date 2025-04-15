@@ -3,7 +3,6 @@
 
 use anyhow::Result;
 use std::collections::BTreeMap;
-use std::path::Path;
 use sui_data_ingestion_core::Worker;
 use sui_types::SYSTEM_PACKAGE_ADDRESSES;
 use tokio::sync::Mutex;
@@ -81,8 +80,7 @@ impl AnalyticsHandler<WrappedObjectEntry> for WrappedObjectHandler {
 }
 
 impl WrappedObjectHandler {
-    pub fn new(store_path: &Path, rest_uri: &str) -> Self {
-        let package_store = LocalDBPackageStore::new(&store_path.join("wrapped_object"), rest_uri);
+    pub fn new(package_store: LocalDBPackageStore) -> Self {
         let state = Mutex::new(State {
             wrapped_objects: vec![],
             package_store: package_store.clone(),

@@ -194,6 +194,19 @@ pub async fn run_queries(
     let requests: Vec<_> = requests
         .iter()
         .filter(|r| !methods_to_skip.contains(&r.method))
+        // TODO: remove this hack when the SDK has removed all MatchAny & MatchAll related implementation.
+        // Skip suix_getOwnedObjects requests with MatchAny & MatchAll filters b/c it's not supported.
+        .filter(|r| {
+            !(r.method == "suix_getOwnedObjects"
+                && r.body_json
+                    .get("params")
+                    .and_then(|p| p.as_array())
+                    .and_then(|p| p.get(1))
+                    .and_then(|p| p.get("filter"))
+                    .and_then(|f| f.as_object())
+                    .map(|f| f.contains_key("MatchAny") || f.contains_key("MatchAll"))
+                    .unwrap_or(false))
+        })
         .cloned()
         .collect();
     let total_requests = requests.len();
@@ -207,7 +220,6 @@ pub async fn run_queries(
     let process_requests = async {
         #[derive(Debug)]
         enum BenchmarkError {
-            DurationLimit,
             Other(anyhow::Error),
         }
 
@@ -305,8 +317,13 @@ pub async fn run_queries(
                                     }
                                     is_error = false;
                                 } else {
-                                    warn!("JSON parsing error for method: {}, error: {:?}, response: {}", 
-                                        request_line.method, parse_result.err(), resp_text);
+                                    warn!(
+                                        method = request_line.method,
+                                        body = ?request_line.body_json,
+                                        error = ?parse_result.err(),
+                                        response = resp_text,
+                                        "Response received but JSON parsing failed"
+                                    );
                                 }
                             } else {
                                 is_error = false;
@@ -322,35 +339,34 @@ pub async fn run_queries(
                                     )));
                                 }
                             };
-                            warn!("Request failed with method: {}, status:{}, request: {}, response: {}", 
-                                request_line.method, status, request_line.body_json, resp_text);
+                            warn!(
+                                method = request_line.method,
+                                status = ?status,
+                                body = ?request_line.body_json,
+                                response = resp_text,
+                                "Response received but status is not success"
+                            );
                         }
                     } else {
-                        warn!("Request error for method {}: {:?}", request_line.method, res);
+                        warn!(
+                            method = request_line.method,
+                            body = ?request_line.body_json,
+                            error = ?res,
+                            "Failed to get response"
+                        );
                     }
 
                     let mut stats = task_stats
                         .lock()
                         .expect("Thread holding stats lock panicked");
                     stats.record_request(&request_line.method, elapsed_ms, is_error);
-                    if let Some(duration_val) = duration {
-                        if start_time.elapsed() > duration_val {
-                            debug!("Duration limit reached!");
-                            return Err(BenchmarkError::DurationLimit);
-                        }
-                    }
                     Ok::<(), BenchmarkError>(())
                 }
             })
             .await;
 
-        // Handle early exit due to duration limit
         match result {
             Ok(()) => Ok(()),
-            Err(BenchmarkError::DurationLimit) => {
-                debug!("Stopped processing due to reaching duration limit");
-                Ok(())
-            }
             Err(BenchmarkError::Other(e)) => Err(e),
         }
     };
@@ -369,7 +385,7 @@ pub async fn run_queries(
         .lock()
         .expect("Thread holding stats lock panicked")
         .clone();
-    debug!(
+    info!(
         "Benchmark completed in {:?}. Total requests: {}, errors: {}, avg latency: {:.2}ms",
         elapsed,
         final_stats.total_sent,

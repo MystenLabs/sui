@@ -70,7 +70,7 @@ impl AuthorityNode {
             let commit_consumer_monitor = inner.commit_consumer_monitor();
             let _handle = tokio::spawn(async move {
                 while let Some(subdag) = commit_receiver.recv().await {
-                    info!(index =% authority_index, "received committed subdag");
+                    info!(authority =% authority_index, commit_index =% subdag.commit_ref.index, "Received committed subdag");
                     commit_consumer_monitor.set_highest_handled_commit(subdag.commit_ref.index);
                 }
             });
@@ -276,6 +276,7 @@ pub(crate) async fn make_authority(
 
     let authority = ConsensusAuthority::start(
         network_type,
+        0,
         authority_index,
         committee,
         parameters,
