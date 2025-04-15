@@ -7,10 +7,10 @@ use prover::prover::{ensures, old};
 fun fresh_object_address_spec(ctx: &mut TxContext): address {
     let old_ctx = old!(ctx);
     let result = fresh_object_address(ctx);
-    ensures(sender(ctx) == sender(old_ctx));
-    ensures(digest(ctx) == digest(old_ctx));
-    ensures(epoch(ctx) == epoch(old_ctx));
-    ensures(epoch_timestamp_ms(ctx) == epoch_timestamp_ms(old_ctx));
+    ensures(ctx.sender() == old_ctx.sender());
+    ensures(ctx.digest() == old_ctx.digest());
+    ensures(ctx.epoch() == old_ctx.epoch());
+    ensures(ctx.epoch_timestamp_ms() == old_ctx.epoch_timestamp_ms());
     result
 }
 
