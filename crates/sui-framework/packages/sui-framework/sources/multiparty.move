@@ -25,6 +25,8 @@ const TRANSFER: u8 = 0x08;
 const NO_PERMISSIONS: u64 = 0;
 
 /// Permissions corresponding to shared objects as defined by `sui::transfer::share_object`.
+/// However, unlike shared objects, it will be possible to "upgrade" a normal object into a
+/// legacy shared object--although this upgrade feature is not yet implemented.
 const LEGACY_SHARED: u64 = (READ | WRITE | DELETE) as u64;
 
 /// All permissions.
@@ -58,7 +60,8 @@ public fun single_owner(owner: address): Multiparty {
 }
 
 /// Creates a `Multiparty` value with permissions matching shared objects as defined by
-/// `sui::transfer::share_object`.
+/// `sui::transfer::share_object`. NOTE: This does not currently support upgrading non-shared
+/// objects (i.e. objects must be created in the same transaction).
 public fun legacy_shared(): Multiparty {
     let mut mp = empty();
     mp.default = Permissions(LEGACY_SHARED);
