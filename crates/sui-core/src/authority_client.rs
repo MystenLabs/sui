@@ -304,9 +304,11 @@ pub fn make_network_authority_clients_with_network_config(
 ) -> BTreeMap<AuthorityName, NetworkAuthorityClient> {
     let mut authority_clients = BTreeMap::new();
     for (name, (_state, network_metadata)) in committee.validators() {
-        let address = network_metadata.network_address.clone();
-        let address = address.rewrite_udp_to_tcp();
-        let address = address.rewrite_http_to_https();
+        let address = network_metadata
+            .network_address
+            .clone()
+            .rewrite_udp_to_tcp()
+            .rewrite_http_to_https();
         let tls_config = network_metadata
             .network_public_key
             .as_ref()
