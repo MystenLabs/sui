@@ -97,6 +97,8 @@ pub(crate) fn test_metrics() -> Arc<Metrics> {
 }
 
 pub(crate) struct NodeMetrics {
+    pub(crate) authority_index: IntGaugeVec,
+    pub(crate) protocol_version: IntGauge,
     pub(crate) block_commit_latency: Histogram,
     pub(crate) proposed_blocks: IntCounterVec,
     pub(crate) proposed_block_size: Histogram,
@@ -133,6 +135,7 @@ pub(crate) struct NodeMetrics {
     pub(crate) synchronizer_current_missing_blocks_by_authority: IntGaugeVec,
     pub(crate) synchronizer_fetched_blocks_by_authority: IntCounterVec,
     pub(crate) synchronizer_fetch_failures: IntCounterVec,
+    pub(crate) synchronizer_process_fetched_failures: IntCounterVec,
     pub(crate) network_received_excluded_ancestors_from_authority: IntCounterVec,
     pub(crate) network_excluded_ancestors_sent_to_fetch: IntCounterVec,
     pub(crate) network_excluded_ancestors_count_by_authority: IntCounterVec,
@@ -207,6 +210,17 @@ pub(crate) struct NodeMetrics {
 impl NodeMetrics {
     pub(crate) fn new(registry: &Registry) -> Self {
         Self {
+            authority_index: register_int_gauge_vec_with_registry!(
+                "authority_index",
+                "The index of the authority",
+                &["name"],
+                registry,
+            ).unwrap(),
+            protocol_version: register_int_gauge_with_registry!(
+                "protocol_version",
+                "The protocol version used in this epoch",
+                registry,
+            ).unwrap(),
             block_commit_latency: register_histogram_with_registry!(
                 "block_commit_latency",
                 "The time taken between block creation and block commit.",
@@ -417,6 +431,12 @@ impl NodeMetrics {
                 &["peer", "type"],
                 registry,
             ).unwrap(),
+            synchronizer_process_fetched_failures: register_int_counter_vec_with_registry!(
+                "synchronizer_process_fetched_failures",
+                "Number of failures for processing fetched blocks against each peer",
+                &["peer", "type"],
+                registry,
+            ).unwrap(),
             network_received_excluded_ancestors_from_authority: register_int_counter_vec_with_registry!(
                 "network_received_excluded_ancestors_from_authority",
                 "Number of excluded ancestors received from each authority.",
@@ -445,7 +465,6 @@ impl NodeMetrics {
                 "Number of times this node tried to fetch the last own block from peers",
                 registry,
             ).unwrap(),
-            // TODO: add a short status label.
             invalid_blocks: register_int_counter_vec_with_registry!(
                 "invalid_blocks",
                 "Number of invalid blocks per peer authority",

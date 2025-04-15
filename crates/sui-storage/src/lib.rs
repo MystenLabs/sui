@@ -311,9 +311,9 @@ fn hard_link(src: impl AsRef<Path>, dst: impl AsRef<Path>) -> io::Result<()> {
 mod tests {
     use crate::hard_link;
     use tempfile::TempDir;
-    use typed_store::rocks::DBMap;
+    use typed_store::rocks::MetricConf;
     use typed_store::rocks::ReadWriteOptions;
-    use typed_store::rocks::{open_cf, MetricConf};
+    use typed_store::rocks::{default_db_options, open_cf_opts, DBMap};
     use typed_store::{reopen, Map};
 
     #[tokio::test]
@@ -327,11 +327,14 @@ mod tests {
         const FIRST_CF: &str = "First_CF";
         const SECOND_CF: &str = "Second_CF";
 
-        let db_a = open_cf(
+        let db_a = open_cf_opts(
             input_path,
             None,
             MetricConf::new("test_db_hard_link_1"),
-            &[FIRST_CF, SECOND_CF],
+            &[
+                (FIRST_CF, default_db_options().options),
+                (SECOND_CF, default_db_options().options),
+            ],
         )
         .unwrap();
 
@@ -345,11 +348,14 @@ mod tests {
 
         // set up db hard link
         hard_link(input_path, output_path)?;
-        let db_b = open_cf(
+        let db_b = open_cf_opts(
             output_path,
             None,
             MetricConf::new("test_db_hard_link_2"),
-            &[FIRST_CF, SECOND_CF],
+            &[
+                (FIRST_CF, default_db_options().options),
+                (SECOND_CF, default_db_options().options),
+            ],
         )
         .unwrap();
 

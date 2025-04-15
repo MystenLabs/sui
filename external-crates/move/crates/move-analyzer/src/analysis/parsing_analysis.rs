@@ -170,7 +170,8 @@ impl<'a> ParsingAnalysisContext<'a> {
                     if ignored_function(fun.name.value()) {
                         continue;
                     }
-                    earliest_member_loc = earliest_loc(earliest_member_loc, fun.loc);
+                    earliest_member_loc =
+                        earliest_loc(earliest_member_loc, fun.doc.loc().unwrap_or(fun.loc));
                     // Unit returns span the entire function signature, so we process them first
                     // for cursor ordering.
                     self.type_symbols(&fun.signature.return_type);
@@ -207,7 +208,8 @@ impl<'a> ParsingAnalysisContext<'a> {
                     };
                 }
                 MM::Struct(sdef) => {
-                    earliest_member_loc = earliest_loc(earliest_member_loc, sdef.loc);
+                    earliest_member_loc =
+                        earliest_loc(earliest_member_loc, sdef.doc.loc().unwrap_or(sdef.loc));
                     // If the cursor is in this item, mark that down.
                     // This may be overridden by the recursion below.
                     if let Some(cursor) = &mut self.cursor {
@@ -236,7 +238,8 @@ impl<'a> ParsingAnalysisContext<'a> {
                     }
                 }
                 MM::Enum(edef) => {
-                    earliest_member_loc = earliest_loc(earliest_member_loc, edef.loc);
+                    earliest_member_loc =
+                        earliest_loc(earliest_member_loc, edef.doc.loc().unwrap_or(edef.loc));
                     // If the cursor is in this item, mark that down.
                     // This may be overridden by the recursion below.
                     if let Some(cursor) = &mut self.cursor {
@@ -277,7 +280,8 @@ impl<'a> ParsingAnalysisContext<'a> {
                     self.chain_symbols(&fdecl.friend)
                 }
                 MM::Constant(c) => {
-                    earliest_member_loc = earliest_loc(earliest_member_loc, c.loc);
+                    earliest_member_loc =
+                        earliest_loc(earliest_member_loc, c.doc.loc().unwrap_or(c.loc));
                     // If the cursor is in this item, mark that down.
                     // This may be overridden by the recursion below.
                     if let Some(cursor) = &mut self.cursor {

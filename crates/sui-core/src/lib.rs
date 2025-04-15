@@ -40,6 +40,7 @@ pub mod streamer;
 pub mod subscription_handler;
 pub mod test_utils;
 pub mod traffic_controller;
+pub mod transaction_driver;
 mod transaction_input_loader;
 mod transaction_manager;
 pub mod transaction_orchestrator;
@@ -68,6 +69,7 @@ mod pay_sui_tests;
 #[cfg(test)]
 #[path = "unit_tests/shared_object_deletion_tests.rs"]
 mod shared_object_deletion_tests;
+#[cfg(test)]
 pub mod test_authority_clients;
 #[cfg(test)]
 #[path = "unit_tests/transfer_to_object_tests.rs"]

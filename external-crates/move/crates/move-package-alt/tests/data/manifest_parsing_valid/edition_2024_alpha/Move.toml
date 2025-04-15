@@ -1,8 +1,8 @@
 [package]
 name = "name"
+edition = "2024.alpha"
 license = "license"
 authors = ["some author"]
-edition = "2024.alpha"
 
 [environments]
 mainnet = "35834a8a"

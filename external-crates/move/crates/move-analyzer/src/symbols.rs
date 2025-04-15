@@ -62,7 +62,7 @@ use crate::{
 use anyhow::{anyhow, Result};
 use crossbeam::channel::Sender;
 use im::ordmap::OrdMap;
-use lsp_server::{Request, RequestId};
+use lsp_server::{Message, Request, RequestId, Response};
 use lsp_types::{
     request::GotoTypeDefinitionParams, Diagnostic, DocumentSymbol, DocumentSymbolParams,
     GotoDefinitionParams, Hover, HoverContents, HoverParams, Location, MarkupContent, MarkupKind,
@@ -220,6 +220,10 @@ pub struct PrecomputedPkgInfo {
     program: Arc<CompiledProgram>,
     /// Mapping from file paths to file hashes
     file_hashes: Arc<BTreeMap<PathBuf, FileHash>>,
+    /// Edition of the compiler used to build this package
+    edition: Option<Edition>,
+    /// Compiler info
+    compiler_info: Option<CompilerInfo>,
 }
 
 /// Location of a use's identifier
@@ -494,8 +498,8 @@ pub enum AutoImportInsertionKind {
 /// In particular, if uses are already preasent, we insert the new import
 /// in the following line keeping the tabulation of the previous import.
 /// If no imports are present, we insert the new import before the first
-/// module member, pushing this member down but keeping its original
-/// tabulation.
+/// module member (or before its doc comment if it exists), pushing
+/// this member down but keeping its original tabulation.
 #[derive(Debug, Clone, Copy, Ord, PartialOrd, PartialEq, Eq)]
 pub struct AutoImportInsertionInfo {
     // Kind of auto-import insertion
@@ -2049,70 +2053,78 @@ pub fn get_compiled_pkg(
         BuildPlan::create(&resolution_graph)?.set_compiler_vfs_root(overlay_fs_root.clone());
     let mut parsed_ast = None;
     let mut typed_ast = None;
-    let mut compiler_info = None;
     let mut diagnostics = None;
 
     let mut dependencies = build_plan.compute_dependencies();
-    let cached_info_opt = if let Ok(deps_package_paths) = dependencies.make_deps_for_compiler() {
-        // Partition deps_package according whether src is available
-        let src_deps = deps_package_paths
-            .iter()
-            .filter_map(|(p, b)| {
-                if let ModuleFormat::Source = b {
-                    Some(p.clone())
-                } else {
-                    None
-                }
-            })
-            .collect::<Vec<_>>();
-
-        let src_names = src_deps
-            .iter()
-            .filter_map(|p| p.name.as_ref().map(|(n, _)| *n))
-            .collect::<BTreeSet<_>>();
-
-        let pkg_info = packages_info.lock().unwrap();
-        let pkg_cached_deps = match pkg_info.get(pkg_path) {
-            Some(d)
-                if manifest_hash.is_some()
-                    && manifest_hash == d.manifest_hash
-                    && deps_hash == d.deps_hash =>
-            {
-                eprintln!("found cached deps for {:?}", pkg_path);
-                Some(AnalyzedPkgInfo {
-                    program_deps: d.deps.clone(),
-                    symbols_data: Some(d.deps_symbols_data.clone()),
-                    program: Some(d.program.clone()),
-                    file_hashes: d.file_hashes.clone(),
+    let (cached_info_opt, mut edition, mut compiler_info) =
+        if let Ok(deps_package_paths) = dependencies.make_deps_for_compiler() {
+            // Partition deps_package according whether src is available
+            let src_deps = deps_package_paths
+                .iter()
+                .filter_map(|(p, b)| {
+                    if let ModuleFormat::Source = b {
+                        Some(p.clone())
+                    } else {
+                        None
+                    }
                 })
-            }
-            _ => construct_pre_compiled_lib(
-                src_deps,
-                None,
-                compiler_flags,
-                Some(overlay_fs_root.clone()),
-            )
-            .ok()
-            .and_then(|pprog_and_comments_res| pprog_and_comments_res.ok())
-            .map(|libs| {
-                eprintln!("created pre-compiled libs for {:?}", pkg_path);
-                AnalyzedPkgInfo {
-                    program_deps: Arc::new(libs),
-                    symbols_data: None,
-                    program: None,
-                    file_hashes: file_hashes.clone(),
+                .collect::<Vec<_>>();
+
+            let src_names = src_deps
+                .iter()
+                .filter_map(|p| p.name.as_ref().map(|(n, _)| *n))
+                .collect::<BTreeSet<_>>();
+
+            let pkg_info = packages_info.lock().unwrap();
+            let (pkg_cached_deps, edition, compiler_info) = match pkg_info.get(pkg_path) {
+                Some(d)
+                    if manifest_hash.is_some()
+                        && manifest_hash == d.manifest_hash
+                        && deps_hash == d.deps_hash =>
+                {
+                    eprintln!("found cached deps for {:?}", pkg_path);
+                    (
+                        Some(AnalyzedPkgInfo {
+                            program_deps: d.deps.clone(),
+                            symbols_data: Some(d.deps_symbols_data.clone()),
+                            program: Some(d.program.clone()),
+                            file_hashes: d.file_hashes.clone(),
+                        }),
+                        d.edition,
+                        d.compiler_info.clone(),
+                    )
                 }
-            }),
+                _ => (
+                    construct_pre_compiled_lib(
+                        src_deps,
+                        None,
+                        compiler_flags,
+                        Some(overlay_fs_root.clone()),
+                    )
+                    .ok()
+                    .and_then(|pprog_and_comments_res| pprog_and_comments_res.ok())
+                    .map(|libs| {
+                        eprintln!("created pre-compiled libs for {:?}", pkg_path);
+                        AnalyzedPkgInfo {
+                            program_deps: Arc::new(libs),
+                            symbols_data: None,
+                            program: None,
+                            file_hashes: file_hashes.clone(),
+                        }
+                    }),
+                    None,
+                    None,
+                ),
+            };
+            if pkg_cached_deps.is_some() {
+                // if successful, remove only source deps but keep bytecode deps as they
+                // were not used to construct pre-compiled lib in the first place
+                dependencies.remove_deps(src_names);
+            }
+            (pkg_cached_deps, edition, compiler_info)
+        } else {
+            (None, None, None)
         };
-        if pkg_cached_deps.is_some() {
-            // if successful, remove only source deps but keep bytecode deps as they
-            // were not used to construct pre-compiled lib in the first place
-            dependencies.remove_deps(src_names);
-        }
-        pkg_cached_deps
-    } else {
-        None
-    };
 
     let (full_compilation, files_to_compile) = if let Some(chached_info) = &cached_info_opt {
         if chached_info.program.is_some() {
@@ -2128,92 +2140,106 @@ pub fn get_compiled_pkg(
         (true, BTreeSet::new())
     };
 
-    let mut edition = None;
-    let compiled_libs = cached_info_opt
-        .clone()
-        .map(|deps| deps.program_deps.clone());
-    build_plan.compile_with_driver_and_deps(dependencies, &mut std::io::sink(), |compiler| {
-        let compiler = compiler.set_ide_mode();
-        // extract expansion AST
-        let (files, compilation_result) = compiler
-            .set_pre_compiled_lib_opt(compiled_libs.clone())
-            .set_files_to_compile(if full_compilation {
-                None
-            } else {
-                Some(files_to_compile.clone())
-            })
-            .run::<PASS_PARSER>()?;
-        let compiler = match compilation_result {
-            Ok(v) => v,
-            Err((_pass, diags)) => {
-                let failure = true;
-                diagnostics = Some((diags, failure));
-                eprintln!("parsed AST compilation failed");
-                return Ok((files, vec![]));
-            }
-        };
-        eprintln!("compiled to parsed AST");
-        let (compiler, parsed_program) = compiler.into_ast();
-        parsed_ast = Some(parsed_program.clone());
-
-        // extract typed AST
-        let compilation_result = compiler.at_parser(parsed_program).run::<PASS_TYPING>();
-        let compiler = match compilation_result {
-            Ok(v) => v,
-            Err((_pass, diags)) => {
-                let failure = true;
-                diagnostics = Some((diags, failure));
-                eprintln!("typed AST compilation failed");
-                eprintln!("diagnostics: {:#?}", diagnostics);
-                return Ok((files, vec![]));
-            }
-        };
-        eprintln!("compiled to typed AST");
-        let (compiler, typed_program) = compiler.into_ast();
-        typed_ast = Some(typed_program.clone());
-        compiler_info = Some(CompilerInfo::from(
-            compiler.compilation_env().ide_information().clone(),
-        ));
-        edition = Some(compiler.compilation_env().edition(Some(root_pkg_name)));
-
-        // compile to CFGIR for accurate diags
-        eprintln!("compiling to CFGIR");
-        let compilation_result = compiler.at_typing(typed_program).run::<PASS_CFGIR>();
-        let compiler = match compilation_result {
-            Ok(v) => v,
-            Err((_pass, diags)) => {
-                let failure = false;
-                diagnostics = Some((diags, failure));
-                eprintln!("compilation to CFGIR failed");
-                return Ok((files, vec![]));
-            }
-        };
-        let failure = false;
-        diagnostics = Some((compiler.compilation_env().take_final_diags(), failure));
-        eprintln!("compiled to CFGIR");
-        Ok((files, vec![]))
-    })?;
-
     let mut ide_diagnostics = lsp_empty_diagnostics(mapped_files.file_name_mapping());
-    if let Some((compiler_diagnostics, failure)) = diagnostics {
-        let lsp_diagnostics =
-            lsp_diagnostics(&compiler_diagnostics.into_codespan_format(), &mapped_files);
-        // start with empty diagnostics for all files and replace them with actual diagnostics
-        // only for files that have failures/warnings so that diagnostics for all other files
-        // (that no longer have failures/warnings) are reset
-        ide_diagnostics.extend(lsp_diagnostics);
-        if failure {
-            // just return diagnostics as we don't have typed AST that we can use to compute
-            // symbolication information
-            debug_assert!(typed_ast.is_none());
-            return Ok((None, ide_diagnostics));
+    if full_compilation || !files_to_compile.is_empty() {
+        let compiled_libs = cached_info_opt
+            .clone()
+            .map(|deps| deps.program_deps.clone());
+        build_plan.compile_with_driver_and_deps(
+            dependencies,
+            &mut std::io::sink(),
+            |compiler| {
+                let compiler = compiler.set_ide_mode();
+                // extract expansion AST
+                let (files, compilation_result) = compiler
+                    .set_pre_compiled_lib_opt(compiled_libs.clone())
+                    .set_files_to_compile(if full_compilation {
+                        None
+                    } else {
+                        Some(files_to_compile.clone())
+                    })
+                    .run::<PASS_PARSER>()?;
+                let compiler = match compilation_result {
+                    Ok(v) => v,
+                    Err((_pass, diags)) => {
+                        let failure = true;
+                        diagnostics = Some((diags, failure));
+                        eprintln!("parsed AST compilation failed");
+                        return Ok((files, vec![]));
+                    }
+                };
+                eprintln!("compiled to parsed AST");
+                let (compiler, parsed_program) = compiler.into_ast();
+                parsed_ast = Some(parsed_program.clone());
+
+                // extract typed AST
+                let compilation_result = compiler.at_parser(parsed_program).run::<PASS_TYPING>();
+                let compiler = match compilation_result {
+                    Ok(v) => v,
+                    Err((_pass, diags)) => {
+                        let failure = true;
+                        diagnostics = Some((diags, failure));
+                        eprintln!("typed AST compilation failed");
+                        eprintln!("diagnostics: {:#?}", diagnostics);
+                        return Ok((files, vec![]));
+                    }
+                };
+                eprintln!("compiled to typed AST");
+                let (compiler, typed_program) = compiler.into_ast();
+                typed_ast = Some(typed_program.clone());
+                compiler_info = Some(CompilerInfo::from(
+                    compiler.compilation_env().ide_information().clone(),
+                ));
+                edition = Some(compiler.compilation_env().edition(Some(root_pkg_name)));
+
+                // compile to CFGIR for accurate diags
+                eprintln!("compiling to CFGIR");
+                let compilation_result = compiler.at_typing(typed_program).run::<PASS_CFGIR>();
+                let compiler = match compilation_result {
+                    Ok(v) => v,
+                    Err((_pass, diags)) => {
+                        let failure = false;
+                        diagnostics = Some((diags, failure));
+                        eprintln!("compilation to CFGIR failed");
+                        return Ok((files, vec![]));
+                    }
+                };
+                let failure = false;
+                diagnostics = Some((compiler.compilation_env().take_final_diags(), failure));
+                eprintln!("compiled to CFGIR");
+                Ok((files, vec![]))
+            },
+        )?;
+
+        if let Some((compiler_diagnostics, failure)) = diagnostics {
+            let lsp_diagnostics =
+                lsp_diagnostics(&compiler_diagnostics.into_codespan_format(), &mapped_files);
+            // start with empty diagnostics for all files and replace them with actual diagnostics
+            // only for files that have failures/warnings so that diagnostics for all other files
+            // (that no longer have failures/warnings) are reset
+            ide_diagnostics.extend(lsp_diagnostics);
+            if failure {
+                // just return diagnostics as we don't have typed AST that we can use to compute
+                // symbolication information
+                debug_assert!(typed_ast.is_none());
+                return Ok((None, ide_diagnostics));
+            }
         }
     }
-
     // uwrap's are safe - this function returns earlier (during diagnostics processing)
     // when failing to produce the ASTs
     let (parsed_program, typed_program_modules) = if full_compilation {
         (parsed_ast.unwrap(), typed_ast.unwrap().modules)
+    } else if files_to_compile.is_empty() {
+        // no compilation happened, so we get everything from the cache, and
+        // the unwraps are safe because the cache is guaranteed to exist (otherwise
+        // compilation would have happened)
+        let cached_info = cached_info_opt.clone().unwrap();
+        let compiled_program = cached_info.program.unwrap();
+        (
+            compiled_program.parsed.clone(),
+            compiled_program.typed_modules.clone(),
+        )
     } else {
         merge_user_programs(
             cached_info_opt.clone(),
@@ -2506,6 +2532,8 @@ pub fn compute_symbols(
     let manifest_hash = compiled_pkg_info.manifest_hash;
     let cached_dep_opt = compiled_pkg_info.cached_deps.clone();
     let deps_hash = compiled_pkg_info.deps_hash.clone();
+    let edition = compiled_pkg_info.edition;
+    let compiler_info = compiled_pkg_info.compiler_info.clone();
     let file_hashes = compiled_pkg_info
         .mapped_files
         .file_name_mapping()
@@ -2552,6 +2580,8 @@ pub fn compute_symbols(
                     deps_symbols_data,
                     program: Arc::new(program),
                     file_hashes: Arc::new(file_hashes),
+                    edition,
+                    compiler_info,
                 },
             );
         }
@@ -3499,12 +3529,8 @@ pub fn on_use_request(
 
     // unwrap will succeed based on the logic above which the compiler is unable to figure out
     // without using Option
-    let response = lsp_server::Response::new_ok(id, result.unwrap());
-    if let Err(err) = context
-        .connection
-        .sender
-        .send(lsp_server::Message::Response(response))
-    {
+    let response = Response::new_ok(id, result.unwrap());
+    if let Err(err) = context.connection.sender.send(Message::Response(response)) {
         eprintln!("could not send use response: {:?}", err);
     }
 }
@@ -3630,12 +3656,8 @@ pub fn on_document_symbol_request(context: &Context, request: &Request) {
         }
     }
     // unwrap will succeed based on the logic above which the compiler is unable to figure out
-    let response = lsp_server::Response::new_ok(request.id.clone(), defs);
-    if let Err(err) = context
-        .connection
-        .sender
-        .send(lsp_server::Message::Response(response))
-    {
+    let response = Response::new_ok(request.id.clone(), defs);
+    if let Err(err) = context.connection.sender.send(Message::Response(response)) {
         eprintln!("could not send use response: {:?}", err);
     }
 }

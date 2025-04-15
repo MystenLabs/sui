@@ -3,12 +3,14 @@
 
 use std::sync::Arc;
 
-use sui_pg_db::Db;
 use tokio::{task::JoinHandle, time::interval};
 use tokio_util::sync::CancellationToken;
 use tracing::{debug, info, warn};
 
-use crate::{metrics::IndexerMetrics, store::Connection};
+use crate::{
+    metrics::IndexerMetrics,
+    store::{Connection, Store},
+};
 
 use super::{Handler, PrunerConfig};
 
@@ -25,9 +27,7 @@ use super::{Handler, PrunerConfig};
 /// when the provided cancellation token is triggered.
 pub(super) fn reader_watermark<H: Handler + 'static>(
     config: Option<PrunerConfig>,
-    // TODO (wlmyng): this will eventually be H::Store once we add the associated type to
-    // concurrent::Handler
-    store: Db,
+    store: H::Store,
     metrics: Arc<IndexerMetrics>,
     cancel: CancellationToken,
 ) -> JoinHandle<()> {

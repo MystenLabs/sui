@@ -8,7 +8,7 @@ use anyhow::{bail, Result};
 use diesel::prelude::*;
 use diesel_async::RunQueryDsl;
 use sui_indexer_alt_framework::{
-    db,
+    db::{Connection, Db},
     pipeline::{concurrent::Handler, Processor},
     types::full_checkpoint_content::CheckpointData,
 };
@@ -38,7 +38,9 @@ impl Processor for CpSequenceNumbers {
 
 #[async_trait::async_trait]
 impl Handler for CpSequenceNumbers {
-    async fn commit(values: &[Self::Value], conn: &mut db::Connection<'_>) -> Result<usize> {
+    type Store = Db;
+
+    async fn commit<'a>(values: &[Self::Value], conn: &mut Connection<'a>) -> Result<usize> {
         Ok(diesel::insert_into(cp_sequence_numbers::table)
             .values(values)
             .on_conflict_do_nothing()
@@ -48,7 +50,7 @@ impl Handler for CpSequenceNumbers {
 }
 
 /// Inclusive start and exclusive end range of prunable txs.
-pub async fn tx_interval(conn: &mut db::Connection<'_>, cps: Range<u64>) -> Result<Range<u64>> {
+pub async fn tx_interval(conn: &mut Connection<'_>, cps: Range<u64>) -> Result<Range<u64>> {
     let result = get_range(conn, cps).await?;
 
     Ok(Range {
@@ -59,7 +61,7 @@ pub async fn tx_interval(conn: &mut db::Connection<'_>, cps: Range<u64>) -> Resu
 
 /// Returns the epochs of the given checkpoint range. `start` is the epoch of the first checkpoint
 /// and `end` is the epoch of the last checkpoint.
-pub async fn epoch_interval(conn: &mut db::Connection<'_>, cps: Range<u64>) -> Result<Range<u64>> {
+pub async fn epoch_interval(conn: &mut Connection<'_>, cps: Range<u64>) -> Result<Range<u64>> {
     let result = get_range(conn, cps).await?;
 
     Ok(Range {
@@ -73,7 +75,7 @@ pub async fn epoch_interval(conn: &mut db::Connection<'_>, cps: Range<u64>) -> R
 /// The values are expected to exist since the cp_sequence_numbers table must have enough information to
 /// encompass the retention of other tables.
 pub(crate) async fn get_range(
-    conn: &mut db::Connection<'_>,
+    conn: &mut Connection<'_>,
     cps: Range<u64>,
 ) -> Result<(StoredCpSequenceNumbers, StoredCpSequenceNumbers)> {
     let Range {

@@ -98,7 +98,7 @@ impl Container {
                     "Started Prometheus HTTP endpoint. To query metrics use\n\tcurl -s http://{}/metrics",
                     config.metrics_address
                 );
-                let server = SuiNode::start(config, registry_service, None).await.unwrap();
+                let server = SuiNode::start(config, registry_service).await.unwrap();
                 // Notify that we've successfully started the node
                 let _ = startup_sender.send(Arc::downgrade(&server));
                 // run until canceled

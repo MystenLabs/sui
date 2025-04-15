@@ -1,5 +1,6 @@
 [package]
 name = "name"
+edition = "2024.beta"
 
 [dependencies]
 A = { local = "a", rename-from = { "A" = "0xG" } }

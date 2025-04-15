@@ -4,6 +4,7 @@
 use std::{
     collections::BTreeMap,
     ffi::OsString,
+    fmt,
     fs::read_to_string,
     path::{Path, PathBuf},
 };
@@ -14,64 +15,72 @@ use serde::{Deserialize, Serialize};
 use serde_spanned::Spanned;
 use toml_edit::{
     visit_mut::{visit_table_like_kv_mut, visit_table_mut, VisitMut},
-    Document, InlineTable, Item, KeyMut, Table, Value,
+    DocumentMut, InlineTable, Item, KeyMut, Table, Value,
 };
 
 use crate::{
     dependency::{ManifestDependencyInfo, PinnedDependencyInfo},
+    errors::{with_file, Located, LockfileError, PackageError, PackageResult},
     flavor::MoveFlavor,
 };
 
 use super::{EnvironmentName, PackageName};
 
-#[derive(Serialize, Deserialize)]
+#[derive(fmt::Debug, Serialize, Deserialize)]
 #[derive_where(Clone, Default)]
 #[serde(bound = "")]
-pub struct Lockfile<F: MoveFlavor> {
+pub struct Lockfile<F: MoveFlavor + fmt::Debug> {
     unpublished: UnpublishedTable<F>,
 
     #[serde(default)]
     published: BTreeMap<EnvironmentName, Publication<F>>,
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(fmt::Debug, Serialize, Deserialize)]
 #[derive_where(Clone)]
 #[serde(bound = "")]
-pub struct Publication<F: MoveFlavor> {
+pub struct Publication<F: MoveFlavor + fmt::Debug> {
     #[serde(flatten)]
     metadata: F::PublishedMetadata,
     dependencies: BTreeMap<PackageName, PinnedDependencyInfo<F>>,
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(fmt::Debug, Serialize, Deserialize)]
 #[derive_where(Default, Clone)]
 #[serde(rename_all = "kebab-case")]
 #[serde(bound = "")]
-struct UnpublishedTable<F: MoveFlavor> {
+struct UnpublishedTable<F: MoveFlavor + fmt::Debug> {
     dependencies: UnpublishedDependencies<F>,
 
     #[serde(default)]
     dep_overrides: BTreeMap<EnvironmentName, UnpublishedDependencies<F>>,
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(fmt::Debug, Serialize, Deserialize)]
 #[derive_where(Default, Clone)]
 #[serde(bound = "")]
-struct UnpublishedDependencies<F: MoveFlavor> {
+struct UnpublishedDependencies<F: MoveFlavor + fmt::Debug> {
+    #[serde(default)]
     pinned: BTreeMap<PackageName, PinnedDependencyInfo<F>>,
+    #[serde(default)]
     unpinned: BTreeMap<PackageName, ManifestDependencyInfo<F>>,
 }
 
-impl<F: MoveFlavor> Lockfile<F> {
+impl<F: MoveFlavor + fmt::Debug> Lockfile<F> {
     /// Read `Move.lock` and all `Move.<env>.lock` files from the directory at `path`.
     /// Returns a new empty [Lockfile] if `path` doesn't contain a `Move.lock`.
-    pub fn read_from(path: impl AsRef<Path>) -> anyhow::Result<Self> {
+    pub fn read_from(path: impl AsRef<Path>) -> PackageResult<Self> {
         // Parse `Move.lock`
         let lockfile_name = path.as_ref().join("Move.lock");
-        let Ok(lockfile_str) = read_to_string(&lockfile_name) else {
+        if !lockfile_name.exists() {
             return Ok(Self::default());
         };
-        let mut lockfiles = toml_edit::de::from_str::<Self>(&lockfile_str)?;
+
+        let (result, file_id) = with_file(lockfile_name, toml_edit::de::from_str::<Self>)?;
+
+        let Ok(mut lockfiles) = result else {
+            return Err(result.unwrap_err().into());
+        };
 
         // Add in `Move.<env>.lock` files
         let dir = std::fs::read_dir(path)?;
@@ -82,13 +91,16 @@ impl<F: MoveFlavor> Lockfile<F> {
                 continue;
             };
 
-            let metadata_contents = std::fs::read_to_string(file.path())?;
-            let metadata: Publication<F> = toml_edit::de::from_str(&metadata_contents)
-                .or_else(|_| bail!(format!("Couldn't parse {file:?}")))?;
+            let (metadata, file_id) =
+                with_file(file.path(), toml_edit::de::from_str::<Publication<F>>)?;
+
+            let Ok(metadata) = metadata else {
+                return Err(metadata.unwrap_err().into());
+            };
 
             let old_entry = lockfiles.published.insert(env_name.clone(), metadata);
             if old_entry.is_some() {
-                bail!("Move.lock and Move.{env_name}.lock both contain publication information for {env_name}; TODO.");
+                return Err(PackageError::Generic("Move.lock and Move.{env_name}.lock both contain publication information for {env_name}".to_string()));
             }
         }
 
@@ -159,7 +171,7 @@ impl<F: MoveFlavor> Lockfile<F> {
     }
 }
 
-impl<F: MoveFlavor> Publication<F> {
+impl<F: MoveFlavor + fmt::Debug> Publication<F> {
     /// Pretty-print [self] as TOML
     fn render(&self) -> String {
         let mut toml = toml_edit::ser::to_document(self).expect("toml serialization succeeds");
@@ -175,7 +187,7 @@ impl<F: MoveFlavor> Publication<F> {
 
 /// Replace every inline table in [toml] with an implicit standard table (implicit tables are not
 /// included if they have no keys directly inside them)
-fn expand_toml(toml: &mut Document) {
+fn expand_toml(toml: &mut DocumentMut) {
     struct Expander;
 
     impl VisitMut for Expander {

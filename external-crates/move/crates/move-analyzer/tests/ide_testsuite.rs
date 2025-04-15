@@ -12,7 +12,8 @@ use std::{
 use json_comments::StripComments;
 use lsp_types::{InlayHintKind, InlayHintLabel, InlayHintTooltip, Position};
 use move_analyzer::{
-    completions::compute_completions_with_symbols,
+    code_action::access_chain_autofix_actions_for_error,
+    completions::{compute_completions_with_symbols, utils::compute_cursor},
     inlay_hints::inlay_hints_internal,
     symbols::{
         compute_symbols, compute_symbols_parsed_program, compute_symbols_pre_process,
@@ -23,6 +24,7 @@ use move_analyzer::{
 use move_command_line_common::testing::insta_assert;
 use move_compiler::linters::LintLevel;
 use serde::{Deserialize, Serialize};
+use url::Url;
 use vfs::{MemoryFS, VfsPath};
 
 //**************************************************************************************************
@@ -50,6 +52,10 @@ enum TestSuite {
     Hint {
         project: String,
         file_tests: BTreeMap<String, Vec<HintTest>>,
+    },
+    AccessChainQuickFixTest {
+        project: String,
+        file_tests: BTreeMap<String, Vec<AccessChainQuickFixTest>>,
     },
 }
 
@@ -82,6 +88,13 @@ struct CursorTest {
 struct HintTest {
     use_line: u32,
     use_col: u32,
+}
+
+#[derive(Serialize, Deserialize)]
+struct AccessChainQuickFixTest {
+    err_line: u32,
+    err_col: u32,
+    err_msg: String,
 }
 
 //**************************************************************************************************
@@ -186,7 +199,7 @@ impl AutoCompletionTest {
     fn test(
         &self,
         test_idx: usize,
-        compiled_pkg_info: CompiledPkgInfo,
+        compiled_pkg_info: &mut CompiledPkgInfo,
         symbols: &mut Symbols,
         output: &mut dyn std::io::Write,
         use_file_path: &Path,
@@ -208,7 +221,7 @@ impl AutoImportTest {
     fn test(
         &self,
         test_idx: usize,
-        compiled_pkg_info: CompiledPkgInfo,
+        compiled_pkg_info: &mut CompiledPkgInfo,
         symbols: &mut Symbols,
         output: &mut dyn std::io::Write,
         use_file_path: &Path,
@@ -326,11 +339,46 @@ impl HintTest {
     }
 }
 
+impl AccessChainQuickFixTest {
+    fn test(
+        &self,
+        test_idx: usize,
+        compiled_pkg_info: &mut CompiledPkgInfo,
+        symbols: &mut Symbols,
+        output: &mut dyn std::io::Write,
+        use_file_path: &Path,
+    ) -> anyhow::Result<()> {
+        let err_line = self.err_line - 1; // 0th-based
+        let err_col = self.err_col - 1; // 0th-based
+        let err_pos = Position {
+            line: err_line,
+            character: err_col,
+        };
+        writeln!(output, "-- test {test_idx} -------------------")?;
+        let mut code_actions = vec![];
+
+        access_chain_autofix_actions_for_error(
+            symbols,
+            compiled_pkg_info,
+            Url::from_file_path(use_file_path).unwrap(),
+            err_pos,
+            self.err_msg.clone(),
+            None,
+            &mut code_actions,
+        );
+        for action in code_actions {
+            writeln!(output, "CODE ACTION: {}", action.title)?;
+        }
+
+        Ok(())
+    }
+}
+
 fn completion_test(
     use_line: u32,
     use_col: u32,
     test_idx: usize,
-    mut compiled_pkg_info: CompiledPkgInfo,
+    compiled_pkg_info: &mut CompiledPkgInfo,
     symbols: &mut Symbols,
     output: &mut dyn std::io::Write,
     use_file_path: &Path,
@@ -346,24 +394,7 @@ fn completion_test(
     // symbols do not change for each test, so we can reuse the same symbols
     // but we need to recompute the cursor each time
     let cursor_path = use_file_path.to_path_buf();
-    let cursor_info = Some((&cursor_path, use_pos));
-    let mut symbols_computation_data = SymbolsComputationData::new();
-    let mut symbols_computation_data_deps = SymbolsComputationData::new();
-    // we only compute cursor context and tag it on the existing symbols to avoid spending time
-    // recomputing all symbols (saves quite a bit of time when running the test suite)
-    let mut cursor_context = compute_symbols_pre_process(
-        &mut symbols_computation_data,
-        &mut symbols_computation_data_deps,
-        &mut compiled_pkg_info,
-        cursor_info,
-    );
-    cursor_context = compute_symbols_parsed_program(
-        &mut symbols_computation_data,
-        &mut symbols_computation_data_deps,
-        &compiled_pkg_info,
-        cursor_context,
-    );
-    symbols.cursor_context = cursor_context;
+    compute_cursor(symbols, compiled_pkg_info, &cursor_path, use_pos);
 
     let items = compute_completions_with_symbols(symbols, &cursor_path, use_pos, auto_import);
     writeln!(output, "-- test {test_idx} -------------------")?;
@@ -473,7 +504,7 @@ fn auto_completion_test_suite(
     project: String,
     file_tests: BTreeMap<String, Vec<AutoCompletionTest>>,
 ) -> datatest_stable::Result<String> {
-    let (project_path, compiled_pkg_info, mut symbols) =
+    let (project_path, mut compiled_pkg_info, mut symbols) =
         initial_symbols(project, &file_tests.keys().collect())?;
 
     let mut output: BufWriter<_> = BufWriter::new(Vec::new());
@@ -491,7 +522,7 @@ fn auto_completion_test_suite(
         let cpath = dunce::canonicalize(&fpath).unwrap();
 
         for (idx, test) in tests.iter().enumerate() {
-            test.test(idx, compiled_pkg_info.clone(), &mut symbols, writer, &cpath)?;
+            test.test(idx, &mut compiled_pkg_info, &mut symbols, writer, &cpath)?;
         }
     }
 
@@ -503,7 +534,7 @@ fn auto_import_test_suite(
     project: String,
     file_tests: BTreeMap<String, Vec<AutoImportTest>>,
 ) -> datatest_stable::Result<String> {
-    let (project_path, compiled_pkg_info, mut symbols) =
+    let (project_path, mut compiled_pkg_info, mut symbols) =
         initial_symbols(project, &file_tests.keys().collect())?;
 
     let mut output: BufWriter<_> = BufWriter::new(Vec::new());
@@ -521,7 +552,7 @@ fn auto_import_test_suite(
         let cpath = dunce::canonicalize(&fpath).unwrap();
 
         for (idx, test) in tests.iter().enumerate() {
-            test.test(idx, compiled_pkg_info.clone(), &mut symbols, writer, &cpath)?;
+            test.test(idx, &mut compiled_pkg_info, &mut symbols, writer, &cpath)?;
         }
     }
 
@@ -587,6 +618,36 @@ fn hint_test_suite(
     Ok(result)
 }
 
+fn access_chain_quick_fix_test_suite(
+    project: String,
+    file_tests: BTreeMap<String, Vec<AccessChainQuickFixTest>>,
+) -> datatest_stable::Result<String> {
+    let (project_path, mut compiled_pkg_info, mut symbols) =
+        initial_symbols(project, &file_tests.keys().collect())?;
+
+    let mut output: BufWriter<_> = BufWriter::new(Vec::new());
+    let writer: &mut dyn io::Write = output.get_mut();
+
+    for (file, tests) in file_tests {
+        writeln!(
+            writer,
+            "== {file} ========================================================"
+        )?;
+
+        let mut fpath = project_path.clone();
+
+        fpath.push(format!("sources/{file}"));
+        let cpath = dunce::canonicalize(&fpath).unwrap();
+
+        for (idx, test) in tests.iter().enumerate() {
+            test.test(idx, &mut compiled_pkg_info, &mut symbols, writer, &cpath)?;
+        }
+    }
+
+    let result: String = String::from_utf8(output.into_inner().unwrap()).unwrap();
+    Ok(result)
+}
+
 fn move_ide_testsuite(test_path: &Path) -> datatest_stable::Result<()> {
     let suite_file = io::BufReader::new(File::open(test_path)?);
     let stripped = StripComments::new(suite_file);
@@ -613,6 +674,10 @@ fn move_ide_testsuite(test_path: &Path) -> datatest_stable::Result<()> {
             project,
             file_tests,
         } => hint_test_suite(project, file_tests),
+        TestSuite::AccessChainQuickFixTest {
+            project,
+            file_tests,
+        } => access_chain_quick_fix_test_suite(project, file_tests),
     }?;
 
     insta_assert! {

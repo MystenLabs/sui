@@ -106,20 +106,20 @@ title: Module `sui_system::stake_subsidy`
 ## Constants
 
 
-<a name="sui_system_stake_subsidy_BASIS_POINT_DENOMINATOR"></a>
-
-
-
-<pre><code><b>const</b> <a href="../sui_system/stake_subsidy.md#sui_system_stake_subsidy_BASIS_POINT_DENOMINATOR">BASIS_POINT_DENOMINATOR</a>: u128 = 10000;
-</code></pre>
-
-
-
 <a name="sui_system_stake_subsidy_ESubsidyDecreaseRateTooLarge"></a>
 
 
 
 <pre><code><b>const</b> <a href="../sui_system/stake_subsidy.md#sui_system_stake_subsidy_ESubsidyDecreaseRateTooLarge">ESubsidyDecreaseRateTooLarge</a>: u64 = 0;
+</code></pre>
+
+
+
+<a name="sui_system_stake_subsidy_BASIS_POINT_DENOMINATOR"></a>
+
+
+
+<pre><code><b>const</b> <a href="../sui_system/stake_subsidy.md#sui_system_stake_subsidy_BASIS_POINT_DENOMINATOR">BASIS_POINT_DENOMINATOR</a>: u128 = 10000;
 </code></pre>
 
 
@@ -192,9 +192,11 @@ Advance the epoch counter and draw down the subsidy for the epoch.
     self.distribution_counter = self.distribution_counter + 1;
     // Decrease the subsidy amount only when the current period ends.
     <b>if</b> (self.distribution_counter % self.stake_subsidy_period_length == 0) {
-        <b>let</b> decrease_amount = self.current_distribution_amount <b>as</b> u128
+        <b>let</b> decrease_amount =
+            self.current_distribution_amount <b>as</b> u128
             * (self.stake_subsidy_decrease_rate <b>as</b> u128) / <a href="../sui_system/stake_subsidy.md#sui_system_stake_subsidy_BASIS_POINT_DENOMINATOR">BASIS_POINT_DENOMINATOR</a>;
-        self.current_distribution_amount = self.current_distribution_amount - (decrease_amount <b>as</b> u64)
+        self.current_distribution_amount =
+            self.current_distribution_amount - (decrease_amount <b>as</b> u64)
     };
     <a href="../sui_system/stake_subsidy.md#sui_system_stake_subsidy">stake_subsidy</a>
 }

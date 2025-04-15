@@ -22,7 +22,7 @@ module P::M {
 //> 0: sui::bag::new();
 //> 1: TransferObjects([Result(0)], Input(0))
 
-//# programmable --sender A --inputs object(2,0) 42 43u32 44 45 46 @A
+//# programmable --sender A --inputs object(2,0) 42 43u32 44 45 46
 //> 0: P::M::name(Input(1), Input(2));
 //> 1: sui::bag::add<u64, u64>(Input(0), Input(3), Input(4));
 //> 2: sui::bag::add<P::M::Name, u64>(Input(0), Result(0), Input(5))

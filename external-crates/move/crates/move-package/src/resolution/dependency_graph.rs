@@ -1306,7 +1306,7 @@ impl DependencyGraph {
         let mut dev_dependencies = None;
         let mut packages = None;
         if !writer.is_empty() {
-            let toml = writer.parse::<toml_edit::Document>()?;
+            let toml = writer.parse::<toml_edit::DocumentMut>()?;
             if let Some(value) = toml.get("dependencies").and_then(|v| v.as_value()) {
                 dependencies = Some(value.clone());
             }
@@ -1464,8 +1464,6 @@ impl DependencyGraph {
 
         // Present the stderr from the resolver, whether the process succeeded or not.
         if !output.stderr.is_empty() {
-            let stderr_label = format!("{resolver} stderr:").red();
-            writeln!(progress_output, "{stderr_label}")?;
             progress_output.write_all(&output.stderr)?;
         }
 

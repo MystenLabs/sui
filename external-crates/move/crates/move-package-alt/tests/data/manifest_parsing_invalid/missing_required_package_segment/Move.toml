@@ -1,11 +1,2 @@
-name = "name"
-license = "license"
-authors = ["some author"]
-
 [dependencies]
 A = { local = "../a" }
-B = { local = "../b", rename-from = { "a" = "0xDEADBEEF" } }
-C = { local = "../some_path", rename-from = { "a" = "0xCAFE", d = "0x4" } }
-D = { local = "../some_path", rename-from = { "a" = "0xCAFE", C = "B" } }
-E = { local = "../some_path", rename-from = { "a" = "0xCAFE", C = "B", "OtherD" = "d" } }
-F = { local = "../some_path", rename-from = { "a" = "0xCAFE" } }

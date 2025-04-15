@@ -1,0 +1,43 @@
+[package]
+name = "sui-replay-2"
+version = "0.1.0"
+authors = ["Mysten Labs <build@mystenlabs.com>"]
+license = "Apache-2.0"
+publish = false
+edition = "2021"
+
+[dependencies]
+base64ct = "1.6.0"
+bcs.workspace = true
+clap.workspace = true
+chrono.workspace = true
+cynic.workspace = true
+cynic-codegen.workspace = true
+futures.workspace = true
+move-binary-format.workspace = true
+move-bytecode-source-map.workspace = true
+move-command-line-common.workspace = true
+move-core-types.workspace = true
+move-disassembler.workspace = true
+move-ir-types.workspace = true
+move-trace-format.workspace = true
+prometheus.workspace = true
+similar.workspace = true
+sui-execution.workspace = true
+sui-graphql-client.workspace = true
+sui-framework.workspace = true
+sui-sdk-types.workspace = true
+sui-types.workspace = true
+telemetry-subscribers.workspace = true
+thiserror.workspace = true
+tokio = { workspace = true, features = ["full"] }
+tracing.workspace = true
+
+[build-dependencies]
+sui-graphql-client-build = { git = "https://github.com/mystenlabs/sui-rust-sdk", package = "sui-graphql-client-build",  rev ="83ff809bc11cbabda21b60130e1f5420170548bf" }
+
+[features]
+tracing = [
+    "sui-types/tracing",
+    "sui-execution/tracing",
+]

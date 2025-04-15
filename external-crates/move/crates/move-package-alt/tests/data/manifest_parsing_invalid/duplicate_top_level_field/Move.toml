@@ -1,4 +1,5 @@
 [package]
 name = "name"
+edition = "2024.beta"
 
 [package]

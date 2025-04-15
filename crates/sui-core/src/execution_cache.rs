@@ -279,7 +279,7 @@ pub trait ObjectCacheRead: Send + Sync {
                     .get_object(&input_key.id().id())
                     .map(|obj| obj.version() >= input_key.version().unwrap())
                     .unwrap_or(false)
-                    || self.have_deleted_fastpath_object_at_version_or_after(
+                    || self.fastpath_stream_ended_at_version_or_after(
                         input_key.id().id(),
                         input_key.version().unwrap(),
                         epoch,
@@ -391,7 +391,7 @@ pub trait ObjectCacheRead: Send + Sync {
         )
     }
 
-    fn have_deleted_fastpath_object_at_version_or_after(
+    fn fastpath_stream_ended_at_version_or_after(
         &self,
         object_id: ObjectID,
         version: SequenceNumber,
@@ -400,12 +400,12 @@ pub trait ObjectCacheRead: Send + Sync {
         let full_id = FullObjectID::Fastpath(object_id); // function explicilty assumes "fastpath"
         matches!(
             self.get_latest_marker(full_id, epoch_id),
-            Some((marker_version, MarkerValue::OwnedDeleted)) if marker_version >= version
+            Some((marker_version, MarkerValue::FastpathStreamEnded)) if marker_version >= version
         )
     }
 
     /// Return the watermark for the highest checkpoint for which we've pruned objects.
-    fn get_highest_pruned_checkpoint(&self) -> CheckpointSequenceNumber;
+    fn get_highest_pruned_checkpoint(&self) -> Option<CheckpointSequenceNumber>;
 }
 
 pub trait TransactionCacheRead: Send + Sync {

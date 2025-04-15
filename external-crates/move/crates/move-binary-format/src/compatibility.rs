@@ -2,13 +2,15 @@
 // Copyright (c) The Move Contributors
 // SPDX-License-Identifier: Apache-2.0
 
+use std::collections::BTreeMap;
+
 use crate::inclusion_mode::{InclusionCheckExecutionMode, InclusionCheckMode};
 use crate::{
     compatibility_mode::{CompatibilityMode, ExecutionCompatibilityMode},
     errors::{PartialVMError, PartialVMResult},
     file_format::{Ability, AbilitySet, DatatypeTyParameter, Visibility},
     file_format_common::VERSION_5,
-    normalized::Module,
+    normalized,
 };
 use move_core_types::vm_status::StatusCode;
 // ***************************************************************************
@@ -42,6 +44,11 @@ pub struct Compatibility {
     /// The set of abilities that cannot be added to an already exisiting type.
     pub disallowed_new_abilities: AbilitySet,
 }
+
+pub type Module = normalized::Module<normalized::RcIdentifier>;
+pub type Struct = normalized::Struct<normalized::RcIdentifier>;
+pub type Enum = normalized::Enum<normalized::RcIdentifier>;
+pub type Function = normalized::Function<normalized::RcIdentifier>;
 
 impl Default for Compatibility {
     fn default() -> Self {
@@ -110,12 +117,12 @@ impl Compatibility {
         let mut context = M::default();
 
         // module's name and address are unchanged
-        if old_module.address != new_module.address || old_module.name != new_module.name {
+        if old_module.address() != new_module.address() || old_module.name() != new_module.name() {
             context.module_id_mismatch(
-                &old_module.address,
-                &old_module.name,
-                &new_module.address,
-                &new_module.name,
+                old_module.address(),
+                old_module.name(),
+                new_module.address(),
+                new_module.name(),
             );
         }
 
@@ -377,12 +384,12 @@ impl InclusionCheck {
         let mut context = M::default();
 
         // module's name and address are unchanged
-        if old_module.address != new_module.address || old_module.name != new_module.name {
+        if old_module.address() != new_module.address() || old_module.name() != new_module.name() {
             context.module_id_mismatch(
-                &old_module.address,
-                &old_module.name,
-                &new_module.address,
-                &new_module.name,
+                old_module.address(),
+                old_module.name(),
+                new_module.address(),
+                new_module.name(),
             );
         }
 
@@ -425,7 +432,7 @@ impl InclusionCheck {
                 Mark::New(name, new) => context.function_new(name, new),
                 Mark::Missing(name, old) => context.function_missing(name, old),
                 Mark::Existing(name, old, new) => {
-                    if old != new {
+                    if !old.equals(new) {
                         context.function_change(name, old, new);
                     }
                 }
@@ -462,9 +469,10 @@ where
     I: Iterator<Item = (&'a K, &'a V)> + 'a,
     J: Iterator<Item = (&'a K, &'a V)> + 'a,
 {
-    // Peeks are needed to prevent advancing the iterators when we don't need to
-    let mut old = old.peekable();
-    let mut new = new.peekable();
+    let old = old.collect::<BTreeMap<_, _>>();
+    let new = new.collect::<BTreeMap<_, _>>();
+    let mut old = old.into_iter().peekable();
+    let mut new = new.into_iter().peekable();
     std::iter::from_fn(move || match (old.peek(), new.peek()) {
         (Some((old_key, _old_value)), Some((new_key, _new_value))) => match old_key.cmp(new_key) {
             std::cmp::Ordering::Equal => {

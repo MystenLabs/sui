@@ -8,4 +8,4 @@ authors = ["Move Team"]
 mainnet = "35834a8a"
 
 [dependencies]
-mvr = { r.mvr = "@pkg/qwer" }
+qwer = { r.mvr = "@pkg/qwer" }

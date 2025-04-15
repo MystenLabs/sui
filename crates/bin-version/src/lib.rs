@@ -23,8 +23,13 @@ macro_rules! bin_version {
     () => {
         $crate::git_revision!();
 
-        const VERSION: &str =
-            $crate::_hidden::concat!(env!("CARGO_PKG_VERSION"), "-", GIT_REVISION);
+        const VERSION: &str = {
+            if GIT_REVISION.is_empty() {
+                env!("CARGO_PKG_VERSION")
+            } else {
+                $crate::_hidden::concat!(env!("CARGO_PKG_VERSION"), "-", GIT_REVISION)
+            }
+        };
     };
 }
 

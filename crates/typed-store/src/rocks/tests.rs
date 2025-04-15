@@ -2,7 +2,6 @@
 // SPDX-License-Identifier: Apache-2.0
 use super::*;
 use crate::reopen;
-use crate::rocks::safe_iter::{SafeIter, SafeRevIter};
 use rstest::rstest;
 
 fn temp_dir() -> std::path::PathBuf {
@@ -11,35 +10,19 @@ fn temp_dir() -> std::path::PathBuf {
         .into_path()
 }
 
-enum TestIteratorWrapper<'a, K, V> {
-    SafeIter(SafeIter<'a, K, V>),
-}
-
-// Implement Iterator for TestIteratorWrapper that returns the same type result for different types of Iterator.
-// For non-safe Iterator, it returns the key value pair. For SafeIterator, it consumes the result (assuming no error),
-// and return they key value pairs.
-impl<K: DeserializeOwned, V: DeserializeOwned> Iterator for TestIteratorWrapper<'_, K, V> {
-    type Item = (K, V);
-    fn next(&mut self) -> Option<Self::Item> {
-        match self {
-            TestIteratorWrapper::SafeIter(iter) => iter.next().map(|result| result.unwrap()),
-        }
-    }
-}
-
-fn get_iter<K, V>(db: &DBMap<K, V>) -> TestIteratorWrapper<'_, K, V>
+fn get_iter<K, V>(db: &DBMap<K, V>) -> impl Iterator<Item = (K, V)> + use<'_, K, V>
 where
     K: Serialize + DeserializeOwned,
     V: Serialize + DeserializeOwned,
 {
-    TestIteratorWrapper::SafeIter(db.safe_iter())
+    db.safe_iter().map(|item| item.unwrap())
 }
 
 fn get_reverse_iter<K, V>(
     db: &DBMap<K, V>,
     lower_bound: Option<K>,
     upper_bound: Option<K>,
-) -> SafeRevIter<'_, K, V>
+) -> impl Iterator<Item = Result<(K, V), TypedStoreError>> + use<'_, K, V>
 where
     K: Serialize + DeserializeOwned,
     V: Serialize + DeserializeOwned,
@@ -52,23 +35,24 @@ fn get_iter_with_bounds<K, V>(
     db: &DBMap<K, V>,
     lower_bound: Option<K>,
     upper_bound: Option<K>,
-) -> TestIteratorWrapper<'_, K, V>
+) -> impl Iterator<Item = (K, V)> + use<'_, K, V>
 where
     K: Serialize + DeserializeOwned,
     V: Serialize + DeserializeOwned,
 {
-    TestIteratorWrapper::SafeIter(db.safe_iter_with_bounds(lower_bound, upper_bound))
+    db.safe_iter_with_bounds(lower_bound, upper_bound)
+        .map(|item| item.unwrap())
 }
 
-fn get_range_iter<K, V>(
-    db: &DBMap<K, V>,
-    range: impl RangeBounds<K>,
-) -> TestIteratorWrapper<'_, K, V>
+fn get_range_iter<'a, K, V>(
+    db: &'a DBMap<K, V>,
+    range: impl RangeBounds<K> + 'a,
+) -> impl Iterator<Item = (K, V)> + 'a
 where
     K: Serialize + DeserializeOwned,
     V: Serialize + DeserializeOwned,
 {
-    TestIteratorWrapper::SafeIter(db.safe_range_iter(range))
+    db.safe_range_iter(range).map(|item| item.unwrap())
 }
 
 #[tokio::test]
@@ -96,11 +80,14 @@ async fn test_reopen_macro() {
     const FIRST_CF: &str = "First_CF";
     const SECOND_CF: &str = "Second_CF";
 
-    let rocks = open_cf(
+    let rocks = open_cf_opts(
         temp_dir(),
         None,
         MetricConf::default(),
-        &[FIRST_CF, SECOND_CF],
+        &[
+            (FIRST_CF, rocksdb::Options::default()),
+            (SECOND_CF, rocksdb::Options::default()),
+        ],
     )
     .unwrap();
 
@@ -128,6 +115,20 @@ async fn test_contains_key() {
     assert!(!db
         .contains_key(&000000000)
         .expect("Failed to call contains key"));
+}
+
+#[tokio::test]
+async fn test_safe_drop_db() {
+    let root_path = temp_dir();
+
+    let tmp_path = root_path.join("test-0");
+    {
+        let db: DBMap<i32, String> = open_map(tmp_path.clone(), Some("table-0"));
+        db.insert(&777, &"123".to_string()).unwrap();
+    }
+    safe_drop_db(tmp_path, Duration::from_secs(30))
+        .await
+        .unwrap();
 }
 
 #[tokio::test]
@@ -434,34 +435,6 @@ async fn test_delete_range() {
 }
 
 #[tokio::test]
-async fn test_clear() {
-    let db: DBMap<i32, String> = open_map(temp_dir(), Some("table"));
-    // Test clear of empty map
-    let _ = db.unsafe_clear();
-
-    let keys_vals = (0..101).map(|i| (i, i.to_string()));
-    let mut insert_batch = db.batch();
-    insert_batch
-        .insert_batch(&db, keys_vals)
-        .expect("Failed to batch insert");
-
-    insert_batch.write().expect("Failed to execute batch");
-
-    // Check we have multiple entries
-    assert!(db.safe_iter().count() > 1);
-    let _ = db.unsafe_clear();
-    assert_eq!(db.safe_iter().count(), 0);
-    // Clear again to ensure safety when clearing empty map
-    let _ = db.unsafe_clear();
-    assert_eq!(db.safe_iter().count(), 0);
-    // Clear with one item
-    let _ = db.insert(&1, &"e".to_string());
-    assert_eq!(db.safe_iter().count(), 1);
-    let _ = db.unsafe_clear();
-    assert_eq!(db.safe_iter().count(), 0);
-}
-
-#[tokio::test]
 async fn test_iter_with_bounds() {
     let db = open_map(temp_dir(), None);
 
@@ -568,10 +541,7 @@ async fn test_range_iter() {
 #[tokio::test]
 async fn test_is_empty() {
     let db: DBMap<i32, String> = open_map(temp_dir(), Some("table"));
-
     // Test empty map is truly empty
-    assert!(db.is_empty());
-    let _ = db.unsafe_clear();
     assert!(db.is_empty());
 
     let keys_vals = (0..101).map(|i| (i, i.to_string()));
@@ -585,11 +555,6 @@ async fn test_is_empty() {
     // Check we have multiple entries and not empty
     assert!(db.safe_iter().count() > 1);
     assert!(!db.is_empty());
-
-    // Clear again to ensure empty works after clearing
-    let _ = db.unsafe_clear();
-    assert_eq!(db.safe_iter().count(), 0);
-    assert!(db.is_empty());
 }
 
 #[tokio::test]
@@ -734,5 +699,15 @@ fn open_map<P: AsRef<Path>, K, V>(path: P, opt_cf: Option<&str>) -> DBMap<K, V> 
 }
 
 fn open_rocksdb<P: AsRef<Path>>(path: P, opt_cfs: &[&str]) -> Arc<Database> {
-    open_cf(path, None, MetricConf::default(), opt_cfs).expect("failed to open rocksdb")
+    let opts = rocksdb::Options::default();
+    open_cf_opts(
+        path,
+        None,
+        MetricConf::default(),
+        &opt_cfs
+            .iter()
+            .map(|cf| (*cf, opts.clone()))
+            .collect::<Vec<_>>(),
+    )
+    .expect("failed to open rocksdb")
 }

@@ -112,8 +112,8 @@ pub struct Indexer {
     handles: Vec<JoinHandle<()>>,
 }
 
+// TODO (wlmyng): non-pg store impl<S: TransactionalStore> Indexer<S> {
 impl Indexer {
-    // impl<S: TransactionalStore> Indexer<S> {
     /// Create a new instance of the indexer framework. `database_url`, `db_args`, `indexer_args,`,
     /// `client_args`, and `ingestion_config` contain configurations for the following,
     /// respectively:
@@ -245,11 +245,15 @@ impl Indexer {
     /// Concurrent pipelines commit checkpoint data out-of-order to maximise throughput, and they
     /// keep the watermark table up-to-date with the highest point they can guarantee all data
     /// exists for, for their pipeline.
-    pub async fn concurrent_pipeline<H: concurrent::Handler + Send + Sync + 'static>(
+    pub async fn concurrent_pipeline<H>(
         &mut self,
         handler: H,
         config: ConcurrentConfig,
-    ) -> Result<()> {
+    ) -> Result<()>
+    where
+        // TODO (wlmyng): eventually this will be Handler<Store = S>
+        H: concurrent::Handler<Store = Db> + Send + Sync + 'static,
+    {
         let start_from_pruner_watermark = H::PRUNING_REQUIRES_PROCESSED_VALUES;
         let Some(watermark) = self.add_pipeline::<H>(start_from_pruner_watermark).await? else {
             return Ok(());
@@ -262,7 +266,7 @@ impl Indexer {
             self.check_first_checkpoint_consistency::<H>(&watermark)?;
         }
 
-        self.handles.push(concurrent::pipeline(
+        self.handles.push(concurrent::pipeline::<H>(
             handler,
             watermark,
             config,
@@ -472,6 +476,7 @@ mod tests {
     use async_trait::async_trait;
 
     use crate::types::full_checkpoint_content::CheckpointData;
+    use sui_pg_db::Connection as PgConnection;
 
     use super::*;
 
@@ -499,10 +504,12 @@ mod tests {
 
             #[async_trait]
             impl concurrent::Handler for $name {
+                type Store = Db;
+
                 const PRUNING_REQUIRES_PROCESSED_VALUES: bool = $pruning_requires_processed_values;
-                async fn commit(
+                async fn commit<'a>(
                     _values: &[Self::Value],
-                    _conn: &mut db::Connection<'_>,
+                    _conn: &mut PgConnection<'a>,
                 ) -> anyhow::Result<usize> {
                     todo!()
                 }
