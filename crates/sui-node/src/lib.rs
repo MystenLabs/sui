@@ -1634,7 +1634,11 @@ impl SuiNode {
             .map(|(tx, _)| *tx.digest())
             .collect::<Vec<_>>();
 
-        info!("reexecuting pending consensus certificates: {:?}", digests);
+        info!(
+            "reexecuting {} pending consensus certificates: {:?}",
+            digests.len(),
+            digests
+        );
 
         state.enqueue_with_expected_effects_digest(pending_consensus_certificates, epoch_store);
 
@@ -1652,7 +1656,25 @@ impl SuiNode {
         .await
         .is_err()
         {
-            debug_fatal!("Timed out waiting for effects digests to be executed");
+            // Log all the digests that were not executed to help debugging.
+            let executed_effects_digests = state
+                .get_transaction_cache_reader()
+                .multi_get_executed_effects_digests(&digests);
+            let pending_digests = digests
+                .iter()
+                .zip(executed_effects_digests.iter())
+                .filter_map(|(digest, executed_effects_digest)| {
+                    if executed_effects_digest.is_none() {
+                        Some(digest)
+                    } else {
+                        None
+                    }
+                })
+                .collect::<Vec<_>>();
+            debug_fatal!(
+                "Timed out waiting for effects digests to be executed: {:?}",
+                pending_digests
+            );
         }
     }
 
