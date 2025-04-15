@@ -4,8 +4,6 @@
 #[allow(unused_const)]
 module sui_system::validator;
 
-/* ERROR: */;
-
 use std::bcs;
 use std::string::String;
 use sui::bag::{Self, Bag};
