@@ -207,6 +207,7 @@ impl<'env> BoogieTranslator<'env> {
             let is_uid = self
                 .env
                 .find_datatype_by_tag(&StructTag::from_str("0x2::object::UID").unwrap())
+                .and_then(|uid_qid| mono_info.structs.get(&uid_qid))
                 .is_some();
             if is_uid {
                 // Sui-specific to allow "using" unresolved type params as Sui objects in Boogie
