@@ -30,7 +30,7 @@ pub struct ReplayConfig {
     #[arg(long, short, default_value = "false")]
     pub show_effects: bool,
     /// Verify transaction execution matches what was executed on chain.
-    #[arg(long, short, default_value = "true")]
+    #[arg(long, short, default_value = "false")]
     pub verify: bool,
     // Enable tracing for tests
     #[arg(long = "trace-execution", default_value = None)]
