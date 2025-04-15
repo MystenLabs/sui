@@ -24,6 +24,34 @@ use sui_system::validator_cap::{Self, UnverifiedValidatorOperationCap, Validator
 use sui_system::validator_wrapper::{Self, ValidatorWrapper};
 use sui_system::voting_power;
 
+// Errors
+const ENonValidatorInReportRecords: u64 = 0;
+#[allow(unused_const)]
+const EInvalidStakeAdjustmentAmount: u64 = 1;
+const EDuplicateValidator: u64 = 2;
+const ENoPoolFound: u64 = 3;
+const ENotAValidator: u64 = 4;
+const EMinJoiningStakeNotReached: u64 = 5;
+const EAlreadyValidatorCandidate: u64 = 6;
+const EValidatorNotCandidate: u64 = 7;
+const ENotValidatorCandidate: u64 = 8;
+const ENotActiveOrPendingValidator: u64 = 9;
+const EStakingBelowThreshold: u64 = 10;
+const EValidatorAlreadyRemoved: u64 = 11;
+const ENotAPendingValidator: u64 = 12;
+const EValidatorSetEmpty: u64 = 13;
+const EInvalidCap: u64 = 101;
+
+// same as in sui_system
+const ACTIVE_VALIDATOR_ONLY: u8 = 1;
+const ACTIVE_OR_PENDING_VALIDATOR: u8 = 2;
+const ANY_VALIDATOR: u8 = 3;
+
+const BASIS_POINT_DENOMINATOR: u64 = 10000;
+const MIN_STAKING_THRESHOLD: u64 = 1_000_000_000; // 1 SUI
+
+const PHASE_LENGTH: u64 = 14; // phases are 14 days = 14 epochs
+
 public struct ValidatorSet has store {
     /// Total amount of stake from all active validators at the beginning of the epoch.
     /// Written only once per epoch, in `advance_epoch` function.
@@ -106,35 +134,6 @@ public struct ValidatorLeaveEvent has copy, drop {
 /// of new validators based on a minimum voting power rather than a minimum stake.
 public struct VotingPowerAdmissionStartEpochKey() has copy, drop, store;
 
-// same as in sui_system
-const ACTIVE_VALIDATOR_ONLY: u8 = 1;
-const ACTIVE_OR_PENDING_VALIDATOR: u8 = 2;
-const ANY_VALIDATOR: u8 = 3;
-
-const BASIS_POINT_DENOMINATOR: u128 = 10000;
-const MIN_STAKING_THRESHOLD: u64 = 1_000_000_000; // 1 SUI
-
-const PHASE_LENGTH: u64 = 14; // phases are 14 days = 14 epochs
-
-// Errors
-const ENonValidatorInReportRecords: u64 = 0;
-#[allow(unused_const)]
-const EInvalidStakeAdjustmentAmount: u64 = 1;
-const EDuplicateValidator: u64 = 2;
-const ENoPoolFound: u64 = 3;
-const ENotAValidator: u64 = 4;
-const EMinJoiningStakeNotReached: u64 = 5;
-const EAlreadyValidatorCandidate: u64 = 6;
-const EValidatorNotCandidate: u64 = 7;
-const ENotValidatorCandidate: u64 = 8;
-const ENotActiveOrPendingValidator: u64 = 9;
-const EStakingBelowThreshold: u64 = 10;
-const EValidatorAlreadyRemoved: u64 = 11;
-const ENotAPendingValidator: u64 = 12;
-const EValidatorSetEmpty: u64 = 13;
-
-const EInvalidCap: u64 = 101;
-
 // ==== initialization at genesis ====
 
 public(package) fun new(
@@ -143,13 +142,9 @@ public(package) fun new(
 ): ValidatorSet {
     let total_stake = calculate_total_stakes(&init_active_validators);
     let mut staking_pool_mappings = table::new(ctx);
-    let num_validators = init_active_validators.length();
-    let mut i = 0;
-    while (i < num_validators) {
-        let validator = &init_active_validators[i];
-        staking_pool_mappings.add(staking_pool_id(validator), sui_address(validator));
-        i = i + 1;
-    };
+    init_active_validators.do_ref!(|v| {
+        staking_pool_mappings.add(v.staking_pool_id(), v.sui_address());
+    });
     let mut validators = ValidatorSet {
         total_stake,
         active_validators: init_active_validators,
@@ -175,23 +170,18 @@ public(package) fun request_add_validator_candidate(
 ) {
     // The next assertions are not critical for the protocol, but they are here to catch problematic configs earlier.
     assert!(
-        !is_duplicate_with_active_validator(self, &validator)
-            && !is_duplicate_with_pending_validator(self, &validator),
+        !self.is_duplicate_with_active_validator(&validator)
+            && !self.is_duplicate_with_pending_validator(&validator),
         EDuplicateValidator,
     );
-    let validator_address = sui_address(&validator);
+    let validator_address = validator.sui_address();
     assert!(!self.validator_candidates.contains(validator_address), EAlreadyValidatorCandidate);
 
     assert!(validator.is_preactive(), EValidatorNotCandidate);
     // Add validator to the candidates mapping and the pool id mappings so that users can start
     // staking with this candidate.
-    self.staking_pool_mappings.add(staking_pool_id(&validator), validator_address);
-    self
-        .validator_candidates
-        .add(
-            sui_address(&validator),
-            validator_wrapper::create_v1(validator, ctx),
-        );
+    self.staking_pool_mappings.add(validator.staking_pool_id(), validator_address);
+    self.validator_candidates.add(validator.sui_address(), validator.wrap_v1(ctx));
 }
 
 /// Called by `sui_system` to remove a validator candidate, and move them to `inactive_validators`.
@@ -205,7 +195,7 @@ public(package) fun request_remove_validator_candidate(
     let mut validator = wrapper.destroy();
     assert!(validator.is_preactive(), EValidatorNotCandidate);
 
-    let staking_pool_id = staking_pool_id(&validator);
+    let staking_pool_id = validator.staking_pool_id();
 
     // Remove the validator's staking pool from mappings.
     self.staking_pool_mappings.remove(staking_pool_id);
@@ -214,12 +204,7 @@ public(package) fun request_remove_validator_candidate(
     validator.deactivate(ctx.epoch());
 
     // Add to the inactive tables.
-    self
-        .inactive_validators
-        .add(
-            staking_pool_id,
-            validator_wrapper::create_v1(validator, ctx),
-        );
+    self.inactive_validators.add(staking_pool_id, validator.wrap_v1(ctx));
 }
 
 /// Called by `sui_system` to add a new validator to `pending_active_validators`, which will be
@@ -230,8 +215,8 @@ public(package) fun request_add_validator(self: &mut ValidatorSet, ctx: &TxConte
     let wrapper = self.validator_candidates.remove(validator_address);
     let validator = wrapper.destroy();
     assert!(
-        !is_duplicate_with_active_validator(self, &validator)
-            && !is_duplicate_with_pending_validator(self, &validator),
+        !self.is_duplicate_with_active_validator(&validator)
+            && !self.is_duplicate_with_pending_validator(&validator),
         EDuplicateValidator,
     );
     assert!(validator.is_preactive(), EValidatorNotCandidate);
@@ -287,9 +272,10 @@ public(package) fun assert_no_pending_or_active_duplicates(
 /// Only an active validator can request to be removed.
 public(package) fun request_remove_validator(self: &mut ValidatorSet, ctx: &TxContext) {
     let validator_address = ctx.sender();
-    let mut validator_index_opt = find_validator(&self.active_validators, validator_address);
-    assert!(validator_index_opt.is_some(), ENotAValidator);
-    let validator_index = validator_index_opt.extract();
+    let validator_index = find_validator(
+        &self.active_validators,
+        validator_address,
+    ).destroy_or!(abort ENotAValidator);
     assert!(!self.pending_removals.contains(&validator_index), EValidatorAlreadyRemoved);
     self.pending_removals.push_back(validator_index);
 }
@@ -308,8 +294,9 @@ public(package) fun request_add_stake(
 ): StakedSui {
     let sui_amount = stake.value();
     assert!(sui_amount >= MIN_STAKING_THRESHOLD, EStakingBelowThreshold);
-    let validator = get_candidate_or_active_validator_mut(self, validator_address);
-    validator.request_add_stake(stake, ctx.sender(), ctx)
+    self
+        .get_candidate_or_active_validator_mut(validator_address)
+        .request_add_stake(stake, ctx.sender(), ctx)
 }
 
 /// Called by `sui_system`, to withdraw some share of a stake from the validator. The share to withdraw
@@ -323,11 +310,11 @@ public(package) fun request_withdraw_stake(
     staked_sui: StakedSui,
     ctx: &TxContext,
 ): Balance<SUI> {
-    let staking_pool_id = pool_id(&staked_sui);
+    let staking_pool_id = staked_sui.pool_id();
     let validator = if (self.staking_pool_mappings.contains(staking_pool_id)) {
         // This is an active validator.
-        let validator_address = self.staking_pool_mappings[pool_id(&staked_sui)];
-        get_candidate_or_active_validator_mut(self, validator_address)
+        let validator_address = self.staking_pool_mappings[staked_sui.pool_id()];
+        self.get_candidate_or_active_validator_mut(validator_address)
     } else {
         // This is an inactive pool.
         assert!(self.inactive_validators.contains(staking_pool_id), ENoPoolFound);
@@ -342,16 +329,15 @@ public(package) fun convert_to_fungible_staked_sui(
     staked_sui: StakedSui,
     ctx: &mut TxContext,
 ): FungibleStakedSui {
-    let staking_pool_id = pool_id(&staked_sui);
+    let staking_pool_id = staked_sui.pool_id();
     let validator = if (self.staking_pool_mappings.contains(staking_pool_id)) {
         // This is an active validator.
         let validator_address = self.staking_pool_mappings[staking_pool_id];
-        get_candidate_or_active_validator_mut(self, validator_address)
+        self.get_candidate_or_active_validator_mut(validator_address)
     } else {
         // This is an inactive pool.
         assert!(self.inactive_validators.contains(staking_pool_id), ENoPoolFound);
-        let wrapper = &mut self.inactive_validators[staking_pool_id];
-        wrapper.load_validator_maybe_upgrade()
+        self.inactive_validators[staking_pool_id].load_validator_maybe_upgrade()
     };
 
     validator.convert_to_fungible_staked_sui(staked_sui, ctx)
@@ -362,17 +348,16 @@ public(package) fun redeem_fungible_staked_sui(
     fungible_staked_sui: FungibleStakedSui,
     ctx: &TxContext,
 ): Balance<SUI> {
-    let staking_pool_id = fungible_staked_sui_pool_id(&fungible_staked_sui);
+    let staking_pool_id = fungible_staked_sui.pool_id();
 
     let validator = if (self.staking_pool_mappings.contains(staking_pool_id)) {
         // This is an active validator.
         let validator_address = self.staking_pool_mappings[staking_pool_id];
-        get_candidate_or_active_validator_mut(self, validator_address)
+        self.get_candidate_or_active_validator_mut(validator_address)
     } else {
         // This is an inactive pool.
         assert!(self.inactive_validators.contains(staking_pool_id), ENoPoolFound);
-        let wrapper = &mut self.inactive_validators[staking_pool_id];
-        wrapper.load_validator_maybe_upgrade()
+        self.inactive_validators[staking_pool_id].load_validator_maybe_upgrade()
     };
 
     validator.redeem_fungible_staked_sui(fungible_staked_sui, ctx)
@@ -428,7 +413,7 @@ public(package) fun advance_epoch(
 
     // Use the tallying rule report records for the epoch to compute validators that will be
     // punished.
-    let slashed_validators = compute_slashed_validators(self, *validator_report_records);
+    let slashed_validators = self.compute_slashed_validators(*validator_report_records);
 
     let total_slashed_validator_voting_power = sum_voting_power_by_addresses(
         &self.active_validators,
@@ -493,11 +478,10 @@ public(package) fun advance_epoch(
         &slashed_validators,
     );
 
-    process_pending_removals(self, validator_report_records, ctx);
+    self.process_pending_removals(validator_report_records, ctx);
 
     // kick low stake validators out.
-    let new_total_stake = update_validator_positions_and_calculate_total_stake(
-        self,
+    let new_total_stake = self.update_validator_positions_and_calculate_total_stake(
         low_stake_grace_period,
         validator_report_records,
         ctx,
@@ -507,7 +491,7 @@ public(package) fun advance_epoch(
 
     // At this point, self.active_validators are updated for next epoch.
     // Now we process the staged validator metadata.
-    effectuate_staged_metadata(self);
+    self.effectuate_staged_metadata();
 }
 
 /// This function does the following:
@@ -579,7 +563,7 @@ fun update_validator_positions_and_calculate_total_stake(
                 let removed_stake = self.process_validator_departure(
                     validator,
                     validator_report_records,
-                    false, /* the validator is kicked out involuntarily */
+                    false, // the validator is kicked out involuntarily
                     ctx,
                 );
                 total_removed_stake = total_removed_stake + removed_stake;
@@ -592,7 +576,7 @@ fun update_validator_positions_and_calculate_total_stake(
             let removed_stake = self.process_validator_departure(
                 validator,
                 validator_report_records,
-                false, /* the validator is kicked out involuntarily */
+                false, // the validator is kicked out involuntarily
                 ctx,
             );
             total_removed_stake = total_removed_stake + removed_stake;
@@ -612,7 +596,7 @@ fun update_validator_positions_and_calculate_total_stake(
             event::emit(ValidatorJoinEvent {
                 epoch: ctx.epoch(),
                 validator_address: validator.sui_address(),
-                staking_pool_id: staking_pool_id(&validator),
+                staking_pool_id: validator.staking_pool_id(),
             });
             self.active_validators.push_back(validator);
         } else {
@@ -623,7 +607,7 @@ fun update_validator_positions_and_calculate_total_stake(
                 .validator_candidates
                 .add(
                     validator.sui_address(),
-                    validator_wrapper::create_v1(validator, ctx),
+                    validator.wrap_v1(ctx),
                 );
             total_removed_stake = total_removed_stake + validator_stake;
         }
@@ -633,15 +617,9 @@ fun update_validator_positions_and_calculate_total_stake(
     initial_total_stake - total_removed_stake
 }
 
-/// Effectutate pending next epoch metadata if they are staged.
+/// Effectuate pending next epoch metadata if they are staged.
 fun effectuate_staged_metadata(self: &mut ValidatorSet) {
-    let num_validators = self.active_validators.length();
-    let mut i = 0;
-    while (i < num_validators) {
-        let validator = &mut self.active_validators[i];
-        validator.effectuate_staged_metadata();
-        i = i + 1;
-    }
+    self.active_validators.do_mut!(|v| v.effectuate_staged_metadata());
 }
 
 /// Called by `sui_system` to derive reference gas price for the new epoch.
@@ -649,17 +627,10 @@ fun effectuate_staged_metadata(self: &mut ValidatorSet) {
 /// The returned gas price should be greater than or equal to 2/3 of the validators submitted
 /// gas price, weighted by stake.
 public fun derive_reference_gas_price(self: &ValidatorSet): u64 {
-    let vs = &self.active_validators;
-    let num_validators = vs.length();
-    let mut entries = vector[];
-    let mut i = 0;
-    while (i < num_validators) {
-        let v = &vs[i];
-        entries.push_back(
-            pq::new_entry(v.gas_price(), v.voting_power()),
-        );
-        i = i + 1;
-    };
+    let entries = self
+        .active_validators
+        .map_ref!(|v| pq::new_entry(v.gas_price(), v.voting_power()));
+
     // Build a priority queue that will pop entries with gas price from the highest to the lowest.
     let mut pq = pq::new(entries);
     let mut sum = 0;
@@ -709,9 +680,7 @@ public fun validator_address_by_pool_id(self: &mut ValidatorSet, pool_id: &ID): 
         self.staking_pool_mappings[*pool_id]
     } else {
         // otherwise it's inactive
-        let wrapper = &mut self.inactive_validators[*pool_id];
-        let validator = wrapper.load_validator_maybe_upgrade();
-        validator.sui_address()
+        self.inactive_validators[*pool_id].load_validator_maybe_upgrade().sui_address()
     }
 }
 
@@ -719,14 +688,13 @@ public(package) fun pool_exchange_rates(
     self: &mut ValidatorSet,
     pool_id: &ID,
 ): &Table<u64, PoolTokenExchangeRate> {
-    let validator = // If the pool id is recorded in the mapping, then it must be either candidate or active.
-    if (self.staking_pool_mappings.contains(*pool_id)) {
+    // If the pool id is recorded in the mapping, then it must be either candidate or active.
+    let validator = if (self.staking_pool_mappings.contains(*pool_id)) {
         let validator_address = self.staking_pool_mappings[*pool_id];
-        get_active_or_pending_or_candidate_validator_ref(self, validator_address, ANY_VALIDATOR)
+        self.get_active_or_pending_or_candidate_validator_ref(validator_address, ANY_VALIDATOR)
     } else {
         // otherwise it's inactive
-        let wrapper = &mut self.inactive_validators[*pool_id];
-        wrapper.load_validator_maybe_upgrade()
+        self.inactive_validators[*pool_id].load_validator_maybe_upgrade()
     };
 
     validator.get_staking_pool_ref().exchange_rates()
@@ -762,17 +730,7 @@ public(package) fun is_duplicate_validator(
 }
 
 fun count_duplicates_vec(validators: &vector<Validator>, validator: &Validator): u64 {
-    let len = validators.length();
-    let mut i = 0;
-    let mut result = 0;
-    while (i < len) {
-        let v = &validators[i];
-        if (v.is_duplicate(validator)) {
-            result = result + 1;
-        };
-        i = i + 1;
-    };
-    result
+    validators.count!(|v| v.is_duplicate(validator))
 }
 
 /// Checks whether `new_validator` is duplicate with any currently pending validators.
@@ -781,16 +739,12 @@ fun is_duplicate_with_pending_validator(self: &ValidatorSet, new_validator: &Val
 }
 
 fun count_duplicates_tablevec(validators: &TableVec<Validator>, validator: &Validator): u64 {
-    let len = validators.length();
-    let mut i = 0;
     let mut result = 0;
-    while (i < len) {
-        let v = &validators[i];
-        if (v.is_duplicate(validator)) {
+    validators.length().do!(|i| {
+        if (validators[i].is_duplicate(validator)) {
             result = result + 1;
         };
-        i = i + 1;
-    };
+    });
     result
 }
 
@@ -800,26 +754,17 @@ fun get_candidate_or_active_validator_mut(
     validator_address: address,
 ): &mut Validator {
     if (self.validator_candidates.contains(validator_address)) {
-        let wrapper = &mut self.validator_candidates[validator_address];
-        return wrapper.load_validator_maybe_upgrade()
-    };
-    get_validator_mut(&mut self.active_validators, validator_address)
+        self.validator_candidates[validator_address].load_validator_maybe_upgrade()
+    } else {
+        get_validator_mut(&mut self.active_validators, validator_address)
+    }
 }
 
 /// Find validator by `validator_address`, in `validators`.
 /// Returns (true, index) if the validator is found, and the index is its index in the list.
 /// If not found, returns (false, 0).
 fun find_validator(validators: &vector<Validator>, validator_address: address): Option<u64> {
-    let length = validators.length();
-    let mut i = 0;
-    while (i < length) {
-        let v = &validators[i];
-        if (v.sui_address() == validator_address) {
-            return option::some(i)
-        };
-        i = i + 1;
-    };
-    option::none()
+    validators.find_index!(|v| v.sui_address() == validator_address)
 }
 
 /// Find validator by `validator_address`, in `validators`.
@@ -847,16 +792,11 @@ fun get_validator_indices(
     validators: &vector<Validator>,
     validator_addresses: &vector<address>,
 ): vector<u64> {
-    let length = validator_addresses.length();
-    let mut i = 0;
     let mut res = vector[];
-    while (i < length) {
-        let addr = validator_addresses[i];
-        let index_opt = find_validator(validators, addr);
-        assert!(index_opt.is_some(), ENotAValidator);
-        res.push_back(index_opt.destroy_some());
-        i = i + 1;
-    };
+    validator_addresses.do_ref!(|addr| {
+        let idx = find_validator(validators, *addr).destroy_or!(abort ENotAValidator);
+        res.push_back(idx);
+    });
     res
 }
 
@@ -864,10 +804,8 @@ public(package) fun get_validator_mut(
     validators: &mut vector<Validator>,
     validator_address: address,
 ): &mut Validator {
-    let mut validator_index_opt = find_validator(validators, validator_address);
-    assert!(validator_index_opt.is_some(), ENotAValidator);
-    let validator_index = validator_index_opt.extract();
-    &mut validators[validator_index]
+    let idx = find_validator(validators, validator_address).destroy_or!(abort ENotAValidator);
+    &mut validators[idx]
 }
 
 #[test_only]
@@ -875,10 +813,8 @@ public(package) fun get_validator(
     validators: &vector<Validator>,
     validator_address: address,
 ): &Validator {
-    let mut validator_index_opt = find_validator(validators, validator_address);
-    assert!(validator_index_opt.is_some(), ENotAValidator);
-    let validator_index = validator_index_opt.extract();
-    &validators[validator_index]
+    let idx = find_validator(validators, validator_address).destroy_or!(abort ENotAValidator);
+    &validators[idx]
 }
 
 /// Get mutable reference to an active or (if active does not exist) pending or (if pending and
@@ -907,8 +843,7 @@ fun get_active_or_pending_or_candidate_validator_mut(
         return validator
     };
     assert!(include_candidate, ENotActiveOrPendingValidator);
-    let wrapper = &mut self.validator_candidates[validator_address];
-    wrapper.load_validator_maybe_upgrade()
+    self.validator_candidates[validator_address].load_validator_maybe_upgrade()
 }
 
 public(package) fun get_validator_mut_with_verified_cap(
@@ -916,8 +851,7 @@ public(package) fun get_validator_mut_with_verified_cap(
     verified_cap: &ValidatorOperationCap,
     include_candidate: bool,
 ): &mut Validator {
-    get_active_or_pending_or_candidate_validator_mut(
-        self,
+    self.get_active_or_pending_or_candidate_validator_mut(
         *verified_cap.verified_operation_cap_address(),
         include_candidate,
     )
@@ -928,7 +862,7 @@ public(package) fun get_validator_mut_with_ctx(
     ctx: &TxContext,
 ): &mut Validator {
     let validator_address = ctx.sender();
-    get_active_or_pending_or_candidate_validator_mut(self, validator_address, false)
+    self.get_active_or_pending_or_candidate_validator_mut(validator_address, false)
 }
 
 public(package) fun get_validator_mut_with_ctx_including_candidates(
@@ -936,14 +870,12 @@ public(package) fun get_validator_mut_with_ctx_including_candidates(
     ctx: &TxContext,
 ): &mut Validator {
     let validator_address = ctx.sender();
-    get_active_or_pending_or_candidate_validator_mut(self, validator_address, true)
+    self.get_active_or_pending_or_candidate_validator_mut(validator_address, true)
 }
 
 fun get_validator_ref(validators: &vector<Validator>, validator_address: address): &Validator {
-    let mut validator_index_opt = find_validator(validators, validator_address);
-    assert!(validator_index_opt.is_some(), ENotAValidator);
-    let validator_index = validator_index_opt.extract();
-    &validators[validator_index]
+    let idx = find_validator(validators, validator_address).destroy_or!(abort ENotAValidator);
+    &validators[idx]
 }
 
 public(package) fun get_active_or_pending_or_candidate_validator_ref(
@@ -967,21 +899,18 @@ public(package) fun get_active_or_pending_or_candidate_validator_ref(
     self.validator_candidates[validator_address].load_validator_maybe_upgrade()
 }
 
-public fun get_active_validator_ref(self: &ValidatorSet, validator_address: address): &Validator {
-    let mut validator_index_opt = find_validator(&self.active_validators, validator_address);
-    assert!(validator_index_opt.is_some(), ENotAValidator);
-    let validator_index = validator_index_opt.extract();
-    &self.active_validators[validator_index]
+public fun get_active_validator_ref(self: &ValidatorSet, addr: address): &Validator {
+    let idx = find_validator(&self.active_validators, addr).destroy_or!(abort ENotAValidator);
+    &self.active_validators[idx]
 }
 
-public fun get_pending_validator_ref(self: &ValidatorSet, validator_address: address): &Validator {
-    let mut validator_index_opt = find_validator_from_table_vec(
+public fun get_pending_validator_ref(self: &ValidatorSet, addr: address): &Validator {
+    let idx = find_validator_from_table_vec(
         &self.pending_active_validators,
-        validator_address,
-    );
-    assert!(validator_index_opt.is_some(), ENotAPendingValidator);
-    let validator_index = validator_index_opt.extract();
-    &self.pending_active_validators[validator_index]
+        addr,
+    ).destroy_or!(abort ENotAPendingValidator);
+
+    &self.pending_active_validators[idx]
 }
 
 #[test_only]
@@ -1001,11 +930,13 @@ public(package) fun verify_cap(
     which_validator: u8,
 ): ValidatorOperationCap {
     let cap_address = *cap.unverified_operation_cap_address();
-    let validator = if (which_validator == ACTIVE_VALIDATOR_ONLY)
-        get_active_validator_ref(self, cap_address)
-    else get_active_or_pending_or_candidate_validator_ref(self, cap_address, which_validator);
+    let validator = if (which_validator == ACTIVE_VALIDATOR_ONLY) {
+        self.get_active_validator_ref(cap_address)
+    } else {
+        self.get_active_or_pending_or_candidate_validator_ref(cap_address, which_validator)
+    };
     assert!(validator.operation_cap_id() == &object::id(cap), EInvalidCap);
-    validator_cap::new_from_unverified(cap)
+    cap.into_verified()
 }
 
 /// Process the pending withdraw requests. For each pending request, the validator
@@ -1016,17 +947,16 @@ fun process_pending_removals(
     ctx: &mut TxContext,
 ) {
     sort_removal_list(&mut self.pending_removals);
-    while (!self.pending_removals.is_empty()) {
+    self.pending_removals.length().do!(|_| {
         let index = self.pending_removals.pop_back();
         let validator = self.active_validators.remove(index);
-        process_validator_departure(
-            self,
+        self.process_validator_departure(
             validator,
             validator_report_records,
-            true, /* the validator removes itself voluntarily */
+            true, // the validator removes itself voluntarily
             ctx,
         );
-    }
+    });
 }
 
 /// Remove `validator` from `self` and return the amount of stake that was removed
@@ -1039,7 +969,7 @@ fun process_validator_departure(
 ): u64 {
     let new_epoch = ctx.epoch() + 1;
     let validator_address = validator.sui_address();
-    let validator_pool_id = staking_pool_id(&validator);
+    let validator_pool_id = validator.staking_pool_id();
 
     // Remove the validator from our tables.
     self.staking_pool_mappings.remove(validator_pool_id);
@@ -1052,7 +982,7 @@ fun process_validator_departure(
     event::emit(ValidatorLeaveEvent {
         epoch: new_epoch,
         validator_address,
-        staking_pool_id: staking_pool_id(&validator),
+        staking_pool_id: validator.staking_pool_id(),
         is_voluntary,
     });
 
@@ -1063,7 +993,7 @@ fun process_validator_departure(
         .inactive_validators
         .add(
             validator_pool_id,
-            validator_wrapper::create_v1(validator, ctx),
+            validator.wrap_v1(ctx),
         );
     removed_stake
 }
@@ -1079,9 +1009,7 @@ fun clean_report_records_leaving_validator(
 
     // Remove the reports submitted by this validator
     let reported_validators = validator_report_records.keys();
-    let length = reported_validators.length();
-    let mut i = 0;
-    while (i < length) {
+    reported_validators.length().do!(|i| {
         let reported_validator_addr = &reported_validators[i];
         let reporters = &mut validator_report_records[reported_validator_addr];
         if (reporters.contains(&leaving_validator_addr)) {
@@ -1090,8 +1018,7 @@ fun clean_report_records_leaving_validator(
                 validator_report_records.remove(reported_validator_addr);
             };
         };
-        i = i + 1;
-    }
+    });
 }
 
 /// Sort all the pending removal indexes.
@@ -1115,37 +1042,19 @@ fun sort_removal_list(withdraw_list: &mut vector<u64>) {
 
 /// Process all active validators' pending stake deposits and withdraws.
 fun process_pending_stakes_and_withdraws(validators: &mut vector<Validator>, ctx: &TxContext) {
-    let length = validators.length();
-    let mut i = 0;
-    while (i < length) {
-        let validator = &mut validators[i];
-        validator.process_pending_stakes_and_withdraws(ctx);
-        i = i + 1;
-    }
+    validators.do_mut!(|v| v.process_pending_stakes_and_withdraws(ctx))
 }
 
 /// Calculate the total active validator stake.
 public(package) fun calculate_total_stakes(validators: &vector<Validator>): u64 {
     let mut stake = 0;
-    let length = validators.length();
-    let mut i = 0;
-    while (i < length) {
-        let v = &validators[i];
-        stake = stake + v.total_stake();
-        i = i + 1;
-    };
+    validators.do_ref!(|v| stake = stake + v.total_stake());
     stake
 }
 
 /// Process the pending stake changes for each validator.
 fun adjust_stake_and_gas_price(validators: &mut vector<Validator>) {
-    let length = validators.length();
-    let mut i = 0;
-    while (i < length) {
-        let validator = &mut validators[i];
-        validator.adjust_stake_and_gas_price();
-        i = i + 1;
-    }
+    validators.do_mut!(|v| v.adjust_stake_and_gas_price())
 }
 
 /// Compute both the individual reward adjustments and total reward adjustment for staking rewards
@@ -1166,37 +1075,36 @@ fun compute_reward_adjustments(
     let mut total_storage_fund_reward_adjustment = 0;
     let mut individual_storage_fund_reward_adjustments = vec_map::empty();
 
-    while (!slashed_validator_indices.is_empty()) {
-        let validator_index = slashed_validator_indices.pop_back();
-
+    slashed_validator_indices.destroy!(|validator_index| {
         // Use the slashing rate to compute the amount of staking rewards slashed from this punished validator.
         let unadjusted_staking_reward = unadjusted_staking_reward_amounts[validator_index];
-        let staking_reward_adjustment_u128 =
-            unadjusted_staking_reward as u128 * (reward_slashing_rate as u128)
-            / BASIS_POINT_DENOMINATOR;
+        let staking_reward_adjustment = mul_div!(
+            unadjusted_staking_reward,
+            reward_slashing_rate,
+            BASIS_POINT_DENOMINATOR,
+        );
 
         // Insert into individual mapping and record into the total adjustment sum.
-        individual_staking_reward_adjustments.insert(
-            validator_index,
-            staking_reward_adjustment_u128 as u64,
-        );
+        individual_staking_reward_adjustments.insert(validator_index, staking_reward_adjustment);
         total_staking_reward_adjustment =
-            total_staking_reward_adjustment + (staking_reward_adjustment_u128 as u64);
+            total_staking_reward_adjustment + staking_reward_adjustment;
 
         // Do the same thing for storage fund rewards.
         let unadjusted_storage_fund_reward = unadjusted_storage_fund_reward_amounts[
             validator_index,
         ];
-        let storage_fund_reward_adjustment_u128 =
-            unadjusted_storage_fund_reward as u128 * (reward_slashing_rate as u128)
-            / BASIS_POINT_DENOMINATOR;
+        let storage_fund_reward_adjustment = mul_div!(
+            unadjusted_storage_fund_reward,
+            reward_slashing_rate,
+            BASIS_POINT_DENOMINATOR,
+        );
         individual_storage_fund_reward_adjustments.insert(
             validator_index,
-            storage_fund_reward_adjustment_u128 as u64,
+            storage_fund_reward_adjustment,
         );
         total_storage_fund_reward_adjustment =
-            total_storage_fund_reward_adjustment + (storage_fund_reward_adjustment_u128 as u64);
-    };
+            total_storage_fund_reward_adjustment + storage_fund_reward_adjustment;
+    });
 
     (
         total_staking_reward_adjustment,
@@ -1216,7 +1124,7 @@ fun compute_slashed_validators(
     while (!validator_report_records.is_empty()) {
         let (validator_address, reporters) = validator_report_records.pop();
         assert!(
-            is_active_validator_by_sui_address(self, validator_address),
+            self.is_active_validator_by_sui_address(validator_address),
             ENonValidatorInReportRecords,
         );
         // Sum up the voting power of validators that have reported this validator and check if it has
@@ -1246,20 +1154,16 @@ fun compute_unadjusted_reward_distribution(
     let mut storage_fund_reward_amounts = vector[];
     let length = validators.length();
     let storage_fund_reward_per_validator = total_storage_fund_reward / length;
-    let mut i = 0;
-    while (i < length) {
-        let validator = &validators[i];
+    validators.do_ref!(|validator| {
         // Integer divisions will truncate the results. Because of this, we expect that at the end
         // there will be some reward remaining in `total_staking_reward`.
         // Use u128 to avoid multiplication overflow.
-        let voting_power: u128 = validator.voting_power() as u128;
-        let reward_amount =
-            voting_power * (total_staking_reward as u128) / (total_voting_power as u128);
-        staking_reward_amounts.push_back(reward_amount as u64);
+        let voting_power = validator.voting_power();
+        let reward_amount = mul_div!(voting_power, total_staking_reward, total_voting_power);
+        staking_reward_amounts.push_back(reward_amount);
         // Storage fund's share of the rewards are equally distributed among validators.
         storage_fund_reward_amounts.push_back(storage_fund_reward_per_validator);
-        i = i + 1;
-    };
+    });
     (staking_reward_amounts, storage_fund_reward_amounts)
 }
 
@@ -1285,34 +1189,40 @@ fun compute_adjusted_reward_distribution(
     let length = validators.length();
     let num_unslashed_validators = length - individual_staking_reward_adjustments.size();
 
-    let mut i = 0;
-    while (i < length) {
+    length.do!(|i| {
         let validator = &validators[i];
         // Integer divisions will truncate the results. Because of this, we expect that at the end
         // there will be some reward remaining in `total_reward`.
         // Use u128 to avoid multiplication overflow.
-        let voting_power = validator.voting_power() as u128;
+        let voting_power = validator.voting_power();
 
         // Compute adjusted staking reward.
         let unadjusted_staking_reward_amount = unadjusted_staking_reward_amounts[i];
-        let adjusted_staking_reward_amount = // If the validator is one of the slashed ones, then subtract the adjustment.
-        if (individual_staking_reward_adjustments.contains(&i)) {
+        // If the validator is one of the slashed ones, then subtract the adjustment.
+        let adjusted_staking_reward_amount = if (
+            individual_staking_reward_adjustments.contains(&i)
+        ) {
             let adjustment = individual_staking_reward_adjustments[&i];
             unadjusted_staking_reward_amount - adjustment
         } else {
             // Otherwise the slashed rewards should be distributed among the unslashed
             // validators so add the corresponding adjustment.
-            let adjustment =
-                total_staking_reward_adjustment as u128 * voting_power
-                                / (total_unslashed_validator_voting_power as u128);
-            unadjusted_staking_reward_amount + (adjustment as u64)
+            let adjustment = mul_div!(
+                total_staking_reward_adjustment,
+                voting_power,
+                total_unslashed_validator_voting_power,
+            );
+
+            unadjusted_staking_reward_amount + adjustment
         };
         adjusted_staking_reward_amounts.push_back(adjusted_staking_reward_amount);
 
         // Compute adjusted storage fund reward.
         let unadjusted_storage_fund_reward_amount = unadjusted_storage_fund_reward_amounts[i];
-        let adjusted_storage_fund_reward_amount = // If the validator is one of the slashed ones, then subtract the adjustment.
-        if (individual_storage_fund_reward_adjustments.contains(&i)) {
+        // If the validator is one of the slashed ones, then subtract the adjustment.
+        let adjusted_storage_fund_reward_amount = if (
+            individual_storage_fund_reward_adjustments.contains(&i)
+        ) {
             let adjustment = individual_storage_fund_reward_adjustments[&i];
             unadjusted_storage_fund_reward_amount - adjustment
         } else {
@@ -1321,9 +1231,7 @@ fun compute_adjusted_reward_distribution(
             unadjusted_storage_fund_reward_amount + adjustment
         };
         adjusted_storage_fund_reward_amounts.push_back(adjusted_storage_fund_reward_amount);
-
-        i = i + 1;
-    };
+    });
 
     (adjusted_staking_reward_amounts, adjusted_storage_fund_reward_amounts)
 }
@@ -1338,15 +1246,17 @@ fun distribute_reward(
 ) {
     let length = validators.length();
     assert!(length > 0, EValidatorSetEmpty);
-    let mut i = 0;
-    while (i < length) {
+    length.do!(|i| {
         let validator = &mut validators[i];
         let staking_reward_amount = adjusted_staking_reward_amounts[i];
         let mut staker_reward = staking_rewards.split(staking_reward_amount);
 
         // Validator takes a cut of the rewards as commission.
-        let validator_commission_amount =
-            (staking_reward_amount as u128) * (validator.commission_rate() as u128) / BASIS_POINT_DENOMINATOR;
+        let validator_commission_amount = mul_div!(
+            staking_reward_amount,
+            validator.commission_rate(),
+            BASIS_POINT_DENOMINATOR,
+        );
 
         // The validator reward = storage_fund_reward + commission.
         let mut validator_reward = staker_reward.split(validator_commission_amount as u64);
@@ -1369,8 +1279,7 @@ fun distribute_reward(
 
         // Add rewards to stake staking pool to auto compound for stakers.
         validator.deposit_stake_rewards(staker_reward);
-        i = i + 1;
-    }
+    });
 }
 
 /// Emit events containing information of each validator for the epoch,
@@ -1383,18 +1292,18 @@ fun emit_validator_epoch_events(
     report_records: &VecMap<address, VecSet<address>>,
     slashed_validators: &vector<address>,
 ) {
-    let num_validators = vs.length();
-    let mut i = 0;
-    while (i < num_validators) {
-        let v = &vs[i];
+    vs.do_ref!(|v| {
         let validator_address = v.sui_address();
         let tallying_rule_reporters = if (report_records.contains(&validator_address)) {
             report_records[&validator_address].into_keys()
         } else {
             vector[]
         };
-        let tallying_rule_global_score = if (slashed_validators.contains(&validator_address)) 0
-        else 1;
+        let tallying_rule_global_score = if (slashed_validators.contains(&validator_address)) {
+            0
+        } else {
+            1
+        };
         event::emit(ValidatorEpochInfoEventV2 {
             epoch: new_epoch,
             validator_address,
@@ -1408,20 +1317,16 @@ fun emit_validator_epoch_events(
             tallying_rule_reporters,
             tallying_rule_global_score,
         });
-        i = i + 1;
-    }
+    });
 }
 
 /// Sum up the total stake of a given list of validator addresses.
 public fun sum_voting_power_by_addresses(vs: &vector<Validator>, addresses: &vector<address>): u64 {
     let mut sum = 0;
-    let mut i = 0;
-    let length = addresses.length();
-    while (i < length) {
-        let validator = get_validator_ref(vs, addresses[i]);
+    addresses.do_ref!(|addr| {
+        let validator = get_validator_ref(vs, *addr);
         sum = sum + validator.voting_power();
-        i = i + 1;
-    };
+    });
     sum
 }
 
@@ -1453,14 +1358,12 @@ public(package) fun is_at_risk_validator(self: &ValidatorSet, addr: address): bo
 public(package) fun active_validator_addresses(self: &ValidatorSet): vector<address> {
     let vs = &self.active_validators;
     let mut res = vector[];
-    let mut i = 0;
-    let length = vs.length();
-    while (i < length) {
-        let validator_address = vs[i].sui_address();
-        res.push_back(validator_address);
-        i = i + 1;
-    };
+    vs.do_ref!(|v| res.push_back(v.sui_address()));
     res
+}
+
+macro fun mul_div($a: u64, $b: u64, $c: u64): u64 {
+    (($a as u128) * ($b as u128) / ($c as u128)) as u64
 }
 
 #[test_only]
@@ -1471,8 +1374,8 @@ public fun find_for_testing(self: &ValidatorSet, validator_address: address): &V
 #[test_only]
 fun get_candidate_or_active_validator(self: &ValidatorSet, validator_address: address): &Validator {
     if (self.validator_candidates.contains(validator_address)) {
-        let wrapper = &self.validator_candidates[validator_address];
-        return wrapper.get_inner_validator_ref()
-    };
-    get_validator(&self.active_validators, validator_address)
+        self.validator_candidates[validator_address].get_inner_validator_ref()
+    } else {
+        get_validator(&self.active_validators, validator_address)
+    }
 }

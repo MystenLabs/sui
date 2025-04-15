@@ -4,6 +4,8 @@
 #[allow(unused_const)]
 module sui_system::validator;
 
+/* ERROR: */;
+
 use std::bcs;
 use std::string::String;
 use sui::bag::{Self, Bag};
@@ -19,6 +21,8 @@ use sui_system::staking_pool::{
     FungibleStakedSui
 };
 use sui_system::validator_cap::{Self, ValidatorOperationCap};
+
+public use fun sui_system::validator_wrapper::create_v1 as Validator.wrap_v1;
 
 /// Invalid proof_of_possession field in ValidatorMetadata
 const EInvalidProofOfPossession: u64 = 0;
@@ -41,7 +45,7 @@ const EMetadataInvalidP2pAddr: u64 = 5;
 /// Invalid primary_address field in ValidatorMetadata
 const EMetadataInvalidPrimaryAddr: u64 = 6;
 
-/// Invalidworker_address field in ValidatorMetadata
+/// Invalid worker_address field in ValidatorMetadata
 const EMetadataInvalidWorkerAddr: u64 = 7;
 
 /// Commission rate set by the validator is higher than the threshold
