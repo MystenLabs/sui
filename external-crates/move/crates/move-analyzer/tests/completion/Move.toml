@@ -7,7 +7,7 @@ MoveStdlib = { local = "../../../move-stdlib/" }
 # dependency on a package with the same address as this one
 # for testing that package name is printed correctly in presence
 # of multiple packages with the same address
-SamePkgAddr = { local = "../same-pkg-addr/" }
+SamePkgAddr = { local = "../same-pkg-addr-std-dep/" }
 
 [addresses]
 Completion = "0xCAFE"
