@@ -238,21 +238,6 @@ impl Database {
         }
     }
 
-    pub fn create_cf<N: AsRef<str>>(
-        &self,
-        name: N,
-        opts: &rocksdb::Options,
-    ) -> Result<(), rocksdb::Error> {
-        match &self.storage {
-            Storage::Rocks(db) => db.underlying.create_cf(name, opts),
-            Storage::InMemory(_) => Ok(()),
-            #[cfg(all(not(target_os = "windows"), feature = "tide_hunter"))]
-            Storage::TideHunter(_) => {
-                unimplemented!("TideHunter: recreation of column family on a fly not implemented")
-            }
-        }
-    }
-
     pub fn drop_cf(&self, name: &str) -> Result<(), rocksdb::Error> {
         match &self.storage {
             Storage::Rocks(db) => db.underlying.drop_cf(name),
@@ -391,20 +376,6 @@ impl Database {
             rocksdb
                 .underlying
                 .compact_range_cf(&rocks_cf(rocksdb, cf_name), start, end);
-        }
-    }
-
-    pub fn flush(&self) -> Result<(), TypedStoreError> {
-        match &self.storage {
-            Storage::Rocks(db) => db
-                .underlying
-                .flush()
-                .map_err(typed_store_err_from_rocks_err),
-            Storage::InMemory(_) => Ok(()),
-            #[cfg(all(not(target_os = "windows"), feature = "tide_hunter"))]
-            Storage::TideHunter(_) => {
-                unimplemented!("TideHunter: flush database is not implemented")
-            }
         }
     }
 
@@ -1461,19 +1432,6 @@ where
                 .write_perf_ctx_metrics
                 .report_metrics(&self.cf);
         }
-        Ok(())
-    }
-
-    /// This method first drops the existing column family and then creates a new one
-    /// with the same name. The two operations are not atomic and hence it is possible
-    /// to get into a race condition where the column family has been dropped but new
-    /// one is not created yet
-    #[instrument(level = "trace", skip_all, err)]
-    fn unsafe_clear(&self) -> Result<(), TypedStoreError> {
-        let _ = self.db.drop_cf(&self.cf);
-        self.db
-            .create_cf(self.cf.clone(), &default_db_options().options)
-            .map_err(typed_store_err_from_rocks_err)?;
         Ok(())
     }
 

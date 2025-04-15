@@ -313,7 +313,6 @@ impl<'a> TestAuthorityBuilder<'a> {
                     .protocol_config()
                     .max_move_identifier_len_as_option(),
                 false,
-                &authority_store,
             )))
         };
         let rpc_index = if self.disable_indexer {

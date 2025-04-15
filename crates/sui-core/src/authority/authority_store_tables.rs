@@ -454,25 +454,6 @@ impl AuthorityPerpetualTables {
         self.objects.checkpoint_db(path).map_err(Into::into)
     }
 
-    pub fn reset_db_for_execution_since_genesis(&self) -> SuiResult {
-        // TODO: Add new tables that get added to the db automatically
-        self.objects.unsafe_clear()?;
-        self.live_owned_object_markers.unsafe_clear()?;
-        self.executed_effects.unsafe_clear()?;
-        self.events_2.unsafe_clear()?;
-        self.events.unsafe_clear()?;
-        self.executed_transactions_to_checkpoint.unsafe_clear()?;
-        self.root_state_hash_by_epoch.unsafe_clear()?;
-        self.epoch_start_configuration.unsafe_clear()?;
-        self.pruned_checkpoint.unsafe_clear()?;
-        self.expected_network_sui_amount.unsafe_clear()?;
-        self.expected_storage_fund_imbalance.unsafe_clear()?;
-        self.object_per_epoch_marker_table.unsafe_clear()?;
-        self.object_per_epoch_marker_table_v2.unsafe_clear()?;
-        self.objects.db.flush()?;
-        Ok(())
-    }
-
     pub fn get_root_state_hash(
         &self,
         epoch: EpochId,

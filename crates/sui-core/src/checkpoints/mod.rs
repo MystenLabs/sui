@@ -888,7 +888,6 @@ impl CheckpointStore {
 
     pub fn reset_db_for_execution_since_genesis(&self) -> SuiResult {
         self.delete_highest_executed_checkpoint_test_only()?;
-        self.tables.watermarks.db.flush()?;
         Ok(())
     }
 

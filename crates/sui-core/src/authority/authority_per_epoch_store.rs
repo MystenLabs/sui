@@ -682,12 +682,6 @@ impl AuthorityEpochTables {
             .collect::<Result<Vec<_>, _>>()?)
     }
 
-    pub fn reset_db_for_execution_since_genesis(&self) -> SuiResult {
-        // TODO: Add new tables that get added to the db automatically
-        self.executed_transactions_to_checkpoint.unsafe_clear()?;
-        Ok(())
-    }
-
     /// WARNING: This method is very subtle and can corrupt the database if used incorrectly.
     /// It should only be used in one-off cases or tests after fully understanding the risk.
     pub fn remove_executed_tx_subtle(&self, digest: &TransactionDigest) -> SuiResult {
