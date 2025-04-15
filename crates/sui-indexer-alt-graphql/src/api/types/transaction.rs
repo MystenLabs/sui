@@ -16,13 +16,16 @@ use crate::{
     error::RpcError,
 };
 
+use super::transaction_effects::TransactionEffects;
+
+#[derive(Clone)]
 pub(crate) struct Transaction {
-    digest: TransactionDigest,
-    contents: TransactionContents,
+    pub digest: TransactionDigest,
+    pub contents: TransactionContents,
 }
 
 #[derive(Clone)]
-pub(crate) struct TransactionContents(Option<Arc<NativeTransactionContents>>);
+pub(crate) struct TransactionContents(pub Option<Arc<NativeTransactionContents>>);
 
 /// Description of a transaction, the unit of activity on Sui.
 #[Object]
@@ -30,6 +33,11 @@ impl Transaction {
     /// A 32-byte hash that uniquely identifies the transaction contents, encoded in Base58.
     async fn digest(&self) -> String {
         Base58::encode(self.digest)
+    }
+
+    /// The results to the chain of executing this transaction.
+    async fn effects(&self) -> Option<TransactionEffects> {
+        Some(TransactionEffects::from(self.clone()))
     }
 
     #[graphql(flatten)]
@@ -95,5 +103,14 @@ impl TransactionContents {
             .context("Failed to fetch transaction contents")?;
 
         Ok(Self(transaction.map(Arc::new)))
+    }
+}
+
+impl From<TransactionEffects> for Transaction {
+    fn from(fx: TransactionEffects) -> Self {
+        Self {
+            digest: fx.digest,
+            contents: TransactionContents(fx.contents.0),
+        }
     }
 }

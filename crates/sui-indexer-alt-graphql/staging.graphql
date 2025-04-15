@@ -200,6 +200,10 @@ type Transaction {
 	"""
 	digest: String!
 	"""
+	The results to the chain of executing this transaction.
+	"""
+	effects: TransactionEffects
+	"""
 	The Base64-encoded BCS serialization of this transaction, as a `TransactionData`.
 	"""
 	transactionBcs: Base64
@@ -215,6 +219,10 @@ type TransactionEffects {
 	Note that this is different from the execution digest, which is the unique hash of the transaction effects.
 	"""
 	digest: String!
+	"""
+	The transaction that ran to produce these effects.
+	"""
+	transaction: Transaction
 	"""
 	The Base64-encoded BCS serialization of these effects, as `TransactionEffects`.
 	"""
