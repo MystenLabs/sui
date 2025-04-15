@@ -19,5 +19,5 @@ error: prover::ensures assertion does not hold
    =     at tests/inputs/ints.fail.move:8: foo
    =         res#1#0 = ELIDEDu64
    =     at tests/inputs/ints.fail.move:14: foo_spec
-   =         x_int#1#0 = 2437
+   =         x_int#1#0 = 8855
    =     at tests/inputs/ints.fail.move:15: foo_spec
