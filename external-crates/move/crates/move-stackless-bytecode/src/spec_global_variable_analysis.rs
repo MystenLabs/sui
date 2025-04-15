@@ -424,9 +424,8 @@ impl FunctionTargetProcessor for SpecGlobalVariableAnalysisProcessor {
                     bc
                 {
                     let callee_id = module_id.qualified(*fun_id);
-                    if (callee_id == func_env.module_env.env.declare_global_qid()
-                        || callee_id == func_env.module_env.env.declare_global_mut_qid()) &&
-                        func_env.module_env.is_target()
+                    if callee_id == func_env.module_env.env.declare_global_qid()
+                        || callee_id == func_env.module_env.env.declare_global_mut_qid()
                     {
                         let loc = FunctionTarget::new(func_env, &data).get_bytecode_loc(*attr_id);
                         let diag = Diagnostic::new(Severity::Error)

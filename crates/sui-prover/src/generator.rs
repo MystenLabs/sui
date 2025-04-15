@@ -15,7 +15,7 @@ use move_model::{
     code_writer::CodeWriter, model::GlobalEnv, ty::Type,
 };
 use crate::boogie_backend::{
-    add_prelude, boogie_wrapper::BoogieWrapper, bytecode_translator::BoogieTranslator,
+    lib::add_prelude, boogie_wrapper::BoogieWrapper, bytecode_translator::BoogieTranslator,
 };
 use move_stackless_bytecode::{
     escape_analysis::EscapeAnalysisProcessor,

@@ -295,13 +295,11 @@ impl FunctionTargetProcessor for SpecWellFormedAnalysisProcessor {
         let (call_data, multiple_calls) = self.find_node_by_func_id(underlying_func.get_qualified_id(), &graph, code, &cfg);
 
         if !call_data.is_some() {
-            if !underlying_func.is_native() {
-                env.diag(
-                    Severity::Error,
-                    &func_env.get_loc(),
-                    "Consider add function call to spec",
-                );
-            }
+            env.diag(
+                Severity::Error,
+                &func_env.get_loc(),
+                "Consider add function call to spec",
+            );
 
             return data;
         }
