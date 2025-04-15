@@ -249,7 +249,7 @@ impl RawFilter {
 }
 
 /// Fetch ObjectIDs for a page of objects owned by `owner` that satisfy the given `filter` and
-/// pagination parameters. Returns the digests and a cursor pointing to the last result (if there are
+/// pagination parameters. Returns the IDs and a cursor pointing to the last result (if there are
 /// any results).
 pub(super) async fn owned_objects(
     ctx: &Context,
@@ -268,7 +268,9 @@ pub(super) async fn owned_objects(
     }
 }
 
-/// TODO Docs
+/// Fetch ObjectIDs for a page of dynamic fields owned by parent object `owner`. The returned IDs
+/// all point to `sui::dynamic_field::Field<K, V>` objects. Returns the IDs and a cursor pointing
+/// to the last result (if there are any results).
 pub(crate) async fn dynamic_fields(
     ctx: &Context,
     owner: ObjectID,
@@ -450,7 +452,7 @@ async fn owned_obj_info(
 
 /// Fetch ObjectIDs for a page of objects owned by `owner` that satisfy the given `filter` which is
 /// assumed to be a simple type filter that can be served by indices in the database, as well as
-/// the pagination parameters. Returns the digests and a cursor pointing to the last result (if
+/// the pagination parameters. Returns the IDs and a cursor pointing to the last result (if
 /// there are any results).
 async fn by_type_indices(
     ctx: &Context,
