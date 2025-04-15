@@ -41,8 +41,6 @@ use sui_types::storage::EpochInfo;
 use sui_types::storage::ObjectStore;
 use sui_types::storage::TransactionInfo;
 use sui_types::sui_system_state::SuiSystemStateTrait;
-use sui_types::transaction::TransactionDataAPI;
-use sui_types::transaction::TransactionKind;
 use tracing::{debug, info};
 use typed_store::rocks::{DBMap, MetricConf};
 use typed_store::traits::Map;
@@ -384,82 +382,18 @@ impl IndexStoreTables {
         checkpoint: &CheckpointData,
         batch: &mut typed_store::rocks::DBBatch,
     ) -> Result<(), StorageError> {
-        let CheckpointData {
-            checkpoint_summary,
-            transactions,
-            ..
-        } = checkpoint;
-
-        // If this is genesis we need to do a little bit of special casing
-        if checkpoint_summary.sequence_number == 0 {
-            let system_state = sui_types::sui_system_state::get_sui_system_state(
-                &transactions[0].output_objects.as_slice(),
-            )
-            .map_err(|e| {
-                StorageError::custom(format!(
-                    "Failed to find system state object output from end of epoch transaction: {e}"
-                ))
-            })?;
-            let next_epoch = EpochInfo {
-                epoch: system_state.epoch(),
-                protocol_version: Some(system_state.protocol_version()),
-                start_timestamp_ms: Some(system_state.epoch_start_timestamp_ms()),
-                end_timestamp_ms: None,
-                start_checkpoint: Some(0),
-                end_checkpoint: None,
-                reference_gas_price: Some(system_state.reference_gas_price()),
-                system_state: Some(system_state),
-            };
-            batch.insert_batch(&self.epochs, [(next_epoch.epoch, next_epoch)])?;
+        let Some(epoch_info) = checkpoint.epoch_info()? else {
             return Ok(());
+        };
+        if epoch_info.epoch > 0 {
+            let prev_epoch = epoch_info.epoch - 1;
+            let mut current_epoch = self.epochs.get(&prev_epoch)?.unwrap_or_default();
+            current_epoch.epoch = prev_epoch; // set this incase there wasn't an entry
+            current_epoch.end_timestamp_ms = epoch_info.start_timestamp_ms;
+            current_epoch.end_checkpoint = epoch_info.start_checkpoint.map(|sq| sq - 1);
+            batch.insert_batch(&self.epochs, [(prev_epoch, current_epoch)])?;
         }
-
-        let Some(_end_of_epoch) = checkpoint_summary.end_of_epoch_data.as_ref() else {
-            return Ok(());
-        };
-
-        let Some(transaction) = transactions.iter().find(|tx| {
-            matches!(
-                tx.transaction.intent_message().value.kind(),
-                TransactionKind::ChangeEpoch(_) | TransactionKind::EndOfEpochTransaction(_)
-            )
-        }) else {
-            return Err(StorageError::custom(format!(
-                "Failed to get end of epoch transaction in checkpoint {} with EndOfEpochData",
-                checkpoint_summary.sequence_number,
-            )));
-        };
-
-        // We need to handle closing out the current epoch by updating the entry for this epoch
-        let mut current_epoch = self
-            .epochs
-            .get(&checkpoint_summary.epoch)?
-            .unwrap_or_default();
-        current_epoch.epoch = checkpoint_summary.epoch; // set this incase there wasn't an entry
-        current_epoch.end_timestamp_ms = Some(checkpoint_summary.timestamp_ms);
-        current_epoch.end_checkpoint = Some(checkpoint_summary.sequence_number);
-        batch.insert_batch(&self.epochs, [(current_epoch.epoch, current_epoch)])?;
-
-        let system_state = sui_types::sui_system_state::get_sui_system_state(
-            &transaction.output_objects.as_slice(),
-        )
-        .map_err(|e| {
-            StorageError::custom(format!(
-                "Failed to find system state object output from end of epoch transaction: {e}"
-            ))
-        })?;
-        let next_epoch = EpochInfo {
-            epoch: system_state.epoch(),
-            protocol_version: Some(system_state.protocol_version()),
-            start_timestamp_ms: Some(system_state.epoch_start_timestamp_ms()),
-            end_timestamp_ms: None,
-            start_checkpoint: Some(checkpoint_summary.sequence_number + 1),
-            end_checkpoint: None,
-            reference_gas_price: Some(system_state.reference_gas_price()),
-            system_state: Some(system_state),
-        };
-        batch.insert_batch(&self.epochs, [(next_epoch.epoch, next_epoch)])?;
-
+        batch.insert_batch(&self.epochs, [(epoch_info.epoch, epoch_info)])?;
         Ok(())
     }
 

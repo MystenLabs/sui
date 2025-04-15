@@ -22,12 +22,12 @@ use std::sync::{Arc, RwLock};
 use std::task::{Context, Poll};
 use std::time::Duration;
 use std::time::Instant;
-use sui_types::base_types::{ObjectID, TransactionDigest};
+use sui_types::base_types::{EpochId, ObjectID, TransactionDigest};
 use sui_types::digests::CheckpointDigest;
 use sui_types::full_checkpoint_content::CheckpointData;
 use sui_types::messages_checkpoint::CheckpointSequenceNumber;
 use sui_types::object::Object;
-use sui_types::storage::ObjectKey;
+use sui_types::storage::{EpochInfo, ObjectKey};
 use tonic::body::BoxBody;
 use tonic::codegen::Service;
 use tonic::transport::{Certificate, Channel, ClientTlsConfig};
@@ -39,6 +39,7 @@ const TRANSACTIONS_TABLE: &str = "transactions";
 const CHECKPOINTS_TABLE: &str = "checkpoints";
 const CHECKPOINTS_BY_DIGEST_TABLE: &str = "checkpoints_by_digest";
 const WATERMARK_TABLE: &str = "watermark";
+const EPOCHS_TABLE: &str = "epochs";
 
 const COLUMN_FAMILY_NAME: &str = "sui";
 const DEFAULT_COLUMN_QUALIFIER: &str = "";
@@ -143,6 +144,18 @@ impl KeyValueStoreWriter for BigTableClient {
         self.multi_set(
             WATERMARK_TABLE,
             [(key, vec![(DEFAULT_COLUMN_QUALIFIER, vec![])])],
+        )
+        .await
+    }
+
+    async fn save_epoch(&mut self, epoch: EpochInfo) -> Result<()> {
+        let key = epoch.epoch.to_be_bytes().to_vec();
+        self.multi_set(
+            EPOCHS_TABLE,
+            [(
+                key,
+                vec![(DEFAULT_COLUMN_QUALIFIER, bcs::to_bytes(&epoch)?)],
+            )],
         )
         .await
     }
@@ -271,6 +284,17 @@ impl KeyValueStoreReader for BigTableClient {
             }
         }
         Ok(None)
+    }
+
+    async fn get_epoch(&mut self, epoch_id: EpochId) -> Result<Option<EpochInfo>> {
+        let key = epoch_id.to_be_bytes().to_vec();
+        Ok(match self.multi_get(EPOCHS_TABLE, vec![key]).await?.pop() {
+            Some(mut row) => row
+                .pop()
+                .map(|value| bcs::from_bytes(&value.1))
+                .transpose()?,
+            None => None,
+        })
     }
 }
 
