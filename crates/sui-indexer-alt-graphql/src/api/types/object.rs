@@ -18,6 +18,8 @@ use crate::{
     error::RpcError,
 };
 
+use super::transaction::Transaction;
+
 pub(crate) struct Object {
     address: NativeSuiAddress,
     version: SequenceNumber,
@@ -76,6 +78,15 @@ impl ObjectContents {
 
         let bytes = bcs::to_bytes(object.as_ref()).context("Failed to serialize object")?;
         Ok(Some(Base64(bytes)))
+    }
+
+    /// The transaction that created this version of the object.
+    async fn previous_transaction(&self) -> Result<Option<Transaction>, RpcError> {
+        let Some(object) = &self.0 else {
+            return Ok(None);
+        };
+
+        Ok(Some(Transaction::with_id(object.previous_transaction)))
     }
 }
 
