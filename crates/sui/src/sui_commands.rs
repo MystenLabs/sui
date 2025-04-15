@@ -533,9 +533,7 @@ impl SuiCommand {
                                 )?;
                         } else {
                             build_config.implicit_dependencies =
-                                implicit_deps_for_protocol_version(
-                                    sui_protocol_config::ProtocolVersion::max(),
-                                )?;
+                                implicit_deps(latest_system_packages());
                         }
 
                         let mut pkg = SuiBuildConfig {
