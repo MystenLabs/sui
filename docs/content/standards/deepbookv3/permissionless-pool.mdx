@@ -15,7 +15,7 @@ The `create_permissionless_pool()` function creates a `Pool`
 
 Tick size should be 10^(9 - base_decimals + quote_decimals - decimal_desired). For example, if creating a SUI(9 decimals)/USDC(6 decimals) pool, with a desired decimal of 3 for tick size (0.001), tick size should be 10^(9 - 9 + 6 - 3) = 10^(3) = 1000.
 
-Decimal desired should be at most 1bps, or 0.01%, of the price between base and quote asset. For example, if 4 decimals is the target, 0.0001 / price should be less than or equal to 0.0001.
+Decimal desired should be at most 1bps, or 0.01%, of the price between base and quote asset. For example, if 3 decimals is the target, 0.001 (three decimals) / price should be less than or equal to 0.0001. Consider a lower tick size for pools where both base and quote assets are stablecoins.
 
 Lot size is in MIST of the base asset, and should be approximately &dollar;0.01 to &dollar;0.10 nominal of the base asset. Lot size must be a power of 10, and less than or equal to min size. Lot size should also be greater than or equal to 1,000.
 
