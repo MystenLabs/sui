@@ -1674,14 +1674,16 @@ fn struct_field_mismatch_diag(
     let is_dummy_field = |f: &Field| f.name.as_str() == "dummy_field" && f.type_ == Type::Bool;
     let old_fields: Vec<Rc<Field>> = old_struct
         .fields
-        .iter()
+        .0
+        .values()
         .filter(|f| !is_dummy_field(f))
         .cloned()
         .collect();
 
     let new_fields: Vec<Rc<Field>> = new_struct
         .fields
-        .iter()
+        .0
+        .values()
         .filter(|f| !is_dummy_field(f))
         .cloned()
         .collect();
@@ -1715,9 +1717,13 @@ fn struct_field_mismatch_diag(
                 ),
             ],
         ));
-    } else if old_fields != new_fields {
-        for (i, (old_field, new_field)) in old_fields.iter().zip(new_fields.iter()).enumerate() {
-            if old_field != new_field {
+    } else if !old_fields
+        .iter()
+        .zip(&new_fields)
+        .all(|(old_field, new_field)| old_field.equivalent(new_field))
+    {
+        for (i, (old_field, new_field)) in old_fields.iter().zip(&new_fields).enumerate() {
+            if !old_field.equivalent(new_field) {
                 let field_loc = struct_sourcemap
                     .fields
                     .get(i)
@@ -1861,13 +1867,13 @@ fn enum_variant_field_message(
     old_variant: &Variant,
     new_variant: &Variant,
 ) -> Result<Vec<(DiagnosticInfo, String)>, Error> {
-    if old_variant.fields.len() != new_variant.fields.len() {
+    if old_variant.fields.0.len() != new_variant.fields.0.len() {
         return Ok(vec![(
             Declarations::FieldMismatch.into(),
             format!(
                 "Mismatched variant field count, expected {}, found {}.",
-                old_variant.fields.len(),
-                new_variant.fields.len()
+                old_variant.fields.0.len(),
+                new_variant.fields.0.len()
             ),
         )]);
     }
@@ -1875,7 +1881,7 @@ fn enum_variant_field_message(
     Ok(
         match (
             old_variant.name != new_variant.name,
-            old_variant.fields != new_variant.fields,
+            !old_variant.fields.equivalent(&new_variant.fields),
         ) {
             (true, true) => vec![(
                 Enums::VariantMismatch.into(),
@@ -1894,10 +1900,13 @@ fn enum_variant_field_message(
             (false, true) => {
                 let mut errors: Vec<(DiagnosticInfo, String)> = vec![];
 
-                for (old_field, new_field) in
-                    old_variant.fields.iter().zip(new_variant.fields.iter())
+                for (old_field, new_field) in old_variant
+                    .fields
+                    .0
+                    .values()
+                    .zip(new_variant.fields.0.values())
                 {
-                    if old_field != new_field {
+                    if !old_field.equivalent(new_field) {
                         let (code, label) =
                             field_mismatch_message(old_field, new_field, Vec::new())?;
                         errors.push((code.into(), label));
@@ -1939,11 +1948,11 @@ fn enum_variant_mismatch_diag(
 
     for (i, (old_variant, new_variant)) in old_enum
         .variants
-        .iter()
-        .zip(new_enum.variants.iter())
+        .values()
+        .zip(new_enum.variants.values())
         .enumerate()
     {
-        if old_variant != new_variant {
+        if !old_variant.equivalent(new_variant) {
             let variant_loc = enum_sourcemap
                 .variants
                 .get(i)
@@ -2005,13 +2014,13 @@ fn enum_new_variant_diag(
 
     let old_enum_map = old_enum
         .variants
-        .iter()
+        .values()
         .map(|v| v.name.as_ident_str())
         .collect::<HashSet<_>>();
 
     let def_loc = enum_sourcemap.definition_location;
 
-    for (i, new_variant) in new_enum.variants.iter().enumerate() {
+    for (i, new_variant) in new_enum.variants.values().enumerate() {
         if !old_enum_map.contains(new_variant.name.as_ident_str()) {
             let variant_loc = enum_sourcemap
                 .variants
@@ -2067,8 +2076,9 @@ fn enum_variant_missing_diag(
 
     let variant_name = &old_enum
         .variants
-        .get(tag)
+        .get_index(tag)
         .context("Unable to get variant")?
+        .1
         .name;
 
     diags.add(Diagnostic::new(
@@ -2159,7 +2169,7 @@ fn struct_changed_diag(
         )?);
     }
 
-    if old_struct.fields != new_struct.fields {
+    if !old_struct.fields.equivalent(&new_struct.fields) {
         diags.extend(struct_field_mismatch_diag(
             struct_name,
             old_struct,
@@ -2230,7 +2240,13 @@ fn enum_changed_diag(
         )?);
     }
 
-    if old_enum.variants != new_enum.variants {
+    if old_enum.variants.len() != new_enum.variants.len()
+        || !old_enum
+            .variants
+            .values()
+            .zip(new_enum.variants.values())
+            .all(|(old_variant, new_variant)| old_variant.equivalent(new_variant))
+    {
         diags.extend(enum_variant_mismatch_diag(
             enum_name,
             old_enum,
@@ -2282,7 +2298,7 @@ fn function_changed_diag(
 ) -> Result<Diagnostics, Error> {
     let mut diags = Diagnostics::new();
 
-    if !old_function.equals(new_function) {
+    if !old_function.equivalent(new_function) {
         diags.extend(function_signature_mismatch_diag(
             function_name,
             old_function,
