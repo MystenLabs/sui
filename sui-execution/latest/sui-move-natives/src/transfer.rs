@@ -146,7 +146,21 @@ pub fn transfer_internal(
 
 #[derive(Clone, Debug)]
 pub struct MultipartyTransferInternalCostParams {
-    pub transfer_multiparty_transfer_internal_cost_base: InternalGas,
+    pub transfer_multiparty_transfer_internal_cost_base: Option<InternalGas>,
+}
+
+macro_rules! native_charge_gas_early_exit_option {
+    ($native_context:ident, $cost:expr) => {{
+        use move_binary_format::errors::PartialVMError;
+        use move_core_types::vm_status::StatusCode;
+        native_charge_gas_early_exit!(
+            $native_context,
+            $cost.ok_or_else(|| {
+                PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR)
+                    .with_message("Gas cost for multiparty is missing".to_string())
+            })?
+        );
+    }};
 }
 /***************************************************************************************************
 * native fun multi_partytransfer_impl
@@ -185,7 +199,7 @@ pub fn multiparty_transfer_internal(
         .transfer_multiparty_transfer_internal_cost_params
         .clone();
 
-    native_charge_gas_early_exit!(
+    native_charge_gas_early_exit_option!(
         context,
         transfer_multiparty_transfer_internal_cost_params
             .transfer_multiparty_transfer_internal_cost_base

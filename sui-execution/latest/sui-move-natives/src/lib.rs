@@ -354,8 +354,8 @@ impl NativesCostTable {
             transfer_multiparty_transfer_internal_cost_params:
                 MultipartyTransferInternalCostParams {
                     transfer_multiparty_transfer_internal_cost_base: protocol_config
-                        .transfer_multiparty_transfer_internal_cost_base()
-                        .into(),
+                        .transfer_multiparty_transfer_internal_cost_base_as_option()
+                        .map(Into::into),
                 },
             transfer_freeze_object_cost_params: TransferFreezeObjectCostParams {
                 transfer_freeze_object_cost_base: protocol_config
