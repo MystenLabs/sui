@@ -102,6 +102,8 @@ module test::counter {
     "@{digest_2}",
     "@{digest_3}"
   ]) {
+    digest
+    effectsDigest
     effectsBcs
   }
 }

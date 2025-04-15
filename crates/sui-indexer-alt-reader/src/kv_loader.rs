@@ -10,9 +10,10 @@ use sui_kvstore::TransactionData as KVTransactionData;
 use sui_types::{
     base_types::ObjectID,
     crypto::AuthorityQuorumSignInfo,
-    digests::TransactionDigest,
+    digests::{TransactionDigest, TransactionEffectsDigest},
     effects::TransactionEffects,
     event::Event,
+    message_envelope::Message,
     messages_checkpoint::{CheckpointContents, CheckpointSummary},
     object::Object,
     signature::GenericSignature,
@@ -173,6 +174,18 @@ impl TransactionContents {
                 Ok(digest)
             }
             Self::Bigtable(kv) => Ok(*kv.transaction.digest()),
+        }
+    }
+
+    pub fn effects_digest(&self) -> anyhow::Result<TransactionEffectsDigest> {
+        match self {
+            Self::Pg(stored) => {
+                let effects: TransactionEffects = bcs::from_bytes(&stored.raw_effects)
+                    .map_err(|e| anyhow::anyhow!("Failed to deserialize effects: {}", e))?;
+
+                Ok(effects.digest())
+            }
+            Self::Bigtable(kv) => Ok(kv.effects.digest()),
         }
     }
 

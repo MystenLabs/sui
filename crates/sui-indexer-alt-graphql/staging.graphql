@@ -231,6 +231,10 @@ type TransactionEffects {
 	The Base64-encoded BCS serialization of these effects, as `TransactionEffects`.
 	"""
 	effectsBcs: Base64
+	"""
+	A 32-byte hash that uniquely identifies the effects contents, encoded in Base58.
+	"""
+	effectsDigest: String
 }
 
 """
