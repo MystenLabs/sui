@@ -4,33 +4,30 @@
 use std::{
     cell::OnceCell,
     collections::{BTreeMap, BTreeSet},
-    path::PathBuf,
     sync::Arc,
 };
 
 use crate::{
     normalized::{self, ModuleId, QualifiedMemberId, TModuleId},
-    serializable_signatures,
+    serializable_signatures, source_model,
 };
 use indexmap::IndexMap;
-use move_binary_format::{CompiledModule, file_format};
+use move_binary_format::file_format;
 use move_bytecode_source_map::source_map::SourceMap;
 use move_compiler::{
     self,
-    compiled_unit::{CompiledUnit, NamedCompiledModule},
+    compiled_unit::NamedCompiledModule,
     expansion::ast::{self as E, ModuleIdent_},
-    naming::ast as N,
     shared::{
         NumericalAddress,
         files::MappedFiles,
-        program_info::{ConstantInfo, FunctionInfo, ModuleInfo, TypingProgramInfo},
+        program_info::{ModuleInfo, TypingProgramInfo},
     },
 };
 use move_core_types::{account_address::AccountAddress, runtime_value};
 use move_ir_types::ast as IR;
 use move_ir_types::location::Spanned;
 use move_symbol_pool::Symbol;
-use serde::{Deserialize, Serialize};
 
 //**************************************************************************************************
 // Types
@@ -42,13 +39,13 @@ mod private {
 }
 pub trait SourceKind: private::Sealed + 'static {}
 
-#[derive(Clone, Copy, Serialize, Deserialize)]
+#[derive(Clone, Copy)]
 pub struct WithSource;
 
 impl private::Sealed for WithSource {}
 impl SourceKind for WithSource {}
 
-#[derive(Clone, Copy, Serialize, Deserialize)]
+#[derive(Clone, Copy)]
 pub struct WithoutSource;
 
 impl private::Sealed for WithoutSource {}
@@ -92,7 +89,7 @@ pub enum Member<'a, K: SourceKind + ?Sized> {
     Struct(Struct<'a, K>),
     Enum(Enum<'a, K>),
     Function(Function<'a, K>),
-    NamedConstant(NamedConstant<'a>),
+    NamedConstant(source_model::NamedConstant<'a>),
 }
 
 pub enum Datatype<'a, K: SourceKind + ?Sized> {
@@ -131,24 +128,10 @@ pub struct Function<'a, K: SourceKind + ?Sized> {
     pub(crate) data: &'a FunctionData,
 }
 
-pub enum Constant<'a> {
-    Compiled(CompiledConstant<'a, WithSource>),
-    Named(NamedConstant<'a>),
-}
-
 pub struct CompiledConstant<'a, K: SourceKind + ?Sized> {
     pub(crate) module: Module<'a, K>,
     pub(crate) compiled: &'a normalized::Constant,
     pub(crate) data: &'a ConstantData,
-}
-
-pub struct NamedConstant<'a> {
-    pub(crate) name: Symbol,
-    pub(crate) module: Module<'a, WithSource>,
-    // There is no guarantee a source constant will have a compiled representation
-    pub(crate) compiled: Option<&'a normalized::Constant>,
-    #[allow(unused)]
-    pub(crate) data: &'a NamedConstantData,
 }
 
 //**************************************************************************************************
@@ -1195,23 +1178,9 @@ impl<K: SourceKind + ?Sized> Clone for Function<'_, K> {
 }
 impl<K: SourceKind + ?Sized> Copy for Function<'_, K> {}
 
-impl Clone for Constant<'_> {
-    fn clone(&self) -> Self {
-        *self
-    }
-}
-impl Copy for Constant<'_> {}
-
 impl Clone for CompiledConstant<'_, WithSource> {
     fn clone(&self) -> Self {
         *self
     }
 }
 impl Copy for CompiledConstant<'_, WithSource> {}
-
-impl Clone for NamedConstant<'_> {
-    fn clone(&self) -> Self {
-        *self
-    }
-}
-impl Copy for NamedConstant<'_> {}

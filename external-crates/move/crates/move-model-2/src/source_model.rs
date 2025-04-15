@@ -3,7 +3,7 @@
 
 use crate::{
     TModuleId,
-    model::{self, CompiledConstant, Constant, PackageData, WithSource},
+    model::{self, NamedConstantData, PackageData, WithSource},
     normalized, serializable_signatures,
 };
 use move_compiler::{
@@ -28,7 +28,26 @@ pub type Struct<'a> = model::Struct<'a, WithSource>;
 pub type Enum<'a> = model::Enum<'a, WithSource>;
 pub type Variant<'a> = model::Variant<'a, WithSource>;
 pub type Function<'a> = model::Function<'a, WithSource>;
-pub type NamedConstant<'a> = model::NamedConstant<'a>;
+
+pub enum Constant<'a> {
+    Compiled(CompiledConstant<'a>),
+    Named(NamedConstant<'a>),
+}
+
+pub type CompiledConstant<'a> = model::CompiledConstant<'a, WithSource>;
+
+pub struct NamedConstant<'a> {
+    pub(crate) name: Symbol,
+    pub(crate) module: Module<'a>,
+    // There is no guarantee a source constant will have a compiled representation
+    pub(crate) compiled: Option<&'a normalized::Constant>,
+    #[allow(unused)]
+    pub(crate) data: &'a NamedConstantData,
+}
+
+//**************************************************************************************************
+// API
+//**************************************************************************************************
 
 impl Model {
     pub fn from_source(
@@ -287,3 +306,21 @@ impl<'a> NamedConstant<'a> {
         self.info().value.get().unwrap()
     }
 }
+
+//**************************************************************************************************
+// Derive
+//**************************************************************************************************
+
+impl Clone for Constant<'_> {
+    fn clone(&self) -> Self {
+        *self
+    }
+}
+impl Copy for Constant<'_> {}
+
+impl Clone for NamedConstant<'_> {
+    fn clone(&self) -> Self {
+        *self
+    }
+}
+impl Copy for NamedConstant<'_> {}
