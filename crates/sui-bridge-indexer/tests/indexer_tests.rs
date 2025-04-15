@@ -86,7 +86,7 @@ async fn test_indexing_transfer() {
         .await
         .unwrap()
         .iter()
-        .map(|t| (t.chain_id, t.nonce, t.status.clone()))
+        .map(|t| (t.chain_id, t.nonce, t.status))
         .collect::<Vec<_>>();
 
     assert_eq!(2, data.len());

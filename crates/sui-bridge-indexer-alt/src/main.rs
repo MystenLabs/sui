@@ -4,10 +4,11 @@ use anyhow::Context;
 use clap::Parser;
 use prometheus::Registry;
 use std::net::SocketAddr;
+use sui_bridge_indexer_alt::handlers::token_transfer_data_handler::TokenTransferDataHandler;
 use sui_bridge_indexer_alt::handlers::token_transfer_handler::TokenTransferHandler;
 use sui_bridge_schema::MIGRATIONS;
-use sui_indexer_alt_framework::db::DbArgs;
 use sui_indexer_alt_framework::ingestion::ClientArgs;
+use sui_indexer_alt_framework::postgres::DbArgs;
 use sui_indexer_alt_framework::{Indexer, IndexerArgs};
 use sui_indexer_alt_metrics::{MetricsArgs, MetricsService};
 use tokio_util::sync::CancellationToken;
@@ -54,7 +55,7 @@ async fn main() -> Result<(), anyhow::Error> {
         cancel.child_token(),
     );
 
-    let mut indexer = Indexer::new(
+    let mut indexer = Indexer::new_from_pg(
         database_url,
         db_args,
         indexer_args,
@@ -73,7 +74,11 @@ async fn main() -> Result<(), anyhow::Error> {
     .await?;
 
     indexer
-        .concurrent_pipeline(TokenTransferHandler::new(), Default::default())
+        .concurrent_pipeline(TokenTransferHandler::default(), Default::default())
+        .await?;
+
+    indexer
+        .concurrent_pipeline(TokenTransferDataHandler::default(), Default::default())
         .await?;
 
     let h_indexer = indexer.run().await?;
