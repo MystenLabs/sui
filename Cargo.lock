@@ -12268,7 +12268,6 @@ dependencies = [
  "sui-transaction-checks",
  "sui-types",
  "tracing",
- "typed-store-error",
 ]
 
 [[package]]

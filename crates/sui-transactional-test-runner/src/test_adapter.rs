@@ -101,7 +101,6 @@ use sui_types::{BRIDGE_ADDRESS, MOVE_STDLIB_PACKAGE_ID};
 use sui_types::{DEEPBOOK_ADDRESS, SUI_DENY_LIST_OBJECT_ID};
 use sui_types::{DEEPBOOK_PACKAGE_ID, SUI_RANDOMNESS_STATE_OBJECT_ID};
 use tempfile::{tempdir, NamedTempFile};
-use typed_store::TypedStoreError;
 
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Debug)]
 pub enum FakeID {
@@ -2587,15 +2586,6 @@ impl ReadStore for SuiTestAdapter {
 
     fn get_events(&self, digest: &TransactionDigest) -> Option<TransactionEvents> {
         self.executor.get_events(digest)
-    }
-
-    fn get_full_checkpoint_contents_by_sequence_number(
-        &self,
-        sequence_number: CheckpointSequenceNumber,
-    ) -> Result<Option<sui_types::messages_checkpoint::FullCheckpointContents>, TypedStoreError>
-    {
-        self.executor
-            .get_full_checkpoint_contents_by_sequence_number(sequence_number)
     }
 
     fn get_full_checkpoint_contents(

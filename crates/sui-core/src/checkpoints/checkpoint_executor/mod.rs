@@ -115,6 +115,8 @@ macro_rules! finish_stage {
 pub struct CheckpointExecutor {
     epoch_store: Arc<AuthorityPerEpochStore>,
     state: Arc<AuthorityState>,
+    // TODO: We should use RocksDbStore in the executor
+    // to consolidate DB accesses.
     checkpoint_store: Arc<CheckpointStore>,
     object_cache_reader: Arc<dyn ObjectCacheRead>,
     transaction_cache_reader: Arc<dyn TransactionCacheRead>,
@@ -645,6 +647,8 @@ impl CheckpointExecutor {
             .expect("checkpoint contents not found");
 
         // attempt to load full checkpoint contents in bulk
+        // Tolerate db error in case of data corruption.
+        // We will fall back to loading items one-by-one below in case of error.
         if let Some(full_contents) = self
             .checkpoint_store
             .get_full_checkpoint_contents_by_sequence_number(seq)
@@ -697,6 +701,8 @@ impl CheckpointExecutor {
             )
         } else {
             // load items one-by-one
+            // TODO: If we used RocksDbStore in the executor instead,
+            // all the logic below could be removed.
 
             let digests = checkpoint_contents.inner();
 

@@ -49,7 +49,6 @@ use sui_types::transaction::TransactionDataAPI;
 use sui_types::transaction::TransactionKind;
 use sui_types::transaction::{InputObjects, TransactionData};
 use test_adapter::{SuiTestAdapter, PRE_COMPILED};
-use typed_store::TypedStoreError;
 
 #[cfg_attr(not(msim), tokio::main)]
 #[cfg_attr(msim, msim::main)]
@@ -367,14 +366,6 @@ impl ReadStore for ValidatorWithFullnode {
         self.validator
             .get_transaction_cache_reader()
             .get_events(digest)
-    }
-
-    fn get_full_checkpoint_contents_by_sequence_number(
-        &self,
-        _sequence_number: sui_types::messages_checkpoint::CheckpointSequenceNumber,
-    ) -> Result<Option<sui_types::messages_checkpoint::FullCheckpointContents>, TypedStoreError>
-    {
-        todo!()
     }
 
     fn get_full_checkpoint_contents(

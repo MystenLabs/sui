@@ -17,7 +17,6 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use tap::Pipe;
 use tracing::error;
-use typed_store_error::TypedStoreError;
 
 #[derive(Clone, Debug, Default)]
 pub struct SharedInMemoryStore(Arc<std::sync::RwLock<InMemoryStore>>);
@@ -64,17 +63,6 @@ impl ReadStore for SharedInMemoryStore {
 
     fn get_lowest_available_checkpoint(&self) -> Result<CheckpointSequenceNumber> {
         Ok(self.inner().get_lowest_available_checkpoint())
-    }
-
-    fn get_full_checkpoint_contents_by_sequence_number(
-        &self,
-        sequence_number: CheckpointSequenceNumber,
-    ) -> Result<Option<FullCheckpointContents>, TypedStoreError> {
-        self.inner()
-            .full_checkpoint_contents
-            .get(&sequence_number)
-            .cloned()
-            .pipe(Ok)
     }
 
     fn get_full_checkpoint_contents(
@@ -483,14 +471,6 @@ impl ReadStore for SingleCheckpointSharedInMemoryStore {
 
     fn get_lowest_available_checkpoint(&self) -> Result<CheckpointSequenceNumber> {
         self.0.get_lowest_available_checkpoint()
-    }
-
-    fn get_full_checkpoint_contents_by_sequence_number(
-        &self,
-        sequence_number: CheckpointSequenceNumber,
-    ) -> Result<Option<FullCheckpointContents>, TypedStoreError> {
-        self.0
-            .get_full_checkpoint_contents_by_sequence_number(sequence_number)
     }
 
     fn get_full_checkpoint_contents(

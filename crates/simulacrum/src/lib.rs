@@ -44,7 +44,6 @@ use sui_types::{
     signature::VerifyParams,
     transaction::{Transaction, VerifiedTransaction},
 };
-use typed_store_error::TypedStoreError;
 
 use self::epoch_state::EpochState;
 pub use self::store::in_mem_store::InMemoryStore;
@@ -570,14 +569,6 @@ impl<T, V: store::SimulatorStore> ReadStore for Simulacrum<T, V> {
         event_digest: &sui_types::digests::TransactionDigest,
     ) -> Option<sui_types::effects::TransactionEvents> {
         self.store().get_transaction_events(event_digest)
-    }
-
-    fn get_full_checkpoint_contents_by_sequence_number(
-        &self,
-        _sequence_number: sui_types::messages_checkpoint::CheckpointSequenceNumber,
-    ) -> Result<Option<sui_types::messages_checkpoint::FullCheckpointContents>, TypedStoreError>
-    {
-        todo!()
     }
 
     fn get_full_checkpoint_contents(
