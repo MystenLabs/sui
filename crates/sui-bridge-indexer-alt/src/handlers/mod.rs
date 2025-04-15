@@ -6,7 +6,7 @@ use move_core_types::identifier::IdentStr;
 use sui_indexer_alt_framework::types::full_checkpoint_content::CheckpointTransaction;
 use sui_indexer_alt_framework::types::SUI_BRIDGE_OBJECT_ID;
 
-mod error_handler;
+pub mod governance_action_handler;
 pub mod token_transfer_data_handler;
 pub mod token_transfer_handler;
 
