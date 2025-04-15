@@ -1,7 +1,7 @@
 ---
 source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
 ---
-processed 27 tasks
+processed 29 tasks
 
 init:
 A: object(0,0)
@@ -84,11 +84,167 @@ task 13, line 86:
 //# create-checkpoint
 Checkpoint created: 5
 
-task 14, lines 88-92:
+task 14, lines 88-106:
 //# run-jsonrpc
 Response: {
   "jsonrpc": "2.0",
   "id": 0,
+  "result": [
+    {
+      "data": {
+        "objectId": "0xb133133c82302d383ea280b29cd5a7eda5129a297f6e06289ca089d01c5114c7",
+        "version": "3",
+        "digest": "D7N7M9cirpKm3QY1aLGDfHgBnz3bknFFtELm4wNiUXwi",
+        "type": "0x2::dynamic_field::Field<0x4827c77e5af9f6aac859515790dc77d123cfcc37c1d2e58213a91136395f4309::M::Name, u64>",
+        "owner": {
+          "ObjectOwner": "0xcbba4377978c35d56a021dd5a88d4f52da68f7f78857f971eff435d7d170d69e"
+        },
+        "content": {
+          "dataType": "moveObject",
+          "type": "0x2::dynamic_field::Field<0x4827c77e5af9f6aac859515790dc77d123cfcc37c1d2e58213a91136395f4309::M::Name, u64>",
+          "hasPublicTransfer": false,
+          "fields": {
+            "id": {
+              "id": "0xb133133c82302d383ea280b29cd5a7eda5129a297f6e06289ca089d01c5114c7"
+            },
+            "name": {
+              "type": "0x4827c77e5af9f6aac859515790dc77d123cfcc37c1d2e58213a91136395f4309::M::Name",
+              "fields": {
+                "x": "42",
+                "y": 43
+              }
+            },
+            "value": "44"
+          }
+        }
+      }
+    },
+    {
+      "data": {
+        "objectId": "0x3f51b1510cbd5b3eb96dc7c1bc9625f0f16d7fbf17e9d657f37bfdd4cc89f7a4",
+        "version": "5",
+        "digest": "9fnALmoBZb4QTj5sajaXcnH3nBMoxxz9tSFoJv996Bd9",
+        "type": "0x4827c77e5af9f6aac859515790dc77d123cfcc37c1d2e58213a91136395f4309::M::Object",
+        "owner": {
+          "ObjectOwner": "0x8b8cd3efa32d3be412d3f8083b7cd3813d71cc49f0c4d440df1d7af55ad96e88"
+        },
+        "content": {
+          "dataType": "moveObject",
+          "type": "0x4827c77e5af9f6aac859515790dc77d123cfcc37c1d2e58213a91136395f4309::M::Object",
+          "hasPublicTransfer": true,
+          "fields": {
+            "id": {
+              "id": "0x3f51b1510cbd5b3eb96dc7c1bc9625f0f16d7fbf17e9d657f37bfdd4cc89f7a4"
+            }
+          }
+        }
+      }
+    },
+    {
+      "data": {
+        "objectId": "0x8b8cd3efa32d3be412d3f8083b7cd3813d71cc49f0c4d440df1d7af55ad96e88",
+        "version": "5",
+        "digest": "BuqZxJnbk1MqKDFs2Vo4W5jwaYxPDDWVTNELE13P9RzJ",
+        "type": "0x2::dynamic_field::Field<0x2::dynamic_object_field::Wrapper<u64>, 0x2::object::ID>",
+        "owner": {
+          "ObjectOwner": "0xcbba4377978c35d56a021dd5a88d4f52da68f7f78857f971eff435d7d170d69e"
+        },
+        "content": {
+          "dataType": "moveObject",
+          "type": "0x2::dynamic_field::Field<0x2::dynamic_object_field::Wrapper<u64>, 0x2::object::ID>",
+          "hasPublicTransfer": false,
+          "fields": {
+            "id": {
+              "id": "0x8b8cd3efa32d3be412d3f8083b7cd3813d71cc49f0c4d440df1d7af55ad96e88"
+            },
+            "name": {
+              "type": "0x2::dynamic_object_field::Wrapper<u64>",
+              "fields": {
+                "name": "45"
+              }
+            },
+            "value": "0x3f51b1510cbd5b3eb96dc7c1bc9625f0f16d7fbf17e9d657f37bfdd4cc89f7a4"
+          }
+        }
+      }
+    },
+    {
+      "data": {
+        "objectId": "0x6edf674639c291337f17327eca3e2c066ab0a9cea980d10754fea09d92fd5051",
+        "version": "6",
+        "digest": "6jRrnFS4FJVtdXma1RG2iUcb8NXjsTcfbfbVHbeY4Bm3",
+        "type": "0x2::dynamic_field::Field<u64, u64>",
+        "owner": {
+          "ObjectOwner": "0xcbba4377978c35d56a021dd5a88d4f52da68f7f78857f971eff435d7d170d69e"
+        },
+        "content": {
+          "dataType": "moveObject",
+          "type": "0x2::dynamic_field::Field<u64, u64>",
+          "hasPublicTransfer": false,
+          "fields": {
+            "id": {
+              "id": "0x6edf674639c291337f17327eca3e2c066ab0a9cea980d10754fea09d92fd5051"
+            },
+            "name": "46",
+            "value": "47"
+          }
+        }
+      }
+    },
+    {
+      "data": {
+        "objectId": "0xc0ab0b0596cf2b735ec2b08f2d4c93347b9a693e40e97ca0c0462e45c96538be",
+        "version": "7",
+        "digest": "5ZZDiZrs5KAALSdGRed1PZPJWzvarTAPVob2ALXkLNSc",
+        "type": "0x2::dynamic_field::Field<bool, u64>",
+        "owner": {
+          "ObjectOwner": "0xcbba4377978c35d56a021dd5a88d4f52da68f7f78857f971eff435d7d170d69e"
+        },
+        "content": {
+          "dataType": "moveObject",
+          "type": "0x2::dynamic_field::Field<bool, u64>",
+          "hasPublicTransfer": false,
+          "fields": {
+            "id": {
+              "id": "0xc0ab0b0596cf2b735ec2b08f2d4c93347b9a693e40e97ca0c0462e45c96538be"
+            },
+            "name": true,
+            "value": "48"
+          }
+        }
+      }
+    },
+    {
+      "data": {
+        "objectId": "0x442d04fc77ad9c2323cd0617b8ce2e40c87a9e99b028a512329bc49d0e2190cb",
+        "version": "8",
+        "digest": "AxgfrX2nKLG1YwFF9RKnXv97s8YupknWXxchWtJYGyiE",
+        "type": "0x2::dynamic_field::Field<bool, u64>",
+        "owner": {
+          "ObjectOwner": "0xcbba4377978c35d56a021dd5a88d4f52da68f7f78857f971eff435d7d170d69e"
+        },
+        "content": {
+          "dataType": "moveObject",
+          "type": "0x2::dynamic_field::Field<bool, u64>",
+          "hasPublicTransfer": false,
+          "fields": {
+            "id": {
+              "id": "0x442d04fc77ad9c2323cd0617b8ce2e40c87a9e99b028a512329bc49d0e2190cb"
+            },
+            "name": false,
+            "value": "49"
+          }
+        }
+      }
+    }
+  ]
+}
+
+task 15, lines 108-112:
+//# run-jsonrpc
+Response: {
+  "jsonrpc": "2.0",
+  "id": 1,
   "result": {
     "data": [
       {
@@ -165,11 +321,11 @@ Response: {
   }
 }
 
-task 15, lines 94-98:
+task 16, lines 114-118:
 //# run-jsonrpc
 Response: {
   "jsonrpc": "2.0",
-  "id": 1,
+  "id": 2,
   "result": {
     "data": [
       {
@@ -204,11 +360,11 @@ Response: {
   }
 }
 
-task 16, lines 100-104:
+task 17, lines 120-124:
 //# run-jsonrpc --cursors bcs(@{obj_10_0},4)
 Response: {
   "jsonrpc": "2.0",
-  "id": 2,
+  "id": 3,
   "result": {
     "data": [
       {
@@ -243,11 +399,11 @@ Response: {
   }
 }
 
-task 17, lines 106-110:
+task 18, lines 126-130:
 //# run-jsonrpc --cursors bcs(@{obj_10_0},4)
 Response: {
   "jsonrpc": "2.0",
-  "id": 3,
+  "id": 4,
   "result": {
     "data": [
       {
@@ -298,22 +454,22 @@ Response: {
   }
 }
 
-task 18, lines 112-113:
+task 19, lines 132-133:
 //# programmable --sender A --inputs object(2,0) 51 52
 //> 0: P::M::dfield<u64, u64>(Input(0), Input(1), Input(2))
-created: object(18,0)
+created: object(19,0)
 mutated: object(0,0), object(2,0)
 gas summary: computation_cost: 1000000, storage_cost: 3701200,  storage_rebate: 2212056, non_refundable_storage_fee: 22344
 
-task 19, line 115:
+task 20, line 135:
 //# create-checkpoint
 Checkpoint created: 6
 
-task 20, lines 117-121:
+task 21, lines 137-141:
 //# run-jsonrpc
 Response: {
   "jsonrpc": "2.0",
-  "id": 4,
+  "id": 5,
   "result": {
     "data": [
       {
@@ -403,22 +559,22 @@ Response: {
   }
 }
 
-task 21, lines 123-124:
+task 22, lines 143-144:
 //# programmable --sender A --inputs object(2,0) true
 //> 0: P::M::dremove<bool, u64>(Input(0), Input(1))
 mutated: object(0,0), object(2,0)
 deleted: object(10,0)
 gas summary: computation_cost: 1000000, storage_cost: 2234400,  storage_rebate: 3611520, non_refundable_storage_fee: 36480
 
-task 22, line 126:
+task 23, line 146:
 //# create-checkpoint
 Checkpoint created: 7
 
-task 23, lines 128-132:
+task 24, lines 148-152:
 //# run-jsonrpc
 Response: {
   "jsonrpc": "2.0",
-  "id": 5,
+  "id": 6,
   "result": {
     "data": [
       {
@@ -495,21 +651,21 @@ Response: {
   }
 }
 
-task 24, lines 134-135:
+task 25, lines 154-155:
 //# programmable --sender A --inputs object(2,0) false
 //> 0: P::M::dmodify<bool>(Input(0), Input(1))
 mutated: object(0,0), object(2,0), object(12,0)
 gas summary: computation_cost: 1000000, storage_cost: 3648000,  storage_rebate: 3611520, non_refundable_storage_fee: 36480
 
-task 25, line 137:
+task 26, line 157:
 //# create-checkpoint
 Checkpoint created: 8
 
-task 26, lines 139-143:
+task 27, lines 159-163:
 //# run-jsonrpc
 Response: {
   "jsonrpc": "2.0",
-  "id": 6,
+  "id": 7,
   "result": {
     "data": [
       {
@@ -584,4 +740,59 @@ Response: {
     "nextCursor": "ILEzEzyCMC04PqKAspzVp+2lEpopf24GKJygidAcURTHAQAAAAAAAAA=",
     "hasNextPage": false
   }
+}
+
+task 28, lines 165-179:
+//# run-jsonrpc
+Response: {
+  "jsonrpc": "2.0",
+  "id": 8,
+  "result": [
+    {
+      "data": {
+        "objectId": "0x442d04fc77ad9c2323cd0617b8ce2e40c87a9e99b028a512329bc49d0e2190cb",
+        "version": "11",
+        "digest": "E7CbvH1EXV9NsebCaJ9Fiik98f3oKwByL7r2VWqoYjdG",
+        "type": "0x2::dynamic_field::Field<bool, u64>",
+        "owner": {
+          "ObjectOwner": "0xcbba4377978c35d56a021dd5a88d4f52da68f7f78857f971eff435d7d170d69e"
+        },
+        "content": {
+          "dataType": "moveObject",
+          "type": "0x2::dynamic_field::Field<bool, u64>",
+          "hasPublicTransfer": false,
+          "fields": {
+            "id": {
+              "id": "0x442d04fc77ad9c2323cd0617b8ce2e40c87a9e99b028a512329bc49d0e2190cb"
+            },
+            "name": false,
+            "value": "50"
+          }
+        }
+      }
+    },
+    {
+      "data": {
+        "objectId": "0x0d938ff4a71eef5974b4f29db7c94c3e169f4545a3a62551785aa2e47e3a4264",
+        "version": "9",
+        "digest": "GEdrbEKrkZtrqxXDzEfejiJ7RhixYZmqprtcrsi7gUcQ",
+        "type": "0x2::dynamic_field::Field<u64, u64>",
+        "owner": {
+          "ObjectOwner": "0xcbba4377978c35d56a021dd5a88d4f52da68f7f78857f971eff435d7d170d69e"
+        },
+        "content": {
+          "dataType": "moveObject",
+          "type": "0x2::dynamic_field::Field<u64, u64>",
+          "hasPublicTransfer": false,
+          "fields": {
+            "id": {
+              "id": "0x0d938ff4a71eef5974b4f29db7c94c3e169f4545a3a62551785aa2e47e3a4264"
+            },
+            "name": "51",
+            "value": "52"
+          }
+        }
+      }
+    }
+  ]
 }

@@ -87,6 +87,26 @@ module P::M {
 
 //# run-jsonrpc
 {
+  "method": "sui_multiGetObjects",
+  "params": [
+    [
+      "@{obj_3_0}",
+      "@{obj_5_0}",
+      "@{obj_6_0}",
+      "@{obj_8_0}",
+      "@{obj_10_0}",
+      "@{obj_12_0}"
+    ],
+    {
+      "showOwner": true,
+      "showType": true,
+      "showContent": true
+    }
+  ]
+}
+
+//# run-jsonrpc
+{
   "method": "suix_getDynamicFields",
   "params": ["@{obj_2_0}"]
 }
@@ -140,4 +160,20 @@ module P::M {
 {
   "method": "suix_getDynamicFields",
   "params": ["@{obj_2_0}"]
+}
+
+//# run-jsonrpc
+{
+  "method": "sui_multiGetObjects",
+  "params": [
+    [
+      "@{obj_12_0}",
+      "@{obj_19_0}"
+    ],
+    {
+      "showOwner": true,
+      "showType": true,
+      "showContent": true
+    }
+  ]
 }
