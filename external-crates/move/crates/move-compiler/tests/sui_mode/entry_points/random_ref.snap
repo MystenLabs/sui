@@ -1,0 +1,8 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: sui
+  edition: legacy
+  lint: false
+---
+

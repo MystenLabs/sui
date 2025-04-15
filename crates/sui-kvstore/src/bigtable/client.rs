@@ -1,6 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use crate::bigtable::metrics::KvMetrics;
 use crate::bigtable::proto::bigtable::v2::bigtable_client::BigtableClient as BigtableInternalClient;
 use crate::bigtable::proto::bigtable::v2::mutate_rows_request::Entry;
 use crate::bigtable::proto::bigtable::v2::mutation::SetCell;
@@ -14,11 +15,13 @@ use anyhow::{anyhow, Result};
 use async_trait::async_trait;
 use gcp_auth::{Token, TokenProvider};
 use http::{HeaderValue, Request, Response};
+use prometheus::Registry;
 use std::future::Future;
 use std::pin::Pin;
 use std::sync::{Arc, RwLock};
 use std::task::{Context, Poll};
 use std::time::Duration;
+use std::time::Instant;
 use sui_types::base_types::{ObjectID, TransactionDigest};
 use sui_types::digests::CheckpointDigest;
 use sui_types::full_checkpoint_content::CheckpointData;
@@ -35,6 +38,7 @@ const OBJECTS_TABLE: &str = "objects";
 const TRANSACTIONS_TABLE: &str = "transactions";
 const CHECKPOINTS_TABLE: &str = "checkpoints";
 const CHECKPOINTS_BY_DIGEST_TABLE: &str = "checkpoints_by_digest";
+const WATERMARK_TABLE: &str = "watermark";
 
 const COLUMN_FAMILY_NAME: &str = "sui";
 const DEFAULT_COLUMN_QUALIFIER: &str = "";
@@ -61,6 +65,8 @@ struct AuthChannel {
 pub struct BigTableClient {
     table_prefix: String,
     client: BigtableInternalClient<AuthChannel>,
+    client_name: String,
+    metrics: Option<Arc<KvMetrics>>,
 }
 
 #[async_trait]
@@ -128,6 +134,15 @@ impl KeyValueStoreWriter for BigTableClient {
                 checkpoint.checkpoint_summary.digest().inner().to_vec(),
                 vec![(DEFAULT_COLUMN_QUALIFIER, key)],
             )],
+        )
+        .await
+    }
+
+    async fn save_watermark(&mut self, watermark: CheckpointSequenceNumber) -> Result<()> {
+        let key = watermark.to_be_bytes().to_vec();
+        self.multi_set(
+            WATERMARK_TABLE,
+            [(key, vec![(DEFAULT_COLUMN_QUALIFIER, vec![])])],
         )
         .await
     }
@@ -239,7 +254,7 @@ impl KeyValueStoreReader for BigTableClient {
     async fn get_latest_checkpoint(&mut self) -> Result<CheckpointSequenceNumber> {
         let upper_limit = u64::MAX.to_be_bytes().to_vec();
         match self
-            .reversed_scan(CHECKPOINTS_TABLE, upper_limit)
+            .reversed_scan(WATERMARK_TABLE, upper_limit)
             .await?
             .pop()
         {
@@ -271,6 +286,8 @@ impl BigTableClient {
         Ok(Self {
             table_prefix: format!("projects/emulator/instances/{}/tables/", instance_id),
             client: BigtableInternalClient::new(auth_channel),
+            client_name: "local".to_string(),
+            metrics: None,
         })
     }
 
@@ -278,6 +295,8 @@ impl BigTableClient {
         instance_id: String,
         is_read_only: bool,
         timeout: Option<Duration>,
+        client_name: String,
+        registry: Option<&Registry>,
     ) -> Result<Self> {
         let policy = if is_read_only {
             "https://www.googleapis.com/auth/bigtable.data.readonly"
@@ -309,6 +328,8 @@ impl BigTableClient {
         Ok(Self {
             table_prefix,
             client: BigtableInternalClient::new(auth_channel),
+            client_name,
+            metrics: registry.map(KvMetrics::new),
         })
     }
 
@@ -383,6 +404,18 @@ impl BigTableClient {
         table_name: &str,
         values: impl IntoIterator<Item = (Bytes, Vec<(&str, Bytes)>)> + std::marker::Send,
     ) -> Result<()> {
+        for chunk in values.into_iter().collect::<Vec<_>>().chunks(50_000) {
+            self.multi_set_internal(table_name, chunk.iter().cloned())
+                .await?;
+        }
+        Ok(())
+    }
+
+    async fn multi_set_internal(
+        &mut self,
+        table_name: &str,
+        values: impl IntoIterator<Item = (Bytes, Vec<(&str, Bytes)>)> + std::marker::Send,
+    ) -> Result<()> {
         let mut entries = vec![];
         for (row_key, cells) in values {
             let mutations = cells
@@ -405,11 +438,73 @@ impl BigTableClient {
             entries,
             ..MutateRowsRequest::default()
         };
-        self.mutate_rows(request).await?;
+        let mut response = self.mutate_rows(request).await?;
+        while let Some(part) = response.message().await? {
+            for entry in part.entries {
+                if let Some(status) = entry.status {
+                    if status.code != 0 {
+                        return Err(anyhow!(
+                            "bigtable write failed {} {}",
+                            status.code,
+                            status.message
+                        ));
+                    }
+                }
+            }
+        }
         Ok(())
     }
 
     pub async fn multi_get(
+        &mut self,
+        table_name: &str,
+        keys: Vec<Vec<u8>>,
+    ) -> Result<Vec<Vec<(Bytes, Bytes)>>> {
+        let start_time = Instant::now();
+        let num_keys_requested = keys.len();
+        let result = self.multi_get_internal(table_name, keys).await;
+        let elapsed_ms = start_time.elapsed().as_millis() as f64;
+        let labels = [&self.client_name, table_name];
+        match &self.metrics {
+            None => result,
+            Some(metrics) => match result {
+                Err(e) => {
+                    metrics.kv_get_errors.with_label_values(&labels).inc();
+                    Err(e)
+                }
+                Ok(result) => {
+                    metrics
+                        .kv_get_batch_size
+                        .with_label_values(&labels)
+                        .observe(num_keys_requested as f64);
+                    if num_keys_requested > result.len() {
+                        metrics
+                            .kv_get_not_found
+                            .with_label_values(&labels)
+                            .inc_by((num_keys_requested - result.len()) as u64);
+                    }
+                    metrics
+                        .kv_get_success
+                        .with_label_values(&labels)
+                        .inc_by(result.len() as u64);
+
+                    metrics
+                        .kv_get_latency_ms
+                        .with_label_values(&labels)
+                        .observe(elapsed_ms);
+                    if num_keys_requested > 0 {
+                        metrics
+                            .kv_get_latency_ms_per_key
+                            .with_label_values(&labels)
+                            .observe(elapsed_ms / num_keys_requested as f64);
+                    }
+                    Ok(result)
+                }
+            },
+        }
+    }
+
+    pub async fn multi_get_internal(
         &mut self,
         table_name: &str,
         keys: Vec<Vec<u8>>,
@@ -431,6 +526,37 @@ impl BigTableClient {
     }
 
     async fn reversed_scan(
+        &mut self,
+        table_name: &str,
+        upper_limit: Bytes,
+    ) -> Result<Vec<(Bytes, Vec<(Bytes, Bytes)>)>> {
+        let start_time = Instant::now();
+        let result = self.reversed_scan_internal(table_name, upper_limit).await;
+        let elapsed_ms = start_time.elapsed().as_millis() as f64;
+        let labels = [&self.client_name, table_name];
+        match &self.metrics {
+            Some(metrics) => match result {
+                Ok(result) => {
+                    metrics.kv_scan_success.with_label_values(&labels).inc();
+                    if result.is_empty() {
+                        metrics.kv_scan_not_found.with_label_values(&labels).inc();
+                    }
+                    metrics
+                        .kv_scan_latency_ms
+                        .with_label_values(&labels)
+                        .observe(elapsed_ms);
+                    Ok(result)
+                }
+                Err(e) => {
+                    metrics.kv_scan_error.with_label_values(&labels).inc();
+                    Err(e)
+                }
+            },
+            None => result,
+        }
+    }
+
+    async fn reversed_scan_internal(
         &mut self,
         table_name: &str,
         upper_limit: Bytes,

@@ -1,0 +1,47 @@
+---
+source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
+---
+processed 5 tasks
+
+init:
+A: object(0,0)
+
+task 1, lines 13-62:
+//# publish --sender A
+events: Event { package_id: test, transaction_module: Identifier("mod"), sender: A, type_: StructTag { address: sui, module: Identifier("display"), name: Identifier("DisplayCreated"), type_params: [Struct(StructTag { address: test, module: Identifier("mod"), name: Identifier("Foo"), type_params: [] })] }, contents: [126, 201, 249, 157, 6, 41, 55, 68, 252, 71, 106, 242, 177, 154, 44, 3, 34, 157, 189, 65, 147, 4, 190, 129, 146, 9, 109, 166, 80, 28, 97, 154] }, Event { package_id: test, transaction_module: Identifier("mod"), sender: A, type_: StructTag { address: sui, module: Identifier("display"), name: Identifier("VersionUpdated"), type_params: [Struct(StructTag { address: test, module: Identifier("mod"), name: Identifier("Foo"), type_params: [] })] }, contents: [126, 201, 249, 157, 6, 41, 55, 68, 252, 71, 106, 242, 177, 154, 44, 3, 34, 157, 189, 65, 147, 4, 190, 129, 146, 9, 109, 166, 80, 28, 97, 154, 1, 0, 1, 1, 99, 72, 123, 99, 125, 123, 99, 125, 123, 99, 125, 123, 99, 125, 123, 99, 125, 123, 99, 125, 123, 99, 125, 123, 99, 125, 123, 99, 125, 123, 99, 125, 123, 99, 125, 123, 99, 125, 123, 99, 125, 123, 99, 125, 123, 99, 125, 123, 99, 125, 123, 99, 125, 123, 99, 125, 123, 99, 125, 123, 99, 125, 123, 99, 125, 123, 99, 125, 123, 99, 125, 123, 99, 125] }
+created: object(1,0), object(1,1), object(1,2)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 18019600,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 2, lines 64-66:
+//# programmable --sender A --inputs 42u8 @A
+//> 0: test::mod::new(Input(0));
+//> 1: TransferObjects([Result(0)], Input(1))
+created: object(2,0)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 4172400,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 3, line 68:
+//# create-checkpoint
+Checkpoint created: 1
+
+task 4, lines 70-74:
+//# run-jsonrpc
+Response: {
+  "jsonrpc": "2.0",
+  "id": 0,
+  "result": {
+    "data": {
+      "objectId": "0xbc4a7d1613c902a636cb1f0b3c104908b282f2e34641e8c9979c25143f6fc71d",
+      "version": "3",
+      "digest": "D8ZGCXxoXRGXiVnz7yQLuUhZbHVnKyEe9MMdNeV5vEYj",
+      "display": {
+        "data": null,
+        "error": {
+          "code": "displayError",
+          "error": "Display output too large"
+        }
+      }
+    }
+  }
+}

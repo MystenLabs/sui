@@ -1,0 +1,8 @@
+---
+source: crates/move-transactional-test-runner/src/framework.rs
+---
+processed 1 task
+
+task 0, lines 1-8:
+//# print-bytecode
+Error: Unbound struct Self.M

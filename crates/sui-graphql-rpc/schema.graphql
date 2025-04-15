@@ -175,6 +175,11 @@ enum AddressTransactionBlockRelationship {
 }
 
 """
+An Authenticator represents the access control rules for a ConsensusV2 object.
+"""
+union Authenticator = Address
+
+"""
 System transaction for creating the on-chain state used by zkLogin.
 """
 type AuthenticatorStateCreateTransaction {
@@ -448,6 +453,10 @@ type Checkpoint {
 	By default, the scanning range consists of all transactions in this checkpoint.
 	"""
 	transactionBlocks(first: Int, after: String, last: Int, before: String, filter: TransactionBlockFilter, scanLimit: Int): TransactionBlockConnection!
+	"""
+	The Base64 serialized BCS bytes of CheckpointSummary for this checkpoint.
+	"""
+	bcs: Base64
 }
 
 type CheckpointConnection {
@@ -849,6 +858,16 @@ type ConsensusCommitPrologueTransaction {
 }
 
 """
+A ConsensusV2 object is an object that is automatically versioned by the consensus protocol
+and allows different authentication modes based on the chosen authenticator.
+(Initially, only single-owner authentication is supported.)
+"""
+type ConsensusV2 {
+	startVersion: UInt53!
+	authenticator: Authenticator
+}
+
+"""
 ISO-8601 Date and Time: RFC3339 in UTC with format: YYYY-MM-DDTHH:MM:SS.mmmZ. Note that the milliseconds part is optional, and it may be omitted if its value is 0.
 """
 scalar DateTime
@@ -1027,7 +1046,7 @@ type EndOfEpochTransaction {
 	transactions(first: Int, before: String, last: Int, after: String): EndOfEpochTransactionKindConnection!
 }
 
-union EndOfEpochTransactionKind = ChangeEpochTransaction | AuthenticatorStateCreateTransaction | AuthenticatorStateExpireTransaction | RandomnessStateCreateTransaction | CoinDenyListStateCreateTransaction | BridgeStateCreateTransaction | BridgeCommitteeInitTransaction
+union EndOfEpochTransactionKind = ChangeEpochTransaction | AuthenticatorStateCreateTransaction | AuthenticatorStateExpireTransaction | RandomnessStateCreateTransaction | CoinDenyListStateCreateTransaction | BridgeStateCreateTransaction | BridgeCommitteeInitTransaction | StoreExecutionTimeObservationsTransaction
 
 type EndOfEpochTransactionKindConnection {
 	"""
@@ -2860,7 +2879,7 @@ objects are ones whose
 
 - Type matches the `type` filter,
 - AND, whose owner matches the `owner` filter,
-- AND, whose ID is in `objectIds` OR whose ID and version is in `objectKeys`.
+- AND, whose ID is in `objectIds`.
 """
 input ObjectFilter {
 	"""
@@ -2879,10 +2898,6 @@ input ObjectFilter {
 	Filter for live objects by their IDs.
 	"""
 	objectIds: [SuiAddress!]
-	"""
-	Filter for live or potentially historical objects by their ID and version.
-	"""
-	objectKeys: [ObjectKey!]
 }
 
 input ObjectKey {
@@ -2905,7 +2920,7 @@ enum ObjectKind {
 """
 The object's owner type: Immutable, Shared, Parent, or Address.
 """
-union ObjectOwner = Immutable | Shared | Parent | AddressOwner
+union ObjectOwner = Immutable | Shared | Parent | AddressOwner | ConsensusV2
 
 input ObjectRef {
 	"""
@@ -3306,6 +3321,10 @@ type Query {
 	"""
 	transactionBlock(digest: String!): TransactionBlock
 	"""
+	Fetch a list of objects by their IDs and versions.
+	"""
+	multiGetObjects(keys: [ObjectKey!]!): [Object]!
+	"""
 	The coin objects that exist in the network.
 	
 	The type field is a string of the inner type of the coin by which to filter (e.g.
@@ -3382,7 +3401,8 @@ type Query {
 	"""
 	typeByName(name: String!): MoveType!
 	"""
-	The coin metadata associated with the given coin type.
+	The coin metadata associated with the given coin type. Note that if the latest version of
+	the coin's metadata is wrapped or deleted, it will not be found.
 	"""
 	coinMetadata(coinType: String!): CoinMetadata
 	"""
@@ -3578,6 +3598,10 @@ type ServiceConfig {
 	Maximum number of transaction ids that can be passed to a `TransactionBlockFilter`.
 	"""
 	maxTransactionIds: Int!
+	"""
+	Maximum number of keys that can be passed to a `multiGetObjects` query.
+	"""
+	maxMultiGetObjectsKeys: Int!
 	"""
 	Maximum number of candidates to scan when gathering a page of results.
 	"""
@@ -3948,6 +3972,13 @@ type StorageFund {
 	non-refundable balance.
 	"""
 	nonRefundableBalance: BigInt
+}
+
+type StoreExecutionTimeObservationsTransaction {
+	"""
+	A workaround to define an empty variant of a GraphQL union.
+	"""
+	_: Boolean
 }
 
 

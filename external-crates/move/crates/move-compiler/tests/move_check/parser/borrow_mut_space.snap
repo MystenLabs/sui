@@ -1,0 +1,21 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: legacy
+  lint: false
+---
+error[E03009]: unbound variable
+  ┌─ tests/move_check/parser/borrow_mut_space.move:6:11
+  │
+6 │         & mut x.f
+  │           ^^^ Unbound variable 'mut'
+
+error[E01002]: unexpected token
+  ┌─ tests/move_check/parser/borrow_mut_space.move:6:15
+  │
+6 │         & mut x.f
+  │               ^
+  │               │
+  │               Unexpected 'x'
+  │               Expected ';'

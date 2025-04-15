@@ -4,11 +4,10 @@
 use crate::manage_package::resolve_lock_file_path;
 use clap::Parser;
 use move_cli::base;
-use move_package::{BuildConfig as MoveBuildConfig, ModelConfig};
-use move_prover::run_boogie_gen;
-use serde_json::json;
+use move_package::BuildConfig as MoveBuildConfig;
 use std::{fs, path::Path};
-use sui_move_build::{check_invalid_dependencies, check_unpublished_dependencies, BuildConfig};
+use sui_move_build::{implicit_deps, BuildConfig};
+use sui_package_management::system_package_versions::latest_system_packages;
 
 const LAYOUTS_DIR: &str = "layouts";
 const STRUCT_LAYOUTS_FILENAME: &str = "struct_layouts.yaml";
@@ -23,6 +22,11 @@ pub struct Build {
     /// Whether we are printing in base64.
     #[clap(long, global = true)]
     pub dump_bytecode_as_base64: bool,
+    /// Don't specialize the package to the active chain when dumping bytecode as Base64. This
+    /// allows building to proceed without a network connection or active environment, but it
+    /// will not be able to automatically determine the addresses of its dependencies.
+    #[clap(long, global = true, requires = "dump_bytecode_as_base64")]
+    pub ignore_chain: bool,
     /// If true, generate struct layout schemas for
     /// all struct types passed into `entry` functions declared by modules in this package
     /// These layout schemas can be consumed by clients (e.g.,
@@ -30,10 +34,6 @@ pub struct Build {
     /// and events.
     #[clap(long, global = true)]
     pub generate_struct_layouts: bool,
-    #[clap(long, global = true)]
-    pub prove: bool,
-    #[clap(long, global = true)]
-    pub path_split: Option<usize>,
     /// The chain ID, if resolved. Required when the dump_bytecode_as_base64 is true,
     /// for automated address management, where package addresses are resolved for the
     /// respective chain in the Move.lock file.
@@ -52,11 +52,7 @@ impl Build {
         Self::execute_internal(
             &rerooted_path,
             build_config,
-            self.with_unpublished_dependencies,
-            self.dump_bytecode_as_base64,
             self.generate_struct_layouts,
-            self.prove,
-            self.path_split,
             self.chain_id.clone(),
         )
     }
@@ -64,34 +60,10 @@ impl Build {
     pub fn execute_internal(
         rerooted_path: &Path,
         mut config: MoveBuildConfig,
-        with_unpublished_deps: bool,
-        dump_bytecode_as_base64: bool,
         generate_struct_layouts: bool,
-        prove: bool,
-        path_split: Option<usize>,
         chain_id: Option<String>,
     ) -> anyhow::Result<()> {
-        if prove {
-            config.verify_mode = true;
-            config.dev_mode = true;
-
-            let model = config.move_model_for_package(
-                rerooted_path,
-                ModelConfig {
-                    all_files_as_targets: false,
-                    target_filter: None,
-                },
-            )?;
-            let mut options = move_prover::cli::Options::default();
-            // don't spawn async tasks when running Boogie--causes a crash if we do
-            options.backend.sequential_task = true;
-            options.backend.use_array_theory = true;
-            options.backend.vc_timeout = 3000;
-            options.backend.path_split = path_split;
-            run_boogie_gen(&model, options)?;
-            return Ok(());
-        }
-
+        config.implicit_dependencies = implicit_deps(latest_system_packages());
         let pkg = BuildConfig {
             config,
             run_bytecode_verifier: true,
@@ -99,21 +71,6 @@ impl Build {
             chain_id,
         }
         .build(rerooted_path)?;
-        if dump_bytecode_as_base64 {
-            check_invalid_dependencies(&pkg.dependency_ids.invalid)?;
-            if !with_unpublished_deps {
-                check_unpublished_dependencies(&pkg.dependency_ids.unpublished)?;
-            }
-
-            println!(
-                "{}",
-                json!({
-                    "modules": pkg.get_package_base64(with_unpublished_deps),
-                    "dependencies": pkg.get_dependency_storage_package_ids(),
-                    "digest": pkg.get_package_digest(with_unpublished_deps),
-                })
-            )
-        }
 
         if generate_struct_layouts {
             let layout_str = serde_yaml::to_string(&pkg.generate_struct_layouts()).unwrap();

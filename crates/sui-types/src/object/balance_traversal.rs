@@ -289,10 +289,7 @@ mod tests {
             .map(|(name, layout)| A::MoveFieldLayout::new(Identifier::new(name).unwrap(), layout))
             .collect();
 
-        A::MoveTypeLayout::Struct(Box::new(A::MoveStructLayout {
-            type_,
-            fields: Box::new(fields),
-        }))
+        A::MoveTypeLayout::Struct(Box::new(A::MoveStructLayout { type_, fields }))
     }
 
     /// BCS encode Move value.

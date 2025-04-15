@@ -213,7 +213,7 @@ struct TestOutput<'a, 'b, W> {
     test_info: &'a BTreeMap<ModuleId, NamedCompiledModule>,
 }
 
-impl<'a, 'b, W: Write> TestOutput<'a, 'b, W> {
+impl<W: Write> TestOutput<'_, '_, W> {
     fn pass(&self, fn_name: &str) {
         writeln!(
             self.writer.lock().unwrap(),
@@ -284,15 +284,14 @@ impl SharedTestingConfig {
 
         // TODO: collect VM logs if the verbose flag (i.e, `self.verbose`) is set
         let now = Instant::now();
-        let serialized_return_values_result = session
-            .execute_function_bypass_visibility_with_tracer_if_enabled(
-                &test_plan.module_id,
-                IdentStr::new(function_name).unwrap(),
-                vec![], // no ty args, at least for now
-                serialize_values(arguments.iter()),
-                &mut gas_meter,
-                tracer,
-            );
+        let serialized_return_values_result = session.execute_function_bypass_visibility(
+            &test_plan.module_id,
+            IdentStr::new(function_name).unwrap(),
+            vec![], // no ty args, at least for now
+            serialize_values(arguments.iter()),
+            &mut gas_meter,
+            tracer,
+        );
         let mut return_result = serialized_return_values_result.map(|res| {
             res.return_values
                 .into_iter()

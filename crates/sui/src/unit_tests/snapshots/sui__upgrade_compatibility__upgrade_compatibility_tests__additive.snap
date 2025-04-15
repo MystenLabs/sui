@@ -1,0 +1,53 @@
+---
+source: crates/sui/src/upgrade_compatibility/../unit_tests/upgrade_compatibility_tests.rs
+expression: normalize_path(err.to_string())
+---
+error[Compatibility E01007]: missing declaration
+  ┌─ /fixtures/upgrade_errors/additive_errors_v2/sources/UpgradeErrors.move:4:18
+  │
+4 │ module upgrades::upgrades {
+  │                  ^^^^^^^^ enum 'EnumToRemove' is missing
+  │
+  = Enums cannot be removed or changed during an 'additive' or 'dependency only' upgrade.
+  = Add missing enum 'EnumToRemove' back to the module 'upgrades'.
+
+error[Compatibility E01007]: missing declaration
+  ┌─ /fixtures/upgrade_errors/additive_errors_v2/sources/UpgradeErrors.move:4:18
+  │
+4 │ module upgrades::upgrades {
+  │                  ^^^^^^^^ function 'function_to_remove' is missing
+  │
+  = Functions cannot be removed or changed during an 'additive' or 'dependency only' upgrade.
+  = Add missing function 'function_to_remove' back to the module 'upgrades'.
+
+error[Compatibility E01007]: missing declaration
+  ┌─ /fixtures/upgrade_errors/additive_errors_v2/sources/UpgradeErrors.move:4:18
+  │
+4 │ module upgrades::upgrades {
+  │                  ^^^^^^^^ struct 'StructToRemove' is missing
+  │
+  = Structs cannot be removed or changed during an 'additive' or 'dependency only' upgrade.
+  = Add missing struct 'StructToRemove' back to the module 'upgrades'.
+
+error[Compatibility E01002]: type mismatch
+  ┌─ /fixtures/upgrade_errors/additive_errors_v2/sources/UpgradeErrors.move:7:9
+  │
+6 │     public struct StructToChange {
+  │                   -------------- Struct definition
+7 │         new_field: u32 // changed to u32
+  │         ^^^^^^^^^ Mismatched field type 'u32', expected 'u64'.
+  │
+  = Structs cannot be removed or changed during an 'additive' or 'dependency only' upgrade.
+  = Restore the original struct's field for struct 'StructToChange' including the ordering.
+
+error[Compatibility E03001]: function signature mismatch
+   ┌─ /fixtures/upgrade_errors/additive_errors_v2/sources/UpgradeErrors.move:18:31
+   │
+18 │     fun function_to_change(): u32 { // changed to u32
+   │                               ^^^ Unexpected return type 'u32', expected 'u64'
+   │
+   = Functions cannot be removed or changed during an 'additive' or 'dependency only' upgrade.
+   = Restore the original function's return type for function 'function_to_change'.
+
+
+Upgrade failed, this package requires changes to be compatible with the existing package. Its upgrade policy is set to 'additive'.

@@ -23,6 +23,7 @@ mod checked {
         language_storage::{ModuleId, TypeTag},
         u256::U256,
     };
+    use move_trace_format::format::MoveTraceBuilder;
     use move_vm_runtime::{
         move_vm::MoveVM,
         session::{LoadedFunctionInstantiation, SerializedReturnValues},
@@ -30,30 +31,35 @@ mod checked {
     use move_vm_types::loaded_data::runtime_types::{CachedDatatype, Type};
     use serde::{de::DeserializeSeed, Deserialize};
     use std::{
+        cell::RefCell,
         collections::{BTreeMap, BTreeSet},
         fmt,
+        rc::Rc,
         sync::Arc,
+        time::Instant,
     };
     use sui_move_natives::object_runtime::ObjectRuntime;
     use sui_protocol_config::ProtocolConfig;
+    use sui_types::execution::{ExecutionTiming, ResultWithTimings};
     use sui_types::execution_config_utils::to_binary_config;
     use sui_types::execution_status::{CommandArgumentError, PackageUpgradeError};
     use sui_types::storage::{get_package_objects, PackageObject};
     use sui_types::type_input::TypeInput;
     use sui_types::{
         base_types::{
-            MoveObjectType, ObjectID, SuiAddress, TxContext, TxContextKind, RESOLVED_ASCII_STR,
-            RESOLVED_STD_OPTION, RESOLVED_UTF8_STR, TX_CONTEXT_MODULE_NAME, TX_CONTEXT_STRUCT_NAME,
+            MoveLegacyTxContext, MoveObjectType, ObjectID, SuiAddress, TxContext, TxContextKind,
+            RESOLVED_ASCII_STR, RESOLVED_STD_OPTION, RESOLVED_UTF8_STR, TX_CONTEXT_MODULE_NAME,
+            TX_CONTEXT_STRUCT_NAME,
         },
         coin::Coin,
         error::{command_argument_error, ExecutionError, ExecutionErrorKind},
-        id::{RESOLVED_SUI_ID, UID},
+        id::RESOLVED_SUI_ID,
         metrics::LimitsMetrics,
         move_package::{
             normalize_deserialized_modules, MovePackage, UpgradeCap, UpgradePolicy, UpgradeReceipt,
             UpgradeTicket,
         },
-        transaction::{Argument, Command, ProgrammableMoveCall, ProgrammableTransaction},
+        transaction::{Command, ProgrammableMoveCall, ProgrammableTransaction},
         transfer::RESOLVED_RECEIVING_STRUCT,
         SUI_FRAMEWORK_ADDRESS,
     };
@@ -71,9 +77,40 @@ mod checked {
         metrics: Arc<LimitsMetrics>,
         vm: &MoveVM,
         state_view: &mut dyn ExecutionState,
-        tx_context: &mut TxContext,
+        tx_context: Rc<RefCell<TxContext>>,
         gas_charger: &mut GasCharger,
         pt: ProgrammableTransaction,
+        trace_builder_opt: &mut Option<MoveTraceBuilder>,
+    ) -> ResultWithTimings<Mode::ExecutionResults, ExecutionError> {
+        let mut timings = vec![];
+        let result = execute_inner::<Mode>(
+            &mut timings,
+            protocol_config,
+            metrics,
+            vm,
+            state_view,
+            tx_context,
+            gas_charger,
+            pt,
+            trace_builder_opt,
+        );
+
+        match result {
+            Ok(result) => Ok((result, timings)),
+            Err(e) => Err((e, timings)),
+        }
+    }
+
+    pub fn execute_inner<Mode: ExecutionMode>(
+        timings: &mut Vec<ExecutionTiming>,
+        protocol_config: &ProtocolConfig,
+        metrics: Arc<LimitsMetrics>,
+        vm: &MoveVM,
+        state_view: &mut dyn ExecutionState,
+        tx_context: Rc<RefCell<TxContext>>,
+        gas_charger: &mut GasCharger,
+        pt: ProgrammableTransaction,
+        trace_builder_opt: &mut Option<MoveTraceBuilder>,
     ) -> Result<Mode::ExecutionResults, ExecutionError> {
         let ProgrammableTransaction { inputs, commands } = pt;
         let mut context = ExecutionContext::new(
@@ -88,19 +125,24 @@ mod checked {
         // execute commands
         let mut mode_results = Mode::empty_results();
         for (idx, command) in commands.into_iter().enumerate() {
-            if let Err(err) = execute_command::<Mode>(&mut context, &mut mode_results, command) {
-                let object_runtime: &ObjectRuntime = context.object_runtime();
+            let start = Instant::now();
+            if let Err(err) =
+                execute_command::<Mode>(&mut context, &mut mode_results, command, trace_builder_opt)
+            {
+                let object_runtime: &ObjectRuntime = context.object_runtime()?;
                 // We still need to record the loaded child objects for replay
                 let loaded_runtime_objects = object_runtime.loaded_runtime_objects();
                 // we do not save the wrapped objects since on error, they should not be modified
                 drop(context);
                 state_view.save_loaded_runtime_objects(loaded_runtime_objects);
+                timings.push(ExecutionTiming::Abort(start.elapsed()));
                 return Err(err.with_command_index(idx));
             };
+            timings.push(ExecutionTiming::Success(start.elapsed()));
         }
 
         // Save loaded objects table in case we fail in post execution
-        let object_runtime: &ObjectRuntime = context.object_runtime();
+        let object_runtime: &ObjectRuntime = context.object_runtime()?;
         // We still need to record the loaded child objects for replay
         // Record the objects loaded at runtime (dynamic fields + received) for
         // storage rebate calculation.
@@ -124,6 +166,7 @@ mod checked {
         context: &mut ExecutionContext<'_, '_, '_>,
         mode_results: &mut Mode::ExecutionResults,
         command: Command,
+        trace_builder_opt: &mut Option<MoveTraceBuilder>,
     ) -> Result<(), ExecutionError> {
         let mut argument_updates = Mode::empty_arguments();
         let results = match command {
@@ -136,9 +179,14 @@ mod checked {
 
                 let tag = to_type_tag(context, tag)?;
 
-                let elem_ty = context
-                    .load_type(&tag)
-                    .map_err(|e| context.convert_vm_error(e))?;
+                let elem_ty = context.load_type(&tag).map_err(|e| {
+                    if context.protocol_config.convert_type_argument_error() {
+                        context.convert_type_argument_error(0, e)
+                    } else {
+                        context.convert_vm_error(e)
+                    }
+                })?;
+
                 let ty = Type::Vector(Box::new(elem_ty));
                 let abilities = context
                     .vm
@@ -157,15 +205,20 @@ mod checked {
                 )]
             }
             Command::MakeMoveVec(tag_opt, args) => {
+                let args = context.splat_args(0, args)?;
                 let mut res = vec![];
                 leb128::write::unsigned(&mut res, args.len() as u64).unwrap();
                 let mut arg_iter = args.into_iter().enumerate();
                 let (mut used_in_non_entry_move_call, elem_ty) = match tag_opt {
                     Some(tag) => {
                         let tag = to_type_tag(context, tag)?;
-                        let elem_ty = context
-                            .load_type(&tag)
-                            .map_err(|e| context.convert_vm_error(e))?;
+                        let elem_ty = context.load_type(&tag).map_err(|e| {
+                            if context.protocol_config.convert_type_argument_error() {
+                                context.convert_type_argument_error(0, e)
+                            } else {
+                                context.convert_vm_error(e)
+                            }
+                        })?;
                         (false, elem_ty)
                     }
                     // If no tag specified, it _must_ be an object
@@ -201,6 +254,9 @@ mod checked {
                 )]
             }
             Command::TransferObjects(objs, addr_arg) => {
+                let unsplat_objs_len = objs.len();
+                let objs = context.splat_args(0, objs)?;
+                let addr_arg = context.one_arg(unsplat_objs_len, addr_arg)?;
                 let objs: Vec<ObjectValue> = objs
                     .into_iter()
                     .enumerate()
@@ -215,6 +271,8 @@ mod checked {
                 vec![]
             }
             Command::SplitCoins(coin_arg, amount_args) => {
+                let coin_arg = context.one_arg(0, coin_arg)?;
+                let amount_args = context.splat_args(1, amount_args)?;
                 let mut obj: ObjectValue = context.borrow_arg_mut(0, coin_arg)?;
                 let ObjectContents::Coin(coin) = &mut obj.contents else {
                     let e = ExecutionErrorKind::command_argument_error(
@@ -230,7 +288,7 @@ mod checked {
                         let amount: u64 =
                             context.by_value_arg(CommandKind::SplitCoins, 1, amount_arg)?;
                         let new_coin_id = context.fresh_id()?;
-                        let new_coin = coin.split(amount, UID::new(new_coin_id))?;
+                        let new_coin = coin.split(amount, new_coin_id)?;
                         let coin_type = obj.type_.clone();
                         // safe because we are propagating the coin type, and relying on the internal
                         // invariant that coin values have a coin type
@@ -242,6 +300,8 @@ mod checked {
                 split_coins
             }
             Command::MergeCoins(target_arg, coin_args) => {
+                let target_arg = context.one_arg(0, target_arg)?;
+                let coin_args = context.splat_args(1, coin_args)?;
                 let mut target: ObjectValue = context.borrow_arg_mut(0, target_arg)?;
                 let ObjectContents::Coin(target_coin) = &mut target.contents else {
                     let e = ExecutionErrorKind::command_argument_error(
@@ -289,6 +349,7 @@ mod checked {
                     type_arguments,
                     arguments,
                 } = *move_call;
+                let arguments = context.splat_args(0, arguments)?;
 
                 let module = to_identifier(context, module)?;
                 let function = to_identifier(context, function)?;
@@ -315,15 +376,21 @@ mod checked {
                     loaded_type_arguments,
                     arguments,
                     /* is_init */ false,
+                    trace_builder_opt,
                 );
 
                 context.linkage_view.reset_linkage();
                 return_values?
             }
-            Command::Publish(modules, dep_ids) => {
-                execute_move_publish::<Mode>(context, &mut argument_updates, modules, dep_ids)?
-            }
+            Command::Publish(modules, dep_ids) => execute_move_publish::<Mode>(
+                context,
+                &mut argument_updates,
+                modules,
+                dep_ids,
+                trace_builder_opt,
+            )?,
             Command::Upgrade(modules, dep_ids, current_package_id, upgrade_ticket) => {
+                let upgrade_ticket = context.one_arg(0, upgrade_ticket)?;
                 execute_move_upgrade::<Mode>(
                     context,
                     modules,
@@ -347,8 +414,9 @@ mod checked {
         runtime_id: &ModuleId,
         function: &IdentStr,
         type_arguments: Vec<Type>,
-        arguments: Vec<Argument>,
+        arguments: Vec<Arg>,
         is_init: bool,
+        trace_builder_opt: &mut Option<MoveTraceBuilder>,
     ) -> Result<Vec<Value>, ExecutionError> {
         // check that the function is either an entry function or a valid public function
         let LoadedFunctionInfo {
@@ -378,6 +446,7 @@ mod checked {
             type_arguments,
             tx_context_kind,
             serialized_arguments,
+            trace_builder_opt,
         )?;
         assert_invariant!(
             by_mut_ref.len() == mutable_reference_outputs.len(),
@@ -416,7 +485,7 @@ mod checked {
     fn write_back_results<Mode: ExecutionMode>(
         context: &mut ExecutionContext<'_, '_, '_>,
         argument_updates: &mut Mode::ArgumentUpdates,
-        arguments: &[Argument],
+        arguments: &[Arg],
         non_entry_move_call: bool,
         mut_ref_values: impl IntoIterator<Item = (u8, Vec<u8>)>,
         mut_ref_kinds: impl IntoIterator<Item = (u8, ValueKind)>,
@@ -476,6 +545,7 @@ mod checked {
         argument_updates: &mut Mode::ArgumentUpdates,
         module_bytes: Vec<Vec<u8>>,
         dep_ids: Vec<ObjectID>,
+        trace_builder_opt: &mut Option<MoveTraceBuilder>,
     ) -> Result<Vec<Value>, ExecutionError> {
         assert_invariant!(
             !module_bytes.is_empty(),
@@ -494,7 +564,7 @@ mod checked {
             // do not calculate or substitute id for predefined packages
             (*modules[0].self_id().address()).into()
         } else {
-            let id = context.tx_context.fresh_id();
+            let id = context.tx_context.borrow_mut().fresh_id();
             substitute_package_id(&mut modules, id)?;
             id
         };
@@ -505,15 +575,16 @@ mod checked {
         let package =
             context.new_package(&modules, dependencies.iter().map(|p| p.move_package()))?;
 
-        // Here we optimistacally push the package that is being published/upgraded
+        // Here we optimistically push the package that is being published/upgraded
         // and if there is an error of any kind (verification or module init) we
         // remove it.
         // The call to `pop_last_package` later is fine because we cannot re-enter and
         // the last package we pushed is the one we are verifying and running the init from
         context.linkage_view.set_linkage(&package)?;
         context.write_package(package);
-        let res = publish_and_verify_modules(context, runtime_id, &modules)
-            .and_then(|_| init_modules::<Mode>(context, argument_updates, &modules));
+        let res = publish_and_verify_modules(context, runtime_id, &modules).and_then(|_| {
+            init_modules::<Mode>(context, argument_updates, &modules, trace_builder_opt)
+        });
         context.linkage_view.reset_linkage();
         if res.is_err() {
             context.pop_package();
@@ -541,7 +612,7 @@ mod checked {
         module_bytes: Vec<Vec<u8>>,
         dep_ids: Vec<ObjectID>,
         current_package_id: ObjectID,
-        upgrade_ticket_arg: Argument,
+        upgrade_ticket_arg: Arg,
     ) -> Result<Vec<Value>, ExecutionError> {
         assert_invariant!(
             !module_bytes.is_empty(),
@@ -607,7 +678,7 @@ mod checked {
         substitute_package_id(&mut modules, runtime_id)?;
 
         // Upgraded packages share their predecessor's runtime ID but get a new storage ID.
-        let storage_id = context.tx_context.fresh_id();
+        let storage_id = context.tx_context.borrow_mut().fresh_id();
 
         let dependencies = fetch_packages(context, &dep_ids)?;
         let package = context.upgrade_package(
@@ -779,11 +850,12 @@ mod checked {
         type_arguments: Vec<Type>,
         tx_context_kind: TxContextKind,
         mut serialized_arguments: Vec<Vec<u8>>,
+        trace_builder_opt: &mut Option<MoveTraceBuilder>,
     ) -> Result<SerializedReturnValues, ExecutionError> {
         match tx_context_kind {
             TxContextKind::None => (),
             TxContextKind::Mutable | TxContextKind::Immutable => {
-                serialized_arguments.push(context.tx_context.to_vec());
+                serialized_arguments.push(context.tx_context.borrow().to_bcs_legacy_context());
             }
         }
         // script visibility checked manually for entry points
@@ -793,6 +865,7 @@ mod checked {
                 function,
                 type_arguments,
                 serialized_arguments,
+                trace_builder_opt,
             )
             .map_err(|e| context.convert_vm_error(e))?;
 
@@ -807,12 +880,12 @@ mod checked {
             let Some((_, ctx_bytes, _)) = result.mutable_reference_outputs.pop() else {
                 invariant_violation!("Missing TxContext in reference outputs");
             };
-            let updated_ctx: TxContext = bcs::from_bytes(&ctx_bytes).map_err(|e| {
+            let updated_ctx: MoveLegacyTxContext = bcs::from_bytes(&ctx_bytes).map_err(|e| {
                 ExecutionError::invariant_violation(format!(
                     "Unable to deserialize TxContext bytes. {e}"
                 ))
             })?;
-            context.tx_context.update_state(updated_ctx)?;
+            context.tx_context.borrow_mut().update_state(updated_ctx)?;
         }
         Ok(result)
     }
@@ -884,6 +957,7 @@ mod checked {
         context: &mut ExecutionContext<'_, '_, '_>,
         argument_updates: &mut Mode::ArgumentUpdates,
         modules: &[CompiledModule],
+        trace_builder_opt: &mut Option<MoveTraceBuilder>,
     ) -> Result<(), ExecutionError> {
         let modules_to_init = modules.iter().filter_map(|module| {
             for fdef in &module.function_defs {
@@ -909,6 +983,7 @@ mod checked {
                 vec![],
                 vec![],
                 /* is_init */ true,
+                trace_builder_opt,
             )?;
 
             assert_invariant!(
@@ -1200,7 +1275,7 @@ mod checked {
         function: &IdentStr,
         function_kind: FunctionKind,
         signature: &LoadedFunctionInstantiation,
-        args: &[Argument],
+        args: &[Arg],
     ) -> Result<ArgInfo, ExecutionError> {
         // check the arity
         let parameters = &signature.parameters;
@@ -1664,7 +1739,7 @@ mod checked {
 
     struct VectorElementVisitor<'a>(&'a PrimitiveArgumentLayout);
 
-    impl<'d, 'a> serde::de::Visitor<'d> for VectorElementVisitor<'a> {
+    impl<'d> serde::de::Visitor<'d> for VectorElementVisitor<'_> {
         type Value = ();
 
         fn expecting(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -1682,7 +1757,7 @@ mod checked {
 
     struct OptionElementVisitor<'a>(&'a PrimitiveArgumentLayout);
 
-    impl<'d, 'a> serde::de::Visitor<'d> for OptionElementVisitor<'a> {
+    impl<'d> serde::de::Visitor<'d> for OptionElementVisitor<'_> {
         type Value = ();
 
         fn expecting(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {

@@ -1,0 +1,4 @@
+---
+source: crates/move-package/tests/test_runner.rs
+---
+Error parsing '[package]' section of manifest: Invalid 'edition'. Unsupported edition "2024.final". Current supported editions include: "legacy", "2024.alpha", "2024.beta", and "2024"

@@ -1,0 +1,43 @@
+---
+source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
+---
+processed 4 tasks
+
+init:
+C: object(0,0)
+
+task 1, line 6:
+//# create-checkpoint
+Checkpoint created: 1
+
+task 2, lines 8-19:
+//# run-graphql
+Response: {
+  "data": {
+    "protocolConfig": {
+      "protocolVersion": 51,
+      "config": {
+        "value": "128"
+      },
+      "featureFlag": {
+        "value": true
+      }
+    }
+  }
+}
+
+task 3, lines 21-32:
+//# run-graphql
+Response: {
+  "data": {
+    "protocolConfig": {
+      "protocolVersion": 8,
+      "config": {
+        "value": null
+      },
+      "featureFlag": {
+        "value": false
+      }
+    }
+  }
+}

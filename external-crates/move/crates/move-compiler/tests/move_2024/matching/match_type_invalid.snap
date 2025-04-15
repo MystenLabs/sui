@@ -1,0 +1,36 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: 2024.alpha
+  lint: false
+---
+error[E04010]: cannot infer type
+   ┌─ tests/move_2024/matching/match_type_invalid.move:12:17
+   │
+12 │         let o = Option::None;
+   │                 ^^^^^^^^^^^^ Could not infer this type. Try adding an annotation
+
+error[E04010]: cannot infer type
+   ┌─ tests/move_2024/matching/match_type_invalid.move:14:13
+   │
+14 │             Option::Some(n) => foo(n),
+   │             ^^^^^^^^^^^^^^^ Could not infer this type. Try adding an annotation
+
+error[E04010]: cannot infer type
+   ┌─ tests/move_2024/matching/match_type_invalid.move:14:26
+   │
+14 │             Option::Some(n) => foo(n),
+   │                          ^ Could not infer this type. Try adding an annotation
+
+error[E04010]: cannot infer type
+   ┌─ tests/move_2024/matching/match_type_invalid.move:14:32
+   │
+14 │             Option::Some(n) => foo(n),
+   │                                ^^^^^^ Could not infer this type. Try adding an annotation
+
+error[E04010]: cannot infer type
+   ┌─ tests/move_2024/matching/match_type_invalid.move:15:13
+   │
+15 │             Option::None => (),
+   │             ^^^^^^^^^^^^ Could not infer this type. Try adding an annotation

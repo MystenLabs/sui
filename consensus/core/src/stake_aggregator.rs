@@ -7,25 +7,36 @@ use consensus_config::{AuthorityIndex, Committee, Stake};
 
 pub(crate) trait CommitteeThreshold {
     fn is_threshold(committee: &Committee, amount: Stake) -> bool;
+    fn threshold(committee: &Committee) -> Stake;
 }
 
+#[derive(Default)]
 pub(crate) struct QuorumThreshold;
 
-#[allow(unused)]
+#[cfg(test)]
+#[derive(Default)]
 pub(crate) struct ValidityThreshold;
 
 impl CommitteeThreshold for QuorumThreshold {
     fn is_threshold(committee: &Committee, amount: Stake) -> bool {
         committee.reached_quorum(amount)
     }
+    fn threshold(committee: &Committee) -> Stake {
+        committee.quorum_threshold()
+    }
 }
 
+#[cfg(test)]
 impl CommitteeThreshold for ValidityThreshold {
     fn is_threshold(committee: &Committee, amount: Stake) -> bool {
         committee.reached_validity(amount)
     }
+    fn threshold(committee: &Committee) -> Stake {
+        committee.validity_threshold()
+    }
 }
 
+#[derive(Default)]
 pub(crate) struct StakeAggregator<T> {
     votes: BTreeSet<AuthorityIndex>,
     stake: Stake,
@@ -51,12 +62,27 @@ impl<T: CommitteeThreshold> StakeAggregator<T> {
         T::is_threshold(committee, self.stake)
     }
 
+    /// Adds a vote for the specified authority index to the aggregator. It is guaranteed to count
+    /// the vote only once for an authority.
+    /// The method returns true when the vote comes from a new authority and is counted.
+    pub(crate) fn add_unique(&mut self, vote: AuthorityIndex, committee: &Committee) -> bool {
+        if self.votes.insert(vote) {
+            self.stake += committee.stake(vote);
+            return true;
+        }
+        false
+    }
+
     pub(crate) fn stake(&self) -> Stake {
         self.stake
     }
 
     pub(crate) fn reached_threshold(&self, committee: &Committee) -> bool {
         T::is_threshold(committee, self.stake)
+    }
+
+    pub(crate) fn threshold(&self, committee: &Committee) -> Stake {
+        T::threshold(committee)
     }
 
     pub(crate) fn clear(&mut self) {
@@ -80,6 +106,27 @@ mod tests {
         assert!(!aggregator.add(AuthorityIndex::new_for_test(1), &committee));
         assert!(aggregator.add(AuthorityIndex::new_for_test(2), &committee));
         assert!(aggregator.add(AuthorityIndex::new_for_test(3), &committee));
+    }
+
+    #[test]
+    fn test_add_unique_quorum_threshold() {
+        let committee = local_committee_and_keys(0, vec![1, 1, 1, 1]).0;
+        let mut aggregator = StakeAggregator::<QuorumThreshold>::new();
+
+        assert!(aggregator.add_unique(AuthorityIndex::new_for_test(0), &committee));
+        assert!(!aggregator.reached_threshold(&committee));
+
+        assert!(aggregator.add_unique(AuthorityIndex::new_for_test(1), &committee));
+        assert!(!aggregator.reached_threshold(&committee));
+
+        assert!(!aggregator.add_unique(AuthorityIndex::new_for_test(1), &committee));
+        assert!(!aggregator.reached_threshold(&committee));
+
+        assert!(aggregator.add_unique(AuthorityIndex::new_for_test(2), &committee));
+        assert!(aggregator.reached_threshold(&committee));
+
+        assert!(aggregator.add_unique(AuthorityIndex::new_for_test(3), &committee));
+        assert!(aggregator.reached_threshold(&committee));
     }
 
     #[test]

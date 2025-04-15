@@ -1,0 +1,36 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: legacy
+  lint: false
+---
+error[E04013]: invalid statement or expression in constant
+  ┌─ tests/move_check/typing/const_in_const_invalid.move:4:20
+  │
+4 │ const C_ONE: u64 = if (C_ZERO == 0) { 1 } else { 2 };
+  │                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ 'if' expressions are not supported in constants
+
+error[E04001]: restricted visibility
+   ┌─ tests/move_check/typing/const_in_const_invalid.move:13:20
+   │
+ 3 │ const C_ZERO: u64 = 0;
+   │       ------ Constants are internal to their module, and cannot can be accessed outside of their module
+   ·
+13 │ const C_ONE: u64 = C_ZERO + 1;
+   │                    ^^^^^^ Invalid access of '0x42::t::C_ZERO'
+
+error[E04001]: restricted visibility
+   ┌─ tests/move_check/typing/const_in_const_invalid.move:14:34
+   │
+ 3 │ const C_ZERO: u64 = 0;
+   │       ------ Constants are internal to their module, and cannot can be accessed outside of their module
+   ·
+14 │ const C_V2: vector<u64> = vector[C_ZERO, C_FIVE];
+   │                                  ^^^^^^ Invalid access of '0x42::t::C_ZERO'
+
+error[E03005]: unbound unscoped name
+   ┌─ tests/move_check/typing/const_in_const_invalid.move:14:42
+   │
+14 │ const C_V2: vector<u64> = vector[C_ZERO, C_FIVE];
+   │                                          ^^^^^^ Unbound constant 'C_FIVE'

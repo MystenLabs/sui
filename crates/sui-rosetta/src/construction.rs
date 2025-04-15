@@ -37,7 +37,7 @@ use crate::types::{
 };
 use crate::{OnlineServerContext, SuiEnv};
 
-/// This module implements the [Rosetta Construction API](https://www.rosetta-api.org/docs/ConstructionApi.html)
+// This module implements the [Rosetta Construction API](https://www.rosetta-api.org/docs/ConstructionApi.html)
 
 /// Derive returns the AccountIdentifier associated with a public key.
 ///

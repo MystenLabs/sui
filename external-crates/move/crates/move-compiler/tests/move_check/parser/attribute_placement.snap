@@ -1,0 +1,78 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: legacy
+  lint: false
+---
+warning[W02018]: unknown attribute
+  ┌─ tests/move_check/parser/attribute_placement.move:3:3
+  │
+3 │ #[attr]
+  │   ^^^^ Unknown attribute 'attr'. Custom attributes must be wrapped in 'ext', e.g. #[ext(attr)]
+
+warning[W02018]: unknown attribute
+  ┌─ tests/move_check/parser/attribute_placement.move:5:7
+  │
+5 │     #[attr]
+  │       ^^^^ Unknown attribute 'attr'. Custom attributes must be wrapped in 'ext', e.g. #[ext(attr)]
+
+warning[W02018]: unknown attribute
+  ┌─ tests/move_check/parser/attribute_placement.move:8:7
+  │
+8 │     #[attr]
+  │       ^^^^ Unknown attribute 'attr'. Custom attributes must be wrapped in 'ext', e.g. #[ext(attr)]
+
+warning[W02018]: unknown attribute
+   ┌─ tests/move_check/parser/attribute_placement.move:11:7
+   │
+11 │     #[attr]
+   │       ^^^^ Unknown attribute 'attr'. Custom attributes must be wrapped in 'ext', e.g. #[ext(attr)]
+
+warning[W02018]: unknown attribute
+   ┌─ tests/move_check/parser/attribute_placement.move:14:7
+   │
+14 │     #[attr]
+   │       ^^^^ Unknown attribute 'attr'. Custom attributes must be wrapped in 'ext', e.g. #[ext(attr)]
+
+warning[W02018]: unknown attribute
+   ┌─ tests/move_check/parser/attribute_placement.move:19:3
+   │
+19 │ #[attr]
+   │   ^^^^ Unknown attribute 'attr'. Custom attributes must be wrapped in 'ext', e.g. #[ext(attr)]
+
+warning[W02018]: unknown attribute
+   ┌─ tests/move_check/parser/attribute_placement.move:21:7
+   │
+21 │     #[attr]
+   │       ^^^^ Unknown attribute 'attr'. Custom attributes must be wrapped in 'ext', e.g. #[ext(attr)]
+
+warning[W02018]: unknown attribute
+   ┌─ tests/move_check/parser/attribute_placement.move:24:7
+   │
+24 │     #[attr]
+   │       ^^^^ Unknown attribute 'attr'. Custom attributes must be wrapped in 'ext', e.g. #[ext(attr)]
+
+warning[W02018]: unknown attribute
+   ┌─ tests/move_check/parser/attribute_placement.move:28:3
+   │
+28 │ #[attr]
+   │   ^^^^ Unknown attribute 'attr'. Custom attributes must be wrapped in 'ext', e.g. #[ext(attr)]
+
+warning[W02018]: unknown attribute
+   ┌─ tests/move_check/parser/attribute_placement.move:30:7
+   │
+30 │     #[attr]
+   │       ^^^^ Unknown attribute 'attr'. Custom attributes must be wrapped in 'ext', e.g. #[ext(attr)]
+
+warning[W02018]: unknown attribute
+   ┌─ tests/move_check/parser/attribute_placement.move:33:7
+   │
+33 │     #[attr]
+   │       ^^^^ Unknown attribute 'attr'. Custom attributes must be wrapped in 'ext', e.g. #[ext(attr)]
+
+warning[W02018]: unknown attribute
+   ┌─ tests/move_check/parser/attribute_placement.move:36:7
+   │
+36 │     #[attr]
+   │       ^^^^ Unknown attribute 'attr'. Custom attributes must be wrapped in 'ext', e.g. #[ext(attr)]

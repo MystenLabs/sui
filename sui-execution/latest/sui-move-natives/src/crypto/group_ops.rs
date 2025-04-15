@@ -26,28 +26,61 @@ pub const NOT_SUPPORTED_ERROR: u64 = 0;
 pub const INVALID_INPUT_ERROR: u64 = 1;
 pub const INPUT_TOO_LONG_ERROR: u64 = 2;
 
-fn is_supported(context: &NativeContext) -> bool {
-    context
+fn is_supported(context: &NativeContext) -> PartialVMResult<bool> {
+    Ok(context
         .extensions()
-        .get::<ObjectRuntime>()
+        .get::<ObjectRuntime>()?
         .protocol_config
-        .enable_group_ops_native_functions()
+        .enable_group_ops_native_functions())
 }
 
-fn is_msm_supported(context: &NativeContext) -> bool {
-    context
+fn is_msm_supported(context: &NativeContext) -> PartialVMResult<bool> {
+    Ok(context
         .extensions()
-        .get::<ObjectRuntime>()
+        .get::<ObjectRuntime>()?
         .protocol_config
-        .enable_group_ops_native_function_msm()
+        .enable_group_ops_native_function_msm())
 }
 
-fn is_uncompressed_g1_supported(context: &NativeContext) -> bool {
-    context
+fn is_uncompressed_g1_supported(context: &NativeContext) -> PartialVMResult<bool> {
+    Ok(context
         .extensions()
-        .get::<ObjectRuntime>()
+        .get::<ObjectRuntime>()?
         .protocol_config
-        .uncompressed_g1_group_elements()
+        .uncompressed_g1_group_elements())
+}
+
+fn v2_native_charge(context: &NativeContext, cost: InternalGas) -> PartialVMResult<InternalGas> {
+    Ok(
+        if context
+            .extensions()
+            .get::<ObjectRuntime>()?
+            .protocol_config
+            .native_charging_v2()
+        {
+            context.gas_used()
+        } else {
+            cost
+        },
+    )
+}
+
+fn map_op_result(
+    context: &NativeContext,
+    cost: InternalGas,
+    result: FastCryptoResult<Vec<u8>>,
+) -> PartialVMResult<NativeResult> {
+    match result {
+        Ok(bytes) => Ok(NativeResult::ok(
+            v2_native_charge(context, cost)?,
+            smallvec![Value::vector_u8(bytes)],
+        )),
+        // Since all Element<G> are validated on construction, this error should never happen unless the requested type is wrong or inputs are invalid.
+        Err(_) => Ok(NativeResult::err(
+            v2_native_charge(context, cost)?,
+            INVALID_INPUT_ERROR,
+        )),
+    }
 }
 
 // Gas related structs and functions.
@@ -198,7 +231,7 @@ pub fn internal_validate(
     debug_assert!(args.len() == 2);
 
     let cost = context.gas_used();
-    if !is_supported(context) {
+    if !is_supported(context)? {
         return Ok(NativeResult::err(cost, NOT_SUPPORTED_ERROR));
     }
 
@@ -208,7 +241,7 @@ pub fn internal_validate(
 
     let cost_params = &context
         .extensions()
-        .get::<NativesCostTable>()
+        .get::<NativesCostTable>()?
         .group_ops_cost_params
         .clone();
 
@@ -228,7 +261,10 @@ pub fn internal_validate(
         _ => false,
     };
 
-    Ok(NativeResult::ok(cost, smallvec![Value::bool(result)]))
+    Ok(NativeResult::ok(
+        v2_native_charge(context, cost)?,
+        smallvec![Value::bool(result)],
+    ))
 }
 
 /***************************************************************************************************
@@ -245,7 +281,7 @@ pub fn internal_add(
     debug_assert!(args.len() == 3);
 
     let cost = context.gas_used();
-    if !is_supported(context) {
+    if !is_supported(context)? {
         return Ok(NativeResult::err(cost, NOT_SUPPORTED_ERROR));
     }
 
@@ -257,7 +293,7 @@ pub fn internal_add(
 
     let cost_params = &context
         .extensions()
-        .get::<NativesCostTable>()
+        .get::<NativesCostTable>()?
         .group_ops_cost_params
         .clone();
 
@@ -281,11 +317,7 @@ pub fn internal_add(
         _ => Err(FastCryptoError::InvalidInput),
     };
 
-    match result {
-        Ok(bytes) => Ok(NativeResult::ok(cost, smallvec![Value::vector_u8(bytes)])),
-        // Since all Element<G> are validated on construction, this error should never happen unless the requested type is wrong or inputs are invalid.
-        Err(_) => Ok(NativeResult::err(cost, INVALID_INPUT_ERROR)),
-    }
+    map_op_result(context, cost, result)
 }
 
 /***************************************************************************************************
@@ -302,7 +334,7 @@ pub fn internal_sub(
     debug_assert!(args.len() == 3);
 
     let cost = context.gas_used();
-    if !is_supported(context) {
+    if !is_supported(context)? {
         return Ok(NativeResult::err(cost, NOT_SUPPORTED_ERROR));
     }
 
@@ -314,7 +346,7 @@ pub fn internal_sub(
 
     let cost_params = &context
         .extensions()
-        .get::<NativesCostTable>()
+        .get::<NativesCostTable>()?
         .group_ops_cost_params
         .clone();
 
@@ -338,11 +370,7 @@ pub fn internal_sub(
         _ => Err(FastCryptoError::InvalidInput),
     };
 
-    match result {
-        Ok(bytes) => Ok(NativeResult::ok(cost, smallvec![Value::vector_u8(bytes)])),
-        // Since all Element<G> are validated on construction, this error should never happen unless the requested type is wrong or inputs are invalid.
-        Err(_) => Ok(NativeResult::err(cost, INVALID_INPUT_ERROR)),
-    }
+    map_op_result(context, cost, result)
 }
 
 /***************************************************************************************************
@@ -359,7 +387,7 @@ pub fn internal_mul(
     debug_assert!(args.len() == 3);
 
     let cost = context.gas_used();
-    if !is_supported(context) {
+    if !is_supported(context)? {
         return Ok(NativeResult::err(cost, NOT_SUPPORTED_ERROR));
     }
 
@@ -371,7 +399,7 @@ pub fn internal_mul(
 
     let cost_params = &context
         .extensions()
-        .get::<NativesCostTable>()
+        .get::<NativesCostTable>()?
         .group_ops_cost_params
         .clone();
 
@@ -410,11 +438,7 @@ pub fn internal_mul(
         _ => Err(FastCryptoError::InvalidInput),
     };
 
-    match result {
-        Ok(bytes) => Ok(NativeResult::ok(cost, smallvec![Value::vector_u8(bytes)])),
-        // Since all Element<G> are validated on construction, this error should never happen unless the requested type is wrong or inputs are invalid.
-        Err(_) => Ok(NativeResult::err(cost, INVALID_INPUT_ERROR)),
-    }
+    map_op_result(context, cost, result)
 }
 
 /***************************************************************************************************
@@ -431,7 +455,7 @@ pub fn internal_div(
     debug_assert!(args.len() == 3);
 
     let cost = context.gas_used();
-    if !is_supported(context) {
+    if !is_supported(context)? {
         return Ok(NativeResult::err(cost, NOT_SUPPORTED_ERROR));
     }
 
@@ -443,7 +467,7 @@ pub fn internal_div(
 
     let cost_params = &context
         .extensions()
-        .get::<NativesCostTable>()
+        .get::<NativesCostTable>()?
         .group_ops_cost_params
         .clone();
 
@@ -482,11 +506,7 @@ pub fn internal_div(
         _ => Err(FastCryptoError::InvalidInput),
     };
 
-    match result {
-        Ok(bytes) => Ok(NativeResult::ok(cost, smallvec![Value::vector_u8(bytes)])),
-        // Since all Element<G> are validated on construction, this error should never happen unless the requested type is wrong, inputs are invalid, or a=0.
-        Err(_) => Ok(NativeResult::err(cost, INVALID_INPUT_ERROR)),
-    }
+    map_op_result(context, cost, result)
 }
 
 /***************************************************************************************************
@@ -504,7 +524,7 @@ pub fn internal_hash_to(
     debug_assert!(args.len() == 2);
 
     let cost = context.gas_used();
-    if !is_supported(context) {
+    if !is_supported(context)? {
         return Ok(NativeResult::err(cost, NOT_SUPPORTED_ERROR));
     }
 
@@ -518,7 +538,7 @@ pub fn internal_hash_to(
 
     let cost_params = &context
         .extensions()
-        .get::<NativesCostTable>()
+        .get::<NativesCostTable>()?
         .group_ops_cost_params
         .clone();
 
@@ -552,11 +572,7 @@ pub fn internal_hash_to(
         _ => Err(FastCryptoError::InvalidInput),
     };
 
-    match result {
-        Ok(bytes) => Ok(NativeResult::ok(cost, smallvec![Value::vector_u8(bytes)])),
-        // Since all Element<G> are validated on construction, this error should never happen unless the requested type is wrong or inputs are invalid.
-        Err(_) => Ok(NativeResult::err(cost, INVALID_INPUT_ERROR)),
-    }
+    map_op_result(context, cost, result)
 }
 
 // Based on calculation from https://github.com/supranational/blst/blob/master/src/multi_scalar.c#L270
@@ -665,7 +681,7 @@ pub fn internal_multi_scalar_mul(
     debug_assert!(args.len() == 3);
 
     let cost = context.gas_used();
-    if !is_msm_supported(context) {
+    if !is_msm_supported(context)? {
         return Ok(NativeResult::err(cost, NOT_SUPPORTED_ERROR));
     }
 
@@ -677,7 +693,7 @@ pub fn internal_multi_scalar_mul(
 
     let cost_params = &context
         .extensions()
-        .get::<NativesCostTable>()
+        .get::<NativesCostTable>()?
         .group_ops_cost_params
         .clone();
 
@@ -716,7 +732,10 @@ pub fn internal_multi_scalar_mul(
             scalars.as_ref(),
             elements.as_ref(),
         ),
-        _ => Ok(NativeResult::err(cost, INVALID_INPUT_ERROR)),
+        _ => Ok(NativeResult::err(
+            v2_native_charge(context, cost)?,
+            INVALID_INPUT_ERROR,
+        )),
     }
 }
 
@@ -734,7 +753,7 @@ pub fn internal_pairing(
     debug_assert!(args.len() == 3);
 
     let cost = context.gas_used();
-    if !is_supported(context) {
+    if !is_supported(context)? {
         return Ok(NativeResult::err(cost, NOT_SUPPORTED_ERROR));
     }
 
@@ -746,7 +765,7 @@ pub fn internal_pairing(
 
     let cost_params = &context
         .extensions()
-        .get::<NativesCostTable>()
+        .get::<NativesCostTable>()?
         .group_ops_cost_params
         .clone();
 
@@ -763,11 +782,7 @@ pub fn internal_pairing(
         _ => Err(FastCryptoError::InvalidInput),
     };
 
-    match result {
-        Ok(bytes) => Ok(NativeResult::ok(cost, smallvec![Value::vector_u8(bytes)])),
-        // Since all Element<G> are validated on construction, this error should never happen unless the requested type is wrong.
-        Err(_) => Ok(NativeResult::err(cost, INVALID_INPUT_ERROR)),
-    }
+    map_op_result(context, cost, result)
 }
 
 /***************************************************************************************************
@@ -785,7 +800,7 @@ pub fn internal_convert(
 
     let cost = context.gas_used();
 
-    if !(is_uncompressed_g1_supported(context)) {
+    if !(is_uncompressed_g1_supported(context))? {
         return Ok(NativeResult::err(cost, NOT_SUPPORTED_ERROR));
     }
 
@@ -796,7 +811,7 @@ pub fn internal_convert(
 
     let cost_params = &context
         .extensions()
-        .get::<NativesCostTable>()
+        .get::<NativesCostTable>()?
         .group_ops_cost_params
         .clone();
 
@@ -825,11 +840,7 @@ pub fn internal_convert(
         _ => Err(FastCryptoError::InvalidInput),
     };
 
-    match result {
-        Ok(bytes) => Ok(NativeResult::ok(cost, smallvec![Value::vector_u8(bytes)])),
-        // Since all Element<G> are validated on construction, this error should never happen unless the requested type is wrong.
-        Err(_) => Ok(NativeResult::err(cost, INVALID_INPUT_ERROR)),
-    }
+    map_op_result(context, cost, result)
 }
 
 /***************************************************************************************************
@@ -847,13 +858,13 @@ pub fn internal_sum(
 
     let cost = context.gas_used();
 
-    if !(is_uncompressed_g1_supported(context)) {
+    if !(is_uncompressed_g1_supported(context))? {
         return Ok(NativeResult::err(cost, NOT_SUPPORTED_ERROR));
     }
 
     let cost_params = &context
         .extensions()
-        .get::<NativesCostTable>()
+        .get::<NativesCostTable>()?
         .group_ops_cost_params
         .clone();
 
@@ -910,8 +921,5 @@ pub fn internal_sum(
         _ => Err(FastCryptoError::InvalidInput),
     };
 
-    match result {
-        Ok(bytes) => Ok(NativeResult::ok(cost, smallvec![Value::vector_u8(bytes)])),
-        Err(_) => Ok(NativeResult::err(cost, INVALID_INPUT_ERROR)),
-    }
+    map_op_result(context, cost, result)
 }

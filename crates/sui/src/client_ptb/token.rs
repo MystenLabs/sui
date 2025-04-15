@@ -45,6 +45,8 @@ pub enum Token {
     At,
     /// .
     Dot,
+    /// /
+    ForwardSlash,
 
     /// End of input.
     Eof,
@@ -62,7 +64,7 @@ pub enum Token {
     Upgrade,
 }
 
-impl<'l> Lexeme<'l> {
+impl Lexeme<'_> {
     /// Returns true if this lexeme corresponds to a special error token.
     pub fn is_error(&self) -> bool {
         use Token as T;
@@ -80,7 +82,7 @@ impl<'l> Lexeme<'l> {
     }
 }
 
-impl<'a> fmt::Display for Lexeme<'a> {
+impl fmt::Display for Lexeme<'_> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         use Token as T;
 
@@ -101,6 +103,7 @@ impl<'a> fmt::Display for Lexeme<'a> {
             T::RAngle => write!(f, "'>'"),
             T::At => write!(f, "'@'"),
             T::Dot => write!(f, "'.'"),
+            T::ForwardSlash => write!(f, "'/'"),
             T::Unexpected => write!(f, "input {:?}", self.1),
             T::UnfinishedString => write!(f, "unfinished string {:?}", format!("{}...", self.1)),
             T::EarlyEof | T::Eof => write!(f, "end of input"),
@@ -130,6 +133,7 @@ impl fmt::Display for Token {
             T::RAngle => write!(f, "'>'"),
             T::At => write!(f, "'@'"),
             T::Dot => write!(f, "'.'"),
+            T::ForwardSlash => write!(f, "'/'"),
             T::Eof => write!(f, "end of input"),
             T::Unexpected => write!(f, "unexpected input"),
             T::UnfinishedString => write!(f, "an unfinished string"),

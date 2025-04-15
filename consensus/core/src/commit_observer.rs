@@ -27,7 +27,7 @@ use crate::{
 /// - The committed subdags are sent as consensus output via an unbounded tokio channel.
 ///
 /// No back pressure mechanism is needed as backpressure is handled as input into
-/// consenus.
+/// consensus.
 ///
 /// - Commit metadata including index is persisted in store, before the CommittedSubDag
 ///     is sent to the consumer.
@@ -37,8 +37,8 @@ pub(crate) struct CommitObserver {
     context: Arc<Context>,
     /// Component to deterministically collect subdags for committed leaders.
     commit_interpreter: Linearizer,
-    /// An unbounded channel to send committed sub-dags to the consumer of consensus output.
-    sender: UnboundedSender<CommittedSubDag>,
+    /// An unbounded channel to send commits to commit handler.
+    commit_sender: UnboundedSender<CommittedSubDag>,
     /// Persistent storage for blocks, commits and other consensus data.
     store: Arc<dyn Store>,
     leader_schedule: Arc<LeaderSchedule>,
@@ -52,10 +52,12 @@ impl CommitObserver {
         store: Arc<dyn Store>,
         leader_schedule: Arc<LeaderSchedule>,
     ) -> Self {
+        let commit_interpreter =
+            Linearizer::new(context.clone(), dag_state.clone(), leader_schedule.clone());
         let mut observer = Self {
             context,
-            commit_interpreter: Linearizer::new(dag_state.clone(), leader_schedule.clone()),
-            sender: commit_consumer.commit_sender,
+            commit_interpreter,
+            commit_sender: commit_consumer.commit_sender,
             store,
             leader_schedule,
         };
@@ -80,8 +82,8 @@ impl CommitObserver {
         let mut sent_sub_dags = Vec::with_capacity(committed_sub_dags.len());
         for committed_sub_dag in committed_sub_dags.into_iter() {
             // Failures in sender.send() are assumed to be permanent
-            if let Err(err) = self.sender.send(committed_sub_dag.clone()) {
-                tracing::error!(
+            if let Err(err) = self.commit_sender.send(committed_sub_dag.clone()) {
+                tracing::warn!(
                     "Failed to send committed sub-dag, probably due to shutdown: {err:?}"
                 );
                 return Err(ConsensusError::Shutdown);
@@ -149,12 +151,14 @@ impl CommitObserver {
             info!("Sending commit {} during recovery", commit.index());
             let committed_sub_dag =
                 load_committed_subdag_from_store(self.store.as_ref(), commit, reputation_scores);
-            self.sender.send(committed_sub_dag).unwrap_or_else(|e| {
-                panic!(
-                    "Failed to send commit during recovery, probably due to shutdown: {:?}",
-                    e
-                )
-            });
+            self.commit_sender
+                .send(committed_sub_dag)
+                .unwrap_or_else(|e| {
+                    panic!(
+                        "Failed to send commit during recovery, probably due to shutdown: {:?}",
+                        e
+                    )
+                });
 
             last_sent_commit_index += 1;
         }
@@ -209,18 +213,27 @@ impl CommitObserver {
 mod tests {
     use mysten_metrics::monitored_mpsc::UnboundedReceiver;
     use parking_lot::RwLock;
+    use rstest::rstest;
 
     use super::*;
     use crate::{
-        block::BlockRef, context::Context, dag_state::DagState, storage::mem_store::MemStore,
+        block::BlockRef, context::Context, dag_state::DagState,
+        linearizer::median_timestamp_by_stake, storage::mem_store::MemStore,
         test_dag_builder::DagBuilder,
     };
 
+    #[rstest]
     #[tokio::test]
-    async fn test_handle_commit() {
+    async fn test_handle_commit(#[values(true, false)] consensus_median_timestamp: bool) {
         telemetry_subscribers::init_for_testing();
         let num_authorities = 4;
-        let context = Arc::new(Context::new_for_test(num_authorities).0);
+        let (mut context, _keys) = Context::new_for_test(num_authorities);
+        context
+            .protocol_config
+            .set_consensus_median_based_commit_timestamp_for_testing(consensus_median_timestamp);
+
+        let context = Arc::new(context);
+
         let mem_store = Arc::new(MemStore::new());
         let dag_state = Arc::new(RwLock::new(DagState::new(
             context.clone(),
@@ -264,14 +277,32 @@ mod tests {
         for (idx, subdag) in commits.iter().enumerate() {
             tracing::info!("{subdag:?}");
             assert_eq!(subdag.leader, leaders[idx].reference());
-            let expected_ts = if idx == 0 {
-                leaders[idx].timestamp_ms()
+
+            let expected_ts = if consensus_median_timestamp {
+                let block_refs = leaders[idx]
+                    .ancestors()
+                    .iter()
+                    .filter(|block_ref| block_ref.round == leaders[idx].round() - 1)
+                    .cloned()
+                    .collect::<Vec<_>>();
+                let blocks = dag_state
+                    .read()
+                    .get_blocks(&block_refs)
+                    .into_iter()
+                    .map(|block_opt| block_opt.expect("We should have all blocks in dag state."));
+                median_timestamp_by_stake(&context, blocks).unwrap()
             } else {
-                leaders[idx]
-                    .timestamp_ms()
-                    .max(commits[idx - 1].timestamp_ms)
+                leaders[idx].timestamp_ms()
             };
+
+            let expected_ts = if idx == 0 {
+                expected_ts
+            } else {
+                expected_ts.max(commits[idx - 1].timestamp_ms)
+            };
+
             assert_eq!(expected_ts, subdag.timestamp_ms);
+
             if idx == 0 {
                 // First subdag includes the leader block plus all ancestor blocks
                 // of the leader minus the genesis round blocks

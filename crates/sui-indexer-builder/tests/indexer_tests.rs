@@ -371,7 +371,7 @@ async fn indexer_with_existing_live_task1() {
         .get_all_tasks("test_indexer")
         .await
         .unwrap();
-    assert_ranges(&tasks, vec![(35, i64::MAX as u64), (10, 34)]);
+    assert_ranges(&tasks, vec![(35, i64::MAX as u64), (31, 34)]);
     indexer.start().await.unwrap();
 
     let tasks = persistent.get_all_tasks("test_indexer").await.unwrap();
@@ -418,11 +418,12 @@ async fn indexer_with_existing_live_task2() {
         .get_all_tasks("test_indexer")
         .await
         .unwrap();
-    assert_ranges(&tasks, vec![(25, i64::MAX as u64), (10, 24)]);
+    println!("{tasks:?}");
+    assert_ranges(&tasks, vec![(25, i64::MAX as u64)]);
     indexer.start().await.unwrap();
 
     let tasks = persistent.get_all_tasks("test_indexer").await.unwrap();
-    assert_ranges(&tasks, vec![(50, i64::MAX as u64), (24, 24)]);
+    assert_ranges(&tasks, vec![(50, i64::MAX as u64)]);
 }
 
 fn assert_ranges(desc_ordered_tasks: &[Task], ranges: Vec<(u64, u64)>) {
@@ -485,6 +486,74 @@ async fn resume_test() {
     let mut recorded_data = persistent.data.lock().await.clone();
     recorded_data.sort();
     assert_eq!((10..=50u64).collect::<Vec<_>>(), recorded_data);
+}
+
+#[tokio::test]
+async fn resume_with_live_test() {
+    telemetry_subscribers::init_for_testing();
+    let registry = Registry::new();
+    mysten_metrics::init_metrics(&registry);
+
+    let data = (0..=70u64).collect::<Vec<_>>();
+    let datasource = TestDatasource {
+        data: data.clone(),
+        live_task_starting_checkpoint: 60,
+        genesis_checkpoint: 0,
+        gauge_metric: new_gauge_vec(&registry, "foo"),
+        counter_metric: new_counter_vec(&registry),
+        inflight_live_tasks: new_gauge_vec(&registry, "bar"),
+    };
+    let persistent = InMemoryPersistent::new();
+    persistent.progress_store.lock().await.insert(
+        "test_indexer - backfill - 30".to_string(),
+        Task {
+            task_name: "test_indexer - backfill - 30".to_string(),
+            start_checkpoint: 10,
+            target_checkpoint: 30,
+            timestamp: 0,
+            is_live_task: false,
+        },
+    );
+    persistent.progress_store.lock().await.insert(
+        "test_indexer - Live".to_string(),
+        Task {
+            task_name: "test_indexer - Live".to_string(),
+            start_checkpoint: 50,
+            target_checkpoint: LIVE_TASK_TARGET_CHECKPOINT as u64,
+            timestamp: 10,
+            is_live_task: true,
+        },
+    );
+    // the live task have indexed cp 31 to 50 before shutdown
+    persistent
+        .data
+        .lock()
+        .await
+        .append(&mut (31..=50).collect());
+    let mut indexer = IndexerBuilder::new(
+        "test_indexer",
+        datasource,
+        NoopDataMapper,
+        persistent.clone(),
+    )
+    .with_backfill_strategy(BackfillStrategy::Simple)
+    .build();
+    indexer.test_only_update_tasks().await.unwrap();
+    let tasks = indexer
+        .test_only_storage()
+        .get_all_tasks("test_indexer")
+        .await
+        .unwrap();
+    assert_ranges(&tasks, vec![(60, i64::MAX as u64), (51, 59), (10, 30)]);
+    indexer.start().await.unwrap();
+
+    // it should have 2 task created for the indexer, one existing task and one live task
+    let tasks = persistent.get_all_tasks("test_indexer").await.unwrap();
+    assert_ranges(&tasks, vec![(70, i64::MAX as u64), (59, 59), (30, 30)]);
+    // the data recorded in storage should be the same as the datasource
+    let mut recorded_data = persistent.data.lock().await.clone();
+    recorded_data.sort();
+    assert_eq!((10..=70u64).collect::<Vec<_>>(), recorded_data);
 }
 
 fn new_gauge_vec(registry: &Registry, name: &str) -> IntGaugeVec {

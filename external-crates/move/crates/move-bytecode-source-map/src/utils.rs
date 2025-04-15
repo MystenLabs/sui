@@ -27,13 +27,16 @@ pub fn source_map_from_file(file_path: &Path) -> Result<SourceMap> {
         .map_err(|_| format_err!("Error deserializing into source map"))
 }
 
+pub fn serialize_to_json_string(map: &SourceMap) -> Result<String> {
+    serde_json::to_string_pretty(map).map_err(|e| format_err!("Error serializing to json: {}", e))
+}
+
 pub fn serialize_to_json(map: &SourceMap) -> Result<Vec<u8>> {
     serde_json::to_vec(map).map_err(|e| format_err!("Error serializing to json: {}", e))
 }
 
 pub fn serialize_to_json_file(map: &SourceMap, file_path: &Path) -> Result<()> {
-    let json = serde_json::to_string_pretty(map)
-        .map_err(|e| format_err!("Error serializing to json: {}", e))?;
+    let json = serialize_to_json_string(map)?;
     let mut f =
         std::fs::File::create(file_path).map_err(|e| format_err!("Error creating file: {}", e))?;
     f.write_all(json.as_bytes())

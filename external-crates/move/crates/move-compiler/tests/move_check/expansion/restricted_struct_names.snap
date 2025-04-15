@@ -1,0 +1,54 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: legacy
+  lint: false
+---
+error[E02010]: invalid name
+  ┌─ tests/move_check/expansion/restricted_struct_names.move:2:12
+  │
+2 │     struct address {}
+  │            ^^^^^^^ Invalid struct name 'address'. Struct names must start with 'A'..'Z'
+
+error[E02010]: invalid name
+  ┌─ tests/move_check/expansion/restricted_struct_names.move:3:12
+  │
+3 │     struct signer {}
+  │            ^^^^^^ Invalid struct name 'signer'. Struct names must start with 'A'..'Z'
+
+error[E02010]: invalid name
+  ┌─ tests/move_check/expansion/restricted_struct_names.move:4:12
+  │
+4 │     struct u8 {}
+  │            ^^ Invalid struct name 'u8'. Struct names must start with 'A'..'Z'
+
+error[E02010]: invalid name
+  ┌─ tests/move_check/expansion/restricted_struct_names.move:5:12
+  │
+5 │     struct u64 {}
+  │            ^^^ Invalid struct name 'u64'. Struct names must start with 'A'..'Z'
+
+error[E02010]: invalid name
+  ┌─ tests/move_check/expansion/restricted_struct_names.move:6:12
+  │
+6 │     struct u128 {}
+  │            ^^^^ Invalid struct name 'u128'. Struct names must start with 'A'..'Z'
+
+error[E02010]: invalid name
+  ┌─ tests/move_check/expansion/restricted_struct_names.move:7:12
+  │
+7 │     struct vector<T> { f: T }
+  │            ^^^^^^ Invalid struct name 'vector'. Struct names must start with 'A'..'Z'
+
+error[E02010]: invalid name
+  ┌─ tests/move_check/expansion/restricted_struct_names.move:9:12
+  │
+9 │     struct freeze {}
+  │            ^^^^^^ Invalid struct name 'freeze'. Struct names must start with 'A'..'Z'
+
+error[E03011]: invalid use of reserved name
+   ┌─ tests/move_check/expansion/restricted_struct_names.move:10:12
+   │
+10 │     struct Self {}
+   │            ^^^^ Invalid struct name 'Self'. 'Self' is restricted and cannot be used to name a struct

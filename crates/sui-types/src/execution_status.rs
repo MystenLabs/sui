@@ -277,6 +277,11 @@ pub enum CommandArgumentError {
         allowed."
     )]
     SharedObjectOperationNotAllowed,
+    #[error(
+        "Invalid argument arity. Expected a single argument but found a result that expanded to \
+        multiple arguments."
+    )]
+    InvalidArgumentArity,
 }
 
 #[derive(Eq, PartialEq, Clone, Debug, Serialize, Deserialize, Hash, Error)]
@@ -374,6 +379,21 @@ impl ExecutionStatus {
                 panic!("Unable to unwrap() on {:?}", self);
             }
             ExecutionStatus::Failure { error, command } => (error, command),
+        }
+    }
+
+    pub fn get_congested_objects(&self) -> Option<&CongestedObjects> {
+        if let ExecutionStatus::Failure {
+            error:
+                ExecutionFailureStatus::ExecutionCancelledDueToSharedObjectCongestion {
+                    congested_objects,
+                },
+            ..
+        } = self
+        {
+            Some(congested_objects)
+        } else {
+            None
         }
     }
 }

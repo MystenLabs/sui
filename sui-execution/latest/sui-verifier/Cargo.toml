@@ -16,7 +16,6 @@ move-vm-config.workspace = true
 move-abstract-stack.workspace = true
 
 move-abstract-interpreter = { path = "../../../external-crates/move/crates/move-abstract-interpreter" }
-move-bytecode-verifier = { path = "../../../external-crates/move/crates/move-bytecode-verifier" }
 
 sui-types.workspace = true
 sui-protocol-config.workspace = true

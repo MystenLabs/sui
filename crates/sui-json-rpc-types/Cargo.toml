@@ -27,14 +27,10 @@ tabled.workspace = true
 move-binary-format.workspace = true
 move-core-types.workspace = true
 move-bytecode-utils.workspace = true
+move-disassembler.workspace = true
+move-ir-types.workspace = true
 
 mysten-metrics.workspace = true
 sui-types.workspace = true
 sui-json.workspace = true
 sui-package-resolver.workspace = true
-
-[dev-dependencies]
-sui-types = { workspace = true, features = ["test-utils"] }
-
-[features]
-test-utils = []

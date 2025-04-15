@@ -1,0 +1,12 @@
+// Copyright (c) Mysten Labs, Inc.
+// SPDX-License-Identifier: Apache-2.0
+
+syntax = "proto3";
+
+package sui.rpc.v2beta;
+
+message ProtocolConfig {
+  optional uint64 protocol_version = 1;
+  map<string, bool> feature_flags = 2;
+  map<string, string> attributes = 3;
+}

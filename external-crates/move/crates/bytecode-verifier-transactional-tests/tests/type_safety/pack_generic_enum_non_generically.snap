@@ -1,0 +1,15 @@
+---
+source: crates/move-transactional-test-runner/src/framework.rs
+input_file: crates/bytecode-verifier-transactional-tests/tests/type_safety/pack_generic_enum_non_generically.mvir
+---
+processed 1 task
+
+task 0, lines 1-11:
+//# publish
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000002::O'. Got VMError: {
+    major_status: GENERIC_MEMBER_OPCODE_MISMATCH,
+    sub_status: None,
+    location: 0x2::O,
+    indices: [],
+    offsets: [(FunctionDefinitionIndex(0), 1)],
+}

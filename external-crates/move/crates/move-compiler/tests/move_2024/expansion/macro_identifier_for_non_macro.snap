@@ -1,0 +1,36 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: 2024.alpha
+  lint: false
+---
+error[E02010]: invalid name
+  ┌─ tests/move_2024/expansion/macro_identifier_for_non_macro.move:2:29
+  │
+2 │     public struct S<phantom $T>()
+  │                             ^^ Invalid type parameter name. Only 'macro fun' type parameter names cat start with '$'
+  │
+  = Type parameter names starting with '$' indicate that their arguments do not have to satisfy certain constraints before the macro is expanded, meaning types like '&mut u64' or '(bool, u8)' may be used as arguments.
+
+error[E02010]: invalid name
+  ┌─ tests/move_2024/expansion/macro_identifier_for_non_macro.move:3:16
+  │
+3 │     fun foo<T>($x: u64, $f: |u64|) {
+  │                ^^ Invalid parameter name '$x'. Non-'macro' parameter names cannot start with '$'
+  │
+  = 'macro' parameters start with '$' to indicate that their arguments are not evaluated before the macro is expanded, meaning the entire expression is substituted. This is different from regular function parameters that are evaluated before the function is called.
+
+error[E02010]: invalid name
+  ┌─ tests/move_2024/expansion/macro_identifier_for_non_macro.move:3:25
+  │
+3 │     fun foo<T>($x: u64, $f: |u64|) {
+  │                         ^^ Invalid parameter name '$f'. Non-'macro' parameter names cannot start with '$'
+  │
+  = 'macro' parameters start with '$' to indicate that their arguments are not evaluated before the macro is expanded, meaning the entire expression is substituted. This is different from regular function parameters that are evaluated before the function is called.
+
+error[E04030]: invalid usage of lambda type
+  ┌─ tests/move_2024/expansion/macro_identifier_for_non_macro.move:3:29
+  │
+3 │     fun foo<T>($x: u64, $f: |u64|) {
+  │                             ^^^^^ Unexpected lambda type. Lambdas can only be used with 'macro' functions, as parameters or direct arguments

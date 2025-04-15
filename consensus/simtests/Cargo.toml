@@ -1,0 +1,32 @@
+[package]
+name = "consensus-simtests"
+version = "0.1.0"
+license = "Apache-2.0"
+authors = ["Mysten Labs <build@mystenlabs.com>"]
+edition = "2021"
+publish = false
+
+[lints]
+workspace = true
+
+[target.'cfg(msim)'.dependencies]
+sui-simulator.workspace = true
+anyhow.workspace = true
+arc-swap.workspace = true
+consensus-config.workspace = true
+consensus-core.workspace = true
+mysten-metrics.workspace = true
+mysten-network.workspace = true
+parking_lot.workspace = true
+prometheus.workspace = true
+rand.workspace = true
+sui-config.workspace = true
+sui-macros.workspace = true
+sui-protocol-config.workspace = true
+tokio.workspace = true
+tokio-stream.workspace = true
+tokio-util.workspace = true
+tracing.workspace = true
+typed-store.workspace = true
+tempfile.workspace = true
+telemetry-subscribers.workspace = true

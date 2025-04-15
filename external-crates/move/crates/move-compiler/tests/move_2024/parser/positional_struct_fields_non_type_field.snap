@@ -1,0 +1,21 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: 2024.alpha
+  lint: false
+---
+error[E03004]: unbound type
+  ┌─ tests/move_2024/parser/positional_struct_fields_non_type_field.move:3:23
+  │
+3 │     public struct Foo(Not a type)
+  │                       ^^^ Unbound type 'Not' in current scope
+
+error[E01002]: unexpected token
+  ┌─ tests/move_2024/parser/positional_struct_fields_non_type_field.move:3:27
+  │
+3 │     public struct Foo(Not a type)
+  │                           ^
+  │                           │
+  │                           Unexpected 'a'
+  │                           Expected ',' or ')'

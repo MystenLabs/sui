@@ -9,7 +9,7 @@
 //! directly to avoid going through the BCS machinery.
 
 use fastcrypto::traits::ToFromBytes;
-use sui_sdk_types::types::*;
+use sui_sdk_types::*;
 use tap::Pipe;
 
 #[derive(Debug)]
@@ -132,6 +132,11 @@ impl From<crate::object::Owner> for Owner {
                 initial_shared_version,
             } => Self::Shared(initial_shared_version.value()),
             crate::object::Owner::Immutable => Self::Immutable,
+            // TODO: Corresponding types need to be added to sui-sdk-types.
+            crate::object::Owner::ConsensusV2 {
+                start_version: _,
+                authenticator: _,
+            } => todo!(),
         }
     }
 }
@@ -423,9 +428,13 @@ impl From<UnchangedSharedKind> for crate::effects::UnchangedSharedKind {
             UnchangedSharedKind::ReadOnlyRoot { version, digest } => {
                 Self::ReadOnlyRoot((version.into(), digest.into()))
             }
-            UnchangedSharedKind::MutateDeleted { version } => Self::MutateDeleted(version.into()),
-            UnchangedSharedKind::ReadDeleted { version } => Self::ReadDeleted(version.into()),
-            UnchangedSharedKind::Cancelled { version } => Self::Cancelled(version.into()),
+            UnchangedSharedKind::MutateDeleted { version } => {
+                Self::MutateConsensusStreamEnded(version.into())
+            }
+            UnchangedSharedKind::ReadDeleted { version } => {
+                Self::ReadConsensusStreamEnded(version.into())
+            }
+            UnchangedSharedKind::Canceled { version } => Self::Cancelled(version.into()),
             UnchangedSharedKind::PerEpochConfig => Self::PerEpochConfig,
         }
     }
@@ -440,13 +449,17 @@ impl From<crate::effects::UnchangedSharedKind> for UnchangedSharedKind {
                     digest: digest.into(),
                 }
             }
-            crate::effects::UnchangedSharedKind::MutateDeleted(version) => Self::MutateDeleted {
-                version: version.into(),
-            },
-            crate::effects::UnchangedSharedKind::ReadDeleted(version) => Self::ReadDeleted {
-                version: version.into(),
-            },
-            crate::effects::UnchangedSharedKind::Cancelled(version) => Self::Cancelled {
+            crate::effects::UnchangedSharedKind::MutateConsensusStreamEnded(version) => {
+                Self::MutateDeleted {
+                    version: version.into(),
+                }
+            }
+            crate::effects::UnchangedSharedKind::ReadConsensusStreamEnded(version) => {
+                Self::ReadDeleted {
+                    version: version.into(),
+                }
+            }
+            crate::effects::UnchangedSharedKind::Cancelled(version) => Self::Canceled {
                 version: version.into(),
             },
             crate::effects::UnchangedSharedKind::PerEpochConfig => Self::PerEpochConfig,

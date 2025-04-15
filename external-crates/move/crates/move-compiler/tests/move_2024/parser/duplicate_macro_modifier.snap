@@ -1,0 +1,14 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: 2024.alpha
+  lint: false
+---
+error[E02001]: duplicate declaration, item, or annotation
+  ┌─ tests/move_2024/parser/duplicate_macro_modifier.move:2:11
+  │
+2 │     macro macro fun foo() {}
+  │     ----- ^^^^^ Duplicate 'macro' modifier
+  │     │      
+  │     'macro' modifier previously given here

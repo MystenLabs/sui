@@ -1,0 +1,24 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: legacy
+  lint: false
+---
+error[E02010]: invalid name
+  ┌─ tests/move_check/expansion/constant_invalid_names.move:3:11
+  │
+3 │     const c1: u64 = 0;
+  │           ^^ Invalid constant name 'c1'. Constant names must start with 'A'..'Z'
+
+error[E02010]: invalid name
+  ┌─ tests/move_check/expansion/constant_invalid_names.move:4:11
+  │
+4 │     const _C1: u64 = 0;
+  │           ^^^ Invalid constant name '_C1'. Constant names must start with 'A'..'Z'
+
+error[E03011]: invalid use of reserved name
+  ┌─ tests/move_check/expansion/constant_invalid_names.move:5:11
+  │
+5 │     const Self: u64 = 0;
+  │           ^^^^ Invalid constant name 'Self'. 'Self' is restricted and cannot be used to name a constant

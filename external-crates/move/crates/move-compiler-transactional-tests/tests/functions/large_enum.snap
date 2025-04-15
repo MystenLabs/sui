@@ -1,0 +1,22 @@
+---
+source: crates/move-transactional-test-runner/src/framework.rs
+---
+processed 5 tasks
+
+task 2, line 43:
+//# run 0x42::m::x1
+return values: |0|{ 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 }
+
+task 3, line 45:
+//# run 0x42::m::x3
+return values: |1|{ 0 }
+
+task 4, line 47:
+//# run 0x42::m::x4
+Error: Function execution failed with VMError: {
+    major_status: VERIFICATION_ERROR,
+    sub_status: None,
+    location: undefined,
+    indices: [],
+    offsets: [],
+}

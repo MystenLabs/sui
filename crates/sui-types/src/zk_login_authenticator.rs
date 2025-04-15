@@ -90,15 +90,12 @@ impl ZkLoginAuthenticator {
         self.max_epoch
     }
 
-    #[cfg(feature = "test-utils")]
     pub fn user_signature_mut_for_testing(&mut self) -> &mut Signature {
         &mut self.user_signature
     }
-    #[cfg(feature = "test-utils")]
     pub fn max_epoch_mut_for_testing(&mut self) -> &mut EpochId {
         &mut self.max_epoch
     }
-    #[cfg(feature = "test-utils")]
     pub fn zk_login_inputs_mut_for_testing(&mut self) -> &mut ZkLoginInputs {
         &mut self.inputs
     }

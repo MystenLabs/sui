@@ -11,7 +11,6 @@ mod checked {
         sync::Arc,
     };
 
-    use crate::adapter::new_native_extensions;
     use crate::error::convert_vm_error;
     use crate::execution_mode::ExecutionMode;
     use crate::execution_value::{CommandKind, ObjectContents, TryFromValue, Value};
@@ -22,6 +21,7 @@ mod checked {
     use crate::gas_charger::GasCharger;
     use crate::programmable_transactions::linkage_view::LinkageView;
     use crate::type_resolver::TypeTagResolver;
+    use crate::{adapter::new_native_extensions, gas_meter::SuiGasMeter};
     use move_binary_format::{
         errors::{Location, PartialVMError, PartialVMResult, VMError, VMResult},
         file_format::{CodeOffset, FunctionDefinitionIndex, TypeParameterIndex},
@@ -193,18 +193,18 @@ mod checked {
             move_vm_profiler::tracing_feature_enabled! {
                 use move_vm_profiler::GasProfiler;
                 use move_vm_types::gas::GasMeter;
+                use crate::gas_meter::SuiGasMeter;
 
                 let tx_digest = tx_context.digest();
-                let remaining_gas: u64 =
-                    move_vm_types::gas::GasMeter::remaining_gas(gas_charger.move_gas_status())
-                        .into();
-                gas_charger
-                    .move_gas_status_mut()
-                    .set_profiler(GasProfiler::init(
-                        &vm.config().profiler_config,
-                        format!("{}", tx_digest),
-                        remaining_gas,
-                    ));
+                let remaining_gas: u64 = move_vm_types::gas::GasMeter::remaining_gas(&SuiGasMeter(
+                    gas_charger.move_gas_status_mut(),
+                ))
+                .into();
+                SuiGasMeter(gas_charger.move_gas_status_mut()).set_profiler(GasProfiler::init(
+                    &vm.config().profiler_config,
+                    format!("{}", tx_digest),
+                    remaining_gas,
+                ));
             }
 
             Ok(Self {
@@ -893,7 +893,7 @@ mod checked {
                 ty_args,
                 args,
                 &mut data_store,
-                gas_status,
+                &mut SuiGasMeter(gas_status),
                 &mut self.native_extensions,
             )
         }
@@ -944,12 +944,12 @@ mod checked {
                 modules,
                 sender,
                 &mut data_store,
-                self.gas_charger.move_gas_status_mut(),
+                &mut SuiGasMeter(self.gas_charger.move_gas_status_mut()),
             )
         }
     }
 
-    impl<'vm, 'state, 'a> TypeTagResolver for ExecutionContext<'vm, 'state, 'a> {
+    impl TypeTagResolver for ExecutionContext<'_, '_, '_> {
         fn get_type_tag(&self, type_: &Type) -> Result<TypeTag, ExecutionError> {
             self.vm
                 .get_runtime()
@@ -1169,13 +1169,16 @@ mod checked {
                 // protected by transaction input checker
                 invariant_violation!("ObjectOwner objects cannot be input")
             }
+            Owner::ConsensusV2 { .. } => {
+                unimplemented!("ConsensusV2 does not exist for this execution version")
+            }
         };
-        let owner = obj.owner;
+        let owner = obj.owner.clone();
         let version = obj.version();
         let object_metadata = InputObjectMetadata::InputObject {
             id,
             is_mutable_input,
-            owner,
+            owner: owner.clone(),
             version,
         };
         let obj_value = value_from_object(protocol_config, vm, linkage_view, new_packages, obj)?;
@@ -1204,7 +1207,7 @@ mod checked {
         Ok(InputValue::new_object(object_metadata, obj_value))
     }
 
-    /// Load an a CallArg, either an object or a raw set of BCS bytes
+    /// Load a CallArg, either an object or a raw set of BCS bytes
     fn load_call_arg(
         protocol_config: &ProtocolConfig,
         vm: &MoveVM,
@@ -1394,7 +1397,7 @@ mod checked {
 
     // TODO: `DataStore` will be reworked and this is likely to disappear.
     //       Leaving this comment around until then as testament to better days to come...
-    impl<'state, 'a> DataStore for SuiDataStore<'state, 'a> {
+    impl DataStore for SuiDataStore<'_, '_> {
         fn link_context(&self) -> AccountAddress {
             self.linkage_view.link_context()
         }

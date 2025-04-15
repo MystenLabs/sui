@@ -470,21 +470,21 @@ impl AUTransactionGen for P2PTransferGenRandomGasRandomPriceRandomSponsorship {
                 },
             }),
             RunInfo {
-                gas_budget_too_low: true,
-                ..
-            } => Err(SuiError::UserInputError {
-                error: UserInputError::GasBudgetTooLow {
-                    gas_budget: self.gas,
-                    min_budget: PROTOCOL_CONFIG.base_tx_cost_fixed() * self.gas_price,
-                },
-            }),
-            RunInfo {
                 gas_budget_too_high: true,
                 ..
             } => Err(SuiError::UserInputError {
                 error: UserInputError::GasBudgetTooHigh {
                     gas_budget: self.gas,
                     max_budget: PROTOCOL_CONFIG.max_tx_gas(),
+                },
+            }),
+            RunInfo {
+                gas_budget_too_low: true,
+                ..
+            } => Err(SuiError::UserInputError {
+                error: UserInputError::GasBudgetTooLow {
+                    gas_budget: self.gas,
+                    min_budget: PROTOCOL_CONFIG.base_tx_cost_fixed() * self.gas_price,
                 },
             }),
             RunInfo {

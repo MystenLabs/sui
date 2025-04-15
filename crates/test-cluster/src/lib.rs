@@ -3,6 +3,7 @@
 
 use futures::{future::join_all, StreamExt};
 use jsonrpsee::http_client::{HttpClient, HttpClientBuilder};
+use mysten_common::fatal;
 use rand::{distributions::*, rngs::OsRng, seq::SliceRandom};
 use std::collections::HashMap;
 use std::net::SocketAddr;
@@ -12,7 +13,7 @@ use std::sync::{Arc, Mutex};
 use std::time::Duration;
 use sui_config::genesis::Genesis;
 use sui_config::node::{AuthorityOverloadConfig, DBCheckpointConfig, RunWithRange};
-use sui_config::{Config, SUI_CLIENT_CONFIG, SUI_NETWORK_CONFIG};
+use sui_config::{Config, ExecutionCacheConfig, SUI_CLIENT_CONFIG, SUI_NETWORK_CONFIG};
 use sui_config::{NodeConfig, PersistedConfig, SUI_KEYSTORE_FILENAME};
 use sui_core::authority_aggregator::AuthorityAggregator;
 use sui_core::authority_client::NetworkAuthorityClient;
@@ -22,7 +23,7 @@ use sui_json_rpc_types::{
 };
 use sui_keys::keystore::{AccountKeystore, FileBasedKeystore, Keystore};
 use sui_node::SuiNodeHandle;
-use sui_protocol_config::ProtocolVersion;
+use sui_protocol_config::{Chain, ProtocolVersion};
 use sui_sdk::apis::QuorumDriverApi;
 use sui_sdk::sui_client_config::{SuiClientConfig, SuiEnv};
 use sui_sdk::wallet_context::WalletContext;
@@ -46,7 +47,6 @@ use sui_types::crypto::KeypairTraits;
 use sui_types::crypto::SuiKeyPair;
 use sui_types::effects::{TransactionEffects, TransactionEvents};
 use sui_types::error::SuiResult;
-use sui_types::governance::MIN_VALIDATOR_JOINING_STAKE_MIST;
 use sui_types::message_envelope::Message;
 use sui_types::object::Object;
 use sui_types::sui_system_state::epoch_start_sui_system_state::EpochStartSystemStateTrait;
@@ -348,7 +348,12 @@ impl TestCluster {
             node.get_node_handle()
                 .unwrap()
                 .with_async(|node| async {
-                    node.close_epoch_for_testing().await.unwrap();
+                    node.close_epoch_for_testing().await.unwrap_or_else(|_| {
+                        fatal!(
+                            "Failed to close epoch for validator {:?}",
+                            node.state().name
+                        );
+                    });
                     cur_stake += cur_committee.weight(&node.state().name);
                 })
                 .await;
@@ -818,6 +823,7 @@ pub struct TestClusterBuilder {
     network_config: Option<NetworkConfig>,
     additional_objects: Vec<Object>,
     num_validators: Option<usize>,
+    validators: Option<Vec<ValidatorGenesisConfig>>,
     fullnode_rpc_port: Option<u16>,
     enable_fullnode_events: bool,
     disable_fullnode_pruning: bool,
@@ -831,6 +837,7 @@ pub struct TestClusterBuilder {
     config_dir: Option<PathBuf>,
     default_jwks: bool,
     authority_overload_config: Option<AuthorityOverloadConfig>,
+    execution_cache_config: Option<ExecutionCacheConfig>,
     data_ingestion_dir: Option<PathBuf>,
     fullnode_run_with_range: Option<RunWithRange>,
     fullnode_policy_config: Option<PolicyConfig>,
@@ -841,6 +848,8 @@ pub struct TestClusterBuilder {
     validator_state_accumulator_v2_enabled_config: StateAccumulatorV2EnabledConfig,
 
     indexer_backed_rpc: bool,
+
+    chain_override: Option<Chain>,
 }
 
 impl TestClusterBuilder {
@@ -848,9 +857,11 @@ impl TestClusterBuilder {
         TestClusterBuilder {
             genesis_config: None,
             network_config: None,
+            chain_override: None,
             additional_objects: vec![],
             fullnode_rpc_port: None,
             num_validators: None,
+            validators: None,
             enable_fullnode_events: false,
             disable_fullnode_pruning: false,
             validator_supported_protocol_versions_config: ProtocolVersionsConfig::Default,
@@ -862,6 +873,7 @@ impl TestClusterBuilder {
             config_dir: None,
             default_jwks: false,
             authority_overload_config: None,
+            execution_cache_config: None,
             data_ingestion_dir: None,
             fullnode_run_with_range: None,
             fullnode_policy_config: None,
@@ -914,8 +926,16 @@ impl TestClusterBuilder {
         self
     }
 
+    /// Set the number of default validators to spawn. Can be overridden by `with_validators`, if
+    /// you need to provide more specific genesis configs for each validator.
     pub fn with_num_validators(mut self, num: usize) -> Self {
         self.num_validators = Some(num);
+        self
+    }
+
+    /// Provide validator genesis configs, overrides the `num_validators` setting.
+    pub fn with_validators(mut self, validators: Vec<ValidatorGenesisConfig>) -> Self {
+        self.validators = Some(validators);
         self
     }
 
@@ -1016,7 +1036,7 @@ impl TestClusterBuilder {
             .accounts
             .extend(addresses.into_iter().map(|address| AccountConfig {
                 address: Some(address),
-                gas_amounts: vec![DEFAULT_GAS_AMOUNT, MIN_VALIDATOR_JOINING_STAKE_MIST],
+                gas_amounts: vec![DEFAULT_GAS_AMOUNT, DEFAULT_GAS_AMOUNT],
             }));
         self
     }
@@ -1052,6 +1072,12 @@ impl TestClusterBuilder {
         self
     }
 
+    pub fn with_execution_cache_config(mut self, config: ExecutionCacheConfig) -> Self {
+        assert!(self.network_config.is_none());
+        self.execution_cache_config = Some(config);
+        self
+    }
+
     pub fn with_data_ingestion_dir(mut self, path: PathBuf) -> Self {
         self.data_ingestion_dir = Some(path);
         self
@@ -1072,6 +1098,11 @@ impl TestClusterBuilder {
 
     pub fn with_indexer_backed_rpc(mut self) -> Self {
         self.indexer_backed_rpc = true;
+        self
+    }
+
+    pub fn with_chain_override(mut self, chain: Chain) -> Self {
+        self.chain_override = Some(chain);
         self
     }
 
@@ -1110,7 +1141,7 @@ impl TestClusterBuilder {
 
         if self.indexer_backed_rpc {
             if self.data_ingestion_dir.is_none() {
-                temp_data_ingestion_dir = Some(tempfile::tempdir().unwrap());
+                temp_data_ingestion_dir = Some(mysten_common::tempdir().unwrap());
                 self.data_ingestion_dir = Some(
                     temp_data_ingestion_dir
                         .as_ref()
@@ -1173,9 +1204,6 @@ impl TestClusterBuilder {
     /// Start a Swarm and set up WalletConfig
     async fn start_swarm(&mut self) -> Result<Swarm, anyhow::Error> {
         let mut builder: SwarmBuilder = Swarm::builder()
-            .committee_size(
-                NonZeroUsize::new(self.num_validators.unwrap_or(NUM_VALIDATOR)).unwrap(),
-            )
             .with_objects(self.additional_objects.clone())
             .with_db_checkpoint_config(self.db_checkpoint_config_validators.clone())
             .with_supported_protocol_versions_config(
@@ -1195,6 +1223,18 @@ impl TestClusterBuilder {
             .with_fullnode_policy_config(self.fullnode_policy_config.clone())
             .with_fullnode_fw_config(self.fullnode_fw_config.clone());
 
+        if let Some(validators) = self.validators.take() {
+            builder = builder.with_validators(validators);
+        } else {
+            builder = builder.committee_size(
+                NonZeroUsize::new(self.num_validators.unwrap_or(NUM_VALIDATOR)).unwrap(),
+            )
+        };
+
+        if let Some(chain) = self.chain_override {
+            builder = builder.with_chain_override(chain);
+        }
+
         if let Some(genesis_config) = self.genesis_config.take() {
             builder = builder.with_genesis_config(genesis_config);
         }
@@ -1205,6 +1245,10 @@ impl TestClusterBuilder {
 
         if let Some(authority_overload_config) = self.authority_overload_config.take() {
             builder = builder.with_authority_overload_config(authority_overload_config);
+        }
+
+        if let Some(execution_cache_config) = self.execution_cache_config.take() {
+            builder = builder.with_execution_cache_config(execution_cache_config);
         }
 
         if let Some(fullnode_rpc_port) = self.fullnode_rpc_port {

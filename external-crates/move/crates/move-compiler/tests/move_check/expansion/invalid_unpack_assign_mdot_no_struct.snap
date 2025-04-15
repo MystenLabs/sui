@@ -1,0 +1,26 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: legacy
+  lint: false
+---
+error[E03003]: unbound module member
+  ┌─ tests/move_check/expansion/invalid_unpack_assign_mdot_no_struct.move:3:9
+  │
+3 │         Self::f {} = 0;
+  │         ^^^^^^^ Unbound struct 'f' in current scope
+
+error[E03003]: unbound module member
+  ┌─ tests/move_check/expansion/invalid_unpack_assign_mdot_no_struct.move:4:9
+  │
+4 │         Self::f() = 0;
+  │         ^^^^^^^ Unbound struct 'f' in current scope
+
+error[E13001]: feature is not supported in specified edition
+  ┌─ tests/move_check/expansion/invalid_unpack_assign_mdot_no_struct.move:4:9
+  │
+4 │         Self::f() = 0;
+  │         ^^^^^^^^^ Positional fields are not supported by current edition 'legacy'; the '2024' edition supports this feature
+  │
+  = You can update the edition in the 'Move.toml', or via command line flag if invoking the compiler directly.

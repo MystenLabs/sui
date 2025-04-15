@@ -1,30 +1,26 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use anyhow::{Context, Result};
+use std::path::Path;
+
+use anyhow::bail;
+use anyhow::Context;
+use anyhow::Result;
 use clap::Parser;
+use prometheus::Registry;
+use sui_indexer_alt::args::Args;
 use sui_indexer_alt::args::Command;
-use sui_indexer_alt::bootstrap::bootstrap;
-use sui_indexer_alt::db::reset_database;
-use sui_indexer_alt::handlers::kv_epoch_ends::KvEpochEnds;
-use sui_indexer_alt::handlers::kv_epoch_starts::KvEpochStarts;
-use sui_indexer_alt::handlers::kv_feature_flags::KvFeatureFlags;
-use sui_indexer_alt::handlers::kv_protocol_configs::KvProtocolConfigs;
-use sui_indexer_alt::pipeline::concurrent::PrunerConfig;
-use sui_indexer_alt::{
-    args::Args,
-    handlers::{
-        ev_emit_mod::EvEmitMod, ev_struct_inst::EvStructInst, kv_checkpoints::KvCheckpoints,
-        kv_objects::KvObjects, kv_transactions::KvTransactions, obj_versions::ObjVersions,
-        sum_coin_balances::SumCoinBalances, sum_displays::SumDisplays, sum_obj_types::SumObjTypes,
-        sum_packages::SumPackages, tx_affected_addresses::TxAffectedAddress,
-        tx_affected_objects::TxAffectedObjects, tx_balance_changes::TxBalanceChanges,
-        tx_calls::TxCalls, tx_digests::TxDigests, tx_kinds::TxKinds,
-        wal_coin_balances::WalCoinBalances, wal_obj_types::WalObjTypes,
-    },
-    Indexer,
-};
+use sui_indexer_alt::config::IndexerConfig;
+use sui_indexer_alt::config::Merge;
+use sui_indexer_alt::setup_indexer;
+use sui_indexer_alt_framework::db::reset_database;
+use sui_indexer_alt_framework::Indexer;
+use sui_indexer_alt_metrics::MetricsService;
+use sui_indexer_alt_schema::MIGRATIONS;
+use tokio::fs;
+use tokio::signal;
 use tokio_util::sync::CancellationToken;
+use tracing::info;
 
 #[tokio::main]
 async fn main() -> Result<()> {
@@ -35,80 +31,130 @@ async fn main() -> Result<()> {
         .with_env()
         .init();
 
-    let cancel = CancellationToken::new();
-
     match args.command {
         Command::Indexer {
-            indexer,
-            consistent_pruning_interval,
-            pruner_delay,
-            consistent_range: lag,
+            database_url,
+            db_args,
+            client_args,
+            indexer_args,
+            metrics_args,
+            config,
         } => {
-            let retry_interval = indexer.ingestion_config.retry_interval;
-            let mut indexer = Indexer::new(args.db_config, indexer, cancel.clone()).await?;
+            let indexer_config = read_config(&config).await?;
+            info!("Starting indexer with config: {:?}", indexer_config);
 
-            let genesis = bootstrap(&indexer, retry_interval, cancel.clone()).await?;
+            let cancel = CancellationToken::new();
 
-            // Pipelines that rely on genesis information
-            indexer
-                .concurrent_pipeline(KvFeatureFlags(genesis.clone()), None)
-                .await?;
+            let registry = Registry::new_custom(Some("indexer_alt".into()), None)
+                .context("Failed to create Prometheus registry.")?;
 
-            indexer
-                .concurrent_pipeline(KvProtocolConfigs(genesis.clone()), None)
-                .await?;
+            let metrics = MetricsService::new(metrics_args, registry, cancel.child_token());
 
-            // Pipelines that are split up into a summary table, and a write-ahead log, where the
-            // write-ahead log needs to be pruned.
-            let pruner_config = lag.map(|l| PrunerConfig {
-                interval: consistent_pruning_interval,
-                delay: pruner_delay,
-                // Retain at least twice as much data as the lag, to guarantee overlap between the
-                // summary table and the write-ahead log.
-                retention: l * 2,
-                // Prune roughly five minutes of data in one go.
-                max_chunk_size: 5 * 300,
+            let h_ctrl_c = tokio::spawn({
+                let cancel = cancel.clone();
+                async move {
+                    tokio::select! {
+                        _ = cancel.cancelled() => {}
+                        _ = signal::ctrl_c() => {
+                            info!("Received Ctrl-C, shutting down...");
+                            cancel.cancel();
+                        }
+                    }
+                }
             });
 
-            indexer.sequential_pipeline(SumCoinBalances, lag).await?;
-            indexer
-                .concurrent_pipeline(WalCoinBalances, pruner_config.clone())
-                .await?;
+            let h_indexer = setup_indexer(
+                database_url,
+                db_args,
+                indexer_args,
+                client_args,
+                indexer_config,
+                true,
+                metrics.registry(),
+                cancel.child_token(),
+            )
+            .await?
+            .run()
+            .await
+            .context("Failed to start indexer")?;
 
-            indexer.sequential_pipeline(SumObjTypes, lag).await?;
-            indexer
-                .concurrent_pipeline(WalObjTypes, pruner_config)
-                .await?;
+            let h_metrics = metrics.run().await?;
 
-            // Other summary tables (without write-ahead log)
-            indexer.sequential_pipeline(SumDisplays, None).await?;
-            indexer.sequential_pipeline(SumPackages, None).await?;
-
-            // Unpruned concurrent pipelines
-            indexer.concurrent_pipeline(EvEmitMod, None).await?;
-            indexer.concurrent_pipeline(EvStructInst, None).await?;
-            indexer.concurrent_pipeline(KvCheckpoints, None).await?;
-            indexer.concurrent_pipeline(KvEpochEnds, None).await?;
-            indexer.concurrent_pipeline(KvEpochStarts, None).await?;
-            indexer.concurrent_pipeline(KvObjects, None).await?;
-            indexer.concurrent_pipeline(KvTransactions, None).await?;
-            indexer.concurrent_pipeline(ObjVersions, None).await?;
-            indexer.concurrent_pipeline(TxAffectedAddress, None).await?;
-            indexer.concurrent_pipeline(TxAffectedObjects, None).await?;
-            indexer.concurrent_pipeline(TxBalanceChanges, None).await?;
-            indexer.concurrent_pipeline(TxCalls, None).await?;
-            indexer.concurrent_pipeline(TxDigests, None).await?;
-            indexer.concurrent_pipeline(TxKinds, None).await?;
-
-            let h_indexer = indexer.run().await.context("Failed to start indexer")?;
-
-            cancel.cancelled().await;
+            // Wait for the indexer to finish, then force the supporting services to shut down
+            // using the cancellation token.
             let _ = h_indexer.await;
+            cancel.cancel();
+            let _ = h_metrics.await;
+            let _ = h_ctrl_c.await;
         }
-        Command::ResetDatabase { skip_migrations } => {
-            reset_database(args.db_config, skip_migrations).await?;
+
+        Command::GenerateConfig => {
+            let config = IndexerConfig::example();
+            let config_toml = toml::to_string_pretty(&config)
+                .context("Failed to serialize default configuration to TOML.")?;
+
+            println!("{config_toml}");
+        }
+
+        Command::MergeConfigs { config } => {
+            let mut files = config.into_iter();
+
+            let Some(file) = files.next() else {
+                bail!("At least one configuration file must be provided.");
+            };
+
+            let mut indexer_config = read_config(&file).await?;
+            for file in files {
+                indexer_config =
+                    indexer_config.merge(read_config(&file).await.with_context(|| {
+                        format!("Failed to read configuration file: {}", file.display())
+                    })?);
+            }
+
+            let config_toml = toml::to_string_pretty(&indexer_config)
+                .context("Failed to serialize merged configuration to TOML.")?;
+
+            println!("{config_toml}");
+        }
+
+        Command::ResetDatabase {
+            database_url,
+            db_args,
+            skip_migrations,
+        } => {
+            reset_database(
+                database_url,
+                db_args,
+                (!skip_migrations).then(|| Indexer::migrations(Some(&MIGRATIONS))),
+            )
+            .await?;
+        }
+
+        #[cfg(feature = "benchmark")]
+        Command::Benchmark {
+            database_url,
+            db_args,
+            benchmark_args,
+            config,
+        } => {
+            let indexer_config = read_config(&config).await?;
+            sui_indexer_alt::benchmark::run_benchmark(
+                database_url,
+                db_args,
+                benchmark_args,
+                indexer_config,
+            )
+            .await?;
         }
     }
 
     Ok(())
+}
+
+async fn read_config(path: &Path) -> Result<IndexerConfig> {
+    let config_contents = fs::read_to_string(path)
+        .await
+        .context("Failed to read configuration TOML file")?;
+
+    toml::from_str(&config_contents).context("Failed to parse configuration TOML file.")
 }

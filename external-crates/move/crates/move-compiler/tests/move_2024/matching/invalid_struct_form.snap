@@ -1,0 +1,48 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: 2024.alpha
+  lint: false
+---
+error[E03013]: positional call mismatch
+  ┌─ tests/move_2024/matching/invalid_struct_form.move:9:13
+  │
+3 │     public struct P(u64) has drop;
+  │                   - 'P' is declared here
+  ·
+9 │             P { x } => x,
+  │             ^^^^^^^ Invalid struct pattern. Positional struct declarations require positional patterns
+
+error[E03010]: unbound field
+  ┌─ tests/move_2024/matching/invalid_struct_form.move:9:13
+  │
+9 │             P { x } => x,
+  │             ^^^^^^^ Unbound field 'x' in 'a::m::P'
+
+error[E04016]: too few arguments
+  ┌─ tests/move_2024/matching/invalid_struct_form.move:9:13
+  │
+9 │             P { x } => x,
+  │             ^^^^^^^ Missing pattern for field '0' in 'a::m::P'
+
+error[E03013]: positional call mismatch
+   ┌─ tests/move_2024/matching/invalid_struct_form.move:12:13
+   │
+ 5 │     public struct N { x: u64 } has drop;
+   │                   - 'N' is declared here
+   ·
+12 │             N(x) => x,
+   │             ^^^^ Invalid struct pattern. Named struct declarations require named patterns
+
+error[E03010]: unbound field
+   ┌─ tests/move_2024/matching/invalid_struct_form.move:12:13
+   │
+12 │             N(x) => x,
+   │             ^^^^ Unbound field '0' in 'a::m::N'
+
+error[E04016]: too few arguments
+   ┌─ tests/move_2024/matching/invalid_struct_form.move:12:13
+   │
+12 │             N(x) => x,
+   │             ^^^^ Missing pattern for field 'x' in 'a::m::N'

@@ -1,0 +1,142 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: 2024.alpha
+  lint: false
+---
+warning[W09002]: unused variable
+   ┌─ tests/move_2024/expansion/meaningless_copy_move.move:11:14
+   │
+11 │     fun test(x: X) {
+   │              ^ Unused parameter 'x'. Consider removing or prefixing with an underscore: '_x'
+   │
+   = This warning can be suppressed with '#[allow(unused_variable)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+error[E01013]: invalid 'move' or 'copy'
+   ┌─ tests/move_2024/expansion/meaningless_copy_move.move:12:9
+   │
+12 │         copy &x;
+   │         ^^^^ -- Expected a name or path access, e.g. 'x' or 'e.f'
+   │         │     
+   │         Invalid 'copy' of expression
+
+error[E01013]: invalid 'move' or 'copy'
+   ┌─ tests/move_2024/expansion/meaningless_copy_move.move:13:9
+   │
+13 │         copy *&x;
+   │         ^^^^ --- Expected a name or path access, e.g. 'x' or 'e.f'
+   │         │     
+   │         Invalid 'copy' of expression
+
+error[E01013]: invalid 'move' or 'copy'
+   ┌─ tests/move_2024/expansion/meaningless_copy_move.move:14:9
+   │
+14 │         copy &x.y;
+   │         ^^^^ ---- Expected a name or path access, e.g. 'x' or 'e.f'
+   │         │     
+   │         Invalid 'copy' of expression
+
+error[E01013]: invalid 'move' or 'copy'
+   ┌─ tests/move_2024/expansion/meaningless_copy_move.move:15:9
+   │
+15 │         copy *&x.y;
+   │         ^^^^ ----- Expected a name or path access, e.g. 'x' or 'e.f'
+   │         │     
+   │         Invalid 'copy' of expression
+
+error[E01013]: invalid 'move' or 'copy'
+   ┌─ tests/move_2024/expansion/meaningless_copy_move.move:16:9
+   │
+16 │         copy x.id();
+   │         ^^^^ ------ Expected a name or path access, e.g. 'x' or 'e.f'
+   │         │     
+   │         Invalid 'copy' of expression
+
+error[E01013]: invalid 'move' or 'copy'
+   ┌─ tests/move_2024/expansion/meaningless_copy_move.move:17:9
+   │
+17 │         copy !0;
+   │         ^^^^ -- Expected a name or path access, e.g. 'x' or 'e.f'
+   │         │     
+   │         Invalid 'copy' of expression
+
+error[E01013]: invalid 'move' or 'copy'
+   ┌─ tests/move_2024/expansion/meaningless_copy_move.move:18:9
+   │
+18 │         copy 0;
+   │         ^^^^ - Expected a name or path access, e.g. 'x' or 'e.f'
+   │         │     
+   │         Invalid 'copy' of expression
+
+error[E01013]: invalid 'move' or 'copy'
+   ┌─ tests/move_2024/expansion/meaningless_copy_move.move:19:9
+   │
+19 │         copy 1 + 1;
+   │         ^^^^ - Expected a name or path access, e.g. 'x' or 'e.f'
+   │         │     
+   │         Invalid 'copy' of expression
+
+error[E01013]: invalid 'move' or 'copy'
+   ┌─ tests/move_2024/expansion/meaningless_copy_move.move:21:9
+   │
+21 │         move &x;
+   │         ^^^^ -- Expected a name or path access, e.g. 'x' or 'e.f'
+   │         │     
+   │         Invalid 'move' of expression
+
+error[E01013]: invalid 'move' or 'copy'
+   ┌─ tests/move_2024/expansion/meaningless_copy_move.move:22:9
+   │
+22 │         move *&x;
+   │         ^^^^ --- Expected a name or path access, e.g. 'x' or 'e.f'
+   │         │     
+   │         Invalid 'move' of expression
+
+error[E01013]: invalid 'move' or 'copy'
+   ┌─ tests/move_2024/expansion/meaningless_copy_move.move:23:9
+   │
+23 │         move &x.y;
+   │         ^^^^ ---- Expected a name or path access, e.g. 'x' or 'e.f'
+   │         │     
+   │         Invalid 'move' of expression
+
+error[E01013]: invalid 'move' or 'copy'
+   ┌─ tests/move_2024/expansion/meaningless_copy_move.move:24:9
+   │
+24 │         move *&x.y;
+   │         ^^^^ ----- Expected a name or path access, e.g. 'x' or 'e.f'
+   │         │     
+   │         Invalid 'move' of expression
+
+error[E01013]: invalid 'move' or 'copy'
+   ┌─ tests/move_2024/expansion/meaningless_copy_move.move:25:9
+   │
+25 │         move x.id();
+   │         ^^^^ ------ Expected a name or path access, e.g. 'x' or 'e.f'
+   │         │     
+   │         Invalid 'move' of expression
+
+error[E01013]: invalid 'move' or 'copy'
+   ┌─ tests/move_2024/expansion/meaningless_copy_move.move:26:9
+   │
+26 │         move !0;
+   │         ^^^^ -- Expected a name or path access, e.g. 'x' or 'e.f'
+   │         │     
+   │         Invalid 'move' of expression
+
+error[E01013]: invalid 'move' or 'copy'
+   ┌─ tests/move_2024/expansion/meaningless_copy_move.move:27:9
+   │
+27 │         move 0;
+   │         ^^^^ - Expected a name or path access, e.g. 'x' or 'e.f'
+   │         │     
+   │         Invalid 'move' of expression
+
+error[E01013]: invalid 'move' or 'copy'
+   ┌─ tests/move_2024/expansion/meaningless_copy_move.move:28:9
+   │
+28 │         move 1 + 1;
+   │         ^^^^ - Expected a name or path access, e.g. 'x' or 'e.f'
+   │         │     
+   │         Invalid 'move' of expression

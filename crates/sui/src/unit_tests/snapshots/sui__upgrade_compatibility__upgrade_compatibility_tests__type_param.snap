@@ -1,0 +1,159 @@
+---
+source: crates/sui/src/unit_tests/upgrade_compatibility_tests.rs
+expression: normalize_path(err.to_string())
+---
+error[Compatibility E01005]: type parameter mismatch
+   ┌─ /fixtures/upgrade_errors/type_param_errors_v2/sources/UpgradeErrors.move:13:19
+   │
+13 │     public struct StructTypeParamAddU<T, U> has copy, drop { x : T }
+   │                   ^^^^^^^^^^^^^^^^^^^ Incorrect number of type parameters: expected 1, found 2
+   │
+   = Structs are part of a module's public interface and cannot be removed or changed during a 'compatible' upgrade.
+   = Restore the original struct's type parameter for struct 'StructTypeParamAddU' including the ordering.
+
+error[Compatibility E01005]: type parameter mismatch
+   ┌─ /fixtures/upgrade_errors/type_param_errors_v2/sources/UpgradeErrors.move:16:45
+   │
+16 │     public struct StructTypeParamRemoveCopy<T> has copy, drop { x : T }
+   │                   ------------------------- ^ Missing constraint: 'copy'
+   │                   │                          
+   │                   Struct definition
+   │
+   = Structs are part of a module's public interface and cannot be removed or changed during an upgrade.
+   = Restore the original type parameter constraint: 'copy'
+
+error[Compatibility E01005]: type parameter mismatch
+   ┌─ /fixtures/upgrade_errors/type_param_errors_v2/sources/UpgradeErrors.move:19:45
+   │
+19 │     public struct StructTypeParamRemoveDrop<T: copy> has copy, drop { x : T }
+   │                   ------------------------- ^ Missing constraint: 'drop'
+   │                   │                          
+   │                   Struct definition
+   │
+   = Structs are part of a module's public interface and cannot be removed or changed during an upgrade.
+   = Restore the original type parameter constraints: 'copy' and 'drop'
+
+error[Compatibility E01005]: type parameter mismatch
+   ┌─ /fixtures/upgrade_errors/type_param_errors_v2/sources/UpgradeErrors.move:22:48
+   │
+22 │     public struct StructTypeParamRemovePhantom<T> has copy, drop { x : u64 }
+   │                   ---------------------------- ^ Missing 'phantom' modifier
+   │                   │                             
+   │                   Struct definition
+   │
+   = Structs are part of a module's public interface and cannot be removed or changed during an upgrade.
+   = Restore the original 'phantom' modifier
+
+error[Compatibility E01005]: type parameter mismatch
+   ┌─ /fixtures/upgrade_errors/type_param_errors_v2/sources/UpgradeErrors.move:25:53
+   │
+25 │     public struct StructTypeParamAddPhantom<phantom T> has copy, drop { x : u64 }
+   │                   -------------------------         ^ Unexpected 'phantom' modifier
+   │                   │                                  
+   │                   Struct definition
+   │
+   = Structs are part of a module's public interface and cannot be removed or changed during an upgrade.
+   = Remove the 'phantom' modifier
+
+error[Compatibility E01005]: type parameter mismatch
+   ┌─ /fixtures/upgrade_errors/type_param_errors_v2/sources/UpgradeErrors.move:29:17
+   │
+29 │     public enum EnumTypeParamAddU<T, U> has copy, drop {
+   │                 ^^^^^^^^^^^^^^^^^ Incorrect number of type parameters: expected 1, found 2
+   │
+   = Enums are part of a module's public interface and cannot be removed or changed during a 'compatible' upgrade.
+   = Restore the original enum's type parameter for enum 'EnumTypeParamAddU' including the ordering.
+
+error[Compatibility E01005]: type parameter mismatch
+   ┌─ /fixtures/upgrade_errors/type_param_errors_v2/sources/UpgradeErrors.move:34:17
+   │
+34 │     public enum EnumTypeParamRemoveU<T> has copy, drop {
+   │                 ^^^^^^^^^^^^^^^^^^^^ Incorrect number of type parameters: expected 2, found 1
+   │
+   = Enums are part of a module's public interface and cannot be removed or changed during a 'compatible' upgrade.
+   = Restore the original enum's type parameters for enum 'EnumTypeParamRemoveU' including the ordering.
+
+error[Compatibility E01005]: type parameter mismatch
+   ┌─ /fixtures/upgrade_errors/type_param_errors_v2/sources/UpgradeErrors.move:39:41
+   │
+39 │     public enum EnumTypeParamRemoveCopy<T> has copy, drop {
+   │                 ----------------------- ^ Missing constraint: 'copy'
+   │                 │                        
+   │                 Enum definition
+   │
+   = Enums are part of a module's public interface and cannot be removed or changed during an upgrade.
+   = Restore the original type parameter constraint: 'copy'
+
+error[Compatibility E01005]: type parameter mismatch
+   ┌─ /fixtures/upgrade_errors/type_param_errors_v2/sources/UpgradeErrors.move:46:16
+   │
+46 │     public fun add_type_param<T, U>(a: T): T { return a }
+   │                ^^^^^^^^^^^^^^ Expected 1 type parameter, found 2
+   │
+   = Functions are part of a module's public interface and cannot be removed or changed during a 'compatible' upgrade.
+   = Restore the original function's type parameter for function 'add_type_param', expected 1 type parameter.
+
+error[Compatibility E01005]: type parameter mismatch
+   ┌─ /fixtures/upgrade_errors/type_param_errors_v2/sources/UpgradeErrors.move:49:16
+   │
+49 │     public fun remove_type_param<T>(a: T): T { return a }
+   │                ^^^^^^^^^^^^^^^^^ Expected 2 type parameters, found 1
+   │
+   = Functions are part of a module's public interface and cannot be removed or changed during a 'compatible' upgrade.
+   = Restore the original function's type parameters for function 'remove_type_param', expected 2 type parameters.
+
+error[Compatibility E01005]: type parameter mismatch
+   ┌─ /fixtures/upgrade_errors/type_param_errors_v2/sources/UpgradeErrors.move:52:31
+   │
+52 │     public fun add_constraint<T: copy>(a: T): T { return a }
+   │                               ^ Unexpected type parameter constraint: 'copy', expected none
+   │
+   = Functions are part of a module's public interface and cannot be removed or changed during a 'compatible' upgrade.
+   = Restore the original function's type parameter for function 'add_constraint'.
+
+error[Compatibility E03001]: function signature mismatch
+   ┌─ /fixtures/upgrade_errors/type_param_errors_v2/sources/UpgradeErrors.move:58:58
+   │
+58 │     public fun swap_type_params<T: drop, U: drop + copy>(a: U, b: T): T { return b }
+   │                                 -                        ^ Unexpected parameter 'U', expected 'T'
+   │                                 │                         
+   │                                 Type parameter 'T' is defined here
+   │
+   = Functions are part of a module's public interface and cannot be removed or changed during a 'compatible' upgrade.
+   = Restore the original function's parameters for function 'swap_type_params'.
+
+error[Compatibility E03001]: function signature mismatch
+   ┌─ /fixtures/upgrade_errors/type_param_errors_v2/sources/UpgradeErrors.move:58:64
+   │
+58 │     public fun swap_type_params<T: drop, U: drop + copy>(a: U, b: T): T { return b }
+   │                                          -                     ^ Unexpected parameter 'T', expected 'U'
+   │                                          │                      
+   │                                          Type parameter 'U' is defined here
+   │
+   = Functions are part of a module's public interface and cannot be removed or changed during a 'compatible' upgrade.
+   = Restore the original function's parameters for function 'swap_type_params'.
+
+error[Compatibility E03001]: function signature mismatch
+   ┌─ /fixtures/upgrade_errors/type_param_errors_v2/sources/UpgradeErrors.move:61:78
+   │
+61 │     public fun swap_type_params_return<T: drop, U: drop + copy>(a: T, b: U): U { return b }
+   │                                        -                                     ^ Unexpected return type 'U', expected 'T'
+   │                                        │                                      
+   │                                        Type parameter 'T' is defined here
+   │
+   = Functions are part of a module's public interface and cannot be removed or changed during a 'compatible' upgrade.
+   = Restore the original function's return type for function 'swap_type_params_return'.
+
+error[Compatibility E03001]: function signature mismatch
+   ┌─ /fixtures/upgrade_errors/type_param_errors_v2/sources/UpgradeErrors.move:67:64
+   │
+67 │     public fun vec_changed_type_param<T: drop, U: drop + copy>(_: vector<U>) {}
+   │                                       -                        ^ Unexpected parameter 'vector<U>', expected 'vector<T>'
+   │                                       │                         
+   │                                       Type parameter 'T' is defined here
+   │
+   = Functions are part of a module's public interface and cannot be removed or changed during a 'compatible' upgrade.
+   = Restore the original function's parameter for function 'vec_changed_type_param'.
+
+
+Upgrade failed, this package requires changes to be compatible with the existing package. Its upgrade policy is set to 'compatible'.

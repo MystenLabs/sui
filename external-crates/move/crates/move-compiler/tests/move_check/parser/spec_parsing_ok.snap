@@ -1,0 +1,160 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: legacy
+  lint: false
+---
+warning[W00001]: DEPRECATED. will be removed
+   ┌─ tests/move_check/parser/spec_parsing_ok.move:11:5
+   │  
+11 │ ╭     spec module {
+12 │ │         global expected_coin_sum: u64;
+13 │ │         global other: bool;
+14 │ │ 
+   · │
+23 │ │         }
+24 │ │     }
+   │ ╰─────^ Specification blocks are deprecated and are no longer used
+
+warning[W00001]: DEPRECATED. will be removed
+   ┌─ tests/move_check/parser/spec_parsing_ok.move:34:5
+   │  
+34 │ ╭     spec SomeCoin {
+35 │ │         // Data invariants
+36 │ │         invariant x > 0;
+37 │ │         invariant x == y;
+38 │ │     }
+   │ ╰─────^ Specification blocks are deprecated and are no longer used
+
+warning[W00001]: DEPRECATED. will be removed
+   ┌─ tests/move_check/parser/spec_parsing_ok.move:40:5
+   │  
+40 │ ╭     spec with_aborts_if {
+41 │ │       aborts_if x == 0;
+42 │ │     }
+   │ ╰─────^ Specification blocks are deprecated and are no longer used
+
+warning[W00001]: DEPRECATED. will be removed
+   ┌─ tests/move_check/parser/spec_parsing_ok.move:47:5
+   │  
+47 │ ╭     spec with_ensures {
+48 │ │         ensures RET == x + 1;
+49 │ │     }
+   │ ╰─────^ Specification blocks are deprecated and are no longer used
+
+warning[W00001]: DEPRECATED. will be removed
+   ┌─ tests/move_check/parser/spec_parsing_ok.move:54:5
+   │  
+54 │ ╭     spec using_block {
+55 │ │         ensures RET = {let y = x; y + 1};
+56 │ │     }
+   │ ╰─────^ Specification blocks are deprecated and are no longer used
+
+warning[W00001]: DEPRECATED. will be removed
+   ┌─ tests/move_check/parser/spec_parsing_ok.move:61:5
+   │  
+61 │ ╭     spec using_lambda
+62 │ │     {
+63 │ │         ensures all(x, |y, z| x + y + z);
+64 │ │     }
+   │ ╰─────^ Specification blocks are deprecated and are no longer used
+
+warning[W00001]: DEPRECATED. will be removed
+   ┌─ tests/move_check/parser/spec_parsing_ok.move:69:5
+   │  
+69 │ ╭     spec using_index_and_range {
+70 │ │         ensures RET = x[1] && x[0..3];
+71 │ │     }
+   │ ╰─────^ Specification blocks are deprecated and are no longer used
+
+warning[W00001]: DEPRECATED. will be removed
+   ┌─ tests/move_check/parser/spec_parsing_ok.move:76:5
+   │  
+76 │ ╭     spec using_implies {
+77 │ │         ensures x > 0 ==> RET == x - 1;
+78 │ │         ensures x == 0 ==> RET == x;
+79 │ │     }
+   │ ╰─────^ Specification blocks are deprecated and are no longer used
+
+warning[W00001]: DEPRECATED. will be removed
+   ┌─ tests/move_check/parser/spec_parsing_ok.move:84:5
+   │  
+84 │ ╭     spec with_emits {
+85 │ │         emits _msg to _guid;
+86 │ │         emits _msg to _guid if true;
+87 │ │         emits _msg to _guid if x > 7;
+88 │ │     }
+   │ ╰─────^ Specification blocks are deprecated and are no longer used
+
+warning[W00001]: DEPRECATED. will be removed
+    ┌─ tests/move_check/parser/spec_parsing_ok.move:93:5
+    │  
+ 93 │ ╭     spec module {
+ 94 │ │         global x: u64;
+ 95 │ │         local y: u64;
+ 96 │ │         z: u64;
+    · │
+ 99 │ │         invariant update Self::generic<u64> = 24;
+100 │ │     }
+    │ ╰─────^ Specification blocks are deprecated and are no longer used
+
+warning[W00001]: DEPRECATED. will be removed
+    ┌─ tests/move_check/parser/spec_parsing_ok.move:104:5
+    │  
+104 │ ╭     spec some_generic {
+105 │ │         ensures generic<T> == 1;
+106 │ │         ensures Self::generic<T> == 1;
+107 │ │     }
+    │ ╰─────^ Specification blocks are deprecated and are no longer used
+
+warning[W00001]: DEPRECATED. will be removed
+    ┌─ tests/move_check/parser/spec_parsing_ok.move:109:5
+    │  
+109 │ ╭     spec schema ModuleInvariant<X, Y> {
+110 │ │         requires global<X>(0x0).f == global<X>(0x1).f;
+111 │ │         ensures global<X>(0x0).f == global<X>(0x1).f;
+112 │ │     }
+    │ ╰─────^ Specification blocks are deprecated and are no longer used
+
+warning[W00001]: DEPRECATED. will be removed
+    ┌─ tests/move_check/parser/spec_parsing_ok.move:114:5
+    │  
+114 │ ╭     spec some_generic {
+115 │ │         include ModuleInvariant<T, T>{foo:bar, x:y};
+116 │ │     }
+    │ ╰─────^ Specification blocks are deprecated and are no longer used
+
+warning[W00001]: DEPRECATED. will be removed
+    ┌─ tests/move_check/parser/spec_parsing_ok.move:118:5
+    │  
+118 │ ╭     spec module {
+119 │ │         apply ModuleInvariant<X, Y> to *foo*<Y, X>;
+120 │ │         apply ModuleInvariant<X, Y> to *foo*<Y, X>, bar except public *, internal baz<X>;
+121 │ │         pragma do_not_verify, timeout = 60;
+122 │ │     }
+    │ ╰─────^ Specification blocks are deprecated and are no longer used
+
+warning[W00001]: DEPRECATED. will be removed
+    ┌─ tests/move_check/parser/spec_parsing_ok.move:124:5
+    │  
+124 │ ╭     spec module {
+125 │ │         invariant forall x: num, y: num, z: num : x == y && y == z ==> x == z;
+126 │ │         invariant forall x: num : exists y: num : y >= x;
+127 │ │         invariant exists x in 1..10, y in 8..12 : x == y;
+128 │ │         invariant<X: key> exists<X>(0x0) <==> exists<X>(0x0);
+129 │ │         invariant<X: key, Y: key> exists<X>(0x0) && exists<Y>(0x1) <==> exists<Y>(0x1) && exists<X>(0x0);
+130 │ │     }
+    │ ╰─────^ Specification blocks are deprecated and are no longer used
+
+warning[W00001]: DEPRECATED. will be removed
+    ┌─ tests/move_check/parser/spec_parsing_ok.move:132:5
+    │  
+132 │ ╭     spec module {
+133 │ │         fun spec_fun_non_zero(): num;
+134 │ │         axiom spec_fun_non_zero() > 0;
+135 │ │ 
+136 │ │         fun spec_fun_identity<T>(x: T): T;
+137 │ │         axiom<T> forall x: T: spec_fun_identity(x) == x;
+138 │ │     }
+    │ ╰─────^ Specification blocks are deprecated and are no longer used

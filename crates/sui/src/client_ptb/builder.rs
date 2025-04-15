@@ -9,21 +9,25 @@ use crate::{
     },
     err, error, sp,
 };
-use anyhow::Result;
+use anyhow::{anyhow, Result};
 use async_recursion::async_recursion;
 use async_trait::async_trait;
 use miette::Severity;
 use move_binary_format::{
     binary_config::BinaryConfig, file_format::SignatureToken, CompiledModule,
 };
-use move_core_types::parsing::{
-    address::{NumericalAddress, ParsedAddress},
-    parser::NumberFormat,
-};
 use move_core_types::{
     account_address::AccountAddress, annotated_value::MoveTypeLayout, ident_str,
 };
-use move_package::BuildConfig;
+use move_core_types::{
+    language_storage::StructTag,
+    parsing::{
+        address::{NumericalAddress, ParsedAddress},
+        parser::NumberFormat,
+        types::{ParsedStructType, ParsedType},
+    },
+};
+use move_package::BuildConfig as MoveBuildConfig;
 use std::{collections::BTreeMap, path::Path};
 use sui_json::{is_receiving_argument, primitive_type};
 use sui_json_rpc_types::{SuiObjectData, SuiObjectDataOptions, SuiRawData};
@@ -39,7 +43,10 @@ use sui_types::{
     Identifier, TypeTag, SUI_FRAMEWORK_PACKAGE_ID,
 };
 
-use super::ast::{ModuleAccess as PTBModuleAccess, ParsedPTBCommand, Program};
+use super::{
+    ast::{ModuleAccess as PTBModuleAccess, ParsedPTBCommand, Program},
+    ptb::AddressData,
+};
 
 // ===========================================================================
 // Object Resolution
@@ -119,6 +126,7 @@ impl<'a> Resolver<'a> for ToObject {
         let obj = builder.get_object(obj_id, loc).await?;
         let owner = obj
             .owner
+            .clone()
             .ok_or_else(|| err!(loc, "Unable to get owner info for object {obj_id}"))?;
         let object_ref = obj.object_ref();
         // Depending on the ownership of the object, we resolve it to different types of object
@@ -128,6 +136,10 @@ impl<'a> Resolver<'a> for ToObject {
             Owner::Immutable | Owner::AddressOwner(_) => ObjectArg::ImmOrOwnedObject(object_ref),
             Owner::Shared {
                 initial_shared_version,
+            }
+            | Owner::ConsensusV2 {
+                start_version: initial_shared_version,
+                ..
             } => ObjectArg::SharedObject {
                 id: object_ref.0,
                 initial_shared_version,
@@ -205,9 +217,9 @@ impl<'a> Resolver<'a> for ToPure {
 ///   an object ID should be resolved to a pure value or an object argument.
 /// - A way to bind the result of a command to an identifier.
 pub struct PTBBuilder<'a> {
-    /// A map from identifiers to addresses. This is used to support address resolution, and also
-    /// supports external address sources (e.g., keystore).
-    addresses: BTreeMap<String, AccountAddress>,
+    /// A map from identifiers to address or move pkg. This is used to support address resolution
+    /// and also supports external address sources (e.g., keystore, mvr).
+    addresses: BTreeMap<String, AddressData>,
     /// A map from identifiers to the file scopes in which they were declared. This is used
     /// for reporting shadowing warnings.
     identifiers: BTreeMap<String, Vec<Span>>,
@@ -270,7 +282,7 @@ impl ArgWithHistory {
 }
 
 impl<'a> PTBBuilder<'a> {
-    pub fn new(starting_env: BTreeMap<String, AccountAddress>, reader: &'a ReadApi) -> Self {
+    pub fn new(starting_env: BTreeMap<String, AddressData>, reader: &'a ReadApi) -> Self {
         Self {
             addresses: starting_env,
             identifiers: BTreeMap::new(),
@@ -369,7 +381,8 @@ impl<'a> PTBBuilder<'a> {
     fn declare_possible_address_binding(&mut self, ident: String, possible_addr: &Spanned<PTBArg>) {
         match possible_addr.value {
             PTBArg::Address(addr) => {
-                self.addresses.insert(ident, addr.into_inner());
+                self.addresses
+                    .insert(ident, AddressData::AccountAddress(addr.into_inner()));
             }
             PTBArg::Identifier(ref i) => {
                 // We do a one-hop resolution here to see if we can resolve the identifier to an
@@ -377,7 +390,9 @@ impl<'a> PTBBuilder<'a> {
                 // This will also handle direct aliasing of addresses throughout the ptb.
                 // Note that we don't do this recursively so no need to worry about loops/cycles.
                 if let Some(addr) = self.addresses.get(i) {
-                    self.addresses.insert(ident, *addr);
+                    if let Some(a) = addr.address() {
+                        self.addresses.insert(ident, AddressData::AccountAddress(a));
+                    }
                 }
             }
             // If we encounter a dotted string e.g., "foo.0" or "sui.io" or something like that
@@ -393,7 +408,7 @@ impl<'a> PTBBuilder<'a> {
                         .join(".")
                 );
                 if let Some(addr) = self.addresses.get(&key) {
-                    self.addresses.insert(ident, *addr);
+                    self.addresses.insert(ident, addr.clone());
                 }
             }
             _ => (),
@@ -406,32 +421,7 @@ impl<'a> PTBBuilder<'a> {
         package_id: ObjectID,
         loc: Span,
     ) -> PTBResult<MovePackage> {
-        let object = self
-            .reader
-            .get_object_with_options(package_id, SuiObjectDataOptions::bcs_lossless())
-            .await
-            .map_err(|e| err!(loc, "{e}"))?
-            .into_object()
-            .map_err(|e| err!(loc, "{e}"))?;
-
-        let Some(SuiRawData::Package(package)) = object.bcs else {
-            error!(
-                loc,
-                "BCS field in object '{}' is missing or not a package.", package_id
-            );
-        };
-
-        MovePackage::new(
-            package.id,
-            package.version,
-            package.module_map,
-            // This package came from on-chain and the tool runs locally, so don't worry about
-            // trying to enforce the package size limit.
-            u64::MAX,
-            package.type_origin_table,
-            package.linkage_table,
-        )
-        .map_err(|e| err!(loc, "{e}"))
+        resolve_package(self.reader, package_id, loc).await
     }
 
     /// Resolves the argument to the move call based on the type information of the function being
@@ -670,7 +660,9 @@ impl<'a> PTBBuilder<'a> {
                 // We now have a location for this address (which may have come from the keystore
                 // so we didnt' have an address for it before), so we tag it with its first usage
                 // location put it in the arguments to resolve and resolve away.
-                let addr = self.addresses[&i];
+                let addr = self.addresses[&i]
+                    .address()
+                    .ok_or_else(|| err!(arg_loc, "Expected an address"))?;
                 let arg = arg_loc.wrap(PTBArg::Address(NumericalAddress::new(
                     addr.into_bytes(),
                     NumberFormat::Hex,
@@ -828,8 +820,7 @@ impl<'a> PTBBuilder<'a> {
                     .insert(i, ArgWithHistory::Unresolved(arg_w_loc));
             }
             ParsedPTBCommand::MakeMoveVec(sp!(ty_loc, ty_arg), sp!(_, args)) => {
-                let ty_arg = ty_arg
-                    .into_type_tag(&resolve_address)
+                let ty_arg = into_type_tag(&self.addresses, ty_arg, &resolve_address)
                     .map_err(|e| err!(ty_loc, "{e}"))?;
                 let mut vec_args: Vec<Tx::Argument> = vec![];
                 if is_primitive_type_tag(&ty_arg) {
@@ -880,20 +871,8 @@ impl<'a> PTBBuilder<'a> {
                 in_ty_args,
                 args,
             ) => {
-                let mut ty_args = vec![];
-
-                if let Some(sp!(ty_loc, in_ty_args)) = in_ty_args {
-                    for t in in_ty_args.into_iter() {
-                        ty_args.push(
-                            t.into_type_tag(&resolve_address)
-                                .map_err(|e| err!(ty_loc, "{e}"))?,
-                        )
-                    }
-                }
-
-                let resolved_address = address.value.clone().into_account_address(&|s| {
-                    self.addresses.get(s).cloned().or_else(|| resolve_address(s))
-                }).map_err(|e| {
+                let resolved_address = try_resolve_parsed_address(&self.addresses, &address)
+                    .map_err(|e| {
                     let e = err!(address.span, "{e}");
                     if let ParsedAddress::Named(name) = address.value {
                         e.with_help(
@@ -903,6 +882,16 @@ impl<'a> PTBBuilder<'a> {
                         e
                     }
                 })?;
+
+                let mut ty_args = vec![];
+                if let Some(sp!(ty_loc, in_ty_args)) = in_ty_args {
+                    for t in in_ty_args.into_iter() {
+                        ty_args.push(
+                            into_type_tag(&self.addresses, t, &resolve_address)
+                                .map_err(|e| err!(ty_loc, "{e}"))?,
+                        )
+                    }
+                }
 
                 let package_id = ObjectID::from_address(resolved_address);
                 let package = self.resolve_to_package(package_id, address.span).await?;
@@ -927,7 +916,7 @@ impl<'a> PTBBuilder<'a> {
             }
             ParsedPTBCommand::Publish(sp!(pkg_loc, package_path)) => {
                 let chain_id = self.reader.get_chain_identifier().await.ok();
-                let build_config = BuildConfig::default();
+                let build_config = MoveBuildConfig::default();
                 let package_path = Path::new(&package_path);
                 let build_config = resolve_lock_file_path(build_config.clone(), Some(package_path))
                     .map_err(|e| err!(pkg_loc, "{e}"))?;
@@ -942,14 +931,6 @@ impl<'a> PTBBuilder<'a> {
                 } else {
                     None
                 };
-                let compile_result = compile_package(
-                    self.reader,
-                    build_config.clone(),
-                    package_path,
-                    false, /* with_unpublished_dependencies */
-                    false, /* skip_dependency_verification */
-                )
-                .await;
                 // Restore original ID, then check result.
                 if let (Some(chain_id), Some(previous_id)) = (chain_id, previous_id) {
                     let _ = sui_package_management::set_package_id(
@@ -960,12 +941,21 @@ impl<'a> PTBBuilder<'a> {
                     )
                     .map_err(|e| err!(pkg_loc, "{e}"))?;
                 }
-                let (dependencies, compiled_modules, _, _) =
-                    compile_result.map_err(|e| err!(pkg_loc, "{e}"))?;
+                let compiled_package = compile_package(
+                    self.reader,
+                    build_config.clone(),
+                    package_path,
+                    false, /* with_unpublished_dependencies */
+                    false, /* skip_dependency_verification */
+                )
+                .await
+                .map_err(|e| err!(pkg_loc, "{e}"))?;
+
+                let compiled_modules = compiled_package.get_package_bytes(false);
 
                 let res = self.ptb.publish_upgradeable(
                     compiled_modules,
-                    dependencies.published.into_values().collect(),
+                    compiled_package.get_published_dependencies_ids(),
                 );
                 self.last_command = Some(res);
             }
@@ -994,7 +984,7 @@ impl<'a> PTBBuilder<'a> {
                     .await?;
 
                 let chain_id = self.reader.get_chain_identifier().await.ok();
-                let build_config = BuildConfig::default();
+                let build_config = MoveBuildConfig::default();
                 let package_path = Path::new(&package_path);
                 let build_config = resolve_lock_file_path(build_config.clone(), Some(package_path))
                     .map_err(|e| err!(path_loc, "{e}"))?;
@@ -1009,16 +999,6 @@ impl<'a> PTBBuilder<'a> {
                 } else {
                     None
                 };
-                let upgrade_result = upgrade_package(
-                    self.reader,
-                    build_config.clone(),
-                    package_path,
-                    ObjectID::from_address(upgrade_cap_id.into_inner()),
-                    false, /* with_unpublished_dependencies */
-                    false, /* skip_dependency_verification */
-                    None,
-                )
-                .await;
                 // Restore original ID, then check result.
                 if let (Some(chain_id), Some(previous_id)) = (chain_id, previous_id) {
                     let _ = sui_package_management::set_package_id(
@@ -1029,8 +1009,27 @@ impl<'a> PTBBuilder<'a> {
                     )
                     .map_err(|e| err!(path_loc, "{e}"))?;
                 }
-                let (package_id, compiled_modules, dependencies, package_digest, upgrade_policy, _) =
-                    upgrade_result.map_err(|e| err!(path_loc, "{e}"))?;
+
+                let (upgrade_policy, compiled_package) = upgrade_package(
+                    self.reader,
+                    build_config.clone(),
+                    package_path,
+                    ObjectID::from_address(upgrade_cap_id.into_inner()),
+                    false, /* with_unpublished_dependencies */
+                    false, /* skip_dependency_verification */
+                    None,
+                )
+                .await
+                .map_err(|e| err!(path_loc, "{e}"))?;
+
+                let package_digest = compiled_package.get_package_digest(false);
+                let package_id = compiled_package
+                    .published_at
+                    .as_ref()
+                    .map_err(|e| err!(path_loc, "{e}"))?;
+                let compiled_modules = compiled_package.get_package_bytes(false);
+                // let (package_id, compiled_modules, dependencies, package_digest, upgrade_policy, _) =
+                //     upgrade_result.map_err(|e| err!(path_loc, "{e}"))?;
 
                 let upgrade_arg = self
                     .ptb
@@ -1038,7 +1037,8 @@ impl<'a> PTBBuilder<'a> {
                     .map_err(|e| err!(cmd_span, "{e}"))?;
                 let digest_arg = self
                     .ptb
-                    .pure(package_digest)
+                    // .to_vec() is necessary to get the length prefix
+                    .pure(package_digest.to_vec())
                     .map_err(|e| err!(cmd_span, "{e}"))?;
                 let upgrade_ticket = self.ptb.command(Tx::Command::move_call(
                     SUI_FRAMEWORK_PACKAGE_ID,
@@ -1048,9 +1048,13 @@ impl<'a> PTBBuilder<'a> {
                     vec![upgrade_cap_arg, upgrade_arg, digest_arg],
                 ));
                 let upgrade_receipt = self.ptb.upgrade(
-                    package_id,
+                    *package_id,
                     upgrade_ticket,
-                    dependencies.published.into_values().collect(),
+                    compiled_package
+                        .dependency_ids
+                        .published
+                        .into_values()
+                        .collect(),
                     compiled_modules,
                 );
                 let res = self.ptb.command(Tx::Command::move_call(
@@ -1169,4 +1173,134 @@ fn edit_distance(a: &str, b: &str) -> usize {
     }
 
     cache[a.len()][b.len()]
+}
+
+/// Check if it's a MVR name. MVR names must contain a / in them so as we already
+/// parsed the name, we can just check if it contains a / in it. A keystore alias cannot
+/// contain a slash, and similarly a numerical address or named address cannot have a / in it.
+pub fn is_mvr_name(name: &str) -> bool {
+    name.contains('/') && (name.contains("@") || name.contains(".sui"))
+}
+
+pub fn into_struct_tag(
+    addresses: &BTreeMap<String, AddressData>,
+    parsed_struct_type: ParsedStructType,
+    mapping: &(impl Fn(&str) -> Option<AccountAddress> + std::marker::Sync),
+) -> anyhow::Result<StructTag> {
+    let fq_name = parsed_struct_type.fq_name;
+    let type_args = parsed_struct_type.type_args;
+
+    let address = match fq_name.module.address {
+        ParsedAddress::Named(name) if is_mvr_name(&name) => {
+            let addr = addresses.get(&name);
+            let Some(AddressData::MovePackage((pkg, type_origin_map))) = addr else {
+                return Err(anyhow::anyhow!(
+                    "Expected that {name} is an actual Move package"
+                ));
+            };
+            let Some(address) =
+                type_origin_map.get(&(fq_name.module.name.clone(), fq_name.name.clone()))
+            else {
+                return Err(anyhow::anyhow!(
+                    "Cannot find the type {} in module {} in package {}({})",
+                    fq_name.name,
+                    fq_name.module.name,
+                    name,
+                    pkg.id()
+                ));
+            };
+            AccountAddress::from_bytes(address.into_bytes()).map_err(|_| {
+                anyhow::anyhow!("Cannot convert ObjectID {address} into AccountAddress")
+            })
+        }
+        _ => fq_name.module.address.into_account_address(mapping),
+    }?;
+
+    Ok(StructTag {
+        address,
+        module: Identifier::new(fq_name.module.name)?,
+        name: Identifier::new(fq_name.name)?,
+        type_params: type_args
+            .into_iter()
+            .map(|t| into_type_tag(addresses, t, mapping))
+            .collect::<anyhow::Result<_>>()?,
+    })
+}
+
+/// Given a parsed type, resolve it to a TypeTag. This custom function makes usage of the custom
+/// into struct tag function that makes use of the already resolved MVR data, if needed.
+pub fn into_type_tag(
+    addresses: &BTreeMap<String, AddressData>,
+    parsed_type: ParsedType,
+    mapping: &(impl Fn(&str) -> Option<AccountAddress> + std::marker::Sync),
+) -> anyhow::Result<TypeTag> {
+    Ok(match parsed_type {
+        ParsedType::U8 => TypeTag::U8,
+        ParsedType::U16 => TypeTag::U16,
+        ParsedType::U32 => TypeTag::U32,
+        ParsedType::U64 => TypeTag::U64,
+        ParsedType::U128 => TypeTag::U128,
+        ParsedType::U256 => TypeTag::U256,
+        ParsedType::Bool => TypeTag::Bool,
+        ParsedType::Address => TypeTag::Address,
+        ParsedType::Signer => TypeTag::Signer,
+        ParsedType::Vector(inner) => {
+            TypeTag::Vector(Box::new(into_type_tag(addresses, *inner, mapping)?))
+        }
+        ParsedType::Struct(s) => TypeTag::Struct(Box::new(into_struct_tag(addresses, s, mapping)?)),
+    })
+}
+
+/// Try to resolve a parsed address by using the already known mvr data and the keystore (addresses
+/// ) or the known package names (e.g., sui, deepbook, etc) by calling `resolve_address`.
+fn try_resolve_parsed_address(
+    addresses: &BTreeMap<String, AddressData>,
+    address: &Spanned<ParsedAddress>,
+) -> Result<AccountAddress> {
+    match &address.value {
+        ParsedAddress::Named(name) => {
+            let address = if let Some(addr) = addresses.get(name) {
+                addr.address()
+            } else {
+                resolve_address(name)
+            };
+
+            address.ok_or_else(|| anyhow!("Unbound named address: '{name}'"))
+        }
+
+        ParsedAddress::Numerical(x) => Ok(x.into_inner()),
+    }
+}
+
+/// Try to resolve an ObjectID to a MovePackage
+pub async fn resolve_package(
+    reader: &ReadApi,
+    package_id: ObjectID,
+    loc: Span,
+) -> Result<MovePackage, PTBError> {
+    let object = reader
+        .get_object_with_options(package_id, SuiObjectDataOptions::bcs_lossless())
+        .await
+        .map_err(|e| err!(loc, "{e}"))?
+        .into_object()
+        .map_err(|e| err!(loc, "{e}"))?;
+
+    let Some(SuiRawData::Package(package)) = object.bcs else {
+        error!(
+            loc,
+            "BCS field in object '{}' is missing or not a package.", package_id
+        );
+    };
+
+    MovePackage::new(
+        package.id,
+        package.version,
+        package.module_map,
+        // This package came from on-chain and the tool runs locally, so don't worry about
+        // trying to enforce the package size limit.
+        u64::MAX,
+        package.type_origin_table,
+        package.linkage_table,
+    )
+    .map_err(|e| err!(loc, "{e}"))
 }

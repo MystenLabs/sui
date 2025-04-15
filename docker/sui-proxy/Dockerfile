@@ -1,4 +1,4 @@
-FROM rust:1.81-bullseye as build
+FROM rust:1.85-bullseye as build
 
 ARG PROFILE=release
 WORKDIR /work
@@ -10,7 +10,6 @@ COPY Cargo.toml Cargo.lock ./
 COPY consensus consensus
 COPY crates crates
 COPY sui-execution sui-execution
-COPY narwhal narwhal
 COPY external-crates external-crates
 
 RUN cargo build --profile ${PROFILE} --bin sui-proxy

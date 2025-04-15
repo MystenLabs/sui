@@ -133,7 +133,19 @@ impl TransactionEffectsAPI for TransactionEffectsV1 {
     }
 
     fn modified_at_versions(&self) -> Vec<(ObjectID, SequenceNumber)> {
-        self.modified_at_versions.clone()
+        self.modified_at_versions
+            .iter()
+            // V1 transaction effects "modified_at_versions" includes unwrapped_then_deleted
+            // objects, so in order to have parity with the V2 transaction effects semantics of
+            // "modified_at_versions", filter out any objects that are unwrapped_then_deleted'ed
+            .filter(|(object_id, _)| {
+                !self
+                    .unwrapped_then_deleted
+                    .iter()
+                    .any(|(deleted_id, _, _)| deleted_id == object_id)
+            })
+            .cloned()
+            .collect()
     }
 
     fn lamport_version(&self) -> SequenceNumber {
@@ -180,6 +192,11 @@ impl TransactionEffectsAPI for TransactionEffectsV1 {
 
     fn wrapped(&self) -> Vec<ObjectRef> {
         self.wrapped.clone()
+    }
+
+    fn transferred_from_consensus(&self) -> Vec<ObjectRef> {
+        // ConsensusV2 objects cannot exist with effects v1
+        vec![]
     }
 
     fn object_changes(&self) -> Vec<ObjectChange> {
@@ -252,7 +269,7 @@ impl TransactionEffectsAPI for TransactionEffectsV1 {
     }
 
     fn gas_object(&self) -> (ObjectRef, Owner) {
-        self.gas_object
+        self.gas_object.clone()
     }
     fn events_digest(&self) -> Option<&TransactionEventsDigest> {
         self.events_digest.as_ref()
@@ -308,8 +325,8 @@ impl TransactionEffectsAPI for TransactionEffectsV1 {
             InputSharedObject::ReadOnly(obj_ref) => {
                 self.shared_objects.push(obj_ref);
             }
-            InputSharedObject::ReadDeleted(id, version)
-            | InputSharedObject::MutateDeleted(id, version) => {
+            InputSharedObject::ReadConsensusStreamEnded(id, version)
+            | InputSharedObject::MutateConsensusStreamEnded(id, version) => {
                 self.shared_objects
                     .push((id, version, ObjectDigest::OBJECT_DIGEST_DELETED));
             }

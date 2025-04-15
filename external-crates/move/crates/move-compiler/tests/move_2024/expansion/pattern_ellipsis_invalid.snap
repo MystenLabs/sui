@@ -1,0 +1,75 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: 2024.alpha
+  lint: false
+---
+error[E03019]: invalid pattern
+   ┌─ tests/move_2024/expansion/pattern_ellipsis_invalid.move:10:20
+   │
+10 │             X::A { .., .. } => 0,
+   │                    ^^  -- Ellipsis pattern used again here
+   │                    │    
+   │                    Multiple ellipsis patterns
+   │
+   = An ellipsis pattern can only appear once in a constructor's pattern.
+
+error[E03019]: invalid pattern
+   ┌─ tests/move_2024/expansion/pattern_ellipsis_invalid.move:11:20
+   │
+11 │             X::B { .., .., .. } => 0,
+   │                    ^^  --  -- Ellipsis pattern used again here
+   │                    │   │    
+   │                    │   Ellipsis pattern used again here
+   │                    Multiple ellipsis patterns
+   │
+   = An ellipsis pattern can only appear once in a constructor's pattern.
+
+error[E03019]: invalid pattern
+   ┌─ tests/move_2024/expansion/pattern_ellipsis_invalid.move:12:20
+   │
+12 │             X::B { .., .., x} => x,
+   │                    ^^  -- Ellipsis pattern used again here
+   │                    │    
+   │                    Multiple ellipsis patterns
+   │
+   = An ellipsis pattern can only appear once in a constructor's pattern.
+
+error[E03019]: invalid pattern
+   ┌─ tests/move_2024/expansion/pattern_ellipsis_invalid.move:13:20
+   │
+13 │             X::B { .., x, .. } => x,
+   │                    ^^     -- Ellipsis pattern used again here
+   │                    │       
+   │                    Multiple ellipsis patterns
+   │
+   = An ellipsis pattern can only appear once in a constructor's pattern.
+
+error[E03019]: invalid pattern
+   ┌─ tests/move_2024/expansion/pattern_ellipsis_invalid.move:14:18
+   │
+14 │             X::C(.., x, ..) => 1,
+   │                  ^^     -- Ellipsis pattern used again here
+   │                  │       
+   │                  Multiple ellipsis patterns
+   │
+   = An ellipsis pattern can only appear once in a constructor's pattern.
+
+warning[W09002]: unused variable
+   ┌─ tests/move_2024/expansion/pattern_ellipsis_invalid.move:14:22
+   │
+14 │             X::C(.., x, ..) => 1,
+   │                      ^ Unused local variable 'x'. Consider removing or prefixing with an underscore: '_x'
+   │
+   = This warning can be suppressed with '#[allow(unused_variable)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+error[E03019]: invalid pattern
+   ┌─ tests/move_2024/expansion/pattern_ellipsis_invalid.move:15:18
+   │
+15 │             X::C(.., ..) => 1,
+   │                  ^^  -- Ellipsis pattern used again here
+   │                  │    
+   │                  Multiple ellipsis patterns
+   │
+   = An ellipsis pattern can only appear once in a constructor's pattern.

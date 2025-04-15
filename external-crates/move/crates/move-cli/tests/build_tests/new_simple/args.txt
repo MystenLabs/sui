@@ -1,0 +1,7 @@
+new P1
+> cat P1/Move.toml
+> cat P1/.gitignore
+
+new P2 -p other_dir
+> cat other_dir/Move.toml
+> cat other_dir/.gitignore

@@ -465,7 +465,6 @@ impl CheckpointContents {
         })
     }
 
-    #[cfg(any(test, feature = "test-utils"))]
     pub fn new_with_digests_only_for_tests<T>(contents: T) -> Self
     where
         T: IntoIterator<Item = ExecutionDigests>,
@@ -773,9 +772,9 @@ pub struct CheckpointVersionSpecificDataV1 {
 }
 
 #[cfg(test)]
-#[cfg(feature = "test-utils")]
 mod tests {
     use crate::digests::{ConsensusCommitDigest, TransactionDigest, TransactionEffectsDigest};
+    use crate::messages_consensus::ConsensusDeterminedVersionAssignments;
     use crate::transaction::VerifiedTransaction;
     use fastcrypto::traits::KeyPair;
     use rand::prelude::StdRng;
@@ -948,14 +947,14 @@ mod tests {
                 2,
                 100,
                 ConsensusCommitDigest::default(),
-                Vec::new(),
+                ConsensusDeterminedVersionAssignments::empty_for_testing(),
             );
             let t2 = VerifiedTransaction::new_consensus_commit_prologue_v3(
                 1,
                 2,
                 100,
                 ConsensusCommitDigest::default(),
-                Vec::new(),
+                ConsensusDeterminedVersionAssignments::empty_for_testing(),
             );
             let c1 = generate_test_checkpoint_summary_from_digest(*t1.digest());
             let c2 = generate_test_checkpoint_summary_from_digest(*t2.digest());
@@ -969,14 +968,14 @@ mod tests {
                 2,
                 100,
                 ConsensusCommitDigest::default(),
-                Vec::new(),
+                ConsensusDeterminedVersionAssignments::empty_for_testing(),
             );
             let t2 = VerifiedTransaction::new_consensus_commit_prologue_v3(
                 1,
                 2,
                 100,
                 ConsensusCommitDigest::random(),
-                Vec::new(),
+                ConsensusDeterminedVersionAssignments::empty_for_testing(),
             );
             let c1 = generate_test_checkpoint_summary_from_digest(*t1.digest());
             let c2 = generate_test_checkpoint_summary_from_digest(*t2.digest());

@@ -13,6 +13,7 @@ use super::{object_read::ObjectRead, sui_address::SuiAddress, uint53::UInt53};
 #[derive(Union)]
 pub(crate) enum UnchangedSharedObject {
     Read(SharedObjectRead),
+    // TODO: Update `Delete` to `ConsensusStreamEnded` to account for ConsensusV2 objects.
     Delete(SharedObjectDelete),
     Cancelled(SharedObjectCancelled),
 }
@@ -71,13 +72,13 @@ impl UnchangedSharedObject {
                 },
             })),
 
-            I::ReadDeleted(id, v) => Ok(U::Delete(SharedObjectDelete {
+            I::ReadConsensusStreamEnded(id, v) => Ok(U::Delete(SharedObjectDelete {
                 address: id.into(),
                 version: v.value().into(),
                 mutable: false,
             })),
 
-            I::MutateDeleted(id, v) => Ok(U::Delete(SharedObjectDelete {
+            I::MutateConsensusStreamEnded(id, v) => Ok(U::Delete(SharedObjectDelete {
                 address: id.into(),
                 version: v.value().into(),
                 mutable: true,

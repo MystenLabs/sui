@@ -1,6 +1,0 @@
-{
-	"private": true,
-	"import": "../../dist/esm/keypairs/ed25519/index.js",
-	"main": "../../dist/cjs/keypairs/ed25519/index.js",
-	"sideEffects": false
-}

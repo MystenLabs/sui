@@ -4,10 +4,10 @@
 use rand::{rngs::ThreadRng, thread_rng, Rng};
 use std::collections::HashSet;
 
-/// This library provides two functions to generate
-/// a random combination of an adjective
-/// and a precious stone name as a well formatted
-/// string, or a list of these strings.
+// This library provides two functions to generate
+// a random combination of an adjective
+// and a precious stone name as a well formatted
+// string, or a list of these strings.
 
 /// A list of adjectives
 const LEFT_NAMES: [&str; 108] = [

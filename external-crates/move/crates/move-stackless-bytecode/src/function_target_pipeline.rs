@@ -167,7 +167,7 @@ pub struct ProcessorResultDisplay<'a> {
     pub processor: &'a dyn FunctionTargetProcessor,
 }
 
-impl<'a> fmt::Display for ProcessorResultDisplay<'a> {
+impl fmt::Display for ProcessorResultDisplay<'_> {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         self.processor.dump_result(f, self.env, self.targets)
     }
@@ -284,6 +284,7 @@ impl FunctionTargetsHolder {
             .entry(func_env.get_qualified_id())
             .or_default()
             .insert(FunctionVariant::Baseline, data);
+
         if let Some(spec_attr) = func_env
             .get_toplevel_attributes()
             .get_(&Verification(VerificationAttribute::Spec))
@@ -386,17 +387,17 @@ impl FunctionTargetsHolder {
                     }
                 }
             }
-
-            func_env.get_name_str().strip_suffix("_inv").map(|name| {
-                if let Some(struct_env) = func_env
-                    .module_env
-                    .find_struct(func_env.symbol_pool().make(name))
-                {
-                    self.datatype_invs
-                        .insert(struct_env.get_qualified_id(), func_env.get_qualified_id());
-                }
-            });
         }
+
+        func_env.get_name_str().strip_suffix("_inv").map(|name| {
+            if let Some(struct_env) = func_env
+                .module_env
+                .find_struct(func_env.symbol_pool().make(name))
+            {
+                self.datatype_invs
+                    .insert(struct_env.get_qualified_id(), func_env.get_qualified_id());
+            }
+        });
     }
 
     /// Gets a function target for read-only consumption, for the given variant.

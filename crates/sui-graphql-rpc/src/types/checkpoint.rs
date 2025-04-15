@@ -27,14 +27,24 @@ use diesel::{ExpressionMethods, OptionalExtension, QueryDsl};
 use diesel_async::scoped_futures::ScopedFutureExt;
 use fastcrypto::encoding::{Base58, Encoding};
 use serde::{Deserialize, Serialize};
-use sui_indexer::{models::checkpoints::StoredCheckpoint, schema::checkpoints};
-use sui_types::messages_checkpoint::CheckpointDigest;
+use sui_indexer::{
+    models::{checkpoints::StoredCheckpoint, raw_checkpoints::StoredRawCheckpoint},
+    schema::checkpoints,
+    schema::raw_checkpoints,
+};
+use sui_types::messages_checkpoint::{CertifiedCheckpointSummary, CheckpointDigest};
 
 /// Filter either by the digest, or the sequence number, or neither, to get the latest checkpoint.
 #[derive(Default, InputObject)]
 pub(crate) struct CheckpointId {
     pub digest: Option<Digest>,
     pub sequence_number: Option<UInt53>,
+}
+
+/// `DataLoader` key for fetching `StoredRawCheckpoint` by its sequence number.
+#[derive(Copy, Clone, Hash, Eq, PartialEq, Debug)]
+struct RawSeqNumKey {
+    pub sequence_number: i64,
 }
 
 /// `DataLoader` key for fetching a `Checkpoint` by its sequence number, constrained by a consistency
@@ -187,6 +197,27 @@ impl Checkpoint {
         TransactionBlock::paginate(ctx, page, filter, self.checkpoint_viewed_at, scan_limit)
             .await
             .extend()
+    }
+
+    /// The Base64 serialized BCS bytes of CheckpointSummary for this checkpoint.
+    async fn bcs(&self, ctx: &Context<'_>) -> Result<Option<Base64>> {
+        let DataLoader(dl) = ctx.data_unchecked();
+        let raw_checkpoint = dl
+            .load_one(RawSeqNumKey {
+                sequence_number: self.stored.sequence_number,
+            })
+            .await?;
+
+        let summary = raw_checkpoint.map(|raw_checkpoint| {
+            bcs::from_bytes::<CertifiedCheckpointSummary>(&raw_checkpoint.certified_checkpoint)
+                .unwrap()
+        });
+
+        let checkpoint_bcs = summary
+            .map(|c| c.into_summary_and_sequence().1)
+            .map(|c| bcs::to_bytes(&c).unwrap());
+
+        Ok(checkpoint_bcs.map(Base64::from))
     }
 }
 
@@ -494,7 +525,6 @@ impl Loader<DigestKey> for Db {
                 } = *key;
 
                 let stored = checkpoint_id_to_stored.get(digest.as_slice()).cloned()?;
-
                 let checkpoint = Checkpoint {
                     stored,
                     checkpoint_viewed_at,
@@ -505,6 +535,50 @@ impl Loader<DigestKey> for Db {
                 // is complicated.
                 let seq_num = checkpoint.stored.sequence_number as u64;
                 (checkpoint_viewed_at >= seq_num).then_some((*key, checkpoint))
+            })
+            .collect())
+    }
+}
+
+#[async_trait::async_trait]
+impl Loader<RawSeqNumKey> for Db {
+    type Value = StoredRawCheckpoint;
+    type Error = Error;
+
+    async fn load(
+        &self,
+        keys: &[RawSeqNumKey],
+    ) -> Result<HashMap<RawSeqNumKey, StoredRawCheckpoint>, Error> {
+        use raw_checkpoints::dsl;
+
+        let checkpoint_ids = keys
+            .iter()
+            .map(|key| key.sequence_number)
+            .collect::<Vec<_>>();
+
+        let raw_checkpoints: Vec<StoredRawCheckpoint> = self
+            .execute(move |conn| {
+                async move {
+                    conn.results(move || {
+                        dsl::raw_checkpoints
+                            .filter(dsl::sequence_number.eq_any(checkpoint_ids.iter().cloned()))
+                    })
+                    .await
+                }
+                .scope_boxed()
+            })
+            .await
+            .map_err(|e| Error::Internal(format!("Failed to fetch raw checkpoints: {e}")))?;
+
+        Ok(raw_checkpoints
+            .into_iter()
+            .map(|raw| {
+                (
+                    RawSeqNumKey {
+                        sequence_number: raw.sequence_number,
+                    },
+                    raw,
+                )
             })
             .collect())
     }

@@ -52,7 +52,7 @@ fn fail_arg_deserialize() {
     }
 }
 
-// check happy path for writing to mut ref args - may be unecessary / covered by other tests
+// check happy path for writing to mut ref args - may be unnecessary / covered by other tests
 #[test]
 fn mutref_output_success() {
     let mod_code = setup_module();
@@ -101,6 +101,7 @@ fn run(
             vec![],
             serialize_values(&vec![arg_val0]),
             &mut UnmeteredGasMeter,
+            None,
         )
         .and_then(|ret_values| {
             let change_set = session.finish().0?;

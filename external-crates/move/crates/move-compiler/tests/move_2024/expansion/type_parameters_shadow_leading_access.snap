@@ -1,0 +1,38 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: 2024.alpha
+  lint: false
+---
+warning[W09001]: unused alias
+  ┌─ tests/move_2024/expansion/type_parameters_shadow_leading_access.move:7:12
+  │
+7 │     use a::T;
+  │            ^ Unused 'use' of alias 'T'. Consider removing it
+  │
+  = This warning can be suppressed with '#[allow(unused_use)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+error[E03006]: unexpected name in this position
+  ┌─ tests/move_2024/expansion/type_parameters_shadow_leading_access.move:8:24
+  │
+8 │     public fun t<T>(_: T::S): T::S {
+  │                        ^ Could not resolve the name 'T'
+
+error[E03006]: unexpected name in this position
+  ┌─ tests/move_2024/expansion/type_parameters_shadow_leading_access.move:8:31
+  │
+8 │     public fun t<T>(_: T::S): T::S {
+  │                               ^ Could not resolve the name 'T'
+
+error[E03006]: unexpected name in this position
+  ┌─ tests/move_2024/expansion/type_parameters_shadow_leading_access.move:9:9
+  │
+9 │         T::foo();
+  │         ^ Could not resolve the name 'T'
+
+error[E03006]: unexpected name in this position
+   ┌─ tests/move_2024/expansion/type_parameters_shadow_leading_access.move:10:9
+   │
+10 │         T::S()
+   │         ^ Could not resolve the name 'T'

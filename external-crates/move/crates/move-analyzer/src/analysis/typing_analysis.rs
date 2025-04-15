@@ -659,7 +659,7 @@ impl TypingAnalysisContext<'_> {
     }
 }
 
-impl<'a> TypingVisitorContext for TypingAnalysisContext<'a> {
+impl TypingVisitorContext for TypingAnalysisContext<'_> {
     // Nothing to do -- we're not producing errors.
     fn push_warning_filter_scope(&mut self, _filter: WarningFilters) {}
 
@@ -705,7 +705,7 @@ impl<'a> TypingVisitorContext for TypingAnalysisContext<'a> {
             self.add_type_param(&stp.param);
         }
         if let N::StructFields::Defined(positional, fields) = &sdef.fields {
-            for (fpos, fname, (_, ty)) in fields {
+            for (fpos, fname, (_, (_, ty))) in fields {
                 self.visit_type(None, ty);
                 if !*positional {
                     // Enter self-definition for field name (unwrap safe - done when inserting def),
@@ -798,7 +798,7 @@ impl<'a> TypingVisitorContext for TypingAnalysisContext<'a> {
             ),
         );
         if let N::VariantFields::Defined(positional, fields) = &vdef.fields {
-            for (floc, fname, (_, ty)) in fields {
+            for (floc, fname, (_, (_, ty))) in fields {
                 self.visit_type(None, ty);
                 if !*positional {
                     // enter self-definition for field name (unwrap safe - done when inserting def),
@@ -1087,6 +1087,7 @@ impl<'a> TypingVisitorContext for TypingAnalysisContext<'a> {
                 }
                 TE::ErrorConstant {
                     line_number_loc: _,
+                    error_code: _,
                     error_constant,
                 } => {
                     // assume that constant is defined in the same module where it's used

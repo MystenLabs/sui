@@ -15,6 +15,7 @@ mod checked {
     use sui_types::error::{SuiResult, UserInputError, UserInputResult};
     use sui_types::executable_transaction::VerifiedExecutableTransaction;
     use sui_types::metrics::BytecodeVerifierMetrics;
+    use sui_types::object::Authenticator;
     use sui_types::transaction::{
         CheckedInputObjects, InputObjectKind, InputObjects, ObjectReadResult, ObjectReadResultKind,
         ReceivingObjectReadResult, ReceivingObjects, TransactionData, TransactionDataAPI,
@@ -307,7 +308,9 @@ mod checked {
                         }
                         .into())
                     }
-                    Owner::Shared { .. } => fp_bail!(UserInputError::NotSharedObjectError.into()),
+                    Owner::Shared { .. } | Owner::ConsensusV2 { .. } => {
+                        fp_bail!(UserInputError::NotSharedObjectError.into())
+                    }
                     Owner::Immutable => fp_bail!(UserInputError::MutableParameterExpected {
                         object_id: *object_id
                     }
@@ -404,8 +407,8 @@ mod checked {
                         system_transaction,
                     )?;
                 }
-                // We skip checking a deleted shared object because it no longer exists
-                ObjectReadResultKind::DeletedSharedObject(_, _) => (),
+                // We skip checking a removed consensus object because it no longer exists.
+                ObjectReadResultKind::ObjectConsensusStreamEnded(_, _) => (),
                 // We skip checking shared objects from cancelled transactions since we are not reading it.
                 ObjectReadResultKind::CancelledTransactionSharedObject(_) => (),
             }
@@ -469,7 +472,7 @@ mod checked {
                         fp_ensure!(
                         owner == &actual_owner,
                         UserInputError::IncorrectUserSignature {
-                            error: format!("Object {:?} is owned by account address {:?}, but given owner/signer address is {:?}", object_id, actual_owner, owner),
+                            error: format!("Object {object_id:?} is owned by account address {actual_owner:?}, but given owner/signer address is {owner:?}"),
                         }
                     );
                     }
@@ -479,10 +482,10 @@ mod checked {
                             parent_id: owner.into(),
                         });
                     }
-                    Owner::Shared { .. } => {
-                        // This object is a mutable shared object. However the transaction
+                    Owner::Shared { .. } | Owner::ConsensusV2 { .. } => {
+                        // This object is a mutable consensus object. However the transaction
                         // specifies it as an owned object. This is inconsistent.
-                        return Err(UserInputError::NotSharedObjectError);
+                        return Err(UserInputError::NotOwnedObjectError);
                     }
                 };
             }
@@ -529,6 +532,7 @@ mod checked {
                 }
             }
             InputObjectKind::SharedMoveObject {
+                id: object_id,
                 initial_shared_version: input_initial_shared_version,
                 ..
             } => {
@@ -537,7 +541,7 @@ mod checked {
                     UserInputError::InvalidSequenceNumber
                 );
 
-                match object.owner {
+                match &object.owner {
                     Owner::AddressOwner(_) | Owner::ObjectOwner(_) | Owner::Immutable => {
                         // When someone locks an object as shared it must be shared already.
                         return Err(UserInputError::NotSharedObjectError);
@@ -546,9 +550,29 @@ mod checked {
                         initial_shared_version: actual_initial_shared_version,
                     } => {
                         fp_ensure!(
-                            input_initial_shared_version == actual_initial_shared_version,
+                            input_initial_shared_version == *actual_initial_shared_version,
                             UserInputError::SharedObjectStartingVersionMismatch
                         )
+                    }
+                    Owner::ConsensusV2 {
+                        start_version: actual_initial_shared_version,
+                        authenticator,
+                    } => {
+                        fp_ensure!(
+                            input_initial_shared_version == *actual_initial_shared_version,
+                            UserInputError::SharedObjectStartingVersionMismatch
+                        );
+                        match authenticator.as_ref() {
+                            Authenticator::SingleOwner(actual_owner) => {
+                                // Check the owner is correct.
+                                fp_ensure!(
+                                    owner == actual_owner,
+                                    UserInputError::IncorrectUserSignature {
+                                        error: format!("Object {object_id:?} is owned by account address {actual_owner:?}, but given owner/signer address is {owner:?}"),
+                                    }
+                                )
+                            }
+                        }
                     }
                 }
             }

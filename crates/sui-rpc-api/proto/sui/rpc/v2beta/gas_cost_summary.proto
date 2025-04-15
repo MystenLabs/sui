@@ -1,0 +1,19 @@
+// Copyright (c) Mysten Labs, Inc.
+// SPDX-License-Identifier: Apache-2.0
+
+syntax = "proto3";
+
+package sui.rpc.v2beta;
+
+// Summary of gas charges.
+message GasCostSummary {
+  // Cost of computation/execution.
+  optional uint64 computation_cost = 1;
+  // Storage cost, it's the sum of all storage cost for all objects created or mutated.
+  optional uint64 storage_cost = 2;
+  // The amount of storage cost refunded to the user for all objects deleted or mutated in the
+  // transaction.
+  optional uint64 storage_rebate = 3;
+  // The fee for the rebate. The portion of the storage rebate kept by the system.
+  optional uint64 non_refundable_storage_fee = 4;
+}

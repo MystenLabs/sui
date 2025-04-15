@@ -27,22 +27,23 @@ typed-store-error.workspace = true
 typed-store-derive = { path = "../typed-store-derive" }
 typed-store-workspace-hack = { path = "../typed-store-workspace-hack" }
 sui-macros.workspace = true
-ouroboros.workspace = true
 rand.workspace = true
 async-trait.workspace = true
 itertools.workspace = true
+[target.'cfg(not(windows))'.dependencies]
+tidehunter = {git = "https://github.com/andll/tidehunter.git", rev = "dd686f055375aa8fa2145618301bdfd5170a2a6b", version = "0.1.0", optional = true}
 
 [dev-dependencies]
 tempfile.workspace = true
 once_cell.workspace = true
-proc-macro2.workspace = true
-quote.workspace = true
 rstest.workspace = true
 rand.workspace = true
-syn.workspace = true
 uint.workspace = true
 
 # Most packages should depend on sui-simulator instead of directly on msim, but for typed-store
 # that creates a circular dependency.
 [target.'cfg(msim)'.dependencies]
 msim.workspace = true
+
+[features]
+tide_hunter = ["tidehunter"]

@@ -4,6 +4,7 @@
 
 use crate::{
     cfgir::cfg::MutForwardCFG,
+    diagnostics::DiagnosticReporter,
     expansion::ast::Mutability,
     hlir::ast::{
         BaseType, BaseType_, Command, Command_, Exp, FunctionSignature, SingleType, TypeName,
@@ -19,17 +20,22 @@ use std::convert::TryFrom;
 
 /// returns true if anything changed
 pub fn optimize(
+    reporter: &DiagnosticReporter,
     _signature: &FunctionSignature,
     _locals: &UniqueMap<Var, (Mutability, SingleType)>,
     constants: &UniqueMap<ConstantName, Value>,
     cfg: &mut MutForwardCFG,
 ) -> bool {
+    let context = Context {
+        reporter,
+        constants,
+    };
     let mut changed = false;
     for block_ref in cfg.blocks_mut().values_mut() {
         let block = std::mem::take(block_ref);
         *block_ref = block
             .into_iter()
-            .filter_map(|mut cmd| match optimize_cmd(constants, &mut cmd) {
+            .filter_map(|mut cmd| match optimize_cmd(&context, &mut cmd) {
                 None => {
                     changed = true;
                     None
@@ -44,6 +50,12 @@ pub fn optimize(
     changed
 }
 
+struct Context<'a> {
+    #[allow(dead_code)]
+    reporter: &'a DiagnosticReporter<'a>,
+    constants: &'a UniqueMap<ConstantName, Value>,
+}
+
 //**************************************************************************************************
 // Scaffolding
 //**************************************************************************************************
@@ -51,24 +63,21 @@ pub fn optimize(
 // Some(changed) to keep
 // None to remove the cmd
 #[growing_stack]
-fn optimize_cmd(
-    consts: &UniqueMap<ConstantName, Value>,
-    sp!(_, cmd_): &mut Command,
-) -> Option<bool> {
+fn optimize_cmd(context: &Context, sp!(_, cmd_): &mut Command) -> Option<bool> {
     use Command_ as C;
     Some(match cmd_ {
-        C::Assign(_, _ls, e) => optimize_exp(consts, e),
+        C::Assign(_, _ls, e) => optimize_exp(context, e),
         C::Mutate(el, er) => {
-            let c1 = optimize_exp(consts, er);
-            let c2 = optimize_exp(consts, el);
+            let c1 = optimize_exp(context, er);
+            let c2 = optimize_exp(context, el);
             c1 || c2
         }
         C::Return { exp: e, .. }
         | C::Abort(_, e)
         | C::JumpIf { cond: e, .. }
-        | C::VariantSwitch { subject: e, .. } => optimize_exp(consts, e),
+        | C::VariantSwitch { subject: e, .. } => optimize_exp(context, e),
         C::IgnoreAndPop { exp: e, .. } => {
-            let c = optimize_exp(consts, e);
+            let c = optimize_exp(context, e);
             if ignorable_exp(e) {
                 // value(s), so the command can be removed
                 return None;
@@ -83,9 +92,9 @@ fn optimize_cmd(
 }
 
 #[growing_stack]
-fn optimize_exp(consts: &UniqueMap<ConstantName, Value>, e: &mut Exp) -> bool {
+fn optimize_exp(context: &Context, e: &mut Exp) -> bool {
     use UnannotatedExp_ as E;
-    let optimize_exp = |e| optimize_exp(consts, e);
+    let optimize_exp = |e| optimize_exp(context, e);
     match &mut e.exp.value {
         //************************************
         // Pass through cases
@@ -103,7 +112,7 @@ fn optimize_exp(consts: &UniqueMap<ConstantName, Value>, e: &mut Exp) -> bool {
             let E::Constant(name) = e_ else {
                 unreachable!()
             };
-            if let Some(value) = consts.get(name) {
+            if let Some(value) = context.constants.get(name) {
                 *e_ = E::Value(value.clone());
                 true
             } else {
@@ -111,21 +120,15 @@ fn optimize_exp(consts: &UniqueMap<ConstantName, Value>, e: &mut Exp) -> bool {
             }
         }
 
-        E::ModuleCall(mcall) => mcall.arguments.iter_mut().map(optimize_exp).any(|x| x),
+        E::ModuleCall(mcall) => mcall.arguments.iter_mut().any(optimize_exp),
 
         E::Freeze(e) | E::Dereference(e) | E::Borrow(_, e, _, _) => optimize_exp(e),
 
-        E::Pack(_, _, fields) => fields
-            .iter_mut()
-            .map(|(_, _, e)| optimize_exp(e))
-            .any(|changed| changed),
+        E::Pack(_, _, fields) => fields.iter_mut().any(|(_, _, e)| optimize_exp(e)),
 
-        E::PackVariant(_, _, _, fields) => fields
-            .iter_mut()
-            .map(|(_, _, e)| optimize_exp(e))
-            .any(|changed| changed),
+        E::PackVariant(_, _, _, fields) => fields.iter_mut().any(|(_, _, e)| optimize_exp(e)),
 
-        E::Multiple(es) => es.iter_mut().map(optimize_exp).any(|changed| changed),
+        E::Multiple(es) => es.iter_mut().any(optimize_exp),
 
         //************************************
         // Foldable cases
@@ -152,7 +155,10 @@ fn optimize_exp(consts: &UniqueMap<ConstantName, Value>, e: &mut Exp) -> bool {
             let changed1 = optimize_exp(e1);
             let changed2 = optimize_exp(e2);
             let changed = changed1 || changed2;
-            if let (Some(v1), Some(v2)) = (foldable_exp(e1), foldable_exp(e2)) {
+            let v1_opt = foldable_exp(e1);
+            let v2_opt = foldable_exp(e2);
+            // TODO warn on operations that always fail
+            if let (Some(v1), Some(v2)) = (v1_opt, v2_opt) {
                 if let Some(folded) = fold_binary_op(e.exp.loc, op, v1, v2) {
                     *e_ = folded;
                     true
@@ -170,6 +176,7 @@ fn optimize_exp(consts: &UniqueMap<ConstantName, Value>, e: &mut Exp) -> bool {
                 _ => unreachable!(),
             };
             let changed = optimize_exp(e);
+            // TODO warn on operations that always fail
             let v = match foldable_exp(e) {
                 Some(v) => v,
                 None => return changed,
@@ -188,7 +195,7 @@ fn optimize_exp(consts: &UniqueMap<ConstantName, Value>, e: &mut Exp) -> bool {
                 E::Vector(_, n, ty, eargs) => (*n, ty, eargs),
                 _ => unreachable!(),
             };
-            let changed = eargs.iter_mut().map(optimize_exp).any(|changed| changed);
+            let changed = eargs.iter_mut().any(optimize_exp);
             if !is_valid_const_type(ty) {
                 return changed;
             }

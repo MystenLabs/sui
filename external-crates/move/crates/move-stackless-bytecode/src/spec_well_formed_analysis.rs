@@ -220,11 +220,14 @@ impl FunctionTargetProcessor for SpecWellFormedAnalysisProcessor {
             }
 
             if spec_params[i].0 != underlying_params[i].0 {
-                env.diag(
-                    Severity::Warning,
-                    &func_env.get_loc(),
-                    "Spec function signature have differ params name than underlying func",
-                );
+                let underlying_param_name = env.symbol_pool().string( underlying_params[i].0);
+                if !underlying_param_name.starts_with('_') {
+                    env.diag(
+                        Severity::Warning,
+                        &func_env.get_loc(),
+                        "Spec function signature have differ params name than underlying func",
+                    );
+                }
             }
         }
 

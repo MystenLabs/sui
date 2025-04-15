@@ -219,7 +219,7 @@ When using the [Sui CLI](/references/cli.mdx) for the first time, it creates a l
 
 There are three ways to initialize a key:
 
-```shell
+```sh
 # generate randomly.
 sui client new-address ed25519
 sui client new-address secp256k1
@@ -242,11 +242,17 @@ Create a transfer transaction in the CLI. Set the `$SUI_ADDRESS` to the one corr
 
 {@include: ../../../snippets/info-gas-budget.mdx}
 
-```shell
-sui client gas
-sui client transfer-sui --to $SUI_ADDRESS --sui-coin-object-id $GAS_COIN_ID --gas-budget $GAS_BUDGET --serialize-unsigned-transaction
-sui keytool sign --address $SUI_ADDRESS --data $TX_BYTES
-sui client execute-signed-tx --tx-bytes $TX_BYTES --signatures $SERIALIZED_SIGNATURE
+```sh
+$ sui client gas
+```
+```sh
+$ sui client transfer-sui --to $SUI_ADDRESS --sui-coin-object-id $GAS_COIN_ID --gas-budget $GAS_BUDGET --serialize-unsigned-transaction
+```
+```sh
+$ sui keytool sign --address $SUI_ADDRESS --data $TX_BYTES
+```
+```sh
+$ sui client execute-signed-tx --tx-bytes $TX_BYTES --signatures $SERIALIZED_SIGNATURE
 ```
 
 </TabItem>

@@ -1,0 +1,63 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: 2024.alpha
+  lint: false
+---
+error[E04007]: incompatible types
+  ┌─ tests/move_2024/typing/lambda_return_mismatched.move:9:23
+  │
+8 │             if (cond) return 0;
+  │                       -------- Expected: integer
+9 │             if (cond) return false;
+  │                       ^^^^^^^^^^^^
+  │                       │      │
+  │                       │      Given: 'bool'
+  │                       Invalid return
+
+error[E04007]: incompatible types
+   ┌─ tests/move_2024/typing/lambda_return_mismatched.move:10:13
+   │
+ 8 │             if (cond) return 0;
+   │                       -------- Expected: integer
+ 9 │             if (cond) return false;
+10 │             return @0
+   │             ^^^^^^^^^
+   │             │      │
+   │             │      Given: 'address'
+   │             Invalid return
+
+error[E04007]: incompatible types
+   ┌─ tests/move_2024/typing/lambda_return_mismatched.move:15:13
+   │
+13 │             if (cond) return &0;
+   │                              -- Expected: '&{integer}'
+14 │             if (cond) return &mut 0;
+15 │             return 0
+   │             ^^^^^^^^
+   │             │      │
+   │             │      Given: integer
+   │             Invalid return
+
+error[E04007]: incompatible types
+   ┌─ tests/move_2024/typing/lambda_return_mismatched.move:19:23
+   │
+18 │             if (cond) return (&0, vector[0]);
+   │                                          - Expected: integer
+19 │             if (cond) return (&mut 0, vector[false]);
+   │                       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   │                       │                      │
+   │                       │                      Given: 'bool'
+   │                       Invalid return
+
+error[E04007]: incompatible types
+   ┌─ tests/move_2024/typing/lambda_return_mismatched.move:24:23
+   │
+23 │             if (cond) return (&0, vector[0]);
+   │                              --------------- Expected expression list of length 2: '(&{integer}, vector<{integer}>)'
+24 │             if (cond) return (&0, vector[0], 1);
+   │                       ^^^^^^^^^^^^^^^^^^^^^^^^^
+   │                       │      │
+   │                       │      Given expression list of length 3: '(&{integer}, vector<{integer}>, {integer})'
+   │                       Invalid return

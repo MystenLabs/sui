@@ -21,8 +21,7 @@ use sui_core::authority::authority_store_types::{StoreData, StoreObject};
 use sui_core::checkpoints::CheckpointStore;
 use sui_core::epoch::committee_store::CommitteeStoreTables;
 use sui_core::jsonrpc_index::IndexStoreTables;
-use sui_core::rest_index::RestIndexStore;
-use sui_storage::mutex_table::RwLockTable;
+use sui_core::rpc_index::RpcIndexStore;
 use sui_types::base_types::{EpochId, ObjectID};
 use tracing::info;
 use typed_store::rocks::{default_db_options, MetricConf};
@@ -103,22 +102,20 @@ pub fn print_table_metadata(
                 let epoch = epoch.ok_or_else(|| anyhow!("--epoch is required"))?;
                 AuthorityEpochTables::open_readonly(epoch, &db_path)
                     .next_shared_object_versions
-                    .rocksdb
+                    .db
             } else {
-                AuthorityPerpetualTables::open_readonly(&db_path)
-                    .objects
-                    .rocksdb
+                AuthorityPerpetualTables::open_readonly(&db_path).objects.db
             }
         }
         StoreName::Index => {
             IndexStoreTables::get_read_only_handle(db_path, None, None, MetricConf::default())
                 .event_by_move_module
-                .rocksdb
+                .db
         }
         StoreName::Epoch => {
             CommitteeStoreTables::get_read_only_handle(db_path, None, None, MetricConf::default())
                 .committee_map
-                .rocksdb
+                .db
         }
     };
 
@@ -159,9 +156,9 @@ pub fn print_table_metadata(
     Ok(())
 }
 
-pub fn duplicate_objects_summary(db_path: PathBuf) -> (usize, usize, usize, usize) {
+pub fn duplicate_objects_summary(db_path: PathBuf) -> anyhow::Result<(usize, usize, usize, usize)> {
     let perpetual_tables = AuthorityPerpetualTables::open_readonly(&db_path);
-    let iter = perpetual_tables.objects.unbounded_iter();
+    let iter = perpetual_tables.objects.safe_iter();
     let mut total_count = 0;
     let mut duplicate_count = 0;
     let mut total_bytes = 0;
@@ -170,7 +167,8 @@ pub fn duplicate_objects_summary(db_path: PathBuf) -> (usize, usize, usize, usiz
     let mut object_id: ObjectID = ObjectID::random();
     let mut data: HashMap<Vec<u8>, usize> = HashMap::new();
 
-    for (key, value) in iter {
+    for item in iter {
+        let (key, value) = item?;
         if let StoreObject::Value(store_object) = value.migrate().into_inner() {
             if let StoreData::Move(object) = store_object.data {
                 if object_id != key.0 {
@@ -187,7 +185,7 @@ pub fn duplicate_objects_summary(db_path: PathBuf) -> (usize, usize, usize, usiz
             }
         }
     }
-    (total_count, duplicate_count, total_bytes, duplicated_bytes)
+    Ok((total_count, duplicate_count, total_bytes, duplicated_bytes))
 }
 
 pub fn compact(db_path: PathBuf) -> anyhow::Result<()> {
@@ -198,13 +196,8 @@ pub fn compact(db_path: PathBuf) -> anyhow::Result<()> {
 
 pub async fn prune_objects(db_path: PathBuf) -> anyhow::Result<()> {
     let perpetual_db = Arc::new(AuthorityPerpetualTables::open(&db_path.join("store"), None));
-    let checkpoint_store = Arc::new(CheckpointStore::open_tables_read_write(
-        db_path.join("checkpoints"),
-        MetricConf::default(),
-        None,
-        None,
-    ));
-    let rest_index = RestIndexStore::new_without_init(db_path.join("rest_index"));
+    let checkpoint_store = CheckpointStore::new(&db_path.join("checkpoints"));
+    let rpc_index = RpcIndexStore::new_without_init(&db_path);
     let highest_pruned_checkpoint = checkpoint_store.get_highest_pruned_checkpoint_seq_number()?;
     let latest_checkpoint = checkpoint_store.get_highest_executed_checkpoint()?;
     info!(
@@ -213,7 +206,6 @@ pub async fn prune_objects(db_path: PathBuf) -> anyhow::Result<()> {
     );
     info!("Highest pruned checkpoint: {}", highest_pruned_checkpoint);
     let metrics = AuthorityStorePruningMetrics::new(&Registry::default());
-    let lock_table = Arc::new(RwLockTable::new(1));
     info!("Pruning setup for db at path: {:?}", db_path.display());
     let pruning_config = AuthorityStorePruningConfig {
         num_epochs_to_retain: 0,
@@ -223,11 +215,10 @@ pub async fn prune_objects(db_path: PathBuf) -> anyhow::Result<()> {
     AuthorityStorePruner::prune_objects_for_eligible_epochs(
         &perpetual_db,
         &checkpoint_store,
-        Some(&rest_index),
-        &lock_table,
+        Some(&rpc_index),
+        None,
         pruning_config,
         metrics,
-        usize::MAX,
         EPOCH_DURATION_MS_FOR_TESTING,
     )
     .await?;
@@ -236,15 +227,9 @@ pub async fn prune_objects(db_path: PathBuf) -> anyhow::Result<()> {
 
 pub async fn prune_checkpoints(db_path: PathBuf) -> anyhow::Result<()> {
     let perpetual_db = Arc::new(AuthorityPerpetualTables::open(&db_path.join("store"), None));
-    let checkpoint_store = Arc::new(CheckpointStore::open_tables_read_write(
-        db_path.join("checkpoints"),
-        MetricConf::default(),
-        None,
-        None,
-    ));
-    let rest_index = RestIndexStore::new_without_init(db_path.join("rest_index"));
+    let checkpoint_store = CheckpointStore::new(&db_path.join("checkpoints"));
+    let rpc_index = RpcIndexStore::new_without_init(&db_path);
     let metrics = AuthorityStorePruningMetrics::new(&Registry::default());
-    let lock_table = Arc::new(RwLockTable::new(1));
     info!("Pruning setup for db at path: {:?}", db_path.display());
     let pruning_config = AuthorityStorePruningConfig {
         num_epochs_to_retain_for_checkpoints: Some(1),
@@ -255,11 +240,10 @@ pub async fn prune_checkpoints(db_path: PathBuf) -> anyhow::Result<()> {
     AuthorityStorePruner::prune_checkpoints_for_eligible_epochs(
         &perpetual_db,
         &checkpoint_store,
-        Some(&rest_index),
-        &lock_table,
+        Some(&rpc_index),
+        None,
         pruning_config,
         metrics,
-        usize::MAX,
         archive_readers,
         EPOCH_DURATION_MS_FOR_TESTING,
     )

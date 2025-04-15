@@ -3,7 +3,8 @@
 
 use crate::committee::EpochId;
 use crate::crypto::{
-    CompressedSignature, PublicKey, SignatureScheme, SuiSignature, ZkLoginAuthenticatorAsBytes,
+    CompressedSignature, PasskeyAuthenticatorAsBytes, PublicKey, SignatureScheme, SuiSignature,
+    ZkLoginAuthenticatorAsBytes,
 };
 use crate::digests::ZKLoginInputsDigest;
 use crate::error::SuiError;
@@ -36,6 +37,7 @@ pub struct VerifyParams {
     pub zk_login_env: ZkLoginEnv,
     pub verify_legacy_zklogin_address: bool,
     pub accept_zklogin_in_multisig: bool,
+    pub accept_passkey_in_multisig: bool,
     pub zklogin_max_epoch_upper_bound_delta: Option<u64>,
 }
 
@@ -46,6 +48,7 @@ impl VerifyParams {
         zk_login_env: ZkLoginEnv,
         verify_legacy_zklogin_address: bool,
         accept_zklogin_in_multisig: bool,
+        accept_passkey_in_multisig: bool,
         zklogin_max_epoch_upper_bound_delta: Option<u64>,
     ) -> Self {
         Self {
@@ -54,6 +57,7 @@ impl VerifyParams {
             zk_login_env,
             verify_legacy_zklogin_address,
             accept_zklogin_in_multisig,
+            accept_passkey_in_multisig,
             zklogin_max_epoch_upper_bound_delta,
         }
     }
@@ -146,14 +150,17 @@ impl GenericSignature {
                         })?)
                             .into(),
                     )),
-                    SignatureScheme::Secp256r1 => Ok(CompressedSignature::Secp256r1(
-                        (&Secp256r1Signature::from_bytes(bytes).map_err(|_| {
-                            SuiError::InvalidSignature {
-                                error: "Cannot parse secp256r1 sig".to_string(),
-                            }
-                        })?)
-                            .into(),
-                    )),
+                    SignatureScheme::Secp256r1 | SignatureScheme::PasskeyAuthenticator => {
+                        Ok(CompressedSignature::Secp256r1(
+                            (&Secp256r1Signature::from_bytes(bytes).map_err(|_| {
+                                SuiError::InvalidSignature {
+                                    error: "Cannot parse secp256r1 sig".to_string(),
+                                }
+                            })?)
+                                .into(),
+                        ))
+                    }
+
                     _ => Err(SuiError::UnsupportedFeatureError {
                         error: "Unsupported signature scheme".to_string(),
                     }),
@@ -161,6 +168,9 @@ impl GenericSignature {
             }
             GenericSignature::ZkLoginAuthenticator(s) => Ok(CompressedSignature::ZkLogin(
                 ZkLoginAuthenticatorAsBytes(s.as_ref().to_vec()),
+            )),
+            GenericSignature::PasskeyAuthenticator(s) => Ok(CompressedSignature::Passkey(
+                PasskeyAuthenticatorAsBytes(s.as_ref().to_vec()),
             )),
             _ => Err(SuiError::UnsupportedFeatureError {
                 error: "Unsupported signature scheme".to_string(),
@@ -199,6 +209,7 @@ impl GenericSignature {
                 }
             }
             GenericSignature::ZkLoginAuthenticator(s) => s.get_pk(),
+            GenericSignature::PasskeyAuthenticator(s) => s.get_pk(),
             _ => Err(SuiError::UnsupportedFeatureError {
                 error: "Unsupported signature scheme".to_string(),
             }),

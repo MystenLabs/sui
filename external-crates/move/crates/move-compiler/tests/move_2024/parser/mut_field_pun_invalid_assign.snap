@@ -1,0 +1,18 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: 2024.alpha
+  lint: false
+---
+error[E04016]: too few arguments
+  ┌─ tests/move_2024/parser/mut_field_pun_invalid_assign.move:6:9
+  │
+6 │         S { mut f } = s;
+  │         ^^^^^^^^^^^ Missing assignment for field 'f' in 'a::m::S'
+
+error[E01002]: unexpected token
+  ┌─ tests/move_2024/parser/mut_field_pun_invalid_assign.move:6:13
+  │
+6 │         S { mut f } = s;
+  │             ^ Unexpected 'mut'. Expected a field expression

@@ -488,10 +488,10 @@ mod tests {
         ($type:literal { $($name:literal : $layout:expr),* $(,)?}) => {
             A::MoveTypeLayout::Struct(Box::new(S {
                 type_: StructTag::from_str($type).expect("Failed to parse struct"),
-                fields: Box::new(vec![$(MoveFieldLayout {
+                fields: vec![$(MoveFieldLayout {
                     name: ident_str!($name).to_owned(),
                     layout: $layout,
-                }),*])
+                }),*]
             }))
         }
     }

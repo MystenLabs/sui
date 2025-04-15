@@ -221,7 +221,7 @@ impl CutPlan {
 
             // Check whether any parent directories need to be made as part of this iteration of the
             // cut.
-            let fresh_parent = shortest_new_prefix(&dst_path).map_or(false, |pfx| {
+            let fresh_parent = shortest_new_prefix(&dst_path).is_some_and(|pfx| {
                 walker.make_directories.insert(pfx);
                 true
             });
@@ -719,7 +719,7 @@ mod tests {
         let root = discover_root(cut.clone()).unwrap();
 
         let sui_execution = root.join("sui-execution");
-        let move_vm_types = root.join("external-crates/move/crates/move-vm-types");
+        let move_core_types = root.join("external-crates/move/crates/move-core-types");
 
         let ws = Workspace::read(&root).unwrap();
 
@@ -728,7 +728,7 @@ mod tests {
 
         // Other examples
         assert!(ws.members.contains(&sui_execution));
-        assert!(ws.exclude.contains(&move_vm_types));
+        assert!(ws.exclude.contains(&move_core_types));
     }
 
     #[test]

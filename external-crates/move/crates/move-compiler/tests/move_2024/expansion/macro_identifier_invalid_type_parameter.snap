@@ -1,0 +1,30 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: 2024.alpha
+  lint: false
+---
+error[E02010]: invalid name
+  ┌─ tests/move_2024/expansion/macro_identifier_invalid_type_parameter.move:3:19
+  │
+3 │     macro fun foo<$_, $__, $_t>() {}
+  │                   ^^ Invalid type parameter name '$_'. Following the '$', the 'macro fun' type parameter must be have a valid type parameter name starting with a letter 'a'..'z' or 'A'..'Z'
+  │
+  = Type parameter names starting with '$' indicate that their arguments do not have to satisfy certain constraints before the macro is expanded, meaning types like '&mut u64' or '(bool, u8)' may be used as arguments.
+
+error[E02010]: invalid name
+  ┌─ tests/move_2024/expansion/macro_identifier_invalid_type_parameter.move:3:23
+  │
+3 │     macro fun foo<$_, $__, $_t>() {}
+  │                       ^^^ Invalid type parameter name '$__'. Following the '$', the 'macro fun' type parameter must be have a valid type parameter name starting with a letter 'a'..'z' or 'A'..'Z'
+  │
+  = Type parameter names starting with '$' indicate that their arguments do not have to satisfy certain constraints before the macro is expanded, meaning types like '&mut u64' or '(bool, u8)' may be used as arguments.
+
+error[E02010]: invalid name
+  ┌─ tests/move_2024/expansion/macro_identifier_invalid_type_parameter.move:3:28
+  │
+3 │     macro fun foo<$_, $__, $_t>() {}
+  │                            ^^^ Invalid type parameter name '$_t'. Following the '$', the 'macro fun' type parameter must be have a valid type parameter name starting with a letter 'a'..'z' or 'A'..'Z'
+  │
+  = Type parameter names starting with '$' indicate that their arguments do not have to satisfy certain constraints before the macro is expanded, meaning types like '&mut u64' or '(bool, u8)' may be used as arguments.

@@ -1,0 +1,36 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: 2024.alpha
+  lint: false
+---
+warning[W10007]: issue with attribute value
+  ┌─ tests/move_2024/ide_mode/struct_method_invalid_autocomplete.move:1:9
+  │
+1 │ #[allow(ide_path_autocomplete)]
+  │         ^^^^^^^^^^^^^^^^^^^^^ Unknown warning filter 'ide_path_autocomplete'
+
+warning[W10007]: issue with attribute value
+   ┌─ tests/move_2024/ide_mode/struct_method_invalid_autocomplete.move:16:13
+   │
+16 │     #[allow(ide_path_autocomplete)]
+   │             ^^^^^^^^^^^^^^^^^^^^^ Unknown warning filter 'ide_path_autocomplete'
+
+error[E04023]: invalid method call
+   ┌─ tests/move_2024/ide_mode/struct_method_invalid_autocomplete.move:20:21
+   │
+20 │         let _tmp1 = _a.t7();
+   │                     ^^^^^^^
+   │                     │  │
+   │                     │  No local 'use fun' alias was found for 'a::m::A.t7', and no function 't7' was found in the defining module 'a::m'
+   │                     Invalid method call. No known method 't7' on type 'a::m::A'
+
+error[E04023]: invalid method call
+   ┌─ tests/move_2024/ide_mode/struct_method_invalid_autocomplete.move:21:21
+   │
+21 │         let _tmp2 = _b.t8();
+   │                     ^^^^^^^
+   │                     │  │
+   │                     │  No local 'use fun' alias was found for 'a::m::B.t8', and no function 't8' was found in the defining module 'a::m'
+   │                     Invalid method call. No known method 't8' on type 'a::m::B'

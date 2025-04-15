@@ -1233,7 +1233,7 @@ impl PathExpander for LegacyPathExpander {
     }
 
     fn ide_autocomplete_suggestion(&mut self, context: &mut DefnContext, loc: Loc) {
-        if context.env.ide_mode() && context.is_source_definition {
+        if context.env.ide_mode() && matches!(context.target_kind, P::TargetKind::Source { .. }) {
             let mut info = AliasAutocompleteInfo::new();
             for (name, addr) in context.named_address_mapping.unwrap().iter() {
                 info.addresses.insert(*name, *addr);
@@ -1242,7 +1242,10 @@ impl PathExpander for LegacyPathExpander {
                 info.modules.insert(*name, *mident);
             }
             for (_, name, (_, (mident, member))) in self.aliases.members.iter() {
-                info.members.insert((*name, *mident, *member));
+                info.members
+                    .entry((*mident, member.value))
+                    .or_default()
+                    .insert(*name);
             }
             let annotation = IDEAnnotation::PathAutocompleteInfo(Box::new(info));
             context.add_ide_annotation(loc, annotation)

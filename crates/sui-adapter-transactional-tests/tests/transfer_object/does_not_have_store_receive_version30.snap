@@ -1,0 +1,171 @@
+---
+source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
+---
+processed 18 tasks
+
+init:
+A: object(0,0), B: object(0,1)
+
+task 1, lines 9-77:
+//# publish
+created: object(1,0)
+mutated: object(0,2)
+gas summary: computation_cost: 1000000, storage_cost: 9659600,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 2, line 79:
+//# run test::m::mint_s --sender A
+created: object(2,0), object(2,1)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 3442800,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 3, line 81:
+//# view-object 2,0
+Owner: Account Address ( A )
+Version: 2
+Contents: test::m::Parent {
+    id: sui::object::UID {
+        id: sui::object::ID {
+            bytes: fake(2,0),
+        },
+    },
+}
+
+task 4, line 83:
+//# view-object 2,1
+Owner: Account Address ( fake(2,0) )
+Version: 2
+Contents: test::m::S {
+    id: sui::object::UID {
+        id: sui::object::ID {
+            bytes: fake(2,1),
+        },
+    },
+}
+
+task 5, lines 85-87:
+//# programmable --sender A --inputs object(2,0) receiving(2,1)
+//> 0: test::m::receive_s(Input(0), Input(1));
+//> 1: test::m::destroy_s(Result(0));
+mutated: object(0,0), object(2,0)
+deleted: object(2,1)
+gas summary: computation_cost: 1000000, storage_cost: 2234400,  storage_rebate: 3408372, non_refundable_storage_fee: 34428
+
+task 6, line 89:
+//# run test::m::mint_cup --sender A --type-args u64
+created: object(6,0), object(6,1)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 3465600,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 7, line 91:
+//# view-object 6,0
+Owner: Account Address ( fake(6,1) )
+Version: 4
+Contents: test::m::Cup<u64> {
+    id: sui::object::UID {
+        id: sui::object::ID {
+            bytes: fake(6,0),
+        },
+    },
+}
+
+task 8, line 93:
+//# view-object 6,1
+Owner: Account Address ( A )
+Version: 4
+Contents: test::m::Parent {
+    id: sui::object::UID {
+        id: sui::object::ID {
+            bytes: fake(6,1),
+        },
+    },
+}
+
+task 9, lines 95-99:
+//# programmable --sender A --inputs object(6,1) receiving(6,0)
+//> 0: test::m::receive_cup<u64>(Input(0), Input(1));
+//> 1: test::m::destroy_cup<u64>(Result(0));
+// Try to directly call`receive` on an object without public transfer this should work up to PV 30.
+mutated: object(0,0), object(6,1)
+deleted: object(6,0)
+gas summary: computation_cost: 1000000, storage_cost: 2234400,  storage_rebate: 3430944, non_refundable_storage_fee: 34656
+
+task 10, line 101:
+//# run test::m::mint_s --sender A
+created: object(10,0), object(10,1)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 3442800,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 11, line 103:
+//# view-object 10,0
+Owner: Account Address ( A )
+Version: 6
+Contents: test::m::Parent {
+    id: sui::object::UID {
+        id: sui::object::ID {
+            bytes: fake(10,0),
+        },
+    },
+}
+
+task 12, line 105:
+//# view-object 10,1
+Owner: Account Address ( fake(10,0) )
+Version: 6
+Contents: test::m::S {
+    id: sui::object::UID {
+        id: sui::object::ID {
+            bytes: fake(10,1),
+        },
+    },
+}
+
+task 13, lines 107-113:
+//# programmable --sender A --inputs object(10,0) receiving(10,1)
+//> 0: test::m::parent_uid(Input(0));
+//> 1: sui::transfer::receive<test::m::S>(Result(0), Input(1));
+//> 2: test::m::destroy_s(Result(1));
+//> 3: sui::object::delete(Result(0));
+// Now publish one with store. We should still be able to call `receive` to receive it.
+mutated: object(0,0)
+deleted: object(10,0), object(10,1)
+gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 3408372, non_refundable_storage_fee: 34428
+
+task 14, line 115:
+//# run test::m::mint_store --sender A
+created: object(14,0), object(14,1)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 3473200,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 15, line 117:
+//# view-object 14,0
+Owner: Account Address ( A )
+Version: 8
+Contents: test::m::Parent {
+    id: sui::object::UID {
+        id: sui::object::ID {
+            bytes: fake(14,0),
+        },
+    },
+}
+
+task 16, line 119:
+//# view-object 14,1
+Owner: Account Address ( fake(14,0) )
+Version: 8
+Contents: test::m::Store {
+    id: sui::object::UID {
+        id: sui::object::ID {
+            bytes: fake(14,1),
+        },
+    },
+}
+
+task 17, lines 121-125:
+//# programmable --sender A --inputs object(14,0) receiving(14,1)
+//> 0: test::m::parent_uid(Input(0));
+//> 1: sui::transfer::receive<test::m::Store>(Result(0), Input(1));
+//> 2: test::m::destroy_store(Result(1));
+//> 3: sui::object::delete(Result(0));
+mutated: object(0,0)
+deleted: object(14,0), object(14,1)
+gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 3438468, non_refundable_storage_fee: 34732

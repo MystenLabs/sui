@@ -50,7 +50,7 @@ pub struct AdapterInitArgs {
 }
 
 #[async_trait]
-impl<'a> MoveTestAdapter<'a> for SimpleVMTestAdapter {
+impl MoveTestAdapter<'_> for SimpleVMTestAdapter {
     type ExtraInitArgs = AdapterInitArgs;
     type ExtraPublishArgs = EmptyCommand;
     type ExtraValueArgs = ();
@@ -63,10 +63,6 @@ impl<'a> MoveTestAdapter<'a> for SimpleVMTestAdapter {
 
     fn default_syntax(&self) -> SyntaxChoice {
         self.default_syntax
-    }
-
-    async fn cleanup_resources(&mut self) -> Result<()> {
-        Ok(())
     }
 
     async fn init(
@@ -211,7 +207,7 @@ impl<'a> MoveTestAdapter<'a> for SimpleVMTestAdapter {
                         .collect::<VMResult<_>>()?;
 
                     session.execute_function_bypass_visibility(
-                        module, function, type_args, args, gas_status,
+                        module, function, type_args, args, gas_status, None,
                     )
                 },
                 test_vm_config(),

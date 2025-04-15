@@ -67,7 +67,7 @@ use crate::{
 };
 
 // =================================================================================================
-/// # Constants
+// # Constants
 
 /// A name we use to represent a script as a module.
 pub const SCRIPT_MODULE_NAME: &str = "<SELF>";
@@ -87,7 +87,7 @@ const fn address_from_single_byte(b: u8) -> AccountAddress {
 }
 
 // =================================================================================================
-/// # Locations
+// # Locations
 
 /// A location, consisting of a FileId and a span in this file.
 #[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Clone)]
@@ -171,17 +171,17 @@ fn is_framework_function(f: &FunctionRef, module: &str, names: Vec<&str>) -> boo
 pub type MoveIrLoc = move_ir_types::location::Loc;
 
 // =================================================================================================
-/// # Identifiers
-///
-/// Identifiers are opaque values used to reference entities in the environment.
-///
-/// We have two kinds of ids: those based on an index, and those based on a symbol. We use
-/// the symbol based ids where we do not have control of the definition index order in bytecode
-/// (i.e. we do not know in which order move-compiler enters functions and structs into file format),
-/// and index based ids where we do have control (for modules, SpecFun and SpecVar).
-///
-/// In any case, ids are opaque in the sense that if someone has a StructId or similar in hand,
-/// it is known to be defined in the environment, as it has been obtained also from the environment.
+// # Identifiers
+//
+// Identifiers are opaque values used to reference entities in the environment.
+//
+// We have two kinds of ids: those based on an index, and those based on a symbol. We use
+// the symbol based ids where we do not have control of the definition index order in bytecode
+// (i.e. we do not know in which order move-compiler enters functions and structs into file format),
+// and index based ids where we do have control (for modules, SpecFun and SpecVar).
+//
+// In any case, ids are opaque in the sense that if someone has a StructId or similar in hand,
+// it is known to be defined in the environment, as it has been obtained also from the environment.
 
 /// Raw index type used in ids. 16 bits are sufficient currently.
 pub type RawIndex = u16;
@@ -440,10 +440,6 @@ impl VerificationScope {
 pub struct GlobalEnv {
     /// A Files database for the codespan crate which supports diagnostics.
     source_files: Files<String>,
-    /// A map of FileId in the Files database to information about documentation comments in a file.
-    /// The comments are represented as map from ByteIndex into string, where the index is the
-    /// start position of the associated language item in the source.
-    doc_comments: BTreeMap<FileId, BTreeMap<ByteIndex, String>>,
     /// A mapping from file hash to file name and associated FileId. Though this information is
     /// already in `source_files`, we can't get it out of there so need to book keep here.
     file_hash_map: BTreeMap<FileHash, (String, FileId)>,
@@ -515,7 +511,6 @@ impl GlobalEnv {
         let internal_loc = fake_loc("<internal>");
         GlobalEnv {
             source_files,
-            doc_comments: Default::default(),
             unknown_loc,
             unknown_move_ir_loc,
             internal_loc,
@@ -693,11 +688,6 @@ impl GlobalEnv {
         target_modules
     }
 
-    /// Adds documentation for a file.
-    pub fn add_documentation(&mut self, file_id: FileId, docs: BTreeMap<ByteIndex, String>) {
-        self.doc_comments.insert(file_id, docs);
-    }
-
     /// Adds diagnostic to the environment.
     pub fn add_diag(&self, diag: Diagnostic<FileId>) {
         self.diags.borrow_mut().push((diag, false));
@@ -804,7 +794,7 @@ impl GlobalEnv {
             .expect("file_id undefined")
     }
 
-    /// Maps a an index which was obtained by `file_id_to_idx` back to a FileId.
+    /// Maps an index which was obtained by `file_id_to_idx` back to a FileId.
     pub fn file_idx_to_id(&self, file_idx: u16) -> FileId {
         *self
             .file_idx_to_id
@@ -1152,7 +1142,7 @@ impl GlobalEnv {
     ///    different addresses in one verification session.
     pub fn find_module_by_name(&self, simple_name: Symbol) -> Option<ModuleEnv<'_>> {
         self.get_modules()
-            .find(|m| m.get_name().name() == simple_name)
+            .find(|m| m.get_name().name() == simple_name && m.get_function_count() > 0)
     }
 
     /// Find a module by its bytecode format ID
@@ -1289,14 +1279,6 @@ impl GlobalEnv {
             &storage_id.address().to_string(),
             self.symbol_pool.make(storage_id.name().as_str()),
         )
-    }
-
-    /// Get documentation associated with an item at Loc.
-    pub fn get_doc(&self, loc: &Loc) -> &str {
-        self.doc_comments
-            .get(&loc.file_id)
-            .and_then(|comments| comments.get(&loc.span.start()).map(|s| s.as_str()))
-            .unwrap_or("")
     }
 
     /// Attempt to compute a struct tag for (`mid`, `sid`, `ts`). Returns `Some` if all types in
@@ -1614,7 +1596,7 @@ impl Default for GlobalEnv {
 }
 
 // =================================================================================================
-/// # Module Environment
+// # Module Environment
 
 /// Represents data for a module.
 #[derive(Debug)]
@@ -1836,11 +1818,6 @@ impl<'env> ModuleEnv<'env> {
             }
             false
         }
-    }
-
-    /// Returns documentation associated with this module.
-    pub fn get_doc(&self) -> &str {
-        self.env.get_doc(&self.data.loc)
     }
 
     /// Shortcut for accessing the symbol pool.
@@ -2362,6 +2339,7 @@ impl<'env> ModuleEnv<'env> {
                 print_code: true,
                 print_basic_blocks: true,
                 print_locals: true,
+                max_output_size: None,
             },
         );
         disas
@@ -2487,11 +2465,6 @@ impl<'env> EnumEnv<'env> {
     /// Returns the attributes of this enum.
     pub fn get_attributes(&self) -> &[Attribute] {
         &self.data.attributes
-    }
-
-    /// Get documentation associated with this enum.
-    pub fn get_doc(&self) -> &str {
-        self.module_env.env.get_doc(&self.data.loc)
     }
 
     /// Gets the id associated with this enum.
@@ -2723,23 +2696,6 @@ impl<'env> VariantEnv<'env> {
         self.data.loc.clone()
     }
 
-    /// Get documentation associated with this struct.
-    pub fn get_doc(&self) -> &str {
-        let def_idx = self.enum_env.data.def_idx;
-        let Ok(emap) = self
-            .enum_env
-            .module_env
-            .data
-            .source_map
-            .get_enum_source_map(def_idx)
-        else {
-            return "";
-        };
-        let variant_loc = emap.variants[self.data.tag].0 .1;
-        let loc = self.enum_env.module_env.env.to_loc(&variant_loc);
-        self.enum_env.module_env.env.get_doc(&loc)
-    }
-
     /// Gets the id associated with this variant.
     pub fn get_id(&self) -> VariantId {
         VariantId(self.data.name)
@@ -2890,11 +2846,6 @@ impl<'env> StructEnv<'env> {
     /// Returns the attributes of this struct.
     pub fn get_attributes(&self) -> &[Attribute] {
         &self.data.attributes
-    }
-
-    /// Get documentation associated with this struct.
-    pub fn get_doc(&self) -> &str {
-        self.module_env.env.get_doc(&self.data.loc)
     }
 
     /// Gets the id associated with this struct.
@@ -3143,49 +3094,6 @@ impl<'env> FieldEnv<'env> {
         }
     }
 
-    /// Get documentation associated with this field.
-    pub fn get_doc(&self) -> &str {
-        match &self.data.info {
-            FieldInfo::DeclaredStruct { def_idx } => {
-                let Ok(smap) = self
-                    .parent_env
-                    .module_env()
-                    .data
-                    .source_map
-                    .get_struct_source_map(*def_idx)
-                else {
-                    return "";
-                };
-                let loc = self
-                    .parent_env
-                    .module_env()
-                    .env
-                    .to_loc(&smap.fields[self.data.offset]);
-                self.parent_env.module_env().env.get_doc(&loc)
-            }
-            FieldInfo::DeclaredEnum { def_idx } => {
-                let EnclosingEnv::Variant(v) = &self.parent_env else {
-                    unreachable!()
-                };
-                let Ok(emap) = self
-                    .parent_env
-                    .module_env()
-                    .data
-                    .source_map
-                    .get_enum_source_map(*def_idx)
-                else {
-                    return "";
-                };
-                let loc = self
-                    .parent_env
-                    .module_env()
-                    .env
-                    .to_loc(&emap.variants[v.data.tag].1[self.data.offset]);
-                self.parent_env.module_env().env.get_doc(&loc)
-            }
-        }
-    }
-
     /// Gets the type of this field.
     pub fn get_type(&self) -> Type {
         match &self.data.info {
@@ -3253,7 +3161,7 @@ pub struct NamedConstantEnv<'env> {
     data: &'env NamedConstantData,
 }
 
-impl<'env> NamedConstantEnv<'env> {
+impl NamedConstantEnv<'_> {
     /// Returns the name of this constant
     pub fn get_name(&self) -> Symbol {
         self.data.name
@@ -3262,11 +3170,6 @@ impl<'env> NamedConstantEnv<'env> {
     /// Returns the id of this constant
     pub fn get_id(&self) -> NamedConstantId {
         NamedConstantId(self.data.name)
-    }
-
-    /// Returns documentation associated with this constant
-    pub fn get_doc(&self) -> &str {
-        self.module_env.env.get_doc(&self.data.loc)
     }
 
     /// Returns the location of this constant
@@ -3291,7 +3194,7 @@ impl<'env> NamedConstantEnv<'env> {
 }
 
 // =================================================================================================
-/// # Function Environment
+// # Function Environment
 
 /// Represents a type parameter.
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
@@ -3406,11 +3309,6 @@ impl<'env> FunctionEnv<'env> {
     /// Gets the qualified id of this function.
     pub fn get_qualified_id(&self) -> QualifiedId<FunId> {
         self.module_env.get_id().qualified(self.get_id())
-    }
-
-    /// Get documentation associated with this function.
-    pub fn get_doc(&self) -> &str {
-        self.module_env.env.get_doc(&self.data.loc)
     }
 
     /// Gets the definition index of this function.
@@ -4103,7 +4001,7 @@ impl<'env> FunctionEnv<'env> {
 }
 
 // =================================================================================================
-/// # Expression Environment
+// # Expression Environment
 
 /// Represents context for an expression.
 #[derive(Debug, Clone)]
@@ -4127,7 +4025,7 @@ impl ExpInfo {
 }
 
 // =================================================================================================
-/// # Formatting
+// # Formatting
 
 pub struct LocDisplay<'env> {
     loc: &'env Loc,
@@ -4153,7 +4051,7 @@ impl Loc {
     }
 }
 
-impl<'env> fmt::Display for LocDisplay<'env> {
+impl fmt::Display for LocDisplay<'_> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         if let Some((fname, pos)) = self.env.get_file_and_location(self.loc) {
             if self.only_line {
@@ -4194,7 +4092,7 @@ impl GetNameString for QualifiedId<FunId> {
     }
 }
 
-impl<'a, Id: Clone> fmt::Display for EnvDisplay<'a, QualifiedId<Id>>
+impl<Id: Clone> fmt::Display for EnvDisplay<'_, QualifiedId<Id>>
 where
     QualifiedId<Id>: GetNameString,
 {
@@ -4203,7 +4101,7 @@ where
     }
 }
 
-impl<'a, Id: Clone> fmt::Display for EnvDisplay<'a, QualifiedInstId<Id>>
+impl<Id: Clone> fmt::Display for EnvDisplay<'_, QualifiedInstId<Id>>
 where
     QualifiedId<Id>: GetNameString,
 {

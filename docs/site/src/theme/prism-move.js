@@ -67,7 +67,7 @@
      */
 
     "module-header": {
-      pattern: /\b(module)\s+(\w+)::(\w+)\s*\{/,
+      pattern: /\b(module)\s+(\w+)::(\w+)\s*[{;]/,
       inside: {
         "module-keyword": {
           pattern: /\b(module)\b/,

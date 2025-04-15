@@ -1,0 +1,316 @@
+---
+source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
+---
+processed 19 tasks
+
+init:
+A: object(0,0), B: object(0,1)
+
+task 1, lines 6-68:
+//# publish --sender A
+created: object(1,0), object(1,1), object(1,2), object(1,3), object(1,4)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 22625200,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 2, line 70:
+//# view-object 1,1
+Owner: Immutable
+Version: 2
+Contents: sui::coin::CoinMetadata<Test::fake::FAKE> {
+    id: sui::object::UID {
+        id: sui::object::ID {
+            bytes: fake(1,1),
+        },
+    },
+    decimals: 8u8,
+    name: std::string::String {
+        bytes: vector[
+            70u8,
+            97u8,
+            107u8,
+            101u8,
+            32u8,
+            67u8,
+            111u8,
+            105u8,
+            110u8,
+        ],
+    },
+    symbol: std::ascii::String {
+        bytes: vector[
+            70u8,
+            65u8,
+            75u8,
+            69u8,
+        ],
+    },
+    description: std::string::String {
+        bytes: vector[
+            65u8,
+            32u8,
+            99u8,
+            111u8,
+            105u8,
+            110u8,
+            32u8,
+            116u8,
+            104u8,
+            97u8,
+            116u8,
+            32u8,
+            105u8,
+            115u8,
+            32u8,
+            102u8,
+            97u8,
+            107u8,
+            101u8,
+        ],
+    },
+    icon_url: std::option::Option<sui::url::Url> {
+        vec: vector[
+            sui::url::Url {
+                url: std::ascii::String {
+                    bytes: vector[
+                        104u8,
+                        116u8,
+                        116u8,
+                        112u8,
+                        115u8,
+                        58u8,
+                        47u8,
+                        47u8,
+                        102u8,
+                        97u8,
+                        107u8,
+                        101u8,
+                        46u8,
+                        99u8,
+                        111u8,
+                        109u8,
+                    ],
+                },
+            },
+        ],
+    },
+}
+
+task 3, line 72:
+//# view-object 1,2
+Owner: Account Address ( A )
+Version: 2
+Contents: sui::coin::CoinMetadata<Test::real::REAL> {
+    id: sui::object::UID {
+        id: sui::object::ID {
+            bytes: fake(1,2),
+        },
+    },
+    decimals: 255u8,
+    name: std::string::String {
+        bytes: vector[
+            82u8,
+            101u8,
+            97u8,
+            108u8,
+            32u8,
+            67u8,
+            111u8,
+            105u8,
+            110u8,
+        ],
+    },
+    symbol: std::ascii::String {
+        bytes: vector[
+            82u8,
+            69u8,
+            65u8,
+            76u8,
+        ],
+    },
+    description: std::string::String {
+        bytes: vector[
+            65u8,
+            32u8,
+            99u8,
+            111u8,
+            105u8,
+            110u8,
+            32u8,
+            116u8,
+            104u8,
+            97u8,
+            116u8,
+            32u8,
+            105u8,
+            115u8,
+            32u8,
+            114u8,
+            101u8,
+            97u8,
+            108u8,
+        ],
+    },
+    icon_url: std::option::Option<sui::url::Url> {
+        vec: vector[
+            sui::url::Url {
+                url: std::ascii::String {
+                    bytes: vector[
+                        104u8,
+                        116u8,
+                        116u8,
+                        112u8,
+                        115u8,
+                        58u8,
+                        47u8,
+                        47u8,
+                        114u8,
+                        101u8,
+                        97u8,
+                        108u8,
+                        46u8,
+                        99u8,
+                        111u8,
+                        109u8,
+                    ],
+                },
+            },
+        ],
+    },
+}
+
+task 4, line 74:
+//# view-object 1,4
+Owner: Account Address ( A )
+Version: 2
+Contents: sui::coin::TreasuryCap<Test::real::REAL> {
+    id: sui::object::UID {
+        id: sui::object::ID {
+            bytes: fake(1,4),
+        },
+    },
+    total_supply: sui::balance::Supply<Test::real::REAL> {
+        value: 0u64,
+    },
+}
+
+task 5, line 76:
+//# create-checkpoint
+Checkpoint created: 1
+
+task 6, lines 78-82:
+//# run-jsonrpc
+Response: {
+  "jsonrpc": "2.0",
+  "id": 0,
+  "result": {
+    "decimals": 255,
+    "name": "Real Coin",
+    "symbol": "REAL",
+    "description": "A coin that is real",
+    "iconUrl": "https://real.com",
+    "id": "0x699b577ae9d710d9ba6e5ea33ec94de172a2c219c5171a0e1a8dfbbd7f761618"
+  }
+}
+
+task 7, lines 84-88:
+//# run-jsonrpc
+Response: {
+  "jsonrpc": "2.0",
+  "id": 1,
+  "result": {
+    "decimals": 8,
+    "name": "Fake Coin",
+    "symbol": "FAKE",
+    "description": "A coin that is fake",
+    "iconUrl": "https://fake.com",
+    "id": "0x51662e5b190cbc4122bd2c9617b5133255b7830673fff57ca0216ed4a271dc13"
+  }
+}
+
+task 8, lines 90-94:
+//# run-jsonrpc
+Response: {
+  "jsonrpc": "2.0",
+  "id": 2,
+  "result": null
+}
+
+task 9, lines 96-100:
+//# run-jsonrpc
+Response: {
+  "jsonrpc": "2.0",
+  "id": 3,
+  "error": {
+    "code": -32602,
+    "message": "Invalid Params: Failed to parse type \"invalid_coin_type\": Invalid struct type: invalid_coin_type. Got error: unexpected end of tokens"
+  }
+}
+
+task 10, lines 102-103:
+//# programmable --sender A --inputs object(1,4) object(1,2)
+//> 0: Test::real::update_metadata_name(Input(0),Input(1));
+mutated: object(0,0), object(1,2), object(1,4)
+gas summary: computation_cost: 1000000, storage_cost: 4780400,  storage_rebate: 4702500, non_refundable_storage_fee: 47500
+
+task 11, line 105:
+//# create-checkpoint
+Checkpoint created: 2
+
+task 12, lines 107-111:
+//# run-jsonrpc
+Response: {
+  "jsonrpc": "2.0",
+  "id": 4,
+  "result": {
+    "decimals": 255,
+    "name": "New Real Name",
+    "symbol": "REAL",
+    "description": "A coin that is real",
+    "iconUrl": "https://real.com",
+    "id": "0x699b577ae9d710d9ba6e5ea33ec94de172a2c219c5171a0e1a8dfbbd7f761618"
+  }
+}
+
+task 13, line 113:
+//# transfer-object 1,2 --sender A --recipient B
+mutated: object(0,0), object(1,2)
+gas summary: computation_cost: 1000000, storage_cost: 3078000,  storage_rebate: 3047220, non_refundable_storage_fee: 30780
+
+task 14, line 115:
+//# create-checkpoint
+Checkpoint created: 3
+
+task 15, lines 117-121:
+//# run-jsonrpc
+Response: {
+  "jsonrpc": "2.0",
+  "id": 5,
+  "result": {
+    "decimals": 255,
+    "name": "New Real Name",
+    "symbol": "REAL",
+    "description": "A coin that is real",
+    "iconUrl": "https://real.com",
+    "id": "0x699b577ae9d710d9ba6e5ea33ec94de172a2c219c5171a0e1a8dfbbd7f761618"
+  }
+}
+
+task 16, lines 123-124:
+//# programmable --sender B --inputs object(1,2)
+//> 0: Test::real::wrap_coin_metadata(Input(0));
+created: object(16,0)
+mutated: object(0,1)
+wrapped: object(1,2)
+gas summary: computation_cost: 1000000, storage_cost: 2948800,  storage_rebate: 2069100, non_refundable_storage_fee: 20900
+
+task 17, line 126:
+//# create-checkpoint
+Checkpoint created: 4
+
+task 18, lines 128-132:
+//# run-jsonrpc
+Response: {
+  "jsonrpc": "2.0",
+  "id": 6,
+  "result": null
+}

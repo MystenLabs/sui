@@ -1,0 +1,18 @@
+---
+source: crates/move-transactional-test-runner/src/framework.rs
+---
+processed 3 tasks
+
+task 1, line 15:
+//# run 0x6::test::test --args 0
+mutable inputs after call: local#0: 0
+
+task 2, line 17:
+//# run 0x6::test::test --args 1
+Error: Function execution failed with VMError: {
+    major_status: ABORTED,
+    sub_status: Some(42),
+    location: 0x6::test,
+    indices: [],
+    offsets: [(FunctionDefinitionIndex(0), 10)],
+}

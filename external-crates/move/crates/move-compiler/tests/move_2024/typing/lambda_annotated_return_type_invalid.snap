@@ -1,0 +1,26 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: 2024.alpha
+  lint: false
+---
+error[E04007]: incompatible types
+   ┌─ tests/move_2024/typing/lambda_annotated_return_type_invalid.move:13:9
+   │
+13 │         call!(|| -> X { 0 }).foo();
+   │         ^^^^^^^^^^^^^^^^^^^^
+   │         │           │   │
+   │         │           │   Given: integer
+   │         │           Expected: 'a::m::X'
+   │         Invalid type annotation
+
+error[E04006]: invalid subtype
+   ┌─ tests/move_2024/typing/lambda_annotated_return_type_invalid.move:14:9
+   │
+14 │         call!(|| -> &mut u64 { &0 });
+   │         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   │         │           │          │
+   │         │           │          Given: '&{integer}'
+   │         │           Expected: '&mut u64'
+   │         Invalid type annotation

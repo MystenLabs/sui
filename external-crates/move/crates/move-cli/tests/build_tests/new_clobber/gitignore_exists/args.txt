@@ -1,0 +1,4 @@
+# if `.gitignore` exists, everything should be created and .gitignore should be extended
+new -p package example
+>cat package/.gitignore
+>ls -A package

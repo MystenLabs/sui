@@ -1,0 +1,35 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: legacy
+  lint: false
+---
+error[E04007]: incompatible types
+  ┌─ tests/move_check/feature_gate/macro_call.move:4:9
+  │
+2 │     public fun foo(_: u64) {}
+  │                       --- Expected: 'u64'
+3 │     fun bar() {
+4 │         foo!(|| ())
+  │         ^^^^^^^^^^^
+  │         │    │
+  │         │    Given: '|| -> _'
+  │         Invalid call of 'a::m::foo'. Invalid argument for parameter '_'
+
+error[E13001]: feature is not supported in specified edition
+  ┌─ tests/move_check/feature_gate/macro_call.move:4:12
+  │
+4 │         foo!(|| ())
+  │            ^ 'macro' functions are not supported by current edition 'legacy'; the '2024' edition supports this feature
+  │
+  = You can update the edition in the 'Move.toml', or via command line flag if invoking the compiler directly.
+
+error[E04029]: invalid function call
+  ┌─ tests/move_check/feature_gate/macro_call.move:4:12
+  │
+2 │     public fun foo(_: u64) {}
+  │                --- Normal (non-'macro') function is declared here
+3 │     fun bar() {
+4 │         foo!(|| ())
+  │            ^ 'foo' is not a macro function and cannot be called with a `!`. Try replacing with 'foo'

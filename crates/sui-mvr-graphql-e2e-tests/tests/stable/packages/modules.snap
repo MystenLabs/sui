@@ -1,0 +1,233 @@
+---
+source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
+---
+processed 6 tasks
+
+task 1, lines 6-31:
+//# publish
+created: object(1,0)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 6004000,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 2, line 33:
+//# create-checkpoint
+Checkpoint created: 1
+
+task 3, lines 35-55:
+//# run-graphql
+Response: {
+  "data": {
+    "object": {
+      "address": "0x90a54cf41ae1d22964b70cd0b3fa8a838341889a3610c2e797e0ff5de895cc11",
+      "asMovePackage": {
+        "module": {
+          "name": "m",
+          "package": {
+            "address": "0x90a54cf41ae1d22964b70cd0b3fa8a838341889a3610c2e797e0ff5de895cc11"
+          },
+          "fileFormatVersion": 6,
+          "bytes": "oRzrCwYAAAAIAQAGAgYKAxARBCEEBSUfB0QiCGZADKYBMAAFAQMBBgEADAEAAQIBAgAABAABAQIAAgIBAAEHBQEBAAIEAAYCAwYLAAEJAAEDAQYLAAEIAQABCQABBgsAAQkAAQgBBENvaW4DU1VJA2JhcgRjb2luA2ZvbwFtA3N1aQV2YWx1ZZClTPQa4dIpZLcM0LP6ioODQYiaNhDC55fg/13olcwRAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAIAAQAAAwULATgACwAWAgEBAAADCAYqAAAAAAAAAAoAOAEGKwAAAAAAAAALADgBGAIA",
+          "disassembly": "// Move bytecode v6\nmodule 90a54cf41ae1d22964b70cd0b3fa8a838341889a3610c2e797e0ff5de895cc11.m {\nuse 0000000000000000000000000000000000000000000000000000000000000002::coin;\nuse 0000000000000000000000000000000000000000000000000000000000000002::sui;\n\npublic foo<Ty0: drop>(Arg0: u64, Arg1: &Coin<Ty0>): u64 {\nB0:\n\t0: MoveLoc[1](Arg1: &Coin<Ty0>)\n\t1: Call coin::value<Ty0>(&Coin<Ty0>): u64\n\t2: MoveLoc[0](Arg0: u64)\n\t3: Add\n\t4: Ret\n}\n\npublic bar(Arg0: &Coin<SUI>): u64 {\nB0:\n\t0: LdU64(42)\n\t1: CopyLoc[0](Arg0: &Coin<SUI>)\n\t2: Call foo<SUI>(u64, &Coin<SUI>): u64\n\t3: LdU64(43)\n\t4: MoveLoc[0](Arg0: &Coin<SUI>)\n\t5: Call foo<SUI>(u64, &Coin<SUI>): u64\n\t6: Mul\n\t7: Ret\n}\n\n}\n"
+        }
+      }
+    }
+  }
+}
+
+task 4, lines 57-84:
+//# run-graphql --cursors {"n":"m","c":1} {"n":"o","c":1}
+Response: {
+  "data": {
+    "object": {
+      "address": "0x90a54cf41ae1d22964b70cd0b3fa8a838341889a3610c2e797e0ff5de895cc11",
+      "asMovePackage": {
+        "all": {
+          "edges": [
+            {
+              "cursor": "eyJuIjoibSIsImMiOjF9",
+              "node": {
+                "name": "m"
+              }
+            },
+            {
+              "cursor": "eyJuIjoibiIsImMiOjF9",
+              "node": {
+                "name": "n"
+              }
+            },
+            {
+              "cursor": "eyJuIjoibyIsImMiOjF9",
+              "node": {
+                "name": "o"
+              }
+            }
+          ],
+          "pageInfo": {
+            "hasNextPage": false,
+            "hasPreviousPage": false
+          }
+        },
+        "after": {
+          "edges": [
+            {
+              "cursor": "eyJuIjoibiIsImMiOjF9",
+              "node": {
+                "name": "n"
+              }
+            },
+            {
+              "cursor": "eyJuIjoibyIsImMiOjF9",
+              "node": {
+                "name": "o"
+              }
+            }
+          ],
+          "pageInfo": {
+            "hasNextPage": false,
+            "hasPreviousPage": true
+          }
+        },
+        "before": {
+          "edges": [
+            {
+              "cursor": "eyJuIjoibSIsImMiOjF9",
+              "node": {
+                "name": "m"
+              }
+            },
+            {
+              "cursor": "eyJuIjoibiIsImMiOjF9",
+              "node": {
+                "name": "n"
+              }
+            }
+          ],
+          "pageInfo": {
+            "hasNextPage": true,
+            "hasPreviousPage": false
+          }
+        }
+      }
+    }
+  }
+}
+
+task 5, lines 87-117:
+//# run-graphql --cursors {"n":"m","c":1} {"n":"o","c":1}
+Response: {
+  "data": {
+    "object": {
+      "address": "0x90a54cf41ae1d22964b70cd0b3fa8a838341889a3610c2e797e0ff5de895cc11",
+      "asMovePackage": {
+        "prefix": {
+          "edges": [
+            {
+              "cursor": "eyJuIjoibiIsImMiOjF9",
+              "node": {
+                "name": "n"
+              }
+            }
+          ],
+          "pageInfo": {
+            "hasNextPage": true,
+            "hasPreviousPage": true
+          }
+        },
+        "prefixAll": {
+          "edges": [
+            {
+              "cursor": "eyJuIjoibiIsImMiOjF9",
+              "node": {
+                "name": "n"
+              }
+            },
+            {
+              "cursor": "eyJuIjoibyIsImMiOjF9",
+              "node": {
+                "name": "o"
+              }
+            }
+          ],
+          "pageInfo": {
+            "hasNextPage": false,
+            "hasPreviousPage": true
+          }
+        },
+        "prefixExcess": {
+          "edges": [
+            {
+              "cursor": "eyJuIjoibiIsImMiOjF9",
+              "node": {
+                "name": "n"
+              }
+            },
+            {
+              "cursor": "eyJuIjoibyIsImMiOjF9",
+              "node": {
+                "name": "o"
+              }
+            }
+          ],
+          "pageInfo": {
+            "hasNextPage": false,
+            "hasPreviousPage": true
+          }
+        },
+        "suffix": {
+          "edges": [
+            {
+              "cursor": "eyJuIjoibiIsImMiOjF9",
+              "node": {
+                "name": "n"
+              }
+            }
+          ],
+          "pageInfo": {
+            "hasNextPage": true,
+            "hasPreviousPage": true
+          }
+        },
+        "suffixAll": {
+          "edges": [
+            {
+              "cursor": "eyJuIjoibSIsImMiOjF9",
+              "node": {
+                "name": "m"
+              }
+            },
+            {
+              "cursor": "eyJuIjoibiIsImMiOjF9",
+              "node": {
+                "name": "n"
+              }
+            }
+          ],
+          "pageInfo": {
+            "hasNextPage": true,
+            "hasPreviousPage": false
+          }
+        },
+        "suffixExcess": {
+          "edges": [
+            {
+              "cursor": "eyJuIjoibSIsImMiOjF9",
+              "node": {
+                "name": "m"
+              }
+            },
+            {
+              "cursor": "eyJuIjoibiIsImMiOjF9",
+              "node": {
+                "name": "n"
+              }
+            }
+          ],
+          "pageInfo": {
+            "hasNextPage": true,
+            "hasPreviousPage": false
+          }
+        }
+      }
+    }
+  }
+}

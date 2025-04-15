@@ -1,0 +1,26 @@
+---
+source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
+---
+processed 4 tasks
+
+task 0, lines 1-12:
+//# publish
+Error: Transaction Effects Status: Sui Move Bytecode Verification Error. Please run the Sui Move Verifier for more information.
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: SuiMoveVerificationError, source: Some("_::m::receive_bad. Invalid call to 'sui::transfer::receive' on an object of type 'T0'. The transferred object's type must be defined in the current module. If the object has the 'store' type ability, you can use the non-internal variant instead, i.e. 'sui::transfer::public_receive'"), command: Some(0) } }
+
+task 1, lines 14-25:
+//# publish
+Error: Transaction Effects Status: Sui Move Bytecode Verification Error. Please run the Sui Move Verifier for more information.
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: SuiMoveVerificationError, source: Some("_::m1::receive_bad. Invalid call to 'sui::transfer::receive' on an object of type 'T0'. The transferred object's type must be defined in the current module. If the object has the 'store' type ability, you can use the non-internal variant instead, i.e. 'sui::transfer::public_receive'"), command: Some(0) } }
+
+task 2, lines 27-41:
+//# publish
+created: object(3,0)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 4848800,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 3, lines 43-54:
+//# publish
+created: object(4,0)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 4430800,  storage_rebate: 978120, non_refundable_storage_fee: 9880

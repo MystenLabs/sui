@@ -1,0 +1,25 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: 2024.migration
+  lint: false
+---
+--- tests/move_2024/migration/friend_decl_multiline.move
++++ tests/move_2024/migration/friend_decl_multiline.move
+@@ -2 +2 @@
+-    #[ext(
++    /* #[ext(
+@@ -5,2 +5,2 @@
+-    ]
+-    friend a::b;
++    ] */
++    /* friend a::b; */
+@@ -8 +8 @@
+-    #[ext(
++    /* #[ext(
+@@ -13,2 +13,2 @@
+-    ]
+-    friend a::c;
++    ] */
++    /* friend a::c; */

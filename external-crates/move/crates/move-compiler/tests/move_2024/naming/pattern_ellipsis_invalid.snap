@@ -1,0 +1,160 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: 2024.alpha
+  lint: false
+---
+error[E03013]: positional call mismatch
+   ┌─ tests/move_2024/naming/pattern_ellipsis_invalid.move:16:13
+   │
+ 3 │         D
+   │         - 'D' is declared here
+   ·
+16 │             Y::D(..) => 0,
+   │             ^^^^^^^^ Invalid variant pattern. Empty variant declarations require empty patterns
+   │
+   = Remove '()' arguments from this pattern
+
+error[E03013]: positional call mismatch
+   ┌─ tests/move_2024/naming/pattern_ellipsis_invalid.move:17:13
+   │
+ 3 │         D
+   │         - 'D' is declared here
+   ·
+17 │             Y::D{..} => 0,
+   │             ^^^^^^^^ Invalid variant pattern. Empty variant declarations require empty patterns
+   │
+   = Remove '{ }' arguments from this pattern
+
+error[E03013]: positional call mismatch
+   ┌─ tests/move_2024/naming/pattern_ellipsis_invalid.move:18:13
+   │
+ 3 │         D
+   │         - 'D' is declared here
+   ·
+18 │             Y::D(x, ..) => 0,
+   │             ^^^^^^^^^^^ Invalid variant pattern. Empty variant declarations require empty patterns
+   │
+   = Remove '()' arguments from this pattern
+
+warning[W09002]: unused variable
+   ┌─ tests/move_2024/naming/pattern_ellipsis_invalid.move:18:18
+   │
+18 │             Y::D(x, ..) => 0,
+   │                  ^ Unused local variable 'x'. Consider removing or prefixing with an underscore: '_x'
+   │
+   = This warning can be suppressed with '#[allow(unused_variable)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+error[E03013]: positional call mismatch
+   ┌─ tests/move_2024/naming/pattern_ellipsis_invalid.move:19:13
+   │
+ 3 │         D
+   │         - 'D' is declared here
+   ·
+19 │             Y::D{x, ..} => 0,
+   │             ^^^^^^^^^^^ Invalid variant pattern. Empty variant declarations require empty patterns
+   │
+   = Remove '{ }' arguments from this pattern
+
+warning[W09002]: unused variable
+   ┌─ tests/move_2024/naming/pattern_ellipsis_invalid.move:19:18
+   │
+19 │             Y::D{x, ..} => 0,
+   │                  ^ Unused local variable 'x'. Consider removing or prefixing with an underscore: '_x'
+   │
+   = This warning can be suppressed with '#[allow(unused_variable)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+error[E03013]: positional call mismatch
+   ┌─ tests/move_2024/naming/pattern_ellipsis_invalid.move:25:13
+   │
+ 7 │         D()
+   │         --- 'D' is declared here
+   ·
+25 │             X::D{} => 0,
+   │             ^^^^^^ Invalid variant pattern. Positional variant declarations require positional patterns
+   │
+   = Positional patterns take arguments using '()'
+
+error[E03013]: positional call mismatch
+   ┌─ tests/move_2024/naming/pattern_ellipsis_invalid.move:26:13
+   │
+ 7 │         D()
+   │         --- 'D' is declared here
+   ·
+26 │             X::D{..} => 0,
+   │             ^^^^^^^^ Invalid variant pattern. Positional variant declarations require positional patterns
+   │
+   = Positional patterns take arguments using '()'
+
+error[E03013]: positional call mismatch
+   ┌─ tests/move_2024/naming/pattern_ellipsis_invalid.move:27:13
+   │
+ 7 │         D()
+   │         --- 'D' is declared here
+   ·
+27 │             X::D{x, ..} => 0,
+   │             ^^^^^^^^^^^ Invalid variant pattern. Positional variant declarations require positional patterns
+   │
+   = Positional patterns take arguments using '()'
+
+error[E03010]: unbound field
+   ┌─ tests/move_2024/naming/pattern_ellipsis_invalid.move:27:13
+   │
+27 │             X::D{x, ..} => 0,
+   │             ^^^^^^^^^^^ Unbound field 'x' in '0x42::m::X::D'
+
+warning[W09002]: unused variable
+   ┌─ tests/move_2024/naming/pattern_ellipsis_invalid.move:27:18
+   │
+27 │             X::D{x, ..} => 0,
+   │                  ^ Unused local variable 'x'. Consider removing or prefixing with an underscore: '_x'
+   │
+   = This warning can be suppressed with '#[allow(unused_variable)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+error[E03013]: positional call mismatch
+   ┌─ tests/move_2024/naming/pattern_ellipsis_invalid.move:33:13
+   │
+11 │         D{}
+   │         --- 'D' is declared here
+   ·
+33 │             Z::D() => 0,
+   │             ^^^^^^ Invalid variant pattern. Named variant declarations require named patterns
+   │
+   = Named patterns take arguments using '{ }'
+
+error[E03013]: positional call mismatch
+   ┌─ tests/move_2024/naming/pattern_ellipsis_invalid.move:34:13
+   │
+11 │         D{}
+   │         --- 'D' is declared here
+   ·
+34 │             Z::D(..) => 0,
+   │             ^^^^^^^^ Invalid variant pattern. Named variant declarations require named patterns
+   │
+   = Named patterns take arguments using '{ }'
+
+error[E03013]: positional call mismatch
+   ┌─ tests/move_2024/naming/pattern_ellipsis_invalid.move:35:13
+   │
+11 │         D{}
+   │         --- 'D' is declared here
+   ·
+35 │             Z::D(x, ..) => 0,
+   │             ^^^^^^^^^^^ Invalid variant pattern. Named variant declarations require named patterns
+   │
+   = Named patterns take arguments using '{ }'
+
+error[E03010]: unbound field
+   ┌─ tests/move_2024/naming/pattern_ellipsis_invalid.move:35:13
+   │
+35 │             Z::D(x, ..) => 0,
+   │             ^^^^^^^^^^^ Unbound field '0' in '0x42::m::Z::D'
+
+warning[W09002]: unused variable
+   ┌─ tests/move_2024/naming/pattern_ellipsis_invalid.move:35:18
+   │
+35 │             Z::D(x, ..) => 0,
+   │                  ^ Unused local variable 'x'. Consider removing or prefixing with an underscore: '_x'
+   │
+   = This warning can be suppressed with '#[allow(unused_variable)]' applied to the 'module' or module member ('const', 'fun', or 'struct')

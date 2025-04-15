@@ -1,0 +1,14 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: legacy
+  lint: false
+---
+warning[W00001]: DEPRECATED. will be removed
+  ┌─ tests/move_check/parser/spec_parsing_generic_condition_fail.move:2:5
+  │  
+2 │ ╭     spec schema InvalidGenericEnsures {
+3 │ │         ensures<T> exists<T>(0x1) <==> exists<T>(0x1);
+4 │ │     }
+  │ ╰─────^ Specification blocks are deprecated and are no longer used

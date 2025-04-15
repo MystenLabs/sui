@@ -1,0 +1,33 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: 2024.alpha
+  lint: false
+---
+error[E04007]: incompatible types
+   ┌─ tests/move_2024/typing/macro_visibility_function_error.move:5:22
+   │
+ 5 │     public macro fun test() {
+   │                      ^^^^
+   │                      │
+   │                      Invalid type annotation
+   │                      Expected: '()'
+   ·
+14 │         test!();
+   │         ------- Given: 'u64'
+
+error[E04001]: restricted visibility
+   ┌─ tests/move_2024/typing/macro_visibility_function_error.move:6:6
+   │
+ 3 │     fun zero(): u64 { 0 }
+   │         ---- This function is internal to its module. Only 'public' and 'public(package)' functions can be called outside of their module
+   ·
+ 6 │         zero()
+   │         ^^^^^^ Invalid call to internal function 'a::m::zero'
+   ·
+14 │         test!();
+   │         ------- While expanding this macro
+   │
+   = This visibility error occurs in a macro body while expanding the macro 'a::m::test'
+   = Visibility inside of expanded macros is resolved in the scope of the caller.

@@ -1692,6 +1692,7 @@ fn module(
     mdef: E::ModuleDefinition,
 ) -> N::ModuleDefinition {
     let E::ModuleDefinition {
+        doc,
         loc,
         warning_filter,
         package_name,
@@ -1762,6 +1763,7 @@ fn module(
     }
     context.pop_warning_filter_scope();
     N::ModuleDefinition {
+        doc,
         loc,
         warning_filter,
         package_name,
@@ -1792,7 +1794,7 @@ fn use_funs(context: &mut Context, eufs: E::UseFuns) -> N::UseFuns {
         .flat_map(|e| explicit_use_fun(context, e))
         .collect();
     for (tn, method, nuf) in resolved_vec {
-        let methods = resolved.entry(tn.clone()).or_default();
+        let methods = resolved.entry(tn).or_default();
         let nuf_loc = nuf.loc;
         if let Err((_, prev)) = methods.add(method, nuf) {
             let msg = format!("Duplicate 'use fun' for '{}.{}'", tn, method);
@@ -1815,6 +1817,7 @@ fn explicit_use_fun(
     e: E::ExplicitUseFun,
 ) -> Option<(N::TypeName, Name, N::UseFun)> {
     let E::ExplicitUseFun {
+        doc,
         loc,
         attributes,
         is_public,
@@ -1892,10 +1895,11 @@ fn explicit_use_fun(
     let tn = sp(ty.loc, tn_);
     let target_function = m_f_opt?;
     let use_fun = N::UseFun {
+        doc,
         loc,
         attributes,
         is_public,
-        tname: tn.clone(),
+        tname: tn,
         target_function,
         kind: N::UseFunKind::Explicit,
         used: is_public.is_some(), // suppress unused warning for public use funs
@@ -2036,6 +2040,7 @@ fn function(
     ef: E::Function,
 ) -> N::Function {
     let E::Function {
+        doc,
         warning_filter,
         index,
         attributes,
@@ -2075,6 +2080,7 @@ fn function(
     }
 
     let mut f = N::Function {
+        doc,
         warning_filter,
         index,
         attributes,
@@ -2173,6 +2179,7 @@ fn struct_def(
     sdef: E::StructDefinition,
 ) -> N::StructDefinition {
     let E::StructDefinition {
+        doc,
         warning_filter,
         index,
         attributes,
@@ -2186,6 +2193,7 @@ fn struct_def(
     let fields = struct_fields(context, fields);
     context.pop_warning_filter_scope();
     N::StructDefinition {
+        doc,
         warning_filter,
         index,
         loc,
@@ -2205,16 +2213,18 @@ fn struct_fields(context: &mut Context, efields: E::StructFields) -> N::StructFi
         E::StructFields::Native(loc) => N::StructFields::Native(loc),
         E::StructFields::Named(em) => N::StructFields::Defined(
             false,
-            em.map(|_f, (idx, t)| (idx, type_(context, TypeAnnotation::StructField, t))),
+            em.map(|_f, (idx, (doc, t))| {
+                (idx, (doc, type_(context, TypeAnnotation::StructField, t)))
+            }),
         ),
         E::StructFields::Positional(tys) => {
             let fields = tys
                 .into_iter()
-                .map(|ty| type_(context, TypeAnnotation::StructField, ty))
+                .map(|(doc, ty)| (doc, type_(context, TypeAnnotation::StructField, ty)))
                 .enumerate()
-                .map(|(idx, ty)| {
+                .map(|(idx, (doc, ty))| {
                     let field_name = positional_field_name(ty.loc, idx);
-                    (field_name, (idx, ty))
+                    (field_name, (idx, (doc, ty)))
                 });
             N::StructFields::Defined(true, UniqueMap::maybe_from_iter(fields).unwrap())
         }
@@ -2231,6 +2241,7 @@ fn enum_def(
     edef: E::EnumDefinition,
 ) -> N::EnumDefinition {
     let E::EnumDefinition {
+        doc,
         warning_filter,
         index,
         attributes,
@@ -2244,6 +2255,7 @@ fn enum_def(
     let variants = enum_variants(context, variants);
     context.pop_warning_filter_scope();
     N::EnumDefinition {
+        doc,
         warning_filter,
         index,
         loc,
@@ -2265,9 +2277,15 @@ fn enum_variants(
 }
 
 fn variant_def(context: &mut Context, variant: E::VariantDefinition) -> N::VariantDefinition {
-    let E::VariantDefinition { loc, index, fields } = variant;
+    let E::VariantDefinition {
+        doc,
+        loc,
+        index,
+        fields,
+    } = variant;
 
     N::VariantDefinition {
+        doc,
         index,
         loc,
         fields: variant_fields(context, fields),
@@ -2279,16 +2297,18 @@ fn variant_fields(context: &mut Context, efields: E::VariantFields) -> N::Varian
         E::VariantFields::Empty => N::VariantFields::Empty,
         E::VariantFields::Named(em) => N::VariantFields::Defined(
             false,
-            em.map(|_f, (idx, t)| (idx, type_(context, TypeAnnotation::VariantField, t))),
+            em.map(|_f, (idx, (doc, t))| {
+                (idx, (doc, type_(context, TypeAnnotation::VariantField, t)))
+            }),
         ),
         E::VariantFields::Positional(tys) => {
             let fields = tys
                 .into_iter()
-                .map(|ty| type_(context, TypeAnnotation::VariantField, ty))
+                .map(|(doc, ty)| (doc, type_(context, TypeAnnotation::VariantField, ty)))
                 .enumerate()
-                .map(|(idx, ty)| {
+                .map(|(idx, (doc, ty))| {
                     let field_name = positional_field_name(ty.loc, idx);
-                    (field_name, (idx, ty))
+                    (field_name, (idx, (doc, ty)))
                 });
             N::VariantFields::Defined(true, UniqueMap::maybe_from_iter(fields).unwrap())
         }
@@ -2301,6 +2321,7 @@ fn variant_fields(context: &mut Context, efields: E::VariantFields) -> N::Varian
 
 fn constant(context: &mut Context, _name: ConstantName, econstant: E::Constant) -> N::Constant {
     let E::Constant {
+        doc,
         warning_filter,
         index,
         attributes,
@@ -2321,6 +2342,7 @@ fn constant(context: &mut Context, _name: ConstantName, econstant: E::Constant) 
     context.nominal_block_id = 0;
     context.pop_warning_filter_scope();
     N::Constant {
+        doc,
         warning_filter,
         index,
         attributes,
@@ -2744,6 +2766,7 @@ fn exp(context: &mut Context, e: Box<E::Exp>) -> Box<N::Exp> {
                     return_label,
                     use_fun_color: 0, // used in macro expansion
                     body,
+                    extra_annotations: vec![], // used in macro expansion
                 }),
             }
         }
@@ -4303,6 +4326,7 @@ fn remove_unused_bindings_exp(
             return_type: _,
             use_fun_color: _,
             body,
+            extra_annotations: _,
         }) => {
             for (lvs, _) in parameters {
                 remove_unused_bindings_lvalues(context, used, lvs)

@@ -1,0 +1,46 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: legacy
+  lint: false
+---
+warning[W09002]: unused variable
+  ┌─ tests/move_check/parser/vector_space_after_less.move:4:13
+  │
+4 │         let a = vector < 100;
+  │             ^ Unused local variable 'a'. Consider removing or prefixing with an underscore: '_a'
+  │
+  = This warning can be suppressed with '#[allow(unused_variable)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+error[E03008]: too few type arguments
+  ┌─ tests/move_check/parser/vector_space_after_less.move:4:17
+  │
+4 │         let a = vector < 100;
+  │                 ^^^^^^------
+  │                 │
+  │                 Expected 1 type argument(s) but got 0
+  │                 Invalid 'vector' instantation
+
+error[E01002]: unexpected token
+  ┌─ tests/move_check/parser/vector_space_after_less.move:4:26
+  │
+4 │         let a = vector < 100;
+  │                          ^^^ Expected '::' after the anonymous address in this module access chain
+
+error[E01002]: unexpected token
+  ┌─ tests/move_check/parser/vector_space_after_less.move:4:29
+  │
+4 │         let a = vector < 100;
+  │                        -    ^ Expected '>'
+  │                        │     
+  │                        To match this '<'
+
+error[E01002]: unexpected token
+  ┌─ tests/move_check/parser/vector_space_after_less.move:4:29
+  │
+4 │         let a = vector < 100;
+  │                             ^
+  │                             │
+  │                             Unexpected ';'
+  │                             Expected '['

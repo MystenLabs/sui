@@ -175,11 +175,11 @@ public fun new(ctx: &mut TxContext): UID {
     }
 }
 
-/// Delete the object and it's `UID`. This is the only way to eliminate a `UID`.
-// This exists to inform Sui of object deletions. When an object
-// gets unpacked, the programmer will have to do something with its
-// `UID`. The implementation of this function emits a deleted
-// system event so Sui knows to process the object deletion
+/// Delete the object and its `UID`. This is the only way to eliminate a `UID`.
+/// This exists to inform Sui of object deletions. When an object
+/// gets unpacked, the programmer will have to do something with its
+/// `UID`. The implementation of this function emits a deleted
+/// system event so Sui knows to process the object deletion
 public fun delete(id: UID) {
     let UID { id: ID { bytes } } = id;
     delete_impl(bytes)

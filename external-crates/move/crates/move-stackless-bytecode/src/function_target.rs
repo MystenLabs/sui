@@ -37,7 +37,7 @@ pub struct FunctionTarget<'env> {
     annotation_formatters: RefCell<Vec<Box<AnnotationFormatter>>>,
 }
 
-impl<'env> Clone for FunctionTarget<'env> {
+impl Clone for FunctionTarget<'_> {
     fn clone(&self) -> Self {
         // Annotation formatters are transient and forgotten on clone, so this is a cheap
         // handle.
@@ -535,7 +535,7 @@ impl FunctionData {
 /// the given code offset. It should return None if there is no relevant annotation.
 pub type AnnotationFormatter = dyn Fn(&FunctionTarget<'_>, CodeOffset) -> Option<String>;
 
-impl<'env> FunctionTarget<'env> {
+impl FunctionTarget<'_> {
     /// Register a formatter. Each function target processor which introduces new annotations
     /// should register a formatter in order to get is value printed when a function target
     /// is displayed for debugging or testing.
@@ -554,7 +554,7 @@ impl<'env> FunctionTarget<'env> {
     }
 }
 
-impl<'env> fmt::Display for FunctionTarget<'env> {
+impl fmt::Display for FunctionTarget<'_> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let modifier = if self.func_env.is_native() {
             "native "

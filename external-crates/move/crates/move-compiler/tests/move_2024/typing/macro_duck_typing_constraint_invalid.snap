@@ -1,0 +1,63 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: 2024.alpha
+  lint: false
+---
+error[E05001]: ability constraint not satisfied
+   ┌─ tests/move_2024/typing/macro_duck_typing_constraint_invalid.move:9:41
+   │
+ 2 │     public struct X<phantom T: copy>() has copy, drop;
+   │                                ---- 'copy' constraint declared here
+ 3 │     public struct None() has drop;
+   │                   ---- To satisfy the constraint, the 'copy' ability would need to be added here
+   ·
+ 9 │     macro fun needs_copy<$T, $U, $V>(_: X<$T>, _: $U, $v: $V): X<$U> {
+   │                                         ^^^^^ 'copy' constraint not satisifed
+   ·
+17 │         needs_copy!<None, None, None>(X(), None(), None());
+   │                     ---- The type 'a::m::None' does not have the ability 'copy'
+
+error[E05001]: ability constraint not satisfied
+   ┌─ tests/move_2024/typing/macro_duck_typing_constraint_invalid.move:9:64
+   │
+ 2 │     public struct X<phantom T: copy>() has copy, drop;
+   │                                ---- 'copy' constraint declared here
+ 3 │     public struct None() has drop;
+   │                   ---- To satisfy the constraint, the 'copy' ability would need to be added here
+   ·
+ 9 │     macro fun needs_copy<$T, $U, $V>(_: X<$T>, _: $U, $v: $V): X<$U> {
+   │                                                                ^^^^^ 'copy' constraint not satisifed
+   ·
+17 │         needs_copy!<None, None, None>(X(), None(), None());
+   │                           ---- The type 'a::m::None' does not have the ability 'copy'
+
+error[E05001]: ability constraint not satisfied
+   ┌─ tests/move_2024/typing/macro_duck_typing_constraint_invalid.move:11:9
+   │
+ 3 │     public struct None() has drop;
+   │                   ---- To satisfy the constraint, the 'copy' ability would need to be added here
+ 4 │ 
+ 5 │     fun mycopy<T: copy>(t: &T): T {
+   │                   ---- 'copy' constraint declared here
+   ·
+11 │         mycopy(&v);
+   │         ^^^^^^^^^^ 'copy' constraint not satisifed
+   ·
+17 │         needs_copy!<None, None, None>(X(), None(), None());
+   │                                 ---- The type 'a::m::None' does not have the ability 'copy'
+
+error[E05001]: ability constraint not satisfied
+   ┌─ tests/move_2024/typing/macro_duck_typing_constraint_invalid.move:12:9
+   │
+ 2 │     public struct X<phantom T: copy>() has copy, drop;
+   │                                ---- 'copy' constraint declared here
+ 3 │     public struct None() has drop;
+   │                   ---- To satisfy the constraint, the 'copy' ability would need to be added here
+   ·
+12 │         X()
+   │         ^^^ 'copy' constraint not satisifed
+   ·
+17 │         needs_copy!<None, None, None>(X(), None(), None());
+   │                           ---- The type 'a::m::None' does not have the ability 'copy'

@@ -1,0 +1,30 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: 2024.alpha
+  lint: false
+---
+warning[W09001]: unused alias
+  ┌─ tests/move_2024/parser/use_fun_type_args.move:3:5
+  │
+3 │     use fun foo as X<u64>.foo;
+  │     ^^^^^^^^^^^^^^^^^^^^^^^^^^ Unused 'use fun' of 'a::m::X.foo'. Consider removing it
+  │
+  = This warning can be suppressed with '#[allow(unused_use)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+error[E01016]: invalid name
+  ┌─ tests/move_2024/parser/use_fun_type_args.move:3:21
+  │
+3 │     use fun foo as X<u64>.foo;
+  │                     ^^^^^ Type arguments are disallowed here. Expected a type name with no type arguments
+
+error[E02001]: duplicate declaration, item, or annotation
+  ┌─ tests/move_2024/parser/use_fun_type_args.move:4:9
+  │
+3 │     use fun foo as X<u64>.foo;
+  │                           --- Previously declared here
+4 │     fun foo<T>(_: X<T>) { abort 0 }
+  │         ^^^       ---- Function declarations create an implicit 'use fun' when their first argument is a type defined in the same module
+  │         │          
+  │         Duplicate 'use fun' for 'a::m::X.foo'

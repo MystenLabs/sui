@@ -5,6 +5,7 @@ use async_graphql::connection::{Connection, CursorType, Edge};
 use async_graphql::*;
 use move_disassembler::disassembler::Disassembler;
 use move_ir_types::location::Loc;
+use sui_types::move_package;
 
 use crate::consistency::{ConsistentIndexCursor, ConsistentNamedCursor};
 use crate::error::Error;
@@ -415,12 +416,16 @@ impl MoveModule {
     /// Textual representation of the module's bytecode.
     async fn disassembly(&self) -> Result<Option<String>> {
         Ok(Some(
-            Disassembler::from_module(self.parsed.bytecode(), Loc::invalid())
-                .map_err(|e| Error::Internal(format!("Error creating disassembler: {e}")))
-                .extend()?
-                .disassemble()
-                .map_err(|e| Error::Internal(format!("Error creating disassembly: {e}")))
-                .extend()?,
+            Disassembler::from_module_with_max_size(
+                self.parsed.bytecode(),
+                Loc::invalid(),
+                *move_package::MAX_DISASSEMBLED_MODULE_SIZE,
+            )
+            .map_err(|e| Error::Internal(format!("Error creating disassembler: {e}")))
+            .extend()?
+            .disassemble()
+            .map_err(|e| Error::Internal(format!("Error creating disassembly: {e}")))
+            .extend()?,
         ))
     }
 }

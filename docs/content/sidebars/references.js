@@ -18,7 +18,7 @@ const references = [
 		items: [
 			{
 				type: 'category',
-				label: 'GraphQL (Beta)',
+				label: 'GraphQL (Alpha)',
 				link: {
 					type: 'doc',
 					id: 'references/sui-graphql',
@@ -35,6 +35,7 @@ const references = [
 				label: 'JSON-RPC',
 				href: '/sui-api-ref',
 			},
+			'references/fullnode-protocol',
 			'references/sui-api/rpc-best-practices',
 		],
 	},
@@ -54,6 +55,15 @@ const references = [
 			'references/cli/keytool',
 			'references/cli/move',
 			'references/cli/validator',
+		],
+	},
+	{
+		type: 'category',
+		label: 'Sui IDE Support',
+		collapsed: false,
+		items: [
+			'references/ide/move',
+			'references/ide/debugger',
 		],
 	},
 	{

@@ -1,0 +1,30 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: legacy
+  lint: false
+---
+error[E02001]: duplicate declaration, item, or annotation
+  ┌─ tests/move_check/expansion/duplicate_module_after_mapping.move:5:11
+  │
+4 │ module K::M1 {}
+  │           -- Module previously defined here, with '(K=0x19)::M1'
+5 │ module k::M1 {}
+  │           ^^ Duplicate definition for module '(k=0x19)::M1'
+
+error[E02001]: duplicate declaration, item, or annotation
+  ┌─ tests/move_check/expansion/duplicate_module_after_mapping.move:9:11
+  │
+8 │ module 0x40::M2 {}
+  │              -- Module previously defined here, with '0x40::M2'
+9 │ module M::M2 {}
+  │           ^^ Duplicate definition for module 'M::M2'
+
+error[E02001]: duplicate declaration, item, or annotation
+   ┌─ tests/move_check/expansion/duplicate_module_after_mapping.move:13:14
+   │
+12 │ module K::M3 {}
+   │           -- Module previously defined here, with '(K=0x19)::M3'
+13 │ module 0x19::M3 {}
+   │              ^^ Duplicate definition for module '0x19::M3'

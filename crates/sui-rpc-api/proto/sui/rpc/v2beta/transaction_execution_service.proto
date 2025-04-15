@@ -1,0 +1,53 @@
+// Copyright (c) Mysten Labs, Inc.
+// SPDX-License-Identifier: Apache-2.0
+
+syntax = "proto3";
+
+package sui.rpc.v2beta;
+
+import "google/protobuf/empty.proto";
+import "google/protobuf/field_mask.proto";
+import "sui/rpc/v2beta/executed_transaction.proto";
+import "sui/rpc/v2beta/signature.proto";
+import "sui/rpc/v2beta/transaction.proto";
+
+service TransactionExecutionService {
+  rpc ExecuteTransaction(ExecuteTransactionRequest) returns (ExecuteTransactionResponse);
+}
+
+message ExecuteTransactionRequest {
+  // The transaction to execute.
+  optional Transaction transaction = 1;
+
+  // Set of `UserSiganture`s authorizing the execution of the provided
+  // transaction.
+  repeated UserSignature signatures = 2;
+
+  // Mask specifying which fields to read.
+  // If no mask is specified, defaults to `finality`.
+  optional google.protobuf.FieldMask read_mask = 3;
+}
+
+// Response message for `NodeService.ExecuteTransaction`.
+message ExecuteTransactionResponse {
+  // Indicates the finality of the executed transaction.
+  optional TransactionFinality finality = 1;
+
+  optional ExecutedTransaction transaction = 2;
+}
+
+// Indicates the finality of the executed transaction.
+message TransactionFinality {
+  oneof finality {
+    // A quorum certificate certifying that a transaction is final but might not
+    // be included in a checkpoint yet.
+    ValidatorAggregatedSignature certified = 1;
+
+    // Sequence number of the checkpoint that includes the transaction.
+    uint64 checkpointed = 2;
+
+    // Indicates that a quorum of validators has executed the transaction but
+    // that it might not be included in a checkpoint yet.
+    google.protobuf.Empty quorum_executed = 3;
+  }
+}

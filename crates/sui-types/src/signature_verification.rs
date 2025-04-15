@@ -15,10 +15,11 @@ use prometheus::IntCounter;
 use std::hash::Hash;
 use std::sync::Arc;
 
-// Cache up to 20000 verified certs. We will need to tune this number in the future - a decent
+// Cache up to this many verified certs. We will need to tune this number in the future - a decent
 // guess to start with is that it should be 10-20 times larger than peak transactions per second,
-// on the assumption that we should see most certs twice within about 10-20 seconds at most: Once via RPC, once via consensus.
-const VERIFIED_CERTIFICATE_CACHE_SIZE: usize = 20000;
+// on the assumption that we should see most certs twice within about 10-20 seconds at most:
+// Once via RPC, once via consensus.
+const VERIFIED_CERTIFICATE_CACHE_SIZE: usize = 100_000;
 
 pub struct VerifiedDigestCache<D> {
     inner: RwLock<LruCache<D, ()>>,

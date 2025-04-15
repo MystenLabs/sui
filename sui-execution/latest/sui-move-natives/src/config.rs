@@ -28,7 +28,7 @@ pub struct ConfigReadSettingImplCostParams {
     pub config_read_setting_impl_cost_per_byte: Option<InternalGas>,
 }
 
-#[instrument(level = "trace", skip_all, err)]
+#[instrument(level = "trace", skip_all)]
 pub fn read_setting_impl(
     context: &mut NativeContext,
     mut ty_args: Vec<Type>,
@@ -42,7 +42,7 @@ pub fn read_setting_impl(
         config_read_setting_impl_cost_per_byte,
     } = context
         .extensions_mut()
-        .get::<NativesCostTable>()
+        .get::<NativesCostTable>()?
         .config_read_setting_impl_cost_params
         .clone();
 
@@ -83,7 +83,7 @@ pub fn read_setting_impl(
             E_BCS_SERIALIZATION_FAILURE,
         ));
     };
-    let object_runtime: &mut ObjectRuntime = context.extensions_mut().get_mut();
+    let object_runtime: &mut ObjectRuntime = context.extensions_mut().get_mut()?;
 
     let read_value_opt = consistent_value_before_current_epoch(
         object_runtime,
@@ -164,7 +164,7 @@ fn unpack_struct<const N: usize>(s: Value) -> PartialVMResult<[Value; N]> {
     let s: Struct = s.value_as()?;
     s.unpack()?.collect::<Vec<_>>().try_into().map_err(|e| {
         PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR)
-            .with_message(format!("struct expected to have have {N} fields: {e:?}"))
+            .with_message(format!("struct expected to have {N} fields: {e:?}"))
     })
 }
 

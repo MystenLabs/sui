@@ -22,27 +22,26 @@ db-urls = ["https://github.com/rustsec/advisory-db"]
 # output a note when they are encountered.
 ignore = [
     # "RUSTSEC-0000-0000",
-    # difference 2.0.0 is unmaintained
-    "RUSTSEC-2020-0095",
-    # rusoto is unmaintained, use aws crates
-    "RUSTSEC-2022-0071",
-    # `tui` is unmaintained; use `ratatui` instead
-    "RUSTSEC-2023-0049",
     # we don't do RSA signing on Sui (only verifying for zklogin)
     "RUSTSEC-2023-0071",
-    # A few dependencies use unpatched rustls.
-    "RUSTSEC-2024-0336",
     # allow yaml-rust being unmaintained
     "RUSTSEC-2024-0320",
     # allow unmaintained proc-macro-error used in transitive dependencies
     "RUSTSEC-2024-0370",
-
-    # Temporarily allow until arrow family of crates updates `lexical-core` to 1.0
-    "RUSTSEC-2023-0086",
     # allow unmaintained instant crate used in transitive dependencies (backoff, cached, fastrand, parking_lot_*)
     "RUSTSEC-2024-0384",
     # allow unmaintained derivative crate used in transitive dependencies (ark-*)
     "RUSTSEC-2024-0388",
+    # `paste` is unmaintained
+    "RUSTSEC-2024-0436",
+    # `backoff` is unmaintained - no safe upgrade available
+    "RUSTSEC-2025-0012",
+    # Vulnerability in `protobuf` crate - difficult to upgrade due to dependency constraints
+    "RUSTSEC-2024-0437",
+    # Versions of `ring` prior to 0.17 are unmaintained
+    "RUSTSEC-2025-0010",
+    # AES functions in `ring` may panic when overflow checking is enabled
+    "RUSTSEC-2025-0009",
 ]
 # Threshold for security vulnerabilities, any vulnerability with a CVSS score
 # lower than the range specified will be ignored. Note that ignored advisories
@@ -75,7 +74,9 @@ allow = [
     "Unlicense",
     "BSL-1.0",
     "Unicode-DFS-2016",
-    #"Apache-2.0 WITH LLVM-exception",
+    "Unicode-3.0",
+    "Zlib",
+    "Apache-2.0 WITH LLVM-exception",
 ]
 # The confidence threshold for detecting a license from license text.
 # The higher the value, the more closely the license text must be to the
@@ -114,19 +115,6 @@ name = "ring"
 expression = "LicenseRef-ring"
 license-files = [
     { path = "LICENSE", hash = 0xbd0eed23 }
-]
-[[licenses.clarify]]
-name = "encoding_rs"
-version = "*"
-expression = "(Apache-2.0 OR MIT) AND BSD-3-Clause"
-license-files = [
-    { path = "COPYRIGHT", hash = 0x39f8ad31 }
-]
-[[licenses.clarify]]
-name = "bls-crypto"
-version = "*"
-expression = "MIT AND Apache-2.0"
-license-files = [
 ]
 [[licenses.clarify]]
 name = "target-lexicon"
@@ -211,5 +199,4 @@ github = [
     "bmwill",
     "mystenlabs",
     "nextest-rs",
-    "wlmyng", # jsonrpsee fork
 ]

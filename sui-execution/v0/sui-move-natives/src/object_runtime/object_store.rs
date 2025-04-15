@@ -80,7 +80,7 @@ pub(crate) enum ObjectResult<V> {
     Loaded(V),
 }
 
-impl<'a> Inner<'a> {
+impl Inner<'_> {
     fn get_or_fetch_object_from_store(
         &mut self,
         parent: ObjectID,
@@ -123,6 +123,9 @@ impl<'a> Inner<'a> {
                             format!("Bad owner for {child}. \
                             Expected an id owner {parent} but found an address, immutable, or shared owner")
                         ))
+                    }
+                    Owner::ConsensusV2 { .. } => {
+                        unimplemented!("ConsensusV2 does not exist for this execution version")
                     }
                 };
                 match object.data {

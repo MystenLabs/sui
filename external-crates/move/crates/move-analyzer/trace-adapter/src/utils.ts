@@ -15,3 +15,8 @@ export interface ModuleInfo {
  * frame.
  */
 export const FRAME_LIFETIME = -1;
+
+/**
+ * The extension for JSON files.
+ */
+export const JSON_FILE_EXT = ".json";

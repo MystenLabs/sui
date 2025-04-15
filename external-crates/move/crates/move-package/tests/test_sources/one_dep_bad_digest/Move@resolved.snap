@@ -1,0 +1,4 @@
+---
+source: crates/move-package/tests/test_runner.rs
+---
+Processing dependency 'OtherDep' of 'Root': Source digest mismatch in dependency 'OtherDep' of 'Root'. Expected 'BAD_DIGEST' but got '8EFF033BF69F7DE9EB2DBCA683732C8EB084EE6EC6C2280585CE7ACDB56867F8'.

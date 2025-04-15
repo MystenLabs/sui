@@ -1,9 +1,0 @@
-error[E01002]: unexpected token
-  ┌─ tests/move_2024/parser/named_blocks_invalid_2.move:4:15
-  │
-4 │         'name {
-  │               ^
-  │               │
-  │               Unexpected '{'
-  │               Expected ':'
-

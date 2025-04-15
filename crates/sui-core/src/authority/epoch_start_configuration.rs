@@ -3,7 +3,7 @@
 
 use enum_dispatch::enum_dispatch;
 use serde::{Deserialize, Serialize};
-use sui_config::{ExecutionCacheConfig, NodeConfig};
+use sui_config::NodeConfig;
 
 use std::fmt;
 use sui_types::authenticator_state::get_authenticator_state_obj_initial_shared_version;
@@ -19,8 +19,6 @@ use sui_types::sui_system_state::epoch_start_sui_system_state::{
     EpochStartSystemState, EpochStartSystemStateTrait,
 };
 
-use crate::execution_cache::{choose_execution_cache, ExecutionCacheConfigType};
-
 #[enum_dispatch]
 pub trait EpochStartConfigTrait {
     fn epoch_digest(&self) -> CheckpointDigest;
@@ -32,12 +30,9 @@ pub trait EpochStartConfigTrait {
     fn bridge_obj_initial_shared_version(&self) -> Option<SequenceNumber>;
     fn bridge_committee_initiated(&self) -> bool;
 
-    fn execution_cache_type(&self) -> ExecutionCacheConfigType {
-        if self.flags().contains(&EpochFlag::WritebackCacheEnabled) {
-            ExecutionCacheConfigType::WritebackCache
-        } else {
-            ExecutionCacheConfigType::PassthroughCache
-        }
+    fn is_data_quarantine_active_from_beginning_of_epoch(&self) -> bool {
+        self.flags()
+            .contains(&EpochFlag::DataQuarantineFromBeginningOfEpoch)
     }
 }
 
@@ -49,51 +44,55 @@ pub trait EpochStartConfigTrait {
 // in the value of some variant, the branch which has been released should take precedence.
 // In this case, the picked-from branch is inconsistent with the released branch, and must
 // be fixed.
-#[derive(Clone, Debug, Serialize, Deserialize, Eq, PartialEq)]
+#[derive(Clone, Debug, Serialize, Deserialize, Eq, PartialEq, Ord, PartialOrd)]
 pub enum EpochFlag {
     // The deprecated flags have all been in production for long enough that
-    // we can have deleted the old code paths they were guarding.
+    // we have deleted the old code paths they were guarding.
     // We retain them here in order not to break deserialization.
     _InMemoryCheckpointRootsDeprecated = 0,
     _PerEpochFinalizedTransactionsDeprecated = 1,
     _ObjectLockSplitTablesDeprecated = 2,
-
-    WritebackCacheEnabled = 3,
-
-    // This flag was "burned" because it was deployed with a broken version of the code. The
-    // new flags below are required to enable state accumulator v2
+    _WritebackCacheEnabledDeprecated = 3,
     _StateAccumulatorV2EnabledDeprecated = 4,
-    StateAccumulatorV2EnabledTestnet = 5,
-    StateAccumulatorV2EnabledMainnet = 6,
+    _StateAccumulatorV2EnabledTestnetDeprecated = 5,
+    _StateAccumulatorV2EnabledMainnetDeprecated = 6,
+    _ExecutedInEpochTableDeprecated = 7,
+    _UseVersionAssignmentTablesV3 = 8,
 
-    ExecutedInEpochTable = 7,
+    // This flag indicates whether data quarantining has been enabled from the
+    // beginning of the epoch.
+    DataQuarantineFromBeginningOfEpoch = 9,
+
+    // Used for `test_epoch_flag_upgrade`.
+    #[cfg(msim)]
+    DummyFlag = 10,
 }
 
 impl EpochFlag {
-    pub fn default_flags_for_new_epoch(config: &NodeConfig) -> Vec<Self> {
-        Self::default_flags_impl(&config.execution_cache)
+    pub fn default_flags_for_new_epoch(_config: &NodeConfig) -> Vec<Self> {
+        // NodeConfig arg is not currently used, but we keep it here for future
+        // flags that might depend on the config.
+        Self::default_flags_impl()
+    }
+
+    // Return flags that are mandatory for the current version of the code. This is used
+    // so that `test_epoch_flag_upgrade` can still work correctly even when there are no
+    // optional flags.
+    pub fn mandatory_flags() -> Vec<Self> {
+        vec![EpochFlag::DataQuarantineFromBeginningOfEpoch]
     }
 
     /// For situations in which there is no config available (e.g. setting up a downloaded snapshot).
     pub fn default_for_no_config() -> Vec<Self> {
-        Self::default_flags_impl(&Default::default())
+        Self::default_flags_impl()
     }
 
-    fn default_flags_impl(cache_config: &ExecutionCacheConfig) -> Vec<Self> {
-        let mut new_flags = vec![
-            EpochFlag::ExecutedInEpochTable,
-            EpochFlag::StateAccumulatorV2EnabledTestnet,
-            EpochFlag::StateAccumulatorV2EnabledMainnet,
-        ];
-
-        if matches!(
-            choose_execution_cache(cache_config),
-            ExecutionCacheConfigType::WritebackCache
-        ) {
-            new_flags.push(EpochFlag::WritebackCacheEnabled);
-        }
-
-        new_flags
+    fn default_flags_impl() -> Vec<Self> {
+        vec![
+            EpochFlag::DataQuarantineFromBeginningOfEpoch,
+            #[cfg(msim)]
+            EpochFlag::DummyFlag,
+        ]
     }
 }
 
@@ -110,16 +109,30 @@ impl fmt::Display for EpochFlag {
             EpochFlag::_ObjectLockSplitTablesDeprecated => {
                 write!(f, "ObjectLockSplitTables (DEPRECATED)")
             }
-            EpochFlag::WritebackCacheEnabled => write!(f, "WritebackCacheEnabled"),
+            EpochFlag::_WritebackCacheEnabledDeprecated => {
+                write!(f, "WritebackCacheEnabled (DEPRECATED)")
+            }
             EpochFlag::_StateAccumulatorV2EnabledDeprecated => {
                 write!(f, "StateAccumulatorV2EnabledDeprecated (DEPRECATED)")
             }
-            EpochFlag::ExecutedInEpochTable => write!(f, "ExecutedInEpochTable"),
-            EpochFlag::StateAccumulatorV2EnabledTestnet => {
-                write!(f, "StateAccumulatorV2EnabledTestnet")
+            EpochFlag::_ExecutedInEpochTableDeprecated => {
+                write!(f, "ExecutedInEpochTable (DEPRECATED)")
             }
-            EpochFlag::StateAccumulatorV2EnabledMainnet => {
-                write!(f, "StateAccumulatorV2EnabledMainnet")
+            EpochFlag::_StateAccumulatorV2EnabledTestnetDeprecated => {
+                write!(f, "StateAccumulatorV2EnabledTestnet (DEPRECATED)")
+            }
+            EpochFlag::_StateAccumulatorV2EnabledMainnetDeprecated => {
+                write!(f, "StateAccumulatorV2EnabledMainnet (DEPRECATED)")
+            }
+            EpochFlag::_UseVersionAssignmentTablesV3 => {
+                write!(f, "UseVersionAssignmentTablesV3 (DEPRECATED)")
+            }
+            EpochFlag::DataQuarantineFromBeginningOfEpoch => {
+                write!(f, "DataQuarantineFromBeginningOfEpoch")
+            }
+            #[cfg(msim)]
+            EpochFlag::DummyFlag => {
+                write!(f, "DummyFlag")
             }
         }
     }

@@ -7,11 +7,13 @@ edition = "2021"
 license = "Apache-2.0"
 
 [dependencies]
-# diem dependencies
+move-binary-format.workspace = true
 move-compiler.workspace = true
-move-model.workspace = true
+move-model-2.workspace = true
+move-core-types.workspace = true
+move-ir-types.workspace = true
+move-symbol-pool.workspace = true
 
-# external dependencies
 codespan.workspace = true
 codespan-reporting.workspace = true
 itertools.workspace = true
@@ -21,13 +23,4 @@ regex.workspace = true
 anyhow.workspace = true
 serde.workspace = true
 once_cell.workspace = true
-
-[dev-dependencies]
-move-prover.workspace = true
-datatest-stable.workspace = true
-tempfile.workspace = true
-move-prover-test-utils.workspace = true
-
-[[test]]
-name = "testsuite"
-harness = false
+clap.workspace = true

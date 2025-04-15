@@ -48,7 +48,7 @@ pub fn ed25519_verify(
     // Load the cost parameters from the protocol config
     let ed25519_verify_cost_params = &context
         .extensions()
-        .get::<NativesCostTable>()
+        .get::<NativesCostTable>()?
         .ed25519_verify_cost_params
         .clone();
     // Charge the base cost for this oper
@@ -70,7 +70,7 @@ pub fn ed25519_verify(
         ed25519_verify_cost_params.ed25519_ed25519_verify_msg_cost_per_byte
             * (msg_ref.len() as u64).into()
             + ed25519_verify_cost_params.ed25519_ed25519_verify_msg_cost_per_block
-                * (((msg_ref.len() + ED25519_BLOCK_SIZE - 1) / ED25519_BLOCK_SIZE) as u64).into()
+                * (msg_ref.len().div_ceil(ED25519_BLOCK_SIZE) as u64).into()
     );
     let cost = context.gas_used();
 

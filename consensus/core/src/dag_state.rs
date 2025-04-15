@@ -12,7 +12,8 @@ use std::{
 
 use consensus_config::AuthorityIndex;
 use itertools::Itertools as _;
-use tracing::{debug, error, info};
+use tokio::time::Instant;
+use tracing::{debug, error, info, trace};
 
 use crate::{
     block::{
@@ -25,8 +26,8 @@ use crate::{
     },
     context::Context,
     leader_scoring::{ReputationScores, ScoringSubdag},
-    stake_aggregator::{QuorumThreshold, StakeAggregator},
     storage::{Store, WriteBatch},
+    threshold_clock::ThresholdClock,
     CommittedSubDag,
 };
 
@@ -50,11 +51,14 @@ pub(crate) struct DagState {
     // CACHED_ROUNDS worth of data. The entries are evicted based on the latest GC round, however the eviction process will respect the CACHED_ROUNDS.
     // For each authority, blocks are only evicted when their round is less than or equal to both `gc_round`, and `highest authority round - cached rounds`.
     // This ensures that the GC requirements are respected (we never clean up any block above `gc_round`), and there are enough blocks cached.
-    recent_blocks: BTreeMap<BlockRef, VerifiedBlock>,
+    recent_blocks: BTreeMap<BlockRef, BlockInfo>,
 
     // Indexes recent block refs by their authorities.
     // Vec position corresponds to the authority index.
     recent_refs_by_authority: Vec<BTreeSet<BlockRef>>,
+
+    // Keeps track of the threshold clock for proposing blocks.
+    threshold_clock: ThresholdClock,
 
     // Keeps track of the highest round that has been evicted for each authority. Any blocks that are of round <= evict_round
     // should be considered evicted, and if any exist we should not consider the causauly complete in the order they appear.
@@ -76,12 +80,6 @@ pub(crate) struct DagState {
     /// The committed subdags that have been scored but scores have not been used
     /// for leader schedule yet.
     scoring_subdag: ScoringSubdag,
-
-    // TODO: Remove when DistributedVoteScoring is enabled.
-    /// The list of committed subdags that have been sequenced by the universal
-    /// committer but have yet to be used to calculate reputation scores for the
-    /// next leader schedule. Until then we consider it as "unscored" subdags.
-    unscored_committed_subdags: Vec<CommittedSubDag>,
 
     // Commit votes pending to be included in new blocks.
     // TODO: limit to 1st commit per round with multi-leader.
@@ -113,6 +111,8 @@ impl DagState {
             .into_iter()
             .map(|block| (block.reference(), block))
             .collect();
+
+        let threshold_clock = ThresholdClock::new(1, context.clone());
 
         let last_commit = store
             .read_last_commit()
@@ -156,20 +156,16 @@ impl DagState {
             unscored_committed_subdags.len()
         );
 
-        if context
-            .protocol_config
-            .consensus_distributed_vote_scoring_strategy()
-        {
-            scoring_subdag.add_subdags(std::mem::take(&mut unscored_committed_subdags));
-        }
+        scoring_subdag.add_subdags(std::mem::take(&mut unscored_committed_subdags));
 
         let mut state = Self {
-            context,
+            context: context.clone(),
             genesis,
             recent_blocks: BTreeMap::new(),
             recent_refs_by_authority: vec![BTreeSet::new(); num_authorities],
+            threshold_clock,
             highest_accepted_round: 0,
-            last_commit,
+            last_commit: last_commit.clone(),
             last_commit_round_advancement_time: None,
             last_committed_rounds: last_committed_rounds.clone(),
             pending_commit_votes: VecDeque::new(),
@@ -177,8 +173,7 @@ impl DagState {
             commits_to_write: vec![],
             commit_info_to_write: vec![],
             scoring_subdag,
-            unscored_committed_subdags,
-            store,
+            store: store.clone(),
             cached_rounds,
             evicted_rounds: vec![0; num_authorities],
         };
@@ -206,6 +201,7 @@ impl DagState {
                     .store
                     .scan_blocks_by_author(authority_index, eviction_round + 1)
                     .expect("Database error");
+
                 (blocks, eviction_round)
             } else {
                 let eviction_round = Self::eviction_round(round, cached_rounds);
@@ -223,7 +219,7 @@ impl DagState {
                 state.update_block_metadata(block);
             }
 
-            info!(
+            debug!(
                 "Recovered blocks {}: {:?}",
                 authority_index,
                 blocks
@@ -231,6 +227,59 @@ impl DagState {
                     .map(|b| b.reference())
                     .collect::<Vec<BlockRef>>()
             );
+        }
+
+        if state.gc_enabled() {
+            if let Some(last_commit) = last_commit {
+                let mut index = last_commit.index();
+                let gc_round = state.gc_round();
+                info!("Recovering block commit statuses from commit index {} and backwards until leader of round <= gc_round {:?}", index, gc_round);
+
+                loop {
+                    let commits = store
+                        .scan_commits((index..=index).into())
+                        .unwrap_or_else(|e| panic!("Failed to read from storage: {:?}", e));
+                    let Some(commit) = commits.first() else {
+                        info!(
+                            "Recovering finished up to index {index}, no more commits to recover"
+                        );
+                        break;
+                    };
+
+                    // Check the commit leader round to see if it is within the gc_round. If it is not then we can stop the recovery process.
+                    if gc_round > 0 && commit.leader().round <= gc_round {
+                        info!(
+                            "Recovering finished, reached commit leader round {} <= gc_round {}",
+                            commit.leader().round,
+                            gc_round
+                        );
+                        break;
+                    }
+
+                    commit.blocks().iter().filter(|b| b.round > gc_round).for_each(|block_ref|{
+                        debug!(
+                            "Setting block {:?} as committed based on commit {:?}",
+                            block_ref,
+                            commit.index()
+                        );
+                        assert!(state.set_committed(block_ref), "Attempted to set again a block {:?} as committed when recovering commit {:?}", block_ref, commit);
+                    });
+
+                    // All commits are indexed starting from 1, so one reach zero exit.
+                    index = index.saturating_sub(1);
+                    if index == 0 {
+                        break;
+                    }
+                }
+            }
+
+            // Recover hard linked statuses for blocks within GC round.
+            let proposed_blocks = store
+                .scan_blocks_by_author(context.own_index, state.gc_round() + 1)
+                .expect("Database error");
+            for block in proposed_blocks {
+                state.link_causal_history(block.reference());
+            }
         }
 
         state
@@ -251,11 +300,31 @@ impl DagState {
 
         let now = self.context.clock.timestamp_utc_ms();
         if block.timestamp_ms() > now {
-            panic!(
-                "Block {:?} cannot be accepted! Block timestamp {} is greater than local timestamp {}.",
-                block, block.timestamp_ms(), now,
-            );
+            if self
+                .context
+                .protocol_config
+                .consensus_median_based_commit_timestamp()
+            {
+                trace!(
+                    "Block {:?} with timestamp {} is greater than local timestamp {}.",
+                    block,
+                    block.timestamp_ms(),
+                    now,
+                );
+            } else {
+                panic!(
+                    "Block {:?} cannot be accepted! Block timestamp {} is greater than local timestamp {}.",
+                    block, block.timestamp_ms(), now,
+                );
+            }
         }
+        let hostname = &self.context.committee.authority(block_ref.author).hostname;
+        self.context
+            .metrics
+            .node_metrics
+            .accepted_block_time_drift_ms
+            .with_label_values(&[hostname])
+            .inc_by(block.timestamp_ms().saturating_sub(now));
 
         // TODO: Move this check to core
         // Ensure we don't write multiple blocks per slot for our own index
@@ -285,8 +354,10 @@ impl DagState {
     /// Updates internal metadata for a block.
     fn update_block_metadata(&mut self, block: &VerifiedBlock) {
         let block_ref = block.reference();
-        self.recent_blocks.insert(block_ref, block.clone());
+        self.recent_blocks
+            .insert(block_ref, BlockInfo::new(block.clone()));
         self.recent_refs_by_authority[block_ref.author].insert(block_ref);
+        self.threshold_clock.add_block(block_ref);
         self.highest_accepted_round = max(self.highest_accepted_round, block.round());
         self.context
             .metrics
@@ -340,8 +411,8 @@ impl DagState {
                 }
                 continue;
             }
-            if let Some(block) = self.recent_blocks.get(block_ref) {
-                blocks[index] = Some(block.clone());
+            if let Some(block_info) = self.recent_blocks.get(block_ref) {
+                blocks[index] = Some(block_info.block.clone());
                 continue;
             }
             missing.push((index, block_ref));
@@ -380,11 +451,11 @@ impl DagState {
         // or support reading from storage while limiting storage reads to edge cases.
 
         let mut blocks = vec![];
-        for (_block_ref, block) in self.recent_blocks.range((
+        for (_block_ref, block_info) in self.recent_blocks.range((
             Included(BlockRef::new(slot.round, slot.authority, BlockDigest::MIN)),
             Included(BlockRef::new(slot.round, slot.authority, BlockDigest::MAX)),
         )) {
-            blocks.push(block.clone())
+            blocks.push(block_info.block.clone())
         }
         blocks
     }
@@ -397,7 +468,7 @@ impl DagState {
         }
 
         let mut blocks = vec![];
-        for (_block_ref, block) in self.recent_blocks.range((
+        for (_block_ref, block_info) in self.recent_blocks.range((
             Included(BlockRef::new(round, AuthorityIndex::ZERO, BlockDigest::MIN)),
             Excluded(BlockRef::new(
                 round + 1,
@@ -405,7 +476,7 @@ impl DagState {
                 BlockDigest::MIN,
             )),
         )) {
-            blocks.push(block.clone())
+            blocks.push(block_info.block.clone())
         }
         blocks
     }
@@ -447,12 +518,13 @@ impl DagState {
             .collect()
     }
 
-    pub(crate) fn contains_block(&self, block_ref: &BlockRef) -> bool {
-        let blocks = self.contains_blocks(vec![*block_ref]);
-        blocks.first().cloned().unwrap()
+    /// Gets the last proposed block from this authority.
+    /// If no block is proposed yet, returns the genesis block.
+    pub(crate) fn get_last_proposed_block(&self) -> VerifiedBlock {
+        self.get_last_block_for_authority(self.context.own_index)
     }
 
-    /// Retrieves the last block proposed for the specified `authority`. If no block is found in cache
+    /// Retrieves the last accepted block from the specified `authority`. If no block is found in cache
     /// then the genesis block is returned as no other block has been received from that authority.
     pub(crate) fn get_last_block_for_authority(&self, authority: AuthorityIndex) -> VerifiedBlock {
         if let Some(last) = self.recent_refs_by_authority[authority].last() {
@@ -460,6 +532,7 @@ impl DagState {
                 .recent_blocks
                 .get(last)
                 .expect("Block should be found in recent blocks")
+                .block
                 .clone();
         }
 
@@ -476,37 +549,89 @@ impl DagState {
     /// Blocks returned are limited to round >= `start`, and cached.
     /// NOTE: caller should not assume returned blocks are always chained.
     /// "Disconnected" blocks can be returned when there are byzantine blocks,
-    /// or when received blocks are not deduped.
+    /// or a previously evicted block is accepted again.
     pub(crate) fn get_cached_blocks(
         &self,
         authority: AuthorityIndex,
         start: Round,
     ) -> Vec<VerifiedBlock> {
+        self.get_cached_blocks_in_range(authority, start, Round::MAX, usize::MAX)
+    }
+
+    // Retrieves the cached block within the range [start_round, end_round) from a given authority,
+    // limited in total number of blocks.
+    pub(crate) fn get_cached_blocks_in_range(
+        &self,
+        authority: AuthorityIndex,
+        start_round: Round,
+        end_round: Round,
+        limit: usize,
+    ) -> Vec<VerifiedBlock> {
+        if start_round >= end_round || limit == 0 {
+            return vec![];
+        }
+
         let mut blocks = vec![];
         for block_ref in self.recent_refs_by_authority[authority].range((
-            Included(BlockRef::new(start, authority, BlockDigest::MIN)),
-            Unbounded,
+            Included(BlockRef::new(start_round, authority, BlockDigest::MIN)),
+            Excluded(BlockRef::new(
+                end_round,
+                AuthorityIndex::MIN,
+                BlockDigest::MIN,
+            )),
         )) {
-            let block = self
+            let block_info = self
                 .recent_blocks
                 .get(block_ref)
                 .expect("Block should exist in recent blocks");
-            blocks.push(block.clone());
+            blocks.push(block_info.block.clone());
+            if blocks.len() >= limit {
+                break;
+            }
         }
         blocks
     }
 
-    /// Returns the last block proposed per authority with `round < end_round`.
+    // Retrieves the last cached block within the range [start_round, end_round) from a given authority.
+    pub(crate) fn get_last_cached_block_in_range(
+        &self,
+        authority: AuthorityIndex,
+        start_round: Round,
+        end_round: Round,
+    ) -> Option<VerifiedBlock> {
+        if start_round >= end_round {
+            return None;
+        }
+
+        let block_ref = self.recent_refs_by_authority[authority]
+            .range((
+                Included(BlockRef::new(start_round, authority, BlockDigest::MIN)),
+                Excluded(BlockRef::new(
+                    end_round,
+                    AuthorityIndex::MIN,
+                    BlockDigest::MIN,
+                )),
+            ))
+            .last()?;
+
+        self.recent_blocks
+            .get(block_ref)
+            .map(|block_info| block_info.block.clone())
+    }
+
+    /// Returns the last block proposed per authority with `evicted round < round < end_round`.
     /// The method is guaranteed to return results only when the `end_round` is not earlier of the
-    /// available cached data for each authority, otherwise the method will panic - it's the caller's
-    /// responsibility to ensure that is not requesting filtering for earlier rounds .
-    /// In case of equivocation for an authority's last slot only one block will be returned (the last in order).
+    /// available cached data for each authority (evicted round + 1), otherwise the method will panic.
+    /// It's the caller's responsibility to ensure that is not requesting for earlier rounds.
+    /// In case of equivocation for an authority's last slot, one block will be returned (the last in order)
+    /// and the other equivocating blocks will be returned.
     pub(crate) fn get_last_cached_block_per_authority(
         &self,
         end_round: Round,
-    ) -> Vec<VerifiedBlock> {
-        // init with the genesis blocks as fallback
+    ) -> Vec<(VerifiedBlock, Vec<BlockRef>)> {
+        // Initialize with the genesis blocks as fallback
         let mut blocks = self.genesis.values().cloned().collect::<Vec<_>>();
+        let mut equivocating_blocks = vec![vec![]; self.context.committee.size()];
 
         if end_round == GENESIS_ROUND {
             panic!(
@@ -515,7 +640,7 @@ impl DagState {
         }
 
         if end_round == GENESIS_ROUND + 1 {
-            return blocks;
+            return blocks.into_iter().map(|b| (b, vec![])).collect();
         }
 
         for (authority_index, block_refs) in self.recent_refs_by_authority.iter().enumerate() {
@@ -530,7 +655,7 @@ impl DagState {
                 panic!("Attempted to request for blocks of rounds < {end_round}, when the last evicted round is {last_evicted_round} for authority {authority_index}", );
             }
 
-            if let Some(block_ref) = block_refs
+            let block_ref_iter = block_refs
                 .range((
                     Included(BlockRef::new(
                         last_evicted_round + 1,
@@ -539,18 +664,27 @@ impl DagState {
                     )),
                     Excluded(BlockRef::new(end_round, authority_index, BlockDigest::MIN)),
                 ))
-                .next_back()
-            {
-                let block = self
-                    .recent_blocks
-                    .get(block_ref)
-                    .expect("Block should exist in recent blocks");
+                .rev();
 
-                blocks[authority_index] = block.clone();
+            let mut last_round = 0;
+            for block_ref in block_ref_iter {
+                if last_round == 0 {
+                    last_round = block_ref.round;
+                    let block_info = self
+                        .recent_blocks
+                        .get(block_ref)
+                        .expect("Block should exist in recent blocks");
+                    blocks[authority_index] = block_info.block.clone();
+                    continue;
+                }
+                if block_ref.round < last_round {
+                    break;
+                }
+                equivocating_blocks[authority_index].push(*block_ref);
             }
         }
 
-        blocks.into_iter().collect()
+        blocks.into_iter().zip(equivocating_blocks).collect()
     }
 
     /// Checks whether a block exists in the slot. The method checks only against the cached data.
@@ -620,6 +754,81 @@ impl DagState {
         exist
     }
 
+    pub(crate) fn contains_block(&self, block_ref: &BlockRef) -> bool {
+        let blocks = self.contains_blocks(vec![*block_ref]);
+        blocks.first().cloned().unwrap()
+    }
+
+    // Sets the block as committed in the cache. If the block is set as committed for first time, then true is returned, otherwise false is returned instead.
+    // Method will panic if the block is not found in the cache.
+    pub(crate) fn set_committed(&mut self, block_ref: &BlockRef) -> bool {
+        if let Some(block_info) = self.recent_blocks.get_mut(block_ref) {
+            if !block_info.committed {
+                block_info.committed = true;
+                return true;
+            }
+            false
+        } else {
+            panic!(
+                "Block {:?} not found in cache to set as committed.",
+                block_ref
+            );
+        }
+    }
+
+    /// Returns true if the block is committed. Only valid for blocks above the GC round.
+    pub(crate) fn is_committed(&self, block_ref: &BlockRef) -> bool {
+        self.recent_blocks
+            .get(block_ref)
+            .unwrap_or_else(|| panic!("Attempted to query for commit status for a block not in cached data {block_ref}"))
+            .committed
+    }
+
+    /// Recursively sets blocks in the causal history of the root block as hard linked, including the root block itself.
+    /// Returns the list of blocks that are newly linked.
+    /// The returned blocks are guaranteed to be above the GC round.
+    pub(crate) fn link_causal_history(&mut self, root_block: BlockRef) -> Vec<BlockRef> {
+        assert!(self.gc_enabled());
+        let gc_round = self.gc_round();
+        let mut linked_blocks = vec![];
+        let mut targets = VecDeque::new();
+        targets.push_back(root_block);
+        while let Some(block_ref) = targets.pop_front() {
+            // This is only correct with GC enabled.
+            if block_ref.round <= gc_round {
+                continue;
+            }
+            let block_info = self
+                .recent_blocks
+                .get_mut(&block_ref)
+                .unwrap_or_else(|| panic!("Block {:?} is not in DAG state", block_ref));
+            if block_info.hard_linked {
+                continue;
+            }
+            linked_blocks.push(block_ref);
+            block_info.hard_linked = true;
+            targets.extend(block_info.block.ancestors().iter());
+        }
+        linked_blocks
+    }
+
+    /// Returns true if the block is hard linked by a proposed block.
+    pub(crate) fn is_hard_linked(&self, block_ref: &BlockRef) -> bool {
+        self.recent_blocks
+            .get(block_ref)
+            .unwrap_or_else(|| panic!("Attempted to query for hard link status for a block not in cached data {block_ref}"))
+            .hard_linked
+    }
+
+    pub(crate) fn threshold_clock_round(&self) -> Round {
+        self.threshold_clock.get_round()
+    }
+
+    // The timestamp of when quorum threshold was last reached in the threshold clock.
+    pub(crate) fn threshold_clock_quorum_ts(&self) -> Instant {
+        self.threshold_clock.get_quorum_ts()
+    }
+
     pub(crate) fn highest_accepted_round(&self) -> Round {
         self.highest_accepted_round
     }
@@ -627,7 +836,7 @@ impl DagState {
     // Buffers a new commit in memory and updates last committed rounds.
     // REQUIRED: must not skip over any commit index.
     pub(crate) fn add_commit(&mut self, commit: TrustedCommit) {
-        if let Some(last_commit) = &self.last_commit {
+        let time_diff = if let Some(last_commit) = &self.last_commit {
             if commit.index() <= last_commit.index() {
                 error!(
                     "New commit index {} <= last commit index {}!",
@@ -641,9 +850,19 @@ impl DagState {
             if commit.timestamp_ms() < last_commit.timestamp_ms() {
                 panic!("Commit timestamps do not monotonically increment, prev commit {:?}, new commit {:?}", last_commit, commit);
             }
+            commit
+                .timestamp_ms()
+                .saturating_sub(last_commit.timestamp_ms())
         } else {
             assert_eq!(commit.index(), 1);
-        }
+            0
+        };
+
+        self.context
+            .metrics
+            .node_metrics
+            .last_commit_time_diff
+            .observe(time_diff as f64);
 
         let commit_round_advanced = if let Some(previous_commit) = &self.last_commit {
             previous_commit.round() < commit.round()
@@ -688,9 +907,6 @@ impl DagState {
     }
 
     pub(crate) fn add_commit_info(&mut self, reputation_scores: ReputationScores) {
-        // We empty the unscored committed subdags to calculate reputation scores.
-        assert!(self.unscored_committed_subdags.is_empty());
-
         // We create an empty scoring subdag once reputation scores are calculated.
         // Note: It is okay for this to not be gated by protocol config as the
         // scoring_subdag should be empty in either case at this point.
@@ -771,10 +987,14 @@ impl DagState {
     /// There is no meaning accepting any blocks with round <= gc_round. The Garbage Collection (GC) round is calculated based on the latest
     /// committed leader round. When GC is disabled that will return the genesis round.
     pub(crate) fn gc_round(&self) -> Round {
+        self.calculate_gc_round(self.last_commit_round())
+    }
+
+    pub(crate) fn calculate_gc_round(&self, commit_round: Round) -> Round {
         let gc_depth = self.context.protocol_config.gc_depth();
         if gc_depth > 0 {
             // GC is enabled, only then calculate the diff
-            self.last_commit_round().saturating_sub(gc_depth)
+            commit_round.saturating_sub(gc_depth)
         } else {
             // Otherwise just return genesis round. That also acts as a safety mechanism so we never attempt to truncate anything
             // even accidentally.
@@ -851,56 +1071,10 @@ impl DagState {
         );
     }
 
-    /// Detects and returns the blocks of the round that forms the last quorum. The method will return
-    /// the quorum even if that's genesis.
-    pub(crate) fn last_quorum(&self) -> Vec<VerifiedBlock> {
-        // the quorum should exist either on the highest accepted round or the one before. If we fail to detect
-        // a quorum then it means that our DAG has advanced with missing causal history.
-        for round in
-            (self.highest_accepted_round.saturating_sub(1)..=self.highest_accepted_round).rev()
-        {
-            if round == GENESIS_ROUND {
-                return self.genesis_blocks();
-            }
-            let mut quorum = StakeAggregator::<QuorumThreshold>::new();
-
-            // Since the minimum wave length is 3 we expect to find a quorum in the uncommitted rounds.
-            let blocks = self.get_uncommitted_blocks_at_round(round);
-            for block in &blocks {
-                if quorum.add(block.author(), &self.context.committee) {
-                    return blocks;
-                }
-            }
-        }
-
-        panic!("Fatal error, no quorum has been detected in our DAG on the last two rounds.");
-    }
-
     pub(crate) fn recover_last_commit_info(&self) -> Option<(CommitRef, CommitInfo)> {
         self.store
             .read_last_commit_info()
             .unwrap_or_else(|e| panic!("Failed to read from storage: {:?}", e))
-    }
-
-    // TODO: Remove four methods below this when DistributedVoteScoring is enabled.
-    pub(crate) fn unscored_committed_subdags_count(&self) -> u64 {
-        self.unscored_committed_subdags.len() as u64
-    }
-
-    #[cfg(test)]
-    pub(crate) fn unscored_committed_subdags(&self) -> Vec<CommittedSubDag> {
-        self.unscored_committed_subdags.clone()
-    }
-
-    pub(crate) fn add_unscored_committed_subdags(
-        &mut self,
-        committed_subdags: Vec<CommittedSubDag>,
-    ) {
-        self.unscored_committed_subdags.extend(committed_subdags);
-    }
-
-    pub(crate) fn take_unscored_committed_subdags(&mut self) -> Vec<CommittedSubDag> {
-        std::mem::take(&mut self.unscored_committed_subdags)
     }
 
     pub(crate) fn add_scoring_subdags(&mut self, scoring_subdags: Vec<CommittedSubDag>) {
@@ -929,10 +1103,6 @@ impl DagState {
             .as_ref()
             .expect("commit range should exist for scoring subdag")
             .end()
-    }
-
-    pub(crate) fn genesis_blocks(&self) -> Vec<VerifiedBlock> {
-        self.genesis.values().cloned().collect()
     }
 
     /// The last round that should get evicted after a cache clean up operation. After this round we are
@@ -964,9 +1134,59 @@ impl DagState {
         gc_round.min(last_round.saturating_sub(cached_rounds))
     }
 
+    /// Detects and returns the blocks of the round that forms the last quorum. The method will return
+    /// the quorum even if that's genesis.
+    #[cfg(test)]
+    pub(crate) fn last_quorum(&self) -> Vec<VerifiedBlock> {
+        // the quorum should exist either on the highest accepted round or the one before. If we fail to detect
+        // a quorum then it means that our DAG has advanced with missing causal history.
+        for round in
+            (self.highest_accepted_round.saturating_sub(1)..=self.highest_accepted_round).rev()
+        {
+            if round == GENESIS_ROUND {
+                return self.genesis_blocks();
+            }
+            use crate::stake_aggregator::{QuorumThreshold, StakeAggregator};
+            let mut quorum = StakeAggregator::<QuorumThreshold>::new();
+
+            // Since the minimum wave length is 3 we expect to find a quorum in the uncommitted rounds.
+            let blocks = self.get_uncommitted_blocks_at_round(round);
+            for block in &blocks {
+                if quorum.add(block.author(), &self.context.committee) {
+                    return blocks;
+                }
+            }
+        }
+
+        panic!("Fatal error, no quorum has been detected in our DAG on the last two rounds.");
+    }
+
+    #[cfg(test)]
+    pub(crate) fn genesis_blocks(&self) -> Vec<VerifiedBlock> {
+        self.genesis.values().cloned().collect()
+    }
+
     #[cfg(test)]
     pub(crate) fn set_last_commit(&mut self, commit: TrustedCommit) {
         self.last_commit = Some(commit);
+    }
+}
+
+struct BlockInfo {
+    block: VerifiedBlock,
+    // Whether the block has been committed
+    committed: bool,
+    // Whether the block has been hard linked by a proposed block.
+    hard_linked: bool,
+}
+
+impl BlockInfo {
+    fn new(block: VerifiedBlock) -> Self {
+        Self {
+            block,
+            committed: false,
+            hard_linked: false,
+        }
     }
 }
 
@@ -1249,6 +1469,116 @@ mod test {
     }
 
     #[tokio::test]
+    async fn test_link_causal_history() {
+        let (mut context, _) = Context::new_for_test(4);
+        context.parameters.dag_state_cached_rounds = 10;
+        context
+            .protocol_config
+            .set_consensus_gc_depth_for_testing(3);
+        let context = Arc::new(context);
+
+        let store = Arc::new(MemStore::new());
+        let mut dag_state = DagState::new(context.clone(), store.clone());
+
+        // Create for rounds 1..=6. Skip creating blocks for authority 0 for rounds 4 - 6.
+        let mut dag_builder = DagBuilder::new(context.clone());
+        dag_builder.layers(1..=3).build();
+        dag_builder
+            .layers(4..=6)
+            .authorities(vec![AuthorityIndex::new_for_test(0)])
+            .skip_block()
+            .build();
+
+        // Accept all blocks
+        let all_blocks = dag_builder.all_blocks();
+        dag_state.accept_blocks(all_blocks.clone());
+
+        // No block is linked yet.
+        for block in &all_blocks {
+            assert!(!dag_state.is_hard_linked(&block.reference()));
+        }
+
+        // Link causal history from a round 1 block.
+        let round_1_block = &all_blocks[1];
+        assert_eq!(round_1_block.round(), 1);
+        let linked_blocks = dag_state.link_causal_history(round_1_block.reference());
+
+        // Check that the block is linked.
+        assert_eq!(linked_blocks.len(), 1);
+        assert_eq!(linked_blocks[0], round_1_block.reference());
+        for block_ref in linked_blocks {
+            assert!(dag_state.is_hard_linked(&block_ref));
+        }
+
+        // Link causal history from a round 2 block.
+        let round_2_block = &all_blocks[4];
+        assert_eq!(round_2_block.round(), 2);
+        let linked_blocks = dag_state.link_causal_history(round_2_block.reference());
+
+        // Check the linked blocks.
+        assert_eq!(linked_blocks.len(), 4);
+        for block_ref in linked_blocks {
+            assert!(block_ref == round_2_block.reference() || block_ref.round == 1);
+        }
+
+        // Check linked status in dag state.
+        for block in &all_blocks {
+            if block.round() == 1 || block.reference() == round_2_block.reference() {
+                assert!(dag_state.is_hard_linked(&block.reference()));
+            } else {
+                assert!(!dag_state.is_hard_linked(&block.reference()));
+            }
+        }
+
+        // Select round 6 block.
+        let round_6_block = all_blocks.last().unwrap();
+        assert_eq!(round_6_block.round(), 6);
+
+        // Get GC round to 3.
+        let last_commit = TrustedCommit::new_for_test(
+            6,
+            CommitDigest::MIN,
+            context.clock.timestamp_utc_ms(),
+            round_6_block.reference(),
+            vec![],
+        );
+        dag_state.set_last_commit(last_commit);
+        assert_eq!(
+            dag_state.gc_round(),
+            3,
+            "GC round should have moved to round 3"
+        );
+
+        // Link causal history from a round 6 block.
+        let linked_blocks = dag_state.link_causal_history(round_6_block.reference());
+
+        // Check the linked blocks. They should not include GC'ed blocks.
+        assert_eq!(linked_blocks.len(), 7, "Linked blocks: {:?}", linked_blocks);
+        for block_ref in linked_blocks {
+            assert!(
+                block_ref.round == 4
+                    || block_ref.round == 5
+                    || block_ref == round_6_block.reference()
+            );
+        }
+
+        // Check linked status in dag state.
+        for block in &all_blocks {
+            let block_ref = block.reference();
+            if block.round() == 1
+                || block_ref == round_2_block.reference()
+                || block_ref.round == 4
+                || block_ref.round == 5
+                || block_ref == round_6_block.reference()
+            {
+                assert!(dag_state.is_hard_linked(&block.reference()));
+            } else {
+                assert!(!dag_state.is_hard_linked(&block.reference()));
+            }
+        }
+    }
+
+    #[tokio::test]
     async fn test_contains_blocks_in_cache_or_store() {
         /// Only keep elements up to 2 rounds before the last committed round
         const CACHED_ROUNDS: Round = 2;
@@ -1372,13 +1702,18 @@ mod test {
     }
 
     #[tokio::test]
-    #[should_panic(expected = "Attempted to check for slot A8 that is <= the last evicted round 8")]
+    #[should_panic(
+        expected = "Attempted to check for slot [0]8 that is <= the last evicted round 8"
+    )]
     async fn test_contains_cached_block_at_slot_panics_when_ask_out_of_range() {
         /// Only keep elements up to 2 rounds before the last committed round
         const CACHED_ROUNDS: Round = 2;
 
         let (mut context, _) = Context::new_for_test(4);
         context.parameters.dag_state_cached_rounds = CACHED_ROUNDS;
+        context
+            .protocol_config
+            .set_consensus_gc_depth_for_testing(0);
 
         let context = Arc::new(context);
         let store = Arc::new(MemStore::new());
@@ -1414,7 +1749,7 @@ mod test {
 
     #[tokio::test]
     #[should_panic(
-        expected = "Attempted to check for slot B3 that is <= the last gc evicted round 3"
+        expected = "Attempted to check for slot [1]3 that is <= the last gc evicted round 3"
     )]
     async fn test_contains_cached_block_at_slot_panics_when_ask_out_of_range_gc_enabled() {
         /// Keep 2 rounds from the highest committed round. This is considered universal and minimum necessary blocks to hold
@@ -1543,118 +1878,6 @@ mod test {
         assert_eq!(result, expected);
     }
 
-    // TODO: Remove when DistributedVoteScoring is enabled.
-    #[rstest]
-    #[tokio::test]
-    async fn test_flush_and_recovery_with_unscored_subdag(#[values(0, 5)] gc_depth: u32) {
-        telemetry_subscribers::init_for_testing();
-        let num_authorities: u32 = 4;
-        let (mut context, _) = Context::new_for_test(num_authorities as usize);
-        context
-            .protocol_config
-            .set_consensus_distributed_vote_scoring_strategy_for_testing(false);
-
-        if gc_depth > 0 {
-            context
-                .protocol_config
-                .set_consensus_gc_depth_for_testing(gc_depth);
-        }
-
-        let context = Arc::new(context);
-        let store = Arc::new(MemStore::new());
-        let mut dag_state = DagState::new(context.clone(), store.clone());
-
-        // Create test blocks and commits for round 1 ~ 10
-        let num_rounds: u32 = 10;
-        let mut dag_builder = DagBuilder::new(context.clone());
-        dag_builder.layers(1..=num_rounds).build();
-        let mut commits = vec![];
-
-        for (_subdag, commit) in dag_builder.get_sub_dag_and_commits(1..=num_rounds) {
-            commits.push(commit);
-        }
-
-        // Add the blocks from first 5 rounds and first 5 commits to the dag state
-        let temp_commits = commits.split_off(5);
-        dag_state.accept_blocks(dag_builder.blocks(1..=5));
-        for commit in commits.clone() {
-            dag_state.add_commit(commit);
-        }
-
-        // Flush the dag state
-        dag_state.flush();
-
-        // Add the rest of the blocks and commits to the dag state
-        dag_state.accept_blocks(dag_builder.blocks(6..=num_rounds));
-        for commit in temp_commits.clone() {
-            dag_state.add_commit(commit);
-        }
-
-        // All blocks should be found in DagState.
-        let all_blocks = dag_builder.blocks(6..=num_rounds);
-        let block_refs = all_blocks
-            .iter()
-            .map(|block| block.reference())
-            .collect::<Vec<_>>();
-        let result = dag_state
-            .get_blocks(&block_refs)
-            .into_iter()
-            .map(|b| b.unwrap())
-            .collect::<Vec<_>>();
-        assert_eq!(result, all_blocks);
-
-        // Last commit index should be 10.
-        assert_eq!(dag_state.last_commit_index(), 10);
-        assert_eq!(
-            dag_state.last_committed_rounds(),
-            dag_builder.last_committed_rounds.clone()
-        );
-
-        // Destroy the dag state.
-        drop(dag_state);
-
-        // Recover the state from the store
-        let dag_state = DagState::new(context.clone(), store.clone());
-
-        // Blocks of first 5 rounds should be found in DagState.
-        let blocks = dag_builder.blocks(1..=5);
-        let block_refs = blocks
-            .iter()
-            .map(|block| block.reference())
-            .collect::<Vec<_>>();
-        let result = dag_state
-            .get_blocks(&block_refs)
-            .into_iter()
-            .map(|b| b.unwrap())
-            .collect::<Vec<_>>();
-        assert_eq!(result, blocks);
-
-        // Blocks above round 5 should not be in DagState, because they are not flushed.
-        let missing_blocks = dag_builder.blocks(6..=num_rounds);
-        let block_refs = missing_blocks
-            .iter()
-            .map(|block| block.reference())
-            .collect::<Vec<_>>();
-        let retrieved_blocks = dag_state
-            .get_blocks(&block_refs)
-            .into_iter()
-            .flatten()
-            .collect::<Vec<_>>();
-        assert!(retrieved_blocks.is_empty());
-
-        // Last commit index should be 5.
-        assert_eq!(dag_state.last_commit_index(), 5);
-
-        // This is the last_commmit_rounds of the first 5 commits that were flushed
-        let expected_last_committed_rounds = vec![4, 5, 4, 4];
-        assert_eq!(
-            dag_state.last_committed_rounds(),
-            expected_last_committed_rounds
-        );
-        // Unscored subdags will be recoverd based on the flushed commits and no commit info
-        assert_eq!(dag_state.unscored_committed_subdags_count(), 5);
-    }
-
     #[tokio::test]
     async fn test_flush_and_recovery() {
         telemetry_subscribers::init_for_testing();
@@ -1767,6 +1990,9 @@ mod test {
         context
             .protocol_config
             .set_consensus_gc_depth_for_testing(GC_DEPTH);
+        context
+            .protocol_config
+            .set_consensus_linearize_subdag_v2_for_testing(true);
 
         let context = Arc::new(context);
 
@@ -1783,10 +2009,11 @@ mod test {
             .build();
         dag_builder.layers(9..=num_rounds).build();
 
-        let mut commits = vec![];
-        for (_subdag, commit) in dag_builder.get_sub_dag_and_commits(1..=num_rounds) {
-            commits.push(commit);
-        }
+        let mut commits = dag_builder
+            .get_sub_dag_and_commits(1..=num_rounds)
+            .into_iter()
+            .map(|(_subdag, commit)| commit)
+            .collect::<Vec<_>>();
 
         // Add the blocks from first 8 rounds and first 7 commits to the dag state
         // It's 7 commits because we missing the commit of round 8 where authority 0 is the leader, but produced no block
@@ -1794,6 +2021,12 @@ mod test {
         dag_state.accept_blocks(dag_builder.blocks(1..=8));
         for commit in commits.clone() {
             dag_state.add_commit(commit);
+        }
+
+        // Holds all the committed blocks from the commits that ended up being persisted (flushed). Any commits that not flushed will not be considered.
+        let mut all_committed_blocks = BTreeSet::<BlockRef>::new();
+        for commit in commits.iter() {
+            all_committed_blocks.extend(commit.blocks());
         }
 
         // Flush the dag state
@@ -1890,6 +2123,60 @@ mod test {
                     .all(|block| block.round() >= 5 && block.round() <= 8));
             }
         }
+
+        // Ensure that committed blocks from > gc_round have been correctly marked as committed according to committed sub dags
+        let gc_round = dag_state.gc_round();
+        assert_eq!(gc_round, 4);
+        dag_state
+            .recent_blocks
+            .iter()
+            .for_each(|(block_ref, block_info)| {
+                if block_ref.round > gc_round && all_committed_blocks.contains(block_ref) {
+                    assert!(
+                        block_info.committed,
+                        "Block {:?} should be committed",
+                        block_ref
+                    );
+                }
+            });
+    }
+
+    #[tokio::test]
+    async fn test_block_info_as_committed() {
+        let num_authorities: u32 = 4;
+        let (context, _) = Context::new_for_test(num_authorities as usize);
+        let context = Arc::new(context);
+
+        let store = Arc::new(MemStore::new());
+        let mut dag_state = DagState::new(context.clone(), store.clone());
+
+        // Accept a block
+        let block = VerifiedBlock::new_for_test(
+            TestBlock::new(1, 0)
+                .set_timestamp_ms(1000)
+                .set_ancestors(vec![])
+                .build(),
+        );
+
+        dag_state.accept_block(block.clone());
+
+        // Query is committed
+        assert!(!dag_state.is_committed(&block.reference()));
+
+        // Set block as committed for first time should return true
+        assert!(
+            dag_state.set_committed(&block.reference()),
+            "Block should be successfully set as committed for first time"
+        );
+
+        // Now it should appear as committed
+        assert!(dag_state.is_committed(&block.reference()));
+
+        // Trying to set the block as committed again, it should return false.
+        assert!(
+            !dag_state.set_committed(&block.reference()),
+            "Block should not be successfully set as committed"
+        );
     }
 
     #[tokio::test]
@@ -1913,6 +2200,8 @@ mod test {
                 dag_state.accept_block(block);
             }
         }
+
+        // Test get_cached_blocks()
 
         let cached_blocks =
             dag_state.get_cached_blocks(context.committee.to_authority_index(0).unwrap(), 0);
@@ -1945,11 +2234,82 @@ mod test {
             dag_state.get_cached_blocks(context.committee.to_authority_index(3).unwrap(), 12);
         assert_eq!(cached_blocks.len(), 1);
         assert_eq!(cached_blocks[0].round(), 12);
+
+        // Test get_cached_blocks_in_range()
+
+        // Start == end
+        let cached_blocks = dag_state.get_cached_blocks_in_range(
+            context.committee.to_authority_index(3).unwrap(),
+            10,
+            10,
+            1,
+        );
+        assert!(cached_blocks.is_empty());
+
+        // Start > end
+        let cached_blocks = dag_state.get_cached_blocks_in_range(
+            context.committee.to_authority_index(3).unwrap(),
+            11,
+            10,
+            1,
+        );
+        assert!(cached_blocks.is_empty());
+
+        // Empty result.
+        let cached_blocks = dag_state.get_cached_blocks_in_range(
+            context.committee.to_authority_index(0).unwrap(),
+            9,
+            10,
+            1,
+        );
+        assert!(cached_blocks.is_empty());
+
+        // Single block, one round before the end.
+        let cached_blocks = dag_state.get_cached_blocks_in_range(
+            context.committee.to_authority_index(1).unwrap(),
+            9,
+            11,
+            1,
+        );
+        assert_eq!(cached_blocks.len(), 1);
+        assert_eq!(cached_blocks[0].round(), 10);
+
+        // Respect end round.
+        let cached_blocks = dag_state.get_cached_blocks_in_range(
+            context.committee.to_authority_index(2).unwrap(),
+            9,
+            12,
+            5,
+        );
+        assert_eq!(cached_blocks.len(), 2);
+        assert_eq!(cached_blocks[0].round(), 10);
+        assert_eq!(cached_blocks[1].round(), 11);
+
+        // Respect start round.
+        let cached_blocks = dag_state.get_cached_blocks_in_range(
+            context.committee.to_authority_index(3).unwrap(),
+            11,
+            20,
+            5,
+        );
+        assert_eq!(cached_blocks.len(), 2);
+        assert_eq!(cached_blocks[0].round(), 11);
+        assert_eq!(cached_blocks[1].round(), 12);
+
+        // Respect limit
+        let cached_blocks = dag_state.get_cached_blocks_in_range(
+            context.committee.to_authority_index(3).unwrap(),
+            10,
+            20,
+            1,
+        );
+        assert_eq!(cached_blocks.len(), 1);
+        assert_eq!(cached_blocks[0].round(), 10);
     }
 
     #[rstest]
     #[tokio::test]
-    async fn test_get_cached_last_block_per_authority(#[values(0, 1)] gc_depth: u32) {
+    async fn test_get_last_cached_block(#[values(0, 1)] gc_depth: u32) {
         // GIVEN
         const CACHED_ROUNDS: Round = 2;
         let (mut context, _) = Context::new_for_test(4);
@@ -1987,8 +2347,15 @@ mod test {
 
         let (_, dag_builder) = parse_dag(dag_str).expect("Invalid dag");
 
+        // Add equivocating block for round 2 authority 3
+        let block = VerifiedBlock::new_for_test(TestBlock::new(2, 2).build());
+
         // Accept all blocks
-        for block in dag_builder.all_blocks() {
+        for block in dag_builder
+            .all_blocks()
+            .into_iter()
+            .chain(std::iter::once(block))
+        {
             dag_state.accept_block(block);
         }
 
@@ -2002,14 +2369,50 @@ mod test {
 
         // WHEN search for the latest blocks
         let end_round = 4;
+        let expected_rounds = vec![0, 1, 2, 3];
+        let expected_excluded_and_equivocating_blocks = vec![0, 0, 1, 0];
+        // THEN
         let last_blocks = dag_state.get_last_cached_block_per_authority(end_round);
+        assert_eq!(
+            last_blocks.iter().map(|b| b.0.round()).collect::<Vec<_>>(),
+            expected_rounds
+        );
+        assert_eq!(
+            last_blocks.iter().map(|b| b.1.len()).collect::<Vec<_>>(),
+            expected_excluded_and_equivocating_blocks
+        );
 
         // THEN
-        assert_eq!(last_blocks[0].round(), 0);
-        assert_eq!(last_blocks[1].round(), 1);
-        assert_eq!(last_blocks[2].round(), 2);
-        assert_eq!(last_blocks[3].round(), 3);
+        for (i, expected_round) in expected_rounds.iter().enumerate() {
+            let round = dag_state
+                .get_last_cached_block_in_range(
+                    context.committee.to_authority_index(i).unwrap(),
+                    0,
+                    end_round,
+                )
+                .map(|b| b.round())
+                .unwrap_or_default();
+            assert_eq!(round, *expected_round, "Authority {i}");
+        }
 
+        // WHEN starting from round 2
+        let start_round = 2;
+        let expected_rounds = [0, 0, 2, 3];
+
+        // THEN
+        for (i, expected_round) in expected_rounds.iter().enumerate() {
+            let round = dag_state
+                .get_last_cached_block_in_range(
+                    context.committee.to_authority_index(i).unwrap(),
+                    start_round,
+                    end_round,
+                )
+                .map(|b| b.round())
+                .unwrap_or_default();
+            assert_eq!(round, *expected_round, "Authority {i}");
+        }
+
+        // WHEN we flush the DagState - after adding a commit with all the blocks, we expect this to trigger
         // WHEN we flush the DagState - after adding a commit with all the blocks, we expect this to trigger
         // a clean up in the internal cache. That will keep the all the blocks with rounds >= authority_commit_round - CACHED_ROUND.
         //
@@ -2019,24 +2422,41 @@ mod test {
 
         // AND we request before round 3
         let end_round = 3;
-        let last_blocks = dag_state.get_last_cached_block_per_authority(end_round);
+        let expected_rounds = vec![0, 1, 2, 2];
 
         // THEN
-        assert_eq!(last_blocks[0].round(), 0);
-        assert_eq!(last_blocks[1].round(), 1);
-        assert_eq!(last_blocks[2].round(), 2);
-        assert_eq!(last_blocks[3].round(), 2);
+        let last_blocks = dag_state.get_last_cached_block_per_authority(end_round);
+        assert_eq!(
+            last_blocks.iter().map(|b| b.0.round()).collect::<Vec<_>>(),
+            expected_rounds
+        );
+
+        // THEN
+        for (i, expected_round) in expected_rounds.iter().enumerate() {
+            let round = dag_state
+                .get_last_cached_block_in_range(
+                    context.committee.to_authority_index(i).unwrap(),
+                    0,
+                    end_round,
+                )
+                .map(|b| b.round())
+                .unwrap_or_default();
+            assert_eq!(round, *expected_round, "Authority {i}");
+        }
     }
 
     #[tokio::test]
     #[should_panic(
-        expected = "Attempted to request for blocks of rounds < 2, when the last evicted round is 1 for authority C"
+        expected = "Attempted to request for blocks of rounds < 2, when the last evicted round is 1 for authority [2]"
     )]
     async fn test_get_cached_last_block_per_authority_requesting_out_of_round_range() {
         // GIVEN
         const CACHED_ROUNDS: Round = 1;
         let (mut context, _) = Context::new_for_test(4);
         context.parameters.dag_state_cached_rounds = CACHED_ROUNDS;
+        context
+            .protocol_config
+            .set_consensus_gc_depth_for_testing(0);
 
         let context = Arc::new(context);
         let store = Arc::new(MemStore::new());
@@ -2077,7 +2497,7 @@ mod test {
 
     #[tokio::test]
     #[should_panic(
-        expected = "Attempted to request for blocks of rounds < 2, when the last evicted round is 1 for authority C"
+        expected = "Attempted to request for blocks of rounds < 2, when the last evicted round is 1 for authority [2]"
     )]
     async fn test_get_cached_last_block_per_authority_requesting_out_of_round_range_gc_enabled() {
         // GIVEN
@@ -2209,12 +2629,7 @@ mod test {
                 .find(|block| block.author() == context.own_index)
                 .unwrap();
 
-            assert_eq!(
-                dag_state
-                    .read()
-                    .get_last_block_for_authority(context.own_index),
-                my_genesis
-            );
+            assert_eq!(dag_state.read().get_last_proposed_block(), my_genesis);
         }
 
         // WHEN adding some blocks for authorities, only the last ones should be returned
@@ -2247,5 +2662,55 @@ mod test {
                 }
             }
         }
+    }
+
+    #[tokio::test]
+    #[should_panic]
+    async fn test_accept_block_panics_when_timestamp_is_ahead() {
+        // GIVEN
+        let (mut context, _) = Context::new_for_test(4);
+        context
+            .protocol_config
+            .set_consensus_median_based_commit_timestamp_for_testing(false);
+        let context = Arc::new(context);
+        let store = Arc::new(MemStore::new());
+        let mut dag_state = DagState::new(context.clone(), store.clone());
+
+        // Set a timestamp for the block that is ahead of the current time
+        let block_timestamp = context.clock.timestamp_utc_ms() + 5_000;
+
+        let block = VerifiedBlock::new_for_test(
+            TestBlock::new(10, 0)
+                .set_timestamp_ms(block_timestamp)
+                .build(),
+        );
+
+        // Try to accept the block - it will panic as accepted block timestamp is ahead of the current time
+        dag_state.accept_block(block);
+    }
+
+    #[tokio::test]
+    async fn test_accept_block_not_panics_when_timestamp_is_ahead_and_median_timestamp() {
+        // GIVEN
+        let (mut context, _) = Context::new_for_test(4);
+        context
+            .protocol_config
+            .set_consensus_median_based_commit_timestamp_for_testing(true);
+
+        let context = Arc::new(context);
+        let store = Arc::new(MemStore::new());
+        let mut dag_state = DagState::new(context.clone(), store.clone());
+
+        // Set a timestamp for the block that is ahead of the current time
+        let block_timestamp = context.clock.timestamp_utc_ms() + 5_000;
+
+        let block = VerifiedBlock::new_for_test(
+            TestBlock::new(10, 0)
+                .set_timestamp_ms(block_timestamp)
+                .build(),
+        );
+
+        // Try to accept the block - it should not panic
+        dag_state.accept_block(block);
     }
 }

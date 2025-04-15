@@ -1,0 +1,36 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: 2024.alpha
+  lint: false
+---
+error[E02010]: invalid name
+   ┌─ tests/move_2024/matching/invalid_mut.move:10:13
+   │
+10 │             mut Maybe::Nothing => (),
+   │             ^^^ -------------- Expected a valid 'enum' variant, 'struct', or 'const', not a variable
+   │             │    
+   │             'mut' can only be used with variable bindings in patterns
+
+warning[W09002]: unused variable
+   ┌─ tests/move_2024/matching/invalid_mut.move:11:17
+   │
+11 │             mut x<u64> => (),
+   │                 ^ Unused local variable 'x'. Consider removing or prefixing with an underscore: '_x'
+   │
+   = This warning can be suppressed with '#[allow(unused_variable)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+error[E02010]: invalid name
+   ┌─ tests/move_2024/matching/invalid_mut.move:11:17
+   │
+11 │             mut x<u64> => (),
+   │                 ^ Invalid type arguments on a pattern variable
+   │
+   = Type arguments cannot appear on pattern variables
+
+error[E01002]: unexpected token
+   ┌─ tests/move_2024/matching/invalid_mut.move:12:13
+   │
+12 │             mut Maybe<u64>::Just(_) => (),
+   │             ^^^ Invalid 'mut' keyword on non-variable pattern
