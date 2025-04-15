@@ -14,13 +14,16 @@ use crate::{
     error::RpcError,
 };
 
+use super::transaction::Transaction;
+
+#[derive(Clone)]
 pub(crate) struct TransactionEffects {
-    digest: TransactionDigest,
-    contents: EffectsContents,
+    pub digest: TransactionDigest,
+    pub contents: EffectsContents,
 }
 
 #[derive(Clone)]
-pub(crate) struct EffectsContents(Option<Arc<TransactionContents>>);
+pub(crate) struct EffectsContents(pub Option<Arc<TransactionContents>>);
 
 /// The results of executing a transaction.
 #[Object]
@@ -30,6 +33,11 @@ impl TransactionEffects {
     /// Note that this is different from the execution digest, which is the unique hash of the transaction effects.
     async fn digest(&self) -> String {
         Base58::encode(self.digest)
+    }
+
+    /// The transaction that ran to produce these effects.
+    async fn transaction(&self) -> Option<Transaction> {
+        Some(Transaction::from(self.clone()))
     }
 
     #[graphql(flatten)]
@@ -84,5 +92,14 @@ impl EffectsContents {
             .context("Failed to fetch transaction contents")?;
 
         Ok(Self(transaction.map(Arc::new)))
+    }
+}
+
+impl From<Transaction> for TransactionEffects {
+    fn from(tx: Transaction) -> Self {
+        Self {
+            digest: tx.digest,
+            contents: EffectsContents(tx.contents.0),
+        }
     }
 }

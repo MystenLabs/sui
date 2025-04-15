@@ -57,10 +57,12 @@ module test::counter {
 { # "Not found" cases
   transaction(digest: "11111111111111111111111111111111") {
     transactionBcs
+    effects { effectsBcs }
   }
 
   transactionEffects(digest: "11111111111111111111111111111111") {
     effectsBcs
+    transaction { transactionBcs }
   }
 }
 
@@ -68,18 +70,22 @@ module test::counter {
 { # Fetching raw transactions and their effects, separately
   transactionA: transaction(digest: "@{digest_2}") {
     transactionBcs
+    effects { effectsBcs }
   }
 
   transactionB: transaction(digest: "@{digest_3}") {
     transactionBcs
+    effects { effectsBcs }
   }
 
   effectsA: transactionEffects(digest: "@{digest_2}") {
     effectsBcs
+    transaction { transactionBcs }
   }
 
   effectsB: transactionEffects(digest: "@{digest_3}") {
     effectsBcs
+    transaction { transactionBcs }
   }
 }
 
