@@ -46,7 +46,7 @@ pub enum Kind<TWithSource, TWithout> {
 /// a `Model<WithSource>` via `Model::from_source`. If no source files are present, a model can be
 /// generated directly from the `CompiledModule`s via `Model::from_compiled`.
 pub struct Model<K: SourceKind> {
-    pub(crate) has_source: bool,
+    pub(crate) has_source: K::FromSource<()>,
     pub(crate) files: K::FromSource<MappedFiles>,
     pub(crate) root_named_address_map: BTreeMap<Symbol, AccountAddress>,
     pub(crate) root_package_name: Option<Symbol>,
@@ -216,7 +216,7 @@ impl<K: SourceKind> Model<K> {
     }
 
     pub fn kind(&self) -> Kind<&Model<WithSource>, &Model<WithoutSource>> {
-        if self.has_source {
+        if self.has_source() {
             Kind::WithSource(unsafe { std::mem::transmute::<&Self, &Model<WithSource>>(self) })
         } else {
             Kind::WithoutSource(unsafe {
@@ -280,6 +280,12 @@ impl<K: SourceKind> Model<K> {
             }
         }
     }
+
+    fn has_source(&self) -> bool {
+        let has_source =
+            unsafe { std::mem::transmute::<&K::FromSource<()>, &Option<()>>(&self.has_source) };
+        has_source.is_some()
+    }
 }
 
 impl<'a, K: SourceKind> Package<'a, K> {
@@ -324,7 +330,7 @@ impl<'a, K: SourceKind> Package<'a, K> {
     }
 
     pub fn kind(self) -> Kind<Package<'a, WithSource>, Package<'a, WithoutSource>> {
-        if self.model().has_source {
+        if self.model().has_source() {
             Kind::WithSource(unsafe { std::mem::transmute::<Self, Package<'a, WithSource>>(self) })
         } else {
             Kind::WithoutSource(unsafe {
@@ -451,7 +457,7 @@ impl<'a, K: SourceKind> Module<'a, K> {
     }
 
     pub fn kind(self) -> Kind<Module<'a, WithSource>, Module<'a, WithoutSource>> {
-        if self.model().has_source {
+        if self.model().has_source() {
             Kind::WithSource(unsafe { std::mem::transmute::<Self, Module<'a, WithSource>>(self) })
         } else {
             Kind::WithoutSource(unsafe {
@@ -487,7 +493,7 @@ impl<'a, K: SourceKind> Struct<'a, K> {
     }
 
     pub fn kind(self) -> Kind<Struct<'a, WithSource>, Struct<'a, WithoutSource>> {
-        if self.model().has_source {
+        if self.model().has_source() {
             Kind::WithSource(unsafe { std::mem::transmute::<Self, Struct<'a, WithSource>>(self) })
         } else {
             Kind::WithoutSource(unsafe {
@@ -568,7 +574,7 @@ impl<'a, K: SourceKind> Variant<'a, K> {
     }
 
     pub fn kind(self) -> Kind<Variant<'a, WithSource>, Variant<'a, WithoutSource>> {
-        if self.model().has_source {
+        if self.model().has_source() {
             Kind::WithSource(unsafe { std::mem::transmute::<Self, Variant<'a, WithSource>>(self) })
         } else {
             Kind::WithoutSource(unsafe {
@@ -615,7 +621,7 @@ impl<'a, K: SourceKind> Function<'a, K> {
     }
 
     pub fn kind(self) -> Kind<Function<'a, WithSource>, Function<'a, WithoutSource>> {
-        if self.model().has_source {
+        if self.model().has_source() {
             Kind::WithSource(unsafe { std::mem::transmute::<Self, Function<'a, WithSource>>(self) })
         } else {
             Kind::WithoutSource(unsafe {

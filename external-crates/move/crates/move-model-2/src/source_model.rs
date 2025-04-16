@@ -118,7 +118,7 @@ impl Model {
             })
             .collect();
         let mut model = Self {
-            has_source: true,
+            has_source: AlwaysSome::new(()),
             files: AlwaysSome::new(files),
             root_package_name,
             root_named_address_map,

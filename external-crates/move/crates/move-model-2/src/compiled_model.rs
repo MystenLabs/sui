@@ -42,7 +42,7 @@ impl Model {
             .map(|(a, n)| (*n, *a))
             .collect();
         let mut model = Self {
-            has_source: false,
+            has_source: AlwaysNone::new(),
             files: AlwaysNone::new(),
             root_package_name: None,
             root_named_address_map,
