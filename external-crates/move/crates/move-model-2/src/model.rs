@@ -189,6 +189,7 @@ impl<K: SourceKind> Model<K> {
         let package = self.maybe_package(&address)?;
         package.maybe_module(name)
     }
+
     pub fn module(&self, module: impl TModuleId) -> Module<K> {
         self.maybe_module(module).unwrap()
     }
@@ -1115,6 +1116,9 @@ fn annotated_constant_layout(ty: &normalized::Type) -> runtime_value::MoveTypeLa
 // Derive
 //**************************************************************************************************
 
+// We derive Clone and Copy manually to avoid needlessly requiring `Clone` and `Copy` on
+// `K: SourceKind`. This isn't super important now, but can be very annoying if we
+// ever use `dyn SourceKind` in the future.
 macro_rules! derive_all {
     ($item:ident) => {
         impl<K: SourceKind> Clone for $item<'_, K> {
