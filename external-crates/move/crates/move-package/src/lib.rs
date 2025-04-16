@@ -18,7 +18,6 @@ use move_compiler::{
 };
 use move_core_types::account_address::AccountAddress;
 use move_model_2::source_model;
-use move_model::model::GlobalEnv;
 use resolution::{dependency_graph::DependencyGraphBuilder, resolution_graph::ResolvedGraph};
 use serde::{Deserialize, Serialize};
 use source_package::{

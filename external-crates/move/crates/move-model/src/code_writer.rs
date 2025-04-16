@@ -8,9 +8,9 @@
 //!   so its on the bottom of the dependency relation, and there is no `utility` crate
 //!   where it could belong to.
 
-use std::{collections::BTreeMap, ops::Bound};
+use std::collections::BTreeMap;
 
-use codespan::{ByteIndex, ByteOffset, ColumnIndex, Files, LineIndex, RawIndex, RawOffset};
+use codespan::{ByteIndex, ByteOffset, RawIndex, RawOffset};
 
 use crate::model::Loc;
 use std::cell::RefCell;
@@ -59,10 +59,6 @@ impl CodeWriter {
             output_location_map,
             label_map: Default::default(),
         }))
-    }
-
-    pub fn get_loc(&self) -> Loc {
-        self.0.borrow().current_location.clone()
     }
 
     pub fn set_emit_hook<F>(&self, f: F)
@@ -214,29 +210,6 @@ impl CodeWriter {
             data.output.push_str(&" ".repeat(n));
         }
         data.output.push_str(s);
-    }
-
-    pub fn get_output_byte_index(&self, line: LineIndex, column: ColumnIndex) -> Option<ByteIndex> {
-        self.process_result(|s| {
-            let mut fmap = Files::new();
-            let id = fmap.add("dummy", s);
-            fmap.line_span(id, line).ok().map(|line_span| {
-                ByteIndex((line_span.start().to_usize() + column.to_usize()) as u32)
-            })
-        })
-    }
-
-    pub fn get_source_location(&self, output_index: ByteIndex) -> Option<Loc> {
-        let data = self.0.borrow();
-        if let Some(loc) = data
-            .output_location_map
-            .range((Bound::Unbounded, Bound::Included(&output_index)))
-            .next_back()
-            .map(|(_, v)| v)
-        {
-            return Some(loc.clone());
-        }
-        None
     }
 }
 
