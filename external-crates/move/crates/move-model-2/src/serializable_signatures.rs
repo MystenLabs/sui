@@ -6,9 +6,8 @@
 //! datatypes (structs and enums).
 
 use crate::{
-    TModuleId,
     normalized::{self, ModuleId},
-    source_model,
+    source_model, TModuleId,
 };
 use indexmap::IndexMap;
 use move_binary_format::file_format;
@@ -31,14 +30,20 @@ pub struct Packages {
 
 #[derive(Serialize, Deserialize)]
 pub struct Package {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(default)]
     pub name: FromSource<Symbol>,
     pub modules: BTreeMap<Symbol, Module>,
 }
 
 #[derive(Serialize, Deserialize)]
 pub struct Module {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(default)]
     pub doc: FromSource<Option<String>>,
     pub immediate_dependencies: BTreeSet<ModuleId>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(default)]
     pub attributes: FromSource<Attributes>,
     pub functions: IndexMap<Symbol, Function>,
     pub structs: IndexMap<Symbol, Struct>,
@@ -56,16 +61,24 @@ pub enum Attribute {
 
 #[derive(Serialize, Deserialize)]
 pub struct Function {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(default)]
     pub source_index: FromSource<usize>,
     /// Set to usize::max_value if the function is a macro
-    pub compiled_index: usize,
+    pub index: usize,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(default)]
     pub doc: FromSource<Option<String>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(default)]
     pub attributes: FromSource<Attributes>,
     pub visibility: Visibility,
     pub entry: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(default)]
     pub macro_: FromSource<bool>,
     pub type_parameters: Vec<TParam>,
-    pub parameters: Vec<(FromSource<Symbol>, Type)>,
+    pub parameters: Vec<Parameter>,
     pub return_: Vec<Type>,
 }
 
@@ -79,8 +92,18 @@ pub enum Visibility {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct TParam {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(default)]
     pub name: FromSource<Symbol>,
     pub constraints: AbilitySet,
+}
+
+#[derive(Serialize, Deserialize)]
+pub struct Parameter {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(default)]
+    name: FromSource<Symbol>,
+    type_: Type,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -97,7 +120,11 @@ pub enum Ability {
 #[derive(Serialize, Deserialize)]
 pub struct Struct {
     pub index: usize,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(default)]
     pub doc: FromSource<Option<String>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(default)]
     pub attributes: FromSource<Attributes>,
     pub abilities: AbilitySet,
     pub type_parameters: Vec<DatatypeTParam>,
@@ -114,7 +141,11 @@ pub struct DatatypeTParam {
 #[derive(Serialize, Deserialize)]
 pub struct Enum {
     pub index: usize,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(default)]
     pub doc: FromSource<Option<String>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(default)]
     pub attributes: FromSource<Attributes>,
     pub abilities: AbilitySet,
     pub type_parameters: Vec<DatatypeTParam>,
@@ -124,6 +155,8 @@ pub struct Enum {
 #[derive(Serialize, Deserialize)]
 pub struct Variant {
     pub index: usize,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(default)]
     pub doc: FromSource<Option<String>>,
     pub fields: Fields,
 }
@@ -138,6 +171,8 @@ pub struct Fields {
 #[derive(Serialize, Deserialize)]
 pub struct Field {
     pub index: usize,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(default)]
     pub doc: FromSource<Option<String>>,
     pub type_: Type,
 }
@@ -280,11 +315,14 @@ impl From<(usize, &normalized::Function)> for Function {
             .collect();
         let parameters = parameters
             .iter()
-            .map(|t| (None /* set by ProgramInfo */, (&**t).into()))
+            .map(|t| Parameter {
+                name: None, // set by ProgramInfo
+                type_: (&**t).into(),
+            })
             .collect();
         let return_ = return_.iter().map(|t| (&**t).into()).collect();
         Self {
-            compiled_index: index,
+            index,
             source_index: None, // set by ProgramInfo
             doc: None,          // set by ProgramInfo
             attributes: None,   // set by ProgramInfo
@@ -522,10 +560,10 @@ impl Function {
         self.parameters
             .iter_mut()
             .zip(&info.signature.parameters)
-            .for_each(|((name, ty), (_, param_name, param_ty))| {
+            .for_each(|(Parameter { name, type_ }, (_, param_name, param_ty))| {
                 debug_assert!(name.is_none());
                 *name = Some(param_name.value.name);
-                *ty = param_ty.into();
+                *type_ = param_ty.into();
             });
         self.return_ = compiler_multiple_types(&info.signature.return_type);
     }
@@ -534,7 +572,7 @@ impl Function {
         assert!(finfo.macro_.is_some());
         Self {
             source_index: Some(finfo.index),
-            compiled_index: usize::MAX,
+            index: usize::MAX,
             doc: Some(doc_comment(&finfo.doc)),
             attributes: Some(attributes(&finfo.attributes)),
             visibility: (&finfo.visibility).into(),
@@ -553,7 +591,10 @@ impl Function {
                 .signature
                 .parameters
                 .iter()
-                .map(|(_, param_name, type_)| (Some(param_name.value.name), type_.into()))
+                .map(|(_, param_name, type_)| Parameter {
+                    name: Some(param_name.value.name),
+                    type_: type_.into(),
+                })
                 .collect(),
             return_: compiler_multiple_types(&finfo.signature.return_type),
         }
