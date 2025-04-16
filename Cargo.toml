@@ -139,6 +139,7 @@ members = [
   "crates/sui-light-client",
   "crates/sui-macros",
   "crates/sui-metric-checker",
+  "crates/sui-metrics-push-client",
   "crates/sui-move",
   "crates/sui-move-build",
   "crates/sui-move-lsp",
@@ -699,6 +700,7 @@ sui-keys = { path = "crates/sui-keys" }
 sui-kvstore = { path = "crates/sui-kvstore" }
 sui-macros = { path = "crates/sui-macros" }
 sui-metric-checker = { path = "crates/sui-metric-checker" }
+sui-metrics-push-client = { path = "crates/sui-metrics-push-client" }
 sui-move = { path = "crates/sui-move" }
 sui-move-build = { path = "crates/sui-move-build" }
 sui-move-lsp = { path = "crates/sui-move-lsp" }

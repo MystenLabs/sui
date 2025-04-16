@@ -14,9 +14,9 @@ use mysten_common::sync::async_once_cell::AsyncOnceCell;
 use sui_config::node::RunWithRange;
 use sui_config::{Config, NodeConfig};
 use sui_core::runtime::SuiRuntimes;
-use sui_node::metrics;
 use sui_telemetry::send_telemetry_event;
 use sui_types::committee::EpochId;
+use sui_types::crypto::KeypairTraits;
 use sui_types::messages_checkpoint::CheckpointSequenceNumber;
 use sui_types::multiaddr::Multiaddr;
 use sui_types::supported_protocol_versions::SupportedProtocolVersions;
@@ -97,7 +97,16 @@ fn main() {
 
     {
         let _enter = runtimes.metrics.enter();
-        metrics::start_metrics_push_task(&config, registry_service.clone());
+        if let Some(metrics_config) = &config.metrics {
+            if let Some(push_url) = &metrics_config.push_url {
+                sui_metrics_push_client::start_metrics_push_task(
+                    metrics_config.push_interval_seconds,
+                    push_url.clone(),
+                    config.network_key_pair().copy(),
+                    registry_service.clone(),
+                );
+            }
+        }
     }
 
     if let Some(listen_address) = args.listen_address {

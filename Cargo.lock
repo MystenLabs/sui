@@ -8461,13 +8461,10 @@ dependencies = [
  "mysten-metrics",
  "once_cell",
  "parking_lot 0.12.3",
- "prometheus",
  "rand 0.8.5",
  "reqwest 0.12.9",
  "snap",
  "sui-macros",
- "sui-tls",
- "sui-types",
  "tempfile",
  "tokio",
  "tracing",
@@ -13145,6 +13142,7 @@ dependencies = [
  "sui-json-rpc-api",
  "sui-json-rpc-types",
  "sui-keys",
+ "sui-metrics-push-client",
  "sui-sdk",
  "sui-test-transaction-builder",
  "sui-types",
@@ -14586,6 +14584,23 @@ dependencies = [
 ]
 
 [[package]]
+name = "sui-metrics-push-client"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "fastcrypto",
+ "mysten-metrics",
+ "prometheus",
+ "reqwest 0.12.9",
+ "serde",
+ "snap",
+ "sui-tls",
+ "sui-types",
+ "tokio",
+ "tracing",
+]
+
+[[package]]
 name = "sui-move"
 version = "1.48.0"
 dependencies = [
@@ -14831,6 +14846,7 @@ dependencies = [
  "sui-json-rpc",
  "sui-json-rpc-api",
  "sui-macros",
+ "sui-metrics-push-client",
  "sui-name-service",
  "sui-network",
  "sui-protocol-config",
