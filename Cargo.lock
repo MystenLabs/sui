@@ -7938,57 +7938,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "move-prover"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "bimap",
- "clap",
- "codespan-reporting",
- "itertools 0.10.5",
- "log",
- "move-command-line-common",
- "move-compiler",
- "move-docgen",
- "move-model",
- "move-package",
- "move-prover-boogie-backend",
- "move-stackless-bytecode",
- "once_cell",
- "serde",
- "simplelog",
- "toml 0.5.11",
-]
-
-[[package]]
-name = "move-prover-boogie-backend"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "async-trait",
- "bimap",
- "codespan",
- "codespan-reporting",
- "futures",
- "itertools 0.10.5",
- "log",
- "move-binary-format",
- "move-command-line-common",
- "move-compiler",
- "move-core-types",
- "move-model",
- "move-stackless-bytecode",
- "num",
- "once_cell",
- "pretty",
- "rand 0.8.5",
- "regex",
- "serde",
- "tera",
- "tokio",
-]
-
-[[package]]
 name = "move-stackless-bytecode"
 version = "0.1.0"
 dependencies = [
@@ -15096,39 +15045,43 @@ version = "1.47.0"
 dependencies = [
  "anyhow",
  "assert_cmd",
- "better_any",
+ "async-trait",
+ "bimap",
  "bin-version",
  "clap",
+ "codespan",
  "codespan-reporting",
  "colored",
  "futures",
+ "glob",
+ "insta",
+ "itertools 0.13.0",
  "jemalloc-ctl",
  "jsonrpsee",
+ "log",
  "move-binary-format",
  "move-cli",
+ "move-command-line-common",
  "move-compiler",
  "move-core-types",
- "move-disassembler",
- "move-ir-types",
+ "move-docgen",
+ "move-model",
  "move-package",
- "move-prover",
- "move-unit-test",
- "move-vm-runtime",
- "mysten-metrics",
+ "move-stackless-bytecode",
+ "num",
+ "once_cell",
  "openai_api_rust",
+ "pretty",
  "rand 0.8.5",
  "regex",
- "sui-core",
- "sui-macros",
- "sui-move-build",
- "sui-move-natives-latest",
- "sui-node",
- "sui-protocol-config",
- "sui-simulator",
- "sui-types",
+ "serde",
+ "simplelog",
  "telemetry-subscribers",
  "tempfile",
+ "tera",
+ "termcolor",
  "tokio",
+ "toml 0.7.4",
  "tracing",
 ]
 

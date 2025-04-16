@@ -74,6 +74,6 @@ docs/content/references/framework/**
 
 lcov.info
 
-*.bpl
+output.bpl
 *.bpl.log
 .sparse

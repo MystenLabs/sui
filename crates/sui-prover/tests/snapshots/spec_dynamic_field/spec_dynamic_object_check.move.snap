@@ -1,0 +1,64 @@
+---
+source: crates/sui-prover/tests/integration.rs
+assertion_line: 128
+expression: output
+snapshot_kind: text
+---
+exiting with bytecode transformation errors
+warning: unused variable
+   ┌─ tests/inputs/spec_dynamic_field/spec_dynamic_object_check.move:14:23
+   │
+14 │     fun sqrt(x: u128, ctx: &mut TxContext): u64 {
+   │                       ^^^ Unused parameter 'ctx'. Consider removing or prefixing with an underscore: '_ctx'
+   │
+   = This warning can be suppressed with '#[allow(unused_variable)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning: unused mutable reference '&mut' parameter
+   ┌─ tests/inputs/spec_dynamic_field/spec_dynamic_object_check.move:14:28
+   │
+14 │     fun sqrt(x: u128, ctx: &mut TxContext): u64 {
+   │                       ---  ^^^^^^^^^^^^^^ Mutable reference is never used mutably, consider switching to an immutable reference '&' instead
+   │                       │     
+   │                       For parameters, this can be silenced by prefixing the name with an underscore, e.g. '_ctx'
+   │
+   = This warning can be suppressed with '#[allow(unused_mut_parameter)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning: unused 'mut' modifiers
+   ┌─ tests/inputs/spec_dynamic_field/spec_dynamic_object_check.move:31:17
+   │
+31 │         let mut parent_ref = &mut parent;
+   │             --- ^^^^^^^^^^ The variable 'parent_ref' is never used mutably
+   │             │    
+   │             Consider removing the 'mut' declaration here
+   │
+   = This warning can be suppressed with '#[allow(unused_let_mut)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+error: Consider removing non-pure calls form spec
+   ┌─ tests/inputs/spec_dynamic_field/spec_dynamic_object_check.move:29:25
+   │
+29 │         let parent_id = object::new(ctx);
+   │                         ^^^^^^^^^^^^^^^^
+
+error: Consider removing non-pure calls form spec
+   ┌─ tests/inputs/spec_dynamic_field/spec_dynamic_object_check.move:33:28
+   │
+33 │         let dof_child_id = object::new(ctx);
+   │                            ^^^^^^^^^^^^^^^^
+
+error: Consider removing non-pure calls form spec
+   ┌─ tests/inputs/spec_dynamic_field/spec_dynamic_object_check.move:37:9
+   │
+37 │         ofield::add(&mut parent_ref.id, dfo_name, dfo_child);
+   │         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+error: Consider removing non-pure calls form spec
+   ┌─ tests/inputs/spec_dynamic_field/spec_dynamic_object_check.move:42:9
+   │
+42 │         transfer::share_object(parent);
+   │         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+error: Function uses unsupported dynamic fields
+   ┌─ tests/inputs/spec_dynamic_field/spec_dynamic_object_check.move:37:9
+   │
+37 │         ofield::add(&mut parent_ref.id, dfo_name, dfo_child);
+   │         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^

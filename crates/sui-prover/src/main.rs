@@ -8,6 +8,9 @@ use tracing::debug;
 mod prove;
 mod llm_explain;
 mod prompts;
+mod generator;
+mod generator_options;
+mod boogie_backend;
 
 bin_version::bin_version!();
 

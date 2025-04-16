@@ -1,0 +1,13 @@
+[package]
+name = "integration-test"
+version = "0.0.1"
+published-at = "0x2"
+edition = "2024.beta"
+
+[dependencies]
+MoveStdlib = { local = "../../sui-framework/packages/move-stdlib", override = true }
+Prover = { local = "../../sui-framework/packages/prover", override = true }
+Sui = { local = "../../sui-framework/packages/sui-framework", override = true }
+
+[addresses]
+integration-test = "0x9"
