@@ -98,11 +98,11 @@ fun test_u256() {
 #[test]
 fun test_address() {
     cases!(
+        // prettier-ignore
         vector[
             @0x0,
             @0x1,
-            @0xFFFF,
-            _FFFF_FFFF_FFFF_FFFF_FFFF_FFFF_FFFF_FFFF_FFFF_FFFF_FFFF_FFFF_FFFF_FFFF_FFFF,
+            @0xFFFF_FFFF_FFFF_FFFF_FFFF_FFFF_FFFF_FFFF_FFFF_FFFF_FFFF_FFFF_FFFF_FFFF_FFFF_FFFF,
         ],
         |bytes| bytes.peel_address(),
     );
