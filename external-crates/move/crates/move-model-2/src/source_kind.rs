@@ -25,9 +25,17 @@ pub struct WithoutSource;
 
 impl private::Sealed for WithoutSource {}
 impl SourceKind for WithoutSource {
-    // We use `MaybeUninit` to ensure it has the same size as `T` which allows for upcasting from
+    // We use `Uninit` to ensure it has the same size as `T` which allows for upcasting from
     // `WithoutSource`` to `AnyKind`` safely.
-    type FromSource<T> = MaybeUninit<T>;
+    type FromSource<T> = Uninit<T>;
+}
+
+pub struct Uninit<T>(MaybeUninit<T>);
+
+impl<T> Uninit<T> {
+    pub fn new() -> Self {
+        Self(MaybeUninit::uninit())
+    }
 }
 
 #[derive(Clone, Copy)]

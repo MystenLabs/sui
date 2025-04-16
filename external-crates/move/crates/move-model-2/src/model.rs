@@ -4,14 +4,13 @@
 use std::{
     cell::OnceCell,
     collections::{BTreeMap, BTreeSet},
-    mem::MaybeUninit,
     sync::Arc,
 };
 
 use crate::{
     normalized::{self, ModuleId, QualifiedMemberId, TModuleId},
     serializable_signatures,
-    source_kind::{AnyKind, SourceKind, WithSource, WithoutSource},
+    source_kind::{AnyKind, SourceKind, Uninit, WithSource, WithoutSource},
     source_model,
 };
 use indexmap::IndexMap;
@@ -1004,13 +1003,13 @@ impl ModuleData<WithoutSource> {
             .map(|name| (name, FunctionData::new()))
             .collect();
         Self {
-            ident: MaybeUninit::uninit(),
+            ident: Uninit::new(),
             structs,
             enums,
             functions,
             constants,
-            named_constants: MaybeUninit::uninit(),
-            constant_names: MaybeUninit::uninit(),
+            named_constants: Uninit::new(),
+            constant_names: Uninit::new(),
             // computed later
             deps: BTreeMap::new(),
             used_by: BTreeMap::new(),
