@@ -5,7 +5,6 @@
 module sui::prover_tests;
 
 use sui::dynamic_field;
-use sui::dynamic_object_field;
 
 public struct Obj has key, store {
     id: UID,
