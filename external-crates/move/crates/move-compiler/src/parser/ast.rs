@@ -164,14 +164,15 @@ pub struct UseDecl {
 // Attributes
 //**************************************************************************************************
 
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum AttributeValue_ {
     Value(Value),
     ModuleAccess(NameAccessChain),
 }
+
 pub type AttributeValue = Spanned<AttributeValue_>;
 
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ParsedAttribute_ {
     Name(Name),
     Assigned(Name, Box<AttributeValue>),
@@ -180,18 +181,21 @@ pub enum ParsedAttribute_ {
 
 pub type ParsedAttribute = Spanned<ParsedAttribute_>;
 
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum ExpectedFailureKind_ {
+    Name(Name),
+    MajorStatus(Value),
+    AbortCode(AttributeValue),
+}
+
+pub type ExpectedFailureKind = Spanned<ExpectedFailureKind_>;
+
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Attribute_ {
     BytecodeInstruction,
-    DefinesPrimtive(Name),
+    DefinesPrimitive(Name),
     Deprecation {
         note: Option<Value>,
-    },
-    Diagnostic {
-        /// Optional prefix, such as `lint(freeze_wrapped)` or top-level `unused-assigment`.
-        allow_set: BTreeSet<(Option<Name>, Name)>,
-        /// Indicates this was from a `#[lint_allow(...)]` form.
-        lint_allow: bool,
     },
     Error {
         code: Option<Value>,
@@ -203,14 +207,19 @@ pub enum Attribute_ {
         kind: Name,
     },
     VerifyOnly,
+    // -- diagnostic attributes ------------------
+    Allow {
+        allow_set: BTreeSet<(Option<Name>, Name)>,
+    },
+    LintAllow {
+        allow_set: BTreeSet<Name>,
+    },
     // -- testing attributes  --------------------
     Test,
     TestOnly,
     ExpectedFailure {
-        failure_kind: Option<Name>,
-        abort_code: Option<AttributeValue>,
-        major_status: Option<Value>,
-        minor_status: Option<Value>,
+        failure_kind: ExpectedFailureKind,
+        minor_status: Option<AttributeValue>,
         location: Option<NameAccessChain>,
     },
     RandomTest,
@@ -417,7 +426,7 @@ pub struct Constant {
 //**************************************************************************************************
 
 // A single name with optional type arguments that may be a macro call.
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct PathEntry {
     pub name: Name,
     pub tyargs: Option<Spanned<Vec<Type>>>,
@@ -427,7 +436,7 @@ pub struct PathEntry {
 // A path root.
 // For now these should never have tyargs or macro call set (though the type arguments will be
 // used for enums).
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct RootPathEntry {
     pub name: LeadingNameAccess,
     pub tyargs: Option<Spanned<Vec<Type>>>,
@@ -435,7 +444,7 @@ pub struct RootPathEntry {
 }
 
 // INVARIANT: entries should be non-zero, or this should be converted to a `SingleName`.
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct NamePath {
     pub root: RootPathEntry,
     pub entries: Vec<PathEntry>,
@@ -445,7 +454,7 @@ pub struct NamePath {
 
 // See the NameAccess trait below for usage.
 // INVARIANT: never push onto a Single. A Single is a final form, demoted from a Path.
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum NameAccessChain_ {
     Single(PathEntry),
     Path(NamePath),
@@ -465,7 +474,7 @@ pub enum Ability_ {
 }
 pub type Ability = Spanned<Ability_>;
 
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Type_ {
     // N
     // N<t1, ... , tn>
@@ -520,7 +529,7 @@ pub type BindWithRangeList = Spanned<Vec<BindWithRange>>;
 pub type LambdaBindings_ = Vec<(BindList, Option<Type>)>;
 pub type LambdaBindings = Spanned<LambdaBindings_>;
 
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Value_ {
     // @<num>
     Address(LeadingNameAccess),
@@ -824,11 +833,22 @@ impl fmt::Debug for LeadingNameAccess_ {
 //**************************************************************************************************
 
 impl Attribute_ {
-    pub fn attribute_name(&self) -> &Name {
+    pub fn attribute_name(&self) -> &'static str {
+        use crate::shared::known_attributes::AttributeKind_ as AK;
         match self {
-            Attribute_::Name(nm)
-            | Attribute_::Assigned(nm, _)
-            | Attribute_::Parameterized(nm, _) => nm,
+            Attribute_::BytecodeInstruction => AK::BytecodeInstruction.name(),
+            Attribute_::DefinesPrimitive(..) => AK::DefinesPrimitive.name(),
+            Attribute_::Deprecation { .. } => AK::Deprecation.name(),
+            Attribute_::Error { .. } => AK::Error.name(),
+            Attribute_::External { .. } => AK::External.name(),
+            Attribute_::Syntax { .. } => AK::Syntax.name(),
+            Attribute_::VerifyOnly => AK::VerifyOnly.name(),
+            Attribute_::Allow { .. } => AK::Allow.name(),
+            Attribute_::LintAllow { .. } => AK::LintAllow.name(),
+            Attribute_::Test => AK::Test.name(),
+            Attribute_::TestOnly => AK::TestOnly.name(),
+            Attribute_::ExpectedFailure { .. } => AK::ExpectedFailure.name(),
+            Attribute_::RandomTest => AK::RandTest.name(),
         }
     }
 }
@@ -1527,23 +1547,7 @@ impl AstDebug for AttributeValue_ {
 
 impl AstDebug for Attribute_ {
     fn ast_debug(&self, w: &mut AstWriter) {
-        match self {
-            Attribute_::Name(n) => w.write(format!("{}", n)),
-            Attribute_::Assigned(n, v) => {
-                w.write(format!("{}", n));
-                w.write(" = ");
-                v.ast_debug(w);
-            }
-            Attribute_::Parameterized(n, inners) => {
-                w.write(format!("{}", n));
-                w.write("(");
-                w.list(&inners.value, ", ", |w, inner| {
-                    inner.ast_debug(w);
-                    false
-                });
-                w.write(")");
-            }
-        }
+        todo!()
     }
 }
 

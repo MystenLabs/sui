@@ -10,7 +10,7 @@ use crate::{
     diag,
     diagnostics::{codes::Category, Diagnostic, DiagnosticReporter, Diagnostics},
     editions::{Edition, FeatureGate, UPGRADE_NOTE},
-    parser::{ast::*, lexer::*, token_set::*},
+    parser::{ast::*, attributes::to_known_attributes, format_one_of, lexer::*, token_set::*},
     shared::{string_utils::*, *},
 };
 
@@ -18,8 +18,6 @@ use move_command_line_common::files::FileHash;
 use move_ir_types::location::*;
 use move_proc_macros::growing_stack;
 use move_symbol_pool::{symbol, Symbol};
-
-use super::format_one_of;
 
 pub(crate) struct Context<'env, 'lexer, 'input> {
     current_package: Option<Symbol>,
@@ -1107,7 +1105,7 @@ fn parse_attribute_value(context: &mut Context) -> Result<AttributeValue, Box<Di
 //          | <Identifier>
 //          | <Identifier> "=" <AttributeValue>
 //          | <Identifier> "(" Comma<Attribute> ")"
-fn parse_attribute(context: &mut Context) -> Result<Attribute, Box<Diagnostic>> {
+fn parse_attribute(context: &mut Context) -> Result<ParsedAttribute, Box<Diagnostic>> {
     let start_loc = context.tokens.start_loc();
     let n = match context.tokens.peek() {
         // hack for `#[syntax(for)]` attribute
@@ -1122,7 +1120,7 @@ fn parse_attribute(context: &mut Context) -> Result<Attribute, Box<Diagnostic>> 
     let attr_ = match context.tokens.peek() {
         Tok::Equal => {
             context.tokens.advance()?;
-            Attribute_::Assigned(n, Box::new(parse_attribute_value(context)?))
+            ParsedAttribute_::Assigned(n, Box::new(parse_attribute_value(context)?))
         }
         Tok::LParen => {
             let args_ = parse_comma_list(
@@ -1134,12 +1132,12 @@ fn parse_attribute(context: &mut Context) -> Result<Attribute, Box<Diagnostic>> 
                 "attribute",
             );
             let end_loc = context.tokens.previous_end_loc();
-            Attribute_::Parameterized(
+            ParsedAttribute_::Parameterized(
                 n,
                 spanned(context.tokens.file_hash(), start_loc, end_loc, args_),
             )
         }
-        _ => Attribute_::Name(n),
+        _ => ParsedAttribute_::Name(n),
     };
     let end_loc = context.tokens.previous_end_loc();
     Ok(spanned(
@@ -1175,7 +1173,17 @@ fn parse_attributes(context: &mut Context) -> Result<Vec<Attributes>, Box<Diagno
         ));
         context.tokens.restore_doc_comment(saved_doc_comments);
     }
-    Ok(attributes_vec)
+    let attributes = attributes_vec
+        .into_iter()
+        .map(|sp!(loc, attrs)| {
+            let attrs = attrs
+                .into_iter()
+                .flat_map(|attr| to_known_attributes(context, attr))
+                .collect::<Vec<_>>();
+            sp(loc, attrs)
+        })
+        .collect::<Vec<_>>();
+    Ok(attributes)
 }
 
 //**************************************************************************************************

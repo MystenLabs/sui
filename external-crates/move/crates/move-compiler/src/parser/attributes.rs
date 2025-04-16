@@ -1,14 +1,14 @@
 // Copyright (c) The Move Contributors
 // SPDX-License-Identifier: Apache-2.0
 
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::BTreeSet;
 
 use crate::{
     diag,
     parser::{
         ast::{
-            Attribute, AttributeValue, AttributeValue_, Attribute_, NameAccessChain,
-            ParsedAttribute, ParsedAttribute_, Value,
+            Attribute, AttributeValue, AttributeValue_, Attribute_, ExpectedFailureKind,
+            ExpectedFailureKind_, NameAccessChain, ParsedAttribute, ParsedAttribute_,
         },
         format_one_of,
         syntax::Context,
@@ -23,32 +23,10 @@ use crate::{
 };
 
 use move_ir_types::location::*;
-use move_symbol_pool::Symbol;
-
-// CURRENTLY SUPPORTED ATTRIBUTES
-//
-//  DefinesPrimtive(NameAccessChain),
-//  Deprecation { note: Option<Name> },
-//  Diagnostic { lint: bool, allows: BTreeSet<Name> },
-//  Error { code: Option<Value> },
-//  External { attr: ParsedAttribute },
-//  Syntax { kind: Name },
-//  VerifyOnly,
-//  // -- testing attributes  --------------------
-//  Test,
-//  TestOnly,
-//  ExpectedFailure {
-//      error_kine: Option<Name>,
-//      code: Option<AttributeValue>,
-//      major_status: Option<Value>,
-//      minor_status: Option<Value>,
-//      location: Option<NameAccessChain>
-//  },
-//  RandomTest,
 
 /// Converts a parsed attribute to a known Attribute, or leaves it as an Unknown attribute.
 /// Some attributes may induce a number of internal attributes for easier handling later.
-pub(crate) fn maybe_to_known_attribute(
+pub(crate) fn to_known_attributes(
     context: &mut Context,
     attribute: ParsedAttribute,
 ) -> Vec<Attribute> {
@@ -154,7 +132,7 @@ fn parse_defines_prim(context: &mut Context, attribute: ParsedAttribute) -> Vec<
             let Some(name) = expect_name_attr(context, inner_attr) else {
                 return vec![];
             };
-            let prim_attr = sp(loc, Attribute_::DefinesPrimtive(name));
+            let prim_attr = sp(loc, Attribute_::DefinesPrimitive(name));
             vec![prim_attr]
         }
     }
@@ -280,13 +258,7 @@ fn parse_allow(context: &mut Context, attribute: ParsedAttribute) -> Vec<Attribu
                     }
                 }
             }
-            let diagnostic = sp(
-                loc,
-                Attribute_::Diagnostic {
-                    allow_set,
-                    lint_allow: false,
-                },
-            );
+            let diagnostic = sp(loc, Attribute_::Allow { allow_set });
             vec![diagnostic]
         }
         PA::Name(_) | PA::Assigned(_, _) => {
@@ -311,24 +283,16 @@ fn parse_lint_allow(context: &mut Context, attribute: ParsedAttribute) -> Vec<At
             let prefix_loc = name.loc;
             let sp!(_, lint_attrs) = inner_attrs;
             let mut allow_set = BTreeSet::new();
-            let lint_prefix = sp(prefix_loc, Symbol::from(KA::DiagnosticAttribute::LINT));
             for lint_attr in lint_attrs.into_iter() {
                 let attr_loc = lint_attr.loc;
                 if let Some(lint_name) = expect_name_attr(context, lint_attr) {
-                    let pair = (Some(lint_prefix), lint_name);
-                    if !allow_set.insert(pair) {
+                    if !allow_set.insert(lint_name) {
                         let msg = format!("Duplicate lint '{}'", lint_name);
                         context.add_diag(diag!(Declarations::InvalidAttribute, (attr_loc, msg)));
                     }
                 }
             }
-            let diagnostic = sp(
-                loc,
-                Attribute_::Diagnostic {
-                    allow_set,
-                    lint_allow: false,
-                },
-            );
+            let diagnostic = sp(loc, Attribute_::LintAllow { allow_set });
             vec![diagnostic]
         }
         PA::Name(_) | PA::Assigned(_, _) => {
@@ -519,11 +483,24 @@ fn parse_expected_failure(context: &mut Context, attribute: ParsedAttribute) -> 
     let sp!(_inner_loc, args) = inner_args;
 
     // Initialize fields of ExpectedFailure with default values.
-    let mut failure_kind: Option<Name> = None;
-    let mut abort_code: Option<AttributeValue> = None;
-    let mut major_status: Option<Value> = None;
-    let mut minor_status: Option<Value> = None;
+    let mut failure_kind: Option<ExpectedFailureKind> = None;
+    let mut minor_status: Option<AttributeValue> = None;
     let mut location_field: Option<NameAccessChain> = None;
+
+    macro_rules! check_failure_kind_unset {
+        ($arg_loc:expr) => {
+            if let Some(kind) = &failure_kind {
+                let msg = format!("Second failure kind given for expected failure");
+                let prev_msg = format!("Previously defiend here");
+                context.add_diag(diag!(
+                    Declarations::InvalidAttribute,
+                    ($arg_loc.clone(), msg),
+                    (kind.loc.clone(), prev_msg)
+                ));
+                continue;
+            }
+        };
+    }
 
     let mut assigned_fields: BTreeSet<Name> = BTreeSet::new();
     for sp!(arg_loc, arg_value) in args {
@@ -533,7 +510,7 @@ fn parse_expected_failure(context: &mut Context, attribute: ParsedAttribute) -> 
                 if !EXPECTED_FAILURE_EXPECTED_NAMES.contains(name.value.as_str()) {
                     let msg = format!(
                         "Invalid failure kind, expected one of: {}",
-                        format_one_of(EXPECTED_FAILURE_EXPECTED_NAMES.iter())
+                        format_one_of(KA::TestingAttribute::expected_failure_cases())
                     );
                     context.add_diag(diag!(
                         Declarations::InvalidAttribute,
@@ -541,17 +518,8 @@ fn parse_expected_failure(context: &mut Context, attribute: ParsedAttribute) -> 
                     ));
                     continue;
                 };
-                if let Some(kind) = failure_kind {
-                    let msg = format!("Second failure kind given for expected failure");
-                    let prev_msg = format!("Previously defiend here");
-                    context.add_diag(diag!(
-                        Declarations::InvalidAttribute,
-                        (arg_loc.clone(), msg),
-                        (kind.loc.clone(), prev_msg)
-                    ));
-                    continue;
-                }
-                failure_kind = Some(name);
+                check_failure_kind_unset!(arg_loc);
+                failure_kind = Some(sp(arg_loc, ExpectedFailureKind_::Name(name)));
             }
             // Assignment form: expected to be one of the allowed keys.
             PA::Assigned(_, _) => {
@@ -576,10 +544,16 @@ fn parse_expected_failure(context: &mut Context, attribute: ParsedAttribute) -> 
                         |expected| format!("Field '{}' must be a {}", key.value, expected);
                     match key.value.as_str() {
                         "abort_code" => {
-                            abort_code = Some(value);
+                            check_failure_kind_unset!(arg_loc);
+                            failure_kind =
+                                Some(sp(arg_loc, ExpectedFailureKind_::AbortCode(value)));
                         }
                         "major_status" => match value.value {
-                            AttributeValue_::Value(v) => major_status = Some(v),
+                            AttributeValue_::Value(v) => {
+                                check_failure_kind_unset!(arg_loc);
+                                failure_kind =
+                                    Some(sp(arg_loc, ExpectedFailureKind_::MajorStatus(v)));
+                            }
                             AttributeValue_::ModuleAccess(_) => {
                                 context.add_diag(diag!(
                                     Declarations::InvalidAttribute,
@@ -587,15 +561,7 @@ fn parse_expected_failure(context: &mut Context, attribute: ParsedAttribute) -> 
                                 ));
                             }
                         },
-                        "minor_status" => match value.value {
-                            AttributeValue_::Value(v) => minor_status = Some(v),
-                            AttributeValue_::ModuleAccess(_) => {
-                                context.add_diag(diag!(
-                                    Declarations::InvalidAttribute,
-                                    (arg_loc.clone(), err_msg("literal value"))
-                                ));
-                            }
-                        },
+                        "minor_status" => minor_status = Some(value),
                         "location" => match value.value {
                             AttributeValue_::ModuleAccess(nac) => location_field = Some(nac),
                             AttributeValue_::Value(_) => {
@@ -625,17 +591,24 @@ fn parse_expected_failure(context: &mut Context, attribute: ParsedAttribute) -> 
             }
         }
     }
-    let expected_failure_attr = sp(
-        loc,
-        Attribute_::ExpectedFailure {
-            failure_kind,
-            abort_code,
-            major_status,
-            minor_status,
-            location: location_field,
-        },
-    );
-    vec![expected_failure_attr]
+    if let Some(failure_kind) = failure_kind {
+        let expected_failure_attr = sp(
+            loc,
+            Attribute_::ExpectedFailure {
+                failure_kind,
+                minor_status,
+                location: location_field,
+            },
+        );
+        vec![expected_failure_attr]
+    } else {
+        let msg = format!(
+            "Invalid '#[expected_failure(...)]' attribute, no failure kind found. Expected one of: {}",
+            format_one_of(KA::TestingAttribute::expected_failure_cases())
+        );
+        context.add_diag(diag!(Attributes::InvalidValue, (loc, msg)));
+        vec![]
+    }
 }
 
 fn parse_syntax(context: &mut Context, attribute: ParsedAttribute) -> Vec<Attribute> {

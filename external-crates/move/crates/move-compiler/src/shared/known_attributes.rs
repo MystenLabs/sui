@@ -2,12 +2,13 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
-    expansion::ast::{ModuleAccess, Value},
-    parser::ast::ParsedAttribute,
+    expansion::ast::{Address, ModuleAccess, ModuleIdent, Value},
     shared::Name,
+    shared::{ast_debug::AstWriter, unique_map::UniqueMap, AstDebug, TName},
 };
 
-use move_ir_types::{ast::ModuleIdent, location::Spanned};
+use move_core_types::vm_status::StatusCode;
+use move_ir_types::location::*;
 use once_cell::sync::Lazy;
 use std::{collections::BTreeSet, fmt};
 
@@ -15,7 +16,7 @@ use std::{collections::BTreeSet, fmt};
 // Types
 // -------------------------------------------------------------------------------------------------
 
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum KnownAttribute {
     BytecodeInstruction(BytecodeInstructionAttribute),
     DefinesPrimitive(DefinesPrimitiveAttribute),
@@ -28,47 +29,72 @@ pub enum KnownAttribute {
     Verification(VerificationAttribute),
 }
 
+/// A full summary of all attribute kinds, used for looking up an individual attribute and
+/// organizing them into sets.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+pub enum AttributeKind_ {
+    Allow,
+    BytecodeInstruction,
+    DefinesPrimitive,
+    Deprecation,
+    Error,
+    ExpectedFailure,
+    External,
+    LintAllow,
+    RandTest,
+    Syntax,
+    Test,
+    TestOnly,
+    VerifyOnly,
+}
+
+pub type AttributeKind = Spanned<AttributeKind_>;
+
 // -----------------------------------------------
 // Individual Attributes
 // -----------------------------------------------
 
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 /// It is a fake native function that actually compiles to a bytecode instruction
 pub struct BytecodeInstructionAttribute;
 
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct DefinesPrimitiveAttribute {
-    name: Name,
+    pub name: Name,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 /// Deprecated spec only annotation
 pub struct DeprecationAttribute {
-    note: Option<Value>,
+    pub note: Option<Value>,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
-pub struct DiagnosticAttribute {
-    allow_set: BTreeSet<(Option<Name>, Name)>,
-    from_lint_allow: bool,
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum DiagnosticAttribute {
+    Allow {
+        allow_set: BTreeSet<(Option<Name>, Name)>,
+    },
+    LintAllow {
+        allow_set: BTreeSet<Name>,
+    },
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ErrorAttribute {
-    code: Option<u8>,
+    pub code: Option<u8>,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ExternalAttribute {
-    attrs: Spanned<Vec<ParsedAttribute>>,
+    pub attrs: ExternalAttributeEntries,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SyntaxAttribute {
-    kind: Name,
+    pub kind: Name,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum TestingAttribute {
     // Is a test that will be run
     Test,
@@ -80,31 +106,52 @@ pub enum TestingAttribute {
     RandTest,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ExpectedFailure {
-    KnownFailure {
-        kind: Name,
-        location: ModuleIdent,
-    },
-    AbortCodeFailure {
-        abort_code: u64,
-        location: ModuleIdent,
-    },
-    ConstantAbortCodeFailure {
-        constant: ModuleAccess,
-    },
-    StatusCodeFailure {
-        major_code: u64,
-        minor_code: Option<u64>,
+    Expected,
+    ExpectedWithCodeDEPRECATED(u64),
+    ExpectedWithError {
+        status_code: StatusCode,
+        minor_code: Option<MinorCode>,
         location: ModuleIdent,
     },
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum MinorCode {
+    Value(u64),
+    Constant(ModuleIdent, Name),
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum VerificationAttribute {
     /// Deprecated spec verification annotation
     VerifyOnly,
 }
+
+// -----------------------------------------------
+// External Attributes
+// -----------------------------------------------
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum ExternalAttributeValue_ {
+    Value(Value),
+    Address(Address),
+    Module(ModuleIdent),
+    ModuleAccess(ModuleAccess),
+}
+pub type ExternalAttributeValue = Spanned<ExternalAttributeValue_>;
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum ExternalAttributeEntry_ {
+    Name(Name),
+    Assigned(Name, Box<ExternalAttributeValue>),
+    Parameterized(Name, ExternalAttributeEntries),
+}
+
+pub type ExternalAttributeEntry = Spanned<ExternalAttributeEntry_>;
+
+pub type ExternalAttributeEntries = UniqueMap<Name, ExternalAttributeEntry>;
 
 // -----------------------------------------------
 // Attribute Positions
@@ -140,6 +187,28 @@ impl AttributePosition {
     ];
 }
 
+impl AttributeKind_ {
+    pub const fn name(&self) -> &'static str {
+        match self {
+            AttributeKind_::BytecodeInstruction => {
+                BytecodeInstructionAttribute::BYTECODE_INSTRUCTION
+            }
+            AttributeKind_::Allow => DiagnosticAttribute::ALLOW,
+            AttributeKind_::DefinesPrimitive => DefinesPrimitiveAttribute::DEFINES_PRIM,
+            AttributeKind_::Deprecation => DeprecationAttribute::DEPRECATED,
+            AttributeKind_::Error => ErrorAttribute::ERROR,
+            AttributeKind_::ExpectedFailure => TestingAttribute::EXPECTED_FAILURE,
+            AttributeKind_::External => ExternalAttribute::EXTERNAL,
+            AttributeKind_::LintAllow => DiagnosticAttribute::LINT_ALLOW,
+            AttributeKind_::RandTest => TestingAttribute::RAND_TEST,
+            AttributeKind_::Syntax => SyntaxAttribute::SYNTAX,
+            AttributeKind_::Test => TestingAttribute::TEST,
+            AttributeKind_::TestOnly => TestingAttribute::TEST_ONLY,
+            AttributeKind_::VerifyOnly => VerificationAttribute::VERIFY_ONLY,
+        }
+    }
+}
+
 impl KnownAttribute {
     pub const fn name(&self) -> &str {
         match self {
@@ -168,6 +237,20 @@ impl KnownAttribute {
             Self::Testing(attr) => attr.expected_positions(),
         }
     }
+
+    pub fn attribute_kind(&self) -> AttributeKind_ {
+        match self {
+            Self::BytecodeInstruction(attr) => attr.attribute_kind(),
+            Self::DefinesPrimitive(attr) => attr.attribute_kind(),
+            Self::Deprecation(attr) => attr.attribute_kind(),
+            Self::Diagnostic(attr) => attr.attribute_kind(),
+            Self::Error(attr) => attr.attribute_kind(),
+            Self::External(attr) => attr.attribute_kind(),
+            Self::Syntax(attr) => attr.attribute_kind(),
+            Self::Verification(attr) => attr.attribute_kind(),
+            Self::Testing(attr) => attr.attribute_kind(),
+        }
+    }
 }
 
 impl BytecodeInstructionAttribute {
@@ -182,6 +265,10 @@ impl BytecodeInstructionAttribute {
             Lazy::new(|| IntoIterator::into_iter([AttributePosition::Function]).collect());
         &BYTECODE_INSTRUCTION_POSITIONS
     }
+
+    pub fn attribute_kind(&self) -> AttributeKind_ {
+        AttributeKind_::BytecodeInstruction
+    }
 }
 
 impl DefinesPrimitiveAttribute {
@@ -195,6 +282,10 @@ impl DefinesPrimitiveAttribute {
         static DEFINES_PRIM_POSITIONS: Lazy<BTreeSet<AttributePosition>> =
             Lazy::new(|| IntoIterator::into_iter([AttributePosition::Module]).collect());
         &DEFINES_PRIM_POSITIONS
+    }
+
+    pub fn attribute_kind(&self) -> AttributeKind_ {
+        AttributeKind_::DefinesPrimitive
     }
 }
 
@@ -218,6 +309,10 @@ impl DeprecationAttribute {
         });
         &DEPRECATION_POSITIONS
     }
+
+    pub fn attribute_kind(&self) -> AttributeKind_ {
+        AttributeKind_::Deprecation
+    }
 }
 
 pub static DEPRECATED_EXPECTED_KEYS: Lazy<BTreeSet<String>> = Lazy::new(|| {
@@ -232,10 +327,9 @@ impl DiagnosticAttribute {
     pub const LINT_ALLOW: &'static str = "lint_allow";
 
     pub const fn name(&self) -> &str {
-        if self.from_lint_allow {
-            Self::LINT_ALLOW
-        } else {
-            Self::ALLOW
+        match self {
+            DiagnosticAttribute::Allow { .. } => Self::LINT_ALLOW,
+            DiagnosticAttribute::LintAllow { .. } => Self::ALLOW,
         }
     }
 
@@ -251,6 +345,13 @@ impl DiagnosticAttribute {
         });
         &ALLOW_WARNING_POSITIONS
     }
+
+    pub fn attribute_kind(&self) -> AttributeKind_ {
+        match self {
+            DiagnosticAttribute::Allow { .. } => AttributeKind_::Allow,
+            DiagnosticAttribute::LintAllow { .. } => AttributeKind_::LintAllow,
+        }
+    }
 }
 
 impl ErrorAttribute {
@@ -265,6 +366,10 @@ impl ErrorAttribute {
         static ERROR_POSITIONS: Lazy<BTreeSet<AttributePosition>> =
             Lazy::new(|| BTreeSet::from([AttributePosition::Constant]));
         &ERROR_POSITIONS
+    }
+
+    pub fn attribute_kind(&self) -> AttributeKind_ {
+        AttributeKind_::Error
     }
 }
 
@@ -286,6 +391,20 @@ impl ExternalAttribute {
             Lazy::new(|| AttributePosition::ALL.iter().copied().collect());
         &DEFINES_PRIM_POSITIONS
     }
+
+    pub fn attribute_kind(&self) -> AttributeKind_ {
+        AttributeKind_::External
+    }
+}
+
+impl ExternalAttributeEntry_ {
+    pub fn name(&self) -> Name {
+        match self {
+            ExternalAttributeEntry_::Name(name)
+            | ExternalAttributeEntry_::Assigned(name, _)
+            | ExternalAttributeEntry_::Parameterized(name, _) => *name,
+        }
+    }
 }
 
 impl SyntaxAttribute {
@@ -306,6 +425,10 @@ impl SyntaxAttribute {
 
     pub fn expected_syntax_cases() -> &'static [&'static str] {
         &[Self::INDEX, Self::FOR, Self::ASSIGN]
+    }
+
+    pub fn attribute_kind(&self) -> AttributeKind_ {
+        AttributeKind_::Syntax
     }
 }
 
@@ -364,6 +487,15 @@ impl TestingAttribute {
             Self::MAJOR_STATUS_NAME,
         ]
     }
+
+    pub fn attribute_kind(&self) -> AttributeKind_ {
+        match self {
+            TestingAttribute::Test => AttributeKind_::Test,
+            TestingAttribute::TestOnly => AttributeKind_::TestOnly,
+            TestingAttribute::ExpectedFailure(..) => AttributeKind_::ExpectedFailure,
+            TestingAttribute::RandTest => AttributeKind_::RandTest,
+        }
+    }
 }
 
 pub static EXPECTED_FAILURE_EXPECTED_NAMES: Lazy<BTreeSet<String>> = Lazy::new(|| {
@@ -407,6 +539,12 @@ impl VerificationAttribute {
         });
         match self {
             Self::VerifyOnly => &VERIFY_ONLY_POSITIONS,
+        }
+    }
+
+    pub fn attribute_kind(&self) -> AttributeKind_ {
+        match self {
+            VerificationAttribute::VerifyOnly => AttributeKind_::VerifyOnly,
         }
     }
 }
@@ -501,9 +639,33 @@ impl fmt::Display for VerificationAttribute {
     }
 }
 
-//**************************************************************************************************
+// -------------------------------------------------------------------------------------------------
+// TName
+// -------------------------------------------------------------------------------------------------
+
+impl TName for Spanned<AttributeKind_> {
+    type Key = AttributeKind_;
+
+    type Loc = move_ir_types::location::Loc;
+
+    fn drop_loc(self) -> (Self::Loc, Self::Key) {
+        let sp!(loc, value) = self;
+        (loc, value)
+    }
+
+    fn add_loc(loc: Self::Loc, key: Self::Key) -> Self {
+        sp(loc, key)
+    }
+
+    fn borrow(&self) -> (&Self::Loc, &Self::Key) {
+        let sp!(loc, value) = self;
+        (loc, value)
+    }
+}
+
+// -------------------------------------------------------------------------------------------------
 // From
-//**************************************************************************************************
+// -------------------------------------------------------------------------------------------------
 
 macro_rules! impl_from_for_known_attribute {
     ($($source:ty => $variant:ident),* $(,)?) => {
@@ -527,4 +689,192 @@ impl_from_for_known_attribute! {
     SyntaxAttribute => Syntax,
     TestingAttribute => Testing,
     VerificationAttribute => Verification,
+}
+
+// -------------------------------------------------------------------------------------------------
+// Display
+// -------------------------------------------------------------------------------------------------
+
+impl std::fmt::Display for AttributeKind_ {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", self.name())
+    }
+}
+
+// -------------------------------------------------------------------------------------------------
+// AstDebug
+// -------------------------------------------------------------------------------------------------
+
+impl AstDebug for BytecodeInstructionAttribute {
+    fn ast_debug(&self, w: &mut AstWriter) {
+        w.write("bytecode_instruction");
+    }
+}
+
+impl AstDebug for DefinesPrimitiveAttribute {
+    fn ast_debug(&self, w: &mut AstWriter) {
+        w.write("defines_primitive(");
+        w.write(&self.name.to_string());
+        w.write(")");
+    }
+}
+
+impl AstDebug for DeprecationAttribute {
+    fn ast_debug(&self, w: &mut AstWriter) {
+        w.write("depreacted");
+        if let Some(ref note) = self.note {
+            w.write("(note= ");
+            w.write(&format!("{}", note));
+            w.write(")");
+        }
+    }
+}
+
+impl AstDebug for DiagnosticAttribute {
+    fn ast_debug(&self, w: &mut AstWriter) {
+        w.write(self.name());
+        w.write("(");
+        let mut first = true;
+        match self {
+            DiagnosticAttribute::Allow { allow_set } => {
+                for (prefix, name) in allow_set {
+                    if !first {
+                        w.write(", ");
+                    }
+                    first = false;
+                    match prefix {
+                        Some(pref) => {
+                            w.write(&pref.to_string());
+                            w.write("(");
+                            w.write(&name.to_string());
+                            w.write(")");
+                        }
+                        None => {
+                            w.write(&name.to_string());
+                        }
+                    }
+                }
+            }
+            DiagnosticAttribute::LintAllow { allow_set } => {
+                for name in allow_set {
+                    if !first {
+                        w.write(", ");
+                    }
+                    first = false;
+                    w.write(&name.to_string());
+                }
+            }
+        };
+        // Each entry is a pair: (Option<Name>, Name)
+        w.write(")");
+    }
+}
+
+impl AstDebug for ErrorAttribute {
+    fn ast_debug(&self, w: &mut AstWriter) {
+        w.write("error");
+        if let Some(code) = self.code {
+            w.write("(code= ");
+            w.write(&code.to_string());
+            w.write(")");
+        }
+    }
+}
+
+impl AstDebug for ExternalAttribute {
+    fn ast_debug(&self, w: &mut AstWriter) {
+        w.write("external");
+        // You might choose to print additional details from `self.attrs` if desired.
+    }
+}
+
+impl AstDebug for SyntaxAttribute {
+    fn ast_debug(&self, w: &mut AstWriter) {
+        w.write("syntax(");
+        w.write(&self.kind.to_string());
+        w.write(")");
+    }
+}
+
+impl AstDebug for VerificationAttribute {
+    fn ast_debug(&self, w: &mut AstWriter) {
+        match self {
+            VerificationAttribute::VerifyOnly => w.write("verify_only"),
+        }
+    }
+}
+
+impl AstDebug for TestingAttribute {
+    fn ast_debug(&self, w: &mut AstWriter) {
+        match self {
+            TestingAttribute::Test => w.write("test"),
+            TestingAttribute::TestOnly => w.write("test_only"),
+            TestingAttribute::ExpectedFailure(exp) => {
+                w.write("expected_failure(");
+                exp.ast_debug(w);
+                w.write(")")
+            }
+            TestingAttribute::RandTest => w.write("rand_test"),
+        }
+    }
+}
+
+impl AstDebug for ExpectedFailure {
+    fn ast_debug(&self, w: &mut AstWriter) {
+        match self {
+            ExpectedFailure::KnownFailure { kind, location } => {
+                w.write("known_failure(kind= ");
+                w.write(&kind.to_string());
+                w.write(", location= ");
+                w.write(&location.to_string());
+                w.write(")")
+            }
+            ExpectedFailure::AbortCodeFailure {
+                abort_code,
+                location,
+            } => {
+                w.write("abort_code_failure(abort_code= ");
+                w.write(&abort_code.to_string());
+                w.write(", location= ");
+                w.write(&location.to_string());
+                w.write(")")
+            }
+            ExpectedFailure::ConstantAbortCodeFailure { constant } => {
+                w.write("constant_abort_code_failure(constant= ");
+                w.write(&constant.to_string());
+                w.write(")")
+            }
+            ExpectedFailure::StatusCodeFailure {
+                major_code,
+                minor_code,
+                location,
+            } => {
+                w.write("status_code_failure(major_code= ");
+                w.write(&major_code.to_string());
+                if let Some(minor) = minor_code {
+                    w.write(", minor_code= ");
+                    w.write(&minor.to_string());
+                }
+                w.write(", location= ");
+                w.write(&location.to_string());
+                w.write(")")
+            }
+        }
+    }
+}
+
+impl AstDebug for KnownAttribute {
+    fn ast_debug(&self, w: &mut AstWriter) {
+        match self {
+            KnownAttribute::BytecodeInstruction(attr) => attr.ast_debug(w),
+            KnownAttribute::DefinesPrimitive(attr) => attr.ast_debug(w),
+            KnownAttribute::Deprecation(attr) => attr.ast_debug(w),
+            KnownAttribute::Diagnostic(attr) => attr.ast_debug(w),
+            KnownAttribute::Error(attr) => attr.ast_debug(w),
+            KnownAttribute::External(attr) => attr.ast_debug(w),
+            KnownAttribute::Syntax(attr) => attr.ast_debug(w),
+            KnownAttribute::Testing(attr) => attr.ast_debug(w),
+            KnownAttribute::Verification(attr) => attr.ast_debug(w),
+        }
+    }
 }
