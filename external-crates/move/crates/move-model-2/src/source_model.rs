@@ -5,7 +5,7 @@ use crate::{
     TModuleId,
     model::{self, NamedConstantData, PackageData},
     normalized, serializable_signatures,
-    source_kind::{AlwaysSome, WithSource},
+    source_kind::WithSource,
 };
 use move_compiler::{
     compiled_unit::CompiledUnit,
@@ -118,11 +118,11 @@ impl Model {
             })
             .collect();
         let mut model = Self {
-            has_source: AlwaysSome::new(()),
-            files: AlwaysSome::new(files),
+            has_source: true,
+            files,
             root_package_name,
             root_named_address_map,
-            info: AlwaysSome::new(info),
+            info,
             compiled,
             packages,
             serializable_signatures: OnceCell::new(),

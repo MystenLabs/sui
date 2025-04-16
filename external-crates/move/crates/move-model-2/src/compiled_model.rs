@@ -4,12 +4,12 @@
 use crate::{
     model::{self, PackageData},
     normalized, serializable_signatures,
-    source_kind::{AlwaysNone, WithoutSource},
+    source_kind::WithoutSource,
 };
 use move_binary_format::CompiledModule;
 use move_core_types::account_address::AccountAddress;
 use move_symbol_pool::Symbol;
-use std::{cell::OnceCell, collections::BTreeMap};
+use std::{cell::OnceCell, collections::BTreeMap, mem::MaybeUninit};
 
 pub type Model = model::Model<WithoutSource>;
 pub type Package<'a> = model::Package<'a, WithoutSource>;
@@ -42,11 +42,11 @@ impl Model {
             .map(|(a, n)| (*n, *a))
             .collect();
         let mut model = Self {
-            has_source: AlwaysNone::new(),
-            files: AlwaysNone::new(),
+            has_source: false,
+            files: MaybeUninit::uninit(),
             root_package_name: None,
             root_named_address_map,
-            info: AlwaysNone::new(),
+            info: MaybeUninit::uninit(),
             compiled,
             packages,
             serializable_signatures: OnceCell::new(),

@@ -4,13 +4,14 @@
 use std::{
     cell::OnceCell,
     collections::{BTreeMap, BTreeSet},
+    mem::MaybeUninit,
     sync::Arc,
 };
 
 use crate::{
     normalized::{self, ModuleId, QualifiedMemberId, TModuleId},
     serializable_signatures,
-    source_kind::{AlwaysNone, AlwaysSome, AnyKind, SourceKind, WithSource, WithoutSource},
+    source_kind::{AnyKind, SourceKind, WithSource, WithoutSource},
     source_model,
 };
 use indexmap::IndexMap;
@@ -46,7 +47,7 @@ pub enum Kind<TWithSource, TWithout> {
 /// a `Model<WithSource>` via `Model::from_source`. If no source files are present, a model can be
 /// generated directly from the `CompiledModule`s via `Model::from_compiled`.
 pub struct Model<K: SourceKind> {
-    pub(crate) has_source: K::FromSource<()>,
+    pub(crate) has_source: bool,
     pub(crate) files: K::FromSource<MappedFiles>,
     pub(crate) root_named_address_map: BTreeMap<Symbol, AccountAddress>,
     pub(crate) root_package_name: Option<Symbol>,
@@ -282,9 +283,7 @@ impl<K: SourceKind> Model<K> {
     }
 
     fn has_source(&self) -> bool {
-        let has_source =
-            unsafe { std::mem::transmute::<&K::FromSource<()>, &Option<()>>(&self.has_source) };
-        has_source.is_some()
+        self.has_source
     }
 }
 
@@ -965,13 +964,13 @@ impl ModuleData<WithSource> {
                 .collect()
         };
         Self {
-            ident: AlwaysSome::new(ident),
+            ident,
             structs,
             enums,
             functions,
             constants,
-            named_constants: AlwaysSome::new(named_constants),
-            constant_names: AlwaysSome::new(constant_names),
+            named_constants,
+            constant_names,
             // computed later
             deps: BTreeMap::new(),
             used_by: BTreeMap::new(),
@@ -1005,13 +1004,13 @@ impl ModuleData<WithoutSource> {
             .map(|name| (name, FunctionData::new()))
             .collect();
         Self {
-            ident: AlwaysNone::new(),
+            ident: MaybeUninit::uninit(),
             structs,
             enums,
             functions,
             constants,
-            named_constants: AlwaysNone::new(),
-            constant_names: AlwaysNone::new(),
+            named_constants: MaybeUninit::uninit(),
+            constant_names: MaybeUninit::uninit(),
             // computed later
             deps: BTreeMap::new(),
             used_by: BTreeMap::new(),
