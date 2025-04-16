@@ -54,24 +54,21 @@ public fun borrow<Element>(t: &Option<Element>): &Element {
 /// Return `default_ref` if `t` does not hold a value
 public fun borrow_with_default<Element>(t: &Option<Element>, default_ref: &Element): &Element {
     let vec_ref = &t.vec;
-    if (vec_ref.is_empty()) default_ref
-    else &vec_ref[0]
+    if (vec_ref.is_empty()) default_ref else &vec_ref[0]
 }
 
 /// Return the value inside `t` if it holds one
 /// Return `default` if `t` does not hold a value
 public fun get_with_default<Element: copy + drop>(t: &Option<Element>, default: Element): Element {
     let vec_ref = &t.vec;
-    if (vec_ref.is_empty()) default
-    else vec_ref[0]
+    if (vec_ref.is_empty()) default else vec_ref[0]
 }
 
 /// Convert the none option `t` to a some option by adding `e`.
 /// Aborts if `t` already holds a value
 public fun fill<Element>(t: &mut Option<Element>, e: Element) {
     let vec_ref = &mut t.vec;
-    if (vec_ref.is_empty()) vec_ref.push_back(e)
-    else abort EOPTION_IS_SET
+    if (vec_ref.is_empty()) vec_ref.push_back(e) else abort EOPTION_IS_SET
 }
 
 /// Convert a `some` option to a `none` by removing and returning the value stored inside `t`
@@ -103,8 +100,7 @@ public fun swap<Element>(t: &mut Option<Element>, e: Element): Element {
 /// Different from swap(), swap_or_fill() allows for `t` not holding a value.
 public fun swap_or_fill<Element>(t: &mut Option<Element>, e: Element): Option<Element> {
     let vec_ref = &mut t.vec;
-    let old_value = if (vec_ref.is_empty()) none()
-    else some(vec_ref.pop_back());
+    let old_value = if (vec_ref.is_empty()) none() else some(vec_ref.pop_back());
     vec_ref.push_back(e);
     old_value
 }
@@ -112,8 +108,7 @@ public fun swap_or_fill<Element>(t: &mut Option<Element>, e: Element): Option<El
 /// Destroys `t.` If `t` holds a value, return it. Returns `default` otherwise
 public fun destroy_with_default<Element: drop>(t: Option<Element>, default: Element): Element {
     let Option { mut vec } = t;
-    if (vec.is_empty()) default
-    else vec.pop_back()
+    if (vec.is_empty()) default else vec.pop_back()
 }
 
 /// Unpack `t` and return its contents
@@ -152,8 +147,7 @@ public macro fun destroy<$T, $R: drop>($o: Option<$T>, $f: |$T| -> $R) {
 /// Destroy `Option<T>` and call the closure `f` on the value inside if it holds one.
 public macro fun do<$T, $R: drop>($o: Option<$T>, $f: |$T| -> $R) {
     let o = $o;
-    if (o.is_some()) { $f(o.destroy_some()); }
-    else o.destroy_none()
+    if (o.is_some()) { $f(o.destroy_some()); } else o.destroy_none()
 }
 
 /// Execute a closure on the value inside `t` if it holds one.
@@ -196,8 +190,7 @@ public macro fun and<$T, $U>($o: Option<$T>, $f: |$T| -> Option<$U>): Option<$U>
 /// Equivalent to Rust's `t.and_then(f)`.
 public macro fun and_ref<$T, $U>($o: &Option<$T>, $f: |&$T| -> Option<$U>): Option<$U> {
     let o = $o;
-    if (o.is_some()) $f(o.borrow())
-    else none()
+    if (o.is_some()) $f(o.borrow()) else none()
 }
 
 /// Map an `Option<T>` to `Option<U>` by applying a function to a contained value.
@@ -217,15 +210,13 @@ public macro fun map<$T, $U>($o: Option<$T>, $f: |$T| -> $U): Option<$U> {
 /// Equivalent to Rust's `t.map(f)`.
 public macro fun map_ref<$T, $U>($o: &Option<$T>, $f: |&$T| -> $U): Option<$U> {
     let o = $o;
-    if (o.is_some()) some($f(o.borrow()))
-    else none()
+    if (o.is_some()) some($f(o.borrow())) else none()
 }
 
 /// Return `None` if the value is `None`, otherwise return `Option<T>` if the predicate `f` returns true.
 public macro fun filter<$T: drop>($o: Option<$T>, $f: |&$T| -> bool): Option<$T> {
     let o = $o;
-    if (o.is_some() && $f(o.borrow())) o
-    else none()
+    if (o.is_some() && $f(o.borrow())) o else none()
 }
 
 /// Return `false` if the value is `None`, otherwise return the result of the predicate `f`.

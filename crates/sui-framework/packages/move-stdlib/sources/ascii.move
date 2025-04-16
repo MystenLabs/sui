@@ -46,8 +46,7 @@ public fun string(bytes: vector<u8>): String {
 /// characters. Otherwise returns `None`.
 public fun try_string(bytes: vector<u8>): Option<String> {
     let is_valid = bytes.all!(|byte| is_valid_char(*byte));
-    if (is_valid) option::some(String { bytes })
-    else option::none()
+    if (is_valid) option::some(String { bytes }) else option::none()
 }
 
 /// Returns `true` if all characters in `string` are printable characters
@@ -155,12 +154,10 @@ public fun index_of(string: &String, substr: &String): u64 {
 
 /// Convert a `char` to its lowercase equivalent.
 fun char_to_uppercase(byte: u8): u8 {
-    if (byte >= 0x61 && byte <= 0x7A) byte - 0x20
-    else byte
+    if (byte >= 0x61 && byte <= 0x7A) byte - 0x20 else byte
 }
 
 /// Convert a `char` to its lowercase equivalent.
 fun char_to_lowercase(byte: u8): u8 {
-    if (byte >= 0x41 && byte <= 0x5A) byte + 0x20
-    else byte
+    if (byte >= 0x41 && byte <= 0x5A) byte + 0x20 else byte
 }
