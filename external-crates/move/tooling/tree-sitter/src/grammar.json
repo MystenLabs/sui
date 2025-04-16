@@ -3193,6 +3193,35 @@
               "name": "module_identity"
             },
             {
+              "type": "STRING",
+              "value": "::"
+            },
+            {
+              "type": "FIELD",
+              "name": "member",
+              "content": {
+                "type": "SYMBOL",
+                "name": "identifier"
+              }
+            },
+            {
+              "type": "FIELD",
+              "name": "type_arguments",
+              "content": {
+                "type": "SYMBOL",
+                "name": "type_arguments"
+              }
+            }
+          ]
+        },
+        {
+          "type": "SEQ",
+          "members": [
+            {
+              "type": "SYMBOL",
+              "name": "module_identity"
+            },
+            {
               "type": "CHOICE",
               "members": [
                 {
@@ -6705,15 +6734,57 @@
       ]
     },
     "num_literal": {
-      "type": "CHOICE",
+      "type": "SEQ",
       "members": [
         {
-          "type": "PATTERN",
-          "value": "[0-9][0-9_]*(?:u8|u16|u32|u64|u128|u256)?"
+          "type": "CHOICE",
+          "members": [
+            {
+              "type": "PATTERN",
+              "value": "[0-9][0-9_]*"
+            },
+            {
+              "type": "PATTERN",
+              "value": "0x[a-fA-F0-9_]+"
+            }
+          ]
         },
         {
-          "type": "PATTERN",
-          "value": "0x[a-fA-F0-9_]+"
+          "type": "CHOICE",
+          "members": [
+            {
+              "type": "CHOICE",
+              "members": [
+                {
+                  "type": "STRING",
+                  "value": "u8"
+                },
+                {
+                  "type": "STRING",
+                  "value": "u16"
+                },
+                {
+                  "type": "STRING",
+                  "value": "u32"
+                },
+                {
+                  "type": "STRING",
+                  "value": "u64"
+                },
+                {
+                  "type": "STRING",
+                  "value": "u128"
+                },
+                {
+                  "type": "STRING",
+                  "value": "u256"
+                }
+              ]
+            },
+            {
+              "type": "BLANK"
+            }
+          ]
         }
       ]
     },
