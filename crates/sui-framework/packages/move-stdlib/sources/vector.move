@@ -72,7 +72,7 @@ public fun singleton<Element>(e: Element): vector<Element> {
 /// Reverses the order of the elements in the vector `v` in place.
 public fun reverse<Element>(v: &mut vector<Element>) {
     let len = v.length();
-    if (len == 0) return ();
+    if (len == 0) return;
 
     let mut front_index = 0;
     let mut back_index = len - 1;
@@ -381,4 +381,111 @@ public macro fun zip_map_ref<$T1, $T2, $U>(
     let mut r = vector[];
     zip_do_ref!($v1, $v2, |el1, el2| r.push_back($f(el1, el2)));
     r
+}
+
+/// Performs an in-place insertion sort on the vector `v` using the comparison function `le`.
+/// The sort is stable, meaning that equal elements will maintain their relative order.
+///
+/// Please, note that the comparison function `le` expects less or equal, not less.
+///
+/// Example:
+/// ```
+/// let mut v = vector[2, 1, 3];
+/// v.insertion_sort_by(|a, b| a <= b);
+/// assert!(v == vector[1, 2, 3]);
+/// ```
+///
+/// Insertion sort is efficient for small vectors (~30 or less elements), and can
+/// be faster than merge sort for almost sorted vectors (e.g. when the vector is
+/// already sorted or nearly sorted).
+public macro fun insertion_sort_by<$T>($v: &mut vector<$T>, $le: |&$T, &$T| -> bool) {
+    let v = $v;
+    let n = v.length();
+    if (n < 2) return;
+    // do insertion sort
+    let mut i = 1;
+    while (i < n) {
+        let mut j = i;
+        while (j > 0 && !$le(&v[j - 1], &v[j])) {
+            v.swap(j, j - 1);
+            j = j - 1;
+        };
+        i = i + 1;
+    }
+}
+
+/// Performs an in-place merge sort on the vector `v` using the comparison function `le`.
+/// Merge sort is efficient for large vectors, and is a stable sort.
+///
+/// Please, note that the comparison function `le` expects less or equal, not less.
+///
+/// Example:
+/// ```
+/// let mut v = vector[2, 1, 3];
+/// v.merge_sort_by(|a, b| a <= b);
+/// assert!(v == vector[1, 2, 3]);
+/// ```
+///
+/// Merge sort performs better than insertion sort for large vectors (~30 elements or more).
+public macro fun merge_sort_by<$T>($v: &mut vector<$T>, $le: |&$T, &$T| -> bool) {
+    let v = $v;
+    let n = v.length();
+    if (n < 2) return;
+
+    let mut flags = vector[false];
+    let mut starts = vector[0];
+    let mut ends = vector[n];
+    while (!flags.is_empty()) {
+        let (halves_sorted, start, end) = (flags.pop_back(), starts.pop_back(), ends.pop_back());
+        let mid = (start + end) / 2;
+        if (halves_sorted) {
+            let mut mid = mid;
+            let mut l = start;
+            let mut r = mid;
+            while (l < mid && r < end) {
+                if ($le(&v[l], &v[r])) {
+                    l = l + 1;
+                } else {
+                    let mut i = r;
+                    while (i > l) {
+                        v.swap(i, i - 1);
+                        i = i - 1;
+                    };
+
+                    l = l + 1;
+                    mid = mid + 1;
+                    r = r + 1;
+                }
+            }
+        } else {
+            // set up the "merge"
+            flags.push_back(true);
+            starts.push_back(start);
+            ends.push_back(end);
+            // set up the recursive calls
+            // v[start..mid]
+            if (mid - start > 1) {
+                flags.push_back(false);
+                starts.push_back(start);
+                ends.push_back(mid);
+            };
+            // v[mid..end]
+            if (end - mid > 1) {
+                flags.push_back(false);
+                starts.push_back(mid);
+                ends.push_back(end);
+            }
+        }
+    }
+}
+
+/// Check if the vector `v` is sorted in non-decreasing order according to the comparison
+/// function `le` (les). Returns `true` if the vector is sorted, `false` otherwise.
+public macro fun is_sorted_by<$T>($v: &vector<$T>, $le: |&$T, &$T| -> bool): bool {
+    let v = $v;
+    let n_minus_1 = v.length().max(1) - 1;
+    'is_sorted_by: {
+        n_minus_1.do!(|i| if (!$le(&v[i], &v[i + 1])) return 'is_sorted_by false);
+        true
+    }
 }

@@ -45,6 +45,9 @@ vectors are growable. This module has many native functions.
 -  [Macro function `zip_do_mut`](#std_vector_zip_do_mut)
 -  [Macro function `zip_map`](#std_vector_zip_map)
 -  [Macro function `zip_map_ref`](#std_vector_zip_map_ref)
+-  [Macro function `insertion_sort_by`](#std_vector_insertion_sort_by)
+-  [Macro function `merge_sort_by`](#std_vector_merge_sort_by)
+-  [Macro function `is_sorted_by`](#std_vector_is_sorted_by)
 
 
 <pre><code></code></pre>
@@ -300,7 +303,7 @@ Reverses the order of the elements in the vector <code>v</code> in place.
 
 <pre><code><b>public</b> <b>fun</b> <a href="../std/vector.md#std_vector_reverse">reverse</a>&lt;Element&gt;(v: &<b>mut</b> <a href="../std/vector.md#std_vector">vector</a>&lt;Element&gt;) {
     <b>let</b> len = v.<a href="../std/vector.md#std_vector_length">length</a>();
-    <b>if</b> (len == 0) <b>return</b> ();
+    <b>if</b> (len == 0) <b>return</b>;
     <b>let</b> <b>mut</b> front_index = 0;
     <b>let</b> <b>mut</b> back_index = len - 1;
     <b>while</b> (front_index &lt; back_index) {
@@ -1164,6 +1167,171 @@ The order of elements in the vectors is preserved.
     <b>let</b> <b>mut</b> r = <a href="../std/vector.md#std_vector">vector</a>[];
     <a href="../std/vector.md#std_vector_zip_do_ref">zip_do_ref</a>!($v1, $v2, |el1, el2| r.<a href="../std/vector.md#std_vector_push_back">push_back</a>($f(el1, el2)));
     r
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="std_vector_insertion_sort_by"></a>
+
+## Macro function `insertion_sort_by`
+
+Performs an in-place insertion sort on the vector <code>v</code> using the comparison function <code>le</code>.
+The sort is stable, meaning that equal elements will maintain their relative order.
+
+Please, note that the comparison function <code>le</code> expects less or equal, not less.
+
+Example:
+```
+let mut v = vector[2, 1, 3];
+v.insertion_sort_by(|a, b| a <= b);
+assert!(v == vector[1, 2, 3]);
+```
+
+Insertion sort is efficient for small vectors (~30 or less elements), and can
+be faster than merge sort for almost sorted vectors (e.g. when the vector is
+already sorted or nearly sorted).
+
+
+<pre><code><b>public</b> <b>macro</b> <b>fun</b> <a href="../std/vector.md#std_vector_insertion_sort_by">insertion_sort_by</a>&lt;$T&gt;($v: &<b>mut</b> <a href="../std/vector.md#std_vector">vector</a>&lt;$T&gt;, $le: |&$T, &$T| -&gt; <a href="../std/bool.md#std_bool">bool</a>)
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b> <b>macro</b> <b>fun</b> <a href="../std/vector.md#std_vector_insertion_sort_by">insertion_sort_by</a>&lt;$T&gt;($v: &<b>mut</b> <a href="../std/vector.md#std_vector">vector</a>&lt;$T&gt;, $le: |&$T, &$T| -&gt; <a href="../std/bool.md#std_bool">bool</a>) {
+    <b>let</b> v = $v;
+    <b>let</b> n = v.<a href="../std/vector.md#std_vector_length">length</a>();
+    <b>if</b> (n &lt; 2) <b>return</b>;
+    // <a href="../std/vector.md#std_vector_do">do</a> insertion sort
+    <b>let</b> <b>mut</b> i = 1;
+    <b>while</b> (i &lt; n) {
+        <b>let</b> <b>mut</b> j = i;
+        <b>while</b> (j &gt; 0 && !$le(&v[j - 1], &v[j])) {
+            v.<a href="../std/vector.md#std_vector_swap">swap</a>(j, j - 1);
+            j = j - 1;
+        };
+        i = i + 1;
+    }
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="std_vector_merge_sort_by"></a>
+
+## Macro function `merge_sort_by`
+
+Performs an in-place merge sort on the vector <code>v</code> using the comparison function <code>le</code>.
+Merge sort is efficient for large vectors, and is a stable sort.
+
+Please, note that the comparison function <code>le</code> expects less or equal, not less.
+
+Example:
+```
+let mut v = vector[2, 1, 3];
+v.merge_sort_by(|a, b| a <= b);
+assert!(v == vector[1, 2, 3]);
+```
+
+Merge sort performs better than insertion sort for large vectors (~30 elements or more).
+
+
+<pre><code><b>public</b> <b>macro</b> <b>fun</b> <a href="../std/vector.md#std_vector_merge_sort_by">merge_sort_by</a>&lt;$T&gt;($v: &<b>mut</b> <a href="../std/vector.md#std_vector">vector</a>&lt;$T&gt;, $le: |&$T, &$T| -&gt; <a href="../std/bool.md#std_bool">bool</a>)
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b> <b>macro</b> <b>fun</b> <a href="../std/vector.md#std_vector_merge_sort_by">merge_sort_by</a>&lt;$T&gt;($v: &<b>mut</b> <a href="../std/vector.md#std_vector">vector</a>&lt;$T&gt;, $le: |&$T, &$T| -&gt; <a href="../std/bool.md#std_bool">bool</a>) {
+    <b>let</b> v = $v;
+    <b>let</b> n = v.<a href="../std/vector.md#std_vector_length">length</a>();
+    <b>if</b> (n &lt; 2) <b>return</b>;
+    <b>let</b> <b>mut</b> flags = <a href="../std/vector.md#std_vector">vector</a>[<b>false</b>];
+    <b>let</b> <b>mut</b> starts = <a href="../std/vector.md#std_vector">vector</a>[0];
+    <b>let</b> <b>mut</b> ends = <a href="../std/vector.md#std_vector">vector</a>[n];
+    <b>while</b> (!flags.<a href="../std/vector.md#std_vector_is_empty">is_empty</a>()) {
+        <b>let</b> (halves_sorted, start, end) = (flags.<a href="../std/vector.md#std_vector_pop_back">pop_back</a>(), starts.<a href="../std/vector.md#std_vector_pop_back">pop_back</a>(), ends.<a href="../std/vector.md#std_vector_pop_back">pop_back</a>());
+        <b>let</b> mid = (start + end) / 2;
+        <b>if</b> (halves_sorted) {
+            <b>let</b> <b>mut</b> mid = mid;
+            <b>let</b> <b>mut</b> l = start;
+            <b>let</b> <b>mut</b> r = mid;
+            <b>while</b> (l &lt; mid && r &lt; end) {
+                <b>if</b> ($le(&v[l], &v[r])) {
+                    l = l + 1;
+                } <b>else</b> {
+                    <b>let</b> <b>mut</b> i = r;
+                    <b>while</b> (i &gt; l) {
+                        v.<a href="../std/vector.md#std_vector_swap">swap</a>(i, i - 1);
+                        i = i - 1;
+                    };
+                    l = l + 1;
+                    mid = mid + 1;
+                    r = r + 1;
+                }
+            }
+        } <b>else</b> {
+            // set up the "merge"
+            flags.<a href="../std/vector.md#std_vector_push_back">push_back</a>(<b>true</b>);
+            starts.<a href="../std/vector.md#std_vector_push_back">push_back</a>(start);
+            ends.<a href="../std/vector.md#std_vector_push_back">push_back</a>(end);
+            // set up the recursive calls
+            // v[start..mid]
+            <b>if</b> (mid - start &gt; 1) {
+                flags.<a href="../std/vector.md#std_vector_push_back">push_back</a>(<b>false</b>);
+                starts.<a href="../std/vector.md#std_vector_push_back">push_back</a>(start);
+                ends.<a href="../std/vector.md#std_vector_push_back">push_back</a>(mid);
+            };
+            // v[mid..end]
+            <b>if</b> (end - mid &gt; 1) {
+                flags.<a href="../std/vector.md#std_vector_push_back">push_back</a>(<b>false</b>);
+                starts.<a href="../std/vector.md#std_vector_push_back">push_back</a>(mid);
+                ends.<a href="../std/vector.md#std_vector_push_back">push_back</a>(end);
+            }
+        }
+    }
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="std_vector_is_sorted_by"></a>
+
+## Macro function `is_sorted_by`
+
+Check if the vector <code>v</code> is sorted in non-decreasing order according to the comparison
+function <code>le</code> (les). Returns <code><b>true</b></code> if the vector is sorted, <code><b>false</b></code> otherwise.
+
+
+<pre><code><b>public</b> <b>macro</b> <b>fun</b> <a href="../std/vector.md#std_vector_is_sorted_by">is_sorted_by</a>&lt;$T&gt;($v: &<a href="../std/vector.md#std_vector">vector</a>&lt;$T&gt;, $le: |&$T, &$T| -&gt; <a href="../std/bool.md#std_bool">bool</a>): <a href="../std/bool.md#std_bool">bool</a>
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b> <b>macro</b> <b>fun</b> <a href="../std/vector.md#std_vector_is_sorted_by">is_sorted_by</a>&lt;$T&gt;($v: &<a href="../std/vector.md#std_vector">vector</a>&lt;$T&gt;, $le: |&$T, &$T| -&gt; <a href="../std/bool.md#std_bool">bool</a>): <a href="../std/bool.md#std_bool">bool</a> {
+    <b>let</b> v = $v;
+    <b>let</b> n_minus_1 = v.<a href="../std/vector.md#std_vector_length">length</a>().max(1) - 1;
+    '<a href="../std/vector.md#std_vector_is_sorted_by">is_sorted_by</a>: {
+        n_minus_1.<a href="../std/vector.md#std_vector_do">do</a>!(|i| <b>if</b> (!$le(&v[i], &v[i + 1])) <b>return</b> '<a href="../std/vector.md#std_vector_is_sorted_by">is_sorted_by</a> <b>false</b>);
+        <b>true</b>
+    }
 }
 </code></pre>
 
