@@ -38,6 +38,7 @@ async fn main() -> Result<()> {
     let metrics = AnalyticsMetrics::new(&registry);
 
     let remote_store_url = config.remote_store_url.clone();
+    let batch_size = config.batch_size;
 
     let processors = config.create_checkpoint_processors(metrics).await?;
 
@@ -64,7 +65,7 @@ async fn main() -> Result<()> {
     }
 
     let reader_options = ReaderOptions {
-        batch_size: 10,
+        batch_size,
         ..Default::default()
     };
 
