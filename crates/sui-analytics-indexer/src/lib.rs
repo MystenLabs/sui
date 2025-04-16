@@ -261,9 +261,11 @@ impl TaskContext {
             FileType::Object => {
                 let package_id_filter = self.config.package_id_filter.clone();
                 let package_store = self.package_store.clone();
+                let metrics = self.metrics.clone();
                 self.create_processor_for_handler(Box::new(ObjectHandler::new(
                     package_store,
                     &package_id_filter,
+                    metrics,
                 )))
                 .await
             }
@@ -299,8 +301,10 @@ impl TaskContext {
             }
             FileType::WrappedObject => {
                 let package_store = self.package_store.clone();
+                let metrics = self.metrics.clone();
                 self.create_processor_for_handler(Box::new(WrappedObjectHandler::new(
                     package_store,
+                    metrics,
                 )))
                 .await
             }
