@@ -36,6 +36,8 @@ impl SourceKind for AnyKind {
     type FromSource<T> = Option<T>;
 }
 
+/// Indicates a populated field of `T`. We use `Option<T>` instead of `T` so that we can safely
+/// use `std::mem::transmute` into an `Option<T>` when "upcasting" `WithSource` to `AnyKind`.
 #[derive(Clone, Copy)]
 pub struct AlwaysSome<T>(Option<T>);
 
@@ -59,6 +61,8 @@ impl<T> Deref for AlwaysSome<T> {
     }
 }
 
+// Indicates an empty field of `T`. We use `Option<T>` instead of `T` so that we can safely
+// use `std::mem::transmute` into an `Option<T>` when "upcasting" `WithSource` to `AnyKind`.
 #[derive(Clone, Copy)]
 pub struct AlwaysNone<T>(Option<T>);
 
