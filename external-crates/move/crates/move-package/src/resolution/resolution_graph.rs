@@ -575,7 +575,7 @@ impl Package {
         Ok(ret)
     }
 
-    pub(crate) fn compiler_config(
+    pub fn compiler_config(
         &self,
         is_dependency: bool,
         config: &BuildConfig,

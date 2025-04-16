@@ -23,13 +23,13 @@ static PACKAGE_PROCESS_MUTEX: Lazy<NamedLock> = Lazy::new(|| {
 /// starts building the package before the git dependency has been fully downloaded by thread 1.
 /// This will then lead to file not found errors). These same issues could occur across processes,
 /// this is why we grab both a thread lock and process lock.
-pub(crate) struct PackageLock {
+pub struct PackageLock {
     _thread_lock: MutexGuard<'static, ()>,
     _process_lock: NamedLockGuard<'static>,
 }
 
 impl PackageLock {
-    pub(crate) fn lock() -> PackageLock {
+    pub fn lock() -> PackageLock {
         Self {
             _thread_lock: PACKAGE_THREAD_MUTEX.lock().unwrap(),
             _process_lock: PACKAGE_PROCESS_MUTEX.lock().unwrap(),
