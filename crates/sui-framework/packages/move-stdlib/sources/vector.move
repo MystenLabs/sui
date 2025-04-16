@@ -72,7 +72,7 @@ public fun singleton<Element>(e: Element): vector<Element> {
 /// Reverses the order of the elements in the vector `v` in place.
 public fun reverse<Element>(v: &mut vector<Element>) {
     let len = v.length();
-    if (len == 0) return ();
+    if (len == 0) return;
 
     let mut front_index = 0;
     let mut back_index = len - 1;
@@ -401,7 +401,7 @@ public macro fun zip_map_ref<$T1, $T2, $U>(
 public macro fun insertion_sort_by<$T>($v: &mut vector<$T>, $le: |&$T, &$T| -> bool) {
     let v = $v;
     let n = v.length();
-    if (n < 2) return ();
+    if (n < 2) return;
     // do insertion sort
     let mut i = 1;
     while (i < n) {
@@ -430,11 +430,11 @@ public macro fun insertion_sort_by<$T>($v: &mut vector<$T>, $le: |&$T, &$T| -> b
 public macro fun merge_sort_by<$T>($v: &mut vector<$T>, $le: |&$T, &$T| -> bool) {
     let v = $v;
     let n = v.length();
-    if (n < 2) return ();
+    if (n < 2) return;
 
     let mut flags = vector[false];
     let mut starts = vector[0];
-    let mut ends = vector[v.length()];
+    let mut ends = vector[n];
     while (!flags.is_empty()) {
         let (halves_sorted, start, end) = (flags.pop_back(), starts.pop_back(), ends.pop_back());
         let mid = (start + end) / 2;
