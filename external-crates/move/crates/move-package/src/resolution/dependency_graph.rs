@@ -9,9 +9,9 @@ use petgraph::{algo, prelude::DiGraphMap, visit::Dfs, Direction};
 use std::io::BufRead;
 use std::{
     collections::{btree_map::Entry, BTreeMap, BTreeSet, VecDeque},
-    fmt,
+    fmt::{self, Write as _},
     fs::File,
-    io::{BufReader, Read, Write},
+    io::{BufReader, Read, Write as _},
     path::{Path, PathBuf},
     process::Command,
 };
@@ -1767,17 +1767,18 @@ fn format_deps(
     if !dependencies.is_empty() {
         for (dep, _, pkg) in dependencies {
             let pkg_name = dep.dep_name;
-            s.push_str("\n\t");
-            s.push_str(&format!("{pkg_name} = "));
-            s.push_str("{ ");
-            s.push_str(&format!("{pkg}"));
+            // SAFETY: writes to strings can't fail
+            write!(s, "\n\t{pkg_name} = {{ {pkg}").unwrap();
             if let Some(digest) = dep.digest {
-                s.push_str(&format!(", digest = {digest}"));
+                write!(s, ", digest = {digest}").unwrap();
             }
             if let Some(subst) = &dep.subst {
-                s.push_str(&format!(", addr_subst = {}", SubstTOML(subst)));
+                write!(s, ", addr_subst = {}", SubstTOML(subst)).unwrap();
             }
             s.push_str(" }");
+            if let Some(version) = pkg.version {
+                write!(s, " # version {version}").unwrap();
+            }
         }
     } else {
         s.push_str("\n\tno dependencies");
