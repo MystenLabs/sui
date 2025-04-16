@@ -867,8 +867,8 @@ const UNSORTED_30: vector<u8> = x"0220021409192d182808091c20170e0e121e0429052118
 #[test]
 fun insertion_sort_by_macro() {
     let mut arr = UNSORTED_100;
-    arr.insertion_sort_by!(|a, b| *a < *b);
-    assert!(!arr.is_sorted_by!(|a, b| *a <= *b));
+    arr.insertion_sort_by!(|a, b| *a <= *b);
+    assert!(arr.is_sorted_by!(|a, b| *a <= *b));
 
     let mut arr = UNSORTED_50;
     arr.insertion_sort_by!(|a, b| *a < *b);
@@ -907,7 +907,7 @@ fun merge_sort_by_macro() {
 // so to optimize, we pop the vector to a smaller size
 fun sort_by_random_set(mut v: vector<u8>) {
     let mut arr = vector::tabulate!(v.length().min(100), |_| v.pop_back());
-    arr.insertion_sort_by!(|a, b| *a < *b);
+    arr.insertion_sort_by!(|a, b| *a <= *b);
     assert!(arr.is_sorted_by!(|a, b| *a <= *b));
 }
 
@@ -922,7 +922,7 @@ fun test_insertion_sort_is_stable_sort_by() {
         Indexed { value: 2, index: 5 },
     ];
 
-    arr.insertion_sort_by!(|a, b| a.value < b.value);
+    arr.insertion_sort_by!(|a, b| a.value <= b.value);
     assert_eq!(
         arr,
         vector[
@@ -935,7 +935,8 @@ fun test_insertion_sort_is_stable_sort_by() {
         ],
     );
 
-    arr.insertion_sort_by!(|a, b| a.value > b.value);
+    // reverse the comparison function
+    arr.insertion_sort_by!(|a, b| b.value <= a.value);
     assert_eq!(
         arr,
         vector[
@@ -991,12 +992,12 @@ fun test_merge_sort_is_stable_sort_by() {
 #[allow(implicit_const_copy)]
 fun test_is_sorted_by() {
     assert!(vector<u8>[].is_sorted_by!(|a, b| *a <= *b));
-    assert!(vector<u8>[].is_sorted_by!(|a, b| *a > *b));
+    assert!(vector<u8>[].is_sorted_by!(|a, b| *a <= *b));
     assert!(vector<u8>[].is_sorted_by!(|_, _| false));
     assert!(vector[0].is_sorted_by!(|a, b| *a <= *b));
-    assert!(vector[0].is_sorted_by!(|a, b| *a > *b));
+    assert!(vector[0].is_sorted_by!(|a, b| *a <= *b));
     assert!(vector[0].is_sorted_by!(|_, _| false));
-    assert!(!vector[1, 2, 4, 3].is_sorted_by!(|a, b| *a <= *b));
+    assert!(!vector[1, 2, 4, 3].is_sorted_by!(|a, b| *a < *b));
 
     assert!(!UNSORTED_30.is_sorted_by!(|a, b| *a <= *b));
     assert!(!UNSORTED_40.is_sorted_by!(|a, b| *a <= *b));

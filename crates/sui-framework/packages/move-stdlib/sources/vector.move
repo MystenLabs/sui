@@ -386,8 +386,18 @@ public macro fun zip_map_ref<$T1, $T2, $U>(
 /// Performs an in-place insertion sort on the vector `v` using the comparison function `le`.
 /// The sort is stable, meaning that equal elements will maintain their relative order.
 ///
-/// Insertion sort is efficient for small vector, and can be faster than merge sort for almost
-/// sorted vectors (e.g. when the vector is already sorted or nearly sorted).
+/// Please, note that the comparison function `le` expects less or equal, not less.
+///
+/// Example:
+/// ```
+/// let mut v = vector[2, 1, 3];
+/// v.insertion_sort_by(|a, b| a <= b);
+/// assert!(v == vector[1, 2, 3]);
+/// ```
+///
+/// Insertion sort is efficient for small vectors (~30 or less elements), and can
+/// be faster than merge sort for almost sorted vectors (e.g. when the vector is
+/// already sorted or nearly sorted).
 public macro fun insertion_sort_by<$T>($v: &mut vector<$T>, $le: |&$T, &$T| -> bool) {
     let v = $v;
     let n = v.length();
@@ -396,7 +406,7 @@ public macro fun insertion_sort_by<$T>($v: &mut vector<$T>, $le: |&$T, &$T| -> b
     let mut i = 1;
     while (i < n) {
         let mut j = i;
-        while (j > 0 && $le(&v[j], &v[j - 1])) {
+        while (j > 0 && !$le(&v[j - 1], &v[j])) {
             v.swap(j, j - 1);
             j = j - 1;
         };
@@ -406,6 +416,15 @@ public macro fun insertion_sort_by<$T>($v: &mut vector<$T>, $le: |&$T, &$T| -> b
 
 /// Performs an in-place merge sort on the vector `v` using the comparison function `le`.
 /// Merge sort is efficient for large vectors, and is a stable sort.
+///
+/// Please, note that the comparison function `le` expects less or equal, not less.
+///
+/// Example:
+/// ```
+/// let mut v = vector[2, 1, 3];
+/// v.merge_sort_by(|a, b| a <= b);
+/// assert!(v == vector[1, 2, 3]);
+/// ```
 ///
 /// Merge sort performs better than insertion sort for large vectors (~30 elements or more).
 public macro fun merge_sort_by<$T>($v: &mut vector<$T>, $le: |&$T, &$T| -> bool) {
@@ -461,7 +480,7 @@ public macro fun merge_sort_by<$T>($v: &mut vector<$T>, $le: |&$T, &$T| -> bool)
 }
 
 /// Check if the vector `v` is sorted in non-decreasing order according to the comparison
-/// function `le`. Returns `true` if the vector is sorted, `false` otherwise.
+/// function `le` (les). Returns `true` if the vector is sorted, `false` otherwise.
 public macro fun is_sorted_by<$T>($v: &vector<$T>, $le: |&$T, &$T| -> bool): bool {
     let v = $v;
     let n_minus_1 = v.length().max(1) - 1;
