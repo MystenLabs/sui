@@ -155,6 +155,8 @@ No permissions.
 <a name="sui_multiparty_LEGACY_SHARED"></a>
 
 Permissions corresponding to shared objects as defined by <code><a href="../sui/transfer.md#sui_transfer_share_object">sui::transfer::share_object</a></code>.
+However, unlike shared objects, it will be possible to "upgrade" a normal object into a
+legacy shared object--although this upgrade feature is not yet implemented.
 
 
 <pre><code><b>const</b> <a href="../sui/multiparty.md#sui_multiparty_LEGACY_SHARED">LEGACY_SHARED</a>: u64 = 7;
@@ -205,7 +207,8 @@ has any permissions. And there are no default permissions.
 ## Function `legacy_shared`
 
 Creates a <code><a href="../sui/multiparty.md#sui_multiparty_Multiparty">Multiparty</a></code> value with permissions matching shared objects as defined by
-<code><a href="../sui/transfer.md#sui_transfer_share_object">sui::transfer::share_object</a></code>.
+<code><a href="../sui/transfer.md#sui_transfer_share_object">sui::transfer::share_object</a></code>. NOTE: This does not currently support upgrading non-shared
+objects (i.e. objects must be created in the same transaction).
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="../sui/multiparty.md#sui_multiparty_legacy_shared">legacy_shared</a>(): <a href="../sui/multiparty.md#sui_multiparty_Multiparty">sui::multiparty::Multiparty</a>
