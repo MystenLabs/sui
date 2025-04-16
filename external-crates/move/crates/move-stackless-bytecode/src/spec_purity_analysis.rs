@@ -108,7 +108,7 @@ impl SpecPurityAnalysis {
     }
 
     fn analyse(&self, func_env: &FunctionEnv, targets: &FunctionTargetsHolder, data: &FunctionData) -> PurityVerificationInfo {
-        let is_spec = targets.is_spec(&func_env.get_qualified_id());
+        let is_spec = targets.is_function_spec(&func_env.get_qualified_id());
         let env = func_env.module_env.env;
         let func_target = FunctionTarget::new(func_env, data);
 
