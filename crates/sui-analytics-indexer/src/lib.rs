@@ -83,6 +83,10 @@ fn default_checkpoint_root() -> PathBuf {
     PathBuf::from("/tmp")
 }
 
+fn default_batch_size() -> usize {
+    10
+}
+
 fn default_remote_store_url() -> String {
     "https://checkpoints.mainnet.sui.io".to_string()
 }
@@ -119,6 +123,9 @@ pub struct JobConfig {
     pub client_metric_port: u16,
     /// Remote object store where data gets written to
     pub remote_store_config: ObjectStoreConfig,
+    /// Number of checkpoints to process in parallel.
+    #[serde(default = "default_batch_size")]
+    pub batch_size: usize,
     /// Remote object store path prefix to use while writing
     #[serde(default = "default_remote_store_url")]
     pub remote_store_url: String,
