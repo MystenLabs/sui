@@ -38,7 +38,7 @@ use crate::{
     },
     shared::{
         ide::{IDEAnnotation, IDEInfo},
-        known_attributes::{AttributeKind_, AttributePosition},
+        known_attributes::AttributePosition,
         string_utils::{is_pascal_case, is_upper_snake_case},
         unique_map::UniqueMap,
         *,
@@ -1169,7 +1169,7 @@ fn warning_filter_(context: &Context, attributes: &E::Attributes) -> WarningFilt
     // Attributes are guaranteedto be sets by now, and everything was flattened during parsing.
     if let Some(lint_allow) = attributes.get_(&known_attributes::AttributeKind_::LintAllow) {
         let KnownAttribute::Diagnostic(DiagnosticAttribute::LintAllow { allow_set }) =
-            lint_allow.value
+            &lint_allow.value
         else {
             context.add_diag(ice!((
                 lint_allow.loc,
@@ -1200,7 +1200,7 @@ fn warning_filter_(context: &Context, attributes: &E::Attributes) -> WarningFilt
     };
 
     if let Some(allow) = attributes.get_(&known_attributes::AttributeKind_::Allow) {
-        let KnownAttribute::Diagnostic(DiagnosticAttribute::Allow { allow_set }) = allow.value
+        let KnownAttribute::Diagnostic(DiagnosticAttribute::Allow { allow_set }) = &allow.value
         else {
             context.add_diag(ice!((
                 allow.loc,
@@ -1214,7 +1214,7 @@ fn warning_filter_(context: &Context, attributes: &E::Attributes) -> WarningFilt
 
         for (prefix, name) in allow_set {
             let prefix = prefix.map(|sym| sym.value);
-            let sp!(name_loc, name) = name;
+            let sp!(name_loc, name) = *name;
             let filters = context.env().filter_from_str(prefix, name);
             if filters.is_empty() {
                 let msg = format!(

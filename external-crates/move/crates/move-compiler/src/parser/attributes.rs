@@ -280,7 +280,7 @@ fn parse_lint_allow(context: &mut Context, attribute: ParsedAttribute) -> Vec<At
     let sp!(loc, attr) = attribute;
     match attr {
         PA::Parameterized(name, inner_attrs) => {
-            let prefix_loc = name.loc;
+            let _prefix_loc = name.loc;
             let sp!(_, lint_attrs) = inner_attrs;
             let mut allow_set = BTreeSet::new();
             for lint_attr in lint_attrs.into_iter() {

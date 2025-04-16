@@ -1546,7 +1546,7 @@ impl AstDebug for AttributeValue_ {
 }
 
 impl AstDebug for Attribute_ {
-    fn ast_debug(&self, w: &mut AstWriter) {
+    fn ast_debug(&self, _w: &mut AstWriter) {
         todo!()
     }
 }

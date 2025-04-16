@@ -48,12 +48,7 @@ impl FilterContext for Context<'_> {
     fn should_remove_by_attributes(&mut self, attrs: &[P::Attributes]) -> bool {
         use known_attributes::VerificationAttribute;
         let flattened_attrs: Vec<_> = attrs.iter().flat_map(verification_attributes).collect();
-        let is_verify_only_loc = flattened_attrs
-            .iter()
-            .map(|attr| match attr {
-                (loc, VerificationAttribute::VerifyOnly) => loc,
-            })
-            .next();
+        let is_verify_only_loc = flattened_attrs.iter().map(|attr| attr.0).next();
         let should_remove = is_verify_only_loc.is_some();
         // TODO this is a bit of a hack
         // but we don't have a better way of suppressing this unless the filtering was done after
@@ -69,7 +64,7 @@ impl FilterContext for Context<'_> {
                     VerificationAttribute::VERIFY_ONLY
                 );
                 self.reporter
-                    .add_diag(diag!(Uncategorized::DeprecatedWillBeRemoved, (*loc, msg)));
+                    .add_diag(diag!(Uncategorized::DeprecatedWillBeRemoved, (loc, msg)));
             }
         }
         should_remove
@@ -88,18 +83,26 @@ pub fn program(compilation_env: &CompilationEnv, prog: P::Program) -> P::Program
     filter_program(&mut context, prog)
 }
 
-fn verification_attributes(
-    attrs: &P::Attributes,
-) -> Vec<(Loc, known_attributes::VerificationAttribute)> {
-    use known_attributes::KnownAttribute;
+fn verification_attributes(attrs: &P::Attributes) -> Vec<(Loc, known_attributes::AttributeKind_)> {
     attrs
         .value
         .iter()
-        .filter_map(
-            |attr| match KnownAttribute::resolve(attr.value.attribute_name().value)? {
-                KnownAttribute::Verification(verify_attr) => Some((attr.loc, verify_attr)),
-                _ => None,
-            },
-        )
+        .filter_map(|attr| match attr.value {
+            P::Attribute_::VerifyOnly => {
+                Some((attr.loc, known_attributes::AttributeKind_::VerifyOnly))
+            }
+            P::Attribute_::BytecodeInstruction
+            | P::Attribute_::DefinesPrimitive(..)
+            | P::Attribute_::Deprecation { .. }
+            | P::Attribute_::Error { .. }
+            | P::Attribute_::External { .. }
+            | P::Attribute_::Syntax { .. }
+            | P::Attribute_::Allow { .. }
+            | P::Attribute_::LintAllow { .. }
+            | P::Attribute_::Test
+            | P::Attribute_::TestOnly
+            | P::Attribute_::ExpectedFailure { .. }
+            | P::Attribute_::RandomTest => None,
+        })
         .collect()
 }

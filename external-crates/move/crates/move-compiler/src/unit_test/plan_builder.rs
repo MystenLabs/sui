@@ -6,10 +6,7 @@ use crate::{
     cfgir::ast as G,
     diag,
     diagnostics::{warning_filters::WarningFilters, Diagnostic, DiagnosticReporter, Diagnostics},
-    expansion::ast::{
-        self as E, Address, Attribute, AttributeValue, Attributes, ModuleAccess_, ModuleIdent,
-        ModuleIdent_,
-    },
+    expansion::ast::{self as E, Address, Attributes, ModuleAccess_, ModuleIdent, ModuleIdent_},
     hlir::{ast as HA, translate::display_var},
     naming::ast as NA,
     parser::ast::ConstantName,

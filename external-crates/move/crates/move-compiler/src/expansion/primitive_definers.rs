@@ -4,11 +4,11 @@
 use crate::{
     diag,
     diagnostics::DiagnosticReporter,
-    expansion::ast::Attribute_,
     expansion::ast::{ModuleDefinition, ModuleIdent},
+    ice,
     naming::ast::BuiltinTypeName_,
     shared::{
-        known_attributes::{DefinesPrimitive, KnownAttribute},
+        known_attributes::{AttributeKind_, DefinesPrimitiveAttribute, KnownAttribute},
         unique_map::UniqueMap,
         CompilationEnv,
     },
@@ -55,41 +55,21 @@ fn check_prim_definer(
     mident: ModuleIdent,
     m: &ModuleDefinition,
 ) {
-    let defines_prim_attr = m
-        .attributes
-        .get_(&KnownAttribute::DefinesPrimitive(DefinesPrimitive));
+    let defines_prim_attr = m.attributes.get_(&AttributeKind_::DefinesPrimitive);
     let Some(sp!(attr_loc, attr_)) = defines_prim_attr else {
         return;
     };
-    let Attribute_::Parameterized(_, params) = attr_ else {
-        let msg = format!(
-            "Expected a primitive type parameterization, e.g. '{}(<type>)'",
-            DefinesPrimitive::DEFINES_PRIM
-        );
-        reporter.add_diag(diag!(Attributes::InvalidUsage, (*attr_loc, msg)));
-        return;
-    };
-    if params.len() != 1 {
-        let msg = format!(
-            "Expected a single primitive type parameterization, e.g. '{}(<type>)'",
-            DefinesPrimitive::DEFINES_PRIM
-        );
-        reporter.add_diag(diag!(Attributes::InvalidUsage, (*attr_loc, msg)));
-        return;
-    }
-    let (_, _, sp!(param_loc, param_)) = params.into_iter().next().unwrap();
-    let Attribute_::Name(name) = param_ else {
-        let msg = format!(
-            "Expected a primitive type parameterization, e.g. '{}(<type>)'",
-            DefinesPrimitive::DEFINES_PRIM
-        );
-        reporter.add_diag(diag!(Attributes::InvalidUsage, (*param_loc, msg)));
+    let KnownAttribute::DefinesPrimitive(DefinesPrimitiveAttribute { name }) = attr_ else {
+        reporter.add_diag(ice!((
+            *attr_loc,
+            "Expected a primitive definer attribute for the provided kind tag"
+        )));
         return;
     };
     let Some(prim) = BuiltinTypeName_::resolve(name.value.as_str()) else {
         let msg = format!(
             "Invalid parameterization of '{}'. Unknown primitive type '{}'",
-            DefinesPrimitive::DEFINES_PRIM,
+            DefinesPrimitiveAttribute::DEFINES_PRIM,
             name,
         );
         reporter.add_diag(diag!(Attributes::InvalidUsage, (name.loc, msg)));
