@@ -170,7 +170,6 @@ move-model-2 = { path = "crates/move-model-2" }
 move-package = { path = "crates/move-package" }
 move-package-alt = { path = "crates/move-package-alt" }
 move-proc-macros = { path = "crates/move-proc-macros"}
-move-stackless-bytecode = { path = "crates/move-stackless-bytecode" }
 move-stdlib = { path = "crates/move-stdlib" }
 move-stdlib-natives = { path = "crates/move-stdlib-natives" }
 move-symbol-pool = { path = "crates/move-symbol-pool" }
@@ -181,7 +180,6 @@ move-vm-profiler = { path = "crates/move-vm-profiler" }
 move-vm-runtime = { path = "crates/move-vm-runtime" }
 move-vm-test-utils = { path = "crates/move-vm-test-utils" }
 move-vm-types = { path = "crates/move-vm-types" }
-prover_bytecode = { path = "crates/move-stackless-bytecode", package="move-stackless-bytecode" }
 
 [profile.bench]
 debug = true

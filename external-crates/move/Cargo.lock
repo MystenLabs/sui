@@ -2497,7 +2497,6 @@ dependencies = [
  "move-model",
  "move-model-2",
  "move-package",
- "move-stackless-bytecode",
  "move-symbol-pool",
  "num",
  "once_cell",
@@ -2680,35 +2679,6 @@ dependencies = [
  "enum-compat-util",
  "quote",
  "syn 2.0.100",
-]
-
-[[package]]
-name = "move-stackless-bytecode"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "bimap",
- "codespan",
- "codespan-reporting",
- "datatest-stable",
- "ethnum",
- "im",
- "internment",
- "itertools 0.10.5",
- "log",
- "move-binary-format",
- "move-command-line-common",
- "move-compiler",
- "move-core-types",
- "move-model",
- "move-stdlib",
- "move-symbol-pool",
- "num",
- "once_cell",
- "paste",
- "petgraph",
- "regex",
- "serde",
 ]
 
 [[package]]

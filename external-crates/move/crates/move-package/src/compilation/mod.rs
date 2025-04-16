@@ -6,4 +6,3 @@ pub mod build_plan;
 pub mod compiled_package;
 pub mod model_builder;
 pub mod package_layout;
-pub mod model_builder_legacy;
