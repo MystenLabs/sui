@@ -11,7 +11,7 @@ While these conventions are recommendations rather than strict rules, they repre
 
 ### Package
 
-A Sui package consists of: 
+A Sui package consists of:
 - a `sources` directory containing the Move code to be uploaded to the blockchain
 - a `Move.toml` manifest file that declares dependencies and other information about the package
 - a `Move.lock` file that the Sui Move toolchain automatically generates to lock the versions of the dependencies and track the different published and upgraded versions of the package that exist on the different networks
@@ -38,7 +38,7 @@ In your package manifest, the package name should be in PascalCase: `name = "MyP
 
 ### Modules
 
-Modules are the main building blocks of your Move code. They are used to organize and encapsulate related functionality. Design your modules around one object or data structure. A variant structure should have its own module to avoid complexity and bugs. 
+Modules are the main building blocks of your Move code. They are used to organize and encapsulate related functionality. Design your modules around one object or data structure. A variant structure should have its own module to avoid complexity and bugs.
 
 Module declarations don't need to use brackets anymore and the compiler provides default `use` statements for widely used modules, so you don't need to declare all of them.
 
@@ -46,14 +46,6 @@ Module declarations don't need to use brackets anymore and the compiler provides
 module conventions::wallet;
 
 public struct Wallet has key, store {
-    id: UID,
-    amount: u64
-}
-
-
-module conventions::claw_back_wallet;
-
-public struct Wallet has key {
     id: UID,
     amount: u64
 }
@@ -132,7 +124,7 @@ const E_INVALID_NAME: u64 = 0;
 
 ### Structs
 
-Always declare struct abilities in this order: `key`, `copy`, `drop`, `store`. 
+Always declare struct abilities in this order: `key`, `copy`, `drop`, `store`.
 
 Do not use 'potato' in the name of structs. The lack of abilities define it as a potato pattern.
 
@@ -180,9 +172,9 @@ The following functions follow standard CRUD (Create, Read, Update, Delete) nami
 - `to_name`: Transforms a Type X to Type Y.
 - `from_name`: Transforms a Type Y to Type X.
 
-### Generics 
+### Generics
 
-Declare generics using single letter names or full names. By convention, developers use `T` and `U` for generic types, but you can use a more descriptive name if it is not confusing with other types. Always prioritize readability. 
+Declare generics using single letter names or full names. By convention, developers use `T` and `U` for generic types, but you can use a more descriptive name if it is not confusing with other types. Always prioritize readability.
 
 ```move
 module conventions::generics;
@@ -439,7 +431,7 @@ public fun start_battle(
     _policy: &TransferPolicy<Hero>, // transfer policy for the game
     hero_id: ID, // hero to use
     battle_id: String // id of the battle to start
-) { 
+) {
     // Implementation omitted.
     abort(0)
 }
