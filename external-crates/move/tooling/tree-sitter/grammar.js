@@ -696,11 +696,14 @@ module.exports = grammar({
     loop_expression: $ => seq('loop', field('body', $._expression)),
 
     // return expression
-    return_expression: $ => prec.left(seq(
-      'return',
-      optional(field('label', $.label)),
-      optional(field('return', $._expression))
-    )),
+    return_expression: $ => choice(
+      prec.left(seq(
+        'return',
+        optional(field('label', $.label)),
+        field('return', $._expression)
+      )),
+      prec(-1, seq('return', optional(field('label', $.label)))),
+    ),
 
     // abort expression
     abort_expression: $ => seq('abort', optional(field('abort', $._expression))),
