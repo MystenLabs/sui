@@ -41,6 +41,10 @@ pub enum Kind<TWithSource, TWithout> {
     WithoutSource(TWithout),
 }
 
+/// The model for a set of packages. Allows for ergonomic access to packages, modules, and
+/// module members. If source files are present, the Move package system can be used to generate
+/// a `Model<WithSource>` via `Model::from_source`. If no source files are present, a model can be
+/// generated directly from the `CompiledModule`s via `Model::from_compiled`.
 pub struct Model<K: SourceKind> {
     pub(crate) has_source: bool,
     pub(crate) files: K::FromSource<MappedFiles>,
@@ -53,13 +57,22 @@ pub struct Model<K: SourceKind> {
     pub(crate) _phantom: std::marker::PhantomData<K>,
 }
 
+macro_rules! shared_comments {
+    () => {
+        "
+Extra functionality is provided in the case that the `Model` had source information
+(`WithSource`) or did not (`WithoutSource`). If you need to \"forget\" which case you are in,
+`to_any` and `as_any` return a common type that can let values with different source information
+to be in tandem, e.g. as different arms in an `if-else`.
+Conversely, if you need to \"remember\" which case you are in, you can use `kind` to to case on
+the presence source information. This can let you access the extra functionality provided by
+the `source_model` or `compiled_model`.
+"
+    };
+}
+
 /// Represents the model data for a package.
-/// Extra functionality is provided in the case that  the `Model` had source information
-/// (`WithSource`) or did not (`WithoutSource`). If you need to "forget" which case you are in,
-/// `to_dyn` and `as_dyn` effectively "drop" the source information annotation. This can let values
-/// with different source information to be used together.
-/// Conversely, if you need to "remember" which case you are in, you can use `kind` to to case on the presence source information. This can let you access the extra functionality provided by
-/// the `source_model` or `compiled_model`.
+#[doc = shared_comments!()]
 pub struct Package<'a, K: SourceKind> {
     pub(crate) addr: AccountAddress,
     // TODO name. We likely want the package name from the root package's named address map
@@ -69,12 +82,7 @@ pub struct Package<'a, K: SourceKind> {
 }
 
 /// Represents the model data for a module.
-/// Extra functionality is provided in the case that  the `Model` had source information
-/// (`WithSource`) or did not (`WithoutSource`). If you need to "forget" which case you are in,
-/// `to_dyn` and `as_dyn` effectively "drop" the source information annotation. This can let values
-/// with different source information to be used together.
-/// Conversely, if you need to "remember" which case you are in, you can use `kind` to to case on the presence source information. This can let you access the extra functionality provided by
-/// the `source_model` or `compiled_model`.
+#[doc = shared_comments!()]
 pub struct Module<'a, K: SourceKind> {
     pub(crate) id: ModuleId,
     pub(crate) package: Package<'a, K>,
@@ -83,12 +91,7 @@ pub struct Module<'a, K: SourceKind> {
 }
 
 /// Represents the model data for a module member.
-/// Extra functionality is provided in the case that  the `Model` had source information
-/// (`WithSource`) or did not (`WithoutSource`). If you need to "forget" which case you are in,
-/// `to_dyn` and `as_dyn` effectively "drop" the source information annotation. This can let values
-/// with different source information to be used together.
-/// Conversely, if you need to "remember" which case you are in, you can use `kind` to to case on the presence source information. This can let you access the extra functionality provided by
-/// the `source_model` or `compiled_model`.
+#[doc = shared_comments!()]
 pub enum Member<'a, K: SourceKind> {
     Struct(Struct<'a, K>),
     Enum(Enum<'a, K>),
@@ -97,24 +100,14 @@ pub enum Member<'a, K: SourceKind> {
 }
 
 /// Represents the model data for a module type declaration (struct or enum).
-/// Extra functionality is provided in the case that  the `Model` had source information
-/// (`WithSource`) or did not (`WithoutSource`). If you need to "forget" which case you are in,
-/// `to_dyn` and `as_dyn` effectively "drop" the source information annotation. This can let values
-/// with different source information to be used together.
-/// Conversely, if you need to "remember" which case you are in, you can use `kind` to to case on the presence source information. This can let you access the extra functionality provided by
-/// the `source_model` or `compiled_model`.
+#[doc = shared_comments!()]
 pub enum Datatype<'a, K: SourceKind> {
     Struct(Struct<'a, K>),
     Enum(Enum<'a, K>),
 }
 
 /// Represents the model data for a struct declaration.
-/// Extra functionality is provided in the case that  the `Model` had source information
-/// (`WithSource`) or did not (`WithoutSource`). If you need to "forget" which case you are in,
-/// `to_dyn` and `as_dyn` effectively "drop" the source information annotation. This can let values
-/// with different source information to be used together.
-/// Conversely, if you need to "remember" which case you are in, you can use `kind` to to case on the presence source information. This can let you access the extra functionality provided by
-/// the `source_model` or `compiled_model`.
+#[doc = shared_comments!()]
 pub struct Struct<'a, K: SourceKind> {
     pub(crate) name: Symbol,
     pub(crate) module: Module<'a, K>,
@@ -124,12 +117,7 @@ pub struct Struct<'a, K: SourceKind> {
 }
 
 /// Represents the model data for an enum declaration.
-/// Extra functionality is provided in the case that  the `Model` had source information
-/// (`WithSource`) or did not (`WithoutSource`). If you need to "forget" which case you are in,
-/// `to_dyn` and `as_dyn` effectively "drop" the source information annotation. This can let values
-/// with different source information to be used together.
-/// Conversely, if you need to "remember" which case you are in, you can use `kind` to to case on the presence source information. This can let you access the extra functionality provided by
-/// the `source_model` or `compiled_model`.
+#[doc = shared_comments!()]
 pub struct Enum<'a, K: SourceKind> {
     pub(crate) name: Symbol,
     pub(crate) module: Module<'a, K>,
@@ -139,12 +127,7 @@ pub struct Enum<'a, K: SourceKind> {
 }
 
 /// Represents the model data for an enum's variant declaration.
-/// Extra functionality is provided in the case that  the `Model` had source information
-/// (`WithSource`) or did not (`WithoutSource`). If you need to "forget" which case you are in,
-/// `to_dyn` and `as_dyn` effectively "drop" the source information annotation. This can let values
-/// with different source information to be used together.
-/// Conversely, if you need to "remember" which case you are in, you can use `kind` to to case on the presence source information. This can let you access the extra functionality provided by
-/// the `source_model` or `compiled_model`.
+#[doc = shared_comments!()]
 pub struct Variant<'a, K: SourceKind> {
     pub(crate) name: Symbol,
     pub(crate) enum_: Enum<'a, K>,
@@ -152,12 +135,7 @@ pub struct Variant<'a, K: SourceKind> {
 }
 
 /// Represents the model data for a function declaration.
-/// Extra functionality is provided in the case that  the `Model` had source information
-/// (`WithSource`) or did not (`WithoutSource`). If you need to "forget" which case you are in,
-/// `to_dyn` and `as_dyn` effectively "drop" the source information annotation. This can let values
-/// with different source information to be used together.
-/// Conversely, if you need to "remember" which case you are in, you can use `kind` to to case on the presence source information. This can let you access the extra functionality provided by
-/// the `source_model` or `compiled_model`.
+#[doc = shared_comments!()]
 pub struct Function<'a, K: SourceKind> {
     pub(crate) name: Symbol,
     pub(crate) module: Module<'a, K>,
@@ -170,12 +148,7 @@ pub struct Function<'a, K: SourceKind> {
 /// Represents the model data for a module's constant present in the `CompiledModule`. Not all
 /// constants at the source level are present in the `CompiledModule` depending on optimizations.
 /// For source level constants, see `source_model::NamedConstant` and `source_model::Constant`.
-/// Extra functionality is provided in the case that  the `Model` had source information
-/// (`WithSource`) or did not (`WithoutSource`). If you need to "forget" which case you are in,
-/// `to_dyn` and `as_dyn` effectively "drop" the source information annotation. This can let values
-/// with different source information to be used together.
-/// Conversely, if you need to "remember" which case you are in, you can use `kind` to to case on the presence source information. This can let you access the extra functionality provided by
-/// the `source_model` or `compiled_model`.
+#[doc = shared_comments!()]
 pub struct CompiledConstant<'a, K: SourceKind> {
     pub(crate) module: Module<'a, K>,
     pub(crate) compiled: &'a normalized::Constant,
@@ -1156,7 +1129,7 @@ macro_rules! derive_all {
                 unsafe { std::mem::transmute::<&$item<'a, K>, &$item<'a, AnyKind>>(self) }
             }
 
-            pub fn to_dyn(self) -> $item<'a, AnyKind> {
+            pub fn to_any(self) -> $item<'a, AnyKind> {
                 unsafe { std::mem::transmute::<$item<'a, K>, $item<'a, AnyKind>>(self) }
             }
         }
