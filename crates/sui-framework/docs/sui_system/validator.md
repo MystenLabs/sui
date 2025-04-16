@@ -613,7 +613,7 @@ Invalid primary_address field in ValidatorMetadata
 
 <a name="sui_system_validator_EMetadataInvalidWorkerAddr"></a>
 
-Invalidworker_address field in ValidatorMetadata
+Invalid worker_address field in ValidatorMetadata
 
 
 <pre><code><b>const</b> <a href="../sui_system/validator.md#sui_system_validator_EMetadataInvalidWorkerAddr">EMetadataInvalidWorkerAddr</a>: u64 = 7;

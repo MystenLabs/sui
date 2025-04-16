@@ -240,13 +240,13 @@ validators:
         next_epoch_worker_address: ~
         extra_fields:
           id:
-            id: "0xe110ad77e73fad5c645f43060b6674ed498dcc85ad0a74d7b0a942a6c892ce55"
+            id: "0x566c281f909533c446642975284b2095ddf626a1bcac652b870372fc23f91a98"
           size: 0
       voting_power: 10000
-      operation_cap_id: "0xd427bd0a299d6cb734901eef125e56fa8fde4c3d84da65d024b76d102cbf9b42"
+      operation_cap_id: "0x9b9e772187742c7cdd786ef1498a5d8ded463d9d115bca5c0b0668c43507874b"
       gas_price: 1000
       staking_pool:
-        id: "0xe14482e0df5ca7d3d7d10c0f19ecbdf16b551fea52c5a3d81ffb5d3ddc92898a"
+        id: "0x074f860589edffae96d38f4d42b3245a5f3f8205764908ba4c571a1dc38d3001"
         activation_epoch: 0
         deactivation_epoch: ~
         sui_balance: 20000000000000000
@@ -254,14 +254,14 @@ validators:
           value: 0
         pool_token_balance: 20000000000000000
         exchange_rates:
-          id: "0x0d5ee139e323a8185af049787c67486e8e6b3e729f343cdac72db0ca3ad8f74c"
+          id: "0x682b2e1b8477199a8e09f2e2a9b5dfb1639a5e831cce6f8ea2ca651df82fcc5c"
           size: 1
         pending_stake: 0
         pending_total_sui_withdraw: 0
         pending_pool_token_withdraw: 0
         extra_fields:
           id:
-            id: "0x6e5d3e1b6d8a444810e786955fbc10ed77ae468542a044e962a9c0b76a912780"
+            id: "0x6903f20e3194918eb62abb7d5c747a1d05448a71ccafa448ad38888782f278e9"
           size: 0
       commission_rate: 200
       next_epoch_stake: 20000000000000000
@@ -269,27 +269,27 @@ validators:
       next_epoch_commission_rate: 200
       extra_fields:
         id:
-          id: "0xc741039c7c0968c16c3d6d4a1129858730c2971c6c8240a289c222830be21ac1"
+          id: "0xd5b1ebc141eaa76234fc02edb427bff83acbcac3f0f1f1b0805c033c67734f44"
         size: 0
   pending_active_validators:
     contents:
-      id: "0x3c3059f1e1175dd2b704db307dee6397eb2164824dc1e044821ad06e96ca23ef"
+      id: "0x519e65392e1f1d768bb8f724774e4700f9ee117cc9f57fab35169f916ce5be71"
       size: 0
   pending_removals: []
   staking_pool_mappings:
-    id: "0x990c165f44eb669ae45db3b9d596714152f9edef5b19a1e6d95cf514b1a8a0fe"
+    id: "0x00ea2d6a0eb21973fbc90a97ae98665f3a3546eac4dca3afcd443c772a480361"
     size: 1
   inactive_validators:
-    id: "0xf7c34e87d6ff7021efe9b8dc2a6d296d7b62d348ee7662fe9d11611e37723494"
+    id: "0xa3df3441258db8bbc43be637a86f825e8f20ab68b9e76b74b7ed1b5b6dbd6cf7"
     size: 0
   validator_candidates:
-    id: "0x6cd5b7db6541b53d4698d15c9aa90a73eea43f54ddff583f13a9268654a333bd"
+    id: "0xb7a318f9e8f22ffcc7c8bde102965c26fa3dfa4dc551b6b23fef998e0ef004b5"
     size: 0
   at_risk_validators:
     contents: []
   extra_fields:
     id:
-      id: "0x3d8ce151a561628cd6b8926578a9883fdd8649f02ab0bde2aafd1c3cdb198f19"
+      id: "0x39e406f38762fa4381b382ab2fd17fc805a89cfeee4439c99eb82b7c6e66f540"
     size: 0
 storage_fund:
   total_object_storage_rebates:
@@ -306,7 +306,7 @@ parameters:
   validator_low_stake_grace_period: 7
   extra_fields:
     id:
-      id: "0x0b1693895d5a338e26f1a12a2fa7139ba60b8d19144e51854805ee7f29de9d7a"
+      id: "0xacb32b211bb6f3975b028d401308a1c14037bdd67db3567f2ba985e3c7583f2a"
     size: 0
 reference_gas_price: 1000
 validator_report_records:
@@ -320,7 +320,7 @@ stake_subsidy:
   stake_subsidy_decrease_rate: 1000
   extra_fields:
     id:
-      id: "0xbd93edcd821798f08cc28345305ec3b838b26408fa1ea8c60c8e9bee5e1013d0"
+      id: "0xd0bcc79cfff6208b58704e98598c59c4a3e38dd032976d2ac6cf0c42af2ced28"
     size: 0
 safe_mode: false
 safe_mode_storage_rewards:
@@ -332,5 +332,5 @@ safe_mode_non_refundable_storage_fee: 0
 epoch_start_timestamp_ms: 10
 extra_fields:
   id:
-    id: "0xfb5c805da68f9ec960461da496d8afc311fb6d5ac32bb71ef13dc685f7292f92"
+    id: "0xb74119690c0395391206c98a522bd30ad9e869aa2626879248681fb8d618f345"
   size: 0

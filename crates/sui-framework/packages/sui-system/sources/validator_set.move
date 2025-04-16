@@ -20,8 +20,8 @@ use sui_system::staking_pool::{
     fungible_staked_sui_pool_id
 };
 use sui_system::validator::{Validator, staking_pool_id, sui_address};
-use sui_system::validator_cap::{Self, UnverifiedValidatorOperationCap, ValidatorOperationCap};
-use sui_system::validator_wrapper::{Self, ValidatorWrapper};
+use sui_system::validator_cap::{UnverifiedValidatorOperationCap, ValidatorOperationCap};
+use sui_system::validator_wrapper::ValidatorWrapper;
 use sui_system::voting_power;
 
 // Errors
@@ -1060,7 +1060,7 @@ fun adjust_stake_and_gas_price(validators: &mut vector<Validator>) {
 /// Compute both the individual reward adjustments and total reward adjustment for staking rewards
 /// as well as storage fund rewards.
 fun compute_reward_adjustments(
-    mut slashed_validator_indices: vector<u64>,
+    slashed_validator_indices: vector<u64>,
     reward_slashing_rate: u64,
     unadjusted_staking_reward_amounts: &vector<u64>,
     unadjusted_storage_fund_reward_amounts: &vector<u64>,
@@ -1292,7 +1292,9 @@ fun emit_validator_epoch_events(
     report_records: &VecMap<address, VecSet<address>>,
     slashed_validators: &vector<address>,
 ) {
-    vs.do_ref!(|v| {
+    let length = vs.length();
+    length.do!(|i| {
+        let v = &vs[i];
         let validator_address = v.sui_address();
         let tallying_rule_reporters = if (report_records.contains(&validator_address)) {
             report_records[&validator_address].into_keys()
