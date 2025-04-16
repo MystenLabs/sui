@@ -15,15 +15,15 @@ public struct Obj has key, store {
 // ====================================================================
 
 public fun simple_transfer(o: Obj, recipient: address) {
-    sui::transfer::public_transfer(o, recipient);
+    transfer::public_transfer(o, recipient);
 }
 
 public fun simple_share(o: Obj) {
-    sui::transfer::public_share_object(o)
+    transfer::public_share_object(o)
 }
 
 public fun simple_freeze(o: Obj) {
-    sui::transfer::public_freeze_object(o)
+    transfer::public_freeze_object(o)
 }
 
 public fun simple_delete(o: Obj) {

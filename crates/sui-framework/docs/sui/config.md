@@ -274,22 +274,23 @@ title: Module `sui::config`
             newer_value,
             older_value_opt,
         } = sobj.data.extract();
-        <b>let</b> (older_value_opt, removed_value) =
-            <b>if</b> (epoch &gt; newer_value_epoch) {
-                // <b>if</b> the `newer_value` is <b>for</b> a previous epoch, <b>move</b> it to `older_value_opt`
-                (<b>move</b> newer_value, <b>move</b> older_value_opt)
-            } <b>else</b> {
-                // the current epoch cannot be less than the `newer_value_epoch`
-                <b>assert</b>!(epoch == newer_value_epoch);
-                // <b>if</b> the `newer_value` is <b>for</b> the current epoch, then the option must be `none`
-                <b>assert</b>!(newer_value.is_none(), <a href="../sui/config.md#sui_config_EAlreadySetForEpoch">EAlreadySetForEpoch</a>);
-                (<b>move</b> older_value_opt, option::none())
-            };
-        sobj.data.fill(<a href="../sui/config.md#sui_config_SettingData">SettingData</a> {
-            newer_value_epoch: epoch,
-            newer_value: option::some(value),
-            older_value_opt,
-        });
+        <b>let</b> (older_value_opt, removed_value) = <b>if</b> (epoch &gt; newer_value_epoch) {
+            // <b>if</b> the `newer_value` is <b>for</b> a previous epoch, <b>move</b> it to `older_value_opt`
+            (<b>move</b> newer_value, <b>move</b> older_value_opt)
+        } <b>else</b> {
+            // the current epoch cannot be less than the `newer_value_epoch`
+            <b>assert</b>!(epoch == newer_value_epoch);
+            // <b>if</b> the `newer_value` is <b>for</b> the current epoch, then the option must be `none`
+            <b>assert</b>!(newer_value.is_none(), <a href="../sui/config.md#sui_config_EAlreadySetForEpoch">EAlreadySetForEpoch</a>);
+            (<b>move</b> older_value_opt, option::none())
+        };
+        sobj
+            .data
+            .fill(<a href="../sui/config.md#sui_config_SettingData">SettingData</a> {
+                newer_value_epoch: epoch,
+                newer_value: option::some(value),
+                older_value_opt,
+            });
         removed_value
     }
 }
@@ -332,21 +333,22 @@ title: Module `sui::config`
         newer_value,
         older_value_opt,
     } = sobj.data.extract();
-    <b>let</b> (older_value_opt, removed_value) =
-        <b>if</b> (epoch &gt; newer_value_epoch) {
-            // <b>if</b> the `newer_value` is <b>for</b> a previous epoch, <b>move</b> it to `older_value_opt`
-            (<b>move</b> newer_value, option::none())
-        } <b>else</b> {
-            // the current epoch cannot be less than the `newer_value_epoch`
-            <b>assert</b>!(epoch == newer_value_epoch);
-            (<b>move</b> older_value_opt, <b>move</b> newer_value)
-        };
+    <b>let</b> (older_value_opt, removed_value) = <b>if</b> (epoch &gt; newer_value_epoch) {
+        // <b>if</b> the `newer_value` is <b>for</b> a previous epoch, <b>move</b> it to `older_value_opt`
+        (<b>move</b> newer_value, option::none())
+    } <b>else</b> {
+        // the current epoch cannot be less than the `newer_value_epoch`
+        <b>assert</b>!(epoch == newer_value_epoch);
+        (<b>move</b> older_value_opt, <b>move</b> newer_value)
+    };
     <b>let</b> older_value_opt_is_none = older_value_opt.is_none();
-    sobj.data.fill(<a href="../sui/config.md#sui_config_SettingData">SettingData</a> {
-        newer_value_epoch: epoch,
-        newer_value: option::none(),
-        older_value_opt,
-    });
+    sobj
+        .data
+        .fill(<a href="../sui/config.md#sui_config_SettingData">SettingData</a> {
+            newer_value_epoch: epoch,
+            newer_value: option::none(),
+            older_value_opt,
+        });
     <b>if</b> (older_value_opt_is_none) {
         field::remove&lt;_, <a href="../sui/config.md#sui_config_Setting">Setting</a>&lt;Value&gt;&gt;(&<b>mut</b> <a href="../sui/config.md#sui_config">config</a>.id, name);
     };
@@ -513,11 +515,7 @@ title: Module `sui::config`
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b>(<a href="../sui/package.md#sui_package">package</a>) <b>macro</b> <b>fun</b> <b>entry</b>&lt;
-    $WriteCap,
-    $Name: <b>copy</b> + drop + store,
-    $Value: <b>copy</b> + drop + store,
-&gt;(
+<pre><code><b>public</b>(<a href="../sui/package.md#sui_package">package</a>) <b>macro</b> <b>fun</b> <b>entry</b>&lt;$WriteCap, $Name: <b>copy</b> + drop + store, $Value: <b>copy</b> + drop + store&gt;(
     $<a href="../sui/config.md#sui_config">config</a>: &<b>mut</b> <a href="../sui/config.md#sui_config_Config">Config</a>&lt;$WriteCap&gt;,
     $cap: &<b>mut</b> $WriteCap,
     $name: $Name,
@@ -571,13 +569,12 @@ title: Module `sui::config`
     <b>let</b> cap = $cap;
     <b>let</b> name = $name;
     <b>let</b> ctx = $ctx;
-    <b>let</b> old_value_opt =
-        <b>if</b> (!<a href="../sui/config.md#sui_config">config</a>.<a href="../sui/config.md#sui_config_exists_with_type_for_next_epoch">exists_with_type_for_next_epoch</a>&lt;_, _, $Value&gt;(name, ctx)) {
-            <b>let</b> initial = $initial_for_next_epoch(<a href="../sui/config.md#sui_config">config</a>, cap, ctx);
-            <a href="../sui/config.md#sui_config">config</a>.<a href="../sui/config.md#sui_config_add_for_next_epoch">add_for_next_epoch</a>(cap, name, initial, ctx)
-        } <b>else</b> {
-            option::none()
-        };
+    <b>let</b> old_value_opt = <b>if</b> (!<a href="../sui/config.md#sui_config">config</a>.<a href="../sui/config.md#sui_config_exists_with_type_for_next_epoch">exists_with_type_for_next_epoch</a>&lt;_, _, $Value&gt;(name, ctx)) {
+        <b>let</b> initial = $initial_for_next_epoch(<a href="../sui/config.md#sui_config">config</a>, cap, ctx);
+        <a href="../sui/config.md#sui_config">config</a>.<a href="../sui/config.md#sui_config_add_for_next_epoch">add_for_next_epoch</a>(cap, name, initial, ctx)
+    } <b>else</b> {
+        option::none()
+    };
     $update_for_next_epoch(old_value_opt, <a href="../sui/config.md#sui_config">config</a>.<a href="../sui/config.md#sui_config_borrow_for_next_epoch_mut">borrow_for_next_epoch_mut</a>(cap, name, ctx));
 }
 </code></pre>

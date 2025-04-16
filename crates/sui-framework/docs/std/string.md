@@ -185,8 +185,7 @@ Tries to create a new string from a sequence of bytes.
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="../std/string.md#std_string_try_utf8">try_utf8</a>(<a href="../std/string.md#std_string_bytes">bytes</a>: <a href="../std/vector.md#std_vector">vector</a>&lt;<a href="../std/u8.md#std_u8">u8</a>&gt;): Option&lt;<a href="../std/string.md#std_string_String">String</a>&gt; {
-    <b>if</b> (<a href="../std/string.md#std_string_internal_check_utf8">internal_check_utf8</a>(&<a href="../std/string.md#std_string_bytes">bytes</a>)) <a href="../std/option.md#std_option_some">option::some</a>(<a href="../std/string.md#std_string_String">String</a> { <a href="../std/string.md#std_string_bytes">bytes</a> })
-    <b>else</b> <a href="../std/option.md#std_option_none">option::none</a>()
+    <b>if</b> (<a href="../std/string.md#std_string_internal_check_utf8">internal_check_utf8</a>(&<a href="../std/string.md#std_string_bytes">bytes</a>)) <a href="../std/option.md#std_option_some">option::some</a>(<a href="../std/string.md#std_string_String">String</a> { <a href="../std/string.md#std_string_bytes">bytes</a> }) <b>else</b> <a href="../std/option.md#std_option_none">option::none</a>()
 }
 </code></pre>
 
