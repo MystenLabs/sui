@@ -35,6 +35,9 @@ const ENV_VAR_DB_PARALLELISM: &str = "DB_PARALLELISM";
 #[derive(Clone, Debug)]
 pub struct ReadWriteOptions {
     pub ignore_range_deletions: bool,
+    /// When set, debug log the hash of the key and value bytes when inserting to
+    /// this table.
+    pub log_value_hash: bool,
 }
 
 impl ReadWriteOptions {
@@ -48,12 +51,18 @@ impl ReadWriteOptions {
         self.ignore_range_deletions = ignore;
         self
     }
+
+    pub fn set_log_value_hash(mut self, log_value_hash: bool) -> Self {
+        self.log_value_hash = log_value_hash;
+        self
+    }
 }
 
 impl Default for ReadWriteOptions {
     fn default() -> Self {
         Self {
             ignore_range_deletions: true,
+            log_value_hash: false,
         }
     }
 }
