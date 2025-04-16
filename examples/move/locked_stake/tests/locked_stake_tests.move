@@ -4,12 +4,15 @@
 #[test_only]
 module locked_stake::locked_stake_tests;
 
-use locked_stake::{epoch_time_lock, locked_stake as ls};
-use sui::{balance, coin, test_scenario, test_utils::{assert_eq, destroy}, vec_map};
-use sui_system::{
-    governance_test_utils::{advance_epoch, set_up_sui_system_state},
-    sui_system::{Self, SuiSystemState}
-};
+use locked_stake::epoch_time_lock;
+use locked_stake::locked_stake as ls;
+use sui::balance;
+use sui::coin;
+use sui::test_scenario;
+use sui::test_utils::{assert_eq, destroy};
+use sui::vec_map;
+use sui_system::governance_test_utils::{advance_epoch, set_up_sui_system_state};
+use sui_system::sui_system::{Self, SuiSystemState};
 
 const MIST_PER_SUI: u64 = 1_000_000_000;
 

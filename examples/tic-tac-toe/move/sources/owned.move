@@ -19,7 +19,8 @@
 /// only requires one transaction.
 module tic_tac_toe::owned;
 
-use sui::{event, transfer::Receiving};
+use sui::event;
+use sui::transfer::Receiving;
 
 // === Object Types ===
 

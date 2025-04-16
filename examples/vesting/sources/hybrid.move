@@ -13,11 +13,10 @@
 #[allow(unused_const)]
 module vesting::hybrid;
 
+use sui::clock::Clock;
+use sui::coin::{Self, Coin};
 use vesting::cliff;
 use vesting::linear;
-use sui::coin::{Self, Coin};
-use sui::clock::Clock;
-
 
 // === Structs ===
 
@@ -29,7 +28,6 @@ public struct Wallet<phantom T> has key, store {
     // A wallet that uses linear vesting for the second half of the balance
     linear_vested: linear::Wallet<T>,
 }
-
 
 // === Public Functions ===
 
@@ -67,11 +65,7 @@ public fun new_wallet<T>(
 }
 
 /// Claim the coins that are available for claiming at the current time.
-public fun claim<T>(
-    self: &mut Wallet<T>,
-    clock: &Clock,
-    ctx: &mut TxContext,
-): Coin<T> {
+public fun claim<T>(self: &mut Wallet<T>, clock: &Clock, ctx: &mut TxContext): Coin<T> {
     let mut coin_cliff = self.cliff_vested.claim(clock, ctx);
     let coin_linear = self.linear_vested.claim(clock, ctx);
     coin_cliff.join(coin_linear);
@@ -79,17 +73,12 @@ public fun claim<T>(
 }
 
 /// Calculate the amount of coins that can be claimed at the current time.
-public fun claimable<T>(
-    self: &Wallet<T>,
-    clock: &Clock,
-): u64 {
+public fun claimable<T>(self: &Wallet<T>, clock: &Clock): u64 {
     self.cliff_vested.claimable(clock) + self.linear_vested.claimable(clock)
 }
 
 /// Delete the wallet if it is empty.
-public fun delete_wallet<T>(
-    self: Wallet<T>,
-) {
+public fun delete_wallet<T>(self: Wallet<T>) {
     let Wallet {
         id,
         cliff_vested,
@@ -103,7 +92,6 @@ public fun delete_wallet<T>(
 // === Accessors ===
 
 /// Get the balance of the wallet.
-public fun balance<T>(self: &Wallet<T>
-): u64 {
+public fun balance<T>(self: &Wallet<T>): u64 {
     self.cliff_vested.balance() + self.linear_vested.balance()
 }
