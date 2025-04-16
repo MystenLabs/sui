@@ -51,7 +51,7 @@ export BOOGIE_EXE="$BIN_DIR/boogie"
 export Z3_EXE="$(brew --prefix z3)/bin/z3"
 cd ./crates/sui-prover
 cargo test
-cd ../../../../
+cd ../..
 
 
 cd ./crates/sui-framework/packages/prover
