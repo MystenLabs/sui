@@ -1,0 +1,6 @@
+---
+source: crates/sui-prover/tests/integration.rs
+assertion_line: 124
+expression: output
+---
+Verification successful
