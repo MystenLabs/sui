@@ -3,8 +3,9 @@
 
 use crate::{
     TModuleId,
-    model::{self, NamedConstantData, PackageData, SourceKind, WithSource},
+    model::{self, NamedConstantData, PackageData},
     normalized, serializable_signatures,
+    source_kind::{AlwaysSome, WithSource},
 };
 use move_compiler::{
     compiled_unit::CompiledUnit,
@@ -17,7 +18,7 @@ use move_compiler::{
 };
 use move_core_types::{account_address::AccountAddress, runtime_value};
 use move_symbol_pool::Symbol;
-use std::{cell::OnceCell, collections::BTreeMap, ops::Deref, path::PathBuf, sync::Arc};
+use std::{cell::OnceCell, collections::BTreeMap, path::PathBuf, sync::Arc};
 
 pub type Model = model::Model<WithSource>;
 pub type Package<'a> = model::Package<'a, WithSource>;
@@ -117,10 +118,11 @@ impl Model {
             })
             .collect();
         let mut model = Self {
-            files: Some(files),
+            has_source: true,
+            files: AlwaysSome::new(files),
             root_package_name,
             root_named_address_map,
-            info: Some(info),
+            info: AlwaysSome::new(info),
             compiled,
             packages,
             serializable_signatures: OnceCell::new(),
@@ -133,7 +135,7 @@ impl Model {
     }
 
     pub fn files(&self) -> &MappedFiles {
-        self.files.as_ref().unwrap()
+        &self.files
     }
 
     pub fn serializable_signatures(&self) -> &serializable_signatures::Packages {
@@ -147,24 +149,16 @@ impl Model {
 
 impl<'a> Module<'a> {
     pub fn ident(&self) -> &'a E::ModuleIdent {
-        self.data.ident.as_ref().unwrap()
+        &self.data.ident
     }
 
     pub fn info(&self) -> &'a ModuleInfo {
-        self.model()
-            .info
-            .as_ref()
-            .unwrap()
-            .modules
-            .get(self.ident())
-            .unwrap()
+        self.model().info.modules.get(self.ident()).unwrap()
     }
 
     pub fn source_path(&self) -> Symbol {
         self.model()
             .files
-            .as_ref()
-            .unwrap()
             .filename(&self.info().defined_loc.file_hash())
     }
 
@@ -183,7 +177,7 @@ impl<'a> Module<'a> {
 
     pub fn maybe_named_constant(&self, name: impl Into<Symbol>) -> Option<NamedConstant<'a>> {
         let name = name.into();
-        let data = &self.data.named_constants.as_ref().unwrap().get(&name)?;
+        let data = &self.data.named_constants.get(&name)?;
         let compiled = data
             .compiled_index
             .map(|idx| &*self.compiled.constants[idx.0 as usize]);
@@ -202,8 +196,6 @@ impl<'a> Module<'a> {
     pub fn named_constants(&self) -> impl Iterator<Item = NamedConstant<'a>> + '_ {
         self.data
             .named_constants
-            .as_ref()
-            .unwrap()
             .keys()
             .copied()
             .map(|name| self.named_constant(name))
@@ -214,16 +206,14 @@ impl<'a> Module<'a> {
             .constants
             .iter()
             .enumerate()
-            .map(
-                |(idx, compiled)| match self.data.constant_names.as_ref().unwrap()[idx] {
-                    Some(name) => Constant::Named(self.named_constant(name)),
-                    None => Constant::Compiled(CompiledConstant {
-                        module: *self,
-                        compiled,
-                        data: &self.data.constants[idx],
-                    }),
-                },
-            )
+            .map(|(idx, compiled)| match self.data.constant_names[idx] {
+                Some(name) => Constant::Named(self.named_constant(name)),
+                None => Constant::Compiled(CompiledConstant {
+                    module: *self,
+                    compiled,
+                    data: &self.data.constants[idx],
+                }),
+            })
     }
 }
 
@@ -310,14 +300,6 @@ impl<'a> NamedConstant<'a> {
 //**************************************************************************************************
 // Derive
 //**************************************************************************************************
-
-impl Deref for Model {
-    type Target = model::Model<dyn SourceKind>;
-
-    fn deref(&self) -> &Self::Target {
-        unsafe { std::mem::transmute::<&Self, &model::Model<dyn SourceKind>>(self) }
-    }
-}
 
 impl Clone for Constant<'_> {
     fn clone(&self) -> Self {

@@ -2,8 +2,9 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
-    model::{self, PackageData, WithoutSource},
+    model::{self, PackageData},
     normalized, serializable_signatures,
+    source_kind::{AlwaysNone, WithoutSource},
 };
 use move_binary_format::CompiledModule;
 use move_core_types::account_address::AccountAddress;
@@ -41,10 +42,11 @@ impl Model {
             .map(|(a, n)| (*n, *a))
             .collect();
         let mut model = Self {
-            files: None,
+            has_source: false,
+            files: AlwaysNone::new(),
             root_package_name: None,
             root_named_address_map,
-            info: None,
+            info: AlwaysNone::new(),
             compiled,
             packages,
             serializable_signatures: OnceCell::new(),

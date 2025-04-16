@@ -9,7 +9,9 @@ use std::{
 
 use crate::{
     normalized::{self, ModuleId, QualifiedMemberId, TModuleId},
-    serializable_signatures, source_model,
+    serializable_signatures,
+    source_kind::{AlwaysNone, AlwaysSome, AnyKind, SourceKind, WithSource, WithoutSource},
+    source_model,
 };
 use indexmap::IndexMap;
 use move_binary_format::file_format;
@@ -33,37 +35,18 @@ use move_symbol_pool::Symbol;
 // Types
 //**************************************************************************************************
 
-/// Simple sealing trait that prevents other types from implementing `SourceKind`.
-mod private {
-    pub trait Sealed {}
-}
-pub trait SourceKind: private::Sealed + 'static {}
-
-#[derive(Clone, Copy)]
-pub struct WithSource;
-
-impl private::Sealed for WithSource {}
-impl SourceKind for WithSource {}
-
-#[derive(Clone, Copy)]
-pub struct WithoutSource;
-
-impl private::Sealed for WithoutSource {}
-impl SourceKind for WithoutSource {}
-
 #[derive(Clone, Copy)]
 pub enum Kind<TWithSource, TWithout> {
     WithSource(TWithSource),
     WithoutSource(TWithout),
 }
 
-type FromSource<T> = Option<T>;
-
-pub struct Model<K: SourceKind + ?Sized> {
-    pub(crate) files: FromSource<MappedFiles>,
+pub struct Model<K: SourceKind> {
+    pub(crate) has_source: bool,
+    pub(crate) files: K::FromSource<MappedFiles>,
     pub(crate) root_named_address_map: BTreeMap<Symbol, AccountAddress>,
     pub(crate) root_package_name: Option<Symbol>,
-    pub(crate) info: FromSource<Arc<TypingProgramInfo>>,
+    pub(crate) info: K::FromSource<Arc<TypingProgramInfo>>,
     pub(crate) compiled: normalized::Packages,
     pub(crate) packages: BTreeMap<AccountAddress, PackageData<K>>,
     pub(crate) serializable_signatures: OnceCell<serializable_signatures::Packages>,
@@ -77,7 +60,7 @@ pub struct Model<K: SourceKind + ?Sized> {
 /// with different source information to be used together.
 /// Conversely, if you need to "remember" which case you are in, you can use `kind` to to case on the presence source information. This can let you access the extra functionality provided by
 /// the `source_model` or `compiled_model`.
-pub struct Package<'a, K: SourceKind + ?Sized> {
+pub struct Package<'a, K: SourceKind> {
     pub(crate) addr: AccountAddress,
     // TODO name. We likely want the package name from the root package's named address map
     pub(crate) model: &'a Model<K>,
@@ -92,7 +75,7 @@ pub struct Package<'a, K: SourceKind + ?Sized> {
 /// with different source information to be used together.
 /// Conversely, if you need to "remember" which case you are in, you can use `kind` to to case on the presence source information. This can let you access the extra functionality provided by
 /// the `source_model` or `compiled_model`.
-pub struct Module<'a, K: SourceKind + ?Sized> {
+pub struct Module<'a, K: SourceKind> {
     pub(crate) id: ModuleId,
     pub(crate) package: Package<'a, K>,
     pub(crate) compiled: &'a normalized::Module,
@@ -106,7 +89,7 @@ pub struct Module<'a, K: SourceKind + ?Sized> {
 /// with different source information to be used together.
 /// Conversely, if you need to "remember" which case you are in, you can use `kind` to to case on the presence source information. This can let you access the extra functionality provided by
 /// the `source_model` or `compiled_model`.
-pub enum Member<'a, K: SourceKind + ?Sized> {
+pub enum Member<'a, K: SourceKind> {
     Struct(Struct<'a, K>),
     Enum(Enum<'a, K>),
     Function(Function<'a, K>),
@@ -120,7 +103,7 @@ pub enum Member<'a, K: SourceKind + ?Sized> {
 /// with different source information to be used together.
 /// Conversely, if you need to "remember" which case you are in, you can use `kind` to to case on the presence source information. This can let you access the extra functionality provided by
 /// the `source_model` or `compiled_model`.
-pub enum Datatype<'a, K: SourceKind + ?Sized> {
+pub enum Datatype<'a, K: SourceKind> {
     Struct(Struct<'a, K>),
     Enum(Enum<'a, K>),
 }
@@ -132,7 +115,7 @@ pub enum Datatype<'a, K: SourceKind + ?Sized> {
 /// with different source information to be used together.
 /// Conversely, if you need to "remember" which case you are in, you can use `kind` to to case on the presence source information. This can let you access the extra functionality provided by
 /// the `source_model` or `compiled_model`.
-pub struct Struct<'a, K: SourceKind + ?Sized> {
+pub struct Struct<'a, K: SourceKind> {
     pub(crate) name: Symbol,
     pub(crate) module: Module<'a, K>,
     pub(crate) compiled: &'a normalized::Struct,
@@ -147,7 +130,7 @@ pub struct Struct<'a, K: SourceKind + ?Sized> {
 /// with different source information to be used together.
 /// Conversely, if you need to "remember" which case you are in, you can use `kind` to to case on the presence source information. This can let you access the extra functionality provided by
 /// the `source_model` or `compiled_model`.
-pub struct Enum<'a, K: SourceKind + ?Sized> {
+pub struct Enum<'a, K: SourceKind> {
     pub(crate) name: Symbol,
     pub(crate) module: Module<'a, K>,
     pub(crate) compiled: &'a normalized::Enum,
@@ -162,7 +145,7 @@ pub struct Enum<'a, K: SourceKind + ?Sized> {
 /// with different source information to be used together.
 /// Conversely, if you need to "remember" which case you are in, you can use `kind` to to case on the presence source information. This can let you access the extra functionality provided by
 /// the `source_model` or `compiled_model`.
-pub struct Variant<'a, K: SourceKind + ?Sized> {
+pub struct Variant<'a, K: SourceKind> {
     pub(crate) name: Symbol,
     pub(crate) enum_: Enum<'a, K>,
     pub(crate) compiled: &'a normalized::Variant,
@@ -175,7 +158,7 @@ pub struct Variant<'a, K: SourceKind + ?Sized> {
 /// with different source information to be used together.
 /// Conversely, if you need to "remember" which case you are in, you can use `kind` to to case on the presence source information. This can let you access the extra functionality provided by
 /// the `source_model` or `compiled_model`.
-pub struct Function<'a, K: SourceKind + ?Sized> {
+pub struct Function<'a, K: SourceKind> {
     pub(crate) name: Symbol,
     pub(crate) module: Module<'a, K>,
     // might be none for macros
@@ -193,7 +176,7 @@ pub struct Function<'a, K: SourceKind + ?Sized> {
 /// with different source information to be used together.
 /// Conversely, if you need to "remember" which case you are in, you can use `kind` to to case on the presence source information. This can let you access the extra functionality provided by
 /// the `source_model` or `compiled_model`.
-pub struct CompiledConstant<'a, K: SourceKind + ?Sized> {
+pub struct CompiledConstant<'a, K: SourceKind> {
     pub(crate) module: Module<'a, K>,
     pub(crate) compiled: &'a normalized::Constant,
     pub(crate) data: &'a ConstantData,
@@ -203,7 +186,7 @@ pub struct CompiledConstant<'a, K: SourceKind + ?Sized> {
 // API
 //**************************************************************************************************
 
-impl<K: SourceKind + ?Sized> Model<K> {
+impl<K: SourceKind> Model<K> {
     pub fn root_package_name(&self) -> Option<Symbol> {
         self.root_package_name
     }
@@ -259,7 +242,7 @@ impl<K: SourceKind + ?Sized> Model<K> {
     }
 
     pub fn kind(&self) -> Kind<&Model<WithSource>, &Model<WithoutSource>> {
-        if self.has_source() {
+        if self.has_source {
             Kind::WithSource(unsafe { std::mem::transmute::<&Self, &Model<WithSource>>(self) })
         } else {
             Kind::WithoutSource(unsafe {
@@ -268,14 +251,8 @@ impl<K: SourceKind + ?Sized> Model<K> {
         }
     }
 
-    pub fn as_dyn(&self) -> &Model<dyn SourceKind> {
-        unsafe { std::mem::transmute::<&Self, &Model<dyn SourceKind>>(self) }
-    }
-
-    fn has_source(&self) -> bool {
-        let has_files = self.files.is_some();
-        debug_assert_eq!(has_files, self.info.is_some());
-        has_files
+    pub fn as_any(&self) -> &Model<AnyKind> {
+        unsafe { std::mem::transmute::<&Self, &Model<AnyKind>>(self) }
     }
 
     pub(crate) fn check_invariants(&self) {
@@ -304,9 +281,7 @@ impl<K: SourceKind + ?Sized> Model<K> {
                             };
                             let declared_idx = model
                                 .info
-                                .as_ref()
-                                .unwrap()
-                                .module(module.ident.as_ref().unwrap())
+                                .module(&module.ident)
                                 .functions
                                 .get_(f)
                                 .unwrap()
@@ -333,7 +308,7 @@ impl<K: SourceKind + ?Sized> Model<K> {
     }
 }
 
-impl<'a, K: SourceKind + ?Sized> Package<'a, K> {
+impl<'a, K: SourceKind> Package<'a, K> {
     pub fn address(&self) -> AccountAddress {
         self.addr
     }
@@ -375,7 +350,7 @@ impl<'a, K: SourceKind + ?Sized> Package<'a, K> {
     }
 
     pub fn kind(self) -> Kind<Package<'a, WithSource>, Package<'a, WithoutSource>> {
-        if self.model().has_source() {
+        if self.model().has_source {
             Kind::WithSource(unsafe { std::mem::transmute::<Self, Package<'a, WithSource>>(self) })
         } else {
             Kind::WithoutSource(unsafe {
@@ -385,7 +360,7 @@ impl<'a, K: SourceKind + ?Sized> Package<'a, K> {
     }
 }
 
-impl<'a, K: SourceKind + ?Sized> Module<'a, K> {
+impl<'a, K: SourceKind> Module<'a, K> {
     pub fn model(&self) -> &'a Model<K> {
         self.package.model()
     }
@@ -502,7 +477,7 @@ impl<'a, K: SourceKind + ?Sized> Module<'a, K> {
     }
 
     pub fn kind(self) -> Kind<Module<'a, WithSource>, Module<'a, WithoutSource>> {
-        if self.model().has_source() {
+        if self.model().has_source {
             Kind::WithSource(unsafe { std::mem::transmute::<Self, Module<'a, WithSource>>(self) })
         } else {
             Kind::WithoutSource(unsafe {
@@ -512,7 +487,7 @@ impl<'a, K: SourceKind + ?Sized> Module<'a, K> {
     }
 }
 
-impl<'a, K: SourceKind + ?Sized> Struct<'a, K> {
+impl<'a, K: SourceKind> Struct<'a, K> {
     pub fn name(&self) -> Symbol {
         self.name
     }
@@ -538,7 +513,7 @@ impl<'a, K: SourceKind + ?Sized> Struct<'a, K> {
     }
 
     pub fn kind(self) -> Kind<Struct<'a, WithSource>, Struct<'a, WithoutSource>> {
-        if self.model().has_source() {
+        if self.model().has_source {
             Kind::WithSource(unsafe { std::mem::transmute::<Self, Struct<'a, WithSource>>(self) })
         } else {
             Kind::WithoutSource(unsafe {
@@ -548,7 +523,7 @@ impl<'a, K: SourceKind + ?Sized> Struct<'a, K> {
     }
 }
 
-impl<'a, K: SourceKind + ?Sized> Enum<'a, K> {
+impl<'a, K: SourceKind> Enum<'a, K> {
     pub fn name(&self) -> Symbol {
         self.name
     }
@@ -589,7 +564,7 @@ impl<'a, K: SourceKind + ?Sized> Enum<'a, K> {
     }
 }
 
-impl<'a, K: SourceKind + ?Sized> Variant<'a, K> {
+impl<'a, K: SourceKind> Variant<'a, K> {
     pub fn name(&self) -> Symbol {
         self.name
     }
@@ -619,7 +594,7 @@ impl<'a, K: SourceKind + ?Sized> Variant<'a, K> {
     }
 
     pub fn kind(self) -> Kind<Variant<'a, WithSource>, Variant<'a, WithoutSource>> {
-        if self.model().has_source() {
+        if self.model().has_source {
             Kind::WithSource(unsafe { std::mem::transmute::<Self, Variant<'a, WithSource>>(self) })
         } else {
             Kind::WithoutSource(unsafe {
@@ -629,7 +604,7 @@ impl<'a, K: SourceKind + ?Sized> Variant<'a, K> {
     }
 }
 
-impl<'a, K: SourceKind + ?Sized> Function<'a, K> {
+impl<'a, K: SourceKind> Function<'a, K> {
     pub fn name(&self) -> Symbol {
         self.name
     }
@@ -666,7 +641,7 @@ impl<'a, K: SourceKind + ?Sized> Function<'a, K> {
     }
 
     pub fn kind(self) -> Kind<Function<'a, WithSource>, Function<'a, WithoutSource>> {
-        if self.model().has_source() {
+        if self.model().has_source {
             Kind::WithSource(unsafe { std::mem::transmute::<Self, Function<'a, WithSource>>(self) })
         } else {
             Kind::WithoutSource(unsafe {
@@ -676,7 +651,7 @@ impl<'a, K: SourceKind + ?Sized> Function<'a, K> {
     }
 }
 
-impl<'a, K: SourceKind + ?Sized> CompiledConstant<'a, K> {
+impl<'a, K: SourceKind> CompiledConstant<'a, K> {
     pub fn module(&self) -> Module<'a, K> {
         self.module
     }
@@ -761,21 +736,21 @@ impl<T: TModuleId> TModuleId for Spanned<T> {
 
 // The *Data structs are not used currently, but if we need extra source information these provide
 // a place to store it.
-pub(crate) struct PackageData<K: SourceKind + ?Sized> {
+pub(crate) struct PackageData<K: SourceKind> {
     // Based on the root packages named address map
     pub(crate) name: Option<Symbol>,
     pub(crate) modules: BTreeMap<Symbol, ModuleData<K>>,
 }
 
-pub(crate) struct ModuleData<K: SourceKind + ?Sized> {
-    pub(crate) ident: FromSource<E::ModuleIdent>,
+pub(crate) struct ModuleData<K: SourceKind> {
+    pub(crate) ident: K::FromSource<E::ModuleIdent>,
     pub(crate) structs: IndexMap<Symbol, StructData>,
     pub(crate) enums: IndexMap<Symbol, EnumData>,
     pub(crate) functions: IndexMap<Symbol, FunctionData>,
     pub(crate) constants: Vec<ConstantData>,
-    pub(crate) named_constants: FromSource<IndexMap<Symbol, NamedConstantData>>,
+    pub(crate) named_constants: K::FromSource<IndexMap<Symbol, NamedConstantData>>,
     // mapping from file_format::ConstantPoolIndex to source constant name, if any
-    pub(crate) constant_names: FromSource<Vec<Option<Symbol>>>,
+    pub(crate) constant_names: K::FromSource<Vec<Option<Symbol>>>,
     pub(crate) deps: BTreeMap<ModuleId, /* is immediate */ bool>,
     pub(crate) used_by: BTreeMap<ModuleId, /* is immediate */ bool>,
     pub(crate) _phantom: std::marker::PhantomData<K>,
@@ -808,7 +783,7 @@ pub(crate) struct NamedConstantData {
 // Construction
 //**************************************************************************************************
 
-impl<K: SourceKind + ?Sized> Model<K> {
+impl<K: SourceKind> Model<K> {
     pub(crate) fn compute_dependencies(&mut self) {
         fn visit(
             packages: &BTreeMap<AccountAddress, normalized::Package>,
@@ -1010,13 +985,13 @@ impl ModuleData<WithSource> {
                 .collect()
         };
         Self {
-            ident: Some(ident),
+            ident: AlwaysSome::new(ident),
             structs,
             enums,
             functions,
             constants,
-            named_constants: Some(named_constants),
-            constant_names: Some(constant_names),
+            named_constants: AlwaysSome::new(named_constants),
+            constant_names: AlwaysSome::new(constant_names),
             // computed later
             deps: BTreeMap::new(),
             used_by: BTreeMap::new(),
@@ -1050,13 +1025,13 @@ impl ModuleData<WithoutSource> {
             .map(|name| (name, FunctionData::new()))
             .collect();
         Self {
-            ident: None,
+            ident: AlwaysNone::new(),
             structs,
             enums,
             functions,
             constants,
-            named_constants: None,
-            constant_names: None,
+            named_constants: AlwaysNone::new(),
+            constant_names: AlwaysNone::new(),
             // computed later
             deps: BTreeMap::new(),
             used_by: BTreeMap::new(),
@@ -1169,20 +1144,20 @@ fn annotated_constant_layout(ty: &normalized::Type) -> runtime_value::MoveTypeLa
 
 macro_rules! derive_all {
     ($item:ident) => {
-        impl<K: SourceKind + ?Sized> Clone for $item<'_, K> {
+        impl<K: SourceKind> Clone for $item<'_, K> {
             fn clone(&self) -> Self {
                 *self
             }
         }
-        impl<K: SourceKind + ?Sized> Copy for $item<'_, K> {}
+        impl<K: SourceKind> Copy for $item<'_, K> {}
 
-        impl<'a, K: SourceKind + ?Sized> $item<'a, K> {
-            pub fn as_dyn(&self) -> &$item<'a, dyn SourceKind> {
-                unsafe { std::mem::transmute::<&$item<'a, K>, &$item<'a, dyn SourceKind>>(self) }
+        impl<'a, K: SourceKind> $item<'a, K> {
+            pub fn as_any(&self) -> &$item<'a, AnyKind> {
+                unsafe { std::mem::transmute::<&$item<'a, K>, &$item<'a, AnyKind>>(self) }
             }
 
-            pub fn to_dyn(self) -> $item<'a, dyn SourceKind> {
-                unsafe { std::mem::transmute::<$item<'a, K>, $item<'a, dyn SourceKind>>(self) }
+            pub fn to_dyn(self) -> $item<'a, AnyKind> {
+                unsafe { std::mem::transmute::<$item<'a, K>, $item<'a, AnyKind>>(self) }
             }
         }
     };
