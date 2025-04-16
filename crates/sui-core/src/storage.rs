@@ -10,7 +10,6 @@ use crate::rpc_index::OwnerIndexInfo;
 use crate::rpc_index::OwnerIndexKey;
 use crate::rpc_index::RpcIndexStore;
 use move_core_types::language_storage::StructTag;
-use mysten_common::debug_fatal;
 use parking_lot::Mutex;
 use std::sync::Arc;
 use sui_types::base_types::ObjectID;
@@ -42,6 +41,7 @@ use sui_types::storage::{ObjectKey, ReadStore};
 use sui_types::transaction::VerifiedTransaction;
 use tap::Pipe;
 use tap::TapFallible;
+use tracing::error;
 use typed_store::TypedStoreError;
 
 #[derive(Clone)]
@@ -164,7 +164,12 @@ impl ReadStore for RocksDbStore {
             if let Ok(Some(contents)) = self
                 .checkpoint_store
                 .get_full_checkpoint_contents_by_sequence_number(sequence_number)
-                .tap_err(|e| debug_fatal!("error getting full checkpoint contents: {:?}", e))
+                .tap_err(|e| {
+                    error!(
+                        "error getting full checkpoint contents for checkpoint {:?}: {:?}",
+                        sequence_number, e
+                    )
+                })
             {
                 return Some(contents);
             }

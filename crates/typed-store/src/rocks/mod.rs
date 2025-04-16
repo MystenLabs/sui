@@ -23,6 +23,8 @@ use crate::{
 };
 use crate::{DbIterator, TypedStoreError};
 use backoff::backoff::Backoff;
+use fastcrypto::hash::{Digest, HashFunction};
+use mysten_common::debug_fatal;
 use prometheus::{Histogram, HistogramTimer};
 use rocksdb::properties::num_files_at_level;
 use rocksdb::{checkpoint::Checkpoint, DBPinnableSlice, LiveFile};
@@ -1208,7 +1210,7 @@ impl DBBatch {
     /// with ignore_range_deletions set to true, the old value are visible until
     /// compaction actually deletes them which will happen sometime after. By
     /// default ignore_range_deletions is set to true on a DBMap (unless it is
-    /// overriden in the config), so please use this function with caution
+    /// overridden in the config), so please use this function with caution
     pub fn schedule_delete_range<K: Serialize, V>(
         &mut self,
         db: &DBMap<K, V>,
@@ -1248,6 +1250,16 @@ impl DBBatch {
                 let k_buf = be_fix_int_ser(k.borrow());
                 let v_buf = bcs::to_bytes(v.borrow()).map_err(typed_store_err_from_bcs_err)?;
                 total += k_buf.len() + v_buf.len();
+                if db.opts.log_value_hash {
+                    let key_hash = default_hash(&k_buf);
+                    let value_hash = default_hash(&v_buf);
+                    debug!(
+                        "Insert to DB table: {:?}, key_hash: {:?}, value_hash: {:?}",
+                        db.cf_name(),
+                        key_hash,
+                        value_hash
+                    );
+                }
                 match (&mut self.batch, &db.column_family) {
                     (StorageWriteBatch::Rocks(b), ColumnFamily::Rocks(name)) => {
                         b.put_cf(&rocks_cf_from_db(&self.database, name)?, k_buf, v_buf)
@@ -1355,9 +1367,21 @@ where
                 .report_metrics(&self.cf);
         }
         match res {
-            Some(data) => Ok(Some(
-                bcs::from_bytes(&data).map_err(typed_store_err_from_bcs_err)?,
-            )),
+            Some(data) => {
+                let value = bcs::from_bytes(&data).map_err(typed_store_err_from_bcs_err);
+                if value.is_err() {
+                    let key_hash = default_hash(&key_buf);
+                    let value_hash = default_hash(&data);
+                    debug_fatal!(
+                        "Failed to deserialize value from DB table {:?}, key_hash: {:?}, value_hash: {:?}, error: {:?}",
+                        self.cf_name(),
+                        key_hash,
+                        value_hash,
+                        value.as_ref().err().unwrap()
+                    );
+                }
+                Ok(Some(value?))
+            }
             None => Ok(None),
         }
     }
@@ -1442,7 +1466,7 @@ where
     /// with ignore_range_deletions set to true, the old value are visible until
     /// compaction actually deletes them which will happen sometime after. By
     /// default ignore_range_deletions is set to true on a DBMap (unless it is
-    /// overriden in the config), so please use this function with caution
+    /// overridden in the config), so please use this function with caution
     #[instrument(level = "trace", skip_all, err)]
     fn schedule_delete_all(&self) -> Result<(), TypedStoreError> {
         let first_key = self.safe_iter().next().transpose()?.map(|(k, _v)| k);
@@ -1765,4 +1789,10 @@ fn populate_missing_cfs(
             .map(|(name, opts)| (name.to_string(), (*opts).clone())),
     );
     Ok(cfs)
+}
+
+fn default_hash(value: &[u8]) -> Digest<32> {
+    let mut hasher = fastcrypto::hash::Blake2b256::default();
+    hasher.update(value);
+    hasher.finalize()
 }
