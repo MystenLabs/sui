@@ -4,4 +4,5 @@
 mod committee;
 pub(crate) mod health;
 mod protocol_config;
+pub(crate) mod sleep;
 pub(crate) mod transactions;
