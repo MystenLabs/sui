@@ -12,34 +12,32 @@ public struct Sword has key, store {
     strength: u64,
 }
 
-public fun buy_sword_with_usdc(coin: Coin<USDC>, tx_context: &mut TxContext): Sword {
-    let sword = create_sword(coin.value(), tx_context);
-
-    transfer::public_transfer(coin, @0x0); // Essentially burning the coin, would send to actual recipient in production
-
+public fun buy_sword_with_usdc(coin: Coin<USDC>, ctx: &mut TxContext): Sword {
+    let sword = create_sword(coin.value(), ctx);
+    // In production: transfer to actual recipient! Don't transfer to 0x0!
+    transfer::public_transfer(coin, @0x0);
     sword
 }
 
-public fun buy_sword_with_sui(coin: Coin<SUI>, tx_context: &mut TxContext): Sword {
-    let sword = create_sword(coin.value(), tx_context);
-
-    transfer::public_transfer(coin, @0x0); // Essentially burning the coin, would send to actual recipient in production
-
+public fun buy_sword_with_sui(coin: Coin<SUI>, ctx: &mut TxContext): Sword {
+    let sword = create_sword(coin.value(), ctx);
+    // In production: transfer to actual recipient! Don't transfer to 0x0!
+    transfer::public_transfer(coin, @0x0);
     sword
 }
 
 public fun buy_sword_with_arbitrary_coin<CoinType>(
     coin: Coin<CoinType>,
-    tx_context: &mut TxContext,
+    ctx: &mut TxContext,
 ): Sword {
-    let sword = create_sword(coin.value(), tx_context);
-
-    transfer::public_transfer(coin, @0x0); // Essentially burning the coin, would send to actual recipient in production
-
+    let sword = create_sword(coin.value(), ctx);
+    // In production: transfer to actual recipient! Don't transfer to 0x0!
+    transfer::public_transfer(coin, @0x0);
     sword
 }
 
-fun create_sword(strength: u64, tx_context: &mut TxContext): Sword {
-    let id = object::new(tx_context);
+/// A helper function to create a sword.
+fun create_sword(strength: u64, ctx: &mut TxContext): Sword {
+    let id = object::new(ctx);
     Sword { id, strength }
 }
