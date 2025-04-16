@@ -164,7 +164,7 @@ impl ReadStore for RocksDbStore {
             if let Ok(Some(contents)) = self
                 .checkpoint_store
                 .get_full_checkpoint_contents_by_sequence_number(sequence_number)
-                .tap_err(|e| debug_fatal!("error getting full checkpoint contents: {:?}", e))
+                .tap_err(|e| panic!("error getting full checkpoint contents: {:?}", e))
             {
                 return Some(contents);
             }
