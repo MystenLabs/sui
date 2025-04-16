@@ -191,8 +191,7 @@ public(package) fun request_remove_validator_candidate(
 ) {
     let validator_address = ctx.sender();
     assert!(self.validator_candidates.contains(validator_address), ENotValidatorCandidate);
-    let wrapper = self.validator_candidates.remove(validator_address);
-    let mut validator = wrapper.destroy();
+    let mut validator = self.validator_candidates.remove(validator_address).destroy();
     assert!(validator.is_preactive(), EValidatorNotCandidate);
 
     let staking_pool_id = validator.staking_pool_id();
@@ -212,8 +211,7 @@ public(package) fun request_remove_validator_candidate(
 public(package) fun request_add_validator(self: &mut ValidatorSet, ctx: &TxContext) {
     let validator_address = ctx.sender();
     assert!(self.validator_candidates.contains(validator_address), ENotValidatorCandidate);
-    let wrapper = self.validator_candidates.remove(validator_address);
-    let validator = wrapper.destroy();
+    let validator = self.validator_candidates.remove(validator_address).destroy();
     assert!(
         !self.is_duplicate_with_active_validator(&validator)
             && !self.is_duplicate_with_pending_validator(&validator),
@@ -318,8 +316,7 @@ public(package) fun request_withdraw_stake(
     } else {
         // This is an inactive pool.
         assert!(self.inactive_validators.contains(staking_pool_id), ENoPoolFound);
-        let wrapper = &mut self.inactive_validators[staking_pool_id];
-        wrapper.load_validator_maybe_upgrade()
+        self.inactive_validators[staking_pool_id].load_validator_maybe_upgrade()
     };
     validator.request_withdraw_stake(staked_sui, ctx)
 }

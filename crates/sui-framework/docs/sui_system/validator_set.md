@@ -758,8 +758,7 @@ Called by <code><a href="../sui_system/sui_system.md#sui_system_sui_system">sui_
 ) {
     <b>let</b> validator_address = ctx.sender();
     <b>assert</b>!(self.validator_candidates.contains(validator_address), <a href="../sui_system/validator_set.md#sui_system_validator_set_ENotValidatorCandidate">ENotValidatorCandidate</a>);
-    <b>let</b> wrapper = self.validator_candidates.remove(validator_address);
-    <b>let</b> <b>mut</b> <a href="../sui_system/validator.md#sui_system_validator">validator</a> = wrapper.destroy();
+    <b>let</b> <b>mut</b> <a href="../sui_system/validator.md#sui_system_validator">validator</a> = self.validator_candidates.remove(validator_address).destroy();
     <b>assert</b>!(<a href="../sui_system/validator.md#sui_system_validator">validator</a>.is_preactive(), <a href="../sui_system/validator_set.md#sui_system_validator_set_EValidatorNotCandidate">EValidatorNotCandidate</a>);
     <b>let</b> staking_pool_id = <a href="../sui_system/validator.md#sui_system_validator">validator</a>.staking_pool_id();
     // Remove the <a href="../sui_system/validator.md#sui_system_validator">validator</a>'s staking pool from mappings.
@@ -795,8 +794,7 @@ processed at the end of epoch.
 <pre><code><b>public</b>(package) <b>fun</b> <a href="../sui_system/validator_set.md#sui_system_validator_set_request_add_validator">request_add_validator</a>(self: &<b>mut</b> <a href="../sui_system/validator_set.md#sui_system_validator_set_ValidatorSet">ValidatorSet</a>, ctx: &TxContext) {
     <b>let</b> validator_address = ctx.sender();
     <b>assert</b>!(self.validator_candidates.contains(validator_address), <a href="../sui_system/validator_set.md#sui_system_validator_set_ENotValidatorCandidate">ENotValidatorCandidate</a>);
-    <b>let</b> wrapper = self.validator_candidates.remove(validator_address);
-    <b>let</b> <a href="../sui_system/validator.md#sui_system_validator">validator</a> = wrapper.destroy();
+    <b>let</b> <a href="../sui_system/validator.md#sui_system_validator">validator</a> = self.validator_candidates.remove(validator_address).destroy();
     <b>assert</b>!(
         !self.<a href="../sui_system/validator_set.md#sui_system_validator_set_is_duplicate_with_active_validator">is_duplicate_with_active_validator</a>(&<a href="../sui_system/validator.md#sui_system_validator">validator</a>)
             && !self.<a href="../sui_system/validator_set.md#sui_system_validator_set_is_duplicate_with_pending_validator">is_duplicate_with_pending_validator</a>(&<a href="../sui_system/validator.md#sui_system_validator">validator</a>),
@@ -1016,8 +1014,7 @@ the stake and any rewards corresponding to it will be immediately processed.
     } <b>else</b> {
         // This is an inactive pool.
         <b>assert</b>!(self.inactive_validators.contains(staking_pool_id), <a href="../sui_system/validator_set.md#sui_system_validator_set_ENoPoolFound">ENoPoolFound</a>);
-        <b>let</b> wrapper = &<b>mut</b> self.inactive_validators[staking_pool_id];
-        wrapper.load_validator_maybe_upgrade()
+        self.inactive_validators[staking_pool_id].load_validator_maybe_upgrade()
     };
     <a href="../sui_system/validator.md#sui_system_validator">validator</a>.<a href="../sui_system/validator_set.md#sui_system_validator_set_request_withdraw_stake">request_withdraw_stake</a>(staked_sui, ctx)
 }
