@@ -7,33 +7,35 @@
 //! as bytecodes. Therefore we do not need an AST for the Move code itself.
 
 use std::{
-    borrow::Borrow,
-    cell::RefCell,
-    collections::{BTreeMap, BTreeSet, HashSet},
     fmt,
     fmt::{Debug, Error, Formatter},
     hash::Hash,
-    ops::Deref,
 };
 
-use internment::LocalIntern;
-use itertools::Itertools;
 use num::{BigInt, BigUint, Num};
 use once_cell::sync::Lazy;
 
-use move_binary_format::file_format::CodeOffset;
-
 use crate::{
-    model::{
-        DatatypeId, EnvDisplay, FieldId, FunId, FunctionVisibility, GlobalEnv, GlobalId, Loc,
-        ModuleId, NodeId, QualifiedId, QualifiedInstId, TypeParameter,
-        GHOST_MEMORY_PREFIX,
-    },
+    model::NodeId,
     symbol::{Symbol, SymbolPool},
-    ty::{Type, TypeDisplayContext},
 };
 
 const MAX_ADDR_STRING: &str = "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff";
+
+/// A type alias for temporaries. Those are locals used in bytecode.
+pub type TempIndex = usize;
+
+#[derive(Debug, PartialEq, Eq, Clone, Copy, Hash)]
+pub enum TraceKind {
+    /// A user level TRACE(..) in the source.
+    User,
+    /// An automatically generated trace
+    Auto,
+    /// A trace for a sub-expression of an assert or assume. The location of a
+    /// Call(.., Trace(SubAuto)) expression identifies the context of the assume or assert.
+    /// A backend may print those traces only if the assertion failed.
+    SubAuto,
+}
 
 // =================================================================================================
 /// # Attributes
@@ -221,11 +223,5 @@ impl fmt::Display for QualifiedSymbolDisplay<'_> {
         }
         write!(f, "{}", self.sym.symbol.display(self.pool))?;
         Ok(())
-    }
-}
-
-impl fmt::Display for GlobalId {
-    fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), Error> {
-        write!(f, "@{}", self.as_usize())
     }
 }

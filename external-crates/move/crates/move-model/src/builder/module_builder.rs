@@ -2,24 +2,16 @@
 // Copyright (c) The Move Contributors
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{
-    collections::{BTreeMap, BTreeSet},
-    default::Default,
-    fmt,
-};
+use std::collections::BTreeMap;
 
-use codespan_reporting::diagnostic::Severity;
 use itertools::Itertools;
 
 use move_binary_format::{
-    file_format::{
-        AbilitySet, Constant, EnumDefinitionIndex, FunctionDefinitionIndex, StructDefinitionIndex,
-    },
+    file_format::{Constant, EnumDefinitionIndex, FunctionDefinitionIndex, StructDefinitionIndex},
     CompiledModule,
 };
 use move_bytecode_source_map::source_map::SourceMap;
 use move_compiler::{
-    compiled_unit::{FunctionInfo, SpecInfo},
     expansion::ast as EA,
     parser::ast as PA,
     shared::{unique_map::UniqueMap, Name, TName},
@@ -33,18 +25,12 @@ use crate::{
         model_builder::{ConstEntry, DatatypeData, ModelBuilder},
     },
     model::{
-        AbilityConstraint, DatatypeId, EnumData, FieldId, FunId, FunctionData, FunctionVisibility,
-        Loc, ModuleId, NamedConstantData, NamedConstantId, NodeId, QualifiedId, QualifiedInstId,
-        StructData, TypeParameter, SCRIPT_BYTECODE_FUN_NAME,
-    },
-    options::ModelBuilderOptions,
-    pragmas::{
-        CONDITION_ABSTRACT_PROP, CONDITION_CONCRETE_PROP, CONDITION_DEACTIVATED_PROP,
-        OPAQUE_PRAGMA, VERIFY_PRAGMA,
+        DatatypeId, EnumData, FunId, FunctionData, Loc, ModuleId, NamedConstantData,
+        NamedConstantId, StructData, SCRIPT_BYTECODE_FUN_NAME,
     },
     project_1st,
     symbol::{Symbol, SymbolPool},
-    ty::{PrimitiveType, Type, BOOL_TYPE},
+    ty::Type,
 };
 
 #[derive(Debug)]
@@ -94,12 +80,11 @@ impl<'env, 'translator> ModuleBuilder<'env, 'translator> {
         module_def: EA::ModuleDefinition,
         compiled_module: CompiledModule,
         source_map: SourceMap,
-        function_infos: UniqueMap<PA::FunctionName, FunctionInfo>,
     ) {
         self.decl_ana(&module_def, &compiled_module, &source_map);
         self.def_ana(&module_def);
         let attrs = self.translate_attributes(&module_def.attributes);
-        self.populate_env_from_result(loc, attrs, compiled_module, source_map, &function_infos);
+        self.populate_env_from_result(loc, attrs, compiled_module, source_map);
     }
 }
 
@@ -139,7 +124,7 @@ impl ModuleBuilder<'_, '_> {
                 );
                 (Some(module_name), self.symbol_pool().make(n.value.as_str()))
             }
-            EA::ModuleAccess_::Variant(_, _) => unimplemented!("translating variant access"),
+            EA::ModuleAccess_::Variant(..) => panic!("Variants are not supported by move model."),
         }
     }
 
@@ -153,38 +138,6 @@ impl ModuleBuilder<'_, '_> {
             symbol,
         }
     }
-
-    /*/// Creates a SpecBlockContext from the given SpecBlockTarget. The context is used during
-    /// definition analysis when visiting a schema block member (condition, invariant, etc.).
-    /// This returns None if the SpecBlockTarget cannnot be resolved; error reporting happens
-    /// at caller side.
-    fn get_spec_block_context<'pa>(
-        &self,
-        target: &'pa EA::SpecBlockTarget,
-    ) -> Option<SpecBlockContext<'pa>> {
-        match &target.value {
-            EA::SpecBlockTarget_::Code => None,
-            EA::SpecBlockTarget_::Member(name, _) => {
-                let qsym = self.qualified_by_module_from_name(name);
-                if self.parent.fun_table.contains_key(&qsym) {
-                    Some(SpecBlockContext::Function(qsym))
-                } else if self.parent.struct_table.contains_key(&qsym) {
-                    Some(SpecBlockContext::Struct(qsym))
-                } else {
-                    None
-                }
-            }
-            EA::SpecBlockTarget_::Schema(name, _) => {
-                let qsym = self.qualified_by_module_from_name(name);
-                if self.parent.spec_schema_table.contains_key(&qsym) {
-                    Some(SpecBlockContext::Schema(qsym))
-                } else {
-                    None
-                }
-            }
-            EA::SpecBlockTarget_::Module => Some(SpecBlockContext::Module),
-        }
-    }*/
 }
 
 // # Attribute Analysis
@@ -281,8 +234,8 @@ impl ModuleBuilder<'_, '_> {
                                 self.symbol_pool().make(n.value.as_str()),
                             )
                         }
-                        EA::ModuleAccess_::Variant(_, _) => {
-                            unimplemented!("translating variant access")
+                        EA::ModuleAccess_::Variant(..) => {
+                            panic!("Variants are not supported by move model.")
                         }
                     },
                 };
@@ -388,7 +341,6 @@ impl ModuleBuilder<'_, '_> {
 
     fn decl_ana_fun(&mut self, name: &PA::FunctionName, def: &EA::Function) {
         let qsym = self.qualified_by_module_from_name(&name.0);
-        let fun_id = FunId::new(qsym.symbol);
         let attrs = self.translate_attributes(&def.attributes);
         let mut et = ExpTranslator::new(self);
         et.enter_scope();
@@ -396,71 +348,16 @@ impl ModuleBuilder<'_, '_> {
             def.signature.type_parameters.iter().map(|(name, _)| name),
         );
         et.enter_scope();
-        let params = et.analyze_and_add_params(&def.signature.parameters, true);
-        let result_type = et.translate_type(&def.signature.return_type);
-        let is_entry = def.entry.is_some();
-        let visibility = match def.visibility {
-            EA::Visibility::Public(_) => FunctionVisibility::Public,
-            // Packages are converted to friend during compilation.
-            EA::Visibility::Package(_) => FunctionVisibility::Friend,
-            EA::Visibility::Friend(_) => FunctionVisibility::Friend,
-            EA::Visibility::Internal => FunctionVisibility::Private,
-        };
+        let params = et.analyze_and_add_params(&def.signature.parameters);
+        let _result_type = et.translate_type(&def.signature.return_type);
         let loc = et.to_loc(&def.loc);
         et.parent.parent.define_fun(
             loc.clone(),
             attrs,
             qsym.clone(),
-            et.parent.module_id,
-            fun_id,
-            visibility,
-            is_entry,
             type_params.clone(),
             params.clone(),
-            result_type.clone(),
         );
-    }
-
-    fn decl_ana_signature(
-        &mut self,
-        signature: &EA::FunctionSignature,
-        for_move_fun: bool,
-    ) -> (Vec<(Symbol, Type)>, Vec<(Symbol, Type)>, Type) {
-        let et = &mut ExpTranslator::new(self);
-        let type_params =
-            et.analyze_and_add_type_params(signature.type_parameters.iter().map(|(name, _)| name));
-        et.enter_scope();
-        let params = et.analyze_and_add_params(&signature.parameters, for_move_fun);
-        let result_type = et.translate_type(&signature.return_type);
-        et.finalize_types();
-        (type_params, params, result_type)
-    }
-
-    fn decl_ana_global_var<'a, I>(
-        &mut self,
-        loc: &Loc,
-        name: &Name,
-        type_params: I,
-        type_: &EA::Type,
-    ) where
-        I: IntoIterator<Item = &'a Name>,
-    {
-        let name = self.symbol_pool().make(name.value.as_str());
-        let (type_params, type_) = {
-            let et = &mut ExpTranslator::new(self);
-            let type_params = et.analyze_and_add_type_params(type_params);
-            let type_ = et.translate_type(type_);
-            (type_params, type_)
-        };
-        if type_.is_reference() {
-            self.parent.error(
-                loc,
-                &format!(
-                    "`{}` cannot have reference type",
-                    name.display(self.symbol_pool())
-                ),
-            )
-        }
     }
 }
 
@@ -614,8 +511,8 @@ impl ModuleBuilder<'_, '_> {
                 et.define_type_param(&loc, *n, ty.clone());
             }
             et.enter_scope();
-            for (idx, (n, ty)) in params.iter().enumerate() {
-                et.define_local(&loc, *n, ty.clone(), Some(idx));
+            for (n, _) in params.iter() {
+                et.define_local(&loc, *n);
             }
             et.finalize_types();
         }
@@ -631,13 +528,12 @@ impl ModuleBuilder<'_, '_> {
         attributes: Vec<Attribute>,
         module: CompiledModule,
         source_map: SourceMap,
-        function_infos: &UniqueMap<PA::FunctionName, FunctionInfo>,
     ) {
         let struct_data: BTreeMap<DatatypeId, StructData> = (0..module.struct_defs().len())
             .filter_map(|idx| {
                 let def_idx = StructDefinitionIndex(idx as u16);
                 let handle_idx = module.struct_def_at(def_idx).struct_handle;
-		let handle = module.datatype_handle_at(handle_idx);
+                let handle = module.datatype_handle_at(handle_idx);
                 let name = self.symbol_pool().make(module.identifier_at(handle.name).as_str());
                 if let Some(entry) = self
                     .parent
@@ -667,9 +563,7 @@ impl ModuleBuilder<'_, '_> {
                 let def_idx = EnumDefinitionIndex(idx as u16);
                 let handle_idx = module.enum_def_at(def_idx).enum_handle;
                 let handle = module.datatype_handle_at(handle_idx);
-                let name = self
-                    .symbol_pool()
-                    .make(module.identifier_at(handle.name).as_str());
+                let name = self.symbol_pool().make(module.identifier_at(handle.name).as_str());
                 if let Some(entry) = self
                     .parent
                     .datatype_table
@@ -689,12 +583,7 @@ impl ModuleBuilder<'_, '_> {
                 } else {
                     self.parent.error(
                         &self.parent.env.internal_loc(),
-                        &format!(
-                            "[internal] bytecode does not match AST: `{}` in bytecode but n\
-ot in AST",
-                            name.display(self.symbol_pool())
-                        ),
-                    );
+                        &format!("[internal] bytecode does not match AST: `{}` in bytecode but not in AST", name.display(self.symbol_pool())));
                     None
                 }
             })
@@ -703,32 +592,27 @@ ot in AST",
             .filter_map(|idx| {
                 let def_idx = FunctionDefinitionIndex(idx as u16);
                 let handle_idx = module.function_def_at(def_idx).function;
-		let handle = module.function_handle_at(handle_idx);
+                let handle = module.function_handle_at(handle_idx);
                 let name_str = module.identifier_at(handle.name).as_str();
                 let name = if name_str == SCRIPT_BYTECODE_FUN_NAME {
                     // This is a pseudo script module, which has exactly one function. Determine
                     // the name of this function.
-                    self.parent.fun_table.iter().filter_map(|(k, _)| {
+                    self.parent.fun_table.iter().find_map(|(k, _)| {
                         if k.module_name == self.module_name
                         { Some(k.symbol) } else { None }
-                    }).next().expect("unexpected script with multiple or no functions")
+                    }).expect("unexpected script with multiple or no functions")
                 } else {
                     self.symbol_pool().make(name_str)
                 };
                 if let Some(entry) = self.parent.fun_table.get(&self.qualified_by_module(name)) {
                     let arg_names = project_1st(&entry.params);
                     let type_arg_names = project_1st(&entry.type_params);
-                    let toplevel_attributes = function_infos
-                        .get_(&move_symbol_pool::Symbol::from(name_str))
-                        .map(|finfo| finfo.attributes.clone())
-                        .unwrap_or_default();
                     Some((FunId::new(name), self.parent.env.create_function_data(
                         &module,
                         def_idx,
                         name,
                         entry.loc.clone(),
                         entry.attributes.clone(),
-                        toplevel_attributes,
                         arg_names,
                         type_arg_names,
                     )))

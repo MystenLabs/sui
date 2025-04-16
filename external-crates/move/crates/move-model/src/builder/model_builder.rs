@@ -7,18 +7,13 @@
 //! byte code). This includes identifying the Move sub-language supported by the specification
 //! system, as well as type checking it and translating it to the spec language ast.
 
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::BTreeMap;
 
-use codespan_reporting::diagnostic::Severity;
-#[allow(unused_imports)]
-use log::{debug, info, warn};
-use num::BigUint;
-
-use move_compiler::{expansion::ast as EA, parser::ast as PA, shared::NumericalAddress};
+use move_compiler::{expansion::ast as EA, shared::NumericalAddress};
 
 use crate::{
-    ast::{Attribute, ModuleName, QualifiedSymbol, Value},
-    model::{DatatypeId, FunId, FunctionVisibility, GlobalEnv, Loc, ModuleId, QualifiedId},
+    ast::{Attribute, QualifiedSymbol, Value},
+    model::{DatatypeId, GlobalEnv, Loc, ModuleId},
     project_2nd,
     symbol::Symbol,
     ty::Type,
@@ -69,14 +64,8 @@ pub(crate) enum DatatypeData {
 #[derive(Debug, Clone)]
 pub(crate) struct FunEntry {
     pub loc: Loc,
-    pub module_id: ModuleId,
-    pub fun_id: FunId,
-    pub visibility: FunctionVisibility,
-    pub is_entry: bool,
     pub type_params: Vec<(Symbol, Type)>,
     pub params: Vec<(Symbol, Type)>,
-    pub result_type: Type,
-    pub is_pure: bool,
     pub attributes: Vec<Attribute>,
 }
 
@@ -108,11 +97,6 @@ impl<'env> ModelBuilder<'env> {
     /// Reports a type checking error.
     pub fn error(&self, at: &Loc, msg: &str) {
         self.env.error(at, msg)
-    }
-
-    /// Reports a type checking error with notes.
-    pub fn error_with_notes(&self, at: &Loc, msg: &str, notes: Vec<String>) {
-        self.env.error_with_notes(at, msg, notes)
     }
 
     /// Defines a struct type.
@@ -170,25 +154,14 @@ impl<'env> ModelBuilder<'env> {
         loc: Loc,
         attributes: Vec<Attribute>,
         name: QualifiedSymbol,
-        module_id: ModuleId,
-        fun_id: FunId,
-        visibility: FunctionVisibility,
-        is_entry: bool,
         type_params: Vec<(Symbol, Type)>,
         params: Vec<(Symbol, Type)>,
-        result_type: Type,
     ) {
         let entry = FunEntry {
             loc,
             attributes,
-            module_id,
-            fun_id,
-            visibility,
-            is_entry,
             type_params,
             params,
-            result_type,
-            is_pure: false,
         };
         // Duplicate declarations have been checked by the Move compiler.
         assert!(self.fun_table.insert(name, entry).is_none());
@@ -229,7 +202,4 @@ impl<'env> ModelBuilder<'env> {
 #[derive(Debug, Clone)]
 pub(crate) struct LocalVarEntry {
     pub loc: Loc,
-    pub type_: Type,
-    /// If this a temporary from Move code, this is it's index.
-    pub temp_index: Option<usize>,
 }
