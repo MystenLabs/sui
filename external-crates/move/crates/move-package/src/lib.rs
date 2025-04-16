@@ -12,7 +12,6 @@ pub mod source_package;
 
 use anyhow::{anyhow, Result};
 use clap::*;
-use compilation::model_builder_legacy::ModelBuilderLegacy;
 use lock_file::LockFile;
 use move_compiler::{
     editions::{Edition, Flavor}, Flags
@@ -256,20 +255,6 @@ impl BuildConfig {
         let resolved_graph = self.resolution_graph_for_package(path, None, writer)?;
         let _mutx = PackageLock::lock(); // held until function returns
         model_builder::build(resolved_graph, writer)
-    }
-
-    pub fn move_model_for_package_legacy(
-        self,
-        path: &Path,
-    ) -> Result<GlobalEnv> {
-        let flags = self.compiler_flags();
-
-        // resolution graph diagnostics are only needed for CLI commands so ignore them by passing a
-        // vector as the writer
-        let resolved_graph = self.resolution_graph_for_package(path, None, &mut Vec::new())?;
-        let _mutx = PackageLock::lock(); // held until function returns
-
-        ModelBuilderLegacy::create(resolved_graph).build_model(flags)
     }
 
     pub fn download_deps_for_package<W: Write>(&self, path: &Path, writer: &mut W) -> Result<()> {
