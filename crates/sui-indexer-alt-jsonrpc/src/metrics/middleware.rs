@@ -11,12 +11,16 @@ use std::{
     time::Duration,
 };
 
-use jsonrpsee::{server::middleware::rpc::RpcServiceT, types::Request, MethodResponse};
+use jsonrpsee::{
+    server::middleware::rpc::RpcServiceT,
+    types::{error::INTERNAL_ERROR_CODE, Request},
+    MethodResponse,
+};
 use pin_project_lite::pin_project;
 use prometheus::{HistogramTimer, IntCounterVec};
 use serde_json::value::RawValue;
 use tower_layer::Layer;
-use tracing::{info, warn};
+use tracing::{error, info, warn};
 
 use super::RpcMetrics;
 
@@ -141,7 +145,31 @@ where
         let method = this.method.as_ref();
         let elapsed_ms = metrics.timer.stop_and_record() * 1000.0;
 
-        if let Some(code) = resp.as_error_code() {
+        let params = || this.params.as_ref().map(|p| p.get()).unwrap_or("[]");
+        let response = || {
+            let result = resp.as_result();
+            if result.len() > 1000 {
+                format!("{}...", &result[..997])
+            } else {
+                result.to_string()
+            }
+        };
+
+        if let Some(INTERNAL_ERROR_CODE) = resp.as_error_code() {
+            metrics
+                .failed
+                .with_label_values(&[method, &format!("{INTERNAL_ERROR_CODE}")])
+                .inc();
+
+            error!(
+                method,
+                params = params(),
+                code = INTERNAL_ERROR_CODE,
+                response = response(),
+                elapsed_ms,
+                "Internal error"
+            );
+        } else if let Some(code) = resp.as_error_code() {
             metrics
                 .failed
                 .with_label_values(&[method, &format!("{code}")])
@@ -154,22 +182,13 @@ where
 
         let slow_request_threshold_ms = this.slow_request_threshold.as_millis() as f64;
         if elapsed_ms > slow_request_threshold_ms {
-            let result = resp.as_result();
-            let response = if result.len() > 1000 {
-                format!("{}...", &result[..997])
-            } else {
-                result.to_string()
-            };
-
-            let params = this.params.as_ref().map(|p| p.get()).unwrap_or("[]");
-
             warn!(
                 elapsed_ms,
                 method,
-                params,
-                error = ?resp.as_error_code(),
-                response_length = result.len(),
-                response,
+                params = params(),
+                code = ?resp.as_error_code(),
+                response_length = resp.as_result().len(),
+                response = response(),
                 "Slow request (>{:.02}s)",
                 this.slow_request_threshold.as_secs_f64(),
             );
