@@ -12940,6 +12940,7 @@ dependencies = [
  "eyre",
  "fastcrypto",
  "gcp-bigquery-client",
+ "jemalloc-sys",
  "move-binary-format",
  "move-bytecode-utils",
  "move-core-types",
