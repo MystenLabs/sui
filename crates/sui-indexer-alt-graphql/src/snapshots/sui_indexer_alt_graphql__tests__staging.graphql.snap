@@ -39,12 +39,86 @@ type Object {
 	previousTransaction: Transaction
 }
 
+type ObjectChange {
+	"""
+	The address of the object that has changed.
+	"""
+	address: SuiAddress!
+	"""
+	The contents of the object immediately before the transaction.
+	"""
+	inputState: Object
+	"""
+	The contents of the object immediately after the transaction.
+	"""
+	outputState: Object
+	"""
+	Whether the ID was created in this transaction.
+	"""
+	idCreated: Boolean
+	"""
+	Whether the ID was deleted in this transaction.
+	"""
+	idDeleted: Boolean
+}
+
+type ObjectChangeConnection {
+	"""
+	Information to aid in pagination.
+	"""
+	pageInfo: PageInfo!
+	"""
+	A list of edges.
+	"""
+	edges: [ObjectChangeEdge!]!
+	"""
+	A list of nodes.
+	"""
+	nodes: [ObjectChange!]!
+}
+
+"""
+An edge in a connection.
+"""
+type ObjectChangeEdge {
+	"""
+	The item at the end of the edge
+	"""
+	node: ObjectChange!
+	"""
+	A cursor for use in pagination
+	"""
+	cursor: String!
+}
+
 """
 Identifies a specific version of an object.
 """
 input ObjectKey {
 	address: SuiAddress!
 	version: UInt53!
+}
+
+"""
+Information about pagination in a connection
+"""
+type PageInfo {
+	"""
+	When paginating backwards, are there more items?
+	"""
+	hasPreviousPage: Boolean!
+	"""
+	When paginating forwards, are there more items?
+	"""
+	hasNextPage: Boolean!
+	"""
+	When paginating backwards, the cursor to continue.
+	"""
+	startCursor: String
+	"""
+	When paginating forwards, the cursor to continue.
+	"""
+	endCursor: String
 }
 
 type Query {
@@ -239,6 +313,10 @@ type TransactionEffects {
 	A 32-byte hash that uniquely identifies the effects contents, encoded in Base58.
 	"""
 	effectsDigest: String
+	"""
+	The before and after state of objects that were modified by this transaction.
+	"""
+	objectChanges(first: Int, after: String, last: Int, before: String): ObjectChangeConnection
 }
 
 """

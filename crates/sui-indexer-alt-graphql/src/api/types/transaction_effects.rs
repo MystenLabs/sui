@@ -4,17 +4,21 @@
 use std::sync::Arc;
 
 use anyhow::Context as _;
-use async_graphql::{Context, Object};
+use async_graphql::{
+    connection::{Connection, Edge},
+    Context, Object,
+};
 use fastcrypto::encoding::{Base58, Encoding};
 use sui_indexer_alt_reader::kv_loader::{KvLoader, TransactionContents};
-use sui_types::digests::TransactionDigest;
+use sui_types::{digests::TransactionDigest, effects::TransactionEffectsAPI};
 
 use crate::{
-    api::scalars::{base64::Base64, digest::Digest},
+    api::scalars::{base64::Base64, cursor::JsonCursor, digest::Digest},
     error::RpcError,
+    pagination::{Page, PaginationConfig},
 };
 
-use super::transaction::Transaction;
+use super::{object_change::ObjectChange, transaction::Transaction};
 
 #[derive(Clone)]
 pub(crate) struct TransactionEffects {
@@ -24,6 +28,8 @@ pub(crate) struct TransactionEffects {
 
 #[derive(Clone)]
 pub(crate) struct EffectsContents(pub Option<Arc<TransactionContents>>);
+
+type CObjectChange = JsonCursor<usize>;
 
 /// The results of executing a transaction.
 #[Object]
@@ -68,6 +74,38 @@ impl EffectsContents {
         };
 
         Ok(Some(Base58::encode(content.effects_digest()?)))
+    }
+
+    /// The before and after state of objects that were modified by this transaction.
+    async fn object_changes(
+        &self,
+        ctx: &Context<'_>,
+        first: Option<u64>,
+        after: Option<CObjectChange>,
+        last: Option<u64>,
+        before: Option<CObjectChange>,
+    ) -> Result<Option<Connection<CObjectChange, ObjectChange>>, RpcError> {
+        let pagination: &PaginationConfig = ctx.data()?;
+        let limits = pagination.limits("TransactionEffects", "objectChanges");
+        let page = Page::from_params(limits, first, after, last, before)?;
+
+        let Some(content) = &self.0 else {
+            return Ok(None);
+        };
+
+        let object_changes = content.effects()?.object_changes();
+        let cursors = page.paginate_indices(object_changes.len());
+
+        let mut conn = Connection::new(cursors.has_previous_page, cursors.has_next_page);
+        for edge in cursors.edges {
+            let object_change = ObjectChange {
+                native: object_changes[*edge.cursor].clone(),
+            };
+
+            conn.edges.push(Edge::new(edge.cursor, object_change))
+        }
+
+        Ok(Some(conn))
     }
 }
 

@@ -119,6 +119,12 @@ impl From<NativeSuiAddress> for SuiAddress {
     }
 }
 
+impl From<ObjectID> for SuiAddress {
+    fn from(value: ObjectID) -> Self {
+        SuiAddress(value.into_bytes())
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

@@ -8,7 +8,7 @@ use async_graphql::{Context, InputObject, Object};
 use fastcrypto::encoding::{Base58, Encoding};
 use sui_indexer_alt_reader::kv_loader::KvLoader;
 use sui_types::{
-    base_types::{SequenceNumber, SuiAddress as NativeSuiAddress},
+    base_types::{ObjectID, SequenceNumber, SuiAddress as NativeSuiAddress},
     digests::ObjectDigest,
     object::Object as NativeObject,
 };
@@ -94,14 +94,13 @@ impl Object {
     /// Construct an object that is represented by just its identifier (its object reference). This
     /// does not check whether the object exists, so should not be used to "fetch" an object based
     /// on an address and/or version provided as user input.
-    #[allow(dead_code)] // TODO: Remove once this is used in object changes
     pub(crate) fn with_ref(
-        address: NativeSuiAddress,
+        address: ObjectID,
         version: SequenceNumber,
         digest: ObjectDigest,
     ) -> Self {
         Self {
-            address,
+            address: address.into(),
             version,
             digest,
             contents: ObjectContents(None),
