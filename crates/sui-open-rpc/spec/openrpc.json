@@ -1337,6 +1337,7 @@
                 "loaded_child_object_format": false,
                 "loaded_child_object_format_type": false,
                 "loaded_child_objects_fixed": true,
+                "max_ptb_value_size_v2": false,
                 "minimize_child_object_mutations": false,
                 "missing_type_is_compatibility_error": true,
                 "move_native_context": false,
