@@ -675,6 +675,10 @@ struct FeatureFlags {
     // If true, enforces checkpoint timestamps are non-decreasing.
     #[serde(skip_serializing_if = "is_false")]
     enforce_checkpoint_timestamp_monotonicity: bool,
+
+    // If true, enables better errors and bounds for max ptb values
+    #[serde(skip_serializing_if = "is_false")]
+    max_ptb_value_size_v2: bool,
 }
 
 fn is_false(b: &bool) -> bool {
@@ -1940,6 +1944,10 @@ impl ProtocolConfig {
 
     pub fn enforce_checkpoint_timestamp_monotonicity(&self) -> bool {
         self.feature_flags.enforce_checkpoint_timestamp_monotonicity
+    }
+
+    pub fn max_ptb_value_size_v2(&self) -> bool {
+        self.feature_flags.max_ptb_value_size_v2
     }
 }
 
@@ -3473,7 +3481,9 @@ impl ProtocolConfig {
                     cfg.feature_flags.enforce_checkpoint_timestamp_monotonicity = true;
                     cfg.consensus_bad_nodes_stake_threshold = Some(30)
                 }
-                82 => {}
+                82 => {
+                    cfg.feature_flags.max_ptb_value_size_v2 = true;
+                }
                 // Use this template when making changes:
                 //
                 //     // modify an existing constant.
