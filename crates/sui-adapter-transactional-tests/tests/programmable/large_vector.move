@@ -1,6 +1,8 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+// Tests size limits on MakeMoveVec
+
 //# init --addresses test=0x0 --accounts A
 
 //# programmable --inputs 0u64
