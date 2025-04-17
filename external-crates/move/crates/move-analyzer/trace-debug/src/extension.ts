@@ -13,6 +13,7 @@ import {
     Position
 } from 'vscode';
 import { decompress } from '@mongodb-js/zstd';
+import { trace } from 'console';
 
 /**
  * Log level for the debug adapter.
@@ -183,10 +184,7 @@ export function activate(context: vscode.ExtensionContext) {
     const trace_content_provider: vscode.TextDocumentContentProvider = {
         async provideTextDocumentContent(uri: vscode.Uri): Promise<string> {
             try {
-                const filePath = uri.path;
-                const buf = fs.readFileSync(filePath);
-                const decompressed = await decompress(buf);
-                return decompressed.toString('utf8').trimEnd();
+                return await decompressTraceFile(uri.path);
             } catch (err) {
                 const msg = err instanceof Error ? err.message : String(err);
                 return `Failed to decode trace:\n${msg}`;
@@ -226,39 +224,60 @@ class MoveConfigurationProvider implements vscode.DebugConfigurationProvider {
      * Massage a debug configuration just before a debug session is being launched,
      * e.g. add all missing attributes to the debug configuration.
      */
-    async resolveDebugConfiguration(folder: WorkspaceFolder | undefined, config: DebugConfiguration, token?: CancellationToken): Promise<DebugConfiguration | undefined | null> {
+    async resolveDebugConfiguration(
+        folder: WorkspaceFolder | undefined,
+        config: DebugConfiguration,
+        token?: CancellationToken
+    ): Promise<DebugConfiguration | undefined | null> {
+        console.log('resolveDebugConfiguration', config);
 
         // if launch.json is missing or empty
-        if (!config.type && !config.request && !config.name) {
-            const editor = vscode.window.activeTextEditor;
-            if (editor && (editor.document.languageId === 'move'
-                || editor.document.languageId === 'mvb'
-                || editor.document.languageId === 'mtrace')) {
+        if (!config.request && !config.name) {
 
-                try {
-                    let traceInfo = await findTraceInfo(editor);
-                    config.type = DEBUGGER_TYPE;
-                    config.name = 'Launch';
-                    config.request = 'launch';
+            try {
+                const editor = vscode.window.activeTextEditor;
+                if (editor && (editor.document.languageId === 'move'
+                    || editor.document.languageId === 'mvb'
+                    || editor.document.languageId === 'mtrace')) {
+                    config.traceInfo = await findTraceInfo(editor);
                     config.source = '${file}';
-                    config.traceInfo = traceInfo;
-                    config.stopOnEntry = true;
-                    config.logLevel = LOG_LEVEL;
-                } catch (err) {
-                    const msg = err instanceof Error ? err.message : String(err);
-                    return vscode.window.showErrorMessage(msg).then(_ => {
-                        return undefined;	// abort launch
-                    });
+                } else if (folder) {
+                    const traceFilesPattern = new vscode.RelativePattern(folder.uri.fsPath, '**/*.json.zst');
+                    const traceFilePaths = await vscode.workspace.findFiles(traceFilesPattern);
+                    if (traceFilePaths.length === 0) {
+                        return vscode.window.showErrorMessage('No trace files found in the workspace.').then(_ => {
+                            return undefined;
+                        });
+                    }
+                    const tracePath = traceFilePaths.length === 1
+                        ? traceFilePaths[0].fsPath
+                        : await pickTraceFileToDebug(traceFilePaths.map(file => file.fsPath));
+
+                    if (!tracePath) {
+                        return vscode.window.showErrorMessage('No trace file selected.').then(_ => {
+                            return undefined;
+                        });
+                    }
+                    const traceContent = await decompressTraceFile(tracePath);
+                    const tracedFunctionInfo = getTracedFunctionInfo(traceContent);
+                    config.traceInfo = [constructTraceInfo(tracePath, tracedFunctionInfo)];
+                    config.source = tracePath;
+                } else {
+                    throw new Error('No active editor or folder');
                 }
+            } catch (err) {
+                const msg = err instanceof Error ? err.message : String(err);
+                return vscode.window.showErrorMessage(msg).then(_ => {
+                    return undefined;
+                });
             }
         }
 
-        if (!config.source) {
-            const msg = "Unknown error when trying to start the trace viewer";
-            return vscode.window.showErrorMessage(msg).then(_ => {
-                return undefined;	// abort launch
-            });
-        }
+        config.type = DEBUGGER_TYPE;
+        config.name = 'Launch';
+        config.request = 'launch';
+        config.stopOnEntry = true;
+        config.logLevel = LOG_LEVEL;
 
         return config;
     }
@@ -278,19 +297,18 @@ async function findTraceInfo(editor: vscode.TextEditor): Promise<string> {
         // this is hopefully a trace in JSON format already uncompressed for view,
         // otherwise the debugger will not trigger on binary compressed file
         // (we do check if JSON schema is correct in the following code)
-        const fpath = editor.document.uri.fsPath;
         const tracedFunctionInfo = getTracedFunctionInfo(editor.document.getText());
-        tracedFunctions = [constructTraceInfo(fpath, tracedFunctionInfo)];
+        tracedFunctions = [constructTraceInfo(openedFilePath, tracedFunctionInfo)];
     } else {
-        const pkgRoot = await findPkgRoot(editor.document.uri.fsPath);
+        const pkgRoot = await findPkgRoot(openedFilePath);
         if (!pkgRoot) {
-            throw new Error(`Cannot find package root for file  '${editor.document.uri.fsPath}'`);
+            throw new Error(`Cannot find package root for file  '${openedFilePath}'`);
         }
         const openedFileExt = path.extname(openedFilePath);
         if (openedFileExt === MOVE_FILE_EXT) {
             const pkgModules = findSrcModules(editor.document.getText());
             if (pkgModules.length === 0) {
-                throw new Error(`Cannot find any modules in file '${editor.document.uri.fsPath}'`);
+                throw new Error(`Cannot find any modules in file '${openedFilePath}'`);
             }
             tracedFunctions = findTracedFunctionsFromPath(pkgRoot, pkgModules);
         } else {
@@ -308,13 +326,13 @@ async function findTraceInfo(editor: vscode.TextEditor): Promise<string> {
             const modulePattern = /\bmodule\s+\d+\.\w+\b/g;
             const moduleSequences = editor.document.getText().match(modulePattern);
             if (!moduleSequences || moduleSequences.length === 0) {
-                throw new Error(`Cannot find module declaration in disassembly file '${editor.document.uri.fsPath}'`);
+                throw new Error(`Cannot find module declaration in disassembly file '${openedFilePath}'`);
             }
             // there should be only one module declaration in a disassembly file
             const [pkgAddrStr, module] = moduleSequences[0].substring('module'.length).trim().split('.');
             const pkgAddr = parseInt(pkgAddrStr);
             if (isNaN(pkgAddr)) {
-                throw new Error(`Cannot parse package address from '${pkgAddrStr}' in disassembly file '${editor.document.uri.fsPath}'`);
+                throw new Error(`Cannot parse package address from '${pkgAddrStr}' in disassembly file '${openedFilePath}'`);
             }
             tracedFunctions = findTracedFunctionsFromTrace(pkgRoot, pkgAddr, module);
         }
@@ -558,4 +576,29 @@ async function pickFunctionToDebug(tracedFunctions: string[]): Promise<string | 
     });
 
     return selectedFunction ? selectedFunction.pkg + '::' + selectedFunction.label : undefined;
+}
+
+/**
+ * Prompts the user to select a trace file to debug from a list of trace files.
+ * @param traceFilePaths list of trace file paths.
+ * @returns single trace file to debug.
+ */
+async function pickTraceFileToDebug(traceFilePaths: string[]): Promise<string | undefined> {
+    const selectedTraceFile = await vscode.window.showQuickPick(traceFilePaths, {
+        canPickMany: false,
+        placeHolder: 'Select a trace file to debug'
+    });
+
+    return selectedTraceFile;
+}
+
+/**
+ * Reads and decompresses a trace file.
+ * @param traceFilePath path to the trace file.
+ * @returns decompressed trace file content as a string.
+ */
+async function decompressTraceFile(traceFilePath: string): Promise<string> {
+    const buf = fs.readFileSync(traceFilePath);
+    const decompressed = await decompress(buf);
+    return decompressed.toString('utf8').trimEnd();
 }

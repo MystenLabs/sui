@@ -82,11 +82,6 @@
                 "runtimeArgs": [
                     "--nolazy"
                 ],
-                "languages": [
-                    "move",
-                    "mvb",
-                    "mtrace"
-                ],
                 "configurationAttributes": {
                     "launch": {
                         "required": [
@@ -120,8 +115,13 @@
                             }
                         }
                     }
-                }
-            }
+                },
+                "initialConfigurations": [
+                    {
+                        "type": "move-debug"
+                    }
+                ]
+    }
         ]
     },
     "menus": {
