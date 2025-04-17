@@ -281,10 +281,8 @@ pub async fn start_rpc(
     )
     .await?;
 
-    let pg_loader = Arc::new(pg_reader.as_data_loader());
-
-    let kv_loader = if let Some(instance_id) = bigtable_instance {
-        let bigtable_reader = BigtableReader::new(
+    let bigtable_reader = if let Some(instance_id) = bigtable_instance {
+        let reader = BigtableReader::new(
             instance_id,
             "indexer-alt-graphql".to_owned(),
             bigtable_args,
@@ -292,7 +290,14 @@ pub async fn start_rpc(
         )
         .await?;
 
-        KvLoader::new_with_bigtable(Arc::new(bigtable_reader.as_data_loader()))
+        Some(reader)
+    } else {
+        None
+    };
+
+    let pg_loader = Arc::new(pg_reader.as_data_loader());
+    let kv_loader = if let Some(reader) = bigtable_reader.as_ref() {
+        KvLoader::new_with_bigtable(Arc::new(reader.as_data_loader()))
     } else {
         KvLoader::new_with_pg(pg_loader.clone())
     };
@@ -317,8 +322,12 @@ pub async fn start_rpc(
     )
     .await?;
 
-    let watermark_task =
-        WatermarkTask::new(config.watermark, pg_reader.clone(), cancel.child_token());
+    let watermark_task = WatermarkTask::new(
+        config.watermark,
+        pg_reader.clone(),
+        bigtable_reader,
+        cancel.child_token(),
+    );
 
     let rpc = rpc
         .route("/graphql", post(graphql))

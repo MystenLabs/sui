@@ -7,15 +7,16 @@ use std::{
     time::Duration,
 };
 
-use anyhow::ensure;
+use anyhow::{ensure, Context as _};
 use chrono::{DateTime, Utc};
 use diesel::{
     sql_query,
     sql_types::{Array, BigInt, Text},
     QueryableByName,
 };
-use sui_indexer_alt_reader::pg_reader::{Connection, PgReader};
-use tokio::{sync::RwLock, task::JoinHandle, time};
+use futures::future::OptionFuture;
+use sui_indexer_alt_reader::{bigtable_reader::BigtableReader, pg_reader::PgReader};
+use tokio::{join, sync::RwLock, task::JoinHandle, time};
 use tokio_util::sync::CancellationToken;
 use tracing::{debug, info, warn};
 
@@ -34,6 +35,9 @@ pub(crate) struct WatermarkTask {
     /// Access to the Postgres DB
     pg_reader: PgReader,
 
+    /// Access to Bigtable.
+    bigtable_reader: Option<BigtableReader>,
+
     /// How long to wait between updating the watermark.
     interval: Duration,
 
@@ -46,7 +50,7 @@ pub(crate) struct WatermarkTask {
 
 /// Snapshot of current watermarks. The upperbound is global across all pipelines, and the
 /// lowerbounds are per-pipeline.
-#[derive(Clone, Default)]
+#[derive(Clone)]
 pub(crate) struct Watermarks {
     /// The upperbound across all pipelines (the minimal high watermarks across all pipelines). The
     /// epoch and checkpoint bounds are inclusive and the transaction bound is exclusive.
@@ -66,12 +70,40 @@ pub(crate) struct Watermark {
     transaction: i64,
 }
 
+#[derive(QueryableByName, Clone)]
+struct WatermarkRow {
+    #[diesel(sql_type = Text)]
+    pipeline: String,
+
+    #[diesel(sql_type = BigInt)]
+    epoch_hi_inclusive: i64,
+
+    #[diesel(sql_type = BigInt)]
+    checkpoint_hi_inclusive: i64,
+
+    #[diesel(sql_type = BigInt)]
+    tx_hi: i64,
+
+    #[diesel(sql_type = BigInt)]
+    timestamp_ms_hi_inclusive: i64,
+
+    #[diesel(sql_type = BigInt)]
+    epoch_lo: i64,
+
+    #[diesel(sql_type = BigInt)]
+    checkpoint_lo: i64,
+
+    #[diesel(sql_type = BigInt)]
+    tx_lo: i64,
+}
+
 pub(crate) type WatermarksLock = Arc<RwLock<Arc<Watermarks>>>;
 
 impl WatermarkTask {
     pub(crate) fn new(
         config: WatermarkConfig,
         pg_reader: PgReader,
+        bigtable_reader: Option<BigtableReader>,
         cancel: CancellationToken,
     ) -> Self {
         let WatermarkConfig {
@@ -82,6 +114,7 @@ impl WatermarkTask {
         Self {
             watermarks: Default::default(),
             pg_reader,
+            bigtable_reader,
             interval: watermark_polling_interval,
             pg_pipelines,
             cancel,
@@ -102,6 +135,7 @@ impl WatermarkTask {
             let Self {
                 watermarks,
                 pg_reader,
+                bigtable_reader,
                 interval,
                 pg_pipelines,
                 cancel,
@@ -111,24 +145,18 @@ impl WatermarkTask {
 
             loop {
                 tokio::select! {
+                    biased;
+
                     _ = cancel.cancelled() => {
                         info!("Shutdown signal received, terminating watermark task");
                         break;
                     }
 
                     _ = interval.tick() => {
-                        let mut conn = match pg_reader.connect().await {
-                            Ok(conn) => conn,
-                            Err(e) => {
-                                warn!("Failed to connect to database: {e}");
-                                continue;
-                            }
-                        };
-
-                        let w = match Watermarks::read(&mut conn, &pg_pipelines).await {
+                        let w = match Watermarks::read(&pg_reader, bigtable_reader.as_ref(), &pg_pipelines).await {
                             Ok(w) => Arc::new(w),
                             Err(e) => {
-                                warn!("Failed to read watermarks: {e}");
+                                warn!("Failed to read watermarks: {e:#}");
                                 continue;
                             }
                         };
@@ -150,112 +178,23 @@ impl WatermarkTask {
 }
 
 impl Watermarks {
-    async fn read(conn: &mut Connection<'_>, pg_pipelines: &[String]) -> anyhow::Result<Self> {
-        #[derive(QueryableByName)]
-        struct WatermarkRow {
-            #[diesel(sql_type = Text)]
-            pipeline: String,
+    async fn read(
+        pg_reader: &PgReader,
+        bigtable_reader: Option<&BigtableReader>,
+        pg_pipelines: &[String],
+    ) -> anyhow::Result<Self> {
+        let rows = watermarks_from_pg(pg_reader, pg_pipelines);
+        let last: OptionFuture<_> = bigtable_reader.map(watermark_from_bigtable).into();
 
-            #[diesel(sql_type = BigInt)]
-            epoch_hi_inclusive: i64,
+        let (rows, last) = join!(rows, last);
+        let rows = rows.context("Failed to read watermarks from Postgres")?;
+        let last = last
+            .transpose()
+            .context("Failed to read watermarks from Bigtable")?;
 
-            #[diesel(sql_type = BigInt)]
-            checkpoint_hi_inclusive: i64,
-
-            #[diesel(sql_type = BigInt)]
-            tx_hi: i64,
-
-            #[diesel(sql_type = BigInt)]
-            timestamp_ms_hi_inclusive: i64,
-
-            #[diesel(sql_type = BigInt)]
-            epoch_lo: i64,
-
-            #[diesel(sql_type = BigInt)]
-            checkpoint_lo: i64,
-
-            #[diesel(sql_type = BigInt)]
-            tx_lo: i64,
-        }
-
-        let query = sql_query(
-            r#"
-            SELECT
-                w.pipeline,
-                w.epoch_hi_inclusive,
-                w.checkpoint_hi_inclusive,
-                w.tx_hi,
-                w.timestamp_ms_hi_inclusive,
-                c.epoch AS epoch_lo,
-                w.reader_lo AS checkpoint_lo,
-                c.tx_lo AS tx_lo
-            FROM
-                watermarks w
-            INNER JOIN
-                cp_sequence_numbers c
-            ON (w.reader_lo = c.cp_sequence_number)
-            WHERE
-                pipeline = ANY($1)
-            "#,
-        )
-        .bind::<Array<Text>, _>(pg_pipelines);
-
-        let rows: Vec<WatermarkRow> = conn.results(query).await?;
-
-        ensure!(
-            !pg_pipelines.is_empty(),
-            "Indexer not tracking any pipelines"
-        );
-
-        let mut remaining_pipelines = BTreeSet::from_iter(pg_pipelines.iter());
-        for row in &rows {
-            remaining_pipelines.remove(&row.pipeline);
-        }
-
-        ensure!(
-            remaining_pipelines.is_empty(),
-            "Missing watermarks for {remaining_pipelines:?}",
-        );
-
-        // SAFETY: rows.len() >= pg_pipelines.len() > 0 based on checks above.
-        let mut rows = rows.into_iter();
-        let first = rows.next().unwrap();
-
-        let mut watermarks = Watermarks {
-            global_hi: Watermark {
-                epoch: first.epoch_hi_inclusive,
-                checkpoint: first.checkpoint_hi_inclusive,
-                transaction: first.tx_hi,
-            },
-            timestamp_ms_hi_inclusive: first.timestamp_ms_hi_inclusive,
-            pipeline_lo: BTreeMap::from_iter([(
-                first.pipeline.clone(),
-                Watermark {
-                    epoch: first.epoch_lo,
-                    checkpoint: first.checkpoint_lo,
-                    transaction: first.tx_lo,
-                },
-            )]),
-        };
-
-        for row in rows {
-            watermarks.global_hi.epoch = watermarks.global_hi.epoch.min(row.epoch_hi_inclusive);
-            watermarks.global_hi.checkpoint = watermarks
-                .global_hi
-                .checkpoint
-                .min(row.checkpoint_hi_inclusive);
-            watermarks.global_hi.transaction = watermarks.global_hi.transaction.min(row.tx_hi);
-            watermarks.timestamp_ms_hi_inclusive = watermarks
-                .timestamp_ms_hi_inclusive
-                .min(row.timestamp_ms_hi_inclusive);
-            watermarks.pipeline_lo.insert(
-                row.pipeline.clone(),
-                Watermark {
-                    epoch: row.epoch_lo,
-                    checkpoint: row.checkpoint_lo,
-                    transaction: row.tx_lo,
-                },
-            );
+        let mut watermarks = Watermarks::default();
+        for row in rows.into_iter().chain(last.into_iter()) {
+            watermarks.merge(row)
         }
 
         Ok(watermarks)
@@ -266,4 +205,106 @@ impl Watermarks {
     pub(crate) fn timestamp_hi(&self) -> Option<DateTime<Utc>> {
         DateTime::from_timestamp_millis(self.timestamp_ms_hi_inclusive)
     }
+
+    fn merge(&mut self, row: WatermarkRow) {
+        self.global_hi.epoch = self.global_hi.epoch.min(row.epoch_hi_inclusive);
+        self.global_hi.checkpoint = self.global_hi.checkpoint.min(row.checkpoint_hi_inclusive);
+        self.global_hi.transaction = self.global_hi.transaction.min(row.tx_hi);
+        self.timestamp_ms_hi_inclusive = self
+            .timestamp_ms_hi_inclusive
+            .min(row.timestamp_ms_hi_inclusive);
+
+        self.pipeline_lo.insert(
+            row.pipeline.clone(),
+            Watermark {
+                epoch: row.epoch_lo,
+                checkpoint: row.checkpoint_lo,
+                transaction: row.tx_lo,
+            },
+        );
+    }
+}
+
+impl Default for Watermarks {
+    fn default() -> Self {
+        Self {
+            global_hi: Watermark {
+                epoch: i64::MAX,
+                checkpoint: i64::MAX,
+                transaction: i64::MAX,
+            },
+            timestamp_ms_hi_inclusive: i64::MAX,
+            pipeline_lo: BTreeMap::new(),
+        }
+    }
+}
+
+async fn watermark_from_bigtable(bigtable_reader: &BigtableReader) -> anyhow::Result<WatermarkRow> {
+    let summary = bigtable_reader
+        .checkpoint_watermark()
+        .await
+        .context("Failed to get checkpoint watermark")?
+        .context("Checkpoint watermark not found")?;
+
+    Ok(WatermarkRow {
+        pipeline: "bigtable".to_owned(),
+        epoch_hi_inclusive: summary.epoch as i64,
+        checkpoint_hi_inclusive: summary.sequence_number as i64,
+        tx_hi: summary.network_total_transactions as i64,
+        timestamp_ms_hi_inclusive: summary.timestamp_ms as i64,
+        epoch_lo: 0,
+        checkpoint_lo: 0,
+        tx_lo: 0,
+    })
+}
+
+async fn watermarks_from_pg(
+    pg_reader: &PgReader,
+    pg_pipelines: &[String],
+) -> anyhow::Result<Vec<WatermarkRow>> {
+    let mut conn = pg_reader
+        .connect()
+        .await
+        .context("Failed to connect to database")?;
+
+    let query = sql_query(
+        r#"
+        SELECT
+            w.pipeline,
+            w.epoch_hi_inclusive,
+            w.checkpoint_hi_inclusive,
+            w.tx_hi,
+            w.timestamp_ms_hi_inclusive,
+            c.epoch AS epoch_lo,
+            w.reader_lo AS checkpoint_lo,
+            c.tx_lo AS tx_lo
+        FROM
+            watermarks w
+        INNER JOIN
+            cp_sequence_numbers c
+        ON (w.reader_lo = c.cp_sequence_number)
+        WHERE
+            pipeline = ANY($1)
+        "#,
+    )
+    .bind::<Array<Text>, _>(pg_pipelines);
+
+    let rows: Vec<WatermarkRow> = conn.results(query).await?;
+
+    ensure!(
+        !pg_pipelines.is_empty(),
+        "Indexer not tracking any pipelines"
+    );
+
+    let mut remaining_pipelines = BTreeSet::from_iter(pg_pipelines.iter());
+    for row in &rows {
+        remaining_pipelines.remove(&row.pipeline);
+    }
+
+    ensure!(
+        remaining_pipelines.is_empty(),
+        "Missing watermarks for {remaining_pipelines:?}",
+    );
+
+    Ok(rows)
 }
