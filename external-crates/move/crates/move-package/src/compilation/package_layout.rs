@@ -10,10 +10,11 @@ pub enum CompiledPackageLayout {
     Root,
     Dependencies,
     Sources,
-    SourceMaps,
+    DebugInfo,
     LockFiles,
     CompiledModules,
     CompiledDocs,
+    Disassembly,
 }
 
 impl CompiledPackageLayout {
@@ -23,10 +24,11 @@ impl CompiledPackageLayout {
             Self::Root => "build",
             Self::Dependencies => "dependencies",
             Self::Sources => "sources",
-            Self::SourceMaps => "source_maps",
+            Self::DebugInfo => "debug_info",
             Self::LockFiles => "locks",
             Self::CompiledModules => "bytecode_modules",
             Self::CompiledDocs => "docs",
+            Self::Disassembly => "disassembly",
         };
         Path::new(path)
     }

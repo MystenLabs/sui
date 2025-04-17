@@ -1,0 +1,90 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: 2024.alpha
+  lint: false
+---
+error[E04001]: restricted visibility
+   ┌─ tests/move_2024/typing/macros_visibility_not_checked_called.move:9:9
+   │
+ 4 │     public(package) fun package() {}
+   │     --------------- A 'public(package)' function can only be called from the same address and package as module 'a::m' in package '<unknown package>'. This call is from address 'b' in package '<unknown package>'
+   ·
+ 9 │         package();
+   │         ^^^^^^^^^ Invalid call to 'public(package)' visible function 'a::m::package'
+   ·
+29 │         a::m::t0!();
+   │         ----------- While expanding this macro
+   │
+   = This visibility error occurs in a macro body while expanding the macro 'a::m::t0'
+   = Visibility inside of expanded macros is resolved in the scope of the caller.
+
+error[E04001]: restricted visibility
+   ┌─ tests/move_2024/typing/macros_visibility_not_checked_called.move:10:9
+   │
+ 3 │     fun private() {}
+   │         ------- This function is internal to its module. Only 'public' and 'public(package)' functions can be called outside of their module
+   ·
+10 │         private();
+   │         ^^^^^^^^^ Invalid call to internal function 'a::m::private'
+   ·
+21 │         a::m::t0!();
+   │         ----------- While expanding this macro
+   │
+   = This visibility error occurs in a macro body while expanding the macro 'a::m::t0'
+   = Visibility inside of expanded macros is resolved in the scope of the caller.
+
+error[E04001]: restricted visibility
+   ┌─ tests/move_2024/typing/macros_visibility_not_checked_called.move:10:9
+   │
+ 3 │     fun private() {}
+   │         ------- This function is internal to its module. Only 'public' and 'public(package)' functions can be called outside of their module
+   ·
+10 │         private();
+   │         ^^^^^^^^^ Invalid call to internal function 'a::m::private'
+   ·
+29 │         a::m::t0!();
+   │         ----------- While expanding this macro
+   │
+   = This visibility error occurs in a macro body while expanding the macro 'a::m::t0'
+   = Visibility inside of expanded macros is resolved in the scope of the caller.
+
+error[E04001]: restricted visibility
+   ┌─ tests/move_2024/typing/macros_visibility_not_checked_called.move:14:9
+   │
+ 3 │     fun private() {}
+   │         ------- This function is internal to its module. Only 'public' and 'public(package)' functions can be called outside of their module
+   ·
+14 │         private();
+   │         ^^^^^^^^^ Invalid call to internal function 'a::m::private'
+   ·
+22 │         a::m::t1!();
+   │         ----------- While expanding this macro
+   │
+   = This visibility error occurs in a macro body while expanding the macro 'a::m::t1'
+   = Visibility inside of expanded macros is resolved in the scope of the caller.
+
+error[E04001]: restricted visibility
+   ┌─ tests/move_2024/typing/macros_visibility_not_checked_called.move:14:9
+   │
+ 3 │     fun private() {}
+   │         ------- This function is internal to its module. Only 'public' and 'public(package)' functions can be called outside of their module
+   ·
+14 │         private();
+   │         ^^^^^^^^^ Invalid call to internal function 'a::m::private'
+   ·
+30 │         a::m::t1!();
+   │         ----------- While expanding this macro
+   │
+   = This visibility error occurs in a macro body while expanding the macro 'a::m::t1'
+   = Visibility inside of expanded macros is resolved in the scope of the caller.
+
+error[E04001]: restricted visibility
+   ┌─ tests/move_2024/typing/macros_visibility_not_checked_called.move:30:9
+   │
+13 │     public(package) macro fun t1() {
+   │     --------------- A 'public(package)' function can only be called from the same address and package as module 'a::m' in package '<unknown package>'. This call is from address 'b' in package '<unknown package>'
+   ·
+30 │         a::m::t1!();
+   │         ^^^^^^^^^^^ Invalid call to 'public(package)' visible function 'a::m::t1'

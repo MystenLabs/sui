@@ -1,0 +1,56 @@
+---
+source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
+---
+processed 9 tasks
+
+init:
+A: object(0,0)
+
+task 1, lines 11-52:
+//# publish
+created: object(1,0)
+mutated: object(0,1)
+gas summary: computation_cost: 1000000, storage_cost: 9614000,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 2, lines 54-56:
+//# run test::m1::create --sender A
+created: object(2,0)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 2249600,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 3, line 57:
+//# run test::m1::add_child --args object(2,0) --sender A
+created: object(3,0), object(3,1)
+mutated: object(0,0), object(2,0)
+gas summary: computation_cost: 1000000, storage_cost: 5950800,  storage_rebate: 2227104, non_refundable_storage_fee: 22496
+
+task 4, lines 59-61:
+//# run test::m1::transfer_child --args object(2,0) --sender A
+mutated: object(0,0), object(2,0), object(3,1)
+deleted: object(3,0)
+gas summary: computation_cost: 1000000, storage_cost: 3496000,  storage_rebate: 5891292, non_refundable_storage_fee: 59508
+
+task 5, line 62:
+//# run test::m1::add_child --args object(2,0) --sender A
+created: object(3,0), object(5,0)
+mutated: object(0,0), object(2,0)
+gas summary: computation_cost: 1000000, storage_cost: 5950800,  storage_rebate: 2227104, non_refundable_storage_fee: 22496
+
+task 6, lines 64-66:
+//# run test::m1::delete_child --args object(2,0) --sender A
+mutated: object(0,0), object(2,0)
+deleted: object(3,0), object(5,0)
+gas summary: computation_cost: 1000000, storage_cost: 2249600,  storage_rebate: 5891292, non_refundable_storage_fee: 59508
+
+task 7, line 67:
+//# run test::m1::add_child --args object(2,0) --sender A
+created: object(3,0), object(7,0)
+mutated: object(0,0), object(2,0)
+gas summary: computation_cost: 1000000, storage_cost: 5950800,  storage_rebate: 2227104, non_refundable_storage_fee: 22496
+
+task 8, line 69:
+//# run test::m1::wrap_child --args object(2,0) --sender A
+mutated: object(0,0), object(2,0)
+deleted: object(3,0)
+wrapped: object(7,0)
+gas summary: computation_cost: 1000000, storage_cost: 2492800,  storage_rebate: 5891292, non_refundable_storage_fee: 59508

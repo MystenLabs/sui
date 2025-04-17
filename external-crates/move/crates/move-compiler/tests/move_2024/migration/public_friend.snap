@@ -1,0 +1,57 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: 2024.alpha
+  lint: false
+---
+error[E13002]: feature is deprecated in specified edition
+  ┌─ tests/move_2024/migration/public_friend.move:3:5
+  │
+3 │     public( friend ) fun t0() {}
+  │     ^^^^^^^^^^^^^^^^ 'public(friend)' is deprecated. Replace with 'public(package)'
+
+error[E13002]: feature is deprecated in specified edition
+  ┌─ tests/move_2024/migration/public_friend.move:5:5
+  │
+5 │     public(friend) fun t1() {}
+  │     ^^^^^^^^^^^^^^ 'public(friend)' is deprecated. Replace with 'public(package)'
+
+error[E13002]: feature is deprecated in specified edition
+  ┌─ tests/move_2024/migration/public_friend.move:7:5
+  │  
+7 │ ╭     public(
+8 │ │         friend) fun t2() {}
+  │ ╰───────────────^ 'public(friend)' is deprecated. Replace with 'public(package)'
+
+error[E13002]: feature is deprecated in specified edition
+   ┌─ tests/move_2024/migration/public_friend.move:10:5
+   │  
+10 │ ╭     public(
+11 │ │         friend
+12 │ │         ) fun t3() {}
+   │ ╰─────────^ 'public(friend)' is deprecated. Replace with 'public(package)'
+
+error[E13002]: feature is deprecated in specified edition
+   ┌─ tests/move_2024/migration/public_friend.move:14:5
+   │  
+14 │ ╭     public(
+15 │ │         friend
+16 │ │         /* comment */
+17 │ │     ) fun t4() {}
+   │ ╰─────^ 'public(friend)' is deprecated. Replace with 'public(package)'
+
+error[E13002]: feature is deprecated in specified edition
+   ┌─ tests/move_2024/migration/public_friend.move:20:5
+   │  
+20 │ ╭     public(
+21 │ │         friend
+22 │ │         /* deleted-comment */
+23 │ │     )/* stays-comment */ fun t5() {}
+   │ ╰─────^ 'public(friend)' is deprecated. Replace with 'public(package)'
+
+error[E13002]: feature is deprecated in specified edition
+   ┌─ tests/move_2024/migration/public_friend.move:25:14
+   │
+25 │     /*stays*/public(/*deleted*/friend/*deleted*/)/*stays*/fun t6() {}
+   │              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ 'public(friend)' is deprecated. Replace with 'public(package)'

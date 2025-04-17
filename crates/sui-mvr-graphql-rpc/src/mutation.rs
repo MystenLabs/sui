@@ -119,7 +119,7 @@ impl Mutation {
                 transaction_module: e.transaction_module,
                 sender: e.sender,
                 type_: e.type_,
-                contents: e.bcs,
+                contents: e.bcs.into_bytes(),
             })
             .collect();
 

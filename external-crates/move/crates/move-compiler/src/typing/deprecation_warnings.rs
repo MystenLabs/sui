@@ -186,7 +186,7 @@ fn deprecations(
     if deprecations.len() != 1 {
         reporter.add_diag(ice!((
             source_location,
-            "ICE: verified that there is at at least one deprecation attribute above, \
+            "ICE: verified that there is at least one deprecation attribute above, \
             and expansion should have failed if there were multiple deprecation attributes."
         )));
         return None;

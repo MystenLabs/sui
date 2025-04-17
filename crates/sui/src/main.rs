@@ -32,7 +32,7 @@ async fn main() {
 
     let args = Args::parse();
     let _guard = match args.command {
-        SuiCommand::Console { .. } | SuiCommand::KeyTool { .. } | SuiCommand::Move { .. } => {
+        SuiCommand::KeyTool { .. } | SuiCommand::Move { .. } => {
             telemetry_subscribers::TelemetryConfig::new()
                 .with_log_level("error")
                 .with_env()

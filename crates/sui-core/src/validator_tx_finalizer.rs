@@ -355,9 +355,11 @@ mod tests {
                     &epoch_store,
                 )
                 .await?;
-            let events = match effects.events_digest() {
-                None => TransactionEvents::default(),
-                Some(digest) => self.authority.get_transaction_events(digest)?,
+            let events = if effects.events_digest().is_some() {
+                self.authority
+                    .get_transaction_events(effects.transaction_digest())?
+            } else {
+                TransactionEvents::default()
             };
             let signed_effects = self
                 .authority

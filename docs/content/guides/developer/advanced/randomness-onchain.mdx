@@ -25,7 +25,7 @@ To securely access randomness:
 
 - Define your function as (private) `entry`.
 - Prefer generating randomness using function-local `RandomGenerator`.
-- Make sure that the "unhappy path" of your function does not charge more gas than the "happy path".
+- Make sure that the "unhappy path" of your function does not consume more resources than the "happy path".
 
 ## Limited resources and `Random` dependent flows
 
@@ -65,6 +65,7 @@ Other limited resources per transaction that you should consider are:
 - The number of objects that can be used (including dynamic fields).
 - Number of events emitted.
 - Number of UIDs generated, or deleted, or transferred.
+- For a complete list of the current limits defined in the Protocol Config, see [this](https://github.com/MystenLabs/sui/blob/main/crates/sui-protocol-config/src/lib.rs#L731).
 
 
 
@@ -79,9 +80,10 @@ A second function, called by transaction `tx2`, reads the stored value and compl
 It is important that the inputs to the second function are fixed and cannot be modified after `tx1` (otherwise an attacker can modify them after seeing the randomness committed by `tx1`).
 Also, it is important to gracefully handle the case in which the second step is never completed (for example, charge a fee in the first step).
 See [this](https://github.com/MystenLabs/sui/blob/main/examples/move/random/random_nft/sources/example.move#L117-L142) for example implementation.
-- Write the function in a way that the happy flow consumes more gas than the unhappy one.
-  - Keep in mind that external functions or native ones can change in the future, potentially resulting in different costs compared to the time you conducted your tests.
+- Write the function in a way that the happy flow consumes more resources than the unhappy one. Keep the following in mind:
+  - External functions or native ones can change in the future, potentially resulting in different costs compared to the time you conducted your tests.
   - [profile-transaction](../../../references/cli/client.mdx#profile-a-transaction) can be used to profile the costs of a transaction.
+  - UIDs generated and deleted on the same transaction do not count towards the limit. 
 
 
 
@@ -183,10 +185,10 @@ The Move compiler enforces this behavior by rejecting `public` functions with `R
 If you want to call `roll_dice(r: &Random, ctx: &mut TxContext)` in module `example`, use the following code snippet:
 
 ```typescript
-const txb = new Transaction();
-txb.moveCall({
+const tx = new Transaction();
+tx.moveCall({
   target: "${PACKAGE_ID}::example::roll_dice",
-  arguments: [txb.object('0x8')]
+  arguments: [tx.object.random()]
 });
 ...
 ```

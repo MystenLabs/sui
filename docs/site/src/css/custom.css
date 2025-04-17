@@ -262,6 +262,17 @@ h4 {
   }
 }
 
+/** Tabs component **/ 
+
+div[role="tabpanel"] {
+  @apply mx-4;
+}
+
+/** Prism overrides **/
+
+.token-line .token.table.class-name {
+  @apply !inline-block;
+}
 
 /** Navbar overrides **/
 

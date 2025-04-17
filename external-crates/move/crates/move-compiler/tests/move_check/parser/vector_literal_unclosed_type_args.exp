@@ -1,8 +1,0 @@
-error[E01002]: unexpected token
-  ┌─ tests/move_check/parser/vector_literal_unclosed_type_args.move:4:28
-  │
-4 │         let _v = vector<u64[0, 1];
-  │                        -   ^ Expected '>'
-  │                        │    
-  │                        To match this '<'
-

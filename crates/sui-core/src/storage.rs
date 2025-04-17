@@ -1,6 +1,14 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use crate::authority::AuthorityState;
+use crate::checkpoints::CheckpointStore;
+use crate::epoch::committee_store::CommitteeStore;
+use crate::execution_cache::ExecutionCacheTraitPointers;
+use crate::rpc_index::CoinIndexInfo;
+use crate::rpc_index::OwnerIndexInfo;
+use crate::rpc_index::OwnerIndexKey;
+use crate::rpc_index::RpcIndexStore;
 use move_core_types::language_storage::StructTag;
 use parking_lot::Mutex;
 use std::sync::Arc;
@@ -9,7 +17,6 @@ use sui_types::base_types::SuiAddress;
 use sui_types::base_types::TransactionDigest;
 use sui_types::committee::Committee;
 use sui_types::committee::EpochId;
-use sui_types::digests::TransactionEventsDigest;
 use sui_types::effects::{TransactionEffects, TransactionEvents};
 use sui_types::messages_checkpoint::CheckpointContentsDigest;
 use sui_types::messages_checkpoint::CheckpointDigest;
@@ -26,20 +33,13 @@ use sui_types::storage::CoinInfo;
 use sui_types::storage::DynamicFieldIndexInfo;
 use sui_types::storage::DynamicFieldKey;
 use sui_types::storage::ObjectStore;
-use sui_types::storage::RestStateReader;
+use sui_types::storage::RpcIndexes;
+use sui_types::storage::RpcStateReader;
 use sui_types::storage::WriteStore;
 use sui_types::storage::{ObjectKey, ReadStore};
 use sui_types::transaction::VerifiedTransaction;
 use tap::Pipe;
-
-use crate::authority::AuthorityState;
-use crate::checkpoints::CheckpointStore;
-use crate::epoch::committee_store::CommitteeStore;
-use crate::execution_cache::ExecutionCacheTraitPointers;
-use crate::rest_index::CoinIndexInfo;
-use crate::rest_index::OwnerIndexInfo;
-use crate::rest_index::OwnerIndexKey;
-use crate::rest_index::RestIndexStore;
+use typed_store::TypedStoreError;
 
 #[derive(Clone)]
 pub struct RocksDbStore {
@@ -205,7 +205,7 @@ impl ReadStore for RocksDbStore {
             .get_executed_effects(digest)
     }
 
-    fn get_events(&self, digest: &TransactionEventsDigest) -> Option<TransactionEvents> {
+    fn get_events(&self, digest: &TransactionDigest) -> Option<TransactionEvents> {
         self.cache_traits
             .transaction_cache_reader
             .get_events(digest)
@@ -341,9 +341,9 @@ impl RestReadStore {
         Self { state, rocks }
     }
 
-    fn index(&self) -> sui_types::storage::error::Result<&RestIndexStore> {
+    fn index(&self) -> sui_types::storage::error::Result<&RpcIndexStore> {
         self.state
-            .rest_index
+            .rpc_index
             .as_deref()
             .ok_or_else(|| sui_types::storage::error::Error::custom("rest index store is disabled"))
     }
@@ -425,7 +425,7 @@ impl ReadStore for RestReadStore {
         self.rocks.get_transaction_effects(digest)
     }
 
-    fn get_events(&self, digest: &TransactionEventsDigest) -> Option<TransactionEvents> {
+    fn get_events(&self, digest: &TransactionDigest) -> Option<TransactionEvents> {
         self.rocks.get_events(digest)
     }
 
@@ -445,17 +445,7 @@ impl ReadStore for RestReadStore {
     }
 }
 
-impl RestStateReader for RestReadStore {
-    fn get_transaction_checkpoint(
-        &self,
-        digest: &TransactionDigest,
-    ) -> sui_types::storage::error::Result<Option<CheckpointSequenceNumber>> {
-        self.index()?
-            .get_transaction_info(digest)
-            .map(|maybe_info| maybe_info.map(|info| info.checkpoint))
-            .map_err(StorageError::custom)
-    }
-
+impl RpcStateReader for RestReadStore {
     fn get_lowest_available_checkpoint_objects(
         &self,
     ) -> sui_types::storage::error::Result<CheckpointSequenceNumber> {
@@ -471,29 +461,43 @@ impl RestStateReader for RestReadStore {
         }
     }
 
-    fn get_chain_identifier(
+    fn get_chain_identifier(&self) -> Result<sui_types::digests::ChainIdentifier> {
+        Ok(self.state.get_chain_identifier())
+    }
+
+    fn indexes(&self) -> Option<&dyn RpcIndexes> {
+        self.index().ok().map(|index| index as _)
+    }
+}
+
+impl RpcIndexes for RpcIndexStore {
+    fn get_transaction_checkpoint(
         &self,
-    ) -> sui_types::storage::error::Result<sui_types::digests::ChainIdentifier> {
-        self.state
-            .get_chain_identifier()
-            .ok_or_else(|| StorageError::missing("unable to query chain identifier"))
+        digest: &TransactionDigest,
+    ) -> sui_types::storage::error::Result<Option<CheckpointSequenceNumber>> {
+        self.get_transaction_info(digest)
+            .map(|maybe_info| maybe_info.map(|info| info.checkpoint))
+            .map_err(StorageError::custom)
     }
 
     fn account_owned_objects_info_iter(
         &self,
         owner: SuiAddress,
         cursor: Option<ObjectID>,
-    ) -> Result<Box<dyn Iterator<Item = AccountOwnedObjectInfo> + '_>> {
-        let iter = self.index()?.owner_iter(owner, cursor)?.map(
-            |(OwnerIndexKey { owner, object_id }, OwnerIndexInfo { version, type_ })| {
-                AccountOwnedObjectInfo {
-                    owner,
-                    object_id,
-                    version,
-                    type_,
-                }
-            },
-        );
+    ) -> Result<Box<dyn Iterator<Item = Result<AccountOwnedObjectInfo, TypedStoreError>> + '_>>
+    {
+        let iter = self.owner_iter(owner, cursor)?.map(|result| {
+            result.map(
+                |(OwnerIndexKey { owner, object_id }, OwnerIndexInfo { version, type_ })| {
+                    AccountOwnedObjectInfo {
+                        owner,
+                        object_id,
+                        version,
+                        type_,
+                    }
+                },
+            )
+        });
 
         Ok(Box::new(iter) as _)
     }
@@ -503,10 +507,12 @@ impl RestStateReader for RestReadStore {
         parent: ObjectID,
         cursor: Option<ObjectID>,
     ) -> sui_types::storage::error::Result<
-        Box<dyn Iterator<Item = (DynamicFieldKey, DynamicFieldIndexInfo)> + '_>,
+        Box<
+            dyn Iterator<Item = Result<(DynamicFieldKey, DynamicFieldIndexInfo), TypedStoreError>>
+                + '_,
+        >,
     > {
-        let iter = self.index()?.dynamic_field_iter(parent, cursor)?;
-
+        let iter = self.dynamic_field_iter(parent, cursor)?;
         Ok(Box::new(iter) as _)
     }
 
@@ -514,8 +520,7 @@ impl RestStateReader for RestReadStore {
         &self,
         coin_type: &StructTag,
     ) -> sui_types::storage::error::Result<Option<CoinInfo>> {
-        self.index()?
-            .get_coin_info(coin_type)?
+        self.get_coin_info(coin_type)?
             .map(
                 |CoinIndexInfo {
                      coin_metadata_object_id,

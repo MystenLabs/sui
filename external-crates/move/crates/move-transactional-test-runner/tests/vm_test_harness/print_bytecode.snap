@@ -1,0 +1,29 @@
+---
+source: crates/move-transactional-test-runner/src/framework.rs
+---
+processed 2 tasks
+
+task 0, lines 1-7:
+//# print-bytecode --syntax=mvir
+// Move bytecode v6
+module 42.M {
+
+entry foo<Ty0, Ty1>() {
+B0:
+	0: Ret
+}
+
+}
+
+
+task 1, lines 9-13:
+//# print-bytecode
+// Move bytecode v6
+module 43.M {
+
+entry foo<X, Y>() {
+B0:
+	0: Ret
+}
+
+}

@@ -1,0 +1,21 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: legacy
+  lint: false
+---
+error[E01002]: unexpected token
+  ┌─ tests/move_check/parser/friend_decl_inside_function.move:6:9
+  │
+6 │         friend 0x42::A;
+  │         ^^^^^^
+  │         │
+  │         Unexpected 'friend'
+  │         Expected an expression term
+
+error[E01002]: unexpected token
+  ┌─ tests/move_check/parser/friend_decl_inside_function.move:9:1
+  │
+9 │ }
+  │ ^ Invalid code unit. Expected 'address' or 'module'. Got '}'

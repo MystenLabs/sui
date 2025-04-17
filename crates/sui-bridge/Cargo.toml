@@ -53,8 +53,6 @@ hex-literal = { version = "0.3.4", optional = true }
 test-cluster = { workspace = true, optional = true }
 
 [dev-dependencies]
-sui-types = { workspace = true, features = ["test-utils"] }
-sui-json-rpc-types = { workspace = true, features = ["test-utils"] }
 sui-config.workspace = true
 sui-test-transaction-builder.workspace = true
 maplit = "1.0.2"

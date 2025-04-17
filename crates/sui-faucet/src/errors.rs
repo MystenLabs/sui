@@ -5,6 +5,12 @@ use thiserror::Error;
 
 #[derive(Error, Debug, PartialEq, Eq)]
 pub enum FaucetError {
+    #[error("Missing X-Turnstile-Token header. For testnet tokens, please use the Web UI: https://faucet.sui.io")]
+    MissingTurnstileTokenHeader,
+
+    #[error("Request limit exceeded. {0}")]
+    TooManyRequests(String),
+
     #[error("Faucet cannot read objects from fullnode: {0}")]
     FullnodeReadingError(String),
 
@@ -42,6 +48,9 @@ pub enum FaucetError {
 
     #[error("Internal error: {0}")]
     Internal(String),
+
+    #[error("Invalid user agent: {0}")]
+    InvalidUserAgent(String),
 }
 
 impl FaucetError {

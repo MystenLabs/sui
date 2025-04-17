@@ -36,5 +36,4 @@ pub use command_line::{
     },
     MOVE_COMPILED_INTERFACES_DIR,
 };
-pub use parser::comments::{CommentMap, FileCommentMap, MatchedFileCommentMap};
 pub use shared::Flags;

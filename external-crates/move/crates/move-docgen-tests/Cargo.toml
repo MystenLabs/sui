@@ -1,0 +1,48 @@
+[package]
+name = "move-docgen-tests"
+version = "0.1.0"
+publish = false
+edition = "2021"
+license = "Apache-2.0"
+
+[dependencies]
+# move dependencies
+move-command-line-common.workspace = true
+move-compiler.workspace = true
+move-model.workspace = true
+move-docgen.workspace = true
+move-stackless-bytecode.workspace = true
+move-package.workspace = true
+move-binary-format.workspace = true
+move-model-2.workspace = true
+move-core-types.workspace = true
+move-ir-types.workspace = true
+move-symbol-pool.workspace = true
+
+# external dependencies
+anyhow.workspace = true
+bimap.workspace = true
+clap.workspace = true
+codespan-reporting.workspace = true
+itertools.workspace = true
+log.workspace = true
+num.workspace = true
+regex.workspace = true
+serde.workspace = true
+once_cell.workspace = true
+tempfile.workspace = true
+insta.workspace = true
+
+[dev-dependencies]
+datatest-stable.workspace = true
+shell-words.workspace = true
+walkdir.workspace = true
+tempfile.workspace = true
+insta = "1.34"
+glob = "0.3"
+termcolor = "1.1.3"
+regex = "1.5"
+
+[[test]]
+name = "testsuite"
+harness = false

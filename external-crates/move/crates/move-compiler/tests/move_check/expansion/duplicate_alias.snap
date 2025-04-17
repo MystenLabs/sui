@@ -1,0 +1,22 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: legacy
+  lint: false
+---
+warning[W09001]: unused alias
+  ┌─ tests/move_check/expansion/duplicate_alias.move:8:19
+  │
+8 │     use 0x2::Y as Z;
+  │                   ^ Unused 'use' of alias 'Z'. Consider removing it
+  │
+  = This warning can be suppressed with '#[allow(unused_use)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+error[E02001]: duplicate declaration, item, or annotation
+  ┌─ tests/move_check/expansion/duplicate_alias.move:8:19
+  │
+7 │     use 0x2::X as Z;
+  │                   - Alias previously defined here
+8 │     use 0x2::Y as Z;
+  │                   ^ Duplicate module alias 'Z'. Module aliases must be unique within a given namespace

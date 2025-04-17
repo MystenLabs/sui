@@ -65,8 +65,6 @@ pub enum PrunableTable {
     TxDigests,
     TxInputObjects,
     TxKinds,
-    TxRecipients,
-    TxSenders,
 
     Checkpoints,
     PrunerCpWatermark,
@@ -96,8 +94,6 @@ impl PrunableTable {
             PrunableTable::TxDigests => tx,
             PrunableTable::TxInputObjects => tx,
             PrunableTable::TxKinds => tx,
-            PrunableTable::TxRecipients => tx,
-            PrunableTable::TxSenders => tx,
 
             PrunableTable::Checkpoints => cp,
             PrunableTable::PrunerCpWatermark => cp,

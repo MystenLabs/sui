@@ -1,0 +1,147 @@
+---
+source: external-crates/move/crates/move-transactional-test-runner/src/framework.rs
+---
+processed 11 tasks
+
+init:
+A: object(0,0), B: object(0,1)
+
+task 1, lines 11-38:
+//# publish
+created: object(1,0)
+mutated: object(0,2)
+gas summary: computation_cost: 1000000, storage_cost: 6961600,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 2, lines 40-42:
+//# programmable --sender B --inputs @B
+//> 0: P::M::o1();
+//> 1: TransferObjects([Result(0)], Input(0))
+created: object(2,0)
+mutated: object(0,1)
+gas summary: computation_cost: 1000000, storage_cost: 2204000,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 3, lines 44-48:
+//# programmable --sender A --inputs @A
+//> 0: P::M::o1();
+//> 1: P::M::o2();
+//> 2: P::N::o1();
+//> 3: TransferObjects([Result(0), Result(1), Result(2)], Input(0))
+created: object(3,0), object(3,1), object(3,2)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 4636000,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 4, line 50:
+//# create-checkpoint
+Checkpoint created: 1
+
+task 5, lines 52-54:
+//# programmable --sender A --inputs @A
+//> 0: P::M::o1();
+//> 1: TransferObjects([Result(0)], Input(0))
+created: object(5,0)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 2204000,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 6, line 56:
+//# create-checkpoint
+Checkpoint created: 2
+
+task 7, lines 58-68:
+//# run-jsonrpc
+Response: {
+  "jsonrpc": "2.0",
+  "id": 0,
+  "result": {
+    "data": [
+      {
+        "data": {
+          "objectId": "0x33606f6df49726da6eb459b42a99e5e9035f775d5fc67f4878ecebf7acd952a7",
+          "version": "3",
+          "digest": "HkMtbLn6X37sNutQWr87BCTnkkWzGjr4CkxMYAKRq6X5",
+          "type": "0xe1c6660ef31048dad1e41047f6fb9b7ed23973bfd4d5c2381c328eaf059b137d::M::O1"
+        }
+      },
+      {
+        "data": {
+          "objectId": "0x7d1dd38797c8b44409ce173982e23be378dd849b77265513b89409b1ebb58f8a",
+          "version": "2",
+          "digest": "CvF9yM9tXXtYcLBdwBqBNXHGN9wtTHPogfsp2SqnzwJH",
+          "type": "0xe1c6660ef31048dad1e41047f6fb9b7ed23973bfd4d5c2381c328eaf059b137d::M::O2"
+        }
+      },
+      {
+        "data": {
+          "objectId": "0x641bb5c9fe8c5c55141dc24b63197f610be62cbdf5de690d299ac04621cee5c6",
+          "version": "2",
+          "digest": "HXsWXDM5xFmP9HfPnyzXA7EinHANUwvAJZz8hwkyPR1A",
+          "type": "0xe1c6660ef31048dad1e41047f6fb9b7ed23973bfd4d5c2381c328eaf059b137d::M::O1"
+        }
+      }
+    ],
+    "nextCursor": "IGQbtcn+jFxVFB3CS2MZf2EL5iy99d5pDSmawEYhzuXGAQAAAAAAAAA=",
+    "hasNextPage": false
+  }
+}
+
+task 8, lines 70-80:
+//# run-jsonrpc
+Response: {
+  "jsonrpc": "2.0",
+  "id": 1,
+  "result": {
+    "data": [
+      {
+        "data": {
+          "objectId": "0xbd6943dd9a32bed6693ec36ae6526c4f195738bcb3c08484b035731b1dfc7fb9",
+          "version": "2",
+          "digest": "An1LvXhmnEHn2gJMSSkdGyun4u38i9oHDmAwXXb9AJJh",
+          "type": "0xe1c6660ef31048dad1e41047f6fb9b7ed23973bfd4d5c2381c328eaf059b137d::N::O1"
+        }
+      }
+    ],
+    "nextCursor": "IL1pQ92aMr7WaT7DauZSbE8ZVzi8s8CEhLA1cxsd/H+5AQAAAAAAAAA=",
+    "hasNextPage": false
+  }
+}
+
+task 9, lines 82-94:
+//# run-jsonrpc
+Response: {
+  "jsonrpc": "2.0",
+  "id": 2,
+  "result": {
+    "data": [
+      {
+        "data": {
+          "objectId": "0x33606f6df49726da6eb459b42a99e5e9035f775d5fc67f4878ecebf7acd952a7",
+          "version": "3",
+          "digest": "HkMtbLn6X37sNutQWr87BCTnkkWzGjr4CkxMYAKRq6X5",
+          "type": "0xe1c6660ef31048dad1e41047f6fb9b7ed23973bfd4d5c2381c328eaf059b137d::M::O1"
+        }
+      }
+    ],
+    "nextCursor": "IDNgb230lybabrRZtCqZ5ekDX3ddX8Z/SHjs6/es2VKnAgAAAAAAAAA=",
+    "hasNextPage": true
+  }
+}
+
+task 10, lines 96-108:
+//# run-jsonrpc --cursors bcs(@{obj_5_0},2)
+Response: {
+  "jsonrpc": "2.0",
+  "id": 3,
+  "result": {
+    "data": [
+      {
+        "data": {
+          "objectId": "0x7d1dd38797c8b44409ce173982e23be378dd849b77265513b89409b1ebb58f8a",
+          "version": "2",
+          "digest": "CvF9yM9tXXtYcLBdwBqBNXHGN9wtTHPogfsp2SqnzwJH",
+          "type": "0xe1c6660ef31048dad1e41047f6fb9b7ed23973bfd4d5c2381c328eaf059b137d::M::O2"
+        }
+      }
+    ],
+    "nextCursor": "IH0d04eXyLRECc4XOYLiO+N43YSbdyZVE7iUCbHrtY+KAQAAAAAAAAA=",
+    "hasNextPage": true
+  }
+}

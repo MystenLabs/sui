@@ -99,7 +99,7 @@ function install_boogie {
   else
     "${DOTNET_INSTALL_DIR}dotnet" tool update --tool-path "${DOTNET_INSTALL_DIR}tools/" Boogie --version $BOOGIE_VERSION
     # If a higher version of boogie is installed, we can not install required version with `dotnet tool update` command above
-    # Print a tip here, since incompatible version of boogie might cause move-prover stuck forever
+    # Print a tip here, since incompatible version of boogie might cause sui-prover stuck forever
     if [[ $? != 0 ]]; then
       echo "failed to install boogie ${BOOGIE_VERSION}, if there is a more updated boogie installed, please consider uninstall it with"
       echo "${DOTNET_INSTALL_DIR}dotnet tool uninstall --tool-path ${DOTNET_INSTALL_DIR}/tools Boogie"

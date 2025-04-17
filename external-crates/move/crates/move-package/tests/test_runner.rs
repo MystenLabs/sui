@@ -4,122 +4,83 @@
 
 use anyhow::{anyhow, bail};
 use move_command_line_common::testing::{
-    add_update_baseline_fix, format_diff, read_env_update_baseline,
+    add_update_baseline_fix, format_diff, read_env_update_baseline, insta_assert
 };
 use move_compiler::Flags;
 use move_package::{
-    compilation::{
-        build_plan::BuildPlan, compiled_package::CompiledPackageInfo, model_builder::ModelBuilder,
-    },
-    package_hooks,
-    package_hooks::PackageHooks,
-    package_hooks::PackageIdentifier,
+    compilation::{build_plan::BuildPlan, compiled_package::CompiledPackageInfo},
+    package_hooks::{self, PackageHooks, PackageIdentifier},
     resolution::resolution_graph::Package,
-    source_package::parsed_manifest::{OnChainInfo, PackageDigest, SourceManifest},
-    BuildConfig, ModelConfig,
+    source_package::{
+        manifest_parser::parse_dependencies,
+        parsed_manifest::{Dependencies, OnChainInfo, PackageDigest, SourceManifest},
+    },
+    BuildConfig,
 };
 use move_symbol_pool::Symbol;
 use std::{
-    ffi::OsStr,
     fs,
     path::{Path, PathBuf},
 };
 use tempfile::{tempdir, TempDir};
 
-const EXTENSIONS: &[&str] = &[
-    "progress",
-    "resolved",
-    "locked",
-    "notlocked",
-    "compiled",
-    "modeled",
-];
-
+/// Resolve the package contained in the same directory as [path], and snapshot a value based
+/// on the extension of [path]:
+///  - ".progress": the output of the progress indicator
+///  - ".locked": the contents of the lockfile
+///  - ".notlocked": the nonexistence of the lockfile
+///  - ".compiled": the serialized [CompiledPackageInfo] after compilation
+///  - ".resolved": the serialized [ResolvedGraph] after package resolution
+///
+/// If a file named `path.with_extension("implicits")` exists, its contents are a toml file containing
+/// additional dependencies which are included as implicit dependencencies.
 pub fn run_test(path: &Path) -> datatest_stable::Result<()> {
     if path.iter().any(|part| part == "deps_only") {
         return Ok(());
     }
 
-    let mut tests = EXTENSIONS
-        .iter()
-        .filter_map(|kind| Test::from_path_with_kind(path, kind).transpose())
-        .peekable();
-
-    if tests.peek().is_none() {
-        return Err(anyhow!(
-            "No snapshot file found for {:?}, please add a file with the same basename and one \
-             of the following extensions: {:#?}\n\n\
-             You probably want to re-run with `env UPDATE_BASELINE=1` after adding this file.",
-            path,
-            EXTENSIONS,
-        )
-        .into());
-    }
-
-    for test in tests {
-        test?.run()?
-    }
-
-    Ok(())
+    let kind = path.extension().unwrap().to_string_lossy();
+    let toml_path = path.with_extension("toml");
+    let test = Test::from_path_with_kind(&toml_path, &kind)?;
+    test.run()
 }
 
 struct Test<'a> {
+    kind: &'a str,
     toml_path: &'a Path,
-    expected: PathBuf,
     output_dir: TempDir,
 }
 
 impl Test<'_> {
-    fn from_path_with_kind<'p>(
-        toml_path: &'p Path,
-        kind: &str,
-    ) -> datatest_stable::Result<Option<Test<'p>>> {
-        let expected = toml_path.with_extension(kind);
-        if !expected.is_file() {
-            Ok(None)
-        } else {
-            Ok(Some(Test {
-                toml_path,
-                expected,
-                output_dir: tempdir()?,
-            }))
-        }
+    fn from_path_with_kind<'a>(
+        toml_path: &'a Path,
+        kind: &'a str,
+    ) -> datatest_stable::Result<Test<'a>> {
+        dbg!(&toml_path);
+        Ok(Test {
+            toml_path,
+            kind,
+            output_dir: tempdir()?,
+        })
     }
 
     fn run(&self) -> datatest_stable::Result<()> {
         package_hooks::register_package_hooks(Box::new(TestHooks()));
-        let update_baseline = read_env_update_baseline();
-
         let output = self.output().unwrap_or_else(|err| format!("{:#}\n", err));
-
-        if update_baseline {
-            fs::write(&self.expected, &output)?;
-            return Ok(());
-        }
-
-        let expected = fs::read_to_string(&self.expected)?;
-        if expected != output {
-            return Err(anyhow!(add_update_baseline_fix(format!(
-                "Expected outputs differ for {:?}:\n{}",
-                self.expected,
-                format_diff(expected, output),
-            )))
-            .into());
-        }
+        insta_assert! {
+            input_path: self.toml_path,
+            contents: output,
+            suffix: self.kind,
+        };
 
         Ok(())
     }
 
+    /// Return the value to be snapshotted, based on `self.kind`, as described in [run_test]
     fn output(&self) -> anyhow::Result<String> {
-        let Some(ext) = self.expected.extension().and_then(OsStr::to_str) else {
-            bail!(
-                "Unexpected snapshot file extension: {:?}",
-                self.expected.extension()
-            );
-        };
-
         let out_path = self.output_dir.path().to_path_buf();
         let lock_path = out_path.join("Move.lock");
+        let implicits_path = self.toml_path.with_extension("implicits");
 
         let config = BuildConfig {
             dev_mode: true,
@@ -128,8 +89,9 @@ impl Test<'_> {
             install_dir: Some(out_path),
             force_recompilation: false,
             lock_file: ["locked", "notlocked"]
-                .contains(&ext)
+                .contains(&self.kind)
                 .then(|| lock_path.clone()),
+            implicit_dependencies: load_implicits_from_file(&implicits_path),
             ..Default::default()
         };
 
@@ -137,7 +99,7 @@ impl Test<'_> {
         let resolved_package =
             config.resolution_graph_for_package(self.toml_path, None, &mut progress);
 
-        Ok(match ext {
+        Ok(match self.kind {
             "progress" => String::from_utf8(progress)?,
 
             "locked" => fs::read_to_string(&lock_path)?,
@@ -149,7 +111,8 @@ impl Test<'_> {
             "notlocked" => "Lock file uncommitted\n".to_string(),
 
             "compiled" => {
-                let mut pkg = BuildPlan::create(resolved_package?)?.compile(&mut progress)?;
+                let mut pkg = BuildPlan::create(&resolved_package?)?
+                    .compile(&mut progress, |compile| compile)?;
                 scrub_compiled_package(&mut pkg.compiled_package_info);
                 format!("{:#?}\n", pkg.compiled_package_info)
             }
@@ -179,6 +142,15 @@ impl Test<'_> {
             ext => bail!("Unrecognised snapshot type: '{ext}'"),
         })
     }
+}
+
+/// Return the dependencies contained in the file at `path`, if any
+fn load_implicits_from_file(path: &Path) -> Dependencies {
+    let deps_toml = fs::read_to_string(path).unwrap_or("# no implicit deps".to_string());
+
+    parse_dependencies(toml::from_str(&deps_toml).unwrap()).unwrap_or_else(|e| {
+        panic!("expected {path:?} to contain a toml-formatted dependencies section\n{e:?}")
+    })
 }
 
 fn scrub_build_config(config: &mut BuildConfig) {
@@ -232,5 +204,21 @@ impl PackageHooks for TestHooks {
             .map(|v| Symbol::from(v.as_ref())))
     }
 }
-
-datatest_stable::harness!(run_test, "tests/test_sources", r".*\.toml$");
+// &["progress", "resolved", "locked", "notlocked", "compiled"];
+datatest_stable::harness!(
+    run_test,
+    "tests/test_sources",
+    r".*\.progress$",
+    run_test,
+    "tests/test_sources",
+    r".*\.resolved$",
+    run_test,
+    "tests/test_sources",
+    r".*\.locked$",
+    run_test,
+    "tests/test_sources",
+    r".*\.notlocked$",
+    run_test,
+    "tests/test_sources",
+    r".*\.compiled$",
+);

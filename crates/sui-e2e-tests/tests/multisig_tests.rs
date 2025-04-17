@@ -2,14 +2,30 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use fastcrypto::traits::EncodeDecodeBase64;
+use p256::pkcs8::DecodePublicKey;
+use passkey_authenticator::{Authenticator, UserCheck, UserValidationMethod};
+use passkey_client::Client;
+use passkey_types::{
+    ctap2::{Aaguid, Ctap2Error},
+    rand::random_vec,
+    webauthn::{
+        AttestationConveyancePreference, CredentialCreationOptions, CredentialRequestOptions,
+        PublicKeyCredentialCreationOptions, PublicKeyCredentialParameters,
+        PublicKeyCredentialRequestOptions, PublicKeyCredentialRpEntity, PublicKeyCredentialType,
+        PublicKeyCredentialUserEntity, UserVerificationRequirement,
+    },
+    Bytes, Passkey,
+};
 use shared_crypto::intent::{Intent, IntentMessage};
 use std::net::SocketAddr;
 use sui_core::authority_client::AuthorityAPI;
 use sui_macros::sim_test;
 use sui_protocol_config::ProtocolConfig;
 use sui_test_transaction_builder::TestTransactionBuilder;
+use sui_types::crypto::{SignatureScheme, ToFromBytes};
 use sui_types::error::UserInputError;
 use sui_types::multisig_legacy::MultiSigLegacy;
+use sui_types::passkey_authenticator::{to_signing_message, PasskeyAuthenticator};
 use sui_types::{
     base_types::SuiAddress,
     crypto::{
@@ -25,7 +41,7 @@ use sui_types::{
     zk_login_authenticator::ZkLoginAuthenticator,
 };
 use test_cluster::{TestCluster, TestClusterBuilder};
-
+use url::Url;
 async fn do_upgraded_multisig_test() -> SuiResult {
     let test_cluster = TestClusterBuilder::new().build().await;
     let tx = make_upgraded_multisig_tx();
@@ -40,6 +56,236 @@ async fn do_upgraded_multisig_test() -> SuiResult {
         .handle_transaction(tx, Some(SocketAddr::new([127, 0, 0, 1].into(), 0)))
         .await
         .map(|_| ())
+}
+
+async fn create_credential_and_sign_test_tx_with_passkey_multisig(
+    test_cluster: &TestCluster,
+    sender: Option<SuiAddress>,
+    change_intent: bool,
+    change_tx: bool,
+) -> Transaction {
+    // set up authenticator and client
+    let my_aaguid = Aaguid::new_empty();
+    let user_validation_method = MyUserValidationMethod {};
+    let store: Option<Passkey> = None;
+    let my_authenticator = Authenticator::new(my_aaguid, store, user_validation_method);
+    let mut my_client = Client::new(my_authenticator);
+    let origin = Url::parse("https://www.sui.io").unwrap();
+
+    // Create credential.
+    let challenge_bytes_from_rp: Bytes = random_vec(32).into();
+    let user_entity = PublicKeyCredentialUserEntity {
+        id: random_vec(32).into(),
+        display_name: "Johnny Passkey".into(),
+        name: "jpasskey@example.org".into(),
+    };
+    let request = CredentialCreationOptions {
+        public_key: PublicKeyCredentialCreationOptions {
+            rp: PublicKeyCredentialRpEntity {
+                id: None, // Leaving the ID as None means use the effective domain
+                name: origin.domain().unwrap().into(),
+            },
+            user: user_entity,
+            challenge: challenge_bytes_from_rp,
+            pub_key_cred_params: vec![PublicKeyCredentialParameters {
+                ty: PublicKeyCredentialType::PublicKey,
+                alg: coset::iana::Algorithm::ES256,
+            }],
+            timeout: None,
+            exclude_credentials: None,
+            authenticator_selection: None,
+            hints: None,
+            attestation: AttestationConveyancePreference::None,
+            attestation_formats: None,
+            extensions: None,
+        },
+    };
+    let my_webauthn_credential = my_client.register(&origin, request, None).await.unwrap();
+    let verifying_key = p256::ecdsa::VerifyingKey::from_public_key_der(
+        my_webauthn_credential
+            .response
+            .public_key
+            .unwrap()
+            .as_slice(),
+    )
+    .unwrap();
+
+    // Derive compact pubkey from DER format.
+    let encoded_point = verifying_key.to_encoded_point(false);
+    let x = encoded_point.x();
+    let y = encoded_point.y();
+    let prefix = if y.unwrap()[31] % 2 == 0 { 0x02 } else { 0x03 };
+    let mut pk_bytes = vec![prefix];
+    pk_bytes.extend_from_slice(x.unwrap());
+    let passkey_pk =
+        PublicKey::try_from_bytes(SignatureScheme::PasskeyAuthenticator, &pk_bytes).unwrap();
+
+    // Construct a multisig with 5 pks (ed25519, secp256k1, secp256r1, zklogin, passkey) with threshold = 1.
+    let keys = keys();
+    let pk0 = keys[0].public(); // ed25519
+    let pk1 = keys[1].public(); // secp256k1
+    let pk2 = keys[2].public(); // secp256r1
+
+    let (_eph_kp, _eph_pk, zklogin_inputs) =
+        &load_test_vectors("../sui-types/src/unit_tests/zklogin_test_vectors.json")[1];
+    let zklogin_pk = PublicKey::ZkLogin(
+        ZkLoginPublicIdentifier::new(zklogin_inputs.get_iss(), zklogin_inputs.get_address_seed())
+            .unwrap(),
+    );
+    let multisig_pk = MultiSigPublicKey::new(
+        vec![
+            pk0.clone(),
+            pk1.clone(),
+            pk2.clone(),
+            zklogin_pk.clone(),
+            passkey_pk.clone(),
+        ],
+        vec![1, 1, 1, 1, 1],
+        1,
+    )
+    .unwrap();
+
+    // Compute sui address as sender, fund gas and make a test transaction.
+    let sender = match sender {
+        Some(s) => s,
+        None => SuiAddress::from(&multisig_pk),
+    };
+
+    let rgp = test_cluster.get_reference_gas_price().await;
+    let gas = test_cluster
+        .fund_address_and_return_gas(rgp, Some(20000000000), sender)
+        .await;
+    let tx_data = TestTransactionBuilder::new(sender, gas, rgp)
+        .transfer_sui(None, SuiAddress::ZERO)
+        .build();
+    let intent_msg = IntentMessage::new(Intent::sui_transaction(), tx_data.clone());
+
+    // Compute the challenge = blake2b_hash(intent_msg(tx)) for passkey credential request.
+    // If change_intent, mangle the intent bytes. If change_tx, mangle the hashed tx bytes.
+    let passkey_challenge = if change_intent {
+        to_signing_message(&IntentMessage::new(
+            Intent::personal_message(),
+            intent_msg.value.clone(),
+        ))
+        .to_vec()
+    } else if change_tx {
+        random_vec(32)
+    } else {
+        to_signing_message(&intent_msg).to_vec()
+    };
+
+    // Request a signature from passkey with challenge set to passkey_digest.
+    let credential_request = CredentialRequestOptions {
+        public_key: PublicKeyCredentialRequestOptions {
+            challenge: Bytes::from(passkey_challenge),
+            timeout: None,
+            rp_id: Some(String::from(origin.domain().unwrap())),
+            allow_credentials: None,
+            user_verification: UserVerificationRequirement::default(),
+            attestation: Default::default(),
+            attestation_formats: None,
+            extensions: None,
+            hints: None,
+        },
+    };
+
+    let authenticated_cred = my_client
+        .authenticate(&origin, credential_request, None)
+        .await
+        .unwrap();
+
+    // Parse signature from der format in response and normalize it to lower s.
+    let sig_bytes_der = authenticated_cred.response.signature.as_slice();
+    let sig = p256::ecdsa::Signature::from_der(sig_bytes_der).unwrap();
+    let sig_bytes = sig.normalize_s().unwrap_or(sig).to_bytes();
+
+    let mut user_sig_bytes = vec![SignatureScheme::Secp256r1.flag()];
+    user_sig_bytes.extend_from_slice(&sig_bytes);
+    user_sig_bytes.extend_from_slice(&pk_bytes);
+
+    // Parse authenticator_data and client_data_json from response.
+    let authenticator_data = authenticated_cred.response.authenticator_data.as_slice();
+    let client_data_json = authenticated_cred.response.client_data_json.as_slice();
+
+    let sig = GenericSignature::PasskeyAuthenticator(
+        PasskeyAuthenticator::new_for_testing(
+            authenticator_data.to_vec(),
+            String::from_utf8(client_data_json.to_vec()).unwrap(),
+            Signature::from_bytes(&user_sig_bytes).unwrap(),
+        )
+        .unwrap(),
+    );
+    let multisig = GenericSignature::MultiSig(
+        MultiSig::combine(vec![sig.clone()], multisig_pk.clone()).unwrap(),
+    );
+    Transaction::from_generic_sig_data(tx_data, vec![multisig])
+}
+
+async fn construct_simple_zklogin_multisig_tx(
+    test_cluster: &TestCluster,
+) -> (Transaction, Transaction) {
+    // construct a multisig address with 1 zklogin pk with threshold = 1.
+    let (eph_kp, _eph_pk, zklogin_inputs) =
+        &load_test_vectors("../sui-types/src/unit_tests/zklogin_test_vectors.json")[1];
+    let zklogin_pk = PublicKey::ZkLogin(
+        ZkLoginPublicIdentifier::new(zklogin_inputs.get_iss(), zklogin_inputs.get_address_seed())
+            .unwrap(),
+    );
+    let multisig_pk = MultiSigPublicKey::insecure_new(vec![(zklogin_pk.clone(), 1)], 1);
+    let multisig_pk_legacy =
+        MultiSigPublicKeyLegacy::new(vec![zklogin_pk.clone()], vec![1], 1).unwrap();
+    let rgp = test_cluster.get_reference_gas_price().await;
+
+    let multisig_addr = SuiAddress::from(&multisig_pk);
+    let gas = test_cluster
+        .fund_address_and_return_gas(rgp, Some(20000000000), multisig_addr)
+        .await;
+    let tx_data = TestTransactionBuilder::new(multisig_addr, gas, rgp)
+        .transfer_sui(None, SuiAddress::ZERO)
+        .build();
+    let intent_msg = IntentMessage::new(Intent::sui_transaction(), tx_data.clone());
+    let sig_4: GenericSignature = ZkLoginAuthenticator::new(
+        zklogin_inputs.clone(),
+        2,
+        Signature::new_secure(&intent_msg, eph_kp),
+    )
+    .into();
+    let multisig = GenericSignature::MultiSig(
+        MultiSig::combine(vec![sig_4.clone()], multisig_pk.clone()).unwrap(),
+    );
+    let multisig_legacy = GenericSignature::MultiSigLegacy(
+        MultiSigLegacy::combine(vec![sig_4.clone()], multisig_pk_legacy.clone()).unwrap(),
+    );
+    (
+        Transaction::from_generic_sig_data(tx_data.clone(), vec![multisig]),
+        Transaction::from_generic_sig_data(tx_data.clone(), vec![multisig_legacy]),
+    )
+}
+
+struct MyUserValidationMethod {}
+#[async_trait::async_trait]
+impl UserValidationMethod for MyUserValidationMethod {
+    type PasskeyItem = Passkey;
+
+    async fn check_user<'a>(
+        &self,
+        _credential: Option<&'a Passkey>,
+        presence: bool,
+        verification: bool,
+    ) -> Result<UserCheck, Ctap2Error> {
+        Ok(UserCheck {
+            presence,
+            verification,
+        })
+    }
+
+    fn is_verification_enabled(&self) -> Option<bool> {
+        Some(true)
+    }
+
+    fn is_presence_enabled(&self) -> bool {
+        true
+    }
 }
 
 #[sim_test]
@@ -827,43 +1073,70 @@ async fn test_zklogin_inside_multisig_feature_deny() {
     assert!(res.is_err());
 }
 
-async fn construct_simple_zklogin_multisig_tx(
-    test_cluster: &TestCluster,
-) -> (Transaction, Transaction) {
-    // construct a multisig address with 1 zklogin pk with threshold = 1.
-    let (eph_kp, _eph_pk, zklogin_inputs) =
-        &load_test_vectors("../sui-types/src/unit_tests/zklogin_test_vectors.json")[1];
-    let zklogin_pk = PublicKey::ZkLogin(
-        ZkLoginPublicIdentifier::new(zklogin_inputs.get_iss(), zklogin_inputs.get_address_seed())
-            .unwrap(),
-    );
-    let multisig_pk = MultiSigPublicKey::insecure_new(vec![(zklogin_pk.clone(), 1)], 1);
-    let multisig_pk_legacy =
-        MultiSigPublicKeyLegacy::new(vec![zklogin_pk.clone()], vec![1], 1).unwrap();
-    let rgp = test_cluster.get_reference_gas_price().await;
-
-    let multisig_addr = SuiAddress::from(&multisig_pk);
-    let gas = test_cluster
-        .fund_address_and_return_gas(rgp, Some(20000000000), multisig_addr)
+#[sim_test]
+async fn test_multisig_passkey_feature_deny() {
+    // if feature disabled, fails to execute.
+    let _guard = ProtocolConfig::apply_overrides_for_testing(|_, mut config| {
+        config.set_accept_passkey_in_multisig_for_testing(false);
+        config
+    });
+    let test_cluster = TestClusterBuilder::new()
+        .with_default_jwks()
+        .with_epoch_duration_ms(15000)
+        .build()
         .await;
-    let tx_data = TestTransactionBuilder::new(multisig_addr, gas, rgp)
-        .transfer_sui(None, SuiAddress::ZERO)
-        .build();
-    let intent_msg = IntentMessage::new(Intent::sui_transaction(), tx_data.clone());
-    let sig_4: GenericSignature = ZkLoginAuthenticator::new(
-        zklogin_inputs.clone(),
-        2,
-        Signature::new_secure(&intent_msg, eph_kp),
+    test_cluster.wait_for_authenticator_state_update().await;
+    let tx =
+        create_credential_and_sign_test_tx_with_passkey_multisig(&test_cluster, None, false, false)
+            .await;
+    // feature flag disabled fails latest multisig tx.
+    let res = test_cluster.wallet.execute_transaction_may_fail(tx).await;
+    assert!(res
+        .unwrap_err()
+        .to_string()
+        .contains("Passkey sig not supported inside multisig"));
+}
+
+#[sim_test]
+async fn test_multisig_passkey_scenarios() {
+    let _guard = ProtocolConfig::apply_overrides_for_testing(|_, mut config| {
+        config.set_accept_passkey_in_multisig_for_testing(true);
+        config
+    });
+    let test_cluster = TestClusterBuilder::new()
+        .with_default_jwks()
+        .with_epoch_duration_ms(15000)
+        .build()
+        .await;
+    test_cluster.wait_for_authenticator_state_update().await;
+    let tx =
+        create_credential_and_sign_test_tx_with_passkey_multisig(&test_cluster, None, false, false)
+            .await;
+    let res = test_cluster.wallet.execute_transaction_may_fail(tx).await;
+    assert!(res.is_ok());
+
+    // wrong sender fails to verify
+    let tx2 = create_credential_and_sign_test_tx_with_passkey_multisig(
+        &test_cluster,
+        Some(SuiAddress::ZERO),
+        false,
+        false,
     )
-    .into();
-    let multisig = GenericSignature::MultiSig(
-        MultiSig::combine(vec![sig_4.clone()], multisig_pk.clone()).unwrap(),
-    );
-    let multisig_legacy = GenericSignature::MultiSigLegacy(
-        MultiSigLegacy::combine(vec![sig_4.clone()], multisig_pk_legacy.clone()).unwrap(),
-    );
-    (
-        Transaction::from_generic_sig_data(tx_data.clone(), vec![multisig]),
-        Transaction::from_generic_sig_data(tx_data.clone(), vec![multisig_legacy]),
-    )
+    .await;
+    let res = test_cluster.wallet.execute_transaction_may_fail(tx2).await;
+    assert!(res.is_err());
+
+    // wrong intent fails to verify
+    let tx3 =
+        create_credential_and_sign_test_tx_with_passkey_multisig(&test_cluster, None, true, false)
+            .await;
+    let res = test_cluster.wallet.execute_transaction_may_fail(tx3).await;
+    assert!(res.is_err());
+
+    // wrong challenge mismatch tx fails to verify
+    let tx4 =
+        create_credential_and_sign_test_tx_with_passkey_multisig(&test_cluster, None, false, true)
+            .await;
+    let res = test_cluster.wallet.execute_transaction_may_fail(tx4).await;
+    assert!(res.is_err());
 }

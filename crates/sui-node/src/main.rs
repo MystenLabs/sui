@@ -43,14 +43,13 @@ struct Args {
 }
 
 fn main() {
+    antithesis_sdk::antithesis_init();
+
+    move_vm_profiler::ensure_move_vm_profiler_disabled();
+
     // Ensure that a validator never calls get_for_min_version/get_for_max_version_UNSAFE.
     // TODO: re-enable after we figure out how to eliminate crashes in prod because of this.
     // ProtocolConfig::poison_get_for_min_version();
-
-    move_vm_profiler::tracing_feature_enabled! {
-        panic!("Cannot run the sui-node binary with tracing feature enabled");
-    }
-
     let args = Args::parse();
     let mut config = NodeConfig::load(&args.config_path).unwrap();
     assert!(
@@ -149,11 +148,7 @@ fn main() {
     let node_once_cell_clone = node_once_cell.clone();
     runtimes.metrics.spawn(async move {
         let node = node_once_cell_clone.get().await;
-        let chain_identifier = match node.state().get_chain_identifier() {
-            Some(chain_identifier) => chain_identifier.to_string(),
-            None => "unknown".to_string(),
-        };
-
+        let chain_identifier = node.state().get_chain_identifier().to_string();
         info!("Sui chain identifier: {chain_identifier}");
         prometheus_registry
             .register(mysten_metrics::uptime_metric(

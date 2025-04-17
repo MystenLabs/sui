@@ -22,6 +22,5 @@ fastcrypto.workspace = true
 
 [dev-dependencies]
 test-fuzz.workspace = true
-sui-types = { workspace = true, features = ["test-utils"] }
 sui-move-build.workspace = true
 sui-framework.workspace = true

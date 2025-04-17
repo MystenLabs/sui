@@ -44,6 +44,7 @@ use super::{
 use crate::connection::ScanConnection;
 use crate::server::watermark_task::Watermark;
 use crate::types::base64::Base64 as GraphQLBase64;
+use crate::types::object::ObjectKey;
 use crate::types::zklogin_verify_signature::verify_zklogin_signature;
 use crate::types::zklogin_verify_signature::ZkLoginIntentScope;
 use crate::types::zklogin_verify_signature::ZkLoginVerifyResult;
@@ -325,6 +326,26 @@ impl Query {
         let Watermark { checkpoint, .. } = *ctx.data()?;
         let lookup = TransactionBlock::by_digest(digest, checkpoint);
         TransactionBlock::query(ctx, lookup).await.extend()
+    }
+
+    /// Fetch a list of objects by their IDs and versions.
+    async fn multi_get_objects(
+        &self,
+        ctx: &Context<'_>,
+        keys: Vec<ObjectKey>,
+    ) -> Result<Vec<Object>> {
+        let cfg: &ServiceConfig = ctx.data_unchecked();
+        if keys.len() > cfg.limits.max_multi_get_objects_keys as usize {
+            return Err(Error::Client(format!(
+                "Number of keys exceeds max limit of '{}'",
+                cfg.limits.max_multi_get_objects_keys
+            ))
+            .into());
+        }
+
+        let Watermark { checkpoint, .. } = *ctx.data()?;
+
+        Object::query_many(ctx, keys, checkpoint).await.extend()
     }
 
     /// The coin objects that exist in the network.

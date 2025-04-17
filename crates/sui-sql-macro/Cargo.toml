@@ -1,0 +1,15 @@
+[package]
+name = "sui-sql-macro"
+version.workspace = true
+authors = ["Mysten Labs <build@mystenlabs.com"]
+license = "Apache-2.0"
+publish = false
+edition = "2021"
+
+[lib]
+proc-macro = true
+
+[dependencies]
+quote.workspace = true
+syn.workspace = true
+thiserror.workspace = true

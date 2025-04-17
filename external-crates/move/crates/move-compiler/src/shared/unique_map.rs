@@ -3,6 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use super::*;
+use rayon::prelude::*;
 use std::{collections::BTreeMap, fmt::Debug, iter::IntoIterator};
 
 //**************************************************************************************************
@@ -224,6 +225,78 @@ impl<K: TName, V> UniqueMap<K, V> {
     }
 }
 
+impl<K: TName, V> UniqueMap<K, V>
+where
+    K: Sync + Send,
+    K::Key: Sync,
+    K::Loc: Send + Sync,
+    V: Sync,
+{
+    pub fn key_cloned_par_iter(&self) -> impl ParallelIterator<Item = (K, &V)> {
+        self.par_iter()
+            .map(|(loc, k_, v)| (K::add_loc(loc, k_.clone()), v))
+    }
+}
+
+impl<K: TName, V> UniqueMap<K, V>
+where
+    K: Sync + Send,
+    K::Key: Sync,
+    K::Loc: Send + Sync,
+    V: Sync + Send,
+{
+    pub fn key_cloned_par_iter_mut(&mut self) -> impl ParallelIterator<Item = (K, &mut V)> {
+        IntoParallelRefMutIterator::par_iter_mut(self)
+            .map(|(loc, k_, v)| (K::add_loc(loc, k_.clone()), v))
+    }
+}
+
+impl<K: TName, V> UniqueMap<K, V>
+where
+    K: Send,
+    K::Key: Send,
+    K::Loc: Send,
+    V: Send,
+{
+    pub fn par_map<V2, F>(self, f: F) -> UniqueMap<K, V2>
+    where
+        V2: Send,
+        F: Fn(K, V) -> V2 + Sync + Send,
+    {
+        UniqueMap(
+            self.0
+                .into_par_iter()
+                .map(|(k_, (loc, v))| {
+                    let v2 = f(K::add_loc(loc, k_.clone()), v);
+                    (k_, (loc, v2))
+                })
+                .collect(),
+        )
+    }
+
+    pub fn maybe_from_par_iter(
+        iter: impl ParallelIterator<Item = (K, V)>,
+    ) -> Result<UniqueMap<K, V>, (K::Key, K::Loc, K::Loc)> {
+        iter.try_fold(Self::new, |mut m, (k, v)| {
+            if let Err((k, old_loc)) = m.add(k, v) {
+                let (loc, key_) = k.drop_loc();
+                Err((key_, loc, old_loc))
+            } else {
+                Ok(m)
+            }
+        })
+        .try_reduce(Self::new, |mut m1, m2| {
+            for (k, v) in m2 {
+                if let Err((k, old_loc)) = m1.add(k, v) {
+                    let (loc, key_) = k.drop_loc();
+                    return Err((key_, loc, old_loc));
+                }
+            }
+            Ok(m1)
+        })
+    }
+}
+
 impl<K: TName, V: PartialEq> PartialEq for UniqueMap<K, V> {
     fn eq(&self, other: &UniqueMap<K, V>) -> bool {
         self.iter()
@@ -325,6 +398,29 @@ impl<K: TName, V> IntoIterator for UniqueMap<K, V> {
     }
 }
 
+impl<K: TName, V> IntoParallelIterator for UniqueMap<K, V>
+where
+    K: Send,
+    K::Key: Send,
+    K::Loc: Send,
+    V: Send,
+{
+    type Iter = rayon::iter::Map<
+        rayon::collections::btree_map::IntoIter<K::Key, (K::Loc, V)>,
+        fn((K::Key, (K::Loc, V))) -> (K, V),
+    >;
+    type Item = (K, V);
+
+    fn into_par_iter(self) -> Self::Iter {
+        self.0.into_par_iter().map(|(k_, loc_v)| {
+            let loc = loc_v.0;
+            let v = loc_v.1;
+            let k = K::add_loc(loc, k_);
+            (k, v)
+        })
+    }
+}
+
 //**************************************************************************************************
 // Iter
 //**************************************************************************************************
@@ -366,6 +462,29 @@ impl<'a, K: TName, V> IntoIterator for &'a UniqueMap<K, V> {
     }
 }
 
+impl<'a, K: TName, V> IntoParallelRefIterator<'a> for UniqueMap<K, V>
+where
+    K: Sync,
+    K::Key: Sync + 'a,
+    K::Loc: Send + Sync + 'a,
+    V: Sync + 'a,
+{
+    type Iter = rayon::iter::Map<
+        rayon::collections::btree_map::Iter<'a, K::Key, (K::Loc, V)>,
+        fn((&'a K::Key, &'a (K::Loc, V))) -> (K::Loc, &'a K::Key, &'a V),
+    >;
+    type Item = (K::Loc, &'a K::Key, &'a V);
+
+    fn par_iter(&'a self) -> Self::Iter {
+        let fix = |(k_, loc_v): (&'a K::Key, &'a (K::Loc, V))| -> (K::Loc, &'a K::Key, &'a V) {
+            let loc = loc_v.0;
+            let v = &loc_v.1;
+            (loc, k_, v)
+        };
+        self.0.par_iter().map(fix)
+    }
+}
+
 //**************************************************************************************************
 // IterMut
 //**************************************************************************************************
@@ -402,5 +521,29 @@ impl<'a, K: TName, V> IntoIterator for &'a mut UniqueMap<K, V> {
                 (loc, k_, v)
             };
         IterMut(self.0.iter_mut().map(fix), len)
+    }
+}
+
+impl<'a, K: TName, V> IntoParallelRefMutIterator<'a> for UniqueMap<K, V>
+where
+    K: Sync,
+    K::Key: Sync + 'a,
+    K::Loc: Send + Sync + 'a,
+    V: Sync + Send + 'a,
+{
+    type Iter = rayon::iter::Map<
+        rayon::collections::btree_map::IterMut<'a, K::Key, (K::Loc, V)>,
+        fn((&'a K::Key, &'a mut (K::Loc, V))) -> (K::Loc, &'a K::Key, &'a mut V),
+    >;
+    type Item = (K::Loc, &'a K::Key, &'a mut V);
+
+    fn par_iter_mut(&'a mut self) -> Self::Iter {
+        let fix =
+            |(k_, loc_v): (&'a K::Key, &'a mut (K::Loc, V))| -> (K::Loc, &'a K::Key, &'a mut V) {
+                let loc = loc_v.0;
+                let v = &mut loc_v.1;
+                (loc, k_, v)
+            };
+        self.0.par_iter_mut().map(fix)
     }
 }

@@ -18,7 +18,7 @@ use move_proc_macros::growing_stack;
 use std::collections::VecDeque;
 
 simple_visitor!(
-    UnneededReturnVisitor,
+    UnneededReturn,
     fn visit_function_custom(
         &mut self,
         _module: ModuleIdent,

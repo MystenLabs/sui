@@ -58,7 +58,7 @@ pub fn init_static_initializers(_args: TokenStream, item: TokenStream) -> TokenS
 
                     register_package_hooks(Box::new(SuiPackageHooks {}));
                     let mut path = PathBuf::from(env!("SIMTEST_STATIC_INIT_MOVE"));
-                    let mut build_config = BuildConfig::default();
+                    let mut build_config = BuildConfig::new_for_testing();
 
                     build_config.config.install_dir = Some(TempDir::new().unwrap().into_path());
                     let _all_module_bytes = build_config
@@ -67,16 +67,15 @@ pub fn init_static_initializers(_args: TokenStream, item: TokenStream) -> TokenS
                         .get_package_bytes(/* with_unpublished_deps */ false);
                 }
 
+                use std::sync::Arc;
 
                 use ::sui_simulator::anemo_tower::callback::CallbackLayer;
                 use ::sui_simulator::anemo_tower::trace::DefaultMakeSpan;
                 use ::sui_simulator::anemo_tower::trace::DefaultOnFailure;
                 use ::sui_simulator::anemo_tower::trace::TraceLayer;
-                use ::sui_simulator::narwhal_network::metrics::MetricsMakeCallbackHandler;
-                use ::sui_simulator::narwhal_network::metrics::NetworkMetrics;
-
-                use std::sync::Arc;
                 use ::sui_simulator::fastcrypto::traits::KeyPair;
+                use ::sui_simulator::mysten_network::metrics::MetricsMakeCallbackHandler;
+                use ::sui_simulator::mysten_network::metrics::NetworkMetrics;
                 use ::sui_simulator::rand_crate::rngs::{StdRng, OsRng};
                 use ::sui_simulator::rand::SeedableRng;
                 use ::sui_simulator::tower::ServiceBuilder;
@@ -201,7 +200,7 @@ pub fn sim_test(args: TokenStream, item: TokenStream) -> TokenStream {
         let return_type = &sig.output;
         let body = &input.block;
         quote! {
-            #[::sui_simulator::sim_test(crate = "sui_simulator", #(#args)*)]
+            #[::sui_simulator::sim_test(crate = "sui_simulator", #(#args),*)]
             #[::sui_macros::init_static_initializers]
             #ignore
             #sig {

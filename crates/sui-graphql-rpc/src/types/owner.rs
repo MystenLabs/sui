@@ -19,7 +19,7 @@ use crate::types::type_filter::ExactTypeFilter;
 
 use async_graphql::connection::Connection;
 use async_graphql::*;
-use sui_json_rpc::name_service::NameServiceConfig;
+use sui_name_service::NameServiceConfig;
 use sui_types::dynamic_field::DynamicFieldType;
 use sui_types::gas_coin::GAS;
 
@@ -135,6 +135,13 @@ pub(crate) enum IOwner {
     CoinMetadata(CoinMetadata),
     StakedSui(StakedSui),
     SuinsRegistration(SuinsRegistration),
+}
+
+/// An Authenticator represents the access control rules for a ConsensusV2 object.
+#[derive(Clone, Debug, Union)]
+pub(crate) enum Authenticator {
+    /// The object is fully owned by a single address.
+    SingleOwner(Address),
 }
 
 /// An Owner is an entity that can own an object. Each Owner is identified by a SuiAddress which

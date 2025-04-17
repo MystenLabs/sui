@@ -1,0 +1,15 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: 2024.alpha
+  lint: false
+---
+error[E01002]: unexpected token
+  ┌─ tests/move_2024/parser/ability_modifier_postfix_missing_semi_multiple_structs.move:4:5
+  │
+4 │     public struct Bar has key {}
+  │     ^^^^^^
+  │     │
+  │     Unexpected 'public'
+  │     Expected one of: ',' or ';'

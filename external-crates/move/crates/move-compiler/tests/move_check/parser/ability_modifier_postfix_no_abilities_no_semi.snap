@@ -1,0 +1,29 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: legacy
+  lint: false
+---
+error[E13001]: feature is not supported in specified edition
+  ┌─ tests/move_check/parser/ability_modifier_postfix_no_abilities_no_semi.move:5:19
+  │
+5 │     struct Foo {} has
+  │                   ^^^ Postfix abilities are not supported by current edition 'legacy'; the '2024' edition supports this feature
+  │
+  = You can update the edition in the 'Move.toml', or via command line flag if invoking the compiler directly.
+
+error[E01002]: unexpected token
+  ┌─ tests/move_check/parser/ability_modifier_postfix_no_abilities_no_semi.move:6:1
+  │
+6 │ }
+  │ ^ Unexpected '}'. Expected a type ability, one of: 'copy', 'drop', 'store', or 'key'
+
+error[E01002]: unexpected token
+  ┌─ tests/move_check/parser/ability_modifier_postfix_no_abilities_no_semi.move:8:1
+  │
+8 │ 
+  │ ^
+  │ 
+  │ Unexpected end-of-file
+  │ Expected a module member: 'spec', 'use', 'friend', 'const', 'fun', or 'struct'

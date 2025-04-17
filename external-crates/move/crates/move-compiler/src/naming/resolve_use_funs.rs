@@ -5,7 +5,7 @@ use crate::diagnostics::warning_filters::WarningFilters;
 use crate::diagnostics::{Diagnostic, DiagnosticReporter, Diagnostics};
 use crate::expansion::ast::{self as E, ModuleIdent};
 use crate::naming::ast as N;
-use crate::parser::ast::{FunctionName, Visibility};
+use crate::parser::ast::{DocComment, FunctionName, Visibility};
 use crate::shared::{program_info::NamingProgramInfo, unique_map::UniqueMap, *};
 use crate::typing::core;
 use crate::{diag, ice};
@@ -230,16 +230,17 @@ fn use_funs(context: &mut Context, uf: &mut N::UseFuns) {
             }
         };
         let nuf = N::UseFun {
+            doc: DocComment::empty(),
             loc,
             attributes,
             is_public,
-            tname: tn.clone(),
+            tname: tn,
             target_function: (target_m, target_f),
             kind,
             used,
         };
         let nuf_loc = nuf.loc;
-        let methods = resolved.entry(tn.clone()).or_insert_with(UniqueMap::new);
+        let methods = resolved.entry(tn).or_insert_with(UniqueMap::new);
         if let Err((_, prev)) = methods.add(method, nuf) {
             let msg = format!("Duplicate 'use fun' for '{}.{}'", tn, method);
             let tn_msg = match ekind {
@@ -286,7 +287,7 @@ fn is_valid_method(
         N::TypeName_::ModuleType(m, _) => m,
     };
     if defining_module == target_m {
-        Some((target_f, tn.clone()))
+        Some((target_f, *tn))
     } else {
         None
     }
@@ -348,6 +349,7 @@ fn exp(context: &mut Context, sp!(_, e_): &mut N::Exp) {
             return_label: _,
             use_fun_color: _,
             body: e,
+            extra_annotations: _,
         }) => exp(context, e),
         N::Exp_::IfElse(econd, et, ef_opt) => {
             exp(context, econd);

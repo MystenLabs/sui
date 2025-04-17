@@ -45,7 +45,7 @@ After the Full node starts you can test the JSON-RPC interfaces.
 
 Sui Explorer supports connecting to a local network. To view activity on your local Full node, open the URL: [https://explorer.sui.io/?network=local](https://explorer.sui.io/?network=local).
 
-You can also change the network that Sui Explorer connects to by select it in the Sui Explorer interface. 
+You can also change the network that Sui Explorer connects to by selecting it in the Sui Explorer interface. 
 
 ### Stop the Full node
 

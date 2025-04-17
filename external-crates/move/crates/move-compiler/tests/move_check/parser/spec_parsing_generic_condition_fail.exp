@@ -1,9 +1,0 @@
-error[E01002]: unexpected token
-  ┌─ tests/move_check/parser/spec_parsing_generic_condition_fail.move:2:5
-  │
-2 │     spec schema InvalidGenericEnsures {
-  │     ^^^^
-  │     │
-  │     Unexpected 'spec'
-  │     Expected a module member: 'use', 'friend', 'const', 'fun', or 'struct'
-

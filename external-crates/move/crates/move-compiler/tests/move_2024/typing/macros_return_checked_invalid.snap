@@ -1,0 +1,81 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: 2024.alpha
+  lint: false
+---
+error[E04007]: incompatible types
+   ┌─ tests/move_2024/typing/macros_return_checked_invalid.move:6:8
+   │
+ 4 │         $y: u64,
+   │             --- Given: 'u64'
+ 5 │         $z: &mut u64
+ 6 │     ): (u64, $T, $U) {
+   │        ^^^^^^^^^^^^^ Invalid type annotation
+   ·
+19 │        foo!<u8, &mut u8>(1, 2u64, &mut 3u64);
+   │             -- Expected: 'u8'
+
+error[E04007]: incompatible types
+   ┌─ tests/move_2024/typing/macros_return_checked_invalid.move:10:42
+   │
+10 │     macro fun ref<$T, $U>($f: || -> $T): &$U {
+   │                                          ^^^
+   │                                          │
+   │                                          Invalid type annotation
+   │                                          Expected: '&u64'
+   ·
+20 │        ref!<u64, u64>(|| &1);
+   │        --------------------- Given: 'u64'
+
+error[E04007]: incompatible types
+   ┌─ tests/move_2024/typing/macros_return_checked_invalid.move:14:45
+   │
+14 │     macro fun double<$T, $U>($f: || -> $T): ($U, $U) {
+   │                                             ^^^^^^^^
+   │                                             │
+   │                                             Invalid type annotation
+   │                                             Expected: '(u64, u64)'
+   ·
+21 │        double!<u64, u64>(|| (0, 0));
+   │        ---------------------------- Given: 'u64'
+
+error[E04007]: incompatible types
+   ┌─ tests/move_2024/typing/macros_return_checked_invalid.move:14:45
+   │
+14 │     macro fun double<$T, $U>($f: || -> $T): ($U, $U) {
+   │                                             ^^^^^^^^
+   │                                             │
+   │                                             Invalid type annotation
+   │                                             Expected: '(u64, u64)'
+   ·
+22 │        double!<u64, u64>(|| 0);
+   │        ----------------------- Given: 'u64'
+
+error[E04007]: incompatible types
+   ┌─ tests/move_2024/typing/macros_return_checked_invalid.move:20:13
+   │
+20 │        ref!<u64, u64>(|| &1);
+   │             ^^^          -- Given: '&{integer}'
+   │             │             
+   │             Invalid type annotation
+   │             Expected: 'u64'
+
+error[E04007]: incompatible types
+   ┌─ tests/move_2024/typing/macros_return_checked_invalid.move:21:16
+   │
+21 │        double!<u64, u64>(|| (0, 0));
+   │                ^^^          ------ Given: '({integer}, {integer})'
+   │                │             
+   │                Invalid type annotation
+   │                Expected: 'u64'
+
+error[E04007]: incompatible types
+   ┌─ tests/move_2024/typing/macros_return_checked_invalid.move:23:16
+   │
+23 │        double!<(u64, u64), u64>(|| (&0, &0));
+   │                ^^^^^^^^^^           -- Given: '&{integer}'
+   │                ││                    
+   │                │Expected: 'u64'
+   │                Invalid type annotation

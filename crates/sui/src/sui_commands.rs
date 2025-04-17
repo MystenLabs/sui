@@ -1,8 +1,9 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::client_commands::SuiClientCommands;
-use crate::console::start_console;
+use crate::client_commands::{
+    implicit_deps_for_protocol_version, pkg_tree_shake, SuiClientCommands,
+};
 use crate::fire_drill::{run_fire_drill, FireDrill};
 use crate::genesis_ceremony::{run, Ceremony};
 use crate::keytool::KeyToolCommand;
@@ -14,7 +15,7 @@ use fastcrypto::traits::KeyPair;
 use move_analyzer::analyzer;
 use move_package::BuildConfig;
 use rand::rngs::OsRng;
-use std::io::{stderr, stdout, Write};
+use std::io::{stdout, Write};
 use std::net::{AddrParseError, IpAddr, Ipv4Addr, SocketAddr};
 use std::num::NonZeroUsize;
 use std::path::{Path, PathBuf};
@@ -43,10 +44,16 @@ use sui_graphql_rpc::{
     test_infra::cluster::start_graphql_server_with_fn_rpc,
 };
 
+use serde_json::json;
 use sui_keys::keypair_file::read_key;
 use sui_keys::keystore::{AccountKeystore, FileBasedKeystore, Keystore};
+use sui_move::manage_package::resolve_lock_file_path;
 use sui_move::{self, execute_move_command};
-use sui_move_build::SuiPackageHooks;
+use sui_move_build::{
+    check_invalid_dependencies, check_unpublished_dependencies, implicit_deps,
+    BuildConfig as SuiBuildConfig, SuiPackageHooks,
+};
+use sui_package_management::system_package_versions::latest_system_packages;
 use sui_sdk::sui_client_config::{SuiClientConfig, SuiEnv};
 use sui_sdk::wallet_context::WalletContext;
 use sui_swarm::memory::Swarm;
@@ -56,7 +63,6 @@ use sui_swarm_config::network_config_builder::ConfigBuilder;
 use sui_swarm_config::node_config_builder::FullnodeConfigBuilder;
 use sui_types::base_types::SuiAddress;
 use sui_types::crypto::{SignatureScheme, SuiKeyPair, ToFromBytes};
-use tempfile::tempdir;
 use tracing;
 use tracing::info;
 
@@ -203,9 +209,21 @@ pub enum SuiCommand {
         #[clap(long)]
         epoch_duration_ms: Option<u64>,
 
+        /// Make the fullnode dump executed checkpoints as files to this directory. This is
+        /// incompatible with --no-full-node.
+        ///
+        /// If --with-indexer is set, this defaults to a temporary directory.
+        #[clap(long, value_name = "DATA_INGESTION_DIR")]
+        data_ingestion_dir: Option<PathBuf>,
+
         /// Start the network without a fullnode
         #[clap(long = "no-full-node")]
         no_full_node: bool,
+        /// Set the number of validators in the network. If a genesis was already generated with a
+        /// specific number of validators, this will not override it; the user should recreate the
+        /// genesis with the desired number of validators.
+        #[clap(long)]
+        committee_size: Option<usize>,
     },
     #[clap(name = "network")]
     Network {
@@ -243,6 +261,9 @@ pub enum SuiCommand {
             help = "Creates an extra faucet configuration for sui persisted runs."
         )]
         with_faucet: bool,
+        /// Set number of validators in the network.
+        #[clap(long)]
+        committee_size: Option<usize>,
     },
     GenesisCeremony(Ceremony),
     /// Sui keystore tool.
@@ -256,13 +277,6 @@ pub enum SuiCommand {
         /// Subcommands.
         #[clap(subcommand)]
         cmd: KeyToolCommand,
-    },
-    /// Start Sui interactive console.
-    #[clap(name = "console")]
-    Console {
-        /// Sets the file storing the state of our user accounts (an empty one will be created if missing)
-        #[clap(long = "client.config")]
-        config: Option<PathBuf>,
     },
     /// Client for interacting with the Sui network.
     #[clap(name = "client")]
@@ -368,8 +382,10 @@ impl SuiCommand {
 
                 indexer_feature_args,
                 fullnode_rpc_port,
+                data_ingestion_dir,
                 no_full_node,
                 epoch_duration_ms,
+                committee_size,
             } => {
                 start(
                     config_dir.clone(),
@@ -378,7 +394,9 @@ impl SuiCommand {
                     force_regenesis,
                     epoch_duration_ms,
                     fullnode_rpc_port,
+                    data_ingestion_dir,
                     no_full_node,
+                    committee_size,
                 )
                 .await?;
 
@@ -392,6 +410,7 @@ impl SuiCommand {
                 epoch_duration_ms,
                 benchmark_ips,
                 with_faucet,
+                committee_size,
             } => {
                 genesis(
                     from_config,
@@ -401,6 +420,7 @@ impl SuiCommand {
                     epoch_duration_ms,
                     benchmark_ips,
                     with_faucet,
+                    committee_size,
                 )
                 .await
             }
@@ -416,15 +436,6 @@ impl SuiCommand {
                 cmd.execute(&mut keystore).await?.print(!json);
                 Ok(())
             }
-            SuiCommand::Console { config } => {
-                let config = config.unwrap_or(sui_config_dir()?.join(SUI_CLIENT_CONFIG));
-                prompt_if_no_config(&config, false).await?;
-                let context = WalletContext::new(&config, None, None)?;
-                if let Err(e) = context.get_client().await?.check_api_version() {
-                    eprintln!("{}", format!("[warning] {e}").yellow().bold());
-                }
-                start_console(context, &mut stdout(), &mut stderr()).await
-            }
             SuiCommand::Client {
                 config,
                 cmd,
@@ -435,8 +446,10 @@ impl SuiCommand {
                 prompt_if_no_config(&config_path, accept_defaults).await?;
                 if let Some(cmd) = cmd {
                     let mut context = WalletContext::new(&config_path, None, None)?;
-                    if let Err(e) = context.get_client().await?.check_api_version() {
-                        eprintln!("{}", format!("[warning] {e}").yellow().bold());
+                    if let Ok(client) = context.get_client().await {
+                        if let Err(e) = client.check_api_version() {
+                            eprintln!("{}", format!("[warning] {e}").yellow().bold());
+                        }
                     }
                     cmd.execute(&mut context).await?.print(!json);
                 } else {
@@ -457,8 +470,10 @@ impl SuiCommand {
                 prompt_if_no_config(&config_path, accept_defaults).await?;
                 let mut context = WalletContext::new(&config_path, None, None)?;
                 if let Some(cmd) = cmd {
-                    if let Err(e) = context.get_client().await?.check_api_version() {
-                        eprintln!("{}", format!("[warning] {e}").yellow().bold());
+                    if let Ok(client) = context.get_client().await {
+                        if let Err(e) = client.check_api_version() {
+                            eprintln!("{}", format!("[warning] {e}").yellow().bold());
+                        }
                     }
                     cmd.execute(&mut context).await?.print(!json);
                 } else {
@@ -472,25 +487,71 @@ impl SuiCommand {
             SuiCommand::Move {
                 package_path,
                 build_config,
-                mut cmd,
+                cmd,
                 config: client_config,
             } => {
-                match &mut cmd {
+                match cmd {
                     sui_move::Command::Build(build) if build.dump_bytecode_as_base64 => {
                         // `sui move build` does not ordinarily require a network connection.
                         // The exception is when --dump-bytecode-as-base64 is specified: In this
                         // case, we should resolve the correct addresses for the respective chain
                         // (e.g., testnet, mainnet) from the Move.lock under automated address management.
+                        // In addition, tree shaking also requires a network as it needs to fetch
+                        // on-chain linkage table of package dependencies.
                         let config =
                             client_config.unwrap_or(sui_config_dir()?.join(SUI_CLIENT_CONFIG));
                         prompt_if_no_config(&config, false).await?;
                         let context = WalletContext::new(&config, None, None)?;
-                        if let Err(e) = context.get_client().await?.check_api_version() {
+
+                        let Ok(client) = context.get_client().await else {
+                            bail!("`sui move build --dump-bytecode-as-base64` requires a connection to the network. Current active network is {} but failed to connect to it.", context.config.active_env.as_ref().unwrap());
+                        };
+                        let read_api = client.read_api();
+
+                        if let Err(e) = client.check_api_version() {
                             eprintln!("{}", format!("[warning] {e}").yellow().bold());
                         }
-                        let client = context.get_client().await?;
-                        let chain_id = client.read_api().get_chain_identifier().await.ok();
-                        build.chain_id = chain_id.clone();
+
+                        let chain_id = if build.ignore_chain {
+                            // for tests it's useful to ignore the chain id!
+                            None
+                        } else {
+                            read_api.get_chain_identifier().await.ok()
+                        };
+
+                        let rerooted_path = move_cli::base::reroot_path(package_path.as_deref())?;
+                        let mut build_config =
+                            resolve_lock_file_path(build_config, Some(&rerooted_path))?;
+                        let protocol_config = read_api.get_protocol_config(None).await?;
+                        build_config.implicit_dependencies =
+                            implicit_deps_for_protocol_version(protocol_config.protocol_version)?;
+
+                        let mut pkg = SuiBuildConfig {
+                            config: build_config,
+                            run_bytecode_verifier: true,
+                            print_diags_to_stderr: true,
+                            chain_id,
+                        }
+                        .build(&rerooted_path)?;
+
+                        let with_unpublished_deps = build.with_unpublished_dependencies;
+
+                        check_invalid_dependencies(&pkg.dependency_ids.invalid)?;
+                        if !with_unpublished_deps {
+                            check_unpublished_dependencies(&pkg.dependency_ids.unpublished)?;
+                        }
+
+                        pkg_tree_shake(read_api, with_unpublished_deps, &mut pkg).await?;
+
+                        println!(
+                            "{}",
+                            json!({
+                                "modules": pkg.get_package_base64(with_unpublished_deps),
+                                "dependencies": pkg.get_dependency_storage_package_ids(),
+                                "digest": pkg.get_package_digest(with_unpublished_deps),
+                            })
+                        );
+                        return Ok(());
                     }
                     _ => (),
                 };
@@ -523,8 +584,10 @@ impl SuiCommand {
                 let config_path =
                     client_config.unwrap_or(sui_config_dir()?.join(SUI_CLIENT_CONFIG));
                 let mut context = WalletContext::new(&config_path, None, None)?;
-                if let Err(e) = context.get_client().await?.check_api_version() {
-                    eprintln!("{}", format!("[warning] {e}").yellow().bold());
+                if let Ok(client) = context.get_client().await {
+                    if let Err(e) = client.check_api_version() {
+                        eprintln!("{}", format!("[warning] {e}").yellow().bold());
+                    }
                 }
                 let rgp = context.get_reference_gas_price().await?;
                 let rpc_url = &context.config.get_active_env()?.rpc;
@@ -582,7 +645,7 @@ impl SuiCommand {
             }
             SuiCommand::FireDrill { fire_drill } => run_fire_drill(fire_drill).await,
             SuiCommand::Analyzer => {
-                analyzer::run();
+                analyzer::run(implicit_deps(latest_system_packages()));
                 Ok(())
             }
         }
@@ -597,7 +660,9 @@ async fn start(
     force_regenesis: bool,
     epoch_duration_ms: Option<u64>,
     fullnode_rpc_port: u16,
+    mut data_ingestion_dir: Option<PathBuf>,
     no_full_node: bool,
+    committee_size: Option<usize>,
 ) -> Result<(), anyhow::Error> {
     if force_regenesis {
         ensure!(
@@ -638,41 +703,109 @@ async fn start(
     }
 
     let mut swarm_builder = Swarm::builder();
+
     // If this is set, then no data will be persisted between runs, and a new genesis will be
     // generated each run.
-    if force_regenesis {
-        swarm_builder =
-            swarm_builder.committee_size(NonZeroUsize::new(DEFAULT_NUMBER_OF_AUTHORITIES).unwrap());
+    let config_dir = if force_regenesis {
+        let committee_size = match committee_size {
+            Some(x) => NonZeroUsize::new(x),
+            None => NonZeroUsize::new(DEFAULT_NUMBER_OF_AUTHORITIES),
+        }
+        .ok_or_else(|| anyhow!("Committee size must be at least 1."))?;
+        swarm_builder = swarm_builder.committee_size(committee_size);
         let genesis_config = GenesisConfig::custom_genesis(1, 100);
         swarm_builder = swarm_builder.with_genesis_config(genesis_config);
         let epoch_duration_ms = epoch_duration_ms.unwrap_or(DEFAULT_EPOCH_DURATION_MS);
         swarm_builder = swarm_builder.with_epoch_duration_ms(epoch_duration_ms);
+        mysten_common::tempdir()?.into_path()
     } else {
-        if config.is_none() && !sui_config_dir()?.join(SUI_NETWORK_CONFIG).exists() {
-            genesis(None, None, None, false, epoch_duration_ms, None, false).await.map_err(|_| anyhow!("Cannot run genesis with non-empty Sui config directory: {}.\n\nIf you are trying to run a local network without persisting the data (so a new genesis that is randomly generated and will not be saved once the network is shut down), use --force-regenesis flag.\nIf you are trying to persist the network data and start from a new genesis, use sui genesis --help to see how to generate a new genesis.", sui_config_dir().unwrap().display()))?;
-        }
+        // If the config path looks like a YAML file, it is treated as if it is the network.yaml
+        // overriding the network.yaml found in the sui config directry. Otherwise it is treated as
+        // the sui config directory for backwards compatibility with `sui-test-validator`.
+        let (network_config_path, sui_config_path) = match config {
+            Some(config)
+                if config.is_file()
+                    && config
+                        .extension()
+                        .is_some_and(|e| e == "yml" || e == "yaml") =>
+            {
+                if committee_size.is_some() {
+                    eprintln!(
+                        "{}",
+                        "[warning] The committee-size arg wil be ignored as a network \
+                            configuration already exists. To change the committee-size, you'll \
+                            have to adjust the network configuration file or regenerate a genesis \
+                            with the desired committee size. See `sui genesis --help` for more \
+                            information."
+                            .yellow()
+                            .bold()
+                    );
+                }
+                (config, sui_config_dir()?)
+            }
+
+            Some(config) => {
+                if committee_size.is_some() {
+                    eprintln!(
+                        "{}",
+                        "[warning] The committee-size arg wil be ignored as a network \
+                            configuration already exists. To change the committee-size, you'll \
+                            have to adjust the network configuration file or regenerate a genesis \
+                            with the desired committee size. See `sui genesis --help` for more \
+                            information."
+                            .yellow()
+                            .bold()
+                    );
+                }
+                (config.join(SUI_NETWORK_CONFIG), config)
+            }
+
+            None => {
+                let sui_config = sui_config_dir()?;
+                let network_config = sui_config.join(SUI_NETWORK_CONFIG);
+
+                if !network_config.exists() {
+                    genesis(
+                        None,
+                        None,
+                        None,
+                        false,
+                        epoch_duration_ms,
+                        None,
+                        false,
+                        committee_size,
+                    )
+                    .await
+                    .map_err(|_| {
+                        anyhow!(
+                            "Cannot run genesis with non-empty Sui config directory: {}.\n\n\
+                                If you are trying to run a local network without persisting the \
+                                data (so a new genesis that is randomly generated and will not be \
+                                saved once the network is shut down), use --force-regenesis flag.\n\
+                                If you are trying to persist the network data and start from a new \
+                                genesis, use sui genesis --help to see how to generate a new \
+                                genesis.",
+                            sui_config.display(),
+                        )
+                    })?;
+                } else if committee_size.is_some() {
+                    eprintln!(
+                        "{}",
+                        "[warning] The committee-size arg wil be ignored as a network \
+                            configuration already exists. To change the committee-size, you'll \
+                            have to adjust the network configuration file or regenerate a genesis \
+                            with the desired committee size. See `sui genesis --help` for more \
+                            information."
+                            .yellow()
+                            .bold()
+                    );
+                }
+
+                (network_config, sui_config)
+            }
+        };
 
         // Load the config of the Sui authority.
-        // To keep compatibility with sui-test-validator where the user can pass a config
-        // directory, this checks if the config is a file or a directory
-        let network_config_path = if let Some(ref config) = config {
-            if config.is_dir() {
-                config.join(SUI_NETWORK_CONFIG)
-            } else if config.is_file()
-                && config
-                    .extension()
-                    .is_some_and(|ext| (ext == "yml" || ext == "yaml"))
-            {
-                config.clone()
-            } else {
-                config.join(SUI_NETWORK_CONFIG)
-            }
-        } else {
-            config
-                .clone()
-                .unwrap_or(sui_config_dir()?)
-                .join(SUI_NETWORK_CONFIG)
-        };
         let network_config: NetworkConfig =
             PersistedConfig::read(&network_config_path).map_err(|err| {
                 err.context(format!(
@@ -682,18 +815,21 @@ async fn start(
             })?;
 
         swarm_builder = swarm_builder
-            .dir(sui_config_dir()?)
+            .dir(sui_config_path.clone())
             .with_network_config(network_config);
-    }
 
-    let data_ingestion_path = tempdir()?.into_path();
+        sui_config_path
+    };
 
     // the indexer requires to set the fullnode's data ingestion directory
     // note that this overrides the default configuration that is set when running the genesis
     // command, which sets data_ingestion_dir to None.
+    if with_indexer.is_some() && data_ingestion_dir.is_none() {
+        data_ingestion_dir = Some(mysten_common::tempdir()?.into_path())
+    }
 
-    if with_indexer.is_some() {
-        swarm_builder = swarm_builder.with_data_ingestion_dir(data_ingestion_path.clone());
+    if let Some(ref dir) = data_ingestion_dir {
+        swarm_builder = swarm_builder.with_data_ingestion_dir(dir.clone());
     }
 
     let mut fullnode_url = sui_config::node::default_json_rpc_address();
@@ -734,7 +870,8 @@ async fn start(
             pg_address.clone(),
             None,
             None,
-            Some(data_ingestion_path.clone()),
+            // We ensured above that this is set to something if --with-indexer is set
+            data_ingestion_dir,
             None,
             None, /* start_checkpoint */
             None, /* end_checkpoint */
@@ -768,14 +905,6 @@ async fn start(
         let faucet_address = parse_host_port(input, DEFAULT_FAUCET_PORT)
             .map_err(|_| anyhow!("Invalid faucet host and port"))?;
         tracing::info!("Starting the faucet service at {faucet_address}");
-        let config_dir = if force_regenesis {
-            tempdir()?.into_path()
-        } else {
-            match config {
-                Some(config) => config,
-                None => sui_config_dir()?,
-            }
-        };
 
         let host_ip = match faucet_address {
             SocketAddr::V4(addr) => *addr.ip(),
@@ -860,6 +989,7 @@ async fn genesis(
     epoch_duration_ms: Option<u64>,
     benchmark_ips: Option<Vec<String>>,
     with_faucet: bool,
+    committee_size: Option<usize>,
 ) -> Result<(), anyhow::Error> {
     let sui_config_dir = &match working_dir {
         // if a directory is specified, it must exist (it
@@ -966,6 +1096,12 @@ async fn genesis(
     if let Some(epoch_duration_ms) = epoch_duration_ms {
         genesis_conf.parameters.epoch_duration_ms = epoch_duration_ms;
     }
+    let committee_size = match committee_size {
+        Some(x) => NonZeroUsize::new(x),
+        None => NonZeroUsize::new(DEFAULT_NUMBER_OF_AUTHORITIES),
+    }
+    .ok_or_else(|| anyhow!("Committee size must be at least 1."))?;
+
     let mut network_config = if let Some(validators) = validator_info {
         builder
             .with_genesis_config(genesis_conf)
@@ -973,7 +1109,7 @@ async fn genesis(
             .build()
     } else {
         builder
-            .committee_size(NonZeroUsize::new(DEFAULT_NUMBER_OF_AUTHORITIES).unwrap())
+            .committee_size(committee_size)
             .with_genesis_config(genesis_conf)
             .build()
     };

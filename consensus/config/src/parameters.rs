@@ -35,7 +35,16 @@ pub struct Parameters {
     #[serde(default = "Parameters::default_max_forward_time_drift")]
     pub max_forward_time_drift: Duration,
 
-    /// Number of blocks to fetch per request.
+    /// Max number of blocks to fetch per block sync request.
+    /// Block sync requests have very short (~2s) timeouts.
+    /// So this value should be limited to allow the requests
+    /// to finish on hosts with good network with this timeout.
+    /// Usually a host sends 14-16 blocks per sec to a peer, so
+    /// sending 32 blocks in 2 seconds should be reasonable.
+    #[serde(default = "Parameters::default_max_blocks_per_sync")]
+    pub max_blocks_per_sync: usize,
+
+    /// Max number of blocks to fetch per commit sync request.
     #[serde(default = "Parameters::default_max_blocks_per_fetch")]
     pub max_blocks_per_fetch: usize,
 
@@ -94,7 +103,7 @@ pub struct Parameters {
 
 impl Parameters {
     pub(crate) fn default_leader_timeout() -> Duration {
-        Duration::from_millis(250)
+        Duration::from_millis(200)
     }
 
     pub(crate) fn default_min_round_delay() -> Duration {
@@ -113,6 +122,15 @@ impl Parameters {
 
     pub(crate) fn default_max_forward_time_drift() -> Duration {
         Duration::from_millis(500)
+    }
+
+    pub(crate) fn default_max_blocks_per_sync() -> usize {
+        if cfg!(msim) {
+            // Exercise hitting blocks per sync limit.
+            4
+        } else {
+            32
+        }
     }
 
     pub(crate) fn default_max_blocks_per_fetch() -> usize {
@@ -135,16 +153,28 @@ impl Parameters {
     }
 
     pub(crate) fn default_round_prober_interval_ms() -> u64 {
-        5000
+        if cfg!(msim) {
+            1000
+        } else {
+            5000
+        }
     }
 
     pub(crate) fn default_round_prober_request_timeout_ms() -> u64 {
-        2000
+        if cfg!(msim) {
+            800
+        } else {
+            4000
+        }
     }
 
     pub(crate) fn default_propagation_delay_stop_proposal_threshold() -> u32 {
         // Propagation delay is usually 0 round in production.
-        20
+        if cfg!(msim) {
+            2
+        } else {
+            5
+        }
     }
 
     pub(crate) fn default_dag_state_cached_rounds() -> u32 {
@@ -183,6 +213,7 @@ impl Default for Parameters {
             leader_timeout: Parameters::default_leader_timeout(),
             min_round_delay: Parameters::default_min_round_delay(),
             max_forward_time_drift: Parameters::default_max_forward_time_drift(),
+            max_blocks_per_sync: Parameters::default_max_blocks_per_sync(),
             max_blocks_per_fetch: Parameters::default_max_blocks_per_fetch(),
             sync_last_known_own_block_timeout:
                 Parameters::default_sync_last_known_own_block_timeout(),

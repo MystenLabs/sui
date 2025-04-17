@@ -379,7 +379,7 @@ pub fn parse_dependency(mut tval: TV) -> Result<PM::Dependency> {
         .remove("override")
         .map(parse_dep_override)
         .transpose()?
-        .map_or(false, |o| o);
+        .is_some_and(|o| o);
 
     let kind = match (
         table.remove("local"),
@@ -535,7 +535,7 @@ fn warn_if_unknown_field_names(table: &toml::map::Map<String, TV>, known_names: 
             unknown_names.insert(key.to_string());
         }
     }
-
+    /*
     if !unknown_names.is_empty() {
         eprintln!(
             "Warning: unknown field name{} found. Expected one of [{}], but found {}",
@@ -548,6 +548,7 @@ fn warn_if_unknown_field_names(table: &toml::map::Map<String, TV>, known_names: 
                 .join(", ")
         );
     }
+    */
 }
 
 fn check_for_required_field_names(

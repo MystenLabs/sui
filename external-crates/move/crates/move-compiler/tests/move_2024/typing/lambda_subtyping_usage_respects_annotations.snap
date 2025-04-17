@@ -1,0 +1,40 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: 2024.alpha
+  lint: false
+---
+error[E04006]: invalid subtype
+   ┌─ tests/move_2024/typing/lambda_subtyping_usage_respects_annotations.move:15:10
+   │
+15 │         *$f() = 0;
+   │          ^^^^
+   │          │
+   │          Invalid mutation. Expected a mutable reference
+   │          Expected: '&mut _'
+   ·
+24 │         return_imm!(|| &mut x);
+   │                        ------ Given: '&u64'
+
+error[E04006]: invalid subtype
+   ┌─ tests/move_2024/typing/lambda_subtyping_usage_respects_annotations.move:20:24
+   │
+ 3 │     macro fun pass_imm($f: |&u64|) {
+   │                             ---- Given: '&u64'
+   ·
+20 │         pass_imm!(|x| *x = 0);
+   │                        ^
+   │                        │
+   │                        Invalid mutation. Expected a mutable reference
+   │                        Expected: '&mut _'
+
+error[E04006]: invalid subtype
+   ┌─ tests/move_2024/typing/lambda_subtyping_usage_respects_annotations.move:21:30
+   │
+21 │         pass_mut!(|x: &u64| *x = 0);
+   │                       ----   ^
+   │                       │      │
+   │                       │      Invalid mutation. Expected a mutable reference
+   │                       │      Expected: '&mut _'
+   │                       Given: '&u64'

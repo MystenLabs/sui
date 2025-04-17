@@ -1,0 +1,18 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: 2024.alpha
+  lint: false
+---
+error[E02020]: no valid 'syntax' declaration found
+   ┌─ tests/move_2024/typing/index_syntax_methods_unsupported_mutability.move:42:9
+   │
+42 │         s[i].mut_deref();
+   │         ^^^^ Could not find a mutable index 'syntax' method
+
+error[E02020]: no valid 'syntax' declaration found
+   ┌─ tests/move_2024/typing/index_syntax_methods_unsupported_mutability.move:43:9
+   │
+43 │         t[i].deref();
+   │         ^^^^ Could not find an immutable index 'syntax' method

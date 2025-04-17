@@ -1,0 +1,45 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: legacy
+  lint: false
+---
+error[E01003]: invalid modifier
+  ┌─ tests/move_check/parser/positional_struct_fields_keyword_field.move:4:5
+  │
+4 │     public struct Foo(fun)
+  │     ^^^^^^ Invalid struct declaration. Structs cannot have visibility modifiers as they are always 'public'
+  │
+  = Starting in the Move 2024 edition visibility must be annotated on struct declarations.
+
+error[E13001]: feature is not supported in specified edition
+  ┌─ tests/move_check/parser/positional_struct_fields_keyword_field.move:4:5
+  │
+4 │     public struct Foo(fun)
+  │     ^^^^^^ Struct visibility modifiers are not supported by current edition 'legacy'; the '2024' edition supports this feature
+  │
+  = You can update the edition in the 'Move.toml', or via command line flag if invoking the compiler directly.
+
+error[E13001]: feature is not supported in specified edition
+  ┌─ tests/move_check/parser/positional_struct_fields_keyword_field.move:4:22
+  │
+4 │     public struct Foo(fun)
+  │                      ^ Positional fields are not supported by current edition 'legacy'; the '2024' edition supports this feature
+  │
+  = You can update the edition in the 'Move.toml', or via command line flag if invoking the compiler directly.
+
+error[E01002]: unexpected token
+  ┌─ tests/move_check/parser/positional_struct_fields_keyword_field.move:4:23
+  │
+4 │     public struct Foo(fun)
+  │                       ^ Unexpected 'fun'. Expected a type
+
+error[E01002]: unexpected token
+  ┌─ tests/move_check/parser/positional_struct_fields_keyword_field.move:4:26
+  │
+4 │     public struct Foo(fun)
+  │                          ^
+  │                          │
+  │                          Unexpected ')'
+  │                          Expected an identifier

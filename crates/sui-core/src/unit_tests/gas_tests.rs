@@ -28,6 +28,27 @@ static MAX_GAS_BUDGET: Lazy<u64> =
 static MIN_GAS_BUDGET_PRE_RGP: Lazy<u64> =
     Lazy::new(|| ProtocolConfig::get_for_max_version_UNSAFE().base_tx_cost_fixed());
 
+#[test]
+fn test_gas_invariants() {
+    let max_tx_gas = ProtocolConfig::get_for_max_version_UNSAFE().max_tx_gas();
+    assert!(
+        DEV_INSPECT_GAS_COIN_VALUE >= max_tx_gas,
+        "DEV_INSPECT_GAS_COIN_VALUE {} cannot be less than max_tx_gas {}",
+        DEV_INSPECT_GAS_COIN_VALUE,
+        max_tx_gas
+    );
+
+    let max_gas_price = ProtocolConfig::get_for_max_version_UNSAFE().max_gas_price();
+    let base_tx_cost_fixed = ProtocolConfig::get_for_max_version_UNSAFE().base_tx_cost_fixed();
+    assert!(
+        max_gas_price * base_tx_cost_fixed <= max_tx_gas,
+        "max_gas_price {} * base_tx_cost_fixed {} > max_tx_gas {}",
+        max_gas_price,
+        base_tx_cost_fixed,
+        max_tx_gas
+    );
+}
+
 #[tokio::test]
 async fn test_tx_less_than_minimum_gas_budget() {
     // This test creates a transaction that sets a gas_budget less than the minimum
@@ -571,7 +592,10 @@ async fn test_transfer_sui_insufficient_gas() {
         ExecutionStatus::new_failure(ExecutionFailureStatus::InsufficientGas, None)
     );
     // Ensure that the owner of the object did not change if the transfer failed.
-    assert_eq!(effects.mutated()[0].1, sender);
+    assert_eq!(
+        effects.mutated()[0].1.get_address_owner_address().unwrap(),
+        sender
+    );
 }
 
 /// - All gas coins should be owned by an address (not shared or immutable)
@@ -734,7 +758,7 @@ async fn test_native_transfer_insufficient_gas_execution() {
     assert_eq!(gas_coin.value(), 0);
     // After a failed transfer, the version should have been incremented,
     // but the owner of the object should remain the same, unchanged.
-    let ((_, version, _), owner) = effects.mutated_excluding_gas()[0];
+    let ((_, version, _), owner) = effects.mutated_excluding_gas()[0].clone();
     assert_eq!(version, gas_object.version());
     assert_eq!(owner, gas_object.owner);
 

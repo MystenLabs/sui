@@ -1,6 +1,0 @@
----
-source: crates/move-prover/tests/integration.rs
-expression: output
-snapshot_kind: text
----
-Verification successful

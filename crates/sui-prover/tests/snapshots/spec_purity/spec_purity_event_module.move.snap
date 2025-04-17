@@ -1,0 +1,12 @@
+---
+source: crates/sui-prover/tests/integration.rs
+assertion_line: 128
+expression: output
+snapshot_kind: text
+---
+exiting with bytecode transformation errors
+error: Consider removing non-pure calls form spec
+   ┌─ tests/inputs/spec_purity/spec_purity_event_module.move:30:9
+   │
+30 │         subcheck(x);
+   │         ^^^^^^^^^^^

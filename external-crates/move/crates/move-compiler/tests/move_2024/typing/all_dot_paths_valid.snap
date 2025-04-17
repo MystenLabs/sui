@@ -1,0 +1,69 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: 2024.alpha
+  lint: false
+---
+error[E04012]: invalid type for constant
+  ┌─ tests/move_2024/typing/all_dot_paths_valid.move:2:16
+  │
+2 │     const ZED: Z = Z { f: 0 };
+  │                ^
+  │                │
+  │                Unpermitted constant type
+  │                Found: 'a::m::Z'. But expected one of: 'u8', 'u16', 'u32', 'u64', 'u128', 'u256', 'bool', 'address', 'vector<_>'
+
+error[E04013]: invalid statement or expression in constant
+  ┌─ tests/move_2024/typing/all_dot_paths_valid.move:2:20
+  │
+2 │     const ZED: Z = Z { f: 0 };
+  │                    ^^^^^^^^^^ Structs are not supported in constants
+
+warning[W04028]: implicit copy of a constant
+   ┌─ tests/move_2024/typing/all_dot_paths_valid.move:25:14
+   │
+25 │         copy ZED.f;
+   │              ^^^ This access will make a new copy of the constant. Consider binding the value to a variable first to make this copy explicit
+   │
+   = This warning can be suppressed with '#[allow(implicit_const_copy)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[W04028]: implicit copy of a constant
+   ┌─ tests/move_2024/typing/all_dot_paths_valid.move:39:10
+   │
+39 │         &VEC;
+   │          ^^^ This access will make a new copy of the constant. Consider binding the value to a variable first to make this copy explicit
+   │
+   = This warning can be suppressed with '#[allow(implicit_const_copy)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[W04028]: implicit copy of a constant
+   ┌─ tests/move_2024/typing/all_dot_paths_valid.move:40:10
+   │
+40 │         &ZED.f;
+   │          ^^^ This access will make a new copy of the constant. Consider binding the value to a variable first to make this copy explicit
+   │
+   = This warning can be suppressed with '#[allow(implicit_const_copy)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[W04028]: implicit copy of a constant
+   ┌─ tests/move_2024/typing/all_dot_paths_valid.move:51:14
+   │
+51 │         &mut VEC;
+   │              ^^^ This access will make a new copy of the constant. Consider binding the value to a variable first to make this copy explicit
+   │
+   = This warning can be suppressed with '#[allow(implicit_const_copy)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[W04028]: implicit copy of a constant
+   ┌─ tests/move_2024/typing/all_dot_paths_valid.move:52:14
+   │
+52 │         &mut ZED.f;
+   │              ^^^ This access will make a new copy of the constant. Consider binding the value to a variable first to make this copy explicit
+   │
+   = This warning can be suppressed with '#[allow(implicit_const_copy)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[W04028]: implicit copy of a constant
+   ┌─ tests/move_2024/typing/all_dot_paths_valid.move:64:9
+   │
+64 │         ZED.f;
+   │         ^^^ This access will make a new copy of the constant. Consider binding the value to a variable first to make this copy explicit
+   │
+   = This warning can be suppressed with '#[allow(implicit_const_copy)]' applied to the 'module' or module member ('const', 'fun', or 'struct')

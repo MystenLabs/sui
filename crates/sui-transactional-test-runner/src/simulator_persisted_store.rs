@@ -5,7 +5,6 @@ use std::{collections::BTreeMap, path::PathBuf, sync::Arc, time::Duration};
 
 use move_binary_format::CompiledModule;
 use move_bytecode_utils::module_cache::GetModule;
-use move_core_types::language_storage::StructTag;
 use move_core_types::{language_storage::ModuleId, resolver::ModuleResolver};
 use simulacrum::Simulacrum;
 use std::num::NonZeroUsize;
@@ -13,12 +12,12 @@ use sui_config::genesis;
 use sui_protocol_config::ProtocolVersion;
 use sui_swarm_config::genesis_config::AccountConfig;
 use sui_swarm_config::network_config_builder::ConfigBuilder;
-use sui_types::storage::{ReadStore, RestStateReader};
+use sui_types::storage::{ReadStore, RpcStateReader};
 use sui_types::{
     base_types::{ObjectID, SequenceNumber, SuiAddress, VersionNumber},
     committee::{Committee, EpochId},
     crypto::AccountKeyPair,
-    digests::{ObjectDigest, TransactionDigest, TransactionEventsDigest},
+    digests::{ObjectDigest, TransactionDigest},
     effects::{TransactionEffects, TransactionEffectsAPI, TransactionEvents},
     error::{SuiError, UserInputError},
     messages_checkpoint::{
@@ -64,8 +63,7 @@ pub struct PersistedStoreInner {
     // Transaction data
     transactions: DBMap<TransactionDigest, sui_types::transaction::TrustedTransaction>,
     effects: DBMap<TransactionDigest, TransactionEffects>,
-    events: DBMap<TransactionEventsDigest, TransactionEvents>,
-    events_tx_digest_index: DBMap<TransactionDigest, TransactionEventsDigest>,
+    events: DBMap<TransactionDigest, TransactionEvents>,
 
     // Committee data
     epoch_to_committee: DBMap<(), Vec<Committee>>,
@@ -190,9 +188,11 @@ impl SimulatorStore for PersistedStore {
     fn get_highest_checkpint(&self) -> Option<VerifiedCheckpoint> {
         self.read_write
             .checkpoints
-            .unbounded_iter()
-            .skip_to_last()
+            .reversed_safe_iter_with_bounds(None, None)
+            .expect("failed to fetch highest checkpoint")
             .next()
+            .transpose()
+            .expect("failed to fetch highest checkpoint")
             .map(|(_, checkpoint)| checkpoint.into())
     }
 
@@ -229,30 +229,11 @@ impl SimulatorStore for PersistedStore {
             .expect("Fatal: DB read failed")
     }
 
-    fn get_transaction_events(
-        &self,
-        digest: &TransactionEventsDigest,
-    ) -> Option<TransactionEvents> {
+    fn get_transaction_events(&self, digest: &TransactionDigest) -> Option<TransactionEvents> {
         self.read_write
             .events
             .get(digest)
             .expect("Fatal: DB read failed")
-    }
-
-    fn get_transaction_events_by_tx_digest(
-        &self,
-        tx_digest: &TransactionDigest,
-    ) -> Option<TransactionEvents> {
-        self.read_write
-            .events_tx_digest_index
-            .get(tx_digest)
-            .expect("Fatal: DB read failed")
-            .and_then(|x| {
-                self.read_write
-                    .events
-                    .get(&x)
-                    .expect("Fatal: DB read failed")
-            })
     }
 
     fn get_object(&self, id: &ObjectID) -> Option<Object> {
@@ -285,7 +266,8 @@ impl SimulatorStore for PersistedStore {
 
     fn owned_objects(&self, owner: SuiAddress) -> Box<dyn Iterator<Item = Object> + '_> {
         Box::new(self.read_write.live_objects
-            .unbounded_iter()
+            .safe_iter()
+            .map(|result| result.expect("rocksdb iteration failed"))
             .flat_map(|(id, version)| self.get_object_at_version(&id, version))
             .filter(
                 move |object| matches!(object.owner, Owner::AddressOwner(addr) if addr == owner),
@@ -366,12 +348,8 @@ impl SimulatorStore for PersistedStore {
 
     fn insert_events(&mut self, tx_digest: &TransactionDigest, events: TransactionEvents) {
         self.read_write
-            .events_tx_digest_index
-            .insert(tx_digest, &events.digest())
-            .expect("Fatal: DB write failed");
-        self.read_write
             .events
-            .insert(&events.digest(), &events)
+            .insert(tx_digest, &events)
             .expect("Fatal: DB write failed");
     }
 
@@ -438,7 +416,7 @@ impl ChildObjectResolver for PersistedStore {
             return Err(SuiError::InvalidChildObjectAccess {
                 object: *child,
                 given_parent: parent,
-                actual_owner: child_object.owner,
+                actual_owner: child_object.owner.clone(),
             });
         }
 
@@ -555,9 +533,9 @@ impl ReadStore for PersistedStoreInnerReadOnlyWrapper {
         self.sync();
         self.inner
             .checkpoints
-            .unbounded_iter()
-            .skip_to_last()
+            .reversed_safe_iter_with_bounds(None, None)?
             .next()
+            .transpose()?
             .map(|(_, checkpoint)| checkpoint.into())
             .ok_or(SuiError::UserInputError {
                 error: UserInputError::LatestCheckpointSequenceNumberNotFound,
@@ -634,7 +612,7 @@ impl ReadStore for PersistedStoreInnerReadOnlyWrapper {
             .expect("Fatal: DB read failed")
     }
 
-    fn get_events(&self, event_digest: &TransactionEventsDigest) -> Option<TransactionEvents> {
+    fn get_events(&self, event_digest: &TransactionDigest) -> Option<TransactionEvents> {
         self.sync();
         self.inner
             .events
@@ -657,14 +635,7 @@ impl ReadStore for PersistedStoreInnerReadOnlyWrapper {
     }
 }
 
-impl RestStateReader for PersistedStoreInnerReadOnlyWrapper {
-    fn get_transaction_checkpoint(
-        &self,
-        _digest: &TransactionDigest,
-    ) -> sui_types::storage::error::Result<Option<CheckpointSequenceNumber>> {
-        todo!()
-    }
-
+impl RpcStateReader for PersistedStoreInnerReadOnlyWrapper {
     fn get_lowest_available_checkpoint_objects(
         &self,
     ) -> sui_types::storage::error::Result<CheckpointSequenceNumber> {
@@ -677,38 +648,8 @@ impl RestStateReader for PersistedStoreInnerReadOnlyWrapper {
         Ok((*self.get_checkpoint_by_sequence_number(0).unwrap().digest()).into())
     }
 
-    fn account_owned_objects_info_iter(
-        &self,
-        _owner: SuiAddress,
-        _cursor: Option<ObjectID>,
-    ) -> sui_types::storage::error::Result<
-        Box<dyn Iterator<Item = sui_types::storage::AccountOwnedObjectInfo> + '_>,
-    > {
-        todo!()
-    }
-
-    fn dynamic_field_iter(
-        &self,
-        _parent: ObjectID,
-        _cursor: Option<ObjectID>,
-    ) -> sui_types::storage::error::Result<
-        Box<
-            dyn Iterator<
-                    Item = (
-                        sui_types::storage::DynamicFieldKey,
-                        sui_types::storage::DynamicFieldIndexInfo,
-                    ),
-                > + '_,
-        >,
-    > {
-        todo!()
-    }
-
-    fn get_coin_info(
-        &self,
-        _coin_type: &StructTag,
-    ) -> sui_types::storage::error::Result<Option<sui_types::storage::CoinInfo>> {
-        todo!()
+    fn indexes(&self) -> Option<&dyn sui_types::storage::RpcIndexes> {
+        None
     }
 }
 

@@ -7,8 +7,6 @@ module deepbook::custodian_v2 {
     use sui::table::{Self, Table};
 
     // <<<<<<<<<<<<<<<<<<<<<<<< Error codes <<<<<<<<<<<<<<<<<<<<<<<<
-    #[test_only]
-    const EUserBalanceDoesNotExist: u64 = 1;
     const EAdminAccountCapRequired: u64 = 2;
     // <<<<<<<<<<<<<<<<<<<<<<<< Error codes <<<<<<<<<<<<<<<<<<<<<<<<
 
@@ -34,14 +32,6 @@ module deepbook::custodian_v2 {
         id: UID,
         /// Map from the owner address of AccountCap object to an Account object
         account_balances: Table<address, Account<T>>,
-    }
-
-    /// Create an admin `AccountCap` that can be used across all DeepBook pools, and has
-    /// the permission to create new `AccountCap`s that can access the same source of funds
-    public(package) fun mint_account_cap(ctx: &mut TxContext): AccountCap {
-        let id = object::new(ctx);
-        let owner = object::uid_to_address(&id);
-        AccountCap { id, owner }
     }
 
     /// Create a "child account cap" such that id != owner
@@ -179,159 +169,5 @@ module deepbook::custodian_v2 {
             );
         };
         table::borrow_mut(&mut custodian.account_balances, owner)
-    }
-
-    #[test_only]
-    fun borrow_account_balance<T>(
-        custodian: &Custodian<T>,
-        owner: address,
-    ): &Account<T> {
-        assert!(
-            table::contains(&custodian.account_balances, owner),
-            EUserBalanceDoesNotExist
-        );
-        table::borrow(&custodian.account_balances, owner)
-    }
-
-    #[test_only]
-    use sui::test_scenario::{Self, Scenario, take_shared, take_from_sender, ctx};
-    #[test_only]
-    use sui::coin::{mint_for_testing};
-    #[test_only]
-    use sui::test_utils::{assert_eq, destroy};
-
-    #[test_only]
-    public struct USD {}
-
-    #[test_only]
-    public(package) fun assert_user_balance<T>(
-        custodian: &Custodian<T>,
-        owner: address,
-        available_balance: u64,
-        locked_balance: u64,
-    ) {
-        let user_balance = borrow_account_balance<T>(custodian, owner);
-        assert!(balance::value(&user_balance.available_balance) == available_balance);
-        assert!(balance::value(&user_balance.locked_balance) == locked_balance)
-    }
-
-    #[test_only]
-    fun setup_test(
-        scenario: &mut Scenario,
-    ) {
-        transfer::share_object<Custodian<USD>>(new<USD>(test_scenario::ctx(scenario)));
-    }
-
-    #[test_only]
-    public(package) fun test_increase_user_available_balance<T>(
-        custodian: &mut Custodian<T>,
-        owner: address,
-        quantity: u64,
-    ) {
-        increase_user_available_balance<T>(custodian, owner, balance::create_for_testing(quantity));
-    }
-
-    #[test_only]
-    public(package) fun deposit<T>(
-        custodian: &mut Custodian<T>,
-        coin: Coin<T>,
-        owner: address,
-    ) {
-        increase_user_available_balance<T>(custodian, owner, coin::into_balance(coin));
-    }
-
-    #[test]
-    #[expected_failure(abort_code = EUserBalanceDoesNotExist)]
-    fun test_user_balance_does_not_exist(){
-        let owner: address = @0xAAAA;
-        let bob: address = @0xBBBB;
-        let mut test = test_scenario::begin(owner);
-        test_scenario::next_tx(&mut test, owner);
-        {
-            setup_test(&mut test);
-            transfer::public_transfer(mint_account_cap(ctx(&mut test)), bob);
-        };
-        test_scenario::next_tx(&mut test, bob);
-        {
-            let custodian = take_shared<Custodian<USD>>(&test);
-            let account_cap = take_from_sender<AccountCap>(&test);
-            let _ = borrow_account_balance(&custodian, bob);
-            test_scenario::return_to_sender<AccountCap>(&test, account_cap);
-            test_scenario::return_shared(custodian);
-
-        };
-        test_scenario::end(test);
-    }
-
-    #[test]
-    fun test_account_balance() {
-        let owner: address = @0xAAAA;
-        let bob: address = @0xBBBB;
-        let mut test = test_scenario::begin(owner);
-        test_scenario::next_tx(&mut test, owner);
-        {
-            setup_test(&mut test);
-            transfer::public_transfer(mint_account_cap(ctx(&mut test)), bob);
-        };
-        test_scenario::next_tx(&mut test, bob);
-        {
-            let custodian = take_shared<Custodian<USD>>(&test);
-            let account_cap = take_from_sender<AccountCap>(&test);
-            let (asset_available, asset_locked) = account_balance(&custodian, bob);
-            assert_eq(asset_available, 0);
-            assert_eq(asset_locked, 0);
-            test_scenario::return_to_sender<AccountCap>(&test, account_cap);
-            test_scenario::return_shared(custodian);
-
-        };
-        test_scenario::next_tx(&mut test, bob);
-        {
-            let mut custodian = take_shared<Custodian<USD>>(&test);
-            let account_cap = take_from_sender<AccountCap>(&test);
-            deposit(&mut custodian, mint_for_testing<USD>(10000, ctx(&mut test)), bob);
-            let (asset_available, mut asset_locked) = account_balance(&custodian, bob);
-            assert_eq(asset_available, 10000);
-            assert_eq(asset_locked, 0);
-            asset_locked = account_locked_balance(&custodian, bob);
-            assert_eq(asset_locked, 0);
-            test_scenario::return_to_sender<AccountCap>(&test, account_cap);
-            test_scenario::return_shared(custodian);
-        };
-        test_scenario::end(test);
-    }
-
-    #[test]
-    fun test_create_child_account_cap() {
-        let mut ctx = tx_context::dummy();
-        let admin_cap = mint_account_cap(&mut ctx);
-        // check that we can duplicate child cap, and don't get another admin cap
-        let child_cap = create_child_account_cap(&admin_cap, &mut ctx);
-        assert_eq(child_cap.owner, admin_cap.owner);
-        assert!(&child_cap.id != &admin_cap.id);
-
-        // check that both child and admin cap can access the funds
-        let mut custodian = new<USD>(&mut ctx);
-        increase_user_available_balance(&mut custodian, account_owner(&admin_cap), balance::create_for_testing(10000));
-        let coin = decrease_user_available_balance(&mut custodian, &child_cap, 10000);
-
-        destroy(admin_cap);
-        destroy(child_cap);
-        destroy(custodian);
-        destroy(coin);
-    }
-
-    #[expected_failure(abort_code = EAdminAccountCapRequired)]
-    #[test]
-    fun test_cant_create_with_child() {
-        // a child cap cannot create an account cap
-        let mut ctx = tx_context::dummy();
-        let admin_cap = mint_account_cap(&mut ctx);
-        // check that we can duplicate child cap, and don't get another admin cap
-        let child_cap1 = create_child_account_cap(&admin_cap, &mut ctx);
-        let child_cap2 = create_child_account_cap(&child_cap1, &mut ctx); // should abort
-
-        destroy(admin_cap);
-        destroy(child_cap1);
-        destroy(child_cap2);
     }
 }

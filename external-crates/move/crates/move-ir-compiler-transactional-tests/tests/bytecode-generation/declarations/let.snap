@@ -1,0 +1,22 @@
+---
+source: crates/move-transactional-test-runner/src/framework.rs
+---
+processed 2 tasks
+
+task 0, lines 1-9:
+//# print-bytecode
+// Move bytecode v6
+module 6.m {
+
+entry foo() {
+L0:	loc0: u64
+B0:
+	0: Ret
+}
+
+}
+
+
+task 1, lines 11-20:
+//# print-bytecode
+Error: variable redefinition x

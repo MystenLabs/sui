@@ -1,0 +1,38 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: 2024.alpha
+  lint: false
+---
+error[E02001]: duplicate declaration, item, or annotation
+  ┌─ tests/move_2024/typing/multiple_deprecation_attributes_invalid.move:3:7
+  │
+2 │     #[deprecated]
+  │       ---------- Attribute previously given here
+3 │     #[deprecated]
+  │       ^^^^^^^^^^ Duplicate attribute 'deprecated' attached to the same item
+
+error[E02001]: duplicate declaration, item, or annotation
+  ┌─ tests/move_2024/typing/multiple_deprecation_attributes_invalid.move:7:7
+  │
+6 │     #[deprecated(note = b"note")]
+  │       ---------- Attribute previously given here
+7 │     #[deprecated]
+  │       ^^^^^^^^^^ Duplicate attribute 'deprecated' attached to the same item
+
+error[E02001]: duplicate declaration, item, or annotation
+   ┌─ tests/move_2024/typing/multiple_deprecation_attributes_invalid.move:10:19
+   │
+10 │     #[deprecated, deprecated(note = b"note")]
+   │       ----------  ^^^^^^^^^^^^^^^^^^^^^^^^^^ Duplicate attribute 'deprecated' attached to the same item
+   │       │            
+   │       Attribute previously given here
+
+error[E02001]: duplicate declaration, item, or annotation
+   ┌─ tests/move_2024/typing/multiple_deprecation_attributes_invalid.move:13:19
+   │
+13 │     #[deprecated, deprecated]
+   │       ----------  ^^^^^^^^^^ Duplicate attribute 'deprecated' attached to the same item
+   │       │            
+   │       Attribute previously given here

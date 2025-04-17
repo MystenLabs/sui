@@ -9,14 +9,16 @@
         name
         package { digest }
       }
-      type {
-        repr
-      }
       sender {
         address
       }
       timestamp
-      json
+      contents {
+        type {
+          repr
+        }
+        json
+      }
       bcs
     }
   }

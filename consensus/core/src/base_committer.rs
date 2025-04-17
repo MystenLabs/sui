@@ -5,6 +5,7 @@ use std::{collections::HashMap, fmt::Display, sync::Arc};
 
 use consensus_config::{AuthorityIndex, Stake};
 use parking_lot::RwLock;
+use tracing::warn;
 
 use crate::{
     block::{BlockAPI, BlockRef, Round, Slot, VerifiedBlock},
@@ -18,6 +19,10 @@ use crate::{
 #[cfg(test)]
 #[path = "tests/base_committer_tests.rs"]
 mod base_committer_tests;
+
+#[cfg(test)]
+#[path = "tests/base_committer_declarative_tests.rs"]
+mod base_committer_declarative_tests;
 
 pub(crate) struct BaseCommitterOptions {
     /// TODO: Re-evaluate if we want this to be configurable after running experiments.
@@ -101,7 +106,9 @@ impl BaseCommitter {
         // There can be at most one leader with enough support for each round, otherwise it means
         // the BFT assumption is broken.
         if leaders_with_enough_support.len() > 1 {
-            panic!("[{self}] More than one certified block for {leader}")
+            panic!(
+                "[{self}] More than one candidate for {leader}: {leaders_with_enough_support:?}"
+            );
         }
 
         leaders_with_enough_support
@@ -316,7 +323,7 @@ impl BaseCommitter {
 
         // There can be at most one certified leader, otherwise it means the BFT assumption is broken.
         if certified_leader_blocks.len() > 1 {
-            panic!("More than one certified block at wave {wave} from leader {leader_slot}")
+            panic!("More than one certified leader at wave {wave} in {leader_slot}: {certified_leader_blocks:?}");
         }
 
         // We commit the target leader if it has a certificate that is an ancestor of the anchor.

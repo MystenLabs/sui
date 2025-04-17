@@ -1,0 +1,30 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: legacy
+  lint: false
+---
+error[E04016]: too few arguments
+  ┌─ tests/move_check/expansion/pack_no_fields_single_block_expr.move:4:18
+  │
+4 │         let _s = S { false };
+  │                  ^^^^^^^^^^^ Missing argument for field 'f' in '0x42::M::S'
+
+error[E01002]: unexpected token
+  ┌─ tests/move_check/expansion/pack_no_fields_single_block_expr.move:4:22
+  │
+4 │         let _s = S { false };
+  │                      ^ Unexpected 'false'. Expected a field expression
+
+error[E04016]: too few arguments
+  ┌─ tests/move_check/expansion/pack_no_fields_single_block_expr.move:5:18
+  │
+5 │         let _s = S { 0 };
+  │                  ^^^^^^^ Missing argument for field 'f' in '0x42::M::S'
+
+error[E01002]: unexpected token
+  ┌─ tests/move_check/expansion/pack_no_fields_single_block_expr.move:5:22
+  │
+5 │         let _s = S { 0 };
+  │                      ^ Unexpected '<Number>'. Expected a field expression

@@ -117,60 +117,61 @@ As you have learned, the function fails when the `ColorObject` is immutable.
 
 First, view the objects you own:
 
-```shell
-export ADDR=`sui client active-address`
-
-sui client objects $ADDR
+```sh
+$ export ADDR=`sui client active-address`
+```
+```sh
+$ sui client objects $ADDR
 ```
 
 Publish the `ColorObject` code on-chain using the Sui Client CLI:
 
 {@include: ../../snippets/info-gas-budget.mdx}
 
-```shell
-sui client publish $ROOT/examples/move/color_object --gas-budget <GAS-AMOUNT>
+```sh
+$ sui client publish $ROOT/examples/move/color_object --gas-budget <GAS-AMOUNT>
 ```
 
 Set the package object ID to the `$PACKAGE` environment variable, if you have it set. Then create a new `ColorObject`:
 
-```shell
-sui client call --gas-budget <GAS-AMOUNT> --package $PACKAGE --module "color_object" --function "create" --args 0 255 0
+```sh
+$ sui client call --gas-budget <GAS-AMOUNT> --package $PACKAGE --module "color_object" --function "create" --args 0 255 0
 ```
 
 Set the newly created object ID to `$OBJECT`. To view the objects in the current active address:
 
-```shell
-sui client objects $ADDR
+```sh
+$ sui client objects $ADDR
 ```
 
 You should see an object with the ID you used for `$OBJECT`. To turn it into an immutable object:
 
-```shell
-sui client call --gas-budget <GAS-AMOUNT> --package $PACKAGE --module "color_object" --function "freeze_object" --args \"$OBJECT\"
+```sh
+$ sui client call --gas-budget <GAS-AMOUNT> --package $PACKAGE --module "color_object" --function "freeze_object" --args \"$OBJECT\"
 ```
 
 View the list of objects again:
 
-```shell
-sui client objects $ADDR
+```sh
+$ sui client objects $ADDR
 ```
 
 `$OBJECT` is no longer listed. It's no longer owned by anyone. You can see that it's now immutable by querying the object information:
 
-```shell
-sui client object $OBJECT
+```sh
+$ sui client object $OBJECT
 ```
 
 The response includes:
 
-```shell
+```sh
 Owner: Immutable
 ```
 
 If you try to mutate it:
 
-```shell
-sui client call --gas-budget <GAS-AMOUNT> --package $PACKAGE --module "color_object" --function "update" --args \"$OBJECT\" 0 0 0
+```sh
+$ sui client call --gas-budget <GAS-AMOUNT> --package $PACKAGE --module "color_object" --function "update" --args \"$OBJECT\" 0 0 0
 ```
 
 The response indicates that you can't pass an immutable object to a mutable argument.

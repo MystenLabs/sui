@@ -1,0 +1,38 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: sui
+  edition: legacy
+  lint: false
+---
+error[Sui E02009]: invalid private transfer call
+   ┌─ tests/sui_mode/private_generics/no_public_transfer_generic.move:10:9
+   │
+ 9 │     public fun t1<T: key>(s: T) {
+   │                              - The type 'T' is not declared in the current module
+10 │         transfer::transfer(s, @0x100);
+   │         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ Invalid private transfer. The function 'sui::transfer::transfer' is restricted to being called in the object's module
+
+error[Sui E02009]: invalid private transfer call
+   ┌─ tests/sui_mode/private_generics/no_public_transfer_generic.move:14:9
+   │
+13 │     public fun t2<T: key>(s: T) {
+   │                              - The type 'T' is not declared in the current module
+14 │         transfer::freeze_object(s);
+   │         ^^^^^^^^^^^^^^^^^^^^^^^^^^ Invalid private transfer. The function 'sui::transfer::freeze_object' is restricted to being called in the object's module
+
+error[Sui E02009]: invalid private transfer call
+   ┌─ tests/sui_mode/private_generics/no_public_transfer_generic.move:18:9
+   │
+17 │     public fun t3<T: key>(s: T) {
+   │                              - The type 'T' is not declared in the current module
+18 │         transfer::share_object(s);
+   │         ^^^^^^^^^^^^^^^^^^^^^^^^^ Invalid private transfer. The function 'sui::transfer::share_object' is restricted to being called in the object's module
+
+error[Sui E02009]: invalid private transfer call
+   ┌─ tests/sui_mode/private_generics/no_public_transfer_generic.move:22:9
+   │
+21 │     public fun t4<T: key>(p: &mut UID, s: Receiving<T>): T {
+   │                                                     - The type 'T' is not declared in the current module
+22 │         transfer::receive(p, s)
+   │         ^^^^^^^^^^^^^^^^^^^^^^^ Invalid private transfer. The function 'sui::transfer::receive' is restricted to being called in the object's module

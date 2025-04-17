@@ -472,7 +472,7 @@ impl TransactionBuilder {
 
         let obj: Object = response.into_object()?.try_into()?;
         let obj_ref = obj.compute_object_reference();
-        let owner = obj.owner;
+        let owner = obj.owner.clone();
         objects.insert(id, obj);
         if is_receiving_argument(view, arg_type) {
             return Ok(ObjectArg::Receiving(obj_ref));
@@ -480,6 +480,10 @@ impl TransactionBuilder {
         Ok(match owner {
             Owner::Shared {
                 initial_shared_version,
+            }
+            | Owner::ConsensusV2 {
+                start_version: initial_shared_version,
+                authenticator: _,
             } => ObjectArg::SharedObject {
                 id,
                 initial_shared_version,
@@ -623,6 +627,7 @@ impl TransactionBuilder {
             .into_object()?;
         let capability_owner = upgrade_capability
             .owner
+            .clone()
             .ok_or_else(|| anyhow!("Unable to determine ownership of upgrade capability"))?;
         let pt = {
             let mut builder = ProgrammableTransactionBuilder::new();
@@ -632,6 +637,10 @@ impl TransactionBuilder {
                 }
                 Owner::Shared {
                     initial_shared_version,
+                }
+                | Owner::ConsensusV2 {
+                    start_version: initial_shared_version,
+                    authenticator: _,
                 } => ObjectArg::SharedObject {
                     id: upgrade_capability.object_ref().0,
                     initial_shared_version,
@@ -695,6 +704,7 @@ impl TransactionBuilder {
             .into_object()?;
         let cap_owner = upgrade_cap
             .owner
+            .clone()
             .ok_or_else(|| anyhow!("Unable to determine ownership of upgrade capability"))?;
         TransactionData::new_upgrade(
             sender,

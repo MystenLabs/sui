@@ -59,7 +59,7 @@ pub fn lsp_position_to_loc(
 /// Some functions defined in a module need to be ignored.
 pub fn ignored_function(name: Symbol) -> bool {
     // In test mode (that's how IDE compiles Move source files),
-    // the compiler inserts an dummy function preventing preventing
+    // the compiler inserts a dummy function preventing preventing
     // publishing of modules compiled in test mode. We need to
     // ignore its definition to avoid spurious on-hover display
     // of this function's info whe hovering close to `module` keyword.

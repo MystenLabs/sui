@@ -9,14 +9,15 @@ use crate::verifier_signing_config::VerifierSigningConfig;
 use crate::Config;
 use anyhow::Result;
 use consensus_config::Parameters as ConsensusParameters;
-use narwhal_config::Parameters as NarwhalParameters;
+use mysten_common::fatal;
+use nonzero_ext::nonzero;
 use once_cell::sync::OnceCell;
 use rand::rngs::OsRng;
 use serde::{Deserialize, Serialize};
 use serde_with::serde_as;
 use std::collections::{BTreeMap, BTreeSet};
 use std::net::SocketAddr;
-use std::num::NonZeroUsize;
+use std::num::{NonZeroU32, NonZeroUsize};
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::time::Duration;
@@ -63,10 +64,8 @@ pub struct NodeConfig {
     #[serde(default = "default_json_rpc_address")]
     pub json_rpc_address: SocketAddr,
 
-    #[serde(default)]
-    pub enable_experimental_rest_api: bool,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub rest: Option<sui_rest_api::Config>,
+    pub rpc: Option<sui_rpc_api::Config>,
 
     #[serde(default = "default_metrics_address")]
     pub metrics_address: SocketAddr,
@@ -123,9 +122,6 @@ pub struct NodeConfig {
 
     #[serde(default)]
     pub db_checkpoint_config: DBCheckpointConfig,
-
-    #[serde(default)]
-    pub indirect_objects_threshold: usize,
 
     #[serde(default)]
     pub expensive_safety_check_config: ExpensiveSafetyCheckConfig,
@@ -206,6 +202,122 @@ pub struct NodeConfig {
     /// By default, write stall is enabled on validators but not on fullnodes.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub enable_db_write_stall: Option<bool>,
+
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub execution_time_observer_config: Option<ExecutionTimeObserverConfig>,
+
+    /// Allow overriding the chain for testing purposes. For instance, it allows you to
+    /// create a test network that believes it is mainnet or testnet. Attempting to
+    /// override this value on production networks will result in an error.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub chain_override_for_testing: Option<Chain>,
+}
+
+#[derive(Clone, Debug, Default, Deserialize, Serialize)]
+#[serde(rename_all = "kebab-case")]
+pub struct ExecutionTimeObserverConfig {
+    /// Size of the channel used for buffering local execution time observations.
+    ///
+    /// If unspecified, this will default to `1_024`.
+    pub observation_channel_capacity: Option<NonZeroUsize>,
+
+    /// Size of the LRU cache used for storing local execution time observations.
+    ///
+    /// If unspecified, this will default to `10_000`.
+    pub observation_cache_size: Option<NonZeroUsize>,
+
+    /// Size of the channel used for buffering object debt updates from consensus handler.
+    ///
+    /// If unspecified, this will default to `128`.
+    pub object_debt_channel_capacity: Option<NonZeroUsize>,
+
+    /// Size of the LRU cache used for tracking object utilization.
+    ///
+    /// If unspecified, this will default to `50_000`.
+    pub object_utilization_cache_size: Option<NonZeroUsize>,
+
+    /// If true, the execution time observer will report per-object utilization metrics.
+    /// Warning: This metric may have very large cardinality.
+    ///
+    /// If unspecified, this will default to `false`.
+    pub report_object_utilization_metric: Option<bool>,
+
+    /// Unless target object utilization is exceeded by at least this amount, no observation
+    /// will be shared with consensus.
+    ///
+    /// If unspecified, this will default to `100` milliseconds.
+    pub observation_sharing_object_utilization_threshold: Option<Duration>,
+
+    /// Unless the current local observation differs from the last one we shared by at least this
+    /// percentage, no observation will be shared with consensus.
+    ///
+    /// If unspecified, this will default to `0.05`.
+    pub observation_sharing_diff_threshold: Option<f64>,
+
+    /// Minimum interval between sharing multiple observations of the same key.
+    ///
+    /// If unspecified, this will default to `5` seconds.
+    pub observation_sharing_min_interval: Option<Duration>,
+
+    /// Global per-second rate limit for sharing observations. This is a safety valve and
+    /// should not trigger during normal operation.
+    ///
+    /// If unspecified, this will default to `10` observations per second.
+    pub observation_sharing_rate_limit: Option<NonZeroU32>,
+
+    /// Global burst limit for sharing observations.
+    ///
+    /// If unspecified, this will default to `100` observations.
+    pub observation_sharing_burst_limit: Option<NonZeroU32>,
+}
+
+impl ExecutionTimeObserverConfig {
+    pub fn observation_channel_capacity(&self) -> NonZeroUsize {
+        self.observation_channel_capacity
+            .unwrap_or(nonzero!(1_024usize))
+    }
+
+    pub fn observation_cache_size(&self) -> NonZeroUsize {
+        self.observation_cache_size.unwrap_or(nonzero!(10_000usize))
+    }
+
+    pub fn object_debt_channel_capacity(&self) -> NonZeroUsize {
+        self.object_debt_channel_capacity
+            .unwrap_or(nonzero!(128usize))
+    }
+
+    pub fn object_utilization_cache_size(&self) -> NonZeroUsize {
+        self.object_utilization_cache_size
+            .unwrap_or(nonzero!(50_000usize))
+    }
+
+    pub fn report_object_utilization_metric(&self) -> bool {
+        self.report_object_utilization_metric.unwrap_or(false)
+    }
+
+    pub fn observation_sharing_object_utilization_threshold(&self) -> Duration {
+        self.observation_sharing_object_utilization_threshold
+            .unwrap_or(Duration::from_millis(100))
+    }
+
+    pub fn observation_sharing_diff_threshold(&self) -> f64 {
+        self.observation_sharing_diff_threshold.unwrap_or(0.05)
+    }
+
+    pub fn observation_sharing_min_interval(&self) -> Duration {
+        self.observation_sharing_min_interval
+            .unwrap_or(Duration::from_secs(5))
+    }
+
+    pub fn observation_sharing_rate_limit(&self) -> NonZeroU32 {
+        self.observation_sharing_rate_limit
+            .unwrap_or(nonzero!(10u32))
+    }
+
+    pub fn observation_sharing_burst_limit(&self) -> NonZeroU32 {
+        self.observation_sharing_burst_limit
+            .unwrap_or(nonzero!(100u32))
+    }
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
@@ -215,7 +327,28 @@ pub enum ExecutionCacheConfig {
     WritebackCache {
         /// Maximum number of entries in each cache. (There are several different caches).
         /// If None, the default of 10000 is used.
-        max_cache_size: Option<usize>,
+        max_cache_size: Option<u64>,
+
+        package_cache_size: Option<u64>, // defaults to 1000
+
+        object_cache_size: Option<u64>, // defaults to max_cache_size
+        marker_cache_size: Option<u64>, // defaults to object_cache_size
+        object_by_id_cache_size: Option<u64>, // defaults to object_cache_size
+
+        transaction_cache_size: Option<u64>, // defaults to max_cache_size
+        executed_effect_cache_size: Option<u64>, // defaults to transaction_cache_size
+        effect_cache_size: Option<u64>,      // defaults to executed_effect_cache_size
+
+        events_cache_size: Option<u64>, // defaults to transaction_cache_size
+
+        transaction_objects_cache_size: Option<u64>, // defaults to 1000
+
+        /// Number of uncommitted transactions at which to pause consensus handler.
+        backpressure_threshold: Option<u64>,
+
+        /// Number of uncommitted transactions at which to refuse new transaction
+        /// submissions. Defaults to backpressure_threshold if unset.
+        backpressure_threshold_for_rpc: Option<u64>,
     },
 }
 
@@ -223,7 +356,170 @@ impl Default for ExecutionCacheConfig {
     fn default() -> Self {
         ExecutionCacheConfig::WritebackCache {
             max_cache_size: None,
+            backpressure_threshold: None,
+            backpressure_threshold_for_rpc: None,
+            package_cache_size: None,
+            object_cache_size: None,
+            marker_cache_size: None,
+            object_by_id_cache_size: None,
+            transaction_cache_size: None,
+            executed_effect_cache_size: None,
+            effect_cache_size: None,
+            events_cache_size: None,
+            transaction_objects_cache_size: None,
         }
+    }
+}
+
+impl ExecutionCacheConfig {
+    pub fn max_cache_size(&self) -> u64 {
+        std::env::var("SUI_MAX_CACHE_SIZE")
+            .ok()
+            .and_then(|s| s.parse().ok())
+            .unwrap_or_else(|| match self {
+                ExecutionCacheConfig::PassthroughCache => fatal!("invalid cache config"),
+                ExecutionCacheConfig::WritebackCache { max_cache_size, .. } => {
+                    max_cache_size.unwrap_or(100000)
+                }
+            })
+    }
+
+    pub fn package_cache_size(&self) -> u64 {
+        std::env::var("SUI_PACKAGE_CACHE_SIZE")
+            .ok()
+            .and_then(|s| s.parse().ok())
+            .unwrap_or_else(|| match self {
+                ExecutionCacheConfig::PassthroughCache => fatal!("invalid cache config"),
+                ExecutionCacheConfig::WritebackCache {
+                    package_cache_size, ..
+                } => package_cache_size.unwrap_or(1000),
+            })
+    }
+
+    pub fn object_cache_size(&self) -> u64 {
+        std::env::var("SUI_OBJECT_CACHE_SIZE")
+            .ok()
+            .and_then(|s| s.parse().ok())
+            .unwrap_or_else(|| match self {
+                ExecutionCacheConfig::PassthroughCache => fatal!("invalid cache config"),
+                ExecutionCacheConfig::WritebackCache {
+                    object_cache_size, ..
+                } => object_cache_size.unwrap_or(self.max_cache_size()),
+            })
+    }
+
+    pub fn marker_cache_size(&self) -> u64 {
+        std::env::var("SUI_MARKER_CACHE_SIZE")
+            .ok()
+            .and_then(|s| s.parse().ok())
+            .unwrap_or_else(|| match self {
+                ExecutionCacheConfig::PassthroughCache => fatal!("invalid cache config"),
+                ExecutionCacheConfig::WritebackCache {
+                    marker_cache_size, ..
+                } => marker_cache_size.unwrap_or(self.object_cache_size()),
+            })
+    }
+
+    pub fn object_by_id_cache_size(&self) -> u64 {
+        std::env::var("SUI_OBJECT_BY_ID_CACHE_SIZE")
+            .ok()
+            .and_then(|s| s.parse().ok())
+            .unwrap_or_else(|| match self {
+                ExecutionCacheConfig::PassthroughCache => fatal!("invalid cache config"),
+                ExecutionCacheConfig::WritebackCache {
+                    object_by_id_cache_size,
+                    ..
+                } => object_by_id_cache_size.unwrap_or(self.object_cache_size()),
+            })
+    }
+
+    pub fn transaction_cache_size(&self) -> u64 {
+        std::env::var("SUI_TRANSACTION_CACHE_SIZE")
+            .ok()
+            .and_then(|s| s.parse().ok())
+            .unwrap_or_else(|| match self {
+                ExecutionCacheConfig::PassthroughCache => fatal!("invalid cache config"),
+                ExecutionCacheConfig::WritebackCache {
+                    transaction_cache_size,
+                    ..
+                } => transaction_cache_size.unwrap_or(self.max_cache_size()),
+            })
+    }
+
+    pub fn executed_effect_cache_size(&self) -> u64 {
+        std::env::var("SUI_EXECUTED_EFFECT_CACHE_SIZE")
+            .ok()
+            .and_then(|s| s.parse().ok())
+            .unwrap_or_else(|| match self {
+                ExecutionCacheConfig::PassthroughCache => fatal!("invalid cache config"),
+                ExecutionCacheConfig::WritebackCache {
+                    executed_effect_cache_size,
+                    ..
+                } => executed_effect_cache_size.unwrap_or(self.transaction_cache_size()),
+            })
+    }
+
+    pub fn effect_cache_size(&self) -> u64 {
+        std::env::var("SUI_EFFECT_CACHE_SIZE")
+            .ok()
+            .and_then(|s| s.parse().ok())
+            .unwrap_or_else(|| match self {
+                ExecutionCacheConfig::PassthroughCache => fatal!("invalid cache config"),
+                ExecutionCacheConfig::WritebackCache {
+                    effect_cache_size, ..
+                } => effect_cache_size.unwrap_or(self.executed_effect_cache_size()),
+            })
+    }
+
+    pub fn events_cache_size(&self) -> u64 {
+        std::env::var("SUI_EVENTS_CACHE_SIZE")
+            .ok()
+            .and_then(|s| s.parse().ok())
+            .unwrap_or_else(|| match self {
+                ExecutionCacheConfig::PassthroughCache => fatal!("invalid cache config"),
+                ExecutionCacheConfig::WritebackCache {
+                    events_cache_size, ..
+                } => events_cache_size.unwrap_or(self.transaction_cache_size()),
+            })
+    }
+
+    pub fn transaction_objects_cache_size(&self) -> u64 {
+        std::env::var("SUI_TRANSACTION_OBJECTS_CACHE_SIZE")
+            .ok()
+            .and_then(|s| s.parse().ok())
+            .unwrap_or_else(|| match self {
+                ExecutionCacheConfig::PassthroughCache => fatal!("invalid cache config"),
+                ExecutionCacheConfig::WritebackCache {
+                    transaction_objects_cache_size,
+                    ..
+                } => transaction_objects_cache_size.unwrap_or(1000),
+            })
+    }
+
+    pub fn backpressure_threshold(&self) -> u64 {
+        std::env::var("SUI_BACKPRESSURE_THRESHOLD")
+            .ok()
+            .and_then(|s| s.parse().ok())
+            .unwrap_or_else(|| match self {
+                ExecutionCacheConfig::PassthroughCache => fatal!("invalid cache config"),
+                ExecutionCacheConfig::WritebackCache {
+                    backpressure_threshold,
+                    ..
+                } => backpressure_threshold.unwrap_or(100_000),
+            })
+    }
+
+    pub fn backpressure_threshold_for_rpc(&self) -> u64 {
+        std::env::var("SUI_BACKPRESSURE_THRESHOLD_FOR_RPC")
+            .ok()
+            .and_then(|s| s.parse().ok())
+            .unwrap_or_else(|| match self {
+                ExecutionCacheConfig::PassthroughCache => fatal!("invalid cache config"),
+                ExecutionCacheConfig::WritebackCache {
+                    backpressure_threshold_for_rpc,
+                    ..
+                } => backpressure_threshold_for_rpc.unwrap_or(self.backpressure_threshold()),
+            })
     }
 }
 
@@ -285,7 +581,6 @@ pub fn default_zklogin_oauth_providers() -> BTreeMap<Chain, BTreeSet<String>> {
         "Threedos".to_string(),
         "Onefc".to_string(),
         "FanTV".to_string(),
-        "AwsTenant-region:us-east-1-tenant_id:us-east-1_LPSLCkC3A".to_string(), // test tenant in mysten aws
         "AwsTenant-region:us-east-1-tenant_id:us-east-1_qPsZxYqd8".to_string(), // Ambrus, external partner
         "Arden".to_string(),                                                    // Arden partner
         "AwsTenant-region:eu-west-3-tenant_id:eu-west-3_gGVCx53Es".to_string(), // Trace, external partner
@@ -305,6 +600,7 @@ pub fn default_zklogin_oauth_providers() -> BTreeMap<Chain, BTreeSet<String>> {
         "Threedos".to_string(),
         "AwsTenant-region:eu-west-3-tenant_id:eu-west-3_gGVCx53Es".to_string(), // Trace, external partner
         "Arden".to_string(),
+        "FanTV".to_string(),
     ]);
     map.insert(Chain::Mainnet, providers.clone());
     map.insert(Chain::Testnet, providers);
@@ -452,6 +748,10 @@ impl NodeConfig {
     pub fn jsonrpc_server_type(&self) -> ServerType {
         self.jsonrpc_server_type.unwrap_or(ServerType::Http)
     }
+
+    pub fn rpc(&self) -> Option<&sui_rpc_api::Config> {
+        self.rpc.as_ref()
+    }
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
@@ -490,18 +790,10 @@ pub struct ConsensusConfig {
     /// on consensus latency estimates.
     pub submit_delay_step_override_millis: Option<u64>,
 
-    // Deprecated: Narwhal specific configs.
-    pub address: Multiaddr,
-    pub narwhal_config: NarwhalParameters,
-
     pub parameters: Option<ConsensusParameters>,
 }
 
 impl ConsensusConfig {
-    pub fn address(&self) -> &Multiaddr {
-        &self.address
-    }
-
     pub fn db_path(&self) -> &Path {
         &self.db_path
     }
@@ -513,10 +805,6 @@ impl ConsensusConfig {
     pub fn submit_delay_step_override(&self) -> Option<Duration> {
         self.submit_delay_step_override_millis
             .map(Duration::from_millis)
-    }
-
-    pub fn narwhal_config(&self) -> &NarwhalParameters {
-        &self.narwhal_config
     }
 
     pub fn db_retention_epochs(&self) -> u64 {
@@ -639,7 +927,7 @@ impl ExpensiveSafetyCheckConfig {
 }
 
 fn default_checkpoint_execution_max_concurrency() -> usize {
-    200
+    4
 }
 
 fn default_local_execution_timeout_sec() -> u64 {
@@ -696,6 +984,15 @@ pub struct AuthorityStorePruningConfig {
     pub killswitch_tombstone_pruning: bool,
     #[serde(default = "default_smoothing", skip_serializing_if = "is_true")]
     pub smooth: bool,
+    /// Enables the compaction filter for pruning the objects table.
+    /// If disabled, a range deletion approach is used instead.
+    /// While it is generally safe to switch between the two modes,
+    /// switching from the compaction filter approach back to range deletion
+    /// may result in some old versions that will never be pruned.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub enable_compaction_filter: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub num_epochs_to_retain_for_indexes: Option<u64>,
 }
 
 fn default_num_latest_epoch_dbs_to_retain() -> usize {
@@ -735,6 +1032,8 @@ impl Default for AuthorityStorePruningConfig {
             num_epochs_to_retain_for_checkpoints: if cfg!(msim) { Some(2) } else { None },
             killswitch_tombstone_pruning: false,
             smooth: true,
+            enable_compaction_filter: cfg!(test) || cfg!(msim),
+            num_epochs_to_retain_for_indexes: None,
         }
     }
 }
@@ -1162,6 +1461,14 @@ mod tests {
         let _template: NodeConfig = serde_yaml::from_str(TEMPLATE).unwrap();
     }
 
+    /// Tests that a legacy validator config (captured on 12/06/2024) can be parsed.
+    #[test]
+    fn legacy_validator_config() {
+        const FILE: &str = include_str!("../data/sui-node-legacy.yaml");
+
+        let _template: NodeConfig = serde_yaml::from_str(FILE).unwrap();
+    }
+
     #[test]
     fn load_key_pairs_to_node_config() {
         let protocol_key_pair: AuthorityKeyPair =
@@ -1216,5 +1523,12 @@ impl RunWithRange {
 
     pub fn matches_checkpoint(&self, seq_num: CheckpointSequenceNumber) -> bool {
         matches!(self, RunWithRange::Checkpoint(seq) if *seq == seq_num)
+    }
+
+    pub fn into_checkpoint_bound(self) -> Option<CheckpointSequenceNumber> {
+        match self {
+            RunWithRange::Epoch(_) => None,
+            RunWithRange::Checkpoint(seq) => Some(seq),
+        }
     }
 }

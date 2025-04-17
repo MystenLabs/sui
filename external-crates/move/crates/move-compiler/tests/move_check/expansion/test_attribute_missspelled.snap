@@ -1,0 +1,18 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: legacy
+  lint: false
+---
+warning[W02018]: unknown attribute
+  ┌─ tests/move_check/expansion/test_attribute_missspelled.move:2:7
+  │
+2 │     #[test__only]
+  │       ^^^^^^^^^^ Unknown attribute 'test__only'. Custom attributes must be wrapped in 'ext', e.g. #[ext(test__only)]
+
+warning[W02018]: unknown attribute
+  ┌─ tests/move_check/expansion/test_attribute_missspelled.move:4:7
+  │
+4 │     #[testonly]
+  │       ^^^^^^^^ Unknown attribute 'testonly'. Custom attributes must be wrapped in 'ext', e.g. #[ext(testonly)]

@@ -1937,6 +1937,7 @@ impl DeprecatedNominalResourceFlag {
 }
 #[rustfmt::skip]
 #[allow(non_camel_case_types)]
+#[allow(clippy::upper_case_acronyms)]
 #[repr(u8)]
 enum DeprecatedKind {
     ALL                     = 0x1,
@@ -2206,6 +2207,7 @@ impl<'a, 'b> VersionedBinary<'a, 'b> {
     }
 }
 
+#[allow(clippy::needless_lifetimes)]
 impl<'a> VersionedCursor<'a> {
     fn version(&self) -> u32 {
         self.version
@@ -2238,7 +2240,7 @@ impl<'a> VersionedCursor<'a> {
     }
 }
 
-impl<'a> Read for VersionedCursor<'a> {
+impl Read for VersionedCursor<'_> {
     fn read(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {
         self.cursor.read(buf)
     }

@@ -1,8 +1,0 @@
-error[E01003]: invalid modifier
-  ┌─ tests/move_2024/parser/global_access_pack.move:3:5
-  │
-3 │     struct S { }
-  │     ^^^^^^ Invalid struct declaration. Internal struct declarations are not yet supported
-  │
-  = Visibility annotations are required on struct declarations from the Move 2024 edition onwards.
-

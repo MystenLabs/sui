@@ -62,6 +62,8 @@ fn get_owner_type(object: &Object) -> OwnerType {
         Owner::ObjectOwner(_) => OwnerType::ObjectOwner,
         Owner::Shared { .. } => OwnerType::Shared,
         Owner::Immutable => OwnerType::Immutable,
+        // TODO: Implement support for ConsensusV2 objects.
+        Owner::ConsensusV2 { .. } => todo!(),
     }
 }
 
@@ -71,6 +73,8 @@ fn get_owner_address(object: &Object) -> Option<String> {
         Owner::ObjectOwner(address) => Some(address.to_string()),
         Owner::Shared { .. } => None,
         Owner::Immutable => None,
+        // TODO: Implement support for ConsensusV2 objects.
+        Owner::ConsensusV2 { .. } => todo!(),
     }
 }
 

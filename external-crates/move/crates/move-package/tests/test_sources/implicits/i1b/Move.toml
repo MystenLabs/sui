@@ -1,0 +1,6 @@
+[package]
+name = "I1"
+edition = "2024.beta"
+
+[dependencies]
+I2 = { local = "../i2a" }

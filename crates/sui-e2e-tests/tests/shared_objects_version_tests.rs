@@ -150,9 +150,10 @@ impl TestEnvironment {
         let (fx, _) = self.move_call("create_counter", vec![]).await.unwrap();
         assert!(fx.status().is_ok());
 
-        *fx.created()
+        fx.created()
             .iter()
             .find(|(_, owner)| matches!(owner, Owner::AddressOwner(_)))
+            .cloned()
             .expect("Owned object created")
     }
 
@@ -163,9 +164,10 @@ impl TestEnvironment {
             .unwrap();
         assert!(fx.status().is_ok());
 
-        *fx.created()
+        fx.created()
             .iter()
             .find(|(_, owner)| owner.is_shared())
+            .cloned()
             .expect("Shared object created")
     }
 
@@ -185,10 +187,11 @@ impl TestEnvironment {
             return Err(error.clone());
         }
 
-        Ok(*fx
+        Ok(fx
             .mutated()
             .iter()
             .find(|(obj, _)| obj.0 == counter.0)
+            .cloned()
             .expect("Counter mutated"))
     }
 
@@ -201,9 +204,10 @@ impl TestEnvironment {
             .await
             .unwrap();
 
-        *fx.mutated()
+        fx.mutated()
             .iter()
             .find(|(obj, _)| obj.0 == counter.0)
+            .cloned()
             .expect("Counter modified")
     }
 
@@ -223,10 +227,11 @@ impl TestEnvironment {
             )
             .await?;
 
-        Ok(*fx
+        Ok(fx
             .mutated()
             .iter()
             .find(|(obj, _)| obj.0 == counter)
+            .cloned()
             .expect("Counter modified"))
     }
 }

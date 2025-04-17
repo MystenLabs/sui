@@ -43,6 +43,7 @@ pub struct TemporaryStore<'backing> {
     store: &'backing dyn BackingStore,
     tx_digest: TransactionDigest,
     input_objects: BTreeMap<ObjectID, Object>,
+    deleted_consensus_objects: BTreeMap<ObjectID, SequenceNumber>,
     /// The version to assign to all objects written by the transaction using this store.
     lamport_timestamp: SequenceNumber,
     mutable_input_refs: BTreeMap<ObjectID, (VersionDigest, Owner)>, // Inputs that are mutable
@@ -74,6 +75,7 @@ impl<'backing> TemporaryStore<'backing> {
     ) -> Self {
         let mutable_input_refs = input_objects.mutable_inputs();
         let lamport_timestamp = input_objects.lamport_timestamp(&receiving_objects);
+        let deleted_consensus_objects = input_objects.consensus_stream_ended_objects();
         let objects = input_objects.into_object_map();
         #[cfg(debug_assertions)]
         {
@@ -94,6 +96,7 @@ impl<'backing> TemporaryStore<'backing> {
             store,
             tx_digest,
             input_objects: objects,
+            deleted_consensus_objects,
             lamport_timestamp,
             mutable_input_refs,
             execution_results: ExecutionResultsV2::default(),
@@ -130,6 +133,7 @@ impl<'backing> TemporaryStore<'backing> {
         InnerTemporaryStore {
             input_objects: self.input_objects,
             mutable_inputs: self.mutable_input_refs,
+            stream_ended_consensus_objects: self.deleted_consensus_objects,
             written: results.written_objects,
             events: TransactionEvents {
                 data: results.user_events,
@@ -232,7 +236,7 @@ impl<'backing> TemporaryStore<'backing> {
                 .into_iter()
                 .map(|shared_input| match shared_input {
                     SharedInput::Existing(oref) => oref,
-                    SharedInput::Deleted(_) => {
+                    SharedInput::ConsensusStreamEnded(_) => {
                         unreachable!("Shared object deletion not supported in effects v1")
                     }
                     SharedInput::Cancelled(_) => {
@@ -264,7 +268,7 @@ impl<'backing> TemporaryStore<'backing> {
     ) -> (InnerTemporaryStore, TransactionEffects) {
         let updated_gas_object_info = if let Some(coin_id) = gas_charger.gas_coin() {
             let object = &self.execution_results.written_objects[&coin_id];
-            (object.compute_object_reference(), object.owner)
+            (object.compute_object_reference(), object.owner.clone())
         } else {
             (
                 (ObjectID::ZERO, SequenceNumber::default(), ObjectDigest::MIN),
@@ -288,7 +292,7 @@ impl<'backing> TemporaryStore<'backing> {
             .iter()
             .for_each(|(id, object)| {
                 let object_ref = object.compute_object_reference();
-                let owner = object.owner;
+                let owner = object.owner.clone();
                 if let Some(old_object_meta) = self.get_object_modified_at(id) {
                     modified_at_versions.push((*id, old_object_meta.version));
                     mutated.push((object_ref, owner));
@@ -448,7 +452,7 @@ impl<'backing> TemporaryStore<'backing> {
             DynamicallyLoadedObjectMetadata {
                 version: old_ref.1,
                 digest: old_ref.2,
-                owner: old_object.owner,
+                owner: old_object.owner.clone(),
                 storage_rebate: old_object.storage_rebate,
                 previous_transaction: old_object.previous_transaction,
             },
@@ -630,7 +634,7 @@ impl<'backing> TemporaryStore<'backing> {
                         |((version, digest), owner)| DynamicallyLoadedObjectMetadata {
                             version: *version,
                             digest: *digest,
-                            owner: *owner,
+                            owner: owner.clone(),
                             // It's guaranteed that a mutable input object is an input object.
                             storage_rebate: self.input_objects[object_id].storage_rebate,
                             previous_transaction: self.input_objects[object_id]
@@ -646,7 +650,7 @@ impl<'backing> TemporaryStore<'backing> {
                         DynamicallyLoadedObjectMetadata {
                             version: obj.version(),
                             digest: obj.digest(),
-                            owner: obj.owner,
+                            owner: obj.owner.clone(),
                             storage_rebate: obj.storage_rebate,
                             previous_transaction: obj.previous_transaction,
                         }
@@ -658,7 +662,7 @@ impl<'backing> TemporaryStore<'backing> {
     }
 }
 
-impl<'backing> TemporaryStore<'backing> {
+impl TemporaryStore<'_> {
     // check that every object read is owned directly or indirectly by sender, sponsor,
     // or a shared object input
     pub fn check_ownership_invariants(
@@ -702,6 +706,9 @@ impl<'backing> TemporaryStore<'backing> {
                     }
                     Owner::ObjectOwner(_parent) => {
                         unreachable!("Input objects must be address owned, shared, or immutable")
+                    }
+                    Owner::ConsensusV2 { .. } => {
+                        unimplemented!("ConsensusV2 does not exist for this execution version")
                     }
                 }
             })
@@ -769,6 +776,9 @@ impl<'backing> TemporaryStore<'backing> {
                         );
                         continue;
                     }
+                    Owner::ConsensusV2 { .. } => {
+                        unimplemented!("ConsensusV2 does not exist for this execution version")
+                    }
                 }
             };
             // we now assume the object is authenticated and must check the parent
@@ -779,7 +789,7 @@ impl<'backing> TemporaryStore<'backing> {
     }
 }
 
-impl<'backing> TemporaryStore<'backing> {
+impl TemporaryStore<'_> {
     /// Track storage gas for each mutable input object (including the gas coin)
     /// and each created object. Compute storage refunds for each deleted object.
     /// Will *not* charge anything, gas status keeps track of storage cost and rebate.
@@ -861,7 +871,7 @@ impl<'backing> TemporaryStore<'backing> {
 // Charge gas current - end
 //==============================================================================
 
-impl<'backing> TemporaryStore<'backing> {
+impl TemporaryStore<'_> {
     pub fn advance_epoch_safe_mode(
         &mut self,
         params: &AdvanceEpochParams,
@@ -882,7 +892,7 @@ type ModifiedObjectInfo<'a> = (
     Option<&'a Object>,
 );
 
-impl<'backing> TemporaryStore<'backing> {
+impl TemporaryStore<'_> {
     fn get_input_sui(
         &self,
         id: &ObjectID,
@@ -1091,7 +1101,7 @@ impl<'backing> TemporaryStore<'backing> {
     }
 }
 
-impl<'backing> ChildObjectResolver for TemporaryStore<'backing> {
+impl ChildObjectResolver for TemporaryStore<'_> {
     fn read_child_object(
         &self,
         parent: &ObjectID,
@@ -1133,7 +1143,7 @@ impl<'backing> ChildObjectResolver for TemporaryStore<'backing> {
     }
 }
 
-impl<'backing> Storage for TemporaryStore<'backing> {
+impl Storage for TemporaryStore<'_> {
     fn reset(&mut self) {
         self.drop_writes();
     }
@@ -1174,7 +1184,7 @@ impl<'backing> Storage for TemporaryStore<'backing> {
     }
 }
 
-impl<'backing> BackingPackageStore for TemporaryStore<'backing> {
+impl BackingPackageStore for TemporaryStore<'_> {
     fn get_package_object(&self, package_id: &ObjectID) -> SuiResult<Option<PackageObject>> {
         // We first check the objects in the temporary store because in non-production code path,
         // it is possible to read packages that are just written in the same transaction.
@@ -1207,7 +1217,7 @@ impl<'backing> BackingPackageStore for TemporaryStore<'backing> {
     }
 }
 
-impl<'backing> ResourceResolver for TemporaryStore<'backing> {
+impl ResourceResolver for TemporaryStore<'_> {
     type Error = SuiError;
 
     fn get_resource(
@@ -1245,7 +1255,7 @@ impl<'backing> ResourceResolver for TemporaryStore<'backing> {
     }
 }
 
-impl<'backing> ParentSync for TemporaryStore<'backing> {
+impl ParentSync for TemporaryStore<'_> {
     fn get_latest_parent_entry_ref_deprecated(&self, _object_id: ObjectID) -> Option<ObjectRef> {
         unreachable!("Never called in newer protocol versions")
     }

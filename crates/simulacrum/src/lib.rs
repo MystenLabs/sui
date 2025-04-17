@@ -14,9 +14,8 @@ use std::num::NonZeroUsize;
 use std::path::PathBuf;
 use std::sync::Arc;
 
-use anyhow::{anyhow, Result};
+use anyhow::{anyhow, ensure, Context, Result};
 use fastcrypto::traits::Signer;
-use move_core_types::language_storage::StructTag;
 use rand::rngs::OsRng;
 use sui_config::verifier_signing_config::VerifierSigningConfig;
 use sui_config::{genesis, transaction_deny_config::TransactionDenyConfig};
@@ -25,11 +24,13 @@ use sui_storage::blob::{Blob, BlobEncoding};
 use sui_swarm_config::genesis_config::AccountConfig;
 use sui_swarm_config::network_config::NetworkConfig;
 use sui_swarm_config::network_config_builder::ConfigBuilder;
-use sui_types::base_types::{AuthorityName, ObjectID, VersionNumber};
-use sui_types::crypto::AuthoritySignature;
+use sui_types::base_types::{AuthorityName, ObjectID, ObjectRef, VersionNumber};
+use sui_types::crypto::{get_account_key_pair, AccountKeyPair, AuthoritySignature};
 use sui_types::digests::ConsensusCommitDigest;
-use sui_types::object::Object;
-use sui_types::storage::{ObjectStore, ReadStore, RestStateReader};
+use sui_types::effects::TransactionEffectsAPI;
+use sui_types::messages_consensus::ConsensusDeterminedVersionAssignments;
+use sui_types::object::{Object, Owner};
+use sui_types::storage::{ObjectStore, ReadStore, RpcStateReader};
 use sui_types::sui_system_state::epoch_start_sui_system_state::EpochStartSystemState;
 use sui_types::transaction::EndOfEpochTransactionKind;
 use sui_types::{
@@ -235,7 +236,7 @@ impl<R, S: store::SimulatorStore> Simulacrum<R, S> {
                 round,
                 timestamp_ms,
                 ConsensusCommitDigest::default(),
-                Vec::new(),
+                ConsensusDeterminedVersionAssignments::empty_for_testing(),
             );
 
         self.execute_transaction(consensus_commit_prologue_transaction.into())
@@ -329,6 +330,42 @@ impl<R, S: store::SimulatorStore> Simulacrum<R, S> {
         self.epoch_state.reference_gas_price()
     }
 
+    /// Create a new account and credit it with `amount` gas units from a faucet account. Returns
+    /// the account, its keypair, and a reference to the gas object it was funded with.
+    ///
+    /// ```
+    /// use simulacrum::Simulacrum;
+    /// use sui_types::base_types::SuiAddress;
+    /// use sui_types::gas_coin::MIST_PER_SUI;
+    ///
+    /// # fn main() {
+    /// let mut simulacrum = Simulacrum::new();
+    /// let (account, kp, gas) = simulacrum.funded_account(MIST_PER_SUI).unwrap();
+    ///
+    /// // `account` is a fresh SuiAddress that owns a Coin<SUI> object with single SUI in it,
+    /// // referred to by `gas`.
+    /// // ...
+    /// # }
+    /// ```
+    pub fn funded_account(
+        &mut self,
+        amount: u64,
+    ) -> Result<(SuiAddress, AccountKeyPair, ObjectRef)> {
+        let (address, key) = get_account_key_pair();
+        let fx = self.request_gas(address, amount)?;
+        ensure!(fx.status().is_ok(), "Failed to request gas for account");
+
+        let gas = fx
+            .created()
+            .into_iter()
+            .find_map(|(oref, owner)| {
+                matches!(owner, Owner::AddressOwner(owner) if owner == address).then_some(oref)
+            })
+            .context("Could not find created object")?;
+
+        Ok((address, key, gas))
+    }
+
     /// Request that `amount` Mist be sent to `address` from a faucet account.
     ///
     /// ```
@@ -391,10 +428,10 @@ impl<R, S: store::SimulatorStore> Simulacrum<R, S> {
             .unwrap();
     }
 
-    pub fn override_last_checkpoint_number(&mut self, number: CheckpointSequenceNumber) {
+    pub fn override_next_checkpoint_number(&mut self, number: CheckpointSequenceNumber) {
         let committee = CommitteeWithKeys::new(&self.keystore, self.epoch_state.committee());
         self.checkpoint_builder
-            .override_last_checkpoint_number(number, &committee);
+            .override_next_checkpoint_number(number, &committee);
     }
 
     fn process_data_ingestion(
@@ -529,7 +566,7 @@ impl<T, V: store::SimulatorStore> ReadStore for Simulacrum<T, V> {
 
     fn get_events(
         &self,
-        event_digest: &sui_types::digests::TransactionEventsDigest,
+        event_digest: &sui_types::digests::TransactionDigest,
     ) -> Option<sui_types::effects::TransactionEvents> {
         self.store().get_transaction_events(event_digest)
     }
@@ -549,16 +586,7 @@ impl<T, V: store::SimulatorStore> ReadStore for Simulacrum<T, V> {
     }
 }
 
-impl<T: Send + Sync, V: store::SimulatorStore + Send + Sync> RestStateReader for Simulacrum<T, V> {
-    fn get_transaction_checkpoint(
-        &self,
-        _digest: &sui_types::digests::TransactionDigest,
-    ) -> sui_types::storage::error::Result<
-        Option<sui_types::messages_checkpoint::CheckpointSequenceNumber>,
-    > {
-        todo!()
-    }
-
+impl<T: Send + Sync, V: store::SimulatorStore + Send + Sync> RpcStateReader for Simulacrum<T, V> {
     fn get_lowest_available_checkpoint_objects(
         &self,
     ) -> sui_types::storage::error::Result<CheckpointSequenceNumber> {
@@ -577,38 +605,8 @@ impl<T: Send + Sync, V: store::SimulatorStore + Send + Sync> RestStateReader for
             .into())
     }
 
-    fn account_owned_objects_info_iter(
-        &self,
-        _owner: SuiAddress,
-        _cursor: Option<ObjectID>,
-    ) -> sui_types::storage::error::Result<
-        Box<dyn Iterator<Item = sui_types::storage::AccountOwnedObjectInfo> + '_>,
-    > {
-        todo!()
-    }
-
-    fn dynamic_field_iter(
-        &self,
-        _parent: ObjectID,
-        _cursor: Option<ObjectID>,
-    ) -> sui_types::storage::error::Result<
-        Box<
-            dyn Iterator<
-                    Item = (
-                        sui_types::storage::DynamicFieldKey,
-                        sui_types::storage::DynamicFieldIndexInfo,
-                    ),
-                > + '_,
-        >,
-    > {
-        todo!()
-    }
-
-    fn get_coin_info(
-        &self,
-        _coin_type: &StructTag,
-    ) -> sui_types::storage::error::Result<Option<sui_types::storage::CoinInfo>> {
-        todo!()
+    fn indexes(&self) -> Option<&dyn sui_types::storage::RpcIndexes> {
+        None
     }
 }
 

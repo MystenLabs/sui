@@ -7,7 +7,7 @@ use clap::{Args, Parser, Subcommand};
 use serde::{Deserialize, Serialize};
 use std::{collections::HashMap, net::SocketAddr, path::PathBuf};
 use strum::IntoEnumIterator;
-use sui_json_rpc::name_service::NameServiceConfig;
+use sui_name_service::NameServiceConfig;
 use sui_types::base_types::{ObjectID, SuiAddress};
 use url::Url;
 
@@ -142,7 +142,14 @@ pub struct IngestionConfig {
 
     /// Whether to delete processed checkpoint files from the local directory,
     /// when running Fullnode-colocated indexer.
-    #[arg(long, default_value_t = true)]
+    #[arg(
+        long,
+        default_value_t = true,
+        default_missing_value = "true",
+        action = clap::ArgAction::Set,
+        num_args = 0..=1,
+        require_equals = false,
+    )]
     pub gc_checkpoint_files: bool,
 }
 
@@ -238,7 +245,6 @@ pub enum Command {
     },
     /// Restore the database from formal snaphots.
     Restore(RestoreConfig),
-    Benchmark(BenchmarkConfig),
 }
 
 #[derive(Args, Default, Debug, Clone)]

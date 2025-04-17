@@ -1,0 +1,12 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: legacy
+  lint: false
+---
+warning[W10007]: issue with attribute value
+  ┌─ tests/move_check/warning_suppression/allow_with_no_filter.move:2:3
+  │
+2 │ #[allow]
+  │   ^^^^^ Expected list of warnings, e.g. 'allow(unused)'

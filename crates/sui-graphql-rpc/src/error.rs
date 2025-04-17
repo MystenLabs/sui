@@ -3,7 +3,7 @@
 
 use async_graphql::{ErrorExtensionValues, ErrorExtensions, Pos, ServerError};
 use sui_indexer::errors::IndexerError;
-use sui_json_rpc::name_service::NameServiceError;
+use sui_name_service::NameServiceError;
 
 use crate::types::move_registry::error::MoveRegistryError;
 

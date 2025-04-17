@@ -190,6 +190,8 @@ When including sections of code, understand that the code might change from what
 
 To include the entire source file, use the `{@inject}` directive with a path to the file, based on the Sui repo root. For example, to include the source file at `sui/examples/move/hero/sources/example.move`, write `{@inject: examples/move/hero/sources/example.move`. The file location is automatically used as the title for the codeblock.
 
+You can use source code from other GitHub repositories, but should do so sparingly and purposefully. There is almost no way to track those projects to ensure the code is valid, unlike the CI processes running on the sui repo. To use, format the directive as `{@inject: github:<GITHUB_ORG_NAME>/<GITHUB_REPO_NAME>/<PATH_TO_FILE>}`.
+
 #### Include part of code
 
 To include only sections of code, add an ID to identify the section, function, struct, or module. The ID is used in the directive syntax and in source code comments. The following sections provide examples of different uses and how to format them.
@@ -392,3 +394,24 @@ flowchart LR
     AC2 <==>|Network TCP| Authority2
 ```
 
+## YouTube player with thumbnail carousel
+
+Displays a list of YouTube thumbnails and provides a player for the currently selected video.
+
+### When to use
+
+Use when you have three or more YouTube videos. You could use with as few as one but there is currently not a way to turn off the carousel so would look weird.
+
+### How to use
+
+Because there are not many videos on the site, you need to import the component on the page in which you're using it.
+
+`import YTCarousel from "@site/src/components/YTCarousel"`
+
+The import statement can go anywhere, but it's typically added to the top of the page. Then use the component by providing an array of YouTube video IDs. Sui videos should not have this problem, but be aware that videos might not have thumbnails like in the example.
+
+`<YTCarousel ids={["youtubeID1","youtubeID2","youtubeID3",...]}/>`
+
+import YTCarousel from "@site/src/components/YTCarousel"
+
+<YTCarousel ids={["dQw4w9WgXcQ","EwTZ2xpQwpA","1TewCPi92ro"]}/>

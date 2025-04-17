@@ -1,0 +1,20 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: legacy
+  lint: false
+---
+error[E13001]: feature is not supported in specified edition
+  ┌─ tests/move_check/parser/named_blocks_invalid_2.move:4:9
+  │
+4 │         'name {
+  │         ^^^^^ Block labels are not supported by current edition 'legacy'; the '2024' edition supports this feature
+  │
+  = You can update the edition in the 'Move.toml', or via command line flag if invoking the compiler directly.
+
+error[E01001]: invalid character
+  ┌─ tests/move_check/parser/named_blocks_invalid_2.move:5:32
+  │
+5 │             if (cond) { return 'name 10 };
+  │                                ^^^^^ Unexpected character (')

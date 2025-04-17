@@ -33,7 +33,7 @@ module Test::M1 {
 
 //# create-checkpoint
 
-//# run-graphql --cursors @{obj_2_0} @{obj_3_0}
+//# run-graphql --cursors bcs(@{obj_2_0},@{highest_checkpoint}) bcs(@{obj_3_0},@{highest_checkpoint})
 {
   one_of_these_will_yield_an_object: address(address: "@{A}") {
     objects(filter: {type: "@{Test}"}, after: "@{cursor_0}") {
@@ -69,7 +69,7 @@ module Test::M1 {
 
 //# create-checkpoint
 
-//# run-graphql --cursors @{obj_2_0,1} @{obj_3_0,1}
+//# run-graphql --cursors bcs(@{obj_2_0},1) bcs(@{obj_3_0},1)
 {
   paginating_on_checkpoint_1: address(address: "@{A}") {
     objects(filter: {type: "@{Test}"}, after: "@{cursor_0}") {
@@ -116,39 +116,12 @@ module Test::M1 {
   }
 }
 
-//# run-graphql
-{
-  objects_at_version: address(address: "@{A}") {
-    objects(
-      filter: {
-        type: "@{Test}",
-        objectKeys: [
-            {objectId: "@{obj_2_0}", version: 3},
-            {objectId: "@{obj_3_0}", version: 4},
-            {objectId: "@{obj_6_0}", version: 5},
-            {objectId: "@{obj_7_0}", version: 6}
-            ]
-      }
-    ) {
-      nodes {
-        version
-        contents {
-          type {
-            repr
-          }
-          json
-        }
-      }
-    }
-  }
-}
-
 //# programmable --sender A --inputs object(2,0) object(3,0) object(6,0) object(7,0) @B
 //> TransferObjects([Input(0), Input(1), Input(2), Input(3)], Input(4))
 
 //# create-checkpoint
 
-//# run-graphql --cursors @{obj_6_0,2}
+//# run-graphql --cursors bcs(@{obj_6_0},2)
 {
   after_obj_6_0_at_checkpoint_2: address(address: "@{A}") {
     objects(filter: {type: "@{Test}"}, after: "@{cursor_0}") {
@@ -228,7 +201,7 @@ module Test::M1 {
 
 //# create-checkpoint
 
-//# run-graphql --cursors @{obj_6_0,2}
+//# run-graphql --cursors bcs(@{obj_6_0},2)
 # This query will error due to requesting data outside of available range
 {
   availableRange {
@@ -272,30 +245,3 @@ module Test::M1 {
   }
 }
 
-//# run-graphql
-# Historical lookups will still return results at version.
-{
-  objects_at_version: address(address: "@{A}") {
-    objects(
-      filter: {
-        type: "@{Test}",
-        objectKeys: [
-            {objectId: "@{obj_2_0}", version: 3},
-            {objectId: "@{obj_3_0}", version: 4},
-            {objectId: "@{obj_6_0}", version: 5},
-            {objectId: "@{obj_7_0}", version: 6}
-            ]
-      }
-    ) {
-      nodes {
-        version
-        contents {
-          type {
-            repr
-          }
-          json
-        }
-      }
-    }
-  }
-}

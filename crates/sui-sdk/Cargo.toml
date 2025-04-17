@@ -42,11 +42,15 @@ fastcrypto.workspace = true
 [dev-dependencies]
 clap.workspace = true
 dirs.workspace = true
-async-recursion.workspace = true
 tempfile.workspace = true
 futures-core.workspace = true
 futures.workspace = true
 rand.workspace = true
+test-cluster.workspace = true
+sui-macros.workspace = true
+sui-simulator.workspace = true
+prometheus.workspace = true
+sui-protocol-config.workspace = true
 
 [[example]]
 name = "coin_read_api"

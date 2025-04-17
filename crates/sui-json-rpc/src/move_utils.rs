@@ -285,7 +285,6 @@ mod tests {
 
     mod get_normalized_move_module_tests {
         use super::super::*;
-        use jsonrpsee::types::ErrorObjectOwned;
         use move_binary_format::file_format::basic_test_module;
 
         fn setup() -> (ObjectID, String) {
@@ -335,8 +334,7 @@ mod tests {
             let response = move_utils
                 .get_normalized_move_module(package, module_name)
                 .await;
-            let error_result = response.unwrap_err();
-            let error_object: ErrorObjectOwned = error_result.into();
+            let error_object = response.unwrap_err();
 
             assert_eq!(error_object.code(), -32602);
             assert_eq!(error_object.message(), &error_string);

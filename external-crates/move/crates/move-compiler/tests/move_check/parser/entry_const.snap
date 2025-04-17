@@ -1,0 +1,12 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: legacy
+  lint: false
+---
+error[E01003]: invalid modifier
+  ┌─ tests/move_check/parser/entry_const.move:3:5
+  │
+3 │     entry const S: u64 = 0;
+  │     ^^^^^ Invalid constant declaration. 'entry' is used only on functions

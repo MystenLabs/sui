@@ -1,0 +1,38 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: 2024.alpha
+  lint: false
+---
+error[E02015]: invalid attribute
+  ┌─ tests/move_2024/expansion/invalid_deprecation_locations.move:5:7
+  │
+5 │     #[deprecated]
+  │       ^^^^^^^^^^
+  │       │
+  │       Known attribute 'deprecated' is not expected with a friend
+  │       Expected to be used with one of the following: module, constant, struct, enum, function
+
+error[E13002]: feature is deprecated in specified edition
+  ┌─ tests/move_2024/expansion/invalid_deprecation_locations.move:6:5
+  │
+6 │     friend 0x42::k;
+  │     ^^^^^^^^^^^^^^^ 'friend's are deprecated. Remove and replace 'public(friend)' with 'public(package)'
+
+error[E02015]: invalid attribute
+  ┌─ tests/move_2024/expansion/invalid_deprecation_locations.move:8:7
+  │
+8 │     #[deprecated]
+  │       ^^^^^^^^^^
+  │       │
+  │       Known attribute 'deprecated' is not expected with a use
+  │       Expected to be used with one of the following: module, constant, struct, enum, function
+
+warning[W09001]: unused alias
+  ┌─ tests/move_2024/expansion/invalid_deprecation_locations.move:9:15
+  │
+9 │     use 0x42::k;
+  │               ^ Unused 'use' of alias 'k'. Consider removing it
+  │
+  = This warning can be suppressed with '#[allow(unused_use)]' applied to the 'module' or module member ('const', 'fun', or 'struct')

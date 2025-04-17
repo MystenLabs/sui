@@ -1,0 +1,30 @@
+// Copyright (c) Mysten Labs, Inc.
+// SPDX-License-Identifier: Apache-2.0
+
+syntax = "proto3";
+
+package sui.rpc.v2beta;
+
+import "sui/rpc/v2beta/protocol_config.proto";
+import "sui/rpc/v2beta/signature.proto";
+
+message Epoch {
+  optional uint64 epoch = 1;
+
+  // The committee governing this epoch.
+  optional ValidatorCommittee committee = 2;
+
+  // Also want a way to get validator metadata for validators (eg network keys)
+  //optional ValidatorSet validator_set = 3;
+
+  // optional uint64 first_checkpoint = 4;
+  // optional uint64 last_checkpoint = 5;
+
+  // optional google.protobuf.Timestamp start = 6;
+  // optional google.protobuf.Timestamp end = 7;
+
+  // Reference gas price denominated in MIST
+  optional uint64 reference_gas_price = 8;
+
+  optional ProtocolConfig protocol_config = 9;
+}

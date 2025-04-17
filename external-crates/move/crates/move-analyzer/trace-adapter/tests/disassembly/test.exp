@@ -1,0 +1,88 @@
+current frame stack:
+  function: test (m.mvb:58)
+    scope 0 :
+  function: foo (m.mvb:18)
+    scope 0 :
+      p#0#0 : 42
+      type: u64
+
+line breakpoints
+  m.mvb
+    22
+    30
+current frame stack:
+  function: test (m.mvb:58)
+    scope 0 :
+  function: foo (m.mvb:19)
+    scope 0 :
+line breakpoints
+  m.mvb
+    22
+    30
+current frame stack:
+  function: test (m.mvb:58)
+    scope 0 :
+  function: foo (m.mvb:20)
+    scope 0 :
+line breakpoints
+  m.mvb
+    22
+    30
+current frame stack:
+  function: test (m.mvb:58)
+    scope 0 :
+  function: foo (m.mvb:22)
+    scope 0 :
+      v1#1#0 : 1764
+      type: u64
+
+line breakpoints
+  m.mvb
+    22
+    30
+current frame stack:
+  function: test (m.mvb:58)
+    scope 0 :
+  function: foo (m.mvb:22)
+    scope 0 :
+      v1#1#0 : 1764
+      type: u64
+
+  function: __inlined__ (m.mvb:23)
+    scope 0 :
+line breakpoints
+  m.mvb
+    22
+    30
+current frame stack:
+  function: test (m.mvb:58)
+    scope 0 :
+  function: foo (m.mvb:22)
+    scope 0 :
+      v1#1#0 : 1764
+      type: u64
+
+  function: __inlined__ (m.mvb:24)
+    scope 0 :
+line breakpoints
+  m.mvb
+    22
+    30
+current frame stack:
+  function: test (m.mvb:58)
+    scope 0 :
+  function: foo (m.mvb:30)
+    scope 0 :
+      %#3 : 3528
+      type: u64
+
+      v1#1#0 : 1764
+      type: u64
+
+      x#1#4 : 3528
+      type: u64
+
+line breakpoints
+  m.mvb
+    22
+    30

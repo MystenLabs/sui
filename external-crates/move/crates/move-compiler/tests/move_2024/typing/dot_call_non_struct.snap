@@ -1,0 +1,126 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: 2024.alpha
+  lint: false
+---
+error[E04010]: cannot infer type
+  ┌─ tests/move_2024/typing/dot_call_non_struct.move:6:9
+  │
+6 │     let x;
+  │         ^ Could not infer this type. Try adding an annotation
+
+error[E04010]: cannot infer type
+  ┌─ tests/move_2024/typing/dot_call_non_struct.move:8:15
+  │
+8 │     let cup = Cup { value: x };
+  │               ^^^^^^^^^^^^^^^^ Could not infer this type. Try adding an annotation
+
+error[E04023]: invalid method call
+  ┌─ tests/move_2024/typing/dot_call_non_struct.move:9:5
+  │
+9 │     0.f();
+  │     ^^^^^
+  │     │
+  │     Invalid method call
+  │     Unable to infer type for method call. Try annotating this type
+
+error[E04023]: invalid method call
+   ┌─ tests/move_2024/typing/dot_call_non_struct.move:10:5
+   │
+10 │     0u64.f();
+   │     ^^^^^^^^
+   │     │    │
+   │     │    No local 'use fun' alias was found for 'u64.f', and no function 'f' was found in the defining module 'std::u64'
+   │     Invalid method call. No known method 'f' on type 'u64'
+
+error[E04023]: invalid method call
+   ┌─ tests/move_2024/typing/dot_call_non_struct.move:11:5
+   │
+11 │     ().f();
+   │     ^^^^^^
+   │     │
+   │     Invalid method call
+   │     Method calls are only supported on single types. Got an expression of type: '()'
+
+error[E04023]: invalid method call
+   ┌─ tests/move_2024/typing/dot_call_non_struct.move:12:5
+   │
+12 │     (0, 1).f();
+   │     ^^^^^^^^^^
+   │     │
+   │     Invalid method call
+   │     Method calls are only supported on single types. Got an expression of type: '({integer}, {integer})'
+
+error[E04005]: expected a single type
+   ┌─ tests/move_2024/typing/dot_call_non_struct.move:13:5
+   │
+13 │     ().f.f();
+   │     ^^
+   │     │
+   │     Invalid dot access
+   │     Expected a single type, but found expression list type: '()'
+
+error[E04009]: expected specific type
+   ┌─ tests/move_2024/typing/dot_call_non_struct.move:13:5
+   │
+13 │     ().f.f();
+   │     ^^^^
+   │     │
+   │     Unbound field 'f'
+   │     Expected a struct type in the current module but got: '()'
+
+error[E04005]: expected a single type
+   ┌─ tests/move_2024/typing/dot_call_non_struct.move:14:5
+   │
+14 │     (0, 1).f.f();
+   │     ^^^^^^
+   │     │
+   │     Invalid dot access
+   │     Expected a single type, but found expression list type: '(u64, u64)'
+
+error[E04009]: expected specific type
+   ┌─ tests/move_2024/typing/dot_call_non_struct.move:14:5
+   │
+14 │     (0, 1).f.f();
+   │     ^^^^^^^^
+   │     │
+   │     Unbound field 'f'
+   │     Expected a struct type in the current module but got: '({integer}, {integer})'
+
+error[E04023]: invalid method call
+   ┌─ tests/move_2024/typing/dot_call_non_struct.move:15:5
+   │
+ 6 │     let x;
+   │         - Unable to infer type for method call. Try annotating this type
+   ·
+15 │     x.f();
+   │     ^^^^^ Invalid method call
+
+error[E04023]: invalid method call
+   ┌─ tests/move_2024/typing/dot_call_non_struct.move:16:5
+   │
+ 6 │     let x;
+   │         - Unable to infer type for method call. Try annotating this type
+   ·
+16 │     y.f();
+   │     ^^^^^ Invalid method call
+
+error[E04023]: invalid method call
+   ┌─ tests/move_2024/typing/dot_call_non_struct.move:17:5
+   │
+ 8 │     let cup = Cup { value: x };
+   │               ---------------- Unable to infer type for method call. Try annotating this type
+   ·
+17 │     cup.value.f();
+   │     ^^^^^^^^^^^^^ Invalid method call
+
+error[E04023]: invalid method call
+   ┌─ tests/move_2024/typing/dot_call_non_struct.move:18:5
+   │
+ 5 │ fun call<T: drop>(t: T) {
+   │                      - Method calls are not supported on type parameters. Got an expression of type: 'T'
+   ·
+18 │     t.f();
+   │     ^^^^^ Invalid method call

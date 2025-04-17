@@ -8,7 +8,8 @@
 set -e
 
 usage() {
-    >&2 echo "Usage: $0 -pkg|-pub [-h]"
+    SCRIPT_NAME=$(basename "$1")
+    >&2 echo "Usage: $SCRIPT_NAME -pkg|-pub [-h]"
     >&2 echo ""
     >&2 echo "Options:"
     >&2 echo " -pub          Publish extensions for all targets"
@@ -21,14 +22,14 @@ clean_tmp_dir() {
 }
 
 if [[ "$@" == "" ]]; then
-    usage
+    usage $0
     exit 1
 fi
 
 for cmd in "$@"
 do
     if [[ "$cmd" == "-h" ]]; then
-        usage
+        usage $0
         exit 0
     elif [[ "$cmd" == "-pkg" ]]; then
         OP="package"
@@ -37,7 +38,7 @@ do
         OP="publish"
         OPTS=""
     else
-        usage
+        usage $0
         exit 1
     fi
 done
@@ -56,11 +57,6 @@ SUPPORTED_OS[windows-x86_64]=win32-x64
 
 TMP_DIR=$( mktemp -d -t vscode-create )
 trap "clean_tmp_dir $TMP_DIR" EXIT
-
-LANG_SERVER_DIR="language-server"
-
-rm -rf $LANG_SERVER_DIR
-mkdir $LANG_SERVER_DIR
 
 for DIST_OS VSCODE_OS in "${(@kv)SUPPORTED_OS}"; do
     # Sui distribution identifier
@@ -85,14 +81,20 @@ for DIST_OS VSCODE_OS in "${(@kv)SUPPORTED_OS}"; do
 
     # copy move-analyzer binary to the appropriate location where it's picked up when bundling the
     # extension
+    LANG_SERVER_DIR="language-server"
+    rm -rf $LANG_SERVER_DIR
+    mkdir $LANG_SERVER_DIR
+
     SRC_SERVER_BIN_LOC=$TMP_DIR"/external-crates/move/target/release/"$ARCHIVE_SERVER_BIN
     DST_SERVER_BIN_LOC=$LANG_SERVER_DIR"/"$SERVER_BIN
     cp $SRC_SERVER_BIN_LOC $DST_SERVER_BIN_LOC
 
     vsce "$OP" ${OPTS//VSCODE_OS/$VSCODE_OS} --target "$VSCODE_OS"
+
+    rm -rf $LANG_SERVER_DIR
+
 done
 
-rm -rf $LANG_SERVER_DIR
 
 # build a "generic" version of the extension that does not bundle the move-analyzer binary
 vsce "$OP" ${OPTS//VSCODE_OS/generic}

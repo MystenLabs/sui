@@ -123,6 +123,7 @@ impl ObjectChecker {
                 if let Some(owner) = self.owner {
                     let object_owner = object
                         .owner
+                        .clone()
                         .unwrap_or_else(|| panic!("Object {} does not have owner", object_id));
                     assert_eq!(
                         object_owner, owner,

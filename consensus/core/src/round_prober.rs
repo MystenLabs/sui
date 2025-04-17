@@ -1,22 +1,23 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-//! RoundProber periodically checks each peer for the latest rounds they received from others.
-//! This provides insight into how effectively each authority's blocks are propagated across
-//! the network.
+//! RoundProber periodically checks each peer for the latest rounds they received and accepted
+//! from others. This provides insight into how effectively each authority's blocks are propagated
+//! and accepted across the network.
 //!
 //! Unlike inferring accepted rounds from the DAG of each block, RoundProber has the benefit that
 //! it remains active even when peers are not proposing. This makes it essential for determining
 //! when to disable optimizations that improve DAG quality but may compromise liveness.
 //!
-//! RoundProber's data source is the `highest_received_rounds` tracked by the CoreThreadDispatcher.
-//! These rounds are updated after blocks are verified but before checking for dependencies.
-//! This should make the values more indicative of how well authorities propagate blocks, and less
-//! influenced by the quality of ancestors in the proposed blocks.
+//! RoundProber's data sources include the `highest_received_rounds` & `highest_accepted_rounds` tracked
+//! by the CoreThreadDispatcher and DagState. The received rounds are updated after blocks are verified
+//! but before checking for dependencies. This should make the values more indicative of how well authorities
+//! propagate blocks, and less influenced by the quality of ancestors in the proposed blocks. The
+//! accepted rounds are updated after checking for dependencies which should indicate the quality
+//! of the proposed blocks including its ancestors.
 
 use std::{sync::Arc, time::Duration};
 
-use consensus_config::{AuthorityIndex, Committee};
 use futures::stream::{FuturesUnordered, StreamExt as _};
 use mysten_common::sync::notify_once::NotifyOnce;
 use mysten_metrics::monitored_scope;
@@ -25,24 +26,8 @@ use tokio::{task::JoinHandle, time::MissedTickBehavior};
 
 use crate::{
     context::Context, core_thread::CoreThreadDispatcher, dag_state::DagState,
-    network::NetworkClient, BlockAPI as _, Round,
+    network::NetworkClient, round_tracker::PeerRoundTracker, BlockAPI as _, Round,
 };
-
-/// A [`QuorumRound`] is a round range [low, high]. It is computed from
-/// highest received rounds of an authority reported by all authorities.
-/// The bounds represent:
-/// - the highest round lower or equal to rounds from a quorum (low)
-/// - the lowest round higher or equal to rounds from a quorum (high)
-///
-/// [`QuorumRound`] is useful because:
-/// - [low, high] range is BFT, always between the lowest and highest rounds
-///   of honest validators, with < validity threshold of malicious stake.
-/// - It provides signals about how well blocks from an authority propagates
-///   in the network. If low bound for an authority is lower than its last
-///   proposed round, the last proposed block has not propagated to a quorum.
-///   If a new block is proposed from the authority, it will not get accepted
-///   immediately by a quorum.
-pub(crate) type QuorumRound = (Round, Round);
 
 // Handle to control the RoundProber loop and read latest round gaps.
 pub(crate) struct RoundProberHandle {
@@ -65,6 +50,7 @@ impl RoundProberHandle {
 pub(crate) struct RoundProber<C: NetworkClient> {
     context: Arc<Context>,
     core_thread_dispatcher: Arc<dyn CoreThreadDispatcher>,
+    round_tracker: Arc<RwLock<PeerRoundTracker>>,
     dag_state: Arc<RwLock<DagState>>,
     network_client: Arc<C>,
     shutdown_notify: Arc<NotifyOnce>,
@@ -74,12 +60,14 @@ impl<C: NetworkClient> RoundProber<C> {
     pub(crate) fn new(
         context: Arc<Context>,
         core_thread_dispatcher: Arc<dyn CoreThreadDispatcher>,
+        round_tracker: Arc<RwLock<PeerRoundTracker>>,
         dag_state: Arc<RwLock<DagState>>,
         network_client: Arc<C>,
     ) -> Self {
         Self {
             context,
             core_thread_dispatcher,
+            round_tracker,
             dag_state,
             network_client,
             shutdown_notify: Arc::new(NotifyOnce::new()),
@@ -115,22 +103,16 @@ impl<C: NetworkClient> RoundProber<C> {
     }
 
     // Probes each peer for the latest rounds they received from others.
-    // Returns the quorum round for each authority, and the propagation delay
-    // of own blocks.
-    pub(crate) async fn probe(&self) -> (Vec<QuorumRound>, Round) {
+    // Returns the propagation delay of own blocks.
+    pub(crate) async fn probe(&self) -> Round {
         let _scope = monitored_scope("RoundProber");
 
         let node_metrics = &self.context.metrics.node_metrics;
         let request_timeout =
             Duration::from_millis(self.context.parameters.round_prober_request_timeout_ms);
         let own_index = self.context.own_index;
-        let last_proposed_round = self
-            .dag_state
-            .read()
-            .get_last_block_for_authority(own_index)
-            .round();
-
         let mut requests = FuturesUnordered::new();
+
         for (peer, _) in self.context.committee.authorities() {
             if peer == own_index {
                 continue;
@@ -148,21 +130,46 @@ impl<C: NetworkClient> RoundProber<C> {
 
         let mut highest_received_rounds =
             vec![vec![0; self.context.committee.size()]; self.context.committee.size()];
+        let mut highest_accepted_rounds =
+            vec![vec![0; self.context.committee.size()]; self.context.committee.size()];
+
+        let blocks = self
+            .dag_state
+            .read()
+            .get_last_cached_block_per_authority(Round::MAX);
+        let local_highest_accepted_rounds = blocks
+            .into_iter()
+            .map(|(block, _)| block.round())
+            .collect::<Vec<_>>();
+        let last_proposed_round = local_highest_accepted_rounds[own_index];
+
+        // For our own index, the highest received & accepted round is our last
+        // accepted round or our last proposed round.
         highest_received_rounds[own_index] = self.core_thread_dispatcher.highest_received_rounds();
+        highest_accepted_rounds[own_index] = local_highest_accepted_rounds;
         highest_received_rounds[own_index][own_index] = last_proposed_round;
+        highest_accepted_rounds[own_index][own_index] = last_proposed_round;
+
         loop {
             tokio::select! {
                 result = requests.next() => {
-                    let Some((peer, result)) = result else {
-                        break;
-                    };
+                    let Some((peer, result)) = result else { break };
+                    let peer_name = &self.context.committee.authority(peer).hostname;
                     match result {
-                        Ok(Ok(rounds)) => {
-                            if rounds.len() == self.context.committee.size() {
-                                highest_received_rounds[peer] = rounds;
+                        Ok(Ok((received, accepted))) => {
+                            if received.len() == self.context.committee.size()
+                            {
+                                highest_received_rounds[peer] = received;
                             } else {
-                                node_metrics.round_prober_request_errors.inc();
-                                tracing::warn!("Received invalid number of rounds from peer {}", peer);
+                                node_metrics.round_prober_request_errors.with_label_values(&["invalid_received_rounds"]).inc();
+                                tracing::warn!("Received invalid number of received rounds from peer {}", peer_name);
+                            }
+
+                            if accepted.len() == self.context.committee.size() {
+                                highest_accepted_rounds[peer] = accepted;
+                            } else {
+                                node_metrics.round_prober_request_errors.with_label_values(&["invalid_accepted_rounds"]).inc();
+                                tracing::warn!("Received invalid number of accepted rounds from peer {}", peer_name);
                             }
                         },
                         // When a request fails, the highest received rounds from that authority will be 0
@@ -176,116 +183,33 @@ impl<C: NetworkClient> RoundProber<C> {
                         // (peer A cannot propagate its blocks well). It can be difficult to distinguish between
                         // own probing failures and actual propagation issues.
                         Ok(Err(err)) => {
-                            node_metrics.round_prober_request_errors.inc();
-                            tracing::warn!("Failed to get latest rounds from peer {}: {:?}", peer, err);
+                            node_metrics.round_prober_request_errors.with_label_values(&["failed_fetch"]).inc();
+                            tracing::debug!("Failed to get latest rounds from peer {}: {:?}", peer_name, err);
                         },
                         Err(_) => {
-                            node_metrics.round_prober_request_errors.inc();
-                            tracing::warn!("Timeout while getting latest rounds from peer {}", peer);
+                            node_metrics.round_prober_request_errors.with_label_values(&["timeout"]).inc();
+                            tracing::debug!("Timeout while getting latest rounds from peer {}", peer_name);
                         },
                     }
                 }
-                _ = self.shutdown_notify.wait() => {
-                    break;
-                }
+                _ = self.shutdown_notify.wait() => break,
             }
         }
 
-        let quorum_rounds: Vec<_> = self
-            .context
-            .committee
-            .authorities()
-            .map(|(peer, _)| {
-                compute_quorum_round(&self.context.committee, peer, &highest_received_rounds)
-            })
-            .collect();
-        for ((low, high), (_, authority)) in quorum_rounds
-            .iter()
-            .zip(self.context.committee.authorities())
-        {
-            node_metrics
-                .round_prober_quorum_round_gaps
-                .with_label_values(&[&authority.hostname])
-                .set((high - low) as i64);
-            node_metrics
-                .round_prober_low_quorum_round
-                .with_label_values(&[&authority.hostname])
-                .set(*low as i64);
-            // The gap can be negative if this validator is lagging behind the network.
-            node_metrics
-                .round_prober_current_round_gaps
-                .with_label_values(&[&authority.hostname])
-                .set(last_proposed_round as i64 - *low as i64);
-        }
-        // TODO: consider using own quorum round gap to control proposing in addition to
-        // propagation delay. For now they seem to be about the same.
+        self.round_tracker
+            .write()
+            .update_from_probe(highest_accepted_rounds, highest_received_rounds);
+        let propagation_delay = self
+            .round_tracker
+            .read()
+            .calculate_propagation_delay(last_proposed_round);
 
-        // It is possible more blocks arrive at a quorum of peers before the get_latest_rounds
-        // requests arrive.
-        // Using the lower bound to increase sensitivity about block propagation issues
-        // that can reduce round rate.
-        // Because of the nature of TCP and block streaming, propagation delay is expected to be
-        // 0 in most cases, even when the actual latency of broadcasting blocks is high.
-        let propagation_delay = last_proposed_round.saturating_sub(quorum_rounds[own_index].0);
-        node_metrics
-            .round_prober_propagation_delays
-            .observe(propagation_delay as f64);
-        node_metrics
-            .round_prober_last_propagation_delay
-            .set(propagation_delay as i64);
-        if let Err(e) = self
+        let _ = self
             .core_thread_dispatcher
-            .set_propagation_delay_and_quorum_rounds(propagation_delay, quorum_rounds.clone())
-        {
-            tracing::warn!(
-                "Failed to set propagation delay and quorum rounds {quorum_rounds:?} on Core: {:?}",
-                e
-            );
-        }
+            .set_propagation_delay(propagation_delay);
 
-        (quorum_rounds, propagation_delay)
+        propagation_delay
     }
-}
-
-/// For the peer specified with target_index, compute and return its [`QuorumRound`].
-fn compute_quorum_round(
-    committee: &Committee,
-    target_index: AuthorityIndex,
-    highest_received_rounds: &[Vec<Round>],
-) -> QuorumRound {
-    let mut rounds_with_stake = highest_received_rounds
-        .iter()
-        .zip(committee.authorities())
-        .map(|(rounds, (_, authority))| (rounds[target_index], authority.stake))
-        .collect::<Vec<_>>();
-    rounds_with_stake.sort();
-
-    // Forward iteration and stopping at validity threshold would produce the same result currently,
-    // with fault tolerance of f/3f+1 votes. But it is not semantically correct, and will provide an
-    // incorrect value when fault tolerance and validity threshold are different.
-    let mut total_stake = 0;
-    let mut low = 0;
-    for (round, stake) in rounds_with_stake.iter().rev() {
-        let reached_quorum_before = total_stake >= committee.quorum_threshold();
-        total_stake += stake;
-        if !reached_quorum_before && total_stake >= committee.quorum_threshold() {
-            low = *round;
-            break;
-        }
-    }
-
-    let mut total_stake = 0;
-    let mut high = 0;
-    for (round, stake) in rounds_with_stake.iter() {
-        let reached_quorum_before = total_stake >= committee.quorum_threshold();
-        total_stake += stake;
-        if !reached_quorum_before && total_stake >= committee.quorum_threshold() {
-            high = *round;
-            break;
-        }
-    }
-
-    (low, high)
 }
 
 #[cfg(test)]
@@ -295,43 +219,31 @@ mod test {
     use async_trait::async_trait;
     use bytes::Bytes;
     use consensus_config::AuthorityIndex;
-    use parking_lot::{Mutex, RwLock};
+    use parking_lot::RwLock;
 
-    use super::QuorumRound;
     use crate::{
         block::BlockRef,
-        commit::CommitRange,
+        commit::{CertifiedCommits, CommitRange},
         context::Context,
         core_thread::{CoreError, CoreThreadDispatcher},
         dag_state::DagState,
         error::{ConsensusError, ConsensusResult},
         network::{BlockStream, NetworkClient},
-        round_prober::{compute_quorum_round, RoundProber},
+        round_prober::RoundProber,
+        round_tracker::PeerRoundTracker,
         storage::mem_store::MemStore,
         Round, TestBlock, VerifiedBlock,
     };
 
     struct FakeThreadDispatcher {
         highest_received_rounds: Vec<Round>,
-        propagation_delay: Mutex<Round>,
-        quorum_rounds: Mutex<Vec<QuorumRound>>,
     }
 
     impl FakeThreadDispatcher {
         fn new(highest_received_rounds: Vec<Round>) -> Self {
             Self {
                 highest_received_rounds,
-                propagation_delay: Mutex::new(0),
-                quorum_rounds: Mutex::new(Vec::new()),
             }
-        }
-
-        fn propagation_delay(&self) -> Round {
-            *self.propagation_delay.lock()
-        }
-
-        fn quorum_rounds(&self) -> Vec<QuorumRound> {
-            self.quorum_rounds.lock().clone()
         }
     }
 
@@ -340,6 +252,20 @@ mod test {
         async fn add_blocks(
             &self,
             _blocks: Vec<VerifiedBlock>,
+        ) -> Result<BTreeSet<BlockRef>, CoreError> {
+            unimplemented!()
+        }
+
+        async fn check_block_refs(
+            &self,
+            _block_refs: Vec<BlockRef>,
+        ) -> Result<BTreeSet<BlockRef>, CoreError> {
+            unimplemented!()
+        }
+
+        async fn add_certified_commits(
+            &self,
+            _commits: CertifiedCommits,
         ) -> Result<BTreeSet<BlockRef>, CoreError> {
             unimplemented!()
         }
@@ -356,15 +282,7 @@ mod test {
             unimplemented!()
         }
 
-        fn set_propagation_delay_and_quorum_rounds(
-            &self,
-            delay: Round,
-            quorum_rounds: Vec<QuorumRound>,
-        ) -> Result<(), CoreError> {
-            let mut quorum_round_per_authority = self.quorum_rounds.lock();
-            *quorum_round_per_authority = quorum_rounds;
-            let mut propagation_delay = self.propagation_delay.lock();
-            *propagation_delay = delay;
+        fn set_propagation_delay(&self, _propagation_delay: Round) -> Result<(), CoreError> {
             Ok(())
         }
 
@@ -379,12 +297,17 @@ mod test {
 
     struct FakeNetworkClient {
         highest_received_rounds: Vec<Vec<Round>>,
+        highest_accepted_rounds: Vec<Vec<Round>>,
     }
 
     impl FakeNetworkClient {
-        fn new(highest_received_rounds: Vec<Vec<Round>>) -> Self {
+        fn new(
+            highest_received_rounds: Vec<Vec<Round>>,
+            highest_accepted_rounds: Vec<Vec<Round>>,
+        ) -> Self {
             Self {
                 highest_received_rounds,
+                highest_accepted_rounds,
             }
         }
     }
@@ -444,18 +367,20 @@ mod test {
             &self,
             peer: AuthorityIndex,
             _timeout: Duration,
-        ) -> ConsensusResult<Vec<Round>> {
-            let rounds = self.highest_received_rounds[peer].clone();
-            if rounds.is_empty() {
+        ) -> ConsensusResult<(Vec<Round>, Vec<Round>)> {
+            let received_rounds = self.highest_received_rounds[peer].clone();
+            let accepted_rounds = self.highest_accepted_rounds[peer].clone();
+            if received_rounds.is_empty() && accepted_rounds.is_empty() {
                 Err(ConsensusError::NetworkRequestTimeout("test".to_string()))
             } else {
-                Ok(rounds)
+                Ok((received_rounds, accepted_rounds))
             }
         }
     }
 
     #[tokio::test]
     async fn test_round_prober() {
+        telemetry_subscribers::init_for_testing();
         const NUM_AUTHORITIES: usize = 7;
         let context = Arc::new(Context::new_for_test(NUM_AUTHORITIES).0);
         let core_thread_dispatcher = Arc::new(FakeThreadDispatcher::new(vec![
@@ -464,25 +389,45 @@ mod test {
         let store = Arc::new(MemStore::new());
         let dag_state = Arc::new(RwLock::new(DagState::new(context.clone(), store)));
         // Have some peers return error or incorrect number of rounds.
-        let network_client = Arc::new(FakeNetworkClient::new(vec![
-            vec![],
-            vec![109, 121, 131, 0, 151, 161, 171],
-            vec![101, 0, 103, 104, 105, 166, 107],
-            vec![],
-            vec![100, 102, 133, 0, 155, 106, 177],
-            vec![105, 115, 103, 0, 125, 126, 127],
-            vec![10, 20, 30, 40, 50, 60],
-        ]));
+        let network_client = Arc::new(FakeNetworkClient::new(
+            vec![
+                vec![],
+                vec![109, 121, 131, 0, 151, 161, 171],
+                vec![101, 0, 103, 104, 105, 166, 107],
+                vec![],
+                vec![100, 102, 133, 0, 155, 106, 177],
+                vec![105, 115, 103, 0, 125, 126, 127],
+                vec![10, 20, 30, 40, 50, 60],
+            ], // highest_received_rounds
+            vec![
+                vec![],
+                vec![0, 121, 131, 0, 151, 161, 171],
+                vec![1, 0, 103, 104, 105, 166, 107],
+                vec![],
+                vec![0, 102, 133, 0, 155, 106, 177],
+                vec![1, 115, 103, 0, 125, 126, 127],
+                vec![1, 20, 30, 40, 50, 60],
+            ], // highest_accepted_rounds
+        ));
+
+        let round_tracker = Arc::new(RwLock::new(PeerRoundTracker::new(context.clone())));
         let prober = RoundProber::new(
             context.clone(),
             core_thread_dispatcher.clone(),
+            round_tracker.clone(),
             dag_state.clone(),
             network_client.clone(),
         );
 
-        // Fake last proposed round to be 110.
-        let block = VerifiedBlock::new_for_test(TestBlock::new(110, 0).build());
-        dag_state.write().accept_block(block);
+        // Create test blocks for each authority with incrementing rounds starting at 110
+        let blocks = (0..NUM_AUTHORITIES)
+            .map(|authority| {
+                let round = 110 + (authority as u32 * 10);
+                VerifiedBlock::new_for_test(TestBlock::new(round, authority as u32).build())
+            })
+            .collect::<Vec<_>>();
+
+        dag_state.write().accept_blocks(blocks);
 
         // Compute quorum rounds and propagation delay based on last proposed round = 110,
         // and highest received rounds:
@@ -494,76 +439,8 @@ mod test {
         // 105, 115, 103, 0,   125, 126, 127,
         // 0,   0,   0,   0,   0,   0,   0,
 
-        let (quorum_rounds, propagation_delay) = prober.probe().await;
+        let propagation_delay = prober.probe().await;
 
-        assert_eq!(
-            quorum_rounds,
-            vec![
-                (100, 105),
-                (0, 115),
-                (103, 130),
-                (0, 0),
-                (105, 150),
-                (106, 160),
-                (107, 170)
-            ]
-        );
-
-        assert_eq!(
-            core_thread_dispatcher.quorum_rounds(),
-            vec![
-                (100, 105),
-                (0, 115),
-                (103, 130),
-                (0, 0),
-                (105, 150),
-                (106, 160),
-                (107, 170)
-            ]
-        );
-        // 110 - 100 = 10
         assert_eq!(propagation_delay, 10);
-        assert_eq!(core_thread_dispatcher.propagation_delay(), 10);
-    }
-
-    #[tokio::test]
-    async fn test_compute_quorum_round() {
-        let (context, _) = Context::new_for_test(4);
-
-        // Observe latest rounds from peers.
-        let highest_received_rounds = vec![
-            vec![10, 11, 12, 13],
-            vec![5, 2, 7, 4],
-            vec![0, 0, 0, 0],
-            vec![3, 4, 5, 6],
-        ];
-
-        let round = compute_quorum_round(
-            &context.committee,
-            AuthorityIndex::new_for_test(0),
-            &highest_received_rounds,
-        );
-        assert_eq!(round, (3, 5));
-
-        let round = compute_quorum_round(
-            &context.committee,
-            AuthorityIndex::new_for_test(1),
-            &highest_received_rounds,
-        );
-        assert_eq!(round, (2, 4));
-
-        let round = compute_quorum_round(
-            &context.committee,
-            AuthorityIndex::new_for_test(2),
-            &highest_received_rounds,
-        );
-        assert_eq!(round, (5, 7));
-
-        let round = compute_quorum_round(
-            &context.committee,
-            AuthorityIndex::new_for_test(3),
-            &highest_received_rounds,
-        );
-        assert_eq!(round, (4, 6));
     }
 }

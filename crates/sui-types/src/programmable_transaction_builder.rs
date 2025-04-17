@@ -10,7 +10,7 @@ use move_core_types::{ident_str, identifier::Identifier, language_storage::TypeT
 use serde::Serialize;
 
 use crate::{
-    base_types::{ObjectID, ObjectRef, SuiAddress},
+    base_types::{FullObjectID, FullObjectRef, ObjectID, ObjectRef, SuiAddress},
     move_package::PACKAGE_MODULE_NAME,
     transaction::{Argument, CallArg, Command, ObjectArg, ProgrammableTransaction},
     SUI_FRAMEWORK_PACKAGE_ID,
@@ -232,6 +232,28 @@ impl ProgrammableTransactionBuilder {
         Ok(())
     }
 
+    // TODO: Merge with `transfer_object` above and update existing callers.
+    pub fn transfer_object_full(
+        &mut self,
+        recipient: SuiAddress,
+        full_object_ref: FullObjectRef,
+    ) -> anyhow::Result<()> {
+        let rec_arg = self.pure(recipient).unwrap();
+        let obj_arg = self.obj(match full_object_ref.0 {
+            FullObjectID::Fastpath(_) => {
+                ObjectArg::ImmOrOwnedObject(full_object_ref.as_object_ref())
+            }
+            FullObjectID::Consensus((id, initial_shared_version)) => ObjectArg::SharedObject {
+                id,
+                initial_shared_version,
+                mutable: true,
+            },
+        });
+        self.commands
+            .push(Command::TransferObjects(vec![obj_arg?], rec_arg));
+        Ok(())
+    }
+
     pub fn transfer_sui(&mut self, recipient: SuiAddress, amount: Option<u64>) {
         let rec_arg = self.pure(recipient).unwrap();
         let coin_arg = if let Some(amount) = amount {
@@ -255,6 +277,24 @@ impl ProgrammableTransactionBuilder {
         amounts: Vec<u64>,
     ) -> anyhow::Result<()> {
         self.pay_impl(recipients, amounts, Argument::GasCoin)
+    }
+
+    pub fn split_coin(&mut self, recipient: SuiAddress, coin: ObjectRef, amounts: Vec<u64>) {
+        let coin_arg = self.obj(ObjectArg::ImmOrOwnedObject(coin)).unwrap();
+        let amounts_len = amounts.len();
+        let amt_args = amounts.into_iter().map(|a| self.pure(a).unwrap()).collect();
+        let result = self.command(Command::SplitCoins(coin_arg, amt_args));
+        let Argument::Result(result) = result else {
+            panic!("self.command should always give a Argument::Result");
+        };
+
+        let recipient = self.pure(recipient).unwrap();
+        self.command(Command::TransferObjects(
+            (0..amounts_len)
+                .map(|i| Argument::NestedResult(result, i as u16))
+                .collect(),
+            recipient,
+        ));
     }
 
     /// Will fail to generate if recipients and amounts do not have the same lengths.

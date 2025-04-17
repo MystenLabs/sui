@@ -155,7 +155,7 @@ impl<'a, 'b> Context<'a, 'b> {
     }
 }
 
-impl<'a> TransferFunctions for LocalsSafety<'a> {
+impl TransferFunctions for LocalsSafety<'_> {
     type State = LocalStates;
 
     fn execute(
@@ -171,7 +171,7 @@ impl<'a> TransferFunctions for LocalsSafety<'a> {
     }
 }
 
-impl<'a> AbstractInterpreter for LocalsSafety<'a> {}
+impl AbstractInterpreter for LocalsSafety<'_> {}
 
 pub fn verify(
     context: &super::CFGContext,

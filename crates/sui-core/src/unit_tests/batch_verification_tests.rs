@@ -145,6 +145,7 @@ async fn test_async_verifier() {
         ZkLoginEnv::Test,
         true,
         true,
+        true,
         Some(30),
     ));
 

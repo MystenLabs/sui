@@ -17,47 +17,23 @@ Following are the endpoints that the `Pool` exposes for flash loans.
 
 Borrow base assets from the `Pool`. The function returns a hot potato, forcing the borrower to return the assets within the same transaction.
 
-```move
-public fun borrow_flashloan_base<BaseAsset, QuoteAsset>(
-    self: &mut Pool<BaseAsset, QuoteAsset>,
-    base_amount: u64,
-    ctx: &mut TxContext,
-): (Coin<BaseAsset>, FlashLoan)
-```
-​
+{@inject: github:MystenLabs/deepbookv3/packages/deepbook/sources/pool.move#fun=borrow_flashloan_base noComments}
+
 ### Borrow flash loan quote
 
 Borrow quote assets from the `Pool`. The function returns a hot potato, forcing the borrower to return the assets within the same transaction.
 
-```move
-public fun borrow_flashloan_quote<BaseAsset, QuoteAsset>(
-    self: &mut Pool<BaseAsset, QuoteAsset>,
-    quote_amount: u64,
-    ctx: &mut TxContext,
-): (Coin<QuoteAsset>, FlashLoan)
-```
-​
+{@inject: github:MystenLabs/deepbookv3/packages/deepbook/sources/pool.move#fun=borrow_flashloan_quote noComments}
+
 ### Retrieve flash loan base
 
 Return the flash loaned base assets to the `Pool`. `FlashLoan` object is unwrapped only if the assets are returned, otherwise the transaction fails.
 
-```move
-public fun return_flashloan_base<BaseAsset, QuoteAsset>(
-    self: &mut Pool<BaseAsset, QuoteAsset>,
-    coin: Coin<BaseAsset>,
-    flash_loan: FlashLoan,
-)
-```
-​
+{@inject: github:MystenLabs/deepbookv3/packages/deepbook/sources/pool.move#fun=return_flashloan_base noComments}
+
 ### Retrieve flash loan quote
 
 Return the flash loaned quote assets to the `Pool`. `FlashLoan` object is unwrapped only if the assets are returned,
 otherwise the transaction fails.
 
-```move
-public fun return_flashloan_quote<BaseAsset, QuoteAsset>(
-    self: &mut Pool<BaseAsset, QuoteAsset>,
-    coin: Coin<QuoteAsset>,
-    flash_loan: FlashLoan,
-)
-```
+{@inject: github:MystenLabs/deepbookv3/packages/deepbook/sources/pool.move#fun=return_flashloan_quote noComments}

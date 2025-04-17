@@ -8,7 +8,8 @@ use std::{num::NonZeroUsize, path::Path, sync::Arc};
 use rand::rngs::OsRng;
 use sui_config::genesis::{TokenAllocation, TokenDistributionScheduleBuilder};
 use sui_config::node::AuthorityOverloadConfig;
-use sui_macros::nondeterministic;
+use sui_config::ExecutionCacheConfig;
+use sui_protocol_config::Chain;
 use sui_types::base_types::{AuthorityName, SuiAddress};
 use sui_types::committee::{Committee, ProtocolVersion};
 use sui_types::crypto::{get_key_pair_from_rng, AccountKeyPair, KeypairTraits, PublicKey};
@@ -63,6 +64,7 @@ pub struct ConfigBuilder<R = OsRng> {
     rng: Option<R>,
     config_directory: PathBuf,
     supported_protocol_versions_config: Option<ProtocolVersionsConfig>,
+    chain_override: Option<Chain>,
     committee: CommitteeConfig,
     genesis_config: Option<GenesisConfig>,
     reference_gas_price: Option<u64>,
@@ -70,6 +72,7 @@ pub struct ConfigBuilder<R = OsRng> {
     jwk_fetch_interval: Option<Duration>,
     num_unpruned_validators: Option<usize>,
     authority_overload_config: Option<AuthorityOverloadConfig>,
+    execution_cache_config: Option<ExecutionCacheConfig>,
     data_ingestion_dir: Option<PathBuf>,
     policy_config: Option<PolicyConfig>,
     firewall_config: Option<RemoteFirewallConfig>,
@@ -84,6 +87,7 @@ impl ConfigBuilder {
             rng: Some(OsRng),
             config_directory: config_directory.as_ref().into(),
             supported_protocol_versions_config: None,
+            chain_override: None,
             // FIXME: A network with only 1 validator does not have liveness.
             // We need to change this. There are some tests that depend on it though.
             committee: CommitteeConfig::Size(NonZeroUsize::new(1).unwrap()),
@@ -93,6 +97,7 @@ impl ConfigBuilder {
             jwk_fetch_interval: None,
             num_unpruned_validators: None,
             authority_overload_config: None,
+            execution_cache_config: None,
             data_ingestion_dir: None,
             policy_config: None,
             firewall_config: None,
@@ -103,7 +108,7 @@ impl ConfigBuilder {
     }
 
     pub fn new_with_temp_dir() -> Self {
-        Self::new(nondeterministic!(tempfile::tempdir().unwrap()).into_path())
+        Self::new(mysten_common::tempdir().unwrap().into_path())
     }
 }
 
@@ -144,6 +149,12 @@ impl<R> ConfigBuilder<R> {
     pub fn with_genesis_config(mut self, genesis_config: GenesisConfig) -> Self {
         assert!(self.genesis_config.is_none(), "Genesis config already set");
         self.genesis_config = Some(genesis_config);
+        self
+    }
+
+    pub fn with_chain_override(mut self, chain: Chain) -> Self {
+        assert!(self.chain_override.is_none(), "Chain override already set");
+        self.chain_override = Some(chain);
         self
     }
 
@@ -244,6 +255,11 @@ impl<R> ConfigBuilder<R> {
         self
     }
 
+    pub fn with_execution_cache_config(mut self, c: ExecutionCacheConfig) -> Self {
+        self.execution_cache_config = Some(c);
+        self
+    }
+
     pub fn with_policy_config(mut self, config: Option<PolicyConfig>) -> Self {
         self.policy_config = config;
         self
@@ -274,11 +290,13 @@ impl<R> ConfigBuilder<R> {
             supported_protocol_versions_config: self.supported_protocol_versions_config,
             committee: self.committee,
             genesis_config: self.genesis_config,
+            chain_override: self.chain_override,
             reference_gas_price: self.reference_gas_price,
             additional_objects: self.additional_objects,
             num_unpruned_validators: self.num_unpruned_validators,
             jwk_fetch_interval: self.jwk_fetch_interval,
             authority_overload_config: self.authority_overload_config,
+            execution_cache_config: self.execution_cache_config,
             data_ingestion_dir: self.data_ingestion_dir,
             policy_config: self.policy_config,
             firewall_config: self.firewall_config,
@@ -429,6 +447,10 @@ impl<R: rand::RngCore + rand::CryptoRng> ConfigBuilder<R> {
                     .with_policy_config(self.policy_config.clone())
                     .with_firewall_config(self.firewall_config.clone());
 
+                if let Some(chain) = self.chain_override {
+                    builder = builder.with_chain_override(chain);
+                }
+
                 if let Some(max_submit_position) = self.max_submit_position {
                     builder = builder.with_max_submit_position(max_submit_position);
                 }
@@ -447,6 +469,10 @@ impl<R: rand::RngCore + rand::CryptoRng> ConfigBuilder<R> {
                 if let Some(authority_overload_config) = &self.authority_overload_config {
                     builder =
                         builder.with_authority_overload_config(authority_overload_config.clone());
+                }
+
+                if let Some(execution_cache_config) = &self.execution_cache_config {
+                    builder = builder.with_execution_cache_config(execution_cache_config.clone());
                 }
 
                 if let Some(path) = &self.data_ingestion_dir {
@@ -586,10 +612,11 @@ mod test {
         let certificate_deny_set = HashSet::new();
         let epoch = EpochData::new_test();
         let transaction_data = &genesis_transaction.data().intent_message().value;
-        let (kind, signer, _) = transaction_data.execution_parts();
+        let (kind, signer, mut gas_data) = transaction_data.execution_parts();
+        gas_data.payment = vec![];
         let input_objects = CheckedInputObjects::new_for_genesis(vec![]);
 
-        let (_inner_temp_store, _, effects, _execution_error) = executor
+        let (_inner_temp_store, _, effects, _timings, _execution_error) = executor
             .execute_transaction_to_effects(
                 &InMemoryStorage::new(Vec::new()),
                 &protocol_config,
@@ -599,11 +626,12 @@ mod test {
                 &epoch.epoch_id(),
                 epoch.epoch_start_timestamp(),
                 input_objects,
-                vec![],
+                gas_data,
                 SuiGasStatus::new_unmetered(),
                 kind,
                 signer,
                 genesis_digest,
+                &mut None,
             );
 
         assert_eq!(&effects, genesis.effects());

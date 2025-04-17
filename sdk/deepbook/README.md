@@ -1,11 +1,1 @@
-# Deepbook TypeScript SDK
-
-```
-pnpm prepare:e2e
-pnpm turbo build
-pnpm test:e2e to run the unit tests.
-```
-
-## Working with Devnet
-
-##
+`@mysten/deepbook` has moved to https://github.com/MystenLabs/ts-sdks/tree/main/packages/deepbook

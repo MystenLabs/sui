@@ -1,0 +1,71 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: 2024.alpha
+  lint: false
+---
+error[E02019]: invalid 'syntax' method type
+   ┌─ tests/move_2024/naming/index_syntax_methods_return_mismatch.move:21:14
+   │
+21 │     #[syntax(index)]
+   │              ^^^^^ Invalid syntax annotation
+22 │     public fun borrow_t(s: &S, i: u64): &mut u64 {
+   │                            --           -------- This syntax method must return an immutable reference to match its subject type
+   │                            │             
+   │                            Immutable subject type defined here
+
+error[E04006]: invalid subtype
+   ┌─ tests/move_2024/naming/index_syntax_methods_return_mismatch.move:23:9
+   │
+ 7 │     native public fun borrow<Element>(v: &vector<Element>, i: u64): &Element;
+   │                                                                     -------- Given: '&u64'
+   ·
+22 │     public fun borrow_t(s: &S, i: u64): &mut u64 {
+   │                                         -------- Expected: '&mut u64'
+23 │         vector::borrow(&s.t, i)
+   │         ^^^^^^^^^^^^^^^^^^^^^^^ Invalid return expression
+
+error[E02019]: invalid 'syntax' method type
+   ┌─ tests/move_2024/naming/index_syntax_methods_return_mismatch.move:44:14
+   │
+44 │     #[syntax(index)]
+   │              ^^^^^ Invalid syntax annotation
+45 │     public fun borrow_t_mut(s: &mut S, i: u64): &u64 {
+   │                                ------           ---- This syntax method must return a mutable reference to match its subject type
+   │                                │                 
+   │                                Mutable subject type defined here
+
+error[E04034]: 'syntax' method types differ
+   ┌─ tests/move_2024/naming/index_syntax_methods_return_mismatch.move:57:41
+   │
+57 │     public fun borrow_t(s: &S, i: u64): &u64 {
+   │                                         ^^^^ This index function returns type '&u64'
+   ·
+62 │     public fun borrow_q_mut(s: &mut S, i: u64): &mut u32 {
+   │                                                 --------
+   │                                                 │
+   │                                                 Expected this mutable index function to return type '&mut u64'
+   │                                                 It returns type '&mut u32'
+   │
+   = These functions must return the same type, differing only by mutability
+
+error[E02019]: invalid 'syntax' method type
+   ┌─ tests/move_2024/naming/index_syntax_methods_return_mismatch.move:78:14
+   │
+78 │     #[syntax(index)]
+   │              ^^^^^ Invalid syntax annotation. This syntax method must return a mutable reference
+79 │     public fun borrow_q_mut(s: &mut S, i: u64): u64 {
+   │                                ------           --- This is not a mutable reference
+   │                                │                 
+   │                                Mutable subject type defined here
+
+error[E02019]: invalid 'syntax' method type
+   ┌─ tests/move_2024/naming/index_syntax_methods_return_mismatch.move:91:14
+   │
+91 │     #[syntax(index)]
+   │              ^^^^^ Invalid syntax annotation. This syntax method must return an immutable reference
+92 │     public fun borrow_t(s: &S, i: u64): u64 {
+   │                            --           --- This is not an immutable reference
+   │                            │             
+   │                            Immutable subject type defined here

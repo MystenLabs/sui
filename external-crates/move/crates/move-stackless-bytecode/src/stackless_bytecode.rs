@@ -5,7 +5,7 @@
 use crate::{
     ast::{Exp, ExpData, MemoryLabel, TempIndex, TraceKind},
     exp_rewriter::{ExpRewriter, ExpRewriterFunctions, RewriteTarget},
-    function_target::FunctionTarget
+    function_target::FunctionTarget,
 };
 use ethnum::U256;
 use itertools::Itertools;
@@ -285,6 +285,7 @@ impl Operation {
 #[derive(Debug, Clone, Eq, Ord, PartialEq, PartialOrd)]
 pub enum BorrowNode {
     GlobalRoot(QualifiedInstId<DatatypeId>),
+    SpecGlobalRoot(Vec<Type>),
     LocalRoot(TempIndex),
     Reference(TempIndex),
     // Used in summaries to represent a returned mutation at return index. This does not
@@ -304,6 +305,7 @@ impl BorrowNode {
     pub fn instantiate(&self, params: &[Type]) -> Self {
         match self {
             Self::GlobalRoot(qid) => Self::GlobalRoot(qid.instantiate_ref(params)),
+            Self::SpecGlobalRoot(tys) => Self::SpecGlobalRoot(Type::instantiate_slice(tys, params)),
             _ => self.clone(),
         }
     }
@@ -848,7 +850,7 @@ pub struct BytecodeDisplay<'env> {
     label_offsets: &'env BTreeMap<Label, CodeOffset>,
 }
 
-impl<'env> fmt::Display for BytecodeDisplay<'env> {
+impl fmt::Display for BytecodeDisplay<'_> {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         use Bytecode::*;
         match &self.bytecode {
@@ -935,7 +937,7 @@ impl<'env> fmt::Display for BytecodeDisplay<'env> {
     }
 }
 
-impl<'env> BytecodeDisplay<'env> {
+impl BytecodeDisplay<'_> {
     fn fmt_locals(
         &self,
         f: &mut Formatter<'_>,
@@ -988,7 +990,7 @@ pub struct OperationDisplay<'env> {
     func_target: &'env FunctionTarget<'env>,
 }
 
-impl<'env> fmt::Display for OperationDisplay<'env> {
+impl fmt::Display for OperationDisplay<'_> {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         use Operation::*;
         match self.oper {
@@ -1238,7 +1240,7 @@ impl<'env> fmt::Display for OperationDisplay<'env> {
     }
 }
 
-impl<'env> OperationDisplay<'env> {
+impl OperationDisplay<'_> {
     fn fmt_type_args(&self, f: &mut Formatter<'_>, targs: &[Type]) -> fmt::Result {
         if !targs.is_empty() {
             let tctx = TypeDisplayContext::WithEnv {
@@ -1312,7 +1314,7 @@ impl BorrowNode {
     }
 }
 
-impl<'env> fmt::Display for BorrowNodeDisplay<'env> {
+impl fmt::Display for BorrowNodeDisplay<'_> {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         use BorrowNode::*;
         match self.node {
@@ -1323,6 +1325,14 @@ impl<'env> fmt::Display for BorrowNodeDisplay<'env> {
                     type_param_names: None,
                 };
                 write!(f, "{}", ty.display(&tctx))?;
+            }
+            SpecGlobalRoot(tys) => {
+                write!(
+                    f,
+                    "GlobalSpecRoot({}, {})",
+                    tys[0].display(&self.func_target.global_env().get_type_display_ctx()),
+                    tys[1].display(&self.func_target.global_env().get_type_display_ctx()),
+                )?;
             }
             LocalRoot(idx) => {
                 write!(f, "LocalRoot($t{})", idx)?;
@@ -1348,7 +1358,7 @@ pub struct BorrowEdgeDisplay<'a> {
     edge: &'a BorrowEdge,
 }
 
-impl<'a> std::fmt::Display for BorrowEdgeDisplay<'a> {
+impl std::fmt::Display for BorrowEdgeDisplay<'_> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         use BorrowEdge::*;
         let tctx = TypeDisplayContext::WithEnv {

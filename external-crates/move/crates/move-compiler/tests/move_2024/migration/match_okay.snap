@@ -1,0 +1,52 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: 2024.alpha
+  lint: false
+---
+warning[W09002]: unused variable
+  ┌─ tests/move_2024/migration/match_okay.move:3:12
+  │
+3 │     fun t1(t: u64, match: u64): bool {
+  │            ^ Unused parameter 't'. Consider removing or prefixing with an underscore: '_t'
+  │
+  = This warning can be suppressed with '#[allow(unused_variable)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+error[E01002]: unexpected token
+  ┌─ tests/move_2024/migration/match_okay.move:3:20
+  │
+3 │     fun t1(t: u64, match: u64): bool {
+  │                    ^ Unexpected 'match'. Expected a function parameter
+
+error[E01002]: unexpected token
+  ┌─ tests/move_2024/migration/match_okay.move:5:5
+  │
+5 │     }
+  │     ^
+  │     │
+  │     Unexpected '}'
+  │     Expected '('
+
+warning[W09002]: unused variable
+  ┌─ tests/move_2024/migration/match_okay.move:7:12
+  │
+7 │     fun t2(t: u64, match: u64): bool {
+  │            ^ Unused parameter 't'. Consider removing or prefixing with an underscore: '_t'
+  │
+  = This warning can be suppressed with '#[allow(unused_variable)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+error[E01002]: unexpected token
+  ┌─ tests/move_2024/migration/match_okay.move:7:20
+  │
+7 │     fun t2(t: u64, match: u64): bool {
+  │                    ^ Unexpected 'match'. Expected a function parameter
+
+error[E01002]: unexpected token
+  ┌─ tests/move_2024/migration/match_okay.move:8:23
+  │
+8 │         if (t == match) { true } else { false }
+  │                       ^
+  │                       │
+  │                       Unexpected ')'
+  │                       Expected '('

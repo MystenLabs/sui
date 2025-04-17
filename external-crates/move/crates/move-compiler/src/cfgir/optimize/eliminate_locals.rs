@@ -4,6 +4,7 @@
 
 use crate::{
     cfgir::{cfg::MutForwardCFG, remove_no_ops},
+    diagnostics::DiagnosticReporter,
     expansion::ast::Mutability,
     hlir::ast::{FunctionSignature, SingleType, Value, Var},
     parser,
@@ -13,6 +14,7 @@ use std::collections::BTreeSet;
 
 /// returns true if anything changed
 pub fn optimize(
+    _reporter: &DiagnosticReporter,
     signature: &FunctionSignature,
     _locals: &UniqueMap<Var, (Mutability, SingleType)>,
     _constants: &UniqueMap<parser::ast::ConstantName, Value>,
@@ -145,7 +147,12 @@ mod count {
     fn lvalue(context: &mut Context, sp!(_, l_): &LValue, substitutable: bool) {
         use LValue_ as L;
         match l_ {
-            L::Ignore | L::Unpack(_, _, _) | L::UnpackVariant(..) => (),
+            L::Ignore => (),
+            L::Unpack(_, _, field_lvalues) | L::UnpackVariant(_, _, _, _, _, field_lvalues) => {
+                for (_field, fl) in field_lvalues {
+                    lvalue(context, fl, /* substitutable */ false);
+                }
+            }
             L::Var { var, .. } => context.assign(var, substitutable),
         }
     }

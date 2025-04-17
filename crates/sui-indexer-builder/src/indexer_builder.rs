@@ -165,7 +165,7 @@ impl<P, D, M> Indexer<P, D, M> {
         let ongoing_tasks = self.storage.get_ongoing_tasks(&self.name).await?;
         let largest_checkpoint = self
             .storage
-            .get_largest_backfill_task_target_checkpoint(&self.name)
+            .get_largest_indexed_checkpoint(&self.name)
             .await?;
         let live_task_from_checkpoint = self.datasource.get_live_task_starting_checkpoint().await?;
 
@@ -338,10 +338,7 @@ pub trait IndexerProgressStore: Send {
 
     async fn get_ongoing_tasks(&self, task_prefix: &str) -> Result<Tasks, Error>;
 
-    async fn get_largest_backfill_task_target_checkpoint(
-        &self,
-        task_prefix: &str,
-    ) -> Result<Option<u64>, Error>;
+    async fn get_largest_indexed_checkpoint(&self, prefix: &str) -> Result<Option<u64>, Error>;
 
     async fn register_task(
         &mut self,

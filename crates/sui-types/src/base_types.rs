@@ -68,9 +68,9 @@ use std::cmp::max;
 use std::convert::{TryFrom, TryInto};
 use std::fmt;
 use std::str::FromStr;
+use sui_protocol_config::ProtocolConfig;
 
 #[cfg(test)]
-#[cfg(feature = "test-utils")]
 #[path = "unit_tests/base_types_tests.rs"]
 mod base_types_tests;
 
@@ -136,6 +136,32 @@ pub struct ObjectID(
     AccountAddress,
 );
 
+#[serde_as]
+#[derive(Debug, Eq, PartialEq, Clone, Copy, PartialOrd, Ord, Hash, Serialize, Deserialize)]
+pub enum FullObjectID {
+    Fastpath(ObjectID),
+    Consensus(ConsensusObjectSequenceKey),
+}
+
+impl FullObjectID {
+    pub fn new(object_id: ObjectID, start_version: Option<SequenceNumber>) -> Self {
+        if let Some(start_version) = start_version {
+            Self::Consensus((object_id, start_version))
+        } else {
+            Self::Fastpath(object_id)
+        }
+    }
+
+    pub fn id(&self) -> ObjectID {
+        match &self {
+            FullObjectID::Fastpath(object_id) => *object_id,
+            FullObjectID::Consensus(consensus_object_sequence_key) => {
+                consensus_object_sequence_key.0
+            }
+        }
+    }
+}
+
 pub type VersionDigest = (SequenceNumber, ObjectDigest);
 
 pub type ObjectRef = (ObjectID, SequenceNumber, ObjectDigest);
@@ -148,7 +174,6 @@ pub fn random_object_ref() -> ObjectRef {
     )
 }
 
-#[cfg(any(feature = "test-utils", test))]
 pub fn update_object_ref_for_testing(object_ref: ObjectRef) -> ObjectRef {
     (
         object_ref.0,
@@ -156,6 +181,25 @@ pub fn update_object_ref_for_testing(object_ref: ObjectRef) -> ObjectRef {
         ObjectDigest::new([0; 32]),
     )
 }
+
+pub struct FullObjectRef(pub FullObjectID, pub SequenceNumber, pub ObjectDigest);
+
+impl FullObjectRef {
+    pub fn from_fastpath_ref(object_ref: ObjectRef) -> Self {
+        Self(
+            FullObjectID::Fastpath(object_ref.0),
+            object_ref.1,
+            object_ref.2,
+        )
+    }
+
+    pub fn as_object_ref(&self) -> ObjectRef {
+        (self.0.id(), self.1, self.2)
+    }
+}
+/// Represents an distinct stream of object versions for a Shared or ConsensusV2 object,
+/// based on the object ID and start version.
+pub type ConsensusObjectSequenceKey = (ObjectID, SequenceNumber);
 
 /// Wrapper around StructTag with a space-efficient representation for common types like coins
 /// The StructTag for a gas coin is 84 bytes, so using 1 byte instead is a win.
@@ -184,6 +228,14 @@ pub enum MoveObjectType_ {
 impl MoveObjectType {
     pub fn gas_coin() -> Self {
         Self(MoveObjectType_::GasCoin)
+    }
+
+    pub fn coin(coin_type: TypeTag) -> Self {
+        Self(if GAS::is_gas_type(&coin_type) {
+            MoveObjectType_::GasCoin
+        } else {
+            MoveObjectType_::Coin(coin_type)
+        })
     }
 
     pub fn staked_sui() -> Self {
@@ -518,7 +570,7 @@ impl ObjectInfo {
             version,
             digest,
             type_: o.into(),
-            owner: o.owner,
+            owner: o.owner.clone(),
             previous_transaction: o.previous_transaction,
         }
     }
@@ -529,7 +581,7 @@ impl ObjectInfo {
             version: object.version(),
             digest: object.digest(),
             type_: object.into(),
-            owner: object.owner,
+            owner: object.owner.clone(),
             previous_transaction: object.previous_transaction,
         }
     }
@@ -587,7 +639,6 @@ impl SuiAddress {
         self.0.to_vec()
     }
 
-    #[cfg(any(feature = "test-utils", test))]
     /// Return a random SuiAddress.
     pub fn random_for_testing_only() -> Self {
         AccountAddress::random().into()
@@ -790,7 +841,6 @@ impl fmt::Debug for SuiAddress {
     }
 }
 
-#[cfg(any(test, feature = "test-utils"))]
 /// Generate a fake SuiAddress with repeated one byte.
 pub fn dbg_addr(name: u8) -> SuiAddress {
     let addr = [name; SUI_ADDRESS_LENGTH];
@@ -910,10 +960,10 @@ pub fn move_ascii_str_layout() -> A::MoveStructLayout {
             name: STD_ASCII_STRUCT_NAME.to_owned(),
             type_params: vec![],
         },
-        fields: Box::new(vec![A::MoveFieldLayout::new(
+        fields: vec![A::MoveFieldLayout::new(
             ident_str!("bytes").into(),
             A::MoveTypeLayout::Vector(Box::new(A::MoveTypeLayout::U8)),
-        )]),
+        )],
     }
 }
 
@@ -925,13 +975,50 @@ pub fn move_utf8_str_layout() -> A::MoveStructLayout {
             name: STD_UTF8_STRUCT_NAME.to_owned(),
             type_params: vec![],
         },
-        fields: Box::new(vec![A::MoveFieldLayout::new(
+        fields: vec![A::MoveFieldLayout::new(
             ident_str!("bytes").into(),
             A::MoveTypeLayout::Vector(Box::new(A::MoveTypeLayout::U8)),
-        )]),
+        )],
     }
 }
 
+// The Rust representation of the Move `TxContext`.
+// This struct must be kept in sync with the Move `TxContext` definition.
+// Moving forward we are going to zero all fields of the Move `TxContext`
+// and use native functions to retrieve info about the transaction.
+// However we cannot remove the Move type and so this struct is going to
+// be the Rust equivalent to the Move `TxContext` for legacy usages.
+//
+// `TxContext` in Rust (see below) is going to be purely used in Rust and can
+// evolve as needed without worrying any compatibility with Move.
+#[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq)]
+pub struct MoveLegacyTxContext {
+    // Signer/sender of the transaction
+    sender: AccountAddress,
+    // Digest of the current transaction
+    digest: Vec<u8>,
+    // The current epoch number
+    epoch: EpochId,
+    // Timestamp that the epoch started at
+    epoch_timestamp_ms: CheckpointTimestamp,
+    // Number of `ObjectID`'s generated during execution of the current transaction
+    ids_created: u64,
+}
+
+impl From<&TxContext> for MoveLegacyTxContext {
+    fn from(tx_context: &TxContext) -> Self {
+        Self {
+            sender: tx_context.sender,
+            digest: tx_context.digest.clone(),
+            epoch: tx_context.epoch,
+            epoch_timestamp_ms: tx_context.epoch_timestamp_ms,
+            ids_created: tx_context.ids_created,
+        }
+    }
+}
+
+// Information about the transaction context.
+// This struct is not related to Move and can evolve as needed/required.
 #[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq)]
 pub struct TxContext {
     /// Signer/sender of the transaction
@@ -944,6 +1031,15 @@ pub struct TxContext {
     epoch_timestamp_ms: CheckpointTimestamp,
     /// Number of `ObjectID`'s generated during execution of the current transaction
     ids_created: u64,
+    // gas price passed to transaction as input
+    gas_price: u64,
+    // gas budget passed to transaction as input
+    gas_budget: u64,
+    // address of the sponsor if any
+    sponsor: Option<AccountAddress>,
+    // whether the `TxContext` is native or not
+    // (TODO: once we version execution we could drop this field)
+    is_native: bool,
 }
 
 #[derive(PartialEq, Eq, Clone, Copy)]
@@ -957,12 +1053,24 @@ pub enum TxContextKind {
 }
 
 impl TxContext {
-    pub fn new(sender: &SuiAddress, digest: &TransactionDigest, epoch_data: &EpochData) -> Self {
+    pub fn new(
+        sender: &SuiAddress,
+        digest: &TransactionDigest,
+        epoch_data: &EpochData,
+        gas_price: u64,
+        gas_budget: u64,
+        sponsor: Option<SuiAddress>,
+        protocol_config: &ProtocolConfig,
+    ) -> Self {
         Self::new_from_components(
             sender,
             digest,
             &epoch_data.epoch_id(),
             epoch_data.epoch_start_timestamp(),
+            gas_price,
+            gas_budget,
+            sponsor,
+            protocol_config,
         )
     }
 
@@ -971,6 +1079,10 @@ impl TxContext {
         digest: &TransactionDigest,
         epoch_id: &EpochId,
         epoch_timestamp_ms: u64,
+        gas_price: u64,
+        gas_budget: u64,
+        sponsor: Option<SuiAddress>,
+        protocol_config: &ProtocolConfig,
     ) -> Self {
         Self {
             sender: AccountAddress::new(sender.0),
@@ -978,6 +1090,10 @@ impl TxContext {
             epoch: *epoch_id,
             epoch_timestamp_ms,
             ids_created: 0,
+            gas_price,
+            gas_budget,
+            sponsor: sponsor.map(|s| s.into()),
+            is_native: protocol_config.move_native_context(),
         }
     }
 
@@ -1010,6 +1126,35 @@ impl TxContext {
         self.epoch
     }
 
+    pub fn sender(&self) -> SuiAddress {
+        self.sender.into()
+    }
+
+    pub fn epoch_timestamp_ms(&self) -> u64 {
+        self.epoch_timestamp_ms
+    }
+
+    /// Return the transaction digest, to include in new objects
+    pub fn digest(&self) -> TransactionDigest {
+        TransactionDigest::new(self.digest.clone().try_into().unwrap())
+    }
+
+    pub fn sponsor(&self) -> Option<SuiAddress> {
+        self.sponsor.map(SuiAddress::from)
+    }
+
+    pub fn gas_price(&self) -> u64 {
+        self.gas_price
+    }
+
+    pub fn gas_budget(&self) -> u64 {
+        self.gas_budget
+    }
+
+    pub fn ids_created(&self) -> u64 {
+        self.ids_created
+    }
+
     /// Derive a globally unique object ID by hashing self.digest | self.ids_created
     pub fn fresh_id(&mut self) -> ObjectID {
         let id = ObjectID::derive_id(self.digest(), self.ids_created);
@@ -1018,13 +1163,24 @@ impl TxContext {
         id
     }
 
-    /// Return the transaction digest, to include in new objects
-    pub fn digest(&self) -> TransactionDigest {
-        TransactionDigest::new(self.digest.clone().try_into().unwrap())
-    }
-
-    pub fn sender(&self) -> SuiAddress {
-        SuiAddress::from(ObjectID(self.sender))
+    pub fn to_bcs_legacy_context(&self) -> Vec<u8> {
+        let move_context: MoveLegacyTxContext = if self.is_native {
+            let tx_context = &TxContext {
+                sender: AccountAddress::ZERO,
+                digest: self.digest.clone(),
+                epoch: 0,
+                epoch_timestamp_ms: 0,
+                ids_created: 0,
+                gas_price: 0,
+                gas_budget: 0,
+                sponsor: None,
+                is_native: true,
+            };
+            tx_context.into()
+        } else {
+            self.into()
+        };
+        bcs::to_bytes(&move_context).unwrap()
     }
 
     pub fn to_vec(&self) -> Vec<u8> {
@@ -1035,34 +1191,44 @@ impl TxContext {
     /// when mutable context is passed over some boundary via
     /// serialize/deserialize and this is the reason why this method
     /// consumes the other context..
-    pub fn update_state(&mut self, other: TxContext) -> Result<(), ExecutionError> {
-        if self.sender != other.sender
-            || self.digest != other.digest
-            || other.ids_created < self.ids_created
-        {
-            return Err(ExecutionError::new_with_source(
-                ExecutionErrorKind::InvariantViolation,
-                "Immutable fields for TxContext changed",
-            ));
+    pub fn update_state(&mut self, other: MoveLegacyTxContext) -> Result<(), ExecutionError> {
+        if !self.is_native {
+            if self.sender != other.sender
+                || self.digest != other.digest
+                || other.ids_created < self.ids_created
+            {
+                return Err(ExecutionError::new_with_source(
+                    ExecutionErrorKind::InvariantViolation,
+                    "Immutable fields for TxContext changed",
+                ));
+            }
+            self.ids_created = other.ids_created;
         }
-        self.ids_created = other.ids_created;
         Ok(())
     }
 
-    #[cfg(feature = "test-utils")]
-    // Generate a random TxContext for testing.
-    pub fn random_for_testing_only() -> Self {
-        Self::new(
-            &SuiAddress::random_for_testing_only(),
-            &TransactionDigest::random(),
-            &EpochData::new_test(),
-        )
-    }
-
-    #[cfg(feature = "test-utils")]
-    /// Generate a TxContext for testing with a specific sender.
-    pub fn with_sender_for_testing_only(sender: &SuiAddress) -> Self {
-        Self::new(sender, &TransactionDigest::random(), &EpochData::new_test())
+    //
+    // Move test only API
+    //
+    pub fn replace(
+        &mut self,
+        sender: AccountAddress,
+        tx_hash: Vec<u8>,
+        epoch: u64,
+        epoch_timestamp_ms: u64,
+        ids_created: u64,
+        gas_price: u64,
+        gas_budget: u64,
+        sponsor: Option<AccountAddress>,
+    ) {
+        self.sender = sender;
+        self.digest = tx_hash;
+        self.epoch = epoch;
+        self.epoch_timestamp_ms = epoch_timestamp_ms;
+        self.ids_created = ids_created;
+        self.gas_price = gas_price;
+        self.gas_budget = gas_budget;
+        self.sponsor = sponsor;
     }
 }
 
@@ -1074,6 +1240,9 @@ impl SequenceNumber {
     pub const CONGESTED: SequenceNumber = SequenceNumber(SequenceNumber::MAX.value() + 2);
     pub const RANDOMNESS_UNAVAILABLE: SequenceNumber =
         SequenceNumber(SequenceNumber::MAX.value() + 3);
+    // Used to represent a sequence number whose value is unknown.
+    // For internal use only. This should never appear on chain.
+    pub const UNKNOWN: SequenceNumber = SequenceNumber(SequenceNumber::MAX.value() + 4);
 
     pub const fn new() -> Self {
         SequenceNumber(0)
@@ -1378,7 +1547,6 @@ impl std::ops::Deref for ObjectID {
     }
 }
 
-#[cfg(feature = "test-utils")]
 /// Generate a fake ObjectID with repeated one byte.
 pub fn dbg_object_id(name: u8) -> ObjectID {
     ObjectID::new([name; ObjectID::LENGTH])

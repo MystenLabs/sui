@@ -1,0 +1,140 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: legacy
+  lint: false
+---
+error[E13001]: feature is not supported in specified edition
+  ┌─ tests/move_check/parser/named_blocks_invalid_3.move:4:9
+  │
+4 │         'name: {
+  │         ^^^^^ Block labels are not supported by current edition 'legacy'; the '2024' edition supports this feature
+  │
+  = You can update the edition in the 'Move.toml', or via command line flag if invoking the compiler directly.
+
+error[E01001]: invalid character
+  ┌─ tests/move_check/parser/named_blocks_invalid_3.move:5:32
+  │
+5 │             if (cond) { return 'name 10 };
+  │                                ^^^^^ Unexpected character (')
+
+error[E13001]: feature is not supported in specified edition
+   ┌─ tests/move_check/parser/named_blocks_invalid_3.move:11:14
+   │
+11 │         loop 'name: {
+   │              ^^^^^ Block labels are not supported by current edition 'legacy'; the '2024' edition supports this feature
+   │
+   = You can update the edition in the 'Move.toml', or via command line flag if invoking the compiler directly.
+
+error[E01001]: invalid character
+   ┌─ tests/move_check/parser/named_blocks_invalid_3.move:12:31
+   │
+12 │             if (cond) { break 'name 10 };
+   │                               ^^^^^ Unexpected character (')
+
+error[E13001]: feature is not supported in specified edition
+   ┌─ tests/move_check/parser/named_blocks_invalid_3.move:17:14
+   │
+17 │         loop 'outer: {
+   │              ^^^^^^ Block labels are not supported by current edition 'legacy'; the '2024' edition supports this feature
+   │
+   = You can update the edition in the 'Move.toml', or via command line flag if invoking the compiler directly.
+
+error[E13001]: feature is not supported in specified edition
+   ┌─ tests/move_check/parser/named_blocks_invalid_3.move:18:18
+   │
+18 │             loop 'inner: {
+   │                  ^^^^^^ Block labels are not supported by current edition 'legacy'; the '2024' edition supports this feature
+   │
+   = You can update the edition in the 'Move.toml', or via command line flag if invoking the compiler directly.
+
+error[E01001]: invalid character
+   ┌─ tests/move_check/parser/named_blocks_invalid_3.move:19:35
+   │
+19 │                 if (cond) { break 'outer 10 };
+   │                                   ^^^^^^ Unexpected character (')
+
+error[E01001]: invalid character
+   ┌─ tests/move_check/parser/named_blocks_invalid_3.move:20:35
+   │
+20 │                 if (cond) { break 'inner 20 };
+   │                                   ^^^^^^ Unexpected character (')
+
+error[E13001]: feature is not supported in specified edition
+   ┌─ tests/move_check/parser/named_blocks_invalid_3.move:26:22
+   │
+26 │         while (cond) 'outer: {
+   │                      ^^^^^^ Block labels are not supported by current edition 'legacy'; the '2024' edition supports this feature
+   │
+   = You can update the edition in the 'Move.toml', or via command line flag if invoking the compiler directly.
+
+error[E13001]: feature is not supported in specified edition
+   ┌─ tests/move_check/parser/named_blocks_invalid_3.move:27:26
+   │
+27 │             while (cond) 'inner: {
+   │                          ^^^^^^ Block labels are not supported by current edition 'legacy'; the '2024' edition supports this feature
+   │
+   = You can update the edition in the 'Move.toml', or via command line flag if invoking the compiler directly.
+
+error[E01001]: invalid character
+   ┌─ tests/move_check/parser/named_blocks_invalid_3.move:28:35
+   │
+28 │                 if (cond) { break 'outer };
+   │                                   ^^^^^^ Unexpected character (')
+
+error[E01001]: invalid character
+   ┌─ tests/move_check/parser/named_blocks_invalid_3.move:29:35
+   │
+29 │                 if (cond) { break 'inner };
+   │                                   ^^^^^^ Unexpected character (')
+
+error[E13001]: feature is not supported in specified edition
+   ┌─ tests/move_check/parser/named_blocks_invalid_3.move:35:22
+   │
+35 │         while (cond) 'outer: {
+   │                      ^^^^^^ Block labels are not supported by current edition 'legacy'; the '2024' edition supports this feature
+   │
+   = You can update the edition in the 'Move.toml', or via command line flag if invoking the compiler directly.
+
+error[E13001]: feature is not supported in specified edition
+   ┌─ tests/move_check/parser/named_blocks_invalid_3.move:36:22
+   │
+36 │             let _x = 'inner: {
+   │                      ^^^^^^ Block labels are not supported by current edition 'legacy'; the '2024' edition supports this feature
+   │
+   = You can update the edition in the 'Move.toml', or via command line flag if invoking the compiler directly.
+
+error[E01001]: invalid character
+   ┌─ tests/move_check/parser/named_blocks_invalid_3.move:37:35
+   │
+37 │                 if (cond) { break 'outer };
+   │                                   ^^^^^^ Unexpected character (')
+
+error[E01001]: invalid character
+   ┌─ tests/move_check/parser/named_blocks_invalid_3.move:38:36
+   │
+38 │                 if (cond) { return 'inner 10 };
+   │                                    ^^^^^^ Unexpected character (')
+
+error[E13001]: feature is not supported in specified edition
+   ┌─ tests/move_check/parser/named_blocks_invalid_3.move:45:14
+   │
+45 │         loop 'l: {
+   │              ^^ Block labels are not supported by current edition 'legacy'; the '2024' edition supports this feature
+   │
+   = You can update the edition in the 'Move.toml', or via command line flag if invoking the compiler directly.
+
+error[E13001]: feature is not supported in specified edition
+   ┌─ tests/move_check/parser/named_blocks_invalid_3.move:46:18
+   │
+46 │             loop 'l: {
+   │                  ^^ Block labels are not supported by current edition 'legacy'; the '2024' edition supports this feature
+   │
+   = You can update the edition in the 'Move.toml', or via command line flag if invoking the compiler directly.
+
+error[E01001]: invalid character
+   ┌─ tests/move_check/parser/named_blocks_invalid_3.move:47:23
+   │
+47 │                 break 'l
+   │                       ^^ Unexpected character (')

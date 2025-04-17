@@ -138,14 +138,16 @@ impl RWLockDependencyBuilder {
                             .or_default()
                             .push(obj_key);
                     }
-                    InputSharedObject::ReadDeleted(oid, version) => read_version
+                    InputSharedObject::ReadConsensusStreamEnded(oid, version) => read_version
                         .entry(ObjectKey(oid, version))
                         .or_default()
                         .push(*effect.transaction_digest()),
-                    InputSharedObject::MutateDeleted(oid, version) => overwrite_versions
-                        .entry(*effect.transaction_digest())
-                        .or_default()
-                        .push(ObjectKey(oid, version)),
+                    InputSharedObject::MutateConsensusStreamEnded(oid, version) => {
+                        overwrite_versions
+                            .entry(*effect.transaction_digest())
+                            .or_default()
+                            .push(ObjectKey(oid, version))
+                    }
                     InputSharedObject::Cancelled(..) => (), // TODO: confirm that consensus_commit_prologue is always at the beginning of the checkpoint, so that cancelled txn don't need to worry about dependency.
                 }
             }

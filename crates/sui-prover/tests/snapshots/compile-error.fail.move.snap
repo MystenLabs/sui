@@ -1,0 +1,12 @@
+---
+source: crates/sui-prover/tests/integration.rs
+expression: output
+---
+exiting with model building errors
+error: unexpected token
+  ┌─ tests/inputs/compile-error.fail.move:5:1
+  │
+4 │   assert!(true
+  │          - To match this '('
+5 │ 
+  │ ^ Expected ')'

@@ -13,7 +13,7 @@ use crate::{
 };
 
 simple_visitor!(
-    ConstantNamingVisitor,
+    ConstantNaming,
     fn visit_constant_custom(
         &mut self,
         _module: ModuleIdent,

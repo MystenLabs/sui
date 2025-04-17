@@ -44,12 +44,11 @@ use sui_types::{
     },
 };
 use tap::TapFallible;
-use tokio::task::JoinHandle;
 use tonic::metadata::{Ascii, MetadataValue};
 use tracing::{error, error_span, info, Instrument};
 
 use crate::{
-    authority::authority_per_epoch_store::AuthorityPerEpochStore,
+    authority::authority_per_epoch_store::AuthorityPerEpochStore, checkpoints::CheckpointStore,
     mysticeti_adapter::LazyMysticetiClient,
 };
 use crate::{
@@ -72,32 +71,22 @@ use tonic::transport::server::TcpConnectInfo;
 mod server_tests;
 
 pub struct AuthorityServerHandle {
-    tx_cancellation: tokio::sync::oneshot::Sender<()>,
-    local_addr: Multiaddr,
-    handle: JoinHandle<Result<(), tonic::transport::Error>>,
+    server_handle: mysten_network::server::Server,
 }
 
 impl AuthorityServerHandle {
     pub async fn join(self) -> Result<(), io::Error> {
-        // Note that dropping `self.complete` would terminate the server.
-        self.handle
-            .await?
-            .map_err(|e| io::Error::new(io::ErrorKind::Other, e))?;
+        self.server_handle.handle().wait_for_shutdown().await;
         Ok(())
     }
 
     pub async fn kill(self) -> Result<(), io::Error> {
-        self.tx_cancellation.send(()).map_err(|_e| {
-            io::Error::new(io::ErrorKind::Other, "could not send cancellation signal!")
-        })?;
-        self.handle
-            .await?
-            .map_err(|e| io::Error::new(io::ErrorKind::Other, e))?;
+        self.server_handle.handle().shutdown().await;
         Ok(())
     }
 
     pub fn address(&self) -> &Multiaddr {
-        &self.local_addr
+        self.server_handle.local_addr()
     }
 }
 
@@ -127,6 +116,7 @@ impl AuthorityServer {
     pub fn new_for_test(state: Arc<AuthorityState>) -> Self {
         let consensus_adapter = Arc::new(ConsensusAdapter::new(
             Arc::new(LazyMysticetiClient::new()),
+            CheckpointStore::new_for_tests(),
             state.name,
             Arc::new(ConnectionMonitorStatusForTests {}),
             100_000,
@@ -151,9 +141,8 @@ impl AuthorityServer {
         let tls_config = sui_tls::create_rustls_server_config(
             self.state.config.network_key_pair().copy().private(),
             SUI_TLS_SERVER_NAME.to_string(),
-            sui_tls::AllowAll,
         );
-        let mut server = mysten_network::config::Config::new()
+        let server = mysten_network::config::Config::new()
             .server_builder()
             .add_service(ValidatorServer::new(ValidatorService::new_for_tests(
                 self.state,
@@ -166,9 +155,7 @@ impl AuthorityServer {
         let local_addr = server.local_addr().to_owned();
         info!("Listening to traffic on {local_addr}");
         let handle = AuthorityServerHandle {
-            tx_cancellation: server.take_cancel_handle().unwrap(),
-            local_addr,
-            handle: spawn_monitored_task!(server.serve()),
+            server_handle: server,
         };
         Ok(handle)
     }
@@ -185,6 +172,8 @@ pub struct ValidatorServiceMetrics {
     pub handle_certificate_consensus_latency: Histogram,
     pub handle_certificate_non_consensus_latency: Histogram,
     pub handle_soft_bundle_certificates_consensus_latency: Histogram,
+    pub handle_soft_bundle_certificates_count: Histogram,
+    pub handle_soft_bundle_certificates_size_bytes: Histogram,
     pub handle_transaction_consensus_latency: Histogram,
 
     num_rejected_tx_in_epoch_boundary: IntCounter,
@@ -267,6 +256,20 @@ impl ValidatorServiceMetrics {
                 "validator_service_handle_soft_bundle_certificates_consensus_latency",
                 "Latency of handling a consensus soft bundle",
                 mysten_metrics::COARSE_LATENCY_SEC_BUCKETS.to_vec(),
+                registry,
+            )
+            .unwrap(),
+            handle_soft_bundle_certificates_count: register_histogram_with_registry!(
+                "handle_soft_bundle_certificates_count",
+                "The number of certificates included in a soft bundle",
+                mysten_metrics::COUNT_BUCKETS.to_vec(),
+                registry,
+            )
+            .unwrap(),
+            handle_soft_bundle_certificates_size_bytes: register_histogram_with_registry!(
+                "handle_soft_bundle_certificates_size_bytes",
+                "The size of soft bundle in bytes",
+                mysten_metrics::BYTES_BUCKETS.to_vec(),
                 registry,
             )
             .unwrap(),
@@ -410,7 +413,7 @@ impl ValidatorService {
     }
 
     // When making changes to this function, see if the changes should be applied to
-    // `handle_transaction_v2()` and `SuiTxValidator::vote_transaction()` as well.
+    // `Self::handle_transaction_v2()` and `SuiTxValidator::vote_transaction()` as well.
     async fn handle_transaction(
         &self,
         request: tonic::Request<Transaction>,
@@ -531,20 +534,19 @@ impl ValidatorService {
 
         let _handle_tx_metrics_guard = metrics.handle_transaction_v2_latency.start_timer();
 
-        let tx_verif_metrics_guard = metrics.tx_verification_latency.start_timer();
-        let transaction = epoch_store.verify_transaction(transaction).tap_err(|_| {
-            metrics.signature_errors.inc();
-        })?;
-        drop(tx_verif_metrics_guard);
+        let transaction = {
+            let _metrics_guard = metrics.tx_verification_latency.start_timer();
+            epoch_store.verify_transaction(transaction).tap_err(|_| {
+                metrics.signature_errors.inc();
+            })?
+        };
 
         // Enable Trace Propagation across spans/processes using tx_digest
         let tx_digest = transaction.digest();
-        let span = error_span!("validator_state_process_tx_v2", ?tx_digest);
+        let _span = error_span!("validator_state_handle_tx_v2", ?tx_digest);
 
         let tx_output = state
-            .handle_transaction_v2(&epoch_store, transaction.clone())
-            .instrument(span)
-            .await
+            .handle_vote_transaction(&epoch_store, transaction.clone())
             .tap_err(|e| {
                 if let SuiError::ValidatorHaltedAtEpochEnd = e {
                     metrics.num_rejected_tx_in_epoch_boundary.inc();
@@ -656,8 +658,11 @@ impl ValidatorService {
                 .get_signed_effects_and_maybe_resign(&tx_digest, epoch_store)?
             {
                 let events = if include_events {
-                    if let Some(digest) = signed_effects.events_digest() {
-                        Some(self.state.get_transaction_events(digest)?)
+                    if signed_effects.events_digest().is_some() {
+                        Some(
+                            self.state
+                                .get_transaction_events(signed_effects.transaction_digest())?,
+                        )
                     } else {
                         None
                     }
@@ -829,8 +834,8 @@ impl ValidatorService {
                     _ => panic!("`handle_submit_to_consensus` received transaction that is not a CertifiedTransaction or UserTransaction"),
                 };
                 let events = if include_events {
-                    if let Some(digest) = effects.events_digest() {
-                        Some(self.state.get_transaction_events(digest)?)
+                    if effects.events_digest().is_some() {
+                        Some(self.state.get_transaction_events(effects.transaction_digest())?)
                     } else {
                         None
                     }
@@ -986,6 +991,7 @@ impl ValidatorService {
         &self,
         certificates: &NonEmpty<CertifiedTransaction>,
         epoch_store: &Arc<AuthorityPerEpochStore>,
+        total_size_bytes: u64,
     ) -> Result<(), tonic::Status> {
         let protocol_config = epoch_store.protocol_config();
         let node_config = &self.state.config;
@@ -1008,6 +1014,7 @@ impl ValidatorService {
         // - All certs must not be already executed.
         // - All certs must have the same gas price.
         // - Number of certs must not exceed the max allowed.
+        // - Total size of all certs must not exceed the max allowed.
         fp_ensure!(
             certificates.len() as u64 <= protocol_config.max_soft_bundle_size(),
             SuiError::UserInputError {
@@ -1017,6 +1024,23 @@ impl ValidatorService {
             }
             .into()
         );
+
+        // We set the soft bundle max size to be half of the consensus max transactions in block size. We do this to account for
+        // serialization overheads and to ensure that the soft bundle is not too large when is attempted to be posted via consensus.
+        // Although half the block size is on the extreme side, it's should be good enough for now.
+        let soft_bundle_max_size_bytes =
+            protocol_config.consensus_max_transactions_in_block_bytes() / 2;
+        fp_ensure!(
+            total_size_bytes <= soft_bundle_max_size_bytes,
+            SuiError::UserInputError {
+                error: UserInputError::SoftBundleTooLarge {
+                    size: total_size_bytes,
+                    limit: soft_bundle_max_size_bytes,
+                },
+            }
+            .into()
+        );
+
         let mut gas_price = None;
         for certificate in certificates {
             let tx_digest = *certificate.digest();
@@ -1078,19 +1102,30 @@ impl ValidatorService {
         };
         let request = request.into_inner();
 
-        let certificates = NonEmpty::from_vec(request.certificates)
-            .ok_or_else(|| SuiError::NoCertificateProvidedError)?;
+        let certificates =
+            NonEmpty::from_vec(request.certificates).ok_or(SuiError::NoCertificateProvidedError)?;
+        let mut total_size_bytes = 0;
         for certificate in &certificates {
             // We need to check this first because we haven't verified the cert signature.
-            certificate.validity_check(epoch_store.protocol_config(), epoch_store.epoch())?;
+            total_size_bytes += certificate
+                .validity_check(epoch_store.protocol_config(), epoch_store.epoch())?
+                as u64;
         }
 
+        self.metrics
+            .handle_soft_bundle_certificates_count
+            .observe(certificates.len() as f64);
+
+        self.metrics
+            .handle_soft_bundle_certificates_size_bytes
+            .observe(total_size_bytes as f64);
+
         // Now that individual certificates are valid, we check if the bundle is valid.
-        self.soft_bundle_validity_check(&certificates, &epoch_store)
+        self.soft_bundle_validity_check(&certificates, &epoch_store, total_size_bytes)
             .await?;
 
         info!(
-            "Received Soft Bundle with {} certificates, from {}, tx digests are [{}]",
+            "Received Soft Bundle with {} certificates, from {}, tx digests are [{}], total size [{}]bytes",
             certificates.len(),
             client_addr
                 .map(|x| x.to_string())
@@ -1099,8 +1134,10 @@ impl ValidatorService {
                 .iter()
                 .map(|x| x.digest().to_string())
                 .collect::<Vec<_>>()
-                .join(", ")
+                .join(", "),
+            total_size_bytes
         );
+
         let span = error_span!("handle_soft_bundle_certificates_v3");
         self.handle_certificates(
             certificates,

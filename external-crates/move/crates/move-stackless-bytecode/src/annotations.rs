@@ -89,6 +89,18 @@ impl Annotations {
         self.map.insert(id, (Data::new(x), fixedpoint));
     }
 
+    pub fn set_with_fixedpoint_check<T: Any + Clone + Eq>(&mut self, x: T, check_fixedpoint: bool) {
+        let fixedpoint = if check_fixedpoint {
+            match self.get::<T>() {
+                Some(old_x) => &x == old_x,
+                None => false,
+            }
+        } else {
+            true
+        };
+        self.set::<T>(x, fixedpoint);
+    }
+
     /// Removes annotation of type T.
     pub fn remove<T: Any>(&mut self) -> Option<Box<T>> {
         let id = TypeId::of::<T>();

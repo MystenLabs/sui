@@ -1,0 +1,74 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: 2024.alpha
+  lint: false
+---
+warning[W09001]: unused alias
+  ┌─ tests/move_2024/ide_mode/missing_type_suggestions.move:7:16
+  │
+7 │     use a::m::{Self, S, A};
+  │                ^^^^ Unused 'use' of alias 'm'. Consider removing it
+  │
+  = This warning can be suppressed with '#[allow(unused_use)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[W09001]: unused alias
+  ┌─ tests/move_2024/ide_mode/missing_type_suggestions.move:7:22
+  │
+7 │     use a::m::{Self, S, A};
+  │                      ^ Unused 'use' of alias 'S'. Consider removing it
+  │
+  = This warning can be suppressed with '#[allow(unused_use)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[W09001]: unused alias
+  ┌─ tests/move_2024/ide_mode/missing_type_suggestions.move:7:25
+  │
+7 │     use a::m::{Self, S, A};
+  │                         ^ Unused 'use' of alias 'A'. Consider removing it
+  │
+  = This warning can be suppressed with '#[allow(unused_use)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[W09002]: unused variable
+  ┌─ tests/move_2024/ide_mode/missing_type_suggestions.move:9:18
+  │
+9 │     public fun p(a:
+  │                  ^ Unused parameter 'a'. Consider removing or prefixing with an underscore: '_a'
+  │
+  = This warning can be suppressed with '#[allow(unused_variable)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+error[E01002]: unexpected token
+   ┌─ tests/move_2024/ide_mode/missing_type_suggestions.move:11:5
+   │
+ 9 │     public fun p(a:
+   │                 - To match this '('
+10 │ 
+11 │     public fun q():
+   │     ^ Expected ')'
+
+error[E01002]: unexpected token
+   ┌─ tests/move_2024/ide_mode/missing_type_suggestions.move:11:5
+   │
+11 │     public fun q():
+   │     ^^^^^^
+   │     │
+   │     Unexpected 'public'
+   │     Expected a type name
+
+error[E01002]: unexpected token
+   ┌─ tests/move_2024/ide_mode/missing_type_suggestions.move:12:1
+   │
+12 │ }
+   │ ^
+   │ │
+   │ Unexpected '}'
+   │ Expected a type name
+
+error[E01002]: unexpected token
+   ┌─ tests/move_2024/ide_mode/missing_type_suggestions.move:14:1
+   │
+14 │ 
+   │ ^
+   │ 
+   │ Unexpected end-of-file
+   │ Expected '{'

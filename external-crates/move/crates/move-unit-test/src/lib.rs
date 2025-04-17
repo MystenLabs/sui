@@ -184,7 +184,7 @@ impl UnitTestingConfig {
                 .set_flags(flags)
                 .run::<PASS_CFGIR>()
                 .unwrap();
-        let (_, compiler) =
+        let compiler =
             diagnostics::unwrap_or_report_pass_diagnostics(&files, comments_and_compiler_res);
 
         let (compiler, cfgir) = compiler.into_ast();

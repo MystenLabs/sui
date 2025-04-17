@@ -36,9 +36,9 @@ pub struct Coin {
 }
 
 impl Coin {
-    pub fn new(id: UID, value: u64) -> Self {
+    pub fn new(id: ObjectID, value: u64) -> Self {
         Self {
-            id,
+            id: UID::new(id),
             balance: Balance::new(value),
         }
     }
@@ -95,7 +95,7 @@ impl Coin {
     pub fn layout(type_param: TypeTag) -> MoveStructLayout {
         MoveStructLayout {
             type_: Self::type_(type_param.clone()),
-            fields: Box::new(vec![
+            fields: vec![
                 MoveFieldLayout::new(
                     ident_str!("id").to_owned(),
                     MoveTypeLayout::Struct(Box::new(UID::layout())),
@@ -104,7 +104,7 @@ impl Coin {
                     ident_str!("balance").to_owned(),
                     MoveTypeLayout::Struct(Box::new(Balance::layout(type_param))),
                 ),
-            ]),
+            ],
         }
     }
 
@@ -122,7 +122,7 @@ impl Coin {
     // Split amount out of this coin to a new coin.
     // Related coin objects need to be updated in temporary_store to persist the changes,
     // including creating the coin object related to the newly created coin.
-    pub fn split(&mut self, amount: u64, new_coin_id: UID) -> Result<Coin, ExecutionError> {
+    pub fn split(&mut self, amount: u64, new_coin_id: ObjectID) -> Result<Coin, ExecutionError> {
         self.balance.withdraw(amount)?;
         Ok(Coin::new(new_coin_id, amount))
     }

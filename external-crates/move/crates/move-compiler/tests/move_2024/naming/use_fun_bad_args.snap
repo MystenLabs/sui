@@ -1,0 +1,87 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: 2024.alpha
+  lint: false
+---
+error[E02017]: invalid 'use fun' declaration
+   ┌─ tests/move_2024/naming/use_fun_bad_args.move:18:5
+   │
+ 5 │     public fun val_u64(_: u64) { abort 0 }
+   │                           --- But 'a::m::val_u64' has a first argument of type 'u64'
+   ·
+18 │     use fun val_u64 as Y.val_u64;
+   │     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ Invalid 'use fun' for 'a::m::Y.val_u64'. Expected a 'a::m::Y' type as the first argument (either by reference '&' '&mut' or by value)
+
+error[E02017]: invalid 'use fun' declaration
+   ┌─ tests/move_2024/naming/use_fun_bad_args.move:19:5
+   │
+ 6 │     public fun imm_vec(_: &vector<u64>) { abort 0 }
+   │                           ------------ But 'a::m::imm_vec' has a first argument of type '&vector<u64>'
+   ·
+19 │     use fun imm_vec as Y.imm_vec;
+   │     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ Invalid 'use fun' for 'a::m::Y.imm_vec'. Expected a 'a::m::Y' type as the first argument (either by reference '&' '&mut' or by value)
+
+error[E02017]: invalid 'use fun' declaration
+   ┌─ tests/move_2024/naming/use_fun_bad_args.move:20:5
+   │
+ 7 │     public fun mut_addr(_: &mut address) { abort 0 }
+   │                            ------------ But 'a::m::mut_addr' has a first argument of type '&mut address'
+   ·
+20 │     use fun mut_addr as Y.mut_addr;
+   │     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ Invalid 'use fun' for 'a::m::Y.mut_addr'. Expected a 'a::m::Y' type as the first argument (either by reference '&' '&mut' or by value)
+
+error[E02017]: invalid 'use fun' declaration
+   ┌─ tests/move_2024/naming/use_fun_bad_args.move:22:5
+   │
+ 9 │     public fun val_x(_: X) { abort 0 }
+   │                         - But 'a::m::val_x' has a first argument of type 'a::m::X'
+   ·
+22 │     use fun val_x as Y.val_x;
+   │     ^^^^^^^^^^^^^^^^^^^^^^^^^ Invalid 'use fun' for 'a::m::Y.val_x'. Expected a 'a::m::Y' type as the first argument (either by reference '&' '&mut' or by value)
+
+error[E02017]: invalid 'use fun' declaration
+   ┌─ tests/move_2024/naming/use_fun_bad_args.move:23:5
+   │
+10 │     public fun imm_x(_: &X) { abort 0 }
+   │                         -- But 'a::m::imm_x' has a first argument of type '&a::m::X'
+   ·
+23 │     use fun imm_x as Y.imm_x;
+   │     ^^^^^^^^^^^^^^^^^^^^^^^^^ Invalid 'use fun' for 'a::m::Y.imm_x'. Expected a 'a::m::Y' type as the first argument (either by reference '&' '&mut' or by value)
+
+error[E02017]: invalid 'use fun' declaration
+   ┌─ tests/move_2024/naming/use_fun_bad_args.move:24:5
+   │
+11 │     public fun mut_x(_: &mut X) { abort 0 }
+   │                         ------ But 'a::m::mut_x' has a first argument of type '&mut a::m::X'
+   ·
+24 │     use fun mut_x as Y.mut_x;
+   │     ^^^^^^^^^^^^^^^^^^^^^^^^^ Invalid 'use fun' for 'a::m::Y.mut_x'. Expected a 'a::m::Y' type as the first argument (either by reference '&' '&mut' or by value)
+
+error[E02017]: invalid 'use fun' declaration
+   ┌─ tests/move_2024/naming/use_fun_bad_args.move:26:5
+   │
+13 │     public fun val_gen<T>(_: T) { abort 0 }
+   │                              - But 'a::m::val_gen' has a first argument of type 'T'
+   ·
+26 │     use fun val_gen as Y.val_gen;
+   │     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ Invalid 'use fun' for 'a::m::Y.val_gen'. Expected a 'a::m::Y' type as the first argument (either by reference '&' '&mut' or by value)
+
+error[E02017]: invalid 'use fun' declaration
+   ┌─ tests/move_2024/naming/use_fun_bad_args.move:27:5
+   │
+14 │     public fun imm_gen<T>(_: &T) { abort 0 }
+   │                              -- But 'a::m::imm_gen' has a first argument of type '&T'
+   ·
+27 │     use fun imm_gen as Y.imm_gen;
+   │     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ Invalid 'use fun' for 'a::m::Y.imm_gen'. Expected a 'a::m::Y' type as the first argument (either by reference '&' '&mut' or by value)
+
+error[E02017]: invalid 'use fun' declaration
+   ┌─ tests/move_2024/naming/use_fun_bad_args.move:28:5
+   │
+15 │     public fun mut_gen<T>(_: &mut T) { abort 0 }
+   │                              ------ But 'a::m::mut_gen' has a first argument of type '&mut T'
+   ·
+28 │     use fun mut_gen as Y.mut_gen;
+   │     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ Invalid 'use fun' for 'a::m::Y.mut_gen'. Expected a 'a::m::Y' type as the first argument (either by reference '&' '&mut' or by value)

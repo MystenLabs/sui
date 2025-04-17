@@ -1,0 +1,33 @@
+---
+source: crates/move-compiler/tests/move_check_testsuite.rs
+info:
+  flavor: core
+  edition: 2024.alpha
+  lint: false
+---
+error[E02001]: duplicate declaration, item, or annotation
+   ┌─ tests/move_2024/naming/duplicate_use_fun_explicit.move:10:5
+   │
+ 7 │     public use fun foobar as X.f;
+   │                                - Previously declared here
+   ·
+10 │     public use fun foobaz as X.f;
+   │     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ Duplicate 'use fun' for 'a::m::X.f'
+
+error[E02001]: duplicate declaration, item, or annotation
+   ┌─ tests/move_2024/naming/duplicate_use_fun_explicit.move:25:5
+   │
+22 │     public use fun foobar as X.f;
+   │                                - Previously declared here
+   ·
+25 │     use fun foobaz as X.f;
+   │     ^^^^^^^^^^^^^^^^^^^^^^ Duplicate 'use fun' for 'a::m2::X.f'
+
+error[E02001]: duplicate declaration, item, or annotation
+   ┌─ tests/move_2024/naming/duplicate_use_fun_explicit.move:40:5
+   │
+37 │     use fun foobar as X.f;
+   │                         - Previously declared here
+   ·
+40 │     use fun foobaz as X.f;
+   │     ^^^^^^^^^^^^^^^^^^^^^^ Duplicate 'use fun' for 'a::m3::X.f'

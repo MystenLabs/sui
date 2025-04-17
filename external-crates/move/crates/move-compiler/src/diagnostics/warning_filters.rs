@@ -1,3 +1,6 @@
+// Copyright (c) The Move Contributors
+// SPDX-License-Identifier: Apache-2.0
+
 use crate::{
     diagnostics::{
         codes::{Category, DiagnosticInfo, ExternalPrefix, Severity, UnusedItem},
@@ -206,6 +209,12 @@ impl WarningFiltersScope {
                 }
             }
         }
+    }
+}
+
+impl Default for WarningFiltersTable {
+    fn default() -> Self {
+        Self::new()
     }
 }
 

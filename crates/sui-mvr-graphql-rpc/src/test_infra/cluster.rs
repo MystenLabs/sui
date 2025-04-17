@@ -18,10 +18,10 @@ pub use sui_indexer::config::RetentionConfig;
 pub use sui_indexer::config::SnapshotLagConfig;
 use sui_indexer::errors::IndexerError;
 use sui_indexer::store::PgIndexerStore;
-use sui_indexer::test_utils::start_indexer_writer_for_testing;
-use sui_pg_temp_db::{get_available_port, TempDb};
+use sui_indexer::test_utils::start_indexer_writer_for_testing_with_mvr_mode;
+use sui_pg_db::temp::{get_available_port, TempDb};
 use sui_swarm_config::genesis_config::{AccountConfig, DEFAULT_GAS_AMOUNT};
-use sui_types::storage::RestStateReader;
+use sui_types::storage::RpcStateReader;
 use tempfile::tempdir;
 use tempfile::TempDir;
 use test_cluster::TestCluster;
@@ -32,7 +32,9 @@ use tokio_util::sync::CancellationToken;
 use tracing::info;
 
 const VALIDATOR_COUNT: usize = 4;
-const EPOCH_DURATION_MS: u64 = 10000;
+/// Set default epoch duration to 300s. This high value is to turn the TestCluster into a lockstep
+/// network of sorts. Tests should call `trigger_reconfiguration` to advance the network's epoch.
+const EPOCH_DURATION_MS: u64 = 300_000;
 
 const ACCOUNT_NUM: usize = 20;
 const GAS_OBJECT_COUNT: usize = 3;
@@ -125,7 +127,7 @@ pub async fn start_network_cluster() -> NetworkCluster {
     let val_fn = start_validator_with_fullnode(data_ingestion_path.path().to_path_buf()).await;
 
     // Starts indexer
-    let (pg_store, pg_handle, _) = start_indexer_writer_for_testing(
+    let (pg_store, pg_handle, _) = start_indexer_writer_for_testing_with_mvr_mode(
         db_url,
         None,
         None,
@@ -133,6 +135,7 @@ pub async fn start_network_cluster() -> NetworkCluster {
         Some(cancellation_token.clone()),
         None, /* start_checkpoint */
         None, /* end_checkpoint */
+        true,
     )
     .await;
 
@@ -150,7 +153,7 @@ pub async fn start_network_cluster() -> NetworkCluster {
 /// Takes in a simulated instantiation of a Sui blockchain and builds a cluster around it. This
 /// cluster is typically used in e2e tests to emulate and test behaviors.
 pub async fn serve_executor(
-    executor: Arc<dyn RestStateReader + Send + Sync>,
+    executor: Arc<dyn RpcStateReader + Send + Sync>,
     snapshot_config: Option<SnapshotLagConfig>,
     retention_config: Option<RetentionConfig>,
     data_ingestion_path: PathBuf,
@@ -175,14 +178,14 @@ pub async fn serve_executor(
         .unwrap();
 
     let executor_server_handle = tokio::spawn(async move {
-        sui_rest_api::RestService::new_without_version(executor)
+        sui_rpc_api::RpcService::new_without_version(executor)
             .start_service(executor_server_url)
             .await;
     });
 
     let snapshot_config = snapshot_config.unwrap_or_default();
 
-    let (pg_store, pg_handle, _) = start_indexer_writer_for_testing(
+    let (pg_store, pg_handle, _) = start_indexer_writer_for_testing_with_mvr_mode(
         db_url,
         Some(snapshot_config.clone()),
         retention_config,
@@ -190,6 +193,7 @@ pub async fn serve_executor(
         Some(cancellation_token.clone()),
         None,
         None,
+        true,
     )
     .await;
 

@@ -1,13 +1,14 @@
 use clap::Args;
 use move_cli::base;
 use move_compiler::editions::{Edition, Flavor};
-use move_package::{source_package::layout::SourcePackageLayout, BuildConfig as MoveBuildConfig, LintFlag, ModelConfig};
+use move_package::{source_package::layout::SourcePackageLayout, BuildConfig as MoveBuildConfig, LintFlag};
 use move_core_types::account_address::AccountAddress;
-use move_prover::{run_boogie_gen, run_move_prover_with_model};
-use tracing::log::LevelFilter;
+use log::LevelFilter;
 use std::{collections::BTreeMap, path::{Path,PathBuf}};
-use codespan_reporting::term::termcolor::{Buffer};
+use codespan_reporting::term::termcolor::Buffer;
 use crate::llm_explain::explain_err;
+use crate::generator::{run_boogie_gen, run_move_prover_with_model};
+use crate::generator_options::Options;
 
 impl From<BuildConfig> for MoveBuildConfig {
     fn from(config: BuildConfig) -> Self {
@@ -29,6 +30,8 @@ impl From<BuildConfig> for MoveBuildConfig {
             default_edition: config.default_edition,
             deps_as_root: config.deps_as_root,
             additional_named_addresses: config.additional_named_addresses,
+            save_disassembly: false,
+            implicit_dependencies: BTreeMap::new(),
         }
     }
 }
@@ -111,14 +114,10 @@ pub async fn execute(
         Some(&rerooted_path),
     )?;
 
-    let model = move_build_config.move_model_for_package(
+    let model = move_build_config.move_model_for_package_legacy(
         &rerooted_path,
-        ModelConfig {
-            all_files_as_targets: false,
-            target_filter: None,
-        },
     )?;
-    let mut options = move_prover::cli::Options::default();
+    let mut options = Options::default();
     // don't spawn async tasks when running Boogie--causes a crash if we do
     options.backend.sequential_task = true;
     options.backend.use_array_theory = general_config.use_array_theory;
@@ -141,7 +140,7 @@ pub async fn execute(
             }
         }
     } else {
-        let _ = run_boogie_gen(&model, options);
+       run_boogie_gen(&model, options)?;
     }
 
     Ok(())

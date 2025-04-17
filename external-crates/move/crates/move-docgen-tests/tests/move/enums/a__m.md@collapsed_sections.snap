@@ -1,0 +1,365 @@
+---
+source: crates/move-docgen-tests/tests/testsuite.rs
+info:
+  section_level_start: 1
+  exclude_private_fun: false
+  exclude_impl: false
+  toc_depth: 3
+  no_collapsed_sections: true
+  include_dep_diagrams: false
+  include_call_diagrams: false
+input_file: crates/move-docgen-tests/tests/move/enums/Move.toml
+---
+<a name="a_m"></a>
+
+# Module `a::m`
+
+This is a doc comment above an annotation.
+
+
+-  [Struct `X`](#a_m_X)
+-  [Struct `Y`](#a_m_Y)
+-  [Struct `XG`](#a_m_XG)
+-  [Struct `YG`](#a_m_YG)
+-  [Struct `XGG`](#a_m_XGG)
+-  [Struct `YGG`](#a_m_YGG)
+-  [Struct `VecMap`](#a_m_VecMap)
+-  [Struct `Entry`](#a_m_Entry)
+-  [Enum `Enum`](#a_m_Enum)
+-  [Enum `GenericEnum`](#a_m_GenericEnum)
+-  [Function `f`](#a_m_f)
+
+
+<pre><code></code></pre>
+
+
+
+<a name="a_m_X"></a>
+
+## Struct `X`
+
+
+
+<pre><code><b>public</b> <b>struct</b> <a href="../a/m.md#a_m_X">X</a> <b>has</b> drop
+</code></pre>
+
+
+
+##### Fields
+
+
+<dl>
+<dt>
+<code>x: <a href="../a/m.md#a_m_Enum">a::m::Enum</a></code>
+</dt>
+<dd>
+</dd>
+</dl>
+
+
+<a name="a_m_Y"></a>
+
+## Struct `Y`
+
+
+
+<pre><code><b>public</b> <b>struct</b> <a href="../a/m.md#a_m_Y">Y</a>
+</code></pre>
+
+
+
+##### Fields
+
+
+<dl>
+<dt>
+<code>0: <a href="../a/m.md#a_m_Enum">a::m::Enum</a></code>
+</dt>
+<dd>
+</dd>
+</dl>
+
+
+<a name="a_m_XG"></a>
+
+## Struct `XG`
+
+
+
+<pre><code><b>public</b> <b>struct</b> <a href="../a/m.md#a_m_XG">XG</a>
+</code></pre>
+
+
+
+##### Fields
+
+
+<dl>
+<dt>
+<code>x: <a href="../a/m.md#a_m_GenericEnum">a::m::GenericEnum</a>&lt;<a href="../a/m.md#a_m_Enum">a::m::Enum</a>&gt;</code>
+</dt>
+<dd>
+</dd>
+</dl>
+
+
+<a name="a_m_YG"></a>
+
+## Struct `YG`
+
+
+
+<pre><code><b>public</b> <b>struct</b> <a href="../a/m.md#a_m_YG">YG</a>
+</code></pre>
+
+
+
+##### Fields
+
+
+<dl>
+<dt>
+<code>0: <a href="../a/m.md#a_m_GenericEnum">a::m::GenericEnum</a>&lt;<a href="../a/m.md#a_m_Enum">a::m::Enum</a>&gt;</code>
+</dt>
+<dd>
+</dd>
+</dl>
+
+
+<a name="a_m_XGG"></a>
+
+## Struct `XGG`
+
+
+
+<pre><code><b>public</b> <b>struct</b> <a href="../a/m.md#a_m_XGG">XGG</a>&lt;T&gt;
+</code></pre>
+
+
+
+##### Fields
+
+
+<dl>
+<dt>
+<code>x: <a href="../a/m.md#a_m_GenericEnum">a::m::GenericEnum</a>&lt;T&gt;</code>
+</dt>
+<dd>
+</dd>
+</dl>
+
+
+<a name="a_m_YGG"></a>
+
+## Struct `YGG`
+
+
+
+<pre><code><b>public</b> <b>struct</b> <a href="../a/m.md#a_m_YGG">YGG</a>&lt;T&gt;
+</code></pre>
+
+
+
+##### Fields
+
+
+<dl>
+<dt>
+<code>0: <a href="../a/m.md#a_m_GenericEnum">a::m::GenericEnum</a>&lt;T&gt;</code>
+</dt>
+<dd>
+</dd>
+</dl>
+
+
+<a name="a_m_VecMap"></a>
+
+## Struct `VecMap`
+
+
+
+<pre><code><b>public</b> <b>struct</b> <a href="../a/m.md#a_m_VecMap">VecMap</a>&lt;K: <b>copy</b>, V&gt; <b>has</b> <b>copy</b>, drop, store
+</code></pre>
+
+
+
+##### Fields
+
+
+<dl>
+<dt>
+<code>contents: vector&lt;<a href="../a/m.md#a_m_Entry">a::m::Entry</a>&lt;K, V&gt;&gt;</code>
+</dt>
+<dd>
+</dd>
+</dl>
+
+
+<a name="a_m_Entry"></a>
+
+## Struct `Entry`
+
+An entry in the map
+
+
+<pre><code><b>public</b> <b>struct</b> <a href="../a/m.md#a_m_Entry">Entry</a>&lt;K: <b>copy</b>, V&gt; <b>has</b> <b>copy</b>, drop, store
+</code></pre>
+
+
+
+##### Fields
+
+
+<dl>
+<dt>
+<code>key: K</code>
+</dt>
+<dd>
+</dd>
+<dt>
+<code>value: V</code>
+</dt>
+<dd>
+</dd>
+</dl>
+
+
+<a name="a_m_Enum"></a>
+
+## Enum `Enum`
+
+This is a doc comment above an enum
+
+
+<pre><code><b>public</b> <b>enum</b> <a href="../a/m.md#a_m_Enum">Enum</a> <b>has</b> drop
+</code></pre>
+
+
+
+##### Variants
+
+
+<dl>
+<dt>
+Variant <code>A</code>
+</dt>
+<dd>
+ This is a doc comment above a variant
+</dd>
+<dt>
+Variant <code>B</code>
+</dt>
+<dd>
+</dd>
+<dt>
+Variant <code>C</code>
+</dt>
+<dd>
+</dd>
+
+<dl>
+<dt>
+<code>0: u64</code>
+</dt>
+<dd>
+</dd>
+</dl>
+
+<dt>
+Variant <code>D</code>
+</dt>
+<dd>
+ Another doc comment
+</dd>
+
+<dl>
+<dt>
+<code>x: u64</code>
+</dt>
+<dd>
+ Doc text on variant field
+</dd>
+</dl>
+
+<dt>
+Variant <code>E</code>
+</dt>
+<dd>
+</dd>
+
+<dl>
+<dt>
+<code>x: u64</code>
+</dt>
+<dd>
+</dd>
+</dl>
+
+
+<dl>
+<dt>
+<code>y: u64</code>
+</dt>
+<dd>
+</dd>
+</dl>
+
+</dl>
+
+
+<a name="a_m_GenericEnum"></a>
+
+## Enum `GenericEnum`
+
+
+
+<pre><code><b>public</b> <b>enum</b> <a href="../a/m.md#a_m_GenericEnum">GenericEnum</a>&lt;T&gt;
+</code></pre>
+
+
+
+##### Variants
+
+
+<dl>
+<dt>
+Variant <code>A</code>
+</dt>
+<dd>
+</dd>
+
+<dl>
+<dt>
+<code>0: T</code>
+</dt>
+<dd>
+</dd>
+</dl>
+
+<dt>
+Variant <code>B</code>
+</dt>
+<dd>
+</dd>
+</dl>
+
+
+<a name="a_m_f"></a>
+
+## Function `f`
+
+Doc comments <code>type_: <a href="../a/m.md#a_m_VecMap">VecMap</a>&lt;u64, <a href="../a/m.md#a_m_X">X</a>&gt;</code>
+
+
+<pre><code><b>fun</b> <a href="../a/m.md#a_m_f">f</a>(x: <a href="../a/m.md#a_m_VecMap">a::m::VecMap</a>&lt;u64, <a href="../a/m.md#a_m_X">a::m::X</a>&gt;): u64
+</code></pre>
+
+
+
+##### Implementation
+
+
+<pre><code><b>fun</b> <a href="../a/m.md#a_m_f">f</a>(x: <a href="../a/m.md#a_m_VecMap">VecMap</a>&lt;u64, <a href="../a/m.md#a_m_X">X</a>&gt;): u64 {
+    0
+}
+</code></pre>

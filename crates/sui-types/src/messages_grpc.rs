@@ -200,7 +200,7 @@ pub struct HandleCertificateResponseV3 {
     /// versions of shared objects.
     //
     // TODO: In the future we may want to include shared objects or child objects which were read
-    // but not modified during exectuion.
+    // but not modified during execution.
     pub input_objects: Option<Vec<Object>>,
 
     /// If requested, will included all changed objects, including mutated, created and unwrapped
@@ -247,7 +247,7 @@ pub struct HandleTransactionResponseV2 {
     /// versions of shared objects.
     //
     // TODO: In the future we may want to include shared objects or child objects which were read
-    // but not modified during exectuion.
+    // but not modified during execution.
     pub input_objects: Option<Vec<Object>>,
 
     /// If requested, will included all changed objects, including mutated, created and unwrapped

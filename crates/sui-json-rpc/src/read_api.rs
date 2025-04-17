@@ -9,7 +9,10 @@ use anyhow::anyhow;
 use async_trait::async_trait;
 use backoff::future::retry;
 use backoff::ExponentialBackoff;
+use fastcrypto::encoding::Base64;
+use fastcrypto_zkp::bn254::zk_login_api::ZkLoginEnv;
 use futures::future::join_all;
+use im::hashmap::HashMap as ImHashMap;
 use indexmap::map::IndexMap;
 use itertools::Itertools;
 use jsonrpsee::core::RpcResult;
@@ -17,8 +20,13 @@ use jsonrpsee::RpcModule;
 use move_bytecode_utils::module_cache::GetModule;
 use move_core_types::annotated_value::{MoveStruct, MoveStructLayout, MoveValue};
 use move_core_types::language_storage::StructTag;
+use shared_crypto::intent::{IntentMessage, PersonalMessage};
+use sui_json_rpc_types::ZkLoginIntentScope;
+use sui_types::base_types::SuiAddress;
+use sui_types::signature::{GenericSignature, VerifyParams};
+use sui_types::signature_verification::VerifiedDigestCache;
 use tap::TapFallible;
-use tracing::{debug, error, info, instrument, trace, warn};
+use tracing::{debug, error, instrument, trace, warn};
 
 use mysten_metrics::add_server_timing;
 use mysten_metrics::spawn_monitored_task;
@@ -40,18 +48,16 @@ use sui_storage::key_value_store::TransactionKeyValueStore;
 use sui_types::base_types::{ObjectID, SequenceNumber, TransactionDigest};
 use sui_types::collection_types::VecMap;
 use sui_types::crypto::AggregateAuthoritySignature;
-use sui_types::digests::TransactionEventsDigest;
 use sui_types::display::DisplayVersionUpdatedEvent;
 use sui_types::effects::{TransactionEffects, TransactionEffectsAPI, TransactionEvents};
 use sui_types::error::{SuiError, SuiObjectResponseError};
 use sui_types::messages_checkpoint::{
-    CheckpointContents, CheckpointContentsDigest, CheckpointSequenceNumber, CheckpointSummary,
-    CheckpointTimestamp,
+    CheckpointContents, CheckpointSequenceNumber, CheckpointSummary, CheckpointTimestamp,
 };
 use sui_types::object::{Object, ObjectRead, PastObjectRead};
 use sui_types::sui_serde::BigInt;
-use sui_types::transaction::Transaction;
 use sui_types::transaction::TransactionDataAPI;
+use sui_types::transaction::{Transaction, TransactionData};
 
 use crate::authority_state::{StateRead, StateReadError, StateReadResult};
 use crate::error::{Error, RpcInterimResult, SuiRpcInputError};
@@ -59,7 +65,11 @@ use crate::{
     get_balance_changes_from_effect, get_object_changes, ObjectProviderCache, SuiRpcModule,
 };
 use crate::{with_tracing, ObjectProvider};
-
+use fastcrypto::encoding::Encoding;
+use fastcrypto::traits::ToFromBytes;
+use shared_crypto::intent::Intent;
+use sui_json_rpc_types::ZkLoginVerifyResult;
+use sui_types::authenticator_state::{get_authenticator_state, ActiveJwk};
 const MAX_DISPLAY_NESTED_LEVEL: usize = 10;
 
 // An implementation of the read portion of the JSON-RPC interface intended for use in
@@ -122,7 +132,7 @@ impl ReadApi {
                     .await?;
                 let content = self
                     .transaction_kv_store
-                    .get_checkpoint_contents_by_digest(verified_summary.content_digest)
+                    .get_checkpoint_contents(verified_summary.sequence_number)
                     .await?;
                 let signature = verified_summary.auth_sig().signature.clone();
                 (verified_summary.into_data(), content, signature).into()
@@ -134,7 +144,7 @@ impl ReadApi {
                     .await?;
                 let content = self
                     .transaction_kv_store
-                    .get_checkpoint_contents_by_digest(verified_summary.content_digest)
+                    .get_checkpoint_contents(verified_summary.sequence_number)
                     .await?;
                 let signature = verified_summary.auth_sig().signature.clone();
                 (verified_summary.into_data(), content, signature).into()
@@ -172,13 +182,8 @@ impl ReadApi {
             })
             .collect();
 
-        let checkpoint_contents_digest: Vec<CheckpointContentsDigest> =
-            checkpoint_summaries_and_signatures
-                .iter()
-                .map(|summary| summary.0.content_digest)
-                .collect();
         let checkpoint_contents = transaction_kv_store
-            .multi_get_checkpoints_contents_by_digest(checkpoint_contents_digest.as_slice())
+            .multi_get_checkpoints_contents(&checkpoint_numbers)
             .await?;
         let contents: Vec<CheckpointContents> = checkpoint_contents.into_iter().flatten().collect();
 
@@ -277,7 +282,7 @@ impl ReadApi {
 
         let unique_checkpoint_numbers = temp_response
             .values()
-            .filter_map(|cache_entry| cache_entry.checkpoint_seq.map(<u64>::from))
+            .filter_map(|cache_entry| cache_entry.checkpoint_seq)
             // It's likely that many transactions have the same checkpoint, so we don't
             // need to over-fetch
             .unique()
@@ -306,13 +311,7 @@ impl ReadApi {
             if cache_entry.checkpoint_seq.is_some() {
                 // safe to unwrap because is_some is checked
                 cache_entry.timestamp = *checkpoint_to_timestamp
-                    .get(
-                        cache_entry
-                            .checkpoint_seq
-                            .map(<u64>::from)
-                            .as_ref()
-                            .unwrap(),
-                    )
+                    .get(cache_entry.checkpoint_seq.as_ref().unwrap())
                     // Safe to unwrap because checkpoint_seq is guaranteed to exist in checkpoint_to_timestamp
                     .unwrap();
             }
@@ -320,77 +319,44 @@ impl ReadApi {
 
         if opts.show_events {
             trace!("getting events");
-            let events_digests_list = temp_response
-                .values()
-                .filter_map(|cache_entry| match &cache_entry.effects {
-                    Some(eff) => eff.events_digest().cloned(),
-                    None => None,
-                })
-                .collect::<Vec<TransactionEventsDigest>>();
-            // filter out empty events digest, as they do not have to be read from the DB
-            let empty_events_digest = TransactionEvents::default().digest();
-            let events_digests_list = events_digests_list
-                .into_iter()
-                .filter(|d| d != &empty_events_digest)
-                .collect::<Vec<_>>();
-
-            let mut events_digest_to_events = if events_digests_list.is_empty() {
-                HashMap::new()
-            } else {
-                // fetch events from the DB with retry, retry each 0.5s for 3s
-                let backoff = ExponentialBackoff {
-                    max_elapsed_time: Some(Duration::from_secs(3)),
-                    multiplier: 1.0,
-                    ..ExponentialBackoff::default()
-                };
-                let events = retry(backoff, || async {
-                    match self
-                        .transaction_kv_store
-                        .multi_get_events(&events_digests_list)
-                        .await
-                    {
-                        // Only return Ok when all the queried transaction events are found, otherwise retry
-                        // until timeout, then return Err.
-                        Ok(events) if !events.contains(&None) => Ok(events),
-                        Ok(_) => Err(backoff::Error::transient(Error::UnexpectedError(
-                            "Events not found, transaction execution may be incomplete.".into(),
-                        ))),
-                        Err(e) => Err(backoff::Error::permanent(Error::UnexpectedError(format!(
-                            "Failed to call multi_get_events: {e:?}"
-                        )))),
-                    }
-                })
-                .await
-                .map_err(|e| {
-                    Error::UnexpectedError(format!(
-                    "Retrieving events with retry failed for events digests {events_digests_list:?}: {e:?}"
-                ))
-                })?
-                .into_iter();
-
-                // construct a hashmap of events digests -> events for fast lookup
-                let events_map = events_digests_list
-                    .into_iter()
-                    .zip(events)
-                    .collect::<HashMap<_, _>>();
-                // Double check that all events are `Some` and their digests match the key
-                for (events_digest, events) in events_map.iter() {
-                    if let Some(events) = events {
-                        if &events.digest() != events_digest {
-                            return Err(Error::UnexpectedError(format!(
-                                "Events digest {events_digest:?} does not match the key {:?}",
-                                events.digest()
-                            )));
-                        }
-                    } else {
-                        return Err(Error::UnexpectedError(format!(
-                            "Events of digest {events_digest:?} is None, but it should not be"
-                        )));
+            let mut non_empty_digests = vec![];
+            for cache_entry in temp_response.values() {
+                if let Some(effects) = &cache_entry.effects {
+                    if effects.events_digest().is_some() {
+                        non_empty_digests.push(cache_entry.digest);
                     }
                 }
-                events_map
+            }
+            // fetch events from the DB with retry, retry each 0.5s for 3s
+            let backoff = ExponentialBackoff {
+                max_elapsed_time: Some(Duration::from_secs(3)),
+                multiplier: 1.0,
+                ..ExponentialBackoff::default()
             };
-            events_digest_to_events.insert(empty_events_digest, Some(TransactionEvents::default()));
+            let mut events = retry(backoff, || async {
+                match self
+                    .transaction_kv_store
+                    .multi_get_events_by_tx_digests(&non_empty_digests)
+                    .await
+                {
+                    // Only return Ok when all the queried transaction events are found, otherwise retry
+                    // until timeout, then return Err.
+                    Ok(events) if !events.contains(&None) => Ok(events),
+                    Ok(_) => Err(backoff::Error::transient(Error::UnexpectedError(
+                        "Events not found, transaction execution may be incomplete.".into(),
+                    ))),
+                    Err(e) => Err(backoff::Error::permanent(Error::UnexpectedError(format!(
+                        "Failed to call multi_get_events: {e:?}"
+                    )))),
+                }
+            })
+            .await
+            .map_err(|e| {
+                Error::UnexpectedError(format!(
+                "Retrieving events with retry failed for transaction digests {digests:?}: {e:?}"
+            ))
+            })?
+            .into_iter();
 
             // fill cache with the events
             for (_, cache_entry) in temp_response.iter_mut() {
@@ -398,15 +364,12 @@ impl ReadApi {
                 if let Some(events_digest) =
                     cache_entry.effects.as_ref().and_then(|e| e.events_digest())
                 {
-                    let events = events_digest_to_events
-                        .get(events_digest)
-                        .cloned()
-                        .unwrap_or_else(|| panic!("Expect event digest {events_digest:?} to be found in cache for transaction {transaction_digest}"))
-                        .map(|events| to_sui_transaction_events(self, cache_entry.digest, events));
-                    match events {
-                        Some(Ok(e)) => cache_entry.events = Some(e),
-                        Some(Err(e)) => cache_entry.errors.push(e.to_string()),
-                        None => {
+                    match events.next() {
+                        Some(Some(ev)) => {
+                            cache_entry.events =
+                                Some(to_sui_transaction_events(self, cache_entry.digest, ev)?)
+                        }
+                        None | Some(None) => {
                             error!("Failed to fetch events with event digest {events_digest:?} for txn {transaction_digest}");
                             cache_entry.errors.push(format!(
                                 "Failed to fetch events with event digest {events_digest:?}",
@@ -770,7 +733,7 @@ impl ReadApiServer for ReadApi {
             let transaction_kv_store = self.transaction_kv_store.clone();
             let transaction = spawn_monitored_task!(async move {
                 let ret = transaction_kv_store.get_tx(digest).await.map_err(|err| {
-                    debug!(tx_digest=?digest, "Failed to get transaction: {:?}", err);
+                    debug!(tx_digest=?digest, "Failed to get transaction: {}", err);
                     Error::from(err)
                 });
                 add_server_timing("tx_kv_lookup");
@@ -836,30 +799,26 @@ impl ReadApiServer for ReadApi {
             }
 
             if opts.show_events && temp_response.effects.is_some() {
-                // safe to unwrap because we have checked is_some
-                if let Some(event_digest) = temp_response.effects.as_ref().unwrap().events_digest()
-                {
-                    let transaction_kv_store = self.transaction_kv_store.clone();
-                    let event_digest = *event_digest;
-                    let events = spawn_monitored_task!(async move {
-                        transaction_kv_store
-                            .get_events(event_digest)
-                            .await
-                            .map_err(|e| {
-                                error!("Failed to call get transaction events for events digest: {event_digest:?} with error {e:?}");
-                                Error::from(e)
-                            })
-                        })
+                let transaction_kv_store = self.transaction_kv_store.clone();
+                let events = spawn_monitored_task!(async move {
+                    transaction_kv_store
+                        .multi_get_events_by_tx_digests(&[digest])
                         .await
-                        .map_err(Error::from)??;
-                    match to_sui_transaction_events(self, digest, events) {
+                        .map_err(|e| {
+                            error!("Failed to call get transaction events for transaction: {digest:?} with error {e:?}");
+                            Error::from(e)
+                        })
+                    })
+                    .await
+                    .map_err(Error::from)??
+                    .pop()
+                    .flatten();
+                match events {
+                    None => temp_response.events = Some(SuiTransactionBlockEvents::default()),
+                    Some(events) => match to_sui_transaction_events(self, digest, events) {
                         Ok(e) => temp_response.events = Some(e),
                         Err(e) => temp_response.errors.push(e.to_string()),
-                    };
-                } else {
-                    // events field will be Some if and only if `show_events` is true and
-                    // there is no error in converting fetching events
-                    temp_response.events = Some(SuiTransactionBlockEvents::default());
+                    },
                 }
             }
 
@@ -941,38 +900,29 @@ impl ReadApiServer for ReadApi {
             let transaction_kv_store = self.transaction_kv_store.clone();
             spawn_monitored_task!(async move{
             let store = state.load_epoch_store_one_call_per_task();
-            let effect = transaction_kv_store
-                .get_fx_by_tx_digest(transaction_digest)
-                .await
-                .map_err(Error::from)?;
-            let events = if let Some(event_digest) = effect.events_digest() {
-            transaction_kv_store
-                .get_events(*event_digest)
+            let events = transaction_kv_store
+                .multi_get_events_by_tx_digests(&[transaction_digest])
                 .await
                 .map_err(
                     |e| {
-                        error!("Failed to get transaction events for event digest {event_digest:?} with error: {e:?}");
+                        error!("Failed to get transaction events for transaction {transaction_digest:?} with error: {e:?}");
                         Error::StateReadError(e.into())
                     })?
-                .data
-                .into_iter()
-                .enumerate()
-                .map(|(seq, e)| {
-                    let layout = store.executor().type_layout_resolver(Box::new(&state.get_backing_package_store().as_ref())).get_annotated_layout(&e.type_)?;
-                    SuiEvent::try_from(
-                        e,
-                        *effect.transaction_digest(),
-                        seq as u64,
-                        None,
-                        layout,
-                    )
-                })
-                .collect::<Result<Vec<_>, _>>()
-                .map_err(Error::SuiError)?
-        } else {
-            vec![]
-        };
-        Ok(events)
+                .pop()
+                .flatten();
+            Ok(match events {
+                Some(events) => events
+                    .data
+                    .into_iter()
+                    .enumerate()
+                    .map(|(seq, e)| {
+                        let layout = store.executor().type_layout_resolver(Box::new(&state.get_backing_package_store().as_ref())).get_annotated_layout(&e.type_)?;
+                        SuiEvent::try_from(e, transaction_digest, seq as u64, None, layout)
+                    })
+                    .collect::<Result<Vec<_>, _>>()
+                    .map_err(Error::SuiError)?,
+                None => vec![],
+            })
         }).await.map_err(Error::from)?
         })
     }
@@ -1050,20 +1000,6 @@ impl ReadApiServer for ReadApi {
     }
 
     #[instrument(skip(self))]
-    async fn get_checkpoints_deprecated_limit(
-        &self,
-        cursor: Option<BigInt<u64>>,
-        limit: Option<BigInt<u64>>,
-        descending_order: bool,
-    ) -> RpcResult<CheckpointPage> {
-        with_tracing!(async move {
-            self.get_checkpoints(cursor, limit.map(|l| *l as usize), descending_order)
-                .await
-                .map_err(Error::from)
-        })
-    }
-
-    #[instrument(skip(self))]
     async fn get_protocol_config(
         &self,
         version: Option<BigInt<u64>>,
@@ -1096,6 +1032,120 @@ impl ReadApiServer for ReadApi {
             let ci = self.state.get_chain_identifier()?;
             Ok(ci.to_string())
         })
+    }
+    #[instrument(skip(self))]
+    async fn verify_zklogin_signature(
+        &self,
+        bytes: String,
+        signature: String,
+        intent_scope: ZkLoginIntentScope,
+        author: SuiAddress,
+    ) -> RpcResult<ZkLoginVerifyResult> {
+        let epoch_store = self.state.load_epoch_store_one_call_per_task();
+        let curr_epoch = epoch_store.epoch();
+        let zklogin_env_native = match self
+            .state
+            .get_chain_identifier()
+            .expect("get chain identifier should not fail")
+            .chain()
+        {
+            sui_protocol_config::Chain::Mainnet | sui_protocol_config::Chain::Testnet => {
+                ZkLoginEnv::Prod
+            }
+            _ => ZkLoginEnv::Test,
+        };
+        let GenericSignature::ZkLoginAuthenticator(zklogin_sig) =
+            GenericSignature::from_bytes(&Base64::decode(&signature).map_err(Error::from)?)
+                .map_err(Error::from)?
+        else {
+            return Err(SuiRpcInputError::GenericNotFound(
+                "Endpoint only supports zkLogin signature".to_string(),
+            )
+            .into());
+        };
+
+        let new_jwks =
+            match get_authenticator_state(self.state.get_object_store()).map_err(Error::from)? {
+                Some(authenticator_state) => authenticator_state.active_jwks,
+                None => {
+                    return Err(SuiRpcInputError::GenericNotFound(
+                        "Authenticator state not found".to_string(),
+                    )
+                    .into());
+                }
+            };
+
+        // construct verify params with active jwks and zklogin_env.
+        let mut oidc_provider_jwks = ImHashMap::new();
+        for active_jwk in new_jwks.iter() {
+            let ActiveJwk { jwk_id, jwk, .. } = active_jwk;
+            match oidc_provider_jwks.entry(jwk_id.clone()) {
+                im::hashmap::Entry::Occupied(_) => {
+                    warn!("JWK with kid {:?} already exists", jwk_id);
+                }
+                im::hashmap::Entry::Vacant(entry) => {
+                    entry.insert(jwk.clone());
+                }
+            }
+        }
+        let verify_params = VerifyParams::new(
+            oidc_provider_jwks,
+            vec![],
+            zklogin_env_native,
+            true,
+            true,
+            true,
+            Some(30),
+        );
+        match intent_scope {
+            ZkLoginIntentScope::TransactionData => {
+                let tx_data: TransactionData =
+                    bcs::from_bytes(&Base64::decode(&bytes).map_err(Error::from)?)
+                        .map_err(Error::from)?;
+                let intent_msg = IntentMessage::new(Intent::sui_transaction(), tx_data.clone());
+                let sig = GenericSignature::ZkLoginAuthenticator(zklogin_sig);
+                match sig.verify_authenticator(
+                    &intent_msg,
+                    author,
+                    curr_epoch,
+                    &verify_params,
+                    Arc::new(VerifiedDigestCache::new_empty()),
+                ) {
+                    Ok(_) => Ok(ZkLoginVerifyResult {
+                        success: true,
+                        errors: vec![],
+                    }),
+                    Err(e) => Ok(ZkLoginVerifyResult {
+                        success: false,
+                        errors: vec![e.to_string()],
+                    }),
+                }
+            }
+            ZkLoginIntentScope::PersonalMessage => {
+                let data = PersonalMessage {
+                    message: Base64::decode(&bytes).map_err(Error::from)?,
+                };
+                let intent_msg = IntentMessage::new(Intent::personal_message(), data);
+
+                let sig = GenericSignature::ZkLoginAuthenticator(zklogin_sig);
+                match sig.verify_authenticator(
+                    &intent_msg,
+                    author,
+                    curr_epoch,
+                    &verify_params,
+                    Arc::new(VerifiedDigestCache::new_empty()),
+                ) {
+                    Ok(_) => Ok(ZkLoginVerifyResult {
+                        success: true,
+                        errors: vec![],
+                    }),
+                    Err(e) => Ok(ZkLoginVerifyResult {
+                        success: false,
+                        errors: vec![e.to_string()],
+                    }),
+                }
+            }
+        }
     }
 }
 
@@ -1195,7 +1245,7 @@ async fn get_display_object_by_type(
     // If there's any recent version of Display, give it to the client.
     // TODO: add support for version query.
     if let Some(event) = events.pop() {
-        let display: DisplayVersionUpdatedEvent = bcs::from_bytes(&event.bcs[..])?;
+        let display: DisplayVersionUpdatedEvent = bcs::from_bytes(&event.bcs.into_bytes())?;
         Ok(Some(display))
     } else {
         Ok(None)

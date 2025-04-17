@@ -70,3 +70,11 @@ fun set_test_spec() {
   set_test();
   ensures(ghost::global<GhostStruct, bool>() == true);
 }
+
+#[spec(prove)]
+fun ghost_borrow_mut_spec() {
+  ghost::declare_global_mut<GhostStruct, bool>();
+  let ghost_ref = ghost::borrow_mut<GhostStruct, bool>();
+  *ghost_ref = true;
+  ensures(ghost::global<GhostStruct, bool>() == true);
+}

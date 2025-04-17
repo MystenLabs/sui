@@ -15,8 +15,8 @@
     "trailingComma": "all"
   },
   "dependencies": {
-    "@mysten/kiosk": "workspace:*",
-    "@mysten/sui": "workspace:*",
-    "commander": "^11.0.0"
+    "@mysten/kiosk": "^0.9.34",
+    "@mysten/sui": "^1.18.0",
+    "commander": "^11.1.0"
   }
 }

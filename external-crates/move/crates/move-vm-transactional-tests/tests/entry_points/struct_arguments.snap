@@ -1,0 +1,20 @@
+---
+source: crates/move-transactional-test-runner/src/framework.rs
+---
+processed 5 tasks
+
+task 1, lines 19-26:
+//# run --args 0 0 0
+mutable inputs after call: local#2: { 0 }
+
+task 2, lines 28-34:
+//# run --type-args 0x42::M::S --args 0 0 0
+mutable inputs after call: local#2: { 0 }
+
+task 3, line 36:
+//# run 0x42::M::foo --args 0 0 0
+mutable inputs after call: local#2: { 0 }
+
+task 4, line 38:
+//# run 0x42::M::foo_gen --type-args 0x42::M::S --args 0 0 0
+mutable inputs after call: local#2: { 0 }
