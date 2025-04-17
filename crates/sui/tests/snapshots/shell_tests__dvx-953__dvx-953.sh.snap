@@ -1,0 +1,22 @@
+---
+source: crates/sui/tests/shell_tests.rs
+description: tests/shell_tests/dvx-953/dvx-953.sh
+---
+----- script -----
+
+cd A && sui move build
+
+----- results -----
+success: true
+exit_code: 0
+----- stdout -----
+
+----- stderr -----
+INCLUDING DEPENDENCY B
+INCLUDING DEPENDENCY C
+INCLUDING DEPENDENCY D
+INCLUDING DEPENDENCY Bridge
+INCLUDING DEPENDENCY SuiSystem
+INCLUDING DEPENDENCY Sui
+INCLUDING DEPENDENCY MoveStdlib
+BUILDING A
