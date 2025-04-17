@@ -17,10 +17,11 @@ ENV RUSTFLAGS="-C debuginfo=2"
 
 RUN cargo build --profile ${PROFILE} --bin sui-analytics-indexer
 
-# --------------------
-# Runtime Stage
-# --------------------
-FROM debian:12-slim as deploy
+FROM debian:12-slim as runtime
+
+# Use jemalloc as memory allocator
+RUN apt-get update && apt-get install -y libjemalloc-dev ca-certificates curl
+ENV LD_PRELOAD /usr/lib/x86_64-linux-gnu/libjemalloc.so
 
 RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates
 
