@@ -2642,6 +2642,7 @@ impl CheckpointService {
 
         // If this times out, the validator may still start up. The worst that can
         // happen is that we will crash later on (due to missing transactions).
+        // TODO: Explain why it will crash later on.
         if tokio::time::timeout(
             Duration::from_secs(120),
             self.wait_for_rebuilt_checkpoints(),
@@ -2659,6 +2660,7 @@ impl CheckpointService {
 impl CheckpointService {
     /// Waits until all checkpoints had been built before the node restarted
     /// are rebuilt.
+    /// TODO: Add comments explain why we need to wait for checkpoints to be rebuilt.
     pub async fn wait_for_rebuilt_checkpoints(&self) {
         let highest_previously_built_seq = self.highest_previously_built_seq;
         let mut rx = self.highest_currently_built_seq_tx.subscribe();

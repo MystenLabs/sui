@@ -422,6 +422,7 @@ impl PipelineHandle {
 impl Drop for PipelineHandle {
     fn drop(&mut self) {
         if !std::thread::panicking() {
+            // TODO: Add comments explain why this guarantee holds.
             assert_eq!(
                 self.cur_stage,
                 PipelineStage::End,
