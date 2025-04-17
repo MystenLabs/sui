@@ -25,7 +25,8 @@ use crate::analytics_metrics::AnalyticsMetrics;
 use crate::handlers::AnalyticsHandler;
 use crate::writers::AnalyticsWriter;
 use crate::{
-    join_paths, FileMetadata, MaxCheckpointReader, ParquetSchema, TaskContext, EPOCH_DIR_PREFIX,
+    heap_profiler, join_paths, FileMetadata, MaxCheckpointReader, ParquetSchema, TaskContext,
+    EPOCH_DIR_PREFIX,
 };
 
 struct State<S: Serialize + ParquetSchema> {
@@ -53,6 +54,8 @@ const CHECK_FILE_SIZE_ITERATION_CYCLE: u64 = 50;
 impl<S: Serialize + ParquetSchema + 'static> Worker for AnalyticsProcessor<S> {
     type Result = ();
     async fn process_checkpoint(&self, checkpoint_data: &CheckpointData) -> Result<()> {
+        heap_profiler::dump_heap_profile_now();
+
         // get epoch id, checkpoint sequence number and timestamp, those are important
         // indexes when operating on data
         let epoch: u64 = checkpoint_data.checkpoint_summary.epoch();

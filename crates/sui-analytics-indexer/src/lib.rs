@@ -54,6 +54,7 @@ pub mod analytics_metrics;
 pub mod analytics_processor;
 pub mod errors;
 mod handlers;
+pub mod heap_profiler;
 pub mod package_store;
 pub mod tables;
 mod writers;
