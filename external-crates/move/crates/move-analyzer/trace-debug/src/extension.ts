@@ -198,9 +198,15 @@ export function activate(context: vscode.ExtensionContext) {
         vscode.workspace.registerTextDocumentContentProvider("mtrace", trace_content_provider)
     );
 
-    vscode.workspace.onDidOpenTextDocument(doc => {
+    vscode.workspace.onDidOpenTextDocument(async doc => {
         if (doc.uri.scheme === 'file' && doc.uri.fsPath.endsWith('.json.zst')) {
+            // Close binary trace file after it was opened
+            await vscode.commands.executeCommand('workbench.action.closeActiveEditor');
+
+            // Open editor showing decompressed trace file
             const mtraceUri = vscode.Uri.parse(`mtrace:${doc.uri.fsPath}`);
+            const mtraceDoc = await vscode.workspace.openTextDocument(mtraceUri);
+            await vscode.window.showTextDocument(mtraceDoc, { preview: false });
             vscode.commands.executeCommand('vscode.open', mtraceUri);
         }
     });
