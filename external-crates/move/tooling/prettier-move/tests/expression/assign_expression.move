@@ -53,6 +53,10 @@ fun assign_expression() {
 
     assign = vector[100, 200];
     assign = vector[100000, 200000, 30000];
+
+    // assign + function call
+    deny_cap_v2 =
+        some::thing(deny_cap);
 }
 
 fun assign_comment() {

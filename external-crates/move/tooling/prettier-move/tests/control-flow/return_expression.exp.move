@@ -28,6 +28,8 @@ fun folding() {
 
     return ({ a + b }, first_return_value, second_return_value);
 
+    return &mut complex[&expression];
+
     return if (some_value) {
         some_value
     } else {
