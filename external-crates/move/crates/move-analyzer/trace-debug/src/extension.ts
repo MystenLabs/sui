@@ -177,7 +177,8 @@ export function activate(context: vscode.ExtensionContext) {
         }
     }));
 
-    // Create and register custom content provider for compressed trace files.
+    // Create and register custom content provider for compressed trace files,
+    // as well as custom editor for Move trace files.
     // TODO: for now it's OK to decmpress the whole trace here because the debugger
     // does not handle streaming traces at the moment anyway, but it will have to change
     // once it does.
@@ -191,11 +192,22 @@ export function activate(context: vscode.ExtensionContext) {
             }
         }
     };
-
     context.subscriptions.push(
         vscode.workspace.registerTextDocumentContentProvider("mtrace", trace_content_provider)
     );
+    context.subscriptions.push(
+        vscode.window.registerCustomEditorProvider(
+            'mtrace.viewer',
+            new MoveTraceViewProvider(),
+            {
+                supportsMultipleEditorsPerDocument: false
+            }
+        )
+    );
 
+    // When opening compressed trace file in the "default" editor,
+    // close the editor and open another one showing decompressed
+    // content.
     vscode.workspace.onDidOpenTextDocument(async doc => {
         if (doc.uri.scheme === 'file' && doc.uri.fsPath.endsWith('.json.zst')) {
             // Close binary trace file after it was opened
@@ -216,6 +228,41 @@ export function activate(context: vscode.ExtensionContext) {
 export function deactivate() { }
 
 /**
+ * Custom editor provider for Move trace files.
+ */
+class MoveTraceViewProvider implements vscode.CustomReadonlyEditorProvider {
+    async openCustomDocument(uri: vscode.Uri): Promise<vscode.CustomDocument> {
+        return { uri, dispose: () => { } };
+    }
+
+    async resolveCustomEditor(
+        document: vscode.CustomDocument,
+        webviewPanel: vscode.WebviewPanel,
+        _token: vscode.CancellationToken
+    ) {
+        webviewPanel.webview.options = { enableScripts: true };
+
+        try {
+            const traceContent = await decompressTraceFile(document.uri.fsPath);
+            webviewPanel.webview.html = this.renderHtml(traceContent);
+        } catch (err) {
+            const msg = err instanceof Error ? err.message : String(err);
+            webviewPanel.webview.html = `<pre style="color:red;">Failed to load trace: ${msg}</pre>`;
+        }
+    }
+
+    private renderHtml(decodedText: string): string {
+        return `
+        <html>
+          <body>
+            <pre>${decodedText.replace(/</g, '&lt;')}</pre>
+          </body>
+        </html>
+      `;
+    }
+}
+
+/**
  * Custom configuration provider for Move debug configurations.
  */
 class MoveConfigurationProvider implements vscode.DebugConfigurationProvider {
@@ -229,16 +276,12 @@ class MoveConfigurationProvider implements vscode.DebugConfigurationProvider {
         config: DebugConfiguration,
         token?: CancellationToken
     ): Promise<DebugConfiguration | undefined | null> {
-        console.log('resolveDebugConfiguration', config);
-
         // if launch.json is missing or empty
         if (!config.request && !config.name) {
-
             try {
                 const editor = vscode.window.activeTextEditor;
                 if (editor && (editor.document.languageId === 'move'
-                    || editor.document.languageId === 'mvb'
-                    || editor.document.languageId === 'mtrace')) {
+                    || editor.document.languageId === 'mvb')) {
                     config.traceInfo = await findTraceInfo(editor);
                     config.source = '${file}';
                 } else if (folder) {
@@ -263,7 +306,15 @@ class MoveConfigurationProvider implements vscode.DebugConfigurationProvider {
                     config.traceInfo = [constructTraceInfo(tracePath, tracedFunctionInfo)];
                     config.source = tracePath;
                 } else {
-                    throw new Error('No active editor or folder');
+                    const traceViewUri = traceViewTabUri();
+                    if (traceViewUri) {
+                        const traceContent = await decompressTraceFile(traceViewUri.fsPath);
+                        const tracedFunctionInfo = getTracedFunctionInfo(traceContent);
+                        config.traceInfo = [constructTraceInfo(traceViewUri.fsPath, tracedFunctionInfo)];
+                        config.source = traceViewUri.fsPath;
+                    } else {
+                        throw new Error('No active editor or folder');
+                    }
                 }
             } catch (err) {
                 const msg = err instanceof Error ? err.message : String(err);
@@ -601,4 +652,21 @@ async function decompressTraceFile(traceFilePath: string): Promise<string> {
     const buf = fs.readFileSync(traceFilePath);
     const decompressed = await decompress(buf);
     return decompressed.toString('utf8').trimEnd();
+}
+
+function traceViewTabUri(): vscode.Uri | undefined {
+    const activeTab = vscode.window.tabGroups.activeTabGroup.activeTab;
+    if (!activeTab) {
+        return undefined;
+    }
+    const input = activeTab.input;
+    if (!input) {
+        return undefined;
+    }
+    if (input instanceof vscode.TabInputCustom) {
+        if (input.viewType === 'move.traceView') {
+            return input.uri;
+        }
+    }
+    return undefined;
 }

@@ -65,6 +65,18 @@
                 ]
             }
         ],
+        "customEditors": [
+            {
+                "viewType": "mtrace.viewer",
+                "displayName": "Move Trace Viewer",
+                "selector": [
+                    {
+                        "filenamePattern": "**/*.json.zst"
+                    }
+                ],
+                "priority": "default"
+            }
+        ],
         "breakpoints": [
             {
                 "language": "move"
@@ -121,7 +133,7 @@
                         "type": "move-debug"
                     }
                 ]
-    }
+            }
         ]
     },
     "menus": {
