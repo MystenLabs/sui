@@ -219,15 +219,23 @@ pub enum ExecutionFailureStatus {
 
     #[error(
         "Move vector element (passed to MakeMoveVec) with size {value_size} is larger \
-        than the maximum object size {max_size}"
+        than the maximum size {max_scaled_size}. Note that this maximum is scaled based on the \
+        type of the vector element."
     )]
-    MoveVectorElemTooBig { value_size: u64, max_size: u64 },
+    MoveVectorElemTooBig {
+        value_size: u64,
+        max_scaled_size: u64,
+    },
 
     #[error(
         "Move value (possibly an upgrade ticket or a dev-inspect value) with size {value_size} \
-        is larger than the maximum object size {max_size}"
+        is larger than the maximum size  {max_scaled_size}. Note that this maximum is scaled based \
+        on the type of the value."
     )]
-    MoveRawValueTooBig { value_size: u64, max_size: u64 },
+    MoveRawValueTooBig {
+        value_size: u64,
+        max_scaled_size: u64,
+    },
     // NOTE: if you want to add a new enum,
     // please add it at the end for Rust SDK backward compatibility.
 }

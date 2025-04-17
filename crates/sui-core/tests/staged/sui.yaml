@@ -563,12 +563,12 @@ ExecutionFailureStatus:
       MoveVectorElemTooBig:
         STRUCT:
           - value_size: U64
-          - max_size: U64
+          - max_scaled_size: U64
     38:
       MoveRawValueTooBig:
         STRUCT:
           - value_size: U64
-          - max_size: U64
+          - max_scaled_size: U64
 ExecutionStatus:
   ENUM:
     0:

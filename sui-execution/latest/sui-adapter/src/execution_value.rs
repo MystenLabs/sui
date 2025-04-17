@@ -288,11 +288,11 @@ pub fn ensure_serialized_size(size: u64, bound: SizeBound) -> Result<(), Executi
             },
             SizeBound::VectorElem(_) => ExecutionErrorKind::MoveVectorElemTooBig {
                 value_size: size,
-                max_size: bound_size,
+                max_scaled_size: bound_size,
             },
             SizeBound::Raw(_) => ExecutionErrorKind::MoveRawValueTooBig {
                 value_size: size,
-                max_size: bound_size,
+                max_scaled_size: bound_size,
             },
         };
         let msg = "Serialized bytes of value too large".to_owned();
