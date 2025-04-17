@@ -1,6 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+#[cfg(test)]
 pub(crate) mod mem_store;
 pub(crate) mod rocksdb_store;
 
@@ -10,14 +11,13 @@ mod store_tests;
 use consensus_config::AuthorityIndex;
 
 use crate::{
-    block::{BlockRef, Round, Slot, VerifiedBlock},
+    block::{BlockRef, Round, VerifiedBlock},
     commit::{CommitInfo, CommitRange, CommitRef, TrustedCommit},
     error::ConsensusResult,
     CommitIndex,
 };
 
 /// A common interface for consensus storage.
-#[allow(unused)]
 pub(crate) trait Store: Send + Sync {
     /// Writes blocks, consensus commits and other data to store atomically.
     fn write(&self, write_batch: WriteBatch) -> ConsensusResult<()>;
@@ -27,9 +27,6 @@ pub(crate) trait Store: Send + Sync {
 
     /// Checks if blocks exist in the store.
     fn contains_blocks(&self, refs: &[BlockRef]) -> ConsensusResult<Vec<bool>>;
-
-    /// Checks whether there is any block at the given slot
-    fn contains_block_at_slot(&self, slot: Slot) -> ConsensusResult<bool>;
 
     /// Reads blocks for an authority, from start_round.
     fn scan_blocks_by_author(
