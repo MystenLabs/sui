@@ -12944,6 +12944,7 @@ dependencies = [
  "move-bytecode-utils",
  "move-core-types",
  "mysten-metrics",
+ "num_cpus",
  "num_enum 0.6.1",
  "object_store",
  "parquet",
