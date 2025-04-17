@@ -87,6 +87,7 @@ use typed_store::DBMapUtils;
 use typed_store::Map;
 
 use super::authority_store_tables::ENV_VAR_LOCKS_BLOCK_CACHE_SIZE;
+use super::consensus_tx_status_cache::{ConsensusTxStatus, ConsensusTxStatusCache};
 use super::epoch_start_configuration::EpochStartConfigTrait;
 use super::execution_time_estimator::ExecutionTimeEstimator;
 use super::shared_object_congestion_tracker::{
@@ -121,6 +122,7 @@ use crate::module_cache_metrics::ResolverMetrics;
 use crate::post_consensus_tx_reorder::PostConsensusTxReorder;
 use crate::signature_verifier::*;
 use crate::stake_aggregator::{GenericMultiStakeAggregator, StakeAggregator};
+use crate::wait_for_effects_request::ConsensusTxPosition;
 
 /// The key where the latest consensus index is stored in the database.
 // TODO: Make a single table (e.g., called `variables`) storing all our lonely variables in one place.
@@ -410,6 +412,8 @@ pub struct AuthorityPerEpochStore {
     tx_object_debts: OnceCell<mpsc::Sender<Vec<ObjectID>>>,
     // Saved at end of epoch for propagating observations to the next.
     end_of_epoch_execution_time_observations: OnceCell<StoredExecutionTimeObservations>,
+
+    pub(crate) consensus_tx_status_cache: Option<ConsensusTxStatusCache>,
 }
 
 /// AuthorityEpochTables contains tables that contain data that is only valid within an epoch.
@@ -917,6 +921,14 @@ impl AuthorityPerEpochStore {
                 None
             };
 
+        let consensus_tx_status_cache = if protocol_config.mysticeti_fastpath() {
+            Some(ConsensusTxStatusCache::new(
+                protocol_config.gc_depth() as u64
+            ))
+        } else {
+            None
+        };
+
         let s = Arc::new(Self {
             name,
             committee: committee.clone(),
@@ -956,6 +968,7 @@ impl AuthorityPerEpochStore {
             tx_local_execution_time: OnceCell::new(),
             tx_object_debts: OnceCell::new(),
             end_of_epoch_execution_time_observations: OnceCell::new(),
+            consensus_tx_status_cache,
         });
 
         s.update_buffer_stake_metric();
@@ -4508,6 +4521,16 @@ impl AuthorityPerEpochStore {
             "The following transactions were neither reverted nor checkpointed: {:?}",
             uncheckpointed_transactions
         );
+    }
+
+    pub(crate) fn set_consensus_tx_status(
+        &self,
+        position: ConsensusTxPosition,
+        status: ConsensusTxStatus,
+    ) {
+        if let Some(cache) = self.consensus_tx_status_cache.as_ref() {
+            cache.set_transaction_status(position, status);
+        }
     }
 }
 
