@@ -28,8 +28,10 @@ fn main() -> Result<()> {
         .worker_threads(num_cpus)
         .enable_all()
         .build()?;
-
+    sui_analytics_indexer::heap_profiler::dump_heap_profile_now();
     runtime.block_on(async {
+        sui_analytics_indexer::heap_profiler::dump_heap_profile_now();
+        info!("Async started");
         // Setup metrics
         let registry_service = mysten_metrics::start_prometheus_server(
             format!(
@@ -43,11 +45,15 @@ fn main() -> Result<()> {
         mysten_metrics::init_metrics(&registry);
         let metrics = AnalyticsMetrics::new(&registry);
 
+        info!("metrics started");
         let remote_store_url = config.remote_store_url.clone();
         let batch_size = config.batch_size;
 
+        sui_analytics_indexer::heap_profiler::dump_heap_profile_now();
         let processors = config.create_checkpoint_processors(metrics).await?;
 
+        info!("create_checkpoint_processors");
+        sui_analytics_indexer::heap_profiler::dump_heap_profile_now();
         let mut watermarks = HashMap::new();
         for processor in processors.iter() {
             let watermark = processor
@@ -57,6 +63,8 @@ fn main() -> Result<()> {
             watermarks.insert(processor.task_name.clone(), watermark);
         }
 
+        info!("got watermarks");
+        sui_analytics_indexer::heap_profiler::dump_heap_profile_now();
         let progress_store = ShimIndexerProgressStore::new(watermarks);
         let mut executor = IndexerExecutor::new(
             progress_store,
@@ -64,12 +72,15 @@ fn main() -> Result<()> {
             DataIngestionMetrics::new(&Registry::new()),
         );
 
+        info!("created executor");
         for processor in processors {
+            sui_analytics_indexer::heap_profiler::dump_heap_profile_now();
             let task_name = processor.task_name.clone();
             let worker_pool = WorkerPool::new(processor, task_name, 1);
             executor.register(worker_pool).await?;
         }
 
+        info!("created processors");
         let reader_options = ReaderOptions {
             batch_size,
             ..Default::default()
@@ -84,6 +95,8 @@ fn main() -> Result<()> {
             exit_receiver,
         );
 
+        info!("executor run");
+        sui_analytics_indexer::heap_profiler::dump_heap_profile_now();
         tokio::spawn(async {
             signal::ctrl_c()
                 .await
@@ -92,6 +105,7 @@ fn main() -> Result<()> {
                 .send(())
                 .expect("Failed to gracefully process shutdown");
         });
+        info!("waiting");
         executor_progress.await?;
         Ok(())
     })
