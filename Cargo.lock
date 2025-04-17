@@ -6569,6 +6569,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "jemallocator"
+version = "0.5.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a0de374a9f8e63150e6f5e8a60cc14c668226d7a347d8aee1a45766e3c4dd3bc"
+dependencies = [
+ "jemalloc-sys",
+ "libc",
+]
+
+[[package]]
 name = "jni"
 version = "0.21.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -12941,6 +12951,7 @@ dependencies = [
  "fastcrypto",
  "gcp-bigquery-client",
  "jemalloc-sys",
+ "jemallocator",
  "move-binary-format",
  "move-bytecode-utils",
  "move-core-types",
@@ -17529,7 +17540,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "97fee6b57c6a41524a810daee9286c02d7752c4253064d0b05472833a438f675"
 dependencies = [
  "cfg-if",
- "rand 0.7.3",
+ "rand 0.8.5",
  "static_assertions",
 ]
 

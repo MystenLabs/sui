@@ -56,7 +56,7 @@ tap.workspace = true
 serde_yaml.workspace = true
 num_cpus.workspace = true
 jemalloc-sys = "0.5"
-# jemallocator = "0.5"                                       # Optional, if you want to route all allocs through jemalloc
+jemallocator = "0.5"
 
 [dev-dependencies]
 
