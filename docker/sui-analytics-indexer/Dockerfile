@@ -12,6 +12,8 @@ COPY crates crates
 COPY sui-execution sui-execution
 COPY external-crates external-crates
 
+ENV RUSTFLAGS="-C debuginfo=2"
+
 RUN cargo build --profile ${PROFILE} --bin sui-analytics-indexer
 
 # ---------------------
