@@ -662,7 +662,7 @@ fn boogie_debug_track(
             fun_target.func_env.module_env.get_id().to_usize(),
             fun_def_idx,
             tracked_idx,
-            boogie_type(fun_target.global_env(), ty.skip_reference()),
+            boogie_type_suffix(fun_target.global_env(), ty.skip_reference()),
             temp_name,
             temp_name,
             temp_name
@@ -674,7 +674,7 @@ fn boogie_debug_track(
             fun_target.func_env.module_env.get_id().to_usize(),
             fun_def_idx,
             tracked_idx,
-            boogie_type(fun_target.global_env(), ty),
+            boogie_type_suffix(fun_target.global_env(), ty),
             value,
             value,
             value

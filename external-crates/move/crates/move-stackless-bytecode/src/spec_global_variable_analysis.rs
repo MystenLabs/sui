@@ -1,3 +1,4 @@
+use core::fmt;
 use std::collections::{BTreeMap, BTreeSet};
 
 use codespan_reporting::diagnostic::{Diagnostic, Label, Severity};
@@ -15,7 +16,7 @@ use crate::{
 };
 
 /// The environment extension computed by this analysis.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct SpecGlobalVariableInfo {
     imm_vars: BTreeSet<Vec<Type>>,
     mut_vars: BTreeSet<Vec<Type>>,
@@ -32,8 +33,8 @@ impl SpecGlobalVariableInfo {
         &self.mut_vars
     }
 
-    pub fn all_vars(&self) -> impl Iterator<Item = Vec<Type>> + '_ {
-        self.imm_vars.union(&self.mut_vars).cloned()
+    pub fn all_vars(&self) -> impl Iterator<Item = &Vec<Type>> + '_ {
+        self.imm_vars.union(&self.mut_vars)
     }
 
     pub fn union(&self, other: &Self) -> Self {
@@ -185,15 +186,6 @@ pub fn get_info(data: &FunctionData) -> &SpecGlobalVariableInfo {
     data.annotations.get::<SpecGlobalVariableInfo>().unwrap()
 }
 
-fn set_info(env: &FunctionEnv, data: &mut FunctionData, info: SpecGlobalVariableInfo) {
-    assert!(
-        !data.annotations.has::<SpecGlobalVariableInfo>(),
-        "spec global variable info already set: function={}",
-        env.get_full_name_str(),
-    );
-    data.annotations.set::<SpecGlobalVariableInfo>(info, true);
-}
-
 pub fn collect_spec_global_variable_info(
     targets: &FunctionTargetsHolder,
     fun_target: &FunctionTarget,
@@ -212,20 +204,21 @@ pub fn collect_spec_global_variable_info(
                 return Some(SpecGlobalVariableInfo::singleton_imm(type_inst, &loc));
             }
 
+            if callee_id == fun_target.func_env.module_env.env.global_set_qid() {
+                return Some(SpecGlobalVariableInfo::singleton_mut(type_inst, &loc));
+            }
+
+            if callee_id == fun_target.func_env.module_env.env.global_borrow_mut_qid() {
+                return Some(SpecGlobalVariableInfo::singleton_mut(type_inst, &loc));
+            }
+
             if callee_id == fun_target.func_env.module_env.env.log_ghost_qid() {
                 return Some(SpecGlobalVariableInfo::singleton_imm(type_inst, &loc));
             }
 
-            let fun_id_with_info = match targets.get_spec_by_fun(&callee_id) {
-                Some(spec_id) => {
-                    if spec_id != &fun_target.func_env.get_qualified_id() {
-                        spec_id
-                    } else {
-                        &callee_id
-                    }
-                }
-                None => &callee_id,
-            };
+            let fun_id_with_info = targets
+                .get_callee_spec_qid(&fun_target.func_env.get_qualified_id(), &callee_id)
+                .unwrap_or(&callee_id);
 
             // native or intrinsic functions are without specs do not have spec global variables
             if fun_target
@@ -303,10 +296,8 @@ impl FunctionTargetProcessor for SpecGlobalVariableAnalysisProcessor {
         targets: &mut FunctionTargetsHolder,
         func_env: &FunctionEnv,
         mut data: FunctionData,
-        _scc_opt: Option<&[FunctionEnv]>,
+        scc_opt: Option<&[FunctionEnv]>,
     ) -> FunctionData {
-        // assert!(scc_opt.is_none(), "recursive functions not supported");
-
         let info = collect_spec_global_variable_info(
             targets,
             &FunctionTarget::new(func_env, &data),
@@ -326,17 +317,17 @@ impl FunctionTargetProcessor for SpecGlobalVariableAnalysisProcessor {
 
                 if spec_info.all_vars().contains(&var) {
                     // check mutability
-                    if info.mut_vars().contains(&var) && !spec_info.mut_vars().contains(&var) {
+                    if info.mut_vars().contains(var) && !spec_info.mut_vars().contains(var) {
                         // if the variable is declared as immutable in spec but used as mutable
                         let primary_labels = info
                             .mut_vars_locs
-                            .get(&var)
+                            .get(var)
                             .unwrap()
                             .iter()
                             .map(|loc| Label::primary(loc.file_id(), loc.span()))
                             .collect();
                         let spec_var_loc =
-                            spec_info.imm_vars_locs.get(&var).unwrap().first().unwrap();
+                            spec_info.imm_vars_locs.get(var).unwrap().first().unwrap();
                         let secondary_label =
                             Label::secondary(spec_var_loc.file_id(), spec_var_loc.span());
                         let diag = Diagnostic::new(Severity::Error)
@@ -354,8 +345,8 @@ impl FunctionTargetProcessor for SpecGlobalVariableAnalysisProcessor {
                     continue;
                 }
 
-                let imm_locs = info.imm_vars_locs.get(&var).into_iter().flatten();
-                let mut_locs = info.mut_vars_locs.get(&var).into_iter().flatten();
+                let imm_locs = info.imm_vars_locs.get(var).into_iter().flatten();
+                let mut_locs = info.mut_vars_locs.get(var).into_iter().flatten();
                 let all_locs = imm_locs.chain(mut_locs).collect::<BTreeSet<_>>();
 
                 if let Some(spec_var_ty) = spec_vars.get(var_name) {
@@ -439,7 +430,8 @@ impl FunctionTargetProcessor for SpecGlobalVariableAnalysisProcessor {
                 }
             }
 
-            set_info(func_env, &mut data, info);
+            data.annotations
+                .set_with_fixedpoint_check(info, scc_opt.is_some());
         }
 
         data
@@ -473,8 +465,42 @@ impl FunctionTargetProcessor for SpecGlobalVariableAnalysisProcessor {
             });
             let info = SpecGlobalVariableInfo::info_union(infos_iter);
 
-            set_info(&spec_env, spec_data, info);
+            spec_data
+                .annotations
+                .set::<SpecGlobalVariableInfo>(info, true);
         }
+    }
+
+    fn dump_result(
+        &self,
+        f: &mut fmt::Formatter,
+        env: &GlobalEnv,
+        targets: &FunctionTargetsHolder,
+    ) -> fmt::Result {
+        writeln!(f, "\n\n==== spec global variable analysis summaries ====\n")?;
+        for ref module in env.get_modules() {
+            for ref fun in module.get_functions() {
+                for (_, ref target) in targets.get_targets(fun) {
+                    let info = get_info(target.data);
+                    writeln!(f, "fun {}", fun.get_full_name_str())?;
+                    for var in info.mut_vars() {
+                        writeln!(
+                            f,
+                            "  mutable {}",
+                            var[0].display(&fun.get_named_type_display_ctx())
+                        )?;
+                    }
+                    for var in info.imm_vars() {
+                        writeln!(
+                            f,
+                            "  immutable {}",
+                            var[0].display(&fun.get_named_type_display_ctx())
+                        )?;
+                    }
+                }
+            }
+        }
+        Ok(())
     }
 
     fn name(&self) -> String {

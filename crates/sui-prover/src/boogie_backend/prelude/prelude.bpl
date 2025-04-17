@@ -455,6 +455,7 @@ datatype $Location {
     // A global resource location within the statically known resource type's memory,
     // where `a` is an address.
     $Global(a: int),
+    $SpecGlobal(s: string),
     // A local location. `i` is the unique index of the local.
     $Local(i: int),
     // The location of a reference outside of the verification scope, for example, a `&mut` parameter

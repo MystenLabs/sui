@@ -280,6 +280,22 @@ impl FunctionTargetsHolder {
         self.datatype_invs.get_by_right(id)
     }
 
+    /// Return the specification of the callee function if the specification can
+    /// be used instead of the callee by the caller. This is the case if and
+    /// only if
+    /// * a specification exists for the callee, and
+    /// * the caller is not the specification.
+    pub fn get_callee_spec_qid(
+        &self,
+        caller_qid: &QualifiedId<FunId>,
+        callee_qid: &QualifiedId<FunId>,
+    ) -> Option<&QualifiedId<FunId>> {
+        match self.get_spec_by_fun(callee_qid) {
+            Some(spec_qid) if spec_qid != caller_qid => Some(spec_qid),
+            _ => None,
+        }
+    }
+
     /// Adds a new function target. The target will be initialized from the Move byte code.
     pub fn add_target(&mut self, func_env: &FunctionEnv<'_>) {
         let generator = StacklessBytecodeGenerator::new(func_env);
@@ -616,8 +632,11 @@ impl FunctionTargetPipeline {
             let src_idx = nodes.get(&fun_id).unwrap();
             let fun_env = env.get_function(fun_id);
             for callee in fun_env.get_called_functions() {
+                let dst_qid = targets
+                    .get_callee_spec_qid(&fun_env.get_qualified_id(), &callee)
+                    .unwrap_or(&callee);
                 let dst_idx = nodes
-                    .get(&callee)
+                    .get(dst_qid)
                     .expect("callee is not in function targets");
                 graph.add_edge(*src_idx, *dst_idx, ());
             }
@@ -656,7 +675,8 @@ impl FunctionTargetPipeline {
         targets: &mut FunctionTargetsHolder,
         hook_before_pipeline: H1,
         hook_after_each_processor: H2,
-    ) where
+    ) -> Result<(), &Box<dyn FunctionTargetProcessor>>
+    where
         H1: Fn(&FunctionTargetsHolder),
         H2: Fn(usize, &dyn FunctionTargetProcessor, &FunctionTargetsHolder),
     {
@@ -698,11 +718,19 @@ impl FunctionTargetPipeline {
                 processor.finalize(env, targets);
             }
             hook_after_each_processor(step_count + 1, processor.as_ref(), targets);
+            if env.has_errors() {
+                return Err(processor);
+            }
         }
+        Ok(())
     }
 
     /// Run the pipeline on all functions in the targets holder, with no hooks in effect
-    pub fn run(&self, env: &GlobalEnv, targets: &mut FunctionTargetsHolder) {
+    pub fn run(
+        &self,
+        env: &GlobalEnv,
+        targets: &mut FunctionTargetsHolder,
+    ) -> Result<(), &Box<dyn FunctionTargetProcessor>> {
         self.run_with_hook(env, targets, |_| {}, |_, _, _| {})
     }
 
@@ -715,7 +743,7 @@ impl FunctionTargetPipeline {
         targets: &mut FunctionTargetsHolder,
         dump_base_name: &str,
         dump_cfg: bool,
-    ) {
+    ) -> Result<(), &Box<dyn FunctionTargetProcessor>> {
         self.run_with_hook(
             env,
             targets,
@@ -739,7 +767,7 @@ impl FunctionTargetPipeline {
                     Self::dump_cfg(env, holders, dump_base_name, step_count, &suffix);
                 }
             },
-        );
+        )
     }
 
     fn print_targets(env: &GlobalEnv, name: &str, targets: &FunctionTargetsHolder) -> String {

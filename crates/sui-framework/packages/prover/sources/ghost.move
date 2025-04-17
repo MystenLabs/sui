@@ -17,6 +17,9 @@ public fun set_spec<T, U>(x: &U) {
 }
 
 #[spec_only]
+public native fun borrow_mut<T, U>(): &mut U;
+
+#[spec_only]
 public native fun declare_global<T, U>();
 #[spec_only]
 public native fun declare_global_mut<T, U>();

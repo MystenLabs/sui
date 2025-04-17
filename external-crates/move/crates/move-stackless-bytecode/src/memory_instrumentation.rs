@@ -191,7 +191,9 @@ impl<'a> Instrumenter<'a> {
         for (node, ancestors) in before.dying_nodes(after) {
             // we only care about references that occurs in the function body
             let node_idx = match node {
-                BorrowNode::LocalRoot(..) | BorrowNode::GlobalRoot(..) => {
+                BorrowNode::LocalRoot(..)
+                | BorrowNode::GlobalRoot(..)
+                | BorrowNode::SpecGlobalRoot(..) => {
                     continue;
                 }
                 BorrowNode::Reference(idx) => {
@@ -290,7 +292,9 @@ impl<'a> Instrumenter<'a> {
                 for action in chain {
                     // decide if we need a pre-writeback pack-ref (i.e., data structure invariant checking)
                     let pre_writeback_check_opt = match &action.dst {
-                        BorrowNode::LocalRoot(..) | BorrowNode::GlobalRoot(..) => {
+                        BorrowNode::LocalRoot(..)
+                        | BorrowNode::GlobalRoot(..)
+                        | BorrowNode::SpecGlobalRoot(..) => {
                             // On write-back to a root, "pack" the reference, i.e. validate all its invariants.
                             let target = self.builder.get_target();
                             let ty = target.get_local_type(action.src);

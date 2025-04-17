@@ -1467,6 +1467,8 @@ impl GlobalEnv {
     const ASSERTS_FUNCTION_NAME: &'static str = "asserts";
     const TYPE_INV_FUNCTION_NAME: &'static str = "type_inv";
     const GLOBAL_FUNCTION_NAME: &'static str = "global";
+    const GLOBAL_SET_FUNCTION_NAME: &'static str = "global_set";
+    const GLOBAL_BORROW_MUT_FUNCTION_NAME: &'static str = "borrow_mut";
     const DECLARE_GLOBAL_FUNCTION_NAME: &'static str = "declare_global";
     const DECLARE_GLOBAL_MUT_FUNCTION_NAME: &'static str = "declare_global_mut";
     const HAVOC_GLOBAL_FUNCTION_NAME: &'static str = "havoc_global";
@@ -1494,6 +1496,17 @@ impl GlobalEnv {
 
     pub fn global_qid(&self) -> QualifiedId<FunId> {
         self.get_fun_qid(Self::SPEC_MODULE_NAME, Self::GLOBAL_FUNCTION_NAME)
+    }
+
+    pub fn global_set_qid(&self) -> QualifiedId<FunId> {
+        self.get_fun_qid(Self::SPEC_MODULE_NAME, Self::GLOBAL_SET_FUNCTION_NAME)
+    }
+
+    pub fn global_borrow_mut_qid(&self) -> QualifiedId<FunId> {
+        self.get_fun_qid(
+            Self::SPEC_MODULE_NAME,
+            Self::GLOBAL_BORROW_MUT_FUNCTION_NAME,
+        )
     }
 
     pub fn declare_global_qid(&self) -> QualifiedId<FunId> {

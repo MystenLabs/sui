@@ -60,7 +60,7 @@ use crate::boogie_backend::{
         boogie_debug_track_abort, boogie_debug_track_local, boogie_debug_track_return,
         boogie_declare_global, boogie_enum_field_name, boogie_enum_name,
         boogie_enum_variant_ctor_name, boogie_equality_for_type, boogie_field_sel,
-        boogie_field_update, boogie_function_bv_name, boogie_function_name,
+        boogie_field_update, boogie_function_bv_name, boogie_function_name, boogie_inst_suffix,
         boogie_make_vec_from_strings, boogie_modifies_memory_name, boogie_num_literal,
         boogie_num_type_base, boogie_num_type_string_capital, boogie_reflection_type_info,
         boogie_reflection_type_name, boogie_resource_memory_name, boogie_spec_global_var_name,
@@ -245,8 +245,6 @@ impl<'env> BoogieTranslator<'env> {
 
         self.translate_ghost_global(&mono_info);
 
-        self.add_type(&Type::Primitive(PrimitiveType::Bool));
-
         // let singleton_function_id = FunId::new(self.env.symbol_pool().make("singleton"));
         let reverse_function_id = FunId::new(self.env.symbol_pool().make("reverse"));
         let append_function_id = FunId::new(self.env.symbol_pool().make("append"));
@@ -330,9 +328,7 @@ impl<'env> BoogieTranslator<'env> {
             }
 
             for ref fun_env in module_env.get_functions() {
-                if fun_env.is_native()
-                    || intrinsic_fun_ids.contains(&fun_env.get_qualified_id())
-                {
+                if fun_env.is_native() || intrinsic_fun_ids.contains(&fun_env.get_qualified_id()) {
                     continue;
                 }
 
@@ -733,12 +729,17 @@ impl<'env> BoogieTranslator<'env> {
             .unwrap_or(empty_set);
 
         assert!(
-            ghost_global_type_instances.is_subset(&ghost_declare_global_type_instances),
+            ghost_global_type_instances.is_subset(
+                &ghost_declare_global_type_instances
+                    .iter()
+                    .map(|x| (*x).clone())
+                    .collect()
+            ),
             "missing type instances for function {}",
             ghost_global_fun_env.get_full_name_str(),
         );
 
-        for type_inst in &ghost_declare_global_type_instances {
+        for type_inst in ghost_declare_global_type_instances {
             self.generate_ghost_global_var_declaration(type_inst);
         }
 
@@ -776,10 +777,11 @@ impl<'env> BoogieTranslator<'env> {
     }
 
     fn add_type(&self, ty: &Type) {
+        let val_ty = ty.skip_reference();
         let overwritten = self
             .types
             .borrow_mut()
-            .insert(ty.clone(), boogie_type(self.env, ty));
+            .insert(val_ty.clone(), boogie_type_suffix(self.env, val_ty));
         match overwritten {
             bimap::Overwritten::Neither | bimap::Overwritten::Pair { .. } => {}
             _ => panic!("type already exists"),
@@ -838,13 +840,6 @@ impl<'env> StructTranslator<'env> {
         let writer = self.parent.writer;
         let struct_env = self.struct_env;
         let env = struct_env.module_env.env;
-
-        // Record datatype
-        self.parent.add_type(&Type::Datatype(
-            struct_env.module_env.get_id(),
-            struct_env.get_id(),
-            self.type_inst.to_owned(),
-        ));
 
         if struct_env.is_native() {
             return;
@@ -1076,13 +1071,6 @@ impl<'env> EnumTranslator<'env> {
         let writer = self.parent.writer;
         let enum_env = self.enum_env;
         let env = enum_env.module_env.env;
-
-        // Record datatype
-        self.parent.add_type(&Type::Datatype(
-            enum_env.module_env.get_id(),
-            enum_env.get_id(),
-            self.type_inst.to_owned(),
-        ));
 
         let qid = enum_env
             .get_qualified_id()
@@ -2200,6 +2188,18 @@ impl<'env> FunctionTranslator<'env> {
                                 }
                                 processed = true;
                             }
+                        }
+
+                        if callee_env.get_qualified_id() == self.parent.env.global_borrow_mut_qid()
+                        {
+                            emitln!(
+                                self.writer(),
+                                "{} := $Mutation($SpecGlobal(\"{}\"), EmptyVec(), {});",
+                                str_local(dests[0]),
+                                boogie_inst_suffix(self.parent.env, inst),
+                                boogie_spec_global_var_name(self.parent.env, inst),
+                            );
+                            processed = true;
                         }
 
                         if callee_env.get_qualified_id() == self.parent.env.ensures_qid() {
@@ -3341,11 +3341,13 @@ impl<'env> FunctionTranslator<'env> {
                     TraceGhost(ghost_type, value_type) => {
                         let instantiated_ghost_type = ghost_type.instantiate(self.type_inst);
                         let instantiated_value_type = value_type.instantiate(self.type_inst);
+                        self.parent.add_type(&instantiated_ghost_type);
+                        self.parent.add_type(&instantiated_value_type);
                         emitln!(
                             self.writer(),
                             "assume {{:print \"$track_ghost({},{}):\", {}}} true;",
-                            boogie_type(self.parent.env, &instantiated_ghost_type),
-                            boogie_type(self.parent.env, &instantiated_value_type),
+                            boogie_type_suffix(self.parent.env, &instantiated_ghost_type),
+                            boogie_type_suffix(self.parent.env, &instantiated_value_type),
                             boogie_spec_global_var_name(
                                 self.parent.env,
                                 &vec![instantiated_ghost_type, instantiated_value_type]
@@ -3466,6 +3468,15 @@ impl<'env> FunctionTranslator<'env> {
                     memory_name,
                     memory_name,
                     src_str,
+                    src_str
+                );
+            }
+            SpecGlobalRoot(tys) => {
+                assert!(matches!(edge, BorrowEdge::Direct));
+                emitln!(
+                    writer,
+                    "{} := $Dereference({});",
+                    boogie_spec_global_var_name(self.parent.env, tys),
                     src_str
                 );
             }
@@ -3656,6 +3667,7 @@ impl<'env> FunctionTranslator<'env> {
 
     /// Generates an update of the debug information about temporary.
     fn track_local(&self, origin_idx: TempIndex, idx: TempIndex, bv_flag: bool) {
+        self.parent.add_type(&self.get_local_type(idx));
         emitln!(
             self.writer(),
             &boogie_debug_track_local(
@@ -3670,6 +3682,7 @@ impl<'env> FunctionTranslator<'env> {
 
     /// Generates an update of the debug information about the return value at given location.
     fn track_return(&self, return_idx: usize, idx: TempIndex, bv_flag: bool) {
+        self.parent.add_type(&self.get_local_type(idx));
         emitln!(
             self.writer(),
             &boogie_debug_track_return(

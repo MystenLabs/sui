@@ -1,0 +1,5 @@
+---
+source: crates/move-prover/tests/integration.rs
+expression: output
+---
+Verification successful
