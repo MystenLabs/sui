@@ -98,7 +98,7 @@ public struct TransferPolicyCreated<phantom T> has copy, drop { id: ID }
 public struct TransferPolicyDestroyed<phantom T> has copy, drop { id: ID }
 
 /// Key to store "Rule" configuration for a specific `TransferPolicy`.
-public struct RuleKey<phantom T: drop> has copy, store, drop {}
+public struct RuleKey<phantom T: drop> has copy, drop, store {}
 
 /// Construct a new `TransferRequest` hot potato which requires an
 /// approving action from the creator to be destroyed / resolved. Once

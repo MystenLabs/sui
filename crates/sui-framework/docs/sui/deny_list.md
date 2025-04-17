@@ -626,8 +626,10 @@ meaningless to add them to the deny list.
     ctx: &<b>mut</b> TxContext,
 ) {
     <b>let</b> bag_entry: &<b>mut</b> <a href="../sui/deny_list.md#sui_deny_list_PerTypeList">PerTypeList</a> = &<b>mut</b> <a href="../sui/deny_list.md#sui_deny_list">deny_list</a>.lists[per_type_index];
-    <b>let</b> elements = <b>if</b> (!bag_entry.denied_addresses.contains(per_type_key)) vector[]
-    <b>else</b> bag_entry.denied_addresses.remove(per_type_key).into_keys();
+    <b>let</b> elements = <b>if</b> (!bag_entry.denied_addresses.contains(per_type_key)) vector[] <b>else</b> bag_entry
+        .denied_addresses
+        .remove(per_type_key)
+        .into_keys();
     elements.do_ref!(|addr| {
         <b>let</b> addr = *addr;
         <b>let</b> denied_count = &<b>mut</b> bag_entry.denied_count[addr];
