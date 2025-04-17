@@ -1080,7 +1080,7 @@ impl<'env, 'outer> Context<'env, 'outer> {
     }
 
     fn is_spec_context(&self) -> bool {
-        self.current_module.as_ref().is_some_and(|m| {
+        self.current_module().as_ref().is_some_and(|m| {
             let minfo = self.module_info(m);
             let is_spec_only = minfo.attributes.is_spec_or_spec_only();
             is_spec_only
@@ -1089,79 +1089,6 @@ impl<'env, 'outer> Context<'env, 'outer> {
                     finfo.attributes.is_spec_or_spec_only()
                 })
         })
-    }
-
-    pub fn emit_warning_if_deprecated(
-        &mut self,
-        mident: &ModuleIdent,
-        name: Name,
-        method_opt: Option<Name>,
-    ) {
-        let in_same_module = self
-            .current_module
-            .is_some_and(|current| current == *mident);
-        if let Some(deprecation) = self.deprecations.get_deprecation(*mident, name) {
-            // Don't register a warning if we are in the module that is deprecated and the actual
-            // member is not deprecated.
-            if deprecation.location == AttributePosition::Module && in_same_module {
-                return;
-            }
-            let diags = deprecation.deprecation_warnings(name, method_opt);
-            self.add_diags(diags);
-        }
-    }
-
-    fn module_info(&self, m: &ModuleIdent) -> &ModuleInfo {
-        self.modules.module(m)
-    }
-
-    fn struct_definition(&self, m: &ModuleIdent, n: &DatatypeName) -> &StructDefinition {
-        self.modules.struct_definition(m, n)
-    }
-
-    pub fn struct_declared_abilities(&self, m: &ModuleIdent, n: &DatatypeName) -> &AbilitySet {
-        self.modules.struct_declared_abilities(m, n)
-    }
-
-    pub fn struct_declared_loc(&self, m: &ModuleIdent, n: &DatatypeName) -> Loc {
-        self.modules.struct_declared_loc(m, n)
-    }
-
-    pub fn struct_tparams(&self, m: &ModuleIdent, n: &DatatypeName) -> &Vec<DatatypeTypeParameter> {
-        self.modules.struct_type_parameters(m, n)
-    }
-
-    fn enum_definition(&self, m: &ModuleIdent, n: &DatatypeName) -> &EnumDefinition {
-        self.modules.enum_definition(m, n)
-    }
-
-    pub fn enum_declared_abilities(&self, m: &ModuleIdent, n: &DatatypeName) -> &AbilitySet {
-        self.modules.enum_declared_abilities(m, n)
-    }
-
-    pub fn enum_declared_loc(&self, m: &ModuleIdent, n: &DatatypeName) -> Loc {
-        self.modules.enum_declared_loc(m, n)
-    }
-
-    pub fn enum_tparams(&self, m: &ModuleIdent, n: &DatatypeName) -> &Vec<DatatypeTypeParameter> {
-        self.modules.enum_type_parameters(m, n)
-    }
-
-    pub fn datatype_kind(&self, m: &ModuleIdent, n: &DatatypeName) -> DatatypeKind {
-        self.modules.datatype_kind(m, n)
-    }
-
-    pub fn function_info(&self, m: &ModuleIdent, n: &FunctionName) -> &FunctionInfo {
-        self.modules.function_info(m, n)
-    }
-
-    pub fn macro_body(&self, m: &ModuleIdent, n: &FunctionName) -> Option<&N::Sequence> {
-        self.macros.get(m)?.get(n)
-    }
-
-    pub fn constant_info(&mut self, m: &ModuleIdent, n: &ConstantName) -> &ConstantInfo {
-        let constants = &self.module_info(m).constants;
-        constants.get(n).expect("ICE should have failed in naming")
     }
 
     // pass in a location for a better error location
