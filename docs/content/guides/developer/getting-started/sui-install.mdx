@@ -10,7 +10,7 @@ The quickest way to install Sui is using the binaries delivered with every relea
 Sui supports the following operating systems:
 
 - Linux - Ubuntu version 22.04 (Jammy Jellyfish) or later
-    - Binaries from AWS only support version 22.04
+    - The [`sui-node` binary from AWS](#aws-sui-node) supports only version 22.04
 - macOS - macOS Monterey or later
 - Microsoft Windows - Windows 10 and 11
 
@@ -138,7 +138,7 @@ $ cargo install --locked --git https://github.com/MystenLabs/sui.git --branch te
 
 The `tracing` feature is important as it adds Move test coverage and debugger support in the Sui CLI. Unless it is enabled you will not be able to use these two features.
 
-## Install `sui-node` for Ubuntu from AWS
+## Install `sui-node` for Ubuntu from AWS {#aws-sui-node}
 
 The `sui-node` binaries for Ubuntu 22.04 are available for download from AWS. You can use either the commit sha for the version of Sui you want to retrieve or its version tag. Using either of these values, you can construct the correct URL to download the binary from AWS.
 
