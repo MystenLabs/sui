@@ -22,7 +22,7 @@ use crate::{
     shared::{
         ide::{DotAutocompleteInfo, IDEAnnotation, MacroCallInfo},
         known_attributes::{
-            AttributeKind_, ErrorAttribute, KnownAttribute, MinorCode, SyntaxAttribute,
+            AttributeKind_, ErrorAttribute, KnownAttribute, MinorCode_, SyntaxAttribute,
         },
         process_binops,
         program_info::{ConstantInfo, DatatypeKind, NamingProgramInfo, TypingProgramInfo},
@@ -4766,7 +4766,7 @@ fn collect_external_attribute_value_module_members(
     if let known_attributes::ExternalAttributeValue_::ModuleAccess(mod_access) = &value.value {
         // We assume mod_access.value is of type ModuleAccess_
         if let ModuleAccess_::ModuleAccess(mident, name) = &mod_access.value {
-            set.insert((mident.clone(), name.clone()));
+            set.insert((*mident, *name));
         }
     }
     set
@@ -4828,13 +4828,12 @@ pub fn collect_known_attribute_module_members(
             // For Testing attributes we currently assume that none contain module accesses.
             if let known_attributes::TestingAttribute::ExpectedFailure(expected_failure) = test_attr
             {
-                match expected_failure {
-                    known_attributes::ExpectedFailure::ExpectedWithError { minor_code, .. } => {
-                        if let Some(MinorCode::Constant(mident, name)) = minor_code {
-                            set.insert((*mident, *name));
-                        }
-                    }
-                    _ => {}
+                if let known_attributes::ExpectedFailure::ExpectedWithError {
+                    minor_code: Some(sp!(_, MinorCode_::Constant(mident, name))),
+                    ..
+                } = expected_failure.as_ref()
+                {
+                    set.insert((*mident, *name));
                 }
             }
         }
@@ -4856,9 +4855,9 @@ fn process_module_attributes<T: TName>(
         for (mident, name) in names {
             context
                 .used_module_members
-                .entry(mident.value.clone())
+                .entry(mident.value)
                 .or_default()
-                .insert(name.value.clone());
+                .insert(name.value);
         }
     }
 }
@@ -4872,9 +4871,9 @@ fn process_attributes<T: TName>(
         for (mident, name) in names {
             context
                 .used_module_members
-                .entry(mident.value.clone())
+                .entry(mident.value)
                 .or_default()
-                .insert(name.value.clone());
+                .insert(name.value);
         }
     }
 }

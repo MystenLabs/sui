@@ -73,13 +73,22 @@ impl<'env, 'lexer, 'input> Context<'env, 'lexer, 'input> {
         }
     }
 
+    pub fn env(&self) -> &CompilationEnv {
+        self.env
+    }
+
     pub fn add_diag(&self, diag: Diagnostic) {
         self.reporter.add_diag(diag);
     }
 
-    fn check_feature(&self, package: Option<Symbol>, feature: FeatureGate, loc: Loc) -> bool {
-        self.env
-            .check_feature(&self.reporter, package, feature, loc)
+    pub fn check_feature(&self, feature: FeatureGate, loc: Loc) -> bool {
+        let Self {
+            env,
+            reporter,
+            current_package,
+            ..
+        } = self;
+        env.check_feature(reporter, *current_package, feature, loc)
     }
 }
 
@@ -1304,11 +1313,7 @@ fn parse_bind(context: &mut Context) -> Result<Bind, Box<Diagnostic>> {
     })?;
     let args = if context.tokens.peek() == Tok::LParen {
         let current_loc = current_token_loc(context.tokens);
-        context.check_feature(
-            context.current_package,
-            FeatureGate::PositionalFields,
-            current_loc,
-        );
+        context.check_feature(FeatureGate::PositionalFields, current_loc);
         let args = parse_comma_list(
             context,
             Tok::LParen,
@@ -2726,11 +2731,7 @@ fn parse_dot_or_index_chain(context: &mut Context) -> Result<Exp, Box<Diagnostic
                 let loc = current_token_loc(context.tokens);
                 match context.tokens.peek() {
                     Tok::NumValue | Tok::NumTypedValue
-                        if context.check_feature(
-                            context.current_package,
-                            FeatureGate::PositionalFields,
-                            loc,
-                        ) =>
+                        if context.check_feature(FeatureGate::PositionalFields, loc) =>
                     {
                         let contents = context.tokens.content();
                         context.advance();
@@ -3597,9 +3598,8 @@ fn parse_enum_variant_decl(context: &mut Context) -> Result<VariantDefinition, B
 fn parse_enum_variant_fields(context: &mut Context) -> Result<VariantFields, Box<Diagnostic>> {
     match context.tokens.peek() {
         Tok::LParen => {
-            let current_package = context.current_package;
             let loc = current_token_loc(context.tokens);
-            context.check_feature(current_package, FeatureGate::PositionalFields, loc);
+            context.check_feature(FeatureGate::PositionalFields, loc);
 
             let list = parse_comma_list(
                 context,
@@ -3627,11 +3627,10 @@ fn parse_enum_variant_fields(context: &mut Context) -> Result<VariantFields, Box
 }
 
 fn check_enum_visibility(visibility: Option<Visibility>, context: &mut Context) {
-    let current_package = context.current_package;
     // NB this could be an if-let but we will eventually want the match for other vis. support.
     match &visibility {
         Some(Visibility::Public(loc)) => {
-            context.check_feature(current_package, FeatureGate::Enums, *loc);
+            context.check_feature(FeatureGate::Enums, *loc);
         }
         vis => {
             let (loc, vis_str) = match vis {
@@ -3865,11 +3864,7 @@ fn parse_postfix_ability_declarations(
     let has_location = current_token_loc(context.tokens);
 
     if postfix_ability_declaration {
-        context.check_feature(
-            context.current_package,
-            FeatureGate::PostFixAbilities,
-            has_location,
-        );
+        context.check_feature(FeatureGate::PostFixAbilities, has_location);
 
         context.tokens.advance()?;
 
@@ -3911,9 +3906,8 @@ fn parse_postfix_ability_declarations(
 fn parse_struct_fields(context: &mut Context) -> Result<StructFields, Box<Diagnostic>> {
     let positional_declaration = context.tokens.peek() == Tok::LParen;
     if positional_declaration {
-        let current_package = context.current_package;
         let loc = current_token_loc(context.tokens);
-        context.check_feature(current_package, FeatureGate::PositionalFields, loc);
+        context.check_feature(FeatureGate::PositionalFields, loc);
 
         context.stop_set.union(&TYPE_STOP_SET);
         let list = parse_comma_list(
@@ -3940,11 +3934,11 @@ fn parse_struct_fields(context: &mut Context) -> Result<StructFields, Box<Diagno
 }
 
 fn check_struct_visibility(visibility: Option<Visibility>, context: &mut Context) {
-    let current_package = context.current_package;
     if let Some(Visibility::Public(loc)) = &visibility {
-        context.check_feature(current_package, FeatureGate::StructTypeVisibility, *loc);
+        context.check_feature(FeatureGate::StructTypeVisibility, *loc);
     }
 
+    let current_package = context.current_package;
     let supports_public = context
         .env
         .supports_feature(current_package, FeatureGate::StructTypeVisibility);
@@ -4500,11 +4494,7 @@ fn parse_module(
             consume_token(context.tokens, Tok::LBrace)?;
         }
         Tok::Semicolon => {
-            context.check_feature(
-                context.current_package,
-                FeatureGate::ModuleLabel,
-                name.loc(),
-            );
+            context.check_feature(FeatureGate::ModuleLabel, name.loc());
             definition_mode = ModuleDefinitionMode::Semicolon;
             consume_token(context.tokens, Tok::Semicolon)?;
         }

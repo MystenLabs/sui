@@ -517,7 +517,7 @@ fn constant(
         signature,
         value,
     } = c;
-    let is_error_constant = attributes.contains_key_(&AttributeKind_::Error.into());
+    let is_error_constant = attributes.contains_key_(&AttributeKind_::Error);
     let name = context.constant_definition_name(m, n);
     let signature = base_type(context, signature);
     let value = value.unwrap();

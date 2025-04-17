@@ -17,8 +17,6 @@ use crate::{
 use move_ir_types::location::Loc;
 use std::collections::HashMap;
 
-const NOTE_STR: &str = "note";
-
 #[derive(Debug, Clone)]
 pub struct Deprecation {
     // The source location of the deprecation attribute
@@ -179,7 +177,6 @@ fn deprecations(
     let Some(deprecation) = attrs.get_(&AttributeKind_::Deprecation) else {
         return None;
     };
-    let loc = deprecation.loc;
     let KnownAttribute::Deprecation(DeprecationAttribute { note }) = &deprecation.value else {
         reporter.add_diag(ice!((
             source_location,
@@ -187,31 +184,9 @@ fn deprecations(
         )));
         return None;
     };
-
-    let make_invalid_deprecation_diag = || {
-        let mut diag = diag!(
-            Attributes::InvalidUsage,
-            (
-                loc,
-                format!("Invalid '{}' attribute", DeprecationAttribute::DEPRECATED)
-            )
-        );
-        let note = format!(
-            "Deprecation attributes must be written as `#[{0}]` or `#[{0}(note = b\"message\")]`",
-            DeprecationAttribute::DEPRECATED
-        );
-        diag.add_note(note);
-        reporter.add_diag(diag);
-    };
-
-    let deprecation_note = note.as_ref().and_then(|note| {
-        let E::Value_::Bytearray(value) = &note.value else {
-            make_invalid_deprecation_diag();
-            return None;
-        };
-        let msg = std::str::from_utf8(value).unwrap().to_string();
-        Some(msg)
-    });
+    let deprecation_note = note
+        .as_ref()
+        .map(|note| std::str::from_utf8(note).unwrap().to_string());
     Some(Deprecation {
         source_location,
         location: attr_position,

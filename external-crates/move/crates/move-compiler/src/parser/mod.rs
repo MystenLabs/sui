@@ -225,7 +225,7 @@ where
         _ => {
             let all_but_last = &formatted[..formatted.len() - 1];
             let last = &formatted[formatted.len() - 1];
-            format!("one of: {} or {}", all_but_last.join(", "), last)
+            format!("one of: {}, or {}", all_but_last.join(", "), last)
         }
     }
 }

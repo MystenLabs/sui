@@ -62,8 +62,8 @@ pub(super) fn resolve_syntax_attributes(
         return None;
     }
 
-    let param_ty = get_first_type(context, &attr_loc, &function.signature)?;
-    let Some(type_name) = determine_subject_type_name(context, module_name, &attr_loc, &param_ty)
+    let param_ty = get_first_type(context, attr_loc, &function.signature)?;
+    let Some(type_name) = determine_subject_type_name(context, module_name, attr_loc, &param_ty)
     else {
         assert!(context.env.has_errors());
         return None;

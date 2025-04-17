@@ -1181,7 +1181,7 @@ fn warning_filter_(context: &Context, attributes: &E::Attributes) -> WarningFilt
             return WarningFiltersBuilder::new_for_source();
         };
 
-        let prefix = Some(symbol!("lint"));
+        let prefix = Some(DiagnosticAttribute::LINT_SYMBOL);
         for name in allow_set {
             let filters = context.env().filter_from_str(prefix, name.value);
             if filters.is_empty() {

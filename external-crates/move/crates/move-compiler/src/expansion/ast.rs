@@ -538,9 +538,9 @@ impl Hash for Address {
 
 impl Attributes {
     pub fn is_test_or_test_only(&self) -> bool {
-        self.contains_key_(&known_attributes::AttributeKind_::TestOnly.into())
-            || self.contains_key_(&known_attributes::AttributeKind_::RandTest.into())
-            || self.contains_key_(&known_attributes::AttributeKind_::Test.into())
+        self.contains_key_(&known_attributes::AttributeKind_::TestOnly)
+            || self.contains_key_(&known_attributes::AttributeKind_::RandTest)
+            || self.contains_key_(&known_attributes::AttributeKind_::Test)
     }
 }
 

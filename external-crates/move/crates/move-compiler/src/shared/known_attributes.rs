@@ -9,6 +9,7 @@ use crate::{
 
 use move_core_types::vm_status::StatusCode;
 use move_ir_types::location::*;
+use move_symbol_pool::Symbol;
 use once_cell::sync::Lazy;
 use std::{collections::BTreeSet, fmt};
 
@@ -66,7 +67,7 @@ pub struct DefinesPrimitiveAttribute {
 #[derive(Debug, Clone, PartialEq, Eq)]
 /// Deprecated spec only annotation
 pub struct DeprecationAttribute {
-    pub note: Option<Value>,
+    pub note: Option<Vec<u8>>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -101,12 +102,13 @@ pub enum TestingAttribute {
     // Can be called by other testing code, and included in compilation in test mode
     TestOnly,
     // This test is expected to fail
-    ExpectedFailure(ExpectedFailure),
+    ExpectedFailure(Box<ExpectedFailure>),
     // This is a test that uses randomly-generated arguments
     RandTest,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+#[allow(clippy::large_enum_variant)]
 pub enum ExpectedFailure {
     Expected,
     ExpectedWithCodeDEPRECATED(u64),
@@ -118,10 +120,13 @@ pub enum ExpectedFailure {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub enum MinorCode {
+#[allow(clippy::large_enum_variant)]
+pub enum MinorCode_ {
     Value(u64),
     Constant(ModuleIdent, Name),
 }
+
+pub type MinorCode = Spanned<MinorCode_>;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum VerificationAttribute {
@@ -291,7 +296,7 @@ impl DefinesPrimitiveAttribute {
 
 impl DeprecationAttribute {
     pub const DEPRECATED: &'static str = "deprecated";
-    pub const NOTE: &'static str = "node";
+    pub const NOTE: &'static str = "note";
 
     pub const fn name(&self) -> &str {
         Self::DEPRECATED
@@ -323,13 +328,14 @@ pub static DEPRECATED_EXPECTED_KEYS: Lazy<BTreeSet<String>> = Lazy::new(|| {
 
 impl DiagnosticAttribute {
     pub const ALLOW: &'static str = "allow";
-    pub const LINT: &'static str = "LINT";
     pub const LINT_ALLOW: &'static str = "lint_allow";
+    pub const LINT: &'static str = "lint";
+    pub const LINT_SYMBOL: Symbol = symbol!("lint");
 
     pub const fn name(&self) -> &str {
         match self {
-            DiagnosticAttribute::Allow { .. } => Self::LINT_ALLOW,
-            DiagnosticAttribute::LintAllow { .. } => Self::ALLOW,
+            DiagnosticAttribute::Allow { .. } => Self::ALLOW,
+            DiagnosticAttribute::LintAllow { .. } => Self::LINT_ALLOW,
         }
     }
 
@@ -433,15 +439,20 @@ impl SyntaxAttribute {
 }
 
 impl TestingAttribute {
+    // Testing annotation names
     pub const TEST: &'static str = "test";
     pub const RAND_TEST: &'static str = "random_test";
-    pub const EXPECTED_FAILURE: &'static str = "expected_failure";
     pub const TEST_ONLY: &'static str = "test_only";
+    pub const EXPECTED_FAILURE: &'static str = "expected_failure";
+
+    // Failure kinds
     pub const ABORT_CODE_NAME: &'static str = "abort_code";
     pub const ARITHMETIC_ERROR_NAME: &'static str = "arithmetic_error";
     pub const VECTOR_ERROR_NAME: &'static str = "vector_error";
     pub const OUT_OF_GAS_NAME: &'static str = "out_of_gas";
     pub const MAJOR_STATUS_NAME: &'static str = "major_status";
+
+    // Other failure arguments
     pub const MINOR_STATUS_NAME: &'static str = "minor_status";
     pub const ERROR_LOCATION: &'static str = "location";
 
@@ -714,17 +725,17 @@ impl AstDebug for BytecodeInstructionAttribute {
 impl AstDebug for DefinesPrimitiveAttribute {
     fn ast_debug(&self, w: &mut AstWriter) {
         w.write("defines_primitive(");
-        w.write(&self.name.to_string());
+        w.write(self.name.to_string());
         w.write(")");
     }
 }
 
 impl AstDebug for DeprecationAttribute {
     fn ast_debug(&self, w: &mut AstWriter) {
-        w.write("depreacted");
+        w.write("deprecated");
         if let Some(ref note) = self.note {
             w.write("(note= ");
-            w.write(&format!("{}", note));
+            w.write(std::str::from_utf8(note).unwrap());
             w.write(")");
         }
     }
@@ -744,13 +755,13 @@ impl AstDebug for DiagnosticAttribute {
                     first = false;
                     match prefix {
                         Some(pref) => {
-                            w.write(&pref.to_string());
+                            w.write(pref.to_string());
                             w.write("(");
-                            w.write(&name.to_string());
+                            w.write(name.to_string());
                             w.write(")");
                         }
                         None => {
-                            w.write(&name.to_string());
+                            w.write(name.to_string());
                         }
                     }
                 }
@@ -761,7 +772,7 @@ impl AstDebug for DiagnosticAttribute {
                         w.write(", ");
                     }
                     first = false;
-                    w.write(&name.to_string());
+                    w.write(name.to_string());
                 }
             }
         };
@@ -775,7 +786,7 @@ impl AstDebug for ErrorAttribute {
         w.write("error");
         if let Some(code) = self.code {
             w.write("(code= ");
-            w.write(&code.to_string());
+            w.write(code.to_string());
             w.write(")");
         }
     }
@@ -791,7 +802,7 @@ impl AstDebug for ExternalAttribute {
 impl AstDebug for SyntaxAttribute {
     fn ast_debug(&self, w: &mut AstWriter) {
         w.write("syntax(");
-        w.write(&self.kind.to_string());
+        w.write(self.kind.to_string());
         w.write(")");
     }
 }
@@ -820,46 +831,8 @@ impl AstDebug for TestingAttribute {
 }
 
 impl AstDebug for ExpectedFailure {
-    fn ast_debug(&self, w: &mut AstWriter) {
-        match self {
-            ExpectedFailure::KnownFailure { kind, location } => {
-                w.write("known_failure(kind= ");
-                w.write(&kind.to_string());
-                w.write(", location= ");
-                w.write(&location.to_string());
-                w.write(")")
-            }
-            ExpectedFailure::AbortCodeFailure {
-                abort_code,
-                location,
-            } => {
-                w.write("abort_code_failure(abort_code= ");
-                w.write(&abort_code.to_string());
-                w.write(", location= ");
-                w.write(&location.to_string());
-                w.write(")")
-            }
-            ExpectedFailure::ConstantAbortCodeFailure { constant } => {
-                w.write("constant_abort_code_failure(constant= ");
-                w.write(&constant.to_string());
-                w.write(")")
-            }
-            ExpectedFailure::StatusCodeFailure {
-                major_code,
-                minor_code,
-                location,
-            } => {
-                w.write("status_code_failure(major_code= ");
-                w.write(&major_code.to_string());
-                if let Some(minor) = minor_code {
-                    w.write(", minor_code= ");
-                    w.write(&minor.to_string());
-                }
-                w.write(", location= ");
-                w.write(&location.to_string());
-                w.write(")")
-            }
-        }
+    fn ast_debug(&self, _w: &mut AstWriter) {
+        todo!()
     }
 }
 

@@ -6,19 +6,17 @@ info:
   lint: false
 ---
 error[E10003]: invalid attribute value
-   ┌─ tests/move_check/unit_test/expected_failure_invalid_literals.move:14:24
+   ┌─ tests/move_check/unit_test/expected_failure_invalid_literals.move:14:35
    │
 14 │     #[expected_failure(abort_code=0u8, location=0x1::M)]
-   │                        ^^^^^^^^^^^^^^
-   │                        │          │
-   │                        │          Annotated non-u64 literals are not permitted
-   │                        Invalid value in attribute assignment
+   │                                   ^^^ Invalid value in attribute assignment
+   │
+   = Expected a u64 literal or named constant
 
 error[E10003]: invalid attribute value
-   ┌─ tests/move_check/unit_test/expected_failure_invalid_literals.move:18:24
+   ┌─ tests/move_check/unit_test/expected_failure_invalid_literals.move:18:35
    │
 18 │     #[expected_failure(abort_code=0u128, location=0x1::M)]
-   │                        ^^^^^^^^^^^^^^^^
-   │                        │          │
-   │                        │          Annotated non-u64 literals are not permitted
-   │                        Invalid value in attribute assignment
+   │                                   ^^^^^ Invalid value in attribute assignment
+   │
+   = Expected a u64 literal or named constant

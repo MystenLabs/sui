@@ -1,13 +1,13 @@
 // Copyright (c) The Move Contributors
 // SPDX-License-Identifier: Apache-2.0
 
-use std::collections::BTreeSet;
+use std::collections::{BTreeMap, BTreeSet};
 
 use crate::{
     diag,
     parser::{
         ast::{
-            Attribute, AttributeValue, AttributeValue_, Attribute_, ExpectedFailureKind,
+            self as P, Attribute, AttributeValue, AttributeValue_, Attribute_, ExpectedFailureKind,
             ExpectedFailureKind_, NameAccessChain, ParsedAttribute, ParsedAttribute_,
         },
         format_one_of,
@@ -30,49 +30,59 @@ pub(crate) fn to_known_attributes(
     context: &mut Context,
     attribute: ParsedAttribute,
 ) -> Vec<Attribute> {
-    use ParsedAttribute_ as PA;
-    let sp!(loc, ref attribute_) = attribute;
-    match attribute_ {
-        PA::Name(name) | PA::Parameterized(name, _) | PA::Assigned(name, _) => {
-            match name.value.as_ref() {
-                // -- bytecode instruction attr --
-                KA::BytecodeInstructionAttribute::BYTECODE_INSTRUCTION => {
-                    parse_bytecode_instruction(context, attribute)
-                }
-                // -- prim definition attribute --
-                KA::DefinesPrimitiveAttribute::DEFINES_PRIM => {
-                    parse_defines_prim(context, attribute)
-                }
-                // -- deprecation attribute ------
-                KA::DeprecationAttribute::DEPRECATED => parse_deprecated(context, attribute),
-                // -- diagnostic attributes ------
-                KA::DiagnosticAttribute::ALLOW => parse_allow(context, attribute),
-                KA::DiagnosticAttribute::LINT_ALLOW => parse_lint_allow(context, attribute),
-                // -- error attribtue ------------
-                KA::ErrorAttribute::ERROR => parse_error(context, attribute),
-                // -- external attributes --------
-                KA::ExternalAttribute::EXTERNAL => parse_external(context, attribute),
-                // -- mode attributes ------------
-                KA::TestingAttribute::TEST_ONLY => parse_test_only(context, attribute),
-                KA::VerificationAttribute::VERIFY_ONLY => parse_verify_only(context, attribute),
-                // -- syntax attribute -----------
-                KA::SyntaxAttribute::SYNTAX => parse_syntax(context, attribute),
-                // -- testing attributes -=-------
-                KA::TestingAttribute::TEST => parse_test(context, attribute),
-                KA::TestingAttribute::RAND_TEST => parse_random_test(context, attribute),
-                KA::TestingAttribute::EXPECTED_FAILURE => {
-                    parse_expected_failure(context, attribute)
-                }
-                _ => {
-                    let msg = format!(
-                        "Unknown attribute '{name}'. Custom attributes must be wrapped in '{ext}', \
-                        e.g. #[{ext}({name})]",
-                        ext = KA::ExternalAttribute::EXTERNAL
-                    );
-                    context.add_diag(diag!(Declarations::UnknownAttribute, (loc, msg)));
-                    vec![]
-                }
+    let sp!(name_loc, name) = attribute.value.name();
+    match name {
+        // -- bytecode instruction attr --
+        KA::BytecodeInstructionAttribute::BYTECODE_INSTRUCTION => {
+            parse_bytecode_instruction(context, attribute)
+        }
+        // -- prim definition attribute --
+        KA::DefinesPrimitiveAttribute::DEFINES_PRIM => parse_defines_prim(context, attribute),
+        // -- deprecation attribute ------
+        KA::DeprecationAttribute::DEPRECATED => parse_deprecated(context, attribute),
+        // -- diagnostic attributes ------
+        KA::DiagnosticAttribute::ALLOW => parse_allow(context, attribute),
+        KA::DiagnosticAttribute::LINT_ALLOW => parse_lint_allow(context, attribute),
+        // -- error attribtue ------------
+        KA::ErrorAttribute::ERROR => {
+            let _ = context.check_feature(
+                crate::editions::FeatureGate::CleverAssertions,
+                attribute.loc,
+            );
+            parse_error(context, attribute)
+        }
+        // -- external attributes --------
+        KA::ExternalAttribute::EXTERNAL => parse_external(context, attribute),
+        // -- mode attributes ------------
+        KA::TestingAttribute::TEST_ONLY => parse_test_only(context, attribute),
+        KA::VerificationAttribute::VERIFY_ONLY => parse_verify_only(context, attribute),
+        // -- syntax attribute -----------
+        KA::SyntaxAttribute::SYNTAX => {
+            let _ =
+                context.check_feature(crate::editions::FeatureGate::SyntaxMethods, attribute.loc);
+            parse_syntax(context, attribute)
+        }
+        // -- testing attributes -=-------
+        KA::TestingAttribute::TEST => parse_test(context, attribute),
+        KA::TestingAttribute::RAND_TEST => parse_random_test(context, attribute),
+        KA::TestingAttribute::EXPECTED_FAILURE => {
+            // NB: This is intended to preserve previous behavior where errors would not be
+            // reported in non-test mode.
+            if context.env().flags().is_testing() {
+                parse_expected_failure(context, attribute)
+            } else {
+                vec![]
             }
+        }
+        ref name => {
+            let msg = format!(
+                "Unknown attribute '{name}'. Custom attributes must be wrapped in '{ext}', \
+                e.g. '#[{ext}({name})]'",
+                ext = KA::ExternalAttribute::EXTERNAL
+            );
+            context.add_diag(diag!(Declarations::UnknownAttribute, (name_loc, msg)));
+            report_duplicate_fields(context, &attribute);
+            vec![]
         }
     }
 }
@@ -140,24 +150,27 @@ fn parse_defines_prim(context: &mut Context, attribute: ParsedAttribute) -> Vec<
 
 fn parse_deprecated(context: &mut Context, attribute: ParsedAttribute) -> Vec<Attribute> {
     use ParsedAttribute_ as PA;
-    let sp!(loc, attr) = attribute;
+    const DEPRECATED_NOTE: &str = "Deprecation attributes must be written as '#[deprecated]' or '#[deprecated(note = b\"message\")]'";
+    let sp!(_, attr) = attribute;
     match attr {
-        PA::Name(_) => {
+        PA::Name(sp!(loc, _)) => {
             let deprecated = sp(loc, Attribute_::Deprecation { note: None });
             vec![deprecated]
         }
-        PA::Assigned(_, _) => {
+        PA::Assigned(sp!(loc, _), _) => {
             let msg = make_attribute_format_error(
                 &attr,
                 &format!(
-                    "either '#[{dep}]' or #[{dep}(note = <value>)]'",
+                    "'#[{dep}]' or '#[{dep}(note = b\"message\")]'",
                     dep = KA::DeprecationAttribute::DEPRECATED
                 ),
             );
-            context.add_diag(diag!(Declarations::InvalidAttribute, (loc, msg)));
+            let mut diag = diag!(Attributes::InvalidUsage, (loc, msg));
+            diag.add_note(DEPRECATED_NOTE);
+            context.add_diag(diag);
             vec![]
         }
-        PA::Parameterized(_, inner_attrs) => {
+        PA::Parameterized(sp!(name_loc, _), inner_attrs) => {
             let sp!(inner_loc, attrs) = inner_attrs;
             if attrs.len() != 1 {
                 let msg = format!(
@@ -165,7 +178,9 @@ fn parse_deprecated(context: &mut Context, attribute: ParsedAttribute) -> Vec<At
                     KA::DeprecationAttribute::DEPRECATED,
                     attrs.len()
                 );
-                context.add_diag(diag!(Declarations::InvalidAttribute, (inner_loc, msg)));
+                let mut diag = diag!(Attributes::InvalidUsage, (inner_loc, msg));
+                diag.add_note(DEPRECATED_NOTE);
+                context.add_diag(diag);
                 return vec![];
             }
             let attr = attrs.into_iter().next().unwrap();
@@ -174,13 +189,15 @@ fn parse_deprecated(context: &mut Context, attribute: ParsedAttribute) -> Vec<At
             {
                 debug_assert!(_key.value.as_ref() == "note");
                 match val_ {
-                    AttributeValue_::Value(val) => {
-                        let deprecated = sp(loc, Attribute_::Deprecation { note: Some(val) });
+                    AttributeValue_::Value(sp!(_, P::Value_::ByteString(bs))) => {
+                        let deprecated = sp(name_loc, Attribute_::Deprecation { note: Some(bs) });
                         vec![deprecated]
                     }
-                    AttributeValue_::ModuleAccess(_) => {
-                        let msg = "Deprecation attribute field 'note' must be a literal value, not a module access.".to_string();
-                        context.add_diag(diag!(Declarations::InvalidAttribute, (loc, msg)));
+                    _ => {
+                        let msg = "Expected bytestring".to_string();
+                        let mut diag = diag!(Attributes::InvalidUsage, (loc, msg));
+                        diag.add_note(DEPRECATED_NOTE);
+                        context.add_diag(diag);
                         vec![]
                     }
                 }
@@ -214,8 +231,8 @@ fn parse_allow(context: &mut Context, attribute: ParsedAttribute) -> Vec<Attribu
                         let msg = format!("Duplicate lint '{}'", name);
                         context.add_diag(diag!(
                             Declarations::InvalidAttribute,
-                            (name.loc.clone(), msg),
-                            (prev.loc.clone(), "Lint first appears here"),
+                            (name.loc, msg),
+                            (prev.loc, "Lint first appears here"),
                         ));
                     } else {
                         let _ = allow_set.insert(pair);
@@ -226,13 +243,9 @@ fn parse_allow(context: &mut Context, attribute: ParsedAttribute) -> Vec<Attribu
             attr @ PA::Assigned(_, _) => {
                 let msg = make_attribute_format_error(
                     &attr,
-                    &format!(
-                        "a name or parameterized attribute, e.g., \
-                        <warning_name_1>' or  '{}(<warning_nmae_1>, <warning_nmae_2>, ...)'",
-                        KA::DiagnosticAttribute::LINT
-                    ),
+                    "a stand alone warning filter identifier, e.g. '#[allow(unused)]'",
                 );
-                context.add_diag(diag!(Declarations::InvalidAttribute, (loc.clone(), msg)));
+                context.add_diag(diag!(Declarations::InvalidAttribute, (loc, msg)));
                 vec![]
             }
         }
@@ -250,8 +263,8 @@ fn parse_allow(context: &mut Context, attribute: ParsedAttribute) -> Vec<Attribu
                         let msg = format!("Duplicate lint '{}'", name);
                         context.add_diag(diag!(
                             Declarations::InvalidAttribute,
-                            (name.loc.clone(), msg),
-                            (prev.loc.clone(), "Lint first appears here"),
+                            (name.loc, msg),
+                            (prev.loc, "Lint first appears here"),
                         ));
                     } else {
                         let _ = allow_set.insert(pair);
@@ -269,7 +282,7 @@ fn parse_allow(context: &mut Context, attribute: ParsedAttribute) -> Vec<Attribu
                     KA::DiagnosticAttribute::ALLOW
                 ),
             );
-            context.add_diag(diag!(Declarations::InvalidAttribute, (loc, msg)));
+            context.add_diag(diag!(Attributes::ValueWarning, (loc, msg)));
             vec![]
         }
     }
@@ -298,9 +311,9 @@ fn parse_lint_allow(context: &mut Context, attribute: ParsedAttribute) -> Vec<At
         PA::Name(_) | PA::Assigned(_, _) => {
             let msg = make_attribute_format_error(
                 &attr,
-                "parameterized attribute as '#[lint_allow(<lint1>, <lint2>, ...)]'",
+                "parameterized attribute as '#[lint_allow(<lint_1>, <lint_2>, ...)]'",
             );
-            context.add_diag(diag!(Declarations::InvalidAttribute, (loc, msg)));
+            context.add_diag(diag!(Attributes::ValueWarning, (loc, msg)));
             vec![]
         }
     }
@@ -431,11 +444,27 @@ fn parse_test(context: &mut Context, attribute: ParsedAttribute) -> Vec<Attribut
             let test_attr = sp(loc, Attribute_::Test);
             vec![test_attr]
         }
+        PA::Parameterized(_, sp!(attr_loc, _)) => {
+            let msg = format!(
+                "Arguments are no longer supported in `#[{}]` attributes",
+                KA::TestingAttribute::TEST
+            );
+            context.add_diag(diag!(
+                Attributes::ValueWarning,
+                (loc, msg),
+                (attr_loc, "Ignoring these arguments")
+            ));
+            let test_attr = sp(loc, Attribute_::Test);
+            vec![test_attr]
+        }
         // Invalid: any assignment or parameterized use is not allowed.
-        PA::Assigned(_, _) | PA::Parameterized(_, _) => {
+        PA::Assigned(_, _) => {
             let msg = make_attribute_format_error(
                 &attr,
-                &format!("'#[{}]' with no arguments", KA::TestingAttribute::TEST),
+                &format!(
+                    "'#[{test}]' with no arguments",
+                    test = KA::TestingAttribute::TEST
+                ),
             );
             context.add_diag(diag!(Declarations::InvalidAttribute, (loc, msg)));
             vec![]
@@ -466,16 +495,30 @@ fn parse_random_test(context: &mut Context, attribute: ParsedAttribute) -> Vec<A
 
 fn parse_expected_failure(context: &mut Context, attribute: ParsedAttribute) -> Vec<Attribute> {
     use ParsedAttribute_ as PA;
-    let sp!(loc, attr) = attribute;
+
+    let sp!(outer_loc, attr) = attribute;
     // expected_failure must be parameterized
     let inner_args = match attr {
+        PA::Name(sp!(name_loc, _)) => {
+            return vec![sp(
+                outer_loc,
+                Attribute_::ExpectedFailure {
+                    failure_kind: Box::new(sp(name_loc, ExpectedFailureKind_::Empty)),
+                    minor_status: None,
+                    location: None,
+                },
+            )]
+        }
         PA::Parameterized(_, inner) => inner,
-        PA::Name(_) | PA::Assigned(_, _) => {
+        PA::Assigned(_, _) => {
             let msg = make_attribute_format_error(
                 &attr,
-                "parameterized attribute as '#[expected_failure(<arg>, ...)]'",
+                &format!(
+                    "either '#[{fail}]' or #[{fail}(<arg>, ...)]'",
+                    fail = KA::TestingAttribute::EXPECTED_FAILURE,
+                ),
             );
-            context.add_diag(diag!(Declarations::InvalidAttribute, (loc, msg)));
+            context.add_diag(diag!(Declarations::InvalidAttribute, (outer_loc, msg)));
             return vec![];
         }
     };
@@ -502,6 +545,16 @@ fn parse_expected_failure(context: &mut Context, attribute: ParsedAttribute) -> 
         };
     }
 
+    // Record if there is _any_ failure kind, even mis-formatted, to avoid reporting an unnecessary
+    // error later;
+    let field_names = args
+        .iter()
+        .map(|sp!(_, attr)| attr.name().value)
+        .collect::<BTreeSet<_>>();
+    let any_failure_kind = KA::TestingAttribute::expected_failure_cases()
+        .iter()
+        .any(|name| field_names.contains(name));
+
     let mut assigned_fields: BTreeSet<Name> = BTreeSet::new();
     for sp!(arg_loc, arg_value) in args {
         match arg_value {
@@ -509,13 +562,10 @@ fn parse_expected_failure(context: &mut Context, attribute: ParsedAttribute) -> 
             PA::Name(name) => {
                 if !EXPECTED_FAILURE_EXPECTED_NAMES.contains(name.value.as_str()) {
                     let msg = format!(
-                        "Invalid failure kind, expected one of: {}",
-                        format_one_of(KA::TestingAttribute::expected_failure_cases())
+                        "Unused attribute for '{}'",
+                        KA::TestingAttribute::EXPECTED_FAILURE
                     );
-                    context.add_diag(diag!(
-                        Declarations::InvalidAttribute,
-                        (arg_loc.clone(), msg)
-                    ));
+                    context.add_diag(diag!(Attributes::ValueWarning, (name.loc, msg)));
                     continue;
                 };
                 check_failure_kind_unset!(arg_loc);
@@ -523,8 +573,9 @@ fn parse_expected_failure(context: &mut Context, attribute: ParsedAttribute) -> 
             }
             // Assignment form: expected to be one of the allowed keys.
             PA::Assigned(_, _) => {
-                if let Some((key, value)) = expect_assigned_attr_value(
+                if let Some((key, value)) = warn_expect_assigned_attr_value(
                     context,
+                    KA::TestingAttribute::EXPECTED_FAILURE,
                     sp(arg_loc, arg_value),
                     &EXPECTED_FAILURE_EXPECTED_KEYS,
                 ) {
@@ -533,12 +584,12 @@ fn parse_expected_failure(context: &mut Context, attribute: ParsedAttribute) -> 
                         let msg = format!("Duplicate assignment for field '{}'.", key);
                         context.add_diag(diag!(
                             Declarations::InvalidAttribute,
-                            (arg_loc.clone(), msg),
+                            (arg_loc, msg),
                             (prev.loc, "Previously defined here"),
                         ));
                         continue;
                     } else {
-                        let _ = assigned_fields.insert(key.clone());
+                        let _ = assigned_fields.insert(key);
                     }
                     let err_msg =
                         |expected| format!("Field '{}' must be a {}", key.value, expected);
@@ -557,7 +608,7 @@ fn parse_expected_failure(context: &mut Context, attribute: ParsedAttribute) -> 
                             AttributeValue_::ModuleAccess(_) => {
                                 context.add_diag(diag!(
                                     Declarations::InvalidAttribute,
-                                    (arg_loc.clone(), err_msg("literal value"))
+                                    (arg_loc, err_msg("literal value"))
                                 ));
                             }
                         },
@@ -567,8 +618,10 @@ fn parse_expected_failure(context: &mut Context, attribute: ParsedAttribute) -> 
                             AttributeValue_::Value(_) => {
                                 context.add_diag(diag!(
                                     Declarations::InvalidAttribute,
-                                    (arg_loc.clone(), err_msg("module name"))
+                                    (arg_loc, err_msg("module name"))
                                 ));
+                                // Bail early
+                                return vec![];
                             }
                         },
                         _ => {} // Should not happen due to allowed_keys filtering.
@@ -580,33 +633,32 @@ fn parse_expected_failure(context: &mut Context, attribute: ParsedAttribute) -> 
                 let msg = make_attribute_format_error(
                     &arg_value,
                     &format!(
-                        "expected an expected failure kind or an assignment (e.g. '{} = <value>')",
+                        "expected a failure kind or an assignment (e.g. '{} = <value>')",
                         KA::TestingAttribute::ABORT_CODE_NAME
                     ),
                 );
-                context.add_diag(diag!(
-                    Declarations::InvalidAttribute,
-                    (arg_loc.clone(), msg)
-                ));
+                context.add_diag(diag!(Declarations::InvalidAttribute, (arg_loc, msg)));
             }
         }
     }
     if let Some(failure_kind) = failure_kind {
         let expected_failure_attr = sp(
-            loc,
+            outer_loc,
             Attribute_::ExpectedFailure {
-                failure_kind,
+                failure_kind: Box::new(failure_kind),
                 minor_status,
                 location: location_field,
             },
         );
         vec![expected_failure_attr]
     } else {
-        let msg = format!(
-            "Invalid '#[expected_failure(...)]' attribute, no failure kind found. Expected one of: {}",
-            format_one_of(KA::TestingAttribute::expected_failure_cases())
-        );
-        context.add_diag(diag!(Attributes::InvalidValue, (loc, msg)));
+        if !any_failure_kind {
+            let msg = format!(
+                "Invalid '#[expected_failure(...)]' attribute, no failure kind found. Expected {}",
+                format_one_of(KA::TestingAttribute::expected_failure_cases())
+            );
+            context.add_diag(diag!(Attributes::InvalidValue, (outer_loc, msg)));
+        }
         vec![]
     }
 }
@@ -650,6 +702,42 @@ fn parse_syntax(context: &mut Context, attribute: ParsedAttribute) -> Vec<Attrib
 // Helpers
 // -------------------------------------------------------------------------------------------------
 
+fn report_duplicate_fields(context: &mut Context, attr: &ParsedAttribute) {
+    use ParsedAttribute_ as PA;
+    let sp!(_loc, parsed) = attr;
+    if let PA::Parameterized(_, sp!(_, subattrs)) = parsed {
+        // Track first occurrence of each sub-attribute name.
+        let mut seen: BTreeMap<String, Loc> = BTreeMap::new();
+        for sub in subattrs {
+            // Extract the name of this sub-attribute.
+            let name_str = match &sub.value {
+                PA::Name(n) => n.value.to_string(),
+                PA::Assigned(n, _) => n.value.to_string(),
+                PA::Parameterized(n, _) => n.value.to_string(),
+            };
+            let this_loc = sub.loc;
+            if let Some(prev_loc) = seen.get(&name_str) {
+                // Duplicate found: report it.
+                let msg = format!(
+                    "Duplicate attribute '{}' attached to the same item",
+                    name_str
+                );
+                context.add_diag(diag!(
+                    Declarations::DuplicateItem,
+                    (this_loc, msg),
+                    (*prev_loc, "Attribute previously given here")
+                ));
+            } else {
+                seen.insert(name_str, this_loc);
+            }
+        }
+        // Recurse into each sub-attribute in case of nested parameterized attributes.
+        for sub in subattrs {
+            report_duplicate_fields(context, sub);
+        }
+    }
+}
+
 // -----------------------------------------------
 // Sub-attribute parsing
 
@@ -661,7 +749,7 @@ fn expect_name_attr(context: &mut Context, attr: ParsedAttribute) -> Option<Name
         PA::Assigned(name, _) | PA::Parameterized(name, _) => {
             let msg =
                 make_attribute_format_error(&attr, &format!("name only, as '{}'", name.clone()));
-            context.add_diag(diag!(Declarations::InvalidAttribute, (loc.clone(), msg)));
+            context.add_diag(diag!(Declarations::InvalidAttribute, (loc, msg)));
             None
         }
     }
@@ -676,19 +764,40 @@ fn expect_assigned_attr_value(
     let sp!(loc, attr) = attr;
     match attr {
         PA::Assigned(key, value) if expected.contains(key.value.as_ref()) => Some((key, *value)),
-        PA::Assigned(key, _) => {
+        PA::Name(key) | PA::Parameterized(key, _) if expected.contains(key.value.as_ref()) => {
+            let name = attr_name(&attr);
+            let msg = make_attribute_format_error(
+                &attr,
+                &format!("an assignment, e.g. '{} = <value>'", name),
+            );
+            context.add_diag(diag!(Declarations::InvalidAttribute, (loc, msg)));
+            None
+        }
+        PA::Name(key) | PA::Assigned(key, _) | PA::Parameterized(key, _) => {
             let msg = format!(
                 "Unexpected field '{}' -- expected {}",
                 key.value.as_ref(),
                 format_one_of(expected)
             );
-            context.add_diag(diag!(Declarations::InvalidAttribute, (loc, msg)));
+            context.add_diag(diag!(Declarations::InvalidAttribute, (key.loc, msg)));
             None
         }
-        attr @ (PA::Name(_) | PA::Parameterized(_, _)) => {
-            let name = attr_name(&attr);
-            let msg = make_attribute_format_error(&attr, &format!("'{} = <value>'", name));
-            context.add_diag(diag!(Declarations::InvalidAttribute, (loc, msg)));
+    }
+}
+
+fn warn_expect_assigned_attr_value(
+    context: &mut Context,
+    parent_attr_name: &str,
+    attr: ParsedAttribute,
+    expected: &BTreeSet<String>,
+) -> Option<(Name, AttributeValue)> {
+    use ParsedAttribute_ as PA;
+    let sp!(loc, attr) = attr;
+    match attr {
+        PA::Assigned(key, value) if expected.contains(key.value.as_ref()) => Some((key, *value)),
+        _ => {
+            let msg = format!("Unused attribute for '{parent_attr_name}'");
+            context.add_diag(diag!(Attributes::ValueWarning, (loc, msg)));
             None
         }
     }
@@ -714,16 +823,9 @@ fn make_attribute_format_error(current_attr: &ParsedAttribute_, expectation: &st
     let encountered = usage_kind(current_attr);
 
     format!(
-        "Attribute '{}' does not support {}. Expected {}.",
+        "Attribute '{}' does not support {}. Expected {}",
         name, encountered, expectation
     )
-}
-
-fn format_attribute_value(value: &AttributeValue_) -> String {
-    match value {
-        AttributeValue_::Value(sp!(_, value)) => format!("{}", value),
-        AttributeValue_::ModuleAccess(sp!(_, name)) => format!("{}", name),
-    }
 }
 
 fn attr_name(attr: &ParsedAttribute_) -> &str {
@@ -740,14 +842,5 @@ fn usage_kind(attr: &ParsedAttribute_) -> &'static str {
         PA::Name(_) => "name-only usage",
         PA::Assigned(_, _) => "assignment",
         PA::Parameterized(_, _) => "parameters",
-    }
-}
-
-fn kind(attr: &ParsedAttribute_) -> &'static str {
-    use ParsedAttribute_ as PA;
-    match &attr {
-        PA::Name(_) => "name",
-        PA::Assigned(_, _) => "assignment",
-        PA::Parameterized(_, _) => "parameterized",
     }
 }
