@@ -10,7 +10,7 @@ use async_graphql::dataloader::DataLoader;
 use prometheus::Registry;
 use sui_kvstore::{BigTableClient, Checkpoint, KeyValueStoreReader, TransactionData};
 use sui_types::digests::TransactionDigest;
-use sui_types::messages_checkpoint::CheckpointSequenceNumber;
+use sui_types::messages_checkpoint::{CheckpointSequenceNumber, CheckpointSummary};
 use sui_types::object::Object;
 use sui_types::storage::ObjectKey;
 use tracing::warn;
@@ -73,6 +73,16 @@ impl BigtableReader {
     /// Create a data loader backed by this reader.
     pub fn as_data_loader(&self) -> DataLoader<Self> {
         DataLoader::new(self.clone(), tokio::spawn)
+    }
+
+    /// Get the summary for the latest checkpoint known to Bigtable.
+    pub async fn checkpoint_watermark(&self) -> Result<Option<CheckpointSummary>, Error> {
+        measure(
+            "watermark",
+            &(),
+            self.0.clone().get_latest_checkpoint_summary(),
+        )
+        .await
     }
 
     /// Multi-get checkpoints by sequence number.
