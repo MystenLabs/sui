@@ -14,9 +14,10 @@ use std::collections::BTreeSet;
 
 use itertools::Itertools;
 
-use move_model::{ model::FunctionEnv};
+use move_model::model::FunctionEnv;
 
-use crate::{exp_generator::ExpGenerator,
+use crate::{
+    exp_generator::ExpGenerator,
     function_data_builder::FunctionDataBuilder,
     function_target::FunctionData,
     function_target_pipeline::{FunctionTargetProcessor, FunctionTargetsHolder},
@@ -58,7 +59,11 @@ impl FunctionTargetProcessor for DebugInstrumenter {
 
         // For spec functions, emit trace instructions for all global variables at entry.
         if targets.is_spec(&fun_env.get_qualified_id()) {
-            for tys in spec_global_variable_analysis::get_info(&builder.data).all_vars().collect_vec() {
+            for tys in spec_global_variable_analysis::get_info(&builder.data)
+                .all_vars()
+                .cloned()
+                .collect_vec()
+            {
                 builder.emit_with(|id| {
                     Call(
                         id,
@@ -111,7 +116,10 @@ impl FunctionTargetProcessor for DebugInstrumenter {
                         Some(Bytecode::Load(_, last_dest, Constant::ByteArray(bytes)))
                             if srcs[0] == *last_dest =>
                         {
-                            String::from_utf8_lossy(bytes).to_string().escape_debug().to_string()
+                            String::from_utf8_lossy(bytes)
+                                .to_string()
+                                .escape_debug()
+                                .to_string()
                         }
                         _ => panic!("log text should be preceded by load byte array"),
                     };

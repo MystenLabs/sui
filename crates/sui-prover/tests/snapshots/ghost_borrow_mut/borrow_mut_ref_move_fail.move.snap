@@ -1,0 +1,12 @@
+---
+source: crates/move-prover/tests/integration.rs
+expression: output
+---
+exiting with model building errors
+error: mutable ownership violated
+   ┌─ tests/inputs/ghost_borrow_mut/borrow_mut_ref_move_fail.move:14:20
+   │
+13 │   let ghost_ref_0 = ghost_ref;
+   │                     --------- It is still being mutably borrowed by this reference
+14 │   *ghost_ref_0 = !(*ghost_ref);
+   │                    ^^^^^^^^^^ Invalid dereference.

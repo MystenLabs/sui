@@ -76,5 +76,10 @@ public fun test_spec<T>(a: Point<T>, b: Point<T>, c: Point<T>): (Range<T>, Range
 
 #[spec_only]
 public fun Range_inv<T>(self: &Range<T>): bool {
-    self.begin.x <= self.end.x
+    self.begin.x <= self.end.x && true_const()
+}
+
+#[spec_only]
+fun true_const(): bool {
+    true
 }

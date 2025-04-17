@@ -1,0 +1,20 @@
+---
+source: crates/sui-prover/tests/integration.rs
+expression: output
+---
+exiting with verification errors
+error: prover::ensures assertion does not hold
+   ┌─ tests/inputs/print-ghost.move:15:5
+   │
+15 │     ensures(ghost::global<u64, bool>() != true);
+   │     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   │
+   =     at tests/inputs/print-ghost.move:12: foo_spec
+   =         x = true
+   =         ghost<u64> = true
+   =     at tests/inputs/print-ghost.move:14: foo_spec
+   =         x = true
+   =     at tests/inputs/print-ghost.move:8: foo
+   =         x = true
+   =         ghost<u64> = true
+   =     at tests/../../sui-framework/packages/prover/sources/ghost.move:15: set_spec

@@ -5,7 +5,7 @@
 use crate::{
     ast::{Exp, ExpData, MemoryLabel, TempIndex, TraceKind},
     exp_rewriter::{ExpRewriter, ExpRewriterFunctions, RewriteTarget},
-    function_target::FunctionTarget
+    function_target::FunctionTarget,
 };
 use ethnum::U256;
 use itertools::Itertools;
@@ -285,6 +285,7 @@ impl Operation {
 #[derive(Debug, Clone, Eq, Ord, PartialEq, PartialOrd)]
 pub enum BorrowNode {
     GlobalRoot(QualifiedInstId<DatatypeId>),
+    SpecGlobalRoot(Vec<Type>),
     LocalRoot(TempIndex),
     Reference(TempIndex),
     // Used in summaries to represent a returned mutation at return index. This does not
@@ -304,6 +305,7 @@ impl BorrowNode {
     pub fn instantiate(&self, params: &[Type]) -> Self {
         match self {
             Self::GlobalRoot(qid) => Self::GlobalRoot(qid.instantiate_ref(params)),
+            Self::SpecGlobalRoot(tys) => Self::SpecGlobalRoot(Type::instantiate_slice(tys, params)),
             _ => self.clone(),
         }
     }
@@ -1323,6 +1325,14 @@ impl fmt::Display for BorrowNodeDisplay<'_> {
                     type_param_names: None,
                 };
                 write!(f, "{}", ty.display(&tctx))?;
+            }
+            SpecGlobalRoot(tys) => {
+                write!(
+                    f,
+                    "GlobalSpecRoot({}, {})",
+                    tys[0].display(&self.func_target.global_env().get_type_display_ctx()),
+                    tys[1].display(&self.func_target.global_env().get_type_display_ctx()),
+                )?;
             }
             LocalRoot(idx) => {
                 write!(f, "LocalRoot($t{})", idx)?;

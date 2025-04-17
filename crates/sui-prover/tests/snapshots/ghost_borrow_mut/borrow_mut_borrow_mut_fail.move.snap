@@ -1,0 +1,10 @@
+---
+source: crates/move-prover/tests/integration.rs
+expression: output
+---
+exiting with bytecode transformation errors
+error: multiple ghost borrow_mut
+   ┌─ tests/inputs/ghost_borrow_mut/borrow_mut_borrow_mut_fail.move:12:21
+   │
+12 │   let ghost_ref_0 = ghost::borrow_mut<GhostStruct, bool>();
+   │                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^

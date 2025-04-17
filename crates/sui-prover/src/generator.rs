@@ -66,6 +66,7 @@ pub fn run_move_prover_with_model<W: WriteColor>(
         error_writer,
         "exiting with model building errors",
     )?;
+    // TODO: delete duplicate diagnostics reporting
     env.report_diag(error_writer, options.prover.report_severity);
 
     // Add the prover options as an extension to the environment, so they can be accessed
@@ -92,12 +93,13 @@ pub fn run_move_prover_with_model<W: WriteColor>(
 
     // Create and process bytecode
     let now = Instant::now();
-    let targets = create_and_process_bytecode(&options, env);
+    let (targets, _err_processor) = create_and_process_bytecode(&options, env);
     let trafo_duration = now.elapsed();
     check_errors(
         env,
         &options,
         error_writer,
+        // TODO: add _err_processor to this message
         "exiting with bytecode transformation errors",
     )?;
 
@@ -204,7 +206,11 @@ pub fn verify_boogie(
     Ok(())
 }
 
-pub fn create_and_process_bytecode(options: &Options, env: &GlobalEnv) -> FunctionTargetsHolder {
+/// Create bytecode and process it.
+pub fn create_and_process_bytecode(
+    options: &Options,
+    env: &GlobalEnv,
+) -> (FunctionTargetsHolder, Option<String>) {
     let mut targets = FunctionTargetsHolder::new();
     let output_dir = Path::new(&options.output_path)
         .parent()
@@ -234,7 +240,7 @@ pub fn create_and_process_bytecode(options: &Options, env: &GlobalEnv) -> Functi
         pipeline_factory::default_pipeline_with_options(&options.prover)
     };
 
-    if options.prover.dump_bytecode {
+    let res = if options.prover.dump_bytecode {
         let dump_file_base = output_dir
             .join(output_prefix)
             .into_os_string()
@@ -242,8 +248,8 @@ pub fn create_and_process_bytecode(options: &Options, env: &GlobalEnv) -> Functi
             .unwrap();
         pipeline.run_with_dump(env, &mut targets, &dump_file_base, options.prover.dump_cfg)
     } else {
-        pipeline.run(env, &mut targets);
-    }
+        pipeline.run(env, &mut targets)
+    };
 
     // println!(
     //     "{}",
@@ -253,7 +259,7 @@ pub fn create_and_process_bytecode(options: &Options, env: &GlobalEnv) -> Functi
     //     }
     // );
 
-    targets
+    (targets, res.err().map(|p| p.name()))
 }
 
 // Tools using the Move prover top-level driver

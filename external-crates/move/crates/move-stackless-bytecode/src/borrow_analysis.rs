@@ -22,6 +22,7 @@ use crate::{
     function_target::{FunctionData, FunctionTarget},
     function_target_pipeline::{FunctionTargetProcessor, FunctionTargetsHolder, FunctionVariant},
     livevar_analysis::LiveVarAnnotation,
+    spec_global_variable_analysis,
     stackless_bytecode::{AssignKind, BorrowEdge, BorrowNode, Bytecode, IndexEdgeKind, Operation},
     stackless_control_flow_graph::StacklessControlFlowGraph,
 };
@@ -114,7 +115,9 @@ impl BorrowInfo {
         trees: &mut Vec<Vec<WriteBackAction>>,
     ) {
         match node {
-            BorrowNode::LocalRoot(..) | BorrowNode::GlobalRoot(..) => {
+            BorrowNode::LocalRoot(..)
+            | BorrowNode::GlobalRoot(..)
+            | BorrowNode::SpecGlobalRoot(..) => {
                 trees.push(order);
             }
             BorrowNode::Reference(index) => {
@@ -631,7 +634,7 @@ impl TransferFunctions for BorrowAnalysis<'_> {
                     }
                 }
             }
-            Call(_, dests, oper, srcs, _) => {
+            Call(attr_id, dests, oper, srcs, _) => {
                 use Operation::*;
                 match oper {
                     // In the borrows below, we only create an edge if the
@@ -656,6 +659,26 @@ impl TransferFunctions for BorrowAnalysis<'_> {
                         state.add_node(dest_node.clone());
                         state.add_edge(src_node, dest_node, BorrowEdge::Direct);
                     }
+                    Function(mid, fid, tys)
+                        if mid.qualified(*fid)
+                            == self.func_target.global_env().global_borrow_mut_qid()
+                            && livevar_annotation_at.after.contains(&dests[0]) =>
+                    {
+                        let dest_node = self.borrow_node(dests[0]);
+                        let src_node = BorrowNode::SpecGlobalRoot(tys.clone());
+                        state.add_node(dest_node.clone());
+                        if state
+                            .get_children(&src_node)
+                            .iter()
+                            .any(|node| state.is_in_use(node))
+                        {
+                            self.func_target.global_env().error(
+                                &self.func_target.get_bytecode_loc(*attr_id),
+                                "multiple ghost borrow_mut",
+                            );
+                        }
+                        state.add_edge(src_node, dest_node, BorrowEdge::Direct);
+                    }
                     BorrowField(mid, sid, inst, field)
                         if livevar_annotation_at.after.contains(&dests[0]) =>
                     {
@@ -673,6 +696,61 @@ impl TransferFunctions for BorrowAnalysis<'_> {
                             .func_target
                             .global_env()
                             .get_function_qid(mid.qualified(*fid));
+
+                        let spec_vars = if callee_env.get_qualified_id()
+                            == self.func_target.global_env().global_qid()
+                            || callee_env.get_qualified_id()
+                                == self.func_target.global_env().global_set_qid()
+                        {
+                            vec![targs.clone()]
+                        } else {
+                            let callee_qid = callee_env.get_qualified_id();
+                            let fun_qid_with_info = self
+                                .targets
+                                .get_callee_spec_qid(
+                                    &self.func_target.func_env.get_qualified_id(),
+                                    &callee_qid,
+                                )
+                                .unwrap_or(&callee_qid);
+                            let data = if fun_qid_with_info
+                                != &self.func_target.func_env.get_qualified_id()
+                            {
+                                self.targets
+                                    .get_data(fun_qid_with_info, &FunctionVariant::Baseline)
+                                    .expect(&format!(
+                                        "spec function not found: {}",
+                                        self.func_target
+                                            .global_env()
+                                            .get_function(*fun_qid_with_info)
+                                            .get_full_name_str()
+                                    ))
+                            } else {
+                                self.func_target.data
+                            };
+                            spec_global_variable_analysis::get_info(data)
+                                .instantiate(targs)
+                                .unwrap()
+                                .all_vars()
+                                .cloned()
+                                .collect_vec()
+                        };
+                        for var in spec_vars {
+                            if state
+                                .get_children(&BorrowNode::SpecGlobalRoot(var.clone()))
+                                .iter()
+                                .any(|node| state.is_in_use(node))
+                            {
+                                self.func_target.global_env().error(
+                                    &self.func_target.get_bytecode_loc(*attr_id),
+                                    &format!(
+                                        "ghost use while borrow_mut: {}",
+                                        (&var[0]).display(
+                                            &self.func_target.func_env.get_named_type_display_ctx()
+                                        )
+                                    ),
+                                );
+                            }
+                        }
 
                         let callee_annotation =
                             get_custom_annotation_or_none(callee_env, self.borrow_natives)
