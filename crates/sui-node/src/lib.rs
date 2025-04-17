@@ -856,24 +856,21 @@ impl SuiNode {
             .set(config.supported_protocol_versions.unwrap().max.as_u64() as i64);
 
         let validator_components = if state.is_validator(&epoch_store) {
-            let (components, _) = futures::join!(
-                Self::construct_validator_components(
-                    config.clone(),
-                    state.clone(),
-                    committee,
-                    epoch_store.clone(),
-                    checkpoint_store.clone(),
-                    state_sync_handle.clone(),
-                    randomness_handle.clone(),
-                    Arc::downgrade(&accumulator),
-                    backpressure_manager.clone(),
-                    connection_monitor_status.clone(),
-                    &registry_service,
-                    sui_node_metrics.clone(),
-                ),
-                Self::reexecute_pending_consensus_certs(&epoch_store, &state,)
-            );
-            let mut components = components?;
+            let mut components = Self::construct_validator_components(
+                config.clone(),
+                state.clone(),
+                committee,
+                epoch_store.clone(),
+                checkpoint_store.clone(),
+                state_sync_handle.clone(),
+                randomness_handle.clone(),
+                Arc::downgrade(&accumulator),
+                backpressure_manager.clone(),
+                connection_monitor_status.clone(),
+                &registry_service,
+                sui_node_metrics.clone(),
+            )
+            .await?;
 
             components.consensus_adapter.submit_recovered(&epoch_store);
 
@@ -1594,7 +1591,14 @@ impl SuiNode {
         }))
     }
 
-    async fn reexecute_pending_consensus_certs(
+    // TODO: Fix this function.
+    // We only attempt to re-execute pending consensus transactions that is:
+    // 1. Fast-path transaction
+    // 2. Has signed the effects
+    // However it is possible that some dependencies are also in pending consensus transactions
+    // but does not meet the above criteria. This will lead to timeout on waiting for effects
+    // digests to be executed.
+    async fn _reexecute_pending_consensus_certs(
         epoch_store: &Arc<AuthorityPerEpochStore>,
         state: &Arc<AuthorityState>,
     ) {
