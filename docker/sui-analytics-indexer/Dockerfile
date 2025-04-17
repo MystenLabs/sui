@@ -17,13 +17,28 @@ ENV RUSTFLAGS="-C debuginfo=2"
 
 RUN cargo build --profile ${PROFILE} --bin sui-analytics-indexer
 
+# --------------------
+# Runtime Stage
+# --------------------
 FROM debian:12-slim as runtime
 
-# Use jemalloc as memory allocator
-RUN apt-get update && apt-get install -y libjemalloc-dev ca-certificates curl
-ENV LD_PRELOAD /usr/lib/x86_64-linux-gnu/libjemalloc.so
+# Install heaptrack, jemalloc, and basic tooling
+RUN apt-get update && apt-get install -y --no-install-recommends \
+  ca-certificates \
+  curl \
+  libjemalloc-dev \
+  heaptrack \
+  procps \
+  && apt-get clean \
+  && rm -rf /var/lib/apt/lists/*
 
-RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates
+# Optional: use jemalloc for consistent memory profiling
+ENV LD_PRELOAD=/usr/lib/x86_64-linux-gnu/libjemalloc.so
 
+# Copy binary with debug symbols
 COPY --from=build --chmod=755 /work/target/release/sui-analytics-indexer /opt/sui/bin/sui-analytics-indexer
+
+# Optional: run under heaptrack by default
+# You can comment this out and use Pulumi to override the command if you prefer
+# CMD ["sh", "-c", "ulimit -c unlimited && heaptrack /opt/sui/bin/sui-analytics-indexer /config/analytics-indexer.yaml"]
 
