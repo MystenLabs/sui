@@ -18,10 +18,7 @@
         "Other"
     ],
     "activationEvents": [
-        "onDebugDynamicConfigurations:move-debug",
-        "onDebugResolve:move-debug",
-        "onLanguage:mtrace",
-        "workspaceContains:**/*.json.zst"
+        "*"
     ],
     "main": "./out/extension.js",
     "contributes": {
