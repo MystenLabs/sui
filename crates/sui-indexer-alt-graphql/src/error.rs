@@ -7,6 +7,8 @@ use std::{convert::Infallible, sync::Arc, time::Duration};
 
 use async_graphql::{ErrorExtensionValues, ErrorExtensions, Response, Value};
 
+use crate::pagination;
+
 /// Error codes for the `extensions.code` field of a GraphQL error that originates from outside
 /// GraphQL.
 ///
@@ -24,6 +26,9 @@ pub(crate) enum RpcError<E: std::error::Error = Infallible> {
     /// An error that is the user's fault.
     BadUserInput(Arc<E>),
 
+    /// A user error related to pagination and cursors.
+    Pagination(#[from] pagination::Error),
+
     /// An error that is produced by the framework, it gets wrapped so that we can add an error
     /// extension to it.
     GraphQlError(async_graphql::Error),
@@ -39,6 +44,10 @@ impl<E: std::error::Error> From<RpcError<E>> for async_graphql::Error {
     fn from(err: RpcError<E>) -> Self {
         match err {
             RpcError::BadUserInput(err) => err.to_string().extend_with(|_, ext| {
+                ext.set("code", code::BAD_USER_INPUT);
+            }),
+
+            RpcError::Pagination(err) => err.to_string().extend_with(|_, ext| {
                 ext.set("code", code::BAD_USER_INPUT);
             }),
 
@@ -75,12 +84,16 @@ impl<E: std::error::Error> From<RpcError<E>> for async_graphql::Error {
     }
 }
 
+// Cannot use `#[from]` for this conversion because [`async_graphql::Error`] does not implement
+// `std::error::Error`, so it cannot participate in the source/chaining APIs.
 impl From<async_graphql::Error> for RpcError {
     fn from(err: async_graphql::Error) -> Self {
         RpcError::GraphQlError(err)
     }
 }
 
+// Cannot use `#[from]` for this conversion because [`anyhow::Error`] does not implement `Clone`,
+// so it needs to be wrapped in an [`Arc`].
 impl From<anyhow::Error> for RpcError {
     fn from(err: anyhow::Error) -> Self {
         RpcError::InternalError(Arc::new(err))

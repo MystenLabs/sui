@@ -97,6 +97,10 @@ pub struct Limits {
     /// keys will result in an error.
     pub max_multi_get_size: u32,
 
+    /// Maximum (and default) number of object changes that can be returned in a single page of
+    /// `TransactionEffects.objectChanges`.
+    pub page_size_override_fx_object_changes: u32,
+
     /// Maximum amount of nesting among type arguments (type arguments nest when a type argument is
     /// itself generic and has arguments).
     pub max_type_argument_depth: usize,
@@ -125,6 +129,7 @@ pub struct LimitsLayer {
     pub default_page_size: Option<u32>,
     pub max_page_size: Option<u32>,
     pub max_multi_get_size: Option<u32>,
+    pub page_size_override_fx_object_changes: Option<u32>,
     pub max_type_argument_depth: Option<usize>,
     pub max_type_argument_width: Option<usize>,
     pub max_type_nodes: Option<usize>,
@@ -216,7 +221,13 @@ impl Limits {
                 default: self.default_page_size,
                 max: self.max_page_size,
             },
-            BTreeMap::new(),
+            BTreeMap::from_iter([(
+                ("TransactionEffects", "objectChanges"),
+                PageLimits {
+                    default: self.page_size_override_fx_object_changes,
+                    max: self.page_size_override_fx_object_changes,
+                },
+            )]),
         )
     }
 
@@ -246,6 +257,9 @@ impl LimitsLayer {
             default_page_size: self.default_page_size.unwrap_or(base.default_page_size),
             max_page_size: self.max_page_size.unwrap_or(base.max_page_size),
             max_multi_get_size: self.max_multi_get_size.unwrap_or(base.max_multi_get_size),
+            page_size_override_fx_object_changes: self
+                .page_size_override_fx_object_changes
+                .unwrap_or(base.page_size_override_fx_object_changes),
             max_type_argument_depth: self
                 .max_type_argument_depth
                 .unwrap_or(base.max_type_argument_depth),
@@ -295,6 +309,7 @@ impl From<Limits> for LimitsLayer {
             default_page_size: Some(value.default_page_size),
             max_page_size: Some(value.max_page_size),
             max_multi_get_size: Some(value.max_multi_get_size),
+            page_size_override_fx_object_changes: Some(value.page_size_override_fx_object_changes),
             max_type_argument_depth: Some(value.max_type_argument_depth),
             max_type_argument_width: Some(value.max_type_argument_width),
             max_type_nodes: Some(value.max_type_nodes),
@@ -351,13 +366,16 @@ impl Default for Limits {
             query_timeout_ms: 40_000,
             max_query_depth: 20,
             max_query_nodes: 300,
-            max_output_nodes: 100_000,
+            max_output_nodes: 1_000_000,
             // Add a 30% buffer to the protocol limit, rounded up to account Base64 overhead.
             max_tx_payload_size: (max_tx_size_bytes * 4).div_ceil(3) as u32,
             max_query_payload_size: 5_000,
             default_page_size: 20,
             max_page_size: 50,
             max_multi_get_size: 200,
+            // A much larger page size than the default, to make it unlikely that users need to
+            // fetch a second page.
+            page_size_override_fx_object_changes: 1024,
             max_type_argument_depth,
             max_type_argument_width,
             max_type_nodes,
