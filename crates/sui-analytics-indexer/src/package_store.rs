@@ -49,12 +49,17 @@ pub struct PackageStoreTables {
 impl PackageStoreTables {
     pub fn new(path: &Path) -> Arc<Self> {
         // Create a custom RocksDB options with controlled memory usage
-        use typed_store::rocksdb::{BlockBasedOptions, Options};
+        use typed_store::rocksdb::{BlockBasedOptions, Cache, Options};
         let mut opts = Options::default();
 
-        // Configure block cache options
+        // Create a shared LRU cache for blocks, indices, and filters - explicit size cap
+        let lru = Cache::new_lru_cache(512 * 1024 * 1024);
+        
+        // Configure block cache options with tight controls
         let mut block_opts = BlockBasedOptions::default();
-        block_opts.set_cache_index_and_filter_blocks(true);
+        block_opts.set_block_cache(&lru); // Use shared explicit cache
+        block_opts.set_cache_index_and_filter_blocks(true); // Cache indices in block cache
+        block_opts.set_pin_l0_filter_and_index_blocks_in_cache(true); // Keeps them out of RSS
         block_opts.set_block_size(16 * 1024); // 16KB blocks
         opts.set_block_based_table_factory(&block_opts);
 
@@ -73,9 +78,16 @@ impl PackageStoreTables {
         opts.set_max_open_files(100); // Limit open files
         opts.set_keep_log_file_num(1); // Keep fewer log files
 
+        // Prevent L0 growth explosion which pins memory
+        opts.set_level_zero_file_num_compaction_trigger(4);
+        opts.set_level_zero_slowdown_writes_trigger(8);
+        opts.set_level_zero_stop_writes_trigger(12);
+        
         // Compaction settings to reduce memory usage
         opts.set_max_bytes_for_level_base(64 * 1024 * 1024); // 64MB for base level
         opts.set_max_bytes_for_level_multiplier(8.0); // Less aggressive level sizing
+        opts.set_max_subcompactions(1); // Prevent excessive compaction memory
+        opts.set_compaction_readahead_size(8 * 1024 * 1024); // 8MB compaction read buffer
 
         // Create the DB with controlled memory options
         Arc::new(Self::open_tables_read_write(

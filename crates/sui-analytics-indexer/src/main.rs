@@ -70,8 +70,10 @@ fn main() -> Result<()> {
             executor.register(worker_pool).await?;
         }
 
+        // Configure reader options to limit in-memory data size
         let reader_options = ReaderOptions {
             batch_size,
+            data_limit: 2 * 1024 * 1024 * 1024, // Limit total checkpoint data to 2GB in memory
             ..Default::default()
         };
 
