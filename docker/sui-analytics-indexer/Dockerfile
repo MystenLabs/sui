@@ -12,13 +12,19 @@ COPY consensus consensus
 COPY crates crates
 COPY sui-execution sui-execution
 COPY external-crates external-crates
-ENV RUSTFLAGS="-C debuginfo=2"
-RUN cargo build --profile ${PROFILE} --bin sui-analytics-indexer
+
+RUN RUSTFLAGS="-C debuginfo=2" cargo build --profile ${PROFILE} --bin sui-analytics-indexer
 
 # Production Image
 FROM debian:bullseye-slim AS runtime
 # Use jemalloc as memory allocator
-RUN apt-get update && apt-get install -y libjemalloc-dev ca-certificates procps htop binutils
+RUN apt-get update && apt-get install -y \
+  libjemalloc-dev \
+  ca-certificates \
+  procps \
+  htop \
+  binutils \
+  heaptrack
 ENV LD_PRELOAD /usr/lib/x86_64-linux-gnu/libjemalloc.so
 
 WORKDIR "$WORKDIR/sui"
