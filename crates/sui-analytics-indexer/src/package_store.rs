@@ -54,7 +54,7 @@ impl PackageStoreTables {
 
         // Create a shared LRU cache for blocks, indices, and filters - explicit size cap
         let lru = Cache::new_lru_cache(512 * 1024 * 1024);
-        
+
         // Configure block cache options with tight controls
         let mut block_opts = BlockBasedOptions::default();
         block_opts.set_block_cache(&lru); // Use shared explicit cache
@@ -82,12 +82,15 @@ impl PackageStoreTables {
         opts.set_level_zero_file_num_compaction_trigger(4);
         opts.set_level_zero_slowdown_writes_trigger(8);
         opts.set_level_zero_stop_writes_trigger(12);
-        
+
         // Compaction settings to reduce memory usage
         opts.set_max_bytes_for_level_base(64 * 1024 * 1024); // 64MB for base level
         opts.set_max_bytes_for_level_multiplier(8.0); // Less aggressive level sizing
         opts.set_max_subcompactions(1); // Prevent excessive compaction memory
         opts.set_compaction_readahead_size(8 * 1024 * 1024); // 8MB compaction read buffer
+
+        opts.set_allow_mmap_reads(false);
+        opts.set_allow_mmap_writes(false);
 
         // Create the DB with controlled memory options
         Arc::new(Self::open_tables_read_write(
