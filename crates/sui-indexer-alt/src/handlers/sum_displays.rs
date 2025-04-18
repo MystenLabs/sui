@@ -8,7 +8,7 @@ use diesel::{upsert::excluded, ExpressionMethods};
 use diesel_async::RunQueryDsl;
 use futures::future::try_join_all;
 use sui_indexer_alt_framework::{
-    db::{Db, DbConnection, FieldCount},
+    db::{Connection, Db, FieldCount},
     pipeline::{sequential::Handler, Processor},
     types::{display::DisplayVersionUpdatedEvent, full_checkpoint_content::CheckpointData},
 };
@@ -68,7 +68,7 @@ impl Handler for SumDisplays {
         }
     }
 
-    async fn commit<'a>(batch: &Self::Batch, conn: &mut DbConnection<'a>) -> Result<usize> {
+    async fn commit<'a>(batch: &Self::Batch, conn: &mut Connection<'a>) -> Result<usize> {
         let values: Vec<_> = batch.values().cloned().collect();
         let updates = values
             .chunks(MAX_INSERT_CHUNK_ROWS)

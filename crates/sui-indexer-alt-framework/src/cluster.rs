@@ -179,11 +179,12 @@ mod tests {
 
     use crate::db::{
         temp::{get_available_port, TempDb},
-        Db, DbConnection, FieldCount,
+        Connection, Db,
     };
     use crate::pipeline::concurrent::{self, ConcurrentConfig};
     use crate::pipeline::Processor;
     use crate::types::full_checkpoint_content::CheckpointData;
+    use crate::FieldCount;
     use crate::Store;
 
     use super::*;
@@ -224,7 +225,7 @@ mod tests {
 
         async fn commit<'a>(
             values: &[Self::Value],
-            conn: &mut DbConnection<'a>,
+            conn: &mut Connection<'a>,
         ) -> anyhow::Result<usize> {
             Ok(diesel::insert_into(tx_counts::table)
                 .values(values)

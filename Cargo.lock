@@ -14438,6 +14438,7 @@ dependencies = [
  "reqwest 0.12.9",
  "scoped-futures",
  "serde",
+ "sui-field-count",
  "sui-indexer-alt-framework-store-traits",
  "sui-indexer-alt-metrics",
  "sui-pg-db",

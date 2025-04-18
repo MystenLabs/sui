@@ -8,7 +8,7 @@ use anyhow::Result;
 use diesel::{ExpressionMethods, QueryDsl};
 use diesel_async::RunQueryDsl;
 use sui_indexer_alt_framework::{
-    db::{Db, DbConnection},
+    db::{Connection, Db},
     pipeline::{concurrent::Handler, Processor},
     types::full_checkpoint_content::CheckpointData,
 };
@@ -61,7 +61,7 @@ impl Handler for TxKinds {
     const MIN_EAGER_ROWS: usize = 100;
     const MAX_PENDING_ROWS: usize = 10000;
 
-    async fn commit<'a>(values: &[Self::Value], conn: &mut DbConnection<'a>) -> Result<usize> {
+    async fn commit<'a>(values: &[Self::Value], conn: &mut Connection<'a>) -> Result<usize> {
         Ok(diesel::insert_into(tx_kinds::table)
             .values(values)
             .on_conflict_do_nothing()
@@ -73,7 +73,7 @@ impl Handler for TxKinds {
         &self,
         from: u64,
         to_exclusive: u64,
-        conn: &mut DbConnection<'a>,
+        conn: &mut Connection<'a>,
     ) -> Result<usize> {
         let Range {
             start: from_tx,
@@ -97,7 +97,7 @@ mod tests {
 
     use crate::handlers::cp_sequence_numbers::CpSequenceNumbers;
 
-    async fn get_all_tx_kinds(conn: &mut DbConnection<'_>) -> Result<Vec<i64>> {
+    async fn get_all_tx_kinds(conn: &mut Connection<'_>) -> Result<Vec<i64>> {
         Ok(tx_kinds::table
             .select(tx_kinds::tx_sequence_number)
             .load(conn)
