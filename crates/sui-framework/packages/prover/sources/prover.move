@@ -68,4 +68,4 @@ fun fresh_spec<T>(): T {
 
 #[spec_only]
 #[allow(unused)]
-native public fun type_inv<T>(x: &T): bool;
+native fun type_inv<T>(x: &T): bool;
