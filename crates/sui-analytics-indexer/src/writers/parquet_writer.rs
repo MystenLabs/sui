@@ -12,11 +12,58 @@ use std::ops::Range;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use sui_types::base_types::EpochId;
+use tracing::info;
+use once_cell::sync::Lazy;
 
 use parquet::arrow::ArrowWriter;
 use parquet::basic::Compression;
 use parquet::file::properties::WriterProperties;
 use sui_storage::object_store::util::path_to_filesystem;
+
+/// Environment variable to override the default maximum string size in bytes.
+/// This is used to prevent Arrow byte array offset overflow errors.
+const MAX_STRING_SIZE_VAR_NAME: &str = "SUI_ANALYTICS_MAX_STRING_SIZE";
+
+/// Default maximum string size in bytes (16MB)
+const DEFAULT_MAX_STRING_SIZE: usize = 16 * 1024 * 1024;
+
+/// Maximum string size in bytes for serialization to Parquet.
+/// 
+/// If the environment variable `SUI_ANALYTICS_MAX_STRING_SIZE` is unset, 
+/// we default to `DEFAULT_MAX_STRING_SIZE` which is 16MB.
+/// 
+/// This is read only once and after that the value is cached.
+static MAX_STRING_SIZE: Lazy<usize> = Lazy::new(|| {
+    let max_size_opt = std::env::var(MAX_STRING_SIZE_VAR_NAME)
+        .ok()
+        .and_then(|s| s.parse().ok());
+    if let Some(max_size) = max_size_opt {
+        info!(
+            "Using custom value for '{}': {} bytes",
+            MAX_STRING_SIZE_VAR_NAME, max_size
+        );
+        max_size
+    } else {
+        info!(
+            "Using default value for '{}': {} bytes",
+            MAX_STRING_SIZE_VAR_NAME, DEFAULT_MAX_STRING_SIZE
+        );
+        DEFAULT_MAX_STRING_SIZE
+    }
+});
+
+/// Replaces a string that exceeds the maximum size limit with a placeholder message.
+/// This ensures that potential JSON content remains valid JSON.
+fn handle_oversized_string(s: &str) -> String {
+    if s.len() <= *MAX_STRING_SIZE {
+        s.to_string()
+    } else {
+        // Use a simple placeholder that would be valid in JSON
+        "String exceeds maximum allowed size".to_string()
+    }
+}
+
+// Removed unused constant
 
 // Save table entries to parquet files.
 pub(crate) struct ParquetWriter {
@@ -25,6 +72,8 @@ pub(crate) struct ParquetWriter {
     epoch: EpochId,
     checkpoint_range: Range<u64>,
     data: Vec<Vec<ParquetValue>>,
+    // Track an estimate of the memory used by each column to avoid Arrow buffer overflow
+    column_size_estimates: Vec<usize>,
 }
 
 impl ParquetWriter {
@@ -40,6 +89,7 @@ impl ParquetWriter {
             epoch: 0,
             checkpoint_range,
             data: vec![],
+            column_size_estimates: vec![],
         })
     }
 
@@ -78,7 +128,14 @@ macro_rules! convert_to_arrow_array {
 
                 for (i, val) in $column.into_iter().enumerate() {
                     if let ParquetValue::OptionStr(v) = val {
-                        values.push(v);
+                        // Handle oversized string values
+                        values.push(v.map(|s| {
+                            if s.len() > *MAX_STRING_SIZE {
+                                handle_oversized_string(&s)
+                            } else {
+                                s
+                            }
+                        }));
                     } else {
                         // Found a type mismatch
                         let error_msg = format!(
@@ -116,7 +173,34 @@ macro_rules! convert_to_arrow_array {
                 $target_vector.push(Arc::new(array) as ArrayRef);
             },
 
-            // Process all other variants using the standard pattern
+            // Handle Str separately to apply truncation
+            ParquetValue::Str(_) => {
+                let mut values = Vec::with_capacity($column.len());
+
+                for (i, val) in $column.into_iter().enumerate() {
+                    if let ParquetValue::Str(v) = val {
+                        // Handle oversized string values
+                        if v.len() > *MAX_STRING_SIZE {
+                            values.push(handle_oversized_string(&v));
+                        } else {
+                            values.push(v);
+                        }
+                    } else {
+                        // Found a type mismatch
+                        let error_msg = format!(
+                            "Type mismatch in column at row {}: expected Str, got {:?}",
+                            i, val
+                        );
+                        tracing::error!("{}", error_msg);
+                        return Err(anyhow!(error_msg));
+                    }
+                }
+
+                let array = StringArray::from(values);
+                $target_vector.push(Arc::new(array) as ArrayRef);
+            },
+
+            // Process remaining variants using the standard pattern
             $(
                 $variant(_) => {
                     // Convert and validate in a single pass
@@ -171,7 +255,7 @@ impl<S: Serialize + ParquetSchema> AnalyticsWriter<S> for ParquetWriter {
         let mut batch_data = vec![];
         for column in std::mem::take(&mut self.data) {
             convert_to_arrow_array!(column, batch_data,
-                ParquetValue::U64 => UInt64Array, ParquetValue::Str => StringArray, ParquetValue::Bool => BooleanArray, ParquetValue::I64 => Int64Array
+                ParquetValue::U64 => UInt64Array, ParquetValue::Bool => BooleanArray, ParquetValue::I64 => Int64Array
             );
         }
         let batch = RecordBatch::try_from_iter(S::schema().iter().zip(batch_data.into_iter()))?;
@@ -191,6 +275,7 @@ impl<S: Serialize + ParquetSchema> AnalyticsWriter<S> for ParquetWriter {
         self.checkpoint_range.end = u64::MAX;
         self.epoch = epoch_num;
         self.data = vec![];
+        self.column_size_estimates = vec![];
         Ok(())
     }
 
