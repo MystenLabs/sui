@@ -1,0 +1,5 @@
+---
+source: crates/move-package-alt/tests/pinning_tests.rs
+assertion_line: 32
+---
+{"mock": Local(LocalDependency { local: "." }), "mock2": Local(LocalDependency { local: ".." })}
