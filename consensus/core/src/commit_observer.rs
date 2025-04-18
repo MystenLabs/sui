@@ -23,16 +23,15 @@ use crate::{
 /// Role of CommitObserver
 /// - Called by core when try_commit() returns newly committed leaders.
 /// - The newly committed leaders are sent to commit observer and then commit observer
-///     gets subdags for each leader via the commit interpreter (linearizer)
+///   gets subdags for each leader via the commit interpreter (linearizer)
 /// - The committed subdags are sent as consensus output via an unbounded tokio channel.
 ///
-/// No back pressure mechanism is needed as backpressure is handled as input into
-/// consensus.
+/// There is no flow control on sending output. Consensus backpressure is applied earlier
+/// at consensus input level, and on commit sync.
 ///
-/// - Commit metadata including index is persisted in store, before the CommittedSubDag
-///     is sent to the consumer.
-/// - When CommitObserver is initialized a last processed commit index can be used
-///     to ensure any missing commits are re-sent.
+/// Commit is persisted in store before the CommittedSubDag is sent to the commit handler.
+/// When Sui recovers, it blocks until the commits it knows about are recovered. So consensus
+/// must be able to quickly recover the commits it has sent to Sui.
 pub(crate) struct CommitObserver {
     context: Arc<Context>,
     /// Component to deterministically collect subdags for committed leaders.
@@ -49,11 +48,11 @@ impl CommitObserver {
         context: Arc<Context>,
         commit_consumer: CommitConsumer,
         dag_state: Arc<RwLock<DagState>>,
-        store: Arc<dyn Store>,
         leader_schedule: Arc<LeaderSchedule>,
     ) -> Self {
+        let store = dag_state.read().store();
         let commit_interpreter =
-            Linearizer::new(context.clone(), dag_state.clone(), leader_schedule.clone());
+            Linearizer::new(context.clone(), dag_state, leader_schedule.clone());
         let mut observer = Self {
             context,
             commit_interpreter,
@@ -252,7 +251,6 @@ mod tests {
             context.clone(),
             commit_consumer,
             dag_state.clone(),
-            mem_store.clone(),
             leader_schedule,
         );
 
@@ -369,7 +367,6 @@ mod tests {
             context.clone(),
             commit_consumer,
             dag_state.clone(),
-            mem_store.clone(),
             leader_schedule.clone(),
         );
 
@@ -465,7 +462,6 @@ mod tests {
             context.clone(),
             commit_consumer,
             dag_state.clone(),
-            mem_store.clone(),
             leader_schedule,
         );
 
@@ -509,7 +505,6 @@ mod tests {
             context.clone(),
             commit_consumer,
             dag_state.clone(),
-            mem_store.clone(),
             leader_schedule.clone(),
         );
 
@@ -562,7 +557,6 @@ mod tests {
             context.clone(),
             commit_consumer,
             dag_state.clone(),
-            mem_store.clone(),
             leader_schedule,
         );
 

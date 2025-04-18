@@ -1134,6 +1134,11 @@ impl DagState {
         gc_round.min(last_round.saturating_sub(cached_rounds))
     }
 
+    /// Returns the underlying store.
+    pub(crate) fn store(&self) -> Arc<dyn Store> {
+        self.store.clone()
+    }
+
     /// Detects and returns the blocks of the round that forms the last quorum. The method will return
     /// the quorum even if that's genesis.
     #[cfg(test)]
