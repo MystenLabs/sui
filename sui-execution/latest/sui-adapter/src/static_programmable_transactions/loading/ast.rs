@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{ops::Deref, rc::Rc};
+use std::rc::Rc;
 
 use move_binary_format::file_format::AbilitySet;
 use move_core_types::{
@@ -26,17 +26,8 @@ pub type Inputs = Vec<(CallArg, InputType)>;
 
 pub type Commands = Vec<Command>;
 
-#[derive(Clone)]
-pub enum InputType {
-    Bytes,
-    Fixed(Type),
-}
-
-#[derive(Clone, Debug)]
-pub struct Type(pub Rc<Type_>);
-
-#[derive(Debug)]
-pub enum Type_ {
+#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
+pub enum Type {
     Bool,
     U8,
     U16,
@@ -48,21 +39,27 @@ pub enum Type_ {
     Signer,
     Vector(Rc<Vector>),
     Datatype(Rc<Datatype>),
-    Reference(/* is mut */ bool, Type),
+    Reference(/* is mut */ bool, Box<Type>),
 }
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub struct Vector {
     pub abilities: AbilitySet,
     pub element_type: Type,
 }
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub struct Datatype {
     pub abilities: AbilitySet,
     pub module: ModuleId,
     pub name: Identifier,
     pub type_arguments: Vec<Type>,
+}
+
+#[derive(Clone)]
+pub enum InputType {
+    Bytes,
+    Fixed(Type),
 }
 
 pub enum Command {
@@ -100,30 +97,30 @@ pub use sui_types::transaction::Argument;
 // impl
 //**************************************************************************************************
 
-impl Type_ {
+impl Type {
     pub fn abilities(&self) -> AbilitySet {
         match self {
-            Type_::Bool
-            | Type_::U8
-            | Type_::U16
-            | Type_::U32
-            | Type_::U64
-            | Type_::U128
-            | Type_::U256
-            | Type_::Address => AbilitySet::PRIMITIVES,
-            Type_::Signer => AbilitySet::SIGNER,
-            Type_::Reference(_, _) => AbilitySet::REFERENCES,
-            Type_::Vector(v) => v.abilities,
-            Type_::Datatype(dt) => dt.abilities,
+            Type::Bool
+            | Type::U8
+            | Type::U16
+            | Type::U32
+            | Type::U64
+            | Type::U128
+            | Type::U256
+            | Type::Address => AbilitySet::PRIMITIVES,
+            Type::Signer => AbilitySet::SIGNER,
+            Type::Reference(_, _) => AbilitySet::REFERENCES,
+            Type::Vector(v) => v.abilities,
+            Type::Datatype(dt) => dt.abilities,
         }
     }
 
-    pub fn is_tx_context(ty: &Type) -> TxContextKind {
-        let (is_mut, inner) = match &*ty.0 {
-            Type_::Reference(is_mut, inner) => (*is_mut, inner),
+    pub fn is_tx_context(&self) -> TxContextKind {
+        let (is_mut, inner) = match self {
+            Type::Reference(is_mut, inner) => (*is_mut, inner),
             _ => return TxContextKind::None,
         };
-        let Type_::Datatype(dt) = &*inner.0 else {
+        let Type::Datatype(dt) = &**inner else {
             return TxContextKind::None;
         };
         if dt.qualified_ident() == RESOLVED_TX_CONTEXT {
@@ -145,18 +142,6 @@ impl Datatype {
             self.module.name(),
             self.name.as_ident_str(),
         )
-    }
-}
-
-//**************************************************************************************************
-// Traits
-//**************************************************************************************************
-
-impl Deref for Type {
-    type Target = Type_;
-
-    fn deref(&self) -> &Self::Target {
-        self.0.as_ref()
     }
 }
 

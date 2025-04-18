@@ -5,12 +5,16 @@ use super::LinkageView;
 use crate::{
     execution_value::ExecutionState,
     programmable_transactions::context::SuiDataStore,
-    static_programmable_transactions::loading::ast::{LoadedFunction, Type},
+    static_programmable_transactions::loading::ast::{self as L, LoadedFunction, Type},
 };
-use move_binary_format::{errors::VMError, file_format::TypeParameterIndex, CompiledModule};
+use move_binary_format::{
+    errors::VMError,
+    file_format::{AbilitySet, TypeParameterIndex},
+    CompiledModule,
+};
 use move_core_types::language_storage::{ModuleId, StructTag};
 use move_vm_runtime::move_vm::MoveVM;
-use std::{cell::OnceCell, sync::Arc};
+use std::{cell::OnceCell, rc::Rc, sync::Arc};
 use sui_protocol_config::ProtocolConfig;
 use sui_types::{
     base_types::ObjectID,
@@ -40,7 +44,7 @@ macro_rules! get_or_init_ty {
             let ty = env.load_type_from_struct(&tag)?;
             env.$ident.set(ty.clone()).unwrap();
         }
-        Ok(env.$ident.get().unwrap())
+        Ok(env.$ident.get().unwrap().clone())
     }};
 }
 
@@ -164,16 +168,31 @@ impl<'a, 'b, 'state> Env<'a, 'b, 'state> {
         todo!()
     }
 
-    pub fn gas_coin_type(&self) -> Result<&Type, ExecutionError> {
+    pub fn gas_coin_type(&self) -> Result<Type, ExecutionError> {
         get_or_init_ty!(self, gas_coin_type, GasCoin::type_())
     }
 
-    pub fn upgrade_ticket_type(&self) -> Result<&Type, ExecutionError> {
+    pub fn upgrade_ticket_type(&self) -> Result<Type, ExecutionError> {
         get_or_init_ty!(self, upgrade_ticket_type, UpgradeTicket::type_())
     }
 
-    pub fn upgrade_receipt_type(&self) -> Result<&Type, ExecutionError> {
+    pub fn upgrade_receipt_type(&self) -> Result<Type, ExecutionError> {
         get_or_init_ty!(self, upgrade_receipt_type, UpgradeReceipt::type_())
+    }
+
+    pub fn vector_type(&self, element_type: Type) -> Result<Type, ExecutionError> {
+        let abilities = AbilitySet::polymorphic_abilities(
+            AbilitySet::VECTOR,
+            [false],
+            [element_type.abilities()],
+        )
+        .map_err(|e| {
+            ExecutionError::new_with_source(ExecutionErrorKind::VMInvariantViolation, e.to_string())
+        })?;
+        Ok(Type::Vector(Rc::new(L::Vector {
+            abilities,
+            element_type,
+        })))
     }
 
     pub fn read_object(&self, id: &ObjectID) -> Result<&Object, ExecutionError> {
@@ -185,6 +204,7 @@ impl<'a, 'b, 'state> Env<'a, 'b, 'state> {
     }
 }
 
+#[allow(unused)]
 fn to_identifier(name: String) -> Result<Identifier, ExecutionError> {
     Identifier::new(name).map_err(|e| {
         ExecutionError::new_with_source(ExecutionErrorKind::VMInvariantViolation, e.to_string())

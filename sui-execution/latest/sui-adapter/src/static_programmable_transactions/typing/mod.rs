@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::static_programmable_transactions::env;
+use crate::static_programmable_transactions::{env, loading::ast as L};
 use sui_types::error::ExecutionError;
 
 pub mod ast;
@@ -11,9 +11,9 @@ pub mod verify;
 
 pub fn translate_and_verify(
     env: &env::Env,
-    pt: sui_types::transaction::ProgrammableTransaction,
+    lt: L::Transaction,
 ) -> Result<ast::Transaction, ExecutionError> {
-    let ast = translate::transaction(env, pt)?;
+    let ast = translate::transaction(env, lt)?;
     verify::transaction(env, &ast)?;
     Ok(ast)
 }

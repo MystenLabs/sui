@@ -1,13 +1,9 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use move_core_types::{identifier::Identifier, language_storage::ModuleId};
-use move_vm_runtime::session::LoadedFunctionInstantiation;
+use crate::static_programmable_transactions::loading::ast as L;
 use std::collections::BTreeMap;
-use sui_types::{
-    base_types::{ObjectID, TxContextKind},
-    transaction::CallArg,
-};
+use sui_types::{base_types::ObjectID, transaction::CallArg};
 
 pub struct Transaction {
     pub inputs: Inputs,
@@ -18,7 +14,7 @@ pub type Inputs = Vec<(CallArg, InputType)>;
 
 pub type Commands = Vec<(Command, ResultType)>;
 
-pub type Type = move_vm_types::loaded_data::runtime_types::Type;
+pub type Type = L::Type;
 
 pub enum InputType {
     Bytes(
@@ -40,14 +36,7 @@ pub enum Command {
     Upgrade(Vec<Vec<u8>>, Vec<ObjectID>, ObjectID, Argument),
 }
 
-pub struct LoadedFunction {
-    pub storage_id: ModuleId,
-    pub runtime_id: ModuleId,
-    pub name: Identifier,
-    pub type_arguments: Vec<Type>,
-    pub signature: LoadedFunctionInstantiation,
-    pub tx_context: TxContextKind,
-}
+pub type LoadedFunction = L::LoadedFunction;
 
 pub struct MoveCall {
     pub function: LoadedFunction,

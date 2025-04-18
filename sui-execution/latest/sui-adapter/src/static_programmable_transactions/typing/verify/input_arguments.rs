@@ -1,13 +1,9 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::{
-    programmable_transactions::execution::{bcs_argument_validate, PrimitiveArgumentLayout},
-    static_programmable_transactions::env::datatype_qualified_ident,
-};
+use crate::programmable_transactions::execution::{bcs_argument_validate, PrimitiveArgumentLayout};
 
-use crate::static_programmable_transactions::{env::Env, typing::ast as T};
-use move_vm_types::loaded_data::runtime_types::{CachedDatatype, Type};
+use crate::static_programmable_transactions::{env::Env, loading::ast::Type, typing::ast as T};
 use sui_types::{
     base_types::{RESOLVED_ASCII_STR, RESOLVED_STD_OPTION, RESOLVED_UTF8_STR},
     error::{command_argument_error, ExecutionError, ExecutionErrorKind},
@@ -17,7 +13,7 @@ use sui_types::{
     transfer::RESOLVED_RECEIVING_STRUCT,
 };
 
-pub fn verify(env: &Env, txn: &T::Transaction) -> Result<(), ExecutionError> {
+pub fn verify(_env: &Env, txn: &T::Transaction) -> Result<(), ExecutionError> {
     let T::Transaction {
         inputs,
         commands: _,
@@ -26,7 +22,7 @@ pub fn verify(env: &Env, txn: &T::Transaction) -> Result<(), ExecutionError> {
         match ty {
             T::InputType::Bytes(constraints) => {
                 for (constraint, &(command_idx, arg_idx)) in constraints {
-                    check_constraint(env, arg_idx, arg, constraint)
+                    check_constraint(arg_idx, arg, constraint)
                         .map_err(|e| e.with_command_index(command_idx as usize))?;
                 }
             }
@@ -37,16 +33,13 @@ pub fn verify(env: &Env, txn: &T::Transaction) -> Result<(), ExecutionError> {
 }
 
 fn check_constraint(
-    env: &Env,
     command_arg_idx: u16,
     arg: &CallArg,
     constraint: &Type,
 ) -> Result<(), ExecutionError> {
     match arg {
-        CallArg::Pure(bytes) => check_pure_bytes(env, command_arg_idx, bytes, constraint),
-        CallArg::Object(ObjectArg::Receiving(_)) => {
-            check_receiving(env, command_arg_idx, constraint)
-        }
+        CallArg::Pure(bytes) => check_pure_bytes(command_arg_idx, bytes, constraint),
+        CallArg::Object(ObjectArg::Receiving(_)) => check_receiving(command_arg_idx, constraint),
         CallArg::Object(ObjectArg::ImmOrOwnedObject(_) | ObjectArg::SharedObject { .. }) => {
             invariant_violation!("Object inputs should be Fixed")
         }
@@ -54,12 +47,12 @@ fn check_constraint(
 }
 
 fn check_pure_bytes(
-    env: &Env,
     command_arg_idx: u16,
     bytes: &[u8],
     constraint: &Type,
 ) -> Result<(), ExecutionError> {
-    let Some(layout) = primitive_serialization_layout(env, constraint)? else {
+    debug_assert!(false, "TODO implement mode for arbitrary values");
+    let Some(layout) = primitive_serialization_layout(constraint)? else {
         let msg = format!(
             "Non-primitive argument at index {command_arg_idx}. If it is an object, it must be \
             populated by an object",
@@ -77,15 +70,11 @@ fn check_pure_bytes(
 }
 
 fn primitive_serialization_layout(
-    env: &Env,
     param_ty: &Type,
 ) -> Result<Option<PrimitiveArgumentLayout>, ExecutionError> {
     Ok(match param_ty {
         Type::Signer => return Ok(None),
-        Type::TyParam(_) => {
-            invariant_violation!("TyParam should be instantiated and never added as a constraint")
-        }
-        Type::Reference(_) | Type::MutableReference(_) => {
+        Type::Reference(_, _) => {
             invariant_violation!("references should not be added as a constraint")
         }
         Type::Bool => Some(PrimitiveArgumentLayout::Bool),
@@ -97,33 +86,26 @@ fn primitive_serialization_layout(
         Type::U256 => Some(PrimitiveArgumentLayout::U256),
         Type::Address => Some(PrimitiveArgumentLayout::Address),
 
-        Type::Vector(inner) => {
-            let info_opt = primitive_serialization_layout(env, inner)?;
+        Type::Vector(v) => {
+            let info_opt = primitive_serialization_layout(&v.element_type)?;
             info_opt.map(|layout| PrimitiveArgumentLayout::Vector(Box::new(layout)))
         }
-        Type::DatatypeInstantiation(inst) => {
-            let (idx, targs) = &**inst;
-            let datatype = env.datatype(*idx)?;
-            let datatype: &CachedDatatype = datatype.as_ref();
-            let resolved = datatype_qualified_ident(datatype);
+        Type::Datatype(dt) => {
+            let resolved = dt.qualified_ident();
             // is option of a string
-            if resolved == RESOLVED_STD_OPTION && targs.len() == 1 {
-                let info_opt = primitive_serialization_layout(env, &targs[0])?;
+            if resolved == RESOLVED_STD_OPTION && dt.type_arguments.len() == 1 {
+                let info_opt = primitive_serialization_layout(&dt.type_arguments[0])?;
                 info_opt.map(|layout| PrimitiveArgumentLayout::Option(Box::new(layout)))
-            } else {
-                None
-            }
-        }
-        Type::Datatype(idx) => {
-            let datatype = env.datatype(*idx)?;
-            let datatype: &CachedDatatype = datatype.as_ref();
-            let resolved = datatype_qualified_ident(datatype);
-            if resolved == RESOLVED_SUI_ID {
-                Some(PrimitiveArgumentLayout::Address)
-            } else if resolved == RESOLVED_ASCII_STR {
-                Some(PrimitiveArgumentLayout::Ascii)
-            } else if resolved == RESOLVED_UTF8_STR {
-                Some(PrimitiveArgumentLayout::UTF8)
+            } else if dt.type_arguments.is_empty() {
+                if resolved == RESOLVED_SUI_ID {
+                    Some(PrimitiveArgumentLayout::Address)
+                } else if resolved == RESOLVED_ASCII_STR {
+                    Some(PrimitiveArgumentLayout::Ascii)
+                } else if resolved == RESOLVED_UTF8_STR {
+                    Some(PrimitiveArgumentLayout::UTF8)
+                } else {
+                    None
+                }
             } else {
                 None
             }
@@ -131,21 +113,11 @@ fn primitive_serialization_layout(
     })
 }
 
-fn check_receiving(
-    env: &Env,
-    command_arg_idx: u16,
-    constraint: &Type,
-) -> Result<(), ExecutionError> {
-    let is_receiving = match constraint {
-        Type::DatatypeInstantiation(inst) => {
-            let (idx, targs) = &**inst;
-            let datatype = env.datatype(*idx)?;
-            let datatype: &CachedDatatype = datatype.as_ref();
-            let resolved = datatype_qualified_ident(datatype);
-            resolved == RESOLVED_RECEIVING_STRUCT && targs.len() == 1
-        }
-        _ => false,
-    };
+fn check_receiving(command_arg_idx: u16, constraint: &Type) -> Result<(), ExecutionError> {
+    let is_receiving = matches!(constraint ,
+        Type::Datatype(dt) if
+            dt.qualified_ident() == RESOLVED_RECEIVING_STRUCT && dt.type_arguments.len() == 1
+    );
     if is_receiving {
         Ok(())
     } else {

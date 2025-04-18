@@ -4,17 +4,15 @@
 use super::{ast as T, env::Env};
 use crate::{
     programmable_transactions::context::EitherError,
-    static_programmable_transactions::env::datatype_qualified_ident,
+    static_programmable_transactions::loading::ast::{self as L, Type},
 };
-use move_core_types::language_storage::StructTag;
-use move_vm_types::loaded_data::runtime_types::{CachedDatatype, Type};
 use std::collections::BTreeMap;
 use sui_types::{
     base_types::TxContextKind,
     coin::RESOLVED_COIN_STRUCT,
     error::{command_argument_error, ExecutionError},
     execution_status::CommandArgumentError,
-    transaction::{self as P, CallArg, ObjectArg},
+    transaction::{CallArg, ObjectArg},
 };
 
 struct Context {
@@ -29,49 +27,38 @@ enum InputType {
     Fixed(Type),
 }
 
-enum LocationType<'env, 'context: 'env> {
+enum LocationType<'context> {
     Bytes(
         &'context mut InputType,
         &'context mut BTreeMap<Type, (u16, u16)>,
     ),
-    Fixed(&'env Type),
+    Fixed(Type),
 }
 
 impl Context {
-    fn new(env: &Env, input_args: Vec<CallArg>) -> Result<Self, ExecutionError> {
+    fn new(linputs: L::Inputs) -> Self {
         let mut context = Context {
             current_command: 0,
             gathered_input_types: BTreeMap::new(),
             inputs: vec![],
             results: vec![],
         };
-        context.inputs = input_args
+        context.inputs = linputs
             .into_iter()
             .enumerate()
-            .map(|(i, arg)| {
+            .map(|(i, (arg, ty))| {
                 let idx = i as u16;
-                let ty = match &arg {
-                    CallArg::Pure(_) | CallArg::Object(ObjectArg::Receiving(_)) => {
+                let ty = match ty {
+                    L::InputType::Bytes => {
                         context.gathered_input_types.insert(idx, BTreeMap::new());
                         InputType::Bytes
                     }
-                    CallArg::Object(
-                        ObjectArg::ImmOrOwnedObject((id, _, _))
-                        | ObjectArg::SharedObject { id, .. },
-                    ) => {
-                        let obj = env.read_object(id)?;
-                        let Some(ty) = obj.type_() else {
-                            invariant_violation!("Object {:?} has does not have a Move type", id);
-                        };
-                        let tag: StructTag = ty.clone().into();
-                        let ty = env.load_type_from_struct(&tag)?;
-                        InputType::Fixed(ty)
-                    }
+                    L::InputType::Fixed(t) => InputType::Fixed(t),
                 };
-                Ok((arg, ty))
+                (arg, ty)
             })
-            .collect::<Result<Vec<_>, ExecutionError>>()?;
-        Ok(context)
+            .collect();
+        context
     }
 
     fn finish(self) -> Vec<(CallArg, T::InputType)> {
@@ -96,30 +83,29 @@ impl Context {
             .collect()
     }
 
-    fn location_type<'env, 'context: 'env>(
+    fn location_type<'context>(
         &'context mut self,
-        env: &'env Env,
+        env: &Env,
         location: T::Location,
-    ) -> Result<LocationType<'env, 'context>, ExecutionError> {
+    ) -> Result<LocationType<'context>, ExecutionError> {
         Ok(match location {
             T::Location::GasCoin => LocationType::Fixed(env.gas_coin_type()?),
             T::Location::Input(i) => match &mut self.inputs[i as usize].1 {
                 t @ InputType::Bytes => {
                     LocationType::Bytes(t, self.gathered_input_types.get_mut(&i).unwrap())
                 }
-                InputType::Fixed(t) => LocationType::Fixed(t),
+                InputType::Fixed(t) => LocationType::Fixed(t.clone()),
             },
-            T::Location::Result(i, j) => LocationType::Fixed(&self.results[i as usize][j as usize]),
+            T::Location::Result(i, j) => {
+                LocationType::Fixed(self.results[i as usize][j as usize].clone())
+            }
         })
     }
 }
 
-pub fn transaction(
-    env: &Env,
-    pt: P::ProgrammableTransaction,
-) -> Result<T::Transaction, ExecutionError> {
-    let P::ProgrammableTransaction { inputs, commands } = pt;
-    let mut context = Context::new(env, inputs)?;
+pub fn transaction(env: &Env, lt: L::Transaction) -> Result<T::Transaction, ExecutionError> {
+    let L::Transaction { inputs, commands } = lt;
+    let mut context = Context::new(inputs);
     let commands = commands
         .into_iter()
         .enumerate()
@@ -135,24 +121,15 @@ pub fn transaction(
 fn command(
     env: &Env,
     context: &mut Context,
-    command: P::Command,
+    command: L::Command,
 ) -> Result<(T::Command, T::ResultType), ExecutionError> {
     Ok(match command {
-        P::Command::MoveCall(pmc) => {
-            let P::ProgrammableMoveCall {
-                package,
-                module,
-                function: name,
-                type_arguments: ptype_arguments,
-                arguments: pargs,
-            } = *pmc;
-            let type_arguments = ptype_arguments
-                .into_iter()
-                .enumerate()
-                .map(|(idx, ty)| env.load_type_input(idx, ty))
-                .collect::<Result<Vec<_>, _>>()?;
-            let function = env.load_function(package, module, name, type_arguments)?;
-            let arg_locs = locations(context, 0, pargs)?;
+        L::Command::MoveCall(lmc) => {
+            let L::MoveCall {
+                function,
+                arguments: largs,
+            } = *lmc;
+            let arg_locs = locations(context, 0, largs)?;
             let parameter_tys = match function.tx_context {
                 TxContextKind::None => &function.signature.parameters,
                 TxContextKind::Mutable | TxContextKind::Immutable => {
@@ -170,19 +147,19 @@ fn command(
                 result,
             )
         }
-        P::Command::TransferObjects(pobjects, paddress) => {
-            let object_locs = locations(context, 0, pobjects)?;
-            let address_loc = one_location(context, object_locs.len(), paddress)?;
+        L::Command::TransferObjects(lobjects, laddress) => {
+            let object_locs = locations(context, 0, lobjects)?;
+            let address_loc = one_location(context, object_locs.len(), laddress)?;
             let objects = constrained_arguments(env, context, 0, object_locs, |ty| {
-                let abilities = env.abilities(ty)?;
+                let abilities = ty.abilities();
                 Ok(abilities.has_copy() && abilities.has_key())
             })?;
             let address = argument(env, context, objects.len(), address_loc, &Type::Address)?;
             (T::Command::TransferObjects(objects, address), vec![])
         }
-        P::Command::SplitCoins(pcoin, pamounts) => {
-            let coin_loc = one_location(context, 0, pcoin)?;
-            let amount_locs = locations(context, 1, pamounts)?;
+        L::Command::SplitCoins(lcoin, lamounts) => {
+            let coin_loc = one_location(context, 0, lcoin)?;
+            let amount_locs = locations(context, 1, lamounts)?;
             let (coin_type, coin) = coin_mut_ref_argument(env, context, 0, coin_loc)?;
             let amounts = arguments(env, context, 1, amount_locs, std::iter::repeat(&Type::U64))?;
             let result = vec![coin_type.clone(); amounts.len()];
@@ -191,53 +168,51 @@ fn command(
                 result,
             )
         }
-        P::Command::MergeCoins(ptarget, pcoins) => {
-            let target_loc = one_location(context, 0, ptarget)?;
-            let coin_locs = locations(context, 1, pcoins)?;
+        L::Command::MergeCoins(ltarget, lcoins) => {
+            let target_loc = one_location(context, 0, ltarget)?;
+            let coin_locs = locations(context, 1, lcoins)?;
             let (coin_type, target) = coin_mut_ref_argument(env, context, 0, target_loc)?;
             let coins = arguments(env, context, 1, coin_locs, std::iter::repeat(&coin_type))?;
             (T::Command::MergeCoins(coin_type, target, coins), vec![])
         }
-        P::Command::MakeMoveVec(Some(pty), pelems) => {
-            let ty = env.load_type_input(0, pty)?;
-            let elem_locs = locations(context, 0, pelems)?;
+        L::Command::MakeMoveVec(Some(ty), lelems) => {
+            let elem_locs = locations(context, 0, lelems)?;
             let elems = arguments(env, context, 0, elem_locs, std::iter::repeat(&ty))?;
             (
                 T::Command::MakeMoveVec(ty.clone(), elems),
-                vec![Type::Vector(Box::new(ty))],
+                vec![env.vector_type(ty)?],
             )
         }
-        P::Command::MakeMoveVec(None, pelems) => {
-            let mut pelems = pelems.into_iter();
-            let Some(pfirst) = pelems.next() else {
+        L::Command::MakeMoveVec(None, lelems) => {
+            let mut lelems = lelems.into_iter();
+            let Some(lfirst) = lelems.next() else {
                 // TODO maybe this should be a different errors for CLI usage
                 invariant_violation!(
                     "input checker ensures if args are empty, there is a type specified"
                 );
             };
-            let first_loc = one_location(context, 0, pfirst)?;
-            let Some(first_ty) = constrained_type(env, context, first_loc, |ty| {
-                Ok(env.abilities(ty)?.has_key())
-            })?
-            .cloned() else {
+            let first_loc = one_location(context, 0, lfirst)?;
+            let Some(first_ty) =
+                constrained_type(env, context, first_loc, |ty| Ok(ty.abilities().has_key()))?
+            else {
                 // TODO need a new error here
                 return Err(command_argument_error(
                     CommandArgumentError::TypeMismatch,
                     0,
                 ));
             };
-            let elems_loc = locations(context, 1, pelems)?;
+            let elems_loc = locations(context, 1, lelems)?;
             let elems = arguments(env, context, 1, elems_loc, std::iter::repeat(&first_ty))?;
             (
                 T::Command::MakeMoveVec(first_ty.clone(), elems),
-                vec![Type::Vector(Box::new(first_ty))],
+                vec![env.vector_type(first_ty)?],
             )
         }
-        P::Command::Publish(items, object_ids) => (T::Command::Publish(items, object_ids), vec![]),
-        P::Command::Upgrade(items, object_ids, object_id, pa) => {
-            let location = one_location(context, 0, pa)?;
+        L::Command::Publish(items, object_ids) => (T::Command::Publish(items, object_ids), vec![]),
+        L::Command::Upgrade(items, object_ids, object_id, la) => {
+            let location = one_location(context, 0, la)?;
             let expected_ty = env.upgrade_ticket_type()?;
-            let a = argument(env, context, 0, location, expected_ty)?;
+            let a = argument(env, context, 0, location, &expected_ty)?;
             let res = env.upgrade_receipt_type()?;
             (
                 T::Command::Upgrade(items, object_ids, object_id, a),
@@ -250,7 +225,7 @@ fn command(
 fn one_location(
     context: &mut Context,
     command_arg_idx: usize,
-    arg: P::Argument,
+    arg: L::Argument,
 ) -> Result<T::Location, ExecutionError> {
     let locs = locations(context, command_arg_idx, vec![arg])?;
     let Ok([loc]): Result<[T::Location; 1], _> = locs.try_into() else {
@@ -262,7 +237,7 @@ fn one_location(
     Ok(loc)
 }
 
-fn locations<Items: IntoIterator<Item = P::Argument>>(
+fn locations<Items: IntoIterator<Item = L::Argument>>(
     context: &mut Context,
     start_idx: usize,
     args: Items,
@@ -273,17 +248,17 @@ where
     fn splat_arg(
         context: &mut Context,
         res: &mut Vec<T::Location>,
-        arg: P::Argument,
+        arg: L::Argument,
     ) -> Result<(), EitherError> {
         match arg {
-            P::Argument::GasCoin => res.push(T::Location::GasCoin),
-            P::Argument::Input(i) => {
+            L::Argument::GasCoin => res.push(T::Location::GasCoin),
+            L::Argument::Input(i) => {
                 if i as usize >= context.inputs.len() {
                     return Err(CommandArgumentError::IndexOutOfBounds { idx: i }.into());
                 }
                 res.push(T::Location::Input(i))
             }
-            P::Argument::NestedResult(i, j) => {
+            L::Argument::NestedResult(i, j) => {
                 let Some(command_result) = context.results.get(i as usize) else {
                     return Err(CommandArgumentError::IndexOutOfBounds { idx: i }.into());
                 };
@@ -296,7 +271,7 @@ where
                 };
                 res.push(T::Location::Result(i, j))
             }
-            P::Argument::Result(i) => {
+            L::Argument::Result(i) => {
                 let Some(result) = context.results.get(i as usize) else {
                     return Err(CommandArgumentError::IndexOutOfBounds { idx: i }.into());
                 };
@@ -361,18 +336,19 @@ fn argument_(
 ) -> Result<T::Argument, EitherError> {
     let command_and_arg_idx = (context.current_command, command_arg_idx as u16);
     let actual_ty = context.location_type(env, location)?;
-    Ok(match (&actual_ty, expected_ty) {
+    Ok(match (actual_ty, expected_ty) {
         // Reference location types
-        (LocationType::Fixed(Type::Reference(a)), Type::Reference(b))
-        | (LocationType::Fixed(Type::MutableReference(a)), Type::Reference(b))
-        | (LocationType::Fixed(Type::MutableReference(a)), Type::MutableReference(b)) => {
-            check_type(command_and_arg_idx, LocationType::Fixed(a), b)?;
+        (LocationType::Fixed(Type::Reference(a_is_mut, a)), Type::Reference(b_is_mut, b))
+            if !b_is_mut || a_is_mut =>
+        {
+            debug_assert!(!a_is_mut || *b_is_mut);
+            debug_assert!(expected_ty.abilities().has_copy());
+            check_type(command_and_arg_idx, LocationType::Fixed(*a), b)?;
             T::Argument::Copy(location)
         }
-        (LocationType::Fixed(Type::Reference(a)), b)
-        | (LocationType::Fixed(Type::MutableReference(a)), b) => {
-            check_type(command_and_arg_idx, LocationType::Fixed(a), b)?;
-            if !env.abilities(b)?.has_copy() {
+        (LocationType::Fixed(Type::Reference(_, a)), b) => {
+            check_type(command_and_arg_idx, LocationType::Fixed(*a), b)?;
+            if !b.abilities().has_copy() {
                 // TODO this should be a different error for missing copy
                 return Err(CommandArgumentError::TypeMismatch.into());
             }
@@ -380,36 +356,24 @@ fn argument_(
         }
 
         // Non reference location types
-        (_, Type::Reference(inner)) => {
-            check_type(command_and_arg_idx, actual_ty, inner)?;
+        (actual_ty, Type::Reference(is_mut, inner)) => {
+            check_type_impl(
+                command_and_arg_idx,
+                /* fix */ *is_mut,
+                actual_ty,
+                inner,
+            )?;
             T::Argument::Borrow(/* mut */ false, location)
         }
-        (_, Type::MutableReference(inner)) => {
-            fix_type(command_and_arg_idx, actual_ty, inner)?;
-            T::Argument::Borrow(/* mut */ true, location)
-        }
-        _ => {
+        (actual_ty, _) => {
             check_type(command_and_arg_idx, actual_ty, expected_ty)?;
-            if env.abilities(expected_ty)?.has_copy() {
+            if expected_ty.abilities().has_copy() {
                 T::Argument::Copy(location)
             } else {
                 T::Argument::Move(location)
             }
         }
     })
-}
-
-fn fix_type(
-    command_and_arg_idx: (u16, u16),
-    actual_ty: LocationType,
-    expected_ty: &Type,
-) -> Result<(), CommandArgumentError> {
-    check_type_impl(
-        command_and_arg_idx,
-        /* fix */ true,
-        actual_ty,
-        expected_ty,
-    )
 }
 
 fn check_type(
@@ -443,7 +407,7 @@ fn check_type_impl(
             Ok(())
         }
         LocationType::Fixed(actual_ty) => {
-            if actual_ty == expected_ty {
+            if &actual_ty == expected_ty {
                 Ok(())
             } else {
                 Err(CommandArgumentError::TypeMismatch)
@@ -496,11 +460,11 @@ fn constrained_type<'a, P: FnMut(&Type) -> Result<bool, ExecutionError>>(
     context: &'a mut Context,
     location: T::Location,
     mut is_valid: P,
-) -> Result<Option<&'a Type>, ExecutionError> {
+) -> Result<Option<Type>, ExecutionError> {
     let LocationType::Fixed(ty) = context.location_type(env, location)? else {
         return Ok(None);
     };
-    Ok(if is_valid(ty)? { Some(ty) } else { None })
+    Ok(if is_valid(&ty)? { Some(ty) } else { None })
 }
 
 fn coin_mut_ref_argument(
@@ -521,12 +485,12 @@ fn coin_mut_ref_argument_(
     let actual_ty = context.location_type(env, location)?;
 
     Ok(match &actual_ty {
-        LocationType::Fixed(Type::MutableReference(ty)) => {
-            let ty = check_coin_type(env, ty)?;
+        LocationType::Fixed(Type::Reference(is_mut, ty)) if *is_mut => {
+            let ty = check_coin_type(ty)?;
             (ty, T::Argument::Copy(location))
         }
         LocationType::Fixed(ty) => {
-            let ty = check_coin_type(env, ty)?;
+            let ty = check_coin_type(ty)?;
             (ty, T::Argument::Borrow(/* mut */ true, location))
         }
         LocationType::Bytes(_, _) => {
@@ -537,17 +501,12 @@ fn coin_mut_ref_argument_(
     })
 }
 
-fn check_coin_type(env: &Env, ty: &Type) -> Result<Type, EitherError> {
-    let Type::DatatypeInstantiation(inst_tys) = ty else {
+fn check_coin_type(ty: &Type) -> Result<Type, EitherError> {
+    let Type::Datatype(dt) = ty else {
         return Err(CommandArgumentError::TypeMismatch.into());
     };
-    let (inst, _tys) = &**inst_tys;
-    let datatype = env.datatype(*inst)?;
-    let datatype: &CachedDatatype = datatype.as_ref();
-    let resolved = datatype_qualified_ident(datatype);
+    let resolved = dt.qualified_ident();
     let is_coin = resolved == RESOLVED_COIN_STRUCT;
-    // is_coin ==> ty.defining_id == ty.runtime_id
-    debug_assert!(!is_coin || datatype.defining_id == datatype.runtime_id);
     if is_coin {
         Ok(ty.clone())
     } else {

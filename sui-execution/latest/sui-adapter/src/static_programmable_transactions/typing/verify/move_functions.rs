@@ -3,9 +3,8 @@
 
 use crate::programmable_transactions::execution::check_private_generics;
 
-use crate::static_programmable_transactions::{env::Env, typing::ast as T};
+use crate::static_programmable_transactions::{env::Env, loading::ast::Type, typing::ast as T};
 use move_binary_format::{file_format::Visibility, CompiledModule};
-use move_vm_types::loaded_data::runtime_types::Type;
 use sui_types::{
     error::{command_argument_error, ExecutionError, ExecutionErrorKind},
     execution_status::CommandArgumentError,
@@ -221,10 +220,11 @@ fn check_signature(function: &T::LoadedFunction) -> Result<(), ExecutionError> {
         match return_type {
             // Type::Reference(_) | Type::MutableReference(inner)
             //     if Mode::allow_arbitrary_values() => Ok(()),
-            Type::Reference(_) | Type::MutableReference(_) => {
+            Type::Reference(_, _) => {
+                debug_assert!(false, "TODO implement mode for arbitrary values");
                 return Err(ExecutionError::from_kind(
                     ExecutionErrorKind::InvalidPublicFunctionReturnType { idx: idx as u16 },
-                ))
+                ));
             }
             t => t,
         };
