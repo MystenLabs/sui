@@ -61,7 +61,7 @@ fn main() -> Result<()> {
         let mut executor = IndexerExecutor::new(
             progress_store,
             processors.len(),
-            DataIngestionMetrics::new(&Registry::new()),
+            DataIngestionMetrics::new(&registry),
         );
 
         for processor in processors {
