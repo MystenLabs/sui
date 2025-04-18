@@ -64,6 +64,7 @@ macro_rules! convert_to_arrow_array {
     ($column:ident, $target_vector:ident, $($variant:path => $types:ty),*) => {{
         use anyhow::anyhow;
 
+        // Check for empty column vec to prevent index out of bounds errors.
         if $column.is_empty() {
             tracing::error!("Empty column data encountered");
             return Err(anyhow!("Empty column data"));
@@ -73,41 +74,24 @@ macro_rules! convert_to_arrow_array {
         match &$column[0] {
             $(
                 $variant(_) => {
-                    // Check if all values match the expected variant
-                    let mut mismatch_index = None;
-                    let mut mismatch_type = None;
+                    // Convert and validate in a single pass
+                    let mut values = Vec::with_capacity($column.len());
                     
-                    for (i, val) in $column.iter().enumerate() {
-                        if !matches!(val, $variant(_)) {
-                            mismatch_index = Some(i);
-                            mismatch_type = Some(format!("{:?}", val));
-                            break;
+                    for (i, val) in $column.into_iter().enumerate() {
+                        if let $variant(v) = val {
+                            values.push(v);
+                        } else {
+                            // Found a type mismatch
+                            let error_msg = format!(
+                                "Type mismatch in column at row {}: expected {}, got {:?}",
+                                i,
+                                stringify!($variant),
+                                val
+                            );
+                            tracing::error!("{}", error_msg);
+                            return Err(anyhow!(error_msg));
                         }
                     }
-                    
-                    if let Some(index) = mismatch_index {
-                        let error_msg = format!(
-                            "Type mismatch in column at row {}: expected {}, got {}",
-                            index,
-                            stringify!($variant),
-                            mismatch_type.unwrap_or_else(|| "unknown type".to_string())
-                        );
-                        tracing::error!("{}", error_msg);
-                        return Err(anyhow!(error_msg));
-                    }
-                    
-                    // Safe to convert all values now
-                    let values = $column
-                        .into_iter()
-                        .map(|v| {
-                            if let $variant(val) = v {
-                                val
-                            } else {
-                                // This should be unreachable since we checked all values above
-                                unreachable!("Type mismatch after validation");
-                            }
-                        })
-                        .collect::<Vec<_>>();
                     
                     let array = <$types>::from(values);
                     $target_vector.push(Arc::new(array) as ArrayRef);
