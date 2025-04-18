@@ -390,3 +390,14 @@ python client.py
 </TabItem>
 
 </Tabs>
+
+## Frequently asked questions
+
+- Q: In a batch object request (`BatchGetObjects`), does the field mask specified in individual `GetObjectRequest`s override the top-level field mask in the `BatchGetObjectsRequest`?
+  - A: **No**, only the top-level field mask defined in the `BatchGetObjectsRequest` is used. Any field masks specified within individual `GetObjectRequest` entries are ignored. This behavior also applies to other batch request APIs in the `LedgerService` interface.
+
+- Q: In `ExecuteTransactionRequest`, why is the `transaction` field marked as `optional`?
+  - A: While the `transaction` field is marked as `optional` in the `TransactionExecutionService` .proto file, it is not optional in the API contract. It is required when making the request. This is a quirk of Protocol Buffers: marking a field as `optional` enables [field presence](https://protobuf.dev/programming-guides/field_presence/), which allows the API to distinguish between fields that were explicitly set and those that were left unset. Some of the benefits of field presence include:
+    - Differentiating between missing and default values
+    - Enabling patch or partial update semantics
+    - Avoiding ambiguity when default values (like `0`, `""`, or `false`) are valid inputs

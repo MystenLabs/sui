@@ -13,7 +13,6 @@ use arc_swap::ArcSwap;
 use fastcrypto_zkp::bn254::zk_login::JwkId;
 use fastcrypto_zkp::bn254::zk_login::OIDCProvider;
 use futures::future::BoxFuture;
-use mysten_common::debug_fatal;
 use mysten_network::server::SUI_TLS_SERVER_NAME;
 use prometheus::Registry;
 use std::collections::{BTreeSet, HashMap, HashSet};
@@ -48,7 +47,6 @@ use sui_rpc_api::ServerVersion;
 use sui_types::base_types::ConciseableName;
 use sui_types::crypto::RandomnessRound;
 use sui_types::digests::ChainIdentifier;
-use sui_types::executable_transaction::VerifiedExecutableTransaction;
 use sui_types::full_checkpoint_content::CheckpointData;
 use sui_types::messages_consensus::AuthorityCapabilitiesV2;
 use sui_types::messages_consensus::ConsensusTransactionKind;
@@ -856,6 +854,7 @@ impl SuiNode {
             .set(config.supported_protocol_versions.unwrap().max.as_u64() as i64);
 
         let validator_components = if state.is_validator(&epoch_store) {
+            Self::reenqueue_pending_consensus_certs(&epoch_store, &state).await;
             let mut components = Self::construct_validator_components(
                 config.clone(),
                 state.clone(),
@@ -1591,95 +1590,41 @@ impl SuiNode {
         }))
     }
 
-    // TODO: Fix this function.
-    // We only attempt to re-execute pending consensus transactions that is:
-    // 1. Fast-path transaction
-    // 2. Has signed the effects
-    // However it is possible that some dependencies are also in pending consensus transactions
-    // but does not meet the above criteria. This will lead to timeout on waiting for effects
-    // digests to be executed.
-    async fn _reexecute_pending_consensus_certs(
+    /// Re-enqueue pending consensus certificates for execution.
+    // TODO: Add comments explain why we need to do this at start up.
+    async fn reenqueue_pending_consensus_certs(
         epoch_store: &Arc<AuthorityPerEpochStore>,
         state: &Arc<AuthorityState>,
     ) {
         let pending_consensus_certificates = epoch_store
             .get_all_pending_consensus_transactions()
             .into_iter()
-            .filter_map(|tx| {
-                match tx.kind {
-                    // shared object txns will be re-executed by consensus replay
-                    ConsensusTransactionKind::CertifiedTransaction(tx)
-                        if !tx.contains_shared_object() =>
-                    {
-                        let tx = *tx;
-                        // we only need to re-execute if we previously signed the effects (which indicates we
-                        // returned the effects to a client).
-                        if let Some(fx_digest) = epoch_store
-                            .get_signed_effects_digest(tx.digest())
-                            .expect("db error")
-                        {
-                            // new_unchecked is safe because we never submit a transaction to consensus
-                            // without verifying it
-                            let tx = VerifiedExecutableTransaction::new_from_certificate(
-                                VerifiedCertificate::new_unchecked(tx),
-                            );
-                            Some((tx, fx_digest))
-                        } else {
-                            None
-                        }
+            .filter_map(|tx| match tx.kind {
+                ConsensusTransactionKind::CertifiedTransaction(tx) => {
+                    if tx.contains_shared_object() {
+                        // We cannot schedule shared object transactions for execution here
+                        // because they must come out of consensus to get prover version assignment.
+                        None
+                    } else {
+                        Some(VerifiedCertificate::new_unchecked(*tx))
                     }
-                    _ => None,
                 }
+                _ => None,
             })
             .collect::<Vec<_>>();
 
         let digests = pending_consensus_certificates
             .iter()
-            .map(|(tx, _)| *tx.digest())
+            .map(|tx| *tx.digest())
             .collect::<Vec<_>>();
 
         info!(
-            "reexecuting {} pending consensus certificates: {:?}",
+            "re-enqueueing {} pending consensus certificates for execution: {:?}",
             digests.len(),
             digests
         );
 
-        state.enqueue_with_expected_effects_digest(pending_consensus_certificates, epoch_store);
-
-        // If this times out, the validator will still almost certainly start up fine. But, it is
-        // possible that it may temporarily "forget" about transactions that it had previously
-        // executed. This could confuse clients in some circumstances. However, the transactions
-        // are still in pending_consensus_certificates, so we cannot lose any finality guarantees.
-        let timeout = if cfg!(msim) { 120 } else { 60 };
-        if tokio::time::timeout(
-            std::time::Duration::from_secs(timeout),
-            state
-                .get_transaction_cache_reader()
-                .notify_read_executed_effects_digests(&digests),
-        )
-        .await
-        .is_err()
-        {
-            // Log all the digests that were not executed to help debugging.
-            let executed_effects_digests = state
-                .get_transaction_cache_reader()
-                .multi_get_executed_effects_digests(&digests);
-            let pending_digests = digests
-                .iter()
-                .zip(executed_effects_digests.iter())
-                .filter_map(|(digest, executed_effects_digest)| {
-                    if executed_effects_digest.is_none() {
-                        Some(digest)
-                    } else {
-                        None
-                    }
-                })
-                .collect::<Vec<_>>();
-            debug_fatal!(
-                "Timed out waiting for effects digests to be executed: {:?}",
-                pending_digests
-            );
-        }
+        state.enqueue_certificates_for_execution(pending_consensus_certificates, epoch_store);
     }
 
     pub fn state(&self) -> Arc<AuthorityState> {
