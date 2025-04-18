@@ -13,7 +13,6 @@ import {
     Position
 } from 'vscode';
 import { decompress } from '@mongodb-js/zstd';
-import { trace } from 'console';
 
 /**
  * Log level for the debug adapter.
@@ -88,7 +87,7 @@ export function activate(context: vscode.ExtensionContext) {
     let previousSourcePath: string | undefined;
     const decorationType = vscode.window.createTextEditorDecorationType({
         color: 'grey',
-        backgroundColor: 'rgba(220, 220, 220, 0.5)' // grey with 50% opacity
+        backgroundColor: 'rgba(220, 220, 220, 0.3)' // grey with 30% opacity
     });
     context.subscriptions.push(
         vscode.debug.onDidChangeActiveStackItem(async stackItem => {
@@ -281,13 +280,11 @@ class MoveConfigurationProvider implements vscode.DebugConfigurationProvider {
             try {
                 const editor = vscode.window.activeTextEditor;
                 if (editor && (editor.document.languageId === 'move'
-                    || editor.document.languageId === 'mvb'
                     || editor.document.languageId === 'mtrace')) {
                     config.traceInfo = await findTraceInfo(editor);
                     config.source = '${file}';
                 } else {
                     const traceViewUri = traceViewTabUri();
-                    console.log('traceViewUri', traceViewUri);
                     if (traceViewUri) {
                         const traceContent = await decompressTraceFile(traceViewUri.fsPath);
                         const tracedFunctionInfo = getTracedFunctionInfo(traceContent);
@@ -353,42 +350,25 @@ async function findTraceInfo(editor: vscode.TextEditor): Promise<string> {
         const tracedFunctionInfo = getTracedFunctionInfo(editor.document.getText());
         tracedFunctions = [constructTraceInfo(openedFilePath, tracedFunctionInfo)];
     } else {
+        const openedFileExt = path.extname(openedFilePath);
+        if (openedFileExt !== MOVE_FILE_EXT) {
+            throw new Error('Unsupported file extension to start debugging '
+                + `'${openedFileExt}'`
+                + '(currently supporting: '
+                + `'${MOVE_FILE_EXT}'`
+                + ', '
+                + `'${TRACE_FILE_EXT}'`
+                + ')');
+        }
         const pkgRoot = await findPkgRoot(openedFilePath);
         if (!pkgRoot) {
             throw new Error(`Cannot find package root for file  '${openedFilePath}'`);
         }
-        const openedFileExt = path.extname(openedFilePath);
-        if (openedFileExt === MOVE_FILE_EXT) {
-            const pkgModules = findSrcModules(editor.document.getText());
-            if (pkgModules.length === 0) {
-                throw new Error(`Cannot find any modules in file '${openedFilePath}'`);
-            }
-            tracedFunctions = findTracedFunctionsFromPath(pkgRoot, pkgModules);
-        } else {
-            if (openedFileExt !== BCODE_FILE_EXT) {
-                throw new Error('Unsupported file extension '
-                    + `'${openedFileExt}'`
-                    + '(currently supporting: '
-                    + `'${MOVE_FILE_EXT}'`
-                    + ', '
-                    + `'${TRACE_FILE_EXT}'`
-                    + ', '
-                    + `'${BCODE_FILE_EXT}'`
-                    + ')');
-            }
-            const modulePattern = /\bmodule\s+\d+\.\w+\b/g;
-            const moduleSequences = editor.document.getText().match(modulePattern);
-            if (!moduleSequences || moduleSequences.length === 0) {
-                throw new Error(`Cannot find module declaration in disassembly file '${openedFilePath}'`);
-            }
-            // there should be only one module declaration in a disassembly file
-            const [pkgAddrStr, module] = moduleSequences[0].substring('module'.length).trim().split('.');
-            const pkgAddr = parseInt(pkgAddrStr);
-            if (isNaN(pkgAddr)) {
-                throw new Error(`Cannot parse package address from '${pkgAddrStr}' in disassembly file '${openedFilePath}'`);
-            }
-            tracedFunctions = findTracedFunctionsFromTrace(pkgRoot, pkgAddr, module);
+        const pkgModules = findSrcModules(editor.document.getText());
+        if (pkgModules.length === 0) {
+            throw new Error(`Cannot find any modules in file '${openedFilePath}'`);
         }
+        tracedFunctions = findTracedFunctionsFromPath(pkgRoot, pkgModules);
 
         if (!tracedFunctions || tracedFunctions.length === 0) {
             throw new Error(`No traced functions found for package at '${pkgRoot}'`);
@@ -472,8 +452,8 @@ function findTracedFunctionsFromPath(pkgRoot: string, pkgModules: string[]): str
         const prefixFiles = filePaths.filter((filePath) => filePath.startsWith(prefix));
         const suffixes = prefixFiles.map((file) => {
             const suffix = file.substring(module.length);
-            if (suffix.startsWith('__') && suffix.endsWith('.json')) {
-                return suffix.substring(2, suffix.length - 5);
+            if (suffix.startsWith('__') && suffix.endsWith(TRACE_FILE_EXT)) {
+                return suffix.substring(2, suffix.length - TRACE_FILE_EXT.length);
             }
             return suffix;
         });
@@ -483,33 +463,6 @@ function findTracedFunctionsFromPath(pkgRoot: string, pkgModules: string[]): str
     return result.map(([module, functionName]) => {
         return functionName.map((func) => module + "::" + func);
     }).flat();
-}
-
-/**
- * Find all functions that have a corresponding trace file by looking at
- * the content of the trace file and its name (`<package>__<module>__<function_name>.json`).
- * We need to match the package address, module name, and function name in the trace
- * file itself as this is the only place where we can find the (potentially matching)
- * package address (module name and function name could be extracted from the trace
- * file name).
- *
- * @param pkgRoot root directory of the package.
- * @param pkgAddr package address.
- * @param module module name.
- * @returns list of functions of the form `<package>::<module>::<function_name>`.
- * @throws Error (containing a descriptive message) if no traced functions are found for the package.
- */
-function findTracedFunctionsFromTrace(pkgRoot: string, pkgAddr: number, module: string): string[] {
-    const filePaths = getTraceFiles(pkgRoot);
-    const result: string[] = [];
-    for (const p of filePaths) {
-        const tracePath = path.join(pkgRoot, 'traces', p);
-        const tracedFunctionInfo = getTracedFunctionInfo(tracePath);
-        if (tracedFunctionInfo.pkgAddr === pkgAddr && tracedFunctionInfo.module === module) {
-            result.push(constructTraceInfo(tracePath, tracedFunctionInfo));
-        }
-    }
-    return result;
 }
 
 /**
@@ -684,8 +637,8 @@ function traceViewTabUri(): vscode.Uri | undefined {
         return undefined;
     }
     if (input instanceof vscode.TabInputCustom) {
-        console.log('input instanceof vscode.TabInputCustom', input);
-        if (input.viewType === 'mtrace.viewer') {
+        if (input.viewType === 'mtrace.viewer' &&
+            input.uri.fsPath.endsWith(TRACE_FILE_EXT)) {
             return input.uri;
         }
     }
