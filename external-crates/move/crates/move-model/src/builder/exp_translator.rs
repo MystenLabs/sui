@@ -2,29 +2,20 @@
 // Copyright (c) The Move Contributors
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{
-    cell::RefCell,
-    collections::{BTreeMap, BTreeSet, LinkedList},
-};
+use std::collections::{BTreeMap, LinkedList};
 
 use itertools::Itertools;
-use num::{BigInt, BigUint, FromPrimitive, Zero};
+use num::{BigInt, BigUint, FromPrimitive};
 
-use move_compiler::{
-    expansion::ast as EA, hlir::ast as HA, naming::ast as NA, parser::ast as PA, shared::Name,
-};
+use move_compiler::{expansion::ast as EA, parser::ast as PA, shared::Name};
 use move_core_types::runtime_value::MoveValue;
-use move_ir_types::location::Spanned;
 
 use crate::{
     ast::Value,
-    builder::{
-        model_builder::{ConstEntry, DatatypeData, LocalVarEntry},
-        module_builder::ModuleBuilder,
-    },
-    model::{DatatypeId, FieldId, Loc, ModuleId, NodeId, QualifiedId},
+    builder::{model_builder::LocalVarEntry, module_builder::ModuleBuilder},
+    model::{Loc, NodeId},
     symbol::{Symbol, SymbolPool},
-    ty::{PrimitiveType, Substitution, Type, TypeDisplayContext, Variance, BOOL_TYPE},
+    ty::{PrimitiveType, Substitution, Type, TypeDisplayContext},
 };
 
 #[derive(Debug)]
@@ -41,31 +32,10 @@ pub(crate) struct ExpTranslator<'env, 'translator, 'module_translator> {
     /// with.
     #[allow(unused)]
     pub result_type: Option<Type>,
-    /// Status for the `old(...)` expression form.
-    pub old_status: OldExpStatus,
     /// The currently build type substitution.
     pub subs: Substitution,
-    /// A counter for generating type variables.
-    pub type_var_counter: u16,
     /// A marker to indicate the node_counter start state.
     pub node_counter_start: usize,
-    /// The locals which have been accessed with this build. The boolean indicates whether
-    /// they ore accessed in `old(..)` context.
-    pub accessed_locals: BTreeSet<(Symbol, bool)>,
-    /// The number of outer context scopes in  `local_table` which are accounted for in
-    /// `accessed_locals`. See also documentation of function `mark_context_scopes`.
-    pub outer_context_scopes: usize,
-    /// A flag to indicate whether we are translating expressions in a spec fun.
-    pub translating_fun_as_spec_fun: bool,
-    /// A flag to indicate whether errors have been generated so far.
-    pub errors_generated: RefCell<bool>,
-}
-
-#[derive(Debug, PartialEq)]
-pub(crate) enum OldExpStatus {
-    NotSupported,
-    OutsideOld,
-    InsideOld,
 }
 
 // # General
@@ -79,56 +49,9 @@ impl<'env, 'translator, 'module_translator> ExpTranslator<'env, 'translator, 'mo
             type_params: vec![],
             local_table: LinkedList::new(),
             result_type: None,
-            old_status: OldExpStatus::NotSupported,
             subs: Substitution::new(),
-            type_var_counter: 0,
             node_counter_start,
-            accessed_locals: BTreeSet::new(),
-            outer_context_scopes: 0,
-            /// Following flags used to translate pure Move functions.
-            translating_fun_as_spec_fun: false,
-            errors_generated: RefCell::new(false),
         }
-    }
-
-    pub fn new_with_old(
-        parent: &'module_translator mut ModuleBuilder<'env, 'translator>,
-        allow_old: bool,
-    ) -> Self {
-        let mut et = ExpTranslator::new(parent);
-        if allow_old {
-            et.old_status = OldExpStatus::OutsideOld;
-        } else {
-            et.old_status = OldExpStatus::NotSupported;
-        };
-        et
-    }
-
-    pub fn translate_fun_as_spec_fun(&mut self) {
-        self.translating_fun_as_spec_fun = true;
-    }
-
-    /// Extract a map from names to types from the scopes of this build.
-    pub fn extract_var_map(&self) -> BTreeMap<Symbol, LocalVarEntry> {
-        let mut vars: BTreeMap<Symbol, LocalVarEntry> = BTreeMap::new();
-        for s in &self.local_table {
-            vars.extend(s.clone());
-        }
-        vars
-    }
-
-    // Get type parameters from this build.
-    #[allow(unused)]
-    pub fn get_type_params(&self) -> Vec<Type> {
-        self.type_params
-            .iter()
-            .map(|(_, t)| t.clone())
-            .collect_vec()
-    }
-
-    // Get type parameters with names from this build.
-    pub fn get_type_params_with_name(&self) -> Vec<(Symbol, Type)> {
-        self.type_params.clone()
     }
 
     /// Shortcut for accessing symbol pool.
@@ -143,44 +66,12 @@ impl<'env, 'translator, 'module_translator> ExpTranslator<'env, 'translator, 'mo
 
     /// Shortcut for reporting an error.
     pub fn error(&self, loc: &Loc, msg: &str) {
-        if self.translating_fun_as_spec_fun {
-            *self.errors_generated.borrow_mut() = true;
-        } else {
-            self.parent.parent.error(loc, msg);
-        }
-    }
-
-    /// Creates a fresh type variable.
-    fn fresh_type_var(&mut self) -> Type {
-        let var = Type::Var(self.type_var_counter);
-        self.type_var_counter += 1;
-        var
-    }
-
-    /// Shortcut to create a new node id.
-    fn new_node_id(&self) -> NodeId {
-        self.parent.parent.env.new_node_id()
-    }
-
-    /// Shortcut to create a new node id and assigns type and location to it.
-    pub fn new_node_id_with_type_loc(&self, ty: &Type, loc: &Loc) -> NodeId {
-        self.parent.parent.env.new_node(loc.clone(), ty.clone())
-    }
-
-    // Short cut for getting node type.
-    pub fn get_node_type(&self, node_id: NodeId) -> Type {
-        self.parent.parent.env.get_node_type(node_id)
+        self.parent.parent.error(loc, msg);
     }
 
     // Short cut for getting node type.
     fn get_node_type_opt(&self, node_id: NodeId) -> Option<Type> {
         self.parent.parent.env.get_node_type_opt(node_id)
-    }
-
-    // Short cut for getting node location.
-    #[allow(dead_code)]
-    fn get_node_loc(&self, node_id: NodeId) -> Loc {
-        self.parent.parent.env.get_node_loc(node_id)
     }
 
     // Short cut for getting node instantiation.
@@ -191,14 +82,6 @@ impl<'env, 'translator, 'module_translator> ExpTranslator<'env, 'translator, 'mo
     /// Shortcut to update node type.
     pub fn update_node_type(&self, node_id: NodeId, ty: Type) {
         self.parent.parent.env.update_node_type(node_id, ty);
-    }
-
-    /// Shortcut to set/update instantiation for the given node id.
-    fn set_node_instantiation(&self, node_id: NodeId, instantiation: Vec<Type>) {
-        self.parent
-            .parent
-            .env
-            .set_node_instantiation(node_id, instantiation);
     }
 
     fn update_node_instantiation(&self, node_id: NodeId, instantiation: Vec<Type>) {
@@ -228,7 +111,7 @@ impl<'env, 'translator, 'module_translator> ExpTranslator<'env, 'translator, 'mo
         }
     }
 
-    /// Finalize the the given type, producing an error if it is not complete.
+    /// Finalize the given type, producing an error if it is not complete.
     fn finalize_type(&self, node_id: NodeId, ty: &Type) -> Type {
         let ty = self.subs.specialize(ty);
         if ty.is_incomplete() {
@@ -245,46 +128,6 @@ impl<'env, 'translator, 'module_translator> ExpTranslator<'env, 'translator, 'mo
         ty
     }
 
-    /// Fix any free type variables remaining in this expression build to a freshly
-    /// generated type parameter, adding them to the passed vector.
-    #[allow(unused)]
-    pub fn fix_types(&mut self, generated_params: &mut Vec<Type>) {
-        if self.parent.parent.env.has_errors() {
-            return;
-        }
-        for i in self.node_counter_start..self.parent.parent.env.next_free_node_number() {
-            let node_id = NodeId::new(i);
-
-            if let Some(ty) = self.get_node_type_opt(node_id) {
-                let ty = self.fix_type(generated_params, &ty);
-                self.update_node_type(node_id, ty);
-            }
-            if let Some(inst) = self.get_node_instantiation_opt(node_id) {
-                let inst = inst
-                    .iter()
-                    .map(|ty| self.fix_type(generated_params, ty))
-                    .collect_vec();
-                self.update_node_instantiation(node_id, inst);
-            }
-        }
-    }
-
-    /// Fix the given type, replacing any remaining free type variables with a type parameter.
-    fn fix_type(&mut self, generated_params: &mut Vec<Type>, ty: &Type) -> Type {
-        // First specialize the type.
-        let ty = self.subs.specialize(ty);
-        // Next get whatever free variables remain.
-        let vars = ty.get_vars();
-        // Assign a type parameter to each free variable and add it to substitution.
-        for var in vars {
-            let type_param = Type::TypeParameter(generated_params.len() as u16);
-            generated_params.push(type_param.clone());
-            self.subs.bind(var, type_param);
-        }
-        // Return type with type parameter substitution applied.
-        self.subs.specialize(&ty)
-    }
-
     /// Constructs a type display context used to visualize types in error messages.
     fn type_display_context(&self) -> TypeDisplayContext<'_> {
         TypeDisplayContext::WithoutEnv {
@@ -296,27 +139,6 @@ impl<'env, 'translator, 'module_translator> ExpTranslator<'env, 'translator, 'mo
     /// Enters a new scope in the locals table.
     pub fn enter_scope(&mut self) {
         self.local_table.push_front(BTreeMap::new());
-    }
-
-    /// Exits the most inner scope of the locals table.
-    pub fn exit_scope(&mut self) {
-        self.local_table.pop_front();
-    }
-
-    /// Mark the current active scope level as context, i.e. symbols which are not
-    /// declared in this expression. This is used to determine what
-    /// `get_accessed_context_locals` returns.
-    #[allow(unused)]
-    pub fn mark_context_scopes(mut self) -> Self {
-        self.outer_context_scopes = self.local_table.len();
-        self
-    }
-
-    /// Gets the locals this build has accessed so far and which belong to the
-    /// context, i.a. are not declared in this expression.
-    #[allow(unused)]
-    pub fn get_accessed_context_locals(&self) -> Vec<(Symbol, bool)> {
-        self.accessed_locals.iter().cloned().collect_vec()
     }
 
     /// Defines a type parameter.
@@ -355,33 +177,12 @@ impl<'env, 'translator, 'module_translator> ExpTranslator<'env, 'translator, 'mo
     /// Defines a local in the most inner scope. This produces an error
     /// if the name already exists. The operation option is used for names
     /// which represent special operations.
-    pub fn define_local(
-        &mut self,
-        loc: &Loc,
-        name: Symbol,
-        type_: Type,
-        temp_index: Option<usize>,
-    ) {
-        self.internal_define_local(loc, name, type_, temp_index)
+    pub fn define_local(&mut self, loc: &Loc, name: Symbol) {
+        self.internal_define_local(loc, name)
     }
 
-    /// Defines a let local.
-    pub fn define_let_local(&mut self, loc: &Loc, name: Symbol, type_: Type) {
-        self.internal_define_local(loc, name, type_, None)
-    }
-
-    fn internal_define_local(
-        &mut self,
-        loc: &Loc,
-        name: Symbol,
-        type_: Type,
-        temp_index: Option<usize>,
-    ) {
-        let entry = LocalVarEntry {
-            loc: loc.clone(),
-            type_,
-            temp_index,
-        };
+    fn internal_define_local(&mut self, loc: &Loc, name: Symbol) {
+        let entry = LocalVarEntry { loc: loc.clone() };
         if let Some(old) = self
             .local_table
             .front_mut()
@@ -392,23 +193,6 @@ impl<'env, 'translator, 'module_translator> ExpTranslator<'env, 'translator, 'mo
             self.error(loc, &format!("duplicate declaration of `{}`", display));
             self.error(&old.loc, &format!("previous declaration of `{}`", display));
         }
-    }
-
-    /// Lookup a local in this build.
-    pub fn lookup_local(&mut self, name: Symbol, in_old: bool) -> Option<&LocalVarEntry> {
-        let mut depth = self.local_table.len();
-        for scope in &self.local_table {
-            if let Some(entry) = scope.get(&name) {
-                if depth <= self.outer_context_scopes {
-                    // Account for access if this belongs to one of the outer scopes
-                    // considered context (i.e. not declared in this expression).
-                    self.accessed_locals.insert((name, in_old));
-                }
-                return Some(entry);
-            }
-            depth -= 1;
-        }
-        None
     }
 
     /// Analyzes the sequence of type parameters as they are provided via the source AST and enters
@@ -434,23 +218,13 @@ impl<'env, 'translator, 'module_translator> ExpTranslator<'env, 'translator, 'mo
     pub fn analyze_and_add_params(
         &mut self,
         params: &[(EA::Mutability, PA::Var, EA::Type)],
-        for_move_fun: bool,
     ) -> Vec<(Symbol, Type)> {
         params
             .iter()
-            .enumerate()
-            .map(|(idx, (_, v, ty))| {
+            .map(|(_, v, ty)| {
                 let ty = self.translate_type(ty);
                 let sym = self.symbol_pool().make(v.0.value.as_str());
-                self.define_local(
-                    &self.to_loc(&v.0.loc),
-                    sym,
-                    ty.clone(),
-                    // If this is for a proper Move function (not spec function), add the
-                    // index so we can resolve this to a `Temporary` expression instead of
-                    // a `LocalVar`.
-                    if for_move_fun { Some(idx) } else { None },
-                );
+                self.define_local(&self.to_loc(&v.0.loc), sym);
                 (sym, ty)
             })
             .collect_vec()
@@ -596,16 +370,6 @@ impl ExpTranslator<'_, '_, '_> {
         }
     }
 
-    #[allow(unused)]
-    pub fn make_context_local_name(&self, name: Symbol, in_old: bool) -> Symbol {
-        if in_old {
-            self.symbol_pool()
-                .make(&format!("{}_$old", name.display(self.symbol_pool())))
-        } else {
-            name
-        }
-    }
-
     pub fn translate_from_move_value(&self, loc: &Loc, ty: &Type, value: &MoveValue) -> Value {
         match (ty, value) {
             (_, MoveValue::U8(n)) => Value::Number(BigInt::from_u8(*n).unwrap()),
@@ -657,35 +421,35 @@ impl ExpTranslator<'_, '_, '_> {
             },
             (Type::Primitive(_), MoveValue::Vector(_))
             | (Type::Primitive(_), MoveValue::Struct(_))
-            | (Type::Primitive(_), MoveValue::Variant(_))
             | (Type::Tuple(_), MoveValue::Vector(_))
             | (Type::Tuple(_), MoveValue::Struct(_))
-            | (Type::Tuple(_), MoveValue::Variant(_))
             | (Type::Vector(_), MoveValue::Struct(_))
-            | (Type::Vector(_), MoveValue::Variant(_))
             | (Type::Datatype(_, _, _), MoveValue::Vector(_))
             | (Type::Datatype(_, _, _), MoveValue::Struct(_))
-            | (Type::Datatype(_, _, _), MoveValue::Variant(_))
             | (Type::TypeParameter(_), MoveValue::Vector(_))
             | (Type::TypeParameter(_), MoveValue::Struct(_))
-            | (Type::TypeParameter(_), MoveValue::Variant(_))
             | (Type::Reference(_, _), MoveValue::Vector(_))
             | (Type::Reference(_, _), MoveValue::Struct(_))
-            | (Type::Reference(_, _), MoveValue::Variant(_))
             | (Type::Fun(_, _), MoveValue::Vector(_))
             | (Type::Fun(_, _), MoveValue::Struct(_))
-            | (Type::Fun(_, _), MoveValue::Variant(_))
             | (Type::TypeDomain(_), MoveValue::Vector(_))
             | (Type::TypeDomain(_), MoveValue::Struct(_))
-            | (Type::TypeDomain(_), MoveValue::Variant(_))
             | (Type::ResourceDomain(_, _, _), MoveValue::Vector(_))
             | (Type::ResourceDomain(_, _, _), MoveValue::Struct(_))
-            | (Type::ResourceDomain(_, _, _), MoveValue::Variant(_))
             | (Type::Error, MoveValue::Vector(_))
             | (Type::Error, MoveValue::Struct(_))
-            | (Type::Error, MoveValue::Variant(_))
             | (Type::Var(_), MoveValue::Vector(_))
             | (Type::Var(_), MoveValue::Struct(_))
+            | (Type::Primitive(_), MoveValue::Variant(_))
+            | (Type::Tuple(_), MoveValue::Variant(_))
+            | (Type::Vector(_), MoveValue::Variant(_))
+            | (Type::Datatype(_, _, _), MoveValue::Variant(_))
+            | (Type::TypeParameter(_), MoveValue::Variant(_))
+            | (Type::Reference(_, _), MoveValue::Variant(_))
+            | (Type::Fun(_, _), MoveValue::Variant(_))
+            | (Type::TypeDomain(_), MoveValue::Variant(_))
+            | (Type::ResourceDomain(_, _, _), MoveValue::Variant(_))
+            | (Type::Error, MoveValue::Variant(_))
             | (Type::Var(_), MoveValue::Variant(_)) => {
                 self.error(
                     loc,

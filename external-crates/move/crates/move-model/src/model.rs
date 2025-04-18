@@ -32,21 +32,18 @@ use codespan_reporting::{
 use itertools::Itertools;
 #[allow(unused_imports)]
 use log::{info, warn};
-use move_compiler::expansion;
 use move_ir_types::ast as IR;
-use num::{BigUint, One, ToPrimitive};
-use serde::{Deserialize, Serialize};
+use num::BigUint;
 
 pub use move_binary_format::file_format::{AbilitySet, Visibility as FunctionVisibility};
 use move_binary_format::{
     file_format::{
-        AddressIdentifierIndex, Bytecode, CodeOffset, Constant as VMConstant, ConstantPoolIndex,
+        AddressIdentifierIndex, Bytecode, Constant as VMConstant, ConstantPoolIndex,
         DatatypeHandleIndex, EnumDefinitionIndex, FunctionDefinition, FunctionDefinitionIndex,
-        FunctionHandleIndex, FunctionInstantiation, IdentifierIndex, ModuleHandle, SignatureIndex,
-        SignatureToken, StructDefinitionIndex, StructFieldInformation, VariantJumpTable,
-        Visibility,
+        FunctionHandleIndex, FunctionInstantiation, SignatureIndex, SignatureToken,
+        StructDefinitionIndex, StructFieldInformation, VariantJumpTable, Visibility,
     },
-    normalized::{Enum, FunctionRef, Type as MType},
+    normalized::{FunctionRef, Type as MType},
     CompiledModule,
 };
 use move_bytecode_source_map::{mapping::SourceMapping, source_map::SourceMap};
@@ -61,9 +58,9 @@ use move_core_types::{
 use move_disassembler::disassembler::{Disassembler, DisassemblerOptions};
 
 use crate::{
-    ast::{Attribute, ModuleName, QualifiedSymbol, Value},
+    ast::{Attribute, ModuleName, Value},
     symbol::{Symbol, SymbolPool},
-    ty::{PrimitiveType, Type, TypeDisplayContext, TypeUnificationAdapter, Variance},
+    ty::{PrimitiveType, Type, TypeDisplayContext},
 };
 
 // =================================================================================================
@@ -390,50 +387,7 @@ impl QualifiedInstId<DatatypeId> {
 }
 
 // =================================================================================================
-/// # Verification Scope
-
-/// Defines what functions to verify.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub enum VerificationScope {
-    /// Verify only public functions.
-    Public,
-    /// Verify all functions.
-    All,
-    /// Verify only one function.
-    Only(String),
-    /// Verify only functions from the given module.
-    OnlyModule(String),
-    /// Verify no functions
-    None,
-}
-
-impl Default for VerificationScope {
-    fn default() -> Self {
-        Self::Public
-    }
-}
-
-impl VerificationScope {
-    /// Whether verification is exclusive to only one function or module. If set, this overrides
-    /// all implicitly included verification targets via invariants and friends.
-    pub fn is_exclusive(&self) -> bool {
-        matches!(
-            self,
-            VerificationScope::Only(_) | VerificationScope::OnlyModule(_)
-        )
-    }
-
-    /// Returns the target function if verification is exclusive to one function.
-    pub fn get_exclusive_verify_function_name(&self) -> Option<&String> {
-        match self {
-            VerificationScope::Only(s) => Some(s),
-            _ => None,
-        }
-    }
-}
-
-// =================================================================================================
-/// # Global Environment
+// # Global Environment
 
 /// Global environment for a set of modules.
 #[derive(Debug)]
@@ -472,8 +426,6 @@ pub struct GlobalEnv {
     exp_info: RefCell<BTreeMap<NodeId, ExpInfo>>,
     /// List of loaded modules, in order they have been provided using `add`.
     pub module_data: Vec<ModuleData>,
-    /// A counter for issuing global ids.
-    global_id_counter: RefCell<usize>,
     /// A type-indexed container for storing extension data in the environment.
     extensions: RefCell<BTreeMap<TypeId, Box<dyn Any>>>,
     /// The address of the standard and extension libaries.
@@ -524,7 +476,6 @@ impl GlobalEnv {
             next_free_node_id: Default::default(),
             exp_info: Default::default(),
             module_data: vec![],
-            global_id_counter: RefCell::new(0),
             extensions: Default::default(),
             stdlib_address: None,
             extlib_address: None,
@@ -606,14 +557,6 @@ impl GlobalEnv {
             .remove(&id)
             .and_then(|d| d.downcast::<Rc<T>>().ok())
             .map(|boxed| *boxed)
-    }
-
-    /// Create a new global id unique to this environment.
-    pub fn new_global_id(&self) -> GlobalId {
-        let mut counter = self.global_id_counter.borrow_mut();
-        let id = GlobalId::new(*counter);
-        *counter += 1;
-        id
     }
 
     /// Returns a reference to the symbol pool owned by this environment.
@@ -1012,7 +955,6 @@ impl GlobalEnv {
         name: Symbol,
         loc: Loc,
         attributes: Vec<Attribute>,
-        toplevel_attributes: expansion::ast::Attributes,
         arg_names: Vec<Symbol>,
         type_arg_names: Vec<Symbol>,
     ) -> FunctionData {
@@ -1021,7 +963,6 @@ impl GlobalEnv {
             name,
             loc,
             attributes,
-            toplevel_attributes,
             def_idx,
             handle_idx,
             arg_names,
@@ -1123,6 +1064,15 @@ impl GlobalEnv {
         }
     }
 
+    /// Return the name of the ghost memory associated with spec var.
+    pub fn ghost_memory_name(&self, spec_var_name: Symbol) -> Symbol {
+        self.symbol_pool.make(&format!(
+            "{}{}",
+            GHOST_MEMORY_PREFIX,
+            self.symbol_pool.string(spec_var_name)
+        ))
+    }
+
     /// Finds a module by name and returns an environment for it.
     pub fn find_module(&self, name: &ModuleName) -> Option<ModuleEnv<'_>> {
         for module_data in &self.module_data {
@@ -1142,7 +1092,7 @@ impl GlobalEnv {
     ///    different addresses in one verification session.
     pub fn find_module_by_name(&self, simple_name: Symbol) -> Option<ModuleEnv<'_>> {
         self.get_modules()
-            .find(|m| m.get_name().name() == simple_name && m.get_function_count() > 0)
+            .find(|m| m.get_name().name() == simple_name)
     }
 
     /// Find a module by its bytecode format ID
@@ -1243,14 +1193,6 @@ impl GlobalEnv {
     /// Gets a struct by qualified id.
     pub fn get_struct_qid(&self, qid: QualifiedId<DatatypeId>) -> StructEnv<'_> {
         self.get_module(qid.module_id).into_struct(qid.id)
-    }
-
-    pub fn get_enum_qid(&self, qid: QualifiedId<DatatypeId>) -> EnumEnv<'_> {
-        self.get_module(qid.module_id).into_enum(qid.id)
-    }
-
-    pub fn get_struct_or_enum_qid(&self, qid: QualifiedId<DatatypeId>) -> StructOrEnumEnv<'_> {
-        self.get_module(qid.module_id).into_struct_or_enum(qid.id)
     }
 
     /// Gets a function by qualified id.
@@ -1450,155 +1392,6 @@ impl GlobalEnv {
     /// Returns the address where the extensions libs are defined.
     pub fn get_extlib_address(&self) -> BigUint {
         self.extlib_address.clone().unwrap_or_else(|| 2u16.into())
-    }
-
-    fn get_fun_qid(&self, module_name: &str, fun_name: &str) -> QualifiedId<FunId> {
-        self.find_module_by_name(self.symbol_pool().make(module_name))
-            .expect(&format!("module not found: {}", module_name))
-            .get_id()
-            .qualified(FunId::new(self.symbol_pool().make(fun_name)))
-    }
-
-    pub const PROVER_MODULE_NAME: &'static str = "prover";
-    pub const SPEC_MODULE_NAME: &'static str = "ghost";
-    const LOG_MODULE_NAME: &'static str = "log";
-    const REQUIRES_FUNCTION_NAME: &'static str = "requires";
-    const ENSURES_FUNCTION_NAME: &'static str = "ensures";
-    const ASSERTS_FUNCTION_NAME: &'static str = "asserts";
-    const TYPE_INV_FUNCTION_NAME: &'static str = "type_inv";
-    const GLOBAL_FUNCTION_NAME: &'static str = "global";
-    const GLOBAL_SET_FUNCTION_NAME: &'static str = "global_set";
-    const GLOBAL_BORROW_MUT_FUNCTION_NAME: &'static str = "borrow_mut";
-    const DECLARE_GLOBAL_FUNCTION_NAME: &'static str = "declare_global";
-    const DECLARE_GLOBAL_MUT_FUNCTION_NAME: &'static str = "declare_global_mut";
-    const HAVOC_GLOBAL_FUNCTION_NAME: &'static str = "havoc_global";
-    const INVARIANT_BEGIN_FUNCTION_NAME: &'static str = "invariant_begin";
-    const INVARIANT_END_FUNCTION_NAME: &'static str = "invariant_end";
-    const LOG_TEXT_FUNCTION_NAME: &'static str = "text";
-    const LOG_VAR_FUNCTION_NAME: &'static str = "var";
-    const LOG_GHOST_FUNCTION_NAME: &'static str = "ghost";
-
-    pub fn requires_qid(&self) -> QualifiedId<FunId> {
-        self.get_fun_qid(Self::PROVER_MODULE_NAME, Self::REQUIRES_FUNCTION_NAME)
-    }
-
-    pub fn ensures_qid(&self) -> QualifiedId<FunId> {
-        self.get_fun_qid(Self::PROVER_MODULE_NAME, Self::ENSURES_FUNCTION_NAME)
-    }
-
-    pub fn asserts_qid(&self) -> QualifiedId<FunId> {
-        self.get_fun_qid(Self::PROVER_MODULE_NAME, Self::ASSERTS_FUNCTION_NAME)
-    }
-
-    pub fn type_inv_qid(&self) -> QualifiedId<FunId> {
-        self.get_fun_qid(Self::PROVER_MODULE_NAME, Self::TYPE_INV_FUNCTION_NAME)
-    }
-
-    pub fn global_qid(&self) -> QualifiedId<FunId> {
-        self.get_fun_qid(Self::SPEC_MODULE_NAME, Self::GLOBAL_FUNCTION_NAME)
-    }
-
-    pub fn global_set_qid(&self) -> QualifiedId<FunId> {
-        self.get_fun_qid(Self::SPEC_MODULE_NAME, Self::GLOBAL_SET_FUNCTION_NAME)
-    }
-
-    pub fn global_borrow_mut_qid(&self) -> QualifiedId<FunId> {
-        self.get_fun_qid(
-            Self::SPEC_MODULE_NAME,
-            Self::GLOBAL_BORROW_MUT_FUNCTION_NAME,
-        )
-    }
-
-    pub fn declare_global_qid(&self) -> QualifiedId<FunId> {
-        self.get_fun_qid(Self::SPEC_MODULE_NAME, Self::DECLARE_GLOBAL_FUNCTION_NAME)
-    }
-
-    pub fn declare_global_mut_qid(&self) -> QualifiedId<FunId> {
-        self.get_fun_qid(
-            Self::SPEC_MODULE_NAME,
-            Self::DECLARE_GLOBAL_MUT_FUNCTION_NAME,
-        )
-    }
-
-    pub fn havoc_global_qid(&self) -> QualifiedId<FunId> {
-        self.get_fun_qid(Self::SPEC_MODULE_NAME, Self::HAVOC_GLOBAL_FUNCTION_NAME)
-    }
-
-    pub fn invariant_begin_qid(&self) -> QualifiedId<FunId> {
-        self.get_fun_qid(
-            Self::PROVER_MODULE_NAME,
-            Self::INVARIANT_BEGIN_FUNCTION_NAME,
-        )
-    }
-
-    pub fn invariant_end_qid(&self) -> QualifiedId<FunId> {
-        self.get_fun_qid(Self::PROVER_MODULE_NAME, Self::INVARIANT_END_FUNCTION_NAME)
-    }
-
-    pub fn log_text_qid(&self) -> QualifiedId<FunId> {
-        self.get_fun_qid(Self::LOG_MODULE_NAME, Self::LOG_TEXT_FUNCTION_NAME)
-    }
-
-    pub fn log_var_qid(&self) -> QualifiedId<FunId> {
-        self.get_fun_qid(Self::LOG_MODULE_NAME, Self::LOG_VAR_FUNCTION_NAME)
-    }
-
-    pub fn log_ghost_qid(&self) -> QualifiedId<FunId> {
-        self.get_fun_qid(Self::LOG_MODULE_NAME, Self::LOG_GHOST_FUNCTION_NAME)
-    }
-
-    fn add_stub_module(&mut self, module_symbol: Symbol) {
-        if self.find_module_by_name(module_symbol).is_none() {
-            let mut compiled_module: CompiledModule = CompiledModule::default();
-            compiled_module.module_handles.push(ModuleHandle {
-                address: AddressIdentifierIndex::default(),
-                name: IdentifierIndex::default(),
-            });
-            compiled_module
-                .address_identifiers
-                .push(AccountAddress::ZERO);
-            compiled_module
-                .identifiers
-                .push(Identifier::new("<SELF>").unwrap());
-            self.module_data.push(ModuleData {
-                name: ModuleName::new(Default::default(), module_symbol),
-                id: ModuleId::new(self.get_module_count()),
-                module: compiled_module,
-                named_constants: BTreeMap::new(),
-                struct_data: BTreeMap::new(),
-                struct_idx_to_id: BTreeMap::new(),
-                function_data: BTreeMap::new(),
-                function_idx_to_id: BTreeMap::new(),
-                // below this line is source/prover specific
-                source_map: SourceMap::new(
-                    MoveIrLoc::new(FileHash::empty(), 0, 0),
-                    IR::ModuleIdent::new(
-                        IR::ModuleName(move_symbol_pool::Symbol::from(
-                            self.symbol_pool.string(module_symbol).as_str(),
-                        )),
-                        AccountAddress::ZERO,
-                    ),
-                ),
-                loc: Loc::default(),
-                attributes: Default::default(),
-                used_modules: Default::default(),
-                friend_modules: Default::default(),
-                enum_data: BTreeMap::new(),
-                enum_idx_to_id: BTreeMap::new(),
-            })
-        }
-    }
-
-    pub fn add_stub_prover_module(&mut self) {
-        self.add_stub_module(self.symbol_pool().make(Self::PROVER_MODULE_NAME))
-    }
-
-    pub fn add_stub_spec_module(&mut self) {
-        self.add_stub_module(self.symbol_pool().make(Self::SPEC_MODULE_NAME))
-    }
-
-    pub fn add_stub_log_module(&mut self) {
-        self.add_stub_module(self.symbol_pool().make(Self::LOG_MODULE_NAME))
     }
 }
 
@@ -1913,14 +1706,7 @@ impl<'env> ModuleEnv<'env> {
 
     /// Gets a FunctionEnv by id.
     pub fn into_function(self, id: FunId) -> FunctionEnv<'env> {
-        let data = self.data.function_data.get(&id).expect(&format!(
-            "FunId undefined: {}",
-            QualifiedSymbol {
-                module_name: self.get_name().clone(),
-                symbol: id.symbol(),
-            }
-            .display_full(self.symbol_pool())
-        ));
+        let data = self.data.function_data.get(&id).expect("FunId undefined");
         FunctionEnv {
             module_env: self,
             data,
@@ -2012,11 +1798,7 @@ impl<'env> ModuleEnv<'env> {
 
     /// Gets a StructEnv by id.
     pub fn get_struct(&self, id: DatatypeId) -> StructEnv<'_> {
-        let data = self
-            .data
-            .struct_data
-            .get(&id)
-            .expect("DatatypeId undefined");
+        let data = self.data.struct_data.get(&id).expect("StructId undefined");
         StructEnv {
             module_env: self.clone(),
             data,
@@ -2029,11 +1811,7 @@ impl<'env> ModuleEnv<'env> {
 
     /// Gets a StructEnv by id, consuming this module env.
     pub fn into_struct(self, id: DatatypeId) -> StructEnv<'env> {
-        let data = self
-            .data
-            .struct_data
-            .get(&id)
-            .expect("DatatypeId undefined");
+        let data = self.data.struct_data.get(&id).expect("StructId undefined");
         StructEnv {
             module_env: self,
             data,
@@ -2113,32 +1891,6 @@ impl<'env> ModuleEnv<'env> {
     /// Returns an iterator over structs in this module.
     pub fn get_enums(&'env self) -> impl Iterator<Item = EnumEnv<'env>> {
         self.clone().into_enums()
-    }
-
-    /// Gets a StructEnv or an EnumEnv by id.
-    pub fn get_struct_or_enum(&self, id: DatatypeId) -> StructOrEnumEnv<'_> {
-        self.find_struct(id.symbol())
-            .map(|struct_env| StructOrEnumEnv::Struct(struct_env))
-            .or_else(|| {
-                self.find_enum(id.symbol())
-                    .map(|enum_env| StructOrEnumEnv::Enum(enum_env))
-            })
-            .expect(&format!(
-                "DatatypeId undefined: {}",
-                QualifiedSymbol {
-                    module_name: self.get_name().clone(),
-                    symbol: id.symbol(),
-                }
-                .display_full(self.symbol_pool())
-            ))
-    }
-
-    /// Gets a StructEnv or an EnumEnv by id, consuming this module env.
-    pub fn into_struct_or_enum(self, id: DatatypeId) -> StructOrEnumEnv<'env> {
-        match self.get_struct_or_enum(id) {
-            StructOrEnumEnv::Struct { .. } => StructOrEnumEnv::Struct(self.into_struct(id)),
-            StructOrEnumEnv::Enum { .. } => StructOrEnumEnv::Enum(self.into_enum(id)),
-        }
     }
 
     /// Returns an iterator over all object types declared by this module
@@ -2390,11 +2142,6 @@ impl<'env> ModuleEnv<'env> {
     }
 }
 
-pub enum StructOrEnumEnv<'env> {
-    Struct(StructEnv<'env>),
-    Enum(EnumEnv<'env>),
-}
-
 // =================================================================================================
 /// # Enum Environment
 
@@ -2490,7 +2237,7 @@ impl<'env> EnumEnv<'env> {
         self.module_env.get_id().qualified(self.get_id())
     }
 
-    /// Get the abilities of this enum.
+    /// Get the abilities of this struct.
     pub fn get_abilities(&self) -> AbilitySet {
         let def = self.module_env.data.module.enum_def_at(self.data.def_idx);
         let handle = self
@@ -2501,12 +2248,12 @@ impl<'env> EnumEnv<'env> {
         handle.abilities
     }
 
-    /// Determines whether memory-related operations needs to be declared for this enum.
+    /// Determines whether memory-related operations needs to be declared for this struct.
     pub fn has_memory(&self) -> bool {
         self.get_abilities().has_key()
     }
 
-    /// Get an iterator for the variants, ordered by tag.
+    /// Get an iterator for the fields, ordered by offset.
     pub fn get_variants(&'env self) -> impl Iterator<Item = VariantEnv<'env>> {
         self.data
             .variant_data
@@ -3237,9 +2984,6 @@ pub struct FunctionData {
     /// Attributes attached to this function.
     attributes: Vec<Attribute>,
 
-    /// Top-level attributes attached to this function.
-    toplevel_attributes: expansion::ast::Attributes,
-
     /// List of function argument names. Not in bytecode but obtained from AST.
     arg_names: Vec<Symbol>,
 
@@ -3267,7 +3011,6 @@ impl FunctionData {
             name,
             loc: Loc::default(),
             attributes: Vec::default(),
-            toplevel_attributes: expansion::ast::Attributes::default(),
             def_idx,
             handle_idx,
             arg_names: vec![],
@@ -3380,11 +3123,6 @@ impl<'env> FunctionEnv<'env> {
             .module
             .function_def_at(self.get_def_idx());
         &function_definition.code.as_ref().unwrap().jump_tables
-    }
-
-    /// Returns the top-level attributes for this function
-    pub fn get_toplevel_attributes(&self) -> &expansion::ast::Attributes {
-        &self.data.toplevel_attributes
     }
 
     /// Returns true if this function is native.
@@ -3680,43 +3418,9 @@ impl<'env> FunctionEnv<'env> {
             .collect()
     }
 
-    /// Determine whether the function is target of verification.
-    pub fn should_verify(&self, default_scope: &VerificationScope) -> bool {
-        if let VerificationScope::Only(function_name) = default_scope {
-            // Overrides pragmas.
-            return self.matches_name(function_name);
-        }
-        if !self.module_env.is_target() {
-            // Don't generate verify method for functions from dependencies.
-            return false;
-        }
-
-        match default_scope {
-            // By using `is_exposed`, we essentially mark all of Public, Script, Friend to be
-            // in the verification scope because they are "exposed" functions in this module.
-            // We may want to change `VerificationScope::Public` to `VerificationScope::Exposed` as
-            // well for consistency.
-            VerificationScope::Public => self.is_exposed(),
-            VerificationScope::All => true,
-            VerificationScope::Only(_) => unreachable!(),
-            VerificationScope::OnlyModule(module_name) => self.module_env.matches_name(module_name),
-            VerificationScope::None => false,
-        }
-    }
-
     /// Returns true if either the name or simple name of this function matches the given string
     pub fn matches_name(&self, name: &str) -> bool {
         name.eq(&*self.get_simple_name_string()) || name.eq(&*self.get_name_string())
-    }
-
-    /// Determine whether this function is explicitly deactivated for verification.
-    pub fn is_explicitly_not_verified(&self, scope: &VerificationScope) -> bool {
-        if let VerificationScope::Only(function_name) = scope {
-            // Overrides pragmas.
-            return !self.matches_name(function_name);
-        } else {
-            false
-        }
     }
 
     /// Get the functions that call this one
@@ -3747,45 +3451,24 @@ impl<'env> FunctionEnv<'env> {
         let called: BTreeSet<_> = self
             .get_bytecode()
             .iter()
-            .flat_map(|c| match c {
-                Bytecode::Call(i) => vec![self.module_env.get_used_function(*i).get_qualified_id()],
-                Bytecode::CallGeneric(i) => {
+            .filter_map(|c| {
+                if let Bytecode::Call(i) = c {
+                    Some(self.module_env.get_used_function(*i).get_qualified_id())
+                } else if let Bytecode::CallGeneric(i) = c {
                     let handle_idx = self
                         .module_env
                         .data
                         .module
                         .function_instantiation_at(*i)
                         .handle;
-                    vec![self
-                        .module_env
-                        .get_used_function(handle_idx)
-                        .get_qualified_id()]
+                    Some(
+                        self.module_env
+                            .get_used_function(handle_idx)
+                            .get_qualified_id(),
+                    )
+                } else {
+                    None
                 }
-                Bytecode::VecPack { .. } => vec![
-                    self.module_env.env.get_fun_qid("vector", "empty"),
-                    self.module_env.env.get_fun_qid("vector", "push_back"),
-                ],
-                Bytecode::VecLen { .. } => {
-                    vec![self.module_env.env.get_fun_qid("vector", "length")]
-                }
-                Bytecode::VecImmBorrow { .. } => {
-                    vec![self.module_env.env.get_fun_qid("vector", "borrow")]
-                }
-                Bytecode::VecMutBorrow { .. } => {
-                    vec![self.module_env.env.get_fun_qid("vector", "borrow_mut")]
-                }
-                Bytecode::VecPushBack { .. } => {
-                    vec![self.module_env.env.get_fun_qid("vector", "push_back")]
-                }
-                Bytecode::VecPopBack { .. } => {
-                    vec![self.module_env.env.get_fun_qid("vector", "pop_back")]
-                }
-                Bytecode::VecUnpack { .. } => vec![
-                    self.module_env.env.get_fun_qid("vector", "destroy_empty"),
-                    self.module_env.env.get_fun_qid("vector", "pop_back"),
-                ],
-                Bytecode::VecSwap { .. } => vec![self.module_env.env.get_fun_qid("vector", "swap")],
-                _ => vec![],
             })
             .collect();
         *self.data.called_funs.borrow_mut() = Some(called.clone());
@@ -3853,20 +3536,6 @@ impl<'env> FunctionEnv<'env> {
     pub fn get_type_display_ctx(&self) -> TypeDisplayContext {
         let type_param_names = self
             .get_type_parameters()
-            .iter()
-            .map(|param| param.0)
-            .collect();
-        TypeDisplayContext::WithEnv {
-            env: self.module_env.env,
-            type_param_names: Some(type_param_names),
-        }
-    }
-
-    /// Produce a TypeDisplayContext to print types within the scope of this env,
-    /// with source names for type parameters
-    pub fn get_named_type_display_ctx(&self) -> TypeDisplayContext {
-        let type_param_names = self
-            .get_named_type_parameters()
             .iter()
             .map(|param| param.0)
             .collect();
@@ -4092,10 +3761,7 @@ pub trait GetNameString {
 
 impl GetNameString for QualifiedId<DatatypeId> {
     fn get_name_for_display(&self, env: &GlobalEnv) -> String {
-        match env.get_struct_or_enum_qid(*self) {
-            StructOrEnumEnv::Struct(struct_env) => struct_env.get_full_name_str(),
-            StructOrEnumEnv::Enum(enum_env) => enum_env.get_full_name_str(),
-        }
+        env.get_struct_qid(*self).get_full_name_str()
     }
 }
 
