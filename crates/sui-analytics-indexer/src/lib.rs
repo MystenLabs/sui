@@ -641,6 +641,7 @@ impl FileType {
     }
 }
 
+#[derive(Debug)]
 pub enum ParquetValue {
     U64(u64),
     Str(String),
