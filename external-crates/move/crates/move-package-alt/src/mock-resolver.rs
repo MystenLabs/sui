@@ -9,7 +9,7 @@ use std::{
 use external_resolver::{QueryID, QueryResult, Request, Response, RESOLVE_ARG};
 use serde::Deserialize;
 
-fn main() {
+pub fn main() {
     let args: Vec<String> = env::args().collect();
 
     assert!(
