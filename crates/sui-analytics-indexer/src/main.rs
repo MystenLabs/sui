@@ -1,6 +1,12 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+// Use jemalloc as the global allocator for better memory efficiency
+use jemallocator::Jemalloc;
+
+#[global_allocator]
+static GLOBAL: Jemalloc = Jemalloc;
+
 use anyhow::Result;
 use prometheus::Registry;
 use std::{collections::HashMap, env};

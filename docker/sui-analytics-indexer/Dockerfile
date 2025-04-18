@@ -1,11 +1,12 @@
-FROM rust:1.85-bullseye as build
+FROM rust:1.85-bullseye AS builder
 
 ARG PROFILE=release
-WORKDIR /work
+ARG GIT_REVISION
+ENV GIT_REVISION=$GIT_REVISION
+WORKDIR "$WORKDIR/sui"
 
 RUN apt-get update && apt-get install -y cmake clang
 
-COPY .git/ .git/
 COPY Cargo.toml Cargo.lock ./
 COPY consensus consensus
 COPY crates crates
@@ -14,6 +15,16 @@ COPY external-crates external-crates
 
 RUN cargo build --profile ${PROFILE} --bin sui-analytics-indexer
 
-FROM debian:12-slim as deploy
-RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates
-COPY --from=build --chmod=755 /work/target/release/sui-analytics-indexer /opt/sui/bin/sui-analytics-indexer
+# Production Image
+FROM debian:bullseye-slim AS runtime
+# Use jemalloc as memory allocator
+RUN apt-get update && apt-get install -y libjemalloc-dev ca-certificates
+ENV LD_PRELOAD /usr/lib/x86_64-linux-gnu/libjemalloc.so
+
+WORKDIR "$WORKDIR/sui"
+COPY --from=builder /sui/target/release/sui-analytics-indexer /opt/sui/bin/sui-analytics-indexer
+
+ARG BUILD_DATE
+ARG GIT_REVISION
+LABEL build-date=$BUILD_DATE
+LABEL git-revision=$GIT_REVISION
