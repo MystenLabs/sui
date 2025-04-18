@@ -75,7 +75,7 @@ macro_rules! convert_to_arrow_array {
             // Handle OptionStr separately - it needs special handling for null values
             ParquetValue::OptionStr(_) => {
                 let mut values = Vec::with_capacity($column.len());
-                
+
                 for (i, val) in $column.into_iter().enumerate() {
                     if let ParquetValue::OptionStr(v) = val {
                         values.push(v);
@@ -89,15 +89,15 @@ macro_rules! convert_to_arrow_array {
                         return Err(anyhow!(error_msg));
                     }
                 }
-                
+
                 let array = StringArray::from(values);
                 $target_vector.push(Arc::new(array) as ArrayRef);
             },
-            
+
             // Handle OptionU64 separately - it needs special handling for null values
             ParquetValue::OptionU64(_) => {
                 let mut values = Vec::with_capacity($column.len());
-                
+
                 for (i, val) in $column.into_iter().enumerate() {
                     if let ParquetValue::OptionU64(v) = val {
                         values.push(v);
@@ -111,17 +111,17 @@ macro_rules! convert_to_arrow_array {
                         return Err(anyhow!(error_msg));
                     }
                 }
-                
+
                 let array = UInt64Array::from(values);
                 $target_vector.push(Arc::new(array) as ArrayRef);
             },
-            
+
             // Process all other variants using the standard pattern
             $(
                 $variant(_) => {
                     // Convert and validate in a single pass
                     let mut values = Vec::with_capacity($column.len());
-                    
+
                     for (i, val) in $column.into_iter().enumerate() {
                         if let $variant(v) = val {
                             values.push(v);
@@ -137,7 +137,7 @@ macro_rules! convert_to_arrow_array {
                             return Err(anyhow!(error_msg));
                         }
                     }
-                    
+
                     let array = <$types>::from(values);
                     $target_vector.push(Arc::new(array) as ArrayRef);
                 }
@@ -167,35 +167,22 @@ impl<S: Serialize + ParquetSchema> AnalyticsWriter<S> for ParquetWriter {
         if self.data.is_empty() {
             return Ok(false);
         }
-        
-        // Always update the checkpoint range
         self.checkpoint_range.end = end_checkpoint_seq_num;
-        
-        // Take ownership of the data and clear self.data to avoid memory leaks
-        // even if conversion or writing fails
-        let data = std::mem::take(&mut self.data);
-        
-        // Do the conversion and write in a single scope - if anything fails,
-        // the data will already be cleared
         let mut batch_data = vec![];
-        
-        for column in data {
-            // If this fails, we've already cleared self.data so memory won't leak
+        for column in std::mem::take(&mut self.data) {
             convert_to_arrow_array!(column, batch_data,
                 ParquetValue::U64 => UInt64Array, ParquetValue::Str => StringArray, ParquetValue::Bool => BooleanArray, ParquetValue::I64 => Int64Array
             );
         }
-        
         let batch = RecordBatch::try_from_iter(S::schema().iter().zip(batch_data.into_iter()))?;
-        
+
         let properties = WriterProperties::builder()
             .set_compression(Compression::SNAPPY)
             .build();
-        
+
         let mut writer = ArrowWriter::try_new(self.file()?, batch.schema(), Some(properties))?;
         writer.write(&batch)?;
         writer.close()?;
-        
         Ok(true)
     }
 
