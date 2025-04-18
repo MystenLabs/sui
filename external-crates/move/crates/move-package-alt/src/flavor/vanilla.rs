@@ -28,6 +28,9 @@ use super::MoveFlavor;
 #[derive(Debug)]
 pub struct Vanilla;
 
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub enum VanillaDep {}
+
 impl MoveFlavor for Vanilla {
     type PublishedMetadata = ();
     type PackageMetadata = ();
@@ -44,7 +47,7 @@ impl MoveFlavor for Vanilla {
     // TODO: should be !, but that's not supported; instead
     // should be some type that always gives an error during
     // deserialization
-    type FlavorDependency<P: ?Sized> = ();
+    type FlavorDependency<P: ?Sized> = VanillaDep;
 
     fn pin(
         &self,
@@ -58,7 +61,7 @@ impl MoveFlavor for Vanilla {
         &self,
         deps: DependencySet<Self::FlavorDependency<Pinned>>,
     ) -> PackageResult<DependencySet<PathBuf>> {
-        // always an error
-        todo!()
+        assert!(deps.is_empty(), "there are no vanilla-flavor dependencies");
+        Ok(DependencySet::new())
     }
 }
