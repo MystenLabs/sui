@@ -1,27 +1,19 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use super::{ast, LinkageView};
+use super::LinkageView;
 use crate::{
     execution_value::ExecutionState,
-    programmable_transactions::context::{load_type, load_type_from_struct, SuiDataStore},
+    programmable_transactions::context::SuiDataStore,
+    static_programmable_transactions::loading::ast::{LoadedFunction, Type},
 };
-use move_binary_format::{
-    errors::VMError,
-    file_format::{AbilitySet, TypeParameterIndex},
-    CompiledModule,
-};
-use move_core_types::{
-    account_address::AccountAddress,
-    identifier::IdentStr,
-    language_storage::{ModuleId, StructTag},
-};
+use move_binary_format::{errors::VMError, file_format::TypeParameterIndex, CompiledModule};
+use move_core_types::language_storage::{ModuleId, StructTag};
 use move_vm_runtime::move_vm::MoveVM;
-use move_vm_types::loaded_data::runtime_types::{CachedDatatype, CachedTypeIndex, Type};
 use std::{cell::OnceCell, sync::Arc};
 use sui_protocol_config::ProtocolConfig;
 use sui_types::{
-    base_types::{ObjectID, TxContextKind, RESOLVED_TX_CONTEXT},
+    base_types::ObjectID,
     error::{ExecutionError, ExecutionErrorKind},
     gas_coin::GasCoin,
     move_package::{UpgradeReceipt, UpgradeTicket},
@@ -113,60 +105,63 @@ impl<'a, 'b, 'state> Env<'a, 'b, 'state> {
 
     pub fn load_function(
         &self,
-        package: ObjectID,
-        module: String,
-        function: String,
-        type_arguments: Vec<Type>,
-    ) -> Result<ast::LoadedFunction, ExecutionError> {
-        assert_invariant!(
-            self.linkage_view.has_linkage(package)?,
-            "packages need to be linked before typing"
-        );
-        let package_address: AccountAddress = package.into();
-        let original_address = self
-            .linkage_view
-            .original_package_id()?
-            .unwrap_or(package_address);
-        let module = to_identifier(module)?;
-        let name = to_identifier(function)?;
-        let storage_id = ModuleId::new(package_address, module.clone());
-        let runtime_id = ModuleId::new(original_address, module);
-        let mut data_store = SuiDataStore::new(self.linkage_view, &[]);
-        let signature = self
-            .vm
-            .get_runtime()
-            .load_function(
-                &runtime_id,
-                name.as_ident_str(),
-                &type_arguments,
-                &mut data_store,
-            )
-            .map_err(|e| self.convert_vm_error(e))?;
-        let tx_context = match signature.parameters.last() {
-            Some(t) => is_tx_context(self, t)?,
-            None => TxContextKind::None,
-        };
-        Ok(ast::LoadedFunction {
-            storage_id,
-            runtime_id,
-            name,
-            type_arguments,
-            signature,
-            tx_context,
-        })
+        _package: ObjectID,
+        _module: String,
+        _function: String,
+        _type_arguments: Vec<Type>,
+    ) -> Result<LoadedFunction, ExecutionError> {
+        // assert_invariant!(
+        //     self.linkage_view.has_linkage(package)?,
+        //     "packages need to be linked before typing"
+        // );
+        // let package_address: AccountAddress = package.into();
+        // let original_address = self
+        //     .linkage_view
+        //     .original_package_id()?
+        //     .unwrap_or(package_address);
+        // let module = to_identifier(module)?;
+        // let name = to_identifier(function)?;
+        // let storage_id = ModuleId::new(package_address, module.clone());
+        // let runtime_id = ModuleId::new(original_address, module);
+        // let mut data_store = SuiDataStore::new(self.linkage_view, &[]);
+        // let signature = self
+        //     .vm
+        //     .get_runtime()
+        //     .load_function(
+        //         &runtime_id,
+        //         name.as_ident_str(),
+        //         &type_arguments,
+        //         &mut data_store,
+        //     )
+        //     .map_err(|e| self.convert_vm_error(e))?;
+        // let tx_context = match signature.parameters.last() {
+        //     Some(t) => is_tx_context(self, t)?,
+        //     None => TxContextKind::None,
+        // };
+        // Ok(ast::LoadedFunction {
+        //     storage_id,
+        //     runtime_id,
+        //     name,
+        //     type_arguments,
+        //     signature,
+        //     tx_context,
+        // })
+        todo!()
     }
 
-    pub fn load_type_input(&self, idx: usize, ty: TypeInput) -> Result<Type, ExecutionError> {
-        let tag = ty
-            .into_type_tag()
-            .map_err(|e| make_invariant_violation!("{}", e.to_string()))?;
-        load_type(self.vm, self.linkage_view, &[], &tag)
-            .map_err(|e| self.convert_type_argument_error(idx, e))
+    pub fn load_type_input(&self, _idx: usize, _ty: TypeInput) -> Result<Type, ExecutionError> {
+        // let tag = ty
+        //     .into_type_tag()
+        //     .map_err(|e| make_invariant_violation!("{}", e.to_string()))?;
+        // load_type(self.vm, self.linkage_view, &[], &tag)
+        //     .map_err(|e| self.convert_type_argument_error(idx, e))
+        todo!()
     }
 
-    pub fn load_type_from_struct(&self, tag: &StructTag) -> Result<Type, ExecutionError> {
-        load_type_from_struct(self.vm, self.linkage_view, &[], tag)
-            .map_err(|e| self.convert_vm_error(e))
+    pub fn load_type_from_struct(&self, _tag: &StructTag) -> Result<Type, ExecutionError> {
+        // load_type_from_struct(self.vm, self.linkage_view, &[], tag)
+        //     .map_err(|e| self.convert_vm_error(e))
+        todo!()
     }
 
     pub fn gas_coin_type(&self) -> Result<&Type, ExecutionError> {
@@ -181,20 +176,6 @@ impl<'a, 'b, 'state> Env<'a, 'b, 'state> {
         get_or_init_ty!(self, upgrade_receipt_type, UpgradeReceipt::type_())
     }
 
-    pub fn abilities(&self, ty: &Type) -> Result<AbilitySet, ExecutionError> {
-        self.vm
-            .get_runtime()
-            .get_type_abilities(ty)
-            .map_err(|e| self.convert_vm_error(e))
-    }
-
-    pub fn datatype(&self, tag: CachedTypeIndex) -> Result<Arc<CachedDatatype>, ExecutionError> {
-        match self.vm.get_runtime().get_type(tag) {
-            Some(ty) => Ok(ty),
-            None => invariant_violation!("Cannot retreive loaded type: {:?}", tag),
-        }
-    }
-
     pub fn read_object(&self, id: &ObjectID) -> Result<&Object, ExecutionError> {
         let Some(obj) = self.state_view.read_object(id) else {
             // protected by transaction input checker
@@ -202,41 +183,6 @@ impl<'a, 'b, 'state> Env<'a, 'b, 'state> {
         };
         Ok(obj)
     }
-}
-
-pub fn datatype_qualified_ident(s: &CachedDatatype) -> (&AccountAddress, &IdentStr, &IdentStr) {
-    let module_id = &s.defining_id;
-    let struct_name = &s.name;
-    (
-        module_id.address(),
-        module_id.name(),
-        struct_name.as_ident_str(),
-    )
-}
-
-fn is_tx_context(env: &Env, ty: &Type) -> Result<TxContextKind, ExecutionError> {
-    let (is_mut, inner) = match ty {
-        Type::MutableReference(inner) => (true, inner),
-        Type::Reference(inner) => (false, inner),
-        _ => return Ok(TxContextKind::None),
-    };
-    let Type::DatatypeInstantiation(inst_tys) = &**inner else {
-        return Ok(TxContextKind::None);
-    };
-    let (inst, _tys) = &**inst_tys;
-    let datatype = env.datatype(*inst)?;
-    let datatype: &CachedDatatype = datatype.as_ref();
-    let resolved = datatype_qualified_ident(datatype);
-    let is_tx_context_type = resolved == RESOLVED_TX_CONTEXT;
-    Ok(if is_tx_context_type {
-        if is_mut {
-            TxContextKind::Mutable
-        } else {
-            TxContextKind::Immutable
-        }
-    } else {
-        TxContextKind::None
-    })
 }
 
 fn to_identifier(name: String) -> Result<Identifier, ExecutionError> {
