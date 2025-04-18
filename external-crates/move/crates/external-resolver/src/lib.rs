@@ -53,7 +53,11 @@ use std::{collections::BTreeMap, io::BufRead, process::Stdio};
 
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
-use tokio::{io::AsyncWriteExt, process::Command};
+use tokio::{
+    io::{AsyncWriteExt, Stdin},
+    process::{Child, ChildStdin, Command},
+};
+use tracing::{debug, info};
 
 /// A name of a binary to invoke for for resolution
 pub type ResolverName = String;
@@ -91,13 +95,13 @@ pub struct Response {
 #[serde(bound = "", deny_unknown_fields)]
 #[serde(rename_all = "kebab-case")]
 pub struct Query {
-    /// The `<data>` part of `{ r.<res> = <data> }`
-    pub argument: toml::Value,
-
     /// Which environment should be used for resolution; None indicates a request for the "default"
     /// resolution
     #[serde(default)]
     pub environment_id: Option<EnvironmentID>,
+
+    /// The `<data>` part of `{ r.<res> = <data> }`
+    pub argument: toml::Value,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -179,48 +183,17 @@ impl Request {
             .spawn()
             .map_err(|e| ResolutionError::io_error(resolver, e))?;
 
-        let request = toml::to_string(self).expect("Request serialization should not fail");
-        let mut stdin = child.stdin.take();
-        tokio::spawn(async move {
-            // SAFETY: we don't really care if there's a write error as long as we get a
-            // well-formed output
-            drop(
-                stdin
-                    .take()
-                    .expect("Child should have a handle to stdin")
-                    .write_all(request.as_bytes()),
-            );
-        });
-
-        let output = child
-            .wait_with_output()
-            .await
-            .map_err(|e| ResolutionError::io_error(resolver, e))?;
-
-        if !output.stderr.is_empty() {
-            eprintln!("Output from external resolver {resolver}:");
-            for line in output.stderr.lines() {
-                eprintln!("  │ {}", line.expect("reading from byte array can't fail"));
-            }
-        }
-
-        // TODO: failure here indicates a bad response from the resolver
-        // TODO: start using debug! for tracing output here
-        let response = String::from_utf8(output.stdout)?;
-
-        // TODO: failure here indicates a bad response from the resolver
-        let result: Response = toml::from_str(&response)?;
+        send_request(resolver, &self, child.stdin.take().expect("stdin exists")).await;
+        let response = recv_response(resolver, child).await?;
 
         for key in self.queries.keys() {
-            if !result.responses.contains_key(key) {
+            if !response.responses.contains_key(key) {
                 // TODO: failure here is a bad response from the resolver
                 anyhow::bail!("External resolver didn't resolve {key}");
             }
         }
 
-        // TODO: check exit code of resolver?
-
-        for (key, result) in result.responses.iter() {
+        for (key, result) in response.responses.iter() {
             if !self.queries.contains_key(key) {
                 // TODO: failure here is a bad response from the resolver
                 anyhow::bail!("External resolver returned extra result {key}");
@@ -233,7 +206,7 @@ impl Request {
             };
         }
 
-        Ok(result)
+        Ok(response)
     }
 }
 
@@ -244,4 +217,45 @@ impl Query {
             environment_id: env,
         }
     }
+}
+
+/// Write [request] onto [stdin], performing appropriate logging using [resolver]
+async fn send_request(resolver: &ResolverName, request: &Request, mut stdin: ChildStdin) {
+    let request = toml::to_string(request).expect("Request serialization should not fail");
+
+    debug!(resolver, "Request to {resolver}");
+    for line in request.lines() {
+        debug!(resolver, "  │ {line}");
+    }
+
+    // we don't really care if there's a write error as long as we get an output
+    tokio::spawn(async move { stdin.write_all(request.as_bytes()).await });
+}
+
+/// Read a response from [child]'s stdin; logging using [resolver]
+async fn recv_response(resolver: &ResolverName, mut child: Child) -> anyhow::Result<Response> {
+    let output = child
+        .wait_with_output()
+        .await
+        .map_err(|e| ResolutionError::io_error(resolver, e))?;
+
+    debug!("{resolver} stdout");
+    for line in output.stdout.lines() {
+        debug!("  │ {}", line.unwrap());
+    }
+
+    if !output.stderr.is_empty() {
+        debug!("Output from {resolver}:");
+        for line in output.stderr.lines() {
+            debug!("  │ {}", line.expect("reading from byte array can't fail"));
+        }
+    }
+
+    // TODO: failure here indicates a bad response from the resolver
+    let response = String::from_utf8(output.stdout)?;
+
+    // TODO: check exit code of resolver?
+
+    // TODO: failure here indicates a bad response from the resolver
+    Ok(toml::from_str(&response)?)
 }

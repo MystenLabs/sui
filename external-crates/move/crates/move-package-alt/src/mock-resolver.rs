@@ -6,7 +6,7 @@ use std::{
     io::{read_to_string, stdin},
 };
 
-use external_resolver::{QueryID, QueryResult, RESOLVE_ARG, Request};
+use external_resolver::{QueryID, QueryResult, Request, Response, RESOLVE_ARG};
 use serde::Deserialize;
 
 fn main() {
@@ -18,6 +18,8 @@ fn main() {
     );
 
     let stdin = read_to_string(stdin()).expect("Stdin can be read");
+
+    eprintln!("==== STDIN ===\n{stdin}\n==== END STDIN ====");
     let request: Request = toml::from_str(&stdin)
         .expect("External resolver must be passed a TOML-formatted request on stdin");
 
@@ -42,8 +44,10 @@ fn main() {
         })
         .collect();
 
+    let response = Response { responses };
+
     println!(
         "{}",
-        toml::to_string(&responses).expect("response can be serialized")
+        toml::to_string(&response).expect("response can be serialized")
     );
 }
