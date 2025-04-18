@@ -1237,9 +1237,9 @@ mod checked {
 
         pub fn size_bound_raw(&self, bound: u64) -> SizeBound {
             if self.protocol_config.max_ptb_value_size_v2() {
-                SizeBound::Object(bound)
-            } else {
                 SizeBound::Raw(bound)
+            } else {
+                SizeBound::Object(bound)
             }
         }
 
@@ -1247,7 +1247,7 @@ mod checked {
             if self.protocol_config.max_ptb_value_size_v2() {
                 SizeBound::VectorElem(bound)
             } else {
-                SizeBound::Raw(bound)
+                SizeBound::Object(bound)
             }
         }
     }
