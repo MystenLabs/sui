@@ -6,7 +6,7 @@ use crate::{
     static_programmable_transactions::env::datatype_qualified_ident,
 };
 
-use super::{ast as T, env::Env};
+use crate::static_programmable_transactions::{env::Env, typing::ast as T};
 use move_vm_types::loaded_data::runtime_types::{CachedDatatype, Type};
 use sui_types::{
     base_types::{RESOLVED_ASCII_STR, RESOLVED_STD_OPTION, RESOLVED_UTF8_STR},

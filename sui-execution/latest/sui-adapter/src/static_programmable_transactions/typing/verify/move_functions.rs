@@ -3,7 +3,7 @@
 
 use crate::programmable_transactions::execution::check_private_generics;
 
-use super::{ast as T, env::Env};
+use crate::static_programmable_transactions::{env::Env, typing::ast as T};
 use move_binary_format::{file_format::Visibility, CompiledModule};
 use move_vm_types::loaded_data::runtime_types::Type;
 use sui_types::{

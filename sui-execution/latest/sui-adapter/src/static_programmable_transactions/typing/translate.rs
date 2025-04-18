@@ -114,7 +114,7 @@ impl Context {
     }
 }
 
-pub fn translate(
+pub fn transaction(
     env: &Env,
     pt: P::ProgrammableTransaction,
 ) -> Result<T::Transaction, ExecutionError> {
