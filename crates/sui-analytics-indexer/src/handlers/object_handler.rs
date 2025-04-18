@@ -228,7 +228,7 @@ impl ObjectHandler {
                         .is_some() =>
                 {
                     self.metrics
-                        .total_too_large_to_deserialize
+                        .field_too_large
                         .with_label_values(&[self.name()])
                         .inc();
                     tracing::warn!(
