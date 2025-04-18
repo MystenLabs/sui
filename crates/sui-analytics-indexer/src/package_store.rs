@@ -18,6 +18,7 @@ use sui_types::object::Object;
 use thiserror::Error;
 #[cfg(not(test))]
 use tokio::sync::RwLock;
+use tracing::info;
 use typed_store::rocks::{DBMap, MetricConf};
 use typed_store::DBMapUtils;
 use typed_store::{Map, TypedStoreError};
@@ -109,6 +110,61 @@ impl PackageStoreTables {
         batch.write().map_err(Error::TypedStore)?;
         Ok(())
     }
+
+    pub fn log_stats(&self) {
+        use typed_store::rocksdb::properties::*;
+
+        match &self.packages.db.storage {
+            typed_store::rocks::Storage::Rocks(db) => {
+                let db = &db.underlying;
+
+                let props = [
+                    (STATS, "RocksDB stats"),
+                    (DBSTATS, "DB stats"),
+                    (LEVELSTATS, "Level stats"),
+                    (CUR_SIZE_ALL_MEM_TABLES, "Cur size of all memtables"),
+                    (SIZE_ALL_MEM_TABLES, "Total memtable size"),
+                    (BLOCK_CACHE_USAGE, "Block cache usage"),
+                    (TOTAL_SST_FILES_SIZE, "Total SST file size"),
+                    (ESTIMATE_NUM_KEYS, "Estimated number of keys"),
+                    (ESTIMATE_LIVE_DATA_SIZE, "Estimated live data size"),
+                    (ESTIMATE_TABLE_READERS_MEM, "Estimated table readers memory"),
+                    (NUM_ENTRIES_ACTIVE_MEM_TABLE, "Entries in active memtable"),
+                    (NUM_ENTRIES_IMM_MEM_TABLES, "Entries in immutable memtables"),
+                    (NUM_DELETES_ACTIVE_MEM_TABLE, "Deletes in active memtable"),
+                    (NUM_DELETES_IMM_MEM_TABLES, "Deletes in immutable memtables"),
+                    (
+                        NUM_IMMUTABLE_MEM_TABLE,
+                        "Number of immutable memtables (not flushed)",
+                    ),
+                    (
+                        NUM_IMMUTABLE_MEM_TABLE_FLUSHED,
+                        "Number of flushed immutable memtables",
+                    ),
+                    (MEM_TABLE_FLUSH_PENDING, "Memtable flush pending"),
+                    (NUM_RUNNING_FLUSHES, "Running flushes"),
+                    (COMPACTION_PENDING, "Compaction pending"),
+                    (NUM_RUNNING_COMPACTIONS, "Running compactions"),
+                ];
+
+                info!(target: "package_store", "========== RocksDB Stats Dump ==========");
+                for (key, label) in props {
+                    match db.property_value(key) {
+                        Ok(value) => {
+                            info!(target: "package_store", "{:?}:\n{:?}", label, value);
+                        }
+                        Err(e) => {
+                            info!(target: "package_store", "{}: <error: {}>", label, e);
+                        }
+                    }
+                }
+                info!(target: "package_store", "========== End of Stats ================");
+            }
+            _ => {
+                info!(target: "package_store", "log_stats(): Not a RocksDB-backed store");
+            }
+        }
+    }
 }
 
 /// Store which keeps package objects in a local rocksdb store. It is expected that this store is
@@ -117,7 +173,7 @@ impl PackageStoreTables {
 /// updated
 #[derive(Clone)]
 pub struct LocalDBPackageStore {
-    package_store_tables: Arc<PackageStoreTables>,
+    pub package_store_tables: Arc<PackageStoreTables>,
     fallback_client: Client,
     #[cfg(not(test))]
     original_id_cache: Arc<RwLock<HashMap<AccountAddress, ObjectID>>>,

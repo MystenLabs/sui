@@ -24,6 +24,7 @@ RUN apt-get update && apt-get install -y \
   procps \
   htop \
   binutils \
+  lsof \
   heaptrack
 ENV LD_PRELOAD /usr/lib/x86_64-linux-gnu/libjemalloc.so
 

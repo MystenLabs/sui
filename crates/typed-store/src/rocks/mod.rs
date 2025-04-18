@@ -129,7 +129,7 @@ impl std::fmt::Debug for Storage {
 
 #[derive(Debug)]
 pub struct Database {
-    storage: Storage,
+    pub storage: Storage,
     metric_conf: MetricConf,
 }
 
