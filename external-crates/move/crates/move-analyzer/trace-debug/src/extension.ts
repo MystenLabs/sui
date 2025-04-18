@@ -294,7 +294,7 @@ class MoveConfigurationProvider implements vscode.DebugConfigurationProvider {
                     }
                     const tracePath = traceFilePaths.length === 1
                         ? traceFilePaths[0].fsPath
-                        : await pickTraceFileToDebug(traceFilePaths.map(file => file.fsPath));
+                        : await pickTraceFileToDebug(folder.uri.fsPath, traceFilePaths.map(file => file.fsPath));
 
                     if (!tracePath) {
                         return vscode.window.showErrorMessage('No trace file selected.').then(_ => {
@@ -631,16 +631,30 @@ async function pickFunctionToDebug(tracedFunctions: string[]): Promise<string | 
 
 /**
  * Prompts the user to select a trace file to debug from a list of trace files.
+ * @param folderPath path to the folder containing the trace files.
  * @param traceFilePaths list of trace file paths.
  * @returns single trace file to debug.
  */
-async function pickTraceFileToDebug(traceFilePaths: string[]): Promise<string | undefined> {
-    const selectedTraceFile = await vscode.window.showQuickPick(traceFilePaths, {
+async function pickTraceFileToDebug(
+    folderPath: string,
+    traceFilePaths: string[]
+): Promise<string | undefined> {
+    const traceFileSuffixes = traceFilePaths.map(filePath => {
+        if (filePath.startsWith(folderPath)) {
+            return filePath.slice(folderPath.length + 1);
+        }
+        return filePath;
+    });
+
+    const selectedSuffix = await vscode.window.showQuickPick(traceFileSuffixes, {
         canPickMany: false,
         placeHolder: 'Select a trace file to debug'
     });
 
-    return selectedTraceFile;
+    if (selectedSuffix) {
+        return traceFilePaths.find(filePath => filePath.endsWith(selectedSuffix));
+    }
+    return undefined;
 }
 
 /**
@@ -654,6 +668,10 @@ async function decompressTraceFile(traceFilePath: string): Promise<string> {
     return decompressed.toString('utf8').trimEnd();
 }
 
+/**
+ * Get the URI of the currently active trace view tab.
+ * @returns uri of the active trace view tab or undefined if no such tab is active.
+ */
 function traceViewTabUri(): vscode.Uri | undefined {
     const activeTab = vscode.window.tabGroups.activeTabGroup.activeTab;
     if (!activeTab) {
