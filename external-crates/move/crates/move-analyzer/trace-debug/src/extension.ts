@@ -71,9 +71,9 @@ interface TracedFunctionInfo {
  * Called when the extension is activated.
 */
 export function activate(context: vscode.ExtensionContext) {
-    // register a configuration provider for 'move-debug' debug type
+    // register a configuration provider for DEBUGGER_TYPE
     const provider = new MoveConfigurationProvider();
-    context.subscriptions.push(vscode.debug.registerDebugConfigurationProvider('move-debug', provider));
+    context.subscriptions.push(vscode.debug.registerDebugConfigurationProvider(DEBUGGER_TYPE, provider));
     context.subscriptions.push(
         vscode.debug.registerDebugAdapterDescriptorFactory(DEBUGGER_TYPE, {
             createDebugAdapterDescriptor: (session: vscode.DebugSession) => {
@@ -281,37 +281,39 @@ class MoveConfigurationProvider implements vscode.DebugConfigurationProvider {
             try {
                 const editor = vscode.window.activeTextEditor;
                 if (editor && (editor.document.languageId === 'move'
-                    || editor.document.languageId === 'mvb')) {
+                    || editor.document.languageId === 'mvb'
+                    || editor.document.languageId === 'mtrace')) {
                     config.traceInfo = await findTraceInfo(editor);
                     config.source = '${file}';
-                } else if (folder) {
-                    const traceFilesPattern = new vscode.RelativePattern(folder.uri.fsPath, '**/*.json.zst');
-                    const traceFilePaths = await vscode.workspace.findFiles(traceFilesPattern);
-                    if (traceFilePaths.length === 0) {
-                        return vscode.window.showErrorMessage('No trace files found in the workspace.').then(_ => {
-                            return undefined;
-                        });
-                    }
-                    const tracePath = traceFilePaths.length === 1
-                        ? traceFilePaths[0].fsPath
-                        : await pickTraceFileToDebug(folder.uri.fsPath, traceFilePaths.map(file => file.fsPath));
-
-                    if (!tracePath) {
-                        return vscode.window.showErrorMessage('No trace file selected.').then(_ => {
-                            return undefined;
-                        });
-                    }
-                    const traceContent = await decompressTraceFile(tracePath);
-                    const tracedFunctionInfo = getTracedFunctionInfo(traceContent);
-                    config.traceInfo = [constructTraceInfo(tracePath, tracedFunctionInfo)];
-                    config.source = tracePath;
                 } else {
                     const traceViewUri = traceViewTabUri();
+                    console.log('traceViewUri', traceViewUri);
                     if (traceViewUri) {
                         const traceContent = await decompressTraceFile(traceViewUri.fsPath);
                         const tracedFunctionInfo = getTracedFunctionInfo(traceContent);
                         config.traceInfo = [constructTraceInfo(traceViewUri.fsPath, tracedFunctionInfo)];
                         config.source = traceViewUri.fsPath;
+                    } else if (folder) {
+                        const traceFilesPattern = new vscode.RelativePattern(folder.uri.fsPath, '**/*.json.zst');
+                        const traceFilePaths = await vscode.workspace.findFiles(traceFilesPattern);
+                        if (traceFilePaths.length === 0) {
+                            return vscode.window.showErrorMessage('No trace files found in the workspace.').then(_ => {
+                                return undefined;
+                            });
+                        }
+                        const tracePath = traceFilePaths.length === 1
+                            ? traceFilePaths[0].fsPath
+                            : await pickTraceFileToDebug(folder.uri.fsPath, traceFilePaths.map(file => file.fsPath));
+
+                        if (!tracePath) {
+                            return vscode.window.showErrorMessage('No trace file selected.').then(_ => {
+                                return undefined;
+                            });
+                        }
+                        const traceContent = await decompressTraceFile(tracePath);
+                        const tracedFunctionInfo = getTracedFunctionInfo(traceContent);
+                        config.traceInfo = [constructTraceInfo(tracePath, tracedFunctionInfo)];
+                        config.source = tracePath;
                     } else {
                         throw new Error('No active editor or folder');
                     }
@@ -682,7 +684,8 @@ function traceViewTabUri(): vscode.Uri | undefined {
         return undefined;
     }
     if (input instanceof vscode.TabInputCustom) {
-        if (input.viewType === 'move.traceView') {
+        console.log('input instanceof vscode.TabInputCustom', input);
+        if (input.viewType === 'mtrace.viewer') {
             return input.uri;
         }
     }
