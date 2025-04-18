@@ -49,8 +49,11 @@ pub struct GitDependency<P = Unpinned> {
 impl GitDependency<Unpinned> {
     /// Replace all commit-ishes in [deps] with commits (i.e. SHAs). Requires fetching the git
     /// repositories
-    pub fn pin(deps: &DependencySet<Self>) -> PackageResult<DependencySet<GitDependency<Pinned>>> {
-        todo!()
+    pub fn pin(deps: DependencySet<Self>) -> PackageResult<DependencySet<GitDependency<Pinned>>> {
+        Ok(deps
+            .into_iter()
+            .map(|(env, package, dep)| (env, package, dep.pin_one().unwrap()))
+            .collect())
     }
 
     /// Replace the commit-ish [self.rev] with a commit (i.e. a SHA). Requires fetching the git

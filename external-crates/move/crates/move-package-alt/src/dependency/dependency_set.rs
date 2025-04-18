@@ -7,7 +7,11 @@ use serde::{Deserialize, Serialize};
 use crate::package::{EnvironmentName, PackageName};
 
 /// A set of default dependencies and dep overrides. Within each environment, package names are
-/// unique
+/// unique.
+///
+/// Iterating over a dependency set produces (Option<EnvironmentName>, PackageName, T) tuples; the
+/// environment name is None to represent the default environment. See [DependencySet::iter] for
+/// more details.
 #[derive(Clone, Serialize, Deserialize)]
 pub struct DependencySet<T> {
     #[serde(flatten)]

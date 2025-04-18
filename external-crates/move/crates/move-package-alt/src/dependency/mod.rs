@@ -119,10 +119,10 @@ pub async fn pin<F: MoveFlavor>(
     locs.extend(resolved_locs);
     flav.extend(resolved_flav);
 
-    let pinned_gits: DependencySet<PinnedDependencyInfo<F>> = GitDependency::pin(&gits)
+    let pinned_gits: DependencySet<PinnedDependencyInfo<F>> = GitDependency::pin(gits)
         .unwrap() // TODO: error collection!
         .into_iter()
-        .map(|(env, package, dep)| (env, package, PinnedDependencyInfo::Git::<F>(dep.clone())))
+        .map(|(env, package, dep)| (env, package, PinnedDependencyInfo::Git::<F>(dep)))
         .collect();
 
     let pinned_locs = locs

@@ -50,8 +50,8 @@ impl MoveFlavor for Vanilla {
         &self,
         deps: DependencySet<Self::FlavorDependency<Unpinned>>,
     ) -> PackageResult<DependencySet<Self::FlavorDependency<Pinned>>> {
-        // always an error
-        todo!()
+        assert!(deps.is_empty(), "there are no vanilla-flavor dependencies");
+        Ok(DependencySet::new())
     }
 
     fn fetch(

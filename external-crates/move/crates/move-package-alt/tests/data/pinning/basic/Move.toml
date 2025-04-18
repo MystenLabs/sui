@@ -11,7 +11,7 @@ testnet = "4c78adac"
 
 [dependencies]
 foo = { git = "https://example.com/foo.git", rev = "releases/v1", rename-from = "Foo", override = true}
-qwer = { r.mock-resolver = { resolved = { git = "..." } } }
+qwer = { r.mock-resolver = { resolved = { local = "..." } } }
 
 [dep-overrides]
 # used to override dependencies for specific environments
