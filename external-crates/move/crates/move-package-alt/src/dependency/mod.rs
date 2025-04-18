@@ -93,8 +93,10 @@ fn split<F: MoveFlavor>(
     (gits, exts, locs, flav)
 }
 
-/// Replace all dependencies with their pinned versions. The returned map is guaranteed to have the
-/// same keys as [deps].
+/// Replace all dependencies with their pinned versions. The returned set may have a different set
+/// of keys than the input, for example if new implicit dependencies are added or if external
+/// resolvers resolve default deps to dep-overrides, or if dep-overrides are identical to the
+/// default deps.
 pub async fn pin<F: MoveFlavor>(
     flavor: &F,
     deps: &DependencySet<ManifestDependencyInfo<F>>, // TODO: maybe take by value?
@@ -103,9 +105,7 @@ pub async fn pin<F: MoveFlavor>(
     let (mut gits, mut exts, mut locs, mut flav) = split(deps);
 
     // TODO: errors!
-    let resolved = ExternalDependency::resolve::<F>(flavor, exts, envs)
-        .await
-        .unwrap();
+    let resolved = ExternalDependency::resolve::<F>(exts, envs).await.unwrap();
 
     let (resolved_gits, resolved_exts, resolved_locs, resolved_flav) = split(&resolved);
 

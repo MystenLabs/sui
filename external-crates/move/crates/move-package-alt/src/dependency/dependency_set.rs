@@ -15,8 +15,6 @@ use crate::package::{EnvironmentName, PackageName};
 #[derive(Clone, Serialize, Deserialize)]
 pub struct DependencySet<T> {
     #[serde(flatten)]
-    /// Map from environments to package names to T. The environment [None] corresponds to the
-    /// "default" environment; we guarantee that there is always a (possibly empty) entry for it.
     defaults: BTreeMap<PackageName, T>,
     overrides: BTreeMap<EnvironmentName, BTreeMap<PackageName, T>>,
 }
@@ -48,11 +46,11 @@ impl<T> DependencySet<T> {
 
     /// Return all of the dependencies for [env]: this includes the default dependencies along with
     /// any overrides (if the same package name has both, the override is returned).
-    pub fn deps_for_env(&self, env: EnvironmentName) -> BTreeMap<PackageName, &T> {
+    pub fn deps_for_env(&self, env: &EnvironmentName) -> BTreeMap<PackageName, &T> {
         let mut result: BTreeMap<PackageName, &T> = BTreeMap::new();
         result.extend(self.defaults.iter().map(|(k, t)| (k.clone(), t)));
 
-        if let Some(deps) = self.overrides.get(&env) {
+        if let Some(deps) = self.overrides.get(env) {
             result.extend(deps.iter().map(|(k, t)| (k.clone(), t)));
         }
 

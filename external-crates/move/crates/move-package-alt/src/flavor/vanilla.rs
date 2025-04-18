@@ -37,6 +37,10 @@ impl MoveFlavor for Vanilla {
     type EnvironmentID = String;
     type AddressInfo = ();
 
+    fn name() -> String {
+        "vanilla".to_string()
+    }
+
     fn implicit_deps(
         &self,
         environments: impl Iterator<Item = Self::EnvironmentID>,

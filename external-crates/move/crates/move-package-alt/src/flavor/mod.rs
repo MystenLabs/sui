@@ -25,6 +25,7 @@ use crate::{
 /// language.
 pub trait MoveFlavor: Debug {
     // TODO: this API is incomplete
+    fn name() -> String;
 
     /// Additional flavor-specific dependency types. Currently we only support flavor-specific
     /// dependencies that are already pinned (although in principle you could use an

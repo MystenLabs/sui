@@ -45,9 +45,12 @@ struct RField {
 }
 
 impl ExternalDependency {
-    /// Invoke the external binaries and deserialize their outputs as dependencies
+    /// Invoke the external binaries to resolve all [deps] in all [envs]; deserialize their outputs
+    /// as dependencies.
+    ///
+    /// Note that the return value may not have entries for all of the environments in [envs]; some
+    /// may be removed if they are identical to the default resolutions.
     pub async fn resolve<F: MoveFlavor>(
-        flavor: &F,
         deps: DependencySet<ExternalDependency>,
         envs: &BTreeMap<EnvironmentName, F::EnvironmentID>,
     ) -> PackageResult<DependencySet<ManifestDependencyInfo<F>>> {
@@ -111,13 +114,14 @@ impl<F: MoveFlavor> TryFrom<QueryResult> for ManifestDependencyInfo<F> {
     }
 }
 
-/// Resolve a set of deps with a single resolver
+/// Resolve the dependencies in [dep_data] with the external resolver [resolver]; requests are
+/// performed for all environments in [envs]
 async fn resolve_single<F: MoveFlavor>(
     resolver: ResolverName,
     dep_data: DependencySet<toml::Value>,
     envs: &BTreeMap<EnvironmentName, F::EnvironmentID>,
 ) -> PackageResult<DependencySet<ManifestDependencyInfo<F>>> {
-    let mut request = Request::new("TODO".to_string());
+    let mut request = Request::new(F::name());
 
     // request default resolution
     let mut default_reqs: BTreeMap<QueryID, Query> = dep_data
@@ -130,7 +134,7 @@ async fn resolve_single<F: MoveFlavor>(
     // request env-specific resolutions
     for (env_name, env_id) in envs {
         let mut env_reqs = dep_data
-            .deps_for_env(env_name.to_string())
+            .deps_for_env(env_name)
             .into_iter()
             .map(|(pkg_name, data)| {
                 query::<F>(

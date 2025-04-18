@@ -47,14 +47,14 @@
 //! ...
 //! ```
 //!
-//! Anything the resolver prints on stderr will be passed through to this process's standard error
+//! Anything the resolver prints on stderr will be logged using [tracing::info!]
 
 use std::{collections::BTreeMap, io::BufRead, process::Stdio};
 
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 use tokio::{
-    io::{AsyncWriteExt, Stdin},
+    io::AsyncWriteExt,
     process::{Child, ChildStdin, Command},
 };
 use tracing::{debug, info};
@@ -174,7 +174,6 @@ impl Request {
     /// contain the same keys as [self]. This method also forwards the standard error from the
     /// resolver to this process's standard error
     pub async fn execute(&self, resolver: &ResolverName) -> anyhow::Result<Response> {
-        // TODO: method too long
         let mut child = Command::new(resolver)
             .arg(RESOLVE_ARG)
             .stdin(Stdio::piped())
@@ -223,7 +222,7 @@ impl Query {
 async fn send_request(resolver: &ResolverName, request: &Request, mut stdin: ChildStdin) {
     let request = toml::to_string(request).expect("Request serialization should not fail");
 
-    debug!(resolver, "Request to {resolver}");
+    debug!("Request to {resolver}");
     for line in request.lines() {
         debug!(resolver, "  │ {line}");
     }
@@ -245,9 +244,9 @@ async fn recv_response(resolver: &ResolverName, mut child: Child) -> anyhow::Res
     }
 
     if !output.stderr.is_empty() {
-        debug!("Output from {resolver}:");
+        info!("Output from {resolver}:");
         for line in output.stderr.lines() {
-            debug!("  │ {}", line.expect("reading from byte array can't fail"));
+            info!("  │ {}", line.expect("reading from byte array can't fail"));
         }
     }
 

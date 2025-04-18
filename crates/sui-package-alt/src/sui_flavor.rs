@@ -23,6 +23,10 @@ pub struct SuiFlavor;
 impl MoveFlavor for SuiFlavor {
     type FlavorDependency<P: ?Sized> = OnChainDependency;
 
+    fn name() -> String {
+        "sui move 2025".to_string()
+    }
+
     fn pin(
         &self,
         deps: DependencySet<Self::FlavorDependency<Unpinned>>,
