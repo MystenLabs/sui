@@ -12,20 +12,8 @@ COPY crates crates
 COPY sui-execution sui-execution
 COPY external-crates external-crates
 
-ENV RUSTFLAGS="-C debuginfo=2"
-
 RUN cargo build --profile ${PROFILE} --bin sui-analytics-indexer
 
-# ---------------------
-# Runtime image
-# ---------------------
 FROM debian:12-slim as deploy
-
-# Install heaptrack + runtime deps
-RUN apt-get update && \
-  apt-get install -y --no-install-recommends \
-  ca-certificates \
-  heaptrack
-
-# Copy your built binary
+RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates
 COPY --from=build --chmod=755 /work/target/release/sui-analytics-indexer /opt/sui/bin/sui-analytics-indexer

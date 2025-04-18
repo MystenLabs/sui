@@ -48,13 +48,35 @@ pub struct PackageStoreTables {
 
 impl PackageStoreTables {
     pub fn new(path: &Path) -> Arc<Self> {
+        // Create a custom RocksDB options with controlled memory usage
+        use typed_store::rocksdb::{BlockBasedOptions, Options};
+        let mut opts = Options::default();
+
+        // Configure block cache options
+        let mut block_opts = BlockBasedOptions::default();
+        block_opts.set_cache_index_and_filter_blocks(true);
+        block_opts.set_block_size(16 * 1024); // 16KB blocks
+        opts.set_block_based_table_factory(&block_opts);
+
+        // Allocate about 3GB to RocksDB total memory budget
+        opts.increase_parallelism(4); // Helps with CPU utilization
+
+        // Configure memory usage
+        opts.set_max_total_wal_size(256 * 1024 * 1024); // 256MB WAL size
+        opts.set_db_write_buffer_size(256 * 1024 * 1024); // 256MB write buffer
+        opts.set_write_buffer_size(64 * 1024 * 1024); // 64MB per memtable
+        opts.set_max_write_buffer_number(4); // Limit number of memtables
+        opts.set_target_file_size_base(128 * 1024 * 1024); // 128MB target file size
+
+        // Create the DB with controlled memory options
         Arc::new(Self::open_tables_read_write(
             path.to_path_buf(),
             MetricConf::new("package"),
-            None,
+            Some(opts),
             None,
         ))
     }
+
     pub(crate) fn update(&self, package: &Object) -> Result<()> {
         let mut batch = self.packages.batch();
         batch
