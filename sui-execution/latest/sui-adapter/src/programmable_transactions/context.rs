@@ -13,7 +13,6 @@ mod checked {
         sync::Arc,
     };
 
-    use crate::adapter::new_native_extensions;
     use crate::error::convert_vm_error;
     use crate::execution_mode::ExecutionMode;
     use crate::execution_value::{CommandKind, ObjectContents, TryFromValue, Value};
@@ -25,9 +24,10 @@ mod checked {
     use crate::gas_meter::SuiGasMeter;
     use crate::programmable_transactions::linkage_view::LinkageView;
     use crate::type_resolver::TypeTagResolver;
+    use crate::{adapter::new_native_extensions, execution_value::SizeBound};
     use move_binary_format::{
         errors::{Location, PartialVMError, PartialVMResult, VMError, VMResult},
-        file_format::{CodeOffset, FunctionDefinitionIndex, TypeParameterIndex},
+        file_format::{AbilitySet, CodeOffset, FunctionDefinitionIndex, TypeParameterIndex},
         CompiledModule,
     };
     use move_core_types::resolver::ModuleResolver;
@@ -313,6 +313,13 @@ mod checked {
                 &self.new_packages,
                 struct_tag,
             )
+        }
+
+        pub fn get_type_abilities(&self, t: &Type) -> Result<AbilitySet, ExecutionError> {
+            self.vm
+                .get_runtime()
+                .get_type_abilities(t)
+                .map_err(|e| self.convert_vm_error(e))
         }
 
         /// Takes the user events from the runtime and tags them with the Move module of the function
@@ -1226,6 +1233,22 @@ mod checked {
                 &mut data_store,
                 &mut SuiGasMeter(self.gas_charger.move_gas_status_mut()),
             )
+        }
+
+        pub fn size_bound_raw(&self, bound: u64) -> SizeBound {
+            if self.protocol_config.max_ptb_value_size_v2() {
+                SizeBound::Raw(bound)
+            } else {
+                SizeBound::Object(bound)
+            }
+        }
+
+        pub fn size_bound_vector_elem(&self, bound: u64) -> SizeBound {
+            if self.protocol_config.max_ptb_value_size_v2() {
+                SizeBound::VectorElem(bound)
+            } else {
+                SizeBound::Object(bound)
+            }
         }
     }
 

@@ -119,6 +119,13 @@ pub struct ObjectValue {
     pub contents: ObjectContents,
 }
 
+#[derive(Debug, Copy, Clone)]
+pub enum SizeBound {
+    Object(u64),
+    VectorElem(u64),
+    Raw(u64),
+}
+
 #[derive(Debug, Clone)]
 pub enum ObjectContents {
     Coin(Coin),
@@ -196,7 +203,7 @@ impl Value {
     pub fn write_bcs_bytes(
         &self,
         buf: &mut Vec<u8>,
-        bound: Option<u64>,
+        bound: Option<SizeBound>,
     ) -> Result<(), ExecutionError> {
         match self {
             Value::Object(obj_value) => obj_value.write_bcs_bytes(buf, bound)?,
@@ -254,7 +261,7 @@ impl ObjectValue {
     pub fn write_bcs_bytes(
         &self,
         buf: &mut Vec<u8>,
-        bound: Option<u64>,
+        bound: Option<SizeBound>,
     ) -> Result<(), ExecutionError> {
         match &self.contents {
             ObjectContents::Raw(bytes) => buf.extend(bytes),
@@ -267,11 +274,26 @@ impl ObjectValue {
     }
 }
 
-pub fn ensure_serialized_size(size: u64, bound: u64) -> Result<(), ExecutionError> {
-    if size > bound {
-        let e = ExecutionErrorKind::MoveObjectTooBig {
-            object_size: size,
-            max_object_size: bound,
+pub fn ensure_serialized_size(size: u64, bound: SizeBound) -> Result<(), ExecutionError> {
+    let bound_size = match bound {
+        SizeBound::Object(bound_size)
+        | SizeBound::VectorElem(bound_size)
+        | SizeBound::Raw(bound_size) => bound_size,
+    };
+    if size > bound_size {
+        let e = match bound {
+            SizeBound::Object(_) => ExecutionErrorKind::MoveObjectTooBig {
+                object_size: size,
+                max_object_size: bound_size,
+            },
+            SizeBound::VectorElem(_) => ExecutionErrorKind::MoveVectorElemTooBig {
+                value_size: size,
+                max_scaled_size: bound_size,
+            },
+            SizeBound::Raw(_) => ExecutionErrorKind::MoveRawValueTooBig {
+                value_size: size,
+                max_scaled_size: bound_size,
+            },
         };
         let msg = "Serialized bytes of value too large".to_owned();
         return Err(ExecutionError::new_with_source(e, msg));
