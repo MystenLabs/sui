@@ -13,7 +13,10 @@ COPY crates crates
 COPY sui-execution sui-execution
 COPY external-crates external-crates
 
-RUN RUSTFLAGS="-C debuginfo=2" cargo build --profile ${PROFILE} --bin sui-analytics-indexer
+ENV RUSTFLAGS="-C debuginfo=2"
+ENV CARGO_PROFILE_RELEASE_STRIP="none"
+
+RUN cargo build --profile ${PROFILE} --bin sui-analytics-indexer
 
 # Production Image
 FROM debian:bullseye-slim AS runtime
@@ -25,6 +28,7 @@ RUN apt-get update && apt-get install -y \
   htop \
   binutils \
   lsof \
+  gdb \
   heaptrack
 ENV LD_PRELOAD /usr/lib/x86_64-linux-gnu/libjemalloc.so
 

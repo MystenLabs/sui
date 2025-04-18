@@ -46,7 +46,6 @@ impl Worker for ObjectHandler {
             ..
         } = checkpoint_data;
         let mut state = self.state.lock().await;
-        state.package_store.package_store_tables.log_stats();
         for checkpoint_transaction in checkpoint_transactions {
             for object in checkpoint_transaction.output_objects.iter() {
                 state.package_store.update(object)?;
