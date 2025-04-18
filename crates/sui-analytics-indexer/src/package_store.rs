@@ -61,12 +61,21 @@ impl PackageStoreTables {
         // Allocate about 3GB to RocksDB total memory budget
         opts.increase_parallelism(4); // Helps with CPU utilization
 
-        // Configure memory usage
-        opts.set_max_total_wal_size(256 * 1024 * 1024); // 256MB WAL size
-        opts.set_db_write_buffer_size(256 * 1024 * 1024); // 256MB write buffer
-        opts.set_write_buffer_size(64 * 1024 * 1024); // 64MB per memtable
-        opts.set_max_write_buffer_number(4); // Limit number of memtables
-        opts.set_target_file_size_base(128 * 1024 * 1024); // 128MB target file size
+        // Configure memory usage - much more conservative settings
+        opts.set_max_total_wal_size(64 * 1024 * 1024); // 64MB WAL size
+        opts.set_db_write_buffer_size(128 * 1024 * 1024); // 128MB write buffer
+        opts.set_write_buffer_size(32 * 1024 * 1024); // 32MB per memtable
+        opts.set_max_write_buffer_number(2); // Limit number of memtables
+        opts.set_target_file_size_base(64 * 1024 * 1024); // 64MB target file size
+
+        // Additional memory settings
+        opts.set_max_background_jobs(2); // Limit background jobs
+        opts.set_max_open_files(100); // Limit open files
+        opts.set_keep_log_file_num(1); // Keep fewer log files
+
+        // Compaction settings to reduce memory usage
+        opts.set_max_bytes_for_level_base(64 * 1024 * 1024); // 64MB for base level
+        opts.set_max_bytes_for_level_multiplier(8.0); // Less aggressive level sizing
 
         // Create the DB with controlled memory options
         Arc::new(Self::open_tables_read_write(
