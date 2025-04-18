@@ -790,6 +790,7 @@ impl CheckpointExecutor {
                         &*self.object_cache_reader,
                     )
                     .expect("failed to acquire shared version assignments");
+                // TODO: Update assigned_transaction_withdraw_sufficiency based on effects in the epoch_store.
             }
         }
 
@@ -948,7 +949,7 @@ impl CheckpointExecutor {
     ) -> Vec<RandomnessRound> {
         if let Some(version_specific_data) = checkpoint
             .version_specific_data(self.epoch_store.protocol_config())
-            .expect("unable to get verison_specific_data")
+            .expect("unable to get version_specific_data")
         {
             // With version-specific data, randomness rounds are stored in checkpoint summary.
             version_specific_data.into_v1().randomness_rounds

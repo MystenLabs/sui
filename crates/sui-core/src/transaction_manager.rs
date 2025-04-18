@@ -16,11 +16,13 @@ use sui_types::{
     base_types::{FullObjectID, SequenceNumber, TransactionDigest},
     committee::EpochId,
     digests::TransactionEffectsDigest,
+    dynamic_field::derive_dynamic_field_id,
     error::{SuiError, SuiResult},
     fp_ensure,
     message_envelope::Message,
     storage::InputKey,
     transaction::{TransactionDataAPI, VerifiedCertificate},
+    SUI_ACCUMULATOR_ROOT_OBJECT_ID,
 };
 use sui_types::{executable_transaction::VerifiedExecutableTransaction, fp_bail};
 use tokio::sync::mpsc::UnboundedSender;
@@ -80,6 +82,9 @@ pub struct PendingCertificate {
     pub waiting_input_objects: BTreeSet<InputKey>,
     // Stores stats about this transaction.
     pub stats: PendingCertificateStats,
+    /// Whether the balance withdraws in this transaction are sufficient to be executed.
+    /// None is a placeholder when we do not yet know the withdraw scheduling result yet.
+    pub balance_withdraw_sufficient: Option<bool>,
 }
 
 struct CacheInner {
@@ -218,6 +223,12 @@ impl AvailableObjectsCache {
     }
 }
 
+struct BalanceWithdrawInfo {
+    tx_digest: TransactionDigest,
+    balance_object_id: ObjectID,
+    max_amount: u64,
+}
+
 struct Inner {
     // Current epoch of TransactionManager.
     epoch: EpochId,
@@ -243,6 +254,12 @@ struct Inner {
 
     // Transactions that have all input objects available, but have not finished execution.
     executing_certificates: HashSet<TransactionDigest>,
+
+    /// Maps the sequence number of the accumulator root object, to the list of withdraw transactions
+    /// that depend on it.
+    balance_withdraws: HashMap<SequenceNumber, HashMap<ObjectID, Vec<(TransactionDigest, u64)>>>,
+
+    balance_sufficient_for_withdraw: HashMap<TransactionDigest, bool>,
 }
 
 impl Inner {
@@ -254,6 +271,8 @@ impl Inner {
             available_objects_cache: AvailableObjectsCache::new(metrics),
             pending_certificates: HashMap::with_capacity(MIN_HASHMAP_CAPACITY),
             executing_certificates: HashSet::with_capacity(MIN_HASHMAP_CAPACITY),
+            balance_withdraws: HashMap::with_capacity(MIN_HASHMAP_CAPACITY),
+            balance_sufficient_for_withdraw: HashMap::with_capacity(MIN_HASHMAP_CAPACITY),
         }
     }
 
@@ -378,6 +397,15 @@ impl TransactionManager {
         certs: Vec<VerifiedExecutableTransaction>,
         epoch_store: &AuthorityPerEpochStore,
     ) {
+        if let Some(accumulator_root_version) =
+            self.process_balance_withdraws_from_consensus(certs.iter(), epoch_store)
+        {
+            self.try_schedule_balance_withdraws(
+                accumulator_root_version,
+                &self.object_cache_read,
+                epoch_store,
+            );
+        }
         let certs = certs.into_iter().map(|cert| (cert, None)).collect();
         self.enqueue_impl(certs, epoch_store)
     }
@@ -562,6 +590,7 @@ impl TransactionManager {
                     enqueue_time: pending_cert_enqueue_time,
                     ready_time: None,
                 },
+                balance_withdraw_sufficient: None,
             });
         }
 
@@ -666,6 +695,131 @@ impl TransactionManager {
         inner.maybe_reserve_capacity();
     }
 
+    fn derive_balance_object_id(address: SuiAddress, coin_type: StructTag) -> ObjectID {
+        unimplemented!("Implement this");
+    }
+
+    fn process_balance_withdraws_from_consensus(
+        &self,
+        certs: impl Iterator<Item = &VerifiedExecutableTransaction>,
+        epoch_store: &AuthorityPerEpochStore,
+    ) -> Option<SequenceNumber> {
+        let balance_withdraws: Vec<_> = certs
+            .filter_map(|cert| {
+                let withdraws = cert.transaction_data().withdraw_balance_args();
+                if withdraws.is_empty() {
+                    None
+                } else {
+                    Some((cert, withdraws))
+                }
+            })
+            .collect();
+        let Some((first_cert, _)) = balance_withdraws.first() else {
+            return None;
+        };
+        let assigned_versions = epoch_store
+            .get_assigned_shared_object_versions(&first_cert.key())
+            .expect("balance withdraws must have assigned versions");
+        let accumulator_root_version = assigned_versions
+            .iter()
+            .find(|(key, _)| key.0 == SUI_ACCUMULATOR_ROOT_OBJECT_ID)
+            .map(|(_, version)| *version)
+            .expect(
+                "balance withdraws must have assigned versions for the accumulator root object",
+            );
+
+        let mut grouped_withdraws: HashMap<ObjectID, Vec<(TransactionDigest, u64)>> =
+            HashMap::new();
+        for (cert, withdraws) in balance_withdraws {
+            for (address, coin_type, max_amount) in withdraws {
+                let balance_object_id = Self::derive_balance_object_id(address, coin_type);
+                grouped_withdraws
+                    .entry(balance_object_id)
+                    .or_default()
+                    .push((cert.digest(), max_amount));
+            }
+        }
+
+        let _old_value = self
+            .inner
+            .read()
+            .write()
+            .balance_withdraws
+            .insert(accumulator_root_version, grouped_withdraws);
+        debug_assert_eq!(old_value, None);
+        Some(accumulator_root_version)
+    }
+
+    fn try_schedule_balance_withdraws(
+        &self,
+        accumulator_root_version: SequenceNumber,
+        object_cache_read: &dyn ObjectCacheRead,
+        epoch_store: &AuthorityPerEpochStore,
+    ) -> bool {
+        if !self
+            .inner
+            .read()
+            .read()
+            .balance_withdraws
+            .contains_key(&accumulator_root_version)
+        {
+            return false;
+        }
+        let accumulator_root_object = object_cache_read
+            .get_object(&SUI_ACCUMULATOR_ROOT_OBJECT_ID)
+            .expect("accumulator root object must exist");
+        if accumulator_root_object.version() < accumulator_root_version {
+            return false;
+        }
+        let Some(grouped_withdraws) = self
+            .inner
+            .read()
+            .write()
+            .balance_withdraws
+            .remove(&accumulator_root_version)
+        else {
+            return false;
+        };
+        if accumulator_root_object.version() > accumulator_root_version {
+            return false;
+        }
+
+        let balance_objects: Vec<_> = object_cache_read
+            .get_objects(grouped_withdraws.keys())
+            .into_iter()
+            .collect();
+        // Holding the lock to ensure that we are not adding transactions to the balance_sufficient_for_withdraw
+        // while it is being modidifed due to parallel execution of the settlement transaction.
+        let inner = self.inner.read().write();
+        // Check that we have not settled any balances in the meantime.
+        // This ensures the balances we have read are consistent.
+        if object_cache_read
+            .get_object(&SUI_ACCUMULATOR_ROOT_OBJECT_ID)
+            .expect("accumulator root object must exist")
+            .version()
+            != accumulator_root_version
+        {
+            return false;
+        }
+
+        let mut assigned_transaction_withdraw_sufficiency = HashMap::new();
+        for balance_object in balance_objects {
+            // TODO: Actually read balacnes
+            let mut balance = 0;
+            let withdraws = grouped_withdraws.remove(&balance_object.id()).unwrap();
+            for (tx_digest, max_amount) in withdraws {
+                if balance >= max_amount {
+                    assigned_transaction_withdraw_sufficiency.insert(*tx_digest, true);
+                    balance -= max_amount;
+                } else {
+                    assigned_transaction_withdraw_sufficiency.insert(*tx_digest, false);
+                }
+            }
+        }
+        // TODO: Add the assigned_transaction_withdraw_sufficiency to the epoch_store.
+        true
+    }
+
     #[cfg(test)]
     pub(crate) fn objects_available(
         &self,
@@ -729,6 +883,7 @@ impl TransactionManager {
         epoch_store: &AuthorityPerEpochStore,
     ) {
         let _scope = monitored_scope("TransactionManager::notify_commit");
+        // TODO: IF output_objectkeys contains the accumulator root object, we need to call try_schedule_balance_withdraws.
         let reconfig_lock = self.inner.read();
         {
             let commit_time = Instant::now();
@@ -762,6 +917,7 @@ impl TransactionManager {
 
     /// Sends the ready certificate for execution.
     fn certificate_ready(&self, inner: &mut Inner, pending_certificate: PendingCertificate) {
+        // TODO: Set the balance_withdraw_sufficient field in the pending certificate here.
         trace!(tx_digest = ?pending_certificate.certificate.digest(), "certificate ready");
         assert_eq!(pending_certificate.waiting_input_objects.len(), 0);
         // Record as an executing certificate.

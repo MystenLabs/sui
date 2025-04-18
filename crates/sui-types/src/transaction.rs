@@ -83,9 +83,9 @@ pub enum WithdrawBalanceArg {
     /// Represents a reservation to withdraw at most `max_amount` from the sender address's balance
     /// of coin type `coin_type`.
     SenderAddress {
-        max_amount: u64,
-        coin_type: StructTag,
-        accumulator_init_shared_version: SequenceNumber,
+        pub max_amount: u64,
+        pub coin_type: StructTag,
+        pub accumulator_init_shared_version: SequenceNumber,
     },
 }
 
@@ -2190,6 +2190,9 @@ pub trait TransactionDataAPI {
 
     fn input_objects(&self) -> UserInputResult<Vec<InputObjectKind>>;
 
+    /// Returns a list of balance withdrawals, each with the withdraw from address, coin type, and max amount.
+    fn withdraw_balance_args(&self) -> Vec<(SuiAddress, StructTag, u64)>;
+
     fn receiving_objects(&self) -> Vec<ObjectRef>;
 
     fn validity_check(&self, config: &ProtocolConfig) -> UserInputResult;
@@ -2292,6 +2295,28 @@ impl TransactionDataAPI for TransactionDataV1 {
             );
         }
         Ok(inputs)
+    }
+
+    fn withdraw_balance_args(&self) -> Vec<(SuiAddress, StructTag, u64)> {
+        match &self.kind {
+            TransactionKind::ProgrammableTransaction(pt) => pt
+                .inputs
+                .iter()
+                .filter_map(|input| {
+                    if let CallArg::WithdrawBalance(arg) = input {
+                        let WithdrawBalanceArg::SenderAddress {
+                            max_amount,
+                            coin_type,
+                            accumulator_init_shared_version: _,
+                        } = arg;
+                        Some((self.sender(), coin_type.clone(), max_amount))
+                    } else {
+                        None
+                    }
+                })
+                .collect(),
+            _ => vec![],
+        }
     }
 
     fn receiving_objects(&self) -> Vec<ObjectRef> {

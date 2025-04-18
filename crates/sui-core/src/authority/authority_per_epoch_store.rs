@@ -377,6 +377,11 @@ pub struct AuthorityPerEpochStore {
     /// Mutex table for shared version assignment
     version_assignment_mutex_table: MutexTable<ObjectID>,
 
+    // For each transaction that has not been executed yet, we store whether the balance withdraws
+    // in this transaction are sufficient to be executed.
+    // After each checkpoint commits, we clear the entries for transactions that have been executed.
+    assigned_transaction_withdraw_sufficiency: RwLock<HashMap<TransactionDigest, bool>>,
+
     /// The moment when the current epoch started locally on this validator. Note that this
     /// value could be skewed if the node crashed and restarted in the middle of the epoch. That's
     /// ok because this is used for metric purposes and we could tolerate some skews occasionally.
@@ -948,6 +953,7 @@ impl AuthorityPerEpochStore {
             pending_consensus_certificates: RwLock::new(pending_consensus_certificates),
             mutex_table: MutexTable::new(MUTEX_TABLE_SIZE),
             version_assignment_mutex_table: MutexTable::new(MUTEX_TABLE_SIZE),
+            assigned_transaction_withdraw_sufficiency: RwLock::new(HashMap::new()),
             epoch_open_time: current_time,
             epoch_close_time: Default::default(),
             metrics,
