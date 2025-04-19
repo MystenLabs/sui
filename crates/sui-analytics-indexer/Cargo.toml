@@ -56,6 +56,7 @@ tap.workspace = true
 serde_yaml.workspace = true
 num_cpus.workspace = true
 once_cell.workspace = true
+jemallocator = "0.5.0"
 
 [dev-dependencies]
 

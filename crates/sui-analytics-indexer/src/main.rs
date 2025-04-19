@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use anyhow::Result;
+use jemallocator::Jemalloc;
 use prometheus::Registry;
 use std::{collections::HashMap, env};
 use sui_analytics_indexer::{analytics_metrics::AnalyticsMetrics, JobConfig};
@@ -10,6 +11,9 @@ use sui_data_ingestion_core::{
 };
 use tokio::{signal, sync::oneshot};
 use tracing::info;
+
+#[global_allocator]
+static GLOBAL: Jemalloc = Jemalloc;
 
 fn main() -> Result<()> {
     let _guard = telemetry_subscribers::TelemetryConfig::new()
@@ -58,10 +62,7 @@ fn main() -> Result<()> {
         }
 
         let progress_store = ShimIndexerProgressStore::new(watermarks);
-        let mut executor = IndexerExecutor::new(
-            progress_store,
-            processors.len(),
-        );
+        let mut executor = IndexerExecutor::new(progress_store, processors.len());
 
         for processor in processors {
             let task_name = processor.task_name.clone();
