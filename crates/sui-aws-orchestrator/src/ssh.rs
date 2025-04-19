@@ -13,7 +13,6 @@ use std::{
 use futures::future::try_join_all;
 use russh::client::Msg;
 use russh::{client, Channel};
-use russh_keys::key;
 use tokio::task::JoinHandle;
 use tokio::time::sleep;
 
@@ -285,10 +284,10 @@ impl client::Handler for Session {
     type Error = russh::Error;
 
     async fn check_server_key(
-        self,
-        _server_public_key: &key::PublicKey,
-    ) -> Result<(Self, bool), Self::Error> {
-        Ok((self, true))
+        &mut self,
+        _server_public_key: &russh_keys::PublicKey,
+    ) -> Result<bool, Self::Error> {
+        Ok(true)
     }
 }
 
@@ -326,8 +325,15 @@ impl SshConnection {
             .await
             .map_err(|error| SshError::ConnectionError { address, error })?;
 
+        let hash_key = russh_keys::key::PrivateKeyWithHashAlg::new(Arc::new(key), None).map_err(|error| {
+            SshError::PrivateKeyError {
+                address,
+                error: error,
+            }
+        })?;
+
         let _auth_res = session
-            .authenticate_publickey(username, Arc::new(key))
+            .authenticate_publickey(username, hash_key)
             .await
             .map_err(|error| SshError::SessionError { address, error })?;
 
