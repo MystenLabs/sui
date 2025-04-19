@@ -10,7 +10,7 @@ use crate::error::RpcError;
 use super::{
     scalars::{digest::Digest, sui_address::SuiAddress, uint53::UInt53},
     types::{
-        object::{Object, ObjectKey},
+        object::{self, Object, ObjectKey},
         service_config::ServiceConfig,
         transaction::Transaction,
         transaction_effects::TransactionEffects,
@@ -27,18 +27,15 @@ impl Query {
         Ok(chain_id.to_string())
     }
 
-    /// Fetch objects by their addresses and versions.
+    /// Fetch objects by their keys.
     ///
     /// Returns a list of objects that is guaranteed to be the same length as `keys`. If an object in `keys` could not be found in the store, its corresponding entry in the result will be `null`. This could be because the object never existed, or because it was pruned.
     async fn multi_get_objects(
         &self,
         ctx: &Context<'_>,
         keys: Vec<ObjectKey>,
-    ) -> Result<Vec<Option<Object>>, RpcError> {
-        let objects = keys
-            .into_iter()
-            .map(|k| Object::fetch(ctx, k.address, k.version));
-
+    ) -> Result<Vec<Option<Object>>, RpcError<object::Error>> {
+        let objects = keys.into_iter().map(|k| Object::by_key(ctx, k));
         try_join_all(objects).await
     }
 
@@ -66,15 +63,35 @@ impl Query {
         try_join_all(effects).await
     }
 
-    /// Fetch an object by its address and version.
+    /// Fetch an object by its address.
+    ///
+    /// If `version` is specified, the object will be fetched at that exact version.
+    ///
+    /// If `rootVersion` is specified, the object will be fetched at the latest version at or before this version. This can be used to fetch a child or ancestor object bounded by its root object's version. For any wrapped or child (object-owned) object, its root object can be defined recursively as:
+    ///
+    /// - The root object of the object it is wrapped in, if it is wrapped.
+    /// - The root object of its owner, if it is owned by another object.
+    /// - The object itself, if it is not object-owned or wrapped.
+    ///
+    /// It is an error to specify both `version` and `rootVersion`, or to specify neither.
+    ///
+    /// Returns `null` if an object cannot be found that meets this criteria.
     async fn object(
         &self,
         ctx: &Context<'_>,
         address: SuiAddress,
-        version: UInt53,
-    ) -> Result<Option<Object>, RpcError> {
-        // TODO: latest version support
-        Object::fetch(ctx, address, version).await
+        version: Option<UInt53>,
+        root_version: Option<UInt53>,
+    ) -> Result<Option<Object>, RpcError<object::Error>> {
+        Object::by_key(
+            ctx,
+            ObjectKey {
+                address,
+                version,
+                root_version,
+            },
+        )
+        .await
     }
 
     /// Configuration for this RPC service.

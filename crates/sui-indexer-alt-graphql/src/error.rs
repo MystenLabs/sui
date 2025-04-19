@@ -1,8 +1,6 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-#![allow(dead_code)] // TODO: Remove once we have a user error.
-
 use std::{convert::Infallible, sync::Arc, time::Duration};
 
 use async_graphql::{ErrorExtensionValues, ErrorExtensions, Response, Value};
@@ -86,7 +84,7 @@ impl<E: std::error::Error> From<RpcError<E>> for async_graphql::Error {
 
 // Cannot use `#[from]` for this conversion because [`async_graphql::Error`] does not implement
 // `std::error::Error`, so it cannot participate in the source/chaining APIs.
-impl From<async_graphql::Error> for RpcError {
+impl<E: std::error::Error> From<async_graphql::Error> for RpcError<E> {
     fn from(err: async_graphql::Error) -> Self {
         RpcError::GraphQlError(err)
     }
@@ -94,7 +92,7 @@ impl From<async_graphql::Error> for RpcError {
 
 // Cannot use `#[from]` for this conversion because [`anyhow::Error`] does not implement `Clone`,
 // so it needs to be wrapped in an [`Arc`].
-impl From<anyhow::Error> for RpcError {
+impl<E: std::error::Error> From<anyhow::Error> for RpcError<E> {
     fn from(err: anyhow::Error) -> Self {
         RpcError::InternalError(Arc::new(err))
     }
