@@ -1,8 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 use anyhow::Result;
-use prometheus::Registry;
-use sui_data_ingestion_core::{DataIngestionMetrics, IndexerExecutor, ReaderOptions, WorkerPool};
+use sui_data_ingestion_core::{IndexerExecutor, ReaderOptions, WorkerPool};
 use sui_kvstore::{BigTableClient, BigTableProgressStore, KvWorker};
 use telemetry_subscribers::TelemetryConfig;
 use tokio::sync::oneshot;
@@ -27,7 +26,6 @@ async fn main() -> Result<()> {
     let mut executor = IndexerExecutor::new(
         BigTableProgressStore::new(client.clone()),
         1,
-        DataIngestionMetrics::new(&Registry::new()),
     );
     let worker_pool = WorkerPool::new(KvWorker { client }, "bigtable".to_string(), 50);
     executor.register(worker_pool).await?;

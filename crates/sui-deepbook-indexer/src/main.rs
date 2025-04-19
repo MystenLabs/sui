@@ -10,7 +10,6 @@ use std::net::{Ipv4Addr, SocketAddr};
 use std::path::PathBuf;
 use std::sync::Arc;
 use sui_config::Config;
-use sui_data_ingestion_core::DataIngestionMetrics;
 use sui_deepbook_indexer::config::IndexerConfig;
 use sui_deepbook_indexer::metrics::DeepBookIndexerMetrics;
 use sui_deepbook_indexer::postgres_manager::get_connection_pool;
@@ -58,7 +57,6 @@ async fn main() -> Result<()> {
     info!("Metrics server started at port {}", config.metric_port);
 
     let indexer_meterics = DeepBookIndexerMetrics::new(&registry);
-    let ingestion_metrics = DataIngestionMetrics::new(&registry);
 
     let db_url = config.db_url.clone();
     let datastore = PgDeepbookPersistent::new(
@@ -82,7 +80,7 @@ async fn main() -> Result<()> {
             .map(|p| p.into())
             .unwrap_or(tempfile::tempdir()?.into_path()),
         config.deepbook_genesis_checkpoint,
-        ingestion_metrics.clone(),
+        (),
         Box::new(indexer_meterics.clone()),
     );
 

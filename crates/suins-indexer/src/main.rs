@@ -11,7 +11,7 @@ use prometheus::Registry;
 use std::env;
 use std::path::PathBuf;
 use sui_data_ingestion_core::{
-    DataIngestionMetrics, FileProgressStore, IndexerExecutor, ReaderOptions, Worker, WorkerPool,
+    FileProgressStore, IndexerExecutor, ReaderOptions, Worker, WorkerPool,
 };
 use sui_types::full_checkpoint_content::CheckpointData;
 use tokio::sync::oneshot;
@@ -144,8 +144,7 @@ async fn main() -> Result<()> {
 
     let registry: Registry = start_basic_prometheus_server();
     mysten_metrics::init_metrics(&registry);
-    let metrics = DataIngestionMetrics::new(&registry);
-    let mut executor = IndexerExecutor::new(progress_store, 1, metrics);
+    let mut executor = IndexerExecutor::new(progress_store, 1);
 
     let indexer_setup =
         if let (Some(registry_id), Some(subdomain_wrapper_type), Some(name_record_type)) =

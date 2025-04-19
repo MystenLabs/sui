@@ -11,7 +11,7 @@ use prometheus::IntGauge;
 use std::path::PathBuf;
 use std::sync::Arc;
 use sui_data_ingestion_core::{
-    DataIngestionMetrics, IndexerExecutor, ProgressStore, ReaderOptions, Worker, WorkerPool,
+    IndexerExecutor, ProgressStore, ReaderOptions, Worker, WorkerPool,
 };
 use sui_sdk::SuiClient;
 use sui_types::full_checkpoint_content::CheckpointData as SuiCheckpointData;
@@ -30,7 +30,6 @@ pub struct SuiCheckpointDatasource {
     concurrency: usize,
     checkpoint_path: PathBuf,
     genesis_checkpoint: u64,
-    ingestion_metrics: DataIngestionMetrics,
     metrics: Box<dyn IndexerMetricProvider>,
 }
 impl SuiCheckpointDatasource {
@@ -40,7 +39,7 @@ impl SuiCheckpointDatasource {
         concurrency: usize,
         checkpoint_path: PathBuf,
         genesis_checkpoint: u64,
-        ingestion_metrics: DataIngestionMetrics,
+        _ingestion_metrics: (),
         metrics: Box<dyn IndexerMetricProvider>,
     ) -> Self {
         SuiCheckpointDatasource {
@@ -49,7 +48,6 @@ impl SuiCheckpointDatasource {
             concurrency,
             checkpoint_path,
             genesis_checkpoint,
-            ingestion_metrics,
             metrics,
         }
     }
@@ -82,7 +80,7 @@ impl Datasource<CheckpointTxnData> for SuiCheckpointDatasource {
             "Starting Sui checkpoint data retrieval with batch size {}",
             ingestion_reader_batch_size
         );
-        let mut executor = IndexerExecutor::new(progress_store, 1, self.ingestion_metrics.clone());
+        let mut executor = IndexerExecutor::new(progress_store, 1);
         let progress_metric = self
             .metrics
             .get_tasks_latest_retrieved_checkpoints()

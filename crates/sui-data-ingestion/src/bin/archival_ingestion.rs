@@ -2,11 +2,10 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use anyhow::Result;
-use prometheus::Registry;
 use serde::{Deserialize, Serialize};
 use sui_data_ingestion::{ArchivalConfig, ArchivalReducer, ArchivalWorker};
 use sui_data_ingestion_core::{
-    DataIngestionMetrics, IndexerExecutor, ReaderOptions, ShimProgressStore, WorkerPool,
+    IndexerExecutor, ReaderOptions, ShimProgressStore, WorkerPool,
 };
 use tokio::sync::oneshot;
 
@@ -47,7 +46,6 @@ async fn main() -> Result<()> {
     let mut executor = IndexerExecutor::new(
         progress_store,
         1,
-        DataIngestionMetrics::new(&Registry::new()),
     );
     let worker_pool =
         WorkerPool::new_with_reducer(ArchivalWorker, "archival".to_string(), 1, Box::new(reducer));

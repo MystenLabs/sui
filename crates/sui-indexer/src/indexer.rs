@@ -8,7 +8,7 @@ use futures::future::try_join_all;
 use mysten_metrics::spawn_monitored_task;
 use prometheus::Registry;
 use sui_data_ingestion_core::{
-    DataIngestionMetrics, IndexerExecutor, ReaderOptions, ShimIndexerProgressStore, WorkerPool,
+    IndexerExecutor, ReaderOptions, ShimIndexerProgressStore, WorkerPool,
 };
 use tokio::sync::oneshot;
 use tokio_util::sync::CancellationToken;
@@ -101,7 +101,6 @@ impl Indexer {
         let mut executor = IndexerExecutor::new(
             progress_store.clone(),
             2,
-            DataIngestionMetrics::new(&Registry::new()),
         );
 
         let worker_pool = WorkerPool::new(
@@ -119,7 +118,6 @@ impl Indexer {
             let executor = IndexerExecutor::new(
                 progress_store,
                 1,
-                DataIngestionMetrics::new(&Registry::new()),
             );
             let (exit_sender, exit_receiver) = oneshot::channel();
             exit_senders.push(exit_sender);

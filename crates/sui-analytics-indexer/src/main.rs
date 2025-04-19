@@ -6,7 +6,7 @@ use prometheus::Registry;
 use std::{collections::HashMap, env};
 use sui_analytics_indexer::{analytics_metrics::AnalyticsMetrics, JobConfig};
 use sui_data_ingestion_core::{
-    DataIngestionMetrics, IndexerExecutor, ReaderOptions, ShimIndexerProgressStore, WorkerPool,
+    IndexerExecutor, ReaderOptions, ShimIndexerProgressStore, WorkerPool,
 };
 use tokio::{signal, sync::oneshot};
 use tracing::info;
@@ -61,7 +61,6 @@ fn main() -> Result<()> {
         let mut executor = IndexerExecutor::new(
             progress_store,
             processors.len(),
-            DataIngestionMetrics::new(&registry),
         );
 
         for processor in processors {

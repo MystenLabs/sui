@@ -22,7 +22,6 @@ use sui_bridge::eth_client::EthClient;
 use sui_bridge::metered_eth_provider::MeteredEthHttpProvier;
 use sui_bridge::metrics::BridgeMetrics;
 use sui_bridge::utils::get_eth_contract_addresses;
-use sui_data_ingestion_core::DataIngestionMetrics;
 use sui_indexer_builder::indexer_builder::{BackfillStrategy, Datasource, Indexer, IndexerBuilder};
 use sui_indexer_builder::metrics::IndexerMetricProvider;
 use sui_indexer_builder::progress::{
@@ -204,7 +203,7 @@ impl Display for BridgeDataSource {
 pub async fn create_sui_indexer(
     pool: PgPool,
     metrics: BridgeIndexerMetrics,
-    ingestion_metrics: DataIngestionMetrics,
+    _ingestion_metrics: (),
     config: &IndexerConfig,
 ) -> anyhow::Result<
     Indexer<PgBridgePersistent, SuiCheckpointDatasource, SuiBridgeDataMapper>,
@@ -233,7 +232,7 @@ pub async fn create_sui_indexer(
             .map(|p| p.into())
             .unwrap_or(tempfile::tempdir()?.into_path()),
         config.sui_bridge_genesis_checkpoint,
-        ingestion_metrics,
+        (),
         metrics.clone().boxed(),
     );
 

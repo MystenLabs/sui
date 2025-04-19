@@ -11,8 +11,7 @@ use sui_data_ingestion::{
     ArchivalConfig, ArchivalReducer, ArchivalWorker, BlobTaskConfig, BlobWorker,
     DynamoDBProgressStore,
 };
-use sui_data_ingestion_core::{DataIngestionMetrics, ReaderOptions};
-use sui_data_ingestion_core::{IndexerExecutor, WorkerPool};
+use sui_data_ingestion_core::{ReaderOptions, IndexerExecutor, WorkerPool};
 use sui_kvstore::{BigTableClient, BigTableProgressStore, KvWorker};
 use tokio::signal;
 use tokio::sync::oneshot;
@@ -116,8 +115,6 @@ async fn main() -> Result<()> {
     );
     let registry: Registry = registry_service.default_registry();
     mysten_metrics::init_metrics(&registry);
-    let metrics = DataIngestionMetrics::new(&registry);
-
     let mut bigtable_store = None;
     for task in &config.tasks {
         if let Task::BigTableKV(kv_config) = &task.task {
@@ -146,7 +143,7 @@ async fn main() -> Result<()> {
         bigtable_store,
     )
     .await;
-    let mut executor = IndexerExecutor::new(progress_store, config.tasks.len(), metrics);
+    let mut executor = IndexerExecutor::new(progress_store, config.tasks.len());
     for task_config in config.tasks {
         match task_config.task {
             Task::Archival(archival_config) => {

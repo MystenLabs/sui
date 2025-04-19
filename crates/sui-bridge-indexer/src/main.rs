@@ -41,7 +41,6 @@ use sui_bridge_indexer::sui_transaction_queries::start_sui_tx_polling_task;
 use sui_bridge_indexer::{
     create_eth_subscription_indexer, create_eth_sync_indexer, create_sui_indexer,
 };
-use sui_data_ingestion_core::DataIngestionMetrics;
 use sui_sdk::SuiClientBuilder;
 
 #[derive(Parser, Clone, Debug)]
@@ -78,7 +77,6 @@ async fn main() -> Result<()> {
     info!("Metrics server started at port {}", config.metric_port);
 
     let indexer_meterics = BridgeIndexerMetrics::new(&registry);
-    let ingestion_metrics = DataIngestionMetrics::new(&registry);
     let bridge_metrics = Arc::new(BridgeMetrics::new(&registry));
 
     let db_url = config.db_url.clone();
@@ -117,7 +115,7 @@ async fn main() -> Result<()> {
     .await?;
     tasks.push(spawn_logged_monitored_task!(eth_sync_indexer.start()));
 
-    let indexer = create_sui_indexer(pool, indexer_meterics, ingestion_metrics, &config).await?;
+    let indexer = create_sui_indexer(pool, indexer_meterics, (), &config).await?;
     tasks.push(spawn_logged_monitored_task!(indexer.start()));
 
     let sui_bridge_client =

@@ -2,11 +2,10 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::progress_store::ExecutorProgress;
-use crate::{DataIngestionMetrics, FileProgressStore, IndexerExecutor, WorkerPool};
+use crate::{FileProgressStore, IndexerExecutor, WorkerPool};
 use crate::{ReaderOptions, Worker};
 use anyhow::Result;
 use async_trait::async_trait;
-use prometheus::Registry;
 use rand::prelude::StdRng;
 use rand::SeedableRng;
 use std::path::PathBuf;
@@ -120,7 +119,6 @@ fn create_executor_bundle() -> ExecutorBundle {
     let executor = IndexerExecutor::new(
         progress_store,
         1,
-        DataIngestionMetrics::new(&Registry::new()),
     );
     ExecutorBundle {
         executor,

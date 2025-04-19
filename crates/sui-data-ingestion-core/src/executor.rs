@@ -7,11 +7,10 @@ use crate::progress_store::{
 use crate::reader::CheckpointReader;
 use crate::worker_pool::WorkerPool;
 use crate::Worker;
-use crate::{DataIngestionMetrics, ReaderOptions};
+use crate::ReaderOptions;
 use anyhow::Result;
 use futures::Future;
 use mysten_metrics::spawn_monitored_task;
-use prometheus::Registry;
 use std::path::PathBuf;
 use std::pin::Pin;
 use std::sync::Arc;
@@ -28,11 +27,10 @@ pub struct IndexerExecutor<P> {
     progress_store: ProgressStoreWrapper<P>,
     pool_progress_sender: mpsc::Sender<(String, CheckpointSequenceNumber)>,
     pool_progress_receiver: mpsc::Receiver<(String, CheckpointSequenceNumber)>,
-    metrics: DataIngestionMetrics,
 }
 
 impl<P: ProgressStore> IndexerExecutor<P> {
-    pub fn new(progress_store: P, number_of_jobs: usize, metrics: DataIngestionMetrics) -> Self {
+    pub fn new(progress_store: P, number_of_jobs: usize) -> Self {
         let (pool_progress_sender, pool_progress_receiver) =
             mpsc::channel(number_of_jobs * MAX_CHECKPOINTS_IN_PROGRESS);
         Self {
@@ -41,7 +39,6 @@ impl<P: ProgressStore> IndexerExecutor<P> {
             progress_store: ProgressStoreWrapper::new(progress_store),
             pool_progress_sender,
             pool_progress_receiver,
-            metrics,
         }
     }
 
@@ -92,7 +89,6 @@ impl<P: ProgressStore> IndexerExecutor<P> {
                         gc_sender.send(seq_number).await?;
                         reader_checkpoint_number = seq_number;
                     }
-                    self.metrics.data_ingestion_checkpoint.with_label_values(&[&task_name]).set(sequence_number as i64);
                 }
                 Some(checkpoint) = checkpoint_recv.recv() => {
                     if let Some(limit) = upper_limit {
@@ -129,9 +125,8 @@ pub async fn setup_single_workflow<W: Worker + 'static>(
     oneshot::Sender<()>,
 )> {
     let (exit_sender, exit_receiver) = oneshot::channel();
-    let metrics = DataIngestionMetrics::new(&Registry::new());
     let progress_store = ShimProgressStore(initial_checkpoint_number);
-    let mut executor = IndexerExecutor::new(progress_store, 1, metrics);
+    let mut executor = IndexerExecutor::new(progress_store, 1);
     let worker_pool = WorkerPool::new(worker, "workflow".to_string(), concurrency);
     executor.register(worker_pool).await?;
     Ok((
