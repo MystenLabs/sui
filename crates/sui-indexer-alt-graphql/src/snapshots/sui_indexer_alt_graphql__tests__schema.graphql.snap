@@ -115,6 +115,10 @@ input ObjectKey {
 	- The object itself, if it is not object-owned or wrapped.
 	"""
 	rootVersion: UInt53
+	"""
+	If specified, tries to fetch the latest version as of this checkpoint.
+	"""
+	atCheckpoint: UInt53
 }
 
 """
@@ -173,11 +177,13 @@ type Query {
 	- The root object of its owner, if it is owned by another object.
 	- The object itself, if it is not object-owned or wrapped.
 	
+	If `atCheckpoint` is specified, the object will be fetched at the latest version as of this checkpoint.
+	
 	It is an error to specify both `version` and `rootVersion`, or to specify neither.
 	
 	Returns `null` if an object cannot be found that meets this criteria.
 	"""
-	object(address: SuiAddress!, version: UInt53, rootVersion: UInt53): Object
+	object(address: SuiAddress!, version: UInt53, rootVersion: UInt53, atCheckpoint: UInt53): Object
 	"""
 	Configuration for this RPC service.
 	"""

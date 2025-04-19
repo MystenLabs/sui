@@ -7,7 +7,9 @@ use anyhow::Context as _;
 use async_graphql::{dataloader::DataLoader, Context, InputObject, Object};
 use fastcrypto::encoding::{Base58, Encoding};
 use sui_indexer_alt_reader::{
-    kv_loader::KvLoader, object_versions::VersionBoundedObjectVersionKey, pg_reader::PgReader,
+    kv_loader::KvLoader,
+    object_versions::{CheckpointBoundedObjectVersionKey, VersionBoundedObjectVersionKey},
+    pg_reader::PgReader,
 };
 use sui_types::{
     base_types::{ObjectID, SequenceNumber, SuiAddress as NativeSuiAddress},
@@ -52,6 +54,9 @@ pub(crate) struct ObjectKey {
     /// - The root object of its owner, if it is owned by another object.
     /// - The object itself, if it is not object-owned or wrapped.
     pub root_version: Option<UInt53>,
+
+    /// If specified, tries to fetch the latest version as of this checkpoint.
+    pub at_checkpoint: Option<UInt53>,
 }
 
 #[derive(thiserror::Error, Debug, Clone)]
@@ -132,13 +137,15 @@ impl Object {
         }
     }
 
-    /// Fetch an object by its key. The key can either specify an exact version to fetch, or an
-    /// upperbound against a "root version".
+    /// Fetch an object by its key. The key can either specify an exact version to fetch, an
+    /// upperbound against a "root version", or an upperbound against a checkpoint.
     pub(crate) async fn by_key(
         ctx: &Context<'_>,
         key: ObjectKey,
     ) -> Result<Option<Self>, RpcError<Error>> {
-        let bounds = key.version.is_some() as u8 + key.root_version.is_some() as u8;
+        let bounds = key.version.is_some() as u8
+            + key.root_version.is_some() as u8
+            + key.at_checkpoint.is_some() as u8;
 
         if bounds > 1 {
             Err(bad_user_input(Error::OneBound))
@@ -146,6 +153,8 @@ impl Object {
             Ok(Self::at_version(ctx, key.address, v).await?)
         } else if let Some(v) = key.root_version {
             Ok(Self::version_bounded(ctx, key.address, v).await?)
+        } else if let Some(cp) = key.at_checkpoint {
+            Ok(Self::checkpoint_bounded(ctx, key.address, cp).await?)
         } else {
             Err(bad_user_input(Error::NotSupported))
         }
@@ -164,6 +173,39 @@ impl Object {
             .load_one(VersionBoundedObjectVersionKey(
                 address.into(),
                 root_version.into(),
+            ))
+            .await
+            .context("Failed to fetch object versions")?
+        else {
+            return Ok(None);
+        };
+
+        // Lack of an object digest indicates that the object was deleted or wrapped at this
+        // version.
+        let Some(digest) = stored.object_digest else {
+            return Ok(None);
+        };
+
+        Ok(Some(Object::with_ref(
+            ObjectID::from_bytes(stored.object_id).context("Failed to deserialize Object ID")?,
+            SequenceNumber::from_u64(stored.object_version as u64),
+            ObjectDigest::try_from(&digest[..]).context("Failed to deserialize Object Digest")?,
+        )))
+    }
+
+    /// Fetch the latest version of the object at the given address as of the checkpoint with
+    /// sequence number `at_checkpoint`.
+    pub(crate) async fn checkpoint_bounded(
+        ctx: &Context<'_>,
+        address: SuiAddress,
+        at_checkpoint: UInt53,
+    ) -> Result<Option<Self>, RpcError<Error>> {
+        let pg_loader: &Arc<DataLoader<PgReader>> = ctx.data()?;
+
+        let Some(stored) = pg_loader
+            .load_one(CheckpointBoundedObjectVersionKey(
+                address.into(),
+                at_checkpoint.into(),
             ))
             .await
             .context("Failed to fetch object versions")?

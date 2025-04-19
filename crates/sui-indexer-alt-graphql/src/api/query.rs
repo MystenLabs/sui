@@ -73,6 +73,8 @@ impl Query {
     /// - The root object of its owner, if it is owned by another object.
     /// - The object itself, if it is not object-owned or wrapped.
     ///
+    /// If `atCheckpoint` is specified, the object will be fetched at the latest version as of this checkpoint.
+    ///
     /// It is an error to specify both `version` and `rootVersion`, or to specify neither.
     ///
     /// Returns `null` if an object cannot be found that meets this criteria.
@@ -82,6 +84,7 @@ impl Query {
         address: SuiAddress,
         version: Option<UInt53>,
         root_version: Option<UInt53>,
+        at_checkpoint: Option<UInt53>,
     ) -> Result<Option<Object>, RpcError<object::Error>> {
         Object::by_key(
             ctx,
@@ -89,6 +92,7 @@ impl Query {
                 address,
                 version,
                 root_version,
+                at_checkpoint,
             },
         )
         .await
