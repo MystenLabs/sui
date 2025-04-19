@@ -9,6 +9,7 @@ edition = "2021"
 [dependencies]
 anyhow.workspace = true
 clap.workspace = true
+clap_complete.workspace = true
 colored.workspace = true
 once_cell.workspace = true
 serde_json.workspace = true

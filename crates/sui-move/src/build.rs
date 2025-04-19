@@ -12,6 +12,7 @@ use sui_package_management::system_package_versions::latest_system_packages;
 const LAYOUTS_DIR: &str = "layouts";
 const STRUCT_LAYOUTS_FILENAME: &str = "struct_layouts.yaml";
 
+/// Build a Move package
 #[derive(Parser)]
 #[group(id = "sui-move-build")]
 pub struct Build {

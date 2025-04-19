@@ -9,12 +9,15 @@ use sui_types::{
 
 use sui_package_resolver::Resolver;
 
-use clap::{Parser, Subcommand};
+use clap::{Parser, Subcommand, CommandFactory};
+use clap_complete::{generate, Shell};
 use std::{fs, path::PathBuf, str::FromStr};
 use sui_light_client::checkpoint::check_and_sync_checkpoints;
 use sui_light_client::config::Config;
 use sui_light_client::package_store::RemotePackageStore;
 use sui_light_client::verifier::{get_verified_effects_and_events, get_verified_object};
+
+use anyhow::anyhow;
 
 use tracing::info;
 
@@ -48,6 +51,14 @@ enum SCommands {
         #[arg(short, long, value_name = "OID")]
         oid: String,
     },
+
+    /// Generate autocompletion script
+    #[clap(name = "completion", hide = false)]
+    Completion {
+        #[clap(long = "shell")]
+        shell: Option<String>,
+    },
+
 }
 
 #[tokio::main]
@@ -56,6 +67,16 @@ pub async fn main() {
 
     // Command line arguments and config loading
     let args = Args::parse();
+
+    if let Some(SCommands::Completion { shell }) = args.command {
+        let sh = if let Some(shell) = shell {
+            clap::ValueEnum::from_str(&shell, true).map_err(|e| anyhow!("Unknown shell: {e}"))
+        } else {
+            Shell::from_env().ok_or(anyhow!("Could not detect shell"))
+        }.expect("Shell not found");
+        generate(sh, &mut Args::command(), Args::command().get_name(), &mut std::io::stdout());
+        return
+    }
 
     let path = args
         .config

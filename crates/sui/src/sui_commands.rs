@@ -10,6 +10,7 @@ use crate::keytool::KeyToolCommand;
 use crate::validator_commands::SuiValidatorCommand;
 use anyhow::{anyhow, bail, ensure, Context};
 use clap::*;
+use clap_complete::{generate, Shell};
 use colored::Colorize;
 use fastcrypto::traits::KeyPair;
 use move_analyzer::analyzer;
@@ -346,6 +347,13 @@ pub enum SuiCommand {
     /// Invoke Sui's move-analyzer via CLI
     #[clap(name = "analyzer", hide = true)]
     Analyzer,
+
+    /// Generate autocompletion script for SUI
+    #[clap(name = "completion", hide = true)]
+    Completion {
+        #[clap(long = "shell")]
+        shell: Option<String>,
+    },
 }
 
 impl SuiCommand {
@@ -646,6 +654,15 @@ impl SuiCommand {
             SuiCommand::FireDrill { fire_drill } => run_fire_drill(fire_drill).await,
             SuiCommand::Analyzer => {
                 analyzer::run(implicit_deps(latest_system_packages()));
+                Ok(())
+            }
+            SuiCommand::Completion { shell } => {
+                let sh = if let Some(shell) = shell {
+                    Shell::from_str(&shell, true).map_err(|e| anyhow!("Unknown shell: {e}"))
+                } else {
+                    Shell::from_env().ok_or(anyhow!("Could not detect shell"))
+                }?;
+                generate(sh, &mut SuiCommand::command(), SuiCommand::command().get_name(), &mut io::stdout());
                 Ok(())
             }
         }

@@ -3,6 +3,7 @@
 
 use std::path::PathBuf;
 
+use anyhow::anyhow;
 use clap::*;
 use colored::Colorize;
 use move_package::BuildConfig as MoveBuildConfig;
@@ -46,6 +47,17 @@ async fn main() {
 
     let bin_name = env!("CARGO_BIN_NAME");
     let args = Args::parse();
+
+    if let sui_move::Command::Completion { shell } = args.cmd {
+        let sh = if let Some(shell) = shell {
+            clap::ValueEnum::from_str(&shell, true).map_err(|e| anyhow!("Unknown shell: {e}"))
+        } else {
+            clap_complete::Shell::from_env().ok_or(anyhow!("Could not detect shell"))
+        }.expect("Shell not found");
+        clap_complete::generate(sh, &mut Args::command(), Args::command().get_name(), &mut std::io::stdout());
+        return
+    }
+
     // let _guard = match args.command {
     //     SuiCommand::Console { .. } | SuiCommand::Client { .. } => {
     //         telemetry_subscribers::TelemetryConfig::new()
