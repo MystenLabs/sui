@@ -19,6 +19,7 @@ use sui_types::full_checkpoint_content::CheckpointData;
 use sui_types::messages_checkpoint::CheckpointSequenceNumber;
 use tokio::sync::mpsc;
 use tokio::sync::oneshot;
+use tracing::info;
 
 pub const MAX_CHECKPOINTS_IN_PROGRESS: usize = 10000;
 
@@ -92,7 +93,9 @@ impl<P: ProgressStore> IndexerExecutor<P> {
                         gc_sender.send(seq_number).await?;
                         reader_checkpoint_number = seq_number;
                     }
-                    self.metrics.data_ingestion_checkpoint.with_label_values(&[&task_name]).set(sequence_number as i64);
+                    let task_names = &[&task_name];
+                    info!("task_names: {:?}", task_names);
+                    // self.metrics.data_ingestion_checkpoint.with_label_values(&[&task_name]).set(sequence_number as i64);
                 }
                 Some(checkpoint) = checkpoint_recv.recv() => {
                     if let Some(limit) = upper_limit {
