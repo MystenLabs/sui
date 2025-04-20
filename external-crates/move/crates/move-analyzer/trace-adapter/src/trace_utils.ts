@@ -368,9 +368,9 @@ const INLINED_FRAME_ID_DIFFERENT_FILE = -2;
  * Reads a Move VM execution trace from a JSON file.
  *
  * @param traceFilePath path to the trace JSON file.
- * @param sourceMapsHashMap a map from file hash to a source map.
- * @param sourceMapsModMap a map from stringified module info to a source map.
- * @param bcodeMapModMap a map from stringified module info to a bytecode map.
+ * @param srcDebugInfosHashMap a map from file hash to debug info.
+ * @param srcDebugInfosModMap a map from stringified module info to debug info.
+ * @param bcodeDebugInfosModMap a map from stringified module info to debug info.
  * @param filesMap a map from file hash to file info (for both source files
  * and disassembled bytecode files).
  * @returns execution trace.
@@ -378,9 +378,9 @@ const INLINED_FRAME_ID_DIFFERENT_FILE = -2;
  */
 export async function readTrace(
     traceFilePath: string,
-    sourceMapsHashMap: Map<string, IDebugInfo>,
-    sourceMapsModMap: Map<string, IDebugInfo>,
-    bcodeMapModMap: Map<string, IDebugInfo>,
+    srcDebugInfosHashMap: Map<string, IDebugInfo>,
+    srcDebugInfosModMap: Map<string, IDebugInfo>,
+    bcodeDebugInfosModMap: Map<string, IDebugInfo>,
     filesMap: Map<string, IFileInfo>,
 ): Promise<ITrace> {
     const buf = Buffer.from(fs.readFileSync(traceFilePath));
@@ -450,7 +450,7 @@ export async function readTrace(
                 addr: frame.module.address,
                 name: frame.module.name
             };
-            const sourceMap = sourceMapsModMap.get(JSON.stringify(modInfo));
+            const sourceMap = srcDebugInfosModMap.get(JSON.stringify(modInfo));
             if (!sourceMap) {
                 throw new Error('Source map for module '
                     + modInfo.name
@@ -476,7 +476,7 @@ export async function readTrace(
             let optimizedBcodeLines = undefined;
             let bcodeFunEntry = undefined;
             let bcodeFilePath = undefined;
-            const bcodeMap = bcodeMapModMap.get(JSON.stringify(modInfo));
+            const bcodeMap = bcodeDebugInfosModMap.get(JSON.stringify(modInfo));
             if (bcodeMap) {
                 bcodeFileHash = bcodeMap.fileHash;
                 optimizedBcodeLines = bcodeMap.optimizedLines;
@@ -541,7 +541,7 @@ export async function readTrace(
             }
 
             const differentFileVirtualFramePop = processInstructionIfMacro(
-                sourceMapsHashMap,
+                srcDebugInfosHashMap,
                 events,
                 frameInfoStack,
                 event.Instruction.pc,
@@ -553,7 +553,7 @@ export async function readTrace(
                 // we may still land in a macro defined in the same file, in which case
                 // we need to push another virtual frame for this instruction right away
                 processInstructionIfMacro(
-                    sourceMapsHashMap,
+                    srcDebugInfosHashMap,
                     events,
                     frameInfoStack,
                     event.Instruction.pc,
