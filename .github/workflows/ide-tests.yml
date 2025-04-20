@@ -42,15 +42,15 @@ jobs:
         with:
           version: 9.1.1
   
+      - name: Install dependencies
+        working-directory: ./external-crates/move/crates/move-analyzer/prettier-plugin
+        run: npm install && npm i web-tree-sitter
+  
       - name: Setup Node
         uses: actions/setup-node@60edb5dd545a775178f52524783378180af0d1f8 # pin@v4.0.2
         with:
           node-version: '20'
           cache: 'pnpm'
-  
-      - name: Install dependencies
-        working-directory: ./external-crates/move/crates/move-analyzer/prettier-plugin
-        run: npm install && npm i web-tree-sitter
   
       - name: Run npm test
         working-directory: ./external-crates/move/crates/move-analyzer/prettier-plugin
@@ -74,16 +74,16 @@ jobs:
         with:
           version: 9.1.1
 
+      - name: Install dependencies
+        working-directory: ./external-crates/move/crates/move-analyzer/trace-adapter
+        shell: bash
+        run: npm install
+
       - name: Setup Node
         uses: actions/setup-node@60edb5dd545a775178f52524783378180af0d1f8 # pin@v4.0.2
         with:
           node-version: '20'
           cache: 'pnpm'
-
-      - name: Install dependencies
-        working-directory: ./external-crates/move/crates/move-analyzer/trace-adapter
-        shell: bash
-        run: npm install
 
       - name: Run npm test
         working-directory: ./external-crates/move/crates/move-analyzer/trace-adapter
