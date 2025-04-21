@@ -31,7 +31,7 @@ pub fn main() {
         .map(|(id, query)| {
             let env_str = match query.environment_id {
                 Some(e) => format!("for environment {}", &e),
-                None => format!("for default environment"),
+                None => "for default environment".to_string(),
             };
 
             eprintln!("Resolving request `{}` {env_str}.", id);

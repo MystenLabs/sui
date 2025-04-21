@@ -93,9 +93,7 @@ impl<T> Iterator for IntoIter<T> {
                 return Some((self.environment_name.clone(), name, value));
             }
 
-            let Some((env, table)) = self.outer.next() else {
-                return None;
-            };
+            let (env, table) = self.outer.next()?;
 
             self.environment_name = Some(env);
             self.inner = table.into_iter();
@@ -139,10 +137,7 @@ impl<'a, T> Iterator for Iter<'a, T> {
                 return Some((self.environment_name, name, value));
             }
 
-            let Some((env, table)) = self.outer.next() else {
-                return None;
-            };
-
+            let (env, table) = self.outer.next()?;
             self.environment_name = Some(env);
             self.inner = table.iter();
         }

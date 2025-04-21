@@ -68,6 +68,7 @@ pub enum PinnedDependencyInfo<F: MoveFlavor + ?Sized> {
 }
 
 /// Split up deps into kinds. The union of the output sets is the same as [deps]
+#[allow(clippy::type_complexity)]
 fn split<F: MoveFlavor>(
     deps: &DependencySet<ManifestDependencyInfo<F>>,
 ) -> (
