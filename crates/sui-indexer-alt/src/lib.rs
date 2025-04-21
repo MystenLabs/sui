@@ -4,27 +4,14 @@
 use bootstrap::bootstrap;
 use config::{IndexerConfig, PipelineLayer};
 use handlers::{
-    coin_balance_buckets::CoinBalanceBuckets,
-    cp_sequence_numbers::CpSequenceNumbers,
-    ev_emit_mod::EvEmitMod,
-    ev_struct_inst::EvStructInst,
-    kv_checkpoints::KvCheckpoints,
-    kv_epoch_ends::KvEpochEnds,
-    kv_epoch_starts::KvEpochStarts,
-    kv_feature_flags::KvFeatureFlags,
-    kv_objects::KvObjects,
-    kv_packages::KvPackages,
-    kv_protocol_configs::KvProtocolConfigs,
-    kv_transactions::KvTransactions,
-    obj_info::ObjInfo,
-    obj_versions::{ObjVersions, ObjVersionsSentinelBackfill},
-    sum_displays::SumDisplays,
-    sum_packages::SumPackages,
-    tx_affected_addresses::TxAffectedAddresses,
-    tx_affected_objects::TxAffectedObjects,
-    tx_balance_changes::TxBalanceChanges,
-    tx_calls::TxCalls,
-    tx_digests::TxDigests,
+    coin_balance_buckets::CoinBalanceBuckets, cp_sequence_numbers::CpSequenceNumbers,
+    ev_emit_mod::EvEmitMod, ev_struct_inst::EvStructInst, kv_checkpoints::KvCheckpoints,
+    kv_epoch_ends::KvEpochEnds, kv_epoch_starts::KvEpochStarts, kv_feature_flags::KvFeatureFlags,
+    kv_objects::KvObjects, kv_packages::KvPackages, kv_protocol_configs::KvProtocolConfigs,
+    kv_transactions::KvTransactions, obj_info::ObjInfo, obj_versions::ObjVersions,
+    sum_displays::SumDisplays, sum_packages::SumPackages,
+    tx_affected_addresses::TxAffectedAddresses, tx_affected_objects::TxAffectedObjects,
+    tx_balance_changes::TxBalanceChanges, tx_calls::TxCalls, tx_digests::TxDigests,
     tx_kinds::TxKinds,
 };
 use prometheus::Registry;
@@ -90,7 +77,6 @@ pub async fn setup_indexer(
         kv_transactions,
         obj_info,
         obj_versions,
-        obj_versions_sentinel_backfill,
         tx_affected_addresses,
         tx_affected_objects,
         tx_balance_changes,
@@ -209,7 +195,6 @@ pub async fn setup_indexer(
     add_concurrent!(KvPackages, kv_packages);
     add_concurrent!(KvTransactions, kv_transactions);
     add_concurrent!(ObjVersions, obj_versions);
-    add_concurrent!(ObjVersionsSentinelBackfill, obj_versions_sentinel_backfill);
     add_concurrent!(TxAffectedAddresses, tx_affected_addresses);
     add_concurrent!(TxAffectedObjects, tx_affected_objects);
     add_concurrent!(TxBalanceChanges, tx_balance_changes);
