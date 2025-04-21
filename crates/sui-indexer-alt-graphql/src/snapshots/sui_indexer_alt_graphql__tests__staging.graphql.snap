@@ -10,13 +10,35 @@ scalar Base64
 
 
 
+"""
+Interface implemented by versioned on-chain values that are addressable by an ID (also referred to as its address). This includes Move objects and packages.
+"""
+interface IObject {
+	"""
+	The version of this object that this content comes from.
+	"""
+	version: UInt53!
+	"""
+	32-byte hash that identifies the object's contents, encoded in Base58.
+	"""
+	digest: String!
+	"""
+	The Base64-encoded BCS serialization of this object, as an `Object`.
+	"""
+	objectBcs: Base64
+	"""
+	The transaction that created this version of the object
+	"""
+	previousTransaction: Transaction
+}
+
 
 """
 An Object on Sui is either a typed value (a Move Object) or a Package (modules containing functions and types).
 
 Every object on Sui is identified by a unique address, and has a version number that increases with every modification. Objects also hold metadata detailing their current owner (who can sign for access to the object and whether that access can modify and/or delete the object), and the digest of the last transaction that modified the object.
 """
-type Object {
+type Object implements IObject {
 	"""
 	The Object's ID.
 	"""
