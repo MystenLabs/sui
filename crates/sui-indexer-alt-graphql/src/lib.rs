@@ -4,6 +4,7 @@
 use std::{any::Any, net::SocketAddr, sync::Arc};
 
 use anyhow::{self, Context};
+use api::types::object::IObject;
 use async_graphql::{
     extensions::ExtensionFactory, http::GraphiQLSource, EmptyMutation, EmptySubscription,
     ObjectType, Schema, SchemaBuilder, SubscriptionType,
@@ -239,7 +240,7 @@ impl Default for RpcArgs {
 
 /// The GraphQL schema this service will serve, without any extensions or context added.
 pub fn schema() -> SchemaBuilder<Query, EmptyMutation, EmptySubscription> {
-    Schema::build(Query, EmptyMutation, EmptySubscription)
+    Schema::build(Query, EmptyMutation, EmptySubscription).register_output_type::<IObject>()
 }
 
 /// Set-up and run the RPC service, using the provided arguments (expected to be extracted from the
