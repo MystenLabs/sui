@@ -152,8 +152,6 @@ pub struct JobConfig {
     pub sf_username: Option<String>,
     pub sf_role: Option<String>,
     pub sf_password_file: Option<String>,
-    /// The number of CPUs tokio can use.
-    pub num_cpus: Option<usize>,
 
     // This is private to enforce using the TaskContext struct
     #[serde(rename = "tasks")]
