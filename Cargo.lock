@@ -8023,6 +8023,7 @@ dependencies = [
  "serde",
  "serde_spanned",
  "thiserror 1.0.69",
+ "tokio",
  "toml 0.5.11",
  "toml_edit 0.22.24",
 ]
