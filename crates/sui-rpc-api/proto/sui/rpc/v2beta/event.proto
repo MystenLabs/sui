@@ -5,6 +5,7 @@ syntax = "proto3";
 
 package sui.rpc.v2beta;
 
+import "google/protobuf/struct.proto";
 import "sui/rpc/v2beta/bcs.proto";
 
 // Events emitted during the successful execution of a transaction.
@@ -37,4 +38,7 @@ message Event {
 
   // BCS serialized bytes of the event.
   optional Bcs contents = 5;
+
+  // JSON rendering of the event.
+  optional google.protobuf.Value json = 100;
 }
