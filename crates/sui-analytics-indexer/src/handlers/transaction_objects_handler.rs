@@ -51,9 +51,7 @@ impl Worker for TransactionObjectsHandler {
 impl AnalyticsHandler<TransactionObjectEntry> for TransactionObjectsHandler {
     async fn read(&self) -> Result<Vec<TransactionObjectEntry>> {
         let mut state = self.state.lock().await;
-        let cloned = state.transaction_objects.clone();
-        state.transaction_objects.clear();
-        Ok(cloned)
+        Ok(std::mem::take(&mut state.transaction_objects))
     }
 
     fn file_type(&self) -> Result<FileType> {

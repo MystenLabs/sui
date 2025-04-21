@@ -54,9 +54,7 @@ impl Worker for MoveCallHandler {
 impl AnalyticsHandler<MoveCallEntry> for MoveCallHandler {
     async fn read(&self) -> Result<Vec<MoveCallEntry>> {
         let mut state = self.state.lock().await;
-        let cloned = state.move_calls.clone();
-        state.move_calls.clear();
-        Ok(cloned)
+        Ok(std::mem::take(&mut state.move_calls))
     }
 
     fn file_type(&self) -> Result<FileType> {

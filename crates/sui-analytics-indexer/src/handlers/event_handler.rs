@@ -70,9 +70,7 @@ impl Worker for EventHandler {
 impl AnalyticsHandler<EventEntry> for EventHandler {
     async fn read(&self) -> Result<Vec<EventEntry>> {
         let mut state = self.state.lock().await;
-        let cloned = state.events.clone();
-        state.events.clear();
-        Ok(cloned)
+        Ok(std::mem::take(&mut state.events))
     }
 
     fn file_type(&self) -> Result<FileType> {
