@@ -106,8 +106,7 @@ pub async fn pin<F: MoveFlavor>(
 ) -> PackageResult<DependencySet<PinnedDependencyInfo<F>>> {
     let (mut gits, mut exts, mut locs, mut flav) = split(deps);
 
-    // TODO: errors!
-    let resolved = ExternalDependency::resolve::<F>(exts, envs).await.unwrap();
+    let resolved = ExternalDependency::resolve::<F>(exts, envs).await?;
 
     let (resolved_gits, resolved_exts, resolved_locs, resolved_flav) = split(&resolved);
 

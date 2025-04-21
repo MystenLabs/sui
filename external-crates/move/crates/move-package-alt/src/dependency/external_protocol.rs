@@ -47,7 +47,12 @@
 //!
 //! Anything the resolver prints on stderr will be logged using [tracing::info!]
 
-use std::{collections::BTreeMap, io::BufRead, process::Stdio};
+use std::{
+    collections::BTreeMap,
+    fmt::Display,
+    io::BufRead,
+    process::{ExitCode, ExitStatus, Stdio},
+};
 
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
@@ -56,6 +61,8 @@ use tokio::{
     process::{Child, ChildStdin, Command},
 };
 use tracing::{debug, info};
+
+use crate::errors::ResolverError;
 
 /// A name of a binary to invoke for for resolution
 pub type ResolverName = String;
@@ -106,58 +113,13 @@ pub struct Query {
 #[serde(bound = "", untagged, deny_unknown_fields)]
 pub enum QueryResult {
     Error {
-        errors: Vec<String>,
+        error: String,
     },
     Success {
         #[serde(default)]
         warnings: Vec<String>,
         resolved: toml::Value,
     },
-}
-
-#[derive(Error, Debug)]
-pub enum ResolutionError {
-    #[error("I/O Error when running external resolver {resolver}")]
-    IoError {
-        resolver: ResolverName,
-
-        #[source]
-        source: std::io::Error,
-    },
-
-    /// This indicates that the resolver was faulty
-    #[error("Resolver {resolver} returned an incorrectly-formatted response: {message}")]
-    BadResolver {
-        resolver: ResolverName,
-        message: String,
-    },
-
-    /// This indicates that the resolver was functioning properly but couldn't resolve a dependency
-    #[error(
-        "Resolver failed to resolve dependency {query_id}. It reported the following errors: TODO"
-    )]
-    ResolverFailure {
-        resolver: ResolverName,
-        query_id: QueryID,
-        query: Query,
-        errors: Vec<String>,
-    },
-}
-
-impl ResolutionError {
-    fn io_error(resolver: &ResolverName, source: std::io::Error) -> Self {
-        Self::IoError {
-            resolver: resolver.clone(),
-            source,
-        }
-    }
-
-    fn bad_resolver(resolver: &ResolverName, source: String, message: impl AsRef<str>) -> Self {
-        Self::BadResolver {
-            resolver: resolver.clone(),
-            message: message.as_ref().to_string(),
-        }
-    }
 }
 
 impl Request {
@@ -170,37 +132,35 @@ impl Request {
 
     /// Run the external resolver [resolver] and return its response. The response is guaranteed to
     /// contain the same keys as [self]. This method also forwards the standard error from the
-    /// resolver to this process's standard error
-    pub async fn execute(&self, resolver: &ResolverName) -> anyhow::Result<Response> {
+    /// resolver to `info!`
+    pub async fn execute(&self, resolver: &ResolverName) -> Result<Response, ResolverError> {
         let mut child = Command::new(resolver)
             .arg(RESOLVE_ARG)
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
             .stderr(Stdio::piped())
             .spawn()
-            .map_err(|e| ResolutionError::io_error(resolver, e))?;
+            .map_err(|e| ResolverError::io_error(resolver, e))?;
 
         send_request(resolver, self, child.stdin.take().expect("stdin exists")).await;
         let response = recv_response(resolver, child).await?;
 
         for key in self.queries.keys() {
             if !response.responses.contains_key(key) {
-                // TODO: failure here is a bad response from the resolver
-                anyhow::bail!("External resolver didn't resolve {key}");
+                return Err(ResolverError::bad_resolver(
+                    resolver,
+                    format!("External resolver didn't resolve {key}"),
+                ));
             }
         }
 
         for (key, result) in response.responses.iter() {
             if !self.queries.contains_key(key) {
-                // TODO: failure here is a bad response from the resolver
-                anyhow::bail!("External resolver returned extra result {key}");
+                return Err(ResolverError::bad_resolver(
+                    resolver,
+                    format!("External resolver returned extra result {key}"),
+                ));
             }
-
-            let QueryResult::Success { .. } = result else {
-                // TODO: failure here is an appropriate response from the resolver but indicates a
-                // resolution failure
-                anyhow::bail!("External resolver failed for {key}");
-            };
         }
 
         Ok(response)
@@ -230,15 +190,18 @@ async fn send_request(resolver: &ResolverName, request: &Request, mut stdin: Chi
 }
 
 /// Read a response from [child]'s stdin; logging using [resolver]
-async fn recv_response(resolver: &ResolverName, mut child: Child) -> anyhow::Result<Response> {
+async fn recv_response(
+    resolver: &ResolverName,
+    mut child: Child,
+) -> Result<Response, ResolverError> {
     let output = child
         .wait_with_output()
         .await
-        .map_err(|e| ResolutionError::io_error(resolver, e))?;
+        .map_err(|e| ResolverError::io_error(resolver, e))?;
 
     debug!("{resolver} stdout");
     for line in output.stdout.lines() {
-        debug!("  │ {}", line.unwrap());
+        debug!("  │ {}", line.expect("reading from stdout can't fail"));
     }
 
     if !output.stderr.is_empty() {
@@ -248,11 +211,13 @@ async fn recv_response(resolver: &ResolverName, mut child: Child) -> anyhow::Res
         }
     }
 
-    // TODO: failure here indicates a bad response from the resolver
-    let response = String::from_utf8(output.stdout)?;
+    let response = String::from_utf8(output.stdout)
+        .map_err(|_| ResolverError::bad_resolver(resolver, "response not utf8 encoded"))?;
 
-    // TODO: check exit code of resolver?
+    if !output.status.success() {
+        return Err(ResolverError::nonzero_exit(resolver, output.status));
+    }
 
-    // TODO: failure here indicates a bad response from the resolver
-    Ok(toml::from_str(&response)?)
+    Ok(toml::from_str(&response)
+        .map_err(|it| ResolverError::bad_resolver(resolver, "incorrectly formatted response"))?)
 }

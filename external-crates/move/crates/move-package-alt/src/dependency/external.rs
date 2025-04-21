@@ -13,9 +13,12 @@ use serde::{
     Deserialize, Serialize,
 };
 use serde_spanned::Spanned;
+use tracing::warn;
 
 use crate::{
-    errors::{self, Located, ManifestError, ManifestErrorKind, PackageError, PackageResult},
+    errors::{
+        self, Located, ManifestError, ManifestErrorKind, PackageError, PackageResult, ResolverError,
+    },
     flavor::MoveFlavor,
     package::{EnvironmentName, PackageName},
 };
@@ -68,8 +71,7 @@ impl ExternalDependency {
             .into_iter()
             .map(move |(resolver, deps)| resolve_single::<F>(resolver, deps, envs));
 
-        // TODO: error!
-        let resolved_all = try_join_all(resolved).await.unwrap();
+        let resolved_all = try_join_all(resolved).await?;
 
         Ok(DependencySet::merge(resolved_all))
     }
@@ -101,19 +103,6 @@ impl From<ExternalDependency> for RField {
     }
 }
 
-impl<F: MoveFlavor> TryFrom<QueryResult> for ManifestDependencyInfo<F> {
-    type Error = anyhow::Error;
-
-    fn try_from(value: QueryResult) -> anyhow::Result<Self> {
-        match value {
-            // TODO: errors!
-            QueryResult::Error { errors } => bail!("External resolver failed!"),
-            // TODO: warnings!
-            QueryResult::Success { warnings, resolved } => Ok(Self::deserialize(resolved)?),
-        }
-    }
-}
-
 /// Resolve the dependencies in [dep_data] with the external resolver [resolver]; requests are
 /// performed for all environments in [envs]
 async fn resolve_single<F: MoveFlavor>(
@@ -121,6 +110,7 @@ async fn resolve_single<F: MoveFlavor>(
     dep_data: DependencySet<toml::Value>,
     envs: &BTreeMap<EnvironmentName, F::EnvironmentID>,
 ) -> PackageResult<DependencySet<ManifestDependencyInfo<F>>> {
+    // TODO: method is too long
     let mut request = Request::new(F::name());
 
     // request default resolution
@@ -151,25 +141,42 @@ async fn resolve_single<F: MoveFlavor>(
     let mut response = request.execute(&resolver).await?;
 
     // build the result
-    let resolved: DependencySet<ManifestDependencyInfo<F>> = dep_data
+    let resolved: Result<DependencySet<ManifestDependencyInfo<F>>, _> = dep_data
         .into_iter()
         .map(|(env, pkg_name, _)| {
             let query_id = query_id(&env, &pkg_name);
-            let result = response.responses.remove(&query_id).unwrap(); // TODO: errors!
+            let result = response
+                .responses
+                .remove(&query_id)
+                .expect("Request::execute returns the same keys as its input");
             let resolved = match result {
-                QueryResult::Error { errors } => panic!("Resolver failed!"),
-                // TODO: warnings!
-                QueryResult::Success { warnings, resolved } => resolved,
+                QueryResult::Error { error } => Err(ResolverError::resolver_failed(
+                    resolver.clone(),
+                    pkg_name,
+                    env,
+                    error,
+                )),
+                QueryResult::Success { warnings, resolved } => {
+                    // TODO: use diagnostics here
+                    for warning in warnings {
+                        warn!("{resolver}: {warning}");
+                    }
+
+                    if let Ok(result) = ManifestDependencyInfo::<F>::deserialize(resolved) {
+                        Ok((env, pkg_name, result))
+                    } else {
+                        Err(ResolverError::bad_resolver(
+                            &resolver,
+                            "incorrectly formatted dependency",
+                        ))
+                    }
+                }
             };
-            (
-                env,
-                pkg_name,
-                ManifestDependencyInfo::<F>::deserialize(resolved).unwrap(), // TODO: errors!
-            )
+            resolved
         })
         .collect();
 
-    Ok(resolved)
+    Ok(resolved?)
 }
 
 /// Generate a unique identifier corresponding to [env] and [pkg]
