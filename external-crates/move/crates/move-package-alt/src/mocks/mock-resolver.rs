@@ -27,7 +27,7 @@ enum RequestData {
     Stdio(Exit),
 
     /// [stderr] should be printed and [output] should be included in the output
-    Value(Process),
+    Echo(EchoValue),
 }
 
 #[derive(Deserialize)]
@@ -42,7 +42,7 @@ struct Exit {
 }
 
 #[derive(Deserialize)]
-struct Process {
+struct EchoValue {
     output: QueryResult,
     stderr: Option<String>,
 }
@@ -60,7 +60,7 @@ pub fn main() -> ExitCode {
         "External resolver must be called with a single argument `{RESOLVE_ARG}`"
     );
 
-    let responses: Result<BTreeMap<QueryID, Process>, Exit> = parse_input()
+    let responses: Result<BTreeMap<QueryID, EchoValue>, Exit> = parse_input()
         .queries
         .into_iter()
         .map(|(id, query)| {
@@ -76,7 +76,7 @@ pub fn main() -> ExitCode {
 
             match data {
                 RequestData::Stdio(exit) => Err(exit),
-                RequestData::Value(process) => Ok((id, process)),
+                RequestData::Echo(process) => Ok((id, process)),
             }
         })
         .collect();
@@ -94,9 +94,10 @@ fn parse_input() -> Request {
 }
 
 /// Report [output] on [stdout], [stderr], and the process return value
-fn generate_output(output: Result<BTreeMap<String, Process>, Exit>) -> ExitCode {
+fn generate_output(output: Result<BTreeMap<String, EchoValue>, Exit>) -> ExitCode {
     match output {
         Ok(responses) => {
+            debug!("Producing stderr");
             let responses = responses
                 .into_iter()
                 .map(|(id, p)| {
@@ -106,18 +107,23 @@ fn generate_output(output: Result<BTreeMap<String, Process>, Exit>) -> ExitCode 
                     (id, p.output)
                 })
                 .collect();
-            let response = Response { responses };
 
+            debug!("Producing stdout");
+            let response = Response { responses };
             println!(
                 "{}",
                 toml::to_string(&response).expect("response can be serialized")
             );
 
+            debug!("Exiting (success)");
             ExitCode::SUCCESS
         }
         Err(exit) => {
+            debug!("Producing stdout output");
             println!("{}", exit.stdout);
+            debug!("Producing stderr output");
             eprintln!("{}", exit.stderr);
+            debug!("Exiting");
             exit.exit_code.unwrap_or(0).into()
         }
     }
