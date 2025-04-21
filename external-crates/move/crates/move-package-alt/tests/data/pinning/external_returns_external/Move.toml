@@ -1,4 +1,4 @@
-# Broken external resolver produces a well-formed TOML output that doesn't represent a valid dependency
+# Broken external resolver produces another external dependency
 
 [package]
 name = "example"
