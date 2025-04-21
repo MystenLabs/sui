@@ -119,7 +119,6 @@ pub struct PipelineLayer {
 
     // Sequential pipelines
     pub sum_displays: Option<SequentialLayer>,
-    pub sum_packages: Option<SequentialLayer>,
 
     // All concurrent pipelines
     pub cp_sequence_numbers: Option<ConcurrentLayer>,
@@ -280,7 +279,6 @@ impl PipelineLayer {
             coin_balance_buckets: Some(Default::default()),
             obj_info: Some(Default::default()),
             sum_displays: Some(Default::default()),
-            sum_packages: Some(Default::default()),
             cp_sequence_numbers: Some(Default::default()),
             ev_emit_mod: Some(Default::default()),
             ev_struct_inst: Some(Default::default()),
@@ -403,7 +401,6 @@ impl Merge for PipelineLayer {
             coin_balance_buckets: self.coin_balance_buckets.merge(other.coin_balance_buckets),
             obj_info: self.obj_info.merge(other.obj_info),
             sum_displays: self.sum_displays.merge(other.sum_displays),
-            sum_packages: self.sum_packages.merge(other.sum_packages),
             cp_sequence_numbers: self.cp_sequence_numbers.merge(other.cp_sequence_numbers),
             ev_emit_mod: self.ev_emit_mod.merge(other.ev_emit_mod),
             ev_struct_inst: self.ev_struct_inst.merge(other.ev_struct_inst),
@@ -534,7 +531,6 @@ mod tests {
                 checkpoint_lag: Some(100),
                 extra: Default::default(),
             }),
-            sum_packages: None,
             ev_emit_mod: Some(ConcurrentLayer {
                 committer: Some(CommitterLayer {
                     write_concurrency: Some(5),
@@ -558,15 +554,6 @@ mod tests {
                 checkpoint_lag: Some(200),
                 extra: Default::default(),
             }),
-            sum_packages: Some(SequentialLayer {
-                committer: Some(CommitterLayer {
-                    write_concurrency: Some(10),
-                    collect_interval_ms: None,
-                    watermark_interval_ms: Some(1000),
-                    extra: Default::default(),
-                }),
-                ..Default::default()
-            }),
             ev_emit_mod: None,
             ..Default::default()
         };
@@ -585,16 +572,6 @@ mod tests {
                         extra: _,
                     }),
                     checkpoint_lag: Some(200),
-                    extra: _,
-                }),
-                sum_packages: Some(SequentialLayer {
-                    committer: Some(CommitterLayer {
-                        write_concurrency: Some(10),
-                        collect_interval_ms: None,
-                        watermark_interval_ms: Some(1000),
-                        extra: _,
-                    }),
-                    checkpoint_lag: None,
                     extra: _,
                 }),
                 ev_emit_mod: Some(ConcurrentLayer {
@@ -622,16 +599,6 @@ mod tests {
                         extra: _,
                     }),
                     checkpoint_lag: Some(100),
-                    extra: _,
-                }),
-                sum_packages: Some(SequentialLayer {
-                    committer: Some(CommitterLayer {
-                        write_concurrency: Some(10),
-                        collect_interval_ms: None,
-                        watermark_interval_ms: Some(1000),
-                        extra: _,
-                    }),
-                    checkpoint_lag: None,
                     extra: _,
                 }),
                 ev_emit_mod: Some(ConcurrentLayer {
