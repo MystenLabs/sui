@@ -3,11 +3,11 @@
 
 use crate::field_mask::FieldMaskTree;
 use crate::field_mask::FieldMaskUtil;
-use crate::message::MessageMerge;
 use crate::message::MessageMergeFrom;
 use crate::proto::google::rpc::bad_request::FieldViolation;
 use crate::proto::rpc::v2beta::BatchGetTransactionsRequest;
 use crate::proto::rpc::v2beta::BatchGetTransactionsResponse;
+use crate::proto::rpc::v2beta::Event;
 use crate::proto::rpc::v2beta::ExecutedTransaction;
 use crate::proto::rpc::v2beta::GetTransactionRequest;
 use crate::proto::rpc::v2beta::Transaction;
@@ -21,6 +21,7 @@ use crate::RpcService;
 use prost_types::FieldMask;
 use sui_sdk_types::TransactionDigest;
 use sui_types::base_types::ObjectID;
+use sui_types::sui_sdk_types_conversions::struct_tag_sdk_to_core;
 
 #[tracing::instrument(skip(service))]
 pub fn get_transaction(
@@ -57,7 +58,8 @@ pub fn get_transaction(
 
     let transaction_read = service.reader.get_transaction_read(transaction_digest)?;
 
-    Ok(ExecutedTransaction::merge_from(
+    Ok(transaction_to_response(
+        service,
         transaction_read,
         &read_mask,
     ))
@@ -95,7 +97,7 @@ pub fn batch_get_transactions(
                 .reader
                 .get_transaction_read(digest)
                 .map(|transaction_read| {
-                    ExecutedTransaction::merge_from(transaction_read, &read_mask)
+                    transaction_to_response(service, transaction_read, &read_mask)
                 })
         })
         .collect::<Result<_, _>>()?;
@@ -103,92 +105,121 @@ pub fn batch_get_transactions(
     Ok(BatchGetTransactionsResponse { transactions })
 }
 
-impl MessageMerge<crate::reader::TransactionRead> for ExecutedTransaction {
-    fn merge(
-        &mut self,
-        source: crate::reader::TransactionRead,
-        mask: &crate::field_mask::FieldMaskTree,
-    ) {
-        if mask.contains(Self::DIGEST_FIELD.name) {
-            self.digest = Some(source.digest.to_string());
-        }
+fn transaction_to_response(
+    service: &RpcService,
+    source: crate::reader::TransactionRead,
+    mask: &crate::field_mask::FieldMaskTree,
+) -> ExecutedTransaction {
+    let mut message = ExecutedTransaction::default();
 
-        if let Some(submask) = mask.subtree(Self::TRANSACTION_FIELD.name) {
-            self.transaction = Some(Transaction::merge_from(source.transaction, &submask));
-        }
+    if mask.contains(ExecutedTransaction::DIGEST_FIELD.name) {
+        message.digest = Some(source.digest.to_string());
+    }
 
-        if let Some(submask) = mask.subtree(Self::SIGNATURES_FIELD.name) {
-            self.signatures = source
-                .signatures
-                .into_iter()
-                .map(|s| UserSignature::merge_from(s, &submask))
-                .collect();
-        }
+    if let Some(submask) = mask.subtree(ExecutedTransaction::TRANSACTION_FIELD.name) {
+        message.transaction = Some(Transaction::merge_from(source.transaction, &submask));
+    }
 
-        if let Some(submask) = mask.subtree(Self::EFFECTS_FIELD.name) {
-            let mut effects = TransactionEffects::merge_from(&source.effects, &submask);
+    if let Some(submask) = mask.subtree(ExecutedTransaction::SIGNATURES_FIELD.name) {
+        message.signatures = source
+            .signatures
+            .into_iter()
+            .map(|s| UserSignature::merge_from(s, &submask))
+            .collect();
+    }
 
-            if let Some(object_types) = source.object_types {
-                if submask.contains(TransactionEffects::CHANGED_OBJECTS_FIELD.name) {
-                    for changed_object in effects.changed_objects.iter_mut() {
-                        let Ok(object_id) = changed_object.object_id().parse::<ObjectID>() else {
-                            continue;
-                        };
+    if let Some(submask) = mask.subtree(ExecutedTransaction::EFFECTS_FIELD.name) {
+        let mut effects = TransactionEffects::merge_from(&source.effects, &submask);
 
-                        if let Some(ty) = object_types.get(&object_id) {
-                            changed_object.object_type = Some(match ty {
-                                sui_types::base_types::ObjectType::Package => "package".to_owned(),
-                                sui_types::base_types::ObjectType::Struct(struct_tag) => {
-                                    struct_tag.to_canonical_string(true)
-                                }
-                            });
-                        }
-                    }
-                }
+        if let Some(object_types) = source.object_types {
+            if submask.contains(TransactionEffects::CHANGED_OBJECTS_FIELD.name) {
+                for changed_object in effects.changed_objects.iter_mut() {
+                    let Ok(object_id) = changed_object.object_id().parse::<ObjectID>() else {
+                        continue;
+                    };
 
-                if submask.contains(TransactionEffects::UNCHANGED_SHARED_OBJECTS_FIELD.name) {
-                    for unchanged_shared_object in effects.unchanged_shared_objects.iter_mut() {
-                        let Ok(object_id) = unchanged_shared_object.object_id().parse::<ObjectID>()
-                        else {
-                            continue;
-                        };
-
-                        if let Some(ty) = object_types.get(&object_id) {
-                            unchanged_shared_object.object_type = Some(match ty {
-                                sui_types::base_types::ObjectType::Package => "package".to_owned(),
-                                sui_types::base_types::ObjectType::Struct(struct_tag) => {
-                                    struct_tag.to_canonical_string(true)
-                                }
-                            });
-                        }
+                    if let Some(ty) = object_types.get(&object_id) {
+                        changed_object.object_type = Some(match ty {
+                            sui_types::base_types::ObjectType::Package => "package".to_owned(),
+                            sui_types::base_types::ObjectType::Struct(struct_tag) => {
+                                struct_tag.to_canonical_string(true)
+                            }
+                        });
                     }
                 }
             }
 
-            self.effects = Some(effects);
+            if submask.contains(TransactionEffects::UNCHANGED_SHARED_OBJECTS_FIELD.name) {
+                for unchanged_shared_object in effects.unchanged_shared_objects.iter_mut() {
+                    let Ok(object_id) = unchanged_shared_object.object_id().parse::<ObjectID>()
+                    else {
+                        continue;
+                    };
+
+                    if let Some(ty) = object_types.get(&object_id) {
+                        unchanged_shared_object.object_type = Some(match ty {
+                            sui_types::base_types::ObjectType::Package => "package".to_owned(),
+                            sui_types::base_types::ObjectType::Struct(struct_tag) => {
+                                struct_tag.to_canonical_string(true)
+                            }
+                        });
+                    }
+                }
+            }
         }
 
-        if let Some(submask) = mask.subtree(Self::EVENTS_FIELD.name) {
-            self.events = source
-                .events
-                .map(|events| TransactionEvents::merge_from(events, &submask));
-        }
-
-        if mask.contains(Self::CHECKPOINT_FIELD.name) {
-            self.checkpoint = source.checkpoint;
-        }
-
-        if mask.contains(Self::TIMESTAMP_FIELD.name) {
-            self.timestamp = source.timestamp_ms.map(timestamp_ms_to_proto);
-        }
-
-        if mask.contains(Self::BALANCE_CHANGES_FIELD.name) {
-            self.balance_changes = source
-                .balance_changes
-                .map(|balance_changes| balance_changes.into_iter().map(Into::into).collect())
-                .unwrap_or_default();
-        }
+        message.effects = Some(effects);
     }
+
+    if let Some(submask) = mask.subtree(ExecutedTransaction::EVENTS_FIELD.name) {
+        message.events = source.events.map(|events| {
+            let mut message = TransactionEvents::merge_from(events.clone(), &submask);
+
+            if let Some(event_mask) = submask.subtree(TransactionEvents::EVENTS_FIELD.name) {
+                if event_mask.contains(Event::JSON_FIELD.name) {
+                    for (message, event) in message.events.iter_mut().zip(&events.0) {
+                        message.json = struct_tag_sdk_to_core(event.type_.clone())
+                            .ok()
+                            .and_then(|struct_tag| {
+                                let layout = service
+                                    .reader
+                                    .inner()
+                                    .get_struct_layout(&struct_tag)
+                                    .ok()
+                                    .flatten()?;
+                                Some((layout, &event.contents))
+                            })
+                            .and_then(|(layout, contents)| {
+                                sui_types::proto_value::ProtoVisitor::default()
+                                    .deserialize_value(contents, &layout)
+                                    .map_err(|e| tracing::debug!("unable to convert to JSON: {e}"))
+                                    .ok()
+                                    .map(Box::new)
+                            });
+                    }
+                }
+            }
+
+            message
+        });
+    }
+
+    if mask.contains(ExecutedTransaction::CHECKPOINT_FIELD.name) {
+        message.checkpoint = source.checkpoint;
+    }
+
+    if mask.contains(ExecutedTransaction::TIMESTAMP_FIELD.name) {
+        message.timestamp = source.timestamp_ms.map(timestamp_ms_to_proto);
+    }
+
+    if mask.contains(ExecutedTransaction::BALANCE_CHANGES_FIELD.name) {
+        message.balance_changes = source
+            .balance_changes
+            .map(|balance_changes| balance_changes.into_iter().map(Into::into).collect())
+            .unwrap_or_default();
+    }
+
+    message
 }
 
 impl From<sui_types::balance_change::BalanceChange> for crate::proto::rpc::v2beta::BalanceChange {
