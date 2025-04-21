@@ -13,6 +13,7 @@ use handlers::{
     kv_epoch_starts::KvEpochStarts,
     kv_feature_flags::KvFeatureFlags,
     kv_objects::KvObjects,
+    kv_packages::KvPackages,
     kv_protocol_configs::KvProtocolConfigs,
     kv_transactions::KvTransactions,
     obj_info::ObjInfo,
@@ -85,6 +86,7 @@ pub async fn setup_indexer(
         kv_epoch_starts,
         kv_feature_flags,
         kv_objects,
+        kv_packages,
         kv_protocol_configs,
         kv_transactions,
         obj_info,
@@ -208,6 +210,7 @@ pub async fn setup_indexer(
     add_concurrent!(KvEpochEnds, kv_epoch_ends);
     add_concurrent!(KvEpochStarts, kv_epoch_starts);
     add_concurrent!(KvObjects, kv_objects);
+    add_concurrent!(KvPackages, kv_packages);
     add_concurrent!(KvTransactions, kv_transactions);
     add_concurrent!(ObjVersions, obj_versions);
     add_concurrent!(ObjVersionsSentinelBackfill, obj_versions_sentinel_backfill);
