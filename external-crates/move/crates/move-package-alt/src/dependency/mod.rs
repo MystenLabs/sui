@@ -8,6 +8,7 @@ mod git;
 mod local;
 
 pub use dependency_set::DependencySet;
+pub mod external_protocol;
 
 use std::{collections::BTreeMap, fmt::Debug, path::PathBuf};
 

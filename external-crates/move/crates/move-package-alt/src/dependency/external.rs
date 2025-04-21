@@ -20,7 +20,7 @@ use crate::{
     package::{EnvironmentName, PackageName},
 };
 
-use external_resolver::{Query, QueryID, QueryResult, Request};
+use super::external_protocol::{Query, QueryID, QueryResult, Request};
 
 use super::{pin, DependencySet, ManifestDependencyInfo, PinnedDependencyInfo};
 

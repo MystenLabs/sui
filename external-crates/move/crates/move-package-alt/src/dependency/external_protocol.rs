@@ -1,5 +1,3 @@
-#![allow(unused)]
-
 //! Types and methods for communication between the package system and external resolvers.
 //!
 //! External dependencies are resolved in each environment as follows. First, all dependencies are

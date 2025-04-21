@@ -18,7 +18,9 @@ use serde::Deserialize;
 use tracing::debug;
 use tracing_subscriber::EnvFilter;
 
-use external_resolver::{QueryID, QueryResult, Request, Response, RESOLVE_ARG};
+use move_package_alt::dependency::external_protocol::{
+    QueryID, QueryResult, Request, Response, RESOLVE_ARG,
+};
 
 #[derive(Deserialize)]
 #[serde(untagged)]

@@ -16,7 +16,6 @@ serde_spanned.workspace = true
 thiserror.workspace = true
 toml_edit.workspace = true
 toml.workspace = true
-external-resolver.workspace = true
 futures.workspace = true
 tokio.workspace = true
 tracing.workspace = true
