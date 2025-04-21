@@ -87,6 +87,10 @@ fn default_batch_size() -> usize {
     10
 }
 
+fn default_data_limit() -> usize {
+    100
+}
+
 fn default_remote_store_url() -> String {
     "https://checkpoints.mainnet.sui.io".to_string()
 }
@@ -123,9 +127,12 @@ pub struct JobConfig {
     pub client_metric_port: u16,
     /// Remote object store where data gets written to
     pub remote_store_config: ObjectStoreConfig,
-    /// Number of checkpoints to process in parallel.
+    /// Object store download batch size.
     #[serde(default = "default_batch_size")]
     pub batch_size: usize,
+    /// Maximum number of checkpoints to queue in memory.
+    #[serde(default = "default_data_limit")]
+    pub data_limit: usize,
     /// Remote object store path prefix to use while writing
     #[serde(default = "default_remote_store_url")]
     pub remote_store_url: String,
@@ -145,6 +152,8 @@ pub struct JobConfig {
     pub sf_username: Option<String>,
     pub sf_role: Option<String>,
     pub sf_password_file: Option<String>,
+    /// The number of CPUs tokio can use.
+    pub num_cpus: Option<usize>,
 
     // This is private to enforce using the TaskContext struct
     #[serde(rename = "tasks")]
