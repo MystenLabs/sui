@@ -6,6 +6,9 @@ syntax = "proto3";
 package sui.rpc.v2alpha;
 
 import "google/protobuf/field_mask.proto";
+import "google/protobuf/struct.proto";
+import "sui/rpc/v2beta/argument.proto";
+import "sui/rpc/v2beta/bcs.proto";
 import "sui/rpc/v2beta/executed_transaction.proto";
 import "sui/rpc/v2beta/owner.proto";
 import "sui/rpc/v2beta/transaction.proto";
@@ -18,8 +21,6 @@ service LiveDataService {
   rpc ListBalances(ListBalancesRequest) returns (ListBalancesResponse);
 
   rpc SimulateTransaction(SimulateTransactionRequest) returns (SimulateTransactionResponse);
-  rpc ResolveTransaction(ResolveTransactionRequest) returns (ResolveTransactionResponse);
-  // ViewFunction?
 }
 
 // Request message for `NodeService.GetCoinInfo`.
@@ -202,20 +203,41 @@ message DynamicField {
 message SimulateTransactionRequest {
   optional sui.rpc.v2beta.Transaction transaction = 1;
   optional google.protobuf.FieldMask read_mask = 2;
+
+  // buf:lint:ignore ENUM_ZERO_VALUE_SUFFIX
+  enum VmChecks {
+    //VM_CHECKS_UNKNOWN = 0;
+    ENABLED = 0;
+    DISABLED = 1;
+  }
+
+  // Specify whether checks should be ENABLED (default) or DISABLED by the vm while executing the transaction
+  optional VmChecks checks = 3;
+
+  // Perform gas selection based on a budget estimation and include the
+  // selected gas payment and budget in the response.
+  //
+  // This option will be ignored if `checks` is `DISABLED`.
+  optional bool do_gas_selection = 4;
 }
 
 message SimulateTransactionResponse {
   optional sui.rpc.v2beta.ExecutedTransaction transaction = 1;
+  repeated CommandResult outputs = 2;
 }
 
-message ResolveTransactionRequest {
-  optional sui.rpc.v2beta.Transaction unresolved_transaction = 1;
-  optional google.protobuf.FieldMask read_mask = 2;
+// An intermediate result/output from the execution of a single command
+message CommandResult {
+  repeated CommandOutput return_values = 1;
+  repeated CommandOutput mutated_by_ref = 2;
 }
 
-message ResolveTransactionResponse {
-  optional sui.rpc.v2beta.Transaction transaction = 1;
-  optional SimulateTransactionResponse simulation = 2;
+message CommandOutput {
+  optional sui.rpc.v2beta.Argument argument = 1;
+  optional sui.rpc.v2beta.Bcs value = 2;
+
+  // JSON rendering of the output.
+  optional google.protobuf.Value json = 3;
 }
 
 message ListOwnedObjectsRequest {

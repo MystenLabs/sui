@@ -746,7 +746,7 @@ async fn party_coin_grpc() {
     use sui_rpc_api::field_mask::FieldMaskUtil;
     use sui_rpc_api::proto::rpc::v2alpha::live_data_service_client::LiveDataServiceClient;
     use sui_rpc_api::proto::rpc::v2alpha::ListOwnedObjectsRequest;
-    use sui_rpc_api::proto::rpc::v2alpha::ResolveTransactionRequest;
+    use sui_rpc_api::proto::rpc::v2alpha::SimulateTransactionRequest;
     use sui_rpc_api::proto::rpc::v2beta::ledger_service_client::LedgerServiceClient;
     use sui_rpc_api::proto::rpc::v2beta::owner::OwnerKind;
     use sui_rpc_api::proto::rpc::v2beta::Argument;
@@ -890,9 +890,10 @@ async fn party_coin_grpc() {
     };
 
     let resolved = live_data_service_client
-        .resolve_transaction(ResolveTransactionRequest {
-            unresolved_transaction: Some(unresolved_transaction),
-            read_mask: Some(FieldMask::from_str("simulation")),
+        .simulate_transaction(SimulateTransactionRequest {
+            transaction: Some(unresolved_transaction),
+            do_gas_selection: Some(true),
+            ..Default::default()
         })
         .await
         .unwrap()
@@ -900,8 +901,6 @@ async fn party_coin_grpc() {
 
     // Assert that the simulation was successful
     assert!(resolved
-        .simulation
-        .unwrap()
         .transaction
         .unwrap()
         .effects
