@@ -549,7 +549,7 @@ async function getTracedFunctionInfo(traceFilePath: string): Promise<TracedFunct
   *
  */
 async function constructTraceInfo(tracePath: string): Promise<string | undefined> {
-    if (!tracePath.endsWith(TRACE_FILE_EXT) &&
+    if (tracePath.endsWith(TRACE_FILE_EXT) &&
         path.basename(tracePath, TRACE_FILE_EXT) === REPLAY_TRACE_FILE_NAME) {
         return undefined;
     }
