@@ -182,7 +182,7 @@ impl Request {
             .spawn()
             .map_err(|e| ResolutionError::io_error(resolver, e))?;
 
-        send_request(resolver, &self, child.stdin.take().expect("stdin exists")).await;
+        send_request(resolver, self, child.stdin.take().expect("stdin exists")).await;
         let response = recv_response(resolver, child).await?;
 
         for key in self.queries.keys() {

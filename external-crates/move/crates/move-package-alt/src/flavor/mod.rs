@@ -24,7 +24,8 @@ use crate::{
 /// methods for package management that are specific to a particular instantiation of the Move
 /// language.
 pub trait MoveFlavor: Debug {
-    // TODO: this API is incomplete
+    /// Return an identifier for the flavor, used to ensure that the correct compiler is being used
+    /// to parse a manifest.
     fn name() -> String;
 
     /// Additional flavor-specific dependency types. Currently we only support flavor-specific
@@ -66,7 +67,7 @@ pub trait MoveFlavor: Debug {
     // TODO: Given an [EnvironmentID] and an [ObjectID], ... should be uniquely determined
     type EnvironmentID: Serialize + DeserializeOwned + Clone + Eq + Ord + Debug + ToString;
 
-    /// Return the implicit dependencies for a given environment
+    /// Return the implicit dependencies for the environments listed in [environments]
     fn implicit_deps(
         &self,
         environments: impl Iterator<Item = Self::EnvironmentID>,

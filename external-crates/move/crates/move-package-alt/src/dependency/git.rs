@@ -52,7 +52,7 @@ impl GitDependency<Unpinned> {
     pub fn pin(deps: DependencySet<Self>) -> PackageResult<DependencySet<GitDependency<Pinned>>> {
         Ok(deps
             .into_iter()
-            .map(|(env, package, dep)| (env, package, dep.pin_one().unwrap()))
+            .map(|(env, package, dep)| (env, package, dep.pin_one().unwrap())) // TODO: errors!
             .collect())
     }
 
