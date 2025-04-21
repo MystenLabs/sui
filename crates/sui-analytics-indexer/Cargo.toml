@@ -54,6 +54,7 @@ gcp-bigquery-client = "0.25.0"
 snowflake-api.workspace = true
 tap.workspace = true
 serde_yaml.workspace = true
+once_cell.workspace = true
 
 [dev-dependencies]
 
