@@ -48,9 +48,7 @@ impl Worker for PackageHandler {
 impl AnalyticsHandler<MovePackageEntry> for PackageHandler {
     async fn read(&self) -> Result<Vec<MovePackageEntry>> {
         let mut state = self.state.lock().await;
-        let cloned = state.packages.clone();
-        state.packages.clear();
-        Ok(cloned)
+        Ok(std::mem::take(&mut state.packages))
     }
 
     fn file_type(&self) -> Result<FileType> {

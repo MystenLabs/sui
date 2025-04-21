@@ -74,9 +74,7 @@ impl Worker for ObjectHandler {
 impl AnalyticsHandler<ObjectEntry> for ObjectHandler {
     async fn read(&self) -> Result<Vec<ObjectEntry>> {
         let mut state = self.state.lock().await;
-        let cloned = state.objects.clone();
-        state.objects.clear();
-        Ok(cloned)
+        Ok(std::mem::take(&mut state.objects))
     }
 
     fn file_type(&self) -> Result<FileType> {

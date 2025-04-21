@@ -43,9 +43,7 @@ impl Worker for CheckpointHandler {
 impl AnalyticsHandler<CheckpointEntry> for CheckpointHandler {
     async fn read(&self) -> Result<Vec<CheckpointEntry>> {
         let mut state = self.state.lock().await;
-        let cloned = state.checkpoints.clone();
-        state.checkpoints.clear();
-        Ok(cloned)
+        Ok(std::mem::take(&mut state.checkpoints))
     }
 
     fn file_type(&self) -> Result<FileType> {
