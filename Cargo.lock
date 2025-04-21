@@ -16298,6 +16298,7 @@ dependencies = [
  "proptest",
  "proptest-derive",
  "prost 0.13.3",
+ "prost-types 0.13.3",
  "rand 0.8.5",
  "roaring",
  "rustls-pemfile 2.1.2",
