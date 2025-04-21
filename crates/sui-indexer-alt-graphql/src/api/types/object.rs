@@ -12,7 +12,7 @@ use sui_indexer_alt_reader::{
     pg_reader::PgReader,
 };
 use sui_types::{
-    base_types::{ObjectID, SequenceNumber, SuiAddress as NativeSuiAddress},
+    base_types::{SequenceNumber, SuiAddress as NativeSuiAddress},
     digests::ObjectDigest,
     object::Object as NativeObject,
 };
@@ -22,7 +22,10 @@ use crate::{
     error::{bad_user_input, RpcError},
 };
 
-use super::transaction::Transaction;
+use super::{
+    addressable::{Addressable, AddressableImpl},
+    transaction::Transaction,
+};
 
 /// Interface implemented by versioned on-chain values that are addressable by an ID (also referred to as its address). This includes Move objects and packages.
 #[derive(Interface)]
@@ -54,7 +57,7 @@ pub(crate) enum IObject {
 }
 
 pub(crate) struct Object {
-    address: NativeSuiAddress,
+    pub(crate) super_: Addressable,
     version: SequenceNumber,
     digest: ObjectDigest,
     contents: Option<Arc<NativeObject>>,
@@ -102,8 +105,8 @@ pub(crate) enum Error {
 #[Object]
 impl Object {
     /// The Object's ID.
-    async fn address(&self) -> SuiAddress {
-        self.address.into()
+    pub(crate) async fn address(&self) -> SuiAddress {
+        AddressableImpl::from(&self.super_).address()
     }
 
     /// The version of this object that this content comes from.
@@ -135,12 +138,12 @@ impl Object {
     /// does not check whether the object exists, so should not be used to "fetch" an object based
     /// on an address and/or version provided as user input.
     pub(crate) fn with_ref(
-        address: ObjectID,
+        addressable: Addressable,
         version: SequenceNumber,
         digest: ObjectDigest,
     ) -> Self {
         Self {
-            address: address.into(),
+            super_: addressable,
             version,
             digest,
             contents: None,
@@ -196,8 +199,13 @@ impl Object {
             return Ok(None);
         };
 
+        let addressable = Addressable::with_address(
+            NativeSuiAddress::from_bytes(stored.object_id)
+                .context("Failed to deserialize SuiAddress")?,
+        );
+
         Ok(Some(Object::with_ref(
-            ObjectID::from_bytes(stored.object_id).context("Failed to deserialize Object ID")?,
+            addressable,
             SequenceNumber::from_u64(stored.object_version as u64),
             ObjectDigest::try_from(&digest[..]).context("Failed to deserialize Object Digest")?,
         )))
@@ -229,8 +237,13 @@ impl Object {
             return Ok(None);
         };
 
+        let addressable = Addressable::with_address(
+            NativeSuiAddress::from_bytes(stored.object_id)
+                .context("Failed to deserialize SuiAddress")?,
+        );
+
         Ok(Some(Object::with_ref(
-            ObjectID::from_bytes(stored.object_id).context("Failed to deserialize Object ID")?,
+            addressable,
             SequenceNumber::from_u64(stored.object_version as u64),
             ObjectDigest::try_from(&digest[..]).context("Failed to deserialize Object Digest")?,
         )))
@@ -248,8 +261,10 @@ impl Object {
             return Ok(None);
         };
 
+        let addressable = Addressable::with_address(object.id().into());
+
         Ok(Some(Object {
-            address: object.id().into(),
+            super_: addressable,
             version: object.version(),
             digest: object.digest(),
             contents: Some(object),
@@ -265,7 +280,7 @@ impl Object {
         if self.contents.is_some() {
             Ok(self.contents.clone())
         } else {
-            contents(ctx, self.address.into(), self.version.into()).await
+            contents(ctx, self.super_.address.into(), self.version.into()).await
         }
     }
 }
