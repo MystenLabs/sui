@@ -1,4 +1,3 @@
-#![allow(unused)]
 //! A mock resolver that simply returns the data passed to it as a dependency resolution
 //!
 //! If there are any inputs with an stdout field then the standard output will be whatever string
@@ -11,24 +10,24 @@
 use std::{
     collections::BTreeMap,
     env,
-    io::{read_to_string, stdin, stdout},
-    process::{ExitCode, Termination},
-    ptr::write_bytes,
+    io::{read_to_string, stdin},
+    process::ExitCode,
 };
 
-use external_resolver::{QueryID, QueryResult, Request, Response, RESOLVE_ARG};
 use serde::Deserialize;
 use tracing::debug;
 use tracing_subscriber::EnvFilter;
+
+use external_resolver::{QueryID, QueryResult, Request, Response, RESOLVE_ARG};
 
 #[derive(Deserialize)]
 #[serde(untagged)]
 enum RequestData {
     /// Execution should be halted with [exit_code] and return the given [stdout]/[stderr]
-    Direct(Exit),
+    Stdio(Exit),
 
     /// [stderr] should be printed and [output] should be included in the output
-    Json(Process),
+    Value(Process),
 }
 
 #[derive(Deserialize)]
@@ -76,8 +75,8 @@ pub fn main() -> ExitCode {
                 .expect("Argument to mock resolver is expected to be well-formed");
 
             match data {
-                RequestData::Direct(exit) => Err(exit),
-                RequestData::Json(process) => Ok((id, process)),
+                RequestData::Stdio(exit) => Err(exit),
+                RequestData::Value(process) => Ok((id, process)),
             }
         })
         .collect();
