@@ -72,17 +72,15 @@ As described previously, sustainable disk usage requires Sui Full nodes to prune
 
 Both transaction and object pruners run in the background. The logical deletion of entries from RocksDB ultimately triggers the physical compaction of data on disk, which is governed by RocksDB background jobs: the pruning effect on disk usage is not immediate and might take multiple days.
 
-To learn more about object pruning policies, see  [Object pruning](./sui-full-node.mdx#object-pruning). You can configure the pruner in two modes:
-* **aggressive pruning** (`num-epochs-to-retain: 0`): Preferred option. Sui prunes old object versions as soon as possible.
+To learn more about object pruning policies, see [Object pruning](#object-pruning). You can configure the pruner in two modes:
+* **moderate pruning** (`num-epochs-to-retain: 5`): Preferred option. Sui retains object versions for 5 epochs.
 * **epoch-based pruning** (`num-epochs-to-retain: X`): Sui prunes old object versions after X epochs.
 
 :::tip 
-
-Testing indicates that aggressive pruning results in more efficient Full Node operation.
-
+Keeping some history (5 epochs) provides better RPC performance as it allows more lookups to happen from local disk rather than from remote storage.
 :::
 
-To learn more about transaction pruning policies, see  [Transaction pruning](./sui-full-node.mdx#transaction-pruning). To configure transaction pruning, specify the `num-epochs-to-retain-for-checkpoints: X` config option. The checkpoints, including their transactions, effects and events are pruned up to X epochs ago. We suggest setting transaction pruning to 2 epochs.
+To learn more about transaction pruning policies, see [Transaction pruning](#transaction-pruning). To configure transaction pruning, specify the `num-epochs-to-retain-for-checkpoints: X` config option. The checkpoints, including their transactions, effects and events are pruned up to X epochs ago. We suggest setting transaction pruning to 2 epochs.
 
 ### Set an archiving watermark
 
@@ -180,8 +178,8 @@ This configuration keeps disk usage to a minimum. It is suitable for most valida
 enable-index-processing: false
 
 authority-store-pruning-config:
-  # Prune historic object versions as soon as possible.
-  num-epochs-to-retain: 0
+  # Retain 5 epochs of object versions for better RPC performance
+  num-epochs-to-retain: 5
   # Prune historic transactions of the past epochs
   num-epochs-to-retain-for-checkpoints: 2
 ```
@@ -197,8 +195,8 @@ This setup manages secondary indexing in addition to the latest state, but aggre
 
 ```yaml
 authority-store-pruning-config:
-  # Prune historic object versions
-  num-epochs-to-retain: 0
+  # Retain 5 epochs of object versions for better RPC performance
+  num-epochs-to-retain: 5
   # Prune historic transactions of the past epochs
   num-epochs-to-retain-for-checkpoints: 2
 ```
