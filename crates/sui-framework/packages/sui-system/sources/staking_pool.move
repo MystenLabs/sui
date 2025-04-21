@@ -711,12 +711,13 @@ fun test_calculate_fungible_staked_sui_withdraw_amount(
 ) {
     total_sui_amount = total_sui_amount.max(1);
 
-    pool_token_frac = pool_token_frac % 10000;
-    fungible_staked_sui_data_total_supply_frac = fungible_staked_sui_data_total_supply_frac % 10000;
-    fungible_staked_sui_data_principal_frac = fungible_staked_sui_data_principal_frac % 10000;
-    fungible_staked_sui_value_bps = fungible_staked_sui_value_bps % 10000;
+    pool_token_frac = pool_token_frac % 10_000;
+    fungible_staked_sui_data_total_supply_frac =
+        fungible_staked_sui_data_total_supply_frac % 10_000;
+    fungible_staked_sui_data_principal_frac = fungible_staked_sui_data_principal_frac % 10_000;
+    fungible_staked_sui_value_bps = fungible_staked_sui_value_bps % 10_000;
 
-    let total_pool_token_amount = mul_div!(total_sui_amount, pool_token_frac, 10000).max(1);
+    let total_pool_token_amount = mul_div!(total_sui_amount, pool_token_frac as u64, 10_000).max(1);
 
     let exchange_rate = PoolTokenExchangeRate {
         sui_amount: total_sui_amount,
@@ -725,20 +726,20 @@ fun test_calculate_fungible_staked_sui_withdraw_amount(
 
     let fungible_staked_sui_data_total_supply = mul_div!(
         total_pool_token_amount,
-        fungible_staked_sui_data_total_supply_frac,
-        10000,
+        fungible_staked_sui_data_total_supply_frac as u64,
+        10_000,
     ).max(1);
     let fungible_staked_sui_value = mul_div!(
         fungible_staked_sui_data_total_supply,
-        fungible_staked_sui_value_bps,
-        10000,
+        fungible_staked_sui_value_bps as u64,
+        10_000,
     );
 
     let max_principal = exchange_rate.get_sui_amount(fungible_staked_sui_data_total_supply);
     let fungible_staked_sui_data_principal_amount = mul_div!(
         max_principal,
-        fungible_staked_sui_data_principal_frac,
-        10000,
+        fungible_staked_sui_data_principal_frac as u64,
+        10_000,
     ).max(1);
 
     let (principal_amount, rewards_amount) = calculate_fungible_staked_sui_withdraw_amount(
