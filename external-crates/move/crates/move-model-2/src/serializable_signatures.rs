@@ -6,8 +6,9 @@
 //! datatypes (structs and enums).
 
 use crate::{
+    TModuleId,
     normalized::{self, ModuleId},
-    source_model, TModuleId,
+    source_model,
 };
 use indexmap::IndexMap;
 use move_binary_format::file_format;
