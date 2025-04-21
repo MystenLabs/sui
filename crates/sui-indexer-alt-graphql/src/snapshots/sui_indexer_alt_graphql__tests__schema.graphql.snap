@@ -3,11 +3,27 @@ source: crates/sui-indexer-alt-graphql/src/lib.rs
 expression: sdl
 ---
 """
+An entity that has an address, could be an account or an object (but never both).
+"""
+type Addressable implements IAddressable {
+	address: SuiAddress!
+}
+
+"""
 String containing Base64-encoded binary data.
 """
 scalar Base64
 
 
+
+"""
+Interface implemented by GraphQL types representing entities that are identified by an address.
+
+An address uniquely represents either the public key of an account, or an object's ID, but never both. It is not possible to determine which type an address represents up-front. If an object is wrapped, its contents will not be accessible via its address, but it will still be possible to access other objects it owns.
+"""
+interface IAddressable {
+	address: SuiAddress!
+}
 
 
 """
@@ -38,7 +54,7 @@ An Object on Sui is either a typed value (a Move Object) or a Package (modules c
 
 Every object on Sui is identified by a unique address, and has a version number that increases with every modification. Objects also hold metadata detailing their current owner (who can sign for access to the object and whether that access can modify and/or delete the object), and the digest of the last transaction that modified the object.
 """
-type Object implements IObject {
+type Object implements IAddressable & IObject {
 	"""
 	The Object's ID.
 	"""
