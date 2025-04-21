@@ -14,6 +14,7 @@ warning[W10007]: issue with attribute value
   │ ╰─────^ Invalid test function
   │  
   = Test functions with arguments have been deprecated
+  = If you would like to test functions with random inputs, consider using '#[rand_test]' instead
 
 warning[W10007]: issue with attribute value
    ┌─ tests/move_2024/unit_test/random_test_not_rand_test_attr.move:8:5
@@ -24,6 +25,7 @@ warning[W10007]: issue with attribute value
    │ ╰─────^ Invalid test function
    │  
    = Test functions with arguments have been deprecated
+   = If you would like to test functions with random inputs, consider using '#[rand_test]' instead
 
 warning[W10007]: issue with attribute value
    ┌─ tests/move_2024/unit_test/random_test_not_rand_test_attr.move:13:5
@@ -35,6 +37,7 @@ warning[W10007]: issue with attribute value
    │ ╰─────^ Invalid test function
    │  
    = Test functions with arguments have been deprecated
+   = If you would like to test functions with random inputs, consider using '#[rand_test]' instead
 
 warning[W10007]: issue with attribute value
    ┌─ tests/move_2024/unit_test/random_test_not_rand_test_attr.move:19:5
@@ -45,3 +48,4 @@ warning[W10007]: issue with attribute value
    │ ╰─────^ Invalid test function
    │  
    = Test functions with arguments have been deprecated
+   = If you would like to test functions with random inputs, consider using '#[rand_test]' instead

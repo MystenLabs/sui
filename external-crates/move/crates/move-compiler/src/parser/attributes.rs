@@ -5,6 +5,7 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use crate::{
     diag,
+    diagnostics::Diagnostic,
     parser::{
         ast::{
             self as P, Attribute, AttributeValue, AttributeValue_, Attribute_, ExpectedFailureKind,
@@ -14,10 +15,7 @@ use crate::{
         syntax::Context,
     },
     shared::{
-        known_attributes::{
-            self as KA, DEPRECATED_EXPECTED_KEYS, EXPECTED_FAILURE_EXPECTED_KEYS,
-            EXPECTED_FAILURE_EXPECTED_NAMES,
-        },
+        known_attributes::{self as KA, TestingAttribute, DEPRECATED_EXPECTED_KEYS},
         Name,
     },
 };
@@ -30,7 +28,7 @@ pub(crate) fn to_known_attributes(
     context: &mut Context,
     attribute: ParsedAttribute,
 ) -> Vec<Attribute> {
-    let sp!(name_loc, name) = attribute.value.name();
+    let sp!(name_loc, name) = attribute.value.loc_str();
     match name {
         // -- bytecode instruction attr --
         KA::BytecodeInstructionAttribute::BYTECODE_INSTRUCTION => {
@@ -65,15 +63,7 @@ pub(crate) fn to_known_attributes(
         // -- testing attributes -=-------
         KA::TestingAttribute::TEST => parse_test(context, attribute),
         KA::TestingAttribute::RAND_TEST => parse_random_test(context, attribute),
-        KA::TestingAttribute::EXPECTED_FAILURE => {
-            // NB: This is intended to preserve previous behavior where errors would not be
-            // reported in non-test mode.
-            if context.env().flags().is_testing() {
-                parse_expected_failure(context, attribute)
-            } else {
-                vec![]
-            }
-        }
+        KA::TestingAttribute::EXPECTED_FAILURE => parse_expected_failure(context, attribute),
         ref name => {
             let msg = format!(
                 "Unknown attribute '{name}'. Custom attributes must be wrapped in '{ext}', \
@@ -185,7 +175,7 @@ fn parse_deprecated(context: &mut Context, attribute: ParsedAttribute) -> Vec<At
             }
             let attr = attrs.into_iter().next().unwrap();
             if let Some((_key, sp!(loc, val_))) =
-                expect_assigned_attr_value(context, attr, &DEPRECATED_EXPECTED_KEYS)
+                expect_assigned_attr_key_value(context, attr, &DEPRECATED_EXPECTED_KEYS)
             {
                 debug_assert!(_key.value.as_ref() == "note");
                 match val_ {
@@ -342,7 +332,7 @@ fn parse_error(context: &mut Context, attribute: ParsedAttribute) -> Vec<Attribu
             }
             let inner_attr = inner_list.into_iter().next().unwrap();
             if let Some((key, code_attr)) =
-                expect_assigned_attr_value(context, inner_attr, &KA::ERROR_EXPECTED_KEYS)
+                expect_assigned_attr_key_value(context, inner_attr, &KA::ERROR_EXPECTED_KEYS)
             {
                 debug_assert!(key.value.as_ref() == "code");
                 match code_attr.value {
@@ -487,7 +477,9 @@ fn parse_random_test(context: &mut Context, attribute: ParsedAttribute) -> Vec<A
                 &attr,
                 &format!("'#[{}]' with no arguments", KA::TestingAttribute::RAND_TEST),
             );
-            context.add_diag(diag!(Declarations::InvalidAttribute, (loc, msg)));
+            let mut diag = diag!(Declarations::InvalidAttribute, (loc, msg));
+            diag.add_note("Input values will be randomly generated for this test.");
+            context.add_diag(diag);
             vec![]
         }
     }
@@ -497,10 +489,10 @@ fn parse_expected_failure(context: &mut Context, attribute: ParsedAttribute) -> 
     use ParsedAttribute_ as PA;
 
     let sp!(outer_loc, attr) = attribute;
-    // expected_failure must be parameterized
-    let inner_args = match attr {
+    // expected_failure must be a name or parameterized
+    match attr {
         PA::Name(sp!(name_loc, _)) => {
-            return vec![sp(
+            vec![sp(
                 outer_loc,
                 Attribute_::ExpectedFailure {
                     failure_kind: Box::new(sp(name_loc, ExpectedFailureKind_::Empty)),
@@ -509,7 +501,22 @@ fn parse_expected_failure(context: &mut Context, attribute: ParsedAttribute) -> 
                 },
             )]
         }
-        PA::Parameterized(_, inner) => inner,
+        PA::Parameterized(_, inner) => {
+            let (Some(failure_kind), minor_status, location) =
+                parse_expected_failure_arguments(context, &outer_loc, inner)
+            else {
+                return vec![];
+            };
+            let failure_kind = Box::new(failure_kind);
+            vec![sp(
+                outer_loc,
+                Attribute_::ExpectedFailure {
+                    failure_kind,
+                    minor_status,
+                    location,
+                },
+            )]
+        }
         PA::Assigned(_, _) => {
             let msg = make_attribute_format_error(
                 &attr,
@@ -519,147 +526,177 @@ fn parse_expected_failure(context: &mut Context, attribute: ParsedAttribute) -> 
                 ),
             );
             context.add_diag(diag!(Declarations::InvalidAttribute, (outer_loc, msg)));
-            return vec![];
+            vec![]
         }
-    };
+    }
+}
 
-    let sp!(_inner_loc, args) = inner_args;
+fn parse_expected_failure_arguments(
+    context: &mut Context,
+    outer_loc: &Loc,
+    sp!(_, arguments): Spanned<Vec<ParsedAttribute>>,
+) -> (
+    Option<ExpectedFailureKind>,
+    Option<AttributeValue>,
+    Option<NameAccessChain>,
+) {
+    fn valid_failure_parameter(
+        context: &mut Context,
+        sp!(loc, attr): ParsedAttribute,
+    ) -> Option<ParsedAttribute> {
+        let sp!(name_loc, name) = attr.loc_str();
+        if !TestingAttribute::expected_failure_valid_keys().contains(name) {
+            context.add_diag(unused_field_warning(
+                &name_loc,
+                TestingAttribute::EXPECTED_FAILURE,
+                name,
+                TestingAttribute::expected_failure_valid_keys(),
+            ));
+            None
+        } else {
+            Some(sp(loc, attr))
+        }
+    }
 
     // Initialize fields of ExpectedFailure with default values.
     let mut failure_kind: Option<ExpectedFailureKind> = None;
-    let mut minor_status: Option<AttributeValue> = None;
-    let mut location_field: Option<NameAccessChain> = None;
+    let mut minor_status: Option<(Loc, AttributeValue)> = None;
+    let mut err_location: Option<(Loc, NameAccessChain)> = None;
+
+    // Record if there is _any_ failure kind, even mis-formatted, to avoid reporting an unnecessary
+    // error later;
+    let mut any_failure_kind = false;
+    let mut has_errors = false;
 
     macro_rules! check_failure_kind_unset {
         ($arg_loc:expr) => {
             if let Some(kind) = &failure_kind {
+                has_errors = true;
                 let msg = format!("Second failure kind given for expected failure");
-                let prev_msg = format!("Previously defiend here");
+                let prev_msg = format!("Previously defined here");
                 context.add_diag(diag!(
                     Declarations::InvalidAttribute,
                     ($arg_loc.clone(), msg),
                     (kind.loc.clone(), prev_msg)
                 ));
                 continue;
+            } else {
+                any_failure_kind = true;
             }
         };
     }
 
-    // Record if there is _any_ failure kind, even mis-formatted, to avoid reporting an unnecessary
-    // error later;
-    let field_names = args
-        .iter()
-        .map(|sp!(_, attr)| attr.name().value)
-        .collect::<BTreeSet<_>>();
-    let any_failure_kind = KA::TestingAttribute::expected_failure_cases()
-        .iter()
-        .any(|name| field_names.contains(name));
-
-    let mut assigned_fields: BTreeSet<Name> = BTreeSet::new();
-    for sp!(arg_loc, arg_value) in args {
-        match arg_value {
-            // Bare name: expected to be an error kind.
-            PA::Name(name) => {
-                if !EXPECTED_FAILURE_EXPECTED_NAMES.contains(name.value.as_str()) {
-                    let msg = format!(
-                        "Unused attribute for '{}'",
-                        KA::TestingAttribute::EXPECTED_FAILURE
-                    );
-                    context.add_diag(diag!(Attributes::ValueWarning, (name.loc, msg)));
+    for attr in arguments {
+        let Some(attr) = valid_failure_parameter(context, attr) else {
+            continue;
+        };
+        let arg_loc = attr.loc;
+        let name = attr.value.loc_str();
+        match name.value {
+            _ if TestingAttribute::expected_failure_kinds().contains(name.value) => {
+                check_failure_kind_unset!(arg_loc);
+                let new_failure_kind = parse_expected_failure_kind(context, attr);
+                failure_kind = failure_kind.or(new_failure_kind);
+            }
+            TestingAttribute::MINOR_STATUS_NAME => {
+                if let Some((prev_loc, _)) = minor_status {
+                    context.add_diag(duplicate_field_error(attr.value.as_name(), &prev_loc));
+                    has_errors = true;
                     continue;
                 };
-                check_failure_kind_unset!(arg_loc);
-                failure_kind = Some(sp(arg_loc, ExpectedFailureKind_::Name(name)));
+                let Some((_name, value)) = expect_assigned_attr(context, attr) else {
+                    has_errors = true;
+                    continue;
+                };
+                minor_status = Some((arg_loc, value));
             }
-            // Assignment form: expected to be one of the allowed keys.
-            PA::Assigned(_, _) => {
-                if let Some((key, value)) = warn_expect_assigned_attr_value(
-                    context,
-                    KA::TestingAttribute::EXPECTED_FAILURE,
-                    sp(arg_loc, arg_value),
-                    &EXPECTED_FAILURE_EXPECTED_KEYS,
-                ) {
-                    // Check for duplicates in assigned fields.
-                    if let Some(prev) = assigned_fields.get(&key) {
-                        let msg = format!("Duplicate assignment for field '{}'.", key);
-                        context.add_diag(diag!(
-                            Declarations::InvalidAttribute,
-                            (arg_loc, msg),
-                            (prev.loc, "Previously defined here"),
-                        ));
-                        continue;
-                    } else {
-                        let _ = assigned_fields.insert(key);
-                    }
-                    let err_msg =
-                        |expected| format!("Field '{}' must be a {}", key.value, expected);
-                    match key.value.as_str() {
-                        "abort_code" => {
-                            check_failure_kind_unset!(arg_loc);
-                            failure_kind =
-                                Some(sp(arg_loc, ExpectedFailureKind_::AbortCode(value)));
-                        }
-                        "major_status" => match value.value {
-                            AttributeValue_::Value(v) => {
-                                check_failure_kind_unset!(arg_loc);
-                                failure_kind =
-                                    Some(sp(arg_loc, ExpectedFailureKind_::MajorStatus(v)));
-                            }
-                            AttributeValue_::ModuleAccess(_) => {
-                                context.add_diag(diag!(
-                                    Declarations::InvalidAttribute,
-                                    (arg_loc, err_msg("literal value"))
-                                ));
-                            }
-                        },
-                        "minor_status" => minor_status = Some(value),
-                        "location" => match value.value {
-                            AttributeValue_::ModuleAccess(nac) => location_field = Some(nac),
-                            AttributeValue_::Value(_) => {
-                                context.add_diag(diag!(
-                                    Declarations::InvalidAttribute,
-                                    (arg_loc, err_msg("module name"))
-                                ));
-                                // Bail early
-                                return vec![];
-                            }
-                        },
-                        _ => {} // Should not happen due to allowed_keys filtering.
-                    }
+            TestingAttribute::ERROR_LOCATION => {
+                if let Some((prev_loc, _)) = err_location {
+                    context.add_diag(duplicate_field_error(attr.value.as_name(), &prev_loc));
+                    has_errors = true;
+                    continue;
                 }
+                let Some((name, value)) = expect_assigned_attr(context, attr) else {
+                    has_errors = true;
+                    continue;
+                };
+                let AttributeValue_::ModuleAccess(access) = value.value else {
+                    context.add_diag(invalid_field_error(&name, "a module name"));
+                    has_errors = true;
+                    continue;
+                };
+                err_location = Some((arg_loc, access));
             }
-            // Parameterized form is not allowed here.
-            PA::Parameterized(_, _) => {
-                let msg = make_attribute_format_error(
-                    &arg_value,
-                    &format!(
-                        "expected a failure kind or an assignment (e.g. '{} = <value>')",
-                        KA::TestingAttribute::ABORT_CODE_NAME
-                    ),
-                );
-                context.add_diag(diag!(Declarations::InvalidAttribute, (arg_loc, msg)));
-            }
+            _ => unreachable!(),
         }
     }
-    if let Some(failure_kind) = failure_kind {
-        let expected_failure_attr = sp(
-            outer_loc,
-            Attribute_::ExpectedFailure {
-                failure_kind: Box::new(failure_kind),
-                minor_status,
-                location: location_field,
-            },
+
+    if !any_failure_kind && !has_errors {
+        let msg = format!(
+            "Invalid '#[expected_failure(...)]' attribute, no failure kind found. Expected {}",
+            format_one_of(KA::TestingAttribute::expected_failure_kinds())
         );
-        vec![expected_failure_attr]
-    } else {
-        if !any_failure_kind {
-            let msg = format!(
-                "Invalid '#[expected_failure(...)]' attribute, no failure kind found. Expected {}",
-                format_one_of(KA::TestingAttribute::expected_failure_cases())
-            );
-            context.add_diag(diag!(Attributes::InvalidValue, (outer_loc, msg)));
+        context.add_diag(diag!(Attributes::InvalidValue, (*outer_loc, msg)));
+    }
+
+    (
+        failure_kind,
+        minor_status.map(|(_, x)| x),
+        err_location.map(|(_, x)| x),
+    )
+}
+
+fn parse_expected_failure_kind(
+    context: &mut Context,
+    attr: ParsedAttribute,
+) -> Option<ExpectedFailureKind> {
+    use ParsedAttribute_ as PA;
+    let name = *attr.value.as_name();
+    let name_str = name.value.as_ref();
+    debug_assert!(TestingAttribute::expected_failure_kinds().contains(name_str));
+    if TestingAttribute::expected_failure_names().contains(name_str) {
+        if !matches!(attr.value, PA::Name(_)) {
+            context.add_diag(diag!(
+                Declarations::InvalidAttribute,
+                (
+                    name.loc,
+                    &make_attribute_format_error(&attr.value, &format!("a name, e.g. '{name}'"))
+                )
+            ));
         }
-        vec![]
+        Some(sp(
+            attr.loc,
+            ExpectedFailureKind_::Name(attr.value.into_name()),
+        ))
+    } else if TestingAttribute::expected_failure_assigned_keys().contains(name_str) {
+        let sp!(loc, PA::Assigned(attr_name, rhs)) = attr else {
+            context.add_diag(diag!(
+                Declarations::InvalidAttribute,
+                (
+                    name.loc,
+                    &make_attribute_format_error(
+                        &attr.value,
+                        &format!("an assignment, e.g. '{name} = <value>'")
+                    )
+                )
+            ));
+            return None;
+        };
+        match name_str {
+            TestingAttribute::ABORT_CODE_NAME => {
+                Some(sp(loc, ExpectedFailureKind_::AbortCode(*rhs)))
+            }
+            TestingAttribute::MAJOR_STATUS_NAME => match rhs.value {
+                AttributeValue_::Value(v) => Some(sp(loc, ExpectedFailureKind_::MajorStatus(v))),
+                AttributeValue_::ModuleAccess(_) => {
+                    context.add_diag(invalid_field_error(&attr_name, "a literal value"));
+                    None
+                }
+            },
+            _ => unreachable!(),
+        }
+    } else {
+        unreachable!()
     }
 }
 
@@ -755,25 +792,16 @@ fn expect_name_attr(context: &mut Context, attr: ParsedAttribute) -> Option<Name
     }
 }
 
-fn expect_assigned_attr_value(
+fn expect_assigned_attr_key_value(
     context: &mut Context,
     attr: ParsedAttribute,
     expected: &BTreeSet<String>,
 ) -> Option<(Name, AttributeValue)> {
     use ParsedAttribute_ as PA;
-    let sp!(loc, attr) = attr;
-    match attr {
-        PA::Assigned(key, value) if expected.contains(key.value.as_ref()) => Some((key, *value)),
-        PA::Name(key) | PA::Parameterized(key, _) if expected.contains(key.value.as_ref()) => {
-            let name = attr_name(&attr);
-            let msg = make_attribute_format_error(
-                &attr,
-                &format!("an assignment, e.g. '{} = <value>'", name),
-            );
-            context.add_diag(diag!(Declarations::InvalidAttribute, (loc, msg)));
-            None
-        }
-        PA::Name(key) | PA::Assigned(key, _) | PA::Parameterized(key, _) => {
+    match attr.value {
+        PA::Name(key) | PA::Assigned(key, _) | PA::Parameterized(key, _)
+            if !expected.contains(key.value.as_ref()) =>
+        {
             let msg = format!(
                 "Unexpected field '{}' -- expected {}",
                 key.value.as_ref(),
@@ -782,25 +810,57 @@ fn expect_assigned_attr_value(
             context.add_diag(diag!(Declarations::InvalidAttribute, (key.loc, msg)));
             None
         }
+        _ => expect_assigned_attr(context, attr),
     }
 }
 
-fn warn_expect_assigned_attr_value(
+fn expect_assigned_attr(
     context: &mut Context,
-    parent_attr_name: &str,
     attr: ParsedAttribute,
-    expected: &BTreeSet<String>,
 ) -> Option<(Name, AttributeValue)> {
     use ParsedAttribute_ as PA;
-    let sp!(loc, attr) = attr;
-    match attr {
-        PA::Assigned(key, value) if expected.contains(key.value.as_ref()) => Some((key, *value)),
-        _ => {
-            let msg = format!("Unused attribute for '{parent_attr_name}'");
-            context.add_diag(diag!(Attributes::ValueWarning, (loc, msg)));
+    match attr.value {
+        PA::Assigned(key, value) => Some((key, *value)),
+        PA::Name(_) | PA::Parameterized(_, _) => {
+            let name = attr.value.as_name();
+            context.add_diag(expected_assignment_error(&attr, name));
             None
         }
     }
+}
+
+fn unused_field_warning<I, T>(loc: &Loc, name: &str, field: &str, expected: I) -> Diagnostic
+where
+    I: IntoIterator<Item = T>,
+    T: ToString,
+{
+    let msg = format!(
+        "Unknown field '{field}' for '{name}'. Expected {}",
+        format_one_of(expected)
+    );
+    diag!(Attributes::ValueWarning, (*loc, msg))
+}
+
+fn expected_assignment_error(attr: &ParsedAttribute, field: &Name) -> Diagnostic {
+    let msg = make_attribute_format_error(
+        &attr.value,
+        &format!("an assignment, e.g. '{} = <value>'", field),
+    );
+    diag!(Declarations::InvalidAttribute, (attr.loc, msg))
+}
+
+fn invalid_field_error(field: &Name, expected: &str) -> Diagnostic {
+    let msg = format!("Field '{field}' must be {expected}");
+    diag!(Declarations::InvalidAttribute, (field.loc, msg))
+}
+
+fn duplicate_field_error(field: &Name, prev_loc: &Loc) -> Diagnostic {
+    let msg = format!("Duplicate assignment for field '{}'.", field);
+    diag!(
+        Declarations::InvalidAttribute,
+        (field.loc, msg),
+        (*prev_loc, "Previously defined here"),
+    )
 }
 
 // -----------------------------------------------
@@ -826,14 +886,6 @@ fn make_attribute_format_error(current_attr: &ParsedAttribute_, expectation: &st
         "Attribute '{}' does not support {}. Expected {}",
         name, encountered, expectation
     )
-}
-
-fn attr_name(attr: &ParsedAttribute_) -> &str {
-    match attr {
-        ParsedAttribute_::Name(name)
-        | ParsedAttribute_::Assigned(name, _)
-        | ParsedAttribute_::Parameterized(name, _) => name.value.as_ref(),
-    }
 }
 
 fn usage_kind(attr: &ParsedAttribute_) -> &'static str {

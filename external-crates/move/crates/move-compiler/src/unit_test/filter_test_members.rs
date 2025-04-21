@@ -253,9 +253,7 @@ fn test_attribute_kinds(attrs: &P::Attributes) -> Vec<(Loc, known_attributes::At
             P::Attribute_::RandomTest => {
                 Some((attr.loc, known_attributes::AttributeKind_::RandTest))
             }
-            P::Attribute_::ExpectedFailure { .. } => {
-                Some((attr.loc, known_attributes::AttributeKind_::ExpectedFailure))
-            }
+            P::Attribute_::ExpectedFailure { .. } => None,
         })
         .collect()
 }

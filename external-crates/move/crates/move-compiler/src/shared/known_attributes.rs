@@ -489,14 +489,20 @@ impl TestingAttribute {
         }
     }
 
-    pub fn expected_failure_cases() -> &'static [&'static str] {
-        &[
-            Self::ABORT_CODE_NAME,
-            Self::ARITHMETIC_ERROR_NAME,
-            Self::VECTOR_ERROR_NAME,
-            Self::OUT_OF_GAS_NAME,
-            Self::MAJOR_STATUS_NAME,
-        ]
+    pub fn expected_failure_kinds() -> &'static BTreeSet<String> {
+        &EXPECTED_FAILURE_KINDS
+    }
+
+    pub fn expected_failure_names() -> &'static BTreeSet<String> {
+        &EXPECTED_FAILURE_NAME_KEYS
+    }
+
+    pub fn expected_failure_assigned_keys() -> &'static BTreeSet<String> {
+        &EXPECTED_FAILURE_ASSIGNED_KEYS
+    }
+
+    pub fn expected_failure_valid_keys() -> &'static BTreeSet<String> {
+        &EXPECTED_FAILURE_ALL_KEYS
     }
 
     pub fn attribute_kind(&self) -> AttributeKind_ {
@@ -509,7 +515,17 @@ impl TestingAttribute {
     }
 }
 
-pub static EXPECTED_FAILURE_EXPECTED_NAMES: Lazy<BTreeSet<String>> = Lazy::new(|| {
+static EXPECTED_FAILURE_KINDS: Lazy<BTreeSet<String>> = Lazy::new(|| {
+    let mut keys = BTreeSet::new();
+    keys.insert(TestingAttribute::ARITHMETIC_ERROR_NAME.to_string());
+    keys.insert(TestingAttribute::VECTOR_ERROR_NAME.to_string());
+    keys.insert(TestingAttribute::OUT_OF_GAS_NAME.to_string());
+    keys.insert(TestingAttribute::MAJOR_STATUS_NAME.to_string());
+    keys.insert(TestingAttribute::ABORT_CODE_NAME.to_string());
+    keys
+});
+
+static EXPECTED_FAILURE_NAME_KEYS: Lazy<BTreeSet<String>> = Lazy::new(|| {
     let mut keys = BTreeSet::new();
     keys.insert(TestingAttribute::ARITHMETIC_ERROR_NAME.to_string());
     keys.insert(TestingAttribute::VECTOR_ERROR_NAME.to_string());
@@ -517,12 +533,23 @@ pub static EXPECTED_FAILURE_EXPECTED_NAMES: Lazy<BTreeSet<String>> = Lazy::new(|
     keys
 });
 
-pub static EXPECTED_FAILURE_EXPECTED_KEYS: Lazy<BTreeSet<String>> = Lazy::new(|| {
+static EXPECTED_FAILURE_ASSIGNED_KEYS: Lazy<BTreeSet<String>> = Lazy::new(|| {
     let mut keys = BTreeSet::new();
     keys.insert(TestingAttribute::ABORT_CODE_NAME.to_string());
     keys.insert(TestingAttribute::MAJOR_STATUS_NAME.to_string());
     keys.insert(TestingAttribute::MINOR_STATUS_NAME.to_string());
     keys.insert(TestingAttribute::ERROR_LOCATION.to_string());
+    keys
+});
+
+static EXPECTED_FAILURE_ALL_KEYS: Lazy<BTreeSet<String>> = Lazy::new(|| {
+    let mut keys = BTreeSet::new();
+    for key in EXPECTED_FAILURE_NAME_KEYS.iter() {
+        keys.insert(key.to_string());
+    }
+    for key in EXPECTED_FAILURE_ASSIGNED_KEYS.iter() {
+        keys.insert(key.to_string());
+    }
     keys
 });
 

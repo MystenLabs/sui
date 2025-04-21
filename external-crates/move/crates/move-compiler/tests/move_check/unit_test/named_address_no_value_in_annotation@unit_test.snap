@@ -21,3 +21,4 @@ warning[W10007]: issue with attribute value
   │     ^^^^^^^^^^^^^^^^^^^^^^^^ Invalid test function
   │
   = Test functions with arguments have been deprecated
+  = If you would like to test functions with random inputs, consider using '#[rand_test]' instead

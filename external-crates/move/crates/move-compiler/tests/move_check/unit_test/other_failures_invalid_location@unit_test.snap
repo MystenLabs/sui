@@ -39,7 +39,7 @@ warning[W10007]: issue with attribute value
    ┌─ tests/move_check/unit_test/other_failures_invalid_location.move:22:43
    │
 22 │     #[expected_failure(major_status=4016, minor_code=0)]
-   │                                           ^^^^^^^^^^^^ Unused attribute for 'expected_failure'
+   │                                           ^^^^^^^^^^ Unknown field 'minor_code' for 'expected_failure'. Expected one of: 'abort_code', 'arithmetic_error', 'location', 'major_status', 'minor_status', 'out_of_gas', or 'vector_error'
 
 error[E03002]: unbound module
    ┌─ tests/move_check/unit_test/other_failures_invalid_location.move:26:47
@@ -59,8 +59,14 @@ error[E03002]: unbound module
 34 │     #[expected_failure(major_status=4004, location=self)]
    │                                                    ^^^^ Unbound module alias 'self'
 
+error[E10004]: invalid usage of known attribute
+   ┌─ tests/move_check/unit_test/other_failures_invalid_location.move:38:24
+   │
+38 │     #[expected_failure(major_status=4016, minor_status=0, location=0)]
+   │                        ^^^^^^^^^^^^^^^^^ Expected 'location' following 'major_status'
+
 error[E02015]: invalid attribute
    ┌─ tests/move_check/unit_test/other_failures_invalid_location.move:38:59
    │
 38 │     #[expected_failure(major_status=4016, minor_status=0, location=0)]
-   │                                                           ^^^^^^^^^^ Field 'location' must be a module name
+   │                                                           ^^^^^^^^ Field 'location' must be a module name

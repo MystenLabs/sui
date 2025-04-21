@@ -18,6 +18,8 @@ error[E02015]: invalid attribute
   │
 7 │     #[random_test(b = 1)]
   │       ^^^^^^^^^^^^^^^^^^ Attribute 'random_test' does not support parameters. Expected '#[random_test]' with no arguments
+  │
+  = Input values will be randomly generated for this test.
 
 error[E10004]: invalid usage of known attribute
    ┌─ tests/move_2024/unit_test/random_test_invalid.move:11:7

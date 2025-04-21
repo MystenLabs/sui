@@ -836,11 +836,27 @@ impl fmt::Debug for LeadingNameAccess_ {
 //**************************************************************************************************
 
 impl ParsedAttribute_ {
-    pub fn name(&self) -> Spanned<&str> {
+    pub fn loc_str(&self) -> Spanned<&str> {
         match self {
             ParsedAttribute_::Name(name)
             | ParsedAttribute_::Assigned(name, _)
             | ParsedAttribute_::Parameterized(name, _) => sp(name.loc, name.value.as_ref()),
+        }
+    }
+
+    pub fn as_name(&self) -> &Name {
+        match self {
+            ParsedAttribute_::Name(name)
+            | ParsedAttribute_::Assigned(name, _)
+            | ParsedAttribute_::Parameterized(name, _) => name,
+        }
+    }
+
+    pub fn into_name(self) -> Name {
+        match self {
+            ParsedAttribute_::Name(name)
+            | ParsedAttribute_::Assigned(name, _)
+            | ParsedAttribute_::Parameterized(name, _) => name,
         }
     }
 }
@@ -1655,7 +1671,9 @@ impl AstDebug for Attribute_ {
                 w.write("allow(");
                 let mut first = true;
                 for (prefix, name) in allow_set {
-                    if !first { w.write(","); }
+                    if !first {
+                        w.write(",");
+                    }
                     first = false;
                     if let Some(pref) = prefix {
                         w.write(pref.value.as_str());
@@ -1681,7 +1699,11 @@ impl AstDebug for Attribute_ {
             A::TestOnly => {
                 w.write("test_only");
             }
-            A::ExpectedFailure { failure_kind, minor_status, location } => {
+            A::ExpectedFailure {
+                failure_kind,
+                minor_status,
+                location,
+            } => {
                 w.write("expected_failure(");
                 // first the kind
                 failure_kind.value.ast_debug(w);

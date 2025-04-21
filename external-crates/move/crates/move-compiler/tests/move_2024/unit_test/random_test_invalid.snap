@@ -10,3 +10,5 @@ error[E02015]: invalid attribute
   │
 7 │     #[random_test(b = 1)]
   │       ^^^^^^^^^^^^^^^^^^ Attribute 'random_test' does not support parameters. Expected '#[random_test]' with no arguments
+  │
+  = Input values will be randomly generated for this test.

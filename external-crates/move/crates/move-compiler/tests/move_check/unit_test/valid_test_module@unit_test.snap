@@ -21,6 +21,7 @@ warning[W10007]: issue with attribute value
    │     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^ Invalid test function
    │
    = Test functions with arguments have been deprecated
+   = If you would like to test functions with random inputs, consider using '#[rand_test]' instead
 
 warning[W10007]: issue with attribute value
    ┌─ tests/move_check/unit_test/valid_test_module.move:22:7
@@ -38,6 +39,7 @@ warning[W10007]: issue with attribute value
    │     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ Invalid test function
    │
    = Test functions with arguments have been deprecated
+   = If you would like to test functions with random inputs, consider using '#[rand_test]' instead
 
 warning[W10007]: issue with attribute value
    ┌─ tests/move_check/unit_test/valid_test_module.move:26:7
@@ -55,6 +57,7 @@ warning[W10007]: issue with attribute value
    │     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ Invalid test function
    │
    = Test functions with arguments have been deprecated
+   = If you would like to test functions with random inputs, consider using '#[rand_test]' instead
 
 warning[W10007]: issue with attribute value
    ┌─ tests/move_check/unit_test/valid_test_module.move:30:7
@@ -72,6 +75,7 @@ warning[W10007]: issue with attribute value
    │     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ Invalid test function
    │
    = Test functions with arguments have been deprecated
+   = If you would like to test functions with random inputs, consider using '#[rand_test]' instead
 
 warning[W10007]: issue with attribute value
    ┌─ tests/move_check/unit_test/valid_test_module.move:35:7
@@ -89,6 +93,7 @@ warning[W10007]: issue with attribute value
    │     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ Invalid test function
    │
    = Test functions with arguments have been deprecated
+   = If you would like to test functions with random inputs, consider using '#[rand_test]' instead
 
 warning[W10007]: issue with attribute value
    ┌─ tests/move_check/unit_test/valid_test_module.move:40:7
@@ -106,3 +111,4 @@ warning[W10007]: issue with attribute value
    │     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ Invalid test function
    │
    = Test functions with arguments have been deprecated
+   = If you would like to test functions with random inputs, consider using '#[rand_test]' instead

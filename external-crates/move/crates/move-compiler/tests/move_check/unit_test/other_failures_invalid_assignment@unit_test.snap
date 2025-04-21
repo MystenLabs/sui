@@ -5,19 +5,11 @@ info:
   edition: legacy
   lint: false
 ---
-warning[W09001]: unused alias
-  ┌─ tests/move_check/unit_test/other_failures_invalid_assignment.move:6:14
-  │
-6 │     use 0x1::n;
-  │              ^ Unused 'use' of alias 'n'. Consider removing it
-  │
-  = This warning can be suppressed with '#[allow(unused_use)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
-
-warning[W10007]: issue with attribute value
+error[E02015]: invalid attribute
   ┌─ tests/move_check/unit_test/other_failures_invalid_assignment.move:9:24
   │
 9 │     #[expected_failure(vector_error=0, location=std::vector)]
-  │                        ^^^^^^^^^^^^^^ Unused attribute for 'expected_failure'
+  │                        ^^^^^^^^^^^^ Attribute 'vector_error' does not support assignment. Expected a name, e.g. 'vector_error'
 
 error[E10003]: invalid attribute value
    ┌─ tests/move_check/unit_test/other_failures_invalid_assignment.move:13:51
@@ -27,17 +19,17 @@ error[E10003]: invalid attribute value
    │
    = Expected a u64 literal or named constant
 
-warning[W10007]: issue with attribute value
+error[E02015]: invalid attribute
    ┌─ tests/move_check/unit_test/other_failures_invalid_assignment.move:17:24
    │
 17 │     #[expected_failure(arithmetic_error=@0, location=n)]
-   │                        ^^^^^^^^^^^^^^^^^^^ Unused attribute for 'expected_failure'
+   │                        ^^^^^^^^^^^^^^^^ Attribute 'arithmetic_error' does not support assignment. Expected a name, e.g. 'arithmetic_error'
 
-warning[W10007]: issue with attribute value
+error[E02015]: invalid attribute
    ┌─ tests/move_check/unit_test/other_failures_invalid_assignment.move:21:24
    │
 21 │     #[expected_failure(out_of_gas=bool, location=Self)]
-   │                        ^^^^^^^^^^^^^^^ Unused attribute for 'expected_failure'
+   │                        ^^^^^^^^^^ Attribute 'out_of_gas' does not support assignment. Expected a name, e.g. 'out_of_gas'
 
 error[E10003]: invalid attribute value
    ┌─ tests/move_check/unit_test/other_failures_invalid_assignment.move:25:37
