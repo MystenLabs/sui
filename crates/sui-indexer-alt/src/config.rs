@@ -134,7 +134,6 @@ pub struct PipelineLayer {
     pub kv_protocol_configs: Option<ConcurrentLayer>,
     pub kv_transactions: Option<ConcurrentLayer>,
     pub obj_versions: Option<ConcurrentLayer>,
-    pub obj_versions_sentinel_backfill: Option<ConcurrentLayer>,
     pub tx_affected_addresses: Option<ConcurrentLayer>,
     pub tx_affected_objects: Option<ConcurrentLayer>,
     pub tx_balance_changes: Option<ConcurrentLayer>,
@@ -294,7 +293,6 @@ impl PipelineLayer {
             kv_protocol_configs: Some(Default::default()),
             kv_transactions: Some(Default::default()),
             obj_versions: Some(Default::default()),
-            obj_versions_sentinel_backfill: None,
             tx_affected_addresses: Some(Default::default()),
             tx_affected_objects: Some(Default::default()),
             tx_balance_changes: Some(Default::default()),
@@ -418,9 +416,6 @@ impl Merge for PipelineLayer {
             kv_protocol_configs: self.kv_protocol_configs.merge(other.kv_protocol_configs),
             kv_transactions: self.kv_transactions.merge(other.kv_transactions),
             obj_versions: self.obj_versions.merge(other.obj_versions),
-            obj_versions_sentinel_backfill: self
-                .obj_versions_sentinel_backfill
-                .merge(other.obj_versions_sentinel_backfill),
             tx_affected_addresses: self
                 .tx_affected_addresses
                 .merge(other.tx_affected_addresses),
