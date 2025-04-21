@@ -4,7 +4,7 @@
 use std::collections::BTreeMap;
 
 use move_package_alt::{
-    dependency::{self, Pinned, PinnedDependencyInfo, Unpinned},
+    dependency::{self, DependencySet, Pinned, PinnedDependencyInfo, Unpinned},
     errors::PackageResult,
     flavor::MoveFlavor,
     package::PackageName,
@@ -23,29 +23,36 @@ pub struct SuiFlavor;
 impl MoveFlavor for SuiFlavor {
     type FlavorDependency<P: ?Sized> = OnChainDependency;
 
+    fn name() -> String {
+        "sui move 2025".to_string()
+    }
+
     fn pin(
         &self,
-        deps: BTreeMap<PackageName, Self::FlavorDependency<Unpinned>>,
-    ) -> PackageResult<BTreeMap<PackageName, Self::FlavorDependency<Pinned>>> {
+        deps: DependencySet<Self::FlavorDependency<Unpinned>>,
+    ) -> PackageResult<DependencySet<Self::FlavorDependency<Pinned>>> {
         todo!()
     }
 
     fn fetch(
         &self,
-        deps: BTreeMap<PackageName, Self::FlavorDependency<Pinned>>,
-    ) -> PackageResult<BTreeMap<PackageName, std::path::PathBuf>> {
+        deps: DependencySet<Self::FlavorDependency<Pinned>>,
+    ) -> PackageResult<DependencySet<std::path::PathBuf>> {
         todo!()
     }
 
     type PublishedMetadata = (); // TODO
 
-    type EnvironmentID = (); // TODO
+    type EnvironmentID = String; // TODO
 
     type AddressInfo = (); // TODO
 
     type PackageMetadata = (); // TODO
 
-    fn implicit_deps(&self, id: Self::EnvironmentID) -> Vec<PinnedDependencyInfo<Self>> {
+    fn implicit_deps(
+        &self,
+        environments: impl Iterator<Item = Self::EnvironmentID>,
+    ) -> DependencySet<PinnedDependencyInfo<Self>> {
         todo!()
     }
 }

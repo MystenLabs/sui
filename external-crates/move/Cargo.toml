@@ -143,7 +143,8 @@ insta = "1.42.0"
 zstd = "0.13.2"
 
 bytecode-interpreter-crypto = { path = "crates/bytecode-interpreter-crypto" }
-enum-compat-util = { path = "crates/enum-compat-util"}
+enum-compat-util = { path = "crates/enum-compat-util" }
+external-resolver = { path = "crates/external-resolver" }
 invalid-mutations = { path = "crates/invalid-mutations" }
 module-generation = { path = "crates/module-generation" }
 move-abstract-interpreter = { path = "crates/move-abstract-interpreter" }

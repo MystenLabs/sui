@@ -24,27 +24,41 @@ use serde::{Deserialize, Serialize};
 
 use crate::errors::PackageResult;
 
-use super::{Pinned, Unpinned};
+use super::{DependencySet, Pinned, Unpinned};
 
+// TODO: custom deserialization to verify pinnedness for pinned deps?
 #[derive(Debug, Serialize, Deserialize)]
 #[derive_where(Clone)]
 pub struct GitDependency<P = Unpinned> {
-    /// The git commit-ish for the dep; guaranteed to be a commit if [P] is [Pinned].
+    /// The repository containing the dependency
     #[serde(rename = "git")]
     repo: String,
 
-    rev: String,
+    /// The git commit-ish for the dep; guaranteed to be a commit if [P] is [Pinned].
+    #[serde(default)]
+    rev: Option<String>,
 
     /// The path within the repository
+    #[serde(default)]
     path: Option<PathBuf>,
+
     #[serde(skip)]
     phantom: PhantomData<P>,
 }
 
 impl GitDependency<Unpinned> {
+    /// Replace all commit-ishes in [deps] with commits (i.e. SHAs). Requires fetching the git
+    /// repositories
+    pub fn pin(deps: DependencySet<Self>) -> PackageResult<DependencySet<GitDependency<Pinned>>> {
+        Ok(deps
+            .into_iter()
+            .map(|(env, package, dep)| (env, package, dep.pin_one().unwrap())) // TODO: errors!
+            .collect())
+    }
+
     /// Replace the commit-ish [self.rev] with a commit (i.e. a SHA). Requires fetching the git
     /// repository
-    pub fn pin(&self) -> PackageResult<GitDependency<Pinned>> {
+    fn pin_one(&self) -> PackageResult<GitDependency<Pinned>> {
         todo!()
     }
 }

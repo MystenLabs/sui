@@ -9,3 +9,4 @@ mainnet = "35834a8a"
 
 [dependencies]
 mock = { r.mock-resolver = { resolved = { local = "."} } }
+mock2 = { r.mock-resolver-2 = { resolved = { local = ".." } } }
