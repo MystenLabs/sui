@@ -585,8 +585,7 @@ fun load_inner_maybe_upgrade(self: &mut SuiSystemState): &mut SuiSystemStateInne
 #[allow(unused_function)]
 /// Returns the voting power of the active validators, values are voting power in the scale of 10000.
 fun validator_voting_powers(wrapper: &mut SuiSystemState): VecMap<address, u64> {
-    let self = load_system_state(wrapper);
-    sui_system_state_inner::active_validator_voting_powers(self)
+    wrapper.load_system_state().active_validator_voting_powers()
 }
 
 #[allow(unused_function)]
