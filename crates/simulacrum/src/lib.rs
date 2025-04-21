@@ -602,6 +602,14 @@ impl<T: Send + Sync, V: store::SimulatorStore + Send + Sync> RpcStateReader for 
     fn indexes(&self) -> Option<&dyn sui_types::storage::RpcIndexes> {
         None
     }
+
+    fn get_struct_layout(
+        &self,
+        _: &move_core_types::language_storage::StructTag,
+    ) -> sui_types::storage::error::Result<Option<move_core_types::annotated_value::MoveTypeLayout>>
+    {
+        Ok(None)
+    }
 }
 
 impl Simulacrum {
