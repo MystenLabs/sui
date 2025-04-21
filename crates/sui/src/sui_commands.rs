@@ -498,33 +498,43 @@ impl SuiCommand {
                         // (e.g., testnet, mainnet) from the Move.lock under automated address management.
                         // In addition, tree shaking also requires a network as it needs to fetch
                         // on-chain linkage table of package dependencies.
-                        let config =
-                            client_config.unwrap_or(sui_config_dir()?.join(SUI_CLIENT_CONFIG));
-                        prompt_if_no_config(&config, false).await?;
-                        let context = WalletContext::new(&config, None, None)?;
-
-                        let Ok(client) = context.get_client().await else {
-                            bail!("`sui move build --dump-bytecode-as-base64` requires a connection to the network. Current active network is {} but failed to connect to it.", context.config.active_env.as_ref().unwrap());
-                        };
-                        let read_api = client.read_api();
-
-                        if let Err(e) = client.check_api_version() {
-                            eprintln!("{}", format!("[warning] {e}").yellow().bold());
-                        }
-
-                        let chain_id = if build.ignore_chain {
+                        let (chain_id, client) = if build.ignore_chain {
                             // for tests it's useful to ignore the chain id!
-                            None
+                            (None, None)
                         } else {
-                            read_api.get_chain_identifier().await.ok()
+                            let config =
+                                client_config.unwrap_or(sui_config_dir()?.join(SUI_CLIENT_CONFIG));
+                            prompt_if_no_config(&config, false).await?;
+                            let context = WalletContext::new(&config, None, None)?;
+
+                            let Ok(client) = context.get_client().await else {
+                                bail!("`sui move build --dump-bytecode-as-base64` requires a connection to the network. Current active network is {} but failed to connect to it.", context.config.active_env.as_ref().unwrap());
+                            };
+
+                            if let Err(e) = client.check_api_version() {
+                                eprintln!("{}", format!("[warning] {e}").yellow().bold());
+                            }
+
+                            (
+                                client.read_api().get_chain_identifier().await.ok(),
+                                Some(client),
+                            )
                         };
 
                         let rerooted_path = move_cli::base::reroot_path(package_path.as_deref())?;
                         let mut build_config =
                             resolve_lock_file_path(build_config, Some(&rerooted_path))?;
-                        let protocol_config = read_api.get_protocol_config(None).await?;
-                        build_config.implicit_dependencies =
-                            implicit_deps_for_protocol_version(protocol_config.protocol_version)?;
+                        if let Some(client) = &client {
+                            let protocol_config =
+                                client.read_api().get_protocol_config(None).await?;
+                            build_config.implicit_dependencies =
+                                implicit_deps_for_protocol_version(
+                                    protocol_config.protocol_version,
+                                )?;
+                        } else {
+                            build_config.implicit_dependencies =
+                                implicit_deps(latest_system_packages());
+                        }
 
                         let mut pkg = SuiBuildConfig {
                             config: build_config,
@@ -541,7 +551,10 @@ impl SuiCommand {
                             check_unpublished_dependencies(&pkg.dependency_ids.unpublished)?;
                         }
 
-                        pkg_tree_shake(read_api, with_unpublished_deps, &mut pkg).await?;
+                        if let Some(client) = client {
+                            pkg_tree_shake(client.read_api(), with_unpublished_deps, &mut pkg)
+                                .await?;
+                        }
 
                         println!(
                             "{}",

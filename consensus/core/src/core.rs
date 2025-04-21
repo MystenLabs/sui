@@ -3,7 +3,7 @@
 
 use std::{
     collections::{BTreeMap, BTreeSet},
-    iter, mem,
+    iter,
     sync::Arc,
     time::Duration,
     vec,
@@ -1042,7 +1042,7 @@ impl Core {
             certified_commits.drain(..limit).collect::<Vec<_>>()
         } else {
             // Otherwise just take all of them and leave the `synced_commits` empty.
-            mem::take(certified_commits)
+            std::mem::take(certified_commits)
         };
 
         tracing::debug!(
@@ -1463,7 +1463,6 @@ impl CoreTextFixture {
             context.clone(),
             commit_consumer,
             dag_state.clone(),
-            store.clone(),
             leader_schedule.clone(),
         );
 
@@ -1543,7 +1542,7 @@ mod test {
         let mut block_status_subscriptions = FuturesUnordered::new();
 
         // Create test blocks for all the authorities for 4 rounds and populate them in store
-        let mut last_round_blocks = genesis_blocks(context.clone());
+        let mut last_round_blocks = genesis_blocks(&context);
         let mut all_blocks: Vec<VerifiedBlock> = last_round_blocks.clone();
         for round in 1..=4 {
             let mut this_round_blocks = Vec::new();
@@ -1588,7 +1587,6 @@ mod test {
             context.clone(),
             commit_consumer,
             dag_state.clone(),
-            store.clone(),
             leader_schedule.clone(),
         );
 
@@ -1673,7 +1671,7 @@ mod test {
         let transaction_consumer = TransactionConsumer::new(tx_receiver, context.clone());
 
         // Create test blocks for all authorities except our's (index = 0).
-        let mut last_round_blocks = genesis_blocks(context.clone());
+        let mut last_round_blocks = genesis_blocks(&context);
         let mut all_blocks = last_round_blocks.clone();
         for round in 1..=4 {
             let mut this_round_blocks = Vec::new();
@@ -1718,7 +1716,6 @@ mod test {
             context.clone(),
             commit_consumer,
             dag_state.clone(),
-            store.clone(),
             leader_schedule.clone(),
         );
 
@@ -1828,7 +1825,6 @@ mod test {
             context.clone(),
             commit_consumer,
             dag_state.clone(),
-            store.clone(),
             leader_schedule.clone(),
         );
 
@@ -1887,7 +1883,7 @@ mod test {
         assert!(total <= context.protocol_config.max_transactions_in_block_bytes());
 
         // genesis blocks should be referenced
-        let all_genesis = genesis_blocks(context);
+        let all_genesis = genesis_blocks(&context);
 
         for ancestor in extended_block.block.ancestors() {
             all_genesis
@@ -2047,7 +2043,6 @@ mod test {
             context.clone(),
             commit_consumer,
             dag_state.clone(),
-            store.clone(),
             leader_schedule.clone(),
         );
 
@@ -2206,7 +2201,6 @@ mod test {
             context.clone(),
             commit_consumer,
             dag_state.clone(),
-            store.clone(),
             leader_schedule.clone(),
         );
 
@@ -2298,7 +2292,6 @@ mod test {
             context.clone(),
             commit_consumer,
             dag_state.clone(),
-            store.clone(),
             leader_schedule.clone(),
         );
 
@@ -2652,7 +2645,6 @@ mod test {
             context.clone(),
             commit_consumer,
             dag_state.clone(),
-            store.clone(),
             leader_schedule.clone(),
         );
 
@@ -2951,7 +2943,6 @@ mod test {
             context.clone(),
             commit_consumer,
             dag_state.clone(),
-            store.clone(),
             leader_schedule.clone(),
         );
 
@@ -3046,7 +3037,6 @@ mod test {
             context.clone(),
             commit_consumer,
             dag_state.clone(),
-            store.clone(),
             leader_schedule.clone(),
         );
 
@@ -3118,7 +3108,6 @@ mod test {
             context.clone(),
             commit_consumer,
             dag_state.clone(),
-            store.clone(),
             leader_schedule.clone(),
         );
 
@@ -3573,7 +3562,6 @@ mod test {
             context.clone(),
             commit_consumer,
             dag_state.clone(),
-            store.clone(),
             leader_schedule.clone(),
         );
 

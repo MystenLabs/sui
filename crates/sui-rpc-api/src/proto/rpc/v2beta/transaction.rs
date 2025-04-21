@@ -261,6 +261,16 @@ impl TryFrom<&super::TransactionExpiration> for sui_sdk_types::TransactionExpira
 // TransactionKind
 //
 
+impl From<super::ProgrammableTransaction> for super::TransactionKind {
+    fn from(value: super::ProgrammableTransaction) -> Self {
+        Self {
+            kind: Some(super::transaction_kind::Kind::ProgrammableTransaction(
+                value,
+            )),
+        }
+    }
+}
+
 impl From<sui_sdk_types::TransactionKind> for super::TransactionKind {
     fn from(value: sui_sdk_types::TransactionKind) -> Self {
         use super::transaction_kind::Kind;
@@ -335,7 +345,7 @@ impl From<sui_sdk_types::ConsensusCommitPrologue> for super::ConsensusCommitProl
         Self {
             epoch: Some(value.epoch),
             round: Some(value.round),
-            commit_timestamp: Some(crate::proto::types::timestamp_ms_to_proto(
+            commit_timestamp: Some(crate::proto::timestamp_ms_to_proto(
                 value.commit_timestamp_ms,
             )),
             consensus_commit_digest: None,
@@ -359,7 +369,7 @@ impl TryFrom<&super::ConsensusCommitPrologue> for sui_sdk_types::ConsensusCommit
         let commit_timestamp_ms = value
             .commit_timestamp
             .ok_or_else(|| TryFromProtoError::missing("commit_timestamp"))?
-            .pipe(crate::proto::types::proto_to_timestamp_ms)?;
+            .pipe(crate::proto::proto_to_timestamp_ms)?;
 
         Ok(Self {
             epoch,
@@ -374,7 +384,7 @@ impl From<sui_sdk_types::ConsensusCommitPrologueV2> for super::ConsensusCommitPr
         Self {
             epoch: Some(value.epoch),
             round: Some(value.round),
-            commit_timestamp: Some(crate::proto::types::timestamp_ms_to_proto(
+            commit_timestamp: Some(crate::proto::timestamp_ms_to_proto(
                 value.commit_timestamp_ms,
             )),
             consensus_commit_digest: Some(value.consensus_commit_digest.to_string()),
@@ -398,7 +408,7 @@ impl TryFrom<&super::ConsensusCommitPrologue> for sui_sdk_types::ConsensusCommit
         let commit_timestamp_ms = value
             .commit_timestamp
             .ok_or_else(|| TryFromProtoError::missing("commit_timestamp"))?
-            .pipe(crate::proto::types::proto_to_timestamp_ms)?;
+            .pipe(crate::proto::proto_to_timestamp_ms)?;
 
         let consensus_commit_digest = value
             .consensus_commit_digest
@@ -421,7 +431,7 @@ impl From<sui_sdk_types::ConsensusCommitPrologueV3> for super::ConsensusCommitPr
         Self {
             epoch: Some(value.epoch),
             round: Some(value.round),
-            commit_timestamp: Some(crate::proto::types::timestamp_ms_to_proto(
+            commit_timestamp: Some(crate::proto::timestamp_ms_to_proto(
                 value.commit_timestamp_ms,
             )),
             consensus_commit_digest: Some(value.consensus_commit_digest.to_string()),
@@ -447,7 +457,7 @@ impl TryFrom<&super::ConsensusCommitPrologue> for sui_sdk_types::ConsensusCommit
         let commit_timestamp_ms = value
             .commit_timestamp
             .ok_or_else(|| TryFromProtoError::missing("commit_timestamp"))?
-            .pipe(crate::proto::types::proto_to_timestamp_ms)?;
+            .pipe(crate::proto::proto_to_timestamp_ms)?;
 
         let consensus_commit_digest = value
             .consensus_commit_digest
@@ -488,9 +498,7 @@ impl From<sui_sdk_types::ConsensusCommitPrologueV4> for super::ConsensusCommitPr
         Self {
             epoch: Some(epoch),
             round: Some(round),
-            commit_timestamp: Some(crate::proto::types::timestamp_ms_to_proto(
-                commit_timestamp_ms,
-            )),
+            commit_timestamp: Some(crate::proto::timestamp_ms_to_proto(commit_timestamp_ms)),
             consensus_commit_digest: Some(consensus_commit_digest.to_string()),
             sub_dag_index,
             consensus_determined_version_assignments: Some(
@@ -514,7 +522,7 @@ impl TryFrom<&super::ConsensusCommitPrologue> for sui_sdk_types::ConsensusCommit
         let commit_timestamp_ms = value
             .commit_timestamp
             .ok_or_else(|| TryFromProtoError::missing("commit_timestamp"))?
-            .pipe(crate::proto::types::proto_to_timestamp_ms)?;
+            .pipe(crate::proto::proto_to_timestamp_ms)?;
 
         let consensus_commit_digest = value
             .consensus_commit_digest
@@ -908,7 +916,7 @@ impl From<sui_sdk_types::ChangeEpoch> for super::ChangeEpoch {
             computation_charge: Some(value.computation_charge),
             storage_rebate: Some(value.storage_rebate),
             non_refundable_storage_fee: Some(value.non_refundable_storage_fee),
-            epoch_start_timestamp: Some(crate::proto::types::timestamp_ms_to_proto(
+            epoch_start_timestamp: Some(crate::proto::timestamp_ms_to_proto(
                 value.epoch_start_timestamp_ms,
             )),
             system_packages: value.system_packages.into_iter().map(Into::into).collect(),
@@ -944,7 +952,7 @@ impl TryFrom<&super::ChangeEpoch> for sui_sdk_types::ChangeEpoch {
             .ok_or_else(|| TryFromProtoError::missing("non_refundable_storage_fee"))?;
         let epoch_start_timestamp_ms = epoch_start_timestamp
             .ok_or_else(|| TryFromProtoError::missing("epoch_start_timestamp_ms"))?
-            .pipe(crate::proto::types::proto_to_timestamp_ms)?;
+            .pipe(crate::proto::proto_to_timestamp_ms)?;
 
         Ok(Self {
             epoch,
@@ -1423,6 +1431,40 @@ impl TryFrom<&super::Input> for sui_sdk_types::Input {
 // Argument
 //
 
+impl super::Argument {
+    pub fn gas() -> Self {
+        Self {
+            kind: Some(super::argument::ArgumentKind::Gas.into()),
+            index: None,
+            subresult: None,
+        }
+    }
+
+    pub fn input(input: u16) -> Self {
+        Self {
+            kind: Some(super::argument::ArgumentKind::Input.into()),
+            index: Some(input.into()),
+            subresult: None,
+        }
+    }
+
+    pub fn result(command: u16) -> Self {
+        Self {
+            kind: Some(super::argument::ArgumentKind::Result.into()),
+            index: Some(command.into()),
+            subresult: None,
+        }
+    }
+
+    pub fn nested_result(command: u16, subresult: u16) -> Self {
+        Self {
+            kind: Some(super::argument::ArgumentKind::Result.into()),
+            index: Some(command.into()),
+            subresult: Some(subresult.into()),
+        }
+    }
+}
+
 impl From<sui_sdk_types::Argument> for super::Argument {
     fn from(value: sui_sdk_types::Argument) -> Self {
         use super::argument::ArgumentKind;
@@ -1490,6 +1532,38 @@ impl TryFrom<&super::Argument> for sui_sdk_types::Argument {
 //
 // Command
 //
+
+impl From<super::command::Command> for super::Command {
+    fn from(value: super::command::Command) -> Self {
+        Self {
+            command: Some(value),
+        }
+    }
+}
+
+impl From<super::MoveCall> for super::command::Command {
+    fn from(value: super::MoveCall) -> Self {
+        Self::MoveCall(value)
+    }
+}
+
+impl From<super::MoveCall> for super::Command {
+    fn from(value: super::MoveCall) -> Self {
+        super::command::Command::from(value).into()
+    }
+}
+
+impl From<super::TransferObjects> for super::command::Command {
+    fn from(value: super::TransferObjects) -> Self {
+        Self::TransferObjects(value)
+    }
+}
+
+impl From<super::TransferObjects> for super::Command {
+    fn from(value: super::TransferObjects) -> Self {
+        super::command::Command::from(value).into()
+    }
+}
 
 impl From<sui_sdk_types::Command> for super::Command {
     fn from(value: sui_sdk_types::Command) -> Self {

@@ -11,6 +11,7 @@ pub struct AnalyticsMetrics {
     pub total_received: IntCounterVec,
     pub last_uploaded_checkpoint: IntGaugeVec,
     pub max_checkpoint_on_store: IntGaugeVec,
+    pub total_too_large_to_deserialize: IntCounterVec,
 }
 
 impl AnalyticsMetrics {
@@ -33,6 +34,13 @@ impl AnalyticsMetrics {
             max_checkpoint_on_store: register_int_gauge_vec_with_registry!(
                 "max_checkpoint_on_store",
                 "Max checkpoint on the db table.",
+                &["data_type"],
+                registry,
+            )
+            .unwrap(),
+            total_too_large_to_deserialize: register_int_counter_vec_with_registry!(
+                "total_too_large_to_deserialize",
+                "Total number of rows skipped due to size.",
                 &["data_type"],
                 registry,
             )

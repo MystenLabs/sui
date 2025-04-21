@@ -5,11 +5,9 @@
 /// actions are allowed as long as the user is not on the denylist.
 module examples::simple_token {
     use examples::denylist_rule::Denylist;
-    use sui::{
-        coin::{Self, TreasuryCap},
-        token::{Self, TokenPolicy, TokenPolicyCap},
-        tx_context::sender
-    };
+    use sui::coin::{Self, TreasuryCap};
+    use sui::token::{Self, TokenPolicy, TokenPolicyCap};
+    use sui::tx_context::sender;
 
     /// OTW and the type for the Token.
     public struct SIMPLE_TOKEN has drop {}
@@ -66,12 +64,11 @@ module examples::simple_token {
 /// We don't test the currency itself but rather use the same set of regulations
 /// on a test currency.
 module examples::simple_token_tests {
-    use examples::{denylist_rule as denylist, simple_token::set_rules};
-    use sui::{
-        coin,
-        token::{Self, TokenPolicy, TokenPolicyCap},
-        token_test_utils::{Self as test, TEST}
-    };
+    use examples::denylist_rule as denylist;
+    use examples::simple_token::set_rules;
+    use sui::coin;
+    use sui::token::{Self, TokenPolicy, TokenPolicyCap};
+    use sui::token_test_utils::{Self as test, TEST};
 
     const ALICE: address = @0x0;
     const BOB: address = @0x1;

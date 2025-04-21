@@ -11,9 +11,10 @@
 /// ===========================================================================================
 #[allow(unused_const)]
 module vesting::linear;
-use sui::coin::{Self, Coin};
-use sui::clock::Clock;
+
 use sui::balance::Balance;
+use sui::clock::Clock;
+use sui::coin::{Self, Coin};
 
 // === Errors ===
 #[error]
@@ -31,9 +32,8 @@ public struct Wallet<phantom T> has key, store {
     // Amount of coins that have been claimed
     claimed: u64,
     // Total duration of the vesting schedule
-    duration: u64
+    duration: u64,
 }
-
 
 // === Public Functions ===
 
@@ -55,41 +55,33 @@ public fun new_wallet<T>(
         balance: coins.into_balance(),
         start,
         claimed: 0,
-        duration
+        duration,
     }
 }
 
 /// Claim the coins that are available for claiming at the current time.
-public fun claim<T>(
-    self: &mut Wallet<T>,
-    clock: &Clock,
-    ctx: &mut TxContext,
-): Coin<T> {
+public fun claim<T>(self: &mut Wallet<T>, clock: &Clock, ctx: &mut TxContext): Coin<T> {
     let claimable_amount = self.claimable(clock);
     self.claimed = self.claimed + claimable_amount;
     coin::from_balance(self.balance.split(claimable_amount), ctx)
 }
 
 /// Calculate the amount of coins that can be claimed at the current time.
-public fun claimable<T>(
-    self: &Wallet<T>,
-    clock: &Clock,
-): u64 {
+public fun claimable<T>(self: &Wallet<T>, clock: &Clock): u64 {
     let timestamp = clock.timestamp_ms();
     if (timestamp < self.start) return 0;
     if (timestamp >= self.start + self.duration) return self.balance.value();
     let elapsed = timestamp - self.start;
     // Convert the balance to u128 to account for overflow in the calculation
     // Note that the division by zero is not possible because when duration is zero, the balance is returned above
-    let claimable: u128 = (self.balance.value() + self.claimed as u128) * (elapsed as u128) / (self.duration as u128);
+    let claimable: u128 =
+        (self.balance.value() + self.claimed as u128) * (elapsed as u128) / (self.duration as u128);
     // Adjust the claimable amount by subtracting the already claimed amount
     (claimable as u64) - self.claimed
 }
 
 /// Delete the wallet if it is empty.
-public fun delete_wallet<T>(
-    self: Wallet<T>,
-) {
+public fun delete_wallet<T>(self: Wallet<T>) {
     let Wallet { id, start: _, balance, claimed: _, duration: _ } = self;
     id.delete();
     balance.destroy_zero();
@@ -98,19 +90,16 @@ public fun delete_wallet<T>(
 // === Accessors ===
 
 /// Get the remaining balance of the wallet.
-public fun balance<T>(self: &Wallet<T>
-): u64 {
+public fun balance<T>(self: &Wallet<T>): u64 {
     self.balance.value()
 }
 
 /// Get the start time of the vesting schedule.
-public fun start<T>(self: &Wallet<T>
-): u64 {
+public fun start<T>(self: &Wallet<T>): u64 {
     self.start
 }
 
 /// Get the duration of the vesting schedule.
-public fun duration<T>(self: &Wallet<T>
-): u64 {
+public fun duration<T>(self: &Wallet<T>): u64 {
     self.duration
 }

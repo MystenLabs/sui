@@ -107,7 +107,7 @@ impl DagState {
         let cached_rounds = context.parameters.dag_state_cached_rounds as Round;
         let num_authorities = context.committee.size();
 
-        let genesis = genesis_blocks(context.clone())
+        let genesis = genesis_blocks(context.as_ref())
             .into_iter()
             .map(|block| (block.reference(), block))
             .collect();
@@ -1132,6 +1132,11 @@ impl DagState {
     /// of the latest blocks in the cache (if enough data is available), while evicting blocks with rounds <= `gc_round` when possible.
     fn gc_eviction_round(last_round: Round, gc_round: Round, cached_rounds: u32) -> Round {
         gc_round.min(last_round.saturating_sub(cached_rounds))
+    }
+
+    /// Returns the underlying store.
+    pub(crate) fn store(&self) -> Arc<dyn Store> {
+        self.store.clone()
     }
 
     /// Detects and returns the blocks of the round that forms the last quorum. The method will return
@@ -2571,7 +2576,7 @@ mod test {
 
         // WHEN no blocks exist then genesis should be returned
         {
-            let genesis = genesis_blocks(context.clone());
+            let genesis = genesis_blocks(context.as_ref());
 
             assert_eq!(dag_state.read().last_quorum(), genesis);
         }
@@ -2623,7 +2628,7 @@ mod test {
 
         // WHEN no blocks exist then genesis should be returned
         {
-            let genesis = genesis_blocks(context.clone());
+            let genesis = genesis_blocks(context.as_ref());
             let my_genesis = genesis
                 .into_iter()
                 .find(|block| block.author() == context.own_index)

@@ -140,7 +140,9 @@ Called by <code><a href="../sui_system/sui_system.md#sui_system_sui_system">sui_
     // into `<a href="../sui_system/storage_fund.md#sui_system_storage_fund_total_object_storage_rebates">total_object_storage_rebates</a>`.
     self.<a href="../sui_system/storage_fund.md#sui_system_storage_fund_total_object_storage_rebates">total_object_storage_rebates</a>.join(storage_charges);
     // Split out the non-refundable portion of the storage rebate and put it into the non-refundable balance.
-    <b>let</b> non_refundable_storage_fee = self.<a href="../sui_system/storage_fund.md#sui_system_storage_fund_total_object_storage_rebates">total_object_storage_rebates</a>.split(non_refundable_storage_fee_amount);
+    <b>let</b> non_refundable_storage_fee = self
+        .<a href="../sui_system/storage_fund.md#sui_system_storage_fund_total_object_storage_rebates">total_object_storage_rebates</a>
+        .split(non_refundable_storage_fee_amount);
     self.non_refundable_balance.join(non_refundable_storage_fee);
     // `storage_rebates` include the already refunded rebates of deleted objects and old rebates of modified objects and
     // should be taken out of the `<a href="../sui_system/storage_fund.md#sui_system_storage_fund_total_object_storage_rebates">total_object_storage_rebates</a>`.

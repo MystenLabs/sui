@@ -2,7 +2,6 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::authority::authority_per_epoch_store::CancelConsensusCertificateReason;
-use crate::authority::epoch_start_configuration::EpochStartConfigTrait;
 use crate::authority::AuthorityPerEpochStore;
 use crate::execution_cache::ObjectCacheRead;
 use std::collections::BTreeMap;
@@ -10,7 +9,6 @@ use std::collections::HashMap;
 use std::collections::HashSet;
 use sui_types::base_types::ConsensusObjectSequenceKey;
 use sui_types::base_types::TransactionDigest;
-use sui_types::crypto::RandomnessRound;
 use sui_types::effects::{TransactionEffects, TransactionEffectsAPI};
 use sui_types::executable_transaction::VerifiedExecutableTransaction;
 use sui_types::storage::{
@@ -20,7 +18,7 @@ use sui_types::transaction::{
     SenderSignedData, SharedInputObject, TransactionDataAPI, TransactionKey,
 };
 use sui_types::{base_types::SequenceNumber, error::SuiResult, SUI_RANDOMNESS_STATE_OBJECT_ID};
-use tracing::{debug, trace};
+use tracing::trace;
 
 pub struct SharedObjVerManager {}
 
@@ -37,48 +35,18 @@ pub struct ConsensusSharedObjVerAssignment {
 }
 
 impl SharedObjVerManager {
-    pub fn assign_versions_from_consensus(
+    pub fn assign_versions_from_consensus<'a>(
         epoch_store: &AuthorityPerEpochStore,
         cache_reader: &dyn ObjectCacheRead,
-        certificates: &[VerifiedExecutableTransaction],
-        randomness_round: Option<RandomnessRound>,
+        certificates: impl Iterator<Item = &'a VerifiedExecutableTransaction> + Clone,
         cancelled_txns: &BTreeMap<TransactionDigest, CancelConsensusCertificateReason>,
     ) -> SuiResult<ConsensusSharedObjVerAssignment> {
         let mut shared_input_next_versions = get_or_init_versions(
-            certificates.iter().map(|cert| cert.data()),
+            certificates.clone().map(|cert| cert.data()),
             epoch_store,
             cache_reader,
-            randomness_round.is_some(),
         )?;
         let mut assigned_versions = Vec::new();
-        // We must update randomness object version first before processing any transaction,
-        // so that all reads are using the next version.
-        // TODO: Add a test that actually check this, i.e. if we change the order, some test should fail.
-        if let Some(round) = randomness_round {
-            // If we're generating randomness, update the randomness state object version.
-            let randomness_obj_initial_shared_version = epoch_store
-                .epoch_start_config()
-                .randomness_obj_initial_shared_version()
-                .expect("randomness state obj must exist");
-            let version = shared_input_next_versions
-                .get_mut(&(
-                    SUI_RANDOMNESS_STATE_OBJECT_ID,
-                    randomness_obj_initial_shared_version,
-                ))
-                .expect("randomness state object must have been added in get_or_init_versions()");
-            debug!("assigning shared object versions for randomness: epoch {}, round {round:?} -> version {version:?}", epoch_store.epoch());
-            assigned_versions.push((
-                TransactionKey::RandomnessRound(epoch_store.epoch(), round),
-                vec![(
-                    (
-                        SUI_RANDOMNESS_STATE_OBJECT_ID,
-                        randomness_obj_initial_shared_version,
-                    ),
-                    *version,
-                )],
-            ));
-            version.increment();
-        }
         for cert in certificates {
             if !cert.contains_shared_object() {
                 continue;
@@ -113,7 +81,6 @@ impl SharedObjVerManager {
             certs_and_effects.iter().map(|(cert, _)| cert.data()),
             epoch_store,
             cache_reader,
-            false,
         );
         let mut assigned_versions = Vec::new();
         for (cert, effects) in certs_and_effects {
@@ -276,7 +243,6 @@ fn get_or_init_versions<'a>(
     transactions: impl Iterator<Item = &'a SenderSignedData>,
     epoch_store: &AuthorityPerEpochStore,
     cache_reader: &dyn ObjectCacheRead,
-    generate_randomness: bool,
 ) -> SuiResult<HashMap<ConsensusObjectSequenceKey, SequenceNumber>> {
     let mut shared_input_objects: Vec<_> = transactions
         .flat_map(|tx| {
@@ -286,18 +252,6 @@ fn get_or_init_versions<'a>(
                 .map(|so| so.into_id_and_version())
         })
         .collect();
-
-    if generate_randomness {
-        shared_input_objects.push((
-            SUI_RANDOMNESS_STATE_OBJECT_ID,
-            epoch_store
-                .epoch_start_config()
-                .randomness_obj_initial_shared_version()
-                .expect(
-                    "randomness_obj_initial_shared_version should exist if randomness is enabled",
-                ),
-        ));
-    }
 
     shared_input_objects.sort();
     shared_input_objects.dedup();
@@ -325,7 +279,7 @@ mod tests {
     };
     use sui_types::object::{Object, Owner};
     use sui_types::programmable_transaction_builder::ProgrammableTransactionBuilder;
-    use sui_types::transaction::{ObjectArg, SenderSignedData, TransactionKey};
+    use sui_types::transaction::{ObjectArg, SenderSignedData, VerifiedTransaction};
     use sui_types::SUI_RANDOMNESS_STATE_OBJECT_ID;
 
     #[tokio::test]
@@ -356,8 +310,7 @@ mod tests {
         } = SharedObjVerManager::assign_versions_from_consensus(
             &epoch_store,
             authority.get_object_cache_reader().as_ref(),
-            &certs,
-            None,
+            certs.iter(),
             &BTreeMap::new(),
         )
         .unwrap();
@@ -410,6 +363,15 @@ mod tests {
             .randomness_obj_initial_shared_version()
             .unwrap();
         let certs = vec![
+            VerifiedExecutableTransaction::new_system(
+                VerifiedTransaction::new_randomness_state_update(
+                    epoch_store.epoch(),
+                    RandomnessRound::new(1),
+                    vec![],
+                    randomness_obj_version,
+                ),
+                epoch_store.epoch(),
+            ),
             generate_shared_objs_tx_with_gas_version(
                 &[(
                     SUI_RANDOMNESS_STATE_OBJECT_ID,
@@ -434,8 +396,7 @@ mod tests {
         } = SharedObjVerManager::assign_versions_from_consensus(
             &epoch_store,
             authority.get_object_cache_reader().as_ref(),
-            &certs,
-            Some(RandomnessRound::new(1)),
+            certs.iter(),
             &BTreeMap::new(),
         )
         .unwrap();
@@ -459,14 +420,14 @@ mod tests {
             assigned_versions,
             vec![
                 (
-                    TransactionKey::RandomnessRound(0, RandomnessRound::new(1)),
+                    certs[0].key(),
                     vec![(
                         (SUI_RANDOMNESS_STATE_OBJECT_ID, randomness_obj_version),
                         randomness_obj_version
                     ),]
                 ),
                 (
-                    certs[0].key(),
+                    certs[1].key(),
                     // It is critical that the randomness object version is updated before the assignment.
                     vec![(
                         (SUI_RANDOMNESS_STATE_OBJECT_ID, randomness_obj_version),
@@ -474,7 +435,7 @@ mod tests {
                     )]
                 ),
                 (
-                    certs[1].key(),
+                    certs[2].key(),
                     // It is critical that the randomness object version is updated before the assignment.
                     vec![(
                         (SUI_RANDOMNESS_STATE_OBJECT_ID, randomness_obj_version),
@@ -592,8 +553,7 @@ mod tests {
         } = SharedObjVerManager::assign_versions_from_consensus(
             &epoch_store,
             authority.get_object_cache_reader().as_ref(),
-            &certs,
-            None,
+            certs.iter(),
             &cancelled_txns,
         )
         .unwrap();

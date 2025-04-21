@@ -766,6 +766,10 @@ impl TransactionEventsDigest {
     pub fn into_inner(self) -> [u8; 32] {
         self.0.into_inner()
     }
+
+    pub fn base58_encode(&self) -> String {
+        Base58::encode(self.0)
+    }
 }
 
 impl fmt::Debug for TransactionEventsDigest {

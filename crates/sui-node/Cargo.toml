@@ -60,6 +60,7 @@ fastcrypto.workspace = true
 fastcrypto-zkp.workspace = true
 move-vm-profiler.workspace = true
 sui-http.workspace = true
+sui-metrics-push-client.workspace = true
 
 [target.'cfg(msim)'.dependencies]
 sui-simulator.workspace = true

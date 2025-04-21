@@ -11,12 +11,7 @@
 /// struct is created which can be used to prove that the `T` was placed
 /// to the `Kiosk`.
 module sui::witness_policy {
-    use sui::transfer_policy::{
-        Self as policy,
-        TransferPolicy,
-        TransferPolicyCap,
-        TransferRequest
-    };
+    use sui::transfer_policy::{Self as policy, TransferPolicy, TransferPolicyCap, TransferRequest};
 
     /// When a Proof does not find its Rule<Proof>.
     const ERuleNotFound: u64 = 0;
@@ -28,7 +23,7 @@ module sui::witness_policy {
     /// Requires a "Proof" witness confirmation on every transfer.
     public fun set<T: key + store, Proof: drop>(
         policy: &mut TransferPolicy<T>,
-        cap: &TransferPolicyCap<T>
+        cap: &TransferPolicyCap<T>,
     ) {
         policy::add_rule(Rule<Proof> {}, policy, cap, true);
     }
@@ -38,7 +33,7 @@ module sui::witness_policy {
     public fun prove<T: key + store, Proof: drop>(
         _proof: Proof,
         policy: &TransferPolicy<T>,
-        request: &mut TransferRequest<T>
+        request: &mut TransferRequest<T>,
     ) {
         assert!(policy::has_rule<T, Rule<Proof>>(policy), ERuleNotFound);
         policy::add_receipt(Rule<Proof> {}, request)
@@ -47,12 +42,9 @@ module sui::witness_policy {
 
 #[test_only]
 module sui::witness_policy_tests {
-    use sui::witness_policy;
     use sui::transfer_policy as policy;
-    use sui::transfer_policy_tests::{
-        Self as test,
-        Asset
-    };
+    use sui::transfer_policy_tests::{Self as test, Asset};
+    use sui::witness_policy;
 
     /// Confirmation of an action to use in Policy.
     public struct Proof has drop {}

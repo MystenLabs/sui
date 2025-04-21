@@ -19,6 +19,7 @@ import {
     ILoc,
     IDebugInfoFunction
 } from './debug_info_utils';
+import { decompress } from '@mongodb-js/zstd';
 
 
 // Data types corresponding to trace file JSON schema.
@@ -43,7 +44,7 @@ interface JSONVectorType {
     vector: JSONBaseType;
 }
 
-type JSONBaseType = string | JSONStructType | JSONVectorType;
+type JSONBaseType = string | JSONStructType | JSONVectorType | JSONStructTypeDescription;
 
 enum JSONTraceRefType {
     Mut = 'Mut',
@@ -55,11 +56,12 @@ interface JSONTraceType {
     ref_type?: JSONTraceRefType
 }
 
-type JSONTraceRuntimeValueType = boolean | number | string | JSONTraceRuntimeValueType[] | JSONTraceCompound;
+type JSONTraceMoveValue = {
+    type: JSONBaseType;
+    value: boolean | number | string | JSONTraceMoveValue[] | JSONTraceCompound
+};
 
-interface JSONTraceFields {
-    [key: string]: JSONTraceRuntimeValueType;
-}
+type JSONTraceFields = [string, JSONTraceMoveValue][];
 
 interface JSONTraceCompound {
     fields: JSONTraceFields;
@@ -70,7 +72,7 @@ interface JSONTraceCompound {
 
 interface JSONTraceRefValueContent {
     location: JSONTraceLocation;
-    snapshot: JSONTraceRuntimeValueType;
+    snapshot: JSONTraceMoveValue;
 }
 
 interface JSONTraceMutRefValue {
@@ -82,7 +84,7 @@ interface JSONTraceImmRefValue {
 }
 
 interface JSONTraceRuntimeValueContent {
-    value: JSONTraceRuntimeValueType;
+    value: JSONTraceMoveValue;
 }
 
 interface JSONTraceRuntimeValue {
@@ -162,7 +164,7 @@ interface JSONTracePopEffect {
 interface JSONDataLoadEffect {
     ref_type: JSONTraceRefType;
     location: JSONTraceLocation;
-    snapshot: JSONTraceRuntimeValueType;
+    snapshot: JSONTraceMoveValue;
 }
 
 interface JSONTraceEffect {
@@ -366,22 +368,33 @@ const INLINED_FRAME_ID_DIFFERENT_FILE = -2;
  * Reads a Move VM execution trace from a JSON file.
  *
  * @param traceFilePath path to the trace JSON file.
- * @param sourceMapsHashMap a map from file hash to a source map.
- * @param sourceMapsModMap a map from stringified module info to a source map.
- * @param bcodeMapModMap a map from stringified module info to a bytecode map.
+ * @param srcDebugInfosHashMap a map from file hash to debug info.
+ * @param srcDebugInfosModMap a map from stringified module info to debug info.
+ * @param bcodeDebugInfosModMap a map from stringified module info to debug info.
  * @param filesMap a map from file hash to file info (for both source files
  * and disassembled bytecode files).
  * @returns execution trace.
  * @throws Error with a descriptive error message if reading trace has failed.
  */
-export function readTrace(
+export async function readTrace(
     traceFilePath: string,
-    sourceMapsHashMap: Map<string, IDebugInfo>,
-    sourceMapsModMap: Map<string, IDebugInfo>,
-    bcodeMapModMap: Map<string, IDebugInfo>,
+    srcDebugInfosHashMap: Map<string, IDebugInfo>,
+    srcDebugInfosModMap: Map<string, IDebugInfo>,
+    bcodeDebugInfosModMap: Map<string, IDebugInfo>,
     filesMap: Map<string, IFileInfo>,
-): ITrace {
-    const traceJSON: JSONTraceRootObject = JSON.parse(fs.readFileSync(traceFilePath, 'utf8'));
+): Promise<ITrace> {
+    const buf = Buffer.from(fs.readFileSync(traceFilePath));
+    const decompressed = await decompress(buf);
+    const [header, ...rest] = decompressed.toString('utf8').trimEnd().split('\n');
+    const jsonVersion: number = JSON.parse(header).version;
+    const jsonEvents: JSONTraceEvent[] = rest.map((line) => {
+        return JSON.parse(line);
+    });
+
+    const traceJSON: JSONTraceRootObject = {
+        events: jsonEvents,
+        version: jsonVersion,
+    };
     if (traceJSON.events.length === 0) {
         throw new Error('Trace contains no events');
     }
@@ -437,7 +450,7 @@ export function readTrace(
                 addr: frame.module.address,
                 name: frame.module.name
             };
-            const sourceMap = sourceMapsModMap.get(JSON.stringify(modInfo));
+            const sourceMap = srcDebugInfosModMap.get(JSON.stringify(modInfo));
             if (!sourceMap) {
                 throw new Error('Source map for module '
                     + modInfo.name
@@ -463,7 +476,7 @@ export function readTrace(
             let optimizedBcodeLines = undefined;
             let bcodeFunEntry = undefined;
             let bcodeFilePath = undefined;
-            const bcodeMap = bcodeMapModMap.get(JSON.stringify(modInfo));
+            const bcodeMap = bcodeDebugInfosModMap.get(JSON.stringify(modInfo));
             if (bcodeMap) {
                 bcodeFileHash = bcodeMap.fileHash;
                 optimizedBcodeLines = bcodeMap.optimizedLines;
@@ -528,7 +541,7 @@ export function readTrace(
             }
 
             const differentFileVirtualFramePop = processInstructionIfMacro(
-                sourceMapsHashMap,
+                srcDebugInfosHashMap,
                 events,
                 frameInfoStack,
                 event.Instruction.pc,
@@ -540,7 +553,7 @@ export function readTrace(
                 // we may still land in a macro defined in the same file, in which case
                 // we need to push another virtual frame for this instruction right away
                 processInstructionIfMacro(
-                    sourceMapsHashMap,
+                    srcDebugInfosHashMap,
                     events,
                     frameInfoStack,
                     event.Instruction.pc,
@@ -884,13 +897,20 @@ function JSONTraceTypeToString(baseType: JSONBaseType, refType?: JSONTraceRefTyp
         return refPrefix + baseType;
     } else if ('vector' in baseType) {
         return refPrefix + `vector<${JSONTraceTypeToString(baseType.vector)}>`;
-    } else {
+    } else if ('struct' in baseType) {
         return refPrefix
             + JSONTraceAddressToHexString(baseType.struct.address)
             + "::"
             + baseType.struct.module
             + "::"
             + baseType.struct.name;
+    } else {
+        return refPrefix
+            + JSONTraceAddressToHexString(baseType.address)
+            + "::"
+            + baseType.module
+            + "::"
+            + baseType.name;
     }
 }
 
@@ -975,26 +995,45 @@ function traceRefValueFromJSON(value: JSONTraceRefValue): RuntimeValueType {
 /**
  * Converts a JSON trace runtime value to a runtime trace value.
  *
- * @param value JSON trace runtime value.
+ * @param moveValue JSON trace runtime value.
  * @returns runtime trace value.
  */
-function traceRuntimeValueFromJSON(value: JSONTraceRuntimeValueType): RuntimeValueType {
-    if (typeof value === 'boolean'
-        || typeof value === 'number'
-        || typeof value === 'string') {
-        return String(value);
-    } else if (Array.isArray(value)) {
-        return value.map(item => traceRuntimeValueFromJSON(item));
-    } else {
+function traceRuntimeValueFromJSON(moveValue: JSONTraceMoveValue): RuntimeValueType {
+    if (
+        moveValue.type === 'U8' ||
+        moveValue.type === 'U16' ||
+        moveValue.type === 'U32' ||
+        moveValue.type === 'U64' ||
+        moveValue.type === 'U128' ||
+        moveValue.type === 'Bool' ||
+        moveValue.type === 'Address') {
+        return String(moveValue.value);
+    } else if (moveValue.type === 'U256' && Array.isArray(moveValue.value)) {
+        let result = 0n;
+        const arr: string[] = moveValue.value as unknown as string[];
+        for (let i = 0; i < arr.length; i++) {
+            const word = BigInt(arr[i]);
+            result += word << BigInt(64 * i);
+        }
+        return String(result);
+    } else if (moveValue.type === 'Vector' && Array.isArray(moveValue.value)) {
+        return moveValue.value.map(item => traceRuntimeValueFromJSON(item));
+    } else if (Array.isArray(moveValue.value)) {
+        throw new Error("Impossible");
+    } else if ((moveValue.type === 'Struct' || moveValue.type === 'Variant') && typeof moveValue.value === 'object' && 'type_' in moveValue.value) {
         const fields: [string, RuntimeValueType][] =
-            Object.entries(value.fields).map(([key, value]) => [key, traceRuntimeValueFromJSON(value)]);
+            moveValue.value.fields.map(([key, value]) =>
+                [key, traceRuntimeValueFromJSON(value)]
+            );
         const compoundValue: IRuntimeCompoundValue = {
             fields,
-            type: value.type,
-            variantName: value.variant_name,
-            variantTag: value.variant_tag
+            type: JSONTraceTypeToString(moveValue.value.type_ as JSONBaseType),
+            variantName: moveValue.value.variant_name,
+            variantTag: moveValue.value.variant_tag,
         };
         return compoundValue;
+    } else {
+        throw new Error("Impossible");
     }
 }
 

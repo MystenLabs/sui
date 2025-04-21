@@ -9,7 +9,7 @@ title: Module `sui_system::validator_cap`
 -  [Function `unverified_operation_cap_address`](#sui_system_validator_cap_unverified_operation_cap_address)
 -  [Function `verified_operation_cap_address`](#sui_system_validator_cap_verified_operation_cap_address)
 -  [Function `new_unverified_validator_operation_cap_and_transfer`](#sui_system_validator_cap_new_unverified_validator_operation_cap_and_transfer)
--  [Function `new_from_unverified`](#sui_system_validator_cap_new_from_unverified)
+-  [Function `into_verified`](#sui_system_validator_cap_into_verified)
 
 
 <pre><code><b>use</b> <a href="../std/ascii.md#std_ascii">std::ascii</a>;
@@ -110,7 +110,9 @@ This is only constructed after successful verification.
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b>(package) <b>fun</b> <a href="../sui_system/validator_cap.md#sui_system_validator_cap_unverified_operation_cap_address">unverified_operation_cap_address</a>(cap: &<a href="../sui_system/validator_cap.md#sui_system_validator_cap_UnverifiedValidatorOperationCap">UnverifiedValidatorOperationCap</a>): &<b>address</b> {
+<pre><code><b>public</b>(package) <b>fun</b> <a href="../sui_system/validator_cap.md#sui_system_validator_cap_unverified_operation_cap_address">unverified_operation_cap_address</a>(
+    cap: &<a href="../sui_system/validator_cap.md#sui_system_validator_cap_UnverifiedValidatorOperationCap">UnverifiedValidatorOperationCap</a>,
+): &<b>address</b> {
     &cap.authorizer_validator_address
 }
 </code></pre>
@@ -183,15 +185,15 @@ or rotating an existing validaotr's <code>operation_cap_id</code>.
 
 </details>
 
-<a name="sui_system_validator_cap_new_from_unverified"></a>
+<a name="sui_system_validator_cap_into_verified"></a>
 
-## Function `new_from_unverified`
+## Function `into_verified`
 
 Convert an <code><a href="../sui_system/validator_cap.md#sui_system_validator_cap_UnverifiedValidatorOperationCap">UnverifiedValidatorOperationCap</a></code> to <code><a href="../sui_system/validator_cap.md#sui_system_validator_cap_ValidatorOperationCap">ValidatorOperationCap</a></code>.
 Should only be called by <code><a href="../sui_system/validator_set.md#sui_system_validator_set">validator_set</a></code> module AFTER verification.
 
 
-<pre><code><b>public</b>(package) <b>fun</b> <a href="../sui_system/validator_cap.md#sui_system_validator_cap_new_from_unverified">new_from_unverified</a>(cap: &<a href="../sui_system/validator_cap.md#sui_system_validator_cap_UnverifiedValidatorOperationCap">sui_system::validator_cap::UnverifiedValidatorOperationCap</a>): <a href="../sui_system/validator_cap.md#sui_system_validator_cap_ValidatorOperationCap">sui_system::validator_cap::ValidatorOperationCap</a>
+<pre><code><b>public</b>(package) <b>fun</b> <a href="../sui_system/validator_cap.md#sui_system_validator_cap_into_verified">into_verified</a>(cap: &<a href="../sui_system/validator_cap.md#sui_system_validator_cap_UnverifiedValidatorOperationCap">sui_system::validator_cap::UnverifiedValidatorOperationCap</a>): <a href="../sui_system/validator_cap.md#sui_system_validator_cap_ValidatorOperationCap">sui_system::validator_cap::ValidatorOperationCap</a>
 </code></pre>
 
 
@@ -200,12 +202,8 @@ Should only be called by <code><a href="../sui_system/validator_set.md#sui_syste
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b>(package) <b>fun</b> <a href="../sui_system/validator_cap.md#sui_system_validator_cap_new_from_unverified">new_from_unverified</a>(
-    cap: &<a href="../sui_system/validator_cap.md#sui_system_validator_cap_UnverifiedValidatorOperationCap">UnverifiedValidatorOperationCap</a>,
-): <a href="../sui_system/validator_cap.md#sui_system_validator_cap_ValidatorOperationCap">ValidatorOperationCap</a> {
-    <a href="../sui_system/validator_cap.md#sui_system_validator_cap_ValidatorOperationCap">ValidatorOperationCap</a> {
-        authorizer_validator_address: cap.authorizer_validator_address
-    }
+<pre><code><b>public</b>(package) <b>fun</b> <a href="../sui_system/validator_cap.md#sui_system_validator_cap_into_verified">into_verified</a>(cap: &<a href="../sui_system/validator_cap.md#sui_system_validator_cap_UnverifiedValidatorOperationCap">UnverifiedValidatorOperationCap</a>): <a href="../sui_system/validator_cap.md#sui_system_validator_cap_ValidatorOperationCap">ValidatorOperationCap</a> {
+    <a href="../sui_system/validator_cap.md#sui_system_validator_cap_ValidatorOperationCap">ValidatorOperationCap</a> { authorizer_validator_address: cap.authorizer_validator_address }
 }
 </code></pre>
 

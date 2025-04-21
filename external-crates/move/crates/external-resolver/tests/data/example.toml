@@ -1,0 +1,8 @@
+flavor = "testing"
+
+queries.q01 = { argument = { resolved = { git = "..." }, warnings = ["warning 1", "warning 2"] } }
+queries.q02 = { argument = { errors = ["error 1", "error 2"] }, environment-id = "chainID1" }
+queries.q03 = { argument = { resolved = { git = "..." } }, environment-id = "chainID2" }
+queries.q04 = { argument = { resolved = [1,2,3] } }
+queries.q05 = { argument = { resolved = [1,2,3] }, environment-id = "chainID1" }
+queries.q06 = { argument = { resolved = [1,2,3] }, environment-id = "chainID2" }

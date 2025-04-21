@@ -6,10 +6,11 @@ use anyhow::Result;
 use crossbeam::channel::{bounded, select};
 use lsp_server::{Connection, Message, Notification, Request, Response};
 use lsp_types::{
-    notification::Notification as _, request::Request as _, CompletionOptions, Diagnostic,
-    HoverProviderCapability, InlayHintOptions, InlayHintServerCapabilities, OneOf, SaveOptions,
-    TextDocumentSyncCapability, TextDocumentSyncKind, TextDocumentSyncOptions,
-    TypeDefinitionProviderCapability, WorkDoneProgressOptions,
+    notification::Notification as _, request::Request as _, CodeActionKind, CodeActionOptions,
+    CodeActionProviderCapability, CompletionOptions, Diagnostic, HoverProviderCapability,
+    InlayHintOptions, InlayHintServerCapabilities, OneOf, SaveOptions, TextDocumentSyncCapability,
+    TextDocumentSyncKind, TextDocumentSyncOptions, TypeDefinitionProviderCapability,
+    WorkDoneProgressOptions,
 };
 use move_compiler::linters::LintLevel;
 use move_package::source_package::parsed_manifest::Dependencies;
@@ -20,7 +21,7 @@ use std::{
 };
 
 use crate::{
-    completions::on_completion_request, context::Context, inlay_hints, symbols,
+    code_action, completions::on_completion_request, context::Context, inlay_hints, symbols,
     vfs::on_text_document_sync_notification,
 };
 use url::Url;
@@ -108,6 +109,13 @@ pub fn run(implicit_deps: Dependencies) {
                 resolve_provider: None,
             },
         ))),
+        code_action_provider: Some(CodeActionProviderCapability::Options(CodeActionOptions {
+            code_action_kinds: Some(vec![CodeActionKind::QUICKFIX]),
+            work_done_progress_options: WorkDoneProgressOptions {
+                work_done_progress: None,
+            },
+            resolve_provider: None,
+        })),
         ..Default::default()
     })
     .expect("could not serialize server capabilities");
@@ -169,6 +177,12 @@ pub fn run(implicit_deps: Dependencies) {
     let context = Context {
         connection,
         symbols: symbols_map.clone(),
+        auto_imports: initialize_params
+            .initialization_options
+            .as_ref()
+            .and_then(|init_options| init_options.get("autoImports"))
+            .and_then(serde_json::Value::as_bool)
+            .unwrap_or_default(),
         inlay_type_hints: initialize_params
             .initialization_options
             .as_ref()
@@ -183,6 +197,10 @@ pub fn run(implicit_deps: Dependencies) {
             .unwrap_or_default(),
     };
 
+    eprintln!(
+        "auto imports during auto-completion enabled: {}",
+        context.auto_imports
+    );
     eprintln!("inlay type hints enabled: {}", context.inlay_type_hints);
     eprintln!("inlay param hints enabled: {}", context.inlay_param_hints);
 
@@ -308,7 +326,6 @@ fn on_request(
             ide_files_root.clone(),
             pkg_dependencies,
             implicit_deps,
-            true, // auto-imports enabled
         ),
         lsp_types::request::GotoDefinition::METHOD => {
             symbols::on_go_to_def_request(context, request);
@@ -327,6 +344,15 @@ fn on_request(
         }
         lsp_types::request::InlayHintRequest::METHOD => {
             inlay_hints::on_inlay_hint_request(context, request);
+        }
+        lsp_types::request::CodeActionRequest::METHOD => {
+            code_action::on_code_action_request(
+                context,
+                request,
+                ide_files_root.clone(),
+                pkg_dependencies,
+                implicit_deps,
+            );
         }
         lsp_types::request::Shutdown::METHOD => {
             eprintln!("Shutdown request received");

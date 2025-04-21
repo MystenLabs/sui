@@ -6,7 +6,7 @@ type-complexity-threshold = 10000
 too-many-arguments-threshold = 20
 
 disallowed-methods = [
-    { path = "anyhow", reason = "we prefer to use eyre" },
+    { path = "anyhow", reason = "prod should use consensus typed errors. tests can use String." },
     # we use tracing with the log feature instead of the log crate.
     { path = "log::info", reason = "use tracing::info instead" },
     { path = "log::debug", reason = "use tracing::debug instead" },

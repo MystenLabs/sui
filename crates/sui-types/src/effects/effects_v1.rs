@@ -194,6 +194,16 @@ impl TransactionEffectsAPI for TransactionEffectsV1 {
         self.wrapped.clone()
     }
 
+    fn transferred_from_consensus(&self) -> Vec<ObjectRef> {
+        // ConsensusV2 objects cannot exist with effects v1
+        vec![]
+    }
+
+    fn transferred_to_consensus(&self) -> Vec<ObjectRef> {
+        // ConsensusV2 objects cannot exist with effects v1
+        vec![]
+    }
+
     fn object_changes(&self) -> Vec<ObjectChange> {
         let modified_at: BTreeMap<_, _> = self.modified_at_versions.iter().copied().collect();
 
@@ -320,8 +330,8 @@ impl TransactionEffectsAPI for TransactionEffectsV1 {
             InputSharedObject::ReadOnly(obj_ref) => {
                 self.shared_objects.push(obj_ref);
             }
-            InputSharedObject::ReadDeleted(id, version)
-            | InputSharedObject::MutateDeleted(id, version) => {
+            InputSharedObject::ReadConsensusStreamEnded(id, version)
+            | InputSharedObject::MutateConsensusStreamEnded(id, version) => {
                 self.shared_objects
                     .push((id, version, ObjectDigest::OBJECT_DIGEST_DELETED));
             }

@@ -217,7 +217,7 @@ export class MoveDebugSession extends LoggingDebugSession {
         logger.log(`Launching trace viewer for file: ${args.source} and trace: ${args.traceInfo}`);
 
         try {
-            await this.runtime.start(args.source, args.traceInfo, args.stopOnEntry || false);
+            await this.runtime.start(args.source, args.traceInfo.toString(), args.stopOnEntry || false);
         } catch (err) {
             response.success = false;
             response.message = err instanceof Error ? err.message : String(err);

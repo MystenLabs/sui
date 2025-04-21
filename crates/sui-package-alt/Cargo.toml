@@ -11,3 +11,4 @@ workspace = true
 
 [dependencies]
 move-package-alt.workspace = true
+serde.workspace = true

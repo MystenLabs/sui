@@ -7,13 +7,15 @@ pub use checked::*;
 mod checked {
     use crate::execution_mode::ExecutionMode;
     use crate::execution_value::{
-        CommandKind, ExecutionState, ObjectContents, ObjectValue, RawValueType, Value,
+        ensure_serialized_size, CommandKind, ExecutionState, ObjectContents, ObjectValue,
+        RawValueType, Value,
     };
     use crate::gas_charger::GasCharger;
+    use move_binary_format::file_format::AbilitySet;
     use move_binary_format::{
         compatibility::{Compatibility, InclusionCheck},
         errors::{Location, PartialVMResult, VMResult},
-        file_format::{AbilitySet, CodeOffset, FunctionDefinitionIndex, LocalIndex, Visibility},
+        file_format::{CodeOffset, FunctionDefinitionIndex, LocalIndex, Visibility},
         file_format_common::VERSION_6,
         normalized, CompiledModule,
     };
@@ -30,6 +32,7 @@ mod checked {
     };
     use move_vm_types::loaded_data::runtime_types::{CachedDatatype, Type};
     use serde::{de::DeserializeSeed, Deserialize};
+    use std::cell::OnceCell;
     use std::{
         cell::RefCell,
         collections::{BTreeMap, BTreeSet},
@@ -188,11 +191,7 @@ mod checked {
                 })?;
 
                 let ty = Type::Vector(Box::new(elem_ty));
-                let abilities = context
-                    .vm
-                    .get_runtime()
-                    .get_type_abilities(&ty)
-                    .map_err(|e| context.convert_vm_error(e))?;
+                let abilities = context.get_type_abilities(&ty)?;
                 // BCS layout for any empty vector should be the same
                 let bytes = bcs::to_bytes::<Vec<u8>>(&vec![]).unwrap();
                 vec![Value::Raw(
@@ -206,6 +205,7 @@ mod checked {
             }
             Command::MakeMoveVec(tag_opt, args) => {
                 let args = context.splat_args(0, args)?;
+                let elem_abilities = OnceCell::<AbilitySet>::new();
                 let mut res = vec![];
                 leb128::write::unsigned(&mut res, args.len() as u64).unwrap();
                 let mut arg_iter = args.into_iter().enumerate();
@@ -227,7 +227,12 @@ mod checked {
                         let (idx, arg) = arg_iter.next().unwrap();
                         let obj: ObjectValue =
                             context.by_value_arg(CommandKind::MakeMoveVec, idx, arg)?;
-                        obj.write_bcs_bytes(&mut res);
+                        let bound =
+                            amplification_bound::<Mode>(context, &obj.type_, &elem_abilities)?;
+                        obj.write_bcs_bytes(
+                            &mut res,
+                            bound.map(|b| context.size_bound_vector_elem(b)),
+                        )?;
                         (obj.used_in_non_entry_move_call, obj.type_)
                     }
                 };
@@ -236,14 +241,14 @@ mod checked {
                     check_param_type::<Mode>(context, idx, &value, &elem_ty)?;
                     used_in_non_entry_move_call =
                         used_in_non_entry_move_call || value.was_used_in_non_entry_move_call();
-                    value.write_bcs_bytes(&mut res);
+                    let bound = amplification_bound::<Mode>(context, &elem_ty, &elem_abilities)?;
+                    value.write_bcs_bytes(
+                        &mut res,
+                        bound.map(|b| context.size_bound_vector_elem(b)),
+                    )?;
                 }
                 let ty = Type::Vector(Box::new(elem_ty));
-                let abilities = context
-                    .vm
-                    .get_runtime()
-                    .get_type_abilities(&ty)
-                    .map_err(|e| context.convert_vm_error(e))?;
+                let abilities = context.get_type_abilities(&ty)?;
                 vec![Value::Raw(
                     RawValueType::Loaded {
                         ty,
@@ -634,7 +639,10 @@ mod checked {
             let ticket_val: Value =
                 context.by_value_arg(CommandKind::Upgrade, 0, upgrade_ticket_arg)?;
             check_param_type::<Mode>(context, 0, &ticket_val, &upgrade_ticket_type)?;
-            ticket_val.write_bcs_bytes(&mut ticket_bytes);
+            let bound =
+                amplification_bound::<Mode>(context, &upgrade_ticket_type, &OnceCell::new())?;
+            ticket_val
+                .write_bcs_bytes(&mut ticket_bytes, bound.map(|b| context.size_bound_raw(b)))?;
             bcs::from_bytes(&ticket_bytes).map_err(|_| {
                 ExecutionError::from_kind(ExecutionErrorKind::CommandArgumentError {
                     arg_idx: 0,
@@ -726,8 +734,11 @@ mod checked {
             ));
         };
 
+        let pool = &mut normalized::RcPool::new();
         let binary_config = to_binary_config(context.protocol_config);
-        let Ok(current_normalized) = existing_package.normalize(&binary_config) else {
+        let Ok(current_normalized) =
+            existing_package.normalize(pool, &binary_config, /* include code */ true)
+        else {
             invariant_violation!("Tried to normalize modules in existing package but failed")
         };
 
@@ -750,7 +761,11 @@ mod checked {
             ));
         }
 
-        let mut new_normalized = normalize_deserialized_modules(upgrading_modules.iter());
+        let mut new_normalized = normalize_deserialized_modules(
+            pool,
+            upgrading_modules.iter(),
+            /* include code */ true,
+        );
         for (name, cur_module) in current_normalized {
             let Some(new_module) = new_normalized.remove(&name) else {
                 return Err(ExecutionError::new_with_source(
@@ -772,8 +787,8 @@ mod checked {
 
     fn check_module_compatibility(
         policy: &UpgradePolicy,
-        cur_module: &normalized::Module,
-        new_module: &normalized::Module,
+        cur_module: &move_binary_format::compatibility::Module,
+        new_module: &move_binary_format::compatibility::Module,
     ) -> Result<(), ExecutionError> {
         match policy {
             UpgradePolicy::Additive => InclusionCheck::Subset.check(cur_module, new_module),
@@ -1187,11 +1202,7 @@ mod checked {
                     }
                     t => t,
                 };
-                let abilities = context
-                    .vm
-                    .get_runtime()
-                    .get_type_abilities(return_type)
-                    .map_err(|e| context.convert_vm_error(e))?;
+                let abilities = context.get_type_abilities(return_type)?;
                 Ok(match return_type {
                     Type::MutableReference(_) | Type::Reference(_) => unreachable!(),
                     Type::TyParam(_) => {
@@ -1341,11 +1352,7 @@ mod checked {
                             has_public_transfer: *has_public_transfer,
                         }
                     } else {
-                        let abilities = context
-                            .vm
-                            .get_runtime()
-                            .get_type_abilities(inner)
-                            .map_err(|e| context.convert_vm_error(e))?;
+                        let abilities = context.get_type_abilities(inner)?;
                         ValueKind::Raw((**inner).clone(), abilities)
                     };
                     by_mut_ref.push((idx as LocalIndex, object_info));
@@ -1370,7 +1377,7 @@ mod checked {
             check_param_type::<Mode>(context, idx, &value, non_ref_param_ty)?;
             let bytes = {
                 let mut v = vec![];
-                value.write_bcs_bytes(&mut v);
+                value.write_bcs_bytes(&mut v, None)?;
                 v
             };
             serialized_args.push(bytes);
@@ -1388,7 +1395,14 @@ mod checked {
         match value {
             // For dev-spect, allow any BCS bytes. This does mean internal invariants for types can
             // be violated (like for string or Option)
-            Value::Raw(RawValueType::Any, _) if Mode::allow_arbitrary_values() => return Ok(()),
+            Value::Raw(RawValueType::Any, bytes) if Mode::allow_arbitrary_values() => {
+                if let Some(bound) = amplification_bound_::<Mode>(context, param_ty)? {
+                    let bound = context.size_bound_raw(bound);
+                    return ensure_serialized_size(bytes.len() as u64, bound);
+                } else {
+                    return Ok(());
+                }
+            }
             // Any means this was just some bytes passed in as an argument (as opposed to being
             // generated from a Move function). Meaning we only allow "primitive" values
             // and might need to run validation in addition to the BCS layout
@@ -1597,6 +1611,74 @@ mod checked {
                 }
             }
         })
+    }
+
+    // We use a `OnceCell` for two reasons. One to cache the ability set for the type so that it
+    // is not recomputed for each element of the vector. And two, to avoid computing the abilities
+    // in the case where `max_ptb_value_size_v2` is false--this removes any case of diverging
+    // based on the result of `get_type_abilities`.
+    fn amplification_bound<Mode: ExecutionMode>(
+        context: &mut ExecutionContext<'_, '_, '_>,
+        param_ty: &Type,
+        abilities: &OnceCell<AbilitySet>,
+    ) -> Result<Option<u64>, ExecutionError> {
+        if context.protocol_config.max_ptb_value_size_v2() {
+            if abilities.get().is_none() {
+                abilities
+                    .set(context.get_type_abilities(param_ty)?)
+                    .unwrap();
+            }
+            if !abilities.get().unwrap().has_copy() {
+                return Ok(None);
+            }
+        }
+        amplification_bound_::<Mode>(context, param_ty)
+    }
+
+    fn amplification_bound_<Mode: ExecutionMode>(
+        context: &mut ExecutionContext<'_, '_, '_>,
+        param_ty: &Type,
+    ) -> Result<Option<u64>, ExecutionError> {
+        // Do not cap size for epoch change/genesis
+        if Mode::packages_are_predefined() {
+            return Ok(None);
+        }
+
+        let Some(bound) = context.protocol_config.max_ptb_value_size_as_option() else {
+            return Ok(None);
+        };
+
+        fn amplification(prim_layout: &PrimitiveArgumentLayout) -> Result<u64, ExecutionError> {
+            use PrimitiveArgumentLayout as PAL;
+            Ok(match prim_layout {
+                PAL::Option(inner_layout) => 1u64 + amplification(inner_layout)?,
+                PAL::Vector(inner_layout) => amplification(inner_layout)?,
+                PAL::Ascii | PAL::UTF8 => 2,
+                PAL::Bool | PAL::U8 | PAL::U16 | PAL::U32 | PAL::U64 => 1,
+                PAL::U128 | PAL::U256 | PAL::Address => 2,
+            })
+        }
+
+        let mut amplification = match primitive_serialization_layout(context, param_ty)? {
+            // No primitive type layout was able to be determined for the type. Assume the worst
+            // and the value is of maximal depth.
+            None => context.protocol_config.max_move_value_depth(),
+            Some(layout) => amplification(&layout)?,
+        };
+
+        // Computed amplification should never be zero
+        debug_assert!(amplification != 0);
+        // We assume here that any value that can be created must be bounded by the max move value
+        // depth so assert that this invariant holds.
+        debug_assert!(
+            context.protocol_config.max_move_value_depth()
+                >= context.protocol_config.max_type_argument_depth() as u64
+        );
+        assert_ne!(context.protocol_config.max_move_value_depth(), 0);
+        if amplification == 0 {
+            amplification = context.protocol_config.max_move_value_depth();
+        }
+        Ok(Some(bound / amplification))
     }
 
     /***************************************************************************************************

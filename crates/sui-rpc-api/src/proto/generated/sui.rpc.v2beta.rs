@@ -572,6 +572,14 @@ pub struct Epoch {
     /// The committee governing this epoch.
     #[prost(message, optional, tag = "2")]
     pub committee: ::core::option::Option<ValidatorCommittee>,
+    #[prost(uint64, optional, tag = "4")]
+    pub first_checkpoint: ::core::option::Option<u64>,
+    #[prost(uint64, optional, tag = "5")]
+    pub last_checkpoint: ::core::option::Option<u64>,
+    #[prost(message, optional, tag = "6")]
+    pub start: ::core::option::Option<::prost_types::Timestamp>,
+    #[prost(message, optional, tag = "7")]
+    pub end: ::core::option::Option<::prost_types::Timestamp>,
     /// Reference gas price denominated in MIST
     #[prost(uint64, optional, tag = "8")]
     pub reference_gas_price: ::core::option::Option<u64>,
@@ -1262,6 +1270,13 @@ pub struct Input {
     /// object.
     #[prost(bool, optional, tag = "6")]
     pub mutable: ::core::option::Option<bool>,
+    /// A literal value
+    ///
+    /// INPUT ONLY
+    #[prost(message, optional, boxed, tag = "1000")]
+    pub literal: ::core::option::Option<
+        ::prost::alloc::boxed::Box<::prost_types::Value>,
+    >,
 }
 /// Nested message and enum types in `Input`.
 pub mod input {
@@ -1465,7 +1480,7 @@ pub mod ledger_service_client {
     }
     impl<T> LedgerServiceClient<T>
     where
-        T: tonic::client::GrpcService<tonic::body::BoxBody>,
+        T: tonic::client::GrpcService<tonic::body::Body>,
         T::Error: Into<StdError>,
         T::ResponseBody: Body<Data = Bytes> + std::marker::Send + 'static,
         <T::ResponseBody as Body>::Error: Into<StdError> + std::marker::Send,
@@ -1486,13 +1501,13 @@ pub mod ledger_service_client {
             F: tonic::service::Interceptor,
             T::ResponseBody: Default,
             T: tonic::codegen::Service<
-                http::Request<tonic::body::BoxBody>,
+                http::Request<tonic::body::Body>,
                 Response = http::Response<
-                    <T as tonic::client::GrpcService<tonic::body::BoxBody>>::ResponseBody,
+                    <T as tonic::client::GrpcService<tonic::body::Body>>::ResponseBody,
                 >,
             >,
             <T as tonic::codegen::Service<
-                http::Request<tonic::body::BoxBody>,
+                http::Request<tonic::body::Body>,
             >>::Error: Into<StdError> + std::marker::Send + std::marker::Sync,
         {
             LedgerServiceClient::new(InterceptedService::new(inner, interceptor))
@@ -1823,7 +1838,7 @@ pub mod ledger_service_server {
         B: Body + std::marker::Send + 'static,
         B::Error: Into<StdError> + std::marker::Send + 'static,
     {
-        type Response = http::Response<tonic::body::BoxBody>;
+        type Response = http::Response<tonic::body::Body>;
         type Error = std::convert::Infallible;
         type Future = BoxFuture<Self::Response, Self::Error>;
         fn poll_ready(
@@ -2157,7 +2172,9 @@ pub mod ledger_service_server {
                 }
                 _ => {
                     Box::pin(async move {
-                        let mut response = http::Response::new(empty_body());
+                        let mut response = http::Response::new(
+                            tonic::body::Body::default(),
+                        );
                         let headers = response.headers_mut();
                         headers
                             .insert(
@@ -3399,7 +3416,7 @@ pub mod transaction_execution_service_client {
     }
     impl<T> TransactionExecutionServiceClient<T>
     where
-        T: tonic::client::GrpcService<tonic::body::BoxBody>,
+        T: tonic::client::GrpcService<tonic::body::Body>,
         T::Error: Into<StdError>,
         T::ResponseBody: Body<Data = Bytes> + std::marker::Send + 'static,
         <T::ResponseBody as Body>::Error: Into<StdError> + std::marker::Send,
@@ -3420,13 +3437,13 @@ pub mod transaction_execution_service_client {
             F: tonic::service::Interceptor,
             T::ResponseBody: Default,
             T: tonic::codegen::Service<
-                http::Request<tonic::body::BoxBody>,
+                http::Request<tonic::body::Body>,
                 Response = http::Response<
-                    <T as tonic::client::GrpcService<tonic::body::BoxBody>>::ResponseBody,
+                    <T as tonic::client::GrpcService<tonic::body::Body>>::ResponseBody,
                 >,
             >,
             <T as tonic::codegen::Service<
-                http::Request<tonic::body::BoxBody>,
+                http::Request<tonic::body::Body>,
             >>::Error: Into<StdError> + std::marker::Send + std::marker::Sync,
         {
             TransactionExecutionServiceClient::new(
@@ -3582,7 +3599,7 @@ pub mod transaction_execution_service_server {
         B: Body + std::marker::Send + 'static,
         B::Error: Into<StdError> + std::marker::Send + 'static,
     {
-        type Response = http::Response<tonic::body::BoxBody>;
+        type Response = http::Response<tonic::body::Body>;
         type Error = std::convert::Infallible;
         type Future = BoxFuture<Self::Response, Self::Error>;
         fn poll_ready(
@@ -3646,7 +3663,9 @@ pub mod transaction_execution_service_server {
                 }
                 _ => {
                     Box::pin(async move {
-                        let mut response = http::Response::new(empty_body());
+                        let mut response = http::Response::new(
+                            tonic::body::Body::default(),
+                        );
                         let headers = response.headers_mut();
                         headers
                             .insert(

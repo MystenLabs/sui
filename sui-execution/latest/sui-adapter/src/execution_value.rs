@@ -119,6 +119,13 @@ pub struct ObjectValue {
     pub contents: ObjectContents,
 }
 
+#[derive(Debug, Copy, Clone)]
+pub enum SizeBound {
+    Object(u64),
+    VectorElem(u64),
+    Raw(u64),
+}
+
 #[derive(Debug, Clone)]
 pub enum ObjectContents {
     Coin(Coin),
@@ -193,14 +200,23 @@ impl Value {
         }
     }
 
-    pub fn write_bcs_bytes(&self, buf: &mut Vec<u8>) {
+    pub fn write_bcs_bytes(
+        &self,
+        buf: &mut Vec<u8>,
+        bound: Option<SizeBound>,
+    ) -> Result<(), ExecutionError> {
         match self {
-            Value::Object(obj_value) => obj_value.write_bcs_bytes(buf),
+            Value::Object(obj_value) => obj_value.write_bcs_bytes(buf, bound)?,
             Value::Raw(_, bytes) => buf.extend(bytes),
             Value::Receiving(id, version, _) => {
                 buf.extend(Receiving::new(*id, *version).to_bcs_bytes())
             }
         }
+        if let Some(bound) = bound {
+            ensure_serialized_size(buf.len() as u64, bound)?;
+        }
+
+        Ok(())
     }
 
     pub fn was_used_in_non_entry_move_call(&self) -> bool {
@@ -242,12 +258,47 @@ impl ObjectValue {
         Ok(())
     }
 
-    pub fn write_bcs_bytes(&self, buf: &mut Vec<u8>) {
+    pub fn write_bcs_bytes(
+        &self,
+        buf: &mut Vec<u8>,
+        bound: Option<SizeBound>,
+    ) -> Result<(), ExecutionError> {
         match &self.contents {
             ObjectContents::Raw(bytes) => buf.extend(bytes),
             ObjectContents::Coin(coin) => buf.extend(coin.to_bcs_bytes()),
         }
+        if let Some(bound) = bound {
+            ensure_serialized_size(buf.len() as u64, bound)?;
+        }
+        Ok(())
     }
+}
+
+pub fn ensure_serialized_size(size: u64, bound: SizeBound) -> Result<(), ExecutionError> {
+    let bound_size = match bound {
+        SizeBound::Object(bound_size)
+        | SizeBound::VectorElem(bound_size)
+        | SizeBound::Raw(bound_size) => bound_size,
+    };
+    if size > bound_size {
+        let e = match bound {
+            SizeBound::Object(_) => ExecutionErrorKind::MoveObjectTooBig {
+                object_size: size,
+                max_object_size: bound_size,
+            },
+            SizeBound::VectorElem(_) => ExecutionErrorKind::MoveVectorElemTooBig {
+                value_size: size,
+                max_scaled_size: bound_size,
+            },
+            SizeBound::Raw(_) => ExecutionErrorKind::MoveRawValueTooBig {
+                value_size: size,
+                max_scaled_size: bound_size,
+            },
+        };
+        let msg = "Serialized bytes of value too large".to_owned();
+        return Err(ExecutionError::new_with_source(e, msg));
+    }
+    Ok(())
 }
 
 pub trait TryFromValue: Sized {

@@ -16,6 +16,8 @@ pub struct Context {
     pub connection: Connection,
     /// Symbolication information
     pub symbols: Arc<Mutex<BTreeMap<PathBuf, Symbols>>>,
+    /// Are auto-imports offered as suggestions during auto-completion?
+    pub auto_imports: bool,
     /// Are inlay type hints enabled?
     pub inlay_type_hints: bool,
     /// Are param type hints enabled?

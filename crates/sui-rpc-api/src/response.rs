@@ -40,7 +40,7 @@ pub async fn append_info_headers(
 
         headers.insert(
             X_SUI_TIMESTAMP,
-            crate::proto::types::timestamp_ms_to_proto(latest_checkpoint.timestamp_ms)
+            crate::proto::timestamp_ms_to_proto(latest_checkpoint.timestamp_ms)
                 .to_string()
                 .try_into()
                 .expect("timestamp is a valid HeaderValue"),
@@ -66,12 +66,12 @@ pub async fn append_info_headers(
         );
     }
 
-    headers.insert(
-        axum::http::header::SERVER,
-        format!("sui-node/{}", state.software_version())
-            .try_into()
-            .expect("server version is a valid HeaderValue"),
-    );
+    if let Some(server_version) = state
+        .server_version()
+        .and_then(|version| version.to_string().try_into().ok())
+    {
+        headers.insert(axum::http::header::SERVER, server_version);
+    }
 
     (headers, response)
 }

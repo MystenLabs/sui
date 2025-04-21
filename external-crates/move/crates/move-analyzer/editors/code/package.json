@@ -57,6 +57,11 @@
       "type": "object",
       "title": "Move",
       "properties": {
+        "move.auto-imports": {
+          "type": "boolean",
+          "default": true,
+          "markdownDescription": "Enable/disable auto-imports during auto-completion"
+        },
         "move.force-bundled": {
           "type": "boolean",
           "default": false,

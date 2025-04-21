@@ -1,0 +1,6 @@
+[package]
+name = ""
+edition = "2024"
+
+[environments]
+mainnet = "35834a8a"

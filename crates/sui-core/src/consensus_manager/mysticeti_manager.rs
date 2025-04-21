@@ -181,6 +181,7 @@ impl ConsensusManagerTrait for MysticetiManager {
 
         let authority = ConsensusAuthority::start(
             network_type,
+            epoch_store.epoch_start_config().epoch_start_timestamp_ms(),
             own_index,
             committee.clone(),
             parameters.clone(),

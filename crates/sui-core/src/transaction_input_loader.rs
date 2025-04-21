@@ -75,15 +75,15 @@ impl TransactionInputLoader {
                             input_results[i] = Some(ObjectReadResult::new(*kind, object.into()))
                         }
                         _ => {
-                            // If the full ID doesn't match, check if the object was marked
-                            // as unavailable.
+                            // If the full ID doesn't match, check if the object's consensus
+                            // stream was ended.
                             if let Some((version, digest)) = self
                                 .cache
-                                .get_last_shared_object_deletion_info(input_full_id, epoch_id)
+                                .get_last_consensus_stream_end_info(input_full_id, epoch_id)
                             {
                                 input_results[i] = Some(ObjectReadResult {
                                     input_object_kind: *kind,
-                                    object: ObjectReadResultKind::DeletedSharedObject(
+                                    object: ObjectReadResultKind::ObjectConsensusStreamEnded(
                                         version, digest,
                                     ),
                                 });
@@ -229,16 +229,16 @@ impl TransactionInputLoader {
                 },
                 (_, InputObjectKind::SharedMoveObject { .. }) => {
                     assert!(key.1.is_valid());
-                    // If the full ID on a shared input doesn't match, check if the object was
-                    // marked as unavailable by a concurrently certified tx.
+                    // If the full ID on a shared input doesn't match, check if the object
+                    // was removed from consensus by a concurrently certified tx.
                     let version = key.1;
-                    if let Some(dependency) = self.cache.get_deleted_shared_object_previous_tx_digest(
+                    if let Some(dependency) = self.cache.get_consensus_stream_end_tx_digest(
                         FullObjectKey::new(input.full_object_id(), version),
                         epoch_id,
                     ) {
                         ObjectReadResult {
                             input_object_kind: *input,
-                            object: ObjectReadResultKind::DeletedSharedObject(version, dependency),
+                            object: ObjectReadResultKind::ObjectConsensusStreamEnded(version, dependency),
                         }
                     } else {
                         panic!("All dependencies of tx {tx_key:?} should have been executed now, but Shared Object id: {:?}, version: {version} is absent in epoch {epoch_id}", input.full_object_id());

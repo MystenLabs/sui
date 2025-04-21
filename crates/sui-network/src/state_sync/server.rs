@@ -124,7 +124,9 @@ where
         &self,
         request: Request<CheckpointContentsDigest>,
     ) -> Result<Response<Option<FullCheckpointContents>>, Status> {
-        let contents = self.store.get_full_checkpoint_contents(request.inner());
+        let contents = self
+            .store
+            .get_full_checkpoint_contents(None, request.inner());
         Ok(Response::new(contents))
     }
 }

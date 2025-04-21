@@ -2912,7 +2912,11 @@ async fn test_invalid_authenticator_state_parameter() {
         ident_str!("use_auth_state").to_owned(),
         /* type_args */ vec![],
         gas_ref,
-        vec![CallArg::AUTHENTICATOR_MUT],
+        vec![CallArg::Object(ObjectArg::SharedObject {
+            id: SUI_AUTHENTICATOR_STATE_OBJECT_ID,
+            initial_shared_version: SequenceNumber::from(1),
+            mutable: true,
+        })],
         TEST_ONLY_GAS_UNIT_FOR_OBJECT_BASICS * rgp,
         rgp,
     )

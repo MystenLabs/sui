@@ -76,7 +76,6 @@ public struct SystemParametersV2 has store {
     /// Minimum number of active validators at any moment.
     min_validator_count: u64,
 
-    /// Deprecated.
     /// Maximum number of active validators at any moment.
     /// We do not allow the number of validators in any epoch to go above this.
     max_validator_count: u64,
@@ -415,6 +414,11 @@ public(package) fun request_add_validator(
     self: &mut SuiSystemStateInnerV2,
     ctx: &TxContext,
 ) {
+    assert!(
+        self.validators.next_epoch_validator_count() < self.parameters.max_validator_count,
+        ELimitExceeded,
+    );
+
     self.validators.request_add_validator(ctx);
 }
 
@@ -1135,14 +1139,6 @@ public(package) fun get_stake_subsidy_distribution_counter(self: &SuiSystemState
 #[test_only]
 public(package) fun set_epoch_for_testing(self: &mut SuiSystemStateInnerV2, epoch_num: u64) {
     self.epoch = epoch_num
-}
-
-#[test_only]
-public(package) fun request_add_validator_for_testing(
-    self: &mut SuiSystemStateInnerV2,
-    ctx: &TxContext,
-) {
-    self.validators.request_add_validator(ctx);
 }
 
 #[test_only]

@@ -5,6 +5,7 @@ use crate::proto::rpc::v2alpha::CoinMetadata;
 use crate::proto::rpc::v2alpha::CoinTreasury;
 use crate::proto::rpc::v2alpha::GetCoinInfoRequest;
 use crate::proto::rpc::v2alpha::GetCoinInfoResponse;
+use crate::proto::rpc::v2alpha::RegulatedCoinMetadata;
 use crate::Result;
 use crate::RpcError;
 use crate::RpcService;
@@ -39,12 +40,14 @@ pub fn get_coin_info(
     let sui_types::storage::CoinInfo {
         coin_metadata_object_id,
         treasury_object_id,
+        regulated_coin_metadata_object_id,
     } = indexes
         .get_coin_info(&core_coin_type)?
         .ok_or_else(|| CoinNotFoundError(coin_type.clone()))?;
 
     let metadata = if let Some(coin_metadata_object_id) = coin_metadata_object_id {
-        service.reader
+        service
+            .reader
             .inner()
             .get_object(&coin_metadata_object_id)
             .map(sui_types::coin::CoinMetadata::try_from)
@@ -52,7 +55,10 @@ pub fn get_coin_info(
             .map_err(|_| {
                 RpcError::new(
                     tonic::Code::Internal,
-                    format!("Unable to read object {coin_metadata_object_id} for coin type {core_coin_type} as CoinMetadata"),
+                    format!(
+                        "Unable to read object {} for coin type {} as CoinMetadata",
+                        coin_metadata_object_id, core_coin_type
+                    ),
                 )
             })?
             .map(|value| CoinMetadata {
@@ -68,7 +74,8 @@ pub fn get_coin_info(
     };
 
     let treasury = if let Some(treasury_object_id) = treasury_object_id {
-        service.reader
+        service
+            .reader
             .inner()
             .get_object(&treasury_object_id)
             .map(sui_types::coin::TreasuryCap::try_from)
@@ -76,7 +83,10 @@ pub fn get_coin_info(
             .map_err(|_| {
                 RpcError::new(
                     tonic::Code::Internal,
-                    format!("Unable to read object {treasury_object_id} for coin type {core_coin_type} as TreasuryCap"),
+                    format!(
+                        "Unable to read object {} for coin type {} as TreasuryCap",
+                        treasury_object_id, core_coin_type
+                    ),
                 )
             })?
             .map(|treasury| CoinTreasury {
@@ -89,10 +99,39 @@ pub fn get_coin_info(
         None
     };
 
+    let regulated_metadata =
+        if let Some(regulated_coin_metadata_object_id) = regulated_coin_metadata_object_id {
+            service
+                .reader
+                .inner()
+                .get_object(&regulated_coin_metadata_object_id)
+                .map(sui_types::coin::RegulatedCoinMetadata::try_from)
+                .transpose()
+                .map_err(|_| {
+                    RpcError::new(
+                        tonic::Code::Internal,
+                        format!(
+                            "Unable to read object {} for coin type {} as CoinMetadata",
+                            regulated_coin_metadata_object_id, core_coin_type
+                        ),
+                    )
+                })?
+                .map(|value| RegulatedCoinMetadata {
+                    id: Some(ObjectId::from(value.id.id.bytes).to_string()),
+                    coin_metadata_object: Some(
+                        ObjectId::from(value.coin_metadata_object.bytes).to_string(),
+                    ),
+                    deny_cap_object: Some(ObjectId::from(value.deny_cap_object.bytes).to_string()),
+                })
+        } else {
+            None
+        };
+
     Ok(GetCoinInfoResponse {
         coin_type: Some(coin_type.to_string()),
         metadata,
         treasury,
+        regulated_metadata,
     })
 }
 

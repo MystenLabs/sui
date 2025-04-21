@@ -1,0 +1,16 @@
+[package]
+name = "external-resolver"
+version = "0.1.0"
+authors = ["Diem Association <opensource@diem.com>"]
+description = "External resolver protocol for move package manager"
+license = "Apache-2.0"
+publish = false
+edition = "2021"
+
+[dependencies]
+anyhow.workspace = true
+toml.workspace = true
+serde.workspace = true
+tokio.workspace = true
+thiserror.workspace = true
+tracing.workspace = true

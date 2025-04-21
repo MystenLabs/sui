@@ -116,8 +116,12 @@ pub async fn run_benchmarks() -> Result<(), anyhow::Error> {
             requests_file,
             methods_to_skip,
         } => {
-            info!("Running JSON RPC benchmark against {endpoint} with concurrency={concurrency} duration_secs={:?} requests_file={requests_file}", 
-                duration_secs);
+            info!(
+                concurrency,
+                ?duration_secs,
+                requests_file,
+                "Running JSON RPC benchmark against {endpoint}"
+            );
             json_rpc::run_benchmark(
                 &endpoint,
                 &requests_file,

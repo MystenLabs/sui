@@ -5,7 +5,8 @@
 /// operation. Can be used to limit any action (eg transfer, toCoin, fromCoin).
 module examples::limiter_rule {
     use std::string::String;
-    use sui::{token::{Self, TokenPolicy, TokenPolicyCap, ActionRequest}, vec_map::{Self, VecMap}};
+    use sui::token::{Self, TokenPolicy, TokenPolicyCap, ActionRequest};
+    use sui::vec_map::{Self, VecMap};
 
     /// Trying to perform an action that exceeds the limit.
     const ELimitExceeded: u64 = 0;
@@ -14,7 +15,7 @@ module examples::limiter_rule {
     public struct Limiter has drop {}
 
     /// The Config object for the `lo
-    public struct Config has store, drop {
+    public struct Config has drop, store {
         /// Mapping of Action -> Limit
         limits: VecMap<String, u64>,
     }
@@ -68,8 +69,11 @@ module examples::limiter_rule {
 #[test_only]
 module examples::limiter_rule_tests {
     use examples::limiter_rule::{Self as limiter, Limiter};
-    use std::{option::none, string::utf8};
-    use sui::{token, token_test_utils::{Self as test, TEST}, vec_map};
+    use std::option::none;
+    use std::string::utf8;
+    use sui::token;
+    use sui::token_test_utils::{Self as test, TEST};
+    use sui::vec_map;
 
     #[test]
     // Scenario: add a limiter rule for 100 tokens per operation, verify that

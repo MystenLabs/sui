@@ -313,19 +313,21 @@ impl<'a> TestAuthorityBuilder<'a> {
                     .protocol_config()
                     .max_move_identifier_len_as_option(),
                 false,
-                &authority_store,
             )))
         };
         let rpc_index = if self.disable_indexer {
             None
         } else {
-            Some(Arc::new(RpcIndexStore::new(
-                &path,
-                &authority_store,
-                &checkpoint_store,
-                &epoch_store,
-                &cache_traits.backing_package_store,
-            )))
+            Some(Arc::new(
+                RpcIndexStore::new(
+                    &path,
+                    &authority_store,
+                    &checkpoint_store,
+                    &epoch_store,
+                    &cache_traits.backing_package_store,
+                )
+                .await,
+            ))
         };
 
         let transaction_deny_config = self.transaction_deny_config.unwrap_or_default();

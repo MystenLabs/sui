@@ -6,7 +6,6 @@ use std::str::FromStr;
 use anyhow::Context as _;
 use diesel::prelude::*;
 use diesel::sql_types::Bool;
-use futures::future;
 use jsonrpsee::{core::RpcResult, http_client::HttpClient, proc_macros::rpc};
 use move_core_types::language_storage::{StructTag, TypeTag};
 use serde::{Deserialize, Serialize};
@@ -16,11 +15,8 @@ use sui_json_rpc_types::{Balance, Coin, Page as PageResponse, SuiCoinMetadata};
 use sui_open_rpc::Module;
 use sui_open_rpc_macros::open_rpc;
 use sui_sql_macro::sql;
+use sui_types::base_types::{ObjectID, SuiAddress};
 use sui_types::object::Object;
-use sui_types::{
-    base_types::{ObjectID, SuiAddress},
-    gas_coin::GAS,
-};
 
 use crate::{
     config::NodeConfig,
@@ -35,21 +31,6 @@ use super::rpc_module::RpcModule;
 #[open_rpc(namespace = "suix", tag = "Coin API")]
 #[rpc(server, namespace = "suix")]
 trait CoinsApi {
-    /// Return Coin objects owned by an address with a specified coin type.
-    /// If no coin type is specified, SUI coins are returned.
-    #[method(name = "getCoins")]
-    async fn get_coins(
-        &self,
-        /// the owner's Sui address
-        owner: SuiAddress,
-        /// optional coin type
-        coin_type: Option<String>,
-        /// optional paging cursor
-        cursor: Option<String>,
-        /// maximum number of items per page
-        limit: Option<usize>,
-    ) -> RpcResult<PageResponse<Coin, String>>;
-
     /// Return metadata (e.g., symbol, decimals) for a coin. Note that if the coin's metadata was
     /// wrapped in the transaction that published its marker type, or the latest version of the
     /// metadata object is wrapped or deleted, it will not be found.
@@ -72,6 +53,22 @@ trait DelegationCoinsApi {
         /// the owner's Sui address
         owner: SuiAddress,
     ) -> RpcResult<Vec<Balance>>;
+
+    // TODO: bring it back to CoinsApi.
+    /// Return Coin objects owned by an address with a specified coin type.
+    /// If no coin type is specified, SUI coins are returned.
+    #[method(name = "getCoins")]
+    async fn get_coins(
+        &self,
+        /// the owner's Sui address
+        owner: SuiAddress,
+        /// optional coin type
+        coin_type: Option<String>,
+        /// optional paging cursor
+        cursor: Option<String>,
+        /// maximum number of items per page
+        limit: Option<usize>,
+    ) -> RpcResult<PageResponse<Coin, String>>;
 }
 
 pub(crate) struct Coins(pub Context);
@@ -105,50 +102,6 @@ impl DelegationCoins {
 
 #[async_trait::async_trait]
 impl CoinsApiServer for Coins {
-    async fn get_coins(
-        &self,
-        owner: SuiAddress,
-        coin_type: Option<String>,
-        cursor: Option<String>,
-        limit: Option<usize>,
-    ) -> RpcResult<PageResponse<Coin, String>> {
-        let coin_type_tag = if let Some(coin_type) = coin_type {
-            sui_types::parse_sui_type_tag(&coin_type)
-                .map_err(|e| invalid_params(Error::BadType(coin_type, e)))?
-        } else {
-            GAS::type_tag()
-        };
-
-        let Self(ctx) = self;
-        let config = &ctx.config().coins;
-
-        let page: Page<Cursor> = Page::from_params::<Error>(
-            config.default_page_size,
-            config.max_page_size,
-            cursor,
-            limit,
-            None,
-        )?;
-
-        // We get all the qualified coin ids first.
-        let coin_id_page = filter_coins(ctx, owner, Some(coin_type_tag), Some(page)).await?;
-
-        let coin_futures = coin_id_page.data.iter().map(|id| coin_response(ctx, *id));
-
-        let coins = future::join_all(coin_futures)
-            .await
-            .into_iter()
-            .zip(coin_id_page.data)
-            .map(|(r, id)| r.with_internal_context(|| format!("Failed to get object {id}")))
-            .collect::<Result<Vec<_>, _>>()?;
-
-        Ok(PageResponse {
-            data: coins,
-            next_cursor: coin_id_page.next_cursor,
-            has_next_page: coin_id_page.has_next_page,
-        })
-    }
-
     async fn get_coin_metadata(&self, coin_type: String) -> RpcResult<Option<SuiCoinMetadata>> {
         let Self(ctx) = self;
 
@@ -165,6 +118,21 @@ impl DelegationCoinsApiServer for DelegationCoins {
 
         client
             .get_all_balances(owner)
+            .await
+            .map_err(client_error_to_error_object)
+    }
+
+    async fn get_coins(
+        &self,
+        owner: SuiAddress,
+        coin_type: Option<String>,
+        cursor: Option<String>,
+        limit: Option<usize>,
+    ) -> RpcResult<PageResponse<Coin, String>> {
+        let Self(client) = self;
+
+        client
+            .get_coins(owner, coin_type, cursor, limit)
             .await
             .map_err(client_error_to_error_object)
     }
@@ -190,6 +158,7 @@ impl RpcModule for DelegationCoins {
     }
 }
 
+#[allow(dead_code)]
 async fn filter_coins(
     ctx: &Context,
     owner: SuiAddress,
@@ -307,6 +276,7 @@ async fn filter_coins(
     })
 }
 
+#[allow(dead_code)]
 async fn coin_response(ctx: &Context, id: ObjectID) -> Result<Coin, RpcError<Error>> {
     let (object, coin_type, balance) = object_with_coin_data(ctx, id).await?;
 
@@ -357,6 +327,7 @@ async fn coin_metadata_response(
     Ok(Some(coin_metadata))
 }
 
+#[allow(dead_code)]
 async fn object_with_coin_data(
     ctx: &Context,
     id: ObjectID,
