@@ -105,6 +105,17 @@ diesel::table! {
 }
 
 diesel::table! {
+    kv_packages (package_id, package_version) {
+        package_id -> Bytea,
+        package_version -> Int8,
+        original_id -> Bytea,
+        is_system_package -> Bool,
+        serialized_object -> Bytea,
+        cp_sequence_number -> Int8,
+    }
+}
+
+diesel::table! {
     kv_protocol_configs (protocol_version, config_name) {
         protocol_version -> Int8,
         config_name -> Text,
@@ -249,6 +260,7 @@ diesel::allow_tables_to_appear_in_same_query!(
     kv_feature_flags,
     kv_genesis,
     kv_objects,
+    kv_packages,
     kv_protocol_configs,
     kv_transactions,
     obj_info,

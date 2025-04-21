@@ -20,6 +20,7 @@ pub(crate) mod kv_epoch_ends;
 pub(crate) mod kv_epoch_starts;
 pub(crate) mod kv_feature_flags;
 pub(crate) mod kv_objects;
+pub(crate) mod kv_packages;
 pub(crate) mod kv_protocol_configs;
 pub(crate) mod kv_transactions;
 pub(crate) mod obj_info;
