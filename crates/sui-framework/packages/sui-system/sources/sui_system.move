@@ -42,20 +42,27 @@ module sui_system::sui_system;
 
 use sui::balance::Balance;
 use sui::coin::Coin;
-use sui_system::staking_pool::{StakedSui, FungibleStakedSui};
+use sui::dynamic_field;
 use sui::sui::SUI;
 use sui::table::Table;
+use sui::vec_map::VecMap;
+use sui_system::stake_subsidy::StakeSubsidy;
+use sui_system::staking_pool::{StakedSui, FungibleStakedSui, PoolTokenExchangeRate};
+use sui_system::sui_system_state_inner::{
+    Self,
+    SystemParameters,
+    SuiSystemStateInner,
+    SuiSystemStateInnerV2
+};
 use sui_system::validator::Validator;
 use sui_system::validator_cap::UnverifiedValidatorOperationCap;
-use sui_system::sui_system_state_inner::{Self, SystemParameters, SuiSystemStateInner, SuiSystemStateInnerV2};
-use sui_system::stake_subsidy::StakeSubsidy;
-use sui_system::staking_pool::PoolTokenExchangeRate;
-use sui::dynamic_field;
-use sui::vec_map::VecMap;
 
-#[test_only] use sui::balance;
-#[test_only] use sui_system::validator_set::ValidatorSet;
-#[test_only] use sui::vec_set::VecSet;
+#[test_only]
+use sui::balance;
+#[test_only]
+use sui_system::validator_set::ValidatorSet;
+#[test_only]
+use sui::vec_set::VecSet;
 
 public struct SuiSystemState has key {
     id: UID,
@@ -123,24 +130,25 @@ public entry fun request_add_validator_candidate(
     commission_rate: u64,
     ctx: &mut TxContext,
 ) {
-    let self = load_system_state_mut(wrapper);
-    self.request_add_validator_candidate(
-        pubkey_bytes,
-        network_pubkey_bytes,
-        worker_pubkey_bytes,
-        proof_of_possession,
-        name,
-        description,
-        image_url,
-        project_url,
-        net_address,
-        p2p_address,
-        primary_address,
-        worker_address,
-        gas_price,
-        commission_rate,
-        ctx,
-    )
+    wrapper
+        .load_system_state_mut()
+        .request_add_validator_candidate(
+            pubkey_bytes,
+            network_pubkey_bytes,
+            worker_pubkey_bytes,
+            proof_of_possession,
+            name,
+            description,
+            image_url,
+            project_url,
+            net_address,
+            p2p_address,
+            primary_address,
+            worker_address,
+            gas_price,
+            commission_rate,
+            ctx,
+        )
 }
 
 /// Called by a validator candidate to remove themselves from the candidacy. After this call
@@ -149,20 +157,15 @@ public entry fun request_remove_validator_candidate(
     wrapper: &mut SuiSystemState,
     ctx: &mut TxContext,
 ) {
-    let self = load_system_state_mut(wrapper);
-    self.request_remove_validator_candidate(ctx)
+    wrapper.load_system_state_mut().request_remove_validator_candidate(ctx)
 }
 
 /// Called by a validator candidate to add themselves to the active validator set beginning next epoch.
 /// Aborts if the validator is a duplicate with one of the pending or active validators, or if the amount of
 /// stake the validator has doesn't meet the min threshold, or if the number of new validators for the next
 /// epoch has already reached the maximum.
-public entry fun request_add_validator(
-    wrapper: &mut SuiSystemState,
-    ctx: &mut TxContext,
-) {
-    let self = load_system_state_mut(wrapper);
-    self.request_add_validator(ctx)
+public entry fun request_add_validator(wrapper: &mut SuiSystemState, ctx: &mut TxContext) {
+    wrapper.load_system_state_mut().request_add_validator(ctx)
 }
 
 /// A validator can call this function to request a removal in the next epoch.
@@ -170,12 +173,8 @@ public entry fun request_add_validator(
 /// (i.e. sender must match the sui_address in the validator).
 /// At the end of the epoch, the `validator` object will be returned to the sui_address
 /// of the validator.
-public entry fun request_remove_validator(
-    wrapper: &mut SuiSystemState,
-    ctx: &mut TxContext,
-) {
-    let self = load_system_state_mut(wrapper);
-    self.request_remove_validator(ctx)
+public entry fun request_remove_validator(wrapper: &mut SuiSystemState, ctx: &mut TxContext) {
+    wrapper.load_system_state_mut().request_remove_validator(ctx)
 }
 
 /// A validator can call this entry function to submit a new gas price quote, to be
@@ -185,8 +184,7 @@ public entry fun request_set_gas_price(
     cap: &UnverifiedValidatorOperationCap,
     new_gas_price: u64,
 ) {
-    let self = load_system_state_mut(wrapper);
-    self.request_set_gas_price(cap, new_gas_price)
+    wrapper.load_system_state_mut().request_set_gas_price(cap, new_gas_price)
 }
 
 /// This entry function is used to set new gas price for candidate validators
@@ -195,8 +193,7 @@ public entry fun set_candidate_validator_gas_price(
     cap: &UnverifiedValidatorOperationCap,
     new_gas_price: u64,
 ) {
-    let self = load_system_state_mut(wrapper);
-    self.set_candidate_validator_gas_price(cap, new_gas_price)
+    wrapper.load_system_state_mut().set_candidate_validator_gas_price(cap, new_gas_price)
 }
 
 /// A validator can call this entry function to set a new commission rate, updated at the end of
@@ -206,8 +203,7 @@ public entry fun request_set_commission_rate(
     new_commission_rate: u64,
     ctx: &mut TxContext,
 ) {
-    let self = load_system_state_mut(wrapper);
-    self.request_set_commission_rate(new_commission_rate, ctx)
+    wrapper.load_system_state_mut().request_set_commission_rate(new_commission_rate, ctx)
 }
 
 /// This entry function is used to set new commission rate for candidate validators
@@ -216,8 +212,9 @@ public entry fun set_candidate_validator_commission_rate(
     new_commission_rate: u64,
     ctx: &mut TxContext,
 ) {
-    let self = load_system_state_mut(wrapper);
-    self.set_candidate_validator_commission_rate(new_commission_rate, ctx)
+    wrapper
+        .load_system_state_mut()
+        .set_candidate_validator_commission_rate(new_commission_rate, ctx)
 }
 
 /// Add stake to a validator's staking pool.
@@ -238,8 +235,7 @@ public fun request_add_stake_non_entry(
     validator_address: address,
     ctx: &mut TxContext,
 ): StakedSui {
-    let self = load_system_state_mut(wrapper);
-    self.request_add_stake(stake, validator_address, ctx)
+    wrapper.load_system_state_mut().request_add_stake(stake, validator_address, ctx)
 }
 
 /// Add stake to a validator's staking pool using multiple coins.
@@ -250,8 +246,10 @@ public entry fun request_add_stake_mul_coin(
     validator_address: address,
     ctx: &mut TxContext,
 ) {
-    let self = load_system_state_mut(wrapper);
-    let staked_sui = self.request_add_stake_mul_coin(stakes, stake_amount, validator_address, ctx);
+    let staked_sui = wrapper
+        .load_system_state_mut()
+        .request_add_stake_mul_coin(stakes, stake_amount, validator_address, ctx);
+
     transfer::public_transfer(staked_sui, ctx.sender());
 }
 
@@ -261,7 +259,7 @@ public entry fun request_withdraw_stake(
     staked_sui: StakedSui,
     ctx: &mut TxContext,
 ) {
-    let withdrawn_stake = request_withdraw_stake_non_entry(wrapper, staked_sui, ctx);
+    let withdrawn_stake = wrapper.request_withdraw_stake_non_entry(staked_sui, ctx);
     transfer::public_transfer(withdrawn_stake.into_coin(ctx), ctx.sender());
 }
 
@@ -271,8 +269,7 @@ public fun convert_to_fungible_staked_sui(
     staked_sui: StakedSui,
     ctx: &mut TxContext,
 ): FungibleStakedSui {
-    let self = load_system_state_mut(wrapper);
-    self.convert_to_fungible_staked_sui(staked_sui, ctx)
+    wrapper.load_system_state_mut().convert_to_fungible_staked_sui(staked_sui, ctx)
 }
 
 /// Convert FungibleStakedSui into a StakedSui object.
@@ -281,8 +278,7 @@ public fun redeem_fungible_staked_sui(
     fungible_staked_sui: FungibleStakedSui,
     ctx: &TxContext,
 ): Balance<SUI> {
-    let self = load_system_state_mut(wrapper);
-    self.redeem_fungible_staked_sui(fungible_staked_sui, ctx)
+    wrapper.load_system_state_mut().redeem_fungible_staked_sui(fungible_staked_sui, ctx)
 }
 
 /// Non-entry version of `request_withdraw_stake` that returns the withdrawn SUI instead of transferring it to the sender.
@@ -291,8 +287,7 @@ public fun request_withdraw_stake_non_entry(
     staked_sui: StakedSui,
     ctx: &mut TxContext,
 ): Balance<SUI> {
-    let self = load_system_state_mut(wrapper);
-    self.request_withdraw_stake(staked_sui, ctx)
+    wrapper.load_system_state_mut().request_withdraw_stake(staked_sui, ctx)
 }
 
 /// Report a validator as a bad or non-performant actor in the system.
@@ -306,10 +301,8 @@ public entry fun report_validator(
     cap: &UnverifiedValidatorOperationCap,
     reportee_addr: address,
 ) {
-    let self = load_system_state_mut(wrapper);
-    self.report_validator(cap, reportee_addr)
+    wrapper.load_system_state_mut().report_validator(cap, reportee_addr)
 }
-
 
 /// Undo a `report_validator` action. Aborts if
 /// 1. the reportee is not a currently active validator or
@@ -320,20 +313,15 @@ public entry fun undo_report_validator(
     cap: &UnverifiedValidatorOperationCap,
     reportee_addr: address,
 ) {
-    let self = load_system_state_mut(wrapper);
-    self.undo_report_validator(cap, reportee_addr)
+    wrapper.load_system_state_mut().undo_report_validator(cap, reportee_addr)
 }
 
 // ==== validator metadata management functions ====
 
 /// Create a new `UnverifiedValidatorOperationCap`, transfer it to the
 /// validator and registers it. The original object is thus revoked.
-public entry fun rotate_operation_cap(
-    self: &mut SuiSystemState,
-    ctx: &mut TxContext,
-) {
-    let self = load_system_state_mut(self);
-    self.rotate_operation_cap(ctx)
+public entry fun rotate_operation_cap(self: &mut SuiSystemState, ctx: &mut TxContext) {
+    self.load_system_state_mut().rotate_operation_cap(ctx)
 }
 
 /// Update a validator's name.
@@ -342,8 +330,7 @@ public entry fun update_validator_name(
     name: vector<u8>,
     ctx: &TxContext,
 ) {
-    let self = load_system_state_mut(self);
-    self.update_validator_name(name, ctx)
+    self.load_system_state_mut().update_validator_name(name, ctx)
 }
 
 /// Update a validator's description
@@ -352,8 +339,7 @@ public entry fun update_validator_description(
     description: vector<u8>,
     ctx: &TxContext,
 ) {
-    let self = load_system_state_mut(self);
-    self.update_validator_description(description, ctx)
+    self.load_system_state_mut().update_validator_description(description, ctx)
 }
 
 /// Update a validator's image url
@@ -362,8 +348,7 @@ public entry fun update_validator_image_url(
     image_url: vector<u8>,
     ctx: &TxContext,
 ) {
-    let self = load_system_state_mut(self);
-    self.update_validator_image_url(image_url, ctx)
+    self.load_system_state_mut().update_validator_image_url(image_url, ctx)
 }
 
 /// Update a validator's project url
@@ -372,8 +357,7 @@ public entry fun update_validator_project_url(
     project_url: vector<u8>,
     ctx: &TxContext,
 ) {
-    let self = load_system_state_mut(self);
-    self.update_validator_project_url(project_url, ctx)
+    self.load_system_state_mut().update_validator_project_url(project_url, ctx)
 }
 
 /// Update a validator's network address.
@@ -383,8 +367,7 @@ public entry fun update_validator_next_epoch_network_address(
     network_address: vector<u8>,
     ctx: &TxContext,
 ) {
-    let self = load_system_state_mut(self);
-    self.update_validator_next_epoch_network_address(network_address, ctx)
+    self.load_system_state_mut().update_validator_next_epoch_network_address(network_address, ctx)
 }
 
 /// Update candidate validator's network address.
@@ -393,8 +376,7 @@ public entry fun update_candidate_validator_network_address(
     network_address: vector<u8>,
     ctx: &TxContext,
 ) {
-    let self = load_system_state_mut(self);
-    self.update_candidate_validator_network_address(network_address, ctx)
+    self.load_system_state_mut().update_candidate_validator_network_address(network_address, ctx)
 }
 
 /// Update a validator's p2p address.
@@ -404,8 +386,7 @@ public entry fun update_validator_next_epoch_p2p_address(
     p2p_address: vector<u8>,
     ctx: &TxContext,
 ) {
-    let self = load_system_state_mut(self);
-    self.update_validator_next_epoch_p2p_address(p2p_address, ctx)
+    self.load_system_state_mut().update_validator_next_epoch_p2p_address(p2p_address, ctx)
 }
 
 /// Update candidate validator's p2p address.
@@ -414,8 +395,7 @@ public entry fun update_candidate_validator_p2p_address(
     p2p_address: vector<u8>,
     ctx: &TxContext,
 ) {
-    let self = load_system_state_mut(self);
-    self.update_candidate_validator_p2p_address(p2p_address, ctx)
+    self.load_system_state_mut().update_candidate_validator_p2p_address(p2p_address, ctx)
 }
 
 /// Update a validator's narwhal primary address.
@@ -425,8 +405,7 @@ public entry fun update_validator_next_epoch_primary_address(
     primary_address: vector<u8>,
     ctx: &TxContext,
 ) {
-    let self = load_system_state_mut(self);
-    self.update_validator_next_epoch_primary_address(primary_address, ctx)
+    self.load_system_state_mut().update_validator_next_epoch_primary_address(primary_address, ctx)
 }
 
 /// Update candidate validator's narwhal primary address.
@@ -435,8 +414,7 @@ public entry fun update_candidate_validator_primary_address(
     primary_address: vector<u8>,
     ctx: &TxContext,
 ) {
-    let self = load_system_state_mut(self);
-    self.update_candidate_validator_primary_address(primary_address, ctx)
+    self.load_system_state_mut().update_candidate_validator_primary_address(primary_address, ctx)
 }
 
 /// Update a validator's narwhal worker address.
@@ -446,8 +424,7 @@ public entry fun update_validator_next_epoch_worker_address(
     worker_address: vector<u8>,
     ctx: &TxContext,
 ) {
-    let self = load_system_state_mut(self);
-    self.update_validator_next_epoch_worker_address(worker_address, ctx)
+    self.load_system_state_mut().update_validator_next_epoch_worker_address(worker_address, ctx)
 }
 
 /// Update candidate validator's narwhal worker address.
@@ -456,8 +433,7 @@ public entry fun update_candidate_validator_worker_address(
     worker_address: vector<u8>,
     ctx: &TxContext,
 ) {
-    let self = load_system_state_mut(self);
-    self.update_candidate_validator_worker_address(worker_address, ctx)
+    self.load_system_state_mut().update_candidate_validator_worker_address(worker_address, ctx)
 }
 
 /// Update a validator's public key of protocol key and proof of possession.
@@ -468,8 +444,9 @@ public entry fun update_validator_next_epoch_protocol_pubkey(
     proof_of_possession: vector<u8>,
     ctx: &TxContext,
 ) {
-    let self = load_system_state_mut(self);
-    self.update_validator_next_epoch_protocol_pubkey(protocol_pubkey, proof_of_possession, ctx)
+    self
+        .load_system_state_mut()
+        .update_validator_next_epoch_protocol_pubkey(protocol_pubkey, proof_of_possession, ctx)
 }
 
 /// Update candidate validator's public key of protocol key and proof of possession.
@@ -479,8 +456,9 @@ public entry fun update_candidate_validator_protocol_pubkey(
     proof_of_possession: vector<u8>,
     ctx: &TxContext,
 ) {
-    let self = load_system_state_mut(self);
-    self.update_candidate_validator_protocol_pubkey(protocol_pubkey, proof_of_possession, ctx)
+    self
+        .load_system_state_mut()
+        .update_candidate_validator_protocol_pubkey(protocol_pubkey, proof_of_possession, ctx)
 }
 
 /// Update a validator's public key of worker key.
@@ -490,8 +468,7 @@ public entry fun update_validator_next_epoch_worker_pubkey(
     worker_pubkey: vector<u8>,
     ctx: &TxContext,
 ) {
-    let self = load_system_state_mut(self);
-    self.update_validator_next_epoch_worker_pubkey(worker_pubkey, ctx)
+    self.load_system_state_mut().update_validator_next_epoch_worker_pubkey(worker_pubkey, ctx)
 }
 
 /// Update candidate validator's public key of worker key.
@@ -500,8 +477,7 @@ public entry fun update_candidate_validator_worker_pubkey(
     worker_pubkey: vector<u8>,
     ctx: &TxContext,
 ) {
-    let self = load_system_state_mut(self);
-    self.update_candidate_validator_worker_pubkey(worker_pubkey, ctx)
+    self.load_system_state_mut().update_candidate_validator_worker_pubkey(worker_pubkey, ctx)
 }
 
 /// Update a validator's public key of network key.
@@ -511,8 +487,7 @@ public entry fun update_validator_next_epoch_network_pubkey(
     network_pubkey: vector<u8>,
     ctx: &TxContext,
 ) {
-    let self = load_system_state_mut(self);
-    self.update_validator_next_epoch_network_pubkey(network_pubkey, ctx)
+    self.load_system_state_mut().update_validator_next_epoch_network_pubkey(network_pubkey, ctx)
 }
 
 /// Update candidate validator's public key of network key.
@@ -521,28 +496,24 @@ public entry fun update_candidate_validator_network_pubkey(
     network_pubkey: vector<u8>,
     ctx: &TxContext,
 ) {
-    let self = load_system_state_mut(self);
-    self.update_candidate_validator_network_pubkey(network_pubkey, ctx)
+    self.load_system_state_mut().update_candidate_validator_network_pubkey(network_pubkey, ctx)
 }
 
 public fun validator_address_by_pool_id(wrapper: &mut SuiSystemState, pool_id: &ID): address {
-    let self = load_system_state_mut(wrapper);
-    self.validator_address_by_pool_id(pool_id)
+    wrapper.load_system_state_mut().validator_address_by_pool_id(pool_id)
 }
 
 /// Getter of the pool token exchange rate of a staking pool. Works for both active and inactive pools.
 public fun pool_exchange_rates(
     wrapper: &mut SuiSystemState,
-    pool_id: &ID
-): &Table<u64, PoolTokenExchangeRate>  {
-    let self = load_system_state_mut(wrapper);
-    self.pool_exchange_rates(pool_id)
+    pool_id: &ID,
+): &Table<u64, PoolTokenExchangeRate> {
+    wrapper.load_system_state_mut().pool_exchange_rates(pool_id)
 }
 
 /// Getter returning addresses of the currently active validators.
 public fun active_validator_addresses(wrapper: &mut SuiSystemState): vector<address> {
-    let self = load_system_state(wrapper);
-    self.active_validator_addresses()
+    wrapper.load_system_state_mut().active_validator_addresses()
 }
 
 #[allow(unused_function)]
@@ -562,26 +533,27 @@ fun advance_epoch(
     storage_rebate: u64,
     non_refundable_storage_fee: u64,
     storage_fund_reinvest_rate: u64, // share of storage fund's rewards that's reinvested
-                                        // into storage fund, in basis point.
+    // into storage fund, in basis point.
     reward_slashing_rate: u64, // how much rewards are slashed to punish a validator, in bps.
     epoch_start_timestamp_ms: u64, // Timestamp of the epoch start
     ctx: &mut TxContext,
 ): Balance<SUI> {
-    let self = load_system_state_mut(wrapper);
     // Validator will make a special system call with sender set as 0x0.
     assert!(ctx.sender() == @0x0, ENotSystemAddress);
-    let storage_rebate = self.advance_epoch(
-        new_epoch,
-        next_protocol_version,
-        storage_reward,
-        computation_reward,
-        storage_rebate,
-        non_refundable_storage_fee,
-        storage_fund_reinvest_rate,
-        reward_slashing_rate,
-        epoch_start_timestamp_ms,
-        ctx,
-    );
+    let storage_rebate = wrapper
+        .load_system_state_mut()
+        .advance_epoch(
+            new_epoch,
+            next_protocol_version,
+            storage_reward,
+            computation_reward,
+            storage_rebate,
+            non_refundable_storage_fee,
+            storage_fund_reinvest_rate,
+            reward_slashing_rate,
+            epoch_start_timestamp_ms,
+            ctx,
+        );
 
     storage_rebate
 }
@@ -604,7 +576,7 @@ fun load_inner_maybe_upgrade(self: &mut SuiSystemState): &mut SuiSystemStateInne
 
     let inner: &mut SuiSystemStateInnerV2 = dynamic_field::borrow_mut(
         &mut self.id,
-        self.version
+        self.version,
     );
     assert!(inner.system_state_version() == self.version, EWrongInnerVersion);
     inner
@@ -613,130 +585,121 @@ fun load_inner_maybe_upgrade(self: &mut SuiSystemState): &mut SuiSystemStateInne
 #[allow(unused_function)]
 /// Returns the voting power of the active validators, values are voting power in the scale of 10000.
 fun validator_voting_powers(wrapper: &mut SuiSystemState): VecMap<address, u64> {
-    let self = load_system_state(wrapper);
-    sui_system_state_inner::active_validator_voting_powers(self)
+    wrapper.load_system_state().active_validator_voting_powers()
 }
 
 #[allow(unused_function)]
 /// Saves the given execution time estimate blob to the SuiSystemState object, for system use
 /// at the start of the next epoch.
 fun store_execution_time_estimates(wrapper: &mut SuiSystemState, estimates_bytes: vector<u8>) {
-    let self = load_system_state_mut(wrapper);
-    sui_system_state_inner::store_execution_time_estimates(self, estimates_bytes)
+    wrapper.load_system_state_mut().store_execution_time_estimates(estimates_bytes)
 }
 
 #[test_only]
 public fun validator_voting_powers_for_testing(wrapper: &mut SuiSystemState): VecMap<address, u64> {
-    validator_voting_powers(wrapper)
+    wrapper.validator_voting_powers()
 }
 
 #[test_only]
 /// Return the current epoch number. Useful for applications that need a coarse-grained concept of time,
 /// since epochs are ever-increasing and epoch changes are intended to happen every 24 hours.
 public fun epoch(wrapper: &mut SuiSystemState): u64 {
-    let self = load_system_state(wrapper);
-    self.epoch()
+    wrapper.load_system_state_mut().epoch()
 }
 
 #[test_only]
 /// Returns unix timestamp of the start of current epoch
 public fun epoch_start_timestamp_ms(wrapper: &mut SuiSystemState): u64 {
-    let self = load_system_state(wrapper);
-    self.epoch_start_timestamp_ms()
+    wrapper.load_system_state_mut().epoch_start_timestamp_ms()
 }
 
 #[test_only]
 /// Returns the total amount staked with `validator_addr`.
 /// Aborts if `validator_addr` is not an active validator.
 public fun validator_stake_amount(wrapper: &mut SuiSystemState, validator_addr: address): u64 {
-    let self = load_system_state(wrapper);
-    self.validator_stake_amount(validator_addr)
+    wrapper.load_system_state_mut().validator_stake_amount(validator_addr)
 }
 
 #[test_only]
 /// Returns the staking pool id of a given validator.
 /// Aborts if `validator_addr` is not an active validator.
 public fun validator_staking_pool_id(wrapper: &mut SuiSystemState, validator_addr: address): ID {
-    let self = load_system_state(wrapper);
-    self.validator_staking_pool_id(validator_addr)
+    wrapper.load_system_state_mut().validator_staking_pool_id(validator_addr)
 }
 
 #[test_only]
 /// Returns reference to the staking pool mappings that map pool ids to active validator addresses
 public fun validator_staking_pool_mappings(wrapper: &mut SuiSystemState): &Table<ID, address> {
-    let self = load_system_state(wrapper);
-    self.validator_staking_pool_mappings()
+    wrapper.load_system_state_mut().validator_staking_pool_mappings()
 }
 
 #[test_only]
 /// Returns all the validators who are currently reporting `addr`
 public fun get_reporters_of(wrapper: &mut SuiSystemState, addr: address): VecSet<address> {
-    let self = load_system_state(wrapper);
-    self.get_reporters_of(addr)
+    wrapper.load_system_state_mut().get_reporters_of(addr)
 }
 
 #[test_only]
 /// Return the current validator set
 public fun validators(wrapper: &mut SuiSystemState): &ValidatorSet {
-    let self = load_system_state(wrapper);
-    self.validators()
+    wrapper.load_system_state_mut().validators()
 }
 
 #[test_only]
 /// Return the currently active validator by address
-public fun active_validator_by_address(self: &mut SuiSystemState, validator_address: address): &Validator {
-    validators(self).get_active_validator_ref(validator_address)
+public fun active_validator_by_address(
+    self: &mut SuiSystemState,
+    validator_address: address,
+): &Validator {
+    self.validators().get_active_validator_ref(validator_address)
 }
 
 #[test_only]
 /// Return the currently pending validator by address
-public fun pending_validator_by_address(self: &mut SuiSystemState, validator_address: address): &Validator {
-    validators(self).get_pending_validator_ref(validator_address)
+public fun pending_validator_by_address(
+    self: &mut SuiSystemState,
+    validator_address: address,
+): &Validator {
+    self.validators().get_pending_validator_ref(validator_address)
 }
 
 #[test_only]
 /// Return the currently candidate validator by address
-public fun candidate_validator_by_address(self: &mut SuiSystemState, validator_address: address): &Validator {
-    validators(self).get_candidate_validator_ref(validator_address)
+public fun candidate_validator_by_address(
+    self: &mut SuiSystemState,
+    validator_address: address,
+): &Validator {
+    self.validators().get_candidate_validator_ref(validator_address)
 }
 
 #[test_only]
 public fun set_epoch_for_testing(wrapper: &mut SuiSystemState, epoch_num: u64) {
-    let self = load_system_state_mut(wrapper);
-    self.set_epoch_for_testing(epoch_num)
+    wrapper.load_system_state_mut().set_epoch_for_testing(epoch_num)
 }
 
 #[test_only]
-public fun request_add_validator_for_testing(
-    wrapper: &mut SuiSystemState,
-    ctx: &TxContext,
-) {
-    let self = load_system_state_mut(wrapper);
-    self.request_add_validator(ctx)
+public fun request_add_validator_for_testing(wrapper: &mut SuiSystemState, ctx: &TxContext) {
+    wrapper.load_system_state_mut().request_add_validator(ctx)
 }
 
 #[test_only]
 public fun get_storage_fund_total_balance(wrapper: &mut SuiSystemState): u64 {
-    let self = load_system_state(wrapper);
-    self.get_storage_fund_total_balance()
+    wrapper.load_system_state_mut().get_storage_fund_total_balance()
 }
 
 #[test_only]
 public fun get_storage_fund_object_rebates(wrapper: &mut SuiSystemState): u64 {
-    let self = load_system_state(wrapper);
-    self.get_storage_fund_object_rebates()
+    wrapper.load_system_state_mut().get_storage_fund_object_rebates()
 }
 
 #[test_only]
 public fun get_stake_subsidy_distribution_counter(wrapper: &mut SuiSystemState): u64 {
-    let self = load_system_state(wrapper);
-    self.get_stake_subsidy_distribution_counter()
+    wrapper.load_system_state_mut().get_stake_subsidy_distribution_counter()
 }
 
 #[test_only]
 public fun set_stake_subsidy_distribution_counter(wrapper: &mut SuiSystemState, counter: u64) {
-    let self = load_system_state_mut(wrapper);
-    self.set_stake_subsidy_distribution_counter(counter)
+    wrapper.load_system_state_mut().set_stake_subsidy_distribution_counter(counter)
 }
 
 #[test_only]
@@ -766,24 +729,25 @@ public entry fun request_add_validator_candidate_for_testing(
     commission_rate: u64,
     ctx: &mut TxContext,
 ) {
-    let self = load_system_state_mut(wrapper);
-    self.request_add_validator_candidate_for_testing(
-        pubkey_bytes,
-        network_pubkey_bytes,
-        worker_pubkey_bytes,
-        proof_of_possession,
-        name,
-        description,
-        image_url,
-        project_url,
-        net_address,
-        p2p_address,
-        primary_address,
-        worker_address,
-        gas_price,
-        commission_rate,
-        ctx
-    )
+    wrapper
+        .load_system_state_mut()
+        .request_add_validator_candidate_for_testing(
+            pubkey_bytes,
+            network_pubkey_bytes,
+            worker_pubkey_bytes,
+            proof_of_possession,
+            name,
+            description,
+            image_url,
+            project_url,
+            net_address,
+            p2p_address,
+            primary_address,
+            worker_address,
+            gas_price,
+            commission_rate,
+            ctx,
+        )
 }
 
 // CAUTION: THIS CODE IS ONLY FOR TESTING AND THIS MACRO MUST NEVER EVER BE REMOVED.
