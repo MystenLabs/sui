@@ -48,9 +48,7 @@ impl Worker for TransactionBCSHandler {
 impl AnalyticsHandler<TransactionBCSEntry> for TransactionBCSHandler {
     async fn read(&self) -> Result<Vec<TransactionBCSEntry>> {
         let mut state = self.state.lock().await;
-        let cloned = state.transactions.clone();
-        state.transactions.clear();
-        Ok(cloned)
+        Ok(std::mem::take(&mut state.transactions))
     }
 
     fn file_type(&self) -> Result<FileType> {

@@ -67,9 +67,7 @@ impl Worker for WrappedObjectHandler {
 impl AnalyticsHandler<WrappedObjectEntry> for WrappedObjectHandler {
     async fn read(&self) -> Result<Vec<WrappedObjectEntry>> {
         let mut state = self.state.lock().await;
-        let cloned = state.wrapped_objects.clone();
-        state.wrapped_objects.clear();
-        Ok(cloned)
+        Ok(std::mem::take(&mut state.wrapped_objects))
     }
 
     fn file_type(&self) -> Result<FileType> {
