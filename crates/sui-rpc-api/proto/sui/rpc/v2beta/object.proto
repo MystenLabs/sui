@@ -5,6 +5,7 @@ syntax = "proto3";
 
 package sui.rpc.v2beta;
 
+import "google/protobuf/struct.proto";
 import "sui/rpc/v2beta/bcs.proto";
 import "sui/rpc/v2beta/owner.proto";
 
@@ -65,6 +66,9 @@ message Object {
   // This number is re-calculated each time the object is mutated based on
   // the present storage gas price.
   optional uint64 storage_rebate = 13;
+
+  // JSON rendering of the object.
+  optional google.protobuf.Value json = 100;
 }
 
 // Module defined by a package.
