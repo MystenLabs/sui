@@ -4,7 +4,7 @@
 //!
 //! External dependencies are resolved in each environment as follows. First, all dependencies are
 //! grouped by the resolver name (`<res>`). Then, each binary `<res>` is invoked with the command
-//! line `<res> --resolve-deps`; a toml-formatted map of requests is passed to the binary on
+//! line `<res> --resolve-deps`; a json-formatted map of requests is passed to the binary on
 //! standard input, and the results are read from standard output.
 //!
 //! An individual request contains a dependency and an optional environment ID (see [Request]). If
@@ -48,6 +48,8 @@
 //! ```
 //!
 //! Anything the resolver prints on stderr will be logged using [tracing::info!]
+
+mod jsonrpc;
 
 use std::{collections::BTreeMap, io::BufRead, process::Stdio};
 
@@ -220,7 +222,7 @@ impl Query {
 
 /// Write [request] onto [stdin], performing appropriate logging using [resolver]
 async fn send_request(resolver: &ResolverName, request: &Request, mut stdin: ChildStdin) {
-    let request = toml::to_string(request).expect("Request serialization should not fail");
+    let request = serde_json::to_string(request).expect("Request serialization should not fail");
 
     debug!("Request to {resolver}");
     for line in request.lines() {
@@ -256,5 +258,5 @@ async fn recv_response(resolver: &ResolverName, mut child: Child) -> anyhow::Res
     // TODO: check exit code of resolver?
 
     // TODO: failure here indicates a bad response from the resolver
-    Ok(toml::from_str(&response)?)
+    Ok(serde_json::from_str(&response)?)
 }
