@@ -1,8 +1,8 @@
 // Copyright (c) The Move Contributors
 // SPDX-License-Identifier: Apache-2.0
 
-//! Provides serializable signatures for packages--potentially with additional names from the Move
-//! source code. The signatures include the signatures of all functions (potentially macros) and
+//! Provides serializable summaries for packages--potentially with additional names from the Move
+//! source code. The summaries include the signatures of all functions (potentially macros) and
 //! datatypes (structs and enums).
 
 use crate::{

@@ -9,9 +9,8 @@ use std::{
 
 use crate::{
     normalized::{self, ModuleId, QualifiedMemberId, TModuleId},
-    serializable_signatures,
     source_kind::{AnyKind, SourceKind, Uninit, WithSource, WithoutSource},
-    source_model,
+    source_model, summary,
 };
 use indexmap::IndexMap;
 use move_binary_format::file_format;
@@ -53,7 +52,7 @@ pub struct Model<K: SourceKind> {
     pub(crate) info: K::FromSource<Arc<TypingProgramInfo>>,
     pub(crate) compiled: normalized::Packages,
     pub(crate) packages: BTreeMap<AccountAddress, PackageData<K>>,
-    pub(crate) serializable_signatures: OnceCell<serializable_signatures::Packages>,
+    pub(crate) summary: OnceCell<summary::Packages>,
     pub(crate) _phantom: std::marker::PhantomData<K>,
 }
 
@@ -208,10 +207,10 @@ impl<K: SourceKind> Model<K> {
         &self.compiled
     }
 
-    pub fn signatures(&self) -> &serializable_signatures::Packages {
+    pub fn summary(&self) -> &summary::Packages {
         match self.kind() {
-            Kind::WithSource(model) => model.serializable_signatures(),
-            Kind::WithoutSource(model) => model.serializable_signatures(),
+            Kind::WithSource(model) => model.summary(),
+            Kind::WithoutSource(model) => model.summary(),
         }
     }
 
@@ -323,8 +322,8 @@ impl<'a, K: SourceKind> Package<'a, K> {
         self.compiled
     }
 
-    pub fn signatures(&self) -> &'a serializable_signatures::Package {
-        &self.model().signatures().packages[&self.addr]
+    pub fn summary(&self) -> &'a summary::Package {
+        &self.model().summary().packages[&self.addr]
     }
 
     pub fn kind(self) -> Kind<Package<'a, WithSource>, Package<'a, WithoutSource>> {
@@ -450,8 +449,8 @@ impl<'a, K: SourceKind> Module<'a, K> {
         &self.data.used_by
     }
 
-    pub fn signatures(&self) -> &serializable_signatures::Module {
-        &self.package.signatures().modules[&self.name()]
+    pub fn summary(&self) -> &summary::Module {
+        &self.package.summary().modules[&self.name()]
     }
 
     pub fn kind(self) -> Kind<Module<'a, WithSource>, Module<'a, WithoutSource>> {
@@ -486,8 +485,8 @@ impl<'a, K: SourceKind> Struct<'a, K> {
         self.compiled
     }
 
-    pub fn signature(&self) -> &serializable_signatures::Struct {
-        &self.module.signatures().structs[&self.name]
+    pub fn summary(&self) -> &summary::Struct {
+        &self.module.summary().structs[&self.name]
     }
 
     pub fn kind(self) -> Kind<Struct<'a, WithSource>, Struct<'a, WithoutSource>> {
@@ -537,8 +536,8 @@ impl<'a, K: SourceKind> Enum<'a, K> {
         }
     }
 
-    pub fn signature(&self) -> &serializable_signatures::Enum {
-        &self.module.signatures().enums[&self.name]
+    pub fn summary(&self) -> &summary::Enum {
+        &self.module.summary().enums[&self.name]
     }
 }
 
@@ -567,8 +566,8 @@ impl<'a, K: SourceKind> Variant<'a, K> {
         self.compiled
     }
 
-    pub fn signature(&self) -> &serializable_signatures::Variant {
-        &self.enum_.signature().variants[&self.name]
+    pub fn summary(&self) -> &summary::Variant {
+        &self.enum_.summary().variants[&self.name]
     }
 
     pub fn kind(self) -> Kind<Variant<'a, WithSource>, Variant<'a, WithoutSource>> {
@@ -614,8 +613,8 @@ impl<'a, K: SourceKind> Function<'a, K> {
         &self.data.called_by
     }
 
-    pub fn signature(&self) -> &serializable_signatures::Function {
-        &self.module.signatures().functions[&self.name]
+    pub fn summary(&self) -> &summary::Function {
+        &self.module.summary().functions[&self.name]
     }
 
     pub fn kind(self) -> Kind<Function<'a, WithSource>, Function<'a, WithoutSource>> {

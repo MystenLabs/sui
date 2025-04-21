@@ -8,9 +8,9 @@ pub mod compiled_model;
 pub mod display;
 pub mod model;
 pub mod normalized;
-pub mod serializable_signatures;
 pub mod source_kind;
 pub mod source_model;
+pub mod summary;
 
 pub use normalized::ModuleId;
 pub use normalized::QualifiedMemberId;
