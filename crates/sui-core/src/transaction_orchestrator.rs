@@ -38,8 +38,8 @@ use sui_types::quorum_driver_types::{
     QuorumDriverError, QuorumDriverResponse, QuorumDriverResult,
 };
 use sui_types::sui_system_state::SuiSystemState;
-use sui_types::transaction::{TransactionData, VerifiedTransaction};
-use sui_types::transaction_executor::SimulateTransactionResult;
+use sui_types::transaction::{ProgrammableTransaction, TransactionData, VerifiedTransaction};
+use sui_types::transaction_executor::{SimulateTransactionResult, ViewFunctionResult};
 use tokio::sync::broadcast::error::RecvError;
 use tokio::sync::broadcast::Receiver;
 use tokio::task::JoinHandle;
@@ -701,5 +701,12 @@ where
         transaction: TransactionData,
     ) -> Result<SimulateTransactionResult, SuiError> {
         self.validator_state.simulate_transaction(transaction)
+    }
+
+    fn view_function(
+        &self,
+        view_function: ProgrammableTransaction,
+    ) -> Result<ViewFunctionResult, SuiError> {
+        self.validator_state.call_view_function(view_function)
     }
 }

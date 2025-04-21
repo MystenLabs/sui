@@ -63,6 +63,7 @@ use sui_types::layout_resolver::LayoutResolver;
 use sui_types::messages_consensus::{AuthorityCapabilitiesV1, AuthorityCapabilitiesV2};
 use sui_types::object::bounded_visitor::BoundedVisitor;
 use sui_types::transaction_executor::SimulateTransactionResult;
+use sui_types::transaction_executor::ViewFunctionResult;
 use tap::TapFallible;
 use tokio::sync::mpsc::unbounded_channel;
 use tokio::sync::RwLock;
@@ -2114,6 +2115,127 @@ impl AuthorityState {
             effects,
             mock_gas_id: mock_gas,
         })
+    }
+
+    /// The object ID for gas can be any object ID, even for an uncreated object
+    #[instrument(skip_all)]
+    pub fn call_view_function(
+        &self,
+        view_function: ProgrammableTransaction,
+    ) -> SuiResult<ViewFunctionResult> {
+        let epoch_store = self.load_epoch_store_one_call_per_task();
+
+        if !self.is_fullnode(&epoch_store) {
+            return Err(SuiError::UnsupportedFeatureError {
+                error: "dev-inspect is only supported on fullnodes".to_string(),
+            });
+        }
+
+        let transaction_kind = TransactionKind::ProgrammableTransaction(view_function);
+
+        let protocol_config = epoch_store.protocol_config();
+
+        let mut transaction = TransactionData::V1(TransactionDataV1 {
+            kind: transaction_kind,
+            sender: SuiAddress::ZERO,
+            gas_data: GasData {
+                payment: vec![],
+                owner: SuiAddress::ZERO,
+                price: epoch_store.reference_gas_price(),
+                budget: protocol_config.max_tx_gas(),
+            },
+            expiration: TransactionExpiration::None,
+        });
+
+        transaction.validity_check_no_gas_check(protocol_config)?;
+
+        let input_object_kinds = transaction.input_objects()?;
+        let receiving_object_refs = transaction.receiving_objects();
+
+        sui_transaction_checks::deny::check_transaction_for_signing(
+            &transaction,
+            &[],
+            &input_object_kinds,
+            &receiving_object_refs,
+            &self.config.transaction_deny_config,
+            self.get_backing_package_store().as_ref(),
+        )?;
+
+        let (mut input_objects, receiving_objects) = self.input_loader.read_objects_for_signing(
+            // We don't want to cache this transaction since it's a dev inspect.
+            None,
+            &input_object_kinds,
+            &receiving_object_refs,
+            epoch_store.epoch(),
+        )?;
+
+        let (gas_status, checked_input_objects) = {
+            // If we are skipping checks, then we call the check_dev_inspect_input function which will perform
+            // only lightweight checks on the transaction input.
+
+            // Populate a dummy gas coin
+            {
+                let dummy_gas_object = Object::new_gas_with_balance_and_owner_for_testing(
+                    DEV_INSPECT_GAS_COIN_VALUE,
+                    transaction.gas_owner(),
+                );
+                let gas_object_ref = dummy_gas_object.compute_object_reference();
+                transaction.gas_data_mut().payment = vec![gas_object_ref];
+                input_objects.push(ObjectReadResult::new(
+                    InputObjectKind::ImmOrOwnedMoveObject(gas_object_ref),
+                    dummy_gas_object.into(),
+                ));
+            }
+
+            let checked_input_objects = sui_transaction_checks::check_dev_inspect_input(
+                protocol_config,
+                transaction.kind(),
+                input_objects,
+                receiving_objects,
+            )?;
+
+            let gas_status = SuiGasStatus::new(
+                protocol_config.max_tx_gas(),
+                transaction.gas_price(),
+                epoch_store.reference_gas_price(),
+                protocol_config,
+            )?;
+
+            (gas_status, checked_input_objects)
+        };
+
+        let executor = sui_execution::executor(protocol_config, /* silent */ true, None)
+            .expect("Creating an executor should not fail here");
+
+        let TransactionData::V1(TransactionDataV1 {
+            kind,
+            sender,
+            gas_data,
+            ..
+        }) = transaction;
+
+        let transaction_digest = TransactionDigest::ZERO;
+        let (_inner_temp_store, _, _effects, execution_result) = executor.dev_inspect_transaction(
+            self.get_backing_store().as_ref(),
+            protocol_config,
+            self.metrics.limits_metrics.clone(),
+            /* expensive checks */ false,
+            self.config.certificate_deny_config.certificate_deny_set(),
+            &epoch_store.epoch_start_config().epoch_data().epoch_id(),
+            epoch_store
+                .epoch_start_config()
+                .epoch_data()
+                .epoch_start_timestamp(),
+            checked_input_objects,
+            gas_data,
+            gas_status,
+            kind,
+            sender,
+            transaction_digest,
+            true, // skip_checks,
+        );
+
+        Ok(execution_result)
     }
 
     /// The object ID for gas can be any object ID, even for an uncreated object
