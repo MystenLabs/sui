@@ -3,11 +3,12 @@
 
 use prost_types::FieldMask;
 use sui_sdk_types::ObjectId;
+use sui_types::sui_sdk_types_conversions::struct_tag_sdk_to_core;
 
 use crate::error::ObjectNotFoundError;
 use crate::field_mask::FieldMaskTree;
 use crate::field_mask::FieldMaskUtil;
-use crate::message::MessageMergeFrom;
+use crate::message::MessageMerge;
 use crate::proto::google::rpc::bad_request::FieldViolation;
 use crate::proto::rpc::v2beta::BatchGetObjectsRequest;
 use crate::proto::rpc::v2beta::BatchGetObjectsResponse;
@@ -113,5 +114,31 @@ fn get_object_impl(
             .ok_or_else(|| ObjectNotFoundError::new(object_id))?
     };
 
-    Ok(Object::merge_from(object, read_mask))
+    let mut message = Object::default();
+
+    if read_mask.contains(Object::JSON_FIELD.name) {
+        message.json = object
+            .as_struct()
+            .and_then(|s| {
+                let struct_tag = struct_tag_sdk_to_core(s.object_type().to_owned()).ok()?;
+                let layout = service
+                    .reader
+                    .inner()
+                    .get_struct_layout(&struct_tag)
+                    .ok()
+                    .flatten()?;
+                Some((layout, s.contents()))
+            })
+            .and_then(|(layout, contents)| {
+                sui_types::proto_value::ProtoVisitor::default()
+                    .deserialize_value(contents, &layout)
+                    .map_err(|e| tracing::debug!("unable to convert to JSON: {e}"))
+                    .ok()
+                    .map(Box::new)
+            });
+    }
+
+    message.merge(object, read_mask);
+
+    Ok(message)
 }
