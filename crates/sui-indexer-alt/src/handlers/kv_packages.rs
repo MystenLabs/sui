@@ -3,21 +3,21 @@
 
 use std::sync::Arc;
 
-use anyhow::{anyhow, Result};
+use anyhow::{Context, Result};
 use diesel_async::RunQueryDsl;
 use sui_indexer_alt_framework::{
     pipeline::{concurrent::Handler, Processor},
     postgres::{Connection, Db},
     types::{base_types::SuiAddress, full_checkpoint_content::CheckpointData},
 };
-use sui_indexer_alt_schema::{packages::StoredKvPackage, schema::kv_packages};
+use sui_indexer_alt_schema::{packages::StoredPackage, schema::kv_packages};
 
 pub(crate) struct KvPackages;
 
 impl Processor for KvPackages {
     const NAME: &'static str = "kv_packages";
 
-    type Value = StoredKvPackage;
+    type Value = StoredPackage;
 
     fn process(&self, checkpoint: &Arc<CheckpointData>) -> Result<Vec<Self::Value>> {
         let CheckpointData {
@@ -34,13 +34,13 @@ impl Processor for KvPackages {
                     continue;
                 };
 
-                values.push(StoredKvPackage {
+                values.push(StoredPackage {
                     package_id: obj.id().to_vec(),
                     original_id: package.original_package_id().to_vec(),
                     package_version: obj.version().value() as i64,
                     is_system_package: tx.transaction.sender_address() == SuiAddress::ZERO,
-                    serialized_object: bcs::to_bytes(obj).map_err(|e| {
-                        anyhow!("Error serializing package object {}: {e}", obj.id())
+                    serialized_object: bcs::to_bytes(obj).with_context(|| {
+                        format!("Error serializing package object {}", obj.id())
                     })?,
                     cp_sequence_number,
                 });
