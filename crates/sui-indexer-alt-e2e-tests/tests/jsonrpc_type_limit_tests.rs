@@ -153,9 +153,9 @@ impl TypeLimitCluster {
                 pipeline: PipelineLayer {
                     cp_sequence_numbers: Some(Default::default()),
                     kv_objects: Some(Default::default()),
+                    kv_packages: Some(Default::default()),
                     obj_info: Some(Default::default()),
                     obj_versions: Some(Default::default()),
-                    sum_packages: Some(Default::default()),
                     ..Default::default()
                 },
                 ..IndexerConfig::for_test()
