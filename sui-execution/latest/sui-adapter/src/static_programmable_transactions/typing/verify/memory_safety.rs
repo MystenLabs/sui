@@ -1,16 +1,20 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use core::borrow;
+use std::collections::{BTreeMap, BTreeSet};
 
 use crate::static_programmable_transactions::{
     env::Env,
     typing::ast::{self as T, Type},
 };
 use move_regex_borrow_graph::references::Ref;
-use sui_types::error::ExecutionError;
+use sui_types::{
+    error::{command_argument_error, ExecutionError},
+    execution_status::CommandArgumentError,
+};
 
 type Graph = move_regex_borrow_graph::collections::Graph<(), T::Location>;
+type Paths = move_regex_borrow_graph::collections::Paths<(), T::Location>;
 
 enum Value {
     Ref(Ref),
@@ -20,8 +24,32 @@ enum Value {
 struct Context {
     graph: Graph,
     local_root: Ref,
+    gas_coin: Option<Value>,
     inputs: Vec<Option<Value>>,
     results: Vec<Vec<Option<Value>>>,
+}
+
+impl Value {
+    fn is_ref(&self) -> bool {
+        match self {
+            Value::Ref(_) => true,
+            Value::NonRef => false,
+        }
+    }
+
+    fn is_non_ref(&self) -> bool {
+        match self {
+            Value::Ref(_) => false,
+            Value::NonRef => true,
+        }
+    }
+
+    fn to_ref(&self) -> Option<Ref> {
+        match self {
+            Value::Ref(r) => Some(*r),
+            Value::NonRef => None,
+        }
+    }
 }
 
 impl Context {
@@ -45,9 +73,114 @@ impl Context {
         Ok(Self {
             graph,
             local_root,
+            gas_coin: Some(Value::NonRef),
             inputs,
             results: vec![],
         })
+    }
+
+    fn location(&mut self, l: T::Location) -> &mut Option<Value> {
+        match l {
+            T::Location::GasCoin => &mut self.gas_coin,
+            T::Location::Input(i) => &mut self.inputs[i as usize],
+            T::Location::Result(i, j) => &mut self.results[i as usize][j as usize],
+        }
+    }
+
+    fn is_mutable(&self, r: Ref) -> Result<bool, ExecutionError> {
+        self.graph.is_mutable(r).map_err(graph_err)
+    }
+
+    fn borrowed_by(&self, r: Ref) -> Result<BTreeMap<Ref, Paths>, ExecutionError> {
+        self.graph.borrowed_by(r).map_err(graph_err)
+    }
+
+    fn release(&mut self, r: Ref) -> Result<(), ExecutionError> {
+        self.graph.release(r).map_err(graph_err)
+    }
+
+    fn extend_by_epsilon(&mut self, r: Ref, is_mut: bool) -> Result<Ref, ExecutionError> {
+        let new_r = self
+            .graph
+            .extend_by_epsilon((), std::iter::once(r), is_mut)
+            .map_err(graph_err)?;
+        Ok(new_r)
+    }
+
+    fn extend_by_label(
+        &mut self,
+        r: Ref,
+        is_mut: bool,
+        extension: T::Location,
+    ) -> Result<Ref, ExecutionError> {
+        let new_r = self
+            .graph
+            .extend_by_label((), std::iter::once(r), is_mut, extension)
+            .map_err(graph_err)?;
+        Ok(new_r)
+    }
+
+    fn extend_by_dot_star_for_call(
+        &mut self,
+        sources: &BTreeSet<Ref>,
+        mutabilities: Vec<bool>,
+    ) -> Result<Vec<Ref>, ExecutionError> {
+        let new_refs = self
+            .graph
+            .extend_by_dot_star_for_call((), sources.iter().copied(), mutabilities)
+            .map_err(graph_err)?;
+        Ok(new_refs)
+    }
+
+    // Writable if
+    // No imm equal
+    // No extensions
+    fn is_writable(&self, r: Ref) -> Result<bool, ExecutionError> {
+        debug_assert!(self.is_mutable(r)?);
+        Ok(self
+            .borrowed_by(r)?
+            .values()
+            .all(|paths| paths.iter().all(|path| path.is_epsilon())))
+    }
+
+    // is in reference not able to be used in a call or return
+    fn find_non_transferrable(&self, refs: &BTreeSet<Ref>) -> Result<Option<Ref>, ExecutionError> {
+        let borrows = refs
+            .iter()
+            .copied()
+            .map(|r| Ok((r, self.borrowed_by(r)?)))
+            .collect::<Result<BTreeMap<_, _>, ExecutionError>>()?;
+        let mut_refs = refs
+            .iter()
+            .copied()
+            .filter_map(|r| match self.is_mutable(r) {
+                Ok(true) => Some(Ok(r)),
+                Ok(false) => None,
+                Err(e) => Some(Err(e)),
+            })
+            .collect::<Result<BTreeSet<_>, ExecutionError>>()?;
+        for (r, borrowed_by) in borrows {
+            let is_mut = mut_refs.contains(&r);
+            for (borrower, paths) in borrowed_by {
+                if !is_mut {
+                    if mut_refs.contains(&borrower) {
+                        // If the ref is imm, but is borrowed by a mut ref in the set
+                        // the mut ref is not transferrable
+                        // In other words, the mut ref is an extension of the imm ref
+                        return Ok(Some(r));
+                    }
+                } else {
+                    for path in paths {
+                        if !path.is_epsilon() || refs.contains(&borrower) {
+                            // If the ref is mut, it cannot have any non-epsilon extensions
+                            // If extension is epsilon (an alias), it cannot be in the transfer set
+                            return Ok(Some(r));
+                        }
+                    }
+                }
+            }
+        }
+        Ok(None)
     }
 }
 
@@ -56,37 +189,73 @@ pub fn verify(_env: &Env, txn: &T::Transaction) -> Result<(), ExecutionError> {
     let mut context = Context::new(inputs)?;
     for (c, _t) in commands {
         let result = command(&mut context, c)?;
+        debug_assert_eq!(result.len(), _t.len());
         context.results.push(result.into_iter().map(Some).collect());
     }
-    todo!()
+
+    // "expensive" invariants to run only in debug mode
+    #[cfg(debug_assertions)]
+    {
+        let Context {
+            gas_coin,
+            inputs,
+            results,
+            ..
+        } = &mut context;
+        let gas_coin = gas_coin.take();
+        let inputs = std::mem::take(inputs);
+        let results = std::mem::take(results);
+        consume_value_opt(&mut context, gas_coin).unwrap();
+        for vopt in inputs {
+            consume_value_opt(&mut context, vopt).unwrap();
+        }
+        for vopt in results {
+            for v in vopt {
+                consume_value_opt(&mut context, v).unwrap();
+            }
+        }
+        assert!(context.borrowed_by(context.local_root).unwrap().is_empty());
+        context.graph.release(context.local_root).unwrap();
+        assert_eq!(context.graph.abstract_size(), 0);
+    }
+
+    Ok(())
 }
 
 fn command(context: &mut Context, command: &T::Command) -> Result<Vec<Value>, ExecutionError> {
     Ok(match command {
-        T::Command::MoveCall(mc) => todo!(),
+        T::Command::MoveCall(mc) => {
+            let T::MoveCall {
+                function,
+                arguments: args,
+            } = &**mc;
+            let return_ = &function.signature.return_;
+            let arg_values = arguments(context, 0, args)?;
+            call(context, arg_values, return_)?
+        }
         T::Command::TransferObjects(objects, recipient) => {
-            let object_values = arguments(context, objects)?;
-            let recipient_value = argument(context, recipient)?;
+            let object_values = arguments(context, 0, objects)?;
+            let recipient_value = argument(context, objects.len(), recipient)?;
             consume_values(context, object_values)?;
             consume_value(context, recipient_value)?;
             vec![]
         }
         T::Command::SplitCoins(_, coin, amounts) => {
-            let amount_values = arguments(context, amounts)?;
-            let coin_value = argument(context, coin)?;
+            let coin_value = argument(context, 0, coin)?;
+            let amount_values = arguments(context, 1, amounts)?;
             consume_values(context, amount_values)?;
-            write_ref(context, coin_value)?;
-            vec![Value::NonRef; amounts.len()]
+            write_ref(context, 0, coin_value)?;
+            (0..amounts.len()).map(|_| Value::NonRef).collect()
         }
         T::Command::MergeCoins(_, target, coins) => {
-            let coin_values = arguments(context, coins)?;
-            let target_value = argument(context, target)?;
+            let target_value = argument(context, 0, target)?;
+            let coin_values = arguments(context, 1, coins)?;
             consume_values(context, coin_values)?;
-            write_ref(context, target_value)?;
+            write_ref(context, 0, target_value)?;
             vec![Value::NonRef]
         }
         T::Command::MakeMoveVec(_, xs) => {
-            let vs = arguments(context, xs)?;
+            let vs = arguments(context, 0, xs)?;
             consume_values(context, vs)?;
             vec![Value::NonRef]
         }
@@ -94,7 +263,7 @@ fn command(context: &mut Context, command: &T::Command) -> Result<Vec<Value>, Ex
             vec![]
         }
         T::Command::Upgrade(_, _, _, x) => {
-            let v = argument(context, x)?;
+            let v = argument(context, 0, x)?;
             consume_value(context, v)?;
             vec![]
         }
@@ -120,43 +289,194 @@ fn consume_value(context: &mut Context, value: Value) -> Result<(), ExecutionErr
                 false,
                 "consume value should not be used for reference values"
             );
-            context.graph.release(r).map_err(graph_err)?;
+            context.release(r)?;
             Ok(())
         }
     }
 }
 
-fn arguments(context: &mut Context, xs: &[T::Argument]) -> Result<Vec<Value>, ExecutionError> {
-    xs.iter().map(|x| argument(context, x)).collect()
-}
-
-fn argument(context: &mut Context, x: &T::Argument) -> Result<Value, ExecutionError> {
-    match x {
-        T::Argument::Move(location) => move_value(context, location),
-        T::Argument::Copy(location) => copy_value(context, location),
-        T::Argument::Borrow(_, location) => borrow_location(context, location),
-        T::Argument::Read(location) => read_location(context, location),
+#[allow(unused)]
+fn consume_value_opt(context: &mut Context, value: Option<Value>) -> Result<(), ExecutionError> {
+    match value {
+        Some(v) => consume_value(context, v),
+        None => Ok(()),
     }
 }
 
-fn move_value(context: &mut Context, location: &T::Location) -> Result<Value, ExecutionError> {
-    todo!()
+fn arguments(
+    context: &mut Context,
+    start: usize,
+    xs: &[T::Argument],
+) -> Result<Vec<Value>, ExecutionError> {
+    xs.iter()
+        .enumerate()
+        .map(|(i, x)| argument(context, start + i, x))
+        .collect()
 }
 
-fn copy_value(context: &mut Context, location: &T::Location) -> Result<Value, ExecutionError> {
-    todo!()
+fn argument(context: &mut Context, idx: usize, x: &T::Argument) -> Result<Value, ExecutionError> {
+    match x {
+        T::Argument::Move(location) => move_value(context, idx, *location),
+        T::Argument::Copy(location) => copy_value(context, idx, *location),
+        T::Argument::Borrow(is_mut, location) => borrow_location(context, idx, *is_mut, *location),
+        T::Argument::Read(location) => read_ref(context, idx, *location),
+    }
 }
 
-fn borrow_location(context: &mut Context, location: &T::Location) -> Result<Value, ExecutionError> {
-    todo!()
+fn move_value(
+    context: &mut Context,
+    arg_idx: usize,
+    l: T::Location,
+) -> Result<Value, ExecutionError> {
+    let Some(value) = context.location(l).take() else {
+        return Err(command_argument_error(
+            CommandArgumentError::InvalidValueUsage,
+            arg_idx,
+        ));
+    };
+    Ok(value)
 }
 
-fn read_location(context: &mut Context, location: &T::Location) -> Result<Value, ExecutionError> {
-    todo!()
+fn copy_value(
+    context: &mut Context,
+    arg_idx: usize,
+    l: T::Location,
+) -> Result<Value, ExecutionError> {
+    let Some(value) = context.location(l) else {
+        // TODO more specific error
+        return Err(command_argument_error(
+            CommandArgumentError::InvalidValueUsage,
+            arg_idx,
+        ));
+    };
+    Ok(match value {
+        Value::Ref(r) => {
+            let r = *r;
+            let is_mut = context.is_mutable(r)?;
+            let new_r = context.extend_by_epsilon(r, is_mut)?;
+            Value::Ref(new_r)
+        }
+        Value::NonRef => Value::NonRef,
+    })
 }
 
-fn write_ref(context: &mut Context, value: Value) -> Result<(), ExecutionError> {
-    todo!()
+fn borrow_location(
+    context: &mut Context,
+    arg_idx: usize,
+    is_mut: bool,
+    l: T::Location,
+) -> Result<Value, ExecutionError> {
+    let Some(value) = context.location(l) else {
+        // TODO more specific error
+        return Err(command_argument_error(
+            CommandArgumentError::InvalidValueUsage,
+            arg_idx,
+        ));
+    };
+    assert_invariant!(
+        value.is_non_ref(),
+        "type checking should guarantee no borrowing of references"
+    );
+    let new_r = context.extend_by_label(context.local_root, is_mut, l)?;
+    Ok(Value::Ref(new_r))
+}
+
+fn read_ref(
+    context: &mut Context,
+    arg_idx: usize,
+    l: T::Location,
+) -> Result<Value, ExecutionError> {
+    let Some(value) = context.location(l) else {
+        // TODO more specific error
+        return Err(command_argument_error(
+            CommandArgumentError::InvalidValueUsage,
+            arg_idx,
+        ));
+    };
+
+    assert_invariant!(
+        value.is_ref(),
+        "type checking should guarantee ReadRef is used on only references"
+    );
+    Ok(Value::NonRef)
+}
+
+fn write_ref(context: &mut Context, arg_idx: usize, value: Value) -> Result<(), ExecutionError> {
+    let Value::Ref(r) = value else {
+        invariant_violation!("type checking should guarantee WriteRef is used on only references");
+    };
+
+    if !context.is_writable(r)? {
+        // TODO more specific error
+        return Err(command_argument_error(
+            CommandArgumentError::InvalidValueUsage,
+            arg_idx,
+        ));
+    }
+    consume_value(context, value)?;
+    Ok(())
+}
+
+fn call(
+    context: &mut Context,
+    arg_values: Vec<Value>,
+    return_: &[Type],
+) -> Result<Vec<Value>, ExecutionError> {
+    let sources = arg_values
+        .iter()
+        .filter_map(|v| v.to_ref())
+        .collect::<BTreeSet<_>>();
+    if let Some(v) = context.find_non_transferrable(&sources)? {
+        let idx = arg_values
+            .iter()
+            .position(|x| x.to_ref() == Some(v))
+            .unwrap_or(arg_values.len());
+        assert_invariant!(
+            idx < arg_values.len(),
+            "non transferrable value was not found in arguments"
+        );
+        return Err(command_argument_error(
+            CommandArgumentError::InvalidValueUsage,
+            idx,
+        ));
+    }
+    let mutabilities = return_
+        .iter()
+        .filter_map(|ty| match ty {
+            Type::Reference(is_mut, _) => Some(*is_mut),
+            _ => None,
+        })
+        .collect::<Vec<_>>();
+    let mutabilities_len = mutabilities.len();
+    let mut return_references = context.extend_by_dot_star_for_call(&sources, mutabilities)?;
+    assert_invariant!(
+        return_references.len() == mutabilities_len,
+        "return_references should have the same length as mutabilities"
+    );
+
+    let mut return_values: Vec<_> = return_
+        .iter()
+        .rev()
+        .map(|ty| {
+            Ok(match ty {
+                Type::Reference(_is_mut, _) => {
+                    let Some(new_ref) = return_references.pop() else {
+                        invariant_violation!("return_references has less references than return_");
+                    };
+                    debug_assert_eq!(context.is_mutable(new_ref)?, *_is_mut);
+                    Value::Ref(new_ref)
+                }
+                _ => Value::NonRef,
+            })
+        })
+        .collect::<Result<Vec<_>, ExecutionError>>()?;
+    return_values.reverse();
+    assert_invariant!(
+        return_references.is_empty(),
+        "return_references has more references than return_"
+    );
+    consume_values(context, arg_values)?;
+    Ok(return_values)
 }
 
 fn graph_err(e: move_regex_borrow_graph::InvariantViolation) -> ExecutionError {

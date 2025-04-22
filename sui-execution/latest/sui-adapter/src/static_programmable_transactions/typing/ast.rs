@@ -36,6 +36,8 @@ pub enum Command {
     Upgrade(Vec<Vec<u8>>, Vec<ObjectID>, ObjectID, Argument),
 }
 
+pub type LoadedFunctionInstantiation = L::LoadedFunctionInstantiation;
+
 pub type LoadedFunction = L::LoadedFunction;
 
 pub struct MoveCall {
@@ -50,6 +52,7 @@ pub enum Location {
     Result(u16, u16),
 }
 
+#[derive(Copy, Clone)]
 pub enum Argument {
     Move(Location),
     Copy(Location),
