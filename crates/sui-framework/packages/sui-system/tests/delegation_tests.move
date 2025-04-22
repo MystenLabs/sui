@@ -5,14 +5,9 @@
 module sui_system::stake_tests;
 
 use sui::coin;
-use sui::test_scenario;
-use sui_system::sui_system::SuiSystemState;
-use sui_system::staking_pool::{Self, StakedSui, PoolTokenExchangeRate};
-use sui::test_utils::assert_eq;
-use sui_system::validator_set;
-use sui::test_utils;
 use sui::table::Table;
-
+use sui::test_scenario;
+use sui::test_utils::{Self, assert_eq};
 use sui_system::governance_test_utils::{
     add_validator,
     add_validator_candidate,
@@ -25,8 +20,11 @@ use sui_system::governance_test_utils::{
     remove_validator,
     remove_validator_candidate,
     total_sui_balance,
-    unstake,
+    unstake
 };
+use sui_system::staking_pool::{Self, StakedSui, PoolTokenExchangeRate};
+use sui_system::sui_system::SuiSystemState;
+use sui_system::validator_set;
 
 const VALIDATOR_ADDR_1: address = @0x1;
 const VALIDATOR_ADDR_2: address = @0x2;
@@ -35,11 +33,14 @@ const STAKER_ADDR_1: address = @0x42;
 const STAKER_ADDR_2: address = @0x43;
 const STAKER_ADDR_3: address = @0x44;
 
-const NEW_VALIDATOR_ADDR: address = @0x1a4623343cd42be47d67314fce0ad042f3c82685544bc91d8c11d24e74ba7357;
+const NEW_VALIDATOR_ADDR: address =
+    @0x1a4623343cd42be47d67314fce0ad042f3c82685544bc91d8c11d24e74ba7357;
 // Generated with seed [0;32]
-const NEW_VALIDATOR_PUBKEY: vector<u8> = x"99f25ef61f8032b914636460982c5cc6f134ef1ddae76657f2cbfec1ebfc8d097374080df6fcf0dcb8bc4b0d8e0af5d80ebbff2b4c599f54f42d6312dfc314276078c1cc347ebbbec5198be258513f386b930d02c2749a803e2330955ebd1a10";
+const NEW_VALIDATOR_PUBKEY: vector<u8> =
+    x"99f25ef61f8032b914636460982c5cc6f134ef1ddae76657f2cbfec1ebfc8d097374080df6fcf0dcb8bc4b0d8e0af5d80ebbff2b4c599f54f42d6312dfc314276078c1cc347ebbbec5198be258513f386b930d02c2749a803e2330955ebd1a10";
 // Generated using [fn test_proof_of_possession]
-const NEW_VALIDATOR_POP: vector<u8> = x"8b93fc1b33379e2796d361c4056f0f04ad5aea7f4a8c02eaac57340ff09b6dc158eb1945eece103319167f420daf0cb3";
+const NEW_VALIDATOR_POP: vector<u8> =
+    x"8b93fc1b33379e2796d361c4056f0f04ad5aea7f4a8c02eaac57340ff09b6dc158eb1945eece103319167f420daf0cb3";
 
 const MIST_PER_SUI: u64 = 1_000_000_000;
 
@@ -162,11 +163,17 @@ fun test_add_remove_stake_flow() {
 
         // Create a stake to VALIDATOR_ADDR_1.
         system_state_mut_ref.request_add_stake(
-            coin::mint_for_testing(60 * MIST_PER_SUI, ctx), VALIDATOR_ADDR_1, ctx
+            coin::mint_for_testing(60 * MIST_PER_SUI, ctx),
+            VALIDATOR_ADDR_1,
+            ctx,
         );
 
-        assert!(system_state_mut_ref.validator_stake_amount(VALIDATOR_ADDR_1) == 100 * MIST_PER_SUI);
-        assert!(system_state_mut_ref.validator_stake_amount(VALIDATOR_ADDR_2) == 100 * MIST_PER_SUI);
+        assert!(
+            system_state_mut_ref.validator_stake_amount(VALIDATOR_ADDR_1) == 100 * MIST_PER_SUI,
+        );
+        assert!(
+            system_state_mut_ref.validator_stake_amount(VALIDATOR_ADDR_2) == 100 * MIST_PER_SUI,
+        );
 
         test_scenario::return_shared(system_state);
     };
@@ -175,23 +182,27 @@ fun test_add_remove_stake_flow() {
 
     scenario.next_tx(STAKER_ADDR_1);
     {
-
         let staked_sui = scenario.take_from_sender<StakedSui>();
         assert!(staked_sui.amount() == 60 * MIST_PER_SUI);
-
 
         let mut system_state = scenario.take_shared<SuiSystemState>();
         let system_state_mut_ref = &mut system_state;
 
-        assert!(system_state_mut_ref.validator_stake_amount(VALIDATOR_ADDR_1) == 160 * MIST_PER_SUI);
-        assert!(system_state_mut_ref.validator_stake_amount(VALIDATOR_ADDR_2) == 100 * MIST_PER_SUI);
+        assert!(
+            system_state_mut_ref.validator_stake_amount(VALIDATOR_ADDR_1) == 160 * MIST_PER_SUI,
+        );
+        assert!(
+            system_state_mut_ref.validator_stake_amount(VALIDATOR_ADDR_2) == 100 * MIST_PER_SUI,
+        );
 
         let ctx = scenario.ctx();
 
         // Unstake from VALIDATOR_ADDR_1
         system_state_mut_ref.request_withdraw_stake(staked_sui, ctx);
 
-        assert!(system_state_mut_ref.validator_stake_amount(VALIDATOR_ADDR_1) == 160 * MIST_PER_SUI);
+        assert!(
+            system_state_mut_ref.validator_stake_amount(VALIDATOR_ADDR_1) == 160 * MIST_PER_SUI,
+        );
         test_scenario::return_shared(system_state);
     };
 
@@ -228,7 +239,7 @@ fun test_remove_stake_post_active_flow(should_distribute_rewards: bool) {
     assert_validator_total_stake_amounts(
         vector[VALIDATOR_ADDR_1, VALIDATOR_ADDR_2],
         vector[200 * MIST_PER_SUI, 100 * MIST_PER_SUI],
-        scenario
+        scenario,
     );
 
     if (should_distribute_rewards) {
@@ -251,7 +262,9 @@ fun test_remove_stake_post_active_flow(should_distribute_rewards: bool) {
         let mut system_state = scenario.take_shared<SuiSystemState>();
         let system_state_mut_ref = &mut system_state;
 
-        assert!(!system_state_mut_ref.validators().is_active_validator_by_sui_address(VALIDATOR_ADDR_1));
+        assert!(
+            !system_state_mut_ref.validators().is_active_validator_by_sui_address(VALIDATOR_ADDR_1),
+        );
 
         let staked_sui = scenario.take_from_sender<StakedSui>();
         assert_eq(staked_sui.amount(), 100 * MIST_PER_SUI);
@@ -273,7 +286,10 @@ fun test_remove_stake_post_active_flow(should_distribute_rewards: bool) {
     if (should_distribute_rewards) unstake(VALIDATOR_ADDR_1, 0, scenario);
 
     // Make sure have all of their stake. NB there is no epoch change. This is immediate.
-    assert_eq(total_sui_balance(VALIDATOR_ADDR_1, scenario), 100 * MIST_PER_SUI + reward_amt + validator_reward_amt);
+    assert_eq(
+        total_sui_balance(VALIDATOR_ADDR_1, scenario),
+        100 * MIST_PER_SUI + reward_amt + validator_reward_amt,
+    );
 
     scenario_val.end();
 }
@@ -325,7 +341,10 @@ fun test_earns_rewards_at_last_epoch() {
     unstake(VALIDATOR_ADDR_1, 0, scenario);
 
     // Make sure have all of their stake. NB there is no epoch change. This is immediate.
-    assert_eq(total_sui_balance(VALIDATOR_ADDR_1, scenario), 100 * MIST_PER_SUI + reward_amt + validator_reward_amt);
+    assert_eq(
+        total_sui_balance(VALIDATOR_ADDR_1, scenario),
+        100 * MIST_PER_SUI + reward_amt + validator_reward_amt,
+    );
 
     scenario_val.end();
 }
@@ -351,7 +370,9 @@ fun test_add_stake_post_active_flow() {
         let mut system_state = scenario.take_shared<SuiSystemState>();
         let system_state_mut_ref = &mut system_state;
 
-        assert!(!system_state_mut_ref.validators().is_active_validator_by_sui_address(VALIDATOR_ADDR_1));
+        assert!(
+            !system_state_mut_ref.validators().is_active_validator_by_sui_address(VALIDATOR_ADDR_1),
+        );
 
         test_scenario::return_shared(system_state);
     };
@@ -368,7 +389,14 @@ fun test_add_preactive_remove_preactive() {
     let mut scenario_val = test_scenario::begin(VALIDATOR_ADDR_1);
     let scenario = &mut scenario_val;
 
-    add_validator_candidate(NEW_VALIDATOR_ADDR, b"name5", b"/ip4/127.0.0.1/udp/85", NEW_VALIDATOR_PUBKEY, NEW_VALIDATOR_POP, scenario);
+    add_validator_candidate(
+        NEW_VALIDATOR_ADDR,
+        b"name5",
+        b"/ip4/127.0.0.1/udp/85",
+        NEW_VALIDATOR_PUBKEY,
+        NEW_VALIDATOR_POP,
+        scenario,
+    );
 
     // Delegate 100 MIST to the preactive validator
     stake_with(STAKER_ADDR_1, NEW_VALIDATOR_ADDR, 100, scenario);
@@ -391,7 +419,14 @@ fun test_add_preactive_remove_pending_failure() {
     let mut scenario_val = test_scenario::begin(VALIDATOR_ADDR_1);
     let scenario = &mut scenario_val;
 
-    add_validator_candidate(NEW_VALIDATOR_ADDR, b"name4", b"/ip4/127.0.0.1/udp/84", NEW_VALIDATOR_PUBKEY, NEW_VALIDATOR_POP, scenario);
+    add_validator_candidate(
+        NEW_VALIDATOR_ADDR,
+        b"name4",
+        b"/ip4/127.0.0.1/udp/84",
+        NEW_VALIDATOR_PUBKEY,
+        NEW_VALIDATOR_POP,
+        scenario,
+    );
     stake_with(STAKER_ADDR_1, NEW_VALIDATOR_ADDR, 100, scenario);
     add_validator(NEW_VALIDATOR_ADDR, scenario);
 
@@ -408,7 +443,14 @@ fun test_add_preactive_remove_active() {
     let mut scenario_val = test_scenario::begin(VALIDATOR_ADDR_1);
     let scenario = &mut scenario_val;
 
-    add_validator_candidate(NEW_VALIDATOR_ADDR, b"name3", b"/ip4/127.0.0.1/udp/83", NEW_VALIDATOR_PUBKEY, NEW_VALIDATOR_POP, scenario);
+    add_validator_candidate(
+        NEW_VALIDATOR_ADDR,
+        b"name3",
+        b"/ip4/127.0.0.1/udp/83",
+        NEW_VALIDATOR_PUBKEY,
+        NEW_VALIDATOR_POP,
+        scenario,
+    );
 
     // Delegate 100 SUI to the preactive validator
     stake_with(STAKER_ADDR_1, NEW_VALIDATOR_ADDR, 100, scenario);
@@ -452,7 +494,14 @@ fun test_add_preactive_remove_post_active() {
     let mut scenario_val = test_scenario::begin(VALIDATOR_ADDR_1);
     let scenario = &mut scenario_val;
 
-    add_validator_candidate(NEW_VALIDATOR_ADDR, b"name1", b"/ip4/127.0.0.1/udp/81", NEW_VALIDATOR_PUBKEY, NEW_VALIDATOR_POP, scenario);
+    add_validator_candidate(
+        NEW_VALIDATOR_ADDR,
+        b"name1",
+        b"/ip4/127.0.0.1/udp/81",
+        NEW_VALIDATOR_PUBKEY,
+        NEW_VALIDATOR_POP,
+        scenario,
+    );
 
     // Delegate 100 SUI to the preactive validator
     stake_with(STAKER_ADDR_1, NEW_VALIDATOR_ADDR, 100, scenario);
@@ -482,7 +531,14 @@ fun test_add_preactive_candidate_drop_out() {
     let mut scenario_val = test_scenario::begin(VALIDATOR_ADDR_1);
     let scenario = &mut scenario_val;
 
-    add_validator_candidate(NEW_VALIDATOR_ADDR, b"name2", b"/ip4/127.0.0.1/udp/82", NEW_VALIDATOR_PUBKEY, NEW_VALIDATOR_POP, scenario);
+    add_validator_candidate(
+        NEW_VALIDATOR_ADDR,
+        b"name2",
+        b"/ip4/127.0.0.1/udp/82",
+        NEW_VALIDATOR_PUBKEY,
+        NEW_VALIDATOR_POP,
+        scenario,
+    );
 
     // Delegate 100 MIST to the preactive validator
     stake_with(STAKER_ADDR_1, NEW_VALIDATOR_ADDR, 100, scenario);
@@ -521,7 +577,7 @@ fun test_staking_pool_exchange_rate_getter() {
     let mut system_state = scenario.take_shared<SuiSystemState>();
     let rates = system_state.pool_exchange_rates(&pool_id);
     assert_eq(rates.length(), 3);
-    assert_exchange_rate_eq(rates, 0, 0, 0);     // no tokens at epoch 0
+    assert_exchange_rate_eq(rates, 0, 0, 0); // no tokens at epoch 0
     assert_exchange_rate_eq(rates, 1, 200, 200); // 200 SUI of self + delegate stake at epoch 1
     assert_exchange_rate_eq(rates, 2, 210, 200); // 10 SUI of rewards at epoch 2
     test_scenario::return_shared(system_state);
@@ -529,7 +585,10 @@ fun test_staking_pool_exchange_rate_getter() {
 }
 
 fun assert_exchange_rate_eq(
-    rates: &Table<u64, PoolTokenExchangeRate>, epoch: u64, sui_amount: u64, pool_token_amount: u64
+    rates: &Table<u64, PoolTokenExchangeRate>,
+    epoch: u64,
+    sui_amount: u64,
+    pool_token_amount: u64,
 ) {
     let rate = &rates[epoch];
     assert_eq(rate.sui_amount(), sui_amount * MIST_PER_SUI);
@@ -543,7 +602,7 @@ fun set_up_sui_system_state() {
 
     let validators = vector[
         create_validator_for_testing(VALIDATOR_ADDR_1, 100, ctx),
-        create_validator_for_testing(VALIDATOR_ADDR_2, 100, ctx)
+        create_validator_for_testing(VALIDATOR_ADDR_2, 100, ctx),
     ];
     create_sui_system_state_for_testing(validators, 0, 0, ctx);
     scenario_val.end();
@@ -556,7 +615,7 @@ fun set_up_sui_system_state_with_storage_fund() {
 
     let validators = vector[
         create_validator_for_testing(VALIDATOR_ADDR_1, 100, ctx),
-        create_validator_for_testing(VALIDATOR_ADDR_2, 100, ctx)
+        create_validator_for_testing(VALIDATOR_ADDR_2, 100, ctx),
     ];
     create_sui_system_state_for_testing(validators, 300, 100, ctx);
     scenario_val.end();

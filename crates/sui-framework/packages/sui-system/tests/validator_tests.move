@@ -14,22 +14,31 @@ use sui::url;
 use sui_system::staking_pool::StakedSui;
 use sui_system::validator::{Self, Validator};
 
-const VALID_NET_PUBKEY: vector<u8> = vector[171, 2, 39, 3, 139, 105, 166, 171, 153, 151, 102, 197, 151, 186, 140, 116, 114, 90, 213, 225, 20, 167, 60, 69, 203, 12, 180, 198, 9, 217, 117, 38];
+const VALID_NET_PUBKEY: vector<u8> = vector[
+    171, 2, 39, 3, 139, 105, 166, 171, 153, 151, 102, 197, 151, 186, 140, 116, 114, 90, 213, 225, 20,
+    167, 60, 69, 203, 12, 180, 198, 9, 217, 117, 38,
+];
 
-const VALID_WORKER_PUBKEY: vector<u8> = vector[171, 3, 39, 3, 139, 105, 166, 171, 153, 151, 102, 197, 151, 186, 140, 116, 114, 90, 213, 225, 20, 167, 60, 69, 203, 12, 180, 198, 9, 217, 117, 38];
+const VALID_WORKER_PUBKEY: vector<u8> = vector[
+    171, 3, 39, 3, 139, 105, 166, 171, 153, 151, 102, 197, 151, 186, 140, 116, 114, 90, 213, 225, 20,
+    167, 60, 69, 203, 12, 180, 198, 9, 217, 117, 38,
+];
 
 // A valid proof of possession must be generated using the same account address and protocol public key.
 // If either VALID_ADDRESS or VALID_PUBKEY changed, PoP must be regenerated using [fn test_proof_of_possession].
 const VALID_ADDRESS: address = @0xaf76afe6f866d8426d2be85d6ef0b11f871a251d043b2f11e15563bf418f5a5a;
-const VALID_PUBKEY: vector<u8> = x"99f25ef61f8032b914636460982c5cc6f134ef1ddae76657f2cbfec1ebfc8d097374080df6fcf0dcb8bc4b0d8e0af5d80ebbff2b4c599f54f42d6312dfc314276078c1cc347ebbbec5198be258513f386b930d02c2749a803e2330955ebd1a10";
-const PROOF_OF_POSSESSION: vector<u8> = x"b01cc86f421beca7ab4cfca87c0799c4d038c199dd399fbec1924d4d4367866dba9e84d514710b91feb65316e4ceef43";
+const VALID_PUBKEY: vector<u8> =
+    x"99f25ef61f8032b914636460982c5cc6f134ef1ddae76657f2cbfec1ebfc8d097374080df6fcf0dcb8bc4b0d8e0af5d80ebbff2b4c599f54f42d6312dfc314276078c1cc347ebbbec5198be258513f386b930d02c2749a803e2330955ebd1a10";
+const PROOF_OF_POSSESSION: vector<u8> =
+    x"b01cc86f421beca7ab4cfca87c0799c4d038c199dd399fbec1924d4d4367866dba9e84d514710b91feb65316e4ceef43";
 
 const VALID_NET_ADDR: vector<u8> = b"/ip4/127.0.0.1/tcp/80";
 const VALID_P2P_ADDR: vector<u8> = b"/ip4/127.0.0.1/udp/80";
 const VALID_CONSENSUS_ADDR: vector<u8> = b"/ip4/127.0.0.1/udp/80";
 const VALID_WORKER_ADDR: vector<u8> = b"/ip4/127.0.0.1/udp/80";
 
-const TOO_LONG_257_BYTES: vector<u8> = b"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
+const TOO_LONG_257_BYTES: vector<u8> =
+    b"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
 
 #[test_only]
 fun get_test_validator(ctx: &mut TxContext): Validator {
@@ -50,13 +59,13 @@ fun get_test_validator(ctx: &mut TxContext): Validator {
         VALID_WORKER_ADDR,
         1,
         0,
-        ctx
+        ctx,
     );
 
     validator.request_add_stake_at_genesis(
         init_stake,
         VALID_ADDRESS,
-        ctx
+        ctx,
     );
 
     validator.activate(0);
@@ -80,12 +89,12 @@ fun test_validator_owner_flow() {
     };
 
     // Check that after destroy, the original stake still exists.
-        scenario.next_tx(sender);
-        {
-            let stake = scenario.take_from_sender<StakedSui>();
-            assert!(stake.amount() == 10_000_000_000);
-            scenario.return_to_sender(stake);
-        };
+    scenario.next_tx(sender);
+    {
+        let stake = scenario.take_from_sender<StakedSui>();
+        assert!(stake.amount() == 10_000_000_000);
+        scenario.return_to_sender(stake);
+    };
     scenario_val.end();
 }
 
@@ -363,9 +372,13 @@ fun test_validator_update_metadata_ok() {
     let mut scenario_val = test_scenario::begin(sender);
     let scenario = &mut scenario_val;
     let ctx = scenario.ctx();
-    let new_protocol_pub_key = x"96d19c53f1bee2158c3fcfb5bb2f06d3a8237667529d2d8f0fbb22fe5c3b3e64748420b4103674490476d98530d063271222d2a59b0f7932909cc455a30f00c69380e6885375e94243f7468e9563aad29330aca7ab431927540e9508888f0e1c";
-    let new_pop = x"a8a0bcaf04e13565914eb22fa9f27a76f297db04446860ee2b923d10224cedb130b30783fb60b12556e7fc50e5b57a86";
+    let new_protocol_pub_key =
+        x"96d19c53f1bee2158c3fcfb5bb2f06d3a8237667529d2d8f0fbb22fe5c3b3e64748420b4103674490476d98530d063271222d2a59b0f7932909cc455a30f00c69380e6885375e94243f7468e9563aad29330aca7ab431927540e9508888f0e1c";
+    let new_pop =
+        x"a8a0bcaf04e13565914eb22fa9f27a76f297db04446860ee2b923d10224cedb130b30783fb60b12556e7fc50e5b57a86";
+    // prettier-ignore
     let new_worker_pub_key = vector[115, 220, 238, 151, 134, 159, 173, 41, 80, 2, 66, 196, 61, 17, 191, 76, 103, 39, 246, 127, 171, 85, 19, 235, 210, 106, 97, 97, 116, 48, 244, 191];
+    // prettier-ignore
     let new_network_pub_key = vector[149, 128, 161, 13, 11, 183, 96, 45, 89, 20, 188, 205, 26, 127, 147, 254, 184, 229, 184, 102, 64, 170, 104, 29, 191, 171, 91, 99, 58, 178, 41, 156];
 
     let mut validator = get_test_validator(ctx);
@@ -377,7 +390,7 @@ fun test_validator_update_metadata_ok() {
         validator.update_next_epoch_primary_address(b"/ip4/192.168.1.1/udp/80");
         validator.update_next_epoch_worker_address(b"/ip4/192.168.1.1/udp/80");
         validator.update_next_epoch_protocol_pubkey(new_protocol_pub_key, new_pop);
-        validator.update_next_epoch_worker_pubkey( new_worker_pub_key);
+        validator.update_next_epoch_worker_pubkey(new_worker_pub_key);
         validator.update_next_epoch_network_pubkey(new_network_pub_key);
 
         validator.update_name(b"new_name");
@@ -403,25 +416,27 @@ fun test_validator_update_metadata_ok() {
         assert!(validator.worker_pubkey_bytes() == &VALID_WORKER_PUBKEY);
 
         // Next epoch
-        assert!(validator.next_epoch_network_address() == &option::some(b"/ip4/192.168.1.1/tcp/80".to_string()));
-        assert!(validator.next_epoch_p2p_address() == &option::some(b"/ip4/192.168.1.1/udp/80".to_string()));
-        assert!(validator.next_epoch_primary_address() == &option::some(b"/ip4/192.168.1.1/udp/80".to_string()));
-        assert!(validator.next_epoch_worker_address() == &option::some(b"/ip4/192.168.1.1/udp/80".to_string()));
+        assert!(
+            validator.next_epoch_network_address() == &option::some(b"/ip4/192.168.1.1/tcp/80".to_string()),
+        );
+        assert!(
+            validator.next_epoch_p2p_address() == &option::some(b"/ip4/192.168.1.1/udp/80".to_string()),
+        );
+        assert!(
+            validator.next_epoch_primary_address() == &option::some(b"/ip4/192.168.1.1/udp/80".to_string()),
+        );
+        assert!(
+            validator.next_epoch_worker_address() == &option::some(b"/ip4/192.168.1.1/udp/80".to_string()),
+        );
         assert!(
             validator.next_epoch_protocol_pubkey_bytes() == &option::some(new_protocol_pub_key),
-            0
+            0,
         );
-        assert!(
-            validator.next_epoch_proof_of_possession() == &option::some(new_pop),
-            0
-        );
-        assert!(
-            validator.next_epoch_worker_pubkey_bytes() == &option::some(new_worker_pub_key),
-            0
-        );
+        assert!(validator.next_epoch_proof_of_possession() == &option::some(new_pop), 0);
+        assert!(validator.next_epoch_worker_pubkey_bytes() == &option::some(new_worker_pub_key), 0);
         assert!(
             validator.next_epoch_network_pubkey_bytes() == &option::some(new_network_pub_key),
-            0
+            0,
         );
     };
 
@@ -439,7 +454,8 @@ fun test_validator_update_metadata_invalid_proof_of_possession() {
         validator.update_next_epoch_protocol_pubkey(
             x"96d19c53f1bee2158c3fcfb5bb2f06d3a8237667529d2d8f0fbb22fe5c3b3e64748420b4103674490476d98530d063271222d2a59b0f7932909cc455a30f00c69380e6885375e94243f7468e9563aad29330aca7ab431927540e9508888f0e1c",
             // This is an invalid proof of possession, so we abort
-            x"8b9794dfd11b88e16ba8f6a4a2c1e7580738dce2d6910ee594bebd88297b22ae8c34d1ee3f5a081159d68e076ef5d300");
+            x"8b9794dfd11b88e16ba8f6a4a2c1e7580738dce2d6910ee594bebd88297b22ae8c34d1ee3f5a081159d68e076ef5d300",
+        );
     };
 
     tear_down(validator, scenario);
@@ -557,7 +573,6 @@ fun test_validator_update_metadata_net_address_too_long() {
 
     tear_down(validator, scenario);
 }
-
 
 #[expected_failure(abort_code = sui_system::validator::EValidatorMetadataExceedingLengthLimit)]
 #[test]
