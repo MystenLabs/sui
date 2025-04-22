@@ -25,6 +25,7 @@ use crate::{
 
 use super::{
     addressable::{Addressable, AddressableImpl},
+    move_package::MovePackage,
     transaction::Transaction,
 };
 
@@ -54,6 +55,7 @@ use super::{
     )
 )]
 pub(crate) enum IObject {
+    MovePackage(MovePackage),
     Object(Object),
 }
 
@@ -118,6 +120,14 @@ impl Object {
     /// 32-byte hash that identifies the object's contents, encoded in Base58.
     async fn digest(&self) -> String {
         ObjectImpl::from(self).digest()
+    }
+
+    /// Attempts to convert the object into a MovePackage.
+    async fn as_move_package(
+        &self,
+        ctx: &Context<'_>,
+    ) -> Result<Option<MovePackage>, RpcError<Error>> {
+        MovePackage::from_object(self, ctx).await
     }
 
     /// The Base64-encoded BCS serialization of this object, as an `Object`.
@@ -228,18 +238,23 @@ impl Object {
         address: SuiAddress,
         version: UInt53,
     ) -> Result<Option<Self>, RpcError<Error>> {
-        let Some(object) = contents(ctx, address, version).await? else {
+        let Some(c) = contents(ctx, address, version).await? else {
             return Ok(None);
         };
 
-        let addressable = Addressable::with_address(object.id().into());
+        Ok(Some(Self::from_contents(c)))
+    }
 
-        Ok(Some(Object {
+    /// Construct a GraphQL representation of an `Object` from its native representation.
+    pub(crate) fn from_contents(contents: Arc<NativeObject>) -> Self {
+        let addressable = Addressable::with_address(contents.id().into());
+
+        Self {
             super_: addressable,
-            version: object.version(),
-            digest: object.digest(),
-            contents: Some(object),
-        }))
+            version: contents.version(),
+            digest: contents.digest(),
+            contents: Some(contents),
+        }
     }
 
     /// Construct a GraphQL representation of an `Object` from versioning information. This
@@ -267,7 +282,7 @@ impl Object {
 
     /// Return a copy of the object's contents, either cached in the object or fetched from the KV
     /// store.
-    async fn contents(
+    pub(crate) async fn contents(
         &self,
         ctx: &Context<'_>,
     ) -> Result<Option<Arc<NativeObject>>, RpcError<Error>> {
