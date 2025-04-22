@@ -14,6 +14,8 @@ pub struct AnalyticsMetrics {
     pub total_too_large_to_deserialize: IntCounterVec,
     pub file_size: IntGaugeVec,
     pub package_fetch_latency: HistogramVec,
+    pub package_cache_gets: IntCounterVec,
+    pub package_cache_hits: IntCounterVec,
 }
 
 impl AnalyticsMetrics {
@@ -59,6 +61,20 @@ impl AnalyticsMetrics {
                 "Latency of HTTP calls to fetch package data in seconds.",
                 &["source"],
                 registry,
+            )
+            .unwrap(),
+            package_cache_gets: register_int_counter_vec_with_registry!(
+                "package_cache_gets_total",
+                "Total number of package cache get requests",
+                &[],
+                registry
+            )
+            .unwrap(),
+            package_cache_hits: register_int_counter_vec_with_registry!(
+                "package_cache_hits_total",
+                "Total number of package cache hits",
+                &[],
+                registry
             )
             .unwrap(),
         }
