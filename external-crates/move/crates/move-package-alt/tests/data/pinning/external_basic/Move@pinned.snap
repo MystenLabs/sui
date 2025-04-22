@@ -1,4 +1,6 @@
 ---
 source: crates/move-package-alt/tests/pinning_tests.rs
 ---
-{"mock": Local(LocalDependency { local: "." }), "mock2": Local(LocalDependency { local: ".." })}
+mock = { local = "." }
+mock2 = { local = ".." }
+overrides = {}

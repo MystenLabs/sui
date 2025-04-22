@@ -16,7 +16,7 @@ use derive_where::derive_where;
 use serde::{Deserialize, Serialize};
 
 use crate::{
-    errors::PackageResult,
+    errors::{PackageResult, ResolverError},
     flavor::MoveFlavor,
     package::{EnvironmentName, PackageName},
 };
@@ -101,27 +101,22 @@ fn split<F: MoveFlavor>(
 /// default deps.
 pub async fn pin<F: MoveFlavor>(
     flavor: &F,
-    deps: &DependencySet<ManifestDependencyInfo<F>>, // TODO: maybe take by value?
+    deps: &DependencySet<ManifestDependencyInfo<F>>,
     envs: &BTreeMap<EnvironmentName, F::EnvironmentID>,
 ) -> PackageResult<DependencySet<PinnedDependencyInfo<F>>> {
     let (mut gits, mut exts, mut locs, mut flav) = split(deps);
 
+    // resolution
     let resolved = ExternalDependency::resolve::<F>(exts, envs).await?;
-
     let (resolved_gits, resolved_exts, resolved_locs, resolved_flav) = split(&resolved);
-
-    // ensure that there are no more externally resolved deps
-    if !resolved_exts.is_empty() {
-        // TODO: error!
-        panic!("External resolver returned external dependency");
-    }
+    assert!(resolved_exts.is_empty(), "resolve() returns resolved deps");
 
     gits.extend(resolved_gits);
     locs.extend(resolved_locs);
     flav.extend(resolved_flav);
 
-    let pinned_gits: DependencySet<PinnedDependencyInfo<F>> = GitDependency::pin(gits)
-        .unwrap() // TODO: error collection!
+    // pinning
+    let pinned_gits: DependencySet<PinnedDependencyInfo<F>> = GitDependency::pin(gits)?
         .into_iter()
         .map(|(env, package, dep)| (env, package, PinnedDependencyInfo::Git::<F>(dep)))
         .collect();
@@ -132,8 +127,7 @@ pub async fn pin<F: MoveFlavor>(
         .collect();
 
     let pinned_flav = flavor
-        .pin(flav)
-        .unwrap() // TODO: Errors!
+        .pin(flav)?
         .into_iter()
         .map(|(env, package, dep)| {
             (

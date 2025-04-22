@@ -35,10 +35,10 @@ type ResolverName = String;
 #[serde(try_from = "RField", into = "RField")]
 pub struct ExternalDependency {
     /// The `<res>` in `{ r.<res> = <data> }`
-    resolver: ResolverName,
+    pub resolver: ResolverName,
 
     /// the `<data>` in `{ r.<res> = <data> }`
-    data: toml::Value,
+    pub data: toml::Value,
 }
 
 /// Convenience type for serializing/deserializing external deps
@@ -53,6 +53,8 @@ impl ExternalDependency {
     ///
     /// Note that the return value may not have entries for all of the environments in [envs]; some
     /// may be removed if they are identical to the default resolutions.
+    ///
+    /// The return value is guaranteed to contain no external dependencies
     pub async fn resolve<F: MoveFlavor>(
         deps: DependencySet<ExternalDependency>,
         envs: &BTreeMap<EnvironmentName, F::EnvironmentID>,
@@ -104,7 +106,8 @@ impl From<ExternalDependency> for RField {
 }
 
 /// Resolve the dependencies in [dep_data] with the external resolver [resolver]; requests are
-/// performed for all environments in [envs]
+/// performed for all environments in [envs]. Ensures that the returned dependency set contains no
+/// externally resolved dependencies.
 async fn resolve_single<F: MoveFlavor>(
     resolver: ResolverName,
     dep_data: DependencySet<toml::Value>,
@@ -172,6 +175,13 @@ async fn resolve_single<F: MoveFlavor>(
                     }
                 }
             };
+
+            if let Ok((_, pkg_name, ManifestDependencyInfo::External { .. })) = resolved {
+                return Err(ResolverError::bad_resolver(
+                    &resolver,
+                    "resolvers must return resolved dependencies",
+                ));
+            }
             resolved
         })
         .collect();

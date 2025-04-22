@@ -22,14 +22,14 @@ pub enum ResolverError {
     },
 
     /// This indicates that the resolver was faulty
-    #[error("{resolver} returned an incorrectly-formatted response: {message}")]
+    #[error("{resolver} did not follow the external resolver protocol: {message}")]
     BadResolver {
         resolver: ResolverName,
         message: String,
     },
 
     /// This indicates that the resolver returned a non-successful exit code
-    #[error("{resolver} returned error code {code}")]
+    #[error("{resolver} returned error code: {code}")]
     ResolverUnsuccessful {
         resolver: ResolverName,
         code: ExitStatus,

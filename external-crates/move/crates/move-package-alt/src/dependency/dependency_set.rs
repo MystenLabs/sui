@@ -1,6 +1,9 @@
 //! Conveniences for managing the entire collection of dependencies (including overrides) for a
 //! package
-use std::collections::{btree_map, BTreeMap};
+use std::{
+    collections::{btree_map, BTreeMap},
+    fmt::Display,
+};
 
 use serde::{Deserialize, Serialize};
 
@@ -197,5 +200,13 @@ impl<T> Extend<(Option<EnvironmentName>, PackageName, T)> for DependencySet<T> {
         for (env, pack, value) in iter {
             self.insert(env, pack, value);
         }
+    }
+}
+
+/// We print dependency sets as toml for easy reading
+impl<T: Serialize> std::fmt::Debug for DependencySet<T> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let toml = toml_edit::ser::to_document(self).expect("dependency set serialization works");
+        write!(f, "{toml}")
     }
 }

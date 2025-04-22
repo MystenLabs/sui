@@ -149,7 +149,7 @@ impl Request {
             if !response.responses.contains_key(key) {
                 return Err(ResolverError::bad_resolver(
                     resolver,
-                    format!("External resolver didn't resolve {key}"),
+                    format!(r#"it didn't resolve "{key}""#),
                 ));
             }
         }
@@ -158,7 +158,7 @@ impl Request {
             if !self.queries.contains_key(key) {
                 return Err(ResolverError::bad_resolver(
                     resolver,
-                    format!("External resolver returned extra result {key}"),
+                    format!(r#"External resolver returned extra result with key "{key}""#),
                 ));
             }
         }
