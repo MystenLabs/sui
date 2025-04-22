@@ -51,4 +51,3 @@ msim.workspace = true
 
 [features]
 tide_hunter = ["tidehunter"]
-default = ["tide_hunter"]
