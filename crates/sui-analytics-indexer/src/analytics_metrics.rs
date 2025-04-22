@@ -16,6 +16,7 @@ pub struct AnalyticsMetrics {
     pub package_fetch_latency: HistogramVec,
     pub package_cache_gets: IntCounterVec,
     pub package_cache_hits: IntCounterVec,
+    pub checkpoint_processing_time: HistogramVec,
 }
 
 impl AnalyticsMetrics {
@@ -74,6 +75,13 @@ impl AnalyticsMetrics {
                 "package_cache_hits_total",
                 "Total number of package cache hits",
                 &[],
+                registry
+            )
+            .unwrap(),
+            checkpoint_processing_time: register_histogram_vec_with_registry!(
+                "checkpoint_processing_time_seconds",
+                "Time taken to process a checkpoint in seconds",
+                &["data_type"],
                 registry
             )
             .unwrap(),
