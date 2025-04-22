@@ -297,40 +297,30 @@ impl ProgrammableTransactionBuilder {
         ));
     }
 
-    pub fn merge_all_coins(&mut self, coins: Vec<ObjectRef>) -> anyhow::Result<Argument> {
-        let mut coins_iter = coins.into_iter();
-
-        let Some(destination_coin) = coins_iter.next() else {
-            bail!("This function should be called with at least one coin");
-        };
-        let source_coins = coins_iter.collect::<Vec<_>>();
-
-        if !source_coins.is_empty() {
-            self.merge_coin(
-                destination_coin,
-                source_coins
-            )
-        } else {
-            self.obj(ObjectArg::ImmOrOwnedObject(destination_coin))
-        }
+    /// Merge `coins` into the `target` coin.
+    pub fn merge_coins(&mut self, target: ObjectRef, coins: Vec<ObjectRef>) -> anyhow::Result<()> {
+        let target_arg = self.obj(ObjectArg::ImmOrOwnedObject(target))?;
+        let coin_args = coins
+            .into_iter()
+            .map(|coin| self.obj(ObjectArg::ImmOrOwnedObject(coin)).unwrap())
+            .collect::<Vec<_>>();
+        self.command(Command::MergeCoins(target_arg, coin_args));
+        Ok(())
     }
 
-    pub fn merge_coin(&mut self, destination_coin: ObjectRef, source_coins: Vec<ObjectRef>) -> anyhow::Result<Argument> {
-        if source_coins.is_empty() {
-            bail!("This function should be called with at least one source coin");
+    /// Merge all `coins` into the first coin in the vector.
+    /// Returns an `Argument` for the first coin.
+    pub fn smash_coins(&mut self, coins: Vec<ObjectRef>) -> anyhow::Result<Argument> {
+        let mut coins = coins.into_iter();
+        let Some(target) = coins.next() else {
+            bail!("coins vector is empty");
         };
-
-        let destination_coin_arg = self.obj(ObjectArg::ImmOrOwnedObject(destination_coin))?;
-        let source_coin_args = source_coins
-            .into_iter()
-            .map(|coin| {
-                self.obj(ObjectArg::ImmOrOwnedObject(coin)).unwrap()
-            })
+        let target_arg = self.obj(ObjectArg::ImmOrOwnedObject(target))?;
+        let coin_args = coins
+            .map(|coin| self.obj(ObjectArg::ImmOrOwnedObject(coin)).unwrap())
             .collect::<Vec<_>>();
-
-        self.command(Command::MergeCoins(destination_coin_arg, source_coin_args));
-
-        anyhow::Ok(destination_coin_arg)
+        self.command(Command::MergeCoins(target_arg, coin_args));
+        Ok(target_arg)
     }
 
     /// Will fail to generate if recipients and amounts do not have the same lengths.
@@ -404,24 +394,23 @@ mod tests {
     use crate::transaction::{CallArg, Command, ObjectArg};
 
     #[test]
-    fn test_builder_merge_coin_one_source() {
+    fn test_builder_merge_coins_one_source() {
         let mut builder = ProgrammableTransactionBuilder::new();
-        let dest_coin_ref = random_object_ref();
-        let source_coin_ref = random_object_ref();
+        let target_coin_ref = random_object_ref();
+        let coins_ref = random_object_ref();
 
-        let arg = builder.merge_coin(
-            dest_coin_ref,
-            vec![source_coin_ref]
+        builder.merge_coins(
+            target_coin_ref,
+            vec![coins_ref]
         ).unwrap();
 
         let tx = builder.finish();
 
-        assert_eq!(arg, Input(0));
         assert_eq!(
             tx.inputs,
             vec![
-                CallArg::Object(ObjectArg::ImmOrOwnedObject(dest_coin_ref)),
-                CallArg::Object(ObjectArg::ImmOrOwnedObject(source_coin_ref))
+                CallArg::Object(ObjectArg::ImmOrOwnedObject(target_coin_ref)),
+                CallArg::Object(ObjectArg::ImmOrOwnedObject(coins_ref))
             ]
         );
         assert_eq!(
@@ -436,14 +425,14 @@ mod tests {
     }
 
     #[test]
-    fn test_builder_merge_coin_two_sources() {
+    fn test_builder_merge_coins_two_sources() {
         let mut builder = ProgrammableTransactionBuilder::new();
-        let dest_coin_ref = random_object_ref();
+        let target_coin_ref = random_object_ref();
         let source_coin1_ref = random_object_ref();
         let source_coin2_ref = random_object_ref();
 
-        let arg = builder.merge_coin(
-            dest_coin_ref,
+        builder.merge_coins(
+            target_coin_ref,
             vec![
                 source_coin1_ref,
                 source_coin2_ref
@@ -452,11 +441,10 @@ mod tests {
 
         let tx = builder.finish();
 
-        assert_eq!(arg, Input(0));
         assert_eq!(
             tx.inputs,
             vec![
-                CallArg::Object(ObjectArg::ImmOrOwnedObject(dest_coin_ref)),
+                CallArg::Object(ObjectArg::ImmOrOwnedObject(target_coin_ref)),
                 CallArg::Object(ObjectArg::ImmOrOwnedObject(source_coin1_ref)),
                 CallArg::Object(ObjectArg::ImmOrOwnedObject(source_coin2_ref)),
             ]
@@ -476,25 +464,41 @@ mod tests {
     }
 
     #[test]
-    fn test_builder_merge_coin_zero_source() {
+    fn test_builder_merge_coins_zero_source() {
         let mut builder = ProgrammableTransactionBuilder::new();
-        let dest_coin_ref = random_object_ref();
+        let target_coin_ref = random_object_ref();
 
-        let err = builder.merge_coin(
-            dest_coin_ref,
+        builder.merge_coins(
+            target_coin_ref,
             vec![]
-        ).err().unwrap();
+        ).unwrap();
 
-        assert_eq!(err.to_string(), "This function should be called with at least one source coin");
+        let tx = builder.finish();
+
+        assert_eq!(
+            tx.inputs,
+            vec![
+                CallArg::Object(ObjectArg::ImmOrOwnedObject(target_coin_ref)),
+            ]
+        );
+        assert_eq!(
+            tx.commands,
+            vec![
+                Command::MergeCoins(
+                    Input(0),
+                    vec![]
+                )
+            ]
+        );
     }
 
     #[test]
-    fn test_builder_merge_all_coin_one_coin() {
+    fn test_builder_smash_coins_one_coin() {
         let mut builder = ProgrammableTransactionBuilder::new();
-        let dest_coin_ref = random_object_ref();
+        let target_coin_ref = random_object_ref();
 
-        let arg = builder.merge_all_coins(
-            vec![dest_coin_ref]
+        let arg = builder.smash_coins(
+            vec![target_coin_ref]
         ).unwrap();
 
         let tx = builder.finish();
@@ -502,20 +506,28 @@ mod tests {
         assert_eq!(arg, Input(0));
         assert_eq!(
             tx.inputs,
-            vec![CallArg::Object(ObjectArg::ImmOrOwnedObject(dest_coin_ref))]
+            vec![CallArg::Object(ObjectArg::ImmOrOwnedObject(target_coin_ref))]
         );
-        assert_eq!(tx.commands, vec![]);
+        assert_eq!(
+            tx.commands,
+            vec![
+                Command::MergeCoins(
+                    Input(0),
+                    vec![]
+                )
+            ]
+        );
     }
 
     #[test]
-    fn test_builder_merge_all_coin_two_coins() {
+    fn test_builder_smash_coins_two_coins() {
         let mut builder = ProgrammableTransactionBuilder::new();
-        let dest_coin_ref = random_object_ref();
+        let target_coin_ref = random_object_ref();
         let source_coin_ref = random_object_ref();
 
-        let arg = builder.merge_all_coins(
+        let arg = builder.smash_coins(
             vec![
-                dest_coin_ref,
+                target_coin_ref,
                 source_coin_ref
             ]
         ).unwrap();
@@ -526,7 +538,7 @@ mod tests {
         assert_eq!(
             tx.inputs,
             vec![
-                CallArg::Object(ObjectArg::ImmOrOwnedObject(dest_coin_ref)),
+                CallArg::Object(ObjectArg::ImmOrOwnedObject(target_coin_ref)),
                 CallArg::Object(ObjectArg::ImmOrOwnedObject(source_coin_ref))
             ]
         );
@@ -542,15 +554,15 @@ mod tests {
     }
 
     #[test]
-    fn test_builder_merge_all_coin_three_coin() {
+    fn test_builder_smash_coins_three_coin() {
         let mut builder = ProgrammableTransactionBuilder::new();
-        let dest_coin_ref = random_object_ref();
+        let target_coin_ref = random_object_ref();
         let source_coin1_ref = random_object_ref();
         let source_coin2_ref = random_object_ref();
 
-        let arg = builder.merge_all_coins(
+        let arg = builder.smash_coins(
             vec![
-                dest_coin_ref,
+                target_coin_ref,
                 source_coin1_ref,
                 source_coin2_ref,
             ]
@@ -562,7 +574,7 @@ mod tests {
         assert_eq!(
             tx.inputs,
             vec![
-                CallArg::Object(ObjectArg::ImmOrOwnedObject(dest_coin_ref)),
+                CallArg::Object(ObjectArg::ImmOrOwnedObject(target_coin_ref)),
                 CallArg::Object(ObjectArg::ImmOrOwnedObject(source_coin1_ref)),
                 CallArg::Object(ObjectArg::ImmOrOwnedObject(source_coin2_ref))
             ]
@@ -582,13 +594,13 @@ mod tests {
     }
 
     #[test]
-    fn test_builder_merge_all_coin_zero_coin() {
+    fn test_builder_smash_coins_zero_coin() {
         let mut builder = ProgrammableTransactionBuilder::new();
 
-        let err = builder.merge_all_coins(
+        let err = builder.smash_coins(
             vec![]
         ).err().unwrap();
 
-        assert_eq!(err.to_string(), "This function should be called with at least one coin");
+        assert_eq!(err.to_string(), "coins vector is empty");
     }
 }
