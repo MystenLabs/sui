@@ -10,7 +10,7 @@ use std::sync::Arc;
 use tidehunter::config::Config;
 use tidehunter::db::Db;
 use tidehunter::iterators::db_iterator::DbIterator;
-use tidehunter::key_shape::{KeyShape, KeySpace};
+use tidehunter::key_shape::{KeyShape, KeySpace, KeyType};
 use tidehunter::metrics::Metrics;
 pub use tidehunter::{
     key_shape::{KeyShapeBuilder, KeySpaceConfig},
@@ -50,7 +50,7 @@ pub fn add_key_space(builder: &mut KeyShapeBuilder, name: &str, config: &ThConfi
         name,
         config.key_size,
         config.mutexes,
-        config.per_mutex,
+        KeyType::uniform(config.per_mutex),
         config.config.clone(),
     )
 }
