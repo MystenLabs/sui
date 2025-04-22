@@ -506,7 +506,7 @@ export class Runtime extends EventEmitter {
                     // and `baz` in the example above).
                     //
                     // The following explains a bit more formally what needs
-                    // to happen both on on `next` and `step` actions when
+                    // to happen both on `next` and `step` actions when
                     // call and non-call instructions are interleaved:
                     //
                     // When `step` is called:
