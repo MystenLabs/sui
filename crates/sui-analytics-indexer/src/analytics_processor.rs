@@ -92,14 +92,31 @@ impl<S: Serialize + ParquetSchema + 'static> Worker for AnalyticsProcessor<S> {
             .inc();
 
         let processing_start = Instant::now();
-        self.handler.process_checkpoint(checkpoint_data).await?;
+        
+        self.task_context
+            .metrics
+            .checkpoints_processed
+            .with_label_values(&[self.name()])
+            .inc();
+            
+        let result = self.handler.process_checkpoint(checkpoint_data).await;
+        
         let processing_time = processing_start.elapsed().as_secs_f64();
         self.task_context
             .metrics
             .checkpoint_processing_time
             .with_label_values(&[self.name()])
             .observe(processing_time);
-
+            
+        if result.is_err() {
+            self.task_context
+                .metrics
+                .checkpoint_processing_failures
+                .with_label_values(&[self.name()])
+                .inc();
+            return result;
+        }
+        
         let rows = self.handler.read().await?;
         state.writer.write(&rows)?;
         state.current_checkpoint_range.end = state
