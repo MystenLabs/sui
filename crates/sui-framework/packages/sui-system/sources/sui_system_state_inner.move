@@ -28,7 +28,7 @@ const EBpsTooLarge: u64 = 5;
 const ESafeModeGasNotProcessed: u64 = 7;
 const EAdvancedToWrongEpoch: u64 = 8;
 
-const BASIS_POINT_DENOMINATOR: u128 = 10000;
+const BASIS_POINT_DENOMINATOR: u64 = 10000;
 
 // same as in validator_set
 const ACTIVE_VALIDATOR_ONLY: u8 = 1;
@@ -821,11 +821,11 @@ public(package) fun advance_epoch(
     let prev_epoch_start_timestamp = self.epoch_start_timestamp_ms;
     self.epoch_start_timestamp_ms = epoch_start_timestamp_ms;
 
-    let bps_denominator_u64 = BASIS_POINT_DENOMINATOR as u64;
+    let bps_denominator = BASIS_POINT_DENOMINATOR;
     // Rates can't be higher than 100%.
     assert!(
-        storage_fund_reinvest_rate <= bps_denominator_u64
-        && reward_slashing_rate <= bps_denominator_u64,
+        storage_fund_reinvest_rate <= bps_denominator
+        && reward_slashing_rate <= bps_denominator,
         EBpsTooLarge,
     );
 
@@ -890,7 +890,7 @@ public(package) fun advance_epoch(
     let storage_fund_reinvestment_amount = mul_div!(
         storage_fund_reward_amount,
         storage_fund_reinvest_rate,
-        BASIS_POINT_DENOMINATOR as u64,
+        BASIS_POINT_DENOMINATOR,
     );
     let storage_fund_reinvestment = storage_fund_reward.split(
         storage_fund_reinvestment_amount,
