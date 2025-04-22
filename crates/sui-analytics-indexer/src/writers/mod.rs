@@ -19,5 +19,5 @@ pub trait AnalyticsWriter<S: Serialize + ParquetSchema>: Send + Sync + 'static {
     /// Reset internal state with given epoch and checkpoint sequence number
     fn reset(&mut self, epoch_num: EpochId, start_checkpoint_seq_num: u64) -> Result<()>;
     /// Approx size in bytes of the current staging file if available
-    fn estimate_file_size(&self) -> Result<Option<u64>>;
+    fn file_size(&self) -> Result<Option<u64>>;
 }
