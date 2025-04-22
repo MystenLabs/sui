@@ -3,22 +3,32 @@
 
 module sui_system::sui_system_state_inner;
 
+use sui::bag::{Self, Bag};
 use sui::balance::{Self, Balance};
 use sui::coin::Coin;
-use sui_system::staking_pool::{StakedSui, FungibleStakedSui};
+use sui::event;
 use sui::sui::SUI;
-use sui_system::validator::{Self, Validator};
-use sui_system::validator_set::{Self, ValidatorSet};
-use sui_system::validator_cap::{UnverifiedValidatorOperationCap, ValidatorOperationCap};
-use sui_system::stake_subsidy::StakeSubsidy;
-use sui_system::storage_fund::{Self, StorageFund};
-use sui_system::staking_pool::PoolTokenExchangeRate;
+use sui::table::Table;
 use sui::vec_map::{Self, VecMap};
 use sui::vec_set::{Self, VecSet};
-use sui::event;
-use sui::table::Table;
-use sui::bag::Bag;
-use sui::bag;
+use sui_system::stake_subsidy::StakeSubsidy;
+use sui_system::staking_pool::{StakedSui, FungibleStakedSui, PoolTokenExchangeRate};
+use sui_system::storage_fund::{Self, StorageFund};
+use sui_system::validator::{Self, Validator};
+use sui_system::validator_cap::{UnverifiedValidatorOperationCap, ValidatorOperationCap};
+use sui_system::validator_set::{Self, ValidatorSet};
+
+const ENotValidator: u64 = 0;
+const ELimitExceeded: u64 = 1;
+#[allow(unused_const)]
+const ENotSystemAddress: u64 = 2;
+const ECannotReportOneself: u64 = 3;
+const EReportRecordNotFound: u64 = 4;
+const EBpsTooLarge: u64 = 5;
+const ESafeModeGasNotProcessed: u64 = 7;
+const EAdvancedToWrongEpoch: u64 = 8;
+
+const BASIS_POINT_DENOMINATOR: u64 = 10000;
 
 // same as in validator_set
 const ACTIVE_VALIDATOR_ONLY: u8 = 1;
@@ -33,34 +43,27 @@ const EXTRA_FIELD_EXECUTION_TIME_ESTIMATES_KEY: u64 = 0;
 public struct SystemParameters has store {
     /// The duration of an epoch, in milliseconds.
     epoch_duration_ms: u64,
-
     /// The starting epoch in which stake subsidies start being paid out
     stake_subsidy_start_epoch: u64,
-
     /// Deprecated.
     /// Maximum number of active validators at any moment.
     /// We do not allow the number of validators in any epoch to go above this.
     max_validator_count: u64,
-
     /// Deprecated.
     /// Lower-bound on the amount of stake required to become a validator.
     min_validator_joining_stake: u64,
-
     // Deprecated.
     /// Validators with stake amount below `validator_low_stake_threshold` are considered to
     /// have low stake and will be escorted out of the validator set after being below this
     /// threshold for more than `validator_low_stake_grace_period` number of epochs.
     validator_low_stake_threshold: u64,
-
     /// Deprecated.
     /// Validators with stake below `validator_very_low_stake_threshold` will be removed
     /// immediately at epoch change, no grace period.
     validator_very_low_stake_threshold: u64,
-
     /// A validator can have stake below `validator_low_stake_threshold`
     /// for this many epochs before being kicked out.
     validator_low_stake_grace_period: u64,
-
     /// Any extra fields that's not defined statically.
     extra_fields: Bag,
 }
@@ -69,36 +72,28 @@ public struct SystemParameters has store {
 public struct SystemParametersV2 has store {
     /// The duration of an epoch, in milliseconds.
     epoch_duration_ms: u64,
-
     /// The starting epoch in which stake subsidies start being paid out
     stake_subsidy_start_epoch: u64,
-
     /// Minimum number of active validators at any moment.
     min_validator_count: u64,
-
     /// Maximum number of active validators at any moment.
     /// We do not allow the number of validators in any epoch to go above this.
     max_validator_count: u64,
-
     /// Deprecated.
     /// Lower-bound on the amount of stake required to become a validator.
     min_validator_joining_stake: u64,
-
     /// Deprecated.
     /// Validators with stake amount below `validator_low_stake_threshold` are considered to
     /// have low stake and will be escorted out of the validator set after being below this
     /// threshold for more than `validator_low_stake_grace_period` number of epochs.
     validator_low_stake_threshold: u64,
-
     /// Deprecated.
     /// Validators with stake below `validator_very_low_stake_threshold` will be removed
     /// immediately at epoch change, no grace period.
     validator_very_low_stake_threshold: u64,
-
     /// A validator can have stake below `validator_low_stake_threshold`
     /// for this many epochs before being kicked out.
     validator_low_stake_grace_period: u64,
-
     /// Any extra fields that's not defined statically.
     extra_fields: Bag,
 }
@@ -132,7 +127,6 @@ public struct SuiSystemStateInner has store {
     validator_report_records: VecMap<address, VecSet<address>>,
     /// Schedule of stake subsidies given out each epoch.
     stake_subsidy: StakeSubsidy,
-
     /// Whether the system is running in a downgraded safe mode due to a non-recoverable bug.
     /// This is set whenever we failed to execute advance_epoch, and ended up executing advance_epoch_safe_mode.
     /// It can be reset once we are able to successfully execute advance_epoch.
@@ -144,7 +138,6 @@ public struct SuiSystemStateInner has store {
     safe_mode_computation_rewards: Balance<SUI>,
     safe_mode_storage_rebates: u64,
     safe_mode_non_refundable_storage_fee: u64,
-
     /// Unix timestamp of the current epoch start
     epoch_start_timestamp_ms: u64,
     /// Any extra fields that's not defined statically.
@@ -180,7 +173,6 @@ public struct SuiSystemStateInnerV2 has store {
     validator_report_records: VecMap<address, VecSet<address>>,
     /// Schedule of stake subsidies given out each epoch.
     stake_subsidy: StakeSubsidy,
-
     /// Whether the system is running in a downgraded safe mode due to a non-recoverable bug.
     /// This is set whenever we failed to execute advance_epoch, and ended up executing advance_epoch_safe_mode.
     /// It can be reset once we are able to successfully execute advance_epoch.
@@ -192,7 +184,6 @@ public struct SuiSystemStateInnerV2 has store {
     safe_mode_computation_rewards: Balance<SUI>,
     safe_mode_storage_rebates: u64,
     safe_mode_non_refundable_storage_fee: u64,
-
     /// Unix timestamp of the current epoch start
     epoch_start_timestamp_ms: u64,
     /// Any extra fields that's not defined statically.
@@ -215,19 +206,6 @@ public struct SystemEpochInfoEvent has copy, drop {
     total_stake_rewards_distributed: u64,
     leftover_storage_fund_inflow: u64,
 }
-
-// Errors
-const ENotValidator: u64 = 0;
-const ELimitExceeded: u64 = 1;
-#[allow(unused_const)]
-const ENotSystemAddress: u64 = 2;
-const ECannotReportOneself: u64 = 3;
-const EReportRecordNotFound: u64 = 4;
-const EBpsTooLarge: u64 = 5;
-const ESafeModeGasNotProcessed: u64 = 7;
-const EAdvancedToWrongEpoch: u64 = 8;
-
-const BASIS_POINT_DENOMINATOR: u128 = 10000;
 
 // ==== functions that can only be called by genesis ====
 
@@ -269,7 +247,6 @@ public(package) fun create(
 public(package) fun create_system_parameters(
     epoch_duration_ms: u64,
     stake_subsidy_start_epoch: u64,
-
     // Validator committee parameters
     max_validator_count: u64,
     min_validator_joining_stake: u64,
@@ -345,7 +322,7 @@ public(package) fun v1_to_v2(self: SuiSystemStateInner): SuiSystemStateInnerV2 {
         safe_mode_storage_rebates,
         safe_mode_non_refundable_storage_fee,
         epoch_start_timestamp_ms,
-        extra_fields: state_extra_fields
+        extra_fields: state_extra_fields,
     }
 }
 
@@ -391,7 +368,7 @@ public(package) fun request_add_validator_candidate(
         worker_address,
         gas_price,
         commission_rate,
-        ctx
+        ctx,
     );
 
     self.validators.request_add_validator_candidate(validator, ctx);
@@ -410,10 +387,7 @@ public(package) fun request_remove_validator_candidate(
 /// Aborts if the validator is a duplicate with one of the pending or active validators, or if the amount of
 /// stake the validator has doesn't meet the min threshold, or if the number of new validators for the next
 /// epoch has already reached the maximum.
-public(package) fun request_add_validator(
-    self: &mut SuiSystemStateInnerV2,
-    ctx: &TxContext,
-) {
+public(package) fun request_add_validator(self: &mut SuiSystemStateInnerV2, ctx: &TxContext) {
     assert!(
         self.validators.next_epoch_validator_count() < self.parameters.max_validator_count,
         ELimitExceeded,
@@ -427,10 +401,7 @@ public(package) fun request_add_validator(
 /// (i.e. sender must match the sui_address in the validator).
 /// At the end of the epoch, the `validator` object will be returned to the sui_address
 /// of the validator.
-public(package) fun request_remove_validator(
-    self: &mut SuiSystemStateInnerV2,
-    ctx: &TxContext,
-) {
+public(package) fun request_remove_validator(self: &mut SuiSystemStateInnerV2, ctx: &TxContext) {
     // Only check min validator condition if the current number of validators satisfy the constraint.
     // This is so that if we somehow already are in a state where we have less than min validators, it no longer matters
     // and is ok to stay so. This is useful for a test setup.
@@ -453,7 +424,9 @@ public(package) fun request_set_gas_price(
 ) {
     // Verify the represented address is an active or pending validator, and the capability is still valid.
     let verified_cap = self.validators.verify_cap(cap, ACTIVE_OR_PENDING_VALIDATOR);
-    let validator = self.validators.get_validator_mut_with_verified_cap(&verified_cap, false /* include_candidate */);
+    let validator = self
+        .validators
+        .get_validator_mut_with_verified_cap(&verified_cap, false /* include_candidate */);
 
     validator.request_set_gas_price(verified_cap, new_gas_price);
 }
@@ -466,7 +439,9 @@ public(package) fun set_candidate_validator_gas_price(
 ) {
     // Verify the represented address is an active or pending validator, and the capability is still valid.
     let verified_cap = self.validators.verify_cap(cap, ANY_VALIDATOR);
-    let candidate = self.validators.get_validator_mut_with_verified_cap(&verified_cap, true /* include_candidate */);
+    let candidate = self
+        .validators
+        .get_validator_mut_with_verified_cap(&verified_cap, true /* include_candidate */);
     candidate.set_candidate_gas_price(verified_cap, new_gas_price)
 }
 
@@ -477,10 +452,12 @@ public(package) fun request_set_commission_rate(
     new_commission_rate: u64,
     ctx: &TxContext,
 ) {
-    self.validators.request_set_commission_rate(
-        new_commission_rate,
-        ctx
-    )
+    self
+        .validators
+        .request_set_commission_rate(
+            new_commission_rate,
+            ctx,
+        )
 }
 
 /// This function is used to set new commission rate for candidate validators
@@ -500,11 +477,13 @@ public(package) fun request_add_stake(
     validator_address: address,
     ctx: &mut TxContext,
 ): StakedSui {
-    self.validators.request_add_stake(
-        validator_address,
-        stake.into_balance(),
-        ctx,
-    )
+    self
+        .validators
+        .request_add_stake(
+            validator_address,
+            stake.into_balance(),
+            ctx,
+        )
 }
 
 /// Add stake to a validator's staking pool using multiple coins.
@@ -562,7 +541,6 @@ public(package) fun report_validator(
     report_validator_impl(verified_cap, reportee_addr, &mut self.validator_report_records);
 }
 
-
 /// Undo a `report_validator` action. Aborts if
 /// 1. the reportee is not a currently active validator or
 /// 2. the sender has not previously reported the `reportee_addr`, or
@@ -614,10 +592,7 @@ fun undo_report_validator_impl(
 
 /// Create a new `UnverifiedValidatorOperationCap`, transfer it to the
 /// validator and registers it. The original object is thus revoked.
-public(package) fun rotate_operation_cap(
-    self: &mut SuiSystemStateInnerV2,
-    ctx: &mut TxContext,
-) {
+public(package) fun rotate_operation_cap(self: &mut SuiSystemStateInnerV2, ctx: &mut TxContext) {
     let validator = self.validators.get_validator_mut_with_ctx_including_candidates(ctx);
     validator.new_unverified_validator_operation_cap_and_transfer(ctx);
 }
@@ -672,7 +647,7 @@ public(package) fun update_validator_next_epoch_network_address(
 ) {
     let validator = self.validators.get_validator_mut_with_ctx(ctx);
     validator.update_next_epoch_network_address(network_address);
-    let validator :&Validator = validator; // Force immutability for the following call
+    let validator: &Validator = validator; // Force immutability for the following call
     self.validators.assert_no_pending_or_active_duplicates(validator);
 }
 
@@ -695,7 +670,7 @@ public(package) fun update_validator_next_epoch_p2p_address(
 ) {
     let validator = self.validators.get_validator_mut_with_ctx(ctx);
     validator.update_next_epoch_p2p_address(p2p_address);
-    let validator :&Validator = validator; // Force immutability for the following call
+    let validator: &Validator = validator; // Force immutability for the following call
     self.validators.assert_no_pending_or_active_duplicates(validator);
 }
 
@@ -761,7 +736,7 @@ public(package) fun update_validator_next_epoch_protocol_pubkey(
 ) {
     let validator = self.validators.get_validator_mut_with_ctx(ctx);
     validator.update_next_epoch_protocol_pubkey(protocol_pubkey, proof_of_possession);
-    let validator :&Validator = validator; // Force immutability for the following call
+    let validator: &Validator = validator; // Force immutability for the following call
     self.validators.assert_no_pending_or_active_duplicates(validator);
 }
 
@@ -785,7 +760,7 @@ public(package) fun update_validator_next_epoch_worker_pubkey(
 ) {
     let validator = self.validators.get_validator_mut_with_ctx(ctx);
     validator.update_next_epoch_worker_pubkey(worker_pubkey);
-    let validator :&Validator = validator; // Force immutability for the following call
+    let validator: &Validator = validator; // Force immutability for the following call
     self.validators.assert_no_pending_or_active_duplicates(validator);
 }
 
@@ -808,7 +783,7 @@ public(package) fun update_validator_next_epoch_network_pubkey(
 ) {
     let validator = self.validators.get_validator_mut_with_ctx(ctx);
     validator.update_next_epoch_network_pubkey(network_pubkey);
-    let validator :&Validator = validator; // Force immutability for the following call
+    let validator: &Validator = validator; // Force immutability for the following call
     self.validators.assert_no_pending_or_active_duplicates(validator);
 }
 
@@ -838,7 +813,7 @@ public(package) fun advance_epoch(
     mut storage_rebate_amount: u64,
     mut non_refundable_storage_fee_amount: u64,
     storage_fund_reinvest_rate: u64, // share of storage fund's rewards that's reinvested
-                                        // into storage fund, in basis point.
+    // into storage fund, in basis point.
     reward_slashing_rate: u64, // how much rewards are slashed to punish a validator, in bps.
     epoch_start_timestamp_ms: u64, // Timestamp of the epoch start
     ctx: &mut TxContext,
@@ -846,11 +821,11 @@ public(package) fun advance_epoch(
     let prev_epoch_start_timestamp = self.epoch_start_timestamp_ms;
     self.epoch_start_timestamp_ms = epoch_start_timestamp_ms;
 
-    let bps_denominator_u64 = BASIS_POINT_DENOMINATOR as u64;
+    let bps_denominator = BASIS_POINT_DENOMINATOR;
     // Rates can't be higher than 100%.
     assert!(
-        storage_fund_reinvest_rate <= bps_denominator_u64
-        && reward_slashing_rate <= bps_denominator_u64,
+        storage_fund_reinvest_rate <= bps_denominator
+        && reward_slashing_rate <= bps_denominator,
         EBpsTooLarge,
     );
 
@@ -866,7 +841,8 @@ public(package) fun advance_epoch(
     computation_reward.join(safe_mode_computation_rewards);
     storage_rebate_amount = storage_rebate_amount + self.safe_mode_storage_rebates;
     self.safe_mode_storage_rebates = 0;
-    non_refundable_storage_fee_amount = non_refundable_storage_fee_amount + self.safe_mode_non_refundable_storage_fee;
+    non_refundable_storage_fee_amount =
+        non_refundable_storage_fee_amount + self.safe_mode_non_refundable_storage_fee;
     self.safe_mode_non_refundable_storage_fee = 0;
 
     let total_validators_stake = self.validators.total_stake();
@@ -882,9 +858,10 @@ public(package) fun advance_epoch(
     // Include stake subsidy in the rewards given out to validators and stakers.
     // Delay distributing any stake subsidies until after `stake_subsidy_start_epoch`.
     // And if this epoch is shorter than the regular epoch duration, don't distribute any stake subsidy.
-    if (old_epoch >= self.parameters.stake_subsidy_start_epoch  &&
-        epoch_start_timestamp_ms >= prev_epoch_start_timestamp + self.parameters.epoch_duration_ms)
-    {
+    if (
+        old_epoch >= self.parameters.stake_subsidy_start_epoch  &&
+        epoch_start_timestamp_ms >= prev_epoch_start_timestamp + self.parameters.epoch_duration_ms
+    ) {
         // special case for epoch 560 -> 561 change bug. add extra subsidies for "safe mode"
         // where reward distribution was skipped. use distribution counter and epoch check to
         // avoiding affecting devnet and testnet
@@ -904,15 +881,19 @@ public(package) fun advance_epoch(
     let stake_subsidy_amount = stake_subsidy.value();
     computation_reward.join(stake_subsidy);
 
-    let total_stake_u128 = total_stake as u128;
-    let computation_charge_u128 = computation_charge as u128;
-
-    let storage_fund_reward_amount = storage_fund_balance as u128 * computation_charge_u128 / total_stake_u128;
+    let storage_fund_reward_amount = mul_div!(
+        storage_fund_balance,
+        computation_charge,
+        total_stake,
+    );
     let mut storage_fund_reward = computation_reward.split(storage_fund_reward_amount as u64);
-    let storage_fund_reinvestment_amount =
-        storage_fund_reward_amount * (storage_fund_reinvest_rate as u128) / BASIS_POINT_DENOMINATOR;
+    let storage_fund_reinvestment_amount = mul_div!(
+        storage_fund_reward_amount,
+        storage_fund_reinvest_rate,
+        BASIS_POINT_DENOMINATOR,
+    );
     let storage_fund_reinvestment = storage_fund_reward.split(
-        storage_fund_reinvestment_amount as u64,
+        storage_fund_reinvestment_amount,
     );
 
     self.epoch = self.epoch + 1;
@@ -922,21 +903,25 @@ public(package) fun advance_epoch(
     let computation_reward_amount_before_distribution = computation_reward.value();
     let storage_fund_reward_amount_before_distribution = storage_fund_reward.value();
 
-    self.validators.advance_epoch(
-        &mut computation_reward,
-        &mut storage_fund_reward,
-        &mut self.validator_report_records,
-        reward_slashing_rate,
-        self.parameters.validator_low_stake_grace_period,
-        ctx,
-    );
+    self
+        .validators
+        .advance_epoch(
+            &mut computation_reward,
+            &mut storage_fund_reward,
+            &mut self.validator_report_records,
+            reward_slashing_rate,
+            self.parameters.validator_low_stake_grace_period,
+            ctx,
+        );
 
     let new_total_stake = self.validators.total_stake();
 
     let computation_reward_amount_after_distribution = computation_reward.value();
     let storage_fund_reward_amount_after_distribution = storage_fund_reward.value();
-    let computation_reward_distributed = computation_reward_amount_before_distribution - computation_reward_amount_after_distribution;
-    let storage_fund_reward_distributed = storage_fund_reward_amount_before_distribution - storage_fund_reward_amount_after_distribution;
+    let computation_reward_distributed =
+        computation_reward_amount_before_distribution - computation_reward_amount_after_distribution;
+    let storage_fund_reward_distributed =
+        storage_fund_reward_amount_before_distribution - storage_fund_reward_amount_after_distribution;
 
     self.protocol_version = next_protocol_version;
 
@@ -949,8 +934,9 @@ public(package) fun advance_epoch(
     leftover_staking_rewards.join(computation_reward);
     let leftover_storage_fund_inflow = leftover_staking_rewards.value();
 
-    let refunded_storage_rebate =
-        self.storage_fund.advance_epoch(
+    let refunded_storage_rebate = self
+        .storage_fund
+        .advance_epoch(
             storage_reward,
             storage_fund_reinvestment,
             leftover_staking_rewards,
@@ -958,27 +944,28 @@ public(package) fun advance_epoch(
             non_refundable_storage_fee_amount,
         );
 
-    event::emit(
-        SystemEpochInfoEvent {
-            epoch: self.epoch,
-            protocol_version: self.protocol_version,
-            reference_gas_price: self.reference_gas_price,
-            total_stake: new_total_stake,
-            storage_charge,
-            storage_fund_reinvestment: storage_fund_reinvestment_amount as u64,
-            storage_rebate: storage_rebate_amount,
-            storage_fund_balance: self.storage_fund.total_balance(),
-            stake_subsidy_amount,
-            total_gas_fees: computation_charge,
-            total_stake_rewards_distributed: computation_reward_distributed + storage_fund_reward_distributed,
-            leftover_storage_fund_inflow,
-        }
-    );
+    event::emit(SystemEpochInfoEvent {
+        epoch: self.epoch,
+        protocol_version: self.protocol_version,
+        reference_gas_price: self.reference_gas_price,
+        total_stake: new_total_stake,
+        storage_charge,
+        storage_fund_reinvestment: storage_fund_reinvestment_amount as u64,
+        storage_rebate: storage_rebate_amount,
+        storage_fund_balance: self.storage_fund.total_balance(),
+        stake_subsidy_amount,
+        total_gas_fees: computation_charge,
+        total_stake_rewards_distributed: computation_reward_distributed + storage_fund_reward_distributed,
+        leftover_storage_fund_inflow,
+    });
     self.safe_mode = false;
     // Double check that the gas from safe mode has been processed.
-    assert!(self.safe_mode_storage_rebates == 0
+    assert!(
+        self.safe_mode_storage_rebates == 0
         && self.safe_mode_storage_rewards.value() == 0
-        && self.safe_mode_computation_rewards.value() == 0, ESafeModeGasNotProcessed);
+        && self.safe_mode_computation_rewards.value() == 0,
+        ESafeModeGasNotProcessed,
+    );
 
     // Return the storage rebate split from storage fund that's already refunded to the transaction senders.
     // This will be burnt at the last step of epoch change programmable transaction.
@@ -1012,44 +999,47 @@ public(package) fun epoch_start_timestamp_ms(self: &SuiSystemStateInnerV2): u64 
 
 /// Returns the total amount staked with `validator_addr`.
 /// Aborts if `validator_addr` is not an active validator.
-public(package) fun validator_stake_amount(self: &SuiSystemStateInnerV2, validator_addr: address): u64 {
+public(package) fun validator_stake_amount(
+    self: &SuiSystemStateInnerV2,
+    validator_addr: address,
+): u64 {
     self.validators.validator_total_stake_amount(validator_addr)
 }
 
 /// Returns the voting power for `validator_addr`.
 /// Aborts if `validator_addr` is not an active validator.
-public(package) fun active_validator_voting_powers(self: &SuiSystemStateInnerV2): VecMap<address, u64> {
-    let mut active_validators = active_validator_addresses(self);
+public(package) fun active_validator_voting_powers(
+    self: &SuiSystemStateInnerV2,
+): VecMap<address, u64> {
+    let active_validators = self.active_validator_addresses();
     let mut voting_powers = vec_map::empty();
-    while (!vector::is_empty(&active_validators)) {
-        let validator = vector::pop_back(&mut active_validators);
-        let voting_power = validator_set::validator_voting_power(&self.validators, validator);
-        vec_map::insert(&mut voting_powers, validator, voting_power);
-    };
+    active_validators.destroy!(|validator| {
+        let voting_power = self.validators.validator_voting_power(validator);
+        voting_powers.insert(validator, voting_power);
+    });
     voting_powers
 }
 
 /// Returns the staking pool id of a given validator.
 /// Aborts if `validator_addr` is not an active validator.
-public(package) fun validator_staking_pool_id(self: &SuiSystemStateInnerV2, validator_addr: address): ID {
-
+public(package) fun validator_staking_pool_id(
+    self: &SuiSystemStateInnerV2,
+    validator_addr: address,
+): ID {
     self.validators.validator_staking_pool_id(validator_addr)
 }
 
 /// Returns reference to the staking pool mappings that map pool ids to active validator addresses
-public(package) fun validator_staking_pool_mappings(self: &SuiSystemStateInnerV2): &Table<ID, address> {
-
+public(package) fun validator_staking_pool_mappings(
+    self: &SuiSystemStateInnerV2,
+): &Table<ID, address> {
     self.validators.staking_pool_mappings()
 }
 
 /// Returns all the validators who are currently reporting `addr`
 public(package) fun get_reporters_of(self: &SuiSystemStateInnerV2, addr: address): VecSet<address> {
-
-    if (self.validator_report_records.contains(&addr)) {
-        self.validator_report_records[&addr]
-    } else {
-        vec_set::empty()
-    }
+    if (self.validator_report_records.contains(&addr)) self.validator_report_records[&addr]
+    else vec_set::empty()
 }
 
 public(package) fun get_storage_fund_total_balance(self: &SuiSystemStateInnerV2): u64 {
@@ -1060,30 +1050,34 @@ public(package) fun get_storage_fund_object_rebates(self: &SuiSystemStateInnerV2
     self.storage_fund.total_object_storage_rebates()
 }
 
-public(package) fun validator_address_by_pool_id(self: &mut SuiSystemStateInnerV2, pool_id: &ID): address {
+public(package) fun validator_address_by_pool_id(
+    self: &mut SuiSystemStateInnerV2,
+    pool_id: &ID,
+): address {
     self.validators.validator_address_by_pool_id(pool_id)
 }
 
 public(package) fun pool_exchange_rates(
     self: &mut SuiSystemStateInnerV2,
-    pool_id: &ID
-): &Table<u64, PoolTokenExchangeRate>  {
-    let validators = &mut self.validators;
-    validators.pool_exchange_rates(pool_id)
+    pool_id: &ID,
+): &Table<u64, PoolTokenExchangeRate> {
+    self.validators.pool_exchange_rates(pool_id)
 }
 
 public(package) fun active_validator_addresses(self: &SuiSystemStateInnerV2): vector<address> {
-    let validator_set = &self.validators;
-    validator_set.active_validator_addresses()
+    self.validators.active_validator_addresses()
 }
 
 #[allow(lint(self_transfer))]
 /// Extract required Balance from vector of Coin<SUI>, transfer the remainder back to sender.
-fun extract_coin_balance(mut coins: vector<Coin<SUI>>, amount: option::Option<u64>, ctx: &mut TxContext): Balance<SUI> {
-    let mut merged_coin = coins.pop_back();
-    merged_coin.join_vec(coins);
-
-    let mut total_balance = merged_coin.into_balance();
+fun extract_coin_balance(
+    mut coins: vector<Coin<SUI>>,
+    amount: option::Option<u64>,
+    ctx: &mut TxContext,
+): Balance<SUI> {
+    let acc = coins.pop_back();
+    let merged = coins.fold!(acc, |mut acc, coin| { acc.join(coin); acc });
+    let mut total_balance = merged.into_balance();
     // return the full amount if amount is not specified
     if (amount.is_some()) {
         let amount = amount.destroy_some();
@@ -1100,11 +1094,15 @@ fun extract_coin_balance(mut coins: vector<Coin<SUI>>, amount: option::Option<u6
     }
 }
 
-public(package) fun store_execution_time_estimates(self: &mut SuiSystemStateInnerV2, estimates: vector<u8>) {
-    if (bag::contains(&self.extra_fields, EXTRA_FIELD_EXECUTION_TIME_ESTIMATES_KEY)) {
-        let _: vector<u8> = bag::remove(&mut self.extra_fields, EXTRA_FIELD_EXECUTION_TIME_ESTIMATES_KEY);
+public(package) fun store_execution_time_estimates(
+    self: &mut SuiSystemStateInnerV2,
+    estimates: vector<u8>,
+) {
+    let key = EXTRA_FIELD_EXECUTION_TIME_ESTIMATES_KEY;
+    if (self.extra_fields.contains(key)) {
+        self.extra_fields.remove<_, vector<u8>>(key);
     };
-    bag::add(&mut self.extra_fields, EXTRA_FIELD_EXECUTION_TIME_ESTIMATES_KEY, estimates);
+    self.extra_fields.add(key, estimates);
 }
 
 #[test_only]
@@ -1115,20 +1113,29 @@ public(package) fun validators(self: &SuiSystemStateInnerV2): &ValidatorSet {
 
 #[test_only]
 /// Return the currently active validator by address
-public(package) fun active_validator_by_address(self: &SuiSystemStateInnerV2, validator_address: address): &Validator {
+public(package) fun active_validator_by_address(
+    self: &SuiSystemStateInnerV2,
+    validator_address: address,
+): &Validator {
     self.validators().get_active_validator_ref(validator_address)
 }
 
 #[test_only]
 /// Return the currently pending validator by address
-public(package) fun pending_validator_by_address(self: &SuiSystemStateInnerV2, validator_address: address): &Validator {
+public(package) fun pending_validator_by_address(
+    self: &SuiSystemStateInnerV2,
+    validator_address: address,
+): &Validator {
     self.validators().get_pending_validator_ref(validator_address)
 }
 
 #[test_only]
 /// Return the currently candidate validator by address
-public(package) fun candidate_validator_by_address(self: &SuiSystemStateInnerV2, validator_address: address): &Validator {
-    validators(self).get_candidate_validator_ref(validator_address)
+public(package) fun candidate_validator_by_address(
+    self: &SuiSystemStateInnerV2,
+    validator_address: address,
+): &Validator {
+    self.validators().get_candidate_validator_ref(validator_address)
 }
 
 #[test_only]
@@ -1142,7 +1149,10 @@ public(package) fun set_epoch_for_testing(self: &mut SuiSystemStateInnerV2, epoc
 }
 
 #[test_only]
-public(package) fun set_stake_subsidy_distribution_counter(self: &mut SuiSystemStateInnerV2, counter: u64) {
+public(package) fun set_stake_subsidy_distribution_counter(
+    self: &mut SuiSystemStateInnerV2,
+    counter: u64,
+) {
     self.stake_subsidy.set_distribution_counter(counter)
 }
 
@@ -1191,8 +1201,12 @@ public(package) fun request_add_validator_candidate_for_testing(
         gas_price,
         commission_rate,
         false, // not an initial validator active at genesis
-        ctx
+        ctx,
     );
 
     self.validators.request_add_validator_candidate(validator, ctx);
+}
+
+macro fun mul_div($a: u64, $b: u64, $c: u64): u64 {
+    (($a as u128) * ($b as u128) / ($c as u128)) as u64
 }
