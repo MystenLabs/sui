@@ -51,6 +51,7 @@ impl AuthorityPerpetualTablesOptions {
 
 /// AuthorityPerpetualTables contains data that must be preserved from one epoch to the next.
 #[derive(DBMapUtils)]
+// #[tidehunter]
 pub struct AuthorityPerpetualTables {
     /// This is a map between the object (ID, version) and the latest state of the object, namely the
     /// state that is needed to process new transactions.
@@ -166,6 +167,7 @@ impl AuthorityPerpetualTables {
         parent_path.join("perpetual")
     }
 
+    #[cfg(any(not(feature = "tide_hunter"), feature = "rocksdb"))]
     pub fn open(
         parent_path: &Path,
         db_options_override: Option<AuthorityPerpetualTablesOptions>,
@@ -195,12 +197,175 @@ impl AuthorityPerpetualTables {
                 events_table_config(db_options.clone()),
             ),
         ]));
+
         Self::open_tables_read_write(
             Self::path(parent_path),
             MetricConf::new("perpetual")
                 .with_sampling(SamplingInterval::new(Duration::from_secs(60), 0)),
             Some(db_options.options),
             Some(table_options),
+        )
+    }
+
+    #[cfg(all(
+        not(target_os = "windows"),
+        feature = "tide_hunter",
+        not(feature = "rocksdb")
+    ))]
+    pub fn open(parent_path: &Path, _: Option<AuthorityPerpetualTablesOptions>) -> Self {
+        use typed_store::tidehunter_util::{
+            default_cells_per_mutex, Bytes, KeySpaceConfig, ThConfig, WalPosition,
+        };
+        const MUTEXES: usize = 1024;
+        const VALUE_CACHE_SIZE: usize = 20_000;
+
+        let bloom_config = KeySpaceConfig::new().with_bloom_filter(0.001, 32_000);
+        let objects_compactor = |index: &mut BTreeMap<Bytes, WalPosition>| {
+            let mut retain = HashSet::new();
+            let mut previous: Option<&[u8]> = None;
+            const OID_SIZE: usize = 32;
+            for (key, _) in index.iter().rev() {
+                if let Some(prev) = previous {
+                    if prev == &key[..OID_SIZE] {
+                        continue;
+                    }
+                }
+                previous = Some(&key[..OID_SIZE]);
+                retain.insert(key.clone());
+            }
+            index.retain(|k, _| retain.contains(k));
+        };
+        let mut digest_prefix = vec![0; 8];
+        digest_prefix[7] = 32;
+
+        let configs = vec![
+            (
+                "objects".to_string(),
+                ThConfig::new_with_config(
+                    32 + 8,
+                    MUTEXES,
+                    default_cells_per_mutex() * 4,
+                    KeySpaceConfig::new().with_compactor(Box::new(objects_compactor)),
+                ),
+            ),
+            (
+                "owned_object_transaction_locks".to_string(),
+                ThConfig::new_with_config(
+                    32 + 8 + 32 + 8,
+                    MUTEXES,
+                    default_cells_per_mutex() * 4,
+                    bloom_config.clone(),
+                ),
+            ),
+            (
+                "transactions".to_string(),
+                ThConfig::new_with_rm_prefix(
+                    32,
+                    MUTEXES,
+                    default_cells_per_mutex(),
+                    KeySpaceConfig::new()
+                        .with_key_reduction(0..16)
+                        .with_value_cache_size(VALUE_CACHE_SIZE),
+                    digest_prefix.clone(),
+                ),
+            ),
+            (
+                "effects".to_string(),
+                ThConfig::new_with_rm_prefix(
+                    32,
+                    MUTEXES,
+                    default_cells_per_mutex(),
+                    bloom_config
+                        .clone()
+                        .with_key_reduction(0..16)
+                        .with_value_cache_size(VALUE_CACHE_SIZE),
+                    digest_prefix.clone(),
+                ),
+            ),
+            (
+                "executed_effects".to_string(),
+                ThConfig::new_with_rm_prefix(
+                    32,
+                    MUTEXES,
+                    default_cells_per_mutex(),
+                    bloom_config
+                        .clone()
+                        .with_key_reduction(0..16)
+                        .with_value_cache_size(VALUE_CACHE_SIZE),
+                    digest_prefix.clone(),
+                ),
+            ),
+            (
+                "events".to_string(),
+                ThConfig::new_with_rm_prefix(
+                    32 + 8,
+                    MUTEXES,
+                    default_cells_per_mutex(),
+                    KeySpaceConfig::default(),
+                    digest_prefix.clone(),
+                ),
+            ),
+            (
+                "events_2".to_string(),
+                ThConfig::new_with_rm_prefix(
+                    32 + 8,
+                    MUTEXES,
+                    default_cells_per_mutex(),
+                    KeySpaceConfig::default(),
+                    digest_prefix.clone(),
+                ),
+            ),
+            (
+                "executed_transactions_to_checkpoint".to_string(),
+                ThConfig::new_with_rm_prefix(
+                    32,
+                    MUTEXES,
+                    default_cells_per_mutex(),
+                    KeySpaceConfig::default(),
+                    digest_prefix.clone(),
+                ),
+            ),
+            (
+                "root_state_hash_by_epoch".to_string(),
+                ThConfig::new(8, 1, 1),
+            ),
+            (
+                "epoch_start_configuration".to_string(),
+                ThConfig::new(0, 1, 1),
+            ),
+            ("pruned_checkpoint".to_string(), ThConfig::new(0, 1, 1)),
+            (
+                "expected_network_sui_amount".to_string(),
+                ThConfig::new(0, 1, 1),
+            ),
+            (
+                "expected_storage_fund_imbalance".to_string(),
+                ThConfig::new(0, 1, 1),
+            ),
+            (
+                "object_per_epoch_marker_table".to_string(),
+                ThConfig::new_with_config(
+                    32 + 8 + 8,
+                    MUTEXES,
+                    default_cells_per_mutex(),
+                    KeySpaceConfig::new_with_key_offset(8),
+                ),
+            ),
+            (
+                "object_per_epoch_marker_table_v2".to_string(),
+                ThConfig::new_with_config(
+                    32 + 8 + 8,
+                    MUTEXES,
+                    default_cells_per_mutex(),
+                    KeySpaceConfig::new_with_key_offset(8),
+                ),
+            ),
+        ];
+        Self::open_tables_read_write(
+            Self::path(parent_path),
+            MetricConf::new("perpetual")
+                .with_sampling(SamplingInterval::new(Duration::from_secs(60), 0)),
+            configs.into_iter().collect(),
         )
     }
 

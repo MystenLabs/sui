@@ -14,7 +14,7 @@ pub use crate::rocks::options::{
 use crate::rocks::safe_iter::{SafeIter, SafeRevIter};
 #[cfg(all(not(target_os = "windows"), feature = "tide_hunter"))]
 use crate::tidehunter_util::{
-    apply_range_bounds, transform_th_iterator, typed_store_error_from_th_error,
+    apply_range_bounds, transform_th_iterator, transform_th_key, typed_store_error_from_th_error,
 };
 use crate::util::{be_fix_int_ser, iterator_bounds, iterator_bounds_with_range};
 use crate::{
@@ -85,7 +85,7 @@ pub enum ColumnFamily {
     Rocks(String),
     InMemory(String),
     #[cfg(all(not(target_os = "windows"), feature = "tide_hunter"))]
-    TideHunter(KeySpace),
+    TideHunter((KeySpace, Option<Vec<u8>>)),
 }
 
 impl std::fmt::Debug for ColumnFamily {
@@ -161,7 +161,7 @@ impl Deref for GetResult<'_> {
 }
 
 impl Database {
-    fn new(storage: Storage, metric_conf: MetricConf) -> Self {
+    pub fn new(storage: Storage, metric_conf: MetricConf) -> Self {
         DBMetrics::get().increment_num_active_dbs(&metric_conf.db_name);
         Self {
             storage,
@@ -185,8 +185,8 @@ impl Database {
                 Ok(db.get(cf_name, key).map(GetResult::InMemory))
             }
             #[cfg(all(not(target_os = "windows"), feature = "tide_hunter"))]
-            (Storage::TideHunter(db), ColumnFamily::TideHunter(ks)) => Ok(db
-                .get(*ks, key.as_ref())
+            (Storage::TideHunter(db), ColumnFamily::TideHunter((ks, prefix))) => Ok(db
+                .get(*ks, &transform_th_key(key.as_ref(), prefix))
                 .map_err(typed_store_error_from_th_error)?
                 .map(GetResult::TideHunter)),
 
@@ -227,9 +227,9 @@ impl Database {
                 .map(|r| Ok(r.map(GetResult::InMemory)))
                 .collect(),
             #[cfg(all(not(target_os = "windows"), feature = "tide_hunter"))]
-            (Storage::TideHunter(db), ColumnFamily::TideHunter(ks)) => {
+            (Storage::TideHunter(db), ColumnFamily::TideHunter((ks, prefix))) => {
                 let res = keys.into_iter().map(|k| {
-                    db.get(*ks, k.as_ref())
+                    db.get(*ks, &transform_th_key(k.as_ref(), prefix))
                         .map_err(typed_store_error_from_th_error)
                 });
                 res.into_iter()
@@ -278,8 +278,8 @@ impl Database {
                 Ok(())
             }
             #[cfg(all(not(target_os = "windows"), feature = "tide_hunter"))]
-            (Storage::TideHunter(db), ColumnFamily::TideHunter(ks)) => db
-                .remove(*ks, key.as_ref().to_vec())
+            (Storage::TideHunter(db), ColumnFamily::TideHunter((ks, prefix))) => db
+                .remove(*ks, transform_th_key(key.as_ref(), prefix))
                 .map_err(typed_store_error_from_th_error),
             _ => Err(TypedStoreError::RocksDBError(
                 "typed store invariant violation".to_string(),
@@ -314,8 +314,8 @@ impl Database {
                 Ok(())
             }
             #[cfg(all(not(target_os = "windows"), feature = "tide_hunter"))]
-            (Storage::TideHunter(db), ColumnFamily::TideHunter(ks)) => db
-                .insert(*ks, key, value)
+            (Storage::TideHunter(db), ColumnFamily::TideHunter((ks, prefix))) => db
+                .insert(*ks, transform_th_key(&key, prefix), value)
                 .map_err(typed_store_error_from_th_error),
             _ => Err(TypedStoreError::RocksDBError(
                 "typed store invariant violation".to_string(),
@@ -571,6 +571,22 @@ impl<K, V> DBMap<K, V> {
             ColumnFamily::Rocks(cf_key.to_string()),
             is_deprecated,
         ))
+    }
+
+    #[cfg(all(not(target_os = "windows"), feature = "tide_hunter"))]
+    pub fn reopen_th(
+        db: Arc<Database>,
+        cf_name: &str,
+        ks: KeySpace,
+        prefix: Option<Vec<u8>>,
+    ) -> Self {
+        DBMap::new(
+            db,
+            &ReadWriteOptions::default(),
+            cf_name,
+            ColumnFamily::TideHunter((ks, prefix.clone())),
+            false,
+        )
     }
 
     pub fn cf_name(&self) -> &str {
@@ -1018,11 +1034,11 @@ impl<K, V> DBMap<K, V> {
             }
             #[cfg(all(not(target_os = "windows"), feature = "tide_hunter"))]
             Storage::TideHunter(db) => match &self.column_family {
-                ColumnFamily::TideHunter(ks) => {
+                ColumnFamily::TideHunter((ks, prefix)) => {
                     let mut iter = db.iterator(*ks);
                     apply_range_bounds(&mut iter, it_lower_bound, it_upper_bound);
                     iter.reverse();
-                    Ok(Box::new(transform_th_iterator(iter)))
+                    Ok(Box::new(transform_th_iterator(iter, prefix)))
                 }
                 _ => unreachable!("storage backend invariant violation"),
             },
@@ -1190,8 +1206,8 @@ impl DBBatch {
                         b.delete_cf(name, k_buf)
                     }
                     #[cfg(all(not(target_os = "windows"), feature = "tide_hunter"))]
-                    (StorageWriteBatch::TideHunter(b), ColumnFamily::TideHunter(ks)) => {
-                        b.delete(*ks, k_buf)
+                    (StorageWriteBatch::TideHunter(b), ColumnFamily::TideHunter((ks, prefix))) => {
+                        b.delete(*ks, transform_th_key(&k_buf, prefix))
                     }
                     _ => Err(TypedStoreError::RocksDBError(
                         "typed store invariant violation".to_string(),
@@ -1268,8 +1284,8 @@ impl DBBatch {
                         b.put_cf(name, k_buf, v_buf)
                     }
                     #[cfg(all(not(target_os = "windows"), feature = "tide_hunter"))]
-                    (StorageWriteBatch::TideHunter(b), ColumnFamily::TideHunter(ks)) => {
-                        b.write(*ks, k_buf.to_vec(), v_buf.to_vec())
+                    (StorageWriteBatch::TideHunter(b), ColumnFamily::TideHunter((ks, prefix))) => {
+                        b.write(*ks, transform_th_key(&k_buf, prefix), v_buf.to_vec())
                     }
                     _ => Err(TypedStoreError::RocksDBError(
                         "typed store invariant violation".to_string(),
@@ -1507,7 +1523,9 @@ where
             Storage::InMemory(db) => db.iterator(&self.cf, None, None, false),
             #[cfg(all(not(target_os = "windows"), feature = "tide_hunter"))]
             Storage::TideHunter(db) => match &self.column_family {
-                ColumnFamily::TideHunter(ks) => Box::new(transform_th_iterator(db.iterator(*ks))),
+                ColumnFamily::TideHunter((ks, prefix)) => {
+                    Box::new(transform_th_iterator(db.iterator(*ks), prefix))
+                }
                 _ => unreachable!("storage backend invariant violation"),
             },
         }
@@ -1540,10 +1558,10 @@ where
             Storage::InMemory(db) => db.iterator(&self.cf, lower_bound, upper_bound, false),
             #[cfg(all(not(target_os = "windows"), feature = "tide_hunter"))]
             Storage::TideHunter(db) => match &self.column_family {
-                ColumnFamily::TideHunter(ks) => {
+                ColumnFamily::TideHunter((ks, prefix)) => {
                     let mut iter = db.iterator(*ks);
                     apply_range_bounds(&mut iter, lower_bound, upper_bound);
-                    Box::new(transform_th_iterator(iter))
+                    Box::new(transform_th_iterator(iter, prefix))
                 }
                 _ => unreachable!("storage backend invariant violation"),
             },
@@ -1573,10 +1591,10 @@ where
             Storage::InMemory(db) => db.iterator(&self.cf, lower_bound, upper_bound, false),
             #[cfg(all(not(target_os = "windows"), feature = "tide_hunter"))]
             Storage::TideHunter(db) => match &self.column_family {
-                ColumnFamily::TideHunter(ks) => {
+                ColumnFamily::TideHunter((ks, prefix)) => {
                     let mut iter = db.iterator(*ks);
                     apply_range_bounds(&mut iter, lower_bound, upper_bound);
-                    Box::new(transform_th_iterator(iter))
+                    Box::new(transform_th_iterator(iter, prefix))
                 }
                 _ => unreachable!("storage backend invariant violation"),
             },
