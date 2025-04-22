@@ -6,6 +6,7 @@ module sui_system::staking_pool_tests;
 
 use sui::balance;
 use sui::test_scenario::{Self, Scenario};
+use sui::test_utils::destroy;
 use sui_system::staking_pool::{Self, StakingPool};
 
 #[test]
@@ -26,8 +27,8 @@ fun test_join_fungible_staked_sui_happy() {
 
     assert!(fungible_staked_sui_1.value() == 300_000_000_000, 0);
 
-    sui::test_utils::destroy(staking_pool);
-    sui::test_utils::destroy(fungible_staked_sui_1);
+    destroy(staking_pool);
+    destroy(fungible_staked_sui_1);
 
     scenario.end();
 }
@@ -50,9 +51,9 @@ fun test_join_fungible_staked_sui_fail() {
 
     fungible_staked_sui_1.join(fungible_staked_sui_2);
 
-    sui::test_utils::destroy(staking_pool_1);
-    sui::test_utils::destroy(staking_pool_2);
-    sui::test_utils::destroy(fungible_staked_sui_1);
+    destroy(staking_pool_1);
+    destroy(staking_pool_2);
+    destroy(fungible_staked_sui_1);
 
     scenario.end();
 }
@@ -72,9 +73,9 @@ fun test_split_fungible_staked_sui_happy() {
     assert!(fungible_staked_sui_1.value() == 25_000_000_000, 0);
     assert!(fungible_staked_sui_2.value() == 75_000_000_000, 0);
 
-    sui::test_utils::destroy(staking_pool);
-    sui::test_utils::destroy(fungible_staked_sui_1);
-    sui::test_utils::destroy(fungible_staked_sui_2);
+    destroy(staking_pool);
+    destroy(fungible_staked_sui_1);
+    destroy(fungible_staked_sui_2);
 
     scenario.end();
 }
@@ -92,9 +93,9 @@ fun test_split_fungible_staked_sui_fail_too_much() {
 
     let fungible_staked_sui_2 = fungible_staked_sui_1.split(100_000_000_000 + 1, scenario.ctx());
 
-    sui::test_utils::destroy(staking_pool);
-    sui::test_utils::destroy(fungible_staked_sui_1);
-    sui::test_utils::destroy(fungible_staked_sui_2);
+    destroy(staking_pool);
+    destroy(fungible_staked_sui_1);
+    destroy(fungible_staked_sui_2);
 
     scenario.end();
 }
@@ -116,8 +117,8 @@ fun test_convert_to_fungible_staked_sui_fail_too_early() {
         scenario.ctx(),
     );
 
-    sui::test_utils::destroy(staking_pool);
-    sui::test_utils::destroy(fungible_staked_sui);
+    destroy(staking_pool);
+    destroy(fungible_staked_sui);
 
     scenario.end();
 }
@@ -141,9 +142,9 @@ fun test_convert_to_fungible_staked_sui_fail_wrong_pool() {
         scenario.ctx(),
     );
 
-    sui::test_utils::destroy(staking_pool_1);
-    sui::test_utils::destroy(staking_pool_2);
-    sui::test_utils::destroy(fungible_staked_sui);
+    destroy(staking_pool_1);
+    destroy(staking_pool_2);
+    destroy(fungible_staked_sui);
 
     scenario.end();
 }
@@ -209,10 +210,10 @@ fun test_convert_to_fungible_staked_sui_happy() {
     assert!(fungible_staked_sui_data.total_supply() == 1_500_000_000, 0);
     assert!(fungible_staked_sui_data.principal_value() == 2_000_000_000, 0);
 
-    sui::test_utils::destroy(staking_pool);
-    // sui::test_utils::destroy(fungible_staked_sui);
-    sui::test_utils::destroy(fungible_staked_sui_1);
-    sui::test_utils::destroy(fungible_staked_sui_2);
+    destroy(staking_pool);
+    // destroy(fungible_staked_sui);
+    destroy(fungible_staked_sui_1);
+    destroy(fungible_staked_sui_2);
 
     scenario.end();
 }
@@ -310,9 +311,9 @@ fun test_redeem_fungible_staked_sui_happy() {
     assert!(staking_pool.pending_stake_withdraw_amount() == 6_000_000_000 - 1, 0);
     assert!(staking_pool.pending_pool_token_withdraw_amount() == 1_500_000_000, 0);
 
-    sui::test_utils::destroy(staking_pool);
-    sui::test_utils::destroy(sui_1);
-    sui::test_utils::destroy(sui_2);
+    destroy(staking_pool);
+    destroy(sui_1);
+    destroy(sui_2);
 
     scenario.end();
 }
@@ -373,9 +374,9 @@ fun test_redeem_fungible_staked_sui_regression_rounding() {
     assert!(fungible_staked_sui_data.total_supply() == 0, 0);
     assert!(fungible_staked_sui_data.principal_value() == 1, 0);
 
-    sui::test_utils::destroy(staking_pool);
-    sui::test_utils::destroy(staked_sui_1);
-    sui::test_utils::destroy(sui);
+    destroy(staking_pool);
+    destroy(staked_sui_1);
+    destroy(sui);
 
     scenario.end();
 }
