@@ -644,7 +644,14 @@ impl MoveTestAdapter<'_> for SuiTestAdapter {
 
                 let mut output = vec![];
                 if show_headers {
-                    output.push(format!("Headers: {:#?}", resp.http_headers.unwrap()));
+                    let mut headers_map: BTreeMap<_, _> = BTreeMap::new();
+
+                    for (header, value) in resp.http_headers.unwrap_or_default().into_iter() {
+                        if let Some(header) = header {
+                            headers_map.insert(format!("{header}"), value);
+                        }
+                    }
+                    output.push(format!("Headers: {:#?}", headers_map));
                 }
                 if show_service_version {
                     output.push(format!(
