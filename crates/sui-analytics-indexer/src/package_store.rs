@@ -102,20 +102,17 @@ impl LocalDBPackageStore {
     }
 
     pub async fn get(&self, id: AccountAddress) -> Result<Object> {
-        // Increment total get requests counter
         self.metrics.package_cache_gets.with_label_values(&[]).inc();
-        
+
         let object = if let Some(object) = self
             .package_store_tables
             .packages
             .get(&ObjectID::from(id))
             .map_err(Error::TypedStore)?
         {
-            // Cache hit
             self.metrics.package_cache_hits.with_label_values(&[]).inc();
             object
         } else {
-            // Cache miss - measure HTTP call latency
             let start_time = Instant::now();
             let result = self.fallback_client.get_object(ObjectID::from(id)).await;
 
