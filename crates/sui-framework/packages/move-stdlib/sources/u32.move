@@ -34,8 +34,8 @@ public fun mul_div(x: u32, y: u32, z: u32): u32 {
 
 /// Calculate x * y / z, upscaling the intermediate values to avoid overflow.
 /// Round up the result.
-public fun mul_div_round_up(x: u32, y: u32, z: u32): u32 {
-    std::macros::num_mul_div_round_up!<_, u64>(x, y, z)
+public fun mul_div_ceil(x: u32, y: u32, z: u32): u32 {
+    std::macros::num_mul_div_ceil!<_, u64>(x, y, z)
 }
 
 /// Calculate x / y, but round up the result.
