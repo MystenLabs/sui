@@ -12,6 +12,7 @@ pub struct AnalyticsMetrics {
     pub last_uploaded_checkpoint: IntGaugeVec,
     pub max_checkpoint_on_store: IntGaugeVec,
     pub total_too_large_to_deserialize: IntCounterVec,
+    pub file_size: IntGaugeVec,
 }
 
 impl AnalyticsMetrics {
@@ -41,6 +42,13 @@ impl AnalyticsMetrics {
             total_too_large_to_deserialize: register_int_counter_vec_with_registry!(
                 "total_too_large_to_deserialize",
                 "Total number of rows skipped due to size.",
+                &["data_type"],
+                registry,
+            )
+            .unwrap(),
+            file_size: register_int_gauge_vec_with_registry!(
+                "file_size_bytes",
+                "Size of generated files in bytes.",
                 &["data_type"],
                 registry,
             )

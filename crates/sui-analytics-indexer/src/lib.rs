@@ -755,7 +755,7 @@ pub struct FileMetadata {
 }
 
 impl FileMetadata {
-    fn new(
+    pub fn new(
         file_type: FileType,
         file_format: FileFormat,
         epoch_num: u64,
