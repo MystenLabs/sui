@@ -1059,7 +1059,9 @@ public(package) fun calculate_rewards(
     withdraw_epoch: u64,
 ): u64 {
     let v_addr = self.staking_pool_mappings[pool_id];
-    self.get_active_validator_ref(v_addr).calculate_rewards(staked_principal, activation_epoch, withdraw_epoch)
+    self
+        .get_active_validator_ref(v_addr)
+        .calculate_rewards(staked_principal, activation_epoch, withdraw_epoch)
 }
 
 /// Process the pending stake changes for each validator.
