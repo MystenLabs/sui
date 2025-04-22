@@ -644,14 +644,13 @@ impl MoveTestAdapter<'_> for SuiTestAdapter {
 
                 let mut output = vec![];
                 if show_headers {
-                    let mut headers_map: BTreeMap<_, _> = BTreeMap::new();
-
-                    for (header, value) in resp.http_headers.unwrap_or_default().into_iter() {
-                        if let Some(header) = header {
-                            headers_map.insert(format!("{header}"), value);
-                        }
-                    }
-                    output.push(format!("Headers: {:#?}", headers_map));
+                    let headers_map: BTreeMap<_, _> = resp
+                        .http_headers
+                        .into_iter()
+                        .flatten()
+                        .filter_map(|(h, v)| Some((h?.to_string(), v)))
+                        .collect();
+                    output.push(format!("Headers: {headers_map:#?}"));
                 }
                 if show_service_version {
                     output.push(format!(
@@ -699,12 +698,13 @@ impl MoveTestAdapter<'_> for SuiTestAdapter {
                 let mut output = String::new();
 
                 if show_headers {
-                    write!(
-                        &mut output,
-                        "Headers: {:#?}\n\n",
-                        resp.http_headers.unwrap()
-                    )
-                    .unwrap();
+                    let headers_map: BTreeMap<_, _> = resp
+                        .http_headers
+                        .into_iter()
+                        .flatten()
+                        .filter_map(|(h, v)| Some((h?.to_string(), v)))
+                        .collect();
+                    write!(&mut output, "Headers: {headers_map:#?}\n\n").unwrap();
                 }
 
                 write!(&mut output, "Response: {}", resp.response_body).unwrap();
