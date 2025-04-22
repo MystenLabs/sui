@@ -214,6 +214,8 @@ impl<S: Serialize + ParquetSchema> AnalyticsWriter<S> for ParquetWriter {
 mod size_estimate_tests {
     use super::*;
     use serde::Serialize;
+    use std::fs;
+    use std::path::Path;
     use tempfile::tempdir;
 
     // ─────────────────────────────────────────────────────────────
@@ -229,18 +231,21 @@ mod size_estimate_tests {
     }
 
     impl ParquetSchema for Row {
-        fn schema() -> &'static [ParquetValue] {
-            use ParquetValue::*;
-            const SCHEMA: &[ParquetValue] = &[U64, I64, Bool, Str];
-            SCHEMA
+        fn schema() -> Vec<String> {
+            vec![
+                "u".to_string(),
+                "i".to_string(),
+                "b".to_string(),
+                "s".to_string(),
+            ]
         }
-        fn get_column(&self, idx: usize) -> ParquetValue<'_> {
+        fn get_column(&self, idx: usize) -> ParquetValue {
             use ParquetValue::*;
             match idx {
                 0 => U64(self.u),
                 1 => I64(self.i),
                 2 => Bool(self.b),
-                3 => Str(&self.s),
+                3 => Str(self.s.clone()),
                 _ => unreachable!(),
             }
         }
@@ -255,7 +260,7 @@ mod size_estimate_tests {
         let dir = tempdir()?;
         let mut writer = ParquetWriter::new(
             dir.path(),
-            FileType::Other("test".into()), // any FileType variant works
+            FileType::Transaction, // using a valid FileType variant
             0,
         )?;
 
@@ -269,33 +274,53 @@ mod size_estimate_tests {
             })
             .collect();
 
-        writer.write(&rows)?;
-        let estimate = writer.estimate_file_size()?.expect("size estimate");
+        <ParquetWriter as AnalyticsWriter<Row>>::write(&mut writer, &rows)?;
+        let estimate = <ParquetWriter as AnalyticsWriter<Row>>::estimate_file_size(&writer)?
+            .expect("size estimate");
 
         // flush to disk
-        writer.flush(0)?;
+        <ParquetWriter as AnalyticsWriter<Row>>::flush(&mut writer, 0)?;
 
-        // locate the single file we just wrote
-        let mut file_bytes = 0;
-        for entry in std::fs::read_dir(dir.path())? {
-            let path = entry?.path();
-            if path.extension().and_then(|s| s.to_str()) == Some("parquet") {
-                file_bytes += path.metadata()?.len();
-            }
-        }
+        let file_bytes = parquet_bytes(dir.path())?;
+
+        println!("file_bytes: {}, estimate: {}", file_bytes, estimate);
 
         // ─────────────────────────────────────────────────────────
         // Assertions
         // ─────────────────────────────────────────────────────────
         assert!(
-            estimate >= file_bytes,
-            "in‑memory estimate ({estimate}) should be ≥ on‑disk size ({file_bytes})"
+            estimate > 0,
+            "in‑memory estimate should be > 0 (got {estimate})"
         );
         assert!(
-            file_bytes >= estimate / 2,
-            "estimate is more than 2× the actual file — likely mis‑counting bits"
+            file_bytes > 0,
+            "Parquet file should be > 0 bytes (got {file_bytes})"
+        );
+        // the writer's estimate should upper‑bound the compressed size
+        assert!(
+            estimate >= file_bytes,
+            "estimate ({estimate}) should be ≥ on‑disk bytes ({file_bytes})"
+        );
+        // …but not be absurdly high (nop nibble: ≥ 50 %)
+        assert!(
+            file_bytes * 2 >= estimate,
+            "estimate ({estimate}) is > 2× file bytes ({file_bytes}); likely mis‑counted"
         );
 
         Ok(())
+    }
+
+    fn parquet_bytes(root: &Path) -> std::io::Result<u64> {
+        let mut bytes = 0;
+        for entry in fs::read_dir(root)? {
+            let entry = entry?;
+            let path = entry.path();
+            if path.is_dir() {
+                bytes += parquet_bytes(&path)?; // recurse
+            } else if path.extension().and_then(|s| s.to_str()) == Some("parquet") {
+                bytes += path.metadata()?.len();
+            }
+        }
+        Ok(bytes)
     }
 }
