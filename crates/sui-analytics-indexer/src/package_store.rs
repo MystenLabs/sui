@@ -21,6 +21,7 @@ use thiserror::Error;
 use tokio::sync::RwLock;
 
 use crate::analytics_metrics::AnalyticsMetrics;
+use tonic::Code;
 use typed_store::rocks::{DBMap, MetricConf};
 use typed_store::DBMapUtils;
 use typed_store::{Map, TypedStoreError};
@@ -110,16 +111,18 @@ impl LocalDBPackageStore {
             object
         } else {
             let start_time = Instant::now();
-            let result = self
-                .fallback_client
-                .get_object(ObjectID::from(id))
-                .await;
-            
-            // Record the latency of the HTTP call
+            let result = self.fallback_client.get_object(ObjectID::from(id)).await;
+
             let elapsed = start_time.elapsed().as_secs_f64();
-            self.metrics.package_fetch_latency.with_label_values(&["fallback_client"]).observe(elapsed);
-            
-            let object = result.map_err(|_| PackageResolverError::PackageNotFound(id))?;
+            self.metrics
+                .package_fetch_latency
+                .with_label_values(&["fallback_client"])
+                .observe(elapsed);
+
+            let object = result.map_err(|status| match status.code() {
+                Code::NotFound => PackageResolverError::PackageNotFound(id),
+                _ => PackageResolverError::UnexpectedError(Arc::new(status)),
+            })?;
             self.update(&object)?;
             object
         };
