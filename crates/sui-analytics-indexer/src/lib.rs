@@ -167,7 +167,7 @@ impl JobConfig {
         self,
         metrics: AnalyticsMetrics,
     ) -> Result<Vec<Processor>> {
-        let package_store = LocalDBPackageStore::new(&self.package_cache_path, &self.rest_url);
+        let package_store = LocalDBPackageStore::new(&self.package_cache_path, &self.rest_url, metrics.clone());
         let job_config = Arc::new(self);
         let mut processors = Vec::with_capacity(job_config.task_configs.len());
         let mut task_names = HashSet::new();

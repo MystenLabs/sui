@@ -338,7 +338,7 @@ mod tests {
         let temp_dir = tempfile::tempdir().unwrap();
         let registry = Registry::new();
         let metrics = AnalyticsMetrics::new(&registry);
-        let package_store = LocalDBPackageStore::new(temp_dir.path(), "http://localhost:9000");
+        let package_store = LocalDBPackageStore::new(temp_dir.path(), "http://localhost:9000", metrics.clone());
         let handler = ObjectHandler::new(package_store, &Some("0xabc".to_string()), metrics);
         let mut state = handler.state.lock().await;
 
