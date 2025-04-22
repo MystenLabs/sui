@@ -141,7 +141,7 @@ public macro fun num_mul_div<$T, $U>($a: $T, $b: $T, $c: $T): $T {
     (($a as $U) * ($b as $U) / ($c as $U)) as $T
 }
 
-public macro fun num_mul_div_round_up<$T, $U>($a: $T, $b: $T, $c: $T): $T {
+public macro fun num_mul_div_ceil<$T, $U>($a: $T, $b: $T, $c: $T): $T {
     (($a as $U) * ($b as $U)).divide_and_round_up($c as $U) as $T
 }
 
